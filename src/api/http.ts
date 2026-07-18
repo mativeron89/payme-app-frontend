@@ -92,6 +92,27 @@ export async function httpRequest<T>(method: string, path: string, body?: unknow
   }
 }
 
+/**
+ * Request de INVITADO (sin login): el guest token va en el header
+ * X-Guest-Token (middleware/auth.js → guestOrAuth acepta ?t= o ese header).
+ */
+export async function httpGuestRequest<T>(
+  method: string,
+  path: string,
+  guestToken: string,
+  body?: unknown,
+): Promise<T> {
+  const headers: Record<string, string> = { 'X-Guest-Token': guestToken };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const res = await fetch(`${BASE_URL}/api${path}`, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new HttpError(res.status, await parseBody(res));
+  return (await res.json()) as T;
+}
+
 export async function httpLogin(email: string, password: string): Promise<StoredSession> {
   const r = await rawRequest<LoginResponse>('POST', '/auth/login', { email, password });
   // G-02: login no devuelve user; queda undefined hasta que exista GET /me.

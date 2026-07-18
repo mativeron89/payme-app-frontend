@@ -1,38 +1,63 @@
 import { AuthProvider, useAuth } from './auth/AuthContext';
-import { useRoute, type PageId } from './router';
+import { ToastProvider } from './components/ui';
+import { useRoute } from './router';
+import { CreateMesaFlow } from './screens/CreateMesaFlow';
+import { CuentaScreen } from './screens/CuentaScreen';
+import { FriendsScreen } from './screens/FriendsScreen';
+import { GroupsScreen } from './screens/GroupsScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { LoginScreen } from './screens/LoginScreen';
-import { StubScreen } from './screens/StubScreen';
-
-/** Pantallas de tiers futuros (título · emoji · tier en que llegan). */
-const STUBS: Record<Exclude<PageId, 'home'>, { title: string; emoji: string; tier: string }> = {
-  cuenta: { title: 'Mi Cuenta', emoji: '💳', tier: 'Tier 5' },
-  cargar: { title: 'Cargar saldo', emoji: '➕', tier: 'Tier 5' },
-  transferir: { title: 'Transferir', emoji: '↗️', tier: 'Tier 5' },
-  amigos: { title: 'Amigos', emoji: '👥', tier: 'Tier 5' },
-  grupos: { title: 'Grupos', emoji: '👨‍👩‍👧', tier: 'Tier 5' },
-  mesas: { title: 'Mesas Abiertas', emoji: '🍽️', tier: 'Tier 2' },
-  scan: { title: 'Escanear ticket', emoji: '📷', tier: 'Tier 2' },
-  perfil: { title: 'Perfil', emoji: '⚙️', tier: 'Tier 5' },
-  mesa: { title: 'Mesa', emoji: '🍽️', tier: 'Tier 2' },
-};
+import { MesaScreen } from './screens/MesaScreen';
+import { MesasScreen } from './screens/MesasScreen';
+import { PerfilScreen } from './screens/PerfilScreen';
+import { TopupScreen } from './screens/TopupScreen';
+import { TransferScreen } from './screens/TransferScreen';
 
 function Shell() {
   const { session } = useAuth();
   const route = useRoute();
 
+  // T3 — momento mágico: el invitado entra por link (#/mesa/:code?t=token)
+  // SIN cuenta ni login. guestOrAuth del contrato: token en query.
+  const guestToken = route.query.get('t');
+  if (route.page === 'mesa' && route.param && !session && guestToken) {
+    return <MesaScreen key={`${route.param}:guest`} code={route.param} guestToken={guestToken} />;
+  }
+
   if (!session) return <LoginScreen />;
-  if (route.page === 'home') return <HomeScreen />;
-  const stub = STUBS[route.page];
-  return <StubScreen title={stub.title} emoji={stub.emoji} tier={stub.tier} />;
+
+  switch (route.page) {
+    case 'home':
+      return <HomeScreen />;
+    case 'mesas':
+      return <MesasScreen />;
+    case 'scan':
+      return <CreateMesaFlow />;
+    case 'mesa':
+      return route.param ? <MesaScreen key={route.param} code={route.param} /> : <MesasScreen />;
+    case 'cuenta':
+      return <CuentaScreen />;
+    case 'cargar':
+      return <TopupScreen />;
+    case 'transferir':
+      return <TransferScreen />;
+    case 'amigos':
+      return <FriendsScreen />;
+    case 'grupos':
+      return <GroupsScreen />;
+    case 'perfil':
+      return <PerfilScreen />;
+  }
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <div className="app">
-        <Shell />
-      </div>
+      <ToastProvider>
+        <div className="app">
+          <Shell />
+        </div>
+      </ToastProvider>
     </AuthProvider>
   );
 }

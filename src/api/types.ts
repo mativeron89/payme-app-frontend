@@ -64,6 +64,41 @@ export interface BalanceResponse {
   currency: string;
 }
 
+/** Tipos de wallet_transactions (schemas walletTxQuery). */
+export type WalletTxType =
+  | 'topup_oxxo'
+  | 'topup_card'
+  | 'topup_spei'
+  | 'transfer_in'
+  | 'transfer_out'
+  | 'payment_mesa'
+  | 'refund_mesa'
+  | 'tip_received'
+  | 'tip_payout'
+  | 'adjustment_credit'
+  | 'adjustment_debit';
+
+/** Elemento de GET /api/account/wallet-transactions. */
+export interface WalletTransaction {
+  id: string;
+  type: WalletTxType;
+  amount_cents: number;
+  amount_display: string;
+  sign: 'credit' | 'debit';
+  balance_after_cents: number;
+  balance_after_display: string;
+  related: { type: string; id: string } | null;
+  description: string | null;
+  metadata: unknown;
+  date: string;
+}
+
+export interface WalletTransactionsResponse {
+  transactions: WalletTransaction[];
+  limit: number;
+  offset: number;
+}
+
 // ─── Mesas (routes/mesas.js) ───────────────────────────────
 
 /** Estados reales de mesa (utils/stateMachine.js — TRANSITIONS.mesa). */
@@ -80,6 +115,8 @@ export type MesaStatus =
   | 'auth_failed'
   | 'cancelled';
 
+export type ItemStatus = 'available' | 'locked' | 'paid' | 'released';
+
 /** Elemento de GET /api/mesas/open. */
 export interface OpenMesa {
   id: string;
@@ -95,6 +132,274 @@ export interface OpenMesa {
 
 export interface OpenMesasResponse {
   mesas: OpenMesa[];
+}
+
+/** Ítem dentro de GET /api/mesas/:code. */
+export interface MesaItem {
+  id: string;
+  name: string;
+  category: string;
+  price_cents: number;
+  quantity: number;
+  status: ItemStatus;
+  locked_by_me: boolean;
+  lock_expires_at: string | null;
+}
+
+/** Slot de división igualitaria (GET /api/mesas/:code, division_slots). */
+export interface DivisionSlot {
+  slot_index: number;
+  amount_cents: number;
+  amount_display: string;
+  status: 'available' | 'claimed' | 'paid';
+}
+
+/** Staff activo (GET /api/mesas/:code → active_staff). */
+export interface ActiveStaff {
+  id: string;
+  display_name: string;
+  role: string;
+}
+
+/** GET /api/mesas/:code → mesa. */
+export interface MesaDetail {
+  id: string;
+  code: string;
+  full_name: string;
+  restaurant: { id: string; name: string; category: string; address: string | null };
+  total_cents: number;
+  total_display: string;
+  paid_amount_cents: number;
+  tip_amount_cents: number;
+  division_mode: 'consumo' | 'igual';
+  expected_participants: number;
+  status: MesaStatus;
+  expires_at: string;
+  items: MesaItem[];
+  division_slots?: DivisionSlot[];
+  active_staff: ActiveStaff[];
+  my_role: 'opener' | 'participant' | 'guest' | null;
+}
+
+export interface MesaDetailResponse {
+  mesa: MesaDetail;
+}
+
+/** POST /api/mesas — request (schemas.createMesa, A-1). */
+export interface CreateMesaRequest {
+  restaurant_id: string;
+  total_cents: number;
+  division_mode: 'consumo' | 'igual';
+  expected_participants: number;
+  guarantee_method: 'card' | 'wallet';
+  stripe_payment_method_id?: string;
+  items: Array<{ name: string; category?: string; price_cents: number; quantity: number }>;
+}
+
+/** POST /api/mesas → 201 (garantía A-1). */
+export interface CreateMesaResponse {
+  mesa: {
+    id: string;
+    code: string;
+    total_cents: number;
+    division_mode: 'consumo' | 'igual';
+    expected_participants: number;
+    status: MesaStatus;
+    expires_at: string;
+    created_at: string;
+  };
+  guarantee: {
+    method: 'card' | 'wallet';
+    status: 'open' | 'requires_action';
+    client_secret?: string;
+  };
+}
+
+/** POST /api/mesas/:code/items/lock → 200. */
+export interface LockItemsResponse {
+  locked: string[];
+  lock_token: string;
+  lock_expires_at: string;
+}
+
+export type PaymentType = 'card' | 'apple_pay' | 'google_pay' | 'wallet';
+
+/** POST /api/mesas/:code/pay — request (schemas.payMesa). */
+export interface PayMesaRequest {
+  payment_method_id?: string;
+  stripe_payment_method_id?: string;
+  payment_type: PaymentType;
+  item_ids: string[];
+  lock_tokens?: string[];
+  tip_cents: number;
+  tip_to_staff_id?: string;
+  idempotency_key: string;
+}
+
+/** POST /api/mesas/:code/pay → 201 (rama wallet o rama tarjeta). */
+export interface PayMesaResponse {
+  attempt: {
+    id: string;
+    gross_amount_cents: number;
+    gross_display?: string;
+    client_secret?: string;
+    status: string;
+    stripe_status?: string;
+    requires_action?: boolean;
+    payment_type?: PaymentType;
+  };
+}
+
+/** POST /api/mesas/:code/invitations (type 'link') → 201. */
+export interface CreateInvitationResponse {
+  invitation: {
+    id: string;
+    invitation_type: 'link' | 'in_app';
+    status: string;
+    expires_at: string;
+    created_at: string;
+  };
+  link?: string;
+}
+
+// ─── OCR (routes/ocr.js) ───────────────────────────────────
+
+/** POST /api/ocr → 200 (mock declarado: HAS_REAL_IMPL=false). */
+export interface OcrResponse {
+  items: Array<{ name: string; price_cents: number; quantity: number; category?: string }>;
+  total_cents: number;
+  mock: boolean;
+}
+
+// ─── Payment methods (routes/payment-methods.js) ───────────
+
+/** Elemento de GET /api/payment-methods. */
+export interface PaymentMethod {
+  id: string;
+  brand: string;
+  bank_name: string | null;
+  type: 'credit' | 'debit';
+  last_four: string;
+  exp_month: number;
+  exp_year: number;
+  is_default: boolean;
+  display: string;
+}
+
+export interface PaymentMethodsResponse {
+  payment_methods: PaymentMethod[];
+}
+
+// ─── Topup (routes/topup.js + spei-funding.js) ─────────────
+
+/** POST /api/topup/oxxo → 201. */
+export interface TopupOxxoResponse {
+  topup: {
+    id: string;
+    status: string;
+    amount_cents: number;
+    amount_display: string;
+    voucher_reference: string;
+    stripe_voucher_url: string | null;
+    voucher_expires_at: string;
+  };
+}
+
+/** POST /api/topup/card → 201. */
+export interface TopupCardResponse {
+  topup: {
+    id: string;
+    status: string;
+    amount_cents: number;
+    amount_display: string;
+  };
+  requires_action: boolean;
+  client_secret?: string;
+}
+
+/** GET /api/wallet/clabe (A-3, abono SPEI). */
+export interface ClabeResponse {
+  clabe: string;
+  banco: string;
+  beneficiario: string;
+  instrucciones: string;
+}
+
+// ─── Transfers (routes/transfers.js) ───────────────────────
+
+export interface CreateTransferRequest {
+  amount_cents: number;
+  to_payme_id?: string;
+  to_email?: string;
+  to_user_id?: string;
+  concept?: string;
+  idempotency_key: string;
+}
+
+/** POST /api/transfers → 201. */
+export interface CreateTransferResponse {
+  transfer: {
+    id: string;
+    amount_cents: number;
+    concept: string | null;
+    completed_at: string;
+    amount_display: string;
+    to: { payme_id: string; full_name: string };
+  };
+}
+
+/** Elemento de GET /api/transfers. */
+export interface TransferListItem {
+  id: string;
+  amount_cents: number;
+  amount_display: string;
+  concept: string | null;
+  status: string;
+  completed_at: string | null;
+  created_at: string;
+  direction: 'sent' | 'received';
+  counterparty_payme_id: string;
+  counterparty_name: string;
+}
+
+export interface TransfersResponse {
+  transfers: TransferListItem[];
+}
+
+// ─── Friends / Groups (routes/friends.js, groups.js) ───────
+
+/** Elemento de GET /api/friends. */
+export interface Friend {
+  id: string;
+  payme_id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  email: string;
+  added_at?: string;
+}
+
+export interface FriendsResponse {
+  friends: Friend[];
+}
+
+/** Elemento de GET /api/groups. */
+export interface Group {
+  id: string;
+  name: string;
+  icon: string;
+  created_at: string;
+  member_count: number;
+}
+
+export interface GroupsResponse {
+  groups: Group[];
+}
+
+/** GET /api/groups/:id. */
+export interface GroupDetailResponse {
+  group: { id: string; name: string; icon: string };
+  members: Array<{ id: string; payme_id: string; first_name: string; last_name: string; email: string }>;
 }
 
 // ─── Errores (shape del error handler de server.js y rutas) ─

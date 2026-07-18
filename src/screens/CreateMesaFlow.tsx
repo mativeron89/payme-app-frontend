@@ -1,0 +1,444 @@
+import { useState } from 'react';
+import { api } from '../api';
+import { HttpError } from '../api/http';
+import { MockApiError } from '../api/mock/mockApi';
+import { MOCK_RESTAURANTS } from '../api/mock/seedData';
+import type { CreateMesaResponse, OcrResponse, PaymentMethod } from '../api/types';
+import { TopBar, useToast } from '../components/ui';
+import { navigate } from '../router';
+import { formatMXN } from '../utils/format';
+
+/**
+ * Wizard del organizador (T2): scan → ticket → división → GARANTÍA (A-1,
+ * pantalla que la maqueta no tenía) → compartir. La mesa recién existe
+ * cuando la garantía queda autorizada: sin garantía no hay mesa (D1).
+ */
+
+type Step = 'scan' | 'ticket' | 'division' | 'garantia' | 'threeds' | 'share';
+
+function extractError(err: unknown): { code: string; extra: Record<string, unknown> } {
+  if (err instanceof MockApiError) return { code: err.message, extra: err.extra };
+  if (err instanceof HttpError) return { code: err.message, extra: err.body ?? {} };
+  return { code: 'unknown', extra: {} };
+}
+
+export function CreateMesaFlow() {
+  const toast = useToast();
+  const [step, setStep] = useState<Step>('scan');
+  const [scanning, setScanning] = useState(false);
+  const [ocr, setOcr] = useState<OcrResponse | null>(null);
+  const [division, setDivision] = useState<'consumo' | 'igual'>('consumo');
+  const [participants, setParticipants] = useState(4);
+  const [method, setMethod] = useState<'card' | 'wallet'>('card');
+  const [pm, setPm] = useState<PaymentMethod | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<CreateMesaResponse | null>(null);
+  const [link, setLink] = useState<string | null>(null);
+
+  // G-01: no hay endpoint de restaurantes; el mock usa uuids fijos conocidos.
+  const restaurant = MOCK_RESTAURANTS[0];
+  const total = ocr?.total_cents ?? 0;
+
+  async function doScan() {
+    setScanning(true);
+    try {
+      const r = await api.scanTicket();
+      setOcr(r);
+      setStep('ticket');
+    } catch {
+      toast('No pudimos leer el ticket');
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function loadDefaultCard() {
+    if (pm) return;
+    try {
+      const r = await api.getPaymentMethods();
+      setPm(r.payment_methods.find((p) => p.is_default) ?? r.payment_methods[0] ?? null);
+    } catch {
+      setPm(null);
+    }
+  }
+
+  async function createMesa() {
+    if (!ocr) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.createMesa({
+        restaurant_id: restaurant.id,
+        total_cents: total,
+        division_mode: division,
+        expected_participants: division === 'igual' ? participants : Math.max(1, participants),
+        guarantee_method: method,
+        ...(method === 'card' && pm && { stripe_payment_method_id: `pm_mock_${pm.last_four}` }),
+        items: ocr.items.map((i) => ({
+          name: i.name,
+          price_cents: i.price_cents,
+          quantity: i.quantity,
+          ...(i.category && { category: i.category }),
+        })),
+      });
+      setCreated(r);
+      if (r.guarantee.status === 'requires_action') {
+        setStep('threeds');
+      } else {
+        await makeLink(r.mesa.code);
+      }
+    } catch (err) {
+      const { code, extra } = extractError(err);
+      if (code === 'guarantee_failed') {
+        const available = typeof extra.available === 'number' ? extra.available : null;
+        setError(
+          available !== null
+            ? `Saldo insuficiente para garantizar: tenés ${formatMXN(available)} disponibles y la mesa necesita ${formatMXN(total)}. Cargá saldo o garantizá con tarjeta.`
+            : 'No pudimos autorizar la garantía. Probá con otro método.',
+        );
+      } else {
+        setError('No pudimos crear la mesa. Probá de nuevo.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirm3ds() {
+    if (!created) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.confirmGuarantee3ds(created.mesa.code, created.guarantee.client_secret ?? '');
+      await makeLink(created.mesa.code);
+    } catch {
+      setError('El banco rechazó la autorización. Probá con otra tarjeta.');
+      setStep('garantia');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function makeLink(code: string) {
+    try {
+      const inv = await api.createInvitation(code);
+      setLink(inv.link ?? null);
+    } catch {
+      setLink(null);
+    }
+    setStep('share');
+  }
+
+  function back() {
+    if (step === 'scan') return navigate('home');
+    if (step === 'ticket') return setStep('scan');
+    if (step === 'division') return setStep('ticket');
+    if (step === 'garantia') return setStep('division');
+    // threeds/share: la mesa ya existe (o está autorizándose); no se vuelve.
+    return navigate('home');
+  }
+
+  // ─── Paso 1: scan ────────────────────────────────────────
+  if (step === 'scan') {
+    return (
+      <div className="screen" style={{ background: 'var(--navy)' }}>
+        <div className="top-bar" style={{ background: 'var(--navy)' }}>
+          <button className="back-btn" onClick={back} aria-label="Volver" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>
+            ←
+          </button>
+          <div className="top-title" style={{ color: '#fff' }}>
+            Escanear ticket
+          </div>
+        </div>
+        <div className="scroll" style={{ background: 'var(--navy)', padding: '20px 16px' }}>
+          <div className="scan-frame">
+            <div className="scan-corner tl" />
+            <div className="scan-corner tr" />
+            <div className="scan-corner bl" />
+            <div className="scan-corner br" />
+            {scanning && <div className="scan-line" />}
+            <div style={{ fontSize: 40, opacity: 0.3 }}>🧾</div>
+          </div>
+          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: 13, margin: '16px 0', fontFamily: 'var(--font-body)' }}>
+            Encuadrá el ticket dentro del marco
+          </div>
+          <div className="note note-amber">
+            <b>El OCR corre en modo demo:</b> hoy no lee la foto — usa un ticket de ejemplo
+            (el backend todavía no tiene proveedor real de OCR).
+          </div>
+          <button className="btn btn-teal" style={{ marginTop: 14 }} onClick={doScan} disabled={scanning}>
+            {scanning ? 'Leyendo ticket…' : '📸 Capturar'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Paso 2: ticket ──────────────────────────────────────
+  if (step === 'ticket' && ocr) {
+    return (
+      <div className="screen">
+        <div className="top-bar" style={{ background: 'var(--navy)' }}>
+          <button className="back-btn" onClick={back} aria-label="Volver" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>
+            ←
+          </button>
+          <div className="top-title" style={{ color: '#fff' }}>
+            Ticket de la mesa
+          </div>
+        </div>
+        <div style={{ background: 'var(--navy)', padding: '0 20px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>{restaurant.name}</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2, fontFamily: 'var(--font-body)' }}>
+              📍 {restaurant.address}
+            </div>
+          </div>
+          <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '6px 14px', borderRadius: 20, fontWeight: 800, fontSize: 14 }}>
+            {formatMXN(total)}
+          </div>
+        </div>
+        <div className="scroll">
+          <div className="card" style={{ margin: 12 }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--gray-l)' }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Detalle</div>
+              <div style={{ fontSize: 11, color: 'var(--gray-d)', marginTop: 2, fontFamily: 'var(--font-body)' }}>
+                {ocr.items.length} ítems · {formatMXN(total)}
+              </div>
+            </div>
+            {ocr.items.map((i, idx) => (
+              <div key={idx} className="item-row" style={{ cursor: 'default' }}>
+                <div className="item-name">
+                  {i.name}
+                  {i.quantity > 1 ? ` × ${i.quantity}` : ''}
+                </div>
+                <div className="item-price">{formatMXN(i.price_cents * i.quantity)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="action-bar">
+          <button className="btn btn-primary" onClick={() => setStep('division')}>
+            Continuar → dividir
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Paso 3: división ────────────────────────────────────
+  if (step === 'division') {
+    const perSlot = participants > 0 ? Math.floor(total / participants) : total;
+    return (
+      <div className="screen">
+        <TopBar title="Dividir cuenta" onBack={back} />
+        <div className="scroll" style={{ padding: '18px 16px' }}>
+          <div style={{ padding: '4px 2px 16px' }}>
+            <div className="h1" style={{ fontSize: 26 }}>
+              ¿Cómo pagan?
+            </div>
+          </div>
+          <button className={`div-card ${division === 'consumo' ? 'sel' : ''}`} onClick={() => setDivision('consumo')}>
+            <div className="div-radio" />
+            <div className="div-ico">👤</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="div-title">Cada uno lo suyo</div>
+              <div className="div-sub">Cada quien selecciona y paga SUS ítems.</div>
+            </div>
+          </button>
+          <button className={`div-card ${division === 'igual' ? 'sel' : ''}`} onClick={() => setDivision('igual')}>
+            <div className="div-radio" />
+            <div className="div-ico">÷</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="div-title">Partes iguales</div>
+              <div className="div-sub">La cuenta se divide en partes iguales; cada pago toma una.</div>
+            </div>
+            {division === 'igual' && (
+              <div className="pill-amt">
+                {formatMXN(perSlot)}
+                <br />
+                ×parte
+              </div>
+            )}
+          </button>
+          {division === 'igual' && (
+            <div className="card card-p" style={{ marginBottom: 12 }}>
+              <div className="sectlabel">¿Cuántos son?</div>
+              <div className="stepper">
+                <button onClick={() => setParticipants(Math.max(2, participants - 1))} aria-label="Menos">
+                  −
+                </button>
+                <div className="val">{participants}</div>
+                <button onClick={() => setParticipants(Math.min(20, participants + 1))} aria-label="Más">
+                  +
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="action-bar">
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              void loadDefaultCard();
+              setStep('garantia');
+            }}
+          >
+            Continuar → garantizar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Paso 4: GARANTÍA (A-1, pantalla nueva) ──────────────
+  if (step === 'garantia') {
+    return (
+      <div className="screen">
+        <TopBar title="Garantizá la mesa" onBack={back} />
+        <div className="scroll" style={{ padding: 16 }}>
+          <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Garantía de la mesa
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: '#fff' }}>{formatMXN(total)}</div>
+            <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.45)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+              Se retiene, no se cobra. Si todos pagan, se libera completa.
+            </div>
+          </div>
+          <div className="note note-teal" style={{ marginBottom: 16 }}>
+            Para abrir la mesa, PayMe retiene el total como garantía: el restaurante cobra
+            sí o sí. Cuando todos pagan su parte, la retención se libera. Si alguien no
+            paga, tu garantía cubre solo ese faltante.
+          </div>
+          {error && <div className="form-error">{error}</div>}
+          <div className="sectlabel">¿Con qué garantizás?</div>
+          <button className={`method-card ${method === 'card' ? 'sel' : ''}`} onClick={() => setMethod('card')}>
+            <div className="cc visa">VISA</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>
+                {pm ? `${pm.bank_name ?? pm.brand} ···· ${pm.last_four}` : 'Tarjeta'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
+                Retención en la tarjeta (puede pedir confirmación del banco)
+              </div>
+            </div>
+            <div className="radio" />
+          </button>
+          <button className={`method-card ${method === 'wallet' ? 'sel' : ''}`} onClick={() => setMethod('wallet')}>
+            <div className="method-icon" style={{ background: 'var(--teal-l)' }}>
+              👛
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Saldo PayMe</div>
+              <div style={{ fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
+                Congela {formatMXN(total)} de tu saldo hasta que la mesa cierre
+              </div>
+            </div>
+            <div className="radio" />
+          </button>
+        </div>
+        <div className="action-bar">
+          <button className="btn btn-primary" onClick={createMesa} disabled={busy}>
+            {busy ? 'Autorizando…' : `🔒 Garantizar ${formatMXN(total)} y abrir mesa`}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Paso 4b: 3DS (requires_action) ──────────────────────
+  if (step === 'threeds') {
+    return (
+      <div className="screen">
+        <div className="scroll" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <div className="spinner" />
+            <div className="h2" style={{ marginTop: 18 }}>
+              Tu banco pide confirmar
+            </div>
+            <div className="body-text" style={{ marginTop: 6 }}>
+              La retención de {formatMXN(total)} necesita autorización (3-D Secure).
+            </div>
+          </div>
+          <div className="note note-teal" style={{ marginTop: 12 }}>
+            En modo demo simulamos la pantalla del banco. Con el backend real, acá se abre
+            la verificación de tu banco (Stripe).
+          </div>
+          <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={confirm3ds} disabled={busy}>
+            {busy ? 'Confirmando…' : '✅ Simular autorización del banco'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Paso 5: compartir ───────────────────────────────────
+  if (step === 'share' && created) {
+    const code = created.mesa.code;
+    return (
+      <div className="screen">
+        <TopBar title="Invitar a la mesa" onBack={() => navigate('mesa', code)} />
+        <div className="scroll" style={{ padding: 16 }}>
+          <div style={{ textAlign: 'center', padding: '8px 0 12px' }}>
+            <div style={{ fontSize: 34 }}>🍝</div>
+            <div className="h2" style={{ marginTop: 6 }}>
+              Mesa {code}
+            </div>
+            <span className="badge badge-teal" style={{ marginTop: 6 }}>
+              Garantizada ✓
+            </span>
+          </div>
+          <div className="note note-teal" style={{ marginBottom: 14 }}>
+            La mesa quedó <b>abierta y garantizada</b> con {method === 'card' ? 'tu tarjeta' : 'tu saldo'}.
+            Ahora invitá al resto: cada uno entra con el link y paga su parte.
+          </div>
+          <div className="sectlabel">Link de invitación</div>
+          {link ? (
+            <>
+              <div style={{ background: 'var(--gray-l)', border: '1.5px dashed var(--teal)', borderRadius: 10, padding: 14, fontFamily: 'monospace', fontSize: 11.5, color: '#0a7b80', wordBreak: 'break-all', marginBottom: 10 }}>
+                {link}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <button
+                  className="btn btn-teal"
+                  style={{ fontSize: 13, padding: 13 }}
+                  onClick={() => {
+                    void navigator.clipboard.writeText(link).then(
+                      () => toast('Link copiado 📋'),
+                      () => toast('No se pudo copiar'),
+                    );
+                  }}
+                >
+                  📋 Copiar
+                </button>
+                <a
+                  className="btn"
+                  style={{ background: '#25D366', color: '#fff', fontSize: 13, padding: 13, textDecoration: 'none' }}
+                  href={`https://wa.me/?text=${encodeURIComponent(`Sumate a la mesa ${code} en PayMe: ${link}`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  💬 WhatsApp
+                </a>
+              </div>
+              <div className="note note-orange">
+                Guardá el link: por seguridad se muestra <b>una sola vez</b> (después podés
+                generar otro desde la mesa).
+              </div>
+            </>
+          ) : (
+            <div className="loading">Generando link…</div>
+          )}
+        </div>
+        <div className="action-bar">
+          <button className="btn btn-primary" onClick={() => navigate('mesa', code)}>
+            Ir a la mesa → elegir mis ítems
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
