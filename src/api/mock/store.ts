@@ -1,6 +1,7 @@
 import { centsToDisplay, splitEqual } from '../../utils/money';
 import type {
   ActiveStaff,
+  AppNotification,
   DivisionSlot,
   Friend,
   Group,
@@ -9,6 +10,7 @@ import type {
   MesaStatus,
   OpenMesa,
   PaymentMethod,
+  PendingInvitation,
   TransferListItem,
   User,
   WalletTransaction,
@@ -76,6 +78,8 @@ interface MockState {
   mesas: MockMesa[];
   walletTx: WalletTransaction[];
   transfers: TransferListItem[];
+  notifications: AppNotification[];
+  pendingInvitations: PendingInvitation[];
 }
 
 let seq = 0;
@@ -175,6 +179,30 @@ function seedMesas(): MockMesa[] {
       captured_shortfall_cents: 0,
       guarantee_method: 'wallet',
     },
+    // Mesa de OTRO organizador (Sofía) — la invitación in-app pendiente apunta acá.
+    {
+      id: mockId('c'),
+      code: 'PA-4520',
+      restaurant: { id: hanzo.id, name: hanzo.name, category: hanzo.category, address: hanzo.address },
+      total_cents: 96000,
+      paid_amount_cents: 0,
+      tip_amount_cents: 0,
+      division_mode: 'igual',
+      expected_participants: 3,
+      status: 'open',
+      expires_at: iso(26 * 60_000),
+      items: [],
+      slots: splitEqual(96000, 3).map((amount, idx) => ({
+        slot_index: idx,
+        amount_cents: amount,
+        status: 'available' as const,
+        claimedBy: null,
+      })),
+      active_staff: STAFF,
+      openedByUser: false,
+      captured_shortfall_cents: 0,
+      guarantee_method: 'card',
+    },
     // A-2 demo: mesa que expiró sin completarse; la garantía cubrió el faltante.
     {
       id: mockId('c'),
@@ -243,8 +271,81 @@ function seedFriends(): Friend[] {
   return [mk('sofi', 'Sofía', 'Fernández'), mk('juan', 'Juan', 'López'), mk('maru', 'María', 'Ruiz'), mk('leo', 'Leo', 'Paz')];
 }
 
+function seedNotifications(mesas: MockMesa[]): {
+  notifications: AppNotification[];
+  pendingInvitations: PendingInvitation[];
+} {
+  const invitedMesa = mesas.find((m) => m.code === 'PA-4520');
+  const notifications: AppNotification[] = [
+    {
+      id: mockId('f'),
+      type: 'invitation_received',
+      title: null,
+      body: 'Sofía Fernández te invitó a una mesa',
+      payload: { mesa_code: 'PA-4520', inviter_name: 'Sofía Fernández' },
+      related_entity_type: 'invitation',
+      related_entity_id: null,
+      read_at: null,
+      created_at: iso(-8 * 60_000),
+    },
+    {
+      id: mockId('f'),
+      type: 'transfer_received',
+      title: null,
+      body: 'Juan López te envió $80.00',
+      payload: { amount_cents: 8000, sender_name: 'Juan López' },
+      related_entity_type: 'transfer',
+      related_entity_id: null,
+      read_at: null,
+      created_at: iso(-3 * 60 * 60_000),
+    },
+    {
+      id: mockId('f'),
+      type: 'topup_succeeded',
+      title: null,
+      body: 'Se acreditaron $500.00 a tu saldo PayMe',
+      payload: { amount_cents: 50000, method: 'oxxo' },
+      related_entity_type: 'topup',
+      related_entity_id: null,
+      read_at: iso(-2 * 24 * 60 * 60_000),
+      created_at: iso(-3 * 24 * 60 * 60_000),
+    },
+    {
+      id: mockId('f'),
+      type: 'mesa_shortfall_charged',
+      title: null,
+      body: 'Se cobró el faltante de la mesa ($210.00) a tu garantía.',
+      payload: { shortfall_cents: 21000 },
+      related_entity_type: 'mesa',
+      related_entity_id: null,
+      read_at: iso(-20 * 60 * 60_000),
+      created_at: iso(-22 * 60 * 60_000),
+    },
+  ];
+  const pendingInvitations: PendingInvitation[] = invitedMesa
+    ? [
+        {
+          id: mockId('f'),
+          mesa_id: invitedMesa.id,
+          invitation_type: 'in_app',
+          status: 'pending',
+          expires_at: iso(24 * 60 * 60_000),
+          created_at: iso(-8 * 60_000),
+          mesa_code: invitedMesa.code,
+          restaurant_name: invitedMesa.restaurant.name,
+          inviter_first_name: 'Sofía',
+          inviter_last_name: 'Fernández',
+          inviter_payme_id: 'payme_mx_sofi',
+        },
+      ]
+    : [];
+  return { notifications, pendingInvitations };
+}
+
 function seedState(): MockState {
   const friends = seedFriends();
+  const mesas = seedMesas();
+  const { notifications, pendingInvitations } = seedNotifications(mesas);
   return {
     user: MOCK_USER,
     balance_cents: 125000,
@@ -282,8 +383,10 @@ function seedState(): MockState {
         memberIds: [friends[1].id, friends[2].id],
       },
     ],
-    mesas: seedMesas(),
+    mesas,
     walletTx: seedWalletTx(),
+    notifications,
+    pendingInvitations,
     transfers: [
       {
         id: mockId('f'),

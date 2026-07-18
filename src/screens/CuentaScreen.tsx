@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import type { BalanceResponse, PaymentMethod, WalletTransaction } from '../api/types';
-import { TopBar } from '../components/ui';
+import type { BalanceResponse, PaymentMethod, StatsResponse, WalletTransaction } from '../api/types';
+import { TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
 
@@ -31,20 +31,47 @@ function txDate(iso: string): string {
 }
 
 export function CuentaScreen() {
+  const toast = useToast();
   const [tab, setTab] = useState<'historial' | 'tarjetas'>('historial');
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
   const [pms, setPms] = useState<PaymentMethod[] | null>(null);
+  const [stats, setStats] = useState<StatsResponse | null>(null);
+
+  function loadPms() {
+    api.getPaymentMethods().then((r) => setPms(r.payment_methods)).catch(() => setPms([]));
+  }
 
   useEffect(() => {
     let alive = true;
     api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
     api.getWalletTransactions().then((r) => alive && setTxs(r.transactions)).catch(() => alive && setTxs([]));
-    api.getPaymentMethods().then((r) => alive && setPms(r.payment_methods)).catch(() => alive && setPms([]));
+    api.getStats().then((s) => alive && setStats(s)).catch(() => undefined);
+    loadPms();
     return () => {
       alive = false;
     };
   }, []);
+
+  async function setDefault(id: string) {
+    try {
+      await api.setDefaultPaymentMethod(id);
+      loadPms();
+    } catch {
+      toast('No se pudo actualizar');
+    }
+  }
+
+  async function removePm(pm: PaymentMethod) {
+    if (!window.confirm(`¿Quitar la tarjeta terminada en ${pm.last_four}?`)) return;
+    try {
+      await api.removePaymentMethod(pm.id);
+      toast('Tarjeta eliminada');
+      loadPms();
+    } catch {
+      toast('No se pudo eliminar');
+    }
+  }
 
   return (
     <div className="screen">
@@ -78,6 +105,30 @@ export function CuentaScreen() {
 
         {tab === 'historial' && (
           <>
+            {stats && stats.month.visits > 0 && (
+              <div className="card card-p" style={{ marginBottom: 14 }}>
+                <div className="sectlabel">Este mes</div>
+                <div style={{ display: 'flex', gap: 8, textAlign: 'center' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 17, fontWeight: 800 }}>{formatMXN(stats.month.spent_cents)}</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>gastado</div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 17, fontWeight: 800 }}>{stats.month.visits}</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>salidas</div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 17, fontWeight: 800 }}>{formatMXN(stats.month.avg_per_visit_cents)}</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>promedio</div>
+                  </div>
+                </div>
+                {stats.top_restaurants[0] && (
+                  <div style={{ fontSize: 11.5, color: 'var(--gray-d)', marginTop: 10, fontFamily: 'var(--font-body)', textAlign: 'center' }}>
+                    Tu favorito: <b style={{ color: 'var(--navy)' }}>{stats.top_restaurants[0].name}</b> ({stats.top_restaurants[0].visits} visitas)
+                  </div>
+                )}
+              </div>
+            )}
             <div className="sectlabel">Movimientos</div>
             {txs === null && <div className="loading">Cargando movimientos…</div>}
             {txs?.length === 0 && (
@@ -113,6 +164,12 @@ export function CuentaScreen() {
           <>
             <div className="sectlabel">Tarjetas guardadas</div>
             {pms === null && <div className="loading">Cargando tarjetas…</div>}
+            {pms?.length === 0 && (
+              <div className="empty">
+                <div className="emoji">💳</div>
+                No tenés tarjetas guardadas.
+              </div>
+            )}
             {pms?.map((pm) => (
               <div key={pm.id} className="card card-p" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div className="cc visa">{pm.brand === 'visa' ? 'VISA' : pm.brand.toUpperCase().slice(0, 4)}</div>
@@ -122,7 +179,21 @@ export function CuentaScreen() {
                     ···· {pm.last_four} · {pm.type === 'credit' ? 'Crédito' : 'Débito'}
                   </div>
                 </div>
-                {pm.is_default && <span className="badge badge-teal">Principal</span>}
+                {pm.is_default ? (
+                  <span className="badge badge-teal">Principal</span>
+                ) : (
+                  <button className="login-toggle" style={{ padding: 4 }} onClick={() => setDefault(pm.id)}>
+                    Hacer principal
+                  </button>
+                )}
+                <button
+                  className="back-btn"
+                  style={{ width: 30, height: 30, fontSize: 14 }}
+                  aria-label={`Quitar tarjeta ${pm.last_four}`}
+                  onClick={() => removePm(pm)}
+                >
+                  ✕
+                </button>
               </div>
             ))}
             <div className="note note-teal" style={{ marginTop: 6 }}>

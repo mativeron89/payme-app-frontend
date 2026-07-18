@@ -1,5 +1,19 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.7.0 — Funcionalidades restantes del contrato + demo compartible (2026-07-18)
+
+- **Avisos** (`GET /notifications` + `unread-count` + `read-all`): inbox con
+  no-leídos, campanita con badge en el home.
+- **Invitaciones in-app** (`GET /invitations` + `accept`): tarjeta en el home
+  y en Avisos; aceptar te lleva a la mesa del que te invitó (mesa seed PA-4520
+  de Sofía, partes iguales).
+- **Estadísticas del mes** (`GET /account/stats`): gastado / salidas /
+  promedio + restaurante favorito en Cuenta → Historial.
+- **Tarjetas**: hacer principal (`PATCH /:id/default`) y quitar (`DELETE`).
+- **Amigos**: quitar amigo con confirmación. **Grupos**: quitar miembro y
+  eliminar grupo.
+- Workflow de deploy del demo mock a GitHub Pages (`deploy-demo.yml`).
+
 ## 0.6.0 — T6 (2026-07-18)
 
 - Estados vacíos en mesas/movimientos/amigos/grupos; mensajes de error en

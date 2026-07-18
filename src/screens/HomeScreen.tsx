@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import type { BalanceResponse, OpenMesasResponse } from '../api/types';
+import type { BalanceResponse, OpenMesasResponse, PendingInvitation } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
@@ -14,11 +14,18 @@ export function HomeScreen() {
   const { session } = useAuth();
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [openMesas, setOpenMesas] = useState<OpenMesasResponse | null>(null);
+  const [unread, setUnread] = useState(0);
+  const [invitation, setInvitation] = useState<PendingInvitation | null>(null);
 
   useEffect(() => {
     let alive = true;
     api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
     api.getOpenMesas().then((m) => alive && setOpenMesas(m)).catch(() => undefined);
+    api.getUnreadCount().then((r) => alive && setUnread(r.unread_count)).catch(() => undefined);
+    api
+      .getPendingInvitations()
+      .then((r) => alive && setInvitation(r.invitations[0] ?? null))
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
@@ -38,13 +45,48 @@ export function HomeScreen() {
 
   return (
     <div className="screen">
-      <div className="top-hero">
-        <div className="logo">
-          Pay<span className="t">Me</span>
+      <div className="top-hero" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div className="logo">
+            Pay<span className="t">Me</span>
+          </div>
+          <div className="hero-sub">{firstName ? `Hola, ${firstName} 👋` : 'Hola 👋'}</div>
         </div>
-        <div className="hero-sub">{firstName ? `Hola, ${firstName} 👋` : 'Hola 👋'}</div>
+        <button
+          onClick={() => navigate('avisos')}
+          aria-label={unread > 0 ? `Avisos: ${unread} sin leer` : 'Avisos'}
+          style={{ position: 'relative', background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '50%', width: 42, height: 42, fontSize: 19, cursor: 'pointer' }}
+        >
+          🔔
+          {unread > 0 && (
+            <span
+              style={{ position: 'absolute', top: -4, right: -4, background: 'var(--orange)', color: '#fff', fontSize: 11, fontWeight: 700, borderRadius: 10, minWidth: 19, height: 19, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', fontFamily: 'var(--font-body)' }}
+            >
+              {unread}
+            </span>
+          )}
+        </button>
       </div>
       <div className="scroll" style={{ padding: '18px 16px' }}>
+        {invitation && (
+          <button
+            className="home-card"
+            onClick={() => navigate('avisos')}
+            style={{ background: 'var(--teal-l)', border: '1.5px solid var(--teal)' }}
+          >
+            <div className="home-card-icon" style={{ background: '#fff' }}>
+              🍣
+            </div>
+            <div>
+              <div className="home-card-title">
+                {invitation.inviter_first_name} te invitó a {invitation.restaurant_name}
+              </div>
+              <div className="home-card-sub" style={{ color: 'var(--gray-d)' }}>
+                Mesa {invitation.mesa_code} · tocá para aceptar
+              </div>
+            </div>
+          </button>
+        )}
         <button
           className="home-card"
           onClick={() => navigate('cuenta')}

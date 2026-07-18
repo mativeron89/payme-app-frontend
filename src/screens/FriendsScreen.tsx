@@ -106,6 +106,23 @@ export function FriendsScreen() {
                 >
                   ↗️
                 </button>
+                <button
+                  className="back-btn"
+                  style={{ width: 30, height: 30, fontSize: 13 }}
+                  aria-label={`Quitar a ${f.first_name}`}
+                  onClick={async () => {
+                    if (!window.confirm(`¿Quitar a ${f.full_name} de tus amigos?`)) return;
+                    try {
+                      await api.removeFriend(f.id);
+                      toast('Amigo quitado');
+                      load();
+                    } catch {
+                      toast('No se pudo quitar');
+                    }
+                  }}
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>

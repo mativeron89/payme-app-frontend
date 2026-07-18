@@ -20,6 +20,7 @@ export type PageId =
   | 'mesas'
   | 'scan'
   | 'perfil'
+  | 'avisos'
   | 'mesa';
 
 export interface Route {
@@ -42,6 +43,7 @@ const VALID_PAGES: ReadonlySet<string> = new Set([
   'mesas',
   'scan',
   'perfil',
+  'avisos',
   'mesa',
 ]);
 

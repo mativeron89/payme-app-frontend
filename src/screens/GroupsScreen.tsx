@@ -77,13 +77,29 @@ export function GroupsScreen() {
                   </div>
                   <div className="id">{m.payme_id}</div>
                 </div>
+                <button
+                  className="back-btn"
+                  style={{ width: 30, height: 30, fontSize: 13 }}
+                  aria-label={`Quitar a ${m.first_name} del grupo`}
+                  onClick={async () => {
+                    try {
+                      await api.removeGroupMember(detail.group.id, m.id);
+                      setDetail(await api.getGroup(detail.group.id));
+                      load();
+                    } catch {
+                      toast('No se pudo quitar');
+                    }
+                  }}
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
           {addable.length > 0 && (
             <>
               <div className="sectlabel">Agregar del listado de amigos</div>
-              <div className="card">
+              <div className="card" style={{ marginBottom: 16 }}>
                 {addable.map((f) => (
                   <button key={f.id} className="friend-row" onClick={() => addMember(f.id)}>
                     <Avatar name={f.full_name} />
@@ -97,6 +113,22 @@ export function GroupsScreen() {
               </div>
             </>
           )}
+          <button
+            className="btn btn-ghost"
+            onClick={async () => {
+              if (!window.confirm(`¿Eliminar el grupo "${detail.group.name}"?`)) return;
+              try {
+                await api.deleteGroup(detail.group.id);
+                toast('Grupo eliminado');
+                setDetail(null);
+                load();
+              } catch {
+                toast('No se pudo eliminar');
+              }
+            }}
+          >
+            🗑️ Eliminar grupo
+          </button>
         </div>
       </div>
     );

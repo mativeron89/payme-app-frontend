@@ -14,11 +14,14 @@ import type {
   GroupsResponse,
   LockItemsResponse,
   MesaDetailResponse,
+  NotificationsResponse,
   OcrResponse,
   OpenMesasResponse,
   PayMesaRequest,
   PayMesaResponse,
   PaymentMethodsResponse,
+  PendingInvitationsResponse,
+  StatsResponse,
   TopupCardResponse,
   TopupOxxoResponse,
   TransfersResponse,
@@ -481,6 +484,73 @@ export async function mockPaymentMethods(): Promise<PaymentMethodsResponse> {
   return delay({ payment_methods: [...state.paymentMethods] });
 }
 
+export async function mockSetDefaultPaymentMethod(id: string): Promise<void> {
+  if (!state.paymentMethods.some((pm) => pm.id === id)) return fail(404, 'payment_method_not_found');
+  state.paymentMethods = state.paymentMethods.map((pm) => ({ ...pm, is_default: pm.id === id }));
+  return delay(undefined);
+}
+
+export async function mockRemovePaymentMethod(id: string): Promise<void> {
+  if (!state.paymentMethods.some((pm) => pm.id === id)) return fail(404, 'payment_method_not_found');
+  state.paymentMethods = state.paymentMethods.filter((pm) => pm.id !== id);
+  return delay(undefined);
+}
+
+// ─── Notifications / invitaciones in-app ───────────────────
+
+export async function mockNotifications(): Promise<NotificationsResponse> {
+  const unread = state.notifications.filter((n) => !n.read_at).length;
+  return delay({ notifications: [...state.notifications], unread_count: unread, limit: 20, offset: 0 });
+}
+
+export async function mockUnreadCount(): Promise<{ unread_count: number }> {
+  return delay({ unread_count: state.notifications.filter((n) => !n.read_at).length });
+}
+
+export async function mockMarkAllNotificationsRead(): Promise<void> {
+  const now = new Date().toISOString();
+  state.notifications = state.notifications.map((n) => ({ ...n, read_at: n.read_at ?? now }));
+  return delay(undefined);
+}
+
+export async function mockPendingInvitations(): Promise<PendingInvitationsResponse> {
+  return delay({ invitations: [...state.pendingInvitations] });
+}
+
+export async function mockAcceptInvitation(id: string): Promise<{ accepted: boolean }> {
+  const inv = state.pendingInvitations.find((i) => i.id === id);
+  if (!inv) return fail(404, 'invitation_not_found');
+  state.pendingInvitations = state.pendingInvitations.filter((i) => i.id !== id);
+  state.notifications = state.notifications.map((n) =>
+    n.type === 'invitation_received' ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n,
+  );
+  return delay({ accepted: true });
+}
+
+// ─── Stats (GET /account/stats) ────────────────────────────
+
+export async function mockStats(): Promise<StatsResponse> {
+  const spent = 216500;
+  const visits = 6;
+  const avg = Math.floor(spent / visits);
+  return delay({
+    month: {
+      spent_cents: spent,
+      spent_display: centsToDisplay(spent),
+      visits,
+      avg_per_visit_cents: avg,
+      avg_per_visit_display: centsToDisplay(avg),
+    },
+    top_restaurants: [
+      { name: 'La Parolaccia', visits: 3 },
+      { name: 'Hanzo Sushi', visits: 2 },
+      { name: 'Café Nube', visits: 1 },
+    ],
+    top_dish: { name: 'Tagliatelle Bolognese', times: 3 },
+    favorite_category: 'italian',
+  });
+}
+
 // ─── Friends / Groups ──────────────────────────────────────
 
 export async function mockFriends(): Promise<FriendsResponse> {
@@ -546,5 +616,18 @@ export async function mockAddGroupMember(groupId: string, friendId: string): Pro
   const group = state.groups.find((g) => g.id === groupId);
   if (!group) return fail(404, 'group_not_found');
   if (!group.memberIds.includes(friendId)) group.memberIds.push(friendId);
+  return delay(undefined);
+}
+
+export async function mockRemoveGroupMember(groupId: string, friendId: string): Promise<void> {
+  const group = state.groups.find((g) => g.id === groupId);
+  if (!group) return fail(404, 'group_not_found');
+  group.memberIds = group.memberIds.filter((id) => id !== friendId);
+  return delay(undefined);
+}
+
+export async function mockDeleteGroup(groupId: string): Promise<void> {
+  if (!state.groups.some((g) => g.id === groupId)) return fail(404, 'group_not_found');
+  state.groups = state.groups.filter((g) => g.id !== groupId);
   return delay(undefined);
 }

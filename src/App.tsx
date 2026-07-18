@@ -1,6 +1,7 @@
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ToastProvider } from './components/ui';
 import { useRoute } from './router';
+import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
 import { CuentaScreen } from './screens/CuentaScreen';
 import { FriendsScreen } from './screens/FriendsScreen';
@@ -47,6 +48,8 @@ function Shell() {
       return <GroupsScreen />;
     case 'perfil':
       return <PerfilScreen />;
+    case 'avisos':
+      return <AvisosScreen />;
   }
 }
 

@@ -402,6 +402,64 @@ export interface GroupDetailResponse {
   members: Array<{ id: string; payme_id: string; first_name: string; last_name: string; email: string }>;
 }
 
+// ─── Notifications (routes/notifications.js) ───────────────
+
+/** Elemento de GET /api/notifications. */
+export interface AppNotification {
+  id: string;
+  type: string;
+  title: string | null;
+  body: string;
+  payload: Record<string, unknown> | null;
+  related_entity_type: string | null;
+  related_entity_id: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationsResponse {
+  notifications: AppNotification[];
+  unread_count: number;
+  limit: number;
+  offset: number;
+}
+
+// ─── Invitations in-app (routes/invitations.js) ────────────
+
+/** Elemento de GET /api/invitations (pendientes para mí). */
+export interface PendingInvitation {
+  id: string;
+  mesa_id: string;
+  invitation_type: 'in_app' | 'link';
+  status: string;
+  expires_at: string;
+  created_at: string;
+  mesa_code: string;
+  restaurant_name: string;
+  inviter_first_name: string;
+  inviter_last_name: string;
+  inviter_payme_id: string;
+}
+
+export interface PendingInvitationsResponse {
+  invitations: PendingInvitation[];
+}
+
+// ─── Stats (routes/account.js → GET /stats) ────────────────
+
+export interface StatsResponse {
+  month: {
+    spent_cents: number;
+    spent_display: string;
+    visits: number;
+    avg_per_visit_cents: number;
+    avg_per_visit_display: string;
+  };
+  top_restaurants: Array<{ name: string; visits: number }>;
+  top_dish: { name: string; times: number } | null;
+  favorite_category: string | null;
+}
+
 // ─── Errores (shape del error handler de server.js y rutas) ─
 
 export interface ApiError {

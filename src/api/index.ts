@@ -22,12 +22,15 @@ import type {
   GroupsResponse,
   LockItemsResponse,
   MesaDetailResponse,
+  NotificationsResponse,
   OcrResponse,
   OpenMesasResponse,
   PayMesaRequest,
   PayMesaResponse,
   PaymentMethodsResponse,
+  PendingInvitationsResponse,
   RegisterRequest,
+  StatsResponse,
   TopupCardResponse,
   TopupOxxoResponse,
   TransfersResponse,
@@ -78,6 +81,16 @@ export interface Api {
   listTransfers(): Promise<TransfersResponse>;
   // payment methods
   getPaymentMethods(): Promise<PaymentMethodsResponse>;
+  setDefaultPaymentMethod(id: string): Promise<void>;
+  removePaymentMethod(id: string): Promise<void>;
+  // notificaciones e invitaciones in-app
+  getNotifications(): Promise<NotificationsResponse>;
+  getUnreadCount(): Promise<{ unread_count: number }>;
+  markAllNotificationsRead(): Promise<void>;
+  getPendingInvitations(): Promise<PendingInvitationsResponse>;
+  acceptInvitation(id: string): Promise<{ accepted: boolean }>;
+  // stats
+  getStats(): Promise<StatsResponse>;
   // social
   getFriends(): Promise<FriendsResponse>;
   addFriend(query: { email?: string; payme_id?: string }): Promise<Friend>;
@@ -86,6 +99,8 @@ export interface Api {
   getGroup(id: string): Promise<GroupDetailResponse>;
   createGroup(name: string, icon?: string): Promise<void>;
   addGroupMember(groupId: string, friendId: string): Promise<void>;
+  removeGroupMember(groupId: string, friendId: string): Promise<void>;
+  deleteGroup(groupId: string): Promise<void>;
 }
 
 /** UUID v4 del navegador — para idempotency_key (8–100 chars por schema). */
@@ -173,6 +188,23 @@ const realApi: Api = {
   listTransfers: () => httpRequest<TransfersResponse>('GET', '/transfers'),
 
   getPaymentMethods: () => httpRequest<PaymentMethodsResponse>('GET', '/payment-methods'),
+  setDefaultPaymentMethod: async (id) => {
+    await httpRequest('PATCH', `/payment-methods/${encodeURIComponent(id)}/default`);
+  },
+  removePaymentMethod: async (id) => {
+    await httpRequest('DELETE', `/payment-methods/${encodeURIComponent(id)}`);
+  },
+
+  getNotifications: () => httpRequest<NotificationsResponse>('GET', '/notifications'),
+  getUnreadCount: () => httpRequest<{ unread_count: number }>('GET', '/notifications/unread-count'),
+  markAllNotificationsRead: async () => {
+    await httpRequest('PATCH', '/notifications/read-all');
+  },
+  getPendingInvitations: () => httpRequest<PendingInvitationsResponse>('GET', '/invitations'),
+  acceptInvitation: (id) =>
+    httpRequest<{ accepted: boolean }>('POST', `/invitations/${encodeURIComponent(id)}/accept`),
+
+  getStats: () => httpRequest<StatsResponse>('GET', '/account/stats'),
 
   getFriends: () => httpRequest<FriendsResponse>('GET', '/friends'),
   addFriend: async (query) => {
@@ -191,6 +223,15 @@ const realApi: Api = {
     await httpRequest('POST', `/groups/${encodeURIComponent(groupId)}/members`, {
       friend_user_id: friendId,
     });
+  },
+  removeGroupMember: async (groupId, friendId) => {
+    await httpRequest(
+      'DELETE',
+      `/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(friendId)}`,
+    );
+  },
+  deleteGroup: async (groupId) => {
+    await httpRequest('DELETE', `/groups/${encodeURIComponent(groupId)}`);
   },
 };
 
@@ -225,6 +266,16 @@ const mockApi: Api = {
   listTransfers: () => mock.mockListTransfers(),
 
   getPaymentMethods: () => mock.mockPaymentMethods(),
+  setDefaultPaymentMethod: (id) => mock.mockSetDefaultPaymentMethod(id),
+  removePaymentMethod: (id) => mock.mockRemovePaymentMethod(id),
+
+  getNotifications: () => mock.mockNotifications(),
+  getUnreadCount: () => mock.mockUnreadCount(),
+  markAllNotificationsRead: () => mock.mockMarkAllNotificationsRead(),
+  getPendingInvitations: () => mock.mockPendingInvitations(),
+  acceptInvitation: (id) => mock.mockAcceptInvitation(id),
+
+  getStats: () => mock.mockStats(),
 
   getFriends: () => mock.mockFriends(),
   addFriend: (query) => mock.mockAddFriend(query),
@@ -233,6 +284,8 @@ const mockApi: Api = {
   getGroup: (id) => mock.mockGroupDetail(id),
   createGroup: (name, icon) => mock.mockCreateGroup(name, icon),
   addGroupMember: (groupId, friendId) => mock.mockAddGroupMember(groupId, friendId),
+  removeGroupMember: (groupId, friendId) => mock.mockRemoveGroupMember(groupId, friendId),
+  deleteGroup: (groupId) => mock.mockDeleteGroup(groupId),
 };
 
 export const api: Api = IS_MOCK ? mockApi : realApi;

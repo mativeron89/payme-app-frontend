@@ -1,0 +1,40 @@
+# Demo compartible: publica el build MOCK en GitHub Pages en cada push a main.
+# La URL queda en https://mativeron89.github.io/payme-app-frontend/
+# Requiere: Settings → Pages → Source: "GitHub Actions" (un click, una vez).
+name: Deploy demo (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build -- --base=/payme-app-frontend/
+        env:
+          VITE_MOCK: '1'
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
