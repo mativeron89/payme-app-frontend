@@ -1,6 +1,6 @@
 # Demo compartible: publica el build MOCK en GitHub Pages en cada push a main.
 # La URL queda en https://mativeron89.github.io/payme-app-frontend/
-# Requiere: Settings → Pages → Source: "GitHub Actions" (un click, una vez).
+# configure-pages con enablement:true activa Pages solo en el primer run.
 name: Deploy demo (GitHub Pages)
 
 on:
@@ -25,6 +25,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/setup-node@v4
         with:
           node-version: 20
