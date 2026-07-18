@@ -1,0 +1,645 @@
+/**
+ * services/settlement.js — Cobro garantizado + dispersión SPEI — v2.9
+ *
+ * Modelo (ver ADR-001): al CREAR la mesa se retiene el total de ítems al
+ * organizador (hold de tarjeta con captura manual, o saldo congelado). Los
+ * comensales pagan sus partes normalmente. Al CERRAR (todos pagaron, o venció):
+ *   - se captura SOLO el faltante (total_ítems − cobrado) al organizador y se
+ *     libera el resto del hold;
+ *   - se dispersa el total − comisión al restaurante vía STP (SPEI).
+ *
+ * La garantía cubre ítems (ingreso del restaurante), NO la propina.
+ *
+ * Disparo: por SWEEP idempotente (sweepSettlements), cableado al scheduler.
+ * El sweep también sana mesas que el timer viejo marque 'expired'.
+ *
+ * CORREGIDO (auditoría v2.9): la liberación del hold sin faltante usaba
+ * cancelIntent(..., 'no_shortfall'), pero 'no_shortfall' NO es un
+ * cancellation_reason válido de Stripe (solo duplicate/fraudulent/
+ * requested_by_customer/abandoned). Ahora usa 'abandoned'.
+ *
+ * ⚠️ SIN VERIFICAR POR ENTORNO. Requiere CI/QA antes de prod.
+ *
+ * Repositorio destino: services/settlement.js
+ */
+'use strict';
+
+const pool = require('../db/pool');
+const eventEmitter = require('./eventEmitter');
+const stripeService = require('./stripe');
+const stp = require('./stp');
+const stateMachine = require('../utils/stateMachine');
+const notifs = require('./notifications');
+const { centsToDisplay, calculateFee } = require('../utils/money');
+const logger = require('../utils/logger');
+
+const SETTLE_BATCH = Number(process.env.SETTLE_BATCH) || 25;
+const SETTLING_STALE_MIN = Number(process.env.SETTLING_STALE_MIN) || 2;
+const DISPERSE_RETRY_MIN = Number(process.env.DISPERSE_RETRY_MIN) || 5;
+const DISPERSE_MAX_RETRIES = Number(process.env.DISPERSE_MAX_RETRIES) || 10;
+
+// claveRastreo determinística por mesa (idempotencia STP)
+function deterministicClave(mesaId) {
+  return ('PM' + String(mesaId).replace(/-/g, '')).slice(0, 29).toUpperCase();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1) HOLD DE GARANTÍA  (lo llama routes/mesas.js al crear la mesa)
+// ═══════════════════════════════════════════════════════════════════════════
+/**
+ * @param {object} p
+ * @param {string} p.mesaId        mesa ya creada en estado 'pending_auth'
+ * @param {object} p.organizer     req.user (necesita id y, para tarjeta, stripe_customer_id)
+ * @param {'card'|'wallet'} p.method
+ * @param {string=} p.stripePaymentMethodId  (tarjeta) pm_... de Stripe
+ * @param {number} p.amountCents   = total_cents de la mesa
+ * @returns {Promise<{status:'open'|'requires_action'|'failed', clientSecret?:string, reason?:string, available?:number, required?:number}>}
+ */
+async function placeGuaranteeHold({ mesaId, organizer, method, stripePaymentMethodId, amountCents }) {
+  if (method === 'wallet') {
+    return placeWalletHold({ mesaId, organizer, amountCents });
+  }
+  return placeCardHold({ mesaId, organizer, stripePaymentMethodId, amountCents });
+}
+
+async function placeCardHold({ mesaId, organizer, stripePaymentMethodId, amountCents }) {
+  if (!organizer?.stripe_customer_id || !stripePaymentMethodId) {
+    await markAuthFailed(mesaId, 'no_payment_source');
+    return { status: 'failed', reason: 'no_payment_source' };
+  }
+
+  let intent;
+  try {
+    intent = await stripeService.createPaymentIntent({
+      amount_cents: amountCents,
+      customer_id: organizer.stripe_customer_id,
+      payment_method_id: stripePaymentMethodId,
+      capture_method: 'manual',                 // ← HOLD
+      idempotency_key: `guarantee_${mesaId}`,
+      metadata: { kind: 'guarantee_auth', mesa_id: mesaId, user_id: organizer.id },
+    });
+  } catch (err) {
+    logger.warn('guarantee_hold_stripe_error', { mesa_id: mesaId, error: err.message });
+    await markAuthFailed(mesaId, err.message);
+    return { status: 'failed', reason: err.message };
+  }
+
+  // requires_capture = hold OK | requires_action = 3DS | otro = rechazo
+  if (intent.status === 'requires_capture') {
+    await pool.tx(async (client) => {
+      const upd = await client.query(
+        `UPDATE mesas
+            SET status='open', auth_method='card',
+                auth_payment_intent_id=$2, auth_amount_cents=$3
+          WHERE id=$1 AND status='pending_auth'`,
+        [mesaId, intent.id, amountCents]
+      );
+      // Outbox E1a: table_opened solo si ESTA corrida abrió la mesa (si el
+      // webhook 3DS ganó la carrera, él ya emitió el evento).
+      if (upd.rowCount === 1) {
+        await eventEmitter.enqueueTableOpened(client, mesaId);
+        // Outbox E6 (v2.13): hold autorizado → payment_secured (misma tx, seq siguiente).
+        await eventEmitter.enqueuePaymentSecured(client, mesaId);
+      }
+    });
+    logger.audit('guarantee_hold_placed', { mesa_id: mesaId, method: 'card', intent_id: intent.id, amount: amountCents });
+    return { status: 'open' };
+  }
+
+  if (intent.status === 'requires_action') {
+    // 3DS: guardamos el PI y devolvemos client_secret; la mesa queda pending_auth.
+    // El webhook payment_intent.amount_capturable_updated la pasará a 'open'.
+    await pool.query(
+      `UPDATE mesas
+          SET auth_method='card', auth_payment_intent_id=$2, auth_amount_cents=$3
+        WHERE id=$1 AND status='pending_auth'`,
+      [mesaId, intent.id, amountCents]
+    );
+    return { status: 'requires_action', clientSecret: intent.client_secret };
+  }
+
+  // rechazo u otro estado no capturable
+  await markAuthFailed(mesaId, `stripe_status_${intent.status}`);
+  try { await stripeService.cancelIntent(intent.id, 'abandoned'); } catch (_) { /* noop */ }
+  return { status: 'failed', reason: `stripe_status_${intent.status}` };
+}
+
+async function placeWalletHold({ mesaId, organizer, amountCents }) {
+  try {
+    return await pool.tx(async (client) => {
+      const { rows } = await client.query(
+        `SELECT id, balance_cents, held_balance_cents
+           FROM wallets WHERE user_id=$1 FOR UPDATE`,
+        [organizer.id]
+      );
+      const w = rows[0];
+      const available = w ? Number(w.balance_cents) - Number(w.held_balance_cents) : 0;
+      if (!w || available < amountCents) {
+        await client.query(
+          `UPDATE mesas SET status='auth_failed' WHERE id=$1 AND status='pending_auth'`,
+          [mesaId]
+        );
+        return { status: 'failed', reason: 'insufficient_balance_for_guarantee', available, required: amountCents };
+      }
+      await client.query(
+        `UPDATE wallets SET held_balance_cents = held_balance_cents + $2, updated_at=NOW() WHERE id=$1`,
+        [w.id, amountCents]
+      );
+      const upd = await client.query(
+        `UPDATE mesas
+            SET status='open', auth_method='wallet',
+                auth_held_balance_cents=$2, auth_amount_cents=$2
+          WHERE id=$1 AND status='pending_auth'`,
+        [mesaId, amountCents]
+      );
+      // Outbox E1b: misma tx del hold de wallet.
+      if (upd.rowCount === 1) {
+        await eventEmitter.enqueueTableOpened(client, mesaId);
+        // Outbox E6 (v2.13): hold autorizado → payment_secured (misma tx, seq siguiente).
+        await eventEmitter.enqueuePaymentSecured(client, mesaId);
+      }
+      logger.audit('guarantee_hold_placed', { mesa_id: mesaId, method: 'wallet', amount: amountCents });
+      return { status: 'open' };
+    });
+  } catch (err) {
+    logger.error('guarantee_wallet_hold_failed', { mesa_id: mesaId, error: err.message });
+    await markAuthFailed(mesaId, err.message);
+    return { status: 'failed', reason: err.message };
+  }
+}
+
+async function markAuthFailed(mesaId, reason) {
+  try {
+    await pool.query(
+      `UPDATE mesas SET status='auth_failed' WHERE id=$1 AND status IN ('pending_auth','open')`,
+      [mesaId]
+    );
+    logger.warn('guarantee_auth_failed', { mesa_id: mesaId, reason });
+  } catch (_) { /* noop */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2) SETTLEMENT (cierre)  — fasado para no llamar a Stripe dentro de una tx
+// ═══════════════════════════════════════════════════════════════════════════
+async function settleMesa(mesaId) {
+  // ── Fase 1 (tx): lock + validar + calcular faltante + marcar 'settling' ──
+  const phase1 = await pool.tx(async (client) => {
+    const { rows } = await client.query(
+      `SELECT id, restaurant_id, total_cents, status, guarantee_mode, auth_method,
+              auth_payment_intent_id, auth_amount_cents, auth_held_balance_cents,
+              opener_user_id, settled_at
+         FROM mesas WHERE id=$1 FOR UPDATE`,
+      [mesaId]
+    );
+    const m = rows[0];
+    if (!m) return { skip: 'not_found' };
+    if (m.settled_at || ['settled', 'dispersing', 'completed', 'cancelled'].includes(m.status)) {
+      return { skip: 'already_settled' };
+    }
+    const settleable =
+      ['open', 'partially_paid', 'expired', 'fully_paid'].includes(m.status) || m.status === 'settling';
+    if (!settleable) return { skip: `status_${m.status}` };
+
+    const { rows: cr } = await client.query(
+      `SELECT COALESCE(SUM(items_amount_cents),0) AS collected
+         FROM payment_attempts
+        WHERE mesa_id=$1 AND status IN ('succeeded','processed')`,
+      [mesaId]
+    );
+    const collected = Number(cr[0].collected);
+    const total = Number(m.total_cents);
+    const shortfall = Math.max(0, total - collected);
+
+    if (m.status !== 'settling') {
+      await client.query(`UPDATE mesas SET status='settling' WHERE id=$1`, [mesaId]);
+      // v2.11: rastro de auditoría de la transición (el FSM ya la define; cierra
+      // el gap documentado en el header de utils/stateMachine.js). Best-effort.
+      try {
+        await stateMachine.transition({
+          client, entityType: 'mesa', entityId: mesaId,
+          fromState: m.status, toState: 'settling',
+          reason: 'settlement_sweep', triggeredBy: 'worker',
+        });
+      } catch (e) {
+        logger.warn('settle_audit_transition_failed', { mesa_id: mesaId, error: e.message });
+      }
+    }
+    return { proceed: true, mesa: m, collected, total, shortfall };
+  });
+
+  if (!phase1.proceed) return phase1;
+  const { mesa: m, total, collected, shortfall } = phase1;
+
+  // ── Fase 1.5 (v2.11 · parche Opción 1 / FINDING A): cancelar pagos EN VUELO ──
+  // La mesa cierra: los attempts pending/requires_action/processing/authorized no
+  // deben poder aterrizar después de calculado el faltante. Mismo patrón 3 pasos
+  // del timer ('cancelling' → Stripe → 'cancelled'). Si Stripe ya cobró alguno,
+  // el webhook lo rescata (webhooks.js) y queda trazado como
+  // 'late_payment_after_settle' (paymentProcessor) para revisión.
+  try {
+    await cancelInFlightAttempts(m, mesaId);
+  } catch (e) {
+    logger.error('settle_cancel_inflight_failed', { mesa_id: mesaId, error: e.message });
+  }
+
+  // ── Fase 2 (sin tx): captura/liberación de tarjeta — idempotente ──
+  if (m.guarantee_mode && m.auth_method === 'card' && m.auth_payment_intent_id) {
+    try {
+      if (shortfall > 0) {
+        // captura parcial = faltante; libera el remanente automáticamente
+        await stripeService.capturePaymentIntent(m.auth_payment_intent_id, shortfall, `capture_${mesaId}`);
+      } else {
+        // sin faltante: liberar el hold completo
+        try { await stripeService.cancelIntent(m.auth_payment_intent_id, 'abandoned'); }
+        catch (e) { logger.warn('guarantee_hold_release_noop', { mesa_id: mesaId, error: e.message }); }
+      }
+    } catch (err) {
+      // la captura falló de verdad → dejar 'settling' para que el sweep reintente
+      logger.error('guarantee_capture_failed', { mesa_id: mesaId, shortfall, error: err.message });
+      return { error: 'capture_failed', detail: err.message };
+    }
+  }
+
+  // ── Fase 3 (tx): ledger de saldo (si wallet) + marcar 'settled' ──
+  const phase3 = await pool.tx(async (client) => {
+    // v2.11 (A2 · P0): re-verificar el estado DENTRO de la tx antes de tocar el
+    // wallet. Sin esto, dos settleMesa concurrentes sobre la misma mesa (tick
+    // solapado del timer / multi-instancia) debitaban el faltante DOS VECES del
+    // saldo del organizador: el UPDATE final con WHERE status='settling' de la
+    // segunda corrida fallaba silencioso, pero su débito ya estaba commiteado.
+    // (El camino tarjeta lo salvaba la idempotency key de Stripe; el wallet no.)
+    const { rows: cur } = await client.query(
+      `SELECT status FROM mesas WHERE id=$1 FOR UPDATE`, [mesaId]
+    );
+    if (cur[0]?.status !== 'settling') {
+      return { raced: true, status: cur[0]?.status };
+    }
+    if (m.guarantee_mode && m.auth_method === 'wallet') {
+      await settleWalletHold(client, m, shortfall);
+    }
+    await client.query(
+      `UPDATE mesas
+          SET status='settled', captured_shortfall_cents=$2, settled_at=NOW()
+        WHERE id=$1 AND status='settling'`,
+      [mesaId, shortfall]
+    );
+    try {
+      await stateMachine.transition({
+        client, entityType: 'mesa', entityId: mesaId,
+        fromState: 'settling', toState: 'settled',
+        reason: 'settled', triggeredBy: 'worker',
+      });
+    } catch (e) {
+      logger.warn('settle_audit_transition_failed', { mesa_id: mesaId, error: e.message });
+    }
+    // Outbox E3: table_charged en 'settled' — cubre fully_paid Y expired+garantía;
+    // hereda el re-check FOR UPDATE de arriba (anti doble emisión).
+    await eventEmitter.enqueueTableCharged(client, mesaId);
+    return { raced: false };
+  });
+  if (phase3.raced) {
+    logger.warn('settle_phase3_lost_race', { mesa_id: mesaId, status: phase3.status });
+    return { skip: 'raced_already_settled' };
+  }
+
+  logger.audit('mesa_settled', { mesa_id: mesaId, total, collected, shortfall, auth_method: m.auth_method });
+
+  // notificar al organizador si se le cobró un faltante (best-effort)
+  if (shortfall > 0) {
+    try {
+      await notifs.create({
+        user_id: m.opener_user_id,
+        type: 'mesa_shortfall_charged',
+        body: `Se cobró el faltante de la mesa (${centsToDisplay(Number(shortfall))}) a tu garantía.`,
+        payload: { mesa_id: mesaId, shortfall_cents: shortfall },
+        related_entity_type: 'mesa',
+        related_entity_id: mesaId,
+      });
+    } catch (_) { /* noop */ }
+  }
+
+  return { settled: true, total, collected, shortfall };
+}
+
+// Liquidación del hold de SALDO: libera la reserva y cobra solo el faltante.
+async function settleWalletHold(client, m, shortfall) {
+  const { rows } = await client.query(
+    `SELECT id, balance_cents, held_balance_cents FROM wallets WHERE user_id=$1 FOR UPDATE`,
+    [m.opener_user_id]
+  );
+  const w = rows[0];
+  if (!w) { logger.error('settle_wallet_no_wallet', { mesa_id: m.id }); return; }
+
+  const reserved = Number(m.auth_held_balance_cents) || 0;
+  const newHeld = Math.max(0, Number(w.held_balance_cents) - reserved);  // liberar reserva
+  let newBalance = Number(w.balance_cents);
+
+  if (shortfall > 0) {
+    newBalance -= shortfall;  // el organizador paga el faltante desde su saldo
+    await client.query(
+      `INSERT INTO wallet_transactions
+         (wallet_id, user_id, type, amount_cents, balance_after_cents,
+          related_entity_type, related_entity_id, description)
+       VALUES ($1,$2,'payment_mesa',$3,$4,'mesa',$5,$6)`,
+      [w.id, m.opener_user_id, -shortfall, newBalance, m.id, 'Faltante mesa (garantía)']
+    );
+  }
+
+  await client.query(
+    `UPDATE wallets SET balance_cents=$2, held_balance_cents=$3, updated_at=NOW() WHERE id=$1`,
+    [w.id, newBalance, newHeld]
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3) DISPERSIÓN al restaurante (SPEI vía STP) — idempotente por mesa
+// ═══════════════════════════════════════════════════════════════════════════
+async function disperseMesa(mesaId) {
+  const { rows } = await pool.query(
+    `SELECT m.id, m.restaurant_id, m.total_cents, m.status, m.dispersed_at,
+            r.clabe AS restaurant_clabe, r.name AS restaurant_name, r.fee_pct, r.rfc
+       FROM mesas m JOIN restaurants r ON r.id = m.restaurant_id
+      WHERE m.id=$1`,
+    [mesaId]
+  );
+  const m = rows[0];
+  if (!m) return { skip: 'not_found' };
+  if (m.dispersed_at || m.status === 'completed') {
+    // v2.11 (A4): si la fila de dispersals quedó en 'retrying'/'failed' de una
+    // corrida anterior pero la mesa ya completó, sanearla — sin esto el sweep(3)
+    // la re-selecciona para siempre (loop no-op: retry_count nunca incrementa).
+    await pool.query(
+      `UPDATE dispersals SET status='sent', updated_at=NOW()
+        WHERE mesa_id=$1 AND status IN ('retrying','failed')`,
+      [mesaId]
+    );
+    return { skip: 'already_dispersed' };
+  }
+  if (m.status !== 'settled' && m.status !== 'dispersing') return { skip: `status_${m.status}` };
+
+  const total = Number(m.total_cents);
+  const fee = calculateFee(total, Number(m.fee_pct || 0.02));
+  const net = total - fee;
+  const clave = deterministicClave(mesaId);
+
+  // asegurar fila de dispersión (idempotente por mesa; clave determinística)
+  await pool.query(
+    `INSERT INTO dispersals
+       (mesa_id, restaurant_id, amount_cents, fee_cents, net_cents, status, stp_clave_rastreo)
+     VALUES ($1,$2,$3,$4,$5,'pending',$6)
+     ON CONFLICT (mesa_id) DO NOTHING`,
+    [mesaId, m.restaurant_id, total, fee, net, clave]
+  );
+
+  if (!m.restaurant_clabe) {
+    logger.error('disperse_no_clabe', { mesa_id: mesaId, restaurant_id: m.restaurant_id });
+    await pool.query(
+      `UPDATE dispersals SET status='manual_review', failure_reason='restaurant_clabe_missing', updated_at=NOW()
+        WHERE mesa_id=$1`,
+      [mesaId]
+    );
+    return { skip: 'no_clabe' };
+  }
+
+  // single-leader: solo un worker pasa settled→dispersing
+  const guard = await pool.query(
+    `UPDATE mesas SET status='dispersing' WHERE id=$1 AND status='settled'`,
+    [mesaId]
+  );
+  if (guard.rowCount === 0 && m.status !== 'dispersing') return { skip: 'not_settled' };
+  if (guard.rowCount === 1) {
+    try {
+      await stateMachine.transition({
+        entityType: 'mesa', entityId: mesaId,
+        fromState: 'settled', toState: 'dispersing',
+        reason: 'disperse_start', triggeredBy: 'worker',
+      });
+    } catch (e) { logger.warn('disperse_audit_transition_failed', { mesa_id: mesaId, error: e.message }); }
+  }
+  await pool.query(`UPDATE dispersals SET status='processing', updated_at=NOW() WHERE mesa_id=$1`, [mesaId]);
+
+  try {
+    const result = await stp.dispersarSPEI({
+      amount_cents: net,
+      clabe_destino: m.restaurant_clabe,
+      beneficiario: m.restaurant_name,
+      rfc_beneficiario: m.rfc || undefined,
+      concepto: `PayMe mesa ${String(mesaId).slice(0, 8)}`,
+      referencia: mesaId,
+      clave_rastreo: clave,
+    });
+
+    await pool.query(
+      `UPDATE dispersals SET status='sent', stp_clave_rastreo=$2, updated_at=NOW() WHERE mesa_id=$1`,
+      [mesaId, result.clave_rastreo]
+    );
+    const done = await pool.tx(async (client) => {
+      const upd = await client.query(
+        `UPDATE mesas SET status='completed', dispersed_at=NOW() WHERE id=$1 AND status='dispersing'`,
+        [mesaId]
+      );
+      // Outbox E4: table_closed atómico con el cierre real de la mesa.
+      if (upd.rowCount === 1) await eventEmitter.enqueueTableClosed(client, mesaId);
+      return upd;
+    });
+    if (done.rowCount === 1) {
+      try {
+        await stateMachine.transition({
+          entityType: 'mesa', entityId: mesaId,
+          fromState: 'dispersing', toState: 'completed',
+          reason: 'spei_sent', triggeredBy: 'worker',
+        });
+      } catch (e) { logger.warn('disperse_audit_transition_failed', { mesa_id: mesaId, error: e.message }); }
+    }
+    logger.audit('mesa_dispersed', { mesa_id: mesaId, net, clave: result.clave_rastreo, mock: !!result.mock });
+    return { dispersed: true, net, clave: result.clave_rastreo };
+  } catch (err) {
+    await pool.query(
+      `UPDATE dispersals
+          SET status='retrying', retry_count = retry_count + 1,
+              next_retry_at = NOW() + ($2 || ' minutes')::interval,
+              failure_reason=$3, updated_at=NOW()
+        WHERE mesa_id=$1`,
+      [mesaId, String(DISPERSE_RETRY_MIN), String(err.message).slice(0, 500)]
+    );
+    // volver a 'settled' para que el sweep reintente
+    const back = await pool.query(`UPDATE mesas SET status='settled' WHERE id=$1 AND status='dispersing'`, [mesaId]);
+    if (back.rowCount === 1) {
+      try {
+        await stateMachine.transition({
+          entityType: 'mesa', entityId: mesaId,
+          fromState: 'dispersing', toState: 'settled',
+          reason: 'disperse_retry', triggeredBy: 'worker',
+        });
+      } catch (e) { logger.warn('disperse_audit_transition_failed', { mesa_id: mesaId, error: e.message }); }
+    }
+    logger.error('mesa_disperse_failed', { mesa_id: mesaId, error: err.message });
+    return { dispersed: false, error: err.message };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2.5) v2.11 (Opción 1 · FINDING A) — cancelar intentos de pago EN VUELO al cerrar
+// ═══════════════════════════════════════════════════════════════════════════
+// Patrón de 3 pasos del timer (v2.4 #7): 'cancelling' con guard → Stripe fuera
+// de tx → 'cancelled' solo si sigue 'cancelling'. Si Stripe ya cobró el intent,
+// cancelIntent falla (tolerado) y el webhook payment_intent.succeeded lo rescata.
+async function cancelInFlightAttempts(m, mesaId) {
+  // PASO 1 (atómico): marcar cancelling con guard de estado
+  const { rows: marked } = await pool.query(
+    `WITH locked AS (
+       SELECT id FROM payment_attempts
+        WHERE mesa_id = $1
+          AND status IN ('pending','requires_action','processing','authorized')
+        FOR UPDATE SKIP LOCKED
+     )
+     UPDATE payment_attempts pa
+        SET status = 'cancelling'
+       FROM locked
+      WHERE pa.id = locked.id
+        AND pa.status IN ('pending','requires_action','processing','authorized')
+  RETURNING pa.id, pa.user_id, pa.stripe_payment_intent_id`,
+    [mesaId]
+  );
+  if (marked.length === 0) return;
+
+  for (const a of marked) {
+    // PASO 2 (sin tx): cancelar en Stripe; si ya cobró, el webhook rescata.
+    if (a.stripe_payment_intent_id) {
+      try {
+        await stripeService.cancelIntent(a.stripe_payment_intent_id, 'abandoned');
+      } catch (err) {
+        logger.warn('settle_cancel_intent_failed', {
+          mesa_id: mesaId, attempt_id: a.id, error: err.message,
+        });
+      }
+    }
+    // PASO 3 (tx): cancelled + liberar locks, SOLO si sigue 'cancelling'
+    try {
+      await pool.tx(async (client) => {
+        const { rows } = await client.query(
+          `SELECT status FROM payment_attempts WHERE id = $1 FOR UPDATE`, [a.id]
+        );
+        if (rows[0]?.status !== 'cancelling') return;
+        await client.query(
+          `UPDATE payment_attempts SET status='cancelled', failure_reason='mesa_settled' WHERE id=$1`,
+          [a.id]
+        );
+        await stateMachine.transition({
+          client, entityType: 'payment_attempt', entityId: a.id,
+          fromState: 'cancelling', toState: 'cancelled',
+          reason: 'mesa_settled', triggeredBy: 'worker',
+        });
+        await client.query(
+          `UPDATE mesa_items
+              SET status='released', locked_by_attempt=NULL, locked_by_user_id=NULL,
+                  locked_by_guest_token=NULL, locked_by_guest_token_hash=NULL,
+                  lock_token=NULL, lock_expires_at=NULL
+            WHERE locked_by_attempt = $1 AND status = 'locked'`,
+          [a.id]
+        );
+        await client.query(
+          `UPDATE mesa_division_slots
+              SET status='available', claimed_by_attempt_id=NULL, claimed_by_user_id=NULL,
+                  claimed_by_guest_token=NULL, claimed_by_guest_token_hash=NULL, claimed_at=NULL
+            WHERE claimed_by_attempt_id = $1 AND status = 'claimed'`,
+          [a.id]
+        );
+      });
+    } catch (err) {
+      logger.error('settle_cancel_finalize_failed', {
+        mesa_id: mesaId, attempt_id: a.id, error: err.message,
+      });
+    }
+    // aviso al pagador (best-effort)
+    if (a.user_id) {
+      try {
+        await notifs.create({
+          user_id: a.user_id, type: 'payment_failed',
+          title: 'Pago cancelado',
+          body: 'La mesa cerró antes de completarse tu pago.',
+          related_entity_type: 'payment_attempt', related_entity_id: a.id,
+        });
+      } catch (_) { /* noop */ }
+    }
+  }
+
+  // aviso al organizador: su garantía cubre a los que no llegaron (best-effort)
+  try {
+    await notifs.create({
+      user_id: m.opener_user_id, type: 'mesa_garantia_impagos',
+      body: `Se cancelaron ${marked.length} pago(s) en curso al cerrar la mesa; tu garantía cubre el faltante.`,
+      payload: { mesa_id: mesaId, cancelled_attempts: marked.length },
+      related_entity_type: 'mesa', related_entity_id: mesaId,
+    });
+  } catch (_) { /* noop */ }
+
+  logger.audit('settle_inflight_cancelled', { mesa_id: mesaId, count: marked.length });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4) SWEEP — idempotente; cablear al scheduler (services/timer.js)
+// ═══════════════════════════════════════════════════════════════════════════
+async function sweepSettlements() {
+  let settled = 0, dispersed = 0, retried = 0;
+
+  // (1) mesas a liquidar: pagadas, vencidas, expired (legacy), o 'settling' stale
+  const { rows: toSettle } = await pool.query(
+    `SELECT id FROM mesas
+      WHERE guarantee_mode = true
+        AND settled_at IS NULL
+        AND (
+              status = 'fully_paid'
+           OR (status IN ('open','partially_paid') AND expires_at < NOW())
+           OR status = 'expired'
+           OR (status = 'settling' AND updated_at < NOW() - ($1 || ' minutes')::interval)
+        )
+      ORDER BY created_at ASC
+      LIMIT $2`,
+    [String(SETTLING_STALE_MIN), SETTLE_BATCH]
+  );
+  for (const r of toSettle) {
+    try { await settleMesa(r.id); settled++; }
+    catch (e) { logger.error('sweep_settle_error', { mesa_id: r.id, error: e.message }); }
+  }
+
+  // (2) dispersar las ya liquidadas
+  const { rows: toDisperse } = await pool.query(
+    `SELECT id FROM mesas
+      WHERE status='settled' AND dispersed_at IS NULL
+      ORDER BY settled_at ASC LIMIT $1`,
+    [SETTLE_BATCH]
+  );
+  for (const r of toDisperse) {
+    try { const d = await disperseMesa(r.id); if (d.dispersed) dispersed++; }
+    catch (e) { logger.error('sweep_disperse_error', { mesa_id: r.id, error: e.message }); }
+  }
+
+  // (3) reintentar dispersiones fallidas
+  const { rows: toRetry } = await pool.query(
+    `SELECT mesa_id FROM dispersals
+      WHERE status IN ('retrying','failed')
+        AND (next_retry_at IS NULL OR next_retry_at < NOW())
+        AND retry_count < $1
+      ORDER BY next_retry_at ASC NULLS FIRST
+      LIMIT $2`,
+    [DISPERSE_MAX_RETRIES, SETTLE_BATCH]
+  );
+  for (const r of toRetry) {
+    try { const d = await disperseMesa(r.mesa_id); if (d.dispersed) retried++; }
+    catch (e) { logger.error('sweep_retry_error', { mesa_id: r.mesa_id, error: e.message }); }
+  }
+
+  if (settled || dispersed || retried) {
+    logger.info('sweep_settlements', { settled, dispersed, retried });
+  }
+  return { settled, dispersed, retried };
+}
+
+module.exports = {
+  placeGuaranteeHold,
+  settleMesa,
+  disperseMesa,
+  sweepSettlements,
+  deterministicClave,
+};
