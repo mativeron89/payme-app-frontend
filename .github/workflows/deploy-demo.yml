@@ -1,6 +1,8 @@
 # Demo compartible: publica el build MOCK en GitHub Pages en cada push a main.
 # La URL queda en https://mativeron89.github.io/payme-app-frontend/
-# configure-pages con enablement:true activa Pages solo en el primer run.
+# Requiere una vez: Settings → Pages → Source: "GitHub Actions".
+# (configure-pages no puede habilitarlo solo: el token del workflow no tiene ese permiso,
+#  por eso va con continue-on-error y no frena el deploy.)
 name: Deploy demo (GitHub Pages)
 
 on:
@@ -26,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+        continue-on-error: true
         with:
           enablement: true
       - uses: actions/setup-node@v4
