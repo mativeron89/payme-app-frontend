@@ -2,6 +2,29 @@
 
 ---
 
+## 🟡 B-04 — `GET /api/mesas/:code` no devuelve `code` (menor, abierto)
+
+Hallado el 2026-07-19 al verificar el fix v2.14.1. **Estaba tapado por B-01**:
+como el endpoint nunca respondía, nadie vio que la respuesta venía incompleta.
+
+`requireMesaParticipant` usa `code` en el `WHERE` pero **no lo selecciona**, ni
+en la consulta con JOIN ni en el fallback. Como `req.mesa.code` queda
+`undefined`, la respuesta sale sin la clave `code` y con
+`full_name: "Mesa undefined - La Parolaccia"`.
+
+Verificado contra v2.14.1: `GET /api/mesas/PA-8804` → `id`, `total_cents`,
+`status` y `expires_at` correctos; `code` **ausente**; `full_name` con el
+"undefined" incrustado.
+
+**Fix sugerido:** agregar `m.code` al `SELECT` (y `code` al fallback).
+
+**Estado del front:** ya no depende de eso. La pantalla de mesa usa el código
+de la ruta —que es con el que pidió la mesa— en vez de esperar que vuelva por
+la API. Es más correcto así, independientemente del bug. Igual conviene
+arreglarlo en el backend porque `full_name` sale roto para cualquier consumidor.
+
+---
+
 ## 🔴 B-01 — BUG BLOQUEANTE del backend (no es un gap: es un defecto)
 
 **Hallado el 2026-07-19 durante T7, corriendo el backend v2.14.0 real contra
@@ -50,8 +73,10 @@ SELECT m.id, m.restaurant_id, m.opener_user_id, m.total_cents, m.paid_amount_cen
 `DATABASE_URL_TEST`/`RUN_DB_TESTS` y varias están en skip declarado, así que
 este camino nunca se ejerció contra un Postgres real.
 
-**Estado (2026-07-19):** confirmado por el equipo del backend. Fix propuesto,
-esperando el OK de Mati para mergear. No hay nada que hacer del lado del front.
+**Estado: RESUELTO** en v2.14.1 (`1a4a7a0`, CI verde). Verificado por el front
+el 2026-07-19 contra el backend real: `GET /mesas/:code` 200, `items/lock` 200,
+`/pay` 201. El backend sumó `tests/sql-runtime.test.js`, que ejecuta estas
+consultas contra el Postgres del CI en cada push.
 
 ---
 
@@ -81,10 +106,9 @@ completos; `POST /:id/accept` responde `500 {"error":"42P10"}`. Repitiendo el
 predicado (`ON CONFLICT (mesa_id, user_id) WHERE user_id IS NOT NULL`) el
 INSERT funciona.
 
-**Comportamiento del front mientras tanto:** verificado que degrada bien —
-avisa "No pudimos aceptar la invitación", deja la invitación en la lista y el
-botón vuelve a estar disponible. No se agrega ningún parche: el fix está en
-camino y un workaround acá sería código muerto.
+**Estado: RESUELTOS** en v2.14.1. Verificado por el front:
+`POST /invitations/:id/accept` → `200 {"accepted":true}`. No hizo falta ningún
+parche del lado del front (se decidió a propósito no meter workarounds).
 
 ---
 

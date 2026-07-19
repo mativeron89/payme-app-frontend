@@ -245,7 +245,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         {previewingAsGuest ? 'Así lo ve quien recibe tu link' : 'Te invitaron a'}
       </div>
       <div style={{ fontSize: 15, fontWeight: 700 }}>
-        {mesa.code} · {mesa.restaurant.name}
+        {code} · {mesa.restaurant.name}
       </div>
       {previewingAsGuest && (
         <button
@@ -277,7 +277,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               {shortfall > 0 ? 'Se cerró por tiempo' : 'Quedó todo pago'}
             </div>
             <div className="body-text" style={{ marginTop: 6 }}>
-              {mesa.restaurant.name} · Mesa {mesa.code}
+              {mesa.restaurant.name} · Mesa {code}
             </div>
           </div>
           <div className="card card-p" style={{ marginBottom: 14 }}>
@@ -400,7 +400,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
             <div className="receipt-row">
               <span className="lbl">Mesa</span>
-              <span className="val">{mesa.code}</span>
+              <span className="val">{code}</span>
             </div>
             <div className="receipt-row">
               <span className="lbl">Método</span>
@@ -665,7 +665,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       <div style={{ background: 'var(--navy)', padding: '0 20px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)', minWidth: 0 }}>
-            Mesa {mesa.code} · {mesa.division_mode === 'igual' ? 'partes iguales' : 'cada uno lo suyo'}
+            Mesa {code} · {mesa.division_mode === 'igual' ? 'partes iguales' : 'cada uno lo suyo'}
           </div>
           <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '4px 12px', borderRadius: 20, fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
             {formatMXN(mesa.total_cents)}
