@@ -2,13 +2,25 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 
 /** Piezas chicas compartidas: top bar, toast y avatar con color estable. */
 
-export function TopBar({ title, onBack, right }: { title: string; onBack: () => void; right?: ReactNode }) {
+export function TopBar({
+  title,
+  onBack,
+  right,
+  backLabel = 'Volver',
+}: {
+  title: string;
+  onBack?: () => void;
+  right?: ReactNode;
+  backLabel?: string;
+}) {
   return (
     <div className="top-bar">
-      <button className="back-btn" onClick={onBack} aria-label="Volver">
-        ←
-      </button>
-      <div className="top-title">{title}</div>
+      {onBack && (
+        <button className="back-btn" onClick={onBack} aria-label={backLabel}>
+          <span aria-hidden="true">←</span>
+        </button>
+      )}
+      <h1 className="top-title">{title}</h1>
       {right}
     </div>
   );
@@ -27,11 +39,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={show}>
       {children}
-      {msg && (
-        <div className="toast" role="status">
-          {msg}
-        </div>
-      )}
+      {/* Siempre montado (ver .toast-hidden en global.css): una región live que
+          se inserta junto con su texto no la anuncian varios lectores. */}
+      <div className={msg ? 'toast' : 'toast toast-hidden'} role="status" aria-live="polite">
+        {msg}
+      </div>
     </ToastContext.Provider>
   );
 }

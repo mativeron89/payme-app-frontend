@@ -1,4 +1,4 @@
-import { centsToDisplay } from '../../utils/money';
+import { centsToDisplay, splitEqual } from '../../utils/money';
 import { saveSession, type StoredSession } from '../storage';
 import type {
   BalanceResponse,
@@ -32,8 +32,10 @@ import {
   availableBalance,
   findMesa,
   markMesaPaid,
+  materializeDemoMesa,
   mesaPayable,
   mockId,
+  persist,
   pushWalletTx,
   settleIfExpired,
   state,
@@ -62,7 +64,13 @@ export class MockApiError extends Error {
   }
 }
 
+/**
+ * Toda respuesta OK del mock pasa por acá, así que es el punto natural para
+ * persistir: cualquier mutación queda guardada sin tener que acordarse en
+ * cada handler.
+ */
 function delay<T>(value: T): Promise<T> {
+  persist();
   return new Promise((resolve) => setTimeout(() => resolve(value), LATENCY_MS));
 }
 
@@ -74,11 +82,28 @@ function fail(status: number, error: string, extra: Record<string, unknown> = {}
 
 // ─── Auth ──────────────────────────────────────────────────
 
+/** "sofi.lopez@mail.com" → "Sofi": el que prueba la demo se ve saludado por su
+ *  propio nombre en vez del de la persona de ejemplo. */
+function nameFromEmail(email: string): string | null {
+  const local = email.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
+  if (!local) return null;
+  const first = local.split(' ')[0];
+  if (!first || first.length < 2 || /^\d+$/.test(first)) return null;
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+}
+
 export async function mockLogin(email: string, _password: string): Promise<StoredSession> {
+  const derived = nameFromEmail(email);
+  const user = {
+    ...MOCK_USER,
+    email: email || MOCK_USER.email,
+    ...(derived && { first_name: derived, last_name: '' }),
+  };
+  state.user = user;
   const session: StoredSession = {
     access_token: 'mock-access-token',
     refresh_token: 'mock-refresh-token',
-    user: { ...MOCK_USER, email: email || MOCK_USER.email },
+    user,
   };
   saveSession(session);
   return delay(session);
@@ -130,7 +155,9 @@ export async function mockOpenMesas(): Promise<OpenMesasResponse> {
 }
 
 export async function mockGetMesa(code: string, identity: MockIdentity): Promise<MesaDetailResponse> {
-  const mesa = findMesa(code);
+  // Si el link viene de otro dispositivo, la mesa no existe en ESTE navegador:
+  // se materializa con el ticket de ejemplo para que la demo no se corte.
+  const mesa = findMesa(code) ?? materializeDemoMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   settleIfExpired(mesa);
   return delay({ mesa: toMesaDetail(mesa, identity) });
@@ -200,9 +227,11 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
     })),
     slots:
       req.division_mode === 'igual'
-        ? Array.from({ length: req.expected_participants }, (_, idx) => ({
+        ? // splitEqual (igual que el backend): el primer comensal absorbe los
+          // centavos sobrantes, así la suma de las partes da SIEMPRE el total.
+          splitEqual(req.total_cents, req.expected_participants).map((amount, idx) => ({
             slot_index: idx,
-            amount_cents: Math.floor(req.total_cents / req.expected_participants),
+            amount_cents: amount,
             status: 'available' as const,
             claimedBy: null,
           }))

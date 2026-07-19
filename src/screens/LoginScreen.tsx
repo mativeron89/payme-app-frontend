@@ -66,7 +66,11 @@ export function LoginScreen() {
         <div className="h2" style={{ marginBottom: 14 }}>
           {mode === 'login' ? 'Entrá a tu cuenta' : 'Creá tu cuenta'}
         </div>
-        {error && <div className="form-error">{error}</div>}
+        {error && (
+          <div className="form-error" role="alert">
+            {error}
+          </div>
+        )}
         {mode === 'register' && (
           <>
             <input

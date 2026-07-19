@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, newIdempotencyKey } from '../api';
 import { extractApiError } from '../api/errors';
 import type { MesaDetail, PaymentMethod, PaymentType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -28,7 +28,10 @@ interface PayResult {
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
   const { session } = useAuth();
   const toast = useToast();
-  const isGuest = !session && !!guestToken;
+  // Si llega guestToken, App ya decidió que esta vista es la del invitado
+  // (sin sesión siempre; con sesión solo en la demo, para poder mostrarla).
+  const isGuest = !!guestToken;
+  const previewingAsGuest = isGuest && !!session;
   const [mesa, setMesa] = useState<MesaDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [view, setView] = useState<View>('detail');
@@ -102,7 +105,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       } catch (err) {
         const { code: ec, extra } = extractApiError(err);
         if (ec === 'item_already_locked' || ec === 'item_already_paid') {
-          toast('Alguien ya tomó uno de esos ítems');
+          toast('Alguien ya tomó uno de esos consumos');
           const itemId = typeof extra.item_id === 'string' ? extra.item_id : null;
           if (itemId) {
             const next = new Set(selected);
@@ -111,7 +114,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           }
           reload();
         } else {
-          toast('No pudimos reservar tus ítems');
+          toast('No pudimos reservar lo que elegiste');
         }
       } finally {
         setBusy(false);
@@ -192,13 +195,23 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }, [view, procStep, reload]);
 
   // ─── Estados de carga / error ────────────────────────────
+  // OJO: el invitado NO puede salir a 'home' — navigate() reescribe el hash sin
+  // el token ?t= y perdería el acceso a la mesa (quedaría en el login).
   if (notFound) {
     return (
       <div className="screen">
-        <TopBar title="Mesa" onBack={() => navigate('home')} />
+        <TopBar title="Mesa" onBack={isGuest ? undefined : () => navigate('home')} />
         <div className="empty">
           <div className="emoji">🔍</div>
-          No encontramos esa mesa (o el link venció).
+          No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la
+          cuenta.
+          {isGuest && (
+            <div style={{ marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => window.location.reload()}>
+                Reintentar
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -206,21 +219,30 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   if (!mesa) {
     return (
       <div className="screen">
-        <TopBar title="Mesa" onBack={() => navigate('home')} />
-        <div className="loading">Cargando mesa…</div>
+        <TopBar title="Mesa" onBack={isGuest ? undefined : () => navigate('home')} />
+        <div className="loading" role="status" aria-live="polite">
+          Cargando mesa…
+        </div>
       </div>
     );
   }
-
-  const backHome = () => (isGuest ? undefined : navigate('home'));
   const guestHeader = isGuest && (
     <div style={{ background: 'var(--teal-l)', padding: '14px 16px', borderBottom: '1px solid var(--teal)' }}>
-      <div style={{ fontSize: 12, color: 'var(--navy)', opacity: 0.7, fontFamily: 'var(--font-body)' }}>
-        Te invitaron a
+      <div className="caption" style={{ color: 'var(--navy)' }}>
+        {previewingAsGuest ? 'Así lo ve quien recibe tu link' : 'Te invitaron a'}
       </div>
       <div style={{ fontSize: 15, fontWeight: 700 }}>
         {mesa.code} · {mesa.restaurant.name}
       </div>
+      {previewingAsGuest && (
+        <button
+          className="login-toggle"
+          style={{ padding: '6px 0 0' }}
+          onClick={() => navigate('home')}
+        >
+          ← Salir de la vista de invitado
+        </button>
+      )}
     </div>
   );
 
@@ -230,7 +252,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     const isOpener = mesa.my_role === 'opener';
     return (
       <div className="screen">
-        <TopBar title={mesa.status === 'fully_paid' ? 'Mesa completa' : 'Mesa cerrada'} onBack={() => navigate(isGuest ? 'home' : 'mesas')} />
+        <TopBar
+          title={mesa.status === 'fully_paid' ? 'Mesa completa' : 'Mesa cerrada'}
+          onBack={isGuest ? undefined : () => navigate('mesas')}
+        />
         {guestHeader}
         <div className="scroll" style={{ padding: '20px 16px' }}>
           <div style={{ textAlign: 'center', padding: '8px 0 18px' }}>
@@ -256,7 +281,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             {shortfall > 0 && (
               <div className="receipt-row">
                 <span className="lbl">{isOpener ? 'Cubrió tu garantía' : 'Cubrió la garantía'}</span>
-                <span className="val" style={{ color: 'var(--orange)' }}>
+                <span className="val" style={{ color: 'var(--orange-txt)' }}>
                   {formatMXN(shortfall)}
                 </span>
               </div>
@@ -270,35 +295,43 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           </div>
           {shortfall > 0 && isOpener && (
             <div className="note note-teal">
-              <b>Tu garantía cubrió {formatMXN(shortfall)}.</b> El restaurante cobró el
-              total; nadie quedó debiendo en la mesa. Podés pedirle esa parte a quien no
-              llegó a pagar (Transferir → pedir plata la agregamos pronto).
+              <b>Tu garantía cubrió {formatMXN(shortfall)}.</b> El restaurante cobró el total y
+              nadie quedó debiendo en la mesa. Pronto vas a poder pedirle ese monto a quien no
+              llegó a pagar.
             </div>
           )}
         </div>
-        {!isGuest && (
-          <div className="action-bar">
-            <button className="btn btn-navy" onClick={() => navigate('home')}>
-              🏠 Inicio
+        {/* La barra se muestra SIEMPRE: sin esto el invitado quedaba en una
+            pantalla de solo lectura sin ninguna salida. */}
+        <div className="action-bar">
+          {isGuest ? (
+            <button className="btn btn-navy" onClick={() => reload()}>
+              Actualizar
             </button>
-          </div>
-        )}
+          ) : (
+            <button className="btn btn-navy" onClick={() => navigate('home')}>
+              <span aria-hidden="true">🏠</span> Inicio
+            </button>
+          )}
+        </div>
       </div>
     );
   }
 
   // ─── Procesando (estados reales del attempt) ─────────────
   if (view === 'processing' && result) {
-    const steps = [
-      { label: 'pending', desc: 'se crea el intento de pago' },
-      { label: 'succeeded', desc: 'el cobro se confirmó' },
-      { label: 'processed', desc: 'acreditado en la mesa' },
-    ];
+    const steps = ['Confirmando el cobro', 'Acreditando en la mesa', 'Listo'];
     return (
       <div className="screen">
         <div className="scroll" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center', padding: '16px 0' }}>
-            {procStep < 3 ? <div className="spinner" /> : <div className="success-circle">✓</div>}
+          <div style={{ textAlign: 'center', padding: '16px 0' }} role="status" aria-live="polite">
+            {procStep < 3 ? (
+              <div className="spinner" aria-hidden="true" />
+            ) : (
+              <div className="success-circle" aria-hidden="true">
+                ✓
+              </div>
+            )}
             <div className="h2" style={{ marginTop: 18 }}>
               {procStep < 2 ? 'Cobrando…' : procStep < 3 ? 'Acreditando…' : 'Pago acreditado'}
             </div>
@@ -307,13 +340,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
           </div>
           <div className="card card-p" style={{ marginTop: 8 }}>
-            {steps.map((s, idx) => (
-              <div key={s.label} className="flow-step">
-                <div className={`flow-dot ${procStep > idx + 1 ? 'done' : procStep === idx + 1 ? 'now' : ''}`}>
+            {steps.map((desc, idx) => (
+              <div key={desc} className="flow-step">
+                <div
+                  className={`flow-dot ${procStep > idx + 1 ? 'done' : procStep === idx + 1 ? 'now' : ''}`}
+                  aria-hidden="true"
+                >
                   {procStep > idx + 1 ? '✓' : idx + 1}
                 </div>
                 <div className="flow-line">
-                  <b>{s.label}</b> → {s.desc}
+                  <b>{desc}</b>
+                  {procStep > idx + 1 ? ' ✓' : procStep === idx + 1 ? '…' : ''}
                 </div>
               </div>
             ))}
@@ -357,7 +394,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <span className="val">{result.methodLabel}</span>
             </div>
             <div className="receipt-row">
-              <span className="lbl">{mesa.division_mode === 'igual' ? 'Mi parte' : 'Mis ítems'}</span>
+              <span className="lbl">{mesa.division_mode === 'igual' ? 'Mi parte' : 'Mis consumos'}</span>
               <span className="val">{formatMXN(result.itemsAmount)}</span>
             </div>
             <div className="receipt-row">
@@ -373,18 +410,30 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           </div>
           {isGuest && (
             <div className="note note-teal" style={{ marginTop: 14 }}>
-              ¿Te gustó? Creá tu cuenta PayMe y la próxima dividís vos.
+              Con una cuenta PayMe podés abrir la mesa vos la próxima vez.
             </div>
           )}
         </div>
         <div className="action-bar">
           {isGuest ? (
-            <button className="btn btn-navy" onClick={() => { setView('detail'); setSelected(new Set()); reload(); }}>
-              Ver la mesa
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn-ghost"
+                onClick={() => {
+                  setView('detail');
+                  setSelected(new Set());
+                  reload();
+                }}
+              >
+                Ver la mesa
+              </button>
+              <button className="btn btn-navy" onClick={() => navigate('home')}>
+                Crear mi cuenta
+              </button>
+            </div>
           ) : (
             <button className="btn btn-navy" onClick={() => navigate('home')}>
-              🏠 Inicio
+              <span aria-hidden="true">🏠</span> Inicio
             </button>
           )}
         </div>
@@ -396,37 +445,61 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   if (view === 'pay') {
     return (
       <div className="screen">
-        <TopBar title="Pagar mi parte" onBack={() => setView('detail')} right={<span style={{ fontSize: 18 }}>🔒</span>} />
+        <TopBar
+          title="Pagar mi parte"
+          onBack={() => setView('detail')}
+          backLabel="Volver a la mesa"
+          right={
+            <span style={{ fontSize: 18 }} aria-hidden="true">
+              🔒
+            </span>
+          }
+        />
         {guestHeader}
         <div className="scroll" style={{ padding: 16 }}>
           <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Pagás SOLO tu parte
             </div>
             <div style={{ fontSize: 32, fontWeight: 800, color: '#fff' }}>{formatMXN(gross)}</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
-              {mesa.division_mode === 'igual' ? 'Tu parte' : 'Tus ítems'} {formatMXN(itemsAmount)} + propina {formatMXN(tipCents)}
+            <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+              {mesa.division_mode === 'igual' ? 'Tu parte' : 'Tus consumos'} {formatMXN(itemsAmount)} + propina {formatMXN(tipCents)}
             </div>
           </div>
-          {error && <div className="form-error">{error}</div>}
-          <div className="sectlabel">Propina al mozo</div>
-          <div className="tip-row">
+          {error && (
+            <div className="form-error" role="alert">
+              {error}
+            </div>
+          )}
+          <div className="sectlabel" id="lbl-propina">
+            Propina al mozo
+          </div>
+          <div className="tip-row" role="radiogroup" aria-labelledby="lbl-propina">
             {TIP_OPTIONS.map((pct) => (
-              <button key={pct} className={`tip-pill ${tipPct === pct ? 'sel' : ''}`} onClick={() => setTipPct(pct)}>
+              <button
+                key={pct}
+                className={`tip-pill ${tipPct === pct ? 'sel' : ''}`}
+                onClick={() => setTipPct(pct)}
+                role="radio"
+                aria-checked={tipPct === pct}
+              >
                 {pct}%
               </button>
             ))}
           </div>
           {tipPct > 0 && mesa.active_staff.length > 0 && (
             <>
-              <div className="sectlabel">¿Para quién?</div>
-              <div className="tip-row" style={{ flexWrap: 'wrap' }}>
+              <div className="sectlabel" id="lbl-mozo">
+                ¿Para quién?
+              </div>
+              <div className="tip-row" style={{ flexWrap: 'wrap' }} role="group" aria-labelledby="lbl-mozo">
                 {mesa.active_staff.map((s) => (
                   <button
                     key={s.id}
                     className={`tip-pill ${staffId === s.id ? 'sel' : ''}`}
                     style={{ flex: 'none' }}
                     onClick={() => setStaffId(staffId === s.id ? null : s.id)}
+                    aria-pressed={staffId === s.id}
                   >
                     {s.display_name}
                   </button>
@@ -434,52 +507,82 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </div>
             </>
           )}
-          <div className="sectlabel">Método</div>
-          {!isGuest && (
-            <button className={`method-card ${payType === 'wallet' ? 'sel' : ''}`} onClick={() => setPayType('wallet')}>
-              <div className="method-icon" style={{ background: 'var(--teal-l)' }}>
-                👛
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>Saldo PayMe</div>
-              </div>
-              <div className="radio" />
-            </button>
-          )}
-          {pm ? (
-            <button className={`method-card ${payType === 'card' ? 'sel' : ''}`} onClick={() => setPayType('card')}>
-              <div className="cc visa">VISA</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>
-                  {pm.bank_name ?? pm.brand} ···· {pm.last_four}
+          <div className="sectlabel" id="lbl-metodo">
+            Método
+          </div>
+          <div role="radiogroup" aria-labelledby="lbl-metodo">
+            {!isGuest && (
+              <button
+                className={`method-card ${payType === 'wallet' ? 'sel' : ''}`}
+                onClick={() => setPayType('wallet')}
+                role="radio"
+                aria-checked={payType === 'wallet'}
+              >
+                <div className="method-icon" style={{ background: 'var(--teal-l)' }} aria-hidden="true">
+                  👛
                 </div>
-              </div>
-              <div className="radio" />
-            </button>
-          ) : (
-            <button className={`method-card ${payType === 'card' ? 'sel' : ''}`} onClick={() => setPayType('card')}>
-              <div className="method-icon" style={{ background: 'var(--gray-l)' }}>
-                💳
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>Saldo PayMe</div>
+                </div>
+                <div className="radio" aria-hidden="true" />
+              </button>
+            )}
+            {pm ? (
+              <button
+                className={`method-card ${payType === 'card' ? 'sel' : ''}`}
+                onClick={() => setPayType('card')}
+                role="radio"
+                aria-checked={payType === 'card'}
+              >
+                <div className="cc visa" aria-hidden="true">
+                  VISA
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    {pm.bank_name ?? pm.brand} ···· {pm.last_four}
+                  </div>
+                </div>
+                <div className="radio" aria-hidden="true" />
+              </button>
+            ) : (
+              <button
+                className={`method-card ${payType === 'card' ? 'sel' : ''}`}
+                onClick={() => setPayType('card')}
+                role="radio"
+                aria-checked={payType === 'card'}
+              >
+                <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
+                  💳
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>Tarjeta de crédito o débito</div>
+                  <div className="caption">La ingresás al confirmar (segura, vía Stripe)</div>
+                </div>
+                <div className="radio" aria-hidden="true" />
+              </button>
+            )}
+            <button
+              className={`method-card ${payType === 'apple_pay' ? 'sel' : ''}`}
+              onClick={() => setPayType('apple_pay')}
+              role="radio"
+              aria-checked={payType === 'apple_pay'}
+            >
+              <div className="method-icon" style={{ background: '#000', color: '#fff' }} aria-hidden="true">
+                🍎
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>Tarjeta de crédito o débito</div>
-                <div style={{ fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
-                  La ingresás al confirmar (segura, vía Stripe)
-                </div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>Apple Pay</div>
+                <div className="caption">vía Stripe</div>
               </div>
-              <div className="radio" />
+              <div className="radio" aria-hidden="true" />
             </button>
+          </div>
+          {IS_MOCK && (
+            <div className="note note-amber" style={{ marginTop: 6 }}>
+              <b>Es una demo:</b> no se cobra nada de verdad y no hay ninguna tarjeta real
+              conectada.
+            </div>
           )}
-          <button className={`method-card ${payType === 'apple_pay' ? 'sel' : ''}`} onClick={() => setPayType('apple_pay')}>
-            <div className="method-icon" style={{ background: '#000', color: '#fff' }}>
-              🍎
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>Apple Pay</div>
-              <div style={{ fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>vía Stripe</div>
-            </div>
-            <div className="radio" />
-          </button>
           {isGuest && (
             <div className="note note-orange" style={{ marginTop: 6 }}>
               Sin iniciar sesión pagás con tarjeta o Apple Pay (el saldo PayMe pide cuenta).
@@ -499,38 +602,81 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const cd = countdownTo(mesa.expires_at);
   const pct = mesa.total_cents > 0 ? Math.round((mesa.paid_amount_cents / mesa.total_cents) * 100) : 0;
   const availableSlots = mesa.division_slots?.filter((s) => s.status === 'available').length ?? 0;
+  // Si ya no queda NADA seleccionable, no tiene sentido pedir "elegí tus consumos".
+  const nothingLeft =
+    mesa.division_mode === 'consumo' &&
+    mesa.items.length > 0 &&
+    mesa.items.every((i) => i.status === 'paid' || (i.status === 'locked' && !i.locked_by_me));
+
+  // Compartir link: mismo botón en las dos ramas de división (antes duplicado
+  // e inaccesible — era solo el emoji 🔗 sin nombre).
+  const shareButton = !isGuest && mesa.my_role === 'opener' && (
+    <button
+      className="btn btn-ghost"
+      style={{ flex: 'none', width: 'auto', padding: '16px 14px' }}
+      aria-label="Copiar link de invitación"
+      onClick={async () => {
+        try {
+          const inv = await api.createInvitation(code);
+          if (inv.link) {
+            await navigator.clipboard.writeText(inv.link);
+            toast('Link de invitación copiado 📋');
+          }
+        } catch {
+          toast('No se pudo generar el link');
+        }
+      }}
+    >
+      <span aria-hidden="true">🔗</span>
+    </button>
+  );
 
   return (
     <div className="screen">
       <div className="top-bar" style={{ background: 'var(--navy)' }}>
         {!isGuest && (
-          <button className="back-btn" onClick={backHome} aria-label="Volver" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>
-            ←
+          <button
+            className="back-btn"
+            onClick={() => navigate('home')}
+            aria-label="Volver al inicio"
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
+          >
+            <span aria-hidden="true">←</span>
           </button>
         )}
-        <div className="top-title" style={{ color: '#fff' }}>
+        <h1 className="top-title" style={{ color: '#fff' }}>
           {mesa.restaurant.name}
-        </div>
+        </h1>
         {isGuest && <span className="badge badge-teal">Invitado</span>}
       </div>
       <div style={{ background: 'var(--navy)', padding: '0 20px 16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', fontFamily: 'var(--font-body)' }}>
-            📍 Mesa {mesa.code} · {mesa.division_mode === 'igual' ? 'partes iguales' : 'cada uno lo suyo'}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)', minWidth: 0 }}>
+            Mesa {mesa.code} · {mesa.division_mode === 'igual' ? 'partes iguales' : 'cada uno lo suyo'}
           </div>
-          <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '4px 12px', borderRadius: 20, fontWeight: 800, fontSize: 13 }}>
+          <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '4px 12px', borderRadius: 20, fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
             {formatMXN(mesa.total_cents)}
           </div>
         </div>
         <div style={{ marginTop: 10 }}>
-          <div className="progress-bar" style={{ background: 'rgba(255,255,255,0.15)' }}>
+          <div
+            className="progress-bar"
+            style={{ background: 'rgba(255,255,255,0.15)' }}
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Pagado ${pct}% de la mesa`}
+          >
             <div className="progress-fill" style={{ width: `${pct}%` }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 11, color: 'rgba(255,255,255,0.55)', fontFamily: 'var(--font-body)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 11.5, color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)' }}>
             <span>
               {formatMXN(mesa.paid_amount_cents)} pagado ({pct}%)
             </span>
-            <span style={{ color: 'var(--orange)', fontWeight: 700 }}>{cd ? `⏳ ${cd}` : '⌛'}</span>
+            <span style={{ color: '#ffb59b', fontWeight: 700 }}>
+              {cd ? `⏳ ${cd}` : '⌛ venció'}
+            </span>
           </div>
         </div>
       </div>
@@ -543,29 +689,40 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <div className="amt">{formatMXN(itemsAmount)}</div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>de {formatMXN(mesa.total_cents)}</div>
+              <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.75)' }}>de {formatMXN(mesa.total_cents)}</div>
               <div style={{ fontSize: 12, color: 'var(--teal)', fontWeight: 700 }}>
                 {mesa.total_cents > 0 ? Math.round((itemsAmount / mesa.total_cents) * 100) : 0}%
               </div>
             </div>
           </div>
           <div className="scroll" style={{ background: '#fff' }}>
-            <div style={{ padding: '12px 16px 4px', fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
-              Tocá tus consumos. Al elegirlos quedan <b>reservados</b> para vos.
+            <div style={{ padding: '12px 16px 4px' }} className="caption">
+              Tocá lo que consumiste. Al elegirlo queda <b>reservado</b> para vos.
             </div>
+            {nothingLeft && (
+              <div className="note note-amber" style={{ margin: '8px 16px' }}>
+                Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.
+              </div>
+            )}
             {mesa.items.map((i) => {
               const paidByOther = i.status === 'paid';
               const lockedByOther = i.status === 'locked' && !i.locked_by_me;
               const sel = selected.has(i.id) || (i.status === 'locked' && i.locked_by_me);
               const blocked = paidByOther || lockedByOther;
+              const price = formatMXN(i.price_cents * i.quantity);
+              const motivo = paidByOther ? ', ya pagado' : lockedByOther ? ', lo tomó otra persona' : '';
               return (
                 <button
                   key={i.id}
                   className={`item-row ${sel ? 'sel' : ''} ${paidByOther ? 'paid-other' : ''} ${lockedByOther ? 'locked-other' : ''}`}
                   onClick={() => !blocked && toggleItem(i.id)}
                   disabled={blocked}
+                  aria-pressed={blocked ? undefined : sel}
+                  aria-label={`${i.name}${i.quantity > 1 ? ` por ${i.quantity}` : ''}, ${price}${motivo}`}
                 >
-                  <div className={`checkbox ${sel ? 'on' : ''} ${blocked ? 'blocked' : ''}`}>
+                  {/* Decorativo: el ✓ oculto con color:transparent lo leía el
+                      lector como si el ítem estuviera marcado. */}
+                  <div className={`checkbox ${sel ? 'on' : ''} ${blocked ? 'blocked' : ''}`} aria-hidden="true">
                     {blocked ? (paidByOther ? '✓' : '🔒') : '✓'}
                   </div>
                   <div className="item-name">
@@ -574,34 +731,26 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     {paidByOther && <span className="item-hint"> · ya pagado</span>}
                     {lockedByOther && <span className="item-hint"> · lo tomó otro</span>}
                   </div>
-                  <div className="item-price">{formatMXN(i.price_cents * i.quantity)}</div>
+                  <div className="item-price">{price}</div>
                 </button>
               );
             })}
           </div>
           <div className="action-bar">
             <div style={{ display: 'flex', gap: 8 }}>
-              {!isGuest && mesa.my_role === 'opener' && (
-                <button
-                  className="btn btn-ghost"
-                  style={{ flex: 'none', width: 'auto', padding: '16px 14px' }}
-                  onClick={async () => {
-                    try {
-                      const inv = await api.createInvitation(code);
-                      if (inv.link) {
-                        await navigator.clipboard.writeText(inv.link);
-                        toast('Link de invitación copiado 📋');
-                      }
-                    } catch {
-                      toast('No se pudo generar el link');
-                    }
-                  }}
-                >
-                  🔗
-                </button>
-              )}
-              <button className="btn btn-primary" onClick={goToPay} disabled={busy || selected.size === 0}>
-                {busy ? 'Reservando…' : selected.size === 0 ? 'Elegí tus ítems' : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
+              {shareButton}
+              <button
+                className="btn btn-primary"
+                onClick={goToPay}
+                disabled={busy || selected.size === 0}
+              >
+                {busy
+                  ? 'Reservando…'
+                  : nothingLeft
+                    ? 'No queda nada por pagar'
+                    : selected.size === 0
+                      ? 'Elegí lo que consumiste'
+                      : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
               </button>
             </div>
           </div>
@@ -612,8 +761,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <div className="sectlabel">Partes de la mesa</div>
             <div className="card" style={{ marginBottom: 12 }}>
               {mesa.division_slots?.map((s) => (
-                <div key={s.slot_index} className="item-row" style={{ cursor: 'default' }}>
-                  <div className={`checkbox ${s.status !== 'available' ? 'blocked' : ''}`}>{s.status !== 'available' ? '✓' : ''}</div>
+                <div
+                  key={s.slot_index}
+                  className={`item-row ${s.status !== 'available' ? 'paid-other' : ''}`}
+                  style={{ cursor: 'default' }}
+                >
+                  <div
+                    className={`checkbox ${s.status !== 'available' ? 'blocked' : ''}`}
+                    aria-hidden="true"
+                  >
+                    {s.status !== 'available' ? '✓' : ''}
+                  </div>
                   <div className="item-name">
                     Parte {s.slot_index + 1}
                     {s.status !== 'available' && <span className="item-hint"> · pagada</span>}
@@ -629,25 +787,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           </div>
           <div className="action-bar">
             <div style={{ display: 'flex', gap: 8 }}>
-              {!isGuest && mesa.my_role === 'opener' && (
-                <button
-                  className="btn btn-ghost"
-                  style={{ flex: 'none', width: 'auto', padding: '16px 14px' }}
-                  onClick={async () => {
-                    try {
-                      const inv = await api.createInvitation(code);
-                      if (inv.link) {
-                        await navigator.clipboard.writeText(inv.link);
-                        toast('Link de invitación copiado 📋');
-                      }
-                    } catch {
-                      toast('No se pudo generar el link');
-                    }
-                  }}
-                >
-                  🔗
-                </button>
-              )}
+              {shareButton}
               <button className="btn btn-primary" onClick={goToPay} disabled={busy || availableSlots === 0}>
                 {availableSlots === 0 ? 'No quedan partes' : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
               </button>

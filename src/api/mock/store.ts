@@ -225,7 +225,9 @@ function seedMesas(): MockMesa[] {
       active_staff: STAFF,
       openedByUser: true,
       captured_shortfall_cents: 21000,
-      guarantee_method: 'card',
+      // wallet (no card): el movimiento sembrado del faltante debita el saldo,
+      // y con garantía de tarjeta el wallet no se toca. Así cierran los números.
+      guarantee_method: 'wallet',
     },
   ];
 }
@@ -250,11 +252,16 @@ function seedWalletTx(): WalletTransaction[] {
     metadata: null,
     date: iso(-daysAgo * 24 * 60 * 60_000),
   });
+  // Cadena de saldos coherente, del más nuevo al más viejo, cerrando en
+  // balance_cents = 125000:
+  //   3000 → +100000 = 103000 → +50000 = 153000 → −15000 = 138000
+  //        → +8000 = 146000 → −21000 = 125000
   return [
-    mk('payment_mesa', -21000, 125000, 'Pago mesa PA-1099', 0),
-    mk('transfer_out', -15000, 146000, 'Transferencia a Sofía', 1),
-    mk('topup_oxxo', 50000, 161000, 'Carga de saldo vía OXXO', 3),
-    mk('topup_spei', 100000, 111000, 'Abono SPEI', 6),
+    mk('payment_mesa', -21000, 125000, 'Faltante mesa PA-1099 (garantía)', 0),
+    mk('transfer_in', 8000, 146000, 'Transferencia de Juan López', 0),
+    mk('transfer_out', -15000, 138000, 'Transferencia a Sofía', 1),
+    mk('topup_oxxo', 50000, 153000, 'Carga de saldo vía OXXO', 3),
+    mk('topup_spei', 100000, 103000, 'Abono por SPEI', 6),
   ];
 }
 
@@ -390,6 +397,18 @@ function seedState(): MockState {
     transfers: [
       {
         id: mockId('f'),
+        amount_cents: 8000,
+        amount_display: centsToDisplay(8000),
+        concept: 'Los tacos',
+        status: 'completed',
+        completed_at: iso(-3 * 60 * 60_000),
+        created_at: iso(-3 * 60 * 60_000),
+        direction: 'received',
+        counterparty_payme_id: 'payme_mx_juan',
+        counterparty_name: 'Juan López',
+      },
+      {
+        id: mockId('f'),
         amount_cents: 15000,
         amount_display: centsToDisplay(15000),
         concept: 'Cine',
@@ -404,7 +423,52 @@ function seedState(): MockState {
   };
 }
 
-export const state: MockState = seedState();
+// ─── Persistencia de la demo ───────────────────────────────
+// Sin esto, recargar la página borraba mesas creadas, pagos, saldo y amigos:
+// el evaluador perdía todo su recorrido al refrescar.
+
+const STORAGE_KEY = 'payme_mock_state_v1';
+
+function loadPersisted(): MockState | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as MockState;
+    // Validación mínima: si el shape no cierra, se descarta y se re-siembra.
+    if (!parsed || !Array.isArray(parsed.mesas) || typeof parsed.balance_cents !== 'number') {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export const state: MockState = loadPersisted() ?? seedState();
+
+let saveQueued = false;
+/** Guarda el estado de la demo (agrupado en un microtask para no serializar de más). */
+export function persist(): void {
+  if (saveQueued) return;
+  saveQueued = true;
+  queueMicrotask(() => {
+    saveQueued = false;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // cuota llena o modo privado: la demo sigue funcionando en memoria
+    }
+  });
+}
+
+/** Reinicia la demo al estado sembrado (botón en Perfil). */
+export function resetDemo(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // noop
+  }
+}
 
 // ─── Helpers de dominio ────────────────────────────────────
 
@@ -430,6 +494,46 @@ export function pushWalletTx(type: WalletTxType, amount: number, description: st
 
 export function findMesa(code: string): MockMesa | null {
   return state.mesas.find((m) => m.code.toUpperCase() === code.toUpperCase()) ?? null;
+}
+
+/**
+ * El estado del mock vive en el navegador, así que un link de invitación
+ * abierto en OTRO teléfono no encontraría la mesa. Para que la demo funcione
+ * al compartirla de verdad, cualquier código con formato válido se materializa
+ * como una mesa abierta con el ticket de ejemplo.
+ */
+export function materializeDemoMesa(code: string): MockMesa | null {
+  if (!/^[A-Z]{2}-\d{3,5}$/i.test(code)) return null;
+  const restaurant = MOCK_RESTAURANTS[0];
+  const items = seedItems();
+  const paid = items
+    .filter((i) => i.status === 'paid')
+    .reduce((s, i) => s + i.price_cents * i.quantity, 0);
+  const mesa: MockMesa = {
+    id: mockId('c'),
+    code: code.toUpperCase(),
+    restaurant: {
+      id: restaurant.id,
+      name: restaurant.name,
+      category: restaurant.category,
+      address: restaurant.address,
+    },
+    total_cents: 84000,
+    paid_amount_cents: paid,
+    tip_amount_cents: 0,
+    division_mode: 'consumo',
+    expected_participants: 4,
+    status: 'partially_paid',
+    expires_at: iso(24 * 60_000),
+    items,
+    slots: null,
+    active_staff: STAFF,
+    openedByUser: false,
+    captured_shortfall_cents: 0,
+    guarantee_method: 'card',
+  };
+  state.mesas.unshift(mesa);
+  return mesa;
 }
 
 /** Expiración perezosa + liquidación A-2: la garantía captura el faltante. */

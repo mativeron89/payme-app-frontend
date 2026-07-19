@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, IS_MOCK } from '../api';
 import type { OpenMesa } from '../api/types';
 import { navigate } from '../router';
 import { countdownTo, formatMXN } from '../utils/format';
+import { mesaStatusBadgeClass, mesaStatusLabel } from '../utils/labels';
 import { TopBar } from '../components/ui';
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -56,12 +57,22 @@ export function MesasScreen() {
               className={`event-card ${m.status === 'partially_paid' ? 'partial' : 'open'}`}
               onClick={() => navigate('mesa', m.code)}
             >
-              <div className="event-icon">{CATEGORY_EMOJI[m.restaurant.category] ?? '🍽️'}</div>
+              <div className="event-icon" aria-hidden="true">
+                {CATEGORY_EMOJI[m.restaurant.category] ?? '🍽️'}
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="event-name">{m.restaurant.name}</div>
                 <div className="event-meta">Mesa {m.code}</div>
                 <div style={{ marginTop: 8 }}>
-                  <div className="progress-bar" style={{ maxWidth: 150 }}>
+                  <div
+                    className="progress-bar"
+                    style={{ maxWidth: 150 }}
+                    role="progressbar"
+                    aria-valuenow={m.pct_paid}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`Pagado ${m.pct_paid}% de la mesa`}
+                  >
                     <div
                       className="progress-fill"
                       style={{
@@ -70,24 +81,36 @@ export function MesasScreen() {
                       }}
                     />
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--gray-d)', marginTop: 3 }}>
+                  <div className="caption" style={{ marginTop: 4 }}>
                     {formatMXN(m.paid_amount_cents)} de {formatMXN(m.total_cents)} ·{' '}
-                    <span className="badge badge-teal" style={{ padding: '1px 7px' }}>
-                      {m.status}
+                    <span className={mesaStatusBadgeClass(m.status)}>
+                      {mesaStatusLabel(m.status)}
                     </span>
                   </div>
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div className="event-amount">{formatMXN(m.total_cents)}</div>
-                <div className="countdown">{cd ? `⏳ ${cd}` : '⌛ venció'}</div>
+                <div className="countdown">
+                  {cd ? `⏳ ${cd}` : '⌛ venció'}
+                </div>
               </div>
             </button>
           );
         })}
-        <button className="btn btn-ghost" onClick={() => navigate('mesa', 'PA-1099')}>
-          Ver qué pasa si expira sin pagar todo →
-        </button>
+        {IS_MOCK && (
+          <div className="note note-amber" style={{ marginTop: 4 }}>
+            <b>Atajo de demo:</b> mirá cómo queda una mesa que venció sin que todos pagaran y la
+            garantía cubrió el faltante.
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ marginTop: 10 }}
+              onClick={() => navigate('mesa', 'PA-1099')}
+            >
+              Ver mesa vencida (ejemplo) →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

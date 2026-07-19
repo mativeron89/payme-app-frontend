@@ -101,10 +101,10 @@ export function FriendsScreen() {
                 <button
                   className="btn"
                   style={{ width: 'auto', padding: '7px 12px', fontSize: 12, background: 'var(--teal-l)', color: '#0a7b80' }}
-                  onClick={() => navigate('transferir')}
-                  aria-label={`Transferir a ${f.first_name}`}
+                  onClick={() => navigate('transferir', f.payme_id)}
+                  aria-label={`Transferir a ${f.full_name}`}
                 >
-                  ↗️
+                  <span aria-hidden="true">↗️</span>
                 </button>
                 <button
                   className="back-btn"

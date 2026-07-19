@@ -1,4 +1,5 @@
 import { IS_MOCK } from '../api';
+import { resetDemo } from '../api/mock/store';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar, TopBar } from '../components/ui';
 import { navigate } from '../router';
@@ -25,8 +26,7 @@ export function PerfilScreen() {
         </div>
         {!user && (
           <div className="note note-orange" style={{ marginBottom: 12 }}>
-            Tus datos de perfil van a aparecer acá cuando el backend exponga el perfil
-            propio (hoy solo llega al registrarte — está pedido, G-02).
+            Tus datos van a aparecer acá en cuanto termines de crear tu cuenta.
           </div>
         )}
         <div className="card" style={{ marginBottom: 12 }}>
@@ -56,10 +56,23 @@ export function PerfilScreen() {
           </button>
         </div>
         {IS_MOCK && (
-          <div className="note note-teal" style={{ marginBottom: 12 }}>
-            <b>Modo demo:</b> los datos son de mentira y viven en tu navegador. La conexión
-            al backend real llega en el Tier 7.
-          </div>
+          <>
+            <div className="note note-teal" style={{ marginBottom: 12 }}>
+              <b>Modo demo:</b> los datos son de ejemplo y se guardan solo en este teléfono.
+              Nada de lo que hagas acá mueve dinero de verdad.
+            </div>
+            <button
+              className="btn btn-ghost"
+              style={{ marginBottom: 12 }}
+              onClick={() => {
+                if (!window.confirm('¿Volver la demo a su estado inicial?')) return;
+                resetDemo();
+                window.location.reload();
+              }}
+            >
+              🔄 Reiniciar la demo
+            </button>
+          </>
         )}
         <button
           className="btn btn-ghost"

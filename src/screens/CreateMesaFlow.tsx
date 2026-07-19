@@ -7,6 +7,7 @@ import type { CreateMesaResponse, OcrResponse, PaymentMethod } from '../api/type
 import { TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
+import { splitEqual } from '../utils/money';
 
 /**
  * Wizard del organizador (T2): scan → ticket → división → GARANTÍA (A-1,
@@ -164,8 +165,8 @@ export function CreateMesaFlow() {
             Encuadrá el ticket dentro del marco
           </div>
           <div className="note note-amber">
-            <b>El OCR corre en modo demo:</b> hoy no lee la foto — usa un ticket de ejemplo
-            (el backend todavía no tiene proveedor real de OCR).
+            <b>Modo demo:</b> todavía no leemos la foto. Usamos un ticket de ejemplo para que
+            puedas probar el resto del flujo.
           </div>
           <button className="btn btn-teal" style={{ marginTop: 14 }} onClick={doScan} disabled={scanning}>
             {scanning ? 'Leyendo ticket…' : '📸 Capturar'}
@@ -203,7 +204,7 @@ export function CreateMesaFlow() {
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--gray-l)' }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Detalle</div>
               <div style={{ fontSize: 11, color: 'var(--gray-d)', marginTop: 2, fontFamily: 'var(--font-body)' }}>
-                {ocr.items.length} ítems · {formatMXN(total)}
+                {ocr.items.length} consumos · {formatMXN(total)}
               </div>
             </div>
             {ocr.items.map((i, idx) => (
@@ -228,7 +229,9 @@ export function CreateMesaFlow() {
 
   // ─── Paso 3: división ────────────────────────────────────
   if (step === 'division') {
-    const perSlot = participants > 0 ? Math.floor(total / participants) : total;
+    // splitEqual, igual que el backend: la suma de las partes da el total exacto
+    // (el primer comensal absorbe los centavos sobrantes).
+    const perSlot = participants > 0 ? splitEqual(total, participants)[0] : total;
     return (
       <div className="screen">
         <TopBar title="Dividir cuenta" onBack={back} />
@@ -243,7 +246,7 @@ export function CreateMesaFlow() {
             <div className="div-ico">👤</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="div-title">Cada uno lo suyo</div>
-              <div className="div-sub">Cada quien selecciona y paga SUS ítems.</div>
+              <div className="div-sub">Cada quien elige y paga lo que consumió.</div>
             </div>
           </button>
           <button className={`div-card ${division === 'igual' ? 'sel' : ''}`} onClick={() => setDivision('igual')}>
@@ -264,12 +267,20 @@ export function CreateMesaFlow() {
           {division === 'igual' && (
             <div className="card card-p" style={{ marginBottom: 12 }}>
               <div className="sectlabel">¿Cuántos son?</div>
-              <div className="stepper">
-                <button onClick={() => setParticipants(Math.max(2, participants - 1))} aria-label="Menos">
+              <div className="stepper" role="group" aria-label="Cantidad de comensales">
+                <button
+                  onClick={() => setParticipants(Math.max(2, participants - 1))}
+                  aria-label="Un comensal menos"
+                >
                   −
                 </button>
-                <div className="val">{participants}</div>
-                <button onClick={() => setParticipants(Math.min(20, participants + 1))} aria-label="Más">
+                <div className="val" aria-live="polite">
+                  {participants}
+                </div>
+                <button
+                  onClick={() => setParticipants(Math.min(20, participants + 1))}
+                  aria-label="Un comensal más"
+                >
                   +
                 </button>
               </div>
@@ -311,7 +322,11 @@ export function CreateMesaFlow() {
             sí o sí. Cuando todos pagan su parte, la retención se libera. Si alguien no
             paga, tu garantía cubre solo ese faltante.
           </div>
-          {error && <div className="form-error">{error}</div>}
+          {error && (
+          <div className="form-error" role="alert">
+            {error}
+          </div>
+        )}
           <div className="sectlabel">¿Con qué garantizás?</div>
           <button className={`method-card ${method === 'card' ? 'sel' : ''}`} onClick={() => setMethod('card')}>
             <div className="cc visa">VISA</div>
@@ -351,22 +366,41 @@ export function CreateMesaFlow() {
   if (step === 'threeds') {
     return (
       <div className="screen">
+        {/* Antes este paso no tenía ninguna salida: la mesa quedaba sin
+            garantizar y el usuario atrapado en la pantalla. */}
+        <TopBar
+          title="Confirmá con tu banco"
+          onBack={() => setStep('garantia')}
+          backLabel="Volver a elegir la garantía"
+        />
         <div className="scroll" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center', padding: '16px 0' }}>
-            <div className="spinner" />
+          <div style={{ textAlign: 'center', padding: '16px 0' }} role="status" aria-live="polite">
+            <div className="spinner" aria-hidden="true" />
             <div className="h2" style={{ marginTop: 18 }}>
               Tu banco pide confirmar
             </div>
             <div className="body-text" style={{ marginTop: 6 }}>
-              La retención de {formatMXN(total)} necesita autorización (3-D Secure).
+              La retención de {formatMXN(total)} necesita que la confirmes con tu banco.
             </div>
           </div>
+          {error && (
+            <div className="form-error" role="alert">
+              {error}
+            </div>
+          )}
           <div className="note note-teal" style={{ marginTop: 12 }}>
-            En modo demo simulamos la pantalla del banco. Con el backend real, acá se abre
-            la verificación de tu banco (Stripe).
+            En la versión final, acá se abre la verificación de tu banco.
           </div>
           <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={confirm3ds} disabled={busy}>
-            {busy ? 'Confirmando…' : '✅ Simular autorización del banco'}
+            {busy ? 'Confirmando…' : 'Confirmar autorización'}
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ marginTop: 10 }}
+            onClick={() => setStep('garantia')}
+            disabled={busy}
+          >
+            Cancelar y elegir otra garantía
           </button>
         </div>
       </div>
@@ -433,7 +467,7 @@ export function CreateMesaFlow() {
         </div>
         <div className="action-bar">
           <button className="btn btn-primary" onClick={() => navigate('mesa', code)}>
-            Ir a la mesa → elegir mis ítems
+            Ir a la mesa → elegir lo mío
           </button>
         </div>
       </div>

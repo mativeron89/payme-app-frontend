@@ -8,7 +8,7 @@ import { formatMXN } from '../utils/format';
 import { stringToCents } from '../utils/money';
 
 /** s-transfer: elegir amigo + monto + concepto → POST /transfers. */
-export function TransferScreen() {
+export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string }) {
   const toast = useToast();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
@@ -21,12 +21,23 @@ export function TransferScreen() {
 
   useEffect(() => {
     let alive = true;
-    api.getFriends().then((r) => alive && setFriends(r.friends)).catch(() => undefined);
+    api
+      .getFriends()
+      .then((r) => {
+        if (!alive) return;
+        setFriends(r.friends);
+        // Si venís de tocar ↗️ en la lista de amigos, ya queda elegido.
+        if (preselectPaymeId) {
+          const match = r.friends.find((f) => f.payme_id === preselectPaymeId);
+          if (match) setTo(match);
+        }
+      })
+      .catch(() => undefined);
     api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, []);
+  }, [preselectPaymeId]);
 
   let amountCents = 0;
   try {
@@ -127,10 +138,14 @@ export function TransferScreen() {
           />
         </div>
         <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--gray-d)', margin: '4px 0 12px', fontFamily: 'var(--font-body)' }}>
-          {balance ? `Disponible: ${formatMXN(balance.balance_cents)}` : ' '}
+          {balance ? `Tu saldo: ${formatMXN(balance.balance_cents)}` : ' '}
         </div>
         <input className="input" placeholder="Concepto (opcional)" value={concept} onChange={(e) => setConcept(e.target.value)} maxLength={200} />
-        {error && <div className="form-error">{error}</div>}
+        {error && (
+          <div className="form-error" role="alert">
+            {error}
+          </div>
+        )}
         <div className="note note-teal">
           Va directo del saldo PayMe al saldo de tu amigo. Inmediata y sin costo.
         </div>

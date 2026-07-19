@@ -1,5 +1,54 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.8.0 — Revisión previa al feedback de diseño (2026-07-19)
+
+Aplicación de los 47 hallazgos confirmados por una revisión multi-agente
+(83 crudos → 47 tras verificación adversarial). Todo lo que no es decisión
+estética quedó resuelto.
+
+**Nada del contrato se filtra ya a la pantalla** (`src/utils/labels.ts`):
+- Estados de mesa en español ("Falta pagar" en vez de `partially_paid`), con
+  el color del badge acorde a la tarjeta.
+- Movimientos del wallet con etiqueta humana en vez de `payment_mesa`.
+- Pantalla de cobro sin `pending`/`succeeded`/`processed`: "Confirmando el
+  cobro → Acreditando en la mesa → Listo".
+- Fuera "Tier 7", "backend", "OCR", "3-D Secure", "modo mock" de los textos.
+
+**Sin callejones sin salida**:
+- El invitado ya no puede quedar atrapado: `navigate('home')` reescribía el
+  hash sin el token `?t=` y lo expulsaba al login perdiendo el link. Ahora
+  las pantallas de invitado no ofrecen salidas que rompan su acceso, y la
+  mesa cerrada siempre muestra barra de acción.
+- El paso 3DS tiene botón de volver y de cancelar (antes la única salida era
+  autorizar, con la mesa ya creada sin garantía).
+- Si no queda nada por tomar, el botón lo dice en vez de pedir lo imposible.
+
+**Demo creíble de punta a punta**:
+- El estado persiste en `localStorage` (`payme_mock_state_v1`): recargar ya
+  no borra mesas, pagos ni saldo. Botón "Reiniciar la demo" en Perfil.
+- Un link de invitación abierto en OTRO dispositivo funciona: la mesa se
+  materializa con el ticket de ejemplo en vez de dar "no encontrada".
+- La vista de invitado se puede ver estando logueado (antes era inalcanzable
+  para quien evalúa), con aviso "Así lo ve quien recibe tu link".
+- Banda persistente "Demo · datos de ejemplo, no se cobra dinero real" y
+  aviso explícito en la pantalla de pago.
+- Números coherentes: la garantía de PA-1099 es por saldo (su débito estaba
+  contradicho), la transferencia de Juan tiene su movimiento y la cadena de
+  saldos cierra en $1,250; los slots usan `splitEqual` como el backend.
+- El saludo toma el nombre de quien entra, no el del usuario de ejemplo.
+- "Saldo disponible" → "Tu saldo PayMe" (G-03: el contrato no expone el
+  saldo retenido, así que no se puede afirmar que esté disponible).
+
+**Accesibilidad**: contraste AA en countdown, badges, placeholders y textos
+sobre navy (`--orange-txt`, `--teal-txt`, `--gray-txt`); `role="radiogroup"`
+en métodos de pago y propina; `role="alert"` en errores; `role="status"` en
+cobro y toasts (siempre montados); `aria-label` en botones de ícono;
+`aria-hidden` en emojis decorativos; `<h1>` real en cada pantalla;
+checkboxes decorativos ocultos al lector; barras de progreso con ARIA.
+
+**Consistencia**: clases `.btn-sm` y `.caption` en vez de nueve overrides
+inline distintos; terminología unificada en "consumos".
+
 ## 0.7.0 — Funcionalidades restantes del contrato + demo compartible (2026-07-18)
 
 - **Avisos** (`GET /notifications` + `unread-count` + `read-all`): inbox con

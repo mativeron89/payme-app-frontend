@@ -4,22 +4,9 @@ import type { BalanceResponse, PaymentMethod, StatsResponse, WalletTransaction }
 import { TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
+import { walletTxEmoji, walletTxLabel } from '../utils/labels';
 
 /** s-account: saldo + tabs Historial / Tarjetas (GET balance, wallet-transactions, payment-methods). */
-
-const TX_META: Record<string, { emoji: string; label: string }> = {
-  topup_oxxo: { emoji: '🏪', label: 'Carga OXXO' },
-  topup_card: { emoji: '💳', label: 'Carga con tarjeta' },
-  topup_spei: { emoji: '🏦', label: 'Abono SPEI' },
-  transfer_in: { emoji: '↘️', label: 'Transferencia recibida' },
-  transfer_out: { emoji: '↗️', label: 'Transferencia enviada' },
-  payment_mesa: { emoji: '🍝', label: 'Pago de mesa' },
-  refund_mesa: { emoji: '↩️', label: 'Reembolso de mesa' },
-  tip_received: { emoji: '💰', label: 'Propina recibida' },
-  tip_payout: { emoji: '💸', label: 'Propina pagada' },
-  adjustment_credit: { emoji: '➕', label: 'Ajuste a favor' },
-  adjustment_debit: { emoji: '➖', label: 'Ajuste en contra' },
-};
 
 function txDate(iso: string): string {
   const d = new Date(iso);
@@ -78,18 +65,25 @@ export function CuentaScreen() {
       <TopBar title="Mi Cuenta" onBack={() => navigate('home')} />
       <div className="scroll" style={{ padding: 16 }}>
         <div style={{ background: 'linear-gradient(135deg,#071A33,#10264A)', borderRadius: 18, padding: '16px 18px 14px', marginBottom: 16 }}>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.58)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1.3, fontWeight: 700 }}>
-            Saldo disponible
+          {/* G-03: el contrato no expone held_balance_cents, así que no podemos
+              afirmar "disponible" — con una garantía por saldo activa, parte de
+              este monto está retenido. */}
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1.3, fontWeight: 700 }}>
+            Tu saldo PayMe
           </div>
           <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', lineHeight: 1 }}>
             {balance ? formatMXN(balance.balance_cents) : '…'}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <button className="btn btn-teal" style={{ padding: 9, fontSize: 12 }} onClick={() => navigate('cargar')}>
-              ➕ Cargar
+            <button className="btn btn-teal btn-sm" onClick={() => navigate('cargar')}>
+              <span aria-hidden="true">➕</span> Cargar
             </button>
-            <button className="btn" style={{ padding: 9, fontSize: 12, background: 'rgba(255,255,255,0.12)', color: '#fff' }} onClick={() => navigate('transferir')}>
-              ↗️ Transferir
+            <button
+              className="btn btn-sm"
+              style={{ background: 'rgba(255,255,255,0.18)', color: '#fff' }}
+              onClick={() => navigate('transferir')}
+            >
+              <span aria-hidden="true">↗️</span> Transferir
             </button>
           </div>
         </div>
@@ -138,24 +132,31 @@ export function CuentaScreen() {
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {txs?.map((t) => {
-                const meta = TX_META[t.type] ?? { emoji: '·', label: t.type };
-                return (
-                  <div key={t.id} className="card card-p" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ fontSize: 18 }}>{meta.emoji}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{t.description ?? meta.label}</div>
-                      <div style={{ fontSize: 11, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
-                        {txDate(t.date)} · {t.type}
-                      </div>
+              {txs?.map((t) => (
+                <div key={t.id} className="card card-p" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ fontSize: 18 }} aria-hidden="true">
+                    {walletTxEmoji(t.type)}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>
+                      {t.description ?? walletTxLabel(t.type)}
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: t.sign === 'credit' ? 'var(--green)' : 'var(--red)' }}>
-                      {t.sign === 'credit' ? '+' : '-'}
-                      {formatMXN(Math.abs(t.amount_cents))}
+                    <div className="caption">
+                      {txDate(t.date)} · {walletTxLabel(t.type)}
                     </div>
                   </div>
-                );
-              })}
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 14,
+                      color: t.sign === 'credit' ? 'var(--green)' : 'var(--red)',
+                    }}
+                  >
+                    {t.sign === 'credit' ? '+' : '−'}
+                    {formatMXN(Math.abs(t.amount_cents))}
+                  </div>
+                </div>
+              ))}
             </div>
           </>
         )}
@@ -197,8 +198,8 @@ export function CuentaScreen() {
               </div>
             ))}
             <div className="note note-teal" style={{ marginTop: 6 }}>
-              Agregar tarjetas nuevas llega con la conexión al backend real (usa Stripe para
-              guardarlas de forma segura — PayMe nunca ve el número completo).
+              Pronto vas a poder agregar tarjetas nuevas. Las guarda Stripe de forma segura:
+              PayMe nunca ve el número completo.
             </div>
           </>
         )}

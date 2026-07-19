@@ -74,7 +74,7 @@ export function HomeScreen() {
             onClick={() => navigate('avisos')}
             style={{ background: 'var(--teal-l)', border: '1.5px solid var(--teal)' }}
           >
-            <div className="home-card-icon" style={{ background: '#fff' }}>
+            <div className="home-card-icon" style={{ background: '#fff' }} aria-hidden="true">
               🍣
             </div>
             <div>
@@ -92,7 +92,7 @@ export function HomeScreen() {
           onClick={() => navigate('cuenta')}
           style={{ background: 'linear-gradient(135deg,#071A33,#12264A)' }}
         >
-          <div className="home-card-icon" style={{ background: 'rgba(0,194,203,0.15)' }}>
+          <div className="home-card-icon" style={{ background: 'rgba(0,194,203,0.15)' }} aria-hidden="true">
             💳
           </div>
           <div>
@@ -107,7 +107,7 @@ export function HomeScreen() {
 
         <div className="home-row">
           <button className="home-card compact" onClick={() => navigate('cargar')} style={{ background: 'var(--teal)' }}>
-            <div className="home-card-icon" style={{ background: 'rgba(255,255,255,0.25)' }}>
+            <div className="home-card-icon" style={{ background: 'rgba(255,255,255,0.25)' }} aria-hidden="true">
               ➕
             </div>
             <div className="home-card-title" style={{ color: '#fff', fontSize: 14 }}>
@@ -119,7 +119,7 @@ export function HomeScreen() {
             onClick={() => navigate('transferir')}
             style={{ border: '1.5px solid var(--gray-l)' }}
           >
-            <div className="home-card-icon" style={{ background: 'var(--orange-l)' }}>
+            <div className="home-card-icon" style={{ background: 'var(--orange-l)' }} aria-hidden="true">
               ↗️
             </div>
             <div className="home-card-title" style={{ fontSize: 14 }}>
@@ -133,7 +133,7 @@ export function HomeScreen() {
           onClick={() => navigate('scan')}
           style={{ background: 'linear-gradient(135deg,var(--orange),#ff8a5c)' }}
         >
-          <div className="home-card-icon" style={{ background: 'rgba(255,255,255,0.2)' }}>
+          <div className="home-card-icon" style={{ background: 'rgba(255,255,255,0.2)' }} aria-hidden="true">
             📷
           </div>
           <div>
@@ -147,7 +147,7 @@ export function HomeScreen() {
         </button>
 
         <button className="home-card" onClick={() => navigate('mesas')} style={{ border: '1.5px solid var(--gray-l)' }}>
-          <div className="home-card-icon" style={{ background: 'var(--teal-l)' }}>
+          <div className="home-card-icon" style={{ background: 'var(--teal-l)' }} aria-hidden="true">
             🍽️
           </div>
           <div>
@@ -160,7 +160,7 @@ export function HomeScreen() {
 
         <div className="home-row" style={{ marginTop: 2 }}>
           <button className="home-card compact" onClick={() => navigate('amigos')} style={{ border: '1.5px solid var(--gray-l)' }}>
-            <div className="home-card-icon" style={{ background: 'var(--teal-l)' }}>
+            <div className="home-card-icon" style={{ background: 'var(--teal-l)' }} aria-hidden="true">
               👥
             </div>
             <div className="home-card-title" style={{ fontSize: 13 }}>
@@ -168,7 +168,7 @@ export function HomeScreen() {
             </div>
           </button>
           <button className="home-card compact" onClick={() => navigate('grupos')} style={{ border: '1.5px solid var(--gray-l)' }}>
-            <div className="home-card-icon" style={{ background: 'var(--orange-l)' }}>
+            <div className="home-card-icon" style={{ background: 'var(--orange-l)' }} aria-hidden="true">
               👨‍👩‍👧
             </div>
             <div className="home-card-title" style={{ fontSize: 13 }}>
@@ -176,7 +176,7 @@ export function HomeScreen() {
             </div>
           </button>
           <button className="home-card compact" onClick={() => navigate('perfil')} style={{ border: '1.5px solid var(--gray-l)' }}>
-            <div className="home-card-icon" style={{ background: 'var(--gray-l)' }}>
+            <div className="home-card-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
               ⚙️
             </div>
             <div className="home-card-title" style={{ fontSize: 13 }}>

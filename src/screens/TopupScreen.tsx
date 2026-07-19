@@ -135,7 +135,11 @@ export function TopupScreen() {
             🏦 SPEI
           </button>
         </div>
-        {error && <div className="form-error">{error}</div>}
+        {error && (
+          <div className="form-error" role="alert">
+            {error}
+          </div>
+        )}
 
         {via === 'oxxo' && (
           <div className="note note-teal">

@@ -1,3 +1,4 @@
+import { IS_MOCK } from './api';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ToastProvider } from './components/ui';
 import { useRoute } from './router';
@@ -20,8 +21,10 @@ function Shell() {
 
   // T3 — momento mágico: el invitado entra por link (#/mesa/:code?t=token)
   // SIN cuenta ni login. guestOrAuth del contrato: token en query.
+  // En la demo, el link abre la vista de invitado AUNQUE haya sesión: si no,
+  // quien está evaluando (siempre logueado en su teléfono) nunca la vería.
   const guestToken = route.query.get('t');
-  if (route.page === 'mesa' && route.param && !session && guestToken) {
+  if (route.page === 'mesa' && route.param && guestToken && (!session || IS_MOCK)) {
     return <MesaScreen key={`${route.param}:guest`} code={route.param} guestToken={guestToken} />;
   }
 
@@ -41,7 +44,7 @@ function Shell() {
     case 'cargar':
       return <TopupScreen />;
     case 'transferir':
-      return <TransferScreen />;
+      return <TransferScreen preselectPaymeId={route.param ?? undefined} />;
     case 'amigos':
       return <FriendsScreen />;
     case 'grupos':
@@ -58,6 +61,11 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <div className="app">
+          {IS_MOCK && (
+            <div className="demo-strip">
+              Demo · datos de ejemplo, no se cobra dinero real
+            </div>
+          )}
           <Shell />
         </div>
       </ToastProvider>
