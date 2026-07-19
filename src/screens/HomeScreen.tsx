@@ -4,6 +4,7 @@ import type { BalanceResponse, OpenMesasResponse, PendingInvitation } from '../a
 import { useAuth } from '../auth/AuthContext';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
+import { displayName } from '../utils/identity';
 
 /**
  * Home (maqueta s-home): saldo → Cuenta, Cargar/Transferir, Nueva Mesa,
@@ -31,8 +32,8 @@ export function HomeScreen() {
     };
   }, []);
 
-  // G-02: tras un login real no hay user (solo tokens); saludo genérico.
-  const firstName = session?.user?.first_name;
+  // G-02: tras un login real no hay `user`; displayName cae al email tipeado.
+  const firstName = displayName(session);
   const mesasCount = openMesas?.mesas.length ?? null;
   const mesasSub =
     mesasCount === null

@@ -115,8 +115,13 @@ export async function httpGuestRequest<T>(
 
 export async function httpLogin(email: string, password: string): Promise<StoredSession> {
   const r = await rawRequest<LoginResponse>('POST', '/auth/login', { email, password });
-  // G-02: login no devuelve user; queda undefined hasta que exista GET /me.
-  const session: StoredSession = { access_token: r.access_token, refresh_token: r.refresh_token };
+  // G-02: el login no devuelve `user`. Guardamos el email tipeado como único
+  // dato de identidad disponible hasta que exista un endpoint de perfil.
+  const session: StoredSession = {
+    access_token: r.access_token,
+    refresh_token: r.refresh_token,
+    email,
+  };
   saveSession(session);
   return session;
 }

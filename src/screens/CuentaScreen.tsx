@@ -1,5 +1,8 @@
+import type { StripeCardElement } from '@stripe/stripe-js';
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, IS_MOCK } from '../api';
+import { confirmCardSetup } from '../api/stripe';
+import { CardField } from '../components/CardField';
 import type { BalanceResponse, PaymentMethod, StatsResponse, WalletTransaction } from '../api/types';
 import { TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
@@ -19,6 +22,13 @@ function txDate(iso: string): string {
 
 export function CuentaScreen() {
   const toast = useToast();
+  const [adding, setAdding] = useState(false);
+  const [busyCard, setBusyCard] = useState(false);
+  const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
+  const [cardState, setCardState] = useState<{ complete: boolean; error: string | null }>({
+    complete: false,
+    error: null,
+  });
   const [tab, setTab] = useState<'historial' | 'tarjetas'>('historial');
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
@@ -57,6 +67,37 @@ export function CuentaScreen() {
       loadPms();
     } catch {
       toast('No se pudo eliminar');
+    }
+  }
+
+  /**
+   * Alta de tarjeta: SetupIntent en el backend → Stripe confirma y devuelve el
+   * `pm_…` → se registra. La tarjeta nunca pasa por PayMe.
+   */
+  async function addCard() {
+    setBusyCard(true);
+    try {
+      const { client_secret } = await api.createSetupIntent();
+      let pmId = 'pm_mock_demo';
+      if (!IS_MOCK) {
+        if (!cardEl) return;
+        const res = await confirmCardSetup(client_secret, cardEl);
+        if ('error' in res) {
+          setCardState((s) => ({ ...s, error: res.error }));
+          return;
+        }
+        pmId = res.paymentMethodId;
+      }
+      await api.attachPaymentMethod(pmId, pms?.length === 0);
+      toast('Tarjeta guardada ✓');
+      setAdding(false);
+      setCardEl(null);
+      setCardState({ complete: false, error: null });
+      loadPms();
+    } catch {
+      toast('No pudimos guardar la tarjeta');
+    } finally {
+      setBusyCard(false);
     }
   }
 
@@ -197,10 +238,50 @@ export function CuentaScreen() {
                 </button>
               </div>
             ))}
-            <div className="note note-teal" style={{ marginTop: 6 }}>
-              Pronto vas a poder agregar tarjetas nuevas. Las guarda Stripe de forma segura:
-              PayMe nunca ve el número completo.
-            </div>
+            {adding ? (
+              <div className="card card-p" style={{ marginTop: 6 }}>
+                <div className="sectlabel">Nueva tarjeta</div>
+                {IS_MOCK ? (
+                  <div className="note note-teal" style={{ marginBottom: 12 }}>
+                    En la demo no pedimos datos reales: se agrega una tarjeta de ejemplo.
+                  </div>
+                ) : (
+                  <>
+                    <CardField onReady={setCardEl} onChange={setCardState} />
+                    {cardState.error && (
+                      <div className="caption" style={{ color: 'var(--red)' }} role="alert">
+                        {cardState.error}
+                      </div>
+                    )}
+                    <div className="caption" style={{ marginBottom: 12 }}>
+                      Los datos van directo a Stripe: PayMe nunca ve el número completo.
+                    </div>
+                  </>
+                )}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      setAdding(false);
+                      setCardEl(null);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={addCard}
+                    disabled={busyCard || (!IS_MOCK && !cardState.complete)}
+                  >
+                    {busyCard ? 'Guardando…' : 'Guardar tarjeta'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button className="btn btn-ghost" style={{ marginTop: 6 }} onClick={() => setAdding(true)}>
+                + Agregar tarjeta
+              </button>
+            )}
           </>
         )}
       </div>

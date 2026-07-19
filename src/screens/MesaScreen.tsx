@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, IS_MOCK, newIdempotencyKey } from '../api';
 import { extractApiError } from '../api/errors';
+import { confirmCardPayment } from '../api/stripe';
 import type { MesaDetail, PaymentMethod, PaymentType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { TopBar, useToast } from '../components/ui';
@@ -143,6 +144,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         },
         guestToken,
       );
+      // El pago con tarjeta puede volver en `requires_action`: ahí el banco
+      // pide 3DS y hay que confirmarlo con Stripe.js antes de dar por hecho el
+      // cobro. Sin esto el usuario vería "pagado" con el cobro sin confirmar.
+      if (r.attempt.requires_action && r.attempt.client_secret) {
+        const confirmed = await confirmCardPayment(r.attempt.client_secret);
+        if (!confirmed.ok) {
+          setError(confirmed.error);
+          setBusy(false);
+          reload();
+          return;
+        }
+      }
       const methodLabel =
         payType === 'wallet'
           ? '👛 Saldo PayMe'

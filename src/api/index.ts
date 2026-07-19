@@ -8,6 +8,7 @@ import {
 } from './http';
 import * as mock from './mock/mockApi';
 import { clearSession, loadSession, type StoredSession } from './storage';
+import { confirmCardPayment } from './stripe';
 import type {
   BalanceResponse,
   ClabeResponse,
@@ -83,6 +84,10 @@ export interface Api {
   getPaymentMethods(): Promise<PaymentMethodsResponse>;
   setDefaultPaymentMethod(id: string): Promise<void>;
   removePaymentMethod(id: string): Promise<void>;
+  /** POST /payment-methods/setup-intent → client_secret para Stripe Elements. */
+  createSetupIntent(): Promise<{ client_secret: string }>;
+  /** POST /payment-methods: registra el `pm_…` ya confirmado con Stripe. */
+  attachPaymentMethod(stripePaymentMethodId: string, setAsDefault?: boolean): Promise<void>;
   // notificaciones e invitaciones in-app
   getNotifications(): Promise<NotificationsResponse>;
   getUnreadCount(): Promise<{ unread_count: number }>;
@@ -141,10 +146,26 @@ const realApi: Api = {
     return (await res.json()) as OcrResponse;
   },
   createMesa: (req) => httpRequest<CreateMesaResponse>('POST', '/mesas', req),
-  async confirmGuarantee3ds() {
-    // T7: acá va stripe.confirmCardPayment(clientSecret) + poll de la mesa
-    // hasta que el webhook amount_capturable_updated la abra.
-    throw new Error('confirmGuarantee3ds real llega en T7 (Stripe.js)');
+  /**
+   * 3DS de la garantía: se confirma con Stripe.js y después se espera a que la
+   * mesa pase a 'open'. Ese cambio lo hace el WEBHOOK
+   * (payment_intent.amount_capturable_updated), no la respuesta de Stripe, así
+   * que hay que sondear la mesa: sin esto el organizador seguiría a compartir
+   * el link con la mesa todavía en 'pending_auth'.
+   */
+  async confirmGuarantee3ds(code, clientSecret) {
+    const r = await confirmCardPayment(clientSecret);
+    if (!r.ok) throw new Error(r.error);
+    for (let i = 0; i < 10; i++) {
+      const { mesa } = await httpRequest<MesaDetailResponse>(
+        'GET',
+        `/mesas/${encodeURIComponent(code)}`,
+      );
+      if (mesa.status !== 'pending_auth') return { status: mesa.status };
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    // El hold quedó autorizado en Stripe pero el webhook todavía no llegó.
+    throw new Error('guarantee_pending_webhook');
   },
   lockItems: (code, itemIds, guestToken) =>
     guestToken
@@ -193,6 +214,14 @@ const realApi: Api = {
   },
   removePaymentMethod: async (id) => {
     await httpRequest('DELETE', `/payment-methods/${encodeURIComponent(id)}`);
+  },
+  createSetupIntent: () =>
+    httpRequest<{ client_secret: string }>('POST', '/payment-methods/setup-intent'),
+  attachPaymentMethod: async (stripePaymentMethodId, setAsDefault) => {
+    await httpRequest('POST', '/payment-methods', {
+      stripe_payment_method_id: stripePaymentMethodId,
+      ...(setAsDefault !== undefined && { set_as_default: setAsDefault }),
+    });
   },
 
   getNotifications: () => httpRequest<NotificationsResponse>('GET', '/notifications'),
@@ -268,6 +297,8 @@ const mockApi: Api = {
   getPaymentMethods: () => mock.mockPaymentMethods(),
   setDefaultPaymentMethod: (id) => mock.mockSetDefaultPaymentMethod(id),
   removePaymentMethod: (id) => mock.mockRemovePaymentMethod(id),
+  createSetupIntent: () => mock.mockCreateSetupIntent(),
+  attachPaymentMethod: (pmId, setAsDefault) => mock.mockAttachPaymentMethod(pmId, setAsDefault),
 
   getNotifications: () => mock.mockNotifications(),
   getUnreadCount: () => mock.mockUnreadCount(),

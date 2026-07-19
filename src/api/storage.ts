@@ -12,6 +12,12 @@ export interface StoredSession {
   access_token: string;
   refresh_token: string;
   user?: User;
+  /**
+   * G-02: el login solo devuelve tokens y no existe `GET /me`, así que
+   * guardamos el email que la persona tipeó para no saludar en el vacío.
+   * Se borra en cuanto el backend exponga el perfil propio.
+   */
+  email?: string;
 }
 
 export function saveSession(s: StoredSession): void {

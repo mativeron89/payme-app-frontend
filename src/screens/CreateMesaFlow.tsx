@@ -1,9 +1,12 @@
+import type { StripeCardElement } from '@stripe/stripe-js';
 import { useState } from 'react';
-import { api } from '../api';
+import { api, IS_MOCK } from '../api';
 import { HttpError } from '../api/http';
 import { MockApiError } from '../api/mock/mockApi';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
+import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, OcrResponse, PaymentMethod } from '../api/types';
+import { CardField } from '../components/CardField';
 import { TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
@@ -36,9 +39,26 @@ export function CreateMesaFlow() {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateMesaResponse | null>(null);
   const [link, setLink] = useState<string | null>(null);
+  const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
+  const [cardState, setCardState] = useState<{ complete: boolean; error: string | null }>({
+    complete: false,
+    error: null,
+  });
 
-  // G-01: no hay endpoint de restaurantes; el mock usa uuids fijos conocidos.
-  const restaurant = MOCK_RESTAURANTS[0];
+  /**
+   * G-01: el contrato NO tiene endpoint para listar/buscar restaurantes, pero
+   * `POST /mesas` exige un `restaurant_id` que exista y esté activo. Mientras
+   * el gap siga abierto, con backend real el id se toma de configuración
+   * (VITE_RESTAURANT_ID, apuntando a una fila sembrada en la base).
+   */
+  const restaurant = IS_MOCK
+    ? MOCK_RESTAURANTS[0]
+    : {
+        id: (import.meta.env.VITE_RESTAURANT_ID as string | undefined) ?? '',
+        name: (import.meta.env.VITE_RESTAURANT_NAME as string | undefined) ?? 'Restaurante',
+        category: 'other',
+        address: '',
+      };
   const total = ocr?.total_cents ?? 0;
 
   async function doScan() {
@@ -69,13 +89,43 @@ export function CreateMesaFlow() {
     setBusy(true);
     setError(null);
     try {
+      // Garantía con tarjeta: el contrato exige un `pm_…` de Stripe.
+      // En demo se simula; con backend real se crea desde el Card Element.
+      let stripePmId: string | null = null;
+      if (method === 'card') {
+        if (IS_MOCK) {
+          stripePmId = `pm_mock_${pm?.last_four ?? '4242'}`;
+        } else {
+          if (!cardEl) {
+            setError('Cargá los datos de la tarjeta para continuar.');
+            setBusy(false);
+            return;
+          }
+          const res = await createCardPaymentMethod(cardEl);
+          if ('error' in res) {
+            setError(res.error);
+            setBusy(false);
+            return;
+          }
+          stripePmId = res.paymentMethodId;
+        }
+      }
+
+      if (!restaurant.id) {
+        setError(
+          'Falta configurar el restaurante de la mesa (VITE_RESTAURANT_ID). Es el gap G-01: el backend todavía no expone la lista de restaurantes.',
+        );
+        setBusy(false);
+        return;
+      }
+
       const r = await api.createMesa({
         restaurant_id: restaurant.id,
         total_cents: total,
         division_mode: division,
         expected_participants: division === 'igual' ? participants : Math.max(1, participants),
         guarantee_method: method,
-        ...(method === 'card' && pm && { stripe_payment_method_id: `pm_mock_${pm.last_four}` }),
+        ...(stripePmId && { stripe_payment_method_id: stripePmId }),
         items: ocr.items.map((i) => ({
           name: i.name,
           price_cents: i.price_cents,
@@ -113,9 +163,18 @@ export function CreateMesaFlow() {
     try {
       await api.confirmGuarantee3ds(created.mesa.code, created.guarantee.client_secret ?? '');
       await makeLink(created.mesa.code);
-    } catch {
-      setError('El banco rechazó la autorización. Probá con otra tarjeta.');
-      setStep('garantia');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg === 'guarantee_pending_webhook') {
+        // El banco autorizó pero el aviso todavía no llegó al backend: no es un
+        // rechazo, así que no mandamos al usuario a elegir otra garantía.
+        setError(
+          'Tu banco autorizó la retención, pero todavía la estamos confirmando. Esperá unos segundos y volvé a intentar.',
+        );
+      } else {
+        setError(msg || 'El banco no autorizó la retención. Probá con otra tarjeta.');
+        setStep('garantia');
+      }
     } finally {
       setBusy(false);
     }
@@ -327,34 +386,70 @@ export function CreateMesaFlow() {
             {error}
           </div>
         )}
-          <div className="sectlabel">¿Con qué garantizás?</div>
-          <button className={`method-card ${method === 'card' ? 'sel' : ''}`} onClick={() => setMethod('card')}>
-            <div className="cc visa">VISA</div>
+          <div className="sectlabel" id="lbl-garantia">
+            ¿Con qué garantizás?
+          </div>
+          <div role="radiogroup" aria-labelledby="lbl-garantia">
+          <button
+            className={`method-card ${method === 'card' ? 'sel' : ''}`}
+            onClick={() => setMethod('card')}
+            role="radio"
+            aria-checked={method === 'card'}
+          >
+            <div className="cc visa" aria-hidden="true">
+              VISA
+            </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 14 }}>
-                {pm ? `${pm.bank_name ?? pm.brand} ···· ${pm.last_four}` : 'Tarjeta'}
+                {IS_MOCK && pm ? `${pm.bank_name ?? pm.brand} ···· ${pm.last_four}` : 'Tarjeta'}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
+              <div className="caption">
                 Retención en la tarjeta (puede pedir confirmación del banco)
               </div>
             </div>
-            <div className="radio" />
+            <div className="radio" aria-hidden="true" />
           </button>
-          <button className={`method-card ${method === 'wallet' ? 'sel' : ''}`} onClick={() => setMethod('wallet')}>
-            <div className="method-icon" style={{ background: 'var(--teal-l)' }}>
+          {/* G-04: el contrato exige un `pm_…` de Stripe para la garantía y
+              GET /payment-methods no lo expone, así que con backend real la
+              tarjeta se ingresa acá aunque el usuario ya tenga uma guardada. */}
+          {!IS_MOCK && method === 'card' && (
+            <div style={{ margin: '4px 0 12px' }}>
+              <CardField onReady={setCardEl} onChange={setCardState} />
+              {cardState.error && (
+                <div className="caption" style={{ color: 'var(--red)' }} role="alert">
+                  {cardState.error}
+                </div>
+              )}
+              <div className="caption">
+                Los datos van directo a Stripe: PayMe nunca ve el número completo.
+              </div>
+            </div>
+          )}
+          <button
+            className={`method-card ${method === 'wallet' ? 'sel' : ''}`}
+            onClick={() => setMethod('wallet')}
+            role="radio"
+            aria-checked={method === 'wallet'}
+          >
+            <div className="method-icon" style={{ background: 'var(--teal-l)' }} aria-hidden="true">
               👛
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 14 }}>Saldo PayMe</div>
-              <div style={{ fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
+              <div className="caption">
                 Congela {formatMXN(total)} de tu saldo hasta que la mesa cierre
               </div>
             </div>
-            <div className="radio" />
+            <div className="radio" aria-hidden="true" />
           </button>
+          </div>
         </div>
         <div className="action-bar">
-          <button className="btn btn-primary" onClick={createMesa} disabled={busy}>
+          <button
+            className="btn btn-primary"
+            onClick={createMesa}
+            disabled={busy || (!IS_MOCK && method === 'card' && !cardState.complete)}
+          >
             {busy ? 'Autorizando…' : `🔒 Garantizar ${formatMXN(total)} y abrir mesa`}
           </button>
         </div>

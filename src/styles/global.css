@@ -51,7 +51,9 @@ body {
 }
 
 .app {
-  min-height: 100%;
+  /* La altura de viewport vive acá, no en .screen: si ambas la tuvieran, la
+     banda de demo empujaría la página y se perdería al hacer scroll. */
+  min-height: 100dvh;
   max-width: 480px; /* en desktop se ve como columna de teléfono */
   margin: 0 auto;
   display: flex;
@@ -63,7 +65,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  min-height: 0;
 }
 
 .scroll {

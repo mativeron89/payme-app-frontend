@@ -1,5 +1,42 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.9.0 — T7 (parte 1): Stripe.js integrado (2026-07-19)
+
+Primera mitad de T7: todo el lado del front listo para hablar con el backend
+real. Falta levantar el backend (requiere PostgreSQL) para verificar de punta
+a punta.
+
+- **Nueva dependencia: `@stripe/stripe-js` 9.10.0** — única del proyecto
+  además de React, alcance ratificado por Mati. Sin wrapper de React: los
+  Elements se montan a mano (`src/components/CardField.tsx`) para no sumar una
+  segunda librería.
+- Carga **diferida**: Stripe queda en un chunk aparte de 2,7 kB que la demo
+  (`VITE_MOCK=1`) no descarga nunca. La clave publicable se pide a
+  `GET /api/config`; la secreta jamás sale del backend.
+- `confirmGuarantee3ds` real: confirma el 3DS y **sondea la mesa** hasta que
+  deja `pending_auth` — el cambio lo hace el webhook, no la respuesta de
+  Stripe, así que sin el sondeo se compartía el link con la mesa sin abrir.
+- 3DS también en el **pago** (`requires_action` en `POST /:code/pay`), que
+  antes se daba por cobrado sin confirmar.
+- Alta de tarjeta real: SetupIntent → Elements → `POST /payment-methods`.
+- **G-02** (login no devuelve `user`): se guarda el email tipeado y
+  `utils/identity.ts` deriva el nombre para saludar, con la deuda documentada.
+- **G-01** (no hay endpoint de restaurantes): el `restaurant_id` sale de
+  `VITE_RESTAURANT_ID` con mensaje de error explícito si falta.
+- `scripts/t7-setup-db.sh` + `scripts/T7_RUNBOOK.md`: preparan la base local,
+  corren las 4 migraciones y siembran el restaurante. **No tocan ni un archivo
+  del backend** (repo de solo lectura).
+- Fix: la banda de demo se perdía al hacer scroll (la altura de viewport
+  estaba duplicada entre `.app` y `.screen`).
+
+### Gaps nuevos encontrados al integrar
+- **G-04 (bloqueante para la garantía con tarjeta)**: `POST /mesas` exige un
+  `stripe_payment_method_id` (`pm_…`) que `GET /payment-methods` **no
+  devuelve**. No se puede garantizar una mesa con una tarjeta ya guardada: hay
+  que tipearla cada vez. `POST /:code/pay` sí acepta el id interno, así que la
+  asimetría parece un descuido del contrato.
+- **G-05**: consecuencia del anterior para las tarjetas guardadas.
+
 ## 0.8.0 — Revisión previa al feedback de diseño (2026-07-19)
 
 Aplicación de los 47 hallazgos confirmados por una revisión multi-agente

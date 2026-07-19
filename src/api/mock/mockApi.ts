@@ -525,6 +525,35 @@ export async function mockRemovePaymentMethod(id: string): Promise<void> {
   return delay(undefined);
 }
 
+export async function mockCreateSetupIntent(): Promise<{ client_secret: string }> {
+  return delay({ client_secret: 'seti_mock_secret' });
+}
+
+/** En demo no hay Stripe: se agrega una tarjeta de ejemplo verosímil. */
+export async function mockAttachPaymentMethod(
+  _stripePaymentMethodId: string,
+  setAsDefault?: boolean,
+): Promise<void> {
+  const banks = ['BBVA', 'Banorte', 'HSBC', 'Citibanamex'];
+  const bank = banks[state.paymentMethods.length % banks.length];
+  const lastFour = String(Math.floor(1000 + Math.random() * 9000));
+  if (setAsDefault) {
+    state.paymentMethods = state.paymentMethods.map((pm) => ({ ...pm, is_default: false }));
+  }
+  state.paymentMethods.push({
+    id: mockId('b'),
+    brand: 'visa',
+    bank_name: bank,
+    type: 'debit',
+    last_four: lastFour,
+    exp_month: 11,
+    exp_year: 2030,
+    is_default: !!setAsDefault || state.paymentMethods.length === 0,
+    display: `${bank} · Débito · •••• ${lastFour}`,
+  });
+  return delay(undefined);
+}
+
 // ─── Notifications / invitaciones in-app ───────────────────
 
 export async function mockNotifications(): Promise<NotificationsResponse> {
