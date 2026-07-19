@@ -50,6 +50,42 @@ SELECT m.id, m.restaurant_id, m.opener_user_id, m.total_cents, m.paid_amount_cen
 `DATABASE_URL_TEST`/`RUN_DB_TESTS` y varias están en skip declarado, así que
 este camino nunca se ejerció contra un Postgres real.
 
+**Estado (2026-07-19):** confirmado por el equipo del backend. Fix propuesto,
+esperando el OK de Mati para mergear. No hay nada que hacer del lado del front.
+
+---
+
+## 🔴 B-02 y B-03 — `ON CONFLICT` contra un índice único PARCIAL
+
+Hallados por el equipo del backend al barrer la capa SQL a partir de B-01.
+**Los verifiqué de forma independiente contra Postgres 18 el 2026-07-19.**
+
+`uq_mesa_participants_user` es un índice único **parcial**:
+
+```
+CREATE UNIQUE INDEX uq_mesa_participants_user
+    ON mesa_participants (mesa_id, user_id) WHERE (user_id IS NOT NULL)
+```
+
+Postgres exige repetir ese predicado en el `ON CONFLICT`; sin él no puede
+inferir el árbitro y aborta con `42P10` — **falla siempre, haya o no
+conflicto** (es error de planificación, no de ejecución).
+
+| # | Dónde | Endpoint que rompe | ¿Afecta a este front? |
+| --- | --- | --- | --- |
+| **B-02** | `routes/invitations.js:71` (`DO UPDATE`) | `POST /api/invitations/:id/accept` → 500 | **Sí**: aceptar una invitación in-app desde la pantalla de Avisos |
+| **B-03** | `routes/mesas.js:721` (`DO NOTHING`) | `POST /api/mesas/:code/invitations` con `type:'in_app'` → 500 | **No hoy**: el front solo genera invitaciones `type:'link'`, que no pasan por ese `ON CONFLICT`. Bloquearía "invitar por PayMe ID" cuando se construya |
+
+Verificación propia: `GET /api/invitations` responde 200 con los datos
+completos; `POST /:id/accept` responde `500 {"error":"42P10"}`. Repitiendo el
+predicado (`ON CONFLICT (mesa_id, user_id) WHERE user_id IS NOT NULL`) el
+INSERT funciona.
+
+**Comportamiento del front mientras tanto:** verificado que degrada bien —
+avisa "No pudimos aceptar la invitación", deja la invitación en la lista y el
+botón vuelve a estar disponible. No se agrega ningún parche: el fix está en
+camino y un workaround acá sería código muerto.
+
 ---
 
 Regla del repo: acá se ANOTA, no se implementa ni se mockea en silencio.
