@@ -1,5 +1,57 @@
 # GAPS — datos/endpoints que el front necesita y el contrato del App Backend no cubre
 
+---
+
+## 🔴 B-01 — BUG BLOQUEANTE del backend (no es un gap: es un defecto)
+
+**Hallado el 2026-07-19 durante T7, corriendo el backend v2.14.0 real contra
+PostgreSQL 18. Reproducible al 100%.**
+
+`middleware/auth.js` → `requireMesaParticipant` (línea ~147) ejecuta:
+
+```sql
+SELECT id, restaurant_id, opener_user_id, total_cents, paid_amount_cents,
+       tip_amount_cents, division_mode, expected_participants,
+       status, expires_at, metadata, fee_pct
+  FROM mesas m
+  LEFT JOIN restaurants r ON r.id = m.restaurant_id
+ WHERE m.code = $1
+```
+
+`id`, `status` y `created_at` existen en **ambas** tablas, así que Postgres
+aborta con `42702: column reference "id" is ambiguous`. La consulta **lanza**
+(no devuelve 0 filas), por lo que el fallback sin JOIN de las líneas
+siguientes es inalcanzable y el `catch` responde `500 mesa_check_failed`.
+
+**Alcance — los tres endpoints del núcleo del producto quedan caídos:**
+
+| Endpoint | Qué rompe |
+| --- | --- |
+| `GET /api/mesas/:code` | Nadie puede **abrir el detalle de una mesa** |
+| `POST /api/mesas/:code/items/lock` | Nadie puede **reservar sus consumos** |
+| `POST /api/mesas/:code/pay` | **NADIE PUEDE PAGAR** |
+
+Crear la mesa y garantizarla sí funciona (`POST /api/mesas` no usa ese
+middleware), así que el dinero se retiene pero después no se puede cobrar.
+
+**Arreglo (verificado contra la base, NO aplicado — ese repo es de solo
+lectura y esto merece acta):** calificar las columnas.
+
+```sql
+SELECT m.id, m.restaurant_id, m.opener_user_id, m.total_cents, m.paid_amount_cents,
+       m.tip_amount_cents, m.division_mode, m.expected_participants,
+       m.status, m.expires_at, m.metadata, r.fee_pct
+  FROM mesas m
+  LEFT JOIN restaurants r ON r.id = m.restaurant_id
+ WHERE m.code = $1
+```
+
+**Por qué el CI no lo detecta:** las suites que tocan base están gateadas por
+`DATABASE_URL_TEST`/`RUN_DB_TESTS` y varias están en skip declarado, así que
+este camino nunca se ejerció contra un Postgres real.
+
+---
+
 Regla del repo: acá se ANOTA, no se implementa ni se mockea en silencio.
 Cada gap se lleva al dueño del contrato (`payme-app-backend`, vía Mati), que
 decide si y cuándo entra. Cuando se resuelva, se actualiza este archivo y la

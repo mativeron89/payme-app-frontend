@@ -5,3 +5,4 @@ dist/
 
 # Config local de T7 (no versionar)
 .env.local
+.env.development.local

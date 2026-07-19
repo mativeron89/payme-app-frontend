@@ -1,5 +1,5 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api, IS_MOCK } from '../api';
 import { HttpError } from '../api/http';
 import { MockApiError } from '../api/mock/mockApi';
@@ -39,6 +39,7 @@ export function CreateMesaFlow() {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateMesaResponse | null>(null);
   const [link, setLink] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<{ complete: boolean; error: string | null }>({
     complete: false,
@@ -61,14 +62,28 @@ export function CreateMesaFlow() {
       };
   const total = ocr?.total_cents ?? 0;
 
-  async function doScan() {
+  /**
+   * Demo: el mock devuelve el ticket de ejemplo sin foto.
+   * Real: `POST /api/ocr` es multipart y valida los magic bytes de la imagen,
+   * así que hay que mandar una foto de verdad → se abre la cámara del teléfono.
+   */
+  function doScan() {
+    if (IS_MOCK) {
+      void runScan();
+      return;
+    }
+    fileInput.current?.click();
+  }
+
+  async function runScan(image?: Blob) {
     setScanning(true);
+    setError(null);
     try {
-      const r = await api.scanTicket();
+      const r = await api.scanTicket(image);
       setOcr(r);
       setStep('ticket');
     } catch {
-      toast('No pudimos leer el ticket');
+      toast('No pudimos leer el ticket. Probá sacar la foto de nuevo.');
     } finally {
       setScanning(false);
     }
@@ -204,12 +219,17 @@ export function CreateMesaFlow() {
     return (
       <div className="screen" style={{ background: 'var(--navy)' }}>
         <div className="top-bar" style={{ background: 'var(--navy)' }}>
-          <button className="back-btn" onClick={back} aria-label="Volver" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>
-            ←
+          <button
+            className="back-btn"
+            onClick={back}
+            aria-label="Volver"
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
+          >
+            <span aria-hidden="true">←</span>
           </button>
-          <div className="top-title" style={{ color: '#fff' }}>
+          <h1 className="top-title" style={{ color: '#fff' }}>
             Escanear ticket
-          </div>
+          </h1>
         </div>
         <div className="scroll" style={{ background: 'var(--navy)', padding: '20px 16px' }}>
           <div className="scan-frame">
@@ -218,15 +238,38 @@ export function CreateMesaFlow() {
             <div className="scan-corner bl" />
             <div className="scan-corner br" />
             {scanning && <div className="scan-line" />}
-            <div style={{ fontSize: 40, opacity: 0.3 }}>🧾</div>
+            <div style={{ fontSize: 40, opacity: 0.3 }} aria-hidden="true">
+              🧾
+            </div>
           </div>
-          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: 13, margin: '16px 0', fontFamily: 'var(--font-body)' }}>
+          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.75)', fontSize: 13, margin: '16px 0', fontFamily: 'var(--font-body)' }}>
             Encuadrá el ticket dentro del marco
           </div>
+          {error && (
+            <div className="form-error" role="alert">
+              {error}
+            </div>
+          )}
           <div className="note note-amber">
-            <b>Modo demo:</b> todavía no leemos la foto. Usamos un ticket de ejemplo para que
-            puedas probar el resto del flujo.
+            <b>{IS_MOCK ? 'Modo demo:' : 'Ojo:'}</b>{' '}
+            {IS_MOCK
+              ? 'todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo.'
+              : 'todavía no leemos la foto de verdad — sacala igual y vas a recibir un ticket de ejemplo para continuar.'}
           </div>
+          {/* Real: abre la cámara del teléfono. POST /api/ocr es multipart y
+              valida los magic bytes, así que necesita una imagen de verdad. */}
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic"
+            capture="environment"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void runScan(file);
+            }}
+          />
           <button className="btn btn-teal" style={{ marginTop: 14 }} onClick={doScan} disabled={scanning}>
             {scanning ? 'Leyendo ticket…' : '📸 Capturar'}
           </button>
