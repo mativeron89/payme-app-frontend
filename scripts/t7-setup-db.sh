@@ -18,16 +18,30 @@ BACKEND="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../payme-app-backend" && pwd)"
 DB_NAME="${DB_NAME:-payme}"
 export DATABASE_URL="${DATABASE_URL:-postgresql://localhost:5432/${DB_NAME}}"
 
+# Postgres.app trae sus binarios adentro del bundle. Los usamos por ruta
+# completa: así no hace falta tocar el PATH del sistema (que pide sudo).
+PGAPP_BIN="/Applications/Postgres.app/Contents/Versions/latest/bin"
+if [ -x "$PGAPP_BIN/psql" ]; then
+  export PATH="$PGAPP_BIN:$PATH"
+fi
+
 if ! command -v psql >/dev/null 2>&1; then
   cat <<'EOF'
-✗ No encuentro `psql`.
+✗ No encuentro `psql` ni Postgres.app.
 
-Si ya instalaste Postgres.app, falta agregar sus herramientas al PATH:
+Instalá Postgres.app desde https://postgresapp.com (arrastrar a Aplicaciones)
+y volvé a correr este script.
+EOF
+  exit 1
+fi
 
-  sudo mkdir -p /etc/paths.d && echo /Applications/Postgres.app/Contents/Versions/latest/bin \
-    | sudo tee /etc/paths.d/postgresapp
+if [ ! -S /tmp/.s.PGSQL.5432 ]; then
+  cat <<'EOF'
+✗ Postgres está instalado pero NO está corriendo.
 
-Después cerrá y volvé a abrir la terminal (o reiniciá esta sesión) y corré el script de nuevo.
+Abrí Postgres.app (Aplicaciones → Postgres) y hacé clic en "Initialize" la
+primera vez, o en "Start" si ya estaba inicializado. Cuando el elefante quede
+en verde, volvé a correr este script. No hace falta contraseña.
 EOF
   exit 1
 fi

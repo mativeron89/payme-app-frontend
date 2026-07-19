@@ -7,14 +7,12 @@ solo se crea su `.env` (config, no código) y se corre `npm start`.
 ## 1. Postgres
 
 Instalar **Postgres.app** (https://postgresapp.com): arrastrar a Aplicaciones,
-abrir, botón *Initialize*. Después, dejar sus herramientas en el PATH:
+abrirla y hacer clic en *Initialize* (o *Start* si ya estaba inicializada).
+Listo: cuando el elefante queda en verde, Postgres está corriendo.
 
-```bash
-sudo mkdir -p /etc/paths.d && echo /Applications/Postgres.app/Contents/Versions/latest/bin \
-  | sudo tee /etc/paths.d/postgresapp
-```
-
-Cerrar y reabrir la terminal.
+> No hace falta tocar el PATH del sistema (eso pedía `sudo` y la contraseña de
+> la Mac). El script de abajo usa los binarios que vienen dentro de
+> Postgres.app por ruta completa.
 
 ## 2. Base + migraciones + restaurante semilla
 
