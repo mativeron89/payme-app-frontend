@@ -718,7 +718,9 @@ router.post('/:code/invitations', requireAuth, validateBody(schemas.createInvita
         await client.query(
           `INSERT INTO mesa_participants (mesa_id, user_id, role, status)
            VALUES ($1, $2, 'invited', 'pending')
-           ON CONFLICT (mesa_id, user_id) DO NOTHING`,
+           -- uq_mesa_participants_user es PARCIAL (WHERE user_id IS NOT NULL):
+           -- sin repetir el predicado, Postgres aborta con 42P10 SIEMPRE.
+           ON CONFLICT (mesa_id, user_id) WHERE user_id IS NOT NULL DO NOTHING`,
           [mesa.id, invitedUserId]
         );
       }

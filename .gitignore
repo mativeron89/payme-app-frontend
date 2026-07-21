@@ -3,6 +3,11 @@ dist/
 *.local
 .DS_Store
 
-# Config local de T7 (no versionar)
-.env.local
-.env.development.local
+# ── Variables de entorno ────────────────────────────────────
+# Ignorar TODO archivo .env* (puede traer secretos o config local)…
+.env
+.env.*
+# …salvo la config de dev no-secreta (versionada a propósito: VITE_MOCK=1)
+# y los archivos de ejemplo.
+!.env.development
+!*.example

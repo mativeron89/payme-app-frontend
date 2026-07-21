@@ -1,9 +1,16 @@
 # contract-mirror/ — espejo de solo lectura del contrato del App Backend
 
-**Procedencia:** copiado tal cual de `../payme-app-backend` (v2.13.0, CI verde)
-el **2026-07-18** durante T0 de este front. Fuente de verdad: el código real de
-ese repo. Este espejo existe para que el front pueda consultar el contrato sin
-abrir el repo del backend en cada sesión.
+**Procedencia:** copiado tal cual de `../payme-app-backend` **v2.14.3** (CI
+verde). Fuente de verdad: el código real de ese repo. Este espejo existe para
+que el front pueda consultar el contrato sin abrir el repo del backend en cada
+sesión.
+
+**Refrescado el 2026-07-20** desde v2.14.3 (venía congelado en v2.13.0 del
+2026-07-18). Cambiaron: `middleware/auth.js`, `routes/invitations.js`,
+`routes/mesas.js` y `docs/settlement.js.ref` (fixes v2.14.1/.2 de SQL contra
+Postgres real + outbox Etapa 2); se agregaron `docs/CHANGELOG_v2.14.md` y las
+migraciones de outbox. `schemas/index.js` NO cambió: el contrato de requests
+sigue igual que en v2.13.
 
 ## Reglas
 
@@ -25,8 +32,8 @@ abrir el repo del backend en cada sesión.
 | `middleware/auth.js` | `requireAuth` / `guestOrAuth` / `requireMesaParticipant` | Contrato de auth: `Bearer` JWT, guest por `?t=` o `X-Guest-Token` |
 | `utils/money.js` | Helpers de dinero en centavos | **Se replica EXACTO en `src/utils/money.ts`** (regla dura #5) |
 | `utils/stateMachine.js` | FSM de mesa / payment_attempt / mesa_item | Estados válidos que la UI tiene que representar |
-| `db/schema.sql` + migraciones garantía/abono | Columnas y CHECKs reales | Referencia de campos cuando una ruta devuelve `SELECT *` |
-| `docs/` | READMEs v2.10/v2.5.2, CHANGELOGs v2.11/v2.13, `settlement.js.ref` | Cómo levantar el backend local, modo mock STP, modelo de garantía |
+| `db/schema.sql` + migraciones (garantía, abono, outbox v2.12, outbox Etapa 2 v2.14) | Columnas y CHECKs reales | Referencia de campos cuando una ruta devuelve `SELECT *` |
+| `docs/` | READMEs v2.10/v2.5.2, CHANGELOGs v2.11/v2.13/**v2.14**, `settlement.js.ref` | Cómo levantar el backend local, modo mock STP, modelo de garantía |
 
 **Seed:** el backend NO tiene seed (verificado 2026-07-18). Los datos de demo
 salen del adaptador mock del front (`VITE_MOCK=1`).

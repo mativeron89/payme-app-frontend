@@ -68,7 +68,10 @@ router.post('/:id/accept', async (req, res, next) => {
       await client.query(
         `INSERT INTO mesa_participants (mesa_id, user_id, role, status)
          VALUES ($1, $2, 'invited', 'active')
-         ON CONFLICT (mesa_id, user_id) DO UPDATE SET status = 'active'`,
+         -- uq_mesa_participants_user es un indice unico PARCIAL: sin repetir su
+         -- predicado, Postgres no infiere arbitro y aborta con 42P10 SIEMPRE.
+         ON CONFLICT (mesa_id, user_id) WHERE user_id IS NOT NULL
+           DO UPDATE SET status = 'active'`,
         [inv.mesa_id, req.user.id]
       );
     });

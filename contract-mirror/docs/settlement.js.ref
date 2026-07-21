@@ -26,6 +26,7 @@
 
 const pool = require('../db/pool');
 const eventEmitter = require('./eventEmitter');
+const aggregateEmitter = require('./aggregateEmitter');
 const stripeService = require('./stripe');
 const stp = require('./stp');
 const stateMachine = require('../utils/stateMachine');
@@ -295,6 +296,9 @@ async function settleMesa(mesaId) {
     // Outbox E3: table_charged en 'settled' — cubre fully_paid Y expired+garantía;
     // hereda el re-check FOR UPDATE de arriba (anti doble emisión).
     await eventEmitter.enqueueTableCharged(client, mesaId);
+    // Outbox Etapa 2: lote de agregados absolutos del día/ventana de la mesa
+    // (acta 2026-07-18). Bajo SAVEPOINT: un fallo del lote no rompe el settle.
+    await aggregateEmitter.enqueueSettledMesaAggregates(client, mesaId);
     return { raced: false };
   });
   if (phase3.raced) {

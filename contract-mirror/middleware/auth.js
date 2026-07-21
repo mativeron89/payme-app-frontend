@@ -145,9 +145,12 @@ async function requireMesaParticipant(req, res, next) {
   try {
     const code = req.params.code;
     const { rows: mRows } = await pool.query(
-      `SELECT id, restaurant_id, opener_user_id, total_cents, paid_amount_cents,
-              tip_amount_cents, division_mode, expected_participants,
-              status, expires_at, metadata, fee_pct
+      // Todas las columnas van calificadas: 'id', 'status' y 'created_at' existen
+      // en mesas Y en restaurants, y una referencia sin alias hace que Postgres
+      // aborte la query entera con 42702 (column reference is ambiguous).
+      `SELECT m.id, m.code, m.restaurant_id, m.opener_user_id, m.total_cents, m.paid_amount_cents,
+              m.tip_amount_cents, m.division_mode, m.expected_participants,
+              m.status, m.expires_at, m.metadata, r.fee_pct
          FROM mesas m
          LEFT JOIN restaurants r ON r.id = m.restaurant_id
         WHERE m.code = $1`,
@@ -156,7 +159,7 @@ async function requireMesaParticipant(req, res, next) {
     if (mRows.length === 0 || !mRows[0].id) {
       // re-fetch sin join (sin fee_pct)
       const { rows: m2 } = await pool.query(
-        `SELECT id, restaurant_id, opener_user_id, total_cents, paid_amount_cents,
+        `SELECT id, code, restaurant_id, opener_user_id, total_cents, paid_amount_cents,
                 tip_amount_cents, division_mode, expected_participants,
                 status, expires_at, metadata
            FROM mesas WHERE code = $1`,

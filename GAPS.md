@@ -2,39 +2,41 @@
 
 ---
 
-## 🟠 B-04 — `requireMesaParticipant` no selecciona `code` (corrompe ledger + Stripe)
+## 🟠 B-04 — `requireMesaParticipant` no seleccionaba `code` (ensuciaba ledger + Stripe)
 
 Hallado el 2026-07-19 al verificar el fix v2.14.1. **Estaba tapado por B-01**:
 como el endpoint nunca respondía, nadie vio que la fila venía incompleta.
 
-`middleware/auth.js` → `requireMesaParticipant` usa `code` en el `WHERE` pero
-**no lo selecciona** — ni en la consulta con JOIN ni en el fallback. Como
-`req.mesa.code` queda `undefined`, se filtra a TODO lo que lo consuma aguas
+`middleware/auth.js` → `requireMesaParticipant` usaba `code` en el `WHERE` pero
+**no lo seleccionaba** — ni en la consulta con JOIN ni en el fallback. Como
+`req.mesa.code` quedaba `undefined`, se filtraba a TODO lo que lo consuma aguas
 abajo (todo eso lee `const mesa = req.mesa`):
 
-| Superficie | Qué queda roto |
+| Superficie | Qué quedaba roto |
 | --- | --- |
-| `GET /api/mesas/:code` (routes/mesas.js:233-234) | respuesta sin la clave `code`; `full_name: "Mesa undefined - …"` |
-| `POST /:code/pay` (routes/mesas.js:564) | **`wallet_transactions.description = "Pago mesa undefined"`** — registro del ledger |
-| `POST /:code/pay` (routes/mesas.js:620) | **metadata `mesa_code: "undefined"`** en el PaymentIntent de Stripe — traza de conciliación |
+| `GET /api/mesas/:code` | respuesta sin la clave `code`; `full_name: "Mesa undefined - …"` |
+| `POST /:code/pay` | `wallet_transactions.description = "Pago mesa undefined"` — texto del ledger |
+| `POST /:code/pay` | metadata `mesa_code: "undefined"` en el PaymentIntent de Stripe — traza de conciliación |
 
-Los dos últimos elevan esto de cosmético a **corrupción de datos en el camino
-del dinero**: descripción del ledger y metadata de Stripe con "undefined".
+**Alcance real: solo TEXTO de traza.** Nunca tocó montos, ni el `balance_cents`,
+ni la idempotencia, ni ningún cálculo de dinero — únicamente ensuciaba con
+"undefined" la descripción del movimiento y la metadata de Stripe. No hubo plata
+en riesgo en ningún momento.
 
-Evidencia dura (mi pago real en PA-8804, verificado en la base v2.14.1):
+Corroboración de que era un olvido y no criterio: el otro endpoint del mismo
+archivo, `GET /mesas/open`, **sí** hacía `SELECT m.id, m.code, …`.
+
+**Estado: RESUELTO** en v2.14.2 (`ef1006c`). El backend agregó `m.code` al
+`SELECT` con JOIN (`auth.js:151`) y `code` al fallback (`auth.js:162`).
+Re-verificado por el front el 2026-07-20 contra el backend real v2.14.3:
+
 ```
-SELECT description FROM wallet_transactions WHERE type='payment_mesa' ...;
- -> "Pago mesa undefined"    (debería decir "Pago mesa PA-8804")
+GET /api/mesas/PA-8859  →  code="PA-8859", full_name="Mesa PA-8859 - La Parolaccia"
+wallet_transactions.description (tras un pago real)  →  "Pago mesa PA-8859"   (se acabó el "undefined")
 ```
 
-Corroboración de que es un olvido y no criterio: el otro endpoint del mismo
-archivo, `GET /mesas/open` (línea 165), **sí** hace `SELECT m.id, m.code, …`.
-
-**Fix sugerido:** agregar `m.code` al `SELECT` con JOIN y `code` al fallback.
-
-**Estado del front:** la pantalla de mesa ya no depende de eso (usa el código
-de la ruta, que es más correcto). Pero el ledger y Stripe se llenan del lado
-del backend, así que ese daño solo se arregla ahí.
+**Estado del front:** ya no dependía de esto (la pantalla de mesa usa el código
+de la ruta, que es más correcto igual). No hizo falta ningún parche.
 
 ---
 
