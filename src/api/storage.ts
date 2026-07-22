@@ -6,7 +6,11 @@ import type { User } from './types';
  * tokens). Cuando exista GET /me se completa acá.
  */
 
-const KEY = 'payme_app_session';
+// La demo mock (/) y el build real (/live/) viven en el MISMO origen de GitHub
+// Pages, así que comparten localStorage. Si la clave fuera única, una sesión
+// mock se filtraría al build real (y su token falso iría al backend real).
+// Namespaced por modo para que cada deploy tenga su propia sesión aislada.
+const KEY = import.meta.env.VITE_MOCK === '1' ? 'payme_app_session__mock' : 'payme_app_session';
 
 export interface StoredSession {
   access_token: string;
