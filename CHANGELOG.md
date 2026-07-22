@@ -1,5 +1,24 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.10.0 — Deploy real público + pago con tarjeta nueva (2026-07-22)
+
+Para el video-demo del comensal (aplicación YC): dejar el front navegable en
+una URL pública contra el backend vivo de Railway (v2.14.3).
+
+- **Deploy dual en GitHub Pages** (`.github/workflows/deploy-demo.yml`):
+  `/` sigue siendo la demo mock (feedback de diseño); `/live/` es el build real
+  (`VITE_MOCK=0`) contra `payme-app-backend-production.up.railway.app`. La
+  publishable key de Stripe la sirve el backend (`GET /api/config`), no va como
+  variable. `VITE_RESTAURANT_ID` sale de la variable de repo homónima (G-01).
+- **Pago con tarjeta nueva en la pantalla de pago** (`MesaScreen`): en modo
+  real, un usuario sin tarjeta guardada ahora ingresa la tarjeta con Stripe
+  Elements inline; se crea el `pm_` y se manda como `stripe_payment_method_id`
+  (campo que el contrato de `POST /:code/pay` ya aceptaba). Antes la opción
+  "Tarjeta" no recolectaba nada y el pago fallaba con `no_payment_source`.
+  Cubre el paso "pagar con 4242" del video. 3DS ya estaba manejado.
+- Registro confirmado **sin OTP/SMS**: `POST /auth/register` toma
+  `{email, phone?, password, first_name, last_name}` y devuelve tokens.
+
 ## 0.9.0 — T7 (parte 1): Stripe.js integrado (2026-07-19)
 
 Primera mitad de T7: todo el lado del front listo para hablar con el backend

@@ -1,8 +1,16 @@
-# Demo compartible: publica el build MOCK en GitHub Pages en cada push a main.
+# Publica DOS builds del front en GitHub Pages en cada push a main:
+#   /              → demo MOCK (para feedback de diseño, sin backend)
+#   /live/         → real, contra el backend vivo de Railway (para el video YC)
 # La URL queda en https://mativeron89.github.io/payme-app-frontend/
+#                  y https://mativeron89.github.io/payme-app-frontend/live/
 # Requiere una vez: Settings → Pages → Source: "GitHub Actions".
-# (configure-pages no puede habilitarlo solo: el token del workflow no tiene ese permiso,
-#  por eso va con continue-on-error y no frena el deploy.)
+#
+# El build /live/ apunta al backend real (VITE_MOCK=0). La publishable key de
+# Stripe la sirve el backend en GET /api/config, así que NO va como variable acá.
+# VITE_RESTAURANT_ID sale de la variable de repo del mismo nombre (G-01: el
+# contrato no expone la lista de restaurantes; hay que fijar el uuid activo de
+# La Parolaccia en el backend vivo). Sin esa variable, abrir mesa avisa que
+# falta configurar el restaurante; el resto del flujo real funciona igual.
 name: Deploy demo (GitHub Pages)
 
 on:
@@ -36,9 +44,20 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+
+      # 1) Build MOCK primero (a dist/ raíz).
       - run: npm run build -- --base=/payme-app-frontend/
         env:
           VITE_MOCK: '1'
+
+      # 2) Build REAL a dist/live/ (no toca los archivos de dist/ raíz).
+      - run: npm run build -- --base=/payme-app-frontend/live/ --outDir dist/live
+        env:
+          VITE_MOCK: '0'
+          VITE_API_URL: https://payme-app-backend-production.up.railway.app
+          VITE_RESTAURANT_ID: ${{ vars.VITE_RESTAURANT_ID }}
+          VITE_RESTAURANT_NAME: La Parolaccia
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
