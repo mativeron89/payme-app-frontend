@@ -55,7 +55,9 @@ jobs:
         env:
           VITE_MOCK: '0'
           VITE_API_URL: https://payme-app-backend-production.up.railway.app
-          VITE_RESTAURANT_ID: ${{ vars.VITE_RESTAURANT_ID }}
+          # La Parolaccia en el backend vivo (verificado: existe y está activo,
+          # 2026-07-22). No es secreto: es el id del restaurante demo. G-01.
+          VITE_RESTAURANT_ID: 00000000-0000-4000-8000-000000000001
           VITE_RESTAURANT_NAME: La Parolaccia
 
       - uses: actions/upload-pages-artifact@v3
