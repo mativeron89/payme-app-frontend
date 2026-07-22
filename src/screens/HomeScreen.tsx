@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, IS_DEMO } from '../api';
 import type { BalanceResponse, OpenMesasResponse, PendingInvitation } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { navigate } from '../router';
@@ -88,23 +88,26 @@ export function HomeScreen() {
             </div>
           </button>
         )}
-        <button
-          className="home-card"
-          onClick={() => navigate('cuenta')}
-          style={{ background: 'linear-gradient(135deg,#071A33,#12264A)' }}
-        >
-          <div className="home-card-icon" style={{ background: 'rgba(0,194,203,0.15)' }} aria-hidden="true">
-            💳
-          </div>
-          <div>
-            <div className="home-card-title" style={{ color: '#fff' }}>
-              Cuenta
+        {/* En modo demo (?demo=1) se saca del encuadre: sugiere wallet/prepago. */}
+        {!IS_DEMO && (
+          <button
+            className="home-card"
+            onClick={() => navigate('cuenta')}
+            style={{ background: 'linear-gradient(135deg,#071A33,#12264A)' }}
+          >
+            <div className="home-card-icon" style={{ background: 'rgba(0,194,203,0.15)' }} aria-hidden="true">
+              💳
             </div>
-            <div className="home-card-sub" style={{ color: 'rgba(255,255,255,0.5)' }}>
-              {balance ? `${formatMXN(balance.balance_cents)} · saldo y movimientos` : 'Cargando saldo…'}
+            <div>
+              <div className="home-card-title" style={{ color: '#fff' }}>
+                Cuenta
+              </div>
+              <div className="home-card-sub" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                {balance ? `${formatMXN(balance.balance_cents)} · saldo y movimientos` : 'Cargando saldo…'}
+              </div>
             </div>
-          </div>
-        </button>
+          </button>
+        )}
 
         <div className="home-row">
           <button className="home-card compact" onClick={() => navigate('cargar')} style={{ background: 'var(--teal)' }}>

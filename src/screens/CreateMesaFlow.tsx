@@ -1,6 +1,6 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useRef, useState } from 'react';
-import { api, IS_MOCK } from '../api';
+import { api, IS_MOCK, IS_DEMO } from '../api';
 import { HttpError } from '../api/http';
 import { MockApiError } from '../api/mock/mockApi';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
@@ -24,6 +24,30 @@ function extractError(err: unknown): { code: string; extra: Record<string, unkno
   if (err instanceof MockApiError) return { code: err.message, extra: err.extra };
   if (err instanceof HttpError) return { code: err.message, extra: err.body ?? {} };
   return { code: 'unknown', extra: {} };
+}
+
+/**
+ * Modo demo (`?demo=1`): imagen mínima válida para saltear la cámara. El OCR
+ * real valida los magic bytes pero ignora el contenido y devuelve el ticket de
+ * ejemplo de siempre, así que un JPEG de 8×8 alcanza. No es una feature nueva:
+ * reemplaza la foto por bytes válidos para reusar el MISMO endpoint y resultado.
+ */
+function makeDemoImage(): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  canvas.width = 8;
+  canvas.height = 8;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 8, 8);
+  }
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('demo_image_failed'))),
+      'image/jpeg',
+      0.8,
+    );
+  });
 }
 
 export function CreateMesaFlow() {
@@ -73,6 +97,21 @@ export function CreateMesaFlow() {
       return;
     }
     fileInput.current?.click();
+  }
+
+  /**
+   * Modo demo (`?demo=1`): saltea la cámara. Genera una imagen mínima válida y
+   * la manda al MISMO `POST /api/ocr`, que responde el ticket de ejemplo de
+   * siempre → avanza a "ticket" y de ahí a dividir. Sin cámara ni diálogo de
+   * archivo (lo que trababa la grabación en el navegador automatizado).
+   */
+  async function runDemoScan() {
+    try {
+      const image = await makeDemoImage();
+      await runScan(image);
+    } catch {
+      toast('No pudimos preparar el ticket de ejemplo. Reintentá.');
+    }
   }
 
   async function runScan(image?: Blob) {
@@ -259,12 +298,15 @@ export function CreateMesaFlow() {
               {error}
             </div>
           )}
-          <div className="note note-amber">
-            <b>{IS_MOCK ? 'Modo demo:' : 'Ojo:'}</b>{' '}
-            {IS_MOCK
-              ? 'todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo.'
-              : 'todavía no leemos la foto de verdad — sacala igual y vas a recibir un ticket de ejemplo para continuar.'}
-          </div>
+          {/* En modo demo el cartel se oculta: delataría la maqueta en cámara. */}
+          {!IS_DEMO && (
+            <div className="note note-amber">
+              <b>{IS_MOCK ? 'Modo demo:' : 'Ojo:'}</b>{' '}
+              {IS_MOCK
+                ? 'todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo.'
+                : 'todavía no leemos la foto de verdad — sacala igual y vas a recibir un ticket de ejemplo para continuar.'}
+            </div>
+          )}
           {/* Real: abre la cámara del teléfono. POST /api/ocr es multipart y
               valida los magic bytes, así que necesita una imagen de verdad. */}
           <input
@@ -279,8 +321,13 @@ export function CreateMesaFlow() {
               if (file) void runScan(file);
             }}
           />
-          <button className="btn btn-teal" style={{ marginTop: 14 }} onClick={doScan} disabled={scanning}>
-            {scanning ? 'Leyendo ticket…' : '📸 Capturar'}
+          <button
+            className="btn btn-teal"
+            style={{ marginTop: 14 }}
+            onClick={IS_DEMO ? () => void runDemoScan() : doScan}
+            disabled={scanning}
+          >
+            {scanning ? 'Leyendo ticket…' : IS_DEMO ? '🧾 Usar ticket de ejemplo' : '📸 Capturar'}
           </button>
         </div>
       </div>

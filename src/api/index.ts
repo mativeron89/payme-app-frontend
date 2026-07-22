@@ -49,6 +49,26 @@ import type {
 
 export const IS_MOCK: boolean = import.meta.env.VITE_MOCK === '1';
 
+/**
+ * Modo demo para grabar el video (aplicación YC): un bypass de cámara, nada
+ * más. Se activa con `?demo=1` en la URL (ej. `.../live/?demo=1`; también se
+ * lee si el flag viaja dentro del hash). Se evalúa UNA vez al cargar.
+ *
+ * SIN el flag la app se comporta EXACTAMENTE igual que hoy. NO toca el contrato
+ * ni el happy-path: solo evita depender de `getUserMedia`/diálogo de archivo al
+ * escanear (ver `CreateMesaFlow`) y saca del encuadre algún cartel/dato que
+ * delata la maqueta. El pago sigue siendo Stripe real.
+ */
+function readDemoFlag(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (new URLSearchParams(window.location.search).get('demo') === '1') return true;
+  const hash = window.location.hash;
+  const q = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+  return new URLSearchParams(q).get('demo') === '1';
+}
+
+export const IS_DEMO: boolean = readDemoFlag();
+
 export interface Api {
   // auth
   login(email: string, password: string): Promise<StoredSession>;

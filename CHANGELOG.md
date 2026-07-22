@@ -1,5 +1,28 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.11.0 — Modo demo sin cámara para grabar el video (2026-07-22)
+
+Bypass de cámara para grabar el video-demo del comensal (aplicación YC) en un
+navegador automatizado, que se traba en el escaneo: `getUserMedia`/el diálogo
+de archivo nunca produce un frame. **Todo detrás de `?demo=1`; sin el flag la
+app se comporta EXACTAMENTE igual que hoy. No toca el contrato ni el
+happy-path.**
+
+- **Flag `IS_DEMO`** (`src/api/index.ts`): se activa con `?demo=1` en la URL
+  (`.../live/?demo=1`; también se lee dentro del hash). Se evalúa una vez al
+  cargar.
+- **Escaneo sin cámara** (`CreateMesaFlow`): en modo demo el botón pasa a ser
+  **"🧾 Usar ticket de ejemplo"**, que genera una imagen mínima válida (JPEG
+  8×8) y la manda al MISMO `POST /api/ocr` — el backend responde el ticket de
+  ejemplo de siempre (La Parolaccia, $840, 6 ítems) y avanza a dividir. No hay
+  ticket hardcodeado nuevo: mismo endpoint, mismo resultado, sin `getUserMedia`.
+- **Cartel del mock oculto** en modo demo: se esconde el aviso amber
+  "…todavía no leemos la foto de verdad…" que delataría la maqueta en cámara.
+- **Bloque "Cuenta · saldo y movimientos" oculto** en el home en modo demo
+  (sugiere wallet/prepago; fuera del encuadre).
+- El pago sigue siendo Stripe real (no se tocó): la tarjeta de test se ingresa
+  con Stripe Elements como siempre.
+
 ## 0.10.0 — Deploy real público + pago con tarjeta nueva (2026-07-22)
 
 Para el video-demo del comensal (aplicación YC): dejar el front navegable en
