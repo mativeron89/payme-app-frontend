@@ -116,6 +116,15 @@ export function CreateMesaFlow() {
             setBusy(false);
             return;
           }
+          // El backend exige un "cliente Stripe" para el hold de la garantía, y
+          // un usuario recién registrado todavía no lo tiene (se crea lazy).
+          // setup-intent lo crea; sin esto la garantía da 'no_payment_source'.
+          // (Verificado contra el backend vivo 2026-07-22.)
+          try {
+            await api.createSetupIntent();
+          } catch {
+            // si esto falla, el hold devolverá un error claro más abajo
+          }
           const res = await createCardPaymentMethod(cardEl);
           if ('error' in res) {
             setError(res.error);
