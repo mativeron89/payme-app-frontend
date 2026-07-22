@@ -1,6 +1,6 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useRef, useState } from 'react';
-import { api, IS_MOCK, IS_DEMO } from '../api';
+import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID } from '../api';
 import { HttpError } from '../api/http';
 import { MockApiError } from '../api/mock/mockApi';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
@@ -150,11 +150,6 @@ export function CreateMesaFlow() {
         if (IS_MOCK) {
           stripePmId = `pm_mock_${pm?.last_four ?? '4242'}`;
         } else {
-          if (!cardEl) {
-            setError('Cargá los datos de la tarjeta para continuar.');
-            setBusy(false);
-            return;
-          }
           // El backend exige un "cliente Stripe" para el hold de la garantía, y
           // un usuario recién registrado todavía no lo tiene (se crea lazy).
           // setup-intent lo crea; sin esto la garantía da 'no_payment_source'.
@@ -164,13 +159,24 @@ export function CreateMesaFlow() {
           } catch {
             // si esto falla, el hold devolverá un error claro más abajo
           }
-          const res = await createCardPaymentMethod(cardEl);
-          if ('error' in res) {
-            setError(res.error);
-            setBusy(false);
-            return;
+          if (IS_DEMO) {
+            // Modo demo (?demo=1): PaymentMethod de test de Stripe, sin tipear
+            // en el iframe de Elements (para grabar en navegador automatizado).
+            stripePmId = DEMO_PM_ID;
+          } else {
+            if (!cardEl) {
+              setError('Cargá los datos de la tarjeta para continuar.');
+              setBusy(false);
+              return;
+            }
+            const res = await createCardPaymentMethod(cardEl);
+            if ('error' in res) {
+              setError(res.error);
+              setBusy(false);
+              return;
+            }
+            stripePmId = res.paymentMethodId;
           }
-          stripePmId = res.paymentMethodId;
         }
       }
 
@@ -511,7 +517,7 @@ export function CreateMesaFlow() {
           {/* G-04: el contrato exige un `pm_…` de Stripe para la garantía y
               GET /payment-methods no lo expone, así que con backend real la
               tarjeta se ingresa acá aunque el usuario ya tenga uma guardada. */}
-          {!IS_MOCK && method === 'card' && (
+          {!IS_MOCK && !IS_DEMO && method === 'card' && (
             <div style={{ margin: '4px 0 12px' }}>
               <CardField onReady={setCardEl} onChange={setCardState} />
               {cardState.error && (
@@ -522,6 +528,12 @@ export function CreateMesaFlow() {
               <div className="caption">
                 Los datos van directo a Stripe: PayMe nunca ve el número completo.
               </div>
+            </div>
+          )}
+          {/* Modo demo (?demo=1): tarjeta de test, sin iframe de Stripe. */}
+          {!IS_MOCK && IS_DEMO && method === 'card' && (
+            <div className="caption" style={{ margin: '4px 0 12px' }}>
+              💳 Tarjeta de prueba ···· 4242 (demo)
             </div>
           )}
           <button
@@ -547,7 +559,7 @@ export function CreateMesaFlow() {
           <button
             className="btn btn-primary"
             onClick={createMesa}
-            disabled={busy || (!IS_MOCK && method === 'card' && !cardState.complete)}
+            disabled={busy || (!IS_MOCK && !IS_DEMO && method === 'card' && !cardState.complete)}
           >
             {busy ? 'Autorizando…' : `🔒 Garantizar ${formatMXN(total)} y abrir mesa`}
           </button>

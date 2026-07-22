@@ -69,6 +69,15 @@ function readDemoFlag(): boolean {
 
 export const IS_DEMO: boolean = readDemoFlag();
 
+/**
+ * Modo demo: PaymentMethod de test de Stripe (Visa 4242, siempre aprueba, sin
+ * 3DS). Con `?demo=1` se manda como `stripe_payment_method_id` en garantía y
+ * pago para NO depender del tipeo en el iframe de Stripe Elements durante la
+ * grabación en navegador automatizado. Es un token público de test de Stripe;
+ * jamás se usa sin el flag (el pago real sigue creando el `pm_` desde Elements).
+ */
+export const DEMO_PM_ID = 'pm_card_visa';
+
 export interface Api {
   // auth
   login(email: string, password: string): Promise<StoredSession>;

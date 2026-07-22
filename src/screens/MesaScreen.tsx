@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, IS_MOCK, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, newIdempotencyKey } from '../api';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
@@ -142,18 +142,23 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // acepta). Sin esto, un usuario nuevo no tenía forma de pagar con tarjeta.
       let freshCardPmId: string | null = null;
       if (payType === 'card' && !pm && !IS_MOCK) {
-        if (!cardEl) {
-          setError('Ingresá los datos de la tarjeta para continuar.');
-          setBusy(false);
-          return;
+        if (IS_DEMO) {
+          // Modo demo (?demo=1): PaymentMethod de test de Stripe, sin iframe.
+          freshCardPmId = DEMO_PM_ID;
+        } else {
+          if (!cardEl) {
+            setError('Ingresá los datos de la tarjeta para continuar.');
+            setBusy(false);
+            return;
+          }
+          const res = await createCardPaymentMethod(cardEl);
+          if ('error' in res) {
+            setError(res.error);
+            setBusy(false);
+            return;
+          }
+          freshCardPmId = res.paymentMethodId;
         }
-        const res = await createCardPaymentMethod(cardEl);
-        if ('error' in res) {
-          setError(res.error);
-          setBusy(false);
-          return;
-        }
-        freshCardPmId = res.paymentMethodId;
       }
 
       const r = await api.payMesa(
@@ -605,7 +610,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             )}
             {/* Real + tarjeta sin una guardada: campo de tarjeta inline. Los
                 datos van directo a Stripe; PayMe nunca ve el número. */}
-            {!IS_MOCK && payType === 'card' && !pm && (
+            {!IS_MOCK && !IS_DEMO && payType === 'card' && !pm && (
               <div style={{ margin: '2px 0 10px' }}>
                 <CardField onReady={setCardEl} onChange={setCardState} />
                 {cardState.error && (
@@ -613,6 +618,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     {cardState.error}
                   </div>
                 )}
+              </div>
+            )}
+            {/* Modo demo (?demo=1): tarjeta de test, sin iframe de Stripe. */}
+            {!IS_MOCK && IS_DEMO && payType === 'card' && !pm && (
+              <div className="caption" style={{ margin: '2px 0 10px' }}>
+                💳 Tarjeta de prueba ···· 4242 (demo)
               </div>
             )}
             <button
@@ -647,7 +658,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           <button
             className="btn btn-primary"
             onClick={doPay}
-            disabled={busy || gross === 0 || (!IS_MOCK && payType === 'card' && !pm && !cardState.complete)}
+            disabled={busy || gross === 0 || (!IS_MOCK && !IS_DEMO && payType === 'card' && !pm && !cardState.complete)}
           >
             {busy ? 'Procesando…' : `Pagar ${formatMXN(gross)}`}
           </button>

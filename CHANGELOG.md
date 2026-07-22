@@ -1,5 +1,25 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.11.1 — Modo demo: simular tarjeta (sin iframe de Stripe) (2026-07-22)
+
+Extiende el modo demo (`?demo=1`) para que la grabación en navegador
+automatizado no dependa de tipear en el iframe cross-origin de Stripe Elements
+(el paso más frágil de automatizar). **Todo detrás del mismo flag; sin `?demo=1`
+el pago sigue creando el `pm_` desde Elements como hoy.**
+
+- **`DEMO_PM_ID = 'pm_card_visa'`** (`src/api/index.ts`): PaymentMethod de test
+  de Stripe (Visa 4242, aprueba sin 3DS). Token público de test; nunca se usa
+  sin el flag.
+- **Garantía** (`CreateMesaFlow`): en demo se saltea `createCardPaymentMethod`
+  y se manda `stripe_payment_method_id: pm_card_visa` (se mantiene el
+  `setup-intent` que crea el cliente Stripe lazy). El campo de tarjeta se
+  reemplaza por una nota "💳 Tarjeta de prueba ···· 4242 (demo)" y el botón deja
+  de exigir `cardState.complete`.
+- **Pago** (`MesaScreen`): idéntico — en demo el pago de la parte manda
+  `pm_card_visa` en vez de crear el `pm_` desde el iframe.
+- Verificado por curl contra el backend vivo: garantía y cobro con
+  `pm_card_visa` = `succeeded`, sin 3DS.
+
 ## 0.11.0 — Modo demo sin cámara para grabar el video (2026-07-22)
 
 Bypass de cámara para grabar el video-demo del comensal (aplicación YC) en un
