@@ -1,5 +1,31 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.14.0 — Home v2 + pantalla Mesas con historial (2026-07-22)
+
+Decisiones de producto de Mati (ratificadas 2026-07-22):
+
+- **El home es una grilla de cuadrados grandes centrados** (2 columnas:
+  Nueva Mesa, Mesas, Cuenta, Amigos, Grupos, Perfil) en vez de tarjetas
+  rectangulares apiladas; la invitación sigue full-width arriba. La tarjeta
+  Mesas se resalta en teal cuando hay una abierta.
+- **Cargar y Transferir salen del home**: viven solo dentro de Cuenta (donde
+  ya estaban, junto al saldo). El home queda enfocado en la mesa.
+- **La tarjeta Cuenta ya no muestra el saldo** (privacidad: nadie ve tu plata
+  por mirar la pantalla). El monto se ve recién adentro de Cuenta. El home
+  deja de pedir `GET /account/balance`.
+- **"Mesas Abiertas" → "Mesas"**: como las abiertas son transitorias (la
+  garantía captura el faltante al vencer), la pantalla vive del HISTORIAL.
+  Si hay una abierta va arriba, destacada en teal; debajo, la lista
+  minimalista de mesas pagadas (restaurante, fecha, lo que pagaste vos —
+  una línea por mesa). Fuente: `GET /account/history` del contrato real
+  (nuevo en el facade: `getHistory`), agrupado por mesa en el cliente.
+  En el home, la tarjeta dice "1 abierta ahora" en color o "Tu historial".
+- **Mock espejando el shape**: seed con 3 mesas pagadas; cada pago propio
+  suma su entrada al historial (los invitados no: el historial es del
+  usuario autenticado, como en el backend).
+- La invitación y la fila Amigos/Grupos/Perfil quedan en el home (decisión
+  de Mati; revierte la idea previa de mover Amigos/Grupos a Perfil).
+
 ## 0.13.0 — T-D1: tipografía nueva + texto de apoyo unificado (2026-07-22)
 
 Primer tier del carril de diseño (ratificado 2026-07-22; Mati eligió la

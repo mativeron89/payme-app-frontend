@@ -1,26 +1,24 @@
 import { useEffect, useState } from 'react';
 import { api, IS_DEMO } from '../api';
-import type { BalanceResponse, OpenMesasResponse, PendingInvitation } from '../api/types';
+import type { OpenMesasResponse, PendingInvitation } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { navigate } from '../router';
-import { formatMXN } from '../utils/format';
 import { displayName } from '../utils/identity';
 
 /**
- * Home (maqueta s-home): saldo → Cuenta, Cargar/Transferir, Nueva Mesa,
- * Mesas Abiertas, y la fila Amigos/Grupos/Perfil.
- * Datos reales del contrato: GET /account/balance + GET /mesas/open.
+ * Home v2 (ratificado 2026-07-22): invitación, Cuenta SIN saldo (privacidad:
+ * nadie ve tu plata por mirar la pantalla), Nueva Mesa, Mesas (abiertas +
+ * historial) y la fila Amigos/Grupos/Perfil. Cargar/Transferir viven SOLO
+ * dentro de Cuenta. Datos reales: GET /mesas/open (el saldo ya no se pide acá).
  */
 export function HomeScreen() {
   const { session } = useAuth();
-  const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [openMesas, setOpenMesas] = useState<OpenMesasResponse | null>(null);
   const [unread, setUnread] = useState(0);
   const [invitation, setInvitation] = useState<PendingInvitation | null>(null);
 
   useEffect(() => {
     let alive = true;
-    api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
     api.getOpenMesas().then((m) => alive && setOpenMesas(m)).catch(() => undefined);
     api.getUnreadCount().then((r) => alive && setUnread(r.unread_count)).catch(() => undefined);
     api
@@ -35,14 +33,7 @@ export function HomeScreen() {
   // G-02: tras un login real no hay `user`; displayName cae al email tipeado.
   const firstName = displayName(session);
   const mesasCount = openMesas?.mesas.length ?? null;
-  const mesasSub =
-    mesasCount === null
-      ? 'Cargando…'
-      : mesasCount === 0
-        ? 'No tenés mesas activas'
-        : mesasCount === 1
-          ? '1 esperando pago'
-          : `${mesasCount} esperando pago`;
+  const hasOpen = (mesasCount ?? 0) > 0;
 
   return (
     <div className="screen">
@@ -88,104 +79,80 @@ export function HomeScreen() {
             </div>
           </button>
         )}
-        {/* En modo demo (?demo=1) se saca del encuadre: sugiere wallet/prepago. */}
-        {!IS_DEMO && (
+        {/* Tres cuadrados grandes: Nueva Mesa, Cuenta, Mesas (pedido de Mati). */}
+        <div className="home-grid">
           <button
-            className="home-card"
-            onClick={() => navigate('cuenta')}
-            style={{ background: 'linear-gradient(135deg,#071A33,#12264A)' }}
+            className="home-tile"
+            onClick={() => navigate('scan')}
+            style={{ background: 'linear-gradient(135deg,var(--orange),#ff8a5c)' }}
           >
-            <div className="home-card-icon" style={{ background: 'rgba(0,194,203,0.15)' }} aria-hidden="true">
-              💳
+            <div className="home-card-icon" style={{ background: 'rgba(255,255,255,0.2)' }} aria-hidden="true">
+              📷
             </div>
-            <div>
+            <div className="home-card-title" style={{ color: '#fff' }}>
+              Nueva Mesa
+            </div>
+          </button>
+
+          {/* En modo demo (?demo=1) se saca del encuadre: sugiere wallet. */}
+          {!IS_DEMO && (
+            <button
+              className="home-tile"
+              onClick={() => navigate('cuenta')}
+              style={{ background: 'linear-gradient(135deg,#071A33,#12264A)' }}
+            >
+              <div className="home-card-icon" style={{ background: 'rgba(0,194,203,0.15)' }} aria-hidden="true">
+                💳
+              </div>
+              {/* Sin monto a propósito: el saldo no se muestra en el home
+                  (cualquiera que mire la pantalla lo vería). Se ve adentro. */}
               <div className="home-card-title" style={{ color: '#fff' }}>
                 Cuenta
               </div>
-              <div className="home-card-sub" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                {balance ? `${formatMXN(balance.balance_cents)} · saldo y movimientos` : 'Cargando saldo…'}
-              </div>
-            </div>
-          </button>
-        )}
+            </button>
+          )}
 
-        <div className="home-row">
-          <button className="home-card compact" onClick={() => navigate('cargar')} style={{ background: 'var(--teal)' }}>
-            <div className="home-card-icon" style={{ background: 'rgba(255,255,255,0.25)' }} aria-hidden="true">
-              ➕
-            </div>
-            <div className="home-card-title" style={{ color: '#fff', fontSize: 14 }}>
-              Cargar
-            </div>
-          </button>
           <button
-            className="home-card compact"
-            onClick={() => navigate('transferir')}
-            style={{ border: '1.5px solid var(--gray-l)' }}
+            className="home-tile"
+            onClick={() => navigate('mesas')}
+            style={hasOpen ? { border: '1.5px solid var(--teal)', background: 'var(--teal-l)' } : undefined}
           >
-            <div className="home-card-icon" style={{ background: 'var(--orange-l)' }} aria-hidden="true">
-              ↗️
+            <div className="home-card-icon" style={{ background: 'var(--teal-l)' }} aria-hidden="true">
+              🍽️
             </div>
-            <div className="home-card-title" style={{ fontSize: 14 }}>
-              Transferir
+            <div>
+              <div className="home-card-title">Mesas</div>
+              <div
+                className="home-card-sub"
+                style={hasOpen ? { color: 'var(--teal-txt)', fontWeight: 600 } : { color: 'var(--gray-d)' }}
+              >
+                {hasOpen ? (mesasCount === 1 ? '1 abierta' : `${mesasCount} abiertas`) : 'Historial'}
+              </div>
             </div>
           </button>
         </div>
 
-        <button
-          className="home-card"
-          onClick={() => navigate('scan')}
-          style={{ background: 'linear-gradient(135deg,var(--orange),#ff8a5c)' }}
-        >
-          <div className="home-card-icon" style={{ background: 'rgba(255,255,255,0.2)' }} aria-hidden="true">
-            📷
-          </div>
-          <div>
-            <div className="home-card-title" style={{ color: '#fff' }}>
-              Nueva Mesa (escanear)
-            </div>
-            <div className="home-card-sub" style={{ color: 'rgba(255,255,255,0.85)' }}>
-              Escaneá el ticket y dividí
-            </div>
-          </div>
-        </button>
-
-        <button className="home-card" onClick={() => navigate('mesas')} style={{ border: '1.5px solid var(--gray-l)' }}>
-          <div className="home-card-icon" style={{ background: 'var(--teal-l)' }} aria-hidden="true">
-            🍽️
-          </div>
-          <div>
-            <div className="home-card-title">Mesas Abiertas</div>
-            <div className="home-card-sub" style={{ color: 'var(--gray-d)' }}>
-              {mesasSub}
-            </div>
-          </div>
-        </button>
-
-        <div className="home-row" style={{ marginTop: 2 }}>
-          <button className="home-card compact" onClick={() => navigate('amigos')} style={{ border: '1.5px solid var(--gray-l)' }}>
+        {/* Abajo: la fila chica de siempre. */}
+        <div className="home-grid">
+          <button className="home-tile sm" onClick={() => navigate('amigos')}>
             <div className="home-card-icon" style={{ background: 'var(--teal-l)' }} aria-hidden="true">
               👥
             </div>
-            <div className="home-card-title" style={{ fontSize: 13 }}>
-              Amigos
-            </div>
+            <div className="home-card-title">Amigos</div>
           </button>
-          <button className="home-card compact" onClick={() => navigate('grupos')} style={{ border: '1.5px solid var(--gray-l)' }}>
+
+          <button className="home-tile sm" onClick={() => navigate('grupos')}>
             <div className="home-card-icon" style={{ background: 'var(--orange-l)' }} aria-hidden="true">
               👨‍👩‍👧
             </div>
-            <div className="home-card-title" style={{ fontSize: 13 }}>
-              Grupos
-            </div>
+            <div className="home-card-title">Grupos</div>
           </button>
-          <button className="home-card compact" onClick={() => navigate('perfil')} style={{ border: '1.5px solid var(--gray-l)' }}>
+
+          <button className="home-tile sm" onClick={() => navigate('perfil')}>
             <div className="home-card-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
               ⚙️
             </div>
-            <div className="home-card-title" style={{ fontSize: 13 }}>
-              Perfil
-            </div>
+            <div className="home-card-title">Perfil</div>
           </button>
         </div>
       </div>

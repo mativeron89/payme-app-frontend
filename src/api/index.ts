@@ -36,6 +36,7 @@ import type {
   TopupOxxoResponse,
   TransfersResponse,
   WalletTransactionsResponse,
+  HistoryResponse,
 } from './types';
 
 /**
@@ -88,6 +89,8 @@ export interface Api {
   // cuenta
   getBalance(): Promise<BalanceResponse>;
   getWalletTransactions(): Promise<WalletTransactionsResponse>;
+  /** Pagos propios en mesas (GET /account/history) — la pantalla Mesas. */
+  getHistory(): Promise<HistoryResponse>;
   // mesas
   getOpenMesas(): Promise<OpenMesasResponse>;
   getMesa(code: string, guestToken?: string): Promise<MesaDetailResponse>;
@@ -150,6 +153,7 @@ const realApi: Api = {
   onSessionExpired: (cb) => setOnSessionExpired(cb),
 
   getBalance: () => httpRequest<BalanceResponse>('GET', '/account/balance'),
+  getHistory: () => httpRequest<HistoryResponse>('GET', '/account/history'),
   getWalletTransactions: () =>
     httpRequest<WalletTransactionsResponse>('GET', '/account/wallet-transactions'),
 
@@ -305,6 +309,7 @@ const mockApi: Api = {
 
   getBalance: () => mock.mockBalance(),
   getWalletTransactions: () => mock.mockWalletTransactions(),
+  getHistory: () => mock.mockHistory(),
 
   getOpenMesas: () => mock.mockOpenMesas(),
   getMesa: (code, guestToken) => mock.mockGetMesa(code, guestToken ? 'guest' : 'user'),

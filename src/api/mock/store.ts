@@ -5,6 +5,7 @@ import type {
   DivisionSlot,
   Friend,
   Group,
+  HistoryEntry,
   ItemStatus,
   MesaDetail,
   MesaStatus,
@@ -76,6 +77,8 @@ interface MockState {
   friends: Friend[];
   groups: Array<Group & { memberIds: string[] }>;
   mesas: MockMesa[];
+  /** GET /account/history: pagos propios en mesas (pantalla Mesas). */
+  history: HistoryEntry[];
   walletTx: WalletTransaction[];
   transfers: TransferListItem[];
   notifications: AppNotification[];
@@ -406,6 +409,34 @@ function seedState(): MockState {
       },
     ],
     mesas,
+    // Historial de mesas pagadas (shape de GET /account/history): alimenta la
+    // pantalla Mesas. mockPayMesa agrega una entrada por cada pago propio.
+    history: [
+      {
+        id: mockId('h'),
+        amount_cents: 22425,
+        date: iso(-3 * 24 * 60 * 60_000),
+        mesa_code: 'PA-8712',
+        restaurant: MOCK_RESTAURANTS[0].name,
+        category: MOCK_RESTAURANTS[0].category,
+      },
+      {
+        id: mockId('h'),
+        amount_cents: 41800,
+        date: iso(-9 * 24 * 60 * 60_000),
+        mesa_code: 'PA-6603',
+        restaurant: MOCK_RESTAURANTS[1].name,
+        category: MOCK_RESTAURANTS[1].category,
+      },
+      {
+        id: mockId('h'),
+        amount_cents: 15650,
+        date: iso(-16 * 24 * 60 * 60_000),
+        mesa_code: 'PA-5218',
+        restaurant: MOCK_RESTAURANTS[0].name,
+        category: MOCK_RESTAURANTS[0].category,
+      },
+    ],
     walletTx: seedWalletTx(),
     notifications,
     pendingInvitations,
@@ -452,6 +483,12 @@ function loadPersisted(): MockState | null {
     // Validación mínima: si el shape no cierra, se descarta y se re-siembra.
     if (!parsed || !Array.isArray(parsed.mesas) || typeof parsed.balance_cents !== 'number') {
       return null;
+    }
+    // Migración 0.14: los estados persistidos previos no tienen `history`
+    // (pantalla Mesas). Se backfillea desde el seed para no romper ni mostrar
+    // un historial vacío a quien ya venía usando la demo.
+    if (!Array.isArray(parsed.history)) {
+      parsed.history = seedState().history;
     }
     return parsed;
   } catch {

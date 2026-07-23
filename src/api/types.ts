@@ -99,6 +99,22 @@ export interface WalletTransactionsResponse {
   offset: number;
 }
 
+/** Elemento de GET /api/account/history — un pago propio en una mesa. */
+export interface HistoryEntry {
+  id: string;
+  amount_cents: number;
+  date: string;
+  mesa_code: string;
+  restaurant: string;
+  category: string;
+}
+
+export interface HistoryResponse {
+  history: HistoryEntry[];
+  limit: number;
+  offset: number;
+}
+
 // ─── Mesas (routes/mesas.js) ───────────────────────────────
 
 /** Estados reales de mesa (utils/stateMachine.js — TRANSITIONS.mesa). */

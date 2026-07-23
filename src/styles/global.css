@@ -222,6 +222,57 @@ body {
 .home-card:active {
   transform: scale(0.98);
 }
+/* Home v2 (pedido de Mati): TRES cuadrados grandes arriba (Nueva Mesa,
+   Cuenta, Mesas) y abajo la fila chica de Amigos/Grupos/Perfil. La invitación
+   sigue full-width arriba de todo. */
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.home-tile {
+  aspect-ratio: 1;
+  border-radius: 20px;
+  border: none;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 10px 6px;
+  transition: transform 0.15s;
+}
+.home-tile:active {
+  transform: scale(0.97);
+}
+.home-tile .home-card-icon {
+  width: 46px;
+  height: 46px;
+  font-size: 22px;
+}
+.home-tile .home-card-title {
+  font-size: 13.5px;
+}
+/* Fila secundaria: mismos cuadrados pero más bajos y con ícono chico. */
+.home-tile.sm {
+  aspect-ratio: auto;
+  padding: 12px 6px;
+  gap: 6px;
+}
+.home-tile.sm .home-card-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 17px;
+  border-radius: 12px;
+}
+.home-tile.sm .home-card-title {
+  font-size: 12.5px;
+}
 .home-card.compact {
   flex-direction: column;
   text-align: center;

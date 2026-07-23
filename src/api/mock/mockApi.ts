@@ -26,6 +26,7 @@ import type {
   TopupOxxoResponse,
   TransfersResponse,
   WalletTransactionsResponse,
+  HistoryResponse,
 } from '../types';
 import { MOCK_RESTAURANTS, MOCK_USER } from './seedData';
 import {
@@ -141,6 +142,12 @@ export async function mockBalance(): Promise<BalanceResponse> {
 
 export async function mockWalletTransactions(): Promise<WalletTransactionsResponse> {
   return delay({ transactions: [...state.walletTx], limit: 30, offset: 0 });
+}
+
+/** GET /account/history: pagos propios en mesas, más reciente primero. */
+export async function mockHistory(): Promise<HistoryResponse> {
+  const sorted = [...state.history].sort((a, b) => b.date.localeCompare(a.date));
+  return delay({ history: sorted, limit: 20, offset: 0 });
 }
 
 // ─── Mesas ─────────────────────────────────────────────────
@@ -393,6 +400,18 @@ export async function mockPayMesa(
   }
   mesa.tip_amount_cents += req.tip_cents;
   markMesaPaid(mesa, itemsAmount);
+
+  // Pantalla Mesas: cada pago propio suma una entrada al historial.
+  if (identity !== 'guest') {
+    state.history.push({
+      id: mockId('h'),
+      amount_cents: gross,
+      date: new Date().toISOString(),
+      mesa_code: mesa.code,
+      restaurant: mesa.restaurant.name,
+      category: mesa.restaurant.category,
+    });
+  }
 
   // D4: guardar la tarjeta nueva si lo pidieron (solo usuarios con cuenta).
   if (req.save_payment_method && req.stripe_payment_method_id && identity !== 'guest') {
