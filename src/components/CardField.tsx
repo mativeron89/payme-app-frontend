@@ -11,11 +11,18 @@ import { getStripe } from '../api/stripe';
  * estilar vía la opción `style`, por eso los valores van acá y no en el CSS.
  */
 
+/** Estado del campo: `empty` permite saber si el usuario ya empezó a tipear. */
+export interface CardFieldState {
+  complete: boolean;
+  error: string | null;
+  empty: boolean;
+}
+
 interface Props {
   /** Se llama con el elemento montado (o null al desmontar). */
   onReady(card: StripeCardElement | null): void;
-  /** Se llama cuando cambia si el campo está completo/con error. */
-  onChange?(state: { complete: boolean; error: string | null }): void;
+  /** Se llama cuando cambia el estado del campo (y se RESETEA al desmontar). */
+  onChange?(state: CardFieldState): void;
 }
 
 export function CardField({ onReady, onChange }: Props) {
@@ -45,7 +52,7 @@ export function CardField({ onReady, onChange }: Props) {
           },
         });
         card.on('change', (e) => {
-          onChange?.({ complete: e.complete, error: e.error?.message ?? null });
+          onChange?.({ complete: e.complete, error: e.error?.message ?? null, empty: e.empty });
         });
         card.mount(holder.current);
         setLoading(false);
@@ -61,6 +68,10 @@ export function CardField({ onReady, onChange }: Props) {
     return () => {
       cancelled = true;
       onReady(null);
+      // Al desmontar, el estado del padre debe volver a "vacío": si quedara
+      // `complete: true` colgado, el botón de pagar/garantizar seguiría
+      // habilitado con un iframe nuevo VACÍO (gate bypasseado).
+      onChange?.({ complete: false, error: null, empty: true });
       card?.destroy();
     };
     // onReady/onChange se asumen estables (useCallback en el padre).

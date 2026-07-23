@@ -2,7 +2,7 @@ import type { StripeCardElement } from '@stripe/stripe-js';
 import { useEffect, useState } from 'react';
 import { api, IS_MOCK } from '../api';
 import { confirmCardSetup } from '../api/stripe';
-import { CardField } from '../components/CardField';
+import { CardField, type CardFieldState } from '../components/CardField';
 import type { BalanceResponse, PaymentMethod, StatsResponse, WalletTransaction } from '../api/types';
 import { TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
@@ -25,9 +25,10 @@ export function CuentaScreen() {
   const [adding, setAdding] = useState(false);
   const [busyCard, setBusyCard] = useState(false);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
-  const [cardState, setCardState] = useState<{ complete: boolean; error: string | null }>({
+  const [cardState, setCardState] = useState<CardFieldState>({
     complete: false,
     error: null,
+    empty: true,
   });
   const [tab, setTab] = useState<'historial' | 'tarjetas'>('historial');
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
@@ -78,7 +79,9 @@ export function CuentaScreen() {
     setBusyCard(true);
     try {
       const { client_secret } = await api.createSetupIntent();
-      let pmId = 'pm_mock_demo';
+      // Mock: id fresco por alta — con uno fijo, la dedupe del mock haría
+      // no-op silencioso a partir de la segunda tarjeta (éxito falso).
+      let pmId = `pm_mock_${Date.now().toString(36)}`;
       if (!IS_MOCK) {
         if (!cardEl) return;
         const res = await confirmCardSetup(client_secret, cardEl);
@@ -92,7 +95,7 @@ export function CuentaScreen() {
       toast('Tarjeta guardada ✓');
       setAdding(false);
       setCardEl(null);
-      setCardState({ complete: false, error: null });
+      setCardState({ complete: false, error: null, empty: true });
       loadPms();
     } catch {
       toast('No pudimos guardar la tarjeta');

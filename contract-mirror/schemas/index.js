@@ -79,6 +79,11 @@ const createMesa = z.object({
   // v2.11 (parche §2 · garantía): el organizador garantiza el total al crear
   guarantee_method: z.enum(['card', 'wallet']),
   stripe_payment_method_id: z.string().min(1).max(100).optional(),
+  // D4 (v2.16): garantía con tarjeta GUARDADA (uuid de payment_methods) y
+  // opt-in para guardar la tarjeta tipeada (default false: el consentimiento
+  // vive en la UI, el backend obedece).
+  payment_method_id: uuid.optional(),
+  save_payment_method: z.boolean().default(false),
   items: z.array(z.object({
     name: z.string().min(1).max(200),
     category: z.string().max(50).optional(),
@@ -87,8 +92,8 @@ const createMesa = z.object({
   })).min(1),
 }).refine(d => d.division_mode !== 'igual' || d.expected_participants >= 2, {
   message: 'igual requires expected_participants >= 2',
-}).refine(d => d.guarantee_method !== 'card' || !!d.stripe_payment_method_id, {
-  message: 'card guarantee requires stripe_payment_method_id',
+}).refine(d => d.guarantee_method !== 'card' || !!(d.stripe_payment_method_id || d.payment_method_id), {
+  message: 'card guarantee requires stripe_payment_method_id or payment_method_id',
 });
 
 const lockItems = z.object({
@@ -98,6 +103,8 @@ const lockItems = z.object({
 const payMesa = z.object({
   payment_method_id: uuid.optional(),
   stripe_payment_method_id: stripePmId.optional(),
+  // D4 (v2.16): opt-in para guardar la tarjeta tipeada al pagar (default false)
+  save_payment_method: z.boolean().default(false),
   payment_type: z.enum(['card', 'apple_pay', 'google_pay', 'wallet']).default('card'),
   item_ids: z.array(uuid).default([]),
   lock_tokens: z.array(lockToken).optional(),

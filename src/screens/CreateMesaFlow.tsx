@@ -1,12 +1,12 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID } from '../api';
 import { HttpError } from '../api/http';
 import { MockApiError } from '../api/mock/mockApi';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, OcrResponse, PaymentMethod } from '../api/types';
-import { CardField } from '../components/CardField';
+import { CardField, type CardFieldState } from '../components/CardField';
 import { TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
@@ -58,17 +58,29 @@ export function CreateMesaFlow() {
   const [division, setDivision] = useState<'consumo' | 'igual'>('consumo');
   const [participants, setParticipants] = useState(4);
   const [method, setMethod] = useState<'card' | 'wallet'>('card');
-  const [pm, setPm] = useState<PaymentMethod | null>(null);
+  // D4: tarjetas guardadas. `cardChoice` es el pm_… elegido o 'new' (otra
+  // tarjeta); `saveCard` = checkbox "guardar" (ratificado: prendido).
+  const [cards, setCards] = useState<PaymentMethod[]>([]);
+  const [cardChoice, setCardChoice] = useState<string>('new');
+  const [saveCard, setSaveCard] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateMesaResponse | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
-  const [cardState, setCardState] = useState<{ complete: boolean; error: string | null }>({
+  const [cardState, setCardState] = useState<CardFieldState>({
     complete: false,
     error: null,
+    empty: true,
   });
+  // Espejo en ref para que loadCards (async) lea el estado ACTUAL del campo y
+  // no pise la selección si el usuario ya empezó a tipear (race de red lenta).
+  const cardStateRef = useRef(cardState);
+  const handleCardChange = useCallback((s: CardFieldState) => {
+    cardStateRef.current = s;
+    setCardState(s);
+  }, []);
 
   /**
    * G-01: el contrato NO tiene endpoint para listar/buscar restaurantes, pero
@@ -128,13 +140,18 @@ export function CreateMesaFlow() {
     }
   }
 
-  async function loadDefaultCard() {
-    if (pm) return;
+  async function loadCards() {
+    if (cards.length > 0) return;
     try {
       const r = await api.getPaymentMethods();
-      setPm(r.payment_methods.find((p) => p.is_default) ?? r.payment_methods[0] ?? null);
+      // D4 (v2.16): las guardadas se reusan con su uuid (payment_method_id).
+      setCards(r.payment_methods);
+      const def = r.payment_methods.find((p) => p.is_default) ?? r.payment_methods[0];
+      // Si la respuesta llegó tarde y el usuario YA está tipeando una tarjeta
+      // nueva, no le pisamos la selección (destruiría lo tipeado).
+      if (def && cardStateRef.current.empty) setCardChoice(def.id);
     } catch {
-      setPm(null);
+      setCards([]);
     }
   }
 
@@ -143,40 +160,41 @@ export function CreateMesaFlow() {
     setBusy(true);
     setError(null);
     try {
-      // Garantía con tarjeta: el contrato exige un `pm_…` de Stripe.
-      // En demo se simula; con backend real se crea desde el Card Element.
+      // Garantía con tarjeta (D4 v2.16): una GUARDADA viaja como
+      // `payment_method_id` (uuid, sin Elements); una NUEVA se crea desde el
+      // Card Element y viaja como `stripe_payment_method_id` (pm_…), con
+      // `save_payment_method` según el checkbox.
       let stripePmId: string | null = null;
+      let savedPmId: string | null = null;
+      let savingNewCard = false;
+      const savedCard = cards.find((c) => c.id === cardChoice) ?? null;
       if (method === 'card') {
-        if (IS_MOCK) {
-          stripePmId = `pm_mock_${pm?.last_four ?? '4242'}`;
+        if (!IS_MOCK && IS_DEMO) {
+          // Modo demo (?demo=1): PaymentMethod de test de Stripe, sin tipear
+          // en el iframe de Elements (para grabar en navegador automatizado).
+          // Desde v2.16 el cliente Stripe se crea solo: sin bootstrap previo.
+          stripePmId = DEMO_PM_ID;
+        } else if (savedCard) {
+          savedPmId = savedCard.id;
+        } else if (IS_MOCK) {
+          stripePmId = `pm_mock_nueva_${Date.now().toString(36)}`;
+          savingNewCard = saveCard;
         } else {
-          // El backend exige un "cliente Stripe" para el hold de la garantía, y
-          // un usuario recién registrado todavía no lo tiene (se crea lazy).
-          // setup-intent lo crea; sin esto la garantía da 'no_payment_source'.
-          // (Verificado contra el backend vivo 2026-07-22.)
-          try {
-            await api.createSetupIntent();
-          } catch {
-            // si esto falla, el hold devolverá un error claro más abajo
+          // v2.16: el backend crea el cliente Stripe lazy en la propia
+          // garantía — el bootstrap de setup-intent (v2.14) ya no hace falta.
+          if (!cardEl) {
+            setError('Cargá los datos de la tarjeta para continuar.');
+            setBusy(false);
+            return;
           }
-          if (IS_DEMO) {
-            // Modo demo (?demo=1): PaymentMethod de test de Stripe, sin tipear
-            // en el iframe de Elements (para grabar en navegador automatizado).
-            stripePmId = DEMO_PM_ID;
-          } else {
-            if (!cardEl) {
-              setError('Cargá los datos de la tarjeta para continuar.');
-              setBusy(false);
-              return;
-            }
-            const res = await createCardPaymentMethod(cardEl);
-            if ('error' in res) {
-              setError(res.error);
-              setBusy(false);
-              return;
-            }
-            stripePmId = res.paymentMethodId;
+          const res = await createCardPaymentMethod(cardEl);
+          if ('error' in res) {
+            setError(res.error);
+            setBusy(false);
+            return;
           }
+          stripePmId = res.paymentMethodId;
+          savingNewCard = saveCard;
         }
       }
 
@@ -195,6 +213,8 @@ export function CreateMesaFlow() {
         expected_participants: division === 'igual' ? participants : Math.max(1, participants),
         guarantee_method: method,
         ...(stripePmId && { stripe_payment_method_id: stripePmId }),
+        ...(savedPmId && { payment_method_id: savedPmId }),
+        ...(savingNewCard && { save_payment_method: true }),
         items: ocr.items.map((i) => ({
           name: i.name,
           price_cents: i.price_cents,
@@ -455,7 +475,7 @@ export function CreateMesaFlow() {
           <button
             className="btn btn-primary"
             onClick={() => {
-              void loadDefaultCard();
+              void loadCards();
               setStep('garantia');
             }}
           >
@@ -505,29 +525,86 @@ export function CreateMesaFlow() {
               VISA
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>
-                {IS_MOCK && pm ? `${pm.bank_name ?? pm.brand} ···· ${pm.last_four}` : 'Tarjeta'}
-              </div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Tarjeta</div>
               <div className="caption">
                 Retención en la tarjeta (puede pedir confirmación del banco)
               </div>
             </div>
             <div className="radio" aria-hidden="true" />
           </button>
-          {/* G-04: el contrato exige un `pm_…` de Stripe para la garantía y
-              GET /payment-methods no lo expone, así que con backend real la
-              tarjeta se ingresa acá aunque el usuario ya tenga uma guardada. */}
-          {!IS_MOCK && !IS_DEMO && method === 'card' && (
-            <div style={{ margin: '4px 0 12px' }}>
-              <CardField onReady={setCardEl} onChange={setCardState} />
-              {cardState.error && (
-                <div className="caption" style={{ color: 'var(--red)' }} role="alert">
-                  {cardState.error}
+          {/* D4: selector de tarjetas guardadas (pm_…) + "usar otra". Cierra
+              G-04: elegir una guardada saltea Elements; el 3DS sigue igual. */}
+          {!IS_DEMO && method === 'card' && cards.length > 0 && (
+            <div role="radiogroup" aria-label="Tarjeta guardada" style={{ margin: '4px 0 4px' }}>
+              {cards.map((c) => (
+                <button
+                  key={c.id}
+                  className={`method-card ${cardChoice === c.id ? 'sel' : ''}`}
+                  onClick={() => setCardChoice(c.id)}
+                  role="radio"
+                  aria-checked={cardChoice === c.id}
+                >
+                  <div className="cc visa" aria-hidden="true">
+                    {c.brand.toUpperCase().slice(0, 4)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>
+                      {c.bank_name ?? c.brand} ···· {c.last_four}
+                      {c.is_default && (
+                        <span className="caption" style={{ marginLeft: 8 }}>
+                          Principal
+                        </span>
+                      )}
+                    </div>
+                    <div className="caption">
+                      Vence {String(c.exp_month).padStart(2, '0')}/{String(c.exp_year % 100).padStart(2, '0')}
+                    </div>
+                  </div>
+                  <div className="radio" aria-hidden="true" />
+                </button>
+              ))}
+              <button
+                className={`method-card ${cardChoice === 'new' ? 'sel' : ''}`}
+                onClick={() => setCardChoice('new')}
+                role="radio"
+                aria-checked={cardChoice === 'new'}
+              >
+                <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
+                  ➕
                 </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>Usar otra tarjeta</div>
+                </div>
+                <div className="radio" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+          {/* Tarjeta nueva: Elements en real; en mock no se pide número. */}
+          {!IS_DEMO && method === 'card' && (cards.length === 0 || cardChoice === 'new') && (
+            <div style={{ margin: '4px 0 12px' }}>
+              {IS_MOCK ? (
+                <div className="caption">La ingresás al confirmar (segura, vía Stripe).</div>
+              ) : (
+                <>
+                  <CardField onReady={setCardEl} onChange={handleCardChange} />
+                  {cardState.error && (
+                    <div className="caption" style={{ color: 'var(--red)' }} role="alert">
+                      {cardState.error}
+                    </div>
+                  )}
+                  <div className="caption">
+                    Los datos van directo a Stripe: PayMe nunca ve el número completo.
+                  </div>
+                </>
               )}
-              <div className="caption">
-                Los datos van directo a Stripe: PayMe nunca ve el número completo.
-              </div>
+              <label className="caption" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={saveCard}
+                  onChange={(e) => setSaveCard(e.target.checked)}
+                />
+                Guardar esta tarjeta para la próxima
+              </label>
             </div>
           )}
           {/* Modo demo (?demo=1): tarjeta de test, sin iframe de Stripe. */}
@@ -559,7 +636,14 @@ export function CreateMesaFlow() {
           <button
             className="btn btn-primary"
             onClick={createMesa}
-            disabled={busy || (!IS_MOCK && !IS_DEMO && method === 'card' && !cardState.complete)}
+            disabled={
+              busy ||
+              (!IS_MOCK &&
+                !IS_DEMO &&
+                method === 'card' &&
+                (cards.length === 0 || cardChoice === 'new') &&
+                !cardState.complete)
+            }
           >
             {busy ? 'Autorizando…' : `🔒 Garantizar ${formatMXN(total)} y abrir mesa`}
           </button>

@@ -185,14 +185,19 @@ export interface MesaDetailResponse {
   mesa: MesaDetail;
 }
 
-/** POST /api/mesas — request (schemas.createMesa, A-1). */
+/** POST /api/mesas — request (schemas.createMesa, A-1 + D4 v2.16). */
 export interface CreateMesaRequest {
   restaurant_id: string;
   total_cents: number;
   division_mode: 'consumo' | 'igual';
   expected_participants: number;
   guarantee_method: 'card' | 'wallet';
+  /** Tarjeta NUEVA: pm_… creado por Stripe Elements. */
   stripe_payment_method_id?: string;
+  /** D4 (v2.16): tarjeta GUARDADA — uuid de payment_methods. */
+  payment_method_id?: string;
+  /** D4 (v2.16): guardar la tarjeta nueva tipeada (default false). */
+  save_payment_method?: boolean;
   items: Array<{ name: string; category?: string; price_cents: number; quantity: number }>;
 }
 
@@ -224,10 +229,14 @@ export interface LockItemsResponse {
 
 export type PaymentType = 'card' | 'apple_pay' | 'google_pay' | 'wallet';
 
-/** POST /api/mesas/:code/pay — request (schemas.payMesa). */
+/** POST /api/mesas/:code/pay — request (schemas.payMesa + D4 v2.16). */
 export interface PayMesaRequest {
+  /** Tarjeta GUARDADA: uuid de payment_methods. */
   payment_method_id?: string;
+  /** Tarjeta NUEVA (pm_… de Elements) o wallets (apple/google). */
   stripe_payment_method_id?: string;
+  /** D4 (v2.16): guardar la tarjeta nueva tipeada (default false). */
+  save_payment_method?: boolean;
   payment_type: PaymentType;
   item_ids: string[];
   lock_tokens?: string[];
@@ -273,9 +282,16 @@ export interface OcrResponse {
 
 // ─── Payment methods (routes/payment-methods.js) ───────────
 
-/** Elemento de GET /api/payment-methods. */
+/**
+ * Elemento de GET /api/payment-methods — contrato D4 PUBLICADO (backend
+ * v2.16.0, routes/payment-methods.js del mirror). `id` es el uuid interno
+ * (lo aceptan la garantía y el pago como `payment_method_id`, y sigue siendo
+ * el id de topup/default/delete); `stripe_payment_method_id` es el `pm_…`
+ * (NOT NULL en la tabla). Cierra G-04/G-05.
+ */
 export interface PaymentMethod {
   id: string;
+  stripe_payment_method_id: string;
   brand: string;
   bank_name: string | null;
   type: 'credit' | 'debit';

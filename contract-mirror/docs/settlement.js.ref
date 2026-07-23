@@ -28,6 +28,7 @@ const pool = require('../db/pool');
 const eventEmitter = require('./eventEmitter');
 const aggregateEmitter = require('./aggregateEmitter');
 const stripeService = require('./stripe');
+const savedCards = require('./savedCards');   // D4 (v2.16)
 const stp = require('./stp');
 const stateMachine = require('../utils/stateMachine');
 const notifs = require('./notifications');
@@ -56,14 +57,14 @@ function deterministicClave(mesaId) {
  * @param {number} p.amountCents   = total_cents de la mesa
  * @returns {Promise<{status:'open'|'requires_action'|'failed', clientSecret?:string, reason?:string, available?:number, required?:number}>}
  */
-async function placeGuaranteeHold({ mesaId, organizer, method, stripePaymentMethodId, amountCents }) {
+async function placeGuaranteeHold({ mesaId, organizer, method, stripePaymentMethodId, amountCents, offSession = false, savePm = false }) {
   if (method === 'wallet') {
     return placeWalletHold({ mesaId, organizer, amountCents });
   }
-  return placeCardHold({ mesaId, organizer, stripePaymentMethodId, amountCents });
+  return placeCardHold({ mesaId, organizer, stripePaymentMethodId, amountCents, offSession, savePm });
 }
 
-async function placeCardHold({ mesaId, organizer, stripePaymentMethodId, amountCents }) {
+async function placeCardHold({ mesaId, organizer, stripePaymentMethodId, amountCents, offSession = false, savePm = false }) {
   if (!organizer?.stripe_customer_id || !stripePaymentMethodId) {
     await markAuthFailed(mesaId, 'no_payment_source');
     return { status: 'failed', reason: 'no_payment_source' };
@@ -77,9 +78,29 @@ async function placeCardHold({ mesaId, organizer, stripePaymentMethodId, amountC
       payment_method_id: stripePaymentMethodId,
       capture_method: 'manual',                 // ← HOLD
       idempotency_key: `guarantee_${mesaId}`,
-      metadata: { kind: 'guarantee_auth', mesa_id: mesaId, user_id: organizer.id },
+      // D4 (v2.16): tarjeta guardada → off_session; tarjeta tipeada con opt-in
+      // de guardado → setup_future_usage (Stripe la adjunta al confirmar).
+      off_session: offSession,
+      ...(savePm && { setup_future_usage: 'off_session' }),
+      metadata: {
+        kind: 'guarantee_auth', mesa_id: mesaId, user_id: organizer.id,
+        ...(savePm && { save_pm: '1' }),   // el webhook 3DS espeja al autorizar
+      },
     });
   } catch (err) {
+    // D4: off_session puede exigir 3DS — el PI quedó en requires_action:
+    // mismo camino 3DS de siempre (mesa pending_auth + client_secret; el
+    // webhook amount_capturable_updated la abrirá).
+    const pi = err.raw?.payment_intent || err.payment_intent;
+    if (err.code === 'authentication_required' && pi) {
+      await pool.query(
+        `UPDATE mesas
+            SET auth_method='card', auth_payment_intent_id=$2, auth_amount_cents=$3
+          WHERE id=$1 AND status='pending_auth'`,
+        [mesaId, pi.id, amountCents]
+      );
+      return { status: 'requires_action', clientSecret: pi.client_secret };
+    }
     logger.warn('guarantee_hold_stripe_error', { mesa_id: mesaId, error: err.message });
     await markAuthFailed(mesaId, err.message);
     return { status: 'failed', reason: err.message };
@@ -104,6 +125,16 @@ async function placeCardHold({ mesaId, organizer, stripePaymentMethodId, amountC
       }
     });
     logger.audit('guarantee_hold_placed', { mesa_id: mesaId, method: 'card', intent_id: intent.id, amount: amountCents });
+    // D4: hold autorizado sin 3DS y con opt-in de guardado → espejar sync
+    // (best-effort, jamás lanza). El camino 3DS lo cubre el webhook.
+    // OJO: se espeja intent.payment_method (lo que Stripe ADJUNTÓ), no el id
+    // del request — los alias de test (pm_card_visa) y algunos wallets se
+    // materializan en otro pm_ al confirmar.
+    if (savePm) {
+      await savedCards.mirrorSavedPaymentMethod(
+        organizer.id, intent.payment_method || stripePaymentMethodId
+      );
+    }
     return { status: 'open' };
   }
 

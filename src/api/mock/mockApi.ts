@@ -181,6 +181,8 @@ export async function mockScanTicket(): Promise<OcrResponse> {
 
 /** Garantía 3DS pendiente del mock (mesa creada con card, aún pending_auth). */
 let pending3ds: MockMesa | null = null;
+/** D4: pm_ de la tarjeta nueva a guardar RECIÉN cuando el 3DS confirme. */
+let pending3dsSave: string | null = null;
 
 export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesaResponse> {
   const sum = req.items.reduce((s, i) => s + i.price_cents * i.quantity, 0);
@@ -261,7 +263,12 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   }
 
   // card: el mock siempre pide 3DS para que la demo muestre requires_action.
+  // D4: el "guardar tarjeta" queda PENDIENTE hasta que el 3DS confirme — si
+  // guardáramos acá, cada reintento cancelado acumularía tarjetas fantasma
+  // (el backend real también guarda recién en el webhook del hold).
   pending3ds = mesa;
+  pending3dsSave =
+    req.save_payment_method && req.stripe_payment_method_id ? req.stripe_payment_method_id : null;
   return delay({
     mesa: {
       id: mesa.id,
@@ -287,6 +294,11 @@ export async function mockConfirmGuarantee3ds(code: string): Promise<{ status: '
   if (!mesa || mesa !== pending3ds) return fail(404, 'mesa_not_found');
   mesa.status = 'open';
   pending3ds = null;
+  // D4: el hold quedó autorizado → recién ahora se guarda la tarjeta nueva.
+  if (pending3dsSave) {
+    saveMockCard(pending3dsSave);
+    pending3dsSave = null;
+  }
   return new Promise((resolve) => setTimeout(() => resolve({ status: 'open' }), 1500));
 }
 
@@ -381,6 +393,11 @@ export async function mockPayMesa(
   }
   mesa.tip_amount_cents += req.tip_cents;
   markMesaPaid(mesa, itemsAmount);
+
+  // D4: guardar la tarjeta nueva si lo pidieron (solo usuarios con cuenta).
+  if (req.save_payment_method && req.stripe_payment_method_id && identity !== 'guest') {
+    saveMockCard(req.stripe_payment_method_id);
+  }
 
   return delay({
     attempt: {
@@ -529,19 +546,35 @@ export async function mockCreateSetupIntent(): Promise<{ client_secret: string }
   return delay({ client_secret: 'seti_mock_secret' });
 }
 
-/** En demo no hay Stripe: se agrega una tarjeta de ejemplo verosímil. */
-export async function mockAttachPaymentMethod(
-  _stripePaymentMethodId: string,
-  setAsDefault?: boolean,
-): Promise<void> {
-  const banks = ['BBVA', 'Banorte', 'HSBC', 'Citibanamex'];
-  const bank = banks[state.paymentMethods.length % banks.length];
-  const lastFour = String(Math.floor(1000 + Math.random() * 9000));
+/**
+ * D4: en el mock no hay Stripe, así que "guardar una tarjeta" fabrica una
+ * verosímil con la forma del contrato v2.16 (id uuid + pm_…). La usan el alta
+ * de Cuenta (attach) y el save_payment_method de garantía/pago. Idempotente
+ * por pm_ (el backend real también deduplica el attach), pero un dupe con
+ * set_as_default SÍ actualiza la principal.
+ */
+export function saveMockCard(stripePaymentMethodId: string, setAsDefault?: boolean): void {
+  const existing = state.paymentMethods.find(
+    (pm) => pm.stripe_payment_method_id === stripePaymentMethodId,
+  );
+  if (existing) {
+    if (setAsDefault) {
+      state.paymentMethods = state.paymentMethods.map((pm) => ({
+        ...pm,
+        is_default: pm.stripe_payment_method_id === stripePaymentMethodId,
+      }));
+    }
+    return;
+  }
   if (setAsDefault) {
     state.paymentMethods = state.paymentMethods.map((pm) => ({ ...pm, is_default: false }));
   }
+  const banks = ['BBVA', 'Banorte', 'HSBC', 'Citibanamex'];
+  const bank = banks[state.paymentMethods.length % banks.length];
+  const lastFour = String(Math.floor(1000 + Math.random() * 9000));
   state.paymentMethods.push({
     id: mockId('b'),
+    stripe_payment_method_id: stripePaymentMethodId,
     brand: 'visa',
     bank_name: bank,
     type: 'debit',
@@ -551,6 +584,13 @@ export async function mockAttachPaymentMethod(
     is_default: !!setAsDefault || state.paymentMethods.length === 0,
     display: `${bank} · Débito · •••• ${lastFour}`,
   });
+}
+
+export async function mockAttachPaymentMethod(
+  stripePaymentMethodId: string,
+  setAsDefault?: boolean,
+): Promise<void> {
+  saveMockCard(stripePaymentMethodId, setAsDefault);
   return delay(undefined);
 }
 

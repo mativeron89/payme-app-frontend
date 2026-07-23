@@ -17,6 +17,7 @@ const express = require('express');
 const pool = require('../db/pool');
 const eventEmitter = require('../services/eventEmitter');
 const stripeService = require('../services/stripe');
+const savedCards = require('../services/savedCards');   // D4 (v2.16)
 const stateMachine = require('../utils/stateMachine');
 const paymentProcessor = require('../services/paymentProcessor');
 const notifs = require('../services/notifications');
@@ -58,6 +59,19 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
     // en el routing normal terminan en retryable_no_local_record y ensucian el
     // retry-loop. Se manejan acá y se responde 200.
     const piObj = event.type.startsWith('payment_intent.') ? event.data.object : null;
+
+    // D4 (v2.16): tarjeta guardada por 3DS — si el PI pedía guardar
+    // (metadata.save_pm) y el desafío terminó bien (pago confirmado o hold
+    // autorizado), espejar la tarjeta localmente. Cubre pago Y garantía en un
+    // solo punto. Best-effort: mirrorSavedPaymentMethod jamás lanza, el
+    // webhook sigue su curso normal.
+    if (piObj && piObj.metadata?.save_pm === '1' && piObj.payment_method
+        && piObj.metadata.user_id && piObj.metadata.user_id !== 'guest'
+        && (event.type === 'payment_intent.succeeded'
+            || event.type === 'payment_intent.amount_capturable_updated')) {
+      await savedCards.mirrorSavedPaymentMethod(piObj.metadata.user_id, piObj.payment_method);
+    }
+
     if (piObj && piObj.metadata && piObj.metadata.kind === 'guarantee_auth') {
       await handleGuaranteeIntentEvent(event.type, piObj);
       await pool.query(

@@ -1,9 +1,32 @@
 # contract-mirror/ — espejo de solo lectura del contrato del App Backend
 
-**Procedencia:** copiado tal cual de `../payme-app-backend` **v2.14.3** (CI
-verde). Fuente de verdad: el código real de ese repo. Este espejo existe para
-que el front pueda consultar el contrato sin abrir el repo del backend en cada
-sesión.
+**Procedencia:** copiado tal cual de `../payme-app-backend` **v2.16.0** (CI
+verde; `/health` del backend vivo de Railway confirma 2.16.0 desplegado,
+2026-07-22). Fuente de verdad: el código real de ese repo. Este espejo existe
+para que el front pueda consultar el contrato sin abrir el repo del backend en
+cada sesión.
+
+**Refrescado el 2026-07-22 desde v2.16.0 (D4 · tarjeta guardada, PUBLICADO):**
+cambiaron `schemas/index.js`, `routes/mesas.js`, `routes/payment-methods.js`,
+`routes/webhooks.js` y `docs/settlement.js.ref`. El contrato D4 real difiere
+del texto del acta: `GET /payment-methods` conserva `id` (uuid interno),
+`last_four`, `bank_name`, `type` y `display`, y AGREGA
+`stripe_payment_method_id` (`pm_…`); la garantía (`POST /mesas`) ahora acepta
+**`payment_method_id` (uuid) para tarjeta guardada** además de
+`stripe_payment_method_id` para tarjeta nueva; `save_payment_method`
+(default false) en garantía y pago guarda la tarjeta tipeada (incluido el
+camino 3DS vía webhook). Cierra G-04/G-05 y disuelve G-06 (los ids de
+topup/default/delete siguen siendo uuid).
+
+**Verificado contra v2.15.0 el 2026-07-22 (D6, calendario de México):** los
+archivos espejados quedaron byte-idénticos en esa versión — D6 cambia
+valores/semántica (`service_window` en español, `business_date` con corte
+05:00 México, atribución por apertura de la mesa) SOLO en los eventos del
+outbox hacia el dashboard (`services/eventEmitter.js`,
+`services/aggregateEmitter.js`, `utils/eventPrivacy.js`, que este espejo no
+rastrea a propósito: son contrato app→dashboard, no del comensal). Verificado
+por grep: ninguna ruta ni schema del contrato del comensal expone
+`service_window`/`business_date`/`hour_bucket`, y `src/` tampoco los consume.
 
 **Refrescado el 2026-07-20** desde v2.14.3 (venía congelado en v2.13.0 del
 2026-07-18). Cambiaron: `middleware/auth.js`, `routes/invitations.js`,

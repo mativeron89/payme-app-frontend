@@ -43,14 +43,20 @@ router.post('/setup-intent', async (req, res, next) => {
 router.get('/', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, brand, bank_name, type, last_four, exp_month, exp_year, is_default, status, created_at
+      `SELECT id, stripe_payment_method_id, brand, bank_name, type, last_four,
+              exp_month, exp_year, is_default, status, created_at
          FROM payment_methods
         WHERE user_id = $1 AND status = 'active'
         ORDER BY is_default DESC, created_at DESC`, [req.user.id]
     );
     res.json({
       payment_methods: rows.map(r => ({
-        id: r.id, brand: r.brand, bank_name: r.bank_name, type: r.type,
+        // D4 (v2.16): ambos ids en el contrato — `id` (uuid interno) es lo que
+        // consumen POST /mesas y /pay como payment_method_id;
+        // `stripe_payment_method_id` (pm_...) para el front que hable Stripe.
+        // Jamás el PAN: solo last_four + metadata.
+        id: r.id, stripe_payment_method_id: r.stripe_payment_method_id,
+        brand: r.brand, bank_name: r.bank_name, type: r.type,
         last_four: r.last_four, exp_month: r.exp_month, exp_year: r.exp_year,
         is_default: r.is_default,
         display: `${r.bank_name || r.brand} · ${r.type === 'credit' ? 'Crédito' : 'Débito'} · •••• ${r.last_four}`,

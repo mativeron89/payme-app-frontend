@@ -358,9 +358,12 @@ function seedState(): MockState {
     balance_cents: 125000,
     held_balance_cents: 0,
     clabe: null,
+    // D4 (contrato v2.16 publicado): id = uuid interno + stripe_payment_method_id
+    // = pm_… . Dos tarjetas para que el selector de garantía/pago tenga qué elegir.
     paymentMethods: [
       {
         id: mockId('b'),
+        stripe_payment_method_id: 'pm_mock_visa4532',
         brand: 'visa',
         bank_name: 'Santander',
         type: 'credit',
@@ -369,6 +372,18 @@ function seedState(): MockState {
         exp_year: 2028,
         is_default: true,
         display: 'Santander · Crédito · •••• 4532',
+      },
+      {
+        id: mockId('b'),
+        stripe_payment_method_id: 'pm_mock_mc8821',
+        brand: 'mastercard',
+        bank_name: 'BBVA',
+        type: 'debit',
+        last_four: '8821',
+        exp_month: 3,
+        exp_year: 2027,
+        is_default: false,
+        display: 'BBVA · Débito · •••• 8821',
       },
     ],
     friends,

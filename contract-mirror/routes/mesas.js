@@ -25,6 +25,7 @@ const {
 const schemas = require('../schemas');
 const stateMachine = require('../utils/stateMachine');
 const stripeService = require('../services/stripe');
+const savedCards = require('../services/savedCards');   // D4 (v2.16)
 const settlement = require('../services/settlement');
 const paymentProcessor = require('../services/paymentProcessor');
 const notifs = require('../services/notifications');
@@ -62,11 +63,28 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
     const {
       restaurant_id, total_cents, division_mode, expected_participants, items,
       guarantee_method, stripe_payment_method_id,   // v2.11 (parche §1/§2 · garantía)
+      payment_method_id, save_payment_method,       // D4 (v2.16): tarjeta guardada
     } = req.body;
     const { rowCount: rOk } = await pool.query(
       `SELECT 1 FROM restaurants WHERE id = $1 AND status = 'active'`, [restaurant_id]
     );
     if (rOk === 0) return res.status(404).json({ error: 'restaurant_not_found' });
+
+    // D4: garantía con tarjeta GUARDADA — resolver el uuid ANTES de crear nada
+    // (404 temprano, sin dejar una mesa auth_failed de por medio). Scope
+    // estricto al usuario autenticado, igual que en el pago.
+    let guaranteePmId = stripe_payment_method_id || null;
+    let usedSavedCard = false;
+    if (guarantee_method === 'card' && !guaranteePmId && payment_method_id) {
+      const { rows: pmRows } = await pool.query(
+        `SELECT stripe_payment_method_id FROM payment_methods
+          WHERE id = $1 AND user_id = $2 AND status = 'active'`,
+        [payment_method_id, req.user.id]
+      );
+      guaranteePmId = pmRows[0]?.stripe_payment_method_id;
+      if (!guaranteePmId) return res.status(404).json({ error: 'payment_method_not_found' });
+      usedSavedCard = true;
+    }
 
     const sum = items.reduce((s, i) => s + i.price_cents * i.quantity, 0);
     if (sum !== total_cents) {
@@ -126,12 +144,23 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
     );
     const organizer = uRows[0] || { id: req.user.id };
 
+    // D4: el hold con tarjeta exige customer de Stripe. Crearlo lazy acá
+    // (mismo patrón que /payment-methods/setup-intent) elimina la fricción de
+    // "primero llamá a setup-intent": la primera mesa con tarjeta tipeada YA
+    // puede garantizar y, con save_payment_method, guardar.
+    if (guarantee_method === 'card' && !organizer.stripe_customer_id) {
+      organizer.stripe_customer_id = await savedCards.ensureStripeCustomer(req.user);
+    }
+    const wantsSaveGuarantee = guarantee_method === 'card' && !!save_payment_method && !usedSavedCard;
+
     const hold = await settlement.placeGuaranteeHold({
       mesaId: mesa.id,
       organizer,
       method: guarantee_method,
-      stripePaymentMethodId: stripe_payment_method_id,
+      stripePaymentMethodId: guaranteePmId,
       amountCents: total_cents,
+      offSession: usedSavedCard,     // D4: tarjeta guardada → confirmación off-session
+      savePm: wantsSaveGuarantee,    // D4: guardar la tarjeta tipeada (opt-in)
     });
 
     if (hold.status === 'failed') {
@@ -343,6 +372,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
     const mesa = req.mesa;
     const {
       payment_method_id, stripe_payment_method_id, payment_type,
+      save_payment_method,                       // D4 (v2.16)
       item_ids, lock_tokens, tip_cents, tip_to_staff_id, idempotency_key,
     } = req.body;
 
@@ -593,6 +623,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
     }
 
     let stripePmId = stripe_payment_method_id || null;
+    let usedSavedCard = false;   // D4: resuelto vía uuid = tarjeta guardada
     if (!stripePmId && payment_method_id) {
       const { rows: pmRows } = await pool.query(
         `SELECT stripe_payment_method_id FROM payment_methods
@@ -604,25 +635,53 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
         await releaseAttemptItems(attempt.id, 'pm_not_found');
         return res.status(404).json({ error: 'payment_method_not_found' });
       }
+      usedSavedCard = true;
     }
     if (!stripePmId) {
       await releaseAttemptItems(attempt.id, 'no_payment_source');
       return res.status(400).json({ error: 'no_payment_source' });
     }
 
+    // D4: guardar la tarjeta tipeada (opt-in, solo usuarios autenticados; los
+    // guests no tienen cuenta donde guardar). setup_future_usage exige customer
+    // de Stripe → crearlo lazy si falta.
+    const wantsSave = !!save_payment_method && !!userId && !usedSavedCard;
+    let customerId = req.user?.stripe_customer_id;
+    if (wantsSave && !customerId) {
+      customerId = await savedCards.ensureStripeCustomer(req.user);
+    }
+
     try {
       const stripeIntent = await stripeService.createPaymentIntent({
         amount_cents: attempt.grossAmount,
-        customer_id: req.user?.stripe_customer_id,
+        customer_id: customerId,
         payment_method_id: stripePmId,
         idempotency_key: `pay_${attempt.id}`,
+        // D4: tarjeta guardada → off_session (Stripe intenta sin fricción; si
+        // el emisor exige 3DS, el catch de abajo lo devuelve como
+        // requires_action + client_secret, igual que cualquier 3DS).
+        off_session: usedSavedCard,
+        ...(wantsSave && { setup_future_usage: 'off_session' }),
         metadata: {
           mesa_id: mesa.id, mesa_code: mesa.code,
           user_id: userId || 'guest',
           attempt_id: attempt.id,
           tip_to_staff_id: tip_to_staff_id || '',
+          // D4: el webhook 3DS espeja la tarjeta cuando el pago confirma
+          ...(wantsSave && { save_pm: '1' }),
         },
       });
+
+      // D4: sin 3DS el intent ya confirmó acá → espejar sync (best-effort,
+      // mirrorSavedPaymentMethod jamás lanza). El camino 3DS lo cubre el
+      // webhook payment_intent.succeeded vía metadata.save_pm.
+      // Se espeja stripeIntent.payment_method (lo ADJUNTADO): los alias de
+      // test y algunos wallets se materializan en otro pm_ al confirmar.
+      if (wantsSave && stripeIntent.status === 'succeeded') {
+        await savedCards.mirrorSavedPaymentMethod(
+          userId, stripeIntent.payment_method || stripePmId
+        );
+      }
 
       const newStatus = stateMachine.mapStripeStatus(stripeIntent.status);
       await pool.query(
@@ -650,6 +709,35 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
         },
       });
     } catch (stripeErr) {
+      // D4: off_session con tarjeta guardada — el emisor puede exigir 3DS.
+      // Stripe lo reporta como error authentication_required, pero el PI quedó
+      // creado en requires_action: devolverlo como cualquier 3DS (el front
+      // completa con el client_secret) en vez de un 502 seco.
+      const pi = stripeErr.raw?.payment_intent || stripeErr.payment_intent;
+      if (stripeErr.code === 'authentication_required' && pi) {
+        const newStatus = stateMachine.mapStripeStatus(pi.status);
+        await pool.query(
+          `UPDATE payment_attempts
+              SET stripe_payment_intent_id = $1,
+                  stripe_client_secret = $2,
+                  status = $3
+            WHERE id = $4`,
+          [pi.id, pi.client_secret, newStatus, attempt.id]
+        );
+        logger.audit('payment_attempt_requires_auth', {
+          mesa_id: mesa.id, attempt_id: attempt.id, stripe_status: pi.status,
+        });
+        return res.status(201).json({
+          attempt: {
+            id: attempt.id,
+            gross_amount_cents: Number(attempt.grossAmount),
+            client_secret: pi.client_secret,
+            status: newStatus,
+            stripe_status: pi.status,
+            requires_action: true,
+          },
+        });
+      }
       logger.error('stripe_payment_intent_failed', {
         attempt_id: attempt.id, error: stripeErr.message,
       });

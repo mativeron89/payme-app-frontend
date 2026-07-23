@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, newIdempotencyKey } from '../api';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
-import { CardField } from '../components/CardField';
+import { CardField, type CardFieldState } from '../components/CardField';
 import type { MesaDetail, PaymentMethod, PaymentType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { TopBar, useToast } from '../components/ui';
@@ -43,12 +43,25 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [tipPct, setTipPct] = useState(15);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [payType, setPayType] = useState<PaymentType>('card');
-  const [pm, setPm] = useState<PaymentMethod | null>(null);
+  // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
+  // tarjeta); `saveCard` = checkbox "guardar" (ratificado: prendido). El
+  // invitado sin cuenta no tiene guardadas: siempre tarjeta nueva sin checkbox.
+  const [cards, setCards] = useState<PaymentMethod[]>([]);
+  const [cardChoice, setCardChoice] = useState<string>('new');
+  const [saveCard, setSaveCard] = useState(true);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
-  const [cardState, setCardState] = useState<{ complete: boolean; error: string | null }>({
+  const [cardState, setCardState] = useState<CardFieldState>({
     complete: false,
     error: null,
+    empty: true,
   });
+  // Espejo en ref: la carga async de tarjetas no debe pisar la selección si
+  // el usuario ya está tipeando una nueva (ver useEffect de abajo).
+  const cardStateRef = useRef(cardState);
+  const handleCardChange = useCallback((s: CardFieldState) => {
+    cardStateRef.current = s;
+    setCardState(s);
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PayResult | null>(null);
@@ -72,8 +85,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     if (!isGuest) {
       api
         .getPaymentMethods()
-        .then((r) => setPm(r.payment_methods.find((p) => p.is_default) ?? r.payment_methods[0] ?? null))
-        .catch(() => setPm(null));
+        .then((r) => {
+          // D4 (v2.16): las guardadas se reusan con su uuid (payment_method_id).
+          setCards(r.payment_methods);
+          const def = r.payment_methods.find((p) => p.is_default) ?? r.payment_methods[0];
+          // No pisar la selección si el usuario ya está tipeando una nueva.
+          if (def && cardStateRef.current.empty) setCardChoice(def.id);
+        })
+        .catch(() => setCards([]));
     }
   }, [isGuest]);
 
@@ -137,14 +156,22 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     setBusy(true);
     setError(null);
     try {
-      // Real + tarjeta sin una guardada: se crea el pm_ desde el Card Element
-      // y se manda como stripe_payment_method_id (el contrato de payMesa ya lo
-      // acepta). Sin esto, un usuario nuevo no tenía forma de pagar con tarjeta.
-      let freshCardPmId: string | null = null;
-      if (payType === 'card' && !pm && !IS_MOCK) {
-        if (IS_DEMO) {
+      // D4 (v2.16): tarjeta GUARDADA → `payment_method_id` (uuid); tarjeta
+      // NUEVA → pm_ desde el Card Element como `stripe_payment_method_id`,
+      // con `save_payment_method` según el checkbox.
+      const savedCard = payType === 'card' ? (cards.find((c) => c.id === cardChoice) ?? null) : null;
+      let stripePmId: string | null = null;
+      let savedPmId: string | null = null;
+      let savingNewCard = false;
+      if (payType === 'card') {
+        if (!IS_MOCK && IS_DEMO) {
           // Modo demo (?demo=1): PaymentMethod de test de Stripe, sin iframe.
-          freshCardPmId = DEMO_PM_ID;
+          stripePmId = DEMO_PM_ID;
+        } else if (savedCard) {
+          savedPmId = savedCard.id;
+        } else if (IS_MOCK) {
+          stripePmId = `pm_mock_nueva_${Date.now().toString(36)}`;
+          savingNewCard = !isGuest && saveCard;
         } else {
           if (!cardEl) {
             setError('Ingresá los datos de la tarjeta para continuar.');
@@ -157,7 +184,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             setBusy(false);
             return;
           }
-          freshCardPmId = res.paymentMethodId;
+          stripePmId = res.paymentMethodId;
+          savingNewCard = !isGuest && saveCard;
         }
       }
 
@@ -169,8 +197,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           ...(lockTokens.length > 0 && { lock_tokens: lockTokens }),
           tip_cents: tipCents,
           ...(staffId && { tip_to_staff_id: staffId }),
-          ...(payType === 'card' && pm && { payment_method_id: pm.id }),
-          ...(freshCardPmId && { stripe_payment_method_id: freshCardPmId }),
+          ...(stripePmId && { stripe_payment_method_id: stripePmId }),
+          ...(savedPmId && { payment_method_id: savedPmId }),
+          ...(savingNewCard && { save_payment_method: true }),
           ...(payType !== 'card' && payType !== 'wallet' && { stripe_payment_method_id: 'pm_mock_walletpay' }),
           idempotency_key: newIdempotencyKey(),
         },
@@ -193,7 +222,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           ? '👛 Saldo PayMe'
           : payType === 'apple_pay'
             ? '🍎 Apple Pay'
-            : `💳 ${pm ? `${pm.brand === 'visa' ? 'Visa' : pm.brand} ··${pm.last_four}` : 'Tarjeta'}`;
+            : `💳 ${savedCard ? `${savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··${savedCard.last_four}` : 'Tarjeta'}`;
       setResult({
         itemsAmount,
         tip: tipCents,
@@ -572,56 +601,104 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <div className="radio" aria-hidden="true" />
               </button>
             )}
-            {pm ? (
-              <button
-                className={`method-card ${payType === 'card' ? 'sel' : ''}`}
-                onClick={() => setPayType('card')}
-                role="radio"
-                aria-checked={payType === 'card'}
-              >
-                <div className="cc visa" aria-hidden="true">
-                  VISA
+            <button
+              className={`method-card ${payType === 'card' ? 'sel' : ''}`}
+              onClick={() => setPayType('card')}
+              role="radio"
+              aria-checked={payType === 'card'}
+            >
+              <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
+                💳
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>Tarjeta de crédito o débito</div>
+                <div className="caption">
+                  {cards.length > 0
+                    ? 'Elegí una guardada o usá otra'
+                    : IS_MOCK
+                      ? 'La ingresás al confirmar (segura, vía Stripe)'
+                      : 'Ingresá los datos abajo (seguro, vía Stripe)'}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>
-                    {pm.bank_name ?? pm.brand} ···· {pm.last_four}
+              </div>
+              <div className="radio" aria-hidden="true" />
+            </button>
+            {/* D4: selector de tarjetas guardadas (pm_…) + "usar otra". Elegir
+                una guardada saltea Elements; el 3DS (requires_action) sigue. */}
+            {!IS_DEMO && payType === 'card' && cards.length > 0 && (
+              <div role="radiogroup" aria-label="Tarjeta guardada" style={{ margin: '2px 0 4px' }}>
+                {cards.map((c) => (
+                  <button
+                    key={c.id}
+                    className={`method-card ${cardChoice === c.id ? 'sel' : ''}`}
+                    onClick={() => setCardChoice(c.id)}
+                    role="radio"
+                    aria-checked={cardChoice === c.id}
+                  >
+                    <div className="cc visa" aria-hidden="true">
+                      {c.brand.toUpperCase().slice(0, 4)}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>
+                        {c.bank_name ?? c.brand} ···· {c.last_four}
+                        {c.is_default && (
+                          <span className="caption" style={{ marginLeft: 8 }}>
+                            Principal
+                          </span>
+                        )}
+                      </div>
+                      <div className="caption">
+                        Vence {String(c.exp_month).padStart(2, '0')}/{String(c.exp_year % 100).padStart(2, '0')}
+                      </div>
+                    </div>
+                    <div className="radio" aria-hidden="true" />
+                  </button>
+                ))}
+                <button
+                  className={`method-card ${cardChoice === 'new' ? 'sel' : ''}`}
+                  onClick={() => setCardChoice('new')}
+                  role="radio"
+                  aria-checked={cardChoice === 'new'}
+                >
+                  <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
+                    ➕
                   </div>
-                </div>
-                <div className="radio" aria-hidden="true" />
-              </button>
-            ) : (
-              <button
-                className={`method-card ${payType === 'card' ? 'sel' : ''}`}
-                onClick={() => setPayType('card')}
-                role="radio"
-                aria-checked={payType === 'card'}
-              >
-                <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
-                  💳
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>Tarjeta de crédito o débito</div>
-                  <div className="caption">
-                    {IS_MOCK ? 'La ingresás al confirmar (segura, vía Stripe)' : 'Ingresá los datos abajo (seguro, vía Stripe)'}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>Usar otra tarjeta</div>
                   </div>
-                </div>
-                <div className="radio" aria-hidden="true" />
-              </button>
+                  <div className="radio" aria-hidden="true" />
+                </button>
+              </div>
             )}
-            {/* Real + tarjeta sin una guardada: campo de tarjeta inline. Los
-                datos van directo a Stripe; PayMe nunca ve el número. */}
-            {!IS_MOCK && !IS_DEMO && payType === 'card' && !pm && (
+            {/* Tarjeta nueva: Elements en real; en mock no se pide número. */}
+            {!IS_DEMO && payType === 'card' && (cards.length === 0 || cardChoice === 'new') && (
               <div style={{ margin: '2px 0 10px' }}>
-                <CardField onReady={setCardEl} onChange={setCardState} />
-                {cardState.error && (
-                  <div className="caption" style={{ color: 'var(--red)' }} role="alert">
-                    {cardState.error}
-                  </div>
+                {!IS_MOCK && (
+                  <>
+                    <CardField onReady={setCardEl} onChange={handleCardChange} />
+                    {cardState.error && (
+                      <div className="caption" style={{ color: 'var(--red)' }} role="alert">
+                        {cardState.error}
+                      </div>
+                    )}
+                  </>
+                )}
+                {!isGuest && (
+                  <label
+                    className="caption"
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={saveCard}
+                      onChange={(e) => setSaveCard(e.target.checked)}
+                    />
+                    Guardar esta tarjeta para la próxima
+                  </label>
                 )}
               </div>
             )}
             {/* Modo demo (?demo=1): tarjeta de test, sin iframe de Stripe. */}
-            {!IS_MOCK && IS_DEMO && payType === 'card' && !pm && (
+            {!IS_MOCK && IS_DEMO && payType === 'card' && (
               <div className="caption" style={{ margin: '2px 0 10px' }}>
                 💳 Tarjeta de prueba ···· 4242 (demo)
               </div>
@@ -658,7 +735,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           <button
             className="btn btn-primary"
             onClick={doPay}
-            disabled={busy || gross === 0 || (!IS_MOCK && !IS_DEMO && payType === 'card' && !pm && !cardState.complete)}
+            disabled={
+              busy ||
+              gross === 0 ||
+              (!IS_MOCK &&
+                !IS_DEMO &&
+                payType === 'card' &&
+                (cards.length === 0 || cardChoice === 'new') &&
+                !cardState.complete)
+            }
           >
             {busy ? 'Procesando…' : `Pagar ${formatMXN(gross)}`}
           </button>

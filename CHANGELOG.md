@@ -1,5 +1,46 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.12.0 — D4: tarjeta guardada, conectado al contrato v2.16 publicado (2026-07-22)
+
+Primera decisión del roadmap ratificado (acta 2026-07-22). Durante la
+implementación mock-first el backend PUBLICÓ D4 (v2.16.0, verificado en el
+repo hermano y en `/health` del vivo), con una forma más rica que el texto del
+acta — y el contrato publicado manda: `GET /payment-methods` conserva `id`
+(uuid) + `last_four`/`bank_name`/`type`/`display` y AGREGA
+`stripe_payment_method_id` (pm_…); la garantía acepta **`payment_method_id`
+(uuid) para tarjeta guardada**; `save_payment_method` (default false) guarda
+la tarjeta tipeada. Cierra G-04/G-05 y disuelve G-06.
+
+- **Selector de tarjetas guardadas en la garantía** (`CreateMesaFlow`): banco +
+  ····últimos 4 + vencimiento + badge "Principal" (la principal viene
+  preseleccionada). Elegir una guardada saltea Stripe Elements (sin re-tipeo,
+  viaja su uuid como `payment_method_id`) y mantiene el 3DS
+  (`requires_action`); "➕ Usar otra tarjeta" abre Elements con el checkbox
+  **"Guardar esta tarjeta para la próxima"** (ratificado: prendido por
+  defecto → `save_payment_method: true`).
+- **El mismo selector en el pago** (`MesaScreen`). El invitado sin cuenta
+  sigue igual que hoy (Elements, sin checkbox). Modo demo `?demo=1` intocado.
+- **Cuenta → Tarjetas y Topup**: sin cambios visibles (el contrato conservó
+  banco/tipo); el alta de Cuenta sigue vía setup-intent. En la garantía se
+  quitó el bootstrap de setup-intent de v2.14: desde v2.16 el cliente Stripe
+  se crea solo (confirmado por el aviso de publicación y verificado en vivo).
+- **Mock** espejando v2.16: seed con dos tarjetas (uuid + pm_), reuso por
+  `payment_method_id`, `save_payment_method` honrado — en la garantía la
+  tarjeta se guarda RECIÉN al confirmar el 3DS (como el backend, que guarda en
+  el webhook del hold): cancelar el 3DS no deja tarjetas fantasma.
+- **Robustez del Card Element** (hallazgos de la review adversaria del diff):
+  al desmontar, `CardField` resetea el estado del padre (antes un
+  `complete: true` colgado dejaba el botón habilitado con el iframe nuevo
+  vacío) y expone `empty`, con lo que la carga tardía de tarjetas ya no pisa
+  la selección si el usuario está tipeando una nueva. Fix también del alta
+  mock repetida en Cuenta (id fijo → no-op silencioso con éxito falso).
+- **contract-mirror refrescado a v2.16.0**: `schemas/index.js`,
+  `routes/mesas.js`, `routes/payment-methods.js`, `routes/webhooks.js`,
+  `docs/settlement.js.ref`. (En v2.15.0/D6 el espejo quedó byte-idéntico: el
+  calendario de México vive en el outbox app→dashboard, fuera del contrato del
+  comensal.)
+- **GAPS.md**: G-04, G-05 y G-06 → RESUELTOS por la publicación v2.16.0.
+
 ## 0.11.1 — Modo demo: simular tarjeta (sin iframe de Stripe) (2026-07-22)
 
 Extiende el modo demo (`?demo=1`) para que la grabación en navegador
