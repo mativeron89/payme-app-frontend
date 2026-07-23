@@ -168,7 +168,7 @@ export function GroupsScreen() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{g.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
+                  <div className="caption">
                     {g.member_count} {g.member_count === 1 ? 'miembro' : 'miembros'}
                   </div>
                 </div>

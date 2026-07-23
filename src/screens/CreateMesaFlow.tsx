@@ -387,7 +387,7 @@ export function CreateMesaFlow() {
           <div className="card" style={{ margin: 12 }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--gray-l)' }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Detalle</div>
-              <div style={{ fontSize: 11, color: 'var(--gray-d)', marginTop: 2, fontFamily: 'var(--font-body)' }}>
+              <div className="caption" style={{ marginTop: 2 }}>
                 {ocr.items.length} consumos · {formatMXN(total)}
               </div>
             </div>

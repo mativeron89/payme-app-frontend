@@ -92,7 +92,7 @@ export function AvisosScreen() {
                     <div style={{ fontSize: 14, fontWeight: 700 }}>
                       {inv.inviter_first_name} te invitó a {inv.restaurant_name}
                     </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
+                    <div className="caption">
                       Mesa {inv.mesa_code} · {relTime(inv.created_at)}
                     </div>
                   </div>
@@ -130,7 +130,7 @@ export function AvisosScreen() {
                 <div style={{ fontSize: 13.5, fontWeight: n.read_at ? 500 : 700, fontFamily: 'var(--font-body)', color: 'var(--navy)' }}>
                   {n.body}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--gray-d)', marginTop: 2, fontFamily: 'var(--font-body)' }}>
+                <div className="caption" style={{ marginTop: 2 }}>
                   {relTime(n.created_at)}
                 </div>
               </div>

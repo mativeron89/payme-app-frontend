@@ -149,19 +149,19 @@ export function CuentaScreen() {
                 <div style={{ display: 'flex', gap: 8, textAlign: 'center' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 17, fontWeight: 800 }}>{formatMXN(stats.month.spent_cents)}</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>gastado</div>
+                    <div className="caption">gastado</div>
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 17, fontWeight: 800 }}>{stats.month.visits}</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>salidas</div>
+                    <div className="caption">salidas</div>
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 17, fontWeight: 800 }}>{formatMXN(stats.month.avg_per_visit_cents)}</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>promedio</div>
+                    <div className="caption">promedio</div>
                   </div>
                 </div>
                 {stats.top_restaurants[0] && (
-                  <div style={{ fontSize: 11.5, color: 'var(--gray-d)', marginTop: 10, fontFamily: 'var(--font-body)', textAlign: 'center' }}>
+                  <div className="caption" style={{ marginTop: 10, textAlign: 'center' }}>
                     Tu favorito: <b style={{ color: 'var(--navy)' }}>{stats.top_restaurants[0].name}</b> ({stats.top_restaurants[0].visits} visitas)
                   </div>
                 )}
@@ -220,7 +220,7 @@ export function CuentaScreen() {
                 <div className="cc visa">{pm.brand === 'visa' ? 'VISA' : pm.brand.toUpperCase().slice(0, 4)}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>{pm.bank_name ?? pm.brand}</div>
-                  <div style={{ fontSize: 11, color: 'var(--gray-d)', fontFamily: 'monospace' }}>
+                  <div style={{ fontSize: 11, color: 'var(--gray-txt)', fontFamily: 'monospace' }}>
                     ···· {pm.last_four} · {pm.type === 'credit' ? 'Crédito' : 'Débito'}
                   </div>
                 </div>

@@ -38,7 +38,13 @@ export function CardField({ onReady, onChange }: Props) {
       try {
         const stripe = await getStripe();
         if (cancelled || !stripe || !holder.current) return;
-        const elements = stripe.elements();
+        // T-D1: el iframe de Stripe no hereda las fuentes de la página — hay
+        // que pasárselas acá o el `fontFamily` de abajo cae al sans del sistema.
+        const elements = stripe.elements({
+          fonts: [
+            { cssSrc: 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap' },
+          ],
+        });
         card = elements.create('card', {
           hidePostalCode: true,
           style: {

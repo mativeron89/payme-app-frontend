@@ -78,10 +78,10 @@ export function TopupScreen() {
             </div>
           </div>
           <div className="voucher">
-            <div style={{ fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>Referencia OXXO</div>
+            <div className="caption">Referencia OXXO</div>
             <div className="num">{voucher.voucher_reference}</div>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{formatMXN(voucher.amount_cents)}</div>
-            <div style={{ fontSize: 11, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
+            <div className="caption">
               Vence el {new Date(voucher.voucher_expires_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })} ·
               mostrá este número en caja
             </div>
@@ -119,7 +119,7 @@ export function TopupScreen() {
                 aria-label="Monto a cargar"
               />
             </div>
-            <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--gray-d)', margin: '4px 0 16px', fontFamily: 'var(--font-body)' }}>
+            <div className="caption" style={{ textAlign: 'center', margin: '4px 0 16px' }}>
               Monto a cargar (mín. $50, máx. $10,000)
             </div>
           </>
@@ -156,7 +156,7 @@ export function TopupScreen() {
                 <div style={{ fontWeight: 700, fontSize: 14 }}>
                   {pm.bank_name ?? pm.brand} ···· {pm.last_four}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
+                <div className="caption">
                   Se acredita al instante
                 </div>
               </div>
@@ -170,11 +170,11 @@ export function TopupScreen() {
           <>
             {clabe ? (
               <div className="voucher spei">
-                <div style={{ fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
+                <div className="caption">
                   Tu CLABE PayMe ({clabe.banco})
                 </div>
                 <div className="num">{clabe.clabe}</div>
-                <div style={{ fontSize: 11, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>
+                <div className="caption">
                   Beneficiario: {clabe.beneficiario}
                 </div>
                 <button

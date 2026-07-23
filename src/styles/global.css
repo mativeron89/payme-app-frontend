@@ -33,7 +33,9 @@
   --radius: 16px;
   --radius-sm: 10px;
   --shadow-sm: 0 2px 8px rgba(15, 31, 61, 0.08);
-  --font-display: 'Syne', 'DM Sans', sans-serif;
+  /* T-D1 (Mati eligió la opción C, 2026-07-22): Plus Jakarta Sans reemplaza a
+     Syne en display; el cuerpo sigue en DM Sans. */
+  --font-display: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
   --font-body: 'DM Sans', sans-serif;
 }
 
@@ -145,7 +147,7 @@ body {
   letter-spacing: 0.6px;
   margin-bottom: 8px;
 }
-/* Texto de apoyo chico. Va en la fuente de CUERPO: la display (Syne) a 10-11px
+/* Texto de apoyo chico. Va en la fuente de CUERPO: la display a 10-11px
    se lee mal y quedaba inconsistente entre pantallas. */
 .caption {
   font-size: 11.5px;

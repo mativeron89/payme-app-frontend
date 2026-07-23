@@ -137,7 +137,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
             aria-label="Monto a transferir"
           />
         </div>
-        <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--gray-d)', margin: '4px 0 12px', fontFamily: 'var(--font-body)' }}>
+        <div className="caption" style={{ textAlign: 'center', margin: '4px 0 12px' }}>
           {balance ? `Tu saldo: ${formatMXN(balance.balance_cents)}` : ' '}
         </div>
         <input className="input" placeholder="Concepto (opcional)" value={concept} onChange={(e) => setConcept(e.target.value)} maxLength={200} />

@@ -19,7 +19,7 @@ export function PerfilScreen() {
             {user ? `${user.first_name} ${user.last_name}` : 'Tu cuenta'}
           </div>
           {user && (
-            <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-d)' }}>
+            <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-txt)' }}>
               {user.payme_id}
             </div>
           )}
@@ -35,7 +35,7 @@ export function PerfilScreen() {
               <span>📧</span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Email</div>
-                <div style={{ fontSize: 12, color: 'var(--gray-d)', fontFamily: 'var(--font-body)' }}>{user.email}</div>
+                <div className="caption">{user.email}</div>
               </div>
             </div>
           )}

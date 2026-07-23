@@ -1,5 +1,22 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.13.0 — T-D1: tipografía nueva + texto de apoyo unificado (2026-07-22)
+
+Primer tier del carril de diseño (ratificado 2026-07-22; Mati eligió la
+opción C del comparador de fuentes).
+
+- **Plus Jakarta Sans reemplaza a Syne** como fuente display (títulos, montos,
+  botones); el cuerpo sigue en DM Sans. Cambio en `index.html` (Google Fonts)
+  y `--font-display` (`global.css`) — se propaga solo a toda la app.
+- **El campo de tarjeta de Stripe ahora carga DM Sans de verdad**: el iframe
+  no hereda las fuentes de la página y `stripe.elements()` no recibía la
+  opción `fonts`, así que caía al sans del sistema desde T7.
+- **Texto de apoyo unificado**: 16 captions armados a mano con
+  `fontSize 10.5–12 + var(--gray-d)` en 7 pantallas pasan a la clase
+  `.caption` existente (11.5px, `--gray-txt`); los 2 de monospace (CLABE,
+  dígitos de tarjeta) conservan su familia pero adoptan el mismo gris. Se
+  acaba la convivencia de dos grises para el mismo rol.
+
 ## 0.12.0 — D4: tarjeta guardada, conectado al contrato v2.16 publicado (2026-07-22)
 
 Primera decisión del roadmap ratificado (acta 2026-07-22). Durante la
