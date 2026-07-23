@@ -5,12 +5,12 @@ import { HttpError } from '../api/http';
 import { MockApiError } from '../api/mock/mockApi';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
-import type { CreateMesaResponse, OcrResponse, PaymentMethod } from '../api/types';
+import type { CreateMesaResponse, PaymentMethod } from '../api/types';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
-import { splitEqual } from '../utils/money';
+import { centsToString, splitEqual, stringToCents } from '../utils/money';
 
 /**
  * Wizard del organizador (T2): scan → ticket → división → GARANTÍA (A-1,
@@ -19,6 +19,25 @@ import { splitEqual } from '../utils/money';
  */
 
 type Step = 'scan' | 'ticket' | 'division' | 'garantia' | 'threeds' | 'share';
+
+/**
+ * D5: fila EDITABLE del ticket. El precio vive como string en pesos mientras
+ * se tipea; a centavos enteros recién al calcular (sin floats).
+ */
+interface EditItem {
+  name: string;
+  priceStr: string;
+  quantity: number;
+  category?: string;
+}
+
+function priceCentsOf(it: EditItem): number {
+  try {
+    return stringToCents(it.priceStr || '0');
+  } catch {
+    return 0;
+  }
+}
 
 function extractError(err: unknown): { code: string; extra: Record<string, unknown> } {
   if (err instanceof MockApiError) return { code: err.message, extra: err.extra };
@@ -54,7 +73,8 @@ export function CreateMesaFlow() {
   const toast = useToast();
   const [step, setStep] = useState<Step>('scan');
   const [scanning, setScanning] = useState(false);
-  const [ocr, setOcr] = useState<OcrResponse | null>(null);
+  const [editItems, setEditItems] = useState<EditItem[]>([]);
+  const [scanFailed, setScanFailed] = useState(false);
   const [division, setDivision] = useState<'consumo' | 'igual'>('consumo');
   const [participants, setParticipants] = useState(4);
   const [method, setMethod] = useState<'card' | 'wallet'>('card');
@@ -96,7 +116,32 @@ export function CreateMesaFlow() {
         category: 'other',
         address: '',
       };
-  const total = ocr?.total_cents ?? 0;
+  // D5: el total SIEMPRE sale de lo que el usuario ve/editó — guardarraíl:
+  // si el total está mal, la división está mal.
+  const total = editItems.reduce((s, i) => s + priceCentsOf(i) * i.quantity, 0);
+  const ticketValid =
+    editItems.length > 0 &&
+    editItems.every((i) => i.name.trim().length > 0 && priceCentsOf(i) > 0 && i.quantity >= 1);
+  const ticketInvalidReason =
+    editItems.length === 0
+      ? 'Agregá al menos un consumo.'
+      : 'Completá nombre y precio (mayor a cero) de cada consumo.';
+
+  function updateItem(idx: number, patch: Partial<EditItem>) {
+    setEditItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  }
+  function removeItem(idx: number) {
+    setEditItems((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function addItem() {
+    setEditItems((prev) => [...prev, { name: '', priceStr: '', quantity: 1 }]);
+  }
+  /** D5: camino manual — misma pantalla editable, arrancando vacía. */
+  function startManual() {
+    setEditItems([{ name: '', priceStr: '', quantity: 1 }]);
+    setScanFailed(false);
+    setStep('ticket');
+  }
 
   /**
    * Demo: el mock devuelve el ticket de ejemplo sin foto.
@@ -131,10 +176,19 @@ export function CreateMesaFlow() {
     setError(null);
     try {
       const r = await api.scanTicket(image);
-      setOcr(r);
+      setEditItems(
+        r.items.map((i) => ({
+          name: i.name,
+          priceStr: centsToString(i.price_cents),
+          quantity: i.quantity,
+          ...(i.category && { category: i.category }),
+        })),
+      );
+      setScanFailed(false);
       setStep('ticket');
     } catch {
-      toast('No pudimos leer el ticket. Probá sacar la foto de nuevo.');
+      setScanFailed(true);
+      toast('No pudimos leer el ticket. Probá de nuevo o cargalo a mano.');
     } finally {
       setScanning(false);
     }
@@ -156,7 +210,7 @@ export function CreateMesaFlow() {
   }
 
   async function createMesa() {
-    if (!ocr) return;
+    if (!ticketValid) return;
     setBusy(true);
     setError(null);
     try {
@@ -215,9 +269,9 @@ export function CreateMesaFlow() {
         ...(stripePmId && { stripe_payment_method_id: stripePmId }),
         ...(savedPmId && { payment_method_id: savedPmId }),
         ...(savingNewCard && { save_payment_method: true }),
-        items: ocr.items.map((i) => ({
-          name: i.name,
-          price_cents: i.price_cents,
+        items: editItems.map((i) => ({
+          name: i.name.trim(),
+          price_cents: priceCentsOf(i),
           quantity: i.quantity,
           ...(i.category && { category: i.category }),
         })),
@@ -355,13 +409,27 @@ export function CreateMesaFlow() {
           >
             {scanning ? 'Leyendo ticket…' : IS_DEMO ? '🧾 Usar ticket de ejemplo' : '📸 Capturar'}
           </button>
+          {scanFailed && (
+            <div className="note note-orange" style={{ marginTop: 12 }}>
+              No pudimos leer la foto. Probá de nuevo con más luz, o cargá el ticket a mano.
+            </div>
+          )}
+          {/* D5: camino manual — siempre disponible, discreto. */}
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ marginTop: scanFailed ? 8 : 12 }}
+            onClick={startManual}
+            disabled={scanning}
+          >
+            ✍️ Cargar el ticket a mano
+          </button>
         </div>
       </div>
     );
   }
 
   // ─── Paso 2: ticket ──────────────────────────────────────
-  if (step === 'ticket' && ocr) {
+  if (step === 'ticket') {
     return (
       <div className="screen">
         <div className="top-bar" style={{ background: 'var(--navy)' }}>
@@ -388,22 +456,86 @@ export function CreateMesaFlow() {
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--gray-l)' }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Detalle</div>
               <div className="caption" style={{ marginTop: 2 }}>
-                {ocr.items.length} consumos · {formatMXN(total)}
+                {editItems.length} consumo{editItems.length === 1 ? '' : 's'} · {formatMXN(total)} ·
+                corregí lo que haga falta antes de dividir
               </div>
             </div>
-            {ocr.items.map((i, idx) => (
-              <div key={idx} className="item-row" style={{ cursor: 'default' }}>
-                <div className="item-name">
-                  {i.name}
-                  {i.quantity > 1 ? ` × ${i.quantity}` : ''}
+            {/* D5: cada consumo es editable — nombre, precio, cantidad, quitar. */}
+            {editItems.map((it, idx) => (
+              <div key={idx} style={{ padding: '10px 16px', borderBottom: '1px solid var(--gray-l)' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    className="input"
+                    style={{ flex: 1, padding: '9px 10px', fontSize: 14 }}
+                    value={it.name}
+                    placeholder="Consumo"
+                    onChange={(e) => updateItem(idx, { name: e.target.value })}
+                    aria-label={`Nombre del consumo ${idx + 1}`}
+                  />
+                  <button
+                    className="back-btn"
+                    style={{ width: 30, height: 30, fontSize: 13, flex: 'none' }}
+                    onClick={() => removeItem(idx)}
+                    aria-label={`Quitar ${it.name || `consumo ${idx + 1}`}`}
+                  >
+                    ✕
+                  </button>
                 </div>
-                <div className="item-price">{formatMXN(i.price_cents * i.quantity)}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                  <span style={{ fontWeight: 700 }}>$</span>
+                  <input
+                    className="input"
+                    style={{ width: 92, padding: '9px 10px', fontSize: 14 }}
+                    inputMode="decimal"
+                    value={it.priceStr}
+                    placeholder="0.00"
+                    onChange={(e) => updateItem(idx, { priceStr: e.target.value.replace(/[^0-9.]/g, '') })}
+                    aria-label={`Precio del consumo ${idx + 1}`}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                    <button
+                      className="back-btn"
+                      style={{ width: 30, height: 30, fontSize: 15 }}
+                      onClick={() => updateItem(idx, { quantity: Math.max(1, it.quantity - 1) })}
+                      aria-label={`Menos cantidad de ${it.name || `consumo ${idx + 1}`}`}
+                    >
+                      −
+                    </button>
+                    <span style={{ minWidth: 22, textAlign: 'center', fontWeight: 700 }}>{it.quantity}</span>
+                    <button
+                      className="back-btn"
+                      style={{ width: 30, height: 30, fontSize: 15 }}
+                      onClick={() => updateItem(idx, { quantity: it.quantity + 1 })}
+                      aria-label={`Más cantidad de ${it.name || `consumo ${idx + 1}`}`}
+                    >
+                      ＋
+                    </button>
+                  </div>
+                  <div
+                    className="caption"
+                    style={{ minWidth: 64, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {formatMXN(priceCentsOf(it) * it.quantity)}
+                  </div>
+                </div>
               </div>
             ))}
+            <button
+              className="btn btn-ghost"
+              style={{ margin: '10px 16px 14px', width: 'auto', fontSize: 13.5 }}
+              onClick={addItem}
+            >
+              ➕ Agregar consumo
+            </button>
           </div>
         </div>
         <div className="action-bar">
-          <button className="btn btn-primary" onClick={() => setStep('division')}>
+          {!ticketValid && (
+            <div className="caption" style={{ textAlign: 'center', marginBottom: 8 }}>
+              {ticketInvalidReason}
+            </div>
+          )}
+          <button className="btn btn-primary" onClick={() => setStep('division')} disabled={!ticketValid}>
             Continuar → dividir
           </button>
         </div>

@@ -1,5 +1,28 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.18.0 — D5 (front): revisá y corregí el ticket antes de dividir (2026-07-23)
+
+Cierra la última decisión del roadmap D4–D7 del lado del front. Guardarraíl
+del acta: si el total está mal, la división está mal. Sin cambios de contrato:
+`POST /mesas` ya acepta los ítems que mande el cliente (validado: suma ==
+total; probado en vivo con payloads arbitrarios en los e2e de D4/D7).
+
+- **El paso "Ticket" es EDITABLE**: cada consumo tiene nombre, precio (pesos,
+  teclado numérico), cantidad con stepper − n ＋ y botón quitar. "➕ Agregar
+  consumo" suma filas (lo que el OCR se comió). El total del header se
+  recalcula en vivo (centavos enteros, `stringToCents`) y ES el que viaja al
+  backend.
+- **"Continuar → dividir" se bloquea** con motivo visible si no hay consumos
+  o si alguna fila está incompleta (sin nombre / precio en cero).
+- **Camino manual**: link discreto "✍️ Cargar el ticket a mano" en la
+  pantalla de escaneo (misma pantalla editable, vacía) + nota con la opción
+  cuando la foto falla.
+- Escanear sigue siendo el camino feliz de un toque; `?demo=1` intacto (el
+  ticket de ejemplo llega editable pero "Continuar" sigue siendo un tap).
+- Verificado en mock: editar precio (total $840→$895), borrar ítem y agregar
+  "Postre ×2" ($875), fila inválida bloquea, manual → división parte del
+  total corregido ($400 ÷ 4 = $100).
+
 ## 0.17.0 — D7: propina por comensal, base partes-iguales (2026-07-23)
 
 Consume el contrato v2.17.0 publicado (verificado en repo hermano y en el
