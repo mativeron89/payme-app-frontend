@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, IS_DEMO } from '../api';
 import type { OpenMesasResponse, PendingInvitation } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { useToast } from '../components/ui';
 import { navigate } from '../router';
 import { displayName } from '../utils/identity';
 
@@ -13,9 +14,29 @@ import { displayName } from '../utils/identity';
  */
 export function HomeScreen() {
   const { session } = useAuth();
+  const toast = useToast();
   const [openMesas, setOpenMesas] = useState<OpenMesasResponse | null>(null);
   const [unread, setUnread] = useState(0);
   const [invitation, setInvitation] = useState<PendingInvitation | null>(null);
+  const [accepting, setAccepting] = useState(false);
+
+  /**
+   * R-04: el banner decía "tocá para aceptar" pero mandaba a Avisos, donde
+   * había que tocar OTRA vez. Ahora cumple la promesa: acepta y te deja
+   * adentro de la mesa.
+   */
+  async function acceptFromBanner() {
+    if (!invitation || accepting) return;
+    setAccepting(true);
+    try {
+      await api.acceptInvitation(invitation.id);
+      toast('Te sumaste a la mesa ✓');
+      navigate('mesa', invitation.mesa_code);
+    } catch {
+      toast('No pudimos aceptar la invitación');
+      setAccepting(false);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -63,7 +84,8 @@ export function HomeScreen() {
         {invitation && (
           <button
             className="home-card"
-            onClick={() => navigate('avisos')}
+            onClick={() => void acceptFromBanner()}
+            disabled={accepting}
             style={{ background: 'var(--teal-l)', border: '1.5px solid var(--teal)' }}
           >
             <div className="home-card-icon" style={{ background: '#fff' }} aria-hidden="true">
@@ -74,7 +96,7 @@ export function HomeScreen() {
                 {invitation.inviter_first_name} te invitó a {invitation.restaurant_name}
               </div>
               <div className="home-card-sub" style={{ color: 'var(--gray-d)' }}>
-                Mesa {invitation.mesa_code} · tocá para aceptar
+                {accepting ? 'Sumándote a la mesa…' : `Mesa ${invitation.mesa_code} · tocá para aceptar`}
               </div>
             </div>
           </button>

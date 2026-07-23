@@ -3,7 +3,7 @@ import { api, newIdempotencyKey } from '../api';
 import { extractApiError } from '../api/errors';
 import type { BalanceResponse, Friend } from '../api/types';
 import { Avatar, TopBar, useToast } from '../components/ui';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { stringToCents } from '../utils/money';
 
@@ -83,7 +83,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
 
   return (
     <div className="screen">
-      <TopBar title="Transferir" onBack={() => navigate('home')} />
+      <TopBar title="Transferir" onBack={() => goBack('cuenta')} />
       <div className="scroll" style={{ padding: 16 }}>
         <div className="sectlabel">Para</div>
         {!to && (

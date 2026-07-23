@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, newIdempotencyKey } from '../api';
 import type { ClabeResponse, PaymentMethod, TopupOxxoResponse } from '../api/types';
 import { TopBar, useToast } from '../components/ui';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { stringToCents } from '../utils/money';
 
@@ -102,7 +102,7 @@ export function TopupScreen() {
 
   return (
     <div className="screen">
-      <TopBar title="Cargar saldo" onBack={() => navigate('home')} />
+      <TopBar title="Cargar saldo" onBack={() => goBack('cuenta')} />
       <div className="scroll" style={{ padding: 16 }}>
         {via !== 'spei' && (
           <>

@@ -58,9 +58,30 @@ export function parseHash(hash: string): Route {
   return { page: page as PageId, param: paramRaw ? decodeURIComponent(paramRaw) : null, query };
 }
 
+// Navegaciones hechas DENTRO de la app: goBack() vuelve por el historial real
+// del navegador (cada cambio de hash crea una entrada), pero si la pantalla se
+// abrió directo (deep link, refresh) no hay adónde volver → cae al fallback.
+let internalNavs = 0;
+
 export function navigate(page: PageId, param?: string): void {
   const suffix = param ? `/${encodeURIComponent(param)}` : '';
-  window.location.hash = `#/${page}${suffix}`;
+  const next = `#/${page}${suffix}`;
+  if (window.location.hash !== next) internalNavs += 1;
+  window.location.hash = next;
+}
+
+/**
+ * Volver RESPETANDO de dónde viniste (R-08: los back hardcodeados mandaban a
+ * un hub fijo aunque hubieras entrado desde otra pantalla). `fallback` es la
+ * pantalla "contenedora" natural si no hay historial propio.
+ */
+export function goBack(fallback: PageId, fallbackParam?: string): void {
+  if (internalNavs > 0) {
+    internalNavs -= 1;
+    window.history.back();
+  } else {
+    navigate(fallback, fallbackParam);
+  }
 }
 
 export function useRoute(): Route {

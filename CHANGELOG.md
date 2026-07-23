@@ -1,5 +1,24 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.15.0 — T-D2: volver con memoria + el banner cumple su promesa (2026-07-23)
+
+Cierre de las podas de navegación del inventario de diseño (R-04, R-08, R-11):
+
+- **`goBack(fallback)` en el router**: los "volver" de Transferir, Cargar y
+  Mesa ahora respetan DE DÓNDE viniste (historial real del navegador; si la
+  pantalla se abrió directa —deep link/refresh— cae a su contenedora
+  natural). Antes: entrabas a Cargar desde Cuenta y "volver" te tiraba al
+  home (R-08).
+- **El detalle de mesa vuelve SIEMPRE a Mesas** (viva o cerrada), su
+  contenedora natural ahora que tiene historial; los botones "🏠 Inicio"
+  quedan como salto directo post-pago (R-11). El invitado sin cuenta sigue
+  sin back del header.
+- **El banner de invitación del home acepta DIRECTO**: decía "tocá para
+  aceptar" pero mandaba a Avisos, donde había que tocar otra vez. Ahora
+  acepta y te deja adentro de la mesa ("Sumándote a la mesa…" mientras
+  procesa; si falla, avisa y no navega) (R-04). La campana de Avisos sigue
+  como acceso a la lista completa.
+
 ## 0.14.0 — Home v2 + pantalla Mesas con historial (2026-07-22)
 
 Decisiones de producto de Mati (ratificadas 2026-07-22):

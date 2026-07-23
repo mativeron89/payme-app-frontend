@@ -7,7 +7,7 @@ import { CardField, type CardFieldState } from '../components/CardField';
 import type { MesaDetail, PaymentMethod, PaymentType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { TopBar, useToast } from '../components/ui';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
 import { countdownTo, formatMXN } from '../utils/format';
 
 /**
@@ -274,7 +274,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   if (notFound) {
     return (
       <div className="screen">
-        <TopBar title="Mesa" onBack={isGuest ? undefined : () => navigate('home')} />
+        <TopBar title="Mesa" onBack={isGuest ? undefined : () => goBack('mesas')} />
         <div className="empty">
           <div className="emoji">🔍</div>
           No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la
@@ -293,7 +293,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   if (!mesa) {
     return (
       <div className="screen">
-        <TopBar title="Mesa" onBack={isGuest ? undefined : () => navigate('home')} />
+        <TopBar title="Mesa" onBack={isGuest ? undefined : () => goBack('mesas')} />
         <div className="loading" role="status" aria-live="polite">
           Cargando mesa…
         </div>
@@ -791,8 +791,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         {!isGuest && (
           <button
             className="back-btn"
-            onClick={() => navigate('home')}
-            aria-label="Volver al inicio"
+            onClick={() => goBack('mesas')}
+            aria-label="Volver"
             style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
           >
             <span aria-hidden="true">←</span>
