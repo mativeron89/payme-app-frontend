@@ -9,6 +9,7 @@ import { useAuth } from '../auth/AuthContext';
 import { TopBar, useToast } from '../components/ui';
 import { goBack, navigate } from '../router';
 import { countdownTo, formatMXN } from '../utils/format';
+import { stringToCents, tipFromBps } from '../utils/money';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -41,6 +42,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lockTokens, setLockTokens] = useState<string[]>([]);
   const [tipPct, setTipPct] = useState(15);
+  // D7: 'pct' manda tip_bps (computa el server); 'custom' manda tip_cents.
+  const [tipMode, setTipMode] = useState<'pct' | 'custom'>('pct');
+  const [customTipStr, setCustomTipStr] = useState('');
   const [staffId, setStaffId] = useState<string | null>(null);
   const [payType, setPayType] = useState<PaymentType>('card');
   // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
@@ -108,7 +112,20 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       .reduce((s, i) => s + i.price_cents * i.quantity, 0);
   }, [mesa, selected]);
 
-  const tipCents = Math.round((itemsAmount * tipPct) / 100);
+  // D7 (v2.17): la propina es % de tu parte IGUALITARIA (total ÷ N), no de tu
+  // consumo. Preview con la réplica exacta de tipFromBps; el cobro real lo
+  // computa el server y el comprobante usa SU tip_cents.
+  const tipCents = (() => {
+    if (!mesa) return 0;
+    if (tipMode === 'custom') {
+      try {
+        return stringToCents(customTipStr || '0');
+      } catch {
+        return 0;
+      }
+    }
+    return tipFromBps(mesa.total_cents, mesa.expected_participants || 1, tipPct * 100);
+  })();
   const gross = itemsAmount + tipCents;
 
   function toggleItem(id: string) {
@@ -195,7 +212,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           payment_type: payType,
           item_ids: mesa.division_mode === 'consumo' ? [...selected] : [],
           ...(lockTokens.length > 0 && { lock_tokens: lockTokens }),
-          tip_cents: tipCents,
+          ...(tipMode === 'custom' ? { tip_cents: tipCents } : { tip_bps: tipPct * 100 }),
           ...(staffId && { tip_to_staff_id: staffId }),
           ...(stripePmId && { stripe_payment_method_id: stripePmId }),
           ...(savedPmId && { payment_method_id: savedPmId }),
@@ -225,7 +242,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             : `💳 ${savedCard ? `${savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··${savedCard.last_four}` : 'Tarjeta'}`;
       setResult({
         itemsAmount,
-        tip: tipCents,
+        tip: r.attempt.tip_cents ?? tipCents,
         gross: r.attempt.gross_amount_cents,
         methodLabel,
       });
@@ -548,20 +565,48 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           <div className="sectlabel" id="lbl-propina">
             Propina al mozo
           </div>
+          <div className="caption" style={{ margin: '0 2px 8px' }}>
+            Tu base: {formatMXN(mesa.tip_base_cents)} (la cuenta ÷ {mesa.expected_participants || 1})
+          </div>
           <div className="tip-row" role="radiogroup" aria-labelledby="lbl-propina">
             {TIP_OPTIONS.map((pct) => (
               <button
                 key={pct}
-                className={`tip-pill ${tipPct === pct ? 'sel' : ''}`}
-                onClick={() => setTipPct(pct)}
+                className={`tip-pill ${tipMode === 'pct' && tipPct === pct ? 'sel' : ''}`}
+                onClick={() => {
+                  setTipMode('pct');
+                  setTipPct(pct);
+                }}
                 role="radio"
-                aria-checked={tipPct === pct}
+                aria-checked={tipMode === 'pct' && tipPct === pct}
               >
                 {pct}%
               </button>
             ))}
+            <button
+              className={`tip-pill ${tipMode === 'custom' ? 'sel' : ''}`}
+              onClick={() => setTipMode('custom')}
+              role="radio"
+              aria-checked={tipMode === 'custom'}
+            >
+              Otro
+            </button>
           </div>
-          {tipPct > 0 && mesa.active_staff.length > 0 && (
+          {tipMode === 'custom' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '10px 2px 0' }}>
+              <span style={{ fontWeight: 700 }}>$</span>
+              <input
+                className="input"
+                style={{ flex: 1, padding: '10px 12px' }}
+                inputMode="decimal"
+                placeholder="0.00"
+                value={customTipStr}
+                onChange={(e) => setCustomTipStr(e.target.value.replace(/[^0-9.]/g, ''))}
+                aria-label="Monto de propina a mano"
+              />
+            </div>
+          )}
+          {tipCents > 0 && mesa.active_staff.length > 0 && (
             <>
               <div className="sectlabel" id="lbl-mozo">
                 ¿Para quién?

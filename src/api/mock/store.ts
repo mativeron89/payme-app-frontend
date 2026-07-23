@@ -635,6 +635,8 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
     total_cents: m.total_cents,
     total_display: centsToDisplay(m.total_cents),
     paid_amount_cents: m.paid_amount_cents,
+    // D7 (v2.17): misma cuenta que routes/mesas.js:271 del backend.
+    tip_base_cents: Math.round(m.total_cents / (m.expected_participants || 1)),
     tip_amount_cents: m.tip_amount_cents,
     division_mode: m.division_mode,
     expected_participants: m.expected_participants,

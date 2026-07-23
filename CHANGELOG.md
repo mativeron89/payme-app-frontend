@@ -1,5 +1,30 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.17.0 — D7: propina por comensal, base partes-iguales (2026-07-23)
+
+Consume el contrato v2.17.0 publicado (verificado en repo hermano y en el
+vivo). La propina deja de ser % de TUS consumos y pasa a ser % de tu parte
+igualitaria (total ÷ N declarados al abrir); cada comensal deja SOLO la suya.
+
+- **Picker nuevo en "Pagar mi parte"**: "Tu base: $X (la cuenta ÷ N)"
+  (`tip_base_cents` del GET), pills 0/10/15/20 % + **"Otro"** con monto a
+  mano. El % viaja como `tip_bps` (la cuenta la hace el SERVER); "Otro"
+  manda `tip_cents`. Nunca ambos (excluyentes en el contrato). Invitados:
+  mismo picker.
+- **Preview con la fórmula EXACTA del server**: `tipFromBps` replicada
+  literal en `src/utils/money.ts` (procedencia utils/money.js:107-112 del
+  backend; paridad verificada ejecutando ambas sobre 441 vectores, 0
+  diferencias). El comprobante usa el `tip_cents` que DEVUELVE el attempt
+  (fuente de verdad) con fallback a la preview.
+- "¿Para quién?" ahora se gatea con el tip efectivo (también aparece con
+  monto a mano, no solo con %).
+- **Mock espejando v2.17**: `tip_base_cents` en el detalle, `tip_bps`
+  computado con la misma réplica, exclusividad 400, `tip_cents` en el
+  attempt.
+- **E2E real contra Railway v2.17**: base=7375 en GET ✓, ambos campos → 400
+  ✓, `tip_bps=1500` → attempt.tip_cents=1106 exacto ✓, `tip_cents=2500`
+  manual ✓ (ambos `succeeded`).
+
 ## 0.16.0 — T-D3a: el home del mock (FAB + barra inferior + saldo con ojito) (2026-07-23)
 
 Adopción del mock de diseño del hermano de Mati (auditoría externa), con la

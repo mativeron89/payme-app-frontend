@@ -187,6 +187,8 @@ export interface MesaDetail {
   total_display: string;
   paid_amount_cents: number;
   tip_amount_cents: number;
+  /** D7 (v2.17): base partes-iguales de la propina — round(total ÷ N). */
+  tip_base_cents: number;
   division_mode: 'consumo' | 'igual';
   expected_participants: number;
   status: MesaStatus;
@@ -256,7 +258,10 @@ export interface PayMesaRequest {
   payment_type: PaymentType;
   item_ids: string[];
   lock_tokens?: string[];
-  tip_cents: number;
+  /** D7 (v2.17): monto a mano. EXCLUYENTE con tip_bps (ambos → 400). */
+  tip_cents?: number;
+  /** D7 (v2.17): 0–10000 = 0–100% de tu parte (total ÷ N); computa el server. */
+  tip_bps?: number;
   tip_to_staff_id?: string;
   idempotency_key: string;
 }
@@ -266,6 +271,8 @@ export interface PayMesaResponse {
   attempt: {
     id: string;
     gross_amount_cents: number;
+    /** D7 (v2.17): la propina EXACTA computada por el server. */
+    tip_cents?: number;
     gross_display?: string;
     client_secret?: string;
     status: string;

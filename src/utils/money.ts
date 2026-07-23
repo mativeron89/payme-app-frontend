@@ -77,6 +77,21 @@ export function calculateFee(grossCents: number, feePct: number): number {
 }
 
 /**
+ * D7 (v2.17): propina por comensal sobre base partes-iguales.
+ * Réplica EXACTA de `tipFromBps` del backend (utils/money.js:107-112,
+ * espejado en contract-mirror) — el cobro real lo computa el SERVER; esto es
+ * solo la preview del picker de %, con el mismo redondeo.
+ */
+export function tipFromBps(totalCents: number, n: number, bps: number): number {
+  if (!Number.isInteger(totalCents) || totalCents < 0)
+    throw new Error('totalCents must be non-negative integer');
+  if (!Number.isInteger(n) || n < 1) throw new Error('n must be positive integer');
+  if (!Number.isInteger(bps) || bps < 0 || bps > 10000)
+    throw new Error('bps out of range (0-10000)');
+  return Math.round((totalCents * bps) / (n * 10000));
+}
+
+/**
  * División igualitaria entre N personas con manejo determinístico de remainder.
  * El primer comensal absorbe los centavos sobrantes.
  */

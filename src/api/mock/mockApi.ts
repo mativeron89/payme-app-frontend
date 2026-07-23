@@ -1,4 +1,4 @@
-import { centsToDisplay, splitEqual } from '../../utils/money';
+import { centsToDisplay, splitEqual, tipFromBps } from '../../utils/money';
 import { saveSession, type StoredSession } from '../storage';
 import type {
   BalanceResponse,
@@ -349,6 +349,17 @@ export async function mockPayMesa(
   if (req.payment_type === 'wallet' && identity === 'guest') {
     return fail(401, 'wallet_requires_auth');
   }
+  // D7 (v2.17): tip_bps (el server hace la cuenta sobre total ÷ N) excluyente
+  // con tip_cents (monto a mano). Misma regla y mismo redondeo que el backend.
+  if (req.tip_bps !== undefined && req.tip_cents) {
+    return fail(400, 'validation_error', {
+      message: 'tip_bps and tip_cents are mutually exclusive',
+    });
+  }
+  const tipCents =
+    req.tip_bps !== undefined
+      ? tipFromBps(mesa.total_cents, mesa.expected_participants || 1, req.tip_bps)
+      : (req.tip_cents ?? 0);
 
   let itemsAmount = 0;
   if (mesa.division_mode === 'consumo') {
@@ -370,7 +381,7 @@ export async function mockPayMesa(
     itemsAmount = slot.amount_cents;
   }
 
-  const gross = itemsAmount + req.tip_cents;
+  const gross = itemsAmount + tipCents;
 
   if (req.payment_type === 'wallet') {
     const available = availableBalance();
@@ -398,7 +409,7 @@ export async function mockPayMesa(
       }
     }
   }
-  mesa.tip_amount_cents += req.tip_cents;
+  mesa.tip_amount_cents += tipCents;
   markMesaPaid(mesa, itemsAmount);
 
   // Pantalla Mesas: cada pago propio suma una entrada al historial.
@@ -422,6 +433,7 @@ export async function mockPayMesa(
     attempt: {
       id: mockId('f'),
       gross_amount_cents: gross,
+      tip_cents: tipCents,
       gross_display: centsToDisplay(gross),
       status: req.payment_type === 'wallet' ? 'processed' : 'succeeded',
       payment_type: req.payment_type,
