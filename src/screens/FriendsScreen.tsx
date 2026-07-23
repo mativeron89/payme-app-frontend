@@ -45,10 +45,9 @@ export function FriendsScreen() {
   }
 
   return (
-    <div className="screen">
+    <div className="screen has-nav">
       <TopBar
         title="Amigos"
-        onBack={() => navigate('home')}
         right={friends ? <span className="badge badge-gray">{friends.length}</span> : undefined}
       />
       <div className="scroll">

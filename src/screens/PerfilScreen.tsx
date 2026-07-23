@@ -10,8 +10,8 @@ export function PerfilScreen() {
   const user = session?.user;
 
   return (
-    <div className="screen">
-      <TopBar title="Perfil" onBack={() => navigate('home')} />
+    <div className="screen has-nav">
+      <TopBar title="Perfil" />
       <div className="scroll" style={{ padding: 16 }}>
         <div style={{ textAlign: 'center', padding: '6px 0 18px' }}>
           <Avatar name={user ? `${user.first_name} ${user.last_name}` : 'PayMe'} size={80} />

@@ -1,29 +1,72 @@
 import { useEffect, useState } from 'react';
 import { api, IS_DEMO } from '../api';
-import type { OpenMesasResponse, PendingInvitation } from '../api/types';
+import type {
+  BalanceResponse,
+  OpenMesasResponse,
+  PendingInvitation,
+  WalletTransaction,
+} from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/ui';
 import { navigate } from '../router';
+import { countdownTo, formatMXN } from '../utils/format';
 import { displayName } from '../utils/identity';
+import { walletTxEmoji, walletTxLabel } from '../utils/labels';
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  italian: '🍝',
+  japanese: '🍣',
+  mexican: '🌮',
+  cafe: '☕',
+  other: '🍽️',
+};
+
+function txDate(iso: string): string {
+  const d = new Date(iso);
+  const diffDays = Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60_000));
+  if (diffDays === 0) return 'Hoy';
+  if (diffDays === 1) return 'Ayer';
+  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+}
 
 /**
- * Home v2 (ratificado 2026-07-22): invitación, Cuenta SIN saldo (privacidad:
- * nadie ve tu plata por mirar la pantalla), Nueva Mesa, Mesas (abiertas +
- * historial) y la fila Amigos/Grupos/Perfil. Cargar/Transferir viven SOLO
- * dentro de Cuenta. Datos reales: GET /mesas/open (el saldo ya no se pide acá).
+ * Home v3 (T-D3a, mock del hermano de Mati, ratificado 2026-07-23): header
+ * claro, tarjeta de saldo con MONTO OCULTO + ojito (opción b: privacidad de
+ * un vistazo, revelar es un tap), sección "Mesas abiertas" horizontal,
+ * "Últimos movimientos", "+ Nueva Mesa" flotante y barra inferior (en App).
+ * Los montos de los movimientos respetan el mismo ojito que el saldo.
  */
 export function HomeScreen() {
   const { session } = useAuth();
   const toast = useToast();
+  const [balance, setBalance] = useState<BalanceResponse | null>(null);
+  const [showBalance, setShowBalance] = useState(false);
   const [openMesas, setOpenMesas] = useState<OpenMesasResponse | null>(null);
+  const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
   const [unread, setUnread] = useState(0);
   const [invitation, setInvitation] = useState<PendingInvitation | null>(null);
   const [accepting, setAccepting] = useState(false);
 
+  useEffect(() => {
+    let alive = true;
+    api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
+    api.getOpenMesas().then((m) => alive && setOpenMesas(m)).catch(() => undefined);
+    api
+      .getWalletTransactions()
+      .then((r) => alive && setTxs(r.transactions.slice(0, 4)))
+      .catch(() => alive && setTxs([]));
+    api.getUnreadCount().then((r) => alive && setUnread(r.unread_count)).catch(() => undefined);
+    api
+      .getPendingInvitations()
+      .then((r) => alive && setInvitation(r.invitations[0] ?? null))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   /**
-   * R-04: el banner decía "tocá para aceptar" pero mandaba a Avisos, donde
-   * había que tocar OTRA vez. Ahora cumple la promesa: acepta y te deja
-   * adentro de la mesa.
+   * R-04: el banner acepta DIRECTO y te deja adentro de la mesa.
    */
   async function acceptFromBanner() {
     if (!invitation || accepting) return;
@@ -38,49 +81,35 @@ export function HomeScreen() {
     }
   }
 
-  useEffect(() => {
-    let alive = true;
-    api.getOpenMesas().then((m) => alive && setOpenMesas(m)).catch(() => undefined);
-    api.getUnreadCount().then((r) => alive && setUnread(r.unread_count)).catch(() => undefined);
-    api
-      .getPendingInvitations()
-      .then((r) => alive && setInvitation(r.invitations[0] ?? null))
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   // G-02: tras un login real no hay `user`; displayName cae al email tipeado.
   const firstName = displayName(session);
-  const mesasCount = openMesas?.mesas.length ?? null;
-  const hasOpen = (mesasCount ?? 0) > 0;
+  const mesas = openMesas?.mesas ?? [];
+  const masked = '$ ••••';
 
   return (
-    <div className="screen">
-      <div className="top-hero" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div className="logo">
-            Pay<span className="t">Me</span>
-          </div>
-          <div className="hero-sub">{firstName ? `Hola, ${firstName} 👋` : 'Hola 👋'}</div>
+    <div className="screen has-nav">
+      <div className="home-head">
+        <div className="logo-line">
+          Pay<span className="t">Me</span>
         </div>
+        <div className="hola">{firstName ? `Hola, ${firstName}!` : '¡Hola!'}</div>
         <button
           onClick={() => navigate('avisos')}
           aria-label={unread > 0 ? `Avisos: ${unread} sin leer` : 'Avisos'}
-          style={{ position: 'relative', background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '50%', width: 42, height: 42, fontSize: 19, cursor: 'pointer' }}
+          style={{ position: 'relative', background: 'none', border: 'none', fontSize: 21, cursor: 'pointer', padding: 4 }}
         >
           🔔
           {unread > 0 && (
             <span
-              style={{ position: 'absolute', top: -4, right: -4, background: 'var(--orange)', color: '#fff', fontSize: 11, fontWeight: 700, borderRadius: 10, minWidth: 19, height: 19, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', fontFamily: 'var(--font-body)' }}
+              style={{ position: 'absolute', top: -2, right: -4, background: 'var(--orange)', color: '#fff', fontSize: 10.5, fontWeight: 700, borderRadius: 10, minWidth: 17, height: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', fontFamily: 'var(--font-body)' }}
             >
               {unread}
             </span>
           )}
         </button>
       </div>
-      <div className="scroll" style={{ padding: '18px 16px' }}>
+
+      <div className="scroll" style={{ padding: '14px 16px' }}>
         {invitation && (
           <button
             className="home-card"
@@ -101,83 +130,130 @@ export function HomeScreen() {
             </div>
           </button>
         )}
-        {/* Tres cuadrados grandes: Nueva Mesa, Cuenta, Mesas (pedido de Mati). */}
-        <div className="home-grid">
-          <button
-            className="home-tile"
-            onClick={() => navigate('scan')}
-            style={{ background: 'linear-gradient(135deg,var(--orange),#ff8a5c)' }}
-          >
-            <div className="home-card-icon" style={{ background: 'rgba(255,255,255,0.2)' }} aria-hidden="true">
-              📷
-            </div>
-            <div className="home-card-title" style={{ color: '#fff' }}>
-              Nueva Mesa
-            </div>
-          </button>
 
-          {/* En modo demo (?demo=1) se saca del encuadre: sugiere wallet. */}
-          {!IS_DEMO && (
-            <button
-              className="home-tile"
-              onClick={() => navigate('cuenta')}
-              style={{ background: 'linear-gradient(135deg,#071A33,#12264A)' }}
-            >
-              <div className="home-card-icon" style={{ background: 'rgba(0,194,203,0.15)' }} aria-hidden="true">
-                💳
+        {/* En modo demo (?demo=1) se saca del encuadre: sugiere wallet. */}
+        {!IS_DEMO && (
+          <div className="saldo-card">
+            <div className="lbl">Tu saldo PayMe</div>
+            <div className="saldo-row">
+              <div className="saldo-amt">
+                {showBalance ? (balance ? formatMXN(balance.balance_cents) : '…') : masked}
               </div>
-              {/* Sin monto a propósito: el saldo no se muestra en el home
-                  (cualquiera que mire la pantalla lo vería). Se ve adentro. */}
-              <div className="home-card-title" style={{ color: '#fff' }}>
-                Cuenta
-              </div>
-            </button>
-          )}
-
-          <button
-            className="home-tile"
-            onClick={() => navigate('mesas')}
-            style={hasOpen ? { border: '1.5px solid var(--teal)', background: 'var(--teal-l)' } : undefined}
-          >
-            <div className="home-card-icon" style={{ background: 'var(--teal-l)' }} aria-hidden="true">
-              🍽️
-            </div>
-            <div>
-              <div className="home-card-title">Mesas</div>
-              <div
-                className="home-card-sub"
-                style={hasOpen ? { color: 'var(--teal-txt)', fontWeight: 600 } : { color: 'var(--gray-d)' }}
+              <button
+                className="eye-btn"
+                onClick={() => setShowBalance((v) => !v)}
+                aria-label={showBalance ? 'Ocultar saldo' : 'Mostrar saldo'}
+                aria-pressed={showBalance}
               >
-                {hasOpen ? (mesasCount === 1 ? '1 abierta' : `${mesasCount} abiertas`) : 'Historial'}
-              </div>
+                {showBalance ? '🙈' : '👁️'}
+              </button>
+              <button className="saldo-arrow" onClick={() => navigate('cuenta')} aria-label="Ir a Cuenta">
+                →
+              </button>
             </div>
-          </button>
-        </div>
+            <div className="saldo-actions">
+              <button className="btn btn-teal btn-sm" onClick={() => navigate('cargar')}>
+                <span aria-hidden="true">➕</span> Cargar
+              </button>
+              <button
+                className="btn btn-sm"
+                style={{ background: 'rgba(255,255,255,0.18)', color: '#fff' }}
+                onClick={() => navigate('transferir')}
+              >
+                <span aria-hidden="true">↗️</span> Transferir
+              </button>
+            </div>
+          </div>
+        )}
 
-        {/* Abajo: la fila chica de siempre. */}
-        <div className="home-grid">
-          <button className="home-tile sm" onClick={() => navigate('amigos')}>
-            <div className="home-card-icon" style={{ background: 'var(--teal-l)' }} aria-hidden="true">
-              👥
+        {mesas.length > 0 && (
+          <>
+            <div className="sect-row">
+              <div className="sect-title">Mesas abiertas ({mesas.length})</div>
+              <button className="vermas" onClick={() => navigate('mesas')}>
+                Ver más
+              </button>
             </div>
-            <div className="home-card-title">Amigos</div>
-          </button>
+            <div className="hscroll">
+              {mesas.map((m) => {
+                const cd = countdownTo(m.expires_at);
+                return (
+                  <button
+                    key={m.id}
+                    className="event-card open"
+                    style={{ background: 'var(--teal-l)', border: '1.5px solid var(--teal)' }}
+                    onClick={() => navigate('mesa', m.code)}
+                  >
+                    <div className="event-icon" aria-hidden="true">
+                      {CATEGORY_EMOJI[m.restaurant.category] ?? '🍽️'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="event-name">{m.restaurant.name}</div>
+                      <div className="event-meta">Mesa {m.code}</div>
+                      <div className="caption" style={{ marginTop: 4 }}>
+                        {formatMXN(m.paid_amount_cents)} de {formatMXN(m.total_cents)}
+                        {cd ? ` · ⏳ ${cd}` : ''}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
 
-          <button className="home-tile sm" onClick={() => navigate('grupos')}>
-            <div className="home-card-icon" style={{ background: 'var(--orange-l)' }} aria-hidden="true">
-              👨‍👩‍👧
+        {txs && txs.length > 0 && (
+          <>
+            <div className="sect-row">
+              <div className="sect-title">Últimos movimientos</div>
+              <button className="vermas" onClick={() => navigate('cuenta')}>
+                Ver más
+              </button>
             </div>
-            <div className="home-card-title">Grupos</div>
-          </button>
-
-          <button className="home-tile sm" onClick={() => navigate('perfil')}>
-            <div className="home-card-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
-              ⚙️
+            <div className="card" style={{ padding: '2px 16px' }}>
+              {txs.map((t, idx) => (
+                <div
+                  key={t.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '11px 0',
+                    borderBottom: idx < txs.length - 1 ? '1px solid var(--gray-l)' : 'none',
+                  }}
+                >
+                  <span style={{ fontSize: 17 }} aria-hidden="true">
+                    {walletTxEmoji(t.type)}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {t.description ?? walletTxLabel(t.type)}
+                    </div>
+                    <div className="caption">{txDate(t.date)}</div>
+                  </div>
+                  {/* El monto respeta el mismo ojito que el saldo. */}
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 13.5,
+                      fontVariantNumeric: 'tabular-nums',
+                      color: showBalance ? (t.sign === 'credit' ? 'var(--green)' : 'var(--red)') : 'var(--gray-txt)',
+                    }}
+                  >
+                    {showBalance
+                      ? `${t.sign === 'credit' ? '+' : '−'}${formatMXN(Math.abs(t.amount_cents))}`
+                      : masked}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="home-card-title">Perfil</div>
-          </button>
-        </div>
+          </>
+        )}
       </div>
+
+      <button className="fab" onClick={() => navigate('scan')}>
+        ➕ Nueva Mesa
+      </button>
     </div>
   );
 }

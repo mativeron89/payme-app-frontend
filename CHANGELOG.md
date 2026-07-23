@@ -1,5 +1,27 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.16.0 — T-D3a: el home del mock (FAB + barra inferior + saldo con ojito) (2026-07-23)
+
+Adopción del mock de diseño del hermano de Mati (auditoría externa), con la
+decisión de privacidad de Mati integrada (opción b ratificada):
+
+- **"+ Nueva Mesa" flotante** (píldora naranja) en el home y en Mesas: LA
+  acción de la app, siempre a un pulgar. Reemplaza al cuadrado del home.
+- **Barra inferior fija** Inicio · Amigos · Grupos · Perfil (componente
+  `BottomNav`, solo en las cuatro pantallas hub; los flujos siguen a pantalla
+  completa). Las pantallas tab pierden la flecha "atrás" y ganan aire
+  inferior (`.has-nav`). Resuelve la alcanzabilidad que marcó el inventario
+  (Perfil e íconos sociales ya no dependen del home).
+- **Home v3 por secciones**: header claro (logo + "Hola, X!" + campana),
+  banner de invitación, **tarjeta de saldo con monto OCULTO** (`$ ••••`) y
+  ojito 👁 para revelar de un tap (privacidad primero; Cargar/Transferir
+  vuelven adentro de la tarjeta, flecha → Cuenta), "Mesas abiertas (N)" en
+  carrusel horizontal con Ver más → Mesas, y "Últimos movimientos" (top 4)
+  con Ver más → Cuenta. **Los montos de los movimientos respetan el mismo
+  ojito** — sin revelar, el home no muestra ni un peso.
+- La grilla de cuadrados de 0.14 desaparece (nav + FAB + secciones la
+  reemplazan). En `?demo=1` la tarjeta de saldo sigue oculta (video YC).
+
 ## 0.15.0 — T-D2: volver con memoria + el banner cumple su promesa (2026-07-23)
 
 Cierre de las podas de navegación del inventario de diseño (R-04, R-08, R-11):

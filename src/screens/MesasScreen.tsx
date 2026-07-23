@@ -96,11 +96,6 @@ export function MesasScreen() {
           <div className="empty">
             <div className="emoji">🍽️</div>
             Todavía no pagaste ninguna mesa.
-            <div style={{ marginTop: 14 }}>
-              <button className="btn btn-primary" onClick={() => navigate('scan')}>
-                📷 Abrir una mesa
-              </button>
-            </div>
           </div>
         )}
 
@@ -212,6 +207,9 @@ export function MesasScreen() {
           </div>
         )}
       </div>
+      <button className="fab solo" onClick={() => navigate('scan')}>
+        ➕ Nueva Mesa
+      </button>
     </div>
   );
 }

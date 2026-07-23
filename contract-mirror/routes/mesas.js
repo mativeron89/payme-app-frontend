@@ -29,7 +29,7 @@ const savedCards = require('../services/savedCards');   // D4 (v2.16)
 const settlement = require('../services/settlement');
 const paymentProcessor = require('../services/paymentProcessor');
 const notifs = require('../services/notifications');
-const { centsToDisplay, sumCents, calculateFee, splitEqual } = require('../utils/money');
+const { centsToDisplay, sumCents, calculateFee, splitEqual, tipFromBps } = require('../utils/money');
 const { payloadHash, hashesMatch, PAYLOAD_KEYS } = require('../utils/idempotency');
 const { generateToken, tokenHash } = require('../utils/tokens');
 const logger = require('../utils/logger');
@@ -266,6 +266,9 @@ router.get('/:code', guestOrAuth, requireMesaParticipant, async (req, res, next)
         total_display: centsToDisplay(Number(mesa.total_cents)),
         paid_amount_cents: Number(mesa.paid_amount_cents),
         tip_amount_cents: Number(mesa.tip_amount_cents),
+        // D7 (v2.17): base partes-iguales de la propina (total ÷ N declarados),
+        // informativo para el picker de % del front. El cobro real usa tipFromBps.
+        tip_base_cents: Math.round(Number(mesa.total_cents) / (Number(mesa.expected_participants) || 1)),
         division_mode: mesa.division_mode,
         expected_participants: mesa.expected_participants,
         status: mesa.status, expires_at: mesa.expires_at,
@@ -373,6 +376,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
     const {
       payment_method_id, stripe_payment_method_id, payment_type,
       save_payment_method,                       // D4 (v2.16)
+      tip_bps,                                   // D7 (v2.17)
       item_ids, lock_tokens, tip_cents, tip_to_staff_id, idempotency_key,
     } = req.body;
 
@@ -385,6 +389,14 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
     const userId = req.user?.id || null;
     const guestTok = req.isGuest ? req.guestToken : null;
     const guestTokHash = guestHashOf(req);  // v2.5.2 P1 #2
+
+    // D7 (v2.17): propina por % — base partes-iguales (total ÷ N declarados al
+    // abrir), la cuenta la hace el SERVER (half-away-from-zero, un solo paso).
+    // Sin tip_bps rige tip_cents (el monto a mano). El schema garantiza la
+    // exclusión mutua.
+    const tipCents = tip_bps !== undefined
+      ? tipFromBps(Number(mesa.total_cents), Number(mesa.expected_participants) || 1, tip_bps)
+      : tip_cents;
 
     if (tip_to_staff_id) {
       const { rowCount: sOk } = await pool.query(
@@ -473,7 +485,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
           validatedItemsAmount = Number(slotRows[0].amount_cents);
         }
 
-        const grossAmount = sumCents(validatedItemsAmount, tip_cents);
+        const grossAmount = sumCents(validatedItemsAmount, tipCents);
         const feeAmount = calculateFee(validatedItemsAmount, Number(mesa.fee_pct || 0.02));
 
         // v2.5.2 P1 #2: payment_attempts guarda guest_token_hash (raw = NULL)
@@ -487,7 +499,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'mesa_pay','pending',$13)
            RETURNING id, gross_amount_cents`,
           [mesa.id, userId, null, guestTokHash, payment_method_id || null,
-           validatedItemsAmount, tip_cents, grossAmount,
+           validatedItemsAmount, tipCents, grossAmount,
            feeAmount, grossAmount - feeAmount,
            idempotency_key, reqHash, payment_type]
         );
@@ -532,11 +544,11 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
           );
         }
 
-        if (tip_cents > 0) {
+        if (tipCents > 0) {
           await client.query(
             `INSERT INTO tip_distributions (payment_attempt_id, mesa_id, staff_id, amount_cents)
              VALUES ($1, $2, $3, $4)`,
-            [a.id, mesa.id, tip_to_staff_id || null, tip_cents]
+            [a.id, mesa.id, tip_to_staff_id || null, tipCents]
           );
         }
         return { ...a, grossAmount, validatedItemsAmount, claimedSlotIndex };
@@ -606,6 +618,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
             id: attempt.id,
             gross_amount_cents: Number(attempt.grossAmount),
             gross_display: centsToDisplay(Number(attempt.grossAmount)),
+            tip_cents: Number(tipCents),   // D7: lo computado por el server
             status: 'processed',
             payment_type: 'wallet',
           },
@@ -702,6 +715,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
         attempt: {
           id: attempt.id,
           gross_amount_cents: Number(attempt.grossAmount),
+          tip_cents: Number(tipCents),   // D7: lo computado por el server
           client_secret: stripeIntent.client_secret,
           status: newStatus,
           stripe_status: stripeIntent.status,
@@ -731,6 +745,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
           attempt: {
             id: attempt.id,
             gross_amount_cents: Number(attempt.grossAmount),
+            tip_cents: Number(tipCents),   // D7: lo computado por el server
             client_secret: pi.client_secret,
             status: newStatus,
             stripe_status: pi.status,

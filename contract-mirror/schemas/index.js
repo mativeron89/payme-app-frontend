@@ -109,6 +109,10 @@ const payMesa = z.object({
   item_ids: z.array(uuid).default([]),
   lock_tokens: z.array(lockToken).optional(),
   tip_cents: positiveCents.default(0),
+  // D7 (v2.17): propina por % sobre base partes-iguales (total÷N declarados).
+  // 0..10000 bps = 0..100% de su parte (tope ratificado). La cuenta la hace el
+  // SERVER. Excluyente con tip_cents (el monto a mano).
+  tip_bps: z.number().int().min(0).max(10000).optional(),
   tip_to_staff_id: uuid.optional(),
   idempotency_key: idempotencyKey,
 }).refine(d => {
@@ -117,7 +121,10 @@ const payMesa = z.object({
     return !!d.stripe_payment_method_id;
   }
   return !!(d.payment_method_id || d.stripe_payment_method_id);
-}, { message: 'payment source required for non-wallet payment' });
+}, { message: 'payment source required for non-wallet payment' })
+.refine(d => d.tip_bps === undefined || !d.tip_cents, {
+  message: 'tip_bps and tip_cents are mutually exclusive',
+});
 
 // TOPUPS
 const TOPUP_MIN = 5000;

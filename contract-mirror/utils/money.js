@@ -94,8 +94,25 @@ function splitEqual(totalCents, n) {
   return parts;
 }
 
+/**
+ * D7 (v2.17): propina por % sobre base partes-iguales.
+ *   tip = round( (total/N) × bps/10000 )
+ * en UN solo paso de aritmética entera (no se redondea la base primero: menos
+ * error acumulado). Para montos >= 0, Math.round es exactamente
+ * half-away-from-zero (la mitad de centavo sube). bps 0..10000 = 0..100% de
+ * la parte del comensal (tope ratificado 2026-07-23; el monto a mano va por
+ * tip_cents, sin bps).
+ * Rango seguro: totalCents×bps < 2^53 con totales reales de restaurante.
+ */
+function tipFromBps(totalCents, n, bps) {
+  if (!Number.isInteger(totalCents) || totalCents < 0) throw new Error('totalCents must be non-negative integer');
+  if (!Number.isInteger(n) || n < 1) throw new Error('n must be positive integer');
+  if (!Number.isInteger(bps) || bps < 0 || bps > 10000) throw new Error('bps out of range (0-10000)');
+  return Math.round((totalCents * bps) / (n * 10000));
+}
+
 module.exports = {
   CURRENCY,
   stringToCents, centsToString, centsToDisplay,
-  sumCents, calculateFee, splitEqual,
+  sumCents, calculateFee, splitEqual, tipFromBps,
 };

@@ -273,6 +273,189 @@ body {
 .home-tile.sm .home-card-title {
   font-size: 12.5px;
 }
+
+/* ─── T-D3a: adopción del mock del hermano de Mati (2026-07-23) ─── */
+
+/* Header claro: logo + saludo en línea + campana. */
+.home-head {
+  background: #fff;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.home-head .logo-line {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--navy);
+  letter-spacing: -0.02em;
+}
+.home-head .logo-line .t {
+  color: var(--teal);
+}
+.home-head .hola {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--gray-txt);
+}
+
+/* Tarjeta de saldo (monto oculto por defecto + ojito — opción b de Mati). */
+.saldo-card {
+  background: linear-gradient(135deg, #071a33, #12264a);
+  border-radius: 20px;
+  padding: 16px 18px;
+  color: #fff;
+  margin-bottom: 4px;
+}
+.saldo-card .lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.3px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 6px;
+}
+.saldo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.saldo-amt {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.eye-btn {
+  background: rgba(255, 255, 255, 0.14);
+  border: none;
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.saldo-arrow {
+  margin-left: auto;
+  background: #fff;
+  color: var(--navy);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.saldo-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* Encabezado de sección con "Ver más". */
+.sect-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 18px 2px 10px;
+}
+.sect-row .sect-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+.sect-row .vermas {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--teal-txt);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* Carrusel horizontal de mesas abiertas. */
+.hscroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+}
+.hscroll > * {
+  flex: 0 0 80%;
+  scroll-snap-align: start;
+}
+
+/* Botón flotante "+ Nueva Mesa" (píldora, siempre a mano). */
+.fab {
+  position: fixed;
+  bottom: 78px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 14px 24px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.45);
+  cursor: pointer;
+  z-index: 20;
+  white-space: nowrap;
+}
+.fab:active {
+  transform: translateX(-50%) scale(0.97);
+}
+/* En pantallas sin barra inferior el flotante baja al borde. */
+.fab.solo {
+  bottom: 24px;
+}
+
+/* Barra inferior fija: Inicio · Amigos · Grupos · Perfil. */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px; /* mismo ancho que .app */
+  background: #fff;
+  border-top: 1px solid var(--gray-l);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  z-index: 19;
+}
+.nav-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--gray-txt);
+}
+.nav-item .ico {
+  font-size: 20px;
+}
+.nav-item.on {
+  color: var(--navy);
+  font-weight: 700;
+}
+/* Las pantallas con barra dejan aire para barra + flotante. */
+.has-nav .scroll {
+  padding-bottom: 150px;
+}
 .home-card.compact {
   flex-direction: column;
   text-align: center;

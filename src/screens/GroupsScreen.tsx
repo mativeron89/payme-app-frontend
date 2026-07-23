@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { Friend, Group, GroupDetailResponse } from '../api/types';
 import { Avatar, TopBar, useToast } from '../components/ui';
-import { navigate } from '../router';
 
 /** s-groups: grupos + detalle + crear + sumar miembros (routes/groups.js). */
 export function GroupsScreen() {
@@ -62,7 +61,7 @@ export function GroupsScreen() {
     const memberIds = new Set(detail.members.map((m) => m.id));
     const addable = friends.filter((f) => !memberIds.has(f.id));
     return (
-      <div className="screen">
+      <div className="screen has-nav">
         <TopBar title={`${detail.group.icon} ${detail.group.name}`} onBack={() => setDetail(null)} />
         <div className="scroll" style={{ padding: '14px 16px' }}>
           <div className="sectlabel">Miembros ({detail.members.length})</div>
@@ -136,7 +135,7 @@ export function GroupsScreen() {
 
   return (
     <div className="screen">
-      <TopBar title="Grupos" onBack={() => navigate('home')} />
+      <TopBar title="Grupos" />
       <div className="scroll" style={{ padding: '14px 16px' }}>
         {creating && (
           <div className="card card-p" style={{ marginBottom: 12 }}>

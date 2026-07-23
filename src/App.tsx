@@ -1,5 +1,6 @@
 import { IS_MOCK } from './api';
 import { AuthProvider, useAuth } from './auth/AuthContext';
+import { BottomNav } from './components/BottomNav';
 import { ToastProvider } from './components/ui';
 import { useRoute } from './router';
 import { AvisosScreen } from './screens/AvisosScreen';
@@ -30,30 +31,43 @@ function Shell() {
 
   if (!session) return <LoginScreen />;
 
-  switch (route.page) {
-    case 'home':
-      return <HomeScreen />;
-    case 'mesas':
-      return <MesasScreen />;
-    case 'scan':
-      return <CreateMesaFlow />;
-    case 'mesa':
-      return route.param ? <MesaScreen key={route.param} code={route.param} /> : <MesasScreen />;
-    case 'cuenta':
-      return <CuentaScreen />;
-    case 'cargar':
-      return <TopupScreen />;
-    case 'transferir':
-      return <TransferScreen preselectPaymeId={route.param ?? undefined} />;
-    case 'amigos':
-      return <FriendsScreen />;
-    case 'grupos':
-      return <GroupsScreen />;
-    case 'perfil':
-      return <PerfilScreen />;
-    case 'avisos':
-      return <AvisosScreen />;
-  }
+  const screen = (() => {
+    switch (route.page) {
+      case 'home':
+        return <HomeScreen />;
+      case 'mesas':
+        return <MesasScreen />;
+      case 'scan':
+        return <CreateMesaFlow />;
+      case 'mesa':
+        return route.param ? <MesaScreen key={route.param} code={route.param} /> : <MesasScreen />;
+      case 'cuenta':
+        return <CuentaScreen />;
+      case 'cargar':
+        return <TopupScreen />;
+      case 'transferir':
+        return <TransferScreen preselectPaymeId={route.param ?? undefined} />;
+      case 'amigos':
+        return <FriendsScreen />;
+      case 'grupos':
+        return <GroupsScreen />;
+      case 'perfil':
+        return <PerfilScreen />;
+      case 'avisos':
+        return <AvisosScreen />;
+    }
+  })();
+
+  // T-D3a: barra inferior solo en las cuatro pantallas hub.
+  const showNav =
+    route.page === 'home' || route.page === 'amigos' || route.page === 'grupos' || route.page === 'perfil';
+
+  return (
+    <>
+      {screen}
+      {showNav && <BottomNav active={route.page} />}
+    </>
+  );
 }
 
 export default function App() {
