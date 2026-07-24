@@ -1,5 +1,22 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.20.0 — Batch 2 de Mati: unidades seleccionables + ticket en una línea (2026-07-23)
+
+- **Cantidades EXPANDIDAS en unidades al crear la mesa**: "Tiramisú ×2" viaja
+  como dos ítems de $70 (quantity 1) → cada unidad se elige/reserva por
+  separado en los DOS modos de división. Resuelve "dejame seleccionar 1 o 2"
+  sin cambio de contrato (el total no cambia; el backend ya acepta filas
+  unitarias). El stepper de cantidad sigue en el ticket editable; la
+  expansión ocurre al confirmar.
+- **Ticket editable en UNA línea por consumo** (nombre · $precio · −n＋ · ✕):
+  un listado de 10+ personas ya no se hace eterno.
+- **Partes iguales**: fuera la sección "Partes de la mesa" (sin sentido para
+  el comensal); queda la nota "N partes iguales de $X · quedan Y". La lista
+  "¿Qué consumiste?" ahora muestra el PRECIO de cada producto.
+- **G-08 nuevo en GAPS.md**: platos compartidos por fracciones (1/2, 1/3…)
+  entre varios comensales — decisión de producto + contrato pendiente de
+  acta con el backend (opciones presentadas a Mati con recomendación).
+
 ## 0.19.0 — Batch de feedback de Mati: 10 ajustes de UX (2026-07-23)
 
 Directivas explícitas de Mati sobre capturas (2026-07-23):

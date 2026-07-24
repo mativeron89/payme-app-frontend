@@ -263,12 +263,17 @@ export function CreateMesaFlow() {
         ...(stripePmId && { stripe_payment_method_id: stripePmId }),
         ...(savedPmId && { payment_method_id: savedPmId }),
         ...(savingNewCard && { save_payment_method: true }),
-        items: editItems.map((i) => ({
-          name: i.name.trim(),
-          price_cents: priceCentsOf(i),
-          quantity: i.quantity,
-          ...(i.category && { category: i.category }),
-        })),
+        // Cantidades EXPANDIDAS en unidades: "Tiramisú ×2" viaja como dos
+        // ítems de $70 → cada unidad se elige/reserva por separado (pedido de
+        // Mati). El total no cambia y el contrato ya lo acepta (quantity 1).
+        items: editItems.flatMap((i) =>
+          Array.from({ length: i.quantity }, () => ({
+            name: i.name.trim(),
+            price_cents: priceCentsOf(i),
+            quantity: 1,
+            ...(i.category && { category: i.category }),
+          })),
+        ),
       });
       setCreated(r);
       if (r.guarantee.status === 'requires_action') {
@@ -449,62 +454,63 @@ export function CreateMesaFlow() {
             </div>
             {/* D5: cada consumo es editable — nombre, precio, cantidad, quitar. */}
             {editItems.map((it, idx) => (
-              <div key={idx} style={{ padding: '6px 16px', borderBottom: '1px solid var(--gray-l)' }}>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <input
-                    className="input"
-                    style={{ flex: 1, padding: '7px 9px', fontSize: 14 }}
-                    value={it.name}
-                    placeholder="Consumo"
-                    onChange={(e) => updateItem(idx, { name: e.target.value })}
-                    aria-label={`Nombre del consumo ${idx + 1}`}
-                  />
-                  <button
-                    className="back-btn"
-                    style={{ width: 26, height: 26, fontSize: 12, flex: 'none' }}
-                    onClick={() => removeItem(idx)}
-                    aria-label={`Quitar ${it.name || `consumo ${idx + 1}`}`}
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13 }}>$</span>
-                  <input
-                    className="input"
-                    style={{ width: 84, padding: '7px 9px', fontSize: 14 }}
-                    inputMode="decimal"
-                    value={it.priceStr}
-                    placeholder="0.00"
-                    onChange={(e) => updateItem(idx, { priceStr: e.target.value.replace(/[^0-9.]/g, '') })}
-                    aria-label={`Precio del consumo ${idx + 1}`}
-                  />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-                    <button
-                      className="back-btn"
-                      style={{ width: 26, height: 26, fontSize: 14 }}
-                      onClick={() => updateItem(idx, { quantity: Math.max(1, it.quantity - 1) })}
-                      aria-label={`Menos cantidad de ${it.name || `consumo ${idx + 1}`}`}
-                    >
-                      −
-                    </button>
-                    <span style={{ minWidth: 22, textAlign: 'center', fontWeight: 700 }}>{it.quantity}</span>
-                    <button
-                      className="back-btn"
-                      style={{ width: 26, height: 26, fontSize: 14 }}
-                      onClick={() => updateItem(idx, { quantity: it.quantity + 1 })}
-                      aria-label={`Más cantidad de ${it.name || `consumo ${idx + 1}`}`}
-                    >
-                      ＋
-                    </button>
-                  </div>
-                  <div
-                    className="caption"
-                    style={{ minWidth: 64, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
-                  >
-                    {formatMXN(priceCentsOf(it) * it.quantity)}
-                  </div>
-                </div>
+              <div
+                key={idx}
+                style={{
+                  display: 'flex',
+                  gap: 5,
+                  alignItems: 'center',
+                  padding: '4px 12px',
+                  borderBottom: '1px solid var(--gray-l)',
+                }}
+              >
+                <input
+                  className="input"
+                  style={{ flex: 1, minWidth: 0, padding: '6px 8px', fontSize: 13.5 }}
+                  value={it.name}
+                  placeholder="Consumo"
+                  onChange={(e) => updateItem(idx, { name: e.target.value })}
+                  aria-label={`Nombre del consumo ${idx + 1}`}
+                />
+                <span style={{ fontWeight: 700, fontSize: 12, flex: 'none' }}>$</span>
+                <input
+                  className="input"
+                  style={{ width: 60, padding: '6px 6px', fontSize: 13.5, flex: 'none', textAlign: 'right' }}
+                  inputMode="decimal"
+                  value={it.priceStr}
+                  placeholder="0"
+                  onChange={(e) => updateItem(idx, { priceStr: e.target.value.replace(/[^0-9.]/g, '') })}
+                  aria-label={`Precio del consumo ${idx + 1}`}
+                />
+                <button
+                  className="back-btn"
+                  style={{ width: 22, height: 22, fontSize: 13, flex: 'none' }}
+                  onClick={() => updateItem(idx, { quantity: Math.max(1, it.quantity - 1) })}
+                  aria-label={`Menos cantidad de ${it.name || `consumo ${idx + 1}`}`}
+                >
+                  −
+                </button>
+                <span
+                  style={{ minWidth: 14, textAlign: 'center', fontWeight: 700, fontSize: 13, flex: 'none' }}
+                >
+                  {it.quantity}
+                </span>
+                <button
+                  className="back-btn"
+                  style={{ width: 22, height: 22, fontSize: 13, flex: 'none' }}
+                  onClick={() => updateItem(idx, { quantity: it.quantity + 1 })}
+                  aria-label={`Más cantidad de ${it.name || `consumo ${idx + 1}`}`}
+                >
+                  ＋
+                </button>
+                <button
+                  className="back-btn"
+                  style={{ width: 22, height: 22, fontSize: 11, flex: 'none' }}
+                  onClick={() => removeItem(idx)}
+                  aria-label={`Quitar ${it.name || `consumo ${idx + 1}`}`}
+                >
+                  ✕
+                </button>
               </div>
             ))}
             <button

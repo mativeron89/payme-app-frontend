@@ -1059,35 +1059,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                       {i.name}
                       {i.quantity > 1 ? ` × ${i.quantity}` : ''}
                     </div>
+                    {/* Feedback Mati: el precio de cada producto, visible. */}
+                    <div className="item-price">{formatMXN(i.price_cents * i.quantity)}</div>
                   </button>
                 );
               })}
             </div>
-            <div className="sectlabel">Partes de la mesa</div>
-            <div className="card" style={{ marginBottom: 12 }}>
-              {mesa.division_slots?.map((s) => (
-                <div
-                  key={s.slot_index}
-                  className={`item-row ${s.status !== 'available' ? 'paid-other' : ''}`}
-                  style={{ cursor: 'default' }}
-                >
-                  <div
-                    className={`checkbox ${s.status !== 'available' ? 'blocked' : ''}`}
-                    aria-hidden="true"
-                  >
-                    {s.status !== 'available' ? '✓' : ''}
-                  </div>
-                  <div className="item-name">
-                    Parte {s.slot_index + 1}
-                    {s.status !== 'available' && <span className="item-hint"> · pagada</span>}
-                  </div>
-                  <div className="item-price">{s.amount_display}</div>
-                </div>
-              ))}
-            </div>
             <div className="note note-teal">
-              La cuenta se dividió en {mesa.expected_participants} partes iguales. Cada pago
-              toma la próxima parte libre — quedan <b>{availableSlots}</b>.
+              La cuenta se dividió en {mesa.expected_participants} partes iguales de{' '}
+              <b>{formatMXN(itemsAmount)}</b>. Quedan <b>{availableSlots}</b> por pagar.
             </div>
           </div>
           <button
