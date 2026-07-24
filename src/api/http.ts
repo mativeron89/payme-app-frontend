@@ -76,6 +76,11 @@ async function tryRefresh(session: StoredSession): Promise<StoredSession | null>
   }
 }
 
+/** Request PÚBLICA (sin sesión): hoy solo restaurantes (G-01, v2.21). */
+export async function httpPublicRequest<T>(method: string, path: string): Promise<T> {
+  return rawRequest<T>(method, path);
+}
+
 /** Request autenticada con retry-tras-refresh (una sola vez). */
 export async function httpRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   const session = loadSession();

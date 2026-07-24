@@ -7,10 +7,9 @@
 #
 # El build /live/ apunta al backend real (VITE_MOCK=0). La publishable key de
 # Stripe la sirve el backend en GET /api/config, así que NO va como variable acá.
-# VITE_RESTAURANT_ID sale de la variable de repo del mismo nombre (G-01: el
-# contrato no expone la lista de restaurantes; hay que fijar el uuid activo de
-# La Parolaccia en el backend vivo). Sin esa variable, abrir mesa avisa que
-# falta configurar el restaurante; el resto del flujo real funciona igual.
+# VITE_RESTAURANT_ID es el uuid del restaurante demo, usado como FALLBACK
+# cuando la URL no trae el QR (?r=uuid). Nombre/dirección se resuelven en vivo
+# contra GET /api/restaurants/:id (G-01 resuelto en backend v2.21).
 name: Deploy demo (GitHub Pages)
 
 on:
@@ -55,10 +54,9 @@ jobs:
         env:
           VITE_MOCK: '0'
           VITE_API_URL: https://payme-app-backend-production.up.railway.app
-          # La Parolaccia en el backend vivo (verificado: existe y está activo,
-          # 2026-07-22). No es secreto: es el id del restaurante demo. G-01.
+          # La Parolaccia en el backend vivo — fallback sin QR. El nombre ya
+          # NO se hardcodea: lo resuelve GET /api/restaurants/:id (G-01, v2.21).
           VITE_RESTAURANT_ID: 00000000-0000-4000-8000-000000000001
-          VITE_RESTAURANT_NAME: La Parolaccia
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -137,8 +137,9 @@ export function HomeScreen() {
           <div className="saldo-card">
             <div className="lbl">Tu saldo PayMe</div>
             <div className="saldo-row">
+              {/* G-03 (v2.21): tras el ojito se muestra el DISPONIBLE real. */}
               <div className="saldo-amt">
-                {showBalance ? (balance ? formatMXN(balance.balance_cents) : '…') : masked}
+                {showBalance ? (balance ? formatMXN(balance.available_cents) : '…') : masked}
               </div>
               <button
                 className="eye-btn"

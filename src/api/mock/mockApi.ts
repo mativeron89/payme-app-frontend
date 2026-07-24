@@ -2,6 +2,7 @@ import { centsToDisplay, fractionAmount, splitEqual, tipFromBps } from '../../ut
 import { saveSession, type StoredSession } from '../storage';
 import type {
   MeResponse,
+  RestaurantResponse,
   BalanceResponse,
   ClabeResponse,
   CreateInvitationResponse,
@@ -141,12 +142,26 @@ export async function mockLogout(): Promise<void> {
 // ─── Cuenta ────────────────────────────────────────────────
 
 export async function mockBalance(): Promise<BalanceResponse> {
+  // G-03 (v2.21): retenido + disponible, misma resta que el backend.
+  const held = state.held_balance_cents;
+  const available = state.balance_cents - held;
   return delay({
     balance_cents: state.balance_cents,
     balance_display: centsToDisplay(state.balance_cents),
+    held_balance_cents: held,
+    held_balance_display: centsToDisplay(held),
+    available_cents: available,
+    available_display: centsToDisplay(available),
     clabe: state.clabe,
     currency: 'mxn',
   });
+}
+
+/** GET /restaurants/:id (G-01, v2.21): resuelve el uuid del QR de la mesa. */
+export async function mockGetRestaurant(id: string): Promise<RestaurantResponse> {
+  const r = MOCK_RESTAURANTS.find((x) => x.id === id);
+  if (!r) return fail(404, 'restaurant_not_found');
+  return delay({ restaurant: { ...r } });
 }
 
 export async function mockWalletTransactions(): Promise<WalletTransactionsResponse> {

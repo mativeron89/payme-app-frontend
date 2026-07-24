@@ -1,5 +1,29 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.24.0 — G-01 + G-03: restaurante por QR y saldo disponible/retenido (contrato v2.21.0) (2026-07-24)
+
+Consume los DOS últimos contratos pendientes (verificados en repo hermano y
+en vivo). **GAPS.md queda EN CERO por primera vez desde T0.**
+
+- **G-01 · Restaurante por QR**: el flujo de abrir mesa resuelve el
+  restaurante contra `GET /restaurants/:id` — el id llega por el QR de la
+  mesa (`?r=<uuid>`, query o hash) con `VITE_RESTAURANT_ID` como fallback de
+  la demo. QR roto/suspendido → aviso naranja en el escaneo ANTES de armar
+  nada. `VITE_RESTAURANT_NAME` retirado del deploy (el nombre ya no se
+  hardcodea). Tipos `Restaurant`/`RestaurantResponse` (`address` nullable —
+  verificado en vivo), `httpPublicRequest` (primera ruta pública),
+  `QR_RESTAURANT_ID`, mock sobre `MOCK_RESTAURANTS` (el QR de Hanzo Sushi
+  cambia el restaurante de la demo).
+- **G-03 · Disponible/retenido**: `BalanceResponse` suma
+  `held_balance_cents/_display` + `available_cents/_display`. La card de
+  Cuenta pasa a **"Disponible $X"** con línea "🔒 Retenido en garantías: $Y"
+  cuando hay hold; el ojito del Home y el "Disponible:" de Transferir usan
+  `available_cents`. Mock replica la resta sobre su hold wallet.
+- Verificado en mock (QR Hanzo en header · QR inválido avisa · garantía
+  wallet $60 → Disponible $235 + Retenido $60) y en vivo (200/404/404-
+  malformado/búsqueda `?q=` · balance con los 6 campos). Espejo a v2.21.0
+  (`routes/restaurants.js` NUEVO, `routes/account.js`, `schemas/index.js`).
+
 ## 0.23.0 — G-02: perfil propio (contrato v2.20.0) (2026-07-24)
 
 Consume el contrato de identidad publicado (verificado en repo hermano y en

@@ -2,6 +2,7 @@ import {
   httpGuestRequest,
   httpLogin,
   httpLogout,
+  httpPublicRequest,
   httpRegister,
   httpRequest,
   setOnSessionExpired,
@@ -12,6 +13,7 @@ import { confirmCardPayment } from './stripe';
 import type {
   BalanceResponse,
   MeResponse,
+  RestaurantResponse,
   FractionRequest,
   ClabeResponse,
   CreateInvitationResponse,
@@ -73,6 +75,22 @@ function readDemoFlag(): boolean {
 export const IS_DEMO: boolean = readDemoFlag();
 
 /**
+ * G-01 (v2.21): el restaurante llega por el QR de la mesa — `?r=<uuid>` en la
+ * URL (query directa o dentro del hash, igual que el flag demo). Se evalúa UNA
+ * vez al cargar; CreateMesaFlow lo resuelve contra GET /restaurants/:id.
+ */
+function readQrRestaurant(): string | null {
+  if (typeof window === 'undefined') return null;
+  const direct = new URLSearchParams(window.location.search).get('r');
+  if (direct) return direct;
+  const hash = window.location.hash;
+  const q = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+  return new URLSearchParams(q).get('r');
+}
+
+export const QR_RESTAURANT_ID: string | null = readQrRestaurant();
+
+/**
  * Modo demo: PaymentMethod de test de Stripe (Visa 4242, siempre aprueba, sin
  * 3DS). Con `?demo=1` se manda como `stripe_payment_method_id` en garantía y
  * pago para NO depender del tipeo en el iframe de Stripe Elements durante la
@@ -90,6 +108,8 @@ export interface Api {
   onSessionExpired(cb: (() => void) | null): void;
   /** Perfil propio (G-02, v2.20) — hidrata sesiones persistidas sin `user`. */
   getMe(): Promise<MeResponse>;
+  /** Resolver el uuid del QR de la mesa (G-01, v2.21). Público, 404 si no está activo. */
+  getRestaurant(id: string): Promise<RestaurantResponse>;
   // cuenta
   getBalance(): Promise<BalanceResponse>;
   getWalletTransactions(): Promise<WalletTransactionsResponse>;
@@ -156,6 +176,8 @@ const realApi: Api = {
   restoreSession: () => loadSession(),
   onSessionExpired: (cb) => setOnSessionExpired(cb),
   getMe: () => httpRequest<MeResponse>('GET', '/account/me'),
+  getRestaurant: (id) =>
+    httpPublicRequest<RestaurantResponse>('GET', `/restaurants/${encodeURIComponent(id)}`),
 
   getBalance: () => httpRequest<BalanceResponse>('GET', '/account/balance'),
   getHistory: () => httpRequest<HistoryResponse>('GET', '/account/history'),
@@ -312,6 +334,7 @@ const mockApi: Api = {
   restoreSession: () => loadSession(),
   onSessionExpired: () => undefined,
   getMe: () => mock.mockGetMe(),
+  getRestaurant: (id) => mock.mockGetRestaurant(id),
 
   getBalance: () => mock.mockBalance(),
   getWalletTransactions: () => mock.mockWalletTransactions(),

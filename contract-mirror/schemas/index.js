@@ -225,6 +225,10 @@ const notificationsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
 });
+// G-01 (v2.21): búsqueda pública de restaurantes; limit fijo server-side (20).
+const restaurantSearchQuery = z.object({
+  q: z.string().trim().max(100).optional(),
+});
 
 function validateBody(schema) {
   return (req, res, next) => {
@@ -265,5 +269,6 @@ module.exports = {
   addStaff, updateStaff, setStaffShift,
   registerPushDevice,
   movementsQuery, historyQuery, walletTxQuery, notificationsQuery,
+  restaurantSearchQuery,
   validateBody, validateQuery,
 };

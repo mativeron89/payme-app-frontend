@@ -69,11 +69,34 @@ export interface AppConfig {
 // ─── Cuenta (routes/account.js) ────────────────────────────
 
 /** GET /api/account/balance (G-03: no expone held_balance_cents). */
+/** GET /api/account/balance (v2.21 suma retenido + disponible — G-03). */
 export interface BalanceResponse {
   balance_cents: number;
   balance_display: string;
+  /** Retenido en garantías wallet activas (G-03, v2.21). */
+  held_balance_cents: number;
+  held_balance_display: string;
+  /** balance − held, computado server-side (misma resta que el 402). */
+  available_cents: number;
+  available_display: string;
   clabe: string | null;
   currency: string;
+}
+
+// ─── Restaurantes (routes/restaurants.js — G-01, v2.21) ────
+
+/** Público de cara al comensal; espeja el shape de GET /mesas/:code → restaurant. */
+export interface Restaurant {
+  id: string;
+  name: string;
+  category: string;
+  /** Nullable en la DB (verificado en vivo: el restaurante demo lo tiene NULL). */
+  address: string | null;
+}
+
+/** GET /api/restaurants/:id → 200. 404 `restaurant_not_found` (también para no-active y uuid malformado). */
+export interface RestaurantResponse {
+  restaurant: Restaurant;
 }
 
 /** Tipos de wallet_transactions (schemas walletTxQuery). */

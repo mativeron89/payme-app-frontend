@@ -36,12 +36,23 @@ router.get('/me', async (req, res, next) => {
 router.get('/balance', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT balance_cents, clabe FROM wallets WHERE user_id = $1`, [req.user.id]
+      `SELECT balance_cents, held_balance_cents, clabe FROM wallets WHERE user_id = $1`,
+      [req.user.id]
     );
-    const w = rows[0] || { balance_cents: 0, clabe: null };
+    const w = rows[0] || { balance_cents: 0, held_balance_cents: 0, clabe: null };
+    const balance = Number(w.balance_cents);
+    // G-03 (v2.21): retenido en garantías + disponible computado server-side —
+    // misma resta que placeWalletHold, el 402 de pago wallet y transfers.
+    // chk_wallets_held_balance garantiza 0 ≤ held ≤ balance en la fila.
+    const held = Number(w.held_balance_cents || 0);
+    const available = balance - held;
     res.json({
-      balance_cents: Number(w.balance_cents),
-      balance_display: centsToDisplay(Number(w.balance_cents)),
+      balance_cents: balance,
+      balance_display: centsToDisplay(balance),
+      held_balance_cents: held,
+      held_balance_display: centsToDisplay(held),
+      available_cents: available,
+      available_display: centsToDisplay(available),
       clabe: w.clabe,
       currency: 'mxn',
     });

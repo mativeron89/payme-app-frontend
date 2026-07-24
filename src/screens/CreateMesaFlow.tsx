@@ -1,11 +1,11 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
-import { useCallback, useRef, useState } from 'react';
-import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID } from '../api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, QR_RESTAURANT_ID } from '../api';
 import { HttpError } from '../api/http';
 import { MockApiError } from '../api/mock/mockApi';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
-import type { CreateMesaResponse, PaymentMethod } from '../api/types';
+import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
 import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
@@ -104,19 +104,34 @@ export function CreateMesaFlow() {
   }, []);
 
   /**
-   * G-01: el contrato NO tiene endpoint para listar/buscar restaurantes, pero
-   * `POST /mesas` exige un `restaurant_id` que exista y esté activo. Mientras
-   * el gap siga abierto, con backend real el id se toma de configuración
-   * (VITE_RESTAURANT_ID, apuntando a una fila sembrada en la base).
+   * G-01 RESUELTO (backend v2.21): el restaurante se resuelve contra
+   * GET /restaurants/:id. El id llega por el QR de la mesa (`?r=<uuid>`) y,
+   * como fallback de la demo, por VITE_RESTAURANT_ID. Un 404 = QR viejo o
+   * restaurante suspendido: se avisa ANTES de dejar armar la mesa.
    */
-  const restaurant = IS_MOCK
-    ? MOCK_RESTAURANTS[0]
-    : {
-        id: (import.meta.env.VITE_RESTAURANT_ID as string | undefined) ?? '',
-        name: (import.meta.env.VITE_RESTAURANT_NAME as string | undefined) ?? 'Restaurante',
-        category: 'other',
-        address: '',
-      };
+  const restaurantId =
+    QR_RESTAURANT_ID ??
+    (IS_MOCK
+      ? MOCK_RESTAURANTS[0].id
+      : ((import.meta.env.VITE_RESTAURANT_ID as string | undefined) ?? ''));
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [restaurantError, setRestaurantError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!restaurantId) {
+      setRestaurantError('No pudimos identificar el restaurante: entrá desde el QR de la mesa.');
+      return;
+    }
+    let alive = true;
+    api
+      .getRestaurant(restaurantId)
+      .then((r) => alive && setRestaurant(r.restaurant))
+      .catch(() =>
+        alive && setRestaurantError('Este QR no corresponde a un restaurante disponible.'),
+      );
+    return () => {
+      alive = false;
+    };
+  }, [restaurantId]);
   // D5: el total SIEMPRE sale de lo que el usuario ve/editó — guardarraíl:
   // si el total está mal, la división está mal.
   const total = editItems.reduce((s, i) => s + priceCentsOf(i) * i.quantity, 0);
@@ -247,10 +262,8 @@ export function CreateMesaFlow() {
         }
       }
 
-      if (!restaurant.id) {
-        setError(
-          'Falta configurar el restaurante de la mesa (VITE_RESTAURANT_ID). Es el gap G-01: el backend todavía no expone la lista de restaurantes.',
-        );
+      if (!restaurant) {
+        setError(restaurantError ?? 'Identificando el restaurante… probá de nuevo en un momento.');
         setBusy(false);
         return;
       }
@@ -379,6 +392,8 @@ export function CreateMesaFlow() {
               {error}
             </div>
           )}
+          {/* G-01: un QR roto/suspendido se avisa acá, antes de armar nada. */}
+          {restaurantError && <div className="note note-orange">{restaurantError}</div>}
           {/* En modo demo el cartel se oculta: delataría la maqueta en cámara. */}
           {!IS_DEMO && (
             <div className="note note-amber">
@@ -445,10 +460,14 @@ export function CreateMesaFlow() {
         </div>
         <div style={{ background: 'var(--navy)', padding: '0 20px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 800, color: '#fff' }}>{restaurant.name}</div>
-            <div style={{ fontSize: 'var(--fs-sm)', color: 'rgba(255,255,255,0.55)', marginTop: 2, fontFamily: 'var(--font-body)' }}>
-              <Icon name="pin" size={14} className="ico-inline" /> {restaurant.address}
+            <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 800, color: '#fff' }}>
+              {restaurant?.name ?? 'Restaurante'}
             </div>
+            {restaurant?.address && (
+              <div style={{ fontSize: 'var(--fs-sm)', color: 'rgba(255,255,255,0.55)', marginTop: 2, fontFamily: 'var(--font-body)' }}>
+                <Icon name="pin" size={14} className="ico-inline" /> {restaurant.address}
+              </div>
+            )}
           </div>
           <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '6px 14px', borderRadius: 20, fontWeight: 800, fontSize: 'var(--fs-base)' }}>
             {formatMXN(total)}

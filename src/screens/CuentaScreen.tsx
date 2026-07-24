@@ -110,15 +110,20 @@ export function CuentaScreen() {
       <TopBar title="Mi Cuenta" onBack={() => navigate('home')} />
       <div className="scroll" style={{ padding: 16 }}>
         <div style={{ background: 'linear-gradient(135deg,#071A33,#10264A)', borderRadius: 18, padding: '16px 18px 14px', marginBottom: 16 }}>
-          {/* G-03: el contrato no expone held_balance_cents, así que no podemos
-              afirmar "disponible" — con una garantía por saldo activa, parte de
-              este monto está retenido. */}
+          {/* G-03 RESUELTO (v2.21): el monto grande es el DISPONIBLE real
+              (balance − retenido, computado por el backend). */}
           <div style={{ fontSize: 'var(--fs-2xs)', color: 'rgba(255,255,255,0.7)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1.3, fontWeight: 700 }}>
-            Tu saldo PayMe
+            Disponible
           </div>
           <div style={{ fontSize: 'var(--fs-2xl)', fontWeight: 800, color: '#fff', lineHeight: 1 }}>
-            {balance ? formatMXN(balance.balance_cents) : '…'}
+            {balance ? formatMXN(balance.available_cents) : '…'}
           </div>
+          {balance && balance.held_balance_cents > 0 && (
+            <div style={{ fontSize: 'var(--fs-sm)', color: 'rgba(255,255,255,0.75)', marginTop: 7, fontFamily: 'var(--font-body)' }}>
+              <Icon name="lock" size={14} className="ico-inline" /> Retenido en garantías:{' '}
+              {formatMXN(balance.held_balance_cents)}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button className="btn btn-teal btn-sm" onClick={() => navigate('cargar')}>
               <Icon name="plus" size={16} className="ico-inline" /> Cargar
