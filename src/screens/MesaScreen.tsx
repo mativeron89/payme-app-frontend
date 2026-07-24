@@ -29,6 +29,14 @@ interface PayResult {
   tip: number;
   gross: number;
   methodLabel: string;
+  /**
+   * Pivote a Stripe Connect (2026-07-24): con TARJETA (incl. Apple/Google
+   * Pay) el comercio es el RESTAURANTE, no PayMe. Con saldo no aplica: ese
+   * riel sigue siendo de PayMe.
+   */
+  chargedByRestaurant: boolean;
+  /** G-10: descriptor del resumen de tarjeta. Ausente hasta que el contrato lo exponga. */
+  statementDescriptor: string | null;
 }
 
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
@@ -241,6 +249,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       `Mesa: ${code}`,
       `Fecha: ${new Date().toLocaleString('es-MX')}`,
       `Método: ${result.methodLabel}`,
+      // Connect: con tarjeta el comercio es el restaurante (con saldo, PayMe).
+      ...(result.chargedByRestaurant
+        ? [
+            `Cobrado por: ${mesa.restaurant.name}`,
+            ...(result.statementDescriptor
+              ? [`En tu resumen de tarjeta: ${result.statementDescriptor}`]
+              : []),
+          ]
+        : []),
       `${mesa.division_mode === 'igual' ? 'Mi parte' : 'Mis consumos'}: ${formatMXN(result.itemsAmount)}`,
       `Propina (al mozo): ${formatMXN(result.tip)}`,
       `Total pagado: ${formatMXN(result.gross)}`,
@@ -361,6 +378,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         tip: r.attempt.tip_cents ?? tipCents,
         gross: r.attempt.gross_amount_cents,
         methodLabel,
+        chargedByRestaurant: payType !== 'wallet',
+        statementDescriptor: r.attempt.statement_descriptor ?? null,
       });
       setView('processing');
       setProcStep(1);
@@ -606,6 +625,21 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <span className="lbl">Método</span>
               <span className="val">{result.methodLabel}</span>
             </div>
+            {/* Connect: con tarjeta el merchant of record es el RESTAURANTE. */}
+            {result.chargedByRestaurant && (
+              <div className="receipt-row">
+                <span className="lbl">Cobrado por</span>
+                <span className="val">{mesa.restaurant.name}</span>
+              </div>
+            )}
+            {result.chargedByRestaurant && result.statementDescriptor && (
+              <div className="caption" style={{ marginTop: -4, marginBottom: 8 }}>
+                En tu resumen de tarjeta vas a ver{' '}
+                <b style={{ color: 'var(--navy)', fontFamily: 'monospace' }}>
+                  {result.statementDescriptor}
+                </b>
+              </div>
+            )}
             <div className="receipt-row">
               <span className="lbl">{mesa.division_mode === 'igual' ? 'Mi parte' : 'Mis consumos'}</span>
               <span className="val">{formatMXN(result.itemsAmount)}</span>
@@ -757,6 +791,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           <div className="sectlabel" id="lbl-metodo">
             Método
           </div>
+          {/* Connect: que se sepa ANTES de pagar quién cobra, no solo en el
+              comprobante. Con saldo no aplica (ese riel sigue siendo PayMe). */}
+          {payType !== 'wallet' && (
+            <div className="caption" style={{ marginTop: -6, marginBottom: 10 }}>
+              Te cobra <b style={{ color: 'var(--navy)' }}>{mesa.restaurant.name}</b> — PayMe
+              divide la cuenta.
+            </div>
+          )}
           <div role="radiogroup" aria-labelledby="lbl-metodo">
             {!isGuest && (
               <button

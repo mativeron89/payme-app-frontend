@@ -1,5 +1,31 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.26.0 — Pivote a Stripe Connect: quién cobra (campo visible) (2026-07-24)
+
+Ratificado por Mati. Con el pivote, en un pago de mesa con **tarjeta**
+(incl. Apple/Google Pay) el merchant of record es el **RESTAURANTE**, no
+PayMe. Cambio ACOTADO a lo que el usuario ve; el riel de saldo (wallet,
+cargas, transferencias) sigue siendo de PayMe y no se tocó.
+
+- **Comprobante en pantalla**: fila **"Cobrado por: <restaurante>"**, solo
+  en pagos con tarjeta. Debajo, cuando el backend exponga el descriptor:
+  "En tu resumen de tarjeta vas a ver <DESCRIPTOR>".
+- **Comprobante enviar/descargar** (`receiptText`): mismas líneas, misma
+  condición.
+- **Antes de pagar**: caption bajo "Método" — "Te cobra <restaurante> —
+  PayMe divide la cuenta" — para que se sepa ANTES, no solo en el recibo.
+- **G-10 en GAPS.md**: el contrato (v2.21.0, verificado repo + vivo) NO
+  expone `statement_descriptor`. Forma acordada:
+  `attempt.statement_descriptor: string | null`. **Mock-first**: el mock lo
+  deriva del nombre (mayúsculas, 22 chars); en real llega `undefined` y la
+  UI degrada sin el sub-texto — el "Cobrado por" sale igual de
+  `restaurant.name`, que sí es contrato.
+- Verificado en mock: con tarjeta aparecen fila + descriptor; con **saldo**
+  no aparece ni el caption ni la fila (ese riel no cambió).
+- Anotado en G-10 como pendiente del pivote: si la **garantía** con tarjeta
+  también pasa a ser del restaurante (hoy el copy dice "PayMe retiene el
+  total") — y que el pivote todavía no tiene acta en `ops/actas/`.
+
 ## 0.25.0 — T-F1: primer feedback del hermano de Mati (2026-07-24)
 
 Tier ratificado por Mati sobre la auditoría de diseño de su hermano.

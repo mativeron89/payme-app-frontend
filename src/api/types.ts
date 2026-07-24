@@ -332,6 +332,18 @@ export interface PayMesaResponse {
     stripe_status?: string;
     requires_action?: boolean;
     payment_type?: PaymentType;
+    /**
+     * G-10 (pivote a Stripe Connect, 2026-07-24): en pagos con TARJETA el
+     * merchant of record es el RESTAURANTE. Este es el descriptor que el
+     * comensal ve en el resumen de su tarjeta — lo define la cuenta Connect
+     * del restaurante, así que solo el backend lo conoce.
+     *
+     * TODAVÍA NO ESTÁ EN EL CONTRATO (backend v2.21.0 no lo expone): forma
+     * acordada con Mati, hoy solo la sirve el mock. En real llega
+     * `undefined` y la UI degrada sin el sub-texto — el "Cobrado por" sale
+     * igual del `restaurant.name`, que sí es contrato.
+     */
+    statement_descriptor?: string | null;
   };
 }
 

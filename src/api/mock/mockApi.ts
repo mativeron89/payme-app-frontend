@@ -535,6 +535,11 @@ export async function mockPayMesa(
       status: req.payment_type === 'wallet' ? 'processed' : 'succeeded',
       payment_type: req.payment_type,
       requires_action: false,
+      // G-10 (Connect, mock-first): con tarjeta el comercio es el RESTAURANTE.
+      // Forma acordada; el contrato real todavía no expone el campo.
+      ...(req.payment_type !== 'wallet' && {
+        statement_descriptor: mesa.restaurant.name.toUpperCase().slice(0, 22),
+      }),
     },
   });
 }
