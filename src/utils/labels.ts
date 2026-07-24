@@ -1,4 +1,5 @@
 import type { MesaStatus, WalletTxType } from '../api/types';
+import type { IconName } from '../components/Icon';
 
 /**
  * Traducción de los enums del contrato a lenguaje de usuario.
@@ -53,20 +54,20 @@ export function walletTxLabel(type: WalletTxType | string): string {
   return TX_LABEL[type as WalletTxType] ?? 'Movimiento';
 }
 
-const TX_EMOJI: Record<WalletTxType, string> = {
-  topup_oxxo: '🏪',
-  topup_card: '💳',
-  topup_spei: '🏦',
-  transfer_in: '↘️',
-  transfer_out: '↗️',
-  payment_mesa: '🍝',
-  refund_mesa: '↩️',
-  tip_received: '💰',
-  tip_payout: '💸',
-  adjustment_credit: '➕',
-  adjustment_debit: '➖',
+const TX_ICON: Record<WalletTxType, IconName> = {
+  topup_oxxo: 'store',
+  topup_card: 'card',
+  topup_spei: 'bank',
+  transfer_in: 'arrow-down-left',
+  transfer_out: 'arrow-up-right',
+  payment_mesa: 'dining',
+  refund_mesa: 'refresh',
+  tip_received: 'cash',
+  tip_payout: 'cash',
+  adjustment_credit: 'plus',
+  adjustment_debit: 'minus',
 };
 
-export function walletTxEmoji(type: WalletTxType | string): string {
-  return TX_EMOJI[type as WalletTxType] ?? '•';
+export function walletTxIcon(type: WalletTxType | string): IconName {
+  return TX_ICON[type as WalletTxType] ?? 'wallet';
 }

@@ -4,6 +4,7 @@ import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
+import { Icon } from '../components/Icon';
 import type { FractionRequest, MesaDetail, PaymentMethod, PaymentType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
@@ -251,7 +252,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         return;
       }
       await navigator.clipboard.writeText(text);
-      toast('Comprobante copiado 📋');
+      toast('Comprobante copiado ✓');
     } catch {
       // el usuario canceló el share del sistema: no es un error
     }
@@ -345,12 +346,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       }
       const methodLabel =
         payType === 'wallet'
-          ? '👛 Saldo PayMe'
+          ? 'Saldo PayMe'
           : payType === 'apple_pay'
-            ? '🍎 Apple Pay'
+            ? 'Apple Pay'
             : payType === 'google_pay'
               ? 'Ⓖ Google Pay'
-              : `💳 ${savedCard ? `${savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··${savedCard.last_four}` : 'Tarjeta'}`;
+              : `${savedCard ? `${savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··${savedCard.last_four}` : 'Tarjeta'}`;
       setResult({
         // Exacto del server: la fracción completadora puede ajustar ±1¢.
         itemsAmount: r.attempt.gross_amount_cents - (r.attempt.tip_cents ?? tipCents),
@@ -405,7 +406,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       <div className="screen">
         <TopBar title="Mesa" onBack={isGuest ? undefined : () => goBack('mesas')} />
         <div className="empty">
-          <div className="emoji">🔍</div>
+          <div className="emoji"><Icon name="search" size={40} /></div>
           No encontramos esta mesa. Puede que el link haya vencido o que ya se haya cerrado la
           cuenta.
           {isGuest && (
@@ -434,7 +435,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       <div className="caption" style={{ color: 'var(--navy)' }}>
         {previewingAsGuest ? 'Así lo ve quien recibe tu link' : 'Te invitaron a'}
       </div>
-      <div style={{ fontSize: 15, fontWeight: 700 }}>
+      <div style={{ fontSize: 'var(--fs-md)', fontWeight: 700 }}>
         {code} · {mesa.restaurant.name}
       </div>
       {previewingAsGuest && (
@@ -462,7 +463,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         {guestHeader}
         <div className="scroll" style={{ padding: '20px 16px' }}>
           <div style={{ textAlign: 'center', padding: '8px 0 18px' }}>
-            <div style={{ fontSize: 44 }}>{shortfall > 0 ? '⌛' : '✅'}</div>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <Icon name={shortfall > 0 ? 'clock' : 'check-circle'} size={40} />
+            </div>
             <div className="h2" style={{ marginTop: 8 }}>
               {shortfall > 0 ? 'Se cerró por tiempo' : 'Quedó todo pago'}
             </div>
@@ -513,7 +516,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </button>
           ) : (
             <button className="btn btn-navy" onClick={() => navigate('home')}>
-              <span aria-hidden="true">🏠</span> Inicio
+              <Icon name="home" size={16} className="ico-inline" /> Inicio
             </button>
           )}
         </div>
@@ -575,13 +578,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
             <div className="body-text">
               Pagaste tu parte.{' '}
-              {mesa.paid_amount_cents < mesa.total_cents
-                ? 'La mesa sigue abierta para los demás.'
-                : 'La mesa quedó completa. 🎉'}
+              {mesa.paid_amount_cents < mesa.total_cents ? (
+                'La mesa sigue abierta para los demás.'
+              ) : (
+                <>
+                  La mesa quedó completa. <Icon name="party" size={16} className="ico-inline" />
+                </>
+              )}
             </div>
           </div>
           <div className="card card-p">
-            <div className="h2" style={{ fontSize: 15, marginBottom: 12 }}>
+            <div className="h2" style={{ fontSize: 'var(--fs-md)', marginBottom: 12 }}>
               Comprobante
             </div>
             <div className="receipt-row">
@@ -622,10 +629,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               (contabilidad del comensal). */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <button className="btn btn-ghost" onClick={() => void shareReceipt()}>
-              📤 Enviar comprobante
+              <Icon name="share" size={16} className="ico-inline" /> Enviar comprobante
             </button>
             <button className="btn btn-ghost" onClick={downloadReceipt}>
-              ⬇️ Descargar
+              <Icon name="download" size={16} className="ico-inline" /> Descargar
             </button>
           </div>
           {isGuest ? (
@@ -646,7 +653,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
           ) : (
             <button className="btn btn-navy" onClick={() => navigate('home')}>
-              <span aria-hidden="true">🏠</span> Inicio
+              <Icon name="home" size={16} className="ico-inline" /> Inicio
             </button>
           )}
         </div>
@@ -662,20 +669,16 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           title="Pagar mi parte"
           onBack={() => setView('detail')}
           backLabel="Volver a la mesa"
-          right={
-            <span style={{ fontSize: 18 }} aria-hidden="true">
-              🔒
-            </span>
-          }
+          right={<Icon name="lock" size={18} />}
         />
         {guestHeader}
         <div className="scroll" style={{ padding: 16 }}>
           <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Pagás SOLO tu parte
             </div>
-            <div style={{ fontSize: 32, fontWeight: 800, color: '#fff' }}>{formatMXN(gross)}</div>
-            <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+            <div style={{ fontSize: 'var(--fs-3xl)', fontWeight: 800, color: '#fff' }}>{formatMXN(gross)}</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
               {mesa.division_mode === 'igual' ? 'Tu parte' : 'Tus consumos'} {formatMXN(itemsAmount)} + propina {formatMXN(tipCents)}
             </div>
           </div>
@@ -760,10 +763,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 aria-checked={payType === 'wallet'}
               >
                 <div className="method-icon" style={{ background: 'var(--teal-l)' }} aria-hidden="true">
-                  👛
+                  <Icon name="wallet" size={22} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>Saldo PayMe</div>
+                  <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Saldo PayMe</div>
                 </div>
                 <div className="radio" aria-hidden="true" />
               </button>
@@ -779,10 +782,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               aria-expanded={cards.length > 0 ? cardsOpen : undefined}
             >
               <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
-                💳
+                <Icon name="card" size={22} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>Tarjeta de crédito o débito</div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Tarjeta de crédito o débito</div>
                 <div className="caption">
                   {cards.length > 0
                     ? (cards.find((c) => c.id === cardChoice)
@@ -814,7 +817,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   >
                     <CardBrandChip brand={c.brand} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>
+                      <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>
                         {c.bank_name ?? c.brand} ···· {c.last_four}
                         {c.is_default && (
                           <span className="caption" style={{ marginLeft: 8 }}>
@@ -836,10 +839,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   aria-checked={cardChoice === 'new'}
                 >
                   <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
-                    ➕
+                    <Icon name="plus" size={22} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>Usar otra tarjeta</div>
+                    <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Usar otra tarjeta</div>
                   </div>
                   <div className="radio" aria-hidden="true" />
                 </button>
@@ -876,7 +879,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             {/* Modo demo (?demo=1): tarjeta de test, sin iframe de Stripe. */}
             {!IS_MOCK && IS_DEMO && payType === 'card' && (
               <div className="caption" style={{ margin: '2px 0 10px' }}>
-                💳 Tarjeta de prueba ···· 4242 (demo)
+                <Icon name="card" size={16} className="ico-inline" /> Tarjeta de prueba ···· 4242 (demo)
               </div>
             )}
             <button
@@ -886,10 +889,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               aria-checked={payType === 'apple_pay'}
             >
               <div className="method-icon" style={{ background: '#000', color: '#fff' }} aria-hidden="true">
-                🍎
+                <Icon name="apple" size={22} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>Apple Pay</div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Apple Pay</div>
                 <div className="caption">vía Stripe</div>
               </div>
               <div className="radio" aria-hidden="true" />
@@ -902,13 +905,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             >
               <div
                 className="method-icon"
-                style={{ background: '#fff', border: '1.5px solid var(--gray-b)', fontWeight: 800, fontSize: 15 }}
+                style={{ background: '#fff', border: '1.5px solid var(--gray-b)', fontWeight: 800, fontSize: 'var(--fs-md)' }}
                 aria-hidden="true"
               >
                 G
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>Google Pay</div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Google Pay</div>
                 <div className="caption">vía Stripe</div>
               </div>
               <div className="radio" aria-hidden="true" />
@@ -967,14 +970,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           const inv = await api.createInvitation(code);
           if (inv.link) {
             await navigator.clipboard.writeText(inv.link);
-            toast('Link de invitación copiado 📋');
+            toast('Link de invitación copiado ✓');
           }
         } catch {
           toast('No se pudo generar el link');
         }
       }}
     >
-      <span aria-hidden="true">🔗</span>
+      <Icon name="link" size={18} />
     </button>
   );
 
@@ -998,11 +1001,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       </div>
       <div style={{ background: 'var(--navy)', padding: '0 20px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)', minWidth: 0 }}>
+          <div style={{ fontSize: 'var(--fs-sm)', color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)', minWidth: 0 }}>
             {mesa.restaurant.name} · Mesa {code} ·{' '}
             {mesa.division_mode === 'igual' ? 'partes iguales' : 'cada uno lo suyo'}
           </div>
-          <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '4px 12px', borderRadius: 20, fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+          <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '4px 12px', borderRadius: 20, fontWeight: 800, fontSize: 'var(--fs-sm)', flexShrink: 0 }}>
             {formatMXN(mesa.total_cents)}
           </div>
         </div>
@@ -1018,12 +1021,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           >
             <div className="progress-fill" style={{ width: `${pct}%` }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 11.5, color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)' }}>
             <span>
               {formatMXN(mesa.paid_amount_cents)} pagado ({pct}%)
             </span>
             <span style={{ color: '#ffb59b', fontWeight: 700 }}>
-              {cd ? `⏳ ${cd}` : '⌛ venció'}
+              <Icon name="clock" size={14} className="ico-inline" /> {cd ?? 'venció'}
             </span>
           </div>
         </div>
@@ -1037,8 +1040,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <div className="amt">{formatMXN(itemsAmount)}</div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.75)' }}>de {formatMXN(mesa.total_cents)}</div>
-              <div style={{ fontSize: 12, color: 'var(--teal)', fontWeight: 700 }}>
+              <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)' }}>de {formatMXN(mesa.total_cents)}</div>
+              <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--teal)', fontWeight: 700 }}>
                 {mesa.total_cents > 0 ? Math.round((itemsAmount / mesa.total_cents) * 100) : 0}%
               </div>
             </div>
@@ -1081,7 +1084,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: blocked ? 'default' : 'pointer', textAlign: 'left' }}
                   >
                     <div className={`checkbox ${sel ? 'on' : ''} ${blocked ? 'blocked' : ''}`} aria-hidden="true">
-                      {blocked ? (paidFull ? '✓' : '🔒') : '✓'}
+                      {blocked ? (paidFull ? '✓' : <Icon name="lock" size={13} />) : '✓'}
                     </div>
                     <div className="item-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {i.name}
@@ -1098,7 +1101,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                         <button
                           key={f.bps}
                           className={`tip-pill ${myBpsSel === f.bps ? 'sel' : ''}`}
-                          style={{ padding: '3px 9px', fontSize: 12 }}
+                          style={{ padding: '3px 9px', fontSize: 'var(--fs-sm)' }}
                           onClick={() => setFraction(i.id, f.bps)}
                           role="radio"
                           aria-checked={myBpsSel === f.bps}

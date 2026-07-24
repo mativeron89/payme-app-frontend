@@ -11,14 +11,15 @@ import { useToast } from '../components/ui';
 import { navigate } from '../router';
 import { countdownTo, formatMXN } from '../utils/format';
 import { displayName } from '../utils/identity';
-import { walletTxEmoji, walletTxLabel } from '../utils/labels';
+import { walletTxIcon, walletTxLabel } from '../utils/labels';
+import { Icon, type IconName } from '../components/Icon';
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  italian: '🍝',
-  japanese: '🍣',
-  mexican: '🌮',
-  cafe: '☕',
-  other: '🍽️',
+const CATEGORY_EMOJI: Record<string, IconName> = {
+  italian: 'pasta',
+  japanese: 'sushi',
+  mexican: 'taco',
+  cafe: 'coffee',
+  other: 'dining',
 };
 
 function txDate(iso: string): string {
@@ -96,12 +97,12 @@ export function HomeScreen() {
         <button
           onClick={() => navigate('avisos')}
           aria-label={unread > 0 ? `Avisos: ${unread} sin leer` : 'Avisos'}
-          style={{ position: 'relative', background: 'none', border: 'none', fontSize: 21, cursor: 'pointer', padding: 4 }}
+          style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
         >
-          🔔
+          <Icon name="bell" size={21} />
           {unread > 0 && (
             <span
-              style={{ position: 'absolute', top: -2, right: -4, background: 'var(--orange)', color: '#fff', fontSize: 10.5, fontWeight: 700, borderRadius: 10, minWidth: 17, height: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', fontFamily: 'var(--font-body)' }}
+              style={{ position: 'absolute', top: -2, right: -4, background: 'var(--orange)', color: '#fff', fontSize: 'var(--fs-2xs)', fontWeight: 700, borderRadius: 10, minWidth: 17, height: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', fontFamily: 'var(--font-body)' }}
             >
               {unread}
             </span>
@@ -118,7 +119,7 @@ export function HomeScreen() {
             style={{ background: 'var(--teal-l)', border: '1.5px solid var(--teal)' }}
           >
             <div className="home-card-icon" style={{ background: '#fff' }} aria-hidden="true">
-              🍣
+              <Icon name="sushi" size={22} />
             </div>
             <div>
               <div className="home-card-title">
@@ -145,7 +146,7 @@ export function HomeScreen() {
                 aria-label={showBalance ? 'Ocultar saldo' : 'Mostrar saldo'}
                 aria-pressed={showBalance}
               >
-                {showBalance ? '🙈' : '👁️'}
+                <Icon name={showBalance ? 'eye-off' : 'eye'} size={18} className="ico-inline" />
               </button>
               <button className="saldo-arrow" onClick={() => navigate('cuenta')} aria-label="Ir a Cuenta">
                 →
@@ -153,14 +154,14 @@ export function HomeScreen() {
             </div>
             <div className="saldo-actions">
               <button className="btn btn-teal btn-sm" onClick={() => navigate('cargar')}>
-                <span aria-hidden="true">➕</span> Cargar
+                <Icon name="plus" size={16} className="ico-inline" /> Cargar
               </button>
               <button
                 className="btn btn-sm"
                 style={{ background: 'rgba(255,255,255,0.18)', color: '#fff' }}
                 onClick={() => navigate('transferir')}
               >
-                <span aria-hidden="true">↗️</span> Transferir
+                <Icon name="arrow-up-right" size={16} className="ico-inline" /> Transferir
               </button>
             </div>
           </div>
@@ -185,14 +186,19 @@ export function HomeScreen() {
                     onClick={() => navigate('mesa', m.code)}
                   >
                     <div className="event-icon" aria-hidden="true">
-                      {CATEGORY_EMOJI[m.restaurant.category] ?? '🍽️'}
+                      <Icon name={CATEGORY_EMOJI[m.restaurant.category] ?? 'dining'} size={22} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="event-name">{m.restaurant.name}</div>
                       <div className="event-meta">Mesa {m.code}</div>
                       <div className="caption" style={{ marginTop: 4 }}>
                         {formatMXN(m.paid_amount_cents)} de {formatMXN(m.total_cents)}
-                        {cd ? ` · ⏳ ${cd}` : ''}
+                        {cd ? (
+                          <>
+                            {' · '}
+                            <Icon name="clock" size={14} className="ico-inline" /> {cd}
+                          </>
+                        ) : null}
                       </div>
                     </div>
                   </button>
@@ -222,11 +228,11 @@ export function HomeScreen() {
                     borderBottom: idx < txs.length - 1 ? '1px solid var(--gray-l)' : 'none',
                   }}
                 >
-                  <span style={{ fontSize: 17 }} aria-hidden="true">
-                    {walletTxEmoji(t.type)}
+                  <span style={{ color: 'var(--gray-txt)' }} aria-hidden="true">
+                    <Icon name={walletTxIcon(t.type)} size={20} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {t.description ?? walletTxLabel(t.type)}
                     </div>
                     <div className="caption">{txDate(t.date)}</div>
@@ -235,7 +241,7 @@ export function HomeScreen() {
                   <div
                     style={{
                       fontWeight: 700,
-                      fontSize: 13.5,
+                      fontSize: 'var(--fs-base)',
                       fontVariantNumeric: 'tabular-nums',
                       color: showBalance ? (t.sign === 'credit' ? 'var(--green)' : 'var(--red)') : 'var(--gray-txt)',
                     }}
@@ -252,7 +258,7 @@ export function HomeScreen() {
       </div>
 
       <button className="fab" onClick={() => navigate('scan')}>
-        ➕ Nueva Mesa
+        <Icon name="plus" size={16} className="ico-inline" /> Nueva Mesa
       </button>
     </div>
   );

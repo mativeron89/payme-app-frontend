@@ -34,7 +34,7 @@ export function TopBar({
       <TopLogo />
       <h1
         className="top-title"
-        style={{ fontSize: 14, color: 'var(--gray-txt)', fontFamily: 'var(--font-body)', fontWeight: 600 }}
+        style={{ fontSize: 'var(--fs-base)', color: 'var(--gray-txt)', fontFamily: 'var(--font-body)', fontWeight: 600 }}
       >
         {title}
       </h1>

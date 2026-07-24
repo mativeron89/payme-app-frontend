@@ -1,5 +1,31 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.22.0 — T-D3: set de íconos SVG propio + escala tipográfica (2026-07-23)
+
+Cierra el tier de diseño T-D3 ratificado por Mati: chau emojis como
+iconografía de interfaz, escala de tamaños única.
+
+- **`src/components/Icon.tsx` nuevo**: 40 glifos SVG dibujados a mano
+  (grilla 24×24, trazo 1.75, `currentColor`, cero dependencias — regla dura
+  del repo). Tipado estricto: un nombre inexistente no compila.
+- **~110 emojis de UI migrados a `<Icon>`** en las 12 pantallas +
+  BottomNav: navegación, saldo/ojito, métodos de pago, estados vacíos,
+  categorías de restaurante (pasta/sushi/taco/café), avisos, comprobante,
+  scan (el recibo del encuadre ahora es visible: el emoji traía su color,
+  el SVG hereda), countdowns, candados y compartir.
+- **Movimientos de wallet con glifo semántico** (`walletTxIcon` reemplaza a
+  `walletTxEmoji` en utils/labels.ts): flechas entrante/saliente para
+  transferencias, tiendita OXXO, banco SPEI, plato para pagos de mesa,
+  billete para propinas, +/− para ajustes.
+- **Escala tipográfica en tokens** `--fs-2xs`…`--fs-hero` (10 tamaños):
+  ~85 `fontSize` inline sueltos convertidos; quedan solo los derivados
+  (avatar) y el 16px del CardField (regla anti-zoom de iOS, intocable).
+- **Se conservan a propósito**: ✓ ✕ − ＋ → ÷ tipográficos, los íconos de
+  grupo elegidos por el usuario (contenido, no interfaz), el chip
+  VISA/Mastercard y la G de Google Pay.
+- Verificación visual completa en mock (home, flujo mesa entero hasta
+  comprobante, cuenta, perfil, avisos); typecheck y build verdes.
+
 ## 0.21.0 — Fracciones de platos compartidos (contrato v2.18.1) (2026-07-23)
 
 Consume el contrato fraccional publicado (verificado en repo hermano y vivo;

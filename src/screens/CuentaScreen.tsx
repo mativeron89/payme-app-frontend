@@ -4,10 +4,11 @@ import { api, IS_MOCK } from '../api';
 import { confirmCardSetup } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import type { BalanceResponse, PaymentMethod, StatsResponse, WalletTransaction } from '../api/types';
+import { Icon } from '../components/Icon';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
-import { walletTxEmoji, walletTxLabel } from '../utils/labels';
+import { walletTxIcon, walletTxLabel } from '../utils/labels';
 
 /** s-account: saldo + tabs Historial / Tarjetas (GET balance, wallet-transactions, payment-methods). */
 
@@ -112,22 +113,22 @@ export function CuentaScreen() {
           {/* G-03: el contrato no expone held_balance_cents, así que no podemos
               afirmar "disponible" — con una garantía por saldo activa, parte de
               este monto está retenido. */}
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1.3, fontWeight: 700 }}>
+          <div style={{ fontSize: 'var(--fs-2xs)', color: 'rgba(255,255,255,0.7)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1.3, fontWeight: 700 }}>
             Tu saldo PayMe
           </div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', lineHeight: 1 }}>
+          <div style={{ fontSize: 'var(--fs-2xl)', fontWeight: 800, color: '#fff', lineHeight: 1 }}>
             {balance ? formatMXN(balance.balance_cents) : '…'}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button className="btn btn-teal btn-sm" onClick={() => navigate('cargar')}>
-              <span aria-hidden="true">➕</span> Cargar
+              <Icon name="plus" size={16} className="ico-inline" /> Cargar
             </button>
             <button
               className="btn btn-sm"
               style={{ background: 'rgba(255,255,255,0.18)', color: '#fff' }}
               onClick={() => navigate('transferir')}
             >
-              <span aria-hidden="true">↗️</span> Transferir
+              <Icon name="arrow-up-right" size={16} className="ico-inline" /> Transferir
             </button>
           </div>
         </div>
@@ -148,15 +149,15 @@ export function CuentaScreen() {
                 <div className="sectlabel">Este mes</div>
                 <div style={{ display: 'flex', gap: 8, textAlign: 'center' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 17, fontWeight: 800 }}>{formatMXN(stats.month.spent_cents)}</div>
+                    <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 800 }}>{formatMXN(stats.month.spent_cents)}</div>
                     <div className="caption">gastado</div>
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 17, fontWeight: 800 }}>{stats.month.visits}</div>
+                    <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 800 }}>{stats.month.visits}</div>
                     <div className="caption">salidas</div>
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 17, fontWeight: 800 }}>{formatMXN(stats.month.avg_per_visit_cents)}</div>
+                    <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 800 }}>{formatMXN(stats.month.avg_per_visit_cents)}</div>
                     <div className="caption">promedio</div>
                   </div>
                 </div>
@@ -171,18 +172,18 @@ export function CuentaScreen() {
             {txs === null && <div className="loading">Cargando movimientos…</div>}
             {txs?.length === 0 && (
               <div className="empty">
-                <div className="emoji">🧾</div>
+                <div className="emoji"><Icon name="receipt" size={40} /></div>
                 Todavía no hay movimientos.
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {txs?.map((t) => (
                 <div key={t.id} className="card card-p" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ fontSize: 18 }} aria-hidden="true">
-                    {walletTxEmoji(t.type)}
+                  <div style={{ color: 'var(--gray-txt)' }} aria-hidden="true">
+                    <Icon name={walletTxIcon(t.type)} size={20} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)' }}>
                       {t.description ?? walletTxLabel(t.type)}
                     </div>
                     <div className="caption">
@@ -192,7 +193,7 @@ export function CuentaScreen() {
                   <div
                     style={{
                       fontWeight: 700,
-                      fontSize: 14,
+                      fontSize: 'var(--fs-base)',
                       color: t.sign === 'credit' ? 'var(--green)' : 'var(--red)',
                     }}
                   >
@@ -211,7 +212,7 @@ export function CuentaScreen() {
             {pms === null && <div className="loading">Cargando tarjetas…</div>}
             {pms?.length === 0 && (
               <div className="empty">
-                <div className="emoji">💳</div>
+                <div className="emoji"><Icon name="card" size={40} /></div>
                 No tenés tarjetas guardadas.
               </div>
             )}
@@ -219,8 +220,8 @@ export function CuentaScreen() {
               <div key={pm.id} className="card card-p" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <CardBrandChip brand={pm.brand} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{pm.bank_name ?? pm.brand}</div>
-                  <div style={{ fontSize: 11, color: 'var(--gray-txt)', fontFamily: 'monospace' }}>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)' }}>{pm.bank_name ?? pm.brand}</div>
+                  <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--gray-txt)', fontFamily: 'monospace' }}>
                     ···· {pm.last_four} · {pm.type === 'credit' ? 'Crédito' : 'Débito'}
                   </div>
                 </div>
@@ -233,7 +234,7 @@ export function CuentaScreen() {
                 )}
                 <button
                   className="back-btn"
-                  style={{ width: 30, height: 30, fontSize: 14 }}
+                  style={{ width: 30, height: 30, fontSize: 'var(--fs-base)' }}
                   aria-label={`Quitar tarjeta ${pm.last_four}`}
                   onClick={() => removePm(pm)}
                 >

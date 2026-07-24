@@ -1,6 +1,7 @@
 import { IS_MOCK } from '../api';
 import { resetDemo } from '../api/mock/store';
 import { useAuth } from '../auth/AuthContext';
+import { Icon } from '../components/Icon';
 import { Avatar, TopBar } from '../components/ui';
 import { navigate } from '../router';
 
@@ -19,7 +20,7 @@ export function PerfilScreen() {
             {user ? `${user.first_name} ${user.last_name}` : 'Tu cuenta'}
           </div>
           {user && (
-            <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-txt)' }}>
+            <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 'var(--fs-sm)', color: 'var(--gray-txt)' }}>
               {user.payme_id}
             </div>
           )}
@@ -32,26 +33,26 @@ export function PerfilScreen() {
         <div className="card" style={{ marginBottom: 12 }}>
           {user && (
             <div className="list-row" style={{ cursor: 'default' }}>
-              <span>📧</span>
+              <span><Icon name="mail" size={16} /></span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>Email</div>
+                <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 600 }}>Email</div>
                 <div className="caption">{user.email}</div>
               </div>
             </div>
           )}
           <button className="list-row" onClick={() => navigate('cuenta')}>
-            <span>💳</span>
-            <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Saldo y tarjetas</div>
+            <span><Icon name="card" size={16} /></span>
+            <div style={{ flex: 1, fontSize: 'var(--fs-sm)', fontWeight: 600 }}>Saldo y tarjetas</div>
             <span style={{ color: 'var(--gray-b)' }}>→</span>
           </button>
           <button className="list-row" onClick={() => navigate('amigos')}>
-            <span>👥</span>
-            <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Amigos</div>
+            <span><Icon name="users" size={16} /></span>
+            <div style={{ flex: 1, fontSize: 'var(--fs-sm)', fontWeight: 600 }}>Amigos</div>
             <span style={{ color: 'var(--gray-b)' }}>→</span>
           </button>
           <button className="list-row" onClick={() => navigate('grupos')}>
-            <span>👨‍👩‍👧</span>
-            <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Grupos</div>
+            <span><Icon name="users-group" size={16} /></span>
+            <div style={{ flex: 1, fontSize: 'var(--fs-sm)', fontWeight: 600 }}>Grupos</div>
             <span style={{ color: 'var(--gray-b)' }}>→</span>
           </button>
         </div>
@@ -70,7 +71,7 @@ export function PerfilScreen() {
                 window.location.reload();
               }}
             >
-              🔄 Reiniciar la demo
+              <Icon name="refresh" size={16} className="ico-inline" /> Reiniciar la demo
             </button>
           </>
         )}

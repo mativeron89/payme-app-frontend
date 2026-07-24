@@ -30,6 +30,19 @@
   --orange-txt: #c2410c;
   --teal-txt: #0a7b80;
   --gray-txt: #64748b;
+  /* T-D3: escala tipográfica ÚNICA (antes: ~25 tamaños ad-hoc). Regla de
+     migración: 10-10.5→2xs · 11-11.5→xs · 12-13→sm · 13.5-14.5→base ·
+     15-16→md · 17-18→lg · 19-22→xl · 24-28→2xl · 32-36→3xl · 38-44→hero. */
+  --fs-2xs: 10.5px;
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs-base: 14px;
+  --fs-md: 15.5px;
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --fs-3xl: 33px;
+  --fs-hero: 40px;
   --radius: 16px;
   --radius-sm: 10px;
   --shadow-sm: 0 2px 8px rgba(15, 31, 61, 0.08);
@@ -509,6 +522,12 @@ body {
 }
 .top-logo.inv {
   color: #fff;
+}
+
+/* Ícono SVG conviviendo con texto en un botón/label. */
+.ico-inline {
+  display: inline-block !important;
+  vertical-align: -3px;
 }
 
 /* Chip de marca Mastercard: los dos círculos, en CSS puro (sin librerías). */

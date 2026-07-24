@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { AppNotification, PendingInvitation } from '../api/types';
+import { Icon, type IconName } from '../components/Icon';
 import { TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 
@@ -9,15 +10,15 @@ import { navigate } from '../router';
  * y el inbox de notificaciones (GET /notifications) abajo.
  */
 
-const NOTIF_EMOJI: Record<string, string> = {
-  invitation_received: '🍽️',
-  transfer_received: '↘️',
-  transfer_sent: '↗️',
-  topup_succeeded: '✅',
-  topup_pending: '🏪',
-  mesa_shortfall_charged: '🔒',
-  mesa_garantia_impagos: '⚠️',
-  payment_failed: '❌',
+const NOTIF_ICON: Record<string, IconName> = {
+  invitation_received: 'dining',
+  transfer_received: 'arrow-down-left',
+  transfer_sent: 'arrow-up-right',
+  topup_succeeded: 'check-circle',
+  topup_pending: 'store',
+  mesa_shortfall_charged: 'lock',
+  mesa_garantia_impagos: 'warning',
+  payment_failed: 'x-circle',
 };
 
 function relTime(iso: string): string {
@@ -87,9 +88,9 @@ export function AvisosScreen() {
             {invitations.map((inv) => (
               <div key={inv.id} className="card card-p" style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <div style={{ fontSize: 26 }}>🍣</div>
+                  <Icon name="sushi" size={26} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>
+                    <div style={{ fontSize: 'var(--fs-base)', fontWeight: 700 }}>
                       {inv.inviter_first_name} te invitó a {inv.restaurant_name}
                     </div>
                     <div className="caption">
@@ -99,7 +100,7 @@ export function AvisosScreen() {
                 </div>
                 <button
                   className="btn btn-primary"
-                  style={{ padding: 12, fontSize: 14 }}
+                  style={{ padding: 12, fontSize: 'var(--fs-base)' }}
                   onClick={() => accept(inv)}
                   disabled={busyId === inv.id}
                 >
@@ -114,7 +115,7 @@ export function AvisosScreen() {
         {notifs === null && <div className="loading">Cargando avisos…</div>}
         {notifs?.length === 0 && invitations.length === 0 && (
           <div className="empty">
-            <div className="emoji">🔔</div>
+            <div className="emoji"><Icon name="bell" size={40} /></div>
             Nada nuevo por acá.
           </div>
         )}
@@ -125,9 +126,9 @@ export function AvisosScreen() {
               className="card card-p"
               style={{ display: 'flex', gap: 12, alignItems: 'flex-start', opacity: n.read_at ? 0.65 : 1 }}
             >
-              <div style={{ fontSize: 18 }}>{NOTIF_EMOJI[n.type] ?? '🔔'}</div>
+              <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: n.read_at ? 500 : 700, fontFamily: 'var(--font-body)', color: 'var(--navy)' }}>
+                <div style={{ fontSize: 'var(--fs-base)', fontWeight: n.read_at ? 500 : 700, fontFamily: 'var(--font-body)', color: 'var(--navy)' }}>
                   {n.body}
                 </div>
                 <div className="caption" style={{ marginTop: 2 }}>

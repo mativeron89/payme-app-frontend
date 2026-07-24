@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, newIdempotencyKey } from '../api';
 import type { ClabeResponse, PaymentMethod, TopupOxxoResponse } from '../api/types';
+import { Icon } from '../components/Icon';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
@@ -72,7 +73,9 @@ export function TopupScreen() {
         <TopBar title="Cargar saldo" onBack={() => navigate('cuenta')} />
         <div className="scroll" style={{ padding: 16 }}>
           <div style={{ textAlign: 'center', padding: '10px 0 16px' }}>
-            <div style={{ fontSize: 40 }}>🏪</div>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <Icon name="store" size={40} />
+            </div>
             <div className="h2" style={{ marginTop: 8 }}>
               Pagá en cualquier OXXO
             </div>
@@ -80,7 +83,7 @@ export function TopupScreen() {
           <div className="voucher">
             <div className="caption">Referencia OXXO</div>
             <div className="num">{voucher.voucher_reference}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{formatMXN(voucher.amount_cents)}</div>
+            <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, marginBottom: 4 }}>{formatMXN(voucher.amount_cents)}</div>
             <div className="caption">
               Vence el {new Date(voucher.voucher_expires_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })} ·
               mostrá este número en caja
@@ -126,13 +129,13 @@ export function TopupScreen() {
         )}
         <div className="seg">
           <button className={`seg-btn ${via === 'oxxo' ? 'on' : ''}`} onClick={() => setVia('oxxo')}>
-            🏪 OXXO
+            <Icon name="store" size={16} className="ico-inline" /> OXXO
           </button>
           <button className={`seg-btn ${via === 'card' ? 'on' : ''}`} onClick={() => setVia('card')}>
-            💳 Tarjeta
+            <Icon name="card" size={16} className="ico-inline" /> Tarjeta
           </button>
           <button className={`seg-btn ${via === 'spei' ? 'on' : ''}`} onClick={() => setVia('spei')}>
-            🏦 SPEI
+            <Icon name="bank" size={16} className="ico-inline" /> SPEI
           </button>
         </div>
         {error && (
@@ -153,7 +156,7 @@ export function TopupScreen() {
             <div className="method-card sel" style={{ cursor: 'default' }}>
               <CardBrandChip brand={pm.brand} />
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>
                   {pm.bank_name ?? pm.brand} ···· {pm.last_four}
                 </div>
                 <div className="caption">
@@ -179,15 +182,15 @@ export function TopupScreen() {
                 </div>
                 <button
                   className="btn btn-teal"
-                  style={{ marginTop: 12, padding: 12, fontSize: 13 }}
+                  style={{ marginTop: 12, padding: 12, fontSize: 'var(--fs-sm)' }}
                   onClick={() => {
                     void navigator.clipboard.writeText(clabe.clabe).then(
-                      () => toast('CLABE copiada 📋'),
+                      () => toast('CLABE copiada ✓'),
                       () => toast('No se pudo copiar'),
                     );
                   }}
                 >
-                  📋 Copiar CLABE
+                  <Icon name="copy" size={16} className="ico-inline" /> Copiar CLABE
                 </button>
               </div>
             ) : (

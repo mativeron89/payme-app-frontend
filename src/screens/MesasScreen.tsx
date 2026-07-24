@@ -5,13 +5,14 @@ import { navigate } from '../router';
 import { countdownTo, formatMXN } from '../utils/format';
 import { mesaStatusBadgeClass, mesaStatusLabel } from '../utils/labels';
 import { TopBar } from '../components/ui';
+import { Icon, type IconName } from '../components/Icon';
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  italian: '🍝',
-  japanese: '🍣',
-  mexican: '🌮',
-  cafe: '☕',
-  other: '🍽️',
+const CATEGORY_EMOJI: Record<string, IconName> = {
+  italian: 'pasta',
+  japanese: 'sushi',
+  mexican: 'taco',
+  cafe: 'coffee',
+  other: 'dining',
 };
 
 /** Una mesa del historial: pagos propios agrupados por mesa_code. */
@@ -94,7 +95,9 @@ export function MesasScreen() {
 
         {empty && (
           <div className="empty">
-            <div className="emoji">🍽️</div>
+            <div className="emoji">
+              <Icon name="dining" size={40} />
+            </div>
             Todavía no pagaste ninguna mesa.
           </div>
         )}
@@ -114,7 +117,7 @@ export function MesasScreen() {
                     onClick={() => navigate('mesa', m.code)}
                   >
                     <div className="event-icon" aria-hidden="true">
-                      {CATEGORY_EMOJI[m.restaurant.category] ?? '🍽️'}
+                      <Icon name={CATEGORY_EMOJI[m.restaurant.category] ?? 'dining'} size={22} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="event-name">{m.restaurant.name}</div>
@@ -147,7 +150,9 @@ export function MesasScreen() {
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div className="event-amount">{formatMXN(m.total_cents)}</div>
-                      <div className="countdown">{cd ? `⏳ ${cd}` : '⌛ venció'}</div>
+                      <div className="countdown">
+                        <Icon name="clock" size={14} className="ico-inline" /> {cd ?? 'venció'}
+                      </div>
                     </div>
                   </button>
                 );
@@ -172,16 +177,16 @@ export function MesasScreen() {
                     borderBottom: idx < pastMesas.length - 1 ? '1px solid var(--gray-l)' : 'none',
                   }}
                 >
-                  <span style={{ fontSize: 18 }} aria-hidden="true">
-                    {CATEGORY_EMOJI[h.category] ?? '🍽️'}
+                  <span aria-hidden="true">
+                    <Icon name={CATEGORY_EMOJI[h.category] ?? 'dining'} size={22} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{h.restaurant}</div>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)' }}>{h.restaurant}</div>
                     <div className="caption">
                       {historyDate(h.date)} · Mesa {h.mesa_code}
                     </div>
                   </div>
-                  <div style={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
+                  <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)', fontVariantNumeric: 'tabular-nums' }}>
                     {formatMXN(h.amount_cents)}
                   </div>
                 </div>
@@ -208,7 +213,7 @@ export function MesasScreen() {
         )}
       </div>
       <button className="fab solo" onClick={() => navigate('scan')}>
-        ➕ Nueva Mesa
+        <Icon name="plus" size={16} className="ico-inline" /> Nueva Mesa
       </button>
     </div>
   );

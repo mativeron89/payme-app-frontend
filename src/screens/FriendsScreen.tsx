@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { Friend } from '../api/types';
 import { Avatar, TopBar, useToast } from '../components/ui';
+import { Icon } from '../components/Icon';
 import { navigate } from '../router';
 
 /** s-friends: lista + búsqueda + alta por email/payme_id (routes/friends.js). */
@@ -55,7 +56,7 @@ export function FriendsScreen() {
           <input
             className="input"
             style={{ margin: 0 }}
-            placeholder="🔍 Buscar por nombre, email o ID"
+            placeholder="Buscar por nombre, email o ID"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
@@ -71,10 +72,10 @@ export function FriendsScreen() {
                 onChange={(e) => setNewQuery(e.target.value)}
               />
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-ghost" style={{ padding: 12, fontSize: 13 }} onClick={() => setAdding(false)}>
+                <button className="btn btn-ghost" style={{ padding: 12, fontSize: 'var(--fs-sm)' }} onClick={() => setAdding(false)}>
                   Cancelar
                 </button>
-                <button className="btn btn-primary" style={{ padding: 12, fontSize: 13 }} onClick={addFriend} disabled={busy || !newQuery.trim()}>
+                <button className="btn btn-primary" style={{ padding: 12, fontSize: 'var(--fs-sm)' }} onClick={addFriend} disabled={busy || !newQuery.trim()}>
                   {busy ? 'Buscando…' : 'Agregar'}
                 </button>
               </div>
@@ -84,7 +85,7 @@ export function FriendsScreen() {
         {visible === null && <div className="loading">Cargando amigos…</div>}
         {visible?.length === 0 && (
           <div className="empty">
-            <div className="emoji">👥</div>
+            <div className="emoji"><Icon name="users" size={40} /></div>
             {friends?.length === 0 ? 'Todavía no agregaste amigos.' : 'Sin resultados para esa búsqueda.'}
           </div>
         )}
@@ -99,15 +100,15 @@ export function FriendsScreen() {
                 </div>
                 <button
                   className="btn"
-                  style={{ width: 'auto', padding: '7px 12px', fontSize: 12, background: 'var(--teal-l)', color: '#0a7b80' }}
+                  style={{ width: 'auto', padding: '7px 12px', fontSize: 'var(--fs-sm)', background: 'var(--teal-l)', color: '#0a7b80' }}
                   onClick={() => navigate('transferir', f.payme_id)}
                   aria-label={`Transferir a ${f.full_name}`}
                 >
-                  <span aria-hidden="true">↗️</span>
+                  <Icon name="arrow-up-right" size={16} />
                 </button>
                 <button
                   className="back-btn"
-                  style={{ width: 30, height: 30, fontSize: 13 }}
+                  style={{ width: 30, height: 30, fontSize: 'var(--fs-sm)' }}
                   aria-label={`Quitar a ${f.first_name}`}
                   onClick={async () => {
                     if (!window.confirm(`¿Quitar a ${f.full_name} de tus amigos?`)) return;

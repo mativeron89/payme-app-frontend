@@ -1,3 +1,4 @@
+import { Icon, type IconName } from './Icon';
 import { navigate, type PageId } from '../router';
 
 /**
@@ -6,11 +7,11 @@ import { navigate, type PageId } from '../router';
  * flujos (mesa, pago, scan) siguen a pantalla completa.
  */
 
-const TABS: Array<{ page: PageId; label: string; icon: string }> = [
-  { page: 'home', label: 'Inicio', icon: '🏠' },
-  { page: 'amigos', label: 'Amigos', icon: '👥' },
-  { page: 'grupos', label: 'Grupos', icon: '👨‍👩‍👧' },
-  { page: 'perfil', label: 'Perfil', icon: '⚙️' },
+const TABS: Array<{ page: PageId; label: string; icon: IconName }> = [
+  { page: 'home', label: 'Inicio', icon: 'home' },
+  { page: 'amigos', label: 'Amigos', icon: 'users' },
+  { page: 'grupos', label: 'Grupos', icon: 'users-group' },
+  { page: 'perfil', label: 'Perfil', icon: 'settings' },
 ];
 
 export function BottomNav({ active }: { active: PageId }) {
@@ -24,7 +25,7 @@ export function BottomNav({ active }: { active: PageId }) {
           aria-current={active === t.page ? 'page' : undefined}
         >
           <span className="ico" aria-hidden="true">
-            {t.icon}
+            <Icon name={t.icon} size={22} />
           </span>
           {t.label}
         </button>

@@ -54,10 +54,10 @@ export function LoginScreen() {
   return (
     <div className="login-screen">
       <div style={{ textAlign: 'center', marginBottom: 22 }}>
-        <div className="logo" style={{ fontSize: 36 }}>
+        <div className="logo" style={{ fontSize: 'var(--fs-3xl)' }}>
           Pay<span className="t">Me</span>
         </div>
-        <div className="hero-sub" style={{ fontSize: 14 }}>
+        <div className="hero-sub" style={{ fontSize: 'var(--fs-base)' }}>
           Dividí y pagá la cuenta desde la mesa
         </div>
       </div>
