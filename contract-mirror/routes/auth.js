@@ -110,7 +110,8 @@ router.post('/login', validateBody(schemas.login), async (req, res, next) => {
     const normalized = normalizeEmail(email);
 
     const { rows } = await pool.query(
-      `SELECT id, password_hash, status FROM users
+      `SELECT id, payme_id, email, first_name, last_name, password_hash, status
+         FROM users
         WHERE email_normalized = $1 OR LOWER(email) = $1
         LIMIT 1`,
       [normalized]
@@ -136,6 +137,12 @@ router.post('/login', validateBody(schemas.login), async (req, res, next) => {
     logger.audit('user_login', { user_id: user.id });
 
     res.json({
+      // G-02 (v2.20): mismo shape de user que register — quien se loguea (no
+      // registra) también conoce su nombre/payme_id sin round-trip extra.
+      user: {
+        id: user.id, payme_id: user.payme_id, email: user.email,
+        first_name: user.first_name, last_name: user.last_name,
+      },
       access_token: accessToken,
       refresh_token: session.rawRefresh,
       expires_in: JWT_TTL_SECONDS,

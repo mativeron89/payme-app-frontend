@@ -6,24 +6,36 @@
 
 // ─── Auth (routes/auth.js) ─────────────────────────────────
 
-/** Shape de `user` en POST /api/auth/register (register RETURNING). */
+/** Shape de `user` en register/login (v2.20) y GET /account/me. */
 export interface User {
   id: string;
   payme_id: string;
   email: string;
   first_name: string;
   last_name: string;
+  /** Solo en GET /account/me (G-02, v2.20). Nullable en el backend. */
+  phone?: string | null;
+  /** Solo en GET /account/me (G-02, v2.20). */
+  created_at?: string;
 }
 
-/** POST /api/auth/login → 200 (OJO G-02: login NO devuelve user). */
-export interface LoginResponse {
+/** Tokens comunes de auth. El refresh devuelve SOLO esto (sin `user`). */
+export interface TokenPair {
   access_token: string;
   refresh_token: string;
   expires_in: number;
 }
 
-/** POST /api/auth/register → 201. */
-export interface RegisterResponse extends LoginResponse {
+/** POST /api/auth/login → 200 (G-02, v2.20: incluye `user`, mismo shape que register). */
+export interface LoginResponse extends TokenPair {
+  user: User;
+}
+
+/** POST /api/auth/register → 201 (mismo shape que login desde v2.20). */
+export type RegisterResponse = LoginResponse;
+
+/** GET /api/account/me → 200 (G-02, v2.20). */
+export interface MeResponse {
   user: User;
 }
 

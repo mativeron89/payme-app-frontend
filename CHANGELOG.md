@@ -1,5 +1,25 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.23.0 — G-02: perfil propio (contrato v2.20.0) (2026-07-24)
+
+Consume el contrato de identidad publicado (verificado en repo hermano y en
+vivo). Cierra G-02: tras un login real, el nombre es el REAL.
+
+- **`GET /account/me`** en el facade (`getMe`), tipos `MeResponse` +
+  `User.phone/created_at` (solo /me), y `TokenPair` separado de
+  `LoginResponse` (el refresh devuelve solo tokens — decisión del plan G-02).
+- **Login guarda `user`** (v2.20 lo devuelve, mismo shape que register) y las
+  **sesiones persistidas pre-v2.20 se hidratan** una vez con `GET /account/me`
+  al restaurar (AuthContext); si falla, se saluda sin nombre y el próximo
+  login completa.
+- **Borrado el paliativo del email**: `identity.ts` ya no deriva el nombre del
+  local-part tipeado y `StoredSession` pierde el campo `email`.
+- Mock: `mockGetMe` sobre el user vigente de la demo. Espejo refrescado a
+  v2.20.0 (`routes/auth.js`, `routes/account.js`).
+- Verificado: mock (sesión vieja sin `user` plantada a mano → hidrata y
+  saluda "Hola, Mati!") y vivo (login con `user`, `/account/me` con
+  `phone: null` + `created_at`, 401 sin token).
+
 ## 0.22.0 — T-D3: set de íconos SVG propio + escala tipográfica (2026-07-23)
 
 Cierra el tier de diseño T-D3 ratificado por Mati: chau emojis como

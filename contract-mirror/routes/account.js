@@ -15,6 +15,24 @@ const { centsToDisplay } = require('../utils/money');
 const router = express.Router();
 router.use(requireAuth);
 
+// ─── GET /me — perfil propio (G-02, v2.20) ─────────────────────────────────
+// SELECT propio con ALLOWLIST explícita en el punto de exposición: no se
+// reusa req.user (el middleware no trae phone/created_at y no queremos
+// engordar una query que corre en CADA request autenticado). Jamás exponer
+// password_hash / stripe_customer_id / email_normalized / kyc_status.
+// Mismo shape que register (+ phone/created_at); wrapper { user } idéntico.
+router.get('/me', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, payme_id, email, first_name, last_name, phone, created_at
+         FROM users WHERE id = $1`,
+      [req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'user_not_found' });
+    res.json({ user: rows[0] });
+  } catch (err) { next(err); }
+});
+
 router.get('/balance', async (req, res, next) => {
   try {
     const { rows } = await pool.query(

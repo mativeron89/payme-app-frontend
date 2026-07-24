@@ -11,6 +11,7 @@ import { clearSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
 import type {
   BalanceResponse,
+  MeResponse,
   FractionRequest,
   ClabeResponse,
   CreateInvitationResponse,
@@ -87,6 +88,8 @@ export interface Api {
   logout(): Promise<void>;
   restoreSession(): StoredSession | null;
   onSessionExpired(cb: (() => void) | null): void;
+  /** Perfil propio (G-02, v2.20) — hidrata sesiones persistidas sin `user`. */
+  getMe(): Promise<MeResponse>;
   // cuenta
   getBalance(): Promise<BalanceResponse>;
   getWalletTransactions(): Promise<WalletTransactionsResponse>;
@@ -152,6 +155,7 @@ const realApi: Api = {
   logout: () => httpLogout(),
   restoreSession: () => loadSession(),
   onSessionExpired: (cb) => setOnSessionExpired(cb),
+  getMe: () => httpRequest<MeResponse>('GET', '/account/me'),
 
   getBalance: () => httpRequest<BalanceResponse>('GET', '/account/balance'),
   getHistory: () => httpRequest<HistoryResponse>('GET', '/account/history'),
@@ -307,6 +311,7 @@ const mockApi: Api = {
   },
   restoreSession: () => loadSession(),
   onSessionExpired: () => undefined,
+  getMe: () => mock.mockGetMe(),
 
   getBalance: () => mock.mockBalance(),
   getWalletTransactions: () => mock.mockWalletTransactions(),

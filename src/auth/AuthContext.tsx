@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api } from '../api';
-import type { StoredSession } from '../api/storage';
+import { saveSession, type StoredSession } from '../api/storage';
 import type { RegisterRequest } from '../api/types';
 
 interface AuthState {
@@ -27,6 +27,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api.onSessionExpired(() => setSession(null));
     return () => api.onSessionExpired(null);
   }, []);
+
+  // G-02 (v2.20): una sesión persistida ANTES de que login devolviera `user`
+  // no tiene identidad — se hidrata una sola vez con GET /account/me. Si
+  // falla (p. ej. offline), se sigue sin nombre; el próximo login la completa.
+  useEffect(() => {
+    if (!session || session.user) return;
+    let alive = true;
+    api
+      .getMe()
+      .then((r) => {
+        if (!alive) return;
+        setSession((cur) => {
+          if (!cur || cur.user) return cur;
+          const next = { ...cur, user: r.user };
+          saveSession(next);
+          return next;
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [session]);
 
   const login = useCallback(async (email: string, password: string) => {
     setSession(await api.login(email, password));

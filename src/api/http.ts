@@ -1,5 +1,5 @@
 import { clearSession, loadSession, saveSession, type StoredSession } from './storage';
-import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse } from './types';
+import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenPair } from './types';
 
 /**
  * Cliente HTTP real contra el app backend (contract-mirror/).
@@ -60,7 +60,8 @@ async function rawRequest<T>(
 /** Refresh con rotación: guarda el par nuevo de tokens antes de devolver. */
 async function tryRefresh(session: StoredSession): Promise<StoredSession | null> {
   try {
-    const r = await rawRequest<LoginResponse>('POST', '/auth/refresh', {
+    // El refresh devuelve SOLO tokens (sin `user` — decisión G-02 v2.20).
+    const r = await rawRequest<TokenPair>('POST', '/auth/refresh', {
       refresh_token: session.refresh_token,
     });
     const updated: StoredSession = {
@@ -115,12 +116,10 @@ export async function httpGuestRequest<T>(
 
 export async function httpLogin(email: string, password: string): Promise<StoredSession> {
   const r = await rawRequest<LoginResponse>('POST', '/auth/login', { email, password });
-  // G-02: el login no devuelve `user`. Guardamos el email tipeado como único
-  // dato de identidad disponible hasta que exista un endpoint de perfil.
   const session: StoredSession = {
     access_token: r.access_token,
     refresh_token: r.refresh_token,
-    email,
+    user: r.user,
   };
   saveSession(session);
   return session;

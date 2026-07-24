@@ -1,6 +1,7 @@
 import { centsToDisplay, fractionAmount, splitEqual, tipFromBps } from '../../utils/money';
 import { saveSession, type StoredSession } from '../storage';
 import type {
+  MeResponse,
   BalanceResponse,
   ClabeResponse,
   CreateInvitationResponse,
@@ -111,6 +112,11 @@ export async function mockLogin(email: string, _password: string): Promise<Store
   };
   saveSession(session);
   return delay(session);
+}
+
+/** GET /account/me (G-02, v2.20): el user vigente de la demo. */
+export async function mockGetMe(): Promise<MeResponse> {
+  return delay({ user: state.user });
 }
 
 export async function mockRegister(data: {
