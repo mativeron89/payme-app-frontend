@@ -168,10 +168,18 @@ export async function mockWalletTransactions(): Promise<WalletTransactionsRespon
   return delay({ transactions: [...state.walletTx], limit: 30, offset: 0 });
 }
 
-/** GET /account/history: pagos propios en mesas, más reciente primero. */
-export async function mockHistory(): Promise<HistoryResponse> {
-  const sorted = [...state.history].sort((a, b) => b.date.localeCompare(a.date));
-  return delay({ history: sorted, limit: 20, offset: 0 });
+/** GET /account/history: pagos propios, más reciente primero. Replica la
+ *  paginación real (limit default 20, máx 100) y los filtros from/to. */
+export async function mockHistory(params?: {
+  from?: string;
+  to?: string;
+  limit?: number;
+}): Promise<HistoryResponse> {
+  const limit = Math.min(params?.limit ?? 20, 100);
+  let sorted = [...state.history].sort((a, b) => b.date.localeCompare(a.date));
+  if (params?.from) sorted = sorted.filter((h) => h.date >= params.from!);
+  if (params?.to) sorted = sorted.filter((h) => h.date <= params.to!);
+  return delay({ history: sorted.slice(0, limit), limit, offset: 0 });
 }
 
 // ─── v2.18 · Fracciones (réplica de services/itemClaims.js del espejo) ─────
@@ -527,6 +535,25 @@ export async function mockPayMesa(
       status: req.payment_type === 'wallet' ? 'processed' : 'succeeded',
       payment_type: req.payment_type,
       requires_action: false,
+    },
+  });
+}
+
+/** POST /:code/invitations type in_app: invita a un amigo por payme_id. */
+export async function mockInviteFriend(code: string, paymeId: string): Promise<CreateInvitationResponse> {
+  const mesa = findMesa(code);
+  if (!mesa) return fail(404, 'mesa_not_found');
+  if (!mesaPayable(mesa)) return fail(409, 'mesa_not_invitable', { status: mesa.status });
+  if (!state.friends.some((f) => f.payme_id === paymeId)) {
+    return fail(404, 'invited_user_not_found');
+  }
+  return delay({
+    invitation: {
+      id: mockId('f'),
+      invitation_type: 'in_app' as const,
+      status: 'pending',
+      expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+      created_at: new Date().toISOString(),
     },
   });
 }

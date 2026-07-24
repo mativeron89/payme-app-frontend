@@ -111,25 +111,33 @@ export function HomeScreen() {
       </div>
 
       <div className="scroll" style={{ padding: '14px 16px' }}>
+        {/* T-F1 (feedback del hermano): botón "Aceptar" explícito a la derecha
+            en vez del banner-que-acepta-al-tocar — evita aceptar sin querer. */}
         {invitation && (
-          <button
-            className="home-card"
-            onClick={() => void acceptFromBanner()}
-            disabled={accepting}
+          <div
+            className="home-card static"
             style={{ background: 'var(--teal-l)', border: '1.5px solid var(--teal)' }}
           >
             <div className="home-card-icon" style={{ background: '#fff' }} aria-hidden="true">
               <Icon name="sushi" size={22} />
             </div>
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div className="home-card-title">
                 {invitation.inviter_first_name} te invitó a {invitation.restaurant_name}
               </div>
               <div className="home-card-sub" style={{ color: 'var(--gray-d)' }}>
-                {accepting ? 'Sumándote a la mesa…' : `Mesa ${invitation.mesa_code} · tocá para aceptar`}
+                Mesa {invitation.mesa_code}
               </div>
             </div>
-          </button>
+            <button
+              className="btn btn-teal btn-sm btn-fit"
+              onClick={() => void acceptFromBanner()}
+              disabled={accepting}
+              aria-label={`Aceptar invitación a ${invitation.restaurant_name}`}
+            >
+              {accepting ? 'Sumando…' : 'Aceptar'}
+            </button>
+          </div>
         )}
 
         {/* En modo demo (?demo=1) se saca del encuadre: sugiere wallet. */}

@@ -8,6 +8,7 @@ import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
+import { InviteFriends } from '../components/InviteFriends';
 import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
@@ -869,7 +870,7 @@ export function CreateMesaFlow() {
   if (step === 'share' && created) {
     const code = created.mesa.code;
     return (
-      <div className="screen">
+      <div className="screen has-cta">
         <TopBar title="Invitar a la mesa" onBack={() => navigate('mesa', code)} />
         <div className="scroll" style={{ padding: 16 }}>
           <div style={{ textAlign: 'center', padding: '8px 0 12px' }}>
@@ -924,6 +925,9 @@ export function CreateMesaFlow() {
           ) : (
             <div className="loading">Generando link…</div>
           )}
+          {/* Feedback del hermano (2026-07-24): invitar DIRECTO a amigos de la
+              app, con buscador y grupos — el link queda para los que no la tienen. */}
+          <InviteFriends code={code} />
         </div>
         <button className="cta-float" onClick={() => navigate('mesa', code)}>
           Ir a la mesa → elegir lo mío

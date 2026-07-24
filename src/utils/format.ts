@@ -25,3 +25,8 @@ export function countdownTo(isoDate: string, now: Date = new Date()): string | n
   const sec = totalSec % 60;
   return `${min}:${sec.toString().padStart(2, '0')}`;
 }
+
+/** Normaliza para búsqueda: sin acentos y en minúsculas ("José" → "jose"). */
+export function fold(s: string): string {
+  return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}

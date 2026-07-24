@@ -1,9 +1,9 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, IS_MOCK } from '../api';
 import { confirmCardSetup } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
-import type { BalanceResponse, PaymentMethod, StatsResponse, WalletTransaction } from '../api/types';
+import type { BalanceResponse, HistoryEntry, PaymentMethod, StatsResponse, WalletTransaction } from '../api/types';
 import { Icon } from '../components/Icon';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
@@ -21,6 +21,70 @@ function txDate(iso: string): string {
   return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
 }
 
+/**
+ * Torta de gastos por categoría (T-F1, feedback del hermano): computada en el
+ * front desde GET /account/history (cada pago trae `category` — sin pedirle
+ * nada nuevo al backend). Las categorías son las del contrato; "bar" no
+ * existe hoy en el enum del backend (anotado con Mati).
+ */
+const CAT_LABEL: Record<string, string> = {
+  italian: 'Italiana',
+  japanese: 'Japonesa',
+  mexican: 'Mexicana',
+  cafe: 'Café',
+  bar: 'Bar',
+  other: 'Otros',
+};
+const CAT_COLORS = ['var(--navy)', 'var(--teal)', 'var(--orange)', '#8FA6C0', '#C9D4E3'];
+
+function CategoryPie({ slices }: { slices: Array<[string, number]> }) {
+  const total = slices.reduce((s, [, v]) => s + v, 0);
+  if (total <= 0) return null;
+  // Donut por stroke-dasharray sobre circunferencia normalizada a 100.
+  const R = 15.9155;
+  let offset = 25; // arranca a las 12
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 }}>
+      <svg width="96" height="96" viewBox="0 0 42 42" aria-hidden="true" style={{ flexShrink: 0 }}>
+        {slices.map(([cat, v], i) => {
+          const pct = (v / total) * 100;
+          const el = (
+            <circle
+              key={cat}
+              cx="21"
+              cy="21"
+              r={R}
+              fill="none"
+              stroke={CAT_COLORS[i % CAT_COLORS.length]}
+              strokeWidth="7"
+              strokeDasharray={`${pct} ${100 - pct}`}
+              strokeDashoffset={offset}
+            />
+          );
+          offset -= pct;
+          return el;
+        })}
+      </svg>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {slices.map(([cat, v], i) => (
+          <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span
+              style={{ width: 10, height: 10, borderRadius: 3, background: CAT_COLORS[i % CAT_COLORS.length], flexShrink: 0 }}
+              aria-hidden="true"
+            />
+            <span style={{ flex: 1, fontSize: 'var(--fs-sm)', fontFamily: 'var(--font-body)' }}>
+              {CAT_LABEL[cat] ?? 'Otros'}
+            </span>
+            <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+              {formatMXN(v)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function CuentaScreen() {
   const toast = useToast();
   const [adding, setAdding] = useState(false);
@@ -36,6 +100,21 @@ export function CuentaScreen() {
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
   const [pms, setPms] = useState<PaymentMethod[] | null>(null);
   const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+
+  // Gastos del mes por categoría, ordenados de mayor a menor (para la torta).
+  // Mes en UTC: espeja el date_trunc('month', NOW()) del backend (server en
+  // UTC) para que la torta cierre contra el "gastado" de stats de al lado.
+  const monthCats = useMemo(() => {
+    const now = new Date();
+    const sums = new Map<string, number>();
+    for (const h of history) {
+      const d = new Date(h.date);
+      if (d.getUTCMonth() !== now.getUTCMonth() || d.getUTCFullYear() !== now.getUTCFullYear()) continue;
+      sums.set(h.category, (sums.get(h.category) ?? 0) + h.amount_cents);
+    }
+    return [...sums.entries()].sort((a, b) => b[1] - a[1]);
+  }, [history]);
 
   function loadPms() {
     api.getPaymentMethods().then((r) => setPms(r.payment_methods)).catch(() => setPms([]));
@@ -46,6 +125,11 @@ export function CuentaScreen() {
     api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
     api.getWalletTransactions().then((r) => alive && setTxs(r.transactions)).catch(() => alive && setTxs([]));
     api.getStats().then((s) => alive && setStats(s)).catch(() => undefined);
+    // El mes COMPLETO para la torta: sin params el backend da solo la primera
+    // página (20) y con >20 pagos los montos no cerrarían contra stats.
+    const now = new Date();
+    const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    api.getHistory({ from, limit: 100 }).then((r) => alive && setHistory(r.history)).catch(() => undefined);
     loadPms();
     return () => {
       alive = false;
@@ -106,8 +190,9 @@ export function CuentaScreen() {
   }
 
   return (
-    <div className="screen">
-      <TopBar title="Mi Cuenta" onBack={() => navigate('home')} />
+    // T-F1: Cuenta es pestaña de la nav — sin flecha atrás, con aire para la barra.
+    <div className="screen has-nav">
+      <TopBar title="Mi Cuenta" />
       <div className="scroll" style={{ padding: 16 }}>
         <div style={{ background: 'linear-gradient(135deg,#071A33,#10264A)', borderRadius: 18, padding: '16px 18px 14px', marginBottom: 16 }}>
           {/* G-03 RESUELTO (v2.21): el monto grande es el DISPONIBLE real
@@ -166,6 +251,7 @@ export function CuentaScreen() {
                     <div className="caption">promedio</div>
                   </div>
                 </div>
+                <CategoryPie slices={monthCats} />
                 {stats.top_restaurants[0] && (
                   <div className="caption" style={{ marginTop: 10, textAlign: 'center' }}>
                     Tu favorito: <b style={{ color: 'var(--navy)' }}>{stats.top_restaurants[0].name}</b> ({stats.top_restaurants[0].visits} visitas)

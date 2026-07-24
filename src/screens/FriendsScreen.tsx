@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { Friend } from '../api/types';
-import { Avatar, TopBar, useToast } from '../components/ui';
+import { Avatar, SocialTabs, TopBar, useToast } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { navigate } from '../router';
+import { fold } from '../utils/format';
 
 /** s-friends: lista + búsqueda + alta por email/payme_id (routes/friends.js). */
 export function FriendsScreen() {
@@ -19,13 +20,14 @@ export function FriendsScreen() {
   }
   useEffect(load, []);
 
+  // fold: "sofia" encuentra a "Sofía" (búsqueda insensible a acentos).
   const visible =
     friends?.filter(
       (f) =>
         !filter ||
-        f.full_name.toLowerCase().includes(filter.toLowerCase()) ||
-        f.payme_id.toLowerCase().includes(filter.toLowerCase()) ||
-        f.email.toLowerCase().includes(filter.toLowerCase()),
+        fold(f.full_name).includes(fold(filter)) ||
+        fold(f.payme_id).includes(fold(filter)) ||
+        fold(f.email).includes(fold(filter)),
     ) ?? null;
 
   async function addFriend() {
@@ -53,6 +55,7 @@ export function FriendsScreen() {
       />
       <div className="scroll">
         <div style={{ padding: '14px 16px 8px' }}>
+          <SocialTabs active="amigos" />
           <input
             className="input"
             style={{ margin: 0 }}

@@ -295,7 +295,8 @@ function seedFriends(): Friend[] {
     email: `${payme}@mail.com`,
     added_at: iso(-30 * 24 * 60 * 60_000),
   });
-  return [mk('sofi', 'Sofía', 'Fernández'), mk('juan', 'Juan', 'López'), mk('maru', 'María', 'Ruiz'), mk('leo', 'Leo', 'Paz')];
+  // 'leop': el formato del contrato exige 4 chars (schemas paymeId) — 'leo' lo violaba.
+  return [mk('sofi', 'Sofía', 'Fernández'), mk('juan', 'Juan', 'López'), mk('maru', 'María', 'Ruiz'), mk('leop', 'Leo', 'Paz')];
 }
 
 function seedNotifications(mesas: MockMesa[]): {
@@ -520,6 +521,13 @@ function loadPersisted(): MockState | null {
     // un historial vacío a quien ya venía usando la demo.
     if (!Array.isArray(parsed.history)) {
       parsed.history = seedState().history;
+    }
+    // Migración 0.25: el seed viejo traía 'payme_mx_leo' (3 chars), que viola
+    // el formato del contrato — se renombra en estados persistidos.
+    if (Array.isArray(parsed.friends)) {
+      for (const f of parsed.friends) {
+        if (f.payme_id === 'payme_mx_leo') f.payme_id = 'payme_mx_leop';
+      }
     }
     return parsed;
   } catch {

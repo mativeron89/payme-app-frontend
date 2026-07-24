@@ -209,6 +209,12 @@ body {
   opacity: 0.6;
   cursor: default;
 }
+/* Botón que NO ocupa todo el ancho (el .btn base es width:100%): para
+   botones inline en filas — chau overrides width/padding repetidos. */
+.btn-fit {
+  width: auto;
+  flex-shrink: 0;
+}
 /* Botón secundario/compacto: reemplaza los overrides inline de padding y
    font-size que estaban repetidos con cinco valores distintos. */
 .btn-sm {
@@ -285,6 +291,15 @@ body {
 }
 .home-tile.sm .home-card-title {
   font-size: 12.5px;
+}
+
+/* Banner informativo con botón propio (T-F1): el contenedor NO es tocable,
+   así que no debe "hundirse" como los home-card botón. */
+.home-card.static {
+  cursor: default;
+}
+.home-card.static:active {
+  transform: none;
 }
 
 /* ─── T-D3a: adopción del mock del hermano de Mati (2026-07-23) ─── */

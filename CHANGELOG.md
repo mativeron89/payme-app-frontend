@@ -1,5 +1,41 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.25.0 — T-F1: primer feedback del hermano de Mati (2026-07-24)
+
+Tier ratificado por Mati sobre la auditoría de diseño de su hermano.
+
+- **Nav nueva**: Inicio · **Cuenta** · Amigos · Perfil. Cuenta pasa a ser
+  pestaña (sin flecha atrás); Amigos y Grupos son UNA sección con tabs
+  internas (`SocialTabs`) — la pestaña queda activa en ambas páginas y los
+  deep links/backs se conservan (cada tab sigue siendo ruta).
+- **Banner de invitación con botón "Aceptar"** a la derecha (antes el banner
+  entero aceptaba al tocarlo); el contenedor ya no se "hunde" al tacto.
+- **Invitar amigos de PayMe** (`InviteFriends`): buscador con typeahead
+  (insensible a acentos — `fold` nuevo en utils, aplicado también al
+  buscador de Amigos) + desplegable de grupos con "Invitar a todos". Usa el
+  contrato EXISTENTE de invitaciones in-app (`POST /mesas/:code/invitations`
+  type `in_app` por `payme_id`). Montado en el paso compartir Y en la mesa
+  (desplegable, solo organizador con mesa invitable — el compartir es
+  one-shot). Guard sincrónico anti doble-envío (el backend no dedupea),
+  toasts que dicen la verdad (todo ok / parcial / todo falló / mesa ya no
+  invitable, cortando el resto), y carga fallida con "Reintentar".
+- **Torta de gastos por categoría** en Cuenta → Este mes: donut SVG propio
+  (cero dependencias) desde `GET /account/history` pidiendo el MES COMPLETO
+  (`from` + `limit=100` — sin eso el backend da solo la primera página de 20
+  y los montos no cerrarían contra stats; el mock ahora replica la
+  paginación real). Mes en UTC, espejando el `date_trunc` del server. G-09
+  anotado como nice-to-have (agregado server-side para >100 pagos/mes).
+- Fixes de la revisión adversaria (16 confirmados): además de lo anterior,
+  `.btn-fit` reemplaza overrides inline sobre `.btn-sm`, `aria-current` en
+  SocialTabs, seed del mock `payme_mx_leop` (el viejo `_leo` violaba el
+  formato del contrato; con migración del estado persistido) y `has-cta`
+  en el paso compartir (el CTA flotante tapaba la lista de amigos).
+- 0.24.1 (hotfix previo, sin entrada propia): la bottom nav tapaba los CTA
+  de Amigos y Grupos (feedback del hermano) — `.has-nav .action-bar` +
+  clase `has-nav` que faltaba en la lista de Grupos.
+- Anotado para juicio de Mati (sin codear): las filas "Saldo y tarjetas" y
+  "Amigos" de Perfil ahora duplican pestañas visibles de la nav.
+
 ## 0.24.0 — G-01 + G-03: restaurante por QR y saldo disponible/retenido (contrato v2.21.0) (2026-07-24)
 
 Consume los DOS últimos contratos pendientes (verificados en repo hermano y

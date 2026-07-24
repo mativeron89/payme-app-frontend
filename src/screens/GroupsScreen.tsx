@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { Friend, Group, GroupDetailResponse } from '../api/types';
-import { Avatar, TopBar, useToast } from '../components/ui';
+import { Avatar, SocialTabs, TopBar, useToast } from '../components/ui';
 import { Icon } from '../components/Icon';
 
 /** s-groups: grupos + detalle + crear + sumar miembros (routes/groups.js). */
@@ -138,6 +138,7 @@ export function GroupsScreen() {
     <div className="screen has-nav">
       <TopBar title="Grupos" />
       <div className="scroll" style={{ padding: '14px 16px' }}>
+        <SocialTabs active="grupos" />
         {creating && (
           <div className="card card-p" style={{ marginBottom: 12 }}>
             <div className="sectlabel">Nuevo grupo</div>

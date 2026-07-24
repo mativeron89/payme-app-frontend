@@ -5,6 +5,7 @@ import { extractApiError } from '../api/errors';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
+import { InviteFriends } from '../components/InviteFriends';
 import type { FractionRequest, MesaDetail, PaymentMethod, PaymentType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
@@ -51,6 +52,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [payType, setPayType] = useState<PaymentType>('card');
   // Feedback Mati: las tarjetas van en un desglosable, no sueltas en la lista.
   const [cardsOpen, setCardsOpen] = useState(false);
+  // T-F1: invitador in-app desplegable en la mesa (el paso compartir es one-shot).
+  const [inviteOpen, setInviteOpen] = useState(false);
   // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
   // tarjeta); `saveCard` = checkbox "guardar" (ratificado: prendido). El
   // invitado sin cuenta no tiene guardadas: siempre tarjeta nueva sin checkbox.
@@ -1120,6 +1123,19 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               );
             })}
           </div>
+          {/* T-F1: el organizador puede invitar amigos in-app también acá —
+              la pantalla de compartir post-crear se ve UNA sola vez. */}
+          {!isGuest && mesa.my_role === 'opener' && (mesa.status === 'open' || mesa.status === 'partially_paid') && (
+            <div style={{ padding: '4px 16px 0' }}>
+              {inviteOpen ? (
+                <InviteFriends code={code} />
+              ) : (
+                <button className="btn btn-ghost btn-sm btn-fit" onClick={() => setInviteOpen(true)}>
+                  <Icon name="users" size={16} className="ico-inline" /> Invitar amigos de PayMe
+                </button>
+              )}
+            </div>
+          )}
           <button className="cta-float" onClick={goToPay} disabled={busy || selected.size === 0}>
             {busy
               ? 'Reservando…'

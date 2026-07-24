@@ -60,7 +60,11 @@ function Shell() {
 
   // T-D3a: barra inferior solo en las cuatro pantallas hub.
   const showNav =
-    route.page === 'home' || route.page === 'amigos' || route.page === 'grupos' || route.page === 'perfil';
+    route.page === 'home' ||
+    route.page === 'cuenta' ||
+    route.page === 'amigos' ||
+    route.page === 'grupos' ||
+    route.page === 'perfil';
 
   return (
     <>

@@ -113,8 +113,12 @@ export interface Api {
   // cuenta
   getBalance(): Promise<BalanceResponse>;
   getWalletTransactions(): Promise<WalletTransactionsResponse>;
-  /** Pagos propios en mesas (GET /account/history) — la pantalla Mesas. */
-  getHistory(): Promise<HistoryResponse>;
+  /**
+   * Pagos propios en mesas (GET /account/history). OJO: el backend pagina
+   * con limit default 20 (máx 100) — para agregados (la torta de Cuenta)
+   * pedir `from` + `limit`, no la primera página pelada.
+   */
+  getHistory(params?: { from?: string; to?: string; limit?: number }): Promise<HistoryResponse>;
   // mesas
   getOpenMesas(): Promise<OpenMesasResponse>;
   getMesa(code: string, guestToken?: string): Promise<MesaDetailResponse>;
@@ -125,6 +129,8 @@ export interface Api {
   lockItems(code: string, items: FractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
   payMesa(code: string, req: PayMesaRequest, guestToken?: string): Promise<PayMesaResponse>;
   createInvitation(code: string): Promise<CreateInvitationResponse>;
+  /** Invitación in-app a un amigo por payme_id (solo el organizador; el backend resuelve el uuid). */
+  inviteFriend(code: string, paymeId: string): Promise<CreateInvitationResponse>;
   // topup (A-3)
   topupOxxo(amountCents: number, idempotencyKey: string): Promise<TopupOxxoResponse>;
   topupCard(
@@ -180,7 +186,14 @@ const realApi: Api = {
     httpPublicRequest<RestaurantResponse>('GET', `/restaurants/${encodeURIComponent(id)}`),
 
   getBalance: () => httpRequest<BalanceResponse>('GET', '/account/balance'),
-  getHistory: () => httpRequest<HistoryResponse>('GET', '/account/history'),
+  getHistory: (params) => {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set('from', params.from);
+    if (params?.to) qs.set('to', params.to);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const s = qs.toString();
+    return httpRequest<HistoryResponse>('GET', `/account/history${s ? `?${s}` : ''}`);
+  },
   getWalletTransactions: () =>
     httpRequest<WalletTransactionsResponse>('GET', '/account/wallet-transactions'),
 
@@ -250,6 +263,11 @@ const realApi: Api = {
   createInvitation: (code) =>
     httpRequest<CreateInvitationResponse>('POST', `/mesas/${encodeURIComponent(code)}/invitations`, {
       type: 'link',
+    }),
+  inviteFriend: (code, paymeId) =>
+    httpRequest<CreateInvitationResponse>('POST', `/mesas/${encodeURIComponent(code)}/invitations`, {
+      type: 'in_app',
+      invited_payme_id: paymeId,
     }),
 
   topupOxxo: (amountCents, idempotencyKey) =>
@@ -338,7 +356,7 @@ const mockApi: Api = {
 
   getBalance: () => mock.mockBalance(),
   getWalletTransactions: () => mock.mockWalletTransactions(),
-  getHistory: () => mock.mockHistory(),
+  getHistory: (params) => mock.mockHistory(params),
 
   getOpenMesas: () => mock.mockOpenMesas(),
   getMesa: (code, guestToken) => mock.mockGetMesa(code, guestToken ? 'guest' : 'user'),
@@ -348,6 +366,7 @@ const mockApi: Api = {
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
   payMesa: (code, req, guestToken) => mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user'),
   createInvitation: (code) => mock.mockCreateInvitation(code),
+  inviteFriend: (code, paymeId) => mock.mockInviteFriend(code, paymeId),
 
   topupOxxo: (amountCents) => mock.mockTopupOxxo(amountCents),
   topupCard: (amountCents, paymentMethodId) => mock.mockTopupCard(amountCents, paymentMethodId),
