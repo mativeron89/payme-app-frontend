@@ -465,6 +465,13 @@ body {
   color: var(--navy);
   font-weight: 700;
 }
+/* Con barra de nav, el action-bar (CTA fijo al pie) debe quedar POR ENCIMA
+   de la nav fija — sin esto, la nav lo tapa (feedback del hermano de Mati,
+   2026-07-24: "la navegación está tapando el botón para agregar amigo"). */
+.has-nav .action-bar {
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+}
+
 /* Las pantallas con barra dejan aire para barra + flotante. */
 .has-nav .scroll {
   padding-bottom: 150px;

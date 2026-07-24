@@ -135,7 +135,7 @@ export function GroupsScreen() {
   }
 
   return (
-    <div className="screen">
+    <div className="screen has-nav">
       <TopBar title="Grupos" />
       <div className="scroll" style={{ padding: '14px 16px' }}>
         {creating && (
