@@ -2,6 +2,15 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 
 /** Piezas chicas compartidas: top bar, toast y avatar con color estable. */
 
+/** Logo chico para cabezales. `inv` = sobre fondo navy. */
+export function TopLogo({ inv = false }: { inv?: boolean }) {
+  return (
+    <span className={`top-logo ${inv ? 'inv' : ''}`} aria-hidden="true">
+      Pay<span className="t">Me</span>
+    </span>
+  );
+}
+
 export function TopBar({
   title,
   onBack,
@@ -13,6 +22,8 @@ export function TopBar({
   right?: ReactNode;
   backLabel?: string;
 }) {
+  // El cabezal SIEMPRE lleva el logo PayMe (pedido de Mati); el título de la
+  // pantalla lo acompaña en gris.
   return (
     <div className="top-bar">
       {onBack && (
@@ -20,8 +31,27 @@ export function TopBar({
           <span aria-hidden="true">←</span>
         </button>
       )}
-      <h1 className="top-title">{title}</h1>
+      <TopLogo />
+      <h1
+        className="top-title"
+        style={{ fontSize: 14, color: 'var(--gray-txt)', fontFamily: 'var(--font-body)', fontWeight: 600 }}
+      >
+        {title}
+      </h1>
       {right}
+    </div>
+  );
+}
+
+/** Chip de marca de tarjeta: VISA en texto, Mastercard con sus círculos. */
+export function CardBrandChip({ brand }: { brand: string }) {
+  const b = brand.toLowerCase();
+  if (b === 'mastercard') {
+    return <div className="cc visa mc" aria-hidden="true" />;
+  }
+  return (
+    <div className="cc visa" aria-hidden="true">
+      {b === 'visa' ? 'VISA' : brand.toUpperCase().slice(0, 4)}
     </div>
   );
 }

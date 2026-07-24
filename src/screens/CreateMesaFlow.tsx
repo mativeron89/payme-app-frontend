@@ -7,7 +7,7 @@ import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, PaymentMethod } from '../api/types';
 import { CardField, type CardFieldState } from '../components/CardField';
-import { TopBar, useToast } from '../components/ui';
+import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { centsToString, splitEqual, stringToCents } from '../utils/money';
@@ -136,12 +136,6 @@ export function CreateMesaFlow() {
   function addItem() {
     setEditItems((prev) => [...prev, { name: '', priceStr: '', quantity: 1 }]);
   }
-  /** D5: camino manual — misma pantalla editable, arrancando vacía. */
-  function startManual() {
-    setEditItems([{ name: '', priceStr: '', quantity: 1 }]);
-    setScanFailed(false);
-    setStep('ticket');
-  }
 
   /**
    * Demo: el mock devuelve el ticket de ejemplo sin foto.
@@ -188,7 +182,7 @@ export function CreateMesaFlow() {
       setStep('ticket');
     } catch {
       setScanFailed(true);
-      toast('No pudimos leer el ticket. Probá de nuevo o cargalo a mano.');
+      toast('No pudimos leer el ticket. Probá sacar la foto de nuevo.');
     } finally {
       setScanning(false);
     }
@@ -355,7 +349,8 @@ export function CreateMesaFlow() {
           >
             <span aria-hidden="true">←</span>
           </button>
-          <h1 className="top-title" style={{ color: '#fff' }}>
+          <TopLogo inv />
+          <h1 className="top-title" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, fontFamily: 'var(--font-body)', fontWeight: 600 }}>
             Escanear ticket
           </h1>
         </div>
@@ -411,18 +406,9 @@ export function CreateMesaFlow() {
           </button>
           {scanFailed && (
             <div className="note note-orange" style={{ marginTop: 12 }}>
-              No pudimos leer la foto. Probá de nuevo con más luz, o cargá el ticket a mano.
+              No pudimos leer la foto. Probá de nuevo con más luz.
             </div>
           )}
-          {/* D5: camino manual — siempre disponible, discreto. */}
-          <button
-            className="btn btn-ghost btn-sm"
-            style={{ marginTop: scanFailed ? 8 : 12 }}
-            onClick={startManual}
-            disabled={scanning}
-          >
-            ✍️ Cargar el ticket a mano
-          </button>
         </div>
       </div>
     );
@@ -431,12 +417,13 @@ export function CreateMesaFlow() {
   // ─── Paso 2: ticket ──────────────────────────────────────
   if (step === 'ticket') {
     return (
-      <div className="screen">
+      <div className="screen has-cta">
         <div className="top-bar" style={{ background: 'var(--navy)' }}>
           <button className="back-btn" onClick={back} aria-label="Volver" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>
             ←
           </button>
-          <div className="top-title" style={{ color: '#fff' }}>
+          <TopLogo inv />
+          <div className="top-title" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, fontFamily: 'var(--font-body)', fontWeight: 600 }}>
             Ticket de la mesa
           </div>
         </div>
@@ -462,11 +449,11 @@ export function CreateMesaFlow() {
             </div>
             {/* D5: cada consumo es editable — nombre, precio, cantidad, quitar. */}
             {editItems.map((it, idx) => (
-              <div key={idx} style={{ padding: '10px 16px', borderBottom: '1px solid var(--gray-l)' }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div key={idx} style={{ padding: '6px 16px', borderBottom: '1px solid var(--gray-l)' }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <input
                     className="input"
-                    style={{ flex: 1, padding: '9px 10px', fontSize: 14 }}
+                    style={{ flex: 1, padding: '7px 9px', fontSize: 14 }}
                     value={it.name}
                     placeholder="Consumo"
                     onChange={(e) => updateItem(idx, { name: e.target.value })}
@@ -474,18 +461,18 @@ export function CreateMesaFlow() {
                   />
                   <button
                     className="back-btn"
-                    style={{ width: 30, height: 30, fontSize: 13, flex: 'none' }}
+                    style={{ width: 26, height: 26, fontSize: 12, flex: 'none' }}
                     onClick={() => removeItem(idx)}
                     aria-label={`Quitar ${it.name || `consumo ${idx + 1}`}`}
                   >
                     ✕
                   </button>
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-                  <span style={{ fontWeight: 700 }}>$</span>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>$</span>
                   <input
                     className="input"
-                    style={{ width: 92, padding: '9px 10px', fontSize: 14 }}
+                    style={{ width: 84, padding: '7px 9px', fontSize: 14 }}
                     inputMode="decimal"
                     value={it.priceStr}
                     placeholder="0.00"
@@ -495,7 +482,7 @@ export function CreateMesaFlow() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
                     <button
                       className="back-btn"
-                      style={{ width: 30, height: 30, fontSize: 15 }}
+                      style={{ width: 26, height: 26, fontSize: 14 }}
                       onClick={() => updateItem(idx, { quantity: Math.max(1, it.quantity - 1) })}
                       aria-label={`Menos cantidad de ${it.name || `consumo ${idx + 1}`}`}
                     >
@@ -504,7 +491,7 @@ export function CreateMesaFlow() {
                     <span style={{ minWidth: 22, textAlign: 'center', fontWeight: 700 }}>{it.quantity}</span>
                     <button
                       className="back-btn"
-                      style={{ width: 30, height: 30, fontSize: 15 }}
+                      style={{ width: 26, height: 26, fontSize: 14 }}
                       onClick={() => updateItem(idx, { quantity: it.quantity + 1 })}
                       aria-label={`Más cantidad de ${it.name || `consumo ${idx + 1}`}`}
                     >
@@ -522,23 +509,24 @@ export function CreateMesaFlow() {
             ))}
             <button
               className="btn btn-ghost"
-              style={{ margin: '10px 16px 14px', width: 'auto', fontSize: 13.5 }}
+              style={{ margin: '8px 16px 10px', width: 'auto', fontSize: 13, padding: '9px 14px' }}
               onClick={addItem}
             >
               ➕ Agregar consumo
             </button>
           </div>
         </div>
-        <div className="action-bar">
-          {!ticketValid && (
-            <div className="caption" style={{ textAlign: 'center', marginBottom: 8 }}>
-              {ticketInvalidReason}
-            </div>
-          )}
-          <button className="btn btn-primary" onClick={() => setStep('division')} disabled={!ticketValid}>
-            Continuar → dividir
-          </button>
-        </div>
+        {!ticketValid && (
+          <div
+            className="caption"
+            style={{ position: 'fixed', bottom: 78, left: 0, right: 0, textAlign: 'center', zIndex: 20 }}
+          >
+            {ticketInvalidReason}
+          </div>
+        )}
+        <button className="cta-float" onClick={() => setStep('division')} disabled={!ticketValid}>
+          Continuar → dividir
+        </button>
       </div>
     );
   }
@@ -549,7 +537,7 @@ export function CreateMesaFlow() {
     // (el primer comensal absorbe los centavos sobrantes).
     const perSlot = participants > 0 ? splitEqual(total, participants)[0] : total;
     return (
-      <div className="screen">
+      <div className="screen has-cta">
         <TopBar title="Dividir cuenta" onBack={back} />
         <div className="scroll" style={{ padding: '18px 16px' }}>
           <div style={{ padding: '4px 2px 16px' }}>
@@ -603,17 +591,15 @@ export function CreateMesaFlow() {
             </div>
           )}
         </div>
-        <div className="action-bar">
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              void loadCards();
-              setStep('garantia');
-            }}
-          >
-            Continuar → garantizar
-          </button>
-        </div>
+        <button
+          className="cta-float"
+          onClick={() => {
+            void loadCards();
+            setStep('garantia');
+          }}
+        >
+          Continuar → garantizar
+        </button>
       </div>
     );
   }
@@ -621,7 +607,7 @@ export function CreateMesaFlow() {
   // ─── Paso 4: GARANTÍA (A-1, pantalla nueva) ──────────────
   if (step === 'garantia') {
     return (
-      <div className="screen">
+      <div className="screen has-cta">
         <TopBar title="Garantizá la mesa" onBack={back} />
         <div className="scroll" style={{ padding: 16 }}>
           <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 14 }}>
@@ -647,69 +633,76 @@ export function CreateMesaFlow() {
             ¿Con qué garantizás?
           </div>
           <div role="radiogroup" aria-labelledby="lbl-garantia">
-          <button
-            className={`method-card ${method === 'card' ? 'sel' : ''}`}
-            onClick={() => setMethod('card')}
-            role="radio"
-            aria-checked={method === 'card'}
-          >
-            <div className="cc visa" aria-hidden="true">
-              VISA
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>Tarjeta</div>
-              <div className="caption">
-                Retención en la tarjeta (puede pedir confirmación del banco)
+          {/* Sin opción "Tarjeta" padre (redundante — feedback de Mati): las
+              tarjetas guardadas SON las opciones. Elegir una = garantizar con
+              esa (D4, sin Elements; 3DS igual). */}
+          {IS_DEMO && (
+            <button
+              className={`method-card ${method === 'card' ? 'sel' : ''}`}
+              onClick={() => setMethod('card')}
+              role="radio"
+              aria-checked={method === 'card'}
+            >
+              <div className="cc visa" aria-hidden="true">
+                VISA
               </div>
-            </div>
-            <div className="radio" aria-hidden="true" />
-          </button>
-          {/* D4: selector de tarjetas guardadas (pm_…) + "usar otra". Cierra
-              G-04: elegir una guardada saltea Elements; el 3DS sigue igual. */}
-          {!IS_DEMO && method === 'card' && cards.length > 0 && (
-            <div role="radiogroup" aria-label="Tarjeta guardada" style={{ margin: '4px 0 4px' }}>
-              {cards.map((c) => (
-                <button
-                  key={c.id}
-                  className={`method-card ${cardChoice === c.id ? 'sel' : ''}`}
-                  onClick={() => setCardChoice(c.id)}
-                  role="radio"
-                  aria-checked={cardChoice === c.id}
-                >
-                  <div className="cc visa" aria-hidden="true">
-                    {c.brand.toUpperCase().slice(0, 4)}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>
-                      {c.bank_name ?? c.brand} ···· {c.last_four}
-                      {c.is_default && (
-                        <span className="caption" style={{ marginLeft: 8 }}>
-                          Principal
-                        </span>
-                      )}
-                    </div>
-                    <div className="caption">
-                      Vence {String(c.exp_month).padStart(2, '0')}/{String(c.exp_year % 100).padStart(2, '0')}
-                    </div>
-                  </div>
-                  <div className="radio" aria-hidden="true" />
-                </button>
-              ))}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>Tarjeta</div>
+                <div className="caption">Tarjeta de prueba ···· 4242 (demo)</div>
+              </div>
+              <div className="radio" aria-hidden="true" />
+            </button>
+          )}
+          {!IS_DEMO &&
+            cards.map((c) => (
               <button
-                className={`method-card ${cardChoice === 'new' ? 'sel' : ''}`}
-                onClick={() => setCardChoice('new')}
+                key={c.id}
+                className={`method-card ${method === 'card' && cardChoice === c.id ? 'sel' : ''}`}
+                onClick={() => {
+                  setMethod('card');
+                  setCardChoice(c.id);
+                }}
                 role="radio"
-                aria-checked={cardChoice === 'new'}
+                aria-checked={method === 'card' && cardChoice === c.id}
               >
-                <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
-                  ➕
-                </div>
+                <CardBrandChip brand={c.brand} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>Usar otra tarjeta</div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    {c.bank_name ?? c.brand} ···· {c.last_four}
+                    {c.is_default && (
+                      <span className="caption" style={{ marginLeft: 8 }}>
+                        Principal
+                      </span>
+                    )}
+                  </div>
+                  <div className="caption">
+                    Vence {String(c.exp_month).padStart(2, '0')}/{String(c.exp_year % 100).padStart(2, '0')}
+                  </div>
                 </div>
                 <div className="radio" aria-hidden="true" />
               </button>
-            </div>
+            ))}
+          {!IS_DEMO && (
+            <button
+              className={`method-card ${method === 'card' && cardChoice === 'new' ? 'sel' : ''}`}
+              onClick={() => {
+                setMethod('card');
+                setCardChoice('new');
+              }}
+              role="radio"
+              aria-checked={method === 'card' && cardChoice === 'new'}
+            >
+              <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
+                ➕
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>
+                  {cards.length > 0 ? 'Usar otra tarjeta' : 'Tarjeta'}
+                </div>
+                <div className="caption">Retención en la tarjeta (puede pedir confirmación del banco)</div>
+              </div>
+              <div className="radio" aria-hidden="true" />
+            </button>
           )}
           {/* Tarjeta nueva: Elements en real; en mock no se pide número. */}
           {!IS_DEMO && method === 'card' && (cards.length === 0 || cardChoice === 'new') && (
@@ -764,22 +757,20 @@ export function CreateMesaFlow() {
           </button>
           </div>
         </div>
-        <div className="action-bar">
-          <button
-            className="btn btn-primary"
-            onClick={createMesa}
-            disabled={
-              busy ||
-              (!IS_MOCK &&
-                !IS_DEMO &&
-                method === 'card' &&
-                (cards.length === 0 || cardChoice === 'new') &&
-                !cardState.complete)
-            }
-          >
-            {busy ? 'Autorizando…' : `🔒 Garantizar ${formatMXN(total)} y abrir mesa`}
-          </button>
-        </div>
+        <button
+          className="cta-float"
+          onClick={createMesa}
+          disabled={
+            busy ||
+            (!IS_MOCK &&
+              !IS_DEMO &&
+              method === 'card' &&
+              (cards.length === 0 || cardChoice === 'new') &&
+              !cardState.complete)
+          }
+        >
+          {busy ? 'Autorizando…' : `🔒 Garantizar ${formatMXN(total)} y abrir mesa`}
+        </button>
       </div>
     );
   }
@@ -887,11 +878,9 @@ export function CreateMesaFlow() {
             <div className="loading">Generando link…</div>
           )}
         </div>
-        <div className="action-bar">
-          <button className="btn btn-primary" onClick={() => navigate('mesa', code)}>
-            Ir a la mesa → elegir lo mío
-          </button>
-        </div>
+        <button className="cta-float" onClick={() => navigate('mesa', code)}>
+          Ir a la mesa → elegir lo mío
+        </button>
       </div>
     );
   }

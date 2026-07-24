@@ -4,7 +4,7 @@ import { api, IS_MOCK } from '../api';
 import { confirmCardSetup } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import type { BalanceResponse, PaymentMethod, StatsResponse, WalletTransaction } from '../api/types';
-import { TopBar, useToast } from '../components/ui';
+import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { walletTxEmoji, walletTxLabel } from '../utils/labels';
@@ -217,7 +217,7 @@ export function CuentaScreen() {
             )}
             {pms?.map((pm) => (
               <div key={pm.id} className="card card-p" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div className="cc visa">{pm.brand === 'visa' ? 'VISA' : pm.brand.toUpperCase().slice(0, 4)}</div>
+                <CardBrandChip brand={pm.brand} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>{pm.bank_name ?? pm.brand}</div>
                   <div style={{ fontSize: 11, color: 'var(--gray-txt)', fontFamily: 'monospace' }}>

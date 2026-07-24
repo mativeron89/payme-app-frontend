@@ -1,5 +1,33 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.19.0 — Batch de feedback de Mati: 10 ajustes de UX (2026-07-23)
+
+Directivas explícitas de Mati sobre capturas (2026-07-23):
+
+- **Fuera "Cargar el ticket a mano"**: en el escaneo queda solo "Capturar"
+  (revierte el camino manual de 0.18.0; el ticket editable se conserva).
+- **Filas del ticket compactas**: menos aire entre consumos.
+- **CTAs primarios de los flujos como píldora flotante naranja** (estilo del
+  mock del hermano): ticket, división, garantía, compartir, "Pagar mi parte"
+  y "Pagar $X" — siempre visibles, sin bajar hasta el fondo (`.cta-float`).
+- **El cabezal SIEMPRE lleva el logo PayMe**: `TopBar` compartida (logo +
+  título gris) y variante `inv` para los headers navy (scan, ticket, mesa).
+- **Garantía sin la opción "Tarjeta" padre** (redundante): las tarjetas
+  guardadas SON las opciones, + "Usar otra tarjeta" + Saldo PayMe.
+- **Chip Mastercard real** (dos círculos en CSS puro, `CardBrandChip`
+  compartido) en garantía, pago, Cuenta y Topup.
+- **IMPORTANTÍSIMO — partes iguales con selección de consumo**: aunque el
+  monto sea la parte fija, marcar QUÉ consumiste es obligatorio ("Marcá lo
+  que consumiste", info para el restaurante). `item_ids` viaja SIEMPRE en el
+  pay. **G-07 nuevo**: el backend hoy descarta esos ítems en la rama igual
+  (`payment_attempt_items` solo se escribe en consumo) — llevar al dueño del
+  contrato para que la info del modelo de negocio se persista.
+- **Métodos de pago reordenados**: Saldo PayMe → Tarjeta con las guardadas en
+  un DESGLOSABLE (resumen + ▾, no sueltas en la lista) → Apple Pay →
+  **Google Pay (nuevo)**.
+- **Comprobante con "Enviar" y "Descargar"** (Web Share / archivo de texto)
+  para la contabilidad del comensal.
+
 ## 0.18.0 — D5 (front): revisá y corregí el ticket antes de dividir (2026-07-23)
 
 Cierra la última decisión del roadmap D4–D7 del lado del front. Guardarraíl

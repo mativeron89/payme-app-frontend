@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, newIdempotencyKey } from '../api';
 import type { ClabeResponse, PaymentMethod, TopupOxxoResponse } from '../api/types';
-import { TopBar, useToast } from '../components/ui';
+import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { stringToCents } from '../utils/money';
@@ -151,7 +151,7 @@ export function TopupScreen() {
         {via === 'card' &&
           (pm ? (
             <div className="method-card sel" style={{ cursor: 'default' }}>
-              <div className="cc visa">VISA</div>
+              <CardBrandChip brand={pm.brand} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>
                   {pm.bank_name ?? pm.brand} ···· {pm.last_four}

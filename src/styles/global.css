@@ -456,6 +456,85 @@ body {
 .has-nav .scroll {
   padding-bottom: 150px;
 }
+
+/* ─── Batch UX 2026-07-23 ─── */
+
+/* CTA primario de los flujos como píldora flotante (pedido de Mati: "que no
+   sea necesario bajar, que vaya navegando la pantalla"). */
+.cta-float {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 14px 26px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.45);
+  white-space: nowrap;
+  max-width: calc(100% - 40px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.cta-float:active {
+  transform: translateX(-50%) scale(0.97);
+}
+.cta-float:disabled {
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: default;
+}
+/* Aire inferior en pantallas con CTA flotante. */
+.has-cta .scroll {
+  padding-bottom: 110px;
+}
+
+/* Logo PayMe chico para los cabezales de TODAS las pantallas. */
+.top-logo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 19px;
+  color: var(--navy);
+  letter-spacing: -0.02em;
+  flex: none;
+}
+.top-logo .t {
+  color: var(--teal);
+}
+.top-logo.inv {
+  color: #fff;
+}
+
+/* Chip de marca Mastercard: los dos círculos, en CSS puro (sin librerías). */
+.cc.mc {
+  position: relative;
+  font-size: 0;
+}
+.cc.mc::before,
+.cc.mc::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.cc.mc::before {
+  left: 8px;
+  background: #eb001b;
+}
+.cc.mc::after {
+  right: 8px;
+  background: #f79e1b;
+  opacity: 0.92;
+}
 .home-card.compact {
   flex-direction: column;
   text-align: center;

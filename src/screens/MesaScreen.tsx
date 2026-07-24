@@ -6,7 +6,7 @@ import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import type { MesaDetail, PaymentMethod, PaymentType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
-import { TopBar, useToast } from '../components/ui';
+import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
 import { goBack, navigate } from '../router';
 import { countdownTo, formatMXN } from '../utils/format';
 import { stringToCents, tipFromBps } from '../utils/money';
@@ -47,6 +47,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [customTipStr, setCustomTipStr] = useState('');
   const [staffId, setStaffId] = useState<string | null>(null);
   const [payType, setPayType] = useState<PaymentType>('card');
+  // Feedback Mati: las tarjetas van en un desglosable, no sueltas en la lista.
+  const [cardsOpen, setCardsOpen] = useState(false);
   // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
   // tarjeta); `saveCard` = checkbox "guardar" (ratificado: prendido). El
   // invitado sin cuenta no tiene guardadas: siempre tarjeta nueva sin checkbox.
@@ -164,8 +166,50 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         setBusy(false);
       }
     } else {
+      // Partes iguales: el monto es la parte, pero marcar lo consumido es
+      // obligatorio (info para el restaurante).
+      if (selected.size === 0) return;
       setView('pay');
     }
+  }
+
+  /** Comprobante en texto plano para enviar/descargar (contabilidad). */
+  function receiptText(): string {
+    if (!mesa || !result) return '';
+    return [
+      'Comprobante PayMe',
+      `Restaurante: ${mesa.restaurant.name}`,
+      `Mesa: ${code}`,
+      `Fecha: ${new Date().toLocaleString('es-MX')}`,
+      `Método: ${result.methodLabel}`,
+      `${mesa.division_mode === 'igual' ? 'Mi parte' : 'Mis consumos'}: ${formatMXN(result.itemsAmount)}`,
+      `Propina (al mozo): ${formatMXN(result.tip)}`,
+      `Total pagado: ${formatMXN(result.gross)}`,
+    ].join('\n');
+  }
+
+  async function shareReceipt() {
+    const text = receiptText();
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Comprobante PayMe', text });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      toast('Comprobante copiado 📋');
+    } catch {
+      // el usuario canceló el share del sistema: no es un error
+    }
+  }
+
+  function downloadReceipt() {
+    const blob = new Blob([receiptText()], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `comprobante-payme-${code}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function doPay() {
@@ -210,7 +254,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         code,
         {
           payment_type: payType,
-          item_ids: mesa.division_mode === 'consumo' ? [...selected] : [],
+          // IMPORTANTÍSIMO (Mati): también en partes iguales viaja QUÉ consumió
+          // cada uno — el modelo se sostiene en esa información (G-07: falta
+          // que el backend la persista en la rama igual).
+          item_ids: [...selected],
           ...(lockTokens.length > 0 && { lock_tokens: lockTokens }),
           ...(tipMode === 'custom' ? { tip_cents: tipCents } : { tip_bps: tipPct * 100 }),
           ...(staffId && { tip_to_staff_id: staffId }),
@@ -239,7 +286,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           ? '👛 Saldo PayMe'
           : payType === 'apple_pay'
             ? '🍎 Apple Pay'
-            : `💳 ${savedCard ? `${savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··${savedCard.last_four}` : 'Tarjeta'}`;
+            : payType === 'google_pay'
+              ? 'Ⓖ Google Pay'
+              : `💳 ${savedCard ? `${savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··${savedCard.last_four}` : 'Tarjeta'}`;
       setResult({
         itemsAmount,
         tip: r.attempt.tip_cents ?? tipCents,
@@ -506,6 +555,16 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           )}
         </div>
         <div className="action-bar">
+          {/* Feedback Mati: el comprobante se puede enviar o descargar
+              (contabilidad del comensal). */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button className="btn btn-ghost" onClick={() => void shareReceipt()}>
+              📤 Enviar comprobante
+            </button>
+            <button className="btn btn-ghost" onClick={downloadReceipt}>
+              ⬇️ Descargar
+            </button>
+          </div>
           {isGuest ? (
             <div style={{ display: 'flex', gap: 8 }}>
               <button
@@ -535,7 +594,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // ─── Pago (s-payment) ────────────────────────────────────
   if (view === 'pay') {
     return (
-      <div className="screen">
+      <div className="screen has-cta">
         <TopBar
           title="Pagar mi parte"
           onBack={() => setView('detail')}
@@ -648,9 +707,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             )}
             <button
               className={`method-card ${payType === 'card' ? 'sel' : ''}`}
-              onClick={() => setPayType('card')}
+              onClick={() => {
+                setPayType('card');
+                if (cards.length > 0) setCardsOpen((v) => payType !== 'card' ? true : !v);
+              }}
               role="radio"
               aria-checked={payType === 'card'}
+              aria-expanded={cards.length > 0 ? cardsOpen : undefined}
             >
               <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
                 💳
@@ -659,17 +722,24 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Tarjeta de crédito o débito</div>
                 <div className="caption">
                   {cards.length > 0
-                    ? 'Elegí una guardada o usá otra'
+                    ? (cards.find((c) => c.id === cardChoice)
+                        ? `${cards.find((c) => c.id === cardChoice)!.bank_name ?? cards.find((c) => c.id === cardChoice)!.brand} ···· ${cards.find((c) => c.id === cardChoice)!.last_four}`
+                        : 'Elegí una guardada o usá otra')
                     : IS_MOCK
                       ? 'La ingresás al confirmar (segura, vía Stripe)'
                       : 'Ingresá los datos abajo (seguro, vía Stripe)'}
                 </div>
               </div>
+              {cards.length > 0 && (
+                <span className="caption" aria-hidden="true" style={{ marginRight: 6 }}>
+                  {cardsOpen ? '▴' : '▾'}
+                </span>
+              )}
               <div className="radio" aria-hidden="true" />
             </button>
-            {/* D4: selector de tarjetas guardadas (pm_…) + "usar otra". Elegir
-                una guardada saltea Elements; el 3DS (requires_action) sigue. */}
-            {!IS_DEMO && payType === 'card' && cards.length > 0 && (
+            {/* D4 + feedback Mati: las guardadas viven en el desglosable, no
+                sueltas en la lista principal. */}
+            {!IS_DEMO && payType === 'card' && cards.length > 0 && cardsOpen && (
               <div role="radiogroup" aria-label="Tarjeta guardada" style={{ margin: '2px 0 4px' }}>
                 {cards.map((c) => (
                   <button
@@ -679,9 +749,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     role="radio"
                     aria-checked={cardChoice === c.id}
                   >
-                    <div className="cc visa" aria-hidden="true">
-                      {c.brand.toUpperCase().slice(0, 4)}
-                    </div>
+                    <CardBrandChip brand={c.brand} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 700, fontSize: 14 }}>
                         {c.bank_name ?? c.brand} ···· {c.last_four}
@@ -715,7 +783,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </div>
             )}
             {/* Tarjeta nueva: Elements en real; en mock no se pide número. */}
-            {!IS_DEMO && payType === 'card' && (cards.length === 0 || cardChoice === 'new') && (
+            {!IS_DEMO && payType === 'card' && (cards.length === 0 || (cardChoice === 'new' && cardsOpen)) && (
               <div style={{ margin: '2px 0 10px' }}>
                 {!IS_MOCK && (
                   <>
@@ -763,6 +831,25 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </div>
               <div className="radio" aria-hidden="true" />
             </button>
+            <button
+              className={`method-card ${payType === 'google_pay' ? 'sel' : ''}`}
+              onClick={() => setPayType('google_pay')}
+              role="radio"
+              aria-checked={payType === 'google_pay'}
+            >
+              <div
+                className="method-icon"
+                style={{ background: '#fff', border: '1.5px solid var(--gray-b)', fontWeight: 800, fontSize: 15 }}
+                aria-hidden="true"
+              >
+                G
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>Google Pay</div>
+                <div className="caption">vía Stripe</div>
+              </div>
+              <div className="radio" aria-hidden="true" />
+            </button>
           </div>
           {IS_MOCK && (
             <div className="note note-amber" style={{ marginTop: 6 }}>
@@ -776,23 +863,21 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
           )}
         </div>
-        <div className="action-bar">
-          <button
-            className="btn btn-primary"
-            onClick={doPay}
-            disabled={
-              busy ||
-              gross === 0 ||
-              (!IS_MOCK &&
-                !IS_DEMO &&
-                payType === 'card' &&
-                (cards.length === 0 || cardChoice === 'new') &&
-                !cardState.complete)
-            }
-          >
-            {busy ? 'Procesando…' : `Pagar ${formatMXN(gross)}`}
-          </button>
-        </div>
+        <button
+          className="cta-float"
+          onClick={doPay}
+          disabled={
+            busy ||
+            gross === 0 ||
+            (!IS_MOCK &&
+              !IS_DEMO &&
+              payType === 'card' &&
+              (cards.length === 0 || cardChoice === 'new') &&
+              !cardState.complete)
+          }
+        >
+          {busy ? 'Procesando…' : `Pagar ${formatMXN(gross)}`}
+        </button>
       </div>
     );
   }
@@ -811,8 +896,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // e inaccesible — era solo el emoji 🔗 sin nombre).
   const shareButton = !isGuest && mesa.my_role === 'opener' && (
     <button
-      className="btn btn-ghost"
-      style={{ flex: 'none', width: 'auto', padding: '16px 14px' }}
+      className="back-btn"
+      style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', flex: 'none' }}
       aria-label="Copiar link de invitación"
       onClick={async () => {
         try {
@@ -831,7 +916,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   );
 
   return (
-    <div className="screen">
+    <div className="screen has-cta">
       <div className="top-bar" style={{ background: 'var(--navy)' }}>
         {!isGuest && (
           <button
@@ -843,15 +928,16 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <span aria-hidden="true">←</span>
           </button>
         )}
-        <h1 className="top-title" style={{ color: '#fff' }}>
-          {mesa.restaurant.name}
-        </h1>
+        <TopLogo inv />
+        <div style={{ flex: 1 }} />
+        {shareButton}
         {isGuest && <span className="badge badge-teal">Invitado</span>}
       </div>
       <div style={{ background: 'var(--navy)', padding: '0 20px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)', minWidth: 0 }}>
-            Mesa {code} · {mesa.division_mode === 'igual' ? 'partes iguales' : 'cada uno lo suyo'}
+            {mesa.restaurant.name} · Mesa {code} ·{' '}
+            {mesa.division_mode === 'igual' ? 'partes iguales' : 'cada uno lo suyo'}
           </div>
           <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '4px 12px', borderRadius: 20, fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
             {formatMXN(mesa.total_cents)}
@@ -935,28 +1021,48 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               );
             })}
           </div>
-          <div className="action-bar">
-            <div style={{ display: 'flex', gap: 8 }}>
-              {shareButton}
-              <button
-                className="btn btn-primary"
-                onClick={goToPay}
-                disabled={busy || selected.size === 0}
-              >
-                {busy
-                  ? 'Reservando…'
-                  : nothingLeft
-                    ? 'No queda nada por pagar'
-                    : selected.size === 0
-                      ? 'Elegí lo que consumiste'
-                      : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
-              </button>
-            </div>
-          </div>
+          <button className="cta-float" onClick={goToPay} disabled={busy || selected.size === 0}>
+            {busy
+              ? 'Reservando…'
+              : nothingLeft
+                ? 'No queda nada por pagar'
+                : selected.size === 0
+                  ? 'Elegí lo que consumiste'
+                  : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
+          </button>
         </>
       ) : (
         <>
           <div className="scroll" style={{ padding: 16 }}>
+            {/* IMPORTANTÍSIMO (Mati): aunque se pague en partes iguales, cada
+                comensal marca QUÉ consumió — esa info sostiene el modelo.
+                No cambia el monto (la parte es fija) ni reserva nada. */}
+            <div className="sectlabel">¿Qué consumiste?</div>
+            <div className="caption" style={{ margin: '0 2px 8px' }}>
+              Marcalo para el restaurante — no cambia lo que pagás.
+            </div>
+            <div className="card" style={{ marginBottom: 14 }}>
+              {mesa.items.map((i) => {
+                const sel = selected.has(i.id);
+                return (
+                  <button
+                    key={i.id}
+                    className={`item-row ${sel ? 'sel' : ''}`}
+                    onClick={() => toggleItem(i.id)}
+                    aria-pressed={sel}
+                    aria-label={`${i.name}${i.quantity > 1 ? ` por ${i.quantity}` : ''}`}
+                  >
+                    <div className={`checkbox ${sel ? 'on' : ''}`} aria-hidden="true">
+                      ✓
+                    </div>
+                    <div className="item-name">
+                      {i.name}
+                      {i.quantity > 1 ? ` × ${i.quantity}` : ''}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
             <div className="sectlabel">Partes de la mesa</div>
             <div className="card" style={{ marginBottom: 12 }}>
               {mesa.division_slots?.map((s) => (
@@ -984,14 +1090,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               toma la próxima parte libre — quedan <b>{availableSlots}</b>.
             </div>
           </div>
-          <div className="action-bar">
-            <div style={{ display: 'flex', gap: 8 }}>
-              {shareButton}
-              <button className="btn btn-primary" onClick={goToPay} disabled={busy || availableSlots === 0}>
-                {availableSlots === 0 ? 'No quedan partes' : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
-              </button>
-            </div>
-          </div>
+          <button
+            className="cta-float"
+            onClick={goToPay}
+            disabled={busy || availableSlots === 0 || selected.size === 0}
+          >
+            {availableSlots === 0
+              ? 'No quedan partes'
+              : selected.size === 0
+                ? 'Marcá lo que consumiste'
+                : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
+          </button>
         </>
       )}
     </div>
