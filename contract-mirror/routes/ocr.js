@@ -27,20 +27,22 @@ const logger = require('../utils/logger');
 const router = express.Router();
 
 const USE_REAL = process.env.OCR_FEATURE_FLAG === 'real';
-// No hay proveedor real integrado todavía. Cuando se integre (Google Vision /
-// AWS Textract / etc), poner esto en true y agregar la llamada en el handler.
-const HAS_REAL_IMPL = false;
+// v2.19 (D5): proveedor real integrado — Amazon Textract (services/ocrTextract).
+// El DEFAULT sigue siendo mock: nada cambia hasta setear OCR_FEATURE_FLAG=real
+// + credenciales AWS por entorno.
+const HAS_REAL_IMPL = true;
 
-// ─── v2.5.2 P1 #8: FAIL-FAST AL STARTUP ───
-// Si se pide modo real y no hay implementación, abortar el arranque.
-if (USE_REAL && !HAS_REAL_IMPL) {
-  const msg = 'OCR real mode is configured but no real OCR provider is implemented';
-  logger.error('ocr_real_mode_no_implementation', {
+// ─── FAIL-FAST AL STARTUP (mismo espíritu que P1 #8) ───
+// Modo real sin credenciales AWS → abortar el arranque, no fallar en runtime.
+if (USE_REAL && !(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_REGION)) {
+  const msg = 'OCR real mode (Textract) requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_REGION';
+  logger.error('ocr_real_mode_missing_aws_credentials', {
     message: msg,
-    hint: 'Cambiá OCR_FEATURE_FLAG=mock o integrá un proveedor real (HAS_REAL_IMPL).',
+    hint: 'Cambiá OCR_FEATURE_FLAG=mock o configurá las credenciales AWS por entorno.',
   });
   throw new Error(msg);
 }
+const ocrTextract = USE_REAL ? require('../services/ocrTextract') : null;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -139,24 +141,27 @@ router.post('/', upload.single('image'), async (req, res, next) => {
       mime: req.file.mimetype, magic, mode: USE_REAL ? 'real' : 'mock',
     });
 
-    let ocrText;
     if (USE_REAL) {
-      // Inalcanzable: el fail-fast al startup ya abortó si USE_REAL && !HAS_REAL_IMPL.
-      // Cuando exista HAS_REAL_IMPL, acá va la llamada al proveedor real.
-      logger.error('ocr_real_called_without_impl');
-      return res.status(503).json({
-        error: 'ocr_service_unavailable',
-        message: 'Real OCR enabled but implementation not configured',
-      });
-    } else {
-      ocrText = mockTicketText();
+      // v2.19 (D5): Textract. Política del acta ante fallo del proveedor:
+      // devolver lo utilizable (acá: nada + warning) para que el usuario
+      // edite a mano — el flujo de dividir la cuenta NUNCA se rompe por OCR.
+      try {
+        const result = await ocrTextract.analyzeExpense(req.file.buffer);
+        return res.json({ ...result, mock: false });
+      } catch (e) {
+        logger.error('ocr_provider_error', { user_id: req.user.id, error: e.message });
+        return res.json({
+          items: [], total_cents: 0, warnings: ['provider_error'], mock: false,
+        });
+      }
     }
 
-    const items = matching.parseTicket(ocrText);
+    const items = matching.parseTicket(mockTicketText());
     res.json({
       items,
       total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0),
-      mock: !USE_REAL,
+      warnings: [],
+      mock: true,
     });
   } catch (err) {
     if (err.message === 'invalid_image_type') {

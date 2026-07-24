@@ -23,11 +23,20 @@
  *   - Tolerancia anti-tercios: si lo pedido deja un remanente < 100 bps
  *     (3×3333 = 9999), la fracción absorbe el remanente (en bps y centavos).
  *
- * Expiración (espeja el modelo viejo):
- *   - En el camino (lock/pay): un claim locked VENCIDO es robable — se libera
- *     lazy bajo el candado del ítem (mismo criterio que el pay legacy).
- *   - En el timer: solo se barren los vencidos SIN attempt (los atados a un
- *     attempt los liberan los caminos de fallo/cancelación, como siempre).
+ * TENENCIA COMPROMETIDA (B-05, v2.19.1): un claim locked atado a un attempt
+ * VIVO (pending/requires_action/processing/authorized/cancelling/succeeded/
+ * processed/refunded) es PLATA EN VUELO — el camino tarjeta deja el claim
+ * locked hasta que el webhook lo marca paid, y en esa ventana NADIE puede
+ * liberarlo: ni el re-reclamo del propio dueño ni la expiración lazy. Solo es
+ * liberable un claim SIN attempt (lock puro) o con attempt muerto
+ * (failed/cancelled — el rescate si releaseAttemptClaims falló). Consecuencia:
+ * el re-reclamo con fracción propia en vuelo AGREGA una fracción (no
+ * "refresca"), y un ítem 100% comprometido da 409 con remaining 0.
+ *
+ * Expiración:
+ *   - En el camino (lock/pay): se liberan lazy SOLO los vencidos liberables
+ *     (mismo predicado de arriba), bajo el candado del ítem.
+ *   - En el timer: solo los vencidos SIN attempt (como siempre).
  */
 'use strict';
 
@@ -78,22 +87,38 @@ function ownsClaim(c, owner, lockTokens) {
       || (Array.isArray(lockTokens) && lockTokens.includes(c.lock_token));
 }
 
-/** Libera lazy los locked vencidos del ítem (robables, criterio del pay legacy). */
+// B-05: estados de attempt cuyo claim SÍ es liberable (attempt muerto).
+// Todo otro estado = plata en vuelo, intocable.
+const RELEASABLE_ATTEMPT_STATES = ['failed', 'cancelled'];
+
+function isReleasable(c) {
+  return c.payment_attempt_id == null
+      || RELEASABLE_ATTEMPT_STATES.includes(c.attempt_status);
+}
+
+/** Libera lazy los locked vencidos LIBERABLES del ítem (B-05: jamás los en vuelo). */
 async function releaseExpired(client, itemId) {
   await client.query(
-    `UPDATE mesa_item_claims SET status='released'
-      WHERE mesa_item_id=$1 AND status='locked'
-        AND lock_expires_at IS NOT NULL AND lock_expires_at < NOW()`,
-    [itemId]
+    `UPDATE mesa_item_claims c SET status='released'
+      WHERE c.mesa_item_id=$1 AND c.status='locked'
+        AND c.lock_expires_at IS NOT NULL AND c.lock_expires_at < NOW()
+        AND (c.payment_attempt_id IS NULL OR EXISTS (
+              SELECT 1 FROM payment_attempts pa
+               WHERE pa.id = c.payment_attempt_id
+                 AND pa.status = ANY($2::text[])))`,
+    [itemId, RELEASABLE_ATTEMPT_STATES]
   );
 }
 
 async function liveClaims(client, itemId) {
+  // B-05: attempt_status viaja con el claim para decidir liberabilidad.
   const { rows } = await client.query(
-    `SELECT id, fraction_bps, amount_cents, status, payment_attempt_id,
-            locked_by_user_id, locked_by_guest_token_hash, lock_token
-       FROM mesa_item_claims
-      WHERE mesa_item_id=$1 AND status IN ('locked','paid')`,
+    `SELECT c.id, c.fraction_bps, c.amount_cents, c.status, c.payment_attempt_id,
+            c.locked_by_user_id, c.locked_by_guest_token_hash, c.lock_token,
+            pa.status AS attempt_status
+       FROM mesa_item_claims c
+       LEFT JOIN payment_attempts pa ON pa.id = c.payment_attempt_id
+      WHERE c.mesa_item_id=$1 AND c.status IN ('locked','paid')`,
     [itemId]
   );
   return rows;
@@ -115,13 +140,18 @@ async function acquire(client, {
   const live = await liveClaims(client, item.id);
 
   const mine = live.filter((c) => c.status === 'locked' && ownsClaim(c, owner, lockTokens));
-  if (mine.length > 0) {
+  // B-05: solo se reemplaza lo LIBERABLE (lock puro / attempt muerto). Un
+  // claim propio atado a un attempt vivo es plata comprometida: pasa al lado
+  // de `others` — suma en `taken` y en el precio de la completadora.
+  const mineReleasable = mine.filter(isReleasable);
+  if (mineReleasable.length > 0) {
     await client.query(
-      `UPDATE mesa_item_claims SET status='released' WHERE id = ANY($1::uuid[])`,
-      [mine.map((c) => c.id)]
+      `UPDATE mesa_item_claims SET status='released'
+        WHERE id = ANY($1::uuid[]) AND status='locked'`,   // guard anti-TOCTOU
+      [mineReleasable.map((c) => c.id)]
     );
   }
-  const others = live.filter((c) => !mine.includes(c));
+  const others = live.filter((c) => !mineReleasable.includes(c));
 
   const taken = others.reduce((s, c) => s + Number(c.fraction_bps), 0);
   const effBps = effectiveBps(requestedBps, 10000 - taken);

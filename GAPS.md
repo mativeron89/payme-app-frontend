@@ -49,6 +49,27 @@ comprobante; nadie re-lockea lo recién pagado en segundos). El mock del front
 implementa la semántica del acta (correcta). Post-fix el front NO cambia:
 el `409 fraction_not_available` + `remaining_bps` ya se maneja desde 0.21.0.
 
+**Estado: RESUELTO** en app-backend **v2.19.1** (2026-07-24). El fix es el
+predicado allowlist recomendado, aplicado en `acquire` Y en `releaseExpired`
+(tenencia comprometida = claim atado a attempt vivo, intocable; liberable
+solo sin attempt o con attempt `failed`/`cancelled`), más el estrechamiento
+de los fallbacks COMPAT a attempts genuinamente pre-v2.18. Los dos
+escenarios de la repro quedaron como tests de integración permanentes en el
+CI del backend, y los dos ítems corruptos de las corridas del 2026-07-23
+(PA-2102 y PA-1202) fueron reparados en la base. **Verificado por el front
+con e2e contra el vivo (2026-07-24, mesas PA-1386 y PA-7741, 11/11 verde):**
+
+- Re-lock inmediato con ⅓ propio en vuelo → **200 con fracción ADICIONAL**;
+  tras el webhook el ítem queda ⅓ `paid` + ⅓ `locked` (remaining 3334,
+  `my_bps` 6666) y los pagos siguientes dan 201 — el ítem cierra `paid`
+  exacto (23.33 + 23.33 + 23.34).
+- Lock extra inmediato sobre ítem 100% comprometido → **409
+  `fraction_not_available` con `remaining_bps: 0`**; tras el webhook el GET
+  queda `paid` / remaining 0 / `my_bps` 10000.
+
+Espejo refrescado a v2.19.1 (`services/itemClaims.js` con `isReleasable`).
+El front no necesitó ningún cambio.
+
 ---
 
 ## 🟠 B-04 — `requireMesaParticipant` no seleccionaba `code` (ensuciaba ledger + Stripe)
