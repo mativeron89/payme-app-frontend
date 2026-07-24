@@ -4,12 +4,12 @@ import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
-import type { MesaDetail, PaymentMethod, PaymentType } from '../api/types';
+import type { FractionRequest, MesaDetail, PaymentMethod, PaymentType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
 import { goBack, navigate } from '../router';
 import { countdownTo, formatMXN } from '../utils/format';
-import { stringToCents, tipFromBps } from '../utils/money';
+import { fractionAmount, stringToCents, tipFromBps } from '../utils/money';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -39,7 +39,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [mesa, setMesa] = useState<MesaDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [view, setView] = useState<View>('detail');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // v2.18 (fracciones): selección = ítem → fracción elegida en bps.
+  const [selected, setSelected] = useState<Map<string, number>>(new Map());
   const [lockTokens, setLockTokens] = useState<string[]>([]);
   const [tipPct, setTipPct] = useState(15);
   // D7: 'pct' manda tip_bps (computa el server); 'custom' manda tip_cents.
@@ -104,6 +105,31 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   const payable = mesa?.status === 'open' || mesa?.status === 'partially_paid';
 
+  /** Valores del contrato (schemas.lockItems del espejo). */
+  const FRACTIONS: Array<{ bps: number; label: string }> = [
+    { bps: 10000, label: '1' },
+    { bps: 5000, label: '½' },
+    { bps: 3333, label: '⅓' },
+    { bps: 2500, label: '¼' },
+  ];
+
+  function bpsLabel(bps: number): string {
+    if (bps >= 10000) return 'entero';
+    if (bps === 5000) return '½';
+    if (bps === 3333 || bps === 3334) return '⅓';
+    if (bps === 2500) return '¼';
+    return `${Math.round(bps / 100)}%`;
+  }
+
+  /** Preview del monto de MI fracción (la completadora la ajusta el server). */
+  function fractionPreview(priceCents: number, bps: number, remainingBps: number): number {
+    if (bps >= remainingBps) {
+      // Completa el ítem → paga lo que falta (aprox: nominal de lo tomado).
+      return Math.max(0, priceCents - fractionAmount(priceCents, 10000 - remainingBps));
+    }
+    return fractionAmount(priceCents, bps);
+  }
+
   const itemsAmount = useMemo(() => {
     if (!mesa) return 0;
     if (mesa.division_mode === 'igual') {
@@ -111,7 +137,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     }
     return mesa.items
       .filter((i) => selected.has(i.id))
-      .reduce((s, i) => s + i.price_cents * i.quantity, 0);
+      .reduce(
+        (s, i) => s + fractionPreview(i.price_cents * i.quantity, selected.get(i.id) ?? 10000, i.remaining_bps),
+        0,
+      );
   }, [mesa, selected]);
 
   // D7 (v2.17): la propina es % de tu parte IGUALITARIA (total ÷ N), no de tu
@@ -131,9 +160,21 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const gross = itemsAmount + tipCents;
 
   function toggleItem(id: string) {
-    const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    const next = new Map(selected);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      const item = mesa?.items.find((i) => i.id === id);
+      const remaining = item?.remaining_bps ?? 10000;
+      const def = FRACTIONS.find((f) => f.bps <= remaining)?.bps ?? 10000;
+      next.set(id, def);
+    }
+    setSelected(next);
+  }
+
+  function setFraction(id: string, bps: number) {
+    const next = new Map(selected);
+    next.set(id, bps);
     setSelected(next);
   }
 
@@ -145,16 +186,30 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       setBusy(true);
       try {
         // Contrato: lock primero (POST /:code/items/lock), después pagar.
-        const r = await api.lockItems(code, [...selected], guestToken);
+        const requests: FractionRequest[] = [...selected.entries()].map(([item_id, fraction_bps]) => ({
+          item_id,
+          fraction_bps,
+        }));
+        const r = await api.lockItems(code, requests, guestToken);
         setLockTokens([r.lock_token]);
         setView('pay');
       } catch (err) {
         const { code: ec, extra } = extractApiError(err);
-        if (ec === 'item_already_locked' || ec === 'item_already_paid') {
+        if (ec === 'fraction_not_available') {
+          const rem = typeof extra.remaining_bps === 'number' ? extra.remaining_bps : 0;
+          toast(rem > 0 ? `De ese plato queda solo ${bpsLabel(rem)}` : 'Ese plato ya está completo');
+          const itemId = typeof extra.item_id === 'string' ? extra.item_id : null;
+          if (itemId) {
+            const next = new Map(selected);
+            next.delete(itemId);
+            setSelected(next);
+          }
+          reload();
+        } else if (ec === 'item_already_locked' || ec === 'item_already_paid') {
           toast('Alguien ya tomó uno de esos consumos');
           const itemId = typeof extra.item_id === 'string' ? extra.item_id : null;
           if (itemId) {
-            const next = new Set(selected);
+            const next = new Map(selected);
             next.delete(itemId);
             setSelected(next);
           }
@@ -255,9 +310,16 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         {
           payment_type: payType,
           // IMPORTANTÍSIMO (Mati): también en partes iguales viaja QUÉ consumió
-          // cada uno — el modelo se sostiene en esa información (G-07: falta
-          // que el backend la persista en la rama igual).
-          item_ids: [...selected],
+          // cada uno (v2.18.1 ya lo persiste — G-07 resuelto). En consumo van
+          // las FRACCIONES (v2.18).
+          ...(mesa.division_mode === 'consumo'
+            ? {
+                items: [...selected.entries()].map(([item_id, fraction_bps]) => ({
+                  item_id,
+                  fraction_bps,
+                })),
+              }
+            : { item_ids: [...selected.keys()] }),
           ...(lockTokens.length > 0 && { lock_tokens: lockTokens }),
           ...(tipMode === 'custom' ? { tip_cents: tipCents } : { tip_bps: tipPct * 100 }),
           ...(staffId && { tip_to_staff_id: staffId }),
@@ -290,7 +352,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               ? 'Ⓖ Google Pay'
               : `💳 ${savedCard ? `${savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··${savedCard.last_four}` : 'Tarjeta'}`;
       setResult({
-        itemsAmount,
+        // Exacto del server: la fracción completadora puede ajustar ±1¢.
+        itemsAmount: r.attempt.gross_amount_cents - (r.attempt.tip_cents ?? tipCents),
         tip: r.attempt.tip_cents ?? tipCents,
         gross: r.attempt.gross_amount_cents,
         methodLabel,
@@ -571,7 +634,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 className="btn btn-ghost"
                 onClick={() => {
                   setView('detail');
-                  setSelected(new Set());
+                  setSelected(new Map());
                   reload();
                 }}
               >
@@ -990,34 +1053,67 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </div>
             )}
             {mesa.items.map((i) => {
-              const paidByOther = i.status === 'paid';
-              const lockedByOther = i.status === 'locked' && !i.locked_by_me;
-              const sel = selected.has(i.id) || (i.status === 'locked' && i.locked_by_me);
-              const blocked = paidByOther || lockedByOther;
-              const price = formatMXN(i.price_cents * i.quantity);
-              const motivo = paidByOther ? ', ya pagado' : lockedByOther ? ', lo tomó otra persona' : '';
+              const fullPrice = i.price_cents * i.quantity;
+              const paidFull = i.status === 'paid';
+              // Bloqueado solo si NO queda nada y nada es mío.
+              const blocked = (paidFull || i.remaining_bps <= 0) && i.my_bps === 0 && !selected.has(i.id);
+              const sel = selected.has(i.id);
+              const myBpsSel = selected.get(i.id) ?? 10000;
+              const partial = i.remaining_bps > 0 && i.remaining_bps < 10000;
+              const hint = paidFull
+                ? ' · ya pagado'
+                : blocked
+                  ? ' · lo tomaron'
+                  : partial
+                    ? ` · queda ${bpsLabel(i.remaining_bps)}`
+                    : '';
               return (
-                <button
+                <div
                   key={i.id}
-                  className={`item-row ${sel ? 'sel' : ''} ${paidByOther ? 'paid-other' : ''} ${lockedByOther ? 'locked-other' : ''}`}
-                  onClick={() => !blocked && toggleItem(i.id)}
-                  disabled={blocked}
-                  aria-pressed={blocked ? undefined : sel}
-                  aria-label={`${i.name}${i.quantity > 1 ? ` por ${i.quantity}` : ''}, ${price}${motivo}`}
+                  className={`item-row ${sel ? 'sel' : ''} ${blocked ? 'paid-other' : ''}`}
+                  style={{ flexWrap: 'wrap', rowGap: 4 }}
                 >
-                  {/* Decorativo: el ✓ oculto con color:transparent lo leía el
-                      lector como si el ítem estuviera marcado. */}
-                  <div className={`checkbox ${sel ? 'on' : ''} ${blocked ? 'blocked' : ''}`} aria-hidden="true">
-                    {blocked ? (paidByOther ? '✓' : '🔒') : '✓'}
+                  <button
+                    onClick={() => !blocked && toggleItem(i.id)}
+                    disabled={blocked}
+                    aria-pressed={blocked ? undefined : sel}
+                    aria-label={`${i.name}, ${formatMXN(fullPrice)}${hint}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: blocked ? 'default' : 'pointer', textAlign: 'left' }}
+                  >
+                    <div className={`checkbox ${sel ? 'on' : ''} ${blocked ? 'blocked' : ''}`} aria-hidden="true">
+                      {blocked ? (paidFull ? '✓' : '🔒') : '✓'}
+                    </div>
+                    <div className="item-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {i.name}
+                      {partial && !blocked && (
+                        <span className="item-hint"> · queda {bpsLabel(i.remaining_bps)}</span>
+                      )}
+                      {(paidFull || blocked) && <span className="item-hint">{hint}</span>}
+                    </div>
+                  </button>
+                  {/* v2.18: fracción en la MISMA línea (UX ratificada). */}
+                  {sel && (
+                    <div style={{ display: 'flex', gap: 4, flex: 'none' }} role="radiogroup" aria-label={`Fracción de ${i.name}`}>
+                      {FRACTIONS.filter((f) => f.bps <= i.remaining_bps).map((f) => (
+                        <button
+                          key={f.bps}
+                          className={`tip-pill ${myBpsSel === f.bps ? 'sel' : ''}`}
+                          style={{ padding: '3px 9px', fontSize: 12 }}
+                          onClick={() => setFraction(i.id, f.bps)}
+                          role="radio"
+                          aria-checked={myBpsSel === f.bps}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="item-price" style={{ flex: 'none' }}>
+                    {sel && myBpsSel < 10000
+                      ? formatMXN(fractionPreview(fullPrice, myBpsSel, i.remaining_bps))
+                      : formatMXN(fullPrice)}
                   </div>
-                  <div className="item-name">
-                    {i.name}
-                    {i.quantity > 1 ? ` × ${i.quantity}` : ''}
-                    {paidByOther && <span className="item-hint"> · ya pagado</span>}
-                    {lockedByOther && <span className="item-hint"> · lo tomó otro</span>}
-                  </div>
-                  <div className="item-price">{price}</div>
-                </button>
+                </div>
               );
             })}
           </div>

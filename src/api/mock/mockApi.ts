@@ -1,4 +1,4 @@
-import { centsToDisplay, splitEqual, tipFromBps } from '../../utils/money';
+import { centsToDisplay, fractionAmount, splitEqual, tipFromBps } from '../../utils/money';
 import { saveSession, type StoredSession } from '../storage';
 import type {
   BalanceResponse,
@@ -27,6 +27,7 @@ import type {
   TransfersResponse,
   WalletTransactionsResponse,
   HistoryResponse,
+  FractionRequest,
 } from '../types';
 import { MOCK_RESTAURANTS, MOCK_USER } from './seedData';
 import {
@@ -42,6 +43,8 @@ import {
   state,
   toMesaDetail,
   toOpenMesa,
+  takenBps,
+  type MockClaim,
   type MockIdentity,
   type MockMesa,
 } from './store';
@@ -150,6 +153,34 @@ export async function mockHistory(): Promise<HistoryResponse> {
   return delay({ history: sorted, limit: 20, offset: 0 });
 }
 
+// ─── v2.18 · Fracciones (réplica de services/itemClaims.js del espejo) ─────
+
+const FRACTION_VALUES = [2500, 3333, 5000, 10000];
+const COMPLETING_TOLERANCE_BPS = 100;
+
+/** bps efectivos contra lo que queda; 409 si no entra; absorbe restos <100. */
+function effectiveBps(requestedBps: number, remainingBps: number): number {
+  if (remainingBps <= 0 || requestedBps > remainingBps) {
+    throw new MockApiError(409, 'fraction_not_available', {
+      remaining_bps: Math.max(0, remainingBps),
+    });
+  }
+  return remainingBps - requestedBps < COMPLETING_TOLERANCE_BPS ? remainingBps : requestedBps;
+}
+
+/** Precio de la fracción; la que COMPLETA ajusta para que el ítem cierre exacto. */
+function priceFraction(priceCents: number, effBps: number, otherLive: MockClaim[]): number {
+  const otherBps = otherLive.reduce((s, c) => s + c.fraction_bps, 0);
+  if (otherBps + effBps >= 10000) {
+    const others = otherLive.reduce(
+      (s, c) => s + (c.amount_cents != null ? c.amount_cents : fractionAmount(priceCents, c.fraction_bps)),
+      0,
+    );
+    return Math.max(0, priceCents - others);
+  }
+  return fractionAmount(priceCents, effBps);
+}
+
 // ─── Mesas ─────────────────────────────────────────────────
 
 export async function mockOpenMesas(): Promise<OpenMesasResponse> {
@@ -232,6 +263,7 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
       quantity: i.quantity,
       status: 'available',
       lockedBy: null,
+      claims: [],
       lock_expires_at: null,
     })),
     slots:
@@ -311,30 +343,45 @@ export async function mockConfirmGuarantee3ds(code: string): Promise<{ status: '
 
 export async function mockLockItems(
   code: string,
-  itemIds: string[],
+  requests: FractionRequest[],
   identity: MockIdentity,
 ): Promise<LockItemsResponse> {
   const mesa = findMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   if (!mesaPayable(mesa)) return fail(409, 'mesa_not_active');
-  for (const id of itemIds) {
-    const item = mesa.items.find((i) => i.id === id);
-    if (!item) return fail(404, 'item_not_found', { item_id: id });
-    if (item.status === 'paid') return fail(409, 'item_already_paid', { item_id: id });
-    if (item.status === 'locked' && item.lockedBy !== identity) {
-      return fail(409, 'item_already_locked', { item_id: id });
+  if (!requests.every((r) => FRACTION_VALUES.includes(r.fraction_bps))) {
+    return fail(400, 'validation_error', { message: 'fraction_bps inválido' });
+  }
+  // Validar y calcular efectivos ANTES de mutar (como la tx del backend).
+  const claims: Array<{ item_id: string; fraction_bps: number }> = [];
+  try {
+    for (const rq of requests) {
+      const item = mesa.items.find((i) => i.id === rq.item_id);
+      if (!item) return fail(404, 'item_not_found', { item_id: rq.item_id });
+      // Re-reclamo: mis locked del ítem se reemplazan (como el backend).
+      const others = item.claims.filter((c) => !(c.who === identity && c.status === 'locked'));
+      const remaining = 10000 - others.reduce((s, c) => s + c.fraction_bps, 0);
+      const eff = effectiveBps(rq.fraction_bps, remaining);
+      claims.push({ item_id: rq.item_id, fraction_bps: eff });
     }
+  } catch (e) {
+    if (e instanceof MockApiError) return fail(e.status, e.message, e.extra);
+    throw e;
   }
   const expires = new Date(Date.now() + 10 * 60_000).toISOString();
-  for (const id of itemIds) {
-    const item = mesa.items.find((i) => i.id === id);
-    if (item) {
-      item.status = 'locked';
-      item.lockedBy = identity;
-      item.lock_expires_at = expires;
-    }
+  for (const c of claims) {
+    const item = mesa.items.find((i) => i.id === c.item_id);
+    if (!item) continue;
+    item.claims = item.claims.filter((cl) => !(cl.who === identity && cl.status === 'locked'));
+    item.claims.push({ who: identity, fraction_bps: c.fraction_bps, amount_cents: null, status: 'locked' });
+    item.lock_expires_at = expires;
   }
-  return delay({ locked: itemIds, lock_token: `mock-lock-${Date.now()}`, lock_expires_at: expires });
+  return delay({
+    locked: claims.map((c) => c.item_id),
+    claims,
+    lock_token: `mock-lock-${Date.now()}`,
+    lock_expires_at: expires,
+  });
 }
 
 export async function mockPayMesa(
@@ -362,16 +409,28 @@ export async function mockPayMesa(
       : (req.tip_cents ?? 0);
 
   let itemsAmount = 0;
+  // v2.18: recibo de fracciones cobradas (solo consumo).
+  const pricedItems: Array<{ item_id: string; fraction_bps: number; amount_cents: number }> = [];
   if (mesa.division_mode === 'consumo') {
-    if (req.item_ids.length === 0) return fail(400, 'no_items_selected');
-    for (const id of req.item_ids) {
-      const item = mesa.items.find((i) => i.id === id);
-      if (!item) return fail(400, 'invalid_item_ids');
-      if (item.status === 'paid') return fail(409, 'item_already_paid', { item_id: id });
-      if (item.status === 'locked' && item.lockedBy !== identity) {
-        return fail(409, 'item_already_locked', { item_id: id });
+    const requests: FractionRequest[] =
+      req.items ??
+      (req.item_ids ?? []).map((id) => ({ item_id: id, fraction_bps: 10000 }));
+    if (requests.length === 0) return fail(400, 'no_items_selected');
+    try {
+      for (const rq of requests) {
+        const item = mesa.items.find((i) => i.id === rq.item_id);
+        if (!item) return fail(400, 'invalid_item_ids');
+        // Mi claim locked del ítem se consume/reemplaza; los demás quedan.
+        const others = item.claims.filter((c) => !(c.who === identity && c.status === 'locked'));
+        const remaining = 10000 - others.reduce((sum, c) => sum + c.fraction_bps, 0);
+        const eff = effectiveBps(rq.fraction_bps, remaining);
+        const amount = priceFraction(item.price_cents * item.quantity, eff, others);
+        pricedItems.push({ item_id: rq.item_id, fraction_bps: eff, amount_cents: amount });
+        itemsAmount += amount;
       }
-      itemsAmount += item.price_cents * item.quantity;
+    } catch (e) {
+      if (e instanceof MockApiError) return fail(e.status, e.message, e.extra);
+      throw e;
     }
   } else {
     const slot = mesa.slots?.find((s) => s.status === 'available');
@@ -401,11 +460,19 @@ export async function mockPayMesa(
   }
 
   if (mesa.division_mode === 'consumo') {
-    for (const id of req.item_ids) {
-      const item = mesa.items.find((i) => i.id === id);
-      if (item) {
+    for (const pi of pricedItems) {
+      const item = mesa.items.find((i) => i.id === pi.item_id);
+      if (!item) continue;
+      item.claims = item.claims.filter((c) => !(c.who === identity && c.status === 'locked'));
+      item.claims.push({
+        who: identity,
+        fraction_bps: pi.fraction_bps,
+        amount_cents: pi.amount_cents,
+        status: 'paid',
+      } satisfies MockClaim);
+      // v2.18: 'paid' SOLO al 100%.
+      if (takenBps(item) >= 10000 && item.claims.every((c) => c.status === 'paid')) {
         item.status = 'paid';
-        item.lockedBy = identity;
       }
     }
   }
@@ -434,6 +501,7 @@ export async function mockPayMesa(
       id: mockId('f'),
       gross_amount_cents: gross,
       tip_cents: tipCents,
+      ...(pricedItems.length > 0 && { items: pricedItems }),
       gross_display: centsToDisplay(gross),
       status: req.payment_type === 'wallet' ? 'processed' : 'succeeded',
       payment_type: req.payment_type,

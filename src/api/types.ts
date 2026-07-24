@@ -157,9 +157,20 @@ export interface MesaItem {
   category: string;
   price_cents: number;
   quantity: number;
+  /** v2.18: 'paid' SOLO cuando el ítem está 100% pagado (fracciones). */
   status: ItemStatus;
+  /** v2.18 (fracciones): bps disponibles del ítem (0..10000). */
+  remaining_bps: number;
+  /** v2.18 (fracciones): MI tenencia en bps (locked+paid). */
+  my_bps: number;
   locked_by_me: boolean;
   lock_expires_at: string | null;
+}
+
+/** v2.18: pedido de fracción (valores válidos: 2500|3333|5000|10000). */
+export interface FractionRequest {
+  item_id: string;
+  fraction_bps: number;
 }
 
 /** Slot de división igualitaria (GET /api/mesas/:code, division_slots). */
@@ -241,6 +252,8 @@ export interface CreateMesaResponse {
 /** POST /api/mesas/:code/items/lock → 200. */
 export interface LockItemsResponse {
   locked: string[];
+  /** v2.18: lo efectivamente reclamado (la tolerancia puede ajustar bps). */
+  claims: FractionRequest[];
   lock_token: string;
   lock_expires_at: string;
 }
@@ -256,7 +269,10 @@ export interface PayMesaRequest {
   /** D4 (v2.16): guardar la tarjeta nueva tipeada (default false). */
   save_payment_method?: boolean;
   payment_type: PaymentType;
-  item_ids: string[];
+  /** Legacy (enteros) — en "partes iguales" viaja esto (ahora se persiste, G-07). */
+  item_ids?: string[];
+  /** v2.18 (consumo): fracciones por ítem. EXCLUYENTE con item_ids. */
+  items?: FractionRequest[];
   lock_tokens?: string[];
   /** D7 (v2.17): monto a mano. EXCLUYENTE con tip_bps (ambos → 400). */
   tip_cents?: number;
@@ -273,6 +289,8 @@ export interface PayMesaResponse {
     gross_amount_cents: number;
     /** D7 (v2.17): la propina EXACTA computada por el server. */
     tip_cents?: number;
+    /** v2.18: recibo de fracciones cobradas (solo consumo). */
+    items?: Array<{ item_id: string; fraction_bps: number; amount_cents: number }>;
     gross_display?: string;
     client_secret?: string;
     status: string;

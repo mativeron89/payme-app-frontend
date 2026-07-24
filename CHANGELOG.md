@@ -1,5 +1,35 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.21.0 — Fracciones de platos compartidos (contrato v2.18.1) (2026-07-23)
+
+Consume el contrato fraccional publicado (verificado en repo hermano y vivo;
+acta de fracciones del 2026-07-23). Cierra G-08 y G-07.
+
+- **Selector de fracción EN LA MISMA LÍNEA del ítem** (UX ratificada): al
+  marcar un consumo aparecen las pills `1 · ½ · ⅓ · ¼` (solo las que entran
+  en lo que queda), el precio de la fila muestra TU fracción y los ítems
+  parcialmente tomados dicen "queda ½". Bloqueado solo cuando no queda nada.
+- **Lock y pago fraccionales**: `items: [{item_id, fraction_bps}]` en
+  lock/pay (consumo); en partes iguales siguen los `item_ids` informativos
+  (que v2.18.1 ahora SÍ persiste — G-07 resuelto). Manejo del
+  `409 fraction_not_available` con el `remaining_bps` en el aviso.
+- **Preview con la réplica exacta** (`fractionAmount` en utils/money.ts,
+  procedencia utils/money.js del backend); la fracción COMPLETADORA la ajusta
+  el server y el comprobante usa los montos del attempt (recibo
+  `attempt.items`).
+- **Mock espejando services/itemClaims.js**: claims por ítem, effectiveBps
+  (tolerancia <100 bps absorbe), priceFraction (la completadora cierra
+  exacto), re-reclamo reemplaza, `paid` solo al 100%, migración del estado
+  persistido. Verificado: ½+½ de $195 = 97.50+97.50 y "ya pagado" recién al
+  cierre.
+- **E2E real contra v2.18.1**: ⅓+⅓+⅓ de $70.00 = 23.33+23.33+**23.34**
+  (absorción exacta), ítem `paid`. **B-05 nuevo en GAPS.md**: el re-lock
+  inmediato del mismo dueño libera claims de un pago exitoso con webhook
+  pendiente (corrompe `remaining_bps`) — reportar al backend; no bloquea el
+  flujo real.
+- **contract-mirror a v2.18.1**: schemas, mesas, webhooks, stateMachine,
+  money y el servicio nuevo `services/itemClaims.js`.
+
 ## 0.20.0 — Batch 2 de Mati: unidades seleccionables + ticket en una línea (2026-07-23)
 
 - **Cantidades EXPANDIDAS en unidades al crear la mesa**: "Tiramisú ×2" viaja

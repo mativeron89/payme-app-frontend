@@ -107,7 +107,13 @@ async function transition({
     `INSERT INTO state_transitions
        (entity_type, entity_id, from_state, to_state, reason, triggered_by, metadata)
      VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [entityType, entityId, fromState, toState, reason || null, triggeredBy, metadata]
+    // v2.18.1: reason TRUNCADO a los 200 de la columna. Sin esto, un mensaje de
+    // error largo (los de Stripe superan 200 chars) reventaba el INSERT de
+    // auditoría y hacía ROLLBACK de la operación real que lo traía — así quedó
+    // un attempt colgado con su fracción presa en el primer E2E de fracciones.
+    // La auditoría jamás debe poder tumbar la operación que audita.
+    [entityType, entityId, fromState, toState,
+     reason ? String(reason).slice(0, 200) : null, triggeredBy, metadata]
   );
   logger.audit('state_transition', {
     entity_type: entityType, entity_id: entityId,

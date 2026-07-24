@@ -92,6 +92,17 @@ export function tipFromBps(totalCents: number, n: number, bps: number): number {
 }
 
 /**
+ * v2.18 (fracciones): monto NOMINAL de una fracción de ítem. Réplica EXACTA de
+ * `fractionAmount` del backend (utils/money.js:121-123, espejado): delega en
+ * tipFromBps(price, 1, bps). La fracción que COMPLETA el ítem NO usa esto —
+ * el server ajusta (price − suma de las demás) para cerrar exacto
+ * (services/itemClaims.js del espejo); acá solo se PREVISUALIZA.
+ */
+export function fractionAmount(priceCents: number, fractionBps: number): number {
+  return tipFromBps(priceCents, 1, fractionBps);
+}
+
+/**
  * División igualitaria entre N personas con manejo determinístico de remainder.
  * El primer comensal absorbe los centavos sobrantes.
  */

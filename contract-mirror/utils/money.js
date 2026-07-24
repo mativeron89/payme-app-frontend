@@ -111,8 +111,19 @@ function tipFromBps(totalCents, n, bps) {
   return Math.round((totalCents * bps) / (n * 10000));
 }
 
+/**
+ * v2.18 (fracciones): precio NOMINAL de una fracción de un ítem —
+ * round(price × bps/10000), misma familia de redondeo que tipFromBps (para
+ * montos >= 0, half-away-from-zero). La fracción que COMPLETA el ítem no usa
+ * esto: ajusta (price − suma de las demás) para que el total cierre exacto —
+ * esa cuenta vive en services/itemClaims.js.
+ */
+function fractionAmount(priceCents, fractionBps) {
+  return tipFromBps(priceCents, 1, fractionBps);
+}
+
 module.exports = {
   CURRENCY,
   stringToCents, centsToString, centsToDisplay,
-  sumCents, calculateFee, splitEqual, tipFromBps,
+  sumCents, calculateFee, splitEqual, tipFromBps, fractionAmount,
 };

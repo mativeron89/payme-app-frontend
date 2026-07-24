@@ -18,6 +18,7 @@ const pool = require('../db/pool');
 const eventEmitter = require('../services/eventEmitter');
 const stripeService = require('../services/stripe');
 const savedCards = require('../services/savedCards');   // D4 (v2.16)
+const itemClaims = require('../services/itemClaims');   // v2.18 (fracciones)
 const stateMachine = require('../utils/stateMachine');
 const paymentProcessor = require('../services/paymentProcessor');
 const notifs = require('../services/notifications');
@@ -502,13 +503,40 @@ async function handleMesaPaymentSucceeded(attempt) {
       // tarda segundos), o cuando un PI falló y luego se confirmó. Sin esta rama,
       // cancelled/failed→succeeded viola el FSM → 409 → retry-loop de Stripe →
       // "cobrado pero no registrado" terminal.
-      const { rows: itemRows } = await client.query(
-        `SELECT mi.id, mi.status FROM payment_attempt_items pai
-           JOIN mesa_items mi ON mi.id = pai.mesa_item_id
-          WHERE pai.payment_attempt_id = $1 FOR UPDATE`,
-        [attempt.id]
-      );
-      const conflict = itemRows.some(r => r.status !== 'released');
+      // v2.18 (fracciones): el rescate opera sobre CLAIMS. Conflicto = alguna
+      // fracción liberada ya no entra en su ítem (otro la tomó). Dos pasadas:
+      // primero verifica todas, después restaura — fiel al A11 original (en
+      // conflicto NO se restaura nada: succeeded sin procesar → revisión manual).
+      const rescue = await itemClaims.restoreAttemptClaims(client, attempt.id);
+      let conflict = rescue.conflict;
+      if (!conflict && rescue.restored === 0) {
+        // COMPAT pre-v2.18: attempt de consumo sin claims — rescate viejo por
+        // payment_attempt_items (división 'iguales' queda excluida: sus filas
+        // G-07 son dato declarado, no tenencia).
+        const { rows: legacyItems } = await client.query(
+          `SELECT mi.id, mi.status FROM payment_attempt_items pai
+             JOIN mesa_items mi ON mi.id = pai.mesa_item_id
+             JOIN mesas m ON m.id = mi.mesa_id
+            WHERE pai.payment_attempt_id = $1 AND m.division_mode = 'consumo'
+            FOR UPDATE OF mi`,
+          [attempt.id]
+        );
+        conflict = legacyItems.some((r) => r.status !== 'released');
+        if (!conflict) {
+          for (const it of legacyItems) {
+            await client.query(
+              `UPDATE mesa_items SET status='locked', locked_by_attempt=$2
+                WHERE id=$1 AND status='released'`,
+              [it.id, attempt.id]
+            );
+            await stateMachine.transition({
+              client, entityType: 'mesa_item', entityId: it.id,
+              fromState: 'released', toState: 'locked',
+              reason: 'webhook_late_rescue', triggeredBy: 'webhook',
+            });
+          }
+        }
+      }
       await client.query(
         `UPDATE payment_attempts SET status='succeeded', failure_reason=NULL WHERE id = $1`,
         [attempt.id]
@@ -520,30 +548,17 @@ async function handleMesaPaymentSucceeded(attempt) {
         [attempt.id, cur, conflict ? 'webhook_late_success_conflict' : 'webhook_late_rescue']
       );
       if (conflict) {
-        // Alguien más tomó/pagó los items liberados: NO pisar. El cobro queda
+        // Alguien más tomó las fracciones liberadas: NO pisar. El cobro queda
         // 'succeeded' SIN procesar → cola de revisión manual (refund probable).
         logger.error('late_success_conflict_manual_review', {
-          attempt_id: attempt.id, previous_status: cur,
-          items: itemRows.map(r => ({ id: r.id, status: r.status })),
+          attempt_id: attempt.id, previous_status: cur, item_id: rescue.item_id,
         });
         return;
       }
-      // Re-tomar los items liberados para que processSuccessfulPayment pueda
-      // marcarlos paid (FSM: released→locked→paid; released→paid es inválido).
-      for (const it of itemRows) {
-        await client.query(
-          `UPDATE mesa_items SET status='locked', locked_by_attempt=$2
-            WHERE id=$1 AND status='released'`,
-          [it.id, attempt.id]
-        );
-        await stateMachine.transition({
-          client, entityType: 'mesa_item', entityId: it.id,
-          fromState: 'released', toState: 'locked',
-          reason: 'webhook_late_rescue', triggeredBy: 'webhook',
-        });
-      }
+      // restoreAttemptClaims ya re-tomó los claims (released→locked) para que
+      // processSuccessfulPayment pueda marcarlos paid (released→paid es inválido).
       logger.warn('webhook_late_rescue', {
-        attempt_id: attempt.id, previous_status: cur, items: itemRows.length,
+        attempt_id: attempt.id, previous_status: cur, claims: rescue.restored,
       });
     } else {
       await client.query(`UPDATE payment_attempts SET status='succeeded' WHERE id = $1`, [attempt.id]);

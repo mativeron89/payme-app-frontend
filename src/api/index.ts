@@ -11,6 +11,7 @@ import { clearSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
 import type {
   BalanceResponse,
+  FractionRequest,
   ClabeResponse,
   CreateInvitationResponse,
   CreateMesaRequest,
@@ -98,7 +99,7 @@ export interface Api {
   createMesa(req: CreateMesaRequest): Promise<CreateMesaResponse>;
   /** Mock: simula la confirmación 3DS de la garantía. En T7: Stripe.js. */
   confirmGuarantee3ds(code: string, clientSecret: string): Promise<{ status: string }>;
-  lockItems(code: string, itemIds: string[], guestToken?: string): Promise<LockItemsResponse>;
+  lockItems(code: string, items: FractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
   payMesa(code: string, req: PayMesaRequest, guestToken?: string): Promise<PayMesaResponse>;
   createInvitation(code: string): Promise<CreateInvitationResponse>;
   // topup (A-3)
@@ -200,16 +201,16 @@ const realApi: Api = {
     // El hold quedó autorizado en Stripe pero el webhook todavía no llegó.
     throw new Error('guarantee_pending_webhook');
   },
-  lockItems: (code, itemIds, guestToken) =>
+  lockItems: (code, items, guestToken) =>
     guestToken
       ? httpGuestRequest<LockItemsResponse>(
           'POST',
           `/mesas/${encodeURIComponent(code)}/items/lock`,
           guestToken,
-          { item_ids: itemIds },
+          { items },
         )
       : httpRequest<LockItemsResponse>('POST', `/mesas/${encodeURIComponent(code)}/items/lock`, {
-          item_ids: itemIds,
+          items,
         }),
   payMesa: (code, req, guestToken) =>
     guestToken
@@ -316,8 +317,7 @@ const mockApi: Api = {
   scanTicket: () => mock.mockScanTicket(),
   createMesa: (req) => mock.mockCreateMesa(req),
   confirmGuarantee3ds: (code) => mock.mockConfirmGuarantee3ds(code),
-  lockItems: (code, itemIds, guestToken) =>
-    mock.mockLockItems(code, itemIds, guestToken ? 'guest' : 'user'),
+  lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
   payMesa: (code, req, guestToken) => mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user'),
   createInvitation: (code) => mock.mockCreateInvitation(code),
 

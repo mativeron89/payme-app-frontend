@@ -30,6 +30,15 @@ import { MOCK_RESTAURANTS, MOCK_USER } from './seedData';
 export type MockIdentity = 'user' | 'guest';
 type Owner = MockIdentity | 'other' | null;
 
+/** v2.18: un reclamo fraccional vivo sobre un ítem (espeja mesa_item_claims). */
+export interface MockClaim {
+  who: Exclude<Owner, null>;
+  fraction_bps: number;
+  /** Fijado al pagar (la completadora ajusta); null mientras está locked. */
+  amount_cents: number | null;
+  status: 'locked' | 'paid';
+}
+
 interface MockItem {
   id: string;
   name: string;
@@ -39,6 +48,8 @@ interface MockItem {
   status: ItemStatus;
   lockedBy: Owner;
   lock_expires_at: string | null;
+  /** v2.18 (fracciones): tenencia por claims — la fuente de verdad. */
+  claims: MockClaim[];
 }
 
 interface MockSlot {
@@ -117,6 +128,12 @@ function seedItems(): MockItem[] {
     status,
     lockedBy,
     lock_expires_at: status === 'locked' ? iso(10 * 60_000) : null,
+    claims:
+      status === 'paid'
+        ? [{ who: lockedBy ?? 'other', fraction_bps: 10000, amount_cents: price * quantity, status: 'paid' }]
+        : status === 'locked'
+          ? [{ who: lockedBy ?? 'other', fraction_bps: 10000, amount_cents: null, status: 'locked' }]
+          : [],
   });
   return [
     mk('Tagliatelle Bolognese', 19500),
@@ -484,6 +501,20 @@ function loadPersisted(): MockState | null {
     if (!parsed || !Array.isArray(parsed.mesas) || typeof parsed.balance_cents !== 'number') {
       return null;
     }
+    // Migración 0.21 (fracciones): items persistidos sin `claims` — backfill
+    // desde el estado legacy (paid entero = claim 10000 pagado).
+    for (const mesa of parsed.mesas) {
+      for (const it of mesa.items) {
+        if (!Array.isArray(it.claims)) {
+          it.claims =
+            it.status === 'paid'
+              ? [{ who: it.lockedBy ?? 'user', fraction_bps: 10000, amount_cents: it.price_cents * it.quantity, status: 'paid' }]
+              : it.status === 'locked' && it.lockedBy
+                ? [{ who: it.lockedBy, fraction_bps: 10000, amount_cents: null, status: 'locked' }]
+                : [];
+        }
+      }
+    }
     // Migración 0.14: los estados persistidos previos no tienen `history`
     // (pantalla Mesas). Se backfillea desde el seed para no romper ni mostrar
     // un historial vacío a quien ya venía usando la demo.
@@ -642,20 +673,36 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
     expected_participants: m.expected_participants,
     status: m.status,
     expires_at: m.expires_at,
-    items: m.items.map((i) => ({
-      id: i.id,
-      name: i.name,
-      category: i.category,
-      price_cents: i.price_cents,
-      quantity: i.quantity,
-      status: i.status,
-      locked_by_me: i.status === 'locked' && i.lockedBy === identity,
-      lock_expires_at: i.lock_expires_at,
-    })),
+    items: m.items.map((i) => {
+      const taken = takenBps(i);
+      const mine = myBps(i, identity);
+      return {
+        id: i.id,
+        name: i.name,
+        category: i.category,
+        price_cents: i.price_cents,
+        quantity: i.quantity,
+        status: i.status,
+        remaining_bps: Math.max(0, 10000 - taken),
+        my_bps: mine,
+        locked_by_me: mine > 0,
+        lock_expires_at: i.lock_expires_at,
+      };
+    }),
     ...(slots && { division_slots: slots }),
     active_staff: m.active_staff,
     my_role: identity === 'guest' ? 'guest' : m.openedByUser ? 'opener' : 'participant',
   };
+}
+
+/** v2.18: bps tomados (locked+paid) de un ítem. */
+export function takenBps(i: MockItem): number {
+  return i.claims.reduce((s, c) => s + c.fraction_bps, 0);
+}
+
+/** v2.18: MI tenencia (locked+paid) en bps. */
+export function myBps(i: MockItem, who: MockIdentity): number {
+  return i.claims.filter((c) => c.who === who).reduce((s, c) => s + c.fraction_bps, 0);
 }
 
 /** Estados en los que la mesa acepta locks/pagos (routes/mesas.js). */

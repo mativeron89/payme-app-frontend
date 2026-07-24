@@ -96,8 +96,23 @@ const createMesa = z.object({
   message: 'card guarantee requires stripe_payment_method_id or payment_method_id',
 });
 
+// v2.18 (fracciones): reclamo de una fracción de un ítem. Valores ratificados:
+// ¼ | ⅓ | ½ | entero. El server valida contra lo disponible y computa montos.
+const { FRACTION_VALUES } = require('../services/itemClaims');
+const fractionItem = z.object({
+  item_id: uuid,
+  fraction_bps: z.number().int()
+    .refine((v) => FRACTION_VALUES.includes(v), {
+      message: `fraction_bps must be one of ${FRACTION_VALUES.join('|')}`,
+    })
+    .default(10000),
+});
+
 const lockItems = z.object({
-  item_ids: z.array(uuid).min(1),
+  item_ids: z.array(uuid).min(1).optional(),          // legacy: enteros
+  items: z.array(fractionItem).min(1).optional(),     // v2.18: fracciones
+}).refine((d) => !!d.item_ids !== !!d.items, {
+  message: 'exactly one of item_ids or items is required',
 });
 
 const payMesa = z.object({
@@ -107,6 +122,8 @@ const payMesa = z.object({
   save_payment_method: z.boolean().default(false),
   payment_type: z.enum(['card', 'apple_pay', 'google_pay', 'wallet']).default('card'),
   item_ids: z.array(uuid).default([]),
+  // v2.18 (fracciones): excluyente con item_ids (que sigue = enteros)
+  items: z.array(fractionItem).min(1).optional(),
   lock_tokens: z.array(lockToken).optional(),
   tip_cents: positiveCents.default(0),
   // D7 (v2.17): propina por % sobre base partes-iguales (total÷N declarados).
@@ -124,6 +141,8 @@ const payMesa = z.object({
 }, { message: 'payment source required for non-wallet payment' })
 .refine(d => d.tip_bps === undefined || !d.tip_cents, {
   message: 'tip_bps and tip_cents are mutually exclusive',
+}).refine(d => !(d.items && d.item_ids.length > 0), {
+  message: 'items and item_ids are mutually exclusive',
 });
 
 // TOPUPS

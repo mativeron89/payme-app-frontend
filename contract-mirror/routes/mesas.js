@@ -26,6 +26,7 @@ const schemas = require('../schemas');
 const stateMachine = require('../utils/stateMachine');
 const stripeService = require('../services/stripe');
 const savedCards = require('../services/savedCards');   // D4 (v2.16)
+const itemClaims = require('../services/itemClaims');   // v2.18 (fracciones)
 const settlement = require('../services/settlement');
 const paymentProcessor = require('../services/paymentProcessor');
 const notifs = require('../services/notifications');
@@ -221,6 +222,26 @@ router.get('/:code', guestOrAuth, requireMesaParticipant, async (req, res, next)
               locked_by_guest_token, locked_by_guest_token_hash
          FROM mesa_items WHERE mesa_id = $1 ORDER BY created_at ASC`, [mesa.id]
     );
+    // v2.18 (fracciones): cuánto queda de cada ítem y cuánto tengo yo (vivos =
+    // pagados + locked no vencidos). Lectura pura: sin candados.
+    const myUserId = req.user?.id || null;
+    const myHashF = guestHashOf(req);
+    const { rows: claimAgg } = await pool.query(
+      `SELECT mesa_item_id,
+              COALESCE(SUM(fraction_bps) FILTER (
+                WHERE status='paid' OR (status='locked' AND (lock_expires_at IS NULL OR lock_expires_at >= NOW()))
+              ), 0)::int AS taken_bps,
+              COALESCE(SUM(fraction_bps) FILTER (
+                WHERE (status='paid' OR (status='locked' AND (lock_expires_at IS NULL OR lock_expires_at >= NOW())))
+                  AND (($2::uuid IS NOT NULL AND locked_by_user_id = $2::uuid)
+                       OR ($3::text IS NOT NULL AND locked_by_guest_token_hash = $3::text))
+              ), 0)::int AS my_bps
+         FROM mesa_item_claims
+        WHERE mesa_id = $1
+        GROUP BY mesa_item_id`,
+      [mesa.id, myUserId, myHashF]
+    );
+    const claimsByItem = new Map(claimAgg.map((c) => [c.mesa_item_id, c]));
     const { rows: activeStaff } = await pool.query(
       `SELECT id, display_name, role FROM restaurant_staff
         WHERE restaurant_id = $1 AND status = 'active' AND shift_status = 'on'
@@ -272,12 +293,20 @@ router.get('/:code', guestOrAuth, requireMesaParticipant, async (req, res, next)
         division_mode: mesa.division_mode,
         expected_participants: mesa.expected_participants,
         status: mesa.status, expires_at: mesa.expires_at,
-        items: items.map(i => ({
-          id: i.id, name: i.name, category: i.category,
-          price_cents: Number(i.price_cents), quantity: i.quantity, status: i.status,
-          locked_by_me: lockedByMe(i),
-          lock_expires_at: i.lock_expires_at,
-        })),
+        items: items.map(i => {
+          const cl = claimsByItem.get(i.id);
+          const takenBps = cl ? Number(cl.taken_bps) : 0;
+          const myBps = cl ? Number(cl.my_bps) : 0;
+          return {
+            id: i.id, name: i.name, category: i.category,
+            price_cents: Number(i.price_cents), quantity: i.quantity, status: i.status,
+            // v2.18 (fracciones): disponible y mi tenencia (0..10000 bps)
+            remaining_bps: Math.max(0, 10000 - takenBps),
+            my_bps: myBps,
+            locked_by_me: myBps > 0 || lockedByMe(i),   // claims primero; columnas legacy p/ filas viejas
+            lock_expires_at: i.lock_expires_at,
+          };
+        }),
         ...(slots && { division_slots: slots }),
         active_staff: activeStaff,
         my_role: req.mesaRole || (req.isGuest ? 'guest' : null),
@@ -296,67 +325,69 @@ router.post('/:code/items/lock', guestOrAuth, requireMesaParticipant,
     const lockToken = generateLockToken();
     const lockExpiresAt = new Date(Date.now() + ITEM_LOCK_SECONDS * 1000);
     const userId = req.user?.id || null;
-    const guestTok = req.isGuest ? req.guestToken : null;
     const guestTokHash = guestHashOf(req);  // v2.5.2 P1 #2
 
-    const locked = await pool.tx(async (client) => {
+    // v2.18 (fracciones): normalizar — legacy item_ids = fracciones enteras.
+    const legacyShape = !!req.body.item_ids;
+    const requests = legacyShape
+      ? req.body.item_ids.map((id) => ({ item_id: id, fraction_bps: 10000 }))
+      : req.body.items;
+    const seen = new Set();
+    for (const r of requests) {
+      if (seen.has(r.item_id)) {
+        return res.status(400).json({ error: 'duplicate_item', item_id: r.item_id });
+      }
+      seen.add(r.item_id);
+    }
+
+    const claims = await pool.tx(async (client) => {
       const result = [];
-      for (const itemId of req.body.item_ids) {
+      // orden estable por id: dos locks concurrentes con sets solapados no se
+      // cruzan en orden inverso (anti-deadlock)
+      const sorted = [...requests].sort((a, b) => a.item_id.localeCompare(b.item_id));
+      for (const rq of sorted) {
         const { rows } = await client.query(
-          `SELECT id, status, locked_by_user_id, locked_by_guest_token,
-                  locked_by_guest_token_hash, lock_expires_at
-             FROM mesa_items WHERE id = $1 AND mesa_id = $2 FOR UPDATE`,
-          [itemId, mesa.id]
+          `SELECT id, status, price_cents FROM mesa_items
+            WHERE id = $1 AND mesa_id = $2 FOR UPDATE`,
+          [rq.item_id, mesa.id]
         );
         const item = rows[0];
-        if (!item) throw Object.assign(new Error('item_not_found'), { status: 404, item_id: itemId });
-
-        if (item.status === 'locked') {
-          const isOwner = (userId && item.locked_by_user_id === userId)
-                       || (guestTokHash && item.locked_by_guest_token_hash === guestTokHash)
-                       || (guestTok && item.locked_by_guest_token === guestTok);
-          if (isOwner) {
-            await client.query(
-              `UPDATE mesa_items
-                  SET lock_token = $2, lock_expires_at = $3, locked_at = NOW()
-                WHERE id = $1`,
-              [itemId, lockToken, lockExpiresAt]
-            );
-            result.push(itemId);
-            continue;
+        if (!item) throw Object.assign(new Error('item_not_found'), { status: 404, item_id: rq.item_id });
+        try {
+          const r = await itemClaims.acquire(client, {
+            item, mesaId: mesa.id,
+            owner: { userId, guestTokHash },
+            requestedBps: rq.fraction_bps,
+            lockToken, lockExpiresAt,
+            triggeredBy: req.isGuest ? 'guest' : 'user',
+          });
+          result.push({ item_id: item.id, fraction_bps: r.effBps });
+        } catch (e) {
+          if (e.status === 409) {
+            // shape legacy: el error histórico que el front v0.20 ya maneja
+            const msg = legacyShape ? 'item_already_locked' : 'fraction_not_available';
+            throw Object.assign(new Error(msg), {
+              status: 409, item_id: rq.item_id, remaining_bps: e.remaining_bps,
+            });
           }
-          throw Object.assign(new Error('item_already_locked'), { status: 409, item_id: itemId });
+          throw e;
         }
-        if (!['available','released'].includes(item.status)) {
-          throw Object.assign(new Error('item_not_available'), { status: 409, item_id: itemId });
-        }
-
-        // v2.5.2 P1 #2: flow nuevo → guardamos SOLO el hash (raw = NULL)
-        await client.query(
-          `UPDATE mesa_items
-              SET status='locked', locked_at=NOW(),
-                  lock_token=$2, lock_expires_at=$3,
-                  locked_by_user_id=$4,
-                  locked_by_guest_token=NULL,
-                  locked_by_guest_token_hash=$5
-            WHERE id=$1`,
-          [itemId, lockToken, lockExpiresAt, userId, guestTokHash]
-        );
-        await stateMachine.transition({
-          client, entityType: 'mesa_item', entityId: itemId,
-          fromState: item.status, toState: 'locked',
-          triggeredBy: req.isGuest ? 'guest' : 'user',
-        });
-        result.push(itemId);
       }
       return result;
     });
 
-    res.json({ locked, lock_token: lockToken, lock_expires_at: lockExpiresAt });
+    res.json({
+      locked: claims.map((c) => c.item_id),   // compat legacy
+      claims,                                  // v2.18: [{item_id, fraction_bps}]
+      lock_token: lockToken,
+      lock_expires_at: lockExpiresAt,
+    });
   } catch (err) {
     if (err.status) {
       return res.status(err.status).json({
-        error: err.message, ...(err.item_id && { item_id: err.item_id }),
+        error: err.message,
+        ...(err.item_id && { item_id: err.item_id }),
+        ...(err.remaining_bps !== undefined && { remaining_bps: err.remaining_bps }),
       });
     }
     next(err);
@@ -377,6 +408,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
       payment_method_id, stripe_payment_method_id, payment_type,
       save_payment_method,                       // D4 (v2.16)
       tip_bps,                                   // D7 (v2.17)
+      items,                                     // v2.18 (fracciones)
       item_ids, lock_tokens, tip_cents, tip_to_staff_id, idempotency_key,
     } = req.body;
 
@@ -433,42 +465,66 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
     try {
       attempt = await pool.tx(async (client) => {
         let validatedItemsAmount = 0;
-        const itemsForLock = [];
+        const pricedClaims = [];   // v2.18: [{claimId, itemId, fractionBps, amountCents}]
         let claimedSlotIndex = null;
 
         if (mesa.division_mode === 'consumo') {
-          if (item_ids.length === 0) {
+          // v2.18 (fracciones): legacy item_ids = fracciones enteras (10000)
+          const legacyShape = !items || items.length === 0;
+          const requests = legacyShape
+            ? item_ids.map((id) => ({ item_id: id, fraction_bps: 10000 }))
+            : items;
+          if (requests.length === 0) {
             throw Object.assign(new Error('no_items_selected'), { status: 400 });
           }
+          const seen = new Set();
+          for (const r of requests) {
+            if (seen.has(r.item_id)) {
+              throw Object.assign(new Error('duplicate_item'), { status: 400, item_id: r.item_id });
+            }
+            seen.add(r.item_id);
+          }
+          // candados por ítem en orden estable (anti-deadlock entre pagos solapados)
+          const sorted = [...requests].sort((a, b) => a.item_id.localeCompare(b.item_id));
           const { rows: itemRows } = await client.query(
-            `SELECT id, price_cents, quantity, status,
-                    locked_by_user_id, locked_by_guest_token, locked_by_guest_token_hash,
-                    lock_token, lock_expires_at
-               FROM mesa_items
+            `SELECT id, price_cents, status FROM mesa_items
               WHERE id = ANY($1::uuid[]) AND mesa_id = $2
-              FOR UPDATE`,
-            [item_ids, mesa.id]
+              ORDER BY id FOR UPDATE`,
+            [sorted.map((r) => r.item_id), mesa.id]
           );
-          if (itemRows.length !== item_ids.length) {
+          if (itemRows.length !== requests.length) {
             throw Object.assign(new Error('invalid_item_ids'), { status: 400 });
           }
-          const ownsLockTokens = (tok) => Array.isArray(lock_tokens) && lock_tokens.includes(tok);
-          for (const it of itemRows) {
+          const byId = new Map(itemRows.map((r) => [r.id, r]));
+          const lockExpiresAt = new Date(Date.now() + ITEM_LOCK_SECONDS * 1000);
+          for (const rq of sorted) {
+            const it = byId.get(rq.item_id);
             if (it.status === 'paid') {
               throw Object.assign(new Error('item_already_paid'), { status: 409, item_id: it.id });
             }
-            if (it.status === 'locked') {
-              const isOwner = (userId && it.locked_by_user_id === userId)
-                           || (guestTokHash && it.locked_by_guest_token_hash === guestTokHash)
-                           || (guestTok && it.locked_by_guest_token === guestTok)
-                           || ownsLockTokens(it.lock_token);
-              const expired = it.lock_expires_at && new Date(it.lock_expires_at) < new Date();
-              if (!isOwner && !expired) {
-                throw Object.assign(new Error('item_already_locked'), { status: 409, item_id: it.id });
+            try {
+              // reclama (o re-reclama lo mío) y PRECIA la fracción: nominal, o
+              // ajuste exacto si completa el ítem (política del acta v2.18)
+              const r = await itemClaims.acquire(client, {
+                item: it, mesaId: mesa.id,
+                owner: { userId, guestTokHash },
+                requestedBps: rq.fraction_bps,
+                lockExpiresAt,
+                lockTokens: Array.isArray(lock_tokens) ? lock_tokens : [],
+                price: true,
+                triggeredBy: req.isGuest ? 'guest' : 'user',
+              });
+              validatedItemsAmount += r.amountCents;
+              pricedClaims.push({ claimId: r.claimId, itemId: it.id, fractionBps: r.effBps, amountCents: r.amountCents });
+            } catch (e) {
+              if (e.status === 409) {
+                const msg = legacyShape ? 'item_already_locked' : 'fraction_not_available';
+                throw Object.assign(new Error(msg), {
+                  status: 409, item_id: rq.item_id, remaining_bps: e.remaining_bps,
+                });
               }
+              throw e;
             }
-            validatedItemsAmount += Number(it.price_cents) * it.quantity;
-            itemsForLock.push(it.id);
           }
         } else {
           const { rows: slotRows } = await client.query(
@@ -506,28 +562,18 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
         const a = aRows[0];
 
         if (mesa.division_mode === 'consumo') {
-          for (const itemId of itemsForLock) {
+          // v2.18: atar los claims recién preciados al attempt (misma tx) y
+          // registrar el detalle cobrado (fracción + monto) para el recibo.
+          await itemClaims.bindToAttempt(
+            client, pricedClaims.map((c) => c.claimId), a.id,
+            new Date(Date.now() + ITEM_LOCK_SECONDS * 1000)
+          );
+          for (const pc of pricedClaims) {
             await client.query(
-              `INSERT INTO payment_attempt_items (payment_attempt_id, mesa_item_id)
-               VALUES ($1, $2)`,
-              [a.id, itemId]
-            );
-            // v2.5.2 P1 #2: lock por hash; WHERE acepta hash (nuevo) o raw (legacy)
-            await client.query(
-              `UPDATE mesa_items
-                  SET status='locked', locked_at=NOW(),
-                      locked_by_attempt=$2,
-                      locked_by_user_id=$3,
-                      locked_by_guest_token=NULL,
-                      locked_by_guest_token_hash=$4,
-                      lock_expires_at = NOW() + INTERVAL '${ITEM_LOCK_SECONDS} seconds'
-                WHERE id=$1
-                  AND (status = 'available' OR status = 'released'
-                       OR (status = 'locked'
-                           AND (($3::uuid IS NOT NULL AND locked_by_user_id = $3::uuid)
-                                OR ($4::text IS NOT NULL AND locked_by_guest_token_hash = $4::text)
-                                OR ($5::text IS NOT NULL AND locked_by_guest_token = $5::text))))`,
-              [itemId, a.id, userId, guestTokHash, guestTok]
+              `INSERT INTO payment_attempt_items
+                 (payment_attempt_id, mesa_item_id, fraction_bps, amount_cents)
+               VALUES ($1, $2, $3, $4)`,
+              [a.id, pc.itemId, pc.fractionBps, pc.amountCents]
             );
           }
         } else {
@@ -542,6 +588,26 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
               WHERE mesa_id = $1 AND slot_index = $5`,
             [mesa.id, a.id, userId, guestTokHash, claimedSlotIndex]
           );
+
+          // G-07 (v2.18): en "partes iguales" el front ya declara QUÉ consumió
+          // cada uno (item_ids/items) — antes se descartaba. Se persiste como
+          // consumo DECLARADO (fraction_bps y amount_cents NULL: se cobró por
+          // slot, no por ítem). Nunca toca la tenencia ni los estados: es dato.
+          const declared = (items && items.length ? items.map((i) => i.item_id) : item_ids) || [];
+          if (declared.length > 0) {
+            const { rows: validItems } = await client.query(
+              `SELECT id FROM mesa_items WHERE id = ANY($1::uuid[]) AND mesa_id = $2`,
+              [declared, mesa.id]
+            );
+            for (const vi of validItems) {
+              await client.query(
+                `INSERT INTO payment_attempt_items (payment_attempt_id, mesa_item_id)
+                 VALUES ($1, $2)
+                 ON CONFLICT (payment_attempt_id, mesa_item_id) DO NOTHING`,
+                [a.id, vi.id]
+              );
+            }
+          }
         }
 
         if (tipCents > 0) {
@@ -551,7 +617,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
             [a.id, mesa.id, tip_to_staff_id || null, tipCents]
           );
         }
-        return { ...a, grossAmount, validatedItemsAmount, claimedSlotIndex };
+        return { ...a, grossAmount, validatedItemsAmount, claimedSlotIndex, pricedClaims };
       });
     } catch (err) {
       if (err.code === '23505') {
@@ -570,10 +636,18 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
       if (err.status) {
         return res.status(err.status).json({
           error: err.message, ...(err.item_id && { item_id: err.item_id }),
+          ...(err.remaining_bps !== undefined && { remaining_bps: err.remaining_bps }),
         });
       }
       throw err;
     }
+
+    // v2.18: detalle de fracciones cobradas (recibo) — presente solo en consumo
+    const itemsDetail = attempt.pricedClaims && attempt.pricedClaims.length
+      ? attempt.pricedClaims.map((c) => ({
+          item_id: c.itemId, fraction_bps: c.fractionBps, amount_cents: c.amountCents,
+        }))
+      : undefined;
 
     if (payment_type === 'wallet') {
       try {
@@ -619,6 +693,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
             gross_amount_cents: Number(attempt.grossAmount),
             gross_display: centsToDisplay(Number(attempt.grossAmount)),
             tip_cents: Number(tipCents),   // D7: lo computado por el server
+            ...(itemsDetail && { items: itemsDetail }),   // v2.18: recibo
             status: 'processed',
             payment_type: 'wallet',
           },
@@ -716,6 +791,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
           id: attempt.id,
           gross_amount_cents: Number(attempt.grossAmount),
           tip_cents: Number(tipCents),   // D7: lo computado por el server
+          ...(itemsDetail && { items: itemsDetail }),   // v2.18: recibo
           client_secret: stripeIntent.client_secret,
           status: newStatus,
           stripe_status: stripeIntent.status,
@@ -746,6 +822,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
             id: attempt.id,
             gross_amount_cents: Number(attempt.grossAmount),
             tip_cents: Number(tipCents),   // D7: lo computado por el server
+            ...(itemsDetail && { items: itemsDetail }),   // v2.18: recibo
             client_secret: pi.client_secret,
             status: newStatus,
             stripe_status: pi.status,
@@ -763,6 +840,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
     if (err.status) {
       return res.status(err.status).json({
         error: err.message, ...(err.item_id && { item_id: err.item_id }),
+        ...(err.remaining_bps !== undefined && { remaining_bps: err.remaining_bps }),
       });
     }
     next(err);
