@@ -16,16 +16,38 @@ INMEDIATAMENTE (sin esperar el webhook), volver a lockear el mismo ítem.
   ítem ya 100% pagado devolvió **200** (esperado 409 `fraction_not_available`)
   y el GET quedó `status=paid` con `remaining_bps=834`.
 
-Lectura (código espejado, services/itemClaims.js `acquire`): el re-reclamo
-libera TODOS los claims `locked` del dueño — incluidos los atados a un
-attempt YA exitoso cuyo webhook aún no confirmó (siguen `locked` hasta el
-webhook). Resultado: tenencia pagada liberada/pisada y `remaining_bps`
-corrupto. Sugerencia: excluir del release los claims con
-`payment_attempt_id` de un attempt no-fallido.
+Lectura VERIFICADA contra el código real del backend (2026-07-23, HEAD ya en
+v2.19.0 — `itemClaims.js` sin cambios desde v2.18: el bug sigue vigente).
+**La causa es DOBLE**:
+
+1. `acquire()` (itemClaims.js:117-122) libera los claims `locked` del dueño
+   sin mirar `payment_attempt_id`: el camino tarjeta nunca marca `paid`
+   inline (mesas.js:774-782 solo actualiza el attempt), así que un claim de
+   un attempt YA `succeeded` con webhook pendiente sigue `locked` — y el
+   re-lock lo libera y lo pisa.
+2. Amplificador: al llegar el webhook, `markAttemptPaid` encuentra 0 claims
+   `locked` y `processSuccessfulPayment` cae al fallback COMPAT pre-v2.18
+   (paymentProcessor.js:56-86) que marca el ítem ENTERO `paid` vía
+   `payment_attempt_items` → `status=paid` con `remaining_bps>0` y plata sin
+   cobrar (la termina absorbiendo la garantía del organizador).
+
+Con esa mecánica ambas corridas cuadran al bps (A: 6667 = 10000−3333 del
+re-lock huérfano; B: 834 = 10000−6666−2500) y los 409 de la corrida A son
+`item_already_paid`, no `fraction_not_available`. Hermanos del mismo patrón
+detectados en la misma verificación: `releaseExpired` (itemClaims.js:82-89)
+libera vencidos atados a attempt (el sweep del timer SÍ los excluye,
+timer.js:169); el UPDATE de liberación no re-chequea `status='locked'`
+(TOCTOU con `markAttemptPaid`, que muta claims sin el FOR UPDATE del ítem);
+gemelo en `processRefund` (paymentProcessor.js:480-504, a auditar). Fix
+recomendado: allowlist — liberable ⇔ `payment_attempt_id IS NULL` o attempt
+en `('failed','cancelled')` — en `acquire` Y `releaseExpired`, + estrechar el
+COMPAT (si el attempt tiene claims, alertar y NO marcar paid). Prompt
+completo entregado a Mati el 2026-07-23 para la sesión del backend.
 
 **Impacto front**: NO bloquea el flujo real (tras pagar se navega al
 comprobante; nadie re-lockea lo recién pagado en segundos). El mock del front
-implementa la semántica del acta (correcta). Llevar al dueño del backend.
+implementa la semántica del acta (correcta). Post-fix el front NO cambia:
+el `409 fraction_not_available` + `remaining_bps` ya se maneja desde 0.21.0.
 
 ---
 
