@@ -2,39 +2,100 @@
 
 ---
 
-## 🟠 B-06 — Reintento tras respuesta perdida puede COBRAR DOS VECES en división igual
+## 🔴 B-06 — Reintento tras respuesta perdida COBRA DOS VECES (las dos ramas de división)
 
 **Hallado el 2026-07-25** en la revisión adversaria del diff de Connect (no lo
-introduce ese cambio: es preexistente). **No reportado al backend todavía —
-requiere decisión de Mati porque cambia el comportamiento de reintento.**
+introduce ese cambio: es preexistente). **Reportado al backend el 2026-07-25;
+respondido, verificado por ellos contra base, y con plan acordado (ver abajo).**
 
 `MesaScreen` genera `idempotency_key: newIdempotencyKey()` DENTRO de cada
-llamada a pagar, así que un reintento del usuario NUNCA reusa la clave: la
-idempotencia del backend queda inalcanzable desde el front.
+llamada a pagar (`src/screens/MesaScreen.tsx`, en el payload de `doPay`), así
+que un reintento NUNCA reusa la clave: la idempotencia del backend —que está
+bien implementada— queda inalcanzable desde el front. El único camino que hoy
+la ejerce es el retry-tras-refresh 401 de `http.ts`, que reenvía el mismo body.
 
-Escenario (necesita que se pierda la respuesta de un pago YA cobrado —
-timeout, túnel, cambio de red en el restaurante):
+Escenario (se pierde la RESPUESTA de un pago YA procesado — wifi del
+restaurante, wifi→4G, tab suspendida por iOS; nuestro `fetch` no tiene
+timeout, así que el cuelgue puede durar minutos):
 
-1. El comensal toca Pagar; el backend cobra; la respuesta se pierde.
-2. El front muestra "No pudimos procesar el pago. Probá de nuevo." y rehabilita
-   el botón.
-3. El comensal reintenta → clave NUEVA → en `division_mode='igual'` el backend
-   toma el **slot siguiente** (`FOR UPDATE SKIP LOCKED`): **paga dos veces, la
-   segunda la parte de otro.** En `consumo` no hay doble cobro (choca con
-   `item_already_paid`), pero queda un 409 sin recargar la mesa.
+1. El comensal toca Pagar; el backend cobra (o, en wallet, debita inline).
+2. Se pierde la respuesta. El front muestra "No pudimos procesar el pago.
+   Probá de nuevo.", rehabilita el botón y **no recarga la mesa** (es la única
+   rama de error sin `reload()`).
+3. El comensal reintenta → clave NUEVA → `findExistingAttempt` no encuentra
+   nada → segundo cobro.
 
-Fix propuesto (front): persistir la `idempotency_key` por intento en un `ref` y
-reusarla en el reintento — **reseteándola cuando cambia el payload** (selección
-de ítems, propina o método), porque la misma clave con otro payload devuelve
-`409 idempotency_conflict`.
+**Las DOS ramas de división cobran de nuevo** (la versión anterior de esta
+entrada decía que `consumo` estaba a salvo: **era falso**):
 
-**Ya aplicado en 0.27.0 (la mitad que sí correspondía a este cambio):** el
-front ahora tolera el shape del REPLAY idempotente (`stripe_client_secret` y
-`requires_action` derivado del status). Sin eso, arreglar la clave habría
-convertido el replay en un 3DS saltado en silencio — van juntos, y este es el
-orden seguro.
+- **`igual`**: el `SELECT … status='available' … FOR UPDATE SKIP LOCKED`
+  saltea el slot ya tomado y agarra **el siguiente: la parte de OTRO
+  comensal**. La mesa cuadra para el restaurante y llega a `fully_paid`
+  normal; el damnificado es el último comensal, que recibe
+  `no_slots_available` y se va creyendo que estaba cubierto.
+- **`consumo` con FRACCIONES**: el claim propio en vuelo no es liberable
+  (correcto, es el fix de B-05), pasa a `others`, y si queda espacio el
+  reintento **crea una fracción nueva y la cobra**. Lo prueba el propio CI del
+  backend: `tests/http.test.js:948-996` hace tres pagos de ⅓ del mismo ítem,
+  mismo usuario, tres claves distintas → tres 201. `item_already_paid` solo
+  frena con el ítem ENTERO ya pagado.
+
+**Severidad por riel**: wallet es la peor (débito inline confirmado y sin
+camino automático de reversa). Tarjeta plataforma = refund manual. Tarjeta
+Connect = sale del balance del restaurante, con D1 re-abierta.
+
+### Hallazgo hermano, MÁS GRAVE — `POST /mesas` (garantía) sin idempotencia
+
+`createMesa` **no acepta `idempotency_key`** (verificado en el schema del
+backend): el mismo accidente en la creación de mesa no tiene defensa posible
+desde el front. El backend lo reprodujo y corrigió la severidad que habíamos
+estimado: **no es doble hold, es doble CAPTURA** — la mesa fantasma se liquida
+sola a los 30 minutos y la garantía cobra el total (en su prueba el wallet del
+organizador bajó $1.000 reales), y además emite eventos al dashboard, así que
+el restaurante ve **facturación inexistente**.
+
+### Plan acordado con el backend (2026-07-25)
+
+**Ellos entregan** (4.1 y 4.2 en el MISMO release, más el resto):
+- `idempotency_key` en `POST /mesas`, misma mecánica que en pagar (aditivo).
+- **409 explícito para attempts terminales** (`failed`/`cancelled`) y, para el
+  resto, replay `200` con el **mismo shape que el 201** (`client_secret`,
+  `requires_action`, `status`) + `gross_amount_cents` numérico.
+- Arreglo del orden de `items` en el hash (ordenado por `item_id`, con test).
+  Ojo: NO por el normalizador existente — hace `String()` sobre objetos, y ½ de
+  A + ¼ de B hashearía igual que A y B enteros = cobro perdido.
+- `claimed_by_me` en los slots del GET, y telemetría del segundo slot.
+- **NO** hacen el guard rígido de un-slot-por-usuario (coincidimos: no cubre
+  `consumo` fraccional, da falso positivo tras 3DS abandonado, y es decisión
+  de producto sin acta — ver la pregunta abierta de abajo).
+
+**Nosotros, RECIÉN CUANDO ELLOS DESPLIEGUEN** (orden acordado, no invertible):
+- Par `(clave, pm_)` cacheado por intento y reusado en el reintento; rotación
+  en fallos DEFINITIVOS (402, 502, 409, 3DS rechazado — donde el slot ya se
+  liberó) y conservación SOLO ante error de red.
+- Tabla de status del replay ANTES de tocar la clave.
+- `items` ordenados por `item_id` (defensa en profundidad).
+- `AbortController` con timeout ≥30s, `reload()` en la rama genérica, y la
+  clave en `sessionStorage` (con `useRef` el bug vuelve si el usuario recarga).
+- Mismo tratamiento en `TransferScreen` y `TopupScreen` (la transferencia es
+  irreversible; el topup OXXO puede emitir dos vouchers válidos).
+- Espejar la idempotencia en el mock, o el fix no es demostrable.
+
+**Por qué NO se toca la clave antes:** hoy B-06 tapa el replay-sobre-terminal.
+Reusar la clave sin el 4.2 cambiaría un doble cobro por un **comprobante de un
+pago que nunca se cobró**. Ambos equipos coincidimos en convivir unos días con
+B-06 (no hay usuarios reales) antes que abrir ese agujero.
+
+### Pregunta de producto abierta (para acta de Mati)
+
+**¿Puede una persona pagar DOS partes de la mesa?** (el caso "pago la mía y la
+de mi amigo que no tiene la app"). Hoy el backend lo permite sin fricción y el
+front no lo ofrece (el comprobante dice "Pagaste tu parte", en singular); el
+mecanismo diseñado para quien no paga es la garantía (A-1/A-2). Importa porque
+el arreglo "obvio" del backend cerraría esa puerta sin que nadie lo decida.
 
 ---
+
 
 ## 🟠 B-05 — v2.18.1: el re-lock del mismo dueño libera claims de un pago exitoso con webhook pendiente
 
