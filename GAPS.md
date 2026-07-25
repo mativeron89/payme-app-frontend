@@ -86,13 +86,24 @@ Reusar la clave sin el 4.2 cambiaría un doble cobro por un **comprobante de un
 pago que nunca se cobró**. Ambos equipos coincidimos en convivir unos días con
 B-06 (no hay usuarios reales) antes que abrir ese agujero.
 
-### Pregunta de producto abierta (para acta de Mati)
+### Pregunta de producto — RESUELTA CON ACTA (2026-07-25)
 
-**¿Puede una persona pagar DOS partes de la mesa?** (el caso "pago la mía y la
-de mi amigo que no tiene la app"). Hoy el backend lo permite sin fricción y el
-front no lo ofrece (el comprobante dice "Pagaste tu parte", en singular); el
-mecanismo diseñado para quien no paga es la garantía (A-1/A-2). Importa porque
-el arreglo "obvio" del backend cerraría esa puerta sin que nadie lo decida.
+**¿Puede una persona pagar DOS partes de la mesa?** → **SÍ, y el producto DEBE
+ofrecerlo.** Acta ratificada:
+`ops/actas/[PAYME]_ACTA_2026-07-25_PAGAR_VARIAS_PARTES.md`.
+
+Consecuencias para este bug:
+- El guard "un usuario = un casillero" queda **vetado formalmente** (era la
+  recomendación de §5 de nuestro reporte; ahora está ratificada).
+- El acta confirma que **la idempotencia es el mecanismo correcto y
+  suficiente**: distingue INTENCIÓN (llave nueva = quiero pagar otra parte)
+  de ACCIDENTE (misma llave = reintento). Nuestro fix no necesita ningún
+  límite adicional.
+- La telemetría del segundo casillero (pedido 4.4) queda como **señal, no
+  como bloqueo**.
+
+El acta además habilita un tier de front (selector de casilleros, copy y
+comprobante en plural) que **no se anticipa sin plan y OK de Mati**.
 
 ---
 
