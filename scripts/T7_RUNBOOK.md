@@ -68,6 +68,7 @@ npm run dev
 | Cargar saldo por OXXO o tarjeta | ⚠️ requiere claves de Stripe en test |
 | Abono SPEI (CLABE) | ✅ con `STP_API_KEY=mock-development-key` |
 | Escanear ticket (OCR) | ⚠️ el backend responde un ticket de ejemplo (no hay proveedor real) |
+| Pagar con **Apple Pay / Google Pay** | ❌ **no aplica: ocultos en la app real** (decisión de Mati 2026-07-25). No hay integración con la Payment Request API de Stripe, así que el backend devuelve 400 (el schema exige `stripe_payment_method_id`). Visibles solo en el build demo. Ver **G-12** y `WALLET_PAY_ENABLED` en `src/api/index.ts`. Cuando se implementen, probarlos **en iPhone/Safari y en Android/Chrome**: es la única forma. |
 
 Para cargar saldo sin Stripe y poder probar los flujos de wallet, se puede
 acreditar a mano en la base:

@@ -99,6 +99,38 @@ export const QR_RESTAURANT_ID: string | null = readQrRestaurant();
  */
 export const DEMO_PM_ID = 'pm_card_visa';
 
+/**
+ * Apple Pay / Google Pay: VISIBLES solo donde funcionan (decisión de Mati,
+ * 2026-07-25).
+ *
+ * Los botones existen en la pantalla de pago desde siempre, pero contra el
+ * backend REAL devuelven 400: no hay integración con la Payment Request API de
+ * Stripe, y el schema de pago exige un `stripe_payment_method_id` que esos
+ * botones no producen (`schemas/index.js`, el refine de `mesaPay`). En la demo
+ * sí funcionan porque el front manda un `pm_` de utilería.
+ *
+ * Por eso el default ES el estado verdadero: encendido en la demo, apagado en
+ * cualquier build real. Así el build `/live/` los oculta solo, sin depender de
+ * que alguien se acuerde de setear una variable en un job nuevo.
+ *
+ * NO se borra nada: ni el `PaymentType`, ni las etiquetas del comprobante, ni
+ * el bloque del mock. Se apaga por dato. Para desarrollar la integración de
+ * verdad (requiere iPhone + Safari): `VITE_WALLET_PAY=1`. El commit que la
+ * traiga cambia este default y listo.
+ *
+ * Cuando llegue ese día: mostrar UN solo botón según el dispositivo (Apple en
+ * iPhone, Google en Android), nunca los dos juntos — pedido de Mati. Y ojo, el
+ * `pm_` de esas hojas nace con la autorización biométrica y muere con ella: no
+ * es reutilizable, cachearlo no sirve.
+ *
+ * El contrato TIENE un interruptor equivalente (`features.apple_pay` de
+ * `GET /api/config`) pero no se usa: está hardcodeado en `true` en el backend
+ * (`routes/config.js`), sin tests y sin tocarse desde v2.11, y apagarlo sería
+ * desplegar el backend que mueve dinero dos veces. Anotado en GAPS (G-12).
+ */
+export const WALLET_PAY_ENABLED: boolean =
+  IS_MOCK || (import.meta.env.VITE_WALLET_PAY as string | undefined) === '1';
+
 export interface Api {
   // auth
   login(email: string, password: string): Promise<StoredSession>;

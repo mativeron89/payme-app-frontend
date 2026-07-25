@@ -1,5 +1,43 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.29.0 — Apple/Google Pay solo donde funcionan (2026-07-25)
+
+Decisión de Mati (2026-07-25): **se ocultan en la app real**, se mantienen en el
+build demo. Los botones existían desde el principio pero contra el backend real
+devuelven **400**: no hay integración con la Payment Request API de Stripe y el
+schema de pago exige un `stripe_payment_method_id` que esos botones no producen.
+En la demo funcionan porque el front manda un `pm_` de utilería.
+
+- **`WALLET_PAY_ENABLED`** en `src/api/index.ts`, junto a `IS_MOCK`/`IS_DEMO`:
+  `IS_MOCK || VITE_WALLET_PAY === '1'`. El **default es el estado verdadero** —
+  encendido en la demo, apagado en cualquier build real — así el build `/live/`
+  los oculta solo, sin depender de que alguien setee una variable en un job
+  nuevo. **No hubo que tocar el workflow de despliegue.**
+- **Nada borrado**: el `PaymentType`, la etiqueta del comprobante (`Ⓖ Google
+  Pay`) y el bloque `pm_mock_walletpay` quedan intactos. Verificado en el
+  bundle: en el build real Vite **elimina los dos botones** por rama muerta y
+  la etiqueta del comprobante sobrevive; en el de demo están los dos.
+  Reactivarlos el día que se implementen es cambiar un default.
+- **El copy del invitado cuelga del mismo flag**: decía "Sin iniciar sesión
+  pagás con tarjeta **o Apple Pay**" — con los botones ocultos habría afirmado
+  un método que no está en pantalla.
+- **G-12 anotado**: `features.apple_pay`/`google_pay` de `GET /api/config`
+  están **hardcodeados en `true`** (a diferencia de `stp_dispersal`/`ocr_real`,
+  que leen entorno), o sea que el backend afirma una capacidad que no cumple.
+  Se pide que pasen a leer entorno, pero **como seguimiento post-27/07**: no es
+  un flip de variable, es release + deploy del backend que mueve dinero, y el
+  ocultamiento ya está resuelto sin ellos. Por eso el front NO gatea por ese
+  campo: sería depender de un dato muerto (ese route se auto-declara `2.5.2`
+  con el backend en v2.26.0) y además llegaría tarde, haciendo parpadear los
+  botones.
+- **Runbook T7**: fila nueva para Apple/Google Pay, con la nota de que probarlos
+  de verdad exige iPhone/Safari y Android/Chrome.
+
+Revisión adversaria de 33 agentes sobre el plan: tumbó el diseño original
+—gatear por `features` de `/api/config` y pedirle al backend bajar el flag— con
+la evidencia de que esos flags son literales en el código, no variables de
+entorno.
+
 ## 0.28.0 — B-06: el reintento ya no cobra dos veces (contrato v2.25.0) (2026-07-25)
 
 Cierra **B-06** del lado del front. El backend tenía la idempotencia bien

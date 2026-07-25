@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID } from '../api';
+import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, WALLET_PAY_ENABLED } from '../api';
 import type { UnconfirmedAttempt } from '../api/idempotency';
 import {
   clearUnconfirmed,
@@ -1211,6 +1211,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <Icon name="card" size={16} className="ico-inline" /> Tarjeta de prueba ···· 4242 (demo)
               </div>
             )}
+            {/* Apple/Google Pay: ocultos en la app real hasta que exista la
+                integración con la Payment Request API (api/features.ts). No se
+                borran: se apagan por dato, y vuelven encendiendo el flag. */}
+            {WALLET_PAY_ENABLED && (
             <button
               className={`method-card ${payType === 'apple_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('apple_pay')}
@@ -1227,6 +1231,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </div>
               <div className="radio" aria-hidden="true" />
             </button>
+            )}
+            {WALLET_PAY_ENABLED && (
             <button
               className={`method-card ${payType === 'google_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('google_pay')}
@@ -1247,6 +1253,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </div>
               <div className="radio" aria-hidden="true" />
             </button>
+            )}
           </div>
           {IS_MOCK && (
             <div className="note note-amber" style={{ marginTop: 6 }}>
@@ -1256,7 +1263,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           )}
           {isGuest && (
             <div className="note note-orange" style={{ marginTop: 6 }}>
-              Sin iniciar sesión pagás con tarjeta o Apple Pay (el saldo PayMe pide cuenta).
+              Sin iniciar sesión pagás con tarjeta{WALLET_PAY_ENABLED ? ' o Apple Pay' : ''} (el
+              saldo PayMe pide cuenta).
             </div>
           )}
         </div>
