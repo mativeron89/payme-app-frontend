@@ -2,6 +2,40 @@
 
 ---
 
+## 🟠 B-06 — Reintento tras respuesta perdida puede COBRAR DOS VECES en división igual
+
+**Hallado el 2026-07-25** en la revisión adversaria del diff de Connect (no lo
+introduce ese cambio: es preexistente). **No reportado al backend todavía —
+requiere decisión de Mati porque cambia el comportamiento de reintento.**
+
+`MesaScreen` genera `idempotency_key: newIdempotencyKey()` DENTRO de cada
+llamada a pagar, así que un reintento del usuario NUNCA reusa la clave: la
+idempotencia del backend queda inalcanzable desde el front.
+
+Escenario (necesita que se pierda la respuesta de un pago YA cobrado —
+timeout, túnel, cambio de red en el restaurante):
+
+1. El comensal toca Pagar; el backend cobra; la respuesta se pierde.
+2. El front muestra "No pudimos procesar el pago. Probá de nuevo." y rehabilita
+   el botón.
+3. El comensal reintenta → clave NUEVA → en `division_mode='igual'` el backend
+   toma el **slot siguiente** (`FOR UPDATE SKIP LOCKED`): **paga dos veces, la
+   segunda la parte de otro.** En `consumo` no hay doble cobro (choca con
+   `item_already_paid`), pero queda un 409 sin recargar la mesa.
+
+Fix propuesto (front): persistir la `idempotency_key` por intento en un `ref` y
+reusarla en el reintento — **reseteándola cuando cambia el payload** (selección
+de ítems, propina o método), porque la misma clave con otro payload devuelve
+`409 idempotency_conflict`.
+
+**Ya aplicado en 0.27.0 (la mitad que sí correspondía a este cambio):** el
+front ahora tolera el shape del REPLAY idempotente (`stripe_client_secret` y
+`requires_action` derivado del status). Sin eso, arreglar la clave habría
+convertido el replay en un 3DS saltado en silencio — van juntos, y este es el
+orden seguro.
+
+---
+
 ## 🟠 B-05 — v2.18.1: el re-lock del mismo dueño libera claims de un pago exitoso con webhook pendiente
 
 **Hallado el 2026-07-23 verificando fracciones contra el backend vivo v2.18.1.**
@@ -209,6 +243,7 @@ primera clase de este front (ver CLAUDE.md).
 | # | Qué falta | Dónde impacta | Qué hace el front mientras tanto | Estado |
 | --- | --- | --- | --- | --- |
 | **G-10** | **Pivote a Stripe Connect (2026-07-24): el contrato no expone el `statement_descriptor` del pago con tarjeta.** Con Connect, el merchant of record de un pago de mesa con TARJETA (incl. Apple/Google Pay) pasa a ser el RESTAURANTE, así que en el resumen de la tarjeta del comensal aparece el restaurante — pero el descriptor exacto lo define la cuenta Connect y solo lo conoce el backend. Verificado en v2.21.0 (repo + vivo): no hay `merchant`, `statement_descriptor` ni `on_behalf_of` en rutas/schemas. **Forma acordada con Mati:** `attempt.statement_descriptor: string \| null` en la respuesta de `POST /:code/pay` (null/ausente cuando no aplica, p. ej. saldo). | Comprobante del pago (pantalla + enviar/descargar): poder decirle al comensal qué va a ver en su resumen, para que no desconozca el cargo. | **Ya resuelto lo esencial sin inventar contrato**: el "Cobrado por: <restaurante>" sale de `mesa.restaurant.name`, que SÍ es contrato — se muestra en real y en mock. El descriptor está **mock-first**: el mock lo deriva del nombre (mayúsculas, 22 chars) y en real llega `undefined` → la UI degrada sin el sub-texto, sin romper nada. | Anotado 2026-07-24. **Pendiente**: (a) que el backend exponga el campo; (b) definir si la GARANTÍA con tarjeta también pasa a ser del restaurante — hoy el copy dice "PayMe retiene el total" (pregunta abierta del pivote, sin acta todavía en `ops/actas/`). |
+| G-11 | **No hay forma de saber ANTES de pagar si el riel de tarjeta es DIRECTO** (Stripe Connect, backend v2.24): cuando el restaurante tiene cuenta conectada, el backend IGNORA `save_payment_method` (guardar la tarjeta ahí la dejaría en la bóveda del restaurante — verificado en `routes/mesas.js` rama `wantsSave && connectTarget` y en `services/settlement.js` `savePm && target`). El front solo se entera al RECIBIR la respuesta, por el `connected_account_id`. | El checkbox **"Guardar esta tarjeta para la próxima"** (garantía y pago) se muestra prendido y puede no cumplirse. | Paliativo honesto ya implementado (0.27.0): si se pidió guardar y la respuesta trae `connected_account_id`, un toast avisa que esta vez no quedó guardada. | **Pedido**: una señal PRE-pago del riel — p. ej. `card_rail: 'direct' \| 'platform'` (o `saves_cards: boolean`) en `GET /mesas/:code` y/o `GET /restaurants/:id`. Con eso el front oculta el checkbox en vez de prometer algo que no va a pasar. Anotado 2026-07-25 · no bloqueante (el cobro funciona igual). |
 | G-09 | **Agregado mensual de gastos por categoría server-side** (nice-to-have): la torta de Cuenta (T-F1, 0.25.0) se computa en el front desde `GET /account/history` pidiendo el mes con `from` + `limit=100` (máximo del contrato). Con >100 pagos en un mes, trunca. Un `GET /account/stats` con breakdown por categoría lo resolvería exacto y barato. | Torta de gastos en Cuenta (feedback del hermano de Mati). | El paliativo actual (mes completo hasta 100 pagos) alcanza de sobra para el MVP. | Anotado 2026-07-24 (nice-to-have, sin urgencia) |
 | G-01 | No hay endpoint para listar/buscar restaurantes, pero `POST /api/mesas` exige `restaurant_id` (uuid) y valida que exista y esté `active`. El OCR mock tampoco devuelve restaurante. | Abrir mesa (T2): sin un `restaurant_id` real no se puede crear mesa contra el backend. | En mock, el adaptador expone restaurantes de demo con uuids fijos. Para T7 (backend real) hace falta o un endpoint (`GET /api/restaurants`) o uuids seedeados conocidos. | **RESUELTO en backend v2.21.0 (2026-07-24) — front conectado en 0.24.0**: `GET /api/restaurants/:id` (público) → `{ restaurant: { id, name, category, address\|null } }`, 404 `restaurant_not_found` para inexistente/suspendido/uuid malformado; `GET /api/restaurants?q=` (público, solo active, limit 20, búsqueda literal). El front resuelve el restaurante por el QR de la mesa (`?r=<uuid>`, con `VITE_RESTAURANT_ID` como fallback demo), avisa ANTES de armar la mesa si el QR no corresponde, y el nombre dejó de hardcodearse en el deploy (`VITE_RESTAURANT_NAME` retirado). Verificado en vivo (200/404/404-malformado/búsqueda) y en mock (QR de Hanzo Sushi resuelto en el header). |
 | G-02 | No hay endpoint de perfil propio (`GET /api/me` o similar). `POST /auth/register` devuelve `user`, pero `POST /auth/login` devuelve SOLO tokens — tras un login no hay forma de saber nombre, `payme_id` ni email del usuario. | Home ("Hola, Mati"), Perfil (T5), y cualquier pantalla que muestre identidad. | En mock no afecta. Contra backend real: persistir el `user` de register en localStorage es parche parcial (no sobrevive login en otro device). | **RESUELTO en backend v2.20.0 (2026-07-24) — front conectado en 0.23.0**: `GET /api/account/me` → `{ user: { id, payme_id, email, first_name, last_name, phone\|null, created_at } }` y el login ahora devuelve `user` (mismo shape que register; el refresh no — el endpoint cubre el restore). Verificado en vivo (200 con shape exacto, 401 `auth_required` sin token). El front borró el paliativo del email (`identity.ts` derivaba el nombre del local-part) e hidrata las sesiones persistidas pre-v2.20 con `GET /account/me` al restaurar. |

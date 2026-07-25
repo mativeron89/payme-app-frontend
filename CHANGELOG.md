@@ -1,5 +1,68 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.27.0 — Connect: 3DS sobre la cuenta conectada (contrato v2.24.0) (2026-07-25)
+
+Consume el contrato de **direct charges** publicado (acta
+`[PAYME]_ACTA_2026-07-24_PIVOTE_STRIPE_CONNECT_TARJETA.md`; verificado en el
+repo hermano y en vivo). **El front queda listo para que el backend encienda
+el pivote.**
+
+- **`connected_account_id` (aditivo)**: cuando el PaymentIntent —o el hold de
+  la garantía— vive en la cuenta del restaurante, Stripe.js se inicializa con
+  `{ stripeAccount }` para poder confirmar el 3DS. Sin el campo, es cargo de
+  plataforma y todo funciona como siempre; **las dos formas conviven**
+  restaurante por restaurante, que es justo lo que el pivote necesita.
+- **`stripe.ts`**: una instancia de Stripe.js **por cuenta** (Map cacheado;
+  antes era una sola) + la config de `/api/config` cacheada aparte, con
+  invalidación si falla la red. `createCardPaymentMethod` y `confirmCardSetup`
+  siguen SIEMPRE en plataforma: el backend clona el `pm_` a la cuenta
+  (`clonePaymentMethodToAccount`) y las tarjetas guardadas son bóveda de
+  PayMe. Verificado leyendo el backend, no asumido.
+- **Los dos caminos de 3DS lo pasan**: pago (`MesaScreen`) y garantía
+  (`CreateMesaFlow` → `confirmGuarantee3ds`).
+- **`save_payment_method` en riel directo**: el backend lo ignora a propósito.
+  Como el front solo conoce el riel al recibir la respuesta, ahora **lo dice**
+  ("esta vez la tarjeta no quedó guardada") en vez de dejar creer que se
+  guardó. **G-11 anotado**: pedido de una señal PRE-pago para poder ocultar el
+  checkbox.
+- **Mock fiel a la semántica**: `MOCK_CONNECTED_ACCOUNTS` con **Hanzo Sushi
+  conectado y La Parolaccia NO** — así el riel directo se prueba con el QR de
+  Hanzo (`?r=…0002`) y la demo del video (La Parolaccia) queda idéntica. En el
+  riel directo el mock tampoco guarda la tarjeta.
+- Verificado en browser (mock), los dos rieles: **Hanzo** → comprobante
+  "Cobrado por: Hanzo Sushi", aviso de tarjeta no guardada, la lista de
+  tarjetas NO crece; **La Parolaccia** → sin aviso, sin "Cobrado por", y la
+  tarjeta nueva SÍ queda guardada. Espejo refrescado a v2.24.0
+  (+ `services/connect.js`).
+
+**Fixes de la revisión adversaria del diff** (13 hallazgos confirmados; el
+riel toca dinero, así que se revisó con 3 lentes + refutación):
+
+- **El comprobante mentía en el riel de plataforma** (bug introducido en
+  0.26.0): decía "Cobrado por: <restaurante>" en TODO pago con tarjeta.
+  Ahora se afirma solo con `connected_account_id` presente — que es
+  exactamente cuando es cierto. El caption pre-pago pasa a ser verdadero en
+  ambos rieles ("Estás pagando tu parte en X — PayMe divide la cuenta"),
+  porque antes de pagar el front no sabe el riel (G-11).
+- **El REPLAY idempotente saltaba el 3DS**: ahí el backend devuelve la fila
+  cruda (`stripe_client_secret`, sin `requires_action`). Se tolera ese shape
+  y se deriva del `status`; sin esto, un replay en 3DS pintaba "pagado" con
+  el cobro sin confirmar. **B-06 anotado** (la otra mitad: reusar la
+  `idempotency_key` en el reintento — cambia el comportamiento de reintento
+  de un pago, va a ratificación de Mati).
+- **El aviso de garantía se disparaba ANTES del 3DS** ("Mesa garantizada ✓"
+  con la mesa aún en `pending_auth`): ahora es una línea en la pantalla de
+  compartir, que solo se alcanza con la retención autorizada. Mismo criterio
+  en el pago: línea en el comprobante en vez de toast efímero (se pisaba con
+  la animación de "Cobrando…").
+- **Copy de la garantía neutral**: "Para abrir la mesa **se retiene** el
+  total" — con Connect la retención puede vivir en la cuenta del restaurante,
+  así que ya no se nombra a PayMe como quien retiene. Verdadero en ambos
+  rieles y sin esperar decisión de producto.
+- **Apple/Google Pay**: el `pm_` de utilería queda atado a `IS_MOCK`. Contra
+  el backend real habría hecho fallar el clonado a la cuenta conectada
+  (alarma `connect_pm_clone_failed`) degradando el pivote en silencio.
+
 ## 0.26.0 — Pivote a Stripe Connect: quién cobra (campo visible) (2026-07-24)
 
 Ratificado por Mati. Con el pivote, en un pago de mesa con **tarjeta**

@@ -85,6 +85,8 @@ export function CreateMesaFlow() {
   const [cards, setCards] = useState<PaymentMethod[]>([]);
   const [cardChoice, setCardChoice] = useState<string>('new');
   const [saveCard, setSaveCard] = useState(true);
+  /** v2.24 (G-11): se pidió guardar la tarjeta y el riel directo la ignoró. */
+  const [saveOmitidoConnect, setSaveOmitidoConnect] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateMesaResponse | null>(null);
@@ -291,6 +293,12 @@ export function CreateMesaFlow() {
         ),
       });
       setCreated(r);
+      // v2.24 (Connect): con hold directo el backend IGNORA
+      // save_payment_method — la tarjeta no queda en la bóveda de PayMe (G-11).
+      // Se ANOTA acá pero se avisa recién en "compartir", que solo se alcanza
+      // con la retención ya autorizada: decirlo antes del 3DS sería anunciar
+      // una garantía que el banco todavía puede rechazar.
+      setSaveOmitidoConnect(savingNewCard && !!r.guarantee.connected_account_id);
       if (r.guarantee.status === 'requires_action') {
         setStep('threeds');
       } else {
@@ -318,7 +326,13 @@ export function CreateMesaFlow() {
     setBusy(true);
     setError(null);
     try {
-      await api.confirmGuarantee3ds(created.mesa.code, created.guarantee.client_secret ?? '');
+      // v2.24 (Connect): si el hold vive en la cuenta del restaurante, el 3DS
+      // se confirma con Stripe.js apuntando a esa cuenta.
+      await api.confirmGuarantee3ds(
+        created.mesa.code,
+        created.guarantee.client_secret ?? '',
+        created.guarantee.connected_account_id,
+      );
       await makeLink(created.mesa.code);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
@@ -659,7 +673,10 @@ export function CreateMesaFlow() {
             </div>
           </div>
           <div className="note note-teal" style={{ marginBottom: 16 }}>
-            Para abrir la mesa, PayMe retiene el total como garantía: el restaurante cobra
+            {/* Connect (v2.24): la retención puede vivir en la cuenta del
+                restaurante o en la de PayMe según el restaurante. El texto no
+                nombra al dueño de la retención: es verdadero en los dos rieles. */}
+            Para abrir la mesa se retiene el total como garantía: el restaurante cobra
             sí o sí. Cuando todos pagan su parte, la retención se libera. Si alguien no
             paga, tu garantía cubre solo ese faltante.
           </div>
@@ -888,6 +905,13 @@ export function CreateMesaFlow() {
             La mesa quedó <b>abierta y garantizada</b> con {method === 'card' ? 'tu tarjeta' : 'tu saldo'}.
             Ahora invitá al resto: cada uno entra con el link y paga su parte.
           </div>
+          {/* G-11: se avisa acá (garantía YA autorizada), no antes del 3DS. */}
+          {saveOmitidoConnect && (
+            <div className="caption" style={{ marginTop: -8, marginBottom: 14 }}>
+              En este restaurante la tarjeta no se guarda. Podés guardarla desde{' '}
+              <b style={{ color: 'var(--navy)' }}>Cuenta</b>.
+            </div>
+          )}
           <div className="sectlabel">Link de invitación</div>
           {link ? (
             <>

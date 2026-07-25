@@ -58,6 +58,10 @@ function guestHashOf(req) {
   return tok ? (req.guestTokenHash || tokenHash(tok)) : null;
 }
 
+// v2.23/v2.24 · Connect: el gate de cobro (kill switch + estado de la cuenta)
+// vive en services/connect.js — lo comparten el pago de mesa y la garantía.
+const connect = require('../services/connect');
+
 // ─── POST / (crear mesa) ───────────────────────────────────
 router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res, next) => {
   try {
@@ -184,6 +188,9 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
         method: guarantee_method,
         status: hold.status,                       // 'open' | 'requires_action' (3DS)
         ...(hold.clientSecret && { client_secret: hold.clientSecret }),
+        // v2.24 · si el hold vive en la cuenta del restaurante, el front DEBE
+        // inicializar Stripe.js con esta cuenta para confirmar el 3DS.
+        ...(hold.connectedAccountId && { connected_account_id: hold.connectedAccountId }),
       },
     });
   } catch (err) { next(err); }
@@ -458,7 +465,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
           message: 'Same idempotency_key used with different payload',
         });
       }
-      return res.json({ attempt: idemExisting, idempotent: true });
+      return res.json({ attempt: withConnectAccount(idemExisting), idempotent: true });
     }
 
     let attempt;
@@ -629,7 +636,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
           if (!hashesMatch(existing.idempotency_payload_hash, reqHash)) {
             return res.status(409).json({ error: 'idempotency_conflict' });
           }
-          return res.json({ attempt: existing, idempotent: true });
+          return res.json({ attempt: withConnectAccount(existing), idempotent: true });
         }
         return res.status(409).json({ error: 'concurrent_conflict' });
       }
@@ -739,24 +746,96 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
       customerId = await savedCards.ensureStripeCustomer(req.user);
     }
 
+    // ─── v2.23 · Connect: ¿este cobro va a la cuenta del restaurante? ───────
+    // Gate por restaurante: solo si su cuenta conectada está ACTIVA. Cualquier
+    // problema (columnas ausentes porque falta la migración, clonado que falla,
+    // restaurante sin onboardear) degrada al cargo PLANO de siempre — que es un
+    // camino sano: PayMe cobra y dispersa por STP, como hasta hoy.
+    let connectTarget = null;
+    try {
+      connectTarget = await connect.resolveChargeTarget(mesa.restaurant_id);
+    } catch (e) {
+      logger.error('connect_target_lookup_failed', { mesa_id: mesa.id, error: e.message });
+    }
+
+    let chargePmId = stripePmId;
+    let appFeeCents = null;
+    if (connectTarget) {
+      // La comisión de PayMe viaja como application_fee e incluye la PROPINA
+      // (decisión de Mati 2026-07-24): el bruto del cargo entra al restaurante,
+      // y PayMe recibe su comisión + la propina, que es con lo que acredita el
+      // wallet del mesero. Sin esto el restaurante se quedaría con la propina y
+      // PayMe la pagaría de su bolsillo.
+      const comision = calculateFee(attempt.validatedItemsAmount, connectTarget.feePct);
+      const propuesta = comision + Number(tipCents);
+      // Stripe exige application_fee < monto del cargo. Un cobro de propina
+      // pura (ítems 0) daría fee == monto: en ese caso NO hay direct charge.
+      if (propuesta >= Number(attempt.grossAmount)) {
+        logger.warn('connect_app_fee_would_exceed_amount', {
+          mesa_id: mesa.id, attempt_id: attempt.id,
+          gross: Number(attempt.grossAmount), proposed_fee: propuesta,
+        });
+        connectTarget = null;
+      } else {
+        appFeeCents = propuesta;
+      }
+    }
+    if (connectTarget) {
+      try {
+        const clon = await stripeService.clonePaymentMethodToAccount({
+          payment_method_id: stripePmId,
+          // SOLO para tarjetas guardadas: el clonado con `customer` exige que
+          // ese pm_ esté adjunto a ESE customer. Una tarjeta recién tipeada no
+          // lo está, y mandar el customer igual hacía fallar el clonado y
+          // degradaba el pivote a cargo de plataforma sin que nadie se entere.
+          customer_id: usedSavedCard ? (req.user?.stripe_customer_id || null) : null,
+          stripe_account: connectTarget.accountId,
+        });
+        chargePmId = clon.id;
+      } catch (e) {
+        // El clonado es la única pieza del pivote que depende de dónde nació la
+        // tarjeta. Si falla, se cobra por plataforma: el restaurante igual cobra
+        // (vía STP) y el comensal no ve nada raro. Queda trazado fuerte porque
+        // un fallo sistemático acá anularía el pivote en silencio.
+        logger.error('connect_pm_clone_failed', {
+          mesa_id: mesa.id, attempt_id: attempt.id,
+          account: connectTarget.accountId, error: e.message,
+        });
+        connectTarget = null;
+        appFeeCents = null;
+        chargePmId = stripePmId;
+      }
+    }
+
     try {
       const stripeIntent = await stripeService.createPaymentIntent({
         amount_cents: attempt.grossAmount,
-        customer_id: customerId,
-        payment_method_id: stripePmId,
+        customer_id: connectTarget ? undefined : customerId,
+        payment_method_id: chargePmId,
         idempotency_key: `pay_${attempt.id}`,
+        // v2.23 · direct charge sobre la cuenta conectada del restaurante
+        ...(connectTarget && {
+          stripe_account: connectTarget.accountId,
+          application_fee_cents: appFeeCents,
+        }),
         // D4: tarjeta guardada → off_session (Stripe intenta sin fricción; si
         // el emisor exige 3DS, el catch de abajo lo devuelve como
         // requires_action + client_secret, igual que cualquier 3DS).
         off_session: usedSavedCard,
-        ...(wantsSave && { setup_future_usage: 'off_session' }),
+        // D4 + Connect: setup_future_usage sobre un direct charge adjuntaría la
+        // tarjeta a la cuenta del RESTAURANTE (y sin customer, Stripe lo
+        // rechaza). Guardar tarjeta es de la bóveda de PayMe: en el riel
+        // directo no se pide acá. La tarjeta igual se cobra normal.
+        ...(wantsSave && !connectTarget && { setup_future_usage: 'off_session' }),
         metadata: {
           mesa_id: mesa.id, mesa_code: mesa.code,
           user_id: userId || 'guest',
           attempt_id: attempt.id,
           tip_to_staff_id: tip_to_staff_id || '',
-          // D4: el webhook 3DS espeja la tarjeta cuando el pago confirma
-          ...(wantsSave && { save_pm: '1' }),
+          // D4: el webhook 3DS espeja la tarjeta cuando el pago confirma.
+          // En el riel directo NO se marca: el pm del intent es el clon, que
+          // vive en la cuenta del restaurante y no pertenece a la bóveda.
+          ...(wantsSave && !connectTarget && { save_pm: '1' }),
         },
       });
 
@@ -765,10 +844,17 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
       // webhook payment_intent.succeeded vía metadata.save_pm.
       // Se espeja stripeIntent.payment_method (lo ADJUNTADO): los alias de
       // test y algunos wallets se materializan en otro pm_ al confirmar.
-      if (wantsSave && stripeIntent.status === 'succeeded') {
+      // OJO (v2.23): en direct charge el payment_method del intent es el CLON,
+      // que vive en la cuenta conectada — espejarlo metería en la bóveda de
+      // PayMe un pm_ que no le pertenece. Se espeja el de plataforma.
+      if (wantsSave && !connectTarget && stripeIntent.status === 'succeeded') {
         await savedCards.mirrorSavedPaymentMethod(
           userId, stripeIntent.payment_method || stripePmId
         );
+      } else if (wantsSave && connectTarget) {
+        logger.warn('save_pm_omitido_en_direct_charge', {
+          mesa_id: mesa.id, attempt_id: attempt.id, account: connectTarget.accountId,
+        });
       }
 
       const newStatus = stateMachine.mapStripeStatus(stripeIntent.status);
@@ -776,9 +862,12 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
         `UPDATE payment_attempts
             SET stripe_payment_intent_id = $1,
                 stripe_client_secret = $2,
-                status = $3
+                status = $3,
+                stripe_account_id = $5,
+                application_fee_cents = $6
           WHERE id = $4`,
-        [stripeIntent.id, stripeIntent.client_secret, newStatus, attempt.id]
+        [stripeIntent.id, stripeIntent.client_secret, newStatus, attempt.id,
+         connectTarget ? connectTarget.accountId : null, appFeeCents || 0]
       );
 
       logger.audit('payment_attempt_created', {
@@ -796,6 +885,10 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
           status: newStatus,
           stripe_status: stripeIntent.status,
           requires_action: stripeIntent.status === 'requires_action',
+          // v2.23 · direct charge: el PI vive en la cuenta del restaurante, así
+          // que el front DEBE inicializar Stripe.js con { stripeAccount: … }
+          // para confirmar el 3DS. Ausente = cargo de plataforma, como siempre.
+          ...(connectTarget && { connected_account_id: connectTarget.accountId }),
         },
       });
     } catch (stripeErr) {
@@ -810,9 +903,12 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
           `UPDATE payment_attempts
               SET stripe_payment_intent_id = $1,
                   stripe_client_secret = $2,
-                  status = $3
+                  status = $3,
+                  stripe_account_id = $5,
+                  application_fee_cents = $6
             WHERE id = $4`,
-          [pi.id, pi.client_secret, newStatus, attempt.id]
+          [pi.id, pi.client_secret, newStatus, attempt.id,
+           connectTarget ? connectTarget.accountId : null, appFeeCents || 0]
         );
         logger.audit('payment_attempt_requires_auth', {
           mesa_id: mesa.id, attempt_id: attempt.id, stripe_status: pi.status,
@@ -827,6 +923,7 @@ router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
             status: newStatus,
             stripe_status: pi.status,
             requires_action: true,
+            ...(connectTarget && { connected_account_id: connectTarget.accountId }),
           },
         });
       }
@@ -942,8 +1039,21 @@ router.post('/:code/invitations', requireAuth, validateBody(schemas.createInvita
 // Helpers
 // ═══════════════════════════════════════════════════════════
 // v2.5.2 P1 #2: busca por guest_token_hash con fallback a guest_token (legacy)
+// El contrato con el front usa `connected_account_id`; en la base la columna es
+// stripe_account_id. Se traduce en un solo lugar.
+function withConnectAccount(attempt) {
+  if (!attempt) return attempt;
+  const { stripe_account_id, ...resto } = attempt;
+  return stripe_account_id ? { ...resto, connected_account_id: stripe_account_id } : resto;
+}
+
 async function findExistingAttempt({ user_id, guest_token_hash, guest_token, mesa_id, idempotency_key }) {
-  const SELECT = `SELECT id, status, stripe_client_secret, gross_amount_cents, idempotency_payload_hash
+  // v2.23: se trae stripe_account_id para que el REPLAY idempotente también
+  // devuelva connected_account_id. Sin eso, un reintento del front sobre un
+  // pago del riel directo recibía el client_secret sin la cuenta, y el 3DS
+  // quedaba inconfirmable.
+  const SELECT = `SELECT id, status, stripe_client_secret, gross_amount_cents,
+                         idempotency_payload_hash, stripe_account_id
                     FROM payment_attempts
                    WHERE %COL% = $1 AND mesa_id = $2
                      AND operation_type = 'mesa_pay' AND idempotency_key = $3`;

@@ -31,7 +31,7 @@ import type {
   HistoryResponse,
   FractionRequest,
 } from '../types';
-import { MOCK_RESTAURANTS, MOCK_USER } from './seedData';
+import { MOCK_CONNECTED_ACCOUNTS, MOCK_RESTAURANTS, MOCK_USER } from './seedData';
 import {
   availableBalance,
   findMesa,
@@ -335,8 +335,13 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   // guardáramos acá, cada reintento cancelado acumularía tarjetas fantasma
   // (el backend real también guarda recién en el webhook del hold).
   pending3ds = mesa;
+  // v2.24 (Connect): con hold DIRECTO el backend ignora save_payment_method
+  // (la tarjeta quedaría en la bóveda del restaurante, no en la de PayMe).
+  const connectedAccountId = MOCK_CONNECTED_ACCOUNTS[req.restaurant_id];
   pending3dsSave =
-    req.save_payment_method && req.stripe_payment_method_id ? req.stripe_payment_method_id : null;
+    !connectedAccountId && req.save_payment_method && req.stripe_payment_method_id
+      ? req.stripe_payment_method_id
+      : null;
   return delay({
     mesa: {
       id: mesa.id,
@@ -348,7 +353,12 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
       expires_at: mesa.expires_at,
       created_at: now,
     },
-    guarantee: { method: 'card', status: 'requires_action', client_secret: 'mock_3ds_secret' },
+    guarantee: {
+      method: 'card',
+      status: 'requires_action',
+      client_secret: 'mock_3ds_secret',
+      ...(connectedAccountId && { connected_account_id: connectedAccountId }),
+    },
   });
 }
 
@@ -520,8 +530,20 @@ export async function mockPayMesa(
     });
   }
 
+  // v2.24 (Connect): el riel es DIRECTO si el restaurante tiene cuenta
+  // conectada Y el pago es con tarjeta (el saldo nunca sale de PayMe).
+  const connectedAccountId =
+    req.payment_type !== 'wallet' ? MOCK_CONNECTED_ACCOUNTS[mesa.restaurant.id] : undefined;
+
   // D4: guardar la tarjeta nueva si lo pidieron (solo usuarios con cuenta).
-  if (req.save_payment_method && req.stripe_payment_method_id && identity !== 'guest') {
+  // v2.24: en el riel directo el backend IGNORA save_payment_method — la
+  // tarjeta quedaría en la bóveda del restaurante, no en la de PayMe.
+  if (
+    !connectedAccountId &&
+    req.save_payment_method &&
+    req.stripe_payment_method_id &&
+    identity !== 'guest'
+  ) {
     saveMockCard(req.stripe_payment_method_id);
   }
 
@@ -535,6 +557,7 @@ export async function mockPayMesa(
       status: req.payment_type === 'wallet' ? 'processed' : 'succeeded',
       payment_type: req.payment_type,
       requires_action: false,
+      ...(connectedAccountId && { connected_account_id: connectedAccountId }),
       // G-10 (Connect, mock-first): con tarjeta el comercio es el RESTAURANTE.
       // Forma acordada; el contrato real todavía no expone el campo.
       ...(req.payment_type !== 'wallet' && {

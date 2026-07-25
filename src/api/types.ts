@@ -281,6 +281,12 @@ export interface CreateMesaResponse {
     method: 'card' | 'wallet';
     status: 'open' | 'requires_action';
     client_secret?: string;
+    /**
+     * v2.24 (Stripe Connect): si el hold vive en la cuenta del restaurante,
+     * el 3DS SOLO se confirma inicializando Stripe.js con `{ stripeAccount }`.
+     * Ausente = hold de plataforma, como siempre.
+     */
+    connected_account_id?: string;
   };
 }
 
@@ -328,10 +334,27 @@ export interface PayMesaResponse {
     items?: Array<{ item_id: string; fraction_bps: number; amount_cents: number }>;
     gross_display?: string;
     client_secret?: string;
+    /**
+     * Solo en el REPLAY idempotente: ahí el backend devuelve la fila cruda del
+     * attempt, donde el secreto se llama así y no viene `requires_action`
+     * (se deriva de `status`). Ver `findExistingAttempt` en el espejo.
+     */
+    stripe_client_secret?: string | null;
     status: string;
     stripe_status?: string;
     requires_action?: boolean;
     payment_type?: PaymentType;
+    /**
+     * v2.24 (Stripe Connect · direct charge): el PaymentIntent vive en la
+     * cuenta del restaurante, así que el 3DS se confirma con Stripe.js
+     * inicializado con `{ stripeAccount: connected_account_id }`. Viene
+     * también en el replay idempotente. Ausente = cargo de plataforma.
+     *
+     * OJO (contrato v2.24): en este riel el backend IGNORA
+     * `save_payment_method` — guardar la tarjeta ahí la dejaría en la bóveda
+     * del restaurante. El cobro es normal; la tarjeta no queda guardada.
+     */
+    connected_account_id?: string;
     /**
      * G-10 (pivote a Stripe Connect, 2026-07-24): en pagos con TARJETA el
      * merchant of record es el RESTAURANTE. Este es el descriptor que el

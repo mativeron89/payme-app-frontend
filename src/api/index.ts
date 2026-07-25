@@ -125,7 +125,12 @@ export interface Api {
   scanTicket(image?: Blob): Promise<OcrResponse>;
   createMesa(req: CreateMesaRequest): Promise<CreateMesaResponse>;
   /** Mock: simula la confirmación 3DS de la garantía. En T7: Stripe.js. */
-  confirmGuarantee3ds(code: string, clientSecret: string): Promise<{ status: string }>;
+  /** @param connectedAccountId v2.24: si el hold vive en la cuenta del restaurante. */
+  confirmGuarantee3ds(
+    code: string,
+    clientSecret: string,
+    connectedAccountId?: string,
+  ): Promise<{ status: string }>;
   lockItems(code: string, items: FractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
   payMesa(code: string, req: PayMesaRequest, guestToken?: string): Promise<PayMesaResponse>;
   createInvitation(code: string): Promise<CreateInvitationResponse>;
@@ -226,8 +231,8 @@ const realApi: Api = {
    * que hay que sondear la mesa: sin esto el organizador seguiría a compartir
    * el link con la mesa todavía en 'pending_auth'.
    */
-  async confirmGuarantee3ds(code, clientSecret) {
-    const r = await confirmCardPayment(clientSecret);
+  async confirmGuarantee3ds(code, clientSecret, connectedAccountId) {
+    const r = await confirmCardPayment(clientSecret, connectedAccountId);
     if (!r.ok) throw new Error(r.error);
     for (let i = 0; i < 10; i++) {
       const { mesa } = await httpRequest<MesaDetailResponse>(

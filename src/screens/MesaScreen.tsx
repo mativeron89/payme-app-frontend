@@ -37,6 +37,8 @@ interface PayResult {
   chargedByRestaurant: boolean;
   /** G-10: descriptor del resumen de tarjeta. Ausente hasta que el contrato lo exponga. */
   statementDescriptor: string | null;
+  /** v2.24: se pidió guardar la tarjeta pero el riel directo la ignora (G-11). */
+  saveOmitidoPorConnect: boolean;
 }
 
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
@@ -347,7 +349,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           ...(stripePmId && { stripe_payment_method_id: stripePmId }),
           ...(savedPmId && { payment_method_id: savedPmId }),
           ...(savingNewCard && { save_payment_method: true }),
-          ...(payType !== 'card' && payType !== 'wallet' && { stripe_payment_method_id: 'pm_mock_walletpay' }),
+          // El pm_ de utilería de Apple/Google Pay es SOLO del mock: contra el
+          // backend real haría fallar el clonado a la cuenta conectada (alarma
+          // connect_pm_clone_failed) y degradaría el pivote en silencio.
+          ...(IS_MOCK &&
+            payType !== 'card' &&
+            payType !== 'wallet' && { stripe_payment_method_id: 'pm_mock_walletpay' }),
           idempotency_key: newIdempotencyKey(),
         },
         guestToken,
@@ -355,8 +362,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // El pago con tarjeta puede volver en `requires_action`: ahí el banco
       // pide 3DS y hay que confirmarlo con Stripe.js antes de dar por hecho el
       // cobro. Sin esto el usuario vería "pagado" con el cobro sin confirmar.
-      if (r.attempt.requires_action && r.attempt.client_secret) {
-        const confirmed = await confirmCardPayment(r.attempt.client_secret);
+      // El REPLAY idempotente devuelve la fila cruda del attempt: el secreto
+      // se llama `stripe_client_secret` y no trae `requires_action` (se deriva
+      // del status). Sin tolerar ese shape, un replay en 3DS saltaba el
+      // desafío del banco y pintaba "pagado" con el cobro sin confirmar.
+      const at = r.attempt;
+      const clientSecret = at.client_secret ?? at.stripe_client_secret;
+      const needsAction = at.requires_action ?? at.status === 'requires_action';
+      if (needsAction && clientSecret) {
+        // v2.24 (Connect · direct charge): si el intent vive en la cuenta del
+        // restaurante, Stripe.js DEBE inicializarse con esa cuenta o el 3DS es
+        // inconfirmable. Ausente = cargo de plataforma, como siempre.
+        const confirmed = await confirmCardPayment(clientSecret, at.connected_account_id);
         if (!confirmed.ok) {
           setError(confirmed.error);
           setBusy(false);
@@ -378,7 +395,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         tip: r.attempt.tip_cents ?? tipCents,
         gross: r.attempt.gross_amount_cents,
         methodLabel,
-        chargedByRestaurant: payType !== 'wallet',
+        // v2.24: "Cobrado por el restaurante" es cierto SOLO en el riel
+        // DIRECTO. En el de plataforma cobra PayMe — afirmarlo siempre era
+        // mentirle al comensal en el 99% de los pagos de hoy.
+        chargedByRestaurant: payType !== 'wallet' && !!r.attempt.connected_account_id,
+        saveOmitidoPorConnect: savingNewCard && !!r.attempt.connected_account_id,
         statementDescriptor: r.attempt.statement_descriptor ?? null,
       });
       setView('processing');
@@ -640,6 +661,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 </b>
               </div>
             )}
+            {/* G-11: el aviso vive ACÁ y no en un toast — el toast se pisaba
+                con la animación de "Cobrando…" y se apagaba antes de que el
+                comensal llegara al comprobante. */}
+            {result.saveOmitidoPorConnect && (
+              <div className="caption" style={{ marginTop: -4, marginBottom: 8 }}>
+                En este restaurante la tarjeta no se guarda. Podés guardarla desde{' '}
+                <b style={{ color: 'var(--navy)' }}>Cuenta</b>.
+              </div>
+            )}
             <div className="receipt-row">
               <span className="lbl">{mesa.division_mode === 'igual' ? 'Mi parte' : 'Mis consumos'}</span>
               <span className="val">{formatMXN(result.itemsAmount)}</span>
@@ -791,12 +821,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           <div className="sectlabel" id="lbl-metodo">
             Método
           </div>
-          {/* Connect: que se sepa ANTES de pagar quién cobra, no solo en el
-              comprobante. Con saldo no aplica (ese riel sigue siendo PayMe). */}
+          {/* Connect: quién cobra depende del riel, y el front NO lo sabe
+              antes de pagar (G-11). Este texto es verdadero en los dos: el
+              cobro es de la cuenta del restaurante y PayMe divide. El
+              "Cobrado por" del comprobante sí lo afirma, ya con la respuesta. */}
           {payType !== 'wallet' && (
             <div className="caption" style={{ marginTop: -6, marginBottom: 10 }}>
-              Te cobra <b style={{ color: 'var(--navy)' }}>{mesa.restaurant.name}</b> — PayMe
-              divide la cuenta.
+              Estás pagando tu parte en{' '}
+              <b style={{ color: 'var(--navy)' }}>{mesa.restaurant.name}</b> — PayMe divide la
+              cuenta.
             </div>
           )}
           <div role="radiogroup" aria-labelledby="lbl-metodo">
