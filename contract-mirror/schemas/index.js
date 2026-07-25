@@ -72,6 +72,10 @@ const createInvitation = z.object({
 
 // MESAS
 const createMesa = z.object({
+  // B-06 §4.1 (v2.25): OPCIONAL y aditivo — sin ella todo funciona como antes.
+  // Con ella, un reintento tras perder la respuesta devuelve la MISMA mesa en
+  // vez de crear otra con otro hold por el total.
+  idempotency_key: idempotencyKey.optional(),
   restaurant_id: uuid,
   total_cents: strictPositive,
   division_mode: z.enum(['consumo', 'igual']).default('consumo'),

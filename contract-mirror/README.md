@@ -1,5 +1,29 @@
 # contract-mirror/ — espejo de solo lectura del contrato del App Backend
 
+**Refrescado el 2026-07-25 desde v2.26.0 (PQ-1 · consentimiento, PUBLICADO):**
+nuevos `routes/consent.js`, `services/consent.js`, `db/migrate_consent_v2.26.sql`
+y `legal/README.md`; `schemas/index.js` suma el `idempotency_key` opcional de
+`createMesa` (B-06 §4.1, v2.25).
+
+Contrato de PQ-1, tal como lo publicó el backend:
+`GET /api/legal` (público, qué textos hay y su versión vigente) ·
+`GET /api/legal/:kind` (público, texto vigente completo con `version`, `hash` y
+`body`; `kind` ∈ `aviso_privacidad` | `aviso_campanas`) ·
+`GET /api/legal/:kind/versions/:version` (histórico) ·
+`GET /api/account/consents` (sesión, estado de todas las finalidades; hoy solo
+`perfilado_campanas`) · `POST /api/account/consents/:purpose/grant` y `/revoke`
+(sesión, aceptan `channel` ∈ `app`|`web`|`soporte` y `app_version` opcionales).
+El `hash` que devuelve el texto vigente es el MISMO que queda grabado como
+prueba en el consentimiento: hay que mostrar siempre el vigente.
+
+⚠️ **Este contrato todavía NO se consume, a pedido del propio backend.**
+`grant` devuelve **403 `age_verification_required` para TODOS** porque nadie
+tiene fecha de nacimiento cargada (D-11 falla cerrado a propósito); se destraba
+con **PQ-2**, que hoy está **bloqueado**: `register` no acepta `birth_date` y
+ninguna ruta la escribe (ver **G-13** en `GAPS.md`). Además los dos textos
+legales vigentes son `0.1.0-placeholder` y lo dicen en su primera línea: no se
+le muestran a un usuario real.
+
 **Procedencia:** copiado tal cual de `../payme-app-backend` **v2.16.0** (CI
 verde; `/health` del backend vivo de Railway confirma 2.16.0 desplegado,
 2026-07-22). Fuente de verdad: el código real de ese repo. Este espejo existe
