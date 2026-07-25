@@ -2,11 +2,18 @@
 
 ---
 
-## 🔴 B-06 — Reintento tras respuesta perdida COBRA DOS VECES (las dos ramas de división)
+## ✅ B-06 — RESUELTO (front 0.28.0 + backend v2.25.0) — Reintento tras respuesta perdida COBRA DOS VECES
 
 **Hallado el 2026-07-25** en la revisión adversaria del diff de Connect (no lo
 introduce ese cambio: es preexistente). **Reportado al backend el 2026-07-25;
-respondido, verificado por ellos contra base, y con plan acordado (ver abajo).**
+respondido, verificado por ellos contra base, plan acordado y ejecutado.**
+
+**Cerrado el 2026-07-25.** Backend v2.25.0 (idempotencia en `POST /mesas`,
+replay con el shape del 201, 409 sobre estados terminales, `claimed_by_me`) +
+front 0.28.0 (clave estable derivada del contenido, congelamiento del intento
+sin confirmar, timeout de 30s). Detalle del lado del front en el CHANGELOG.
+**Falta la verificación del ciclo en vivo contra el backend desplegado** antes
+de darlo por cerrado también de su lado.
 
 `MesaScreen` genera `idempotency_key: newIdempotencyKey()` DENTRO de cada
 llamada a pagar (`src/screens/MesaScreen.tsx`, en el payload de `doPay`), así

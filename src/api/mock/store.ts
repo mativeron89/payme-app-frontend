@@ -664,6 +664,10 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
         amount_cents: s.amount_cents,
         amount_display: centsToDisplay(s.amount_cents),
         status: s.status,
+        // v2.25 §4.3: solo sobre casilleros TOMADOS y solo si son míos —
+        // uno liberado puede conservar rastros del dueño anterior.
+        claimed_by_me:
+          (s.status === 'claimed' || s.status === 'paid') && s.claimedBy === identity,
       }))
     : undefined;
   return {

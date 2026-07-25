@@ -1,12 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID } from '../api';
+import type { UnconfirmedAttempt } from '../api/idempotency';
+import {
+  clearUnconfirmed,
+  idempotencyKeyFor,
+  markUnconfirmed,
+  readUnconfirmed,
+  recallPaymentMethod,
+  rememberPaymentMethod,
+  rotateIdempotencyKey,
+  shouldRotateOnError,
+} from '../api/idempotency';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
 import { InviteFriends } from '../components/InviteFriends';
-import type { FractionRequest, MesaDetail, PaymentMethod, PaymentType } from '../api/types';
+import type {
+  FractionRequest,
+  MesaDetail,
+  PayMesaRequest,
+  PayMesaResponse,
+  PaymentMethod,
+  PaymentType,
+} from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
 import { goBack, navigate } from '../router';
@@ -83,8 +101,16 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     cardStateRef.current = s;
     setCardState(s);
   }, []);
+  /**
+   * B-06: una vez que el usuario apretó "Pagar", ninguna respuesta de red
+   * puede cambiarle el método de pago por su cuenta. Cambiarlo mueve el scope
+   * de la clave, y si el pago quedó en el aire, el reintento cobraría de nuevo.
+   */
+  const payStartedRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** El replay trajo un pago ya reembolsado: volver a pagar se decide a mano. */
+  const [refundedNotice, setRefundedNotice] = useState(false);
   const [result, setResult] = useState<PayResult | null>(null);
   const [procStep, setProcStep] = useState(0);
   const [, forceTick] = useState(0);
@@ -110,8 +136,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           // D4 (v2.16): las guardadas se reusan con su uuid (payment_method_id).
           setCards(r.payment_methods);
           const def = r.payment_methods.find((p) => p.is_default) ?? r.payment_methods[0];
-          // No pisar la selección si el usuario ya está tipeando una nueva.
-          if (def && cardStateRef.current.empty) setCardChoice(def.id);
+          // No pisar la selección si el usuario ya está tipeando una nueva —
+          // ni si ya hay un pago en curso (B-06: movería la clave).
+          if (def && cardStateRef.current.empty && !payStartedRef.current) setCardChoice(def.id);
         })
         .catch(() => setCards([]));
     }
@@ -174,6 +201,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const gross = itemsAmount + tipCents;
 
   function toggleItem(id: string) {
+    // B-06: con un pago sin confirmar, cambiar la selección cambiaría el
+    // payload de la clave congelada → 409 en el reintento (o, peor, un cobro
+    // nuevo). Primero se resuelve ese pago.
+    if (frozenRef.current) {
+      toast('Tenés un pago sin confirmar: resolvelo antes de cambiar tu selección');
+      return;
+    }
     const next = new Map(selected);
     if (next.has(id)) {
       next.delete(id);
@@ -187,6 +221,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }
 
   function setFraction(id: string, bps: number) {
+    if (frozenRef.current) {
+      toast('Tenés un pago sin confirmar: resolvelo antes de cambiar tu selección');
+      return;
+    }
     const next = new Map(selected);
     next.set(id, bps);
     setSelected(next);
@@ -290,11 +328,186 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     URL.revokeObjectURL(url);
   }
 
+  /**
+   * B-06: el scope se DERIVA DEL CONTENIDO del pago, con los mismos campos que
+   * el backend hashea (`PAYLOAD_KEYS.mesa_pay`). Mismo payload = misma clave =
+   * el reintento cae en el replay, aunque el usuario haya recargado o salido
+   * de la mesa y vuelto. Payload distinto = clave distinta, sin rotar nada.
+   *
+   * Va `cardChoice` y NO el `pm_`: el pm_ de una tarjeta tipeada se genera
+   * dentro de doPay y se cachea BAJO este scope, así que el reintento recupera
+   * el mismo y el hash del backend no se mueve. Meterlo acá sería circular.
+   *
+   * `lock_tokens` queda afuera a propósito: el backend lo excluye del hash.
+   */
+  const contentScope = useMemo(() => {
+    const sel =
+      mesa?.division_mode === 'consumo'
+        ? [...selected.entries()].map(([id, bps]) => `${id}:${bps}`).sort().join(',')
+        : [...selected.keys()].sort().join(',');
+    const tip = tipMode === 'custom' ? `c${tipCents}` : `b${tipPct * 100}`;
+    return `pay:${code}|${payType}|${cardChoice}|${sel}|${tip}|${staffId ?? '-'}`;
+  }, [code, mesa?.division_mode, selected, tipMode, tipCents, tipPct, payType, cardChoice, staffId]);
+
+  /**
+   * Intento sin confirmar (error ambiguo). Mientras exista, el pago queda
+   * CONGELADO en ese scope: no se puede cambiar nada y el único camino es
+   * reintentar el mismo pago, que el backend replaya en vez de re-cobrar.
+   */
+  const payArea = `pay:${code}`;
+  const [frozen, setFrozen] = useState<UnconfirmedAttempt | null>(() => readUnconfirmed(payArea));
+  const frozenScope = frozen?.scope ?? null;
+  const payScope = frozenScope ?? contentScope;
+  const frozenRef = useRef(frozenScope);
+  frozenRef.current = frozenScope;
+
+  /** v2.25 §4.3: cuántos casilleros tomé YO (la prueba de que mi pago llegó). */
+  const mySlotsTaken = mesa?.division_slots?.filter((s) => s.claimed_by_me).length ?? 0;
+  const mySlotsRef = useRef(mySlotsTaken);
+  mySlotsRef.current = mySlotsTaken;
+
+  const freezePay = useCallback(
+    (scope: string, payload?: unknown) => {
+      markUnconfirmed(payArea, scope, mySlotsRef.current, payload);
+      setFrozen({ scope, evidence: mySlotsRef.current, payload });
+    },
+    [payArea],
+  );
+  const unfreezePay = useCallback(() => {
+    clearUnconfirmed(payArea);
+    setFrozen(null);
+  }, [payArea]);
+
+  /**
+   * `claimed_by_me` es la prueba del backend de que mi pago SÍ llegó: si tras
+   * congelar apareció un casillero mío MÁS de los que había, ese pago está
+   * hecho y el intento se cierra solo.
+   *
+   * Solo aplica a partes iguales. En consumo no hay señal equivalente: el lock
+   * ya sube `my_bps` ANTES de pagar, así que usarlo descongelaría sin prueba.
+   * Ahí la salida es reintentar, que el backend replaya sin volver a cobrar.
+   */
+  useEffect(() => {
+    if (frozen && mesa?.division_mode === 'igual' && mySlotsTaken > frozen.evidence) {
+      unfreezePay();
+      rotateIdempotencyKey(frozen.scope);
+      toast('Ese pago ya estaba registrado ✓');
+    }
+  }, [frozen, mesa?.division_mode, mySlotsTaken, unfreezePay, toast]);
+
+  /**
+   * Respuesta del pago (nueva o REPLAY idempotente): 3DS, reembolsado y
+   * comprobante. Vive aparte porque el reintento congelado la comparte, y los
+   * datos del comprobante salen del CUERPO que se mandó, no del estado de la
+   * pantalla — tras una recarga ese estado ya no existe.
+   */
+  async function handlePayResponse(r: PayMesaResponse, scope: string, body: PayMesaRequest) {
+    const payKind = body.payment_type;
+    const savedCard = body.payment_method_id
+      ? (cards.find((c) => c.id === body.payment_method_id) ?? null)
+      : null;
+    const savingNewCard = !!body.save_payment_method;
+    // El pago con tarjeta puede volver en `requires_action`: ahí el banco
+    // pide 3DS y hay que confirmarlo con Stripe.js antes de dar por hecho el
+    // cobro. Sin esto el usuario vería "pagado" con el cobro sin confirmar.
+    // El REPLAY idempotente devuelve la fila cruda del attempt: el secreto
+    // se llama `stripe_client_secret` y no trae `requires_action` (se deriva
+    // del status). Sin tolerar ese shape, un replay en 3DS saltaba el
+    // desafío del banco y pintaba "pagado" con el cobro sin confirmar.
+    const at = r.attempt;
+    const clientSecret = at.client_secret ?? at.stripe_client_secret;
+    const needsAction = at.requires_action ?? at.status === 'requires_action';
+    // B-06: un replay puede traer un pago YA REEMBOLSADO. El backend
+    // devuelve 200 con status 'refunded' a propósito (un 409 nos haría
+    // rotar la clave y RE-COBRAR el reembolso). Se trata por el status.
+    if (at.status === 'refunded') {
+      // NO se rota sola: rotar acá es re-cobrar un reembolso. El intento
+      // quedó resuelto (se cobró y se devolvió), así que se descongela y la
+      // decisión de volver a pagar la toma el usuario, a mano.
+      unfreezePay();
+      setRefundedNotice(true);
+      setError('Ese pago se cobró y después te lo reembolsaron. No volvimos a cobrarte.');
+      setBusy(false);
+      reload();
+      return;
+    }
+    if (needsAction && clientSecret) {
+      // v2.24 (Connect · direct charge): si el intent vive en la cuenta del
+      // restaurante, Stripe.js DEBE inicializarse con esa cuenta o el 3DS es
+      // inconfirmable. Ausente = cargo de plataforma, como siempre.
+      const confirmed = await confirmCardPayment(clientSecret, at.connected_account_id);
+      if (!confirmed.ok) {
+        if (confirmed.definitive) {
+          // El banco rechazó: el intento murió y el backend liberó lo tomado.
+          rotateIdempotencyKey(scope);
+          unfreezePay();
+          setError(confirmed.error);
+        } else {
+          // Se cayó la red durante el 3DS: el banco pudo haber autorizado
+          // igual. Se congela; el reintento replaya en vez de re-cobrar.
+          freezePay(scope, body);
+          setError('Se cortó la conexión mientras el banco confirmaba. No reintentes con otro método: tocá "Reintentar el pago sin confirmar".');
+        }
+        setBusy(false);
+        reload();
+        return;
+      }
+    }
+    const methodLabel =
+      payKind === 'wallet'
+        ? 'Saldo PayMe'
+        : payKind === 'apple_pay'
+          ? 'Apple Pay'
+          : payKind === 'google_pay'
+            ? 'Ⓖ Google Pay'
+            : `${savedCard ? `${savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··${savedCard.last_four}` : 'Tarjeta'}`;
+    setResult({
+      // Exacto del server: la fracción completadora puede ajustar ±1¢.
+      itemsAmount: r.attempt.gross_amount_cents - (r.attempt.tip_cents ?? body.tip_cents ?? tipCents),
+      tip: r.attempt.tip_cents ?? body.tip_cents ?? tipCents,
+      gross: r.attempt.gross_amount_cents,
+      methodLabel,
+      // v2.24: "Cobrado por el restaurante" es cierto SOLO en el riel
+      // DIRECTO. En el de plataforma cobra PayMe — afirmarlo siempre era
+      // mentirle al comensal en el 99% de los pagos de hoy.
+      chargedByRestaurant: payKind !== 'wallet' && !!r.attempt.connected_account_id,
+      saveOmitidoPorConnect: savingNewCard && !!r.attempt.connected_account_id,
+      statementDescriptor: r.attempt.statement_descriptor ?? null,
+    });
+    // Intento completado: el próximo pago de esta mesa (otra parte, otro
+    // plato) es una intención NUEVA y necesita clave nueva.
+    rotateIdempotencyKey(scope);
+    unfreezePay();
+    setView('processing');
+    setProcStep(1);
+  }
+
   async function doPay() {
     if (!mesa) return;
+    // B-06: el scope se CONGELA acá. Si algo lo mueve mientras el pago vuela
+    // (una respuesta tardía de /payment-methods, un re-render), la clave que
+    // se conserva para el reintento sigue siendo la de ESTE intento.
+    const scope = payScope;
+    payStartedRef.current = true;
     setBusy(true);
     setError(null);
+    // El cuerpo EXACTO que salió, para poder congelarlo si la respuesta se
+    // pierde: el reintento tiene que reenviar esto, no reconstruirlo.
+    let sentBody: PayMesaRequest | null = null;
     try {
+      /**
+       * B-06: reintento de un intento CONGELADO. Se manda el MISMO cuerpo que
+       * se mandó la primera vez, no uno reconstruido: tras una recarga el
+       * estado de la pantalla arranca vacío, y reconstruirlo mandaría otro
+       * payload con la misma clave → 409 en bucle, sin salida.
+       */
+      if (frozen?.payload) {
+        const body = frozen.payload as PayMesaRequest;
+        sentBody = body;
+        const r = await api.payMesa(code, body, guestToken);
+        await handlePayResponse(r, scope, body);
+        return;
+      }
       // D4 (v2.16): tarjeta GUARDADA → `payment_method_id` (uuid); tarjeta
       // NUEVA → pm_ desde el Card Element como `stripe_payment_method_id`,
       // con `save_payment_method` según el checkbox.
@@ -309,7 +522,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         } else if (savedCard) {
           savedPmId = savedCard.id;
         } else if (IS_MOCK) {
-          stripePmId = `pm_mock_nueva_${Date.now().toString(36)}`;
+          stripePmId = recallPaymentMethod(scope) ?? `pm_mock_nueva_${Date.now().toString(36)}`;
+          rememberPaymentMethod(scope, stripePmId);
           savingNewCard = !isGuest && saveCard;
         } else {
           if (!cardEl) {
@@ -317,32 +531,40 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             setBusy(false);
             return;
           }
-          const res = await createCardPaymentMethod(cardEl);
-          if ('error' in res) {
-            setError(res.error);
-            setBusy(false);
-            return;
+          // B-06: en el REINTENTO se reusa el pm_ ya tokenizado. Stripe.js
+          // devuelve uno distinto por invocación y el backend lo hashea: sin
+          // esto, la clave estable daría 409 idempotency_conflict en bucle.
+          const cached = recallPaymentMethod(scope);
+          if (cached) {
+            stripePmId = cached;
+          } else {
+            const res = await createCardPaymentMethod(cardEl);
+            if ('error' in res) {
+              setError(res.error);
+              setBusy(false);
+              return;
+            }
+            stripePmId = res.paymentMethodId;
+            rememberPaymentMethod(scope, stripePmId);
           }
-          stripePmId = res.paymentMethodId;
           savingNewCard = !isGuest && saveCard;
         }
       }
 
-      const r = await api.payMesa(
-        code,
-        {
+      const body: PayMesaRequest = {
           payment_type: payType,
           // IMPORTANTÍSIMO (Mati): también en partes iguales viaja QUÉ consumió
           // cada uno (v2.18.1 ya lo persiste — G-07 resuelto). En consumo van
           // las FRACCIONES (v2.18).
+          // Ordenados por item_id: el backend v2.25 ya no rompe por orden,
+          // pero mandarlos estables nos deja a salvo de una versión vieja.
           ...(mesa.division_mode === 'consumo'
             ? {
-                items: [...selected.entries()].map(([item_id, fraction_bps]) => ({
-                  item_id,
-                  fraction_bps,
-                })),
+                items: [...selected.entries()]
+                  .map(([item_id, fraction_bps]) => ({ item_id, fraction_bps }))
+                  .sort((a, b) => a.item_id.localeCompare(b.item_id)),
               }
-            : { item_ids: [...selected.keys()] }),
+            : { item_ids: [...selected.keys()].sort() }),
           ...(lockTokens.length > 0 && { lock_tokens: lockTokens }),
           ...(tipMode === 'custom' ? { tip_cents: tipCents } : { tip_bps: tipPct * 100 }),
           ...(staffId && { tip_to_staff_id: staffId }),
@@ -355,58 +577,34 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           ...(IS_MOCK &&
             payType !== 'card' &&
             payType !== 'wallet' && { stripe_payment_method_id: 'pm_mock_walletpay' }),
-          idempotency_key: newIdempotencyKey(),
-        },
-        guestToken,
-      );
-      // El pago con tarjeta puede volver en `requires_action`: ahí el banco
-      // pide 3DS y hay que confirmarlo con Stripe.js antes de dar por hecho el
-      // cobro. Sin esto el usuario vería "pagado" con el cobro sin confirmar.
-      // El REPLAY idempotente devuelve la fila cruda del attempt: el secreto
-      // se llama `stripe_client_secret` y no trae `requires_action` (se deriva
-      // del status). Sin tolerar ese shape, un replay en 3DS saltaba el
-      // desafío del banco y pintaba "pagado" con el cobro sin confirmar.
-      const at = r.attempt;
-      const clientSecret = at.client_secret ?? at.stripe_client_secret;
-      const needsAction = at.requires_action ?? at.status === 'requires_action';
-      if (needsAction && clientSecret) {
-        // v2.24 (Connect · direct charge): si el intent vive en la cuenta del
-        // restaurante, Stripe.js DEBE inicializarse con esa cuenta o el 3DS es
-        // inconfirmable. Ausente = cargo de plataforma, como siempre.
-        const confirmed = await confirmCardPayment(clientSecret, at.connected_account_id);
-        if (!confirmed.ok) {
-          setError(confirmed.error);
-          setBusy(false);
-          reload();
-          return;
-        }
-      }
-      const methodLabel =
-        payType === 'wallet'
-          ? 'Saldo PayMe'
-          : payType === 'apple_pay'
-            ? 'Apple Pay'
-            : payType === 'google_pay'
-              ? 'Ⓖ Google Pay'
-              : `${savedCard ? `${savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··${savedCard.last_four}` : 'Tarjeta'}`;
-      setResult({
-        // Exacto del server: la fracción completadora puede ajustar ±1¢.
-        itemsAmount: r.attempt.gross_amount_cents - (r.attempt.tip_cents ?? tipCents),
-        tip: r.attempt.tip_cents ?? tipCents,
-        gross: r.attempt.gross_amount_cents,
-        methodLabel,
-        // v2.24: "Cobrado por el restaurante" es cierto SOLO en el riel
-        // DIRECTO. En el de plataforma cobra PayMe — afirmarlo siempre era
-        // mentirle al comensal en el 99% de los pagos de hoy.
-        chargedByRestaurant: payType !== 'wallet' && !!r.attempt.connected_account_id,
-        saveOmitidoPorConnect: savingNewCard && !!r.attempt.connected_account_id,
-        statementDescriptor: r.attempt.statement_descriptor ?? null,
-      });
-      setView('processing');
-      setProcStep(1);
+          idempotency_key: idempotencyKeyFor(scope),
+      };
+      sentBody = body;
+      const r = await api.payMesa(code, body, guestToken);
+      await handlePayResponse(r, scope, body);
     } catch (err) {
-      const { code: ec, extra } = extractApiError(err);
-      if (ec === 'insufficient_funds') {
+      const { code: ec, extra, status } = extractApiError(err);
+      // B-06, la decisión central: si el intento MURIÓ (el backend ya liberó
+      // el casillero o el ítem), se rota y el reintento arranca de cero. Si
+      // el error es AMBIGUO —red caída, respuesta perdida, timeout— se
+      // CONSERVA la clave Y se CONGELA el pago: el reintento cae en el replay
+      // del backend en vez de cobrar de nuevo, y hasta entonces no se puede
+      // cambiar nada (cambiar algo generaría clave nueva = doble cobro).
+      const definitivo = shouldRotateOnError(ec, status);
+      if (definitivo) {
+        rotateIdempotencyKey(scope);
+        unfreezePay();
+      }
+      if (ec === 'idempotency_key_terminal') {
+        setError('Ese intento de pago ya no sirve. Probá de nuevo.');
+        reload();
+      } else if (ec === 'idempotency_conflict') {
+        // Hay un intento VIVO con otro payload. Rotar acá sería el doble
+        // cobro; se congela en el scope que el backend ya conoce.
+        freezePay(scope, sentBody ?? frozen?.payload);
+        setError('Tenés un pago sin confirmar en esta mesa. Reintentá ese mismo pago antes de cambiar nada.');
+        reload();
+      } else if (ec === 'insufficient_funds') {
         const available = typeof extra.available === 'number' ? extra.available : 0;
         setError(
           `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Cargá saldo o pagá con tarjeta.`,
@@ -419,8 +617,20 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       } else if (ec === 'no_slots_available') {
         setError('Ya no quedan partes por pagar en esta mesa.');
         reload();
+      } else if (definitivo) {
+        // 4xx sin código propio: el backend dijo que NO y ya liberó lo tomado.
+        // La clave se rotó arriba, así que reintentar arranca de cero.
+        setError('No pudimos completar el pago. Revisá la mesa y probá de nuevo.');
+        reload();
       } else {
-        setError('No pudimos procesar el pago. Probá de nuevo.');
+        // Error ambiguo (5xx, red, timeout): puede que el cobro SÍ haya salido.
+        // Se CONGELA el pago con esta clave: el reintento cae en el replay del
+        // backend, y hasta resolverlo no se puede cambiar nada (cualquier
+        // cambio generaría clave nueva y cobraría de nuevo). La mesa se
+        // recarga: si el pago llegó, `claimed_by_me` lo descongela solo.
+        freezePay(scope, sentBody ?? frozen?.payload);
+        setError('No pudimos confirmar el pago. Puede que se haya cobrado igual: reintentá ESTE mismo pago, no armes otro.');
+        reload();
       }
       setBusy(false);
     }
@@ -742,16 +952,48 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         <div className="scroll" style={{ padding: 16 }}>
           <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 16 }}>
             <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Pagás SOLO tu parte
+              {frozenScope ? 'Pendiente de confirmar' : 'Pagás SOLO tu parte'}
             </div>
-            <div style={{ fontSize: 'var(--fs-3xl)', fontWeight: 800, color: '#fff' }}>{formatMXN(gross)}</div>
-            <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
-              {mesa.division_mode === 'igual' ? 'Tu parte' : 'Tus consumos'} {formatMXN(itemsAmount)} + propina {formatMXN(tipCents)}
-            </div>
+            {/* Con un intento congelado, el monto de la pantalla NO es el del
+                pago que quedó en el aire (tras una recarga la selección
+                arranca vacía). Mostrarlo sería mentir sobre lo que se reenvía. */}
+            {frozenScope ? (
+              <>
+                <div style={{ fontSize: 'var(--fs-xl)', fontWeight: 800, color: '#fff' }}>
+                  Pago sin confirmar
+                </div>
+                <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+                  Reintentalo para saber si se cobró: mandamos el mismo pago, no uno nuevo.
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 'var(--fs-3xl)', fontWeight: 800, color: '#fff' }}>{formatMXN(gross)}</div>
+                <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+                  {mesa.division_mode === 'igual' ? 'Tu parte' : 'Tus consumos'} {formatMXN(itemsAmount)} + propina {formatMXN(tipCents)}
+                </div>
+              </>
+            )}
           </div>
           {error && (
             <div className="form-error" role="alert">
               {error}
+            </div>
+          )}
+          {/* B-06: pago sin confirmar. Se bloquea todo lo que cambiaría el
+              payload — con la clave congelada, cambiar algo es cobrar de
+              nuevo. El único camino es reintentar ESTE pago. */}
+          {frozenScope && (
+            <div className="note note-orange" role="status">
+              <b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal
+              cual está: si ya salió, no te cobramos de nuevo. Hasta resolverlo no podés cambiar
+              propina, método ni consumos.
+            </div>
+          )}
+          {refundedNotice && (
+            <div className="note note-amber" role="status">
+              Ese pago se te <b>reembolsó</b>. No lo repetimos solos: si querés pagar igual, tocá
+              el botón de abajo.
             </div>
           )}
           <div className="sectlabel" id="lbl-propina">
@@ -769,6 +1011,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   setTipMode('pct');
                   setTipPct(pct);
                 }}
+                disabled={!!frozenScope}
                 role="radio"
                 aria-checked={tipMode === 'pct' && tipPct === pct}
               >
@@ -778,6 +1021,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <button
               className={`tip-pill ${tipMode === 'custom' ? 'sel' : ''}`}
               onClick={() => setTipMode('custom')}
+              disabled={!!frozenScope}
               role="radio"
               aria-checked={tipMode === 'custom'}
             >
@@ -794,6 +1038,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 placeholder="0.00"
                 value={customTipStr}
                 onChange={(e) => setCustomTipStr(e.target.value.replace(/[^0-9.]/g, ''))}
+                disabled={!!frozenScope}
                 aria-label="Monto de propina a mano"
               />
             </div>
@@ -810,6 +1055,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     className={`tip-pill ${staffId === s.id ? 'sel' : ''}`}
                     style={{ flex: 'none' }}
                     onClick={() => setStaffId(staffId === s.id ? null : s.id)}
+                    disabled={!!frozenScope}
                     aria-pressed={staffId === s.id}
                   >
                     {s.display_name}
@@ -837,6 +1083,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <button
                 className={`method-card ${payType === 'wallet' ? 'sel' : ''}`}
                 onClick={() => setPayType('wallet')}
+                disabled={!!frozenScope}
                 role="radio"
                 aria-checked={payType === 'wallet'}
               >
@@ -855,6 +1102,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 setPayType('card');
                 if (cards.length > 0) setCardsOpen((v) => payType !== 'card' ? true : !v);
               }}
+              disabled={!!frozenScope}
               role="radio"
               aria-checked={payType === 'card'}
               aria-expanded={cards.length > 0 ? cardsOpen : undefined}
@@ -890,6 +1138,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     key={c.id}
                     className={`method-card ${cardChoice === c.id ? 'sel' : ''}`}
                     onClick={() => setCardChoice(c.id)}
+                    disabled={!!frozenScope}
                     role="radio"
                     aria-checked={cardChoice === c.id}
                   >
@@ -913,6 +1162,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <button
                   className={`method-card ${cardChoice === 'new' ? 'sel' : ''}`}
                   onClick={() => setCardChoice('new')}
+                  disabled={!!frozenScope}
                   role="radio"
                   aria-checked={cardChoice === 'new'}
                 >
@@ -947,6 +1197,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     <input
                       type="checkbox"
                       checked={saveCard}
+                      disabled={!!frozenScope}
                       onChange={(e) => setSaveCard(e.target.checked)}
                     />
                     Guardar esta tarjeta para la próxima
@@ -963,6 +1214,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <button
               className={`method-card ${payType === 'apple_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('apple_pay')}
+              disabled={!!frozenScope}
               role="radio"
               aria-checked={payType === 'apple_pay'}
             >
@@ -978,6 +1230,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <button
               className={`method-card ${payType === 'google_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('google_pay')}
+              disabled={!!frozenScope}
               role="radio"
               aria-checked={payType === 'google_pay'}
             >
@@ -1009,18 +1262,33 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         </div>
         <button
           className="cta-float"
-          onClick={doPay}
+          onClick={() => {
+            // Reembolsado: volver a pagar es una decisión explícita del
+            // usuario, nunca automática (rotar solo = re-cobrar un reembolso).
+            if (refundedNotice) {
+              rotateIdempotencyKey(payScope);
+              setRefundedNotice(false);
+            }
+            void doPay();
+          }}
           disabled={
             busy ||
-            gross === 0 ||
-            (!IS_MOCK &&
+            (!frozenScope && gross === 0) ||
+            (!frozenScope &&
+              !IS_MOCK &&
               !IS_DEMO &&
               payType === 'card' &&
               (cards.length === 0 || cardChoice === 'new') &&
               !cardState.complete)
           }
         >
-          {busy ? 'Procesando…' : `Pagar ${formatMXN(gross)}`}
+          {busy
+            ? 'Procesando…'
+            : frozenScope
+              ? 'Reintentar el pago sin confirmar'
+              : refundedNotice
+                ? `Pagar de nuevo ${formatMXN(gross)}`
+                : `Pagar ${formatMXN(gross)}`}
         </button>
       </div>
     );
@@ -1125,6 +1393,23 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
           </div>
           <div className="scroll" style={{ background: '#fff' }}>
+          {/* B-06: el pago quedó sin confirmar. Un toast al tocar un ítem se
+              pierde; acá queda a la vista, con el camino de vuelta. */}
+          {frozenScope && (
+            <div style={{ padding: '12px 16px 0' }}>
+              <div className="note note-orange" role="status">
+                <b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal
+                cual antes de cambiar tu selección.
+                <button
+                  className="btn btn-ghost btn-sm btn-fit"
+                  style={{ marginTop: 8 }}
+                  onClick={() => setView('pay')}
+                >
+                  Reintentar ese pago
+                </button>
+              </div>
+            </div>
+          )}
             <div style={{ padding: '12px 16px 4px' }} className="caption">
               Tocá lo que consumiste. Al elegirlo queda <b>reservado</b> para vos.
             </div>
@@ -1227,6 +1512,23 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             {/* IMPORTANTÍSIMO (Mati): aunque se pague en partes iguales, cada
                 comensal marca QUÉ consumió — esa info sostiene el modelo.
                 No cambia el monto (la parte es fija) ni reserva nada. */}
+            {/* B-06: el pago quedó sin confirmar. Un toast al tocar un ítem se
+                pierde; acá queda a la vista, con el camino de vuelta. */}
+              {frozenScope && (
+              <div style={{ padding: '12px 16px 0' }}>
+                <div className="note note-orange" role="status">
+                  <b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal
+                  cual antes de cambiar tu selección.
+                  <button
+                    className="btn btn-ghost btn-sm btn-fit"
+                    style={{ marginTop: 8 }}
+                    onClick={() => setView('pay')}
+                  >
+                    Reintentar ese pago
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="sectlabel">¿Qué consumiste?</div>
             <div className="caption" style={{ margin: '0 2px 8px' }}>
               Marcalo para el restaurante — no cambia lo que pagás.
@@ -1259,6 +1561,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               La cuenta se dividió en {mesa.expected_participants} partes iguales de{' '}
               <b>{formatMXN(itemsAmount)}</b>. Quedan <b>{availableSlots}</b> por pagar.
             </div>
+            {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al
+                comensal ver que su parte YA está tomada. Sin esto volvía, veía
+                casilleros libres y pagaba de nuevo — llevándose el de otro.
+                No se bloquea: pagar más de una parte es legítimo (acta
+                2026-07-25), pero tiene que ser una decisión, no un accidente. */}
+            {mySlotsTaken > 0 && (
+              <div className="note note-teal" style={{ marginTop: 8 }}>
+                <b>Ya pagaste {mySlotsTaken === 1 ? 'tu parte' : `${mySlotsTaken} partes`} ✓</b>
+                {availableSlots > 0 && ' Si tocás pagar de nuevo, cubrís la parte de otro comensal.'}
+              </div>
+            )}
           </div>
           <button
             className="cta-float"
@@ -1269,7 +1582,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               ? 'No quedan partes'
               : selected.size === 0
                 ? 'Marcá lo que consumiste'
-                : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
+                : mySlotsTaken > 0
+                  ? `Pagar otra parte → ${formatMXN(itemsAmount)}`
+                  : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
           </button>
         </>
       )}

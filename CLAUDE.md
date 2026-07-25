@@ -19,10 +19,14 @@ TELÉFONO — esta app se usa en la mesa de un restaurante.
 
 Workspace local `PayMe/` con carpetas hermanas:
 
-1. `payme-app-backend` — **EL CONTRATO DE ESTE FRONT** (v2.13+, Node 18/
+1. `payme-app-backend` — **EL CONTRATO DE ESTE FRONT** (**v2.25.0**, Node 18/
    CommonJS, Stripe, STP en modo mock, CI verde). Mueve dinero real.
    **SOLO LECTURA ABSOLUTA: no se edita, no se "arregla", jamás.**
-2. `payme-dashboard-backend` (v1.0.7, CI verde) — otro dominio. NO SE TOCA.
+   ⚡ Trae el **pivote a Stripe Connect** (v2.22–v2.24): el pago con tarjeta es
+   un *direct charge* sobre la cuenta conectada del restaurante — el
+   restaurante es merchant of record. **Apagado por flag** en el backend
+   (`CONNECT_DIRECT_CHARGES`); este front ya lo consume desde v0.26/0.27.
+2. `payme-dashboard-backend` (repo v1.0.16, prod v1.0.12) — otro dominio. NO SE TOCA.
 3. `payme-dashboard-frontend` — en desarrollo con su propio Claude Code y su
    propio CLAUDE.md. **FUERA DE TU ALCANCE: no produzcas nada para el
    dashboard.**

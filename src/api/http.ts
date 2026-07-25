@@ -38,6 +38,15 @@ async function parseBody(res: Response): Promise<ApiError | null> {
   }
 }
 
+/**
+ * B-06: sin timeout, "se perdió la respuesta" es un fetch colgado minutos —
+ * el usuario mira una pantalla muerta y termina recargando o reintentando a
+ * ciegas. 30s es holgado para un pago con Stripe de por medio; lo que se gana
+ * es convertir el cuelgue en un error manejable (y la clave de idempotencia
+ * se conserva, así que el reintento cae en el replay del backend).
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 async function rawRequest<T>(
   method: string,
   path: string,
@@ -48,11 +57,19 @@ async function rawRequest<T>(
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}/api${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/api${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new HttpError(res.status, await parseBody(res));
   return (await res.json()) as T;
 }
@@ -110,11 +127,21 @@ export async function httpGuestRequest<T>(
 ): Promise<T> {
   const headers: Record<string, string> = { 'X-Guest-Token': guestToken };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const res = await fetch(`${BASE_URL}/api${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  // B-06: el invitado también paga por acá. Sin timeout, un pago colgado deja
+  // la pantalla muerta y empuja al reintento a ciegas — el mismo agujero.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/api${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new HttpError(res.status, await parseBody(res));
   return (await res.json()) as T;
 }

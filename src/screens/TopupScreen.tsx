@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { api, newIdempotencyKey } from '../api';
+import { api } from '../api';
+import { idempotencyKeyFor, rotateIdempotencyKey, shouldRotateOnError } from '../api/idempotency';
+import { extractApiError } from '../api/errors';
+import { confirmCardPayment } from '../api/stripe';
 import type { ClabeResponse, PaymentMethod, TopupOxxoResponse } from '../api/types';
 import { Icon } from '../components/Icon';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
@@ -46,21 +49,65 @@ export function TopupScreen() {
   }
   const amountOk = amountCents >= 5000 && amountCents <= 1_000_000;
 
+  /**
+   * B-06: con clave nueva por intento, un reintento de OXXO emite un SEGUNDO
+   * voucher válido (dos referencias vivas; si se pagan las dos, se acredita
+   * el doble) y uno de tarjeta cobra otra vez.
+   */
+  const topupScope = `topup:${via}:${amountCents}`;
+
   async function doTopup() {
     setBusy(true);
     setError(null);
     try {
       if (via === 'oxxo') {
-        const r = await api.topupOxxo(amountCents, newIdempotencyKey());
+        const r = await api.topupOxxo(amountCents, idempotencyKeyFor(topupScope));
+        rotateIdempotencyKey(topupScope);
         setVoucher(r.topup);
       } else if (via === 'card') {
         if (!pm) return;
-        await api.topupCard(amountCents, pm.id, newIdempotencyKey());
-        toast(`Se acreditaron ${formatMXN(amountCents)} ✓`);
+        const r = await api.topupCard(amountCents, pm.id, idempotencyKeyFor(topupScope));
+        // El banco puede pedir 3DS: sin confirmarlo, la plata no entra y el
+        // toast anunciaba saldo inexistente.
+        if (r.requires_action && r.client_secret) {
+          const confirmed = await confirmCardPayment(r.client_secret);
+          if (!confirmed.ok) {
+            if (confirmed.definitive) rotateIdempotencyKey(topupScope);
+            setError(confirmed.error);
+            return;
+          }
+          toast('Confirmamos con tu banco: el saldo entra en unos segundos.');
+          rotateIdempotencyKey(topupScope);
+          navigate('cuenta');
+          return;
+        }
+        // B-06: un replay puede traer un topup FALLIDO (200 `idempotent:true`
+        // con status 'failed'). Sin mirar el status, anunciábamos como
+        // acreditado un cobro que nunca prosperó.
+        if (r.topup.status === 'failed') {
+          rotateIdempotencyKey(topupScope);
+          setError('Ese cobro no prosperó. Probá de nuevo o con otra tarjeta.');
+          return;
+        }
+        rotateIdempotencyKey(topupScope);
+        toast(
+          r.topup.status === 'succeeded'
+            ? `Se acreditaron ${formatMXN(amountCents)} ✓`
+            : 'Carga en curso: el saldo aparece en unos segundos.',
+        );
         navigate('cuenta');
       }
-    } catch {
-      setError('No pudimos iniciar la carga. Probá de nuevo.');
+    } catch (err) {
+      const { code, status } = extractApiError(err);
+      if (shouldRotateOnError(code, status)) rotateIdempotencyKey(topupScope);
+      // En OXXO no hay saldo que revisar todavía: lo que puede haber quedado
+      // vivo es una REFERENCIA. Decir "revisá tu saldo" mandaba a mirar donde
+      // no hay nada.
+      setError(
+        via === 'oxxo'
+          ? 'No pudimos confirmar la referencia. Reintentá: si ya se había generado, te devolvemos la misma (no una segunda).'
+          : 'No pudimos confirmar la carga. Revisá tu saldo antes de reintentar: si el cobro salió, el reintento no cobra de nuevo.',
+      );
     } finally {
       setBusy(false);
     }

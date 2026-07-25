@@ -2,6 +2,16 @@ import type { StripeCardElement } from '@stripe/stripe-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, QR_RESTAURANT_ID } from '../api';
 import { HttpError } from '../api/http';
+import {
+  clearUnconfirmed,
+  idempotencyKeyFor,
+  markUnconfirmed,
+  readUnconfirmed,
+  recallPaymentMethod,
+  rememberPaymentMethod,
+  rotateIdempotencyKey,
+  shouldRotateOnError,
+} from '../api/idempotency';
 import { MockApiError } from '../api/mock/mockApi';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
@@ -41,10 +51,14 @@ function priceCentsOf(it: EditItem): number {
   }
 }
 
-function extractError(err: unknown): { code: string; extra: Record<string, unknown> } {
-  if (err instanceof MockApiError) return { code: err.message, extra: err.extra };
-  if (err instanceof HttpError) return { code: err.message, extra: err.body ?? {} };
-  return { code: 'unknown', extra: {} };
+function extractError(err: unknown): {
+  code: string;
+  extra: Record<string, unknown>;
+  status: number | null;
+} {
+  if (err instanceof MockApiError) return { code: err.message, extra: err.extra, status: err.status };
+  if (err instanceof HttpError) return { code: err.message, extra: err.body ?? {}, status: err.status };
+  return { code: 'unknown', extra: {}, status: null };
 }
 
 /**
@@ -117,6 +131,16 @@ export function CreateMesaFlow() {
     (IS_MOCK
       ? MOCK_RESTAURANTS[0].id
       : ((import.meta.env.VITE_RESTAURANT_ID as string | undefined) ?? ''));
+  /**
+   * B-06: clave estable del intento de ABRIR mesa, derivada del CONTENIDO
+   * (restaurante + total + división + garantía). Editar el ticket después de
+   * un error ambiguo es otra mesa, no el mismo intento: con un scope fijo
+   * daba `409 idempotency_conflict` y quedaba trabado.
+   *
+   * El total entra porque es lo que se retiene: una garantía por otro monto
+   * NUNCA puede replayar la anterior.
+   */
+  const mesaScopeBase = `mesa:${restaurantId || 'sin-restaurante'}`;
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [restaurantError, setRestaurantError] = useState<string | null>(null);
   useEffect(() => {
@@ -138,6 +162,28 @@ export function CreateMesaFlow() {
   // D5: el total SIEMPRE sale de lo que el usuario ve/editó — guardarraíl:
   // si el total está mal, la división está mal.
   const total = editItems.reduce((s, i) => s + priceCentsOf(i) * i.quantity, 0);
+  // Los campos son los MISMOS que el backend hashea en `PAYLOAD_KEYS.create_mesa`.
+  // La tarjeta elegida queda AFUERA a propósito, igual que allá: el `pm_` de una
+  // tarjeta tipeada cambia en cada invocación de Stripe.js, y meterlo acá haría
+  // que cambiar de tarjeta abriera una segunda mesa con un segundo hold.
+  const contentScope = `${mesaScopeBase}|${total}|${division}|${participants}|${method}`;
+  /**
+   * Intento de apertura SIN CONFIRMAR (error ambiguo). La mesa puede existir
+   * ya, con su garantía por el TOTAL retenida. Mientras esté congelado no se
+   * puede editar nada: abrir otra mesa sería un segundo hold por el total.
+   */
+  const [frozenScope, setFrozenScope] = useState<string | null>(
+    () => readUnconfirmed(mesaScopeBase)?.scope ?? null,
+  );
+  const mesaScope = frozenScope ?? contentScope;
+  function freezeMesa(scope: string) {
+    markUnconfirmed(mesaScopeBase, scope);
+    setFrozenScope(scope);
+  }
+  function unfreezeMesa() {
+    clearUnconfirmed(mesaScopeBase);
+    setFrozenScope(null);
+  }
   const ticketValid =
     editItems.length > 0 &&
     editItems.every((i) => i.name.trim().length > 0 && priceCentsOf(i) > 0 && i.quantity >= 1);
@@ -244,7 +290,9 @@ export function CreateMesaFlow() {
         } else if (savedCard) {
           savedPmId = savedCard.id;
         } else if (IS_MOCK) {
-          stripePmId = `pm_mock_nueva_${Date.now().toString(36)}`;
+          stripePmId =
+            recallPaymentMethod(mesaScope) ?? `pm_mock_nueva_${Date.now().toString(36)}`;
+          rememberPaymentMethod(mesaScope, stripePmId);
           savingNewCard = saveCard;
         } else {
           // v2.16: el backend crea el cliente Stripe lazy en la propia
@@ -254,13 +302,22 @@ export function CreateMesaFlow() {
             setBusy(false);
             return;
           }
-          const res = await createCardPaymentMethod(cardEl);
-          if ('error' in res) {
-            setError(res.error);
-            setBusy(false);
-            return;
+          // B-06: en el reintento se reusa el pm_ ya tokenizado. Stripe.js
+          // devuelve uno distinto por invocación y el backend lo hashea: sin
+          // esto, la clave estable daría 409 idempotency_conflict en bucle.
+          const cached = recallPaymentMethod(mesaScope);
+          if (cached) {
+            stripePmId = cached;
+          } else {
+            const res = await createCardPaymentMethod(cardEl);
+            if ('error' in res) {
+              setError(res.error);
+              setBusy(false);
+              return;
+            }
+            stripePmId = res.paymentMethodId;
+            rememberPaymentMethod(mesaScope, stripePmId);
           }
-          stripePmId = res.paymentMethodId;
           savingNewCard = saveCard;
         }
       }
@@ -277,6 +334,10 @@ export function CreateMesaFlow() {
         division_mode: division,
         expected_participants: division === 'igual' ? participants : Math.max(1, participants),
         guarantee_method: method,
+        // B-06 (v2.25): clave estable del intento de ABRIR la mesa. Sin esto,
+        // perder la respuesta y reintentar creaba una segunda mesa con una
+        // segunda garantía por el total, que termina capturándose sola.
+        idempotency_key: idempotencyKeyFor(mesaScope),
         ...(stripePmId && { stripe_payment_method_id: stripePmId }),
         ...(savedPmId && { payment_method_id: savedPmId }),
         ...(savingNewCard && { save_payment_method: true }),
@@ -300,21 +361,60 @@ export function CreateMesaFlow() {
       // una garantía que el banco todavía puede rechazar.
       setSaveOmitidoConnect(savingNewCard && !!r.guarantee.connected_account_id);
       if (r.guarantee.status === 'requires_action') {
+        // OJO: acá NO se rota. La mesa existe pero su garantía todavía no está
+        // autorizada, y no hay endpoint para re-garantizar: conservar la clave
+        // permite reintentar el MISMO 3DS sobre la MISMA mesa (el replay del
+        // backend devuelve su client_secret vivo) en vez de abrir otra mesa
+        // con otro hold por el total.
+        freezeMesa(mesaScope);
         setStep('threeds');
       } else {
+        // Mesa abierta y garantía autorizada: el intento se cierra. Sin rotar,
+        // la próxima mesa del mismo restaurante y mismo total recibiría el
+        // replay de ésta — una mesa vieja, quizá ya cerrada.
+        rotateIdempotencyKey(mesaScope);
+        unfreezeMesa();
         await makeLink(r.mesa.code);
       }
     } catch (err) {
-      const { code, extra } = extractError(err);
+      const { code, extra, status } = extractError(err);
+      // B-06: se rota solo si el intento MURIÓ. Ante error ambiguo (red,
+      // respuesta perdida) la clave se conserva y el reintento cae en el
+      // replay del backend, en vez de abrir una segunda mesa con una
+      // segunda garantía por el total.
+      const definitivo = shouldRotateOnError(code, status);
+      if (definitivo) {
+        rotateIdempotencyKey(mesaScope);
+        unfreezeMesa();
+      }
       if (code === 'guarantee_failed') {
+        rotateIdempotencyKey(mesaScope);
+        unfreezeMesa();
         const available = typeof extra.available === 'number' ? extra.available : null;
         setError(
           available !== null
             ? `Saldo insuficiente para garantizar: tenés ${formatMXN(available)} disponibles y la mesa necesita ${formatMXN(total)}. Cargá saldo o garantizá con tarjeta.`
             : 'No pudimos autorizar la garantía. Probá con otro método.',
         );
+      } else if (code === 'idempotency_key_terminal') {
+        // La mesa de ese intento quedó muerta: se arranca una nueva.
+        rotateIdempotencyKey(mesaScope);
+        unfreezeMesa();
+        setError('Ese intento ya no sirve. Probá de nuevo para abrir la mesa.');
+      } else if (code === 'idempotency_conflict') {
+        // Hay un intento VIVO con otro contenido. Rotar acá abriría una
+        // segunda mesa con un segundo hold por el total.
+        freezeMesa(mesaScope);
+        setError('Tenés una apertura sin confirmar. Reintentala tal cual antes de cambiar el ticket.');
+      } else if (definitivo) {
+        // 4xx sin código propio: el backend rechazó y no creó nada.
+        setError('No pudimos abrir la mesa. Revisá el ticket y probá de nuevo.');
       } else {
-        setError('No pudimos crear la mesa. Probá de nuevo.');
+        // Ambiguo (5xx, red, timeout): la mesa PUEDE existir ya, con su
+        // garantía retenida. Se congela el intento — el reintento cae en el
+        // replay del backend y devuelve esa misma mesa en vez de crear otra.
+        freezeMesa(mesaScope);
+        setError('No pudimos confirmar la apertura. Puede que la mesa ya se haya creado: reintentá esta misma apertura, no armes otra.');
       }
     } finally {
       setBusy(false);
@@ -323,6 +423,14 @@ export function CreateMesaFlow() {
 
   async function confirm3ds() {
     if (!created) return;
+    // El replay de una mesa en `pending_auth` recupera el client_secret con
+    // best-effort: si Stripe no respondió, viene vacío. Mandarlo así hacía
+    // fallar la confirmación y el mensaje mentía ("el banco no autorizó").
+    if (!created.guarantee.client_secret) {
+      setError('Estamos recuperando la confirmación de tu banco. Tocá reintentar en unos segundos.');
+      setStep('garantia');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -330,9 +438,12 @@ export function CreateMesaFlow() {
       // se confirma con Stripe.js apuntando a esa cuenta.
       await api.confirmGuarantee3ds(
         created.mesa.code,
-        created.guarantee.client_secret ?? '',
+        created.guarantee.client_secret,
         created.guarantee.connected_account_id,
       );
+      // Garantía autorizada: el intento se cierra acá.
+      rotateIdempotencyKey(mesaScope);
+      unfreezeMesa();
       await makeLink(created.mesa.code);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
@@ -343,6 +454,12 @@ export function CreateMesaFlow() {
           'Tu banco autorizó la retención, pero todavía la estamos confirmando. Esperá unos segundos y volvé a intentar.',
         );
       } else {
+        // El banco rechazó: ese hold murió y no hay forma de re-garantizar la
+        // misma mesa. Sin rotar, el reintento replayaba la mesa muerta y el
+        // usuario quedaba en un bucle sin salida.
+        rotateIdempotencyKey(mesaScope);
+        unfreezeMesa();
+        setCreated(null);
         setError(msg || 'El banco no autorizó la retención. Probá con otra tarjeta.');
         setStep('garantia');
       }
@@ -362,6 +479,13 @@ export function CreateMesaFlow() {
   }
 
   function back() {
+    // B-06: con una apertura sin confirmar, volver a editar el ticket cambia
+    // el contenido → clave nueva → segunda mesa con un segundo hold por el
+    // total. Primero se resuelve ese intento.
+    if (frozenScope && (step === 'garantia' || step === 'threeds')) {
+      toast('Tenés una apertura sin confirmar: reintentala antes de cambiar la mesa');
+      return;
+    }
     if (step === 'scan') return navigate('home');
     if (step === 'ticket') return setStep('scan');
     if (step === 'division') return setStep('ticket');
@@ -685,6 +809,15 @@ export function CreateMesaFlow() {
             {error}
           </div>
         )}
+          {/* B-06: apertura sin confirmar. La mesa PUEDE existir ya con su
+              garantía retenida: cambiar el método abriría una segunda. */}
+          {frozenScope && (
+            <div className="note note-orange" role="status">
+              <b>Tenés una apertura sin confirmar.</b> Puede que la mesa ya se haya creado con su
+              garantía. Reintentala tal cual: si ya existe, te devolvemos esa misma mesa en vez de
+              retener el total otra vez.
+            </div>
+          )}
           <div className="sectlabel" id="lbl-garantia">
             ¿Con qué garantizás?
           </div>
@@ -696,6 +829,7 @@ export function CreateMesaFlow() {
             <button
               className={`method-card ${method === 'card' ? 'sel' : ''}`}
               onClick={() => setMethod('card')}
+              disabled={!!frozenScope}
               role="radio"
               aria-checked={method === 'card'}
             >
@@ -718,6 +852,7 @@ export function CreateMesaFlow() {
                   setMethod('card');
                   setCardChoice(c.id);
                 }}
+                disabled={!!frozenScope}
                 role="radio"
                 aria-checked={method === 'card' && cardChoice === c.id}
               >
@@ -745,6 +880,7 @@ export function CreateMesaFlow() {
                 setMethod('card');
                 setCardChoice('new');
               }}
+              disabled={!!frozenScope}
               role="radio"
               aria-checked={method === 'card' && cardChoice === 'new'}
             >
@@ -797,6 +933,7 @@ export function CreateMesaFlow() {
           <button
             className={`method-card ${method === 'wallet' ? 'sel' : ''}`}
             onClick={() => setMethod('wallet')}
+            disabled={!!frozenScope}
             role="radio"
             aria-checked={method === 'wallet'}
           >
@@ -818,7 +955,8 @@ export function CreateMesaFlow() {
           onClick={createMesa}
           disabled={
             busy ||
-            (!IS_MOCK &&
+            (!frozenScope &&
+              !IS_MOCK &&
               !IS_DEMO &&
               method === 'card' &&
               (cards.length === 0 || cardChoice === 'new') &&
@@ -827,6 +965,10 @@ export function CreateMesaFlow() {
         >
           {busy ? (
             'Autorizando…'
+          ) : frozenScope ? (
+            <>
+              <Icon name="lock" size={16} className="ico-inline" /> Reintentar esta apertura
+            </>
           ) : (
             <>
               <Icon name="lock" size={16} className="ico-inline" /> Garantizar {formatMXN(total)} y

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, newIdempotencyKey } from '../api';
+import { api } from '../api';
+import { idempotencyKeyFor, rotateIdempotencyKey, shouldRotateOnError } from '../api/idempotency';
 import { extractApiError } from '../api/errors';
 import type { BalanceResponse, Friend } from '../api/types';
 import { Avatar, TopBar, useToast } from '../components/ui';
@@ -55,26 +56,41 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
       )
     : friends;
 
+  /**
+   * B-06: la transferencia es IRREVERSIBLE (la plata queda en la wallet del
+   * otro). Clave estable por destinatario+monto: si se pierde la respuesta,
+   * el reintento cae en el replay del backend en vez de enviar dos veces.
+   */
+  const transferScope = `transfer:${to?.payme_id ?? '-'}:${amountCents}:${concept}`;
+
   async function doTransfer() {
     if (!to || amountCents <= 0) return;
     setBusy(true);
     setError(null);
     try {
-      await api.createTransfer({
+      const r = await api.createTransfer({
         amount_cents: amountCents,
         to_payme_id: to.payme_id,
         ...(concept && { concept }),
-        idempotency_key: newIdempotencyKey(),
+        idempotency_key: idempotencyKeyFor(transferScope),
       });
-      toast(`Le enviaste ${formatMXN(amountCents)} a ${to.first_name} ✓`);
+      rotateIdempotencyKey(transferScope);
+      // Si el backend replayó un envío YA hecho, decirlo. Anunciarlo como
+      // nuevo hacía creer que se mandó dos veces (o que faltaba mandarlo).
+      toast(
+        r.idempotent
+          ? `Ese envío a ${to.first_name} ya estaba hecho: no lo repetimos.`
+          : `Le enviaste ${formatMXN(amountCents)} a ${to.first_name} ✓`,
+      );
       navigate('cuenta');
     } catch (err) {
-      const { code, extra } = extractApiError(err);
+      const { code, extra, status } = extractApiError(err);
+      if (shouldRotateOnError(code, status)) rotateIdempotencyKey(transferScope);
       if (code === 'insufficient_funds') {
         const available = typeof extra.available === 'number' ? extra.available : 0;
         setError(`Saldo insuficiente: tenés ${formatMXN(available)} disponibles.`);
       } else {
-        setError('No pudimos enviar la transferencia. Probá de nuevo.');
+        setError('No pudimos confirmar la transferencia. Revisá tu saldo antes de reintentar.');
       }
     } finally {
       setBusy(false);

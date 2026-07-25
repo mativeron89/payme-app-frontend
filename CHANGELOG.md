@@ -1,5 +1,62 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.28.0 — B-06: el reintento ya no cobra dos veces (contrato v2.25.0) (2026-07-25)
+
+Cierra **B-06** del lado del front. El backend tenía la idempotencia bien
+hecha; nosotros generábamos una `idempotency_key` NUEVA dentro de cada llamada,
+así que nunca se ejercía: si se perdía la RESPUESTA de un pago ya cobrado, el
+reintento cobraba de nuevo (en división igual se llevaba el casillero de otro
+comensal; en consumo cobraba otra vez la misma fracción).
+
+- **`src/api/idempotency.ts` (nuevo)**: la clave vive en `sessionStorage` —no
+  en memoria: recargar la página entre el fallo y el reintento traía el bug
+  entero de vuelta— y el `pm_` tokenizado viaja con ella, porque Stripe.js
+  devuelve uno distinto por invocación y el backend lo hashea.
+- **El scope se DERIVA DEL CONTENIDO** del pago, con los mismos campos que
+  hashea `PAYLOAD_KEYS` del backend. Mismo pago = misma clave (aunque el
+  usuario recargue o salga de la mesa y vuelva) → replay. Pago distinto = clave
+  distinta, sin rotar nada. **No se rota "por efecto"**: un `useEffect` con
+  deps corre también en el MONTAJE y borraba la clave justo cuando el usuario
+  vuelve a mirar la mesa — que es lo que el propio mensaje de error le pide.
+- **Intento CONGELADO ante error ambiguo** (5xx, red, timeout): se guarda el
+  CUERPO exacto que salió y la pantalla bloquea propina, método y consumos. El
+  único botón es "Reintentar el pago sin confirmar", que reenvía ese mismo
+  cuerpo. Congelar solo la clave no alcanzaba: tras una recarga el estado
+  arranca vacío y reconstruir el pedido daba 409 en bucle.
+- **Definitivo vs ambiguo por STATUS, no por lista de códigos**: un 4xx es una
+  decisión del backend (ya liberó lo tomado) → clave nueva; 5xx/red/timeout no
+  dicen nada → se conserva. Excepciones: 409 `idempotency_conflict` (hay un
+  intento vivo: rotar ahí ES el doble cobro) y 429.
+- **`refunded` nunca rota solo**: el backend devuelve 200 con ese estado a
+  propósito, y rotar sería re-cobrar un reembolso. Se avisa y volver a pagar
+  queda como decisión explícita del usuario.
+- **`claimed_by_me` (v2.25 §4.3) consumido**: en partes iguales la mesa ahora
+  dice "Ya pagaste tu parte ✓" y el CTA pasa a "Pagar otra parte". No se
+  bloquea —pagar más de una parte es legítimo (acta 2026-07-25)— pero deja de
+  ser un accidente. También descongela solo el intento cuando aparece un
+  casillero mío MÁS de los que había al congelar.
+- **Abrir mesa (`POST /mesas`)**: el mismo tratamiento. Era el caso más caro —
+  un reintento creaba una segunda mesa con una segunda garantía por el TOTAL.
+  La clave se rota al quedar la garantía autorizada, no antes: durante el 3DS
+  se conserva para poder reintentar sobre la MISMA mesa. Un rechazo del banco
+  sí rota (no hay endpoint para re-garantizar, y si no quedaba en bucle).
+- **Transferencias y carga de saldo**: misma política. La transferencia es
+  irreversible y en OXXO un reintento emitía un SEGUNDO voucher válido (dos
+  referencias vivas; si se pagaban las dos, se acreditaba el doble). Además el
+  topup con tarjeta ahora mira `status` y `requires_action` antes de cantar
+  "se acreditaron": el replay de un cobro fallido se anunciaba como éxito.
+- **Timeout de 30s en `http.ts`** (incluido el pago del INVITADO): sin él, "se
+  perdió la respuesta" era una pantalla colgada durante minutos — justo lo que
+  empuja a reintentar a ciegas.
+- **Mock fiel**: replica la idempotencia comparando el HASH del payload (misma
+  clave + otro contenido = 409, como el backend) y la garantía WALLET, que
+  volvía antes de guardarla y retenía el total otra vez en la demo.
+
+Revisión adversaria de 34 agentes sobre el diff: 23 hallazgos confirmados,
+todos aplicados. Los tres más graves los encontró ella, no yo — el efecto de
+rotación que corría en el montaje, la clave de mesa que nunca se rotaba tras
+el éxito, y el 3DS rechazado sin salida.
+
 ## 0.27.0 — Connect: 3DS sobre la cuenta conectada (contrato v2.24.0) (2026-07-25)
 
 Consume el contrato de **direct charges** publicado (acta

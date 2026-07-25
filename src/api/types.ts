@@ -214,6 +214,12 @@ export interface DivisionSlot {
   amount_cents: number;
   amount_display: string;
   status: 'available' | 'claimed' | 'paid';
+  /**
+   * v2.25 (B-06 §4.3): ¿este casillero es MÍO? Sin esto nadie podía detectar
+   * el doble cobro. El backend solo lo marca sobre casilleros TOMADOS
+   * (`claimed`/`paid`) y jamás expone de quién es el ajeno.
+   */
+  claimed_by_me?: boolean;
 }
 
 /** Staff activo (GET /api/mesas/:code → active_staff). */
@@ -263,6 +269,13 @@ export interface CreateMesaRequest {
   /** D4 (v2.16): guardar la tarjeta nueva tipeada (default false). */
   save_payment_method?: boolean;
   items: Array<{ name: string; category?: string; price_cents: number; quantity: number }>;
+  /**
+   * B-06 (v2.25, aditivo): sin esto, perder la respuesta de una mesa YA
+   * creada y reintentar generaba una SEGUNDA mesa con una segunda garantía
+   * — que se liquida sola a los 30 min y captura el total (doble cobro real),
+   * además de emitir eventos de facturación inexistente al dashboard.
+   */
+  idempotency_key?: string;
 }
 
 /** POST /api/mesas → 201 (garantía A-1). */
@@ -325,6 +338,11 @@ export interface PayMesaRequest {
 
 /** POST /api/mesas/:code/pay → 201 (rama wallet o rama tarjeta). */
 export interface PayMesaResponse {
+  /**
+   * v2.25 (B-06): `true` cuando la respuesta es un REPLAY de la misma clave
+   * de idempotencia — el cobro ya había ocurrido y NO se cobró de nuevo.
+   */
+  idempotent?: boolean;
   attempt: {
     id: string;
     gross_amount_cents: number;
@@ -465,6 +483,12 @@ export interface CreateTransferRequest {
 
 /** POST /api/transfers → 201. */
 export interface CreateTransferResponse {
+  /**
+   * B-06: `true` cuando el backend devolvió el envío YA hecho con esta clave
+   * en vez de hacer uno nuevo (replay idempotente). Sin mirarlo, el front
+   * anunciaba "le enviaste $X" por una transferencia que ya estaba hecha.
+   */
+  idempotent?: boolean;
   transfer: {
     id: string;
     amount_cents: number;

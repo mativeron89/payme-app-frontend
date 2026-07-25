@@ -125,11 +125,19 @@ export async function createCardPaymentMethod(
 export async function confirmCardPayment(
   clientSecret: string,
   connectedAccountId?: string | null,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; definitive: boolean }> {
   const stripe = await requireStripe(connectedAccountId);
   const { error } = await stripe.confirmCardPayment(clientSecret);
   if (error) {
-    return { ok: false, error: error.message ?? 'Tu banco no autorizó la operación.' };
+    // B-06: un rechazo del banco (`card_error`) mata el intento y ahí sí
+    // corresponde clave nueva. Un `api_connection_error` NO dice nada: el 3DS
+    // pudo haberse confirmado igual, y rotar la clave sería cobrar dos veces.
+    const definitive = error.type === 'card_error' || error.type === 'validation_error';
+    return {
+      ok: false,
+      error: error.message ?? 'Tu banco no autorizó la operación.',
+      definitive,
+    };
   }
   return { ok: true };
 }
