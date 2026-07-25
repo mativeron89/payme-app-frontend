@@ -69,6 +69,29 @@ el restaurante ve **facturación inexistente**.
   `consumo` fraccional, da falso positivo tras 3DS abandonado, y es decisión
   de producto sin acta — ver la pregunta abierta de abajo).
 
+**✅ EL BACKEND YA DESPLEGÓ — v2.25.0, verificado en producción (2026-07-25).**
+Detalles del contrato nuevo que la implementación del front DEBE respetar:
+- `POST /mesas` acepta `idempotency_key` (opcional). Replay → `200 {mesa,
+  guarantee, idempotent:true}`; payload distinto → `409 idempotency_conflict`.
+- **Mesa muerta** (garantía fallida/cancelada/vencida) → `409
+  idempotency_key_terminal`: rotar la clave y abrir mesa nueva.
+- Si el 3DS quedó pendiente, **el replay SÍ devuelve `client_secret`** (no es
+  de un solo uso — corrigieron su propia suposición).
+- Si el proceso murió antes de colocar la garantía, el reintento **re-conduce
+  el hold sobre la misma mesa** en vez de dejar la clave trabada.
+- Replay de pagos: `failed`/`cancelled`/`cancelling` → `409
+  idempotency_key_terminal`. El resto → `200` con el shape del 201
+  (`client_secret`, `requires_action`, `tip_cents`, `payment_type`,
+  `gross_amount_cents` numérico).
+- ⚠️ **`refunded` NO da 409, a propósito**: ese pago SÍ se cobró, y un 409 nos
+  haría rotar la clave y **re-cobrar un reembolso**. Llega como replay `200`
+  con `status:'refunded'` → tratarlo por el status, nunca rotar.
+- `items` ya no rompe por orden (igual los mandamos ordenados).
+- `claimed_by_me` en `division_slots` (solo los propios, nunca de terceros) —
+  habilita el selector de varias partes.
+
+**PENDIENTE DEL FRONT (decisión de Mati en curso, no codear todavía):**
+
 **Nosotros, RECIÉN CUANDO ELLOS DESPLIEGUEN** (orden acordado, no invertible):
 - Par `(clave, pm_)` cacheado por intento y reusado en el reintento; rotación
   en fallos DEFINITIVOS (402, 502, 409, 3DS rechazado — donde el slot ya se
