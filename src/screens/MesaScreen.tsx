@@ -591,7 +591,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         const body = frozen.payload as PayMesaRequest;
         sentBody = body;
         await prepareMonetaryRequest(scope, `mesa_pay:${code}`, body, mySlotsRef.current);
-        const r = await api.payMesa(code, body, guestToken);
+        const r = await api.payMesa(code, body, guestToken, { grossCents: gross, tipCents });
         await handlePayResponse(r, scope, body);
         return;
       }
@@ -669,7 +669,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       };
       sentBody = body;
       await prepareMonetaryRequest(scope, `mesa_pay:${code}`, body, mySlotsRef.current);
-      const r = await api.payMesa(code, body, guestToken);
+      const r = await api.payMesa(code, body, guestToken, { grossCents: gross, tipCents });
       await handlePayResponse(r, scope, body);
     } catch (err) {
       const { code: ec, extra, status } = extractApiError(err);

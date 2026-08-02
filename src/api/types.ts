@@ -439,30 +439,37 @@ export interface PaymentMethodsResponse {
 
 /** POST /api/topup/oxxo → 201. */
 export interface TopupOxxoResponse {
+  idempotent?: boolean;
   topup: {
     id: string;
-    status: string;
+    /** Se normaliza desde el BIGINT/shape real del endpoint. */
+    method: 'oxxo' | 'card' | 'spei';
+    status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | 'cancelled';
     amount_cents: number;
     amount_display: string;
-    voucher_reference: string;
-    stripe_voucher_url: string | null;
-    voucher_expires_at: string;
+    /** Un replay puede llegar antes de que el backend vuelva a exponer el voucher. */
+    voucher_reference?: string;
+    stripe_voucher_url?: string | null;
+    voucher_expires_at?: string;
   };
 }
 
 /** POST /api/topup/card → 201. */
 export interface TopupCardResponse {
+  idempotent?: boolean;
   topup: {
     id: string;
-    status: string;
+    method: 'oxxo' | 'card' | 'spei';
+    status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | 'cancelled';
     amount_cents: number;
     amount_display: string;
   };
-  requires_action: boolean;
+  /** Ausente en replay: no se inventa false ni se promete un 3DS. */
+  requires_action?: boolean;
   client_secret?: string;
 }
 /** GET /api/topup/:id → estado de reconciliación de la carga. */
-export interface TopupStatusResponse { topup: { id: string; status: string; amount_cents: number; amount_display: string }; }
+export interface TopupStatusResponse { topup: { id: string; method: 'oxxo' | 'card' | 'spei'; status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | 'cancelled'; amount_cents: number; amount_display: string }; }
 
 /** GET /api/wallet/clabe (A-3, abono SPEI). */
 export interface ClabeResponse {
@@ -498,6 +505,7 @@ export interface CreateTransferResponse {
     completed_at: string;
     amount_display: string;
     to: { payme_id: string; full_name: string };
+    status?: 'pending' | 'completed' | 'failed' | 'reversed';
   };
 }
 

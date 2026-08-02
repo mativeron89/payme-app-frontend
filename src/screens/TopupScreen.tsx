@@ -29,6 +29,11 @@ import { createInFlightMutex } from '../utils/inFlight';
  */
 
 type Via = 'oxxo' | 'card' | 'spei';
+type VoucherTopup = TopupOxxoResponse['topup'] & { voucher_reference: string; voucher_expires_at: string };
+function hasVoucher(topup: TopupOxxoResponse['topup']): topup is VoucherTopup {
+  return typeof topup.voucher_reference === 'string' && topup.voucher_reference.length > 0 &&
+    typeof topup.voucher_expires_at === 'string' && topup.voucher_expires_at.length > 0;
+}
 
 export function TopupScreen() {
   const toast = useToast();
@@ -39,7 +44,7 @@ export function TopupScreen() {
   const [busy, setBusy] = useState(false);
   const topupInFlightRef = useRef(createInFlightMutex());
   const [error, setError] = useState<string | null>(null);
-  const [voucher, setVoucher] = useState<TopupOxxoResponse['topup'] | null>(null);
+  const [voucher, setVoucher] = useState<VoucherTopup | null>(null);
   const [clabe, setClabe] = useState<ClabeResponse | null>(null);
 
   useEffect(() => {
@@ -75,7 +80,7 @@ export function TopupScreen() {
     return !!origin && !!current && current.principal_id === origin.principal_id && current.family_id === origin.family_id;
   }
   async function reconcileTopup(id: string, scope: string, origin: StoredSession | undefined) {
-    const reconciled = await pollTopup(() => api.getTopup(id, amountCents), () => originCurrent(origin));
+    const reconciled = await pollTopup(() => api.getTopup(id, amountCents, 'card'), () => originCurrent(origin));
     if (!originCurrent(origin)) return;
     if (reconciled.outcome === 'success') {
       await rotateIdempotencyKey(scope, 'topup_card');
@@ -113,8 +118,22 @@ export function TopupScreen() {
         const key = await idempotencyKeyFor(topupScope, 'topup_oxxo');
         await prepareMonetaryRequest(topupScope, 'topup_oxxo', { amount_cents: amountCents, idempotency_key: key });
         const r = await api.topupOxxo(amountCents, key);
-        await rotateIdempotencyKey(topupScope);
-        setVoucher(r.topup);
+        const outcome = topupOutcome(r.topup.status, false);
+        if (outcome === 'success') {
+          await rotateIdempotencyKey(topupScope);
+          toast(`Se acreditaron ${formatMXN(amountCents)} ✓`);
+          navigate('cuenta');
+        } else if (outcome === 'definitive') {
+          await rotateIdempotencyKey(topupScope);
+          setError('Esa carga no prosperó. Podés iniciar otra.');
+        } else if (hasVoucher(r.topup)) {
+          await rotateIdempotencyKey(topupScope);
+          setVoucher(r.topup);
+        } else {
+          // El replay contractual puede traer la fila antes de los datos del
+          // voucher. No se inventa un comprobante ni se libera el intento.
+          setError('La carga sigue en confirmación pero no podemos mostrar su referencia todavía. No inicies otra carga.');
+        }
       } else if (via === 'card') {
         if (!pm) return;
         const key = await idempotencyKeyFor(topupScope, 'topup_card');
@@ -126,7 +145,7 @@ export function TopupScreen() {
         const r = await api.topupCard(amountCents, pm.id, key);
         // El banco puede pedir 3DS: sin confirmarlo, la plata no entra y el
         // toast anunciaba saldo inexistente.
-        if (r.requires_action && r.client_secret) {
+        if (r.requires_action === true && r.client_secret) {
           await rememberMonetaryReference(topupScope, 'topup_card', r.topup.id);
           const confirmed = await confirmCardPayment(r.client_secret);
           if (!confirmed.ok) {
@@ -137,7 +156,7 @@ export function TopupScreen() {
           await reconcileTopup(r.topup.id, topupScope, actor.session);
           return;
         }
-        if (topupOutcome(r.topup.status, r.requires_action, r.client_secret) === 'ambiguous') {
+        if (topupOutcome(r.topup.status, r.requires_action === true, r.client_secret) === 'ambiguous') {
           // El contrato actual no expone GET /topup/:id para reconciliar. Sin
           // ese dato no se puede afirmar ni liberar el intento con seguridad.
           await rememberMonetaryReference(topupScope, 'topup_card', r.topup.id);
@@ -147,7 +166,7 @@ export function TopupScreen() {
         // B-06: un replay puede traer un topup FALLIDO (200 `idempotent:true`
         // con status 'failed'). Sin mirar el status, anunciábamos como
         // acreditado un cobro que nunca prosperó.
-        if (topupOutcome(r.topup.status, r.requires_action, r.client_secret) === 'definitive') {
+        if (topupOutcome(r.topup.status, r.requires_action === true, r.client_secret) === 'definitive') {
           await rotateIdempotencyKey(topupScope);
           setError('Ese cobro no prosperó. Probá de nuevo o con otra tarjeta.');
           return;

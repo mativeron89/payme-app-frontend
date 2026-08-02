@@ -24,8 +24,6 @@ import type {
   PaymentMethodsResponse,
   PendingInvitationsResponse,
   StatsResponse,
-  TopupCardResponse,
-  TopupOxxoResponse,
   TransfersResponse,
   WalletTransactionsResponse,
   HistoryResponse,
@@ -688,7 +686,7 @@ export async function mockCreateInvitation(code: string): Promise<CreateInvitati
 
 // ─── Topup (A-3: tres vías) ────────────────────────────────
 
-export async function mockTopupOxxo(amountCents: number): Promise<TopupOxxoResponse> {
+export async function mockTopupOxxo(amountCents: number): Promise<unknown> {
   if (amountCents < 5000 || amountCents > 1_000_000) return fail(400, 'validation_error');
   const ref = `93${String(Math.floor(Math.random() * 1e10)).padStart(10, '0')}`;
   return delay({
@@ -707,7 +705,7 @@ export async function mockTopupOxxo(amountCents: number): Promise<TopupOxxoRespo
 export async function mockTopupCard(
   amountCents: number,
   paymentMethodId: string,
-): Promise<TopupCardResponse> {
+): Promise<unknown> {
   if (amountCents < 5000 || amountCents > 1_000_000) return fail(400, 'validation_error');
   if (!state.paymentMethods.some((pm) => pm.id === paymentMethodId)) {
     return fail(404, 'payment_method_not_found');

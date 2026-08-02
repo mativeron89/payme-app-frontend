@@ -13,7 +13,7 @@ import { withPreparedMonetaryRequest } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
 import { clearSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
-import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse } from './moneyGuards';
+import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse, type PayMesaExpectation } from './moneyGuards';
 import type {
   BalanceResponse,
   MeResponse,
@@ -171,7 +171,7 @@ export interface Api {
     connectedAccountId?: string,
   ): Promise<{ status: string; outcome: 'success' | 'definitive' | 'ambiguous'; error?: string }>;
   lockItems(code: string, items: FractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
-  payMesa(code: string, req: PayMesaRequest, guestToken?: string): Promise<PayMesaResponse>;
+  payMesa(code: string, req: PayMesaRequest, guestToken: string | undefined, expectation: PayMesaExpectation): Promise<PayMesaResponse>;
   createInvitation(code: string): Promise<CreateInvitationResponse>;
   /** Invitación in-app a un amigo por payme_id (solo el organizador; el backend resuelve el uuid). */
   inviteFriend(code: string, paymeId: string): Promise<CreateInvitationResponse>;
@@ -182,7 +182,7 @@ export interface Api {
     paymentMethodId: string,
     idempotencyKey: string,
   ): Promise<TopupCardResponse>;
-  getTopup(id: string, expectedAmountCents?: number): Promise<TopupStatusResponse>;
+  getTopup(id: string, expectedAmountCents: number, expectedMethod: 'oxxo' | 'card' | 'spei'): Promise<TopupStatusResponse>;
   getClabe(): Promise<ClabeResponse>;
   // transfers
   createTransfer(req: CreateTransferRequest): Promise<CreateTransferResponse>;
@@ -308,7 +308,7 @@ const realApi: Api = {
       : httpRequest<LockItemsResponse>('POST', `/mesas/${encodeURIComponent(code)}/items/lock`, {
           items,
         }),
-  payMesa: async (code, req, guestToken) =>
+  payMesa: async (code, req, guestToken, expectation) =>
     withPreparedMonetaryRequest(
       `mesa_pay:${code}`,
       req.idempotency_key,
@@ -321,8 +321,8 @@ const realApi: Api = {
               `/mesas/${encodeURIComponent(code)}/pay`,
               guestToken,
               req,
-            ), req)
-          : payMesaResponse(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/pay`, req, session), req),
+            ), req, expectation)
+          : payMesaResponse(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/pay`, req, session), req, expectation),
     ),
   createInvitation: (code) =>
     httpRequest<CreateInvitationResponse>('POST', `/mesas/${encodeURIComponent(code)}/invitations`, {
@@ -358,9 +358,9 @@ const realApi: Api = {
       async (session) => topupCardResponse(await httpRequest<unknown>('POST', '/topup/card', req, session), amountCents),
     );
   },
-  getTopup: async (id, expectedAmountCents) => {
+  getTopup: async (id, expectedAmountCents, expectedMethod) => {
     if (typeof expectedAmountCents !== 'number' || !Number.isSafeInteger(expectedAmountCents) || expectedAmountCents < 0) throw new Error('topup_expectation_required');
-    return topupStatusResponse(await httpRequest<unknown>('GET', `/topup/${encodeURIComponent(id)}`), { id, amountCents: expectedAmountCents });
+    return topupStatusResponse(await httpRequest<unknown>('GET', `/topup/${encodeURIComponent(id)}`), { id, amountCents: expectedAmountCents, method: expectedMethod });
   },
   getClabe: () => httpRequest<ClabeResponse>('GET', '/wallet/clabe'),
 
@@ -462,13 +462,13 @@ const mockApi: Api = {
     return { ...result, outcome: result.status === 'open' ? 'success' as const : 'ambiguous' as const };
   },
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
-  payMesa: async (code, req, guestToken) =>
+  payMesa: async (code, req, guestToken, expectation) =>
     withPreparedMonetaryRequest(
       `mesa_pay:${code}`,
       req.idempotency_key,
       req,
       guestToken,
-      async () => payMesaResponse(await mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user'), req),
+      async () => payMesaResponse(await mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user'), req, expectation),
     ),
   createInvitation: (code) => mock.mockCreateInvitation(code),
   inviteFriend: (code, paymeId) => mock.mockInviteFriend(code, paymeId),
