@@ -204,18 +204,21 @@ describe('B-06: actor namespace y journal durable', () => {
     expect(backend).toHaveBeenCalledTimes(1);
   });
 
-  it('solo un acuse explícito posterior al terminal permite una intención nueva', async () => {
+  it('A puede terminar mientras B espera, pero ningún caller viejo obtiene una key nueva', async () => {
     signIn('a');
     const actor = await money.resolveMoneyActor();
-    const scope = money.scopeForActor(actor, 'transfer:friend:5000:concepto');
-    const key = await money.idempotencyKeyFor(scope, 'transfer');
-    const payload = { idempotency_key: key, amount_cents: 5000 };
-    await money.prepareMonetaryRequest(scope, 'transfer', payload);
-    await money.withPreparedMonetaryRequest('transfer', key, payload, undefined, async () => ({ ok: true }));
-    await money.rotateIdempotencyKey(scope, 'transfer');
-    expect(await money.idempotencyKeyFor(scope, 'transfer')).toBe(key);
-    await money.acknowledgeTerminalAttempt(scope, 'transfer');
-    expect(await money.idempotencyKeyFor(scope, 'transfer')).not.toBe(key);
+    const scope = money.scopeForActor(actor, 'topup:card:5000');
+    const key = await money.idempotencyKeyFor(scope, 'topup_card');
+    const oldPayload = { idempotency_key: key, amount_cents: 5000 };
+    await money.prepareMonetaryRequest(scope, 'topup_card', oldPayload);
+    const backend = vi.fn(async () => ({ ok: true }));
+    await money.withPreparedMonetaryRequest('topup_card', key, oldPayload, undefined, backend);
+    await money.rotateIdempotencyKey(scope, 'topup_card');
+    // Una acción posterior de A y el retry tardío de B ven el mismo
+    // tombstone. Sin protocolo backend de epochs no se borra localmente.
+    expect(await money.idempotencyKeyFor(scope, 'topup_card')).toBe(key);
+    await expect(money.withPreparedMonetaryRequest('topup_card', key, oldPayload, undefined, backend)).rejects.toThrow('monetary_terminal_retained');
+    expect(backend).toHaveBeenCalledTimes(1);
   });
 
   it('tras reload consulta solo actor, familia y área exactos', async () => {

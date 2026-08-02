@@ -62,19 +62,20 @@ async function rawRequest<T>(
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  let res: Response;
   try {
-    res = await fetch(`${BASE_URL}/api${path}`, {
+    const res = await fetch(`${BASE_URL}/api${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
       signal: ctrl.signal,
     });
+    // El body puede colgar después de recibir headers: conservar el timer
+    // hasta json() evita dejar un journal monetario en sending eterno.
+    if (!res.ok) throw new HttpError(res.status, await parseBody(res));
+    return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) throw new HttpError(res.status, await parseBody(res));
-  return (await res.json()) as T;
 }
 
 /** Refresh con rotación: guarda el par nuevo de tokens antes de devolver. */
@@ -165,19 +166,18 @@ export async function httpGuestRequest<T>(
   // la pantalla muerta y empuja al reintento a ciegas — el mismo agujero.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-  let res: Response;
   try {
-    res = await fetch(`${BASE_URL}/api${path}`, {
+    const res = await fetch(`${BASE_URL}/api${path}`, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: ctrl.signal,
     });
+    if (!res.ok) throw new HttpError(res.status, await parseBody(res));
+    return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) throw new HttpError(res.status, await parseBody(res));
-  return (await res.json()) as T;
 }
 
 export async function httpLogin(email: string, password: string): Promise<StoredSession> {

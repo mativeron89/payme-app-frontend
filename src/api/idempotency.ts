@@ -131,26 +131,6 @@ export async function rotateIdempotencyKey(scope: string, operation?: string): P
   if (!operation && !inferred) throw new MonetarySafetyError('monetary_attempt_ambiguous');
   const id = await identities(scope, operation ?? inferred!); await withLock(id.index, async () => { const found = readEntry(id.index); if (!found) return; writeEntry(id.index, { ...found, state: 'terminal', at: Date.now() }); }); memoryPm.delete(scope);
 }
-/**
- * Un cierre se retiene hasta que una acción posterior, distinta y explícita,
- * haya visto el resultado. Nunca se llama desde un retry automático: borrar
- * antes permite que otra pestaña cree una segunda key tras perder la carrera.
- */
-export async function acknowledgeTerminalAttempt(scope: string, operation: string): Promise<boolean> {
-  const id = await identities(scope, operation);
-  return withLock(id.index, async () => {
-    const found = readEntry(id.index);
-    if (!found) return false;
-    if (found.actor !== id.actor || found.area !== id.area || found.state !== 'terminal') {
-      throw new MonetarySafetyError('monetary_attempt_ambiguous');
-    }
-    try {
-      localStorage.removeItem(journalKey(id.index));
-      if (localStorage.getItem(journalKey(id.index)) !== null) throw new Error('roundtrip');
-    } catch { throw new MonetarySafetyError('money_storage_unavailable'); }
-    return true;
-  });
-}
 /** Referencia opaca para reconciliar; el payload/PM nunca se persiste. */
 export async function rememberMonetaryReference(scope: string, operation: string, reference: string): Promise<void> {
   if (!reference) throw new MonetarySafetyError('monetary_attempt_ambiguous');

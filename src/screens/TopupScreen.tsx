@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
-  acknowledgeTerminalAttempt,
   idempotencyKeyFor,
   prepareMonetaryRequest,
   readMonetaryReference,
@@ -76,7 +75,7 @@ export function TopupScreen() {
     return !!origin && !!current && current.principal_id === origin.principal_id && current.family_id === origin.family_id;
   }
   async function reconcileTopup(id: string, scope: string, origin: StoredSession | undefined) {
-    const reconciled = await pollTopup(() => api.getTopup(id), () => originCurrent(origin));
+    const reconciled = await pollTopup(() => api.getTopup(id, amountCents), () => originCurrent(origin));
     if (!originCurrent(origin)) return;
     if (reconciled.outcome === 'success') {
       await rotateIdempotencyKey(scope, 'topup_card');
@@ -95,7 +94,7 @@ export function TopupScreen() {
     const scope = scopeForActor(actor, 'topup:resume');
     let alive = true;
     void readMonetaryReference(scope, 'topup_card')
-      .then((id) => { if (id && alive) return reconcileTopup(id, scope, actor.session); return undefined; })
+      .then((id) => { if (id && alive) setError('Hay una carga anterior en reconciliación; no se inició otra.'); })
       .catch(() => alive && setError('Hay una carga anterior en reconciliación; no se inició otra.'));
     return () => { alive = false; };
   }, [actor]);
@@ -110,9 +109,6 @@ export function TopupScreen() {
     setBusy(true);
     setError(null);
     try {
-      // Un nuevo toque después de ver un terminal es una intención explícita;
-      // un retry interno/journal en vuelo nunca ejecuta este acuse.
-      await acknowledgeTerminalAttempt(topupScope, via === 'oxxo' ? 'topup_oxxo' : 'topup_card');
       if (via === 'oxxo') {
         const key = await idempotencyKeyFor(topupScope, 'topup_oxxo');
         await prepareMonetaryRequest(topupScope, 'topup_oxxo', { amount_cents: amountCents, idempotency_key: key });

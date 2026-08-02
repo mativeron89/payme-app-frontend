@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, QR_RESTAURANT_ID, WALLET_RAIL_ENABLED } from '../api';
 import { HttpError } from '../api/http';
 import {
-  acknowledgeTerminalAttempt,
   clearUnconfirmed,
   idempotencyKeyFor,
   markUnconfirmed,
@@ -299,7 +298,6 @@ export function CreateMesaFlow() {
     setBusy(true);
     setError(null);
     try {
-      await acknowledgeTerminalAttempt(mesaScope, 'create_mesa');
       const idempotencyKey = await idempotencyKeyFor(mesaScope, 'create_mesa');
       // Garantía con tarjeta (D4 v2.16): una GUARDADA viaja como
       // `payment_method_id` (uuid, sin Elements); una NUEVA se crea desde el

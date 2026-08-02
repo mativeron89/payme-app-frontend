@@ -13,7 +13,7 @@ import { withPreparedMonetaryRequest } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
 import { clearSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
-import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, transferResponse } from './moneyGuards';
+import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse } from './moneyGuards';
 import type {
   BalanceResponse,
   MeResponse,
@@ -182,7 +182,7 @@ export interface Api {
     paymentMethodId: string,
     idempotencyKey: string,
   ): Promise<TopupCardResponse>;
-  getTopup(id: string): Promise<TopupStatusResponse>;
+  getTopup(id: string, expectedAmountCents?: number): Promise<TopupStatusResponse>;
   getClabe(): Promise<ClabeResponse>;
   // transfers
   createTransfer(req: CreateTransferRequest): Promise<CreateTransferResponse>;
@@ -261,7 +261,7 @@ const realApi: Api = {
       req.idempotency_key ?? '',
       req,
       undefined,
-      async (session) => createMesaResponse(await httpRequest<unknown>('POST', '/mesas', req, session)),
+      async (session) => createMesaResponse(await httpRequest<unknown>('POST', '/mesas', req, session), req),
     ),
   /**
    * 3DS de la garantía: se confirma con Stripe.js y después se espera a que la
@@ -321,8 +321,8 @@ const realApi: Api = {
               `/mesas/${encodeURIComponent(code)}/pay`,
               guestToken,
               req,
-            ))
-          : payMesaResponse(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/pay`, req, session)),
+            ), req)
+          : payMesaResponse(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/pay`, req, session), req),
     ),
   createInvitation: (code) =>
     httpRequest<CreateInvitationResponse>('POST', `/mesas/${encodeURIComponent(code)}/invitations`, {
@@ -341,7 +341,7 @@ const realApi: Api = {
       idempotencyKey,
       req,
       undefined,
-      async (session) => topupOxxoResponse(await httpRequest<unknown>('POST', '/topup/oxxo', req, session)),
+      async (session) => topupOxxoResponse(await httpRequest<unknown>('POST', '/topup/oxxo', req, session), amountCents),
     );
   },
   topupCard: async (amountCents, paymentMethodId, idempotencyKey) => {
@@ -355,10 +355,13 @@ const realApi: Api = {
       idempotencyKey,
       req,
       undefined,
-      async (session) => topupCardResponse(await httpRequest<unknown>('POST', '/topup/card', req, session)),
+      async (session) => topupCardResponse(await httpRequest<unknown>('POST', '/topup/card', req, session), amountCents),
     );
   },
-  getTopup: (id) => httpRequest<TopupStatusResponse>('GET', `/topup/${encodeURIComponent(id)}`),
+  getTopup: async (id, expectedAmountCents) => {
+    if (typeof expectedAmountCents !== 'number' || !Number.isSafeInteger(expectedAmountCents) || expectedAmountCents < 0) throw new Error('topup_expectation_required');
+    return topupStatusResponse(await httpRequest<unknown>('GET', `/topup/${encodeURIComponent(id)}`), { id, amountCents: expectedAmountCents });
+  },
   getClabe: () => httpRequest<ClabeResponse>('GET', '/wallet/clabe'),
 
   createTransfer: async (req) =>
@@ -367,7 +370,7 @@ const realApi: Api = {
       req.idempotency_key,
       req,
       undefined,
-      async (session) => transferResponse(await httpRequest<unknown>('POST', '/transfers', req, session)),
+      async (session) => transferResponse(await httpRequest<unknown>('POST', '/transfers', req, session), req),
     ),
   listTransfers: () => httpRequest<TransfersResponse>('GET', '/transfers'),
 
@@ -452,7 +455,7 @@ const mockApi: Api = {
       req.idempotency_key ?? '',
       req,
       undefined,
-      async () => createMesaResponse(await mock.mockCreateMesa(req)),
+      async () => createMesaResponse(await mock.mockCreateMesa(req), req),
     ),
   async confirmGuarantee3ds(code) {
     const result = await mock.mockConfirmGuarantee3ds(code);
@@ -465,7 +468,7 @@ const mockApi: Api = {
       req.idempotency_key,
       req,
       guestToken,
-      async () => payMesaResponse(await mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user')),
+      async () => payMesaResponse(await mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user'), req),
     ),
   createInvitation: (code) => mock.mockCreateInvitation(code),
   inviteFriend: (code, paymeId) => mock.mockInviteFriend(code, paymeId),
@@ -476,7 +479,7 @@ const mockApi: Api = {
       idempotencyKey,
       { amount_cents: amountCents, idempotency_key: idempotencyKey },
       undefined,
-      async () => topupOxxoResponse(await mock.mockTopupOxxo(amountCents)),
+      async () => topupOxxoResponse(await mock.mockTopupOxxo(amountCents), amountCents),
     ),
   topupCard: async (amountCents, paymentMethodId, idempotencyKey) =>
     withPreparedMonetaryRequest(
@@ -484,13 +487,13 @@ const mockApi: Api = {
       idempotencyKey,
       { amount_cents: amountCents, payment_method_id: paymentMethodId, idempotency_key: idempotencyKey },
       undefined,
-      async () => topupCardResponse(await mock.mockTopupCard(amountCents, paymentMethodId)),
+      async () => topupCardResponse(await mock.mockTopupCard(amountCents, paymentMethodId), amountCents),
     ),
   getTopup: async () => { throw new Error('topup_reconciliation_unavailable_in_mock'); },
   getClabe: () => mock.mockGetClabe(),
 
   createTransfer: async (req) =>
-    withPreparedMonetaryRequest('transfer', req.idempotency_key, req, undefined, async () => transferResponse(await mock.mockCreateTransfer(req))),
+    withPreparedMonetaryRequest('transfer', req.idempotency_key, req, undefined, async () => transferResponse(await mock.mockCreateTransfer(req), req)),
   listTransfers: () => mock.mockListTransfers(),
 
   getPaymentMethods: () => mock.mockPaymentMethods(),

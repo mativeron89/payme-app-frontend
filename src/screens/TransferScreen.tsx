@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
-  acknowledgeTerminalAttempt,
   idempotencyKeyFor,
   prepareMonetaryRequest,
   rotateIdempotencyKey,
@@ -87,7 +86,6 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
     setBusy(true);
     setError(null);
     try {
-      await acknowledgeTerminalAttempt(transferScope, 'transfer');
       const key = await idempotencyKeyFor(transferScope, 'transfer');
       const request = {
         amount_cents: amountCents,

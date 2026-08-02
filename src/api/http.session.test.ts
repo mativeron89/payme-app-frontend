@@ -10,8 +10,8 @@ class MemoryStorage {
 const storage = new MemoryStorage();
 Object.assign(globalThis, { localStorage: storage });
 
-const { httpLogin, httpLogout, httpRegister, httpRequest } = await import('./http');
-const { loadSession } = await import('./storage');
+const { httpGuestRequest, httpLogin, httpLogout, httpRegister, httpRequest } = await import('./http');
+const { loadSession, saveSession } = await import('./storage');
 const { mockLogin, mockRegister } = await import('./mock/mockApi');
 
 function response(body: unknown, status = 200): Response {
@@ -71,5 +71,32 @@ describe('sesión mock: conserva el mismo contrato de storage', () => {
   it('register mock persiste y es restaurable sin depender del camino real', async () => {
     await mockRegister({ email: 'new@example.com', first_name: 'Nueva', last_name: 'Cuenta' });
     expect(loadSession()).toMatchObject({ principal_id: 'a0000000-0000-4000-8000-000000000001', user: { email: 'new@example.com' } });
+  });
+});
+
+describe('timeout cubre headers y body', () => {
+  function stalledBodyFetch() {
+    return vi.fn(async (_url: string, init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: () => new Promise((_, reject) => {
+        (init?.signal as AbortSignal | undefined)?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      }),
+    } as Response));
+  }
+
+  it.each([
+    ['auth', async () => httpRequest('GET', '/account/me')],
+    ['guest', async () => httpGuestRequest('POST', '/mesas/code/pay', 'guest-token', { idempotency_key: 'key' })],
+    ['monetaria', async () => httpRequest('POST', '/transfers', { idempotency_key: 'key' })],
+  ])('aborta body colgado de request %s', async (_name, request) => {
+    saveSession({ access_token: 'access', refresh_token: 'refresh', family_id: 'family', principal_id: 'u', user });
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', stalledBodyFetch());
+    const pending = request();
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await rejected;
+    vi.useRealTimers();
   });
 });

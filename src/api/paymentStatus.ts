@@ -1,5 +1,32 @@
 export type SettlementOutcome = 'success' | 'definitive' | 'ambiguous';
 
+export interface MesaClosureView { title: string; detail: string; completed: boolean; }
+/** Copy contractual: solo `completed` acredita cierre/dispersión. */
+export function mesaClosureView(status: unknown): MesaClosureView {
+  switch (status) {
+    case 'fully_paid':
+      return { title: 'Pagos registrados', detail: 'La mesa todavía está pendiente de cierre y liquidación.', completed: false };
+    case 'settled':
+      return { title: 'Mesa liquidada', detail: 'El faltante, si existió, quedó registrado. Aún no podemos afirmar la entrega al restaurante.', completed: false };
+    case 'completed':
+      return { title: 'Cierre completado', detail: 'La mesa terminó su proceso de cierre.', completed: true };
+    case 'pending_auth':
+      return { title: 'Garantía en confirmación', detail: 'Todavía no podemos confirmar el resultado de la garantía.', completed: false };
+    case 'auth_failed':
+      return { title: 'Garantía no confirmada', detail: 'No podemos afirmar que exista un cobro o cierre de la mesa.', completed: false };
+    case 'cancelled':
+      return { title: 'Mesa cancelada', detail: 'No podemos afirmar que exista un cobro o cierre de la mesa.', completed: false };
+    case 'expired':
+      return { title: 'Mesa vencida', detail: 'El cierre y cualquier liquidación todavía requieren confirmación.', completed: false };
+    case 'settling':
+      return { title: 'Mesa en liquidación', detail: 'El cierre sigue en proceso; todavía no está confirmado.', completed: false };
+    case 'dispersing':
+      return { title: 'Entrega en proceso', detail: 'La liquidación sigue en proceso; todavía no está confirmada.', completed: false };
+    default:
+      return { title: 'Estado de la mesa', detail: 'Todavía no podemos confirmar el cierre ni una entrega al restaurante.', completed: false };
+  }
+}
+
 /** Solo estados que el contrato acredita permiten cerrar/rotar un pago de mesa. */
 export function mesaPaymentOutcome(status: unknown): SettlementOutcome {
   if (status === 'succeeded' || status === 'processed') return 'success';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { guaranteeOutcome, mesaPaymentOutcome, pollTopup, topupOutcome } from './paymentStatus';
+import { guaranteeOutcome, mesaClosureView, mesaPaymentOutcome, pollTopup, topupOutcome } from './paymentStatus';
 
 describe('estados monetarios acreditables', () => {
   it('solo succeeded/processed cierran el pago de mesa', () => {
@@ -33,5 +33,18 @@ describe('estados monetarios acreditables', () => {
     expect(resolved.outcome).toBe('success');
     expect(calls).toBe(2);
     await expect(pollTopup(async () => ({ topup: { status: 'succeeded' } }), () => false, async () => undefined)).resolves.toEqual({ outcome: 'ambiguous', response: null });
+  });
+
+  it.each([
+    'pending_auth', 'auth_failed', 'cancelled', 'expired', 'settling', 'fully_paid', 'settled', 'dispersing',
+  ])('ningún estado prematuro afirma entrega o garantía cobrada: %s', (status) => {
+    const view = mesaClosureView(status);
+    expect(view.completed).toBe(false);
+    expect(`${view.title} ${view.detail}`.toLowerCase()).not.toContain('recibió');
+    expect(`${view.title} ${view.detail}`.toLowerCase()).not.toContain('garantía cobrada');
+  });
+
+  it('solo completed habilita el cierre concluyente', () => {
+    expect(mesaClosureView('completed')).toMatchObject({ title: 'Cierre completado', completed: true });
   });
 });

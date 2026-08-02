@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, WALLET_PAY_ENABLED, WALLET_RAIL_ENABLED } from '../api';
 import type { UnconfirmedAttempt } from '../api/idempotency';
 import {
-  acknowledgeTerminalAttempt,
   clearUnconfirmed,
   idempotencyKeyFor,
   markUnconfirmed,
@@ -17,7 +16,7 @@ import {
 } from '../api/idempotency';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
-import { mesaPaymentOutcome } from '../api/paymentStatus';
+import { mesaClosureView, mesaPaymentOutcome } from '../api/paymentStatus';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
@@ -341,13 +340,6 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     a.download = `comprobante-payme-${code}.txt`;
     a.click();
     URL.revokeObjectURL(url);
-  }
-
-  async function leaveTerminalReceipt(next: () => void) {
-    // El usuario ya vio el comprobante: recién ahora reconoce el terminal y
-    // habilita una intención posterior (por ejemplo, otra parte válida).
-    if (payScope) await acknowledgeTerminalAttempt(payScope, `mesa_pay:${code}`);
-    next();
   }
 
   /**
@@ -766,15 +758,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   // ─── Mesa cerrada (A-2) ──────────────────────────────────
   if (!payable && view === 'detail') {
-    // pending_auth/auth_failed/cancelled/expired/settling no prueban que el
-    // restaurante haya cobrado ni que la garantía se capturó. Solo un estado
-    // contractual de liquidación permite mostrar montos concluyentes.
-    if (!['fully_paid', 'settled', 'completed'].includes(mesa.status)) {
+    const closure = mesaClosureView(mesa.status);
+    // Solo `completed` acredita cierre/dispersión. fully_paid y settled son
+    // avances reales, pero no prueban qué recibió el restaurante.
+    if (!closure.completed) {
       return (
         <div className="screen">
-          <TopBar title="Estado de la mesa" onBack={isGuest ? undefined : () => navigate('mesas')} />
+          <TopBar title={closure.title} onBack={isGuest ? undefined : () => navigate('mesas')} />
           {guestHeader}
-          <div className="empty">La mesa está en estado <b>{mesa.status}</b>. Todavía no podemos confirmar el resultado de la garantía ni el cobro del restaurante.</div>
+          <div className="empty">{closure.detail}</div>
           <div className="action-bar"><button className="btn btn-navy" onClick={() => reload()}>Actualizar estado</button></div>
         </div>
       );
@@ -784,7 +776,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     return (
       <div className="screen">
         <TopBar
-          title={mesa.status === 'fully_paid' ? 'Mesa completa' : 'Mesa cerrada'}
+          title="Cierre completado"
           onBack={isGuest ? undefined : () => navigate('mesas')}
         />
         {guestHeader}
@@ -948,9 +940,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="btn btn-ghost"
-                onClick={() => void leaveTerminalReceipt(() => {
-                  setView('detail'); setSelected(new Map()); reload();
-                })}
+                onClick={() => { setView('detail'); setSelected(new Map()); reload(); }}
               >
                 Ver la mesa
               </button>
@@ -959,7 +949,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </button>
             </div>
           ) : (
-            <button className="btn btn-navy" onClick={() => void leaveTerminalReceipt(() => navigate('home'))}>
+            <button className="btn btn-navy" onClick={() => navigate('home')}>
               <Icon name="home" size={16} className="ico-inline" /> Inicio
             </button>
           )}
@@ -1304,9 +1294,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             // Reembolsado: volver a pagar es una decisión explícita del
             // usuario, nunca automática (rotar solo = re-cobrar un reembolso).
             if (refundedNotice) {
-              await rotateIdempotencyKey(payScope, `mesa_pay:${code}`);
-              await acknowledgeTerminalAttempt(payScope, `mesa_pay:${code}`);
-              setRefundedNotice(false);
+              setError('Ese intento reembolsado requiere reconciliación antes de iniciar otro pago.');
+              return;
             }
             await doPay();
           })();
