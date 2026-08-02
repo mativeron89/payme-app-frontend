@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import { BottomNav } from './components/BottomNav';
 import { ToastProvider } from './components/ui';
 import { useMoneyActor } from './api/idempotency';
+import { allowsWalletRoute } from './api/releaseGates';
 import { useRoute } from './router';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
@@ -35,7 +36,7 @@ function Shell() {
 
   if (!session) return <LoginScreen />;
 
-  if (!WALLET_RAIL_ENABLED && (route.page === 'cargar' || route.page === 'transferir')) {
+  if (!allowsWalletRoute(WALLET_RAIL_ENABLED, route.page)) {
     return <div className="screen"><div className="empty">El riel de saldo PayMe todavía no está habilitado para esta versión. No se inició ninguna operación.</div></div>;
   }
 

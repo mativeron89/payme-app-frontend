@@ -10,6 +10,7 @@ import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { walletTxIcon, walletTxLabel } from '../utils/labels';
 import { createInFlightMutex } from '../utils/inFlight';
+import { accountRailView } from '../api/releaseGates';
 
 /** s-account: saldo + tabs Historial / Tarjetas (GET balance, wallet-transactions, payment-methods). */
 
@@ -97,7 +98,8 @@ export function CuentaScreen() {
     error: null,
     empty: true,
   });
-  const [tab, setTab] = useState<'historial' | 'tarjetas'>('historial');
+  const accountView = accountRailView(WALLET_RAIL_ENABLED);
+  const [tab, setTab] = useState<'historial' | 'tarjetas'>(accountView.showWalletHistory ? 'historial' : 'tarjetas');
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
   const [pms, setPms] = useState<PaymentMethod[] | null>(null);
@@ -128,12 +130,14 @@ export function CuentaScreen() {
       api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
       api.getWalletTransactions().then((r) => alive && setTxs(r.transactions)).catch(() => alive && setTxs([]));
     }
-    api.getStats().then((s) => alive && setStats(s)).catch(() => undefined);
-    // El mes COMPLETO para la torta: sin params el backend da solo la primera
-    // página (20) y con >20 pagos los montos no cerrarían contra stats.
-    const now = new Date();
-    const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-    api.getHistory({ from, limit: 100 }).then((r) => alive && setHistory(r.history)).catch(() => undefined);
+    if (accountView.showWalletHistory) {
+      api.getStats().then((s) => alive && setStats(s)).catch(() => undefined);
+      // El mes COMPLETO para la torta: sin params el backend da solo la primera
+      // página (20) y con >20 pagos los montos no cerrarían contra stats.
+      const now = new Date();
+      const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+      api.getHistory({ from, limit: 100 }).then((r) => alive && setHistory(r.history)).catch(() => undefined);
+    }
     loadPms();
     return () => {
       alive = false;
@@ -195,16 +199,12 @@ export function CuentaScreen() {
     }
   }
 
-  if (!WALLET_RAIL_ENABLED) {
-    return <div className="screen has-nav"><TopBar title="Mi Cuenta" /><div className="empty">El riel de saldo PayMe no está habilitado para esta versión.</div></div>;
-  }
-
   return (
     // T-F1: Cuenta es pestaña de la nav — sin flecha atrás, con aire para la barra.
     <div className="screen has-nav">
       <TopBar title="Mi Cuenta" />
       <div className="scroll" style={{ padding: 16 }}>
-        <div style={{ background: 'linear-gradient(135deg,#071A33,#10264A)', borderRadius: 18, padding: '16px 18px 14px', marginBottom: 16 }}>
+        {accountView.showBalance && <div style={{ background: 'linear-gradient(135deg,#071A33,#10264A)', borderRadius: 18, padding: '16px 18px 14px', marginBottom: 16 }}>
           {/* G-03 RESUELTO (v2.21): el monto grande es el DISPONIBLE real
               (balance − retenido, computado por el backend). */}
           <div style={{ fontSize: 'var(--fs-2xs)', color: 'rgba(255,255,255,0.7)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1.3, fontWeight: 700 }}>
@@ -231,18 +231,18 @@ export function CuentaScreen() {
               <Icon name="arrow-up-right" size={16} className="ico-inline" /> Transferir
             </button>
           </div>
-        </div>
+        </div>}
 
-        <div className="tabs">
+        {accountView.showWalletHistory && <div className="tabs">
           <button className={`tab ${tab === 'historial' ? 'on' : ''}`} onClick={() => setTab('historial')}>
             Historial
           </button>
           <button className={`tab ${tab === 'tarjetas' ? 'on' : ''}`} onClick={() => setTab('tarjetas')}>
             Tarjetas
           </button>
-        </div>
+        </div>}
 
-        {tab === 'historial' && (
+        {accountView.showWalletHistory && tab === 'historial' && (
           <>
             {stats && stats.month.visits > 0 && (
               <div className="card card-p" style={{ marginBottom: 14 }}>
