@@ -8,32 +8,32 @@ export class MonetarySafetyError extends Error {
 export interface MoneyActor { id: string; session?: StoredSession; }
 export interface UnconfirmedAttempt { actor: string; scope: string; evidence: number; payload?: unknown; }
 
-const JOURNAL_KEY = 'payme_money_journal_v3';
+const JOURNAL_PREFIX = 'payme_money_journal_v3_';
 const VERSION = 3;
 const SEPARATOR = '::';
 const memoryPm = new Map<string, string>();
 const memoryPending = new Map<string, UnconfirmedAttempt>();
 
-interface Journal { v: number; actor: string; area: string; key: string; fingerprint?: string; state: 'prepared' | 'in_flight' | 'sending'; at: number; }
-type JournalBook = Record<string, Journal>;
+interface Journal { v: number; actor: string; area: string; key: string; fingerprint?: string; state: 'prepared' | 'in_flight' | 'sending' | 'ambiguous'; at: number; retries?: number; }
 
 function stable(value: unknown): string { return JSON.stringify(value); }
-function readBook(): JournalBook {
+function journalKey(index: string): string { return JOURNAL_PREFIX + index; }
+function readEntry(index: string): Journal | null {
   try {
-    const raw = localStorage.getItem(JOURNAL_KEY);
-    if (!raw) return {};
+    const raw = localStorage.getItem(journalKey(index));
+    if (!raw) return null;
     const value = JSON.parse(raw) as unknown;
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('corrupt');
-    const book = value as JournalBook;
-    if (Object.values(book).some((entry) => !entry || entry.v !== VERSION || typeof entry.actor !== 'string' || typeof entry.area !== 'string' || typeof entry.key !== 'string' || !['prepared', 'in_flight', 'sending'].includes(entry.state))) throw new Error('legacy');
-    return book;
+    const entry = value as Journal;
+    if (entry.v !== VERSION || typeof entry.actor !== 'string' || typeof entry.area !== 'string' || typeof entry.key !== 'string' || !['prepared', 'in_flight', 'sending', 'ambiguous'].includes(entry.state)) throw new Error('legacy');
+    return entry;
   } catch { throw new MonetarySafetyError('monetary_journal_ambiguous'); }
 }
-function writeBook(book: JournalBook): void {
-  const raw = stable(book);
+function writeEntry(index: string, entry: Journal): void {
+  const raw = stable(entry);
   try {
-    localStorage.setItem(JOURNAL_KEY, raw);
-    if (localStorage.getItem(JOURNAL_KEY) !== raw) throw new Error('roundtrip');
+    localStorage.setItem(journalKey(index), raw);
+    if (localStorage.getItem(journalKey(index)) !== raw) throw new Error('roundtrip');
   } catch { throw new MonetarySafetyError('money_storage_unavailable'); }
 }
 function parseScope(scope: string): { actor: string; raw: string } {
@@ -92,11 +92,11 @@ export function scopeForActor(actor: MoneyActor, raw: string): string { if (!raw
 export async function idempotencyKeyFor(scope: string, operation: string): Promise<string> {
   const id = await identities(scope, operation);
   return withLock(id.index, async () => {
-    const book = readBook(); const found = book[id.index];
+    const found = readEntry(id.index);
     if (found && (found.v !== VERSION || found.actor !== id.actor || found.area !== id.area)) throw new MonetarySafetyError('monetary_journal_ambiguous');
     if (found) return found.key;
     const entry: Journal = { v: VERSION, actor: id.actor, area: id.area, key: newKey(), state: 'prepared', at: Date.now() };
-    writeBook({ ...book, [id.index]: entry }); return entry.key;
+    writeEntry(id.index, entry); return entry.key;
   });
 }
 export async function rememberPaymentMethod(scope: string, pm: string): Promise<void> { if (!pm) throw new MonetarySafetyError('monetary_attempt_ambiguous'); memoryPm.set(scope, pm); }
@@ -104,28 +104,29 @@ export function recallPaymentMethod(scope: string): string | undefined { return 
 export async function prepareMonetaryRequest(scope: string, operation: string, payload: unknown): Promise<string> {
   const id = await identities(scope, operation); const fingerprint = await digest(stable(payload));
   return withLock(id.index, async () => {
-    const book = readBook(); const found = book[id.index];
+    const found = readEntry(id.index);
     if (!found || found.v !== VERSION || found.actor !== id.actor || found.area !== id.area) throw new MonetarySafetyError('monetary_journal_ambiguous');
     if (found.state === 'sending') throw new MonetarySafetyError('monetary_area_frozen');
     if (found.fingerprint && found.fingerprint !== fingerprint) throw new MonetarySafetyError('monetary_payload_ambiguous');
     // Se escribe ANTES de toda red. Un crash deja in_flight detectable tras reload.
-    writeBook({ ...book, [id.index]: { ...found, fingerprint, state: 'in_flight', at: Date.now() } }); return found.key;
+    writeEntry(id.index, { ...found, fingerprint, state: 'in_flight', at: Date.now() }); return found.key;
   });
 }
 export async function withPreparedMonetaryRequest<T>(operation: string, key: string, payload: unknown, guestToken: string | undefined, send: (session: StoredSession | undefined) => Promise<T>): Promise<T> {
   const actor = await resolveMoneyActor(guestToken); const scope = scopeForActor(actor, 'runtime'); const id = await identities(scope, operation); const fingerprint = await digest(stable(payload));
   return withLock(id.index, async () => {
-    const found = readBook()[id.index];
-    if (!found || found.v !== VERSION || found.key !== key || found.state !== 'in_flight' || found.fingerprint !== fingerprint) throw new MonetarySafetyError('monetary_request_unprepared');
-    writeBook({ ...readBook(), [id.index]: { ...found, state: 'sending', at: Date.now() } });
-    return send(actor.session);
+    const found = readEntry(id.index);
+    if (!found || found.v !== VERSION || found.key !== key || !['in_flight', 'ambiguous'].includes(found.state) || found.fingerprint !== fingerprint) throw new MonetarySafetyError('monetary_request_unprepared');
+    writeEntry(id.index, { ...found, state: 'sending', at: Date.now(), retries: (found.retries ?? 0) + 1 });
+    try { return await send(actor.session); }
+    catch (error) { writeEntry(id.index, { ...found, state: 'ambiguous', at: Date.now(), retries: (found.retries ?? 0) + 1 }); throw error; }
   });
 }
 export async function rotateIdempotencyKey(scope: string, operation?: string): Promise<void> {
   const raw = parseScope(scope).raw;
   const inferred = raw.startsWith('pay:') ? `mesa_pay:${raw.slice(4).split('|')[0]}` : raw.startsWith('mesa:') ? 'create_mesa' : raw.startsWith('topup:') ? 'topup_card' : raw.startsWith('transfer:') ? 'transfer' : undefined;
   if (!operation && !inferred) throw new MonetarySafetyError('monetary_attempt_ambiguous');
-  const id = await identities(scope, operation ?? inferred!); await withLock(id.index, async () => { const book = readBook(); delete book[id.index]; writeBook(book); }); memoryPm.delete(scope);
+  const id = await identities(scope, operation ?? inferred!); await withLock(id.index, async () => { try { localStorage.removeItem(journalKey(id.index)); if (localStorage.getItem(journalKey(id.index)) !== null) throw new Error('roundtrip'); } catch { throw new MonetarySafetyError('money_storage_unavailable'); } }); memoryPm.delete(scope);
 }
 export const ROTATING_ERROR_CODES = ['idempotency_key_terminal','insufficient_funds','payment_provider_error','no_slots_available','mesa_not_payable','fraction_not_available','item_already_paid','item_already_locked','wallet_requires_auth'] as const;
 export function shouldRotateOnError(code: string, status?: number | null): boolean { if (code === 'idempotency_conflict' || code === 'refunded' || code === 'validation_error') return false; if ((ROTATING_ERROR_CODES as readonly string[]).includes(code)) return true; return typeof status === 'number' && status !== 409 && status !== 429 && status >= 400 && status < 500; }
@@ -134,6 +135,8 @@ export function readUnconfirmed(area: string): UnconfirmedAttempt | null {
   const memory = memoryPending.get(area); if (memory) return memory;
   // Sin payload recuperable tras reload, cualquier journal compartido activo
   // se trata como ambiguo: la UI no inventa una intención nueva.
-  try { const active = Object.values(readBook()).some((entry) => entry.v === VERSION && entry.state !== 'prepared'); return active ? { actor: parseScope(area).actor, scope: area, evidence: 0 } : null; } catch { throw new MonetarySafetyError('monetary_journal_ambiguous'); }
+  // No se puede derivar el índice sin Web Crypto en una lectura sincrónica:
+  // ante cualquier journal v3 activo, se congela conservadoramente.
+  try { for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key?.startsWith(JOURNAL_PREFIX)) { const raw = localStorage.getItem(key); if (!raw) throw new Error('corrupt'); const entry = JSON.parse(raw) as Journal; if (entry.v !== VERSION || entry.state !== 'prepared') return { actor: parseScope(area).actor, scope: area, evidence: 0 }; } } return null; } catch { throw new MonetarySafetyError('monetary_journal_ambiguous'); }
 }
 export function clearUnconfirmed(area: string): void { memoryPending.delete(area); }

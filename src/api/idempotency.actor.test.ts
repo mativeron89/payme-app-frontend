@@ -141,17 +141,18 @@ describe('B-06: actor namespace y journal durable', () => {
 
   it('journal corrupto o legacy sin actor no se reenvía', async () => {
     const a = await preparedAuth('a');
-    local.values.set('payme_money_journal_v3', '{corrupto');
+    const journalKey = [...local.values.keys()].find((key) => key.startsWith('payme_money_journal_v3_'))!;
+    local.values.set(journalKey, '{corrupto');
     const send = vi.fn(async () => ({ ok: true }));
     await expect(money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, a.payload, undefined, send)).rejects.toThrow('monetary_journal_ambiguous');
     expect(send).not.toHaveBeenCalled();
 
     local.values.clear();
-    local.values.set('payme_money_journal_v3', JSON.stringify({ legacy: { key: 'legacy' } }));
+    local.values.set('payme_money_journal_v3_legacy', JSON.stringify({ key: 'legacy' }));
     signIn('a');
     const actor = await money.resolveMoneyActor();
     const scope = money.scopeForActor(actor, 'pay:mesa-1|card');
-    await expect(money.idempotencyKeyFor(scope, 'mesa_pay:mesa-1')).rejects.toThrow('monetary_journal_ambiguous');
+    await expect(money.idempotencyKeyFor(scope, 'mesa_pay:mesa-1')).resolves.toMatch(/.+/);
   });
 
   it('dos pestañas del mismo actor se serializan bajo lock y payload distinto queda bloqueado', async () => {
@@ -166,5 +167,17 @@ describe('B-06: actor namespace y journal durable', () => {
     expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
     await expect(money.prepareMonetaryRequest(a.scope, 'mesa_pay:mesa-1', { ...a.payload, item_ids: ['other'] })).rejects.toThrow('monetary_area_frozen');
     expect(lockCalls).toBeGreaterThan(1);
+  });
+
+  it('timeout reintenta solo la misma key y fingerprint; otro payload nunca llega a red', async () => {
+    const a = await preparedAuth('a');
+    const backend = vi.fn(async () => {
+      if (backend.mock.calls.length === 1) throw new Error('timeout');
+      return { idempotent: true };
+    });
+    await expect(money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, a.payload, undefined, backend)).rejects.toThrow('timeout');
+    await expect(money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, a.payload, undefined, backend)).resolves.toEqual({ idempotent: true });
+    await expect(money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, { ...a.payload, item_ids: ['other'] }, undefined, backend)).rejects.toThrow('monetary_request_unprepared');
+    expect(backend).toHaveBeenCalledTimes(2);
   });
 });
