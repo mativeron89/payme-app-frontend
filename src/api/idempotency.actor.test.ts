@@ -10,6 +10,8 @@ class MemoryStorage {
     this.values.set(key, value);
   }
   removeItem(key: string) { this.values.delete(key); }
+  get length() { return this.values.size; }
+  key(index: number) { return [...this.values.keys()][index] ?? null; }
 }
 
 const local = new MemoryStorage();
@@ -148,11 +150,56 @@ describe('B-06: actor namespace y journal durable', () => {
     expect(send).not.toHaveBeenCalled();
 
     local.values.clear();
-    local.values.set('payme_money_journal_v3_legacy', JSON.stringify({ key: 'legacy' }));
+    // Formato exacto de origin/main: sessionStorage, scope crudo, sin actor
+    // ni family. No hay base segura para atribuirlo a esta nueva sesión.
+    session.values.set('payme_idem_pay:mesa-1|card|new|item-1|b1500|-', JSON.stringify({ key: 'legacy-key', pm: 'pm_legacy' }));
+    session.values.set('payme_pending_pay:mesa-1', JSON.stringify({ scope: 'pay:mesa-1|card|new|item-1|b1500|-', evidence: 1, payload: { item_ids: ['item-1'] } }));
     signIn('a');
     const actor = await money.resolveMoneyActor();
     const scope = money.scopeForActor(actor, 'pay:mesa-1|card');
-    await expect(money.idempotencyKeyFor(scope, 'mesa_pay:mesa-1')).resolves.toMatch(/.+/);
+    await expect(money.idempotencyKeyFor(scope, 'mesa_pay:mesa-1')).rejects.toThrow('monetary_legacy_quarantined');
+    expect([...session.values.keys()]).toEqual(expect.arrayContaining([
+      'payme_idem_pay:mesa-1|card|new|item-1|b1500|-',
+      'payme_pending_pay:mesa-1',
+    ]));
+    expect([...local.values.keys()].some((key) => key.startsWith('payme_money_legacy_quarantine_v1_'))).toBe(true);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('un prefijo legacy de operación ya no reconocible también falla cerrado', async () => {
+    session.values.set('payme_pending_formato-antiguo', JSON.stringify({ key: 'unknown' }));
+    signIn('a');
+    const actor = await money.resolveMoneyActor();
+    const scope = money.scopeForActor(actor, 'transfer:b:100');
+    await expect(money.idempotencyKeyFor(scope, 'transfer')).rejects.toThrow('monetary_legacy_quarantined');
+    expect([...session.values.keys()]).toContain('payme_pending_formato-antiguo');
+  });
+
+  it('logout y relogin del mismo principal no recuperan PM, payload ni pending de otra familia', async () => {
+    const old = await preparedAuth('a', 'mesa_pay:mesa-1');
+    money.markUnconfirmed(old.scope, old.scope, 2, old.payload);
+    expect(money.recallPaymentMethod(old.scope)).toBe('pm_saved');
+    expect(await money.readUnconfirmed(old.scope, 'mesa_pay:mesa-1')).toMatchObject({ payload: old.payload });
+
+    signIn('a', 'a-family-new');
+    const freshActor = await money.resolveMoneyActor();
+    const freshScope = money.scopeForActor(freshActor, 'pay:mesa-1|card');
+    expect(money.recallPaymentMethod(freshScope)).toBeUndefined();
+    expect(await money.readUnconfirmed(freshScope, 'mesa_pay:mesa-1')).toBeNull();
+  });
+
+  it('dos familias del mismo principal mantienen sus artefactos de memoria aislados', async () => {
+    signIn('a', 'family-one');
+    const first = await money.resolveMoneyActor();
+    const firstScope = money.scopeForActor(first, 'topup:card:5000');
+    await money.rememberPaymentMethod(firstScope, 'pm_family_one');
+    money.markUnconfirmed(firstScope, firstScope, 0, { amount_cents: 5000 });
+
+    signIn('a', 'family-two');
+    const second = await money.resolveMoneyActor();
+    const secondScope = money.scopeForActor(second, 'topup:card:5000');
+    expect(money.recallPaymentMethod(secondScope)).toBeUndefined();
+    expect(await money.readUnconfirmed(secondScope, 'topup_card')).toBeNull();
   });
 
   it('dos pestañas del mismo actor se serializan bajo lock y payload distinto queda bloqueado', async () => {

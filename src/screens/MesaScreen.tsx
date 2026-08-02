@@ -35,6 +35,7 @@ import { goBack, navigate } from '../router';
 import { countdownTo, formatMXN } from '../utils/format';
 import { fractionAmount, stringToCents, tipFromBps } from '../utils/money';
 import { createInFlightMutex } from '../utils/inFlight';
+import { RequestEpoch } from '../utils/requestEpoch';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -120,20 +121,40 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [refundedNotice, setRefundedNotice] = useState(false);
   const [result, setResult] = useState<PayResult | null>(null);
   const [, forceTick] = useState(0);
+  // Toda lectura de esta instancia captura el epoch. Cambiar token/código
+  // invalida antes de renderizar la identidad siguiente y un resolve tardío
+  // de A no puede escribir mesa, error, tarjetas ni notFound de B.
+  const identityEpochRef = useRef(new RequestEpoch());
+  const mesaReadEpochRef = useRef(new RequestEpoch());
 
   // Un token guest nuevo para el mismo código es otra identidad: ningún
   // estado visual o lock de A puede sobrevivir para B.
   useEffect(() => {
-    setSelected(new Map()); setLockTokens([]); setTipPct(15); setTipMode('pct');
-    setCustomTipStr(''); setStaffId(null); setPayType('card'); setCardChoice('new');
-    setError(null); setBusy(false); setView('detail');
-  }, [guestToken]);
+    identityEpochRef.current.next();
+    mesaReadEpochRef.current.next();
+    setMesa(null); setNotFound(false); setSelected(new Map()); setLockTokens([]);
+    setTipPct(15); setTipMode('pct'); setCustomTipStr(''); setStaffId(null);
+    setPayType('card'); setCardsOpen(false); setInviteOpen(false); setCards([]);
+    setCardChoice('new'); setSaveCard(true); setCardEl(null);
+    const emptyCard: CardFieldState = { complete: false, error: null, empty: true };
+    cardStateRef.current = emptyCard; setCardState(emptyCard);
+    payStartedRef.current = false; payInFlightRef.current = createInFlightMutex();
+    setRefundedNotice(false); setResult(null); setError(null); setBusy(false); setView('detail');
+  }, [guestToken, code]);
 
   const reload = useCallback(() => {
+    const requestEpoch = mesaReadEpochRef.current.next();
+    const identityEpoch = identityEpochRef.current.capture();
     api
       .getMesa(code, guestToken)
-      .then((r) => setMesa(r.mesa))
-      .catch(() => setNotFound(true));
+      .then((r) => {
+        if (mesaReadEpochRef.current.isCurrent(requestEpoch) && identityEpochRef.current.isCurrent(identityEpoch)) {
+          setMesa(r.mesa); setNotFound(false);
+        }
+      })
+      .catch(() => {
+        if (mesaReadEpochRef.current.isCurrent(requestEpoch) && identityEpochRef.current.isCurrent(identityEpoch)) setNotFound(true);
+      });
   }, [code, guestToken]);
 
   useEffect(() => {
@@ -144,9 +165,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   useEffect(() => {
     if (!isGuest) {
+      const identityEpoch = identityEpochRef.current.capture();
+      let alive = true;
       api
         .getPaymentMethods()
         .then((r) => {
+          if (!alive || !identityEpochRef.current.isCurrent(identityEpoch)) return;
           // D4 (v2.16): las guardadas se reusan con su uuid (payment_method_id).
           setCards(r.payment_methods);
           const def = r.payment_methods.find((p) => p.is_default) ?? r.payment_methods[0];
@@ -154,9 +178,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           // ni si ya hay un pago en curso (B-06: movería la clave).
           if (def && cardStateRef.current.empty && !payStartedRef.current) setCardChoice(def.id);
         })
-        .catch(() => setCards([]));
+        .catch(() => { if (alive && identityEpochRef.current.isCurrent(identityEpoch)) setCards([]); });
+      return () => { alive = false; };
     }
-  }, [isGuest]);
+    return undefined;
+  }, [isGuest, guestToken, code]);
 
   const payable = mesa?.status === 'open' || mesa?.status === 'partially_paid';
 
@@ -374,11 +400,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   useEffect(() => {
     if (!payArea) return;
     let alive = true;
+    const identityEpoch = identityEpochRef.current.capture();
     void readUnconfirmed(payArea, `mesa_pay:${code}`)
-      .then((attempt) => alive && setFrozen(attempt))
-      .catch(() => alive && setError('Hay un pago anterior que no podemos atribuir de forma segura. Esperá la reconciliación antes de pagar.'));
+      .then((attempt) => alive && identityEpochRef.current.isCurrent(identityEpoch) && setFrozen(attempt))
+      .catch(() => alive && identityEpochRef.current.isCurrent(identityEpoch) && setError('Hay un pago anterior que no podemos atribuir de forma segura. Esperá la reconciliación antes de pagar.'));
     return () => { alive = false; };
   }, [payArea, code]);
+  useEffect(() => { setFrozen(null); }, [guestToken, code]);
   const frozenScope = frozen?.scope ?? null;
   const payScope = frozenScope ?? contentScope;
   const frozenRef = useRef(frozenScope);

@@ -27,10 +27,16 @@ function Shell() {
   // ignorarlo en real cuando hay sesión mezclaba identidades y dejaba al
   // invitado fuera de la mesa correcta.
   const guestToken = route.query.get('t');
-  const { actor: guestActor } = useMoneyActor(guestToken ?? undefined);
+  const { actor: guestActor, resolvedFor: guestResolvedFor } = useMoneyActor(guestToken ?? undefined);
   if (route.page === 'mesa' && route.param && guestToken) {
-    // El token no entra al key: el fingerprint del actor fuerza remount al
-    // cambiar A→B y evita que una respuesta tardía de A pinte la mesa de B.
+    // No se monta MesaScreen hasta resolver exactamente ESTE token. Sin este
+    // gate, el primer render de B podía reutilizar el fingerprint/estado de A
+    // mientras Web Crypto calculaba B. El token no entra al key ni storage.
+    if (!guestActor || guestResolvedFor !== guestToken) {
+      return <div className="screen"><div className="empty">Abriendo la mesa de invitación…</div></div>;
+    }
+    // El fingerprint fuerza remount al cambiar A→B y evita que una respuesta
+    // tardía de A pinte la mesa de B.
     return <MesaScreen key={`${route.param}:${guestActor?.id ?? 'guest-pending'}`} code={route.param} guestToken={guestToken} />;
   }
 
