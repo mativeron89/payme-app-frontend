@@ -1,4 +1,4 @@
-import { clearCurrentSession, createSession, isCurrentSession, loadSession, replaceCurrentSession, type StoredSession } from './storage';
+import { clearCurrentSession, createSession, isCurrentSession, loadSession, replaceCurrentSession, saveSession, type StoredSession } from './storage';
 import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenPair } from './types';
 
 /**
@@ -172,6 +172,9 @@ export async function httpLogin(email: string, password: string): Promise<Stored
     refresh_token: r.refresh_token,
     user: r.user,
   });
+  // La UI y httpRequest leen la misma fuente. No se publica una sesión que
+  // localStorage no pudo confirmar con round-trip.
+  saveSession(session);
   return session;
 }
 
@@ -182,6 +185,7 @@ export async function httpRegister(data: RegisterRequest): Promise<StoredSession
     refresh_token: r.refresh_token,
     user: r.user,
   });
+  saveSession(session);
   return session;
 }
 

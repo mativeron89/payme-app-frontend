@@ -1,4 +1,5 @@
 import {
+  Fragment,
   createContext,
   useCallback,
   useContext,
@@ -8,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api } from '../api';
-import { saveSession, type StoredSession } from '../api/storage';
+import { loadSession, replaceCurrentSession, subscribeSession, type StoredSession } from '../api/storage';
 import type { RegisterRequest } from '../api/types';
 
 interface AuthState {
@@ -24,26 +25,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<StoredSession | null>(() => api.restoreSession());
 
   useEffect(() => {
-    api.onSessionExpired(() => setSession(null));
+    api.onSessionExpired(() => setSession(loadSession()));
     return () => api.onSessionExpired(null);
   }, []);
+
+  useEffect(() => subscribeSession(() => setSession(loadSession())), []);
 
   // G-02 (v2.20): una sesión persistida ANTES de que login devolviera `user`
   // no tiene identidad — se hidrata una sola vez con GET /account/me. Si
   // falla (p. ej. offline), se sigue sin nombre; el próximo login la completa.
   useEffect(() => {
     if (!session || session.user) return;
+    const origin = session;
     let alive = true;
     api
       .getMe()
       .then((r) => {
         if (!alive) return;
-        setSession((cur) => {
-          if (!cur || cur.user) return cur;
-          const next = { ...cur, user: r.user };
-          saveSession(next);
-          return next;
-        });
+        // La respuesta de hidratación puede llegar después de un cambio de
+        // pestaña/relogin. CAS evita reanimar su familia vieja en storage/UI.
+        const current = loadSession();
+        if (!current || current.user) return;
+        replaceCurrentSession(origin, { ...current, user: r.user });
       })
       .catch(() => undefined);
     return () => {
@@ -52,23 +55,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   const login = useCallback(async (email: string, password: string) => {
-    setSession(await api.login(email, password));
+    try {
+      // El estado visible solo puede adoptar lo que quedó confirmado en storage.
+      // Esto cubre tanto el adaptador real (que devuelve la sesión) como mock.
+      await api.login(email, password);
+    } finally {
+      setSession(loadSession());
+    }
   }, []);
 
   const register = useCallback(async (data: RegisterRequest) => {
-    setSession(await api.register(data));
+    try {
+      await api.register(data);
+    } finally {
+      setSession(loadSession());
+    }
   }, []);
 
   const logout = useCallback(async () => {
-    await api.logout();
-    setSession(null);
+    try {
+      await api.logout();
+    } finally {
+      setSession(loadSession());
+    }
   }, []);
 
   const value = useMemo(
     () => ({ session, login, register, logout }),
     [session, login, register, logout],
   );
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // Una familia nueva, incluso del mismo principal, invalida estados derivados
+  // de la UI anterior antes de que puedan firmar requests con credenciales viejas.
+  return (
+    <AuthContext.Provider value={value}>
+      <Fragment key={session?.family_id ?? 'signed-out'}>{children}</Fragment>
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthState {
