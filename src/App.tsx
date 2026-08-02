@@ -21,11 +21,11 @@ function Shell() {
   const route = useRoute();
 
   // T3 — momento mágico: el invitado entra por link (#/mesa/:code?t=token)
-  // SIN cuenta ni login. guestOrAuth del contrato: token en query.
-  // En la demo, el link abre la vista de invitado AUNQUE haya sesión: si no,
-  // quien está evaluando (siempre logueado en su teléfono) nunca la vería.
+  // con o sin sesión. guestOrAuth del contrato prioriza el token del link;
+  // ignorarlo en real cuando hay sesión mezclaba identidades y dejaba al
+  // invitado fuera de la mesa correcta.
   const guestToken = route.query.get('t');
-  if (route.page === 'mesa' && route.param && guestToken && (!session || IS_MOCK)) {
+  if (route.page === 'mesa' && route.param && guestToken) {
     return <MesaScreen key={`${route.param}:guest`} code={route.param} guestToken={guestToken} />;
   }
 

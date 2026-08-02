@@ -1,5 +1,11 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.29.2 — Link de invitado aislado de la sesión (2026-08-02)
+
+- Un link `#/mesa/:code?t=…` ahora conserva siempre la identidad invitada,
+  incluso si el navegador tiene una sesión PayMe activa. El token se envía por
+  el canal guest del contrato y no se mezcla con Authorization.
+
 ## 0.29.1 — Recuperación segura de reintentos y runtime (2026-08-02)
 
 - B-06: un `409 idempotency_key_terminal` ahora rota y descongela el intento
