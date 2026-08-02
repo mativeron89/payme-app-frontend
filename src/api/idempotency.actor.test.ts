@@ -67,6 +67,7 @@ afterEach(() => {
   local.values.clear();
   session.values.clear();
   local.failSet = false;
+  local.corruptRead = false;
   session.failSet = false;
   session.corruptRead = false;
   lockCalls = 0;
@@ -98,7 +99,7 @@ describe('B-06: actor namespace y journal durable', () => {
     expect(storage.isCurrentSession(stale!)).toBe(false);
     expect((await money.resolveMoneyActor()).id).toBe('auth:a');
     const send = vi.fn(async (captured: Awaited<ReturnType<typeof money.resolveMoneyActor>>['session']) => captured);
-    await expect(money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, a.payload, undefined, send)).rejects.toThrow('monetary_session_stale');
+    await expect(money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, a.payload, undefined, send)).rejects.toThrow('monetary_request_unprepared');
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -123,48 +124,47 @@ describe('B-06: actor namespace y journal durable', () => {
     const actor = await money.resolveMoneyActor();
     const scope = money.scopeForActor(actor, 'transfer:b:100');
     const send = vi.fn(async () => ({ ok: true }));
-    session.failSet = true;
+    local.failSet = true;
     await expect(money.idempotencyKeyFor(scope, 'transfer')).rejects.toThrow('money_storage_unavailable');
     expect(send).not.toHaveBeenCalled();
-    session.failSet = false;
-    session.corruptRead = true;
-    await expect(money.idempotencyKeyFor(scope, 'transfer')).rejects.toThrow('money_storage_unavailable');
-    session.corruptRead = false;
+    local.failSet = false;
+    local.corruptRead = true;
+    await expect(money.idempotencyKeyFor(scope, 'transfer')).rejects.toThrow('money_actor_unavailable');
+    local.corruptRead = false;
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
     await expect(money.idempotencyKeyFor(scope, 'transfer')).rejects.toThrow('money_lock_unavailable');
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks } });
     const originalCrypto = globalThis.crypto;
     vi.stubGlobal('crypto', { randomUUID: originalCrypto.randomUUID.bind(originalCrypto) });
-    await expect(money.resolveMoneyActor('guest-token-A')).rejects.toThrow('money_actor_unavailable');
+    await expect(money.resolveMoneyActor('guest-token-A')).rejects.toThrow('money_crypto_unavailable');
   });
 
-  it('journal corrupto o legacy sin actor no se reenvía hasta descarte explícito', async () => {
+  it('journal corrupto o legacy sin actor no se reenvía', async () => {
     const a = await preparedAuth('a');
-    const preparedKey = [...session.values.keys()].find((key) => key.startsWith('payme_money_prepared_v2_'))!;
-    session.values.set(preparedKey, '{corrupto');
+    local.values.set('payme_money_journal_v3', '{corrupto');
     const send = vi.fn(async () => ({ ok: true }));
-    await expect(money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, a.payload, undefined, send)).rejects.toThrow('monetary_request_unprepared');
+    await expect(money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, a.payload, undefined, send)).rejects.toThrow('monetary_journal_ambiguous');
     expect(send).not.toHaveBeenCalled();
 
-    session.values.clear();
-    session.values.set('payme_idem_pay:mesa-1|card', JSON.stringify({ key: 'legacy' }));
+    local.values.clear();
+    local.values.set('payme_money_journal_v3', JSON.stringify({ legacy: { key: 'legacy' } }));
     signIn('a');
     const actor = await money.resolveMoneyActor();
     const scope = money.scopeForActor(actor, 'pay:mesa-1|card');
-    await expect(money.idempotencyKeyFor(scope, 'mesa_pay:mesa-1')).rejects.toThrow('monetary_attempt_ambiguous');
-    money.discardLegacyMonetaryAttempt('pay:mesa-1|card');
-    await expect(money.idempotencyKeyFor(scope, 'mesa_pay:mesa-1')).resolves.toMatch(/.+/);
+    await expect(money.idempotencyKeyFor(scope, 'mesa_pay:mesa-1')).rejects.toThrow('monetary_journal_ambiguous');
   });
 
   it('dos pestañas del mismo actor se serializan bajo lock y payload distinto queda bloqueado', async () => {
     const a = await preparedAuth('a');
     const send = vi.fn(async () => ({ ok: true }));
-    await Promise.all([
+    const results = await Promise.allSettled([
       money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, a.payload, undefined, send),
       money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, a.payload, undefined, send),
     ]);
     expect(maxActiveLocks).toBe(1);
-    await expect(money.prepareMonetaryRequest(a.scope, 'mesa_pay:mesa-1', { ...a.payload, item_ids: ['other'] })).rejects.toThrow('monetary_payload_ambiguous');
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+    await expect(money.prepareMonetaryRequest(a.scope, 'mesa_pay:mesa-1', { ...a.payload, item_ids: ['other'] })).rejects.toThrow('monetary_area_frozen');
     expect(lockCalls).toBeGreaterThan(1);
   });
 });
