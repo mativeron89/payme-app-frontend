@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
   idempotencyKeyFor,
@@ -9,6 +9,7 @@ import {
   useMoneyActor,
 } from '../api/idempotency';
 import { extractApiError } from '../api/errors';
+import { topupOutcome } from '../api/paymentStatus';
 import { confirmCardPayment } from '../api/stripe';
 import type { ClabeResponse, PaymentMethod, TopupOxxoResponse } from '../api/types';
 import { Icon } from '../components/Icon';
@@ -16,6 +17,7 @@ import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { stringToCents } from '../utils/money';
+import { createInFlightMutex } from '../utils/inFlight';
 
 /**
  * s-topup (T5 + A-3): tres vías reales del contrato — OXXO (voucher),
@@ -32,6 +34,7 @@ export function TopupScreen() {
   const [amountStr, setAmountStr] = useState('500');
   const [pm, setPm] = useState<PaymentMethod | null>(null);
   const [busy, setBusy] = useState(false);
+  const topupInFlightRef = useRef(createInFlightMutex());
   const [error, setError] = useState<string | null>(null);
   const [voucher, setVoucher] = useState<TopupOxxoResponse['topup'] | null>(null);
   const [clabe, setClabe] = useState<ClabeResponse | null>(null);
@@ -65,8 +68,10 @@ export function TopupScreen() {
   const topupScope = actor ? scopeForActor(actor, `topup:${via}:${amountCents}`) : '';
 
   async function doTopup() {
+    if (!topupInFlightRef.current.tryEnter()) return;
     if (!topupScope || !actor) {
       setError(actorError ? 'No pudimos verificar una identidad segura para esta carga.' : 'Preparando una identidad segura para esta carga…');
+      topupInFlightRef.current.leave();
       return;
     }
     setBusy(true);
@@ -96,25 +101,25 @@ export function TopupScreen() {
             setError(confirmed.error);
             return;
           }
-          toast('Confirmamos con tu banco: el saldo entra en unos segundos.');
-          rotateIdempotencyKey(topupScope);
-          navigate('cuenta');
+          setError('Tu banco aprobó la carga; todavía estamos confirmando el saldo. No inicies otra carga con este monto.');
+          return;
+        }
+        if (topupOutcome(r.topup.status, r.requires_action, r.client_secret) === 'ambiguous') {
+          // El contrato actual no expone GET /topup/:id para reconciliar. Sin
+          // ese dato no se puede afirmar ni liberar el intento con seguridad.
+          setError('La carga sigue en confirmación y no podemos verificarla todavía. No inicies otra carga; revisá tu saldo más tarde.');
           return;
         }
         // B-06: un replay puede traer un topup FALLIDO (200 `idempotent:true`
         // con status 'failed'). Sin mirar el status, anunciábamos como
         // acreditado un cobro que nunca prosperó.
-        if (r.topup.status === 'failed') {
+        if (topupOutcome(r.topup.status, r.requires_action, r.client_secret) === 'definitive') {
           rotateIdempotencyKey(topupScope);
           setError('Ese cobro no prosperó. Probá de nuevo o con otra tarjeta.');
           return;
         }
         rotateIdempotencyKey(topupScope);
-        toast(
-          r.topup.status === 'succeeded'
-            ? `Se acreditaron ${formatMXN(amountCents)} ✓`
-            : 'Carga en curso: el saldo aparece en unos segundos.',
-        );
+        toast(`Se acreditaron ${formatMXN(amountCents)} ✓`);
         navigate('cuenta');
       }
     } catch (err) {
@@ -129,6 +134,7 @@ export function TopupScreen() {
           : 'No pudimos confirmar la carga. Revisá tu saldo antes de reintentar: si el cobro salió, el reintento no cobra de nuevo.',
       );
     } finally {
+      topupInFlightRef.current.leave();
       setBusy(false);
     }
   }

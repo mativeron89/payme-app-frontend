@@ -1,5 +1,5 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, IS_MOCK } from '../api';
 import { confirmCardSetup } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
@@ -9,6 +9,7 @@ import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { walletTxIcon, walletTxLabel } from '../utils/labels';
+import { createInFlightMutex } from '../utils/inFlight';
 
 /** s-account: saldo + tabs Historial / Tarjetas (GET balance, wallet-transactions, payment-methods). */
 
@@ -89,6 +90,7 @@ export function CuentaScreen() {
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [busyCard, setBusyCard] = useState(false);
+  const addCardInFlightRef = useRef(createInFlightMutex());
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<CardFieldState>({
     complete: false,
@@ -161,6 +163,7 @@ export function CuentaScreen() {
    * `pm_…` → se registra. La tarjeta nunca pasa por PayMe.
    */
   async function addCard() {
+    if (!addCardInFlightRef.current.tryEnter()) return;
     setBusyCard(true);
     try {
       const { client_secret } = await api.createSetupIntent();
@@ -185,6 +188,7 @@ export function CuentaScreen() {
     } catch {
       toast('No pudimos guardar la tarjeta');
     } finally {
+      addCardInFlightRef.current.leave();
       setBusyCard(false);
     }
   }

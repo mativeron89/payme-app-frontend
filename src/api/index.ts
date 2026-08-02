@@ -9,6 +9,7 @@ import {
 } from './http';
 import * as mock from './mock/mockApi';
 import { withPreparedMonetaryRequest } from './idempotency';
+import { guaranteeOutcome } from './paymentStatus';
 import { clearSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
 import type {
@@ -163,7 +164,7 @@ export interface Api {
     code: string,
     clientSecret: string,
     connectedAccountId?: string,
-  ): Promise<{ status: string }>;
+  ): Promise<{ status: string; outcome: 'success' | 'definitive' | 'ambiguous'; error?: string }>;
   lockItems(code: string, items: FractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
   payMesa(code: string, req: PayMesaRequest, guestToken?: string): Promise<PayMesaResponse>;
   createInvitation(code: string): Promise<CreateInvitationResponse>;
@@ -264,18 +265,31 @@ const realApi: Api = {
    * el link con la mesa todavía en 'pending_auth'.
    */
   async confirmGuarantee3ds(code, clientSecret, connectedAccountId) {
-    const r = await confirmCardPayment(clientSecret, connectedAccountId);
-    if (!r.ok) throw new Error(r.error);
+    try {
+      const r = await confirmCardPayment(clientSecret, connectedAccountId);
+      if (!r.ok) return { status: 'requires_action', outcome: r.definitive ? 'definitive' : 'ambiguous', error: r.error };
+    } catch {
+      return { status: 'requires_action', outcome: 'ambiguous', error: 'No pudimos confirmar la respuesta de tu banco.' };
+    }
+    // Stripe ya pudo autorizar. Un fallo de polling NO es un rechazo y no
+    // habilita una segunda garantía: se conserva el journal para reconciliar.
     for (let i = 0; i < 10; i++) {
-      const { mesa } = await httpRequest<MesaDetailResponse>(
-        'GET',
-        `/mesas/${encodeURIComponent(code)}`,
-      );
-      if (mesa.status !== 'pending_auth') return { status: mesa.status };
+      try {
+        const { mesa } = await httpRequest<MesaDetailResponse>(
+          'GET',
+          `/mesas/${encodeURIComponent(code)}`,
+        );
+        const outcome = guaranteeOutcome(mesa.status);
+        if (outcome === 'success') return { status: mesa.status, outcome };
+        if (outcome === 'definitive') {
+          return { status: mesa.status, outcome, error: 'La garantía ya no está vigente.' };
+        }
+      } catch {
+        return { status: 'pending_auth', outcome: 'ambiguous', error: 'Tu banco pudo haber autorizado la garantía; todavía la estamos verificando.' };
+      }
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    // El hold quedó autorizado en Stripe pero el webhook todavía no llegó.
-    throw new Error('guarantee_pending_webhook');
+    return { status: 'pending_auth', outcome: 'ambiguous', error: 'Tu banco pudo haber autorizado la garantía; todavía la estamos verificando.' };
   },
   lockItems: (code, items, guestToken) =>
     guestToken
@@ -433,7 +447,10 @@ const mockApi: Api = {
       undefined,
       () => mock.mockCreateMesa(req),
     ),
-  confirmGuarantee3ds: (code) => mock.mockConfirmGuarantee3ds(code),
+  async confirmGuarantee3ds(code) {
+    const result = await mock.mockConfirmGuarantee3ds(code);
+    return { ...result, outcome: result.status === 'open' ? 'success' as const : 'ambiguous' as const };
+  },
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
   payMesa: (code, req, guestToken) =>
     withPreparedMonetaryRequest(

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
   idempotencyKeyFor,
@@ -14,6 +14,7 @@ import { Avatar, TopBar, useToast } from '../components/ui';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { stringToCents } from '../utils/money';
+import { createInFlightMutex } from '../utils/inFlight';
 
 /** s-transfer: elegir amigo + monto + concepto → POST /transfers. */
 export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string }) {
@@ -26,6 +27,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
   const [amountStr, setAmountStr] = useState('');
   const [concept, setConcept] = useState('');
   const [busy, setBusy] = useState(false);
+  const transferInFlightRef = useRef(createInFlightMutex());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -75,8 +77,10 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
 
   async function doTransfer() {
     if (!to || amountCents <= 0) return;
+    if (!transferInFlightRef.current.tryEnter()) return;
     if (!transferScope || !actor) {
       setError(actorError ? 'No pudimos verificar una identidad segura para esta transferencia.' : 'Preparando una identidad segura para esta transferencia…');
+      transferInFlightRef.current.leave();
       return;
     }
     setBusy(true);
@@ -110,6 +114,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
         setError('No pudimos confirmar la transferencia. Revisá tu saldo antes de reintentar.');
       }
     } finally {
+      transferInFlightRef.current.leave();
       setBusy(false);
     }
   }

@@ -26,6 +26,7 @@ import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { centsToString, splitEqual, stringToCents } from '../utils/money';
+import { createInFlightMutex } from '../utils/inFlight';
 
 /**
  * Wizard del organizador (T2): scan → ticket → división → GARANTÍA (A-1,
@@ -106,6 +107,7 @@ export function CreateMesaFlow() {
   /** v2.24 (G-11): se pidió guardar la tarjeta y el riel directo la ignoró. */
   const [saveOmitidoConnect, setSaveOmitidoConnect] = useState(false);
   const [busy, setBusy] = useState(false);
+  const createInFlightRef = useRef(createInFlightMutex());
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateMesaResponse | null>(null);
   const [link, setLink] = useState<string | null>(null);
@@ -286,8 +288,10 @@ export function CreateMesaFlow() {
 
   async function createMesa() {
     if (!ticketValid) return;
+    if (!createInFlightRef.current.tryEnter()) return;
     if (!mesaScope || !actor) {
       setError(actorError ? 'No pudimos verificar una identidad segura para esta garantía.' : 'Preparando una identidad segura para esta garantía…');
+      createInFlightRef.current.leave();
       return;
     }
     setBusy(true);
@@ -440,6 +444,7 @@ export function CreateMesaFlow() {
         setError('No pudimos confirmar la apertura. Puede que la mesa ya se haya creado: reintentá esta misma apertura, no armes otra.');
       }
     } finally {
+      createInFlightRef.current.leave();
       setBusy(false);
     }
   }
@@ -459,33 +464,30 @@ export function CreateMesaFlow() {
     try {
       // v2.24 (Connect): si el hold vive en la cuenta del restaurante, el 3DS
       // se confirma con Stripe.js apuntando a esa cuenta.
-      await api.confirmGuarantee3ds(
+      const confirmation = await api.confirmGuarantee3ds(
         created.mesa.code,
         created.guarantee.client_secret,
         created.guarantee.connected_account_id,
       );
+      if (confirmation.outcome === 'ambiguous') {
+        setError(confirmation.error ?? 'Tu banco pudo haber autorizado la retención; todavía la estamos verificando.');
+        return;
+      }
+      if (confirmation.outcome === 'definitive') {
+        rotateIdempotencyKey(mesaScope);
+        unfreezeMesa();
+        setCreated(null);
+        setError(confirmation.error ?? 'El banco no autorizó la retención. Probá con otra tarjeta.');
+        setStep('garantia');
+        return;
+      }
       // Garantía autorizada: el intento se cierra acá.
       rotateIdempotencyKey(mesaScope);
       unfreezeMesa();
       await makeLink(created.mesa.code);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : '';
-      if (msg === 'guarantee_pending_webhook') {
-        // El banco autorizó pero el aviso todavía no llegó al backend: no es un
-        // rechazo, así que no mandamos al usuario a elegir otra garantía.
-        setError(
-          'Tu banco autorizó la retención, pero todavía la estamos confirmando. Esperá unos segundos y volvé a intentar.',
-        );
-      } else {
-        // El banco rechazó: ese hold murió y no hay forma de re-garantizar la
-        // misma mesa. Sin rotar, el reintento replayaba la mesa muerta y el
-        // usuario quedaba en un bucle sin salida.
-        rotateIdempotencyKey(mesaScope);
-        unfreezeMesa();
-        setCreated(null);
-        setError(msg || 'El banco no autorizó la retención. Probá con otra tarjeta.');
-        setStep('garantia');
-      }
+    } catch {
+      // Excepción local inesperada: no hay evidencia de rechazo del banco.
+      setError('No pudimos verificar la garantía. Reintentá esta misma confirmación; no abras otra mesa.');
     } finally {
       setBusy(false);
     }

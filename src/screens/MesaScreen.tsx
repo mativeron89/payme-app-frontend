@@ -16,6 +16,7 @@ import {
 } from '../api/idempotency';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
+import { mesaPaymentOutcome } from '../api/paymentStatus';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
@@ -33,6 +34,7 @@ import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
 import { goBack, navigate } from '../router';
 import { countdownTo, formatMXN } from '../utils/format';
 import { fractionAmount, stringToCents, tipFromBps } from '../utils/money';
+import { createInFlightMutex } from '../utils/inFlight';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -41,7 +43,7 @@ import { fractionAmount, stringToCents, tipFromBps } from '../utils/money';
  * INVITADO por link (#/mesa/:code?t=token, sin login).
  */
 
-type View = 'detail' | 'pay' | 'processing' | 'confirm';
+type View = 'detail' | 'pay' | 'confirm';
 
 const TIP_OPTIONS = [0, 10, 15, 20];
 
@@ -112,11 +114,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    */
   const payStartedRef = useRef(false);
   const [busy, setBusy] = useState(false);
+  const payInFlightRef = useRef(createInFlightMutex());
   const [error, setError] = useState<string | null>(null);
   /** El replay trajo un pago ya reembolsado: volver a pagar se decide a mano. */
   const [refundedNotice, setRefundedNotice] = useState(false);
   const [result, setResult] = useState<PayResult | null>(null);
-  const [procStep, setProcStep] = useState(0);
   const [, forceTick] = useState(0);
 
   const reload = useCallback(() => {
@@ -467,6 +469,31 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         reload();
         return;
       }
+      // La aprobación de Stripe no acredita sola el pago en PayMe. Esperamos
+      // el estado del backend y conservamos key/payload mientras tanto.
+      freezePay(scope, body);
+      setError('Tu banco aprobó la operación; todavía estamos confirmando el pago. Reintentá esta misma confirmación, sin cambiar el método.');
+      setBusy(false);
+      reload();
+      return;
+    }
+    const outcome = mesaPaymentOutcome(at.status);
+    if (outcome === 'definitive') {
+      rotateIdempotencyKey(scope);
+      unfreezePay();
+      setError('Ese pago no prosperó. Podés iniciar uno nuevo.');
+      setBusy(false);
+      reload();
+      return;
+    }
+    if (outcome !== 'success') {
+      // pending/requires_action/processing, shapes incompletos y estados
+      // nuevos no son acreditación. Se conserva el intento para reconciliar.
+      freezePay(scope, body);
+      setError('Estamos confirmando este pago. No inicies otro ni cambies el método hasta que se resuelva.');
+      setBusy(false);
+      reload();
+      return;
     }
     const methodLabel =
       payKind === 'wallet'
@@ -493,18 +520,20 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     // plato) es una intención NUEVA y necesita clave nueva.
     rotateIdempotencyKey(scope);
     unfreezePay();
-    setView('processing');
-    setProcStep(1);
+    setView('confirm');
+    setBusy(false);
   }
 
   async function doPay() {
     if (!mesa) return;
+    if (!payInFlightRef.current.tryEnter()) return;
     // B-06: el scope se CONGELA acá. Si algo lo mueve mientras el pago vuela
     // (una respuesta tardía de /payment-methods, un re-render), la clave que
     // se conserva para el reintento sigue siendo la de ESTE intento.
     const scope = payScope;
     if (!scope || !actor) {
       setError(actorError ? 'No pudimos verificar una identidad segura para este pago.' : 'Preparando una identidad segura para este pago…');
+      payInFlightRef.current.leave();
       return;
     }
     payStartedRef.current = true;
@@ -660,23 +689,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         reload();
       }
       setBusy(false);
+    } finally {
+      payInFlightRef.current.leave();
     }
   }
-
-  // Animación de estados reales: pending → succeeded → processed.
-  useEffect(() => {
-    if (view !== 'processing') return;
-    if (procStep >= 3) {
-      const t = setTimeout(() => {
-        setBusy(false);
-        setView('confirm');
-        reload();
-      }, 700);
-      return () => clearTimeout(t);
-    }
-    const t = setTimeout(() => setProcStep((s) => s + 1), 1000);
-    return () => clearTimeout(t);
-  }, [view, procStep, reload]);
 
   // ─── Estados de carga / error ────────────────────────────
   // OJO: el invitado NO puede salir a 'home' — navigate() reescribe el hash sin
@@ -799,48 +815,6 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <Icon name="home" size={16} className="ico-inline" /> Inicio
             </button>
           )}
-        </div>
-      </div>
-    );
-  }
-
-  // ─── Procesando (estados reales del attempt) ─────────────
-  if (view === 'processing' && result) {
-    const steps = ['Confirmando el cobro', 'Acreditando en la mesa', 'Listo'];
-    return (
-      <div className="screen">
-        <div className="scroll" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center', padding: '16px 0' }} role="status" aria-live="polite">
-            {procStep < 3 ? (
-              <div className="spinner" aria-hidden="true" />
-            ) : (
-              <div className="success-circle" aria-hidden="true">
-                ✓
-              </div>
-            )}
-            <div className="h2" style={{ marginTop: 18 }}>
-              {procStep < 2 ? 'Cobrando…' : procStep < 3 ? 'Acreditando…' : 'Pago acreditado'}
-            </div>
-            <div className="body-text" style={{ marginTop: 6 }}>
-              {formatMXN(result.gross)} · {result.methodLabel}
-            </div>
-          </div>
-          <div className="card card-p" style={{ marginTop: 8 }}>
-            {steps.map((desc, idx) => (
-              <div key={desc} className="flow-step">
-                <div
-                  className={`flow-dot ${procStep > idx + 1 ? 'done' : procStep === idx + 1 ? 'now' : ''}`}
-                  aria-hidden="true"
-                >
-                  {procStep > idx + 1 ? '✓' : idx + 1}
-                </div>
-                <div className="flow-line">
-                  <b>{desc}</b>
-                  {procStep > idx + 1 ? ' ✓' : procStep === idx + 1 ? '…' : ''}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     );
