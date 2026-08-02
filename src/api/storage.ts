@@ -17,6 +17,13 @@ export interface StoredSession {
   access_token: string;
   refresh_token: string;
   user?: User;
+  family_id: string;
+  principal_id: string;
+}
+
+export function createSession(session: Omit<StoredSession, 'family_id' | 'principal_id'>): StoredSession {
+  if (!session.user?.id) throw new Error('session_identity_required');
+  return { ...session, family_id: crypto.randomUUID(), principal_id: session.user.id };
 }
 
 export function saveSession(s: StoredSession): void {
@@ -32,7 +39,9 @@ export function loadSession(): StoredSession | null {
       typeof parsed === 'object' &&
       parsed !== null &&
       typeof (parsed as StoredSession).access_token === 'string' &&
-      typeof (parsed as StoredSession).refresh_token === 'string'
+      typeof (parsed as StoredSession).refresh_token === 'string' &&
+      typeof (parsed as StoredSession).family_id === 'string' &&
+      typeof (parsed as StoredSession).principal_id === 'string'
     ) {
       return parsed as StoredSession;
     }
@@ -41,6 +50,24 @@ export function loadSession(): StoredSession | null {
   }
   localStorage.removeItem(KEY);
   return null;
+}
+
+export function isCurrentSession(session: StoredSession): boolean {
+  const current = loadSession();
+  return !!current && current.family_id === session.family_id && current.principal_id === session.principal_id;
+}
+
+/** CAS: respuestas viejas no pueden adoptar ni borrar otra familia. */
+export function replaceCurrentSession(expected: StoredSession, next: StoredSession): boolean {
+  if (!isCurrentSession(expected)) return false;
+  saveSession(next);
+  return true;
+}
+
+export function clearCurrentSession(expected: StoredSession): boolean {
+  if (!isCurrentSession(expected)) return false;
+  clearSession();
+  return true;
 }
 
 export function clearSession(): void {

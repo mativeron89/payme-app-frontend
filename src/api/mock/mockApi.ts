@@ -1,5 +1,5 @@
 import { centsToDisplay, fractionAmount, splitEqual, tipFromBps } from '../../utils/money';
-import { saveSession, type StoredSession } from '../storage';
+import { createSession, saveSession, type StoredSession } from '../storage';
 import type {
   MeResponse,
   RestaurantResponse,
@@ -163,11 +163,11 @@ export async function mockLogin(email: string, _password: string): Promise<Store
     ...(derived && { first_name: derived, last_name: '' }),
   };
   state.user = user;
-  const session: StoredSession = {
+  const session = createSession({
     access_token: 'mock-access-token',
     refresh_token: 'mock-refresh-token',
     user,
-  };
+  });
   saveSession(session);
   return delay(session);
 }
@@ -183,11 +183,11 @@ export async function mockRegister(data: {
   last_name: string;
 }): Promise<StoredSession> {
   state.user = { ...MOCK_USER, ...data };
-  const session: StoredSession = {
+  const session = createSession({
     access_token: 'mock-access-token',
     refresh_token: 'mock-refresh-token',
     user: state.user,
-  };
+  });
   saveSession(session);
   return delay(session);
 }

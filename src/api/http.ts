@@ -1,4 +1,4 @@
-import { clearSession, loadSession, saveSession, type StoredSession } from './storage';
+import { clearCurrentSession, createSession, isCurrentSession, loadSession, replaceCurrentSession, type StoredSession } from './storage';
 import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenPair } from './types';
 
 /**
@@ -14,7 +14,7 @@ import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenP
 const BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 let onSessionExpiredCb: (() => void) | null = null;
-let refreshInFlight: Promise<StoredSession | null> | null = null;
+const refreshInFlight = new Map<string, Promise<StoredSession | null>>();
 
 export function setOnSessionExpired(cb: (() => void) | null): void {
   onSessionExpiredCb = cb;
@@ -77,10 +77,17 @@ async function rawRequest<T>(
 
 /** Refresh con rotación: guarda el par nuevo de tokens antes de devolver. */
 async function tryRefresh(session: StoredSession): Promise<StoredSession | null> {
-  const current = loadSession();
-  if (current && current.refresh_token !== session.refresh_token) return current;
-  if (!refreshInFlight) {
-    refreshInFlight = (async () => {
+  if (!isCurrentSession(session)) return null;
+  const existing = refreshInFlight.get(session.family_id);
+  if (existing) return existing;
+  const run = async () => {
+    if (!isCurrentSession(session)) return null;
+    const lock = globalThis.navigator?.locks;
+    if (!lock) return null;
+    return lock.request(`payme-refresh-${session.family_id}`, { mode: 'exclusive' }, async () => {
+      const current = loadSession();
+      if (!current || current.family_id !== session.family_id || current.principal_id !== session.principal_id) return null;
+      if (current.refresh_token !== session.refresh_token) return current;
       try {
         // El refresh devuelve SOLO tokens (sin `user` — decisión G-02 v2.20).
         const r = await rawRequest<TokenPair>('POST', '/auth/refresh', {
@@ -90,17 +97,18 @@ async function tryRefresh(session: StoredSession): Promise<StoredSession | null>
           access_token: r.access_token,
           refresh_token: r.refresh_token,
           user: session.user,
+          family_id: session.family_id,
+          principal_id: session.principal_id,
         };
-        saveSession(updated);
-        return updated;
+        return replaceCurrentSession(session, updated) ? updated : null;
       } catch {
         return null;
       }
-    })().finally(() => {
-      refreshInFlight = null;
     });
-  }
-  return refreshInFlight;
+  };
+  const pending = run().finally(() => refreshInFlight.delete(session.family_id));
+  refreshInFlight.set(session.family_id, pending);
+  return pending;
 }
 
 /** Request PÚBLICA (sin sesión): hoy solo restaurantes (G-01, v2.21). */
@@ -117,9 +125,10 @@ export async function httpRequest<T>(method: string, path: string, body?: unknow
   } catch (err) {
     if (err instanceof HttpError && err.status === 401) {
       const refreshed = await tryRefresh(session);
-      if (refreshed) return rawRequest<T>(method, path, body, refreshed.access_token);
-      clearSession();
-      onSessionExpiredCb?.();
+      if (refreshed && refreshed.family_id === session.family_id && refreshed.principal_id === session.principal_id && isCurrentSession(refreshed)) {
+        return rawRequest<T>(method, path, body, refreshed.access_token);
+      }
+      if (clearCurrentSession(session)) onSessionExpiredCb?.();
     }
     throw err;
   }
@@ -158,23 +167,21 @@ export async function httpGuestRequest<T>(
 
 export async function httpLogin(email: string, password: string): Promise<StoredSession> {
   const r = await rawRequest<LoginResponse>('POST', '/auth/login', { email, password });
-  const session: StoredSession = {
+  const session = createSession({
     access_token: r.access_token,
     refresh_token: r.refresh_token,
     user: r.user,
-  };
-  saveSession(session);
+  });
   return session;
 }
 
 export async function httpRegister(data: RegisterRequest): Promise<StoredSession> {
   const r = await rawRequest<RegisterResponse>('POST', '/auth/register', data);
-  const session: StoredSession = {
+  const session = createSession({
     access_token: r.access_token,
     refresh_token: r.refresh_token,
     user: r.user,
-  };
-  saveSession(session);
+  });
   return session;
 }
 
@@ -187,5 +194,5 @@ export async function httpLogout(): Promise<void> {
       // logout best-effort: la sesión local se limpia igual
     }
   }
-  clearSession();
+  if (session) clearCurrentSession(session);
 }

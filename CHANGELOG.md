@@ -1,5 +1,12 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.29.4 — Familia de sesión y refresh fail-closed (2026-08-02)
+
+- Login/registro crean una familia y principal opacos; refresh conserva ambos y
+  usa compare-and-swap antes de guardar o limpiar una sesión.
+- Los retries autenticados abortan si la familia cambia. La rotación exige Web
+  Locks y falla cerrada cuando no existe exclusión acreditable.
+
 ## 0.29.3 — Clasificación B-06 y checks locales (2026-08-02)
 
 - Los rechazos definitivos del contrato rotan aunque lleguen como 409; solo
