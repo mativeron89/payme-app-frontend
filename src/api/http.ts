@@ -47,19 +47,21 @@ async function parseBody(res: Response): Promise<ApiError | null> {
  * se conserva, así que el reintento cae en el replay del backend).
  */
 const REQUEST_TIMEOUT_MS = 30_000;
+export const OCR_TIMEOUT_MS = 60_000;
 
 async function rawRequest<T>(
   method: string,
   path: string,
   body?: unknown,
   token?: string,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}/api${path}`, {
@@ -77,7 +79,14 @@ async function rawRequest<T>(
 
 /** Refresh con rotación: guarda el par nuevo de tokens antes de devolver. */
 async function tryRefresh(session: StoredSession): Promise<StoredSession | null> {
-  if (!isCurrentSession(session)) return null;
+  if (!isCurrentSession(session)) {
+    const current = loadSession();
+    // R1 pudo rotar antes de que R2 procese su 401: reutilizar SOLO la misma
+    // familia/principal evita un refresh viejo y permite un único retry.
+    return current && current.family_id === session.family_id && current.principal_id === session.principal_id
+      ? current
+      : null;
+  }
   const existing = refreshInFlight.get(session.family_id);
   if (existing) return existing;
   const run = async () => {
@@ -122,16 +131,17 @@ export async function httpRequest<T>(
   path: string,
   body?: unknown,
   expectedSession?: StoredSession,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const session = expectedSession ?? loadSession();
   if (!session || !isCurrentSession(session)) throw new HttpError(401, { error: 'auth_required' });
   try {
-    return await rawRequest<T>(method, path, body, session.access_token);
+    return await rawRequest<T>(method, path, body, session.access_token, timeoutMs);
   } catch (err) {
     if (err instanceof HttpError && err.status === 401) {
       const refreshed = await tryRefresh(session);
       if (refreshed && refreshed.family_id === session.family_id && refreshed.principal_id === session.principal_id && isCurrentSession(refreshed)) {
-        return rawRequest<T>(method, path, body, refreshed.access_token);
+        return rawRequest<T>(method, path, body, refreshed.access_token, timeoutMs);
       }
       if (clearCurrentSession(session)) onSessionExpiredCb?.();
     }

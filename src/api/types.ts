@@ -461,6 +461,8 @@ export interface TopupCardResponse {
   requires_action: boolean;
   client_secret?: string;
 }
+/** GET /api/topup/:id → estado de reconciliación de la carga. */
+export interface TopupStatusResponse { topup: { id: string; status: string; amount_cents: number; amount_display: string }; }
 
 /** GET /api/wallet/clabe (A-3, abono SPEI). */
 export interface ClabeResponse {

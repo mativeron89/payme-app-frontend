@@ -5,6 +5,7 @@ import {
   httpPublicRequest,
   httpRegister,
   httpRequest,
+  OCR_TIMEOUT_MS,
   setOnSessionExpired,
 } from './http';
 import * as mock from './mock/mockApi';
@@ -40,6 +41,7 @@ import type {
   StatsResponse,
   TopupCardResponse,
   TopupOxxoResponse,
+  TopupStatusResponse,
   TransfersResponse,
   WalletTransactionsResponse,
   HistoryResponse,
@@ -177,6 +179,7 @@ export interface Api {
     paymentMethodId: string,
     idempotencyKey: string,
   ): Promise<TopupCardResponse>;
+  getTopup(id: string): Promise<TopupStatusResponse>;
   getClabe(): Promise<ClabeResponse>;
   // transfers
   createTransfer(req: CreateTransferRequest): Promise<CreateTransferResponse>;
@@ -244,10 +247,10 @@ const realApi: Api = {
   async scanTicket(image) {
     // POST /api/ocr es multipart (campo `image`). Pasa por httpRequest para
     // compartir timeout, refresh rotativo y errores normalizados con el resto.
-    if (!image) throw new Error('scanTicket requiere imagen en modo real');
+    if (!image || image.size <= 0 || image.size > 10 * 1024 * 1024) throw new Error('scanTicket requiere una imagen de hasta 10 MB');
     const form = new FormData();
     form.append('image', image, 'ticket.jpg');
-    return httpRequest<OcrResponse>('POST', '/ocr', form);
+    return httpRequest<OcrResponse>('POST', '/ocr', form, undefined, OCR_TIMEOUT_MS);
   },
   createMesa: (req) =>
     withPreparedMonetaryRequest(
@@ -352,6 +355,7 @@ const realApi: Api = {
       (session) => httpRequest<TopupCardResponse>('POST', '/topup/card', req, session),
     );
   },
+  getTopup: (id) => httpRequest<TopupStatusResponse>('GET', `/topup/${encodeURIComponent(id)}`),
   getClabe: () => httpRequest<ClabeResponse>('GET', '/wallet/clabe'),
 
   createTransfer: (req) =>
@@ -479,6 +483,7 @@ const mockApi: Api = {
       undefined,
       () => mock.mockTopupCard(amountCents, paymentMethodId),
     ),
+  getTopup: async () => { throw new Error('topup_reconciliation_unavailable_in_mock'); },
   getClabe: () => mock.mockGetClabe(),
 
   createTransfer: (req) =>

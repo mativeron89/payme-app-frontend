@@ -101,6 +101,22 @@ export function TopupScreen() {
             setError(confirmed.error);
             return;
           }
+          try {
+            const reconciled = await api.getTopup(r.topup.id);
+            if (reconciled.topup.status === 'succeeded') {
+              rotateIdempotencyKey(topupScope);
+              toast(`Se acreditaron ${formatMXN(amountCents)} ✓`);
+              navigate('cuenta');
+              return;
+            }
+            if (reconciled.topup.status === 'failed' || reconciled.topup.status === 'cancelled') {
+              rotateIdempotencyKey(topupScope);
+              setError('Ese cobro no prosperó. Podés iniciar una nueva carga.');
+              return;
+            }
+          } catch {
+            // Sin evidencia de estado, el journal queda in_flight/sending.
+          }
           setError('Tu banco aprobó la carga; todavía estamos confirmando el saldo. No inicies otra carga con este monto.');
           return;
         }

@@ -121,6 +121,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [result, setResult] = useState<PayResult | null>(null);
   const [, forceTick] = useState(0);
 
+  // Un token guest nuevo para el mismo código es otra identidad: ningún
+  // estado visual o lock de A puede sobrevivir para B.
+  useEffect(() => {
+    setSelected(new Map()); setLockTokens([]); setTipPct(15); setTipMode('pct');
+    setCustomTipStr(''); setStaffId(null); setPayType('card'); setCardChoice('new');
+    setError(null); setBusy(false); setView('detail');
+  }, [guestToken]);
+
   const reload = useCallback(() => {
     api
       .getMesa(code, guestToken)
@@ -729,7 +737,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const guestHeader = isGuest && (
     <div style={{ background: 'var(--teal-l)', padding: '14px 16px', borderBottom: '1px solid var(--teal)' }}>
       <div className="caption" style={{ color: 'var(--navy)' }}>
-        {previewingAsGuest ? 'Así lo ve quien recibe tu link' : 'Te invitaron a'}
+        {'Te invitaron a'}
       </div>
       <div style={{ fontSize: 'var(--fs-md)', fontWeight: 700 }}>
         {code} · {mesa.restaurant.name}
@@ -740,7 +748,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           style={{ padding: '6px 0 0' }}
           onClick={() => navigate('home')}
         >
-          ← Salir de la vista de invitado
+          ← Volver a mi cuenta
         </button>
       )}
     </div>

@@ -108,6 +108,7 @@ export function CreateMesaFlow() {
   const [saveOmitidoConnect, setSaveOmitidoConnect] = useState(false);
   const [busy, setBusy] = useState(false);
   const createInFlightRef = useRef(createInFlightMutex());
+  const confirm3dsInFlightRef = useRef(createInFlightMutex());
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateMesaResponse | null>(null);
   const [link, setLink] = useState<string | null>(null);
@@ -451,12 +452,14 @@ export function CreateMesaFlow() {
 
   async function confirm3ds() {
     if (!created) return;
+    if (!confirm3dsInFlightRef.current.tryEnter()) return;
     // El replay de una mesa en `pending_auth` recupera el client_secret con
     // best-effort: si Stripe no respondió, viene vacío. Mandarlo así hacía
     // fallar la confirmación y el mensaje mentía ("el banco no autorizó").
     if (!created.guarantee.client_secret) {
       setError('Estamos recuperando la confirmación de tu banco. Tocá reintentar en unos segundos.');
       setStep('garantia');
+      confirm3dsInFlightRef.current.leave();
       return;
     }
     setBusy(true);
@@ -489,6 +492,7 @@ export function CreateMesaFlow() {
       // Excepción local inesperada: no hay evidencia de rechazo del banco.
       setError('No pudimos verificar la garantía. Reintentá esta misma confirmación; no abras otra mesa.');
     } finally {
+      confirm3dsInFlightRef.current.leave();
       setBusy(false);
     }
   }
