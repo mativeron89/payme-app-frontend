@@ -8,6 +8,7 @@ import {
   setOnSessionExpired,
 } from './http';
 import * as mock from './mock/mockApi';
+import { withPreparedMonetaryRequest } from './idempotency';
 import { clearSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
 import type {
@@ -247,7 +248,14 @@ const realApi: Api = {
     form.append('image', image, 'ticket.jpg');
     return httpRequest<OcrResponse>('POST', '/ocr', form);
   },
-  createMesa: (req) => httpRequest<CreateMesaResponse>('POST', '/mesas', req),
+  createMesa: (req) =>
+    withPreparedMonetaryRequest(
+      'create_mesa',
+      req.idempotency_key ?? '',
+      req,
+      undefined,
+      (session) => httpRequest<CreateMesaResponse>('POST', '/mesas', req, session),
+    ),
   /**
    * 3DS de la garantía: se confirma con Stripe.js y después se espera a que la
    * mesa pase a 'open'. Ese cambio lo hace el WEBHOOK
@@ -281,14 +289,21 @@ const realApi: Api = {
           items,
         }),
   payMesa: (code, req, guestToken) =>
-    guestToken
-      ? httpGuestRequest<PayMesaResponse>(
-          'POST',
-          `/mesas/${encodeURIComponent(code)}/pay`,
-          guestToken,
-          req,
-        )
-      : httpRequest<PayMesaResponse>('POST', `/mesas/${encodeURIComponent(code)}/pay`, req),
+    withPreparedMonetaryRequest(
+      `mesa_pay:${code}`,
+      req.idempotency_key,
+      req,
+      guestToken,
+      (session) =>
+        guestToken
+          ? httpGuestRequest<PayMesaResponse>(
+              'POST',
+              `/mesas/${encodeURIComponent(code)}/pay`,
+              guestToken,
+              req,
+            )
+          : httpRequest<PayMesaResponse>('POST', `/mesas/${encodeURIComponent(code)}/pay`, req, session),
+    ),
   createInvitation: (code) =>
     httpRequest<CreateInvitationResponse>('POST', `/mesas/${encodeURIComponent(code)}/invitations`, {
       type: 'link',
@@ -299,20 +314,40 @@ const realApi: Api = {
       invited_payme_id: paymeId,
     }),
 
-  topupOxxo: (amountCents, idempotencyKey) =>
-    httpRequest<TopupOxxoResponse>('POST', '/topup/oxxo', {
-      amount_cents: amountCents,
-      idempotency_key: idempotencyKey,
-    }),
-  topupCard: (amountCents, paymentMethodId, idempotencyKey) =>
-    httpRequest<TopupCardResponse>('POST', '/topup/card', {
+  topupOxxo: (amountCents, idempotencyKey) => {
+    const req = { amount_cents: amountCents, idempotency_key: idempotencyKey };
+    return withPreparedMonetaryRequest(
+      'topup_oxxo',
+      idempotencyKey,
+      req,
+      undefined,
+      (session) => httpRequest<TopupOxxoResponse>('POST', '/topup/oxxo', req, session),
+    );
+  },
+  topupCard: (amountCents, paymentMethodId, idempotencyKey) => {
+    const req = {
       amount_cents: amountCents,
       payment_method_id: paymentMethodId,
       idempotency_key: idempotencyKey,
-    }),
+    };
+    return withPreparedMonetaryRequest(
+      'topup_card',
+      idempotencyKey,
+      req,
+      undefined,
+      (session) => httpRequest<TopupCardResponse>('POST', '/topup/card', req, session),
+    );
+  },
   getClabe: () => httpRequest<ClabeResponse>('GET', '/wallet/clabe'),
 
-  createTransfer: (req) => httpRequest<CreateTransferResponse>('POST', '/transfers', req),
+  createTransfer: (req) =>
+    withPreparedMonetaryRequest(
+      'transfer',
+      req.idempotency_key,
+      req,
+      undefined,
+      (session) => httpRequest<CreateTransferResponse>('POST', '/transfers', req, session),
+    ),
   listTransfers: () => httpRequest<TransfersResponse>('GET', '/transfers'),
 
   getPaymentMethods: () => httpRequest<PaymentMethodsResponse>('GET', '/payment-methods'),
@@ -390,18 +425,47 @@ const mockApi: Api = {
   getOpenMesas: () => mock.mockOpenMesas(),
   getMesa: (code, guestToken) => mock.mockGetMesa(code, guestToken ? 'guest' : 'user'),
   scanTicket: () => mock.mockScanTicket(),
-  createMesa: (req) => mock.mockCreateMesa(req),
+  createMesa: (req) =>
+    withPreparedMonetaryRequest(
+      'create_mesa',
+      req.idempotency_key ?? '',
+      req,
+      undefined,
+      () => mock.mockCreateMesa(req),
+    ),
   confirmGuarantee3ds: (code) => mock.mockConfirmGuarantee3ds(code),
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
-  payMesa: (code, req, guestToken) => mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user'),
+  payMesa: (code, req, guestToken) =>
+    withPreparedMonetaryRequest(
+      `mesa_pay:${code}`,
+      req.idempotency_key,
+      req,
+      guestToken,
+      () => mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user'),
+    ),
   createInvitation: (code) => mock.mockCreateInvitation(code),
   inviteFriend: (code, paymeId) => mock.mockInviteFriend(code, paymeId),
 
-  topupOxxo: (amountCents) => mock.mockTopupOxxo(amountCents),
-  topupCard: (amountCents, paymentMethodId) => mock.mockTopupCard(amountCents, paymentMethodId),
+  topupOxxo: (amountCents, idempotencyKey) =>
+    withPreparedMonetaryRequest(
+      'topup_oxxo',
+      idempotencyKey,
+      { amount_cents: amountCents, idempotency_key: idempotencyKey },
+      undefined,
+      () => mock.mockTopupOxxo(amountCents),
+    ),
+  topupCard: (amountCents, paymentMethodId, idempotencyKey) =>
+    withPreparedMonetaryRequest(
+      'topup_card',
+      idempotencyKey,
+      { amount_cents: amountCents, payment_method_id: paymentMethodId, idempotency_key: idempotencyKey },
+      undefined,
+      () => mock.mockTopupCard(amountCents, paymentMethodId),
+    ),
   getClabe: () => mock.mockGetClabe(),
 
-  createTransfer: (req) => mock.mockCreateTransfer(req),
+  createTransfer: (req) =>
+    withPreparedMonetaryRequest('transfer', req.idempotency_key, req, undefined, () => mock.mockCreateTransfer(req)),
   listTransfers: () => mock.mockListTransfers(),
 
   getPaymentMethods: () => mock.mockPaymentMethods(),

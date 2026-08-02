@@ -6,11 +6,14 @@ import {
   clearUnconfirmed,
   idempotencyKeyFor,
   markUnconfirmed,
+  prepareMonetaryRequest,
   readUnconfirmed,
   recallPaymentMethod,
   rememberPaymentMethod,
   rotateIdempotencyKey,
+  scopeForActor,
   shouldRotateOnError,
+  useMoneyActor,
 } from '../api/idempotency';
 import { MockApiError } from '../api/mock/mockApi';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
@@ -87,6 +90,7 @@ function makeDemoImage(): Promise<Blob> {
 
 export function CreateMesaFlow() {
   const toast = useToast();
+  const { actor, error: actorError } = useMoneyActor();
   const [step, setStep] = useState<Step>('scan');
   const [scanning, setScanning] = useState(false);
   const [editItems, setEditItems] = useState<EditItem[]>([]);
@@ -140,7 +144,9 @@ export function CreateMesaFlow() {
    * El total entra porque es lo que se retiene: una garantía por otro monto
    * NUNCA puede replayar la anterior.
    */
-  const mesaScopeBase = `mesa:${restaurantId || 'sin-restaurante'}`;
+  const mesaScopeBase = actor
+    ? scopeForActor(actor, `mesa:${restaurantId || 'sin-restaurante'}`)
+    : '';
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [restaurantError, setRestaurantError] = useState<string | null>(null);
   useEffect(() => {
@@ -166,21 +172,31 @@ export function CreateMesaFlow() {
   // La tarjeta elegida queda AFUERA a propósito, igual que allá: el `pm_` de una
   // tarjeta tipeada cambia en cada invocación de Stripe.js, y meterlo acá haría
   // que cambiar de tarjeta abriera una segunda mesa con un segundo hold.
-  const contentScope = `${mesaScopeBase}|${total}|${division}|${participants}|${method}`;
+  const contentScope = actor
+    ? scopeForActor(actor, `mesa:${restaurantId || 'sin-restaurante'}|${total}|${division}|${participants}|${method}`)
+    : '';
   /**
    * Intento de apertura SIN CONFIRMAR (error ambiguo). La mesa puede existir
    * ya, con su garantía por el TOTAL retenida. Mientras esté congelado no se
    * puede editar nada: abrir otra mesa sería un segundo hold por el total.
    */
-  const [frozenScope, setFrozenScope] = useState<string | null>(
-    () => readUnconfirmed(mesaScopeBase)?.scope ?? null,
-  );
+  const [frozenScope, setFrozenScope] = useState<string | null>(null);
+  useEffect(() => {
+    if (!mesaScopeBase) return;
+    try {
+      setFrozenScope(readUnconfirmed(mesaScopeBase)?.scope ?? null);
+    } catch {
+      setError('Hay una apertura anterior que no podemos atribuir de forma segura. Descartala o reconciliála antes de abrir otra.');
+    }
+  }, [mesaScopeBase]);
   const mesaScope = frozenScope ?? contentScope;
   function freezeMesa(scope: string) {
+    if (!mesaScopeBase) throw new Error('money_actor_unavailable');
     markUnconfirmed(mesaScopeBase, scope);
     setFrozenScope(scope);
   }
   function unfreezeMesa() {
+    if (!mesaScopeBase) return;
     clearUnconfirmed(mesaScopeBase);
     setFrozenScope(null);
   }
@@ -270,9 +286,14 @@ export function CreateMesaFlow() {
 
   async function createMesa() {
     if (!ticketValid) return;
+    if (!mesaScope || !actor) {
+      setError(actorError ? 'No pudimos verificar una identidad segura para esta garantía.' : 'Preparando una identidad segura para esta garantía…');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
+      const idempotencyKey = await idempotencyKeyFor(mesaScope, 'create_mesa');
       // Garantía con tarjeta (D4 v2.16): una GUARDADA viaja como
       // `payment_method_id` (uuid, sin Elements); una NUEVA se crea desde el
       // Card Element y viaja como `stripe_payment_method_id` (pm_…), con
@@ -292,7 +313,7 @@ export function CreateMesaFlow() {
         } else if (IS_MOCK) {
           stripePmId =
             recallPaymentMethod(mesaScope) ?? `pm_mock_nueva_${Date.now().toString(36)}`;
-          rememberPaymentMethod(mesaScope, stripePmId);
+          await rememberPaymentMethod(mesaScope, stripePmId);
           savingNewCard = saveCard;
         } else {
           // v2.16: el backend crea el cliente Stripe lazy en la propia
@@ -316,7 +337,7 @@ export function CreateMesaFlow() {
               return;
             }
             stripePmId = res.paymentMethodId;
-            rememberPaymentMethod(mesaScope, stripePmId);
+            await rememberPaymentMethod(mesaScope, stripePmId);
           }
           savingNewCard = saveCard;
         }
@@ -328,7 +349,7 @@ export function CreateMesaFlow() {
         return;
       }
 
-      const r = await api.createMesa({
+      const request = {
         restaurant_id: restaurant.id,
         total_cents: total,
         division_mode: division,
@@ -337,7 +358,7 @@ export function CreateMesaFlow() {
         // B-06 (v2.25): clave estable del intento de ABRIR la mesa. Sin esto,
         // perder la respuesta y reintentar creaba una segunda mesa con una
         // segunda garantía por el total, que termina capturándose sola.
-        idempotency_key: idempotencyKeyFor(mesaScope),
+        idempotency_key: idempotencyKey,
         ...(stripePmId && { stripe_payment_method_id: stripePmId }),
         ...(savedPmId && { payment_method_id: savedPmId }),
         ...(savingNewCard && { save_payment_method: true }),
@@ -352,7 +373,9 @@ export function CreateMesaFlow() {
             ...(i.category && { category: i.category }),
           })),
         ),
-      });
+      };
+      await prepareMonetaryRequest(mesaScope, 'create_mesa', request);
+      const r = await api.createMesa(request);
       setCreated(r);
       // v2.24 (Connect): con hold directo el backend IGNORA
       // save_payment_method — la tarjeta no queda en la bóveda de PayMe (G-11).

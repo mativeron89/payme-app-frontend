@@ -117,9 +117,14 @@ export async function httpPublicRequest<T>(method: string, path: string): Promis
 }
 
 /** Request autenticada con retry-tras-refresh (una sola vez). */
-export async function httpRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const session = loadSession();
-  if (!session) throw new HttpError(401, { error: 'auth_required' });
+export async function httpRequest<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  expectedSession?: StoredSession,
+): Promise<T> {
+  const session = expectedSession ?? loadSession();
+  if (!session || !isCurrentSession(session)) throw new HttpError(401, { error: 'auth_required' });
   try {
     return await rawRequest<T>(method, path, body, session.access_token);
   } catch (err) {

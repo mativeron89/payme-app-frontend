@@ -1,121 +1,294 @@
-/**
- * Claves de idempotencia ESTABLES por intento de operación (B-06).
- *
- * El bug: generábamos una clave nueva DENTRO de cada llamada, así que la
- * idempotencia del backend —que está bien hecha— nunca se ejercía. Si se
- * perdía la respuesta de un pago YA cobrado, el reintento se llevaba el
- * casillero de otro comensal (o cobraba otra fracción del mismo plato).
- *
- * Reglas (acordadas con el backend, contrato v2.25.0):
- *  - El scope se DERIVA DEL CONTENIDO del pago (ítems, propina, método), como
- *    en Transfer/Topup. Payload distinto = scope distinto = clave distinta,
- *    sin rotar nada. Payload idéntico = misma clave, aunque el usuario haya
- *    recargado o salido de la mesa y vuelto → el reintento cae en el replay.
- *  - NO se rota "por efecto" (un `useEffect` con deps corre también en el
- *    MONTAJE y borraba la clave justo cuando el usuario vuelve a mirar la
- *    mesa, que es lo que el propio mensaje de error le pide hacer).
- *  - Se ROTA cuando el intento murió de verdad (402, 502, 3DS rechazado,
- *    `idempotency_key_terminal`) — ahí el backend ya liberó el casillero — y
- *    tras el ÉXITO, porque el pago siguiente es otra intención.
- *  - JAMÁS se rota ante `refunded`: ese pago SÍ se cobró, y rotar ahí
- *    re-cobraría un reembolso (aviso del backend).
- *  - JAMÁS se rota ante `idempotency_conflict`: significa que hay un intento
- *    VIVO con otro payload. Rotar ahí es exactamente el doble cobro.
- *
- * Vive en `sessionStorage` y no en memoria: con un `useRef`, recargar la
- * página entre el fallo y el reintento hace volver el bug entero.
- *
- * El `pm_` viaja JUNTO a la clave porque Stripe.js devuelve uno distinto por
- * invocación y el backend lo incluye en el hash del payload: sin cachearlo,
- * reusar la clave daría `409 idempotency_conflict` en bucle.
- */
+import { useEffect, useState } from 'react';
+import { loadSession, type StoredSession } from './storage';
 
-const PREFIX = 'payme_idem_';
-const memoryAttempts = new Map<string, StoredAttempt>();
+/** No se puede acreditar un intento monetario; la UI debe detenerse. */
+export class MonetarySafetyError extends Error {
+  constructor(code: string) {
+    super(code);
+    this.name = 'MonetarySafetyError';
+  }
+}
+
+export interface MoneyActor {
+  /** auth:<principal> o guest:<sha256>; nunca contiene el token guest crudo. */
+  id: string;
+  session?: StoredSession;
+}
+
+const PREFIX = 'payme_idem_v2_';
+const PENDING_PREFIX = 'payme_pending_v2_';
+const PREPARED_PREFIX = 'payme_money_prepared_v2_';
+const LEGACY_PREFIX = 'payme_idem_';
+const LEGACY_PENDING_PREFIX = 'payme_pending_';
+const SEPARATOR = '::';
 
 interface StoredAttempt {
+  actor: string;
+  scope: string;
   key: string;
-  /** `pm_…` de una tarjeta tipeada, para no re-tokenizar en el reintento. */
+  operation: string;
+  /** Auth: una familia nueva no puede firmar un intento iniciado por la vieja. */
+  family_id?: string;
   pm?: string;
+  payload?: unknown;
+}
+
+function stable(value: unknown): string {
+  return JSON.stringify(value);
+}
+
+function storageGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    throw new MonetarySafetyError('money_storage_unavailable');
+  }
+}
+
+function storageSet(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+    if (sessionStorage.getItem(key) !== value) throw new Error('roundtrip');
+  } catch {
+    throw new MonetarySafetyError('money_storage_unavailable');
+  }
+}
+
+function storageRemove(key: string): void {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // Limpiar no autoriza un reintento: el próximo acceso seguirá fail-closed.
+  }
+}
+
+function parseScope(scope: string): { actor: string; raw: string } {
+  const split = scope.indexOf(SEPARATOR);
+  if (split <= 0 || split === scope.length - SEPARATOR.length) {
+    throw new MonetarySafetyError('monetary_attempt_ambiguous');
+  }
+  const actor = scope.slice(0, split);
+  const raw = scope.slice(split + SEPARATOR.length);
+  if (!actor.startsWith('auth:') && !actor.startsWith('guest:')) {
+    throw new MonetarySafetyError('monetary_attempt_ambiguous');
+  }
+  return { actor, raw };
+}
+
+function scopedKey(prefix: string, scope: string): string {
+  return prefix + encodeURIComponent(scope);
+}
+
+function assertNoLegacy(scope: string, prefix: string): void {
+  const { raw } = parseScope(scope);
+  // Un registro previo sin propietario no puede atribuirse al actor actual.
+  if (storageGet(prefix + raw) !== null) throw new MonetarySafetyError('monetary_attempt_ambiguous');
+}
+
+function readAttempt(scope: string): StoredAttempt | null {
+  const expected = parseScope(scope);
+  assertNoLegacy(scope, LEGACY_PREFIX);
+  const raw = storageGet(scopedKey(PREFIX, scope));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as StoredAttempt;
+    if (
+      typeof parsed?.key !== 'string' ||
+      typeof parsed.actor !== 'string' ||
+      typeof parsed.scope !== 'string' ||
+      typeof parsed.operation !== 'string' ||
+      parsed.actor !== expected.actor ||
+      parsed.scope !== scope
+    ) {
+      throw new Error('invalid');
+    }
+    return parsed;
+  } catch {
+    throw new MonetarySafetyError('monetary_attempt_ambiguous');
+  }
+}
+
+function writeAttempt(scope: string, attempt: StoredAttempt): void {
+  const expected = parseScope(scope);
+  if (attempt.actor !== expected.actor || attempt.scope !== scope) {
+    throw new MonetarySafetyError('monetary_attempt_ambiguous');
+  }
+  storageSet(scopedKey(PREFIX, scope), stable(attempt));
+}
+
+function currentFamilyForActor(actor: string): string | undefined {
+  if (!actor.startsWith('auth:')) return undefined;
+  const session = loadSession();
+  if (!session || actor !== `auth:${session.principal_id}`) {
+    throw new MonetarySafetyError('money_actor_unavailable');
+  }
+  return session.family_id;
+}
+
+async function withMoneyLock<T>(actor: string, resource: string, action: () => Promise<T>): Promise<T> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) throw new MonetarySafetyError('money_lock_unavailable');
+  return locks.request(`payme-money-${actor}-${resource}`, { mode: 'exclusive' }, action);
 }
 
 function newKey(): string {
+  if (!globalThis.crypto?.randomUUID) throw new MonetarySafetyError('money_crypto_unavailable');
   return crypto.randomUUID();
 }
 
-function read(scope: string): StoredAttempt | null {
-  try {
-    const raw = sessionStorage.getItem(PREFIX + scope);
-    if (!raw) return memoryAttempts.get(scope) ?? null;
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed === 'object' && parsed !== null && typeof (parsed as StoredAttempt).key === 'string') {
-      const attempt = parsed as StoredAttempt;
-      memoryAttempts.set(scope, attempt);
-      return attempt;
+async function guestActor(token: string): Promise<MoneyActor> {
+  if (!token || !globalThis.crypto?.subtle || typeof TextEncoder === 'undefined') {
+    throw new MonetarySafetyError('money_actor_unavailable');
+  }
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return { id: `guest:${fingerprint}` };
+}
+
+/** Actor estable para namespace; el token guest nunca entra a storage ni logs. */
+export async function resolveMoneyActor(guestToken?: string): Promise<MoneyActor> {
+  if (guestToken) return guestActor(guestToken);
+  const session = loadSession();
+  if (!session?.principal_id) throw new MonetarySafetyError('money_actor_unavailable');
+  return { id: `auth:${session.principal_id}`, session };
+}
+
+/** Hook de UI: hasta resolver actor/crypto, toda acción monetaria queda bloqueada. */
+export function useMoneyActor(guestToken?: string): { actor: MoneyActor | null; error: string | null } {
+  const [actor, setActor] = useState<MoneyActor | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setActor(null);
+    setError(null);
+    resolveMoneyActor(guestToken)
+      .then((next) => alive && setActor(next))
+      .catch((err: unknown) => alive && setError(err instanceof Error ? err.message : 'money_actor_unavailable'));
+    return () => {
+      alive = false;
+    };
+  }, [guestToken]);
+  return { actor, error };
+}
+
+export function scopeForActor(actor: MoneyActor, rawScope: string): string {
+  if (!rawScope) throw new MonetarySafetyError('monetary_attempt_ambiguous');
+  return `${actor.id}${SEPARATOR}${rawScope}`;
+}
+
+/** Crea o recupera una key únicamente bajo lock y con persistencia durable. */
+export async function idempotencyKeyFor(scope: string, operation: string): Promise<string> {
+  const { actor } = parseScope(scope);
+  return withMoneyLock(actor, `attempt:${scope}`, async () => {
+    const found = readAttempt(scope);
+    if (found) {
+      if (found.operation !== operation) throw new MonetarySafetyError('monetary_attempt_ambiguous');
+      if (found.family_id !== currentFamilyForActor(actor)) throw new MonetarySafetyError('monetary_session_stale');
+      return found.key;
     }
-  } catch {
-    // En modo privado o con storage bloqueado, conservamos la identidad mientras
-    // esta pestaña siga viva. Tras una recarga no queda prueba durable del intento:
-    // ese caso requiere recuperación contractual, no una clave nueva inventada.
-    return memoryAttempts.get(scope) ?? null;
-  }
-  return memoryAttempts.get(scope) ?? null;
+    const familyId = currentFamilyForActor(actor);
+    const attempt: StoredAttempt = {
+      actor,
+      scope,
+      key: newKey(),
+      operation,
+      ...(familyId && { family_id: familyId }),
+    };
+    writeAttempt(scope, attempt);
+    return attempt.key;
+  });
 }
 
-function write(scope: string, value: StoredAttempt): void {
-  memoryAttempts.set(scope, value);
-  try {
-    sessionStorage.setItem(PREFIX + scope, JSON.stringify(value));
-  } catch {
-    // El fallback en memoria conserva clave y pm_ durante esta pestaña.
-  }
+/** El pm_ queda ligado al mismo actor/intent; no existe fallback en memoria. */
+export async function rememberPaymentMethod(scope: string, pm: string): Promise<void> {
+  const { actor } = parseScope(scope);
+  await withMoneyLock(actor, `attempt:${scope}`, async () => {
+    const found = readAttempt(scope);
+    if (!found || !pm) throw new MonetarySafetyError('monetary_attempt_ambiguous');
+    writeAttempt(scope, { ...found, pm });
+  });
 }
 
-/** Clave del intento en curso; la crea si no había. */
-export function idempotencyKeyFor(scope: string): string {
-  const found = read(scope);
-  if (found) return found.key;
-  const key = newKey();
-  write(scope, { key });
-  return key;
-}
-
-/** Cierra el intento: el próximo pago arranca con clave nueva. */
-export function rotateIdempotencyKey(scope: string): void {
-  memoryAttempts.delete(scope);
-  try {
-    sessionStorage.removeItem(PREFIX + scope);
-  } catch {
-    // idem
-  }
-}
-
-/** Guarda el `pm_` tokenizado junto a la clave del intento en curso. */
-export function rememberPaymentMethod(scope: string, pm: string): void {
-  const found = read(scope);
-  write(scope, { key: found?.key ?? newKey(), pm });
-}
-
-/** `pm_` ya tokenizado para este intento, si lo hay. */
 export function recallPaymentMethod(scope: string): string | undefined {
-  return read(scope)?.pm;
+  return readAttempt(scope)?.pm;
 }
 
 /**
- * Estados en los que el intento está MUERTO y hay que arrancar de cero.
- * `refunded` NO está: ese pago se cobró (ver cabecera).
+ * Congela key + payload exacto antes de red. Si cambia el payload, es una
+ * intención ambigua: no se genera key nueva ni se llama a la API.
  */
-export const TERMINAL_ATTEMPT_STATUSES = ['failed', 'cancelled', 'cancelling'] as const;
+export async function prepareMonetaryRequest(scope: string, operation: string, payload: unknown): Promise<string> {
+  const { actor } = parseScope(scope);
+  return withMoneyLock(actor, `attempt:${scope}`, async () => {
+    const found = readAttempt(scope);
+    if (!found || found.operation !== operation) throw new MonetarySafetyError('monetary_attempt_ambiguous');
+    if (found.family_id !== currentFamilyForActor(actor)) throw new MonetarySafetyError('monetary_session_stale');
+    if (found.payload !== undefined && stable(found.payload) !== stable(payload)) {
+      throw new MonetarySafetyError('monetary_payload_ambiguous');
+    }
+    const next = { ...found, payload };
+    writeAttempt(scope, next);
+    storageSet(
+      `${PREPARED_PREFIX}${encodeURIComponent(actor)}:${encodeURIComponent(operation)}:${encodeURIComponent(found.key)}`,
+      stable(next),
+    );
+    return found.key;
+  });
+}
+
+/** Verifica el journal bajo lock y recién entonces permite enviar la mutación. */
+export async function withPreparedMonetaryRequest<T>(
+  operation: string,
+  key: string,
+  payload: unknown,
+  guestToken: string | undefined,
+  send: (session: StoredSession | undefined) => Promise<T>,
+): Promise<T> {
+  const actor = await resolveMoneyActor(guestToken);
+  return withMoneyLock(actor.id, `send:${operation}:${key}`, async () => {
+    const index = `${PREPARED_PREFIX}${encodeURIComponent(actor.id)}:${encodeURIComponent(operation)}:${encodeURIComponent(key)}`;
+    const raw = storageGet(index);
+    if (!raw) throw new MonetarySafetyError('monetary_request_unprepared');
+    let attempt: StoredAttempt;
+    try {
+      attempt = JSON.parse(raw) as StoredAttempt;
+    } catch {
+      throw new MonetarySafetyError('monetary_request_unprepared');
+    }
+    if (attempt.actor !== actor.id || attempt.operation !== operation || attempt.key !== key) {
+      throw new MonetarySafetyError('monetary_request_unprepared');
+    }
+    if (attempt.family_id !== actor.session?.family_id) throw new MonetarySafetyError('monetary_session_stale');
+    if (stable(attempt.payload) !== stable(payload)) throw new MonetarySafetyError('monetary_request_unprepared');
+    return send(actor.session);
+  });
+}
+
+/** Descarte explícito: el usuario elige abandonar un journal, nunca se recicla solo. */
+export function discardMonetaryAttempt(scope: string): void {
+  const found = readAttempt(scope);
+  if (!found) return;
+  storageRemove(scopedKey(PREFIX, scope));
+  const index = `${PREPARED_PREFIX}${encodeURIComponent(found.actor)}:${encodeURIComponent(found.operation)}:${encodeURIComponent(found.key)}`;
+  storageRemove(index);
+}
 
 /**
- * Errores del backend que significan "este intento no va a prosperar nunca":
- * ahí el casillero/ítem ya quedó liberado y corresponde clave nueva.
- *
- * `idempotency_conflict` NO está: ese error dice que la clave está viva con
- * OTRO payload. Rotarla ahí es abrir un segundo cobro sobre un pago que quizá
- * ya salió — el bug que esto viene a cerrar. Se resuelve congelando el intento
- * (ver `markUnconfirmed`), no rotando.
+ * Ruta explícita para un registro pre-actor. No lo atribuye ni lo reenvía: el
+ * consumidor debe ofrecer reconciliación o descarte informado antes de llamar.
  */
+export function discardLegacyMonetaryAttempt(rawScope: string): void {
+  if (!rawScope || rawScope.includes(SEPARATOR)) throw new MonetarySafetyError('monetary_attempt_ambiguous');
+  storageRemove(LEGACY_PREFIX + rawScope);
+  storageRemove(LEGACY_PENDING_PREFIX + rawScope);
+}
+
+/** Alias existente para los cierres terminales ya definidos por contrato. */
+export function rotateIdempotencyKey(scope: string): void {
+  discardMonetaryAttempt(scope);
+}
+
+export const TERMINAL_ATTEMPT_STATUSES = ['failed', 'cancelled', 'cancelling'] as const;
 export const ROTATING_ERROR_CODES = [
   'idempotency_key_terminal',
   'insufficient_funds',
@@ -129,20 +302,9 @@ export const ROTATING_ERROR_CODES = [
   'validation_error',
 ] as const;
 
-/**
- * ¿Este error mata el intento (rotar) o es ambiguo (conservar la clave)?
- *
- * La regla real es el STATUS: un 4xx es una decisión del backend —ya liberó el
- * casillero o la fracción— y reintentar de cero es lo correcto; un 5xx, un
- * timeout o la red caída no dicen nada sobre si el cobro salió, así que la
- * clave se conserva. Excepciones: 409 `idempotency_conflict` (hay un intento
- * vivo: rotar sería el doble cobro) y 429 (pedir de nuevo, no empezar otro).
- *
- * La lista de códigos queda como respaldo para cuando no hay status (mock
- * viejo, error sin envolver).
- */
+/** Timeout/red/5xx/conflict/429/refunded conservan el intento. */
 export function shouldRotateOnError(code: string, status?: number | null): boolean {
-  if (code === 'idempotency_conflict') return false;
+  if (code === 'idempotency_conflict' || code === 'refunded') return false;
   if ((ROTATING_ERROR_CODES as readonly string[]).includes(code)) return true;
   if (typeof status === 'number') {
     if (status === 409 || status === 429) return false;
@@ -151,77 +313,40 @@ export function shouldRotateOnError(code: string, status?: number | null): boole
   return false;
 }
 
-/**
- * Intento SIN CONFIRMAR (error ambiguo: red caída, timeout, respuesta
- * perdida). Puede haberse cobrado o no; el único que sabe es el backend.
- *
- * Mientras exista, la pantalla CONGELA el pago: no deja cambiar propina,
- * método ni consumos, y el único botón es reintentar ESE mismo pago. Sin el
- * congelamiento, cambiar cualquier cosa genera una clave nueva y el reintento
- * cobra de nuevo — el mismo doble cobro de B-06 por otra puerta.
- *
- * `area` es estable (la mesa, el restaurante); el valor guardado es el scope
- * EXACTO del intento, que es lo que congela el payload. Va a sessionStorage
- * para sobrevivir a una recarga.
- */
-const PENDING_PREFIX = 'payme_pending_';
-const memoryPending = new Map<string, UnconfirmedAttempt>();
-
-/**
- * `evidence` es cuánta prueba de pago propio había en la mesa AL CONGELAR
- * (casilleros `claimed_by_me`). Sirve para descongelar solo, y hace falta que
- * sea un contador y no un booleano: quien ya había pagado una parte antes
- * arrancaría con la prueba en verdadero y se descongelaría sin haber cobrado
- * nada nuevo — justo el segundo cobro que esto evita.
- */
 export interface UnconfirmedAttempt {
+  actor: string;
   scope: string;
   evidence: number;
-  /**
-   * El CUERPO exacto que se mandó. Se guarda porque congelar solo la clave no
-   * alcanza: tras una recarga el estado de la pantalla arranca vacío, y
-   * reconstruir el pedido mandaría otro payload con la misma clave → 409 en
-   * bucle. El reintento reenvía esto, tal cual.
-   */
   payload?: unknown;
 }
 
-export function markUnconfirmed(area: string, scope: string, evidence = 0, payload?: unknown): void {
-  const attempt: UnconfirmedAttempt = { scope, evidence, ...(payload !== undefined && { payload }) };
-  memoryPending.set(area, attempt);
+function readPending(area: string): UnconfirmedAttempt | null {
+  const expected = parseScope(area);
+  assertNoLegacy(area, LEGACY_PENDING_PREFIX);
+  const raw = storageGet(scopedKey(PENDING_PREFIX, area));
+  if (!raw) return null;
   try {
-    sessionStorage.setItem(PENDING_PREFIX + area, JSON.stringify(attempt));
+    const parsed = JSON.parse(raw) as UnconfirmedAttempt;
+    if (parsed.actor !== expected.actor || typeof parsed.scope !== 'string' || typeof parsed.evidence !== 'number') {
+      throw new Error('invalid');
+    }
+    return parsed;
   } catch {
-    // El estado React y este fallback mantienen el intento congelado en memoria.
+    throw new MonetarySafetyError('monetary_attempt_ambiguous');
   }
+}
+
+export function markUnconfirmed(area: string, scope: string, evidence = 0, payload?: unknown): void {
+  const actor = parseScope(area).actor;
+  if (parseScope(scope).actor !== actor) throw new MonetarySafetyError('monetary_attempt_ambiguous');
+  const attempt: UnconfirmedAttempt = { actor, scope, evidence, ...(payload !== undefined && { payload }) };
+  storageSet(scopedKey(PENDING_PREFIX, area), stable(attempt));
 }
 
 export function readUnconfirmed(area: string): UnconfirmedAttempt | null {
-  try {
-    const raw = sessionStorage.getItem(PENDING_PREFIX + area);
-    if (!raw) return memoryPending.get(area) ?? null;
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed === 'object' && parsed !== null && typeof (parsed as UnconfirmedAttempt).scope === 'string') {
-      const a = parsed as UnconfirmedAttempt;
-      const attempt = {
-        scope: a.scope,
-        evidence: typeof a.evidence === 'number' ? a.evidence : 0,
-        ...(a.payload !== undefined && { payload: a.payload }),
-      };
-      memoryPending.set(area, attempt);
-      return attempt;
-    }
-  } catch {
-    return memoryPending.get(area) ?? null;
-  }
-  return memoryPending.get(area) ?? null;
+  return readPending(area);
 }
 
 export function clearUnconfirmed(area: string): void {
-  memoryPending.delete(area);
-  try {
-    sessionStorage.removeItem(PENDING_PREFIX + area);
-  } catch {
-    // idem
-  }
+  storageRemove(scopedKey(PENDING_PREFIX, area));
 }

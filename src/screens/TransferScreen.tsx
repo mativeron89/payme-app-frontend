@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { idempotencyKeyFor, rotateIdempotencyKey, shouldRotateOnError } from '../api/idempotency';
+import {
+  idempotencyKeyFor,
+  prepareMonetaryRequest,
+  rotateIdempotencyKey,
+  scopeForActor,
+  shouldRotateOnError,
+  useMoneyActor,
+} from '../api/idempotency';
 import { extractApiError } from '../api/errors';
 import type { BalanceResponse, Friend } from '../api/types';
 import { Avatar, TopBar, useToast } from '../components/ui';
@@ -11,6 +18,7 @@ import { stringToCents } from '../utils/money';
 /** s-transfer: elegir amigo + monto + concepto → POST /transfers. */
 export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string }) {
   const toast = useToast();
+  const { actor, error: actorError } = useMoneyActor();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [to, setTo] = useState<Friend | null>(null);
@@ -61,19 +69,28 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
    * otro). Clave estable por destinatario+monto: si se pierde la respuesta,
    * el reintento cae en el replay del backend en vez de enviar dos veces.
    */
-  const transferScope = `transfer:${to?.payme_id ?? '-'}:${amountCents}:${concept}`;
+  const transferScope = actor
+    ? scopeForActor(actor, `transfer:${to?.payme_id ?? '-'}:${amountCents}:${concept}`)
+    : '';
 
   async function doTransfer() {
     if (!to || amountCents <= 0) return;
+    if (!transferScope || !actor) {
+      setError(actorError ? 'No pudimos verificar una identidad segura para esta transferencia.' : 'Preparando una identidad segura para esta transferencia…');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const r = await api.createTransfer({
+      const key = await idempotencyKeyFor(transferScope, 'transfer');
+      const request = {
         amount_cents: amountCents,
         to_payme_id: to.payme_id,
         ...(concept && { concept }),
-        idempotency_key: idempotencyKeyFor(transferScope),
-      });
+        idempotency_key: key,
+      };
+      await prepareMonetaryRequest(transferScope, 'transfer', request);
+      const r = await api.createTransfer(request);
       rotateIdempotencyKey(transferScope);
       // Si el backend replayó un envío YA hecho, decirlo. Anunciarlo como
       // nuevo hacía creer que se mandó dos veces (o que faltaba mandarlo).

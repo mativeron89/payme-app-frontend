@@ -5,11 +5,14 @@ import {
   clearUnconfirmed,
   idempotencyKeyFor,
   markUnconfirmed,
+  prepareMonetaryRequest,
   readUnconfirmed,
   recallPaymentMethod,
   rememberPaymentMethod,
   rotateIdempotencyKey,
+  scopeForActor,
   shouldRotateOnError,
+  useMoneyActor,
 } from '../api/idempotency';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
@@ -61,6 +64,7 @@ interface PayResult {
 
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
   const { session } = useAuth();
+  const { actor, error: actorError } = useMoneyActor(guestToken);
   const toast = useToast();
   // Si llega guestToken, App ya decidió que esta vista es la del invitado
   // (sin sesión siempre; con sesión solo en la demo, para poder mostrarla).
@@ -340,7 +344,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    *
    * `lock_tokens` queda afuera a propósito: el backend lo excluye del hash.
    */
-  const contentScope = useMemo(() => {
+  const rawContentScope = useMemo(() => {
     const sel =
       mesa?.division_mode === 'consumo'
         ? [...selected.entries()].map(([id, bps]) => `${id}:${bps}`).sort().join(',')
@@ -348,14 +352,23 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     const tip = tipMode === 'custom' ? `c${tipCents}` : `b${tipPct * 100}`;
     return `pay:${code}|${payType}|${cardChoice}|${sel}|${tip}|${staffId ?? '-'}`;
   }, [code, mesa?.division_mode, selected, tipMode, tipCents, tipPct, payType, cardChoice, staffId]);
+  const contentScope = actor ? scopeForActor(actor, rawContentScope) : '';
 
   /**
    * Intento sin confirmar (error ambiguo). Mientras exista, el pago queda
    * CONGELADO en ese scope: no se puede cambiar nada y el único camino es
    * reintentar el mismo pago, que el backend replaya en vez de re-cobrar.
    */
-  const payArea = `pay:${code}`;
-  const [frozen, setFrozen] = useState<UnconfirmedAttempt | null>(() => readUnconfirmed(payArea));
+  const payArea = actor ? scopeForActor(actor, `pay:${code}`) : '';
+  const [frozen, setFrozen] = useState<UnconfirmedAttempt | null>(null);
+  useEffect(() => {
+    if (!payArea) return;
+    try {
+      setFrozen(readUnconfirmed(payArea));
+    } catch {
+      setError('Hay un pago anterior que no podemos atribuir de forma segura. Descartalo o reconciliálo antes de pagar.');
+    }
+  }, [payArea]);
   const frozenScope = frozen?.scope ?? null;
   const payScope = frozenScope ?? contentScope;
   const frozenRef = useRef(frozenScope);
@@ -368,12 +381,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   const freezePay = useCallback(
     (scope: string, payload?: unknown) => {
+      if (!payArea) throw new Error('money_actor_unavailable');
       markUnconfirmed(payArea, scope, mySlotsRef.current, payload);
-      setFrozen({ scope, evidence: mySlotsRef.current, payload });
+      setFrozen(readUnconfirmed(payArea));
     },
     [payArea],
   );
   const unfreezePay = useCallback(() => {
+    if (!payArea) return;
     clearUnconfirmed(payArea);
     setFrozen(null);
   }, [payArea]);
@@ -488,6 +503,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     // (una respuesta tardía de /payment-methods, un re-render), la clave que
     // se conserva para el reintento sigue siendo la de ESTE intento.
     const scope = payScope;
+    if (!scope || !actor) {
+      setError(actorError ? 'No pudimos verificar una identidad segura para este pago.' : 'Preparando una identidad segura para este pago…');
+      return;
+    }
     payStartedRef.current = true;
     setBusy(true);
     setError(null);
@@ -504,6 +523,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       if (frozen?.payload) {
         const body = frozen.payload as PayMesaRequest;
         sentBody = body;
+        await prepareMonetaryRequest(scope, `mesa_pay:${code}`, body);
         const r = await api.payMesa(code, body, guestToken);
         await handlePayResponse(r, scope, body);
         return;
@@ -512,6 +532,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // NUEVA → pm_ desde el Card Element como `stripe_payment_method_id`,
       // con `save_payment_method` según el checkbox.
       const savedCard = payType === 'card' ? (cards.find((c) => c.id === cardChoice) ?? null) : null;
+      const idempotencyKey = await idempotencyKeyFor(scope, `mesa_pay:${code}`);
       let stripePmId: string | null = null;
       let savedPmId: string | null = null;
       let savingNewCard = false;
@@ -523,7 +544,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           savedPmId = savedCard.id;
         } else if (IS_MOCK) {
           stripePmId = recallPaymentMethod(scope) ?? `pm_mock_nueva_${Date.now().toString(36)}`;
-          rememberPaymentMethod(scope, stripePmId);
+          await rememberPaymentMethod(scope, stripePmId);
           savingNewCard = !isGuest && saveCard;
         } else {
           if (!cardEl) {
@@ -545,7 +566,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               return;
             }
             stripePmId = res.paymentMethodId;
-            rememberPaymentMethod(scope, stripePmId);
+            await rememberPaymentMethod(scope, stripePmId);
           }
           savingNewCard = !isGuest && saveCard;
         }
@@ -577,9 +598,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           ...(IS_MOCK &&
             payType !== 'card' &&
             payType !== 'wallet' && { stripe_payment_method_id: 'pm_mock_walletpay' }),
-          idempotency_key: idempotencyKeyFor(scope),
+          idempotency_key: idempotencyKey,
       };
       sentBody = body;
+      await prepareMonetaryRequest(scope, `mesa_pay:${code}`, body);
       const r = await api.payMesa(code, body, guestToken);
       await handlePayResponse(r, scope, body);
     } catch (err) {

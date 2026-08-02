@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { idempotencyKeyFor, rotateIdempotencyKey, shouldRotateOnError } from '../api/idempotency';
+import {
+  idempotencyKeyFor,
+  prepareMonetaryRequest,
+  rotateIdempotencyKey,
+  scopeForActor,
+  shouldRotateOnError,
+  useMoneyActor,
+} from '../api/idempotency';
 import { extractApiError } from '../api/errors';
 import { confirmCardPayment } from '../api/stripe';
 import type { ClabeResponse, PaymentMethod, TopupOxxoResponse } from '../api/types';
@@ -20,6 +27,7 @@ type Via = 'oxxo' | 'card' | 'spei';
 
 export function TopupScreen() {
   const toast = useToast();
+  const { actor, error: actorError } = useMoneyActor();
   const [via, setVia] = useState<Via>('oxxo');
   const [amountStr, setAmountStr] = useState('500');
   const [pm, setPm] = useState<PaymentMethod | null>(null);
@@ -54,19 +62,31 @@ export function TopupScreen() {
    * voucher válido (dos referencias vivas; si se pagan las dos, se acredita
    * el doble) y uno de tarjeta cobra otra vez.
    */
-  const topupScope = `topup:${via}:${amountCents}`;
+  const topupScope = actor ? scopeForActor(actor, `topup:${via}:${amountCents}`) : '';
 
   async function doTopup() {
+    if (!topupScope || !actor) {
+      setError(actorError ? 'No pudimos verificar una identidad segura para esta carga.' : 'Preparando una identidad segura para esta carga…');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       if (via === 'oxxo') {
-        const r = await api.topupOxxo(amountCents, idempotencyKeyFor(topupScope));
+        const key = await idempotencyKeyFor(topupScope, 'topup_oxxo');
+        await prepareMonetaryRequest(topupScope, 'topup_oxxo', { amount_cents: amountCents, idempotency_key: key });
+        const r = await api.topupOxxo(amountCents, key);
         rotateIdempotencyKey(topupScope);
         setVoucher(r.topup);
       } else if (via === 'card') {
         if (!pm) return;
-        const r = await api.topupCard(amountCents, pm.id, idempotencyKeyFor(topupScope));
+        const key = await idempotencyKeyFor(topupScope, 'topup_card');
+        await prepareMonetaryRequest(topupScope, 'topup_card', {
+          amount_cents: amountCents,
+          payment_method_id: pm.id,
+          idempotency_key: key,
+        });
+        const r = await api.topupCard(amountCents, pm.id, key);
         // El banco puede pedir 3DS: sin confirmarlo, la plata no entra y el
         // toast anunciaba saldo inexistente.
         if (r.requires_action && r.client_secret) {
