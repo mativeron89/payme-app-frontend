@@ -240,20 +240,12 @@ const realApi: Api = {
       ? httpGuestRequest<MesaDetailResponse>('GET', `/mesas/${encodeURIComponent(code)}`, guestToken)
       : httpRequest<MesaDetailResponse>('GET', `/mesas/${encodeURIComponent(code)}`),
   async scanTicket(image) {
-    // POST /api/ocr es multipart (campo `image`); el backend responde el
-    // ticket mock (HAS_REAL_IMPL=false).
+    // POST /api/ocr es multipart (campo `image`). Pasa por httpRequest para
+    // compartir timeout, refresh rotativo y errores normalizados con el resto.
     if (!image) throw new Error('scanTicket requiere imagen en modo real');
     const form = new FormData();
     form.append('image', image, 'ticket.jpg');
-    const session = loadSession();
-    const base = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
-    const res = await fetch(`${base}/api/ocr`, {
-      method: 'POST',
-      headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
-      body: form,
-    });
-    if (!res.ok) throw new Error('ocr_failed');
-    return (await res.json()) as OcrResponse;
+    return httpRequest<OcrResponse>('POST', '/ocr', form);
   },
   createMesa: (req) => httpRequest<CreateMesaResponse>('POST', '/mesas', req),
   /**

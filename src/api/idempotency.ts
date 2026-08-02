@@ -31,6 +31,7 @@
  */
 
 const PREFIX = 'payme_idem_';
+const memoryAttempts = new Map<string, StoredAttempt>();
 
 interface StoredAttempt {
   key: string;
@@ -45,23 +46,28 @@ function newKey(): string {
 function read(scope: string): StoredAttempt | null {
   try {
     const raw = sessionStorage.getItem(PREFIX + scope);
-    if (!raw) return null;
+    if (!raw) return memoryAttempts.get(scope) ?? null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed === 'object' && parsed !== null && typeof (parsed as StoredAttempt).key === 'string') {
-      return parsed as StoredAttempt;
+      const attempt = parsed as StoredAttempt;
+      memoryAttempts.set(scope, attempt);
+      return attempt;
     }
   } catch {
-    // sessionStorage lleno/bloqueado o dato corrupto: se trata como "sin clave".
+    // En modo privado o con storage bloqueado, conservamos la identidad mientras
+    // esta pestaña siga viva. Tras una recarga no queda prueba durable del intento:
+    // ese caso requiere recuperación contractual, no una clave nueva inventada.
+    return memoryAttempts.get(scope) ?? null;
   }
-  return null;
+  return memoryAttempts.get(scope) ?? null;
 }
 
 function write(scope: string, value: StoredAttempt): void {
+  memoryAttempts.set(scope, value);
   try {
     sessionStorage.setItem(PREFIX + scope, JSON.stringify(value));
   } catch {
-    // Sin persistencia la clave dura lo que dure el render: peor que
-    // guardarla, mejor que romper el pago.
+    // El fallback en memoria conserva clave y pm_ durante esta pestaña.
   }
 }
 
@@ -76,6 +82,7 @@ export function idempotencyKeyFor(scope: string): string {
 
 /** Cierra el intento: el próximo pago arranca con clave nueva. */
 export function rotateIdempotencyKey(scope: string): void {
+  memoryAttempts.delete(scope);
   try {
     sessionStorage.removeItem(PREFIX + scope);
   } catch {
@@ -157,6 +164,7 @@ export function shouldRotateOnError(code: string, status?: number | null): boole
  * para sobrevivir a una recarga.
  */
 const PENDING_PREFIX = 'payme_pending_';
+const memoryPending = new Map<string, UnconfirmedAttempt>();
 
 /**
  * `evidence` es cuánta prueba de pago propio había en la mesa AL CONGELAR
@@ -178,33 +186,38 @@ export interface UnconfirmedAttempt {
 }
 
 export function markUnconfirmed(area: string, scope: string, evidence = 0, payload?: unknown): void {
+  const attempt: UnconfirmedAttempt = { scope, evidence, ...(payload !== undefined && { payload }) };
+  memoryPending.set(area, attempt);
   try {
-    sessionStorage.setItem(PENDING_PREFIX + area, JSON.stringify({ scope, evidence, payload }));
+    sessionStorage.setItem(PENDING_PREFIX + area, JSON.stringify(attempt));
   } catch {
-    // sin persistencia el congelamiento dura lo que dure la pantalla
+    // El estado React y este fallback mantienen el intento congelado en memoria.
   }
 }
 
 export function readUnconfirmed(area: string): UnconfirmedAttempt | null {
   try {
     const raw = sessionStorage.getItem(PENDING_PREFIX + area);
-    if (!raw) return null;
+    if (!raw) return memoryPending.get(area) ?? null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed === 'object' && parsed !== null && typeof (parsed as UnconfirmedAttempt).scope === 'string') {
       const a = parsed as UnconfirmedAttempt;
-      return {
+      const attempt = {
         scope: a.scope,
         evidence: typeof a.evidence === 'number' ? a.evidence : 0,
         ...(a.payload !== undefined && { payload: a.payload }),
       };
+      memoryPending.set(area, attempt);
+      return attempt;
     }
   } catch {
-    // dato corrupto: se trata como "sin intento pendiente"
+    return memoryPending.get(area) ?? null;
   }
-  return null;
+  return memoryPending.get(area) ?? null;
 }
 
 export function clearUnconfirmed(area: string): void {
+  memoryPending.delete(area);
   try {
     sessionStorage.removeItem(PENDING_PREFIX + area);
   } catch {

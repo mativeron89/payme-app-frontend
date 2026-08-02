@@ -1,5 +1,16 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.29.1 — Recuperación segura de reintentos y runtime (2026-08-02)
+
+- B-06: un `409 idempotency_key_terminal` ahora rota y descongela el intento
+  muerto; `idempotency_conflict` conserva su tratamiento seguro.
+- La identidad idempotente y el payload pendiente cuentan con fallback en
+  memoria cuando `sessionStorage` está bloqueado, sin convertir la evidencia
+  `claimed_by_me` en un guard de casillero único.
+- Refresh rotativo single-flight, OCR multipart a través del cliente
+  autenticado con timeout/refresh, y hash mal codificado que degrada a home en
+  lugar de tumbar la aplicación.
+
 ## 0.29.0 — Apple/Google Pay solo donde funcionan (2026-07-25)
 
 Decisión de Mati (2026-07-25): **se ocultan en la app real**, se mantienen en el

@@ -55,7 +55,13 @@ export function parseHash(hash: string): Route {
   const [pageRaw, paramRaw] = (pathPart ?? '').split('/');
   const page = (pageRaw ?? '').toLowerCase();
   if (!VALID_PAGES.has(page)) return DEFAULT_ROUTE;
-  return { page: page as PageId, param: paramRaw ? decodeURIComponent(paramRaw) : null, query };
+  if (!paramRaw) return { page: page as PageId, param: null, query };
+  try {
+    return { page: page as PageId, param: decodeURIComponent(paramRaw), query };
+  } catch {
+    // Un deep link mal codificado no puede dejar la app en blanco.
+    return DEFAULT_ROUTE;
+  }
 }
 
 // Navegaciones hechas DENTRO de la app: goBack() vuelve por el historial real

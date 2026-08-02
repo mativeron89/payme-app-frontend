@@ -14,6 +14,7 @@ import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenP
 const BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 let onSessionExpiredCb: (() => void) | null = null;
+let refreshInFlight: Promise<StoredSession | null> | null = null;
 
 export function setOnSessionExpired(cb: (() => void) | null): void {
   onSessionExpiredCb = cb;
@@ -54,7 +55,7 @@ async function rawRequest<T>(
   token?: string,
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (body !== undefined && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const ctrl = new AbortController();
@@ -64,7 +65,7 @@ async function rawRequest<T>(
     res = await fetch(`${BASE_URL}/api${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
       signal: ctrl.signal,
     });
   } finally {
@@ -76,21 +77,30 @@ async function rawRequest<T>(
 
 /** Refresh con rotación: guarda el par nuevo de tokens antes de devolver. */
 async function tryRefresh(session: StoredSession): Promise<StoredSession | null> {
-  try {
-    // El refresh devuelve SOLO tokens (sin `user` — decisión G-02 v2.20).
-    const r = await rawRequest<TokenPair>('POST', '/auth/refresh', {
-      refresh_token: session.refresh_token,
+  const current = loadSession();
+  if (current && current.refresh_token !== session.refresh_token) return current;
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      try {
+        // El refresh devuelve SOLO tokens (sin `user` — decisión G-02 v2.20).
+        const r = await rawRequest<TokenPair>('POST', '/auth/refresh', {
+          refresh_token: session.refresh_token,
+        });
+        const updated: StoredSession = {
+          access_token: r.access_token,
+          refresh_token: r.refresh_token,
+          user: session.user,
+        };
+        saveSession(updated);
+        return updated;
+      } catch {
+        return null;
+      }
+    })().finally(() => {
+      refreshInFlight = null;
     });
-    const updated: StoredSession = {
-      access_token: r.access_token,
-      refresh_token: r.refresh_token,
-      user: session.user,
-    };
-    saveSession(updated);
-    return updated;
-  } catch {
-    return null;
   }
+  return refreshInFlight;
 }
 
 /** Request PÚBLICA (sin sesión): hoy solo restaurantes (G-01, v2.21). */

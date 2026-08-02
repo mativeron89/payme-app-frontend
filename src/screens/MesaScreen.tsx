@@ -596,6 +596,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         unfreezePay();
       }
       if (ec === 'idempotency_key_terminal') {
+        // El backend usa 409 tanto para conflicto VIVO como para intento
+        // terminal. Este último sí murió: conservar su clave deja al usuario
+        // reintentando el mismo 409 para siempre.
+        rotateIdempotencyKey(scope);
+        unfreezePay();
         setError('Ese intento de pago ya no sirve. Probá de nuevo.');
         reload();
       } else if (ec === 'idempotency_conflict') {
