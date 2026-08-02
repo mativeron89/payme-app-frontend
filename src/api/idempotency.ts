@@ -143,11 +143,12 @@ export const ROTATING_ERROR_CODES = [
  */
 export function shouldRotateOnError(code: string, status?: number | null): boolean {
   if (code === 'idempotency_conflict') return false;
+  if ((ROTATING_ERROR_CODES as readonly string[]).includes(code)) return true;
   if (typeof status === 'number') {
     if (status === 409 || status === 429) return false;
     return status >= 400 && status < 500;
   }
-  return (ROTATING_ERROR_CODES as readonly string[]).includes(code);
+  return false;
 }
 
 /**

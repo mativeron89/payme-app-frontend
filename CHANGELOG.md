@@ -1,5 +1,12 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.29.3 — Clasificación B-06 y checks locales (2026-08-02)
+
+- Los rechazos definitivos del contrato rotan aunque lleguen como 409; solo
+  `idempotency_conflict` y 429 conservan el intento. `refunded` no rota.
+- Se incorporó Vitest 3.2.7, checks de clasificación B-06/hash seguro y CI
+  ejecuta tests antes de typecheck/build.
+
 ## 0.29.2 — Link de invitado aislado de la sesión (2026-08-02)
 
 - Un link `#/mesa/:code?t=…` ahora conserva siempre la identidad invitada,
