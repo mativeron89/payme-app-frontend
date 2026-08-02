@@ -10,7 +10,7 @@ class MemoryStorage {
 const storage = new MemoryStorage();
 Object.assign(globalThis, { localStorage: storage });
 
-const { httpLogin, httpRegister, httpRequest } = await import('./http');
+const { httpLogin, httpLogout, httpRegister, httpRequest } = await import('./http');
 const { loadSession } = await import('./storage');
 const { mockLogin, mockRegister } = await import('./mock/mockApi');
 
@@ -45,6 +45,20 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
 
     const created = await httpRegister({ email: user.email, password: 'password', first_name: 'Una', last_name: 'Persona' });
     expect(loadSession()).toMatchObject({ access_token: 'access-register', family_id: created.family_id, principal_id: user.id });
+  });
+
+  it('logout borra la sesión antes de esperar una revocación remota lenta', async () => {
+    let release: (() => void) | undefined;
+    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && (init.body as string | undefined)?.includes('password')) {
+        return Promise.resolve(response({ access_token: 'access-logout', refresh_token: 'refresh-logout', expires_in: 900, user }));
+      }
+      return new Promise<Response>((resolve) => { release = () => resolve(response({ ok: true })); });
+    }));
+    await httpLogin(user.email, 'password');
+    await expect(httpLogout()).resolves.toBeUndefined();
+    expect(loadSession()).toBeNull();
+    release?.();
   });
 });
 

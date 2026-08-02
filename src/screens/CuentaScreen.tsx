@@ -1,6 +1,6 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK } from '../api';
+import { api, IS_MOCK, WALLET_RAIL_ENABLED } from '../api';
 import { confirmCardSetup } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import type { BalanceResponse, HistoryEntry, PaymentMethod, StatsResponse, WalletTransaction } from '../api/types';
@@ -124,8 +124,10 @@ export function CuentaScreen() {
 
   useEffect(() => {
     let alive = true;
-    api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
-    api.getWalletTransactions().then((r) => alive && setTxs(r.transactions)).catch(() => alive && setTxs([]));
+    if (WALLET_RAIL_ENABLED) {
+      api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
+      api.getWalletTransactions().then((r) => alive && setTxs(r.transactions)).catch(() => alive && setTxs([]));
+    }
     api.getStats().then((s) => alive && setStats(s)).catch(() => undefined);
     // El mes COMPLETO para la torta: sin params el backend da solo la primera
     // página (20) y con >20 pagos los montos no cerrarían contra stats.
@@ -191,6 +193,10 @@ export function CuentaScreen() {
       addCardInFlightRef.current.leave();
       setBusyCard(false);
     }
+  }
+
+  if (!WALLET_RAIL_ENABLED) {
+    return <div className="screen has-nav"><TopBar title="Mi Cuenta" /><div className="empty">El riel de saldo PayMe no está habilitado para esta versión.</div></div>;
   }
 
   return (

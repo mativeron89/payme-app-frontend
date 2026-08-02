@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, WALLET_PAY_ENABLED } from '../api';
+import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, WALLET_PAY_ENABLED, WALLET_RAIL_ENABLED } from '../api';
 import type { UnconfirmedAttempt } from '../api/idempotency';
 import {
+  acknowledgeTerminalAttempt,
   clearUnconfirmed,
   idempotencyKeyFor,
   markUnconfirmed,
@@ -342,6 +343,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     URL.revokeObjectURL(url);
   }
 
+  async function leaveTerminalReceipt(next: () => void) {
+    // El usuario ya vio el comprobante: recién ahora reconoce el terminal y
+    // habilita una intención posterior (por ejemplo, otra parte válida).
+    if (payScope) await acknowledgeTerminalAttempt(payScope, `mesa_pay:${code}`);
+    next();
+  }
+
   /**
    * B-06: el scope se DERIVA DEL CONTENIDO del pago, con los mismos campos que
    * el backend hashea (`PAYLOAD_KEYS.mesa_pay`). Mismo payload = misma clave =
@@ -373,12 +381,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [frozen, setFrozen] = useState<UnconfirmedAttempt | null>(null);
   useEffect(() => {
     if (!payArea) return;
-    try {
-      setFrozen(readUnconfirmed(payArea));
-    } catch {
-      setError('Hay un pago anterior que no podemos atribuir de forma segura. Descartalo o reconciliálo antes de pagar.');
-    }
-  }, [payArea]);
+    let alive = true;
+    void readUnconfirmed(payArea, `mesa_pay:${code}`)
+      .then((attempt) => alive && setFrozen(attempt))
+      .catch(() => alive && setError('Hay un pago anterior que no podemos atribuir de forma segura. Esperá la reconciliación antes de pagar.'));
+    return () => { alive = false; };
+  }, [payArea, code]);
   const frozenScope = frozen?.scope ?? null;
   const payScope = frozenScope ?? contentScope;
   const frozenRef = useRef(frozenScope);
@@ -393,7 +401,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     (scope: string, payload?: unknown) => {
       if (!payArea) throw new Error('money_actor_unavailable');
       markUnconfirmed(payArea, scope, mySlotsRef.current, payload);
-      setFrozen(readUnconfirmed(payArea));
+      setFrozen({ actor: scope.split('::')[0], scope, evidence: mySlotsRef.current, ...(payload !== undefined && { payload }) });
     },
     [payArea],
   );
@@ -413,12 +421,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * Ahí la salida es reintentar, que el backend replaya sin volver a cobrar.
    */
   useEffect(() => {
-    if (frozen && mesa?.division_mode === 'igual' && mySlotsTaken > frozen.evidence) {
-      unfreezePay();
-      rotateIdempotencyKey(frozen.scope);
-      toast('Ese pago ya estaba registrado ✓');
+    if (frozen && frozen.evidence !== undefined && mesa?.division_mode === 'igual' && mySlotsTaken > frozen.evidence) {
+      void (async () => {
+        await rotateIdempotencyKey(frozen.scope, `mesa_pay:${code}`);
+        unfreezePay();
+        toast('Ese pago ya estaba registrado ✓');
+      })();
     }
-  }, [frozen, mesa?.division_mode, mySlotsTaken, unfreezePay, toast]);
+  }, [frozen, mesa?.division_mode, mySlotsTaken, unfreezePay, toast, code]);
 
   /**
    * Respuesta del pago (nueva o REPLAY idempotente): 3DS, reembolsado y
@@ -464,7 +474,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       if (!confirmed.ok) {
         if (confirmed.definitive) {
           // El banco rechazó: el intento murió y el backend liberó lo tomado.
-          rotateIdempotencyKey(scope);
+          await rotateIdempotencyKey(scope, `mesa_pay:${code}`);
           unfreezePay();
           setError(confirmed.error);
         } else {
@@ -487,7 +497,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     }
     const outcome = mesaPaymentOutcome(at.status);
     if (outcome === 'definitive') {
-      rotateIdempotencyKey(scope);
+      await rotateIdempotencyKey(scope, `mesa_pay:${code}`);
       unfreezePay();
       setError('Ese pago no prosperó. Podés iniciar uno nuevo.');
       setBusy(false);
@@ -526,7 +536,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     });
     // Intento completado: el próximo pago de esta mesa (otra parte, otro
     // plato) es una intención NUEVA y necesita clave nueva.
-    rotateIdempotencyKey(scope);
+    await rotateIdempotencyKey(scope, `mesa_pay:${code}`);
     unfreezePay();
     setView('confirm');
     setBusy(false);
@@ -560,7 +570,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       if (frozen?.payload) {
         const body = frozen.payload as PayMesaRequest;
         sentBody = body;
-        await prepareMonetaryRequest(scope, `mesa_pay:${code}`, body);
+        await prepareMonetaryRequest(scope, `mesa_pay:${code}`, body, mySlotsRef.current);
         const r = await api.payMesa(code, body, guestToken);
         await handlePayResponse(r, scope, body);
         return;
@@ -638,7 +648,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           idempotency_key: idempotencyKey,
       };
       sentBody = body;
-      await prepareMonetaryRequest(scope, `mesa_pay:${code}`, body);
+      await prepareMonetaryRequest(scope, `mesa_pay:${code}`, body, mySlotsRef.current);
       const r = await api.payMesa(code, body, guestToken);
       await handlePayResponse(r, scope, body);
     } catch (err) {
@@ -651,14 +661,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // cambiar nada (cambiar algo generaría clave nueva = doble cobro).
       const definitivo = shouldRotateOnError(ec, status);
       if (definitivo) {
-        rotateIdempotencyKey(scope);
+        await rotateIdempotencyKey(scope, `mesa_pay:${code}`);
         unfreezePay();
       }
       if (ec === 'idempotency_key_terminal') {
         // El backend usa 409 tanto para conflicto VIVO como para intento
         // terminal. Este último sí murió: conservar su clave deja al usuario
         // reintentando el mismo 409 para siempre.
-        rotateIdempotencyKey(scope);
+        await rotateIdempotencyKey(scope, `mesa_pay:${code}`);
         unfreezePay();
         setError('Ese intento de pago ya no sirve. Probá de nuevo.');
         reload();
@@ -756,6 +766,19 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   // ─── Mesa cerrada (A-2) ──────────────────────────────────
   if (!payable && view === 'detail') {
+    // pending_auth/auth_failed/cancelled/expired/settling no prueban que el
+    // restaurante haya cobrado ni que la garantía se capturó. Solo un estado
+    // contractual de liquidación permite mostrar montos concluyentes.
+    if (!['fully_paid', 'settled', 'completed'].includes(mesa.status)) {
+      return (
+        <div className="screen">
+          <TopBar title="Estado de la mesa" onBack={isGuest ? undefined : () => navigate('mesas')} />
+          {guestHeader}
+          <div className="empty">La mesa está en estado <b>{mesa.status}</b>. Todavía no podemos confirmar el resultado de la garantía ni el cobro del restaurante.</div>
+          <div className="action-bar"><button className="btn btn-navy" onClick={() => reload()}>Actualizar estado</button></div>
+        </div>
+      );
+    }
     const shortfall = Math.max(0, mesa.total_cents - mesa.paid_amount_cents);
     const isOpener = mesa.my_role === 'opener';
     return (
@@ -925,11 +948,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="btn btn-ghost"
-                onClick={() => {
-                  setView('detail');
-                  setSelected(new Map());
-                  reload();
-                }}
+                onClick={() => void leaveTerminalReceipt(() => {
+                  setView('detail'); setSelected(new Map()); reload();
+                })}
               >
                 Ver la mesa
               </button>
@@ -938,7 +959,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </button>
             </div>
           ) : (
-            <button className="btn btn-navy" onClick={() => navigate('home')}>
+            <button className="btn btn-navy" onClick={() => void leaveTerminalReceipt(() => navigate('home'))}>
               <Icon name="home" size={16} className="ico-inline" /> Inicio
             </button>
           )}
@@ -1088,7 +1109,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
           )}
           <div role="radiogroup" aria-labelledby="lbl-metodo">
-            {!isGuest && (
+            {!isGuest && WALLET_RAIL_ENABLED && (
               <button
                 className={`method-card ${payType === 'wallet' ? 'sel' : ''}`}
                 onClick={() => setPayType('wallet')}
@@ -1279,14 +1300,16 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         </div>
         <button
           className="cta-float"
-          onClick={() => {
+          onClick={() => { void (async () => {
             // Reembolsado: volver a pagar es una decisión explícita del
             // usuario, nunca automática (rotar solo = re-cobrar un reembolso).
             if (refundedNotice) {
-              rotateIdempotencyKey(payScope);
+              await rotateIdempotencyKey(payScope, `mesa_pay:${code}`);
+              await acknowledgeTerminalAttempt(payScope, `mesa_pay:${code}`);
               setRefundedNotice(false);
             }
-            void doPay();
+            await doPay();
+          })();
           }}
           disabled={
             busy ||

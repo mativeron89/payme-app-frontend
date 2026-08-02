@@ -1,7 +1,8 @@
-import { IS_MOCK } from './api';
+import { IS_MOCK, WALLET_RAIL_ENABLED } from './api';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { BottomNav } from './components/BottomNav';
 import { ToastProvider } from './components/ui';
+import { useMoneyActor } from './api/idempotency';
 import { useRoute } from './router';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
@@ -25,11 +26,18 @@ function Shell() {
   // ignorarlo en real cuando hay sesión mezclaba identidades y dejaba al
   // invitado fuera de la mesa correcta.
   const guestToken = route.query.get('t');
+  const { actor: guestActor } = useMoneyActor(guestToken ?? undefined);
   if (route.page === 'mesa' && route.param && guestToken) {
-    return <MesaScreen key={`${route.param}:guest`} code={route.param} guestToken={guestToken} />;
+    // El token no entra al key: el fingerprint del actor fuerza remount al
+    // cambiar A→B y evita que una respuesta tardía de A pinte la mesa de B.
+    return <MesaScreen key={`${route.param}:${guestActor?.id ?? 'guest-pending'}`} code={route.param} guestToken={guestToken} />;
   }
 
   if (!session) return <LoginScreen />;
+
+  if (!WALLET_RAIL_ENABLED && (route.page === 'cargar' || route.page === 'transferir')) {
+    return <div className="screen"><div className="empty">El riel de saldo PayMe todavía no está habilitado para esta versión. No se inició ninguna operación.</div></div>;
+  }
 
   const screen = (() => {
     switch (route.page) {

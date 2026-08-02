@@ -180,4 +180,72 @@ describe('B-06: actor namespace y journal durable', () => {
     await expect(money.withPreparedMonetaryRequest('mesa_pay:mesa-1', a.key, { ...a.payload, item_ids: ['other'] }, undefined, backend)).rejects.toThrow('monetary_request_unprepared');
     expect(backend).toHaveBeenCalledTimes(2);
   });
+
+  it.each([
+    ['topup', 'topup_card', 'topup:card:5000'],
+    ['transfer', 'transfer', 'transfer:friend:5000:concepto'],
+    ['garantía', 'create_mesa', 'mesa:restaurant'],
+    ['pago', 'mesa_pay:mesa-1', 'pay:mesa-1|card'],
+  ])('retiene el cierre de %s para que una pestaña tardía no cree otra key', async (_label, operation, rawScope) => {
+    signIn('a');
+    const actor = await money.resolveMoneyActor();
+    const scope = money.scopeForActor(actor, rawScope);
+    const key = await money.idempotencyKeyFor(scope, operation);
+    const payload = { idempotency_key: key, amount_cents: 5000, operation };
+    await money.prepareMonetaryRequest(scope, operation, payload);
+    const backend = vi.fn(async () => ({ ok: true }));
+
+    await money.withPreparedMonetaryRequest(operation, key, payload, undefined, backend);
+    // A ya tiene evidencia terminal. B puede llegar tarde, pero el cierre se
+    // conserva bajo el mismo lock/índice: no hay ventana para otra key.
+    await money.rotateIdempotencyKey(scope, operation);
+    expect(await money.idempotencyKeyFor(scope, operation)).toBe(key);
+    await expect(money.withPreparedMonetaryRequest(operation, key, payload, undefined, backend)).rejects.toThrow('monetary_terminal_retained');
+    expect(backend).toHaveBeenCalledTimes(1);
+  });
+
+  it('solo un acuse explícito posterior al terminal permite una intención nueva', async () => {
+    signIn('a');
+    const actor = await money.resolveMoneyActor();
+    const scope = money.scopeForActor(actor, 'transfer:friend:5000:concepto');
+    const key = await money.idempotencyKeyFor(scope, 'transfer');
+    const payload = { idempotency_key: key, amount_cents: 5000 };
+    await money.prepareMonetaryRequest(scope, 'transfer', payload);
+    await money.withPreparedMonetaryRequest('transfer', key, payload, undefined, async () => ({ ok: true }));
+    await money.rotateIdempotencyKey(scope, 'transfer');
+    expect(await money.idempotencyKeyFor(scope, 'transfer')).toBe(key);
+    await money.acknowledgeTerminalAttempt(scope, 'transfer');
+    expect(await money.idempotencyKeyFor(scope, 'transfer')).not.toBe(key);
+  });
+
+  it('tras reload consulta solo actor, familia y área exactos', async () => {
+    signIn('a');
+    const actorA = await money.resolveMoneyActor();
+    const mesaA = money.scopeForActor(actorA, 'pay:mesa-a|card');
+    const mesaB = money.scopeForActor(actorA, 'pay:mesa-b|card');
+    const key = await money.idempotencyKeyFor(mesaA, 'mesa_pay:mesa-a');
+    await money.prepareMonetaryRequest(mesaA, 'mesa_pay:mesa-a', { idempotency_key: key, item_ids: ['a'] });
+    // Simula reload: se pierde el payload/PM de memoria, no el journal durable.
+    expect(await money.readUnconfirmed(mesaA, 'mesa_pay:mesa-a')).toMatchObject({ scope: mesaA });
+    expect(await money.readUnconfirmed(mesaB, 'mesa_pay:mesa-b')).toBeNull();
+    signIn('b');
+    const actorB = await money.resolveMoneyActor();
+    const mesaOtherActor = money.scopeForActor(actorB, 'pay:mesa-a|card');
+    expect(await money.readUnconfirmed(mesaOtherActor, 'mesa_pay:mesa-a')).toBeNull();
+    expect([...local.values.values()].join('')).not.toContain('item_ids');
+  });
+
+  it('no fabrica evidencia cero tras reload cuando una parte previa ya existía', async () => {
+    signIn('a');
+    const actor = await money.resolveMoneyActor();
+    const scope = money.scopeForActor(actor, 'pay:mesa-1|card');
+    const key = await money.idempotencyKeyFor(scope, 'mesa_pay:mesa-1');
+    const payload = { idempotency_key: key, item_ids: ['second'] };
+    await money.prepareMonetaryRequest(scope, 'mesa_pay:mesa-1', payload, 1);
+    const recovered = await money.readUnconfirmed(money.scopeForActor(actor, 'pay:mesa-1'), 'mesa_pay:mesa-1');
+    expect(recovered?.evidence).toBe(1);
+    // La vista no puede tomar una parte histórica (1) como delta atribuible
+    // a la segunda operación; sin una respuesta/reconciliación exacta no hay POST 3.
+    expect(1 > (recovered?.evidence ?? Number.POSITIVE_INFINITY)).toBe(false);
+  });
 });

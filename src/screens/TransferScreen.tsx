@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
+  acknowledgeTerminalAttempt,
   idempotencyKeyFor,
   prepareMonetaryRequest,
   rotateIdempotencyKey,
@@ -86,6 +87,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
     setBusy(true);
     setError(null);
     try {
+      await acknowledgeTerminalAttempt(transferScope, 'transfer');
       const key = await idempotencyKeyFor(transferScope, 'transfer');
       const request = {
         amount_cents: amountCents,
@@ -95,7 +97,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
       };
       await prepareMonetaryRequest(transferScope, 'transfer', request);
       const r = await api.createTransfer(request);
-      rotateIdempotencyKey(transferScope);
+      await rotateIdempotencyKey(transferScope);
       // Si el backend replayó un envío YA hecho, decirlo. Anunciarlo como
       // nuevo hacía creer que se mandó dos veces (o que faltaba mandarlo).
       toast(
@@ -106,7 +108,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
       navigate('cuenta');
     } catch (err) {
       const { code, extra, status } = extractApiError(err);
-      if (shouldRotateOnError(code, status)) rotateIdempotencyKey(transferScope);
+      if (shouldRotateOnError(code, status)) await rotateIdempotencyKey(transferScope);
       if (code === 'insufficient_funds') {
         const available = typeof extra.available === 'number' ? extra.available : 0;
         setError(`Saldo insuficiente: tenés ${formatMXN(available)} disponibles.`);

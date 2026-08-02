@@ -128,4 +128,9 @@ describe('sesión observable y CAS', () => {
     expect(() => api.saveSession(stored('a'))).toThrow('session_storage_unavailable');
     expect(api.loadSession()?.principal_id).toBe('b');
   });
+
+  it('una sesión malformada o con refresh vacío falla cerrada', () => {
+    storage.setItem('payme_app_session', JSON.stringify({ ...stored('a'), refresh_token: '' }));
+    expect(api.loadSession()).toBeNull();
+  });
 });

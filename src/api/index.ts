@@ -13,6 +13,7 @@ import { withPreparedMonetaryRequest } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
 import { clearSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
+import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, transferResponse } from './moneyGuards';
 import type {
   BalanceResponse,
   MeResponse,
@@ -57,6 +58,8 @@ import type {
  */
 
 export const IS_MOCK: boolean = import.meta.env.VITE_MOCK === '1';
+/** El riel saldo/IFPE no está ratificado para release real; nunca se degrada. */
+export const WALLET_RAIL_ENABLED: boolean = IS_MOCK;
 
 /**
  * Modo demo para grabar el video (aplicación YC): un bypass de cámara, nada
@@ -252,13 +255,13 @@ const realApi: Api = {
     form.append('image', image, 'ticket.jpg');
     return httpRequest<OcrResponse>('POST', '/ocr', form, undefined, OCR_TIMEOUT_MS);
   },
-  createMesa: (req) =>
+  createMesa: async (req) =>
     withPreparedMonetaryRequest(
       'create_mesa',
       req.idempotency_key ?? '',
       req,
       undefined,
-      (session) => httpRequest<CreateMesaResponse>('POST', '/mesas', req, session),
+      async (session) => createMesaResponse(await httpRequest<unknown>('POST', '/mesas', req, session)),
     ),
   /**
    * 3DS de la garantía: se confirma con Stripe.js y después se espera a que la
@@ -305,21 +308,21 @@ const realApi: Api = {
       : httpRequest<LockItemsResponse>('POST', `/mesas/${encodeURIComponent(code)}/items/lock`, {
           items,
         }),
-  payMesa: (code, req, guestToken) =>
+  payMesa: async (code, req, guestToken) =>
     withPreparedMonetaryRequest(
       `mesa_pay:${code}`,
       req.idempotency_key,
       req,
       guestToken,
-      (session) =>
+      async (session) =>
         guestToken
-          ? httpGuestRequest<PayMesaResponse>(
+          ? payMesaResponse(await httpGuestRequest<unknown>(
               'POST',
               `/mesas/${encodeURIComponent(code)}/pay`,
               guestToken,
               req,
-            )
-          : httpRequest<PayMesaResponse>('POST', `/mesas/${encodeURIComponent(code)}/pay`, req, session),
+            ))
+          : payMesaResponse(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/pay`, req, session)),
     ),
   createInvitation: (code) =>
     httpRequest<CreateInvitationResponse>('POST', `/mesas/${encodeURIComponent(code)}/invitations`, {
@@ -331,17 +334,17 @@ const realApi: Api = {
       invited_payme_id: paymeId,
     }),
 
-  topupOxxo: (amountCents, idempotencyKey) => {
+  topupOxxo: async (amountCents, idempotencyKey) => {
     const req = { amount_cents: amountCents, idempotency_key: idempotencyKey };
     return withPreparedMonetaryRequest(
       'topup_oxxo',
       idempotencyKey,
       req,
       undefined,
-      (session) => httpRequest<TopupOxxoResponse>('POST', '/topup/oxxo', req, session),
+      async (session) => topupOxxoResponse(await httpRequest<unknown>('POST', '/topup/oxxo', req, session)),
     );
   },
-  topupCard: (amountCents, paymentMethodId, idempotencyKey) => {
+  topupCard: async (amountCents, paymentMethodId, idempotencyKey) => {
     const req = {
       amount_cents: amountCents,
       payment_method_id: paymentMethodId,
@@ -352,19 +355,19 @@ const realApi: Api = {
       idempotencyKey,
       req,
       undefined,
-      (session) => httpRequest<TopupCardResponse>('POST', '/topup/card', req, session),
+      async (session) => topupCardResponse(await httpRequest<unknown>('POST', '/topup/card', req, session)),
     );
   },
   getTopup: (id) => httpRequest<TopupStatusResponse>('GET', `/topup/${encodeURIComponent(id)}`),
   getClabe: () => httpRequest<ClabeResponse>('GET', '/wallet/clabe'),
 
-  createTransfer: (req) =>
+  createTransfer: async (req) =>
     withPreparedMonetaryRequest(
       'transfer',
       req.idempotency_key,
       req,
       undefined,
-      (session) => httpRequest<CreateTransferResponse>('POST', '/transfers', req, session),
+      async (session) => transferResponse(await httpRequest<unknown>('POST', '/transfers', req, session)),
     ),
   listTransfers: () => httpRequest<TransfersResponse>('GET', '/transfers'),
 
@@ -443,51 +446,51 @@ const mockApi: Api = {
   getOpenMesas: () => mock.mockOpenMesas(),
   getMesa: (code, guestToken) => mock.mockGetMesa(code, guestToken ? 'guest' : 'user'),
   scanTicket: () => mock.mockScanTicket(),
-  createMesa: (req) =>
+  createMesa: async (req) =>
     withPreparedMonetaryRequest(
       'create_mesa',
       req.idempotency_key ?? '',
       req,
       undefined,
-      () => mock.mockCreateMesa(req),
+      async () => createMesaResponse(await mock.mockCreateMesa(req)),
     ),
   async confirmGuarantee3ds(code) {
     const result = await mock.mockConfirmGuarantee3ds(code);
     return { ...result, outcome: result.status === 'open' ? 'success' as const : 'ambiguous' as const };
   },
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
-  payMesa: (code, req, guestToken) =>
+  payMesa: async (code, req, guestToken) =>
     withPreparedMonetaryRequest(
       `mesa_pay:${code}`,
       req.idempotency_key,
       req,
       guestToken,
-      () => mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user'),
+      async () => payMesaResponse(await mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user')),
     ),
   createInvitation: (code) => mock.mockCreateInvitation(code),
   inviteFriend: (code, paymeId) => mock.mockInviteFriend(code, paymeId),
 
-  topupOxxo: (amountCents, idempotencyKey) =>
+  topupOxxo: async (amountCents, idempotencyKey) =>
     withPreparedMonetaryRequest(
       'topup_oxxo',
       idempotencyKey,
       { amount_cents: amountCents, idempotency_key: idempotencyKey },
       undefined,
-      () => mock.mockTopupOxxo(amountCents),
+      async () => topupOxxoResponse(await mock.mockTopupOxxo(amountCents)),
     ),
-  topupCard: (amountCents, paymentMethodId, idempotencyKey) =>
+  topupCard: async (amountCents, paymentMethodId, idempotencyKey) =>
     withPreparedMonetaryRequest(
       'topup_card',
       idempotencyKey,
       { amount_cents: amountCents, payment_method_id: paymentMethodId, idempotency_key: idempotencyKey },
       undefined,
-      () => mock.mockTopupCard(amountCents, paymentMethodId),
+      async () => topupCardResponse(await mock.mockTopupCard(amountCents, paymentMethodId)),
     ),
   getTopup: async () => { throw new Error('topup_reconciliation_unavailable_in_mock'); },
   getClabe: () => mock.mockGetClabe(),
 
-  createTransfer: (req) =>
-    withPreparedMonetaryRequest('transfer', req.idempotency_key, req, undefined, () => mock.mockCreateTransfer(req)),
+  createTransfer: async (req) =>
+    withPreparedMonetaryRequest('transfer', req.idempotency_key, req, undefined, async () => transferResponse(await mock.mockCreateTransfer(req))),
   listTransfers: () => mock.mockListTransfers(),
 
   getPaymentMethods: () => mock.mockPaymentMethods(),

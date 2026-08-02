@@ -1,8 +1,9 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, QR_RESTAURANT_ID } from '../api';
+import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, QR_RESTAURANT_ID, WALLET_RAIL_ENABLED } from '../api';
 import { HttpError } from '../api/http';
 import {
+  acknowledgeTerminalAttempt,
   clearUnconfirmed,
   idempotencyKeyFor,
   markUnconfirmed,
@@ -186,11 +187,11 @@ export function CreateMesaFlow() {
   const [frozenScope, setFrozenScope] = useState<string | null>(null);
   useEffect(() => {
     if (!mesaScopeBase) return;
-    try {
-      setFrozenScope(readUnconfirmed(mesaScopeBase)?.scope ?? null);
-    } catch {
-      setError('Hay una apertura anterior que no podemos atribuir de forma segura. Descartala o reconciliála antes de abrir otra.');
-    }
+    let alive = true;
+    void readUnconfirmed(mesaScopeBase, 'create_mesa')
+      .then((attempt) => alive && setFrozenScope(attempt?.scope ?? null))
+      .catch(() => alive && setError('Hay una apertura anterior que no podemos atribuir de forma segura. Esperá la reconciliación antes de abrir otra.'));
+    return () => { alive = false; };
   }, [mesaScopeBase]);
   const mesaScope = frozenScope ?? contentScope;
   function freezeMesa(scope: string) {
@@ -298,6 +299,7 @@ export function CreateMesaFlow() {
     setBusy(true);
     setError(null);
     try {
+      await acknowledgeTerminalAttempt(mesaScope, 'create_mesa');
       const idempotencyKey = await idempotencyKeyFor(mesaScope, 'create_mesa');
       // Garantía con tarjeta (D4 v2.16): una GUARDADA viaja como
       // `payment_method_id` (uuid, sin Elements); una NUEVA se crea desde el
@@ -397,10 +399,18 @@ export function CreateMesaFlow() {
         freezeMesa(mesaScope);
         setStep('threeds');
       } else {
+        // Un 2xx con una mesa que no quedó abierta no acredita una garantía.
+        // La respuesta ya se recibió, pero sin estado contractual de éxito se
+        // conserva journal/clave y se obliga a reconciliar la misma operación.
+        if (r.guarantee.status !== 'open' || r.mesa.status !== 'open') {
+          freezeMesa(mesaScope);
+          setError('La garantía sigue en verificación. No abras otra mesa ni cambies el método todavía.');
+          return;
+        }
         // Mesa abierta y garantía autorizada: el intento se cierra. Sin rotar,
         // la próxima mesa del mismo restaurante y mismo total recibiría el
         // replay de ésta — una mesa vieja, quizá ya cerrada.
-        rotateIdempotencyKey(mesaScope);
+        await rotateIdempotencyKey(mesaScope);
         unfreezeMesa();
         await makeLink(r.mesa.code);
       }
@@ -412,11 +422,11 @@ export function CreateMesaFlow() {
       // segunda garantía por el total.
       const definitivo = shouldRotateOnError(code, status);
       if (definitivo) {
-        rotateIdempotencyKey(mesaScope);
+        await rotateIdempotencyKey(mesaScope);
         unfreezeMesa();
       }
       if (code === 'guarantee_failed') {
-        rotateIdempotencyKey(mesaScope);
+        await rotateIdempotencyKey(mesaScope);
         unfreezeMesa();
         const available = typeof extra.available === 'number' ? extra.available : null;
         setError(
@@ -426,7 +436,7 @@ export function CreateMesaFlow() {
         );
       } else if (code === 'idempotency_key_terminal') {
         // La mesa de ese intento quedó muerta: se arranca una nueva.
-        rotateIdempotencyKey(mesaScope);
+        await rotateIdempotencyKey(mesaScope);
         unfreezeMesa();
         setError('Ese intento ya no sirve. Probá de nuevo para abrir la mesa.');
       } else if (code === 'idempotency_conflict') {
@@ -477,7 +487,7 @@ export function CreateMesaFlow() {
         return;
       }
       if (confirmation.outcome === 'definitive') {
-        rotateIdempotencyKey(mesaScope);
+        await rotateIdempotencyKey(mesaScope);
         unfreezeMesa();
         setCreated(null);
         setError(confirmation.error ?? 'El banco no autorizó la retención. Probá con otra tarjeta.');
@@ -485,7 +495,7 @@ export function CreateMesaFlow() {
         return;
       }
       // Garantía autorizada: el intento se cierra acá.
-      rotateIdempotencyKey(mesaScope);
+      await rotateIdempotencyKey(mesaScope);
       unfreezeMesa();
       await makeLink(created.mesa.code);
     } catch {
@@ -959,7 +969,7 @@ export function CreateMesaFlow() {
               <Icon name="card" size={14} className="ico-inline" /> Tarjeta de prueba ···· 4242 (demo)
             </div>
           )}
-          <button
+          {WALLET_RAIL_ENABLED && <button
             className={`method-card ${method === 'wallet' ? 'sel' : ''}`}
             onClick={() => setMethod('wallet')}
             disabled={!!frozenScope}
@@ -976,7 +986,7 @@ export function CreateMesaFlow() {
               </div>
             </div>
             <div className="radio" aria-hidden="true" />
-          </button>
+          </button>}
           </div>
         </div>
         <button

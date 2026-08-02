@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, WALLET_RAIL_ENABLED } from '../api';
 import type { Friend } from '../api/types';
 import { Avatar, SocialTabs, TopBar, useToast } from '../components/ui';
 import { Icon } from '../components/Icon';
@@ -101,14 +101,14 @@ export function FriendsScreen() {
                   <div className="n">{f.full_name}</div>
                   <div className="id">{f.payme_id}</div>
                 </div>
-                <button
+                {WALLET_RAIL_ENABLED && <button
                   className="btn"
                   style={{ width: 'auto', padding: '7px 12px', fontSize: 'var(--fs-sm)', background: 'var(--teal-l)', color: '#0a7b80' }}
                   onClick={() => navigate('transferir', f.payme_id)}
                   aria-label={`Transferir a ${f.full_name}`}
                 >
                   <Icon name="arrow-up-right" size={16} />
-                </button>
+                </button>}
                 <button
                   className="back-btn"
                   style={{ width: 30, height: 30, fontSize: 'var(--fs-sm)' }}

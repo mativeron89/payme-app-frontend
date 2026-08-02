@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
+  acknowledgeTerminalAttempt,
   idempotencyKeyFor,
   prepareMonetaryRequest,
+  readMonetaryReference,
+  rememberMonetaryReference,
   rotateIdempotencyKey,
   scopeForActor,
   shouldRotateOnError,
   useMoneyActor,
 } from '../api/idempotency';
 import { extractApiError } from '../api/errors';
-import { topupOutcome } from '../api/paymentStatus';
+import { pollTopup, topupOutcome } from '../api/paymentStatus';
 import { confirmCardPayment } from '../api/stripe';
+import { loadSession, type StoredSession } from '../api/storage';
 import type { ClabeResponse, PaymentMethod, TopupOxxoResponse } from '../api/types';
 import { Icon } from '../components/Icon';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
@@ -67,6 +71,35 @@ export function TopupScreen() {
    */
   const topupScope = actor ? scopeForActor(actor, `topup:${via}:${amountCents}`) : '';
 
+  function originCurrent(origin: StoredSession | undefined): boolean {
+    const current = loadSession();
+    return !!origin && !!current && current.principal_id === origin.principal_id && current.family_id === origin.family_id;
+  }
+  async function reconcileTopup(id: string, scope: string, origin: StoredSession | undefined) {
+    const reconciled = await pollTopup(() => api.getTopup(id), () => originCurrent(origin));
+    if (!originCurrent(origin)) return;
+    if (reconciled.outcome === 'success') {
+      await rotateIdempotencyKey(scope, 'topup_card');
+      toast(`Se acreditaron ${formatMXN(amountCents)} ✓`);
+      navigate('cuenta');
+    } else if (reconciled.outcome === 'definitive') {
+      await rotateIdempotencyKey(scope, 'topup_card');
+      setError('Ese cobro no prosperó. Podés iniciar una nueva carga.');
+    } else {
+      setError('La carga sigue en confirmación. No inicies otra carga hasta que se resuelva.');
+    }
+  }
+
+  useEffect(() => {
+    if (!actor) return;
+    const scope = scopeForActor(actor, 'topup:resume');
+    let alive = true;
+    void readMonetaryReference(scope, 'topup_card')
+      .then((id) => { if (id && alive) return reconcileTopup(id, scope, actor.session); return undefined; })
+      .catch(() => alive && setError('Hay una carga anterior en reconciliación; no se inició otra.'));
+    return () => { alive = false; };
+  }, [actor]);
+
   async function doTopup() {
     if (!topupInFlightRef.current.tryEnter()) return;
     if (!topupScope || !actor) {
@@ -77,11 +110,14 @@ export function TopupScreen() {
     setBusy(true);
     setError(null);
     try {
+      // Un nuevo toque después de ver un terminal es una intención explícita;
+      // un retry interno/journal en vuelo nunca ejecuta este acuse.
+      await acknowledgeTerminalAttempt(topupScope, via === 'oxxo' ? 'topup_oxxo' : 'topup_card');
       if (via === 'oxxo') {
         const key = await idempotencyKeyFor(topupScope, 'topup_oxxo');
         await prepareMonetaryRequest(topupScope, 'topup_oxxo', { amount_cents: amountCents, idempotency_key: key });
         const r = await api.topupOxxo(amountCents, key);
-        rotateIdempotencyKey(topupScope);
+        await rotateIdempotencyKey(topupScope);
         setVoucher(r.topup);
       } else if (via === 'card') {
         if (!pm) return;
@@ -95,52 +131,38 @@ export function TopupScreen() {
         // El banco puede pedir 3DS: sin confirmarlo, la plata no entra y el
         // toast anunciaba saldo inexistente.
         if (r.requires_action && r.client_secret) {
+          await rememberMonetaryReference(topupScope, 'topup_card', r.topup.id);
           const confirmed = await confirmCardPayment(r.client_secret);
           if (!confirmed.ok) {
-            if (confirmed.definitive) rotateIdempotencyKey(topupScope);
+            if (confirmed.definitive) await rotateIdempotencyKey(topupScope);
             setError(confirmed.error);
             return;
           }
-          try {
-            const reconciled = await api.getTopup(r.topup.id);
-            if (reconciled.topup.status === 'succeeded') {
-              rotateIdempotencyKey(topupScope);
-              toast(`Se acreditaron ${formatMXN(amountCents)} ✓`);
-              navigate('cuenta');
-              return;
-            }
-            if (reconciled.topup.status === 'failed' || reconciled.topup.status === 'cancelled') {
-              rotateIdempotencyKey(topupScope);
-              setError('Ese cobro no prosperó. Podés iniciar una nueva carga.');
-              return;
-            }
-          } catch {
-            // Sin evidencia de estado, el journal queda in_flight/sending.
-          }
-          setError('Tu banco aprobó la carga; todavía estamos confirmando el saldo. No inicies otra carga con este monto.');
+          await reconcileTopup(r.topup.id, topupScope, actor.session);
           return;
         }
         if (topupOutcome(r.topup.status, r.requires_action, r.client_secret) === 'ambiguous') {
           // El contrato actual no expone GET /topup/:id para reconciliar. Sin
           // ese dato no se puede afirmar ni liberar el intento con seguridad.
-          setError('La carga sigue en confirmación y no podemos verificarla todavía. No inicies otra carga; revisá tu saldo más tarde.');
+          await rememberMonetaryReference(topupScope, 'topup_card', r.topup.id);
+          await reconcileTopup(r.topup.id, topupScope, actor.session);
           return;
         }
         // B-06: un replay puede traer un topup FALLIDO (200 `idempotent:true`
         // con status 'failed'). Sin mirar el status, anunciábamos como
         // acreditado un cobro que nunca prosperó.
         if (topupOutcome(r.topup.status, r.requires_action, r.client_secret) === 'definitive') {
-          rotateIdempotencyKey(topupScope);
+          await rotateIdempotencyKey(topupScope);
           setError('Ese cobro no prosperó. Probá de nuevo o con otra tarjeta.');
           return;
         }
-        rotateIdempotencyKey(topupScope);
+        await rotateIdempotencyKey(topupScope);
         toast(`Se acreditaron ${formatMXN(amountCents)} ✓`);
         navigate('cuenta');
       }
     } catch (err) {
       const { code, status } = extractApiError(err);
-      if (shouldRotateOnError(code, status)) rotateIdempotencyKey(topupScope);
+      if (shouldRotateOnError(code, status)) await rotateIdempotencyKey(topupScope);
       // En OXXO no hay saldo que revisar todavía: lo que puede haber quedado
       // vivo es una REFERENCIA. Decir "revisá tu saldo" mandaba a mirar donde
       // no hay nada.

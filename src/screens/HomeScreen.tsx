@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, IS_DEMO } from '../api';
+import { api, IS_DEMO, WALLET_RAIL_ENABLED } from '../api';
 import type {
   BalanceResponse,
   OpenMesasResponse,
@@ -50,12 +50,11 @@ export function HomeScreen() {
 
   useEffect(() => {
     let alive = true;
-    api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
+    if (WALLET_RAIL_ENABLED) {
+      api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
+      api.getWalletTransactions().then((r) => alive && setTxs(r.transactions.slice(0, 4))).catch(() => alive && setTxs([]));
+    }
     api.getOpenMesas().then((m) => alive && setOpenMesas(m)).catch(() => undefined);
-    api
-      .getWalletTransactions()
-      .then((r) => alive && setTxs(r.transactions.slice(0, 4)))
-      .catch(() => alive && setTxs([]));
     api.getUnreadCount().then((r) => alive && setUnread(r.unread_count)).catch(() => undefined);
     api
       .getPendingInvitations()
@@ -141,7 +140,7 @@ export function HomeScreen() {
         )}
 
         {/* En modo demo (?demo=1) se saca del encuadre: sugiere wallet. */}
-        {!IS_DEMO && (
+        {WALLET_RAIL_ENABLED && !IS_DEMO && (
           <div className="saldo-card">
             <div className="lbl">Tu saldo PayMe</div>
             <div className="saldo-row">
@@ -217,7 +216,7 @@ export function HomeScreen() {
           </>
         )}
 
-        {txs && txs.length > 0 && (
+        {WALLET_RAIL_ENABLED && txs && txs.length > 0 && (
           <>
             <div className="sect-row">
               <div className="sect-title">Últimos movimientos</div>

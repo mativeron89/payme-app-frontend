@@ -26,6 +26,14 @@ export interface StoredSession {
   principal_id: string;
 }
 
+function validSession(value: unknown): value is StoredSession {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const s = value as StoredSession;
+  const nonEmpty = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+  if (!nonEmpty(s.access_token) || !nonEmpty(s.refresh_token) || !nonEmpty(s.family_id) || !nonEmpty(s.principal_id)) return false;
+  return s.user === undefined || (!!s.user && typeof s.user === 'object' && nonEmpty(s.user.id));
+}
+
 export function createSession(session: Omit<StoredSession, 'family_id' | 'principal_id'>): StoredSession {
   if (!session.user?.id) throw new Error('session_identity_required');
   return { ...session, family_id: crypto.randomUUID(), principal_id: session.user.id };
@@ -38,7 +46,7 @@ export function saveSession(s: StoredSession): void {
     throw new Error('session_storage_unavailable');
   }
   const confirmed = loadSession();
-  if (!confirmed || confirmed.family_id !== s.family_id || confirmed.principal_id !== s.principal_id || confirmed.access_token !== s.access_token) {
+  if (!confirmed || confirmed.family_id !== s.family_id || confirmed.principal_id !== s.principal_id || confirmed.access_token !== s.access_token || confirmed.refresh_token !== s.refresh_token) {
     throw new Error('session_storage_unavailable');
   }
   notify();
@@ -54,16 +62,7 @@ export function loadSession(): StoredSession | null {
   if (!raw) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      typeof (parsed as StoredSession).access_token === 'string' &&
-      typeof (parsed as StoredSession).refresh_token === 'string' &&
-      typeof (parsed as StoredSession).family_id === 'string' &&
-      typeof (parsed as StoredSession).principal_id === 'string'
-    ) {
-      return parsed as StoredSession;
-    }
+    if (validSession(parsed)) return parsed;
   } catch {
     // sesión corrupta → se descarta
   }

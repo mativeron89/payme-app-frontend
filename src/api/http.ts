@@ -206,12 +206,9 @@ export async function httpRegister(data: RegisterRequest): Promise<StoredSession
 
 export async function httpLogout(): Promise<void> {
   const session = loadSession();
-  if (session) {
-    try {
-      await rawRequest('POST', '/auth/logout', undefined, session.access_token);
-    } catch {
-      // logout best-effort: la sesión local se limpia igual
-    }
-  }
-  if (session) clearCurrentSession(session);
+  // Cerrar la UI no espera la red: un logout colgado no puede dejar a la
+  // persona firmando operaciones 30s más. El bearer capturado se revoca en
+  // background y nunca se lee una sesión nueva para esa llamada.
+  if (!session || !clearCurrentSession(session)) return;
+  void rawRequest('POST', '/auth/logout', undefined, session.access_token, 3_000).catch(() => undefined);
 }

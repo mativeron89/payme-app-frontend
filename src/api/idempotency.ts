@@ -6,7 +6,7 @@ export class MonetarySafetyError extends Error {
 }
 
 export interface MoneyActor { id: string; session?: StoredSession; }
-export interface UnconfirmedAttempt { actor: string; scope: string; evidence: number; payload?: unknown; }
+export interface UnconfirmedAttempt { actor: string; scope: string; /** Baseline atribuible; ausente nunca acredita un pago. */ evidence?: number; payload?: unknown; }
 
 const JOURNAL_PREFIX = 'payme_money_journal_v3_';
 const VERSION = 3;
@@ -14,7 +14,7 @@ const SEPARATOR = '::';
 const memoryPm = new Map<string, string>();
 const memoryPending = new Map<string, UnconfirmedAttempt>();
 
-interface Journal { v: number; actor: string; area: string; key: string; fingerprint?: string; state: 'prepared' | 'in_flight' | 'sending' | 'ambiguous'; at: number; retries?: number; }
+interface Journal { v: number; actor: string; area: string; key: string; fingerprint?: string; state: 'prepared' | 'in_flight' | 'sending' | 'ambiguous' | 'terminal'; at: number; retries?: number; evidence?: number; reference?: string; }
 
 function stable(value: unknown): string { return JSON.stringify(value); }
 function journalKey(index: string): string { return JOURNAL_PREFIX + index; }
@@ -25,7 +25,7 @@ function readEntry(index: string): Journal | null {
     const value = JSON.parse(raw) as unknown;
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('corrupt');
     const entry = value as Journal;
-    if (entry.v !== VERSION || typeof entry.actor !== 'string' || typeof entry.area !== 'string' || typeof entry.key !== 'string' || !['prepared', 'in_flight', 'sending', 'ambiguous'].includes(entry.state)) throw new Error('legacy');
+    if (entry.v !== VERSION || typeof entry.actor !== 'string' || typeof entry.area !== 'string' || typeof entry.key !== 'string' || !['prepared', 'in_flight', 'sending', 'ambiguous', 'terminal'].includes(entry.state) || (entry.evidence !== undefined && (!Number.isSafeInteger(entry.evidence) || entry.evidence < 0)) || (entry.reference !== undefined && (typeof entry.reference !== 'string' || !entry.reference))) throw new Error('legacy');
     return entry;
   } catch { throw new MonetarySafetyError('monetary_journal_ambiguous'); }
 }
@@ -101,22 +101,25 @@ export async function idempotencyKeyFor(scope: string, operation: string): Promi
 }
 export async function rememberPaymentMethod(scope: string, pm: string): Promise<void> { if (!pm) throw new MonetarySafetyError('monetary_attempt_ambiguous'); memoryPm.set(scope, pm); }
 export function recallPaymentMethod(scope: string): string | undefined { return memoryPm.get(scope); }
-export async function prepareMonetaryRequest(scope: string, operation: string, payload: unknown): Promise<string> {
+export async function prepareMonetaryRequest(scope: string, operation: string, payload: unknown, evidence?: number): Promise<string> {
   const id = await identities(scope, operation); const fingerprint = await digest(stable(payload));
+  if (evidence !== undefined && (!Number.isSafeInteger(evidence) || evidence < 0)) throw new MonetarySafetyError('monetary_attempt_ambiguous');
   return withLock(id.index, async () => {
     const found = readEntry(id.index);
     if (!found || found.v !== VERSION || found.actor !== id.actor || found.area !== id.area) throw new MonetarySafetyError('monetary_journal_ambiguous');
-    if (found.state === 'sending') throw new MonetarySafetyError('monetary_area_frozen');
+    if (found.state === 'sending' || found.state === 'terminal') throw new MonetarySafetyError('monetary_area_frozen');
     if (found.fingerprint && found.fingerprint !== fingerprint) throw new MonetarySafetyError('monetary_payload_ambiguous');
     // Se escribe ANTES de toda red. Un crash deja in_flight detectable tras reload.
-    writeEntry(id.index, { ...found, fingerprint, state: 'in_flight', at: Date.now() }); return found.key;
+    writeEntry(id.index, { ...found, fingerprint, state: 'in_flight', at: Date.now(), ...(evidence !== undefined && { evidence }) }); return found.key;
   });
 }
 export async function withPreparedMonetaryRequest<T>(operation: string, key: string, payload: unknown, guestToken: string | undefined, send: (session: StoredSession | undefined) => Promise<T>): Promise<T> {
   const actor = await resolveMoneyActor(guestToken); const scope = scopeForActor(actor, 'runtime'); const id = await identities(scope, operation); const fingerprint = await digest(stable(payload));
   return withLock(id.index, async () => {
     const found = readEntry(id.index);
-    if (!found || found.v !== VERSION || found.key !== key || !['in_flight', 'ambiguous'].includes(found.state) || found.fingerprint !== fingerprint) throw new MonetarySafetyError('monetary_request_unprepared');
+    if (!found || found.v !== VERSION || found.key !== key || found.fingerprint !== fingerprint) throw new MonetarySafetyError('monetary_request_unprepared');
+    if (found.state === 'terminal') throw new MonetarySafetyError('monetary_terminal_retained');
+    if (!['in_flight', 'ambiguous'].includes(found.state)) throw new MonetarySafetyError('monetary_request_unprepared');
     writeEntry(id.index, { ...found, state: 'sending', at: Date.now(), retries: (found.retries ?? 0) + 1 });
     try { return await send(actor.session); }
     catch (error) { writeEntry(id.index, { ...found, state: 'ambiguous', at: Date.now(), retries: (found.retries ?? 0) + 1 }); throw error; }
@@ -126,17 +129,65 @@ export async function rotateIdempotencyKey(scope: string, operation?: string): P
   const raw = parseScope(scope).raw;
   const inferred = raw.startsWith('pay:') ? `mesa_pay:${raw.slice(4).split('|')[0]}` : raw.startsWith('mesa:') ? 'create_mesa' : raw.startsWith('topup:') ? 'topup_card' : raw.startsWith('transfer:') ? 'transfer' : undefined;
   if (!operation && !inferred) throw new MonetarySafetyError('monetary_attempt_ambiguous');
-  const id = await identities(scope, operation ?? inferred!); await withLock(id.index, async () => { try { localStorage.removeItem(journalKey(id.index)); if (localStorage.getItem(journalKey(id.index)) !== null) throw new Error('roundtrip'); } catch { throw new MonetarySafetyError('money_storage_unavailable'); } }); memoryPm.delete(scope);
+  const id = await identities(scope, operation ?? inferred!); await withLock(id.index, async () => { const found = readEntry(id.index); if (!found) return; writeEntry(id.index, { ...found, state: 'terminal', at: Date.now() }); }); memoryPm.delete(scope);
+}
+/**
+ * Un cierre se retiene hasta que una acción posterior, distinta y explícita,
+ * haya visto el resultado. Nunca se llama desde un retry automático: borrar
+ * antes permite que otra pestaña cree una segunda key tras perder la carrera.
+ */
+export async function acknowledgeTerminalAttempt(scope: string, operation: string): Promise<boolean> {
+  const id = await identities(scope, operation);
+  return withLock(id.index, async () => {
+    const found = readEntry(id.index);
+    if (!found) return false;
+    if (found.actor !== id.actor || found.area !== id.area || found.state !== 'terminal') {
+      throw new MonetarySafetyError('monetary_attempt_ambiguous');
+    }
+    try {
+      localStorage.removeItem(journalKey(id.index));
+      if (localStorage.getItem(journalKey(id.index)) !== null) throw new Error('roundtrip');
+    } catch { throw new MonetarySafetyError('money_storage_unavailable'); }
+    return true;
+  });
+}
+/** Referencia opaca para reconciliar; el payload/PM nunca se persiste. */
+export async function rememberMonetaryReference(scope: string, operation: string, reference: string): Promise<void> {
+  if (!reference) throw new MonetarySafetyError('monetary_attempt_ambiguous');
+  const id = await identities(scope, operation);
+  await withLock(id.index, async () => {
+    const found = readEntry(id.index);
+    if (!found || found.actor !== id.actor || found.area !== id.area || !['in_flight', 'sending', 'ambiguous'].includes(found.state)) throw new MonetarySafetyError('monetary_request_unprepared');
+    writeEntry(id.index, { ...found, reference, at: Date.now() });
+  });
+}
+export async function readMonetaryReference(scope: string, operation: string): Promise<string | null> {
+  const id = await identities(scope, operation);
+  return withLock(id.index, async () => {
+    const found = readEntry(id.index);
+    if (!found || found.actor !== id.actor || found.area !== id.area || found.state === 'terminal' || found.state === 'prepared') return null;
+    return found.reference ?? null;
+  });
 }
 export const ROTATING_ERROR_CODES = ['idempotency_key_terminal','insufficient_funds','payment_provider_error','no_slots_available','mesa_not_payable','fraction_not_available','item_already_paid','item_already_locked','wallet_requires_auth'] as const;
 export function shouldRotateOnError(code: string, status?: number | null): boolean { if (code === 'idempotency_conflict' || code === 'refunded' || code === 'validation_error') return false; if ((ROTATING_ERROR_CODES as readonly string[]).includes(code)) return true; return typeof status === 'number' && status !== 409 && status !== 429 && status >= 400 && status < 500; }
 export function markUnconfirmed(area: string, scope: string, evidence = 0, payload?: unknown): void { memoryPending.set(area, { actor: parseScope(area).actor, scope, evidence, ...(payload !== undefined && { payload }) }); }
-export function readUnconfirmed(area: string): UnconfirmedAttempt | null {
-  const memory = memoryPending.get(area); if (memory) return memory;
-  // Sin payload recuperable tras reload, cualquier journal compartido activo
-  // se trata como ambiguo: la UI no inventa una intención nueva.
-  // No se puede derivar el índice sin Web Crypto en una lectura sincrónica:
-  // ante cualquier journal v3 activo, se congela conservadoramente.
-  try { for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key?.startsWith(JOURNAL_PREFIX)) { const raw = localStorage.getItem(key); if (!raw) throw new Error('corrupt'); const entry = JSON.parse(raw) as Journal; if (entry.v !== VERSION || entry.state !== 'prepared') return { actor: parseScope(area).actor, scope: area, evidence: 0 }; } } return null; } catch { throw new MonetarySafetyError('monetary_journal_ambiguous'); }
+/**
+ * Tras reload se consulta exclusivamente el journal del actor+familia+área
+ * actual. Un intento ajeno (u otra mesa) no puede congelar ni liberar esta UI.
+ * Si falta payload/PM en memoria, se devuelve una congelación sin payload: la
+ * vista no puede reconstruir ni reenviar una mutación a ciegas.
+ */
+export async function readUnconfirmed(area: string, operation: string): Promise<UnconfirmedAttempt | null> {
+  const parsed = parseScope(area);
+  const memory = memoryPending.get(area);
+  if (memory && memory.actor === parsed.actor) return memory;
+  const id = await identities(area, operation);
+  return withLock(id.index, async () => {
+    const found = readEntry(id.index);
+    if (!found || found.state === 'prepared') return null;
+    if (found.actor !== id.actor || found.area !== id.area) throw new MonetarySafetyError('monetary_journal_ambiguous');
+    return { actor: parsed.actor, scope: area, ...(found.evidence !== undefined && { evidence: found.evidence }) };
+  });
 }
 export function clearUnconfirmed(area: string): void { memoryPending.delete(area); }
