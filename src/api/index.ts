@@ -12,6 +12,7 @@ import * as mock from './mock/mockApi';
 import { attachPaymentMethodResponse, invitationResponse, setupIntentResponse } from './contractResponses';
 import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
+import { allowsDemoMode } from './releaseGates';
 import { invalidateSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
 import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse, type PayMesaExpectation, type TransferExpectation } from './moneyGuards';
@@ -69,21 +70,33 @@ export const IS_MOCK: boolean = import.meta.env.VITE_MOCK === '1';
 export const WALLET_RAIL_ENABLED: boolean = IS_MOCK;
 
 /**
- * Modo histórico para grabar la demo: se activa por `?demo=1` (también dentro
- * del hash), saltea la captura OCR y usa el PaymentMethod público de test de
- * Stripe en garantía/pago. Es aceptable solo en un artefacto y entorno
- * acreditados como test; G-24 exige hacerlo inalcanzable por URL antes de un
- * piloto o de configurar credenciales live.
+ * Modo histórico para grabar la demo: `?demo=1` (también dentro del hash)
+ * saltea la captura OCR y usa el PaymentMethod público de test de Stripe en
+ * garantía/pago.
+ *
+ * G-24 (OLA 2-B): ya NO alcanza con la URL. Hace falta además la capability de
+ * BUILD `VITE_ALLOW_DEMO=1`, que el build real no trae. Así el modo demo queda
+ * inalcanzable por URL en el artefacto real —fail-closed— y conservar la demo
+ * exige compilar un artefacto aparte, con entorno acreditado como Stripe test.
+ * El mock lo conserva: ahí no hay dinero ni credenciales.
  */
-function readDemoFlag(): boolean {
-  if (typeof window === 'undefined') return false;
-  if (new URLSearchParams(window.location.search).get('demo') === '1') return true;
-  const hash = window.location.hash;
-  const q = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
-  return new URLSearchParams(q).get('demo') === '1';
-}
+export const DEMO_BUILD_ALLOWED: boolean =
+  IS_MOCK || (import.meta.env.VITE_ALLOW_DEMO as string | undefined) === '1';
 
-export const IS_DEMO: boolean = readDemoFlag();
+/**
+ * Se escribe como `CAPABILITY && lectura()` a propósito: con la capability
+ * apagada, `DEMO_BUILD_ALLOWED` es una constante `false` en tiempo de build, el
+ * empaquetador pliega la expresión entera y ELIMINA por rama muerta tanto la
+ * lectura de la URL como `DEMO_PM_ID` y el bypass de OCR. Así el artefacto real
+ * no sólo no puede activarlos: no los contiene. G-24 pedía "ausentes o
+ * inaccesibles"; de esta forma quedan ausentes.
+ */
+const demoFlagInUrl = (): boolean =>
+  typeof window === 'undefined'
+    ? false
+    : allowsDemoMode(true, window.location.search, window.location.hash);
+
+export const IS_DEMO: boolean = DEMO_BUILD_ALLOWED && demoFlagInUrl();
 
 /**
  * G-01 (v2.21): el restaurante llega por el QR de la mesa — `?r=<uuid>` en la

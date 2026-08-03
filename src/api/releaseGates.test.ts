@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountRailView, allowsWalletRoute } from './releaseGates';
+import { accountRailView, allowsDemoMode, allowsWalletRoute } from './releaseGates';
 
 describe('gate IFPE de release', () => {
   it('real conserva tarjetas y elimina todo affordance wallet', () => {
@@ -45,5 +45,38 @@ describe('gate IFPE de release', () => {
     const real = accountRailView(false);
     expect(real.showAccountActivity).toBe(true);
     expect(real.showWalletMovements).toBe(false);
+  });
+
+  /**
+   * G-24 · el build real no puede activar `pm_card_visa` ni el bypass OCR desde
+   * la URL. La capability de build manda: sin ella, ninguna forma de `?demo=1`
+   * enciende nada. Fail-closed.
+   */
+  describe('G-24 · modo demo por capability de build', () => {
+    const FORMAS = [
+      ['query directa', '?demo=1', ''],
+      ['dentro del hash', '', '#/mesa/PA-1?demo=1'],
+      ['hash con varios params', '', '#/mesa/PA-1?t=abc&demo=1'],
+      ['query y hash a la vez', '?demo=1', '#/mesa/PA-1?demo=1'],
+    ] as const;
+
+    it('sin capability de build, NINGUNA forma de la URL lo activa', () => {
+      for (const [, search, hash] of FORMAS) {
+        expect(allowsDemoMode(false, search, hash)).toBe(false);
+      }
+    });
+
+    it('con capability de build, la URL sí lo activa', () => {
+      for (const [, search, hash] of FORMAS) {
+        expect(allowsDemoMode(true, search, hash)).toBe(true);
+      }
+    });
+
+    it('con capability pero sin flag en la URL, sigue apagado', () => {
+      expect(allowsDemoMode(true, '', '')).toBe(false);
+      expect(allowsDemoMode(true, '?demo=0', '')).toBe(false);
+      expect(allowsDemoMode(true, '?demo=true', '')).toBe(false);
+      expect(allowsDemoMode(true, '', '#/mesa/PA-1?r=uuid')).toBe(false);
+    });
   });
 });
