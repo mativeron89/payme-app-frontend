@@ -142,7 +142,7 @@ export function CuentaScreen() {
     empty: true,
   });
   const accountView = accountRailView(WALLET_RAIL_ENABLED);
-  const [tab, setTab] = useState<'historial' | 'tarjetas'>(accountView.showWalletHistory ? 'historial' : 'tarjetas');
+  const [tab, setTab] = useState<'historial' | 'tarjetas'>(accountView.showAccountActivity ? 'historial' : 'tarjetas');
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
   const [pms, setPms] = useState<PaymentMethod[] | null>(null);
@@ -173,7 +173,7 @@ export function CuentaScreen() {
       api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
       api.getWalletTransactions().then((r) => alive && setTxs(r.transactions)).catch(() => alive && setTxs([]));
     }
-    if (accountView.showWalletHistory) {
+    if (accountView.showAccountActivity) {
       api.getStats().then((s) => alive && setStats(s)).catch(() => undefined);
       // El mes COMPLETO para la torta: sin params el backend da solo la primera
       // página (20) y con >20 pagos los montos no cerrarían contra stats.
@@ -374,7 +374,7 @@ export function CuentaScreen() {
           </div>
         </div>}
 
-        {accountView.showWalletHistory && <div className="tabs">
+        {accountView.showAccountActivity && <div className="tabs">
           <button className={`tab ${tab === 'historial' ? 'on' : ''}`} onClick={() => setTab('historial')}>
             Historial
           </button>
@@ -383,7 +383,7 @@ export function CuentaScreen() {
           </button>
         </div>}
 
-        {accountView.showWalletHistory && tab === 'historial' && (
+        {accountView.showAccountActivity && tab === 'historial' && (
           <>
             {stats && stats.month.visits > 0 && (
               <div className="card card-p" style={{ marginBottom: 14 }}>
@@ -410,6 +410,41 @@ export function CuentaScreen() {
                 )}
               </div>
             )}
+            {/* N-10: los pagos propios salen de GET /account/history (card-only) y
+                se muestran SIEMPRE. La lista de wallet_transactions de abajo es
+                riel saldo y sigue su flag. Sin el riel, esta es la única lista,
+                así que el historial de la cuenta no desaparece del build real. */}
+            {!accountView.showWalletMovements && (
+              <>
+                <div className="sectlabel">Mis pagos</div>
+                {history.length === 0 && (
+                  <div className="empty">
+                    <div className="emoji"><Icon name="receipt" size={40} /></div>
+                    Todavía no pagaste ninguna mesa.
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
+                  {history.map((h) => (
+                    <div key={h.id} className="card card-p" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ color: 'var(--gray-txt)' }} aria-hidden="true">
+                        <Icon name="receipt" size={20} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)' }}>{h.restaurant}</div>
+                        <div className="caption">
+                          {txDate(h.date)} · Mesa {h.mesa_code}
+                        </div>
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>
+                        {formatMXN(h.amount_cents)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {accountView.showWalletMovements && (
+              <>
             <div className="sectlabel">Movimientos</div>
             {txs === null && <div className="loading">Cargando movimientos…</div>}
             {txs?.length === 0 && (
@@ -445,6 +480,8 @@ export function CuentaScreen() {
                 </div>
               ))}
             </div>
+              </>
+            )}
           </>
         )}
 
