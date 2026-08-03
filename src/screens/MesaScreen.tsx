@@ -7,6 +7,7 @@ import {
   completeMonetaryIntent,
   markUnconfirmed,
   prepareMonetaryRequest,
+  crossActorIntentExists,
   readUnconfirmed,
   reconcileMonetaryIntent,
   recallPaymentMethod,
@@ -504,6 +505,35 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   /** Agregado informativo del principal; nunca prueba qué intento concreto llegó. */
   const mySlotsTaken = mesa?.division_slots?.filter((s) => s.claimed_by_me).length ?? 0;
 
+  /**
+   * N-08 · cruce invitado↔autenticado. La misma persona en la misma mesa por
+   * las dos puertas obtenía journal virgen y key nueva; en división igual eso
+   * es un segundo casillero, o sea doble cobro.
+   *
+   * `claimed_by_me` no lo detecta: el backend lo computa por identidad (hash
+   * del token de invitado vs `user_id`), así que también ve dos personas. La
+   * evidencia posible sin cambiar contrato es local a este dispositivo.
+   *
+   * NO bloquea —pagar varias partes es legítimo y el guard
+   * un-usuario-un-casillero está vetado por acta—: exige una confirmación
+   * explícita para que sea una decisión y no un accidente.
+   */
+  const [crossActor, setCrossActor] = useState(false);
+  const [crossActorAcknowledged, setCrossActorAcknowledged] = useState(false);
+  const [showExtraPartConfirm, setShowExtraPartConfirm] = useState(false);
+  useEffect(() => {
+    if (!payArea) return;
+    let alive = true;
+    void crossActorIntentExists(payArea, `mesa_pay:${code}`)
+      .then((exists) => alive && setCrossActor(exists))
+      .catch(() => alive && setCrossActor(true));
+    return () => { alive = false; };
+  }, [payArea, code]);
+  useEffect(() => { setCrossActorAcknowledged(false); setShowExtraPartConfirm(false); }, [guestToken, code]);
+  /** Se pide confirmación por evidencia del backend (mi casillero) o del dispositivo. */
+  const needsExtraPartConfirmation =
+    !crossActorAcknowledged && (crossActor || mySlotsTaken > 0);
+
   const freezePay = useCallback(
     (scope: string, handle: MonetaryIntentHandle, payload?: unknown) => {
       if (!payArea) throw new Error('money_actor_unavailable');
@@ -717,6 +747,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     }
     if (frozenRequiresReconciliation) {
       setError('Este pago no puede reenviarse desde la sesión actual. Sigue bloqueado hasta reconciliar su resultado.');
+      payInFlightRef.current.leave();
+      return;
+    }
+    // N-08: no se emite una clave nueva sobre una mesa donde este dispositivo
+    // (o esta identidad) ya tiene un pago, sin que el usuario lo confirme.
+    if (!frozen && needsExtraPartConfirmation) {
+      setError(null);
+      setShowExtraPartConfirm(true);
       payInFlightRef.current.leave();
       return;
     }
@@ -1210,6 +1248,35 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </>
             )}
           </div>
+          {/* N-08: este dispositivo ya pagó una parte de esta mesa, por esta
+              identidad o por la otra puerta (invitado/autenticado). No se
+              bloquea —pagar varias partes es legítimo— pero se confirma. */}
+          {showExtraPartConfirm && (
+            <div className="note note-orange" role="alertdialog" aria-label="Confirmar parte adicional">
+              <b>Desde este teléfono ya se pagó una parte de esta mesa.</b>{' '}
+              {mySlotsTaken > 0
+                ? 'Tu parte ya figura pagada.'
+                : 'Fue con otra sesión (link de invitado o tu cuenta).'}{' '}
+              Si continuás vas a pagar una parte <b>adicional</b>, y se cobra aparte.
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-sm btn-teal btn-fit"
+                  onClick={() => {
+                    setCrossActorAcknowledged(true);
+                    setShowExtraPartConfirm(false);
+                  }}
+                >
+                  Sí, pagar otra parte
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm btn-fit"
+                  onClick={() => setShowExtraPartConfirm(false)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
           {error && (
             <div className="form-error" role="alert">
               {error}

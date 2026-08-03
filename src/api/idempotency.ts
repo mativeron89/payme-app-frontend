@@ -519,3 +519,46 @@ export async function releaseLegacyQuarantine(scope: string, operation: string):
     });
   });
 }
+
+// ─── N-08 · borde invitado↔autenticado ──────────────────────────────
+
+/**
+ * ¿Este DISPOSITIVO ya tiene un intento monetario para esta misma área bajo
+ * OTRO actor?
+ *
+ * El caso: la misma persona entra a una mesa primero por link de invitado y
+ * después autenticada (o al revés). Son dos actores distintos, así que el
+ * journal nace virgen y sale una idempotency key nueva. En división igual eso
+ * toma un SEGUNDO casillero: doble cobro real, con B-06 puesto.
+ *
+ * `claimed_by_me` del backend NO alcanza para detectarlo —lo verifiqué en
+ * `contract-mirror/routes/mesas.js`: se computa por identidad (hash del token
+ * de invitado para el guest, `user_id` para el autenticado), así que el backend
+ * también ve dos personas distintas—. La única evidencia disponible sin cambiar
+ * contrato es local: este navegador sí conoce las dos puertas.
+ *
+ * NO fusiona principals ni los compara: sólo informa que existe otro actor con
+ * intento sobre la MISMA área, sin decir cuál ni entregar nada suyo. Y NO
+ * bloquea: pagar varias partes es legítimo (acta 2026-07-25, el guard
+ * un-usuario-un-casillero está vetado). Sirve para exigir una confirmación
+ * explícita, de modo que sea una decisión y no un accidente.
+ *
+ * Ante cualquier ambigüedad devuelve `true`: preferimos preguntar de más.
+ */
+export async function crossActorIntentExists(scope: string, operation: string): Promise<boolean> {
+  const id = await identities(scope, operation);
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(JOURNAL_PREFIX)) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const value = JSON.parse(raw) as unknown;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return true;
+      const entry = value as Journal;
+      if (typeof entry.area !== 'string' || typeof entry.actor !== 'string') return true;
+      if (entry.area === id.area && entry.actor !== id.actor) return true;
+    }
+    return false;
+  } catch { return true; }
+}
