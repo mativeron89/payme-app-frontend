@@ -147,21 +147,39 @@ function legacyKeys(): string[] {
     return keys;
   } catch { throw new MonetarySafetyError('monetary_legacy_quarantined'); }
 }
-function writeLegacyQuarantine(area: string): void {
+interface LegacyQuarantine { v: 1 | 2; area: string; at: number; state?: 'frozen' | 'reconciled'; reconciled_at?: number; }
+function writeLegacyQuarantine(area: string, record?: LegacyQuarantine): void {
   const key = legacyQuarantineKey(area);
-  const value = stable({ v: 1, area, at: Date.now() });
+  const value = stable(record ?? { v: 2, area, at: Date.now(), state: 'frozen' });
   try {
     localStorage.setItem(key, value);
     if (localStorage.getItem(key) !== value) throw new Error('roundtrip');
   } catch { throw new MonetarySafetyError('money_storage_unavailable'); }
 }
+/**
+ * Lectura del registro de cuarentena. Un v1 (sin `state`) se lee como
+ * congelado: es el formato que escribía la versión anterior.
+ */
+function parseLegacyQuarantine(area: string): LegacyQuarantine | null {
+  const raw = localStorage.getItem(legacyQuarantineKey(area));
+  if (!raw) return null;
+  const value = JSON.parse(raw) as unknown;
+  if (
+    !value || typeof value !== 'object' || Array.isArray(value) ||
+    ((value as { v?: unknown }).v !== 1 && (value as { v?: unknown }).v !== 2) ||
+    (value as { area?: unknown }).area !== area
+  ) throw new Error('corrupt');
+  const record = value as LegacyQuarantine;
+  const state = record.v === 2 ? record.state : 'frozen';
+  if (state !== 'frozen' && state !== 'reconciled') throw new Error('corrupt');
+  return { ...record, state };
+}
 function hasLegacyQuarantine(area: string): boolean {
   try {
-    const raw = localStorage.getItem(legacyQuarantineKey(area));
-    if (!raw) return false;
-    const value = JSON.parse(raw) as unknown;
-    if (!value || typeof value !== 'object' || Array.isArray(value) || (value as { v?: unknown }).v !== 1 || (value as { area?: unknown }).area !== area) throw new Error('corrupt');
-    return true;
+    const record = parseLegacyQuarantine(area);
+    // N-09: una cuarentena RECONCILIADA por el titular deja de bloquear. El
+    // residuo NO se borra: sigue en sessionStorage como evidencia.
+    return !!record && record.state !== 'reconciled';
   } catch { throw new MonetarySafetyError('monetary_legacy_quarantined'); }
 }
 /**
@@ -171,6 +189,9 @@ function hasLegacyQuarantine(area: string): boolean {
  */
 function guardLegacy(area: string, operation: string): void {
   if (hasLegacyQuarantine(area)) throw new MonetarySafetyError('monetary_legacy_quarantined');
+  // N-09: si el titular ya reconcilió esta área, el residuo intacto no vuelve a
+  // congelarla. Sin esto, liberar era imposible: el barrido la re-escribía.
+  if (isLegacyQuarantineReconciled(area)) return;
   for (const key of legacyKeys()) {
     const raw = key.startsWith(LEGACY_IDEM_PREFIX)
       ? key.slice(LEGACY_IDEM_PREFIX.length)
@@ -398,4 +419,65 @@ export function clearUnconfirmed(area: string, handle: MonetaryIntentHandle): vo
   try {
     if (handleBelongsToCurrentFamily(area, handle)) memoryPending.delete(handleMemoryKey(area, handle));
   } catch { /* una familia vieja nunca limpia la vigente */ }
+}
+
+// ─── N-09 · salida controlada de la cuarentena legacy ───────────────
+
+function isLegacyQuarantineReconciled(area: string): boolean {
+  try { return parseLegacyQuarantine(area)?.state === 'reconciled'; }
+  catch { return false; }
+}
+
+export interface LegacyQuarantineState {
+  area: string;
+  at: number;
+  reconciled: boolean;
+  /** Claves de residuo halladas, para el runbook. Nunca su contenido. */
+  residue: string[];
+}
+
+/**
+ * Estado de la cuarentena para una operación, en forma consultable por la UI.
+ * No lanza: la pantalla necesita poder EXPLICAR el bloqueo, y una función que
+ * sólo sabía lanzar es la razón por la que no existía ninguna salida.
+ */
+export async function readLegacyQuarantine(scope: string, operation: string): Promise<LegacyQuarantineState | null> {
+  const id = await identities(scope, operation);
+  let record: LegacyQuarantine | null = null;
+  try { record = parseLegacyQuarantine(id.area); }
+  catch { return { area: id.area, at: 0, reconciled: false, residue: [] }; }
+  if (!record) return null;
+  let residue: string[] = [];
+  try {
+    residue = legacyKeys().filter(
+      (k) => k.startsWith(LEGACY_IDEM_PREFIX) || k.startsWith(LEGACY_PENDING_PREFIX),
+    );
+  } catch { residue = []; }
+  return { area: id.area, at: record.at, reconciled: record.state === 'reconciled', residue };
+}
+
+/**
+ * Levanta la cuarentena tras una reconciliación EXPLÍCITA del titular.
+ *
+ * No borra el residuo: la evidencia monetaria se conserva intacta, tal como
+ * exige la orden. Lo único que cambia es que el área deja de estar congelada,
+ * así que la próxima operación abre una generación nueva.
+ *
+ * Es una decisión humana, no un TTL: la pantalla debe haber mostrado el runbook
+ * y pedido confirmación antes de llamar acá.
+ */
+export async function releaseLegacyQuarantine(scope: string, operation: string): Promise<void> {
+  const id = await identities(scope, operation);
+  await withLock(id.index, async () => {
+    let record: LegacyQuarantine | null = null;
+    try { record = parseLegacyQuarantine(id.area); }
+    catch { record = null; }
+    writeLegacyQuarantine(id.area, {
+      v: 2,
+      area: id.area,
+      at: record?.at ?? Date.now(),
+      state: 'reconciled',
+      reconciled_at: Date.now(),
+    });
+  });
 }
