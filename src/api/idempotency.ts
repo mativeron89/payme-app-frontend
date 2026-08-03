@@ -348,6 +348,44 @@ export async function completeMonetaryIntent(scope: string, operation: string, h
   });
   memoryPm.delete(handleMemoryKey(scope, handle));
 }
+/**
+ * N-07 · SALIDA del intento congelado, tras una reconciliación EXPLÍCITA.
+ *
+ * El journal sabía congelar pero no destrabar: sin payload en memoria —o sea
+ * tras cualquier reload, back del navegador o remount— el área quedaba
+ * bloqueada sin ninguna transición posible. Para `create_mesa` el área es
+ * global por principal, así que un corte de red abriendo una mesa dejaba al
+ * organizador sin poder abrir NINGUNA mesa nunca más en ese navegador.
+ *
+ * A diferencia de `completeMonetaryIntent`, esta función NO exige que la
+ * familia coincida. El motivo: un relogin del MISMO principal crea una familia
+ * nueva, así que exigirla convertía el fail-closed en denegación permanente.
+ * Lo que sí se exige es el actor (principal estable) y la generación exacta,
+ * de modo que el aislamiento cross-PRINCIPAL —el que de verdad protege— queda
+ * intacto.
+ *
+ * Sólo TERMINALIZA: nunca entrega payload ni PM, nunca reenvía, nunca cobra.
+ * El caller debe haber obtenido evidencia autoritativa del backend (para una
+ * mesa, `claimed_by_me`) y confirmación del usuario ANTES de llamar. No hay TTL
+ * ni desbloqueo automático: es una decisión humana informada.
+ */
+export async function reconcileMonetaryIntent(scope: string, operation: string, handle: MonetaryIntentHandle): Promise<void> {
+  if (!validHandle(handle)) throw new MonetarySafetyError('monetary_attempt_ambiguous');
+  const id = await identities(scope, operation);
+  await withLock(id.index, async () => {
+    guardPreviousJournal(id.area);
+    const found = readEntry(id.index);
+    if (!found) return;
+    if (found.actor !== id.actor || found.area !== id.area) throw new MonetarySafetyError('monetary_journal_ambiguous');
+    if (found.key !== handle.key || found.generation !== handle.generation) throw new MonetarySafetyError('monetary_generation_stale');
+    if (found.state !== 'terminal') writeEntry(id.index, { ...found, state: 'terminal', at: Date.now() });
+  });
+  // Los artefactos en memoria mueren con el intento; nunca sobreviven a su
+  // generación. Se limpian best-effort: una familia vieja no puede tocar los de
+  // la vigente y eso no debe impedir la reconciliación.
+  try { memoryPm.delete(handleMemoryKey(scope, handle)); } catch { /* fail-open solo en memoria */ }
+  try { memoryPending.delete(handleMemoryKey(scope, handle)); } catch { /* idem */ }
+}
 /** Referencia opaca para reconciliar; el payload/PM nunca se persiste. */
 export async function rememberMonetaryReference(scope: string, operation: string, handle: MonetaryIntentHandle, reference: string): Promise<void> {
   if (!validHandle(handle) || !reference) throw new MonetarySafetyError('monetary_attempt_ambiguous');

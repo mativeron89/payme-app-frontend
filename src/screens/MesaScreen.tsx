@@ -8,6 +8,7 @@ import {
   markUnconfirmed,
   prepareMonetaryRequest,
   readUnconfirmed,
+  reconcileMonetaryIntent,
   recallPaymentMethod,
   rememberPaymentMethod,
   scopeForActor,
@@ -521,6 +522,69 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     clearUnconfirmed(payArea, handle);
     setFrozen((current) => current && current.handle.key === handle.key && current.handle.generation === handle.generation ? null : current);
   }, [payArea]);
+
+  /**
+   * N-07 · SALIDA del intento congelado. Antes no existía ninguna: sin payload
+   * en memoria —tras un reload o el back del navegador— el pago quedaba
+   * bloqueado para siempre.
+   *
+   * No hay TTL ni desbloqueo automático. Se consulta la EVIDENCIA AUTORITATIVA
+   * del backend (`claimed_by_me` sobre los casilleros, o mis ítems pagados) y
+   * recién con eso se cierra el intento:
+   *  - si el pago llegó, se informa y se cierra sin cobrar nada;
+   *  - si no llegó, se pide una confirmación explícita antes de liberar, porque
+   *    el intento siguiente será un cobro nuevo.
+   */
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileVerdict, setReconcileVerdict] = useState<'landed' | 'absent' | null>(null);
+
+  const myPaidItems = useCallback(
+    (m: MesaDetail | null) => (m?.items ?? []).filter((i) => (i.my_bps ?? 0) > 0 && i.status === 'paid').length,
+    [],
+  );
+
+  const checkReconciliation = useCallback(async () => {
+    if (!frozen || !payArea) return;
+    setReconciling(true);
+    setError(null);
+    try {
+      const fresh = await api.getMesa(code, guestToken);
+      setMesa(fresh.mesa);
+      const landed =
+        fresh.mesa.division_mode === 'igual'
+          ? (fresh.mesa.division_slots ?? []).some((s) => s.claimed_by_me)
+          : myPaidItems(fresh.mesa) > 0;
+      if (landed) {
+        await reconcileMonetaryIntent(frozen.scope, `mesa_pay:${code}`, frozen.handle);
+        setFrozen(null);
+        setReconcileVerdict(null);
+        toast('Ese pago ya está registrado ✓');
+      } else {
+        // No se libera solo: el usuario tiene que decidirlo viendo el aviso.
+        setReconcileVerdict('absent');
+      }
+    } catch {
+      setError('No pudimos consultar el estado de la mesa. Probá de nuevo en un momento.');
+    } finally {
+      setReconciling(false);
+    }
+  }, [frozen, payArea, code, guestToken, myPaidItems, toast]);
+
+  const releaseAfterReconciliation = useCallback(async () => {
+    if (!frozen) return;
+    setReconciling(true);
+    try {
+      await reconcileMonetaryIntent(frozen.scope, `mesa_pay:${code}`, frozen.handle);
+      setFrozen(null);
+      setReconcileVerdict(null);
+      setError(null);
+      toast('Listo: podés pagar de nuevo');
+    } catch {
+      setError('No pudimos cerrar ese intento. Sigue bloqueado por seguridad.');
+    } finally {
+      setReconciling(false);
+    }
+  }, [frozen, code, toast]);
 
   // `claimed_by_me` es un agregado del principal, no identifica qué intento
   // pagó. Otro dispositivo puede aumentarlo mientras ESTE POST sigue ambiguo;
@@ -1107,6 +1171,35 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     ? 'No podemos reenviar este pago desde la sesión actual. No iniciaremos otro hasta reconciliarlo.'
                     : 'Reintentalo para saber si se cobró: mandamos el mismo pago, no uno nuevo.'}
                 </div>
+                {/* N-07: la salida. Antes este estado no tenía ninguna y el
+                    área quedaba bloqueada para siempre. Se resuelve con la
+                    evidencia del backend, nunca con un TTL. */}
+                {frozenRequiresReconciliation && reconcileVerdict !== 'absent' && (
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', marginTop: 12 }}
+                    onClick={() => void checkReconciliation()}
+                    disabled={reconciling}
+                  >
+                    {reconciling ? 'Consultando…' : 'Revisar si se cobró'}
+                  </button>
+                )}
+                {frozenRequiresReconciliation && reconcileVerdict === 'absent' && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 'var(--fs-xs)', color: '#fff', fontFamily: 'var(--font-body)' }}>
+                      No encontramos ese pago en la mesa: no llegó a tomar tu parte. Si continuás,
+                      el próximo intento es un <b>cobro nuevo</b>.
+                    </div>
+                    <button
+                      className="btn btn-sm btn-teal"
+                      style={{ marginTop: 8 }}
+                      onClick={() => void releaseAfterReconciliation()}
+                      disabled={reconciling}
+                    >
+                      {reconciling ? 'Cerrando…' : 'Entiendo, desbloquear el pago'}
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
               <>
