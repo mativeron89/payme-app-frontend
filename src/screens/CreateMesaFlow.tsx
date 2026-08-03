@@ -9,6 +9,7 @@ import {
   markUnconfirmed,
   prepareMonetaryRequest,
   readUnconfirmed,
+  reconcileMonetaryIntent,
   recallPaymentMethod,
   rememberPaymentMethod,
   scopeForActor,
@@ -240,6 +241,57 @@ export function CreateMesaFlow() {
     if (!mesaScopeBase) return;
     clearUnconfirmed(mesaScopeBase, handle);
     setFrozen((current) => current && current.handle.key === handle.key && current.handle.generation === handle.generation ? null : current);
+  }
+
+  /**
+   * N-07 · SALIDA de la apertura congelada. Era el caso más grave del journal:
+   * el área de `create_mesa` es GLOBAL por principal, así que un corte de red
+   * abriendo una mesa dejaba al organizador sin poder abrir NINGUNA mesa nunca
+   * más en ese navegador — y no existía transición posible.
+   *
+   * La evidencia autoritativa es `GET /mesas/open`: si la mesa llegó a crearse,
+   * está ahí con su garantía. Sin TTL ni desbloqueo automático.
+   */
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileVerdict, setReconcileVerdict] = useState<'absent' | null>(null);
+
+  async function checkMesaReconciliation() {
+    if (!frozen) return;
+    setReconciling(true);
+    setError(null);
+    try {
+      const abiertas = await api.getOpenMesas();
+      const propia = abiertas.mesas.find((m) => m.restaurant?.name === restaurant?.name);
+      if (propia) {
+        await reconcileMonetaryIntent(frozen.scope, 'create_mesa', frozen.handle);
+        setFrozen(null);
+        setReconcileVerdict(null);
+        toast(`Esa mesa ya existe: ${propia.code}`);
+        navigate('mesas');
+      } else {
+        setReconcileVerdict('absent');
+      }
+    } catch {
+      setError('No pudimos consultar tus mesas abiertas. Probá de nuevo en un momento.');
+    } finally {
+      setReconciling(false);
+    }
+  }
+
+  async function releaseMesaAfterReconciliation() {
+    if (!frozen) return;
+    setReconciling(true);
+    try {
+      await reconcileMonetaryIntent(frozen.scope, 'create_mesa', frozen.handle);
+      setFrozen(null);
+      setReconcileVerdict(null);
+      setError(null);
+      toast('Listo: podés abrir la mesa de nuevo');
+    } catch {
+      setError('No pudimos cerrar ese intento. Sigue bloqueado por seguridad.');
+    } finally {
+      setReconciling(false);
+    }
   }
   const ticketValid =
     editItems.length > 0 &&
@@ -946,7 +998,38 @@ export function CreateMesaFlow() {
           {frozen && (
             <div className="note note-orange" role="status">
               {frozenRequiresReconciliation ? (
-                <><b>Hay una apertura de una sesión anterior.</b> Puede que la garantía ya exista. Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa.</>
+                <>
+                  <b>Hay una apertura de una sesión anterior.</b> Puede que la garantía ya exista.
+                  Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa.
+                  {/* N-07: la salida. Antes este estado dejaba al organizador
+                      sin poder abrir NINGUNA mesa en este navegador. */}
+                  {reconcileVerdict !== 'absent' ? (
+                    <div style={{ marginTop: 10 }}>
+                      <button
+                        className="btn btn-sm btn-teal btn-fit"
+                        onClick={() => void checkMesaReconciliation()}
+                        disabled={reconciling}
+                      >
+                        {reconciling ? 'Consultando…' : 'Revisar si la mesa se creó'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 10 }}>
+                      <div>
+                        No encontramos ninguna mesa abierta tuya en este restaurante: esa apertura
+                        no llegó a crearse. Si continuás, se retiene el total de nuevo.
+                      </div>
+                      <button
+                        className="btn btn-sm btn-teal btn-fit"
+                        style={{ marginTop: 8 }}
+                        onClick={() => void releaseMesaAfterReconciliation()}
+                        disabled={reconciling}
+                      >
+                        {reconciling ? 'Cerrando…' : 'Entiendo, desbloquear'}
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <><b>Tenés una apertura sin confirmar.</b> Puede que la mesa ya se haya creado con su garantía. Reintentala tal cual: si ya existe, te devolvemos esa misma mesa en vez de retener el total otra vez.</>
               )}
