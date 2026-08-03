@@ -35,6 +35,11 @@ import type {
 } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
+import {
+  needsExtraPartConfirmation as needsExtraPartConfirmationOf,
+  paymentLanded,
+  requiresReconciliation,
+} from './freezeMachine';
 import { goBack, navigate } from '../router';
 import { countdownTo, formatMXN } from '../utils/format';
 import { fractionAmount, stringToCents, tipFromBps } from '../utils/money';
@@ -496,8 +501,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }, [payArea, code]);
   useEffect(() => { setFrozen(null); }, [guestToken, code]);
   const frozenScope = frozen?.scope ?? null;
-  const canReplayFrozen = !!frozen?.payload && frozen.reconciliationRequired !== true;
-  const frozenRequiresReconciliation = !!frozen && !canReplayFrozen;
+  // La decisión vive en `freezeMachine.ts`, que sí tiene cobertura: acá sólo
+  // se consume. Antes era lógica inline sin un solo test.
+  const frozenRequiresReconciliation = requiresReconciliation(frozen);
   const payScope = frozenScope ?? contentScope;
   const frozenRef = useRef(frozenScope);
   frozenRef.current = frozenScope;
@@ -531,8 +537,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }, [payArea, code]);
   useEffect(() => { setCrossActorAcknowledged(false); setShowExtraPartConfirm(false); }, [guestToken, code]);
   /** Se pide confirmación por evidencia del backend (mi casillero) o del dispositivo. */
-  const needsExtraPartConfirmation =
-    !crossActorAcknowledged && (crossActor || mySlotsTaken > 0);
+  const needsExtraPartConfirmation = needsExtraPartConfirmationOf({
+    acknowledged: crossActorAcknowledged,
+    crossActorIntent: crossActor,
+    mySlotsTaken,
+  });
 
   const freezePay = useCallback(
     (scope: string, handle: MonetaryIntentHandle, payload?: unknown) => {
@@ -568,11 +577,6 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [reconciling, setReconciling] = useState(false);
   const [reconcileVerdict, setReconcileVerdict] = useState<'landed' | 'absent' | null>(null);
 
-  const myPaidItems = useCallback(
-    (m: MesaDetail | null) => (m?.items ?? []).filter((i) => (i.my_bps ?? 0) > 0 && i.status === 'paid').length,
-    [],
-  );
-
   const checkReconciliation = useCallback(async () => {
     if (!frozen || !payArea) return;
     setReconciling(true);
@@ -580,10 +584,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     try {
       const fresh = await api.getMesa(code, guestToken);
       setMesa(fresh.mesa);
-      const landed =
-        fresh.mesa.division_mode === 'igual'
-          ? (fresh.mesa.division_slots ?? []).some((s) => s.claimed_by_me)
-          : myPaidItems(fresh.mesa) > 0;
+      const landed = paymentLanded(fresh.mesa);
       if (landed) {
         await reconcileMonetaryIntent(frozen.scope, `mesa_pay:${code}`, frozen.handle);
         setFrozen(null);
@@ -598,7 +599,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     } finally {
       setReconciling(false);
     }
-  }, [frozen, payArea, code, guestToken, myPaidItems, toast]);
+  }, [frozen, payArea, code, guestToken, toast]);
 
   const releaseAfterReconciliation = useCallback(async () => {
     if (!frozen) return;
