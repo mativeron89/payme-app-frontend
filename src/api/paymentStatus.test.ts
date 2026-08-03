@@ -17,6 +17,9 @@ describe('estados monetarios acreditables', () => {
     expect(topupOutcome('processing', true)).toBe('ambiguous');
     expect(topupOutcome('processing', true, 'secret')).toBe('ambiguous');
     expect(topupOutcome('succeeded', false)).toBe('success');
+    for (const status of ['failed', 'cancelled', 'expired']) {
+      expect(topupOutcome(status, false)).toBe('definitive');
+    }
   });
 
   it('garantía autorizada con polling 401/timeout/pending sigue ambigua y no abre otro hold', () => {

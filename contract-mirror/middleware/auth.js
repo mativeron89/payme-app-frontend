@@ -14,7 +14,7 @@
 
 const jwt = require('jsonwebtoken');
 const pool = require('../db/pool');
-const { tokenHash } = require('../utils/tokens');
+const { tokenHash, verifyInvitationLinkToken } = require('../utils/tokens');
 const logger = require('../utils/logger');
 
 const JWT_ISS = process.env.JWT_ISSUER || 'payme.mx';
@@ -26,18 +26,37 @@ function verifyJwt(token) {
     // Si el token no tiene iss/aud (tokens viejos pre-v2.5.1), no falla.
     issuer: undefined,
     audience: undefined,
+    algorithms: ['HS256'],
   });
 }
 
-async function loadActiveSession(jti) {
-  if (!jti) return null;
+async function loadActiveSession({ jti, sessionId }) {
+  if (jti) {
+    const { rows: [session] } = await pool.query(
+      `SELECT id, user_id, jti, status, expires_at, revoked_at
+         FROM user_sessions
+        WHERE jti = $1`,
+      [jti]
+    );
+    if (!session) return null;
+    // Un token que trae ambos claims no puede hacer que cada uno apunte a una
+    // sesión distinta. `session_id` legacy pudo representar id o jti.
+    if (sessionId && sessionId !== session.id && sessionId !== session.jti) return null;
+    return session;
+  }
+  if (typeof sessionId !== 'string' || sessionId.length === 0 || sessionId.length > 100) {
+    return null;
+  }
   const { rows } = await pool.query(
-    `SELECT id, user_id, status, expires_at, revoked_at
+    `SELECT id, user_id, jti, status, expires_at, revoked_at
        FROM user_sessions
-      WHERE jti = $1`,
-    [jti]
+      WHERE id::text = $1 OR jti = $1
+      LIMIT 2`,
+    [sessionId]
   );
-  return rows[0] || null;
+  // Fail-closed ante una colisión teórica id↔jti: un claim nunca elige entre
+  // dos sesiones por orden físico de PostgreSQL.
+  return rows.length === 1 ? rows[0] : null;
 }
 
 async function loadUser(userId) {
@@ -77,7 +96,10 @@ async function requireAuth(req, res, next) {
 
     // v2.5.1 P1 #6: si el JWT tiene session_id, validar que esté activa
     if (payload.jti || payload.session_id) {
-      const session = await loadActiveSession(payload.jti);
+      const session = await loadActiveSession({
+        jti: payload.jti,
+        sessionId: payload.session_id,
+      });
       if (!session) {
         // Si el token DICE tener jti pero no existe en DB → revocada/inexistente
         return res.status(401).json({ error: 'session_not_found' });
@@ -87,6 +109,10 @@ async function requireAuth(req, res, next) {
       }
       if (session.expires_at && new Date(session.expires_at) < new Date()) {
         return res.status(401).json({ error: 'session_expired' });
+      }
+      const subject = payload.sub || payload.user_id;
+      if (!subject || session.user_id !== subject) {
+        return res.status(401).json({ error: 'session_subject_mismatch' });
       }
       // Refrescar last_seen async (no bloquea)
       pool.query(
@@ -175,6 +201,19 @@ async function requireMesaParticipant(req, res, next) {
       // Validar guest token: hash o legacy
       const hash = req.guestTokenHash;
       const raw  = req.guestToken;
+      const looksV2 = raw.startsWith('v2.');
+      let versionedInvitationId = null;
+      if (looksV2) {
+        try {
+          versionedInvitationId = verifyInvitationLinkToken(raw);
+        } catch (err) {
+          logger.error('invitation_link_verification_unavailable', { error: err.code || err.message });
+          return res.status(503).json({ error: 'invitation_link_unavailable' });
+        }
+        if (!versionedInvitationId) {
+          return res.status(403).json({ error: 'not_a_mesa_participant' });
+        }
+      }
 
       const { rowCount } = await pool.query(
         `SELECT 1 FROM (
@@ -184,18 +223,40 @@ async function requireMesaParticipant(req, res, next) {
                 ($2::text IS NOT NULL AND guest_token_hash = $2::text)
                 OR ($3::text IS NOT NULL AND guest_token = $3::text)
               )
-              AND status IN ('pending','active')
+              AND status = 'active'
            UNION ALL
-           SELECT 1 FROM invitations
-            WHERE mesa_id = $1
+           SELECT 1 FROM invitations canonical
+            WHERE $4::uuid IS NOT NULL
+              AND canonical.id = $4::uuid
+              AND canonical.mesa_id = $1
+              AND canonical.invitation_type = 'link'
+              AND canonical.superseded_by_id IS NULL
+              AND canonical.status = 'pending'
+              AND canonical.expires_at > NOW()
+           UNION ALL
+           SELECT 1
+             FROM invitations source
+             JOIN invitations canonical
+               ON canonical.id = COALESCE(source.superseded_by_id, source.id)
+              AND canonical.mesa_id = source.mesa_id
+              AND canonical.inviter_user_id = source.inviter_user_id
+              AND canonical.invitation_type = source.invitation_type
+              AND (canonical.invitation_type <> 'in_app'
+                   OR canonical.invited_user_id IS NOT DISTINCT FROM source.invited_user_id)
+            WHERE $4::uuid IS NULL
+              AND source.mesa_id = $1
+              AND canonical.mesa_id = $1
+              AND canonical.invitation_type = 'link'
+              AND canonical.superseded_by_id IS NULL
               AND (
-                ($2::text IS NOT NULL AND token_hash = $2::text)
-                OR ($3::text IS NOT NULL AND token = $3::text)
+                ($2::text IS NOT NULL AND source.token_hash = $2::text)
+                OR ($3::text IS NOT NULL AND source.token = $3::text)
               )
-              AND status IN ('pending','accepted')
-              AND expires_at > NOW()
+              AND canonical.status = 'pending'
+              AND source.expires_at > NOW()
+              AND canonical.expires_at > NOW()
          ) sub LIMIT 1`,
-        [req.mesa.id, hash, raw]
+        [req.mesa.id, hash, raw, versionedInvitationId]
       );
       if (rowCount === 0) {
         return res.status(403).json({ error: 'not_a_mesa_participant' });
@@ -213,10 +274,11 @@ async function requireMesaParticipant(req, res, next) {
     const { rowCount } = await pool.query(
       `SELECT 1 FROM (
          SELECT 1 FROM mesa_participants
-          WHERE mesa_id = $1 AND user_id = $2 AND status IN ('pending','active')
+          WHERE mesa_id = $1 AND user_id = $2 AND status = 'active'
          UNION ALL
          SELECT 1 FROM invitations
-          WHERE mesa_id = $1 AND invited_user_id = $2 AND status IN ('pending','accepted')
+          WHERE mesa_id = $1 AND invited_user_id = $2 AND status = 'pending'
+            AND superseded_by_id IS NULL
             AND expires_at > NOW()
        ) sub LIMIT 1`,
       [req.mesa.id, u]
@@ -237,4 +299,7 @@ module.exports = {
   guestOrAuth,
   requireMesaParticipant,
   verifyJwt,
+  // Compartido con /auth/logout: aceptar una forma legacy en el middleware
+  // pero no poder revocarla dejaría una sesión activa tras un logout exitoso.
+  loadActiveSession,
 };

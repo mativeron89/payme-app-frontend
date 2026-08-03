@@ -275,7 +275,7 @@ export interface CreateMesaRequest {
    * — que se liquida sola a los 30 min y captura el total (doble cobro real),
    * además de emitir eventos de facturación inexistente al dashboard.
    */
-  idempotency_key?: string;
+  idempotency_key: string;
 }
 
 /** POST /api/mesas → 201 (garantía A-1). */
@@ -351,7 +351,8 @@ export interface PayMesaResponse {
     /** v2.18: recibo de fracciones cobradas (solo consumo). */
     items?: Array<{ item_id: string; fraction_bps: number; amount_cents: number }>;
     gross_display?: string;
-    client_secret?: string;
+    /** El replay unificado puede serializar `null`; el guard lo elimina. */
+    client_secret?: string | null;
     /**
      * Solo en el REPLAY idempotente: ahí el backend devuelve la fila cruda del
      * attempt, donde el secreto se llama así y no viene `requires_action`
@@ -390,10 +391,13 @@ export interface PayMesaResponse {
 
 /** POST /api/mesas/:code/invitations (type 'link') → 201. */
 export interface CreateInvitationResponse {
+  /** `true` cuando el backend replaya la invitación creada con la misma key. */
+  idempotent?: boolean;
   invitation: {
     id: string;
     invitation_type: 'link' | 'in_app';
-    status: string;
+    /** El replay de la misma key puede devolver la autoridad ya vencida. */
+    status: 'pending' | 'expired';
     expires_at: string;
     created_at: string;
   };
@@ -435,6 +439,21 @@ export interface PaymentMethodsResponse {
   payment_methods: PaymentMethod[];
 }
 
+/** POST /api/payment-methods/setup-intent → 200. */
+export interface CreateSetupIntentResponse {
+  setup_intent_id: string;
+  client_secret: string;
+}
+
+/** POST /api/payment-methods → 201 fresh / 200 replay en e8a3faf. */
+export type AttachedPaymentMethod = PaymentMethod;
+
+export interface AttachPaymentMethodResponse {
+  payment_method: AttachedPaymentMethod;
+  /** El `pm_` ya estaba adjunto; no se creó una segunda tarjeta local. */
+  idempotent?: boolean;
+}
+
 // ─── Topup (routes/topup.js + spei-funding.js) ─────────────
 
 /** POST /api/topup/oxxo → 201. */
@@ -443,11 +462,11 @@ export interface TopupOxxoResponse {
   topup: {
     id: string;
     /** Se normaliza desde el BIGINT/shape real del endpoint. */
-    method: 'oxxo' | 'card' | 'spei';
+    method: 'oxxo';
     status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | 'cancelled';
     amount_cents: number;
     amount_display: string;
-    /** Un replay puede llegar antes de que el backend vuelva a exponer el voucher. */
+    /** Sólo un replay terminal puede omitirlo; uno activo falla en el guard. */
     voucher_reference?: string;
     stripe_voucher_url?: string | null;
     voucher_expires_at?: string;
@@ -459,7 +478,7 @@ export interface TopupCardResponse {
   idempotent?: boolean;
   topup: {
     id: string;
-    method: 'oxxo' | 'card' | 'spei';
+    method: 'card';
     status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | 'cancelled';
     amount_cents: number;
     amount_display: string;
@@ -490,24 +509,31 @@ export interface CreateTransferRequest {
   idempotency_key: string;
 }
 
-/** POST /api/transfers → 201. */
-export interface CreateTransferResponse {
-  /**
-   * B-06: `true` cuando el backend devolvió el envío YA hecho con esta clave
-   * en vez de hacer uno nuevo (replay idempotente). Sin mirarlo, el front
-   * anunciaba "le enviaste $X" por una transferencia que ya estaba hecha.
-   */
-  idempotent?: boolean;
-  transfer: {
-    id: string;
-    amount_cents: number;
-    concept: string | null;
-    completed_at: string;
-    amount_display: string;
-    to: { payme_id: string; full_name: string };
-    status?: 'pending' | 'completed' | 'failed' | 'reversed';
-  };
+interface TransferResponseBase {
+  id: string;
+  amount_cents: number;
+  concept: string | null;
+  completed_at: string;
+  amount_display: string;
 }
+
+/** POST /api/transfers: fresh liga por `to`; replay liga por `to_user_id`. */
+export type CreateTransferResponse =
+  | {
+      idempotent?: false;
+      transfer: TransferResponseBase & {
+        to: { payme_id: string; full_name: string };
+        status?: 'completed';
+      };
+    }
+  | {
+      /** El backend devolvió el envío YA hecho; no ejecutó otro movimiento. */
+      idempotent: true;
+      transfer: TransferResponseBase & {
+        to_user_id: string;
+        status: 'completed';
+      };
+    };
 
 /** Elemento de GET /api/transfers. */
 export interface TransferListItem {

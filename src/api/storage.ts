@@ -12,7 +12,11 @@ import type { User } from './types';
 // mock se filtraría al build real (y su token falso iría al backend real).
 // Namespaced por modo para que cada deploy tenga su propia sesión aislada.
 const KEY = import.meta.env.VITE_MOCK === '1' ? 'payme_app_session__mock' : 'payme_app_session';
+const TOMBSTONE_KEY = `${KEY}__invalidated_families_v1`;
+const TOMBSTONE_VERSION = 1;
+const MAX_TOMBSTONES = 64;
 const listeners = new Set<() => void>();
+const volatileInvalidated = new Map<string, string>();
 
 function notify(): void {
   listeners.forEach((listener) => listener());
@@ -26,12 +30,92 @@ export interface StoredSession {
   principal_id: string;
 }
 
+interface SessionTombstone {
+  family_id: string;
+  principal_id: string;
+  at: number;
+}
+
+interface SessionTombstoneJournal {
+  v: number;
+  entries: SessionTombstone[];
+}
+
 function validSession(value: unknown): value is StoredSession {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const s = value as StoredSession;
   const nonEmpty = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
   if (!nonEmpty(s.access_token) || !nonEmpty(s.refresh_token) || !nonEmpty(s.family_id) || !nonEmpty(s.principal_id)) return false;
-  return s.user === undefined || (!!s.user && typeof s.user === 'object' && nonEmpty(s.user.id));
+  return s.user === undefined || (!!s.user && typeof s.user === 'object' && nonEmpty(s.user.id) && s.user.id === s.principal_id);
+}
+
+function sameFamily(a: Pick<StoredSession, 'family_id' | 'principal_id'>, b: Pick<StoredSession, 'family_id' | 'principal_id'>): boolean {
+  return a.family_id === b.family_id && a.principal_id === b.principal_id;
+}
+
+function readRawSession(): StoredSession | null {
+  const raw = localStorage.getItem(KEY);
+  if (!raw) return null;
+  const parsed: unknown = JSON.parse(raw);
+  return validSession(parsed) ? parsed : null;
+}
+
+function readTombstones(): SessionTombstone[] {
+  const raw = localStorage.getItem(TOMBSTONE_KEY);
+  if (!raw) return [];
+  const parsed: unknown = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('session_tombstone_ambiguous');
+  const journal = parsed as SessionTombstoneJournal;
+  if (journal.v !== TOMBSTONE_VERSION || !Array.isArray(journal.entries) || journal.entries.some((entry) =>
+    !entry || typeof entry !== 'object' || typeof entry.family_id !== 'string' || !entry.family_id || typeof entry.principal_id !== 'string' || !entry.principal_id || !Number.isSafeInteger(entry.at) || entry.at < 0
+  )) throw new Error('session_tombstone_ambiguous');
+  return journal.entries;
+}
+
+function tombstoned(session: Pick<StoredSession, 'family_id' | 'principal_id'>): boolean {
+  if (volatileInvalidated.get(session.family_id) === session.principal_id) return true;
+  return readTombstones().some((entry) => sameFamily(entry, session));
+}
+
+/**
+ * La invalidación se persiste y verifica ANTES de borrar tokens. Así, aunque
+ * removeItem falle o un refresh viejo termine tarde, load/save fallan cerrado.
+ */
+export function persistSessionTombstone(session: StoredSession): void {
+  volatileInvalidated.set(session.family_id, session.principal_id);
+  try {
+    const entries = readTombstones().filter((entry) => !sameFamily(entry, session));
+    entries.push({ family_id: session.family_id, principal_id: session.principal_id, at: Date.now() });
+    entries.sort((a, b) => b.at - a.at);
+    const raw = JSON.stringify({ v: TOMBSTONE_VERSION, entries: entries.slice(0, MAX_TOMBSTONES) });
+    localStorage.setItem(TOMBSTONE_KEY, raw);
+    if (localStorage.getItem(TOMBSTONE_KEY) !== raw) throw new Error('roundtrip');
+    volatileInvalidated.delete(session.family_id);
+  } catch {
+    throw new Error('session_storage_unavailable');
+  } finally {
+    // La UI relee de inmediato: el tombstone durable o, ante fallo, el mapa
+    // fail-closed impiden que siga firmando con la familia invalidada.
+    notify();
+  }
+}
+
+/** Borra solo la familia invalidada; una familia de relogin queda intacta. */
+export function invalidateSession(session: StoredSession): boolean {
+  persistSessionTombstone(session);
+  let current: StoredSession | null;
+  try {
+    current = readRawSession();
+    if (!current || !sameFamily(current, session)) return false;
+    localStorage.removeItem(KEY);
+    const after = readRawSession();
+    if (after && sameFamily(after, session)) throw new Error('roundtrip');
+  } catch {
+    throw new Error('session_storage_unavailable');
+  } finally {
+    notify();
+  }
+  return true;
 }
 
 export function createSession(session: Omit<StoredSession, 'family_id' | 'principal_id'>): StoredSession {
@@ -40,9 +124,12 @@ export function createSession(session: Omit<StoredSession, 'family_id' | 'princi
 }
 
 export function saveSession(s: StoredSession): void {
+  if (!validSession(s)) throw new Error('session_identity_required');
   try {
+    if (tombstoned(s)) throw new Error('session_invalidated');
     localStorage.setItem(KEY, JSON.stringify(s));
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === 'session_invalidated') throw error;
     throw new Error('session_storage_unavailable');
   }
   const confirmed = loadSession();
@@ -53,21 +140,15 @@ export function saveSession(s: StoredSession): void {
 }
 
 export function loadSession(): StoredSession | null {
-  let raw: string | null;
   try {
-    raw = localStorage.getItem(KEY);
+    const session = readRawSession();
+    if (!session || tombstoned(session)) return null;
+    return session;
   } catch {
+    // Storage/tombstone ambiguo o sesión corrupta: nunca se firma a ciegas.
+    try { localStorage.removeItem(KEY); } catch { /* fail-closed por retorno */ }
     return null;
   }
-  if (!raw) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (validSession(parsed)) return parsed;
-  } catch {
-    // sesión corrupta → se descarta
-  }
-  clearSession();
-  return null;
 }
 
 export function isCurrentSession(session: StoredSession): boolean {
@@ -81,22 +162,26 @@ export function isCurrentSession(session: StoredSession): boolean {
 
 /** CAS: respuestas viejas no pueden adoptar ni borrar otra familia. */
 export function replaceCurrentSession(expected: StoredSession, next: StoredSession): boolean {
+  if (!sameFamily(expected, next)) return false;
   if (!isCurrentSession(expected)) return false;
   saveSession(next);
   return true;
 }
 
 export function clearCurrentSession(expected: StoredSession): boolean {
-  if (!isCurrentSession(expected)) return false;
-  clearSession();
-  return true;
+  return invalidateSession(expected);
 }
 
 export function clearSession(): void {
   try {
+    const current = readRawSession();
+    if (current) {
+      invalidateSession(current);
+      return;
+    }
     localStorage.removeItem(KEY);
   } catch {
-    // Sin acceso a storage tampoco puede existir una sesión confiable en UI.
+    throw new Error('session_storage_unavailable');
   }
   notify();
 }
@@ -105,7 +190,7 @@ export function clearSession(): void {
 export function subscribeSession(listener: () => void): () => void {
   listeners.add(listener);
   const onStorage = (event: StorageEvent) => {
-    if (event.key === KEY || event.key === null) notify();
+    if (event.key === KEY || event.key === TOMBSTONE_KEY || event.key === null) notify();
   };
   window.addEventListener('storage', onStorage);
   return () => {

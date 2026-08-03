@@ -104,3 +104,14 @@ Misma clase que los P0 de SQL (v2.14.1/.2): bug latente que sólo aparece contra
 
 ## Verificación
 - `node --check` sobre `services/stripe.js`; suites puras verdes. La confirmación de fondo es el smoke E2E contra Railway + Stripe test (no un mock).
+
+---
+
+# Housekeeping post-v2.14.3 (2026-07-20) — bookkeeping, sin cambio de versión ni de comportamiento
+
+Auditoría de la sesión Bibliotecario (workspace). **La versión sigue en 2.14.3** (ningún cambio de dinero, contrato ni runtime de negocio):
+- **`/health` + log de startup** leen la versión de `package.json` (antes hardcodeada `'2.10.0'`, desincronizada con el deploy). `server.js`.
+- **`CLAUDE.md`** refrescado (v1.1): estado v2.14.3; Outbox Etapa 2 marcado ENTREGADO (puntero `services/aggregateEmitter.js` @ `settlement.js:301` + acta); baseline de tests 65 → **94**; desambiguadas las siglas D2 (invariante de wallet vs decisión de refund de topup) y «D4» (barrido técnico, no decisión).
+- **`.gitignore`** endurecido: `*.env` + `!*.env.example` (defensa en profundidad).
+- **8 `.md` históricos** movidos a `docs/history/` (con `git mv`, historial preservado) + README que aclara que sus advertencias "SIN VERIFICAR POR ENTORNO" ya no aplican (CI verde con Postgres real desde v2.11).
+- **Verificación de dinero (revisión de código):** el `automatic_payment_methods:{enabled:true,allow_redirects:'never'}` de v2.14.3 se confirma inocuo para montos/idempotencia/garantía — es el único punto de PaymentIntent del hold (`settlement.js:74`) y del pago (`routes/mesas.js:614`); `amount` intacto, `idempotencyKey` va como 2º argumento (fuera del objeto modificado), `capture_method:'manual'` del hold sin tocar. Corroborado por el smoke E2E en vivo. Las 2 suites `garantia`/`abono` siguen skippeadas (gate `RUN_DB_TESTS`, porqué documentado en cada archivo).

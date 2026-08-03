@@ -159,13 +159,16 @@ export async function confirmCardPayment(
 export async function confirmCardSetup(
   clientSecret: string,
   card: StripeCardElement,
-): Promise<{ paymentMethodId: string } | { error: string }> {
+): Promise<{ paymentMethodId: string } | { error: string; definitive: boolean }> {
   const stripe = await requireStripe();
   const { setupIntent, error } = await stripe.confirmCardSetup(clientSecret, {
     payment_method: { card },
   });
   if (error || !setupIntent?.payment_method) {
-    return { error: error?.message ?? 'No pudimos guardar la tarjeta.' };
+    return {
+      error: error?.message ?? 'No pudimos guardar la tarjeta.',
+      definitive: isDefinitiveStripeErrorType(error?.type),
+    };
   }
   const pm = setupIntent.payment_method;
   return { paymentMethodId: typeof pm === 'string' ? pm : pm.id };

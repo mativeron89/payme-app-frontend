@@ -25,7 +25,11 @@ async function requireManager(req, res, next) {
   } catch (err) { next(err); }
 }
 
-router.get('/:rid/staff', async (req, res, next) => {
+// El roster administrativo contiene identidad, fecha de alta y estado de
+// turno. No es el selector público de propina: ese contrato mínimo vive en
+// /:rid/staff/active. Exigir manager evita enumerar PII usando los UUID
+// públicos del catálogo de restaurantes.
+router.get('/:rid/staff', requireAuth, requireManager, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT s.id, s.role, s.display_name, s.shift_status, s.hired_at,

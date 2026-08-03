@@ -133,4 +133,29 @@ describe('sesión observable y CAS', () => {
     storage.setItem('payme_app_session', JSON.stringify({ ...stored('a'), refresh_token: '' }));
     expect(api.loadSession()).toBeNull();
   });
+
+  it('el tombstone durable impide que una respuesta tardía restaure la familia cerrada', () => {
+    const a = stored('a');
+    api.saveSession(a);
+    expect(api.invalidateSession(a)).toBe(true);
+
+    storage.setItem('payme_app_session', JSON.stringify({
+      ...a,
+      access_token: 'late-access',
+      refresh_token: 'late-refresh',
+    }));
+    expect(api.loadSession()).toBeNull();
+    expect(() => api.saveSession(a)).toThrow('session_invalidated');
+  });
+
+  it('invalidar A después de un relogin no borra la familia B', () => {
+    const a = stored('a');
+    const b = stored('b');
+    api.saveSession(a);
+    api.persistSessionTombstone(a);
+    api.saveSession(b);
+
+    expect(api.invalidateSession(a)).toBe(false);
+    expect(api.loadSession()).toMatchObject({ family_id: b.family_id, principal_id: b.principal_id });
+  });
 });

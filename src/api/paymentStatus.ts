@@ -38,7 +38,7 @@ export function mesaPaymentOutcome(status: unknown): SettlementOutcome {
 export function topupOutcome(status: unknown, requiresAction: boolean, clientSecret?: string): SettlementOutcome {
   if (requiresAction) return clientSecret ? 'ambiguous' : 'ambiguous';
   if (status === 'succeeded') return 'success';
-  if (status === 'failed' || status === 'cancelled') return 'definitive';
+  if (status === 'failed' || status === 'cancelled' || status === 'expired') return 'definitive';
   return 'ambiguous';
 }
 

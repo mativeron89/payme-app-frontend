@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api } from '../api';
+import { api, newIdempotencyKey } from '../api';
 import { extractApiError } from '../api/errors';
+import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
 import type { Friend, Group } from '../api/types';
 import { fold } from '../utils/format';
 import { Avatar, useToast } from './ui';
@@ -27,12 +28,20 @@ export function InviteFriends({ code }: { code: string }) {
   const [groupBusy, setGroupBusy] = useState<string | null>(null);
   /**
    * Guard SINCRÓNICO contra dobles envíos: individual y grupo reservan el
-   * payme_id ANTES de ceder el event loop. El backend NO dedupea
-   * invitaciones (el INSERT no tiene ON CONFLICT), así que la carrera
-   * duplicaría la notificación "X te invitó" al mismo amigo. Si el envío
-   * falla se libera la reserva para poder reintentar.
+   * payme_id ANTES de ceder el event loop. La key del backend cubre replays,
+   * pero no reemplaza este mutex contra dos taps simultáneos. Si el envío
+   * falla se libera el botón; ante ambigüedad se conserva la misma key.
    */
   const sentRef = useRef<Set<string>>(new Set());
+  /** Una key por mesa+destinatario; un error ambiguo libera el botón, no la key. */
+  const invitationKeysRef = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    sentRef.current.clear();
+    setInvited(new Set());
+    setBusy(new Set());
+    setGroupBusy(null);
+  }, [code]);
 
   useEffect(() => {
     let alive = true;
@@ -63,16 +72,33 @@ export function InviteFriends({ code }: { code: string }) {
     if (sentRef.current.has(f.payme_id)) return;
     sentRef.current.add(f.payme_id);
     setBusy((s) => new Set(s).add(f.payme_id));
+    const operation = `${code}::${f.payme_id}`;
     try {
-      await api.inviteFriend(code, f.payme_id);
+      const key = invitationKeysRef.current.get(operation) ?? newIdempotencyKey();
+      invitationKeysRef.current.set(operation, key);
+      const invitation = await api.inviteFriend(code, f.payme_id, key);
+      if (invitation.invitation.status === 'expired') {
+        invitationKeysRef.current.delete(operation);
+        sentRef.current.delete(f.payme_id);
+        toast(`La invitación anterior a ${f.first_name} venció. Tocá de nuevo para generar otra.`);
+        return;
+      }
+      invitationKeysRef.current.delete(operation);
       setInvited((s) => new Set(s).add(f.payme_id));
       toast(`Invitación enviada a ${f.first_name} ✓`);
     } catch (err) {
+      const failure = extractApiError(err);
+      const definitive = isDefinitiveMutationError(failure.code, failure.status);
+      if (definitive) invitationKeysRef.current.delete(operation);
       sentRef.current.delete(f.payme_id);
       toast(
-        extractApiError(err).code === 'mesa_not_invitable'
+        failure.code === 'mesa_not_invitable'
           ? 'La mesa ya no acepta invitados'
-          : `No pudimos invitar a ${f.first_name}`,
+          : isServiceUnavailable(failure.status)
+            ? `El servicio no pudo confirmar la invitación a ${f.first_name}. Reintentá esta misma invitación; no generes otra.`
+            : definitive
+              ? `No pudimos invitar a ${f.first_name}`
+              : `No pudimos confirmar la invitación a ${f.first_name}. Reintentá la misma: vamos a reutilizarla.`,
       );
     } finally {
       setBusy((s) => {
@@ -97,18 +123,35 @@ export function InviteFriends({ code }: { code: string }) {
       let fallidas = 0;
       let intentadas = 0;
       let notInvitable = false;
+      let ambiguous = false;
+      let unavailable = false;
       for (const m of detail.members) {
         if (sentRef.current.has(m.payme_id)) continue;
         sentRef.current.add(m.payme_id);
         intentadas += 1;
+        const operation = `${code}::${m.payme_id}`;
         try {
-          await api.inviteFriend(code, m.payme_id);
+          const key = invitationKeysRef.current.get(operation) ?? newIdempotencyKey();
+          invitationKeysRef.current.set(operation, key);
+          const invitation = await api.inviteFriend(code, m.payme_id, key);
+          if (invitation.invitation.status === 'expired') {
+            invitationKeysRef.current.delete(operation);
+            sentRef.current.delete(m.payme_id);
+            fallidas += 1;
+            continue;
+          }
+          invitationKeysRef.current.delete(operation);
           setInvited((s) => new Set(s).add(m.payme_id));
           ok += 1;
         } catch (err) {
+          const failure = extractApiError(err);
+          const definitive = isDefinitiveMutationError(failure.code, failure.status);
+          if (definitive) invitationKeysRef.current.delete(operation);
+          else ambiguous = true;
+          if (isServiceUnavailable(failure.status)) unavailable = true;
           sentRef.current.delete(m.payme_id);
           fallidas += 1;
-          if (extractApiError(err).code === 'mesa_not_invitable') {
+          if (failure.code === 'mesa_not_invitable') {
             notInvitable = true;
             break;
           }
@@ -116,6 +159,13 @@ export function InviteFriends({ code }: { code: string }) {
       }
       if (notInvitable) toast('La mesa ya no acepta invitados');
       else if (intentadas === 0) toast(`Ya habías invitado a todos en ${g.name}`);
+      else if (ambiguous) {
+        toast(
+          unavailable
+            ? `El servicio no confirmó todas las invitaciones a ${g.name}. Reintentá las pendientes: reutilizamos cada operación, no generes otras.`
+            : `No pudimos confirmar todas las invitaciones a ${g.name}. Reintentá las pendientes: vamos a reutilizar las mismas.`,
+        );
+      }
       else if (fallidas === 0)
         toast(`${ok} invitación${ok === 1 ? '' : 'es'} enviada${ok === 1 ? '' : 's'} a ${g.name} ✓`);
       else if (ok === 0) toast(`No pudimos enviar las invitaciones a ${g.name} — probá de nuevo`);

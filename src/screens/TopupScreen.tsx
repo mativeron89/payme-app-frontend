@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
-  idempotencyKeyFor,
+  acquireMonetaryIntent,
+  completeMonetaryIntent,
   prepareMonetaryRequest,
   readMonetaryReference,
   rememberMonetaryReference,
-  rotateIdempotencyKey,
   scopeForActor,
   shouldRotateOnError,
   useMoneyActor,
+  type MonetaryIntentHandle,
 } from '../api/idempotency';
 import { extractApiError } from '../api/errors';
 import { pollTopup, topupOutcome } from '../api/paymentStatus';
@@ -79,15 +80,15 @@ export function TopupScreen() {
     const current = loadSession();
     return !!origin && !!current && current.principal_id === origin.principal_id && current.family_id === origin.family_id;
   }
-  async function reconcileTopup(id: string, scope: string, origin: StoredSession | undefined) {
+  async function reconcileTopup(id: string, scope: string, intent: MonetaryIntentHandle, origin: StoredSession | undefined) {
     const reconciled = await pollTopup(() => api.getTopup(id, amountCents, 'card'), () => originCurrent(origin));
     if (!originCurrent(origin)) return;
     if (reconciled.outcome === 'success') {
-      await rotateIdempotencyKey(scope, 'topup_card');
+      await completeMonetaryIntent(scope, 'topup_card', intent);
       toast(`Se acreditaron ${formatMXN(amountCents)} ✓`);
       navigate('cuenta');
     } else if (reconciled.outcome === 'definitive') {
-      await rotateIdempotencyKey(scope, 'topup_card');
+      await completeMonetaryIntent(scope, 'topup_card', intent);
       setError('Ese cobro no prosperó. Podés iniciar una nueva carga.');
     } else {
       setError('La carga sigue en confirmación. No inicies otra carga hasta que se resuelva.');
@@ -99,7 +100,7 @@ export function TopupScreen() {
     const scope = scopeForActor(actor, 'topup:resume');
     let alive = true;
     void readMonetaryReference(scope, 'topup_card')
-      .then((id) => { if (id && alive) setError('Hay una carga anterior en reconciliación; no se inició otra.'); })
+      .then((pending) => { if (pending && alive) setError('Hay una carga anterior en reconciliación; no se inició otra.'); })
       .catch(() => alive && setError('Hay una carga anterior en reconciliación; no se inició otra.'));
     return () => { alive = false; };
   }, [actor]);
@@ -113,71 +114,73 @@ export function TopupScreen() {
     }
     setBusy(true);
     setError(null);
+    let intent: MonetaryIntentHandle | null = null;
+    const operation = via === 'oxxo' ? 'topup_oxxo' : 'topup_card';
     try {
       if (via === 'oxxo') {
-        const key = await idempotencyKeyFor(topupScope, 'topup_oxxo');
-        await prepareMonetaryRequest(topupScope, 'topup_oxxo', { amount_cents: amountCents, idempotency_key: key });
-        const r = await api.topupOxxo(amountCents, key);
+        intent = await acquireMonetaryIntent(topupScope, 'topup_oxxo');
+        await prepareMonetaryRequest(topupScope, 'topup_oxxo', intent, { amount_cents: amountCents, idempotency_key: intent.key });
+        const r = await api.topupOxxo(amountCents, intent);
         const outcome = topupOutcome(r.topup.status, false);
         if (outcome === 'success') {
-          await rotateIdempotencyKey(topupScope);
+          await completeMonetaryIntent(topupScope, 'topup_oxxo', intent);
           toast(`Se acreditaron ${formatMXN(amountCents)} ✓`);
           navigate('cuenta');
         } else if (outcome === 'definitive') {
-          await rotateIdempotencyKey(topupScope);
+          await completeMonetaryIntent(topupScope, 'topup_oxxo', intent);
           setError('Esa carga no prosperó. Podés iniciar otra.');
         } else if (hasVoucher(r.topup)) {
-          await rotateIdempotencyKey(topupScope);
+          await completeMonetaryIntent(topupScope, 'topup_oxxo', intent);
           setVoucher(r.topup);
         } else {
-          // El replay contractual puede traer la fila antes de los datos del
-          // voucher. No se inventa un comprobante ni se libera el intento.
+          // Defensa redundante: la fachada contractual rechaza esta forma
+          // dentro de withPreparedMonetaryRequest, antes de llegar a la UI.
           setError('La carga sigue en confirmación pero no podemos mostrar su referencia todavía. No inicies otra carga.');
         }
       } else if (via === 'card') {
         if (!pm) return;
-        const key = await idempotencyKeyFor(topupScope, 'topup_card');
-        await prepareMonetaryRequest(topupScope, 'topup_card', {
+        intent = await acquireMonetaryIntent(topupScope, 'topup_card');
+        await prepareMonetaryRequest(topupScope, 'topup_card', intent, {
           amount_cents: amountCents,
           payment_method_id: pm.id,
-          idempotency_key: key,
+          idempotency_key: intent.key,
         });
-        const r = await api.topupCard(amountCents, pm.id, key);
+        const r = await api.topupCard(amountCents, pm.id, intent);
         // El banco puede pedir 3DS: sin confirmarlo, la plata no entra y el
         // toast anunciaba saldo inexistente.
         if (r.requires_action === true && r.client_secret) {
-          await rememberMonetaryReference(topupScope, 'topup_card', r.topup.id);
+          await rememberMonetaryReference(topupScope, 'topup_card', intent, r.topup.id);
           const confirmed = await confirmCardPayment(r.client_secret);
           if (!confirmed.ok) {
-            if (confirmed.definitive) await rotateIdempotencyKey(topupScope);
+            if (confirmed.definitive) await completeMonetaryIntent(topupScope, 'topup_card', intent);
             setError(confirmed.error);
             return;
           }
-          await reconcileTopup(r.topup.id, topupScope, actor.session);
+          await reconcileTopup(r.topup.id, topupScope, intent, actor.session);
           return;
         }
         if (topupOutcome(r.topup.status, r.requires_action === true, r.client_secret) === 'ambiguous') {
-          // El contrato actual no expone GET /topup/:id para reconciliar. Sin
-          // ese dato no se puede afirmar ni liberar el intento con seguridad.
-          await rememberMonetaryReference(topupScope, 'topup_card', r.topup.id);
-          await reconcileTopup(r.topup.id, topupScope, actor.session);
+          // GET /topup/:id permite reconciliar id+método+monto+estado. Si no
+          // alcanza un estado terminal, se conserva la misma intención.
+          await rememberMonetaryReference(topupScope, 'topup_card', intent, r.topup.id);
+          await reconcileTopup(r.topup.id, topupScope, intent, actor.session);
           return;
         }
         // B-06: un replay puede traer un topup FALLIDO (200 `idempotent:true`
         // con status 'failed'). Sin mirar el status, anunciábamos como
         // acreditado un cobro que nunca prosperó.
         if (topupOutcome(r.topup.status, r.requires_action === true, r.client_secret) === 'definitive') {
-          await rotateIdempotencyKey(topupScope);
+          await completeMonetaryIntent(topupScope, 'topup_card', intent);
           setError('Ese cobro no prosperó. Probá de nuevo o con otra tarjeta.');
           return;
         }
-        await rotateIdempotencyKey(topupScope);
+        await completeMonetaryIntent(topupScope, 'topup_card', intent);
         toast(`Se acreditaron ${formatMXN(amountCents)} ✓`);
         navigate('cuenta');
       }
     } catch (err) {
       const { code, status } = extractApiError(err);
-      if (shouldRotateOnError(code, status)) await rotateIdempotencyKey(topupScope);
+      if (intent && shouldRotateOnError(code, status)) await completeMonetaryIntent(topupScope, operation, intent);
       // En OXXO no hay saldo que revisar todavía: lo que puede haber quedado
       // vivo es una REFERENCIA. Decir "revisá tu saldo" mandaba a mirar donde
       // no hay nada.

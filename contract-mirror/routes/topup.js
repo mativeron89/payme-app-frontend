@@ -12,6 +12,7 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { topupOxxo, topupCard, validateBody } = require('../schemas');
 const stripeOxxo = require('../services/stripe-oxxo');
+const topupProcessor = require('../services/topupProcessor');
 const notifs = require('../services/notifications');
 const { centsToDisplay } = require('../utils/money');
 const { payloadHash, hashesMatch, PAYLOAD_KEYS } = require('../utils/idempotency');
@@ -23,7 +24,12 @@ router.use(requireAuth);
 async function findExistingTopup(user_id, idempotency_key) {
   const { rows } = await pool.query(
     `SELECT id, method, amount_cents, status, idempotency_payload_hash,
-            stripe_voucher_url, voucher_reference, voucher_expires_at
+            stripe_payment_intent_id, stripe_client_secret, stripe_status,
+            stripe_voucher_url, voucher_reference,
+            voucher_expires_at, failure_reason, payment_method_id,
+            stripe_contract_prepared_at, stripe_customer_id_snapshot,
+            stripe_payment_method_id_snapshot, billing_email_snapshot,
+            billing_name_snapshot, user_id
        FROM topups WHERE user_id = $1 AND idempotency_key = $2`,
     [user_id, idempotency_key]
   );
@@ -50,60 +56,134 @@ async function checkTopupIdempotency(user_id, idempotency_key, reqHash) {
   return { existing };
 }
 
-async function creditWalletForTopup(topupId) {
-  await pool.tx(async (client) => {
-    const { rows: tRows } = await client.query(
-      `SELECT id, user_id, method, amount_cents, status FROM topups WHERE id = $1 FOR UPDATE`,
-      [topupId]
-    );
-    const t = tRows[0];
-    if (!t) return;
-    if (t.status === 'succeeded') return;
+function publicTopup(topup) {
+  return {
+    id: topup.id,
+    method: topup.method,
+    status: topup.status,
+    amount_cents: Number(topup.amount_cents),
+    amount_display: centsToDisplay(Number(topup.amount_cents)),
+    ...(topup.method === 'oxxo' && {
+      voucher_reference: topup.voucher_reference || null,
+      stripe_voucher_url: topup.stripe_voucher_url || null,
+      voucher_expires_at: topup.voucher_expires_at || null,
+    }),
+  };
+}
 
-    const { rows: wRows } = await client.query(
-      `SELECT id, balance_cents FROM wallets WHERE user_id = $1 FOR UPDATE`, [t.user_id]
-    );
-    let wallet = wRows[0];
-    if (!wallet) {
-      const { rows: newW } = await client.query(
-        `INSERT INTO wallets (user_id, balance_cents) VALUES ($1, 0) RETURNING id, balance_cents`,
-        [t.user_id]
-      );
-      wallet = newW[0];
-    }
-    const newBalance = Number(wallet.balance_cents) + Number(t.amount_cents);
-    await client.query(`UPDATE topups SET status='succeeded', updated_at=NOW() WHERE id=$1`, [t.id]);
-    await client.query(`UPDATE wallets SET balance_cents=$1, updated_at=NOW() WHERE id=$2`, [newBalance, wallet.id]);
-    await client.query(
-      `INSERT INTO wallet_transactions
-         (wallet_id, user_id, type, amount_cents, balance_after_cents,
-          related_entity_type, related_entity_id, description)
-       VALUES ($1,$2,$3,$4,$5,'topup',$6,$7)`,
-      [wallet.id, t.user_id,
-       t.method === 'oxxo' ? 'topup_oxxo' : 'topup_card',
-       t.amount_cents, newBalance, t.id,
-       `Carga de saldo vía ${t.method.toUpperCase()}`]
-    );
-    await notifs.create({
-      client, user_id: t.user_id, type: 'topup_succeeded',
-      body: `Se acreditaron ${centsToDisplay(Number(t.amount_cents))} a tu saldo PayMe`,
-      payload: {
-        amount_cents: Number(t.amount_cents),
-        method: t.method, new_balance: newBalance,
-      },
-      related_entity_type: 'topup', related_entity_id: t.id,
-    });
+function intentFromError(err) {
+  return err?.raw?.payment_intent || err?.payment_intent || null;
+}
+
+function needsProviderRedrive(topup) {
+  return !!topup?.stripe_contract_prepared_at
+    && ['pending', 'processing'].includes(topup.status)
+    && (!topup.stripe_payment_intent_id
+      || (topup.method === 'oxxo'
+        && (!topup.stripe_voucher_url || !topup.voucher_reference || !topup.voucher_expires_at))
+      || (topup.method === 'card'
+        && topup.stripe_status === 'requires_action' && !topup.stripe_client_secret));
+}
+
+function idempotentTopupResponse(res, topup) {
+  const requiresAction = topup.method === 'card'
+    && topup.stripe_status === 'requires_action';
+  return res.json({
+    topup: publicTopup(topup),
+    idempotent: true,
+    ...(topup.method === 'card' && {
+      requires_action: requiresAction,
+      client_secret: requiresAction ? topup.stripe_client_secret : undefined,
+    }),
   });
+}
+
+function reconciliationPending(res) {
+  return res.status(503).json({
+    error: 'topup_reconciliation_pending',
+    retry_with_same_idempotency_key: true,
+  });
+}
+
+async function applyIntentFromProviderError(topup, stripeErr) {
+  const intent = intentFromError(stripeErr);
+  if (!intent) return null;
+  // Un voucher activo sin sus datos públicos todavía no es un resultado útil:
+  // conservar el row unbound permite que el retry idempotente recupere el PI
+  // completo. Los terminales sí se aplican para no esconder un rechazo real.
+  if (topup.method === 'oxxo' && ['requires_action', 'processing'].includes(intent.status)) {
+    try { topupProcessor.assertTopupIntentContract(topup, intent); }
+    catch (contractErr) {
+      logger.error('topup_provider_error_contract_rejected', {
+        topup_id: topup.id, intent_id: intent.id || null,
+        error: contractErr.message, mismatches: contractErr.details?.mismatches || null,
+      });
+    }
+    return null;
+  }
+  try {
+    return await topupProcessor.applyTopupIntent({ topupId: topup.id, intent });
+  } catch (contractErr) {
+    logger.error('topup_provider_error_contract_rejected', {
+      topup_id: topup.id, intent_id: intent.id || null,
+      error: contractErr.message, mismatches: contractErr.details?.mismatches || null,
+    });
+    return null;
+  }
+}
+
+async function prepareOxxoTopup(req, amountCents, idempotencyKey, reqHash) {
+  const billingName = `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim().slice(0, 200);
+  try {
+    await pool.query(
+      `INSERT INTO topups
+         (user_id, method, amount_cents, fee_cents, net_cents,
+          idempotency_key, idempotency_payload_hash, status,
+          stripe_contract_prepared_at, stripe_customer_id_snapshot,
+          billing_email_snapshot, billing_name_snapshot)
+       VALUES ($1,'oxxo',$2,0,$2,$3,$4,'pending',NOW(),$5,$6,$7)
+       RETURNING id`,
+      [req.user.id, amountCents, idempotencyKey, reqHash,
+       req.user.stripe_customer_id, req.user.email, billingName]
+    );
+    return { topup: await findExistingTopup(req.user.id, idempotencyKey), created: true };
+  } catch (err) {
+    if (err.code !== '23505') throw err;
+    const replay = await checkTopupIdempotency(req.user.id, idempotencyKey, reqHash);
+    return { topup: replay?.existing || null, conflict: replay?.conflict || false, created: false };
+  }
+}
+
+async function prepareCardTopup(req, amountCents, paymentMethodId, idempotencyKey, reqHash) {
+  const { rows: [paymentMethod] } = await pool.query(
+    `SELECT stripe_payment_method_id FROM payment_methods
+      WHERE id=$1 AND user_id=$2 AND status='active'`,
+    [paymentMethodId, req.user.id]
+  );
+  if (!paymentMethod) return { notFound: true };
+  try {
+    await pool.query(
+      `INSERT INTO topups
+         (user_id, method, amount_cents, fee_cents, net_cents,
+          payment_method_id, idempotency_key, idempotency_payload_hash, status,
+          stripe_contract_prepared_at, stripe_customer_id_snapshot,
+          stripe_payment_method_id_snapshot)
+       VALUES ($1,'card',$2,0,$2,$3,$4,$5,'pending',NOW(),$6,$7)`,
+      [req.user.id, amountCents, paymentMethodId, idempotencyKey, reqHash,
+       req.user.stripe_customer_id, paymentMethod.stripe_payment_method_id]
+    );
+    return { topup: await findExistingTopup(req.user.id, idempotencyKey), created: true };
+  } catch (err) {
+    if (err.code !== '23505') throw err;
+    const replay = await checkTopupIdempotency(req.user.id, idempotencyKey, reqHash);
+    return { topup: replay?.existing || null, conflict: replay?.conflict || false, created: false };
+  }
 }
 
 // ─── POST /oxxo ───────────────────────────────────────────
 router.post('/oxxo', validateBody(topupOxxo), async (req, res, next) => {
   try {
     const { amount_cents, idempotency_key } = req.body;
-    if (!req.user.stripe_customer_id) {
-      return res.status(400).json({ error: 'no_stripe_customer' });
-    }
-
     const reqHash = payloadHash(req.body, { keep: PAYLOAD_KEYS.topup_oxxo });
 
     const idemCheck = await checkTopupIdempotency(req.user.id, idempotency_key, reqHash);
@@ -113,80 +193,87 @@ router.post('/oxxo', validateBody(topupOxxo), async (req, res, next) => {
         message: 'Same idempotency_key used with different payload',
       });
     }
-    if (idemCheck?.existing) {
-      return res.json({ topup: idemCheck.existing, idempotent: true });
+    if (idemCheck?.existing?.method !== undefined && idemCheck.existing.method !== 'oxxo') {
+      return res.status(409).json({ error: 'idempotency_conflict' });
+    }
+    if (idemCheck?.existing
+        && ['pending', 'processing'].includes(idemCheck.existing.status)
+        && !idemCheck.existing.stripe_contract_prepared_at) {
+      return reconciliationPending(res);
+    }
+    if (idemCheck?.existing && !needsProviderRedrive(idemCheck.existing)) {
+      return idempotentTopupResponse(res, idemCheck.existing);
+    }
+    if (!idemCheck?.existing && !req.user.stripe_customer_id) {
+      return res.status(400).json({ error: 'no_stripe_customer' });
     }
 
-    let topupId;
-    try {
-      const { rows } = await pool.query(
-        `INSERT INTO topups
-           (user_id, method, amount_cents, fee_cents, net_cents,
-            idempotency_key, idempotency_payload_hash, status)
-         VALUES ($1,'oxxo',$2,0,$2,$3,$4,'pending')
-         RETURNING id`,
-        [req.user.id, amount_cents, idempotency_key, reqHash]
-      );
-      topupId = rows[0].id;
-    } catch (err) {
-      if (err.code === '23505') {
-        const recheck = await checkTopupIdempotency(req.user.id, idempotency_key, reqHash);
-        if (recheck?.conflict) return res.status(409).json({ error: 'idempotency_conflict' });
-        if (recheck?.existing) return res.json({ topup: recheck.existing, idempotent: true });
-        return res.status(409).json({ error: 'idempotency_conflict' });
-      }
-      throw err;
+    const prepared = idemCheck?.existing
+      ? { topup: idemCheck.existing, created: false }
+      : await prepareOxxoTopup(req, amount_cents, idempotency_key, reqHash);
+    if (prepared.conflict || !prepared.topup) {
+      return res.status(409).json({ error: 'idempotency_conflict' });
     }
+    const topup = prepared.topup;
+    if (!topup.stripe_contract_prepared_at) return reconciliationPending(res);
 
     let voucher;
     try {
       voucher = await stripeOxxo.createOxxoVoucher({
-        amount_cents,
-        customer_id: req.user.stripe_customer_id,
-        email: req.user.email,
-        name: `${req.user.first_name} ${req.user.last_name}`,
-        idempotency_key,
-        metadata: { payme_user_id: req.user.id, topup_id: topupId },
+        amount_cents: Number(topup.amount_cents),
+        customer_id: topup.stripe_customer_id_snapshot,
+        email: topup.billing_email_snapshot,
+        name: topup.billing_name_snapshot,
+        idempotency_key: topupProcessor.providerKey(topup),
+        metadata: { payme_user_id: topup.user_id, topup_id: topup.id },
       });
     } catch (stripeErr) {
-      await pool.query(
-        `UPDATE topups SET status='failed', failure_reason=$1 WHERE id=$2`,
-        [stripeErr.message, topupId]
-      );
-      throw stripeErr;
+      const applied = await applyIntentFromProviderError(topup, stripeErr);
+      if (applied?.topup?.status === 'failed' || applied?.topup?.status === 'cancelled') {
+        return res.status(502).json({
+          error: 'topup_provider_error', status: applied.topup.status,
+        });
+      }
+      logger.error('topup_oxxo_result_ambiguous', {
+        topup_id: topup.id, error: stripeErr.message,
+      });
+      return reconciliationPending(res);
     }
 
-    await pool.query(
-      `UPDATE topups
-          SET stripe_payment_intent_id = $1,
-              stripe_voucher_url = $2,
-              voucher_reference = $3,
-              voucher_expires_at = $4,
-              status = 'processing'
-        WHERE id = $5`,
-      [voucher.intent_id, voucher.voucher_url, voucher.voucher_number,
-       voucher.expires_at, topupId]
-    );
+    let applied;
+    try {
+      applied = await topupProcessor.applyTopupIntent({
+        topupId: topup.id,
+        intent: voucher.intent,
+        voucher,
+      });
+    } catch (err) {
+      logger.error('topup_oxxo_binding_failed', {
+        topup_id: topup.id, intent_id: voucher.intent_id || null, error: err.message,
+      });
+      return reconciliationPending(res);
+    }
+    if (applied.topup.status === 'failed' || applied.topup.status === 'cancelled') {
+      return res.status(502).json({ error: 'topup_provider_error', status: applied.topup.status });
+    }
 
-    await notifs.create({
-      user_id: req.user.id, type: 'topup_pending',
-      body: `Tenés hasta el ${voucher.expires_at.toLocaleDateString('es-MX')} para pagar ${centsToDisplay(Number(amount_cents))} en cualquier OXXO`,
-      payload: { amount_cents, voucher_number: voucher.voucher_number },
-      related_entity_type: 'topup', related_entity_id: topupId,
-    });
+    if (!applied.idempotent) {
+      await notifs.create({
+        user_id: topup.user_id, type: 'topup_pending',
+        body: `Tenés hasta el ${voucher.expires_at.toLocaleDateString('es-MX')} para pagar ${centsToDisplay(Number(topup.amount_cents))} en cualquier OXXO`,
+        payload: { amount_cents: Number(topup.amount_cents), voucher_number: voucher.voucher_number },
+        related_entity_type: 'topup', related_entity_id: topup.id,
+      });
+    }
 
     logger.audit('topup_oxxo_created', {
-      user_id: req.user.id, amount: amount_cents, topup_id: topupId,
+      user_id: topup.user_id, amount: Number(topup.amount_cents), topup_id: topup.id,
     });
 
-    res.status(201).json({
-      topup: {
-        id: topupId, status: 'processing',
-        amount_cents, amount_display: centsToDisplay(Number(amount_cents)),
-        voucher_reference: voucher.voucher_number,
-        stripe_voucher_url: voucher.voucher_url,
-        voucher_expires_at: voucher.expires_at,
-      },
+    const refreshed = await findExistingTopup(topup.user_id, idempotency_key);
+    return res.status(prepared.created ? 201 : 200).json({
+      topup: publicTopup(refreshed),
+      ...(!prepared.created && { idempotent: true }),
     });
   } catch (err) { next(err); }
 });
@@ -195,10 +282,6 @@ router.post('/oxxo', validateBody(topupOxxo), async (req, res, next) => {
 router.post('/card', validateBody(topupCard), async (req, res, next) => {
   try {
     const { amount_cents, payment_method_id, idempotency_key } = req.body;
-    if (!req.user.stripe_customer_id) {
-      return res.status(400).json({ error: 'no_stripe_customer' });
-    }
-
     const reqHash = payloadHash(req.body, { keep: PAYLOAD_KEYS.topup_card });
 
     const idemCheck = await checkTopupIdempotency(req.user.id, idempotency_key, reqHash);
@@ -208,85 +291,93 @@ router.post('/card', validateBody(topupCard), async (req, res, next) => {
         message: 'Same idempotency_key used with different payload',
       });
     }
-    if (idemCheck?.existing) {
-      return res.json({ topup: idemCheck.existing, idempotent: true });
+    if (idemCheck?.existing?.method !== undefined && idemCheck.existing.method !== 'card') {
+      return res.status(409).json({ error: 'idempotency_conflict' });
+    }
+    if (idemCheck?.existing
+        && ['pending', 'processing'].includes(idemCheck.existing.status)
+        && !idemCheck.existing.stripe_contract_prepared_at) {
+      return reconciliationPending(res);
+    }
+    if (idemCheck?.existing && !needsProviderRedrive(idemCheck.existing)) {
+      return idempotentTopupResponse(res, idemCheck.existing);
+    }
+    if (!idemCheck?.existing && !req.user.stripe_customer_id) {
+      return res.status(400).json({ error: 'no_stripe_customer' });
     }
 
-    const { rows: pmRows } = await pool.query(
-      `SELECT stripe_payment_method_id FROM payment_methods
-        WHERE id = $1 AND user_id = $2 AND status = 'active'`,
-      [payment_method_id, req.user.id]
-    );
-    const pm = pmRows[0];
-    if (!pm) return res.status(404).json({ error: 'payment_method_not_found' });
-
-    let topupId;
-    try {
-      const { rows } = await pool.query(
-        `INSERT INTO topups
-           (user_id, method, amount_cents, fee_cents, net_cents,
-            payment_method_id, idempotency_key, idempotency_payload_hash, status)
-         VALUES ($1,'card',$2,0,$2,$3,$4,$5,'pending')
-         RETURNING id`,
-        [req.user.id, amount_cents, payment_method_id, idempotency_key, reqHash]
+    const prepared = idemCheck?.existing
+      ? { topup: idemCheck.existing, created: false }
+      : await prepareCardTopup(
+        req, amount_cents, payment_method_id, idempotency_key, reqHash
       );
-      topupId = rows[0].id;
-    } catch (err) {
-      if (err.code === '23505') {
-        const recheck = await checkTopupIdempotency(req.user.id, idempotency_key, reqHash);
-        if (recheck?.conflict) return res.status(409).json({ error: 'idempotency_conflict' });
-        if (recheck?.existing) return res.json({ topup: recheck.existing, idempotent: true });
-        return res.status(409).json({ error: 'idempotency_conflict' });
-      }
-      throw err;
+    if (prepared.notFound) return res.status(404).json({ error: 'payment_method_not_found' });
+    if (prepared.conflict || !prepared.topup) {
+      return res.status(409).json({ error: 'idempotency_conflict' });
     }
+    const topup = prepared.topup;
+    if (!topup.stripe_contract_prepared_at) return reconciliationPending(res);
 
     let charge;
     try {
       charge = await stripeOxxo.createCardTopup({
-        amount_cents,
-        customer_id: req.user.stripe_customer_id,
-        payment_method_id: pm.stripe_payment_method_id,
-        idempotency_key,
-        metadata: { payme_user_id: req.user.id, topup_id: topupId },
+        amount_cents: Number(topup.amount_cents),
+        customer_id: topup.stripe_customer_id_snapshot,
+        payment_method_id: topup.stripe_payment_method_id_snapshot,
+        idempotency_key: topupProcessor.providerKey(topup),
+        metadata: { payme_user_id: topup.user_id, topup_id: topup.id },
       });
     } catch (stripeErr) {
-      await pool.query(
-        `UPDATE topups SET status='failed', failure_reason=$1 WHERE id=$2`,
-        [stripeErr.message, topupId]
-      );
-      throw stripeErr;
+      const applied = await applyIntentFromProviderError(topup, stripeErr);
+      if (!applied) {
+        logger.error('topup_card_result_ambiguous', {
+          topup_id: topup.id, error: stripeErr.message, type: stripeErr.type,
+        });
+        return reconciliationPending(res);
+      }
+      if (applied.topup.status === 'failed' || applied.topup.status === 'cancelled') {
+        return res.status(502).json({
+          error: 'topup_provider_error', status: applied.topup.status,
+        });
+      }
+      const refreshed = await findExistingTopup(topup.user_id, idempotency_key);
+      return res.status(prepared.created ? 201 : 200).json({
+        topup: publicTopup(refreshed),
+        requires_action: refreshed.stripe_status === 'requires_action',
+        client_secret: refreshed.stripe_status === 'requires_action'
+          ? refreshed.stripe_client_secret : undefined,
+        ...(!prepared.created && { idempotent: true }),
+      });
     }
 
-    await pool.query(
-      `UPDATE topups SET stripe_payment_intent_id = $1, status = 'processing' WHERE id = $2`,
-      [charge.intent_id, topupId]
-    );
-
-    if (charge.succeeded) {
-      try { await creditWalletForTopup(topupId); }
-      catch (err) {
-        logger.error('inline_topup_credit_failed', { topup_id: topupId, error: err.message });
-      }
+    let applied;
+    try {
+      applied = await topupProcessor.applyTopupIntent({
+        topupId: topup.id, intent: charge.intent,
+      });
+    } catch (err) {
+      logger.error('topup_card_binding_failed', {
+        topup_id: topup.id, intent_id: charge.intent_id || null, error: err.message,
+      });
+      return reconciliationPending(res);
+    }
+    if (applied.topup.status === 'failed' || applied.topup.status === 'cancelled') {
+      return res.status(502).json({ error: 'topup_provider_error', status: applied.topup.status });
     }
 
     logger.audit('topup_card_created', {
-      user_id: req.user.id, amount: amount_cents, topup_id: topupId,
-      requires_action: charge.requires_action,
-      succeeded_inline: charge.succeeded,
+      user_id: topup.user_id, amount: Number(topup.amount_cents), topup_id: topup.id,
+      requires_action: charge.intent.status === 'requires_action',
+      succeeded_inline: applied.topup.status === 'succeeded',
     });
 
-    const { rows: refreshed } = await pool.query(
-      `SELECT status FROM topups WHERE id = $1`, [topupId]
-    );
-    res.status(201).json({
-      topup: {
-        id: topupId,
-        status: refreshed[0].status,
-        amount_cents, amount_display: centsToDisplay(Number(amount_cents)),
-      },
-      requires_action: charge.requires_action,
-      client_secret: charge.requires_action ? charge.client_secret : undefined,
+    const refreshed = await findExistingTopup(topup.user_id, idempotency_key);
+    return res.status(prepared.created ? 201 : 200).json({
+      topup: publicTopup(refreshed),
+      requires_action: refreshed.stripe_status === 'requires_action',
+      client_secret: refreshed.stripe_status === 'requires_action'
+        ? refreshed.stripe_client_secret : undefined,
+      ...(!prepared.created && { idempotent: true }),
     });
   } catch (err) { next(err); }
 });

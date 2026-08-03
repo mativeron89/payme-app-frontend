@@ -1,22 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, WALLET_PAY_ENABLED, WALLET_RAIL_ENABLED } from '../api';
-import type { UnconfirmedAttempt } from '../api/idempotency';
+import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, WALLET_PAY_ENABLED, WALLET_RAIL_ENABLED, newIdempotencyKey } from '../api';
+import type { MonetaryIntentHandle, UnconfirmedAttempt } from '../api/idempotency';
 import {
+  acquireMonetaryIntent,
   clearUnconfirmed,
-  idempotencyKeyFor,
+  completeMonetaryIntent,
   markUnconfirmed,
   prepareMonetaryRequest,
   readUnconfirmed,
   recallPaymentMethod,
   rememberPaymentMethod,
-  rotateIdempotencyKey,
   scopeForActor,
   shouldRotateOnError,
   useMoneyActor,
 } from '../api/idempotency';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
+import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
 import { mesaClosureView, mesaPaymentOutcome } from '../api/paymentStatus';
+import { payableEqualSlotAmounts, type PayMesaExpectation } from '../api/moneyGuards';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
@@ -36,6 +38,7 @@ import { countdownTo, formatMXN } from '../utils/format';
 import { fractionAmount, stringToCents, tipFromBps } from '../utils/money';
 import { createInFlightMutex } from '../utils/inFlight';
 import { RequestEpoch } from '../utils/requestEpoch';
+import { writeClipboardText } from '../utils/clipboard';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -65,6 +68,30 @@ interface PayResult {
   saveOmitidoPorConnect: boolean;
 }
 
+/**
+ * Binding contractual de la respuesta. Los montos de preview no intervienen:
+ * consumo se acredita con el recibo de ítems; igualdad, con un monto de slot
+ * que efectivamente pertenece a la mesa.
+ */
+function payExpectationFor(mesa: MesaDetail, body: PayMesaRequest): PayMesaExpectation {
+  const expectedTip = body.tip_cents ?? tipFromBps(
+    mesa.total_cents,
+    mesa.expected_participants || 1,
+    body.tip_bps ?? 0,
+  );
+  if (mesa.division_mode === 'consumo') {
+    return {
+      divisionMode: 'consumo',
+      tipCents: expectedTip,
+    };
+  }
+  return {
+    divisionMode: 'igual',
+    possibleItemsAmountCents: payableEqualSlotAmounts(mesa.division_slots),
+    tipCents: expectedTip,
+  };
+}
+
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
   const { session } = useAuth();
   const { actor, error: actorError } = useMoneyActor(guestToken);
@@ -89,6 +116,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [cardsOpen, setCardsOpen] = useState(false);
   // T-F1: invitador in-app desplegable en la mesa (el paso compartir es one-shot).
   const [inviteOpen, setInviteOpen] = useState(false);
+  const shareAttemptsRef = useRef<Map<string, string>>(new Map());
+  const shareLinksRef = useRef<Map<string, string>>(new Map());
+  const shareInFlightRef = useRef(createInFlightMutex());
   // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
   // tarjeta); `saveCard` = checkbox "guardar" (ratificado: prendido). El
   // invitado sin cuenta no tiene guardadas: siempre tarjeta nueva sin checkbox.
@@ -135,12 +165,60 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     setMesa(null); setNotFound(false); setSelected(new Map()); setLockTokens([]);
     setTipPct(15); setTipMode('pct'); setCustomTipStr(''); setStaffId(null);
     setPayType('card'); setCardsOpen(false); setInviteOpen(false); setCards([]);
+    shareInFlightRef.current = createInFlightMutex();
     setCardChoice('new'); setSaveCard(true); setCardEl(null);
     const emptyCard: CardFieldState = { complete: false, error: null, empty: true };
     cardStateRef.current = emptyCard; setCardState(emptyCard);
     payStartedRef.current = false; payInFlightRef.current = createInFlightMutex();
     setRefundedNotice(false); setResult(null); setError(null); setBusy(false); setView('detail');
   }, [guestToken, code]);
+
+  async function copyInvitationLink() {
+    if (!shareInFlightRef.current.tryEnter()) return;
+    try {
+      let link = shareLinksRef.current.get(code) ?? null;
+      if (!link) {
+        const key = shareAttemptsRef.current.get(code) ?? newIdempotencyKey();
+        shareAttemptsRef.current.set(code, key);
+        const invitation = await api.createInvitation(code, key);
+        if (invitation.invitation.status === 'expired') {
+          shareAttemptsRef.current.delete(code);
+          toast('La invitación anterior venció. Tocá de nuevo para generar otra.');
+          return;
+        }
+        if (!invitation.link) {
+          toast('La invitación pudo haberse creado, pero no recibimos el link. Reintentá la misma operación; no generes otra.');
+          return;
+        }
+        // La mutación terminó. Si falla el clipboard, se conserva SOLO el
+        // link ya generado para volver a copiarlo sin hacer otro POST.
+        shareAttemptsRef.current.delete(code);
+        link = invitation.link;
+        shareLinksRef.current.set(code, link);
+      }
+      try {
+        const copied = await writeClipboardText(link);
+        if (!copied) throw new Error('clipboard_unavailable');
+        shareLinksRef.current.delete(code);
+        toast('Link de invitación copiado ✓');
+      } catch {
+        toast('El link ya se generó, pero no se pudo copiar. Tocá de nuevo: no vamos a crear otro.');
+      }
+    } catch (err) {
+      const failure = extractApiError(err);
+      const definitive = isDefinitiveMutationError(failure.code, failure.status);
+      if (definitive) shareAttemptsRef.current.delete(code);
+      toast(
+        isServiceUnavailable(failure.status)
+          ? 'El servicio no pudo confirmar el link. Reintentá esta misma operación; no generes otra.'
+          : definitive
+            ? 'No se pudo generar el link'
+            : 'No pudimos confirmar el link. Reintentá la misma operación: vamos a reutilizarla.',
+      );
+    } finally {
+      shareInFlightRef.current.leave();
+    }
+  }
 
   const reload = useCallback(() => {
     const requestEpoch = mesaReadEpochRef.current.next();
@@ -351,8 +429,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         await navigator.share({ title: 'Comprobante PayMe', text });
         return;
       }
-      await navigator.clipboard.writeText(text);
-      toast('Comprobante copiado ✓');
+      const copied = await writeClipboardText(text);
+      toast(copied
+        ? 'Comprobante copiado ✓'
+        : 'No se pudo copiar: tu navegador no habilitó el portapapeles');
     } catch {
       // el usuario canceló el share del sistema: no es un error
     }
@@ -402,53 +482,49 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     let alive = true;
     const identityEpoch = identityEpochRef.current.capture();
     void readUnconfirmed(payArea, `mesa_pay:${code}`)
-      .then((attempt) => alive && identityEpochRef.current.isCurrent(identityEpoch) && setFrozen(attempt))
+      .then((attempt) => {
+        if (!alive || !identityEpochRef.current.isCurrent(identityEpoch)) return;
+        setFrozen(attempt);
+        if (attempt?.reconciliationRequired) {
+          setError('Hay un pago de una sesión anterior. No vamos a reenviarlo ni iniciar otro hasta reconciliarlo.');
+        }
+      })
       .catch(() => alive && identityEpochRef.current.isCurrent(identityEpoch) && setError('Hay un pago anterior que no podemos atribuir de forma segura. Esperá la reconciliación antes de pagar.'));
     return () => { alive = false; };
   }, [payArea, code]);
   useEffect(() => { setFrozen(null); }, [guestToken, code]);
   const frozenScope = frozen?.scope ?? null;
+  const canReplayFrozen = !!frozen?.payload && frozen.reconciliationRequired !== true;
+  const frozenRequiresReconciliation = !!frozen && !canReplayFrozen;
   const payScope = frozenScope ?? contentScope;
   const frozenRef = useRef(frozenScope);
   frozenRef.current = frozenScope;
 
-  /** v2.25 §4.3: cuántos casilleros tomé YO (la prueba de que mi pago llegó). */
+  /** Agregado informativo del principal; nunca prueba qué intento concreto llegó. */
   const mySlotsTaken = mesa?.division_slots?.filter((s) => s.claimed_by_me).length ?? 0;
-  const mySlotsRef = useRef(mySlotsTaken);
-  mySlotsRef.current = mySlotsTaken;
 
   const freezePay = useCallback(
-    (scope: string, payload?: unknown) => {
+    (scope: string, handle: MonetaryIntentHandle, payload?: unknown) => {
       if (!payArea) throw new Error('money_actor_unavailable');
-      markUnconfirmed(payArea, scope, mySlotsRef.current, payload);
-      setFrozen({ actor: scope.split('::')[0], scope, evidence: mySlotsRef.current, ...(payload !== undefined && { payload }) });
+      try {
+        markUnconfirmed(payArea, scope, handle, payload);
+        setFrozen({ actor: scope.split('::')[0], scope, handle, ...(payload !== undefined && { payload }) });
+      } catch (error) {
+        if (extractApiError(error).code !== 'monetary_family_reconciliation_required') throw error;
+        setFrozen({ actor: scope.split('::')[0], scope, handle, reconciliationRequired: true });
+      }
     },
     [payArea],
   );
-  const unfreezePay = useCallback(() => {
+  const unfreezePay = useCallback((handle: MonetaryIntentHandle) => {
     if (!payArea) return;
-    clearUnconfirmed(payArea);
-    setFrozen(null);
+    clearUnconfirmed(payArea, handle);
+    setFrozen((current) => current && current.handle.key === handle.key && current.handle.generation === handle.generation ? null : current);
   }, [payArea]);
 
-  /**
-   * `claimed_by_me` es la prueba del backend de que mi pago SÍ llegó: si tras
-   * congelar apareció un casillero mío MÁS de los que había, ese pago está
-   * hecho y el intento se cierra solo.
-   *
-   * Solo aplica a partes iguales. En consumo no hay señal equivalente: el lock
-   * ya sube `my_bps` ANTES de pagar, así que usarlo descongelaría sin prueba.
-   * Ahí la salida es reintentar, que el backend replaya sin volver a cobrar.
-   */
-  useEffect(() => {
-    if (frozen && frozen.evidence !== undefined && mesa?.division_mode === 'igual' && mySlotsTaken > frozen.evidence) {
-      void (async () => {
-        await rotateIdempotencyKey(frozen.scope, `mesa_pay:${code}`);
-        unfreezePay();
-        toast('Ese pago ya estaba registrado ✓');
-      })();
-    }
-  }, [frozen, mesa?.division_mode, mySlotsTaken, unfreezePay, toast, code]);
+  // `claimed_by_me` es un agregado del principal, no identifica qué intento
+  // pagó. Otro dispositivo puede aumentarlo mientras ESTE POST sigue ambiguo;
+  // por eso nunca terminaliza ni descongela el journal local.
 
   /**
    * Respuesta del pago (nueva o REPLAY idempotente): 3DS, reembolsado y
@@ -456,7 +532,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * datos del comprobante salen del CUERPO que se mandó, no del estado de la
    * pantalla — tras una recarga ese estado ya no existe.
    */
-  async function handlePayResponse(r: PayMesaResponse, scope: string, body: PayMesaRequest) {
+  async function handlePayResponse(r: PayMesaResponse, scope: string, intent: MonetaryIntentHandle, body: PayMesaRequest) {
     const payKind = body.payment_type;
     const savedCard = body.payment_method_id
       ? (cards.find((c) => c.id === body.payment_method_id) ?? null)
@@ -476,10 +552,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     // devuelve 200 con status 'refunded' a propósito (un 409 nos haría
     // rotar la clave y RE-COBRAR el reembolso). Se trata por el status.
     if (at.status === 'refunded') {
-      // NO se rota sola: rotar acá es re-cobrar un reembolso. El intento
-      // quedó resuelto (se cobró y se devolvió), así que se descongela y la
-      // decisión de volver a pagar la toma el usuario, a mano.
-      unfreezePay();
+      // El intento quedó resuelto (se cobró y se devolvió). Marcar terminal
+      // no emite red: solo permite que una acción posterior y explícita del
+      // usuario adquiera otra generación con una clave distinta.
+      await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+      unfreezePay(intent);
       setRefundedNotice(true);
       setError('Ese pago se cobró y después te lo reembolsaron. No volvimos a cobrarte.');
       setBusy(false);
@@ -494,13 +571,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       if (!confirmed.ok) {
         if (confirmed.definitive) {
           // El banco rechazó: el intento murió y el backend liberó lo tomado.
-          await rotateIdempotencyKey(scope, `mesa_pay:${code}`);
-          unfreezePay();
+          await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+          unfreezePay(intent);
           setError(confirmed.error);
         } else {
           // Se cayó la red durante el 3DS: el banco pudo haber autorizado
           // igual. Se congela; el reintento replaya en vez de re-cobrar.
-          freezePay(scope, body);
+          freezePay(scope, intent, body);
           setError('Se cortó la conexión mientras el banco confirmaba. No reintentes con otro método: tocá "Reintentar el pago sin confirmar".');
         }
         setBusy(false);
@@ -509,7 +586,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       }
       // La aprobación de Stripe no acredita sola el pago en PayMe. Esperamos
       // el estado del backend y conservamos key/payload mientras tanto.
-      freezePay(scope, body);
+      freezePay(scope, intent, body);
       setError('Tu banco aprobó la operación; todavía estamos confirmando el pago. Reintentá esta misma confirmación, sin cambiar el método.');
       setBusy(false);
       reload();
@@ -517,8 +594,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     }
     const outcome = mesaPaymentOutcome(at.status);
     if (outcome === 'definitive') {
-      await rotateIdempotencyKey(scope, `mesa_pay:${code}`);
-      unfreezePay();
+      await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+      unfreezePay(intent);
       setError('Ese pago no prosperó. Podés iniciar uno nuevo.');
       setBusy(false);
       reload();
@@ -527,7 +604,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     if (outcome !== 'success') {
       // pending/requires_action/processing, shapes incompletos y estados
       // nuevos no son acreditación. Se conserva el intento para reconciliar.
-      freezePay(scope, body);
+      freezePay(scope, intent, body);
       setError('Estamos confirmando este pago. No inicies otro ni cambies el método hasta que se resuelva.');
       setBusy(false);
       reload();
@@ -556,8 +633,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     });
     // Intento completado: el próximo pago de esta mesa (otra parte, otro
     // plato) es una intención NUEVA y necesita clave nueva.
-    await rotateIdempotencyKey(scope, `mesa_pay:${code}`);
-    unfreezePay();
+    await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+    unfreezePay(intent);
     setView('confirm');
     setBusy(false);
   }
@@ -574,12 +651,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       payInFlightRef.current.leave();
       return;
     }
+    if (frozenRequiresReconciliation) {
+      setError('Este pago no puede reenviarse desde la sesión actual. Sigue bloqueado hasta reconciliar su resultado.');
+      payInFlightRef.current.leave();
+      return;
+    }
     payStartedRef.current = true;
     setBusy(true);
     setError(null);
     // El cuerpo EXACTO que salió, para poder congelarlo si la respuesta se
     // pierde: el reintento tiene que reenviar esto, no reconstruirlo.
     let sentBody: PayMesaRequest | null = null;
+    let intent: MonetaryIntentHandle | null = frozen?.handle ?? null;
     try {
       /**
        * B-06: reintento de un intento CONGELADO. Se manda el MISMO cuerpo que
@@ -589,17 +672,19 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
        */
       if (frozen?.payload) {
         const body = frozen.payload as PayMesaRequest;
+        intent = frozen.handle;
         sentBody = body;
-        await prepareMonetaryRequest(scope, `mesa_pay:${code}`, body, mySlotsRef.current);
-        const r = await api.payMesa(code, body, guestToken, { grossCents: gross, tipCents });
-        await handlePayResponse(r, scope, body);
+        await prepareMonetaryRequest(scope, `mesa_pay:${code}`, intent, body);
+        const r = await api.payMesa(code, body, guestToken, payExpectationFor(mesa, body), intent);
+        await handlePayResponse(r, scope, intent, body);
         return;
       }
       // D4 (v2.16): tarjeta GUARDADA → `payment_method_id` (uuid); tarjeta
       // NUEVA → pm_ desde el Card Element como `stripe_payment_method_id`,
       // con `save_payment_method` según el checkbox.
       const savedCard = payType === 'card' ? (cards.find((c) => c.id === cardChoice) ?? null) : null;
-      const idempotencyKey = await idempotencyKeyFor(scope, `mesa_pay:${code}`);
+      intent = intent ?? await acquireMonetaryIntent(scope, `mesa_pay:${code}`);
+      const idempotencyKey = intent.key;
       let stripePmId: string | null = null;
       let savedPmId: string | null = null;
       let savingNewCard = false;
@@ -610,8 +695,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         } else if (savedCard) {
           savedPmId = savedCard.id;
         } else if (IS_MOCK) {
-          stripePmId = recallPaymentMethod(scope) ?? `pm_mock_nueva_${Date.now().toString(36)}`;
-          await rememberPaymentMethod(scope, stripePmId);
+          stripePmId = recallPaymentMethod(scope, intent) ?? `pm_mock_nueva_${Date.now().toString(36)}`;
+          await rememberPaymentMethod(scope, intent, stripePmId);
           savingNewCard = !isGuest && saveCard;
         } else {
           if (!cardEl) {
@@ -622,7 +707,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           // B-06: en el REINTENTO se reusa el pm_ ya tokenizado. Stripe.js
           // devuelve uno distinto por invocación y el backend lo hashea: sin
           // esto, la clave estable daría 409 idempotency_conflict en bucle.
-          const cached = recallPaymentMethod(scope);
+          const cached = recallPaymentMethod(scope, intent);
           if (cached) {
             stripePmId = cached;
           } else {
@@ -633,7 +718,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               return;
             }
             stripePmId = res.paymentMethodId;
-            await rememberPaymentMethod(scope, stripePmId);
+            await rememberPaymentMethod(scope, intent, stripePmId);
           }
           savingNewCard = !isGuest && saveCard;
         }
@@ -668,9 +753,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           idempotency_key: idempotencyKey,
       };
       sentBody = body;
-      await prepareMonetaryRequest(scope, `mesa_pay:${code}`, body, mySlotsRef.current);
-      const r = await api.payMesa(code, body, guestToken, { grossCents: gross, tipCents });
-      await handlePayResponse(r, scope, body);
+      await prepareMonetaryRequest(scope, `mesa_pay:${code}`, intent, body);
+      const r = await api.payMesa(code, body, guestToken, payExpectationFor(mesa, body), intent);
+      await handlePayResponse(r, scope, intent, body);
     } catch (err) {
       const { code: ec, extra, status } = extractApiError(err);
       // B-06, la decisión central: si el intento MURIÓ (el backend ya liberó
@@ -680,22 +765,29 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // del backend en vez de cobrar de nuevo, y hasta entonces no se puede
       // cambiar nada (cambiar algo generaría clave nueva = doble cobro).
       const definitivo = shouldRotateOnError(ec, status);
-      if (definitivo) {
-        await rotateIdempotencyKey(scope, `mesa_pay:${code}`);
-        unfreezePay();
+      if (intent && definitivo) {
+        await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+        unfreezePay(intent);
       }
-      if (ec === 'idempotency_key_terminal') {
+      if (ec === 'monetary_family_reconciliation_required') {
+        setError('El pago pertenece a una sesión anterior. No lo reenviamos ni iniciamos otro hasta reconciliarlo.');
+      } else if (ec === 'idempotency_key_terminal') {
         // El backend usa 409 tanto para conflicto VIVO como para intento
         // terminal. Este último sí murió: conservar su clave deja al usuario
         // reintentando el mismo 409 para siempre.
-        await rotateIdempotencyKey(scope, `mesa_pay:${code}`);
-        unfreezePay();
+        if (intent) {
+          await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+          unfreezePay(intent);
+        }
         setError('Ese intento de pago ya no sirve. Probá de nuevo.');
+        reload();
+      } else if (ec === 'monetary_generation_stale') {
+        setError('Otra pestaña ya cerró este intento. Actualizamos la mesa antes de permitir una nueva acción.');
         reload();
       } else if (ec === 'idempotency_conflict') {
         // Hay un intento VIVO con otro payload. Rotar acá sería el doble
         // cobro; se congela en el scope que el backend ya conoce.
-        freezePay(scope, sentBody ?? frozen?.payload);
+        if (intent) freezePay(scope, intent, sentBody ?? frozen?.payload);
         setError('Tenés un pago sin confirmar en esta mesa. Reintentá ese mismo pago antes de cambiar nada.');
         reload();
       } else if (ec === 'insufficient_funds') {
@@ -721,8 +813,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         // Se CONGELA el pago con esta clave: el reintento cae en el replay del
         // backend, y hasta resolverlo no se puede cambiar nada (cualquier
         // cambio generaría clave nueva y cobraría de nuevo). La mesa se
-        // recarga: si el pago llegó, `claimed_by_me` lo descongela solo.
-        freezePay(scope, sentBody ?? frozen?.payload);
+        // recarga solo para mostrar estado; ningún agregado cierra el intento.
+        if (intent) freezePay(scope, intent, sentBody ?? frozen?.payload);
         setError('No pudimos confirmar el pago. Puede que se haya cobrado igual: reintentá ESTE mismo pago, no armes otro.');
         reload();
       }
@@ -1000,7 +1092,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         <div className="scroll" style={{ padding: 16 }}>
           <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 16 }}>
             <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              {frozenScope ? 'Pendiente de confirmar' : 'Pagás SOLO tu parte'}
+              {frozenRequiresReconciliation ? 'Reconciliación necesaria' : frozenScope ? 'Pendiente de confirmar' : 'Pagás SOLO tu parte'}
             </div>
             {/* Con un intento congelado, el monto de la pantalla NO es el del
                 pago que quedó en el aire (tras una recarga la selección
@@ -1011,7 +1103,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   Pago sin confirmar
                 </div>
                 <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
-                  Reintentalo para saber si se cobró: mandamos el mismo pago, no uno nuevo.
+                  {frozenRequiresReconciliation
+                    ? 'No podemos reenviar este pago desde la sesión actual. No iniciaremos otro hasta reconciliarlo.'
+                    : 'Reintentalo para saber si se cobró: mandamos el mismo pago, no uno nuevo.'}
                 </div>
               </>
             ) : (
@@ -1033,9 +1127,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               nuevo. El único camino es reintentar ESTE pago. */}
           {frozenScope && (
             <div className="note note-orange" role="status">
-              <b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal
-              cual está: si ya salió, no te cobramos de nuevo. Hasta resolverlo no podés cambiar
-              propina, método ni consumos.
+              {frozenRequiresReconciliation ? (
+                <><b>Hay un pago que no podemos reenviar.</b> Pertenece a una sesión anterior o se perdió su cuerpo exacto al recargar. Sigue bloqueado para evitar un segundo cobro.</>
+              ) : (
+                <><b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal cual está: si ya salió, no te cobramos de nuevo. Hasta resolverlo no podés cambiar propina, método ni consumos.</>
+              )}
             </div>
           )}
           {refundedNotice && (
@@ -1330,6 +1426,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           }}
           disabled={
             busy ||
+            frozenRequiresReconciliation ||
             (!frozenScope && gross === 0) ||
             (!frozenScope &&
               !IS_MOCK &&
@@ -1341,7 +1438,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         >
           {busy
             ? 'Procesando…'
-            : frozenScope
+            : frozenRequiresReconciliation
+              ? 'Reconciliación necesaria'
+              : frozenScope
               ? 'Reintentar el pago sin confirmar'
               : refundedNotice
                 ? `Pagar de nuevo ${formatMXN(gross)}`
@@ -1368,17 +1467,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       className="back-btn"
       style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', flex: 'none' }}
       aria-label="Copiar link de invitación"
-      onClick={async () => {
-        try {
-          const inv = await api.createInvitation(code);
-          if (inv.link) {
-            await navigator.clipboard.writeText(inv.link);
-            toast('Link de invitación copiado ✓');
-          }
-        } catch {
-          toast('No se pudo generar el link');
-        }
-      }}
+      onClick={() => void copyInvitationLink()}
     >
       <Icon name="link" size={18} />
     </button>

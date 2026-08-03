@@ -33,7 +33,6 @@ En `../payme-app-backend/`, copiar `.env.example` a `.env` y completar:
 | `JWT_SECRET` | cualquier texto de 32+ caracteres |
 | `STRIPE_SECRET_KEY` | `sk_test_…` del panel de Stripe (modo test) |
 | `STRIPE_PUBLISHABLE_KEY` | `pk_test_…` del panel de Stripe (modo test) |
-| `STP_API_KEY` | `mock-development-key` (deja SPEI en modo simulado) |
 | `FRONTEND_PUBLIC_URL` | `http://localhost:5174/#` |
 
 > Las claves de Stripe las pone **Mati**: son credenciales suyas y no deben
@@ -60,20 +59,12 @@ npm run dev
 | Flujo | Estado con backend real |
 | --- | --- |
 | Registro / login / logout | ✅ completo |
-| Amigos, grupos, transferencias | ✅ completo |
-| Abrir mesa con garantía por **saldo** | ✅ completo (no toca Stripe) |
-| Pagar con **saldo** | ✅ completo |
-| Abrir mesa con garantía por **tarjeta** | ⚠️ funciona, pero **G-04**: hay que tipear la tarjeta cada vez (el contrato pide un `pm_…` que `GET /payment-methods` no devuelve) |
+| Amigos y grupos | ✅ dentro del alcance card-only |
+| Abrir mesa con garantía por **tarjeta** | ⚠️ requiere claves Stripe test; tarjeta guardada o Elements según el contrato |
 | Pagar con tarjeta / agregar tarjeta / 3DS | ⚠️ requiere claves de Stripe en test |
-| Cargar saldo por OXXO o tarjeta | ⚠️ requiere claves de Stripe en test |
-| Abono SPEI (CLABE) | ✅ con `STP_API_KEY=mock-development-key` |
 | Escanear ticket (OCR) | ⚠️ el backend responde un ticket de ejemplo (no hay proveedor real) |
-| Pagar con **Apple Pay / Google Pay** | ❌ **no aplica: ocultos en la app real** (decisión de Mati 2026-07-25). No hay integración con la Payment Request API de Stripe, así que el backend devuelve 400 (el schema exige `stripe_payment_method_id`). Visibles solo en el build demo. Ver **G-12** y `WALLET_PAY_ENABLED` en `src/api/index.ts`. Cuando se implementen, probarlos **en iPhone/Safari y en Android/Chrome**: es la única forma. |
+| Pagar con **Apple Pay / Google Pay** | ❌ plan ratificado: primer pago con `pm_` efímero, no guardado/off-session; siguen apagados hasta integración real y prueba física; ver **G-12** |
+| Wallet, topups, transferencias, CLABE, SPEI y STP | ❌ plan de apagado ratificado para post-auditoría; flags/UI/endpoints fail-closed, código/schema legacy intactos y nunca habilitados por SQL |
 
-Para cargar saldo sin Stripe y poder probar los flujos de wallet, se puede
-acreditar a mano en la base:
-
-```sql
-UPDATE wallets SET balance_cents = 500000
- WHERE user_id = (SELECT id FROM users WHERE email = 'TU_EMAIL');
-```
+Este runbook acredita únicamente una prueba local. No permite inferir CI,
+deploy ni estado de producción.

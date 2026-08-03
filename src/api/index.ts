@@ -9,18 +9,21 @@ import {
   setOnSessionExpired,
 } from './http';
 import * as mock from './mock/mockApi';
-import { withPreparedMonetaryRequest } from './idempotency';
+import { attachPaymentMethodResponse, invitationResponse, setupIntentResponse } from './contractResponses';
+import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
-import { clearSession, loadSession, type StoredSession } from './storage';
+import { invalidateSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
-import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse, type PayMesaExpectation } from './moneyGuards';
+import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse, type PayMesaExpectation, type TransferExpectation } from './moneyGuards';
 import type {
   BalanceResponse,
+  AttachPaymentMethodResponse,
   MeResponse,
   RestaurantResponse,
   FractionRequest,
   ClabeResponse,
   CreateInvitationResponse,
+  CreateSetupIntentResponse,
   CreateMesaRequest,
   CreateMesaResponse,
   CreateTransferRequest,
@@ -58,18 +61,19 @@ import type {
  */
 
 export const IS_MOCK: boolean = import.meta.env.VITE_MOCK === '1';
-/** El riel saldo/IFPE no está ratificado para release real; nunca se degrada. */
+/**
+ * Estado preexistente: el riel nunca aparece en real y el mock conserva su
+ * historia. El apagado también dentro del mock se ejecuta recién después de
+ * esta auditoría, según el plan ratificado; no se anticipa acá.
+ */
 export const WALLET_RAIL_ENABLED: boolean = IS_MOCK;
 
 /**
- * Modo demo para grabar el video (aplicación YC): un bypass de cámara, nada
- * más. Se activa con `?demo=1` en la URL (ej. `.../live/?demo=1`; también se
- * lee si el flag viaja dentro del hash). Se evalúa UNA vez al cargar.
- *
- * SIN el flag la app se comporta EXACTAMENTE igual que hoy. NO toca el contrato
- * ni el happy-path: solo evita depender de `getUserMedia`/diálogo de archivo al
- * escanear (ver `CreateMesaFlow`) y saca del encuadre algún cartel/dato que
- * delata la maqueta. El pago sigue siendo Stripe real.
+ * Modo histórico para grabar la demo: se activa por `?demo=1` (también dentro
+ * del hash), saltea la captura OCR y usa el PaymentMethod público de test de
+ * Stripe en garantía/pago. Es aceptable solo en un artefacto y entorno
+ * acreditados como test; G-24 exige hacerlo inalcanzable por URL antes de un
+ * piloto o de configurar credenciales live.
  */
 function readDemoFlag(): boolean {
   if (typeof window === 'undefined') return false;
@@ -107,36 +111,12 @@ export const QR_RESTAURANT_ID: string | null = readQrRestaurant();
 export const DEMO_PM_ID = 'pm_card_visa';
 
 /**
- * Apple Pay / Google Pay: VISIBLES solo donde funcionan (decisión de Mati,
- * 2026-07-25).
- *
- * Los botones existen en la pantalla de pago desde siempre, pero contra el
- * backend REAL devuelven 400: no hay integración con la Payment Request API de
- * Stripe, y el schema de pago exige un `stripe_payment_method_id` que esos
- * botones no producen (`schemas/index.js`, el refine de `mesaPay`). En la demo
- * sí funcionan porque el front manda un `pm_` de utilería.
- *
- * Por eso el default ES el estado verdadero: encendido en la demo, apagado en
- * cualquier build real. Así el build `/live/` los oculta solo, sin depender de
- * que alguien se acuerde de setear una variable en un job nuevo.
- *
- * NO se borra nada: ni el `PaymentType`, ni las etiquetas del comprobante, ni
- * el bloque del mock. Se apaga por dato. Para desarrollar la integración de
- * verdad (requiere iPhone + Safari): `VITE_WALLET_PAY=1`. El commit que la
- * traiga cambia este default y listo.
- *
- * Cuando llegue ese día: mostrar UN solo botón según el dispositivo (Apple en
- * iPhone, Google en Android), nunca los dos juntos — pedido de Mati. Y ojo, el
- * `pm_` de esas hojas nace con la autorización biométrica y muere con ella: no
- * es reutilizable, cachearlo no sirve.
- *
- * El contrato TIENE un interruptor equivalente (`features.apple_pay` de
- * `GET /api/config`) pero no se usa: está hardcodeado en `true` en el backend
- * (`routes/config.js`), sin tests y sin tocarse desde v2.11, y apagarlo sería
- * desplegar el backend que mueve dinero dos veces. Anotado en GAPS (G-12).
+ * Apple Pay / Google Pay siguen apagados también en mock. Son un MUST
+ * ratificado del MVP, pero la hoja nativa y sus pruebas físicas todavía no
+ * están implementadas; un botón que manda un `pm_` de utilería no acredita
+ * soporte.
  */
-export const WALLET_PAY_ENABLED: boolean =
-  IS_MOCK || (import.meta.env.VITE_WALLET_PAY as string | undefined) === '1';
+export const WALLET_PAY_ENABLED = false;
 
 export interface Api {
   // auth
@@ -162,7 +142,7 @@ export interface Api {
   getOpenMesas(): Promise<OpenMesasResponse>;
   getMesa(code: string, guestToken?: string): Promise<MesaDetailResponse>;
   scanTicket(image?: Blob): Promise<OcrResponse>;
-  createMesa(req: CreateMesaRequest): Promise<CreateMesaResponse>;
+  createMesa(req: CreateMesaRequest, intent: MonetaryIntentHandle): Promise<CreateMesaResponse>;
   /** Mock: simula la confirmación 3DS de la garantía. En T7: Stripe.js. */
   /** @param connectedAccountId v2.24: si el hold vive en la cuenta del restaurante. */
   confirmGuarantee3ds(
@@ -171,30 +151,30 @@ export interface Api {
     connectedAccountId?: string,
   ): Promise<{ status: string; outcome: 'success' | 'definitive' | 'ambiguous'; error?: string }>;
   lockItems(code: string, items: FractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
-  payMesa(code: string, req: PayMesaRequest, guestToken: string | undefined, expectation: PayMesaExpectation): Promise<PayMesaResponse>;
-  createInvitation(code: string): Promise<CreateInvitationResponse>;
+  payMesa(code: string, req: PayMesaRequest, guestToken: string | undefined, expectation: PayMesaExpectation, intent: MonetaryIntentHandle): Promise<PayMesaResponse>;
+  createInvitation(code: string, idempotencyKey: string): Promise<CreateInvitationResponse>;
   /** Invitación in-app a un amigo por payme_id (solo el organizador; el backend resuelve el uuid). */
-  inviteFriend(code: string, paymeId: string): Promise<CreateInvitationResponse>;
+  inviteFriend(code: string, paymeId: string, idempotencyKey: string): Promise<CreateInvitationResponse>;
   // topup (A-3)
-  topupOxxo(amountCents: number, idempotencyKey: string): Promise<TopupOxxoResponse>;
+  topupOxxo(amountCents: number, intent: MonetaryIntentHandle): Promise<TopupOxxoResponse>;
   topupCard(
     amountCents: number,
     paymentMethodId: string,
-    idempotencyKey: string,
+    intent: MonetaryIntentHandle,
   ): Promise<TopupCardResponse>;
   getTopup(id: string, expectedAmountCents: number, expectedMethod: 'oxxo' | 'card' | 'spei'): Promise<TopupStatusResponse>;
   getClabe(): Promise<ClabeResponse>;
   // transfers
-  createTransfer(req: CreateTransferRequest): Promise<CreateTransferResponse>;
+  createTransfer(req: CreateTransferRequest, expectation: TransferExpectation, intent: MonetaryIntentHandle): Promise<CreateTransferResponse>;
   listTransfers(): Promise<TransfersResponse>;
   // payment methods
   getPaymentMethods(): Promise<PaymentMethodsResponse>;
   setDefaultPaymentMethod(id: string): Promise<void>;
   removePaymentMethod(id: string): Promise<void>;
   /** POST /payment-methods/setup-intent → client_secret para Stripe Elements. */
-  createSetupIntent(): Promise<{ client_secret: string }>;
+  createSetupIntent(idempotencyKey: string, expectedSession?: StoredSession): Promise<CreateSetupIntentResponse>;
   /** POST /payment-methods: registra el `pm_…` ya confirmado con Stripe. */
-  attachPaymentMethod(stripePaymentMethodId: string, setAsDefault?: boolean): Promise<void>;
+  attachPaymentMethod(stripePaymentMethodId: string, setAsDefault?: boolean, expectedSession?: StoredSession): Promise<AttachPaymentMethodResponse>;
   // notificaciones e invitaciones in-app
   getNotifications(): Promise<NotificationsResponse>;
   getUnreadCount(): Promise<{ unread_count: number }>;
@@ -250,15 +230,15 @@ const realApi: Api = {
   async scanTicket(image) {
     // POST /api/ocr es multipart (campo `image`). Pasa por httpRequest para
     // compartir timeout, refresh rotativo y errores normalizados con el resto.
-    if (!image || image.size <= 0 || image.size > 10 * 1024 * 1024) throw new Error('scanTicket requiere una imagen de hasta 10 MB');
+    if (!image || image.size <= 0 || image.size > 8 * 1024 * 1024) throw new Error('scanTicket requiere una imagen de hasta 8 MiB');
     const form = new FormData();
     form.append('image', image, 'ticket.jpg');
     return httpRequest<OcrResponse>('POST', '/ocr', form, undefined, OCR_TIMEOUT_MS);
   },
-  createMesa: async (req) =>
+  createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(
       'create_mesa',
-      req.idempotency_key ?? '',
+      intent,
       req,
       undefined,
       async (session) => createMesaResponse(await httpRequest<unknown>('POST', '/mesas', req, session), req),
@@ -308,10 +288,10 @@ const realApi: Api = {
       : httpRequest<LockItemsResponse>('POST', `/mesas/${encodeURIComponent(code)}/items/lock`, {
           items,
         }),
-  payMesa: async (code, req, guestToken, expectation) =>
+  payMesa: async (code, req, guestToken, expectation, intent) =>
     withPreparedMonetaryRequest(
       `mesa_pay:${code}`,
-      req.idempotency_key,
+      intent,
       req,
       guestToken,
       async (session) =>
@@ -324,35 +304,37 @@ const realApi: Api = {
             ), req, expectation)
           : payMesaResponse(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/pay`, req, session), req, expectation),
     ),
-  createInvitation: (code) =>
-    httpRequest<CreateInvitationResponse>('POST', `/mesas/${encodeURIComponent(code)}/invitations`, {
+  createInvitation: async (code, idempotencyKey) =>
+    invitationResponse(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/invitations`, {
       type: 'link',
-    }),
-  inviteFriend: (code, paymeId) =>
-    httpRequest<CreateInvitationResponse>('POST', `/mesas/${encodeURIComponent(code)}/invitations`, {
+      idempotency_key: idempotencyKey,
+    }), 'link', code),
+  inviteFriend: async (code, paymeId, idempotencyKey) =>
+    invitationResponse(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/invitations`, {
       type: 'in_app',
       invited_payme_id: paymeId,
-    }),
+      idempotency_key: idempotencyKey,
+    }), 'in_app', code),
 
-  topupOxxo: async (amountCents, idempotencyKey) => {
-    const req = { amount_cents: amountCents, idempotency_key: idempotencyKey };
+  topupOxxo: async (amountCents, intent) => {
+    const req = { amount_cents: amountCents, idempotency_key: intent.key };
     return withPreparedMonetaryRequest(
       'topup_oxxo',
-      idempotencyKey,
+      intent,
       req,
       undefined,
       async (session) => topupOxxoResponse(await httpRequest<unknown>('POST', '/topup/oxxo', req, session), amountCents),
     );
   },
-  topupCard: async (amountCents, paymentMethodId, idempotencyKey) => {
+  topupCard: async (amountCents, paymentMethodId, intent) => {
     const req = {
       amount_cents: amountCents,
       payment_method_id: paymentMethodId,
-      idempotency_key: idempotencyKey,
+      idempotency_key: intent.key,
     };
     return withPreparedMonetaryRequest(
       'topup_card',
-      idempotencyKey,
+      intent,
       req,
       undefined,
       async (session) => topupCardResponse(await httpRequest<unknown>('POST', '/topup/card', req, session), amountCents),
@@ -364,13 +346,13 @@ const realApi: Api = {
   },
   getClabe: () => httpRequest<ClabeResponse>('GET', '/wallet/clabe'),
 
-  createTransfer: async (req) =>
+  createTransfer: async (req, expectation, intent) =>
     withPreparedMonetaryRequest(
       'transfer',
-      req.idempotency_key,
+      intent,
       req,
       undefined,
-      async (session) => transferResponse(await httpRequest<unknown>('POST', '/transfers', req, session), req),
+      async (session) => transferResponse(await httpRequest<unknown>('POST', '/transfers', req, session), req, expectation),
     ),
   listTransfers: () => httpRequest<TransfersResponse>('GET', '/transfers'),
 
@@ -381,14 +363,18 @@ const realApi: Api = {
   removePaymentMethod: async (id) => {
     await httpRequest('DELETE', `/payment-methods/${encodeURIComponent(id)}`);
   },
-  createSetupIntent: () =>
-    httpRequest<{ client_secret: string }>('POST', '/payment-methods/setup-intent'),
-  attachPaymentMethod: async (stripePaymentMethodId, setAsDefault) => {
-    await httpRequest('POST', '/payment-methods', {
+  createSetupIntent: async (idempotencyKey, expectedSession) =>
+    setupIntentResponse(await httpRequest<unknown>(
+      'POST',
+      '/payment-methods/setup-intent',
+      { idempotency_key: idempotencyKey },
+      expectedSession,
+    )),
+  attachPaymentMethod: async (stripePaymentMethodId, setAsDefault, expectedSession) =>
+    attachPaymentMethodResponse(await httpRequest<unknown>('POST', '/payment-methods', {
       stripe_payment_method_id: stripePaymentMethodId,
       ...(setAsDefault !== undefined && { set_as_default: setAsDefault }),
-    });
-  },
+    }, expectedSession), stripePaymentMethodId),
 
   getNotifications: () => httpRequest<NotificationsResponse>('GET', '/notifications'),
   getUnreadCount: () => httpRequest<{ unread_count: number }>('GET', '/notifications/unread-count'),
@@ -434,8 +420,9 @@ const mockApi: Api = {
   login: (email, password) => mock.mockLogin(email, password),
   register: (data) => mock.mockRegister(data),
   async logout() {
+    const origin = loadSession();
     await mock.mockLogout();
-    clearSession();
+    if (origin) invalidateSession(origin);
   },
   restoreSession: () => loadSession(),
   onSessionExpired: () => undefined,
@@ -449,10 +436,10 @@ const mockApi: Api = {
   getOpenMesas: () => mock.mockOpenMesas(),
   getMesa: (code, guestToken) => mock.mockGetMesa(code, guestToken ? 'guest' : 'user'),
   scanTicket: () => mock.mockScanTicket(),
-  createMesa: async (req) =>
+  createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(
       'create_mesa',
-      req.idempotency_key ?? '',
+      intent,
       req,
       undefined,
       async () => createMesaResponse(await mock.mockCreateMesa(req), req),
@@ -462,45 +449,45 @@ const mockApi: Api = {
     return { ...result, outcome: result.status === 'open' ? 'success' as const : 'ambiguous' as const };
   },
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
-  payMesa: async (code, req, guestToken, expectation) =>
+  payMesa: async (code, req, guestToken, expectation, intent) =>
     withPreparedMonetaryRequest(
       `mesa_pay:${code}`,
-      req.idempotency_key,
+      intent,
       req,
       guestToken,
       async () => payMesaResponse(await mock.mockPayMesa(code, req, guestToken ? 'guest' : 'user'), req, expectation),
     ),
-  createInvitation: (code) => mock.mockCreateInvitation(code),
-  inviteFriend: (code, paymeId) => mock.mockInviteFriend(code, paymeId),
+  createInvitation: async (code, idempotencyKey) => invitationResponse(await mock.mockCreateInvitation(code, idempotencyKey), 'link', code),
+  inviteFriend: async (code, paymeId, idempotencyKey) => invitationResponse(await mock.mockInviteFriend(code, paymeId, idempotencyKey), 'in_app', code),
 
-  topupOxxo: async (amountCents, idempotencyKey) =>
+  topupOxxo: async (amountCents, intent) =>
     withPreparedMonetaryRequest(
       'topup_oxxo',
-      idempotencyKey,
-      { amount_cents: amountCents, idempotency_key: idempotencyKey },
+      intent,
+      { amount_cents: amountCents, idempotency_key: intent.key },
       undefined,
-      async () => topupOxxoResponse(await mock.mockTopupOxxo(amountCents), amountCents),
+      async () => topupOxxoResponse(await mock.mockTopupOxxo(amountCents, intent.key), amountCents),
     ),
-  topupCard: async (amountCents, paymentMethodId, idempotencyKey) =>
+  topupCard: async (amountCents, paymentMethodId, intent) =>
     withPreparedMonetaryRequest(
       'topup_card',
-      idempotencyKey,
-      { amount_cents: amountCents, payment_method_id: paymentMethodId, idempotency_key: idempotencyKey },
+      intent,
+      { amount_cents: amountCents, payment_method_id: paymentMethodId, idempotency_key: intent.key },
       undefined,
-      async () => topupCardResponse(await mock.mockTopupCard(amountCents, paymentMethodId), amountCents),
+      async () => topupCardResponse(await mock.mockTopupCard(amountCents, paymentMethodId, intent.key), amountCents),
     ),
   getTopup: async () => { throw new Error('topup_reconciliation_unavailable_in_mock'); },
   getClabe: () => mock.mockGetClabe(),
 
-  createTransfer: async (req) =>
-    withPreparedMonetaryRequest('transfer', req.idempotency_key, req, undefined, async () => transferResponse(await mock.mockCreateTransfer(req), req)),
+  createTransfer: async (req, expectation, intent) =>
+    withPreparedMonetaryRequest('transfer', intent, req, undefined, async () => transferResponse(await mock.mockCreateTransfer(req), req, expectation)),
   listTransfers: () => mock.mockListTransfers(),
 
   getPaymentMethods: () => mock.mockPaymentMethods(),
   setDefaultPaymentMethod: (id) => mock.mockSetDefaultPaymentMethod(id),
   removePaymentMethod: (id) => mock.mockRemovePaymentMethod(id),
-  createSetupIntent: () => mock.mockCreateSetupIntent(),
-  attachPaymentMethod: (pmId, setAsDefault) => mock.mockAttachPaymentMethod(pmId, setAsDefault),
+  createSetupIntent: async (idempotencyKey) => setupIntentResponse(await mock.mockCreateSetupIntent(idempotencyKey)),
+  attachPaymentMethod: async (pmId, setAsDefault) => attachPaymentMethodResponse(await mock.mockAttachPaymentMethod(pmId, setAsDefault), pmId),
 
   getNotifications: () => mock.mockNotifications(),
   getUnreadCount: () => mock.mockUnreadCount(),

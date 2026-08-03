@@ -1,5 +1,39 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.29.5 — Cierre local de auditoría y espejo v2.28.8 (2026-08-03)
+
+- Las mutaciones distinguen rechazos definitivos de resultados ambiguos: sólo
+  conflictos idempotentes/concurrentes, 408/425/429 y 5xx conservan el intento
+  para replay; un 400 de validación no queda congelado como si fuera red.
+- El alta de tarjeta conserva en `sessionStorage` únicamente key, etapa y
+  referencia `pm_`, ligadas al principal y con limpieza CAS. Nunca persiste el
+  `client_secret`; un registro corrupto o storage no durable falla cerrado.
+- SetupIntent, attach de tarjeta e invitaciones validan su shape en runtime:
+  un 2xx malformado no se convierte en éxito. El mock replica la autoridad e
+  idempotencia relevantes y el portapapeles sólo informa éxito comprobado.
+- Un replay de invitación vencida se modela como terminal: no se copia ni se
+  marca al amigo como invitado, y la key anterior se libera para un intento
+  fresco. Link, código de mesa y token también quedan ligados en runtime.
+- El alta de tarjeta captura principal+familia: una respuesta tardía de la
+  sesión A no puede persistir, adjuntar ni limpiar referencias bajo la sesión B.
+  La transición setup→attach también usa CAS por key: K1 no resucita sobre K2.
+- La creación de mesa bloquea un nuevo intento si existe evidencia local
+  ambigua anterior, antes de tokenizar otra tarjeta.
+- El límite previo de OCR se alineó con el receptor auditado: más de 8 MiB se
+  rechaza antes de red, en lugar de ofrecer 10 MiB que el backend nunca acepta.
+- El lock actualiza PostCSS de 8.5.19 a 8.5.25 mediante el fix compatible del
+  audit; no se fuerza el salto mayor Vite 5→8 requerido por los dos hallazgos
+  restantes de toolchain de desarrollo.
+- `contract-mirror/` fue refrescado por copia: 67/67 archivos byte-idénticos
+  contra App Backend
+  `e8a3faf2f520b249cbe6001f14ef70230a405695` (v2.28.8), con procedencia y
+  bloqueos vigentes documentados. Esto no acredita publicación externa.
+- Baseline ratificado: wallet durmiente post-auditoría (no borrado) y
+  Apple/Google Pay como MUST de primer pago mediante hoja nativa, sin prerequisito
+  de tarjeta guardada. El candidato permanece **NO-GO de release/piloto** por
+  los seis bloqueos de backend y los gates de wallet, hojas nativas, PQ-2 y
+  G-24 listados al inicio de `GAPS.md`.
+
 ## 0.29.4 — Familia de sesión y refresh fail-closed (2026-08-02)
 
 - Login/registro crean una familia y principal opacos; refresh conserva ambos y

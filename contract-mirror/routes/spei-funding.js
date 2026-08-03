@@ -50,7 +50,7 @@ router.get('/clabe', requireAuth, async (req, res, next) => {
     });
 
     if (result.issued) {
-      logger.audit('wallet_clabe_issued', { user_id: req.user.id, clabe: result.clabe });
+      logger.audit('wallet_clabe_issued', { user_id: req.user.id, clabe: stpAbono.maskedClabe(result.clabe) });
     }
     res.json({
       clabe: result.clabe,

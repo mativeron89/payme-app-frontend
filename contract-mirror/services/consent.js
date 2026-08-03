@@ -17,6 +17,7 @@
 const pool = require('../db/pool');
 const legal = require('./legal');
 const logger = require('../utils/logger');
+const { hoyMenosAnios } = require('../utils/fechas');
 
 /**
  * Finalidades. Lista CERRADA: una finalidad nueva es una decisión de producto
@@ -56,15 +57,6 @@ function isPurpose(key) {
  * desplegado antes que su migración) o sin fecha declarada por el titular.
  * El gate de grantConsent trata ese null como BLOQUEO.
  */
-const TZ_MX = 'America/Mexico_City';
-
-/** Hoy en el calendario de México, como 'YYYY-MM-DD'. */
-function hoyEnMexico() {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ_MX, year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date());
-}
-
 async function edadConocida(userId) {
   const { rows } = await pool.query(
     `SELECT column_name FROM information_schema.columns
@@ -79,10 +71,8 @@ async function edadConocida(userId) {
   const bd = u[0]?.bd;
   if (!bd) return null;                    // el titular no la declaró
 
-  // Fecha límite: quien nació ESE día o antes ya cumplió 18 hoy en México.
-  const [y, m, d] = hoyEnMexico().split('-');
-  const limite = `${String(Number(y) - 18).padStart(4, '0')}-${m}-${d}`;
-  return bd <= limite;                     // comparación de calendario, sin husos
+  // Quien nació ese día o antes ya cumplió 18 hoy en México.
+  return bd <= hoyMenosAnios(18);          // comparación de calendario, sin husos
 }
 
 /**
@@ -152,12 +142,19 @@ async function registrar({ userId, purposeKey, state, channel, ip, userAgent, ap
  * D-11 prohíbe dirigir campañas por perfilamiento a menores, **ni con
  * consentimiento de los representantes legales**.
  *
- * La columna `users.birth_date` YA existe (la agrega la migración de este
- * mismo cambio), pero **nadie la llena todavía**: pedirla en el registro es
- * trabajo del front (D-03). Mientras esté vacía, la edad es DESCONOCIDA y
- * otorgar se RECHAZA. Preferible bloquear una finalidad opcional que incumplir
- * D-11 en silencio — y el acta es explícita en que rechazar NO degrada el
- * servicio.
+ * ⚠️ **NO asumir que todo usuario nuevo tiene fecha.** PQ-2 (v2.27) agregó
+ * `birth_date` al registro, pero **v2.28 la dejó OPCIONAL por default** (modo de
+ * compatibilidad del rollout: `PQ2_BIRTH_DATE_REQUIRED`). Mientras esa bandera
+ * no esté prendida, **se siguen creando cuentas SIN fecha**. Hay entonces tres
+ * poblaciones sin edad verificable:
+ *   · usuarios anteriores a PQ-2;
+ *   · usuarios creados durante la compatibilidad sin mandar la fecha;
+ *   · cualquiera que la app no le haya pedido todavía.
+ * Para las tres, la edad es DESCONOCIDA y otorgar se **RECHAZA** hasta que la
+ * declaren —en el registro o por `PATCH /api/account/me`—. Ese es el
+ * comportamiento correcto y no cambia con la bandera: **el gate falla cerrado
+ * siempre**. Preferible bloquear una finalidad opcional que incumplir D-11 en
+ * silencio; el acta es explícita en que rechazar NO degrada el servicio.
  */
 async function grantConsent({ userId, purposeKey, channel = 'app', ip, userAgent, appVersion }) {
   if (!isPurpose(purposeKey)) throw Object.assign(new Error('unknown_purpose'), { status: 400 });

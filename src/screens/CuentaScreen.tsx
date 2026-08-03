@@ -1,6 +1,16 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK, WALLET_RAIL_ENABLED } from '../api';
+import { api, IS_MOCK, WALLET_RAIL_ENABLED, newIdempotencyKey } from '../api';
+import {
+  CardSetupAttemptError,
+  clearCardSetupAttempt,
+  readCardSetupAttempt,
+  writeCardSetupAttempt,
+  type CardSetupAttemptState,
+} from '../api/cardSetupAttempt';
+import { extractApiError } from '../api/errors';
+import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
+import { loadSession, type StoredSession } from '../api/storage';
 import { confirmCardSetup } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import type { BalanceResponse, HistoryEntry, PaymentMethod, StatsResponse, WalletTransaction } from '../api/types';
@@ -13,6 +23,35 @@ import { createInFlightMutex } from '../utils/inFlight';
 import { accountRailView } from '../api/releaseGates';
 
 /** s-account: saldo + tabs Historial / Tarjetas (GET balance, wallet-transactions, payment-methods). */
+
+interface CardSetupAttempt extends CardSetupAttemptState {
+  clientSecret?: string;
+}
+
+type CardRetryStage = 'none' | 'setup' | 'attach';
+
+function currentCardSetupSession(origin: StoredSession): StoredSession | null {
+  const current = loadSession();
+  return current &&
+    current.principal_id === origin.principal_id &&
+    current.family_id === origin.family_id
+    ? current
+    : null;
+}
+
+function assertCardSetupOrigin(origin: StoredSession): StoredSession {
+  const current = currentCardSetupSession(origin);
+  if (!current) throw new CardSetupAttemptError('card_setup_actor_changed');
+  return current;
+}
+
+function initialCardAttempt(): { attempt: CardSetupAttempt | null; error: string | null } {
+  try {
+    return { attempt: readCardSetupAttempt(), error: null };
+  } catch {
+    return { attempt: null, error: 'No podemos verificar el alta anterior de tarjeta. No vamos a crear otra hasta recuperar el estado local.' };
+  }
+}
 
 function txDate(iso: string): string {
   const d = new Date(iso);
@@ -89,9 +128,13 @@ function CategoryPie({ slices }: { slices: Array<[string, number]> }) {
 
 export function CuentaScreen() {
   const toast = useToast();
-  const [adding, setAdding] = useState(false);
+  const initialAttempt = useRef(initialCardAttempt()).current;
+  const [adding, setAdding] = useState(!!initialAttempt.attempt || !!initialAttempt.error);
   const [busyCard, setBusyCard] = useState(false);
   const addCardInFlightRef = useRef(createInFlightMutex());
+  const cardAttemptRef = useRef<CardSetupAttempt | null>(initialAttempt.attempt);
+  const [cardRetryStage, setCardRetryStage] = useState<CardRetryStage>(initialAttempt.attempt?.stage ?? 'none');
+  const [cardSetupBlocked, setCardSetupBlocked] = useState<string | null>(initialAttempt.error);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<CardFieldState>({
     complete: false,
@@ -170,29 +213,127 @@ export function CuentaScreen() {
    */
   async function addCard() {
     if (!addCardInFlightRef.current.tryEnter()) return;
+    if (cardSetupBlocked) {
+      toast(cardSetupBlocked);
+      addCardInFlightRef.current.leave();
+      return;
+    }
+    const origin = loadSession();
+    if (!origin) {
+      toast('Tu sesión ya no está disponible. Volvé a ingresar antes de guardar una tarjeta.');
+      addCardInFlightRef.current.leave();
+      return;
+    }
     setBusyCard(true);
     try {
-      const { client_secret } = await api.createSetupIntent();
-      // Mock: id fresco por alta — con uno fijo, la dedupe del mock haría
-      // no-op silencioso a partir de la segunda tarjeta (éxito falso).
-      let pmId = `pm_mock_${Date.now().toString(36)}`;
-      if (!IS_MOCK) {
-        if (!cardEl) return;
-        const res = await confirmCardSetup(client_secret, cardEl);
-        if ('error' in res) {
-          setCardState((s) => ({ ...s, error: res.error }));
-          return;
-        }
-        pmId = res.paymentMethodId;
+      assertCardSetupOrigin(origin);
+      let attempt = cardAttemptRef.current;
+      if (!attempt) {
+        attempt = {
+          setupKey: newIdempotencyKey(),
+          setAsDefault: pms?.length === 0,
+          stage: 'setup',
+        };
+        // Durable ANTES de red: un reload reusa el mismo SetupIntent.
+        writeCardSetupAttempt(attempt, origin);
+        cardAttemptRef.current = attempt;
+        setCardRetryStage('setup');
       }
-      await api.attachPaymentMethod(pmId, pms?.length === 0);
+
+      if (!attempt.clientSecret && !attempt.paymentMethodId) {
+        const setup = await api.createSetupIntent(attempt.setupKey, assertCardSetupOrigin(origin));
+        assertCardSetupOrigin(origin);
+        attempt = { ...attempt, clientSecret: setup.client_secret };
+        cardAttemptRef.current = attempt;
+      }
+
+      if (!attempt.paymentMethodId) {
+        // En mock el id deriva de la key, para que incluso una excepción entre
+        // materialización y attach vuelva a la MISMA tarjeta.
+        let pmId = `pm_mock_${attempt.setupKey.replace(/[^a-zA-Z0-9]/g, '')}`;
+        if (!IS_MOCK) {
+          if (!cardEl || !attempt.clientSecret) {
+            setCardState((s) => ({ ...s, error: 'Cargá los datos de la tarjeta para continuar.' }));
+            setCardRetryStage('setup');
+            return;
+          }
+          assertCardSetupOrigin(origin);
+          const res = await confirmCardSetup(attempt.clientSecret, cardEl);
+          assertCardSetupOrigin(origin);
+          if ('error' in res) {
+            if (res.definitive) {
+              try {
+                clearCardSetupAttempt(attempt.setupKey, origin);
+                cardAttemptRef.current = null;
+                setCardRetryStage('none');
+              } catch {
+                setCardSetupBlocked('El banco rechazó la tarjeta, pero no pudimos limpiar el intento local. No vamos a reenviarlo.');
+              }
+            } else {
+              setCardRetryStage('setup');
+            }
+            setCardState((s) => ({ ...s, error: res.error }));
+            return;
+          }
+          pmId = res.paymentMethodId;
+        }
+        attempt = { ...attempt, stage: 'attach', paymentMethodId: pmId };
+        cardAttemptRef.current = attempt;
+        // El pm_ no es secreto; persistirlo permite que reload reintente el
+        // attach derivado/idempotente sin crear otro SetupIntent ni tarjeta.
+        writeCardSetupAttempt(attempt, origin);
+        setCardRetryStage('attach');
+      }
+
+      const paymentMethodId = attempt.paymentMethodId;
+      if (!paymentMethodId) throw new Error('payment_method_materialization_ambiguous');
+      assertCardSetupOrigin(origin);
+      await api.attachPaymentMethod(
+        paymentMethodId,
+        attempt.setAsDefault,
+        assertCardSetupOrigin(origin),
+      );
+      assertCardSetupOrigin(origin);
+      // Fresh 201 y replay 200 son el mismo éxito contractual: recién acá
+      // se rota la key de setup y se olvida el pm_ materializado.
+      clearCardSetupAttempt(attempt.setupKey, origin);
+      cardAttemptRef.current = null;
+      setCardRetryStage('none');
+      setCardSetupBlocked(null);
       toast('Tarjeta guardada ✓');
       setAdding(false);
       setCardEl(null);
       setCardState({ complete: false, error: null, empty: true });
       loadPms();
-    } catch {
-      toast('No pudimos guardar la tarjeta');
+    } catch (err) {
+      if (err instanceof CardSetupAttemptError) {
+        if (err.message === 'card_setup_actor_changed') return;
+        const message = 'No pudimos guardar de forma segura el estado de esta alta. No vamos a enviar otra operación.';
+        setCardSetupBlocked(message);
+        toast(message);
+        return;
+      }
+      const failure = extractApiError(err);
+      const definitive = isDefinitiveMutationError(failure.code, failure.status);
+      if (definitive) {
+        const setupKey = cardAttemptRef.current?.setupKey;
+        try {
+          if (setupKey) clearCardSetupAttempt(setupKey, origin);
+          cardAttemptRef.current = null;
+          setCardRetryStage('none');
+        } catch {
+          setCardSetupBlocked('El rechazo fue definitivo, pero no pudimos limpiar el intento local. No vamos a reenviarlo.');
+        }
+      } else {
+        setCardRetryStage(cardAttemptRef.current?.paymentMethodId ? 'attach' : 'setup');
+      }
+      toast(
+        isServiceUnavailable(failure.status)
+          ? 'El servicio no pudo confirmar la tarjeta. Reintentá esta misma operación; no agregues otra.'
+          : definitive
+            ? 'No pudimos guardar la tarjeta. Revisá los datos y probá de nuevo.'
+            : 'No pudimos confirmar si la tarjeta se guardó. Reintentá la misma operación: no vamos a crear otra.',
+      );
     } finally {
       addCardInFlightRef.current.leave();
       setBusyCard(false);
@@ -346,7 +487,23 @@ export function CuentaScreen() {
             {adding ? (
               <div className="card card-p" style={{ marginTop: 6 }}>
                 <div className="sectlabel">Nueva tarjeta</div>
-                {IS_MOCK ? (
+                {cardRetryStage !== 'none' && (
+                  <div className="note note-orange" style={{ marginBottom: 12 }} role="status">
+                    {cardRetryStage === 'attach'
+                      ? 'Esta tarjeta quedó sin confirmar. Reintentá la misma operación: conservamos el mismo registro y no vamos a generar otra.'
+                      : 'Esta alta quedó sin confirmar. Reintentá la misma operación: conservamos su clave.'}
+                  </div>
+                )}
+                {cardSetupBlocked && (
+                  <div className="form-error" role="alert" style={{ marginBottom: 12 }}>
+                    {cardSetupBlocked}
+                  </div>
+                )}
+                {cardRetryStage === 'attach' ? (
+                  <div className="caption" style={{ marginBottom: 12 }}>
+                    La tarjeta ya fue materializada por Stripe. Solo reintentaremos registrar esa misma referencia.
+                  </div>
+                ) : IS_MOCK ? (
                   <div className="note note-teal" style={{ marginBottom: 12 }}>
                     En la demo no pedimos datos reales: se agrega una tarjeta de ejemplo.
                   </div>
@@ -376,9 +533,13 @@ export function CuentaScreen() {
                   <button
                     className="btn btn-primary btn-sm"
                     onClick={addCard}
-                    disabled={busyCard || (!IS_MOCK && !cardState.complete)}
+                    disabled={!!cardSetupBlocked || busyCard || (!IS_MOCK && cardRetryStage !== 'attach' && !cardState.complete)}
                   >
-                    {busyCard ? 'Guardando…' : 'Guardar tarjeta'}
+                    {busyCard
+                      ? 'Guardando…'
+                      : cardRetryStage === 'attach'
+                        ? 'Reintentar la misma tarjeta'
+                        : 'Guardar tarjeta'}
                   </button>
                 </div>
               </div>

@@ -1,0 +1,150 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+class MemoryStorage {
+  values = new Map<string, string>();
+  getItem(key: string) { return this.values.get(key) ?? null; }
+  setItem(key: string, value: string) { this.values.set(key, value); }
+  removeItem(key: string) { this.values.delete(key); }
+}
+
+const storage = new MemoryStorage();
+Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
+
+const { saveSession } = await import('./storage');
+const { api, IS_MOCK, WALLET_PAY_ENABLED, WALLET_RAIL_ENABLED } = await import('./index');
+
+function jsonResponse(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+beforeEach(() => {
+  expect(IS_MOCK).toBe(false);
+  saveSession({
+    access_token: 'access-contract',
+    refresh_token: 'refresh-contract',
+    family_id: 'family-contract',
+    principal_id: 'user-contract',
+    user: {
+      id: 'user-contract',
+      payme_id: 'payme_mx_contract',
+      email: 'contract@example.com',
+      first_name: 'Con',
+      last_name: 'Trato',
+    },
+  });
+});
+
+afterEach(() => {
+  storage.values.clear();
+  vi.unstubAllGlobals();
+});
+
+describe('fachada real: contrato idempotente aditivo', () => {
+  it('mantiene apagados wallet, Apple Pay y Google Pay también fuera de release real', () => {
+    expect(WALLET_RAIL_ENABLED).toBe(false);
+    expect(WALLET_PAY_ENABLED).toBe(false);
+  });
+
+  it('rechaza OCR por encima de los 8 MiB que acepta el backend antes de red', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(api.scanTicket({ size: 8 * 1024 * 1024 + 1 } as Blob))
+      .rejects.toThrow('hasta 8 MiB');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([200, 201])('acepta invitación %i y envía la key obligatoria del facade', async (status) => {
+    const body = {
+      invitation: {
+        id: 'invitation-id',
+        invitation_type: 'link',
+        status: 'pending',
+        expires_at: '2026-08-04T00:00:00.000Z',
+        created_at: '2026-08-03T00:00:00.000Z',
+      },
+      link: 'https://payme.test/#/mesa/PM-123?t=token',
+      ...(status === 200 && { idempotent: true }),
+    };
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse(body, status));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(api.createInvitation('PM-123', 'invitation-idem-key-1')).resolves.toEqual(body);
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(init.body as string)).toEqual({
+      type: 'link',
+      idempotency_key: 'invitation-idem-key-1',
+    });
+  });
+
+  it('envía la misma key también al invitar por payme_id', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse({
+      invitation: {
+        id: 'invitation-id',
+        invitation_type: 'in_app',
+        status: 'pending',
+        expires_at: '2026-08-04T00:00:00.000Z',
+        created_at: '2026-08-03T00:00:00.000Z',
+      },
+    }, 201));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api.inviteFriend('PM-123', 'payme_mx_sofi', 'friend-idem-key-1');
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(init.body as string)).toEqual({
+      type: 'in_app',
+      invited_payme_id: 'payme_mx_sofi',
+      idempotency_key: 'friend-idem-key-1',
+    });
+  });
+
+  it.each([200, 201])('tipa attach %i y setup transporta su key', async (attachStatus) => {
+    const setup = { setup_intent_id: 'seti_contract', client_secret: 'seti_contract_secret' };
+    const attached = {
+      payment_method: {
+        id: 'payment-method-id',
+        stripe_payment_method_id: 'pm_contract',
+        brand: 'visa',
+        bank_name: null,
+        type: 'credit',
+        last_four: '4242',
+        exp_month: 8,
+        exp_year: 2030,
+        is_default: true,
+        display: 'Visa · Crédito · •••• 4242',
+      },
+      ...(attachStatus === 200 && { idempotent: true }),
+    };
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
+      url.endsWith('/setup-intent')
+        ? jsonResponse(setup, 200)
+        : jsonResponse(attached, attachStatus));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(api.createSetupIntent('setup-idem-key-1')).resolves.toEqual(setup);
+    await expect(api.attachPaymentMethod('pm_contract', true)).resolves.toEqual(attached);
+    const setupInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const attachInit = fetchMock.mock.calls[1][1] as RequestInit;
+    expect(JSON.parse(setupInit.body as string)).toEqual({ idempotency_key: 'setup-idem-key-1' });
+    expect(JSON.parse(attachInit.body as string)).toEqual({
+      stripe_payment_method_id: 'pm_contract',
+      set_as_default: true,
+    });
+  });
+
+  it('rechaza 2xx malformados y conserva una señal de contrato, no un falso éxito', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/setup-intent')) return jsonResponse({}, 200);
+      if (url.endsWith('/payment-methods')) return jsonResponse({}, 201);
+      return jsonResponse({ invitation: {} }, 201);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(api.createSetupIntent('setup-malformed-key')).rejects.toThrow('contract_response_invalid');
+    await expect(api.attachPaymentMethod('pm_malformed')).rejects.toThrow('contract_response_invalid');
+    await expect(api.createInvitation('PM-123', 'invite-malformed-key')).rejects.toThrow('contract_response_invalid');
+  });
+});

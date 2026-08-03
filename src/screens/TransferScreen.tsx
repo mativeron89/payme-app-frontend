@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
-  idempotencyKeyFor,
+  acquireMonetaryIntent,
+  completeMonetaryIntent,
   prepareMonetaryRequest,
-  rotateIdempotencyKey,
   scopeForActor,
   shouldRotateOnError,
   useMoneyActor,
+  type MonetaryIntentHandle,
 } from '../api/idempotency';
 import { extractApiError } from '../api/errors';
 import type { BalanceResponse, Friend } from '../api/types';
@@ -85,17 +86,18 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
     }
     setBusy(true);
     setError(null);
+    let intent: MonetaryIntentHandle | null = null;
     try {
-      const key = await idempotencyKeyFor(transferScope, 'transfer');
+      intent = await acquireMonetaryIntent(transferScope, 'transfer');
       const request = {
         amount_cents: amountCents,
         to_payme_id: to.payme_id,
         ...(concept && { concept }),
-        idempotency_key: key,
+        idempotency_key: intent.key,
       };
-      await prepareMonetaryRequest(transferScope, 'transfer', request);
-      const r = await api.createTransfer(request);
-      await rotateIdempotencyKey(transferScope);
+      await prepareMonetaryRequest(transferScope, 'transfer', intent, request);
+      const r = await api.createTransfer(request, { recipientUserId: to.id, paymeId: to.payme_id }, intent);
+      await completeMonetaryIntent(transferScope, 'transfer', intent);
       // Si el backend replayó un envío YA hecho, decirlo. Anunciarlo como
       // nuevo hacía creer que se mandó dos veces (o que faltaba mandarlo).
       toast(
@@ -106,7 +108,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
       navigate('cuenta');
     } catch (err) {
       const { code, extra, status } = extractApiError(err);
-      if (shouldRotateOnError(code, status)) await rotateIdempotencyKey(transferScope);
+      if (intent && shouldRotateOnError(code, status)) await completeMonetaryIntent(transferScope, 'transfer', intent);
       if (code === 'insufficient_funds') {
         const available = typeof extra.available === 'number' ? extra.available : 0;
         setError(`Saldo insuficiente: tenés ${formatMXN(available)} disponibles.`);

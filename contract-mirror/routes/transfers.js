@@ -12,7 +12,7 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { createTransfer, validateBody } = require('../schemas');
 const notifs = require('../services/notifications');
-const { centsToDisplay } = require('../utils/money');
+const { centsToDisplay, sumCents } = require('../utils/money');
 const { payloadHash, hashesMatch, PAYLOAD_KEYS } = require('../utils/idempotency');
 const logger = require('../utils/logger');
 
@@ -112,7 +112,7 @@ router.post('/', validateBody(createTransfer), async (req, res, next) => {
 
         if (!fromW || !toW) throw Object.assign(new Error('wallet_not_found'), { status: 500 });
         // v2.11 (A5): el saldo reservado como garantía no es transferible.
-        const fromAvailable = Number(fromW.balance_cents) - Number(fromW.held_balance_cents || 0);
+        const fromAvailable = sumCents(fromW.balance_cents, -BigInt(fromW.held_balance_cents || 0));
         if (fromAvailable < amount_cents) {
           throw Object.assign(new Error('insufficient_funds'), {
             status: 402,
@@ -131,8 +131,8 @@ router.post('/', validateBody(createTransfer), async (req, res, next) => {
         );
         const transfer = tRows[0];
 
-        const newFromBal = Number(fromW.balance_cents) - amount_cents;
-        const newToBal   = Number(toW.balance_cents)   + amount_cents;
+        const newFromBal = sumCents(fromW.balance_cents, -amount_cents);
+        const newToBal   = sumCents(toW.balance_cents, amount_cents);
         await client.query(`UPDATE wallets SET balance_cents=$1, updated_at=NOW() WHERE id=$2`, [newFromBal, fromW.id]);
         await client.query(`UPDATE wallets SET balance_cents=$1, updated_at=NOW() WHERE id=$2`, [newToBal, toW.id]);
 

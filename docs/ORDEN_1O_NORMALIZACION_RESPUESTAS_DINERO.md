@@ -1,7 +1,11 @@
 # ORDEN 1O — normalización contractual de respuestas monetarias
 
-Fecha: 2026-08-02. Alcance: frontera de respuestas de App Frontend. El
-`contract-mirror/` se auditó en solo lectura y no fue modificado.
+Fecha inicial: 2026-08-02. Actualización de cierre: 2026-08-03. Alcance:
+frontera de respuestas de App Frontend. El espejo fue refrescado por copia
+desde App Backend `e8a3faf2f520b249cbe6001f14ef70230a405695` (v2.28.8):
+67/67 archivos con fuente quedaron byte-idénticos. El README del espejo es
+documentación propia y no tiene par en el backend. Esto es evidencia local;
+no acredita push, deploy ni producción.
 
 ## Reglas de frontera
 
@@ -21,16 +25,26 @@ Fecha: 2026-08-02. Alcance: frontera de respuestas de App Frontend. El
 | Endpoint | Forma real fresh | Forma real replay/consulta | Normalización aceptada | Binding y cierre seguro |
 | --- | --- | --- | --- | --- |
 | `POST /mesas` | `mesa` es fila `RETURNING`; `total_cents` BIGINT puede serializarse decimal. `guarantee` trae método/`open` o `requires_action`. `routes/mesas.js:106-111,185-195` | Idempotencia de alta no agrega un shape distinto publicado en esta ruta. | `total_cents` decimal → entero seguro; UUID/código/fechas/enums estrictos. | Igualdad exacta contra total, división, participantes y método solicitados; estado mesa↔garantía coherente. |
-| `POST /mesas/:code/pay` tarjeta | Fresh incluye `id`, `gross_amount_cents`, `tip_cents`, secreto/estado/`requires_action`; omite `payment_type`. `routes/mesas.js:878-892` | Replay selecciona `id,status,stripe_client_secret,gross_amount_cents` y puede incluir cuenta Connect; omite tip/tipo. `routes/mesas.js:455-468,1055-1059` | BIGINT decimal → entero seguro; `payment_type` ausente es válido; si llega, debe coincidir. | Fresh: gross+tip exactos del request-bound expectation. Replay sin `tip_amount_cents`: fail-closed (G-20), sin inventar la propina ni confirmar 3DS. |
-| `POST /topup/oxxo` | `{id,status,amount_cents,amount_display,voucher_*}`. `routes/topup.js:182-190` | Replay retorna la fila con `method,amount_cents,status` y voucher sólo si ya existe. `routes/topup.js:23-30,116-118` | Centavos exactos; display local; voucher opcional en replay. | Endpoint fija método fresh; replay debe coincidir si lo declara. Sin voucher para `processing`, se retiene journal y no se muestra referencia ficticia. |
-| `POST /topup/card` | `{id,status,amount_cents,amount_display}` más `requires_action`/`client_secret`. `routes/topup.js:282-290` | Replay fila cruda con `method,amount_cents,status`, sin display ni `requires_action`. `routes/topup.js:23-30,211-212` | DTO único con método esperado, centavos y display local; `requires_action` permanece ausente si el contrato no lo envía. | Monto exacto; método verificable cuando aparece. Status `processing`/`requires_action` queda ambiguo, nunca anuncia saldo ni fabrica 3DS. |
+| `POST /mesas/:code/pay` | Fresh incluye `id`, gross, propina, riel y, en consumo, `items[]` con fracción+monto. La compatibilidad con una omisión histórica del tipo sólo se tolera ante una firma Stripe fresh completa (`client_secret`, `stripe_status`, `requires_action`). | `attemptReplayResponse` publica tip, tipo, gross, estado, `client_secret`/`requires_action`, cuenta Connect y `items[]` hidratados para consumo. | `tip_cents` y `tip_amount_cents` se normalizan a un valor único y deben coincidir si llegan ambos. El código wallet histórico exige tipo explícito; los campos Stripe neutros de replay se eliminan del DTO y cualquier firma accionable inconsistente se rechaza. | Consumo: set exacto de IDs, fracciones y montos; `items.amount + tip = gross`. Igualdad: `gross-tip` debe coincidir con un slot `available` o `claimed_by_me`, nunca uno ajeno. El preview jamás acredita. G-20 quedó resuelto en el checkpoint fuente. |
+| `POST /topup/oxxo` | `{id,status:'processing',amount_cents,amount_display,voucher_reference,voucher_expires_at}`. `routes/topup.js:182-190` | Replay retorna fila con `method,amount_cents,status` y voucher sólo si ya existe. `routes/topup.js:23-30,116-118` | Centavos exactos; display local. Fresh se acredita por la firma completa de voucher; replay exige `method:'oxxo'`. Nunca se infiere el riel sólo por el endpoint invocado. | Un replay activo sin voucher lanza `money_response_unbound` dentro del callback protegido: el journal vuelve a `ambiguous` y reintenta la misma key; nunca queda en `sending` ni fabrica referencia. |
+| `POST /topup/card` | `{id,status,amount_cents,amount_display}` más `requires_action:boolean` y secreto sólo cuando corresponde. `routes/topup.js:282-290` | Replay fila cruda con `method,amount_cents,status`, sin display ni `requires_action`. `routes/topup.js:23-30,211-212` | Fresh se acredita por `requires_action`; replay exige `method:'card'`. Nulos de columnas OXXO se eliminan y el display se deriva localmente. | Monto y riel exactos; un shape OXXO no puede cruzarse como tarjeta. `processing` sin evidencia terminal queda ambiguo y nunca anuncia saldo ni fabrica 3DS. |
 | `GET /topup/:id` | — | Incluye `id,method,amount_cents,status` y display derivado. `routes/topup.js:294-305` | Centavos exactos, método/status enum cerrado, display local. | ID, monto y método deben igualar la expectativa del polling; mismatch queda ambiguo. |
-| `POST /transfers` | Fresh incluye `id,amount_cents,concept,completed_at,to`. `routes/transfers.js:202-210` | Replay retorna fila sin `to` (`id,amount_cents,concept,status,completed_at`). `routes/transfers.js:22-30,61-65` | BIGINT decimal → entero seguro; display local; enums cerrados. | Fresh ata monto, concepto y `to.payme_id`. Replay sin destinatario queda fail-closed y journal retenido (G-21). |
+| `POST /transfers` | Fresh incluye `id,amount_cents,concept,completed_at,to`. `routes/transfers.js:202-210` | Replay incluye `to_user_id` además de monto, concepto, `status` y `completed_at`. `routes/transfers.js:22-30,61-65` | BIGINT decimal → entero seguro; display local; UUID y estado cerrados. | Expectativa `{recipientUserId,paymeId}` desde `Friend`: fresh liga por `to.payme_id`; replay por `to_user_id` y exige `status='completed'`; ambos ligan monto, concepto y `completed_at`. G-21 queda resuelto. |
 
 ## Evidencia de pruebas
 
 `src/api/moneyGuards.test.ts` fija las formas anteriores (incluidos BIGINT
-string y campos ausentes) y prueba mismatch de monto/tip/destinatario,
+string, nulos de replay y campos ausentes), centavo completador, exclusión de
+slots ajenos, aliases de propina, separación wallet/Stripe, firmas cruzadas de
+topup y binding fresh/replay de destinatario. Prueba mismatch de monto/tip/destinatario,
 strings no canónicos, negativos, exponentes, enteros inseguros, métodos y
 estados desconocidos. Las respuestas rechazadas no llegan a los call sites:
 las fachadas de `src/api/index.ts` normalizan antes de resolver la promesa.
+`src/api/mock/mockApi.idempotency.test.ts` verifica que OXXO reusa referencia
+y que tarjeta no acredita saldo dos veces al repetir la misma key; un payload
+distinto —incluido cambiar de OXXO a tarjeta— devuelve
+`idempotency_conflict` bajo el namespace compartido, igual que el backend.
+
+Los flujos wallet/topup/transfer se conservan como historia contractual, pero
+quedan fuera del MVP por el plan ratificado de wallet durmiente. Este documento
+no autoriza reactivarlos ni implementa su apagado post-auditoría.

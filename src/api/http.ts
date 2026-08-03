@@ -1,4 +1,4 @@
-import { clearCurrentSession, createSession, isCurrentSession, loadSession, replaceCurrentSession, saveSession, type StoredSession } from './storage';
+import { createSession, invalidateSession, isCurrentSession, loadSession, persistSessionTombstone, replaceCurrentSession, saveSession, type StoredSession } from './storage';
 import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenPair } from './types';
 
 /**
@@ -12,6 +12,7 @@ import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenP
  */
 
 const BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const SESSION_LOCK = 'payme-session-state';
 
 let onSessionExpiredCb: (() => void) | null = null;
 const refreshInFlight = new Map<string, Promise<StoredSession | null>>();
@@ -29,6 +30,12 @@ export class HttpError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+async function withSessionLock<T>(action: () => Promise<T> | T): Promise<T | null> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) return null;
+  return locks.request(SESSION_LOCK, { mode: 'exclusive' }, action);
 }
 
 async function parseBody(res: Response): Promise<ApiError | null> {
@@ -92,9 +99,7 @@ async function tryRefresh(session: StoredSession): Promise<StoredSession | null>
   if (existing) return existing;
   const run = async () => {
     if (!isCurrentSession(session)) return null;
-    const lock = globalThis.navigator?.locks;
-    if (!lock) return null;
-    return lock.request(`payme-refresh-${session.family_id}`, { mode: 'exclusive' }, async () => {
+    return withSessionLock(async () => {
       const current = loadSession();
       if (!current || current.family_id !== session.family_id || current.principal_id !== session.principal_id) return null;
       if (current.refresh_token !== session.refresh_token) return current;
@@ -144,7 +149,16 @@ export async function httpRequest<T>(
       if (refreshed && refreshed.family_id === session.family_id && refreshed.principal_id === session.principal_id && isCurrentSession(refreshed)) {
         return rawRequest<T>(method, path, body, refreshed.access_token, timeoutMs);
       }
-      if (clearCurrentSession(session)) onSessionExpiredCb?.();
+      // El tombstone se escribe antes de esperar el lock. Así un refresh de
+      // otra pestaña que ya está en red no puede restaurar esta familia.
+      let invalidatedCurrent = false;
+      try {
+        persistSessionTombstone(session);
+        invalidatedCurrent = (await withSessionLock(() => invalidateSession(session))) ?? false;
+      } catch {
+        // persistSessionTombstone conserva un marcador fail-closed en memoria.
+      }
+      if (invalidatedCurrent) onSessionExpiredCb?.();
     }
     throw err;
   }
@@ -189,7 +203,11 @@ export async function httpLogin(email: string, password: string): Promise<Stored
   });
   // La UI y httpRequest leen la misma fuente. No se publica una sesión que
   // localStorage no pudo confirmar con round-trip.
-  saveSession(session);
+  const saved = await withSessionLock(() => saveSession(session));
+  // En un navegador sin Web Locks no existe refresh concurrente (tryRefresh
+  // falla cerrado) y logout deja el tombstone sin borrar a ciegas. Persistir
+  // el login explícito sigue siendo seguro y evita bloquear navegadores viejos.
+  if (saved === null) saveSession(session);
   return session;
 }
 
@@ -200,7 +218,8 @@ export async function httpRegister(data: RegisterRequest): Promise<StoredSession
     refresh_token: r.refresh_token,
     user: r.user,
   });
-  saveSession(session);
+  const saved = await withSessionLock(() => saveSession(session));
+  if (saved === null) saveSession(session);
   return session;
 }
 
@@ -209,6 +228,10 @@ export async function httpLogout(): Promise<void> {
   // Cerrar la UI no espera la red: un logout colgado no puede dejar a la
   // persona firmando operaciones 30s más. El bearer capturado se revoca en
   // background y nunca se lee una sesión nueva para esa llamada.
-  if (!session || !clearCurrentSession(session)) return;
+  if (!session) return;
   void rawRequest('POST', '/auth/logout', undefined, session.access_token, 3_000).catch(() => undefined);
+  // Invalidación durable inmediata; la limpieza física se serializa con el
+  // mismo lock que refresh/login. Si apareció otra familia, no se borra.
+  persistSessionTombstone(session);
+  await withSessionLock(() => invalidateSession(session));
 }

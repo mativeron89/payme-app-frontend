@@ -1,152 +1,166 @@
-# contract-mirror/ — espejo de solo lectura del contrato del App Backend
+# contract-mirror — App Backend → App Frontend
 
-**Refrescado el 2026-07-25 desde v2.26.0 (PQ-1 · consentimiento, PUBLICADO):**
-nuevos `routes/consent.js`, `services/consent.js`, `db/migrate_consent_v2.26.sql`
-y `legal/README.md`; `schemas/index.js` suma el `idempotency_key` opcional de
-`createMesa` (B-06 §4.1, v2.25).
+Espejo **de solo lectura** del contrato que el App Frontend consume. La fuente
+de verdad continúa siendo el código del App Backend; esta carpeta no se importa
+desde `src/` y nunca se corrige a mano.
 
-Contrato de PQ-1, tal como lo publicó el backend:
-`GET /api/legal` (público, qué textos hay y su versión vigente) ·
-`GET /api/legal/:kind` (público, texto vigente completo con `version`, `hash` y
-`body`; `kind` ∈ `aviso_privacidad` | `aviso_campanas`) ·
-`GET /api/legal/:kind/versions/:version` (histórico) ·
-`GET /api/account/consents` (sesión, estado de todas las finalidades; hoy solo
-`perfilado_campanas`) · `POST /api/account/consents/:purpose/grant` y `/revoke`
-(sesión, aceptan `channel` ∈ `app`|`web`|`soporte` y `app_version` opcionales).
-El `hash` que devuelve el texto vigente es el MISMO que queda grabado como
-prueba en el consentimiento: hay que mostrar siempre el vigente.
+## Procedencia congelada
 
-⚠️ **Este contrato todavía NO se consume, a pedido del propio backend.**
-`grant` devuelve **403 `age_verification_required` para TODOS** porque nadie
-tiene fecha de nacimiento cargada (D-11 falla cerrado a propósito); se destraba
-con **PQ-2**, que hoy está **bloqueado**: `register` no acepta `birth_date` y
-ninguna ruta la escribe (ver **G-13** en `GAPS.md`). Además los dos textos
-legales vigentes son `0.1.0-placeholder` y lo dicen en su primera línea: no se
-le muestran a un usuario real.
+- Fecha del refresh: **2026-08-03**.
+- Fuente local: `../payme-app-backend`.
+- Commit exacto: `e8a3faf2f520b249cbe6001f14ef70230a405695`.
+- Versión de `package.json`: **2.28.8**.
+- Rama fuente: `codex/audit-2026-08-02-app-backend`.
 
-**Procedencia:** copiado tal cual de `../payme-app-backend` **v2.16.0** (CI
-verde; `/health` del backend vivo de Railway confirma 2.16.0 desplegado,
-2026-07-22). Fuente de verdad: el código real de ese repo. Este espejo existe
-para que el front pueda consultar el contrato sin abrir el repo del backend en
-cada sesión.
-
-**Refrescado el 2026-07-22 desde v2.16.0 (D4 · tarjeta guardada, PUBLICADO):**
-cambiaron `schemas/index.js`, `routes/mesas.js`, `routes/payment-methods.js`,
-`routes/webhooks.js` y `docs/settlement.js.ref`. El contrato D4 real difiere
-del texto del acta: `GET /payment-methods` conserva `id` (uuid interno),
-`last_four`, `bank_name`, `type` y `display`, y AGREGA
-`stripe_payment_method_id` (`pm_…`); la garantía (`POST /mesas`) ahora acepta
-**`payment_method_id` (uuid) para tarjeta guardada** además de
-`stripe_payment_method_id` para tarjeta nueva; `save_payment_method`
-(default false) en garantía y pago guarda la tarjeta tipeada (incluido el
-camino 3DS vía webhook). Cierra G-04/G-05 y disuelve G-06 (los ids de
-topup/default/delete siguen siendo uuid).
-
-**Verificado contra v2.15.0 el 2026-07-22 (D6, calendario de México):** los
-archivos espejados quedaron byte-idénticos en esa versión — D6 cambia
-valores/semántica (`service_window` en español, `business_date` con corte
-05:00 México, atribución por apertura de la mesa) SOLO en los eventos del
-outbox hacia el dashboard (`services/eventEmitter.js`,
-`services/aggregateEmitter.js`, `utils/eventPrivacy.js`, que este espejo no
-rastrea a propósito: son contrato app→dashboard, no del comensal). Verificado
-por grep: ninguna ruta ni schema del contrato del comensal expone
-`service_window`/`business_date`/`hour_bucket`, y `src/` tampoco los consume.
-
-**Refrescado el 2026-07-20** desde v2.14.3 (venía congelado en v2.13.0 del
-2026-07-18). Cambiaron: `middleware/auth.js`, `routes/invitations.js`,
-`routes/mesas.js` y `docs/settlement.js.ref` (fixes v2.14.1/.2 de SQL contra
-Postgres real + outbox Etapa 2); se agregaron `docs/CHANGELOG_v2.14.md` y las
-migraciones de outbox. `schemas/index.js` NO cambió: el contrato de requests
-sigue igual que en v2.13.
+Ese commit es un candidato **local** de auditoría. No se afirma push, CI remoto,
+deploy, Railway, Stripe real ni producción. El backend registró dos corridas
+locales de 30 suites y 549 tests, pero permanece NO-GO técnico/de release por
+los bloqueos que se enumeran abajo.
 
 ## Reglas
 
-1. **SOLO LECTURA.** Nada de esta carpeta se edita, se "arregla" ni se importa
-   desde `src/`. Si el contrato parece tener un problema, se anota en
-   `../GAPS.md` y Mati lo lleva al dueño del contrato.
-2. **Se refresca, no se parchea.** Cuando el backend cambie de versión, se
-   vuelve a copiar desde `../payme-app-backend` y se actualiza la fecha y la
-   versión de este README.
-3. Lo que no está acá (ni en el repo del backend), **no existe**: no se
-   inventan endpoints, campos ni shapes.
+1. El mirror se **refresca copiando**; no se parchea.
+2. Todo archivo espejado, salvo este README, debe ser byte-idéntico a su fuente.
+3. Si `src/` necesita un campo o endpoint inexistente, se registra en
+   `../GAPS.md`; el front no inventa contrato ni lo simula en silencio.
+4. Los archivos de `db/` y `services/` son evidencia para comprender autoridad,
+   retries y estados; no convierten detalles internos en API pública.
+5. Un hash local no acredita que esa versión esté publicada. La procedencia se
+   actualiza recién al refrescar desde otro commit concreto.
 
-## Qué hay
+## Qué se espeja
 
-| Carpeta | Contenido | Para qué lo usa el front |
+| Destino | Fuente | Motivo |
 | --- | --- | --- |
-| `schemas/index.js` | Schemas Zod de TODOS los request bodies/queries | Tipos de requests, validaciones, límites (topup min $50/max $10.000, etc.) |
-| `routes/*.js` | Las 16 rutas Express (los response shapes viven acá) | Endpoints exactos, códigos de error, shapes de respuesta |
-| `middleware/auth.js` | `requireAuth` / `guestOrAuth` / `requireMesaParticipant` | Contrato de auth: `Bearer` JWT, guest por `?t=` o `X-Guest-Token` |
-| `utils/money.js` | Helpers de dinero en centavos | **Se replica EXACTO en `src/utils/money.ts`** (regla dura #5) |
-| `utils/stateMachine.js` | FSM de mesa / payment_attempt / mesa_item | Estados válidos que la UI tiene que representar |
-| `db/schema.sql` + migraciones (garantía, abono, outbox v2.12, outbox Etapa 2 v2.14) | Columnas y CHECKs reales | Referencia de campos cuando una ruta devuelve `SELECT *` |
-| `docs/` | READMEs v2.10/v2.5.2, CHANGELOGs v2.11/v2.13/**v2.14**, `settlement.js.ref` | Cómo levantar el backend local, modo mock STP, modelo de garantía |
+| `routes/*.js` | todas las rutas del backend | paths, auth, errores y response shapes |
+| `schemas/index.js` | schema Zod real | request bodies, límites y enums |
+| `middleware/auth.js` | middleware real | Bearer, guest token y participación |
+| `db/schema.sql`, `db/migrate_*.sql` | schema y migraciones | CHECKs, estados, columnas y unicidad |
+| `services/connect.js` | gate Connect | cuenta conectada y merchant-of-record |
+| `services/cardEligibility.js` | política de tarjeta | marca/funding/ownership fail-closed |
+| `services/paymentIntentContract.js` | contrato Stripe durable | campos y evidencia de PaymentIntent |
+| `services/paymentAttemptReconciler.js` | reconciliación | replays y estados ambiguos |
+| `services/paymentMethodLifecycle.js`, `savedCards.js` | lifecycle de PM | attach/detach y tarjeta activa |
+| `services/invitationAuthority.js` | autoridad social | actor, destinatario y token canónico |
+| `services/itemClaims.js` | tenencia de consumos | locks, fracciones y casilleros |
+| `services/topupProcessor.js` | contrato legacy de topup | replay mientras el wallet siga dormido |
+| `services/consent.js` | PQ-1/PQ-2 | consentimiento y edad autoritativa |
+| `utils/money.js`, `stateMachine.js`, `idempotency.js` | primitivas compartidas | centavos, FSM y hash de requests |
+| `docs/settlement.js.ref` | `services/settlement.js` | referencia de cierre/garantía |
 
-**Seed:** el backend NO tiene seed (verificado 2026-07-18). Los datos de demo
-salen del adaptador mock del front (`VITE_MOCK=1`).
+Los changelogs y READMEs históricos se conservan como contexto, no como estado
+vigente. `docs/CHANGELOG_v2.28.8.md` describe el candidato fuente.
 
-## Resumen del contrato (verificado contra el código, no contra la maqueta)
+## Contrato vigente relevante
 
-### Base y auth
-- Base: `http://localhost:3000` · prefijo `/api` · CORS por `FRONTEND_ORIGIN`.
-- `POST /api/auth/register` `{email, phone?, password, first_name, last_name}` → `201 {user, access_token, refresh_token, expires_in}`
-- `POST /api/auth/login` `{email, password}` → `{access_token, refresh_token, expires_in}`
-- `POST /api/auth/refresh` `{refresh_token}` → **rota** el refresh token (el cliente DEBE reemplazarlo; reuso del viejo = sesión revocada, 401 `refresh_reuse_detected`).
-- `POST /api/auth/logout` (Bearer) → `{revoked}`
-- Guest: sin login, con `?t=<token>` en query o header `X-Guest-Token` (solo rutas de mesa con `guestOrAuth`).
+### Configuración y capacidades
 
-### Config
-- `GET /api/config` → `{version, currency, stripe_publishable_key, mesa_hold_seconds, payment_hold_seconds, invitation_expiry_seconds, item_lock_seconds, features}`
-- `GET /api/config/stripe-key` → `{publishable_key}`
+`GET /api/config` publica la versión desde `package.json` y expone:
 
-### Mesas (núcleo)
-- `POST /api/mesas` (auth) — **A-1**: exige `guarantee_method: 'card'|'wallet'` (+ `stripe_payment_method_id` si card). Valida `sum(items) === total_cents`. Respuestas:
-  - `201 {mesa:{...status:'open'|'pending_auth'}, guarantee:{method, status:'open'|'requires_action', client_secret?}}` — `requires_action` = 3DS: el front confirma el `client_secret` con Stripe.js y la mesa pasa a `open` vía webhook.
-  - `402 {error:'guarantee_failed', reason, available?, required?}` — sin garantía no hay mesa (D1).
-- `GET /api/mesas/open` (auth) → `{mesas:[{id, code, full_name, restaurant, total_cents, paid_amount_cents, pct_paid, status, expires_at}]}`
-- `GET /api/mesas/:code` (guestOrAuth + participante) → `{mesa:{..., items:[{id, name, category, price_cents, quantity, status, locked_by_me, lock_expires_at}], division_slots?, active_staff, my_role}}`
-- `POST /api/mesas/:code/items/lock` `{item_ids}` → `{locked, lock_token, lock_expires_at}` · 409 `item_already_locked`
-- `POST /api/mesas/:code/pay` `{payment_method_id?|stripe_payment_method_id?, payment_type:'card'|'apple_pay'|'google_pay'|'wallet', item_ids, lock_tokens?, tip_cents, tip_to_staff_id?, idempotency_key}` →
-  - wallet: `201 {attempt:{id, gross_amount_cents, gross_display, status:'processed', payment_type}}` · `402 insufficient_funds {available, required}` (descuenta el saldo retenido) · guest+wallet: `401 wallet_requires_auth`
-  - tarjeta: `201 {attempt:{id, gross_amount_cents, client_secret, status, stripe_status, requires_action}}`
-  - división `igual`: sin `item_ids`, el pago reclama un slot (`409 no_slots_available`).
-- `POST /api/mesas/:code/invitations` (solo opener) `{type:'link'|'in_app', invited_user_id?/invited_payme_id?}` → `201 {invitation, link?}` — el `link` (`/mesa/:code?t=<raw>`) se devuelve UNA sola vez.
+- `features.apple_pay: false`;
+- `features.google_pay: false`;
+- `features.stp_dispersal` sólo como capacidad de dispersión del restaurante;
+- `features.ocr_real` desde el modo OCR;
+- `features.account_birth_date` con `supported`,
+  `registration_required`, `write_once` y
+  `adulthood_server_authoritative`.
 
-### Estados que la UI representa (FSM real)
-- Mesa: `pending_auth → open → partially_paid → fully_paid → settling → settled → dispersing → completed`, más `expired`, `auth_failed`, `cancelled`.
-- Pago: `pending → requires_action|processing → succeeded → processed` (más `failed/cancelled/refunded`).
-- Ítem: `available → locked → paid|released`.
-- **A-2**: si la mesa expira sin completarse, la garantía del organizador captura el faltante (`captured_shortfall_cents`; notificación `mesa_shortfall_charged`). El restaurante SIEMPRE cobra el total. La pantalla de expirada dice "tu garantía cubrió $X" — nunca "no se cobra a nadie".
+Apple Pay y Google Pay están ratificados como MUST post-auditoría, pero este
+commit no implementa una hoja nativa ni prueba física. `false` es la única
+capacidad honesta hasta que eso exista.
 
-### Cuenta / wallet
-- `GET /api/account/balance` → `{balance_cents, balance_display, clabe, currency}` (ojo: no expone `held_balance_cents` — el disponible real puede ser menor si hay garantía wallet activa).
-- `GET /api/account/movements` (+`/:id`), `GET /api/account/wallet-transactions` (tipos: `topup_oxxo|topup_card|topup_spei|transfer_in|transfer_out|payment_mesa|refund_mesa|tip_received|tip_payout|adjustment_credit|adjustment_debit`), `GET /api/account/history`, `GET /api/account/stats`.
+### Autenticación y cuenta
 
-### Topup — **A-3: tres vías**
-- `POST /api/topup/oxxo` `{amount_cents (5000–1000000), idempotency_key}` → `201 {topup:{..., voucher_reference, stripe_voucher_url, voucher_expires_at}}`
-- `POST /api/topup/card` `{amount_cents, payment_method_id, idempotency_key}` → `201 {topup, requires_action, client_secret?}`
-- SPEI: `GET /api/wallet/clabe` → `{clabe, banco:'STP', beneficiario:'PayMe', instrucciones}` (CLABE virtual; el abono se acredita por webhook STP).
-- `GET /api/topup` y `GET /api/topup/:id` para estado.
+- Registro y login devuelven access/refresh tokens; refresh rota la sesión y
+  detecta reutilización.
+- `birth_date` sigue gobernada por la capability de PQ-2; el servidor decide
+  adultez y la fecha es write-once.
+- Los decoders del front deben rechazar cualquier 2xx que no contenga el shape
+  contractual completo; un 2xx malformado no es éxito.
 
-### Tarjetas
-- `POST /api/payment-methods/setup-intent` → `{setup_intent_id, client_secret}` (Stripe Elements para agregar tarjeta sin cobrar; crea el customer lazy).
-- `GET /api/payment-methods` → `{payment_methods:[{id, brand, bank_name, type, last_four, exp_month, exp_year, is_default, display}]}`
-- `POST /api/payment-methods` `{stripe_payment_method_id, set_as_default?}` · `DELETE /:id` · `PATCH /:id/default`
+### Mesas, garantía y pagos
 
-### Social
-- Friends: `GET /`, `POST /` (`{email | payme_id}`), `GET /search?q=`, `DELETE /:friendId`.
-- Groups: CRUD `/api/groups` + `/:id/members` (miembros deben ser amigos).
-- Transfers: `POST /api/transfers` `{amount_cents, to_payme_id|to_email|to_user_id, concept?, idempotency_key}` → `201 {transfer}` · `402 insufficient_funds`; `GET /` y `/:id`.
-- Invitations (in_app): `GET /api/invitations`, `POST /:id/accept`, `POST /:id/cancel`.
+- `POST /api/mesas` y `POST /api/mesas/:code/pay` exigen evidencia idempotente
+  durable. El mismo intento conserva key, payload y `pm_`; un resultado
+  ambiguo se reintenta exactamente, no se transforma en una operación nueva.
+- Dinero viaja como centavos enteros seguros y bps; no se aceptan floats.
+- Garantía y pago pueden responder `requires_action` con `client_secret` y
+  `connected_account_id`; el front confirma 3DS en la cuenta indicada.
+- Tarjetas guardadas y tipeadas verifican marca, funding, customer, cuenta y
+  ownership. Attach/detach/pago/garantía comparten un lifecycle durable.
 
-### Otros
-- Notifications: `GET /api/notifications` (`unread_only`), `/unread-count`, `PATCH /:id/read`, `PATCH /read-all`, `DELETE /:id`, push-devices.
-- OCR: `POST /api/ocr` (multipart `image`, 8MB, jpeg/png/webp/heic) → `{items, total_cents, mock:true}` — **mock declarado**, devuelve ticket de ejemplo.
-- Staff: `GET /api/restaurants/:rid/staff/active` (para elegir mozo de propina; también viene en `GET /mesas/:code` como `active_staff`). Propinas propias: `GET /api/me/staff-earnings`.
-- Salud: `GET /health` (sin `/api`).
+### Invitaciones
 
-### Idempotencia (regla transversal)
-`pay`, `topup/*` y `transfers` exigen `idempotency_key` (8–100 chars) generado por el cliente. Misma key + mismo payload → respuesta idempotente; misma key + payload distinto → `409 idempotency_conflict`. El front genera una key por intento de pago (p.ej. UUID) y la **reusa en reintentos** del mismo intento.
+- La autoridad natural define una invitación pendiente por mesa, actor y
+  destinatario/link. Retries equivalentes convergen aunque cambie la key.
+- Tokens raw sólo se muestran cuando el contrato lo permite; aceptar, cancelar
+  o inspeccionar nunca cruza actor.
+- El front debe conservar los errores de conflicto como autoridad del servidor,
+  no crear una invitación paralela.
 
-### Modo demo local
-Backend local: `npm start` en `../payme-app-backend` (puerto 3000; requiere Postgres 14+ y `npm run migrate:fresh`). `STP_API_KEY=mock-development-key` activa el mock STP incorporado (dispersión y abono SPEI simulados de punta a punta). Stripe en test mode. OCR siempre mock (`HAS_REAL_IMPL=false`).
+### OCR y staff
+
+- OCR acepta un único archivo `image`, máximo 8 MiB, con MIME y magic bytes
+  compatibles. Tipo inválido → 400; archivo grande → 413; multipart truncado →
+  400. Multer está en 2.2.0.
+- `GET /api/restaurants/:rid/staff` es administrativo: requiere sesión y rol
+  manager/owner.
+- `GET /api/restaurants/:rid/staff/active` continúa público para selección de
+  propina y sólo devuelve `id`, `role` y `display_name`.
+
+## Baseline de producto ratificado
+
+### Wallet durmiente
+
+El wallet no se elimina. El plan ratificado post-auditoría debe sacarlo de la
+UI y hacerlo fallar cerrado por flags, conservando código, schema, rutas,
+historia y tests. Ese apagado **todavía no está implementado** en el commit
+fuente. El front no debe usar wallet/STP/topup/transfer como fallback. Reactivar
+requiere gate IFPE.
+
+### Apple Pay y Google Pay
+
+Son MUST y deben permitir el primer pago sin tarjeta previamente guardada,
+mediante hoja nativa y cero tipeo. El `pm_` de wallet nativo es efímero: muere
+con la hoja y no sirve para cargos off-session. Cuentas Junior necesita una
+tarjeta guardada del padre; Apple/Google Pay no la reemplaza.
+
+## Bloqueos que el front debe respetar
+
+1. **P0 — Connect no falla cerrado.** `resolveChargeTarget()` puede retornar
+   `null` cuando faltan flag/secreto/cuenta apta y el backend conserva el cargo
+   de plataforma/STP. El MVP card-only no ratificó ese fallback.
+2. **P0 contractual / P1 de implementación backend — `save_payment_method`
+   bajo direct charges.** La intención se acepta y queda sellada, pero el direct
+   charge omite `setup_future_usage`, customer y espejo de bóveda. Es P0 como
+   gate de la promesa de UI y P1 como defecto técnico inventariado del backend.
+3. **P1 — D1-E.** Falta el flujo de disputas con devolución explícita de la
+   comisión PayMe.
+4. **P1 — D1-D.** Faltan avisos y el auto-refund ratificado para pagos tardíos
+   inequívocos de hasta MXN 2.000.
+5. **P1 privacidad cross-repo.** Items y tips del outbox pueden salir con
+   cohorte uno; faltan `tables_count`, min-sample uniforme y retracción.
+6. **P1 integridad de agregados.** Sin mapping `restaurant_branches`, el emisor
+   hace skip sin quarantine/replay.
+
+Por estos puntos el App Frontend puede cerrar calidad local y espejo, pero no
+queda autorizado a release/piloto.
+
+## Verificación byte a byte
+
+El cierre comparó **67/67** archivos contra su fuente exacta, sin diferencias ni
+fuentes ausentes. Mapeos especiales:
+
+- `contract-mirror/docs/settlement.js.ref` ↔
+  `payme-app-backend/services/settlement.js`;
+- `contract-mirror/docs/CHANGELOG_v2.28.8.md` ↔
+  `payme-app-backend/CHANGELOG_v2.28.8.md`;
+- `contract-mirror/docs/CHANGELOG_v2.11.md` ↔
+  `payme-app-backend/docs/history/CHANGELOG_v2.11.md`;
+- `contract-mirror/docs/CHANGELOG_v2.13.md` y
+  `CHANGELOG_v2.14.md` ↔ sus pares en la raíz de `payme-app-backend/`;
+- `contract-mirror/docs/README_v2.10_CONSOLIDADO.md` y
+  `README_v2.5.2.md` ↔ sus pares en `payme-app-backend/docs/history/`;
+- los demás paths se corresponden por nombre.
+
+La única diferencia deliberada sin par fuente es este README de procedencia.

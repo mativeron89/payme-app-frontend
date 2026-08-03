@@ -20,9 +20,9 @@ import type {
 import { MOCK_RESTAURANTS, MOCK_USER } from './seedData';
 
 /**
- * Store en memoria del mock: hace de "backend" con las MISMAS reglas del
+ * Store persistido del mock: hace de "backend" con las MISMAS reglas del
  * contrato (garantía A-1, saldo retenido, locks, slots, expiración A-2).
- * Se resetea al recargar la página — suficiente para la demo.
+ * El estado económico y su ledger idempotente se restauran juntos al recargar.
  * Identidades: 'user' (el logueado) · 'guest' (entró por link) · 'other'
  * (los demás comensales, simulados).
  */
@@ -52,7 +52,7 @@ interface MockItem {
   claims: MockClaim[];
 }
 
-interface MockSlot {
+export interface MockSlot {
   slot_index: number;
   amount_cents: number;
   status: 'available' | 'claimed' | 'paid';
@@ -79,7 +79,12 @@ export interface MockMesa {
   guarantee_method: 'card' | 'wallet' | null;
 }
 
-interface MockState {
+export interface MockIdemEntry {
+  hash: string;
+  response: unknown;
+}
+
+export interface MockState {
   user: User;
   balance_cents: number;
   held_balance_cents: number;
@@ -94,6 +99,8 @@ interface MockState {
   transfers: TransferListItem[];
   notifications: AppNotification[];
   pendingInvitations: PendingInvitation[];
+  /** Debe persistir junto a las mutaciones económicas para que reload no cobre de nuevo. */
+  idempotency: Record<string, MockIdemEntry>;
 }
 
 let seq = 0;
@@ -458,6 +465,7 @@ function seedState(): MockState {
     walletTx: seedWalletTx(),
     notifications,
     pendingInvitations,
+    idempotency: {},
     transfers: [
       {
         id: mockId('f'),
@@ -528,6 +536,11 @@ function loadPersisted(): MockState | null {
       for (const f of parsed.friends) {
         if (f.payme_id === 'payme_mx_leo') f.payme_id = 'payme_mx_leop';
       }
+    }
+    // Auditoría 2026-08-02: el estado económico ya persistía, pero el ledger
+    // idempotente era memoria de módulo. Un reload podía repetir una mutación.
+    if (!parsed.idempotency || typeof parsed.idempotency !== 'object' || Array.isArray(parsed.idempotency)) {
+      parsed.idempotency = {};
     }
     return parsed;
   } catch {

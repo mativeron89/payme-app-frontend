@@ -43,7 +43,7 @@ router.post('/abono', async (req, res) => {
     if (result.status === 'wallet_not_found') {
       // la plata ya se movió en STP: ACK igual y dejar para revisión/devolución manual
       logger.error('stp_abono_wallet_not_found', {
-        clabe: parsed.clabeDestino, clave_rastreo: parsed.claveRastreo, amount_cents: parsed.amountCents,
+        clabe: stpAbono.maskedClabe(parsed.clabeDestino), clave_rastreo: parsed.claveRastreo, amount_cents: parsed.amountCents,
       });
     } else if (result.status === 'duplicate') {
       logger.info('stp_abono_duplicate', { clave_rastreo: parsed.claveRastreo });

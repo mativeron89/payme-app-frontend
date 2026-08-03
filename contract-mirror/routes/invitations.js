@@ -1,18 +1,16 @@
 /**
- * routes/invitations.js v2.5.1
+ * Mutaciones de la autoridad canónica de invitaciones.
  *
- * Cambios vs v2.5.0:
- *   - P1 #8: nuevos guest links generan token crudo (devuelto en response)
- *     y guardan SOLO el hash en DB. Validación de aceptación: hash primero,
- *     fallback a token crudo (legacy).
+ * Accept/cancel resuelven IDs legacy supersedidos, bloquean siempre
+ * mesa → invitación canónica y terminalizan expiraciones bajo el mismo lock.
  */
 'use strict';
 
 const express = require('express');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
-const { generateToken, tokenHash } = require('../utils/tokens');
-const notifs = require('../services/notifications');
+const { uuidIdParam, validateParams } = require('../schemas');
+const invitationAuthority = require('../services/invitationAuthority');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -31,6 +29,7 @@ router.get('/', async (req, res, next) => {
          JOIN restaurants r ON r.id = m.restaurant_id
          JOIN users u       ON u.id = i.inviter_user_id
         WHERE i.invited_user_id = $1 AND i.status = 'pending'
+          AND i.superseded_by_id IS NULL
           AND i.expires_at > NOW()
         ORDER BY i.created_at DESC`,
       [req.user.id]
@@ -40,31 +39,65 @@ router.get('/', async (req, res, next) => {
 });
 
 // ─── POST /:id/accept ─────────────────────────────────────
-router.post('/:id/accept', async (req, res, next) => {
+router.post('/:id/accept', validateParams(uuidIdParam), async (req, res, next) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT id, mesa_id, invited_user_id, status, expires_at
-         FROM invitations
-        WHERE id = $1`,
-      [req.params.id]
-    );
-    const inv = rows[0];
-    if (!inv) return res.status(404).json({ error: 'invitation_not_found' });
-    if (inv.invited_user_id !== req.user.id) {
-      return res.status(403).json({ error: 'not_for_you' });
-    }
-    if (inv.status !== 'pending') {
-      return res.status(409).json({ error: 'invitation_not_pending', status: inv.status });
-    }
-    if (new Date(inv.expires_at) < new Date()) {
-      return res.status(410).json({ error: 'invitation_expired' });
-    }
+    const outcome = await pool.tx(async (client) => {
+      const current = await invitationAuthority.lockCanonical(client, req.params.id);
+      if (!current) return { httpStatus: 404, error: 'invitation_not_found' };
+      if (current.invited_user_id !== req.user.id) {
+        return { httpStatus: 403, error: 'not_for_you' };
+      }
+      if (current.source_expired) {
+        if (current.source_id === current.id && current.status === 'pending') {
+          await client.query(
+            `UPDATE invitations SET status='expired' WHERE id=$1 AND status='pending'`,
+            [current.id]
+          );
+        }
+        return { httpStatus: 410, error: 'invitation_expired' };
+      }
+      if (current.status === 'expired') {
+        return { httpStatus: 410, error: 'invitation_expired' };
+      }
+      if (current.status !== 'pending') {
+        return {
+          httpStatus: 409,
+          error: 'invitation_not_pending',
+          status: current.status,
+        };
+      }
+      if (current.expired) {
+        await client.query(
+          `UPDATE invitations SET status='expired' WHERE id=$1 AND status='pending'`,
+          [current.id]
+        );
+        return { httpStatus: 410, error: 'invitation_expired' };
+      }
 
-    await pool.tx(async (client) => {
-      await client.query(
-        `UPDATE invitations SET status='accepted', accepted_at=NOW() WHERE id=$1`,
-        [inv.id]
+      const { rows: accepted } = await client.query(
+        `UPDATE invitations
+            SET status='accepted', accepted_at=clock_timestamp()
+          WHERE id=$1
+            AND invited_user_id=$2
+            AND status='pending'
+            AND expires_at > clock_timestamp()
+          RETURNING id, mesa_id`,
+        [current.id, req.user.id]
       );
+
+      const inv = accepted[0];
+      if (!inv) {
+        // Con la fila bloqueada, el único predicado que puede cambiar entre la
+        // lectura y este UPDATE es el reloj.
+        await client.query(
+          `UPDATE invitations SET status='expired'
+            WHERE id=$1 AND status='pending'
+              AND expires_at <= clock_timestamp()`,
+          [current.id]
+        );
+        return { httpStatus: 410, error: 'invitation_expired' };
+      }
+
       await client.query(
         `INSERT INTO mesa_participants (mesa_id, user_id, role, status)
          VALUES ($1, $2, 'invited', 'active')
@@ -74,39 +107,87 @@ router.post('/:id/accept', async (req, res, next) => {
            DO UPDATE SET status = 'active'`,
         [inv.mesa_id, req.user.id]
       );
+
+      return { accepted: true, invitationId: inv.id };
     });
 
-    logger.audit('invitation_accepted', { invitation_id: inv.id, user_id: req.user.id });
+    if (!outcome.accepted) {
+      return res.status(outcome.httpStatus).json({
+        error: outcome.error,
+        ...(outcome.status && { status: outcome.status }),
+      });
+    }
+
+    logger.audit('invitation_accepted', {
+      invitation_id: outcome.invitationId,
+      user_id: req.user.id,
+    });
     res.json({ accepted: true });
   } catch (err) { next(err); }
 });
 
 // ─── POST /:id/cancel ─────────────────────────────────────
-router.post('/:id/cancel', async (req, res, next) => {
+// v2.28.6: una pending ya vencida es terminal y responde 410
+// invitation_expired; no se reescribe artificialmente a cancelled.
+router.post('/:id/cancel', validateParams(uuidIdParam), async (req, res, next) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT id, inviter_user_id, status FROM invitations WHERE id = $1`,
-      [req.params.id]
-    );
-    const inv = rows[0];
-    if (!inv) return res.status(404).json({ error: 'invitation_not_found' });
-    if (inv.inviter_user_id !== req.user.id) {
-      return res.status(403).json({ error: 'only_inviter_can_cancel' });
+    const outcome = await pool.tx(async (client) => {
+      const current = await invitationAuthority.lockCanonical(client, req.params.id);
+      if (!current) return { httpStatus: 404, error: 'invitation_not_found' };
+      if (current.inviter_user_id !== req.user.id) {
+        return { httpStatus: 403, error: 'only_inviter_can_cancel' };
+      }
+      if (current.source_expired) {
+        if (current.source_id === current.id && current.status === 'pending') {
+          await client.query(
+            `UPDATE invitations SET status='expired' WHERE id=$1 AND status='pending'`,
+            [current.id]
+          );
+        }
+        return { httpStatus: 410, error: 'invitation_expired' };
+      }
+      if (current.status === 'expired') {
+        return { httpStatus: 410, error: 'invitation_expired' };
+      }
+      if (current.status !== 'pending') {
+        return { httpStatus: 409, error: 'invitation_not_pending' };
+      }
+      if (current.expired) {
+        await client.query(
+          `UPDATE invitations SET status='expired' WHERE id=$1 AND status='pending'`,
+          [current.id]
+        );
+        return { httpStatus: 410, error: 'invitation_expired' };
+      }
+
+      const { rows: cancelled } = await client.query(
+        `UPDATE invitations
+            SET status='cancelled', cancelled_at=clock_timestamp()
+          WHERE id=$1
+            AND inviter_user_id=$2
+            AND status='pending'
+            AND expires_at > clock_timestamp()
+          RETURNING id`,
+        [current.id, req.user.id]
+      );
+      if (cancelled[0]) return { cancelled: true };
+      await client.query(
+        `UPDATE invitations SET status='expired'
+          WHERE id=$1 AND status='pending'
+            AND expires_at <= clock_timestamp()`,
+        [current.id]
+      );
+      return { httpStatus: 410, error: 'invitation_expired' };
+    });
+
+    if (!outcome.cancelled) {
+      return res.status(outcome.httpStatus).json({ error: outcome.error });
     }
-    if (inv.status !== 'pending') {
-      return res.status(409).json({ error: 'invitation_not_pending' });
-    }
-    await pool.query(
-      `UPDATE invitations SET status='cancelled', cancelled_at=NOW() WHERE id=$1`,
-      [inv.id]
-    );
     res.json({ cancelled: true });
   } catch (err) { next(err); }
 });
 
 // ─── POST /accept-link (guest accept de link público) ─────
-// Acepta { token: "raw" } y registra al guest en mesa_participants.
-// v2.5.1 P1 #8: busca por token_hash primero, fallback a token crudo.
 router.post('/accept-link', express.json(), async (req, res, next) => {
   // Sin requireAuth (accesible para guests). El router al inicio aplicó
   // requireAuth, así que reabrimos como sub-router... pero por simplicidad,
@@ -122,44 +203,3 @@ router.post('/accept-link', express.json(), async (req, res, next) => {
 });
 
 module.exports = router;
-
-// ═══════════════════════════════════════════════════════════
-// Helpers exportados para otros routes (mesas.js usa este pattern):
-// ═══════════════════════════════════════════════════════════
-
-/**
- * Crea una invitation tipo 'link' con token hasheado.
- *
- * @returns { invitation, rawToken }
- *   rawToken se devuelve UNA SOLA VEZ y se usa para construir el link público.
- *   En DB solo guardamos token_hash.
- */
-module.exports.createLinkInvitation = async function createLinkInvitation({
-  client, mesaId, inviterUserId, expiresAt,
-}) {
-  const raw = generateToken(24);
-  const hash = tokenHash(raw);
-
-  const { rows } = await client.query(
-    `INSERT INTO invitations
-       (mesa_id, inviter_user_id, invitation_type, token_hash, expires_at)
-     VALUES ($1, $2, 'link', $3, $4)
-     RETURNING id, invitation_type, status, expires_at, created_at`,
-    [mesaId, inviterUserId, hash, expiresAt]
-  );
-  return { invitation: rows[0], rawToken: raw, tokenHash: hash };
-};
-
-module.exports.createInAppInvitation = async function createInAppInvitation({
-  client, mesaId, inviterUserId, invitedUserId, invitedPaymeId, expiresAt,
-}) {
-  const { rows } = await client.query(
-    `INSERT INTO invitations
-       (mesa_id, inviter_user_id, invited_user_id, invited_payme_id,
-        invitation_type, expires_at)
-     VALUES ($1, $2, $3, $4, 'in_app', $5)
-     RETURNING id, invitation_type, status, expires_at, created_at`,
-    [mesaId, inviterUserId, invitedUserId, invitedPaymeId || null, expiresAt]
-  );
-  return { invitation: rows[0] };
-};
