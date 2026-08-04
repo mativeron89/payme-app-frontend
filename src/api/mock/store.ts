@@ -101,6 +101,20 @@ export interface MockState {
   clabe: string | null;
   paymentMethods: PaymentMethod[];
   friends: MockPerson[];
+  /**
+   * OLA 3C: solicitudes de amistad pendientes. `direction` es desde MI punto de
+   * vista — `incoming` me la mandaron, `outgoing` la mandé yo. El `id` es el de
+   * la SOLICITUD, nunca el de la persona: en el backend confundirlos hacía que
+   * aceptar diera 404 siempre.
+   */
+  friendRequests: Array<{
+    id: string;
+    direction: 'incoming' | 'outgoing';
+    person: MockPerson;
+    requested_at: string;
+  }>;
+  /** Ids de usuario que YO bloqueé. */
+  blockedUserIds: string[];
   groups: Array<Group & { memberIds: string[] }>;
   mesas: MockMesa[];
   /** GET /account/history: pagos propios en mesas (pantalla Mesas). */
@@ -429,6 +443,24 @@ function seedState(): MockState {
       },
     ],
     friends,
+    // Una solicitud entrante sembrada: sin esto la pantalla nueva arranca vacía
+    // y no se puede ver el flujo de aceptar en la demo.
+    friendRequests: [
+      {
+        id: mockId('f'),
+        direction: 'incoming' as const,
+        person: {
+          id: mockId('a'),
+          payme_id: 'payme_mx_vale',
+          first_name: 'Valentina',
+          last_name: 'Ríos',
+          full_name: 'Valentina Ríos',
+          email: 'vale@mail.com',
+        },
+        requested_at: iso(-2 * 60 * 60_000),
+      },
+    ],
+    blockedUserIds: [],
     groups: [
       {
         id: mockId('a'),

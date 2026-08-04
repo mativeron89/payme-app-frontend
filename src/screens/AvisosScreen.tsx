@@ -12,6 +12,10 @@ import { navigate } from '../router';
 
 const NOTIF_ICON: Record<string, IconName> = {
   invitation_received: 'dining',
+  // OLA 3C: aviso nuevo del backend v2.29 (la plantilla existía y ninguna ruta
+  // la usaba). Sin ícono propio caía en la campana genérica.
+  friend_request_received: 'users',
+  friend_added: 'users',
   transfer_received: 'arrow-down-left',
   transfer_sent: 'arrow-up-right',
   topup_succeeded: 'check-circle',

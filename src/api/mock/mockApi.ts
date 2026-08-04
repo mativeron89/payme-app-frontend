@@ -12,7 +12,9 @@ import type {
   CreateSetupIntentResponse,
   CreateTransferRequest,
   CreateTransferResponse,
-  Friend,
+  FriendRequestCreatedResponse,
+  FriendRequestDirection,
+  FriendRequestsResponse,
   FriendsResponse,
   GroupDetailResponse,
   GroupsResponse,
@@ -51,7 +53,6 @@ import {
   type MockIdemEntry,
   type MockIdentity,
   type MockMesa,
-  type MockPerson,
   type MockSlot,
 } from './store';
 
@@ -1179,20 +1180,106 @@ export async function mockFriends(): Promise<FriendsResponse> {
   });
 }
 
-export async function mockAddFriend(query: { email?: string; payme_id?: string }): Promise<Friend> {
+/**
+ * C1/C2 · una solicitud es una INTENCIÓN, no un vínculo.
+ *
+ * Responde 202 `{ requested: true }` SIEMPRE: exista o no la persona, sea o no
+ * ya tu amigo, te haya bloqueado o no. El mock replica esa ceguera a propósito
+ * — si acá devolviera 404 cuando no encuentra a nadie, la demo enseñaría un
+ * comportamiento que el backend eliminó justamente por ser un oráculo.
+ */
+export async function mockAddFriend(query: { email?: string; payme_id?: string }): Promise<FriendRequestCreatedResponse> {
   const handle = (query.email ?? query.payme_id ?? 'nuevo').split('@')[0].replace(/^payme_mx_/, '');
-  const first = handle.charAt(0).toUpperCase() + handle.slice(1);
-  const friend: MockPerson = {
-    email: query.email ?? `${handle}@mail.com`,
-    id: mockId('a'),
-    payme_id: query.payme_id ?? `payme_mx_${handle.slice(0, 4).padEnd(4, 'x')}`,
-    first_name: first,
-    last_name: 'Demo',
-    full_name: `${first} Demo`,
-    added_at: new Date().toISOString(),
-  };
-  state.friends.push(friend);
-  return delay(friend);
+  const yaEsAmigo = state.friends.some(
+    (f) => f.payme_id === query.payme_id || f.email === query.email,
+  );
+  const yaPedida = state.friendRequests.some(
+    (r) => r.direction === 'outgoing' && r.person.payme_id === query.payme_id,
+  );
+  if (!yaEsAmigo && !yaPedida) {
+    const first = handle.charAt(0).toUpperCase() + handle.slice(1);
+    state.friendRequests.push({
+      id: mockId('f'),
+      direction: 'outgoing',
+      person: {
+        id: mockId('a'),
+        payme_id: query.payme_id ?? `payme_mx_${handle.slice(0, 4).padEnd(4, 'x')}`,
+        first_name: first,
+        last_name: 'Demo',
+        full_name: `${first} Demo`,
+        email: query.email ?? `${handle}@mail.com`,
+      },
+      requested_at: new Date().toISOString(),
+    });
+  }
+  // Misma respuesta en los cuatro casos.
+  return delay({ requested: true as const });
+}
+
+export async function mockFriendRequests(direction: FriendRequestDirection): Promise<FriendRequestsResponse> {
+  return delay({
+    direction,
+    requests: state.friendRequests
+      .filter((r) => r.direction === direction)
+      .map((r) => ({
+        id: r.id,
+        // La persona va ANIDADA: `id` es el de la solicitud, no el suyo.
+        user: {
+          id: r.person.id,
+          payme_id: r.person.payme_id,
+          first_name: r.person.first_name,
+          last_name: r.person.last_name,
+          full_name: r.person.full_name,
+        },
+        requested_at: r.requested_at,
+      })),
+  });
+}
+
+/** Aceptar: sólo una ENTRANTE. Una saliente no es mía para aceptar. */
+export async function mockAcceptFriendRequest(requestId: string): Promise<void> {
+  const i = state.friendRequests.findIndex((r) => r.id === requestId && r.direction === 'incoming');
+  if (i === -1) return fail(404, 'request_not_found');
+  const [req] = state.friendRequests.splice(i, 1);
+  state.friends.push({ ...req.person, added_at: new Date().toISOString() });
+  return delay(undefined);
+}
+
+export async function mockRejectFriendRequest(requestId: string): Promise<void> {
+  const i = state.friendRequests.findIndex((r) => r.id === requestId && r.direction === 'incoming');
+  if (i === -1) return fail(404, 'request_not_found');
+  state.friendRequests.splice(i, 1);
+  return delay(undefined);
+}
+
+/** Cancelar: sólo una PROPIA todavía pendiente. */
+export async function mockCancelFriendRequest(requestId: string): Promise<void> {
+  const i = state.friendRequests.findIndex((r) => r.id === requestId && r.direction === 'outgoing');
+  if (i === -1) return fail(404, 'request_not_found');
+  state.friendRequests.splice(i, 1);
+  return delay(undefined);
+}
+
+/**
+ * Bloquear rompe la amistad en ambos sentidos y borra cualquier solicitud viva
+ * con esa persona, igual que el backend.
+ */
+export async function mockBlockUser(userId: string): Promise<void> {
+  if (userId === state.user.id) return fail(400, 'cannot_block_self');
+  const conocido =
+    state.friends.some((f) => f.id === userId) ||
+    state.friendRequests.some((r) => r.person.id === userId);
+  if (!conocido) return fail(404, 'user_not_found');
+  state.friends = state.friends.filter((f) => f.id !== userId);
+  state.friendRequests = state.friendRequests.filter((r) => r.person.id !== userId);
+  if (!state.blockedUserIds.includes(userId)) state.blockedUserIds.push(userId);
+  return delay(undefined);
+}
+
+export async function mockUnblockUser(userId: string): Promise<void> {
+  if (!state.blockedUserIds.includes(userId)) return fail(404, 'block_not_found');
+  state.blockedUserIds = state.blockedUserIds.filter((id) => id !== userId);
+  return delay(undefined);
 }
 
 export async function mockRemoveFriend(friendId: string): Promise<void> {

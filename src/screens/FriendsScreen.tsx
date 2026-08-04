@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, WALLET_RAIL_ENABLED } from '../api';
-import type { Friend } from '../api/types';
+import type { Friend, FriendRequest } from '../api/types';
 import { Avatar, SocialTabs, TopBar, useToast } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { navigate } from '../router';
@@ -14,9 +14,62 @@ export function FriendsScreen() {
   const [adding, setAdding] = useState(false);
   const [newQuery, setNewQuery] = useState('');
   const [busy, setBusy] = useState(false);
+  /**
+   * OLA 3C · las solicitudes pendientes. Sin esta pantalla el flujo quedaba
+   * cortado a la mitad: `POST /friends` ya no crea amistad, así que alguien
+   * mandaba una solicitud y nadie podía aceptarla desde la app.
+   */
+  const [incoming, setIncoming] = useState<FriendRequest[]>([]);
+  const [outgoing, setOutgoing] = useState<FriendRequest[]>([]);
+  const [reqBusy, setReqBusy] = useState<string | null>(null);
+
+  function loadRequests() {
+    void api.getFriendRequests('incoming').then((r) => setIncoming(r.requests)).catch(() => setIncoming([]));
+    void api.getFriendRequests('outgoing').then((r) => setOutgoing(r.requests)).catch(() => setOutgoing([]));
+  }
+
+  /** El `id` que viaja es el de la SOLICITUD, nunca el de la persona. */
+  async function resolveRequest(
+    requestId: string,
+    action: 'accept' | 'reject' | 'cancel',
+    quien: string,
+  ) {
+    setReqBusy(requestId);
+    try {
+      if (action === 'accept') await api.acceptFriendRequest(requestId);
+      else if (action === 'reject') await api.rejectFriendRequest(requestId);
+      else await api.cancelFriendRequest(requestId);
+      toast(
+        action === 'accept' ? `Ahora son amigos con ${quien} ✓`
+          : action === 'reject' ? 'Solicitud rechazada'
+            : 'Solicitud cancelada',
+      );
+      load();
+      loadRequests();
+    } catch {
+      // 404 = la solicitud ya no está (la resolvieron del otro lado o venció).
+      toast('Esa solicitud ya no está disponible');
+      loadRequests();
+    } finally {
+      setReqBusy(null);
+    }
+  }
+
+  async function block(userId: string, quien: string) {
+    if (!window.confirm(`¿Bloquear a ${quien}? Se rompe la amistad y no van a poder mandarse solicitudes.`)) return;
+    try {
+      await api.blockUser(userId);
+      toast(`${quien} quedó bloqueado`);
+      load();
+      loadRequests();
+    } catch {
+      toast('No pudimos bloquear a esa persona');
+    }
+  }
 
   function load() {
     api.getFriends().then((r) => setFriends(r.friends)).catch(() => setFriends([]));
+    loadRequests();
   }
   useEffect(load, []);
 
@@ -37,13 +90,16 @@ export function FriendsScreen() {
     if (!q) return;
     setBusy(true);
     try {
-      const friend = await api.addFriend(q.includes('@') ? { email: q } : { payme_id: q });
-      toast(`${friend.first_name} agregado ✓`);
+      await api.addFriend(q.includes('@') ? { email: q } : { payme_id: q });
+      // C1/C2: el backend responde 202 igual exista o no la persona. La app NO
+      // puede decir "no encontramos a nadie": esa respuesta era un oráculo para
+      // descubrir cuentas probando correos. El copy no afirma nada del otro.
+      toast('Si tiene PayMe, le va a llegar tu solicitud');
       setNewQuery('');
       setAdding(false);
-      load();
+      loadRequests();
     } catch {
-      toast('No encontramos a nadie con ese dato');
+      toast('No pudimos enviar la solicitud. Probá de nuevo.');
     } finally {
       setBusy(false);
     }
@@ -61,11 +117,81 @@ export function FriendsScreen() {
           <input
             className="input"
             style={{ margin: 0 }}
-            placeholder="Buscar por nombre, email o ID"
+            placeholder="Buscar por nombre o ID PayMe"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
+
+        {/* OLA 3C · solicitudes. Van ARRIBA de la lista: una solicitud entrante
+            es una acción pendiente, y enterrarla abajo dejaba el flujo cortado
+            aunque el endpoint existiera. */}
+        {incoming.length > 0 && (
+          <div style={{ padding: '0 16px 8px' }}>
+            <div className="sectlabel">
+              Te quieren agregar ({incoming.length})
+            </div>
+            <div className="card">
+              {incoming.map((r) => (
+                <div key={r.id} className="friend-row" style={{ cursor: 'default' }}>
+                  <Avatar name={r.user.full_name} />
+                  <div className="fr-name">
+                    <div className="n">{r.user.full_name}</div>
+                    <div className="id">{r.user.payme_id}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="btn btn-teal btn-sm btn-fit"
+                      disabled={reqBusy === r.id}
+                      onClick={() => void resolveRequest(r.id, 'accept', r.user.first_name)}
+                    >
+                      Aceptar
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm btn-fit"
+                      disabled={reqBusy === r.id}
+                      onClick={() => void resolveRequest(r.id, 'reject', r.user.first_name)}
+                    >
+                      Rechazar
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm btn-fit"
+                      aria-label={`Bloquear a ${r.user.full_name}`}
+                      disabled={reqBusy === r.id}
+                      onClick={() => void block(r.user.id, r.user.first_name)}
+                    >
+                      <Icon name="x-circle" size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {outgoing.length > 0 && (
+          <div style={{ padding: '0 16px 8px' }}>
+            <div className="sectlabel">Enviadas ({outgoing.length})</div>
+            <div className="card">
+              {outgoing.map((r) => (
+                <div key={r.id} className="friend-row" style={{ cursor: 'default' }}>
+                  <Avatar name={r.user.full_name} />
+                  <div className="fr-name">
+                    <div className="n">{r.user.full_name}</div>
+                    <div className="id">Pendiente de que acepte</div>
+                  </div>
+                  <button
+                    className="btn btn-ghost btn-sm btn-fit"
+                    disabled={reqBusy === r.id}
+                    onClick={() => void resolveRequest(r.id, 'cancel', r.user.first_name)}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {adding && (
           <div style={{ padding: '4px 16px 0' }}>
             <div className="card card-p" style={{ marginBottom: 4 }}>

@@ -28,7 +28,9 @@ import type {
   CreateMesaResponse,
   CreateTransferRequest,
   CreateTransferResponse,
-  Friend,
+  FriendRequestCreatedResponse,
+  FriendRequestDirection,
+  FriendRequestsResponse,
   FriendsResponse,
   GroupDetailResponse,
   GroupsResponse,
@@ -161,7 +163,19 @@ export interface Api {
   getStats(): Promise<StatsResponse>;
   // social
   getFriends(): Promise<FriendsResponse>;
-  addFriend(query: { email?: string; payme_id?: string }): Promise<Friend>;
+  /**
+   * C1/C2 (v2.29): ya NO crea amistad ni dice si la persona existe. Responde
+   * 202 `{ requested: true }` en todos los casos. La UI no puede afirmar nada
+   * sobre el destinatario.
+   */
+  addFriend(query: { email?: string; payme_id?: string }): Promise<FriendRequestCreatedResponse>;
+  getFriendRequests(direction: FriendRequestDirection): Promise<FriendRequestsResponse>;
+  acceptFriendRequest(requestId: string): Promise<void>;
+  rejectFriendRequest(requestId: string): Promise<void>;
+  cancelFriendRequest(requestId: string): Promise<void>;
+  blockUser(userId: string): Promise<void>;
+  unblockUser(userId: string): Promise<void>;
+  /** C5: puede dar 404 `friendship_not_found` si no había amistad. */
   removeFriend(friendId: string): Promise<void>;
   getGroups(): Promise<GroupsResponse>;
   getGroup(id: string): Promise<GroupDetailResponse>;
@@ -364,9 +378,23 @@ const realApi: Api = {
   getStats: () => httpRequest<StatsResponse>('GET', '/account/stats'),
 
   getFriends: () => httpRequest<FriendsResponse>('GET', '/friends'),
-  addFriend: async (query) => {
-    const r = await httpRequest<{ friend: Friend }>('POST', '/friends', query);
-    return r.friend;
+  addFriend: (query) => httpRequest<FriendRequestCreatedResponse>('POST', '/friends', query),
+  getFriendRequests: (direction) =>
+    httpRequest<FriendRequestsResponse>('GET', `/friends/requests?direction=${direction}`),
+  acceptFriendRequest: async (requestId) => {
+    await httpRequest('POST', `/friends/requests/${encodeURIComponent(requestId)}/accept`);
+  },
+  rejectFriendRequest: async (requestId) => {
+    await httpRequest('POST', `/friends/requests/${encodeURIComponent(requestId)}/reject`);
+  },
+  cancelFriendRequest: async (requestId) => {
+    await httpRequest('DELETE', `/friends/requests/${encodeURIComponent(requestId)}`);
+  },
+  blockUser: async (userId) => {
+    await httpRequest('POST', `/friends/${encodeURIComponent(userId)}/block`);
+  },
+  unblockUser: async (userId) => {
+    await httpRequest('DELETE', `/friends/${encodeURIComponent(userId)}/block`);
   },
   removeFriend: async (friendId) => {
     await httpRequest('DELETE', `/friends/${encodeURIComponent(friendId)}`);
@@ -475,6 +503,12 @@ const mockApi: Api = {
 
   getFriends: () => mock.mockFriends(),
   addFriend: (query) => mock.mockAddFriend(query),
+  getFriendRequests: (direction) => mock.mockFriendRequests(direction),
+  acceptFriendRequest: (requestId) => mock.mockAcceptFriendRequest(requestId),
+  rejectFriendRequest: (requestId) => mock.mockRejectFriendRequest(requestId),
+  cancelFriendRequest: (requestId) => mock.mockCancelFriendRequest(requestId),
+  blockUser: (userId) => mock.mockBlockUser(userId),
+  unblockUser: (userId) => mock.mockUnblockUser(userId),
   removeFriend: (friendId) => mock.mockRemoveFriend(friendId),
   getGroups: () => mock.mockGroups(),
   getGroup: (id) => mock.mockGroupDetail(id),
