@@ -1,5 +1,29 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.30.1 — Barrido adversarial sobre 0.30.0 (2026-08-04)
+
+- **El caso de control estaba roto y lo rompí yo en 0.30.0.** `HomeScreen` y
+  `CuentaScreen` pedían saldo y movimientos dentro de un `useEffect(..., [])`.
+  Eso servía cuando el riel era una constante; ahora la capability llega
+  DESPUÉS del primer render, cuando vale `false` por fail-closed, y el efecto no
+  se vuelve a ejecutar. Con el backend declarando `enabled: true`, la tarjeta de
+  saldo se renderizaba con el monto en "…" **para siempre** y "Últimos
+  movimientos" no aparecía nunca. Arreglado con un efecto por capability, cada
+  uno con su dependencia y separados entre sí.
+- **Mi verificación en navegador de 0.30.0 no podía verlo:** di el control por
+  bueno viendo APARECER la tarjeta, y la tarjeta aparecía vacía — el monto está
+  enmascarado por diseño y se ve igual cargado que sin cargar. Hizo falta el
+  ojito.
+- **Barrido estructural nuevo:** falla nombrando archivo y capability si un
+  `useEffect` lee una y no la declara en sus dependencias. Con guardarraíl
+  contra pasar en vacío y con su límite declarado dentro del test.
+- **El barrido de (d) tenía un agujero, y lo tenía el barrido:** detectaba una
+  supresión sólo si el archivo nombraba los tipos, así que una escrita
+  importando `WALLET_NOTIFICATION_TYPES` —la forma más natural— pasaba limpia.
+  Ahora también se marca esa vía.
+- No es defecto de dinero: son GET de lectura, y con el riel apagado —el estado
+  vigente— nada de esto se ejecuta.
+
 ## 0.30.0 — El apagado del wallet deja de ser decisión del front (2026-08-04)
 
 - **OLA 5D · el riel saldo lo declara apagado el BACKEND, y este front lo lee.**
