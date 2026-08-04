@@ -2,8 +2,8 @@ import { IS_MOCK } from './api';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { BottomNav } from './components/BottomNav';
 import { ToastProvider } from './components/ui';
-import { useMoneyActor } from './api/idempotency';
 import { allowsWalletRoute } from './api/releaseGates';
+import { tokenForMesa } from './api/invitationLink';
 import { useWalletRail } from './api/walletRail';
 import { useRoute } from './router';
 import { AvisosScreen } from './screens/AvisosScreen';
@@ -12,6 +12,7 @@ import { CuentaScreen } from './screens/CuentaScreen';
 import { FriendsScreen } from './screens/FriendsScreen';
 import { GroupsScreen } from './screens/GroupsScreen';
 import { HomeScreen } from './screens/HomeScreen';
+import { JoinMesaScreen } from './screens/JoinMesaScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { MesaScreen } from './screens/MesaScreen';
 import { MesasScreen } from './screens/MesasScreen';
@@ -27,22 +28,32 @@ function Shell() {
   // que mientras la capability viaja las rutas del riel siguen bloqueadas.
   const { walletRailEnabled } = useWalletRail();
 
-  // T3 — momento mágico: el invitado entra por link (#/mesa/:code?t=token)
-  // con o sin sesión. guestOrAuth del contrato prioriza el token del link;
-  // ignorarlo en real cuando hay sesión mezclaba identidades y dejaba al
-  // invitado fuera de la mesa correcta.
-  const guestToken = route.query.get('t');
-  const { actor: guestActor, resolvedFor: guestResolvedFor } = useMoneyActor(guestToken ?? undefined);
-  if (route.page === 'mesa' && route.param && guestToken) {
-    // No se monta MesaScreen hasta resolver exactamente ESTE token. Sin este
-    // gate, el primer render de B podía reutilizar el fingerprint/estado de A
-    // mientras Web Crypto calculaba B. El token no entra al key ni storage.
-    if (!guestActor || guestResolvedFor !== guestToken) {
-      return <div className="screen"><div className="empty">Abriendo la mesa de invitación…</div></div>;
-    }
-    // El fingerprint fuerza remount al cambiar A→B y evita que una respuesta
-    // tardía de A pinte la mesa de B.
-    return <MesaScreen key={`${route.param}:${guestActor?.id ?? 'guest-pending'}`} code={route.param} guestToken={guestToken} />;
+  /**
+   * CIERRE DEL PAGO SIN CUENTA (backend v2.32.0) · acá estaba el defecto.
+   *
+   * Este branch montaba `MesaScreen` en modo INVITADO —con o sin sesión— y le
+   * pasaba el token del link. Con eso se veía la mesa, se tomaban ítems y se
+   * PAGABA sin cuenta, porque las tres rutas aceptaban `guestOrAuth`. Ahora
+   * exigen sesión y contestan **401**, y el token dejó de ser autorización: es
+   * una CREDENCIAL que se canjea en `POST /invitations/accept-link`.
+   *
+   * Así que el link ya no lleva a la mesa: lleva a `JoinMesaScreen`, que
+   * conserva el token, empuja al alta si hace falta, canjea, y recién después
+   * navega a la mesa **sin `?t=`**.
+   *
+   * El respaldo en storage no es opcional: el tramo del alta es donde el token
+   * se pierde, y perderlo deja a la persona registrada y afuera de la mesa a la
+   * que la invitaron — peor que el defecto que se está cerrando.
+   *
+   * **`useMoneyActor(guestToken)` ya no se llama con el token**, y las ramas de
+   * identidad monetaria de invitado (`guest:` en `idempotency.ts:240`) quedan
+   * sin call site pero INTACTAS. Es el mismo criterio con el que el emisor dejó
+   * `guestOrAuth` en pie con cero call sites: mezclar borrado de código con un
+   * cambio de autorización sobre rutas de dinero es cómo se cuelan errores.
+   */
+  const linkToken = tokenForMesa(route.param ?? '', route.query.get('t'));
+  if (route.page === 'mesa' && route.param && linkToken) {
+    return <JoinMesaScreen key={route.param} code={route.param} token={linkToken} />;
   }
 
   if (!session) return <LoginScreen />;

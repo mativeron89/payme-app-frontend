@@ -79,6 +79,18 @@ export interface AppConfig {
   };
 }
 
+/**
+ * `POST /api/invitations/accept-link` (v2.32.0). Requiere sesión.
+ *
+ * `joined` viene siempre `true` en el 200 — el rechazo es un status, no un
+ * booleano—, pero se decodifica igual: un 2xx malformado no acredita que la
+ * inscripción haya ocurrido, y de eso depende que la persona pueda pagar.
+ */
+export interface AcceptInvitationLinkResponse {
+  joined: true;
+  mesa_code: string;
+}
+
 // ─── Cuenta (routes/account.js) ────────────────────────────
 
 /** GET /api/account/balance (G-03: no expone held_balance_cents). */

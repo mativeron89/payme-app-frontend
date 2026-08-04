@@ -116,6 +116,25 @@ archivo, la maqueta, el mock o `GAPS.md`.
   contienen fecha de nacimiento/capability, pero D-03 contradice el modelo de
   alta vigente. No interpretar `registration_required` ni modificar el registro
   hasta la enmienda y orden coordinada App Backend↔App Frontend.
+- **CIERRE DEL PAGO SIN CUENTA (backend v2.32.0, espejado el 2026-08-04).**
+  `GET /mesas/:code`, `items/lock` y `pay` **ya no aceptan invitado**: exigen
+  sesión y contestan **401**. El token de `?t=` dejó de ser AUTORIZACIÓN y pasó
+  a ser **CREDENCIAL**: se conserva a través del alta y se canjea en
+  `POST /invitations/accept-link`, que inscribe por `user_id`.
+  - El circuito ratificado: link por WhatsApp → **quien no tiene cuenta no ve la
+    mesa** → se registra → el token sobrevive → se canjea → ahí sí ve, toma
+    ítems y paga.
+  - **401 ≠ 403.** 401 dice *"necesitás cuenta"* y manda al alta conservando el
+    token; 403 diría *"no sos de esta mesa"*, que es otra pantalla. Confundirlos
+    manda a la gente a la pantalla equivocada.
+  - Los **cuatro** motivos de rechazo (inválido, vencido, cancelado,
+    supersedido) comparten el mismo 403 **a propósito**: distinguirlos le diría
+    a un desconocido si una mesa existe. No inventar copy que los separe.
+  - El **503** no es un rechazo: es "no pudimos verificar". Reintentable.
+  - `httpGuestRequest`, los parámetros `guestToken` de la fachada y las ramas
+    `isGuest` de `MesaScreen` quedan **durmientes e intactos**, igual que
+    `guestOrAuth` del otro lado. **No borrarlos**: mezclar borrado de código con
+    un cambio de autorización sobre rutas de dinero es cómo se cuelan errores.
 - **El modo `?demo=1` YA NO EXISTE (eliminado el 2026-08-03).** Sustituía
   Stripe Elements por un PaymentMethod de test y salteaba la captura OCR, y se
   activaba desde la URL. Se eliminó por completo —no se gateó— cuando Mati
@@ -149,8 +168,11 @@ y propina, estados `pending → succeeded → processed` y expiración honesta.
    backend expone utilidades de dinero propias, replicalas EXACTAS en
    `src/utils/` (como hizo el dashboard con `money.ts`) y anotá la
    procedencia.
-6. **El flujo del invitado por link es el momento mágico de la demo**: entra
-   temprano (T3), no al final.
+6. **El flujo del link es el momento mágico de la demo**: entra temprano (T3),
+   no al final. ⚠️ **Desde el backend v2.32.0 ese flujo YA NO ES "sin cuenta".**
+   Ver el baseline de abajo: el link lleva al alta y después al canje. Sigue
+   siendo el momento mágico —un link de WhatsApp y estás pagando tu parte— pero
+   con cuenta de por medio. No volver a implementar el pago de invitado.
 7. Commits en español, cambios quirúrgicos, sin `as any`, tests + typecheck +
    builds real y mock, versión + entrada de CHANGELOG por tier.
 
@@ -171,7 +193,7 @@ y propina, estados `pending → succeeded → processed` y expiración honesta.
 | **T0** | Leer `../payme-app-backend`, construir `contract-mirror/`, contrastar maqueta vs contrato, relevar auth real y modo mock, ratificar alcance y este plan con Mati | — |
 | T1 | Esqueleto Vite+React+TS, router propio, mock base, auth según contrato, shell de navegación + home | `s-home` |
 | T2 | Flujo del organizador: abrir mesa con garantía **solo tarjeta** vía Stripe.js (`requires_action`/3DS simulado en mock) + estado "Garantizada", scan-mock, ticket, división consumo/igual, mis ítems (lock), compartir link/QR con hash | `s-open`, **nueva "Garantizá la mesa"**, `s-scan`, `s-ticket`, `s-division`, `s-myitems`, `s-share` |
-| T3 | **Invitado por link** (momento mágico): entrada con hash, selección con lock y pago card-only con su procesando/confirmación | `s-guest` (+ `s-processing`/`s-confirm` en variante invitado) |
+| T3 | **Entrada por link** (momento mágico): entrada con hash, **canje del token con cuenta** (v2.32.0), selección con lock y pago card-only con su procesando/confirmación | `s-guest` (+ `s-processing`/`s-confirm`) + **nueva "Sumate a la mesa"** |
 | T4 | Pago del organizador con propina al mozo, estados `pending → succeeded → processed`, confirmación, **expirada con semántica A-2**, notas | `s-payment`, `s-processing`, `s-confirm`, `s-expired`, `s-notes` |
 | T5 | Cuenta y social card-only: tarjetas, historial propio de pagos, amigos, grupos y perfil. Las pantallas wallet/topup/transfer quedan dormidas y no navegables. | `s-account`, `s-friends`, `s-groups`, `s-profile` |
 | T6 | Pulido móvil: estados vacíos/error, accesibilidad, performance | transversal |

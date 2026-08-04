@@ -1508,3 +1508,24 @@ body {
   font-size: 40px;
   margin-bottom: 8px;
 }
+
+/* ─── Cierre del pago sin cuenta · banner del canje por link ───
+   Encabeza el alta cuando alguien abre un link de invitación sin sesión. Dice
+   POR QUÉ se le pide cuenta, sin revelar nada de la mesa: ni restaurante, ni
+   total, ni gente. Antes de canjear el token no hay de dónde sacarlo —las tres
+   rutas de mesa exigen sesión desde v2.32.0— y está bien que no lo haya. */
+.join-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 16px 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--teal-l);
+  color: #0a7b80;
+}
+.join-banner-title {
+  font-weight: 700;
+  font-size: var(--fs-base);
+  color: var(--navy);
+}

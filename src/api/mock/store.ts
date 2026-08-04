@@ -128,6 +128,30 @@ export interface MockState {
   transfers: TransferListItem[];
   notifications: AppNotification[];
   pendingInvitations: PendingInvitation[];
+  /**
+   * CIERRE DEL PAGO SIN CUENTA · tokens de link emitidos → código de su mesa.
+   *
+   * Existe para que el mock **no sea permisivo**. Sin esto, `accept-link`
+   * tendría que aceptar cualquier string, y el mock enseñaría que todo link
+   * sirve: el 403 quedaría inverificable a mano. Es exactamente la forma en que
+   * un mock permisivo ya le escondió un defecto vivo a este repo.
+   *
+   * En el backend el token nombra su mesa (`resolveLinkToken` → `mesa_id`).
+   * Acá se replica esa propiedad, que es la que importa.
+   */
+  linkTokens: Record<string, string>;
+  /**
+   * Mesas a las que el usuario se sumó CANJEANDO un link (`accept-link`).
+   * Espeja las filas de `mesa_participants` que crea el canje.
+   *
+   * **Límite declarado:** el mock NO usa esto como gate de lectura. El backend
+   * sí exige participación (`requireMesaParticipant`), pero el mock ya dejaba
+   * ver cualquier mesa sembrada desde antes de este cambio, y volverlo
+   * fail-closed toca el acceso a TODAS las mesas de la demo. Es otro cambio —
+   * el mismo criterio con el que el emisor no borró sus ramas de invitado en el
+   * commit del cierre. Lo que esto sí acredita es que el canje INSCRIBE.
+   */
+  joinedMesaCodes: string[];
   /** Debe persistir junto a las mutaciones económicas para que reload no cobre de nuevo. */
   idempotency: Record<string, MockIdemEntry>;
 }
@@ -603,6 +627,8 @@ function seedState(): MockState {
     walletTx: [],
     notifications,
     pendingInvitations,
+    linkTokens: {},
+    joinedMesaCodes: [],
     idempotency: {},
     transfers: [
       {
@@ -683,6 +709,12 @@ function loadPersisted(): MockState | null {
     // OLA 3C: `friendRequests` y `blockedUserIds` nacieron después que el
     // storage. Un estado persistido de antes los trae `undefined` y la pantalla
     // de amigos reventaba al leerlos.
+    // v2.32.0 · `linkTokens` nació con el cierre del pago sin cuenta. Un estado
+    // persistido de antes lo trae `undefined`, y canjear reventaría al leerlo.
+    if (!parsed.linkTokens || typeof parsed.linkTokens !== 'object' || Array.isArray(parsed.linkTokens)) {
+      parsed.linkTokens = {};
+    }
+    if (!Array.isArray(parsed.joinedMesaCodes)) parsed.joinedMesaCodes = [];
     if (!Array.isArray(parsed.friendRequests)) parsed.friendRequests = [];
     if (!Array.isArray(parsed.blockedUserIds)) parsed.blockedUserIds = [];
     // El directorio de personas que existen sin ser amigas.

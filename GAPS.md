@@ -6,8 +6,24 @@ Esta sección manda sobre las afirmaciones históricas del resto del archivo.
 Las menciones antiguas a versiones "desplegadas", producción o verificaciones
 en vivo son registro de su momento y **no acreditan el estado externo actual**.
 La única fuente local de este cierre es App Backend
-`db48cf69422fb0edbeb633e883c14405174a549b` (v2.31.0), espejada byte a byte en
-`contract-mirror/`; no hubo push, deploy ni consulta a producción.
+`330a645cf4ea12e0ac6fe1f397a956a3327666a8` (v2.32.0), espejada byte a byte en
+`contract-mirror/` (68/68); no hubo push, deploy ni consulta a producción.
+
+### Cierre del pago sin cuenta · espejado, sin gap abierto
+
+El backend cerró `GET /mesas/:code`, `items/lock` y `pay` a sesión (401) y abrió
+`POST /invitations/accept-link`. Este front lo espeja completo y **no le quedó
+ningún hueco de contrato**: el circuito link → alta → canje → mesa cierra con lo
+que el emisor publica.
+
+Dos cosas que NO son gaps aunque lo parezcan, anotadas para que nadie las abra:
+
+- **La pantalla de canje no puede mostrar nada de la mesa antes de canjear.** No
+  falta un endpoint: `GET /mesas/:code` exige sesión y participación, y mostrarle
+  el restaurante o el total a cualquiera con un link es justamente lo que el
+  cierre saca de la mesa. Pedir un "preview público de mesa" sería reabrirlo.
+- **El 403 no dice por qué.** Los cuatro motivos son indistinguibles a propósito.
+  Pedir un campo `reason` sería pedir el oráculo que el contrato eliminó.
 
 El frontend puede cerrar sus gates locales de calidad, pero el candidato sigue
 **NO-GO de release/piloto** por estos bloqueos del ecosistema:

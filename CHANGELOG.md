@@ -1,5 +1,35 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.31.0 — Cierre del pago sin cuenta, espejado (2026-08-04)
+
+Espejo del backend v2.32.0. El token de `?t=` deja de ser **autorización** y
+pasa a ser **credencial**.
+
+- **El link ya no lleva a la mesa: lleva al canje.** `App` montaba `MesaScreen`
+  en modo invitado con el token de la URL, y con eso se veía la mesa, se tomaban
+  ítems y se **pagaba sin cuenta**. Ahora lleva a `JoinMesaScreen`.
+- **Quien no tiene cuenta no ve nada de la mesa** — ni restaurante, ni total, ni
+  cuánta gente hay. Ve el alta, con un banner que explica por qué.
+- **El token sobrevive al alta.** Se guarda en `sessionStorage` con el código de
+  su mesa; la URL sigue siendo la fuente primaria y esto cubre el tramo del
+  registro. Perderlo dejaría a la persona registrada y **afuera** de la mesa a
+  la que la invitaron, que es peor que el defecto que se cierra.
+- **Se suelta al canjear y también ante un 403** — un token muerto que
+  sobreviviera capturaría esa mesa en cada visita.
+- **Un solo mensaje para los cuatro motivos de rechazo.** El emisor no
+  distingue inválido de vencido de cancelado de supersedido, a propósito: sería
+  decirle a un desconocido si una mesa existe. Un test barre todos los mensajes
+  contra un conjunto de palabras delatoras.
+- **El 503 no es un rechazo.** Es "no pudimos verificar", y es reintentable.
+  Fundirlo con el 403 diría que una invitación está muerta cuando el backend
+  sólo está a media configuración.
+- **Nada se borra:** `httpGuestRequest`, los parámetros `guestToken` de la
+  fachada y las ramas `isGuest` de `MesaScreen` quedan durmientes e intactos,
+  igual que `guestOrAuth` del otro lado.
+- El mock replica la **ceguera** del emisor y modela los tokens emitidos, así
+  que el 403 es verificable a mano y no acepta cualquier string.
+- `contract-mirror` refrescado a v2.32.0 (68 archivos; `utils/tokens.js` nuevo).
+
 ## 0.30.1 — Barrido adversarial sobre 0.30.0 (2026-08-04)
 
 - **El caso de control estaba roto y lo rompí yo en 0.30.0.** `HomeScreen` y

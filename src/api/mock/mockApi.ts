@@ -1,6 +1,7 @@
 import { centsToDisplay, fractionAmount, splitEqual, sumCents, tipFromBps } from '../../utils/money';
-import { createSession, saveSession, type StoredSession } from '../storage';
+import { createSession, loadSession, saveSession, type StoredSession } from '../storage';
 import type {
+  AcceptInvitationLinkResponse,
   AppConfig,
   AttachPaymentMethodResponse,
   MeResponse,
@@ -883,6 +884,7 @@ export async function mockCreateInvitation(
     writeMockIdempotency(ledgerKey, { hash, response: natural.response });
     return delay(response);
   }
+  const token = `mock-guest-${Date.now().toString(36)}`;
   const response: CreateInvitationResponse = {
     invitation: {
       id: mockId('f'),
@@ -892,8 +894,11 @@ export async function mockCreateInvitation(
       created_at: new Date().toISOString(),
     },
     // El mismo UUID canónico reconstruye el mismo link en cada replay.
-    link: `${base}#/mesa/${code}?t=mock-guest-${Date.now().toString(36)}`,
+    link: `${base}#/mesa/${code}?t=${token}`,
   };
+  // El token nombra SU mesa, como en el backend. Sin esto `accept-link` tendría
+  // que aceptar cualquier string y el mock enseñaría que todo link sirve.
+  state.linkTokens[token] = code;
   writeMockIdempotency(naturalKey, { hash, response });
   writeMockIdempotency(ledgerKey, { hash, response });
   return delay(response);
@@ -1177,6 +1182,38 @@ export async function mockMarkAllNotificationsRead(): Promise<void> {
 
 export async function mockPendingInvitations(): Promise<PendingInvitationsResponse> {
   return delay({ invitations: [...state.pendingInvitations] });
+}
+
+/**
+ * `POST /invitations/accept-link` — CIERRE DEL PAGO SIN CUENTA (v2.32.0).
+ *
+ * Replica las propiedades del emisor que importan, no su implementación:
+ *
+ *  - **Ciego a propósito.** Token inexistente, de otra mesa que ya no está, o
+ *    basura: todos el MISMO 403 `invitation_link_not_valid`. El emisor no
+ *    distingue inválido de vencido de cancelado de supersedido porque hacerlo
+ *    le diría a un desconocido si una mesa existe. Un mock que devolviera
+ *    404 para "no existe" y 403 para "vencido" **enseñaría el oráculo que el
+ *    contrato eliminó** — que es la lección 18 de este ciclo, ya pagada.
+ *  - **Idempotente.** Canjear dos veces deja una sola inscripción.
+ *  - **No consume el link.** Es MULTIUSO: canjearlo no lo invalida para el
+ *    resto de la mesa.
+ *  - **Requiere sesión.** Sin ella el adaptador real da 401 y acá también.
+ */
+export async function mockAcceptInvitationLink(
+  token: string,
+): Promise<AcceptInvitationLinkResponse> {
+  if (typeof token !== 'string' || token.length < 8 || token.length > 200) {
+    return fail(400, 'invitation_token_required');
+  }
+  if (!loadSession()) return fail(401, 'auth_required');
+  const code = state.linkTokens[token];
+  const mesa = code ? findMesa(code) : null;
+  // Un solo 403 para los cuatro motivos. No agregar ramas que los separen.
+  if (!code || !mesa) return fail(403, 'invitation_link_not_valid');
+  // La inscripción es por usuario y el link NO se marca consumido.
+  if (!state.joinedMesaCodes.includes(code)) state.joinedMesaCodes.push(code);
+  return delay({ joined: true as const, mesa_code: code });
 }
 
 export async function mockAcceptInvitation(id: string): Promise<{ accepted: boolean }> {

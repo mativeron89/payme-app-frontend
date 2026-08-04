@@ -9,13 +9,14 @@ import {
   setOnSessionExpired,
 } from './http';
 import * as mock from './mock/mockApi';
-import { attachPaymentMethodResponse, invitationResponse, setupIntentResponse } from './contractResponses';
+import { acceptInvitationLinkResponse, attachPaymentMethodResponse, invitationResponse, setupIntentResponse } from './contractResponses';
 import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
 import { invalidateSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
 import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse, type PayMesaExpectation, type TransferExpectation } from './moneyGuards';
 import type {
+  AcceptInvitationLinkResponse,
   AppConfig,
   BalanceResponse,
   AttachPaymentMethodResponse,
@@ -183,6 +184,22 @@ export interface Api {
   markAllNotificationsRead(): Promise<void>;
   getPendingInvitations(): Promise<PendingInvitationsResponse>;
   acceptInvitation(id: string): Promise<{ accepted: boolean }>;
+  /**
+   * CIERRE DEL PAGO SIN CUENTA (v2.32.0) · canjea el token de un link por una
+   * INSCRIPCIÓN. **Requiere sesión**: es el único camino nuevo para sumarse a
+   * una mesa por link.
+   *
+   * El link es MULTIUSO, así que canjearlo no lo consume para los demás.
+   * Canjear dos veces es idempotente: deja una sola inscripción activa.
+   *
+   * Errores del contrato: `400 invitation_token_required` · `401` sin sesión ·
+   * `403 invitation_link_not_valid` · `503 invitation_link_unavailable`.
+   * Los CUATRO motivos de rechazo —inválido, vencido, cancelado y
+   * supersedido— comparten el 403 a propósito: distinguirlos le diría a un
+   * desconocido si una mesa existe. El front no debe inventar copy que los
+   * separe (misma doctrina que el 202 ciego de `addFriend`).
+   */
+  acceptInvitationLink(token: string): Promise<AcceptInvitationLinkResponse>;
   // stats
   getStats(): Promise<StatsResponse>;
   // social
@@ -399,6 +416,10 @@ const realApi: Api = {
   getPendingInvitations: () => httpRequest<PendingInvitationsResponse>('GET', '/invitations'),
   acceptInvitation: (id) =>
     httpRequest<{ accepted: boolean }>('POST', `/invitations/${encodeURIComponent(id)}/accept`),
+  acceptInvitationLink: async (token) =>
+    acceptInvitationLinkResponse(
+      await httpRequest<unknown>('POST', '/invitations/accept-link', { token }),
+    ),
 
   getStats: () => httpRequest<StatsResponse>('GET', '/account/stats'),
 
@@ -524,6 +545,8 @@ const mockApi: Api = {
   markAllNotificationsRead: () => mock.mockMarkAllNotificationsRead(),
   getPendingInvitations: () => mock.mockPendingInvitations(),
   acceptInvitation: (id) => mock.mockAcceptInvitation(id),
+  acceptInvitationLink: async (token) =>
+    acceptInvitationLinkResponse(await mock.mockAcceptInvitationLink(token)),
 
   getStats: () => mock.mockStats(),
 

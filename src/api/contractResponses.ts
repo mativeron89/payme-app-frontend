@@ -1,4 +1,5 @@
 import type {
+  AcceptInvitationLinkResponse,
   AttachPaymentMethodResponse,
   AttachedPaymentMethod,
   CreateInvitationResponse,
@@ -40,6 +41,26 @@ function invitationLinkMatches(value: unknown, expectedCode: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * CIERRE DEL PAGO SIN CUENTA · el 200 de `accept-link`.
+ *
+ * Se decodifica aunque el shape sea de dos campos, y por una razón concreta:
+ * de este 200 depende que el front navegue a la mesa dando por hecho que la
+ * persona quedó INSCRIPTA. Si el cuerpo no es el del contrato, tratarlo como
+ * éxito la manda a una mesa donde el siguiente request le va a dar 403 sin
+ * explicación. Un 2xx malformado no es éxito.
+ *
+ * `joined` tiene que ser exactamente `true`: un `"true"`, un `1` o un `false`
+ * son todos verdaderos-por-descuido en JS si uno se conforma con leer la clave.
+ */
+export function acceptInvitationLinkResponse(value: unknown): AcceptInvitationLinkResponse {
+  const body = record(value);
+  if (!body || body.joined !== true || !nonEmpty(body.mesa_code)) {
+    throw new ContractResponseError('invitations/accept-link');
+  }
+  return value as AcceptInvitationLinkResponse;
 }
 
 export function setupIntentResponse(value: unknown): CreateSetupIntentResponse {
