@@ -6,16 +6,30 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-03**.
+- Fecha del refresh: **2026-08-04**.
 - Fuente local: `../payme-app-backend`.
-- Commit exacto: `e8a3faf2f520b249cbe6001f14ef70230a405695`.
-- Versión de `package.json`: **2.28.8**.
+- Commit exacto: `db48cf69422fb0edbeb633e883c14405174a549b`.
+- Versión de `package.json`: **2.31.0**.
 - Rama fuente: `codex/audit-2026-08-02-app-backend`.
 
 Ese commit es un candidato **local** de auditoría. No se afirma push, CI remoto,
-deploy, Railway, Stripe real ni producción. El backend registró dos corridas
-locales de 30 suites y 549 tests, pero permanece NO-GO técnico/de release por
+deploy, Railway, Stripe real ni producción. Las corridas de suite que el emisor
+declara en sus mensajes de commit (588 tests / 35 suites) son **suyas y no se
+verificaron desde este repo**; el backend permanece NO-GO técnico/de release por
 los bloqueos que se enumeran abajo.
+
+### Qué cambió respecto del refresh anterior (`e8a3faf`, v2.28.8)
+
+Sólo **dos** de los 67 archivos espejados difieren, los dos de OLA 5:
+
+- `routes/config.js` ← `9d874c4`: `GET /api/config` publica
+  `features.wallet_rail`, la capability **global y autoritativa** que hasta acá
+  no existía. Ver abajo.
+- `services/notifications.js` ← `5e210fd`: el emisor deja de crear cinco tipos
+  de aviso del riel saldo, y agrega `friend_request_received` (OLA 3C).
+
+Los otros 65 quedaron byte-idénticos, así que este refresh **no toca** ninguna
+superficie de dinero, garantía, invitaciones ni schema.
 
 ## Reglas
 
@@ -61,6 +75,7 @@ vigente. `docs/CHANGELOG_v2.28.8.md` describe el candidato fuente.
 - `features.google_pay: false`;
 - `features.stp_dispersal` sólo como capacidad de dispersión del restaurante;
 - `features.ocr_real` desde el modo OCR;
+- `features.wallet_rail` con `enabled` y `account_activity` (v2.31.0);
 - `features.account_birth_date` con `supported`,
   `registration_required`, `write_once` y
   `adulthood_server_authoritative`.
@@ -68,6 +83,33 @@ vigente. `docs/CHANGELOG_v2.28.8.md` describe el candidato fuente.
 Apple Pay y Google Pay están ratificados como MUST post-auditoría, pero este
 commit no implementa una hoja nativa ni prueba física. `false` es la única
 capacidad honesta hasta que eso exista.
+
+#### `features.wallet_rail` — la capability que corrige un defecto de autoridad
+
+Hasta v2.30.1 el riel saldo estaba apagado **porque este front lo apagaba** con
+una constante propia. Eso contradecía la constitución, que manda la capability
+**global y autoritativa del backend**: un deploy del front con otro valor lo
+reencendía sin que el backend se enterara. Ahora existe, y el front la **lee**.
+
+Lo que el emisor declara en `routes/config.js` y hay que respetar acá:
+
+- `enabled` es **constante, no bandera**: no se lee de `process.env`, ni del
+  usuario, ni del rol, ni del restaurante ni de la sucursal. Reactivar wallet es
+  una orden nueva con IFPE y ratificación, jamás una variable de entorno.
+- **Ausencia de la clave = backend previo a OLA 5**, y el consumidor debe leerla
+  como **APAGADO**. Acá el fail-closed cae del lado seguro, y por eso —a
+  diferencia de `account_birth_date`— no hay booleano `supported`.
+- `account_activity` viaja **separado a propósito**: `GET /api/account/history` y
+  `GET /api/account/stats` leen `payment_attempts`, **no** tablas de wallet, y la
+  ratificación manda conservarlas. Es exactamente la superficie card-only que
+  `07f0ba2` escondió en este repo por fundir los dos gates. El emisor tiene un
+  test que falla si los dos valores vuelven a moverse juntos; este repo tiene el
+  suyo (`walletRail.test.ts`).
+- El emisor compara el juego de claves **CERRADO**, así que un campo nuevo tipo
+  `enabled_for_restaurant` —justo el permiso por cuenta que la ratificación
+  prohíbe— rompe su suite. Este repo aplica el mismo conjunto cerrado del lado
+  del consumidor y **falla cerrado**, porque un backend distinto del espejado no
+  es una hipótesis: es el caso normal de un deploy desincronizado.
 
 ### Autenticación y cuenta
 
@@ -114,9 +156,27 @@ capacidad honesta hasta que eso exista.
 
 El wallet no se elimina. El plan ratificado post-auditoría debe sacarlo de la
 UI y hacerlo fallar cerrado por flags, conservando código, schema, rutas,
-historia y tests. Ese apagado **todavía no está implementado** en el commit
-fuente. El front no debe usar wallet/STP/topup/transfer como fallback. Reactivar
-requiere gate IFPE.
+historia y tests. El front no debe usar wallet/STP/topup/transfer como fallback.
+Reactivar requiere gate IFPE.
+
+**Estado en el commit fuente (v2.31.0), corregido respecto del refresh anterior:**
+el apagado **empezó** y son dos piezas, las dos verificables en este espejo:
+
+1. `routes/config.js` publica `features.wallet_rail.enabled: false` — la
+   autoridad del apagado, arriba.
+2. `services/notifications.js` deja de crear cinco tipos del riel saldo:
+   `topup_succeeded`, `topup_failed`, `topup_pending`, `transfer_received` y
+   `transfer_sent`. El gate está en el servicio y **no** en los tres emisores,
+   y devuelve `null` **antes de tocar la base** para no abortar la transacción
+   de dinero que envuelve al llamador. Los llamadores quedan intactos y
+   durmientes: **no se borró nada**.
+
+**`tip_received` NO está suprimido, y es deliberado del emisor:** avisa a un
+mesero —persona identificada— de plata acreditada a su nombre, que es obligación
+legacy. Este front **no debe** filtrarlo por analogía.
+
+Lo que sigue sin implementarse en el backend es el resto de OLA 5: el inventario
+wallet y el apagado de las rutas/obligaciones legacy.
 
 ### Apple Pay y Google Pay
 
@@ -148,8 +208,9 @@ queda autorizado a release/piloto.
 
 ## Verificación byte a byte
 
-El cierre comparó **67/67** archivos contra su fuente exacta, sin diferencias ni
-fuentes ausentes. Mapeos especiales:
+El refresh del **2026-08-04** volvió a comparar **67/67** archivos contra su
+fuente exacta en `db48cf6`, sin diferencias ni fuentes ausentes. Los `docs/` se
+comparan por su mapeo especial, no por path. Mapeos especiales:
 
 - `contract-mirror/docs/settlement.js.ref` ↔
   `payme-app-backend/services/settlement.js`;

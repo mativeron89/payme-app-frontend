@@ -16,6 +16,35 @@ const { stpRestaurantDispersalReady } = require('../middleware/envValidation');
 const { version } = require('../package.json');
 const router = express.Router();
 
+/**
+ * OLA 5 · capability de wallet. Ratificada 2026-08-02/03: el riel wallet sale
+ * completo del MVP.
+ *
+ * Hasta acá el apagado lo decidía el FRONT con una constante propia, así que un
+ * deploy suyo con otro valor lo reencendía sin que el backend se enterara. La
+ * constitución manda lo contrario: la capability es global y autoritativa del
+ * backend, y el front no la decide ni la hardcodea. Esto es esa capability.
+ *
+ * `enabled` es una CONSTANTE, no una bandera. No se lee de `process.env`, ni del
+ * usuario, ni del restaurante ni de la sucursal: no existe permiso por cuenta,
+ * rol ni entorno que la mueva. Reactivar exige IFPE vigente, auditoría y una
+ * ratificación nueva de Mati — una orden, jamás una variable de entorno.
+ *
+ * `account_activity` está acá A PROPÓSITO y separado: `/api/account/history` y
+ * `/api/account/stats` leen `payment_attempts`, NO tablas de wallet, y la
+ * ratificación manda conservarlas. Publicarlo aparte es lo que impide que un
+ * consumidor las vuelva a gatear con la bandera de wallet — que es exactamente
+ * lo que pasó en el front en `07f0ba2` y escondió superficie card-only.
+ *
+ * Ausencia de la clave = backend previo a OLA 5. El consumidor debe leerla como
+ * APAGADO: acá el fail-closed cae del lado seguro y no hace falta un booleano
+ * `supported` como en `account_birth_date`.
+ */
+const WALLET_RAIL = Object.freeze({
+  enabled: false,
+  account_activity: true,
+});
+
 router.get('/stripe-key', (req, res) => {
   res.json({ publishable_key: process.env.STRIPE_PUBLISHABLE_KEY });
 });
@@ -39,6 +68,8 @@ router.get('/', (req, res) => {
       // nunca es un gate de wallet/IFPE ni habilita endpoints de saldo.
       stp_dispersal: stpRestaurantDispersalReady(),
       ocr_real: process.env.OCR_FEATURE_FLAG === 'real',
+      // OLA 5 · ver WALLET_RAIL arriba. Constante, no bandera.
+      wallet_rail: WALLET_RAIL,
       // PQ-2 (v2.28). Cuatro booleanos, cada uno con una decisión del front detrás:
       //   supported  → ¿existe el campo? Un backend ≤ v2.27 no manda esta clave.
       //                Es explícito y no por presencia para que el front pueda

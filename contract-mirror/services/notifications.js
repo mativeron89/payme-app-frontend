@@ -37,9 +37,42 @@ const TYPES = {
   friend_request_received: { title: 'Te quieren agregar en PayMe' },
 };
 
+/**
+ * OLA 5 · avisos del riel saldo. La ratificación saca wallet del MVP: cero UI,
+ * cero rutas. Estos tipos avisan de hechos de saldo que ya no tienen pantalla
+ * donde mirarse, así que emitirlos deja el hecho viajando por la red hacia un
+ * consumidor que no puede ni debe mostrarlo.
+ *
+ * El gate vive ACÁ y no en los tres emisores a propósito: un solo lugar no se
+ * puede aplicar a medias y cubre al próximo emisor que nadie previó. Los
+ * llamadores quedan intactos y durmientes — no se borra nada, como manda la
+ * ratificación.
+ *
+ * `tip_received` NO está en la lista, y es deliberado. Avisa a un mesero —una
+ * persona identificada— de plata acreditada a su nombre (`paymentProcessor.js`
+ * la escribe en su wallet). Esa acreditación es obligación legacy: hasta que el
+ * inventario de OLA 5 la drene, callarla sería ocultarle a alguien un
+ * movimiento propio. Se decide con la cuarentena de cargos históricos, no acá.
+ *
+ * Consecuencia declarada: un abono SPEI entrante deja de avisarle al usuario.
+ * NO queda invisible — `walletFunding.js` registra `wallet_credited_spei` del
+ * lado del operador en la misma transacción. Lo que se pierde es el aviso a
+ * alguien que hoy no tiene pantalla de saldo donde usarlo.
+ */
+const WALLET_RAIL_TYPES = new Set([
+  'topup_succeeded', 'topup_failed', 'topup_pending',
+  'transfer_received', 'transfer_sent',
+]);
+
 async function create({ user_id, type, title, body, payload = {}, related_entity_type, related_entity_id, client }) {
   if (!TYPES[type]) {
     logger.warn('unknown_notification_type', { type });
+    return null;
+  }
+  // Antes de tocar la base: devolver acá no puede abortar la tx de dinero que
+  // envuelve al llamador. Mismo contrato que un tipo desconocido — `null`.
+  if (WALLET_RAIL_TYPES.has(type)) {
+    logger.audit('notification_suppressed_wallet_rail', { user_id, type });
     return null;
   }
   const finalTitle = title || TYPES[type].title;
@@ -113,4 +146,4 @@ async function unreadCount(user_id) {
   return rows[0].c;
 }
 
-module.exports = { create, createBulk, markRead, markAllRead, unreadCount, TYPES };
+module.exports = { create, createBulk, markRead, markAllRead, unreadCount, TYPES, WALLET_RAIL_TYPES };
