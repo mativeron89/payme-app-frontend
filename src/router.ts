@@ -77,6 +77,32 @@ export function navigate(page: PageId, param?: string): void {
 }
 
 /**
+ * Reemplaza la ruta actual **sin dejar entrada en el historial**.
+ *
+ * Para redirigir desde una ruta que no se debe poder alcanzar. Con `navigate`
+ * la ruta bloqueada quedaría viva en el historial y el botón Atrás la
+ * recuperaría — el mismo mecanismo por el que Back revivía el token de una
+ * invitación. Una ruta a la que no se puede entrar tampoco se puede volver.
+ */
+export function replaceRoute(page: PageId, param?: string): void {
+  const suffix = param ? `/${encodeURIComponent(param)}` : '';
+  const next = `#/${page}${suffix}`;
+  if (window.location.hash === next) return;
+  try {
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${window.location.search}${next}`,
+    );
+    // `replaceState` no dispara `hashchange`: hay que avisarle al router.
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  } catch {
+    // Si el navegador no deja tocar el historial, al menos sacar de la ruta.
+    window.location.hash = next;
+  }
+}
+
+/**
  * Volver RESPETANDO de dónde viniste (R-08: los back hardcodeados mandaban a
  * un hub fijo aunque hubieras entrado desde otra pantalla). `fallback` es la
  * pantalla "contenedora" natural si no hay historial propio.

@@ -7,6 +7,7 @@ import {
   resetWalletRailForTests,
   subscribeWalletRail,
 } from './walletRail';
+import { allowsWalletRoute } from './releaseGates';
 
 /**
  * OLA 5D · el apagado del riel saldo deja de ser decisión de este repo.
@@ -289,6 +290,76 @@ describe('barrido estructural del árbol', () => {
       }
     }
     expect(ofensores).toEqual([]);
+  });
+
+  /**
+   * ORDEN 3A · las rutas del riel no muestran copy: REDIRIGEN.
+   *
+   * Antes `#/cargar` renderizaba un cartel que decía "El riel de saldo PayMe
+   * todavía no está habilitado para esta versión". Eso es UI del saldo: nombra
+   * el riel e insinúa que en otra versión está. La ratificación pide cero UI y
+   * cero rutas.
+   */
+  it('App no conserva copy que anuncie el riel saldo en la ruta bloqueada', () => {
+    const app = fuentes['/src/App.tsx'];
+    expect(app, 'no se encontró App.tsx').toBeTruthy();
+    // ⚠️ Se barre el código SIN COMENTARIOS, y es la medición correcta: los
+    // docblocks CITAN la copy vieja para explicar por qué se fue, y un barrido
+    // textual no distingue "lo dice la pantalla" de "lo explica el comentario".
+    // Es el mismo error que ya cometí midiendo `guestToken` por presencia de
+    // texto en vez de por alcanzabilidad — un test que castiga a la
+    // documentación empuja a borrarla.
+    // Límite declarado: el stripper es ingenuo (no entiende comentarios dentro
+    // de strings), suficiente para este archivo.
+    const codigo = app!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(codigo).toContain('replaceRoute');
+    for (const frase of ['riel de saldo', 'Saldo PayMe todavía', 'no está habilitado']) {
+      expect(codigo).not.toContain(frase);
+    }
+  });
+
+  /**
+   * Y redirige con `replaceRoute`, no con `navigate`: con `navigate` la ruta
+   * bloqueada quedaría viva en el historial y el botón Atrás la recuperaría.
+   * Una ruta a la que no se puede entrar tampoco se puede volver.
+   */
+  it('la redirección no deja la ruta bloqueada en el historial', () => {
+    const router = fuentes['/src/router.ts'];
+    expect(router, 'no se encontró router.ts').toBeTruthy();
+    const bloque = /export function replaceRoute[\s\S]*?\n}/.exec(router!);
+    expect(bloque, 'replaceRoute debe existir').toBeTruthy();
+    expect(bloque![0]).toContain('replaceState');
+    expect(bloque![0]).not.toContain('pushState');
+  });
+
+  /**
+   * ⭐ Los CUATRO estados apagados producen el mismo resultado. `allowsWalletRoute`
+   * recibe el booleano ya resuelto, así que lo que se fija es que los cuatro
+   * colapsen en `false` y de ahí en ruta bloqueada — incluido `pending`, que es
+   * el estado en el que la app ARRANCA siempre.
+   */
+  it.each([
+    ['false', { features: { wallet_rail: { enabled: false, account_activity: true } } }],
+    ['ausente', { features: {} }],
+    ['malformada', { features: { wallet_rail: { enabled: 'false', account_activity: true } } }],
+    ['con permiso por principal', { features: { wallet_rail: { enabled: false, account_activity: true, enabled_for_restaurant: true } } }],
+  ])('con la capability %s, cargar y transferir quedan bloqueadas', (_caso, config) => {
+    const { walletRailEnabled } = readWalletRail(config);
+    expect(walletRailEnabled).toBe(false);
+    expect(allowsWalletRoute(walletRailEnabled, 'cargar')).toBe(false);
+    expect(allowsWalletRoute(walletRailEnabled, 'transferir')).toBe(false);
+    // Y la superficie card-only sigue alcanzable.
+    for (const p of ['home', 'cuenta', 'amigos', 'perfil', 'mesa', 'avisos']) {
+      expect(allowsWalletRoute(walletRailEnabled, p)).toBe(true);
+    }
+  });
+
+  it('el estado inicial pending también bloquea', () => {
+    resetWalletRailForTests();
+    const { walletRailEnabled, status } = getWalletRailState();
+    expect(status).toBe('pending');
+    expect(allowsWalletRoute(walletRailEnabled, 'cargar')).toBe(false);
+    expect(allowsWalletRoute(walletRailEnabled, 'transferir')).toBe(false);
   });
 
   it('las pantallas dormidas del riel siguen en el árbol: nada se borró', () => {

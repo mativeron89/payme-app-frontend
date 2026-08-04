@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { IS_MOCK } from './api';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { BottomNav } from './components/BottomNav';
@@ -5,7 +6,7 @@ import { ToastProvider } from './components/ui';
 import { allowsWalletRoute } from './api/releaseGates';
 import { tokenForMesa } from './api/invitationLink';
 import { useWalletRail } from './api/walletRail';
-import { useRoute } from './router';
+import { replaceRoute, useRoute } from './router';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
 import { CuentaScreen } from './screens/CuentaScreen';
@@ -27,6 +28,32 @@ function Shell() {
   // antes de cualquier return temprano (regla de hooks) y arranca APAGADO, así
   // que mientras la capability viaja las rutas del riel siguen bloqueadas.
   const { walletRailEnabled } = useWalletRail();
+
+  /**
+   * ORDEN 3A · las rutas del riel saldo NO MUESTRAN NADA: redirigen.
+   *
+   * Antes acá se renderizaba un cartel que decía *"El riel de saldo PayMe
+   * todavía no está habilitado para esta versión"*. Eso es **copy que anuncia el
+   * riel**: la ratificación pide cero UI y cero rutas, y un cartel que nombra el
+   * saldo es UI del saldo. Peor, insinúa que en otra versión sí está.
+   *
+   * Ahora se va a superficie neutra con `replaceRoute`, que **no deja entrada en
+   * el historial**: con `navigate`, `#/cargar` quedaría viva y el botón Atrás la
+   * recuperaría. Es el mismo mecanismo por el que Back revivía el token de una
+   * invitación — una ruta a la que no se puede entrar tampoco se puede volver.
+   *
+   * Cubre los CUATRO estados en que el riel está apagado —`false`, ausente,
+   * `pending` y malformada—, porque los cuatro producen `walletRailEnabled:
+   * false` en `walletRail.ts`. Y vale igual en real y en mock: el mock recorre
+   * el mismo lector.
+   *
+   * `TopupScreen` y `TransferScreen` no se montan, así que tampoco llaman a
+   * ningún endpoint. Las dos siguen en el árbol, durmientes.
+   */
+  const rutaDelRielSaldo = !allowsWalletRoute(walletRailEnabled, route.page);
+  useEffect(() => {
+    if (rutaDelRielSaldo) replaceRoute('home');
+  }, [rutaDelRielSaldo]);
 
   /**
    * CIERRE DEL PAGO SIN CUENTA (backend v2.32.0) · acá estaba el defecto.
@@ -58,9 +85,8 @@ function Shell() {
 
   if (!session) return <LoginScreen />;
 
-  if (!allowsWalletRoute(walletRailEnabled, route.page)) {
-    return <div className="screen"><div className="empty">El riel de saldo PayMe todavía no está habilitado para esta versión. No se inició ninguna operación.</div></div>;
-  }
+  // Sin copy y sin pantalla: el efecto de arriba ya está redirigiendo.
+  if (rutaDelRielSaldo) return null;
 
   const screen = (() => {
     switch (route.page) {
