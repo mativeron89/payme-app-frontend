@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { api, WALLET_RAIL_ENABLED } from '../api';
+import { api } from '../api';
 import type { Friend } from '../api/types';
 import { Avatar, SocialTabs, TopBar, useToast } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { navigate } from '../router';
+import { useWalletRail } from '../api/walletRail';
 import { fold, relTime } from '../utils/format';
 import {
   incomingRowView, outgoingRowView, type IncomingRowView, type OutgoingRowView,
@@ -11,6 +12,8 @@ import {
 
 /** s-friends: lista + búsqueda + alta por email/payme_id (routes/friends.js). */
 export function FriendsScreen() {
+  // OLA 5D · el atajo "transferir" es riel saldo: lo habilita el BACKEND.
+  const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
   const [friends, setFriends] = useState<Friend[] | null>(null);
   const [filter, setFilter] = useState('');
@@ -256,7 +259,7 @@ export function FriendsScreen() {
                   <div className="n">{f.full_name}</div>
                   <div className="id">{f.payme_id}</div>
                 </div>
-                {WALLET_RAIL_ENABLED && <button
+                {walletRailEnabled && <button
                   className="btn"
                   style={{ width: 'auto', padding: '7px 12px', fontSize: 'var(--fs-sm)', background: 'var(--teal-l)', color: '#0a7b80' }}
                   onClick={() => navigate('transferir', f.payme_id)}

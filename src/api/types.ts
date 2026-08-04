@@ -63,6 +63,19 @@ export interface AppConfig {
     google_pay: boolean;
     stp_dispersal: boolean;
     ocr_real: boolean;
+    /**
+     * OLA 5 (v2.31.0) · capability del riel saldo. **Sin tipar a propósito.**
+     *
+     * Tiparla como `{ enabled: boolean; account_activity: boolean }` haría que
+     * el compilador afirme una forma que sólo se puede verificar en runtime: la
+     * respuesta viene de un backend que puede ser de otra versión. `unknown`
+     * obliga a pasar por `readWalletRail` (`walletRail.ts`), que valida el
+     * conjunto CERRADO de claves y falla cerrado.
+     *
+     * Opcional porque su ausencia es contrato: backend previo a OLA 5 → riel
+     * APAGADO.
+     */
+    wallet_rail?: unknown;
   };
 }
 

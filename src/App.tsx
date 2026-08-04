@@ -1,9 +1,10 @@
-import { IS_MOCK, WALLET_RAIL_ENABLED } from './api';
+import { IS_MOCK } from './api';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { BottomNav } from './components/BottomNav';
 import { ToastProvider } from './components/ui';
 import { useMoneyActor } from './api/idempotency';
 import { allowsWalletRoute } from './api/releaseGates';
+import { useWalletRail } from './api/walletRail';
 import { useRoute } from './router';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
@@ -21,6 +22,10 @@ import { TransferScreen } from './screens/TransferScreen';
 function Shell() {
   const { session } = useAuth();
   const route = useRoute();
+  // OLA 5D · quién puede alcanzar el riel saldo lo declara el BACKEND. Se pide
+  // antes de cualquier return temprano (regla de hooks) y arranca APAGADO, así
+  // que mientras la capability viaja las rutas del riel siguen bloqueadas.
+  const { walletRailEnabled } = useWalletRail();
 
   // T3 — momento mágico: el invitado entra por link (#/mesa/:code?t=token)
   // con o sin sesión. guestOrAuth del contrato prioriza el token del link;
@@ -42,7 +47,7 @@ function Shell() {
 
   if (!session) return <LoginScreen />;
 
-  if (!allowsWalletRoute(WALLET_RAIL_ENABLED, route.page)) {
+  if (!allowsWalletRoute(walletRailEnabled, route.page)) {
     return <div className="screen"><div className="empty">El riel de saldo PayMe todavía no está habilitado para esta versión. No se inició ninguna operación.</div></div>;
   }
 

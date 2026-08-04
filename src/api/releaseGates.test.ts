@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { accountRailView, allowsWalletRoute } from './releaseGates';
 
 describe('gate IFPE de release', () => {
-  it('real conserva tarjetas y elimina todo affordance wallet', () => {
-    expect(accountRailView(false)).toEqual({
+  it('riel apagado conserva tarjetas y elimina todo affordance wallet', () => {
+    expect(accountRailView(false, true)).toEqual({
       showCards: true,
       showAccountActivity: true,
       showBalance: false,
@@ -15,8 +15,8 @@ describe('gate IFPE de release', () => {
     expect(allowsWalletRoute(false, 'cuenta')).toBe(true);
   });
 
-  it('mock explícito conserva ambos rieles', () => {
-    expect(accountRailView(true)).toEqual({
+  it('riel encendido por el backend conserva ambos rieles', () => {
+    expect(accountRailView(true, true)).toEqual({
       showCards: true,
       showAccountActivity: true,
       showBalance: true,
@@ -30,19 +30,34 @@ describe('gate IFPE de release', () => {
   /**
    * N-10 · el error que esta ola corrige: el historial de pagos propio y sus
    * estadísticas son superficie card-only RATIFICADA QUE SE CONSERVA. Apagar el
-   * riel saldo no puede apagarlos. Este test es el que impide que vuelva a
-   * colgarse del mismo flag.
+   * riel saldo no puede apagarlos.
+   *
+   * OLA 5D lo vuelve **estructural**: son dos parámetros distintos, así que ya
+   * no hay una variable de la que puedan derivar los dos. El test recorre las
+   * cuatro combinaciones y exige que `showAccountActivity` siga al segundo
+   * parámetro y sea INDIFERENTE al primero.
    */
   it('la actividad de cuenta card-only NO depende del riel saldo', () => {
-    expect(accountRailView(false).showAccountActivity).toBe(true);
-    expect(accountRailView(true).showAccountActivity).toBe(true);
-    expect(accountRailView(false).showAccountActivity).toBe(
-      accountRailView(true).showAccountActivity,
-    );
+    expect(accountRailView(false, true).showAccountActivity).toBe(true);
+    expect(accountRailView(true, true).showAccountActivity).toBe(true);
+    expect(accountRailView(false, false).showAccountActivity).toBe(false);
+    expect(accountRailView(true, false).showAccountActivity).toBe(false);
+
+    // La forma fuerte: con el segundo parámetro fijo, mover el riel no la mueve.
+    for (const actividad of [true, false]) {
+      expect(accountRailView(false, actividad).showAccountActivity).toBe(
+        accountRailView(true, actividad).showAccountActivity,
+      );
+    }
   });
 
+  /**
+   * El caso exacto de `07f0ba2`, escrito como test: el backend declara el riel
+   * APAGADO y la actividad de cuenta CONSERVADA. Si alguien vuelve a fundir los
+   * dos gates, este test se pone rojo.
+   */
   it('separa la actividad de cuenta de los movimientos de wallet', () => {
-    const real = accountRailView(false);
+    const real = accountRailView(false, true);
     expect(real.showAccountActivity).toBe(true);
     expect(real.showWalletMovements).toBe(false);
   });

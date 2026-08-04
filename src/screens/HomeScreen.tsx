@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, WALLET_RAIL_ENABLED } from '../api';
+import { api } from '../api';
 import type {
   BalanceResponse,
   OpenMesasResponse,
@@ -9,6 +9,7 @@ import type {
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/ui';
 import { navigate } from '../router';
+import { useWalletRail } from '../api/walletRail';
 import { countdownTo, formatMXN } from '../utils/format';
 import { displayName } from '../utils/identity';
 import { walletTxIcon, walletTxLabel } from '../utils/labels';
@@ -39,6 +40,9 @@ function txDate(iso: string): string {
  */
 export function HomeScreen() {
   const { session } = useAuth();
+  // OLA 5D · saldo y movimientos son riel saldo: los habilita el BACKEND.
+  // Arranca apagado, así que ni siquiera se PIDEN mientras la capability viaja.
+  const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [showBalance, setShowBalance] = useState(false);
@@ -50,7 +54,7 @@ export function HomeScreen() {
 
   useEffect(() => {
     let alive = true;
-    if (WALLET_RAIL_ENABLED) {
+    if (walletRailEnabled) {
       api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
       api.getWalletTransactions().then((r) => alive && setTxs(r.transactions.slice(0, 4))).catch(() => alive && setTxs([]));
     }
@@ -140,7 +144,7 @@ export function HomeScreen() {
         )}
 
         {/* En modo demo (?demo=1) se saca del encuadre: sugiere wallet. */}
-        {WALLET_RAIL_ENABLED && (
+        {walletRailEnabled && (
           <div className="saldo-card">
             <div className="lbl">Tu saldo PayMe</div>
             <div className="saldo-row">
@@ -216,7 +220,7 @@ export function HomeScreen() {
           </>
         )}
 
-        {WALLET_RAIL_ENABLED && txs && txs.length > 0 && (
+        {walletRailEnabled && txs && txs.length > 0 && (
           <>
             <div className="sect-row">
               <div className="sect-title">Últimos movimientos</div>

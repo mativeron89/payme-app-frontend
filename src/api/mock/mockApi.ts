@@ -1,6 +1,7 @@
 import { centsToDisplay, fractionAmount, splitEqual, sumCents, tipFromBps } from '../../utils/money';
 import { createSession, saveSession, type StoredSession } from '../storage';
 import type {
+  AppConfig,
   AttachPaymentMethodResponse,
   MeResponse,
   RestaurantResponse,
@@ -210,6 +211,44 @@ function fail(status: number, error: string, extra: Record<string, unknown> = {}
   return new Promise((_, reject) =>
     setTimeout(() => reject(new MockApiError(status, error, extra)), LATENCY_MS),
   );
+}
+
+// ─── Config ────────────────────────────────────────────────
+
+/**
+ * `GET /api/config` — OLA 5D.
+ *
+ * El mock **también respeta la capability**, y eso es una decisión, no un
+ * detalle: si el mock se saltara `wallet_rail` y el riel quedara apagado por
+ * otro camino, el mock estaría *ignorando* la capability en vez de respetarla,
+ * y el artefacto de desarrollo enseñaría un producto donde el apagado del riel
+ * no depende del backend. Ya pasó en este repo que un mock permisivo le ocultó
+ * un defecto vivo a quien verificaba a mano.
+ *
+ * Los valores replican **exactos** los del emisor
+ * (`contract-mirror/routes/config.js:43-46`), y hay un test que lee el espejo
+ * como texto y falla si se separan.
+ *
+ * `stripe_publishable_key: undefined` es fiel: el mock no carga Stripe.js ni
+ * depende de credenciales.
+ */
+export async function mockGetConfig(): Promise<AppConfig> {
+  return delay({
+    version: 'mock',
+    currency: 'mxn',
+    stripe_publishable_key: undefined,
+    mesa_hold_seconds: 1800,
+    payment_hold_seconds: 420,
+    invitation_expiry_seconds: 86400,
+    item_lock_seconds: 600,
+    features: {
+      apple_pay: false,
+      google_pay: false,
+      stp_dispersal: false,
+      ocr_real: false,
+      wallet_rail: { enabled: false, account_activity: true },
+    },
+  });
 }
 
 // ─── Auth ──────────────────────────────────────────────────

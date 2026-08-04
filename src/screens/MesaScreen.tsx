@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK, WALLET_PAY_ENABLED, WALLET_RAIL_ENABLED, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, WALLET_PAY_ENABLED, newIdempotencyKey } from '../api';
+import { useWalletRail } from '../api/walletRail';
 import type { MonetaryIntentHandle, UnconfirmedAttempt } from '../api/idempotency';
 import {
   acquireMonetaryIntent,
@@ -100,6 +101,8 @@ function payExpectationFor(mesa: MesaDetail, body: PayMesaRequest): PayMesaExpec
 }
 
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
+  // OLA 5D · método de pago con saldo y copy asociada: los declara el BACKEND.
+  const { walletRailEnabled } = useWalletRail();
   const { session } = useAuth();
   const { actor, error: actorError } = useMoneyActor(guestToken);
   const toast = useToast();
@@ -895,13 +898,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         setError(
           // Sin riel saldo, "Cargá saldo" manda a #/cargar, que responde con la
           // pantalla de bloqueo: sería empujar a una ruta muerta.
-          WALLET_RAIL_ENABLED
+          walletRailEnabled
             ? `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Cargá saldo o pagá con tarjeta.`
             : `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Pagá con tarjeta.`,
         );
       } else if (ec === 'wallet_requires_auth') {
         setError(
-          WALLET_RAIL_ENABLED
+          walletRailEnabled
             ? 'Para pagar con saldo PayMe tenés que iniciar sesión.'
             : 'Ese método de pago no está disponible. Pagá con tarjeta.',
         );
@@ -1389,7 +1392,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
           )}
           <div role="radiogroup" aria-labelledby="lbl-metodo">
-            {!isGuest && WALLET_RAIL_ENABLED && (
+            {!isGuest && walletRailEnabled && (
               <button
                 className={`method-card ${payType === 'wallet' ? 'sel' : ''}`}
                 onClick={() => setPayType('wallet')}
@@ -1571,7 +1574,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   la ruta de más tráfico. Con el riel apagado le anunciaba al
                   comensal un saldo PayMe que no existe. */}
               Sin iniciar sesión pagás con tarjeta{WALLET_PAY_ENABLED ? ' o Apple Pay' : ''}
-              {WALLET_RAIL_ENABLED ? ' (el saldo PayMe pide cuenta)' : ''}.
+              {walletRailEnabled ? ' (el saldo PayMe pide cuenta)' : ''}.
             </div>
           )}
         </div>

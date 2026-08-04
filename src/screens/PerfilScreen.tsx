@@ -1,13 +1,16 @@
-import { IS_MOCK, WALLET_RAIL_ENABLED } from '../api';
+import { IS_MOCK } from '../api';
 import { resetDemo } from '../api/mock/store';
 import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
 import { Avatar, TopBar } from '../components/ui';
 import { navigate } from '../router';
+import { useWalletRail } from '../api/walletRail';
 
 /** s-profile: identidad + accesos + salir. */
 export function PerfilScreen() {
   const { session, logout } = useAuth();
+  // OLA 5D · el rótulo de la fila lo decide el BACKEND, no este repo.
+  const { walletRailEnabled } = useWalletRail();
   const user = session?.user;
 
   return (
@@ -47,7 +50,7 @@ export function PerfilScreen() {
                 ÚNICO acceso a gestión de tarjetas, que es card-only ratificado.
                 Se renombra. */}
             <div style={{ flex: 1, fontSize: 'var(--fs-sm)', fontWeight: 600 }}>
-              {WALLET_RAIL_ENABLED ? 'Saldo y tarjetas' : 'Mis tarjetas'}
+              {walletRailEnabled ? 'Saldo y tarjetas' : 'Mis tarjetas'}
             </div>
             <span style={{ color: 'var(--gray-b)' }}>→</span>
           </button>

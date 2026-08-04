@@ -11,17 +11,28 @@
  * que nada tienen que ver con el riel saldo.
  *
  * Quedan separados:
- *  - `showAccountActivity`: pagos propios + estadísticas. SIEMPRE activo; su
- *    fuente son endpoints card-only.
+ *  - `showAccountActivity`: pagos propios + estadísticas. Su fuente son
+ *    endpoints card-only (`payment_attempts`), no tablas de wallet.
  *  - `showWalletMovements`: la lista de `wallet_transactions`. Esa sí es riel
- *    saldo y sigue el flag.
+ *    saldo y sigue el gate del riel.
  *
- * El apagado completo del wallet es OLA 5 y no se anticipa acá.
+ * **OLA 5D · los dos parámetros vienen del BACKEND, no de acá.** Antes
+ * `showAccountActivity` era la constante `true` que corrigió `ef9811d`, y
+ * mantenerla habría sido volver a decidir del lado del front lo que el emisor
+ * ya declara: `GET /api/config` publica `enabled` y `account_activity` como
+ * **dos campos separados**, y el emisor tiene un test que falla si vuelven a
+ * moverse juntos.
+ *
+ * Que sean dos parámetros distintos es lo que hace estructuralmente imposible
+ * repetir `07f0ba2`: **no hay una variable de la que puedan derivar los dos.**
+ * Ante capability ausente o mal formada, `walletRail.ts` entrega
+ * `accountActivity: true` — o sea, la superficie card-only NO se esconde por un
+ * fallo de red.
  */
-export function accountRailView(walletRailEnabled: boolean) {
+export function accountRailView(walletRailEnabled: boolean, accountActivity: boolean) {
   return {
     showCards: true,
-    showAccountActivity: true,
+    showAccountActivity: accountActivity,
     showBalance: walletRailEnabled,
     showWalletMovements: walletRailEnabled,
     showTopupTransfer: walletRailEnabled,

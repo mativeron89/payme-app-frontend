@@ -1,6 +1,7 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, IS_MOCK, QR_RESTAURANT_ID, WALLET_RAIL_ENABLED, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, QR_RESTAURANT_ID, newIdempotencyKey } from '../api';
+import { useWalletRail } from '../api/walletRail';
 import { extractApiError } from '../api/errors';
 import {
   acquireMonetaryIntent,
@@ -68,6 +69,8 @@ function lineTotalCents(it: EditItem): number | null {
 }
 
 export function CreateMesaFlow() {
+  // OLA 5D · el método "Saldo PayMe" de la garantía lo habilita el BACKEND.
+  const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
   const { actor, error: actorError } = useMoneyActor();
   const [step, setStep] = useState<Step>('scan');
@@ -494,7 +497,7 @@ export function CreateMesaFlow() {
         const available = typeof extra.available === 'number' ? extra.available : null;
         setError(
           available !== null
-            ? WALLET_RAIL_ENABLED
+            ? walletRailEnabled
               ? `Saldo insuficiente para garantizar: tenés ${formatMXN(available)} disponibles y la mesa necesita ${formatMXN(total)}. Cargá saldo o garantizá con tarjeta.`
               : `Saldo insuficiente para garantizar: tenés ${formatMXN(available)} disponibles y la mesa necesita ${formatMXN(total)}. Garantizá con tarjeta.`
             : 'No pudimos autorizar la garantía. Probá con otro método.',
@@ -1073,7 +1076,7 @@ export function CreateMesaFlow() {
               </label>
             </div>
           )}
-          {WALLET_RAIL_ENABLED && <button
+          {walletRailEnabled && <button
             className={`method-card ${method === 'wallet' ? 'sel' : ''}`}
             onClick={() => setMethod('wallet')}
             disabled={!!frozen}

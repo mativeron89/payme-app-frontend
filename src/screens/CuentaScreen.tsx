@@ -1,6 +1,7 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK, WALLET_RAIL_ENABLED, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, newIdempotencyKey } from '../api';
+import { useWalletRail } from '../api/walletRail';
 import {
   CardSetupAttemptError,
   clearCardSetupAttempt,
@@ -141,8 +142,23 @@ export function CuentaScreen() {
     error: null,
     empty: true,
   });
-  const accountView = accountRailView(WALLET_RAIL_ENABLED);
-  const [tab, setTab] = useState<'historial' | 'tarjetas'>(accountView.showAccountActivity ? 'historial' : 'tarjetas');
+  // OLA 5D · las DOS decisiones vienen del backend y por campos SEPARADOS:
+  // el riel saldo y la actividad de cuenta card-only no comparten variable.
+  const { walletRailEnabled, accountActivity } = useWalletRail();
+  const accountView = accountRailView(walletRailEnabled, accountActivity);
+  /**
+   * La capability llega DESPUÉS del primer render, así que la pestaña no puede
+   * quedar congelada en lo que valía al montar: si el backend declarara
+   * `account_activity: false`, el estado seguiría en 'historial', el panel de
+   * historial estaría gateado y el de tarjetas pediría `tab === 'tarjetas'` —
+   * pantalla en blanco, con las dos secciones apagadas a la vez.
+   *
+   * Es la lección 9 del ciclo en chiquito: un gate correcto crea un estado que
+   * la UI no sabía representar. Se resuelve DERIVANDO la pestaña efectiva en vez
+   * de recordarla, así el caso no depende de que alguien se acuerde de resetear.
+   */
+  const [tabElegida, setTab] = useState<'historial' | 'tarjetas'>('historial');
+  const tab = accountView.showAccountActivity ? tabElegida : 'tarjetas';
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
   const [pms, setPms] = useState<PaymentMethod[] | null>(null);
@@ -169,7 +185,7 @@ export function CuentaScreen() {
 
   useEffect(() => {
     let alive = true;
-    if (WALLET_RAIL_ENABLED) {
+    if (walletRailEnabled) {
       api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
       api.getWalletTransactions().then((r) => alive && setTxs(r.transactions)).catch(() => alive && setTxs([]));
     }

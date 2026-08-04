@@ -11,7 +11,8 @@ const storage = new MemoryStorage();
 Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
 
 const { saveSession } = await import('./storage');
-const { api, IS_MOCK, WALLET_PAY_ENABLED, WALLET_RAIL_ENABLED } = await import('./index');
+const { api, IS_MOCK, WALLET_PAY_ENABLED } = await import('./index');
+const { getWalletRailState, resetWalletRailForTests } = await import('./walletRail');
 
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -43,8 +44,24 @@ afterEach(() => {
 });
 
 describe('fachada real: contrato idempotente aditivo', () => {
-  it('mantiene apagados wallet, Apple Pay y Google Pay también fuera de release real', () => {
-    expect(WALLET_RAIL_ENABLED).toBe(false);
+  /**
+   * OLA 5D · esto ya NO afirma una constante de este repo.
+   *
+   * Antes acá se leía `expect(WALLET_RAIL_ENABLED).toBe(false)`, que probaba
+   * que el front había decidido bien — no que el riel estuviera apagado. El
+   * estado inicial de la fachada real es el fail-closed: **antes de que el
+   * backend conteste, el riel está apagado**, así que no existe ventana en la
+   * que la UI de saldo aparezca por no haber llegado la capability todavía.
+   *
+   * Que el backend pueda apagarlo se prueba en `walletRail.test.ts`.
+   */
+  it('la fachada real arranca con el riel saldo APAGADO antes de cualquier respuesta', () => {
+    resetWalletRailForTests();
+    const inicial = getWalletRailState();
+    expect(inicial.walletRailEnabled).toBe(false);
+    expect(inicial.status).toBe('pending');
+    // Y la superficie card-only ratificada NO se esconde por no tener respuesta.
+    expect(inicial.accountActivity).toBe(true);
     expect(WALLET_PAY_ENABLED).toBe(false);
   });
 

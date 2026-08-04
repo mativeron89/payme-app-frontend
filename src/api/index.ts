@@ -16,6 +16,7 @@ import { invalidateSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
 import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse, type PayMesaExpectation, type TransferExpectation } from './moneyGuards';
 import type {
+  AppConfig,
   BalanceResponse,
   AttachPaymentMethodResponse,
   MeResponse,
@@ -63,25 +64,26 @@ import type {
  */
 
 export const IS_MOCK: boolean = import.meta.env.VITE_MOCK === '1';
+
 /**
- * Riel saldo PayMe: **APAGADO en real, demo y mock** (OLA 5C).
+ * Riel saldo PayMe: **APAGADO en real y mock**, y desde OLA 5D **el que lo
+ * declara apagado es el BACKEND**.
  *
- * Antes valía `IS_MOCK`, lo que acoplaba dos ejes que no tienen nada que ver:
- * "hay wallet" y "es la demo". La consecuencia era que el artefacto mock ERA un
- * build con el riel entero encendido, publicado en el mismo host público que el
- * real. La ratificación pide cero UI y cero rutas en los tres.
+ * Acá había una constante `WALLET_RAIL_ENABLED = false`. Se eliminó a
+ * propósito, y la eliminación es media corrección: mientras existiera, alguien
+ * podía leerla en vez de leer la capability, y un deploy de este front con otro
+ * valor reencendía el riel sin que el backend se enterara. Sacarla convierte
+ * esa omisión silenciosa en un error de compilación en cada consumidor.
  *
- * **Nada se borra.** Pantallas, adaptadores, tipos, schema e historia quedan
+ * El estado vive en `./walletRail`: `useWalletRail()` en pantallas,
+ * `readWalletRail()` para la lógica pura. Lee `GET /api/config` →
+ * `features.wallet_rail` y **falla cerrado**.
+ *
+ * **Nada se borra.** Pantallas, adaptadores, tipos, schema e historia siguen
  * DURMIENTES: `TopupScreen` y `TransferScreen` siguen en el árbol, los ocho
- * métodos del riel siguen en la fachada, y `payment_type: 'wallet'` sigue
+ * métodos del riel siguen en esta fachada, y `payment_type: 'wallet'` sigue
  * siendo legal en los decoders porque el contrato del backend lo conserva.
- *
- * No hay permiso por cuenta, rol ni restaurante que lo reactive: es una
- * constante. Reactivar exige gate IFPE, auditoría y ratificación nueva — y
- * entonces la capability debe venir del BACKEND, no de acá (OLA 5D, hoy
- * bloqueada porque `/api/config` no publica ninguna capability de wallet).
  */
-export const WALLET_RAIL_ENABLED: boolean = false;
 
 
 /**
@@ -110,6 +112,15 @@ export const QR_RESTAURANT_ID: string | null = readQrRestaurant();
 export const WALLET_PAY_ENABLED = false;
 
 export interface Api {
+  /**
+   * `GET /api/config`. Público (sin sesión) y de solo lectura. Lo consume
+   * `walletRail.ts` para la capability del riel saldo.
+   *
+   * Pasa por la fachada —y no por un `fetch` suelto— para que el mock recorra
+   * EL MISMO camino: un mock que se saltee la capability no la respetaría, la
+   * ignoraría, y volvería a enseñar el comportamiento que se eliminó.
+   */
+  getConfig(): Promise<AppConfig>;
   // auth
   login(email: string, password: string): Promise<StoredSession>;
   register(data: RegisterRequest): Promise<StoredSession>;
@@ -204,6 +215,7 @@ export function newIdempotencyKey(): string {
 }
 
 const realApi: Api = {
+  getConfig: () => httpPublicRequest<AppConfig>('GET', '/config'),
   login: (email, password) => httpLogin(email, password),
   register: (data) => httpRegister(data),
   logout: () => httpLogout(),
@@ -434,6 +446,7 @@ const realApi: Api = {
 };
 
 const mockApi: Api = {
+  getConfig: () => mock.mockGetConfig(),
   login: (email, password) => mock.mockLogin(email, password),
   register: (data) => mock.mockRegister(data),
   async logout() {
