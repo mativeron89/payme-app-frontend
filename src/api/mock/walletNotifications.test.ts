@@ -18,7 +18,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const STORAGE_KEY = 'payme_mock_state_v1';
 
-const TIPOS_WALLET = ['transfer_received', 'transfer_sent', 'topup_succeeded', 'topup_pending'];
+/**
+ * Los CINCO tipos que el emisor dejó de mandar (`5e210fd`). Antes acá había
+ * cuatro: faltaba `topup_failed`, y una lista paralela se queda corta sin que
+ * nadie se entere. Un test de abajo la compara contra el juego del store, que a
+ * su vez se compara contra el espejo en `walletRailNotifications.mirror.test.ts`.
+ */
+const TIPOS_WALLET = [
+  'topup_succeeded', 'topup_failed', 'topup_pending',
+  'transfer_received', 'transfer_sent',
+];
 
 function setupStorage(persisted?: unknown) {
   const m = new Map<string, string>();
@@ -38,6 +47,12 @@ describe('avisos del riel saldo · apagados en el mock', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
+  });
+
+  it('esta lista es la misma que la del store, sin copias que se desincronicen', async () => {
+    setupStorage();
+    const { WALLET_NOTIFICATION_TYPES } = await import('./store');
+    expect([...TIPOS_WALLET].sort()).toEqual([...WALLET_NOTIFICATION_TYPES].sort());
   });
 
   it('el inbox sembrado no trae ningún aviso de saldo', async () => {

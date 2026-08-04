@@ -424,9 +424,24 @@ export function seedWalletNotifications(): AppNotification[] {
   ];
 }
 
-/** Tipos de aviso del riel saldo: sirven al apagado y a su test de recaída. */
+/**
+ * Tipos de aviso del riel saldo: sirven al apagado del MOCK y a su test de
+ * recaída. **No es una lista nuestra: es la del emisor.**
+ *
+ * Espeja exactamente `WALLET_RAIL_TYPES` de
+ * `contract-mirror/services/notifications.js`, donde App Backend dejó de
+ * crearlos (`5e210fd`). Un test lee el espejo como texto y falla si los dos
+ * juegos se separan — la lista a mano se había quedado corta justamente acá:
+ * faltaba `topup_failed`, así que un estado persistido de la demo lo conservaba.
+ *
+ * ⚠️ `tip_received` NO está, y es deliberado del emisor: avisa a un mesero
+ * —persona identificada— de plata acreditada a su nombre, que es obligación
+ * legacy. Agregarlo acá por analogía sería ocultarle a alguien un movimiento
+ * propio.
+ */
 export const WALLET_NOTIFICATION_TYPES = [
-  'transfer_received', 'transfer_sent', 'topup_succeeded', 'topup_pending',
+  'topup_succeeded', 'topup_failed', 'topup_pending',
+  'transfer_received', 'transfer_sent',
 ] as const;
 
 function seedNotifications(mesas: MockMesa[]): {
