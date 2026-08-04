@@ -384,23 +384,21 @@ function seedDirectory(): MockPerson[] {
   return [mk('vale', 'Valentina', 'Ríos'), mk('nico', 'Nicolás', 'Salas')];
 }
 
-function seedNotifications(mesas: MockMesa[]): {
-  notifications: AppNotification[];
-  pendingInvitations: PendingInvitation[];
-} {
-  const invitedMesa = mesas.find((m) => m.code === 'PA-4520');
-  const notifications: AppNotification[] = [
-    {
-      id: mockId('f'),
-      type: 'invitation_received',
-      title: null,
-      body: 'Sofía Fernández te invitó a una mesa',
-      payload: { mesa_code: 'PA-4520', inviter_name: 'Sofía Fernández' },
-      related_entity_type: 'invitation',
-      related_entity_id: null,
-      read_at: null,
-      created_at: iso(-8 * 60_000),
-    },
+/**
+ * Avisos del riel SALDO. **Durmiente: nada los llama.**
+ *
+ * OLA 5C(b) apagó saldo, movimientos y garantía wallet del mock con el criterio
+ * de que la demo es un artefacto de enseñanza — y dejó afuera el inbox, que
+ * seguía mostrando "Se acreditaron $500.00 a tu saldo PayMe" en `#/avisos`.
+ * Se conservan acá, sin llamador, por la misma regla que `seedWalletTx`: el
+ * riel se apaga, no se borra.
+ *
+ * ⚠️ NO confundir con la ola (d): allá el problema es que el BACKEND REAL sigue
+ *    emitiendo `topup_succeeded` y `transfer_received`. Eso no se arregla desde
+ *    acá y sigue frenado esperando al emisor.
+ */
+export function seedWalletNotifications(): AppNotification[] {
+  return [
     {
       id: mockId('f'),
       type: 'transfer_received',
@@ -423,6 +421,34 @@ function seedNotifications(mesas: MockMesa[]): {
       read_at: iso(-2 * 24 * 60 * 60_000),
       created_at: iso(-3 * 24 * 60 * 60_000),
     },
+  ];
+}
+
+/** Tipos de aviso del riel saldo: sirven al apagado y a su test de recaída. */
+export const WALLET_NOTIFICATION_TYPES = [
+  'transfer_received', 'transfer_sent', 'topup_succeeded', 'topup_pending',
+] as const;
+
+function seedNotifications(mesas: MockMesa[]): {
+  notifications: AppNotification[];
+  pendingInvitations: PendingInvitation[];
+} {
+  const invitedMesa = mesas.find((m) => m.code === 'PA-4520');
+  const notifications: AppNotification[] = [
+    {
+      id: mockId('f'),
+      type: 'invitation_received',
+      title: null,
+      body: 'Sofía Fernández te invitó a una mesa',
+      payload: { mesa_code: 'PA-4520', inviter_name: 'Sofía Fernández' },
+      related_entity_type: 'invitation',
+      related_entity_id: null,
+      read_at: null,
+      created_at: iso(-8 * 60_000),
+    },
+    // Acá vivían `transfer_received` y `topup_succeeded`. Se mudaron a
+    // `seedWalletNotifications()`, durmiente: el riel saldo está apagado y el
+    // inbox no es una excepción al apagado.
     {
       id: mockId('f'),
       type: 'mesa_shortfall_charged',
@@ -646,6 +672,13 @@ function loadPersisted(): MockState | null {
     if (!Array.isArray(parsed.blockedUserIds)) parsed.blockedUserIds = [];
     // El directorio de personas que existen sin ser amigas.
     if (!Array.isArray(parsed.directory)) parsed.directory = seedDirectory();
+    // OLA 5C(b), corrección: sin esto el apagado del riel saldo no alcanzaba a
+    // nadie que ya hubiera abierto la demo — los avisos de saldo viven en SU
+    // localStorage, no en el seed, y seguirían visibles en `#/avisos`.
+    if (Array.isArray(parsed.notifications)) {
+      const durmientes: readonly string[] = WALLET_NOTIFICATION_TYPES;
+      parsed.notifications = parsed.notifications.filter((n) => !durmientes.includes(n.type));
+    }
     return parsed;
   } catch {
     return null;
