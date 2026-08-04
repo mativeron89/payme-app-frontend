@@ -17,12 +17,15 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const { requireWalletRail } = require('../services/walletRail');
 const stpAbono = require('../services/stpAbono');
 const logger = require('../utils/logger');
 
 const router = express.Router();
 
-router.get('/clabe', requireAuth, async (req, res, next) => {
+// Es un GET pero ACUÑA y PERSISTE: inserta wallet, emite CLABE y la fija.
+// Va gateado como los POST — lo que decide no es el verbo, es el efecto.
+router.get('/clabe', requireAuth, requireWalletRail, async (req, res, next) => {
   try {
     const result = await pool.tx(async (client) => {
       // asegurar wallet + lock (evita doble emisión de CLABE en carrera)

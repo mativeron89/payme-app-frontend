@@ -27,6 +27,7 @@ const { generateToken, tokenHash, normalizeEmail, hashIp } = require('../utils/t
 const { generatePaymeId } = require('../utils/userId');
 const logger = require('../utils/logger');
 const { loadActiveSession } = require('../middleware/auth');
+const { walletRailEnabled } = require('../services/walletRail');
 
 const router = express.Router();
 const { validateBody } = schemas;
@@ -97,7 +98,13 @@ router.post('/register', validateRegister, async (req, res, next) => {
           [paymeId, email, normalized, phone || null, hash, first_name, last_name, birth_date ?? null]
         );
         const createdUser = rows[0];
-        await client.query(`INSERT INTO wallets (user_id, balance_cents) VALUES ($1, 0)`, [createdUser.id]);
+        // ORDEN 1A · el alta ya no acuña wallet. NO es un 410: registrarse es
+        // card-only legítimo y tiene que seguir funcionando; lo que se apaga es
+        // que nazca una fila de dinero electrónico sin que nadie la pida.
+        // La fila no se borra para las cuentas que ya la tienen.
+        if (walletRailEnabled()) {
+          await client.query(`INSERT INTO wallets (user_id, balance_cents) VALUES ($1, 0)`, [createdUser.id]);
+        }
         const createdSession = await createSession({
           userId: createdUser.id, userAgent: req.headers['user-agent'], ip: req.ip, client,
         });

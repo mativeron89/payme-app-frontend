@@ -30,6 +30,7 @@ const {
 const schemas = require('../schemas');
 const stateMachine = require('../utils/stateMachine');
 const stripeService = require('../services/stripe');
+const { rechazaPorRielApagado } = require('../services/walletRail');
 const cardEligibility = require('../services/cardEligibility');
 const savedCards = require('../services/savedCards');   // D4 (v2.16)
 const paymentMethodLifecycle = require('../services/paymentMethodLifecycle');
@@ -152,6 +153,12 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
       payment_method_id, save_payment_method,       // D4 (v2.16): tarjeta guardada
       idempotency_key,                              // B-06 §4.1 (v2.25): opcional
     } = req.body;
+    // ORDEN 1A · la garantía por saldo sale del MVP. Va ACÁ, apenas leído el
+    // body: más abajo ya se calcula el hash de idempotencia, se busca mesa
+    // previa, se toca Stripe y se inserta la mesa (:398). Rechazar tarde
+    // dejaría una mesa creada por un método que el riel no admite.
+    if (guarantee_method === 'wallet'
+        && rechazaPorRielApagado(req, res, 'guarantee_method')) return;
     // ── B-06 §4.1 (v2.25): idempotencia de la CREACIÓN ──
     // Sin esto, perder la respuesta después del hold hacía que el reintento
     // creara una SEGUNDA mesa con un SEGUNDO hold por el total — y la mesa
@@ -846,6 +853,11 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
     if (payment_type === 'wallet' && req.isGuest) {
       return res.status(401).json({ error: 'wallet_requires_auth' });
     }
+    // ORDEN 1A · el pago con saldo sale del MVP. Va antes del hash de
+    // idempotencia, del replay gate y del INSERT del attempt (:1172): nada de
+    // eso debe correr para un riel que no admite obligaciones nuevas.
+    if (payment_type === 'wallet'
+        && rechazaPorRielApagado(req, res, 'payment_type')) return;
     const userId = req.user?.id || null;
     const guestTok = req.isGuest ? req.guestToken : null;
     const guestTokHash = guestHashOf(req);  // v2.5.2 P1 #2

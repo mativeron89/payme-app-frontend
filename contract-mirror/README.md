@@ -6,10 +6,10 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-04** (segundo del día).
+- Fecha del refresh: **2026-08-04** (tercero del día · ORDEN 3A).
 - Fuente local: `../payme-app-backend`.
-- Commit exacto: `330a645cf4ea12e0ac6fe1f397a956a3327666a8`.
-- Versión de `package.json`: **2.32.0**.
+- Commit exacto: `39c9f7283488827c72daf94fb6c7a949036b43d9`.
+- Versión de `package.json`: **2.34.2**.
 - Rama fuente: `codex/audit-2026-08-02-app-backend`.
 
 Ese commit es un candidato **local** de auditoría. No se afirma push, CI remoto,
@@ -18,7 +18,53 @@ declara en sus mensajes de commit (588 tests / 35 suites) son **suyas y no se
 verificaron desde este repo**; el backend permanece NO-GO técnico/de release por
 los bloqueos que se enumeran abajo.
 
-### Qué cambió respecto del refresh anterior (`db48cf6`, v2.31.0)
+### 🔴 EL CONTEO HEREDADO ESTABA MAL, Y EL NÚMERO ERA LO DE MENOS
+
+Los refreshes anteriores declararon **67/67** y **68/68**. Los dos números eran
+falsos, y por el mismo motivo: el comando de enumeración usaba
+`find . -type f | grep -v README.md` —**sin anclar**—, así que descartaba
+silenciosamente **dos** archivos, no uno:
+
+- `README.md`, este archivo, que es la única exclusión legítima;
+- **`legal/README.md`, que es un archivo ESPEJADO con fuente real**
+  (`payme-app-backend/legal/README.md`).
+
+O sea que había un archivo del espejo que **nunca se verificó contra su fuente**
+y que no entraba en ningún conteo. Que hoy resultara idéntico fue suerte, no
+método. El error de conteo era el síntoma; el agujero de verificación era el
+defecto.
+
+**Enumeración correcta al 2026-08-04:** **70 archivos espejados** más este
+README de procedencia. Eran 69 antes de agregar `services/walletRail.js` en este
+refresh — el 69 que midió la reauditoría era el número correcto de ese momento.
+
+**Corregido con estructura, no con cuidado:** `contract-mirror.test.ts` enumera
+el árbol y falla si el inventario cambia sin que se actualice este README, y
+compara el número escrito acá contra el número real. Un conteo a mano es un
+borrador; esto es un método.
+
+**Límite declarado:** ese test **no** puede comparar byte a byte contra la
+fuente, porque `../payme-app-backend` está fuera de la raíz de Vite. La paridad
+byte a byte se verifica al refrescar, con el script que este README documenta, y
+su resultado se registra abajo.
+
+### Qué cambió en este refresh (`330a645` v2.32.0 → `39c9f72` v2.34.2)
+
+Seis archivos difieren y **uno se agrega**:
+
+- `routes/topup.js`, `routes/transfers.js`, `routes/spei-funding.js`,
+  `routes/mesas.js` ← `679161d`: **el riel wallet ahora falla cerrado en el
+  BACKEND**, con `410 feature_removed`. Ver abajo, porque refuta algo que este
+  repo daba por cierto.
+- `routes/auth.js` ← `679161d`: el alta **ya no acuña** una fila de wallet.
+  Registrarse sigue funcionando: es card-only legítimo.
+- `services/invitationAuthority.js` ← `a7027b7`: corrige por escrito que
+  `resolveLinkToken` **no es** una extracción sino una **segunda copia** del
+  predicado de autorización.
+- `services/walletRail.js` — **agregado al espejo.** Es el gate central y define
+  el cuerpo de error `410 feature_removed` que este front puede recibir.
+
+### Qué había cambiado en el refresh anterior (`db48cf6`, v2.31.0)
 
 **El cierre del pago sin cuenta.** Cuatro archivos, uno de ellos nuevo en el
 espejo:
@@ -76,6 +122,8 @@ superficie de dinero, garantía, invitaciones ni schema.
 | `services/consent.js` | PQ-1/PQ-2 | consentimiento y edad autoritativa |
 | `utils/money.js`, `stateMachine.js`, `idempotency.js` | primitivas compartidas | centavos, FSM y hash de requests |
 | `utils/tokens.js` | emisión y verificación de tokens de invitación | formato v2 vs legacy del token que el front conserva |
+| `services/walletRail.js` | gate central del riel saldo | el `410 feature_removed` que el front puede recibir |
+| `legal/README.md` | avisos legales | contexto; **estuvo espejado y sin verificar hasta ORDEN 3A** |
 | `docs/settlement.js.ref` | `services/settlement.js` | referencia de cierre/garantía |
 
 Los changelogs y READMEs históricos se conservan como contexto, no como estado
@@ -99,6 +147,28 @@ vigente. `docs/CHANGELOG_v2.28.8.md` describe el candidato fuente.
 Apple Pay y Google Pay están ratificados como MUST post-auditoría, pero este
 commit no implementa una hoja nativa ni prueba física. `false` es la única
 capacidad honesta hasta que eso exista.
+
+#### 🔴 CORRECCIÓN · publicar la capability NO apagaba el riel
+
+**Afirmación previa de este repo, REFUTADA (ORDEN 3A):** que con
+`wallet_rail.enabled=false` en `/api/config` el riel quedaba apagado y la
+autoridad quedaba del lado del backend.
+
+**Publicar una capability hace autoritativa la DECLARACIÓN, no la EJECUCIÓN.**
+Entre `9d874c4` (v2.31.0) y `679161d` (v2.33.0) el backend **seguía aceptando**
+topups, transferencias, emisión de CLABE, garantía wallet y pago wallet, y el
+alta **seguía acuñando una fila de dinero electrónico** por cada usuario nuevo.
+La capability decía "apagado" mientras los endpoints funcionaban.
+
+Desde `679161d` el gate existe de verdad: `services/walletRail.js`, gobernado
+por `LEGACY_WALLET_ENABLED` (apagada por defecto, parsing estricto — un typo no
+la deja encendida en silencio), y **siete entrypoints devuelven
+`410 { error: 'feature_removed', code: 'feature_removed' }`**.
+
+Consecuencia para este front, y es la que importa: **el apagado de la UI nunca
+fue el gate de dinero, y no lo es ahora tampoco.** Lo que este repo lee es una
+declaración para no ofrecer lo que no existe; quien impide una obligación wallet
+nueva es el backend. Las dos capas son necesarias y ninguna sustituye a la otra.
 
 #### `features.wallet_rail` — la capability que corrige un defecto de autoridad
 
@@ -196,6 +266,25 @@ siguen en pie pero inalcanzables. Este repo hace lo mismo: `httpGuestRequest`,
 los parámetros `guestToken` de la fachada y las ramas `isGuest` de `MesaScreen`
 quedan durmientes e intactos.
 
+#### 🔴 CORRECCIÓN · `resolveLinkToken` NO es una definición única
+
+**Afirmación previa, del emisor y espejada acá, REFUTADA:** que el predicado
+"este token autoriza entrar a esta mesa" quedaba con **una sola definición**.
+
+Es falso y el propio emisor lo corrigió en `a7027b7`: `middleware/auth.js`
+conserva su **segunda copia** del predicado, v2 y legacy, sin refactorizar. El
+drift que aquel mensaje decía haber eliminado **sigue existiendo** — hoy en
+código sin call sites, porque ninguna ruta usa `guestOrAuth`. Si alguien vuelve
+a colgarlo de una ruta, reactiva un predicado de autorización **sin un solo
+test**, porque los tests de invitado se movieron todos al servicio.
+
+Para este front la consecuencia es acotada pero real: **no se puede razonar
+sobre la semántica de un token leyendo sólo `resolveLinkToken`.** Los alias
+legacy y la cadena de supersesión se resuelven ahí con reglas propias
+(`source.expires_at` **y** `canonical.expires_at`, y la canónica vía
+`COALESCE(source.superseded_by_id, source.id)`), que no son las mismas líneas
+que las del middleware.
+
 ### OCR y staff
 
 - OCR acepta un único archivo `image`, máximo 8 MiB, con MIME y magic bytes
@@ -264,9 +353,13 @@ queda autorizado a release/piloto.
 
 ## Verificación byte a byte
 
-El segundo refresh del **2026-08-04** comparó **68/68** archivos contra su
-fuente exacta en `330a645`, sin diferencias ni fuentes ausentes (67 del refresh
-anterior más `utils/tokens.js`). Los `docs/` se
+El refresh de **ORDEN 3A** comparó **70/70** archivos contra su fuente exacta en
+`39c9f72`: **70 idénticos, 0 diferencias, 0 sin fuente**. Es la primera
+verificación que incluye `legal/README.md`, que las anteriores descartaban sin
+saberlo. El script enumera desde el árbol con `find`, aplica los mapeos
+especiales de abajo y compara con `cmp`, contando por separado idénticos,
+distintos y sin-fuente — así "no hay diferencias" no se confunde con "no
+comparó nada". Los `docs/` se
 comparan por su mapeo especial, no por path. Mapeos especiales:
 
 - `contract-mirror/docs/settlement.js.ref` ↔

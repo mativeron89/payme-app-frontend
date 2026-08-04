@@ -10,6 +10,7 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const { requireWalletRail } = require('../services/walletRail');
 const { createTransfer, validateBody } = require('../schemas');
 const notifs = require('../services/notifications');
 const { centsToDisplay, sumCents } = require('../utils/money');
@@ -44,7 +45,7 @@ async function checkTransferIdempotency(from_user_id, idempotency_key, reqHash) 
   return { existing };
 }
 
-router.post('/', validateBody(createTransfer), async (req, res, next) => {
+router.post('/', requireWalletRail, validateBody(createTransfer), async (req, res, next) => {
   try {
     const { amount_cents, to_payme_id, to_email, to_user_id, concept, idempotency_key } = req.body;
 

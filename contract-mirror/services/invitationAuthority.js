@@ -325,11 +325,23 @@ async function lockCanonical(client, invitationId) {
 /**
  * Resuelve QUÉ invitación de link autoriza un token crudo, o null.
  *
- * Existe para que "este token autoriza entrar a esta mesa" tenga UNA sola
- * definición. Antes del cierre del pago sin cuenta el predicado vivía sólo
- * dentro del UNION de `requireMesaParticipant`; con dos copias, la próxima
- * corrección se aplica a una y no a la otra, que es como nacen los agujeros de
- * permisos.
+ * ⚠️ CORRECCIÓN · esto NO es una extracción, es una SEGUNDA COPIA.
+ *
+ * El mensaje de `211fccd` afirmó que el predicado quedaba con "una sola
+ * definición". Es falso, y lo encontró una revisión independiente:
+ * `middleware/auth.js:218-258` conserva su propio predicado v2 y legacy, sin
+ * refactorizar. O sea que el drift que ese mensaje decía haber eliminado
+ * SIGUE EXISTIENDO — hoy en código sin call sites, porque tras el cierre del
+ * pago sin cuenta ninguna ruta usa `guestOrAuth`.
+ *
+ * El riesgo concreto: si alguien vuelve a colgar `guestOrAuth` de una ruta,
+ * reactiva un predicado de autorización que **no tiene un solo test**, porque
+ * los tests de invitado se movieron todos acá. Por eso hay un guard que falla
+ * si alguna ruta vuelve a usarlo (`tests/guest-rail-cerrado.test.js`).
+ *
+ * Deduplicar de verdad es un refactor de middleware de autorización y va en
+ * orden propia. Mientras tanto queda escrito acá para que nadie vuelva a leer
+ * "una sola definición" y lo crea.
  *
  * Los dos formatos van por caminos SEPARADOS a propósito. El intento anterior
  * de cerrar esto los mezcló en un solo predicado con

@@ -10,6 +10,7 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const { requireWalletRail } = require('../services/walletRail');
 const { topupOxxo, topupCard, validateBody } = require('../schemas');
 const stripeOxxo = require('../services/stripe-oxxo');
 const topupProcessor = require('../services/topupProcessor');
@@ -181,7 +182,7 @@ async function prepareCardTopup(req, amountCents, paymentMethodId, idempotencyKe
 }
 
 // ─── POST /oxxo ───────────────────────────────────────────
-router.post('/oxxo', validateBody(topupOxxo), async (req, res, next) => {
+router.post('/oxxo', requireWalletRail, validateBody(topupOxxo), async (req, res, next) => {
   try {
     const { amount_cents, idempotency_key } = req.body;
     const reqHash = payloadHash(req.body, { keep: PAYLOAD_KEYS.topup_oxxo });
@@ -279,7 +280,7 @@ router.post('/oxxo', validateBody(topupOxxo), async (req, res, next) => {
 });
 
 // ─── POST /card ───────────────────────────────────────────
-router.post('/card', validateBody(topupCard), async (req, res, next) => {
+router.post('/card', requireWalletRail, validateBody(topupCard), async (req, res, next) => {
   try {
     const { amount_cents, payment_method_id, idempotency_key } = req.body;
     const reqHash = payloadHash(req.body, { keep: PAYLOAD_KEYS.topup_card });
