@@ -102,6 +102,11 @@ export interface MockState {
   paymentMethods: PaymentMethod[];
   friends: MockPerson[];
   /**
+   * Personas que existen en PayMe y NO son mis amigas. Hace de tabla `users`
+   * para que `mockAddFriend` pueda fallar en silencio como el backend real.
+   */
+  directory: MockPerson[];
+  /**
    * OLA 3C: solicitudes de amistad pendientes. `direction` es desde MI punto de
    * vista — `incoming` me la mandaron, `outgoing` la mandé yo. El `id` es el de
    * la SOLICITUD, nunca el de la persona: en el backend confundirlos hacía que
@@ -349,6 +354,36 @@ function seedFriends(): MockPerson[] {
   return [mk('sofi', 'Sofía', 'Fernández'), mk('juan', 'Juan', 'López'), mk('maru', 'María', 'Ruiz'), mk('leop', 'Leo', 'Paz')];
 }
 
+/**
+ * Personas que EXISTEN en PayMe sin ser amigas mías.
+ *
+ * El mock no tenía tabla `users`: sólo existían mis amigos, así que
+ * `mockAddFriend` inventaba una persona para cualquier texto que se tipeara y
+ * la solicitud saliente aparecía SIEMPRE. Eso hacía invisible en la demo el
+ * comportamiento real —el backend sólo inserta la fila si el destino existe y
+ * está activo— y con él, el oráculo que ese comportamiento produce.
+ *
+ * Un mock que diverge del contrato hacia el lado permisivo convierte la
+ * verificación manual en teatro: mirás la pantalla, funciona, y lo que mirabas
+ * no era el sistema.
+ */
+function seedDirectory(): MockPerson[] {
+  const mk = (payme: string, first: string, last: string): MockPerson => ({
+    id: mockId('a'),
+    payme_id: `payme_mx_${payme}`,
+    first_name: first,
+    last_name: last,
+    full_name: `${first} ${last}`,
+    email: `${payme}@mail.com`,
+    // Sólo significa algo cuando la persona pasa a `friends`; ahí se pisa.
+    added_at: '',
+  });
+  // Valentina es la misma que manda la solicitud entrante sembrada: agregarla
+  // por correo debe disparar el camino RECÍPROCO del contrato (pedirle a quien
+  // ya me pidió equivale a aceptar), que es el más difícil de ver a mano.
+  return [mk('vale', 'Valentina', 'Ríos'), mk('nico', 'Nicolás', 'Salas')];
+}
+
 function seedNotifications(mesas: MockMesa[]): {
   notifications: AppNotification[];
   pendingInvitations: PendingInvitation[];
@@ -422,6 +457,7 @@ function seedNotifications(mesas: MockMesa[]): {
 
 function seedState(): MockState {
   const friends = seedFriends();
+  const directory = seedDirectory();
   const mesas = seedMesas();
   const { notifications, pendingInvitations } = seedNotifications(mesas);
   return {
@@ -460,20 +496,16 @@ function seedState(): MockState {
       },
     ],
     friends,
+    directory,
     // Una solicitud entrante sembrada: sin esto la pantalla nueva arranca vacía
-    // y no se puede ver el flujo de aceptar en la demo.
+    // y no se puede ver el flujo de aceptar en la demo. La persona es LA MISMA
+    // del directorio (mismo `id`), para que agregarla por correo dispare el
+    // camino recíproco del contrato en vez de crear una segunda pendiente.
     friendRequests: [
       {
         id: mockId('f'),
         direction: 'incoming' as const,
-        person: {
-          id: mockId('a'),
-          payme_id: 'payme_mx_vale',
-          first_name: 'Valentina',
-          last_name: 'Ríos',
-          full_name: 'Valentina Ríos',
-          email: 'vale@mail.com',
-        },
+        person: directory[0],
         requested_at: iso(-2 * 60 * 60_000),
       },
     ],
@@ -607,6 +639,13 @@ function loadPersisted(): MockState | null {
     if (!parsed.idempotency || typeof parsed.idempotency !== 'object' || Array.isArray(parsed.idempotency)) {
       parsed.idempotency = {};
     }
+    // OLA 3C: `friendRequests` y `blockedUserIds` nacieron después que el
+    // storage. Un estado persistido de antes los trae `undefined` y la pantalla
+    // de amigos reventaba al leerlos.
+    if (!Array.isArray(parsed.friendRequests)) parsed.friendRequests = [];
+    if (!Array.isArray(parsed.blockedUserIds)) parsed.blockedUserIds = [];
+    // El directorio de personas que existen sin ser amigas.
+    if (!Array.isArray(parsed.directory)) parsed.directory = seedDirectory();
     return parsed;
   } catch {
     return null;

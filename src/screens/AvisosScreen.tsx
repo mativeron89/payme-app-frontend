@@ -4,6 +4,7 @@ import type { AppNotification, PendingInvitation } from '../api/types';
 import { Icon, type IconName } from '../components/Icon';
 import { TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
+import { relTime } from '../utils/format';
 
 /**
  * Avisos: invitaciones in-app pendientes (GET /invitations + accept) arriba,
@@ -24,16 +25,6 @@ const NOTIF_ICON: Record<string, IconName> = {
   mesa_garantia_impagos: 'warning',
   payment_failed: 'x-circle',
 };
-
-function relTime(iso: string): string {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (mins < 1) return 'recién';
-  if (mins < 60) return `hace ${mins} min`;
-  const hs = Math.floor(mins / 60);
-  if (hs < 24) return `hace ${hs} h`;
-  const days = Math.floor(hs / 24);
-  return days === 1 ? 'ayer' : `hace ${days} días`;
-}
 
 export function AvisosScreen() {
   const toast = useToast();

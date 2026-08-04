@@ -1193,30 +1193,43 @@ export async function mockFriends(): Promise<FriendsResponse> {
  * comportamiento que el backend eliminó justamente por ser un oráculo.
  */
 export async function mockAddFriend(query: { email?: string; payme_id?: string }): Promise<FriendRequestCreatedResponse> {
-  const handle = (query.email ?? query.payme_id ?? 'nuevo').split('@')[0].replace(/^payme_mx_/, '');
-  const yaEsAmigo = state.friends.some(
-    (f) => f.payme_id === query.payme_id || f.email === query.email,
+  // El backend BUSCA primero, y si no encuentra a nadie activo no inserta nada
+  // (`routes/friends.js:136-151`). El mock hacía lo contrario: inventaba una
+  // persona para cualquier texto, así que la solicitud saliente aparecía
+  // siempre y la demo no podía mostrar —ni delatar— el comportamiento real.
+  const email = query.email?.trim().toLowerCase();
+  const destino = [...state.friends, ...state.directory].find(
+    (p) => (email !== undefined && p.email.toLowerCase() === email)
+      || (query.payme_id !== undefined && p.payme_id === query.payme_id),
   );
-  const yaPedida = state.friendRequests.some(
-    (r) => r.direction === 'outgoing' && r.person.payme_id === query.payme_id,
-  );
-  if (!yaEsAmigo && !yaPedida) {
-    const first = handle.charAt(0).toUpperCase() + handle.slice(1);
-    state.friendRequests.push({
-      id: mockId('f'),
-      direction: 'outgoing',
-      person: {
-        id: mockId('a'),
-        payme_id: query.payme_id ?? `payme_mx_${handle.slice(0, 4).padEnd(4, 'x')}`,
-        first_name: first,
-        last_name: 'Demo',
-        full_name: `${first} Demo`,
-        email: query.email ?? `${handle}@mail.com`,
-      },
-      requested_at: new Date().toISOString(),
-    });
+
+  if (destino) {
+    const bloqueado = state.blockedUserIds.includes(destino.id);
+    const yaEsAmigo = state.friends.some((f) => f.id === destino.id);
+    const yaPedida = state.friendRequests.some(
+      (r) => r.direction === 'outgoing' && r.person.id === destino.id,
+    );
+    // Si el otro YA me pidió, pedirle yo equivale a aceptar: el contrato evita
+    // así dos pendientes cruzadas que nadie resuelve.
+    const reciproca = state.friendRequests.findIndex(
+      (r) => r.direction === 'incoming' && r.person.id === destino.id,
+    );
+    if (!bloqueado && !yaEsAmigo && !yaPedida) {
+      if (reciproca !== -1) {
+        const [req] = state.friendRequests.splice(reciproca, 1);
+        state.friends.push({ ...req.person, added_at: new Date().toISOString() });
+      } else {
+        state.friendRequests.push({
+          id: mockId('f'),
+          direction: 'outgoing',
+          person: destino,
+          requested_at: new Date().toISOString(),
+        });
+      }
+    }
   }
-  // Misma respuesta en los cuatro casos.
+  // Misma respuesta en TODOS los casos: no existe, existe, ya es amigo, ya hay
+  // pendiente, o me bloqueó. Es la ceguera que el endpoint tiene a propósito.
   return delay({ requested: true as const });
 }
 

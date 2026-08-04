@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api, WALLET_RAIL_ENABLED } from '../api';
-import type { Friend, FriendRequest } from '../api/types';
+import type { Friend } from '../api/types';
 import { Avatar, SocialTabs, TopBar, useToast } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { navigate } from '../router';
-import { fold } from '../utils/format';
+import { fold, relTime } from '../utils/format';
+import {
+  incomingRowView, outgoingRowView, type IncomingRowView, type OutgoingRowView,
+} from './friendRequestsView';
 
 /** s-friends: lista + búsqueda + alta por email/payme_id (routes/friends.js). */
 export function FriendsScreen() {
@@ -19,20 +22,28 @@ export function FriendsScreen() {
    * cortado a la mitad: `POST /friends` ya no crea amistad, así que alguien
    * mandaba una solicitud y nadie podía aceptarla desde la app.
    */
-  const [incoming, setIncoming] = useState<FriendRequest[]>([]);
-  const [outgoing, setOutgoing] = useState<FriendRequest[]>([]);
+  const [incoming, setIncoming] = useState<IncomingRowView[]>([]);
+  /**
+   * ⚠️ `OutgoingRowView`, NO `FriendRequest`: la identidad del destinatario se
+   * descarta acá, en el borde de red, y nunca entra al componente. Guardar el
+   * `FriendRequest` crudo y "acordarse de no pintarlo" es lo que falló.
+   */
+  const [outgoing, setOutgoing] = useState<OutgoingRowView[]>([]);
   const [reqBusy, setReqBusy] = useState<string | null>(null);
 
   function loadRequests() {
-    void api.getFriendRequests('incoming').then((r) => setIncoming(r.requests)).catch(() => setIncoming([]));
-    void api.getFriendRequests('outgoing').then((r) => setOutgoing(r.requests)).catch(() => setOutgoing([]));
+    void api.getFriendRequests('incoming')
+      .then((r) => setIncoming(r.requests.map(incomingRowView))).catch(() => setIncoming([]));
+    void api.getFriendRequests('outgoing')
+      .then((r) => setOutgoing(r.requests.map(outgoingRowView))).catch(() => setOutgoing([]));
   }
 
   /** El `id` que viaja es el de la SOLICITUD, nunca el de la persona. */
   async function resolveRequest(
     requestId: string,
     action: 'accept' | 'reject' | 'cancel',
-    quien: string,
+    /** Sólo para las ENTRANTES: de una saliente no sabemos —ni mostramos— quién es. */
+    quien?: string,
   ) {
     setReqBusy(requestId);
     try {
@@ -97,7 +108,11 @@ export function FriendsScreen() {
       toast('Si tiene PayMe, le va a llegar tu solicitud');
       setNewQuery('');
       setAdding(false);
-      loadRequests();
+      // ⚠️ A propósito NO se recarga la lista acá. Recargar contestaba, medio
+      // segundo después, la misma pregunta que el 202 ciego se acababa de negar
+      // a contestar: aparecía una fila nueva si la cuenta existía y ninguna si
+      // no. La solicitud se ve al volver a entrar. No cierra el oráculo —el
+      // contador sigue delatando— pero la app deja de desmentir su propio copy.
     } catch {
       toast('No pudimos enviar la solicitud. Probá de nuevo.');
     } finally {
@@ -133,32 +148,32 @@ export function FriendsScreen() {
             </div>
             <div className="card">
               {incoming.map((r) => (
-                <div key={r.id} className="friend-row" style={{ cursor: 'default' }}>
-                  <Avatar name={r.user.full_name} />
+                <div key={r.requestId} className="friend-row with-actions" style={{ cursor: 'default' }}>
+                  <Avatar name={r.fullName} />
                   <div className="fr-name">
-                    <div className="n">{r.user.full_name}</div>
-                    <div className="id">{r.user.payme_id}</div>
+                    <div className="n">{r.fullName}</div>
+                    <div className="id">{r.paymeId}</div>
                   </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div className="fr-actions">
                     <button
                       className="btn btn-teal btn-sm btn-fit"
-                      disabled={reqBusy === r.id}
-                      onClick={() => void resolveRequest(r.id, 'accept', r.user.first_name)}
+                      disabled={reqBusy === r.requestId}
+                      onClick={() => void resolveRequest(r.requestId, 'accept', r.firstName)}
                     >
                       Aceptar
                     </button>
                     <button
                       className="btn btn-ghost btn-sm btn-fit"
-                      disabled={reqBusy === r.id}
-                      onClick={() => void resolveRequest(r.id, 'reject', r.user.first_name)}
+                      disabled={reqBusy === r.requestId}
+                      onClick={() => void resolveRequest(r.requestId, 'reject', r.firstName)}
                     >
                       Rechazar
                     </button>
                     <button
                       className="btn btn-ghost btn-sm btn-fit"
-                      aria-label={`Bloquear a ${r.user.full_name}`}
-                      disabled={reqBusy === r.id}
-                      onClick={() => void block(r.user.id, r.user.first_name)}
+                      aria-label={`Bloquear a ${r.fullName}`}
+                      disabled={reqBusy === r.requestId}
+                      onClick={() => void block(r.userId, r.firstName)}
                     >
                       <Icon name="x-circle" size={16} />
                     </button>
@@ -172,18 +187,30 @@ export function FriendsScreen() {
         {outgoing.length > 0 && (
           <div style={{ padding: '0 16px 8px' }}>
             <div className="sectlabel">Enviadas ({outgoing.length})</div>
+            {/* Sin nombre ni avatar: ver friendRequestsView.ts. Quien todavía no
+                aceptó no eligió darse a conocer, y pintarlo acá le entregaba
+                nombre y apellido a cualquiera que tipeara su correo. */}
+            <div className="caption" style={{ margin: '0 0 6px' }}>
+              Por privacidad no mostramos a quién hasta que acepte.
+            </div>
             <div className="card">
               {outgoing.map((r) => (
-                <div key={r.id} className="friend-row" style={{ cursor: 'default' }}>
-                  <Avatar name={r.user.full_name} />
+                <div key={r.requestId} className="friend-row" style={{ cursor: 'default' }}>
+                  <div
+                    className="avatar"
+                    style={{ background: 'var(--gray-l, #eceff3)', color: 'var(--muted)', width: 42, height: 42 }}
+                    aria-hidden="true"
+                  >
+                    <Icon name="clock" size={18} />
+                  </div>
                   <div className="fr-name">
-                    <div className="n">{r.user.full_name}</div>
-                    <div className="id">Pendiente de que acepte</div>
+                    <div className="n">Solicitud enviada</div>
+                    <div className="id">{relTime(r.requestedAt)} · pendiente</div>
                   </div>
                   <button
                     className="btn btn-ghost btn-sm btn-fit"
-                    disabled={reqBusy === r.id}
-                    onClick={() => void resolveRequest(r.id, 'cancel', r.user.first_name)}
+                    disabled={reqBusy === r.requestId}
+                    onClick={() => void resolveRequest(r.requestId, 'cancel')}
                   >
                     Cancelar
                   </button>

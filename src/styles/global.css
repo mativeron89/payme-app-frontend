@@ -1312,6 +1312,20 @@ body {
 .friend-row.sel {
   background: var(--teal-l);
 }
+/* Fila con TRES acciones (solicitud entrante: aceptar/rechazar/bloquear). A
+   375px no entran junto al avatar y el nombre, y `.fr-name` se encogía hasta
+   que el texto quedaba debajo de los botones. Las acciones bajan a una segunda
+   línea, alineadas con el nombre (avatar 42 + gap 12). */
+.friend-row.with-actions {
+  flex-wrap: wrap;
+}
+.friend-row.with-actions .fr-actions {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  padding-left: 54px;
+  margin-top: 8px;
+}
 .avatar {
   width: 42px;
   height: 42px;

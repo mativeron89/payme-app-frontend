@@ -26,6 +26,22 @@ export function countdownTo(isoDate: string, now: Date = new Date()): string | n
   return `${min}:${sec.toString().padStart(2, '0')}`;
 }
 
+/**
+ * Fecha relativa corta ("hace 3 h", "ayer"). Vivía dentro de AvisosScreen; se
+ * subió acá cuando la pantalla de solicitudes necesitó la misma, porque una
+ * solicitud saliente ya no muestra a quién y la antigüedad es lo único que le
+ * queda al usuario para distinguirlas.
+ */
+export function relTime(isoDate: string, now: Date = new Date()): string {
+  const mins = Math.floor((now.getTime() - new Date(isoDate).getTime()) / 60_000);
+  if (mins < 1) return 'recién';
+  if (mins < 60) return `hace ${mins} min`;
+  const hs = Math.floor(mins / 60);
+  if (hs < 24) return `hace ${hs} h`;
+  const days = Math.floor(hs / 24);
+  return days === 1 ? 'ayer' : `hace ${days} días`;
+}
+
 /** Normaliza para búsqueda: sin acentos y en minúsculas ("José" → "jose"). */
 export function fold(s: string): string {
   return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
