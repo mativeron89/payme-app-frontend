@@ -187,19 +187,74 @@ router.post('/:id/cancel', validateParams(uuidIdParam), async (req, res, next) =
   } catch (err) { next(err); }
 });
 
-// ─── POST /accept-link (guest accept de link público) ─────
-router.post('/accept-link', express.json(), async (req, res, next) => {
-  // Sin requireAuth (accesible para guests). El router al inicio aplicó
-  // requireAuth, así que reabrimos como sub-router... pero por simplicidad,
-  // dejamos esta ruta abierta vía override de auth (no la necesitamos en MVP).
-  // ACTUALIZACIÓN: este endpoint queda como TODO/limitación documentada;
-  // en MVP los guests usan el link directo /mesa/:code?t=token sin endpoint
-  // de accept explícito (el middleware guestOrAuth + requireMesaParticipant
-  // ya valida automáticamente).
-  res.status(501).json({
-    error: 'not_implemented',
-    message: 'guests usan ?t=token en URL, no requieren accept explícito',
-  });
+// ─── POST /accept-link ────────────────────────────────────
+// Canjea el token de un link por una INSCRIPCIÓN, para un usuario con sesión.
+//
+// Antes esto era un 501 y los invitados operaban la mesa con `?t=` crudo, sin
+// cuenta. Ése es el pago sin cuenta que se está cerrando: el token deja de ser
+// autorización para pagar y pasa a ser una CREDENCIAL para sumarse. Sobrevive
+// al alta porque el front lo conserva y lo canjea acá una vez que hay sesión.
+//
+// El link es MULTIUSO: varios comensales entran por el mismo. Por eso esto NO
+// marca la invitación como `accepted` —eso la consumiría para todos los demás—;
+// inscribe y la deja `pending`. Es lo que hace coherente la ratificación del
+// 2026-08-04: mientras el link viva sigue admitiendo, y cancelarlo corta la
+// admisión sin tocar a quien ya entró.
+//
+// Idempotente por el índice parcial de mesa_participants: canjear dos veces
+// deja exactamente una fila activa.
+router.post('/accept-link', async (req, res, next) => {
+  try {
+    const token = req.body?.token;
+    if (typeof token !== 'string' || token.length < 8 || token.length > 200) {
+      return res.status(400).json({ error: 'invitation_token_required' });
+    }
+
+    const outcome = await pool.tx(async (client) => {
+      let link;
+      try {
+        link = await invitationAuthority.resolveLinkToken(client, token);
+      } catch (err) {
+        // Sin secreto de firma no se puede decidir si un token v2 es válido.
+        // Fallar cerrado y 503: un 403 afirmaría que el token no sirve.
+        if (err.code === 'invitation_link_secret_invalid') {
+          logger.error('invitation_link_verification_unavailable', { error: err.code });
+          return { httpStatus: 503, error: 'invitation_link_unavailable' };
+        }
+        throw err;
+      }
+      // Un token vencido, cancelado, supersedido o inexistente se contestan
+      // IGUAL: distinguirlos le diría a un desconocido si una mesa existe.
+      if (!link) return { httpStatus: 403, error: 'invitation_link_not_valid' };
+
+      const { rows: [mesa] } = await client.query(
+        `SELECT id, code FROM mesas WHERE id=$1`, [link.mesa_id]
+      );
+      if (!mesa) return { httpStatus: 403, error: 'invitation_link_not_valid' };
+
+      await client.query(
+        `INSERT INTO mesa_participants (mesa_id, user_id, role, status)
+         VALUES ($1, $2, 'invited', 'active')
+         -- Mismo árbitro parcial que /:id/accept: sin repetir el predicado,
+         -- Postgres no infiere el índice y aborta con 42P10.
+         ON CONFLICT (mesa_id, user_id) WHERE user_id IS NOT NULL
+           DO UPDATE SET status = 'active'`,
+        [link.mesa_id, req.user.id]
+      );
+
+      return { joined: true, invitationId: link.id, mesaCode: mesa.code };
+    });
+
+    if (!outcome.joined) {
+      return res.status(outcome.httpStatus).json({ error: outcome.error });
+    }
+
+    logger.audit('invitation_link_joined', {
+      invitation_id: outcome.invitationId,
+      user_id: req.user.id,
+    });
+    res.json({ joined: true, mesa_code: outcome.mesaCode });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

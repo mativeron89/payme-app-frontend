@@ -11,7 +11,9 @@
 const pool = require('../db/pool');
 const notifs = require('./notifications');
 const { payloadHash, hashesMatch } = require('../utils/idempotency');
-const { invitationLinkToken } = require('../utils/tokens');
+const {
+  invitationLinkToken, verifyInvitationLinkToken, tokenHash, INVITATION_TOKEN_PREFIX,
+} = require('../utils/tokens');
 
 function codedError(code, status, extra = {}) {
   const err = new Error(code);
@@ -320,8 +322,72 @@ async function lockCanonical(client, invitationId) {
   return rows[0] ? { ...rows[0], source_id: source.source_id } : null;
 }
 
+/**
+ * Resuelve QUÉ invitación de link autoriza un token crudo, o null.
+ *
+ * Existe para que "este token autoriza entrar a esta mesa" tenga UNA sola
+ * definición. Antes del cierre del pago sin cuenta el predicado vivía sólo
+ * dentro del UNION de `requireMesaParticipant`; con dos copias, la próxima
+ * corrección se aplica a una y no a la otra, que es como nacen los agujeros de
+ * permisos.
+ *
+ * Los dos formatos van por caminos SEPARADOS a propósito. El intento anterior
+ * de cerrar esto los mezcló en un solo predicado con
+ * `($2::uuid IS NULL OR canonical.id = $2::uuid)`, que para un token legacy no
+ * filtra nada: alcanzaba con que existiera cualquier otro link vivo en la misma
+ * mesa para que un link cancelado siguiera dando acceso. Acá un token v2 nunca
+ * toca la rama legacy y viceversa, así que esa forma no se puede volver a
+ * escribir por descuido.
+ *
+ * NO decide si el usuario ya es participante: sólo si el token sigue siendo
+ * autoridad para admitir a alguien nuevo. Esa separación es la ratificación del
+ * 2026-08-04 — cancelar deja de admitir gente nueva y no expulsa a nadie.
+ */
+async function resolveLinkToken(db, rawToken) {
+  if (typeof rawToken !== 'string' || rawToken.length < 8 || rawToken.length > 200) return null;
+
+  if (rawToken.startsWith(`${INVITATION_TOKEN_PREFIX}.`)) {
+    const invitationId = verifyInvitationLinkToken(rawToken);
+    if (!invitationId) return null;
+    const { rows } = await db.query(
+      `SELECT canonical.id, canonical.mesa_id
+         FROM invitations canonical
+        WHERE canonical.id = $1::uuid
+          AND canonical.invitation_type = 'link'
+          AND canonical.superseded_by_id IS NULL
+          AND canonical.status = 'pending'
+          AND canonical.expires_at > NOW()`,
+      [invitationId]
+    );
+    return rows[0] || null;
+  }
+
+  // Legacy: el token se resuelve por hash contra la fila que lo emitió, y de ahí
+  // se salta a su canónica. `source.expires_at` se mira además del de la
+  // canónica: un link viejo vencido no revive porque lo hayan supersedido.
+  const { rows } = await db.query(
+    `SELECT canonical.id, canonical.mesa_id
+       FROM invitations source
+       JOIN invitations canonical
+         ON canonical.id = COALESCE(source.superseded_by_id, source.id)
+        AND canonical.mesa_id = source.mesa_id
+        AND canonical.inviter_user_id = source.inviter_user_id
+        AND canonical.invitation_type = source.invitation_type
+      WHERE (source.token_hash = $1::text OR source.token = $2::text)
+        AND canonical.invitation_type = 'link'
+        AND canonical.superseded_by_id IS NULL
+        AND canonical.status = 'pending'
+        AND source.expires_at > NOW()
+        AND canonical.expires_at > NOW()
+      LIMIT 1`,
+    [tokenHash(rawToken), rawToken]
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   createOrReplay,
   lockCanonical,
   codedError,
+  resolveLinkToken,
 };

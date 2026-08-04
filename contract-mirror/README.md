@@ -6,10 +6,10 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-04**.
+- Fecha del refresh: **2026-08-04** (segundo del día).
 - Fuente local: `../payme-app-backend`.
-- Commit exacto: `db48cf69422fb0edbeb633e883c14405174a549b`.
-- Versión de `package.json`: **2.31.0**.
+- Commit exacto: `330a645cf4ea12e0ac6fe1f397a956a3327666a8`.
+- Versión de `package.json`: **2.32.0**.
 - Rama fuente: `codex/audit-2026-08-02-app-backend`.
 
 Ese commit es un candidato **local** de auditoría. No se afirma push, CI remoto,
@@ -18,7 +18,22 @@ declara en sus mensajes de commit (588 tests / 35 suites) son **suyas y no se
 verificaron desde este repo**; el backend permanece NO-GO técnico/de release por
 los bloqueos que se enumeran abajo.
 
-### Qué cambió respecto del refresh anterior (`e8a3faf`, v2.28.8)
+### Qué cambió respecto del refresh anterior (`db48cf6`, v2.31.0)
+
+**El cierre del pago sin cuenta.** Cuatro archivos, uno de ellos nuevo en el
+espejo:
+
+- `routes/invitations.js` ← `211fccd`: `POST /accept-link` deja de ser un 501 y
+  canja el token por una INSCRIPCIÓN.
+- `routes/mesas.js` ← `fc3f7cb`: `GET /:code`, `items/lock` y `pay` pasan de
+  `guestOrAuth` a `requireAuth`. **Éste es el cierre.**
+- `services/invitationAuthority.js` ← `211fccd`: `resolveLinkToken`, el
+  predicado único de "este token autoriza entrar a esta mesa".
+- `utils/tokens.js` — **agregado al espejo en este refresh.** No estaba y ahora
+  hace falta: es el hash y la verificación del token que este front custodia a
+  través del alta.
+
+### Qué había cambiado en el refresh anterior (`e8a3faf` → `db48cf6`)
 
 Sólo **dos** de los 67 archivos espejados difieren, los dos de OLA 5:
 
@@ -60,6 +75,7 @@ superficie de dinero, garantía, invitaciones ni schema.
 | `services/topupProcessor.js` | contrato legacy de topup | replay mientras el wallet siga dormido |
 | `services/consent.js` | PQ-1/PQ-2 | consentimiento y edad autoritativa |
 | `utils/money.js`, `stateMachine.js`, `idempotency.js` | primitivas compartidas | centavos, FSM y hash de requests |
+| `utils/tokens.js` | emisión y verificación de tokens de invitación | formato v2 vs legacy del token que el front conserva |
 | `docs/settlement.js.ref` | `services/settlement.js` | referencia de cierre/garantía |
 
 Los changelogs y READMEs históricos se conservan como contexto, no como estado
@@ -140,6 +156,46 @@ Lo que el emisor declara en `routes/config.js` y hay que respetar acá:
 - El front debe conservar los errores de conflicto como autoridad del servidor,
   no crear una invitación paralela.
 
+### Cierre del pago sin cuenta (v2.32.0) — el contrato que este front espeja
+
+`GET /mesas/:code`, `POST /mesas/:code/items/lock` y `POST /mesas/:code/pay`
+**ya no aceptan invitado**. Sin sesión responden **`401`, no `403`**, y la
+distinción es de producto, no de protocolo:
+
+- **401** = *"necesitás cuenta"* → llevar al alta **conservando el token**;
+- **403** = *"no sos de esta mesa"* → otra pantalla y otro mensaje.
+
+Tratar el 401 como 403 manda a la gente a la pantalla equivocada justo en el
+momento que el cierre viene a arreglar.
+
+**`POST /api/invitations/accept-link`** · requiere sesión · body `{ token }`:
+
+| Respuesta | Cuándo |
+| --- | --- |
+| `200 { joined, mesa_code }` | canjeado |
+| `400 invitation_token_required` | sin token, o fuera de 8..200 caracteres |
+| `401` | sin sesión |
+| `403 invitation_link_not_valid` | inválido, vencido, cancelado **y** supersedido |
+| `503 invitation_link_unavailable` | no se pudo **verificar** (falta el secreto de firma) |
+
+**Los cuatro motivos del 403 son indistinguibles a propósito:** separarlos le
+diría a un desconocido si una mesa existe. El front **no** debe inventar copy
+que los distinga — misma doctrina que el 202 ciego de `POST /friends`.
+
+**El 503 NO es un rechazo** y no se puede fundir con el 403: el emisor lo
+declara explícitamente porque *"un 403 afirmaría que el token no sirve"*. Es
+reintentable.
+
+Propiedades del canje que el front asume y el mock replica: el link es
+**MULTIUSO** (canjearlo no lo consume ni lo marca `accepted`), el canje es
+**idempotente** (dos veces = una inscripción activa), y la atribución es por
+`user_id`. **Las atribuciones legacy por `guest_token_hash` NO se heredan.**
+
+`guestOrAuth` quedó con **cero call sites** en el backend; sus ramas de invitado
+siguen en pie pero inalcanzables. Este repo hace lo mismo: `httpGuestRequest`,
+los parámetros `guestToken` de la fachada y las ramas `isGuest` de `MesaScreen`
+quedan durmientes e intactos.
+
 ### OCR y staff
 
 - OCR acepta un único archivo `image`, máximo 8 MiB, con MIME y magic bytes
@@ -208,8 +264,9 @@ queda autorizado a release/piloto.
 
 ## Verificación byte a byte
 
-El refresh del **2026-08-04** volvió a comparar **67/67** archivos contra su
-fuente exacta en `db48cf6`, sin diferencias ni fuentes ausentes. Los `docs/` se
+El segundo refresh del **2026-08-04** comparó **68/68** archivos contra su
+fuente exacta en `330a645`, sin diferencias ni fuentes ausentes (67 del refresh
+anterior más `utils/tokens.js`). Los `docs/` se
 comparan por su mapeo especial, no por path. Mapeos especiales:
 
 - `contract-mirror/docs/settlement.js.ref` ↔

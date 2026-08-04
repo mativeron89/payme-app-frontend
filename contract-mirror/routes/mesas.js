@@ -22,7 +22,10 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db/pool');
 const {
-  requireAuth, guestOrAuth, requireMesaParticipant,
+  // Sin `guestOrAuth`: tras el cierre del pago sin cuenta ninguna ruta de la
+  // app acepta invitados. El middleware sigue existiendo y exportado, pero ya
+  // no tiene un solo call site — se deja en pie porque sacarlo es otro cambio.
+  requireAuth, requireMesaParticipant,
 } = require('../middleware/auth');
 const schemas = require('../schemas');
 const stateMachine = require('../utils/stateMachine');
@@ -599,7 +602,8 @@ router.get('/open', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:code', guestOrAuth, requireMesaParticipant, async (req, res, next) => {
+// CIERRE DEL PAGO SIN CUENTA · C1. Ver el bloque de C3 en `/:code/pay`.
+router.get('/:code', requireAuth, requireMesaParticipant, async (req, res, next) => {
   try {
     const mesa = req.mesa;
     const { rows: items } = await pool.query(
@@ -720,7 +724,8 @@ router.get('/:code', guestOrAuth, requireMesaParticipant, async (req, res, next)
   } catch (err) { next(err); }
 });
 
-router.post('/:code/items/lock', guestOrAuth, requireMesaParticipant,
+// CIERRE DEL PAGO SIN CUENTA · C2. Ver el bloque de C3 en `/:code/pay`.
+router.post('/:code/items/lock', requireAuth, requireMesaParticipant,
   validateBody(schemas.lockItems), async (req, res, next) => {
   try {
     const mesa = req.mesa;
@@ -805,7 +810,28 @@ router.post('/:code/items/lock', guestOrAuth, requireMesaParticipant,
 // item_ids/slot_ids se ordenan al hashear (P1 #3 v2.5.2 vía idempotency.js).
 // guest token hashing en tablas operativas (P1 #2 v2.5.2).
 // ═══════════════════════════════════════════════════════════
-router.post('/:code/pay', guestOrAuth, requireMesaParticipant,
+/**
+ * CIERRE DEL PAGO SIN CUENTA · C3 — éste es el cierre.
+ *
+ * Estas tres rutas (`GET /:code`, `items/lock`, `pay`) aceptaban `guestOrAuth`:
+ * con el token en `?t=` se podía ver la mesa, tomar ítems y PAGAR sin cuenta.
+ * Ahora exigen sesión y contestan 401 sin ella.
+ *
+ * El token no desaparece de la URL: deja de ser autorización y pasa a ser una
+ * CREDENCIAL. El front lo conserva a través del alta y lo canjea en
+ * `POST /api/invitations/accept-link`, que inscribe por `user_id`. Ése es el
+ * único camino nuevo para sumarse a una mesa.
+ *
+ * Las atribuciones nuevas son por `user_id`. Las legacy por `guest_token_hash`
+ * NO se heredan: sería atribuirle a alguien actos de otro, con dinero de por
+ * medio. Contar cuántas hay en producción es gate externo, previo a desplegar.
+ *
+ * Consecuencia: `req.isGuest` ya no puede ser verdadero acá, así que las ramas
+ * de invitado que quedan más abajo son inalcanzables por estas rutas. Se dejan
+ * en pie a propósito — sacarlas es otro cambio, y mezclar borrado de código con
+ * un cambio de autorización sobre endpoints de dinero es cómo se cuelan errores.
+ */
+router.post('/:code/pay', requireAuth, requireMesaParticipant,
   validateBody(schemas.payMesa), async (req, res, next) => {
   try {
     const mesa = req.mesa;
