@@ -20,10 +20,10 @@ TELÉFONO — esta app se usa en la mesa de un restaurante.
 Workspace local `PayMe/` con carpetas hermanas:
 
 1. `payme-app-backend` — **EL CONTRATO DE ESTE FRONT** (Node/CommonJS,
-   Stripe Connect; su checkpoint final se verifica, no se presume). El cierre
-   local de auditoría usa exactamente
-   `e8a3faf2f520b249cbe6001f14ef70230a405695` (v2.28.8), copiado en
-   `contract-mirror/`; no implica que esté publicado. Mueve dinero real.
+   Stripe Connect; su checkpoint final se verifica, no se presume). El espejo
+   vigente usa exactamente `db48cf69422fb0edbeb633e883c14405174a549b`
+   (v2.31.0), copiado en `contract-mirror/`; no implica que esté publicado.
+   Mueve dinero real.
    **SOLO LECTURA ABSOLUTA: no se edita, no se "arregla", jamás.**
    ⚡ Trae el **pivote a Stripe Connect** (v2.22–v2.24): el pago con tarjeta es
    un *direct charge* sobre la cuenta conectada del restaurante — el
@@ -85,10 +85,20 @@ archivo, la maqueta, el mock o `GAPS.md`.
   resolvió — la garantía captura el faltante. La pantalla de expiración
   dice **"tu garantía cubrió $X"**, nunca "los $X no se cobran a nadie".
 - **Wallet muerto para el MVP**: saldo, garantía/pago wallet, topups, P2P,
-  CLABE, SPEI y STP quedan fuera. El plan de apagado ya está ratificado y
-  permanece dormido hasta su implementación post-auditoría: flags/UI y
-  comportamiento fail-closed, conservando código/schema e historia legacy.
-  Una reactivación futura exigiría gate IFPE; nunca se usa como fallback.
+  CLABE, SPEI y STP quedan fuera. Nunca se usa como fallback.
+  **El apagado está IMPLEMENTADO, y su autoridad es del BACKEND (OLA 5D,
+  2026-08-04).** `GET /api/config` publica `features.wallet_rail` desde
+  v2.31.0 y este front lo LEE en `src/api/walletRail.ts`; ya no existe la
+  constante propia `WALLET_RAIL_ENABLED`, y eliminarla fue parte de la
+  corrección —mientras existiera, alguien podía leerla en vez de leer la
+  capability, y un deploy de este front reencendía el riel sin que el backend
+  se enterara—. Falla cerrado: capability ausente, mal formada o red caída →
+  APAGADO. Un campo con forma de permiso por cuenta, rol o restaurante lo apaga
+  **y se denuncia**. `account_activity` es un campo SEPARADO que falla al revés,
+  a conservar: historial y estadísticas propias son card-only ratificado.
+  **Nada se borró**: pantallas, métodos de fachada y decoders siguen durmientes.
+  Reactivar exige gate IFPE, auditoría y ratificación nueva — una orden, jamás
+  una variable de entorno.
 - **Apple Pay y Google Pay** tienen plan ratificado y son MUST del card-only:
   permiten el primer pago sin tarjeta previa mediante un `pm_` efímero, nunca
   off-session ni guardado. Permanecen **apagados en real y mock** hasta cerrar

@@ -1,5 +1,52 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.30.0 — El apagado del wallet deja de ser decisión del front (2026-08-04)
+
+- **OLA 5D · el riel saldo lo declara apagado el BACKEND, y este front lo lee.**
+  Hasta acá `WALLET_RAIL_ENABLED` era una constante propia: wallet estaba
+  apagado porque el front decidió apagarlo, no porque el sistema lo declarara
+  apagado, y un deploy de este front con otro valor lo reencendía sin que el
+  backend se enterara. Desde App Backend v2.31.0 `GET /api/config` publica
+  `features.wallet_rail`, y `src/api/walletRail.ts` la consume.
+- **La constante se eliminó, no se conservó apuntando al nuevo estado.**
+  Mientras existiera, alguien podía leerla en vez de leer la capability. El
+  typecheck marcó los ocho consumidores uno por uno.
+- **Fail-closed, en direcciones distintas para cada campo.** `enabled` falla a
+  `false`: capability ausente, mal formada o red caída → riel APAGADO, y el
+  estado inicial ya es apagado, así que no hay ventana en la que la UI de saldo
+  aparezca mientras la respuesta viaja. `account_activity` falla a `true`:
+  historial y estadísticas propias leen `payment_attempts`, son card-only
+  ratificado, y esconderlas por un fallo de red repetiría `07f0ba2`. Son dos
+  parámetros distintos de `accountRailView`, no uno derivado del otro.
+- **Conjunto CERRADO de claves del lado del consumidor.** Un backend distinto
+  del espejado no es una hipótesis: es el caso normal de un deploy
+  desincronizado. Una clave de más apaga el riel; si tiene forma de permiso por
+  principal (`enabled_for_user`, `per_branch`, `sucursal_override`) además se
+  denuncia, porque la ratificación prohíbe ese permiso.
+- **El mock respeta la capability, no la ignora**: `mockGetConfig` publica el
+  mismo shape y recorre el mismo lector. Un test lee el espejo como texto y
+  falla si los valores del mock se separan de los del emisor.
+- **Nada se borró.** `TopupScreen`, `TransferScreen`, los ocho métodos del riel
+  y `payment_type: 'wallet'` siguen durmientes: verificado en el navegador
+  poniendo `enabled: true` en el mock, con la UI de saldo y `#/cargar` volviendo
+  completas.
+- **La pestaña de Cuenta se DERIVA en vez de recordarse.** Se inicializaba desde
+  un valor que ahora llega después del primer render; con
+  `account_activity: false` quedaba en 'historial' con los dos paneles apagados.
+- **(d) · los avisos del riel saldo se fueron POR EL EMISOR** (`5e210fd`), y este
+  repo lo ACREDITA en vez de taparlo: la lista del mock se compara contra el
+  espejo —tenía cuatro tipos y el emisor suprime cinco; faltaba `topup_failed`—
+  y un barrido estructural falla si alguien agrega un filtro de red por esos
+  tipos. `AvisosScreen` sigue sin gate: el backend dejó de crear filas nuevas,
+  no borró las viejas, y esconderlas ocultaría un hecho real. `tip_received` no
+  se suprime, ni allá ni acá.
+- `contract-mirror/` refrescado por copia a
+  `db48cf69422fb0edbeb633e883c14405174a549b` (v2.31.0): 67/67 byte-idénticos,
+  con sólo dos archivos cambiados respecto del refresh anterior. Esto no
+  acredita publicación externa.
+- **Límite declarado:** desde este repo no se puede acreditar el emisor
+  corriendo. El end-to-end real contra el backend vivo sigue faltando.
+
 ## 0.29.5 — Cierre local de auditoría y espejo v2.28.8 (2026-08-03)
 
 - Las mutaciones distinguen rechazos definitivos de resultados ambiguos: sólo

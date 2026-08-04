@@ -1,12 +1,12 @@
 # GAPS — datos/endpoints que el front necesita y el contrato del App Backend no cubre
 
-## Estado vigente de auditoría — 2026-08-03
+## Estado vigente de auditoría — 2026-08-04
 
 Esta sección manda sobre las afirmaciones históricas del resto del archivo.
 Las menciones antiguas a versiones "desplegadas", producción o verificaciones
 en vivo son registro de su momento y **no acreditan el estado externo actual**.
 La única fuente local de este cierre es App Backend
-`e8a3faf2f520b249cbe6001f14ef70230a405695` (v2.28.8), espejada byte a byte en
+`db48cf69422fb0edbeb633e883c14405174a549b` (v2.31.0), espejada byte a byte en
 `contract-mirror/`; no hubo push, deploy ni consulta a producción.
 
 El frontend puede cerrar sus gates locales de calidad, pero el candidato sigue
@@ -21,20 +21,40 @@ El frontend puede cerrar sus gates locales de calidad, pero el candidato sigue
 | **P1 privacidad** | Agregados de ítems y propinas pueden emitirse con cohorte uno; faltan `tables_count`, min-sample uniforme y retracción. | Contrato coordinado App Backend↔Dashboard Backend; nunca inventarlo en un front. |
 | **P1 integridad de datos** | Si falta `restaurant_branches`, el emisor omite lifecycle/agregados sin cuarentena ni replay. | App Backend + gate operacional de cobertura de mapping al 100 %. |
 
-Además, el apagado del wallet está **ratificado pero no implementado**: se
-ejecutará post-auditoría con flags, fuera de UI y fail-closed, conservando
-código/schema/rutas/tests e historia; reactivarlo requiere gate IFPE. Apple Pay
-y Google Pay son MUST post-auditoría para el primer pago mediante hoja nativa,
-sin tarjeta previamente guardada y sin tipeo. Su `pm_` efímero no sirve
-off-session ni reemplaza la tarjeta guardada del padre en Cuentas Junior.
+**El apagado del wallet ya no es una promesa, y su autoridad ya no es del
+front.** Estado al 2026-08-04:
+
+- El riel saldo está apagado en real y en mock, **y quien lo declara apagado es
+  el BACKEND**: `GET /api/config` publica `features.wallet_rail` desde v2.31.0 y
+  este front lo lee (`src/api/walletRail.ts`). Ya no hay constante propia; la
+  eliminamos para que nadie pueda leerla en vez de leer la capability.
+- Falla cerrado: capability ausente, mal formada o red caída → riel APAGADO. Un
+  campo con forma de permiso por cuenta/rol/restaurante lo apaga **y se
+  denuncia**, porque la ratificación prohíbe ese permiso.
+- `account_activity` viaja como campo SEPARADO y falla al revés —a conservar—:
+  historial y estadísticas propias son card-only ratificado y esconderlas ante un
+  fallo de red repetiría `07f0ba2`.
+- El emisor dejó de mandar los cinco avisos del riel saldo (`5e210fd`). Este
+  repo **no agregó ningún filtro de red** para taparlo: un test estructural falla
+  si alguien lo agrega. Lo único que migra es el estado persistido de la demo.
+- **Nada se borró:** `TopupScreen`, `TransferScreen`, los ocho métodos del riel y
+  `payment_type: 'wallet'` siguen durmientes. Reactivar exige gate IFPE,
+  auditoría y ratificación nueva — una orden, no una variable de entorno.
+
+Apple Pay y Google Pay siguen siendo MUST post-auditoría para el primer pago
+mediante hoja nativa, sin tarjeta previamente guardada y sin tipeo. Su `pm_`
+efímero no sirve off-session ni reemplaza la tarjeta guardada del padre en
+Cuentas Junior.
+
 También continúa el STOP de registro PQ-2: el contrato técnico de fecha ya está
 en el checkpoint y el espejo, pero D-03 todavía contradice el alta vigente
 (teléfono/nombre/fecha/sin apellido vs email/password/apellido). La UI no usa
-`registration_required` para elegir unilateralmente un modelo de registro. Por
-último, el bypass `?demo=1` del build `/live/` sólo es admisible en un
-artefacto y entorno acreditados explícitamente como Stripe test; el estado
-externo no fue verificado. Antes de piloto o credenciales live debe quedar
-fuera del control de la URL y gobernado por un build explícito (G-24).
+`registration_required` para elegir unilateralmente un modelo de registro.
+
+**El bypass `?demo=1` ya no existe** (G-24, cerrado por eliminación el
+2026-08-03). El párrafo que pedía sacarlo del control de la URL antes del piloto
+quedó sin objeto y se elimina de acá: un texto que describe un estado que ya no
+existe es una orden latente, y alguien iría a "arreglarlo" de nuevo.
 
 ---
 
