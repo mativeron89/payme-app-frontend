@@ -36,6 +36,20 @@ export type JoinLinkOutcome =
   | 'joining'
   /** 403 · los CUATRO motivos del contrato, indistinguibles a propósito. */
   | 'rejected'
+  /**
+   * 400 `invitation_token_required` · el token no tiene forma de token (vacío,
+   * o fuera de 8..200 caracteres). Es TERMINAL, no un problema de red.
+   *
+   * Antes caía en `error`, y `error` ofrece reintentar. Eso invita a reintentos
+   * engañosos: un link truncado al copiarlo de WhatsApp no se arregla
+   * reintentando, y cada reintento le dice a la persona que puede estar por
+   * funcionar. La copy honesta es "este link está incompleto".
+   *
+   * Es un rechazo pero NO se funde con `rejected`: acá el defecto está en el
+   * link que la persona tiene en la mano, y eso sí se puede accionar —pedir que
+   * se lo manden de nuevo, o abrirlo completo—. No revela nada de la mesa.
+   */
+  | 'invalid'
   /** 503 · el emisor no pudo verificar. Reintentable. */
   | 'unavailable'
   /** Red caída, timeout, 5xx genérico, 2xx malformado. Reintentable. */
@@ -62,6 +76,12 @@ export function joinLinkMessage(outcome: JoinLinkOutcome): JoinLinkMessage {
       return {
         title: 'Este link ya no sirve',
         body: 'Pedile al organizador que te comparta uno nuevo.',
+        retryable: false,
+      };
+    case 'invalid':
+      return {
+        title: 'Este link está incompleto',
+        body: 'Puede haberse cortado al copiarlo. Pedí que te lo manden de nuevo y abrilo entero.',
         retryable: false,
       };
     case 'unavailable':

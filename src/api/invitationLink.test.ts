@@ -3,6 +3,7 @@ import {
   clearPendingInvitationLink,
   readPendingInvitationLink,
   rememberInvitationLink,
+  stripTokenFromUrl,
   tokenForMesa,
 } from './invitationLink';
 
@@ -81,6 +82,104 @@ describe('el token del link sobrevive al alta', () => {
   });
 });
 
+describe('ORDEN 3A · la secuencia de custodia', () => {
+  /**
+   * ⭐ El round-trip no es paranoia: `setItem` puede no tirar y aun así no
+   * persistir (cuota, modo privado, WebView con storage particionado). El
+   * booleano es lo que decide si se puede retirar el token de la URL, y
+   * retirarlo sin custodia es pérdida silenciosa.
+   */
+  it('confirma el guardado leyendo de vuelta, no por ausencia de excepción', () => {
+    expect(rememberInvitationLink('PA-2847', 'tok-abcdefgh')).toBe(true);
+  });
+
+  it('un storage que ACEPTA la escritura y no persiste devuelve false', () => {
+    vi.stubGlobal('sessionStorage', {
+      setItem() { /* acepta y no guarda: el caso que una excepción no delata */ },
+      getItem: () => null,
+      removeItem() {},
+    } as unknown as Storage);
+    expect(rememberInvitationLink('PA-2847', 'tok-abcdefgh')).toBe(false);
+  });
+
+  it('un storage bloqueado devuelve false en vez de explotar', () => {
+    vi.stubGlobal('sessionStorage', {
+      setItem() { throw new Error('SecurityError'); },
+      getItem() { throw new Error('SecurityError'); },
+      removeItem() { throw new Error('SecurityError'); },
+    } as unknown as Storage);
+    expect(rememberInvitationLink('PA-2847', 'tok-abcdefgh')).toBe(false);
+  });
+
+  it('no guarda basura, y lo dice', () => {
+    expect(rememberInvitationLink('', 'tok-abcdefgh')).toBe(false);
+    expect(rememberInvitationLink('PA-2847', '')).toBe(false);
+  });
+});
+
+describe('ORDEN 3A · retirar el token de la URL sin tocar el historial', () => {
+  function urlStub(hash: string) {
+    const replaceState = vi.fn();
+    vi.stubGlobal('window', {
+      location: { hash, pathname: '/', search: '' },
+      history: { state: null, replaceState },
+    });
+    return replaceState;
+  }
+
+  it('lo retira del hash', () => {
+    const replaceState = urlStub('#/mesa/PA-2847?t=tok-abcdefgh');
+    expect(stripTokenFromUrl()).toBe(true);
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/#/mesa/PA-2847');
+  });
+
+  /**
+   * ⭐ `replaceState`, NUNCA asignar el hash. Asignarlo crea una entrada nueva y
+   * deja viva la anterior con el `?t=`: el botón Atrás la recupera y la app
+   * vuelve a custodiar un token ya soltado. Back no debe revivir el token.
+   */
+  it('usa replaceState y NO agrega una entrada de historial', () => {
+    const replaceState = urlStub('#/mesa/PA-2847?t=tok-abcdefgh');
+    const pushState = vi.fn();
+    (globalThis as unknown as { window: { history: Record<string, unknown> } })
+      .window.history.pushState = pushState;
+    stripTokenFromUrl();
+    expect(replaceState).toHaveBeenCalledTimes(1);
+    expect(pushState).not.toHaveBeenCalled();
+  });
+
+  /**
+   * `r` es el uuid del restaurante del QR (G-01). Llevárselo puesto rompería
+   * otro flujo para arreglar éste.
+   */
+  it('preserva los demás parámetros legítimos', () => {
+    const replaceState = urlStub('#/mesa/PA-2847?r=uuid-del-qr&t=tok-abcdefgh');
+    stripTokenFromUrl();
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/#/mesa/PA-2847?r=uuid-del-qr');
+  });
+
+  it('sin token no toca nada', () => {
+    const replaceState = urlStub('#/mesa/PA-2847?r=uuid-del-qr');
+    expect(stripTokenFromUrl()).toBe(false);
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+
+  it('sin query no toca nada', () => {
+    const replaceState = urlStub('#/mesa/PA-2847');
+    expect(stripTokenFromUrl()).toBe(false);
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+
+  it('un navegador que no deja tocar el historial no rompe el canje', () => {
+    vi.stubGlobal('window', {
+      location: { hash: '#/mesa/PA-2847?t=tok-abcdefgh', pathname: '/', search: '' },
+      history: { state: null, replaceState() { throw new Error('SecurityError'); } },
+    });
+    expect(() => stripTokenFromUrl()).not.toThrow();
+    expect(stripTokenFromUrl()).toBe(false);
+  });
+});
+
 describe('higiene de la credencial', () => {
   it('vencido el TTL local se descarta Y se borra, no queda dando vueltas', () => {
     rememberInvitationLink('PA-2847', 'tok-abcdefgh');
@@ -107,9 +206,26 @@ describe('higiene de la credencial', () => {
     ['sin token', JSON.stringify({ code: 'PA-1', savedAt: Date.now() })],
     ['sin code', JSON.stringify({ token: 'tok-abcdefgh', savedAt: Date.now() })],
     ['savedAt no numérico', JSON.stringify({ code: 'PA-1', token: 'tok-abcdefgh', savedAt: 'ayer' })],
-  ])('un respaldo corrupto (%s) se descarta sin romper', (_caso, raw) => {
+  ])('un respaldo corrupto (%s) se ELIMINA FÍSICAMENTE, no sólo devuelve null', (_caso, raw) => {
     sessionStorage.setItem('payme_pending_invitation_link', raw);
     expect(readPendingInvitationLink()).toBeNull();
+    // ⭐ Devolver null no es descartar. Antes la fila QUEDABA: una credencial
+    // que la app ya no puede usar sobreviviendo en el dispositivo, y sin TTL que
+    // la alcance si el campo roto es justamente `savedAt`.
+    expect(sessionStorage.getItem('payme_pending_invitation_link')).toBeNull();
+  });
+
+  /**
+   * El caso que la orden nombró: shape inválido **con un token sensible
+   * adentro**. Lo que no puede pasar es que la credencial sobreviva.
+   */
+  it('un shape inválido con token adentro no deja el token en storage', () => {
+    sessionStorage.setItem('payme_pending_invitation_link', JSON.stringify({
+      code: 'PA-2847', token: 'tok-super-sensible', savedAt: 'no-es-numero',
+    }));
+    expect(readPendingInvitationLink()).toBeNull();
+    const crudo = JSON.stringify([...Object.entries(sessionStorage)]);
+    expect(crudo).not.toContain('tok-super-sensible');
   });
 
   it('no guarda basura: sin code o sin token no escribe nada', () => {

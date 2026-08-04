@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { acceptInvitationLinkResponse } from './contractResponses';
 
 /**
@@ -16,6 +16,12 @@ import { acceptInvitationLinkResponse } from './contractResponses';
  */
 
 const fuentes = import.meta.glob('/src/**/*.{ts,tsx}', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
+const espejo = import.meta.glob('/contract-mirror/services/invitationAuthority.js', {
   query: '?raw',
   import: 'default',
   eager: true,
@@ -92,6 +98,93 @@ describe('C1/C2/C3 · el front no opera la mesa como invitado', () => {
     expect(fuentes['/src/api/http.ts']!).toContain('httpGuestRequest');
     expect(fuentes['/src/api/idempotency.ts']!).toContain('guest:');
     expect(fuentes['/src/screens/MesaScreen.tsx']!).toContain('isGuest');
+  });
+});
+
+describe('ORDEN 3A · el token nunca se muestra', () => {
+  /**
+   * La credencial no puede aparecer en copy, en un `console`, ni en un atributo
+   * del DOM. La pantalla de canje la RECIBE, así que es donde puede escaparse.
+   */
+  it('JoinMesaScreen no imprime el token en ningún lado', () => {
+    const pantalla = fuentes['/src/screens/JoinMesaScreen.tsx'];
+    expect(pantalla, 'no se encontró JoinMesaScreen').toBeTruthy();
+    // Ni interpolado en JSX, ni logueado, ni puesto en un atributo.
+    expect(pantalla!).not.toMatch(/\{\s*token\s*\}/);
+    expect(pantalla!).not.toMatch(/console\.(log|error|warn|info)\([^)]*token/);
+    expect(pantalla!).not.toMatch(/(title|aria-label|alt|value|data-[\w-]+)=\{[^}]*token/);
+  });
+
+  it('la copy del canje no interpola nada: son literales', () => {
+    const view = fuentes['/src/screens/joinLinkView.ts'];
+    expect(view, 'no se encontró joinLinkView').toBeTruthy();
+    // Un template literal en la copy es la vía por la que entraría el token.
+    expect(view!.replace(/^[\s\S]*?export type/, '')).not.toContain('${');
+  });
+
+  it('la custodia no loguea la credencial', () => {
+    const custodia = fuentes['/src/api/invitationLink.ts'];
+    expect(custodia, 'no se encontró invitationLink').toBeTruthy();
+    expect(custodia!).not.toMatch(/console\./);
+  });
+});
+
+describe('ORDEN 3A · dos mesas no cruzan credenciales', () => {
+  /**
+   * A y B viven en el mismo `sessionStorage` con UNA sola clave, así que el
+   * riesgo no es teórico: el respaldo de A tiene que quedar inerte al entrar a
+   * B, y el de B tiene que reemplazarlo, no convivir. La lógica está en
+   * `tokenForMesa`; acá se fija que la propiedad se sostenga en secuencia.
+   */
+  it('el respaldo de A no autoriza a B, y el de B reemplaza al de A', async () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('sessionStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+      removeItem: (k: string) => { store.delete(k); },
+    } as unknown as Storage);
+    const { rememberInvitationLink, tokenForMesa } = await import('./invitationLink');
+
+    rememberInvitationLink('PA-AAAA', 'tok-de-la-mesa-A');
+    expect(tokenForMesa('PA-AAAA', null)).toBe('tok-de-la-mesa-A');
+    expect(tokenForMesa('PA-BBBB', null)).toBeNull();
+
+    rememberInvitationLink('PA-BBBB', 'tok-de-la-mesa-B');
+    expect(tokenForMesa('PA-BBBB', null)).toBe('tok-de-la-mesa-B');
+    // Y el de A deja de valer: una sola credencial viva por vez.
+    expect(tokenForMesa('PA-AAAA', null)).toBeNull();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('ORDEN 3A · la semántica REAL de los alias legacy', () => {
+  /**
+   * ⚠️ CORRECCIÓN de una afirmación previa, del emisor y espejada acá.
+   *
+   * `211fccd` dijo que `resolveLinkToken` dejaba el predicado "este token
+   * autoriza entrar a esta mesa" con **una sola definición**. Es falso, y el
+   * propio emisor lo corrigió en `a7027b7`: `middleware/auth.js` conserva una
+   * SEGUNDA copia sin refactorizar. Este test no puede ejecutar SQL, así que
+   * fija lo único que puede fijar desde acá: que el espejo **dice** la
+   * semántica real, para que nadie razone sobre un token leyendo un resumen.
+   */
+  it('el espejo declara que resolveLinkToken NO es definición única', () => {
+    const svc = espejo['/contract-mirror/services/invitationAuthority.js'];
+    expect(svc, 'no se encontró invitationAuthority en el espejo').toBeTruthy();
+    expect(svc!).toContain('SEGUNDA COPIA');
+  });
+
+  /**
+   * Un alias legacy salta a su canónica por `COALESCE(source.superseded_by_id,
+   * source.id)`, y exige que **las DOS** filas estén vigentes. Es la parte que
+   * un resumen se come: sin `source.expires_at`, un link viejo y vencido
+   * reviviría por haber sido supersedido por uno nuevo.
+   */
+  it('el alias legacy exige vigencia de la fila FUENTE y de la canónica', () => {
+    const svc = espejo['/contract-mirror/services/invitationAuthority.js']!;
+    expect(svc).toContain('COALESCE(source.superseded_by_id, source.id)');
+    expect(svc).toContain('source.expires_at > NOW()');
+    expect(svc).toContain('canonical.expires_at > NOW()');
   });
 });
 

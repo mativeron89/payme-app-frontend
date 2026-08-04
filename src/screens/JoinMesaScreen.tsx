@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
-import { clearPendingInvitationLink, rememberInvitationLink } from '../api/invitationLink';
+import {
+  clearPendingInvitationLink,
+  rememberInvitationLink,
+  stripTokenFromUrl,
+} from '../api/invitationLink';
 import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
 import { navigate } from '../router';
@@ -46,11 +50,31 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
    */
   const [attempt, setAttempt] = useState(0);
 
-  // El token se guarda ANTES de cualquier otra cosa y sin depender de que haya
-  // sesión: éste es el tramo del alta, donde perderlo deja a la persona
-  // registrada y afuera de la mesa a la que la invitaron.
+  /**
+   * ⭐ LA SECUENCIA DE CUSTODIA, Y EL ORDEN NO ES NEGOCIABLE.
+   *
+   *   1. guardar;
+   *   2. comprobar el ROUND-TRIP (leer de vuelta y comparar);
+   *   3. **sólo entonces** retirar el token de la URL.
+   *
+   * Invertir 2 y 3 es pérdida silenciosa del token: `setItem` puede no tirar y
+   * aun así no persistir —cuota, modo privado, un WebView con storage
+   * particionado—, y si la URL ya se limpió no queda ninguna custodia. La
+   * persona se registra y **queda afuera de la mesa a la que la invitaron**,
+   * que es peor que el defecto que este cierre vino a corregir.
+   *
+   * **Si el round-trip falla, la URL NO se toca.** El token sigue expuesto en el
+   * hash, que es exactamente donde estaba: no se empeora nada y el alta sigue
+   * funcionando. Preferir un token visible a un token perdido es una decisión, y
+   * queda escrita acá para que nadie la "corrija" limpiando siempre.
+   *
+   * Retirarlo usa `replaceState`, no `navigate`: asignar el hash CREA una
+   * entrada de historial y deja viva la anterior con el `?t=`, así que el botón
+   * Atrás la recupera y la app vuelve a custodiar un token ya soltado.
+   * **Back no debe revivir el token.**
+   */
   useEffect(() => {
-    rememberInvitationLink(code, token);
+    if (rememberInvitationLink(code, token)) stripTokenFromUrl();
   }, [code, token]);
 
   useEffect(() => {
@@ -64,22 +88,34 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
         // Recién acá se suelta la credencial: si el canje no cerró, el token
         // tiene que seguir disponible para el reintento.
         clearPendingInvitationLink();
-        // Sin `?t=`: el token ya no es autorización y no tiene por qué quedar
-        // en la URL, el historial del navegador ni un screenshot.
+        // Cinturón y tirantes: si el round-trip había fallado, el token sigue en
+        // la URL y éste es el momento en que ya no hace falta para nada.
+        stripTokenFromUrl();
         navigate('mesa', r.mesa_code);
       })
       .catch((err: unknown) => {
         if (!alive) return;
         const { status } = extractApiError(err);
-        // Un 403 es definitivo: el token está muerto y hay que SOLTARLO. Si el
-        // respaldo sobreviviera, `tokenForMesa` lo seguiría devolviendo y esta
-        // mesa quedaría capturada por un link muerto en cada visita.
-        // Un 503 o un fallo de red NO dicen eso, así que ahí se conserva.
-        if (status === 403) clearPendingInvitationLink();
-        // 503 NO es "tu link no sirve": es "no pudimos verificarlo ahora".
-        // Tratarlo como 403 le diría a alguien que su invitación está muerta
-        // cuando lo único que pasó es que al emisor le falta un secreto.
-        setOutcome(status === 503 ? 'unavailable' : status === 403 ? 'rejected' : 'error');
+        /**
+         * Custodia POR RESULTADO. Los terminales sueltan la credencial; los
+         * reintentables la conservan. Confundirlos rompe en las dos
+         * direcciones: soltar un token vivo deja a la persona sin poder
+         * reintentar, y conservar uno muerto deja esa mesa capturada por un
+         * link inválido en cada visita.
+         *
+         *   400 · el link no tiene forma de link  → TERMINAL, soltar
+         *   403 · rechazo ciego (los cuatro)      → TERMINAL, soltar
+         *   503 · no se pudo verificar            → conservar, reintentable
+         *   red/5xx/2xx malformado                → conservar, reintentable
+         */
+        const terminal = status === 400 || status === 403;
+        if (terminal) clearPendingInvitationLink();
+        setOutcome(
+          status === 400 ? 'invalid'
+            : status === 403 ? 'rejected'
+            : status === 503 ? 'unavailable'
+            : 'error',
+        );
       });
     return () => {
       alive = false;

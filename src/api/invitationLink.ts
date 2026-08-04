@@ -70,13 +70,76 @@ function store(): Storage | null {
   }
 }
 
-export function rememberInvitationLink(code: string, token: string): void {
-  if (!code || !token) return;
+/**
+ * Guarda la credencial **y comprueba el round-trip**, devolviendo si quedó
+ * realmente custodiada.
+ *
+ * El booleano no es cosmético: es lo que decide si se puede retirar el token de
+ * la URL. `setItem` puede no tirar y aun así no persistir —cuota, modo privado,
+ * un WebView con storage particionado—, y en ese caso la URL es la ÚNICA
+ * custodia que queda. Retirarla ahí sería pérdida silenciosa del token: la
+ * persona se registra y queda afuera de la mesa a la que la invitaron.
+ *
+ * Por eso se lee de vuelta y se compara, en vez de confiar en que no hubo
+ * excepción. Escribir y ver la escritura son cosas distintas.
+ */
+export function rememberInvitationLink(code: string, token: string): boolean {
+  if (!code || !token) return false;
   try {
     store()?.setItem(KEY, JSON.stringify({ code, token, savedAt: Date.now() }));
   } catch {
-    // Cuota llena o storage bloqueado: seguimos con la URL.
+    return false;
   }
+  const leido = readPendingInvitationLink();
+  return leido?.code === code && leido.token === token;
+}
+
+/**
+ * Retira **sólo** el token del hash actual, sin agregar historial.
+ *
+ * ## Por qué `replaceState` y no `navigate`
+ *
+ * `navigate` asigna `window.location.hash`, y eso **crea una entrada nueva**
+ * dejando viva la anterior con el `?t=`. El botón Atrás la recupera, `useRoute`
+ * la parsea y la app vuelve a custodiar un token que ya se había soltado.
+ * **Back no debe revivir el token.** `replaceState` reemplaza la entrada actual,
+ * así que ninguna entrada del historial lo conserva.
+ *
+ * ## Qué se preserva
+ *
+ * Sólo se borra `t`. El resto de los parámetros son legítimos y tienen dueño
+ * —`r` es el uuid del restaurante del QR (G-01)— y llevárselos puestos rompería
+ * otro flujo para arreglar éste.
+ *
+ * Devuelve `true` si el token estaba y se retiró.
+ */
+export function stripTokenFromUrl(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const hash = window.location.hash;
+    const i = hash.indexOf('?');
+    if (i < 0) return false;
+    const params = new URLSearchParams(hash.slice(i + 1));
+    if (!params.has('t')) return false;
+    params.delete('t');
+    const resto = params.toString();
+    const limpio = `${hash.slice(0, i)}${resto ? `?${resto}` : ''}`;
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${window.location.search}${limpio}`,
+    );
+    return true;
+  } catch {
+    // Un navegador que no deja tocar el historial no puede romper el canje.
+    return false;
+  }
+}
+
+/** Borra la fila y devuelve `null`. Una credencial que no valida se ELIMINA. */
+function descartar(): null {
+  clearPendingInvitationLink();
+  return null;
 }
 
 export function readPendingInvitationLink(): PendingInvitationLink | null {
@@ -87,22 +150,22 @@ export function readPendingInvitationLink(): PendingInvitationLink | null {
     return null;
   }
   if (!raw) return null;
+  // ⚠️ TODA salida sin dato BORRA la fila. Antes, un shape inválido devolvía
+  // `null` y **la fila quedaba**: una credencial que la app ya no puede usar
+  // sobreviviendo en el storage del dispositivo, sin TTL que la alcance si el
+  // `savedAt` es el campo roto. Devolver null no es descartar; descartar es
+  // borrar.
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return null;
+    if (typeof parsed !== 'object' || parsed === null) return descartar();
     const { code, token, savedAt } = parsed as Record<string, unknown>;
-    if (typeof code !== 'string' || !code) return null;
-    if (typeof token !== 'string' || !token) return null;
-    if (typeof savedAt !== 'number' || !Number.isFinite(savedAt)) return null;
-    if (Date.now() - savedAt > TTL_MS) {
-      clearPendingInvitationLink();
-      return null;
-    }
+    if (typeof code !== 'string' || !code) return descartar();
+    if (typeof token !== 'string' || !token) return descartar();
+    if (typeof savedAt !== 'number' || !Number.isFinite(savedAt)) return descartar();
+    if (Date.now() - savedAt > TTL_MS) return descartar();
     return { code, token, savedAt };
   } catch {
-    // Un valor corrupto no debe romper la app ni quedar dando vueltas.
-    clearPendingInvitationLink();
-    return null;
+    return descartar();
   }
 }
 

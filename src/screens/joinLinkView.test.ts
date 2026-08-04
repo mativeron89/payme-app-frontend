@@ -20,8 +20,8 @@ describe('el rechazo de un link es CIEGO a su motivo', () => {
   it('sólo existe UN estado de rechazo, no cuatro', () => {
     // Si alguien agrega 'expired' | 'cancelled' | 'superseded' al tipo, esto
     // deja de compilar o deja de cubrir — y hay que venir a leer este bloque.
-    const todos: JoinLinkOutcome[] = ['joining', 'rejected', 'unavailable', 'error'];
-    expect(todos).toHaveLength(4);
+    const todos: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'unavailable', 'error'];
+    expect(todos).toHaveLength(5);
   });
 
   /**
@@ -35,7 +35,7 @@ describe('el rechazo de un link es CIEGO a su motivo', () => {
       'no existe', 'inexistente', 'no encontr', 'inválid', 'invalid',
     ];
     const ofensores: string[] = [];
-    for (const outcome of ['joining', 'rejected', 'unavailable', 'error'] as JoinLinkOutcome[]) {
+    for (const outcome of ['joining', 'rejected', 'invalid', 'unavailable', 'error'] as JoinLinkOutcome[]) {
       const m = joinLinkMessage(outcome);
       const texto = `${m.title} ${m.body}`.toLowerCase();
       for (const palabra of DELATORES) {
@@ -47,6 +47,39 @@ describe('el rechazo de un link es CIEGO a su motivo', () => {
 
   it('el rechazo no ofrece reintentar: reintentar no lo va a cambiar', () => {
     expect(joinLinkMessage('rejected').retryable).toBe(false);
+  });
+});
+
+describe('ORDEN 3A · el 400 es TERMINAL, no un problema de conexión', () => {
+  /**
+   * Antes el 400 caía en `error`, y `error` ofrece reintentar. Eso **invita a
+   * reintentos engañosos**: un link truncado al copiarlo de WhatsApp no se
+   * arregla reintentando, y cada reintento le sugiere a la persona que podría
+   * estar por funcionar.
+   */
+  it('no ofrece reintentar', () => {
+    expect(joinLinkMessage('invalid').retryable).toBe(false);
+  });
+
+  it('no habla de conexión ni de red', () => {
+    const m = joinLinkMessage('invalid');
+    const texto = `${m.title} ${m.body}`.toLowerCase();
+    for (const palabra of ['conexión', 'conexion', 'red', 'internet', 'servidor']) {
+      expect(texto).not.toContain(palabra);
+    }
+  });
+
+  /**
+   * Es un rechazo pero NO se funde con `rejected`: acá el defecto está en el
+   * link que la persona tiene en la mano y eso SÍ se puede accionar. Y sigue
+   * sin revelar nada de la mesa, que es la regla que no se negocia.
+   */
+  it('se distingue del rechazo ciego y tampoco revela nada de la mesa', () => {
+    expect(joinLinkMessage('invalid').title).not.toBe(joinLinkMessage('rejected').title);
+    const texto = JSON.stringify(joinLinkMessage('invalid')).toLowerCase();
+    for (const palabra of ['mesa no', 'no existe', 'restaurante', 'organizador ya']) {
+      expect(texto).not.toContain(palabra);
+    }
   });
 });
 
@@ -75,7 +108,7 @@ describe('un 503 NO es un rechazo', () => {
 });
 
 describe('todos los estados tienen mensaje', () => {
-  it.each(['joining', 'rejected', 'unavailable', 'error'] as JoinLinkOutcome[])(
+  it.each(['joining', 'rejected', 'invalid', 'unavailable', 'error'] as JoinLinkOutcome[])(
     '%s produce título y cuerpo no vacíos',
     (outcome) => {
       const m = joinLinkMessage(outcome);
