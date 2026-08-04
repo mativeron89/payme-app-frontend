@@ -1,5 +1,28 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.32.0 — ORDEN 3A · custodia del token, rutas del riel y espejo (2026-08-04)
+
+- **El espejo estaba mal contado, y el número era lo de menos.** El comando de
+  enumeración usaba `grep -v README.md` **sin anclar**, así que descartaba en
+  silencio `legal/README.md` — un archivo espejado con fuente real que **nunca
+  se verificó**. Inventario correcto: **70 archivos**. Ahora lo fija un test.
+- **Back revivía el token de invitación.** `navigate` asigna el hash y crea una
+  entrada, dejando viva la anterior con el `?t=`. Se retira con `replaceState`,
+  preservando el resto de los parámetros (`r` del QR).
+- **Orden de custodia:** guardar → comprobar round-trip → recién ahí soltar la
+  URL. Si el round-trip falla, la URL no se toca: preferimos un token visible a
+  un token perdido.
+- **Un shape inválido devolvía `null` y dejaba la fila.** Ahora toda salida sin
+  dato borra la credencial físicamente.
+- **El 400 dejó de ser "problema de conexión".** Es terminal, con copy
+  accionable, y no invita a reintentos engañosos.
+- **`#/cargar` y `#/transferir` ya no muestran copy:** redirigen a superficie
+  neutra sin dejar entrada en el historial, en los cuatro estados apagados de la
+  capability y en real y mock.
+- **Tres afirmaciones vencidas corregidas**, una mía y grave: leer la capability
+  **no** apagaba el riel — publicar hace autoritativa la declaración, no la
+  ejecución. El gate de dinero lo puso el backend en v2.33.0.
+
 ## 0.31.0 — Cierre del pago sin cuenta, espejado (2026-08-04)
 
 Espejo del backend v2.32.0. El token de `?t=` deja de ser **autorización** y
