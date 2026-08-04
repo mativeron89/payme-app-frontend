@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountRailView, allowsDemoMode, allowsWalletRoute } from './releaseGates';
+import { accountRailView, allowsWalletRoute } from './releaseGates';
 
 describe('gate IFPE de release', () => {
   it('real conserva tarjetas y elimina todo affordance wallet', () => {
@@ -48,35 +48,39 @@ describe('gate IFPE de release', () => {
   });
 
   /**
-   * G-24 · el build real no puede activar `pm_card_visa` ni el bypass OCR desde
-   * la URL. La capability de build manda: sin ella, ninguna forma de `?demo=1`
-   * enciende nada. Fail-closed.
+   * G-24 · CERRADO POR ELIMINACIÓN.
+   *
+   * Los tests anteriores probaban que ninguna forma de `?demo=1` activaba la
+   * rama del modo demo. Al eliminarse esa rama, **esos tests dejaron de probar
+   * algo**: verificar que no se activa lo que no existe es exactamente el
+   * antipatrón que ya nos mordió en este ciclo —defensas declaradas que no
+   * ejecutan nada—. Así que no se conservan como estaban.
+   *
+   * Lo que sí sigue teniendo valor es el INVARIANTE que protegían: que un
+   * PaymentMethod de prueba no pueda llegar a la app. Eso ahora se puede
+   * afirmar mucho más fuerte, sobre el código fuente entero en vez de sobre una
+   * función: si alguien reintroduce `pm_card_visa` por cualquier vía —otra
+   * pantalla, otro flag, un helper nuevo— este test lo frena.
    */
-  describe('G-24 · modo demo por capability de build', () => {
-    const FORMAS = [
-      ['query directa', '?demo=1', ''],
-      ['dentro del hash', '', '#/mesa/PA-1?demo=1'],
-      ['hash con varios params', '', '#/mesa/PA-1?t=abc&demo=1'],
-      ['query y hash a la vez', '?demo=1', '#/mesa/PA-1?demo=1'],
-    ] as const;
-
-    it('sin capability de build, NINGUNA forma de la URL lo activa', () => {
-      for (const [, search, hash] of FORMAS) {
-        expect(allowsDemoMode(false, search, hash)).toBe(false);
+  it('G-24 · ningún PaymentMethod de prueba de Stripe existe en el código fuente', () => {
+    // `import.meta.glob` es nativo de Vite: barre el árbol sin agregar ninguna
+    // dependencia (los tipos de node lo serían).
+    const fuentes = import.meta.glob('/src/**/*.{ts,tsx}', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>;
+    const PROHIBIDOS = ['pm_card_visa', 'tok_visa'];
+    const ofensores: string[] = [];
+    for (const [ruta, cuerpo] of Object.entries(fuentes)) {
+      if (ruta.endsWith('releaseGates.test.ts')) continue; // este archivo los nombra
+      for (const token of PROHIBIDOS) {
+        if (cuerpo.includes(token)) ofensores.push(`${ruta} → ${token}`);
       }
-    });
-
-    it('con capability de build, la URL sí lo activa', () => {
-      for (const [, search, hash] of FORMAS) {
-        expect(allowsDemoMode(true, search, hash)).toBe(true);
-      }
-    });
-
-    it('con capability pero sin flag en la URL, sigue apagado', () => {
-      expect(allowsDemoMode(true, '', '')).toBe(false);
-      expect(allowsDemoMode(true, '?demo=0', '')).toBe(false);
-      expect(allowsDemoMode(true, '?demo=true', '')).toBe(false);
-      expect(allowsDemoMode(true, '', '#/mesa/PA-1?r=uuid')).toBe(false);
-    });
+    }
+    // Guardarraíl del guardarraíl: si el glob no encuentra nada, el test pasaría
+    // en vacío y no probaría absolutamente nada.
+    expect(Object.keys(fuentes).length).toBeGreaterThan(20);
+    expect(ofensores).toEqual([]);
   });
 });

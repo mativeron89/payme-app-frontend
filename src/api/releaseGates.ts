@@ -31,21 +31,3 @@ export function accountRailView(walletRailEnabled: boolean) {
 export function allowsWalletRoute(walletRailEnabled: boolean, page: string): boolean {
   return walletRailEnabled || (page !== 'cargar' && page !== 'transferir');
 }
-
-/**
- * OLA 2-B · G-24: el modo demo (`?demo=1`) sustituye Stripe Elements por el
- * PaymentMethod público de test `pm_card_visa` y saltea la captura OCR. Hasta
- * ahora se activaba SOLO desde la URL, así que cualquier visitante del build
- * real podía encenderlo.
- *
- * Ahora requiere DOS llaves y la de build manda: sin capability compilada, la
- * URL no puede nada. Fail-closed — el build real no la trae y no hay forma de
- * pedirla en runtime. Un artefacto de demo separado se compila con la
- * capability encendida y un entorno acreditado como Stripe test.
- */
-export function allowsDemoMode(demoBuildAllowed: boolean, search: string, hash: string): boolean {
-  if (!demoBuildAllowed) return false;
-  if (new URLSearchParams(search).get('demo') === '1') return true;
-  const q = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
-  return new URLSearchParams(q).get('demo') === '1';
-}

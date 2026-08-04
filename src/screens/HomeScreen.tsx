@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, IS_DEMO, WALLET_RAIL_ENABLED } from '../api';
+import { api, WALLET_RAIL_ENABLED } from '../api';
 import type {
   BalanceResponse,
   OpenMesasResponse,
@@ -140,7 +140,7 @@ export function HomeScreen() {
         )}
 
         {/* En modo demo (?demo=1) se saca del encuadre: sugiere wallet. */}
-        {WALLET_RAIL_ENABLED && !IS_DEMO && (
+        {WALLET_RAIL_ENABLED && (
           <div className="saldo-card">
             <div className="lbl">Tu saldo PayMe</div>
             <div className="saldo-row">

@@ -12,7 +12,6 @@ import * as mock from './mock/mockApi';
 import { attachPaymentMethodResponse, invitationResponse, setupIntentResponse } from './contractResponses';
 import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
-import { allowsDemoMode } from './releaseGates';
 import { invalidateSession, loadSession, type StoredSession } from './storage';
 import { confirmCardPayment } from './stripe';
 import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse, type PayMesaExpectation, type TransferExpectation } from './moneyGuards';
@@ -69,34 +68,6 @@ export const IS_MOCK: boolean = import.meta.env.VITE_MOCK === '1';
  */
 export const WALLET_RAIL_ENABLED: boolean = IS_MOCK;
 
-/**
- * Modo histórico para grabar la demo: `?demo=1` (también dentro del hash)
- * saltea la captura OCR y usa el PaymentMethod público de test de Stripe en
- * garantía/pago.
- *
- * G-24 (OLA 2-B): ya NO alcanza con la URL. Hace falta además la capability de
- * BUILD `VITE_ALLOW_DEMO=1`, que el build real no trae. Así el modo demo queda
- * inalcanzable por URL en el artefacto real —fail-closed— y conservar la demo
- * exige compilar un artefacto aparte, con entorno acreditado como Stripe test.
- * El mock lo conserva: ahí no hay dinero ni credenciales.
- */
-export const DEMO_BUILD_ALLOWED: boolean =
-  IS_MOCK || (import.meta.env.VITE_ALLOW_DEMO as string | undefined) === '1';
-
-/**
- * Se escribe como `CAPABILITY && lectura()` a propósito: con la capability
- * apagada, `DEMO_BUILD_ALLOWED` es una constante `false` en tiempo de build, el
- * empaquetador pliega la expresión entera y ELIMINA por rama muerta tanto la
- * lectura de la URL como `DEMO_PM_ID` y el bypass de OCR. Así el artefacto real
- * no sólo no puede activarlos: no los contiene. G-24 pedía "ausentes o
- * inaccesibles"; de esta forma quedan ausentes.
- */
-const demoFlagInUrl = (): boolean =>
-  typeof window === 'undefined'
-    ? false
-    : allowsDemoMode(true, window.location.search, window.location.hash);
-
-export const IS_DEMO: boolean = DEMO_BUILD_ALLOWED && demoFlagInUrl();
 
 /**
  * G-01 (v2.21): el restaurante llega por el QR de la mesa — `?r=<uuid>` en la
@@ -114,14 +85,6 @@ function readQrRestaurant(): string | null {
 
 export const QR_RESTAURANT_ID: string | null = readQrRestaurant();
 
-/**
- * Modo demo: PaymentMethod de test de Stripe (Visa 4242, siempre aprueba, sin
- * 3DS). Con `?demo=1` se manda como `stripe_payment_method_id` en garantía y
- * pago para NO depender del tipeo en el iframe de Stripe Elements durante la
- * grabación en navegador automatizado. Es un token público de test de Stripe;
- * jamás se usa sin el flag (el pago real sigue creando el `pm_` desde Elements).
- */
-export const DEMO_PM_ID = 'pm_card_visa';
 
 /**
  * Apple Pay / Google Pay siguen apagados también en mock. Son un MUST

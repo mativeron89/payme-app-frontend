@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, WALLET_PAY_ENABLED, WALLET_RAIL_ENABLED, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, WALLET_PAY_ENABLED, WALLET_RAIL_ENABLED, newIdempotencyKey } from '../api';
 import type { MonetaryIntentHandle, UnconfirmedAttempt } from '../api/idempotency';
 import {
   acquireMonetaryIntent,
@@ -792,10 +792,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       let savedPmId: string | null = null;
       let savingNewCard = false;
       if (payType === 'card') {
-        if (!IS_MOCK && IS_DEMO) {
-          // Modo demo (?demo=1): PaymentMethod de test de Stripe, sin iframe.
-          stripePmId = DEMO_PM_ID;
-        } else if (savedCard) {
+        if (savedCard) {
           savedPmId = savedCard.id;
         } else if (IS_MOCK) {
           stripePmId = recallPaymentMethod(scope, intent) ?? `pm_mock_nueva_${Date.now().toString(36)}`;
@@ -1436,7 +1433,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </button>
             {/* D4 + feedback Mati: las guardadas viven en el desglosable, no
                 sueltas en la lista principal. */}
-            {!IS_DEMO && payType === 'card' && cards.length > 0 && cardsOpen && (
+            {payType === 'card' && cards.length > 0 && cardsOpen && (
               <div role="radiogroup" aria-label="Tarjeta guardada" style={{ margin: '2px 0 4px' }}>
                 {cards.map((c) => (
                   <button
@@ -1482,7 +1479,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </div>
             )}
             {/* Tarjeta nueva: Elements en real; en mock no se pide número. */}
-            {!IS_DEMO && payType === 'card' && (cards.length === 0 || (cardChoice === 'new' && cardsOpen)) && (
+            {payType === 'card' && (cards.length === 0 || (cardChoice === 'new' && cardsOpen)) && (
               <div style={{ margin: '2px 0 10px' }}>
                 {!IS_MOCK && (
                   <>
@@ -1510,15 +1507,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 )}
               </div>
             )}
-            {/* Modo demo (?demo=1): tarjeta de test, sin iframe de Stripe. */}
-            {!IS_MOCK && IS_DEMO && payType === 'card' && (
-              <div className="caption" style={{ margin: '2px 0 10px' }}>
-                <Icon name="card" size={16} className="ico-inline" /> Tarjeta de prueba ···· 4242 (demo)
-              </div>
-            )}
-            {/* Apple/Google Pay: ocultos en la app real hasta que exista la
-                integración con la Payment Request API (api/features.ts). No se
-                borran: se apagan por dato, y vuelven encendiendo el flag. */}
+            {/* Apple/Google Pay: apagados hasta que exista la integración con
+                la Payment Request API y su prueba física. No se borran: se
+                apagan por dato (`WALLET_PAY_ENABLED` en api/index.ts). */}
             {WALLET_PAY_ENABLED && (
             <button
               className={`method-card ${payType === 'apple_pay' ? 'sel' : ''}`}
@@ -1591,7 +1582,6 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             (!frozenScope && gross === 0) ||
             (!frozenScope &&
               !IS_MOCK &&
-              !IS_DEMO &&
               payType === 'card' &&
               (cards.length === 0 || cardChoice === 'new') &&
               !cardState.complete)

@@ -106,11 +106,14 @@ archivo, la maqueta, el mock o `GAPS.md`.
   contienen fecha de nacimiento/capability, pero D-03 contradice el modelo de
   alta vigente. No interpretar `registration_required` ni modificar el registro
   hasta la enmienda y orden coordinada App Backend↔App Frontend.
-- **`?demo=1` no es un control de seguridad:** su uso histórico de video sólo
-  es admisible en un artefacto/host separado y un entorno acreditado como
-  Stripe test; el estado externo no fue verificado. Antes de piloto o
-  credenciales live debe ser inalcanzable por URL. Ver G-24; conservar la demo
-  requiere coordinación explícita.
+- **El modo `?demo=1` YA NO EXISTE (eliminado el 2026-08-03).** Sustituía
+  Stripe Elements por un PaymentMethod de test y salteaba la captura OCR, y se
+  activaba desde la URL. Se eliminó por completo —no se gateó— cuando Mati
+  confirmó que la demo ya pasó y no se graba ninguna más: sin usuario, un flag
+  que nadie va a volver a prender es superficie que alguien puede prender por
+  error. G-24 quedó cerrado por eliminación. **El modo mock (`VITE_MOCK=1`) es
+  otra cosa y se conserva**: es el riel de desarrollo. Si alguien necesita
+  volver a grabar, se decide de nuevo y se implementa en un artefacto aparte.
 
 Los flujos vigentes son home, cuenta/tarjetas, amigos, grupos, mesas abiertas,
 scan-mock, ticket, división consumo/igual, invitaciones, locks, pago con tarjeta

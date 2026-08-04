@@ -1,6 +1,6 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID, QR_RESTAURANT_ID, WALLET_RAIL_ENABLED, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, QR_RESTAURANT_ID, WALLET_RAIL_ENABLED, newIdempotencyKey } from '../api';
 import { extractApiError } from '../api/errors';
 import {
   acquireMonetaryIntent,
@@ -65,30 +65,6 @@ function lineTotalCents(it: EditItem): number | null {
   if (price <= 0 || !Number.isSafeInteger(it.quantity) || it.quantity < 1) return null;
   const total = BigInt(price) * BigInt(it.quantity);
   return total <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(total) : null;
-}
-
-/**
- * Modo demo (`?demo=1`): imagen mínima válida para saltear la cámara. El OCR
- * real valida los magic bytes pero ignora el contenido y devuelve el ticket de
- * ejemplo de siempre, así que un JPEG de 8×8 alcanza. No es una feature nueva:
- * reemplaza la foto por bytes válidos para reusar el MISMO endpoint y resultado.
- */
-function makeDemoImage(): Promise<Blob> {
-  const canvas = document.createElement('canvas');
-  canvas.width = 8;
-  canvas.height = 8;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, 8, 8);
-  }
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error('demo_image_failed'))),
-      'image/jpeg',
-      0.8,
-    );
-  });
 }
 
 export function CreateMesaFlow() {
@@ -325,21 +301,6 @@ export function CreateMesaFlow() {
     fileInput.current?.click();
   }
 
-  /**
-   * Modo demo (`?demo=1`): saltea la cámara. Genera una imagen mínima válida y
-   * la manda al MISMO `POST /api/ocr`, que responde el ticket de ejemplo de
-   * siempre → avanza a "ticket" y de ahí a dividir. Sin cámara ni diálogo de
-   * archivo (lo que trababa la grabación en el navegador automatizado).
-   */
-  async function runDemoScan() {
-    try {
-      const image = await makeDemoImage();
-      await runScan(image);
-    } catch {
-      toast('No pudimos preparar el ticket de ejemplo. Reintentá.');
-    }
-  }
-
   async function runScan(image?: Blob) {
     setScanning(true);
     setError(null);
@@ -413,12 +374,7 @@ export function CreateMesaFlow() {
       let savingNewCard = false;
       const savedCard = cards.find((c) => c.id === cardChoice) ?? null;
       if (method === 'card') {
-        if (!IS_MOCK && IS_DEMO) {
-          // Modo demo (?demo=1): PaymentMethod de test de Stripe, sin tipear
-          // en el iframe de Elements (para grabar en navegador automatizado).
-          // Desde v2.16 el cliente Stripe se crea solo: sin bootstrap previo.
-          stripePmId = DEMO_PM_ID;
-        } else if (savedCard) {
+        if (savedCard) {
           savedPmId = savedCard.id;
         } else if (IS_MOCK) {
           stripePmId =
@@ -717,15 +673,12 @@ export function CreateMesaFlow() {
           )}
           {/* G-01: un QR roto/suspendido se avisa acá, antes de armar nada. */}
           {restaurantError && <div className="note note-orange">{restaurantError}</div>}
-          {/* En modo demo el cartel se oculta: delataría la maqueta en cámara. */}
-          {!IS_DEMO && (
-            <div className="note note-amber">
-              <b>{IS_MOCK ? 'Modo demo:' : 'Ojo:'}</b>{' '}
-              {IS_MOCK
-                ? 'todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo.'
-                : 'todavía no leemos la foto de verdad — sacala igual y vas a recibir un ticket de ejemplo para continuar.'}
-            </div>
-          )}
+          <div className="note note-amber">
+            <b>{IS_MOCK ? 'Modo demo:' : 'Ojo:'}</b>{' '}
+            {IS_MOCK
+              ? 'todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo.'
+              : 'todavía no leemos la foto de verdad — sacala igual y vas a recibir un ticket de ejemplo para continuar.'}
+          </div>
           {/* Real: abre la cámara del teléfono. POST /api/ocr es multipart y
               valida los magic bytes, así que necesita una imagen de verdad. */}
           <input
@@ -743,15 +696,11 @@ export function CreateMesaFlow() {
           <button
             className="btn btn-teal"
             style={{ marginTop: 14 }}
-            onClick={IS_DEMO ? () => void runDemoScan() : doScan}
+            onClick={doScan}
             disabled={scanning}
           >
             {scanning ? (
               'Leyendo ticket…'
-            ) : IS_DEMO ? (
-              <>
-                <Icon name="receipt" size={16} className="ico-inline" /> Usar ticket de ejemplo
-              </>
             ) : (
               <>
                 <Icon name="camera" size={16} className="ico-inline" /> Capturar
@@ -1042,26 +991,7 @@ export function CreateMesaFlow() {
           {/* Sin opción "Tarjeta" padre (redundante — feedback de Mati): las
               tarjetas guardadas SON las opciones. Elegir una = garantizar con
               esa (D4, sin Elements; 3DS igual). */}
-          {IS_DEMO && (
-            <button
-              className={`method-card ${method === 'card' ? 'sel' : ''}`}
-              onClick={() => setMethod('card')}
-              disabled={!!frozen}
-              role="radio"
-              aria-checked={method === 'card'}
-            >
-              <div className="cc visa" aria-hidden="true">
-                VISA
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Tarjeta</div>
-                <div className="caption">Tarjeta de prueba ···· 4242 (demo)</div>
-              </div>
-              <div className="radio" aria-hidden="true" />
-            </button>
-          )}
-          {!IS_DEMO &&
-            cards.map((c) => (
+          {cards.map((c) => (
               <button
                 key={c.id}
                 className={`method-card ${method === 'card' && cardChoice === c.id ? 'sel' : ''}`}
@@ -1090,7 +1020,7 @@ export function CreateMesaFlow() {
                 <div className="radio" aria-hidden="true" />
               </button>
             ))}
-          {!IS_DEMO && (
+          {(
             <button
               className={`method-card ${method === 'card' && cardChoice === 'new' ? 'sel' : ''}`}
               onClick={() => {
@@ -1114,7 +1044,7 @@ export function CreateMesaFlow() {
             </button>
           )}
           {/* Tarjeta nueva: Elements en real; en mock no se pide número. */}
-          {!IS_DEMO && method === 'card' && (cards.length === 0 || cardChoice === 'new') && (
+          {method === 'card' && (cards.length === 0 || cardChoice === 'new') && (
             <div style={{ margin: '4px 0 12px' }}>
               {IS_MOCK ? (
                 <div className="caption">La ingresás al confirmar (segura, vía Stripe).</div>
@@ -1139,12 +1069,6 @@ export function CreateMesaFlow() {
                 />
                 Guardar esta tarjeta para la próxima
               </label>
-            </div>
-          )}
-          {/* Modo demo (?demo=1): tarjeta de test, sin iframe de Stripe. */}
-          {!IS_MOCK && IS_DEMO && method === 'card' && (
-            <div className="caption" style={{ margin: '4px 0 12px' }}>
-              <Icon name="card" size={14} className="ico-inline" /> Tarjeta de prueba ···· 4242 (demo)
             </div>
           )}
           {WALLET_RAIL_ENABLED && <button
@@ -1177,7 +1101,6 @@ export function CreateMesaFlow() {
             frozenRequiresReconciliation ||
             (!frozen &&
               !IS_MOCK &&
-              !IS_DEMO &&
               method === 'card' &&
               (cards.length === 0 || cardChoice === 'new') &&
               !cardState.complete)
