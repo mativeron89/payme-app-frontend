@@ -228,7 +228,12 @@ function seedMesas(): MockMesa[] {
       active_staff: STAFF,
       openedByUser: true,
       captured_shortfall_cents: 0,
-      guarantee_method: 'wallet',
+      // OLA 5C (b): resembrada como TARJETA. Una mesa con garantía wallet
+      // enseñaba un riel que no existe a quien usa el mock para entender el
+      // producto — el mismo argumento por el que el mock replica la ceguera de
+      // C2. El mock no es un registro histórico y no tiene obligaciones legacy
+      // que preservar: ahí no hay plata de nadie.
+      guarantee_method: 'card',
     },
     // Mesa de OTRO organizador (Sofía) — la invitación in-app pendiente apunta acá.
     {
@@ -283,7 +288,17 @@ function seedMesas(): MockMesa[] {
   ];
 }
 
-function seedWalletTx(): WalletTransaction[] {
+/**
+ * DURMIENTE (OLA 5C · b). El riel saldo está apagado, así que el mock ya no
+ * siembra movimientos de saldo. La función NO se borra —la ratificación manda
+ * conservar código, schema e historia— y por eso se exporta: sin eso el
+ * compilador la marca como muerta y la única salida sería eliminarla, que es
+ * justo lo que no hay que hacer.
+ *
+ * Se vuelve a conectar en `initialState` el día que exista gate IFPE,
+ * ratificación nueva y una capability publicada por el BACKEND.
+ */
+export function seedWalletTx(): WalletTransaction[] {
   const mk = (
     type: WalletTxType,
     amount: number,
@@ -411,7 +426,9 @@ function seedState(): MockState {
   const { notifications, pendingInvitations } = seedNotifications(mesas);
   return {
     user: MOCK_USER,
-    balance_cents: 125000,
+    // Riel saldo apagado: el mock no siembra saldo. Los campos quedan en el
+    // schema (durmiente), en cero.
+    balance_cents: 0,
     held_balance_cents: 0,
     clabe: null,
     // D4 (contrato v2.16 publicado): id = uuid interno + stripe_payment_method_id
@@ -508,7 +525,9 @@ function seedState(): MockState {
         category: MOCK_RESTAURANTS[0].category,
       },
     ],
-    walletTx: seedWalletTx(),
+    // Sin riel saldo no hay movimientos de saldo que mostrar. El seed queda
+    // en el árbol (durmiente); lo que se apaga es la siembra.
+    walletTx: [],
     notifications,
     pendingInvitations,
     idempotency: {},

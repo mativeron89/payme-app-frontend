@@ -944,16 +944,20 @@ export async function mockTopupCard(
   return delay(fresh);
 }
 
+/**
+ * OLA 5C (b): el riel saldo está apagado y esta lectura queda DURMIENTE.
+ *
+ * Además se elimina un defecto propio, independiente del wallet: la versión
+ * anterior **acuñaba y persistía** una CLABE dentro de un `GET`. Una lectura que
+ * escribe es un defecto por sí mismo, y no vuelve así aunque el riel se
+ * reactive dentro de dos años.
+ *
+ * Falla cerrada en vez de fabricar: si algo llegara acá con el riel apagado, es
+ * un camino que no debería existir, y devolver una CLABE inventada sería
+ * enseñar un riel inexistente a quien usa el mock para entender el producto.
+ */
 export async function mockGetClabe(): Promise<ClabeResponse> {
-  if (!state.clabe) {
-    state.clabe = `6461800000${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
-  }
-  return delay({
-    clabe: state.clabe,
-    banco: 'STP',
-    beneficiario: 'PayMe',
-    instrucciones: 'Transferí por SPEI a esta CLABE desde tu banco; el saldo se acredita solo.',
-  });
+  return fail(404, 'wallet_rail_disabled');
 }
 
 // ─── Transfers ─────────────────────────────────────────────

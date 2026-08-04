@@ -64,11 +64,24 @@ import type {
 
 export const IS_MOCK: boolean = import.meta.env.VITE_MOCK === '1';
 /**
- * Estado preexistente: el riel nunca aparece en real y el mock conserva su
- * historia. El apagado también dentro del mock se ejecuta recién después de
- * esta auditoría, según el plan ratificado; no se anticipa acá.
+ * Riel saldo PayMe: **APAGADO en real, demo y mock** (OLA 5C).
+ *
+ * Antes valía `IS_MOCK`, lo que acoplaba dos ejes que no tienen nada que ver:
+ * "hay wallet" y "es la demo". La consecuencia era que el artefacto mock ERA un
+ * build con el riel entero encendido, publicado en el mismo host público que el
+ * real. La ratificación pide cero UI y cero rutas en los tres.
+ *
+ * **Nada se borra.** Pantallas, adaptadores, tipos, schema e historia quedan
+ * DURMIENTES: `TopupScreen` y `TransferScreen` siguen en el árbol, los ocho
+ * métodos del riel siguen en la fachada, y `payment_type: 'wallet'` sigue
+ * siendo legal en los decoders porque el contrato del backend lo conserva.
+ *
+ * No hay permiso por cuenta, rol ni restaurante que lo reactive: es una
+ * constante. Reactivar exige gate IFPE, auditoría y ratificación nueva — y
+ * entonces la capability debe venir del BACKEND, no de acá (OLA 5D, hoy
+ * bloqueada porque `/api/config` no publica ninguna capability de wallet).
  */
-export const WALLET_RAIL_ENABLED: boolean = IS_MOCK;
+export const WALLET_RAIL_ENABLED: boolean = false;
 
 
 /**
