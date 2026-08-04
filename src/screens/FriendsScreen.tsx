@@ -26,8 +26,10 @@ export function FriendsScreen() {
       (f) =>
         !filter ||
         fold(f.full_name).includes(fold(filter)) ||
-        fold(f.payme_id).includes(fold(filter)) ||
-        fold(f.email).includes(fold(filter)),
+        // C4 (v2.29): `email` salió del contrato, del resultado y del criterio.
+        // Buscar por substring de correo confirmaba su existencia carácter a
+        // carácter. No se repone del lado del front.
+        fold(f.payme_id).includes(fold(filter)),
     ) ?? null;
 
   async function addFriend() {

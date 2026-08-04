@@ -17,6 +17,16 @@ import type {
   WalletTransaction,
   WalletTxType,
 } from '../types';
+
+/**
+ * Persona COMPLETA del mock, con el correo que `users` sí tiene en el backend.
+ *
+ * C3/C4 (v2.29) sacó `email` de la proyección de AMIGOS, no de la base: grupos
+ * lo sigue devolviendo. El store guarda el dato y cada endpoint proyecta lo que
+ * su contrato declara — igual que el backend. Si el mock lo borrara del todo,
+ * mentiría en la otra dirección.
+ */
+export type MockPerson = Friend & { email: string };
 import { MOCK_RESTAURANTS, MOCK_USER } from './seedData';
 
 /**
@@ -90,7 +100,7 @@ export interface MockState {
   held_balance_cents: number;
   clabe: string | null;
   paymentMethods: PaymentMethod[];
-  friends: Friend[];
+  friends: MockPerson[];
   groups: Array<Group & { memberIds: string[] }>;
   mesas: MockMesa[];
   /** GET /account/history: pagos propios en mesas (pantalla Mesas). */
@@ -292,13 +302,17 @@ function seedWalletTx(): WalletTransaction[] {
   ];
 }
 
-function seedFriends(): Friend[] {
-  const mk = (payme: string, first: string, last: string): Friend => ({
+function seedFriends(): MockPerson[] {
+  const mk = (payme: string, first: string, last: string): MockPerson => ({
     id: mockId('a'),
     payme_id: `payme_mx_${payme}`,
     first_name: first,
     last_name: last,
     full_name: `${first} ${last}`,
+    // El mock conserva el correo como lo conserva `users` en el backend: lo que
+    // C3/C4 sacó es la PROYECCIÓN en amigos, no el dato. Grupos sigue
+    // devolviéndolo (contract-mirror/routes/groups.js), así que el store tiene
+    // que poder alimentar las dos formas.
     email: `${payme}@mail.com`,
     added_at: iso(-30 * 24 * 60 * 60_000),
   });

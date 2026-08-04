@@ -556,19 +556,78 @@ export interface TransfersResponse {
 // ─── Friends / Groups (routes/friends.js, groups.js) ───────
 
 /** Elemento de GET /api/friends. */
+/**
+ * Persona en el dominio social (OLA 3C · backend v2.29.0, `persona()` de
+ * routes/friends.js).
+ *
+ * **C3/C4: `email` SALIÓ del contrato**, tanto de la proyección como del
+ * criterio de búsqueda. Buscar por substring de correo era una forma barata de
+ * confirmarlo carácter a carácter. No se repone del lado del front.
+ */
 export interface Friend {
   id: string;
   payme_id: string;
   first_name: string;
   last_name: string;
   full_name: string;
-  email: string;
+  /** Solo en GET /friends: `responded_at` de la amistad, o `created_at`. */
   added_at?: string;
 }
 
 export interface FriendsResponse {
   friends: Friend[];
 }
+
+/** GET /api/friends/search → 200. Busca SOLO entre amigos propios. */
+export interface FriendSearchResponse {
+  results: Friend[];
+}
+
+/**
+ * C1/C2 · `POST /api/friends` ya no crea una amistad: crea una INTENCIÓN.
+ *
+ * Responde **202 `{ requested: true }` SIEMPRE** — la persona no existe,
+ * existe, ya es amiga, ya tiene tu solicitud, o te bloqueó. El emisor no puede
+ * distinguir ninguno de esos casos. Esa ceguera es el punto: antes un 404
+ * `user_not_found` convertía al endpoint en un oráculo para descubrir quién
+ * tiene cuenta probando correos.
+ *
+ * Consecuencia para la UI: **no se puede decir "no encontramos a esa
+ * persona"**, porque el front no lo sabe. El estado real de las solicitudes
+ * propias se ve en `GET /friends/requests?direction=outgoing`.
+ */
+export interface FriendRequestCreatedResponse {
+  requested: true;
+}
+
+export type FriendRequestDirection = 'incoming' | 'outgoing';
+
+/**
+ * Elemento de `GET /api/friends/requests`.
+ *
+ * ⚠️ `id` es el de la SOLICITUD y la persona va anidada en `user`. Están
+ * separados a propósito: en el backend, seleccionar `f.id` junto a `u.id`
+ * devolvía dos columnas `id` y el driver conservaba la última, así que aceptar
+ * fallaba con 404 siempre. No volver a mezclarlos de este lado.
+ */
+export interface FriendRequest {
+  id: string;
+  user: Friend;
+  requested_at: string;
+}
+
+export interface FriendRequestsResponse {
+  direction: FriendRequestDirection;
+  requests: FriendRequest[];
+}
+
+export interface FriendRequestAcceptedResponse { accepted: true }
+export interface FriendRequestRejectedResponse { rejected: true }
+export interface FriendRequestCancelledResponse { cancelled: true }
+export interface FriendBlockedResponse { blocked: true }
+export interface FriendUnblockedResponse { unblocked: true }
+/** C5: `DELETE /friends/:id` ahora da 404 `friendship_not_found` si no había. */
+export interface FriendRemovedResponse { removed: true }
 
 /** Elemento de GET /api/groups. */
 export interface Group {

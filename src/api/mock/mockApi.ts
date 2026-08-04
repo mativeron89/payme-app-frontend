@@ -51,6 +51,7 @@ import {
   type MockIdemEntry,
   type MockIdentity,
   type MockMesa,
+  type MockPerson,
   type MockSlot,
 } from './store';
 
@@ -967,8 +968,11 @@ export async function mockCreateTransfer(
     if (previous.hash !== idemHash) return fail(409, 'idempotency_conflict');
     return delay(previous.response as CreateTransferResponse);
   }
+  // C3/C4: `email` ya no viaja en el shape de amigo. El destinatario por correo
+  // sigue siendo válido en el contrato de transferencias, pero el mock no puede
+  // resolverlo desde su lista: se busca por payme_id o id.
   const to = state.friends.find(
-    (f) => f.payme_id === req.to_payme_id || f.email === req.to_email || f.id === req.to_user_id,
+    (f) => f.payme_id === req.to_payme_id || f.id === req.to_user_id,
   );
   if (!to) return fail(404, 'recipient_not_found');
   const available = availableBalance();
@@ -1168,19 +1172,23 @@ export async function mockStats(): Promise<StatsResponse> {
 // ─── Friends / Groups ──────────────────────────────────────
 
 export async function mockFriends(): Promise<FriendsResponse> {
-  return delay({ friends: [...state.friends] });
+  // C3: el contrato de amigos ya no lleva `email`. Se proyecta explícitamente
+  // para que el mock no pueda filtrarlo por descuido.
+  return delay({
+    friends: state.friends.map(({ email: _email, ...persona }) => persona),
+  });
 }
 
 export async function mockAddFriend(query: { email?: string; payme_id?: string }): Promise<Friend> {
   const handle = (query.email ?? query.payme_id ?? 'nuevo').split('@')[0].replace(/^payme_mx_/, '');
   const first = handle.charAt(0).toUpperCase() + handle.slice(1);
-  const friend: Friend = {
+  const friend: MockPerson = {
+    email: query.email ?? `${handle}@mail.com`,
     id: mockId('a'),
     payme_id: query.payme_id ?? `payme_mx_${handle.slice(0, 4).padEnd(4, 'x')}`,
     first_name: first,
     last_name: 'Demo',
     full_name: `${first} Demo`,
-    email: query.email ?? `${handle}@mail.com`,
     added_at: new Date().toISOString(),
   };
   state.friends.push(friend);
@@ -1209,6 +1217,7 @@ export async function mockGroupDetail(id: string): Promise<GroupDetailResponse> 
       payme_id: m.payme_id,
       first_name: m.first_name,
       last_name: m.last_name,
+      // Grupos SÍ conserva el correo (contract-mirror/routes/groups.js).
       email: m.email,
     })),
   });

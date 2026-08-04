@@ -139,6 +139,10 @@ const addFriend = z.object({
   email: email.optional(), payme_id: paymeId.optional(),
 }).refine(d => d.email || d.payme_id, { message: 'email or payme_id required' });
 const searchFriends = z.object({ q: z.string().min(1).max(100) });
+// OLA 3C: entrantes = las que me mandaron; salientes = las que mandé.
+const friendRequestsQuery = z.object({
+  direction: z.enum(['incoming', 'outgoing']).default('incoming'),
+});
 const createGroup = z.object({
   name: z.string().min(1).max(100),
   icon: z.string().max(10).optional(),
@@ -390,7 +394,7 @@ module.exports = {
   register, registerCompat, registerSchema, birthDateRequeridaEnRegistro,
   login, refreshToken, updateMe,
   attachPaymentMethod, setupIntent, setDefaultPaymentMethod, uuidIdParam,
-  addFriend, searchFriends,
+  addFriend, searchFriends, friendRequestsQuery,
   createGroup, updateGroup, addGroupMember,
   createInvitation,
   createMesa, payMesa, lockItems,

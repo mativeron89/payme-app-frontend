@@ -62,8 +62,8 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
     ? friends.filter(
         (f) =>
           f.full_name.toLowerCase().includes(filter.toLowerCase()) ||
-          f.payme_id.toLowerCase().includes(filter.toLowerCase()) ||
-          f.email.toLowerCase().includes(filter.toLowerCase()),
+          // C4 (v2.29): sin `email` en el contrato ni en el criterio.
+          f.payme_id.toLowerCase().includes(filter.toLowerCase()),
       )
     : friends;
 

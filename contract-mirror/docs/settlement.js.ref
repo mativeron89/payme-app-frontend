@@ -1707,9 +1707,10 @@ async function settleMesa(mesaId) {
     // Outbox E3: table_charged en 'settled' — cubre fully_paid Y expired+garantía;
     // hereda el re-check FOR UPDATE de arriba (anti doble emisión).
     await eventEmitter.enqueueTableCharged(client, mesaId);
-    // Outbox Etapa 2: un fallo técnico revierte esta fase. La ausencia conocida
-    // de mapping conserva el skip ruidoso hasta la quarantine durable de ORDEN 2;
-    // no se bloquea dinero por una integración analítica sin contrato ratificado.
+    // Outbox Etapa 2 (OLA 2-A): corre bajo SAVEPOINT. Un fallo TÉCNICO ya no
+    // revierte esta fase —el dinero ya se capturó en la Fase 2— sino que difiere
+    // el lote a `settlement_aggregate_backlog` para reintento observable. La
+    // violación de privacidad sí sigue abortando todo.
     await aggregateEmitter.enqueueSettledMesaAggregates(client, mesaId);
     return { raced: false };
   });
@@ -2981,6 +2982,35 @@ async function sweepSettlements() {
     catch (e) { logger.error('sweep_settle_error', { mesa_id: r.id, error: e.message }); }
   }
 
+  // (1-bis) reintentar los lotes de agregados diferidos (OLA 2-A).
+  // Va DESPUÉS de liquidar y ANTES de dispersar: es trabajo analítico y no debe
+  // retrasar el dinero. Cada reintento corre en su propia transacción, así que
+  // un lote que vuelva a fallar no arrastra a los demás ni toca el settle.
+  let aggregatesRetried = 0;
+  const { rows: pendientes } = await pool.query(
+    `SELECT mesa_id FROM settlement_aggregate_backlog
+      WHERE resolved_at IS NULL AND next_attempt_at <= NOW()
+      ORDER BY next_attempt_at ASC
+      LIMIT $1`,
+    [SETTLE_BATCH]
+  );
+  for (const r of pendientes) {
+    try {
+      // enqueueSettledMesaAggregates se re-anota sola con backoff si vuelve a
+      // fallar, así que este loop no necesita administrar reintentos.
+      await pool.tx(async (client) => {
+        await aggregateEmitter.enqueueSettledMesaAggregates(client, r.mesa_id);
+      });
+      aggregatesRetried++;
+    } catch (e) {
+      // Sólo llega acá una violación de privacidad (no se difiere, aborta) o un
+      // fallo de la propia anotación. Ninguna de las dos puede quedar callada.
+      logger.error('sweep_aggregate_backlog_error', {
+        mesa_id: r.mesa_id, error: e.message, code: e.code || null,
+      });
+    }
+  }
+
   // (2) dispersar las ya liquidadas
   const { rows: toDisperse } = await pool.query(
     `SELECT id FROM mesas
@@ -3052,12 +3082,13 @@ async function sweepSettlements() {
     catch (e) { logger.error('sweep_retry_error', { mesa_id: r.mesa_id, error: e.message }); }
   }
 
-  if (settled || dispersed || reconciled || quarantined || retried) {
+  if (settled || dispersed || reconciled || quarantined || retried || aggregatesRetried) {
     logger.info('sweep_settlements', {
       settled, dispersed, reconciled, quarantined, retried,
+      aggregates_retried: aggregatesRetried,
     });
   }
-  return { settled, dispersed, reconciled, quarantined, retried };
+  return { settled, dispersed, reconciled, quarantined, retried, aggregatesRetried };
 }
 
 module.exports = {

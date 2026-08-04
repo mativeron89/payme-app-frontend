@@ -188,8 +188,35 @@ function assertWebhookSlotBinding(row, event, provider) {
 // la respuesta: otro proceso/instancia sólo puede retomar el event_id después
 // de que el worker termine o su conexión muera. Así el timer puede marcar un
 // slot stale como retryable sin habilitar dos ejecutores simultáneos.
-async function holdWebhookEventLock(eventId) {
-  const client = await pool.connect();
+/**
+ * Toma el advisory lock del evento. **NUNCA lanza**: distingue las tres salidas
+ * posibles para que el handler HTTP pueda decidir sin depender de un catch.
+ *
+ * N-01 (OLA 2-A): antes esto re-lanzaba ante un fallo de `pool.connect()`. Los
+ * dos endpoints lo llamaban FUERA de todo try/catch, Express 4 no captura
+ * rejections de handlers async y no hay handler global → un blip de PostgreSQL
+ * durante una ráfaga de webhooks **mataba el proceso**, justo en el canal por
+ * donde entra el dinero. Regresión introducida en e8a3faf.
+ *
+ * El lock vive en su propio pool (`pool.lockPool`): la conexión queda retenida
+ * toda la request mientras el handler necesita OTRAS conexiones, así que
+ * tomarla del pool principal permitía que una ráfaga se auto-bloqueara. El
+ * advisory lock es de alcance de base, no de pool, así que la exclusión
+ * cross-worker se conserva intacta.
+ *
+ * @returns {Promise<{status:'acquired', lock:{release:Function}}
+ *                  |{status:'in_progress'}
+ *                  |{status:'unavailable', error:Error}>}
+ */
+async function acquireWebhookEventLock(eventId) {
+  let client;
+  try {
+    client = await pool.lockPool.connect();
+  } catch (err) {
+    // Pool agotado, PostgreSQL caído o timeout de conexión. No es un duplicado:
+    // es infraestructura. Se devuelve como dato, no como excepción.
+    return { status: 'unavailable', error: err };
+  }
   try {
     const { rows: [row] } = await client.query(
       `SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired`,
@@ -197,31 +224,48 @@ async function holdWebhookEventLock(eventId) {
     );
     if (!row?.acquired) {
       client.release();
-      return null;
+      return { status: 'in_progress' };
     }
   } catch (err) {
     client.release(true);
-    throw err;
+    return { status: 'unavailable', error: err };
   }
   let released = false;
   return {
-    async release() {
-      if (released) return;
-      released = true;
-      try {
-        await client.query(
-          `SELECT pg_advisory_unlock(hashtextextended($1, 0))`,
-          [eventId]
-        );
-        client.release();
-      } catch (err) {
-        client.release(true);
-        logger.error('webhook_advisory_unlock_failed', {
-          event_id: eventId, error: err.message,
-        });
-      }
+    status: 'acquired',
+    lock: {
+      /** Idempotente y **nunca rechaza**: se invoca desde un `void` sin dueño. */
+      async release() {
+        if (released) return;
+        released = true;
+        try {
+          await client.query(
+            `SELECT pg_advisory_unlock(hashtextextended($1, 0))`,
+            [eventId]
+          );
+          client.release();
+        } catch (err) {
+          // Un fallo acá tampoco puede escapar: `releaseWebhookLockWithResponse`
+          // lo llama con `void`, así que una rejection sería otra vez un crash.
+          try { client.release(true); } catch (_) { /* la conexión ya se fue */ }
+          logger.error('webhook_advisory_unlock_failed', {
+            event_id: eventId, error: err.message,
+          });
+        }
+      },
     },
   };
+}
+
+/**
+ * Variante que LANZA ante fallo de infraestructura, para los sweeps internos:
+ * ellos corren dentro de su propio try/catch, registran el fallo en el inbox y
+ * reintentan. Ahí un throw es la conducta correcta; en un handler HTTP no.
+ */
+async function holdWebhookEventLock(eventId) {
+  const result = await acquireWebhookEventLock(eventId);
+  if (result.status === 'unavailable') throw result.error;
+  return result.status === 'acquired' ? result.lock : null;
 }
 
 function releaseWebhookLockWithResponse(res, lock) {
@@ -249,11 +293,22 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
     return res.status(400).json({ received: false, error: 'webhook_livemode_mismatch' });
   }
 
-  const eventLock = await holdWebhookEventLock(event.id);
-  if (!eventLock) {
+  // N-01: se captura localmente. Un fallo de infraestructura acá NO puede
+  // escapar como rejection no manejada (Express 4 no las atrapa y el proceso
+  // caería). 503 para que Stripe reintente el evento.
+  const lockResult = await acquireWebhookEventLock(event.id);
+  if (lockResult.status === 'unavailable') {
+    logger.error('webhook_lock_unavailable', {
+      event_id: event.id, type: event.type,
+      error: lockResult.error.message, code: lockResult.error.code || null,
+    });
+    return res.status(503).json({ received: false, error: 'webhook_lock_unavailable' });
+  }
+  if (lockResult.status === 'in_progress') {
     logger.info('webhook_worker_in_progress', { event_id: event.id, type: event.type });
     return res.status(503).json({ received: false, in_progress: true });
   }
+  const eventLock = lockResult.lock;
   releaseWebhookLockWithResponse(res, eventLock);
 
   logger.webhook(event);
@@ -1563,13 +1618,22 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
     return res.json({ received: true, ignored: 'no_account' });
   }
 
-  const eventLock = await holdWebhookEventLock(event.id);
-  if (!eventLock) {
+  // N-01: mismo cierre que en /stripe. Este endpoint tenía el defecto idéntico.
+  const lockResult = await acquireWebhookEventLock(event.id);
+  if (lockResult.status === 'unavailable') {
+    logger.error('connect_webhook_lock_unavailable', {
+      event_id: event.id, type: event.type, account: acctId,
+      error: lockResult.error.message, code: lockResult.error.code || null,
+    });
+    return res.status(503).json({ received: false, error: 'webhook_lock_unavailable' });
+  }
+  if (lockResult.status === 'in_progress') {
     logger.info('connect_webhook_worker_in_progress', {
       event_id: event.id, type: event.type, account: acctId,
     });
     return res.status(503).json({ received: false, in_progress: true });
   }
+  const eventLock = lockResult.lock;
   releaseWebhookLockWithResponse(res, eventLock);
 
   let connectLeaseId = null;
