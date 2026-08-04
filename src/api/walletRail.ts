@@ -17,6 +17,26 @@ import { api } from './index';
  * capability existe (`GET /api/config` → `features.wallet_rail`, espejada en
  * `contract-mirror/routes/config.js:43-46`), así que el front deja de decidir.
  *
+ * ## 🔴 CORRECCIÓN · leer la capability NO es el gate de dinero
+ *
+ * **Afirmación previa de este repo, REFUTADA (ORDEN 3A):** que con la
+ * capability publicada el riel quedaba apagado y la autoridad, resuelta.
+ *
+ * **Publicar una capability hace autoritativa la DECLARACIÓN, no la EJECUCIÓN.**
+ * Entre `9d874c4` (v2.31.0) y `679161d` (v2.33.0) el backend **seguía
+ * aceptando** topups, transferencias, emisión de CLABE, garantía wallet y pago
+ * wallet, y el alta seguía acuñando una fila de dinero electrónico por usuario
+ * nuevo. La capability decía "apagado" mientras los endpoints funcionaban.
+ *
+ * Desde v2.33.0 el gate existe de verdad en `services/walletRail.js`, y siete
+ * entrypoints devuelven `410 { error: 'feature_removed' }`.
+ *
+ * **Qué significa este módulo entonces, con precisión:** es la capa que impide
+ * OFRECER lo que no existe. No impide, ni impidió nunca, una obligación wallet
+ * nueva — eso lo hace el backend. Las dos capas son necesarias y **ninguna
+ * sustituye a la otra**: sin ésta la UI ofrece un riel muerto; sin la del
+ * backend, cualquier cliente lo usa igual.
+ *
  * ## Fail-closed, y en qué dirección para cada campo
  *
  * Los dos campos fallan hacia el lado seguro, **y el lado seguro no es el mismo

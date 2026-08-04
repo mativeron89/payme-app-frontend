@@ -106,8 +106,20 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const { session } = useAuth();
   const { actor, error: actorError } = useMoneyActor(guestToken);
   const toast = useToast();
-  // Si llega guestToken, App ya decidió que esta vista es la del invitado
-  // (sin sesión siempre; con sesión solo en la demo, para poder mostrarla).
+  /**
+   * ⚠️ OBSOLETO PERO NO BORRADO · `guestToken` no puede llegar nunca.
+   *
+   * El comentario anterior decía que App decidía acá la vista de invitado "sin
+   * sesión siempre; con sesión solo en la demo". **Las dos mitades están
+   * vencidas**: el modo demo se eliminó el 2026-08-03, y desde el cierre del
+   * pago sin cuenta (backend v2.32.0) App monta esta pantalla en UN solo lugar
+   * y **sin el prop**. `isGuest` es `false` siempre.
+   *
+   * Todo lo que cuelga de `isGuest` queda inalcanzable e INTACTO, igual que las
+   * ramas `req.isGuest` que el emisor dejó en pie: mezclar borrado de código con
+   * un cambio de autorización sobre rutas de dinero es cómo se cuelan errores.
+   * Un test impide que alguien vuelva a montar esta pantalla con un token.
+   */
   const isGuest = !!guestToken;
   const previewingAsGuest = isGuest && !!session;
   const [mesa, setMesa] = useState<MesaDetail | null>(null);
@@ -131,7 +143,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const shareInFlightRef = useRef(createInFlightMutex());
   // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
   // tarjeta); `saveCard` = checkbox "guardar" (ratificado: prendido). El
-  // invitado sin cuenta no tiene guardadas: siempre tarjeta nueva sin checkbox.
+  // invitado sin cuenta no tenía guardadas: siempre tarjeta nueva sin checkbox.
+  // (Rama inalcanzable desde v2.32.0 — ver el docblock de `isGuest`.)
   const [cards, setCards] = useState<PaymentMethod[]>([]);
   const [cardChoice, setCardChoice] = useState<string>('new');
   const [saveCard, setSaveCard] = useState(true);

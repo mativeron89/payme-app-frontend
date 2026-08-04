@@ -33,7 +33,12 @@ import { MOCK_RESTAURANTS, MOCK_USER } from './seedData';
  * Store persistido del mock: hace de "backend" con las MISMAS reglas del
  * contrato (garantía A-1, saldo retenido, locks, slots, expiración A-2).
  * El estado económico y su ledger idempotente se restauran juntos al recargar.
- * Identidades: 'user' (el logueado) · 'guest' (entró por link) · 'other'
+ * Identidades: 'user' (el logueado) · 'guest' (LEGACY, ver abajo) · 'other'
+ *
+ * ⚠️ `'guest'` ya NO la produce nadie. Antes del cierre del pago sin cuenta
+ * (backend v2.32.0) la elegía la fachada cuando venía un `guestToken`; hoy la
+ * fachada nunca recibe uno, porque quien entra por link se registra y canjea el
+ * token por una inscripción. El tipo y sus ramas quedan durmientes e intactos.
  * (los demás comensales, simulados).
  */
 
