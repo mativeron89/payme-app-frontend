@@ -69,12 +69,16 @@ describe('(d) · los avisos del riel saldo los apaga EL EMISOR', () => {
    * Se permite exactamente un archivo —`mock/store.ts`, que migra estado
    * persistido de la demo— y los tests, que los nombran para probarlos.
    *
-   * **Límite declarado:** es una heurística textual sobre "nombra los tipos Y
-   * tiene forma de filtro". No ve una supresión escrita sin nombrarlos (por
-   * ejemplo con una constante importada de otro archivo, o por `startsWith`),
-   * y puede dar falso positivo si un archivo menciona un tipo por otra razón y
-   * además filtra cualquier otra cosa. Sirve contra el caso probable —alguien
-   * agrega el filtro donde duele, en la pantalla— no contra uno adversarial.
+   * Cubre las DOS vías: nombrar los tipos y filtrar, o importar el juego de
+   * tipos del store —que era el agujero del propio barrido, encontrado mirando
+   * el instrumento en vez de lo medido—.
+   *
+   * **Límite declarado:** sigue siendo heurística textual. No ve una supresión
+   * escrita sin nombrar los tipos NI importar la constante (por ejemplo por
+   * `startsWith('topup')`), y puede dar falso positivo si un archivo menciona un
+   * tipo por otra razón y además filtra cualquier otra cosa. Sirve contra el
+   * caso probable —alguien agrega el filtro donde duele, en la pantalla— no
+   * contra uno adversarial.
    */
   it('ningún archivo fuera del store del mock filtra avisos por estos tipos', () => {
     const fuentes = import.meta.glob('/src/**/*.{ts,tsx}', {
@@ -93,7 +97,13 @@ describe('(d) · los avisos del riel saldo los apaga EL EMISOR', () => {
       // los nombran, así que se exige además que haya un filtro/exclusión.
       const nombra = WALLET_NOTIFICATION_TYPES.some((t) => cuerpo.includes(t));
       const filtra = /\.filter\(|includes\([^)]*type|type\s*!==|!.*\.includes\(/.test(cuerpo);
-      if (nombra && filtra) ofensores.push(ruta);
+      if (nombra && filtra) ofensores.push(`${ruta} · nombra los tipos y filtra`);
+      // La vía que se le escapaba al barrido: escribir la supresión SIN nombrar
+      // los tipos, importando la constante. La encontró el barrido adversarial
+      // de este mismo cambio, mirando el barrido en vez de lo barrido.
+      if (cuerpo.includes('WALLET_NOTIFICATION_TYPES')) {
+        ofensores.push(`${ruta} · importa el juego de tipos del riel saldo`);
+      }
     }
     expect(ofensores).toEqual([]);
   });

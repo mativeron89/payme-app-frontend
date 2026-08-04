@@ -296,4 +296,48 @@ describe('barrido estructural del árbol', () => {
     expect(rutas).toContain('/src/screens/TopupScreen.tsx');
     expect(rutas).toContain('/src/screens/TransferScreen.tsx');
   });
+
+  /**
+   * ⭐ EL DEFECTO QUE ESTE BARRIDO EXISTE PARA IMPEDIR, y que apareció de verdad
+   * en el barrido adversarial de este mismo cambio.
+   *
+   * Las capabilities pasaron de CONSTANTE a valor ASÍNCRONO. Un `useEffect` con
+   * deps `[]` las lee en el primer render —cuando todavía valen su default por
+   * fail-closed— y **no las vuelve a mirar nunca**. Con el riel encendido por el
+   * backend, `HomeScreen` y `CuentaScreen` renderizaban la tarjeta de saldo y
+   * dejaban el monto en "…" para siempre, porque `getBalance()` no se llamaba.
+   *
+   * Es la clase entera del cambio: **todo lo que leyó una constante UNA VEZ se
+   * rompe cuando esa constante empieza a llegar por red.** Un comentario no lo
+   * evita; el barrido sí, porque el próximo que agregue un efecto que lea una
+   * capability se entera al correr los tests.
+   *
+   * **Límite declarado:** empareja el cuerpo del efecto hasta su cierre de nivel
+   * de componente, así que un efecto escrito con otra indentación o con un
+   * `}, [` anidado se captura corto y podría dar falso NEGATIVO. Y sólo mira las
+   * tres capabilities nombradas. Sirve contra el caso probable, no contra uno
+   * adversarial.
+   */
+  it('ningún efecto lee una capability sin declararla en sus dependencias', () => {
+    const CAPABILITIES = ['walletRailEnabled', 'accountActivity', 'showAccountActivity'];
+    const EFECTO = /useEffect\(\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\},\s*\[([^\]]*)\]\s*\)/g;
+
+    const ofensores: string[] = [];
+    let efectosVistos = 0;
+    for (const [ruta, cuerpo] of Object.entries(fuentes)) {
+      if (ruta.includes('.test.')) continue;
+      for (const m of cuerpo.matchAll(EFECTO)) {
+        efectosVistos++;
+        const [, body, deps] = m;
+        for (const cap of CAPABILITIES) {
+          if (body.includes(cap) && !deps.includes(cap)) {
+            ofensores.push(`${ruta} → efecto que lee ${cap} con deps [${deps.trim()}]`);
+          }
+        }
+      }
+    }
+    // Guardarraíl: si la regex dejara de emparejar, el test pasaría en vacío.
+    expect(efectosVistos).toBeGreaterThan(8);
+    expect(ofensores).toEqual([]);
+  });
 });

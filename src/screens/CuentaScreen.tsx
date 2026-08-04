@@ -183,25 +183,45 @@ export function CuentaScreen() {
     api.getPaymentMethods().then((r) => setPms(r.payment_methods)).catch(() => setPms([]));
   }
 
+  // Tarjetas: card-only puro, no depende de ninguna capability.
   useEffect(() => {
-    let alive = true;
-    if (walletRailEnabled) {
-      api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
-      api.getWalletTransactions().then((r) => alive && setTxs(r.transactions)).catch(() => alive && setTxs([]));
-    }
-    if (accountView.showAccountActivity) {
-      api.getStats().then((s) => alive && setStats(s)).catch(() => undefined);
-      // El mes COMPLETO para la torta: sin params el backend da solo la primera
-      // página (20) y con >20 pagos los montos no cerrarían contra stats.
-      const now = new Date();
-      const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-      api.getHistory({ from, limit: 100 }).then((r) => alive && setHistory(r.history)).catch(() => undefined);
-    }
     loadPms();
+  }, []);
+
+  /**
+   * ⚠️ UN EFECTO POR CAPABILITY, CON SU DEPENDENCIA. Ver el docblock gemelo en
+   * `HomeScreen`: las dos capabilities llegan DESPUÉS del primer render, así que
+   * un efecto `[]` las lee cuando todavía valen su default y nunca las vuelve a
+   * mirar. Con el riel encendido por el backend, el saldo quedaba en "…" y los
+   * movimientos vacíos para siempre.
+   *
+   * Y van SEPARADAS entre sí por la misma razón que en `accountRailView`: si
+   * compartieran efecto, un cambio en una re-pediría los datos de la otra, y
+   * volverían a estar acopladas por la puerta de atrás.
+   */
+  useEffect(() => {
+    if (!walletRailEnabled) return;
+    let alive = true;
+    api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
+    api.getWalletTransactions().then((r) => alive && setTxs(r.transactions)).catch(() => alive && setTxs([]));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [walletRailEnabled]);
+
+  useEffect(() => {
+    if (!accountView.showAccountActivity) return;
+    let alive = true;
+    api.getStats().then((s) => alive && setStats(s)).catch(() => undefined);
+    // El mes COMPLETO para la torta: sin params el backend da solo la primera
+    // página (20) y con >20 pagos los montos no cerrarían contra stats.
+    const now = new Date();
+    const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    api.getHistory({ from, limit: 100 }).then((r) => alive && setHistory(r.history)).catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [accountView.showAccountActivity]);
 
   async function setDefault(id: string) {
     try {

@@ -52,12 +52,9 @@ export function HomeScreen() {
   const [invitation, setInvitation] = useState<PendingInvitation | null>(null);
   const [accepting, setAccepting] = useState(false);
 
+  // Card-only: no depende del riel y se pide una sola vez.
   useEffect(() => {
     let alive = true;
-    if (walletRailEnabled) {
-      api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
-      api.getWalletTransactions().then((r) => alive && setTxs(r.transactions.slice(0, 4))).catch(() => alive && setTxs([]));
-    }
     api.getOpenMesas().then((m) => alive && setOpenMesas(m)).catch(() => undefined);
     api.getUnreadCount().then((r) => alive && setUnread(r.unread_count)).catch(() => undefined);
     api
@@ -68,6 +65,30 @@ export function HomeScreen() {
       alive = false;
     };
   }, []);
+
+  /**
+   * ⚠️ EL RIEL VA EN SU PROPIO EFECTO, Y LA DEPENDENCIA NO ES OPCIONAL.
+   *
+   * `walletRailEnabled` ya no es una constante: llega DESPUÉS del primer
+   * render. Con estas dos llamadas dentro del efecto de arriba —que corre una
+   * sola vez, cuando la capability todavía vale `false` por fail-closed— nunca
+   * se pedían: si el backend encendía el riel, la tarjeta de saldo se
+   * renderizaba y quedaba en "…" para siempre y "Últimos movimientos" no
+   * aparecía nunca.
+   *
+   * Es el gemelo del bug de la pestaña de Cuenta: **un valor que pasó de
+   * constante a asíncrono rompe todo lo que lo leyó una sola vez.** Separarlos
+   * también evita repetir las llamadas card-only cuando la capability llega.
+   */
+  useEffect(() => {
+    if (!walletRailEnabled) return;
+    let alive = true;
+    api.getBalance().then((b) => alive && setBalance(b)).catch(() => undefined);
+    api.getWalletTransactions().then((r) => alive && setTxs(r.transactions.slice(0, 4))).catch(() => alive && setTxs([]));
+    return () => {
+      alive = false;
+    };
+  }, [walletRailEnabled]);
 
   /**
    * R-04: el banner acepta DIRECTO y te deja adentro de la mesa.
