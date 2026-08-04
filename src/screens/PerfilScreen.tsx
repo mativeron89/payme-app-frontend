@@ -1,4 +1,4 @@
-import { IS_MOCK } from '../api';
+import { IS_MOCK, WALLET_RAIL_ENABLED } from '../api';
 import { resetDemo } from '../api/mock/store';
 import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
@@ -42,7 +42,13 @@ export function PerfilScreen() {
           )}
           <button className="list-row" onClick={() => navigate('cuenta')}>
             <span><Icon name="card" size={16} /></span>
-            <div style={{ flex: 1, fontSize: 'var(--fs-sm)', fontWeight: 600 }}>Saldo y tarjetas</div>
+            {/* OLA 5C (c): con el riel saldo apagado, "Saldo y tarjetas" nombraba
+                algo que no existe en el build real. NO se oculta la fila: es el
+                ÚNICO acceso a gestión de tarjetas, que es card-only ratificado.
+                Se renombra. */}
+            <div style={{ flex: 1, fontSize: 'var(--fs-sm)', fontWeight: 600 }}>
+              {WALLET_RAIL_ENABLED ? 'Saldo y tarjetas' : 'Mis tarjetas'}
+            </div>
             <span style={{ color: 'var(--gray-b)' }}>→</span>
           </button>
           <button className="list-row" onClick={() => navigate('amigos')}>

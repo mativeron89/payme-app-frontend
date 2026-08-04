@@ -893,10 +893,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       } else if (ec === 'insufficient_funds') {
         const available = typeof extra.available === 'number' ? extra.available : 0;
         setError(
-          `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Cargá saldo o pagá con tarjeta.`,
+          // Sin riel saldo, "Cargá saldo" manda a #/cargar, que responde con la
+          // pantalla de bloqueo: sería empujar a una ruta muerta.
+          WALLET_RAIL_ENABLED
+            ? `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Cargá saldo o pagá con tarjeta.`
+            : `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Pagá con tarjeta.`,
         );
       } else if (ec === 'wallet_requires_auth') {
-        setError('Para pagar con saldo PayMe tenés que iniciar sesión.');
+        setError(
+          WALLET_RAIL_ENABLED
+            ? 'Para pagar con saldo PayMe tenés que iniciar sesión.'
+            : 'Ese método de pago no está disponible. Pagá con tarjeta.',
+        );
       } else if (ec === 'mesa_not_payable') {
         setError('La mesa ya cerró.');
         reload();
@@ -1559,8 +1567,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           )}
           {isGuest && (
             <div className="note note-orange" style={{ marginTop: 6 }}>
-              Sin iniciar sesión pagás con tarjeta{WALLET_PAY_ENABLED ? ' o Apple Pay' : ''} (el
-              saldo PayMe pide cuenta).
+              {/* OLA 5C (c): esta nota se lee SIN sesión, por URL pública — es
+                  la ruta de más tráfico. Con el riel apagado le anunciaba al
+                  comensal un saldo PayMe que no existe. */}
+              Sin iniciar sesión pagás con tarjeta{WALLET_PAY_ENABLED ? ' o Apple Pay' : ''}
+              {WALLET_RAIL_ENABLED ? ' (el saldo PayMe pide cuenta)' : ''}.
             </div>
           )}
         </div>

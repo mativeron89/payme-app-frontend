@@ -494,7 +494,9 @@ export function CreateMesaFlow() {
         const available = typeof extra.available === 'number' ? extra.available : null;
         setError(
           available !== null
-            ? `Saldo insuficiente para garantizar: tenés ${formatMXN(available)} disponibles y la mesa necesita ${formatMXN(total)}. Cargá saldo o garantizá con tarjeta.`
+            ? WALLET_RAIL_ENABLED
+              ? `Saldo insuficiente para garantizar: tenés ${formatMXN(available)} disponibles y la mesa necesita ${formatMXN(total)}. Cargá saldo o garantizá con tarjeta.`
+              : `Saldo insuficiente para garantizar: tenés ${formatMXN(available)} disponibles y la mesa necesita ${formatMXN(total)}. Garantizá con tarjeta.`
             : 'No pudimos autorizar la garantía. Probá con otro método.',
         );
       } else if (code === 'idempotency_key_terminal') {
