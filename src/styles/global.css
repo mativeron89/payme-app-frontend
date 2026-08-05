@@ -1858,6 +1858,18 @@ body {
   padding-bottom: 140px;
 }
 
+/* §1.9 · paso 3 · el gemelo de `.has-nav .action-bar`, y existe por la misma
+   razón: el `.action-bar` NO es fijo, la barra SÍ, así que sin este aire la
+   barra se le monta encima al CTA. Es literalmente el bug que reportó el
+   hermano de Mati en 2026-07-24 —"la navegación está tapando el botón para
+   agregar amigo"— y la conversión a la barra nueva lo reabre si se olvida.
+
+   81px = los 69 que mide el bloque de la barra + los 12 de aire que el propio
+   `.action-bar` ya usa arriba. Medido en el navegador, no estimado. */
+.has-appbar .action-bar {
+  padding-bottom: calc(81px + env(safe-area-inset-bottom));
+}
+
 /* Padding lateral de las pantallas del flujo, en longhands a propósito: así no
    se lleva puesto el padding-bottom de arriba. */
 .flow-scroll {

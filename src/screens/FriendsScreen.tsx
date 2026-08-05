@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { Friend } from '../api/types';
 import { Avatar, SocialTabs, TopBar, useToast } from '../components/ui';
+import { AppBottomBar } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
 import { navigate } from '../router';
 import { useWalletRail } from '../api/walletRail';
@@ -124,7 +125,7 @@ export function FriendsScreen() {
   }
 
   return (
-    <div className="screen has-nav">
+    <div className="screen has-appbar">
       <TopBar
         title="Amigos"
         right={friends ? <span className="badge badge-gray">{friends.length}</span> : undefined}
@@ -294,6 +295,14 @@ export function FriendsScreen() {
           + Agregar amigo
         </button>
       </div>
+      {/* §1.9 · paso 3 · junto con sacar `amigos` de `showNav`, en el mismo
+          commit. `amigos` activa, que es su propia posición.
+
+          El `.action-bar` de arriba no es fijo y la barra sí, así que necesita
+          aire por debajo: `.has-appbar .action-bar` en `global.css`. Sin eso
+          vuelve el bug de 2026-07-24, "la navegación está tapando el botón para
+          agregar amigo" — y volvería exactamente en el mismo botón. */}
+      <AppBottomBar active="amigos" />
     </div>
   );
 }

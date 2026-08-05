@@ -176,8 +176,7 @@ function Shell() {
    * Cuando salgan Cuenta, Amigos y Grupos, esta variable y `BottomNav.tsx` se
    * van juntas.
    */
-  const showNav =
-    route.page === 'cuenta' || route.page === 'amigos' || route.page === 'grupos';
+  const showNav = route.page === 'cuenta' || route.page === 'grupos';
 
   return (
     <>
