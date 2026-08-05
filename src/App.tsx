@@ -6,7 +6,8 @@ import { ToastProvider } from './components/ui';
 import { allowsWalletRoute } from './api/releaseGates';
 import { tokenForMesa } from './api/invitationLink';
 import { useWalletRail } from './api/walletRail';
-import { replaceRoute, useRoute } from './router';
+import { useRoute } from './router';
+import { enforceWalletRouteGuard } from './walletRouteGuard';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
 import { CuentaScreen } from './screens/CuentaScreen';
@@ -49,11 +50,18 @@ function Shell() {
    *
    * `TopupScreen` y `TransferScreen` no se montan, así que tampoco llaman a
    * ningún endpoint. Las dos siguen en el árbol, durmientes.
+   *
+   * ORDEN 4C · la redirección vive en `walletRouteGuard.ts`. No es prolijidad:
+   * mientras la llamada estaba acá adentro, **ningún test podía morir al
+   * borrarla** —sin librería de render un efecto no se ejecuta en la suite— y
+   * el único test que había afirmaba que la ruta *está prohibida*, no que se
+   * *actúe* en consecuencia. Una defensa declarada que nadie comprueba
+   * ejecutada es lo mismo que no tenerla.
    */
   const rutaDelRielSaldo = !allowsWalletRoute(walletRailEnabled, route.page);
   useEffect(() => {
-    if (rutaDelRielSaldo) replaceRoute('home');
-  }, [rutaDelRielSaldo]);
+    enforceWalletRouteGuard(walletRailEnabled, route.page);
+  }, [walletRailEnabled, route.page]);
 
   /**
    * CIERRE DEL PAGO SIN CUENTA (backend v2.32.0) · acá estaba el defecto.

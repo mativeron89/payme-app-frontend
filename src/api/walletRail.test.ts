@@ -312,9 +312,20 @@ describe('barrido estructural del árbol', () => {
     // Límite declarado: el stripper es ingenuo (no entiende comentarios dentro
     // de strings), suficiente para este archivo.
     const codigo = app!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-    expect(codigo).toContain('replaceRoute');
+    // ORDEN 4C · la llamada se movió a `walletRouteGuard.ts`, así que seguir
+    // exigiendo `replaceRoute` ACÁ sería exigir que no se delegue. Lo que este
+    // test protege es que la ruta bloqueada **redirija** en vez de pintar copy,
+    // y eso ahora se acredita siguiendo la cadena hasta el final: App llama al
+    // guard, y el guard llama a `replaceRoute`. Si cualquiera de los dos
+    // eslabones desaparece, esto se pone rojo igual que antes.
+    expect(codigo).toContain('enforceWalletRouteGuard');
+    const guard = fuentes['/src/walletRouteGuard.ts'];
+    expect(guard, 'no se encontró walletRouteGuard.ts').toBeTruthy();
+    const guardCodigo = guard!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(guardCodigo).toContain("replaceRoute('home')");
     for (const frase of ['riel de saldo', 'Saldo PayMe todavía', 'no está habilitado']) {
       expect(codigo).not.toContain(frase);
+      expect(guardCodigo).not.toContain(frase);
     }
   });
 
