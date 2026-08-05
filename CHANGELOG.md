@@ -1,5 +1,45 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.41.0 — ORDEN VISUAL · Avisos pasa a primer nivel (2026-08-05)
+
+**`SPEC_APP.md` §1.8 aplicada.** El cambio de fondo **no es cosmético: es
+navegación** — la pantalla pierde la flecha de volver.
+
+- **Cabecera de primer nivel**: logo + `payme_id` + campana en `--brand` sin
+  badge. La regla de §5 bis · A es dura —*"si una pantalla tiene el logo arriba,
+  es de primer nivel; no puede tener flecha de volver"*— y su precio es que la
+  **única salida deliberada pasa a ser la barra inferior**, que §1.8 nombra
+  explícitamente como la forma de salir.
+- **La campana no es un botón.** No hace nada: ya estás adentro. Va como
+  `role="img"` con nombre accesible, y —sin tarjeta de título— ese nombre es lo
+  único que dice de qué pantalla se trata. Naranja porque el badge cuenta lo que
+  no viste y acá lo estás viendo. **No es una quinta excepción de la lista
+  cerrada**: es la misma ranura sobre la banda navy a la que el sistema ya le
+  concede `--brand` para el badge, y que ya convive con el círculo de la barra
+  en toda pantalla de primer nivel. Mide 5.82:1 sobre navy.
+- **Cuatro recorridos nuevos de Playwright, y existen por esto**: ningún test
+  tocaba Avisos, así que sacar el `AppHeaderBack` no rompía nada que la suite
+  pudiera ver, y si la salida por la barra falla la persona queda encerrada.
+  Cubren entrada por la campana, ausencia de "Volver", salida por la barra,
+  Atrás del navegador y el canje. Acreditados mutando: sacar `bellHere` y
+  devolver el copy a "Aceptar" tiran dos, y sólo esos dos.
+- **"Marcar leídos" baja del encabezado** a su propia fila, que existe aunque no
+  haya nada sin leer: si apareciera y desapareciera, la lista saltaría justo
+  cuando la persona termina de marcar.
+- **La tarjeta de invitación** deja de ser `card` blanca — `--teal-l` con borde
+  `--action-2`, que es lo que le da jerarquía y no el color del botón—, va en
+  **dos líneas** y su botón dice **"Sumarme"**, el mismo verbo de §1.2. El punto
+  de no leído pasa a `--action` navy. Los rótulos de sección pasan a `<h2>`:
+  sin tarjeta de título la pantalla no tenía ningún encabezado.
+- **El ícono por categoría del restaurante no se puede: G-31.**
+  `GET /invitations` manda el nombre y ni `category` ni el id. Queda `store`,
+  genérico. Lo que había era un **`sushi` hardcodeado** — no un genérico, sino
+  decir que el restaurante es japonés sin que nadie lo dijera.
+- **Un defecto que estaba en siete pantallas**, encontrado forzando el vacío de
+  Avisos: el ícono del estado vacío quedaba pegado a la izquierda con la frase
+  centrada debajo. `.empty` centra con `text-align`, que sólo alcanza al
+  contenido en línea, y adentro va un `<svg>` desde hace rato.
+
 ## 0.40.0 — ORDEN VISUAL · Escanear, y §1.7 frenada con dos motivos (2026-08-05)
 
 **`SPEC_APP.md` §1.6 aplicada entera y verificada.** §1.7 Compartir **no entra**:
