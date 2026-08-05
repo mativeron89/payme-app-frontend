@@ -2013,8 +2013,16 @@ body {
   border-top-left-radius: 0;
 }
 
-/* Con pestañas, la tarjeta no sube: ya está pegada a la burbuja activa. */
-.btabs + .mounted-card {
+/* Con pestañas, la tarjeta NO sube: ya está pegada a la burbuja activa, que
+   llega hasta el borde de abajo de la banda.
+
+   El selector `.btabs + .mounted-card` que había acá no matcheaba nunca: las
+   pestañas van DENTRO del `<header>` y la tarjeta va afuera, así que no son
+   hermanas. Era CSS muerto, y el -24px de arriba se aplicaba igual — con la
+   tarjeta adentro de un `.scroll` (que es `overflow-y: auto`) el margen
+   negativo la recorta por arriba en vez de montarla. Se marca desde el header,
+   que es quien sabe si tiene pestañas o no. */
+.hdr-tabbed + .scroll > .mounted-card:first-child {
   margin-top: 0;
 }
 
@@ -2845,3 +2853,327 @@ body {
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §1.1 · INICIO + §1.11 · las tres pestañas — son la MISMA pantalla.
+
+   Estructura, de arriba abajo: banda navy con las pestañas en burbuja →
+   tarjeta montada con los ACCESOS (la pestaña lanza, no muestra) → la burbuja
+   de la mesa abierta → barra de cinco posiciones.
+
+   La mesa va al MEDIO, no arriba (decisión de Mati): tiene más impacto debajo
+   de los accesos que encabezando la pantalla.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Accesos de la pestaña (§5 bis · B) ───
+   SIN fondo propio: la pestaña y su contenido son una sola burbuja blanca
+   continua. Lo único que los separa es una línea de --border — vertical si son
+   dos, horizontal si van apilados. */
+.launch-pair {
+  display: flex;
+  align-items: stretch;
+}
+.launch-pair > .launch + .launch {
+  border-left: 1px solid var(--border);
+}
+
+.launch-stack {
+  display: flex;
+  flex-direction: column;
+}
+.launch-stack > .launch + .launch {
+  border-top: 1px solid var(--border);
+}
+
+.launch {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  /* Mucho más que el mínimo táctil: es el objeto principal de la tarjeta. */
+  min-height: 84px;
+  padding: var(--sp-4) var(--sp-3);
+  background: none;
+  border: none;
+  /* SIN border-radius, y no es un olvido: la línea que separa los accesos es un
+     `border-left`, y un radio acá se la lleva puesta — el divisor se curvaba en
+     las dos puntas y leía como si el acceso de la derecha fuera otra tarjeta.
+     Visto a 375px antes de commitear. */
+  cursor: pointer;
+  text-align: center;
+}
+
+/* El ícono del acceso va en --link. Es la señal de "esto lleva a otro lado". */
+.launch-ico {
+  color: var(--link);
+  display: flex;
+}
+
+.launch-label {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* La frase de invitación de la pestaña Estadísticas, textual de Mati. */
+.launch-invite {
+  margin: 0;
+  padding: var(--sp-4) var(--sp-4) 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.launch:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
+
+/* ─── Estado DESCONOCIDO (§5) — punteado + --surface-2 ───
+   "Existe pero no se muestra / todavía no existe". Punteado y sólido no son
+   decoración: punteado dice que hay algo que no estás viendo. */
+.state-unknown {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin: var(--sp-4);
+  padding: var(--sp-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.state-unknown-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.state-unknown-body {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* ─── Estado ERROR DE RED (§5) — borde SÓLIDO --danger + tinte + Reintentar ───
+   Un error nunca puede leerse como vacío: por eso lleva borde y el vacío no. */
+.state-error {
+  display: flex;
+  /* El botón va en su PROPIA fila y no al costado del texto: a 375px el título
+     quedaba partido en dos con el botón al lado y el bloque leía desbalanceado.
+     Verificado en pantalla forzando la falla, no imaginado. */
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-lg);
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.state-error-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.state-error-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.state-error-body {
+  margin: 2px 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* ─── La burbuja de la mesa ─── */
+.home-mesa {
+  display: block;
+  margin: var(--sp-6) var(--sp-4) 0;
+}
+
+.mesa-card {
+  display: block;
+  width: 100%;
+  padding: var(--sp-4);
+  border: none;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mesa-card:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.mesa-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.mesa-kicker {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--text-muted);
+}
+
+.mesa-name {
+  margin-top: var(--sp-2);
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.mesa-meta {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* La jerarquía dice "cuánto falta", no "cuánto es": lo pagado manda. */
+.mesa-money {
+  margin-top: var(--sp-4);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  /* El `gap` NO es cosmético: al ser ítems flex, el espacio en blanco del texto
+     se colapsa y quedaba "$325.00de $840.00". Se vio en pantalla, no leyendo. */
+  gap: var(--sp-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.mesa-paid {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: 800;
+  color: var(--text);
+}
+
+.mesa-total {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+/* La barra NUNCA es el único indicador: los dos importes de arriba son el
+   dato, esto es el refuerzo. Por eso arriba va aria-hidden. */
+.mesa-bar {
+  margin-top: var(--sp-2);
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.mesa-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-full);
+  background: var(--action-2);
+}
+
+.mesa-foot {
+  margin-top: var(--sp-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+.mesa-cd {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--text-muted);
+}
+/* Bajo 1 h. NO parpadea: un countdown que titila apura, no informa. */
+.mesa-cd.urgent {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.mesa-go {
+  color: var(--link);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Vacío REAL: el único estado del sistema SIN borde. Y sin botón propio — la
+   acción ya está en el círculo naranja de la barra, a un centímetro. */
+.mesa-empty {
+  padding: var(--sp-6) var(--sp-4);
+  text-align: center;
+}
+
+.mesa-empty-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mesa-empty-body {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* ─── Cargando: esqueleto con la SILUETA del contenido real, nunca un spinner
+   centrado (§5). Cada línea tiene el ancho de lo que va a reemplazar. ─── */
+.mesa-card.sk {
+  cursor: default;
+}
+
+.sk-line {
+  display: block;
+  height: 12px;
+  margin-bottom: var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.sk-line.tall {
+  height: 20px;
+}
+.sk-line.bar {
+  height: 8px;
+  margin-bottom: 0;
+  border-radius: var(--r-full);
+}
+.sk-line.w40 { width: 40%; }
+.sk-line.w55 { width: 55%; }
+.sk-line.w70 { width: 70%; }
+.sk-line.w100 { width: 100%; }

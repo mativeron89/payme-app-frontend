@@ -43,7 +43,7 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
 
       // ⭐ La redirección, ocurriendo de verdad adentro de la app montada.
       await expect(page).toHaveURL(/#\/home$/);
-      await expect(page.getByRole('button', { name: 'Nueva Mesa' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
       // Y no se montó nada del riel en el camino.
       const cuerpo = await page.locator('body').innerText();

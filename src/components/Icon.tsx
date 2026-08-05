@@ -28,6 +28,11 @@ const GLYPHS = {
   wallet: { d: ['M4 7.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-10Z', 'M4 7.5A2 2 0 0 1 6 5.5h11', 'M16 13.5h4'] },
   receipt: { d: ['M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21V3Z', 'M9 8h6', 'M9 12h6', 'M9 16h4'] },
   camera: { d: ['M4 8h3.5l1.5-2.5h6L16.5 8H20a1 1 0 0 1 1 1v10H3V9a1 1 0 0 1 1-1Z', 'M12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z'] },
+  /* Tres barras y el eje: es el acceso a Estadísticas (SPEC_APP.md §1.11). Se
+     agregó acá en vez de reusar `arrow-up-right` porque esa flecha ya significa
+     "transferencia saliente" en los movimientos, y un mismo glifo con dos
+     sentidos es peor que un glifo de más. */
+  chart: { d: ['M4 20h16', 'M7.5 20v-6', 'M12 20V6', 'M16.5 20v-9'] },
   pin: { d: ['M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z', 'M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'] },
   lock: { d: ['M6 11h12v9H6z', 'M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11'] },
   link: {

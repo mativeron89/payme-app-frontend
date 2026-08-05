@@ -18,6 +18,26 @@ import { expect, type Page } from '@playwright/test';
  * - **Cero estado compartido entre tests.** Cada test abre su contexto y su
  *   mesa; el mock guarda en `localStorage`, así que contextos distintos son
  *   mundos distintos. Ningún test depende del orden.
+ *
+ * ## El botón de abrir mesa se llama "Nueva", no "Nueva Mesa"
+ *
+ * Con el rediseño de §1.1 el flotante `+ Nueva Mesa` de `HomeScreen` desapareció
+ * y su lugar lo ocupa el círculo central de la barra de cinco posiciones, cuyo
+ * `aria-label` es `Nueva` (`AppBottomBar`, `SISTEMA_DISENO.md` §5 bis · C).
+ *
+ * **Se cambió a propósito y en el mismo commit que la pantalla**, porque este
+ * helper lo usan LOS CUATRO specs: con el nombre viejo caían los 24 recorridos
+ * de una, incluidos los que no tocan Inicio, y quien lo viera sin este párrafo
+ * pensaría que el rediseño rompió toda la app. Era el renombre esperado.
+ *
+ * **No alcanzaba con arreglarlo acá.** El aviso que llegó decía "`_app.ts`", y
+ * al corregir sólo este archivo quedaron 3 recorridos rojos: `rutas-wallet` y
+ * `invitacion-back` afirman por su cuenta *"terminé en Inicio"* usando el mismo
+ * botón como prueba de que la pantalla es Inicio, sin pasar por el helper. Se
+ * corrigieron los tres puntos; el `grep` es el que manda, no la memoria.
+ *
+ * Va con `exact: true`: sin él, `name: 'Nueva'` matchea por subcadena y
+ * cualquier "Nueva tarjeta" futura entraría en el mismo selector.
  */
 
 /** Cualquier email entra en el mock; la contraseña no se valida. */
@@ -26,7 +46,7 @@ export async function ingresar(page: Page): Promise<void> {
   await page.getByPlaceholder('Email').fill('mati@payme.mx');
   await page.getByPlaceholder('Contraseña').fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Nueva Mesa' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 }
 
 export interface MesaAbierta {
@@ -52,7 +72,7 @@ export interface MesaAbierta {
  * un paso opcional que se pueda saltear.
  */
 export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
-  await page.getByRole('button', { name: 'Nueva Mesa' }).click();
+  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Escanear ticket' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Capturar' }).click();

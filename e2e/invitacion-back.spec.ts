@@ -73,7 +73,7 @@ test.describe('el token de un link terminal no revive por historial', () => {
 
     // Volvió a la app, no a una URL con la credencial adentro.
     expect(tokenDeLaUrl(page.url())).toBeNull();
-    await expect(page.getByRole('button', { name: 'Nueva Mesa' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
   });
 
   /**

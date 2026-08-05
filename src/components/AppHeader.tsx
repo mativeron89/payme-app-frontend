@@ -53,7 +53,7 @@ export function AppHeader({
   onBell?: () => void;
 }) {
   return (
-    <header className={`hdr ${compact ? 'hdr-compact' : ''}`}>
+    <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
       <div className="hdr-row">
         <PayMeLogo />
         {userName && <span className="hdr-user">{userName}</span>}
@@ -92,7 +92,7 @@ export function AppHeaderBack({
   step?: ReactNode;
 }) {
   return (
-    <header className={`hdr ${compact ? 'hdr-compact' : ''}`}>
+    <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
       <div className="hdr-row">
         <button type="button" className="hdr-back" onClick={onBack}>
           <Icon name="arrow-left" size={20} />
