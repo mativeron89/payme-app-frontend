@@ -164,7 +164,9 @@ export function HomeScreen() {
           </div>
         )}
 
-        {/* En modo demo (?demo=1) se saca del encuadre: sugiere wallet. */}
+        {/* La tarjeta de saldo la gobierna la capability del BACKEND, y hoy
+            está apagada: el riel wallet salió del MVP y su autoridad no es de
+            este front (OLA 5D). */}
         {walletRailEnabled && (
           <div className="saldo-card">
             <div className="lbl">Tu saldo PayMe</div>
