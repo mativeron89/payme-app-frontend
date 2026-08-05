@@ -340,12 +340,15 @@ export async function mockHistory(params?: {
   from?: string;
   to?: string;
   limit?: number;
+  offset?: number;
 }): Promise<HistoryResponse> {
   const limit = Math.min(params?.limit ?? 20, 100);
+  // `offset` espeja `historyQuery` del emisor: entero, mínimo 0, default 0.
+  const offset = Math.max(0, Math.trunc(params?.offset ?? 0));
   let sorted = [...state.history].sort((a, b) => b.date.localeCompare(a.date));
   if (params?.from) sorted = sorted.filter((h) => h.date >= params.from!);
   if (params?.to) sorted = sorted.filter((h) => h.date <= params.to!);
-  return delay({ history: sorted.slice(0, limit), limit, offset: 0 });
+  return delay({ history: sorted.slice(offset, offset + limit), limit, offset });
 }
 
 // ─── v2.18 · Fracciones (réplica de services/itemClaims.js del espejo) ─────

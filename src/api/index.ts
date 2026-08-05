@@ -140,7 +140,7 @@ export interface Api {
    * con limit default 20 (máx 100) — para agregados (la torta de Cuenta)
    * pedir `from` + `limit`, no la primera página pelada.
    */
-  getHistory(params?: { from?: string; to?: string; limit?: number }): Promise<HistoryResponse>;
+  getHistory(params?: { from?: string; to?: string; limit?: number; offset?: number }): Promise<HistoryResponse>;
   // mesas
   getOpenMesas(): Promise<OpenMesasResponse>;
   getMesa(code: string, guestToken?: string): Promise<MesaDetailResponse>;
@@ -248,6 +248,11 @@ const realApi: Api = {
     if (params?.from) qs.set('from', params.from);
     if (params?.to) qs.set('to', params.to);
     if (params?.limit) qs.set('limit', String(params.limit));
+    // `offset` con `!= null` y no truthy: `offset=0` es la primera página y con
+    // un `if (params.offset)` no se mandaba nunca. El emisor lo defaultea a 0
+    // igual, pero un parámetro que se pierde en el caso más común es el que
+    // nadie mira cuando la paginación sale mal.
+    if (params?.offset != null) qs.set('offset', String(params.offset));
     const s = qs.toString();
     return httpRequest<HistoryResponse>('GET', `/account/history${s ? `?${s}` : ''}`);
   },
