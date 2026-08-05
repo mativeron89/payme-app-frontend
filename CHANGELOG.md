@@ -1,5 +1,36 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.46.0 — §1.9 · `Más` es una pantalla de verdad (2026-08-05)
+
+La quinta posición de la barra dejó de apuntar a Perfil "provisoriamente".
+
+- **`Más` ES Perfil, no la contiene** (Diseño, 2026-08-05, sobre tres preguntas
+  que este repo dejó abiertas). Un menú con una sola fila útil agrega fricción
+  sin agregar nada, y **"configuración" no entra**: cero spec, cero pantalla,
+  cero contrato detrás — el mismo tratamiento que el QR de Compartir y Cuentas
+  Asociadas. **No hubo pantalla nueva que inventar.**
+- **La ruta se renombra limpia, sin alias**, y eso se verificó antes: `perfil`
+  **no tenía un solo `navigate('perfil')` durmiente**. Es lo contrario de
+  `cuenta`, que conserva su `case` porque sí los tiene — **dos rutas retiradas
+  en el mismo turno, dos tratamientos, y la diferencia es medible.**
+- **Amigos y Grupos salen de la pantalla.** No es recorte: las dos son
+  **posiciones de la barra**, así que esas filas eran **un segundo camino al
+  mismo lugar** — navegación que hay que mantener coherente en dos lados y que
+  se desincroniza sola. **"Mis tarjetas" se queda**: es el único acceso a
+  gestión de tarjetas, card-only ratificado, y la barra no tiene posición para
+  ella.
+- El destino de la posición y la ruta de la pantalla van en el **mismo commit**:
+  mientras el destino decía `perfil`, tocar Más llegaba igual a algo, así que un
+  test de "llega a una pantalla" no distinguiría el antes del después.
+- ⚠️ **El test de ausencia falló en su primera versión por la razón que
+  justifica el cambio**: buscaba cero botones "Amigos" y encontró el de la
+  barra. Que la fila y la posición choquen en el mismo selector **es** el
+  duplicado que se sacó, visto dos veces.
+- El renombre dejó que **el compilador** encontrara los cinco call sites en vez
+  de buscarlos con `grep` — segundo cobro de derivar la unión del array (0.43.0).
+
+**518 vitest · 63 e2e** · typecheck · builds real y mock.
+
 ## 0.45.0 — §1.9 · paso 6 · se retira la Cuenta vieja (2026-08-05)
 
 **La pantalla se va; la ruta se queda.** Es la parte de §1.9 que quedó separable
