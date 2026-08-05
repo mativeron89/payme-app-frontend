@@ -66,6 +66,23 @@ const GLYPHS = {
   cash: {
     d: ['M3.5 6.5h17a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-17A1.5 1.5 0 0 1 2 16V8a1.5 1.5 0 0 1 1.5-1.5Z', 'M12 14.75a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5Z', 'M5.5 12h.01', 'M18.5 12h.01'],
   },
+  /* Estructura de la app (SISTEMA_DISENO.md §5 bis). La flecha derecha es el
+     glifo del círculo "Continuar"; la izquierda, el "Volver" de la cabecera de
+     subpantalla. `grid-dots` es el ícono de `Más` — elegido provisoriamente por
+     Mati el 2026-08-03 ("por el momento"), con dots-circle, sliders y menu-deep
+     como alternativas evaluadas: SPEC_APP.md §5 lo deja como pregunta abierta. */
+  'arrow-right': { d: ['M4.5 12h15', 'M13 5.5l6.5 6.5-6.5 6.5'] },
+  'arrow-left': { d: ['M19.5 12h-15', 'M11 5.5 4.5 12 11 18.5'] },
+  'grid-dots': {
+    f: [
+      'M6 6.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+      'M12 6.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+      'M18 6.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+      'M6 14.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+      'M12 14.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+      'M18 14.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+    ],
+  },
 } satisfies Record<string, Glyph>;
 
 export type IconName = keyof typeof GLYPHS;

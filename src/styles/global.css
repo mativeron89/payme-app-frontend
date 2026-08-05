@@ -47,7 +47,7 @@
   --surface: #ffffff;
   --surface-2: #f8fafc;
   --border: #e2e8f0;
-  --text: #0f1f3d; /* 15.4:1 sobre --bg */
+  --text: #0f1f3d; /* 15.21:1 sobre --bg — el doc dice 15.4, ver designTokens.test.ts */
   --text-muted: #5b6b82; /* 5.05 sobre --bg · 5.43 sobre --surface · 5.19 sobre --surface-2 */
   --text-faint: #7d8ca1; /* 3.42:1 — SOLO decorativo, nunca información */
   --on-dark: #ffffff; /* 16.36:1 sobre navy */
@@ -1645,4 +1645,353 @@ body {
   font-weight: 700;
   font-size: var(--fs-legacy-base);
   color: var(--navy);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ESTRUCTURA DE LA APP · SISTEMA_DISENO.md §5 bis
+   Tres componentes compartidos por toda la app del comensal. Ninguna pantalla
+   inventa su propio encabezado ni su propia navegación.
+   Conviven con los estilos viejos (.bottom-nav, .fab, .cta-float) mientras las
+   pantallas migran de a una. Cuando la última migre, aquellos se borran.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── §5 bis · C · Barra inferior de cinco posiciones ─── */
+.appbar-block {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px; /* mismo ancho que .app */
+  background: var(--surface);
+  /* Sombra hacia arriba, SIN línea divisoria: la difuminada la reemplaza. */
+  box-shadow: 0 -8px 22px rgba(15, 31, 61, 0.1);
+  z-index: 19;
+}
+
+/* Fila propia arriba de la barra: acá vive lo dinámico (el importe), para que
+   el nav item de abajo no cambie de texto según el estado. */
+.appbar-above {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.appbar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: end;
+  padding: var(--sp-2) var(--sp-2) calc(var(--sp-2) + env(safe-area-inset-bottom));
+}
+
+.appbar-item,
+.appbar-center {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+  /* Área táctil mínima de la app, sin excepción. */
+  min-height: var(--tap-min);
+  padding: var(--sp-2) 0 var(--sp-1);
+}
+
+.appbar-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted); /* ítem inactivo */
+  font-weight: 400;
+}
+
+/* Las etiquetas van a 11px. Es la ÚNICA excepción al mínimo de 12px del
+   sistema, y solo porque el ícono y la posición acompañan siempre al texto. */
+.appbar-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+/* Ítem activo: ícono Y etiqueta en --brand-ink (5.18:1). No se usa --brand:
+   #ff6b35 sobre blanco da 2.6:1 y a 11px es ilegible. */
+.appbar-item.on {
+  color: var(--brand-ink);
+  font-weight: 500;
+}
+
+/* Rayita del activo, pegada al borde superior de la barra. */
+.appbar-tick {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 3px;
+  border-radius: var(--r-full);
+  background: var(--brand-ink);
+}
+
+/* Círculo central, montado 22px sobre el borde de la barra. */
+.appbar-fab {
+  width: 46px;
+  height: 46px;
+  margin-top: -22px;
+  border-radius: var(--r-full);
+  border: none;
+  cursor: pointer;
+  background: var(--brand);
+  /* Glifo NAVY, nunca blanco: blanco sobre --brand da 2.84:1 y un ícono de
+     control necesita 3:1. Navy da 5.77:1. */
+  color: var(--brand-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--sh-2);
+  transition: transform var(--mo-fast, 120ms) ease-out;
+}
+.appbar-fab:active {
+  transform: scale(0.96);
+}
+.appbar-fab:disabled {
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: default;
+}
+.appbar-center .appbar-label {
+  color: var(--text-muted);
+}
+
+/* Foco visible: 2px sólido con 2px de offset, navy sobre fondo claro. */
+.appbar-item:focus-visible,
+.appbar-fab:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* Aire para que el contenido no quede debajo de la barra. */
+.has-appbar .scroll {
+  padding-bottom: 108px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appbar-fab {
+    transition: none;
+  }
+  .appbar-fab:active {
+    transform: none;
+  }
+}
+
+/* ─── §5 bis · A · Cabecera navy de borde curvo ─── */
+.hdr {
+  background: var(--action);
+  color: var(--on-dark);
+  /* NO es rectangular: es el gesto que se toma de la referencia. */
+  border-radius: 0 0 34px 34px;
+  padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-6);
+}
+
+/* Variante COMPACTA — solo la entrada por link (SPEC_APP.md §1.2). Menos
+   padding, logo más chico, curva más cerrada. No usarla en ningún otro lado. */
+.hdr-compact {
+  border-radius: 0 0 26px 26px;
+  padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-4);
+}
+.hdr-compact .hdr-logo {
+  font-size: 22px;
+}
+
+.hdr-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--tap-min);
+}
+
+.hdr-logo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  color: var(--on-dark);
+  flex: none;
+}
+/* El `Me` en teal sobre navy: 7.46:1. */
+.hdr-logo-me {
+  color: var(--action-2);
+}
+
+/* Nombre COMPLETO del usuario. Trunca con elipsis; nunca empuja la campana. */
+.hdr-user {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--on-dark-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hdr-bell {
+  position: relative;
+  margin-left: auto;
+  flex: none;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--on-dark);
+}
+
+/* Badge de no leídos: --brand con el número en navy — 5.77:1. Es uno de los
+   usos permitidos del naranja. */
+.hdr-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--brand);
+  color: var(--brand-fg);
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Volver: flecha Y texto, no solo ícono. */
+.hdr-back {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--on-dark);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.hdr-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hdr-step {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--on-dark-muted);
+}
+
+/* Sobre la banda navy el foco va en teal — 7.46:1. El navy sobre navy no se
+   vería, y el teal sobre claro no llega a 3:1: por eso son dos reglas. */
+.hdr button:focus-visible,
+.btab:focus-visible {
+  outline: 2px solid var(--action-2);
+  outline-offset: 2px;
+}
+
+/* ─── §5 bis · B · Pestañas en burbuja ─── */
+.btabs {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-1);
+  margin: var(--sp-4) calc(var(--sp-4) * -1) calc(var(--sp-6) * -1);
+  padding: 0 var(--sp-4);
+}
+
+.btab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: var(--sp-2) var(--sp-4);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  /* Inactiva: texto plano sobre el navy, SIN fondo. El fondo translúcido que
+     se probó casi no se veía — es un bug corregido, no una opción. */
+  background: none;
+  color: var(--on-dark-muted);
+  font-weight: 400;
+  border-radius: 14px 14px 0 0;
+}
+
+/* Activa: burbuja blanca enganchada a la tarjeta — una sola pieza continua. */
+.btab.on {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.28);
+}
+
+/* Badge de conteo de la pestaña: mismo tratamiento que el de la campana. */
+.btab-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--brand);
+  color: var(--brand-fg);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Tarjeta montada sobre la banda ─── */
+.mounted-card {
+  position: relative;
+  z-index: 1;
+  /* Sube 24px sobre la banda: el navy asoma a los costados. */
+  margin: -24px var(--sp-4) 0;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
+}
+
+/* Esquina superior izquierda cuadrada SOLO cuando la pestaña activa es la
+   primera: así burbuja y tarjeta leen como una sola pieza. Si la activa está
+   al medio o al final, las cuatro esquinas van redondeadas y el enganche se
+   da por contacto. */
+.mounted-card.flush {
+  border-top-left-radius: 0;
+}
+
+/* Con pestañas, la tarjeta no sube: ya está pegada a la burbuja activa. */
+.btabs + .mounted-card {
+  margin-top: 0;
 }

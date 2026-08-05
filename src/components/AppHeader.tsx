@@ -1,0 +1,176 @@
+import type { ReactNode } from 'react';
+import { Icon } from './Icon';
+
+/**
+ * Cabecera navy de borde curvo y pestañas en burbuja —
+ * SISTEMA_DISENO.md §5 bis · A y · B.
+ *
+ * Son componentes COMPARTIDOS: ninguna pantalla inventa su propio encabezado.
+ * Entran sin call sites; cada pantalla los adopta cuando se implementa
+ * (paso 3 de la orden visual).
+ *
+ * Regla conceptual que separa las variantes, y que no es un detalle:
+ * **si una pantalla tiene el logo arriba, es de primer nivel.** No puede tener
+ * flecha de volver ni dejar activa otra entrada de la barra. El spec lo llama
+ * "un error conceptual, no un detalle" — es el error que Mati detectó y que
+ * terminó fusionando `s-account` dentro de las pestañas de Inicio.
+ */
+
+/** `Pay` en blanco + `Me` en teal — 7.46:1 sobre la banda navy. */
+export function PayMeLogo({ size }: { size?: number }) {
+  return (
+    <span className="hdr-logo" style={size ? { fontSize: size } : undefined}>
+      Pay<span className="hdr-logo-me">Me</span>
+    </span>
+  );
+}
+
+interface HeaderBase {
+  /** Pestañas en burbuja, si la pantalla las tiene. */
+  tabs?: ReactNode;
+  /**
+   * Banda compacta de la entrada por link (SPEC_APP.md §1.2): menos padding,
+   * logo 22px, curva de 26px en vez de 34px. **Es la única pantalla con esta
+   * variante** — no aplicarla en ningún otro lado.
+   */
+  compact?: boolean;
+}
+
+/**
+ * Variante de PRIMER NIVEL — pantallas de la barra inferior.
+ * Logo + nombre completo del usuario + campana.
+ */
+export function AppHeader({
+  userName,
+  unread = 0,
+  onBell,
+  tabs,
+  compact,
+}: HeaderBase & {
+  /** Nombre COMPLETO. Trunca con elipsis; nunca empuja la campana. */
+  userName?: string;
+  unread?: number;
+  onBell?: () => void;
+}) {
+  return (
+    <header className={`hdr ${compact ? 'hdr-compact' : ''}`}>
+      <div className="hdr-row">
+        <PayMeLogo />
+        {userName && <span className="hdr-user">{userName}</span>}
+        {onBell && (
+          <button type="button" className="hdr-bell" onClick={onBell} aria-label="Avisos">
+            <Icon name="bell" size={22} />
+            {unread > 0 && (
+              <span className="hdr-badge" aria-label={`${unread} sin leer`}>
+                {unread}
+              </span>
+            )}
+          </button>
+        )}
+      </div>
+      {tabs}
+    </header>
+  );
+}
+
+/**
+ * Variante de SUBPANTALLA — pasos de un flujo, detalles.
+ * Flecha de volver + título + contador de paso opcional.
+ *
+ * `Volver` va con flecha Y texto, no solo ícono (SPEC_APP.md §1.3).
+ */
+export function AppHeaderBack({
+  title,
+  onBack,
+  step,
+  tabs,
+  compact,
+}: HeaderBase & {
+  title?: string;
+  onBack: () => void;
+  /** Ej.: "Paso 2 de 5". En Mis ítems no hay: no es un paso de flujo lineal. */
+  step?: ReactNode;
+}) {
+  return (
+    <header className={`hdr ${compact ? 'hdr-compact' : ''}`}>
+      <div className="hdr-row">
+        <button type="button" className="hdr-back" onClick={onBack}>
+          <Icon name="arrow-left" size={20} />
+          Volver
+        </button>
+        {title && <span className="hdr-title">{title}</span>}
+        {step && <span className="hdr-step">{step}</span>}
+      </div>
+      {tabs}
+    </header>
+  );
+}
+
+export interface BubbleTab {
+  id: string;
+  label: string;
+  /** Conteo tipo el de Solicitudes: círculo --brand con el número en navy. */
+  badge?: number;
+}
+
+/**
+ * §5 bis · B — Pestañas en burbuja.
+ *
+ * La activa es una burbuja blanca ENGANCHADA a la tarjeta de contenido: forman
+ * una sola pieza continua del mismo color. La tarjeta lleva la esquina superior
+ * izquierda cuadrada solo cuando la activa es la primera; si está al medio o al
+ * final, va con las cuatro redondeadas y el enganche se da por contacto.
+ *
+ * Las INACTIVAS son texto plano al 72% de blanco sobre el navy, **sin ningún
+ * fondo**. Se probó un fondo blanco al 16% para que "pareciera burbuja" y casi
+ * no se veía: es un bug corregido, y aplica en toda la app (SPEC_APP.md §1.9).
+ */
+export function BubbleTabs({
+  tabs,
+  active,
+  onSelect,
+}: {
+  tabs: BubbleTab[];
+  active: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="btabs" role="tablist">
+      {tabs.map((t) => {
+        const on = t.id === active;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            className={`btab ${on ? 'on' : ''}`}
+            onClick={() => onSelect(t.id)}
+          >
+            {t.label}
+            {t.badge != null && t.badge > 0 && <span className="btab-badge">{t.badge}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * La tarjeta blanca montada sobre la banda. Sube 24px, con --sp-4 de margen
+ * lateral, y el navy asoma a los costados.
+ *
+ * `flush` = la pestaña activa es la PRIMERA, así que la esquina superior
+ * izquierda va cuadrada para que burbuja y tarjeta lean como una sola pieza.
+ */
+export function MountedCard({
+  children,
+  flush = false,
+  className = '',
+}: {
+  children: ReactNode;
+  flush?: boolean;
+  className?: string;
+}) {
+  return <div className={`mounted-card ${flush ? 'flush' : ''} ${className}`}>{children}</div>;
+}
