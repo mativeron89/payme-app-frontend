@@ -118,37 +118,23 @@ test.describe('el camino de pago completo', () => {
   });
 
   /**
-   * 🔴 DEFECTO ENCONTRADO POR ESTE RECORRIDO · NO LO ARREGLÉ · ESPERA ORDEN.
+   * ⭐ EL DEFECTO QUE ESTE RECORRIDO ENCONTRÓ, y que ahora acredita arreglado.
    *
-   * Después de un canje exitoso, **"Ver mis ítems" no hace nada y la persona
-   * queda encerrada en la pantalla de felicitación.**
+   * Estuvo un rato como `fixme`: **"Ver mis ítems" no hacía nada y la persona
+   * quedaba encerrada en la pantalla de felicitación.** Al cerrar el canje la
+   * custodia retira el token, así que la URL queda en `#/mesa/PA-XXXX` — que es
+   * exactamente el destino del botón, porque el link ES la ruta de la mesa.
+   * Asignar el hash que ya está no dispara `hashchange`, el router no se entera
+   * y `JoinMesaScreen` seguía montada.
    *
-   * ## Por qué pasa
+   * No era un caso raro: es el camino normal de cualquiera que llega por
+   * WhatsApp, y §1.2-C no tiene barra inferior, así que ese círculo era el único
+   * control de la pantalla.
    *
-   * Al cerrar el canje, la custodia retira el token del hash, así que la URL
-   * queda en `#/mesa/PA-XXXX`. El botón llama a `navigate('mesa', joined)`, que
-   * arma exactamente ese mismo hash y lo asigna. **Asignar el hash que ya está
-   * no dispara `hashchange`**, el router no se entera, no hay re-render, y
-   * `JoinMesaScreen` sigue montada en `stage === 'joined'`.
-   *
-   * ## Por qué NO es un artefacto de este test
-   *
-   * Es el camino normal: link de WhatsApp → alta → canje. La URL siempre queda
-   * en la ruta de la mesa, porque el link ES la ruta de la mesa. Cualquiera que
-   * se sume por link cae acá.
-   *
-   * Y no hay otra salida: §1.2-C no muestra la barra inferior, así que el único
-   * control de la pantalla es ese círculo. Sale con el botón Atrás del
-   * navegador, o recargando.
-   *
-   * ## Por qué no lo arreglé acá
-   *
-   * Es un cambio de navegación sobre la pantalla que entra al flujo de dinero,
-   * y mi orden era escribir recorridos, no cambiar comportamiento. Queda como
-   * `fixme` —registrado en código, no en una nota— y reportado. Cuando se
-   * ordene el arreglo, se saca el `fixme` y este test lo acredita.
+   * Este test es lo que impide que vuelva. Verificado con mutante: revertido el
+   * arreglo, se pone rojo.
    */
-  test.fixme('sumarse por el link: la salida a Mis ítems funciona', async ({ page }) => {
+  test('sumarse por el link: la salida a Mis ítems funciona', async ({ page }) => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
     await page.goto(`/#/mesa/${mesa.code}?t=${mesa.token}`);
@@ -156,6 +142,10 @@ test.describe('el camino de pago completo', () => {
 
     await page.getByRole('button', { name: 'Ver mis ítems' }).click();
 
-    await expect(page.getByText('¿Qué consumiste?', { exact: false })).toBeVisible();
+    // Se llegó a Mis ítems: los ítems del ticket son botones de esta pantalla y
+    // de ninguna otra del recorrido.
+    await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese' })).toBeVisible();
+    // Y la felicitación se fue: no quedó montada abajo ni al lado.
+    await expect(page.getByText('¡Te sumaste a la mesa!')).toHaveCount(0);
   });
 });

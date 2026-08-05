@@ -40,6 +40,50 @@ import { joinLinkMessage, joinLinkStage, type JoinLinkOutcome } from './joinLink
  * reabriría el oráculo del lado del consumidor, que es exactamente cómo la
  * pantalla "Enviadas" reabrió el que el 202 ciego había cerrado.
  */
+/**
+ * ORDEN 5 · la salida de §1.2-C, que estaba MUERTA.
+ *
+ * ## El defecto, encontrado por el recorrido de pago en navegador
+ *
+ * Al cerrar el canje, la custodia retira el token del hash. La URL queda en
+ * `#/mesa/PA-XXXX` — que es **exactamente el destino de este botón**, porque el
+ * link de invitación ES la ruta de la mesa. `navigate` asigna ese mismo hash, y
+ * **asignar el hash que ya está no dispara `hashchange`**: el router no se
+ * entera, `Shell` no vuelve a renderizar, y esta pantalla se queda montada con
+ * `stage === 'joined'`.
+ *
+ * No es un caso raro: es el camino normal de cualquiera que llega por WhatsApp.
+ * Y §1.2-C no muestra la barra inferior, así que ese círculo es el ÚNICO control
+ * de la pantalla. Con él muerto, la única salida era el botón Atrás del
+ * navegador o recargar.
+ *
+ * ## Por qué el remedio es avisarle al router, y no tocar el router
+ *
+ * `navigate` se conserva porque el destino **no siempre** coincide con la URL
+ * actual: `accept-link` devuelve `mesa_code` y el emisor es la autoridad sobre
+ * a qué mesa entraste, no el `:code` del link. Si difieren, hay que navegar de
+ * verdad.
+ *
+ * Cuando no difieren, hace falta decirle al router que relea la URL. Es el mismo
+ * remedio que `replaceRoute` ya aplica en `router.ts` con el mismo comentario
+ * —*"`replaceState` no dispara `hashchange`: hay que avisarle al router"*—, así
+ * que no se inventa un mecanismo: se reusa el que la app ya usa.
+ *
+ * Se avisa **sólo si el hash no cambió**. Si cambió, el navegador dispara su
+ * propio `hashchange` y avisar de nuevo sería un re-render de más.
+ *
+ * Deliberadamente NO se toca `navigate`: tiene esta misma limitación para
+ * cualquier navegación a la ruta en la que ya estás, pero cambiarla afecta a
+ * todas las pantallas de la app y eso es otra orden.
+ */
+function salirAMisItems(mesaCode: string): void {
+  const antes = window.location.hash;
+  navigate('mesa', mesaCode);
+  if (window.location.hash === antes) {
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  }
+}
+
 export function JoinMesaScreen({ code, token }: { code: string; token: string }) {
   const { session } = useAuth();
   const [outcome, setOutcome] = useState<JoinLinkOutcome>('joining');
@@ -199,7 +243,7 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
           <button
             type="button"
             className="link-round"
-            onClick={() => navigate('mesa', joined)}
+            onClick={() => salirAMisItems(joined)}
             aria-label="Ver mis ítems"
           >
             <Icon name="arrow-right" size={24} />
