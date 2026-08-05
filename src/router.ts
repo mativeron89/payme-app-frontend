@@ -10,40 +10,33 @@ import { useEffect, useState } from 'react';
  * en `#/mesa/:code?t=...`; parseHash ya soporta el `?t=` adentro del hash.
  */
 
-export type PageId =
-  | 'home'
+/**
+ * **Las páginas de la app, en UNA sola lista.**
+ *
+ * Antes esto eran dos: la unión de tipos `PageId` y el `Set` de validación de
+ * `parseHash`. Decían lo mismo y **nada las obligaba a coincidir**, así que
+ * podían separarse en silencio y en la dirección peor:
+ *
+ * > Una página en el `Set` y **no** en la unión pasaba el `page as PageId` de
+ * > `parseHash` —que es un cast **sin chequeo**: `ReadonlySet<string>.has()` no
+ * > narrowea—, llegaba al switch de `App.tsx` sin `case`, y dejaba la app **en
+ * > blanco**. El compilador no podía verlo: para él la unión estaba completa.
+ *
+ * Con la unión **derivada** del array esa deriva ya no es detectable: es
+ * **imposible de escribir**. Y de paso el cast de `parseHash` pasa a ser sano
+ * por construcción, porque el `Set` se construye de acá.
+ *
+ * Agregar una página es agregar un elemento acá. El `default` de `App.tsx` se
+ * encarga de que olvidarse del `case` **rompa el build**.
+ */
+export const PAGES = [
+  'home',
   /**
    * `cuenta` es la Cuenta VIEJA. Las tres pantallas que §1.11 lanza desde las
    * pestañas de Inicio son de PRIMER NIVEL y tienen su ruta propia: no cuelgan
    * de un parámetro de `cuenta`. Se probó al revés —`#/cuenta/tarjetas`— para
    * no tocar `App.tsx`, y evitar un archivo no es una razón de diseño.
    */
-  | 'cuenta'
-  | 'tarjetas'
-  | 'pagos'
-  | 'estadisticas'
-  | 'cargar'
-  | 'transferir'
-  | 'amigos'
-  | 'grupos'
-  | 'mesas'
-  | 'scan'
-  | 'perfil'
-  | 'avisos'
-  | 'mesa';
-
-export interface Route {
-  page: PageId;
-  /** parámetro opcional (ej.: code en #/mesa/PA-2847). */
-  param: string | null;
-  /** query dentro del hash (ej.: t=<guest token> en el link de invitado). */
-  query: URLSearchParams;
-}
-
-const DEFAULT_ROUTE: Route = { page: 'home', param: null, query: new URLSearchParams() };
-
-const VALID_PAGES: ReadonlySet<string> = new Set([
-  'home',
   'cuenta',
   'tarjetas',
   'pagos',
@@ -57,7 +50,27 @@ const VALID_PAGES: ReadonlySet<string> = new Set([
   'perfil',
   'avisos',
   'mesa',
-]);
+] as const;
+
+export type PageId = (typeof PAGES)[number];
+
+export interface Route {
+  page: PageId;
+  /** parámetro opcional (ej.: code en #/mesa/PA-2847). */
+  param: string | null;
+  /** query dentro del hash (ej.: t=<guest token> en el link de invitado). */
+  query: URLSearchParams;
+}
+
+const DEFAULT_ROUTE: Route = { page: 'home', param: null, query: new URLSearchParams() };
+
+/**
+ * Se construye de `PAGES`, no de una copia. El `page as PageId` de abajo sigue
+ * siendo un cast sin chequeo —`ReadonlySet<string>.has()` no narrowea— pero
+ * ahora es **sano por construcción**: lo único que el `Set` deja pasar salió de
+ * `PAGES`, y `PageId` es exactamente `PAGES`.
+ */
+const VALID_PAGES: ReadonlySet<string> = new Set(PAGES);
 
 export function parseHash(hash: string): Route {
   const clean = hash.replace(/^#\/?/, '');

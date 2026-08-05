@@ -131,6 +131,32 @@ function Shell() {
         return <PerfilScreen />;
       case 'avisos':
         return <AvisosScreen />;
+      /**
+       * **El guard real es el `never`, no el `default`.**
+       *
+       * Si mañana alguien agrega una página a `PAGES` y se olvida del `case`,
+       * `route.page` **no estrecha a `never` y el build revienta**. No es un
+       * test que haya que acordarse de correr: es **imposible de shipear**.
+       *
+       * El `return` es la red de runtime, y hoy es **inalcanzable** — hay que
+       * decir cuál de las dos es, no suponerlo:
+       *
+       * > `parseHash` valida el hash contra `VALID_PAGES` antes del cast, y
+       * > desde este commit ese `Set` se construye de `PAGES`, de donde se
+       * > deriva `PageId`. Así que el `default` está muerto **porque** existen
+       * > esos dos cambios. Antes de ellos estaba **vivo**: el cast era sin
+       * > chequeo y una entrada del `Set` que no estuviera en la unión llegaba
+       * > acá sin `case` y dejaba la pantalla en blanco.
+       *
+       * Se conserva igual. Una red que hoy nadie pisa cuesta tres líneas, y es
+       * lo único que separa un `case` faltante de una app en blanco si alguna
+       * de las dos garantías de arriba se afloja.
+       */
+      default: {
+        const paginaNoCubierta: never = route.page;
+        void paginaNoCubierta;
+        return <HomeScreen />;
+      }
     }
   })();
 
