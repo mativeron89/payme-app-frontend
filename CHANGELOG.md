@@ -1,5 +1,37 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.38.1 — la salida de §1.2-C estaba muerta (2026-08-05)
+
+Arreglo del defecto que 0.38.0 registró como encontrado y sin arreglar. **Aquella
+entrada queda superseded en ese punto**, no equivocada: describía el estado al
+cerrar la ORDEN 5, y el arreglo llegó con una orden propia inmediatamente
+después.
+
+- **Después de un canje exitoso, "Ver mis ítems" no hacía nada.** La persona
+  quedaba encerrada en la pantalla de felicitación. Al cerrar el canje la
+  custodia retira el token, así que la URL queda en `#/mesa/PA-XXXX` — que es
+  **exactamente el destino del botón**, porque el link de invitación ES la ruta
+  de la mesa. `navigate` asignaba ese mismo hash, y asignar el hash que ya está
+  **no dispara `hashchange`**: el router no se enteraba, `Shell` no volvía a
+  renderizar y `JoinMesaScreen` seguía montada.
+- **No era un caso raro.** Es el camino normal de cualquiera que llega por
+  WhatsApp. Y §1.2-C no muestra la barra inferior, así que ese círculo era el
+  **único** control de la pantalla: la única salida era el Atrás del navegador o
+  recargar.
+- **`navigate` se conserva**, porque el destino no siempre coincide con la URL:
+  `accept-link` devuelve `mesa_code` y **el emisor es la autoridad** sobre a qué
+  mesa entraste, no el `:code` del link. Cuando no difieren, se le avisa al
+  router que relea la URL — el mismo remedio que `replaceRoute` ya aplica en
+  `router.ts`, no un mecanismo nuevo — y **sólo** si el hash no cambió, porque si
+  cambió el navegador dispara el suyo.
+- **Deliberadamente NO se tocó `navigate`.** Tiene la misma limitación para
+  cualquier navegación a la ruta en la que ya estás, pero cambiarla afecta a
+  todas las pantallas de la app: es otra orden. **La custodia del token tampoco
+  se tocó** — está cerrada y con sus mutantes muertos.
+- Sale el `test.fixme` del recorrido 3 y ese test lo acredita: llega a Mis ítems
+  y la felicitación se desmonta. **Dos mutantes, los dos muertos**: revertir el
+  aviso al router, y volver a llamar `navigate` directo.
+
 ## 0.38.0 — ORDEN 5 · Playwright, y las dos anclas cerradas (2026-08-05)
 
 Entra un runner de navegador, **autorizado por Mati en orden propia**. No
