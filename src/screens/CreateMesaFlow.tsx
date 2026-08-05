@@ -82,6 +82,32 @@ export function CreateMesaFlow() {
   const [scanning, setScanning] = useState(false);
   const [editItems, setEditItems] = useState<EditItem[]>([]);
   const [scanFailed, setScanFailed] = useState(false);
+  /**
+   * §1.3 · el total que el OCR leyó del ticket IMPRESO, tal como vino. Existe
+   * sólo para poder contrastarlo contra la suma de las filas y avisar la
+   * diferencia: antes se descartaba, y por eso la observación "chequeá que el
+   * total coincida" no podía detectar nada — el total en pantalla ERA la suma.
+   *
+   * NUNCA viaja al backend. Lo que se manda en `total_cents` sigue siendo la
+   * suma de lo que la persona ve y editó (ver el guardarraíl de D5 más abajo):
+   * si mandáramos el del OCR, un ticket mal leído abriría una mesa por un monto
+   * que nadie miró, y la garantía retiene ese monto.
+   */
+  const [scannedTotalCents, setScannedTotalCents] = useState<number | null>(null);
+  /** §1.3 · "Modificar ítems": vista normal ↔ modo edición, y qué fila se abrió. */
+  const [editingItems, setEditingItems] = useState(false);
+  const [expandedItem, setExpandedItem] = useState<number | null>(null);
+  const expandedRowRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * La fila que se abre puede quedar FUERA de la pantalla — pasa siempre al
+   * agregar un consumo, porque nace al final de una lista de seis. Abrir un
+   * campo que la persona no ve es lo mismo que no abrirlo: se queda mirando la
+   * lista sin entender qué pasó. Verificado a 375px, que es donde ocurre.
+   */
+  useEffect(() => {
+    if (expandedItem === null) return;
+    expandedRowRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [expandedItem]);
   const [division, setDivision] = useState<'consumo' | 'igual'>('consumo');
   const [participants, setParticipants] = useState(4);
   const [method, setMethod] = useState<'card' | 'wallet'>('card');
@@ -285,15 +311,37 @@ export function CreateMesaFlow() {
     editItems.length === 0
       ? 'Agregá al menos un consumo.'
       : 'Completá nombre y precio (mayor a cero) de cada consumo.';
+  /**
+   * §1.3 · la suma de las filas contra el total IMPRESO que leyó el OCR. Se
+   * compara sólo cuando las dos cifras son de fiar: sin total del OCR, o con
+   * alguna fila incompleta (que fuerza `total` a 0), una diferencia no
+   * significaría nada y el aviso sería ruido.
+   *
+   * El aviso NO bloquea Continuar. Corregir una fila mal leída es exactamente
+   * lo que esta pantalla existe para permitir, y ahí la suma se aparta del
+   * impreso a propósito; lo que el spec prohíbe es ajustar en silencio.
+   */
+  const totalMismatch =
+    scannedTotalCents !== null && ticketValid && total !== scannedTotalCents
+      ? { printed: scannedTotalCents, diff: total - scannedTotalCents }
+      : null;
 
   function updateItem(idx: number, patch: Partial<EditItem>) {
     setEditItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   }
   function removeItem(idx: number) {
     setEditItems((prev) => prev.filter((_, i) => i !== idx));
+    // La fila abierta desaparece, y los índices de abajo se corren: dejar
+    // `expandedItem` quieto abriría OTRA fila, o una que ya no existe.
+    setExpandedItem((open) => (open === null || open === idx ? null : open > idx ? open - 1 : open));
   }
   function addItem() {
-    setEditItems((prev) => [...prev, { name: '', priceStr: '', quantity: 1 }]);
+    // Nace vacío y se abre solo: sin esto habría que adivinar que la fila nueva
+    // se toca para completarla.
+    setEditItems((prev) => {
+      setExpandedItem(prev.length);
+      return [...prev, { name: '', priceStr: '', quantity: 1 }];
+    });
   }
 
   /**
@@ -322,7 +370,17 @@ export function CreateMesaFlow() {
           ...(i.category && { category: i.category }),
         })),
       );
+      // El total impreso, para contrastarlo (§1.3). Un OCR que no lo pudo leer
+      // manda 0: eso no es "el ticket sumaba cero", es "no lo sé" → sin dato,
+      // no se compara y la observación queda informativa.
+      setScannedTotalCents(r.total_cents > 0 ? r.total_cents : null);
       setScanFailed(false);
+      // El OCR puede contestar 200 con CERO ítems (routes/ocr.js devuelve
+      // `items: []` ante `provider_error`). Con la lista vacía y la vista normal
+      // no habría ni una fila ni el "+ Agregar consumo", que vive en el modo
+      // edición: la pantalla quedaría sin salida. Se abre ya en edición.
+      setEditingItems(r.items.length === 0);
+      setExpandedItem(null);
       setStep('ticket');
     } catch {
       setScanFailed(true);
@@ -728,123 +786,163 @@ export function CreateMesaFlow() {
   }
 
   // ─── Paso 2: ticket ──────────────────────────────────────
+  /**
+   * SPEC_APP.md §1.3, aplicado. Lo que cambia y por qué:
+   *
+   *  - Cabecera de flujo de dos filas y tarjeta de título `--teal-l`, la misma
+   *    que estrenó División. Acá la tarjeta SÍ lleva contenido debajo del
+   *    título: total y observación, separados por la misma línea que separa la
+   *    lista. Es UNA tarjeta — las dos variantes con pestaña fusionada al
+   *    estilo Inicio se probaron y Mati las rechazó.
+   *  - La lista deja de ser una grilla de inputs y pasa a texto limpio. Los
+   *    controles aparecen recién en modo edición: la vista normal es para leer
+   *    el ticket, no para tipearlo.
+   *  - El stepper de cantidad pasa de 22×22 a 44×44. Estaba en la MITAD del
+   *    mínimo del sistema, en una pantalla que se usa parado y con una mano.
+   *  - Desaparece el copy "N consumos · corregí lo que haga falta": el spec
+   *    manda no mostrar el conteo, y "corregí lo que haga falta" ya lo dice el
+   *    link de modificar.
+   *  - CTA: la barra de cinco posiciones con "Continuar", sin ítem activo. El
+   *    motivo de invalidez sube a la fila propia de la barra en vez de flotar
+   *    sobre el contenido a `bottom: 78px`, que se apoyaba en la altura del
+   *    botón viejo. Salir del flujo acá no deja nada a medias: el freeze
+   *    monetario empieza en la garantía, dos pasos más adelante.
+   */
   if (step === 'ticket') {
     return (
-      <div className="screen has-cta">
-        <div className="top-bar" style={{ background: 'var(--navy)' }}>
-          <button className="back-btn" onClick={back} aria-label="Volver" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>
-            ←
-          </button>
-          <TopLogo inv />
-          <div className="top-title" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--fs-legacy-base)', fontFamily: 'var(--font-body)', fontWeight: 600 }}>
-            Ticket de la mesa
+      <div className="screen has-appbar">
+        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step="Paso 2 de 5" />
+        <div className="title-card">
+          <div className="title-card-title">{restaurant?.name ?? 'Restaurante'}</div>
+          {restaurant?.address && (
+            <div className="title-card-sub">
+              <Icon name="pin" size={14} className="ico-inline" /> {restaurant.address}
+            </div>
+          )}
+          <div className="title-card-div" />
+          <div className="title-card-total">
+            <span className="title-card-total-lbl">Total</span>
+            <span className="title-card-total-amt">{formatMXN(total)}</span>
+          </div>
+          {/* Informativa mientras cierre; --warning con la diferencia exacta
+              cuando no. `aria-live` porque el salto de una a otra pasa mientras
+              la persona edita y no vuelve a leer la tarjeta. */}
+          <div
+            className={`title-card-note ${totalMismatch ? 'warn' : ''}`}
+            aria-live="polite"
+          >
+            <Icon name={totalMismatch ? 'warning' : 'info'} size={16} />
+            <span>
+              {totalMismatch
+                ? `No coincide con el total del ticket (${formatMXN(totalMismatch.printed)}): hay ${formatMXN(Math.abs(totalMismatch.diff))} de ${totalMismatch.diff > 0 ? 'más' : 'menos'}.`
+                : 'Chequeá que el total coincida con el total del ticket'}
+            </span>
           </div>
         </div>
-        <div style={{ background: 'var(--navy)', padding: '0 20px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ fontSize: 'var(--fs-legacy-lg)', fontWeight: 800, color: '#fff' }}>
-              {restaurant?.name ?? 'Restaurante'}
-            </div>
-            {restaurant?.address && (
-              <div style={{ fontSize: 'var(--fs-legacy-sm)', color: 'rgba(255,255,255,0.55)', marginTop: 2, fontFamily: 'var(--font-body)' }}>
-                <Icon name="pin" size={14} className="ico-inline" /> {restaurant.address}
-              </div>
+        <div className="scroll flow-scroll">
+          <div className="tk-list">
+            {editItems.map((it, idx) => {
+              const nombre = it.name.trim();
+              const etiqueta = nombre || `consumo ${idx + 1}`;
+              if (editingItems && expandedItem === idx) {
+                return (
+                  <div className="tk-edit" key={idx} ref={expandedRowRef}>
+                    <label className="tk-edit-field">
+                      <span className="tk-edit-lbl">Consumo</span>
+                      <input
+                        className="tk-edit-input"
+                        value={it.name}
+                        placeholder="Nombre del consumo"
+                        onChange={(e) => updateItem(idx, { name: e.target.value })}
+                      />
+                    </label>
+                    <label className="tk-edit-field">
+                      <span className="tk-edit-lbl">Precio por unidad</span>
+                      <input
+                        className="tk-edit-input amt"
+                        inputMode="decimal"
+                        value={it.priceStr}
+                        placeholder="0"
+                        onChange={(e) =>
+                          updateItem(idx, { priceStr: e.target.value.replace(/[^0-9.]/g, '') })
+                        }
+                      />
+                    </label>
+                    <div className="tk-edit-row">
+                      <div className="stepper" role="group" aria-label={`Cantidad de ${etiqueta}`}>
+                        <button
+                          onClick={() => updateItem(idx, { quantity: Math.max(1, it.quantity - 1) })}
+                          aria-label={`Una unidad menos de ${etiqueta}`}
+                        >
+                          −
+                        </button>
+                        <div className="val" aria-live="polite">
+                          {it.quantity}
+                        </div>
+                        <button
+                          onClick={() => updateItem(idx, { quantity: it.quantity + 1 })}
+                          aria-label={`Una unidad más de ${etiqueta}`}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button className="tk-del" onClick={() => removeItem(idx)}>
+                        <Icon name="trash" size={18} /> Eliminar
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div className="tk-row" key={idx}>
+                  <span className="tk-qty">{it.quantity}</span>
+                  <span className={`tk-name ${nombre ? '' : 'tk-sin-nombre'}`}>
+                    {nombre || 'Sin nombre'}
+                  </span>
+                  <span className="tk-price">
+                    {lineTotals[idx] === null ? '—' : formatMXN(lineTotals[idx] as number)}
+                  </span>
+                  {editingItems && (
+                    <button
+                      className="tk-pencil"
+                      onClick={() => setExpandedItem(idx)}
+                      aria-label={`Modificar ${etiqueta}`}
+                    >
+                      <Icon name="pencil" size={20} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="tk-foot">
+            <button
+              className="tk-edit-link"
+              onClick={() => {
+                setEditingItems((on) => !on);
+                setExpandedItem(null);
+              }}
+            >
+              <Icon name={editingItems ? 'check' : 'pencil'} size={18} />
+              {editingItems ? 'Listo' : 'Modificar ítems'}
+            </button>
+            {editingItems && (
+              <button className="tk-edit-link" onClick={addItem}>
+                <Icon name="plus" size={18} /> Agregar consumo
+              </button>
             )}
           </div>
-          <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '6px 14px', borderRadius: 20, fontWeight: 800, fontSize: 'var(--fs-legacy-base)' }}>
-            {formatMXN(total)}
-          </div>
         </div>
-        <div className="scroll">
-          <div className="card" style={{ margin: 12 }}>
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--gray-l)' }}>
-              <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 700 }}>Detalle</div>
-              <div className="caption" style={{ marginTop: 2 }}>
-                {editItems.length} consumo{editItems.length === 1 ? '' : 's'} · {formatMXN(total)} ·
-                corregí lo que haga falta antes de dividir
-              </div>
-            </div>
-            {/* D5: cada consumo es editable — nombre, precio, cantidad, quitar. */}
-            {editItems.map((it, idx) => (
-              <div
-                key={idx}
-                style={{
-                  display: 'flex',
-                  gap: 5,
-                  alignItems: 'center',
-                  padding: '4px 12px',
-                  borderBottom: '1px solid var(--gray-l)',
-                }}
-              >
-                <input
-                  className="input"
-                  style={{ flex: 1, minWidth: 0, padding: '6px 8px', fontSize: 'var(--fs-legacy-base)' }}
-                  value={it.name}
-                  placeholder="Consumo"
-                  onChange={(e) => updateItem(idx, { name: e.target.value })}
-                  aria-label={`Nombre del consumo ${idx + 1}`}
-                />
-                <span style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-sm)', flex: 'none' }}>$</span>
-                <input
-                  className="input"
-                  style={{ width: 60, padding: '6px 6px', fontSize: 'var(--fs-legacy-base)', flex: 'none', textAlign: 'right' }}
-                  inputMode="decimal"
-                  value={it.priceStr}
-                  placeholder="0"
-                  onChange={(e) => updateItem(idx, { priceStr: e.target.value.replace(/[^0-9.]/g, '') })}
-                  aria-label={`Precio del consumo ${idx + 1}`}
-                />
-                <button
-                  className="back-btn"
-                  style={{ width: 22, height: 22, fontSize: 'var(--fs-legacy-sm)', flex: 'none' }}
-                  onClick={() => updateItem(idx, { quantity: Math.max(1, it.quantity - 1) })}
-                  aria-label={`Menos cantidad de ${it.name || `consumo ${idx + 1}`}`}
-                >
-                  −
-                </button>
-                <span
-                  style={{ minWidth: 14, textAlign: 'center', fontWeight: 700, fontSize: 'var(--fs-legacy-sm)', flex: 'none' }}
-                >
-                  {it.quantity}
-                </span>
-                <button
-                  className="back-btn"
-                  style={{ width: 22, height: 22, fontSize: 'var(--fs-legacy-sm)', flex: 'none' }}
-                  onClick={() => updateItem(idx, { quantity: it.quantity + 1 })}
-                  aria-label={`Más cantidad de ${it.name || `consumo ${idx + 1}`}`}
-                >
-                  ＋
-                </button>
-                <button
-                  className="back-btn"
-                  style={{ width: 22, height: 22, fontSize: 'var(--fs-legacy-xs)', flex: 'none' }}
-                  onClick={() => removeItem(idx)}
-                  aria-label={`Quitar ${it.name || `consumo ${idx + 1}`}`}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-            <button
-              className="btn btn-ghost"
-              style={{ margin: '8px 16px 10px', width: 'auto', fontSize: 'var(--fs-legacy-sm)', padding: '9px 14px' }}
-              onClick={addItem}
-            >
-              <Icon name="plus" size={16} className="ico-inline" /> Agregar consumo
-            </button>
-          </div>
-        </div>
-        {!ticketValid && (
-          <div
-            className="caption"
-            style={{ position: 'fixed', bottom: 78, left: 0, right: 0, textAlign: 'center', zIndex: 20 }}
-          >
-            {ticketInvalidReason}
-          </div>
-        )}
-        <button className="cta-float" onClick={() => setStep('division')} disabled={!ticketValid}>
-          Continuar → dividir
-        </button>
+        <AppBottomBar
+          active={null}
+          above={!ticketValid ? <div className="tk-invalid">{ticketInvalidReason}</div> : undefined}
+          center={{
+            label: 'Continuar',
+            icon: 'arrow-right',
+            onClick: () => setStep('division'),
+            disabled: !ticketValid,
+          }}
+        />
       </div>
     );
   }
@@ -876,7 +974,10 @@ export function CreateMesaFlow() {
         <div className="title-card">
           <div className="title-card-title">¿Cómo dividen?</div>
         </div>
-        <div className="scroll" style={{ padding: '0 16px' }}>
+        {/* Mismo cambio que Ticket: el padding inline que había acá pisaba el
+            padding-bottom de `.has-appbar .scroll` y dejaba a División sin
+            separación con la barra. No se veía porque su contenido es corto. */}
+        <div className="scroll flow-scroll">
           <button className={`div-card ${division === 'consumo' ? 'sel' : ''}`} onClick={() => setDivision('consumo')}>
             <div className="div-radio" />
             <div className="div-ico">

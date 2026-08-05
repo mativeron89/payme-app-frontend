@@ -1781,9 +1781,25 @@ body {
   outline-offset: 2px;
 }
 
-/* Aire para que el contenido no quede debajo de la barra. */
+/* Aire para que el contenido no quede debajo de la barra.
+   140px y no 108: el bloque mide 69px con la barra sola, pero 135px cuando
+   lleva su fila `above` (el motivo por el que Continuar está apagado, §1.3).
+   Con 108 la última fila quedaba tapada, y `scrollIntoView` —que mide contra
+   el padding del contenedor, no contra lo que la barra fija ocluye— creía
+   haberla dejado visible.
+
+   OJO al usarlo: un `style={{ padding: … }}` inline en el `.scroll` PISA este
+   padding-bottom, porque el shorthand inline le gana al longhand de la clase.
+   Por eso las pantallas del flujo llevan `.flow-scroll` y no padding inline. */
 .has-appbar .scroll {
-  padding-bottom: 108px;
+  padding-bottom: 140px;
+}
+
+/* Padding lateral de las pantallas del flujo, en longhands a propósito: así no
+   se lleva puesto el padding-bottom de arriba. */
+.flow-scroll {
+  padding-left: var(--sp-4);
+  padding-right: var(--sp-4);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2304,6 +2320,283 @@ body {
 
 .split-amt-lbl {
   margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TICKET · SPEC_APP.md §1.3
+   Una sola tarjeta de título: restaurante + ubicación arriba, y debajo de la
+   línea el total con su observación. Se probaron y descartaron dos variantes
+   con pestaña fusionada al estilo Inicio; Mati rechazó las dos.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Ubicación bajo el nombre del restaurante, centrada como él. */
+.title-card-sub {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* La MISMA línea que separa las filas de la lista de consumos: la tarjeta y la
+   lista tienen que leerse como el mismo documento, no como dos bloques. */
+.title-card-div {
+  /* De borde a borde de la tarjeta: el negativo cancela el padding de
+     .title-card. Media línea suelta en el medio partiría la tarjeta en dos
+     bloques, y es UNA sola tarjeta. */
+  margin: var(--sp-3) calc(var(--sp-4) * -1);
+  border-top: 1px solid var(--border);
+}
+
+.title-card-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.title-card-total-lbl {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.title-card-total-amt {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Observación INFORMATIVA: no es un error, así que va en --text-muted y nunca
+   en --warning mientras los números cierren.
+   El spec la dibuja en --fs-xs (12px); va en --fs-sm porque §2 del sistema
+   reserva 12px para etiquetas en MAYÚSCULA y lo prohíbe para datos, y esto es
+   una oración que la persona tiene que leer con el ticket de papel en la mano. */
+.title-card-note {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.title-card-note svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* Los números NO cierran. Deja de ser informativa: el ícono cambia de info a
+   warning, el color pasa a --warning y el texto dice la diferencia exacta.
+   Jamás se ajusta el total en silencio. */
+.title-card-note.warn {
+  color: var(--warning);
+  font-weight: 500;
+}
+
+/* ─── La lista de consumos ─── */
+
+/* Texto limpio, como en Mis ítems: en la vista normal no hay ni un recuadro de
+   input a la vista. Los controles aparecen recién en modo edición. */
+/* `center` y no `baseline`: cantidad, nombre y precio comparten tamaño y
+   line-height, así que las dos se ven igual — pero la fila también lleva un
+   botón de 44px SIN texto, y la línea de base de un elemento que no tiene
+   ninguna se sintetiza desde su borde inferior. Centrar no depende de eso.
+   (Con `baseline` la fila también medía 52px: el 121px que aparecía en las
+   filas sin nombre era la colisión con `.empty`, no la alineación.) */
+.tk-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tk-qty {
+  flex: none;
+  min-width: 22px;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.tk-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+  /* `break-word` y no `anywhere`: los dos parten un nombre larguísimo, pero
+     `anywhere` además reduce el ancho mínimo intrínseco del elemento, y en un
+     flex eso lo deja competir por el espacio desde casi cero. */
+  overflow-wrap: break-word;
+}
+
+/* Sin nombre todavía (consumo recién agregado): es un hueco a completar, no un
+   dato. Se dice con palabras además del color.
+   NO se llama `.empty`: esa clase ya existe como estado vacío global, con
+   `padding: 36px 24px` y `text-align: center`, y la fila se los comía enteros
+   —121px de alto en vez de 53—. Un nombre genérico en una hoja única es una
+   colisión esperando. */
+.tk-name.tk-sin-nombre {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.tk-price {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: right;
+}
+
+/* El lápiz de cada fila, sólo en modo edición. Área táctil completa aunque el
+   glifo sea chico. */
+.tk-pencil {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  /* Negativo para que los 44px de área táctil no engorden una fila cuya línea
+     de texto mide 24: el botón se sale del padding de la fila sin empujarla. */
+  margin: calc(var(--sp-2) * -1) 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--link);
+  cursor: pointer;
+}
+
+/* La última fila lleva una línea más marcada antes de la acción de editar. */
+.tk-list {
+  border-bottom: 2px solid var(--border);
+}
+
+.tk-list .tk-row:last-child {
+  border-bottom: 0;
+}
+
+/* Fila expandida. El monto se vuelve editable con borde --action-2; el nombre y
+   la cantidad también, porque un consumo agregado nace vacío y sin eso no habría
+   forma de nombrarlo (desvío del spec, decidido con Mati el 2026-08-05). */
+.tk-edit {
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--border);
+  /* Quien scrollea es el documento, y `scrollIntoView` alinea contra el borde
+     del viewport: no tiene forma de saber que la barra fija tapa los últimos
+     135px. `scroll-margin-bottom` es exactamente cómo se le dice. Sin esto la
+     fila recién abierta quedaba "visible" para el navegador y debajo de la
+     barra para la persona. */
+  scroll-margin-bottom: 148px;
+}
+
+.tk-edit-field {
+  display: block;
+  margin-bottom: var(--sp-3);
+}
+
+.tk-edit-lbl {
+  display: block;
+  margin-bottom: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.tk-edit-input {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--sp-2) var(--sp-3);
+  border: 2px solid var(--action-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+}
+
+.tk-edit-input.amt {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tk-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+/* Eliminar en --danger, con tacho. Nunca sólo el ícono: el texto va al lado. */
+.tk-del {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+/* Al pie de la lista: un LINK con lápiz, no un botón con borde. */
+.tk-edit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--link);
+  cursor: pointer;
+}
+
+.tk-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0 var(--sp-4);
+}
+
+/* Motivo por el que Continuar está apagado. Va en la fila propia de la barra,
+   no flotando sobre el contenido como antes. */
+.tk-invalid {
   font-family: var(--font-body);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);

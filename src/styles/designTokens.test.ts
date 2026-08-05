@@ -134,6 +134,22 @@ describe('sistema de diseño · §1 color', () => {
     }
   })
 
+  /**
+   * SPEC_APP.md §1.3 · la observación del total vive DENTRO de la tarjeta de
+   * título, así que cuando pasa a advertencia el par no es el que el sistema
+   * midió (`--warning` sobre `--warning-tint`, 5.10:1) sino `--warning` sobre
+   * `--teal-l`. Es un fondo más claro y el ratio BAJA: pasa AA, pero por menos
+   * margen. Queda fijado acá para que un retoque del celeste no lo hunda en
+   * silencio en el único lugar donde la app dice que las cuentas no cierran.
+   */
+  it('la advertencia del total pasa AA sobre el celeste de la tarjeta', () => {
+    expect(contrast('warning', 'teal-l')).toBeCloseTo(4.77, 1)
+    expect(contrast('warning', 'teal-l')).toBeGreaterThanOrEqual(4.5)
+    // Y el texto normal de la misma tarjeta, que comparte fondo.
+    expect(contrast('text-muted', 'teal-l')).toBeGreaterThanOrEqual(4.5)
+    expect(contrast('text', 'teal-l')).toBeGreaterThanOrEqual(4.5)
+  })
+
   it('--on-dark-muted llega a 8:1 sobre la banda navy', () => {
     const composed = over([255, 255, 255], 0.72, channels(token('action')))
     expect(ratio(composed, channels(token('action')))).toBeGreaterThanOrEqual(8)

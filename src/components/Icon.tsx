@@ -76,6 +76,12 @@ const GLYPHS = {
      como alternativas evaluadas: SPEC_APP.md §5 lo deja como pregunta abierta. */
   'arrow-right': { d: ['M4.5 12h15', 'M13 5.5l6.5 6.5-6.5 6.5'] },
   'arrow-left': { d: ['M19.5 12h-15', 'M11 5.5 4.5 12 11 18.5'] },
+  /* SPEC_APP.md §1.3 · el lápiz de "Modificar ítems" y el ícono de la
+     observación del total. `info` va SIEMPRE con su texto al lado: el ícono
+     solo no informa nada, y el sistema prohíbe que el color o el glifo sean el
+     único portador de significado (§5). */
+  pencil: { d: ['M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z', 'M14.5 7.5l2 2'] },
+  info: { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 11v5.5', 'M12 7.6v.4'] },
   'grid-dots': {
     f: [
       'M6 6.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
