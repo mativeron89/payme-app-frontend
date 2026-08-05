@@ -1394,10 +1394,11 @@ export function CreateMesaFlow() {
    * mesa quedó garantizada — y hasta hoy era una `TopBar` genérica con el link
    * suelto en un recuadro punteado.
    *
-   *  - Cabecera de flujo de dos filas con **"Paso 5 de 5"** y tarjeta de título
-   *    `--teal-l`: *"¡Mesa garantizada!"* + *"Compartí el código para que se
-   *    sumen"*. Con eso se cae la nota que repetía lo mismo en un párrafo — y
-   *    que además todavía nombraba el saldo como método de garantía.
+   *  - Cabecera de flujo de dos filas —**sin contador de paso**, ver abajo— y
+   *    tarjeta de título `--teal-l`: *"¡Mesa garantizada!"* + *"Compartí el
+   *    código para que se sumen"*. Con eso se cae la nota que repetía lo mismo
+   *    en un párrafo — y que además todavía nombraba el saldo como método de
+   *    garantía.
    *  - **El código es el protagonista**: mono, grande, y tocarlo copia.
    *  - **"Compartir por WhatsApp"**, no "Compartir link" genérico: es el canal
    *    real. Fondo `#075E54`, el teal oscuro histórico de la marca y **no** el
@@ -1421,6 +1422,26 @@ export function CreateMesaFlow() {
    * cambiaría el contenido, o sea la clave, o sea una segunda mesa con un
    * segundo hold por el total — que es exactamente lo que B-06 evita. Lleva a la
    * mesa, que además es donde el organizador tiene que ir a elegir lo suyo.
+   *
+   * **Y por eso ya no se llama "Volver" (Diseño, 2026-08-04).** El destino era
+   * correcto y el nombre no: *un control que dice "Volver" y no retrocede es
+   * una etiqueta que miente*. Pasa a **"Ver mesa"**, con ícono de plato y sin
+   * flecha de retroceso.
+   *
+   * El renombre resuelve además algo que esta pantalla había perdido: al pasar
+   * el CTA del pie al círculo con casa, **nada le decía al organizador que
+   * todavía le falta elegir lo suyo**. El camino existía —casa → Inicio → la
+   * burbuja de la mesa— pero ningún control lo nombraba. Ahora lo nombra, **sin
+   * agregar un segundo botón**: es el mismo control.
+   *
+   * **Se retira "Paso 5 de 5"** por lo mismo. "Ver mesa" no es un paso hacia
+   * atrás del asistente sino una salida lateral a la mesa en vivo; contar pasos
+   * al lado de un control que no navega el asistente ya no significa nada.
+   *
+   * El destino se verificó antes de cablear, y no hubo nada que recablear:
+   * `navigate('mesa', code)` **ya era** Mis ítems (§1.5) —`#/mesa/:code` monta
+   * `MesaScreen`, que es esa pantalla— y acepta el código. Lo único que estaba
+   * mal era cómo se llamaba el control.
    */
   if (step === 'share' && created) {
     const code = created.mesa.code;
@@ -1435,7 +1456,8 @@ export function CreateMesaFlow() {
         <AppHeaderFlow
           paymeId={session?.user?.payme_id}
           onBack={() => navigate('mesa', code)}
-          step="Paso 5 de 5"
+          backLabel="Ver mesa"
+          backIcon="tools-kitchen-2"
         />
         <div className="title-card">
           <h1 className="title-card-title">¡Mesa garantizada!</h1>

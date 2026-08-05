@@ -79,4 +79,31 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
     expect(texto).toContain(mesa.code);
     expect(texto).toContain(mesa.token);
   });
+
+  /**
+   * La cuarta ausencia, y la última que llegó (Diseño, 2026-08-04).
+   *
+   * El control de la cabecera **no retrocede**: va a la mesa, porque volver a
+   * División abriría una segunda mesa con un segundo hold (B-06). Mientras se
+   * llamó "Volver" fue una etiqueta que mentía; ahora dice **"Ver mesa"**.
+   *
+   * Se afirman las dos mitades. Sólo pedir "Ver mesa" dejaría pasar que
+   * conviviera con un "Volver" —el modo en que estas cosas se "arreglan" de
+   * buena fe: agregando, no cambiando— y sólo pedir la ausencia de "Volver"
+   * pasaría si no hubiera ningún control.
+   *
+   * Y **el contador de paso se retira**: "Ver mesa" no navega el asistente, así
+   * que "Paso 5 de 5" al lado suyo ya no significa nada. Es una ausencia igual
+   * que las otras tres, y se rompe igual de fácil — copiando la cabecera de
+   * cualquiera de los otros cuatro pasos, que sí lo llevan.
+   */
+  test('el control de la cabecera dice "Ver mesa", y no queda contador de paso', async ({ page }) => {
+    await ingresar(page);
+    await abrirMesaConLink(page);
+
+    await expect(page.getByRole('button', { name: 'Ver mesa', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Volver', exact: true })).toHaveCount(0);
+
+    await expect(page.getByText(/Paso \d+ de \d+/)).toHaveCount(0);
+  });
 });

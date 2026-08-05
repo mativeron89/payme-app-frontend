@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 
 /**
  * Cabecera navy de borde curvo y pestañas en burbuja —
@@ -153,6 +153,8 @@ export function AppHeaderBack({
 export function AppHeaderFlow({
   paymeId,
   onBack,
+  backLabel = 'Volver',
+  backIcon = 'arrow-left',
   step,
   action,
   compact,
@@ -160,6 +162,21 @@ export function AppHeaderFlow({
   /** `payme_id` de la sesión. Si falta, la fila 1 va sólo con el logo. */
   paymeId?: string;
   onBack: () => void;
+  /**
+   * Qué dice y qué ícono lleva el control de la fila 2. Por defecto retrocede.
+   *
+   * Existen porque **§1.7 Compartir no retrocede**: cuando esa pantalla se
+   * muestra la mesa ya existe y la garantía ya está autorizada, así que volver
+   * a División abriría una segunda mesa con un segundo hold (B-06). Su control
+   * va a la mesa, y un control que dice "Volver" y no retrocede **es una
+   * etiqueta que miente**. Por eso el nombre y el glifo son de quien lo usa, y
+   * la flecha de retroceso se puede sacar.
+   *
+   * No se agrega un segundo botón a la pantalla: es el MISMO control, con
+   * destino corregido y nombre honesto.
+   */
+  backLabel?: string;
+  backIcon?: IconName;
   /** Ej.: "Paso 3 de 5". */
   step?: ReactNode;
   /**
@@ -178,8 +195,8 @@ export function AppHeaderFlow({
       </div>
       <div className="hdr-row hdr-row-2">
         <button type="button" className="hdr-back" onClick={onBack}>
-          <Icon name="arrow-left" size={20} />
-          Volver
+          <Icon name={backIcon} size={20} />
+          {backLabel}
         </button>
         {step && <span className="hdr-step">{step}</span>}
         {action}

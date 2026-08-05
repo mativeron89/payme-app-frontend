@@ -44,9 +44,10 @@ test.describe('el camino de pago completo', () => {
     await expect(page.getByText(mesa.code, { exact: true })).toBeVisible();
 
     // §1.7 · el CTA es el círculo con casa, que cierra el flujo. El atajo a la
-    // mesa —donde el organizador elige lo suyo— es "Volver": la mesa YA existe
-    // y está garantizada, así que retroceder a División está prohibido (B-06).
-    await page.getByRole('button', { name: 'Volver', exact: true }).click();
+    // mesa —donde el organizador elige lo suyo— es **"Ver mesa"**, no "Volver":
+    // la mesa YA existe y está garantizada, así que retroceder a División está
+    // prohibido (B-06), y un control que dice "Volver" y no retrocede miente.
+    await page.getByRole('button', { name: 'Ver mesa', exact: true }).click();
     await expect(page.getByText(new RegExp(`Mesa ${mesa.code}`))).toBeVisible();
     await expect(page.getByText('$840.00')).toBeVisible();
 
@@ -92,7 +93,7 @@ test.describe('el camino de pago completo', () => {
   test('la propina se recalcula: 0% deja el total en la parte exacta', async ({ page }) => {
     await ingresar(page);
     await abrirMesaConLink(page);
-    await page.getByRole('button', { name: 'Volver', exact: true }).click();
+    await page.getByRole('button', { name: 'Ver mesa', exact: true }).click();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('button', { name: 'Continuar' }).click();
 

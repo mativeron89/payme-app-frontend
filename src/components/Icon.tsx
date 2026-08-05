@@ -60,6 +60,26 @@ const GLYPHS = {
     f: ['M12 3.5l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6Z', 'M18.7 13.5l.9 2.2 2.2.9-2.2.9-.9 2.2-.9-2.2-2.2-.9 2.2-.9Z', 'M6 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z'],
   },
   dining: { d: ['M12 19.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15Z', 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z'] },
+  /**
+   * SPEC_APP.md §1.7 · el control "Ver mesa" de Compartir. El spec lo nombra
+   * `ti-tools-kitchen-2` y lo describe como *"ícono de plato"*, agregando entre
+   * paréntesis *"el mismo que usa la categoría de restaurante en otras
+   * pantallas"*. **Esas dos cosas no son la misma acá**, y por eso el glifo es
+   * propio en vez de reusar `dining`:
+   *
+   *  - `dining` son dos círculos concéntricos —un plato visto desde arriba— y a
+   *    tamaño chico **se lee como una diana**. No es una opinión: §1.8 ya lo
+   *    había medido a 26px y por eso puso `store` en la tarjeta de invitación.
+   *    Acá el control de la cabecera va a **20px**, o sea peor. Verificado
+   *    mirándolo a 375px antes de dibujar esto.
+   *  - `tools-kitchen-2` es cubierto —tenedor y cuchillo—, que a 20px sí se lee.
+   *
+   * Se dibuja acá y no se trae de ninguna parte: el set es propio y sin
+   * dependencias (T-D3), y esto es un glifo más en la misma grilla 24×24.
+   */
+  'tools-kitchen-2': {
+    d: ['M8 12v9', 'M5 3v6a3 3 0 0 0 6 0V3', 'M19 3v12h-3.5c0-4.6 1.2-8.8 3.5-12', 'M19 15v6'],
+  },
   pasta: { d: ['M4 12h16a8 8 0 0 1-16 0Z', 'M6 9c1-1.5 2.5-1.5 3.5 0S12 10.5 13 9s2.5-1.5 3.5 0', 'M7.5 6c1-1.2 2-1.2 3 0s2 1.2 3 0'] },
   sushi: { d: ['M12 18c5 0 9-1.3 9-3V9c0 1.7-4 3-9 3s-9-1.3-9-3v6c0 1.7 4 3 9 3Z', 'M12 12c5 0 9-1.3 9-3s-4-3-9-3-9 1.3-9 3 4 3 9 3Z', 'M12 9.8a3 1.2 0 1 0 0-2.4 3 1.2 0 0 0 0 2.4Z'] },
   taco: { d: ['M3 17a9 9 0 0 1 18 0Z', 'M6.5 13.5c.8-.9 1.7-.9 2.5 0s1.7.9 2.5 0 1.7-.9 2.5 0 1.7.9 2.5 0'] },
