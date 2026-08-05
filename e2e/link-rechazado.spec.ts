@@ -38,8 +38,17 @@ test.describe('el 403 es ciego', () => {
       await ingresar(page);
       await page.goto(`/#/mesa/PA-0001?t=${token}`);
 
-      await expect(page.getByText('Este link ya no funciona')).toBeVisible();
-      await expect(page.getByText('Pedile a quien te invitó que te comparta uno nuevo.')).toBeVisible();
+      /**
+       * ⭐ `exact: true`, y no es cosmético. Con coincidencia por subcadena,
+       * agregarle *"Este link venció."* adelante al mismo texto **seguía
+       * pasando** — lo verifiqué con un mutante. Esta copy está ratificada
+       * palabra por palabra en `SPEC_APP.md` §1.2-B justamente porque no puede
+       * variar según el motivo: exigirla exacta es la forma honesta de decirlo.
+       */
+      await expect(page.getByText('Este link ya no funciona', { exact: true })).toBeVisible();
+      await expect(
+        page.getByText('Pedile a quien te invitó que te comparta uno nuevo.', { exact: true }),
+      ).toBeVisible();
 
       const cuerpo = await page.locator('body').innerText();
       // Ningún restaurante del seed. Nombrar uno diría que la mesa existe.
@@ -48,8 +57,13 @@ test.describe('el 403 es ciego', () => {
       }
       // Ni importes, ni comensales, ni estado de la mesa.
       expect(cuerpo).not.toMatch(/\$\d/);
-      // Y ninguna palabra que separe los cuatro motivos.
-      for (const m of ['vencid', 'expirad', 'cancelad', 'reemplazad', 'supersedid']) {
+      /**
+       * Y ninguna palabra que separe los cuatro motivos. **Raíces, no palabras
+       * completas**: la primera versión listaba `vencid` y no atrapó `venció`,
+       * que es la forma más obvia de todas. Una lista de prohibidos ya defiende
+       * poco; una que además falla la conjugación no defiende nada.
+       */
+      for (const m of ['venc', 'expir', 'caduc', 'cancel', 'reemplaz', 'supersed', 'anulad']) {
         expect(cuerpo.toLowerCase(), `separó el motivo "${m}"`).not.toContain(m);
       }
     });
