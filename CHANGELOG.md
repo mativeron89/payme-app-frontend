@@ -1,5 +1,74 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.38.0 — ORDEN 5 · Playwright, y las dos anclas cerradas (2026-08-05)
+
+Entra un runner de navegador, **autorizado por Mati en orden propia**. No
+reemplaza nada: los 479 tests de vitest siguen donde estaban. Playwright se suma
+arriba, con carpeta propia (`e2e/`) y `test.include` en vitest para que cada
+runner mire lo suyo.
+
+- **Cuatro recorridos, y no más.** Los tests de navegador son lentos y frágiles:
+  se usan para los caminos donde una falla significa que alguien con la tarjeta
+  en la mano no puede terminar. Lo que se puede probar sin navegador se sigue
+  probando sin navegador.
+  1. **Atrás no revive el token** de un link terminal — cierra el ancla de 4B.
+  2. **`#/cargar` y `#/transferir` no son alcanzables** — cierra el ancla de 4C.
+  3. **El camino de pago completo**, que nunca se había recorrido entero.
+  4. **El 403 de un link no delata si la mesa existe.**
+- **Un solo proyecto, y es un teléfono** (390×844 con touch). Esta app se usa en
+  la mesa de un restaurante. Queda anotado que **Safari es el navegador de más
+  riesgo** —el link llega por WhatsApp y se abre en un WebView de iOS— y que esto
+  **no lo cubre**: sólo se descargó Chromium.
+- **Puerto 5176 con `strictPort`**, propio. El 5174 es `npm run dev` y el 5175 el
+  riel de mock de otra sesión: no se le pisa la configuración corriendo a nadie,
+  y si el puerto está ocupado **falla** en vez de correr contra otra cosa.
+
+### 🔴 Un defecto encontrado, NO arreglado, esperando orden
+
+**Después de un canje exitoso, "Ver mis ítems" no hace nada y la persona queda
+encerrada en la pantalla de felicitación.** La custodia retira el token, la URL
+queda en `#/mesa/PA-XXXX`, y el botón asigna **ese mismo hash**: asignarlo no
+dispara `hashchange`, el router no se entera, no hay re-render y
+`JoinMesaScreen` sigue montada. No es artefacto del test —es el camino normal
+del link de WhatsApp— y §1.2-C no tiene barra inferior, así que la única salida
+es el Atrás del navegador o recargar.
+
+Queda como `test.fixme`: registrado en código, no en una nota. Es un cambio de
+navegación sobre una pantalla del flujo de dinero y esta orden era escribir
+recorridos, no cambiar comportamiento.
+
+### Dos tests míos que los mutantes encontraron flojos
+
+Lo registro porque el hallazgo no es el arreglo, es **cómo apareció**: los dos
+recorridos estaban verdes y **acreditaban algo que no ejercitaban**.
+
+- **El recorrido de 4B no probaba el arreglo de 4B.** Revertido el
+  `stripTokenFromUrl()` del terminal, los cuatro tests seguían verdes. En un
+  navegador de verdad `sessionStorage` **funciona**, así que la URL se limpia en
+  la apertura y la línea que 4B agregó nunca corre. El defecto vive **sólo** en
+  el estado degradado —storage que acepta la escritura y no persiste, que es
+  justo el WebView donde se abre un link de WhatsApp—. Se agregaron dos casos que
+  **rompen el storage dentro de Chromium**: el terminal limpiando la URL, y su
+  complemento —que hasta el canje **no** la toque, porque perder el token deja a
+  la persona registrada y afuera de la mesa—.
+- **El recorrido del 403 no atrapaba una copy que filtra el motivo.** Dos causas
+  que se tapaban: `getByText` coincide por **subcadena**, así que agregarle *"Este
+  link venció."* adelante seguía matcheando; y la lista de motivos decía `vencid`
+  y no atrapó `venció`. Ahora la copy se exige **exacta** —está ratificada palabra
+  por palabra en §1.2-B justamente porque no puede variar según el motivo— y la
+  lista pasó a **raíces**. El test de comparación entre una mesa que existe y una
+  que no **no alcanzaba solo**: las dos pantallas cambian juntas.
+- **Cinco mutantes finales, los cinco muertos**: revertir 4B (1 test), neutralizar
+  `replaceRoute('home')` (5), filtrar el motivo en el body (3) y en el título (3),
+  y volver reintentable el link incompleto (1).
+
+### Método
+
+Cero `waitForTimeout` — se espera a que algo **sea visible**, nunca a que pase el
+tiempo. Selectores por rol y texto visible, nunca CSS: un `.tk-row` se renombra
+en el próximo commit de diseño. Tests independientes, sin orden ni estado
+compartido: cada uno abre su contexto y su mesa.
+
 ## 0.37.0 — ORDEN 4 · custodia del token y rutas del riel saldo (2026-08-05)
 
 Dos defectos que tenían la misma forma: **una defensa declarada que nadie
