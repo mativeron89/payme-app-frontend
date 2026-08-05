@@ -1,5 +1,42 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.33.0 — ORDEN VISUAL · tokens y esqueleto del sistema de diseño (2026-08-05)
+
+Pasos 1 y 2 de la orden visual. **Ninguna pantalla cambió todavía**: entra el
+vocabulario y entra el esqueleto, y las pantallas los adoptan de a una.
+
+- **Los tokens de `SISTEMA_DISENO.md` §1–§3 viven en `global.css`**: color
+  (marca, acción, superficie, texto, semánticos con su tinte propio), la escala
+  tipográfica de seis tamaños con line-heights, la mono, espaciado base 4, tres
+  radios, tres elevaciones y el área táctil mínima.
+- **Hubo que liberar el namespace antes.** La escala del sistema reusa
+  `--fs-sm` y `--fs-xs` con **otros** valores (12.5→14 y 11.5→12). Definirla sin
+  más habría movido 44 usos de tamaño en silencio, que es justo lo que el paso 1
+  prohíbe. La escala vieja pasó a `--fs-legacy-*` en un rename mecánico: mismo
+  valor, otro nombre, cero pixel movido. Quedan **100 usos** de deuda contada.
+- **`designTokens.test.ts` re-mide los contrastes**, que es lo que el sistema
+  exige cada vez que se toca un hex — aritmética WCAG pura sobre el CSS leído
+  como texto, sin jsdom ni librería de render. Fija también las prohibiciones:
+  blanco sobre `--brand` (2.84), `--brand` como texto (2.6) y el teal como texto
+  (2.19) siguen reprobando, que es por qué existen `--brand-fg`, `--brand-ink`
+  y `--link`.
+- **Discrepancia encontrada al automatizar la medición:** `--text` sobre `--bg`
+  da **15.21:1**, no 15.4 como declara `SISTEMA_DISENO.md` en dos lugares.
+  Tampoco corresponde a las otras dos superficies (16.36 y 15.64), así que no es
+  un fondo confundido. Sin consecuencia de accesibilidad —el mínimo AA es 4.5—
+  pero el documento dice que todo ratio está medido. Se fija el valor real; el
+  documento es de la conversación de Diseño y no se edita desde este repo.
+- **Los tres componentes de estructura de §5 bis**, sin call sites: cabecera
+  navy de borde curvo (primer nivel, subpantalla y la compacta de la entrada por
+  link), pestañas en burbuja fusionadas a la tarjeta, y la barra inferior de
+  cinco posiciones con centro configurable — `+` Nueva, `→` Continuar o cámara
+  y "Capturar" según la pantalla, porque lo fijo es el componente y su posición,
+  no el texto.
+- `test.css` habilitado en `vite.config.ts`: vitest reemplaza todo módulo CSS
+  por un stub vacío por default y el import `?raw` llegaba como `""`. Se usó
+  `?raw` y no `node:fs` para no incorporar `@types/node` — dependencia nueva,
+  prohibida sin OK previo de Mati.
+
 ## 0.32.0 — ORDEN 3A · custodia del token, rutas del riel y espejo (2026-08-04)
 
 - **El espejo estaba mal contado, y el número era lo de menos.** El comando de
