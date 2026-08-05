@@ -1,5 +1,36 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.35.0 — ORDEN VISUAL · División (2026-08-05)
+
+- **`SPEC_APP.md` §1.4 · División**, la primera pantalla del flujo de armar
+  mesa que adopta el sistema.
+  - **Cabecera de flujo, la tercera variante** (§1.3): dos filas en la banda
+    navy — logo + `payme_id`, y debajo "Volver" con el contador de paso. Entra
+    como `AppHeaderFlow` en el componente compartido porque §1.3–§1.6 la usan
+    todas, no como markup suelto de esta pantalla.
+  - Tarjeta de título `--teal-l` montada sobre la banda.
+  - **La selección deja el naranja y pasa a teal**: dentro de una tarjeta el
+    naranja ya no marca estado. Y no es sólo el borde — el radio se llena.
+  - **El importe por persona sube a `--fs-h1` y se recalcula en vivo** con el
+    stepper, anunciado con `aria-live`. Antes era una píldora de 13px al
+    costado: es el dato que la persona está buscando y estaba en letra chica.
+  - Barra de cinco posiciones con "Continuar" en el centro, sin ítem activo.
+    Deja salir del flujo a mitad de camino, a propósito; verificado que en este
+    paso no hay nada congelado todavía, así que irse no deja ninguna operación
+    monetaria a medias.
+  - Área táctil del stepper a 44×44 y el subtexto de las tarjetas de 12px a
+    `--fs-sm` — era información por debajo del mínimo del sistema.
+- **Ticket sigue sin tocarse**: §1.4 tiene un pendiente explícito —si el
+  celeste de la tarjeta de título es el estándar o es específico de División—
+  que termina en *"No tocar Ticket hasta confirmar"*. Elevado, sin respuesta
+  todavía.
+- **Inicio (§1.1) sigue frenado** por la pregunta abierta de §5: dónde va la
+  invitación pendiente. El esqueleto nuevo no tiene lugar donde el banner de
+  hoy entre sin romper el enganche entre la pestaña activa y la tarjeta, así
+  que preservarlo obligaría a elegir por la puerta de atrás. Queda para la
+  decisión de Mati.
+- Deuda: `--fs-legacy-*` 112 → 111 · bloques `style={{…}}` 370 → 368.
+
 ## 0.34.0 — ORDEN VISUAL · entrada por link y Avisos (2026-08-05)
 
 Paso 3 de la orden visual: las primeras pantallas que adoptan el sistema. Los
