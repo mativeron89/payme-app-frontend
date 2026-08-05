@@ -8,9 +8,31 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-08-04** (tercero del día · ORDEN 3A).
 - Fuente local: `../payme-app-backend`.
-- Commit exacto: `39c9f7283488827c72daf94fb6c7a949036b43d9`.
-- Versión de `package.json`: **2.34.2**.
+- Commit exacto: `a79938e306a7c3f2e7aae7eedd4cd43c5ae9e405`.
+- Versión de `package.json`: **2.34.4**.
 - Rama fuente: `codex/audit-2026-08-02-app-backend`.
+
+### ORDEN 5 · el espejo NO quedó atrasado, y esto lo dice sin ambigüedad
+
+El refresh se hizo contra `39c9f72` (v2.34.2) y el backend avanzó después a
+`a79938e` (v2.34.4). **Ningún byte del espejo cambió**, y es verificable: entre
+las dos versiones el backend tocó **sólo `package.json` y `tests/http.test.js`**
+—dos arreglos de un flake de PQ-2—, y **ninguno de los dos está espejado**.
+
+La verificación de ORDEN 5 contra `a79938e` dio **70 idénticos · 0 diferencias ·
+0 sin fuente**, sin copiar nada.
+
+**Por qué se actualiza igual la procedencia:** declararla en `39c9f72` mientras
+los bytes corresponden también a `a79938e` hace creer que el espejo está
+atrasado dos versiones — de hecho pasó, y motivó esta verificación. Un texto que
+describe un estado que no es, es una orden latente. El hash apunta ahora al
+commit contra el que la paridad está **verificada**, que es lo que la
+procedencia debe significar.
+
+**Límite declarado:** `contractMirror.test.ts` valida que el hash tenga 40
+caracteres, **no** que sea el HEAD del backend — no puede, porque
+`../payme-app-backend` está fuera de la raíz de Vite. Que la procedencia esté al
+día se acredita corriendo el script, no con la suite.
 
 Ese commit es un candidato **local** de auditoría. No se afirma push, CI remoto,
 deploy, Railway, Stripe real ni producción. Las corridas de suite que el emisor
