@@ -1,58 +1,36 @@
-import type { StripeCardElement } from '@stripe/stripe-js';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK, newIdempotencyKey } from '../api';
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '../api';
 import { useWalletRail } from '../api/walletRail';
-import {
-  CardSetupAttemptError,
-  clearCardSetupAttempt,
-  readCardSetupAttempt,
-  writeCardSetupAttempt,
-  type CardSetupAttemptState,
-} from '../api/cardSetupAttempt';
-import { extractApiError } from '../api/errors';
-import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
-import { loadSession, type StoredSession } from '../api/storage';
-import { confirmCardSetup } from '../api/stripe';
-import { CardField, type CardFieldState } from '../components/CardField';
-import type { BalanceResponse, HistoryEntry, PaymentMethod, StatsResponse, WalletTransaction } from '../api/types';
+import { accountRailView } from '../api/releaseGates';
+import type { BalanceResponse, HistoryEntry, StatsResponse, WalletTransaction } from '../api/types';
+import { CardsPanel } from '../components/CardsPanel';
 import { Icon } from '../components/Icon';
-import { CardBrandChip, TopBar, useToast } from '../components/ui';
-import { navigate } from '../router';
+import { TopBar } from '../components/ui';
+import { navigate, useRoute } from '../router';
 import { formatMXN } from '../utils/format';
 import { walletTxIcon, walletTxLabel } from '../utils/labels';
-import { createInFlightMutex } from '../utils/inFlight';
-import { accountRailView } from '../api/releaseGates';
+import { TarjetasScreen } from './TarjetasScreen';
 
-/** s-account: saldo + tabs Historial / Tarjetas (GET balance, wallet-transactions, payment-methods). */
-
-interface CardSetupAttempt extends CardSetupAttemptState {
-  clientSecret?: string;
-}
-
-type CardRetryStage = 'none' | 'setup' | 'attach';
-
-function currentCardSetupSession(origin: StoredSession): StoredSession | null {
-  const current = loadSession();
-  return current &&
-    current.principal_id === origin.principal_id &&
-    current.family_id === origin.family_id
-    ? current
-    : null;
-}
-
-function assertCardSetupOrigin(origin: StoredSession): StoredSession {
-  const current = currentCardSetupSession(origin);
-  if (!current) throw new CardSetupAttemptError('card_setup_actor_changed');
-  return current;
-}
-
-function initialCardAttempt(): { attempt: CardSetupAttempt | null; error: string | null } {
-  try {
-    return { attempt: readCardSetupAttempt(), error: null };
-  } catch {
-    return { attempt: null, error: 'No podemos verificar el alta anterior de tarjeta. No vamos a crear otra hasta recuperar el estado local.' };
-  }
-}
+/**
+ * `s-account` — la Cuenta VIEJA.
+ *
+ * §1.11 la absorbió: sus contenidos son ahora tres pantallas propias que
+ * lanzan las pestañas de Inicio. Este archivo queda por dos razones y ninguna
+ * es inercia:
+ *
+ * 1. **Es el ruteo de esas tres.** `#/cuenta/tarjetas`, `#/cuenta/pagos` y
+ *    `#/cuenta/estadisticas` entran por acá. Se resolvió con el parámetro que
+ *    el router ya soporta en vez de con tres `PageId` nuevas para **no tocar
+ *    `src/App.tsx`**, que tiene una batería de tests de rutas wallet con ocho
+ *    mutantes y no conviene mover por un cambio de diseño.
+ * 2. **Sigue siendo alcanzable** desde la barra vieja (Amigos, Grupos, Perfil)
+ *    y desde una fila de Perfil, que son pantallas que §1.9 todavía no
+ *    convirtió. Cuando lo haga, este archivo se retira entero.
+ *
+ * Lo que era su pestaña "Tarjetas" ya no vive acá: monta `CardsPanel`, el
+ * mismo componente que usa `TarjetasScreen`. **Una sola copia de la máquina de
+ * alta de tarjeta** — dos serían dos formas de crear una tarjeta de más.
+ */
 
 function txDate(iso: string): string {
   const d = new Date(iso);
@@ -127,21 +105,22 @@ function CategoryPie({ slices }: { slices: Array<[string, number]> }) {
   );
 }
 
+/**
+ * Sub-ruteo de la sección Cuenta. `#/cuenta/<algo>` monta la pantalla real de
+ * §1.11; `#/cuenta` a secas cae en la Cuenta vieja de abajo. Entra con
+ * `tarjetas`; `pagos` y `estadisticas` llegan en sus propios commits.
+ *
+ * Un parámetro desconocido **no rompe ni redirige**: cae en la vieja, que es
+ * una superficie válida. Inventar un 404 acá sería peor que llegar a una
+ * pantalla que existe.
+ */
 export function CuentaScreen() {
-  const toast = useToast();
-  const initialAttempt = useRef(initialCardAttempt()).current;
-  const [adding, setAdding] = useState(!!initialAttempt.attempt || !!initialAttempt.error);
-  const [busyCard, setBusyCard] = useState(false);
-  const addCardInFlightRef = useRef(createInFlightMutex());
-  const cardAttemptRef = useRef<CardSetupAttempt | null>(initialAttempt.attempt);
-  const [cardRetryStage, setCardRetryStage] = useState<CardRetryStage>(initialAttempt.attempt?.stage ?? 'none');
-  const [cardSetupBlocked, setCardSetupBlocked] = useState<string | null>(initialAttempt.error);
-  const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
-  const [cardState, setCardState] = useState<CardFieldState>({
-    complete: false,
-    error: null,
-    empty: true,
-  });
+  const { param } = useRoute();
+  if (param === 'tarjetas') return <TarjetasScreen />;
+  return <CuentaVieja />;
+}
+
+function CuentaVieja() {
   // OLA 5D · las DOS decisiones vienen del backend y por campos SEPARADOS:
   // el riel saldo y la actividad de cuenta card-only no comparten variable.
   const { walletRailEnabled, accountActivity } = useWalletRail();
@@ -161,7 +140,6 @@ export function CuentaScreen() {
   const tab = accountView.showAccountActivity ? tabElegida : 'tarjetas';
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [txs, setTxs] = useState<WalletTransaction[] | null>(null);
-  const [pms, setPms] = useState<PaymentMethod[] | null>(null);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
@@ -178,15 +156,6 @@ export function CuentaScreen() {
     }
     return [...sums.entries()].sort((a, b) => b[1] - a[1]);
   }, [history]);
-
-  function loadPms() {
-    api.getPaymentMethods().then((r) => setPms(r.payment_methods)).catch(() => setPms([]));
-  }
-
-  // Tarjetas: card-only puro, no depende de ninguna capability.
-  useEffect(() => {
-    loadPms();
-  }, []);
 
   /**
    * ⚠️ UN EFECTO POR CAPABILITY, CON SU DEPENDENCIA. Ver el docblock gemelo en
@@ -222,159 +191,6 @@ export function CuentaScreen() {
       alive = false;
     };
   }, [accountView.showAccountActivity]);
-
-  async function setDefault(id: string) {
-    try {
-      await api.setDefaultPaymentMethod(id);
-      loadPms();
-    } catch {
-      toast('No se pudo actualizar');
-    }
-  }
-
-  async function removePm(pm: PaymentMethod) {
-    if (!window.confirm(`¿Quitar la tarjeta terminada en ${pm.last_four}?`)) return;
-    try {
-      await api.removePaymentMethod(pm.id);
-      toast('Tarjeta eliminada');
-      loadPms();
-    } catch {
-      toast('No se pudo eliminar');
-    }
-  }
-
-  /**
-   * Alta de tarjeta: SetupIntent en el backend → Stripe confirma y devuelve el
-   * `pm_…` → se registra. La tarjeta nunca pasa por PayMe.
-   */
-  async function addCard() {
-    if (!addCardInFlightRef.current.tryEnter()) return;
-    if (cardSetupBlocked) {
-      toast(cardSetupBlocked);
-      addCardInFlightRef.current.leave();
-      return;
-    }
-    const origin = loadSession();
-    if (!origin) {
-      toast('Tu sesión ya no está disponible. Volvé a ingresar antes de guardar una tarjeta.');
-      addCardInFlightRef.current.leave();
-      return;
-    }
-    setBusyCard(true);
-    try {
-      assertCardSetupOrigin(origin);
-      let attempt = cardAttemptRef.current;
-      if (!attempt) {
-        attempt = {
-          setupKey: newIdempotencyKey(),
-          setAsDefault: pms?.length === 0,
-          stage: 'setup',
-        };
-        // Durable ANTES de red: un reload reusa el mismo SetupIntent.
-        writeCardSetupAttempt(attempt, origin);
-        cardAttemptRef.current = attempt;
-        setCardRetryStage('setup');
-      }
-
-      if (!attempt.clientSecret && !attempt.paymentMethodId) {
-        const setup = await api.createSetupIntent(attempt.setupKey, assertCardSetupOrigin(origin));
-        assertCardSetupOrigin(origin);
-        attempt = { ...attempt, clientSecret: setup.client_secret };
-        cardAttemptRef.current = attempt;
-      }
-
-      if (!attempt.paymentMethodId) {
-        // En mock el id deriva de la key, para que incluso una excepción entre
-        // materialización y attach vuelva a la MISMA tarjeta.
-        let pmId = `pm_mock_${attempt.setupKey.replace(/[^a-zA-Z0-9]/g, '')}`;
-        if (!IS_MOCK) {
-          if (!cardEl || !attempt.clientSecret) {
-            setCardState((s) => ({ ...s, error: 'Cargá los datos de la tarjeta para continuar.' }));
-            setCardRetryStage('setup');
-            return;
-          }
-          assertCardSetupOrigin(origin);
-          const res = await confirmCardSetup(attempt.clientSecret, cardEl);
-          assertCardSetupOrigin(origin);
-          if ('error' in res) {
-            if (res.definitive) {
-              try {
-                clearCardSetupAttempt(attempt.setupKey, origin);
-                cardAttemptRef.current = null;
-                setCardRetryStage('none');
-              } catch {
-                setCardSetupBlocked('El banco rechazó la tarjeta, pero no pudimos limpiar el intento local. No vamos a reenviarlo.');
-              }
-            } else {
-              setCardRetryStage('setup');
-            }
-            setCardState((s) => ({ ...s, error: res.error }));
-            return;
-          }
-          pmId = res.paymentMethodId;
-        }
-        attempt = { ...attempt, stage: 'attach', paymentMethodId: pmId };
-        cardAttemptRef.current = attempt;
-        // El pm_ no es secreto; persistirlo permite que reload reintente el
-        // attach derivado/idempotente sin crear otro SetupIntent ni tarjeta.
-        writeCardSetupAttempt(attempt, origin);
-        setCardRetryStage('attach');
-      }
-
-      const paymentMethodId = attempt.paymentMethodId;
-      if (!paymentMethodId) throw new Error('payment_method_materialization_ambiguous');
-      assertCardSetupOrigin(origin);
-      await api.attachPaymentMethod(
-        paymentMethodId,
-        attempt.setAsDefault,
-        assertCardSetupOrigin(origin),
-      );
-      assertCardSetupOrigin(origin);
-      // Fresh 201 y replay 200 son el mismo éxito contractual: recién acá
-      // se rota la key de setup y se olvida el pm_ materializado.
-      clearCardSetupAttempt(attempt.setupKey, origin);
-      cardAttemptRef.current = null;
-      setCardRetryStage('none');
-      setCardSetupBlocked(null);
-      toast('Tarjeta guardada ✓');
-      setAdding(false);
-      setCardEl(null);
-      setCardState({ complete: false, error: null, empty: true });
-      loadPms();
-    } catch (err) {
-      if (err instanceof CardSetupAttemptError) {
-        if (err.message === 'card_setup_actor_changed') return;
-        const message = 'No pudimos guardar de forma segura el estado de esta alta. No vamos a enviar otra operación.';
-        setCardSetupBlocked(message);
-        toast(message);
-        return;
-      }
-      const failure = extractApiError(err);
-      const definitive = isDefinitiveMutationError(failure.code, failure.status);
-      if (definitive) {
-        const setupKey = cardAttemptRef.current?.setupKey;
-        try {
-          if (setupKey) clearCardSetupAttempt(setupKey, origin);
-          cardAttemptRef.current = null;
-          setCardRetryStage('none');
-        } catch {
-          setCardSetupBlocked('El rechazo fue definitivo, pero no pudimos limpiar el intento local. No vamos a reenviarlo.');
-        }
-      } else {
-        setCardRetryStage(cardAttemptRef.current?.paymentMethodId ? 'attach' : 'setup');
-      }
-      toast(
-        isServiceUnavailable(failure.status)
-          ? 'El servicio no pudo confirmar la tarjeta. Reintentá esta misma operación; no agregues otra.'
-          : definitive
-            ? 'No pudimos guardar la tarjeta. Revisá los datos y probá de nuevo.'
-            : 'No pudimos confirmar si la tarjeta se guardó. Reintentá la misma operación: no vamos a crear otra.',
-      );
-    } finally {
-      addCardInFlightRef.current.leave();
-      setBusyCard(false);
-    }
-  }
 
   return (
     // T-F1: Cuenta es pestaña de la nav — sin flecha atrás, con aire para la barra.
@@ -524,103 +340,7 @@ export function CuentaScreen() {
         {tab === 'tarjetas' && (
           <>
             <div className="sectlabel">Tarjetas guardadas</div>
-            {pms === null && <div className="loading">Cargando tarjetas…</div>}
-            {pms?.length === 0 && (
-              <div className="empty">
-                <div className="emoji"><Icon name="card" size={40} /></div>
-                No tenés tarjetas guardadas.
-              </div>
-            )}
-            {pms?.map((pm) => (
-              <div key={pm.id} className="card card-p" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <CardBrandChip brand={pm.brand} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 'var(--fs-legacy-base)' }}>{pm.bank_name ?? pm.brand}</div>
-                  <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'var(--gray-txt)', fontFamily: 'monospace' }}>
-                    ···· {pm.last_four} · {pm.type === 'credit' ? 'Crédito' : 'Débito'}
-                  </div>
-                </div>
-                {pm.is_default ? (
-                  <span className="badge badge-teal">Principal</span>
-                ) : (
-                  <button className="login-toggle" style={{ padding: 4 }} onClick={() => setDefault(pm.id)}>
-                    Hacer principal
-                  </button>
-                )}
-                <button
-                  className="back-btn"
-                  style={{ width: 30, height: 30, fontSize: 'var(--fs-legacy-base)' }}
-                  aria-label={`Quitar tarjeta ${pm.last_four}`}
-                  onClick={() => removePm(pm)}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-            {adding ? (
-              <div className="card card-p" style={{ marginTop: 6 }}>
-                <div className="sectlabel">Nueva tarjeta</div>
-                {cardRetryStage !== 'none' && (
-                  <div className="note note-orange" style={{ marginBottom: 12 }} role="status">
-                    {cardRetryStage === 'attach'
-                      ? 'Esta tarjeta quedó sin confirmar. Reintentá la misma operación: conservamos el mismo registro y no vamos a generar otra.'
-                      : 'Esta alta quedó sin confirmar. Reintentá la misma operación: conservamos su clave.'}
-                  </div>
-                )}
-                {cardSetupBlocked && (
-                  <div className="form-error" role="alert" style={{ marginBottom: 12 }}>
-                    {cardSetupBlocked}
-                  </div>
-                )}
-                {cardRetryStage === 'attach' ? (
-                  <div className="caption" style={{ marginBottom: 12 }}>
-                    La tarjeta ya fue materializada por Stripe. Solo reintentaremos registrar esa misma referencia.
-                  </div>
-                ) : IS_MOCK ? (
-                  <div className="note note-teal" style={{ marginBottom: 12 }}>
-                    En la demo no pedimos datos reales: se agrega una tarjeta de ejemplo.
-                  </div>
-                ) : (
-                  <>
-                    <CardField onReady={setCardEl} onChange={setCardState} />
-                    {cardState.error && (
-                      <div className="caption" style={{ color: 'var(--red)' }} role="alert">
-                        {cardState.error}
-                      </div>
-                    )}
-                    <div className="caption" style={{ marginBottom: 12 }}>
-                      Los datos van directo a Stripe: PayMe nunca ve el número completo.
-                    </div>
-                  </>
-                )}
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => {
-                      setAdding(false);
-                      setCardEl(null);
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={addCard}
-                    disabled={!!cardSetupBlocked || busyCard || (!IS_MOCK && cardRetryStage !== 'attach' && !cardState.complete)}
-                  >
-                    {busyCard
-                      ? 'Guardando…'
-                      : cardRetryStage === 'attach'
-                        ? 'Reintentar la misma tarjeta'
-                        : 'Guardar tarjeta'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button className="btn btn-ghost" style={{ marginTop: 6 }} onClick={() => setAdding(true)}>
-                + Agregar tarjeta
-              </button>
-            )}
+            <CardsPanel />
           </>
         )}
       </div>

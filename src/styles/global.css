@@ -3177,3 +3177,97 @@ body {
 .sk-line.w55 { width: 55%; }
 .sk-line.w70 { width: 70%; }
 .sk-line.w100 { width: 100%; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §1.11 · las tres pantallas que lanzan las pestañas: Tarjetas, Pagos y
+   Estadísticas. La pestaña lanza; el contenido completo vive acá.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Tarjetas ─── */
+.pm-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+}
+
+.pm-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.pm-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* El banco es lo que cede: puede ser largo y no identifica nada por sí solo. */
+.pm-bank {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Los últimos cuatro NO se truncan nunca: son lo único que distingue una
+   tarjeta de otra. Con banco y dígitos en un mismo texto, la elipsis se comía
+   los dígitos y quedaba "Santander ···· 4…". */
+.pm-last {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pm-state {
+  margin-top: var(--sp-2);
+}
+
+.pm-default {
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
+  color: var(--link);
+}
+
+.pm-meta {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* La ÚNICA fila punteada de la app que no significa "dato oculto": por eso
+   lleva el `+` y la palabra, nunca un ícono solo. */
+.pm-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: var(--tap-min);
+  margin-top: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-lg);
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--link);
+}
