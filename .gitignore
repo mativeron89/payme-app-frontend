@@ -10,4 +10,5 @@ dist/
 # …salvo la config de dev no-secreta (versionada a propósito: VITE_MOCK=1)
 # y los archivos de ejemplo.
 !.env.development
+!.env.mock
 !*.example
