@@ -18,7 +18,7 @@ import { LoginScreen } from './screens/LoginScreen';
 import { MesaScreen } from './screens/MesaScreen';
 import { MesasScreen } from './screens/MesasScreen';
 import { PagosScreen } from './screens/PagosScreen';
-import { PerfilScreen } from './screens/PerfilScreen';
+import { MasScreen } from './screens/MasScreen';
 import { TarjetasScreen } from './screens/TarjetasScreen';
 import { TopupScreen } from './screens/TopupScreen';
 import { TransferScreen } from './screens/TransferScreen';
@@ -142,8 +142,8 @@ function Shell() {
         return <FriendsScreen />;
       case 'grupos':
         return <GroupsScreen />;
-      case 'perfil':
-        return <PerfilScreen />;
+      case 'mas':
+        return <MasScreen />;
       case 'avisos':
         return <AvisosScreen />;
       /**

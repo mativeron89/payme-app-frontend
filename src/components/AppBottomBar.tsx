@@ -39,20 +39,26 @@ interface SideItem {
   page: PageId;
 }
 
-/**
- * `Más` apunta a `perfil` porque la pantalla Más todavía no existe y Perfil ES
- * hoy la lista de opciones (nombre, mail, cerrar sesión) que el spec dice que
- * va a vivir adentro de Más, junto con configuración (SPEC_APP.md §1.9).
- * Cuando exista la pantalla Más, este destino cambia acá y en ningún otro lado.
- */
 const LEFT: SideItem[] = [
   { slot: 'home', label: 'Inicio', icon: 'home', page: 'home' },
   { slot: 'mesas', label: 'Mesas', icon: 'receipt', page: 'mesas' },
 ];
 
+/**
+ * `Más` **ya no apunta a `perfil` "provisoriamente"**: apunta a `mas`, que es
+ * una ruta y una pantalla de verdad desde §1.9.
+ *
+ * Y `Más` **ES** Perfil, no la contiene (resuelto por Diseño el 2026-08-05): un
+ * menú de una sola fila útil agrega fricción sin agregar nada, y "configuración"
+ * no tiene ni spec ni pantalla ni contrato detrás — una fila que no lleva a
+ * ningún lado es el tratamiento que el spec ya le negó al QR de Compartir y a
+ * Cuentas Asociadas.
+ */
+const RIGHT_DESTINO_MAS = 'mas' as const;
+
 const RIGHT: SideItem[] = [
   { slot: 'amigos', label: 'Amigos', icon: 'users', page: 'amigos' },
-  { slot: 'mas', label: 'Más', icon: 'grid-dots', page: 'perfil' },
+  { slot: 'mas', label: 'Más', icon: 'grid-dots', page: RIGHT_DESTINO_MAS },
 ];
 
 export interface AppBottomBarProps {

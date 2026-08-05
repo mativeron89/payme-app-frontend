@@ -19,8 +19,8 @@ import { ingresar } from './_app';
  * barra nueva no navegara, la persona queda **encerrada** — el mismo modo de
  * falla que §1.8 cubrió cuando Avisos perdió su flecha de volver.
  *
- * Perfil no está en esta tabla: se convirtió primero y su recorrido vive en
- * `perfil-accesos.spec.ts`, junto con el acceso a Mis tarjetas que cambió en el
+ * Más no está en esta tabla: se convirtió primero y su recorrido vive en
+ * `mas-accesos.spec.ts`, junto con el acceso a Mis tarjetas que cambió en el
  * mismo paso.
  */
 

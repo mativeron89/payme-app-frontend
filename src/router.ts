@@ -47,7 +47,14 @@ export const PAGES = [
   'grupos',
   'mesas',
   'scan',
-  'perfil',
+  /**
+   * §1.9 · **`perfil` se renombró a `mas`**, no se agregó al lado. Se pudo
+   * porque esta ruta **no tenía un solo `navigate('perfil')` durmiente** —su
+   * único call site era la quinta posición de la barra—, así que no hay
+   * navegación ratificada que proteger. Es lo contrario de `cuenta`, que
+   * conserva su `case` justamente porque sí los tiene.
+   */
+  'mas',
   'avisos',
   'mesa',
 ] as const;

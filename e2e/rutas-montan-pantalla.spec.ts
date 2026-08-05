@@ -105,7 +105,7 @@ const ESPERADO: Record<PageId, Esperado> = {
   grupos: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Grupos' } },
   mesas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Mesas' } },
   scan: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Escaneá el ticket' } },
-  perfil: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Perfil' } },
+  mas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Más' } },
   avisos: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Notificaciones' } },
 
   /**

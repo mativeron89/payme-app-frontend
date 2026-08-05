@@ -124,7 +124,7 @@ const APAGADO: ReadonlyArray<readonly [string, unknown]> = [
 
 const RUTAS_DEL_RIEL: readonly PageId[] = ['cargar', 'transferir'];
 const RUTAS_LEGITIMAS: readonly PageId[] = [
-  'home', 'cuenta', 'amigos', 'grupos', 'perfil', 'avisos', 'mesas', 'mesa', 'scan',
+  'home', 'cuenta', 'amigos', 'grupos', 'mas', 'avisos', 'mesas', 'mesa', 'scan',
   // §1.11 · las tres pantallas que lanzan las pestañas de Inicio. Se agregan
   // acá porque `allowsWalletRoute` es una lista de PROHIBIDOS: toda ruta nueva
   // nace permitida sin que nadie la mire, así que la única forma de que su
