@@ -10,6 +10,116 @@
 }
 
 :root {
+  /* ══════════════════════════════════════════════════════════════════════
+     SISTEMA DE DISEÑO · tokens de ../diseno/SISTEMA_DISENO.md §1–§3
+     Fuente: v1 2026-08-03, con la enmienda del cuarto uso del naranja
+     (§1, 2026-08-04). El dueño del documento es la conversación de Diseño;
+     acá se COPIAN valores, no se deciden.
+
+     Estos tokens son ADITIVOS: al momento de agregarlos no los usa nadie.
+     Las pantallas migran de a una (SISTEMA_DISENO §2 lo manda así), y hasta
+     que una pantalla migre sigue leyendo la escala --fs-legacy-* de abajo.
+
+     Los ratios de contraste anotados están MEDIDOS con la fórmula WCAG 2.1
+     sobre estos hex exactos, no estimados. Los fija designTokens.test.ts:
+     si cambiás un hex, el test lo vuelve a medir y falla si no llega.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /* §1 · Color — marca.
+     El naranja es UNA acción, no una paleta: botón circular "Nueva", ítem
+     activo de la barra inferior, badge de no leídos, y el CTA de pantalla de
+     primer contacto (cuarto uso, ratificado 2026-08-04). Nada más. */
+  --brand: #ff6b35;
+  --brand-fg: #0f1f3d; /* glifo sobre --brand · 5.77:1 — NUNCA blanco (2.84:1) */
+  --brand-soft: #fff0eb;
+  --brand-ink: #c2410c; /* naranja COMO TEXTO sobre claro · 5.18:1 */
+
+  /* §1 · Color — acción. --brand y --brand-ink no son intercambiables:
+     #ff6b35 como texto sobre blanco da 2.6:1 y está prohibido. */
+  --action: #0f1f3d;
+  --action-fg: #ffffff; /* 16.36:1 */
+  --action-2: #00c2cb;
+  --action-2-fg: #0f1f3d; /* 7.46:1 */
+  --link: #0a7b80; /* el teal #00c2cb como texto da 2.19:1: como texto va este */
+
+  /* §1 · Color — superficie y texto. */
+  --bg: #f4f7fa;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --border: #e2e8f0;
+  --text: #0f1f3d; /* 15.4:1 sobre --bg */
+  --text-muted: #5b6b82; /* 5.05 sobre --bg · 5.43 sobre --surface · 5.19 sobre --surface-2 */
+  --text-faint: #7d8ca1; /* 3.42:1 — SOLO decorativo, nunca información */
+  --on-dark: #ffffff; /* 16.36:1 sobre navy */
+  --on-dark-muted: rgba(255, 255, 255, 0.72); /* ≥8:1 sobre navy */
+
+  /* §1 · Color — semánticos. Texto y tinte son valores DISTINTOS.
+     Regla dura: el color nunca es el único portador de significado; todo
+     estado va con texto o ícono (§5). */
+  --success: #047857;
+  --success-tint: #ecfdf5; /* 5.21:1 */
+  --warning: #92620a;
+  --warning-tint: #fffbeb; /* 5.10:1 */
+  --danger: #b42318;
+  --danger-tint: #fef2f2; /* 6.01:1 */
+  --info: #0a6c85;
+  --info-tint: #e6f6fa; /* 5.41:1 */
+
+  /* §2 · Tipografía — escala del sistema. SEIS tamaños, no hay un séptimo.
+     Nada baja de 12px, y 12px solo para etiquetas.
+     El cuerpo a 16px es obligatorio y NO se sube de una: cada SPEC lo aplica
+     en su pantalla (§2, "deuda declarada"). */
+  --fs-display: 40px; /* el importe grande del pago · peso 800 */
+  --lh-display: 1.05;
+  --fs-h1: 28px; /* título de pantalla · peso 800 */
+  --lh-h1: 1.2;
+  --fs-h2: 20px; /* título de tarjeta y de sección · peso 700 */
+  --lh-h2: 1.25;
+  --fs-body: 16px; /* cuerpo · peso 400–500 · NUNCA menos de 16px en la app */
+  --lh-body: 1.5;
+  --fs-sm: 14px; /* secundario, metadatos · peso 500 */
+  --lh-sm: 1.45;
+  --fs-xs: 12px; /* etiquetas en MAYÚSCULA · peso 700 · PROHIBIDO para datos */
+  --lh-xs: 1.4;
+
+  /* §2 · Tipografía — familia mono. SOLO códigos de mesa: los importes van en
+     display con tabular-nums, nunca en mono.
+     Las familias display y cuerpo ya existen abajo como --font-display y
+     --font-body. NO se redefinen acá: el sistema declara otra cadena de
+     fallback (system-ui, -apple-system) y cambiarla movería la fuente durante
+     la carga de la webfont. Es un cambio visible, no aditivo — se reconcilia
+     cuando se migre la tipografía, no ahora. */
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* §3 · Espaciado, base 4. No se mezcla con otra escala. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
+
+  /* §3 · Radios. TRES, no seis. --r-lg es el de la tarjeta montada sobre la
+     banda: el gesto que se toma de la referencia, tiene que ser generoso. */
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-full: 9999px;
+
+  /* §3 · Elevación — suave y baja, nunca dramática. La sombra ACOMPAÑA al
+     borde, no lo reemplaza: toda tarjeta lleva 1px solid var(--border)
+     además de su sombra. En monitor barato la sombra casi no se ve. */
+  --sh-1: 0 1px 2px rgba(15, 31, 61, 0.06);
+  --sh-2: 0 2px 8px rgba(15, 31, 61, 0.08);
+  --sh-3: 0 8px 24px rgba(15, 31, 61, 0.1);
+
+  /* §3 · Área táctil mínima en la app, sin excepción. Se usa parada, con una
+     mano, apurada. */
+  --tap-min: 44px;
+
+  /* ══════════ fin de los tokens del sistema · abajo, lo preexistente ══════════ */
+
   --navy: #0f1f3d;
   --teal: #00c2cb;
   --teal-l: #e0f8f9;
