@@ -1,5 +1,49 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.34.0 — ORDEN VISUAL · entrada por link y Avisos (2026-08-05)
+
+Paso 3 de la orden visual: las primeras pantallas que adoptan el sistema. Los
+tokens y el esqueleto ya estaban (0.33.0); acá empiezan a usarse.
+
+- **`SPEC_APP.md` §1.2 · entrada por link, las tres pantallas.** Es la primera
+  que ve casi todo el mundo que llega por un link de WhatsApp, y la de mayor
+  riesgo del spec. Esqueleto propio: banda compacta, burbuja angosta flotando
+  en el medio exacto, bloque de acción abajo, sin barra inferior.
+  - **401** con burbuja genérica *"Te invitaron a una mesa"*: no nombra el
+    restaurante, porque para saber que el token es válido habría que
+    preguntárselo al backend y el endpoint que lo diría sin sesión es el
+    preview público que el cierre del pago sin cuenta prohíbe. Un link
+    reenviado, además, le confirmaría a cualquiera dónde está comiendo otro.
+    *"Crear cuenta gratis"* es el **cuarto uso permitido del naranja**, con el
+    texto en navy (5.77:1).
+  - **403** con un solo cartel para los cuatro motivos y salida por el círculo
+    naranja. Copy textual del spec.
+  - **"Sumate a la mesa"**, nueva: antes el canje navegaba derecho a la mesa.
+    Tilde de 72px en `--success`, el nombre del restaurante sin el código, y un
+    solo destino a un toque. Es el único momento con permiso de nombrar la
+    mesa: el canje ya cerró y quien mira es un participante inscripto.
+  - **La custodia del token no cambió.** Se sigue comprobando el round-trip
+    antes de soltar la URL y la credencial se libera en el mismo punto que
+    antes. Verificado en el navegador: tras el canje el hash queda sin `?t=`,
+    el `sessionStorage` vacío, y Atrás no revive el token.
+- **`SPEC_APP.md` §1.8 · Avisos.** El punto de "sin leer" pasa a `--action-2` y
+  a la izquierda, acompañado del peso 700 — dos señales, no una. El leído deja
+  de atenuarse con `opacity` sobre la fila entera, que arrastraba el texto por
+  debajo del mínimo de contraste. Vacío real con la copy del spec y sin borde.
+  Cabecera de subpantalla y barra de cinco posiciones sin ítem activo.
+- **Contraste corregido de paso** (§3 lo habilita en cualquier pantalla, no es
+  rediseño): el botón de aceptar invitación era naranja con texto blanco —
+  2.84:1 y un uso del naranja fuera de los cuatro permitidos.
+- **Tests**: `joinLinkStage` extrae a función pura qué pantalla se muestra, y
+  fija la regla de privacidad —sin sesión no se ve **nada** de la mesa,
+  cualquiera sea el resultado del canje— y que ninguna pantalla quede sin
+  salida. `designTokens.test.ts` fija el cuarto uso del naranja contra el modo
+  en que se rompería en silencio: un `color: #fff` "para que se vea más".
+  381 tests (eran 370).
+- **Deuda**: los usos de `--fs-legacy-*` bajan de 113 a 112 y los bloques
+  `style={{…}}` de 378 a 370. Baja pantalla por pantalla, como manda el
+  sistema.
+
 ## 0.33.0 — ORDEN VISUAL · tokens y esqueleto del sistema de diseño (2026-08-05)
 
 Pasos 1 y 2 de la orden visual. **Ninguna pantalla cambió todavía**: entra el
