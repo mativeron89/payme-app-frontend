@@ -1,5 +1,42 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.45.0 — §1.9 · paso 6 · se retira la Cuenta vieja (2026-08-05)
+
+**La pantalla se va; la ruta se queda.** Es la parte de §1.9 que quedó separable
+del bloque social, y la única que toca superficie del riel de saldo.
+
+- **`CuentaScreen` sale del árbol.** Su mitad card-only ya vivía en las dos
+  pantallas de primer nivel que estrenó §1.11 —`#/tarjetas` y `#/pagos`—, y su
+  otra mitad era riel saldo apagado.
+- 🔴 **`case 'cuenta'` SOBREVIVE** apuntando a `TarjetasScreen`. Verificado
+  contra el árbol: quedan **ocho `navigate('cuenta')` durmientes** —riel saldo,
+  preservados por ratificación— y **sin `case` cualquiera dejaría la app en
+  blanco**. Se descartó sacar `'cuenta'` de la unión de páginas —haría fallar el
+  compilador, que sería mejor— porque su precio es editar ocho call sites
+  durmientes: **la ratificación pesa más que la elegancia del compilador.**
+- **Los dos gates no se reubican: se acredita que la superficie ya no existe.**
+  `accountRailView` **conserva sus cinco campos** —un campo durmiente no se borra
+  porque su consumidor se haya ido— y lo que se prueba es que **ningún archivo
+  vivo lee `showWalletMovements`**, con barrido de fuente y control positivo.
+- ⭐ **El recorrido que impide repetir `07f0ba2` no se aflojó: se mudó.** Vivía
+  sobre `#/cuenta`, donde las dos superficies convivían en pestañas. Ahora se
+  afirman **donde viven**, una ruta cada una, con el barrido de vocabulario
+  wallet corriendo sobre las dos por separado. **Queda más fuerte que antes.**
+- **Tres mutantes, tres capas distintas:** sacar el `case` lo mata **el
+  compilador** —el `never` de 0.43.0 cobrando—; apuntarlo a otra pantalla deja
+  **typecheck verde y e2e rojo**; agregar un consumidor vivo del gate lo tira.
+- El recorrido de Cuenta en la barra **se retira en vez de adaptarse**: afirmar
+  sobre una pantalla que ya no existe es verde y vacío.
+- `rutas-montan-pantalla` estrena el tipo **`alias`**: dos páginas
+  indistinguibles por su render **se declaran**, no se tapan con un marcador
+  débil. Afirma que se ve la pantalla aliasada **y que la URL no cambió** —un
+  redirect pasaría la primera, y dejaría la ruta vieja fuera del `case`.
+
+**Queda de §1.9** el bloque social: Amigos + Grupos + Solicitudes en una pantalla
+con tres pestañas. **`Más` está bloqueada**: el spec la nombra tres veces y no la
+diseña ninguna, y "configuración" no existe. **518 vitest · 61 e2e** · typecheck
+· builds real y mock. JS real 350.30 → 342.88 kB.
+
 ## 0.44.0 — §1.9 · pasos 2 y 3 · una sola barra en toda la app (2026-08-05)
 
 La sección social **no** se rehizo todavía: eso es el bloque irreducible de §1.9
