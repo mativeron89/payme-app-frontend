@@ -96,6 +96,88 @@ test.describe('el token de un link terminal no revive por historial', () => {
   });
 
   /**
+   * ⭐⭐ EL TEST QUE DE VERDAD EJERCITA EL ARREGLO DE 4B. Y no estaba.
+   *
+   * ## Cómo me di cuenta
+   *
+   * Revertí el arreglo —saqué el `stripTokenFromUrl()` de la rama terminal— y
+   * **los cuatro tests de arriba siguieron verdes**. O sea que este spec
+   * acreditaba el ancla sin ejercitar el defecto que la motivó.
+   *
+   * ## Por qué se me escapó
+   *
+   * En un navegador de verdad `sessionStorage` **funciona**. Entonces la
+   * custodia cierra en la apertura, la URL se limpia ahí mismo, y cuando llega
+   * el 403 ya no queda nada que limpiar: la línea que 4B agregó nunca corre.
+   *
+   * El defecto vive **sólo** en el estado degradado: storage que acepta la
+   * escritura y no persiste —modo privado, cuota, un WebView con storage
+   * particionado, que es justo donde se abre un link de WhatsApp—. Ahí la URL
+   * es la ÚNICA custodia, `openInvitationCustody` la deja intacta a propósito,
+   * y el terminal es el único que puede soltarla.
+   *
+   * Así que hay que **romper el storage en el navegador**, que es lo que hace
+   * este test. Es el mismo storage amnésico de la suite de vitest, pero adentro
+   * de Chromium y contra la app entera.
+   */
+  test('con storage que no persiste, el terminal SÍ limpia la URL', async ({ page }) => {
+    // Amnésico: acepta el `setItem` sin quejarse y no guarda. Ninguna excepción
+    // lo delata — sólo el round-trip, que es justo lo que la app comprueba.
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'sessionStorage', {
+        configurable: true,
+        get: () => ({
+          getItem: () => null,
+          setItem: () => undefined,
+          removeItem: () => undefined,
+          clear: () => undefined,
+          key: () => null,
+          length: 0,
+        }),
+      });
+    });
+
+    await ingresar(page);
+    await page.goto(`/#/mesa/PA-9999?t=${TOKEN_MUERTO}`);
+    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+
+    // Sin el arreglo de 4B, acá el `?t=` sigue vivo: el storage nunca lo tuvo.
+    expect(tokenDeLaUrl(page.url())).toBeNull();
+
+    await page.goBack();
+    expect(tokenDeLaUrl(page.url())).toBeNull();
+  });
+
+  /**
+   * El complemento del anterior: con el storage roto, la URL es la única
+   * custodia y **no se toca** hasta que el resultado sea terminal. Perder el
+   * token ahí dejaría a la persona registrada y afuera de la mesa a la que la
+   * invitaron — peor que el defecto que el cierre vino a cerrar.
+   */
+  test('con storage que no persiste, la URL conserva el token hasta el canje', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'sessionStorage', {
+        configurable: true,
+        get: () => ({
+          getItem: () => null,
+          setItem: () => undefined,
+          removeItem: () => undefined,
+          clear: () => undefined,
+          key: () => null,
+          length: 0,
+        }),
+      });
+    });
+
+    // Sin sesión: la pantalla del 401, que es el tramo del alta. El canje no
+    // corrió todavía, así que la credencial tiene que seguir donde esté.
+    await page.goto('/#/mesa/PA-0001?t=tok-tiene-que-quedar-en-la-url');
+
+    await expect(page.getByText('Te invitaron a una mesa')).toBeVisible();
+    expect(tokenDeLaUrl(page.url())).toBe('tok-tiene-que-quedar-en-la-url');
+  });
+
+  /**
    * Y el respaldo tampoco sobrevive. `sessionStorage` es la otra custodia: si
    * el terminal limpia la URL pero deja la fila, cualquier visita futura a esa
    * mesa la levanta y vuelve a canjear un token muerto.
