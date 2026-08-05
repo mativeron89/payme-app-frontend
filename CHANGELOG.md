@@ -1,5 +1,31 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.39.1 — las tres pantallas de §1.11 pasan a primer nivel (2026-08-05)
+
+Autorizado tras el aviso previo sobre `src/App.tsx`. Deshace el rodeo con el que
+las tres pantallas habían entrado en 0.39.0.
+
+- **`#/tarjetas`, `#/pagos` y `#/estadisticas`** son ahora rutas propias, con su
+  `PageId` y su `case`. Colgaban de `#/cuenta/<algo>` para no tocar `App.tsx`, y
+  **evitar un archivo no es una razón de diseño**.
+- **`home` sale de `showNav`**, que es el cambio real: Inicio monta su propia
+  barra igual que `scan`, `mesa` y `avisos`. `BottomNav` deja de decidir cuándo
+  no dibujarse y `CuentaScreen` deja de ser un sub-router.
+- **Spec nuevo `inicio-accesos` (4 recorridos).** El switch de `App.tsx` no tiene
+  `default`: borrar un `case` no rompía nada — la pantalla no se montaba y la app
+  quedaba en blanco sin que ningún test se enterara. Acreditado mutando: borrar
+  `case 'pagos'` mata el recorrido. Cubre también que Asociadas siga sin ningún
+  acceso.
+- **`RUTAS_LEGITIMAS` suma las tres.** `allowsWalletRoute` es una lista de
+  **prohibidos**, así que toda ruta nueva nace permitida sin que nadie la mire;
+  nombrarlas es la única forma de acreditar su permiso.
+- Suite de rutas wallet verde tras tocar `App.tsx`: 126 tests. En navegador,
+  `#/cargar` y `#/transferir` siguen terminando en `#/home`, sin una palabra del
+  vocabulario del riel.
+- La máquina de alta de tarjeta no se tocó: `addCard`, los helpers de
+  `cardSetupAttempt` y `setDefault`/`removePm` son **byte a byte** los del
+  checkpoint `1984710`.
+
 ## 0.39.0 — ORDEN VISUAL · Inicio y sus tres pestañas (2026-08-05)
 
 **`SPEC_APP.md` §1.1 + §1.11 — son la misma pantalla**, así que van juntas: las
