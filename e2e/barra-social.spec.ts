@@ -27,6 +27,12 @@ import { ingresar } from './_app';
 /** Rutas ya convertidas, con la posición que les corresponde encendida. */
 const CONVERTIDAS = [
   { ruta: 'amigos', posicion: 'Amigos', titulo: 'Amigos' },
+  /**
+   * Grupos enciende **Amigos**, no una posición propia: vive DENTRO de esa
+   * sección y comparten pestañas internas. Es el criterio que ya usaba
+   * `BottomNav`, no uno nuevo.
+   */
+  { ruta: 'grupos', posicion: 'Amigos', titulo: 'Grupos' },
 ] as const;
 
 /**
@@ -111,5 +117,26 @@ test.describe('§1.9 · la barra de cinco en la sección social', () => {
       fondoDelCta,
       `el CTA termina en ${fondoDelCta} y la barra empieza en ${techoDeLaBarra}: está tapado`,
     ).toBeLessThanOrEqual(techoDeLaBarra);
+  });
+
+  /**
+   * El **detalle** de un grupo es la otra vista de la misma ruta, y hoy también
+   * dibujaba `BottomNav`. Sin barra quedaría con una sola salida —la flecha, que
+   * vuelve a la lista— y **ninguna que saque de la sección**.
+   *
+   * Va aparte de la tabla porque no se llega por URL: hay que abrir un grupo.
+   */
+  test('el detalle de un grupo también lleva la barra, y sale a Inicio', async ({ page }) => {
+    await ingresar(page);
+    await page.goto('/#/grupos');
+
+    await page.getByRole('button', { name: /Familia/ }).click();
+    await expect(page.getByText(/^Miembros \(/)).toBeVisible();
+
+    const barra = page.getByRole('navigation', { name: 'Navegación principal' });
+    await expect(barra).toHaveCount(1);
+
+    await barra.getByRole('button', { name: 'Inicio', exact: true }).click();
+    await expect(page).toHaveURL(/#\/home$/);
   });
 });

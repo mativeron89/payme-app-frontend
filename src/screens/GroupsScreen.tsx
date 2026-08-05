@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { Friend, Group, GroupDetailResponse } from '../api/types';
 import { Avatar, SocialTabs, TopBar, useToast } from '../components/ui';
+import { AppBottomBar } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
 
 /** s-groups: grupos + detalle + crear + sumar miembros (routes/groups.js). */
@@ -62,9 +63,11 @@ export function GroupsScreen() {
     const memberIds = new Set(detail.members.map((m) => m.id));
     const addable = friends.filter((f) => !memberIds.has(f.id));
     return (
-      <div className="screen has-nav">
+      <div className="screen has-appbar">
         <TopBar title={`${detail.group.icon} ${detail.group.name}`} onBack={() => setDetail(null)} />
-        <div className="scroll" style={{ padding: '14px 16px' }}>
+        {/* Longhands: el shorthand inline pisa el `padding-bottom` de
+            `.has-appbar .scroll` y "Eliminar grupo" queda abajo de la barra. */}
+        <div className="scroll" style={{ paddingTop: 14, paddingLeft: 16, paddingRight: 16 }}>
           <div className="sectlabel">Miembros ({detail.members.length})</div>
           <div className="card" style={{ marginBottom: 16 }}>
             {detail.members.length === 0 && <div className="empty" style={{ padding: 18 }}>Sin miembros todavía.</div>}
@@ -130,14 +133,19 @@ export function GroupsScreen() {
             <Icon name="trash" size={16} className="ico-inline" /> Eliminar grupo
           </button>
         </div>
+        {/* El detalle TAMBIÉN la lleva. Hoy `BottomNav` se dibuja acá —`grupos`
+            está en `showNav` y esta vista es la misma ruta—, así que sacarla sin
+            reemplazo le quitaría a esta pantalla su navegación. Que tenga flecha
+            de volver no alcanza: esa vuelve a la lista, no sale de la sección. */}
+        <AppBottomBar active="amigos" />
       </div>
     );
   }
 
   return (
-    <div className="screen has-nav">
+    <div className="screen has-appbar">
       <TopBar title="Grupos" />
-      <div className="scroll" style={{ padding: '14px 16px' }}>
+      <div className="scroll" style={{ paddingTop: 14, paddingLeft: 16, paddingRight: 16 }}>
         <SocialTabs active="grupos" />
         {creating && (
           <div className="card card-p" style={{ marginBottom: 12 }}>
@@ -184,6 +192,14 @@ export function GroupsScreen() {
           + Crear grupo
         </button>
       </div>
+      {/* §1.9 · paso 3 · junto con sacar `grupos` de `showNav`. `amigos` activa:
+          Grupos vive DENTRO de la sección Amigos y comparten pestañas internas
+          (`SocialTabs`), que es el mismo criterio que ya usaba `BottomNav`.
+          Marcar otra posición diría que estás en otra sección.
+
+          Su `.action-bar` necesita el mismo aire que el de Amigos, y lo tiene:
+          `.has-appbar .action-bar` es una regla, no una excepción por pantalla. */}
+      <AppBottomBar active="amigos" />
     </div>
   );
 }
