@@ -3,6 +3,14 @@ dist/
 *.local
 .DS_Store
 
+# ── Playwright (ORDEN 5) ────────────────────────────────────
+# Salida de corridas: trazas, capturas y reporte HTML. Se regeneran, y una
+# captura de una corrida fallida puede tener datos de la sesión mock adentro.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
 # ── Variables de entorno ────────────────────────────────────
 # Ignorar TODO archivo .env* (puede traer secretos o config local)…
 .env

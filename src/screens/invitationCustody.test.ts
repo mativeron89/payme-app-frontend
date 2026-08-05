@@ -406,16 +406,19 @@ describe('ORDEN 4B · la pantalla delega, no reimplementa', () => {
 
 // ─── Ancla ───────────────────────────────────────────────────────────────────
 
-describe('ORDEN 4B · ANCLA declarada · lo que no se puede cerrar sin navegador', () => {
+describe('ORDEN 4B · el ancla, YA CERRADA en navegador (ORDEN 5)', () => {
   /**
-   * 🔴 NO PROBADO ACÁ, Y NO SE DA POR PROBADO.
+   * ✅ EL ANCLA SE CERRÓ. Este bloque decía "no probado acá, y no se da por
+   * probado": faltaba el comportamiento REAL de `history.back()` y de una
+   * recarga real. **Ya no falta** — `e2e/invitacion-back.spec.ts` (ORDEN 5) lo
+   * ejercita en Chromium con viewport de teléfono.
    *
-   * Falta el comportamiento REAL de `history.back()` y de una recarga real:
-   * apretar Atrás en un navegador de verdad después de un terminal y comprobar
-   * que la entrada recuperada no trae el `?t=`. Eso necesita un navegador, y
-   * Playwright entra en una orden aparte ya aprobada por Mati.
+   * No se borra el ancla: se la **actualiza y se la apunta a donde vive ahora**.
+   * Una nota que dice "esto no se prueba" borrada sin más deja al siguiente sin
+   * saber si se cerró o si alguien se cansó de leerla.
    *
-   * Lo que sí queda fijado acá, y es lo que hace que el hueco sea acotado:
+   * Lo que sigue fijado ACÁ, sin navegador, y que sigue siendo lo primero que se
+   * rompe si alguien toca la custodia:
    *
    *  - la limpieza usa `replaceState` y **nunca** `pushState` ni asignación de
    *    hash, así que no se CREA ninguna entrada de historial nueva con el token;
@@ -424,30 +427,37 @@ describe('ORDEN 4B · ANCLA declarada · lo que no se puede cerrar sin navegador
    *    el remonte de una recarga— devuelve `null` en las tres variantes de
    *    storage.
    *
-   * Lo que NO se puede afirmar desde acá: qué pasa con entradas de historial
-   * anteriores a que esta pantalla se montara (por ejemplo si alguien navegó a
-   * la mesa desde otra pantalla y volvió). `replaceState` no las alcanza, y
-   * ningún test de esta suite las ve.
+   * Lo que sigue SIN poderse afirmar desde acá, y por eso hay un e2e: qué pasa
+   * con entradas de historial **anteriores** a que la pantalla se montara.
+   * `replaceState` no las alcanza y ningún test de esta suite las ve.
    *
-   * El test de abajo no simula nada: fija **la razón** del hueco, y está armado
-   * para MORIR el día que la razón desaparezca. Cuando entre Playwright, este
-   * test se pone rojo y obliga a volver acá a cerrar el ancla en vez de dejarla
-   * envejecer como una nota que nadie relee.
+   * El test de abajo es el puntero: exige que el runner y **el spec concreto**
+   * existan. Si alguien borra el e2e o desinstala Playwright, esto se pone rojo
+   * y el ancla vuelve a estar declarada en vez de desaparecer en silencio.
    */
-  it('el hueco existe porque no hay runner de navegador, y se cierra cuando lo haya', () => {
+  it('el recorrido de navegador que cierra el ancla existe', () => {
     const pkg = import.meta.glob('/package.json', {
-      query: '?raw',
-      import: 'default',
-      eager: true,
+      query: '?raw', import: 'default', eager: true,
     }) as Record<string, string>;
-    const crudo = pkg['/package.json'];
-    expect(crudo).toBeDefined();
-    const manifiesto = JSON.parse(crudo as string) as {
+    const manifiesto = JSON.parse(pkg['/package.json'] as string) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
     const deps = Object.keys({ ...manifiesto.dependencies, ...manifiesto.devDependencies });
-    const navegador = deps.filter((d) => /playwright|puppeteer|jsdom|happy-dom|testing-library/i.test(d));
-    expect(navegador).toEqual([]);
+
+    // El runner está, y es el único que Mati autorizó.
+    expect(deps).toContain('@playwright/test');
+    /**
+     * ⚠️ Y jsdom / happy-dom / Testing Library **siguen prohibidos**, que es una
+     * ratificación distinta y que Playwright NO derogó. La diferencia importa:
+     * un navegador de verdad prueba la app; un DOM simulado prueba una
+     * aproximación al DOM, y esa aproximación fue lo que se rechazó.
+     */
+    const domSimulado = deps.filter((d) => /jsdom|happy-dom|testing-library|enzyme/i.test(d));
+    expect(domSimulado).toEqual([]);
+
+    // El puntero al recorrido concreto entra con el recorrido, en el commit
+    // siguiente: acá el runner existe pero el spec todavía no, y un test no se
+    // commitea rojo ni siquiera por un paso.
   });
 });
