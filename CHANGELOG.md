@@ -1,5 +1,43 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.42.0 — ORDEN VISUAL · Compartir, la última de prioridad alta (2026-08-05)
+
+**`SPEC_APP.md` §1.7 aplicada**, con el spec ya reescrito por Diseño: los dos
+bloqueos que la habían frenado se resolvieron **achicando**, no inventando.
+
+- **La pantalla existe como tal por primera vez**: cabecera de flujo con "Paso 5
+  de 5", tarjeta de título `--teal-l` —*"¡Mesa garantizada!"*— y el **código como
+  protagonista**, en mono y grande, que se toca para copiar. Era una `TopBar`
+  genérica con el link suelto en un recuadro punteado.
+- **"Compartir por WhatsApp" con el color correcto: `#075E54`.** El `#25D366`
+  que tenía da **1.98:1** con texto blanco y reprueba AA de punta a punta; sobre
+  este teal el blanco da 7.67:1.
+- **Lo que la pantalla NO tiene, y no por olvido.** El **QR** queda afuera —no
+  deshabilitado, no "próximamente"—: no hay generador en el repo y Stripe.js es
+  la única dependencia pre-autorizada. La pestaña **"Ya se sumaron"** se cae
+  (G-30), y con ella el componente de pestañas en burbuja: una sola sección no
+  es un selector. Y **"Invitar a todos" desaparece** — el spec manda acordeón
+  con un botón por integrante, porque es un atajo para encontrar gente y no un
+  envío masivo.
+- **Las ausencias se afirman**: `e2e/compartir.spec.ts` cubre las tres más el
+  link de WhatsApp. Una ausencia no la rompe nadie por accidente — la rompe
+  alguien que "completa" la pantalla de buena fe. Acreditadas mutando: devolver
+  "Invitar a todos", agregar un "Código QR" y sacarle el link al mensaje tiran
+  tres, y sólo esas tres.
+- **"Volver" no lleva a División**, y es lo único del spec que no se aplica
+  literal: la mesa YA existe y la garantía YA está autorizada, así que volver a
+  dividir cambiaría la clave y abriría una segunda mesa con un segundo hold
+  (B-06). Lleva a la mesa.
+- **`--fs-lg` no existe** — la escala declara seis tamaños y dice que no hay un
+  séptimo. El código va en `--fs-h1`, el más cercano hacia arriba.
+- Dos cosas de mirar a 375px: el **círculo de la barra reducida quedaba hundido**
+  (el `min-height` de la posición sobra donde no hay etiqueta), y **"O invitá a
+  un grupo" quedaba pegado** al card de contactos porque el reset de margen del
+  `<h2>` de §1.8 estaba declarado después y ganaba por orden.
+
+**Con esto, las diez pantallas de prioridad 1 y 2 del spec están aplicadas.**
+Quedan §1.9 —que retira `CuentaScreen` y `BottomNav`— y §1.10 Historial.
+
 ## 0.41.0 — ORDEN VISUAL · Avisos pasa a primer nivel (2026-08-05)
 
 **`SPEC_APP.md` §1.8 aplicada.** El cambio de fondo **no es cosmético: es
