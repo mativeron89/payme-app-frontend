@@ -1117,9 +1117,13 @@ body {
   font-family: var(--font-display);
   text-align: left;
 }
+/* §1.4 · la selección pasó de naranja a teal: el naranja ya no marca estado
+   dentro de una tarjeta, marca marca. Y nunca es sólo el borde — el radio se
+   llena, que es la señal que sobrevive a la escala de grises. */
 .div-card.sel {
-  border-color: var(--orange);
-  background: #fff9f6;
+  border-width: 2px;
+  border-color: var(--action-2);
+  background: var(--surface);
 }
 .div-radio {
   width: 24px;
@@ -1132,14 +1136,14 @@ body {
   justify-content: center;
 }
 .div-card.sel .div-radio {
-  border-color: var(--orange);
+  border-color: var(--action-2);
 }
 .div-card.sel .div-radio::after {
   content: '';
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--orange);
+  background: var(--action-2);
 }
 .div-ico {
   width: 48px;
@@ -1154,8 +1158,8 @@ body {
   color: var(--navy);
 }
 .div-card.sel .div-ico {
-  background: var(--orange-l);
-  color: var(--orange);
+  background: var(--teal-l);
+  color: var(--link); /* el teal como TEXTO va en --link: 5.05:1 */
 }
 .div-title {
   font-size: 16px;
@@ -1164,7 +1168,8 @@ body {
   margin-bottom: 3px;
 }
 .div-sub {
-  font-size: 12px;
+  /* Era 12px: información por debajo del mínimo del sistema. */
+  font-size: var(--fs-sm);
   color: var(--gray-d);
   line-height: 1.4;
   font-family: var(--font-body);
@@ -1186,8 +1191,9 @@ body {
   justify-content: center;
 }
 .stepper button {
-  width: 40px;
-  height: 40px;
+  /* Área táctil mínima de la app, sin excepción (§1.4 lo pide explícito). */
+  width: var(--tap-min);
+  height: var(--tap-min);
   border-radius: 50%;
   border: 1.5px solid var(--gray-b);
   background: #fff;
@@ -2224,4 +2230,83 @@ body {
   font-size: var(--fs-body);
   line-height: var(--lh-body);
   color: var(--text-muted);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FLUJO DE ARMAR MESA · SPEC_APP.md §1.3–§1.6
+   Cabecera de dos filas (tercera variante) y tarjeta de título. La banda lleva
+   MENOS padding abajo que la de primer nivel, para que no quede aire entre
+   "Volver" y la tarjeta montada.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.hdr-flow {
+  padding-bottom: var(--sp-6);
+}
+
+.hdr-flow .hdr-row {
+  min-height: 0;
+}
+
+.hdr-row-2 {
+  margin-top: var(--sp-2);
+  min-height: var(--tap-min);
+}
+
+/* El ID del usuario, no su nombre: en el flujo identifica la cuenta con la que
+   se está armando la mesa. Trunca antes de empujar nada. */
+.hdr-id {
+  margin-left: auto;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--on-dark-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* La tarjeta de título, montada sobre la banda. Lleva SIEMPRE el título
+   centrado; lo que va debajo depende de cada pantalla y puede no haber nada
+   (§1.4). En División va en --teal-l, no blanca. */
+.title-card {
+  position: relative;
+  z-index: 1;
+  margin: -24px var(--sp-4) var(--sp-4);
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--teal-l);
+  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
+  text-align: center;
+}
+
+.title-card-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* §1.4 · el importe por persona, en vivo mientras se mueve el stepper: es la
+   información que la persona está buscando, así que va en --fs-h1 y no en una
+   píldora al costado. */
+.split-amt {
+  margin-top: var(--sp-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: center;
+}
+
+.split-amt-lbl {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  text-align: center;
 }

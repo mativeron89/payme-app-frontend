@@ -106,6 +106,49 @@ export function AppHeaderBack({
   );
 }
 
+/**
+ * Variante de FLUJO — la tercera, que introduce SPEC_APP.md §1.3 y que no es
+ * ninguna de las dos de §5 bis · A. Dos filas dentro de la misma banda navy:
+ *
+ *     Pay Me                              payme_mx_mati
+ *     ← Volver                                Paso 2 de 5
+ *
+ * Fila 1: logo en dos tonos + **ID del usuario** a la derecha. Sin campana —
+ * en medio de armar una mesa, un aviso lleva afuera del flujo.
+ * Fila 2: Volver (flecha Y texto, no sólo ícono) y el contador de paso.
+ *
+ * El spec la deja pendiente de confirmar como estándar de todos los pasos, y
+ * manda aplicar el mismo criterio hasta que se diga lo contrario.
+ */
+export function AppHeaderFlow({
+  paymeId,
+  onBack,
+  step,
+  compact,
+}: HeaderBase & {
+  /** `payme_id` de la sesión. Si falta, la fila 1 va sólo con el logo. */
+  paymeId?: string;
+  onBack: () => void;
+  /** Ej.: "Paso 3 de 5". */
+  step?: ReactNode;
+}) {
+  return (
+    <header className={`hdr hdr-flow ${compact ? 'hdr-compact' : ''}`}>
+      <div className="hdr-row">
+        <PayMeLogo />
+        {paymeId && <span className="hdr-id">{paymeId}</span>}
+      </div>
+      <div className="hdr-row hdr-row-2">
+        <button type="button" className="hdr-back" onClick={onBack}>
+          <Icon name="arrow-left" size={20} />
+          Volver
+        </button>
+        {step && <span className="hdr-step">{step}</span>}
+      </div>
+    </header>
+  );
+}
+
 export interface BubbleTab {
   id: string;
   label: string;

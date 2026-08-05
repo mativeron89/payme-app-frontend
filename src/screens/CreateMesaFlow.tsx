@@ -23,6 +23,9 @@ import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutation
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
+import { AppBottomBar } from '../components/AppBottomBar';
+import { AppHeaderFlow } from '../components/AppHeader';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
 import { InviteFriends } from '../components/InviteFriends';
@@ -72,6 +75,8 @@ export function CreateMesaFlow() {
   // OLA 5D · el método "Saldo PayMe" de la garantía lo habilita el BACKEND.
   const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
+  // Sólo para el ID que muestra la cabecera de flujo (SPEC_APP.md §1.3).
+  const { session } = useAuth();
   const { actor, error: actorError } = useMoneyActor();
   const [step, setStep] = useState<Step>('scan');
   const [scanning, setScanning] = useState(false);
@@ -845,43 +850,50 @@ export function CreateMesaFlow() {
   }
 
   // ─── Paso 3: división ────────────────────────────────────
+  /**
+   * SPEC_APP.md §1.4, aplicado. Lo que cambia y por qué:
+   *
+   *  - Cabecera de DOS filas (§1.3) en vez de la `TopBar` genérica, y tarjeta
+   *    de título `--teal-l` montada sobre la banda, con el título centrado y
+   *    **nada debajo** — a diferencia de Ticket, que sí trae total.
+   *  - La selección pasó de naranja a teal: dentro de una tarjeta el naranja ya
+   *    no marca estado, marca marca. Y no es sólo el borde — el radio se llena.
+   *  - El importe por persona sube a `--fs-h1` y se muestra **en vivo** con el
+   *    stepper: es la información que la persona está buscando. Antes era una
+   *    píldora chica al costado de la tarjeta.
+   *  - CTA: la barra de cinco posiciones con "Continuar" en el centro, sin
+   *    ítem activo. Deja salir del flujo a mitad de camino, y es intencional.
+   *    Acá todavía no hay nada congelado —el freeze empieza en la garantía—,
+   *    así que irse no deja ninguna operación monetaria a medias.
+   */
   if (step === 'division') {
     // splitEqual, igual que el backend: la suma de las partes da el total exacto
     // (el primer comensal absorbe los centavos sobrantes).
     const perSlot = participants > 0 ? splitEqual(total, participants)[0] : total;
     return (
-      <div className="screen has-cta">
-        <TopBar title="Dividir cuenta" onBack={back} />
-        <div className="scroll" style={{ padding: '18px 16px' }}>
-          <div style={{ padding: '4px 2px 16px' }}>
-            <div className="h1" style={{ fontSize: 'var(--fs-legacy-2xl)' }}>
-              ¿Cómo pagan?
-            </div>
-          </div>
+      <div className="screen has-appbar">
+        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step="Paso 3 de 5" />
+        <div className="title-card">
+          <div className="title-card-title">¿Cómo dividen?</div>
+        </div>
+        <div className="scroll" style={{ padding: '0 16px' }}>
           <button className={`div-card ${division === 'consumo' ? 'sel' : ''}`} onClick={() => setDivision('consumo')}>
             <div className="div-radio" />
             <div className="div-ico">
               <Icon name="users" size={22} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="div-title">Cada uno lo suyo</div>
-              <div className="div-sub">Cada quien elige y paga lo que consumió.</div>
+              <div className="div-title">Por lo que pidió cada uno</div>
+              <div className="div-sub">Cada uno elige sus platos</div>
             </div>
           </button>
           <button className={`div-card ${division === 'igual' ? 'sel' : ''}`} onClick={() => setDivision('igual')}>
             <div className="div-radio" />
             <div className="div-ico">÷</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="div-title">Partes iguales</div>
-              <div className="div-sub">La cuenta se divide en partes iguales; cada pago toma una.</div>
+              <div className="div-title">En partes iguales</div>
+              <div className="div-sub">El total dividido entre todos</div>
             </div>
-            {division === 'igual' && (
-              <div className="pill-amt">
-                {formatMXN(perSlot)}
-                <br />
-                ×parte
-              </div>
-            )}
           </button>
           {division === 'igual' && (
             <div className="card card-p" style={{ marginBottom: 12 }}>
@@ -903,18 +915,26 @@ export function CreateMesaFlow() {
                   +
                 </button>
               </div>
+              {/* Recalcula con cada toque del stepper. `aria-live` lo anuncia:
+                  quien no ve la pantalla también necesita el número nuevo. */}
+              <div className="split-amt" aria-live="polite">
+                {formatMXN(perSlot)}
+              </div>
+              <div className="split-amt-lbl">por persona</div>
             </div>
           )}
         </div>
-        <button
-          className="cta-float"
-          onClick={() => {
-            void loadCards();
-            setStep('garantia');
+        <AppBottomBar
+          active={null}
+          center={{
+            label: 'Continuar',
+            icon: 'arrow-right',
+            onClick: () => {
+              void loadCards();
+              setStep('garantia');
+            },
           }}
-        >
-          Continuar → garantizar
-        </button>
+        />
       </div>
     );
   }
