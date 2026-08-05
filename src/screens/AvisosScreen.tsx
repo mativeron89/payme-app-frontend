@@ -1,14 +1,30 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { AppNotification, PendingInvitation } from '../api/types';
+import { AppBottomBar } from '../components/AppBottomBar';
+import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
-import { TopBar, useToast } from '../components/ui';
-import { navigate } from '../router';
+import { useToast } from '../components/ui';
+import { goBack, navigate } from '../router';
 import { relTime } from '../utils/format';
 
 /**
  * Avisos: invitaciones in-app pendientes (GET /invitations + accept) arriba,
  * y el inbox de notificaciones (GET /notifications) abajo.
+ *
+ * SPEC_APP.md §1.8, aplicado:
+ *
+ *  - **No leído = punto `--action-2` de 8px a la izquierda Y peso 700.** Antes
+ *    el punto era naranja y estaba a la derecha, y el naranja está reservado
+ *    (SISTEMA_DISENO.md §1). Dos señales, no una: el punto solo no alcanza.
+ *  - **El leído ya no se atenúa con `opacity` sobre la fila entera.** Bajar la
+ *    opacidad del contenedor arrastra el texto por debajo del mínimo de
+ *    contraste — es el mismo defecto que el spec da por corregido en Mis ítems
+ *    (§1.5) y acá seguía vivo. La diferencia la marcan el peso y el punto.
+ *  - **Vacío real sin borde**, con la copy del spec.
+ *  - Cabecera de subpantalla y barra de cinco posiciones **sin ítem activo**:
+ *    ninguna de las cinco representa "estoy en Avisos" (§1.3 lo dice de esta
+ *    pantalla por su nombre).
  */
 
 const NOTIF_ICON: Record<string, IconName> = {
@@ -64,11 +80,11 @@ export function AvisosScreen() {
   const hasUnread = notifs?.some((n) => !n.read_at) ?? false;
 
   return (
-    <div className="screen">
-      <TopBar
+    <div className="screen has-appbar">
+      <AppHeaderBack
         title="Avisos"
-        onBack={() => navigate('home')}
-        right={
+        onBack={() => goBack('home')}
+        step={
           hasUnread ? (
             <button className="login-toggle" style={{ padding: 4 }} onClick={markAll}>
               Marcar leídos
@@ -93,8 +109,12 @@ export function AvisosScreen() {
                     </div>
                   </div>
                 </div>
+                {/* Era `btn-primary`: naranja con texto blanco, 2.84:1. El
+                    naranja además está reservado y este botón no es ninguno de
+                    sus cuatro usos. Navy da 16.36:1. Corregir contraste sí se
+                    puede hoy en cualquier pantalla — no es rediseño (§3). */}
                 <button
-                  className="btn btn-primary"
+                  className="btn btn-navy"
                   style={{ padding: 12, fontSize: 'var(--fs-legacy-base)' }}
                   onClick={() => accept(inv)}
                   disabled={busyId === inv.id}
@@ -109,34 +129,34 @@ export function AvisosScreen() {
         <div className="sectlabel">Notificaciones</div>
         {notifs === null && <div className="loading">Cargando avisos…</div>}
         {notifs?.length === 0 && invitations.length === 0 && (
-          <div className="empty">
+          <div className="empty aviso-empty">
             <div className="emoji"><Icon name="bell" size={40} /></div>
-            Nada nuevo por acá.
+            No tenés avisos.
           </div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {notifs?.map((n) => (
-            <div
-              key={n.id}
-              className="card card-p"
-              style={{ display: 'flex', gap: 12, alignItems: 'flex-start', opacity: n.read_at ? 0.65 : 1 }}
-            >
-              <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 'var(--fs-legacy-base)', fontWeight: n.read_at ? 500 : 700, fontFamily: 'var(--font-body)', color: 'var(--navy)' }}>
-                  {n.body}
-                </div>
-                <div className="caption" style={{ marginTop: 2 }}>
-                  {relTime(n.created_at)}
+          {notifs?.map((n) => {
+            const sinLeer = !n.read_at;
+            return (
+              <div key={n.id} className="card card-p aviso-row">
+                <span
+                  className={`aviso-dot ${sinLeer ? '' : 'off'}`}
+                  aria-hidden={sinLeer ? undefined : 'true'}
+                  aria-label={sinLeer ? 'Sin leer' : undefined}
+                  role={sinLeer ? 'img' : undefined}
+                />
+                <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className={`aviso-title ${sinLeer ? 'unread' : ''}`}>{n.body}</div>
+                  <div className="aviso-time">{relTime(n.created_at)}</div>
                 </div>
               </div>
-              {!n.read_at && (
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--orange)', marginTop: 6, flexShrink: 0 }} />
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
+      {/* Ningún ítem activo: ninguna de las cinco posiciones es "Avisos". */}
+      <AppBottomBar active={null} />
     </div>
   );
 }

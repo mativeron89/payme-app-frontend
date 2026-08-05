@@ -2169,3 +2169,59 @@ body {
   line-height: var(--lh-sm);
   color: var(--text-muted);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   AVISOS · SPEC_APP.md §1.8
+   No leído = punto --action-2 de 8px A LA IZQUIERDA **más** peso 700 en el
+   título. El punto solo no alcanza: son dos señales porque una sola se pierde
+   en escala de grises y con daltonismo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.aviso-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.aviso-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: var(--r-full);
+  background: var(--action-2);
+}
+
+/* El leído conserva el hueco del punto: sin esto la lista se desalinea fila a
+   fila y el ojo pierde la columna. */
+.aviso-dot.off {
+  background: none;
+}
+
+.aviso-title {
+  font-family: var(--font-body);
+  font-size: var(--fs-body); /* el cuerpo a 16px, aplicado en esta pantalla */
+  line-height: var(--lh-body);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.aviso-title.unread {
+  font-weight: 700;
+}
+
+.aviso-time {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* Vacío REAL: sin borde. Si hubiera borde, habría algo que no estás viendo —
+   ésa es la diferencia con supresión y con desconocido (§5 del sistema). */
+.aviso-empty {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
