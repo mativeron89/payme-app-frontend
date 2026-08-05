@@ -1604,6 +1604,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     <MesaDetailView
       mesa={mesa}
       code={code}
+      paymeId={session?.user?.payme_id}
       isGuest={isGuest}
       guestHeader={guestHeader}
       selected={selected}

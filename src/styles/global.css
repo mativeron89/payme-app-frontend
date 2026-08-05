@@ -2603,3 +2603,245 @@ body {
   color: var(--text-muted);
   text-align: center;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MIS ÍTEMS · SPEC_APP.md §1.5
+   La pantalla que gobierna a cualquier participante autenticado de la mesa.
+   Reusa la tarjeta de título y el .flow-scroll de §1.3: es el mismo sistema,
+   no una variante — acá la tarjeta SÍ lleva contenido debajo del título.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Progreso de pago de la mesa completa, dentro de la tarjeta de título. */
+.mi-progress {
+  height: 8px;
+  border-radius: var(--r-full);
+  background: rgba(15, 31, 61, 0.1);
+  overflow: hidden;
+}
+
+.mi-progress-fill {
+  height: 100%;
+  border-radius: var(--r-full);
+  background: var(--action-2);
+  transition: width 0.3s ease;
+}
+
+.mi-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.mi-meta-amt {
+  font-variant-numeric: tabular-nums;
+}
+
+/* El countdown. En --brand-ink (5.18:1) cuando falta menos de una hora: es el
+   naranja COMO TEXTO, nunca --brand, que sobre claro da 2.6:1. */
+.mi-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.mi-count.urgent {
+  color: var(--brand-ink);
+  font-weight: 700;
+}
+
+/* ─── La lista ─── */
+
+.mi-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-3) var(--sp-2);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.mi-row:disabled {
+  cursor: default;
+}
+
+/* Seleccionado: fondo de fila al 8%. Es tinte, no el color pleno — el pleno
+   sobre el que después va texto no llega a contraste. */
+.mi-row.sel {
+  background: rgba(0, 194, 203, 0.08);
+}
+
+/* Checkbox. Los CUATRO estados se distinguen por FORMA además de color: vacío,
+   tilde teal, tilde verde y candado. En escala de grises "lo eligió otro" y
+   "lo elegí yo" no se pueden confundir (§1.5 lo pide explícito). */
+.mi-check {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: transparent;
+}
+
+.mi-check.on {
+  border-color: var(--action-2);
+  background: var(--action-2);
+  color: var(--action-2-fg);
+}
+
+.mi-check.paid {
+  border-color: var(--success);
+  background: var(--success);
+  color: #fff;
+}
+
+.mi-check.taken {
+  border-color: var(--border);
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+.mi-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mi-name {
+  /* `block` explícito: son spans dentro de un <button>, y en línea el estado se
+     pegaba al nombre — "Pizza MargheritaPagado". */
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+.mi-row.sel .mi-name {
+  font-weight: 600;
+}
+
+/* Se atenúan NOMBRE y PRECIO, nunca la fila entera: bajarle la opacidad al
+   contenedor arrastra el texto de ayuda por debajo del mínimo de contraste.
+   Ya pasó una vez; la corrección se conserva (§1.5). */
+.mi-name.dim,
+.mi-price.dim {
+  color: var(--text-muted);
+}
+
+.mi-name.paid {
+  text-decoration: line-through;
+}
+
+/* El estado, con PALABRAS. El color y el ícono nunca son el único portador. */
+.mi-tag {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.mi-price {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: right;
+}
+
+.mi-row.sel .mi-price {
+  font-weight: 700;
+}
+
+/* ─── Selector de porción ─── */
+
+/* Desplegable debajo del ítem, INDENTADO para que se lea como suyo y no como
+   otra fila de la lista. Arranca con "1" marcada: tildar y listo sigue siendo
+   el flujo de siempre, y el selector sólo pesa si alguien lo cambia. */
+.mi-frac {
+  padding: var(--sp-3) var(--sp-2) var(--sp-4) 44px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 194, 203, 0.08);
+}
+
+.mi-frac-lbl {
+  margin-bottom: var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* Mismo componente .seg del sistema, con el área táctil de la app. */
+.mi-frac .seg {
+  margin-bottom: var(--sp-2);
+  background: var(--surface);
+}
+
+.mi-frac .seg-btn {
+  min-height: var(--tap-min);
+  font-size: var(--fs-body);
+}
+
+.mi-frac .seg-btn.on {
+  background: var(--action-2);
+  color: var(--action-2-fg);
+}
+
+.mi-frac-amt {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--link);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── "Mi parte", la fila propia arriba de la barra ─── */
+
+/* Lo dinámico vive acá y NO en la etiqueta del centro de la barra: un nav item
+   que cambia de texto según el estado es un nav item inestable (§1.5). */
+.mi-parte {
+  /* `flex: 1` porque `.appbar-above` es un flex container: sin esto la fila
+     medía lo que mide su contenido (154px de 375) y el monto quedaba pegado a
+     la etiqueta en vez de contra el borde derecho. */
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+.mi-parte-amt {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}

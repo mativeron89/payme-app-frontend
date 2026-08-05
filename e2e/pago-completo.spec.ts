@@ -47,9 +47,19 @@ test.describe('el camino de pago completo', () => {
     // Marcar lo consumido: en partes iguales es informativo para el
     // restaurante y NO cambia lo que se paga. Esa promesa está en pantalla.
     await expect(page.getByText('no cambia lo que pagás')).toBeVisible();
+    // Antes de elegir, la fila de la barra pide elegir y no muestra monto.
+    await expect(page.getByText('Marcá lo que consumiste')).toBeVisible();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
 
-    await page.getByRole('button', { name: /Pagar mi parte/ }).click();
+    // §1.5 · el monto vive en su fila propia ARRIBA de la barra, no en la
+    // etiqueta del nav item — que dice "Continuar" y no cambia según el estado.
+    // Se ancla en el texto "Mi parte" y se mira SU fila: `$210.00` suelto
+    // aparece dos veces en la pantalla (acá y en la nota de partes iguales), y
+    // afirmarlo suelto pasaría aunque esta fila no existiera.
+    const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
+    await expect(filaMiParte).toContainText('$210.00');
+
+    await page.getByRole('button', { name: 'Continuar' }).click();
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
 
     // La parte, la propina y el total, antes de tocar nada.
@@ -78,7 +88,7 @@ test.describe('el camino de pago completo', () => {
     await abrirMesaConLink(page);
     await page.getByRole('button', { name: /Ir a la mesa/ }).click();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-    await page.getByRole('button', { name: /Pagar mi parte/ }).click();
+    await page.getByRole('button', { name: 'Continuar' }).click();
 
     // La propina es un `radiogroup`, no botones sueltos: es una elección entre
     // opciones excluyentes y así la anuncia un lector de pantalla.

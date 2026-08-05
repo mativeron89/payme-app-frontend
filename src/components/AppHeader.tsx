@@ -124,6 +124,7 @@ export function AppHeaderFlow({
   paymeId,
   onBack,
   step,
+  action,
   compact,
 }: HeaderBase & {
   /** `payme_id` de la sesión. Si falta, la fila 1 va sólo con el logo. */
@@ -131,6 +132,13 @@ export function AppHeaderFlow({
   onBack: () => void;
   /** Ej.: "Paso 3 de 5". */
   step?: ReactNode;
+  /**
+   * Reemplaza al contador de paso cuando la pantalla NO es un paso de un flujo
+   * lineal. Mis ítems (§1.5) usa esta misma cabecera pero pone acá el ícono de
+   * link: es la pantalla a la que el usuario vuelve una y otra vez mientras la
+   * mesa sigue abierta, y decirle "Paso 4 de 5" sería mentirle sobre dónde está.
+   */
+  action?: ReactNode;
 }) {
   return (
     <header className={`hdr hdr-flow ${compact ? 'hdr-compact' : ''}`}>
@@ -144,6 +152,7 @@ export function AppHeaderFlow({
           Volver
         </button>
         {step && <span className="hdr-step">{step}</span>}
+        {action}
       </div>
     </header>
   );

@@ -79,3 +79,17 @@ export function nothingLeftFor(mesa: MesaDetail): boolean {
 export function availableSlotsOf(mesa: MesaDetail): number {
   return mesa.division_slots?.filter((s) => s.status === 'available').length ?? 0;
 }
+
+/**
+ * §1.5 · el countdown se pinta en `--brand-ink` cuando falta menos de UNA hora.
+ *
+ * Recibe la salida de `countdownTo`, que es `"MM:SS"` con los minutos SIN topar
+ * en 60 —una mesa de 90 minutos da `"90:00"`—, así que la pregunta se responde
+ * leyendo los minutos. `null` es "ya venció": urgente no aplica, porque no
+ * queda nada que apurar.
+ */
+export function countdownIsUrgent(countdown: string | null): boolean {
+  if (!countdown) return false;
+  const minutes = Number(countdown.split(':')[0]);
+  return Number.isFinite(minutes) && minutes < 60;
+}
