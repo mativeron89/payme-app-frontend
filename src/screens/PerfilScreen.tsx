@@ -43,7 +43,22 @@ export function PerfilScreen() {
               </div>
             </div>
           )}
-          <button className="list-row" onClick={() => navigate('cuenta')}>
+          {/* §1.9 · paso 2 · va a `#/tarjetas`, la pantalla de PRIMER NIVEL que
+              §1.11 estrenó, y no a la Cuenta vieja que §1.9 retira.
+
+              Es el ÚNICO `navigate('cuenta')` VIVO del repo. Los otros ocho son
+              declaraciones o código durmiente del riel saldo —`HomeScreen` ×2
+              adentro de bloques `walletRailEnabled`, `TopupScreen` ×5,
+              `TransferScreen` ×1— y **no se tocan**: están preservados por
+              ratificación, y reinterpretar navegación durmiente no es tarea de
+              un cambio de destino. Por eso `case 'cuenta'` también sigue en pie.
+
+              OJO con el rótulo de abajo: sigue gateado por el riel saldo (OLA 5C
+              c) y esta orden no lo toca. Con el riel encendido diría "Saldo y
+              tarjetas" apuntando a una pantalla que sólo tiene tarjetas. Hoy es
+              inalcanzable —el riel falla cerrado y su reactivación exige orden
+              nueva— pero queda dicho, no descubierto después. */}
+          <button className="list-row" onClick={() => navigate('tarjetas')}>
             <span><Icon name="card" size={16} /></span>
             {/* OLA 5C (c): con el riel saldo apagado, "Saldo y tarjetas" nombraba
                 algo que no existe en el build real. NO se oculta la fila: es el
