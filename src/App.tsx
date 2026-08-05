@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { IS_MOCK } from './api';
 import { AuthProvider, useAuth } from './auth/AuthContext';
-import { BottomNav } from './components/BottomNav';
 import { ToastProvider } from './components/ui';
 import { allowsWalletRoute } from './api/releaseGates';
 import { tokenForMesa } from './api/invitationLink';
@@ -161,29 +160,21 @@ function Shell() {
   })();
 
   /**
-   * Barra inferior VIEJA (`BottomNav`), sólo en las pantallas que todavía no
-   * adoptaron la de cinco posiciones de `SISTEMA_DISENO.md` §5 bis · C.
+   * **`showNav` y `BottomNav` ya no existen.** §1.9 · paso 3 terminó: las cuatro
+   * pantallas que quedaban —Perfil, Amigos, Grupos y Cuenta— montan
+   * `AppBottomBar` ellas mismas, igual que Inicio, Escanear, la mesa, Avisos y
+   * las tres de §1.11.
    *
-   * **`home` salió de esta lista** al rediseñarse §1.1: Inicio monta
-   * `AppBottomBar` él mismo, igual que `scan`, `mesa`, `avisos` y las tres
-   * pantallas de §1.11 —que por eso tampoco están acá—. Dejarlo habría
-   * dibujado dos barras superpuestas.
+   * Cada conversión fue montar la barra nueva **y** salir de esta lista en el
+   * mismo commit. La mitad de eso deja las dos barras conviviendo, superpuestas
+   * — y ninguna de las dos mitades falla con un error: falla con una pantalla
+   * que se ve mal, que es lo que no ve un test que no mire.
    *
-   * **`perfil` salió con §1.9 · paso 3.** Cada pantalla se convierte montando
-   * `AppBottomBar` **y saliendo de esta lista en el mismo commit**: hacer una
-   * sola de las dos mitades deja las dos barras conviviendo, superpuestas.
-   *
-   * Cuando salgan Cuenta, Amigos y Grupos, esta variable y `BottomNav.tsx` se
-   * van juntas.
+   * `App` vuelve a montar sólo la pantalla. **Qué barra lleva una pantalla es
+   * decisión de la pantalla**, que es donde el spec la pone: la posición del
+   * círculo central cambia según dónde estás, y eso `App` no lo sabe.
    */
-  const showNav = route.page === 'cuenta';
-
-  return (
-    <>
-      {screen}
-      {showNav && <BottomNav active={route.page} />}
-    </>
-  );
+  return screen;
 }
 
 export default function App() {

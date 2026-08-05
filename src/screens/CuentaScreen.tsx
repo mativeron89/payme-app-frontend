@@ -3,6 +3,7 @@ import { api } from '../api';
 import { useWalletRail } from '../api/walletRail';
 import { accountRailView } from '../api/releaseGates';
 import type { BalanceResponse, HistoryEntry, StatsResponse, WalletTransaction } from '../api/types';
+import { AppBottomBar } from '../components/AppBottomBar';
 import { CardsPanel } from '../components/CardsPanel';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/ui';
@@ -174,9 +175,11 @@ export function CuentaScreen() {
 
   return (
     // T-F1: Cuenta es pestaña de la nav — sin flecha atrás, con aire para la barra.
-    <div className="screen has-nav">
+    <div className="screen has-appbar">
       <TopBar title="Mi Cuenta" />
-      <div className="scroll" style={{ padding: 16 }}>
+      {/* Longhands: el shorthand inline pisa el `padding-bottom` de
+          `.has-appbar .scroll` y la última fila queda debajo de la barra. */}
+      <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
         {accountView.showBalance && <div style={{ background: 'linear-gradient(135deg,#071A33,#10264A)', borderRadius: 18, padding: '16px 18px 14px', marginBottom: 16 }}>
           {/* G-03 RESUELTO (v2.21): el monto grande es el DISPONIBLE real
               (balance − retenido, computado por el backend). */}
@@ -324,6 +327,18 @@ export function CuentaScreen() {
           </>
         )}
       </div>
+      {/* §1.9 · paso 3 · la cuarta y última, con la que `showNav` queda vacío y
+          `BottomNav` se muere.
+
+          `active={null}` —o sea NINGUNA posición encendida— y es lo honesto:
+          Cuenta no es una de las cinco. §1.11 la fusionó adentro de las pestañas
+          de Inicio, así que no le queda posición propia, y encender otra diría
+          que estás en una sección en la que no estás.
+
+          Esta pantalla se retira entera en el paso 6. Hasta entonces sigue
+          alcanzable, y una pantalla alcanzable necesita navegación. Sus dos
+          gates del riel saldo no se tocan acá. */}
+      <AppBottomBar active={null} />
     </div>
   );
 }

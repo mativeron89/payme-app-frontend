@@ -139,4 +139,30 @@ test.describe('§1.9 · la barra de cinco en la sección social', () => {
     await barra.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect(page).toHaveURL(/#\/home$/);
   });
+
+  /**
+   * **Cuenta, la cuarta**, va aparte de la tabla porque **no enciende ninguna
+   * posición**: §1.11 la fusionó dentro de las pestañas de Inicio, así que no le
+   * queda una propia. `active={null}` es lo honesto — encender otra diría que
+   * estás en una sección en la que no estás.
+   *
+   * Se afirma que **ninguna** está marcada, y no sólo que la barra existe: si
+   * alguien le pone una posición "para que no quede vacía", esto lo dice.
+   *
+   * La pantalla se retira entera en el paso 6. Mientras siga alcanzable,
+   * necesita navegación.
+   */
+  test('Cuenta lleva la barra sin marcar ninguna posición, y sale a Inicio', async ({ page }) => {
+    await ingresar(page);
+    await page.goto('/#/cuenta');
+    await expect(page.getByRole('heading', { name: 'Mi Cuenta', exact: true })).toBeVisible();
+
+    const barra = page.getByRole('navigation', { name: 'Navegación principal' });
+    await expect(barra).toHaveCount(1);
+    await expect(barra.locator('[aria-current="page"]')).toHaveCount(0);
+
+    await barra.getByRole('button', { name: 'Inicio', exact: true }).click();
+    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toBeVisible();
+  });
 });
