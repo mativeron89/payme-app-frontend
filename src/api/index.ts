@@ -112,6 +112,17 @@ export const QR_RESTAURANT_ID: string | null = readQrRestaurant();
  */
 export const WALLET_PAY_ENABLED = false;
 
+/**
+ * Techo del multipart del OCR, espejado de `routes/ocr.js:49`
+ * (`limits: { fileSize: 8 * 1024 * 1024 }` → 413 `image_too_large`).
+ *
+ * Se exporta porque la pantalla de Escanear (§1.6) tiene que avisar del límite
+ * ANTES de subir: con mala señal, mandar 12 MB para que el backend los rechace
+ * es un minuto perdido en la mesa. La guarda de abajo se conserva igual — el
+ * adaptador no confía en que la pantalla haya mirado.
+ */
+export const MAX_TICKET_IMAGE_BYTES = 8 * 1024 * 1024;
+
 export interface Api {
   /**
    * `GET /api/config`. Público (sin sesión) y de solo lectura. Lo consume
@@ -267,7 +278,7 @@ const realApi: Api = {
   async scanTicket(image) {
     // POST /api/ocr es multipart (campo `image`). Pasa por httpRequest para
     // compartir timeout, refresh rotativo y errores normalizados con el resto.
-    if (!image || image.size <= 0 || image.size > 8 * 1024 * 1024) throw new Error('scanTicket requiere una imagen de hasta 8 MiB');
+    if (!image || image.size <= 0 || image.size > MAX_TICKET_IMAGE_BYTES) throw new Error('scanTicket requiere una imagen de hasta 8 MiB');
     const form = new FormData();
     form.append('image', image, 'ticket.jpg');
     return httpRequest<OcrResponse>('POST', '/ocr', form, undefined, OCR_TIMEOUT_MS);

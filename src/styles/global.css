@@ -1326,18 +1326,34 @@ body {
   font-family: var(--font-display);
 }
 
-/* ─── Scan (s-scan) ─── */
+/* ══════════════════════════════════════════════════════════════════════════
+   ESCANEAR · SPEC_APP.md §1.6
+   Se probó con la pantalla ENTERA en navy —la idea era que reforzara la
+   metáfora de cámara— y Mati la rechazó. Fondo claro estándar y cabecera navy
+   curva de siempre: Escanear no es una excepción de esqueleto, es una pantalla
+   más del flujo con un componente oscuro adentro.
+
+   Por eso el marco pasa de ser EL FONDO a ser UNA TARJETA flotante: ancho
+   completo de la columna, radio del sistema y la sombra de la tarjeta montada
+   (§5 bis · D). Es el único elemento oscuro de la pantalla.
+   ══════════════════════════════════════════════════════════════════════════ */
 .scan-frame {
-  margin: 0 auto;
-  width: min(240px, 70vw);
   height: 300px;
-  border-radius: 18px;
+  border-radius: var(--r-lg);
   background: linear-gradient(135deg, #1a2942, #0d1829);
+  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+/* El ícono del centro es decorativo: la instrucción la da el texto de abajo. */
+.scan-glyph {
+  display: flex;
+  color: var(--white);
+  opacity: 0.3;
 }
 .scan-corner {
   position: absolute;
@@ -1382,14 +1398,50 @@ body {
   box-shadow: 0 0 8px var(--teal);
   animation: scan 2.4s ease-in-out infinite;
 }
+/* En porcentajes, no en píxeles: los 30px/270px de antes estaban atados a la
+   altura exacta del marco viejo y se salían del recuadro al cambiarla. */
 @keyframes scan {
   0%,
   100% {
-    top: 30px;
+    top: 10%;
   }
   50% {
-    top: 270px;
+    top: 88%;
   }
+}
+
+/* §1.6 lo pide explícito, y hasta hoy no se cumplía: el barrido es el único
+   bucle de esta pantalla. Con movimiento reducido la línea se queda quieta al
+   medio — sigue marcando el marco como activo sin animar nada. El estado real
+   lo dicen el texto y el `aria-busy`, no la línea. */
+@media (prefers-reduced-motion: reduce) {
+  .scan-line {
+    animation: none;
+    top: 50%;
+  }
+}
+
+/* La instrucción y el estado comparten lugar: en reposo dice cómo encuadrar,
+   mientras sube dice que está subiendo. Un solo renglón, con `aria-live`. */
+.scan-hint {
+  margin: var(--sp-4) 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* El aviso de que todavía no leemos la foto de verdad es INFORMACIÓN, y la
+   regla transversal del spec dice que ninguna información baja de 14px: `.note`
+   está en 12.5px. Se sube acá y no en `.note`, que es legacy compartida por
+   media app — cambiarla de una es un barrido propio, no un renglón de §1.6.
+   El margen superior le devuelve el ritmo de 16px cuando viene pegada a un
+   cartel de estado. */
+.scan-note {
+  margin-top: var(--sp-4);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 
 /* ─── Voucher OXXO / CLABE ─── */
@@ -2305,6 +2357,11 @@ body {
 }
 
 .title-card-title {
+  /* Escanear (§1.6) lo monta como <h1>: es el único título de esa pantalla y
+     sin él no queda encabezado ninguno. El reset del margen del <h1> vive acá
+     y no en un `style` inline, que es exactamente el override silencioso que
+     ya rompió el padding de la barra una vez. */
+  margin: 0;
   font-family: var(--font-display);
   font-size: var(--fs-h2);
   line-height: var(--lh-h2);
@@ -3002,6 +3059,33 @@ body {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--text-muted);
+}
+
+/* ─── Estado ADVERTENCIA (§1.6) — mismo esqueleto que el error, otro color ───
+   Una foto de más de 8 MB no es una falla: es un límite conocido con una
+   salida obvia. Va en --warning y NO en --danger, que queda para lo que sí
+   salió mal. Borde SÓLIDO igual: "esto es lo que hay" (§5). */
+.state-warn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--warning);
+  border-radius: var(--r-lg);
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+
+/* Dos salidas lado a lado —Reintentar y Cargarlo a mano— repartidas en partes
+   iguales. Con una sola, ocupa el ancho entero igual que en `.state-error`. */
+.state-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.state-actions > .btn {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ─── La burbuja de la mesa ─── */

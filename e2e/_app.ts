@@ -73,7 +73,9 @@ export interface MesaAbierta {
  */
 export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Escanear ticket' })).toBeVisible();
+  // §1.6 renombró el título al aplicar el rediseño: la cabecera navy de dos
+  // filas no lleva título, y el <h1> pasó a la tarjeta de título `--teal-l`.
+  await expect(page.getByRole('heading', { name: 'Escaneá el ticket' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Capturar' }).click();
   // El OCR mock tarda. Se espera al ticket, no a un número de milisegundos.

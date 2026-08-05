@@ -1,8 +1,9 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, IS_MOCK, QR_RESTAURANT_ID, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey } from '../api';
 import { useWalletRail } from '../api/walletRail';
 import { extractApiError } from '../api/errors';
+import { HttpError } from '../api/http';
 import {
   acquireMonetaryIntent,
   clearUnconfirmed,
@@ -29,7 +30,7 @@ import { AppHeaderFlow } from '../components/AppHeader';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
 import { InviteFriends } from '../components/InviteFriends';
-import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
+import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { centsToString, splitEqual, stringToCents, sumCents } from '../utils/money';
@@ -81,7 +82,13 @@ export function CreateMesaFlow() {
   const [step, setStep] = useState<Step>('scan');
   const [scanning, setScanning] = useState(false);
   const [editItems, setEditItems] = useState<EditItem[]>([]);
-  const [scanFailed, setScanFailed] = useState(false);
+  /**
+   * §1.6 · qué salió mal en la captura. Era un booleano y no alcanzaba: la foto
+   * demasiado grande y el OCR que no pudo leer son estados DISTINTOS, con color
+   * distinto y con salidas distintas. Meterlos en el mismo cartel obligaba a
+   * elegir un copy que no fuera cierto para uno de los dos.
+   */
+  const [scanIssue, setScanIssue] = useState<'ocr' | 'too_large' | null>(null);
   /**
    * §1.3 · el total que el OCR leyó del ticket IMPRESO, tal como vino. Existe
    * sólo para poder contrastarlo contra la suma de las filas y avisar la
@@ -357,9 +364,28 @@ export function CreateMesaFlow() {
     fileInput.current?.click();
   }
 
+  /**
+   * §1.6 · **siempre existe la salida manual**: un OCR que falla no puede
+   * terminar el flujo. Se entra al Ticket en modo edición con una fila vacía —
+   * exactamente el mismo estado en el que queda un OCR que contestó 200 con
+   * cero ítems, así que no estrena camino: reusa el que ya estaba probado.
+   */
+  function cargarAMano() {
+    setScanIssue(null);
+    setScannedTotalCents(null);
+    setEditItems([{ name: '', priceStr: '', quantity: 1 }]);
+    setEditingItems(true);
+    setExpandedItem(0);
+    setStep('ticket');
+  }
+
   async function runScan(image?: Blob) {
     setScanning(true);
     setError(null);
+    // El cartel del intento anterior se va cuando este intento EMPIEZA, no
+    // cuando se toca el botón: si la persona abre la cámara y la cancela, el
+    // motivo por el que falló la vez pasada tiene que seguir en pantalla.
+    setScanIssue(null);
     try {
       const r = await api.scanTicket(image);
       setEditItems(
@@ -374,7 +400,7 @@ export function CreateMesaFlow() {
       // manda 0: eso no es "el ticket sumaba cero", es "no lo sé" → sin dato,
       // no se compara y la observación queda informativa.
       setScannedTotalCents(r.total_cents > 0 ? r.total_cents : null);
-      setScanFailed(false);
+      setScanIssue(null);
       // El OCR puede contestar 200 con CERO ítems (routes/ocr.js devuelve
       // `items: []` ante `provider_error`). Con la lista vacía y la vista normal
       // no habría ni una fila ni el "+ Agregar consumo", que vive en el modo
@@ -382,9 +408,14 @@ export function CreateMesaFlow() {
       setEditingItems(r.items.length === 0);
       setExpandedItem(null);
       setStep('ticket');
-    } catch {
-      setScanFailed(true);
-      toast('No pudimos leer el ticket. Probá sacar la foto de nuevo.');
+    } catch (err) {
+      // El techo se mira ANTES de subir, así que acá sólo cae lo que pasó el
+      // chequeo local y el backend igual rechazó (413 `image_too_large`, p.ej.
+      // un proxy con otro límite). Mismo cartel, misma salida.
+      const tooLarge = err instanceof HttpError && (err.status === 413 || err.body?.error === 'image_too_large');
+      setScanIssue(tooLarge ? 'too_large' : 'ocr');
+      // El cartel de §1.6 dice lo mismo con sus dos salidas al lado. El toast
+      // encima era el segundo aviso del mismo hecho, y tapaba justo la barra.
     } finally {
       setScanning(false);
     }
@@ -703,37 +734,57 @@ export function CreateMesaFlow() {
   }
 
   // ─── Paso 1: scan ────────────────────────────────────────
+  /**
+   * SPEC_APP.md §1.6, aplicado. Lo que cambia y por qué:
+   *
+   *  - **La pantalla deja de ser navy entera.** Se probó así —la idea era
+   *    reforzar la metáfora de cámara— y Mati la rechazó: esqueleto estándar,
+   *    cabecera navy curva y fondo claro, igual que Ticket y División. El marco
+   *    oscuro queda como UNA TARJETA flotante adentro, no como el fondo.
+   *  - Cabecera de flujo de dos filas + tarjeta de título `--teal-l`, la misma
+   *    de las otras tres pantallas de armar mesa. Se estrena `Paso 1 de 5`, que
+   *    faltaba: era el único paso del flujo sin contador.
+   *  - CTA: la barra de cinco posiciones, sin ítem activo. El círculo lleva
+   *    **cámara y dice "Capturar"** — textual del spec: *"El texto del nav item
+   *    no es fijo en toda la app; lo fijo es el componente y su posición."*
+   *  - Los cuatro estados quedan separados y con salida propia: lista ·
+   *    subiendo · **no se pudo leer** (`--danger`, Reintentar + Cargarlo a
+   *    mano) · **foto muy grande** (`--warning`, con el límite en castellano).
+   *
+   * **El "progreso real" que pide el spec NO se puede implementar, y no se
+   * simula.** `scanTicket` arma un `FormData` y lo manda por `httpRequest`, que
+   * es `fetch` (`src/api/http.ts:76`): `fetch` no expone evento de progreso de
+   * subida. La única API del navegador que lo tiene es `XMLHttpRequest`, y
+   * cambiar el riel de red toca el mismo `httpRequest` por el que pasan las
+   * rutas de dinero — eso no se hace de paso. Queda **G-29**, y es gap del riel
+   * de red de este front, no del contrato. Mientras tanto el estado honesto es
+   * "Subiendo la foto…" sin porcentaje: una barra que avanza sin medir nada es
+   * peor que no tenerla, porque la persona la cree.
+   */
   if (step === 'scan') {
     return (
-      <div className="screen" style={{ background: 'var(--navy)' }}>
-        <div className="top-bar" style={{ background: 'var(--navy)' }}>
-          <button
-            className="back-btn"
-            onClick={back}
-            aria-label="Volver"
-            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
-          >
-            <span aria-hidden="true">←</span>
-          </button>
-          <TopLogo inv />
-          <h1 className="top-title" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--fs-legacy-base)', fontFamily: 'var(--font-body)', fontWeight: 600 }}>
-            Escanear ticket
-          </h1>
+      <div className="screen has-appbar">
+        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step="Paso 1 de 5" />
+        <div className="title-card">
+          {/* <h1> y no <div>: es el único título de esta pantalla. */}
+          <h1 className="title-card-title">Escaneá el ticket</h1>
         </div>
-        <div className="scroll" style={{ background: 'var(--navy)', padding: '20px 16px' }}>
-          <div className="scan-frame">
+        <div className="scroll flow-scroll">
+          <div className="scan-frame" aria-busy={scanning || undefined}>
             <div className="scan-corner tl" />
             <div className="scan-corner tr" />
             <div className="scan-corner bl" />
             <div className="scan-corner br" />
             {scanning && <div className="scan-line" />}
-            <div style={{ opacity: 0.3, color: '#fff' }} aria-hidden="true">
+            <div className="scan-glyph" aria-hidden="true">
               <Icon name="receipt" size={40} />
             </div>
           </div>
-          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.75)', fontSize: 'var(--fs-legacy-sm)', margin: '16px 0', fontFamily: 'var(--font-body)' }}>
-            Encuadrá el ticket dentro del marco
-          </div>
+          {/* Un solo renglón para instrucción y estado, con `aria-live`: quien
+              no ve la pantalla también necesita enterarse de que arrancó. */}
+          <p className="scan-hint" aria-live="polite">
+            {scanning ? 'Subiendo la foto…' : 'Encuadrá el ticket dentro del marco'}
+          </p>
           {error && (
             <div className="form-error" role="alert">
               {error}
@@ -741,7 +792,53 @@ export function CreateMesaFlow() {
           )}
           {/* G-01: un QR roto/suspendido se avisa acá, antes de armar nada. */}
           {restaurantError && <div className="note note-orange">{restaurantError}</div>}
-          <div className="note note-amber">
+          {scanIssue === 'ocr' && (
+            <div className="state-error" role="alert">
+              <div className="state-error-row">
+                <Icon name="x-circle" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">No pudimos leer el ticket</div>
+                  <p className="state-error-body">
+                    Probá sacar la foto de nuevo con más luz, o cargá los consumos a mano.
+                  </p>
+                </div>
+              </div>
+              {/* Las DOS salidas, al lado. Un OCR que falla no puede terminar
+                  el flujo: sin "Cargarlo a mano" la mesa queda sin abrir. */}
+              <div className="state-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  Reintentar
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                  Cargarlo a mano
+                </button>
+              </div>
+            </div>
+          )}
+          {scanIssue === 'too_large' && (
+            <div className="state-warn" role="alert">
+              <div className="state-error-row">
+                <Icon name="warning" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">La foto pesa más de 8 MB</div>
+                  <p className="state-error-body">Probá con menos calidad.</p>
+                </div>
+              </div>
+              <div className="state-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  Sacar otra foto
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Este aviso era `note-amber`, y con el cartel de "foto muy grande"
+              al lado se leían como UN SOLO bloque amarillo: mismo tinte, mismo
+              borde, dos cosas distintas. Encontrado mirando la pantalla, no el
+              diff. Pasa a teal —el color informativo del sistema, el mismo de
+              la nota de la mesa garantizada— para que en Escanear el amarillo
+              signifique exactamente una cosa: algo que la persona tiene que
+              resolver ahora. */}
+          <div className="note note-teal scan-note">
             <b>{IS_MOCK ? 'Modo demo:' : 'Ojo:'}</b>{' '}
             {IS_MOCK
               ? 'todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo.'
@@ -758,29 +855,22 @@ export function CreateMesaFlow() {
             onChange={(e) => {
               const file = e.target.files?.[0];
               e.target.value = '';
-              if (file) void runScan(file);
+              if (!file) return;
+              // El techo se mira ACÁ y no después de subir: con mala señal,
+              // mandar 12 MB para que el backend conteste 413 es un minuto
+              // perdido en la mesa. El adaptador conserva su guarda igual.
+              if (file.size > MAX_TICKET_IMAGE_BYTES) {
+                setScanIssue('too_large');
+                return;
+              }
+              void runScan(file);
             }}
           />
-          <button
-            className="btn btn-teal"
-            style={{ marginTop: 14 }}
-            onClick={doScan}
-            disabled={scanning}
-          >
-            {scanning ? (
-              'Leyendo ticket…'
-            ) : (
-              <>
-                <Icon name="camera" size={16} className="ico-inline" /> Capturar
-              </>
-            )}
-          </button>
-          {scanFailed && (
-            <div className="note note-orange" style={{ marginTop: 12 }}>
-              No pudimos leer la foto. Probá de nuevo con más luz.
-            </div>
-          )}
         </div>
+        <AppBottomBar
+          active={null}
+          center={{ label: 'Capturar', icon: 'camera', onClick: doScan, disabled: scanning }}
+        />
       </div>
     );
   }

@@ -416,6 +416,37 @@ ratificada del 2026-08-02; su historia se conserva dormida bajo el plan de
 apagado ya ratificado y pendiente de implementación, no como trabajo de
 producto (ver CLAUDE.md).
 
+## G-29 — el progreso de subida del ticket · **NO es un gap de contrato**
+
+Va acá arriba y **fuera de la tabla a propósito**: la tabla se lleva al dueño
+del contrato, y esto **no se le pide a App Backend**. Es deuda del riel de red
+de este front, y se resuelve adentro de este repo con orden propia.
+
+**Qué pide el spec.** `SPEC_APP.md` §1.6 enumera el estado *subiendo* como
+"progreso real, no spinner infinito".
+
+**Por qué hoy no se puede.** `api.scanTicket()` arma un `FormData` y lo manda
+por `httpRequest` (`src/api/index.ts`), que es **`fetch`**
+(`src/api/http.ts:76`). **`fetch` no expone evento de progreso de subida.** La
+única API del navegador que lo tiene es `XMLHttpRequest`.
+
+**Por qué no se cambió de paso.** `httpRequest` es el mismo por el que pasan
+`POST /mesas`, `POST /mesas/:code/pay` y los refunds. Cambiarle el transporte
+—o abrirle una segunda implementación— por una barra de progreso es tocar el
+riel del dinero para arreglar una animación. Eso necesita su propia orden, con
+su propia verificación de idempotencia, timeout y refresh rotativo.
+
+**Qué hace la pantalla mientras tanto.** Dice **"Subiendo la foto…"**, sin
+porcentaje y sin barra, con `aria-busy` en el marco y `aria-live` en el texto.
+**No se simula progreso**: una barra que avanza sin medir nada es peor que no
+tenerla, porque la persona la cree y espera con un número que es mentira.
+
+**Cómo se cerraría.** Una ruta de subida propia sobre `XMLHttpRequest`, aislada
+del `httpRequest` monetario y usada **sólo** por el OCR, con su
+`upload.onprogress`. Anotado 2026-08-05 desde §1.6.
+
+---
+
 | # | Qué falta | Dónde impacta | Qué hace el front mientras tanto | Estado |
 | --- | --- | --- | --- | --- |
 | **G-28** | **`GET /api/mesas/open` sólo lista las mesas que ABRISTE vos.** La query filtra por `m.opener_user_id = $1` (`contract-mirror/routes/mesas.js:588-596`) y es el **único** listado de mesas del contrato: `GET /mesas/:code` exige conocer el código y pasa por `requireMesaParticipant`. Entonces alguien que se sumó por un link —que es el circuito del momento mágico— **no tiene ninguna forma de encontrar la mesa en la que está** si pierde el link o cierra la app: su Inicio dice "No tenés mesas abiertas" mientras tiene una mesa abierta y plata por pagar. | Inicio (§1.1), donde la burbuja de la mesa es el objeto principal de la pantalla, y el historial (§1.10). Afecta al invitado, que es la mayoría de los comensales de cualquier mesa. | **Nada, y a propósito.** El front no puede inventar un listado que el contrato no expone, y adivinar códigos de mesa está fuera de discusión. La burbuja muestra el vacío real honesto —no dice "no hay", dice que no tenés mesas abiertas— pero el estado es correcto para el organizador y **engañoso para el invitado**, y eso no se arregla con copy. | **Pedido al dueño del contrato (App Backend).** Alcanza con ampliar la misma query a las mesas donde el usuario es participante (`mesa_participants`), que es el criterio que ya usa `requireMesaParticipant`; el shape no cambia. Anotado 2026-08-05 desde §1.1. |
