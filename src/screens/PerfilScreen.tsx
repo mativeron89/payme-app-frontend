@@ -1,6 +1,7 @@
 import { IS_MOCK } from '../api';
 import { resetDemo } from '../api/mock/store';
 import { useAuth } from '../auth/AuthContext';
+import { AppBottomBar } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
 import { Avatar, TopBar } from '../components/ui';
 import { navigate } from '../router';
@@ -14,9 +15,13 @@ export function PerfilScreen() {
   const user = session?.user;
 
   return (
-    <div className="screen has-nav">
+    <div className="screen has-appbar">
       <TopBar title="Perfil" />
-      <div className="scroll" style={{ padding: 16 }}>
+      {/* Longhands y no `padding: 16`: el shorthand inline PISA el
+          `padding-bottom: 140px` de `.has-appbar .scroll`, y la última fila
+          —"Cerrar sesión"— queda debajo de la barra. Está advertido en el CSS y
+          es exactamente el modo en que se cuela. */}
+      <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
         <div style={{ textAlign: 'center', padding: '6px 0 18px' }}>
           <Avatar name={user ? `${user.first_name} ${user.last_name}` : 'PayMe'} size={80} />
           <div className="h2" style={{ marginTop: 10 }}>
@@ -108,6 +113,15 @@ export function PerfilScreen() {
           Cerrar sesión
         </button>
       </div>
+      {/* §1.9 · paso 3 · la barra de cinco posiciones, montada por la pantalla.
+          `mas` activa porque hoy esa posición apunta acá: la pantalla Más no
+          existe todavía y Perfil ES la lista de opciones que va a vivir adentro
+          (`AppBottomBar`, SPEC_APP.md §1.9).
+
+          Va junto con sacar `perfil` de `showNav` en `App.tsx`, en el MISMO
+          commit: montar la barra nueva sin sacar la vieja deja las dos
+          conviviendo, superpuestas. */}
+      <AppBottomBar active="mas" />
     </div>
   );
 }

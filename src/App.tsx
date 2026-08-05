@@ -169,14 +169,15 @@ function Shell() {
    * pantallas de §1.11 —que por eso tampoco están acá—. Dejarlo habría
    * dibujado dos barras superpuestas.
    *
-   * Cuando §1.9 convierta a Amigos, Grupos y Perfil, esta variable y
-   * `BottomNav.tsx` se van juntas.
+   * **`perfil` salió con §1.9 · paso 3.** Cada pantalla se convierte montando
+   * `AppBottomBar` **y saliendo de esta lista en el mismo commit**: hacer una
+   * sola de las dos mitades deja las dos barras conviviendo, superpuestas.
+   *
+   * Cuando salgan Cuenta, Amigos y Grupos, esta variable y `BottomNav.tsx` se
+   * van juntas.
    */
   const showNav =
-    route.page === 'cuenta' ||
-    route.page === 'amigos' ||
-    route.page === 'grupos' ||
-    route.page === 'perfil';
+    route.page === 'cuenta' || route.page === 'amigos' || route.page === 'grupos';
 
   return (
     <>

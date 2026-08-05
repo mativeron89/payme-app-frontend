@@ -45,4 +45,33 @@ test.describe('los accesos de Perfil', () => {
     // que fuera a `cuenta` y de ahí rebotara pasaría igual.
     await expect(page.getByRole('heading', { name: 'Mi Cuenta', exact: true })).toHaveCount(0);
   });
+
+  /**
+   * §1.9 · paso 3 · **la barra nueva, y una sola.**
+   *
+   * Las dos mitades van juntas —montar `AppBottomBar` y salir de `showNav`— y
+   * este recorrido afirma las dos, porque hacer una sola **deja las dos barras
+   * conviviendo** y eso es peor que no haber empezado.
+   *
+   * Y afirma la salida, que es lo que de verdad importa: `BottomNav` era la
+   * ÚNICA vuelta a Inicio desde acá. Si la barra nueva no navegara, la persona
+   * quedaría encerrada en Perfil — el mismo modo de falla que §1.8 cubrió
+   * cuando Avisos perdió su flecha de volver.
+   */
+  test('Perfil monta la barra de cinco y sale a Inicio, sin dos barras', async ({ page }) => {
+    await ingresar(page);
+    await page.goto('/#/perfil');
+
+    // La de cinco posiciones: su círculo central sólo existe en ella.
+    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Más', exact: true })).toBeVisible();
+
+    // Y la vieja NO está. Su posición "Cuenta" no existe en la de cinco, así que
+    // es lo que distingue una barra de la otra sin mirar CSS.
+    await expect(page.getByRole('button', { name: 'Cuenta', exact: true })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Inicio', exact: true }).click();
+    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toBeVisible();
+  });
 });
