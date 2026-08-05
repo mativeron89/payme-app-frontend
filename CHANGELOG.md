@@ -1,5 +1,50 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.39.0 — ORDEN VISUAL · Inicio y sus tres pestañas (2026-08-05)
+
+**`SPEC_APP.md` §1.1 + §1.11 — son la misma pantalla**, así que van juntas: las
+tres pestañas SON Inicio. Es la casa de la app y la que Mati más quiere ver.
+
+- **La estructura pasa a la de §5 bis**: banda navy de borde curvo con el
+  **nombre completo** —trunca con elipsis y nunca empuja la campana, verificado
+  con un nombre largo—, las tres pestañas en burbuja **enganchadas** a la
+  tarjeta montada, y la barra de cinco posiciones en lugar del flotante. La
+  tarjeta va con la esquina cuadrada sólo cuando la pestaña activa es la
+  primera; con la del medio o la última, el enganche se da por contacto.
+- **La mesa va DEBAJO de los accesos**, no encabezando (decisión de Mati). Sus
+  cuatro estados se forzaron uno por uno a 375px: mesa, vacío real sin borde,
+  error de red con **Reintentar** y esqueleto con la silueta. El error antes se
+  tragaba con un `.catch(() => undefined)` y la pantalla decía "No tenés mesas
+  abiertas" cuando lo cierto era que no habíamos podido preguntar.
+- **La pestaña LANZA, no muestra.** Cuenta abre `Ver tarjetas` y `Ver pagos`;
+  Estadísticas, la frase de Mati y un solo acceso. Sin fondo propio y separados
+  por una línea de `--border`. **Asociadas existe y no tiene interior**: hijos
+  es Cuentas Junior y pareja es un instrumento de pago compartido — las dos son
+  stop conditions del gobierno, y una pantalla que ya existe es mucho más
+  difícil de discutir que una que todavía no.
+- **Se cae el carrusel "(N)" y todo plural**: nunca hay más de UNA mesa abierta
+  por usuario. Y se cae el banner de invitación, que ahora vive en Avisos.
+- **Los DOS gates del riel de saldo viajan enteros y gateados.** Son dos, no
+  uno, y al reescribir es fácil conservar el primero y llevarse el segundo por
+  delante.
+- **Las tres pantallas destino**, cada una en su commit: **Tarjetas** —con la
+  máquina de alta MOVIDA a `CardsPanel`, no copiada: dos copias de eso es cómo
+  nace una tarjeta duplicada—, **Pagos** —agrupado por mes con encabezado
+  pegajoso, y `offset` que el emisor validaba y este front nunca mandaba, así
+  que "Cargar más" no existía— y **Estadísticas**, que declara al pie lo que el
+  contrato no tiene en vez de omitirlo.
+- **El botón de abrir mesa pasó de "Nueva Mesa" a "Nueva"** y los e2e se
+  actualizaron en el mismo commit, a propósito: era el renombre esperado, no una
+  regresión. Estaba en tres puntos, no sólo en el helper compartido.
+- **Acreditado mutando**: sacar la barra de la pantalla nueva mata 21 de los 24
+  recorridos; sacarle el año a la clave del agrupado mata 2 de los 6 tests de
+  `pagosView`. El verde no era de arrastre.
+- **G-27 y G-28** en `GAPS.md`. El segundo es el grave: `GET /mesas/open` filtra
+  por `opener_user_id`, así que quien se sumó por un link no tiene forma de
+  volver a encontrar su mesa. Ninguno se cierra desde este repo.
+- Deuda: `--fs-legacy-*` sin cambios netos · la Cuenta vieja queda como ruteo y
+  como superficie de las pantallas que §1.9 todavía no convirtió.
+
 ## 0.38.1 — la salida de §1.2-C estaba muerta (2026-08-05)
 
 Arreglo del defecto que 0.38.0 registró como encontrado y sin arreglar. **Aquella
