@@ -456,8 +456,16 @@ describe('ORDEN 4B · el ancla, YA CERRADA en navegador (ORDEN 5)', () => {
     const domSimulado = deps.filter((d) => /jsdom|happy-dom|testing-library|enzyme/i.test(d));
     expect(domSimulado).toEqual([]);
 
-    // El puntero al recorrido concreto entra con el recorrido, en el commit
-    // siguiente: acá el runner existe pero el spec todavía no, y un test no se
-    // commitea rojo ni siquiera por un paso.
+    // Y el recorrido concreto existe. Si alguien borra el e2e o desinstala
+    // Playwright, esto se pone rojo y el ancla vuelve a estar declarada en vez
+    // de desaparecer en silencio.
+    const specs = import.meta.glob('/e2e/*.spec.ts', {
+      query: '?raw', import: 'default', eager: true,
+    }) as Record<string, string>;
+    const back = specs['/e2e/invitacion-back.spec.ts'];
+    expect(back, 'falta el e2e que cierra el ancla de 4B').toBeTruthy();
+    // Que sea el recorrido que decimos que es, no un archivo vacío con el
+    // nombre correcto.
+    expect(back).toContain('page.goBack()');
   });
 });
