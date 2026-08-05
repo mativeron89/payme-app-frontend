@@ -25,7 +25,7 @@ import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
-import { AppBottomBar } from '../components/AppBottomBar';
+import { AppBottomBar, AppBottomCta } from '../components/AppBottomBar';
 import { AppHeaderFlow } from '../components/AppHeader';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
@@ -1389,88 +1389,129 @@ export function CreateMesaFlow() {
   }
 
   // ─── Paso 5: compartir ───────────────────────────────────
+  /**
+   * SPEC_APP.md §1.7, aplicado. Es el momento de triunfo del organizador — la
+   * mesa quedó garantizada — y hasta hoy era una `TopBar` genérica con el link
+   * suelto en un recuadro punteado.
+   *
+   *  - Cabecera de flujo de dos filas con **"Paso 5 de 5"** y tarjeta de título
+   *    `--teal-l`: *"¡Mesa garantizada!"* + *"Compartí el código para que se
+   *    sumen"*. Con eso se cae la nota que repetía lo mismo en un párrafo — y
+   *    que además todavía nombraba el saldo como método de garantía.
+   *  - **El código es el protagonista**: mono, grande, y tocarlo copia.
+   *  - **"Compartir por WhatsApp"**, no "Compartir link" genérico: es el canal
+   *    real. Fondo `#075E54`, el teal oscuro histórico de la marca y **no** el
+   *    verde moderno `#25D366` que tenía — blanco sobre ese verde da 1.98:1;
+   *    sobre este teal da 7.67:1.
+   *  - CTA: **variante reducida de la barra**, sólo el círculo con casa. No es
+   *    "avanzar un paso": es el cierre del flujo de armar mesa.
+   *
+   * **El QR queda AFUERA**, resuelto en el spec el 2026-08-04: no hay generador
+   * de QR en el repo y Stripe.js es la única dependencia pre-autorizada. No se
+   * deja deshabilitado ni con copy de "próximamente" —mismo tratamiento que
+   * Cuentas Asociadas— y un QR decorativo que no decodifique sería peor que no
+   * tenerlo. Cuando exista la orden de dependencia, el toggle vuelve tal cual.
+   *
+   * **La pestaña "Ya se sumaron" también queda afuera (G-30)**, así que el
+   * componente de pestañas en burbuja no aplica: una sola sección no es un
+   * selector. Invitar va como panel único, sin chrome de tab.
+   *
+   * **"Volver" NO puede llevar a División, aunque sea el paso anterior.** Acá
+   * la mesa YA existe y la garantía YA está autorizada: volver a dividir
+   * cambiaría el contenido, o sea la clave, o sea una segunda mesa con un
+   * segundo hold por el total — que es exactamente lo que B-06 evita. Lleva a la
+   * mesa, que además es donde el organizador tiene que ir a elegir lo suyo.
+   */
   if (step === 'share' && created) {
     const code = created.mesa.code;
+    const copiarLink = () => {
+      if (!link) return;
+      void writeClipboardText(link).then((copied) =>
+        toast(copied ? 'Link de invitación copiado ✓' : 'No se pudo copiar: tu navegador no habilitó el portapapeles'),
+      );
+    };
     return (
-      <div className="screen has-cta">
-        <TopBar title="Invitar a la mesa" onBack={() => navigate('mesa', code)} />
-        <div className="scroll" style={{ padding: 16 }}>
-          <div style={{ textAlign: 'center', padding: '8px 0 12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <Icon name="pasta" size={34} />
-            </div>
-            <div className="h2" style={{ marginTop: 6 }}>
-              Mesa {code}
-            </div>
-            <span className="badge badge-teal" style={{ marginTop: 6 }}>
-              Garantizada ✓
-            </span>
+      <div className="screen has-appbar">
+        <AppHeaderFlow
+          paymeId={session?.user?.payme_id}
+          onBack={() => navigate('mesa', code)}
+          step="Paso 5 de 5"
+        />
+        <div className="title-card">
+          <h1 className="title-card-title">¡Mesa garantizada!</h1>
+          <div className="title-card-sub">Compartí el código para que se sumen</div>
+        </div>
+        <div className="scroll flow-scroll">
+          <div className="share-card">
+            {/* Tocar el código copia EL LINK, no el código: el código solo no
+                sirve para entrar —las tres rutas de mesa exigen sesión y
+                participación desde v2.32.0—, y la credencial es el `?t=`. Por
+                eso el aviso dice "link" y no "código". */}
+            <button
+              type="button"
+              className="share-code"
+              onClick={copiarLink}
+              disabled={!link}
+              aria-label={`Copiar el link de invitación de la mesa ${code}`}
+            >
+              <span className="share-code-txt">{code}</span>
+              <Icon name="copy" size={20} />
+            </button>
+            <a
+              className={`btn share-wa ${link ? '' : 'off'}`}
+              href={link ? `https://wa.me/?text=${encodeURIComponent(`Sumate a la mesa ${code} en PayMe: ${link}`)}` : undefined}
+              target="_blank"
+              rel="noreferrer"
+              aria-disabled={link ? undefined : true}
+            >
+              <Icon name="message" size={18} className="ico-inline" /> Compartir por WhatsApp
+            </a>
           </div>
-          <div className="note note-teal" style={{ marginBottom: 14 }}>
-            La mesa quedó <b>abierta y garantizada</b> con {method === 'card' ? 'tu tarjeta' : 'tu saldo'}.
-            Ahora invitá al resto: cada uno entra con el link y paga su parte.
-          </div>
-          {/* G-11: se avisa acá (garantía YA autorizada), no antes del 3DS. */}
-          {saveOmitidoConnect && (
-            <div className="caption" style={{ marginTop: -8, marginBottom: 14 }}>
-              En este restaurante la tarjeta no se guarda. Podés guardarla desde{' '}
-              <b style={{ color: 'var(--navy)' }}>Cuenta</b>.
-            </div>
-          )}
-          <div className="sectlabel">Link de invitación</div>
-          {linkState === 'ready' && link ? (
+          {/* El link se muestra UNA sola vez y en texto: es una credencial, y
+              esconderla detrás del portapapeles deja a quien no pudo copiar sin
+              nada. La advertencia es de comportamiento real del backend. */}
+          {linkState === 'ready' && link && (
             <>
-              <div style={{ background: 'var(--gray-l)', border: '1.5px dashed var(--teal)', borderRadius: 10, padding: 14, fontFamily: 'monospace', fontSize: 'var(--fs-legacy-xs)', color: '#0a7b80', wordBreak: 'break-all', marginBottom: 10 }}>
-                {link}
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                <button
-                  className="btn btn-teal"
-                  style={{ fontSize: 'var(--fs-legacy-sm)', padding: 13 }}
-                  onClick={() => {
-                    void writeClipboardText(link).then((copied) =>
-                      toast(copied ? 'Link copiado ✓' : 'No se pudo copiar: tu navegador no habilitó el portapapeles'),
-                    );
-                  }}
-                >
-                  <Icon name="copy" size={16} className="ico-inline" /> Copiar
-                </button>
-                <a
-                  className="btn"
-                  style={{ background: '#25D366', color: '#fff', fontSize: 'var(--fs-legacy-sm)', padding: 13, textDecoration: 'none' }}
-                  href={`https://wa.me/?text=${encodeURIComponent(`Sumate a la mesa ${code} en PayMe: ${link}`)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <Icon name="message" size={16} className="ico-inline" /> WhatsApp
-                </a>
-              </div>
+              <p className="share-link">{link}</p>
               <div className="note note-orange">
                 Guardá el link: por seguridad se muestra <b>una sola vez</b> (después podés
                 generar otro desde la mesa).
               </div>
             </>
-          ) : linkState === 'loading' ? (
-            <div className="loading">Generando link…</div>
-          ) : (
-            <div className="note note-orange" role="alert">
-              {linkError ?? 'No pudimos generar el link.'}
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ marginTop: 10 }}
-                onClick={() => void makeLink(code)}
-              >
+          )}
+          {linkState === 'loading' && (
+            <p className="share-link" aria-busy="true">
+              Generando el link…
+            </p>
+          )}
+          {linkState !== 'ready' && linkState !== 'loading' && (
+            <div className="state-error" role="alert">
+              <div className="state-error-row">
+                <Icon name="x-circle" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">No pudimos generar el link</div>
+                  <p className="state-error-body">
+                    {linkError ?? 'La mesa está abierta igual: podés invitar desde acá abajo.'}
+                  </p>
+                </div>
+              </div>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void makeLink(code)}>
                 Reintentar el mismo link
               </button>
             </div>
           )}
-          {/* Feedback del hermano (2026-07-24): invitar DIRECTO a amigos de la
-              app, con buscador y grupos — el link queda para los que no la tienen. */}
+          {/* G-11: se avisa acá (garantía YA autorizada), no antes del 3DS. */}
+          {saveOmitidoConnect && (
+            <p className="share-note">
+              En este restaurante la tarjeta no se guarda. Podés guardarla desde{' '}
+              <b>Cuenta</b>.
+            </p>
+          )}
           <InviteFriends code={code} />
         </div>
-        <button className="cta-float" onClick={() => navigate('mesa', code)}>
-          Ir a la mesa → elegir lo mío
-        </button>
+        {/* Variante REDUCIDA de la barra: el círculo no significa "avanzar un
+            paso", cierra el flujo. Glifo de casa, no flecha. */}
+        <AppBottomCta label="Ir a Inicio" icon="home" onClick={() => navigate('home')} />
       </div>
     );
   }

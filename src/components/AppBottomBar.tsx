@@ -20,8 +20,9 @@ import { navigate, type PageId } from '../router';
  * (§1.6). Textual del spec: *"El texto del nav item no es fijo en toda la app;
  * lo fijo es el componente y su posición."*
  *
- * Compartir (§1.7) NO usa este componente: lleva su propia variante reducida,
- * un círculo solo con ícono de casa, porque cierra el flujo en vez de avanzarlo.
+ * Compartir (§1.7) no usa la barra de cinco: lleva la variante reducida de
+ * abajo, `AppBottomCta` — un círculo solo con ícono de casa, porque cierra el
+ * flujo en vez de avanzarlo.
  */
 
 /** Ítem activo. `null` = ninguno, que es lo correcto en los pasos de flujo. */
@@ -119,6 +120,41 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
         </div>
         {RIGHT.map(item)}
       </nav>
+    </div>
+  );
+}
+
+/**
+ * **Variante REDUCIDA** — hoy sólo Compartir (SPEC_APP.md §1.7, confirmada en
+ * §5 el 2026-08-04: *"Compartir mantiene su variante propia y reducida (círculo
+ * con casa, sin las otras cuatro posiciones)"*).
+ *
+ * Es el mismo bloque, la misma sombra y el mismo círculo que la barra de cinco
+ * —por eso vive acá y no en la pantalla—, pero sin las cuatro posiciones y
+ * **sin etiqueta**: no es navegación, es el cierre del flujo de armar mesa.
+ *
+ * El glifo va en navy sobre `--brand`, 5.77:1. El nombre accesible lo lleva el
+ * `aria-label`, que es lo único que tiene: sin etiqueta visible, un botón sin
+ * nombre sería un círculo mudo para quien no ve la pantalla.
+ */
+export function AppBottomCta({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string;
+  icon: IconName;
+  onClick: () => void;
+}) {
+  return (
+    <div className="appbar-block">
+      <div className="appbar appbar-solo">
+        <div className="appbar-center">
+          <button type="button" className="appbar-fab" onClick={onClick} aria-label={label}>
+            <Icon name={icon} size={24} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

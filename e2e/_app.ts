@@ -92,7 +92,9 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await expect(page.getByRole('heading', { name: 'Confirmá con tu banco' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Confirmar autorización' }).click();
-  await expect(page.getByRole('heading', { name: 'Invitar a la mesa' })).toBeVisible();
+  // §1.7 le puso el título del spec: la pantalla es el momento de triunfo del
+  // organizador, no un formulario de invitación.
+  await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 
   // El link se muestra UNA sola vez, en texto. Se lee de la pantalla y no de un
   // endpoint: lo que importa es lo que la persona puede copiar y mandar.

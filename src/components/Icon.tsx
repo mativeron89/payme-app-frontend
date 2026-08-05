@@ -81,6 +81,10 @@ const GLYPHS = {
      como alternativas evaluadas: SPEC_APP.md §5 lo deja como pregunta abierta. */
   'arrow-right': { d: ['M4.5 12h15', 'M13 5.5l6.5 6.5-6.5 6.5'] },
   'arrow-left': { d: ['M19.5 12h-15', 'M11 5.5 4.5 12 11 18.5'] },
+  /* SPEC_APP.md §1.7 · el chevron de la fila de grupo, que gira al abrir el
+     acordeón. Apunta abajo en reposo: la fila se expande hacia abajo empujando
+     a las siguientes, y el glifo dice hacia dónde. */
+  'chevron-down': { d: ['M6 9.5 12 15.5l6-6'] },
   /* SPEC_APP.md §1.3 · el lápiz de "Modificar ítems" y el ícono de la
      observación del total. `info` va SIEMPRE con su texto al lado: el ícono
      solo no informa nada, y el sistema prohíbe que el color o el glifo sean el

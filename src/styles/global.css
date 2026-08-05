@@ -275,7 +275,11 @@ body {
   color: var(--gray-d);
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  margin-bottom: 8px;
+  /* El reset del margen del <h2> va acá, en la regla BASE, y no en un override
+     más abajo: §1.7 y §1.8 montan estos rótulos como <h2>, y un `margin-top: 0`
+     declarado después le ganaba a los `margin-top` que otras pantallas le
+     ponen a un rótulo suyo — misma especificidad, gana el último. */
+  margin: 0 0 8px;
 }
 /* Texto de apoyo chico. Va en la fuente de CUERPO: la display a 10-11px
    se lee mal y quedaba inconsistente entre pantallas. */
@@ -2260,6 +2264,224 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   COMPARTIR · SPEC_APP.md §1.7
+   El momento de triunfo del organizador. El código es el protagonista y el
+   canal real es WhatsApp; el QR queda afuera hasta que exista una orden de
+   dependencia, y no se dibuja su superficie mientras tanto.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* La barra reducida: una sola columna en vez de cinco. El resto —bloque,
+   sombra, círculo— es exactamente el de la barra de cinco.
+
+   El `min-height` de la posición existe para garantizar el área táctil de los
+   ítems con ícono + etiqueta; acá no hay etiqueta y el círculo ya mide 46px,
+   por encima del mínimo. Dejándolo puesto, el círculo quedaba HUNDIDO adentro
+   del bloque —medido: 2px debajo del borde superior y 12px del borde de la
+   pantalla— y se perdía el gesto de "montado sobre el borde" que es lo que lo
+   hace leer como la misma barra. Sin él, el margen negativo hace su trabajo. */
+.appbar-solo {
+  grid-template-columns: 1fr;
+  padding-bottom: calc(var(--sp-6) + env(safe-area-inset-bottom));
+}
+
+.appbar-solo .appbar-center {
+  min-height: 0;
+  padding: 0;
+}
+
+.share-card {
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+}
+
+/* Tocar el código copia. Es un botón de ancho completo y no un ícono suelto:
+   el área táctil es todo el renglón, que es como se toca esto con una mano. */
+.share-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.share-code:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.share-code:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* Mono: es un código de mesa, el único uso de la familia mono del sistema.
+   Los importes NO van acá — van en display con tabular-nums.
+
+   §1.7 pide `--fs-lg` y **ese token no existe**: la escala del sistema declara
+   SEIS tamaños y dice que no hay un séptimo. Se mapea al más cercano hacia
+   arriba, `--fs-h1`, porque el código es el protagonista de la pantalla — lo
+   que la persona lee en voz alta y copia. Inventar el token sería agregar el
+   séptimo tamaño de contrabando. */
+.share-code-txt {
+  font-family: var(--font-mono);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* `#075E54` es el teal oscuro histórico de WhatsApp. El verde moderno
+   `#25D366` —que es lo que había— da 1.98:1 con texto blanco y reprueba AA de
+   punta a punta; sobre este teal el blanco da 7.67:1. */
+.share-wa {
+  background: #075e54;
+  color: var(--on-dark);
+  text-decoration: none;
+}
+
+.share-wa.off {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* El link en texto, seleccionable. Corta por caracter porque una URL con token
+   no tiene espacios y si no se sale de la pantalla. */
+.share-link {
+  margin: 0 0 var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--link);
+  word-break: break-all;
+}
+
+.share-note {
+  margin: var(--sp-3) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* ─── El panel de invitar: sin pestañas, una sola sección ─── */
+.inv-panel {
+  margin-top: var(--sp-6);
+}
+
+.inv-list {
+  margin-top: var(--sp-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  overflow: hidden;
+}
+
+.inv-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.inv-row:last-child {
+  border-bottom: none;
+}
+
+/* Fila de grupo: ícono propio, nombre, conteo y chevron. Es un botón entero
+   —área táctil de todo el renglón— y no un chevron chiquito al costado. */
+.inv-group {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+
+.inv-group:last-child {
+  border-bottom: none;
+}
+
+.inv-group:focus-visible,
+.inv-row .btn:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
+
+.inv-group-ico {
+  flex: none;
+  width: 32px;
+  font-size: 22px;
+  line-height: 1;
+  text-align: center;
+}
+
+/* Gira al abrir. Con movimiento reducido cambia igual, sin transición: la
+   dirección del glifo es información, la animación no. */
+.inv-chevron {
+  flex: none;
+  display: flex;
+  color: var(--text-muted);
+  transition: transform var(--mo-fast, 120ms) ease-out;
+}
+
+.inv-chevron.on {
+  transform: rotate(180deg);
+}
+
+/* Los integrantes van indentados bajo su grupo: empujan a los grupos de abajo,
+   que es el gesto de acordeón que pide el spec. */
+.inv-members {
+  padding-left: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.inv-none {
+  margin: var(--sp-3) 0;
+  padding: 0 var(--sp-4);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* Botón CON BORDE y sin relleno: es una acción repetible sobre una lista, no
+   el cierre de una pantalla. */
+.btn-outline {
+  background: none;
+  border: 1.5px solid var(--action);
+  color: var(--action);
+}
+
+.inv-groups-label {
+  margin-top: var(--sp-6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inv-chevron {
+    transition: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    AVISOS · SPEC_APP.md §1.8
    No leído = punto --action navy de 8px A LA IZQUIERDA **más** peso 700 en el
    título. El punto solo no alcanza: son dos señales porque una sola se pierde
@@ -2358,10 +2580,7 @@ body {
 
 /* Los rótulos de sección son <h2> desde §1.8: sin tarjeta de título, esta
    pantalla no tenía NINGÚN encabezado para un lector de pantalla. El reset del
-   margen del <h2> va acá y no en un `style` inline. */
-.sectlabel {
-  margin-top: 0;
-}
+   margen del <h2> vive en la regla base de `.sectlabel`, no acá. */
 
 .aviso-row {
   display: flex;

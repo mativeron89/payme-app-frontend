@@ -38,9 +38,15 @@ test.describe('el camino de pago completo', () => {
     const mesa = await abrirMesaConLink(page);
 
     // La mesa nació garantizada (A-1): sin hold autorizado no hay mesa abierta.
-    await expect(page.getByText('Garantizada ✓')).toBeVisible();
+    // §1.7 movió ese hecho del badge "Garantizada ✓" al título de la pantalla,
+    // y le sumó el código de mesa como protagonista: si el hold no se hubiera
+    // autorizado, no habría ni pantalla ni código que copiar.
+    await expect(page.getByText(mesa.code, { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: /Ir a la mesa/ }).click();
+    // §1.7 · el CTA es el círculo con casa, que cierra el flujo. El atajo a la
+    // mesa —donde el organizador elige lo suyo— es "Volver": la mesa YA existe
+    // y está garantizada, así que retroceder a División está prohibido (B-06).
+    await page.getByRole('button', { name: 'Volver', exact: true }).click();
     await expect(page.getByText(new RegExp(`Mesa ${mesa.code}`))).toBeVisible();
     await expect(page.getByText('$840.00')).toBeVisible();
 
@@ -86,7 +92,7 @@ test.describe('el camino de pago completo', () => {
   test('la propina se recalcula: 0% deja el total en la parte exacta', async ({ page }) => {
     await ingresar(page);
     await abrirMesaConLink(page);
-    await page.getByRole('button', { name: /Ir a la mesa/ }).click();
+    await page.getByRole('button', { name: 'Volver', exact: true }).click();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('button', { name: 'Continuar' }).click();
 
