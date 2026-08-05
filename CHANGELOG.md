@@ -1,5 +1,62 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.40.0 — ORDEN VISUAL · Escanear, y §1.7 frenada con dos motivos (2026-08-05)
+
+**`SPEC_APP.md` §1.6 aplicada entera y verificada.** §1.7 Compartir **no entra**:
+está frenada por dos cosas que no se deciden desde este repo, detalladas abajo.
+
+- **Escanear deja de ser una pantalla navy entera.** Se probó así —la idea era
+  reforzar la metáfora de cámara— y Mati la rechazó: esqueleto estándar,
+  cabecera navy curva de dos filas, tarjeta de título `--teal-l` y fondo claro,
+  igual que Ticket y División. El marco oscuro pasa de ser **el fondo** a ser
+  **una tarjeta flotante** con la sombra de la tarjeta montada. Estrena
+  `Paso 1 de 5`: era el único paso del flujo sin contador.
+- **La barra de cinco posiciones, con cámara y "Capturar" en el círculo.** El
+  texto del nav item no es fijo en toda la app; lo fijo es el componente y su
+  posición.
+- **Los cuatro estados quedan separados y cada uno con su salida.** `scanFailed`
+  era un booleano: la foto de más de 8 MB (`--warning`) y el OCR que no pudo
+  leer (`--danger`) son estados distintos, y meterlos en el mismo cartel obligaba
+  a elegir un copy que no era cierto para uno de los dos. **Siempre existe la
+  salida manual**: "Cargarlo a mano" entra al Ticket en edición con una fila
+  vacía, así que un OCR que falla no puede terminar el flujo.
+- **El techo de 8 MB se mira antes de subir**, no después: con mala señal,
+  mandar 12 MB para que el backend conteste 413 es un minuto perdido en la mesa.
+  Sale de `MAX_TICKET_IMAGE_BYTES`, y un test nuevo lo **lee del espejo** de
+  `routes/ocr.js` en vez de confiar en un número escrito de memoria — acreditado
+  bajándolo a 4 MiB y viendo caer el test.
+- **El barrido respeta `prefers-reduced-motion`**, que §1.6 pide explícito y
+  hasta hoy no se cumplía. Los keyframes pasan a porcentajes: los 30px/270px
+  estaban atados a la altura del marco viejo. Acreditado forzando la media
+  query — `animation-name` pasa de `scan` a `none` y la línea queda en 150px,
+  la mitad exacta del marco.
+- **El "progreso real" del spec no se puede implementar y NO se simula.**
+  `scanTicket` manda `FormData` por `httpRequest`, que es `fetch`, y `fetch` no
+  expone progreso de subida; la única API que lo tiene es `XMLHttpRequest`, y
+  cambiar el riel de red toca el mismo `httpRequest` de las rutas de dinero.
+  Queda **G-29**, anotado **fuera** de la tabla de GAPS a propósito: es deuda de
+  este repo, no algo que se le pida a App Backend. Mientras tanto la pantalla
+  dice "Subiendo la foto…", sin porcentaje, con `aria-busy` y `aria-live`.
+- **Un defecto encontrado mirando la pantalla a 375px**, no el diff: el cartel de
+  "foto muy grande" y la nota amarilla del modo demo se leían como un solo
+  bloque —mismo tinte, mismo borde, dos cosas distintas—. La nota pasa a teal
+  para que en Escanear el amarillo signifique exactamente una cosa. De paso sube
+  a 14px: era información a 12.5px, debajo del piso del sistema.
+
+**Por qué §1.7 Compartir no entra.** Las dos son decisiones de otro, no
+dificultades de implementación:
+
+1. **El QR.** El spec pide un botón que despliegue el código QR del link. **No
+   hay ningún generador de QR en el repo** y la única dependencia autorizada de
+   este front es Stripe.js; escribir un codificador QR a mano —Reed-Solomon
+   incluido— no es un renglón de una orden visual. Un QR decorativo que no
+   decodifica al link sería peor que no tenerlo.
+2. **La pestaña "Ya se sumaron"** no tiene dato: **G-30**. El contrato no expone
+   quiénes están en una mesa, y en casi todo el resto eso es a propósito.
+
+Sin esas dos, la pantalla se queda sin una de sus dos pestañas en burbuja y sin
+uno de sus tres botones de compartir. Media pantalla no es la pantalla.
+
 ## 0.39.1 — las tres pantallas de §1.11 pasan a primer nivel (2026-08-05)
 
 Autorizado tras el aviso previo sobre `src/App.tsx`. Deshace el rodeo con el que
