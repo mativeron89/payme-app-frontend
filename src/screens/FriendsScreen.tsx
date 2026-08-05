@@ -233,10 +233,10 @@ export function FriendsScreen() {
                 onChange={(e) => setNewQuery(e.target.value)}
               />
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-ghost" style={{ padding: 12, fontSize: 'var(--fs-sm)' }} onClick={() => setAdding(false)}>
+                <button className="btn btn-ghost" style={{ padding: 12, fontSize: 'var(--fs-legacy-sm)' }} onClick={() => setAdding(false)}>
                   Cancelar
                 </button>
-                <button className="btn btn-primary" style={{ padding: 12, fontSize: 'var(--fs-sm)' }} onClick={addFriend} disabled={busy || !newQuery.trim()}>
+                <button className="btn btn-primary" style={{ padding: 12, fontSize: 'var(--fs-legacy-sm)' }} onClick={addFriend} disabled={busy || !newQuery.trim()}>
                   {busy ? 'Buscando…' : 'Agregar'}
                 </button>
               </div>
@@ -261,7 +261,7 @@ export function FriendsScreen() {
                 </div>
                 {walletRailEnabled && <button
                   className="btn"
-                  style={{ width: 'auto', padding: '7px 12px', fontSize: 'var(--fs-sm)', background: 'var(--teal-l)', color: '#0a7b80' }}
+                  style={{ width: 'auto', padding: '7px 12px', fontSize: 'var(--fs-legacy-sm)', background: 'var(--teal-l)', color: '#0a7b80' }}
                   onClick={() => navigate('transferir', f.payme_id)}
                   aria-label={`Transferir a ${f.full_name}`}
                 >
@@ -269,7 +269,7 @@ export function FriendsScreen() {
                 </button>}
                 <button
                   className="back-btn"
-                  style={{ width: 30, height: 30, fontSize: 'var(--fs-sm)' }}
+                  style={{ width: 30, height: 30, fontSize: 'var(--fs-legacy-sm)' }}
                   aria-label={`Quitar a ${f.first_name}`}
                   onClick={async () => {
                     if (!window.confirm(`¿Quitar a ${f.full_name} de tus amigos?`)) return;

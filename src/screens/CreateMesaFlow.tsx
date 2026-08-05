@@ -653,7 +653,7 @@ export function CreateMesaFlow() {
             <span aria-hidden="true">←</span>
           </button>
           <TopLogo inv />
-          <h1 className="top-title" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--fs-base)', fontFamily: 'var(--font-body)', fontWeight: 600 }}>
+          <h1 className="top-title" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--fs-legacy-base)', fontFamily: 'var(--font-body)', fontWeight: 600 }}>
             Escanear ticket
           </h1>
         </div>
@@ -668,7 +668,7 @@ export function CreateMesaFlow() {
               <Icon name="receipt" size={40} />
             </div>
           </div>
-          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.75)', fontSize: 'var(--fs-sm)', margin: '16px 0', fontFamily: 'var(--font-body)' }}>
+          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.75)', fontSize: 'var(--fs-legacy-sm)', margin: '16px 0', fontFamily: 'var(--font-body)' }}>
             Encuadrá el ticket dentro del marco
           </div>
           {error && (
@@ -731,29 +731,29 @@ export function CreateMesaFlow() {
             ←
           </button>
           <TopLogo inv />
-          <div className="top-title" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--fs-base)', fontFamily: 'var(--font-body)', fontWeight: 600 }}>
+          <div className="top-title" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--fs-legacy-base)', fontFamily: 'var(--font-body)', fontWeight: 600 }}>
             Ticket de la mesa
           </div>
         </div>
         <div style={{ background: 'var(--navy)', padding: '0 20px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 800, color: '#fff' }}>
+            <div style={{ fontSize: 'var(--fs-legacy-lg)', fontWeight: 800, color: '#fff' }}>
               {restaurant?.name ?? 'Restaurante'}
             </div>
             {restaurant?.address && (
-              <div style={{ fontSize: 'var(--fs-sm)', color: 'rgba(255,255,255,0.55)', marginTop: 2, fontFamily: 'var(--font-body)' }}>
+              <div style={{ fontSize: 'var(--fs-legacy-sm)', color: 'rgba(255,255,255,0.55)', marginTop: 2, fontFamily: 'var(--font-body)' }}>
                 <Icon name="pin" size={14} className="ico-inline" /> {restaurant.address}
               </div>
             )}
           </div>
-          <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '6px 14px', borderRadius: 20, fontWeight: 800, fontSize: 'var(--fs-base)' }}>
+          <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '6px 14px', borderRadius: 20, fontWeight: 800, fontSize: 'var(--fs-legacy-base)' }}>
             {formatMXN(total)}
           </div>
         </div>
         <div className="scroll">
           <div className="card" style={{ margin: 12 }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--gray-l)' }}>
-              <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 700 }}>Detalle</div>
+              <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 700 }}>Detalle</div>
               <div className="caption" style={{ marginTop: 2 }}>
                 {editItems.length} consumo{editItems.length === 1 ? '' : 's'} · {formatMXN(total)} ·
                 corregí lo que haga falta antes de dividir
@@ -773,16 +773,16 @@ export function CreateMesaFlow() {
               >
                 <input
                   className="input"
-                  style={{ flex: 1, minWidth: 0, padding: '6px 8px', fontSize: 'var(--fs-base)' }}
+                  style={{ flex: 1, minWidth: 0, padding: '6px 8px', fontSize: 'var(--fs-legacy-base)' }}
                   value={it.name}
                   placeholder="Consumo"
                   onChange={(e) => updateItem(idx, { name: e.target.value })}
                   aria-label={`Nombre del consumo ${idx + 1}`}
                 />
-                <span style={{ fontWeight: 700, fontSize: 'var(--fs-sm)', flex: 'none' }}>$</span>
+                <span style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-sm)', flex: 'none' }}>$</span>
                 <input
                   className="input"
-                  style={{ width: 60, padding: '6px 6px', fontSize: 'var(--fs-base)', flex: 'none', textAlign: 'right' }}
+                  style={{ width: 60, padding: '6px 6px', fontSize: 'var(--fs-legacy-base)', flex: 'none', textAlign: 'right' }}
                   inputMode="decimal"
                   value={it.priceStr}
                   placeholder="0"
@@ -791,20 +791,20 @@ export function CreateMesaFlow() {
                 />
                 <button
                   className="back-btn"
-                  style={{ width: 22, height: 22, fontSize: 'var(--fs-sm)', flex: 'none' }}
+                  style={{ width: 22, height: 22, fontSize: 'var(--fs-legacy-sm)', flex: 'none' }}
                   onClick={() => updateItem(idx, { quantity: Math.max(1, it.quantity - 1) })}
                   aria-label={`Menos cantidad de ${it.name || `consumo ${idx + 1}`}`}
                 >
                   −
                 </button>
                 <span
-                  style={{ minWidth: 14, textAlign: 'center', fontWeight: 700, fontSize: 'var(--fs-sm)', flex: 'none' }}
+                  style={{ minWidth: 14, textAlign: 'center', fontWeight: 700, fontSize: 'var(--fs-legacy-sm)', flex: 'none' }}
                 >
                   {it.quantity}
                 </span>
                 <button
                   className="back-btn"
-                  style={{ width: 22, height: 22, fontSize: 'var(--fs-sm)', flex: 'none' }}
+                  style={{ width: 22, height: 22, fontSize: 'var(--fs-legacy-sm)', flex: 'none' }}
                   onClick={() => updateItem(idx, { quantity: it.quantity + 1 })}
                   aria-label={`Más cantidad de ${it.name || `consumo ${idx + 1}`}`}
                 >
@@ -812,7 +812,7 @@ export function CreateMesaFlow() {
                 </button>
                 <button
                   className="back-btn"
-                  style={{ width: 22, height: 22, fontSize: 'var(--fs-xs)', flex: 'none' }}
+                  style={{ width: 22, height: 22, fontSize: 'var(--fs-legacy-xs)', flex: 'none' }}
                   onClick={() => removeItem(idx)}
                   aria-label={`Quitar ${it.name || `consumo ${idx + 1}`}`}
                 >
@@ -822,7 +822,7 @@ export function CreateMesaFlow() {
             ))}
             <button
               className="btn btn-ghost"
-              style={{ margin: '8px 16px 10px', width: 'auto', fontSize: 'var(--fs-sm)', padding: '9px 14px' }}
+              style={{ margin: '8px 16px 10px', width: 'auto', fontSize: 'var(--fs-legacy-sm)', padding: '9px 14px' }}
               onClick={addItem}
             >
               <Icon name="plus" size={16} className="ico-inline" /> Agregar consumo
@@ -854,7 +854,7 @@ export function CreateMesaFlow() {
         <TopBar title="Dividir cuenta" onBack={back} />
         <div className="scroll" style={{ padding: '18px 16px' }}>
           <div style={{ padding: '4px 2px 16px' }}>
-            <div className="h1" style={{ fontSize: 'var(--fs-2xl)' }}>
+            <div className="h1" style={{ fontSize: 'var(--fs-legacy-2xl)' }}>
               ¿Cómo pagan?
             </div>
           </div>
@@ -926,11 +926,11 @@ export function CreateMesaFlow() {
         <TopBar title="Garantizá la mesa" onBack={back} />
         <div className="scroll" style={{ padding: 16 }}>
           <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 14 }}>
-            <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Garantía de la mesa
             </div>
-            <div style={{ fontSize: 'var(--fs-3xl)', fontWeight: 800, color: '#fff' }}>{formatMXN(total)}</div>
-            <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.45)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+            <div style={{ fontSize: 'var(--fs-legacy-3xl)', fontWeight: 800, color: '#fff' }}>{formatMXN(total)}</div>
+            <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.45)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
               Se retiene, no se cobra. Si todos pagan, se libera completa.
             </div>
           </div>
@@ -1010,7 +1010,7 @@ export function CreateMesaFlow() {
               >
                 <CardBrandChip brand={c.brand} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>
+                  <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>
                     {c.bank_name ?? c.brand} ···· {c.last_four}
                     {c.is_default && (
                       <span className="caption" style={{ marginLeft: 8 }}>
@@ -1040,7 +1040,7 @@ export function CreateMesaFlow() {
                 <Icon name="plus" size={22} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>
+                <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>
                   {cards.length > 0 ? 'Usar otra tarjeta' : 'Tarjeta'}
                 </div>
                 <div className="caption">Retención en la tarjeta (puede pedir confirmación del banco)</div>
@@ -1087,7 +1087,7 @@ export function CreateMesaFlow() {
               <Icon name="wallet" size={22} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Saldo PayMe</div>
+              <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>Saldo PayMe</div>
               <div className="caption">
                 Congela {formatMXN(total)} de tu saldo hasta que la mesa cierre
               </div>
@@ -1209,13 +1209,13 @@ export function CreateMesaFlow() {
           <div className="sectlabel">Link de invitación</div>
           {linkState === 'ready' && link ? (
             <>
-              <div style={{ background: 'var(--gray-l)', border: '1.5px dashed var(--teal)', borderRadius: 10, padding: 14, fontFamily: 'monospace', fontSize: 'var(--fs-xs)', color: '#0a7b80', wordBreak: 'break-all', marginBottom: 10 }}>
+              <div style={{ background: 'var(--gray-l)', border: '1.5px dashed var(--teal)', borderRadius: 10, padding: 14, fontFamily: 'monospace', fontSize: 'var(--fs-legacy-xs)', color: '#0a7b80', wordBreak: 'break-all', marginBottom: 10 }}>
                 {link}
               </div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <button
                   className="btn btn-teal"
-                  style={{ fontSize: 'var(--fs-sm)', padding: 13 }}
+                  style={{ fontSize: 'var(--fs-legacy-sm)', padding: 13 }}
                   onClick={() => {
                     void writeClipboardText(link).then((copied) =>
                       toast(copied ? 'Link copiado ✓' : 'No se pudo copiar: tu navegador no habilitó el portapapeles'),
@@ -1226,7 +1226,7 @@ export function CreateMesaFlow() {
                 </button>
                 <a
                   className="btn"
-                  style={{ background: '#25D366', color: '#fff', fontSize: 'var(--fs-sm)', padding: 13, textDecoration: 'none' }}
+                  style={{ background: '#25D366', color: '#fff', fontSize: 'var(--fs-legacy-sm)', padding: 13, textDecoration: 'none' }}
                   href={`https://wa.me/?text=${encodeURIComponent(`Sumate a la mesa ${code} en PayMe: ${link}`)}`}
                   target="_blank"
                   rel="noreferrer"

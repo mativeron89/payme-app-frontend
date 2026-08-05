@@ -30,19 +30,26 @@
   --orange-txt: #c2410c;
   --teal-txt: #0a7b80;
   --gray-txt: #64748b;
-  /* T-D3: escala tipográfica ÚNICA (antes: ~25 tamaños ad-hoc). Regla de
-     migración: 10-10.5→2xs · 11-11.5→xs · 12-13→sm · 13.5-14.5→base ·
-     15-16→md · 17-18→lg · 19-22→xl · 24-28→2xl · 32-36→3xl · 38-44→hero. */
-  --fs-2xs: 10.5px;
-  --fs-xs: 11.5px;
-  --fs-sm: 12.5px;
-  --fs-base: 14px;
-  --fs-md: 15.5px;
-  --fs-lg: 17px;
-  --fs-xl: 20px;
-  --fs-2xl: 26px;
-  --fs-3xl: 33px;
-  --fs-hero: 40px;
+  /* ESCALA LEGACY EN MIGRACIÓN — no se usa en pantalla nueva.
+     Viene de T-D3 (escala ÚNICA que reemplazó ~25 tamaños ad-hoc). Se renombró
+     con prefijo `legacy-` para liberar los nombres de la escala del sistema de
+     diseño (SISTEMA_DISENO.md §2), que reusa `--fs-sm` y `--fs-xs` con OTROS
+     valores: 12.5→14 y 11.5→12. Sin el prefijo, definir la escala nueva movía
+     44 usos de tamaño en silencio.
+     El rename NO cambió un pixel: es el mismo valor con otro nombre.
+     DEUDA: 100 usos a migrar a la escala del sistema, pantalla por pantalla
+     (el propio sistema lo manda así, §2 "los SPEC lo aplican pantalla por
+     pantalla"). Cuando el último uso muera, este bloque se borra entero. */
+  --fs-legacy-2xs: 10.5px;
+  --fs-legacy-xs: 11.5px;
+  --fs-legacy-sm: 12.5px;
+  --fs-legacy-base: 14px;
+  --fs-legacy-md: 15.5px;
+  --fs-legacy-lg: 17px;
+  --fs-legacy-xl: 20px;
+  --fs-legacy-2xl: 26px;
+  --fs-legacy-3xl: 33px;
+  --fs-legacy-hero: 40px;
   --radius: 16px;
   --radius-sm: 10px;
   --shadow-sm: 0 2px 8px rgba(15, 31, 61, 0.08);
@@ -1526,6 +1533,6 @@ body {
 }
 .join-banner-title {
   font-weight: 700;
-  font-size: var(--fs-base);
+  font-size: var(--fs-legacy-base);
   color: var(--navy);
 }

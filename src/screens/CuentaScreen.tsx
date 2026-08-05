@@ -114,10 +114,10 @@ function CategoryPie({ slices }: { slices: Array<[string, number]> }) {
               style={{ width: 10, height: 10, borderRadius: 3, background: CAT_COLORS[i % CAT_COLORS.length], flexShrink: 0 }}
               aria-hidden="true"
             />
-            <span style={{ flex: 1, fontSize: 'var(--fs-sm)', fontFamily: 'var(--font-body)' }}>
+            <span style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontFamily: 'var(--font-body)' }}>
               {CAT_LABEL[cat] ?? 'Otros'}
             </span>
-            <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
               {formatMXN(v)}
             </span>
           </div>
@@ -384,14 +384,14 @@ export function CuentaScreen() {
         {accountView.showBalance && <div style={{ background: 'linear-gradient(135deg,#071A33,#10264A)', borderRadius: 18, padding: '16px 18px 14px', marginBottom: 16 }}>
           {/* G-03 RESUELTO (v2.21): el monto grande es el DISPONIBLE real
               (balance − retenido, computado por el backend). */}
-          <div style={{ fontSize: 'var(--fs-2xs)', color: 'rgba(255,255,255,0.7)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1.3, fontWeight: 700 }}>
+          <div style={{ fontSize: 'var(--fs-legacy-2xs)', color: 'rgba(255,255,255,0.7)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1.3, fontWeight: 700 }}>
             Disponible
           </div>
-          <div style={{ fontSize: 'var(--fs-2xl)', fontWeight: 800, color: '#fff', lineHeight: 1 }}>
+          <div style={{ fontSize: 'var(--fs-legacy-2xl)', fontWeight: 800, color: '#fff', lineHeight: 1 }}>
             {balance ? formatMXN(balance.available_cents) : '…'}
           </div>
           {balance && balance.held_balance_cents > 0 && (
-            <div style={{ fontSize: 'var(--fs-sm)', color: 'rgba(255,255,255,0.75)', marginTop: 7, fontFamily: 'var(--font-body)' }}>
+            <div style={{ fontSize: 'var(--fs-legacy-sm)', color: 'rgba(255,255,255,0.75)', marginTop: 7, fontFamily: 'var(--font-body)' }}>
               <Icon name="lock" size={14} className="ico-inline" /> Retenido en garantías:{' '}
               {formatMXN(balance.held_balance_cents)}
             </div>
@@ -426,15 +426,15 @@ export function CuentaScreen() {
                 <div className="sectlabel">Este mes</div>
                 <div style={{ display: 'flex', gap: 8, textAlign: 'center' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 800 }}>{formatMXN(stats.month.spent_cents)}</div>
+                    <div style={{ fontSize: 'var(--fs-legacy-lg)', fontWeight: 800 }}>{formatMXN(stats.month.spent_cents)}</div>
                     <div className="caption">gastado</div>
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 800 }}>{stats.month.visits}</div>
+                    <div style={{ fontSize: 'var(--fs-legacy-lg)', fontWeight: 800 }}>{stats.month.visits}</div>
                     <div className="caption">salidas</div>
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 800 }}>{formatMXN(stats.month.avg_per_visit_cents)}</div>
+                    <div style={{ fontSize: 'var(--fs-legacy-lg)', fontWeight: 800 }}>{formatMXN(stats.month.avg_per_visit_cents)}</div>
                     <div className="caption">promedio</div>
                   </div>
                 </div>
@@ -466,12 +466,12 @@ export function CuentaScreen() {
                         <Icon name="receipt" size={20} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)' }}>{h.restaurant}</div>
+                        <div style={{ fontWeight: 600, fontSize: 'var(--fs-legacy-base)' }}>{h.restaurant}</div>
                         <div className="caption">
                           {txDate(h.date)} · Mesa {h.mesa_code}
                         </div>
                       </div>
-                      <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>
+                      <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>
                         {formatMXN(h.amount_cents)}
                       </div>
                     </div>
@@ -496,7 +496,7 @@ export function CuentaScreen() {
                     <Icon name={walletTxIcon(t.type)} size={20} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)' }}>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-legacy-base)' }}>
                       {t.description ?? walletTxLabel(t.type)}
                     </div>
                     <div className="caption">
@@ -506,7 +506,7 @@ export function CuentaScreen() {
                   <div
                     style={{
                       fontWeight: 700,
-                      fontSize: 'var(--fs-base)',
+                      fontSize: 'var(--fs-legacy-base)',
                       color: t.sign === 'credit' ? 'var(--green)' : 'var(--red)',
                     }}
                   >
@@ -535,8 +535,8 @@ export function CuentaScreen() {
               <div key={pm.id} className="card card-p" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <CardBrandChip brand={pm.brand} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)' }}>{pm.bank_name ?? pm.brand}</div>
-                  <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--gray-txt)', fontFamily: 'monospace' }}>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--fs-legacy-base)' }}>{pm.bank_name ?? pm.brand}</div>
+                  <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'var(--gray-txt)', fontFamily: 'monospace' }}>
                     ···· {pm.last_four} · {pm.type === 'credit' ? 'Crédito' : 'Débito'}
                   </div>
                 </div>
@@ -549,7 +549,7 @@ export function CuentaScreen() {
                 )}
                 <button
                   className="back-btn"
-                  style={{ width: 30, height: 30, fontSize: 'var(--fs-base)' }}
+                  style={{ width: 30, height: 30, fontSize: 'var(--fs-legacy-base)' }}
                   aria-label={`Quitar tarjeta ${pm.last_four}`}
                   onClick={() => removePm(pm)}
                 >

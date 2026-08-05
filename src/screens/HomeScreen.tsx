@@ -126,7 +126,7 @@ export function HomeScreen() {
           <Icon name="bell" size={21} />
           {unread > 0 && (
             <span
-              style={{ position: 'absolute', top: -2, right: -4, background: 'var(--orange)', color: '#fff', fontSize: 'var(--fs-2xs)', fontWeight: 700, borderRadius: 10, minWidth: 17, height: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', fontFamily: 'var(--font-body)' }}
+              style={{ position: 'absolute', top: -2, right: -4, background: 'var(--orange)', color: '#fff', fontSize: 'var(--fs-legacy-2xs)', fontWeight: 700, borderRadius: 10, minWidth: 17, height: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', fontFamily: 'var(--font-body)' }}
             >
               {unread}
             </span>
@@ -265,7 +265,7 @@ export function HomeScreen() {
                     <Icon name={walletTxIcon(t.type)} size={20} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-legacy-base)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {t.description ?? walletTxLabel(t.type)}
                     </div>
                     <div className="caption">{txDate(t.date)}</div>
@@ -274,7 +274,7 @@ export function HomeScreen() {
                   <div
                     style={{
                       fontWeight: 700,
-                      fontSize: 'var(--fs-base)',
+                      fontSize: 'var(--fs-legacy-base)',
                       fontVariantNumeric: 'tabular-nums',
                       color: showBalance ? (t.sign === 'credit' ? 'var(--green)' : 'var(--red)') : 'var(--gray-txt)',
                     }}

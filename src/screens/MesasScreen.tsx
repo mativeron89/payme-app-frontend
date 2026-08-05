@@ -181,12 +181,12 @@ export function MesasScreen() {
                     <Icon name={CATEGORY_EMOJI[h.category] ?? 'dining'} size={22} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)' }}>{h.restaurant}</div>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-legacy-base)' }}>{h.restaurant}</div>
                     <div className="caption">
                       {historyDate(h.date)} · Mesa {h.mesa_code}
                     </div>
                   </div>
-                  <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)', fontVariantNumeric: 'tabular-nums' }}>
+                  <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)', fontVariantNumeric: 'tabular-nums' }}>
                     {formatMXN(h.amount_cents)}
                   </div>
                 </div>

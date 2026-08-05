@@ -85,7 +85,7 @@ export function AvisosScreen() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                   <Icon name="sushi" size={26} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 'var(--fs-base)', fontWeight: 700 }}>
+                    <div style={{ fontSize: 'var(--fs-legacy-base)', fontWeight: 700 }}>
                       {inv.inviter_first_name} te invitó a {inv.restaurant_name}
                     </div>
                     <div className="caption">
@@ -95,7 +95,7 @@ export function AvisosScreen() {
                 </div>
                 <button
                   className="btn btn-primary"
-                  style={{ padding: 12, fontSize: 'var(--fs-base)' }}
+                  style={{ padding: 12, fontSize: 'var(--fs-legacy-base)' }}
                   onClick={() => accept(inv)}
                   disabled={busyId === inv.id}
                 >
@@ -123,7 +123,7 @@ export function AvisosScreen() {
             >
               <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 'var(--fs-base)', fontWeight: n.read_at ? 500 : 700, fontFamily: 'var(--font-body)', color: 'var(--navy)' }}>
+                <div style={{ fontSize: 'var(--fs-legacy-base)', fontWeight: n.read_at ? 500 : 700, fontFamily: 'var(--font-body)', color: 'var(--navy)' }}>
                   {n.body}
                 </div>
                 <div className="caption" style={{ marginTop: 2 }}>

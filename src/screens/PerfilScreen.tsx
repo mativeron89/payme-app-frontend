@@ -23,7 +23,7 @@ export function PerfilScreen() {
             {user ? `${user.first_name} ${user.last_name}` : 'Tu cuenta'}
           </div>
           {user && (
-            <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 'var(--fs-sm)', color: 'var(--gray-txt)' }}>
+            <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 'var(--fs-legacy-sm)', color: 'var(--gray-txt)' }}>
               {user.payme_id}
             </div>
           )}
@@ -38,7 +38,7 @@ export function PerfilScreen() {
             <div className="list-row" style={{ cursor: 'default' }}>
               <span><Icon name="mail" size={16} /></span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 600 }}>Email</div>
+                <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>Email</div>
                 <div className="caption">{user.email}</div>
               </div>
             </div>
@@ -49,19 +49,19 @@ export function PerfilScreen() {
                 algo que no existe en el build real. NO se oculta la fila: es el
                 ÚNICO acceso a gestión de tarjetas, que es card-only ratificado.
                 Se renombra. */}
-            <div style={{ flex: 1, fontSize: 'var(--fs-sm)', fontWeight: 600 }}>
+            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
               {walletRailEnabled ? 'Saldo y tarjetas' : 'Mis tarjetas'}
             </div>
             <span style={{ color: 'var(--gray-b)' }}>→</span>
           </button>
           <button className="list-row" onClick={() => navigate('amigos')}>
             <span><Icon name="users" size={16} /></span>
-            <div style={{ flex: 1, fontSize: 'var(--fs-sm)', fontWeight: 600 }}>Amigos</div>
+            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>Amigos</div>
             <span style={{ color: 'var(--gray-b)' }}>→</span>
           </button>
           <button className="list-row" onClick={() => navigate('grupos')}>
             <span><Icon name="users-group" size={16} /></span>
-            <div style={{ flex: 1, fontSize: 'var(--fs-sm)', fontWeight: 600 }}>Grupos</div>
+            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>Grupos</div>
             <span style={{ color: 'var(--gray-b)' }}>→</span>
           </button>
         </div>

@@ -212,7 +212,7 @@ export function TopupScreen() {
           <div className="voucher">
             <div className="caption">Referencia OXXO</div>
             <div className="num">{voucher.voucher_reference}</div>
-            <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, marginBottom: 4 }}>{formatMXN(voucher.amount_cents)}</div>
+            <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 700, marginBottom: 4 }}>{formatMXN(voucher.amount_cents)}</div>
             <div className="caption">
               Vence el {new Date(voucher.voucher_expires_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })} ·
               mostrá este número en caja
@@ -285,7 +285,7 @@ export function TopupScreen() {
             <div className="method-card sel" style={{ cursor: 'default' }}>
               <CardBrandChip brand={pm.brand} />
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>
+                <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>
                   {pm.bank_name ?? pm.brand} ···· {pm.last_four}
                 </div>
                 <div className="caption">
@@ -311,7 +311,7 @@ export function TopupScreen() {
                 </div>
                 <button
                   className="btn btn-teal"
-                  style={{ marginTop: 12, padding: 12, fontSize: 'var(--fs-sm)' }}
+                  style={{ marginTop: 12, padding: 12, fontSize: 'var(--fs-legacy-sm)' }}
                   onClick={() => {
                     void navigator.clipboard.writeText(clabe.clabe).then(
                       () => toast('CLABE copiada ✓'),

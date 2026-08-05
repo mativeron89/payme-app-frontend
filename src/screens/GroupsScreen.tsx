@@ -79,7 +79,7 @@ export function GroupsScreen() {
                 </div>
                 <button
                   className="back-btn"
-                  style={{ width: 30, height: 30, fontSize: 'var(--fs-sm)' }}
+                  style={{ width: 30, height: 30, fontSize: 'var(--fs-legacy-sm)' }}
                   aria-label={`Quitar a ${m.first_name} del grupo`}
                   onClick={async () => {
                     try {
@@ -144,10 +144,10 @@ export function GroupsScreen() {
             <div className="sectlabel">Nuevo grupo</div>
             <input className="input" placeholder="Nombre (Familia, Trabajo…)" value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={100} />
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-ghost" style={{ padding: 12, fontSize: 'var(--fs-sm)' }} onClick={() => setCreating(false)}>
+              <button className="btn btn-ghost" style={{ padding: 12, fontSize: 'var(--fs-legacy-sm)' }} onClick={() => setCreating(false)}>
                 Cancelar
               </button>
-              <button className="btn btn-primary" style={{ padding: 12, fontSize: 'var(--fs-sm)' }} onClick={createGroup} disabled={busy || !newName.trim()}>
+              <button className="btn btn-primary" style={{ padding: 12, fontSize: 'var(--fs-legacy-sm)' }} onClick={createGroup} disabled={busy || !newName.trim()}>
                 {busy ? 'Creando…' : 'Crear'}
               </button>
             </div>
@@ -164,11 +164,11 @@ export function GroupsScreen() {
           <div className="card" style={{ marginBottom: 12 }}>
             {groups.map((g) => (
               <button key={g.id} className="list-row" onClick={() => openGroup(g)}>
-                <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--orange-l)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-xl)' }}>
+                <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--orange-l)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-legacy-xl)' }}>
                   {g.icon}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 'var(--fs-base)', fontWeight: 600 }}>{g.name}</div>
+                  <div style={{ fontSize: 'var(--fs-legacy-base)', fontWeight: 600 }}>{g.name}</div>
                   <div className="caption">
                     {g.member_count} {g.member_count === 1 ? 'miembro' : 'miembros'}
                   </div>
