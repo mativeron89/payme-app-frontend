@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
-import {
-  clearPendingInvitationLink,
-  rememberInvitationLink,
-  stripTokenFromUrl,
-} from '../api/invitationLink';
 import { useAuth } from '../auth/AuthContext';
 import { AppHeader } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
 import { navigate } from '../router';
+import {
+  closeInvitationCustody,
+  openInvitationCustody,
+  settleInvitationFailure,
+} from './invitationCustody';
 import { LoginScreen } from './LoginScreen';
 import { joinLinkMessage, joinLinkStage, type JoinLinkOutcome } from './joinLinkView';
 
@@ -87,9 +87,15 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
    * entrada de historial y deja viva la anterior con el `?t=`, así que el botón
    * Atrás la recupera y la app vuelve a custodiar un token ya soltado.
    * **Back no debe revivir el token.**
+   *
+   * ORDEN 4B · la secuencia vive en `invitationCustody.ts`. Un `useEffect` no
+   * es ejercitable sin librería de render, y el defecto que 4B cierra no estaba
+   * en los helpers sino en QUIÉN los llama y CUÁNDO. Movida allá, esa parte es
+   * código con tests; acá quedan las tres llamadas, y que sigan siendo esas
+   * tres lo fija un guardarraíl de fuente.
    */
   useEffect(() => {
-    if (rememberInvitationLink(code, token)) stripTokenFromUrl();
+    openInvitationCustody(code, token);
   }, [code, token]);
 
   useEffect(() => {
@@ -101,11 +107,10 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
       .then((r) => {
         if (!alive) return;
         // Recién acá se suelta la credencial: si el canje no cerró, el token
-        // tiene que seguir disponible para el reintento.
-        clearPendingInvitationLink();
-        // Cinturón y tirantes: si el round-trip había fallado, el token sigue en
-        // la URL y éste es el momento en que ya no hace falta para nada.
-        stripTokenFromUrl();
+        // tiene que seguir disponible para el reintento. Suelta las DOS
+        // custodias —storage y URL—: si el round-trip había fallado, el token
+        // sigue en el hash y éste es el momento en que ya no hace falta.
+        closeInvitationCustody();
         /**
          * Antes acá se navegaba derecho a la mesa. Ahora se muestra §1.2-C, y
          * el destino es el mismo —Mis ítems— a un toque del círculo naranja.
@@ -120,25 +125,21 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
         if (!alive) return;
         const { status } = extractApiError(err);
         /**
-         * Custodia POR RESULTADO. Los terminales sueltan la credencial; los
-         * reintentables la conservan. Confundirlos rompe en las dos
+         * Custodia POR RESULTADO, en `invitationCustody.ts`. Los terminales
+         * sueltan la credencial de las DOS custodias —storage **y URL**—; los
+         * reintentables la conservan en ambas. Confundirlos rompe en las dos
          * direcciones: soltar un token vivo deja a la persona sin poder
          * reintentar, y conservar uno muerto deja esa mesa capturada por un
          * link inválido en cada visita.
          *
-         *   400 · el link no tiene forma de link  → TERMINAL, soltar
-         *   403 · rechazo ciego (los cuatro)      → TERMINAL, soltar
-         *   503 · no se pudo verificar            → conservar, reintentable
-         *   red/5xx/2xx malformado                → conservar, reintentable
+         * ORDEN 4B · acá estaba el defecto: soltar era **sólo** limpiar el
+         * storage. Con el round-trip fallado el token nunca estuvo en storage y
+         * seguía en el `?t=` del hash, así que un 403 dejaba viva en la barra de
+         * direcciones y en el historial una credencial que el emisor ya había
+         * declarado inservible. La decisión y su ejecución ahora son la misma
+         * función y no pueden divergir.
          */
-        const terminal = status === 400 || status === 403;
-        if (terminal) clearPendingInvitationLink();
-        setOutcome(
-          status === 400 ? 'invalid'
-            : status === 403 ? 'rejected'
-            : status === 503 ? 'unavailable'
-            : 'error',
-        );
+        setOutcome(settleInvitationFailure(status));
       });
     return () => {
       alive = false;
