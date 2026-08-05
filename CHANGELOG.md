@@ -1,5 +1,50 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.43.0 — El ruteo deja de fallar en silencio, y §1.7 deja de mentir (2026-08-05)
+
+Los dos preparativos de §1.9, antes de tocar la sección social. Ninguno de los
+dos cambia lo que la app hace; los dos cambian lo que la app puede romper.
+
+- **El switch de `src/App.tsx` no tenía `default`**, así que una ruta declarada
+  sin `case` **no montaba nada: pantalla en blanco, sin error y sin test rojo**.
+  Ahora el `default` asigna la ruta a un `never`, y olvidarse de un `case`
+  **rompe el build** — no es un test que haya que acordarse de correr.
+- **`PageId` se DERIVA de `PAGES`.** Eran dos listas —la unión de tipos y el
+  `Set` que valida el hash— que decían lo mismo sin que nada las obligara a
+  coincidir. Y el `page as PageId` de `parseHash` es un cast **sin chequeo**
+  (`ReadonlySet<string>.has()` no narrowea), así que una página en el `Set` y no
+  en la unión llegaba al switch sin `case` **invisible para el compilador**.
+  Derivar vuelve esa deriva **imposible de escribir**, no detectable.
+- **`e2e/rutas-montan-pantalla.spec.ts`** itera el array del router y afirma que
+  cada ruta monta **la suya**. Iterar el array —y no una lista propia— significa
+  que una página nueva entra sola al recorrido. **Cada ruta afirma dos cosas: que
+  se ve su marcador y que NO se ve el de Inicio**, porque con el `default`
+  devolviendo Inicio un test de "renderiza algo no vacío" pasaría con el `case`
+  borrado.
+- Tres mediciones que corrigen supuestos: el `default` de runtime **es
+  inalcanzable hoy, y lo es *porque* existen los dos cambios de arriba** — antes
+  estaba vivo; **`noUnusedLocals` ya mataba** el mutante "el `case` monta otra
+  pantalla", así que el mutante que acredita el e2e es el del `param`
+  (typecheck verde, e2e rojo); y **`tsconfig` sólo incluye `src`**, así que un
+  tipo dentro de `e2e/` no es un guard sino ayuda de editor.
+- **§1.7 · "Volver" pasa a "Ver mesa"** y se retira "Paso 5 de 5" (corrección de
+  Diseño). El destino ya era el correcto —volver a División abriría una segunda
+  mesa con un segundo hold, B-06— y lo que mentía era el nombre: *un control que
+  dice "Volver" y no retrocede es una etiqueta que miente*. De paso recupera el
+  CTA explícito "todavía te falta elegir lo tuyo", **sin agregar un segundo
+  botón**: es el mismo control.
+- **El ícono hubo que dibujarlo.** El spec pide `ti-tools-kitchen-2` y aclara que
+  es "el mismo que usa la categoría de restaurante"; en este repo ése es
+  `dining`, dos círculos concéntricos, y **a 20px se lee como una diana**.
+  Segunda vez que el set falla a tamaño chico —§1.8 ya lo había medido a 26px—,
+  así que se dibujó el glifo que el spec nombra, en el set propio y sin
+  dependencias. **Pendiente de confirmación de Diseño.**
+- Una ausencia nueva afirmada: el contador de paso de §1.7, acreditada
+  devolviéndolo. Y el que clickeaba "Volver" ahí no era `compartir.spec.ts` sino
+  **`pago-completo.spec.ts`**, el camino de pago entero.
+
+**517 vitest · 52 e2e** (venían 36) · typecheck · builds real y mock.
+
 ## 0.42.0 — ORDEN VISUAL · Compartir, la última de prioridad alta (2026-08-05)
 
 **`SPEC_APP.md` §1.7 aplicada**, con el spec ya reescrito por Diseño: los dos
