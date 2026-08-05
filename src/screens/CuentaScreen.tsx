@@ -9,6 +9,7 @@ import { TopBar } from '../components/ui';
 import { navigate, useRoute } from '../router';
 import { formatMXN } from '../utils/format';
 import { walletTxIcon, walletTxLabel } from '../utils/labels';
+import { EstadisticasScreen } from './EstadisticasScreen';
 import { PagosScreen } from './PagosScreen';
 import { TarjetasScreen } from './TarjetasScreen';
 
@@ -108,8 +109,7 @@ function CategoryPie({ slices }: { slices: Array<[string, number]> }) {
 
 /**
  * Sub-ruteo de la sección Cuenta. `#/cuenta/<algo>` monta la pantalla real de
- * §1.11; `#/cuenta` a secas cae en la Cuenta vieja de abajo. Entra con
- * `tarjetas` y `pagos`; `estadisticas` llega en su propio commit.
+ * §1.11; `#/cuenta` a secas cae en la Cuenta vieja de abajo.
  *
  * Un parámetro desconocido **no rompe ni redirige**: cae en la vieja, que es
  * una superficie válida. Inventar un 404 acá sería peor que llegar a una
@@ -119,6 +119,7 @@ export function CuentaScreen() {
   const { param } = useRoute();
   if (param === 'tarjetas') return <TarjetasScreen />;
   if (param === 'pagos') return <PagosScreen />;
+  if (param === 'estadisticas') return <EstadisticasScreen />;
   return <CuentaVieja />;
 }
 
