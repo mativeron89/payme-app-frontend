@@ -1995,3 +1995,177 @@ body {
 .btabs + .mounted-card {
   margin-top: 0;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ENTRADA POR LINK · SPEC_APP.md §1.2 — 401, 403 y "Sumate a la mesa"
+
+   Es la primera pantalla que ve casi todo el mundo que llega por link, y su
+   esqueleto es DISTINTO del resto de la app (v5, ratificado 2026-08-04):
+   banda compacta, una burbuja angosta flotando en el medio exacto del espacio
+   libre, y el bloque de acción pegado abajo.
+
+   Ninguna de las tres lleva barra inferior: nadie de estas pantallas tiene
+   home todavía.
+
+   Lo que ninguna de las tres puede hacer: nombrar el restaurante o la mesa
+   ANTES del canje. Ni el 401 ni el 403. Después del canje sí (§1.2-C), porque
+   ahí ya hay sesión y quien mira es un participante inscripto — son dos
+   momentos con permisos distintos, y que el copy difiera es correcto.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.link-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+
+/* El espacio libre entre la banda y el bloque de abajo. La burbuja flota en el
+   MEDIO EXACTO, con aire parejo arriba y abajo: un solo tramo flexible
+   centrado da los dos espaciadores iguales del spec sin nodos vacíos. */
+.link-mid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: var(--sp-6) var(--sp-4);
+  text-align: center;
+}
+
+/* La burbuja NO va de borde a borde: es angosta y centrada. */
+.link-bubble {
+  width: 240px;
+  max-width: 100%;
+  padding: var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
+}
+
+.link-bubble-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.link-bubble-body {
+  margin-top: var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted); /* 5.43:1 sobre --surface */
+}
+
+/* Bloque de acción, pegado abajo. */
+.link-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) calc(var(--sp-6) + env(safe-area-inset-bottom));
+  text-align: center;
+}
+
+.link-foot-copy {
+  margin-bottom: var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-body); /* el cuerpo a 16px, aplicado en esta pantalla */
+  line-height: var(--lh-body);
+  color: var(--text-muted); /* 5.05:1 sobre --bg */
+}
+
+/* Los dos botones del 401 son de ANCHO COMPLETO, no el círculo naranja: es la
+   primera acción que ve un desconocido sin ningún contexto de la app, y un
+   ícono minimalista ahí sería críptico. */
+.link-btn {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+
+/* ⭐ CUARTO uso permitido del naranja (SISTEMA_DISENO.md §1, enmienda del
+   2026-08-04): acción principal de una pantalla de PRIMER CONTACTO. Es una
+   excepción con fundamento, no una puerta abierta — esta pantalla no compite
+   con ningún otro elemento naranja porque nadie ve el círculo "Nueva" ni la
+   barra activa antes de tener cuenta.
+   El texto va en NAVY (5.77:1). Blanco daría 2.84:1 y no pasa. */
+.link-btn-brand {
+  background: var(--brand);
+  color: var(--brand-fg);
+}
+
+/* "Ya tengo cuenta · Entrar" es un botón CON BORDE, no un link suelto: como
+   texto plano se perdía entre el resto del contenido. Con borde propio tiene el
+   mismo peso visual que el primario sin competirle en color. */
+.link-btn-outline {
+  background: var(--surface);
+  color: var(--action); /* 16.36:1 sobre blanco */
+  border: 1.5px solid var(--action);
+}
+
+.link-btn:focus-visible,
+.link-round:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* La salida del 403 y del canje: círculo de 56px. Nunca una pantalla sin
+   acción — el código ya documenta el bug donde alguien quedaba atrapado en una
+   vista de solo lectura. */
+.link-round {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-full);
+  border: none;
+  cursor: pointer;
+  background: var(--brand);
+  color: var(--brand-fg); /* glifo navy, 5.77:1 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--sh-2);
+}
+
+/* §1.2-C · el tilde del canje: 72px en --success, con el glifo en blanco
+   (5.48:1). El ícono va SIEMPRE con texto al lado — el color no es el único
+   portador de significado. */
+.link-check {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--r-full);
+  background: var(--success);
+  color: var(--action-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.link-ok-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* El nombre del restaurante, SIN el código de mesa: no aporta nada en el
+   momento de celebrar. */
+.link-ok-sub {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}

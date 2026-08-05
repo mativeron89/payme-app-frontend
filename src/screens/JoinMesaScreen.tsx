@@ -7,10 +7,11 @@ import {
   stripTokenFromUrl,
 } from '../api/invitationLink';
 import { useAuth } from '../auth/AuthContext';
+import { AppHeader } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
 import { navigate } from '../router';
 import { LoginScreen } from './LoginScreen';
-import { joinLinkMessage, type JoinLinkOutcome } from './joinLinkView';
+import { joinLinkMessage, joinLinkStage, type JoinLinkOutcome } from './joinLinkView';
 
 /**
  * CIERRE DEL PAGO SIN CUENTA · la pantalla que reemplaza a "ver la mesa con el
@@ -42,6 +43,20 @@ import { joinLinkMessage, type JoinLinkOutcome } from './joinLinkView';
 export function JoinMesaScreen({ code, token }: { code: string; token: string }) {
   const { session } = useAuth();
   const [outcome, setOutcome] = useState<JoinLinkOutcome>('joining');
+  /**
+   * El alta no se abre sola: §1.2-A es una pantalla propia con DOS acciones, y
+   * recién al tocar una se muestra el formulario en el modo que corresponde.
+   * `null` = todavía se está viendo el 401.
+   */
+  const [authMode, setAuthMode] = useState<'register' | 'login' | null>(null);
+  /**
+   * Canje cerrado. Es lo ÚNICO que habilita §1.2-C, y con él el permiso de
+   * nombrar el restaurante: a esta altura ya hay sesión y quien mira es un
+   * participante inscripto de la mesa.
+   */
+  const [joined, setJoined] = useState<string | null>(null);
+  /** Nombre del restaurante, si el detalle llegó. Ver el efecto de abajo. */
+  const [restaurant, setRestaurant] = useState<string | null>(null);
   /**
    * El reintento va en las DEPENDENCIAS del efecto, no en un `setOutcome`
    * suelto. Volver el estado a 'joining' sin cambiar una dep repinta el cartel
@@ -91,7 +106,15 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
         // Cinturón y tirantes: si el round-trip había fallado, el token sigue en
         // la URL y éste es el momento en que ya no hace falta para nada.
         stripTokenFromUrl();
-        navigate('mesa', r.mesa_code);
+        /**
+         * Antes acá se navegaba derecho a la mesa. Ahora se muestra §1.2-C, y
+         * el destino es el mismo —Mis ítems— a un toque del círculo naranja.
+         *
+         * El orden con la custodia NO cambió: la credencial se suelta acá,
+         * apenas el canje cierra, exactamente como antes. Lo único que cambió
+         * es que la navegación la dispara la persona.
+         */
+        setJoined(r.mesa_code);
       })
       .catch((err: unknown) => {
         if (!alive) return;
@@ -122,45 +145,160 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
     };
   }, [session, token, attempt]);
 
-  // Sin sesión no se ve la mesa. Se ve el alta — con el token ya guardado.
-  if (!session) {
+  /**
+   * El nombre del restaurante para §1.2-C, y **sólo** después del canje.
+   *
+   * `accept-link` devuelve `{ joined, mesa_code }` y nada más, así que el
+   * nombre sale de `GET /mesas/:code` — que ahora exige sesión y que a esta
+   * altura contesta porque la persona quedó inscripta. No es un "preview
+   * público" por la puerta de atrás: sin canje este efecto no corre.
+   *
+   * Si falla, la pantalla se muestra **sin** el nombre. No se inventa un
+   * placeholder ni se bloquea el paso: el canje ya cerró y la salida a Mis
+   * ítems tiene que existir igual.
+   */
+  useEffect(() => {
+    if (!joined) return;
+    let alive = true;
+    api
+      .getMesa(joined)
+      .then((r) => {
+        if (alive) setRestaurant(r.mesa.restaurant.name);
+      })
+      .catch(() => {
+        /* Sin nombre se muestra igual. Ver el comentario de arriba. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [joined]);
+
+  const stage = joinLinkStage({
+    hasSession: Boolean(session),
+    hasJoined: joined !== null,
+    outcome,
+  });
+
+  /** §1.2-C · canje exitoso. Un solo destino: Mis ítems. */
+  if (stage === 'joined' && joined) {
     return (
-      <div className="screen">
-        <div className="join-banner">
-          <Icon name="sushi" size={22} />
+      <div className="link-screen">
+        <AppHeader compact />
+        <div className="link-mid">
+          <div className="link-check" aria-hidden="true">
+            <Icon name="check" size={38} />
+          </div>
           <div>
-            <div className="join-banner-title">Te invitaron a una mesa</div>
-            <div className="caption">
-              Creá tu cuenta o entrá para sumarte y pagar tu parte.
-            </div>
+            <div className="link-ok-title">¡Te sumaste a la mesa!</div>
+            {/* Sin el código de mesa: no aporta nada en el momento de celebrar. */}
+            {restaurant && <div className="link-ok-sub">{restaurant}</div>}
           </div>
         </div>
-        <LoginScreen />
+        <div className="link-foot">
+          <button
+            type="button"
+            className="link-round"
+            onClick={() => navigate('mesa', joined)}
+            aria-label="Ver mis ítems"
+          >
+            <Icon name="arrow-right" size={24} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * §1.2-A · 401. Sin sesión no se ve la mesa: se ve esto, con el token ya
+   * guardado. La burbuja es GENÉRICA a propósito —"Te invitaron a una mesa"—
+   * y no nombra el restaurante: para saber que el token es válido habría que
+   * preguntarle al backend, y el endpoint que lo diría sin sesión es el
+   * preview público que el cierre del pago sin cuenta prohíbe. Además, un link
+   * reenviado le confirmaría a cualquiera dónde está comiendo otra persona.
+   */
+  if (stage === 'signup') {
+    if (authMode) {
+      return (
+        <div className="screen">
+          <div className="join-banner">
+            <Icon name="sushi" size={22} />
+            <div>
+              <div className="join-banner-title">Te invitaron a una mesa</div>
+              <div className="caption">
+                Creá tu cuenta o entrá para sumarte y pagar tu parte.
+              </div>
+            </div>
+          </div>
+          <LoginScreen initialMode={authMode} />
+        </div>
+      );
+    }
+    return (
+      <div className="link-screen">
+        <AppHeader compact />
+        <div className="link-mid">
+          <div className="link-bubble">
+            <div className="link-bubble-title">Te invitaron a una mesa</div>
+          </div>
+        </div>
+        <div className="link-foot">
+          <p className="link-foot-copy">
+            Para ver la mesa y pagar tu parte, necesitás una cuenta de PayMe
+          </p>
+          {/* Único elemento naranja de la pantalla, con el texto en navy. */}
+          <button
+            type="button"
+            className="link-btn link-btn-brand"
+            onClick={() => setAuthMode('register')}
+          >
+            Crear cuenta gratis
+          </button>
+          <button
+            type="button"
+            className="link-btn link-btn-outline"
+            onClick={() => setAuthMode('login')}
+          >
+            Ya tengo cuenta · Entrar
+          </button>
+        </div>
       </div>
     );
   }
 
   const message = joinLinkMessage(outcome);
   return (
-    <div className="screen">
-      <div className="empty" style={{ padding: '48px 24px' }}>
-        <div className="emoji">
-          <Icon name={outcome === 'joining' ? 'sushi' : 'warning'} size={40} />
+    <div className="link-screen">
+      <AppHeader compact />
+      <div className="link-mid">
+        <div className="link-bubble">
+          <div className="link-bubble-title">{message.title}</div>
+          <div className="link-bubble-body">{message.body}</div>
         </div>
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>{message.title}</div>
-        <div className="caption">{message.body}</div>
-        {message.retryable && (
+      </div>
+      <div className="link-foot">
+        {stage === 'retry' && (
           <button
-            className="btn btn-primary"
-            style={{ marginTop: 18 }}
+            type="button"
+            className="link-btn link-btn-outline"
             onClick={() => setAttempt((n) => n + 1)}
           >
             Reintentar
           </button>
         )}
-        {!message.retryable && outcome !== 'joining' && (
-          <button className="btn" style={{ marginTop: 18 }} onClick={() => navigate('home')}>
-            Ir a inicio
+        {/**
+         * §1.2-B · la salida del terminal es el círculo, no un botón de texto.
+         * El spec la manda a login si no hay sesión y a Inicio si la hay; acá
+         * sólo se llega con sesión —sin ella la rama de arriba muestra el 401—,
+         * así que el destino es Inicio.
+         */}
+        {stage === 'blocked' && (
+          <button
+            type="button"
+            className="link-round"
+            onClick={() => navigate('home')}
+            aria-label="Ir a PayMe"
+          >
+            <Icon name="arrow-right" size={24} />
           </button>
         )}
       </div>

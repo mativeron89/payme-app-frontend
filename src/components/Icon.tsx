@@ -46,6 +46,9 @@ const GLYPHS = {
   store: { d: ['M4 9 5.5 4h13L20 9', 'M4 9c0 1.4 1 2.5 2.5 2.5S9 10.4 9 9c0 1.4 1 2.5 2.5 2.5S14 10.4 14 9c0 1.4 1 2.5 2.5 2.5S20 10.4 20 9', 'M5.5 11.5V20h13v-8.5', 'M9.5 20v-5h5v5'] },
   bank: { d: ['M3 9.5 12 4l9 5.5', 'M4.5 9.5h15V11h-15z', 'M6.5 11v6', 'M12 11v6', 'M17.5 11v6', 'M4 19.5h16'] },
   'check-circle': { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M8 12.2l2.8 2.8L16.5 9.5'] },
+  /* Tilde suelto, sin anillo: va DENTRO de un círculo propio, como el de 72px
+     del canje (SPEC_APP.md §1.2-C). `check-circle` ahí duplicaría el borde. */
+  check: { d: ['M5 12.5l4.7 4.7L19 7.5'] },
   warning: { d: ['M12 3.5 22 20H2L12 3.5Z', 'M12 9.5V14', 'M12 16.8v.4'] },
   'x-circle': { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M9 9l6 6', 'M15 9l-6 6'] },
   party: {

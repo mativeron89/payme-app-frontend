@@ -61,6 +61,43 @@ export interface JoinLinkMessage {
   readonly retryable: boolean;
 }
 
+/**
+ * Qué PANTALLA de SPEC_APP.md §1.2 corresponde mostrar.
+ *
+ * Vive acá, como función pura, por la misma razón que `joinLinkMessage`: la
+ * suite no tiene librería de render —por ratificación— así que lo único que se
+ * puede fijar con tests es la decisión, no el JSX. Y acá la decisión es una
+ * regla de privacidad, no una preferencia de layout:
+ *
+ *   **sin sesión no se ve NADA de la mesa.** Cualquiera sea el resultado del
+ *   canje, sin sesión la pantalla es el alta (§1.2-A) y nunca el detalle del
+ *   rechazo ni el nombre del restaurante. El orden de estas ramas ES la regla.
+ */
+export type JoinLinkStage =
+  /** §1.2-A · 401: hay que crear cuenta o entrar. Genérica, sin datos de mesa. */
+  | 'signup'
+  /** Canjeando, ya con sesión. */
+  | 'joining'
+  /** §1.2-B · terminal: el link no va a servir. Salida por el círculo. */
+  | 'blocked'
+  /** No terminal (503, red): la salida es Reintentar. */
+  | 'retry'
+  /** §1.2-C · canje exitoso. Es el único momento con permiso de nombrar la mesa. */
+  | 'joined';
+
+export function joinLinkStage(state: {
+  readonly hasSession: boolean;
+  readonly hasJoined: boolean;
+  readonly outcome: JoinLinkOutcome;
+}): JoinLinkStage {
+  // El canje ya cerró: hay sesión y hay inscripción. Es lo único que habilita
+  // §1.2-C, y por eso va primero.
+  if (state.hasJoined) return 'joined';
+  if (!state.hasSession) return 'signup';
+  if (state.outcome === 'joining') return 'joining';
+  return joinLinkMessage(state.outcome).retryable ? 'retry' : 'blocked';
+}
+
 export function joinLinkMessage(outcome: JoinLinkOutcome): JoinLinkMessage {
   switch (outcome) {
     case 'joining':
@@ -73,9 +110,13 @@ export function joinLinkMessage(outcome: JoinLinkOutcome): JoinLinkMessage {
       // UN solo texto para los cuatro motivos. Si alguien viene a "mejorar" esto
       // distinguiendo vencido de cancelado: el backend no se lo dice, y no se lo
       // dice a propósito.
+      // La copy es la del SPEC_APP.md §1.2-B, textual. Decía "Este link ya no
+      // sirve · Pedile al organizador…"; el spec la cerró como "…ya no
+      // funciona · Pedile a quien te invitó…", que además no nombra un rol de
+      // la mesa: coherente con que esta pantalla no acredita que la mesa exista.
       return {
-        title: 'Este link ya no sirve',
-        body: 'Pedile al organizador que te comparta uno nuevo.',
+        title: 'Este link ya no funciona',
+        body: 'Pedile a quien te invitó que te comparta uno nuevo.',
         retryable: false,
       };
     case 'invalid':

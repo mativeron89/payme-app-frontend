@@ -245,3 +245,53 @@ describe('la escala legacy sigue intacta — el paso 1 no cambia un pixel', () =
     expect(token('fs-legacy-xs')).not.toBe(token('fs-xs'))
   })
 })
+
+/** Devuelve el cuerpo de una regla CSS por selector exacto. */
+function rule(selector: string): string {
+  const escapado = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const found = CSS.match(new RegExp(`^\\s*${escapado}\\s*\\{([^}]*)\\}`, 'm'))
+  if (!found) throw new Error(`falta la regla ${selector} en global.css`)
+  return found[1]
+}
+
+describe('entrada por link · SPEC_APP.md §1.2', () => {
+  /**
+   * El CUARTO uso del naranja es una EXCEPCIÓN ratificada (SISTEMA_DISENO.md
+   * §1, enmienda del 2026-08-04), no una puerta abierta. Se fija acá porque el
+   * modo en que se rompería es silencioso: alguien pone `color: #fff` "para que
+   * se vea más" y el botón cae a 2.84:1 en la primera pantalla que ve un
+   * desconocido, que además se usa con poca luz.
+   */
+  it('el CTA de primer contacto es --brand con el texto en NAVY, nunca blanco', () => {
+    const cta = rule('.link-btn-brand')
+    expect(cta).toContain('background: var(--brand)')
+    expect(cta).toContain('color: var(--brand-fg)')
+    expect(cta).not.toMatch(/color:\s*(#fff|#ffffff|white|var\(--action-fg\)|var\(--on-dark\))/i)
+    expect(contrast('brand-fg', 'brand')).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('el círculo de salida lleva el glifo en navy, igual que el de la barra', () => {
+    const circulo = rule('.link-round')
+    expect(circulo).toContain('background: var(--brand)')
+    expect(circulo).toContain('color: var(--brand-fg)')
+  })
+
+  it('el botón con borde del "Ya tengo cuenta" usa navy, que sí pasa sobre blanco', () => {
+    const outline = rule('.link-btn-outline')
+    expect(outline).toContain('color: var(--action)')
+    expect(contrast('action', 'surface')).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('el tilde de 72px del canje pasa AA en blanco sobre --success', () => {
+    const check = rule('.link-check')
+    expect(check).toContain('background: var(--success)')
+    expect(check).toContain('color: var(--action-fg)')
+    expect(contrast('action-fg', 'success')).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('el área táctil de los botones no baja del mínimo de la app', () => {
+    expect(rule('.link-btn')).toContain('min-height: var(--tap-min)')
+    // El círculo es de 56px por spec, ya por encima de los 44.
+    expect(rule('.link-round')).toContain('width: 56px')
+  })
+})

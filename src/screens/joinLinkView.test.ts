@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { joinLinkMessage, type JoinLinkOutcome } from './joinLinkView';
+import { joinLinkMessage, joinLinkStage, type JoinLinkOutcome } from './joinLinkView';
+
+const OUTCOMES: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'unavailable', 'error'];
 
 /**
  * CIERRE DEL PAGO SIN CUENTA · lo que se fija acá es una regla de PRIVACIDAD,
@@ -104,6 +106,58 @@ describe('un 503 NO es un rechazo', () => {
 
   it('un fallo de red también es reintentable', () => {
     expect(joinLinkMessage('error').retryable).toBe(true);
+  });
+});
+
+/**
+ * SPEC_APP.md §1.2 · qué pantalla se muestra. Lo que se fija acá NO es layout:
+ * es que el orden de las ramas conserve la política de privacidad del cierre
+ * del pago sin cuenta.
+ */
+describe('§1.2 · sin sesión no se ve NADA de la mesa', () => {
+  it('cualquiera sea el resultado del canje, sin sesión la pantalla es el alta', () => {
+    // Incluye los terminales: ni siquiera el motivo del rechazo se le muestra a
+    // alguien sin sesión. Si esta rama se moviera debajo del switch de outcome,
+    // un 403 pintaría el cartel de rechazo antes del alta.
+    for (const outcome of OUTCOMES) {
+      expect(joinLinkStage({ hasSession: false, hasJoined: false, outcome })).toBe('signup');
+    }
+  });
+
+  it('el canje exitoso manda, y es el ÚNICO estado con permiso de nombrar la mesa', () => {
+    expect(joinLinkStage({ hasSession: true, hasJoined: true, outcome: 'joining' })).toBe('joined');
+  });
+
+  it('ninguna otra etapa es la del canje: el nombre del restaurante no se filtra', () => {
+    for (const outcome of OUTCOMES) {
+      expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome })).not.toBe('joined');
+      expect(joinLinkStage({ hasSession: false, hasJoined: false, outcome })).not.toBe('joined');
+    }
+  });
+});
+
+describe('§1.2 · ninguna pantalla queda sin salida', () => {
+  /**
+   * Regla dura que se conserva de la versión vieja del spec: el repo ya
+   * documenta el bug donde alguien quedaba atrapado en una vista de solo
+   * lectura. Terminal → círculo de salida; reintentable → Reintentar.
+   */
+  it('los terminales van al bloque con círculo de salida', () => {
+    expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'rejected' })).toBe('blocked');
+    expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'invalid' })).toBe('blocked');
+  });
+
+  it('los reintentables ofrecen reintentar, no una salida ciega', () => {
+    expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'unavailable' })).toBe('retry');
+    expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'error' })).toBe('retry');
+  });
+
+  it('la etapa se deriva de `retryable`, no de una segunda tabla que se desincronice', () => {
+    for (const outcome of OUTCOMES) {
+      if (outcome === 'joining') continue;
+      const etapa = joinLinkStage({ hasSession: true, hasJoined: false, outcome });
+      expect(etapa).toBe(joinLinkMessage(outcome).retryable ? 'retry' : 'blocked');
+    }
   });
 });
 
