@@ -11,6 +11,7 @@ import { enforceWalletRouteGuard } from './walletRouteGuard';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
 import { CuentaScreen } from './screens/CuentaScreen';
+import { EstadisticasScreen } from './screens/EstadisticasScreen';
 import { FriendsScreen } from './screens/FriendsScreen';
 import { GroupsScreen } from './screens/GroupsScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -18,7 +19,9 @@ import { JoinMesaScreen } from './screens/JoinMesaScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { MesaScreen } from './screens/MesaScreen';
 import { MesasScreen } from './screens/MesasScreen';
+import { PagosScreen } from './screens/PagosScreen';
 import { PerfilScreen } from './screens/PerfilScreen';
+import { TarjetasScreen } from './screens/TarjetasScreen';
 import { TopupScreen } from './screens/TopupScreen';
 import { TransferScreen } from './screens/TransferScreen';
 
@@ -108,6 +111,14 @@ function Shell() {
         return route.param ? <MesaScreen key={route.param} code={route.param} /> : <MesasScreen />;
       case 'cuenta':
         return <CuentaScreen />;
+      // §1.11 · las tres que lanzan las pestañas de Inicio. Son de PRIMER
+      // NIVEL: cada una con su ruta, no colgadas de un parámetro de `cuenta`.
+      case 'tarjetas':
+        return <TarjetasScreen />;
+      case 'pagos':
+        return <PagosScreen />;
+      case 'estadisticas':
+        return <EstadisticasScreen />;
       case 'cargar':
         return <TopupScreen />;
       case 'transferir':
@@ -123,9 +134,19 @@ function Shell() {
     }
   })();
 
-  // T-D3a: barra inferior solo en las cuatro pantallas hub.
+  /**
+   * Barra inferior VIEJA (`BottomNav`), sólo en las pantallas que todavía no
+   * adoptaron la de cinco posiciones de `SISTEMA_DISENO.md` §5 bis · C.
+   *
+   * **`home` salió de esta lista** al rediseñarse §1.1: Inicio monta
+   * `AppBottomBar` él mismo, igual que `scan`, `mesa`, `avisos` y las tres
+   * pantallas de §1.11 —que por eso tampoco están acá—. Dejarlo habría
+   * dibujado dos barras superpuestas.
+   *
+   * Cuando §1.9 convierta a Amigos, Grupos y Perfil, esta variable y
+   * `BottomNav.tsx` se van juntas.
+   */
   const showNav =
-    route.page === 'home' ||
     route.page === 'cuenta' ||
     route.page === 'amigos' ||
     route.page === 'grupos' ||

@@ -360,7 +360,7 @@ describe('barrido estructural del árbol', () => {
     expect(allowsWalletRoute(walletRailEnabled, 'cargar')).toBe(false);
     expect(allowsWalletRoute(walletRailEnabled, 'transferir')).toBe(false);
     // Y la superficie card-only sigue alcanzable.
-    for (const p of ['home', 'cuenta', 'amigos', 'perfil', 'mesa', 'avisos']) {
+    for (const p of ['home', 'cuenta', 'amigos', 'perfil', 'mesa', 'avisos', 'tarjetas', 'pagos', 'estadisticas']) {
       expect(allowsWalletRoute(walletRailEnabled, p)).toBe(true);
     }
   });

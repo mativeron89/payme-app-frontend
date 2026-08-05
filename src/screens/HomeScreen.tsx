@@ -166,8 +166,8 @@ export function HomeScreen() {
         <MountedCard flush={tab === TABS[0]!.id}>
           {tab === 'cuenta' && (
             <div className="launch-pair">
-              <Launcher icon="card" label="Ver tarjetas" onClick={() => navigate('cuenta', 'tarjetas')} />
-              <Launcher icon="receipt" label="Ver pagos" onClick={() => navigate('cuenta', 'pagos')} />
+              <Launcher icon="card" label="Ver tarjetas" onClick={() => navigate('tarjetas')} />
+              <Launcher icon="receipt" label="Ver pagos" onClick={() => navigate('pagos')} />
             </div>
           )}
 
@@ -178,7 +178,7 @@ export function HomeScreen() {
               <Launcher
                 icon="chart"
                 label="Ver mis estadísticas"
-                onClick={() => navigate('cuenta', 'estadisticas')}
+                onClick={() => navigate('estadisticas')}
               />
             </div>
           )}

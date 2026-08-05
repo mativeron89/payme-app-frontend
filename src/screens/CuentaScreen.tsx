@@ -6,32 +6,25 @@ import type { BalanceResponse, HistoryEntry, StatsResponse, WalletTransaction } 
 import { CardsPanel } from '../components/CardsPanel';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/ui';
-import { navigate, useRoute } from '../router';
+import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { walletTxIcon, walletTxLabel } from '../utils/labels';
-import { EstadisticasScreen } from './EstadisticasScreen';
-import { PagosScreen } from './PagosScreen';
-import { TarjetasScreen } from './TarjetasScreen';
 
 /**
  * `s-account` — la Cuenta VIEJA.
  *
- * §1.11 la absorbió: sus contenidos son ahora tres pantallas propias que
- * lanzan las pestañas de Inicio. Este archivo queda por dos razones y ninguna
- * es inercia:
- *
- * 1. **Es el ruteo de esas tres.** `#/cuenta/tarjetas`, `#/cuenta/pagos` y
- *    `#/cuenta/estadisticas` entran por acá. Se resolvió con el parámetro que
- *    el router ya soporta en vez de con tres `PageId` nuevas para **no tocar
- *    `src/App.tsx`**, que tiene una batería de tests de rutas wallet con ocho
- *    mutantes y no conviene mover por un cambio de diseño.
- * 2. **Sigue siendo alcanzable** desde la barra vieja (Amigos, Grupos, Perfil)
- *    y desde una fila de Perfil, que son pantallas que §1.9 todavía no
- *    convirtió. Cuando lo haga, este archivo se retira entero.
+ * §1.11 la absorbió: sus contenidos son ahora tres pantallas de primer nivel
+ * —`#/tarjetas`, `#/pagos`, `#/estadisticas`— que lanzan las pestañas de
+ * Inicio. Este archivo queda porque **sigue siendo alcanzable** desde la barra
+ * vieja (Amigos, Grupos, Perfil) y desde una fila de Perfil, que son pantallas
+ * que §1.9 todavía no convirtió. Cuando lo haga, se retira entero.
  *
  * Lo que era su pestaña "Tarjetas" ya no vive acá: monta `CardsPanel`, el
  * mismo componente que usa `TarjetasScreen`. **Una sola copia de la máquina de
  * alta de tarjeta** — dos serían dos formas de crear una tarjeta de más.
+ *
+ * Lo demás que le queda son los dos bloques del riel de saldo, gateados por la
+ * capability del backend y por lo tanto sin UI. No se borran.
  */
 
 function txDate(iso: string): string {
@@ -107,23 +100,7 @@ function CategoryPie({ slices }: { slices: Array<[string, number]> }) {
   );
 }
 
-/**
- * Sub-ruteo de la sección Cuenta. `#/cuenta/<algo>` monta la pantalla real de
- * §1.11; `#/cuenta` a secas cae en la Cuenta vieja de abajo.
- *
- * Un parámetro desconocido **no rompe ni redirige**: cae en la vieja, que es
- * una superficie válida. Inventar un 404 acá sería peor que llegar a una
- * pantalla que existe.
- */
 export function CuentaScreen() {
-  const { param } = useRoute();
-  if (param === 'tarjetas') return <TarjetasScreen />;
-  if (param === 'pagos') return <PagosScreen />;
-  if (param === 'estadisticas') return <EstadisticasScreen />;
-  return <CuentaVieja />;
-}
-
-function CuentaVieja() {
   // OLA 5D · las DOS decisiones vienen del backend y por campos SEPARADOS:
   // el riel saldo y la actividad de cuenta card-only no comparten variable.
   const { walletRailEnabled, accountActivity } = useWalletRail();

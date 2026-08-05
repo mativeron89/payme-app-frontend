@@ -12,7 +12,16 @@ import { useEffect, useState } from 'react';
 
 export type PageId =
   | 'home'
+  /**
+   * `cuenta` es la Cuenta VIEJA. Las tres pantallas que §1.11 lanza desde las
+   * pestañas de Inicio son de PRIMER NIVEL y tienen su ruta propia: no cuelgan
+   * de un parámetro de `cuenta`. Se probó al revés —`#/cuenta/tarjetas`— para
+   * no tocar `App.tsx`, y evitar un archivo no es una razón de diseño.
+   */
   | 'cuenta'
+  | 'tarjetas'
+  | 'pagos'
+  | 'estadisticas'
   | 'cargar'
   | 'transferir'
   | 'amigos'
@@ -36,6 +45,9 @@ const DEFAULT_ROUTE: Route = { page: 'home', param: null, query: new URLSearchPa
 const VALID_PAGES: ReadonlySet<string> = new Set([
   'home',
   'cuenta',
+  'tarjetas',
+  'pagos',
+  'estadisticas',
   'cargar',
   'transferir',
   'amigos',
