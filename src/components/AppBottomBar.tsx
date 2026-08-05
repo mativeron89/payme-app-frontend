@@ -7,12 +7,16 @@ import { navigate, type PageId } from '../router';
  *     Inicio · Mesas · [ + ] Nueva · Amigos · Más
  *
  * Fijas para toda la app: ninguna pantalla inventa su propia navegación.
- * Reemplaza al botón flotante — elimina `.fab`, `.cta-float` y el hack
- * `.has-nav .action-bar`, que existían porque la navegación tapaba el botón.
  *
- * NO reemplaza todavía a `BottomNav`: este componente entra sin call sites y
- * cada pantalla lo adopta cuando se implementa (paso 3 de la orden visual).
- * Mientras las dos convivan, `BottomNav` es la vieja y esta es la nueva.
+ * **Ya reemplazó a `BottomNav`**, que se retiró en §1.9 · paso 3 cuando la
+ * última pantalla la adoptó. Cada pantalla la monta ELLA: `App` no decide qué
+ * barra lleva cada una, porque la posición del círculo central cambia según
+ * dónde estás y eso `App` no lo sabe.
+ *
+ * Su hack de layout tiene gemelo y no desapareció: `.has-appbar .action-bar`
+ * existe por lo mismo que existía `.has-nav .action-bar` —el `.action-bar` no
+ * es fijo y la barra sí—. Lo que sigue vivo del mundo viejo es `.fab` y
+ * `.cta-float`, con call sites en Mesas y en los dos flujos de mesa.
  *
  * La posición central es CONFIGURABLE, y eso viene del SPEC, no de comodidad:
  * en Inicio es `+` "Nueva" (SPEC_APP.md §1.1), en Ticket/División/Mis ítems es

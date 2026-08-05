@@ -566,52 +566,13 @@ body {
   bottom: 24px;
 }
 
-/* Barra inferior fija: Inicio · Amigos · Grupos · Perfil. */
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px; /* mismo ancho que .app */
-  background: #fff;
-  border-top: 1px solid var(--gray-l);
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-  z-index: 19;
-}
-.nav-item {
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 0;
-  font-family: var(--font-body);
-  font-size: 11px;
-  color: var(--gray-txt);
-}
-.nav-item .ico {
-  font-size: 20px;
-}
-.nav-item.on {
-  color: var(--navy);
-  font-weight: 700;
-}
-/* Con barra de nav, el action-bar (CTA fijo al pie) debe quedar POR ENCIMA
-   de la nav fija — sin esto, la nav lo tapa (feedback del hermano de Mati,
-   2026-07-24: "la navegación está tapando el botón para agregar amigo"). */
-.has-nav .action-bar {
-  padding-bottom: calc(84px + env(safe-area-inset-bottom));
-}
+/* La barra inferior VIEJA vivía acá: `.bottom-nav`, `.nav-item` y los dos
+   `.has-nav` que le hacían lugar. Se fue con §1.9 · paso 3, cuando la última
+   pantalla pasó a `AppBottomBar`. Sus dos reglas de layout tienen gemelo en la
+   sección §5 bis: `.has-appbar .scroll` y `.has-appbar .action-bar`.
 
-/* Las pantallas con barra dejan aire para barra + flotante. */
-.has-nav .scroll {
-  padding-bottom: 150px;
-}
+   `.fab`, `.fab.solo` y `.cta-float` NO se van: siguen vivos en Mesas y en los
+   dos flujos de mesa. */
 
 /* ─── Batch UX 2026-07-23 ─── */
 
@@ -1720,8 +1681,9 @@ body {
    ESTRUCTURA DE LA APP · SISTEMA_DISENO.md §5 bis
    Tres componentes compartidos por toda la app del comensal. Ninguna pantalla
    inventa su propio encabezado ni su propia navegación.
-   Conviven con los estilos viejos (.bottom-nav, .fab, .cta-float) mientras las
-   pantallas migran de a una. Cuando la última migre, aquellos se borran.
+   `.bottom-nav` ya se borró: la última pantalla migró en §1.9 · paso 3. Siguen
+   conviviendo `.fab` y `.cta-float`, que todavía tienen call sites en Mesas y
+   en los dos flujos de mesa.
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* ─── §5 bis · C · Barra inferior de cinco posiciones ─── */
