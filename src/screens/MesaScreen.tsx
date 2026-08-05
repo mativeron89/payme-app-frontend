@@ -25,7 +25,6 @@ import { payableEqualSlotAmounts, type PayMesaExpectation } from '../api/moneyGu
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
-import { InviteFriends } from '../components/InviteFriends';
 import type {
   FractionRequest,
   MesaDetail,
@@ -35,15 +34,17 @@ import type {
   PaymentType,
 } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
-import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
+import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import {
   needsExtraPartConfirmation as needsExtraPartConfirmationOf,
   paymentLanded,
   requiresReconciliation,
 } from './freezeMachine';
+import { MesaDetailView } from './MesaDetailView';
+import { FRACTIONS, bpsLabel, itemsAmountFor } from './mesaItemsView';
 import { goBack, navigate } from '../router';
-import { countdownTo, formatMXN } from '../utils/format';
-import { fractionAmount, stringToCents, tipFromBps } from '../utils/money';
+import { formatMXN } from '../utils/format';
+import { stringToCents, tipFromBps } from '../utils/money';
 import { createInFlightMutex } from '../utils/inFlight';
 import { RequestEpoch } from '../utils/requestEpoch';
 import { writeClipboardText } from '../utils/clipboard';
@@ -287,43 +288,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   const payable = mesa?.status === 'open' || mesa?.status === 'partially_paid';
 
-  /** Valores del contrato (schemas.lockItems del espejo). */
-  const FRACTIONS: Array<{ bps: number; label: string }> = [
-    { bps: 10000, label: '1' },
-    { bps: 5000, label: '½' },
-    { bps: 3333, label: '⅓' },
-    { bps: 2500, label: '¼' },
-  ];
-
-  function bpsLabel(bps: number): string {
-    if (bps >= 10000) return 'entero';
-    if (bps === 5000) return '½';
-    if (bps === 3333 || bps === 3334) return '⅓';
-    if (bps === 2500) return '¼';
-    return `${Math.round(bps / 100)}%`;
-  }
-
-  /** Preview del monto de MI fracción (la completadora la ajusta el server). */
-  function fractionPreview(priceCents: number, bps: number, remainingBps: number): number {
-    if (bps >= remainingBps) {
-      // Completa el ítem → paga lo que falta (aprox: nominal de lo tomado).
-      return Math.max(0, priceCents - fractionAmount(priceCents, 10000 - remainingBps));
-    }
-    return fractionAmount(priceCents, bps);
-  }
-
-  const itemsAmount = useMemo(() => {
-    if (!mesa) return 0;
-    if (mesa.division_mode === 'igual') {
-      return mesa.division_slots?.find((s) => s.status === 'available')?.amount_cents ?? 0;
-    }
-    return mesa.items
-      .filter((i) => selected.has(i.id))
-      .reduce(
-        (s, i) => s + fractionPreview(i.price_cents * i.quantity, selected.get(i.id) ?? 10000, i.remaining_bps),
-        0,
-      );
-  }, [mesa, selected]);
+  // `FRACTIONS`, `bpsLabel`, `fractionPreview` y esta cuenta viven ahora en
+  // `mesaItemsView.ts`: son puras y estaban declaradas adentro del componente,
+  // donde no había forma de ejercitarlas sin montar la pantalla entera.
+  const itemsAmount = useMemo(() => itemsAmountFor(mesa, selected), [mesa, selected]);
 
   // D7 (v2.17): la propina es % de tu parte IGUALITARIA (total ÷ N), no de tu
   // consumo. Preview con la réplica exacta de tipFromBps; el cobro real lo
@@ -1628,290 +1596,29 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     );
   }
 
-  // ─── Detalle + selección (s-ticket / s-myitems / s-guest) ─
-  const cd = countdownTo(mesa.expires_at);
-  const pct = mesa.total_cents > 0 ? Math.round((mesa.paid_amount_cents / mesa.total_cents) * 100) : 0;
-  const availableSlots = mesa.division_slots?.filter((s) => s.status === 'available').length ?? 0;
-  // Si ya no queda NADA seleccionable, no tiene sentido pedir "elegí tus consumos".
-  const nothingLeft =
-    mesa.division_mode === 'consumo' &&
-    mesa.items.length > 0 &&
-    mesa.items.every((i) => i.status === 'paid' || (i.status === 'locked' && !i.locked_by_me));
-
-  // Compartir link: mismo botón en las dos ramas de división (antes duplicado
-  // e inaccesible — era solo el emoji 🔗 sin nombre).
-  const shareButton = !isGuest && mesa.my_role === 'opener' && (
-    <button
-      className="back-btn"
-      style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', flex: 'none' }}
-      aria-label="Copiar link de invitación"
-      onClick={() => void copyInvitationLink()}
-    >
-      <Icon name="link" size={18} />
-    </button>
-  );
-
+  // ─── Detalle + selección (s-myitems) ─────────────────────
+  // El JSX vive en `MesaDetailView`: es la pantalla que §1.5 rediseña, y tenerla
+  // en el mismo archivo que el pago hacía que un cambio visual rozara dinero.
+  // Acá queda el cableado — estado adentro, intenciones afuera.
   return (
-    <div className="screen has-cta">
-      <div className="top-bar" style={{ background: 'var(--navy)' }}>
-        {!isGuest && (
-          <button
-            className="back-btn"
-            onClick={() => goBack('mesas')}
-            aria-label="Volver"
-            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
-          >
-            <span aria-hidden="true">←</span>
-          </button>
-        )}
-        <TopLogo inv />
-        <div style={{ flex: 1 }} />
-        {shareButton}
-        {isGuest && <span className="badge badge-teal">Invitado</span>}
-      </div>
-      <div style={{ background: 'var(--navy)', padding: '0 20px 16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontSize: 'var(--fs-legacy-sm)', color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)', minWidth: 0 }}>
-            {mesa.restaurant.name} · Mesa {code} ·{' '}
-            {mesa.division_mode === 'igual' ? 'partes iguales' : 'cada uno lo suyo'}
-          </div>
-          <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '4px 12px', borderRadius: 20, fontWeight: 800, fontSize: 'var(--fs-legacy-sm)', flexShrink: 0 }}>
-            {formatMXN(mesa.total_cents)}
-          </div>
-        </div>
-        <div style={{ marginTop: 10 }}>
-          <div
-            className="progress-bar"
-            style={{ background: 'rgba(255,255,255,0.15)' }}
-            role="progressbar"
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`Pagado ${pct}% de la mesa`}
-          >
-            <div className="progress-fill" style={{ width: `${pct}%` }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)' }}>
-            <span>
-              {formatMXN(mesa.paid_amount_cents)} pagado ({pct}%)
-            </span>
-            <span style={{ color: '#ffb59b', fontWeight: 700 }}>
-              <Icon name="clock" size={14} className="ico-inline" /> {cd ?? 'venció'}
-            </span>
-          </div>
-        </div>
-      </div>
-      {guestHeader}
-      {mesa.division_mode === 'consumo' ? (
-        <>
-          <div className="totalbar">
-            <div>
-              <div className="lbl">Mi parte</div>
-              <div className="amt">{formatMXN(itemsAmount)}</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)' }}>de {formatMXN(mesa.total_cents)}</div>
-              <div style={{ fontSize: 'var(--fs-legacy-sm)', color: 'var(--teal)', fontWeight: 700 }}>
-                {mesa.total_cents > 0 ? Math.round((itemsAmount / mesa.total_cents) * 100) : 0}%
-              </div>
-            </div>
-          </div>
-          <div className="scroll" style={{ background: '#fff' }}>
-          {/* B-06: el pago quedó sin confirmar. Un toast al tocar un ítem se
-              pierde; acá queda a la vista, con el camino de vuelta. */}
-          {frozenScope && (
-            <div style={{ padding: '12px 16px 0' }}>
-              <div className="note note-orange" role="status">
-                <b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal
-                cual antes de cambiar tu selección.
-                <button
-                  className="btn btn-ghost btn-sm btn-fit"
-                  style={{ marginTop: 8 }}
-                  onClick={() => setView('pay')}
-                >
-                  Reintentar ese pago
-                </button>
-              </div>
-            </div>
-          )}
-            <div style={{ padding: '12px 16px 4px' }} className="caption">
-              Tocá lo que consumiste. Al elegirlo queda <b>reservado</b> para vos.
-            </div>
-            {nothingLeft && (
-              <div className="note note-amber" style={{ margin: '8px 16px' }}>
-                Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.
-              </div>
-            )}
-            {mesa.items.map((i) => {
-              const fullPrice = i.price_cents * i.quantity;
-              const paidFull = i.status === 'paid';
-              // Bloqueado solo si NO queda nada y nada es mío.
-              const blocked = (paidFull || i.remaining_bps <= 0) && i.my_bps === 0 && !selected.has(i.id);
-              const sel = selected.has(i.id);
-              const myBpsSel = selected.get(i.id) ?? 10000;
-              const partial = i.remaining_bps > 0 && i.remaining_bps < 10000;
-              const hint = paidFull
-                ? ' · ya pagado'
-                : blocked
-                  ? ' · lo tomaron'
-                  : partial
-                    ? ` · queda ${bpsLabel(i.remaining_bps)}`
-                    : '';
-              return (
-                <div
-                  key={i.id}
-                  className={`item-row ${sel ? 'sel' : ''} ${blocked ? 'paid-other' : ''}`}
-                  style={{ flexWrap: 'wrap', rowGap: 4 }}
-                >
-                  <button
-                    onClick={() => !blocked && toggleItem(i.id)}
-                    disabled={blocked}
-                    aria-pressed={blocked ? undefined : sel}
-                    aria-label={`${i.name}, ${formatMXN(fullPrice)}${hint}`}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: blocked ? 'default' : 'pointer', textAlign: 'left' }}
-                  >
-                    <div className={`checkbox ${sel ? 'on' : ''} ${blocked ? 'blocked' : ''}`} aria-hidden="true">
-                      {blocked ? (paidFull ? '✓' : <Icon name="lock" size={13} />) : '✓'}
-                    </div>
-                    <div className="item-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {i.name}
-                      {partial && !blocked && (
-                        <span className="item-hint"> · queda {bpsLabel(i.remaining_bps)}</span>
-                      )}
-                      {(paidFull || blocked) && <span className="item-hint">{hint}</span>}
-                    </div>
-                  </button>
-                  {/* v2.18: fracción en la MISMA línea (UX ratificada). */}
-                  {sel && (
-                    <div style={{ display: 'flex', gap: 4, flex: 'none' }} role="radiogroup" aria-label={`Fracción de ${i.name}`}>
-                      {FRACTIONS.filter((f) => f.bps <= i.remaining_bps).map((f) => (
-                        <button
-                          key={f.bps}
-                          className={`tip-pill ${myBpsSel === f.bps ? 'sel' : ''}`}
-                          style={{ padding: '3px 9px', fontSize: 'var(--fs-legacy-sm)' }}
-                          onClick={() => setFraction(i.id, f.bps)}
-                          role="radio"
-                          aria-checked={myBpsSel === f.bps}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="item-price" style={{ flex: 'none' }}>
-                    {sel && myBpsSel < 10000
-                      ? formatMXN(fractionPreview(fullPrice, myBpsSel, i.remaining_bps))
-                      : formatMXN(fullPrice)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {/* T-F1: el organizador puede invitar amigos in-app también acá —
-              la pantalla de compartir post-crear se ve UNA sola vez. */}
-          {!isGuest && mesa.my_role === 'opener' && (mesa.status === 'open' || mesa.status === 'partially_paid') && (
-            <div style={{ padding: '4px 16px 0' }}>
-              {inviteOpen ? (
-                <InviteFriends code={code} />
-              ) : (
-                <button className="btn btn-ghost btn-sm btn-fit" onClick={() => setInviteOpen(true)}>
-                  <Icon name="users" size={16} className="ico-inline" /> Invitar amigos de PayMe
-                </button>
-              )}
-            </div>
-          )}
-          <button className="cta-float" onClick={goToPay} disabled={busy || selected.size === 0}>
-            {busy
-              ? 'Reservando…'
-              : nothingLeft
-                ? 'No queda nada por pagar'
-                : selected.size === 0
-                  ? 'Elegí lo que consumiste'
-                  : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
-          </button>
-        </>
-      ) : (
-        <>
-          <div className="scroll" style={{ padding: 16 }}>
-            {/* IMPORTANTÍSIMO (Mati): aunque se pague en partes iguales, cada
-                comensal marca QUÉ consumió — esa info sostiene el modelo.
-                No cambia el monto (la parte es fija) ni reserva nada. */}
-            {/* B-06: el pago quedó sin confirmar. Un toast al tocar un ítem se
-                pierde; acá queda a la vista, con el camino de vuelta. */}
-              {frozenScope && (
-              <div style={{ padding: '12px 16px 0' }}>
-                <div className="note note-orange" role="status">
-                  <b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal
-                  cual antes de cambiar tu selección.
-                  <button
-                    className="btn btn-ghost btn-sm btn-fit"
-                    style={{ marginTop: 8 }}
-                    onClick={() => setView('pay')}
-                  >
-                    Reintentar ese pago
-                  </button>
-                </div>
-              </div>
-            )}
-            <div className="sectlabel">¿Qué consumiste?</div>
-            <div className="caption" style={{ margin: '0 2px 8px' }}>
-              Marcalo para el restaurante — no cambia lo que pagás.
-            </div>
-            <div className="card" style={{ marginBottom: 14 }}>
-              {mesa.items.map((i) => {
-                const sel = selected.has(i.id);
-                return (
-                  <button
-                    key={i.id}
-                    className={`item-row ${sel ? 'sel' : ''}`}
-                    onClick={() => toggleItem(i.id)}
-                    aria-pressed={sel}
-                    aria-label={`${i.name}${i.quantity > 1 ? ` por ${i.quantity}` : ''}`}
-                  >
-                    <div className={`checkbox ${sel ? 'on' : ''}`} aria-hidden="true">
-                      ✓
-                    </div>
-                    <div className="item-name">
-                      {i.name}
-                      {i.quantity > 1 ? ` × ${i.quantity}` : ''}
-                    </div>
-                    {/* Feedback Mati: el precio de cada producto, visible. */}
-                    <div className="item-price">{formatMXN(i.price_cents * i.quantity)}</div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="note note-teal">
-              La cuenta se dividió en {mesa.expected_participants} partes iguales de{' '}
-              <b>{formatMXN(itemsAmount)}</b>. Quedan <b>{availableSlots}</b> por pagar.
-            </div>
-            {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al
-                comensal ver que su parte YA está tomada. Sin esto volvía, veía
-                casilleros libres y pagaba de nuevo — llevándose el de otro.
-                No se bloquea: pagar más de una parte es legítimo (acta
-                2026-07-25), pero tiene que ser una decisión, no un accidente. */}
-            {mySlotsTaken > 0 && (
-              <div className="note note-teal" style={{ marginTop: 8 }}>
-                <b>Ya pagaste {mySlotsTaken === 1 ? 'tu parte' : `${mySlotsTaken} partes`} ✓</b>
-                {availableSlots > 0 && ' Si tocás pagar de nuevo, cubrís la parte de otro comensal.'}
-              </div>
-            )}
-          </div>
-          <button
-            className="cta-float"
-            onClick={goToPay}
-            disabled={busy || availableSlots === 0 || selected.size === 0}
-          >
-            {availableSlots === 0
-              ? 'No quedan partes'
-              : selected.size === 0
-                ? 'Marcá lo que consumiste'
-                : mySlotsTaken > 0
-                  ? `Pagar otra parte → ${formatMXN(itemsAmount)}`
-                  : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
-          </button>
-        </>
-      )}
-    </div>
+    <MesaDetailView
+      mesa={mesa}
+      code={code}
+      isGuest={isGuest}
+      guestHeader={guestHeader}
+      selected={selected}
+      itemsAmount={itemsAmount}
+      mySlotsTaken={mySlotsTaken}
+      frozenScope={frozenScope}
+      busy={busy}
+      inviteOpen={inviteOpen}
+      onToggleItem={toggleItem}
+      onSetFraction={setFraction}
+      onGoToPay={goToPay}
+      onRetryFrozenPay={() => setView('pay')}
+      onOpenInvite={() => setInviteOpen(true)}
+      onCopyInvitationLink={() => void copyInvitationLink()}
+      onBack={() => goBack('mesas')}
+    />
   );
 }
