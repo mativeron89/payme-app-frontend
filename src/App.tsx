@@ -9,7 +9,6 @@ import { useRoute } from './router';
 import { enforceWalletRouteGuard } from './walletRouteGuard';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
-import { CuentaScreen } from './screens/CuentaScreen';
 import { EstadisticasScreen } from './screens/EstadisticasScreen';
 import { FriendsScreen } from './screens/FriendsScreen';
 import { GroupsScreen } from './screens/GroupsScreen';
@@ -108,8 +107,25 @@ function Shell() {
         return <CreateMesaFlow />;
       case 'mesa':
         return route.param ? <MesaScreen key={route.param} code={route.param} /> : <MesasScreen />;
+      /**
+       * §1.9 · paso 6 · **la ruta VIVE, la pantalla se retiró.**
+       *
+       * `CuentaScreen` ya no existe, pero `case 'cuenta'` no se puede borrar:
+       * quedan **ocho `navigate('cuenta')` durmientes** —`TopupScreen` ×5,
+       * `TransferScreen` ×1, `HomeScreen` ×2 dentro de bloques
+       * `walletRailEnabled`— preservados por ratificación. Sin `case`, cualquiera
+       * de ellos dejaría la app **en blanco** si llegara a alcanzarse.
+       *
+       * Se probó la salida elegante —sacar `'cuenta'` de la unión `Page` para
+       * que el compilador obligue— y se **descartó**: exigiría editar los ocho
+       * call sites, o sea reinterpretar navegación durmiente. **La ratificación
+       * pesa más que la elegancia del compilador.**
+       *
+       * Aterriza en `TarjetasScreen` y no en Inicio porque es lo que más se
+       * parece a lo que esos call sites querían: la gestión de tarjetas era la
+       * mitad card-only de la Cuenta vieja, y es la que se conserva.
+       */
       case 'cuenta':
-        return <CuentaScreen />;
       // §1.11 · las tres que lanzan las pestañas de Inicio. Son de PRIMER
       // NIVEL: cada una con su ruta, no colgadas de un parámetro de `cuenta`.
       case 'tarjetas':

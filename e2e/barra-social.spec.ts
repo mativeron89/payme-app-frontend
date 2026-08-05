@@ -141,28 +141,18 @@ test.describe('§1.9 · la barra de cinco en la sección social', () => {
   });
 
   /**
-   * **Cuenta, la cuarta**, va aparte de la tabla porque **no enciende ninguna
-   * posición**: §1.11 la fusionó dentro de las pestañas de Inicio, así que no le
-   * queda una propia. `active={null}` es lo honesto — encender otra diría que
-   * estás en una sección en la que no estás.
+   * **Cuenta ya no tiene recorrido acá, y es correcto que no lo tenga.**
    *
-   * Se afirma que **ninguna** está marcada, y no sólo que la barra existe: si
-   * alguien le pone una posición "para que no quede vacía", esto lo dice.
+   * En el paso 3 tuvo uno: montaba la barra sin encender ninguna posición.
+   * **El paso 6 retiró `CuentaScreen` entera**, así que ese test dejó de
+   * describir algo que existe — y un test que afirma sobre una pantalla
+   * retirada es de la misma familia que un guard que corre donde su mecanismo
+   * no existe: verde y vacío.
    *
-   * La pantalla se retira entera en el paso 6. Mientras siga alcanzable,
-   * necesita navegación.
+   * Lo que sí sobrevive de esa ruta —que `#/cuenta` monta algo real, porque
+   * ocho `navigate('cuenta')` durmientes dependen de eso— se afirma en
+   * `rutas-montan-pantalla.spec.ts`, como alias declarado, y en el control
+   * positivo de `rutas-wallet.spec.ts`. **No se perdió cobertura: se mudó a
+   * donde el hecho vive ahora.**
    */
-  test('Cuenta lleva la barra sin marcar ninguna posición, y sale a Inicio', async ({ page }) => {
-    await ingresar(page);
-    await page.goto('/#/cuenta');
-    await expect(page.getByRole('heading', { name: 'Mi Cuenta', exact: true })).toBeVisible();
-
-    const barra = page.getByRole('navigation', { name: 'Navegación principal' });
-    await expect(barra).toHaveCount(1);
-    await expect(barra.locator('[aria-current="page"]')).toHaveCount(0);
-
-    await barra.getByRole('button', { name: 'Inicio', exact: true }).click();
-    await expect(page).toHaveURL(/#\/home$/);
-    await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toBeVisible();
-  });
 });

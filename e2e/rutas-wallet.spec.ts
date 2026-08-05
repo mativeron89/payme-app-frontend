@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 
 /**
@@ -96,6 +96,12 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
    * CONTROL POSITIVO, por la misma razón que en la suite de vitest: sin esto,
    * "no aparece CLABE" no distingue *"el gate funciona"* de *"la app no
    * renderiza nada en este entorno"*. Una ruta legítima tiene que renderizar.
+   *
+   * Sigue usando `#/cuenta` **a propósito, aunque §1.9 haya retirado esa
+   * pantalla**: ahora esa ruta monta `TarjetasScreen` por el `case` compartido,
+   * y que renderice contenido es justamente lo que protege a los ocho
+   * `navigate('cuenta')` durmientes de dejar la app en blanco. El control
+   * positivo y ese guard son la misma afirmación.
    */
   test('control positivo · una ruta card-only sí se alcanza y muestra contenido', async ({ page }) => {
     await ingresar(page);
@@ -108,27 +114,50 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
   });
 
   /**
-   * Y lo que la ratificación manda CONSERVAR: apagar el riel saldo no puede
+   * ⭐ **Lo que la ratificación manda CONSERVAR**: apagar el riel saldo no puede
    * apagar el historial de pagos propio ni las tarjetas. Es el error de
    * `07f0ba2`, mirado desde el navegador en vez de desde una función.
+   *
+   * 🔴 **§1.9 · paso 6 le movió el piso a este test y NO se lo aflojó.** Vivía
+   * sobre `#/cuenta`, donde las dos superficies convivían en pestañas de
+   * `CuentaScreen`. Esa pantalla se retiró, así que ahora se afirman **donde
+   * viven de verdad**: `#/pagos` y `#/tarjetas`, las dos de primer nivel que
+   * estrenó §1.11.
+   *
+   * Es la misma exigencia sobre dos rutas en vez de sobre dos pestañas — y
+   * queda **más fuerte**, no más débil: antes bastaba con que `CuentaScreen`
+   * montara; ahora cada superficie tiene que estar en su propia pantalla, y el
+   * barrido de vocabulario corre sobre las dos por separado.
    */
-  test('las tarjetas y la actividad propia siguen visibles con el riel apagado', async ({ page }) => {
-    await ingresar(page);
-    await page.goto('/#/cuenta');
-    await expect(page).toHaveURL(/#\/cuenta$/);
+  const CARD_ONLY = [
+    {
+      ruta: 'pagos',
+      que: 'la actividad propia',
+      // `GET /account/history` + `stats`, que leen `payment_attempts` y NO
+      // tablas de wallet. Es exactamente lo que `07f0ba2` escondió.
+      ver: (page: Page) => page.getByText('Mis pagos', { exact: true }),
+    },
+    {
+      ruta: 'tarjetas',
+      que: 'las tarjetas guardadas',
+      // Los puntos del enmascarado: si hay una tarjeta pintada, hay superficie.
+      ver: (page: Page) => page.getByText(/····/).first(),
+    },
+  ] as const;
 
-    // La actividad propia: `GET /account/history` + `stats`, que leen
-    // `payment_attempts` y NO tablas de wallet. Es lo que `07f0ba2` escondió.
-    await expect(page.getByText('MIS PAGOS')).toBeVisible();
+  for (const { ruta, que, ver } of CARD_ONLY) {
+    test(`${que} sigue visible con el riel apagado · #/${ruta}`, async ({ page }) => {
+      await ingresar(page);
+      await page.goto(`/#/${ruta}`);
+      await expect(page).toHaveURL(new RegExp(`#/${ruta}$`));
 
-    // Y las tarjetas, que viven en su pestaña.
-    await page.getByRole('button', { name: 'Tarjetas' }).click();
-    await expect(page.getByText(/····/).first()).toBeVisible();
+      await expect(ver(page)).toBeVisible();
 
-    // Nada del riel saldo, en ninguna de las dos pestañas.
-    const cuerpo = await page.locator('body').innerText();
-    for (const palabra of VOCABULARIO_WALLET) {
-      expect(cuerpo).not.toContain(palabra);
-    }
-  });
+      // Y nada del riel saldo en el camino.
+      const cuerpo = await page.locator('body').innerText();
+      for (const palabra of VOCABULARIO_WALLET) {
+        expect(cuerpo, `apareció "${palabra}" en #/${ruta}`).not.toContain(palabra);
+      }
+    });
+  }
 });

@@ -56,7 +56,17 @@ type Esperado =
       /** El `/param` del hash, para las rutas que sin él montan otra cosa. */
       readonly param?: string;
     }
-  | { readonly tipo: 'redirige'; readonly a: RegExp };
+  | { readonly tipo: 'redirige'; readonly a: RegExp }
+  /**
+   * 🔴 **La ruta monta A PROPÓSITO la misma pantalla que otra.**
+   *
+   * Existe porque el caso apareció y la regla de este archivo es que **dos
+   * páginas indistinguibles por su render se declaran, no se tapan con un
+   * marcador débil para que el test cierre**. Acá la indistinguibilidad es la
+   * decisión, no el accidente: `case 'cuenta'` cae a propósito en el mismo
+   * `case` que `tarjetas`.
+   */
+  | { readonly tipo: 'alias'; readonly de: PageId; readonly porque: string };
 
 /**
  * `Record<PageId, …>` a propósito: en el editor, agregar una página sin entrada
@@ -66,7 +76,18 @@ type Esperado =
  */
 const ESPERADO: Record<PageId, Esperado> = {
   home: { tipo: 'pantalla', marcador: MARCADOR_DE_INICIO },
-  cuenta: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Mi Cuenta' } },
+  /**
+   * §1.9 · paso 6 · `CuentaScreen` se retiró y **la ruta sobrevive**, montando
+   * `TarjetasScreen`. No es cosmético: quedan **ocho `navigate('cuenta')`
+   * durmientes** preservados por ratificación, y sin `case` cualquiera de ellos
+   * dejaría la app en blanco. Este renglón es lo que impide que alguien lo
+   * "limpie" viendo una ruta sin pantalla propia.
+   */
+  cuenta: {
+    tipo: 'alias',
+    de: 'tarjetas',
+    porque: 'la pantalla se retiró en §1.9 y la ruta vive para los ocho navigate() durmientes',
+  },
   tarjetas: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis tarjetas' } },
   pagos: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis pagos' } },
   estadisticas: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis estadísticas' } },
@@ -137,6 +158,26 @@ test.describe('cada ruta declarada monta su propia pantalla', () => {
 
       if (esperado!.tipo === 'redirige') {
         await expect(page).toHaveURL(esperado!.a);
+        return;
+      }
+
+      /**
+       * Alias: monta la pantalla de OTRA página, y eso es la decisión. Se
+       * afirman las dos mitades, porque cada una sola miente:
+       *
+       *  - que se ve el marcador de la aliasada → la ruta monta algo real;
+       *  - que la URL **no cambió** → llegó por el `case`, no por un redirect.
+       *    Sin esto, un `replaceRoute('tarjetas')` pasaría igual, y no es lo
+       *    mismo: un redirect deja la ruta vieja fuera del `case`, que es
+       *    exactamente lo que los ocho durmientes no toleran.
+       */
+      if (esperado!.tipo === 'alias') {
+        const aliasada = ESPERADO[esperado!.de];
+        expect(aliasada?.tipo, `«${esperado!.de}» tiene que ser una pantalla`).toBe('pantalla');
+        await expect(
+          ubicar(page, (aliasada as { marcador: Marcador }).marcador),
+        ).toBeVisible();
+        await expect(page).toHaveURL(new RegExp(`#/${pagina}$`));
         return;
       }
 

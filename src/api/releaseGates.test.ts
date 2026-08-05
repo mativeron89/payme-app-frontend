@@ -98,4 +98,52 @@ describe('gate IFPE de release', () => {
     expect(Object.keys(fuentes).length).toBeGreaterThan(20);
     expect(ofensores).toEqual([]);
   });
+
+  /**
+   * §1.9 · paso 6 · **`showWalletMovements` se quedó sin consumidor vivo.**
+   *
+   * `CuentaScreen` era el único que lo leía —dos bloques, `:252` y `:281`— y se
+   * retiró con la demolición. La pregunta que había que contestar era si el gate
+   * **se reubica** o si **se acredita que la superficie ya no existe**, y es lo
+   * segundo: no hay dónde reubicarlo, porque no quedó ninguna lista de
+   * `wallet_transactions` en ninguna pantalla.
+   *
+   * 🔴 **`accountRailView` CONSERVA sus cinco campos.** Durmiente es durmiente:
+   * el campo no se borra porque su consumidor se haya ido. Los dos tests de
+   * arriba siguen exigiendo los cinco, y el `toEqual` los falla si alguien
+   * "limpia" el que sobra.
+   *
+   * Lo que cambia es esto: se prueba, **no se afirma**. Si mañana alguien
+   * vuelve a colgar superficie del riel saldo, este test la encuentra sola —
+   * incluso en una pantalla que hoy no existe.
+   */
+  it('§1.9 · ningún consumidor VIVO lee `showWalletMovements`', () => {
+    const fuentes = import.meta.glob('/src/**/*.{ts,tsx}', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>;
+
+    /**
+     * Dónde SÍ puede aparecer, y por qué cada uno:
+     *  - `releaseGates.ts` lo DECLARA — es el campo durmiente que se conserva;
+     *  - los `.test.ts`/`.test.tsx` lo afirman apagado, que es su trabajo.
+     * Cualquier otro archivo de `src/` es un consumidor vivo.
+     */
+    const esDeclaracionOTest = (ruta: string) =>
+      ruta === '/src/api/releaseGates.ts' || /\.test\.tsx?$/.test(ruta);
+
+    const consumidores = Object.entries(fuentes)
+      .filter(([ruta]) => !esDeclaracionOTest(ruta))
+      .filter(([, cuerpo]) => cuerpo.includes('showWalletMovements'))
+      .map(([ruta]) => ruta);
+
+    // Control positivo, por la misma razón que el de G-24: sin él, un glob que
+    // no encuentra nada daría cero y el cero no significaría nada. Se exige
+    // además que el barrido SÍ vea la declaración — o sea que busca donde debe.
+    expect(Object.keys(fuentes).length).toBeGreaterThan(20);
+    expect(fuentes['/src/api/releaseGates.ts']).toContain('showWalletMovements');
+
+    expect(consumidores).toEqual([]);
+  });
 });
