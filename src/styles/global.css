@@ -1679,7 +1679,14 @@ body {
   font-family: var(--font-body);
   font-size: 13.5px;
 }
+/* `text-align: center` del contenedor sólo centra contenido EN LÍNEA, y desde
+   que acá adentro va un <svg> del set de íconos en vez de un emoji de texto,
+   el ícono quedaba pegado a la izquierda con la frase centrada debajo.
+   Encontrado forzando el vacío de Avisos a 375px. Con flex se centran los dos
+   casos: el emoji de texto queda como ítem anónimo y también centrado. */
 .empty .emoji {
+  display: flex;
+  justify-content: center;
   font-size: 40px;
   margin-bottom: 8px;
 }
@@ -2254,10 +2261,107 @@ body {
 
 /* ══════════════════════════════════════════════════════════════════════════
    AVISOS · SPEC_APP.md §1.8
-   No leído = punto --action-2 de 8px A LA IZQUIERDA **más** peso 700 en el
+   No leído = punto --action navy de 8px A LA IZQUIERDA **más** peso 700 en el
    título. El punto solo no alcanza: son dos señales porque una sola se pierde
    en escala de grises y con daltonismo.
+
+   Es de PRIMER NIVEL: se llega por la campana, no por la barra, así que no
+   lleva flecha de volver. La campana queda en --brand y sin badge — el badge
+   cuenta lo que no viste, y acá lo estás viendo.
    ══════════════════════════════════════════════════════════════════════════ */
+
+/* La campana de "ya estás acá". `--brand` sobre la banda navy mide 5.82:1, muy
+   por encima del 3:1 que pide un objeto gráfico. No es un botón: no hace nada. */
+.hdr-bell-here {
+  color: var(--brand);
+  cursor: default;
+}
+
+/* "Marcar leídos" en su propia fila, DEBAJO del encabezado. Alineado a la
+   derecha porque es una acción global sobre la lista que sigue. La fila existe
+   aunque no haya nada sin leer: si apareciera y desapareciera, la lista saltaría
+   hacia arriba justo cuando la persona termina de marcar. */
+.avisos-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-4);
+}
+
+.linkbtn {
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--link);
+}
+
+.linkbtn:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* La tarjeta de invitación. NO es `card` blanca: fondo --teal-l y borde
+   --action-2 son lo que la separa del resto de la lista — y es esa separación,
+   no el color del botón, la que le da la jerarquía (§1.8). */
+.inv-card {
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--action-2);
+  border-radius: var(--r-lg);
+  background: var(--teal-l);
+}
+
+.inv-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  color: var(--text);
+}
+
+/* Dos líneas, nunca una sola larga. La primera es el contexto y la segunda es
+   el dato: el restaurante va con más peso porque es lo que la persona busca. */
+.inv-l1 {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.inv-l2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.inv-cta {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.inv-meta {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* Los rótulos de sección son <h2> desde §1.8: sin tarjeta de título, esta
+   pantalla no tenía NINGÚN encabezado para un lector de pantalla. El reset del
+   margen del <h2> va acá y no en un `style` inline. */
+.sectlabel {
+  margin-top: 0;
+}
 
 .aviso-row {
   display: flex;
@@ -2265,13 +2369,17 @@ body {
   gap: var(--sp-3);
 }
 
+/* §1.8 lo pone en `--action` navy, no en `--action-2` teal. El punto ACOMPAÑA:
+   la señal principal es el peso 700 del título, y por eso el punto no necesita
+   competir por atención con nada. Naranja está descartado explícitamente — esta
+   pantalla ya muestra la barra con su círculo naranja. */
 .aviso-dot {
   flex: none;
   width: 8px;
   height: 8px;
   margin-top: 7px;
   border-radius: var(--r-full);
-  background: var(--action-2);
+  background: var(--action);
 }
 
 /* El leído conserva el hueco del punto: sin esto la lista se desalinea fila a

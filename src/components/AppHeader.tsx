@@ -37,35 +37,65 @@ interface HeaderBase {
 }
 
 /**
- * Variante de PRIMER NIVEL — pantallas de la barra inferior.
- * Logo + nombre completo del usuario + campana.
+ * Variante de PRIMER NIVEL — pantallas de la barra inferior, y Avisos, a la que
+ * se llega por la campana.
+ * Logo + identidad del usuario + campana.
  */
 export function AppHeader({
   userName,
+  paymeId,
   unread = 0,
   onBell,
+  bellHere = false,
   tabs,
   compact,
 }: HeaderBase & {
-  /** Nombre COMPLETO. Trunca con elipsis; nunca empuja la campana. */
+  /** Nombre COMPLETO (§1.1). Trunca con elipsis; nunca empuja la campana. */
   userName?: string;
+  /**
+   * `payme_id`, para las pantallas que piden la identidad corta en vez del
+   * nombre: §1.8 Avisos. Va en el MISMO slot y con el mismo tratamiento — es la
+   * misma ranura de identidad, no una fila nueva.
+   */
+  paymeId?: string;
   unread?: number;
   onBell?: () => void;
+  /**
+   * `true` en la pantalla de Avisos: la campana queda en `--brand`, **sin badge
+   * y sin ser un botón**, porque ya estás adentro y no hay adónde ir (§1.8).
+   *
+   * No es una quinta excepción de la lista cerrada de naranjas: ocupa la MISMA
+   * ranura sobre la banda navy a la que la tabla de `SISTEMA_DISENO.md` §1 ya
+   * le concede `--brand` para el badge de no leídos, y esa ranura ya convive
+   * con el círculo de la barra en toda pantalla de primer nivel.
+   */
+  bellHere?: boolean;
 }) {
+  const identidad = userName ?? paymeId;
   return (
     <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
       <div className="hdr-row">
         <PayMeLogo />
-        {userName && <span className="hdr-user">{userName}</span>}
-        {onBell && (
-          <button type="button" className="hdr-bell" onClick={onBell} aria-label="Avisos">
+        {identidad && <span className="hdr-user">{identidad}</span>}
+        {bellHere ? (
+          /* No es `<button>` a propósito: no hace nada. Un botón que no lleva a
+             ningún lado es una promesa rota, y encima entra en el orden de
+             tabulación. Lleva nombre accesible porque, sin tarjeta de título,
+             es lo único que dice de qué pantalla se trata. */
+          <span className="hdr-bell hdr-bell-here" role="img" aria-label="Estás en Avisos">
             <Icon name="bell" size={22} />
-            {unread > 0 && (
-              <span className="hdr-badge" aria-label={`${unread} sin leer`}>
-                {unread}
-              </span>
-            )}
-          </button>
+          </span>
+        ) : (
+          onBell && (
+            <button type="button" className="hdr-bell" onClick={onBell} aria-label="Avisos">
+              <Icon name="bell" size={22} />
+              {unread > 0 && (
+                <span className="hdr-badge" aria-label={`${unread} sin leer`}>
+                  {unread}
+                </span>
+              )}
+            </button>
+          )
         )}
       </div>
       {tabs}
