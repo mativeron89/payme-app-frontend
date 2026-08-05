@@ -1,5 +1,49 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.44.0 — §1.9 · pasos 2 y 3 · una sola barra en toda la app (2026-08-05)
+
+La sección social **no** se rehizo todavía: eso es el bloque irreducible de §1.9
+y va con su propia orden. Esto es el corte que lo vuelve seguro.
+
+- **La fila de tarjetas de Perfil iba a la Cuenta vieja.** Era el **único
+  `navigate('cuenta')` vivo** del repo; los otros ocho son declaraciones o riel
+  saldo durmiente y **no se tocan**. Ahora va a `#/tarjetas`. **Ninguna prueba
+  tocaba Perfil**, así que estrena `e2e/perfil-accesos.spec.ts`.
+- **Las cuatro pantallas que quedaban —Perfil, Amigos, Grupos y Cuenta— montan
+  `AppBottomBar`**, y con la última **`showNav` y `BottomNav` desaparecen**.
+  `App` vuelve a montar sólo la pantalla: qué barra lleva cada una es decisión de
+  la pantalla, porque el círculo central cambia según dónde estás.
+- **Cada conversión es atómica**: montar la barra nueva **y** salir de `showNav`
+  en el mismo commit. La mitad de eso deja **las dos barras conviviendo**, y esa
+  falla no da error — da una pantalla que se ve mal.
+- **Las posiciones dicen la verdad**: Amigos en Amigos **y en Grupos** —viven en
+  la misma sección, criterio que ya usaba `BottomNav`—, Más en Perfil, y
+  **ninguna en Cuenta**, que §1.11 fusionó adentro de las pestañas de Inicio.
+  Encender una "para que no quede vacía" lo dice el recorrido.
+- 🔴 **Volvía el bug del CTA tapado.** `.action-bar` no es fijo y la barra sí:
+  sin aire por debajo, la barra se le monta encima a "+ Agregar amigo" — el
+  reporte del hermano de Mati del 2026-07-24, en el mismo botón. Entra
+  `.has-appbar .action-bar`, gemelo del que ya existía. **Se mide con cajas y no
+  con `toBeVisible()`**: un elemento tapado por otro sigue siendo "visible" para
+  Playwright.
+- **Las dos barras llevaban el mismo landmark**, así que contarlo dice
+  directamente si hay dos. Es mejor que cualquier proxy: no depende de qué
+  posición tenga cada una ni de una clase de CSS.
+- Un detalle que no se ve en el diff y sí en el teléfono: el
+  `style={{ padding: N }}` inline del `.scroll` **pisa** el `padding-bottom` de
+  `.has-appbar .scroll` —shorthand inline contra longhand de clase— y deja la
+  última fila debajo de la barra. Va en longhands en las cuatro.
+- **`BottomNav.tsx` y sus estilos salen del árbol**, acreditado en el bundle
+  construido: `bottom-nav`, `nav-item` y `has-nav` dan **cero** en el CSS de
+  salida, con `appbar-block` de control positivo. **`.fab` y `.cta-float` NO se
+  van** —el comentario del sistema los daba por condenados junto con
+  `.bottom-nav` y era cierto para uno solo—: siguen vivos en Mesas y en los dos
+  flujos de mesa.
+
+**Queda de §1.9** el bloque grande: la sección social unificada con sus tres
+pestañas, `Más`, y la demolición de `CuentaScreen`. **517 vitest · 61 e2e**
+(venían 52) · typecheck · builds real y mock.
+
 ## 0.43.0 — El ruteo deja de fallar en silencio, y §1.7 deja de mentir (2026-08-05)
 
 Los dos preparativos de §1.9, antes de tocar la sección social. Ninguno de los
