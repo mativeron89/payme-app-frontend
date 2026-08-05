@@ -1,5 +1,55 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.36.0 — ORDEN VISUAL · Ticket (2026-08-05)
+
+- **`SPEC_APP.md` §1.3 · Ticket.** El pendiente que 0.35.0 dejó elevado —si el
+  celeste de la tarjeta de título era el estándar o una excepción de División—
+  **ya estaba resuelto en el spec** cuando se escribió esa entrada: el archivo
+  se editó a las 20:28, diez minutos después del commit de División, y dice que
+  `--teal-l` es el estándar de toda tarjeta de título y que *"Ticket se corrige
+  para pasar a `--teal-l`"*. La entrada anterior quedó vencida, no equivocada.
+  - Cabecera de flujo y tarjeta de título `--teal-l`. Acá la tarjeta **sí lleva
+    contenido debajo del título** —total y observación— separado por la misma
+    línea que separa la lista. Es una sola tarjeta.
+  - **La lista deja de ser una grilla de inputs**: cantidad · nombre · precio
+    tabular, texto limpio, sin un recuadro a la vista. Los controles aparecen
+    recién en modo edición. Se va el copy con el conteo de consumos.
+  - **"Modificar ítems" en dos estados**, con lápiz por fila y Eliminar en
+    `--danger`. La fila expandida edita nombre, precio y cantidad, no sólo el
+    monto como dice el spec: un consumo agregado nace vacío y sin nombre no se
+    completa nunca. **Desvío consultado con Mati.**
+  - **El chequeo del total dejó de ser vacuo.** El spec pide avisar cuando la
+    suma de las filas no coincide con el total del ticket, pero el total en
+    pantalla **era** la suma —`runScan` descartaba `total_cents`—, así que no
+    podía discrepar de sí mismo. Ahora se conserva el total impreso y se
+    contrasta. **No viaja al backend**: lo que se manda sigue siendo la suma de
+    lo que la persona vio y editó, porque la garantía retiene ese monto.
+  - Barra de cinco posiciones con "Continuar", sin ítem activo, y el motivo de
+    invalidez en su fila propia en vez de flotando a `bottom: 78px`.
+  - Área táctil del stepper de 22×22 a 44×44: estaba en la mitad del mínimo.
+- **Tres defectos que aparecieron al verificar y no eran de esta pantalla:**
+  - `.has-appbar .scroll` **no tenía efecto** — un `style={{ padding }}` inline
+    le ganaba al `padding-bottom` de la clase y la separación con la barra era
+    cero. **División arrastraba lo mismo** y no se veía porque su contenido es
+    corto. Las dos pasan a `.flow-scroll`, en longhands.
+  - `scrollIntoView` daba por visible una fila tapada por la barra fija:
+    corregido con `scroll-margin-bottom`.
+  - `.tk-name.empty` chocaba con `.empty`, el estado vacío global, y heredaba
+    sus `padding: 36px 24px` — 121px de fila en vez de 53. Renombrada.
+- **Contraste nuevo medido**: `--warning` sobre `--teal-l` da **4.77:1** — pasa
+  AA, pero con menos margen que el par que el sistema tenía medido (5.10 sobre
+  `--warning-tint`). Fijado en `designTokens.test.ts` y comprobado por mutación.
+- **No se implementa "ítem no reconocido"**: el spec lo deja pendiente de ver en
+  pantalla y `OcrResponse` no trae ningún campo por ítem del que pudiera salir.
+- Verificado a 375px en mock. La discrepancia de totales **no es alcanzable en
+  mock por sí sola** —el adaptador calcula `total_cents` con un reduce sobre los
+  mismos ítems—, así que se forzó editando un precio, en las dos direcciones, y
+  se restauró comprobando el regreso al estado informativo.
+- Deuda, medida con `git grep -o` sobre `src/` (el método que reconcilia con las
+  entradas anteriores): bloques `style={{…}}` 368 → **347** · `--fs-legacy-*`
+  99 → **86**. Ojo con el segundo: la entrada de 0.35.0 cerró en 111, y la caída
+  de 111 a 99 es del commit `cf235df` de la ORDEN 4B, no de acá.
+
 ## 0.35.0 — ORDEN VISUAL · División (2026-08-05)
 
 - **`SPEC_APP.md` §1.4 · División**, la primera pantalla del flujo de armar
