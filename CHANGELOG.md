@@ -1,5 +1,65 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.37.0 — ORDEN 4 · custodia del token y rutas del riel saldo (2026-08-05)
+
+Dos defectos que tenían la misma forma: **una defensa declarada que nadie
+comprobaba ejecutada**. En los dos casos el predicado era correcto, tenía sus
+tests en verde, y no protegía nada porque el llamador no lo obedecía.
+
+- **4B · el token terminal se soltaba de UNA de las DOS custodias.** El parte
+  decía "la URL conserva el `?t=`"; el defecto era más grande. El token vive en
+  `sessionStorage` **y** en la URL, y **no siempre en los dos**: cuando el
+  round-trip del storage falla —modo privado, cuota, un WebView con storage
+  particionado— `openInvitationCustody` deja el `?t=` en el hash **a propósito**,
+  porque preferimos un token visible a un token perdido. En ese estado, un 400 o
+  un 403 limpiaban un storage que nunca tuvo nada y no tocaban la URL: la
+  credencial que el emisor **acaba de declarar inservible** seguía en la barra de
+  direcciones y en el historial de un teléfono que se pasa alrededor de la mesa.
+  - `stripTokenFromUrl` funcionaba perfecto y tenía **todos sus tests verdes con
+    el defecto adentro**, porque el defecto nunca estuvo ahí: estaba en quién lo
+    llama y cuándo.
+  - La secuencia sale del `useEffect` a **`invitationCustody.ts`**. Sin librería
+    de render un efecto no se ejecuta en la suite, así que mientras el "cuándo"
+    viviera adentro era justo lo que no se podía testear.
+  - La decisión terminal y su ejecución quedan en **la misma función**: no se
+    puede agregar un estado terminal nuevo sin pasar por el mismo `if`.
+  - 39 tests: las siete filas de la matriz × storage funcional, storage que
+    **lanza** y storage que acepta la escritura y **no persiste**.
+- **4C · la redirección de `#/cargar` y `#/transferir`.** El único test decía
+  `allowsWalletRoute(false,'cargar') === false` —"la ruta está prohibida"—, y eso
+  sigue siendo cierto aunque nadie redirija. **Borrar `replaceRoute('home')`
+  dejaba la suite entera en verde.**
+  - La llamada sale a **`walletRouteGuard.ts`**, por la misma razón que 4B. Su
+    firma es `(walletRailEnabled, page)` y nada más: **no hay por dónde inyectar
+    un permiso** por cuenta, rol o restaurante.
+  - 58 tests sobre la cadena completa: payload real de `GET /api/config` →
+    `readWalletRail` → decisión → `replaceRoute` → historial → hash, para las
+    **siete** formas del riel apagado (falsa, ausente, cuatro malformadas y
+    permiso por principal) × las dos rutas, más `pending`.
+  - Se monta el **árbol real** con `renderToStaticMarkup` —ya es dependencia, no
+    agrega ninguna—: `TopupScreen` y `TransferScreen` no se montan y `fetch` no
+    se llama nunca. Con **dos controles positivos**, porque la ausencia de una
+    palabra no distingue "el gate funciona" de "acá no se renderiza nada".
+  - Las siete formas conservan tarjetas e historial propio: nada card-only queda
+    gateado por wallet. Es el error de `07f0ba2` escrito como test.
+- **Catorce mutantes sobre el estado commiteado, en worktree aparte. Los catorce
+  mueren.** Incluidos los dos que la orden nombró: el defecto original de 4B (9
+  tests) y neutralizar `replaceRoute('home')` (23 tests).
+- **Anclas declaradas, no dadas por probadas.**
+  - El botón **Atrás real** y la **recarga real** necesitan navegador. Su test no
+    simula nada: verifica que no hay runner de navegador en `package.json`, así
+    que **se pone rojo solo** cuando entre Playwright y obliga a volver.
+  - `VITE_MOCK=1 npx vitest run` **está roja desde antes de esta orden** (34
+    tests en 8 archivos sobre `4b490ca`, sin cambios míos): la suite está escrita
+    contra el adaptador real. Así que "corrida en los dos modos" **no es
+    evidencia disponible** y no se invoca. Lo que sí está verde en mock es el
+    build. La independencia del modo se acredita distinto: `IS_MOCK`, `VITE_MOCK`
+    e `import.meta.env` no aparecen en el **código** de ninguno de los tres
+    módulos que deciden esto.
+- Wallet sigue **durmiente y sin borrar**: `TopupScreen`, `TransferScreen`, los
+  métodos de la fachada y los decoders siguen en el árbol. Lo único que se probó
+  es **quién decide** si se pueden alcanzar, y sigue siendo el backend.
+
 ## 0.36.0 — ORDEN VISUAL · Ticket (2026-08-05)
 
 - **`SPEC_APP.md` §1.3 · Ticket.** El pendiente que 0.35.0 dejó elevado —si el
