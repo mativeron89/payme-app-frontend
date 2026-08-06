@@ -256,6 +256,36 @@ export function BubbleTabs({
 }
 
 /**
+ * Un acceso de pestaña. **No lleva fondo propio** (§5 bis · B): la pestaña y su
+ * contenido son una sola burbuja blanca continua, y los accesos se separan con
+ * una línea de `--border`. Un fondo de otro color rompe la lectura de pieza
+ * única. El ícono va en `--link`.
+ *
+ * Vivía dentro de `HomeScreen`, que fue quien lo estrenó. Subió acá cuando la
+ * sección social necesitó el mismo tile: es la pieza que acompaña a
+ * `BubbleTabs` y `MountedCard`, y las tres son de §5 bis · B. Copiarlo habría
+ * dejado dos tiles que se ven igual hasta que uno cambie.
+ */
+export function Launcher({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: IconName;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="launch" onClick={onClick}>
+      <span className="launch-ico" aria-hidden="true">
+        <Icon name={icon} size={22} />
+      </span>
+      <span className="launch-label">{label}</span>
+    </button>
+  );
+}
+
+/**
  * La tarjeta blanca montada sobre la banda. Sube 24px, con --sp-4 de margen
  * lateral, y el navy asoma a los costados.
  *

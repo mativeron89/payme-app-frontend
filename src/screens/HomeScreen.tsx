@@ -7,9 +7,11 @@ import { useWalletRail } from '../api/walletRail';
 import { countdownLong, formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { mesaStatusLabel, walletTxIcon, walletTxLabel } from '../utils/labels';
-import { Icon, type IconName } from '../components/Icon';
+import { Icon } from '../components/Icon';
 import { AppBottomBar } from '../components/AppBottomBar';
-import { AppHeader, BubbleTabs, MountedCard, type BubbleTab } from '../components/AppHeader';
+import {
+  AppHeader, BubbleTabs, Launcher, MountedCard, type BubbleTab,
+} from '../components/AppHeader';
 
 /**
  * §1.1 · Inicio — y §1.11, que **es la misma pantalla**: las tres pestañas SON
@@ -46,31 +48,6 @@ function txDate(iso: string): string {
   if (diffDays === 0) return 'Hoy';
   if (diffDays === 1) return 'Ayer';
   return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
-}
-
-/**
- * Un acceso de pestaña. **No lleva fondo propio** (§5 bis · B): la pestaña y su
- * contenido son una sola burbuja blanca continua, y los accesos se separan con
- * una línea de `--border`. Un fondo de otro color rompe la lectura de pieza
- * única. El ícono va en `--link`.
- */
-function Launcher({
-  icon,
-  label,
-  onClick,
-}: {
-  icon: IconName;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" className="launch" onClick={onClick}>
-      <span className="launch-ico" aria-hidden="true">
-        <Icon name={icon} size={22} />
-      </span>
-      <span className="launch-label">{label}</span>
-    </button>
-  );
 }
 
 export function HomeScreen() {
