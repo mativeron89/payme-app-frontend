@@ -1066,6 +1066,89 @@ body {
   color: #fff;
 }
 
+/* ─── Selector de propina · SPEC_APP.md §1.5 bis ───
+   🔴 El marco es el que distingue "todavía no elegí" de "elegí 0 %". Vive acá
+   y NO en la píldora a propósito: si la distinción viviera en la píldora, el
+   0 % necesitaría un estado visual propio y sería de segunda clase. Con el
+   marco, el 0 % se rellena igual que 10/15/20 y la señal de que falta elegir
+   la lleva la sección entera. */
+.tip-block {
+  border: 1.4px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  transition: border-color 0.18s, background 0.18s;
+}
+.tip-block .tip-row {
+  margin-bottom: 0;
+}
+/* Con el 5 % son SEIS controles y a 375px no entran en una fila: "Otro" se
+   salía de la pantalla. El spec ya lo dibuja abajo —[0][5][10][15][20] y
+   [Otro] en su propia línea— así que la fila envuelve y "Otro" ocupa el ancho.
+   Medido en el teléfono, no deducido. */
+.tip-choices {
+  flex-wrap: wrap;
+}
+/* `flex: 1` con base automática deja que el ancho del texto decida, y a 375px
+   los cinco porcentajes ya no entraban: uno se caía a la fila de abajo
+   estirado. Con base 0 reparten el ancho en partes iguales y el padding
+   lateral baja lo justo para que el más ancho ("10%") quepa. */
+.tip-choices .tip-pill {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.tip-choices .tip-pill--otro {
+  flex: 0 0 100%;
+}
+.tip-block-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tip-block--pending {
+  border-style: dashed;
+  border-color: var(--warning);
+  background: var(--warning-tint);
+}
+/* El texto también carga la señal, no sólo el color: el título cambia de
+   "Tu propina" a "Elegí tu propina" y se pinta en --warning (5.10:1 sobre
+   --warning-tint). */
+.tip-block--pending .tip-block-title {
+  color: var(--warning);
+}
+/* Se toca "Pagar" sin elegir: el borde pulsa UNA vez. Es lo que trae el ojo
+   después del scroll; el toast solo se pierde arriba. */
+.tip-block--pulse {
+  animation: tip-pulse 0.6s ease-out 1;
+}
+@keyframes tip-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(146, 98, 10, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(146, 98, 10, 0);
+  }
+}
+/* Sin movimiento, pero la animación SIGUE existiendo: es su `animationend` el
+   que apaga la clase. Anularla con `animation: none` dejaría el pulso pegado
+   para siempre y el segundo intento no avisaría nada. */
+@media (prefers-reduced-motion: reduce) {
+  .tip-block--pulse {
+    animation-duration: 0.01ms;
+  }
+}
+/* §1.5 bis · la píldora elegida va en --action-2, incluida la de 0 %. Se
+   scopea a `.tip-choices` para no repintar las píldoras del mesero, que este
+   spec no toca. */
+.tip-choices .tip-pill.sel {
+  background: var(--action-2);
+  border-color: var(--action-2);
+  color: var(--action-2-fg);
+}
+
 /* ─── División (s-division) ─── */
 .div-card {
   background: #fff;

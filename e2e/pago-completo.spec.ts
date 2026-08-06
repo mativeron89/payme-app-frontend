@@ -69,7 +69,28 @@ test.describe('el camino de pago completo', () => {
     await page.getByRole('button', { name: 'Continuar' }).click();
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
 
-    // La parte, la propina y el total, antes de tocar nada.
+    // 🔴 §1.5 bis · ANTES DE ELEGIR NO HAY PROPINA. Acá la pantalla mostraba
+    // $241.50 —base + 15 % que nadie eligió— y ése era el defecto: un número
+    // en pantalla, y después en el cable, que la persona nunca decidió.
+    await expect(page.getByText('Tu parte $210.00', { exact: true })).toBeVisible();
+    await expect(page.getByText('+ propina (elegí abajo)')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Pagar $210.00' })).toBeVisible();
+
+    // Ninguna píldora rellena, **ni la de 0 %**: que el 0 % se vea elegido sólo
+    // cuando se elige es lo que lo distingue de "todavía no elegí".
+    const propinas = page.getByRole('radiogroup', { name: /propina/i });
+    await expect(propinas.getByRole('radio', { checked: true })).toHaveCount(0);
+    // El preset de 5 % entró con este cambio, no antes.
+    await expect(propinas.getByRole('radio', { name: '5%', exact: true })).toBeVisible();
+
+    // Tocar "Pagar" sin elegir NO envía nada, y tampoco deja a nadie encerrado:
+    // el botón sigue activo y lo que aparece es el pedido de elegir.
+    await page.getByRole('button', { name: 'Pagar $210.00' }).click();
+    await expect(page.getByText('Elegí tu propina para pagar')).toBeVisible();
+    await expect(page.getByText('¡Listo!')).toHaveCount(0);
+
+    // Recién con la elección hecha el total incluye la propina.
+    await propinas.getByRole('radio', { name: '15%', exact: true }).click();
     await expect(page.getByText('Tu parte $210.00 + propina $31.50')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Pagar $241.50' })).toBeVisible();
 
@@ -105,6 +126,41 @@ test.describe('el camino de pago completo', () => {
     await page.getByRole('radio', { name: '20%', exact: true }).click();
     // $210.00 + 20% = $252.00.
     await expect(page.getByRole('button', { name: 'Pagar $252.00' })).toBeVisible();
+  });
+
+  /**
+   * ⭐ **El 0 % es una opción de primera clase, y esto es lo que lo prueba.**
+   *
+   * No alcanza con que exista la píldora: elegir 0 % tiene que *quedar
+   * elegido* —mismo relleno que 15 o 20, el título deja de pedir nada— y
+   * tiene que **pagar**. Si el obligatorio dejara pasar todo menos el 0 %,
+   * sería una propina obligatoria disfrazada de elección obligatoria, que es
+   * exactamente lo que el acta prohíbe.
+   */
+  test('elegir 0% es una elección: se marca, y paga', async ({ page }) => {
+    await ingresar(page);
+    await abrirMesaConLink(page);
+    await page.getByRole('button', { name: 'Ver mesa', exact: true }).click();
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+    await page.getByRole('button', { name: 'Continuar' }).click();
+
+    const propinas = page.getByRole('radiogroup', { name: /propina/i });
+    await expect(propinas.getByRole('radio', { checked: true })).toHaveCount(0);
+
+    await propinas.getByRole('radio', { name: '0%', exact: true }).click();
+
+    // Quedó elegido: la sección deja de pedir y la píldora del 0 % es la única
+    // marcada. Es el mismo estado que dejaría cualquier otro preset.
+    await expect(propinas.getByRole('radio', { name: '0%', exact: true })).toBeChecked();
+    await expect(propinas.getByRole('radio', { checked: true })).toHaveCount(1);
+    await expect(page.getByText('+ propina (elegí abajo)')).toHaveCount(0);
+
+    // Y paga, sin pedir nada más.
+    await page.getByRole('button', { name: 'Pagar $210.00' }).click();
+    await expect(page.getByText('¡Listo!')).toBeVisible();
+    const comprobante = await page.locator('body').innerText();
+    expect(comprobante).toContain('Propina (al mozo)');
+    expect(comprobante).toContain('$0.00');
   });
 
   /**

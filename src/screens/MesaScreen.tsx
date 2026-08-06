@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, IS_MOCK, WALLET_PAY_ENABLED, newIdempotencyKey } from '../api';
 import { useWalletRail } from '../api/walletRail';
 import type { MonetaryIntentHandle, UnconfirmedAttempt } from '../api/idempotency';
@@ -44,7 +44,16 @@ import { MesaDetailView } from './MesaDetailView';
 import { FRACTIONS, bpsLabel, itemsAmountFor } from './mesaItemsView';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
-import { stringToCents, tipFromBps } from '../utils/money';
+import { tipFromBps } from '../utils/money';
+import {
+  NO_TIP_CHOSEN,
+  TIP_OPTIONS,
+  type TipChoice,
+  tipCentsFor,
+  tipIsChosen,
+  tipPayloadFor,
+  tipScopeToken,
+} from './tipSelectorView';
 import { createInFlightMutex } from '../utils/inFlight';
 import { RequestEpoch } from '../utils/requestEpoch';
 import { writeClipboardText } from '../utils/clipboard';
@@ -58,7 +67,136 @@ import { writeClipboardText } from '../utils/clipboard';
 
 type View = 'detail' | 'pay' | 'confirm';
 
-const TIP_OPTIONS = [0, 10, 15, 20];
+/**
+ * §1.5 bis · fallback: el selector de propina no se pudo MOSTRAR.
+ *
+ * No es el caso de "no eligió" —ése frena y se resuelve en un toque— sino el
+ * que protege el acta: **un control roto no puede impedir un pago.** El cobro
+ * continúa con propina 0 (ver `tipPayloadFor`), la nota es informativa y no
+ * alarma, y el bloque de mesero no aparece por el gate de `tipCents > 0` que
+ * ya existía.
+ *
+ * Es una clase porque los error boundaries no tienen equivalente en hooks.
+ */
+class TipSelectorBoundary extends Component<
+  { onFail: () => void; fallback: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    // La pantalla necesita SABERLO: con el selector caído el obligatorio no se
+    // dispara, porque no habría dónde elegir.
+    this.props.onFail();
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/**
+ * El selector de propina — `SPEC_APP.md` §1.5 bis.
+ *
+ * 🔴 **Es un componente propio porque si no el boundary de arriba no sirve
+ * para nada.** Medido: con este JSX inline en `MesaScreen`, un error acá
+ * explota mientras la PANTALLA arma sus hijos, o sea fuera del subárbol que el
+ * boundary observa — y se lleva la pantalla de pago entera, fallback o no.
+ * Como hijo, el error queda adentro y el cobro puede continuar con propina 0,
+ * que es lo que manda el acta.
+ *
+ * No tiene estado: la propina la sigue teniendo `MesaScreen`, que es la dueña
+ * del pago. Esto sólo dibuja y avisa qué se tocó.
+ */
+function TipSelector({
+  sectionRef,
+  tip,
+  onChoose,
+  customTipStr,
+  onCustomChange,
+  baseCents,
+  participants,
+  disabled,
+  pending,
+  pulse,
+  onPulseEnd,
+}: {
+  sectionRef: React.RefObject<HTMLDivElement>;
+  tip: TipChoice;
+  onChoose: (tip: TipChoice) => void;
+  customTipStr: string;
+  onCustomChange: (value: string) => void;
+  baseCents: number;
+  participants: number;
+  disabled: boolean;
+  pending: boolean;
+  pulse: boolean;
+  onPulseEnd: () => void;
+}) {
+  return (
+    /* 🔴 La distinción "no elegí" vs "elegí 0 %" vive en el MARCO, no en la
+       píldora. Si viviera en la píldora, el 0 % necesitaría un estado visual
+       propio y quedaría de segunda clase — justo lo que el acta prohíbe. */
+    <div
+      ref={sectionRef}
+      className={`tip-block${pending ? ' tip-block--pending' : ''}${pulse ? ' tip-block--pulse' : ''}`}
+      onAnimationEnd={onPulseEnd}
+    >
+      <div className="sectlabel tip-block-title" id="lbl-propina">
+        {pending && <Icon name="warning" size={14} aria-hidden="true" />}
+        {pending ? 'Elegí tu propina' : 'Tu propina'}
+      </div>
+      <div className="caption" style={{ margin: '0 2px 8px' }}>
+        Tu base: {formatMXN(baseCents)} (la cuenta ÷ {participants})
+      </div>
+      <div className="tip-row tip-choices" role="radiogroup" aria-labelledby="lbl-propina">
+        {TIP_OPTIONS.map((pct) => {
+          const elegida = tip.mode === 'pct' && tip.pct === pct;
+          return (
+            <button
+              key={pct}
+              className={`tip-pill ${elegida ? 'sel' : ''}`}
+              onClick={() => onChoose({ mode: 'pct', pct })}
+              disabled={disabled}
+              role="radio"
+              aria-checked={elegida}
+            >
+              {pct}%
+            </button>
+          );
+        })}
+        <button
+          className={`tip-pill tip-pill--otro ${tip.mode === 'custom' ? 'sel' : ''}`}
+          onClick={() => onChoose({ mode: 'custom' })}
+          disabled={disabled}
+          role="radio"
+          aria-checked={tip.mode === 'custom'}
+        >
+          Otro
+        </button>
+      </div>
+      {tip.mode === 'custom' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '10px 2px 0' }}>
+          <span style={{ fontWeight: 700 }}>$</span>
+          <input
+            className="input"
+            style={{ flex: 1, padding: '10px 12px' }}
+            inputMode="decimal"
+            placeholder="0.00"
+            value={customTipStr}
+            onChange={(e) => onCustomChange(e.target.value.replace(/[^0-9.]/g, ''))}
+            disabled={disabled}
+            aria-label="Monto de propina a mano"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface PayResult {
   itemsAmount: number;
@@ -129,10 +267,24 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // v2.18 (fracciones): selección = ítem → fracción elegida en bps.
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
   const [lockTokens, setLockTokens] = useState<string[]>([]);
-  const [tipPct, setTipPct] = useState(15);
-  // D7: 'pct' manda tip_bps (computa el server); 'custom' manda tip_cents.
-  const [tipMode, setTipMode] = useState<'pct' | 'custom'>('pct');
+  /**
+   * §1.5 bis · 🔴 LA PROPINA NACE SIN ELEGIR.
+   *
+   * Acá había `useState(15)` con modo `'pct'`: quien no tocaba el selector
+   * pagaba 15 % de su parte y el payload salía con `tip_bps: 1500` como si lo
+   * hubiera elegido. **El sistema elegía por la persona, y con su plata.**
+   *
+   * `TipChoice` ya no puede representar eso: el porcentaje vive adentro de la
+   * variante elegida (ver `tipSelectorView.ts`). D7 sigue igual — `'pct'` manda
+   * `tip_bps` y lo computa el server; `'custom'` manda `tip_cents`.
+   */
+  const [tip, setTip] = useState<TipChoice>(NO_TIP_CHOSEN);
   const [customTipStr, setCustomTipStr] = useState('');
+  /** El selector no se pudo mostrar: el cobro CONTINÚA con propina 0. */
+  const [tipSelectorFailed, setTipSelectorFailed] = useState(false);
+  /** El pulso de una sola vez del borde cuando se toca "Pagar" sin elegir. */
+  const [tipPulse, setTipPulse] = useState(false);
+  const tipSectionRef = useRef<HTMLDivElement | null>(null);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [payType, setPayType] = useState<PaymentType>('card');
   // Feedback Mati: las tarjetas van en un desglosable, no sueltas en la lista.
@@ -187,7 +339,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     identityEpochRef.current.next();
     mesaReadEpochRef.current.next();
     setMesa(null); setNotFound(false); setSelected(new Map()); setLockTokens([]);
-    setTipPct(15); setTipMode('pct'); setCustomTipStr(''); setStaffId(null);
+    // La mesa nueva también nace sin elegir: acá estaba el segundo `15`.
+    setTip(NO_TIP_CHOSEN); setCustomTipStr(''); setStaffId(null);
+    setTipSelectorFailed(false); setTipPulse(false);
     setPayType('card'); setCardsOpen(false); setInviteOpen(false); setCards([]);
     shareInFlightRef.current = createInFlightMutex();
     setCardChoice('new'); setSaveCard(true); setCardEl(null);
@@ -295,19 +449,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   // D7 (v2.17): la propina es % de tu parte IGUALITARIA (total ÷ N), no de tu
   // consumo. Preview con la réplica exacta de tipFromBps; el cobro real lo
-  // computa el server y el comprobante usa SU tip_cents.
-  const tipCents = (() => {
-    if (!mesa) return 0;
-    if (tipMode === 'custom') {
-      try {
-        return stringToCents(customTipStr || '0');
-      } catch {
-        return 0;
-      }
-    }
-    return tipFromBps(mesa.total_cents, mesa.expected_participants || 1, tipPct * 100);
-  })();
+  // computa el server y el comprobante usa SU tip_cents. Sin elección es 0, y
+  // por eso la pantalla puede mostrar la base sola en vez de un total inventado.
+  const tipCents = mesa
+    ? tipCentsFor(tip, {
+        totalCents: mesa.total_cents,
+        participants: mesa.expected_participants || 1,
+        customStr: customTipStr,
+      })
+    : 0;
   const gross = itemsAmount + tipCents;
+  const tipChosen = tipIsChosen(tip);
 
   function toggleItem(id: string) {
     // B-06: con un pago sin confirmar, cambiar la selección cambiaría el
@@ -456,9 +608,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       mesa?.division_mode === 'consumo'
         ? [...selected.entries()].map(([id, bps]) => `${id}:${bps}`).sort().join(',')
         : [...selected.keys()].sort().join(',');
-    const tip = tipMode === 'custom' ? `c${tipCents}` : `b${tipPct * 100}`;
-    return `pay:${code}|${payType}|${cardChoice}|${sel}|${tip}|${staffId ?? '-'}`;
-  }, [code, mesa?.division_mode, selected, tipMode, tipCents, tipPct, payType, cardChoice, staffId]);
+    // §1.5 bis: el token sale del MISMO payload que se manda, no del estado de
+    // la UI. Las formas `b<bps>` y `c<centavos>` no se mueven.
+    const tipToken = tipScopeToken(tipPayloadFor(tip, tipCents));
+    return `pay:${code}|${payType}|${cardChoice}|${sel}|${tipToken}|${staffId ?? '-'}`;
+  }, [code, mesa?.division_mode, selected, tip, tipCents, payType, cardChoice, staffId]);
   const contentScope = actor ? scopeForActor(actor, rawContentScope) : '';
 
   /**
@@ -491,6 +645,19 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const payScope = frozenScope ?? contentScope;
   const frozenRef = useRef(frozenScope);
   frozenRef.current = frozenScope;
+
+  /**
+   * §1.5 bis · falta elegir la propina, y hay dónde hacerlo.
+   *
+   * 🔴 Las dos exclusiones no son detalles:
+   * - **Selector caído** (`tipSelectorFailed`): el acta manda que el cobro
+   *   continúe. Pedir una elección sin control dónde hacerla es encerrar a la
+   *   persona con la tarjeta en la mano.
+   * - **Pago congelado** (B-06): la propina ya viajó dentro de la clave de
+   *   idempotencia de ese intento. Pedir que se elija de nuevo sería pedir
+   *   cambiar algo que ya no se puede cambiar — el selector va `disabled`.
+   */
+  const tipPending = !tipChosen && !tipSelectorFailed && !frozenScope;
 
   /** Agregado informativo del principal; nunca prueba qué intento concreto llegó. */
   const mySlotsTaken = mesa?.division_slots?.filter((s) => s.claimed_by_me).length ?? 0;
@@ -735,6 +902,21 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       payInFlightRef.current.leave();
       return;
     }
+    /**
+     * §1.5 bis · el obligatorio. **No se envía nada** y no se deja a nadie
+     * atrapado: el CTA sigue activo —un botón gris se lee como error del
+     * sistema, no como "te falta un paso"— y acá se avisa, se lleva el ojo al
+     * selector y el borde pulsa una vez. Elegir es un toque, y el 0 % está ahí.
+     */
+    if (tipPending) {
+      toast('Elegí tu propina para pagar');
+      // `scrollIntoView` es opcional a propósito: si el navegador no lo tiene,
+      // el toast y el pulso siguen siendo la señal.
+      tipSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      setTipPulse(true);
+      payInFlightRef.current.leave();
+      return;
+    }
     // N-08: no se emite una clave nueva sobre una mesa donde este dispositivo
     // (o esta identidad) ya tiene un pago, sin que el usuario lo confirme.
     if (!frozen && needsExtraPartConfirmation) {
@@ -823,7 +1005,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               }
             : { item_ids: [...selected.keys()].sort() }),
           ...(lockTokens.length > 0 && { lock_tokens: lockTokens }),
-          ...(tipMode === 'custom' ? { tip_cents: tipCents } : { tip_bps: tipPct * 100 }),
+          // §1.5 bis: el mismo payload del que sale el token del scope. Sin
+          // elección sólo se llega acá por el fallback, y ahí va `tip_bps: 0`.
+          ...tipPayloadFor(tip, tipCents),
           ...(staffId && { tip_to_staff_id: staffId }),
           ...(stripePmId && { stripe_payment_method_id: stripePmId }),
           ...(savedPmId && { payment_method_id: savedPmId }),
@@ -1231,10 +1415,21 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </>
             ) : (
               <>
-                <div style={{ fontSize: 'var(--fs-legacy-3xl)', fontWeight: 800, color: '#fff' }}>{formatMXN(gross)}</div>
-                <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
-                  {mesa.division_mode === 'igual' ? 'Tu parte' : 'Tus consumos'} {formatMXN(itemsAmount)} + propina {formatMXN(tipCents)}
+                {/* §1.5 bis · antes de elegir se muestra LA BASE SOLA. Acá
+                    salía base + 15 % adivinado: un número en pantalla que la
+                    persona no eligió, que es el bug que esto cierra. */}
+                <div style={{ fontSize: 'var(--fs-legacy-3xl)', fontWeight: 800, color: '#fff' }}>
+                  {formatMXN(tipPending ? itemsAmount : gross)}
                 </div>
+                <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+                  {mesa.division_mode === 'igual' ? 'Tu parte' : 'Tus consumos'} {formatMXN(itemsAmount)}
+                  {tipPending ? '' : ` + propina ${formatMXN(tipCents)}`}
+                </div>
+                {tipPending && (
+                  <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)' }}>
+                    + propina (elegí abajo)
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1290,53 +1485,33 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               el botón de abajo.
             </div>
           )}
-          <div className="sectlabel" id="lbl-propina">
-            Propina al mozo
-          </div>
-          <div className="caption" style={{ margin: '0 2px 8px' }}>
-            Tu base: {formatMXN(mesa.tip_base_cents)} (la cuenta ÷ {mesa.expected_participants || 1})
-          </div>
-          <div className="tip-row" role="radiogroup" aria-labelledby="lbl-propina">
-            {TIP_OPTIONS.map((pct) => (
-              <button
-                key={pct}
-                className={`tip-pill ${tipMode === 'pct' && tipPct === pct ? 'sel' : ''}`}
-                onClick={() => {
-                  setTipMode('pct');
-                  setTipPct(pct);
-                }}
-                disabled={!!frozenScope}
-                role="radio"
-                aria-checked={tipMode === 'pct' && tipPct === pct}
+          <TipSelectorBoundary
+            onFail={() => setTipSelectorFailed(true)}
+            fallback={
+              <div
+                className="caption"
+                style={{ display: 'flex', gap: 6, alignItems: 'flex-start', margin: '0 2px 16px', color: 'var(--text-muted)' }}
+                role="status"
               >
-                {pct}%
-              </button>
-            ))}
-            <button
-              className={`tip-pill ${tipMode === 'custom' ? 'sel' : ''}`}
-              onClick={() => setTipMode('custom')}
+                <Icon name="info" size={16} aria-hidden="true" />
+                <span>No pudimos cargar las opciones de propina — tu pago sigue sin propina.</span>
+              </div>
+            }
+          >
+            <TipSelector
+              sectionRef={tipSectionRef}
+              tip={tip}
+              onChoose={setTip}
+              customTipStr={customTipStr}
+              onCustomChange={setCustomTipStr}
+              baseCents={mesa.tip_base_cents}
+              participants={mesa.expected_participants || 1}
               disabled={!!frozenScope}
-              role="radio"
-              aria-checked={tipMode === 'custom'}
-            >
-              Otro
-            </button>
-          </div>
-          {tipMode === 'custom' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '10px 2px 0' }}>
-              <span style={{ fontWeight: 700 }}>$</span>
-              <input
-                className="input"
-                style={{ flex: 1, padding: '10px 12px' }}
-                inputMode="decimal"
-                placeholder="0.00"
-                value={customTipStr}
-                onChange={(e) => setCustomTipStr(e.target.value.replace(/[^0-9.]/g, ''))}
-                disabled={!!frozenScope}
-                aria-label="Monto de propina a mano"
-              />
-            </div>
-          )}
+              pending={tipPending}
+              pulse={tipPulse}
+              onPulseEnd={() => setTipPulse(false)}
+            />
+          </TipSelectorBoundary>
           {tipCents > 0 && mesa.active_staff.length > 0 && (
             <>
               <div className="sectlabel" id="lbl-mozo">
