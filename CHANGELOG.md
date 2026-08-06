@@ -1,5 +1,38 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.49.0 — el espejo va a v2.42.0, y G-28 se muere también en el mock (2026-08-05)
+
+Refresh del `contract-mirror` contra el backend **v2.42.0** (`22b84a2`): cinco
+archivos, **70 espejados · 70 idénticos · 0 diferencias**. Los dos cambios de
+contrato son **aditivos**; nada de lo que este front ya consume cambió de forma.
+
+- **G-28 cerrado por el emisor.** `GET /mesas/open` incluye las mesas donde el
+  usuario es **participante activo**, no sólo las que abrió. Mismo shape, más
+  filas: quien se sumaba por un link no tenía forma de reencontrar su mesa y su
+  Inicio decía "No tenés mesas abiertas" **mientras debía plata**, sin error que
+  lo delatara. **El front no necesitó cambiar nada… salvo el mock**, que
+  reproducía el mismo filtro y por lo tanto el mismo defecto. Un mock que miente
+  es peor que no tenerlo. Acreditado con su mutante.
+- **`GET /account/history` trae `mesa_status`**, que entra en `HistoryEntry` con
+  su procedencia. El compilador encontró los cuatro sitios que faltaba tocar.
+  🔴 Queda anotado en el tipo que la granularidad es **un renglón por pago** y
+  que no se pide que el contrato agrupe: esa misma respuesta alimenta
+  `PagosScreen`, superficie card-only ratificada. **Ningún campo se consume en
+  pantalla todavía** — §1.10 y la burbuja de Inicio son trabajo aparte.
+- **El riel wallet del backend se endureció, no se aflojó**: `wallet_rail.
+  enabled` dejó de ser un literal y sale del servicio autoritativo, que eliminó
+  la env var `LEGACY_WALLET_ENABLED`. Ya no existe variable de entorno que
+  reabra la creación de obligaciones nuevas. `account_activity: true` no se
+  movió.
+
+⭐ **El test de paridad del riel encontró que la autoridad se había mudado.**
+Raspaba literales del bloque `WALLET_RAIL` de `config.js`; con `enabled` fuera
+de ahí, habría quedado comparando **un solo campo y pasando en vacío sobre el
+que importa**. Ahora lee las dos fuentes del espejo y además exige que `enabled`
+no haya vuelto a ser literal.
+
+**529 vitest · 64 e2e** · typecheck · builds real y mock.
+
 ## 0.48.0 — §1.5 bis · la propina se elige, y el sistema deja de elegirla (2026-08-05)
 
 **El defecto no era que la elección se pudiera saltear: era que ya estaba
