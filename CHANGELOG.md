@@ -1,5 +1,77 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.51.0 — auditoría pre-dominio: se buscó lo roto, y esto es lo que había (2026-08-06)
+
+Mati compra el dominio y quiere subir con cero bugs, así que esta versión no
+agrega: **audita**. Recorrido completo del comensal y del invitado a 375px
+contra el mock, caminos adversos (doble tap, recarga a mitad de flujo, links
+vencidos, expiración presenciada EN VIVO), coherencia contra el spec y barrido
+de código por las familias de defectos conocidas. **13 hallazgos reportados,
+9 corregidos acá bajo despacho del Bibliotecario, 4 falsas alarmas documentadas
+para que nadie las vuelva a cavar.** Consola: cero errores en toda la sesión.
+
+Lo que estaba roto y ya no:
+
+- 🔴 **La coma cobraba ×100.** El saneo del monto de propina a mano BORRABA la
+  coma: "12,34" eran $1,234.00, sin señal. La regla nueva vive en
+  `sanearMontoPropio`: la coma sola ES el decimal y se normaliza ("12,34" →
+  1234 centavos); lo ambiguo ("1,234.56") se rechaza al camino inválido, nunca
+  se adivina. Medido antes/después en pantalla: CTA $1,429.00 → $207.34.
+- **Inicio escondía mesas abiertas.** La premisa "nunca hay más de una" (cierta
+  en 2026-08-03) murió con G-28, y `mesas[0]` truncaba sin rastro — con §1.10,
+  la mesa truncada no existía en NINGUNA superficie. Entró la variante B del
+  spec: protagonista por `expires_at` más próximo (el reloj de garantía, no el
+  orden del payload — con el seed CAMBIA qué mesa se ve), fila "+N mesas
+  abiertas más" y hoja inferior. Con una sola mesa, cero cambio, testeado.
+- **El badge acusaba al que ya pagó.** `partially_paid` decía "Falta pagar";
+  ahora "Pago en curso" — describe a la mesa, no a quien mira. Personalizar de
+  verdad espera un campo por-participante: **G-34**, con la condición escrita.
+- **En partes iguales, marcar era un gate disfrazado.** La pantalla dice
+  "no cambia lo que pagás" y el gate exigía marcar igual — en DOS lugares
+  (el disabled y un guard en `goToPay`). En igual ya no se exige; en consumo
+  no se tocó: ahí la selección ES el monto. Dos mitades acreditadas por e2e.
+- **La demo no podía contar el pitch.** La pantalla A-2 rica ("Tu garantía
+  cubrió $X · el restaurante cobró el total") era INALCANZABLE: el atajo
+  apuntaba a un seed en `settled` y la expiración viva también paraba ahí.
+  Seed a `completed` y `settleIfExpired` del mock a `completed` — en la demo
+  el cierre por vencimiento ES el cierre completo, porque no hay dispersión
+  que esperar. El riel real y su pantalla prudente quedan intactos.
+- **El mock mentía como G-28, en tres rieles más.** La cuenta recién creada
+  heredaba las tarjetas y el `payme_id` del seed (el pagador primerizo era
+  inejercitable — ahora nace limpia y ese camino está recorrido y sano);
+  la invitación vencida se servía para siempre y se aceptaba con "Te sumaste ✓"
+  (ahora GET filtra y accept contesta 410, como el emisor); y aceptar una
+  invitación no escribía participación — la mesa aceptada jamás aparecía en
+  `/mesas/open` (ahora escribe, con mutante). Y el seed de la mesa igual tenía
+  `items: []`, un estado que `POST /mesas` prohíbe: modelaba un imposible.
+
+Lo que quedó a la vista y NO se tocó acá, cada cosa con su dueño:
+
+- 🔴 **G-11 quedó FUNCIONANDO a la vista**: con el pagador primerizo alcanzable,
+  el checkbox "Guardar esta tarjeta" aparece MARCADO por defecto y el mock
+  cumple la promesa que el backend real no cumple en direct charges. Decisión
+  contractual, en el archivo de Mati.
+- **La base de propina ÷N** (D7): en consumo nadie pregunta cuántos son y viaja
+  un 4 inventado — y se midió el borde: con N=1 la base es LA CUENTA ENTERA.
+  El número correcto no existe; la regla es decisión de producto, con Mati.
+- **Propina sin techo** ($999,999 sin fricción; el contrato tampoco acota) —
+  producto, con Mati. · **G-35**: hash sucio en rutas desconocidas (deuda de
+  router). · **G-36**: el seed se pudre en sesión larga; "Reiniciar la demo"
+  cura y nada lo sugiere.
+
+Falsas alarmas documentadas (los retiros valen tanto como los hallazgos): el
+"sin estado de carga" de Pagos era el skeleton que mi volcado de texto no ve;
+PA-4520 no era una invitación a mesa propia; el token multi-canje ES el diseño
+(link de grupo de WhatsApp — "una sola vez" refiere a mostrarse, no a
+canjearse); y `stringToCents` nunca tuvo la culpa de la coma: era el saneo.
+
+Cierre: **564 vitest · 71 Playwright · typecheck · builds real y mock**, todo
+corrido como única escritora del árbol. Y una lección de instrumento pagada
+dos veces esta noche: un `tail -2` sobre la salida de Playwright me escondió
+un "1 failed" (declarado en `77a1ab7`), y un `var(--sp-5)` inexistente
+invalidó un shorthand ENTERO de CSS — las salidas se leen completas, y los
+tokens se verifican contra `:root` antes de usarse.
+
 ## 0.50.1 — el borde de página subcontaba una mesa; carga completa antes de agrupar (2026-08-05)
 
 Corrección sobre 0.50.0, por límite marcado por el Bibliotecario-Auditor: la
