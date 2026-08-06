@@ -12,7 +12,12 @@ import type { IconName } from '../components/Icon';
 const MESA_STATUS: Record<MesaStatus, string> = {
   pending_auth: 'Autorizando',
   open: 'Abierta',
-  partially_paid: 'Falta pagar',
+  // §1.1 (corrección de honestidad, 2026-08-05): es el estado de la MESA, no
+  // del que mira — quien ya pagó su parte leía "Falta pagar" como deuda
+  // propia. No se personaliza porque no hay con qué: `/mesas/open` no trae
+  // ningún campo por-participante (G-34). Genérico-y-honesto gana a
+  // personal-y-falso.
+  partially_paid: 'Pago en curso',
   fully_paid: 'Completa',
   expired: 'Vencida',
   settling: 'Cerrando',

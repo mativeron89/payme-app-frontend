@@ -3607,6 +3607,116 @@ body {
   white-space: nowrap;
 }
 
+/* ─── "+N mesas abiertas más" (§1.1, variante B, 2026-08-05) ───
+   El grupo une la tarjeta y la fila en UNA burbuja: la sombra vive en el
+   grupo y la tarjeta pierde el radio de abajo. Con una sola mesa el grupo no
+   existe y .mesa-card queda exactamente como siempre. */
+.mesa-card-group {
+  border-radius: var(--r-lg);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+}
+.mesa-card-group .mesa-card {
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  box-shadow: none;
+}
+.mesa-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  background: var(--surface);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--action);
+  text-align: left;
+  cursor: pointer;
+}
+.mesa-more:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* La hoja inferior: patrón modal mínimo — overlay que cierra al tocar afuera
+   y panel abajo, con las filas de mesa reusando la misma barra de progreso. */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 31, 61, 0.45);
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+}
+.sheet {
+  width: 100%;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding: var(--sp-3) var(--sp-4) var(--sp-6);
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-2) 0 var(--sp-3);
+}
+.sheet-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  color: var(--text);
+}
+.sheet-close {
+  border: none;
+  background: none;
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sheet-mesa {
+  display: block;
+  width: 100%;
+  padding: var(--sp-3) 0;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.sheet-mesa:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+.sheet-mesa-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+.sheet-mesa-name {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+.sheet-mesa-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+
 /* Vacío REAL: el único estado del sistema SIN borde. Y sin botón propio — la
    acción ya está en el círculo naranja de la barra, a un centímetro. */
 .mesa-empty {
