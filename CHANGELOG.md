@@ -1,5 +1,47 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.52.0 — las tres decisiones de Mati sobre lo que la auditoría dejó a la vista (2026-08-06)
+
+La auditoría de v0.51.0 escaló tres cosas con dueño; Mati decidió las tres el
+mismo día y esta versión las implementa. Son **features post-auditoría**, no
+parte de la entrada anterior — por eso versión propia.
+
+- **G-11 · el checkbox "Guardar esta tarjeta" nace DESMARCADO** (garantía y
+  pago). Un casillero marcado por defecto hace la promesa sin que la persona
+  la pida, y el backend hoy no cumple `save_payment_method` en direct charges:
+  desmarcado, la promesa sólo existe si alguien la elige. No se escondió nada
+  y quien lo marca, guarda. Eran TRES literales `true` —dos `useState` y un
+  reset por mesa, el "segundo 15" otra vez—, unificados en una sola fuente
+  (`GUARDAR_TARJETA_DEFAULT`, `saveCardView.ts`) con el fundamento escrito.
+- **§1.4 · el stepper de comensales se pregunta SIEMPRE — murió el 4
+  inventado.** En "cada uno lo suyo" nadie preguntaba cuántos son: viajaba el
+  default invisible de un `useState(4)`, único separador del borde ÷1 (base
+  de propina = la cuenta entera). Ahora el mismo stepper vive en los dos
+  modos —"¿Cuántos pagan?" / "¿Cuántos son en la mesa?"—, nace SIN ELEGIR con
+  el patrón de la propina (marco pendiente, CTA nunca apagado, toast+scroll),
+  muestra en vivo la misma cuenta ÷ N de §1.5 bis con la fórmula del emisor,
+  y el piso es del contrato (2 en iguales, 1 en consumo). Acreditado con la
+  condición de la orden: el e2e lee el estado del mock y afirma que el N que
+  viajó es EXACTAMENTE el elegido — buscando la mesa por código, porque el
+  mock unshiftea y "la última del array" era una del seed con 4: el test
+  ingenuo habría pasado en verde afirmando el defecto.
+- **§1.5 bis · la propina desmedida se reconfirma, nunca se bloquea.** Umbral
+  relativo (> 3× la base del emisor, estricto), diálogo con el monto exacto y
+  la comparación —nunca un "¿estás seguro?" genérico—, dos salidas: "Volver a
+  editar" (valor tipeado intacto) y "Sí, pagar" — la salida hacia adelante
+  que el acta exige. Secuencial tras el gate de "sin elegir". Y la
+  confirmación EXPIRA si la propina cambia: un "sí" dado sobre $700 no cubre
+  un monto distinto del que el diálogo mostró — sin eso, la reconfirmación
+  era un cheque en blanco con cara de protección.
+
+De instrumento, para el que audite después: la cadena de gates ahora corta
+por **exit code** — `playwright | grep` devolvía el exit del grep, que
+aprueba por *encontrar* la palabra, incluida "failed". El grep quedó para
+informar conteos desde los logs, nunca para decidir.
+
+Cierre: **568 vitest · 75/75 Playwright · typecheck · builds real y mock**,
+gateado por la cadena nueva (exit=0).
+
 ## 0.51.0 — auditoría pre-dominio: se buscó lo roto, y esto es lo que había (2026-08-06)
 
 Mati compra el dominio y quiere subir con cero bugs, así que esta versión no
