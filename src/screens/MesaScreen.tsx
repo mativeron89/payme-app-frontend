@@ -45,6 +45,7 @@ import { FRACTIONS, bpsLabel, itemsAmountFor } from './mesaItemsView';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { tipFromBps } from '../utils/money';
+import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import {
   NO_TIP_CHOSEN,
   TIP_OPTIONS,
@@ -296,12 +297,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const shareLinksRef = useRef<Map<string, string>>(new Map());
   const shareInFlightRef = useRef(createInFlightMutex());
   // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
-  // tarjeta); `saveCard` = checkbox "guardar" (ratificado: prendido). El
-  // invitado sin cuenta no tenía guardadas: siempre tarjeta nueva sin checkbox.
+  // tarjeta); `saveCard` = checkbox "guardar" — nace DESMARCADO (Mati,
+  // 2026-08-06; el porqué vive en `saveCardView.ts`). El invitado sin cuenta
+  // no tenía guardadas: siempre tarjeta nueva sin checkbox.
   // (Rama inalcanzable desde v2.32.0 — ver el docblock de `isGuest`.)
   const [cards, setCards] = useState<PaymentMethod[]>([]);
   const [cardChoice, setCardChoice] = useState<string>('new');
-  const [saveCard, setSaveCard] = useState(true);
+  const [saveCard, setSaveCard] = useState(GUARDAR_TARJETA_DEFAULT);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<CardFieldState>({
     complete: false,
@@ -345,7 +347,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     setTipSelectorFailed(false); setTipPulse(false);
     setPayType('card'); setCardsOpen(false); setInviteOpen(false); setCards([]);
     shareInFlightRef.current = createInFlightMutex();
-    setCardChoice('new'); setSaveCard(true); setCardEl(null);
+    // El reset por mesa vuelve AL DEFAULT, no a un literal propio: acá vivía
+    // el segundo `true`, igual que el segundo `15` de la propina.
+    setCardChoice('new'); setSaveCard(GUARDAR_TARJETA_DEFAULT); setCardEl(null);
     const emptyCard: CardFieldState = { complete: false, error: null, empty: true };
     cardStateRef.current = emptyCard; setCardState(emptyCard);
     payStartedRef.current = false; payInFlightRef.current = createInFlightMutex();

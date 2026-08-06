@@ -21,6 +21,7 @@ import {
   type UnconfirmedAttempt,
 } from '../api/idempotency';
 import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
+import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types';
@@ -119,10 +120,11 @@ export function CreateMesaFlow() {
   const [participants, setParticipants] = useState(4);
   const [method, setMethod] = useState<'card' | 'wallet'>('card');
   // D4: tarjetas guardadas. `cardChoice` es el pm_… elegido o 'new' (otra
-  // tarjeta); `saveCard` = checkbox "guardar" (ratificado: prendido).
+  // tarjeta); `saveCard` = checkbox "guardar" — nace DESMARCADO (Mati,
+  // 2026-08-06; el porqué vive en `saveCardView.ts`).
   const [cards, setCards] = useState<PaymentMethod[]>([]);
   const [cardChoice, setCardChoice] = useState<string>('new');
-  const [saveCard, setSaveCard] = useState(true);
+  const [saveCard, setSaveCard] = useState(GUARDAR_TARJETA_DEFAULT);
   /** v2.24 (G-11): se pidió guardar la tarjeta y el riel directo la ignoró. */
   const [saveOmitidoConnect, setSaveOmitidoConnect] = useState(false);
   const [busy, setBusy] = useState(false);
