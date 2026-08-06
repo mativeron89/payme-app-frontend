@@ -1,5 +1,56 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.50.0 — §1.10 · Mesas ES el historial, y la mesa viva deja de repetirse (2026-08-05)
+
+Última pantalla del rediseño. La entrada "Mesas" de la barra deja de mezclar
+"Abiertas ahora" con una lista de pagadas: **es el historial de mesas
+cerradas**, con el título "Historial" en píldora `--teal-l` angosta (la barra
+sigue diciendo "Mesas" por espacio). Primer nivel de verdad: cabecera navy con
+logo, barra de cinco con "Mesas" activa, y muere el `.fab` flotante de la
+pantalla vieja.
+
+- **La mesa abierta no se repite acá — y era un defecto vivo, no cosmética.**
+  El organizador que pagaba su parte veía su mesa DOS veces: en Inicio como
+  abierta y acá abajo de un encabezado de mes, como si hubiera terminado.
+  Recién se pudo arreglar con `mesa_status` (v2.42.0); qué cuenta como
+  "abierta" **lo dice el contrato, no un criterio propio**: `open |
+  partially_paid`, la misma lista que filtra `GET /mesas/open`
+  (`historialView.ts` la espeja con test que lo declara). Con G-28 cerrado el
+  invitado ya ve su mesa viva en Inicio, así que excluirla de acá no deja a
+  nadie sin nada — la secuencia que ordenó el Bibliotecario.
+- **Lista agrupada por mes local** (encabezado pegajoso, misma decisión
+  argumentada en `pagosView.ts`), fila con restaurante · fecha + **franja
+  horaria** · lo que pagaste vos en tabular · chevron. La franja se calcula en
+  el front del timestamp completo —cero gap de contrato— con cortes decididos
+  acá: 6–12 · 12–16 · 16–20 · 20–6. Cuatro glifos nuevos en el set propio
+  (`sun-rise`, `sun-high`, `sun-low`, `moon`), verificados renderizados a
+  14px: lo que importa es que se distingan ENTRE SÍ, y el ícono acompaña
+  siempre a la palabra.
+- **El acordeón NO muestra ítems, a propósito.** G-33 sigue abierta —el
+  contrato no tiene detalle de mesa cerrada; el que hoy funciona lo hace por
+  coincidencia— así que la fila despliega el estado **desconocido** de
+  `SISTEMA_DISENO.md` §5 (interrogación, punteado, copy honesta), nunca un
+  mock que aparente funcionar. Cuando el dueño del contrato conteste, ese
+  acordeón es el único lugar a tocar.
+- **El mock volvía foto lo que el emisor proyecta vivo.** `mockHistory` servía
+  el `mesa_status` del momento del pago; el emisor lo saca de un `JOIN mesas`
+  al momento de la consulta. Con la foto, la mesa donde pagaste tu parte
+  quedaba `partially_paid` para siempre y el historial la excluía aunque ya
+  hubiera cerrado. Se re-lee la mesa al servir; acreditado con mutante — misma
+  clase de defecto que el `openedByUser` de G-28.
+- Paginación honesta heredada de `PagosScreen`: sin `has_more` en el contrato,
+  "Cargar más" aparece cuando la página vino llena. Error de red con
+  Reintentar (no un vacío que miente), skeleton con silueta, vacío real sin
+  borde: *"Todavía no cerraste ninguna mesa."*
+- El marcador e2e de `#/mesas` pasó del heading "Mesas" (murió con la TopBar)
+  a la píldora "Historial", y `e2e/historial.spec.ts` estrena tres recorridos:
+  el seed por mes sin "Abiertas ahora", el acordeón desconocido, y **la mesa
+  viva con la parte pagada que NO aparece** — este último acreditado matando
+  el filtro.
+
+**543 vitest · 67 e2e** · typecheck · builds real y mock · verificado en
+navegador contra el mock (seed v1) a 375px.
+
 ## 0.49.0 — el espejo va a v2.42.0, y G-28 se muere también en el mock (2026-08-05)
 
 Refresh del `contract-mirror` contra el backend **v2.42.0** (`22b84a2`): cinco
