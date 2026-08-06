@@ -49,6 +49,7 @@ import {
   NO_TIP_CHOSEN,
   TIP_OPTIONS,
   type TipChoice,
+  sanearMontoPropio,
   tipCentsFor,
   tipIsChosen,
   tipPayloadFor,
@@ -188,7 +189,7 @@ function TipSelector({
             inputMode="decimal"
             placeholder="0.00"
             value={customTipStr}
-            onChange={(e) => onCustomChange(e.target.value.replace(/[^0-9.]/g, ''))}
+            onChange={(e) => onCustomChange(sanearMontoPropio(e.target.value))}
             disabled={disabled}
             aria-label="Monto de propina a mano"
           />
