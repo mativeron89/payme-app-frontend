@@ -3866,3 +3866,92 @@ body {
 .stat-hero.sk {
   text-align: left;
 }
+
+/* ─── §1.9 · Sección social ───
+   La burbuja de contenido que va DEBAJO de la tarjeta montada: el tile de
+   "Nuevo amigo"/"Nuevo grupo" es una pieza y el buscador con su listado es
+   otra, separadas a propósito (el spec las dibuja como dos burbujas). */
+.social-list {
+  margin: var(--sp-4) var(--sp-4) 0;
+}
+
+/* Buscador SIEMPRE visible, arriba del listado y dentro de la misma burbuja.
+   Se separa de las filas con la misma línea que separa fila de fila. */
+.social-search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.social-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--text);
+  font-family: var(--font-body);
+  /* ≥16px evita el zoom automático de iOS al enfocar, igual que `.input`. */
+  font-size: 16px;
+}
+.social-search-input::placeholder {
+  color: var(--text-muted);
+}
+.social-search-input:focus {
+  outline: none;
+}
+.social-search:focus-within {
+  outline: 2px solid var(--action-2);
+  outline-offset: -2px;
+}
+
+/* Ícono propio de cada grupo (§1.9: "no uno repetido"). */
+.group-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--orange-l);
+  font-size: var(--fs-legacy-xl);
+}
+
+/* Elegir el ícono al crear el grupo. Es la superficie que faltaba: el contrato
+   ya aceptaba `icon` opcional, y sin esto todos nacían con el default. */
+.icon-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.icon-pick-opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: var(--fs-legacy-xl);
+  cursor: pointer;
+}
+.icon-pick-opt.on {
+  border-color: var(--action-2);
+  background: var(--teal-l);
+}
+.icon-pick-opt:focus-visible {
+  outline: 2px solid var(--action-2);
+  outline-offset: 2px;
+}
+
+/* Solicitudes muestra directo dentro de la tarjeta montada: sus rótulos
+   necesitan el aire lateral que las filas ya traen. */
+.solicitudes > .sectlabel {
+  padding: var(--sp-3) var(--sp-4) 0;
+}

@@ -10,8 +10,7 @@ import { enforceWalletRouteGuard } from './walletRouteGuard';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
 import { EstadisticasScreen } from './screens/EstadisticasScreen';
-import { FriendsScreen } from './screens/FriendsScreen';
-import { GroupsScreen } from './screens/GroupsScreen';
+import { SocialScreen } from './screens/SocialScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { JoinMesaScreen } from './screens/JoinMesaScreen';
 import { LoginScreen } from './screens/LoginScreen';
@@ -138,10 +137,15 @@ function Shell() {
         return <TopupScreen />;
       case 'transferir':
         return <TransferScreen preselectPaymeId={route.param ?? undefined} />;
+      /**
+       * §1.9 · Amigos, Grupos y Solicitudes son UNA pantalla con tres pestañas.
+       * `grupos` se retiró de `PAGES` en el mismo commit: tenía un solo call
+       * site —las pestañas viejas— y cero `navigate('grupos')` durmientes, así
+       * que el compilador encontró todo. Es el caso de `perfil`, no el de
+       * `cuenta`.
+       */
       case 'amigos':
-        return <FriendsScreen />;
-      case 'grupos':
-        return <GroupsScreen />;
+        return <SocialScreen />;
       case 'mas':
         return <MasScreen />;
       case 'avisos':

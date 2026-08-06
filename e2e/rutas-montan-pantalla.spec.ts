@@ -47,6 +47,17 @@ interface Marcador {
   /** `heading` para los `<h1>` de `TopBar`; `texto` para los que no son heading. */
   readonly rol: 'heading' | 'tab' | 'texto';
   readonly nombre: string;
+  /**
+   * Por defecto el nombre se matchea EXACTO, que es lo que evita que un
+   * marcador flojo pase por cualquier cosa.
+   *
+   * Se afloja en un solo caso y por un motivo concreto: una pestaña con badge
+   * **incluye el conteo en su nombre accesible** —"Solicitudes 2 pendientes"—
+   * a propósito, para que quien no ve el círculo naranja igual se entere. Ese
+   * nombre cambia con los datos del mock, así que exigirlo exacto haría un test
+   * que se rompe solo cuando alguien acepta una solicitud.
+   */
+  readonly exacto?: boolean;
 }
 
 type Esperado =
@@ -101,8 +112,20 @@ const ESPERADO: Record<PageId, Esperado> = {
   cargar: { tipo: 'redirige', a: /#\/home$/ },
   transferir: { tipo: 'redirige', a: /#\/home$/ },
 
-  amigos: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Amigos' } },
-  grupos: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Grupos' } },
+  /**
+   * §1.9 · la sección social es UNA pantalla con tres pestañas, así que
+   * `grupos` ya no es una ruta y salió de esta tabla junto con `PAGES`.
+   *
+   * El marcador **no puede ser un heading**: esta pantalla es de primer nivel
+   * y su banda navy lleva el logo, no un título (§5 bis · A). Se usa la
+   * pestaña `Solicitudes`, que además es un marcador FUERTE: ninguna otra
+   * pantalla la tiene, y encima distingue del fallback a Inicio, cuya tercera
+   * pestaña es `Asociadas`.
+   */
+  amigos: {
+    tipo: 'pantalla',
+    marcador: { rol: 'tab', nombre: 'Solicitudes', exacto: false },
+  },
   mesas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Mesas' } },
   scan: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Escaneá el ticket' } },
   mas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Más' } },
@@ -136,8 +159,9 @@ const ESPERADO: Record<PageId, Esperado> = {
 };
 
 function ubicar(page: Page, m: Marcador) {
-  if (m.rol === 'heading') return page.getByRole('heading', { name: m.nombre, exact: true });
-  if (m.rol === 'tab') return page.getByRole('tab', { name: m.nombre, exact: true });
+  const exact = m.exacto ?? true;
+  if (m.rol === 'heading') return page.getByRole('heading', { name: m.nombre, exact });
+  if (m.rol === 'tab') return page.getByRole('tab', { name: m.nombre, exact });
   return page.getByText(m.nombre, { exact: false });
 }
 

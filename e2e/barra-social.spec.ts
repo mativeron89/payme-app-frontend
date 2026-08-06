@@ -1,158 +1,152 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
 
 /**
- * §1.9 · paso 3 · **las pantallas de la sección social montan la barra de cinco,
- * y una sola.**
+ * §1.9 · **la sección social monta la barra de cinco, y una sola.**
  *
- * ## Las dos mitades, y por qué se afirman juntas
+ * ## Qué cambió en el paso 4, y qué NO se aflojó
  *
- * Convertir una pantalla es montar `AppBottomBar` **y** sacarla de `showNav` en
- * `App.tsx`. Hacer una sola mitad **deja las dos barras conviviendo,
- * superpuestas** — el modo de falla por el que "media §1.9 es peor que
- * ninguna". Ninguna de las dos mitades se rompe con un error: se rompe con una
- * pantalla que se ve mal, y eso no lo ve ningún test que no mire.
+ * Amigos, Grupos y Solicitudes dejaron de ser rutas separadas: son **tres
+ * pestañas de una sola pantalla**. Así que la tabla que recorría `#/amigos` y
+ * `#/grupos` se cayó sola — `#/grupos` ya no existe.
  *
- * ## Lo que de verdad importa acá es la SALIDA
+ * Lo que ese recorrido protegía **no se cayó con él**:
  *
- * `BottomNav` era la **única vuelta a Inicio** desde estas pantallas. Si la
- * barra nueva no navegara, la persona queda **encerrada** — el mismo modo de
- * falla que §1.8 cubrió cuando Avisos perdió su flecha de volver.
+ *  - que haya **una sola barra** se sigue afirmando contando el landmark;
+ *  - que se pueda **salir a Inicio** se sigue afirmando, y sigue importando por
+ *    lo mismo: la barra es la única vuelta desde acá;
+ *  - que el **detalle de un grupo** también la lleve, ahora llegando por la
+ *    pestaña en vez de por URL;
+ *  - y el bug del CTA tapado, que **cambió de forma y por eso cambió de
+ *    assert** — ver abajo.
  *
- * Más no está en esta tabla: se convirtió primero y su recorrido vive en
- * `mas-accesos.spec.ts`, junto con el acceso a Mis tarjetas que cambió en el
- * mismo paso.
+ * ## ⭐ El bug del CTA tapado, y por qué el test es otro
+ *
+ * El original medía que el botón de `.action-bar` no quedara debajo de la
+ * barra: es el bug que reportó el hermano de Mati el 2026-07-24 —*"la
+ * navegación está tapando el botón para agregar amigo"*—.
+ *
+ * **Ese `.action-bar` ya no existe**: §1.9 lo reemplazó por el tile "Nuevo
+ * amigo", que vive arriba de todo y no lo puede tapar nada. Adaptar el assert
+ * viejo habría sido afirmar sobre un elemento retirado: verde y vacío.
+ *
+ * Pero el modo de falla **no se fue, se mudó**: ahora lo que puede quedar
+ * enterrado abajo de la barra es **la última fila del listado**. El mecanismo
+ * que lo evita es `padding-bottom` en `.has-appbar .scroll`, y lo rompe una
+ * sola cosa concreta: un `style={{ padding: N }}` inline, que es shorthand y
+ * **pisa el longhand del stylesheet**. Por eso se afirma el mecanismo —el
+ * padding real, comparado contra el alto real de la barra— en vez de mirar una
+ * caja que en un listado corto daría verde sin probar nada.
  */
 
-/** Rutas ya convertidas, con la posición que les corresponde encendida. */
-const CONVERTIDAS = [
-  { ruta: 'amigos', posicion: 'Amigos', titulo: 'Amigos' },
-  /**
-   * Grupos enciende **Amigos**, no una posición propia: vive DENTRO de esa
-   * sección y comparten pestañas internas. Es el criterio que ya usaba
-   * `BottomNav`, no uno nuevo.
-   */
-  { ruta: 'grupos', posicion: 'Amigos', titulo: 'Grupos' },
-] as const;
-
-/**
- * La posición "Cuenta" existe en `BottomNav` y **no** en la barra de cinco
- * (Cuenta se fusionó dentro de las pestañas de Inicio en §1.11). Es lo que
- * distingue una barra de la otra sin mirar una clase de CSS.
- */
-const SOLO_EN_LA_BARRA_VIEJA = 'Cuenta';
-
-async function noTapadoPor(page: Page, cta: string, barra: string) {
-  const a = await page.locator(cta).boundingBox();
-  const b = await page.locator(barra).boundingBox();
-  expect(a, `no encontré ${cta}`).not.toBeNull();
-  expect(b, `no encontré ${barra}`).not.toBeNull();
-  return { fondoDelCta: a!.y + a!.height, techoDeLaBarra: b!.y };
-}
+const BARRA = 'Navegación principal';
 
 test.describe('§1.9 · la barra de cinco en la sección social', () => {
-  for (const { ruta, posicion, titulo } of CONVERTIDAS) {
-    test(`#/${ruta} monta la barra nueva, y UNA sola`, async ({ page }) => {
-      await ingresar(page);
-      await page.goto(`/#/${ruta}`);
-      await expect(page.getByRole('heading', { name: titulo, exact: true })).toBeVisible();
+  test('#/amigos monta la barra nueva, y UNA sola', async ({ page }) => {
+    await ingresar(page);
+    await page.goto('/#/amigos');
+    await expect(page.getByRole('tab', { name: /Solicitudes/ })).toBeVisible();
 
-      /**
-       * ⭐ **Las dos barras llevan el mismo landmark**, así que contarlo dice
-       * directamente si hay dos. Es mejor que cualquier proxy: no depende de
-       * qué posición tenga cada una ni de una clase de CSS.
-       */
-      const barra = page.getByRole('navigation', { name: 'Navegación principal' });
+    /**
+     * ⭐ **Las dos barras llevan el mismo landmark**, así que contarlo dice
+     * directamente si hay dos. No depende de qué posición tenga cada una ni de
+     * una clase de CSS.
+     */
+    const barra = page.getByRole('navigation', { name: BARRA });
+    await expect(barra).toHaveCount(1);
+
+    // Y es la de cinco: su círculo central y su posición propia. Todo scopeado
+    // a la barra — "Amigos" también es una pestaña, y sin scope el selector
+    // matchea dos elementos y el test se cae por ambigüedad.
+    await expect(barra.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(barra.getByRole('button', { name: 'Amigos', exact: true })).toBeVisible();
+    /**
+     * La posición "Cuenta" existe en la barra VIEJA y no en la de cinco (Cuenta
+     * se fusionó dentro de las pestañas de Inicio en §1.11). Es lo que
+     * distingue una barra de la otra sin mirar una clase de CSS.
+     */
+    await expect(barra.getByRole('button', { name: 'Cuenta', exact: true })).toHaveCount(0);
+  });
+
+  test('#/amigos sale a Inicio por la barra', async ({ page }) => {
+    await ingresar(page);
+    await page.goto('/#/amigos');
+
+    const barra = page.getByRole('navigation', { name: BARRA });
+    await barra.getByRole('button', { name: 'Inicio', exact: true }).click();
+
+    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toBeVisible();
+  });
+
+  /**
+   * Las tres pestañas encienden **Amigos** en la barra, no una posición cada
+   * una: son una sección sola. Cambiar de pestaña no puede cambiar dónde creés
+   * que estás.
+   */
+  for (const pestania of ['Amigos', 'Grupos', 'Solicitudes']) {
+    test(`la pestaña ${pestania} deja Amigos encendida en la barra`, async ({ page }) => {
+      await ingresar(page);
+      await page.goto('/#/amigos');
+
+      await page.getByRole('tab', { name: new RegExp(`^${pestania}`) }).click();
+      await expect(page.getByRole('tab', { name: new RegExp(`^${pestania}`) }))
+        .toHaveAttribute('aria-selected', 'true');
+
+      const barra = page.getByRole('navigation', { name: BARRA });
       await expect(barra).toHaveCount(1);
-
-      // Y es la de cinco: su círculo central y su posición propia. Todo scopeado
-      // a la barra — "Amigos" también es una pestaña de `SocialTabs`, y sin
-      // scope el selector matchea dos elementos y el test se cae por ambigüedad.
-      await expect(barra.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
-      await expect(barra.getByRole('button', { name: posicion, exact: true })).toBeVisible();
-      await expect(
-        barra.getByRole('button', { name: SOLO_EN_LA_BARRA_VIEJA, exact: true }),
-      ).toHaveCount(0);
-    });
-
-    test(`#/${ruta} sale a Inicio por la barra`, async ({ page }) => {
-      await ingresar(page);
-      await page.goto(`/#/${ruta}`);
-
-      const barra = page.getByRole('navigation', { name: 'Navegación principal' });
-      await barra.getByRole('button', { name: 'Inicio', exact: true }).click();
-
-      await expect(page).toHaveURL(/#\/home$/);
-      await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toBeVisible();
+      // `aria-current="page"` es lo que marca la posición activa de la barra.
+      await expect(barra.getByRole('button', { name: 'Amigos', exact: true }))
+        .toHaveAttribute('aria-current', 'page');
     });
   }
 
   /**
-   * ⭐ El CTA de Amigos **no queda debajo de la barra**.
+   * ⭐ **El listado no queda debajo de la barra.** Sucesor del bug del CTA
+   * tapado; ver el encabezado de este archivo para por qué el assert es otro.
    *
-   * `.action-bar` no es fijo y la barra sí, así que sin aire por debajo la barra
-   * se le monta encima. **Es literalmente el bug que reportó el hermano de Mati
-   * el 2026-07-24** —*"la navegación está tapando el botón para agregar
-   * amigo"*—, que `.has-nav .action-bar` había cerrado y que la conversión a la
-   * barra nueva reabre si nadie escribe su gemelo.
-   *
-   * Se mide con cajas y no con `toBeVisible()`: **un elemento tapado por otro
-   * sigue siendo "visible" para Playwright**, así que ese assert habría pasado
-   * con el botón enterrado abajo de la barra.
+   * Se mide el mecanismo y no una caja: con pocos amigos el listado no llega
+   * abajo, así que un `boundingBox` daría verde con el padding roto.
    */
-  test('el CTA de Amigos queda por encima de la barra, no debajo', async ({ page }) => {
+  test('el scroll de la sección social deja aire para la barra', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/amigos');
+    await expect(page.getByRole('tab', { name: /Solicitudes/ })).toBeVisible();
 
-    const cta = page.getByRole('button', { name: '+ Agregar amigo' });
-    await expect(cta).toBeVisible();
-    await cta.scrollIntoViewIfNeeded();
-
-    const { fondoDelCta, techoDeLaBarra } = await noTapadoPor(
-      page,
-      '.action-bar button',
-      '.appbar-block',
+    const scroll = page.locator('.screen.has-appbar > .scroll');
+    const padding = await scroll.evaluate(
+      (el) => parseFloat(getComputedStyle(el).paddingBottom),
     );
+    const caja = await page.locator('.appbar-block').boundingBox();
+    expect(caja, 'no encontré la barra').not.toBeNull();
+
     expect(
-      fondoDelCta,
-      `el CTA termina en ${fondoDelCta} y la barra empieza en ${techoDeLaBarra}: está tapado`,
-    ).toBeLessThanOrEqual(techoDeLaBarra);
+      padding,
+      `el scroll deja ${padding}px abajo y la barra mide ${caja!.height}px: ` +
+        'la última fila del listado queda enterrada. Suele ser un `style={{ padding: N }}` ' +
+        'inline, que es shorthand y pisa el longhand de `.has-appbar .scroll`.',
+    ).toBeGreaterThanOrEqual(caja!.height);
   });
 
   /**
-   * El **detalle** de un grupo es la otra vista de la misma ruta, y hoy también
-   * dibujaba `BottomNav`. Sin barra quedaría con una sola salida —la flecha, que
+   * El **detalle** de un grupo lleva flecha de volver, y por eso mismo va sin
+   * logo (§5 bis · A). Sin barra quedaría con una sola salida —la flecha, que
    * vuelve a la lista— y **ninguna que saque de la sección**.
    *
-   * Va aparte de la tabla porque no se llega por URL: hay que abrir un grupo.
+   * Ya no se llega por URL: hay que entrar por la pestaña Grupos.
    */
   test('el detalle de un grupo también lleva la barra, y sale a Inicio', async ({ page }) => {
     await ingresar(page);
-    await page.goto('/#/grupos');
+    await page.goto('/#/amigos');
 
+    await page.getByRole('tab', { name: 'Grupos', exact: true }).click();
     await page.getByRole('button', { name: /Familia/ }).click();
     await expect(page.getByText(/^Miembros \(/)).toBeVisible();
 
-    const barra = page.getByRole('navigation', { name: 'Navegación principal' });
+    const barra = page.getByRole('navigation', { name: BARRA });
     await expect(barra).toHaveCount(1);
 
     await barra.getByRole('button', { name: 'Inicio', exact: true }).click();
     await expect(page).toHaveURL(/#\/home$/);
   });
-
-  /**
-   * **Cuenta ya no tiene recorrido acá, y es correcto que no lo tenga.**
-   *
-   * En el paso 3 tuvo uno: montaba la barra sin encender ninguna posición.
-   * **El paso 6 retiró `CuentaScreen` entera**, así que ese test dejó de
-   * describir algo que existe — y un test que afirma sobre una pantalla
-   * retirada es de la misma familia que un guard que corre donde su mecanismo
-   * no existe: verde y vacío.
-   *
-   * Lo que sí sobrevive de esa ruta —que `#/cuenta` monta algo real, porque
-   * ocho `navigate('cuenta')` durmientes dependen de eso— se afirma en
-   * `rutas-montan-pantalla.spec.ts`, como alias declarado, y en el control
-   * positivo de `rutas-wallet.spec.ts`. **No se perdió cobertura: se mudó a
-   * donde el hecho vive ahora.**
-   */
 });

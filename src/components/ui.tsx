@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
-import { navigate } from '../router';
 
 /** Piezas chicas compartidas: top bar, toast y avatar con color estable. */
 
@@ -44,31 +43,15 @@ export function TopBar({
   );
 }
 
-/**
- * Tabs de la sección social (T-F1, feedback del hermano): Amigos y Grupos
- * son UNA sección de la nav; estas tabs navegan entre las dos páginas (los
- * deep links y los backs siguen funcionando porque cada tab es una ruta).
+/*
+ * `SocialTabs` vivía acá y se retiró con §1.9. Eran las pestañas de pastilla
+ * gris que navegaban entre `#/amigos` y `#/grupos`: dos rutas, dos pantallas.
+ * Ahora la sección social es UNA pantalla y sus tres pestañas son `BubbleTabs`
+ * (§5 bis · B), que es el mismo componente que usa Inicio.
+ *
+ * No queda alias ni reexport: su único consumidor eran esas dos pantallas, que
+ * se fueron en el mismo commit.
  */
-export function SocialTabs({ active }: { active: 'amigos' | 'grupos' }) {
-  return (
-    <div className="tabs" style={{ margin: '0 0 12px' }}>
-      <button
-        className={`tab ${active === 'amigos' ? 'on' : ''}`}
-        aria-current={active === 'amigos' ? 'page' : undefined}
-        onClick={() => navigate('amigos')}
-      >
-        Amigos
-      </button>
-      <button
-        className={`tab ${active === 'grupos' ? 'on' : ''}`}
-        aria-current={active === 'grupos' ? 'page' : undefined}
-        onClick={() => navigate('grupos')}
-      >
-        Grupos
-      </button>
-    </div>
-  );
-}
 
 /** Chip de marca de tarjeta: VISA en texto, Mastercard con sus círculos. */
 export function CardBrandChip({ brand }: { brand: string }) {

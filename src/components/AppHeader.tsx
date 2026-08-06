@@ -247,7 +247,19 @@ export function BubbleTabs({
             onClick={() => onSelect(t.id)}
           >
             {t.label}
-            {t.badge != null && t.badge > 0 && <span className="btab-badge">{t.badge}</span>}
+            {/* El conteo entra al NOMBRE ACCESIBLE de la pestaña, y tiene que
+                entrar: una persona que no ve el círculo naranja igual necesita
+                saber que hay algo esperándola. Por eso lleva su propio texto
+                —"2 pendientes" y no un "2" suelto— en vez de `aria-hidden`.
+
+                Consecuencia para quien escriba tests: el nombre de una pestaña
+                con badge NO es su etiqueta pelada. Buscarla con `exact: true`
+                falla en cuanto el contador deja de estar en cero. */}
+            {t.badge != null && t.badge > 0 && (
+              <span className="btab-badge" aria-label={`${t.badge} pendientes`}>
+                {t.badge}
+              </span>
+            )}
           </button>
         );
       })}

@@ -43,8 +43,16 @@ export const PAGES = [
   'estadisticas',
   'cargar',
   'transferir',
+  /**
+   * §1.9 · `amigos` es la sección social ENTERA: Amigos, Grupos y Solicitudes
+   * son tres pestañas de una sola pantalla, no tres rutas.
+   *
+   * **`grupos` se retiró limpia, sin alias**, y se pudo por lo mismo que
+   * `perfil` en 0.46.0: su único call site eran las pestañas viejas y no había
+   * **un solo `navigate('grupos')` durmiente**. Es lo contrario de `cuenta`,
+   * que conserva su `case` justamente porque sí los tiene.
+   */
   'amigos',
-  'grupos',
   'mesas',
   'scan',
   /**
