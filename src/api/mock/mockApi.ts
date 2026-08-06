@@ -286,12 +286,30 @@ export async function mockGetMe(): Promise<MeResponse> {
   return delay({ user: state.user });
 }
 
+/** "Sofía" → "payme_mx_sofia": el payme_id de una cuenta nueva sale de SU
+ *  nombre, como en el backend real — no del usuario de ejemplo. */
+function paymeIdFromName(firstName: string): string {
+  const plano = firstName
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  return `payme_mx_${plano || 'nueva'}`;
+}
+
 export async function mockRegister(data: {
   email: string;
   first_name: string;
   last_name: string;
 }): Promise<StoredSession> {
-  state.user = { ...MOCK_USER, ...data };
+  // Una cuenta NUEVA nace como en el backend real: sin métodos de pago y con
+  // payme_id propio. Heredar los del seed hacía INEJERCITABLE el camino del
+  // pagador primerizo —el primero que recorre un usuario real, porque la
+  // garantía exige tarjeta guardada y Apple/Google están apagados— y servía
+  // el payme_id de la persona de ejemplo a cualquier registro. El usuario del
+  // SEED conserva sus dos tarjetas: entra por mockLogin, que no toca esto.
+  state.user = { ...MOCK_USER, ...data, payme_id: paymeIdFromName(data.first_name) };
+  state.paymentMethods = [];
   const session = createSession({
     access_token: 'mock-access-token',
     refresh_token: 'mock-refresh-token',
