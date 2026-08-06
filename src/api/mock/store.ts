@@ -842,7 +842,13 @@ export function materializeDemoMesa(code: string): MockMesa | null {
 export function settleIfExpired(mesa: MockMesa): void {
   const active = mesa.status === 'open' || mesa.status === 'partially_paid';
   if (!active || new Date(mesa.expires_at).getTime() > Date.now()) return;
-  mesa.status = 'settled';
+  // `completed` A PROPÓSITO, y SÓLO en el mock (auditoría 2026-08-06): acá el
+  // cierre por vencimiento ES el cierre completo — no hay dispersión pendiente
+  // que esperar, porque no hay dispersión. Dejarlo en 'settled' no modelaba un
+  // estado intermedio real: modelaba uno que en el mock nunca avanza, y la
+  // pantalla A-2 rica ("Tu garantía cubrió $X") quedaba inalcanzable por el
+  // camino vivo. En el riel real 'settled' es correcto y significa algo.
+  mesa.status = 'completed';
   mesa.captured_shortfall_cents = Math.max(0, mesa.total_cents - mesa.paid_amount_cents);
   if (mesa.openedByUser && mesa.captured_shortfall_cents > 0) {
     if (mesa.guarantee_method === 'wallet') {
