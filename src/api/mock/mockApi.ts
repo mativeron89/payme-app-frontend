@@ -1278,6 +1278,13 @@ export async function mockAcceptInvitation(id: string): Promise<{ accepted: bool
     return fail(410, 'invitation_expired');
   }
   state.pendingInvitations = state.pendingInvitations.filter((i) => i.id !== id);
+  // El emisor INSERTA en mesa_participants al aceptar (routes/invitations.js:102)
+  // y `joinedMesaCodes` es su espejo acá. Sin esta línea, aceptar era un no-op
+  // de participación: la mesa aceptada JAMÁS aparecía en /mesas/open — el
+  // síntoma de G-28, reproducido por el mock en el riel de invitaciones in-app.
+  if (!state.joinedMesaCodes.includes(inv.mesa_code)) {
+    state.joinedMesaCodes.push(inv.mesa_code);
+  }
   state.notifications = state.notifications.map((n) =>
     n.type === 'invitation_received' ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n,
   );

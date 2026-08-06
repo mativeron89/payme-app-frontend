@@ -77,6 +77,22 @@ describe('invitaciones in-app · vencidas (espejo del emisor)', () => {
     expect(state.pendingInvitations).toEqual([]);
   });
 
+  it('aceptar una viva ESCRIBE la participación: la mesa aparece en /mesas/open', async () => {
+    // El no-op que esto mata: aceptar sólo borraba la pendiente, sin tocar
+    // joinedMesaCodes — la mesa aceptada no aparecía en el Inicio de quien
+    // aceptó. Es el síntoma de G-28, reproducido por el mock en otro riel.
+    const { mock, state } = await cargar();
+    const viva = state.mesas.find((m) => m.status === 'open' && !m.openedByUser)!;
+    state.pendingInvitations = [{ ...invitacion('viva', 60_000), mesa_code: viva.code }];
+
+    const antes = await mock.mockOpenMesas();
+    expect(antes.mesas.map((m) => m.code)).not.toContain(viva.code);
+
+    await mock.mockAcceptInvitation('viva');
+    const despues = await mock.mockOpenMesas();
+    expect(despues.mesas.map((m) => m.code)).toContain(viva.code);
+  });
+
   it('la invitación del SEED no promete más vida que su mesa', async () => {
     const { state } = await cargar();
     const inv = state.pendingInvitations[0]!;
