@@ -63,12 +63,20 @@ export function MasScreen() {
           {/* §1.9 · paso 2 · va a `#/tarjetas`, la pantalla de PRIMER NIVEL que
               §1.11 estrenó, y no a la Cuenta vieja que §1.9 retira.
 
-              Es el ÚNICO `navigate('cuenta')` VIVO del repo. Los otros ocho son
-              declaraciones o código durmiente del riel saldo —`HomeScreen` ×2
-              adentro de bloques `walletRailEnabled`, `TopupScreen` ×5,
-              `TransferScreen` ×1— y **no se tocan**: están preservados por
-              ratificación, y reinterpretar navegación durmiente no es tarea de
-              un cambio de destino. Por eso `case 'cuenta'` también sigue en pie.
+              Esta fila era el ÚNICO camino VIVO a `cuenta`. Los otros **DIEZ**
+              son código durmiente del riel saldo y **no se tocan**: están
+              preservados por ratificación, y reinterpretar navegación durmiente
+              no es tarea de un cambio de destino. Por eso `case 'cuenta'`
+              también sigue en pie.
+
+              🔴 **Diez, no ocho.** Son ocho `navigate('cuenta')` —`HomeScreen`
+              ×2 adentro de bloques `walletRailEnabled`, `TopupScreen` ×5,
+              `TransferScreen` ×1— **más dos `goBack('cuenta')`**
+              (`TopupScreen:237`, `TransferScreen:126`), que caen en la misma
+              ruta porque `goBack` **llama a `navigate(fallback)`** cuando no hay
+              historial propio (`router.ts:150`) — el caso de quien entra en frío
+              a esa URL. Un `grep` de `navigate('cuenta')` no los ve, así que el
+              conteo viejo no sólo erraba el número: **mandaba a buscar mal.**
 
               OJO con el rótulo de abajo: sigue gateado por el riel saldo (OLA 5C
               c) y esta orden no lo toca. Con el riel encendido diría "Saldo y

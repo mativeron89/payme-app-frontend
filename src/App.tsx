@@ -110,13 +110,25 @@ function Shell() {
        * §1.9 · paso 6 · **la ruta VIVE, la pantalla se retiró.**
        *
        * `CuentaScreen` ya no existe, pero `case 'cuenta'` no se puede borrar:
-       * quedan **ocho `navigate('cuenta')` durmientes** —`TopupScreen` ×5,
-       * `TransferScreen` ×1, `HomeScreen` ×2 dentro de bloques
-       * `walletRailEnabled`— preservados por ratificación. Sin `case`, cualquiera
-       * de ellos dejaría la app **en blanco** si llegara a alcanzarse.
+       * quedan **DIEZ call sites durmientes que alcanzan esta ruta**,
+       * preservados por ratificación. Sin `case`, cualquiera de ellos dejaría la
+       * app **en blanco** si llegara a alcanzarse.
+       *
+       * 🔴 **Son diez y no ocho, y la diferencia importa por CÓMO se buscan:**
+       *
+       *  - **ocho `navigate('cuenta')`** — `TopupScreen` ×5, `TransferScreen` ×1,
+       *    `HomeScreen` ×2 dentro de bloques `walletRailEnabled`;
+       *  - **más dos `goBack('cuenta')`** — `TopupScreen:237` y
+       *    `TransferScreen:126`.
+       *
+       * `goBack(fallback)` **llama a `navigate(fallback)`** cuando no hay
+       * historial propio (`router.ts:150`), y eso no es un caso exótico: es lo
+       * que pasa con quien entra en frío a esa URL. O sea que un `grep` de
+       * `navigate('cuenta')` —el que invita a hacer la redacción anterior de
+       * este comentario— **no ve dos de los diez caminos**.
        *
        * Se probó la salida elegante —sacar `'cuenta'` de la unión `Page` para
-       * que el compilador obligue— y se **descartó**: exigiría editar los ocho
+       * que el compilador obligue— y se **descartó**: exigiría editar los diez
        * call sites, o sea reinterpretar navegación durmiente. **La ratificación
        * pesa más que la elegancia del compilador.**
        *

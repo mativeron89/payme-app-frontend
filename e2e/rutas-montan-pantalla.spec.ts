@@ -89,15 +89,20 @@ const ESPERADO: Record<PageId, Esperado> = {
   home: { tipo: 'pantalla', marcador: MARCADOR_DE_INICIO },
   /**
    * §1.9 · paso 6 · `CuentaScreen` se retiró y **la ruta sobrevive**, montando
-   * `TarjetasScreen`. No es cosmético: quedan **ocho `navigate('cuenta')`
-   * durmientes** preservados por ratificación, y sin `case` cualquiera de ellos
-   * dejaría la app en blanco. Este renglón es lo que impide que alguien lo
-   * "limpie" viendo una ruta sin pantalla propia.
+   * `TarjetasScreen`. No es cosmético: quedan **DIEZ call sites durmientes que
+   * alcanzan esta ruta** —ocho `navigate('cuenta')` **más dos
+   * `goBack('cuenta')`**— preservados por ratificación, y sin `case` cualquiera
+   * de ellos dejaría la app en blanco. Este renglón es lo que impide que
+   * alguien lo "limpie" viendo una ruta sin pantalla propia.
+   *
+   * El detalle de por qué los `goBack` cuentan está en `src/App.tsx`, sobre el
+   * `case`: `goBack(fallback)` llama a `navigate(fallback)` sin historial
+   * propio, así que un `grep` de `navigate('cuenta')` no los ve.
    */
   cuenta: {
     tipo: 'alias',
     de: 'tarjetas',
-    porque: 'la pantalla se retiró en §1.9 y la ruta vive para los ocho navigate() durmientes',
+    porque: 'la pantalla se retiró en §1.9 y la ruta vive para los diez call sites durmientes',
   },
   tarjetas: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis tarjetas' } },
   pagos: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis pagos' } },
@@ -193,7 +198,7 @@ test.describe('cada ruta declarada monta su propia pantalla', () => {
        *  - que la URL **no cambió** → llegó por el `case`, no por un redirect.
        *    Sin esto, un `replaceRoute('tarjetas')` pasaría igual, y no es lo
        *    mismo: un redirect deja la ruta vieja fuera del `case`, que es
-       *    exactamente lo que los ocho durmientes no toleran.
+       *    exactamente lo que los diez durmientes no toleran.
        */
       if (esperado!.tipo === 'alias') {
         const aliasada = ESPERADO[esperado!.de];
