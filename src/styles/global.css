@@ -1487,8 +1487,18 @@ body {
   font-weight: 600;
   color: var(--navy);
 }
+/* §1.9 · el identificador SUBE de 11px a `--fs-sm` (14px). Era información en
+   11px, que el sistema prohíbe: su piso es 14px.
+
+   Sigue en `monospace` a propósito — el cambio que el spec pide es el tamaño,
+   y un `payme_mx_…` se lee mejor con ancho fijo.
+
+   Toca tres superficies, no sólo la sección social: `InviteFriends` y
+   `TransferScreen` usan la misma fila. Es lo correcto —el piso de tamaño es
+   del sistema, no de una pantalla— y por eso va en commit propio. */
 .fr-name .id {
-  font-size: 11px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--gray-d);
   font-family: monospace;
 }
