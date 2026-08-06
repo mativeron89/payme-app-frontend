@@ -1,5 +1,58 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.47.0 — §1.9 · la sección social, y el pedazo del spec que no se puede construir (2026-08-05)
+
+**§1.9 queda cerrada.** Amigos, Grupos y Solicitudes dejaron de ser dos rutas
+con pestañas de pastilla gris: son **tres pestañas en burbuja de una sola
+pantalla** (§5 bis · B, el mismo componente que Inicio).
+
+- **Una pantalla y no tres rutas, por una razón medible:** el badge de
+  Solicitudes tiene que verse desde Amigos y desde Grupos. Con una ruta por
+  pestaña, las tres pantallas tendrían que pedir las solicitudes sólo para
+  pintar un número en una pestaña ajena.
+- **La ruta `grupos` se retira limpia, sin alias**, y se midió antes de
+  decidirlo: su único call site eran las pestañas viejas y **cero
+  `navigate('grupos')` durmientes**. Es el caso de `perfil` (0.46.0), no el de
+  `cuenta`. **El compilador encontró los dos puntos que rompía** —`SocialTabs` y
+  la lista de rutas legítimas del guard—: tercer cobro de derivar la unión de
+  `PAGES` (0.43.0), y ningún `grep`.
+- 🔴 **Solicitudes sale con UNA lista, y la ausencia es deliberada.** El spec
+  pide adentro un selector de pastilla Amigos/Grupos y filas *"Te invitó a
+  {grupo}"*. **No existe en el contrato, y no es un endpoint que falte: es otro
+  modelo de producto.** `friend_groups` tiene `user_id` y `UNIQUE (user_id,
+  name)`; `GET /groups` filtra por `g.user_id`, así que **a quien agregás nunca
+  se le avisa y el grupo no le aparece**; `POST /groups/:id/members` inserta
+  directo con `201 {added:true}`. **Un grupo es una carpeta de contactos tuya.**
+  Un control cuyo segundo lado no puede tener nada nunca es la misma promesa
+  vacía que el spec ya le negó al QR (§1.7), a Cuentas Asociadas (§1.11) y a
+  "Configuración" en `Más`. Va como **G-32**, y es **decisión de producto antes
+  que pedido de contrato**: no lo cierra ningún campo aditivo.
+- **El alta de grupo estrena selección de ícono**, que es lo que §1.9 pide con
+  *"ícono propio, no uno repetido"*. El contrato ya aceptaba `icon` opcional y
+  la fachada ya lo pasaba: **faltaba sólo la superficie**, así que todo grupo
+  nacía con el default del backend y la lista entera se veía igual. El "gap"
+  era de UI, no de contrato — y se parecía tanto a uno que valía verificarlo.
+- **Listado alfabético** con `localeCompare('es')`, que ordena bien los acentos.
+- ⭐ **El bug del CTA tapado cambió de forma, así que cambió de assert.** El
+  `.action-bar` que medía el test viejo **ya no existe** —lo reemplazó el tile,
+  que vive arriba de todo—, y adaptarlo habría sido afirmar sobre un elemento
+  retirado: verde y vacío. El modo de falla se mudó a **la última fila del
+  listado**, así que ahora se afirma el **mecanismo**: el `padding-bottom` real
+  contra el alto real de la barra. **Acreditado con su mutante** —un
+  `style={{ padding: 12 }}` inline, shorthand que pisa el longhand—, que lo tira
+  y sólo a él.
+- **El identificador sube de 11px a `--fs-sm`** (14px), en commit propio: era
+  información por debajo del piso del sistema, y `.fr-name .id` lo usan también
+  `InviteFriends` y `TransferScreen`. Mezclarlo habría escondido su alcance
+  real adentro de un commit de otra cosa.
+- El conteo del badge **entra al nombre accesible** de la pestaña a propósito:
+  quien no ve el círculo naranja igual necesita enterarse. Queda anotado en el
+  componente, porque vuelve inservible buscar esa pestaña con `exact: true`.
+
+**517 vitest · 63 e2e** · typecheck · builds real y mock. Uno menos de vitest: el
+guard de rutas itera la lista y perdió `grupos`. Verificado en mock a 375px —las
+tres pestañas y el detalle de grupo—, consola limpia.
+
 ## 0.46.0 — §1.9 · `Más` es una pantalla de verdad (2026-08-05)
 
 La quinta posición de la barra dejó de apuntar a Perfil "provisoriamente".
