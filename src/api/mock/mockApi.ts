@@ -348,7 +348,20 @@ export async function mockHistory(params?: {
   let sorted = [...state.history].sort((a, b) => b.date.localeCompare(a.date));
   if (params?.from) sorted = sorted.filter((h) => h.date >= params.from!);
   if (params?.to) sorted = sorted.filter((h) => h.date <= params.to!);
-  return delay({ history: sorted.slice(offset, offset + limit), limit, offset });
+  /**
+   * `mesa_status` es VIVO, no foto: el emisor lo proyecta con `JOIN mesas` al
+   * momento de la consulta (`routes/account.js`). `mockPayMesa` guarda el
+   * estado del momento del pago, así que servirlo tal cual mentiría en el caso
+   * corriente: pagás tu parte (la entrada nace `partially_paid`), la mesa
+   * termina después, y el historial la seguiría mostrando viva — Historial
+   * (§1.10) la excluiría para siempre. Se re-lee la mesa al servir; las del
+   * seed sin mesa viva conservan su estado guardado.
+   */
+  const vivas = new Map(state.mesas.map((m) => [m.code, m.status]));
+  const proyectado = sorted
+    .slice(offset, offset + limit)
+    .map((h) => (vivas.has(h.mesa_code) ? { ...h, mesa_status: vivas.get(h.mesa_code)! } : h));
+  return delay({ history: proyectado, limit, offset });
 }
 
 // ─── v2.18 · Fracciones (réplica de services/itemClaims.js del espejo) ─────
