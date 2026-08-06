@@ -1,5 +1,64 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.53.0 — el gate de admisión: la mesa muerta lo dice, y fully_paid admite (2026-08-07)
+
+La ventana que la auditoría descubrió arreglando el mock —invitación viva,
+mesa muerta, "Te sumaste ✓" hacia la nada— quedó cerrada de punta a punta.
+Mati ratificó las tres decisiones (A: el accept valida el estado de la mesa;
+B: pagada-entera-pero-viva ADMITE; C: el link usa el mismo gate), App Backend
+publicó el contrato en v2.45.0, y esta versión lo espeja y lo pone en
+pantalla. Dueño primero, consumidor después.
+
+- **Espejo a v2.45.0** (70/70 idénticos): `mesaViva()` — UN predicado, viva =
+  `open | partially_paid | fully_paid` —, `410 mesa_not_joinable` en las dos
+  puertas de entrar, y `GET /invitations` que MARCA (`mesa_joinable`,
+  `mesa_status`) en vez de filtrar: la señal se computa desde el mismo
+  predicado del gate, no desde una segunda expresión que se desincroniza.
+- **El mock modela las tres puertas con el mismo predicado** — con el warning
+  escrito de no confundirlo con el filtro de `/mesas/open` (fully_paid admite
+  gente pero no se lista como abierta: dos conjuntos, por contrato). El 410
+  del accept deja la invitación PENDIENTE: la mesa no revive, y consumirla
+  sería inventar semántica que el dueño no cedió. Y PA-4520 dejó de violar el
+  `.min(1)` de POST /mesas (mismo defecto de seed que tenía PA-3121).
+- **Pantalla D** (link a mesa muerta, §1.2, copy de Diseño textual): "Esta
+  mesa ya cerró / Hablá con quien te invitó si creés que es un error" —
+  hermana de A/B/C, terminal sin Reintentar, honesta sólo con quien probó un
+  token genuino (el 403 opaco sigue cubriendo al desconocido). Y la línea que
+  cierra el círculo del recién registrado — "Tu cuenta ya está lista — podés
+  abrir tu propia mesa cuando quieras" — ANTES de soltarlo a un Inicio vacío:
+  la explicación vive en la pantalla que sabe qué pasó; Inicio no adivina.
+- **Avisos**: la invitación a mesa muerta viene APAGADA de nacimiento ("Esta
+  mesa ya cerró", sin Sumarme), leyendo `mesa_joinable` directo — ni
+  desaparece (parecería un bug) ni invita al camino muerto. Más el toast
+  homónimo para la carrera entre el listado y el toque.
+- **fully_paid ADMITE, acreditado en POSITIVO**: unit en las dos puertas del
+  mock y e2e que entra DE VERDAD por Avisos a una mesa pagada entera. Es la
+  mesa que un espejo apurado apaga por parecerse a "ya no hay nada que hacer
+  acá" — probar una regla no es probar su complemento, y un espejo que sólo
+  testea rechazos pasa en verde apagando todo.
+
+🔴 **Y el e2e de la pantalla D destapó un bug REAL, preexistente, de toda la
+familia de rechazos**: el Shell recalculaba `tokenForMesa` EN CADA RENDER.
+Cuando un terminal soltaba la custodia del token (comportamiento correcto),
+cualquier re-render posterior —la sesión recién seteada tras el alta, por
+ejemplo— volvía `null` el token y REEMPLAZABA la pantalla de rechazo montada
+por `MesaScreen`: la persona veía "Mesa liquidada" en vez de "Esta mesa ya
+cerró". **Afectaba también a los terminales viejos (403/400)** — ninguna
+pantalla de rechazo estaba a salvo; sólo que ningún flujo de test
+re-renderizaba el Shell a tiempo. **Salía verde en serie y caía en paralelo:
+un test que sólo corre en serie acredita una coreografía, no un
+comportamiento.** Fix: la decisión se toma UNA vez por navegación (`useMemo`
+sobre `route`, que sólo cambia con hashchange), no por render. Tres corridas
+paralelas seguidas del spec: 3/3.
+
+De instrumento: dos carreras del harness pagadas y documentadas en el helper
+del e2e (mutar localStorage con el mock vivo en memoria; hash+reload en el
+mismo evaluate), y la cadena de exit codes cazó un hash corto en el README
+del espejo antes del commit — el gate arreglado en v0.52.0 ya cobró.
+
+Cierre: **580 vitest · 78/78 Playwright · typecheck · builds real y mock**,
+todo por exit code.
+
 ## 0.52.0 — las tres decisiones de Mati sobre lo que la auditoría dejó a la vista (2026-08-06)
 
 La auditoría de v0.51.0 escaló tres cosas con dueño; Mati decidió las tres el
