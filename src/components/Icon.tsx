@@ -88,6 +88,19 @@ const GLYPHS = {
     f: ['M15.8 7.2c1.9 0 3.4.8 4.3 2.1-2.4 1.4-2.6 4.9-.1 6.4-.6 1.6-1.9 3.9-3.6 4.8-1.1.6-2 .1-3.1.1s-2.3.6-3.4-.1C7 19 4.5 14.6 5.4 11c.6-2.3 2.4-3.8 4.4-3.8 1.1 0 1.9.6 2.9.6s1.9-.6 3.1-.6Z', 'M14.8 4.6c-.7.9-1.9 1.5-2.9 1.4-.1-1.1.4-2.2 1.1-3 .7-.8 2-1.4 2.9-1.4.1 1.1-.4 2.2-1.1 3Z'],
   },
   clock: { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7.5V12l3 2'] },
+  /* Franjas horarias de Historial (SPEC_APP.md §1.10): cuatro siluetas que se
+     distinguen ENTRE SÍ a 16px —media cúpula sobre línea, sol con rayos, sol
+     sobre línea, medialuna—, que es más importante que el detalle de cada una.
+     Verificados renderizados a ese tamaño (regla de SISTEMA_DISENO.md §5). */
+  'sun-rise': { d: ['M3 18h18', 'M7.5 18a4.5 4.5 0 0 1 9 0', 'M12 10.5V7.5', 'M5.5 12l2 2', 'M18.5 12l-2 2'] },
+  'sun-high': {
+    d: ['M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M12 3v2.5', 'M12 18.5V21', 'M3 12h2.5', 'M18.5 12H21', 'M5.6 5.6l1.8 1.8', 'M16.6 16.6l1.8 1.8', 'M18.4 5.6l-1.8 1.8', 'M7.4 16.6l-1.8 1.8'],
+  },
+  'sun-low': { d: ['M12 15a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z', 'M3 19h18', 'M12 4.5V6', 'M6 6.5l1.3 1.3', 'M18 6.5l-1.3 1.3'] },
+  moon: { d: ['M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z'] },
+  /* Interrogación del estado DESCONOCIDO (SISTEMA_DISENO.md §5): el acordeón
+     de Historial la muestra mientras G-33 siga sin respuesta del contrato. */
+  help: { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M9.5 9.3a2.5 2.5 0 1 1 3.7 2.3c-.8.5-1.2 1-1.2 1.9v.3', 'M12 16.8v.4'] },
   'arrow-up-right': { d: ['M7 17 17 7', 'M9 7h8v8'] },
   'arrow-down-left': { d: ['M17 7 7 17', 'M15 17H7V9'] },
   minus: { d: ['M5 12h14'] },

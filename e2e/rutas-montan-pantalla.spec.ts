@@ -131,7 +131,12 @@ const ESPERADO: Record<PageId, Esperado> = {
     tipo: 'pantalla',
     marcador: { rol: 'tab', nombre: 'Solicitudes', exacto: false },
   },
-  mesas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Mesas' } },
+  /**
+   * §1.10: la etiqueta de la barra dice "Mesas" por espacio, pero el TÍTULO de
+   * la pantalla es la píldora "Historial" — y es marcador fuerte: ningún otro
+   * heading de la app dice así. El heading "Mesas" murió con la TopBar vieja.
+   */
+  mesas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Historial' } },
   scan: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Escaneá el ticket' } },
   mas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Más' } },
   avisos: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Notificaciones' } },

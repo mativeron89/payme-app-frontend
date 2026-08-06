@@ -3814,6 +3814,122 @@ body {
   color: var(--text);
 }
 
+/* ─── Historial · SPEC_APP.md §1.10 (la entrada "Mesas" de la barra) ─── */
+
+/* Píldora de título angosta y centrada, NO la tarjeta de ancho completo: un
+   título sin total ni progreso debajo quedaba desproporcionado a todo lo
+   ancho (se probó, §1.10). Medidas del spec: ancho del texto, --r-full,
+   14px 32px, --fs-h2 — el tamaño más cercano de la escala de seis. */
+.hist-pill-wrap {
+  display: flex;
+  justify-content: center;
+  margin: var(--sp-4) 0 var(--sp-2);
+}
+
+.hist-pill {
+  margin: 0;
+  padding: 14px 32px;
+  border-radius: var(--r-full);
+  background: var(--teal-l);
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.hist-item {
+  margin-bottom: var(--sp-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  overflow: hidden;
+}
+
+/* Botón entero —área táctil de todo el renglón—, como .inv-group. */
+.hist-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+
+.hist-row:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
+
+/* Abierta: la fila se tiñe apenas — tinte al 8%, no el color pleno, igual que
+   un ítem seleccionado en Mis ítems (§1.10 lo pide con esa referencia). */
+.hist-item.on .hist-row {
+  background: rgba(0, 194, 203, 0.08);
+}
+
+.hist-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.hist-rest {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hist-meta {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.hist-amt {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Gira de abajo a arriba al abrir. Con movimiento reducido cambia igual, sin
+   transición: la dirección del glifo es información, la animación no. */
+.hist-chevron {
+  flex: none;
+  display: flex;
+  color: var(--text-muted);
+  transition: transform var(--mo-fast, 120ms) ease-out;
+}
+
+.hist-chevron.on {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hist-chevron {
+    transition: none;
+  }
+}
+
+/* El desconocido va DENTRO de la tarjeta de la fila: hereda .state-unknown
+   (punteado + --surface-2) y sólo ajusta el margen exterior. */
+.hist-unknown {
+  margin: 0 var(--sp-3) var(--sp-3);
+}
+
 /* La página siguiente falló, pero lo ya mostrado sigue siendo correcto. Se
    dice, no se borra la lista. */
 .pago-fallo {
