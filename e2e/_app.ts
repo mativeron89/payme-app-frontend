@@ -85,6 +85,16 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await page.getByRole('button', { name: /En partes iguales/ }).click();
   await expect(page.getByRole('button', { name: 'Un comensal más' })).toBeVisible();
 
+  // §1.4 (2026-08-06): el stepper nace SIN ELEGIR y el N lo pone la persona —
+  // murió el `useState(4)`. Este helper ELIGE 4 a mano (piso 2 + dos toques)
+  // porque toda la aritmética anclada de los specs ($210.00 la parte, $241.50
+  // con 15 %) es 840 ÷ 4: si esto cambia, cambian esos números, no el criterio.
+  const masUno = page.getByRole('button', { name: 'Un comensal más' });
+  await masUno.click();
+  await masUno.click();
+  await masUno.click();
+  await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('4');
+
   await page.getByRole('button', { name: 'Continuar' }).click();
   await expect(page.getByRole('heading', { name: 'Garantizá la mesa' })).toBeVisible();
 

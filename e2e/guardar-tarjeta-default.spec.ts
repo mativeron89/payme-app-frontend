@@ -26,10 +26,13 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
-  // Abrir mesa hasta la garantía.
+  // Abrir mesa hasta la garantía. El stepper de §1.4 nace sin elegir: se
+  // eligen 2 comensales a mano (ya no existe el 4 por defecto).
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await page.getByRole('button', { name: 'Capturar', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
 
   // SUPERFICIE 1 · garantía: el checkbox existe y NACE DESMARCADO.

@@ -117,7 +117,20 @@ export function CreateMesaFlow() {
     expandedRowRef.current?.scrollIntoView({ block: 'nearest' });
   }, [expandedItem]);
   const [division, setDivision] = useState<'consumo' | 'igual'>('consumo');
-  const [participants, setParticipants] = useState(4);
+  /**
+   * §1.4 (spec 2026-08-06): el stepper se pregunta SIEMPRE y nace SIN ELEGIR.
+   * Acá vivía `useState(4)` — un 4 que en modo consumo nadie veía ni podía
+   * editar, viajaba como `expected_participants` y era lo único que separaba
+   * al usuario de una base de propina = la cuenta entera (÷1, el default del
+   * contrato). El número correcto no existe: por eso se pregunta, no se
+   * inventa. `null` = todavía no eligió, mismo patrón que la propina.
+   */
+  const [participants, setParticipants] = useState<number | null>(null);
+  const [stepperPulse, setStepperPulse] = useState(false);
+  const stepperRef = useRef<HTMLDivElement | null>(null);
+  // Piso del CONTRATO, no inventado: `schemas/index.js` exige >= 2 en partes
+  // iguales (refine sobre division_mode) y >= 1 en el resto.
+  const pisoComensales = division === 'igual' ? 2 : 1;
   const [method, setMethod] = useState<'card' | 'wallet'>('card');
   // D4: tarjetas guardadas. `cardChoice` es el pm_… elegido o 'new' (otra
   // tarjeta); `saveCard` = checkbox "guardar" — nace DESMARCADO (Mati,
@@ -440,6 +453,16 @@ export function CreateMesaFlow() {
 
   async function createMesa() {
     if (!ticketValid) return;
+    // §1.4: sin N elegido no se abre mesa. Este guard NO inventa un default —
+    // el gate de División ya lo exige, y si algún camino nuevo llegara acá sin
+    // elección, vuelve a División en vez de fabricar un número. Que no exista
+    // camino que mande un N que el usuario no eligió es la condición de la
+    // orden, y un `?? 4` acá la violaría en silencio.
+    if (participants === null) {
+      toast('Elegí cuántos son');
+      setStep('division');
+      return;
+    }
     if (!createInFlightRef.current.tryEnter()) return;
     if (!mesaScope || !actor) {
       setError(actorError ? 'No pudimos verificar una identidad segura para esta garantía.' : 'Preparando una identidad segura para esta garantía…');
@@ -518,7 +541,9 @@ export function CreateMesaFlow() {
         restaurant_id: restaurant.id,
         total_cents: total,
         division_mode: division,
-        expected_participants: division === 'igual' ? participants : Math.max(1, participants),
+        // El N que la persona ELIGIÓ, en los dos modos. El ternario viejo era
+        // inerte (las dos ramas mandaban el mismo default invisible).
+        expected_participants: participants,
         guarantee_method: method,
         // B-06 (v2.25): clave estable del intento de ABRIR la mesa. Sin esto,
         // perder la respuesta y reintentar creaba una segunda mesa con una
@@ -1059,7 +1084,7 @@ export function CreateMesaFlow() {
   if (step === 'division') {
     // splitEqual, igual que el backend: la suma de las partes da el total exacto
     // (el primer comensal absorbe los centavos sobrantes).
-    const perSlot = participants > 0 ? splitEqual(total, participants)[0] : total;
+    const perSlot = participants !== null && participants > 0 ? splitEqual(total, participants)[0] : total;
     return (
       <div className="screen has-appbar">
         <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step="Paso 3 de 5" />
@@ -1080,7 +1105,15 @@ export function CreateMesaFlow() {
               <div className="div-sub">Cada uno elige sus platos</div>
             </div>
           </button>
-          <button className={`div-card ${division === 'igual' ? 'sel' : ''}`} onClick={() => setDivision('igual')}>
+          <button
+            className={`div-card ${division === 'igual' ? 'sel' : ''}`}
+            onClick={() => {
+              setDivision('igual');
+              // El piso de iguales es 2 (contrato): un 1 elegido en consumo
+              // deja de ser válido y se vuelve a preguntar, no se corrige solo.
+              if (participants !== null && participants < 2) setParticipants(null);
+            }}
+          >
             <div className="div-radio" />
             <div className="div-ico">÷</div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1088,34 +1121,56 @@ export function CreateMesaFlow() {
               <div className="div-sub">El total dividido entre todos</div>
             </div>
           </button>
-          {division === 'igual' && (
-            <div className="card card-p" style={{ marginBottom: 12 }}>
-              <div className="sectlabel">¿Cuántos son?</div>
-              <div className="stepper" role="group" aria-label="Cantidad de comensales">
-                <button
-                  onClick={() => setParticipants(Math.max(2, participants - 1))}
-                  aria-label="Un comensal menos"
-                >
-                  −
-                </button>
-                <div className="val" aria-live="polite">
-                  {participants}
-                </div>
-                <button
-                  onClick={() => setParticipants(Math.min(20, participants + 1))}
-                  aria-label="Un comensal más"
-                >
-                  +
-                </button>
-              </div>
-              {/* Recalcula con cada toque del stepper. `aria-live` lo anuncia:
-                  quien no ve la pantalla también necesita el número nuevo. */}
-              <div className="split-amt" aria-live="polite">
-                {formatMXN(perSlot)}
-              </div>
-              <div className="split-amt-lbl">por persona</div>
+          {/* §1.4 (2026-08-06): el stepper SIEMPRE — se sacó el `if`, no se
+              agregó pantalla. El copy cambia porque el número hace algo
+              distinto: en iguales determina el importe; en consumo sólo fija
+              la base de propina — la MISMA "cuenta ÷ N" que la persona va a
+              ver en §1.5 bis, con la MISMA fórmula del emisor
+              (Math.round(total/N), routes/mesas.js:780). Nace SIN ELEGIR con
+              el patrón exacto del selector de propina: marco pendiente,
+              Continuar nunca se apaga, toast + scroll si tocan sin elegir. */}
+          <div
+            ref={stepperRef}
+            className={`card card-p${participants === null ? ' tip-block tip-block--pending' : ''}${stepperPulse ? ' tip-block--pulse' : ''}`}
+            style={{ marginBottom: 12 }}
+            onAnimationEnd={() => setStepperPulse(false)}
+          >
+            <div className="sectlabel tip-block-title">
+              {participants === null && <Icon name="warning" size={14} aria-hidden="true" />}
+              {division === 'igual' ? '¿Cuántos pagan?' : '¿Cuántos son en la mesa?'}
             </div>
-          )}
+            <div className="stepper" role="group" aria-label="Cantidad de comensales">
+              <button
+                onClick={() => setParticipants(participants === null ? pisoComensales : Math.max(pisoComensales, participants - 1))}
+                aria-label="Un comensal menos"
+              >
+                −
+              </button>
+              <div className="val" aria-live="polite">
+                {participants ?? '—'}
+              </div>
+              <button
+                onClick={() => setParticipants(participants === null ? pisoComensales : Math.min(20, participants + 1))}
+                aria-label="Un comensal más"
+              >
+                +
+              </button>
+            </div>
+            {/* Sin elegir, sin número: un importe calculado sobre un N que
+                nadie eligió es exactamente lo que este stepper mata. */}
+            {participants !== null && (
+              <>
+                <div className="split-amt" aria-live="polite">
+                  {division === 'igual'
+                    ? formatMXN(perSlot)
+                    : formatMXN(Math.round(total / participants))}
+                </div>
+                <div className="split-amt-lbl">
+                  {division === 'igual' ? 'c/u' : 'base de propina · c/u'}
+                </div>
+              </>
+            )}
+          </div>
         </div>
         <AppBottomBar
           active={null}
@@ -1123,6 +1178,15 @@ export function CreateMesaFlow() {
             label: 'Continuar',
             icon: 'arrow-right',
             onClick: () => {
+              // §1.4: el CTA nunca se apaga — frena explicando, igual que la
+              // propina. Un botón muerto sin motivo es el defecto que Ticket
+              // ya pagó.
+              if (participants === null) {
+                toast('Elegí cuántos son');
+                stepperRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                setStepperPulse(true);
+                return;
+              }
               void loadCards();
               setStep('garantia');
             },
