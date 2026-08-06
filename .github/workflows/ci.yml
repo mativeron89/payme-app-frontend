@@ -5,6 +5,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  # 2026-08-06: dos veces seguidas un push y un PR llegaron al servidor sin que
+  # Actions creara ningún run. Sin disparo manual no hay forma de pedir la
+  # verificación de un commit ya pusheado, y la única salida es ensuciar la
+  # historia con un commit vacío. El riesgo no es el hueco puntual: es que
+  # "la rama está verde" pasa a significar "el último run que corrió salió
+  # bien" en vez de "el último commit está verificado". Se parecen y no son
+  # lo mismo.
+  workflow_dispatch:
 
 jobs:
   build:
