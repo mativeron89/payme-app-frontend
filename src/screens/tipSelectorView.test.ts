@@ -3,6 +3,7 @@ import {
   NO_TIP_CHOSEN,
   TIP_OPTIONS,
   type TipChoice,
+  propinaDesmedida,
   sanearMontoPropio,
   tipCentsFor,
   tipIsChosen,
@@ -104,6 +105,20 @@ describe('el saneo del monto a mano (auditoría 2026-08-06 · la coma ×100)', (
     expect(sanearMontoPropio('12.34')).toBe('12.34');
     expect(sanearMontoPropio('$50')).toBe('50');
     expect(sanearMontoPropio('abc')).toBe('');
+  });
+});
+
+describe('la reconfirmación de propina desmedida (§1.5 bis, 2026-08-06)', () => {
+  it('3× exacto NO reconfirma: es el borde permitido, no el primero sospechoso', () => {
+    expect(propinaDesmedida(63000, 21000)).toBe(false);
+  });
+  it('un centavo por encima de 3× sí', () => {
+    expect(propinaDesmedida(63001, 21000)).toBe(true);
+  });
+  it('sin base no hay comparación honesta que mostrar: no reconfirma', () => {
+    // El diálogo del spec exige monto + comparación, nunca un "¿seguro?"
+    // genérico — sin base, la comparación no existe.
+    expect(propinaDesmedida(999999, 0)).toBe(false);
   });
 });
 

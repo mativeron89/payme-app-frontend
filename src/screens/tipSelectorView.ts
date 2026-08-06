@@ -75,6 +75,27 @@ export function sanearMontoPropio(crudo: string): string {
 }
 
 /**
+ * ¿La propina amerita reconfirmación? — §1.5 bis, decisión de Mati del
+ * 2026-08-06 con spec de Diseño.
+ *
+ * Umbral RELATIVO: propina > 3× la base — el mismo `tip_base_cents` que el
+ * emisor ya calcula y publica (`routes/mesas.js:780`, total ÷ N). "Fijo
+ * envejece, relativo no; y 300 % no tiene lectura legítima frecuente."
+ *
+ * NO es el bloqueo que el acta prohíbe: el diálogo tiene siempre la salida
+ * "Sí, pagar" — quien quiere dejar una propina enorme a propósito, puede.
+ * Y se dispara DESPUÉS del gate de "sin elegir": dos chequeos secuenciales,
+ * no uno reemplazando al otro.
+ *
+ * `>` estricto a propósito: 3× exacto es el borde permitido, no el primero
+ * sospechoso. Base 0 o negativa no reconfirma nada — sin base no hay
+ * comparación honesta que mostrar, y el diálogo exige mostrar la comparación.
+ */
+export function propinaDesmedida(tipCents: number, baseCents: number): boolean {
+  return baseCents > 0 && tipCents > 3 * baseCents;
+}
+
+/**
  * D7 (v2.17): la propina es % de tu parte IGUALITARIA (total ÷ N), no de tu
  * consumo. Réplica exacta de `tipFromBps`; el cobro real lo computa el server y
  * el comprobante usa SU `tip_cents`.

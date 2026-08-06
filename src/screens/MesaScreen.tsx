@@ -50,6 +50,7 @@ import {
   NO_TIP_CHOSEN,
   TIP_OPTIONS,
   type TipChoice,
+  propinaDesmedida,
   sanearMontoPropio,
   tipCentsFor,
   tipIsChosen,
@@ -287,6 +288,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   /** El pulso de una sola vez del borde cuando se toca "Pagar" sin elegir. */
   const [tipPulse, setTipPulse] = useState(false);
   const tipSectionRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * §1.5 bis (2026-08-06) · reconfirmación de propina desmedida (> 3× la
+   * base). `tipConfirmedRef` = "esta propina ya fue reconfirmada": expira en
+   * cuanto la propina CAMBIA — una confirmación no puede cubrir un monto
+   * distinto del que se mostró en el diálogo.
+   */
+  const [showTipConfirm, setShowTipConfirm] = useState(false);
+  const tipConfirmedRef = useRef(false);
+  useEffect(() => {
+    tipConfirmedRef.current = false;
+    setShowTipConfirm(false);
+  }, [tip, customTipStr]);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [payType, setPayType] = useState<PaymentType>('card');
   // Feedback Mati: las tarjetas van en un desglosable, no sueltas en la lista.
@@ -925,6 +938,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       payInFlightRef.current.leave();
       return;
     }
+    /**
+     * §1.5 bis (2026-08-06) · propina desmedida: > 3× la base del emisor.
+     * Chequeo SECUENCIAL — corre después del de "sin elegir", no en su
+     * lugar — y NO es el bloqueo que el acta prohíbe: el diálogo siempre
+     * tiene "Sí, pagar". Quien quiere dejar una propina enorme a propósito,
+     * puede — con un toque más.
+     */
+    if (mesa && !tipConfirmedRef.current && propinaDesmedida(tipCents, mesa.tip_base_cents)) {
+      setShowTipConfirm(true);
+      payInFlightRef.current.leave();
+      return;
+    }
     // N-08: no se emite una clave nueva sobre una mesa donde este dispositivo
     // (o esta identidad) ya tiene un pago, sin que el usuario lo confirme.
     if (!frozen && needsExtraPartConfirmation) {
@@ -1444,6 +1469,37 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           {/* N-08: este dispositivo ya pagó una parte de esta mesa, por esta
               identidad o por la otra puerta (invitado/autenticado). No se
               bloquea —pagar varias partes es legítimo— pero se confirma. */}
+          {/* §1.5 bis · reconfirmación de propina desmedida. Monto exacto +
+              comparación, nunca un "¿estás seguro?" genérico. La salida
+              afirmativa existe SIEMPRE (el acta prohíbe bloquear); la de
+              editar conserva el valor tipeado intacto. */}
+          {showTipConfirm && mesa && (
+            <div className="note note-orange" role="alertdialog" aria-label="Confirmar propina">
+              <b>Tu propina: {formatMXN(tipCents)}.</b> Es más de 3 veces la base de{' '}
+              {formatMXN(mesa.tip_base_cents)} (la cuenta ÷ {mesa.expected_participants}).
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-sm btn-teal btn-fit"
+                  onClick={() => {
+                    setShowTipConfirm(false);
+                    tipSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                  }}
+                >
+                  Volver a editar
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm btn-fit"
+                  onClick={() => {
+                    tipConfirmedRef.current = true;
+                    setShowTipConfirm(false);
+                    void doPay();
+                  }}
+                >
+                  Sí, pagar
+                </button>
+              </div>
+            </div>
+          )}
           {showExtraPartConfirm && (
             <div className="note note-orange" role="alertdialog" aria-label="Confirmar parte adicional">
               <b>Desde este teléfono ya se pagó una parte de esta mesa.</b>{' '}
