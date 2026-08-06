@@ -1,5 +1,57 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.48.0 — §1.5 bis · la propina se elige, y el sistema deja de elegirla (2026-08-05)
+
+**El defecto no era que la elección se pudiera saltear: era que ya estaba
+hecha.** La pantalla de pago arrancaba en `useState(15)` con modo `'pct'` y
+volvía a 15 en cada mesa nueva, así que quien nunca tocaba el selector pagaba
+**$31.50 sobre una parte de $210.00** y el payload salía con `tip_bps: 1500`,
+indistinguible de una decisión propia. Es la orden de propina obligatoria del
+acta del 2026-08-05, especificada por Diseño en `SPEC_APP.md` §1.5 bis.
+
+- **La propina nace sin elegir.** `TipChoice` —módulo puro `tipSelectorView`—
+  no puede representar un porcentaje que nadie tocó: el `pct` vive adentro de la
+  variante elegida. El default de 15 ya no se puede reescribir sin inventar un
+  caso nuevo del tipo; **el compilador es parte del arreglo, no sólo el test.**
+- **Antes de elegir se muestra la base sola**, con *"+ propina (elegí abajo)"*.
+  Nunca más un total con un porcentaje adivinado en pantalla.
+- 🔴 **La señal de "falta elegir" vive en el MARCO, no en la píldora**, y ésa es
+  la decisión fina del spec: si viviera en la píldora, el 0 % necesitaría un
+  estado visual propio y quedaría de segunda clase. Elegido, el 0 % se rellena
+  con el **mismo `--action-2`** que 10/15/20. Sin tratamiento especial para
+  "elegí no dejar propina" — es lo que lo hace de primera clase de verdad.
+- **El botón de pagar queda activo, nunca gris.** Un botón muerto se lee como
+  error del sistema, no como "te falta un paso". Tocarlo sin elegir no envía
+  nada: avisa, desliza hasta el selector y el borde pulsa una vez.
+- **Entra el preset de 5 %**, en el mismo commit que saca el default. Antes
+  habría dejado cinco píldoras con una pre-elegida: más superficie para el
+  mismo defecto.
+- **Riel monetario sin mover nada**: el token de la clave de idempotencia sale
+  del mismo payload que viaja (`b<bps>` / `c<centavos>` intactos), el
+  obligatorio no se dispara sobre un pago congelado por B-06 —la propina ya
+  está comprometida en esa clave— y el gate del mesero a `tipCents > 0` se
+  conserva: sin propina no hay a quién atribuirla.
+
+⭐ **Tres cosas que salieron de medirlas, no de deducirlas:**
+
+- **Matar el `useState(15)` solo no reproduce el defecto.** Mutado únicamente el
+  estado inicial, los cinco recorridos siguen verdes: el `useEffect` de
+  identidad corre al montar y lo pisa. **El que manda en el camino de pago es el
+  reset por mesa.** Con los dos mutados mueren dos recorridos, en las
+  afirmaciones correctas.
+- **El fallback del acta no funcionaba con el selector inline.** Un error ahí
+  explota mientras la pantalla arma sus hijos —fuera del subárbol que ve el
+  error boundary— y se lleva el pago entero. Por eso el selector es un
+  componente propio: **acreditado rompiéndolo**, el cobro continúa, sale la nota
+  informativa en `--text-muted` y el comprobante dice propina **$0.00**. Nunca
+  15, que sería el mismo bug disfrazado.
+- **El quinto preset no entraba a 375px**: "Otro" se salía por la derecha. El
+  spec ya lo dibuja en su propia fila.
+
+**528 vitest · 64 e2e** · typecheck · builds real y mock. Verificado en el
+navegador a 375px contra el mock, en los tres estados: sin elegir, 0 % elegido y
+selector caído.
+
 ## 0.47.0 — §1.9 · la sección social, y el pedazo del spec que no se puede construir (2026-08-05)
 
 **§1.9 queda cerrada.** Amigos, Grupos y Solicitudes dejaron de ser dos rutas
