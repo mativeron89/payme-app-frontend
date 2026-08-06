@@ -1,5 +1,27 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.50.1 — el borde de página subcontaba una mesa; carga completa antes de agrupar (2026-08-05)
+
+Corrección sobre 0.50.0, por límite marcado por el Bibliotecario-Auditor: la
+"paginación honesta" heredada de `PagosScreen` **acá no era honesta**. `Pagos`
+lista renglones y una página parcial sólo muestra menos renglones; Historial
+**SUMA por mesa**, así que una mesa cuyos renglones quedaron partidos entre
+dos páginas mostraba un total propio **subcontado como si fuera el real** —
+plata pagada que la pantalla no contaba. Y con orden por fecha DESC no alcanza
+con descartar la última mesa del borde: cualquier mesa cercana puede tener
+renglones en la página siguiente.
+
+- `traerHistorialCompleto` (`historialView.ts`) pagina con `limit` 100 hasta
+  la página corta **antes** de agrupar. Muere "Cargar más".
+- **O está todo, o es error**: una falla a mitad de carga propaga al estado de
+  error con Reintentar — totales parciales serían el mismo defecto con otra
+  cara. Backstop anti-loop (50 páginas llenas → error explícito, no cuelgue).
+- Cinco tests nuevos, incluido el de la mesa partida entre dos páginas que
+  suma completa.
+
+**548 vitest · 67 e2e** · typecheck · builds real y mock · re-verificado en
+navegador contra el mock a 375px.
+
 ## 0.50.0 — §1.10 · Mesas ES el historial, y la mesa viva deja de repetirse (2026-08-05)
 
 Última pantalla del rediseño. La entrada "Mesas" de la barra deja de mezclar
