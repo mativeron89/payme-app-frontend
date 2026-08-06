@@ -1228,7 +1228,11 @@ export async function mockMarkAllNotificationsRead(): Promise<void> {
 }
 
 export async function mockPendingInvitations(): Promise<PendingInvitationsResponse> {
-  return delay({ invitations: [...state.pendingInvitations] });
+  // Espejo del WHERE del emisor (`routes/invitations.js:31-34`): pendiente Y
+  // NO VENCIDA (`expires_at > NOW()`). El mock servía la tarjeta para siempre
+  // — "Sumarme" sobre una invitación muerta, éxito y aterrizaje en la nada.
+  const ahora = new Date().toISOString();
+  return delay({ invitations: state.pendingInvitations.filter((i) => i.expires_at > ahora) });
 }
 
 /**
@@ -1266,6 +1270,13 @@ export async function mockAcceptInvitationLink(
 export async function mockAcceptInvitation(id: string): Promise<{ accepted: boolean }> {
   const inv = state.pendingInvitations.find((i) => i.id === id);
   if (!inv) return fail(404, 'invitation_not_found');
+  // El emisor valida el vencimiento AL ACEPTAR y contesta 410 marcándola
+  // 'expired' (`routes/invitations.js:69-74`). El mock aceptaba incondicional:
+  // "Te sumaste ✓" a una invitación muerta.
+  if (inv.expires_at <= new Date().toISOString()) {
+    state.pendingInvitations = state.pendingInvitations.filter((i) => i.id !== id);
+    return fail(410, 'invitation_expired');
+  }
   state.pendingInvitations = state.pendingInvitations.filter((i) => i.id !== id);
   state.notifications = state.notifications.map((n) =>
     n.type === 'invitation_received' ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n,

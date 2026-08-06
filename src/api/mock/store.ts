@@ -518,7 +518,13 @@ function seedNotifications(mesas: MockMesa[]): {
           mesa_id: invitedMesa.id,
           invitation_type: 'in_app',
           status: 'pending',
-          expires_at: iso(24 * 60 * 60_000),
+          // Atada al reloj de SU MESA, no a las 24 h del contrato (auditoría
+          // 2026-08-06): con 24 h acá y la mesa muriendo a los ~26 min, la
+          // tarjeta "Sumarme" sobrevivía HORAS a la mesa — éxito seguido de
+          // "Mesa liquidada". Una invitación de demo no puede prometer más
+          // vida que la mesa que invita. (Si el emisor debería atarlas también
+          // en el riel real es pregunta de contrato, elevada.)
+          expires_at: invitedMesa.expires_at,
           created_at: iso(-8 * 60_000),
           mesa_code: invitedMesa.code,
           restaurant_name: invitedMesa.restaurant.name,
