@@ -6,6 +6,7 @@ import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeader } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
 import { useToast } from '../components/ui';
+import { extractApiError } from '../api/errors';
 import { navigate } from '../router';
 import { relTime } from '../utils/format';
 
@@ -87,8 +88,12 @@ export function AvisosScreen() {
       await api.acceptInvitation(inv.id);
       toast('Te sumaste a la mesa ✓');
       navigate('mesa', inv.mesa_code);
-    } catch {
-      toast('No pudimos aceptar la invitación');
+    } catch (err) {
+      // v2.45.0 · la carrera entre el GET y el toque: la tarjeta vino viva y
+      // la mesa murió en el medio. El 410 tiene copy propia (Diseño) — el
+      // genérico diría "no pudimos" cuando lo que pasó es "ya no hay dónde".
+      const { status } = extractApiError(err);
+      toast(status === 410 ? 'Esta mesa ya cerró.' : 'No pudimos aceptar la invitación');
       load();
     } finally {
       setBusyId(null);
@@ -123,7 +128,16 @@ export function AvisosScreen() {
           <>
             <h2 className="sectlabel">Te invitaron</h2>
             {invitations.map((inv) => (
-              <div key={inv.id} className="inv-card">
+              /**
+               * v2.45.0 · el listado MARCA, no filtra: `mesa_joinable` se lee
+               * DIRECTO — el emisor lo computa con el mismo predicado que
+               * gatea el accept; inferirlo acá sería una segunda expresión de
+               * la regla. La tarjeta de mesa muerta se muestra APAGADA con
+               * "Esta mesa ya cerró" en vez de desaparecer (una invitación
+               * que se esfuma parece bug) y en vez de invitar a un camino
+               * muerto (el momento horrible que la auditoría midió).
+               */
+              <div key={inv.id} className={`inv-card${inv.mesa_joinable === false ? ' inv-card--cerrada' : ''}`}>
                 <div className="inv-head">
                   {/* G-31: genérico a propósito. El contrato no manda la
                       categoría del restaurante, y el `sushi` que había acá
@@ -151,13 +165,21 @@ export function AvisosScreen() {
                     spec: a ancho completo pesaba más que el nombre del
                     restaurante, que es el dato que la persona vino a leer. */}
                 <div className="inv-cta">
-                  <button
-                    className="btn btn-navy btn-fit"
-                    onClick={() => accept(inv)}
-                    disabled={busyId === inv.id}
-                  >
-                    {busyId === inv.id ? 'Sumándote…' : 'Sumarme'}
-                  </button>
+                  {inv.mesa_joinable === false ? (
+                    /* Sin botón: no se ofrece entrar a donde ya no se puede.
+                       El texto dice lo que pasó — copy de Diseño, sin el
+                       bloque de cuenta-lista de la pantalla D: quien mira
+                       Avisos no está en su primer minuto. */
+                    <span className="inv-cerrada-copy">Esta mesa ya cerró</span>
+                  ) : (
+                    <button
+                      className="btn btn-navy btn-fit"
+                      onClick={() => accept(inv)}
+                      disabled={busyId === inv.id}
+                    >
+                      {busyId === inv.id ? 'Sumándote…' : 'Sumarme'}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

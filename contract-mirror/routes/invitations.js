@@ -11,17 +11,30 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { uuidIdParam, validateParams } = require('../schemas');
 const invitationAuthority = require('../services/invitationAuthority');
+const stateMachine = require('../utils/stateMachine');
 const logger = require('../utils/logger');
 
 const router = express.Router();
 router.use(requireAuth);
 
 // ─── GET / (invitations pendientes para el user actual) ───
+// Tercera puerta del gate de admisión (ratificado 2026-08-06): el listado
+// MARCA, no filtra. Una invitación cuya mesa murió sigue apareciendo —
+// desaparecerla parecería un bug y la persona no entendería qué pasó — pero
+// viaja con `mesa_joinable: false` para que el front la muestre apagada
+// ("Esta mesa ya cerró") sin que nadie toque un camino muerto.
+//
+// `mesa_joinable` se computa acá en JS con EL MISMO `mesaViva()` que gatea
+// las dos puertas de entrar — no en SQL, que sería una segunda expresión de
+// la regla desincronizándose sola. `mesa_status` acompaña para el copy. El
+// front lee `mesa_joinable` directo, sin inferir ni reimplementar la regla.
+// Ambos campos son aditivos: un front que los ignora ve lo mismo que ayer.
 router.get('/', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT i.id, i.mesa_id, i.invitation_type, i.status, i.expires_at, i.created_at,
-              m.code AS mesa_code, r.name AS restaurant_name,
+              m.code AS mesa_code, m.status AS mesa_status,
+              r.name AS restaurant_name,
               u.first_name AS inviter_first_name, u.last_name AS inviter_last_name,
               u.payme_id AS inviter_payme_id
          FROM invitations i
@@ -34,7 +47,12 @@ router.get('/', async (req, res, next) => {
         ORDER BY i.created_at DESC`,
       [req.user.id]
     );
-    res.json({ invitations: rows });
+    res.json({
+      invitations: rows.map((row) => ({
+        ...row,
+        mesa_joinable: stateMachine.mesaViva(row.mesa_status),
+      })),
+    });
   } catch (err) { next(err); }
 });
 
@@ -72,6 +90,33 @@ router.post('/:id/accept', validateParams(uuidIdParam), async (req, res, next) =
           [current.id]
         );
         return { httpStatus: 410, error: 'invitation_expired' };
+      }
+
+      // ─── Gate de admisión (ratificado 2026-08-06) ─────────────────────────
+      // La invitación está viva; ahora la MESA tiene que estarlo. Cierra la
+      // ventana crear-viva → aceptar-muerta medida en
+      // docs/VENTANA_INVITACION_MESA_MUERTA_2026-08-06.md.
+      //
+      // Carrera resuelta por el lock que YA tenemos: lockCanonical bloqueó la
+      // fila de la mesa FOR UPDATE (orden mesa → invitación), y settleMesa
+      // toma ese mismo lock en su Fase 1 — la mesa no puede morir entre esta
+      // lectura y el INSERT del participante; muere antes (y acá se ve) o
+      // después del commit (y el participante entró con la mesa viva).
+      //
+      // El gate es sobre ACEPTAR, no sobre ESTAR: cero retroactividad — a
+      // ninguna fila existente de mesa_participants la toca nadie.
+      const { rows: [mesaRow] } = await client.query(
+        `SELECT status FROM mesas WHERE id=$1`, [current.mesa_id]
+      );
+      if (!mesaRow || !stateMachine.mesaViva(mesaRow.status)) {
+        // 410 mesa_not_joinable ≠ 409 mesa_not_invitable (crear) ni 410
+        // invitation_expired: el front necesita copys distintos. La invitación
+        // queda pending y vence sola — la mesa no revive, no hay replay útil.
+        return {
+          httpStatus: 410,
+          error: 'mesa_not_joinable',
+          mesaStatus: mesaRow?.status || null,
+        };
       }
 
       const { rows: accepted } = await client.query(
@@ -115,6 +160,7 @@ router.post('/:id/accept', validateParams(uuidIdParam), async (req, res, next) =
       return res.status(outcome.httpStatus).json({
         error: outcome.error,
         ...(outcome.status && { status: outcome.status }),
+        ...(outcome.mesaStatus && { mesa_status: outcome.mesaStatus }),
       });
     }
 
@@ -227,10 +273,27 @@ router.post('/accept-link', async (req, res, next) => {
       // IGUAL: distinguirlos le diría a un desconocido si una mesa existe.
       if (!link) return { httpStatus: 403, error: 'invitation_link_not_valid' };
 
+      // FOR UPDATE: mismo criterio de carrera que /:id/accept — settleMesa
+      // toma este lock en su Fase 1, así que la mesa no puede morir entre el
+      // gate y el INSERT del participante.
       const { rows: [mesa] } = await client.query(
-        `SELECT id, code FROM mesas WHERE id=$1`, [link.mesa_id]
+        `SELECT id, code, status FROM mesas WHERE id=$1 FOR UPDATE`, [link.mesa_id]
       );
       if (!mesa) return { httpStatus: 403, error: 'invitation_link_not_valid' };
+
+      // ─── Gate de admisión (ratificado 2026-08-06 · decisión C) ────────────
+      // "Una sola regla, aplicada igual en las dos puertas": el MISMO
+      // predicado mesaViva() que /:id/accept. El 410 revela el estado de la
+      // mesa sólo a quien ya probó tener un token VÁLIDO — el 403 uniforme de
+      // arriba sigue cubriendo al desconocido. Cortar la admisión no toca a
+      // quien ya entró por este link: cero retroactividad.
+      if (!stateMachine.mesaViva(mesa.status)) {
+        return {
+          httpStatus: 410,
+          error: 'mesa_not_joinable',
+          mesaStatus: mesa.status,
+        };
+      }
 
       await client.query(
         `INSERT INTO mesa_participants (mesa_id, user_id, role, status)
@@ -246,7 +309,10 @@ router.post('/accept-link', async (req, res, next) => {
     });
 
     if (!outcome.joined) {
-      return res.status(outcome.httpStatus).json({ error: outcome.error });
+      return res.status(outcome.httpStatus).json({
+        error: outcome.error,
+        ...(outcome.mesaStatus && { mesa_status: outcome.mesaStatus }),
+      });
     }
 
     logger.audit('invitation_link_joined', {

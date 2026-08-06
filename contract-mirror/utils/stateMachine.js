@@ -92,6 +92,27 @@ const TRANSITIONS = {
   },
 };
 
+// ─── Vitalidad de la mesa · gate de admisión (ratificado 2026-08-06) ────────
+// Una mesa está VIVA cuando todavía es una mesa operando: se puede estar en
+// ella, pedir y pagar. Deja de estarlo al entrar al cierre (settling y
+// sucesores), al vencer, o al terminar sin abrirse (auth_failed/cancelled).
+// `fully_paid` está VIVA a propósito (decisión B ratificada: pagada entera
+// pero aún no cerrada admite gente — si alguien pide algo más, el que entra
+// ya está adentro). El gate se define por lo que la mesa ES, no por una lista
+// suelta: la clasificación es EXHAUSTIVA sobre TRANSITIONS.mesa y el test
+// tests/invitacion-gate-mesa-viva.test.js la verifica — agregar un estado a
+// la FSM sin clasificarlo acá rompe el build, y un estado desconocido NO es
+// vivo (fail-closed).
+const MESA_ESTADOS_VIVOS = Object.freeze(['open', 'partially_paid', 'fully_paid']);
+const MESA_ESTADOS_NO_VIVOS = Object.freeze([
+  'pending_auth', 'expired', 'settling', 'settled', 'dispersing',
+  'completed', 'auth_failed', 'cancelled', 'dispersed',
+]);
+
+function mesaViva(status) {
+  return MESA_ESTADOS_VIVOS.includes(status);
+}
+
 function canTransition(entityType, from, to) {
   const allowed = TRANSITIONS[entityType]?.[from];
   if (!allowed) return false;
@@ -143,4 +164,7 @@ function mapStripeStatus(stripeStatus) {
   }
 }
 
-module.exports = { TRANSITIONS, canTransition, transition, mapStripeStatus };
+module.exports = {
+  TRANSITIONS, canTransition, transition, mapStripeStatus,
+  MESA_ESTADOS_VIVOS, MESA_ESTADOS_NO_VIVOS, mesaViva,
+};

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { IS_MOCK } from './api';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ToastProvider } from './components/ui';
@@ -86,7 +86,22 @@ function Shell() {
    * `guestOrAuth` en pie con cero call sites: mezclar borrado de código con un
    * cambio de autorización sobre rutas de dinero es cómo se cuelan errores.
    */
-  const linkToken = tokenForMesa(route.param ?? '', route.query.get('t'));
+  /**
+   * UNA decisión por NAVEGACIÓN, no por render (v2.45.0, encontrado por el
+   * e2e de la pantalla D bajo paralelismo): cuando el canje termina en
+   * terminal, la custodia suelta el token de storage y URL — y este cálculo,
+   * re-evaluado en un re-render cualquiera del Shell (la sesión recién
+   * seteada tras el alta, por ejemplo), pasaba a `null` y REEMPLAZABA a
+   * `JoinMesaScreen` —con su pantalla de rechazo montada— por `MesaScreen`.
+   * La persona veía "Mesa liquidada" en vez de "Esta mesa ya cerró": la
+   * pantalla equivocada, elegida por una carrera. Afectaba igual a los
+   * terminales viejos (403/400). El memo fija la decisión mientras la
+   * navegación sea la misma; `route` sólo cambia con hashchange.
+   */
+  const linkToken = useMemo(
+    () => tokenForMesa(route.param ?? '', route.query.get('t')),
+    [route],
+  );
   if (route.page === 'mesa' && route.param && linkToken) {
     return <JoinMesaScreen key={route.param} code={route.param} token={linkToken} />;
   }

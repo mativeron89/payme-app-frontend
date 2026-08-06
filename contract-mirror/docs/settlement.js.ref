@@ -42,6 +42,9 @@ const stp = require('./stp');
 const connect = require('./connect');   // v2.24: onboarding y ruteo de webhook
 // ORDEN OLA 4 · 4B: el gate TIPADO de 4A gobierna todo camino que mueva plata.
 const connectGate = require('./connectGate');
+// El gate de 4B decide sobre riel NUEVO. Las filas que YA existen con cuenta
+// ausente no se deciden: se contienen.
+const legacyQuarantine = require('./legacyPlatformQuarantine');
 const stateMachine = require('../utils/stateMachine');
 const notifs = require('./notifications');
 const { centsToDisplay, calculateFee, prorateCents, sumCents } = require('../utils/money');
@@ -727,6 +730,26 @@ async function placeCardHold({
     logger.error('guarantee_connect_target_failed', { mesa_id: mesaId, error: e.message });
     return { status: 'reconciliation_pending', reason: 'connect_target_unavailable' };
   }
+  // ── CUARENTENA · C2 · antes del clon y del create ─────────────────────────
+  // `decideCardGuaranteeRail` ya no puede SELLAR una decisión nueva sin cuenta
+  // (4B), pero `readDurableCardDecision` devuelve tal cual la decisión durable
+  // de una mesa histórica: `accountId: null`. Ese null llegaba hasta
+  // `createPaymentIntent` sin `stripe_account` y creaba un hold de PLATAFORMA,
+  // por retry o por `sweepPreparedGuarantees`.
+  try {
+    await legacyQuarantine.assertGuaranteeNotLegacyPlatformById({
+      mesaId, provenance: legacyQuarantine.PROCEDENCIAS.HOLD,
+      amountAtRiskCents: amountCents,
+    });
+  } catch (err) {
+    if (err instanceof legacyQuarantine.LegacyPlatformQuarantineError) {
+      // La mesa NO se termina: su obligación existe y la decide Mati. Queda
+      // como está, contenida y listada, sin hold nuevo.
+      return { status: 'reconciliation_pending', reason: err.code };
+    }
+    throw err;
+  }
+
   const targetAccount = decision.accountId || null;
   const holdAppFee = Number(decision.applicationFeeCents || 0);
   const durableSourcePmId = decision.sourcePaymentMethodId;
@@ -960,6 +983,16 @@ async function sweepPreparedGuarantees({ limit = SETTLE_BATCH, mesaId = null } =
              OR auth_charge_card_verified_at IS NOT NULL)
         AND created_at < NOW() - INTERVAL '2 minutes'
         AND ($2::uuid IS NULL OR id=$2)
+        -- Una mesa ya contenida por este mismo consumidor no se vuelve a elegir:
+        -- el bloqueo la frenaría igual, pero el sweep giraría en falso cada ~2
+        -- min. NO es un permiso: placeCardHold revalida por su cuenta, así que
+        -- borrar esta línea no habilita ningún cobro (mutante M-Q6).
+        AND NOT EXISTS (
+              SELECT 1 FROM legacy_platform_binding_quarantine q
+               WHERE q.mesa_id = mesas.id
+                 AND q.provenance = 'guarantee_hold'
+                 AND q.status = 'quarantined'
+            )
       ORDER BY created_at ASC, id ASC
       LIMIT $1`,
     [safeLimit, mesaId]
@@ -1152,6 +1185,23 @@ async function reconcileGuaranteeReplay({
       || !Number.isSafeInteger(Number(applicationFeeCents))
       || Number(applicationFeeCents) < 0) {
     return { resolved: false, reason: 'guarantee_snapshot_incomplete' };
+  }
+
+  // ── CUARENTENA · C3 · antes del retrieve ───────────────────────────────────
+  // Acá `retrieveIntent` no mueve plata, pero el `client_secret` que esta
+  // función devuelve en `requires_action` le entrega al navegador del comensal
+  // la capacidad de CONFIRMAR un PaymentIntent de plataforma. Es lectura en el
+  // SDK y cobro en el efecto, así que se frena en la misma dirección.
+  try {
+    await legacyQuarantine.assertGuaranteeNotLegacyPlatformById({
+      mesaId, provenance: legacyQuarantine.PROCEDENCIAS.REPLAY,
+      amountAtRiskCents: amountCents,
+    });
+  } catch (err) {
+    if (err instanceof legacyQuarantine.LegacyPlatformQuarantineError) {
+      return { resolved: false, reason: err.code, quarantined: true };
+    }
+    throw err;
   }
 
   let intent;
@@ -1577,6 +1627,43 @@ async function settleMesa(mesaId) {
     // la liberación fallaría en silencio, dejando el hold del comensal vivo
     // hasta que venza a los ~7 días.
     const authAcct = m.auth_stripe_account_id || null;
+
+    // ── CUARENTENA · C4 · antes del capture, y FUERA del try de abajo ─────────
+    // El gate de 4B corre dentro de `if (authAcct)`: con la cuenta ausente el
+    // código caía derecho al `capturePaymentIntent` y capturaba un hold de
+    // PLATAFORMA. Eso movía plata real por el riel prohibido.
+    //
+    // 🔴 VA FUERA DEL `try` A PROPÓSITO. Ese catch devuelve
+    // `{ error: 'capture_failed' }` y deja la mesa en `settling` para que el
+    // sweep reintente PARA SIEMPRE. Lanzar adentro haría que la cuarentena
+    // fuera indistinguible de un fallo de red y girara en falso cada ~2 min.
+    //
+    // Sólo se frena la dirección COBRO: con `shortfall === 0` la rama de abajo
+    // libera el hold completo y eso se deja pasar. Para una fila legacy el PI
+    // vive de verdad en plataforma, así que `null` le pega al lugar correcto, y
+    // frenar una devolución también sería decidir.
+    //
+    // ⚠️ CONSECUENCIA ECONÓMICA DECLARADA: una mesa legacy con faltante NO
+    // cobra ese faltante. El hold vence solo a los ~7 días en Stripe y el
+    // restaurante no lo cobra. No es un descuido: capturarlo dejaría la plata
+    // en la cuenta de plataforma de PayMe, y el riel para hacérsela llegar al
+    // restaurante era STP, que salió del MVP. Capturar crearía una obligación
+    // nueva sin riel de salida. Se eleva a Mati con la evidencia de la tabla.
+    if (shortfall > 0) {
+      try {
+        await legacyQuarantine.assertGuaranteeNotLegacyPlatform({
+          mesa: m,
+          provenance: legacyQuarantine.PROCEDENCIAS.CAPTURE,
+          amountAtRiskCents: shortfall,
+        });
+      } catch (err) {
+        if (err instanceof legacyQuarantine.LegacyPlatformQuarantineError) {
+          return { error: err.code, quarantined: true, shortfall };
+        }
+        throw err;
+      }
+    }
+
     try {
       if (shortfall > 0) {
         // ── ORDEN OLA 4 · 4B · el gate antes de la CAPTURA ──────────────────
@@ -2833,6 +2920,29 @@ async function recoverPreparedAttemptBinding(attemptId) {
     return { resolved: false, reason: 'attempt_snapshot_incomplete' };
   }
 
+  // ── CUARENTENA · C1 · antes del clon, del create y del UPDATE local ────────
+  // Un attempt con el contrato SELLADO y la cuenta ausente reemitía acá un
+  // PaymentIntent de PLATAFORMA con la key original. Se frena y se anota; no se
+  // reemite, no se cancela y no se toca su plata.
+  //
+  // Va después del chequeo de snapshot a propósito: un attempt SIN
+  // `prepared_at` ya salió por `attempt_snapshot_incomplete` y sigue siendo
+  // transitorio. Contenerlo también frenaría pagos nuevos válidos.
+  try {
+    await legacyQuarantine.assertAttemptNotLegacyPlatform({
+      attempt, provenance: legacyQuarantine.PROCEDENCIAS.RECOVERY,
+    });
+  } catch (err) {
+    if (err instanceof legacyQuarantine.LegacyPlatformQuarantineError) {
+      // El contrato de retorno de esta función es el que el timer ya sabe
+      // manejar: `resolved:false` lo hace `continue` sin llamar a Stripe
+      // (`timer.js:80`). La evidencia dura es la fila de cuarentena y el cero
+      // en el contador del SDK, no este objeto.
+      return { resolved: false, reason: err.code, quarantined: true };
+    }
+    throw err;
+  }
+
   let chargePaymentMethodId = attempt.stripe_charge_payment_method_id || null;
   let chargeCardVerifiedAt = attempt.charge_card_verified_at || null;
   const accountId = attempt.stripe_account_id || null;
@@ -3047,6 +3157,16 @@ async function sweepSettlements() {
            OR status = 'expired'
            OR (status = 'settling' AND updated_at < NOW() - ($1 || ' minutes')::interval)
         )
+        -- Mismo criterio que en sweepPreparedGuarantees: una mesa cuya CAPTURA
+        -- quedó contenida se deja de elegir para no reintentar para siempre. Se
+        -- filtra sólo por la procedencia guarantee_capture: una mesa contenida
+        -- en el hold y sin faltante todavía tiene que poder liquidar y liberar.
+        AND NOT EXISTS (
+              SELECT 1 FROM legacy_platform_binding_quarantine q
+               WHERE q.mesa_id = mesas.id
+                 AND q.provenance = 'guarantee_capture'
+                 AND q.status = 'quarantined'
+            )
       ORDER BY created_at ASC
       LIMIT $2`,
     [String(SETTLING_STALE_MIN), SETTLE_BATCH]

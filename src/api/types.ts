@@ -724,6 +724,17 @@ export interface PendingInvitation {
   inviter_first_name: string;
   inviter_last_name: string;
   inviter_payme_id: string;
+  /**
+   * v2.45.0 (gate de admisión) · el listado MARCA, no filtra: una invitación
+   * cuya mesa murió sigue viniendo, con esto en false, para mostrarla apagada
+   * ("Esta mesa ya cerró") en vez de desaparecerla. Se lee DIRECTO — el
+   * emisor lo computa con el MISMO `mesaViva()` que gatea las dos puertas de
+   * entrar; inferirlo acá sería una segunda expresión de la regla
+   * desincronizándose sola.
+   */
+  mesa_joinable: boolean;
+  /** v2.45.0 · estado VIVO de la mesa, para el copy. */
+  mesa_status: MesaStatus;
 }
 
 export interface PendingInvitationsResponse {

@@ -146,6 +146,10 @@ const MATRIZ: ReadonlyArray<{
 }> = [
   { caso: '400 · el link no tiene forma de link', status: 400, terminal: true, outcome: 'invalid' },
   { caso: '403 · rechazo ciego (los cuatro motivos)', status: 403, terminal: true, outcome: 'rejected' },
+  // v2.45.0 · token GENUINO, mesa muerta. Terminal: la mesa no revive y el
+  // emisor lo dice ("no hay replay útil") — conservar el token sería invitar
+  // a reintentar contra una puerta que no se va a abrir.
+  { caso: '410 · mesa_not_joinable (v2.45.0)', status: 410, terminal: true, outcome: 'mesa_cerrada' },
   { caso: '503 · el emisor no pudo verificar', status: 503, terminal: false, outcome: 'unavailable' },
   { caso: 'red caída / timeout', status: null, terminal: false, outcome: 'error' },
   { caso: '5xx genérico', status: 500, terminal: false, outcome: 'error' },
