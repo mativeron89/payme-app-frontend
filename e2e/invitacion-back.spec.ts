@@ -1,0 +1,195 @@
+import { expect, test } from '@playwright/test';
+import { ingresar, tokenDeLaUrl } from './_app';
+
+/**
+ * ORDEN 5 · recorrido 1 · CIERRA EL ANCLA DE 4B.
+ *
+ * ## Qué quedó sin probar en 4B, exactamente
+ *
+ * La suite de vitest fija que la limpieza usa `replaceState` y nunca
+ * `pushState`, que el hash resultante no trae `t`, y que resolver el token
+ * desde cero después de un terminal da `null`. Lo que **no podía** afirmar,
+ * y quedó escrito como ancla:
+ *
+ *   > qué pasa con entradas de historial **anteriores** a que la pantalla se
+ *   > montara. `replaceState` no las alcanza, y ningún test de esa suite las ve.
+ *
+ * Eso necesita un navegador con historial de verdad. Es esto.
+ *
+ * ## Por qué importa que Back no reviva el token
+ *
+ * El token dejó de ser autorización y es una **credencial**. Si el botón Atrás
+ * recupera una entrada con `?t=`, `useRoute` la parsea y la app vuelve a
+ * custodiar una credencial que ya se había soltado — y en el caso terminal, una
+ * que el emisor **ya declaró inservible**. Queda en la barra de direcciones de
+ * un teléfono que se pasa alrededor de la mesa.
+ *
+ * ## Por qué el token de estos tests es inválido, y no es una limitación
+ *
+ * El 403 es **el** caso del ancla: es cuando la app suelta la credencial. Un
+ * token válido no la suelta hasta después del canje, así que probaría otra cosa.
+ * El canje exitoso está cubierto en `pago-completo.spec.ts`.
+ */
+
+/** 8..200 caracteres: pasa la validación de forma y muere en el 403 del emisor. */
+const TOKEN_MUERTO = 'tok-que-no-existe-en-ninguna-mesa';
+
+test.describe('el token de un link terminal no revive por historial', () => {
+  test('abrir el link directo: la URL queda limpia y Atrás no lo trae de vuelta', async ({ page }) => {
+    await ingresar(page);
+
+    // Se entra por el link, que es como llega la gente: desde WhatsApp.
+    await page.goto(`/#/mesa/PA-9999?t=${TOKEN_MUERTO}`);
+
+    // El 403 ciego. Los cuatro motivos comparten esta pantalla a propósito.
+    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+
+    // ⭐ Lo primero: la credencial muerta salió de la URL.
+    expect(tokenDeLaUrl(page.url())).toBeNull();
+
+    // ⭐ Y lo que vitest no podía ver: apretar Atrás de verdad.
+    await page.goBack();
+    expect(tokenDeLaUrl(page.url())).toBeNull();
+  });
+
+  /**
+   * El caso que el ancla nombraba: **historial previo al montaje**. Acá la
+   * entrada con `?t=` no es la primera —hay una pantalla antes— así que si
+   * `replaceState` no la alcanzara, Atrás la recuperaría.
+   */
+  test('con una pantalla previa, Atrás vuelve a ella y no al link con token', async ({ page }) => {
+    await ingresar(page);
+    await expect(page).toHaveURL(/#\/home|:\d+\/$/);
+
+    // Navegación DENTRO de la app, que es la que crea entrada de historial.
+    await page.evaluate((t) => {
+      window.location.hash = `#/mesa/PA-9999?t=${t}`;
+    }, TOKEN_MUERTO);
+
+    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+    expect(tokenDeLaUrl(page.url())).toBeNull();
+
+    await page.goBack();
+
+    // Volvió a la app, no a una URL con la credencial adentro.
+    expect(tokenDeLaUrl(page.url())).toBeNull();
+    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  });
+
+  /**
+   * Recargar es lo más natural que hace alguien cuando algo no funciona. Si el
+   * token sobreviviera en `sessionStorage` o en la URL, la mesa quedaría
+   * capturada por un link inválido: entrás, canjea solo, falla, y no hay salida.
+   */
+  test('recargar después del terminal no vuelve a intentar con el token', async ({ page }) => {
+    await ingresar(page);
+    await page.goto(`/#/mesa/PA-9999?t=${TOKEN_MUERTO}`);
+    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+
+    await page.reload();
+
+    expect(tokenDeLaUrl(page.url())).toBeNull();
+    // Sin token no hay canje: la app muestra la mesa (que no existe) o el hub,
+    // pero NUNCA vuelve a la pantalla del link. Lo que no puede pasar es que
+    // reaparezca el rechazo, porque eso significaría que reintentó.
+    await expect(page.getByText('Este link ya no funciona')).toHaveCount(0);
+  });
+
+  /**
+   * ⭐⭐ EL TEST QUE DE VERDAD EJERCITA EL ARREGLO DE 4B. Y no estaba.
+   *
+   * ## Cómo me di cuenta
+   *
+   * Revertí el arreglo —saqué el `stripTokenFromUrl()` de la rama terminal— y
+   * **los cuatro tests de arriba siguieron verdes**. O sea que este spec
+   * acreditaba el ancla sin ejercitar el defecto que la motivó.
+   *
+   * ## Por qué se me escapó
+   *
+   * En un navegador de verdad `sessionStorage` **funciona**. Entonces la
+   * custodia cierra en la apertura, la URL se limpia ahí mismo, y cuando llega
+   * el 403 ya no queda nada que limpiar: la línea que 4B agregó nunca corre.
+   *
+   * El defecto vive **sólo** en el estado degradado: storage que acepta la
+   * escritura y no persiste —modo privado, cuota, un WebView con storage
+   * particionado, que es justo donde se abre un link de WhatsApp—. Ahí la URL
+   * es la ÚNICA custodia, `openInvitationCustody` la deja intacta a propósito,
+   * y el terminal es el único que puede soltarla.
+   *
+   * Así que hay que **romper el storage en el navegador**, que es lo que hace
+   * este test. Es el mismo storage amnésico de la suite de vitest, pero adentro
+   * de Chromium y contra la app entera.
+   */
+  test('con storage que no persiste, el terminal SÍ limpia la URL', async ({ page }) => {
+    // Amnésico: acepta el `setItem` sin quejarse y no guarda. Ninguna excepción
+    // lo delata — sólo el round-trip, que es justo lo que la app comprueba.
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'sessionStorage', {
+        configurable: true,
+        get: () => ({
+          getItem: () => null,
+          setItem: () => undefined,
+          removeItem: () => undefined,
+          clear: () => undefined,
+          key: () => null,
+          length: 0,
+        }),
+      });
+    });
+
+    await ingresar(page);
+    await page.goto(`/#/mesa/PA-9999?t=${TOKEN_MUERTO}`);
+    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+
+    // Sin el arreglo de 4B, acá el `?t=` sigue vivo: el storage nunca lo tuvo.
+    expect(tokenDeLaUrl(page.url())).toBeNull();
+
+    await page.goBack();
+    expect(tokenDeLaUrl(page.url())).toBeNull();
+  });
+
+  /**
+   * El complemento del anterior: con el storage roto, la URL es la única
+   * custodia y **no se toca** hasta que el resultado sea terminal. Perder el
+   * token ahí dejaría a la persona registrada y afuera de la mesa a la que la
+   * invitaron — peor que el defecto que el cierre vino a cerrar.
+   */
+  test('con storage que no persiste, la URL conserva el token hasta el canje', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'sessionStorage', {
+        configurable: true,
+        get: () => ({
+          getItem: () => null,
+          setItem: () => undefined,
+          removeItem: () => undefined,
+          clear: () => undefined,
+          key: () => null,
+          length: 0,
+        }),
+      });
+    });
+
+    // Sin sesión: la pantalla del 401, que es el tramo del alta. El canje no
+    // corrió todavía, así que la credencial tiene que seguir donde esté.
+    await page.goto('/#/mesa/PA-0001?t=tok-tiene-que-quedar-en-la-url');
+
+    await expect(page.getByText('Te invitaron a una mesa')).toBeVisible();
+    expect(tokenDeLaUrl(page.url())).toBe('tok-tiene-que-quedar-en-la-url');
+  });
+
+  /**
+   * Y el respaldo tampoco sobrevive. `sessionStorage` es la otra custodia: si
+   * el terminal limpia la URL pero deja la fila, cualquier visita futura a esa
+   * mesa la levanta y vuelve a canjear un token muerto.
+   */
+  test('el respaldo en sessionStorage también queda vacío', async ({ page }) => {
+    await ingresar(page);
+    await page.goto(`/#/mesa/PA-9999?t=${TOKEN_MUERTO}`);
+    await expect(page.getByText('Este link ya no funciona')).toBeVisible();
+
+    const guardado = await page.evaluate(() =>
+      window.sessionStorage.getItem('payme_pending_invitation_link'),
+    );
+    expect(guardado).toBeNull();
+  });
+});

@@ -1,16 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { idempotencyKeyFor, rotateIdempotencyKey, shouldRotateOnError } from '../api/idempotency';
+import {
+  acquireMonetaryIntent,
+  completeMonetaryIntent,
+  prepareMonetaryRequest,
+  scopeForActor,
+  shouldRotateOnError,
+  useMoneyActor,
+  type MonetaryIntentHandle,
+} from '../api/idempotency';
 import { extractApiError } from '../api/errors';
 import type { BalanceResponse, Friend } from '../api/types';
 import { Avatar, TopBar, useToast } from '../components/ui';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { stringToCents } from '../utils/money';
+import { createInFlightMutex } from '../utils/inFlight';
 
 /** s-transfer: elegir amigo + monto + concepto → POST /transfers. */
 export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string }) {
   const toast = useToast();
+  const { actor, error: actorError } = useMoneyActor();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
   const [to, setTo] = useState<Friend | null>(null);
@@ -18,6 +28,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
   const [amountStr, setAmountStr] = useState('');
   const [concept, setConcept] = useState('');
   const [busy, setBusy] = useState(false);
+  const transferInFlightRef = useRef(createInFlightMutex());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,8 +62,8 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
     ? friends.filter(
         (f) =>
           f.full_name.toLowerCase().includes(filter.toLowerCase()) ||
-          f.payme_id.toLowerCase().includes(filter.toLowerCase()) ||
-          f.email.toLowerCase().includes(filter.toLowerCase()),
+          // C4 (v2.29): sin `email` en el contrato ni en el criterio.
+          f.payme_id.toLowerCase().includes(filter.toLowerCase()),
       )
     : friends;
 
@@ -61,20 +72,32 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
    * otro). Clave estable por destinatario+monto: si se pierde la respuesta,
    * el reintento cae en el replay del backend en vez de enviar dos veces.
    */
-  const transferScope = `transfer:${to?.payme_id ?? '-'}:${amountCents}:${concept}`;
+  const transferScope = actor
+    ? scopeForActor(actor, `transfer:${to?.payme_id ?? '-'}:${amountCents}:${concept}`)
+    : '';
 
   async function doTransfer() {
     if (!to || amountCents <= 0) return;
+    if (!transferInFlightRef.current.tryEnter()) return;
+    if (!transferScope || !actor) {
+      setError(actorError ? 'No pudimos verificar una identidad segura para esta transferencia.' : 'Preparando una identidad segura para esta transferencia…');
+      transferInFlightRef.current.leave();
+      return;
+    }
     setBusy(true);
     setError(null);
+    let intent: MonetaryIntentHandle | null = null;
     try {
-      const r = await api.createTransfer({
+      intent = await acquireMonetaryIntent(transferScope, 'transfer');
+      const request = {
         amount_cents: amountCents,
         to_payme_id: to.payme_id,
         ...(concept && { concept }),
-        idempotency_key: idempotencyKeyFor(transferScope),
-      });
-      rotateIdempotencyKey(transferScope);
+        idempotency_key: intent.key,
+      };
+      await prepareMonetaryRequest(transferScope, 'transfer', intent, request);
+      const r = await api.createTransfer(request, { recipientUserId: to.id, paymeId: to.payme_id }, intent);
+      await completeMonetaryIntent(transferScope, 'transfer', intent);
       // Si el backend replayó un envío YA hecho, decirlo. Anunciarlo como
       // nuevo hacía creer que se mandó dos veces (o que faltaba mandarlo).
       toast(
@@ -85,7 +108,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
       navigate('cuenta');
     } catch (err) {
       const { code, extra, status } = extractApiError(err);
-      if (shouldRotateOnError(code, status)) rotateIdempotencyKey(transferScope);
+      if (intent && shouldRotateOnError(code, status)) await completeMonetaryIntent(transferScope, 'transfer', intent);
       if (code === 'insufficient_funds') {
         const available = typeof extra.available === 'number' ? extra.available : 0;
         setError(`Saldo insuficiente: tenés ${formatMXN(available)} disponibles.`);
@@ -93,6 +116,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
         setError('No pudimos confirmar la transferencia. Revisá tu saldo antes de reintentar.');
       }
     } finally {
+      transferInFlightRef.current.leave();
       setBusy(false);
     }
   }

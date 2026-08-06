@@ -1,11 +1,10 @@
 /**
  * utils/money.ts — Helpers de dinero en centavos.
  *
- * PROCEDENCIA: réplica EXACTA de `contract-mirror/utils/money.js`
- * (payme-app-backend v2.13, utils/money.js), tipada para TS estricto.
- * Regla dura #5 del CLAUDE.md: si el backend expone utilidades de dinero,
- * se replican EXACTAS. No modificar acá: si hay un problema, es del contrato
- * y va a GAPS.md.
+ * PROCEDENCIA: réplica tipada del `utils/money.js` en App Backend
+ * `e8a3faf2f520b249cbe6001f14ef70230a405695`, mirror 67/67 verificado
+ * byte a byte durante el cierre local del 2026-08-03.
+ * Regla dura #5: la aritmética debe permanecer idéntica entre ambos lados.
  */
 
 export const CURRENCY = 'mxn';
@@ -21,18 +20,18 @@ const MAX_SAFE_CENTS = Number.MAX_SAFE_INTEGER;
 export function stringToCents(input: string | number): number {
   if (typeof input === 'number') {
     if (!Number.isFinite(input)) throw new Error(`Invalid amount: ${input}`);
-    return Math.round(input * 100);
+    return stringToCents(String(input));
   }
   if (typeof input !== 'string') {
     throw new TypeError('stringToCents requires string|number');
   }
-  const clean = input.replace(/[^0-9.\-]/g, '');
-  if (!clean || !/^-?\d+(\.\d{1,2})?$/.test(clean)) {
+  const match = input.match(/^(-)?\$?(\d+)(?:\.(\d{1,2}))?$/);
+  if (!match) {
     throw new Error(`Invalid amount format: ${input}`);
   }
-  const negative = clean.startsWith('-');
-  const abs = negative ? clean.slice(1) : clean;
-  const [intPart, decPart = ''] = abs.split('.');
+  const negative = !!match[1];
+  const intPart = match[2];
+  const decPart = match[3] || '';
   const dec = (decPart + '00').slice(0, 2);
   const totalStr = `${intPart}${dec}`;
   const total = Number(totalStr);
@@ -44,8 +43,12 @@ export function stringToCents(input: string | number): number {
 
 /** 21000 → "210.00" */
 export function centsToString(c: number | bigint): string {
-  if (typeof c === 'bigint') c = Number(c);
+  if (typeof c === 'bigint') {
+    if (c > BigInt(MAX_SAFE_CENTS) || c < -BigInt(MAX_SAFE_CENTS)) throw new Error('cents overflow');
+    c = Number(c);
+  }
   if (typeof c !== 'number') throw new TypeError('centsToString requires number|bigint');
+  if (!Number.isSafeInteger(c)) throw new Error('cents must be a safe integer');
   const neg = c < 0;
   const abs = Math.abs(c);
   const major = Math.floor(abs / 100);
@@ -62,18 +65,48 @@ export function centsToDisplay(c: number | bigint): string {
 export function sumCents(...values: Array<number | bigint | string>): number {
   let total = 0;
   for (const v of values) {
+    if (typeof v === 'bigint' && (v > BigInt(MAX_SAFE_CENTS) || v < -BigInt(MAX_SAFE_CENTS))) {
+      throw new Error(`Invalid cents in sum: ${v}`);
+    }
     const n = typeof v === 'bigint' ? Number(v) : Number(v || 0);
-    if (!Number.isFinite(n)) throw new Error(`Invalid amount in sum: ${v}`);
+    if (!Number.isSafeInteger(n)) throw new Error(`Invalid cents in sum: ${v}`);
     total += n;
+    if (!Number.isSafeInteger(total)) throw new Error('Cents sum overflow');
   }
   return total;
 }
 
 /** Fee en centavos. fee_pct entre 0 y 1 (0.02 = 2%). */
 export function calculateFee(grossCents: number, feePct: number): number {
+  if (!Number.isSafeInteger(grossCents) || grossCents < 0) throw new Error('gross_cents must be a non-negative safe integer');
   const pct = Number(feePct);
   if (!Number.isFinite(pct) || pct < 0 || pct > 1) throw new Error('fee_pct out of range');
-  return Math.round(Number(grossCents) * pct);
+  const bps = Math.round(pct * 10_000);
+  if (!Number.isSafeInteger(bps) || Math.abs(pct - (bps / 10_000)) > Number.EPSILON * 8) {
+    throw new Error('fee_pct must be representable in bps');
+  }
+  const fee = (BigInt(grossCents) * BigInt(bps) + 5_000n) / 10_000n;
+  if (fee > BigInt(MAX_SAFE_CENTS)) throw new Error('fee overflow');
+  return Number(fee);
+}
+
+/** Prorratea centavos con redondeo half-up y sin multiplicar en Number. */
+export function prorateCents(totalCents: number, partCents: number, wholeCents: number): number {
+  for (const [name, value] of [
+    ['totalCents', totalCents],
+    ['partCents', partCents],
+    ['wholeCents', wholeCents],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`${name} must be a non-negative safe integer`);
+    }
+  }
+  if (wholeCents === 0) throw new Error('wholeCents must be greater than zero');
+  if (partCents > wholeCents) throw new Error('partCents cannot exceed wholeCents');
+  const denominator = BigInt(wholeCents);
+  const result = ((BigInt(totalCents) * BigInt(partCents)) + (denominator / 2n)) / denominator;
+  if (result > BigInt(MAX_SAFE_CENTS)) throw new Error('prorated cents overflow');
+  return Number(result);
 }
 
 /**
@@ -83,12 +116,15 @@ export function calculateFee(grossCents: number, feePct: number): number {
  * solo la preview del picker de %, con el mismo redondeo.
  */
 export function tipFromBps(totalCents: number, n: number, bps: number): number {
-  if (!Number.isInteger(totalCents) || totalCents < 0)
-    throw new Error('totalCents must be non-negative integer');
-  if (!Number.isInteger(n) || n < 1) throw new Error('n must be positive integer');
-  if (!Number.isInteger(bps) || bps < 0 || bps > 10000)
+  if (!Number.isSafeInteger(totalCents) || totalCents < 0)
+    throw new Error('totalCents must be non-negative safe integer');
+  if (!Number.isSafeInteger(n) || n < 1) throw new Error('n must be positive safe integer');
+  if (!Number.isSafeInteger(bps) || bps < 0 || bps > 10000)
     throw new Error('bps out of range (0-10000)');
-  return Math.round((totalCents * bps) / (n * 10000));
+  const denominator = BigInt(n) * 10_000n;
+  const tip = (BigInt(totalCents) * BigInt(bps) + (denominator / 2n)) / denominator;
+  if (tip > BigInt(MAX_SAFE_CENTS)) throw new Error('tip overflow');
+  return Number(tip);
 }
 
 /**
@@ -107,9 +143,9 @@ export function fractionAmount(priceCents: number, fractionBps: number): number 
  * El primer comensal absorbe los centavos sobrantes.
  */
 export function splitEqual(totalCents: number, n: number): number[] {
-  if (!Number.isInteger(n) || n < 1) throw new Error('n must be positive integer');
-  if (!Number.isInteger(totalCents) || totalCents < 0)
-    throw new Error('totalCents must be non-negative integer');
+  if (!Number.isSafeInteger(n) || n < 1) throw new Error('n must be positive safe integer');
+  if (!Number.isSafeInteger(totalCents) || totalCents < 0)
+    throw new Error('totalCents must be non-negative safe integer');
   const base = Math.floor(totalCents / n);
   const remainder = totalCents - base * n;
   const parts: number[] = new Array(n).fill(base);

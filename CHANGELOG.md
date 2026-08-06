@@ -1,5 +1,1129 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.50.1 — el borde de página subcontaba una mesa; carga completa antes de agrupar (2026-08-05)
+
+Corrección sobre 0.50.0, por límite marcado por el Bibliotecario-Auditor: la
+"paginación honesta" heredada de `PagosScreen` **acá no era honesta**. `Pagos`
+lista renglones y una página parcial sólo muestra menos renglones; Historial
+**SUMA por mesa**, así que una mesa cuyos renglones quedaron partidos entre
+dos páginas mostraba un total propio **subcontado como si fuera el real** —
+plata pagada que la pantalla no contaba. Y con orden por fecha DESC no alcanza
+con descartar la última mesa del borde: cualquier mesa cercana puede tener
+renglones en la página siguiente.
+
+- `traerHistorialCompleto` (`historialView.ts`) pagina con `limit` 100 hasta
+  la página corta **antes** de agrupar. Muere "Cargar más".
+- **O está todo, o es error**: una falla a mitad de carga propaga al estado de
+  error con Reintentar — totales parciales serían el mismo defecto con otra
+  cara. Backstop anti-loop (50 páginas llenas → error explícito, no cuelgue).
+- Cinco tests nuevos, incluido el de la mesa partida entre dos páginas que
+  suma completa.
+
+**548 vitest · 67 e2e** · typecheck · builds real y mock · re-verificado en
+navegador contra el mock a 375px.
+
+## 0.50.0 — §1.10 · Mesas ES el historial, y la mesa viva deja de repetirse (2026-08-05)
+
+Última pantalla del rediseño. La entrada "Mesas" de la barra deja de mezclar
+"Abiertas ahora" con una lista de pagadas: **es el historial de mesas
+cerradas**, con el título "Historial" en píldora `--teal-l` angosta (la barra
+sigue diciendo "Mesas" por espacio). Primer nivel de verdad: cabecera navy con
+logo, barra de cinco con "Mesas" activa, y muere el `.fab` flotante de la
+pantalla vieja.
+
+- **La mesa abierta no se repite acá — y era un defecto vivo, no cosmética.**
+  El organizador que pagaba su parte veía su mesa DOS veces: en Inicio como
+  abierta y acá abajo de un encabezado de mes, como si hubiera terminado.
+  Recién se pudo arreglar con `mesa_status` (v2.42.0); qué cuenta como
+  "abierta" **lo dice el contrato, no un criterio propio**: `open |
+  partially_paid`, la misma lista que filtra `GET /mesas/open`
+  (`historialView.ts` la espeja con test que lo declara). Con G-28 cerrado el
+  invitado ya ve su mesa viva en Inicio, así que excluirla de acá no deja a
+  nadie sin nada — la secuencia que ordenó el Bibliotecario.
+- **Lista agrupada por mes local** (encabezado pegajoso, misma decisión
+  argumentada en `pagosView.ts`), fila con restaurante · fecha + **franja
+  horaria** · lo que pagaste vos en tabular · chevron. La franja se calcula en
+  el front del timestamp completo —cero gap de contrato— con cortes decididos
+  acá: 6–12 · 12–16 · 16–20 · 20–6. Cuatro glifos nuevos en el set propio
+  (`sun-rise`, `sun-high`, `sun-low`, `moon`), verificados renderizados a
+  14px: lo que importa es que se distingan ENTRE SÍ, y el ícono acompaña
+  siempre a la palabra.
+- **El acordeón NO muestra ítems, a propósito.** G-33 sigue abierta —el
+  contrato no tiene detalle de mesa cerrada; el que hoy funciona lo hace por
+  coincidencia— así que la fila despliega el estado **desconocido** de
+  `SISTEMA_DISENO.md` §5 (interrogación, punteado, copy honesta), nunca un
+  mock que aparente funcionar. Cuando el dueño del contrato conteste, ese
+  acordeón es el único lugar a tocar.
+- **El mock volvía foto lo que el emisor proyecta vivo.** `mockHistory` servía
+  el `mesa_status` del momento del pago; el emisor lo saca de un `JOIN mesas`
+  al momento de la consulta. Con la foto, la mesa donde pagaste tu parte
+  quedaba `partially_paid` para siempre y el historial la excluía aunque ya
+  hubiera cerrado. Se re-lee la mesa al servir; acreditado con mutante — misma
+  clase de defecto que el `openedByUser` de G-28.
+- Paginación honesta heredada de `PagosScreen`: sin `has_more` en el contrato,
+  "Cargar más" aparece cuando la página vino llena. Error de red con
+  Reintentar (no un vacío que miente), skeleton con silueta, vacío real sin
+  borde: *"Todavía no cerraste ninguna mesa."*
+- El marcador e2e de `#/mesas` pasó del heading "Mesas" (murió con la TopBar)
+  a la píldora "Historial", y `e2e/historial.spec.ts` estrena tres recorridos:
+  el seed por mes sin "Abiertas ahora", el acordeón desconocido, y **la mesa
+  viva con la parte pagada que NO aparece** — este último acreditado matando
+  el filtro.
+
+**543 vitest · 67 e2e** · typecheck · builds real y mock · verificado en
+navegador contra el mock (seed v1) a 375px.
+
+## 0.49.0 — el espejo va a v2.42.0, y G-28 se muere también en el mock (2026-08-05)
+
+Refresh del `contract-mirror` contra el backend **v2.42.0** (`22b84a2`): cinco
+archivos, **70 espejados · 70 idénticos · 0 diferencias**. Los dos cambios de
+contrato son **aditivos**; nada de lo que este front ya consume cambió de forma.
+
+- **G-28 cerrado por el emisor.** `GET /mesas/open` incluye las mesas donde el
+  usuario es **participante activo**, no sólo las que abrió. Mismo shape, más
+  filas: quien se sumaba por un link no tenía forma de reencontrar su mesa y su
+  Inicio decía "No tenés mesas abiertas" **mientras debía plata**, sin error que
+  lo delatara. **El front no necesitó cambiar nada… salvo el mock**, que
+  reproducía el mismo filtro y por lo tanto el mismo defecto. Un mock que miente
+  es peor que no tenerlo. Acreditado con su mutante.
+- **`GET /account/history` trae `mesa_status`**, que entra en `HistoryEntry` con
+  su procedencia. El compilador encontró los cuatro sitios que faltaba tocar.
+  🔴 Queda anotado en el tipo que la granularidad es **un renglón por pago** y
+  que no se pide que el contrato agrupe: esa misma respuesta alimenta
+  `PagosScreen`, superficie card-only ratificada. **Ningún campo se consume en
+  pantalla todavía** — §1.10 y la burbuja de Inicio son trabajo aparte.
+- **El riel wallet del backend se endureció, no se aflojó**: `wallet_rail.
+  enabled` dejó de ser un literal y sale del servicio autoritativo, que eliminó
+  la env var `LEGACY_WALLET_ENABLED`. Ya no existe variable de entorno que
+  reabra la creación de obligaciones nuevas. `account_activity: true` no se
+  movió.
+
+⭐ **El test de paridad del riel encontró que la autoridad se había mudado.**
+Raspaba literales del bloque `WALLET_RAIL` de `config.js`; con `enabled` fuera
+de ahí, habría quedado comparando **un solo campo y pasando en vacío sobre el
+que importa**. Ahora lee las dos fuentes del espejo y además exige que `enabled`
+no haya vuelto a ser literal.
+
+**529 vitest · 64 e2e** · typecheck · builds real y mock.
+
+## 0.48.0 — §1.5 bis · la propina se elige, y el sistema deja de elegirla (2026-08-05)
+
+**El defecto no era que la elección se pudiera saltear: era que ya estaba
+hecha.** La pantalla de pago arrancaba en `useState(15)` con modo `'pct'` y
+volvía a 15 en cada mesa nueva, así que quien nunca tocaba el selector pagaba
+**$31.50 sobre una parte de $210.00** y el payload salía con `tip_bps: 1500`,
+indistinguible de una decisión propia. Es la orden de propina obligatoria del
+acta del 2026-08-05, especificada por Diseño en `SPEC_APP.md` §1.5 bis.
+
+- **La propina nace sin elegir.** `TipChoice` —módulo puro `tipSelectorView`—
+  no puede representar un porcentaje que nadie tocó: el `pct` vive adentro de la
+  variante elegida. El default de 15 ya no se puede reescribir sin inventar un
+  caso nuevo del tipo; **el compilador es parte del arreglo, no sólo el test.**
+- **Antes de elegir se muestra la base sola**, con *"+ propina (elegí abajo)"*.
+  Nunca más un total con un porcentaje adivinado en pantalla.
+- 🔴 **La señal de "falta elegir" vive en el MARCO, no en la píldora**, y ésa es
+  la decisión fina del spec: si viviera en la píldora, el 0 % necesitaría un
+  estado visual propio y quedaría de segunda clase. Elegido, el 0 % se rellena
+  con el **mismo `--action-2`** que 10/15/20. Sin tratamiento especial para
+  "elegí no dejar propina" — es lo que lo hace de primera clase de verdad.
+- **El botón de pagar queda activo, nunca gris.** Un botón muerto se lee como
+  error del sistema, no como "te falta un paso". Tocarlo sin elegir no envía
+  nada: avisa, desliza hasta el selector y el borde pulsa una vez.
+- **Entra el preset de 5 %**, en el mismo commit que saca el default. Antes
+  habría dejado cinco píldoras con una pre-elegida: más superficie para el
+  mismo defecto.
+- **Riel monetario sin mover nada**: el token de la clave de idempotencia sale
+  del mismo payload que viaja (`b<bps>` / `c<centavos>` intactos), el
+  obligatorio no se dispara sobre un pago congelado por B-06 —la propina ya
+  está comprometida en esa clave— y el gate del mesero a `tipCents > 0` se
+  conserva: sin propina no hay a quién atribuirla.
+
+⭐ **Tres cosas que salieron de medirlas, no de deducirlas:**
+
+- **Matar el `useState(15)` solo no reproduce el defecto.** Mutado únicamente el
+  estado inicial, los cinco recorridos siguen verdes: el `useEffect` de
+  identidad corre al montar y lo pisa. **El que manda en el camino de pago es el
+  reset por mesa.** Con los dos mutados mueren dos recorridos, en las
+  afirmaciones correctas.
+- **El fallback del acta no funcionaba con el selector inline.** Un error ahí
+  explota mientras la pantalla arma sus hijos —fuera del subárbol que ve el
+  error boundary— y se lleva el pago entero. Por eso el selector es un
+  componente propio: **acreditado rompiéndolo**, el cobro continúa, sale la nota
+  informativa en `--text-muted` y el comprobante dice propina **$0.00**. Nunca
+  15, que sería el mismo bug disfrazado.
+- **El quinto preset no entraba a 375px**: "Otro" se salía por la derecha. El
+  spec ya lo dibuja en su propia fila.
+
+**528 vitest · 64 e2e** · typecheck · builds real y mock. Verificado en el
+navegador a 375px contra el mock, en los tres estados: sin elegir, 0 % elegido y
+selector caído.
+
+## 0.47.0 — §1.9 · la sección social, y el pedazo del spec que no se puede construir (2026-08-05)
+
+**§1.9 queda cerrada.** Amigos, Grupos y Solicitudes dejaron de ser dos rutas
+con pestañas de pastilla gris: son **tres pestañas en burbuja de una sola
+pantalla** (§5 bis · B, el mismo componente que Inicio).
+
+- **Una pantalla y no tres rutas, por una razón medible:** el badge de
+  Solicitudes tiene que verse desde Amigos y desde Grupos. Con una ruta por
+  pestaña, las tres pantallas tendrían que pedir las solicitudes sólo para
+  pintar un número en una pestaña ajena.
+- **La ruta `grupos` se retira limpia, sin alias**, y se midió antes de
+  decidirlo: su único call site eran las pestañas viejas y **cero
+  `navigate('grupos')` durmientes**. Es el caso de `perfil` (0.46.0), no el de
+  `cuenta`. **El compilador encontró los dos puntos que rompía** —`SocialTabs` y
+  la lista de rutas legítimas del guard—: tercer cobro de derivar la unión de
+  `PAGES` (0.43.0), y ningún `grep`.
+- 🔴 **Solicitudes sale con UNA lista, y la ausencia es deliberada.** El spec
+  pide adentro un selector de pastilla Amigos/Grupos y filas *"Te invitó a
+  {grupo}"*. **No existe en el contrato, y no es un endpoint que falte: es otro
+  modelo de producto.** `friend_groups` tiene `user_id` y `UNIQUE (user_id,
+  name)`; `GET /groups` filtra por `g.user_id`, así que **a quien agregás nunca
+  se le avisa y el grupo no le aparece**; `POST /groups/:id/members` inserta
+  directo con `201 {added:true}`. **Un grupo es una carpeta de contactos tuya.**
+  Un control cuyo segundo lado no puede tener nada nunca es la misma promesa
+  vacía que el spec ya le negó al QR (§1.7), a Cuentas Asociadas (§1.11) y a
+  "Configuración" en `Más`. Va como **G-32**, y es **decisión de producto antes
+  que pedido de contrato**: no lo cierra ningún campo aditivo.
+- **El alta de grupo estrena selección de ícono**, que es lo que §1.9 pide con
+  *"ícono propio, no uno repetido"*. El contrato ya aceptaba `icon` opcional y
+  la fachada ya lo pasaba: **faltaba sólo la superficie**, así que todo grupo
+  nacía con el default del backend y la lista entera se veía igual. El "gap"
+  era de UI, no de contrato — y se parecía tanto a uno que valía verificarlo.
+- **Listado alfabético** con `localeCompare('es')`, que ordena bien los acentos.
+- ⭐ **El bug del CTA tapado cambió de forma, así que cambió de assert.** El
+  `.action-bar` que medía el test viejo **ya no existe** —lo reemplazó el tile,
+  que vive arriba de todo—, y adaptarlo habría sido afirmar sobre un elemento
+  retirado: verde y vacío. El modo de falla se mudó a **la última fila del
+  listado**, así que ahora se afirma el **mecanismo**: el `padding-bottom` real
+  contra el alto real de la barra. **Acreditado con su mutante** —un
+  `style={{ padding: 12 }}` inline, shorthand que pisa el longhand—, que lo tira
+  y sólo a él.
+- **El identificador sube de 11px a `--fs-sm`** (14px), en commit propio: era
+  información por debajo del piso del sistema, y `.fr-name .id` lo usan también
+  `InviteFriends` y `TransferScreen`. Mezclarlo habría escondido su alcance
+  real adentro de un commit de otra cosa.
+- El conteo del badge **entra al nombre accesible** de la pestaña a propósito:
+  quien no ve el círculo naranja igual necesita enterarse. Queda anotado en el
+  componente, porque vuelve inservible buscar esa pestaña con `exact: true`.
+
+**517 vitest · 63 e2e** · typecheck · builds real y mock. Uno menos de vitest: el
+guard de rutas itera la lista y perdió `grupos`. Verificado en mock a 375px —las
+tres pestañas y el detalle de grupo—, consola limpia.
+
+## 0.46.0 — §1.9 · `Más` es una pantalla de verdad (2026-08-05)
+
+La quinta posición de la barra dejó de apuntar a Perfil "provisoriamente".
+
+- **`Más` ES Perfil, no la contiene** (Diseño, 2026-08-05, sobre tres preguntas
+  que este repo dejó abiertas). Un menú con una sola fila útil agrega fricción
+  sin agregar nada, y **"configuración" no entra**: cero spec, cero pantalla,
+  cero contrato detrás — el mismo tratamiento que el QR de Compartir y Cuentas
+  Asociadas. **No hubo pantalla nueva que inventar.**
+- **La ruta se renombra limpia, sin alias**, y eso se verificó antes: `perfil`
+  **no tenía un solo `navigate('perfil')` durmiente**. Es lo contrario de
+  `cuenta`, que conserva su `case` porque sí los tiene — **dos rutas retiradas
+  en el mismo turno, dos tratamientos, y la diferencia es medible.**
+- **Amigos y Grupos salen de la pantalla.** No es recorte: las dos son
+  **posiciones de la barra**, así que esas filas eran **un segundo camino al
+  mismo lugar** — navegación que hay que mantener coherente en dos lados y que
+  se desincroniza sola. **"Mis tarjetas" se queda**: es el único acceso a
+  gestión de tarjetas, card-only ratificado, y la barra no tiene posición para
+  ella.
+- El destino de la posición y la ruta de la pantalla van en el **mismo commit**:
+  mientras el destino decía `perfil`, tocar Más llegaba igual a algo, así que un
+  test de "llega a una pantalla" no distinguiría el antes del después.
+- ⚠️ **El test de ausencia falló en su primera versión por la razón que
+  justifica el cambio**: buscaba cero botones "Amigos" y encontró el de la
+  barra. Que la fila y la posición choquen en el mismo selector **es** el
+  duplicado que se sacó, visto dos veces.
+- El renombre dejó que **el compilador** encontrara los cinco call sites en vez
+  de buscarlos con `grep` — segundo cobro de derivar la unión del array (0.43.0).
+
+**518 vitest · 63 e2e** · typecheck · builds real y mock.
+
+## 0.45.0 — §1.9 · paso 6 · se retira la Cuenta vieja (2026-08-05)
+
+**La pantalla se va; la ruta se queda.** Es la parte de §1.9 que quedó separable
+del bloque social, y la única que toca superficie del riel de saldo.
+
+- **`CuentaScreen` sale del árbol.** Su mitad card-only ya vivía en las dos
+  pantallas de primer nivel que estrenó §1.11 —`#/tarjetas` y `#/pagos`—, y su
+  otra mitad era riel saldo apagado.
+- 🔴 **`case 'cuenta'` SOBREVIVE** apuntando a `TarjetasScreen`. Verificado
+  contra el árbol: quedan **ocho `navigate('cuenta')` durmientes** —riel saldo,
+  preservados por ratificación— y **sin `case` cualquiera dejaría la app en
+  blanco**. Se descartó sacar `'cuenta'` de la unión de páginas —haría fallar el
+  compilador, que sería mejor— porque su precio es editar ocho call sites
+  durmientes: **la ratificación pesa más que la elegancia del compilador.**
+- **Los dos gates no se reubican: se acredita que la superficie ya no existe.**
+  `accountRailView` **conserva sus cinco campos** —un campo durmiente no se borra
+  porque su consumidor se haya ido— y lo que se prueba es que **ningún archivo
+  vivo lee `showWalletMovements`**, con barrido de fuente y control positivo.
+- ⭐ **El recorrido que impide repetir `07f0ba2` no se aflojó: se mudó.** Vivía
+  sobre `#/cuenta`, donde las dos superficies convivían en pestañas. Ahora se
+  afirman **donde viven**, una ruta cada una, con el barrido de vocabulario
+  wallet corriendo sobre las dos por separado. **Queda más fuerte que antes.**
+- **Tres mutantes, tres capas distintas:** sacar el `case` lo mata **el
+  compilador** —el `never` de 0.43.0 cobrando—; apuntarlo a otra pantalla deja
+  **typecheck verde y e2e rojo**; agregar un consumidor vivo del gate lo tira.
+- El recorrido de Cuenta en la barra **se retira en vez de adaptarse**: afirmar
+  sobre una pantalla que ya no existe es verde y vacío.
+- `rutas-montan-pantalla` estrena el tipo **`alias`**: dos páginas
+  indistinguibles por su render **se declaran**, no se tapan con un marcador
+  débil. Afirma que se ve la pantalla aliasada **y que la URL no cambió** —un
+  redirect pasaría la primera, y dejaría la ruta vieja fuera del `case`.
+
+**Queda de §1.9** el bloque social: Amigos + Grupos + Solicitudes en una pantalla
+con tres pestañas. **`Más` está bloqueada**: el spec la nombra tres veces y no la
+diseña ninguna, y "configuración" no existe. **518 vitest · 61 e2e** · typecheck
+· builds real y mock. JS real 350.30 → 342.88 kB.
+
+## 0.44.0 — §1.9 · pasos 2 y 3 · una sola barra en toda la app (2026-08-05)
+
+La sección social **no** se rehizo todavía: eso es el bloque irreducible de §1.9
+y va con su propia orden. Esto es el corte que lo vuelve seguro.
+
+- **La fila de tarjetas de Perfil iba a la Cuenta vieja.** Era el **único
+  `navigate('cuenta')` vivo** del repo; los otros ocho son declaraciones o riel
+  saldo durmiente y **no se tocan**. Ahora va a `#/tarjetas`. **Ninguna prueba
+  tocaba Perfil**, así que estrena `e2e/perfil-accesos.spec.ts`.
+- **Las cuatro pantallas que quedaban —Perfil, Amigos, Grupos y Cuenta— montan
+  `AppBottomBar`**, y con la última **`showNav` y `BottomNav` desaparecen**.
+  `App` vuelve a montar sólo la pantalla: qué barra lleva cada una es decisión de
+  la pantalla, porque el círculo central cambia según dónde estás.
+- **Cada conversión es atómica**: montar la barra nueva **y** salir de `showNav`
+  en el mismo commit. La mitad de eso deja **las dos barras conviviendo**, y esa
+  falla no da error — da una pantalla que se ve mal.
+- **Las posiciones dicen la verdad**: Amigos en Amigos **y en Grupos** —viven en
+  la misma sección, criterio que ya usaba `BottomNav`—, Más en Perfil, y
+  **ninguna en Cuenta**, que §1.11 fusionó adentro de las pestañas de Inicio.
+  Encender una "para que no quede vacía" lo dice el recorrido.
+- 🔴 **Volvía el bug del CTA tapado.** `.action-bar` no es fijo y la barra sí:
+  sin aire por debajo, la barra se le monta encima a "+ Agregar amigo" — el
+  reporte del hermano de Mati del 2026-07-24, en el mismo botón. Entra
+  `.has-appbar .action-bar`, gemelo del que ya existía. **Se mide con cajas y no
+  con `toBeVisible()`**: un elemento tapado por otro sigue siendo "visible" para
+  Playwright.
+- **Las dos barras llevaban el mismo landmark**, así que contarlo dice
+  directamente si hay dos. Es mejor que cualquier proxy: no depende de qué
+  posición tenga cada una ni de una clase de CSS.
+- Un detalle que no se ve en el diff y sí en el teléfono: el
+  `style={{ padding: N }}` inline del `.scroll` **pisa** el `padding-bottom` de
+  `.has-appbar .scroll` —shorthand inline contra longhand de clase— y deja la
+  última fila debajo de la barra. Va en longhands en las cuatro.
+- **`BottomNav.tsx` y sus estilos salen del árbol**, acreditado en el bundle
+  construido: `bottom-nav`, `nav-item` y `has-nav` dan **cero** en el CSS de
+  salida, con `appbar-block` de control positivo. **`.fab` y `.cta-float` NO se
+  van** —el comentario del sistema los daba por condenados junto con
+  `.bottom-nav` y era cierto para uno solo—: siguen vivos en Mesas y en los dos
+  flujos de mesa.
+
+**Queda de §1.9** el bloque grande: la sección social unificada con sus tres
+pestañas, `Más`, y la demolición de `CuentaScreen`. **517 vitest · 61 e2e**
+(venían 52) · typecheck · builds real y mock.
+
+## 0.43.0 — El ruteo deja de fallar en silencio, y §1.7 deja de mentir (2026-08-05)
+
+Los dos preparativos de §1.9, antes de tocar la sección social. Ninguno de los
+dos cambia lo que la app hace; los dos cambian lo que la app puede romper.
+
+- **El switch de `src/App.tsx` no tenía `default`**, así que una ruta declarada
+  sin `case` **no montaba nada: pantalla en blanco, sin error y sin test rojo**.
+  Ahora el `default` asigna la ruta a un `never`, y olvidarse de un `case`
+  **rompe el build** — no es un test que haya que acordarse de correr.
+- **`PageId` se DERIVA de `PAGES`.** Eran dos listas —la unión de tipos y el
+  `Set` que valida el hash— que decían lo mismo sin que nada las obligara a
+  coincidir. Y el `page as PageId` de `parseHash` es un cast **sin chequeo**
+  (`ReadonlySet<string>.has()` no narrowea), así que una página en el `Set` y no
+  en la unión llegaba al switch sin `case` **invisible para el compilador**.
+  Derivar vuelve esa deriva **imposible de escribir**, no detectable.
+- **`e2e/rutas-montan-pantalla.spec.ts`** itera el array del router y afirma que
+  cada ruta monta **la suya**. Iterar el array —y no una lista propia— significa
+  que una página nueva entra sola al recorrido. **Cada ruta afirma dos cosas: que
+  se ve su marcador y que NO se ve el de Inicio**, porque con el `default`
+  devolviendo Inicio un test de "renderiza algo no vacío" pasaría con el `case`
+  borrado.
+- Tres mediciones que corrigen supuestos: el `default` de runtime **es
+  inalcanzable hoy, y lo es *porque* existen los dos cambios de arriba** — antes
+  estaba vivo; **`noUnusedLocals` ya mataba** el mutante "el `case` monta otra
+  pantalla", así que el mutante que acredita el e2e es el del `param`
+  (typecheck verde, e2e rojo); y **`tsconfig` sólo incluye `src`**, así que un
+  tipo dentro de `e2e/` no es un guard sino ayuda de editor.
+- **§1.7 · "Volver" pasa a "Ver mesa"** y se retira "Paso 5 de 5" (corrección de
+  Diseño). El destino ya era el correcto —volver a División abriría una segunda
+  mesa con un segundo hold, B-06— y lo que mentía era el nombre: *un control que
+  dice "Volver" y no retrocede es una etiqueta que miente*. De paso recupera el
+  CTA explícito "todavía te falta elegir lo tuyo", **sin agregar un segundo
+  botón**: es el mismo control.
+- **El ícono hubo que dibujarlo.** El spec pide `ti-tools-kitchen-2` y aclara que
+  es "el mismo que usa la categoría de restaurante"; en este repo ése es
+  `dining`, dos círculos concéntricos, y **a 20px se lee como una diana**.
+  Segunda vez que el set falla a tamaño chico —§1.8 ya lo había medido a 26px—,
+  así que se dibujó el glifo que el spec nombra, en el set propio y sin
+  dependencias. **Pendiente de confirmación de Diseño.**
+- Una ausencia nueva afirmada: el contador de paso de §1.7, acreditada
+  devolviéndolo. Y el que clickeaba "Volver" ahí no era `compartir.spec.ts` sino
+  **`pago-completo.spec.ts`**, el camino de pago entero.
+
+**517 vitest · 52 e2e** (venían 36) · typecheck · builds real y mock.
+
+## 0.42.0 — ORDEN VISUAL · Compartir, la última de prioridad alta (2026-08-05)
+
+**`SPEC_APP.md` §1.7 aplicada**, con el spec ya reescrito por Diseño: los dos
+bloqueos que la habían frenado se resolvieron **achicando**, no inventando.
+
+- **La pantalla existe como tal por primera vez**: cabecera de flujo con "Paso 5
+  de 5", tarjeta de título `--teal-l` —*"¡Mesa garantizada!"*— y el **código como
+  protagonista**, en mono y grande, que se toca para copiar. Era una `TopBar`
+  genérica con el link suelto en un recuadro punteado.
+- **"Compartir por WhatsApp" con el color correcto: `#075E54`.** El `#25D366`
+  que tenía da **1.98:1** con texto blanco y reprueba AA de punta a punta; sobre
+  este teal el blanco da 7.67:1.
+- **Lo que la pantalla NO tiene, y no por olvido.** El **QR** queda afuera —no
+  deshabilitado, no "próximamente"—: no hay generador en el repo y Stripe.js es
+  la única dependencia pre-autorizada. La pestaña **"Ya se sumaron"** se cae
+  (G-30), y con ella el componente de pestañas en burbuja: una sola sección no
+  es un selector. Y **"Invitar a todos" desaparece** — el spec manda acordeón
+  con un botón por integrante, porque es un atajo para encontrar gente y no un
+  envío masivo.
+- **Las ausencias se afirman**: `e2e/compartir.spec.ts` cubre las tres más el
+  link de WhatsApp. Una ausencia no la rompe nadie por accidente — la rompe
+  alguien que "completa" la pantalla de buena fe. Acreditadas mutando: devolver
+  "Invitar a todos", agregar un "Código QR" y sacarle el link al mensaje tiran
+  tres, y sólo esas tres.
+- **"Volver" no lleva a División**, y es lo único del spec que no se aplica
+  literal: la mesa YA existe y la garantía YA está autorizada, así que volver a
+  dividir cambiaría la clave y abriría una segunda mesa con un segundo hold
+  (B-06). Lleva a la mesa.
+- **`--fs-lg` no existe** — la escala declara seis tamaños y dice que no hay un
+  séptimo. El código va en `--fs-h1`, el más cercano hacia arriba.
+- Dos cosas de mirar a 375px: el **círculo de la barra reducida quedaba hundido**
+  (el `min-height` de la posición sobra donde no hay etiqueta), y **"O invitá a
+  un grupo" quedaba pegado** al card de contactos porque el reset de margen del
+  `<h2>` de §1.8 estaba declarado después y ganaba por orden.
+
+**Con esto, las diez pantallas de prioridad 1 y 2 del spec están aplicadas.**
+Quedan §1.9 —que retira `CuentaScreen` y `BottomNav`— y §1.10 Historial.
+
+## 0.41.0 — ORDEN VISUAL · Avisos pasa a primer nivel (2026-08-05)
+
+**`SPEC_APP.md` §1.8 aplicada.** El cambio de fondo **no es cosmético: es
+navegación** — la pantalla pierde la flecha de volver.
+
+- **Cabecera de primer nivel**: logo + `payme_id` + campana en `--brand` sin
+  badge. La regla de §5 bis · A es dura —*"si una pantalla tiene el logo arriba,
+  es de primer nivel; no puede tener flecha de volver"*— y su precio es que la
+  **única salida deliberada pasa a ser la barra inferior**, que §1.8 nombra
+  explícitamente como la forma de salir.
+- **La campana no es un botón.** No hace nada: ya estás adentro. Va como
+  `role="img"` con nombre accesible, y —sin tarjeta de título— ese nombre es lo
+  único que dice de qué pantalla se trata. Naranja porque el badge cuenta lo que
+  no viste y acá lo estás viendo. **No es una quinta excepción de la lista
+  cerrada**: es la misma ranura sobre la banda navy a la que el sistema ya le
+  concede `--brand` para el badge, y que ya convive con el círculo de la barra
+  en toda pantalla de primer nivel. Mide 5.82:1 sobre navy.
+- **Cuatro recorridos nuevos de Playwright, y existen por esto**: ningún test
+  tocaba Avisos, así que sacar el `AppHeaderBack` no rompía nada que la suite
+  pudiera ver, y si la salida por la barra falla la persona queda encerrada.
+  Cubren entrada por la campana, ausencia de "Volver", salida por la barra,
+  Atrás del navegador y el canje. Acreditados mutando: sacar `bellHere` y
+  devolver el copy a "Aceptar" tiran dos, y sólo esos dos.
+- **"Marcar leídos" baja del encabezado** a su propia fila, que existe aunque no
+  haya nada sin leer: si apareciera y desapareciera, la lista saltaría justo
+  cuando la persona termina de marcar.
+- **La tarjeta de invitación** deja de ser `card` blanca — `--teal-l` con borde
+  `--action-2`, que es lo que le da jerarquía y no el color del botón—, va en
+  **dos líneas** y su botón dice **"Sumarme"**, el mismo verbo de §1.2. El punto
+  de no leído pasa a `--action` navy. Los rótulos de sección pasan a `<h2>`:
+  sin tarjeta de título la pantalla no tenía ningún encabezado.
+- **El ícono por categoría del restaurante no se puede: G-31.**
+  `GET /invitations` manda el nombre y ni `category` ni el id. Queda `store`,
+  genérico. Lo que había era un **`sushi` hardcodeado** — no un genérico, sino
+  decir que el restaurante es japonés sin que nadie lo dijera.
+- **Un defecto que estaba en siete pantallas**, encontrado forzando el vacío de
+  Avisos: el ícono del estado vacío quedaba pegado a la izquierda con la frase
+  centrada debajo. `.empty` centra con `text-align`, que sólo alcanza al
+  contenido en línea, y adentro va un `<svg>` desde hace rato.
+
+## 0.40.0 — ORDEN VISUAL · Escanear, y §1.7 frenada con dos motivos (2026-08-05)
+
+**`SPEC_APP.md` §1.6 aplicada entera y verificada.** §1.7 Compartir **no entra**:
+está frenada por dos cosas que no se deciden desde este repo, detalladas abajo.
+
+- **Escanear deja de ser una pantalla navy entera.** Se probó así —la idea era
+  reforzar la metáfora de cámara— y Mati la rechazó: esqueleto estándar,
+  cabecera navy curva de dos filas, tarjeta de título `--teal-l` y fondo claro,
+  igual que Ticket y División. El marco oscuro pasa de ser **el fondo** a ser
+  **una tarjeta flotante** con la sombra de la tarjeta montada. Estrena
+  `Paso 1 de 5`: era el único paso del flujo sin contador.
+- **La barra de cinco posiciones, con cámara y "Capturar" en el círculo.** El
+  texto del nav item no es fijo en toda la app; lo fijo es el componente y su
+  posición.
+- **Los cuatro estados quedan separados y cada uno con su salida.** `scanFailed`
+  era un booleano: la foto de más de 8 MB (`--warning`) y el OCR que no pudo
+  leer (`--danger`) son estados distintos, y meterlos en el mismo cartel obligaba
+  a elegir un copy que no era cierto para uno de los dos. **Siempre existe la
+  salida manual**: "Cargarlo a mano" entra al Ticket en edición con una fila
+  vacía, así que un OCR que falla no puede terminar el flujo.
+- **El techo de 8 MB se mira antes de subir**, no después: con mala señal,
+  mandar 12 MB para que el backend conteste 413 es un minuto perdido en la mesa.
+  Sale de `MAX_TICKET_IMAGE_BYTES`, y un test nuevo lo **lee del espejo** de
+  `routes/ocr.js` en vez de confiar en un número escrito de memoria — acreditado
+  bajándolo a 4 MiB y viendo caer el test.
+- **El barrido respeta `prefers-reduced-motion`**, que §1.6 pide explícito y
+  hasta hoy no se cumplía. Los keyframes pasan a porcentajes: los 30px/270px
+  estaban atados a la altura del marco viejo. Acreditado forzando la media
+  query — `animation-name` pasa de `scan` a `none` y la línea queda en 150px,
+  la mitad exacta del marco.
+- **El "progreso real" del spec no se puede implementar y NO se simula.**
+  `scanTicket` manda `FormData` por `httpRequest`, que es `fetch`, y `fetch` no
+  expone progreso de subida; la única API que lo tiene es `XMLHttpRequest`, y
+  cambiar el riel de red toca el mismo `httpRequest` de las rutas de dinero.
+  Queda **G-29**, anotado **fuera** de la tabla de GAPS a propósito: es deuda de
+  este repo, no algo que se le pida a App Backend. Mientras tanto la pantalla
+  dice "Subiendo la foto…", sin porcentaje, con `aria-busy` y `aria-live`.
+- **Un defecto encontrado mirando la pantalla a 375px**, no el diff: el cartel de
+  "foto muy grande" y la nota amarilla del modo demo se leían como un solo
+  bloque —mismo tinte, mismo borde, dos cosas distintas—. La nota pasa a teal
+  para que en Escanear el amarillo signifique exactamente una cosa. De paso sube
+  a 14px: era información a 12.5px, debajo del piso del sistema.
+
+**Por qué §1.7 Compartir no entra.** Las dos son decisiones de otro, no
+dificultades de implementación:
+
+1. **El QR.** El spec pide un botón que despliegue el código QR del link. **No
+   hay ningún generador de QR en el repo** y la única dependencia autorizada de
+   este front es Stripe.js; escribir un codificador QR a mano —Reed-Solomon
+   incluido— no es un renglón de una orden visual. Un QR decorativo que no
+   decodifica al link sería peor que no tenerlo.
+2. **La pestaña "Ya se sumaron"** no tiene dato: **G-30**. El contrato no expone
+   quiénes están en una mesa, y en casi todo el resto eso es a propósito.
+
+Sin esas dos, la pantalla se queda sin una de sus dos pestañas en burbuja y sin
+uno de sus tres botones de compartir. Media pantalla no es la pantalla.
+
+## 0.39.1 — las tres pantallas de §1.11 pasan a primer nivel (2026-08-05)
+
+Autorizado tras el aviso previo sobre `src/App.tsx`. Deshace el rodeo con el que
+las tres pantallas habían entrado en 0.39.0.
+
+- **`#/tarjetas`, `#/pagos` y `#/estadisticas`** son ahora rutas propias, con su
+  `PageId` y su `case`. Colgaban de `#/cuenta/<algo>` para no tocar `App.tsx`, y
+  **evitar un archivo no es una razón de diseño**.
+- **`home` sale de `showNav`**, que es el cambio real: Inicio monta su propia
+  barra igual que `scan`, `mesa` y `avisos`. `BottomNav` deja de decidir cuándo
+  no dibujarse y `CuentaScreen` deja de ser un sub-router.
+- **Spec nuevo `inicio-accesos` (4 recorridos).** El switch de `App.tsx` no tiene
+  `default`: borrar un `case` no rompía nada — la pantalla no se montaba y la app
+  quedaba en blanco sin que ningún test se enterara. Acreditado mutando: borrar
+  `case 'pagos'` mata el recorrido. Cubre también que Asociadas siga sin ningún
+  acceso.
+- **`RUTAS_LEGITIMAS` suma las tres.** `allowsWalletRoute` es una lista de
+  **prohibidos**, así que toda ruta nueva nace permitida sin que nadie la mire;
+  nombrarlas es la única forma de acreditar su permiso.
+- Suite de rutas wallet verde tras tocar `App.tsx`: 126 tests. En navegador,
+  `#/cargar` y `#/transferir` siguen terminando en `#/home`, sin una palabra del
+  vocabulario del riel.
+- La máquina de alta de tarjeta no se tocó: `addCard`, los helpers de
+  `cardSetupAttempt` y `setDefault`/`removePm` son **byte a byte** los del
+  checkpoint `1984710`.
+
+## 0.39.0 — ORDEN VISUAL · Inicio y sus tres pestañas (2026-08-05)
+
+**`SPEC_APP.md` §1.1 + §1.11 — son la misma pantalla**, así que van juntas: las
+tres pestañas SON Inicio. Es la casa de la app y la que Mati más quiere ver.
+
+- **La estructura pasa a la de §5 bis**: banda navy de borde curvo con el
+  **nombre completo** —trunca con elipsis y nunca empuja la campana, verificado
+  con un nombre largo—, las tres pestañas en burbuja **enganchadas** a la
+  tarjeta montada, y la barra de cinco posiciones en lugar del flotante. La
+  tarjeta va con la esquina cuadrada sólo cuando la pestaña activa es la
+  primera; con la del medio o la última, el enganche se da por contacto.
+- **La mesa va DEBAJO de los accesos**, no encabezando (decisión de Mati). Sus
+  cuatro estados se forzaron uno por uno a 375px: mesa, vacío real sin borde,
+  error de red con **Reintentar** y esqueleto con la silueta. El error antes se
+  tragaba con un `.catch(() => undefined)` y la pantalla decía "No tenés mesas
+  abiertas" cuando lo cierto era que no habíamos podido preguntar.
+- **La pestaña LANZA, no muestra.** Cuenta abre `Ver tarjetas` y `Ver pagos`;
+  Estadísticas, la frase de Mati y un solo acceso. Sin fondo propio y separados
+  por una línea de `--border`. **Asociadas existe y no tiene interior**: hijos
+  es Cuentas Junior y pareja es un instrumento de pago compartido — las dos son
+  stop conditions del gobierno, y una pantalla que ya existe es mucho más
+  difícil de discutir que una que todavía no.
+- **Se cae el carrusel "(N)" y todo plural**: nunca hay más de UNA mesa abierta
+  por usuario. Y se cae el banner de invitación, que ahora vive en Avisos.
+- **Los DOS gates del riel de saldo viajan enteros y gateados.** Son dos, no
+  uno, y al reescribir es fácil conservar el primero y llevarse el segundo por
+  delante.
+- **Las tres pantallas destino**, cada una en su commit: **Tarjetas** —con la
+  máquina de alta MOVIDA a `CardsPanel`, no copiada: dos copias de eso es cómo
+  nace una tarjeta duplicada—, **Pagos** —agrupado por mes con encabezado
+  pegajoso, y `offset` que el emisor validaba y este front nunca mandaba, así
+  que "Cargar más" no existía— y **Estadísticas**, que declara al pie lo que el
+  contrato no tiene en vez de omitirlo.
+- **El botón de abrir mesa pasó de "Nueva Mesa" a "Nueva"** y los e2e se
+  actualizaron en el mismo commit, a propósito: era el renombre esperado, no una
+  regresión. Estaba en tres puntos, no sólo en el helper compartido.
+- **Acreditado mutando**: sacar la barra de la pantalla nueva mata 21 de los 24
+  recorridos; sacarle el año a la clave del agrupado mata 2 de los 6 tests de
+  `pagosView`. El verde no era de arrastre.
+- **G-27 y G-28** en `GAPS.md`. El segundo es el grave: `GET /mesas/open` filtra
+  por `opener_user_id`, así que quien se sumó por un link no tiene forma de
+  volver a encontrar su mesa. Ninguno se cierra desde este repo.
+- Deuda: `--fs-legacy-*` sin cambios netos · la Cuenta vieja queda como ruteo y
+  como superficie de las pantallas que §1.9 todavía no convirtió.
+
+## 0.38.1 — la salida de §1.2-C estaba muerta (2026-08-05)
+
+Arreglo del defecto que 0.38.0 registró como encontrado y sin arreglar. **Aquella
+entrada queda superseded en ese punto**, no equivocada: describía el estado al
+cerrar la ORDEN 5, y el arreglo llegó con una orden propia inmediatamente
+después.
+
+- **Después de un canje exitoso, "Ver mis ítems" no hacía nada.** La persona
+  quedaba encerrada en la pantalla de felicitación. Al cerrar el canje la
+  custodia retira el token, así que la URL queda en `#/mesa/PA-XXXX` — que es
+  **exactamente el destino del botón**, porque el link de invitación ES la ruta
+  de la mesa. `navigate` asignaba ese mismo hash, y asignar el hash que ya está
+  **no dispara `hashchange`**: el router no se enteraba, `Shell` no volvía a
+  renderizar y `JoinMesaScreen` seguía montada.
+- **No era un caso raro.** Es el camino normal de cualquiera que llega por
+  WhatsApp. Y §1.2-C no muestra la barra inferior, así que ese círculo era el
+  **único** control de la pantalla: la única salida era el Atrás del navegador o
+  recargar.
+- **`navigate` se conserva**, porque el destino no siempre coincide con la URL:
+  `accept-link` devuelve `mesa_code` y **el emisor es la autoridad** sobre a qué
+  mesa entraste, no el `:code` del link. Cuando no difieren, se le avisa al
+  router que relea la URL — el mismo remedio que `replaceRoute` ya aplica en
+  `router.ts`, no un mecanismo nuevo — y **sólo** si el hash no cambió, porque si
+  cambió el navegador dispara el suyo.
+- **Deliberadamente NO se tocó `navigate`.** Tiene la misma limitación para
+  cualquier navegación a la ruta en la que ya estás, pero cambiarla afecta a
+  todas las pantallas de la app: es otra orden. **La custodia del token tampoco
+  se tocó** — está cerrada y con sus mutantes muertos.
+- Sale el `test.fixme` del recorrido 3 y ese test lo acredita: llega a Mis ítems
+  y la felicitación se desmonta. **Dos mutantes, los dos muertos**: revertir el
+  aviso al router, y volver a llamar `navigate` directo.
+
+## 0.38.0 — ORDEN 5 · Playwright, y las dos anclas cerradas (2026-08-05)
+
+Entra un runner de navegador, **autorizado por Mati en orden propia**. No
+reemplaza nada: los 479 tests de vitest siguen donde estaban. Playwright se suma
+arriba, con carpeta propia (`e2e/`) y `test.include` en vitest para que cada
+runner mire lo suyo.
+
+- **Cuatro recorridos, y no más.** Los tests de navegador son lentos y frágiles:
+  se usan para los caminos donde una falla significa que alguien con la tarjeta
+  en la mano no puede terminar. Lo que se puede probar sin navegador se sigue
+  probando sin navegador.
+  1. **Atrás no revive el token** de un link terminal — cierra el ancla de 4B.
+  2. **`#/cargar` y `#/transferir` no son alcanzables** — cierra el ancla de 4C.
+  3. **El camino de pago completo**, que nunca se había recorrido entero.
+  4. **El 403 de un link no delata si la mesa existe.**
+- **Un solo proyecto, y es un teléfono** (390×844 con touch). Esta app se usa en
+  la mesa de un restaurante. Queda anotado que **Safari es el navegador de más
+  riesgo** —el link llega por WhatsApp y se abre en un WebView de iOS— y que esto
+  **no lo cubre**: sólo se descargó Chromium.
+- **Puerto 5176 con `strictPort`**, propio. El 5174 es `npm run dev` y el 5175 el
+  riel de mock de otra sesión: no se le pisa la configuración corriendo a nadie,
+  y si el puerto está ocupado **falla** en vez de correr contra otra cosa.
+
+### 🔴 Un defecto encontrado, NO arreglado, esperando orden
+
+**Después de un canje exitoso, "Ver mis ítems" no hace nada y la persona queda
+encerrada en la pantalla de felicitación.** La custodia retira el token, la URL
+queda en `#/mesa/PA-XXXX`, y el botón asigna **ese mismo hash**: asignarlo no
+dispara `hashchange`, el router no se entera, no hay re-render y
+`JoinMesaScreen` sigue montada. No es artefacto del test —es el camino normal
+del link de WhatsApp— y §1.2-C no tiene barra inferior, así que la única salida
+es el Atrás del navegador o recargar.
+
+Queda como `test.fixme`: registrado en código, no en una nota. Es un cambio de
+navegación sobre una pantalla del flujo de dinero y esta orden era escribir
+recorridos, no cambiar comportamiento.
+
+### Dos tests míos que los mutantes encontraron flojos
+
+Lo registro porque el hallazgo no es el arreglo, es **cómo apareció**: los dos
+recorridos estaban verdes y **acreditaban algo que no ejercitaban**.
+
+- **El recorrido de 4B no probaba el arreglo de 4B.** Revertido el
+  `stripTokenFromUrl()` del terminal, los cuatro tests seguían verdes. En un
+  navegador de verdad `sessionStorage` **funciona**, así que la URL se limpia en
+  la apertura y la línea que 4B agregó nunca corre. El defecto vive **sólo** en
+  el estado degradado —storage que acepta la escritura y no persiste, que es
+  justo el WebView donde se abre un link de WhatsApp—. Se agregaron dos casos que
+  **rompen el storage dentro de Chromium**: el terminal limpiando la URL, y su
+  complemento —que hasta el canje **no** la toque, porque perder el token deja a
+  la persona registrada y afuera de la mesa—.
+- **El recorrido del 403 no atrapaba una copy que filtra el motivo.** Dos causas
+  que se tapaban: `getByText` coincide por **subcadena**, así que agregarle *"Este
+  link venció."* adelante seguía matcheando; y la lista de motivos decía `vencid`
+  y no atrapó `venció`. Ahora la copy se exige **exacta** —está ratificada palabra
+  por palabra en §1.2-B justamente porque no puede variar según el motivo— y la
+  lista pasó a **raíces**. El test de comparación entre una mesa que existe y una
+  que no **no alcanzaba solo**: las dos pantallas cambian juntas.
+- **Cinco mutantes finales, los cinco muertos**: revertir 4B (1 test), neutralizar
+  `replaceRoute('home')` (5), filtrar el motivo en el body (3) y en el título (3),
+  y volver reintentable el link incompleto (1).
+
+### Método
+
+Cero `waitForTimeout` — se espera a que algo **sea visible**, nunca a que pase el
+tiempo. Selectores por rol y texto visible, nunca CSS: un `.tk-row` se renombra
+en el próximo commit de diseño. Tests independientes, sin orden ni estado
+compartido: cada uno abre su contexto y su mesa.
+
+## 0.37.0 — ORDEN 4 · custodia del token y rutas del riel saldo (2026-08-05)
+
+Dos defectos que tenían la misma forma: **una defensa declarada que nadie
+comprobaba ejecutada**. En los dos casos el predicado era correcto, tenía sus
+tests en verde, y no protegía nada porque el llamador no lo obedecía.
+
+- **4B · el token terminal se soltaba de UNA de las DOS custodias.** El parte
+  decía "la URL conserva el `?t=`"; el defecto era más grande. El token vive en
+  `sessionStorage` **y** en la URL, y **no siempre en los dos**: cuando el
+  round-trip del storage falla —modo privado, cuota, un WebView con storage
+  particionado— `openInvitationCustody` deja el `?t=` en el hash **a propósito**,
+  porque preferimos un token visible a un token perdido. En ese estado, un 400 o
+  un 403 limpiaban un storage que nunca tuvo nada y no tocaban la URL: la
+  credencial que el emisor **acaba de declarar inservible** seguía en la barra de
+  direcciones y en el historial de un teléfono que se pasa alrededor de la mesa.
+  - `stripTokenFromUrl` funcionaba perfecto y tenía **todos sus tests verdes con
+    el defecto adentro**, porque el defecto nunca estuvo ahí: estaba en quién lo
+    llama y cuándo.
+  - La secuencia sale del `useEffect` a **`invitationCustody.ts`**. Sin librería
+    de render un efecto no se ejecuta en la suite, así que mientras el "cuándo"
+    viviera adentro era justo lo que no se podía testear.
+  - La decisión terminal y su ejecución quedan en **la misma función**: no se
+    puede agregar un estado terminal nuevo sin pasar por el mismo `if`.
+  - 39 tests: las siete filas de la matriz × storage funcional, storage que
+    **lanza** y storage que acepta la escritura y **no persiste**.
+- **4C · la redirección de `#/cargar` y `#/transferir`.** El único test decía
+  `allowsWalletRoute(false,'cargar') === false` —"la ruta está prohibida"—, y eso
+  sigue siendo cierto aunque nadie redirija. **Borrar `replaceRoute('home')`
+  dejaba la suite entera en verde.**
+  - La llamada sale a **`walletRouteGuard.ts`**, por la misma razón que 4B. Su
+    firma es `(walletRailEnabled, page)` y nada más: **no hay por dónde inyectar
+    un permiso** por cuenta, rol o restaurante.
+  - 58 tests sobre la cadena completa: payload real de `GET /api/config` →
+    `readWalletRail` → decisión → `replaceRoute` → historial → hash, para las
+    **siete** formas del riel apagado (falsa, ausente, cuatro malformadas y
+    permiso por principal) × las dos rutas, más `pending`.
+  - Se monta el **árbol real** con `renderToStaticMarkup` —ya es dependencia, no
+    agrega ninguna—: `TopupScreen` y `TransferScreen` no se montan y `fetch` no
+    se llama nunca. Con **dos controles positivos**, porque la ausencia de una
+    palabra no distingue "el gate funciona" de "acá no se renderiza nada".
+  - Las siete formas conservan tarjetas e historial propio: nada card-only queda
+    gateado por wallet. Es el error de `07f0ba2` escrito como test.
+- **Catorce mutantes sobre el estado commiteado, en worktree aparte. Los catorce
+  mueren.** Incluidos los dos que la orden nombró: el defecto original de 4B (9
+  tests) y neutralizar `replaceRoute('home')` (23 tests).
+- **Anclas declaradas, no dadas por probadas.**
+  - El botón **Atrás real** y la **recarga real** necesitan navegador. Su test no
+    simula nada: verifica que no hay runner de navegador en `package.json`, así
+    que **se pone rojo solo** cuando entre Playwright y obliga a volver.
+  - `VITE_MOCK=1 npx vitest run` **está roja desde antes de esta orden** (34
+    tests en 8 archivos sobre `4b490ca`, sin cambios míos): la suite está escrita
+    contra el adaptador real. Así que "corrida en los dos modos" **no es
+    evidencia disponible** y no se invoca. Lo que sí está verde en mock es el
+    build. La independencia del modo se acredita distinto: `IS_MOCK`, `VITE_MOCK`
+    e `import.meta.env` no aparecen en el **código** de ninguno de los tres
+    módulos que deciden esto.
+- Wallet sigue **durmiente y sin borrar**: `TopupScreen`, `TransferScreen`, los
+  métodos de la fachada y los decoders siguen en el árbol. Lo único que se probó
+  es **quién decide** si se pueden alcanzar, y sigue siendo el backend.
+
+## 0.36.0 — ORDEN VISUAL · Ticket (2026-08-05)
+
+- **`SPEC_APP.md` §1.3 · Ticket.** El pendiente que 0.35.0 dejó elevado —si el
+  celeste de la tarjeta de título era el estándar o una excepción de División—
+  **ya estaba resuelto en el spec** cuando se escribió esa entrada: el archivo
+  se editó a las 20:28, diez minutos después del commit de División, y dice que
+  `--teal-l` es el estándar de toda tarjeta de título y que *"Ticket se corrige
+  para pasar a `--teal-l`"*. La entrada anterior quedó vencida, no equivocada.
+  - Cabecera de flujo y tarjeta de título `--teal-l`. Acá la tarjeta **sí lleva
+    contenido debajo del título** —total y observación— separado por la misma
+    línea que separa la lista. Es una sola tarjeta.
+  - **La lista deja de ser una grilla de inputs**: cantidad · nombre · precio
+    tabular, texto limpio, sin un recuadro a la vista. Los controles aparecen
+    recién en modo edición. Se va el copy con el conteo de consumos.
+  - **"Modificar ítems" en dos estados**, con lápiz por fila y Eliminar en
+    `--danger`. La fila expandida edita nombre, precio y cantidad, no sólo el
+    monto como dice el spec: un consumo agregado nace vacío y sin nombre no se
+    completa nunca. **Desvío consultado con Mati.**
+  - **El chequeo del total dejó de ser vacuo.** El spec pide avisar cuando la
+    suma de las filas no coincide con el total del ticket, pero el total en
+    pantalla **era** la suma —`runScan` descartaba `total_cents`—, así que no
+    podía discrepar de sí mismo. Ahora se conserva el total impreso y se
+    contrasta. **No viaja al backend**: lo que se manda sigue siendo la suma de
+    lo que la persona vio y editó, porque la garantía retiene ese monto.
+  - Barra de cinco posiciones con "Continuar", sin ítem activo, y el motivo de
+    invalidez en su fila propia en vez de flotando a `bottom: 78px`.
+  - Área táctil del stepper de 22×22 a 44×44: estaba en la mitad del mínimo.
+- **Tres defectos que aparecieron al verificar y no eran de esta pantalla:**
+  - `.has-appbar .scroll` **no tenía efecto** — un `style={{ padding }}` inline
+    le ganaba al `padding-bottom` de la clase y la separación con la barra era
+    cero. **División arrastraba lo mismo** y no se veía porque su contenido es
+    corto. Las dos pasan a `.flow-scroll`, en longhands.
+  - `scrollIntoView` daba por visible una fila tapada por la barra fija:
+    corregido con `scroll-margin-bottom`.
+  - `.tk-name.empty` chocaba con `.empty`, el estado vacío global, y heredaba
+    sus `padding: 36px 24px` — 121px de fila en vez de 53. Renombrada.
+- **Contraste nuevo medido**: `--warning` sobre `--teal-l` da **4.77:1** — pasa
+  AA, pero con menos margen que el par que el sistema tenía medido (5.10 sobre
+  `--warning-tint`). Fijado en `designTokens.test.ts` y comprobado por mutación.
+- **No se implementa "ítem no reconocido"**: el spec lo deja pendiente de ver en
+  pantalla y `OcrResponse` no trae ningún campo por ítem del que pudiera salir.
+- Verificado a 375px en mock. La discrepancia de totales **no es alcanzable en
+  mock por sí sola** —el adaptador calcula `total_cents` con un reduce sobre los
+  mismos ítems—, así que se forzó editando un precio, en las dos direcciones, y
+  se restauró comprobando el regreso al estado informativo.
+- Deuda, medida con `git grep -o` sobre `src/` (el método que reconcilia con las
+  entradas anteriores): bloques `style={{…}}` 368 → **347** · `--fs-legacy-*`
+  99 → **86**. Ojo con el segundo: la entrada de 0.35.0 cerró en 111, y la caída
+  de 111 a 99 es del commit `cf235df` de la ORDEN 4B, no de acá.
+
+## 0.35.0 — ORDEN VISUAL · División (2026-08-05)
+
+- **`SPEC_APP.md` §1.4 · División**, la primera pantalla del flujo de armar
+  mesa que adopta el sistema.
+  - **Cabecera de flujo, la tercera variante** (§1.3): dos filas en la banda
+    navy — logo + `payme_id`, y debajo "Volver" con el contador de paso. Entra
+    como `AppHeaderFlow` en el componente compartido porque §1.3–§1.6 la usan
+    todas, no como markup suelto de esta pantalla.
+  - Tarjeta de título `--teal-l` montada sobre la banda.
+  - **La selección deja el naranja y pasa a teal**: dentro de una tarjeta el
+    naranja ya no marca estado. Y no es sólo el borde — el radio se llena.
+  - **El importe por persona sube a `--fs-h1` y se recalcula en vivo** con el
+    stepper, anunciado con `aria-live`. Antes era una píldora de 13px al
+    costado: es el dato que la persona está buscando y estaba en letra chica.
+  - Barra de cinco posiciones con "Continuar" en el centro, sin ítem activo.
+    Deja salir del flujo a mitad de camino, a propósito; verificado que en este
+    paso no hay nada congelado todavía, así que irse no deja ninguna operación
+    monetaria a medias.
+  - Área táctil del stepper a 44×44 y el subtexto de las tarjetas de 12px a
+    `--fs-sm` — era información por debajo del mínimo del sistema.
+- **Ticket sigue sin tocarse**: §1.4 tiene un pendiente explícito —si el
+  celeste de la tarjeta de título es el estándar o es específico de División—
+  que termina en *"No tocar Ticket hasta confirmar"*. Elevado, sin respuesta
+  todavía.
+- **Inicio (§1.1) sigue frenado** por la pregunta abierta de §5: dónde va la
+  invitación pendiente. El esqueleto nuevo no tiene lugar donde el banner de
+  hoy entre sin romper el enganche entre la pestaña activa y la tarjeta, así
+  que preservarlo obligaría a elegir por la puerta de atrás. Queda para la
+  decisión de Mati.
+- Deuda: `--fs-legacy-*` 112 → 111 · bloques `style={{…}}` 370 → 368.
+
+## 0.34.0 — ORDEN VISUAL · entrada por link y Avisos (2026-08-05)
+
+Paso 3 de la orden visual: las primeras pantallas que adoptan el sistema. Los
+tokens y el esqueleto ya estaban (0.33.0); acá empiezan a usarse.
+
+- **`SPEC_APP.md` §1.2 · entrada por link, las tres pantallas.** Es la primera
+  que ve casi todo el mundo que llega por un link de WhatsApp, y la de mayor
+  riesgo del spec. Esqueleto propio: banda compacta, burbuja angosta flotando
+  en el medio exacto, bloque de acción abajo, sin barra inferior.
+  - **401** con burbuja genérica *"Te invitaron a una mesa"*: no nombra el
+    restaurante, porque para saber que el token es válido habría que
+    preguntárselo al backend y el endpoint que lo diría sin sesión es el
+    preview público que el cierre del pago sin cuenta prohíbe. Un link
+    reenviado, además, le confirmaría a cualquiera dónde está comiendo otro.
+    *"Crear cuenta gratis"* es el **cuarto uso permitido del naranja**, con el
+    texto en navy (5.77:1).
+  - **403** con un solo cartel para los cuatro motivos y salida por el círculo
+    naranja. Copy textual del spec.
+  - **"Sumate a la mesa"**, nueva: antes el canje navegaba derecho a la mesa.
+    Tilde de 72px en `--success`, el nombre del restaurante sin el código, y un
+    solo destino a un toque. Es el único momento con permiso de nombrar la
+    mesa: el canje ya cerró y quien mira es un participante inscripto.
+  - **La custodia del token no cambió.** Se sigue comprobando el round-trip
+    antes de soltar la URL y la credencial se libera en el mismo punto que
+    antes. Verificado en el navegador: tras el canje el hash queda sin `?t=`,
+    el `sessionStorage` vacío, y Atrás no revive el token.
+- **`SPEC_APP.md` §1.8 · Avisos.** El punto de "sin leer" pasa a `--action-2` y
+  a la izquierda, acompañado del peso 700 — dos señales, no una. El leído deja
+  de atenuarse con `opacity` sobre la fila entera, que arrastraba el texto por
+  debajo del mínimo de contraste. Vacío real con la copy del spec y sin borde.
+  Cabecera de subpantalla y barra de cinco posiciones sin ítem activo.
+- **Contraste corregido de paso** (§3 lo habilita en cualquier pantalla, no es
+  rediseño): el botón de aceptar invitación era naranja con texto blanco —
+  2.84:1 y un uso del naranja fuera de los cuatro permitidos.
+- **Tests**: `joinLinkStage` extrae a función pura qué pantalla se muestra, y
+  fija la regla de privacidad —sin sesión no se ve **nada** de la mesa,
+  cualquiera sea el resultado del canje— y que ninguna pantalla quede sin
+  salida. `designTokens.test.ts` fija el cuarto uso del naranja contra el modo
+  en que se rompería en silencio: un `color: #fff` "para que se vea más".
+  381 tests (eran 370).
+- **Deuda**: los usos de `--fs-legacy-*` bajan de 113 a 112 y los bloques
+  `style={{…}}` de 378 a 370. Baja pantalla por pantalla, como manda el
+  sistema.
+
+## 0.33.0 — ORDEN VISUAL · tokens y esqueleto del sistema de diseño (2026-08-05)
+
+Pasos 1 y 2 de la orden visual. **Ninguna pantalla cambió todavía**: entra el
+vocabulario y entra el esqueleto, y las pantallas los adoptan de a una.
+
+- **Los tokens de `SISTEMA_DISENO.md` §1–§3 viven en `global.css`**: color
+  (marca, acción, superficie, texto, semánticos con su tinte propio), la escala
+  tipográfica de seis tamaños con line-heights, la mono, espaciado base 4, tres
+  radios, tres elevaciones y el área táctil mínima.
+- **Hubo que liberar el namespace antes.** La escala del sistema reusa
+  `--fs-sm` y `--fs-xs` con **otros** valores (12.5→14 y 11.5→12). Definirla sin
+  más habría movido 44 usos de tamaño en silencio, que es justo lo que el paso 1
+  prohíbe. La escala vieja pasó a `--fs-legacy-*` en un rename mecánico: mismo
+  valor, otro nombre, cero pixel movido. Quedan **100 usos** de deuda contada.
+- **`designTokens.test.ts` re-mide los contrastes**, que es lo que el sistema
+  exige cada vez que se toca un hex — aritmética WCAG pura sobre el CSS leído
+  como texto, sin jsdom ni librería de render. Fija también las prohibiciones:
+  blanco sobre `--brand` (2.84), `--brand` como texto (2.6) y el teal como texto
+  (2.19) siguen reprobando, que es por qué existen `--brand-fg`, `--brand-ink`
+  y `--link`.
+- **Discrepancia encontrada al automatizar la medición:** `--text` sobre `--bg`
+  da **15.21:1**, no 15.4 como declara `SISTEMA_DISENO.md` en dos lugares.
+  Tampoco corresponde a las otras dos superficies (16.36 y 15.64), así que no es
+  un fondo confundido. Sin consecuencia de accesibilidad —el mínimo AA es 4.5—
+  pero el documento dice que todo ratio está medido. Se fija el valor real; el
+  documento es de la conversación de Diseño y no se edita desde este repo.
+- **Los tres componentes de estructura de §5 bis**, sin call sites: cabecera
+  navy de borde curvo (primer nivel, subpantalla y la compacta de la entrada por
+  link), pestañas en burbuja fusionadas a la tarjeta, y la barra inferior de
+  cinco posiciones con centro configurable — `+` Nueva, `→` Continuar o cámara
+  y "Capturar" según la pantalla, porque lo fijo es el componente y su posición,
+  no el texto.
+- `test.css` habilitado en `vite.config.ts`: vitest reemplaza todo módulo CSS
+  por un stub vacío por default y el import `?raw` llegaba como `""`. Se usó
+  `?raw` y no `node:fs` para no incorporar `@types/node` — dependencia nueva,
+  prohibida sin OK previo de Mati.
+
+## 0.32.0 — ORDEN 3A · custodia del token, rutas del riel y espejo (2026-08-04)
+
+- **El espejo estaba mal contado, y el número era lo de menos.** El comando de
+  enumeración usaba `grep -v README.md` **sin anclar**, así que descartaba en
+  silencio `legal/README.md` — un archivo espejado con fuente real que **nunca
+  se verificó**. Inventario correcto: **70 archivos**. Ahora lo fija un test.
+- **Back revivía el token de invitación.** `navigate` asigna el hash y crea una
+  entrada, dejando viva la anterior con el `?t=`. Se retira con `replaceState`,
+  preservando el resto de los parámetros (`r` del QR).
+- **Orden de custodia:** guardar → comprobar round-trip → recién ahí soltar la
+  URL. Si el round-trip falla, la URL no se toca: preferimos un token visible a
+  un token perdido.
+- **Un shape inválido devolvía `null` y dejaba la fila.** Ahora toda salida sin
+  dato borra la credencial físicamente.
+- **El 400 dejó de ser "problema de conexión".** Es terminal, con copy
+  accionable, y no invita a reintentos engañosos.
+- **`#/cargar` y `#/transferir` ya no muestran copy:** redirigen a superficie
+  neutra sin dejar entrada en el historial, en los cuatro estados apagados de la
+  capability y en real y mock.
+- **Tres afirmaciones vencidas corregidas**, una mía y grave: leer la capability
+  **no** apagaba el riel — publicar hace autoritativa la declaración, no la
+  ejecución. El gate de dinero lo puso el backend en v2.33.0.
+
+## 0.31.0 — Cierre del pago sin cuenta, espejado (2026-08-04)
+
+Espejo del backend v2.32.0. El token de `?t=` deja de ser **autorización** y
+pasa a ser **credencial**.
+
+- **El link ya no lleva a la mesa: lleva al canje.** `App` montaba `MesaScreen`
+  en modo invitado con el token de la URL, y con eso se veía la mesa, se tomaban
+  ítems y se **pagaba sin cuenta**. Ahora lleva a `JoinMesaScreen`.
+- **Quien no tiene cuenta no ve nada de la mesa** — ni restaurante, ni total, ni
+  cuánta gente hay. Ve el alta, con un banner que explica por qué.
+- **El token sobrevive al alta.** Se guarda en `sessionStorage` con el código de
+  su mesa; la URL sigue siendo la fuente primaria y esto cubre el tramo del
+  registro. Perderlo dejaría a la persona registrada y **afuera** de la mesa a
+  la que la invitaron, que es peor que el defecto que se cierra.
+- **Se suelta al canjear y también ante un 403** — un token muerto que
+  sobreviviera capturaría esa mesa en cada visita.
+- **Un solo mensaje para los cuatro motivos de rechazo.** El emisor no
+  distingue inválido de vencido de cancelado de supersedido, a propósito: sería
+  decirle a un desconocido si una mesa existe. Un test barre todos los mensajes
+  contra un conjunto de palabras delatoras.
+- **El 503 no es un rechazo.** Es "no pudimos verificar", y es reintentable.
+  Fundirlo con el 403 diría que una invitación está muerta cuando el backend
+  sólo está a media configuración.
+- **Nada se borra:** `httpGuestRequest`, los parámetros `guestToken` de la
+  fachada y las ramas `isGuest` de `MesaScreen` quedan durmientes e intactos,
+  igual que `guestOrAuth` del otro lado.
+- El mock replica la **ceguera** del emisor y modela los tokens emitidos, así
+  que el 403 es verificable a mano y no acepta cualquier string.
+- `contract-mirror` refrescado a v2.32.0 (68 archivos; `utils/tokens.js` nuevo).
+
+## 0.30.1 — Barrido adversarial sobre 0.30.0 (2026-08-04)
+
+- **El caso de control estaba roto y lo rompí yo en 0.30.0.** `HomeScreen` y
+  `CuentaScreen` pedían saldo y movimientos dentro de un `useEffect(..., [])`.
+  Eso servía cuando el riel era una constante; ahora la capability llega
+  DESPUÉS del primer render, cuando vale `false` por fail-closed, y el efecto no
+  se vuelve a ejecutar. Con el backend declarando `enabled: true`, la tarjeta de
+  saldo se renderizaba con el monto en "…" **para siempre** y "Últimos
+  movimientos" no aparecía nunca. Arreglado con un efecto por capability, cada
+  uno con su dependencia y separados entre sí.
+- **Mi verificación en navegador de 0.30.0 no podía verlo:** di el control por
+  bueno viendo APARECER la tarjeta, y la tarjeta aparecía vacía — el monto está
+  enmascarado por diseño y se ve igual cargado que sin cargar. Hizo falta el
+  ojito.
+- **Barrido estructural nuevo:** falla nombrando archivo y capability si un
+  `useEffect` lee una y no la declara en sus dependencias. Con guardarraíl
+  contra pasar en vacío y con su límite declarado dentro del test.
+- **El barrido de (d) tenía un agujero, y lo tenía el barrido:** detectaba una
+  supresión sólo si el archivo nombraba los tipos, así que una escrita
+  importando `WALLET_NOTIFICATION_TYPES` —la forma más natural— pasaba limpia.
+  Ahora también se marca esa vía.
+- No es defecto de dinero: son GET de lectura, y con el riel apagado —el estado
+  vigente— nada de esto se ejecuta.
+
+## 0.30.0 — El apagado del wallet deja de ser decisión del front (2026-08-04)
+
+- **OLA 5D · el riel saldo lo declara apagado el BACKEND, y este front lo lee.**
+  Hasta acá `WALLET_RAIL_ENABLED` era una constante propia: wallet estaba
+  apagado porque el front decidió apagarlo, no porque el sistema lo declarara
+  apagado, y un deploy de este front con otro valor lo reencendía sin que el
+  backend se enterara. Desde App Backend v2.31.0 `GET /api/config` publica
+  `features.wallet_rail`, y `src/api/walletRail.ts` la consume.
+- **La constante se eliminó, no se conservó apuntando al nuevo estado.**
+  Mientras existiera, alguien podía leerla en vez de leer la capability. El
+  typecheck marcó los ocho consumidores uno por uno.
+- **Fail-closed, en direcciones distintas para cada campo.** `enabled` falla a
+  `false`: capability ausente, mal formada o red caída → riel APAGADO, y el
+  estado inicial ya es apagado, así que no hay ventana en la que la UI de saldo
+  aparezca mientras la respuesta viaja. `account_activity` falla a `true`:
+  historial y estadísticas propias leen `payment_attempts`, son card-only
+  ratificado, y esconderlas por un fallo de red repetiría `07f0ba2`. Son dos
+  parámetros distintos de `accountRailView`, no uno derivado del otro.
+- **Conjunto CERRADO de claves del lado del consumidor.** Un backend distinto
+  del espejado no es una hipótesis: es el caso normal de un deploy
+  desincronizado. Una clave de más apaga el riel; si tiene forma de permiso por
+  principal (`enabled_for_user`, `per_branch`, `sucursal_override`) además se
+  denuncia, porque la ratificación prohíbe ese permiso.
+- **El mock respeta la capability, no la ignora**: `mockGetConfig` publica el
+  mismo shape y recorre el mismo lector. Un test lee el espejo como texto y
+  falla si los valores del mock se separan de los del emisor.
+- **Nada se borró.** `TopupScreen`, `TransferScreen`, los ocho métodos del riel
+  y `payment_type: 'wallet'` siguen durmientes: verificado en el navegador
+  poniendo `enabled: true` en el mock, con la UI de saldo y `#/cargar` volviendo
+  completas.
+- **La pestaña de Cuenta se DERIVA en vez de recordarse.** Se inicializaba desde
+  un valor que ahora llega después del primer render; con
+  `account_activity: false` quedaba en 'historial' con los dos paneles apagados.
+- **(d) · los avisos del riel saldo se fueron POR EL EMISOR** (`5e210fd`), y este
+  repo lo ACREDITA en vez de taparlo: la lista del mock se compara contra el
+  espejo —tenía cuatro tipos y el emisor suprime cinco; faltaba `topup_failed`—
+  y un barrido estructural falla si alguien agrega un filtro de red por esos
+  tipos. `AvisosScreen` sigue sin gate: el backend dejó de crear filas nuevas,
+  no borró las viejas, y esconderlas ocultaría un hecho real. `tip_received` no
+  se suprime, ni allá ni acá.
+- `contract-mirror/` refrescado por copia a
+  `db48cf69422fb0edbeb633e883c14405174a549b` (v2.31.0): 67/67 byte-idénticos,
+  con sólo dos archivos cambiados respecto del refresh anterior. Esto no
+  acredita publicación externa.
+- **Límite declarado:** desde este repo no se puede acreditar el emisor
+  corriendo. El end-to-end real contra el backend vivo sigue faltando.
+
+## 0.29.5 — Cierre local de auditoría y espejo v2.28.8 (2026-08-03)
+
+- Las mutaciones distinguen rechazos definitivos de resultados ambiguos: sólo
+  conflictos idempotentes/concurrentes, 408/425/429 y 5xx conservan el intento
+  para replay; un 400 de validación no queda congelado como si fuera red.
+- El alta de tarjeta conserva en `sessionStorage` únicamente key, etapa y
+  referencia `pm_`, ligadas al principal y con limpieza CAS. Nunca persiste el
+  `client_secret`; un registro corrupto o storage no durable falla cerrado.
+- SetupIntent, attach de tarjeta e invitaciones validan su shape en runtime:
+  un 2xx malformado no se convierte en éxito. El mock replica la autoridad e
+  idempotencia relevantes y el portapapeles sólo informa éxito comprobado.
+- Un replay de invitación vencida se modela como terminal: no se copia ni se
+  marca al amigo como invitado, y la key anterior se libera para un intento
+  fresco. Link, código de mesa y token también quedan ligados en runtime.
+- El alta de tarjeta captura principal+familia: una respuesta tardía de la
+  sesión A no puede persistir, adjuntar ni limpiar referencias bajo la sesión B.
+  La transición setup→attach también usa CAS por key: K1 no resucita sobre K2.
+- La creación de mesa bloquea un nuevo intento si existe evidencia local
+  ambigua anterior, antes de tokenizar otra tarjeta.
+- El límite previo de OCR se alineó con el receptor auditado: más de 8 MiB se
+  rechaza antes de red, en lugar de ofrecer 10 MiB que el backend nunca acepta.
+- El lock actualiza PostCSS de 8.5.19 a 8.5.25 mediante el fix compatible del
+  audit; no se fuerza el salto mayor Vite 5→8 requerido por los dos hallazgos
+  restantes de toolchain de desarrollo.
+- `contract-mirror/` fue refrescado por copia: 67/67 archivos byte-idénticos
+  contra App Backend
+  `e8a3faf2f520b249cbe6001f14ef70230a405695` (v2.28.8), con procedencia y
+  bloqueos vigentes documentados. Esto no acredita publicación externa.
+- Baseline ratificado: wallet durmiente post-auditoría (no borrado) y
+  Apple/Google Pay como MUST de primer pago mediante hoja nativa, sin prerequisito
+  de tarjeta guardada. El candidato permanece **NO-GO de release/piloto** por
+  los seis bloqueos de backend y los gates de wallet, hojas nativas, PQ-2 y
+  G-24 listados al inicio de `GAPS.md`.
+
+## 0.29.4 — Familia de sesión y refresh fail-closed (2026-08-02)
+
+- Login/registro crean una familia y principal opacos; refresh conserva ambos y
+  usa compare-and-swap antes de guardar o limpiar una sesión.
+- Los retries autenticados abortan si la familia cambia. La rotación exige Web
+  Locks y falla cerrada cuando no existe exclusión acreditable.
+
+## 0.29.3 — Clasificación B-06 y checks locales (2026-08-02)
+
+- Los rechazos definitivos del contrato rotan aunque lleguen como 409; solo
+  `idempotency_conflict` y 429 conservan el intento. `refunded` no rota.
+- Se incorporó Vitest 3.2.7, checks de clasificación B-06/hash seguro y CI
+  ejecuta tests antes de typecheck/build.
+
+## 0.29.2 — Link de invitado aislado de la sesión (2026-08-02)
+
+- Un link `#/mesa/:code?t=…` ahora conserva siempre la identidad invitada,
+  incluso si el navegador tiene una sesión PayMe activa. El token se envía por
+  el canal guest del contrato y no se mezcla con Authorization.
+
+## 0.29.1 — Recuperación segura de reintentos y runtime (2026-08-02)
+
+- B-06: un `409 idempotency_key_terminal` ahora rota y descongela el intento
+  muerto; `idempotency_conflict` conserva su tratamiento seguro.
+- La identidad idempotente y el payload pendiente cuentan con fallback en
+  memoria cuando `sessionStorage` está bloqueado, sin convertir la evidencia
+  `claimed_by_me` en un guard de casillero único.
+- Refresh rotativo single-flight, OCR multipart a través del cliente
+  autenticado con timeout/refresh, y hash mal codificado que degrada a home en
+  lugar de tumbar la aplicación.
+
+## 0.29.0 — Apple/Google Pay solo donde funcionan (2026-07-25)
+
+Decisión de Mati (2026-07-25): **se ocultan en la app real**, se mantienen en el
+build demo. Los botones existían desde el principio pero contra el backend real
+devuelven **400**: no hay integración con la Payment Request API de Stripe y el
+schema de pago exige un `stripe_payment_method_id` que esos botones no producen.
+En la demo funcionan porque el front manda un `pm_` de utilería.
+
+- **`WALLET_PAY_ENABLED`** en `src/api/index.ts`, junto a `IS_MOCK`/`IS_DEMO`:
+  `IS_MOCK || VITE_WALLET_PAY === '1'`. El **default es el estado verdadero** —
+  encendido en la demo, apagado en cualquier build real — así el build `/live/`
+  los oculta solo, sin depender de que alguien setee una variable en un job
+  nuevo. **No hubo que tocar el workflow de despliegue.**
+- **Nada borrado**: el `PaymentType`, la etiqueta del comprobante (`Ⓖ Google
+  Pay`) y el bloque `pm_mock_walletpay` quedan intactos. Verificado en el
+  bundle: en el build real Vite **elimina los dos botones** por rama muerta y
+  la etiqueta del comprobante sobrevive; en el de demo están los dos.
+  Reactivarlos el día que se implementen es cambiar un default.
+- **El copy del invitado cuelga del mismo flag**: decía "Sin iniciar sesión
+  pagás con tarjeta **o Apple Pay**" — con los botones ocultos habría afirmado
+  un método que no está en pantalla.
+- **G-12 anotado**: `features.apple_pay`/`google_pay` de `GET /api/config`
+  están **hardcodeados en `true`** (a diferencia de `stp_dispersal`/`ocr_real`,
+  que leen entorno), o sea que el backend afirma una capacidad que no cumple.
+  Se pide que pasen a leer entorno, pero **como seguimiento post-27/07**: no es
+  un flip de variable, es release + deploy del backend que mueve dinero, y el
+  ocultamiento ya está resuelto sin ellos. Por eso el front NO gatea por ese
+  campo: sería depender de un dato muerto (ese route se auto-declara `2.5.2`
+  con el backend en v2.26.0) y además llegaría tarde, haciendo parpadear los
+  botones.
+- **Runbook T7**: fila nueva para Apple/Google Pay, con la nota de que probarlos
+  de verdad exige iPhone/Safari y Android/Chrome.
+
+Revisión adversaria de 33 agentes sobre el plan: tumbó el diseño original
+—gatear por `features` de `/api/config` y pedirle al backend bajar el flag— con
+la evidencia de que esos flags son literales en el código, no variables de
+entorno.
+
 ## 0.28.0 — B-06: el reintento ya no cobra dos veces (contrato v2.25.0) (2026-07-25)
 
 Cierra **B-06** del lado del front. El backend tenía la idempotencia bien

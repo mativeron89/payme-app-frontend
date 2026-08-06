@@ -71,3 +71,31 @@ const TX_ICON: Record<WalletTxType, IconName> = {
 export function walletTxIcon(type: WalletTxType | string): IconName {
   return TX_ICON[type as WalletTxType] ?? 'wallet';
 }
+
+/**
+ * Categoría del RESTAURANTE — el enum de `restaurants.category` del contrato
+ * (`italian | japanese | mexican | cafe | other`), que es lo que devuelve
+ * `favorite_category` de `GET /account/stats`.
+ *
+ * **No es el tipo del plato.** El spec de Estadísticas (§1.11) lo dice con
+ * todas las letras porque es una confusión fácil y cara: el ranking por
+ * tipología de plato —carne, pescado, pollo— no existe en ninguna parte del
+ * contrato, y clasificar qué comió cada persona roza categorías sensibles
+ * (una dieta puede revelar religión o condición de salud). El copy dice
+ * "cocina" y no promete otra cosa.
+ *
+ * Un valor desconocido devuelve `null`, no "Otros": si el emisor agrega una
+ * categoría nueva, preferimos no mostrarla a mostrarla mal.
+ */
+const CATEGORIA: Record<string, string> = {
+  italian: 'Italiana',
+  japanese: 'Japonesa',
+  mexican: 'Mexicana',
+  cafe: 'Café',
+  other: 'Otros',
+};
+
+export function categoryLabel(category: string | null | undefined): string | null {
+  if (!category) return null;
+  return CATEGORIA[category] ?? null;
+}

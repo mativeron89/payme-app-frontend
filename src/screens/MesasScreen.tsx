@@ -1,11 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, IS_MOCK } from '../api';
-import type { HistoryEntry, OpenMesa } from '../api/types';
+import type { HistoryEntry } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
 import { navigate } from '../router';
-import { countdownTo, formatMXN } from '../utils/format';
-import { mesaStatusBadgeClass, mesaStatusLabel } from '../utils/labels';
-import { TopBar } from '../components/ui';
+import { formatMXN } from '../utils/format';
+import { fullName } from '../utils/identity';
+import { AppBottomBar } from '../components/AppBottomBar';
+import { AppHeader } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
+import {
+  agruparPorMes,
+  FRANJA_LABEL,
+  franjaDe,
+  mesasCerradas,
+  traerHistorialCompleto,
+  type Franja,
+} from './historialView';
 
 const CATEGORY_EMOJI: Record<string, IconName> = {
   italian: 'pasta',
@@ -15,40 +25,17 @@ const CATEGORY_EMOJI: Record<string, IconName> = {
   other: 'dining',
 };
 
-/** Una mesa del historial: pagos propios agrupados por mesa_code. */
-interface HistoryMesa {
-  mesa_code: string;
-  restaurant: string;
-  category: string;
-  /** Suma de MIS pagos en esa mesa (centavos enteros). */
-  amount_cents: number;
-  /** Fecha del último pago (la que ordena la lista). */
-  date: string;
-}
+/** El ícono ACOMPAÑA a la palabra, nunca la reemplaza (§1.10). */
+const FRANJA_ICON: Record<Franja, IconName> = {
+  manana: 'sun-rise',
+  mediodia: 'sun-high',
+  tarde: 'sun-low',
+  noche: 'moon',
+};
 
-/** GET /account/history trae un renglón POR PAGO; acá se agrupa por mesa. */
-function groupByMesa(entries: HistoryEntry[]): HistoryMesa[] {
-  const byCode = new Map<string, HistoryMesa>();
-  for (const e of entries) {
-    const prev = byCode.get(e.mesa_code);
-    if (prev) {
-      prev.amount_cents += e.amount_cents;
-      if (e.date > prev.date) prev.date = e.date;
-    } else {
-      byCode.set(e.mesa_code, {
-        mesa_code: e.mesa_code,
-        restaurant: e.restaurant,
-        category: e.category,
-        amount_cents: e.amount_cents,
-        date: e.date,
-      });
-    }
-  }
-  return [...byCode.values()].sort((a, b) => b.date.localeCompare(a.date));
-}
-
-function historyDate(iso: string): string {
+function fechaDeFila(iso: string): string {
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
   const diffDays = Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60_000));
   if (diffDays === 0) return 'Hoy';
   if (diffDays === 1) return 'Ayer';
@@ -56,145 +43,169 @@ function historyDate(iso: string): string {
 }
 
 /**
- * Mesas v2 (ratificado 2026-07-22): las abiertas son transitorias (la garantía
- * captura el faltante al vencer), así que la pantalla vive del HISTORIAL.
- * Si hay una abierta, va arriba destacada en color; las pagadas, en una lista
- * minimalista (GET /account/history agrupado por mesa).
+ * **Mesas ES el historial** — `SPEC_APP.md` §1.10, definido por Mati: *"una
+ * forma más rápida de ir al histórico de mesas"*. Como nunca hay más de una
+ * mesa abierta y ya se ve en Inicio, esta entrada de la barra lista las
+ * CERRADAS; el título de la pantalla dice **Historial** aunque la etiqueta de
+ * la barra diga "Mesas" por espacio.
+ *
+ * La mesa abierta NO se repite acá. Antes de `mesa_status` (v2.42.0) esta
+ * pantalla no podía cumplirlo: el organizador que pagaba su parte veía su mesa
+ * viva bajo un encabezado de mes, como si hubiera terminado. Y la sección
+ * "Abiertas ahora" que vivía arriba se retiró con G-28 cerrado: el invitado ya
+ * ve su mesa en Inicio, donde corresponde, no acá.
+ *
+ * El acordeón de detalle NO muestra ítems: G-33 sigue abierta —el contrato no
+ * tiene un detalle de mesa cerrada, y el que hoy funciona lo hace por
+ * coincidencia—, así que despliega el estado DESCONOCIDO de
+ * `SISTEMA_DISENO.md` §5. Nunca un mock que aparente funcionar.
  */
 export function MesasScreen() {
-  const [mesas, setMesas] = useState<OpenMesa[] | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[] | null>(null);
-  const [, forceTick] = useState(0);
+  const { session } = useAuth();
+  const [pagos, setPagos] = useState<HistoryEntry[] | null>(null);
+  const [fallo, setFallo] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const [abierta, setAbierta] = useState<string | null>(null);
+
+  /**
+   * TODO el historial antes de agrupar, sin "Cargar más": una página parcial
+   * dejaría a una mesa partida en el borde con su total SUBCONTADO en
+   * pantalla. O está todo, o es el estado de error — la falla a mitad de
+   * carga propaga a propósito (ver `traerHistorialCompleto`).
+   */
+  const cargarHistorial = useCallback(() => {
+    setFallo(false);
+    setPagos(null);
+    traerHistorialCompleto((limit, offset) =>
+      api.getHistory({ limit, offset }).then((r) => r.history),
+    )
+      .then(setPagos)
+      .catch(() => setFallo(true));
+  }, []);
+
+  useEffect(() => {
+    cargarHistorial();
+  }, [cargarHistorial]);
 
   useEffect(() => {
     let alive = true;
-    api.getOpenMesas().then((r) => alive && setMesas(r.mesas)).catch(() => alive && setMesas([]));
-    api.getHistory().then((r) => alive && setHistory(r.history)).catch(() => alive && setHistory([]));
-    const tick = setInterval(() => forceTick((n) => n + 1), 1000);
+    api.getUnreadCount().then((r) => alive && setUnread(r.unread_count)).catch(() => undefined);
     return () => {
       alive = false;
-      clearInterval(tick);
     };
   }, []);
 
-  const pastMesas = useMemo(() => (history ? groupByMesa(history) : null), [history]);
-  const loading = mesas === null || pastMesas === null;
-  const empty = !loading && mesas.length === 0 && pastMesas.length === 0;
+  const cerradas = pagos ? mesasCerradas(pagos) : null;
+  const grupos = cerradas ? agruparPorMes(cerradas) : [];
 
   return (
-    <div className="screen">
-      <TopBar
-        title="Mesas"
-        onBack={() => navigate('home')}
-        right={
-          mesas && mesas.length > 0 ? <span className="badge badge-teal">{mesas.length} abierta{mesas.length > 1 ? 's' : ''}</span> : undefined
-        }
+    <div className="screen has-appbar">
+      <AppHeader
+        userName={fullName(session) ?? undefined}
+        unread={unread}
+        onBell={() => navigate('avisos')}
       />
-      <div className="scroll" style={{ padding: 16 }}>
-        {loading && <div className="loading">Cargando tus mesas…</div>}
 
-        {empty && (
-          <div className="empty">
-            <div className="emoji">
-              <Icon name="dining" size={40} />
+      <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16 }}>
+        {/* Píldora angosta, no la tarjeta de ancho completo: un título sin
+            total ni progreso debajo quedaba desproporcionado a todo lo ancho
+            (se probó, §1.10). --fs-h2 es el tamaño más cercano de la escala
+            de seis, no un séptimo de contrabando. */}
+        <div className="hist-pill-wrap">
+          <h1 className="hist-pill">Historial</h1>
+        </div>
+
+        {fallo && !pagos ? (
+          <div className="state-error">
+            <div className="state-error-row">
+              <Icon name="x-circle" size={22} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="state-error-title">No pudimos cargar tu historial</div>
+                <p className="state-error-body">Revisá la conexión y probá de nuevo.</p>
+              </div>
             </div>
-            Todavía no pagaste ninguna mesa.
+            <button type="button" className="btn btn-ghost btn-sm" onClick={cargarHistorial}>
+              Reintentar
+            </button>
           </div>
-        )}
-
-        {/* ─── Abiertas ahora: destacadas en color ─── */}
-        {mesas && mesas.length > 0 && (
+        ) : cerradas === null ? (
+          <div aria-busy="true" aria-label="Cargando tu historial">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="pago-row sk">
+                <span className="sk-line w55" />
+                <span className="sk-line w40" />
+              </div>
+            ))}
+          </div>
+        ) : cerradas.length === 0 ? (
+          /* Vacío REAL: sin borde, único estado del sistema que no lo lleva. */
+          <div className="mesa-empty">
+            <div className="mesa-empty-title">Todavía no cerraste ninguna mesa.</div>
+          </div>
+        ) : (
           <>
-            <div className="sectlabel">Abiertas ahora</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
-              {mesas.map((m) => {
-                const cd = countdownTo(m.expires_at);
-                return (
-                  <button
-                    key={m.id}
-                    className={`event-card ${m.status === 'partially_paid' ? 'partial' : 'open'}`}
-                    style={{ background: 'var(--teal-l)', border: '1.5px solid var(--teal)' }}
-                    onClick={() => navigate('mesa', m.code)}
-                  >
-                    <div className="event-icon" aria-hidden="true">
-                      <Icon name={CATEGORY_EMOJI[m.restaurant.category] ?? 'dining'} size={22} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="event-name">{m.restaurant.name}</div>
-                      <div className="event-meta">Mesa {m.code}</div>
-                      <div style={{ marginTop: 8 }}>
-                        <div
-                          className="progress-bar"
-                          style={{ maxWidth: 150, background: '#fff' }}
-                          role="progressbar"
-                          aria-valuenow={m.pct_paid}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={`Pagado ${m.pct_paid}% de la mesa`}
-                        >
-                          <div
-                            className="progress-fill"
-                            style={{
-                              width: `${m.pct_paid}%`,
-                              background: m.status === 'partially_paid' ? 'var(--orange)' : 'var(--teal)',
-                            }}
-                          />
+            {grupos.map((g) => (
+              <section key={g.key} aria-label={g.label}>
+                <h2 className="mes-sticky">{g.label}</h2>
+                {g.mesas.map((m) => {
+                  const franja = franjaDe(m.date);
+                  const on = abierta === m.mesa_code;
+                  return (
+                    <div key={m.mesa_code} className={`hist-item ${on ? 'on' : ''}`}>
+                      <button
+                        type="button"
+                        className="hist-row"
+                        aria-expanded={on}
+                        onClick={() => setAbierta(on ? null : m.mesa_code)}
+                      >
+                        <span aria-hidden="true">
+                          <Icon name={CATEGORY_EMOJI[m.category] ?? 'dining'} size={22} />
+                        </span>
+                        <div className="hist-main">
+                          <div className="hist-rest">{m.restaurant}</div>
+                          <div className="hist-meta">
+                            {fechaDeFila(m.date)}
+                            {franja && (
+                              <>
+                                {' · '}
+                                {FRANJA_LABEL[franja]}{' '}
+                                <Icon
+                                  name={FRANJA_ICON[franja]}
+                                  size={14}
+                                  className="ico-inline"
+                                />
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <div className="caption" style={{ marginTop: 4 }}>
-                          {formatMXN(m.paid_amount_cents)} de {formatMXN(m.total_cents)} ·{' '}
-                          <span className={mesaStatusBadgeClass(m.status)}>
-                            {mesaStatusLabel(m.status)}
-                          </span>
+                        <div className="hist-amt">{formatMXN(m.amount_cents)}</div>
+                        <span className={`hist-chevron ${on ? 'on' : ''}`} aria-hidden="true">
+                          <Icon name="chevron-down" size={20} />
+                        </span>
+                      </button>
+                      {on && (
+                        /* G-33: el detalle de consumo no tiene contrato
+                           confirmado. Estado desconocido, con borde punteado —
+                           si hay borde, hay algo que no estás viendo. */
+                        <div className="state-unknown hist-unknown">
+                          <Icon name="help" size={20} />
+                          <div>
+                            <div className="state-unknown-title">
+                              El detalle de esta mesa todavía no está disponible
+                            </div>
+                            <p className="state-unknown-body">
+                              No podemos confirmar que sea seguro de mostrar. Lo que pagaste vos
+                              es el monto de esta fila.
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div className="event-amount">{formatMXN(m.total_cents)}</div>
-                      <div className="countdown">
-                        <Icon name="clock" size={14} className="ico-inline" /> {cd ?? 'venció'}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
+                  );
+                })}
+              </section>
+            ))}
 
-        {/* ─── Historial: lista minimalista, una línea por mesa ─── */}
-        {pastMesas && pastMesas.length > 0 && (
-          <>
-            <div className="sectlabel">Historial</div>
-            <div className="card" style={{ padding: '2px 16px' }}>
-              {pastMesas.map((h, idx) => (
-                <div
-                  key={h.mesa_code}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '12px 0',
-                    borderBottom: idx < pastMesas.length - 1 ? '1px solid var(--gray-l)' : 'none',
-                  }}
-                >
-                  <span aria-hidden="true">
-                    <Icon name={CATEGORY_EMOJI[h.category] ?? 'dining'} size={22} />
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-base)' }}>{h.restaurant}</div>
-                    <div className="caption">
-                      {historyDate(h.date)} · Mesa {h.mesa_code}
-                    </div>
-                  </div>
-                  <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)', fontVariantNumeric: 'tabular-nums' }}>
-                    {formatMXN(h.amount_cents)}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="caption" style={{ marginTop: 8, textAlign: 'center' }}>
-              Lo que pagaste vos en cada mesa.
-            </div>
           </>
         )}
 
@@ -212,9 +223,8 @@ export function MesasScreen() {
           </div>
         )}
       </div>
-      <button className="fab solo" onClick={() => navigate('scan')}>
-        <Icon name="plus" size={16} className="ico-inline" /> Nueva Mesa
-      </button>
+
+      <AppBottomBar active="mesas" />
     </div>
   );
 }

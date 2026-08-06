@@ -24,25 +24,598 @@
  */
 'use strict';
 
+const crypto = require('node:crypto');
 const pool = require('../db/pool');
 const eventEmitter = require('./eventEmitter');
 const aggregateEmitter = require('./aggregateEmitter');
 const stripeService = require('./stripe');
+const cardEligibility = require('./cardEligibility');
 const savedCards = require('./savedCards');   // D4 (v2.16)
+const itemClaims = require('./itemClaims');   // v2.18 (fracciones)
+const paymentProcessor = require('./paymentProcessor');
+const paymentAttemptReconciler = require('./paymentAttemptReconciler');
+const {
+  assertPaymentIntentContract,
+  loadPaymentAttemptContract,
+} = require('./paymentIntentContract');
 const stp = require('./stp');
+const connect = require('./connect');   // v2.24: onboarding y ruteo de webhook
+// ORDEN OLA 4 · 4B: el gate TIPADO de 4A gobierna todo camino que mueva plata.
+const connectGate = require('./connectGate');
 const stateMachine = require('../utils/stateMachine');
 const notifs = require('./notifications');
-const { centsToDisplay, calculateFee } = require('../utils/money');
+const { centsToDisplay, calculateFee, prorateCents, sumCents } = require('../utils/money');
 const logger = require('../utils/logger');
 
 const SETTLE_BATCH = Number(process.env.SETTLE_BATCH) || 25;
 const SETTLING_STALE_MIN = Number(process.env.SETTLING_STALE_MIN) || 2;
 const DISPERSE_RETRY_MIN = Number(process.env.DISPERSE_RETRY_MIN) || 5;
 const DISPERSE_MAX_RETRIES = Number(process.env.DISPERSE_MAX_RETRIES) || 10;
+const DISPERSE_PROCESSING_STALE_MIN = Number(process.env.DISPERSE_PROCESSING_STALE_MIN) || 5;
 
 // claveRastreo determinística por mesa (idempotencia STP)
 function deterministicClave(mesaId) {
   return ('PM' + String(mesaId).replace(/-/g, '')).slice(0, 29).toUpperCase();
+}
+
+function canonicalJson(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  return `{${Object.keys(value).sort().map((key) => (
+    `${JSON.stringify(key)}:${canonicalJson(value[key])}`
+  )).join(',')}}`;
+}
+
+function stpRequestHash(snapshot) {
+  return crypto.createHash('sha256').update(canonicalJson(snapshot)).digest('hex');
+}
+
+function buildStpRequestSnapshot(m, { amount, fee, net, clave }) {
+  return {
+    version: 1,
+    mesa_id: m.id,
+    restaurant_id: m.restaurant_id,
+    gross_amount_cents: amount,
+    fee_cents: fee,
+    amount_cents: net,
+    clabe_destino: m.restaurant_clabe,
+    beneficiario: m.restaurant_name,
+    rfc_beneficiario: m.rfc || null,
+    concepto: `PayMe mesa ${String(m.id).slice(0, 8)}`,
+    referencia: m.id,
+    clave_rastreo: clave,
+  };
+}
+
+function assertStoredStpRequest(plan, mesaId) {
+  const request = plan?.stp_request_snapshot;
+  const expectedMode = stp.IS_MOCK ? 'mock' : 'real';
+  const mismatches = [];
+  if (!request || typeof request !== 'object' || Array.isArray(request)) {
+    mismatches.push('snapshot');
+  } else {
+    if (request.version !== 1) mismatches.push('version');
+    if (request.mesa_id !== mesaId) mismatches.push('mesa_id');
+    if (request.restaurant_id !== plan.restaurant_id) mismatches.push('restaurant_id');
+    if (request.referencia !== mesaId) mismatches.push('referencia');
+    if (request.clave_rastreo !== deterministicClave(mesaId)) mismatches.push('clave_rastreo');
+    if (request.clave_rastreo !== plan.stp_clave_rastreo) mismatches.push('plan_clave');
+    if (Number(request.gross_amount_cents) !== Number(plan.amount_cents)) {
+      mismatches.push('gross_amount');
+    }
+    if (Number(request.fee_cents) !== Number(plan.fee_cents)) mismatches.push('fee');
+    if (Number(request.amount_cents) !== Number(plan.net_cents)) mismatches.push('net');
+    if (!Number.isSafeInteger(request.amount_cents) || request.amount_cents <= 0) {
+      mismatches.push('safe_amount');
+    }
+    if (typeof request.clabe_destino !== 'string' || request.clabe_destino.length !== 18) {
+      mismatches.push('clabe');
+    }
+  }
+  if (plan?.stp_provider_mode !== expectedMode) mismatches.push('provider_mode');
+  if (typeof plan?.stp_request_hash !== 'string'
+      || plan.stp_request_hash !== stpRequestHash(request)) mismatches.push('hash');
+  if (mismatches.length > 0) {
+    throw guaranteeInvariantError('dispersal_stp_request_binding_invalid', { mismatches });
+  }
+  return request;
+}
+
+function isConnectZeroDispersal(plan, mesaId, restaurantId) {
+  return Number(plan?.amount_cents) === 0
+    && Number(plan?.fee_cents) === 0
+    && Number(plan?.net_cents) === 0
+    && plan?.status === 'sent'
+    && plan?.failure_reason === 'liquidado_por_stripe_connect'
+    && plan?.restaurant_id === restaurantId
+    && plan?.stp_clave_rastreo === deterministicClave(mesaId);
+}
+
+async function quarantineDispersal(executor, mesaId, reason) {
+  return executor.query(
+    `UPDATE dispersals
+        SET status='manual_review', next_retry_at=NULL,
+            failure_reason=LEFT($2,500), updated_at=NOW()
+      WHERE mesa_id=$1 AND status <> 'manual_review'`,
+    [mesaId, reason]
+  );
+}
+
+function guaranteeInvariantError(code, details = {}) {
+  const err = new Error(code);
+  err.code = code;
+  err.details = details;
+  return err;
+}
+
+function normalizedAccount(value) {
+  return value || null;
+}
+
+function remoteObjectId(value) {
+  return typeof value === 'string' ? value : value?.id || null;
+}
+
+function assertGuaranteeIntentShape(intent, expected) {
+  const expectedFee = Number(expected.applicationFeeCents || 0);
+  const observedFee = Number(intent?.application_fee_amount || 0);
+  const mismatches = [];
+  if (!intent?.id || typeof intent.id !== 'string') mismatches.push('id');
+  if (Number(intent?.amount) !== Number(expected.amountCents)) mismatches.push('amount');
+  if (String(intent?.currency || '').toLowerCase() !== 'mxn') mismatches.push('currency');
+  if (intent?.capture_method !== 'manual') mismatches.push('capture_method');
+  if (remoteObjectId(intent?.payment_method) !== expected.chargePaymentMethodId) {
+    mismatches.push('payment_method');
+  }
+  if (remoteObjectId(intent?.customer) !== (expected.customerId || null)) {
+    mismatches.push('customer');
+  }
+  if ((intent?.setup_future_usage || null) !== (expected.setupFutureUsage || null)) {
+    mismatches.push('setup_future_usage');
+  }
+  if (!Array.isArray(intent?.payment_method_types)
+      || intent.payment_method_types.length !== 1
+      || intent.payment_method_types[0] !== 'card') {
+    mismatches.push('payment_method_types');
+  }
+  if (intent?.metadata?.kind !== 'guarantee_auth') mismatches.push('metadata.kind');
+  if (intent?.metadata?.mesa_id !== expected.mesaId) mismatches.push('metadata.mesa_id');
+  if (intent?.metadata?.user_id !== expected.organizerId) mismatches.push('metadata.user_id');
+  if (normalizedAccount(intent?.payme_request_account_id) !== normalizedAccount(expected.accountId)) {
+    mismatches.push('account');
+  }
+  if (observedFee !== expectedFee) mismatches.push('application_fee_amount');
+  if (Object.prototype.hasOwnProperty.call(intent || {}, 'payme_request_payment_method_id')
+      && intent.payme_request_payment_method_id !== expected.chargePaymentMethodId) {
+    mismatches.push('request.payment_method');
+  }
+  if (Object.prototype.hasOwnProperty.call(intent || {}, 'payme_request_customer_id')
+      && intent.payme_request_customer_id !== (expected.customerId || null)) {
+    mismatches.push('request.customer');
+  }
+  if (Object.prototype.hasOwnProperty.call(intent || {}, 'payme_request_off_session')
+      && intent.payme_request_off_session !== !!expected.offSession) {
+    mismatches.push('request.off_session');
+  }
+  if (Object.prototype.hasOwnProperty.call(intent || {}, 'payme_request_setup_future_usage')
+      && intent.payme_request_setup_future_usage !== (expected.setupFutureUsage || null)) {
+    mismatches.push('request.setup_future_usage');
+  }
+  if (Object.prototype.hasOwnProperty.call(intent || {}, 'payme_request_capture_method')
+      && intent.payme_request_capture_method !== 'manual') {
+    mismatches.push('request.capture_method');
+  }
+  if (Object.prototype.hasOwnProperty.call(intent || {}, 'payme_request_payment_method_types')
+      && (!Array.isArray(intent.payme_request_payment_method_types)
+        || intent.payme_request_payment_method_types.length !== 1
+        || intent.payme_request_payment_method_types[0] !== 'card')) {
+    mismatches.push('request.payment_method_types');
+  }
+  if (mismatches.length > 0) {
+    throw guaranteeInvariantError('guarantee_intent_contract_mismatch', {
+      mismatches, intent_id: intent?.id || null,
+    });
+  }
+}
+
+function assertGuaranteeCaptureResult(intent, expected) {
+  const mismatches = [];
+  try {
+    assertGuaranteeIntentShape(intent, {
+      amountCents: expected.authorizedAmountCents,
+      applicationFeeCents: expected.applicationFeeCents,
+      chargePaymentMethodId: expected.chargePaymentMethodId,
+      customerId: expected.customerId,
+      setupFutureUsage: expected.setupFutureUsage,
+      offSession: expected.offSession,
+      mesaId: expected.mesaId,
+      organizerId: expected.organizerId,
+      accountId: expected.accountId,
+    });
+  } catch (err) {
+    if (Array.isArray(err?.details?.mismatches)) {
+      mismatches.push(...err.details.mismatches.map((field) => `contract.${field}`));
+    } else {
+      throw err;
+    }
+  }
+  if (intent?.id !== expected.intentId) mismatches.push('id');
+  if (intent?.status !== 'succeeded') mismatches.push('status');
+  if (Number(intent?.amount_received) !== Number(expected.amountCents)) mismatches.push('amount_received');
+  if (mismatches.length > 0) {
+    throw guaranteeInvariantError('guarantee_capture_result_mismatch', {
+      mismatches, intent_id: intent?.id || null, status: intent?.status || null,
+    });
+  }
+}
+
+function assertGuaranteeReleaseResult(intent, expected) {
+  const mismatches = [];
+  try {
+    assertGuaranteeIntentShape(intent, {
+      amountCents: expected.authorizedAmountCents,
+      applicationFeeCents: expected.applicationFeeCents,
+      chargePaymentMethodId: expected.chargePaymentMethodId,
+      customerId: expected.customerId,
+      setupFutureUsage: expected.setupFutureUsage,
+      offSession: expected.offSession,
+      mesaId: expected.mesaId,
+      organizerId: expected.organizerId,
+      accountId: expected.accountId,
+    });
+  } catch (err) {
+    if (Array.isArray(err?.details?.mismatches)) {
+      mismatches.push(...err.details.mismatches.map((field) => `contract.${field}`));
+    } else {
+      throw err;
+    }
+  }
+  if (intent?.id !== expected.intentId) mismatches.push('id');
+  if (intent?.status !== 'canceled') mismatches.push('status');
+  if (mismatches.length > 0) {
+    throw guaranteeInvariantError('guarantee_release_result_mismatch', {
+      mismatches, intent_id: intent?.id || null, status: intent?.status || null,
+    });
+  }
+}
+
+function validateDurableCardDecision(row, { mesaId, organizerId, amountCents }) {
+  if (!row || row.id !== mesaId || row.opener_user_id !== organizerId || !row.guarantee_mode
+      || Number(row.total_cents) !== Number(amountCents)) {
+    throw guaranteeInvariantError('guarantee_hold_mismatch');
+  }
+  if (!['pending_auth', 'open'].includes(row.status)) {
+    throw guaranteeInvariantError('guarantee_state_conflict', { status: row.status });
+  }
+  if (row.auth_method && row.auth_method !== 'card') {
+    throw guaranteeInvariantError('guarantee_rail_conflict', { auth_method: row.auth_method });
+  }
+  if (row.auth_method === 'card' && Number(row.auth_amount_cents) !== Number(amountCents)) {
+    throw guaranteeInvariantError('guarantee_amount_conflict');
+  }
+}
+
+function storedGuaranteeCardSnapshot(row) {
+  const snapshot = {
+    policyVersion: Number(row?.auth_card_policy_version),
+    brand: row?.auth_card_brand,
+    funding: row?.auth_card_funding,
+    walletType: null,
+    verifiedAt: row?.auth_card_verified_at,
+  };
+  return cardEligibility.isTrustedSnapshot(snapshot) ? snapshot : null;
+}
+
+function storedAttemptCardSnapshot(row) {
+  const snapshot = {
+    policyVersion: Number(row?.card_policy_version),
+    brand: row?.card_brand_snapshot,
+    funding: row?.card_funding_snapshot,
+    walletType: null,
+    verifiedAt: row?.card_verified_at,
+  };
+  return cardEligibility.isTrustedSnapshot(snapshot) ? snapshot : null;
+}
+
+async function readDurableCardDecision(mesaId, organizerId, amountCents) {
+  const { rows: [row] } = await pool.query(
+    `SELECT id, opener_user_id, total_cents, guarantee_mode, status, auth_method,
+            auth_amount_cents, auth_stripe_account_id, auth_application_fee_cents,
+            auth_source_payment_method_id, auth_charge_payment_method_id,
+            auth_card_policy_version, auth_card_brand, auth_card_funding,
+            auth_card_verified_at, auth_charge_card_verified_at,
+            auth_stripe_customer_id,
+            auth_off_session, auth_save_payment_method
+       FROM mesas WHERE id=$1`,
+    [mesaId]
+  );
+  validateDurableCardDecision(row, { mesaId, organizerId, amountCents });
+  if (row.auth_method !== 'card') return null;
+  if (!row.auth_source_payment_method_id) {
+    throw guaranteeInvariantError('guarantee_source_payment_method_missing');
+  }
+  if (!row.auth_stripe_customer_id) {
+    throw guaranteeInvariantError('guarantee_customer_missing');
+  }
+  if (row.auth_off_session == null || row.auth_save_payment_method == null) {
+    throw guaranteeInvariantError('guarantee_provider_flags_missing');
+  }
+  const sourceCardSnapshot = storedGuaranteeCardSnapshot(row);
+  if (!sourceCardSnapshot) {
+    throw guaranteeInvariantError('guarantee_card_policy_snapshot_missing');
+  }
+  if (row.auth_charge_payment_method_id && !row.auth_charge_card_verified_at) {
+    throw guaranteeInvariantError('guarantee_charge_card_verification_missing');
+  }
+  return {
+    accountId: row.auth_stripe_account_id || null,
+    applicationFeeCents: Number(row.auth_application_fee_cents || 0),
+    sourcePaymentMethodId: row.auth_source_payment_method_id,
+    chargePaymentMethodId: row.auth_charge_payment_method_id || null,
+    customerId: row.auth_stripe_customer_id,
+    offSession: row.auth_off_session,
+    savePaymentMethod: row.auth_save_payment_method,
+    sourceCardSnapshot,
+    chargeCardVerifiedAt: row.auth_charge_card_verified_at || null,
+  };
+}
+
+// El riel de la garantía se decide y persiste ANTES del primer side effect en
+// Stripe. `auth_method='card'` distingue una decisión de plataforma (acct NULL)
+// de una mesa todavía sin decidir. Un retry siempre reutiliza esa decisión.
+async function decideCardGuaranteeRail({
+  mesaId, organizerId, amountCents, sourcePaymentMethodId, offSession,
+  savePaymentMethod, customerId, sourceCardSnapshot,
+}) {
+  const existing = await readDurableCardDecision(mesaId, organizerId, amountCents);
+  if (existing) return existing;
+
+  // ORDEN OLA 4 · 4B — el riel de una garantía NUEVA lo decide el gate tipado.
+  // `resolveChargeTargetByMesa` devolvía null ante la duda y ese null se sellaba
+  // como `auth_stripe_account_id=NULL`, o sea una garantía card-only de
+  // plataforma: el fallback prohibido, ya durable.
+  let candidate;
+  try {
+    candidate = await connectGate.requireChargeTarget({ mesaId });
+  } catch (err) {
+    // Otra request pudo haber decidido mientras se evaluaba el gate.
+    const raced = await readDurableCardDecision(mesaId, organizerId, amountCents);
+    if (raced) return raced;
+    if (err instanceof connectGate.ConnectGateError) {
+      // Una comisión fuera del dominio `[0,1)` es configuración inválida, no un
+      // estado transitorio: se conserva el código histórico para que siga
+      // terminalizando la mesa (`markInvalidGuaranteeConfiguration`) en vez de
+      // dejarla en `pending_auth` esperando un retry que nunca puede converger.
+      if (err.code === connectGate.CODIGOS.FEE_INVALID) {
+        throw guaranteeInvariantError('guarantee_application_fee_invalid');
+      }
+      throw guaranteeInvariantError('guarantee_connect_account_not_ready',
+        { connect_code: err.code });
+    }
+    throw err;
+  }
+  const candidateAccount = candidate.accountId;
+  const candidateFee = calculateFee(amountCents, candidate.feePct);
+  if (!Number.isSafeInteger(candidateFee) || candidateFee < 0
+      || candidateFee >= amountCents) {
+    throw guaranteeInvariantError('guarantee_application_fee_invalid');
+  }
+  if (!customerId) throw guaranteeInvariantError('guarantee_customer_missing');
+  if (!cardEligibility.isTrustedSnapshot(sourceCardSnapshot)) {
+    throw guaranteeInvariantError('guarantee_card_policy_snapshot_missing');
+  }
+
+  return pool.tx(async (client) => {
+    const { rows: [row] } = await client.query(
+      `SELECT id, opener_user_id, total_cents, guarantee_mode, status, auth_method,
+              auth_amount_cents, auth_stripe_account_id, auth_application_fee_cents,
+              auth_source_payment_method_id, auth_charge_payment_method_id,
+              auth_card_policy_version, auth_card_brand, auth_card_funding,
+              auth_card_verified_at, auth_charge_card_verified_at,
+              auth_stripe_customer_id,
+              auth_off_session, auth_save_payment_method
+         FROM mesas WHERE id=$1 FOR UPDATE`,
+      [mesaId]
+    );
+    validateDurableCardDecision(row, { mesaId, organizerId, amountCents });
+    if (row.auth_method === 'card') {
+      if (!row.auth_source_payment_method_id || !row.auth_stripe_customer_id
+          || row.auth_off_session == null || row.auth_save_payment_method == null) {
+        throw guaranteeInvariantError('guarantee_provider_snapshot_incomplete');
+      }
+      const durableSnapshot = storedGuaranteeCardSnapshot(row);
+      if (!durableSnapshot
+          || (row.auth_charge_payment_method_id && !row.auth_charge_card_verified_at)) {
+        throw guaranteeInvariantError('guarantee_card_policy_snapshot_missing');
+      }
+      return {
+        accountId: row.auth_stripe_account_id || null,
+        applicationFeeCents: Number(row.auth_application_fee_cents || 0),
+        sourcePaymentMethodId: row.auth_source_payment_method_id,
+        chargePaymentMethodId: row.auth_charge_payment_method_id || null,
+        customerId: row.auth_stripe_customer_id,
+        offSession: row.auth_off_session,
+        savePaymentMethod: row.auth_save_payment_method,
+        sourceCardSnapshot: durableSnapshot,
+        chargeCardVerifiedAt: row.auth_charge_card_verified_at || null,
+      };
+    }
+    const hasPresealedSource = !!row.auth_source_payment_method_id
+      || !!row.auth_stripe_customer_id
+      || row.auth_off_session != null
+      || row.auth_save_payment_method != null
+      || Number(row.auth_card_policy_version) === 1;
+    if (hasPresealedSource) {
+      const presealedSnapshot = storedGuaranteeCardSnapshot(row);
+      if (!row.auth_source_payment_method_id || !row.auth_stripe_customer_id
+          || typeof row.auth_off_session !== 'boolean'
+          || typeof row.auth_save_payment_method !== 'boolean'
+          || !presealedSnapshot || row.auth_charge_payment_method_id
+          || row.auth_charge_card_verified_at) {
+        throw guaranteeInvariantError('guarantee_presealed_source_incomplete');
+      }
+      sourcePaymentMethodId = row.auth_source_payment_method_id;
+      customerId = row.auth_stripe_customer_id;
+      offSession = row.auth_off_session;
+      savePaymentMethod = row.auth_save_payment_method;
+      sourceCardSnapshot = presealedSnapshot;
+    }
+    // 4B · última línea antes de sellar: una decisión card-only NUEVA no puede
+    // quedar durable con account null. Es el mutante "persistir null pese a
+    // target directo", y acá es donde se vuelve irreversible.
+    if (!candidateAccount) {
+      throw guaranteeInvariantError('guarantee_connect_account_missing_on_seal');
+    }
+    await client.query(
+      `UPDATE mesas
+          SET auth_method='card', auth_amount_cents=$2,
+              auth_stripe_account_id=$3, auth_application_fee_cents=$4,
+              auth_source_payment_method_id=$5,
+              auth_charge_payment_method_id=$6,
+              auth_stripe_customer_id=$7,
+              auth_off_session=$8, auth_save_payment_method=$9,
+              auth_card_policy_version=$10, auth_card_brand=$11,
+              auth_card_funding=$12, auth_card_verified_at=$13,
+              auth_charge_card_verified_at=$14
+        WHERE id=$1`,
+      [mesaId, amountCents, candidateAccount, candidateFee, sourcePaymentMethodId,
+       candidateAccount ? null : sourcePaymentMethodId,
+       customerId, !!offSession, !!savePaymentMethod,
+       sourceCardSnapshot.policyVersion, sourceCardSnapshot.brand,
+       sourceCardSnapshot.funding, sourceCardSnapshot.verifiedAt,
+       candidateAccount ? null : sourceCardSnapshot.verifiedAt]
+    );
+    return {
+      accountId: candidateAccount,
+      applicationFeeCents: candidateFee,
+      sourcePaymentMethodId,
+      chargePaymentMethodId: candidateAccount ? null : sourcePaymentMethodId,
+      customerId,
+      offSession: !!offSession,
+      savePaymentMethod: !!savePaymentMethod,
+      sourceCardSnapshot,
+      chargeCardVerifiedAt: candidateAccount ? null : sourceCardSnapshot.verifiedAt,
+    };
+  });
+}
+
+async function persistGuaranteeChargePaymentMethod({
+  mesaId, organizerId, amountCents, chargePaymentMethodId, chargeCardVerifiedAt,
+}) {
+  if (!chargePaymentMethodId || !Number.isFinite(new Date(chargeCardVerifiedAt).getTime())) {
+    throw guaranteeInvariantError('guarantee_charge_payment_method_missing');
+  }
+  return pool.tx(async (client) => {
+    const { rows: [row] } = await client.query(
+      `SELECT id, opener_user_id, total_cents, guarantee_mode, status, auth_method,
+              auth_amount_cents, auth_stripe_account_id, auth_source_payment_method_id,
+              auth_charge_payment_method_id, auth_charge_card_verified_at,
+              auth_card_policy_version
+         FROM mesas WHERE id=$1 FOR UPDATE`,
+      [mesaId]
+    );
+    validateDurableCardDecision(row, { mesaId, organizerId, amountCents });
+    if (row.auth_method !== 'card' || !row.auth_source_payment_method_id) {
+      throw guaranteeInvariantError('guarantee_provider_snapshot_incomplete');
+    }
+    if (Number(row.auth_card_policy_version) !== 1) {
+      throw guaranteeInvariantError('guarantee_card_policy_snapshot_missing');
+    }
+    if (row.auth_charge_payment_method_id
+        && row.auth_charge_payment_method_id !== chargePaymentMethodId) {
+      throw guaranteeInvariantError('guarantee_charge_payment_method_conflict');
+    }
+    if (row.auth_charge_payment_method_id && row.auth_charge_card_verified_at) {
+      // Dos retries pueden observar el mismo clon idempotente en timestamps
+      // distintos. El primer timestamp durable gana; sólo cambiar el ID es
+      // conflicto económico.
+      return row.auth_charge_payment_method_id;
+    }
+    if (!row.auth_charge_payment_method_id) {
+      await client.query(
+        `UPDATE mesas
+            SET auth_charge_payment_method_id=$2,
+                auth_charge_card_verified_at=$3
+          WHERE id=$1`,
+        [mesaId, chargePaymentMethodId, chargeCardVerifiedAt]
+      );
+    }
+    return chargePaymentMethodId;
+  });
+}
+
+async function persistCardGuaranteeIntent({
+  mesaId, organizerId, amountCents, intent, accountId, applicationFeeCents,
+}) {
+  return pool.tx(async (client) => {
+    const { rows: [row] } = await client.query(
+      `SELECT id, opener_user_id, total_cents, guarantee_mode, status, auth_method,
+              auth_payment_intent_id, auth_amount_cents, auth_stripe_account_id,
+              auth_application_fee_cents, auth_charge_payment_method_id,
+              auth_card_policy_version, auth_card_verified_at,
+              auth_charge_card_verified_at,
+              auth_stripe_customer_id, auth_off_session, auth_save_payment_method
+         FROM mesas WHERE id=$1 FOR UPDATE`,
+      [mesaId]
+    );
+    validateDurableCardDecision(row, { mesaId, organizerId, amountCents });
+    const hasV1Evidence = Number(row.auth_card_policy_version) === 1
+      && !!row.auth_card_verified_at && !!row.auth_charge_card_verified_at;
+    // Compatibilidad estrictamente acotada: una garantía histórica ya bindeada
+    // puede reconciliar ESE mismo PI después de la migración. Nunca se bindea un
+    // PI nuevo sobre policy v0 ni se infiere una promoción sin evidencia remota.
+    const isAlreadyBoundLegacy = Number(row.auth_card_policy_version) === 0
+      && !!row.auth_payment_intent_id
+      && row.auth_payment_intent_id === intent.id;
+    if (row.auth_method !== 'card'
+        || !row.auth_charge_payment_method_id
+        || (!hasV1Evidence && !isAlreadyBoundLegacy)
+        || !row.auth_stripe_customer_id
+        || typeof row.auth_off_session !== 'boolean'
+        || typeof row.auth_save_payment_method !== 'boolean'
+        || normalizedAccount(row.auth_stripe_account_id) !== normalizedAccount(accountId)
+        || Number(row.auth_application_fee_cents || 0) !== Number(applicationFeeCents || 0)
+        || (row.auth_payment_intent_id && row.auth_payment_intent_id !== intent.id)) {
+      throw guaranteeInvariantError('guarantee_binding_conflict');
+    }
+
+    if (row.status === 'open') {
+      if (intent.status !== 'requires_capture' || row.auth_payment_intent_id !== intent.id) {
+        throw guaranteeInvariantError('guarantee_binding_conflict');
+      }
+      return { status: 'open', idempotent: true };
+    }
+    if (row.status !== 'pending_auth') {
+      throw guaranteeInvariantError('guarantee_state_conflict', { status: row.status });
+    }
+
+    if (intent.status === 'requires_action') {
+      await client.query(
+        `UPDATE mesas SET auth_payment_intent_id=$2
+          WHERE id=$1 AND status='pending_auth'`,
+        [mesaId, intent.id]
+      );
+      return { status: 'requires_action' };
+    }
+    if (intent.status !== 'requires_capture') {
+      throw guaranteeInvariantError('guarantee_remote_state_conflict', { status: intent.status });
+    }
+
+    const upd = await client.query(
+      `UPDATE mesas SET status='open', auth_payment_intent_id=$2
+        WHERE id=$1 AND status='pending_auth'`,
+      [mesaId, intent.id]
+    );
+    if (upd.rowCount !== 1) throw guaranteeInvariantError('guarantee_binding_conflict');
+    await stateMachine.transition({
+      client, entityType: 'mesa', entityId: mesaId,
+      fromState: 'pending_auth', toState: 'open',
+      reason: 'guarantee_hold_authorized', triggeredBy: 'system',
+    });
+    await eventEmitter.enqueueTableOpened(client, mesaId);
+    await eventEmitter.enqueuePaymentSecured(client, mesaId);
+    return { status: 'open', idempotent: false };
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -57,126 +630,414 @@ function deterministicClave(mesaId) {
  * @param {number} p.amountCents   = total_cents de la mesa
  * @returns {Promise<{status:'open'|'requires_action'|'failed', clientSecret?:string, reason?:string, available?:number, required?:number}>}
  */
-async function placeGuaranteeHold({ mesaId, organizer, method, stripePaymentMethodId, amountCents, offSession = false, savePm = false }) {
+async function placeGuaranteeHold({
+  mesaId, organizer, method, stripePaymentMethodId, amountCents,
+  offSession = false, savePm = false, sourceCardSnapshot = null,
+}) {
   if (method === 'wallet') {
     return placeWalletHold({ mesaId, organizer, amountCents });
   }
-  return placeCardHold({ mesaId, organizer, stripePaymentMethodId, amountCents, offSession, savePm });
+  return placeCardHold({
+    mesaId, organizer, stripePaymentMethodId, amountCents,
+    offSession, savePm, sourceCardSnapshot,
+  });
 }
 
-async function placeCardHold({ mesaId, organizer, stripePaymentMethodId, amountCents, offSession = false, savePm = false }) {
-  if (!organizer?.stripe_customer_id || !stripePaymentMethodId) {
+async function placeCardHold({
+  mesaId, organizer, stripePaymentMethodId, amountCents,
+  offSession = false, savePm = false, sourceCardSnapshot = null,
+}) {
+  if (!organizer?.id || !stripePaymentMethodId) {
     await markAuthFailed(mesaId, 'no_payment_source');
     return { status: 'failed', reason: 'no_payment_source' };
+  }
+
+  // Un retry con riel ya sellado usa exclusivamente el snapshot durable. Para
+  // una decisión nueva se acepta evidencia prevalidada por la ruta (necesaria
+  // para rechazar antes de crear la mesa); los callers internos sin evidencia
+  // deben recuperarla de Stripe antes de persistir cualquier contrato.
+  let decision;
+  try {
+    decision = await readDurableCardDecision(mesaId, organizer.id, amountCents);
+  } catch (e) {
+    logger.error('guarantee_card_snapshot_read_failed', {
+      mesa_id: mesaId, error: e.message,
+    });
+    return { status: 'reconciliation_pending', reason: 'guarantee_provider_snapshot_incomplete' };
+  }
+  if (!decision && !cardEligibility.isTrustedSnapshot(sourceCardSnapshot)) {
+    try {
+      const verified = await cardEligibility.retrieveEligibleCard({
+        paymentMethodId: stripePaymentMethodId,
+        expectedCustomerId: organizer.stripe_customer_id || null,
+        ownership: offSession ? 'saved' : 'typed_user',
+        reconciliationCode: 'guarantee_payment_method_verification_unavailable',
+      });
+      sourceCardSnapshot = verified.snapshot;
+    } catch (e) {
+      if (e.status === 422) {
+        await markAuthFailed(mesaId, e.code);
+        return { status: 'failed', reason: e.code };
+      }
+      logger.error('guarantee_source_card_verification_failed', {
+        mesa_id: mesaId, error: e.message, code: e.code || null,
+      });
+      return { status: 'reconciliation_pending', reason: e.code || 'guarantee_payment_method_verification_unavailable' };
+    }
+  }
+
+  // El target se sella localmente antes de clonar o crear nada en Stripe. Si la
+  // cuenta del restaurante cambia durante un timeout, el retry conserva el riel,
+  // la comisión y la misma idempotency key del primer intento.
+  try {
+    decision ||= await decideCardGuaranteeRail({
+      mesaId, organizerId: organizer.id, amountCents,
+      sourcePaymentMethodId: stripePaymentMethodId,
+      offSession, savePaymentMethod: savePm,
+      customerId: organizer.stripe_customer_id || null,
+      sourceCardSnapshot,
+    });
+  } catch (e) {
+    if (e.code === 'guarantee_application_fee_invalid') {
+      try {
+        const terminal = await markInvalidGuaranteeConfiguration(mesaId);
+        if (terminal.terminal) {
+          return { status: 'failed', reason: 'guarantee_application_fee_invalid' };
+        }
+      } catch (terminalError) {
+        logger.error('guarantee_configuration_terminalization_failed', {
+          mesa_id: mesaId, error: terminalError.message,
+        });
+      }
+    }
+    if (e.code === 'guarantee_connect_account_not_ready') {
+      // 4B · la mesa queda en `pending_auth` sin hold ni PI. NO se termina la
+      // mesa: la cuenta puede volver a ser apta en minutos y el mismo
+      // idempotency_key tiene que poder converger. Lo que no puede pasar —y no
+      // pasa— es que se cree un hold de plataforma mientras tanto.
+      logger.warn('guarantee_connect_gate_rejected', {
+        mesa_id: mesaId, code: e.details?.connect_code || null,
+      });
+      return {
+        status: 'reconciliation_pending',
+        reason: 'connect_account_not_ready',
+        connectCode: e.details?.connect_code || null,
+      };
+    }
+    logger.error('guarantee_connect_target_failed', { mesa_id: mesaId, error: e.message });
+    return { status: 'reconciliation_pending', reason: 'connect_target_unavailable' };
+  }
+  const targetAccount = decision.accountId || null;
+  const holdAppFee = Number(decision.applicationFeeCents || 0);
+  const durableSourcePmId = decision.sourcePaymentMethodId;
+  const durableCustomerId = decision.customerId;
+  const durableOffSession = decision.offSession;
+  const durableSavePm = decision.savePaymentMethod;
+  let holdPmId = decision.chargePaymentMethodId || durableSourcePmId;
+  if (targetAccount) {
+    if (!decision.chargePaymentMethodId) {
+      try {
+        const clon = await stripeService.clonePaymentMethodToAccount({
+          payment_method_id: durableSourcePmId,
+          // Solo para tarjetas guardadas: clonar con `customer` exige que el pm_
+          // esté adjunto a ESE customer (ver v2.23).
+          customer_id: durableOffSession ? durableCustomerId : null,
+          stripe_account: targetAccount,
+          idempotency_key: `clone_guarantee_${mesaId}`,
+        });
+        const cloneId = cardEligibility.remoteId(clon);
+        const verifiedClone = await cardEligibility.retrieveEligibleCard({
+          paymentMethodId: cloneId,
+          stripeAccount: targetAccount,
+          ownership: 'clone',
+          expectedSnapshot: decision.sourceCardSnapshot,
+          reconciliationCode: 'connect_payment_method_reconciliation_pending',
+        });
+        holdPmId = await persistGuaranteeChargePaymentMethod({
+          mesaId, organizerId: organizer.id, amountCents,
+          chargePaymentMethodId: cloneId,
+          chargeCardVerifiedAt: verifiedClone.snapshot.verifiedAt,
+        });
+      } catch (e) {
+        logger.error('guarantee_pm_clone_failed', {
+          mesa_id: mesaId, account: targetAccount, error: e.message,
+        });
+        return { status: 'reconciliation_pending', reason: 'connect_payment_method_unavailable' };
+      }
+    }
+  } else if (!decision.chargePaymentMethodId) {
+    return { status: 'reconciliation_pending', reason: 'guarantee_provider_snapshot_incomplete' };
   }
 
   let intent;
   try {
     intent = await stripeService.createPaymentIntent({
       amount_cents: amountCents,
-      customer_id: organizer.stripe_customer_id,
-      payment_method_id: stripePaymentMethodId,
+      // En direct charge el customer es de plataforma: no viaja (ver v2.23).
+      customer_id: targetAccount ? undefined : durableCustomerId,
+      payment_method_id: holdPmId,
       capture_method: 'manual',                 // ← HOLD
       idempotency_key: `guarantee_${mesaId}`,
+      ...(targetAccount && { stripe_account: targetAccount, application_fee_cents: holdAppFee }),
       // D4 (v2.16): tarjeta guardada → off_session; tarjeta tipeada con opt-in
       // de guardado → setup_future_usage (Stripe la adjunta al confirmar).
-      off_session: offSession,
-      ...(savePm && { setup_future_usage: 'off_session' }),
+      off_session: durableOffSession,
+      // D4 + Connect: sobre un direct charge, setup_future_usage adjuntaría la
+      // tarjeta a la cuenta del RESTAURANTE, no a la bóveda de PayMe.
+      ...(durableSavePm && !targetAccount && { setup_future_usage: 'off_session' }),
       metadata: {
         kind: 'guarantee_auth', mesa_id: mesaId, user_id: organizer.id,
-        ...(savePm && { save_pm: '1' }),   // el webhook 3DS espeja al autorizar
+        ...(durableSavePm && !targetAccount && { save_pm: '1' }),   // el webhook 3DS espeja al autorizar
       },
     });
   } catch (err) {
-    // D4: off_session puede exigir 3DS — el PI quedó en requires_action:
-    // mismo camino 3DS de siempre (mesa pending_auth + client_secret; el
-    // webhook amount_capturable_updated la abrirá).
-    const pi = err.raw?.payment_intent || err.payment_intent;
-    if (err.code === 'authentication_required' && pi) {
-      await pool.query(
-        `UPDATE mesas
-            SET auth_method='card', auth_payment_intent_id=$2, auth_amount_cents=$3
-          WHERE id=$1 AND status='pending_auth'`,
-        [mesaId, pi.id, amountCents]
-      );
-      return { status: 'requires_action', clientSecret: pi.client_secret };
+    const rawPi = err.raw?.payment_intent || err.payment_intent;
+    const pi = rawPi ? { ...rawPi, payme_request_account_id: targetAccount } : null;
+    // authentication_required puede devolver un PI real en requires_action;
+    // se procesa igual que una respuesta normal. Los únicos errores sin PI que
+    // se consideran terminales son rechazos de tarjeta inequívocos. Timeout,
+    // 5xx o error genérico pueden ocultar un hold remoto creado con la misma key.
+    if (pi) {
+      try {
+        assertGuaranteeIntentShape(pi, {
+          mesaId, organizerId: organizer.id, amountCents,
+          accountId: targetAccount, applicationFeeCents: holdAppFee,
+          chargePaymentMethodId: holdPmId,
+          customerId: targetAccount ? null : durableCustomerId,
+          offSession: durableOffSession,
+          setupFutureUsage: durableSavePm && !targetAccount ? 'off_session' : null,
+        });
+      } catch (shapeErr) {
+        logger.error('guarantee_hold_remote_contract_mismatch', {
+          mesa_id: mesaId, intent_id: pi.id || null, error: shapeErr.message,
+          mismatches: shapeErr.details?.mismatches || [],
+        });
+        return { status: 'reconciliation_pending', reason: 'guarantee_reconciliation_pending' };
+      }
     }
-    logger.warn('guarantee_hold_stripe_error', { mesa_id: mesaId, error: err.message });
-    await markAuthFailed(mesaId, err.message);
-    return { status: 'failed', reason: err.message };
+    if (pi && ['requires_capture', 'requires_action'].includes(pi.status)) {
+      intent = pi;
+    } else if ((pi && ['requires_payment_method', 'canceled'].includes(pi.status))
+        || (!pi && err.type === 'StripeCardError'
+            && ['card_declined', 'expired_card', 'incorrect_cvc'].includes(err.code))) {
+      logger.warn('guarantee_hold_declined', {
+        mesa_id: mesaId, code: err.code || null, stripe_status: pi?.status || null,
+      });
+      const terminalReason = err.message || err.code || `stripe_status_${pi?.status || 'failed'}`;
+      await markAuthFailed(mesaId, terminalReason);
+      return { status: 'failed', reason: terminalReason };
+    } else {
+      logger.error('guarantee_hold_result_ambiguous', {
+        mesa_id: mesaId, error: err.message, code: err.code || null,
+      });
+      return { status: 'reconciliation_pending', reason: 'guarantee_reconciliation_pending' };
+    }
+  }
+
+  try {
+    assertGuaranteeIntentShape(intent, {
+      mesaId, organizerId: organizer.id, amountCents,
+      accountId: targetAccount, applicationFeeCents: holdAppFee,
+      chargePaymentMethodId: holdPmId,
+      customerId: targetAccount ? null : durableCustomerId,
+      offSession: durableOffSession,
+      setupFutureUsage: durableSavePm && !targetAccount ? 'off_session' : null,
+    });
+  } catch (err) {
+    logger.error('guarantee_hold_remote_contract_mismatch', {
+      mesa_id: mesaId, intent_id: intent?.id || null, error: err.message,
+      mismatches: err.details?.mismatches || [],
+    });
+    return { status: 'reconciliation_pending', reason: 'guarantee_reconciliation_pending' };
   }
 
   // requires_capture = hold OK | requires_action = 3DS | otro = rechazo
   if (intent.status === 'requires_capture') {
-    await pool.tx(async (client) => {
-      const upd = await client.query(
-        `UPDATE mesas
-            SET status='open', auth_method='card',
-                auth_payment_intent_id=$2, auth_amount_cents=$3
-          WHERE id=$1 AND status='pending_auth'`,
-        [mesaId, intent.id, amountCents]
-      );
-      // Outbox E1a: table_opened solo si ESTA corrida abrió la mesa (si el
-      // webhook 3DS ganó la carrera, él ya emitió el evento).
-      if (upd.rowCount === 1) {
-        await eventEmitter.enqueueTableOpened(client, mesaId);
-        // Outbox E6 (v2.13): hold autorizado → payment_secured (misma tx, seq siguiente).
-        await eventEmitter.enqueuePaymentSecured(client, mesaId);
-      }
-    });
+    try {
+      await persistCardGuaranteeIntent({
+        mesaId, organizerId: organizer.id, amountCents, intent,
+        accountId: targetAccount, applicationFeeCents: holdAppFee,
+      });
+    } catch (err) {
+      logger.error('guarantee_hold_persistence_pending', {
+        mesa_id: mesaId, intent_id: intent.id, error: err.message,
+      });
+      return { status: 'reconciliation_pending', reason: 'guarantee_reconciliation_pending' };
+    }
     logger.audit('guarantee_hold_placed', { mesa_id: mesaId, method: 'card', intent_id: intent.id, amount: amountCents });
     // D4: hold autorizado sin 3DS y con opt-in de guardado → espejar sync
     // (best-effort, jamás lanza). El camino 3DS lo cubre el webhook.
     // OJO: se espeja intent.payment_method (lo que Stripe ADJUNTÓ), no el id
     // del request — los alias de test (pm_card_visa) y algunos wallets se
     // materializan en otro pm_ al confirmar.
-    if (savePm) {
+    if (durableSavePm && !targetAccount) {
       await savedCards.mirrorSavedPaymentMethod(
-        organizer.id, intent.payment_method || stripePaymentMethodId
+        organizer.id, intent.payment_method || durableSourcePmId
       );
+    } else if (durableSavePm && targetAccount) {
+      logger.warn('save_pm_omitido_en_garantia_directa', {
+        mesa_id: mesaId, account: targetAccount,
+      });
     }
-    return { status: 'open' };
+    return { status: 'open', connectedAccountId: targetAccount };
   }
 
   if (intent.status === 'requires_action') {
     // 3DS: guardamos el PI y devolvemos client_secret; la mesa queda pending_auth.
     // El webhook payment_intent.amount_capturable_updated la pasará a 'open'.
-    await pool.query(
-      `UPDATE mesas
-          SET auth_method='card', auth_payment_intent_id=$2, auth_amount_cents=$3
-        WHERE id=$1 AND status='pending_auth'`,
-      [mesaId, intent.id, amountCents]
-    );
-    return { status: 'requires_action', clientSecret: intent.client_secret };
+    try {
+      await persistCardGuaranteeIntent({
+        mesaId, organizerId: organizer.id, amountCents, intent,
+        accountId: targetAccount, applicationFeeCents: holdAppFee,
+      });
+    } catch (err) {
+      logger.error('guarantee_hold_persistence_pending', {
+        mesa_id: mesaId, intent_id: intent.id, error: err.message,
+      });
+      return { status: 'reconciliation_pending', reason: 'guarantee_reconciliation_pending' };
+    }
+    if (!intent.client_secret) {
+      logger.error('guarantee_hold_client_secret_missing', {
+        mesa_id: mesaId, intent_id: intent.id,
+      });
+      return { status: 'reconciliation_pending', reason: 'guarantee_client_secret_missing' };
+    }
+    return { status: 'requires_action', clientSecret: intent.client_secret,
+             connectedAccountId: targetAccount };
   }
 
-  // rechazo u otro estado no capturable
-  await markAuthFailed(mesaId, `stripe_status_${intent.status}`);
-  try { await stripeService.cancelIntent(intent.id, 'abandoned'); } catch (_) { /* noop */ }
-  return { status: 'failed', reason: `stripe_status_${intent.status}` };
+  if (['requires_payment_method', 'canceled'].includes(intent.status)) {
+    await markAuthFailed(mesaId, `stripe_status_${intent.status}`);
+    return { status: 'failed', reason: `stripe_status_${intent.status}` };
+  }
+  logger.error('guarantee_hold_unexpected_remote_status', {
+    mesa_id: mesaId, intent_id: intent.id, stripe_status: intent.status,
+  });
+  return { status: 'reconciliation_pending', reason: 'guarantee_reconciliation_pending' };
+}
+
+async function sweepPreparedGuarantees({ limit = SETTLE_BATCH, mesaId = null } = {}) {
+  const safeLimit = Number.isSafeInteger(Number(limit))
+    ? Math.max(1, Math.min(Number(limit), 100))
+    : SETTLE_BATCH;
+  // Una fila legacy sin PI local puede ocultar un hold remoto creado bajo la
+  // key guarantee_<mesa>. No hay evidencia suficiente para afirmar si Stripe
+  // fue llamado: no se promueve ni se reemite. Se hace visible como bloqueo de
+  // inventario/preflight en vez de quedar silenciosamente fuera del sweep.
+  const { rows: [legacyInventory] } = await pool.query(
+    `SELECT COUNT(*)::int AS n
+       FROM mesas
+      WHERE status='pending_auth' AND guarantee_mode=true
+        AND auth_method='card' AND auth_payment_intent_id IS NULL
+        AND auth_source_payment_method_id IS NOT NULL
+        AND auth_card_policy_version=0
+        AND created_at < NOW() - INTERVAL '2 minutes'
+        AND ($1::uuid IS NULL OR id=$1)`,
+    [mesaId]
+  );
+  const legacyAmbiguous = Number(legacyInventory?.n || 0);
+  if (legacyAmbiguous > 0) {
+    logger.error('legacy_guarantee_binding_inventory_blocked', {
+      count: legacyAmbiguous,
+      scoped_mesa: mesaId || null,
+      action: 'inventory_and_quarantine_required',
+    });
+  }
+  const { rows } = await pool.query(
+    `SELECT id, opener_user_id, total_cents, auth_source_payment_method_id,
+            auth_stripe_customer_id, auth_off_session, auth_save_payment_method
+       FROM mesas
+      WHERE status='pending_auth' AND guarantee_mode=true
+        AND auth_method='card' AND auth_payment_intent_id IS NULL
+        AND auth_source_payment_method_id IS NOT NULL
+        AND auth_stripe_customer_id IS NOT NULL
+        AND auth_off_session IS NOT NULL AND auth_save_payment_method IS NOT NULL
+        AND auth_card_policy_version=1
+        AND auth_card_brand IN ('visa','mastercard','amex')
+        AND auth_card_funding IN ('credit','debit')
+        AND auth_card_verified_at IS NOT NULL
+        AND (auth_charge_payment_method_id IS NULL
+             OR auth_charge_card_verified_at IS NOT NULL)
+        AND created_at < NOW() - INTERVAL '2 minutes'
+        AND ($2::uuid IS NULL OR id=$2)
+      ORDER BY created_at ASC, id ASC
+      LIMIT $1`,
+    [safeLimit, mesaId]
+  );
+  let resolved = 0;
+  let pending = 0;
+  for (const row of rows) {
+    try {
+      const result = await placeCardHold({
+        mesaId: row.id,
+        organizer: {
+          id: row.opener_user_id,
+          stripe_customer_id: row.auth_stripe_customer_id,
+        },
+        method: 'card',
+        stripePaymentMethodId: row.auth_source_payment_method_id,
+        amountCents: Number(row.total_cents),
+        offSession: row.auth_off_session,
+        savePm: row.auth_save_payment_method,
+      });
+      if (['open', 'requires_action', 'failed'].includes(result.status)) resolved++;
+      else pending++;
+    } catch (err) {
+      pending++;
+      logger.error('guarantee_binding_sweep_failed', {
+        mesa_id: row.id, error: err.message,
+      });
+    }
+  }
+  if (rows.length > 0) {
+    logger.info('guarantee_binding_sweep', { selected: rows.length, resolved, pending });
+  }
+  return {
+    selected: rows.length,
+    resolved,
+    pending,
+    legacyAmbiguous,
+    releaseBlocked: legacyAmbiguous > 0,
+  };
 }
 
 async function placeWalletHold({ mesaId, organizer, amountCents }) {
   try {
     return await pool.tx(async (client) => {
+      // Orden de locks de garantía: mesa -> wallet. La mesa es la operación
+      // dueña; sin su transición exacta ningún replay puede reservar saldo.
+      const { rows: mesaRows } = await client.query(
+        `SELECT id,status,opener_user_id,total_cents,guarantee_mode,auth_method,
+                auth_held_balance_cents,auth_amount_cents
+           FROM mesas WHERE id=$1 FOR UPDATE`, [mesaId]
+      );
+      const mesa = mesaRows[0];
+      if (!mesa || mesa.opener_user_id !== organizer.id || !mesa.guarantee_mode ||
+          Number(mesa.total_cents) !== amountCents) {
+        return { status: 'failed', reason: 'guarantee_hold_mismatch' };
+      }
+      if (mesa.status === 'open' && mesa.auth_method === 'wallet' &&
+          Number(mesa.auth_held_balance_cents) === amountCents && Number(mesa.auth_amount_cents) === amountCents) {
+        return { status: 'open', idempotent: true };
+      }
+      if (mesa.status !== 'pending_auth') {
+        return { status: 'failed', reason: 'guarantee_state_conflict' };
+      }
       const { rows } = await client.query(
         `SELECT id, balance_cents, held_balance_cents
            FROM wallets WHERE user_id=$1 FOR UPDATE`,
         [organizer.id]
       );
       const w = rows[0];
-      const available = w ? Number(w.balance_cents) - Number(w.held_balance_cents) : 0;
+      const available = w
+        ? sumCents(w.balance_cents, -BigInt(w.held_balance_cents || 0))
+        : 0;
       if (!w || available < amountCents) {
-        await client.query(
-          `UPDATE mesas SET status='auth_failed' WHERE id=$1 AND status='pending_auth'`,
-          [mesaId]
-        );
+        await transitionMesaAuthFailed(client, mesaId, 'insufficient_balance_for_guarantee');
         return { status: 'failed', reason: 'insufficient_balance_for_guarantee', available, required: amountCents };
       }
-      await client.query(
-        `UPDATE wallets SET held_balance_cents = held_balance_cents + $2, updated_at=NOW() WHERE id=$1`,
-        [w.id, amountCents]
-      );
+      // La transición se acredita antes del side effect de wallet, dentro de
+      // la misma tx. Si no es nuestra, se aborta sin hold/ledger/eventos.
       const upd = await client.query(
         `UPDATE mesas
             SET status='open', auth_method='wallet',
@@ -184,30 +1045,258 @@ async function placeWalletHold({ mesaId, organizer, amountCents }) {
           WHERE id=$1 AND status='pending_auth'`,
         [mesaId, amountCents]
       );
+      if (upd.rowCount !== 1) return { status: 'failed', reason: 'guarantee_state_conflict' };
+      await stateMachine.transition({
+        client, entityType: 'mesa', entityId: mesaId,
+        fromState: 'pending_auth', toState: 'open',
+        reason: 'guarantee_hold_authorized', triggeredBy: 'system',
+      });
+      await client.query(
+        `UPDATE wallets SET held_balance_cents = held_balance_cents + $2, updated_at=NOW() WHERE id=$1`,
+        [w.id, amountCents]
+      );
       // Outbox E1b: misma tx del hold de wallet.
-      if (upd.rowCount === 1) {
-        await eventEmitter.enqueueTableOpened(client, mesaId);
-        // Outbox E6 (v2.13): hold autorizado → payment_secured (misma tx, seq siguiente).
-        await eventEmitter.enqueuePaymentSecured(client, mesaId);
-      }
+      await eventEmitter.enqueueTableOpened(client, mesaId);
+      // Outbox E6 (v2.13): hold autorizado → payment_secured (misma tx, seq siguiente).
+      await eventEmitter.enqueuePaymentSecured(client, mesaId);
       logger.audit('guarantee_hold_placed', { mesa_id: mesaId, method: 'wallet', amount: amountCents });
       return { status: 'open' };
     });
   } catch (err) {
     logger.error('guarantee_wallet_hold_failed', { mesa_id: mesaId, error: err.message });
-    await markAuthFailed(mesaId, err.message);
-    return { status: 'failed', reason: err.message };
+    return { status: 'reconciliation_pending', reason: 'guarantee_persistence_failed' };
   }
 }
 
+async function transitionMesaAuthFailed(client, mesaId, reason, triggeredBy = 'system') {
+  const upd = await client.query(
+    `UPDATE mesas SET status='auth_failed'
+      WHERE id=$1 AND status='pending_auth'
+      RETURNING id`,
+    [mesaId]
+  );
+  if (upd.rowCount === 1) {
+    await stateMachine.transition({
+      client, entityType: 'mesa', entityId: mesaId,
+      fromState: 'pending_auth', toState: 'auth_failed',
+      reason, triggeredBy,
+    });
+    return { changed: true, status: 'auth_failed' };
+  }
+  const { rows: [current] } = await client.query(
+    `SELECT status FROM mesas WHERE id=$1 FOR UPDATE`, [mesaId]
+  );
+  return { changed: false, status: current?.status || null };
+}
+
 async function markAuthFailed(mesaId, reason) {
-  try {
-    await pool.query(
-      `UPDATE mesas SET status='auth_failed' WHERE id=$1 AND status IN ('pending_auth','open')`,
+  return pool.tx(async (client) => {
+    const result = await transitionMesaAuthFailed(client, mesaId, reason);
+    if (result.changed) {
+      logger.warn('guarantee_auth_failed', { mesa_id: mesaId, reason });
+    }
+    return result;
+  });
+}
+
+/**
+ * Terminaliza exclusivamente una configuración inválida detectada antes de
+ * cualquier side effect Stripe. Si otra request ya selló el riel o el PI, no
+ * pisa esa obligación: el caller vuelve a reconciliación fail-closed.
+ */
+async function markInvalidGuaranteeConfiguration(mesaId) {
+  return pool.tx(async (client) => {
+    const { rows: [row] } = await client.query(
+      `SELECT status,auth_method,auth_payment_intent_id
+         FROM mesas WHERE id=$1 FOR UPDATE`,
       [mesaId]
     );
-    logger.warn('guarantee_auth_failed', { mesa_id: mesaId, reason });
-  } catch (_) { /* noop */ }
+    if (!row) return { terminal: false, status: null };
+    if (row.status !== 'pending_auth' || row.auth_method !== null
+        || row.auth_payment_intent_id !== null) {
+      return { terminal: false, status: row.status };
+    }
+    const transitioned = await transitionMesaAuthFailed(
+      client, mesaId, 'guarantee_application_fee_invalid'
+    );
+    if (transitioned.changed) {
+      logger.warn('guarantee_configuration_failed', {
+        mesa_id: mesaId, reason: 'guarantee_application_fee_invalid',
+      });
+    }
+    return {
+      terminal: transitioned.changed || transitioned.status === 'auth_failed',
+      status: transitioned.status,
+    };
+  });
+}
+
+/**
+ * Reconciliación estricta del replay de una mesa cuya garantía ya tiene un
+ * PaymentIntent durable. Nunca devuelve una respuesta "requires_action" sin
+ * haber recuperado y validado el mismo PI y su client_secret.
+ *
+ * Este camino existe para la respuesta perdida después de bindear el PI. La
+ * metadata remota no decide identidad: id, cuenta, monto, fee y organizador se
+ * comparan contra el snapshot local antes de tocar el estado.
+ */
+async function reconcileGuaranteeReplay({
+  mesaId, organizerId, amountCents, intentId, accountId = null,
+  applicationFeeCents = 0, chargePaymentMethodId, customerId,
+  offSession, savePaymentMethod,
+}) {
+  if (!mesaId || !organizerId || !intentId
+      || !chargePaymentMethodId || !customerId
+      || typeof offSession !== 'boolean' || typeof savePaymentMethod !== 'boolean'
+      || !Number.isSafeInteger(Number(amountCents)) || Number(amountCents) <= 0
+      || !Number.isSafeInteger(Number(applicationFeeCents))
+      || Number(applicationFeeCents) < 0) {
+    return { resolved: false, reason: 'guarantee_snapshot_incomplete' };
+  }
+
+  let intent;
+  try {
+    intent = await stripeService.retrieveIntent(intentId, accountId || null);
+  } catch (err) {
+    logger.warn('guarantee_replay_retrieve_uncertain', {
+      mesa_id: mesaId, intent_id: intentId, error: err.message,
+    });
+    return { resolved: false, reason: 'guarantee_retrieve_uncertain' };
+  }
+
+  try {
+    if (intent?.id !== intentId) {
+      throw guaranteeInvariantError('guarantee_intent_contract_mismatch', {
+        mismatches: ['intent_id'], intent_id: intent?.id || null,
+      });
+    }
+    assertGuaranteeIntentShape(intent, {
+      mesaId, organizerId, amountCents: Number(amountCents),
+      accountId: accountId || null,
+      applicationFeeCents: Number(applicationFeeCents),
+      chargePaymentMethodId,
+      customerId: accountId ? null : customerId,
+      offSession,
+      setupFutureUsage: savePaymentMethod && !accountId ? 'off_session' : null,
+    });
+  } catch (err) {
+    logger.error('guarantee_replay_remote_contract_mismatch', {
+      mesa_id: mesaId, intent_id: intent?.id || null,
+      error: err.message, mismatches: err.details?.mismatches || [],
+    });
+    return { resolved: false, reason: 'guarantee_contract_mismatch' };
+  }
+
+  if (intent.status === 'requires_action') {
+    if (!intent.client_secret) {
+      return { resolved: false, reason: 'guarantee_client_secret_missing' };
+    }
+    try {
+      await persistCardGuaranteeIntent({
+        mesaId, organizerId, amountCents: Number(amountCents), intent,
+        accountId: accountId || null,
+        applicationFeeCents: Number(applicationFeeCents),
+      });
+    } catch (err) {
+      logger.error('guarantee_replay_binding_pending', {
+        mesa_id: mesaId, intent_id: intentId, error: err.message,
+      });
+      return { resolved: false, reason: 'guarantee_binding_pending' };
+    }
+    return {
+      resolved: true, status: 'requires_action',
+      clientSecret: intent.client_secret,
+      connectedAccountId: accountId || null,
+    };
+  }
+
+  if (intent.status === 'requires_capture') {
+    try {
+      await persistCardGuaranteeIntent({
+        mesaId, organizerId, amountCents: Number(amountCents), intent,
+        accountId: accountId || null,
+        applicationFeeCents: Number(applicationFeeCents),
+      });
+    } catch (err) {
+      logger.error('guarantee_replay_authorization_pending', {
+        mesa_id: mesaId, intent_id: intentId, error: err.message,
+      });
+      return { resolved: false, reason: 'guarantee_authorization_pending' };
+    }
+    return {
+      resolved: true, status: 'open', connectedAccountId: accountId || null,
+    };
+  }
+
+  if (intent.status === 'succeeded') {
+    const review = {
+      reason: 'guarantee_captured_outside_settlement',
+      source: 'api_replay', intent_id: intent.id,
+      observed_at: new Date().toISOString(),
+    };
+    try {
+      await pool.tx(async (client) => {
+        const { rows: [row] } = await client.query(
+          `SELECT status, metadata, auth_payment_intent_id
+             FROM mesas WHERE id=$1 FOR UPDATE`,
+          [mesaId]
+        );
+        if (!row || row.auth_payment_intent_id !== intentId) {
+          throw guaranteeInvariantError('guarantee_binding_conflict');
+        }
+        if (row.metadata?.guarantee_manual_review) return;
+        if (row.status !== 'pending_auth') {
+          throw guaranteeInvariantError('guarantee_state_conflict', { status: row.status });
+        }
+        const upd = await client.query(
+          `UPDATE mesas
+              SET status='settling',
+                  metadata=jsonb_set(
+                    COALESCE(metadata, '{}'::jsonb),
+                    '{guarantee_manual_review}', $2::jsonb, true
+                  )
+            WHERE id=$1 AND status='pending_auth'`,
+          [mesaId, JSON.stringify(review)]
+        );
+        if (upd.rowCount !== 1) throw new Error('guarantee_replay_quarantine_race');
+        await stateMachine.transition({
+          client, entityType: 'mesa', entityId: mesaId,
+          fromState: 'pending_auth', toState: 'settling',
+          reason: review.reason, triggeredBy: 'system',
+          metadata: { intent_id: intent.id, source: review.source },
+        });
+      });
+    } catch (err) {
+      logger.error('guarantee_replay_quarantine_pending', {
+        mesa_id: mesaId, intent_id: intentId, error: err.message,
+      });
+      return { resolved: false, reason: 'guarantee_quarantine_pending' };
+    }
+    return { resolved: false, manualReview: true, reason: review.reason };
+  }
+
+  if (['canceled', 'requires_payment_method'].includes(intent.status)) {
+    try {
+      const terminal = await markAuthFailed(mesaId, `stripe_status_${intent.status}`);
+      if (terminal.status !== 'auth_failed') {
+        return { resolved: false, reason: 'guarantee_terminal_state_race' };
+      }
+    } catch (err) {
+      logger.error('guarantee_replay_terminal_persistence_pending', {
+        mesa_id: mesaId, intent_id: intentId, error: err.message,
+      });
+      return { resolved: false, reason: 'guarantee_terminal_persistence_pending' };
+    }
+    return { resolved: true, status: 'failed', reason: `stripe_status_${intent.status}` };
+  }
+
+  logger.warn('guarantee_replay_unexpected_remote_status', {
+    mesa_id: mesaId, intent_id: intentId, stripe_status: intent.status || null,
+  });
+  return {
+    resolved: false,
+    reason: `guarantee_remote_status_${intent.status || 'unknown'}`,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -217,10 +1306,16 @@ async function settleMesa(mesaId) {
   // ── Fase 1 (tx): lock + validar + calcular faltante + marcar 'settling' ──
   const phase1 = await pool.tx(async (client) => {
     const { rows } = await client.query(
-      `SELECT id, restaurant_id, total_cents, status, guarantee_mode, auth_method,
-              auth_payment_intent_id, auth_amount_cents, auth_held_balance_cents,
-              opener_user_id, settled_at
-         FROM mesas WHERE id=$1 FOR UPDATE`,
+      `SELECT m.id, m.restaurant_id, m.total_cents, m.status, m.guarantee_mode, m.auth_method,
+              m.auth_payment_intent_id, m.auth_amount_cents, m.auth_held_balance_cents,
+              m.auth_stripe_account_id, m.auth_application_fee_cents,
+              m.auth_source_payment_method_id, m.auth_charge_payment_method_id,
+              m.auth_stripe_customer_id, m.auth_off_session,
+              m.auth_save_payment_method,
+              m.opener_user_id, m.settled_at, m.metadata,
+              r.fee_pct
+         FROM mesas m LEFT JOIN restaurants r ON r.id = m.restaurant_id
+        WHERE m.id=$1 FOR UPDATE OF m`,
       [mesaId]
     );
     const m = rows[0];
@@ -228,39 +1323,85 @@ async function settleMesa(mesaId) {
     if (m.settled_at || ['settled', 'dispersing', 'completed', 'cancelled'].includes(m.status)) {
       return { skip: 'already_settled' };
     }
+    if (m.metadata?.guarantee_manual_review) {
+      return {
+        blocked: 'guarantee_manual_review_required',
+        details: { guarantee_manual_review: m.metadata.guarantee_manual_review },
+      };
+    }
+    if (m.guarantee_mode) {
+      const totalCents = Number(m.total_cents);
+      const authAmount = Number(m.auth_amount_cents);
+      const authFee = Number(m.auth_application_fee_cents || 0);
+      const invalidCard = m.auth_method === 'card'
+        && (!m.auth_payment_intent_id
+            || !m.auth_source_payment_method_id
+            || !m.auth_charge_payment_method_id
+            || !m.auth_stripe_customer_id
+            || typeof m.auth_off_session !== 'boolean'
+            || typeof m.auth_save_payment_method !== 'boolean'
+            || !Number.isSafeInteger(totalCents) || totalCents <= 0
+            || !Number.isSafeInteger(authAmount) || authAmount !== totalCents
+            || !Number.isSafeInteger(authFee) || authFee < 0 || authFee > authAmount
+            || (!m.auth_stripe_account_id && authFee !== 0));
+      if (invalidCard || !['card', 'wallet'].includes(m.auth_method)) {
+        return {
+          blocked: 'invalid_guarantee_binding',
+          details: {
+            auth_method: m.auth_method || null,
+            has_intent: !!m.auth_payment_intent_id,
+            has_durable_source: !!m.auth_source_payment_method_id,
+            has_durable_charge_source: !!m.auth_charge_payment_method_id,
+            has_durable_customer: !!m.auth_stripe_customer_id,
+            provider_flags_prepared: typeof m.auth_off_session === 'boolean'
+              && typeof m.auth_save_payment_method === 'boolean',
+            auth_amount_cents: Number.isFinite(authAmount) ? authAmount : null,
+            total_cents: totalCents,
+            has_connected_account: !!m.auth_stripe_account_id,
+            auth_application_fee_cents: authFee,
+          },
+        };
+      }
+    }
     const settleable =
       ['open', 'partially_paid', 'expired', 'fully_paid'].includes(m.status) || m.status === 'settling';
     if (!settleable) return { skip: `status_${m.status}` };
 
-    const { rows: cr } = await client.query(
-      `SELECT COALESCE(SUM(items_amount_cents),0) AS collected
-         FROM payment_attempts
-        WHERE mesa_id=$1 AND status IN ('succeeded','processed')`,
-      [mesaId]
-    );
-    const collected = Number(cr[0].collected);
-    const total = Number(m.total_cents);
-    const shortfall = Math.max(0, total - collected);
-
-    if (m.status !== 'settling') {
-      await client.query(`UPDATE mesas SET status='settling' WHERE id=$1`, [mesaId]);
-      // v2.11: rastro de auditoría de la transición (el FSM ya la define; cierra
-      // el gap documentado en el header de utils/stateMachine.js). Best-effort.
-      try {
-        await stateMachine.transition({
-          client, entityType: 'mesa', entityId: mesaId,
-          fromState: m.status, toState: 'settling',
-          reason: 'settlement_sweep', triggeredBy: 'worker',
-        });
-      } catch (e) {
-        logger.warn('settle_audit_transition_failed', { mesa_id: mesaId, error: e.message });
-      }
+    // Un PaymentIntent puede haber quedado `succeeded` antes de que llegara su
+    // webhook. Contarlo como cobrado sin aplicar claims/tips/paid_amount haría
+    // que E3 y los agregados cerraran con una foto contable incompleta. Mesa
+    // primero preserva el orden global de locks (mesa → attempt).
+    const preDrain = await drainSucceededAttempts(client, mesaId);
+    if (preDrain.unresolved.length > 0) {
+      return { blocked: 'succeeded_attempts_unprocessed', attempts: preDrain.unresolved };
     }
-    return { proceed: true, mesa: m, collected, total, shortfall };
+    const { rows: [freshMesa] } = await client.query(
+      `SELECT status FROM mesas WHERE id=$1`, [mesaId]
+    );
+    const currentStatus = freshMesa?.status || m.status;
+
+    if (currentStatus !== 'settling') {
+      await client.query(`UPDATE mesas SET status='settling' WHERE id=$1`, [mesaId]);
+      // Auditoría de estado obligatoria: si falla, la fase 1 completa revierte
+      // y nunca se llama a Stripe con una mesa que no quedó en settling.
+      await stateMachine.transition({
+        client, entityType: 'mesa', entityId: mesaId,
+        fromState: currentStatus, toState: 'settling',
+        reason: 'settlement_sweep', triggeredBy: 'worker',
+      });
+    }
+    return { proceed: true, mesa: m };
   });
 
+  if (phase1.blocked) {
+    const err = new Error(phase1.blocked);
+    err.code = phase1.blocked;
+    err.attempts = phase1.attempts;
+    err.details = phase1.details;
+    throw err;
+  }
   if (!phase1.proceed) return phase1;
-  const { mesa: m, total, collected, shortfall } = phase1;
+  const { mesa: m } = phase1;
 
   // ── Fase 1.5 (v2.11 · parche Opción 1 / FINDING A): cancelar pagos EN VUELO ──
   // La mesa cierra: los attempts pending/requires_action/processing/authorized no
@@ -268,26 +1409,323 @@ async function settleMesa(mesaId) {
   // del timer ('cancelling' → Stripe → 'cancelled'). Si Stripe ya cobró alguno,
   // el webhook lo rescata (webhooks.js) y queda trazado como
   // 'late_payment_after_settle' (paymentProcessor) para revisión.
-  try {
-    await cancelInFlightAttempts(m, mesaId);
-  } catch (e) {
-    logger.error('settle_cancel_inflight_failed', { mesa_id: mesaId, error: e.message });
+  // El marcado SQL y la cancelación confirmada forman una barrera monetaria:
+  // ante binding pendiente, error externo ambiguo o fallo de finalización se
+  // corta antes de capturar la garantía. El retry/webhook reconcilia el estado.
+  await cancelInFlightAttempts(m, mesaId);
+
+  // La barrera puede haber esperado a un webhook que ganó la carrera y llevó
+  // un attempt a succeeded/processed. El faltante calculado antes de esa espera
+  // sería un snapshot obsoleto y permitiría una captura excesiva. Se vuelve a
+  // bloquear la mesa y se calcula la foto monetaria definitiva sólo después de
+  // aislar todos los intentos no terminales.
+  const moneySnapshot = await pool.tx(async (client) => {
+    const { rows: [current] } = await client.query(
+      `SELECT status, total_cents, paid_amount_cents, tip_amount_cents,
+              settlement_fenced_at, settlement_snapshot_total_cents,
+              settlement_snapshot_collected_cents,
+              settlement_snapshot_tip_cents,
+              settlement_snapshot_shortfall_cents
+         FROM mesas WHERE id=$1 FOR UPDATE`, [mesaId]
+    );
+    if (!current || current.status !== 'settling') {
+      return { raced: true, status: current?.status || null };
+    }
+    // Cubre al webhook/binder que ganó justo después del primer drain y durante
+    // la cancelación externa. Si no puede aplicarse contablemente, se bloquea
+    // antes de calcular/capturar cualquier faltante.
+    const postDrain = await drainSucceededAttempts(client, mesaId);
+    if (postDrain.unresolved.length > 0) {
+      return { raced: false, blocked: 'succeeded_attempts_unprocessed', attempts: postDrain.unresolved };
+    }
+    // `postDrain` puede acreditar un succeeded que estaba esperando. Releer la
+    // fila dentro de la misma tx evita validar contra el objeto previo al drain.
+    const { rows: [fresh] } = await client.query(
+      `SELECT total_cents, paid_amount_cents, tip_amount_cents,
+              settlement_fenced_at, settlement_snapshot_total_cents,
+              settlement_snapshot_collected_cents,
+              settlement_snapshot_tip_cents,
+              settlement_snapshot_shortfall_cents
+         FROM mesas WHERE id=$1`,
+      [mesaId]
+    );
+    const { rows: [amounts] } = await client.query(
+      `SELECT COALESCE(SUM(items_amount_cents),0) AS collected,
+              COALESCE(SUM(tip_amount_cents),0) AS tips
+         FROM payment_attempts
+        WHERE mesa_id=$1 AND status='processed'`,
+      [mesaId]
+    );
+    let total;
+    let collected;
+    let tips;
+    let persistedPaid;
+    let persistedTips;
+    try {
+      total = sumCents(fresh.total_cents);
+      collected = sumCents(amounts.collected);
+      tips = sumCents(amounts.tips);
+      persistedPaid = sumCents(fresh.paid_amount_cents);
+      persistedTips = sumCents(fresh.tip_amount_cents);
+    } catch (err) {
+      return {
+        raced: false, blocked: 'settlement_money_snapshot_invalid',
+        details: { reason: 'unsafe_integer', error: err.message },
+      };
+    }
+    if (total <= 0 || collected < 0 || tips < 0 || persistedPaid < 0 || persistedTips < 0
+        || collected > total || collected !== persistedPaid || tips !== persistedTips) {
+      return {
+        raced: false, blocked: 'settlement_money_snapshot_invalid',
+        details: {
+          reason: collected > total ? 'collected_exceeds_total' : 'ledger_drift',
+          total_cents: total, collected_cents: collected,
+          paid_amount_cents: persistedPaid,
+          tip_cents: tips, tip_amount_cents: persistedTips,
+        },
+      };
+    }
+    if (fresh.settlement_fenced_at) {
+      let fencedTotal;
+      let fencedCollected;
+      let fencedTips;
+      let fencedShortfall;
+      try {
+        fencedTotal = sumCents(fresh.settlement_snapshot_total_cents);
+        fencedCollected = sumCents(fresh.settlement_snapshot_collected_cents);
+        fencedTips = sumCents(fresh.settlement_snapshot_tip_cents);
+        fencedShortfall = sumCents(fresh.settlement_snapshot_shortfall_cents);
+      } catch (err) {
+        return {
+          raced: false, blocked: 'settlement_money_fence_invalid',
+          details: { reason: 'unsafe_fenced_integer', error: err.message },
+        };
+      }
+      if (fencedTotal !== total || fencedCollected !== collected
+          || fencedCollected !== persistedPaid
+          || fencedTips !== tips || fencedTips !== persistedTips
+          || fencedShortfall !== sumCents(fencedTotal, -fencedCollected)) {
+        return {
+          raced: false, blocked: 'settlement_money_fence_invalid',
+          details: {
+            reason: 'fenced_snapshot_drift',
+            total_cents: total,
+            collected_cents: collected,
+            paid_amount_cents: persistedPaid,
+            fenced_total_cents: fencedTotal,
+            fenced_collected_cents: fencedCollected,
+            fenced_tip_cents: fencedTips,
+            fenced_shortfall_cents: fencedShortfall,
+          },
+        };
+      }
+      return {
+        raced: false,
+        total: fencedTotal,
+        collected: fencedCollected,
+        tips: fencedTips,
+        shortfall: fencedShortfall,
+        fencedAt: fresh.settlement_fenced_at,
+        reusedFence: true,
+      };
+    }
+    const shortfall = sumCents(total, -collected);
+    const { rows: [fenced] } = await client.query(
+      `UPDATE mesas
+          SET settlement_fenced_at=NOW(),
+              settlement_snapshot_total_cents=$2,
+              settlement_snapshot_collected_cents=$3,
+              settlement_snapshot_tip_cents=$4,
+              settlement_snapshot_shortfall_cents=$5
+        WHERE id=$1 AND settlement_fenced_at IS NULL
+      RETURNING settlement_fenced_at`,
+      [mesaId, total, collected, tips, shortfall]
+    );
+    if (!fenced) {
+      return {
+        raced: false, blocked: 'settlement_money_fence_race',
+        details: { reason: 'fence_compare_and_set_lost' },
+      };
+    }
+    return {
+      raced: false, total, collected, tips,
+      shortfall,
+      fencedAt: fenced.settlement_fenced_at,
+      reusedFence: false,
+    };
+  });
+  if (moneySnapshot.raced) {
+    logger.warn('settle_money_snapshot_lost_race', {
+      mesa_id: mesaId, status: moneySnapshot.status,
+    });
+    return { skip: 'raced_before_money_snapshot' };
   }
+  if (moneySnapshot.blocked) {
+    const err = new Error(moneySnapshot.blocked);
+    err.code = moneySnapshot.blocked;
+    err.attempts = moneySnapshot.attempts;
+    err.details = moneySnapshot.details;
+    throw err;
+  }
+  const { total, collected, tips, shortfall } = moneySnapshot;
 
   // ── Fase 2 (sin tx): captura/liberación de tarjeta — idempotente ──
   if (m.guarantee_mode && m.auth_method === 'card' && m.auth_payment_intent_id) {
+    // v2.24: el hold puede vivir en la cuenta del RESTAURANTE. Capturar o
+    // cancelar sin la cuenta da resource_missing: la captura entraría en el
+    // loop de reintentos del sweep (el restaurante nunca cobra el faltante) y
+    // la liberación fallaría en silencio, dejando el hold del comensal vivo
+    // hasta que venza a los ~7 días.
+    const authAcct = m.auth_stripe_account_id || null;
     try {
       if (shortfall > 0) {
-        // captura parcial = faltante; libera el remanente automáticamente
-        await stripeService.capturePaymentIntent(m.auth_payment_intent_id, shortfall, `capture_${mesaId}`);
+        // ── ORDEN OLA 4 · 4B · el gate antes de la CAPTURA ──────────────────
+        // Capturar mueve plata. Entre el hold y este momento pueden haber
+        // pasado horas: la cuenta pudo restringirse, perder `card_payments` o
+        // dejar de existir. Se revalida la MISMA cuenta durable —nunca se
+        // elige otra— y cualquier no-aptitud frena la captura. El hold sigue
+        // vivo y el sweep reintenta; lo que no ocurre es un cargo sobre una
+        // cuenta que hoy no está apta.
+        //
+        // LÍMITE DECLARADO: `authAcct === null` es una garantía de PLATAFORMA
+        // anterior a 4B. Su destino económico lo decide 4C ("cuarentena, no
+        // decidir automáticamente"); 4B no lo toca y no inventa esa política.
+        if (authAcct) {
+          let vigente;
+          try {
+            vigente = await connectGate.requireChargeTarget({ mesaId });
+          } catch (gateErr) {
+            throw gateErr instanceof connectGate.ConnectGateError
+              ? guaranteeInvariantError('guarantee_capture_connect_not_ready', {
+                connect_code: gateErr.code, auth_account: authAcct,
+              })
+              : gateErr;
+          }
+          if (vigente.accountId !== authAcct) {
+            // Un retry JAMÁS puede capturar contra otra cuenta que la que
+            // autorizó el hold, aunque el restaurante haya migrado la suya.
+            throw guaranteeInvariantError('guarantee_capture_account_mismatch', {
+              durable: authAcct, vigente: vigente.accountId,
+            });
+          }
+        }
+        // Comisión RECALCULADA sobre lo que se captura de verdad: Stripe la
+        // capa al monto capturado pero NO la prorratea (Fase 0 · E8).
+        // Prorrateo de la comisión AUTORIZADA (no del fee_pct vivo): el
+        // comensal autorizó con la tarifa de ese momento. Cero es un snapshot
+        // válido (restaurante 0%); filas legacy incompletas ya quedaron
+        // bloqueadas por `invalid_guarantee_binding` en Fase 1.
+        const authFee = Number(m.auth_application_fee_cents || 0);
+        const authAmt = Number(m.auth_amount_cents || 0);
+        const feeCaptura = !authAcct ? null
+          : prorateCents(authFee, shortfall, authAmt);
+        // captura parcial = faltante; libera el remanente automáticamente. Una
+        // excepción de red no prueba fracaso: se relee el MISMO PI, en la cuenta
+        // persistida, y sólo un `succeeded` exacto permite avanzar a Fase 3.
+        let captured;
+        try {
+          captured = await stripeService.capturePaymentIntent(
+            m.auth_payment_intent_id, shortfall, `capture_${mesaId}`,
+            { stripe_account: authAcct, application_fee_cents: feeCaptura }
+          );
+        } catch (captureErr) {
+          logger.warn('guarantee_capture_requires_reconciliation', {
+            mesa_id: mesaId, intent_id: m.auth_payment_intent_id,
+            auth_account: authAcct, error: captureErr.message,
+          });
+          try {
+            captured = await stripeService.retrieveIntent(m.auth_payment_intent_id, authAcct);
+          } catch (retrieveErr) {
+            const unresolved = guaranteeInvariantError('guarantee_capture_reconciliation_failed', {
+              capture_error: captureErr.message, retrieve_error: retrieveErr.message,
+            });
+            unresolved.cause = retrieveErr;
+            throw unresolved;
+          }
+        }
+        assertGuaranteeCaptureResult(captured, {
+          intentId: m.auth_payment_intent_id,
+          amountCents: shortfall,
+          authorizedAmountCents: Number(m.auth_amount_cents),
+          accountId: authAcct,
+          applicationFeeCents: feeCaptura,
+          chargePaymentMethodId: m.auth_charge_payment_method_id,
+          customerId: authAcct ? null : m.auth_stripe_customer_id,
+          setupFutureUsage: m.auth_save_payment_method && !authAcct ? 'off_session' : null,
+          offSession: m.auth_off_session,
+          mesaId,
+          organizerId: m.opener_user_id,
+        });
+        if (authAcct) {
+          // Se escribe en la columna de la comisión CAPTURADA. `auth_application_
+          // fee_cents` es la base del prorrateo y NO se toca: pisarla haría que
+          // cada reintento del sweep leyera un valor ya prorrateado y la
+          // comisión se partiera al medio en cada vuelta.
+          await pool.query(
+            `UPDATE mesas SET captured_application_fee_cents=$2 WHERE id=$1`,
+            [mesaId, feeCaptura]
+          );
+        }
       } else {
         // sin faltante: liberar el hold completo
-        try { await stripeService.cancelIntent(m.auth_payment_intent_id, 'abandoned'); }
-        catch (e) { logger.warn('guarantee_hold_release_noop', { mesa_id: mesaId, error: e.message }); }
+        let remote;
+        try {
+          remote = await stripeService.cancelIntent(
+            m.auth_payment_intent_id, 'abandoned', authAcct
+          );
+          assertGuaranteeReleaseResult(remote, {
+            intentId: m.auth_payment_intent_id,
+            authorizedAmountCents: Number(m.auth_amount_cents),
+            accountId: authAcct,
+            applicationFeeCents: Number(m.auth_application_fee_cents || 0),
+            chargePaymentMethodId: m.auth_charge_payment_method_id,
+            customerId: authAcct ? null : m.auth_stripe_customer_id,
+            setupFutureUsage: m.auth_save_payment_method && !authAcct ? 'off_session' : null,
+            offSession: m.auth_off_session,
+            mesaId,
+            organizerId: m.opener_user_id,
+          });
+        } catch (cancelErr) {
+          logger.warn('guarantee_hold_release_requires_reconciliation', {
+            mesa_id: mesaId, error: cancelErr.message,
+          });
+          remote = await stripeService.retrieveIntent(m.auth_payment_intent_id, authAcct);
+        }
+        assertGuaranteeReleaseResult(remote, {
+          intentId: m.auth_payment_intent_id,
+          authorizedAmountCents: Number(m.auth_amount_cents),
+          accountId: authAcct,
+          applicationFeeCents: Number(m.auth_application_fee_cents || 0),
+          chargePaymentMethodId: m.auth_charge_payment_method_id,
+          customerId: authAcct ? null : m.auth_stripe_customer_id,
+          setupFutureUsage: m.auth_save_payment_method && !authAcct ? 'off_session' : null,
+          offSession: m.auth_off_session,
+          mesaId,
+          organizerId: m.opener_user_id,
+        });
       }
     } catch (err) {
       // la captura falló de verdad → dejar 'settling' para que el sweep reintente
-      logger.error('guarantee_capture_failed', { mesa_id: mesaId, shortfall, error: err.message });
+      logger.error('guarantee_capture_failed', {
+        mesa_id: mesaId, shortfall, error: err.message,
+        auth_account: authAcct, riel: authAcct ? 'connect_direct' : 'plataforma',
+      });
+      // El sweep reintenta cada ~2 min PARA SIEMPRE. Si la captura viene
+      // fallando hace rato ya no es un hipo de red: o el hold venció (~7 días),
+      // o se está capturando contra la cuenta equivocada. En los dos casos el
+      // restaurante NO está cobrando su faltante → cola manual.
+      try {
+        const { rows: edad } = await pool.query(
+          `SELECT EXTRACT(EPOCH FROM (NOW() - updated_at))/60 AS min FROM mesas WHERE id=$1`,
+          [mesaId]
+        );
+        if (Number(edad[0]?.min || 0) > 30) {
+          logger.error('guarantee_capture_stuck_manual_review', {
+            mesa_id: mesaId, shortfall, minutos_atascada: Math.round(Number(edad[0].min)),
+            auth_account: authAcct, error: err.message,
+          });
+        }
+      } catch (_) { /* la alerta jamás debe tapar el error real */ }
       return { error: 'capture_failed', detail: err.message };
     }
   }
@@ -301,10 +1739,23 @@ async function settleMesa(mesaId) {
     // segunda corrida fallaba silencioso, pero su débito ya estaba commiteado.
     // (El camino tarjeta lo salvaba la idempotency key de Stripe; el wallet no.)
     const { rows: cur } = await client.query(
-      `SELECT status FROM mesas WHERE id=$1 FOR UPDATE`, [mesaId]
+      `SELECT status, settlement_fenced_at,
+              settlement_snapshot_total_cents,
+              settlement_snapshot_collected_cents,
+              settlement_snapshot_tip_cents,
+              settlement_snapshot_shortfall_cents
+         FROM mesas WHERE id=$1 FOR UPDATE`, [mesaId]
     );
     if (cur[0]?.status !== 'settling') {
       return { raced: true, status: cur[0]?.status };
+    }
+    const fence = cur[0];
+    if (!fence.settlement_fenced_at
+        || Number(fence.settlement_snapshot_total_cents) !== total
+        || Number(fence.settlement_snapshot_collected_cents) !== collected
+        || Number(fence.settlement_snapshot_tip_cents) !== tips
+        || Number(fence.settlement_snapshot_shortfall_cents) !== shortfall) {
+      return { raced: false, blocked: 'settlement_money_fence_invalid' };
     }
     if (m.guarantee_mode && m.auth_method === 'wallet') {
       await settleWalletHold(client, m, shortfall);
@@ -315,26 +1766,36 @@ async function settleMesa(mesaId) {
         WHERE id=$1 AND status='settling'`,
       [mesaId, shortfall]
     );
-    try {
-      await stateMachine.transition({
-        client, entityType: 'mesa', entityId: mesaId,
-        fromState: 'settling', toState: 'settled',
-        reason: 'settled', triggeredBy: 'worker',
-      });
-    } catch (e) {
-      logger.warn('settle_audit_transition_failed', { mesa_id: mesaId, error: e.message });
-    }
+    await stateMachine.transition({
+      client, entityType: 'mesa', entityId: mesaId,
+      fromState: 'settling', toState: 'settled',
+      reason: 'settled', triggeredBy: 'worker',
+    });
     // Outbox E3: table_charged en 'settled' — cubre fully_paid Y expired+garantía;
     // hereda el re-check FOR UPDATE de arriba (anti doble emisión).
     await eventEmitter.enqueueTableCharged(client, mesaId);
-    // Outbox Etapa 2: lote de agregados absolutos del día/ventana de la mesa
-    // (acta 2026-07-18). Bajo SAVEPOINT: un fallo del lote no rompe el settle.
+    // Outbox Etapa 2 (OLA 2-A · ampliado por ORDEN 1A): corre bajo SAVEPOINT y
+    // NINGÚN fallo del lote revierte esta fase —el dinero ya se capturó en la
+    // Fase 2—, sino que lo difiere a `settlement_aggregate_backlog` para
+    // reintento observable.
+    //
+    // ⚠️ Eso incluye la violación de PRIVACIDAD. Hasta ORDEN 1A ese caso sí
+    // relanzaba, y era el defecto P0: la excepción atravesaba el SAVEPOINT,
+    // revertía `settled` + E3 con la plata ya capturada y dejaba la mesa
+    // `settling` para que el sweep volviera a pasarle por encima. El payload
+    // rechazado sigue sin salir —lo revierte el SAVEPOINT—; lo que se le quitó
+    // a la analítica es el poder de veto sobre el dinero, no el rigor.
     await aggregateEmitter.enqueueSettledMesaAggregates(client, mesaId);
     return { raced: false };
   });
   if (phase3.raced) {
     logger.warn('settle_phase3_lost_race', { mesa_id: mesaId, status: phase3.status });
     return { skip: 'raced_already_settled' };
+  }
+  if (phase3.blocked) {
+    const err = new Error(phase3.blocked);
+    err.code = phase3.blocked;
+    throw err;
   }
 
   logger.audit('mesa_settled', { mesa_id: mesaId, total, collected, shortfall, auth_method: m.auth_method });
@@ -356,6 +1817,45 @@ async function settleMesa(mesaId) {
   return { settled: true, total, collected, shortfall };
 }
 
+async function drainSucceededAttempts(client, mesaId) {
+  const { rows } = await client.query(
+    `SELECT id FROM payment_attempts
+      WHERE mesa_id=$1 AND status='succeeded'
+      ORDER BY created_at ASC, id ASC
+      FOR UPDATE`,
+    [mesaId]
+  );
+  const unresolved = [];
+  for (const row of rows) {
+    const result = await paymentProcessor.processSuccessfulPayment(client, row.id, {
+      triggeredBy: 'worker',
+    });
+    if (!result.processed && !result.alreadyProcessed && !result.quarantined) {
+      unresolved.push({
+        attempt_id: row.id,
+        reason: result.manualReview || result.invalidStatus ||
+          (result.mesaMissing ? 'mesa_missing' : 'processing_incomplete'),
+      });
+    }
+  }
+  return { processed: rows.length - unresolved.length, unresolved };
+}
+
+async function processSucceededAttemptForMesa(mesaId, attemptId) {
+  return pool.tx(async (client) => {
+    const { rows: [mesa] } = await client.query(
+      `SELECT id FROM mesas WHERE id=$1 FOR UPDATE`, [mesaId]
+    );
+    if (!mesa) return { processed: 0, unresolved: [{ reason: 'mesa_missing' }], status: null };
+    const result = await drainSucceededAttempts(client, mesaId);
+    const { rows: [latest] } = await client.query(
+      `SELECT status FROM payment_attempts WHERE id=$1`,
+      [attemptId]
+    );
+    return { ...result, status: latest?.status || null };
+  });
+}
+
 // Liquidación del hold de SALDO: libera la reserva y cobra solo el faltante.
 async function settleWalletHold(client, m, shortfall) {
   const { rows } = await client.query(
@@ -363,14 +1863,40 @@ async function settleWalletHold(client, m, shortfall) {
     [m.opener_user_id]
   );
   const w = rows[0];
-  if (!w) { logger.error('settle_wallet_no_wallet', { mesa_id: m.id }); return; }
+  const reserved = Number(m.auth_held_balance_cents);
+  const authorized = Number(m.auth_amount_cents);
+  const mesaTotal = Number(m.total_cents);
+  const walletHeld = Number(w?.held_balance_cents);
+  const walletBalance = Number(w?.balance_cents);
+  const validAmounts = Number.isSafeInteger(reserved) && reserved >= 0
+    && Number.isSafeInteger(authorized) && authorized >= 0
+    && Number.isSafeInteger(mesaTotal) && mesaTotal >= 0
+    && Number.isSafeInteger(shortfall) && shortfall >= 0
+    && Number.isSafeInteger(walletHeld) && walletHeld >= 0
+    && Number.isSafeInteger(walletBalance) && walletBalance >= 0;
+  if (!w || !validAmounts || reserved <= 0 || reserved !== authorized
+      || authorized !== mesaTotal || walletHeld < reserved || reserved < shortfall
+      || walletBalance < shortfall) {
+    logger.error('settle_wallet_invariant_failed', {
+      mesa_id: m.id,
+      wallet_found: !!w,
+      reserved_cents: reserved,
+      authorized_cents: Number.isFinite(authorized) ? authorized : null,
+      mesa_total_cents: Number.isFinite(mesaTotal) ? mesaTotal : null,
+      held_cents: Number.isFinite(walletHeld) ? walletHeld : null,
+      balance_cents: Number.isFinite(walletBalance) ? walletBalance : null,
+      shortfall_cents: shortfall,
+    });
+    const err = new Error('settlement_wallet_invariant_failed');
+    err.code = 'settlement_wallet_invariant_failed';
+    throw err;
+  }
 
-  const reserved = Number(m.auth_held_balance_cents) || 0;
-  const newHeld = Math.max(0, Number(w.held_balance_cents) - reserved);  // liberar reserva
-  let newBalance = Number(w.balance_cents);
+  const newHeld = sumCents(walletHeld, -reserved);  // liberar exactamente la reserva
+  let newBalance = walletBalance;
 
   if (shortfall > 0) {
-    newBalance -= shortfall;  // el organizador paga el faltante desde su saldo
+    newBalance = sumCents(walletBalance, -shortfall);
     await client.query(
       `INSERT INTO wallet_transactions
          (wallet_id, user_id, type, amount_cents, balance_after_cents,
@@ -386,12 +1912,65 @@ async function settleWalletHold(client, m, shortfall) {
   );
 }
 
+// Convergencia exclusivamente local después de que `dispersals.status='sent'`
+// ya acreditó la entrega al proveedor. Nunca vuelve a invocar STP.
+async function finalizeSentDispersal(mesaId, reason) {
+  return pool.tx(async (client) => {
+    const { rows: [current] } = await client.query(
+      `SELECT status, dispersed_at FROM mesas WHERE id=$1 FOR UPDATE`,
+      [mesaId]
+    );
+    if (!current || !['dispersing', 'completed'].includes(current.status)) {
+      return { rowCount: 0 };
+    }
+    const { rows: [plan] } = await client.query(
+      `SELECT restaurant_id, amount_cents, fee_cents, net_cents,
+              status, stp_clave_rastreo, stp_request_snapshot,
+              stp_request_hash, stp_provider_mode
+         FROM dispersals WHERE mesa_id=$1 FOR UPDATE`,
+      [mesaId]
+    );
+    try {
+      assertStoredStpRequest(plan, mesaId);
+    } catch (err) {
+      return { rowCount: 0, blocked: err.code || err.message };
+    }
+    if (plan.status !== 'sent' || plan.stp_provider_mode !== 'mock') {
+      return { rowCount: 0, blocked: 'dispersal_not_mock_sent' };
+    }
+    // Dos finalizadores pueden observar el mismo `sent`. El segundo no es un
+    // incidente: si la mesa ya quedó cerrada con la misma prueba durable, la
+    // convergencia fue exitosa y no se duplica ni E4 ni la transición.
+    if (current.status === 'completed' && current.dispersed_at) {
+      return { rowCount: 1, alreadyFinalized: true };
+    }
+    if (current.status !== 'dispersing') {
+      return { rowCount: 0, blocked: 'mesa_completion_proof_incomplete' };
+    }
+    const upd = await client.query(
+      `UPDATE mesas SET status='completed', dispersed_at=NOW()
+        WHERE id=$1 AND status='dispersing'`,
+      [mesaId]
+    );
+    if (upd.rowCount === 1) {
+      await eventEmitter.enqueueTableClosed(client, mesaId);
+      await stateMachine.transition({
+        client, entityType: 'mesa', entityId: mesaId,
+        fromState: 'dispersing', toState: 'completed',
+        reason, triggeredBy: 'worker',
+      });
+    }
+    return { rowCount: upd.rowCount };
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 3) DISPERSIÓN al restaurante (SPEI vía STP) — idempotente por mesa
 // ═══════════════════════════════════════════════════════════════════════════
 async function disperseMesa(mesaId) {
   const { rows } = await pool.query(
     `SELECT m.id, m.restaurant_id, m.total_cents, m.status, m.dispersed_at,
+            m.auth_stripe_account_id, m.captured_shortfall_cents,
             r.clabe AS restaurant_clabe, r.name AS restaurant_name, r.fee_pct, r.rfc
        FROM mesas m JOIN restaurants r ON r.id = m.restaurant_id
       WHERE m.id=$1`,
@@ -400,116 +1979,566 @@ async function disperseMesa(mesaId) {
   const m = rows[0];
   if (!m) return { skip: 'not_found' };
   if (m.dispersed_at || m.status === 'completed') {
-    // v2.11 (A4): si la fila de dispersals quedó en 'retrying'/'failed' de una
-    // corrida anterior pero la mesa ya completó, sanearla — sin esto el sweep(3)
-    // la re-selecciona para siempre (loop no-op: retry_count nunca incrementa).
-    await pool.query(
-      `UPDATE dispersals SET status='sent', updated_at=NOW()
-        WHERE mesa_id=$1 AND status IN ('retrying','failed')`,
+    const { rows: [terminalPlan] } = await pool.query(
+      `SELECT restaurant_id, amount_cents, fee_cents, net_cents, status,
+              stp_clave_rastreo, stp_request_snapshot, stp_request_hash,
+              stp_provider_mode, stp_provider_id, stp_submitted_at,
+              stp_confirmed_at, failure_reason
+         FROM dispersals WHERE mesa_id=$1`,
       [mesaId]
     );
+    let terminalProofValid = !!terminalPlan
+      && isConnectZeroDispersal(terminalPlan, mesaId, m.restaurant_id);
+    if (terminalPlan && !terminalProofValid
+        && ['sent', 'confirmed'].includes(terminalPlan.status)) {
+      try {
+        assertStoredStpRequest(terminalPlan, mesaId);
+        terminalProofValid = terminalPlan.status === 'sent'
+          ? terminalPlan.stp_provider_mode === 'mock'
+          : terminalPlan.stp_provider_mode === 'real'
+            && !!terminalPlan.stp_provider_id && !!terminalPlan.stp_submitted_at
+            && !!terminalPlan.stp_confirmed_at;
+      } catch (_) {
+        terminalProofValid = false;
+      }
+    }
+    if (terminalPlan && !terminalProofValid) {
+      await quarantineDispersal(
+        pool, mesaId,
+        `completed_mesa_without_stp_confirmation_proof:${terminalPlan?.status || 'missing'}`
+      );
+      logger.error('completed_mesa_without_stp_confirmation_proof', {
+        mesa_id: mesaId, dispersal_status: terminalPlan?.status || null,
+      });
+      return { skip: 'already_dispersed', manual_review: true };
+    }
     return { skip: 'already_dispersed' };
   }
-  if (m.status !== 'settled' && m.status !== 'dispersing') return { skip: `status_${m.status}` };
+  // `dispersing` es un claim durable: otro worker ya pudo haber entregado la
+  // orden a STP. Nunca se reenvía desde ese estado. Si `sent` ya acredita la
+  // entrega, sí se puede completar la fase DB/outbox que pudo fallar después.
+  if (m.status === 'dispersing') {
+    const { rows: [sent] } = await pool.query(
+      `SELECT restaurant_id, amount_cents, fee_cents, net_cents,
+              status, stp_clave_rastreo, stp_request_snapshot,
+              stp_request_hash, stp_provider_mode, stp_provider_id,
+              stp_submitted_at
+         FROM dispersals WHERE mesa_id=$1`,
+      [mesaId]
+    );
+    if (sent?.status === 'submitted') {
+      try {
+        assertStoredStpRequest(sent, mesaId);
+      } catch (err) {
+        await quarantineDispersal(
+          pool, mesaId, `submitted_stp_binding_invalid:${err.code || err.message}`
+        );
+        logger.error('dispersal_submitted_binding_invalid', {
+          mesa_id: mesaId, error: err.message, details: err.details,
+        });
+        return { skip: 'dispersal_submitted_binding_invalid', manual_review: true };
+      }
+      if (sent.stp_provider_mode !== 'real' || !sent.stp_provider_id
+          || !sent.stp_submitted_at) {
+        await quarantineDispersal(pool, mesaId, 'submitted_stp_provider_proof_invalid');
+        logger.error('dispersal_submitted_provider_proof_invalid', { mesa_id: mesaId });
+        return { skip: 'dispersal_submitted_provider_proof_invalid', manual_review: true };
+      }
+      return {
+        skip: 'stp_confirmation_pending', submitted: true,
+        clave: sent.stp_clave_rastreo,
+      };
+    }
+    if (sent?.status === 'sent') {
+      const amount = Number(sent.amount_cents);
+      const fee = Number(sent.fee_cents);
+      const net = Number(sent.net_cents);
+      let requestBindingValid = false;
+      try {
+        assertStoredStpRequest(sent, mesaId);
+        requestBindingValid = sent.stp_provider_mode === 'mock';
+      } catch (_) {
+        requestBindingValid = false;
+      }
+      const bindingIsExact = requestBindingValid
+        && sent.restaurant_id === m.restaurant_id
+        && Number.isSafeInteger(amount) && amount > 0
+        && Number.isSafeInteger(fee) && fee >= 0
+        && Number.isSafeInteger(net) && net >= 0
+        && amount - fee === net
+        && typeof sent.stp_clave_rastreo === 'string'
+        && sent.stp_clave_rastreo.length > 0;
+      if (!bindingIsExact) {
+        await quarantineDispersal(pool, mesaId, 'sent_stp_binding_invalid');
+        logger.error('dispersal_sent_binding_invalid', {
+          mesa_id: mesaId, restaurant_id: m.restaurant_id,
+        });
+        return { skip: 'dispersal_sent_binding_invalid', manual_review: true };
+      }
+      const reconciled = await finalizeSentDispersal(
+        mesaId, 'spei_sent_local_reconciliation'
+      );
+      if (reconciled.rowCount === 1) {
+        logger.audit('mesa_dispersal_local_reconciled', {
+          mesa_id: mesaId, clave: sent.stp_clave_rastreo,
+        });
+        return {
+          dispersed: false, reconciled: true, net,
+          clave: sent.stp_clave_rastreo,
+        };
+      }
+    }
+    if (sent?.status === 'processing' && sent.stp_request_hash) {
+      try {
+        assertStoredStpRequest(sent, mesaId);
+        return { skip: 'dispersal_in_progress' };
+      } catch (err) {
+        await quarantineDispersal(
+          pool, mesaId, `processing_stp_binding_invalid:${err.code || err.message}`
+        );
+        return { skip: 'dispersal_processing_binding_invalid', manual_review: true };
+      }
+    }
+    if (sent && sent.status !== 'manual_review') {
+      await quarantineDispersal(
+        pool, mesaId, `dispersing_mesa_without_delivery_proof:${sent.status}`
+      );
+      return { skip: 'dispersal_state_without_delivery_proof', manual_review: true };
+    }
+    return { skip: 'dispersal_in_progress_or_unknown' };
+  }
+  if (m.status !== 'settled') return { skip: `status_${m.status}` };
 
-  const total = Number(m.total_cents);
-  const fee = calculateFee(total, Number(m.fee_pct || 0.02));
+  // ─── v2.23 · SPLIT POR RIEL (pivote Connect) ─────────────────────────────
+  // Lo que se cobró como DIRECT CHARGE ya liquidó en la cuenta del restaurante:
+  // dispersarlo otra vez por STP le pagaría DOS VECES la misma mesa. Por STP va
+  // solo lo que quedó del lado de PayMe.
+  //
+  // El criterio es DÓNDE CAYÓ LA PLATA (stripe_account_id), no con qué método
+  // se pagó: una misma mesa puede tener cobros directos y cobros de plataforma
+  // (por ejemplo si el clonado de la tarjeta falló y se degradó al camino de
+  // siempre), y el split tiene que seguir cerrando.
+  //
+  // Se descuentan `items_amount_cents` (el ingreso del restaurante), NO el
+  // bruto: la propina nunca fue suya — viaja dentro de la application_fee hacia
+  // PayMe, que con eso acredita el wallet del mesero.
+  //
+  // La garantía puede vivir en plataforma o en la cuenta conectada. Cuando el
+  // faltante se capturó en la conectada ya liquidó allí y se resta abajo; en
+  // plataforma permanece dentro de la base STP.
+  const { rows: railRows } = await pool.query(
+    `SELECT
+       COALESCE(SUM(CASE
+         WHEN pa.status IN ('succeeded','processed') THEN pa.items_amount_cents
+         WHEN pa.status = 'refunded' AND c.settlement_timing = 'post_settle'
+           THEN pa.items_amount_cents
+         ELSE 0 END), 0)::bigint AS items_directos
+       FROM payment_attempts pa
+       LEFT JOIN connect_application_fee_refunds c
+         ON c.payment_attempt_id = pa.id
+        AND c.stripe_account_id = pa.stripe_account_id
+        AND c.stripe_payment_intent_id = pa.stripe_payment_intent_id
+        AND c.charge_amount_cents = pa.gross_amount_cents
+        AND c.restaurant_items_cents = pa.items_amount_cents
+        AND c.original_application_fee_cents = pa.application_fee_cents
+      WHERE pa.mesa_id = $1 AND pa.stripe_account_id IS NOT NULL`,
+    [mesaId]
+  );
+  const itemsDirectos = Number(railRows[0].items_directos);
+
+  // v2.24: si el hold de garantía vive en la cuenta CONECTADA, el faltante
+  // capturado ya lo cobró el restaurante — dispersarlo otra vez por STP sería
+  // pagárselo dos veces. Con el hold en plataforma (o garantía de saldo) lo
+  // cobra PayMe y sigue dentro de la base, como en v2.23.
+  const faltanteDirecto = m.auth_stripe_account_id
+    ? Number(m.captured_shortfall_cents || 0)
+    : 0;
+  if (faltanteDirecto > 0) {
+    logger.audit('disperse_faltante_capturado_en_conectada', {
+      mesa_id: mesaId, faltante_cents: faltanteDirecto,
+    });
+  }
+
+  const totalMesa = Number(m.total_cents);
+  if (![totalMesa, itemsDirectos, faltanteDirecto].every(Number.isSafeInteger)
+      || totalMesa < 0 || itemsDirectos < 0 || faltanteDirecto < 0) {
+    throw guaranteeInvariantError('dispersal_money_snapshot_invalid');
+  }
+  const base = sumCents(totalMesa, -itemsDirectos, -faltanteDirecto);
+  if (base < 0) throw guaranteeInvariantError('dispersal_money_snapshot_invalid');
+  const fee = calculateFee(base, Number(m.fee_pct ?? 0.02));
+  // D1-B devuelve comisión recuperada por el riel explícito del refund. No se
+  // compensa application_fee/propina nuevamente por STP.
+  const total = base;
   const net = total - fee;
   const clave = deterministicClave(mesaId);
 
+  if (itemsDirectos > 0) {
+    logger.audit('disperse_split_por_riel', {
+      mesa_id: mesaId, total_mesa: Number(m.total_cents),
+      liquidado_por_stripe: itemsDirectos, a_dispersar_por_stp: total,
+    });
+  }
+
+  // Upgrade fence: antes de recalcular o sobrescribir una fila histórica,
+  // clasificamos la evidencia que ya existe. Sólo `pending` sin hash demuestra
+  // que nunca hubo intento externo. Un outcome legacy sin sello, un cambio de
+  // modo mock/real o un estado incompatible se cuarentena de forma durable.
+  const { rows: [existingDispersal] } = await pool.query(
+    `SELECT restaurant_id, amount_cents, fee_cents, net_cents, status,
+            stp_clave_rastreo, stp_request_snapshot, stp_request_hash,
+            stp_provider_mode, stp_provider_id, stp_submitted_at,
+            stp_confirmed_at, failure_reason
+       FROM dispersals WHERE mesa_id=$1`,
+    [mesaId]
+  );
+  if (existingDispersal) {
+    if (existingDispersal.restaurant_id !== m.restaurant_id) {
+      await quarantineDispersal(pool, mesaId, 'stp_restaurant_binding_mismatch');
+      return { skip: 'stp_restaurant_binding_mismatch', manual_review: true };
+    }
+    if (existingDispersal.status === 'manual_review') {
+      return { skip: 'dispersal_manual_review', manual_review: true };
+    }
+    const zeroSentinel = isConnectZeroDispersal(
+      existingDispersal, mesaId, m.restaurant_id
+    );
+    if (zeroSentinel) {
+      if (total !== 0 || existingDispersal.stp_clave_rastreo !== clave) {
+        await quarantineDispersal(pool, mesaId, 'stp_zero_sentinel_binding_mismatch');
+        return { skip: 'stp_zero_sentinel_binding_mismatch', manual_review: true };
+      }
+    } else if (!existingDispersal.stp_request_hash) {
+      if (existingDispersal.status !== 'pending') {
+        await quarantineDispersal(
+          pool, mesaId, `legacy_stp_outcome_unknown:${existingDispersal.status}`
+        );
+        return { skip: 'legacy_stp_outcome_unknown', manual_review: true };
+      }
+    } else {
+      try {
+        assertStoredStpRequest(existingDispersal, mesaId);
+      } catch (err) {
+        await quarantineDispersal(
+          pool, mesaId, `sealed_stp_binding_invalid:${err.code || err.message}`
+        );
+        return { skip: 'sealed_stp_binding_invalid', manual_review: true };
+      }
+      if (!['pending', 'retrying', 'failed'].includes(existingDispersal.status)) {
+        await quarantineDispersal(
+          pool, mesaId, `settled_mesa_with_stp_state:${existingDispersal.status}`
+        );
+        return { skip: 'settled_mesa_with_stp_state', manual_review: true };
+      }
+    }
+  }
+
+  // Mesa liquidada 100% por Stripe: no hay SPEI que mandar. Sin este corte, la
+  // mesa quedaba trabada en 'dispersing' (o se mandaba una transferencia de $0)
+  // y nunca emitía E4 table_closed.
+  if (total === 0) {
+    const cerrada = await pool.tx(async (client) => {
+      const { rows: [current] } = await client.query(
+        `SELECT status FROM mesas WHERE id=$1 FOR UPDATE`,
+        [mesaId]
+      );
+      if (!current || !['settled', 'dispersing'].includes(current.status)) {
+        return { rowCount: 0 };
+      }
+      const { rows: [upserted] } = await client.query(
+        `INSERT INTO dispersals
+           (mesa_id, restaurant_id, amount_cents, fee_cents, net_cents,
+            status, stp_clave_rastreo, failure_reason)
+         VALUES ($1,$2,0,0,0,'sent',$3,'liquidado_por_stripe_connect')
+         ON CONFLICT (mesa_id) DO UPDATE
+            SET restaurant_id=EXCLUDED.restaurant_id,
+                amount_cents=0, fee_cents=0, net_cents=0,
+                status='sent', stp_clave_rastreo=EXCLUDED.stp_clave_rastreo,
+                failure_reason=EXCLUDED.failure_reason,
+                next_retry_at=NULL, updated_at=NOW()
+          WHERE dispersals.status = 'pending'
+            AND dispersals.stp_request_hash IS NULL
+         RETURNING restaurant_id, amount_cents, fee_cents, net_cents,
+                   status, stp_clave_rastreo, failure_reason`,
+        [mesaId, m.restaurant_id, clave]
+      );
+      let plan = upserted;
+      if (!plan) {
+        const { rows: [existing] } = await client.query(
+          `SELECT restaurant_id, amount_cents, fee_cents, net_cents,
+                  status, stp_clave_rastreo, failure_reason
+             FROM dispersals WHERE mesa_id=$1 FOR UPDATE`,
+          [mesaId]
+        );
+        plan = existing;
+      }
+      const exactZeroPlan = plan?.restaurant_id === m.restaurant_id
+        && Number(plan.amount_cents) === 0
+        && Number(plan.fee_cents) === 0
+        && Number(plan.net_cents) === 0
+        && plan.status === 'sent'
+        && plan.stp_clave_rastreo === clave
+        && plan.failure_reason === 'liquidado_por_stripe_connect';
+      if (!exactZeroPlan) {
+        throw guaranteeInvariantError('dispersal_zero_plan_conflict');
+      }
+      const upd = await client.query(
+        `UPDATE mesas SET status='completed', dispersed_at=NOW()
+          WHERE id=$1 AND status=$2`,
+        [mesaId, current.status]
+      );
+      if (upd.rowCount === 1) {
+        await eventEmitter.enqueueTableClosed(client, mesaId);
+        await stateMachine.transition({
+          client, entityType: 'mesa', entityId: mesaId,
+          fromState: current.status, toState: 'completed',
+          reason: 'liquidado_por_stripe_connect', triggeredBy: 'worker',
+        });
+      }
+      return upd;
+    });
+    logger.audit('disperse_no_requerida', {
+      mesa_id: mesaId, motivo: 'todo_liquidado_por_stripe', cerrada: cerrada.rowCount === 1,
+    });
+    return { dispersed: false, skipped: 'settled_by_stripe', net: 0, clave };
+  }
+
   // asegurar fila de dispersión (idempotente por mesa; clave determinística)
+  // v2.23: si la fila ya existe y TODAVÍA no se envió, se re-sincroniza el
+  // monto. Con el split por riel el importe puede cambiar entre intentos (un
+  // cobro directo que aterriza tarde reduce lo que va por STP), y dejar el
+  // valor viejo mandaría un SPEI por un monto que ya no corresponde.
   await pool.query(
     `INSERT INTO dispersals
        (mesa_id, restaurant_id, amount_cents, fee_cents, net_cents, status, stp_clave_rastreo)
      VALUES ($1,$2,$3,$4,$5,'pending',$6)
-     ON CONFLICT (mesa_id) DO NOTHING`,
+     ON CONFLICT (mesa_id) DO UPDATE
+        SET amount_cents = EXCLUDED.amount_cents,
+            fee_cents    = EXCLUDED.fee_cents,
+            net_cents    = EXCLUDED.net_cents,
+            updated_at   = NOW()
+      WHERE dispersals.status = 'pending'
+        AND dispersals.stp_request_hash IS NULL`,
     [mesaId, m.restaurant_id, total, fee, net, clave]
   );
 
-  if (!m.restaurant_clabe) {
-    logger.error('disperse_no_clabe', { mesa_id: mesaId, restaurant_id: m.restaurant_id });
-    await pool.query(
-      `UPDATE dispersals SET status='manual_review', failure_reason='restaurant_clabe_missing', updated_at=NOW()
-        WHERE mesa_id=$1`,
+  // Claim único y atómico: nunca puede quedar mesa=dispersing con el plan aún
+  // pending por una caída entre dos commits. Después del commit, cualquier
+  // crash se trata como entrega ambigua y jamás habilita reenvío ciego. En la
+  // misma tx se sella dinero+destino; futuros retries leen esta foto, nunca la
+  // CLABE, el fee o el nombre vivos bajo la misma clave de rastreo.
+  const claimed = await pool.tx(async (client) => {
+    const { rows: [currentMesa] } = await client.query(
+      `SELECT status FROM mesas WHERE id=$1 FOR UPDATE`, [mesaId]
+    );
+    let { rows: [currentPlan] } = await client.query(
+      `SELECT status, restaurant_id, amount_cents, fee_cents, net_cents,
+              stp_clave_rastreo, stp_request_snapshot, stp_request_hash,
+              stp_provider_mode
+         FROM dispersals WHERE mesa_id=$1 FOR UPDATE`,
       [mesaId]
     );
+    if (currentMesa?.status !== 'settled') return false;
+    if (!currentPlan || !['pending','retrying','failed'].includes(currentPlan.status)
+        || currentPlan.restaurant_id !== m.restaurant_id) {
+      throw guaranteeInvariantError('dispersal_claim_state_conflict');
+    }
+
+    if (!currentPlan.stp_request_hash) {
+      if (currentPlan.status !== 'pending') {
+        await quarantineDispersal(
+          client, mesaId, `legacy_stp_outcome_unknown:${currentPlan.status}`
+        );
+        return { skip: 'legacy_stp_outcome_unknown' };
+      }
+      if (Number(currentPlan.amount_cents) !== total
+          || Number(currentPlan.fee_cents) !== fee
+          || Number(currentPlan.net_cents) !== net
+          || currentPlan.stp_clave_rastreo !== clave) {
+        throw guaranteeInvariantError('dispersal_claim_state_conflict');
+      }
+      if (!m.restaurant_clabe) {
+        await client.query(
+          `UPDATE dispersals
+              SET status='manual_review', failure_reason='restaurant_clabe_missing',
+                  updated_at=NOW()
+            WHERE mesa_id=$1 AND stp_request_hash IS NULL`,
+          [mesaId]
+        );
+        return { skip: 'no_clabe' };
+      }
+      const request = buildStpRequestSnapshot(m, {
+        amount: total, fee, net, clave,
+      });
+      const requestHash = stpRequestHash(request);
+      const providerMode = stp.IS_MOCK ? 'mock' : 'real';
+      const { rows: [sealed] } = await client.query(
+        `UPDATE dispersals
+            SET stp_request_snapshot=$2::jsonb, stp_request_hash=$3,
+                stp_provider_mode=$4, updated_at=NOW()
+          WHERE mesa_id=$1 AND stp_request_hash IS NULL
+            AND status='pending'
+        RETURNING status, restaurant_id, amount_cents, fee_cents, net_cents,
+                  stp_clave_rastreo, stp_request_snapshot, stp_request_hash,
+                  stp_provider_mode`,
+        [mesaId, request, requestHash, providerMode]
+      );
+      if (!sealed) throw guaranteeInvariantError('dispersal_request_seal_race');
+      currentPlan = sealed;
+    }
+
+    let sealedRequest;
+    try {
+      sealedRequest = assertStoredStpRequest(currentPlan, mesaId);
+    } catch (err) {
+      await quarantineDispersal(
+        client, mesaId, `sealed_stp_binding_invalid:${err.code || err.message}`
+      );
+      return { skip: 'sealed_stp_binding_invalid' };
+    }
+    const mesaUpd = await client.query(
+      `UPDATE mesas SET status='dispersing' WHERE id=$1 AND status='settled'`,
+      [mesaId]
+    );
+    const planUpd = await client.query(
+      `UPDATE dispersals SET status='processing', next_retry_at=NULL,
+              failure_reason=NULL, updated_at=NOW()
+        WHERE mesa_id=$1 AND status=$2 AND stp_request_hash=$3`,
+      [mesaId, currentPlan.status, currentPlan.stp_request_hash]
+    );
+    if (mesaUpd.rowCount !== 1 || planUpd.rowCount !== 1) {
+      throw guaranteeInvariantError('dispersal_claim_state_conflict');
+    }
+    await stateMachine.transition({
+      client, entityType: 'mesa', entityId: mesaId,
+      fromState: 'settled', toState: 'dispersing',
+      reason: 'disperse_start', triggeredBy: 'worker',
+    });
+    return {
+      request: sealedRequest,
+      requestHash: currentPlan.stp_request_hash,
+      providerMode: currentPlan.stp_provider_mode,
+    };
+  });
+  if (!claimed) return { skip: 'dispersal_claim_lost' };
+  if (claimed.skip === 'no_clabe') {
+    logger.error('disperse_no_clabe', {
+      mesa_id: mesaId, restaurant_id: m.restaurant_id,
+    });
     return { skip: 'no_clabe' };
   }
-
-  // single-leader: solo un worker pasa settled→dispersing
-  const guard = await pool.query(
-    `UPDATE mesas SET status='dispersing' WHERE id=$1 AND status='settled'`,
-    [mesaId]
-  );
-  if (guard.rowCount === 0 && m.status !== 'dispersing') return { skip: 'not_settled' };
-  if (guard.rowCount === 1) {
-    try {
-      await stateMachine.transition({
-        entityType: 'mesa', entityId: mesaId,
-        fromState: 'settled', toState: 'dispersing',
-        reason: 'disperse_start', triggeredBy: 'worker',
-      });
-    } catch (e) { logger.warn('disperse_audit_transition_failed', { mesa_id: mesaId, error: e.message }); }
+  if (claimed.skip) {
+    return { skip: claimed.skip, manual_review: true };
   }
-  await pool.query(`UPDATE dispersals SET status='processing', updated_at=NOW() WHERE mesa_id=$1`, [mesaId]);
 
   try {
-    const result = await stp.dispersarSPEI({
-      amount_cents: net,
-      clabe_destino: m.restaurant_clabe,
-      beneficiario: m.restaurant_name,
-      rfc_beneficiario: m.rfc || undefined,
-      concepto: `PayMe mesa ${String(mesaId).slice(0, 8)}`,
-      referencia: mesaId,
-      clave_rastreo: clave,
-    });
+    const result = await stp.dispersarSPEI(claimed.request);
+    if (!result || result.clave_rastreo !== claimed.request.clave_rastreo) {
+      throw guaranteeInvariantError('stp_response_contract_mismatch', {
+        reason: 'tracking_key',
+      });
+    }
 
-    await pool.query(
-      `UPDATE dispersals SET status='sent', stp_clave_rastreo=$2, updated_at=NOW() WHERE mesa_id=$1`,
-      [mesaId, result.clave_rastreo]
+    const sealedNet = Number(claimed.request.amount_cents);
+    if (claimed.providerMode === 'real') {
+      if (result.status !== 'submitted' || result.mock === true
+          || typeof result.stp_id !== 'string' || result.stp_id.length === 0) {
+        throw guaranteeInvariantError('stp_response_contract_mismatch', {
+          reason: 'real_submission_proof',
+        });
+      }
+      const submitted = await pool.query(
+        `UPDATE dispersals
+            SET status='submitted', stp_provider_id=$3,
+                stp_submitted_at=NOW(), failure_reason=NULL, updated_at=NOW()
+          WHERE mesa_id=$1 AND status='processing'
+            AND stp_request_hash=$2 AND stp_provider_mode='real'`,
+        [mesaId, claimed.requestHash, result.stp_id]
+      );
+      if (submitted.rowCount !== 1) {
+        throw guaranteeInvariantError('dispersal_submission_fence_lost');
+      }
+      logger.audit('mesa_dispersal_submitted', {
+        mesa_id: mesaId, net: sealedNet,
+        clave: result.clave_rastreo, stp_id: result.stp_id,
+      });
+      return {
+        dispersed: false, submitted: true, confirmation_pending: true,
+        net: sealedNet, clave: result.clave_rastreo,
+      };
+    }
+
+    if (result.status !== 'sent' || result.mock !== true) {
+      throw guaranteeInvariantError('stp_response_contract_mismatch', {
+        reason: 'mock_delivery_proof',
+      });
+    }
+    const sent = await pool.query(
+      `UPDATE dispersals
+          SET status='sent', stp_submitted_at=NOW(), failure_reason=NULL,
+              updated_at=NOW()
+        WHERE mesa_id=$1 AND status='processing'
+          AND stp_request_hash=$2 AND stp_provider_mode='mock'`,
+      [mesaId, claimed.requestHash]
     );
-    const done = await pool.tx(async (client) => {
-      const upd = await client.query(
-        `UPDATE mesas SET status='completed', dispersed_at=NOW() WHERE id=$1 AND status='dispersing'`,
+    if (sent.rowCount !== 1) {
+      throw guaranteeInvariantError('dispersal_submission_fence_lost');
+    }
+    const finalized = await finalizeSentDispersal(mesaId, 'spei_mock_sent');
+    if (finalized.rowCount !== 1) {
+      throw guaranteeInvariantError('dispersal_local_finalize_blocked', {
+        reason: finalized.blocked || 'row_not_updated',
+      });
+    }
+    logger.audit('mesa_dispersed', {
+      mesa_id: mesaId, net: sealedNet,
+      clave: result.clave_rastreo, mock: true,
+    });
+    return { dispersed: true, net: sealedNet, clave: result.clave_rastreo };
+  } catch (err) {
+    const safelyRetryable = err?.code === 'stp_rejected' || err?.code === 'stp_not_sent';
+    if (safelyRetryable) {
+      await pool.query(
+        `UPDATE dispersals
+            SET status='retrying', retry_count = retry_count + 1,
+                next_retry_at = NOW() + ($2 || ' minutes')::interval,
+                failure_reason=$3, updated_at=NOW()
+          WHERE mesa_id=$1 AND status='processing'`,
+        [mesaId, String(DISPERSE_RETRY_MIN), String(err.message).slice(0, 500)]
+      );
+      // Solo un rechazo explícito o un fallo previo al envío habilita retry.
+      const back = await pool.query(
+        `UPDATE mesas SET status='settled' WHERE id=$1 AND status='dispersing'`,
         [mesaId]
       );
-      // Outbox E4: table_closed atómico con el cierre real de la mesa.
-      if (upd.rowCount === 1) await eventEmitter.enqueueTableClosed(client, mesaId);
-      return upd;
+      if (back.rowCount === 1) {
+        try {
+          await stateMachine.transition({
+            entityType: 'mesa', entityId: mesaId,
+            fromState: 'dispersing', toState: 'settled',
+            reason: 'disperse_retry', triggeredBy: 'worker',
+          });
+        } catch (e) { logger.warn('disperse_audit_transition_failed', { mesa_id: mesaId, error: e.message }); }
+      }
+    } else {
+      // Timeout, error de red o error local posterior al side effect: el SPEI
+      // puede existir. Se conserva `dispersing` y se exige conciliación manual.
+      await pool.query(
+        `UPDATE dispersals
+            SET status='manual_review', next_retry_at=NULL,
+                failure_reason=$2, updated_at=NOW()
+          WHERE mesa_id=$1 AND status='processing'`,
+        [mesaId, `delivery_unknown:${String(err.message).slice(0, 480)}`]
+      );
+    }
+    logger.error('mesa_disperse_failed', {
+      mesa_id: mesaId, error: err.message, safely_retryable: safelyRetryable,
     });
-    if (done.rowCount === 1) {
-      try {
-        await stateMachine.transition({
-          entityType: 'mesa', entityId: mesaId,
-          fromState: 'dispersing', toState: 'completed',
-          reason: 'spei_sent', triggeredBy: 'worker',
-        });
-      } catch (e) { logger.warn('disperse_audit_transition_failed', { mesa_id: mesaId, error: e.message }); }
-    }
-    logger.audit('mesa_dispersed', { mesa_id: mesaId, net, clave: result.clave_rastreo, mock: !!result.mock });
-    return { dispersed: true, net, clave: result.clave_rastreo };
-  } catch (err) {
-    await pool.query(
-      `UPDATE dispersals
-          SET status='retrying', retry_count = retry_count + 1,
-              next_retry_at = NOW() + ($2 || ' minutes')::interval,
-              failure_reason=$3, updated_at=NOW()
-        WHERE mesa_id=$1`,
-      [mesaId, String(DISPERSE_RETRY_MIN), String(err.message).slice(0, 500)]
-    );
-    // volver a 'settled' para que el sweep reintente
-    const back = await pool.query(`UPDATE mesas SET status='settled' WHERE id=$1 AND status='dispersing'`, [mesaId]);
-    if (back.rowCount === 1) {
-      try {
-        await stateMachine.transition({
-          entityType: 'mesa', entityId: mesaId,
-          fromState: 'dispersing', toState: 'settled',
-          reason: 'disperse_retry', triggeredBy: 'worker',
-        });
-      } catch (e) { logger.warn('disperse_audit_transition_failed', { mesa_id: mesaId, error: e.message }); }
-    }
-    logger.error('mesa_disperse_failed', { mesa_id: mesaId, error: err.message });
-    return { dispersed: false, error: err.message };
+    return {
+      dispersed: false,
+      error: err.message,
+      manual_review: !safelyRetryable,
+    };
   }
 }
 
@@ -523,71 +2552,94 @@ async function cancelInFlightAttempts(m, mesaId) {
   // PASO 1 (atómico): marcar cancelling con guard de estado
   const { rows: marked } = await pool.query(
     `WITH locked AS (
-       SELECT id FROM payment_attempts
+       SELECT id, status AS prev_status FROM payment_attempts
         WHERE mesa_id = $1
-          AND status IN ('pending','requires_action','processing','authorized')
-        FOR UPDATE SKIP LOCKED
-     )
-     UPDATE payment_attempts pa
+          AND status IN ('pending','requires_action','processing','authorized','cancelling')
+        ORDER BY created_at ASC, id ASC
+        FOR UPDATE
+     ), updated AS (
+       UPDATE payment_attempts pa
         SET status = 'cancelling'
        FROM locked
       WHERE pa.id = locked.id
-        AND pa.status IN ('pending','requires_action','processing','authorized')
-  RETURNING pa.id, pa.user_id, pa.stripe_payment_intent_id`,
+        AND pa.status IN ('pending','requires_action','processing','authorized','cancelling')
+       RETURNING pa.id, pa.user_id, pa.payment_type,
+                 pa.stripe_payment_intent_id, pa.stripe_account_id,
+                 pa.stripe_contract_prepared_at,
+                 locked.prev_status
+     ), audited AS (
+       INSERT INTO state_transitions
+         (entity_type, entity_id, from_state, to_state, reason, triggered_by)
+       SELECT 'payment_attempt', id, prev_status, 'cancelling',
+              'mesa_settlement_cancel_barrier', 'worker'
+         FROM updated WHERE prev_status <> 'cancelling'
+       RETURNING entity_id
+     )
+     SELECT id, user_id, payment_type, stripe_payment_intent_id,
+            stripe_account_id, stripe_contract_prepared_at, prev_status FROM updated`,
     [mesaId]
   );
   if (marked.length === 0) return;
 
+  const unresolved = [];
+  let cancelledCount = 0;
+
   for (const a of marked) {
     // PASO 2 (sin tx): cancelar en Stripe; si ya cobró, el webhook rescata.
-    if (a.stripe_payment_intent_id) {
-      try {
-        await stripeService.cancelIntent(a.stripe_payment_intent_id, 'abandoned');
-      } catch (err) {
-        logger.warn('settle_cancel_intent_failed', {
-          mesa_id: mesaId, attempt_id: a.id, error: err.message,
+    if (a.payment_type !== 'wallet' && !a.stripe_payment_intent_id) {
+      if (a.stripe_contract_prepared_at) {
+        // Desde este sello el request pudo haber creado un PI aunque todavía no
+        // haya persistido su id. La ausencia de binding es ambigua y bloquea.
+        unresolved.push({ attempt_id: a.id, reason: 'stripe_binding_pending' });
+        logger.error('settle_inflight_binding_pending', {
+          mesa_id: mesaId, attempt_id: a.id, payment_type: a.payment_type,
         });
+        continue;
       }
+      // Sin sello contractual el attempt está demostrablemente pre-Stripe: se
+      // puede finalizar localmente igual que wallet, sin side effect externo.
     }
-    // PASO 3 (tx): cancelled + liberar locks, SOLO si sigue 'cancelling'
-    try {
-      await pool.tx(async (client) => {
-        const { rows } = await client.query(
-          `SELECT status FROM payment_attempts WHERE id = $1 FOR UPDATE`, [a.id]
+    if (a.stripe_payment_intent_id) {
+      let canceled = null;
+      let cancelError = null;
+      try {
+        // v2.23 (Connect): cancelar contra la cuenta donde vive el PI.
+        canceled = await stripeService.cancelIntent(
+          a.stripe_payment_intent_id, 'abandoned', a.stripe_account_id || null
         );
-        if (rows[0]?.status !== 'cancelling') return;
-        await client.query(
-          `UPDATE payment_attempts SET status='cancelled', failure_reason='mesa_settled' WHERE id=$1`,
-          [a.id]
-        );
-        await stateMachine.transition({
-          client, entityType: 'payment_attempt', entityId: a.id,
-          fromState: 'cancelling', toState: 'cancelled',
-          reason: 'mesa_settled', triggeredBy: 'worker',
+      } catch (err) {
+        cancelError = err;
+      }
+      const reconciliation = await reconcileAttemptCancellation({
+        attemptId: a.id,
+        mesaId,
+        intentId: a.stripe_payment_intent_id,
+        stripeAccountId: a.stripe_account_id || null,
+        reason: 'mesa_settled',
+        triggeredBy: 'worker',
+        remoteIntent: canceled,
+      });
+      if (!reconciliation.resolved) {
+        unresolved.push({ attempt_id: a.id, reason: reconciliation.reason });
+        logger.error('settle_cancel_intent_uncertain', {
+          mesa_id: mesaId, attempt_id: a.id,
+          error: cancelError?.message || reconciliation.reason,
+          remote_status: reconciliation.remoteStatus || null,
         });
-        await client.query(
-          `UPDATE mesa_items
-              SET status='released', locked_by_attempt=NULL, locked_by_user_id=NULL,
-                  locked_by_guest_token=NULL, locked_by_guest_token_hash=NULL,
-                  lock_token=NULL, lock_expires_at=NULL
-            WHERE locked_by_attempt = $1 AND status = 'locked'`,
-          [a.id]
-        );
-        await client.query(
-          `UPDATE mesa_division_slots
-              SET status='available', claimed_by_attempt_id=NULL, claimed_by_user_id=NULL,
-                  claimed_by_guest_token=NULL, claimed_by_guest_token_hash=NULL, claimed_at=NULL
-            WHERE claimed_by_attempt_id = $1 AND status = 'claimed'`,
-          [a.id]
-        );
-      });
-    } catch (err) {
-      logger.error('settle_cancel_finalize_failed', {
-        mesa_id: mesaId, attempt_id: a.id, error: err.message,
-      });
+      } else if (reconciliation.outcome === 'cancelled' && reconciliation.finalized) {
+        cancelledCount++;
+      }
+      continue;
     }
+    // PASO 3 (tx): cancelled + liberar claims/locks, SOLO si sigue
+    // 'cancelling'. La misma primitiva cierra la carrera en la que el request
+    // termina de bindear el PI después de que esta barrera lo marcó.
+    const finalized = await finalizeCancellingAttempt(a.id, {
+      reason: 'mesa_settled', triggeredBy: 'worker',
+    });
+    if (finalized.finalized) cancelledCount++;
     // aviso al pagador (best-effort)
-    if (a.user_id) {
+    if (finalized.finalized && a.user_id) {
       try {
         await notifs.create({
           user_id: a.user_id, type: 'payment_failed',
@@ -599,24 +2651,390 @@ async function cancelInFlightAttempts(m, mesaId) {
     }
   }
 
-  // aviso al organizador: su garantía cubre a los que no llegaron (best-effort)
-  try {
-    await notifs.create({
-      user_id: m.opener_user_id, type: 'mesa_garantia_impagos',
-      body: `Se cancelaron ${marked.length} pago(s) en curso al cerrar la mesa; tu garantía cubre el faltante.`,
-      payload: { mesa_id: mesaId, cancelled_attempts: marked.length },
-      related_entity_type: 'mesa', related_entity_id: mesaId,
-    });
-  } catch (_) { /* noop */ }
+  if (unresolved.length > 0) {
+    const err = new Error('settlement_inflight_attempts_unresolved');
+    err.code = 'settlement_inflight_attempts_unresolved';
+    err.attempts = unresolved;
+    throw err;
+  }
 
-  logger.audit('settle_inflight_cancelled', { mesa_id: mesaId, count: marked.length });
+  // aviso al organizador: su garantía cubre a los que no llegaron (best-effort)
+  if (cancelledCount > 0) {
+    try {
+      await notifs.create({
+        user_id: m.opener_user_id, type: 'mesa_garantia_impagos',
+        body: `Se cancelaron ${cancelledCount} pago(s) en curso al cerrar la mesa; tu garantía cubre el faltante.`,
+        payload: { mesa_id: mesaId, cancelled_attempts: cancelledCount },
+        related_entity_type: 'mesa', related_entity_id: mesaId,
+      });
+    } catch (_) { /* noop */ }
+  }
+
+  logger.audit('settle_inflight_cancelled', { mesa_id: mesaId, count: cancelledCount });
+}
+
+/**
+ * Confirma localmente una cancelación remota ya exitosa. Es deliberadamente
+ * estricta: cualquier fallo de estado/auditoría/liberación revierte todo y el
+ * caller debe mantener bloqueada la captura de garantía.
+ *
+ * Se exporta para que /pay pueda cerrar el caso PI-creado-después-de-settling:
+ * sin este paso el attempt quedaría `cancelling` aunque Stripe ya respondiera
+ * `canceled`, y cada retry volvería a cancelar un PI terminal indefinidamente.
+ */
+async function finalizeCancellingAttempt(attemptId, {
+  reason = 'cancelled', triggeredBy = 'worker',
+  allowedFrom = ['cancelling'],
+} = {}) {
+  return pool.tx(async (client) => {
+    const { rows: [attempt] } = await client.query(
+      `SELECT id, mesa_id, status FROM payment_attempts WHERE id=$1 FOR UPDATE`,
+      [attemptId]
+    );
+    if (!attempt || !allowedFrom.includes(attempt.status)) {
+      return { finalized: false, status: attempt?.status || null };
+    }
+
+    await client.query(
+      `UPDATE payment_attempts SET status='cancelled', failure_reason=$2 WHERE id=$1`,
+      [attemptId, String(reason).slice(0, 500)]
+    );
+    await stateMachine.transition({
+      client, entityType: 'payment_attempt', entityId: attemptId,
+      fromState: attempt.status, toState: 'cancelled',
+      reason, triggeredBy,
+    });
+
+    // v2.18: mesa_item_claims es la fuente de verdad. El UPDATE siguiente se
+    // conserva únicamente para filas legacy anteriores a claims.
+    await itemClaims.releaseAttemptClaims(client, attemptId, triggeredBy);
+    await client.query(
+      `UPDATE mesa_items
+          SET status='released', locked_by_attempt=NULL, locked_by_user_id=NULL,
+              locked_by_guest_token=NULL, locked_by_guest_token_hash=NULL,
+              lock_token=NULL, lock_expires_at=NULL
+        WHERE locked_by_attempt=$1 AND status='locked'`,
+      [attemptId]
+    );
+    await client.query(
+      `UPDATE mesa_division_slots
+          SET status='available', claimed_by_attempt_id=NULL, claimed_by_user_id=NULL,
+              claimed_by_guest_token=NULL, claimed_by_guest_token_hash=NULL, claimed_at=NULL
+        WHERE mesa_id=$1 AND claimed_by_attempt_id=$2 AND status='claimed'`,
+      [attempt.mesa_id, attemptId]
+    );
+    return { finalized: true, status: 'cancelled' };
+  });
+}
+
+async function reconcileSucceededCancellingAttempt({
+  attemptId, mesaId, remoteIntent, stripeAccountId, triggeredBy,
+}) {
+  const result = await paymentAttemptReconciler.processRemoteSuccess({
+    attemptId, mesaId, remoteIntent, stripeAccountId, triggeredBy,
+  });
+  return { ...result, outcome: result.resolved ? 'succeeded' : undefined };
+}
+
+/**
+ * Convergencia autónoma de attempts cuyo éxito remoto quedó bindeado pero cuyos
+ * efectos locales no llegaron a commitear. No depende de otro request del
+ * usuario ni de que Stripe conserve sus reintentos de webhook.
+ */
+async function sweepSucceededAttempts({ limit = 25 } = {}) {
+  const safeLimit = Number.isSafeInteger(limit) && limit > 0 && limit <= 100
+    ? limit
+    : 25;
+  const { rows } = await pool.query(
+    `SELECT id, mesa_id, stripe_payment_intent_id, stripe_account_id
+       FROM payment_attempts
+      WHERE status='succeeded' AND payment_type <> 'wallet'
+        AND operation_type='mesa_pay'
+        AND connect_refund_fenced_at IS NULL
+        AND stripe_payment_intent_id IS NOT NULL
+        AND stripe_contract_prepared_at IS NOT NULL
+      ORDER BY updated_at ASC, id ASC
+      LIMIT $1`,
+    [safeLimit]
+  );
+  const outcomes = [];
+  for (const row of rows) {
+    try {
+      const remoteIntent = await stripeService.retrieveIntent(
+        row.stripe_payment_intent_id, row.stripe_account_id || null
+      );
+      const result = await paymentAttemptReconciler.processRemoteSuccess({
+        attemptId: row.id,
+        mesaId: row.mesa_id,
+        remoteIntent,
+        stripeAccountId: row.stripe_account_id || null,
+        triggeredBy: 'worker',
+      });
+      outcomes.push({ attemptId: row.id, ...result });
+    } catch (err) {
+      logger.error('succeeded_attempt_reconciliation_failed', {
+        attempt_id: row.id,
+        mesa_id: row.mesa_id,
+        intent_id: row.stripe_payment_intent_id,
+        account: row.stripe_account_id || null,
+        error: err.message,
+        code: err.code || null,
+      });
+      outcomes.push({ attemptId: row.id, resolved: false, error: err.code || err.message });
+    }
+  }
+  return outcomes;
+}
+
+/**
+ * Recupera un create de pago cuyo request quedó sellado pero cuya respuesta no
+ * llegó a persistirse. Reemite sólo las idempotency keys originales, valida el
+ * objeto completo y bindea el id; no aplica dinero ni libera claims.
+ */
+async function recoverPreparedAttemptBinding(attemptId) {
+  let { rows: [attempt] } = await pool.query(
+    `SELECT pa.id, pa.mesa_id, pa.user_id, pa.status, pa.payment_type,
+            pa.operation_type, pa.gross_amount_cents, pa.application_fee_cents,
+            pa.stripe_payment_intent_id, pa.stripe_account_id,
+            pa.stripe_contract_prepared_at,
+            pa.stripe_source_payment_method_id,
+            pa.stripe_charge_payment_method_id,
+            pa.card_policy_version,pa.card_brand_snapshot,
+            pa.card_funding_snapshot,pa.card_verified_at,
+            pa.charge_card_verified_at,
+            pa.stripe_customer_id_snapshot, pa.stripe_used_saved_card,
+            pa.stripe_save_payment_method, m.code AS mesa_code,
+            (SELECT td.staff_id FROM tip_distributions td
+              WHERE td.payment_attempt_id=pa.id ORDER BY td.created_at ASC LIMIT 1
+            ) AS tip_to_staff_id
+       FROM payment_attempts pa
+       JOIN mesas m ON m.id=pa.mesa_id
+      WHERE pa.id=$1`,
+    [attemptId]
+  );
+  if (!attempt) return { resolved: false, reason: 'attempt_not_found' };
+  if (attempt.stripe_payment_intent_id) {
+    return {
+      resolved: true, intentId: attempt.stripe_payment_intent_id,
+      stripeAccountId: attempt.stripe_account_id || null,
+      mesaId: attempt.mesa_id, remoteIntent: null, alreadyBound: true,
+    };
+  }
+  const sourceCardSnapshot = storedAttemptCardSnapshot(attempt);
+  if (attempt.status !== 'cancelling' || attempt.payment_type !== 'card'
+      || attempt.operation_type !== 'mesa_pay'
+      || !attempt.stripe_contract_prepared_at
+      || !attempt.stripe_source_payment_method_id
+      || !sourceCardSnapshot
+      || (attempt.stripe_charge_payment_method_id
+          && !attempt.charge_card_verified_at)
+      || typeof attempt.stripe_used_saved_card !== 'boolean'
+      || typeof attempt.stripe_save_payment_method !== 'boolean') {
+    return { resolved: false, reason: 'attempt_snapshot_incomplete' };
+  }
+
+  let chargePaymentMethodId = attempt.stripe_charge_payment_method_id || null;
+  let chargeCardVerifiedAt = attempt.charge_card_verified_at || null;
+  const accountId = attempt.stripe_account_id || null;
+  if (!chargePaymentMethodId && accountId) {
+    const clone = await stripeService.clonePaymentMethodToAccount({
+      payment_method_id: attempt.stripe_source_payment_method_id,
+      customer_id: attempt.stripe_used_saved_card
+        ? (attempt.stripe_customer_id_snapshot || null)
+        : null,
+      stripe_account: accountId,
+      idempotency_key: `clone_pay_${attempt.id}`,
+    });
+    const cloneId = cardEligibility.remoteId(clone);
+    const verifiedClone = await cardEligibility.retrieveEligibleCard({
+      paymentMethodId: cloneId,
+      stripeAccount: accountId,
+      ownership: 'clone',
+      expectedSnapshot: sourceCardSnapshot,
+      reconciliationCode: 'connect_payment_method_reconciliation_pending',
+    });
+    chargePaymentMethodId = cloneId;
+    chargeCardVerifiedAt = verifiedClone.snapshot.verifiedAt;
+  } else if (!chargePaymentMethodId) {
+    chargePaymentMethodId = attempt.stripe_source_payment_method_id;
+    chargeCardVerifiedAt = sourceCardSnapshot.verifiedAt;
+  }
+  if (!chargePaymentMethodId
+      || !Number.isFinite(new Date(chargeCardVerifiedAt).getTime())) {
+    return { resolved: false, reason: 'attempt_charge_method_unresolved' };
+  }
+
+  let racedBinding = null;
+  await pool.tx(async (client) => {
+    await client.query(`SELECT id FROM mesas WHERE id=$1 FOR UPDATE`, [attempt.mesa_id]);
+    const { rows: [current] } = await client.query(
+      `SELECT status, stripe_payment_intent_id, stripe_contract_prepared_at,
+              stripe_charge_payment_method_id,charge_card_verified_at,
+              card_policy_version,card_verified_at
+         FROM payment_attempts WHERE id=$1 FOR UPDATE`,
+      [attempt.id]
+    );
+    if (current?.stripe_payment_intent_id) {
+      racedBinding = current.stripe_payment_intent_id;
+      return;
+    }
+    if (!current || current.status !== 'cancelling'
+        || !current.stripe_contract_prepared_at
+        || Number(current.card_policy_version) !== 1
+        || !current.card_verified_at
+        || (current.stripe_charge_payment_method_id
+            && current.stripe_charge_payment_method_id !== chargePaymentMethodId)) {
+      throw guaranteeInvariantError('attempt_binding_recovery_race');
+    }
+    if (current.stripe_charge_payment_method_id) {
+      if (!current.charge_card_verified_at) {
+        throw guaranteeInvariantError('attempt_charge_card_verification_missing');
+      }
+      // Primer timestamp durable gana para el mismo clon idempotente.
+      chargeCardVerifiedAt = current.charge_card_verified_at;
+    } else {
+      await client.query(
+        `UPDATE payment_attempts
+            SET stripe_charge_payment_method_id=$2,charge_card_verified_at=$3
+          WHERE id=$1`,
+        [attempt.id, chargePaymentMethodId, chargeCardVerifiedAt]
+      );
+    }
+  });
+
+  if (racedBinding) {
+    return {
+      resolved: true, intentId: racedBinding,
+      stripeAccountId: accountId, mesaId: attempt.mesa_id,
+      remoteIntent: null, alreadyBound: true,
+    };
+  }
+
+  attempt = {
+    ...attempt,
+    stripe_charge_payment_method_id: chargePaymentMethodId,
+    charge_card_verified_at: chargeCardVerifiedAt,
+  };
+  const createRequest = {
+    amount_cents: Number(attempt.gross_amount_cents),
+    customer_id: accountId ? undefined : (attempt.stripe_customer_id_snapshot || null),
+    payment_method_id: chargePaymentMethodId,
+    idempotency_key: `pay_${attempt.id}`,
+    ...(accountId && {
+      stripe_account: accountId,
+      application_fee_cents: Number(attempt.application_fee_cents || 0),
+    }),
+    off_session: attempt.stripe_used_saved_card,
+    ...(attempt.stripe_save_payment_method && !accountId
+      && { setup_future_usage: 'off_session' }),
+    metadata: {
+      mesa_id: attempt.mesa_id,
+      mesa_code: attempt.mesa_code,
+      user_id: attempt.user_id || 'guest',
+      attempt_id: attempt.id,
+      tip_to_staff_id: attempt.tip_to_staff_id || '',
+      ...(attempt.stripe_save_payment_method && !accountId && { save_pm: '1' }),
+    },
+  };
+  let intent;
+  try {
+    intent = await stripeService.createPaymentIntent(createRequest);
+  } catch (err) {
+    const raw = err.raw?.payment_intent || err.payment_intent || null;
+    if (!raw) throw err;
+    intent = { ...raw, payme_request_account_id: accountId };
+  }
+  const candidate = { ...attempt, stripe_payment_intent_id: intent?.id || null };
+  assertPaymentIntentContract(candidate, intent, { stripeAccountId: accountId });
+
+  await pool.tx(async (client) => {
+    await client.query(`SELECT id FROM mesas WHERE id=$1 FOR UPDATE`, [attempt.mesa_id]);
+    const { rows: [current] } = await client.query(
+      `SELECT status, stripe_payment_intent_id, stripe_account_id,
+              stripe_charge_payment_method_id,charge_card_verified_at,
+              card_policy_version,card_verified_at
+         FROM payment_attempts WHERE id=$1 FOR UPDATE`,
+      [attempt.id]
+    );
+    if (!current || current.status !== 'cancelling'
+        || (current.stripe_payment_intent_id
+            && current.stripe_payment_intent_id !== intent.id)
+        || (current.stripe_account_id || null) !== accountId
+        || current.stripe_charge_payment_method_id !== chargePaymentMethodId
+        || !current.charge_card_verified_at
+        || Number(current.card_policy_version) !== 1
+        || !current.card_verified_at) {
+      throw guaranteeInvariantError('attempt_binding_recovery_race');
+    }
+    await client.query(
+      `UPDATE payment_attempts
+          SET stripe_payment_intent_id=COALESCE(stripe_payment_intent_id,$2),
+              stripe_client_secret=$3
+        WHERE id=$1`,
+      [attempt.id, intent.id, intent.client_secret || null]
+    );
+  });
+  logger.audit('payment_attempt_binding_recovered', {
+    attempt_id: attempt.id, intent_id: intent.id, account: accountId,
+  });
+  return {
+    resolved: true, intentId: intent.id, stripeAccountId: accountId,
+    mesaId: attempt.mesa_id, remoteIntent: intent,
+  };
+}
+
+/**
+ * Un error de cancel no prueba que el PI siga vivo: también es la respuesta
+ * habitual al reintentar sobre un PI ya `canceled`. Se recupera el estado en la
+ * cuenta correcta y sólo se decide con evidencia remota.
+ */
+async function reconcileAttemptCancellation({
+  attemptId, mesaId, intentId, stripeAccountId = null,
+  reason = 'cancelled', triggeredBy = 'worker', remoteIntent = null,
+}) {
+  let remote = remoteIntent;
+  if (!remote) {
+    try {
+      remote = await stripeService.retrieveIntent(intentId, stripeAccountId);
+    } catch (err) {
+      return { resolved: false, reason: 'stripe_retrieve_uncertain', error: err };
+    }
+  }
+  const attempt = await loadPaymentAttemptContract(attemptId);
+  try {
+    assertPaymentIntentContract(attempt, remote, { stripeAccountId });
+  } catch (err) {
+    logger.error('payment_intent_reconciliation_contract_mismatch', {
+      attempt_id: attemptId, intent_id: remote?.id || intentId,
+      mismatches: err.details?.mismatches || null,
+    });
+    return { resolved: false, reason: err.code || 'payment_intent_contract_mismatch', error: err };
+  }
+  if (remote?.status === 'canceled') {
+    const finalized = await finalizeCancellingAttempt(attemptId, { reason, triggeredBy });
+    return {
+      resolved: true, outcome: 'cancelled', finalized: finalized.finalized,
+      remoteStatus: remote.status,
+    };
+  }
+  if (remote?.status === 'succeeded') {
+    const result = await reconcileSucceededCancellingAttempt({
+      attemptId, mesaId, remoteIntent: remote, stripeAccountId, triggeredBy,
+    });
+    return { ...result, remoteStatus: remote.status };
+  }
+  return {
+    resolved: false,
+    reason: `stripe_status_${remote?.status || 'unknown'}`,
+    remoteStatus: remote?.status || null,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 4) SWEEP — idempotente; cablear al scheduler (services/timer.js)
 // ═══════════════════════════════════════════════════════════════════════════
 async function sweepSettlements() {
-  let settled = 0, dispersed = 0, retried = 0;
+  let settled = 0, dispersed = 0, reconciled = 0, quarantined = 0, retried = 0;
 
   // (1) mesas a liquidar: pagadas, vencidas, expired (legacy), o 'settling' stale
   const { rows: toSettle } = await pool.query(
@@ -638,6 +3056,39 @@ async function sweepSettlements() {
     catch (e) { logger.error('sweep_settle_error', { mesa_id: r.id, error: e.message }); }
   }
 
+  // (1-bis) reintentar los lotes de agregados diferidos (OLA 2-A).
+  // Va DESPUÉS de liquidar y ANTES de dispersar: es trabajo analítico y no debe
+  // retrasar el dinero. Cada reintento corre en su propia transacción, así que
+  // un lote que vuelva a fallar no arrastra a los demás ni toca el settle.
+  let aggregatesRetried = 0;
+  const { rows: pendientes } = await pool.query(
+    `SELECT mesa_id FROM settlement_aggregate_backlog
+      WHERE resolved_at IS NULL AND next_attempt_at <= NOW()
+      ORDER BY next_attempt_at ASC
+      LIMIT $1`,
+    [SETTLE_BATCH]
+  );
+  for (const r of pendientes) {
+    try {
+      // enqueueSettledMesaAggregates se re-anota sola con backoff si vuelve a
+      // fallar, así que este loop no necesita administrar reintentos.
+      const res = await pool.tx(async (client) =>
+        aggregateEmitter.enqueueSettledMesaAggregates(client, r.mesa_id));
+      // ⭐ ORDEN 1A: contar la VUELTA como progreso era mentira de métrica. Un
+      // lote diferido o saltado no emitió nada, y desde que privacidad también
+      // se difiere en vez de lanzar, la mentira sería permanente: el sweep
+      // reportaría `aggregates_retried` creciendo mientras el backlog no baja.
+      if (res && !res.deferred && !res.skipped) aggregatesRetried++;
+    } catch (e) {
+      // Desde ORDEN 1A el lote NO propaga —ni siquiera privacidad, que ahora se
+      // anota como cuarentena—, así que acá sólo llega un fallo de la propia
+      // anotación o de la transacción. Ninguno puede quedar callado.
+      logger.error('sweep_aggregate_backlog_error', {
+        mesa_id: r.mesa_id, error: e.message, code: e.code || null,
+      });
+    }
+  }
+
   // (2) dispersar las ya liquidadas
   const { rows: toDisperse } = await pool.query(
     `SELECT id FROM mesas
@@ -650,10 +3101,54 @@ async function sweepSettlements() {
     catch (e) { logger.error('sweep_disperse_error', { mesa_id: r.id, error: e.message }); }
   }
 
+  // Una versión anterior podía commitear mesa=dispersing antes de mover el
+  // plan a processing. También un worker puede morir luego del claim atómico.
+  // En ambos casos nunca se reenvía: se materializa revisión manual durable.
+  const legacyClaims = await pool.query(
+    `UPDATE dispersals d
+        SET status='manual_review', next_retry_at=NULL,
+            failure_reason='dispersal_claim_without_delivery_state', updated_at=NOW()
+       FROM mesas m
+      WHERE d.mesa_id=m.id AND m.status='dispersing'
+        AND d.status IN ('pending','retrying','failed')`
+  );
+  const staleProcessing = await pool.query(
+    `UPDATE dispersals d
+        SET status='manual_review', next_retry_at=NULL,
+            failure_reason='delivery_unknown:processing_lease_expired', updated_at=NOW()
+       FROM mesas m
+      WHERE d.mesa_id=m.id AND m.status='dispersing'
+        AND d.status='processing'
+        AND d.updated_at < NOW() - ($1 || ' minutes')::interval`,
+    [String(DISPERSE_PROCESSING_STALE_MIN)]
+  );
+  quarantined = legacyClaims.rowCount + staleProcessing.rowCount;
+
+  // (2b) STP pudo confirmar `sent` y luego caer la tx local de mesa/outbox.
+  // Esta rama sólo converge DB; `disperseMesa` valida el binding y no reenvía.
+  const { rows: toReconcile } = await pool.query(
+    `SELECT m.id
+       FROM mesas m JOIN dispersals d ON d.mesa_id=m.id
+      WHERE m.status='dispersing' AND m.dispersed_at IS NULL
+        AND d.status='sent'
+      ORDER BY d.updated_at ASC, m.id ASC
+      LIMIT $1`,
+    [SETTLE_BATCH]
+  );
+  for (const r of toReconcile) {
+    try {
+      const d = await disperseMesa(r.id);
+      if (d.reconciled) reconciled++;
+    } catch (e) {
+      logger.error('sweep_disperse_reconcile_error', { mesa_id: r.id, error: e.message });
+    }
+  }
+
   // (3) reintentar dispersiones fallidas
   const { rows: toRetry } = await pool.query(
     `SELECT mesa_id FROM dispersals
       WHERE status IN ('retrying','failed')
+        AND stp_request_hash IS NOT NULL
         AND (next_retry_at IS NULL OR next_retry_at < NOW())
         AND retry_count < $1
       ORDER BY next_retry_at ASC NULLS FIRST
@@ -665,16 +3160,27 @@ async function sweepSettlements() {
     catch (e) { logger.error('sweep_retry_error', { mesa_id: r.mesa_id, error: e.message }); }
   }
 
-  if (settled || dispersed || retried) {
-    logger.info('sweep_settlements', { settled, dispersed, retried });
+  if (settled || dispersed || reconciled || quarantined || retried || aggregatesRetried) {
+    logger.info('sweep_settlements', {
+      settled, dispersed, reconciled, quarantined, retried,
+      aggregates_retried: aggregatesRetried,
+    });
   }
-  return { settled, dispersed, retried };
+  return { settled, dispersed, reconciled, quarantined, retried, aggregatesRetried };
 }
 
 module.exports = {
   placeGuaranteeHold,
+  sweepPreparedGuarantees,
+  reconcileGuaranteeReplay,
   settleMesa,
   disperseMesa,
   sweepSettlements,
+  finalizeCancellingAttempt,
+  recoverPreparedAttemptBinding,
+  reconcileAttemptCancellation,
+  sweepSucceededAttempts,
+  reconcileSucceededAttempt: paymentAttemptReconciler.processRemoteSuccess,
+  processSucceededAttemptForMesa,
   deterministicClave,
 };

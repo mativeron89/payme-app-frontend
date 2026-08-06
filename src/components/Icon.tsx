@@ -28,6 +28,11 @@ const GLYPHS = {
   wallet: { d: ['M4 7.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-10Z', 'M4 7.5A2 2 0 0 1 6 5.5h11', 'M16 13.5h4'] },
   receipt: { d: ['M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21V3Z', 'M9 8h6', 'M9 12h6', 'M9 16h4'] },
   camera: { d: ['M4 8h3.5l1.5-2.5h6L16.5 8H20a1 1 0 0 1 1 1v10H3V9a1 1 0 0 1 1-1Z', 'M12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z'] },
+  /* Tres barras y el eje: es el acceso a Estadísticas (SPEC_APP.md §1.11). Se
+     agregó acá en vez de reusar `arrow-up-right` porque esa flecha ya significa
+     "transferencia saliente" en los movimientos, y un mismo glifo con dos
+     sentidos es peor que un glifo de más. */
+  chart: { d: ['M4 20h16', 'M7.5 20v-6', 'M12 20V6', 'M16.5 20v-9'] },
   pin: { d: ['M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z', 'M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'] },
   lock: { d: ['M6 11h12v9H6z', 'M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11'] },
   link: {
@@ -46,12 +51,35 @@ const GLYPHS = {
   store: { d: ['M4 9 5.5 4h13L20 9', 'M4 9c0 1.4 1 2.5 2.5 2.5S9 10.4 9 9c0 1.4 1 2.5 2.5 2.5S14 10.4 14 9c0 1.4 1 2.5 2.5 2.5S20 10.4 20 9', 'M5.5 11.5V20h13v-8.5', 'M9.5 20v-5h5v5'] },
   bank: { d: ['M3 9.5 12 4l9 5.5', 'M4.5 9.5h15V11h-15z', 'M6.5 11v6', 'M12 11v6', 'M17.5 11v6', 'M4 19.5h16'] },
   'check-circle': { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M8 12.2l2.8 2.8L16.5 9.5'] },
+  /* Tilde suelto, sin anillo: va DENTRO de un círculo propio, como el de 72px
+     del canje (SPEC_APP.md §1.2-C). `check-circle` ahí duplicaría el borde. */
+  check: { d: ['M5 12.5l4.7 4.7L19 7.5'] },
   warning: { d: ['M12 3.5 22 20H2L12 3.5Z', 'M12 9.5V14', 'M12 16.8v.4'] },
   'x-circle': { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M9 9l6 6', 'M15 9l-6 6'] },
   party: {
     f: ['M12 3.5l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6Z', 'M18.7 13.5l.9 2.2 2.2.9-2.2.9-.9 2.2-.9-2.2-2.2-.9 2.2-.9Z', 'M6 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z'],
   },
   dining: { d: ['M12 19.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15Z', 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z'] },
+  /**
+   * SPEC_APP.md §1.7 · el control "Ver mesa" de Compartir. El spec lo nombra
+   * `ti-tools-kitchen-2` y lo describe como *"ícono de plato"*, agregando entre
+   * paréntesis *"el mismo que usa la categoría de restaurante en otras
+   * pantallas"*. **Esas dos cosas no son la misma acá**, y por eso el glifo es
+   * propio en vez de reusar `dining`:
+   *
+   *  - `dining` son dos círculos concéntricos —un plato visto desde arriba— y a
+   *    tamaño chico **se lee como una diana**. No es una opinión: §1.8 ya lo
+   *    había medido a 26px y por eso puso `store` en la tarjeta de invitación.
+   *    Acá el control de la cabecera va a **20px**, o sea peor. Verificado
+   *    mirándolo a 375px antes de dibujar esto.
+   *  - `tools-kitchen-2` es cubierto —tenedor y cuchillo—, que a 20px sí se lee.
+   *
+   * Se dibuja acá y no se trae de ninguna parte: el set es propio y sin
+   * dependencias (T-D3), y esto es un glifo más en la misma grilla 24×24.
+   */
+  'tools-kitchen-2': {
+    d: ['M8 12v9', 'M5 3v6a3 3 0 0 0 6 0V3', 'M19 3v12h-3.5c0-4.6 1.2-8.8 3.5-12', 'M19 15v6'],
+  },
   pasta: { d: ['M4 12h16a8 8 0 0 1-16 0Z', 'M6 9c1-1.5 2.5-1.5 3.5 0S12 10.5 13 9s2.5-1.5 3.5 0', 'M7.5 6c1-1.2 2-1.2 3 0s2 1.2 3 0'] },
   sushi: { d: ['M12 18c5 0 9-1.3 9-3V9c0 1.7-4 3-9 3s-9-1.3-9-3v6c0 1.7 4 3 9 3Z', 'M12 12c5 0 9-1.3 9-3s-4-3-9-3-9 1.3-9 3 4 3 9 3Z', 'M12 9.8a3 1.2 0 1 0 0-2.4 3 1.2 0 0 0 0 2.4Z'] },
   taco: { d: ['M3 17a9 9 0 0 1 18 0Z', 'M6.5 13.5c.8-.9 1.7-.9 2.5 0s1.7.9 2.5 0 1.7-.9 2.5 0 1.7.9 2.5 0'] },
@@ -60,11 +88,51 @@ const GLYPHS = {
     f: ['M15.8 7.2c1.9 0 3.4.8 4.3 2.1-2.4 1.4-2.6 4.9-.1 6.4-.6 1.6-1.9 3.9-3.6 4.8-1.1.6-2 .1-3.1.1s-2.3.6-3.4-.1C7 19 4.5 14.6 5.4 11c.6-2.3 2.4-3.8 4.4-3.8 1.1 0 1.9.6 2.9.6s1.9-.6 3.1-.6Z', 'M14.8 4.6c-.7.9-1.9 1.5-2.9 1.4-.1-1.1.4-2.2 1.1-3 .7-.8 2-1.4 2.9-1.4.1 1.1-.4 2.2-1.1 3Z'],
   },
   clock: { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7.5V12l3 2'] },
+  /* Franjas horarias de Historial (SPEC_APP.md §1.10): cuatro siluetas que se
+     distinguen ENTRE SÍ a 16px —media cúpula sobre línea, sol con rayos, sol
+     sobre línea, medialuna—, que es más importante que el detalle de cada una.
+     Verificados renderizados a ese tamaño (regla de SISTEMA_DISENO.md §5). */
+  'sun-rise': { d: ['M3 18h18', 'M7.5 18a4.5 4.5 0 0 1 9 0', 'M12 10.5V7.5', 'M5.5 12l2 2', 'M18.5 12l-2 2'] },
+  'sun-high': {
+    d: ['M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M12 3v2.5', 'M12 18.5V21', 'M3 12h2.5', 'M18.5 12H21', 'M5.6 5.6l1.8 1.8', 'M16.6 16.6l1.8 1.8', 'M18.4 5.6l-1.8 1.8', 'M7.4 16.6l-1.8 1.8'],
+  },
+  'sun-low': { d: ['M12 15a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z', 'M3 19h18', 'M12 4.5V6', 'M6 6.5l1.3 1.3', 'M18 6.5l-1.3 1.3'] },
+  moon: { d: ['M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z'] },
+  /* Interrogación del estado DESCONOCIDO (SISTEMA_DISENO.md §5): el acordeón
+     de Historial la muestra mientras G-33 siga sin respuesta del contrato. */
+  help: { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M9.5 9.3a2.5 2.5 0 1 1 3.7 2.3c-.8.5-1.2 1-1.2 1.9v.3', 'M12 16.8v.4'] },
   'arrow-up-right': { d: ['M7 17 17 7', 'M9 7h8v8'] },
   'arrow-down-left': { d: ['M17 7 7 17', 'M15 17H7V9'] },
   minus: { d: ['M5 12h14'] },
   cash: {
     d: ['M3.5 6.5h17a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-17A1.5 1.5 0 0 1 2 16V8a1.5 1.5 0 0 1 1.5-1.5Z', 'M12 14.75a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5Z', 'M5.5 12h.01', 'M18.5 12h.01'],
+  },
+  /* Estructura de la app (SISTEMA_DISENO.md §5 bis). La flecha derecha es el
+     glifo del círculo "Continuar"; la izquierda, el "Volver" de la cabecera de
+     subpantalla. `grid-dots` es el ícono de `Más` — elegido provisoriamente por
+     Mati el 2026-08-03 ("por el momento"), con dots-circle, sliders y menu-deep
+     como alternativas evaluadas: SPEC_APP.md §5 lo deja como pregunta abierta. */
+  'arrow-right': { d: ['M4.5 12h15', 'M13 5.5l6.5 6.5-6.5 6.5'] },
+  'arrow-left': { d: ['M19.5 12h-15', 'M11 5.5 4.5 12 11 18.5'] },
+  /* SPEC_APP.md §1.7 · el chevron de la fila de grupo, que gira al abrir el
+     acordeón. Apunta abajo en reposo: la fila se expande hacia abajo empujando
+     a las siguientes, y el glifo dice hacia dónde. */
+  'chevron-down': { d: ['M6 9.5 12 15.5l6-6'] },
+  /* SPEC_APP.md §1.3 · el lápiz de "Modificar ítems" y el ícono de la
+     observación del total. `info` va SIEMPRE con su texto al lado: el ícono
+     solo no informa nada, y el sistema prohíbe que el color o el glifo sean el
+     único portador de significado (§5). */
+  pencil: { d: ['M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z', 'M14.5 7.5l2 2'] },
+  info: { d: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 11v5.5', 'M12 7.6v.4'] },
+  'grid-dots': {
+    f: [
+      'M6 6.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+      'M12 6.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+      'M18 6.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+      'M6 14.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+      'M12 14.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+      'M18 14.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z',
+    ],
   },
 } satisfies Record<string, Glyph>;
 

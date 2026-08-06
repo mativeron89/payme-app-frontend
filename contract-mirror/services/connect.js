@@ -263,7 +263,10 @@ function targetDe(r) {
   const listo = r.stripe_account_status === 'active'
     && r.stripe_charges_enabled === true
     && r.stripe_card_payments_status === 'active';
-  return listo ? { accountId: r.stripe_account_id, feePct: Number(r.fee_pct || 0.02) } : null;
+  return listo ? {
+    accountId: r.stripe_account_id,
+    feePct: Number(r.fee_pct ?? 0.02),
+  } : null;
 }
 
 /** Busca el restaurante dueño de una cuenta conectada (ruteo del webhook). */

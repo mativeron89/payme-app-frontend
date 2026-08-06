@@ -17,13 +17,28 @@ import type {
   WalletTransaction,
   WalletTxType,
 } from '../types';
+
+/**
+ * Persona COMPLETA del mock, con el correo que `users` sí tiene en el backend.
+ *
+ * C3/C4 (v2.29) sacó `email` de la proyección de AMIGOS, no de la base: grupos
+ * lo sigue devolviendo. El store guarda el dato y cada endpoint proyecta lo que
+ * su contrato declara — igual que el backend. Si el mock lo borrara del todo,
+ * mentiría en la otra dirección.
+ */
+export type MockPerson = Friend & { email: string };
 import { MOCK_RESTAURANTS, MOCK_USER } from './seedData';
 
 /**
- * Store en memoria del mock: hace de "backend" con las MISMAS reglas del
+ * Store persistido del mock: hace de "backend" con las MISMAS reglas del
  * contrato (garantía A-1, saldo retenido, locks, slots, expiración A-2).
- * Se resetea al recargar la página — suficiente para la demo.
- * Identidades: 'user' (el logueado) · 'guest' (entró por link) · 'other'
+ * El estado económico y su ledger idempotente se restauran juntos al recargar.
+ * Identidades: 'user' (el logueado) · 'guest' (LEGACY, ver abajo) · 'other'
+ *
+ * ⚠️ `'guest'` ya NO la produce nadie. Antes del cierre del pago sin cuenta
+ * (backend v2.32.0) la elegía la fachada cuando venía un `guestToken`; hoy la
+ * fachada nunca recibe uno, porque quien entra por link se registra y canjea el
+ * token por una inscripción. El tipo y sus ramas quedan durmientes e intactos.
  * (los demás comensales, simulados).
  */
 
@@ -52,7 +67,7 @@ interface MockItem {
   claims: MockClaim[];
 }
 
-interface MockSlot {
+export interface MockSlot {
   slot_index: number;
   amount_cents: number;
   status: 'available' | 'claimed' | 'paid';
@@ -79,13 +94,37 @@ export interface MockMesa {
   guarantee_method: 'card' | 'wallet' | null;
 }
 
-interface MockState {
+export interface MockIdemEntry {
+  hash: string;
+  response: unknown;
+}
+
+export interface MockState {
   user: User;
   balance_cents: number;
   held_balance_cents: number;
   clabe: string | null;
   paymentMethods: PaymentMethod[];
-  friends: Friend[];
+  friends: MockPerson[];
+  /**
+   * Personas que existen en PayMe y NO son mis amigas. Hace de tabla `users`
+   * para que `mockAddFriend` pueda fallar en silencio como el backend real.
+   */
+  directory: MockPerson[];
+  /**
+   * OLA 3C: solicitudes de amistad pendientes. `direction` es desde MI punto de
+   * vista — `incoming` me la mandaron, `outgoing` la mandé yo. El `id` es el de
+   * la SOLICITUD, nunca el de la persona: en el backend confundirlos hacía que
+   * aceptar diera 404 siempre.
+   */
+  friendRequests: Array<{
+    id: string;
+    direction: 'incoming' | 'outgoing';
+    person: MockPerson;
+    requested_at: string;
+  }>;
+  /** Ids de usuario que YO bloqueé. */
+  blockedUserIds: string[];
   groups: Array<Group & { memberIds: string[] }>;
   mesas: MockMesa[];
   /** GET /account/history: pagos propios en mesas (pantalla Mesas). */
@@ -94,6 +133,32 @@ interface MockState {
   transfers: TransferListItem[];
   notifications: AppNotification[];
   pendingInvitations: PendingInvitation[];
+  /**
+   * CIERRE DEL PAGO SIN CUENTA · tokens de link emitidos → código de su mesa.
+   *
+   * Existe para que el mock **no sea permisivo**. Sin esto, `accept-link`
+   * tendría que aceptar cualquier string, y el mock enseñaría que todo link
+   * sirve: el 403 quedaría inverificable a mano. Es exactamente la forma en que
+   * un mock permisivo ya le escondió un defecto vivo a este repo.
+   *
+   * En el backend el token nombra su mesa (`resolveLinkToken` → `mesa_id`).
+   * Acá se replica esa propiedad, que es la que importa.
+   */
+  linkTokens: Record<string, string>;
+  /**
+   * Mesas a las que el usuario se sumó CANJEANDO un link (`accept-link`).
+   * Espeja las filas de `mesa_participants` que crea el canje.
+   *
+   * **Límite declarado:** el mock NO usa esto como gate de lectura. El backend
+   * sí exige participación (`requireMesaParticipant`), pero el mock ya dejaba
+   * ver cualquier mesa sembrada desde antes de este cambio, y volverlo
+   * fail-closed toca el acceso a TODAS las mesas de la demo. Es otro cambio —
+   * el mismo criterio con el que el emisor no borró sus ramas de invitado en el
+   * commit del cierre. Lo que esto sí acredita es que el canje INSCRIBE.
+   */
+  joinedMesaCodes: string[];
+  /** Debe persistir junto a las mutaciones económicas para que reload no cobre de nuevo. */
+  idempotency: Record<string, MockIdemEntry>;
 }
 
 let seq = 0;
@@ -197,7 +262,12 @@ function seedMesas(): MockMesa[] {
       active_staff: STAFF,
       openedByUser: true,
       captured_shortfall_cents: 0,
-      guarantee_method: 'wallet',
+      // OLA 5C (b): resembrada como TARJETA. Una mesa con garantía wallet
+      // enseñaba un riel que no existe a quien usa el mock para entender el
+      // producto — el mismo argumento por el que el mock replica la ceguera de
+      // C2. El mock no es un registro histórico y no tiene obligaciones legacy
+      // que preservar: ahí no hay plata de nadie.
+      guarantee_method: 'card',
     },
     // Mesa de OTRO organizador (Sofía) — la invitación in-app pendiente apunta acá.
     {
@@ -252,7 +322,17 @@ function seedMesas(): MockMesa[] {
   ];
 }
 
-function seedWalletTx(): WalletTransaction[] {
+/**
+ * DURMIENTE (OLA 5C · b). El riel saldo está apagado, así que el mock ya no
+ * siembra movimientos de saldo. La función NO se borra —la ratificación manda
+ * conservar código, schema e historia— y por eso se exporta: sin eso el
+ * compilador la marca como muerta y la única salida sería eliminarla, que es
+ * justo lo que no hay que hacer.
+ *
+ * Se vuelve a conectar en `initialState` el día que exista gate IFPE,
+ * ratificación nueva y una capability publicada por el BACKEND.
+ */
+export function seedWalletTx(): WalletTransaction[] {
   const mk = (
     type: WalletTxType,
     amount: number,
@@ -285,13 +365,17 @@ function seedWalletTx(): WalletTransaction[] {
   ];
 }
 
-function seedFriends(): Friend[] {
-  const mk = (payme: string, first: string, last: string): Friend => ({
+function seedFriends(): MockPerson[] {
+  const mk = (payme: string, first: string, last: string): MockPerson => ({
     id: mockId('a'),
     payme_id: `payme_mx_${payme}`,
     first_name: first,
     last_name: last,
     full_name: `${first} ${last}`,
+    // El mock conserva el correo como lo conserva `users` en el backend: lo que
+    // C3/C4 sacó es la PROYECCIÓN en amigos, no el dato. Grupos sigue
+    // devolviéndolo (contract-mirror/routes/groups.js), así que el store tiene
+    // que poder alimentar las dos formas.
     email: `${payme}@mail.com`,
     added_at: iso(-30 * 24 * 60 * 60_000),
   });
@@ -299,23 +383,51 @@ function seedFriends(): Friend[] {
   return [mk('sofi', 'Sofía', 'Fernández'), mk('juan', 'Juan', 'López'), mk('maru', 'María', 'Ruiz'), mk('leop', 'Leo', 'Paz')];
 }
 
-function seedNotifications(mesas: MockMesa[]): {
-  notifications: AppNotification[];
-  pendingInvitations: PendingInvitation[];
-} {
-  const invitedMesa = mesas.find((m) => m.code === 'PA-4520');
-  const notifications: AppNotification[] = [
-    {
-      id: mockId('f'),
-      type: 'invitation_received',
-      title: null,
-      body: 'Sofía Fernández te invitó a una mesa',
-      payload: { mesa_code: 'PA-4520', inviter_name: 'Sofía Fernández' },
-      related_entity_type: 'invitation',
-      related_entity_id: null,
-      read_at: null,
-      created_at: iso(-8 * 60_000),
-    },
+/**
+ * Personas que EXISTEN en PayMe sin ser amigas mías.
+ *
+ * El mock no tenía tabla `users`: sólo existían mis amigos, así que
+ * `mockAddFriend` inventaba una persona para cualquier texto que se tipeara y
+ * la solicitud saliente aparecía SIEMPRE. Eso hacía invisible en la demo el
+ * comportamiento real —el backend sólo inserta la fila si el destino existe y
+ * está activo— y con él, el oráculo que ese comportamiento produce.
+ *
+ * Un mock que diverge del contrato hacia el lado permisivo convierte la
+ * verificación manual en teatro: mirás la pantalla, funciona, y lo que mirabas
+ * no era el sistema.
+ */
+function seedDirectory(): MockPerson[] {
+  const mk = (payme: string, first: string, last: string): MockPerson => ({
+    id: mockId('a'),
+    payme_id: `payme_mx_${payme}`,
+    first_name: first,
+    last_name: last,
+    full_name: `${first} ${last}`,
+    email: `${payme}@mail.com`,
+    // Sólo significa algo cuando la persona pasa a `friends`; ahí se pisa.
+    added_at: '',
+  });
+  // Valentina es la misma que manda la solicitud entrante sembrada: agregarla
+  // por correo debe disparar el camino RECÍPROCO del contrato (pedirle a quien
+  // ya me pidió equivale a aceptar), que es el más difícil de ver a mano.
+  return [mk('vale', 'Valentina', 'Ríos'), mk('nico', 'Nicolás', 'Salas')];
+}
+
+/**
+ * Avisos del riel SALDO. **Durmiente: nada los llama.**
+ *
+ * OLA 5C(b) apagó saldo, movimientos y garantía wallet del mock con el criterio
+ * de que la demo es un artefacto de enseñanza — y dejó afuera el inbox, que
+ * seguía mostrando "Se acreditaron $500.00 a tu saldo PayMe" en `#/avisos`.
+ * Se conservan acá, sin llamador, por la misma regla que `seedWalletTx`: el
+ * riel se apaga, no se borra.
+ *
+ * ⚠️ NO confundir con la ola (d): allá el problema es que el BACKEND REAL sigue
+ *    emitiendo `topup_succeeded` y `transfer_received`. Eso no se arregla desde
+ *    acá y sigue frenado esperando al emisor.
+ */
+export function seedWalletNotifications(): AppNotification[] {
+  return [
     {
       id: mockId('f'),
       type: 'transfer_received',
@@ -338,6 +450,49 @@ function seedNotifications(mesas: MockMesa[]): {
       read_at: iso(-2 * 24 * 60 * 60_000),
       created_at: iso(-3 * 24 * 60 * 60_000),
     },
+  ];
+}
+
+/**
+ * Tipos de aviso del riel saldo: sirven al apagado del MOCK y a su test de
+ * recaída. **No es una lista nuestra: es la del emisor.**
+ *
+ * Espeja exactamente `WALLET_RAIL_TYPES` de
+ * `contract-mirror/services/notifications.js`, donde App Backend dejó de
+ * crearlos (`5e210fd`). Un test lee el espejo como texto y falla si los dos
+ * juegos se separan — la lista a mano se había quedado corta justamente acá:
+ * faltaba `topup_failed`, así que un estado persistido de la demo lo conservaba.
+ *
+ * ⚠️ `tip_received` NO está, y es deliberado del emisor: avisa a un mesero
+ * —persona identificada— de plata acreditada a su nombre, que es obligación
+ * legacy. Agregarlo acá por analogía sería ocultarle a alguien un movimiento
+ * propio.
+ */
+export const WALLET_NOTIFICATION_TYPES = [
+  'topup_succeeded', 'topup_failed', 'topup_pending',
+  'transfer_received', 'transfer_sent',
+] as const;
+
+function seedNotifications(mesas: MockMesa[]): {
+  notifications: AppNotification[];
+  pendingInvitations: PendingInvitation[];
+} {
+  const invitedMesa = mesas.find((m) => m.code === 'PA-4520');
+  const notifications: AppNotification[] = [
+    {
+      id: mockId('f'),
+      type: 'invitation_received',
+      title: null,
+      body: 'Sofía Fernández te invitó a una mesa',
+      payload: { mesa_code: 'PA-4520', inviter_name: 'Sofía Fernández' },
+      related_entity_type: 'invitation',
+      related_entity_id: null,
+      read_at: null,
+      created_at: iso(-8 * 60_000),
+    },
+    // Acá vivían `transfer_received` y `topup_succeeded`. Se mudaron a
+    // `seedWalletNotifications()`, durmiente: el riel saldo está apagado y el
+    // inbox no es una excepción al apagado.
     {
       id: mockId('f'),
       type: 'mesa_shortfall_charged',
@@ -372,11 +527,14 @@ function seedNotifications(mesas: MockMesa[]): {
 
 function seedState(): MockState {
   const friends = seedFriends();
+  const directory = seedDirectory();
   const mesas = seedMesas();
   const { notifications, pendingInvitations } = seedNotifications(mesas);
   return {
     user: MOCK_USER,
-    balance_cents: 125000,
+    // Riel saldo apagado: el mock no siembra saldo. Los campos quedan en el
+    // schema (durmiente), en cero.
+    balance_cents: 0,
     held_balance_cents: 0,
     clabe: null,
     // D4 (contrato v2.16 publicado): id = uuid interno + stripe_payment_method_id
@@ -408,6 +566,20 @@ function seedState(): MockState {
       },
     ],
     friends,
+    directory,
+    // Una solicitud entrante sembrada: sin esto la pantalla nueva arranca vacía
+    // y no se puede ver el flujo de aceptar en la demo. La persona es LA MISMA
+    // del directorio (mismo `id`), para que agregarla por correo dispare el
+    // camino recíproco del contrato en vez de crear una segunda pendiente.
+    friendRequests: [
+      {
+        id: mockId('f'),
+        direction: 'incoming' as const,
+        person: directory[0],
+        requested_at: iso(-2 * 60 * 60_000),
+      },
+    ],
+    blockedUserIds: [],
     groups: [
       {
         id: mockId('a'),
@@ -435,6 +607,7 @@ function seedState(): MockState {
         amount_cents: 22425,
         date: iso(-3 * 24 * 60 * 60_000),
         mesa_code: 'PA-8712',
+        mesa_status: 'completed',
         restaurant: MOCK_RESTAURANTS[0].name,
         category: MOCK_RESTAURANTS[0].category,
       },
@@ -443,6 +616,7 @@ function seedState(): MockState {
         amount_cents: 41800,
         date: iso(-9 * 24 * 60 * 60_000),
         mesa_code: 'PA-6603',
+        mesa_status: 'completed',
         restaurant: MOCK_RESTAURANTS[1].name,
         category: MOCK_RESTAURANTS[1].category,
       },
@@ -451,13 +625,19 @@ function seedState(): MockState {
         amount_cents: 15650,
         date: iso(-16 * 24 * 60 * 60_000),
         mesa_code: 'PA-5218',
+        mesa_status: 'completed',
         restaurant: MOCK_RESTAURANTS[0].name,
         category: MOCK_RESTAURANTS[0].category,
       },
     ],
-    walletTx: seedWalletTx(),
+    // Sin riel saldo no hay movimientos de saldo que mostrar. El seed queda
+    // en el árbol (durmiente); lo que se apaga es la siembra.
+    walletTx: [],
     notifications,
     pendingInvitations,
+    linkTokens: {},
+    joinedMesaCodes: [],
+    idempotency: {},
     transfers: [
       {
         id: mockId('f'),
@@ -528,6 +708,31 @@ function loadPersisted(): MockState | null {
       for (const f of parsed.friends) {
         if (f.payme_id === 'payme_mx_leo') f.payme_id = 'payme_mx_leop';
       }
+    }
+    // Auditoría 2026-08-02: el estado económico ya persistía, pero el ledger
+    // idempotente era memoria de módulo. Un reload podía repetir una mutación.
+    if (!parsed.idempotency || typeof parsed.idempotency !== 'object' || Array.isArray(parsed.idempotency)) {
+      parsed.idempotency = {};
+    }
+    // OLA 3C: `friendRequests` y `blockedUserIds` nacieron después que el
+    // storage. Un estado persistido de antes los trae `undefined` y la pantalla
+    // de amigos reventaba al leerlos.
+    // v2.32.0 · `linkTokens` nació con el cierre del pago sin cuenta. Un estado
+    // persistido de antes lo trae `undefined`, y canjear reventaría al leerlo.
+    if (!parsed.linkTokens || typeof parsed.linkTokens !== 'object' || Array.isArray(parsed.linkTokens)) {
+      parsed.linkTokens = {};
+    }
+    if (!Array.isArray(parsed.joinedMesaCodes)) parsed.joinedMesaCodes = [];
+    if (!Array.isArray(parsed.friendRequests)) parsed.friendRequests = [];
+    if (!Array.isArray(parsed.blockedUserIds)) parsed.blockedUserIds = [];
+    // El directorio de personas que existen sin ser amigas.
+    if (!Array.isArray(parsed.directory)) parsed.directory = seedDirectory();
+    // OLA 5C(b), corrección: sin esto el apagado del riel saldo no alcanzaba a
+    // nadie que ya hubiera abierto la demo — los avisos de saldo viven en SU
+    // localStorage, no en el seed, y seguirían visibles en `#/avisos`.
+    if (Array.isArray(parsed.notifications)) {
+      const durmientes: readonly string[] = WALLET_NOTIFICATION_TYPES;
+      parsed.notifications = parsed.notifications.filter((n) => !durmientes.includes(n.type));
     }
     return parsed;
   } catch {

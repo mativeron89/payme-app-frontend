@@ -63,7 +63,32 @@ export interface AppConfig {
     google_pay: boolean;
     stp_dispersal: boolean;
     ocr_real: boolean;
+    /**
+     * OLA 5 (v2.31.0) · capability del riel saldo. **Sin tipar a propósito.**
+     *
+     * Tiparla como `{ enabled: boolean; account_activity: boolean }` haría que
+     * el compilador afirme una forma que sólo se puede verificar en runtime: la
+     * respuesta viene de un backend que puede ser de otra versión. `unknown`
+     * obliga a pasar por `readWalletRail` (`walletRail.ts`), que valida el
+     * conjunto CERRADO de claves y falla cerrado.
+     *
+     * Opcional porque su ausencia es contrato: backend previo a OLA 5 → riel
+     * APAGADO.
+     */
+    wallet_rail?: unknown;
   };
+}
+
+/**
+ * `POST /api/invitations/accept-link` (v2.32.0). Requiere sesión.
+ *
+ * `joined` viene siempre `true` en el 200 — el rechazo es un status, no un
+ * booleano—, pero se decodifica igual: un 2xx malformado no acredita que la
+ * inscripción haya ocurrido, y de eso depende que la persona pueda pagar.
+ */
+export interface AcceptInvitationLinkResponse {
+  joined: true;
+  mesa_code: string;
 }
 
 // ─── Cuenta (routes/account.js) ────────────────────────────
@@ -134,12 +159,26 @@ export interface WalletTransactionsResponse {
   offset: number;
 }
 
-/** Elemento de GET /api/account/history — un pago propio en una mesa. */
+/**
+ * Elemento de GET /api/account/history — **un pago propio**, no una mesa.
+ *
+ * 🔴 La granularidad es UN RENGLÓN POR PAGO y el emisor la fijó con test
+ * (backend v2.42.0): esta misma respuesta alimenta `PagosScreen`, que es
+ * superficie card-only ratificada. Dos pagos a la misma mesa son dos renglones,
+ * y agruparlos es trabajo del front — `groupByMesa()` ya lo hace. No pedir que
+ * el contrato agrupe.
+ */
 export interface HistoryEntry {
   id: string;
   amount_cents: number;
   date: string;
   mesa_code: string;
+  /**
+   * Aditivo en v2.42.0. Sin esto el front no podía saber si la mesa de un pago
+   * sigue viva, y pintaba mesas abiertas bajo un encabezado de mes como si ya
+   * hubieran terminado.
+   */
+  mesa_status: MesaStatus;
   restaurant: string;
   category: string;
 }
@@ -275,7 +314,7 @@ export interface CreateMesaRequest {
    * — que se liquida sola a los 30 min y captura el total (doble cobro real),
    * además de emitir eventos de facturación inexistente al dashboard.
    */
-  idempotency_key?: string;
+  idempotency_key: string;
 }
 
 /** POST /api/mesas → 201 (garantía A-1). */
@@ -351,7 +390,8 @@ export interface PayMesaResponse {
     /** v2.18: recibo de fracciones cobradas (solo consumo). */
     items?: Array<{ item_id: string; fraction_bps: number; amount_cents: number }>;
     gross_display?: string;
-    client_secret?: string;
+    /** El replay unificado puede serializar `null`; el guard lo elimina. */
+    client_secret?: string | null;
     /**
      * Solo en el REPLAY idempotente: ahí el backend devuelve la fila cruda del
      * attempt, donde el secreto se llama así y no viene `requires_action`
@@ -390,10 +430,13 @@ export interface PayMesaResponse {
 
 /** POST /api/mesas/:code/invitations (type 'link') → 201. */
 export interface CreateInvitationResponse {
+  /** `true` cuando el backend replaya la invitación creada con la misma key. */
+  idempotent?: boolean;
   invitation: {
     id: string;
     invitation_type: 'link' | 'in_app';
-    status: string;
+    /** El replay de la misma key puede devolver la autoridad ya vencida. */
+    status: 'pending' | 'expired';
     expires_at: string;
     created_at: string;
   };
@@ -435,32 +478,56 @@ export interface PaymentMethodsResponse {
   payment_methods: PaymentMethod[];
 }
 
+/** POST /api/payment-methods/setup-intent → 200. */
+export interface CreateSetupIntentResponse {
+  setup_intent_id: string;
+  client_secret: string;
+}
+
+/** POST /api/payment-methods → 201 fresh / 200 replay en e8a3faf. */
+export type AttachedPaymentMethod = PaymentMethod;
+
+export interface AttachPaymentMethodResponse {
+  payment_method: AttachedPaymentMethod;
+  /** El `pm_` ya estaba adjunto; no se creó una segunda tarjeta local. */
+  idempotent?: boolean;
+}
+
 // ─── Topup (routes/topup.js + spei-funding.js) ─────────────
 
 /** POST /api/topup/oxxo → 201. */
 export interface TopupOxxoResponse {
+  idempotent?: boolean;
   topup: {
     id: string;
-    status: string;
+    /** Se normaliza desde el BIGINT/shape real del endpoint. */
+    method: 'oxxo';
+    status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | 'cancelled';
     amount_cents: number;
     amount_display: string;
-    voucher_reference: string;
-    stripe_voucher_url: string | null;
-    voucher_expires_at: string;
+    /** Sólo un replay terminal puede omitirlo; uno activo falla en el guard. */
+    voucher_reference?: string;
+    stripe_voucher_url?: string | null;
+    voucher_expires_at?: string;
   };
 }
 
 /** POST /api/topup/card → 201. */
 export interface TopupCardResponse {
+  idempotent?: boolean;
   topup: {
     id: string;
-    status: string;
+    method: 'card';
+    status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | 'cancelled';
     amount_cents: number;
     amount_display: string;
   };
-  requires_action: boolean;
+  /** Ausente en replay: no se inventa false ni se promete un 3DS. */
+  requires_action?: boolean;
   client_secret?: string;
 }
+/** GET /api/topup/:id → estado de reconciliación de la carga. */
+export interface TopupStatusResponse { topup: { id: string; method: 'oxxo' | 'card' | 'spei'; status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | 'cancelled'; amount_cents: number; amount_display: string }; }
 
 /** GET /api/wallet/clabe (A-3, abono SPEI). */
 export interface ClabeResponse {
@@ -481,23 +548,31 @@ export interface CreateTransferRequest {
   idempotency_key: string;
 }
 
-/** POST /api/transfers → 201. */
-export interface CreateTransferResponse {
-  /**
-   * B-06: `true` cuando el backend devolvió el envío YA hecho con esta clave
-   * en vez de hacer uno nuevo (replay idempotente). Sin mirarlo, el front
-   * anunciaba "le enviaste $X" por una transferencia que ya estaba hecha.
-   */
-  idempotent?: boolean;
-  transfer: {
-    id: string;
-    amount_cents: number;
-    concept: string | null;
-    completed_at: string;
-    amount_display: string;
-    to: { payme_id: string; full_name: string };
-  };
+interface TransferResponseBase {
+  id: string;
+  amount_cents: number;
+  concept: string | null;
+  completed_at: string;
+  amount_display: string;
 }
+
+/** POST /api/transfers: fresh liga por `to`; replay liga por `to_user_id`. */
+export type CreateTransferResponse =
+  | {
+      idempotent?: false;
+      transfer: TransferResponseBase & {
+        to: { payme_id: string; full_name: string };
+        status?: 'completed';
+      };
+    }
+  | {
+      /** El backend devolvió el envío YA hecho; no ejecutó otro movimiento. */
+      idempotent: true;
+      transfer: TransferResponseBase & {
+        to_user_id: string;
+        status: 'completed';
+      };
+    };
 
 /** Elemento de GET /api/transfers. */
 export interface TransferListItem {
@@ -520,19 +595,78 @@ export interface TransfersResponse {
 // ─── Friends / Groups (routes/friends.js, groups.js) ───────
 
 /** Elemento de GET /api/friends. */
+/**
+ * Persona en el dominio social (OLA 3C · backend v2.29.0, `persona()` de
+ * routes/friends.js).
+ *
+ * **C3/C4: `email` SALIÓ del contrato**, tanto de la proyección como del
+ * criterio de búsqueda. Buscar por substring de correo era una forma barata de
+ * confirmarlo carácter a carácter. No se repone del lado del front.
+ */
 export interface Friend {
   id: string;
   payme_id: string;
   first_name: string;
   last_name: string;
   full_name: string;
-  email: string;
+  /** Solo en GET /friends: `responded_at` de la amistad, o `created_at`. */
   added_at?: string;
 }
 
 export interface FriendsResponse {
   friends: Friend[];
 }
+
+/** GET /api/friends/search → 200. Busca SOLO entre amigos propios. */
+export interface FriendSearchResponse {
+  results: Friend[];
+}
+
+/**
+ * C1/C2 · `POST /api/friends` ya no crea una amistad: crea una INTENCIÓN.
+ *
+ * Responde **202 `{ requested: true }` SIEMPRE** — la persona no existe,
+ * existe, ya es amiga, ya tiene tu solicitud, o te bloqueó. El emisor no puede
+ * distinguir ninguno de esos casos. Esa ceguera es el punto: antes un 404
+ * `user_not_found` convertía al endpoint en un oráculo para descubrir quién
+ * tiene cuenta probando correos.
+ *
+ * Consecuencia para la UI: **no se puede decir "no encontramos a esa
+ * persona"**, porque el front no lo sabe. El estado real de las solicitudes
+ * propias se ve en `GET /friends/requests?direction=outgoing`.
+ */
+export interface FriendRequestCreatedResponse {
+  requested: true;
+}
+
+export type FriendRequestDirection = 'incoming' | 'outgoing';
+
+/**
+ * Elemento de `GET /api/friends/requests`.
+ *
+ * ⚠️ `id` es el de la SOLICITUD y la persona va anidada en `user`. Están
+ * separados a propósito: en el backend, seleccionar `f.id` junto a `u.id`
+ * devolvía dos columnas `id` y el driver conservaba la última, así que aceptar
+ * fallaba con 404 siempre. No volver a mezclarlos de este lado.
+ */
+export interface FriendRequest {
+  id: string;
+  user: Friend;
+  requested_at: string;
+}
+
+export interface FriendRequestsResponse {
+  direction: FriendRequestDirection;
+  requests: FriendRequest[];
+}
+
+export interface FriendRequestAcceptedResponse { accepted: true }
+export interface FriendRequestRejectedResponse { rejected: true }
+export interface FriendRequestCancelledResponse { cancelled: true }
+export interface FriendBlockedResponse { blocked: true }
+export interface FriendUnblockedResponse { unblocked: true }
+/** C5: `DELETE /friends/:id` ahora da 404 `friendship_not_found` si no había. */
+export interface FriendRemovedResponse { removed: true }
 
 /** Elemento de GET /api/groups. */
 export interface Group {

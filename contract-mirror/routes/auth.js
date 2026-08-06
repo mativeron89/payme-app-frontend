@@ -26,22 +26,28 @@ const schemas = require('../schemas');
 const { generateToken, tokenHash, normalizeEmail, hashIp } = require('../utils/tokens');
 const { generatePaymeId } = require('../utils/userId');
 const logger = require('../utils/logger');
+const { loadActiveSession } = require('../middleware/auth');
+const { walletRailEnabled } = require('../services/walletRail');
 
 const router = express.Router();
 const { validateBody } = schemas;
 
 const JWT_TTL_SECONDS = Number(process.env.JWT_TTL_SECONDS) || (7 * 24 * 60 * 60);   // 7d
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS) || (30 * 24 * 60 * 60); // 30d
+const REFRESH_CONCURRENT_GRACE_SECONDS = 5;
 const JWT_ISS = process.env.JWT_ISSUER || 'payme.mx';
 const JWT_AUD = process.env.JWT_AUDIENCE || 'payme-app';
+// Hash bcrypt válido de costo 10 para normalizar el trabajo del login cuando
+// el email no existe. No representa una cuenta ni una credencial utilizable.
+const DUMMY_PASSWORD_HASH = '$2b$10$/ydJ9mGw8xoJfSyW9XQUP.BweuZ9D/ddrClj4M1ST.StKd.AyaqJW';
 
-async function createSession({ userId, userAgent, ip }) {
+async function createSession({ userId, userAgent, ip, client = pool }) {
   const jti = randomUUID();
   const rawRefresh = generateToken(32);
   const refreshHash = tokenHash(rawRefresh);
   const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000);
 
-  await pool.query(
+  await client.query(
     `INSERT INTO user_sessions
        (user_id, jti, refresh_token_hash, user_agent, ip_hash, expires_at)
      VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -56,40 +62,70 @@ function issueAccessToken({ userId, jti }) {
   return jwt.sign(
     { sub: userId, jti, iss: JWT_ISS, aud: JWT_AUD, nbf: now, iat: now },
     process.env.JWT_SECRET,
-    { expiresIn: JWT_TTL_SECONDS }
+    { expiresIn: JWT_TTL_SECONDS, algorithm: 'HS256' }
   );
 }
 
 // ─── POST /register ────────────────────────────────────────
-router.post('/register', validateBody(schemas.register), async (req, res, next) => {
+// El schema se elige EN CADA REQUEST (gate de rollout de PQ-2, v2.28): en modo
+// de compatibilidad birth_date es opcional; con PQ2_BIRTH_DATE_REQUIRED=true
+// pasa a obligatoria. Sin esta indirección, el flip sería un release.
+function validateRegister(req, res, next) {
+  return validateBody(schemas.registerSchema())(req, res, next);
+}
+
+router.post('/register', validateRegister, async (req, res, next) => {
   try {
     // req.body.email ya viene normalizado por el schema (P1 #4), pero
     // normalizeEmail es idempotente y lo dejamos por claridad.
-    const { email, phone, password, first_name, last_name } = req.body;
+    const { email, phone, password, first_name, last_name, birth_date } = req.body;
     const normalized = normalizeEmail(email);
 
-    const { rowCount } = await pool.query(
-      `SELECT 1 FROM users WHERE email_normalized = $1 OR LOWER(email) = $1`,
-      [normalized]
-    );
-    if (rowCount > 0) return res.status(409).json({ error: 'email_already_registered' });
-
     const hash = await bcrypt.hash(password, 10);
-    const paymeId = await generatePaymeId();
-
-    const { rows } = await pool.query(
-      `INSERT INTO users (payme_id, email, email_normalized, phone, password_hash, first_name, last_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, payme_id, email, first_name, last_name`,
-      [paymeId, email, normalized, phone || null, hash, first_name, last_name]
-    );
-    const user = rows[0];
-
-    await pool.query(`INSERT INTO wallets (user_id, balance_cents) VALUES ($1, 0)`, [user.id]);
-
-    const session = await createSession({
-      userId: user.id, userAgent: req.headers['user-agent'], ip: req.ip,
-    });
+    let created = null;
+    for (let attempt = 0; attempt < 10 && !created; attempt += 1) {
+      const paymeId = await generatePaymeId(first_name, last_name);
+      try {
+        created = await pool.tx(async (client) => {
+        const { rows } = await client.query(
+          `INSERT INTO users (payme_id, email, email_normalized, phone, password_hash,
+                             first_name, last_name, birth_date)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING id, payme_id, email, first_name, last_name`,
+          // `?? null` explícito: en modo de compatibilidad birth_date llega undefined.
+          // pg ya lo mapearía a NULL, pero acá el NULL es la conducta ratificada
+          // (cuenta sin fecha = gate de menores cerrado), no un efecto del driver.
+          [paymeId, email, normalized, phone || null, hash, first_name, last_name, birth_date ?? null]
+        );
+        const createdUser = rows[0];
+        // ORDEN 1A · el alta ya no acuña wallet. NO es un 410: registrarse es
+        // card-only legítimo y tiene que seguir funcionando; lo que se apaga es
+        // que nazca una fila de dinero electrónico sin que nadie la pida.
+        // La fila no se borra para las cuentas que ya la tienen.
+        if (walletRailEnabled()) {
+          await client.query(`INSERT INTO wallets (user_id, balance_cents) VALUES ($1, 0)`, [createdUser.id]);
+        }
+        const createdSession = await createSession({
+          userId: createdUser.id, userAgent: req.headers['user-agent'], ip: req.ip, client,
+        });
+          return { user: createdUser, session: createdSession };
+        });
+      } catch (err) {
+        // La constraint es la fuente de verdad ante registros concurrentes.
+        if (err.code === '23505' && (err.constraint === 'uq_users_email_normalized' ||
+            err.constraint === 'users_email_key')) {
+          return res.status(409).json({ error: 'email_already_registered' });
+        }
+        // generatePaymeId reduce la colisión, pero la UNIQUE constraint cierra
+        // la carrera entre procesos; un rollback deja cero escrituras parciales.
+        if (err.code === '23505' && err.constraint === 'users_payme_id_key' && attempt < 9) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (!created) throw new Error('payme_id_collision_retry_exhausted');
+    const { user, session } = created;
     const accessToken = issueAccessToken({ userId: user.id, jti: session.jti });
 
     logger.audit('user_registered', { user_id: user.id, payme_id: user.payme_id });
@@ -112,17 +148,18 @@ router.post('/login', validateBody(schemas.login), async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT id, payme_id, email, first_name, last_name, password_hash, status
          FROM users
-        WHERE email_normalized = $1 OR LOWER(email) = $1
-        LIMIT 1`,
+        WHERE email_normalized = $1 OR LOWER(TRIM(email)) = $1
+        LIMIT 2`,
       [normalized]
     );
-    if (rows.length === 0) return res.status(401).json({ error: 'invalid_credentials' });
-
-    const user = rows[0];
+    // Dos filas legacy que colisionan al normalizar no pueden elegirse por el
+    // orden físico de pg. Se falla cerrado y la identidad requiere remediación.
+    const user = rows.length === 1 ? rows[0] : null;
+    // Exactamente una verificación bcrypt por request: no filtra existencia ni
+    // estado por timing. La suspensión sólo se revela tras acreditar el secreto.
+    const ok = await bcrypt.compare(password, user?.password_hash || DUMMY_PASSWORD_HASH);
+    if (!user || !ok) return res.status(401).json({ error: 'invalid_credentials' });
     if (user.status !== 'active') return res.status(403).json({ error: 'user_suspended' });
-
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.status(401).json({ error: 'invalid_credentials' });
 
     await pool.query(
       `UPDATE users SET email_normalized = $1 WHERE id = $2 AND email_normalized IS NULL`,
@@ -155,76 +192,65 @@ router.post('/refresh', validateBody(schemas.refreshToken), async (req, res, nex
   try {
     const { refresh_token } = req.body;
     const incomingHash = tokenHash(refresh_token);
-
-    // 1) Buscar por el refresh_token_hash ACTUAL.
-    const { rows } = await pool.query(
-      `SELECT id, user_id, jti, status, expires_at
-         FROM user_sessions
-        WHERE refresh_token_hash = $1
-        LIMIT 1`,
-      [incomingHash]
-    );
-    const session = rows[0];
-
-    if (!session) {
-      // 2) ¿Matchea un token YA ROTADO (prev_refresh_token_hash)?
-      //    Eso es reuse de un token viejo → replay → revocar la session.
-      const { rows: reuseRows } = await pool.query(
-        `SELECT id, user_id, status
+    const outcome = await pool.tx(async (client) => {
+      // FOR UPDATE serializa tanto la rotación como la clasificación del token
+      // previo. refresh_rotated_at solo cambia al rotar, nunca por tráfico normal.
+      const { rows } = await client.query(
+        `SELECT id, user_id, jti, status, expires_at, refresh_token_hash,
+                prev_refresh_token_hash, refresh_rotated_at
            FROM user_sessions
-          WHERE prev_refresh_token_hash = $1
-          LIMIT 1`,
-        [incomingHash]
+          WHERE refresh_token_hash = $1 OR prev_refresh_token_hash = $1
+          ORDER BY CASE WHEN refresh_token_hash = $1 THEN 0 ELSE 1 END
+          LIMIT 1 FOR UPDATE`, [incomingHash]
       );
-      const reused = reuseRows[0];
-      if (reused) {
-        if (reused.status === 'active') {
-          await pool.query(
-            `UPDATE user_sessions
-                SET status='revoked', revoked_at=NOW(),
-                    revoked_reason='refresh_reuse_detected'
-              WHERE id = $1`,
-            [reused.id]
-          );
-        }
-        logger.warn('refresh_reuse_detected', {
-          session_id: reused.id, user_id: reused.user_id,
-        });
-        return res.status(401).json({ error: 'refresh_reuse_detected' });
+      const session = rows[0];
+      if (!session || session.status !== 'active' || new Date(session.expires_at) <= new Date() ||
+          !session.user_id || !session.jti) {
+        return { kind: 'invalid' };
       }
-      return res.status(401).json({ error: 'invalid_refresh_token' });
+
+      if (session.refresh_token_hash !== incomingHash) {
+        const { rows: graceRows } = await client.query(
+          `SELECT refresh_rotated_at >= NOW() - ($2::int * INTERVAL '1 second') AS within_grace
+             FROM user_sessions WHERE id = $1`, [session.id, REFRESH_CONCURRENT_GRACE_SECONDS]
+        );
+        if (graceRows[0]?.within_grace) return { kind: 'concurrent' };
+        await client.query(
+          `UPDATE user_sessions SET status='revoked', revoked_at=NOW(),
+             revoked_reason='refresh_reuse_detected' WHERE id=$1 AND status='active'`, [session.id]
+        );
+        return { kind: 'reuse', session };
+      }
+
+      const newRawRefresh = generateToken(32);
+      const newRefreshHash = tokenHash(newRawRefresh);
+      // Firmar antes de consumir el token evita perderlo si la firma/config falla.
+      const accessToken = issueAccessToken({ userId: session.user_id, jti: session.jti });
+      const { rowCount } = await client.query(
+        `UPDATE user_sessions
+            SET prev_refresh_token_hash=refresh_token_hash, refresh_token_hash=$2,
+                refresh_rotated_at=NOW(), last_seen_at=NOW()
+          WHERE id=$1 AND refresh_token_hash=$3 AND status='active' AND jti=$4`,
+        [session.id, newRefreshHash, incomingHash, session.jti]
+      );
+      if (rowCount !== 1) return { kind: 'invalid' };
+      return { kind: 'rotated', session, accessToken, newRawRefresh };
+    });
+
+    if (outcome.kind === 'concurrent') {
+      return res.status(409).json({ error: 'refresh_in_progress' });
     }
-
-    if (session.status !== 'active') {
-      return res.status(401).json({ error: 'session_revoked' });
+    if (outcome.kind === 'reuse') {
+      logger.warn('refresh_reuse_detected', { session_id: outcome.session.id, user_id: outcome.session.user_id });
+      return res.status(401).json({ error: 'refresh_reuse_detected' });
     }
-    if (new Date(session.expires_at) < new Date()) {
-      return res.status(401).json({ error: 'session_expired' });
-    }
-    if (!session.jti) {
-      return res.status(500).json({ error: 'session_missing_jti' });
-    }
+    if (outcome.kind !== 'rotated') return res.status(401).json({ error: 'invalid_refresh_token' });
 
-    // 3) ROTAR: nuevo raw refresh, mover el actual a prev_refresh_token_hash.
-    const newRawRefresh = generateToken(32);
-    const newRefreshHash = tokenHash(newRawRefresh);
-
-    await pool.query(
-      `UPDATE user_sessions
-          SET prev_refresh_token_hash = refresh_token_hash,
-              refresh_token_hash = $2,
-              last_seen_at = NOW()
-        WHERE id = $1`,
-      [session.id, newRefreshHash]
-    );
-
-    const accessToken = issueAccessToken({ userId: session.user_id, jti: session.jti });
-
-    logger.audit('token_refreshed', { session_id: session.id, user_id: session.user_id });
+    logger.audit('token_refreshed', { session_id: outcome.session.id, user_id: outcome.session.user_id });
 
     res.json({
-      access_token: accessToken,
-      refresh_token: newRawRefresh,  // rotado
+      access_token: outcome.accessToken,
+      refresh_token: outcome.newRawRefresh,
       expires_in: JWT_TTL_SECONDS,
     });
   } catch (err) { next(err); }
@@ -240,23 +266,43 @@ router.post('/logout', async (req, res, next) => {
     const token = header.slice(7);
 
     let payload;
-    try { payload = jwt.verify(token, process.env.JWT_SECRET); }
+    try { payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] }); }
     catch (err) { return res.status(401).json({ error: 'invalid_token' }); }
 
-    if (!payload.jti) {
+    // Conserva compatibilidad con tokens viejos sin claims, pero no permite que
+    // un token que sí declara issuer/audience ajenos revoque una sesión válida.
+    if ((payload.iss && payload.iss !== JWT_ISS) || (payload.aud && payload.aud !== JWT_AUD)) {
+      return res.status(401).json({ error: 'invalid_token' });
+    }
+
+    if (!payload.jti && !payload.session_id) {
       return res.json({ revoked: false, reason: 'legacy_token_no_session' });
+    }
+
+    const subject = payload.sub || payload.user_id;
+    if (!subject) return res.status(401).json({ error: 'invalid_token' });
+
+    // Usa la misma resolución fail-closed que requireAuth. Esto conserva los
+    // tokens legacy cuyo session_id era el UUID de la fila (o su jti), liga la
+    // sesión al sujeto y rechaza claims jti/session_id contradictorios.
+    const session = await loadActiveSession({
+      jti: payload.jti,
+      sessionId: payload.session_id,
+    });
+    if (!session || session.user_id !== subject) {
+      return res.status(401).json({ error: 'invalid_token' });
     }
 
     const { rowCount } = await pool.query(
       `UPDATE user_sessions
           SET status='revoked', revoked_at=NOW(),
               revoked_reason = COALESCE(revoked_reason, 'user_logout')
-        WHERE jti = $1 AND status = 'active'`,
-      [payload.jti]
+        WHERE id = $1 AND user_id = $2 AND status = 'active'`,
+      [session.id, subject]
     );
 
     logger.audit('user_logout', {
-      user_id: payload.sub, jti: payload.jti, revoked: rowCount > 0,
+      user_id: subject, session_id: session.id, revoked: rowCount > 0,
     });
 
     res.json({ revoked: rowCount > 0 });

@@ -1,22 +1,30 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, IS_MOCK, IS_DEMO, DEMO_PM_ID } from '../api';
-import type { UnconfirmedAttempt } from '../api/idempotency';
+import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, IS_MOCK, WALLET_PAY_ENABLED, newIdempotencyKey } from '../api';
+import { useWalletRail } from '../api/walletRail';
+import type { MonetaryIntentHandle, UnconfirmedAttempt } from '../api/idempotency';
 import {
+  acquireMonetaryIntent,
   clearUnconfirmed,
-  idempotencyKeyFor,
+  completeMonetaryIntent,
   markUnconfirmed,
+  prepareMonetaryRequest,
+  crossActorIntentExists,
   readUnconfirmed,
+  reconcileMonetaryIntent,
   recallPaymentMethod,
   rememberPaymentMethod,
-  rotateIdempotencyKey,
+  scopeForActor,
   shouldRotateOnError,
+  useMoneyActor,
 } from '../api/idempotency';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
+import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
+import { mesaClosureView, mesaPaymentOutcome } from '../api/paymentStatus';
+import { payableEqualSlotAmounts, type PayMesaExpectation } from '../api/moneyGuards';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
 import { CardField, type CardFieldState } from '../components/CardField';
 import { Icon } from '../components/Icon';
-import { InviteFriends } from '../components/InviteFriends';
 import type {
   FractionRequest,
   MesaDetail,
@@ -26,10 +34,29 @@ import type {
   PaymentType,
 } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
-import { CardBrandChip, TopBar, TopLogo, useToast } from '../components/ui';
+import { CardBrandChip, TopBar, useToast } from '../components/ui';
+import {
+  needsExtraPartConfirmation as needsExtraPartConfirmationOf,
+  paymentLanded,
+  requiresReconciliation,
+} from './freezeMachine';
+import { MesaDetailView } from './MesaDetailView';
+import { FRACTIONS, bpsLabel, itemsAmountFor } from './mesaItemsView';
 import { goBack, navigate } from '../router';
-import { countdownTo, formatMXN } from '../utils/format';
-import { fractionAmount, stringToCents, tipFromBps } from '../utils/money';
+import { formatMXN } from '../utils/format';
+import { tipFromBps } from '../utils/money';
+import {
+  NO_TIP_CHOSEN,
+  TIP_OPTIONS,
+  type TipChoice,
+  tipCentsFor,
+  tipIsChosen,
+  tipPayloadFor,
+  tipScopeToken,
+} from './tipSelectorView';
+import { createInFlightMutex } from '../utils/inFlight';
+import { RequestEpoch } from '../utils/requestEpoch';
+import { writeClipboardText } from '../utils/clipboard';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -38,9 +65,138 @@ import { fractionAmount, stringToCents, tipFromBps } from '../utils/money';
  * INVITADO por link (#/mesa/:code?t=token, sin login).
  */
 
-type View = 'detail' | 'pay' | 'processing' | 'confirm';
+type View = 'detail' | 'pay' | 'confirm';
 
-const TIP_OPTIONS = [0, 10, 15, 20];
+/**
+ * §1.5 bis · fallback: el selector de propina no se pudo MOSTRAR.
+ *
+ * No es el caso de "no eligió" —ése frena y se resuelve en un toque— sino el
+ * que protege el acta: **un control roto no puede impedir un pago.** El cobro
+ * continúa con propina 0 (ver `tipPayloadFor`), la nota es informativa y no
+ * alarma, y el bloque de mesero no aparece por el gate de `tipCents > 0` que
+ * ya existía.
+ *
+ * Es una clase porque los error boundaries no tienen equivalente en hooks.
+ */
+class TipSelectorBoundary extends Component<
+  { onFail: () => void; fallback: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    // La pantalla necesita SABERLO: con el selector caído el obligatorio no se
+    // dispara, porque no habría dónde elegir.
+    this.props.onFail();
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/**
+ * El selector de propina — `SPEC_APP.md` §1.5 bis.
+ *
+ * 🔴 **Es un componente propio porque si no el boundary de arriba no sirve
+ * para nada.** Medido: con este JSX inline en `MesaScreen`, un error acá
+ * explota mientras la PANTALLA arma sus hijos, o sea fuera del subárbol que el
+ * boundary observa — y se lleva la pantalla de pago entera, fallback o no.
+ * Como hijo, el error queda adentro y el cobro puede continuar con propina 0,
+ * que es lo que manda el acta.
+ *
+ * No tiene estado: la propina la sigue teniendo `MesaScreen`, que es la dueña
+ * del pago. Esto sólo dibuja y avisa qué se tocó.
+ */
+function TipSelector({
+  sectionRef,
+  tip,
+  onChoose,
+  customTipStr,
+  onCustomChange,
+  baseCents,
+  participants,
+  disabled,
+  pending,
+  pulse,
+  onPulseEnd,
+}: {
+  sectionRef: React.RefObject<HTMLDivElement>;
+  tip: TipChoice;
+  onChoose: (tip: TipChoice) => void;
+  customTipStr: string;
+  onCustomChange: (value: string) => void;
+  baseCents: number;
+  participants: number;
+  disabled: boolean;
+  pending: boolean;
+  pulse: boolean;
+  onPulseEnd: () => void;
+}) {
+  return (
+    /* 🔴 La distinción "no elegí" vs "elegí 0 %" vive en el MARCO, no en la
+       píldora. Si viviera en la píldora, el 0 % necesitaría un estado visual
+       propio y quedaría de segunda clase — justo lo que el acta prohíbe. */
+    <div
+      ref={sectionRef}
+      className={`tip-block${pending ? ' tip-block--pending' : ''}${pulse ? ' tip-block--pulse' : ''}`}
+      onAnimationEnd={onPulseEnd}
+    >
+      <div className="sectlabel tip-block-title" id="lbl-propina">
+        {pending && <Icon name="warning" size={14} aria-hidden="true" />}
+        {pending ? 'Elegí tu propina' : 'Tu propina'}
+      </div>
+      <div className="caption" style={{ margin: '0 2px 8px' }}>
+        Tu base: {formatMXN(baseCents)} (la cuenta ÷ {participants})
+      </div>
+      <div className="tip-row tip-choices" role="radiogroup" aria-labelledby="lbl-propina">
+        {TIP_OPTIONS.map((pct) => {
+          const elegida = tip.mode === 'pct' && tip.pct === pct;
+          return (
+            <button
+              key={pct}
+              className={`tip-pill ${elegida ? 'sel' : ''}`}
+              onClick={() => onChoose({ mode: 'pct', pct })}
+              disabled={disabled}
+              role="radio"
+              aria-checked={elegida}
+            >
+              {pct}%
+            </button>
+          );
+        })}
+        <button
+          className={`tip-pill tip-pill--otro ${tip.mode === 'custom' ? 'sel' : ''}`}
+          onClick={() => onChoose({ mode: 'custom' })}
+          disabled={disabled}
+          role="radio"
+          aria-checked={tip.mode === 'custom'}
+        >
+          Otro
+        </button>
+      </div>
+      {tip.mode === 'custom' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '10px 2px 0' }}>
+          <span style={{ fontWeight: 700 }}>$</span>
+          <input
+            className="input"
+            style={{ flex: 1, padding: '10px 12px' }}
+            inputMode="decimal"
+            placeholder="0.00"
+            value={customTipStr}
+            onChange={(e) => onCustomChange(e.target.value.replace(/[^0-9.]/g, ''))}
+            disabled={disabled}
+            aria-label="Monto de propina a mano"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface PayResult {
   itemsAmount: number;
@@ -59,11 +215,50 @@ interface PayResult {
   saveOmitidoPorConnect: boolean;
 }
 
+/**
+ * Binding contractual de la respuesta. Los montos de preview no intervienen:
+ * consumo se acredita con el recibo de ítems; igualdad, con un monto de slot
+ * que efectivamente pertenece a la mesa.
+ */
+function payExpectationFor(mesa: MesaDetail, body: PayMesaRequest): PayMesaExpectation {
+  const expectedTip = body.tip_cents ?? tipFromBps(
+    mesa.total_cents,
+    mesa.expected_participants || 1,
+    body.tip_bps ?? 0,
+  );
+  if (mesa.division_mode === 'consumo') {
+    return {
+      divisionMode: 'consumo',
+      tipCents: expectedTip,
+    };
+  }
+  return {
+    divisionMode: 'igual',
+    possibleItemsAmountCents: payableEqualSlotAmounts(mesa.division_slots),
+    tipCents: expectedTip,
+  };
+}
+
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
+  // OLA 5D · método de pago con saldo y copy asociada: los declara el BACKEND.
+  const { walletRailEnabled } = useWalletRail();
   const { session } = useAuth();
+  const { actor, error: actorError } = useMoneyActor(guestToken);
   const toast = useToast();
-  // Si llega guestToken, App ya decidió que esta vista es la del invitado
-  // (sin sesión siempre; con sesión solo en la demo, para poder mostrarla).
+  /**
+   * ⚠️ OBSOLETO PERO NO BORRADO · `guestToken` no puede llegar nunca.
+   *
+   * El comentario anterior decía que App decidía acá la vista de invitado "sin
+   * sesión siempre; con sesión solo en la demo". **Las dos mitades están
+   * vencidas**: el modo demo se eliminó el 2026-08-03, y desde el cierre del
+   * pago sin cuenta (backend v2.32.0) App monta esta pantalla en UN solo lugar
+   * y **sin el prop**. `isGuest` es `false` siempre.
+   *
+   * Todo lo que cuelga de `isGuest` queda inalcanzable e INTACTO, igual que las
+   * ramas `req.isGuest` que el emisor dejó en pie: mezclar borrado de código con
+   * un cambio de autorización sobre rutas de dinero es cómo se cuelan errores.
+   * Un test impide que alguien vuelva a montar esta pantalla con un token.
+   */
   const isGuest = !!guestToken;
   const previewingAsGuest = isGuest && !!session;
   const [mesa, setMesa] = useState<MesaDetail | null>(null);
@@ -72,19 +267,37 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // v2.18 (fracciones): selección = ítem → fracción elegida en bps.
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
   const [lockTokens, setLockTokens] = useState<string[]>([]);
-  const [tipPct, setTipPct] = useState(15);
-  // D7: 'pct' manda tip_bps (computa el server); 'custom' manda tip_cents.
-  const [tipMode, setTipMode] = useState<'pct' | 'custom'>('pct');
+  /**
+   * §1.5 bis · 🔴 LA PROPINA NACE SIN ELEGIR.
+   *
+   * Acá había `useState(15)` con modo `'pct'`: quien no tocaba el selector
+   * pagaba 15 % de su parte y el payload salía con `tip_bps: 1500` como si lo
+   * hubiera elegido. **El sistema elegía por la persona, y con su plata.**
+   *
+   * `TipChoice` ya no puede representar eso: el porcentaje vive adentro de la
+   * variante elegida (ver `tipSelectorView.ts`). D7 sigue igual — `'pct'` manda
+   * `tip_bps` y lo computa el server; `'custom'` manda `tip_cents`.
+   */
+  const [tip, setTip] = useState<TipChoice>(NO_TIP_CHOSEN);
   const [customTipStr, setCustomTipStr] = useState('');
+  /** El selector no se pudo mostrar: el cobro CONTINÚA con propina 0. */
+  const [tipSelectorFailed, setTipSelectorFailed] = useState(false);
+  /** El pulso de una sola vez del borde cuando se toca "Pagar" sin elegir. */
+  const [tipPulse, setTipPulse] = useState(false);
+  const tipSectionRef = useRef<HTMLDivElement | null>(null);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [payType, setPayType] = useState<PaymentType>('card');
   // Feedback Mati: las tarjetas van en un desglosable, no sueltas en la lista.
   const [cardsOpen, setCardsOpen] = useState(false);
   // T-F1: invitador in-app desplegable en la mesa (el paso compartir es one-shot).
   const [inviteOpen, setInviteOpen] = useState(false);
+  const shareAttemptsRef = useRef<Map<string, string>>(new Map());
+  const shareLinksRef = useRef<Map<string, string>>(new Map());
+  const shareInFlightRef = useRef(createInFlightMutex());
   // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
   // tarjeta); `saveCard` = checkbox "guardar" (ratificado: prendido). El
-  // invitado sin cuenta no tiene guardadas: siempre tarjeta nueva sin checkbox.
+  // invitado sin cuenta no tenía guardadas: siempre tarjeta nueva sin checkbox.
+  // (Rama inalcanzable desde v2.32.0 — ver el docblock de `isGuest`.)
   const [cards, setCards] = useState<PaymentMethod[]>([]);
   const [cardChoice, setCardChoice] = useState<string>('new');
   const [saveCard, setSaveCard] = useState(true);
@@ -108,18 +321,96 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    */
   const payStartedRef = useRef(false);
   const [busy, setBusy] = useState(false);
+  const payInFlightRef = useRef(createInFlightMutex());
   const [error, setError] = useState<string | null>(null);
   /** El replay trajo un pago ya reembolsado: volver a pagar se decide a mano. */
   const [refundedNotice, setRefundedNotice] = useState(false);
   const [result, setResult] = useState<PayResult | null>(null);
-  const [procStep, setProcStep] = useState(0);
   const [, forceTick] = useState(0);
+  // Toda lectura de esta instancia captura el epoch. Cambiar token/código
+  // invalida antes de renderizar la identidad siguiente y un resolve tardío
+  // de A no puede escribir mesa, error, tarjetas ni notFound de B.
+  const identityEpochRef = useRef(new RequestEpoch());
+  const mesaReadEpochRef = useRef(new RequestEpoch());
+
+  // Un token guest nuevo para el mismo código es otra identidad: ningún
+  // estado visual o lock de A puede sobrevivir para B.
+  useEffect(() => {
+    identityEpochRef.current.next();
+    mesaReadEpochRef.current.next();
+    setMesa(null); setNotFound(false); setSelected(new Map()); setLockTokens([]);
+    // La mesa nueva también nace sin elegir: acá estaba el segundo `15`.
+    setTip(NO_TIP_CHOSEN); setCustomTipStr(''); setStaffId(null);
+    setTipSelectorFailed(false); setTipPulse(false);
+    setPayType('card'); setCardsOpen(false); setInviteOpen(false); setCards([]);
+    shareInFlightRef.current = createInFlightMutex();
+    setCardChoice('new'); setSaveCard(true); setCardEl(null);
+    const emptyCard: CardFieldState = { complete: false, error: null, empty: true };
+    cardStateRef.current = emptyCard; setCardState(emptyCard);
+    payStartedRef.current = false; payInFlightRef.current = createInFlightMutex();
+    setRefundedNotice(false); setResult(null); setError(null); setBusy(false); setView('detail');
+  }, [guestToken, code]);
+
+  async function copyInvitationLink() {
+    if (!shareInFlightRef.current.tryEnter()) return;
+    try {
+      let link = shareLinksRef.current.get(code) ?? null;
+      if (!link) {
+        const key = shareAttemptsRef.current.get(code) ?? newIdempotencyKey();
+        shareAttemptsRef.current.set(code, key);
+        const invitation = await api.createInvitation(code, key);
+        if (invitation.invitation.status === 'expired') {
+          shareAttemptsRef.current.delete(code);
+          toast('La invitación anterior venció. Tocá de nuevo para generar otra.');
+          return;
+        }
+        if (!invitation.link) {
+          toast('La invitación pudo haberse creado, pero no recibimos el link. Reintentá la misma operación; no generes otra.');
+          return;
+        }
+        // La mutación terminó. Si falla el clipboard, se conserva SOLO el
+        // link ya generado para volver a copiarlo sin hacer otro POST.
+        shareAttemptsRef.current.delete(code);
+        link = invitation.link;
+        shareLinksRef.current.set(code, link);
+      }
+      try {
+        const copied = await writeClipboardText(link);
+        if (!copied) throw new Error('clipboard_unavailable');
+        shareLinksRef.current.delete(code);
+        toast('Link de invitación copiado ✓');
+      } catch {
+        toast('El link ya se generó, pero no se pudo copiar. Tocá de nuevo: no vamos a crear otro.');
+      }
+    } catch (err) {
+      const failure = extractApiError(err);
+      const definitive = isDefinitiveMutationError(failure.code, failure.status);
+      if (definitive) shareAttemptsRef.current.delete(code);
+      toast(
+        isServiceUnavailable(failure.status)
+          ? 'El servicio no pudo confirmar el link. Reintentá esta misma operación; no generes otra.'
+          : definitive
+            ? 'No se pudo generar el link'
+            : 'No pudimos confirmar el link. Reintentá la misma operación: vamos a reutilizarla.',
+      );
+    } finally {
+      shareInFlightRef.current.leave();
+    }
+  }
 
   const reload = useCallback(() => {
+    const requestEpoch = mesaReadEpochRef.current.next();
+    const identityEpoch = identityEpochRef.current.capture();
     api
       .getMesa(code, guestToken)
-      .then((r) => setMesa(r.mesa))
-      .catch(() => setNotFound(true));
+      .then((r) => {
+        if (mesaReadEpochRef.current.isCurrent(requestEpoch) && identityEpochRef.current.isCurrent(identityEpoch)) {
+          setMesa(r.mesa); setNotFound(false);
+        }
+      })
+      .catch(() => {
+        if (mesaReadEpochRef.current.isCurrent(requestEpoch) && identityEpochRef.current.isCurrent(identityEpoch)) setNotFound(true);
+      });
   }, [code, guestToken]);
 
   useEffect(() => {
@@ -130,9 +421,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   useEffect(() => {
     if (!isGuest) {
+      const identityEpoch = identityEpochRef.current.capture();
+      let alive = true;
       api
         .getPaymentMethods()
         .then((r) => {
+          if (!alive || !identityEpochRef.current.isCurrent(identityEpoch)) return;
           // D4 (v2.16): las guardadas se reusan con su uuid (payment_method_id).
           setCards(r.payment_methods);
           const def = r.payment_methods.find((p) => p.is_default) ?? r.payment_methods[0];
@@ -140,65 +434,32 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           // ni si ya hay un pago en curso (B-06: movería la clave).
           if (def && cardStateRef.current.empty && !payStartedRef.current) setCardChoice(def.id);
         })
-        .catch(() => setCards([]));
+        .catch(() => { if (alive && identityEpochRef.current.isCurrent(identityEpoch)) setCards([]); });
+      return () => { alive = false; };
     }
-  }, [isGuest]);
+    return undefined;
+  }, [isGuest, guestToken, code]);
 
   const payable = mesa?.status === 'open' || mesa?.status === 'partially_paid';
 
-  /** Valores del contrato (schemas.lockItems del espejo). */
-  const FRACTIONS: Array<{ bps: number; label: string }> = [
-    { bps: 10000, label: '1' },
-    { bps: 5000, label: '½' },
-    { bps: 3333, label: '⅓' },
-    { bps: 2500, label: '¼' },
-  ];
-
-  function bpsLabel(bps: number): string {
-    if (bps >= 10000) return 'entero';
-    if (bps === 5000) return '½';
-    if (bps === 3333 || bps === 3334) return '⅓';
-    if (bps === 2500) return '¼';
-    return `${Math.round(bps / 100)}%`;
-  }
-
-  /** Preview del monto de MI fracción (la completadora la ajusta el server). */
-  function fractionPreview(priceCents: number, bps: number, remainingBps: number): number {
-    if (bps >= remainingBps) {
-      // Completa el ítem → paga lo que falta (aprox: nominal de lo tomado).
-      return Math.max(0, priceCents - fractionAmount(priceCents, 10000 - remainingBps));
-    }
-    return fractionAmount(priceCents, bps);
-  }
-
-  const itemsAmount = useMemo(() => {
-    if (!mesa) return 0;
-    if (mesa.division_mode === 'igual') {
-      return mesa.division_slots?.find((s) => s.status === 'available')?.amount_cents ?? 0;
-    }
-    return mesa.items
-      .filter((i) => selected.has(i.id))
-      .reduce(
-        (s, i) => s + fractionPreview(i.price_cents * i.quantity, selected.get(i.id) ?? 10000, i.remaining_bps),
-        0,
-      );
-  }, [mesa, selected]);
+  // `FRACTIONS`, `bpsLabel`, `fractionPreview` y esta cuenta viven ahora en
+  // `mesaItemsView.ts`: son puras y estaban declaradas adentro del componente,
+  // donde no había forma de ejercitarlas sin montar la pantalla entera.
+  const itemsAmount = useMemo(() => itemsAmountFor(mesa, selected), [mesa, selected]);
 
   // D7 (v2.17): la propina es % de tu parte IGUALITARIA (total ÷ N), no de tu
   // consumo. Preview con la réplica exacta de tipFromBps; el cobro real lo
-  // computa el server y el comprobante usa SU tip_cents.
-  const tipCents = (() => {
-    if (!mesa) return 0;
-    if (tipMode === 'custom') {
-      try {
-        return stringToCents(customTipStr || '0');
-      } catch {
-        return 0;
-      }
-    }
-    return tipFromBps(mesa.total_cents, mesa.expected_participants || 1, tipPct * 100);
-  })();
+  // computa el server y el comprobante usa SU tip_cents. Sin elección es 0, y
+  // por eso la pantalla puede mostrar la base sola en vez de un total inventado.
+  const tipCents = mesa
+    ? tipCentsFor(tip, {
+        totalCents: mesa.total_cents,
+        participants: mesa.expected_participants || 1,
+        customStr: customTipStr,
+      })
+    : 0;
   const gross = itemsAmount + tipCents;
+  const tipChosen = tipIsChosen(tip);
 
   function toggleItem(id: string) {
     // B-06: con un pago sin confirmar, cambiar la selección cambiaría el
@@ -311,8 +572,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         await navigator.share({ title: 'Comprobante PayMe', text });
         return;
       }
-      await navigator.clipboard.writeText(text);
-      toast('Comprobante copiado ✓');
+      const copied = await writeClipboardText(text);
+      toast(copied
+        ? 'Comprobante copiado ✓'
+        : 'No se pudo copiar: tu navegador no habilitó el portapapeles');
     } catch {
       // el usuario canceló el share del sistema: no es un error
     }
@@ -340,60 +603,174 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    *
    * `lock_tokens` queda afuera a propósito: el backend lo excluye del hash.
    */
-  const contentScope = useMemo(() => {
+  const rawContentScope = useMemo(() => {
     const sel =
       mesa?.division_mode === 'consumo'
         ? [...selected.entries()].map(([id, bps]) => `${id}:${bps}`).sort().join(',')
         : [...selected.keys()].sort().join(',');
-    const tip = tipMode === 'custom' ? `c${tipCents}` : `b${tipPct * 100}`;
-    return `pay:${code}|${payType}|${cardChoice}|${sel}|${tip}|${staffId ?? '-'}`;
-  }, [code, mesa?.division_mode, selected, tipMode, tipCents, tipPct, payType, cardChoice, staffId]);
+    // §1.5 bis: el token sale del MISMO payload que se manda, no del estado de
+    // la UI. Las formas `b<bps>` y `c<centavos>` no se mueven.
+    const tipToken = tipScopeToken(tipPayloadFor(tip, tipCents));
+    return `pay:${code}|${payType}|${cardChoice}|${sel}|${tipToken}|${staffId ?? '-'}`;
+  }, [code, mesa?.division_mode, selected, tip, tipCents, payType, cardChoice, staffId]);
+  const contentScope = actor ? scopeForActor(actor, rawContentScope) : '';
 
   /**
    * Intento sin confirmar (error ambiguo). Mientras exista, el pago queda
    * CONGELADO en ese scope: no se puede cambiar nada y el único camino es
    * reintentar el mismo pago, que el backend replaya en vez de re-cobrar.
    */
-  const payArea = `pay:${code}`;
-  const [frozen, setFrozen] = useState<UnconfirmedAttempt | null>(() => readUnconfirmed(payArea));
+  const payArea = actor ? scopeForActor(actor, `pay:${code}`) : '';
+  const [frozen, setFrozen] = useState<UnconfirmedAttempt | null>(null);
+  useEffect(() => {
+    if (!payArea) return;
+    let alive = true;
+    const identityEpoch = identityEpochRef.current.capture();
+    void readUnconfirmed(payArea, `mesa_pay:${code}`)
+      .then((attempt) => {
+        if (!alive || !identityEpochRef.current.isCurrent(identityEpoch)) return;
+        setFrozen(attempt);
+        if (attempt?.reconciliationRequired) {
+          setError('Hay un pago de una sesión anterior. No vamos a reenviarlo ni iniciar otro hasta reconciliarlo.');
+        }
+      })
+      .catch(() => alive && identityEpochRef.current.isCurrent(identityEpoch) && setError('Hay un pago anterior que no podemos atribuir de forma segura. Esperá la reconciliación antes de pagar.'));
+    return () => { alive = false; };
+  }, [payArea, code]);
+  useEffect(() => { setFrozen(null); }, [guestToken, code]);
   const frozenScope = frozen?.scope ?? null;
+  // La decisión vive en `freezeMachine.ts`, que sí tiene cobertura: acá sólo
+  // se consume. Antes era lógica inline sin un solo test.
+  const frozenRequiresReconciliation = requiresReconciliation(frozen);
   const payScope = frozenScope ?? contentScope;
   const frozenRef = useRef(frozenScope);
   frozenRef.current = frozenScope;
 
-  /** v2.25 §4.3: cuántos casilleros tomé YO (la prueba de que mi pago llegó). */
+  /**
+   * §1.5 bis · falta elegir la propina, y hay dónde hacerlo.
+   *
+   * 🔴 Las dos exclusiones no son detalles:
+   * - **Selector caído** (`tipSelectorFailed`): el acta manda que el cobro
+   *   continúe. Pedir una elección sin control dónde hacerla es encerrar a la
+   *   persona con la tarjeta en la mano.
+   * - **Pago congelado** (B-06): la propina ya viajó dentro de la clave de
+   *   idempotencia de ese intento. Pedir que se elija de nuevo sería pedir
+   *   cambiar algo que ya no se puede cambiar — el selector va `disabled`.
+   */
+  const tipPending = !tipChosen && !tipSelectorFailed && !frozenScope;
+
+  /** Agregado informativo del principal; nunca prueba qué intento concreto llegó. */
   const mySlotsTaken = mesa?.division_slots?.filter((s) => s.claimed_by_me).length ?? 0;
-  const mySlotsRef = useRef(mySlotsTaken);
-  mySlotsRef.current = mySlotsTaken;
+
+  /**
+   * N-08 · cruce invitado↔autenticado. La misma persona en la misma mesa por
+   * las dos puertas obtenía journal virgen y key nueva; en división igual eso
+   * es un segundo casillero, o sea doble cobro.
+   *
+   * `claimed_by_me` no lo detecta: el backend lo computa por identidad (hash
+   * del token de invitado vs `user_id`), así que también ve dos personas. La
+   * evidencia posible sin cambiar contrato es local a este dispositivo.
+   *
+   * NO bloquea —pagar varias partes es legítimo y el guard
+   * un-usuario-un-casillero está vetado por acta—: exige una confirmación
+   * explícita para que sea una decisión y no un accidente.
+   */
+  const [crossActor, setCrossActor] = useState(false);
+  const [crossActorAcknowledged, setCrossActorAcknowledged] = useState(false);
+  const [showExtraPartConfirm, setShowExtraPartConfirm] = useState(false);
+  useEffect(() => {
+    if (!payArea) return;
+    let alive = true;
+    void crossActorIntentExists(payArea, `mesa_pay:${code}`)
+      .then((exists) => alive && setCrossActor(exists))
+      .catch(() => alive && setCrossActor(true));
+    return () => { alive = false; };
+  }, [payArea, code]);
+  useEffect(() => { setCrossActorAcknowledged(false); setShowExtraPartConfirm(false); }, [guestToken, code]);
+  /** Se pide confirmación por evidencia del backend (mi casillero) o del dispositivo. */
+  const needsExtraPartConfirmation = needsExtraPartConfirmationOf({
+    acknowledged: crossActorAcknowledged,
+    crossActorIntent: crossActor,
+    mySlotsTaken,
+  });
 
   const freezePay = useCallback(
-    (scope: string, payload?: unknown) => {
-      markUnconfirmed(payArea, scope, mySlotsRef.current, payload);
-      setFrozen({ scope, evidence: mySlotsRef.current, payload });
+    (scope: string, handle: MonetaryIntentHandle, payload?: unknown) => {
+      if (!payArea) throw new Error('money_actor_unavailable');
+      try {
+        markUnconfirmed(payArea, scope, handle, payload);
+        setFrozen({ actor: scope.split('::')[0], scope, handle, ...(payload !== undefined && { payload }) });
+      } catch (error) {
+        if (extractApiError(error).code !== 'monetary_family_reconciliation_required') throw error;
+        setFrozen({ actor: scope.split('::')[0], scope, handle, reconciliationRequired: true });
+      }
     },
     [payArea],
   );
-  const unfreezePay = useCallback(() => {
-    clearUnconfirmed(payArea);
-    setFrozen(null);
+  const unfreezePay = useCallback((handle: MonetaryIntentHandle) => {
+    if (!payArea) return;
+    clearUnconfirmed(payArea, handle);
+    setFrozen((current) => current && current.handle.key === handle.key && current.handle.generation === handle.generation ? null : current);
   }, [payArea]);
 
   /**
-   * `claimed_by_me` es la prueba del backend de que mi pago SÍ llegó: si tras
-   * congelar apareció un casillero mío MÁS de los que había, ese pago está
-   * hecho y el intento se cierra solo.
+   * N-07 · SALIDA del intento congelado. Antes no existía ninguna: sin payload
+   * en memoria —tras un reload o el back del navegador— el pago quedaba
+   * bloqueado para siempre.
    *
-   * Solo aplica a partes iguales. En consumo no hay señal equivalente: el lock
-   * ya sube `my_bps` ANTES de pagar, así que usarlo descongelaría sin prueba.
-   * Ahí la salida es reintentar, que el backend replaya sin volver a cobrar.
+   * No hay TTL ni desbloqueo automático. Se consulta la EVIDENCIA AUTORITATIVA
+   * del backend (`claimed_by_me` sobre los casilleros, o mis ítems pagados) y
+   * recién con eso se cierra el intento:
+   *  - si el pago llegó, se informa y se cierra sin cobrar nada;
+   *  - si no llegó, se pide una confirmación explícita antes de liberar, porque
+   *    el intento siguiente será un cobro nuevo.
    */
-  useEffect(() => {
-    if (frozen && mesa?.division_mode === 'igual' && mySlotsTaken > frozen.evidence) {
-      unfreezePay();
-      rotateIdempotencyKey(frozen.scope);
-      toast('Ese pago ya estaba registrado ✓');
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileVerdict, setReconcileVerdict] = useState<'landed' | 'absent' | null>(null);
+
+  const checkReconciliation = useCallback(async () => {
+    if (!frozen || !payArea) return;
+    setReconciling(true);
+    setError(null);
+    try {
+      const fresh = await api.getMesa(code, guestToken);
+      setMesa(fresh.mesa);
+      const landed = paymentLanded(fresh.mesa);
+      if (landed) {
+        await reconcileMonetaryIntent(frozen.scope, `mesa_pay:${code}`, frozen.handle);
+        setFrozen(null);
+        setReconcileVerdict(null);
+        toast('Ese pago ya está registrado ✓');
+      } else {
+        // No se libera solo: el usuario tiene que decidirlo viendo el aviso.
+        setReconcileVerdict('absent');
+      }
+    } catch {
+      setError('No pudimos consultar el estado de la mesa. Probá de nuevo en un momento.');
+    } finally {
+      setReconciling(false);
     }
-  }, [frozen, mesa?.division_mode, mySlotsTaken, unfreezePay, toast]);
+  }, [frozen, payArea, code, guestToken, toast]);
+
+  const releaseAfterReconciliation = useCallback(async () => {
+    if (!frozen) return;
+    setReconciling(true);
+    try {
+      await reconcileMonetaryIntent(frozen.scope, `mesa_pay:${code}`, frozen.handle);
+      setFrozen(null);
+      setReconcileVerdict(null);
+      setError(null);
+      toast('Listo: podés pagar de nuevo');
+    } catch {
+      setError('No pudimos cerrar ese intento. Sigue bloqueado por seguridad.');
+    } finally {
+      setReconciling(false);
+    }
+  }, [frozen, code, toast]);
+
+  // `claimed_by_me` es un agregado del principal, no identifica qué intento
+  // pagó. Otro dispositivo puede aumentarlo mientras ESTE POST sigue ambiguo;
+  // por eso nunca terminaliza ni descongela el journal local.
 
   /**
    * Respuesta del pago (nueva o REPLAY idempotente): 3DS, reembolsado y
@@ -401,7 +778,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * datos del comprobante salen del CUERPO que se mandó, no del estado de la
    * pantalla — tras una recarga ese estado ya no existe.
    */
-  async function handlePayResponse(r: PayMesaResponse, scope: string, body: PayMesaRequest) {
+  async function handlePayResponse(r: PayMesaResponse, scope: string, intent: MonetaryIntentHandle, body: PayMesaRequest) {
     const payKind = body.payment_type;
     const savedCard = body.payment_method_id
       ? (cards.find((c) => c.id === body.payment_method_id) ?? null)
@@ -421,10 +798,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     // devuelve 200 con status 'refunded' a propósito (un 409 nos haría
     // rotar la clave y RE-COBRAR el reembolso). Se trata por el status.
     if (at.status === 'refunded') {
-      // NO se rota sola: rotar acá es re-cobrar un reembolso. El intento
-      // quedó resuelto (se cobró y se devolvió), así que se descongela y la
-      // decisión de volver a pagar la toma el usuario, a mano.
-      unfreezePay();
+      // El intento quedó resuelto (se cobró y se devolvió). Marcar terminal
+      // no emite red: solo permite que una acción posterior y explícita del
+      // usuario adquiera otra generación con una clave distinta.
+      await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+      unfreezePay(intent);
       setRefundedNotice(true);
       setError('Ese pago se cobró y después te lo reembolsaron. No volvimos a cobrarte.');
       setBusy(false);
@@ -439,19 +817,44 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       if (!confirmed.ok) {
         if (confirmed.definitive) {
           // El banco rechazó: el intento murió y el backend liberó lo tomado.
-          rotateIdempotencyKey(scope);
-          unfreezePay();
+          await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+          unfreezePay(intent);
           setError(confirmed.error);
         } else {
           // Se cayó la red durante el 3DS: el banco pudo haber autorizado
           // igual. Se congela; el reintento replaya en vez de re-cobrar.
-          freezePay(scope, body);
+          freezePay(scope, intent, body);
           setError('Se cortó la conexión mientras el banco confirmaba. No reintentes con otro método: tocá "Reintentar el pago sin confirmar".');
         }
         setBusy(false);
         reload();
         return;
       }
+      // La aprobación de Stripe no acredita sola el pago en PayMe. Esperamos
+      // el estado del backend y conservamos key/payload mientras tanto.
+      freezePay(scope, intent, body);
+      setError('Tu banco aprobó la operación; todavía estamos confirmando el pago. Reintentá esta misma confirmación, sin cambiar el método.');
+      setBusy(false);
+      reload();
+      return;
+    }
+    const outcome = mesaPaymentOutcome(at.status);
+    if (outcome === 'definitive') {
+      await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+      unfreezePay(intent);
+      setError('Ese pago no prosperó. Podés iniciar uno nuevo.');
+      setBusy(false);
+      reload();
+      return;
+    }
+    if (outcome !== 'success') {
+      // pending/requires_action/processing, shapes incompletos y estados
+      // nuevos no son acreditación. Se conserva el intento para reconciliar.
+      freezePay(scope, intent, body);
+      setError('Estamos confirmando este pago. No inicies otro ni cambies el método hasta que se resuelva.');
+      setBusy(false);
+      reload();
+      return;
     }
     const methodLabel =
       payKind === 'wallet'
@@ -476,24 +879,59 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     });
     // Intento completado: el próximo pago de esta mesa (otra parte, otro
     // plato) es una intención NUEVA y necesita clave nueva.
-    rotateIdempotencyKey(scope);
-    unfreezePay();
-    setView('processing');
-    setProcStep(1);
+    await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+    unfreezePay(intent);
+    setView('confirm');
+    setBusy(false);
   }
 
   async function doPay() {
     if (!mesa) return;
+    if (!payInFlightRef.current.tryEnter()) return;
     // B-06: el scope se CONGELA acá. Si algo lo mueve mientras el pago vuela
     // (una respuesta tardía de /payment-methods, un re-render), la clave que
     // se conserva para el reintento sigue siendo la de ESTE intento.
     const scope = payScope;
+    if (!scope || !actor) {
+      setError(actorError ? 'No pudimos verificar una identidad segura para este pago.' : 'Preparando una identidad segura para este pago…');
+      payInFlightRef.current.leave();
+      return;
+    }
+    if (frozenRequiresReconciliation) {
+      setError('Este pago no puede reenviarse desde la sesión actual. Sigue bloqueado hasta reconciliar su resultado.');
+      payInFlightRef.current.leave();
+      return;
+    }
+    /**
+     * §1.5 bis · el obligatorio. **No se envía nada** y no se deja a nadie
+     * atrapado: el CTA sigue activo —un botón gris se lee como error del
+     * sistema, no como "te falta un paso"— y acá se avisa, se lleva el ojo al
+     * selector y el borde pulsa una vez. Elegir es un toque, y el 0 % está ahí.
+     */
+    if (tipPending) {
+      toast('Elegí tu propina para pagar');
+      // `scrollIntoView` es opcional a propósito: si el navegador no lo tiene,
+      // el toast y el pulso siguen siendo la señal.
+      tipSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      setTipPulse(true);
+      payInFlightRef.current.leave();
+      return;
+    }
+    // N-08: no se emite una clave nueva sobre una mesa donde este dispositivo
+    // (o esta identidad) ya tiene un pago, sin que el usuario lo confirme.
+    if (!frozen && needsExtraPartConfirmation) {
+      setError(null);
+      setShowExtraPartConfirm(true);
+      payInFlightRef.current.leave();
+      return;
+    }
     payStartedRef.current = true;
     setBusy(true);
     setError(null);
     // El cuerpo EXACTO que salió, para poder congelarlo si la respuesta se
     // pierde: el reintento tiene que reenviar esto, no reconstruirlo.
     let sentBody: PayMesaRequest | null = null;
+    let intent: MonetaryIntentHandle | null = frozen?.handle ?? null;
     try {
       /**
        * B-06: reintento de un intento CONGELADO. Se manda el MISMO cuerpo que
@@ -503,27 +941,28 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
        */
       if (frozen?.payload) {
         const body = frozen.payload as PayMesaRequest;
+        intent = frozen.handle;
         sentBody = body;
-        const r = await api.payMesa(code, body, guestToken);
-        await handlePayResponse(r, scope, body);
+        await prepareMonetaryRequest(scope, `mesa_pay:${code}`, intent, body);
+        const r = await api.payMesa(code, body, guestToken, payExpectationFor(mesa, body), intent);
+        await handlePayResponse(r, scope, intent, body);
         return;
       }
       // D4 (v2.16): tarjeta GUARDADA → `payment_method_id` (uuid); tarjeta
       // NUEVA → pm_ desde el Card Element como `stripe_payment_method_id`,
       // con `save_payment_method` según el checkbox.
       const savedCard = payType === 'card' ? (cards.find((c) => c.id === cardChoice) ?? null) : null;
+      intent = intent ?? await acquireMonetaryIntent(scope, `mesa_pay:${code}`);
+      const idempotencyKey = intent.key;
       let stripePmId: string | null = null;
       let savedPmId: string | null = null;
       let savingNewCard = false;
       if (payType === 'card') {
-        if (!IS_MOCK && IS_DEMO) {
-          // Modo demo (?demo=1): PaymentMethod de test de Stripe, sin iframe.
-          stripePmId = DEMO_PM_ID;
-        } else if (savedCard) {
+        if (savedCard) {
           savedPmId = savedCard.id;
         } else if (IS_MOCK) {
-          stripePmId = recallPaymentMethod(scope) ?? `pm_mock_nueva_${Date.now().toString(36)}`;
-          rememberPaymentMethod(scope, stripePmId);
+          stripePmId = recallPaymentMethod(scope, intent) ?? `pm_mock_nueva_${Date.now().toString(36)}`;
+          await rememberPaymentMethod(scope, intent, stripePmId);
           savingNewCard = !isGuest && saveCard;
         } else {
           if (!cardEl) {
@@ -534,7 +973,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           // B-06: en el REINTENTO se reusa el pm_ ya tokenizado. Stripe.js
           // devuelve uno distinto por invocación y el backend lo hashea: sin
           // esto, la clave estable daría 409 idempotency_conflict en bucle.
-          const cached = recallPaymentMethod(scope);
+          const cached = recallPaymentMethod(scope, intent);
           if (cached) {
             stripePmId = cached;
           } else {
@@ -545,7 +984,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               return;
             }
             stripePmId = res.paymentMethodId;
-            rememberPaymentMethod(scope, stripePmId);
+            await rememberPaymentMethod(scope, intent, stripePmId);
           }
           savingNewCard = !isGuest && saveCard;
         }
@@ -566,7 +1005,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               }
             : { item_ids: [...selected.keys()].sort() }),
           ...(lockTokens.length > 0 && { lock_tokens: lockTokens }),
-          ...(tipMode === 'custom' ? { tip_cents: tipCents } : { tip_bps: tipPct * 100 }),
+          // §1.5 bis: el mismo payload del que sale el token del scope. Sin
+          // elección sólo se llega acá por el fallback, y ahí va `tip_bps: 0`.
+          ...tipPayloadFor(tip, tipCents),
           ...(staffId && { tip_to_staff_id: staffId }),
           ...(stripePmId && { stripe_payment_method_id: stripePmId }),
           ...(savedPmId && { payment_method_id: savedPmId }),
@@ -577,11 +1018,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           ...(IS_MOCK &&
             payType !== 'card' &&
             payType !== 'wallet' && { stripe_payment_method_id: 'pm_mock_walletpay' }),
-          idempotency_key: idempotencyKeyFor(scope),
+          idempotency_key: idempotencyKey,
       };
       sentBody = body;
-      const r = await api.payMesa(code, body, guestToken);
-      await handlePayResponse(r, scope, body);
+      await prepareMonetaryRequest(scope, `mesa_pay:${code}`, intent, body);
+      const r = await api.payMesa(code, body, guestToken, payExpectationFor(mesa, body), intent);
+      await handlePayResponse(r, scope, intent, body);
     } catch (err) {
       const { code: ec, extra, status } = extractApiError(err);
       // B-06, la decisión central: si el intento MURIÓ (el backend ya liberó
@@ -591,26 +1033,46 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // del backend en vez de cobrar de nuevo, y hasta entonces no se puede
       // cambiar nada (cambiar algo generaría clave nueva = doble cobro).
       const definitivo = shouldRotateOnError(ec, status);
-      if (definitivo) {
-        rotateIdempotencyKey(scope);
-        unfreezePay();
+      if (intent && definitivo) {
+        await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+        unfreezePay(intent);
       }
-      if (ec === 'idempotency_key_terminal') {
+      if (ec === 'monetary_family_reconciliation_required') {
+        setError('El pago pertenece a una sesión anterior. No lo reenviamos ni iniciamos otro hasta reconciliarlo.');
+      } else if (ec === 'idempotency_key_terminal') {
+        // El backend usa 409 tanto para conflicto VIVO como para intento
+        // terminal. Este último sí murió: conservar su clave deja al usuario
+        // reintentando el mismo 409 para siempre.
+        if (intent) {
+          await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
+          unfreezePay(intent);
+        }
         setError('Ese intento de pago ya no sirve. Probá de nuevo.');
+        reload();
+      } else if (ec === 'monetary_generation_stale') {
+        setError('Otra pestaña ya cerró este intento. Actualizamos la mesa antes de permitir una nueva acción.');
         reload();
       } else if (ec === 'idempotency_conflict') {
         // Hay un intento VIVO con otro payload. Rotar acá sería el doble
         // cobro; se congela en el scope que el backend ya conoce.
-        freezePay(scope, sentBody ?? frozen?.payload);
+        if (intent) freezePay(scope, intent, sentBody ?? frozen?.payload);
         setError('Tenés un pago sin confirmar en esta mesa. Reintentá ese mismo pago antes de cambiar nada.');
         reload();
       } else if (ec === 'insufficient_funds') {
         const available = typeof extra.available === 'number' ? extra.available : 0;
         setError(
-          `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Cargá saldo o pagá con tarjeta.`,
+          // Sin riel saldo, "Cargá saldo" manda a #/cargar, que responde con la
+          // pantalla de bloqueo: sería empujar a una ruta muerta.
+          walletRailEnabled
+            ? `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Cargá saldo o pagá con tarjeta.`
+            : `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Pagá con tarjeta.`,
         );
       } else if (ec === 'wallet_requires_auth') {
-        setError('Para pagar con saldo PayMe tenés que iniciar sesión.');
+        setError(
+          walletRailEnabled
+            ? 'Para pagar con saldo PayMe tenés que iniciar sesión.'
+            : 'Ese método de pago no está disponible. Pagá con tarjeta.',
+        );
       } else if (ec === 'mesa_not_payable') {
         setError('La mesa ya cerró.');
         reload();
@@ -627,29 +1089,16 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         // Se CONGELA el pago con esta clave: el reintento cae en el replay del
         // backend, y hasta resolverlo no se puede cambiar nada (cualquier
         // cambio generaría clave nueva y cobraría de nuevo). La mesa se
-        // recarga: si el pago llegó, `claimed_by_me` lo descongela solo.
-        freezePay(scope, sentBody ?? frozen?.payload);
+        // recarga solo para mostrar estado; ningún agregado cierra el intento.
+        if (intent) freezePay(scope, intent, sentBody ?? frozen?.payload);
         setError('No pudimos confirmar el pago. Puede que se haya cobrado igual: reintentá ESTE mismo pago, no armes otro.');
         reload();
       }
       setBusy(false);
+    } finally {
+      payInFlightRef.current.leave();
     }
   }
-
-  // Animación de estados reales: pending → succeeded → processed.
-  useEffect(() => {
-    if (view !== 'processing') return;
-    if (procStep >= 3) {
-      const t = setTimeout(() => {
-        setBusy(false);
-        setView('confirm');
-        reload();
-      }, 700);
-      return () => clearTimeout(t);
-    }
-    const t = setTimeout(() => setProcStep((s) => s + 1), 1000);
-    return () => clearTimeout(t);
-  }, [view, procStep, reload]);
 
   // ─── Estados de carga / error ────────────────────────────
   // OJO: el invitado NO puede salir a 'home' — navigate() reescribe el hash sin
@@ -686,9 +1135,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const guestHeader = isGuest && (
     <div style={{ background: 'var(--teal-l)', padding: '14px 16px', borderBottom: '1px solid var(--teal)' }}>
       <div className="caption" style={{ color: 'var(--navy)' }}>
-        {previewingAsGuest ? 'Así lo ve quien recibe tu link' : 'Te invitaron a'}
+        {'Te invitaron a'}
       </div>
-      <div style={{ fontSize: 'var(--fs-md)', fontWeight: 700 }}>
+      <div style={{ fontSize: 'var(--fs-legacy-md)', fontWeight: 700 }}>
         {code} · {mesa.restaurant.name}
       </div>
       {previewingAsGuest && (
@@ -697,7 +1146,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           style={{ padding: '6px 0 0' }}
           onClick={() => navigate('home')}
         >
-          ← Salir de la vista de invitado
+          ← Volver a mi cuenta
         </button>
       )}
     </div>
@@ -705,12 +1154,25 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   // ─── Mesa cerrada (A-2) ──────────────────────────────────
   if (!payable && view === 'detail') {
+    const closure = mesaClosureView(mesa.status);
+    // Solo `completed` acredita cierre/dispersión. fully_paid y settled son
+    // avances reales, pero no prueban qué recibió el restaurante.
+    if (!closure.completed) {
+      return (
+        <div className="screen">
+          <TopBar title={closure.title} onBack={isGuest ? undefined : () => navigate('mesas')} />
+          {guestHeader}
+          <div className="empty">{closure.detail}</div>
+          <div className="action-bar"><button className="btn btn-navy" onClick={() => reload()}>Actualizar estado</button></div>
+        </div>
+      );
+    }
     const shortfall = Math.max(0, mesa.total_cents - mesa.paid_amount_cents);
     const isOpener = mesa.my_role === 'opener';
     return (
       <div className="screen">
         <TopBar
-          title={mesa.status === 'fully_paid' ? 'Mesa completa' : 'Mesa cerrada'}
+          title="Cierre completado"
           onBack={isGuest ? undefined : () => navigate('mesas')}
         />
         {guestHeader}
@@ -777,48 +1239,6 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     );
   }
 
-  // ─── Procesando (estados reales del attempt) ─────────────
-  if (view === 'processing' && result) {
-    const steps = ['Confirmando el cobro', 'Acreditando en la mesa', 'Listo'];
-    return (
-      <div className="screen">
-        <div className="scroll" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center', padding: '16px 0' }} role="status" aria-live="polite">
-            {procStep < 3 ? (
-              <div className="spinner" aria-hidden="true" />
-            ) : (
-              <div className="success-circle" aria-hidden="true">
-                ✓
-              </div>
-            )}
-            <div className="h2" style={{ marginTop: 18 }}>
-              {procStep < 2 ? 'Cobrando…' : procStep < 3 ? 'Acreditando…' : 'Pago acreditado'}
-            </div>
-            <div className="body-text" style={{ marginTop: 6 }}>
-              {formatMXN(result.gross)} · {result.methodLabel}
-            </div>
-          </div>
-          <div className="card card-p" style={{ marginTop: 8 }}>
-            {steps.map((desc, idx) => (
-              <div key={desc} className="flow-step">
-                <div
-                  className={`flow-dot ${procStep > idx + 1 ? 'done' : procStep === idx + 1 ? 'now' : ''}`}
-                  aria-hidden="true"
-                >
-                  {procStep > idx + 1 ? '✓' : idx + 1}
-                </div>
-                <div className="flow-line">
-                  <b>{desc}</b>
-                  {procStep > idx + 1 ? ' ✓' : procStep === idx + 1 ? '…' : ''}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // ─── Comprobante ─────────────────────────────────────────
   if (view === 'confirm' && result) {
     return (
@@ -841,7 +1261,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
           </div>
           <div className="card card-p">
-            <div className="h2" style={{ fontSize: 'var(--fs-md)', marginBottom: 12 }}>
+            <div className="h2" style={{ fontSize: 'var(--fs-legacy-md)', marginBottom: 12 }}>
               Comprobante
             </div>
             <div className="receipt-row">
@@ -916,11 +1336,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="btn btn-ghost"
-                onClick={() => {
-                  setView('detail');
-                  setSelected(new Map());
-                  reload();
-                }}
+                onClick={() => { setView('detail'); setSelected(new Map()); reload(); }}
               >
                 Ver la mesa
               </button>
@@ -951,30 +1367,101 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         {guestHeader}
         <div className="scroll" style={{ padding: 16 }}>
           <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 16 }}>
-            <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              {frozenScope ? 'Pendiente de confirmar' : 'Pagás SOLO tu parte'}
+            <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {frozenRequiresReconciliation ? 'Reconciliación necesaria' : frozenScope ? 'Pendiente de confirmar' : 'Pagás SOLO tu parte'}
             </div>
             {/* Con un intento congelado, el monto de la pantalla NO es el del
                 pago que quedó en el aire (tras una recarga la selección
                 arranca vacía). Mostrarlo sería mentir sobre lo que se reenvía. */}
             {frozenScope ? (
               <>
-                <div style={{ fontSize: 'var(--fs-xl)', fontWeight: 800, color: '#fff' }}>
+                <div style={{ fontSize: 'var(--fs-legacy-xl)', fontWeight: 800, color: '#fff' }}>
                   Pago sin confirmar
                 </div>
-                <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
-                  Reintentalo para saber si se cobró: mandamos el mismo pago, no uno nuevo.
+                <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+                  {frozenRequiresReconciliation
+                    ? 'No podemos reenviar este pago desde la sesión actual. No iniciaremos otro hasta reconciliarlo.'
+                    : 'Reintentalo para saber si se cobró: mandamos el mismo pago, no uno nuevo.'}
                 </div>
+                {/* N-07: la salida. Antes este estado no tenía ninguna y el
+                    área quedaba bloqueada para siempre. Se resuelve con la
+                    evidencia del backend, nunca con un TTL. */}
+                {frozenRequiresReconciliation && reconcileVerdict !== 'absent' && (
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', marginTop: 12 }}
+                    onClick={() => void checkReconciliation()}
+                    disabled={reconciling}
+                  >
+                    {reconciling ? 'Consultando…' : 'Revisar si se cobró'}
+                  </button>
+                )}
+                {frozenRequiresReconciliation && reconcileVerdict === 'absent' && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 'var(--fs-legacy-xs)', color: '#fff', fontFamily: 'var(--font-body)' }}>
+                      No encontramos ese pago en la mesa: no llegó a tomar tu parte. Si continuás,
+                      el próximo intento es un <b>cobro nuevo</b>.
+                    </div>
+                    <button
+                      className="btn btn-sm btn-teal"
+                      style={{ marginTop: 8 }}
+                      onClick={() => void releaseAfterReconciliation()}
+                      disabled={reconciling}
+                    >
+                      {reconciling ? 'Cerrando…' : 'Entiendo, desbloquear el pago'}
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
               <>
-                <div style={{ fontSize: 'var(--fs-3xl)', fontWeight: 800, color: '#fff' }}>{formatMXN(gross)}</div>
-                <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
-                  {mesa.division_mode === 'igual' ? 'Tu parte' : 'Tus consumos'} {formatMXN(itemsAmount)} + propina {formatMXN(tipCents)}
+                {/* §1.5 bis · antes de elegir se muestra LA BASE SOLA. Acá
+                    salía base + 15 % adivinado: un número en pantalla que la
+                    persona no eligió, que es el bug que esto cierra. */}
+                <div style={{ fontSize: 'var(--fs-legacy-3xl)', fontWeight: 800, color: '#fff' }}>
+                  {formatMXN(tipPending ? itemsAmount : gross)}
                 </div>
+                <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+                  {mesa.division_mode === 'igual' ? 'Tu parte' : 'Tus consumos'} {formatMXN(itemsAmount)}
+                  {tipPending ? '' : ` + propina ${formatMXN(tipCents)}`}
+                </div>
+                {tipPending && (
+                  <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)' }}>
+                    + propina (elegí abajo)
+                  </div>
+                )}
               </>
             )}
           </div>
+          {/* N-08: este dispositivo ya pagó una parte de esta mesa, por esta
+              identidad o por la otra puerta (invitado/autenticado). No se
+              bloquea —pagar varias partes es legítimo— pero se confirma. */}
+          {showExtraPartConfirm && (
+            <div className="note note-orange" role="alertdialog" aria-label="Confirmar parte adicional">
+              <b>Desde este teléfono ya se pagó una parte de esta mesa.</b>{' '}
+              {mySlotsTaken > 0
+                ? 'Tu parte ya figura pagada.'
+                : 'Fue con otra sesión (link de invitado o tu cuenta).'}{' '}
+              Si continuás vas a pagar una parte <b>adicional</b>, y se cobra aparte.
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-sm btn-teal btn-fit"
+                  onClick={() => {
+                    setCrossActorAcknowledged(true);
+                    setShowExtraPartConfirm(false);
+                  }}
+                >
+                  Sí, pagar otra parte
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm btn-fit"
+                  onClick={() => setShowExtraPartConfirm(false)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
           {error && (
             <div className="form-error" role="alert">
               {error}
@@ -985,9 +1472,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               nuevo. El único camino es reintentar ESTE pago. */}
           {frozenScope && (
             <div className="note note-orange" role="status">
-              <b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal
-              cual está: si ya salió, no te cobramos de nuevo. Hasta resolverlo no podés cambiar
-              propina, método ni consumos.
+              {frozenRequiresReconciliation ? (
+                <><b>Hay un pago que no podemos reenviar.</b> Pertenece a una sesión anterior o se perdió su cuerpo exacto al recargar. Sigue bloqueado para evitar un segundo cobro.</>
+              ) : (
+                <><b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal cual está: si ya salió, no te cobramos de nuevo. Hasta resolverlo no podés cambiar propina, método ni consumos.</>
+              )}
             </div>
           )}
           {refundedNotice && (
@@ -996,53 +1485,33 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               el botón de abajo.
             </div>
           )}
-          <div className="sectlabel" id="lbl-propina">
-            Propina al mozo
-          </div>
-          <div className="caption" style={{ margin: '0 2px 8px' }}>
-            Tu base: {formatMXN(mesa.tip_base_cents)} (la cuenta ÷ {mesa.expected_participants || 1})
-          </div>
-          <div className="tip-row" role="radiogroup" aria-labelledby="lbl-propina">
-            {TIP_OPTIONS.map((pct) => (
-              <button
-                key={pct}
-                className={`tip-pill ${tipMode === 'pct' && tipPct === pct ? 'sel' : ''}`}
-                onClick={() => {
-                  setTipMode('pct');
-                  setTipPct(pct);
-                }}
-                disabled={!!frozenScope}
-                role="radio"
-                aria-checked={tipMode === 'pct' && tipPct === pct}
+          <TipSelectorBoundary
+            onFail={() => setTipSelectorFailed(true)}
+            fallback={
+              <div
+                className="caption"
+                style={{ display: 'flex', gap: 6, alignItems: 'flex-start', margin: '0 2px 16px', color: 'var(--text-muted)' }}
+                role="status"
               >
-                {pct}%
-              </button>
-            ))}
-            <button
-              className={`tip-pill ${tipMode === 'custom' ? 'sel' : ''}`}
-              onClick={() => setTipMode('custom')}
+                <Icon name="info" size={16} aria-hidden="true" />
+                <span>No pudimos cargar las opciones de propina — tu pago sigue sin propina.</span>
+              </div>
+            }
+          >
+            <TipSelector
+              sectionRef={tipSectionRef}
+              tip={tip}
+              onChoose={setTip}
+              customTipStr={customTipStr}
+              onCustomChange={setCustomTipStr}
+              baseCents={mesa.tip_base_cents}
+              participants={mesa.expected_participants || 1}
               disabled={!!frozenScope}
-              role="radio"
-              aria-checked={tipMode === 'custom'}
-            >
-              Otro
-            </button>
-          </div>
-          {tipMode === 'custom' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '10px 2px 0' }}>
-              <span style={{ fontWeight: 700 }}>$</span>
-              <input
-                className="input"
-                style={{ flex: 1, padding: '10px 12px' }}
-                inputMode="decimal"
-                placeholder="0.00"
-                value={customTipStr}
-                onChange={(e) => setCustomTipStr(e.target.value.replace(/[^0-9.]/g, ''))}
-                disabled={!!frozenScope}
-                aria-label="Monto de propina a mano"
-              />
-            </div>
-          )}
+              pending={tipPending}
+              pulse={tipPulse}
+              onPulseEnd={() => setTipPulse(false)}
+            />
+          </TipSelectorBoundary>
           {tipCents > 0 && mesa.active_staff.length > 0 && (
             <>
               <div className="sectlabel" id="lbl-mozo">
@@ -1079,7 +1548,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
           )}
           <div role="radiogroup" aria-labelledby="lbl-metodo">
-            {!isGuest && (
+            {!isGuest && walletRailEnabled && (
               <button
                 className={`method-card ${payType === 'wallet' ? 'sel' : ''}`}
                 onClick={() => setPayType('wallet')}
@@ -1091,7 +1560,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   <Icon name="wallet" size={22} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Saldo PayMe</div>
+                  <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>Saldo PayMe</div>
                 </div>
                 <div className="radio" aria-hidden="true" />
               </button>
@@ -1111,7 +1580,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <Icon name="card" size={22} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Tarjeta de crédito o débito</div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>Tarjeta de crédito o débito</div>
                 <div className="caption">
                   {cards.length > 0
                     ? (cards.find((c) => c.id === cardChoice)
@@ -1131,7 +1600,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </button>
             {/* D4 + feedback Mati: las guardadas viven en el desglosable, no
                 sueltas en la lista principal. */}
-            {!IS_DEMO && payType === 'card' && cards.length > 0 && cardsOpen && (
+            {payType === 'card' && cards.length > 0 && cardsOpen && (
               <div role="radiogroup" aria-label="Tarjeta guardada" style={{ margin: '2px 0 4px' }}>
                 {cards.map((c) => (
                   <button
@@ -1144,7 +1613,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   >
                     <CardBrandChip brand={c.brand} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>
+                      <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>
                         {c.bank_name ?? c.brand} ···· {c.last_four}
                         {c.is_default && (
                           <span className="caption" style={{ marginLeft: 8 }}>
@@ -1170,14 +1639,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     <Icon name="plus" size={22} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Usar otra tarjeta</div>
+                    <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>Usar otra tarjeta</div>
                   </div>
                   <div className="radio" aria-hidden="true" />
                 </button>
               </div>
             )}
             {/* Tarjeta nueva: Elements en real; en mock no se pide número. */}
-            {!IS_DEMO && payType === 'card' && (cards.length === 0 || (cardChoice === 'new' && cardsOpen)) && (
+            {payType === 'card' && (cards.length === 0 || (cardChoice === 'new' && cardsOpen)) && (
               <div style={{ margin: '2px 0 10px' }}>
                 {!IS_MOCK && (
                   <>
@@ -1205,12 +1674,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 )}
               </div>
             )}
-            {/* Modo demo (?demo=1): tarjeta de test, sin iframe de Stripe. */}
-            {!IS_MOCK && IS_DEMO && payType === 'card' && (
-              <div className="caption" style={{ margin: '2px 0 10px' }}>
-                <Icon name="card" size={16} className="ico-inline" /> Tarjeta de prueba ···· 4242 (demo)
-              </div>
-            )}
+            {/* Apple/Google Pay: apagados hasta que exista la integración con
+                la Payment Request API y su prueba física. No se borran: se
+                apagan por dato (`WALLET_PAY_ENABLED` en api/index.ts). */}
+            {WALLET_PAY_ENABLED && (
             <button
               className={`method-card ${payType === 'apple_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('apple_pay')}
@@ -1222,11 +1689,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <Icon name="apple" size={22} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Apple Pay</div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>Apple Pay</div>
                 <div className="caption">vía Stripe</div>
               </div>
               <div className="radio" aria-hidden="true" />
             </button>
+            )}
+            {WALLET_PAY_ENABLED && (
             <button
               className={`method-card ${payType === 'google_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('google_pay')}
@@ -1236,17 +1705,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             >
               <div
                 className="method-icon"
-                style={{ background: '#fff', border: '1.5px solid var(--gray-b)', fontWeight: 800, fontSize: 'var(--fs-md)' }}
+                style={{ background: '#fff', border: '1.5px solid var(--gray-b)', fontWeight: 800, fontSize: 'var(--fs-legacy-md)' }}
                 aria-hidden="true"
               >
                 G
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 'var(--fs-base)' }}>Google Pay</div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>Google Pay</div>
                 <div className="caption">vía Stripe</div>
               </div>
               <div className="radio" aria-hidden="true" />
             </button>
+            )}
           </div>
           {IS_MOCK && (
             <div className="note note-amber" style={{ marginTop: 6 }}>
@@ -1256,27 +1726,32 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           )}
           {isGuest && (
             <div className="note note-orange" style={{ marginTop: 6 }}>
-              Sin iniciar sesión pagás con tarjeta o Apple Pay (el saldo PayMe pide cuenta).
+              {/* OLA 5C (c): esta nota se lee SIN sesión, por URL pública — es
+                  la ruta de más tráfico. Con el riel apagado le anunciaba al
+                  comensal un saldo PayMe que no existe. */}
+              Sin iniciar sesión pagás con tarjeta{WALLET_PAY_ENABLED ? ' o Apple Pay' : ''}
+              {walletRailEnabled ? ' (el saldo PayMe pide cuenta)' : ''}.
             </div>
           )}
         </div>
         <button
           className="cta-float"
-          onClick={() => {
+          onClick={() => { void (async () => {
             // Reembolsado: volver a pagar es una decisión explícita del
             // usuario, nunca automática (rotar solo = re-cobrar un reembolso).
             if (refundedNotice) {
-              rotateIdempotencyKey(payScope);
-              setRefundedNotice(false);
+              setError('Ese intento reembolsado requiere reconciliación antes de iniciar otro pago.');
+              return;
             }
-            void doPay();
+            await doPay();
+          })();
           }}
           disabled={
             busy ||
+            frozenRequiresReconciliation ||
             (!frozenScope && gross === 0) ||
             (!frozenScope &&
               !IS_MOCK &&
-              !IS_DEMO &&
               payType === 'card' &&
               (cards.length === 0 || cardChoice === 'new') &&
               !cardState.complete)
@@ -1284,7 +1759,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         >
           {busy
             ? 'Procesando…'
-            : frozenScope
+            : frozenRequiresReconciliation
+              ? 'Reconciliación necesaria'
+              : frozenScope
               ? 'Reintentar el pago sin confirmar'
               : refundedNotice
                 ? `Pagar de nuevo ${formatMXN(gross)}`
@@ -1294,300 +1771,30 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     );
   }
 
-  // ─── Detalle + selección (s-ticket / s-myitems / s-guest) ─
-  const cd = countdownTo(mesa.expires_at);
-  const pct = mesa.total_cents > 0 ? Math.round((mesa.paid_amount_cents / mesa.total_cents) * 100) : 0;
-  const availableSlots = mesa.division_slots?.filter((s) => s.status === 'available').length ?? 0;
-  // Si ya no queda NADA seleccionable, no tiene sentido pedir "elegí tus consumos".
-  const nothingLeft =
-    mesa.division_mode === 'consumo' &&
-    mesa.items.length > 0 &&
-    mesa.items.every((i) => i.status === 'paid' || (i.status === 'locked' && !i.locked_by_me));
-
-  // Compartir link: mismo botón en las dos ramas de división (antes duplicado
-  // e inaccesible — era solo el emoji 🔗 sin nombre).
-  const shareButton = !isGuest && mesa.my_role === 'opener' && (
-    <button
-      className="back-btn"
-      style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', flex: 'none' }}
-      aria-label="Copiar link de invitación"
-      onClick={async () => {
-        try {
-          const inv = await api.createInvitation(code);
-          if (inv.link) {
-            await navigator.clipboard.writeText(inv.link);
-            toast('Link de invitación copiado ✓');
-          }
-        } catch {
-          toast('No se pudo generar el link');
-        }
-      }}
-    >
-      <Icon name="link" size={18} />
-    </button>
-  );
-
+  // ─── Detalle + selección (s-myitems) ─────────────────────
+  // El JSX vive en `MesaDetailView`: es la pantalla que §1.5 rediseña, y tenerla
+  // en el mismo archivo que el pago hacía que un cambio visual rozara dinero.
+  // Acá queda el cableado — estado adentro, intenciones afuera.
   return (
-    <div className="screen has-cta">
-      <div className="top-bar" style={{ background: 'var(--navy)' }}>
-        {!isGuest && (
-          <button
-            className="back-btn"
-            onClick={() => goBack('mesas')}
-            aria-label="Volver"
-            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
-          >
-            <span aria-hidden="true">←</span>
-          </button>
-        )}
-        <TopLogo inv />
-        <div style={{ flex: 1 }} />
-        {shareButton}
-        {isGuest && <span className="badge badge-teal">Invitado</span>}
-      </div>
-      <div style={{ background: 'var(--navy)', padding: '0 20px 16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontSize: 'var(--fs-sm)', color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)', minWidth: 0 }}>
-            {mesa.restaurant.name} · Mesa {code} ·{' '}
-            {mesa.division_mode === 'igual' ? 'partes iguales' : 'cada uno lo suyo'}
-          </div>
-          <div style={{ background: 'var(--teal)', color: 'var(--navy)', padding: '4px 12px', borderRadius: 20, fontWeight: 800, fontSize: 'var(--fs-sm)', flexShrink: 0 }}>
-            {formatMXN(mesa.total_cents)}
-          </div>
-        </div>
-        <div style={{ marginTop: 10 }}>
-          <div
-            className="progress-bar"
-            style={{ background: 'rgba(255,255,255,0.15)' }}
-            role="progressbar"
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`Pagado ${pct}% de la mesa`}
-          >
-            <div className="progress-fill" style={{ width: `${pct}%` }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)' }}>
-            <span>
-              {formatMXN(mesa.paid_amount_cents)} pagado ({pct}%)
-            </span>
-            <span style={{ color: '#ffb59b', fontWeight: 700 }}>
-              <Icon name="clock" size={14} className="ico-inline" /> {cd ?? 'venció'}
-            </span>
-          </div>
-        </div>
-      </div>
-      {guestHeader}
-      {mesa.division_mode === 'consumo' ? (
-        <>
-          <div className="totalbar">
-            <div>
-              <div className="lbl">Mi parte</div>
-              <div className="amt">{formatMXN(itemsAmount)}</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 'var(--fs-xs)', color: 'rgba(255,255,255,0.75)' }}>de {formatMXN(mesa.total_cents)}</div>
-              <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--teal)', fontWeight: 700 }}>
-                {mesa.total_cents > 0 ? Math.round((itemsAmount / mesa.total_cents) * 100) : 0}%
-              </div>
-            </div>
-          </div>
-          <div className="scroll" style={{ background: '#fff' }}>
-          {/* B-06: el pago quedó sin confirmar. Un toast al tocar un ítem se
-              pierde; acá queda a la vista, con el camino de vuelta. */}
-          {frozenScope && (
-            <div style={{ padding: '12px 16px 0' }}>
-              <div className="note note-orange" role="status">
-                <b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal
-                cual antes de cambiar tu selección.
-                <button
-                  className="btn btn-ghost btn-sm btn-fit"
-                  style={{ marginTop: 8 }}
-                  onClick={() => setView('pay')}
-                >
-                  Reintentar ese pago
-                </button>
-              </div>
-            </div>
-          )}
-            <div style={{ padding: '12px 16px 4px' }} className="caption">
-              Tocá lo que consumiste. Al elegirlo queda <b>reservado</b> para vos.
-            </div>
-            {nothingLeft && (
-              <div className="note note-amber" style={{ margin: '8px 16px' }}>
-                Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.
-              </div>
-            )}
-            {mesa.items.map((i) => {
-              const fullPrice = i.price_cents * i.quantity;
-              const paidFull = i.status === 'paid';
-              // Bloqueado solo si NO queda nada y nada es mío.
-              const blocked = (paidFull || i.remaining_bps <= 0) && i.my_bps === 0 && !selected.has(i.id);
-              const sel = selected.has(i.id);
-              const myBpsSel = selected.get(i.id) ?? 10000;
-              const partial = i.remaining_bps > 0 && i.remaining_bps < 10000;
-              const hint = paidFull
-                ? ' · ya pagado'
-                : blocked
-                  ? ' · lo tomaron'
-                  : partial
-                    ? ` · queda ${bpsLabel(i.remaining_bps)}`
-                    : '';
-              return (
-                <div
-                  key={i.id}
-                  className={`item-row ${sel ? 'sel' : ''} ${blocked ? 'paid-other' : ''}`}
-                  style={{ flexWrap: 'wrap', rowGap: 4 }}
-                >
-                  <button
-                    onClick={() => !blocked && toggleItem(i.id)}
-                    disabled={blocked}
-                    aria-pressed={blocked ? undefined : sel}
-                    aria-label={`${i.name}, ${formatMXN(fullPrice)}${hint}`}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: blocked ? 'default' : 'pointer', textAlign: 'left' }}
-                  >
-                    <div className={`checkbox ${sel ? 'on' : ''} ${blocked ? 'blocked' : ''}`} aria-hidden="true">
-                      {blocked ? (paidFull ? '✓' : <Icon name="lock" size={13} />) : '✓'}
-                    </div>
-                    <div className="item-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {i.name}
-                      {partial && !blocked && (
-                        <span className="item-hint"> · queda {bpsLabel(i.remaining_bps)}</span>
-                      )}
-                      {(paidFull || blocked) && <span className="item-hint">{hint}</span>}
-                    </div>
-                  </button>
-                  {/* v2.18: fracción en la MISMA línea (UX ratificada). */}
-                  {sel && (
-                    <div style={{ display: 'flex', gap: 4, flex: 'none' }} role="radiogroup" aria-label={`Fracción de ${i.name}`}>
-                      {FRACTIONS.filter((f) => f.bps <= i.remaining_bps).map((f) => (
-                        <button
-                          key={f.bps}
-                          className={`tip-pill ${myBpsSel === f.bps ? 'sel' : ''}`}
-                          style={{ padding: '3px 9px', fontSize: 'var(--fs-sm)' }}
-                          onClick={() => setFraction(i.id, f.bps)}
-                          role="radio"
-                          aria-checked={myBpsSel === f.bps}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="item-price" style={{ flex: 'none' }}>
-                    {sel && myBpsSel < 10000
-                      ? formatMXN(fractionPreview(fullPrice, myBpsSel, i.remaining_bps))
-                      : formatMXN(fullPrice)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {/* T-F1: el organizador puede invitar amigos in-app también acá —
-              la pantalla de compartir post-crear se ve UNA sola vez. */}
-          {!isGuest && mesa.my_role === 'opener' && (mesa.status === 'open' || mesa.status === 'partially_paid') && (
-            <div style={{ padding: '4px 16px 0' }}>
-              {inviteOpen ? (
-                <InviteFriends code={code} />
-              ) : (
-                <button className="btn btn-ghost btn-sm btn-fit" onClick={() => setInviteOpen(true)}>
-                  <Icon name="users" size={16} className="ico-inline" /> Invitar amigos de PayMe
-                </button>
-              )}
-            </div>
-          )}
-          <button className="cta-float" onClick={goToPay} disabled={busy || selected.size === 0}>
-            {busy
-              ? 'Reservando…'
-              : nothingLeft
-                ? 'No queda nada por pagar'
-                : selected.size === 0
-                  ? 'Elegí lo que consumiste'
-                  : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
-          </button>
-        </>
-      ) : (
-        <>
-          <div className="scroll" style={{ padding: 16 }}>
-            {/* IMPORTANTÍSIMO (Mati): aunque se pague en partes iguales, cada
-                comensal marca QUÉ consumió — esa info sostiene el modelo.
-                No cambia el monto (la parte es fija) ni reserva nada. */}
-            {/* B-06: el pago quedó sin confirmar. Un toast al tocar un ítem se
-                pierde; acá queda a la vista, con el camino de vuelta. */}
-              {frozenScope && (
-              <div style={{ padding: '12px 16px 0' }}>
-                <div className="note note-orange" role="status">
-                  <b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal
-                  cual antes de cambiar tu selección.
-                  <button
-                    className="btn btn-ghost btn-sm btn-fit"
-                    style={{ marginTop: 8 }}
-                    onClick={() => setView('pay')}
-                  >
-                    Reintentar ese pago
-                  </button>
-                </div>
-              </div>
-            )}
-            <div className="sectlabel">¿Qué consumiste?</div>
-            <div className="caption" style={{ margin: '0 2px 8px' }}>
-              Marcalo para el restaurante — no cambia lo que pagás.
-            </div>
-            <div className="card" style={{ marginBottom: 14 }}>
-              {mesa.items.map((i) => {
-                const sel = selected.has(i.id);
-                return (
-                  <button
-                    key={i.id}
-                    className={`item-row ${sel ? 'sel' : ''}`}
-                    onClick={() => toggleItem(i.id)}
-                    aria-pressed={sel}
-                    aria-label={`${i.name}${i.quantity > 1 ? ` por ${i.quantity}` : ''}`}
-                  >
-                    <div className={`checkbox ${sel ? 'on' : ''}`} aria-hidden="true">
-                      ✓
-                    </div>
-                    <div className="item-name">
-                      {i.name}
-                      {i.quantity > 1 ? ` × ${i.quantity}` : ''}
-                    </div>
-                    {/* Feedback Mati: el precio de cada producto, visible. */}
-                    <div className="item-price">{formatMXN(i.price_cents * i.quantity)}</div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="note note-teal">
-              La cuenta se dividió en {mesa.expected_participants} partes iguales de{' '}
-              <b>{formatMXN(itemsAmount)}</b>. Quedan <b>{availableSlots}</b> por pagar.
-            </div>
-            {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al
-                comensal ver que su parte YA está tomada. Sin esto volvía, veía
-                casilleros libres y pagaba de nuevo — llevándose el de otro.
-                No se bloquea: pagar más de una parte es legítimo (acta
-                2026-07-25), pero tiene que ser una decisión, no un accidente. */}
-            {mySlotsTaken > 0 && (
-              <div className="note note-teal" style={{ marginTop: 8 }}>
-                <b>Ya pagaste {mySlotsTaken === 1 ? 'tu parte' : `${mySlotsTaken} partes`} ✓</b>
-                {availableSlots > 0 && ' Si tocás pagar de nuevo, cubrís la parte de otro comensal.'}
-              </div>
-            )}
-          </div>
-          <button
-            className="cta-float"
-            onClick={goToPay}
-            disabled={busy || availableSlots === 0 || selected.size === 0}
-          >
-            {availableSlots === 0
-              ? 'No quedan partes'
-              : selected.size === 0
-                ? 'Marcá lo que consumiste'
-                : mySlotsTaken > 0
-                  ? `Pagar otra parte → ${formatMXN(itemsAmount)}`
-                  : `Pagar mi parte → ${formatMXN(itemsAmount)}`}
-          </button>
-        </>
-      )}
-    </div>
+    <MesaDetailView
+      mesa={mesa}
+      code={code}
+      paymeId={session?.user?.payme_id}
+      isGuest={isGuest}
+      guestHeader={guestHeader}
+      selected={selected}
+      itemsAmount={itemsAmount}
+      mySlotsTaken={mySlotsTaken}
+      frozenScope={frozenScope}
+      busy={busy}
+      inviteOpen={inviteOpen}
+      onToggleItem={toggleItem}
+      onSetFraction={setFraction}
+      onGoToPay={goToPay}
+      onRetryFrozenPay={() => setView('pay')}
+      onOpenInvite={() => setInviteOpen(true)}
+      onCopyInvitationLink={() => void copyInvitationLink()}
+      onBack={() => goBack('mesas')}
+    />
   );
 }

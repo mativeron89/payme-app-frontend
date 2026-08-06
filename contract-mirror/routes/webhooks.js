@@ -13,6 +13,7 @@
  */
 'use strict';
 
+const crypto = require('node:crypto');
 const express = require('express');
 const pool = require('../db/pool');
 const eventEmitter = require('../services/eventEmitter');
@@ -21,14 +22,262 @@ const savedCards = require('../services/savedCards');   // D4 (v2.16)
 const itemClaims = require('../services/itemClaims');   // v2.18 (fracciones)
 const stateMachine = require('../utils/stateMachine');
 const paymentProcessor = require('../services/paymentProcessor');
+const settlement = require('../services/settlement');
+const topupProcessor = require('../services/topupProcessor');
+const connectRefundProcessor = require('../services/connectRefundProcessor');
+const {
+  assertPaymentIntentContract,
+  guaranteeIntentMismatches,
+} = require('../services/paymentIntentContract');
 const connectService = require('../services/connect');   // v2.22 (Connect)
-const notifs = require('../services/notifications');
-const { centsToDisplay } = require('../utils/money');
 const logger = require('../utils/logger');
+const { stripeEventModeMatches } = require('../middleware/envValidation');
 
 const router = express.Router();
 
 const MAX_WEBHOOK_RETRIES = Number(process.env.WEBHOOK_MAX_RETRIES) || 10;
+const REPLAY_REQUIRED_EVENT_TYPES = new Set([
+  'payment_intent.succeeded',
+  'payment_intent.payment_failed',
+  'payment_intent.canceled',
+  'payment_intent.processing',
+  'payment_intent.amount_capturable_updated',
+  'charge.refunded',
+]);
+const CONNECT_REPLAY_REQUIRED_EVENT_TYPES = new Set([
+  ...REPLAY_REQUIRED_EVENT_TYPES,
+  'refund.created',
+  'refund.updated',
+  'refund.failed',
+]);
+
+function eventRequiresDurableReplay(event) {
+  const types = event?.account
+    ? CONNECT_REPLAY_REQUIRED_EVENT_TYPES
+    : REPLAY_REQUIRED_EVENT_TYPES;
+  return types.has(event?.type);
+}
+
+function stripeObjectId(value) {
+  return typeof value === 'string' ? value : value?.id || null;
+}
+
+function paymeMetadata(metadata) {
+  const allowed = new Set([
+    'attempt_id', 'mesa_id', 'user_id', 'kind', 'save_pm',
+    'topup_id', 'payme_user_id', 'type',
+  ]);
+  return Object.fromEntries(
+    Object.entries(metadata || {}).filter(([key]) => allowed.has(key))
+  );
+}
+
+function normalizedInboxObject(event) {
+  const object = event?.data?.object || null;
+  if (!object) return null;
+  if (event.type === 'charge.refunded') {
+    return {
+      id: object.id || null,
+      object: object.object || null,
+      payment_intent: stripeObjectId(object.payment_intent),
+      application_fee: stripeObjectId(object.application_fee),
+      amount: object.amount ?? null,
+      amount_captured: object.amount_captured ?? null,
+      amount_refunded: object.amount_refunded ?? null,
+      currency: object.currency || null,
+      refunded: object.refunded,
+      payment_method: stripeObjectId(object.payment_method),
+      metadata: paymeMetadata(object.metadata),
+      refunds: {
+        data: Array.isArray(object.refunds?.data)
+          ? object.refunds.data.map((refund) => ({ id: refund?.id || null }))
+          : [],
+      },
+    };
+  }
+  if (['refund.created', 'refund.updated', 'refund.failed'].includes(event.type)) {
+    return {
+      id: object.id || null,
+      object: object.object || null,
+      charge: stripeObjectId(object.charge),
+      payment_intent: stripeObjectId(object.payment_intent),
+      amount: object.amount ?? null,
+      currency: object.currency || null,
+      status: object.status || null,
+      failure_reason: object.failure_reason || null,
+      pending_reason: object.pending_reason || null,
+      created: object.created || null,
+      metadata: paymeMetadata(object.metadata),
+    };
+  }
+  return {
+    id: object.id || null,
+    object: object.object || null,
+    status: object.status || null,
+    amount: object.amount ?? null,
+    amount_received: object.amount_received ?? null,
+    amount_capturable: object.amount_capturable ?? null,
+    currency: object.currency || null,
+    capture_method: object.capture_method || null,
+    payment_method: stripeObjectId(object.payment_method),
+    customer: stripeObjectId(object.customer),
+    setup_future_usage: object.setup_future_usage || null,
+    payment_method_types: Array.isArray(object.payment_method_types)
+      ? [...object.payment_method_types]
+      : [],
+    application_fee_amount: object.application_fee_amount ?? null,
+    latest_charge: stripeObjectId(object.latest_charge),
+    metadata: paymeMetadata(object.metadata),
+    last_payment_error: object.last_payment_error
+      ? { code: object.last_payment_error.code || null }
+      : null,
+  };
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => (
+      `${JSON.stringify(key)}:${canonicalJson(value[key])}`
+    )).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function snapshotHash(snapshot) {
+  if (!snapshot) return null;
+  return crypto.createHash('sha256').update(canonicalJson(snapshot), 'utf8').digest('hex');
+}
+
+function webhookInboxMetadata(event) {
+  const snapshot = eventRequiresDurableReplay(event) ? {
+    id: event.id,
+    type: event.type,
+    account: event.account || null,
+    livemode: !!event.livemode,
+    created: event.created || null,
+    data: { object: normalizedInboxObject(event) },
+  } : null;
+  return {
+    livemode: !!event?.livemode,
+    account: event?.account || null,
+    // Snapshot verificado por firma, suficiente para reconstrucción manual o
+    // replay local aun si Stripe deja de reintentar. No se guarda el request
+    // HTTP ni headers; sólo el objeto económico normalizado del evento.
+    event_snapshot: snapshot,
+    event_snapshot_hash: snapshotHash(snapshot),
+  };
+}
+
+function assertWebhookSlotBinding(row, event, provider) {
+  const incoming = webhookInboxMetadata(event);
+  const storedHash = row?.metadata?.event_snapshot_hash
+    || snapshotHash(row?.metadata?.event_snapshot || null);
+  if (!row || row.provider !== provider || row.event_type !== event.type
+      || (row.metadata?.account || null) !== (event.account || null)
+      || !!row.metadata?.livemode !== !!event.livemode
+      || (storedHash !== null && storedHash !== incoming.event_snapshot_hash)) {
+    const err = new Error('webhook_event_binding_conflict');
+    err.code = 'webhook_event_binding_conflict';
+    throw err;
+  }
+}
+
+// Un slot durable por sí solo no evita que un worker lento sobreviva al umbral
+// de recuperación. El advisory lock vive en una conexión dedicada durante toda
+// la respuesta: otro proceso/instancia sólo puede retomar el event_id después
+// de que el worker termine o su conexión muera. Así el timer puede marcar un
+// slot stale como retryable sin habilitar dos ejecutores simultáneos.
+/**
+ * Toma el advisory lock del evento. **NUNCA lanza**: distingue las tres salidas
+ * posibles para que el handler HTTP pueda decidir sin depender de un catch.
+ *
+ * N-01 (OLA 2-A): antes esto re-lanzaba ante un fallo de `pool.connect()`. Los
+ * dos endpoints lo llamaban FUERA de todo try/catch, Express 4 no captura
+ * rejections de handlers async y no hay handler global → un blip de PostgreSQL
+ * durante una ráfaga de webhooks **mataba el proceso**, justo en el canal por
+ * donde entra el dinero. Regresión introducida en e8a3faf.
+ *
+ * El lock vive en su propio pool (`pool.lockPool`): la conexión queda retenida
+ * toda la request mientras el handler necesita OTRAS conexiones, así que
+ * tomarla del pool principal permitía que una ráfaga se auto-bloqueara. El
+ * advisory lock es de alcance de base, no de pool, así que la exclusión
+ * cross-worker se conserva intacta.
+ *
+ * @returns {Promise<{status:'acquired', lock:{release:Function}}
+ *                  |{status:'in_progress'}
+ *                  |{status:'unavailable', error:Error}>}
+ */
+async function acquireWebhookEventLock(eventId) {
+  let client;
+  try {
+    client = await pool.lockPool.connect();
+  } catch (err) {
+    // Pool agotado, PostgreSQL caído o timeout de conexión. No es un duplicado:
+    // es infraestructura. Se devuelve como dato, no como excepción.
+    return { status: 'unavailable', error: err };
+  }
+  try {
+    const { rows: [row] } = await client.query(
+      `SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired`,
+      [eventId]
+    );
+    if (!row?.acquired) {
+      client.release();
+      return { status: 'in_progress' };
+    }
+  } catch (err) {
+    client.release(true);
+    return { status: 'unavailable', error: err };
+  }
+  let released = false;
+  return {
+    status: 'acquired',
+    lock: {
+      /** Idempotente y **nunca rechaza**: se invoca desde un `void` sin dueño. */
+      async release() {
+        if (released) return;
+        released = true;
+        try {
+          await client.query(
+            `SELECT pg_advisory_unlock(hashtextextended($1, 0))`,
+            [eventId]
+          );
+          client.release();
+        } catch (err) {
+          // Un fallo acá tampoco puede escapar: `releaseWebhookLockWithResponse`
+          // lo llama con `void`, así que una rejection sería otra vez un crash.
+          try { client.release(true); } catch (_) { /* la conexión ya se fue */ }
+          logger.error('webhook_advisory_unlock_failed', {
+            event_id: eventId, error: err.message,
+          });
+        }
+      },
+    },
+  };
+}
+
+/**
+ * Variante que LANZA ante fallo de infraestructura, para los sweeps internos:
+ * ellos corren dentro de su propio try/catch, registran el fallo en el inbox y
+ * reintentan. Ahí un throw es la conducta correcta; en un handler HTTP no.
+ */
+async function holdWebhookEventLock(eventId) {
+  const result = await acquireWebhookEventLock(eventId);
+  if (result.status === 'unavailable') throw result.error;
+  return result.status === 'acquired' ? result.lock : null;
+}
+
+function releaseWebhookLockWithResponse(res, lock) {
+  let releaseStarted = false;
+  const release = () => {
+    if (releaseStarted) return;
+    releaseStarted = true;
+    void lock.release();
+  };
+  res.once('finish', release);
+  res.once('close', release);
+}
 
 router.post('/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
   let event;
@@ -39,9 +288,45 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  if (!stripeEventModeMatches(event)) {
+    logger.error('webhook_livemode_mismatch', { event_id: event.id, type: event.type, livemode: event.livemode });
+    return res.status(400).json({ received: false, error: 'webhook_livemode_mismatch' });
+  }
+
+  // N-01: se captura localmente. Un fallo de infraestructura acá NO puede
+  // escapar como rejection no manejada (Express 4 no las atrapa y el proceso
+  // caería). 503 para que Stripe reintente el evento.
+  const lockResult = await acquireWebhookEventLock(event.id);
+  if (lockResult.status === 'unavailable') {
+    logger.error('webhook_lock_unavailable', {
+      event_id: event.id, type: event.type,
+      error: lockResult.error.message, code: lockResult.error.code || null,
+    });
+    return res.status(503).json({ received: false, error: 'webhook_lock_unavailable' });
+  }
+  if (lockResult.status === 'in_progress') {
+    logger.info('webhook_worker_in_progress', { event_id: event.id, type: event.type });
+    return res.status(503).json({ received: false, in_progress: true });
+  }
+  const eventLock = lockResult.lock;
+  releaseWebhookLockWithResponse(res, eventLock);
+
   logger.webhook(event);
 
-  const acquired = await acquireWebhookSlot(event);
+  let slot;
+  try {
+    slot = await acquireWebhookSlot(event);
+  } catch (err) {
+    logger.error('platform_webhook_slot_acquire_failed', {
+      event_id: event.id, type: event.type, error: err.code || err.message,
+    });
+    if (err.code === 'webhook_event_binding_conflict') {
+      return res.status(400).json({ received: false, error: err.code });
+    }
+    return res.status(500).json({ received: false, error: 'slot_acquire_failed' });
+  }
+  const acquired = slot.state;
+  const platformLeaseId = slot.leaseId || null;
   if (acquired === 'duplicate_processed') {
     return res.json({ received: true, duplicate: true });
   }
@@ -56,71 +341,25 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
   }
 
   try {
-    // ── v2.11 (parche §3 · garantía): interceptar PIs de guarantee_auth ──
-    // Los PaymentIntents del hold de garantía NO son attempts ni topups; si caen
-    // en el routing normal terminan en retryable_no_local_record y ensucian el
-    // retry-loop. Se manejan acá y se responde 200.
-    const piObj = event.type.startsWith('payment_intent.') ? event.data.object : null;
-
-    // D4 (v2.16): tarjeta guardada por 3DS — si el PI pedía guardar
-    // (metadata.save_pm) y el desafío terminó bien (pago confirmado o hold
-    // autorizado), espejar la tarjeta localmente. Cubre pago Y garantía en un
-    // solo punto. Best-effort: mirrorSavedPaymentMethod jamás lanza, el
-    // webhook sigue su curso normal.
-    if (piObj && piObj.metadata?.save_pm === '1' && piObj.payment_method
-        && piObj.metadata.user_id && piObj.metadata.user_id !== 'guest'
-        && (event.type === 'payment_intent.succeeded'
-            || event.type === 'payment_intent.amount_capturable_updated')) {
-      await savedCards.mirrorSavedPaymentMethod(piObj.metadata.user_id, piObj.payment_method);
-    }
-
-    if (piObj && piObj.metadata && piObj.metadata.kind === 'guarantee_auth') {
-      await handleGuaranteeIntentEvent(event.type, piObj);
-      await pool.query(
-        `UPDATE processed_webhook_events
-            SET status='processed', processed_at=NOW(), last_attempt_at=NOW()
-          WHERE event_id = $1`,
-        [event.id]
-      );
-      return res.json({ received: true, guarantee: true });
-    }
-
-    let foundLocal = true;
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        foundLocal = await routeSucceeded(event.data.object);
-        break;
-      case 'payment_intent.payment_failed':
-        foundLocal = await routeFailed(event.data.object);
-        break;
-      case 'payment_intent.canceled':
-        foundLocal = await routeCancelled(event.data.object);
-        break;
-      case 'payment_intent.processing':
-        foundLocal = await routeProcessing(event.data.object);
-        break;
-      case 'charge.refunded':
-        foundLocal = await handleChargeRefunded(event.data.object, event);
-        break;
-      default:
-        logger.debug('webhook_unhandled', { type: event.type });
-        foundLocal = true;
-    }
+    const outcome = await dispatchPlatformEvent(event);
+    const foundLocal = outcome.foundLocal;
 
     if (foundLocal === false) {
-      const newCount = await markRetryableNoLocalRecord(event);
+      const newCount = await markRetryableNoLocalRecord(event, platformLeaseId);
       logger.warn('webhook_no_local_record_will_retry', {
         event_id: event.id, type: event.type, retry_count: newCount,
       });
-      if (newCount >= MAX_WEBHOOK_RETRIES) {
-        await pool.query(
+      if (newCount >= MAX_WEBHOOK_RETRIES && !eventRequiresDurableReplay(event)) {
+        const terminalized = await pool.query(
           `UPDATE processed_webhook_events
               SET status='failed_terminal',
                   failure_reason='max_retries_no_local_record',
                   last_attempt_at = NOW()
-            WHERE event_id = $1`,
-          [event.id]
+          WHERE event_id = $1 AND processing_lease_id=$2::uuid
+            AND status='retryable_no_local_record'`,
+          [event.id, platformLeaseId]
         );
+        assertPlatformLeaseFinish(terminalized.rowCount);
         logger.error('webhook_max_retries_reached', {
           event_id: event.id, type: event.type, retry_count: newCount,
         });
@@ -131,19 +370,37 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
       return res.status(503).json({ received: false, no_local_record: true });
     }
 
-    await pool.query(
+    const finished = await pool.query(
       `UPDATE processed_webhook_events
-          SET status='processed', processed_at=NOW(), last_attempt_at=NOW()
-        WHERE event_id = $1`,
-      [event.id]
+          SET status='processed', processed_at=NOW(), last_attempt_at=NOW(),
+              metadata=metadata - 'event_snapshot'
+        WHERE event_id = $1 AND processing_lease_id=$2::uuid
+          AND status='processing'`,
+      [event.id, platformLeaseId]
     );
-    res.json({ received: true });
+    assertPlatformLeaseFinish(finished.rowCount);
+    res.json({
+      received: true,
+      ...(outcome.guarantee && { guarantee: true }),
+      ...(outcome.ignored && { ignored: outcome.ignored }),
+    });
   } catch (err) {
     logger.error('webhook_handler_error', {
       event_id: event.id, type: event.type,
       error: err.message, stack: err.stack,
     });
-    const failStatus = await markFailedAfterError(event, err.message);
+    let failStatus;
+    try {
+      failStatus = await markFailedAfterError(event, platformLeaseId, err.message);
+    } catch (finishErr) {
+      if (finishErr.code === 'platform_webhook_processing_lease_lost') {
+        logger.error('platform_webhook_stale_worker_fenced', {
+          event_id: event.id, type: event.type,
+        });
+        return res.status(500).json({ received: false, error: 'processing_lease_lost' });
+      }
+      throw finishErr;
+    }
     if (failStatus === 'failed_terminal') {
       return res.json({ received: true, terminal: true, error: 'handler_failed' });
     }
@@ -152,44 +409,105 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
 });
 
 /**
+ * Handler único reutilizable por la entrega HTTP firmada y por el replay del
+ * inbox durable. El worker jamás salta validaciones de contrato: reconstruye
+ * sólo el snapshot normalizado que ya pasó firma+mode gate y entra por las
+ * mismas primitivas monetarias.
+ */
+async function dispatchPlatformEvent(event) {
+  const piObj = event.type.startsWith('payment_intent.') ? event.data?.object : null;
+  if (piObj?.metadata?.kind === 'guarantee_auth') {
+    const guaranteeResult = await handleGuaranteeIntentEvent(event.type, piObj);
+    if (!guaranteeResult.ignored
+        && event.type === 'payment_intent.amount_capturable_updated') {
+      await mirrorIntentPaymentMethodIfRequested(piObj);
+    }
+    return {
+      foundLocal: true,
+      guarantee: true,
+      ignored: guaranteeResult.ignored || null,
+    };
+  }
+
+  let foundLocal = true;
+  switch (event.type) {
+    case 'payment_intent.succeeded':
+      foundLocal = await routeSucceeded(event.data.object);
+      break;
+    case 'payment_intent.payment_failed':
+      foundLocal = await routeFailed(event.data.object);
+      break;
+    case 'payment_intent.canceled':
+      foundLocal = await routeCancelled(event.data.object);
+      break;
+    case 'payment_intent.processing':
+      foundLocal = await routeProcessing(event.data.object);
+      break;
+    case 'charge.refunded':
+      foundLocal = await handleChargeRefunded(event.data.object, event);
+      break;
+    default:
+      logger.debug('webhook_unhandled', { type: event.type });
+      foundLocal = true;
+  }
+  return { foundLocal };
+}
+
+/**
  * Toma el slot del webhook.
  *
  * v2.5.2 P1 #5: el reacquire de retryables es atómico (UPDATE ... RETURNING).
  *
- * Returns: 'acquired' | 'duplicate_processed' | 'in_progress' | 'failed_terminal'
+ * Returns: { state, leaseId? }. Cada adquisición rota un lease durable; un
+ * worker viejo puede terminar su efecto idempotente, pero nunca pisar el estado
+ * del dueño nuevo del inbox.
  */
 async function acquireWebhookSlot(event) {
   try {
-    await pool.query(
+    const { rows: [inserted] } = await pool.query(
       `INSERT INTO processed_webhook_events
          (event_id, provider, event_type, status, metadata)
-       VALUES ($1, 'stripe', $2, 'processing', $3)`,
-      [event.id, event.type, { livemode: event.livemode }]
+       VALUES ($1, 'stripe', $2, 'processing', $3)
+       RETURNING processing_lease_id::text AS lease_id`,
+      [event.id, event.type, webhookInboxMetadata(event)]
     );
-    return 'acquired';
+    return { state: 'acquired', leaseId: inserted.lease_id };
   } catch (err) {
     if (err.code !== '23505') throw err;
 
     const { rows } = await pool.query(
-      `SELECT status, retry_count FROM processed_webhook_events WHERE event_id = $1`,
+      `SELECT provider, event_type, status, retry_count, metadata
+         FROM processed_webhook_events WHERE event_id = $1`,
       [event.id]
     );
+    assertWebhookSlotBinding(rows[0], event, 'stripe');
     const cur = rows[0]?.status;
     const retryCount = Number(rows[0]?.retry_count || 0);
 
     if (cur === 'processed') {
       logger.info('webhook_already_processed', { event_id: event.id, type: event.type });
-      return 'duplicate_processed';
+      return { state: 'duplicate_processed' };
     }
     if (cur === 'processing') {
       logger.info('webhook_in_progress', { event_id: event.id });
-      return 'in_progress';
+      return { state: 'in_progress' };
     }
     if (cur === 'failed_terminal') {
-      return 'failed_terminal';
+      if (!eventRequiresDurableReplay(event)) return { state: 'failed_terminal' };
+      const { rows: [reacquired] } = await pool.query(
+        `UPDATE processed_webhook_events
+            SET status='processing', processing_started_at=NOW(), last_attempt_at=NOW(),
+                processing_lease_id=uuid_generate_v4()
+          WHERE event_id=$1 AND status='failed_terminal'
+        RETURNING processing_lease_id::text AS lease_id`,
+        [event.id]
+      );
+      return reacquired
+        ? { state: 'acquired', leaseId: reacquired.lease_id }
+        : { state: 'in_progress' };
     }
     if (cur === 'retryable_no_local_record' || cur === 'failed_retryable') {
-      if (retryCount >= MAX_WEBHOOK_RETRIES) {
+      if (retryCount >= MAX_WEBHOOK_RETRIES && !eventRequiresDurableReplay(event)) {
         await pool.query(
           `UPDATE processed_webhook_events
               SET status='failed_terminal',
@@ -198,7 +516,7 @@ async function acquireWebhookSlot(event) {
             WHERE event_id = $1`,
           [event.id]
         );
-        return 'failed_terminal';
+        return { state: 'failed_terminal' };
       }
       // ─── v2.5.2 P1 #5: reacquire ATÓMICO ───
       // Solo un worker puede mover de retryable→processing. El WHERE con los
@@ -208,53 +526,69 @@ async function acquireWebhookSlot(event) {
         `UPDATE processed_webhook_events
             SET status='processing',
                 processing_started_at = NOW(),
-                last_attempt_at = NOW()
+                last_attempt_at = NOW(),
+                processing_lease_id=uuid_generate_v4()
           WHERE event_id = $1
             AND status IN ('retryable_no_local_record','failed_retryable')
-        RETURNING event_id`,
+        RETURNING processing_lease_id::text AS lease_id`,
         [event.id]
       );
       if (upd.length === 0) {
         logger.info('webhook_reacquire_lost_race', { event_id: event.id });
-        return 'in_progress';
+        return { state: 'in_progress' };
       }
       logger.info('webhook_retry_reacquired', {
         event_id: event.id, previous_status: cur, retry_count: retryCount,
       });
-      return 'acquired';
+      return { state: 'acquired', leaseId: upd[0].lease_id };
     }
-    return 'acquired';
+    return { state: 'in_progress' };
   }
 }
 
-async function markRetryableNoLocalRecord(event) {
+function platformLeaseLostError() {
+  const err = new Error('platform_webhook_processing_lease_lost');
+  err.code = 'platform_webhook_processing_lease_lost';
+  return err;
+}
+
+function assertPlatformLeaseFinish(rowCount) {
+  if (rowCount !== 1) throw platformLeaseLostError();
+}
+
+async function markRetryableNoLocalRecord(event, leaseId) {
   const { rows } = await pool.query(
     `UPDATE processed_webhook_events
         SET status='retryable_no_local_record',
             failure_reason='no_local_record',
             retry_count = retry_count + 1,
             last_attempt_at = NOW()
-      WHERE event_id = $1
+      WHERE event_id = $1 AND processing_lease_id=$2::uuid
+        AND status='processing'
   RETURNING retry_count`,
-    [event.id]
+    [event.id, leaseId]
   );
+  assertPlatformLeaseFinish(rows.length);
   return Number(rows[0]?.retry_count || 0);
 }
 
-async function markFailedAfterError(event, reason) {
+async function markFailedAfterError(event, leaseId, reason) {
+  const terminalize = !eventRequiresDurableReplay(event);
   const { rows } = await pool.query(
     `UPDATE processed_webhook_events
         SET retry_count = retry_count + 1,
             failure_reason = $2,
             last_attempt_at = NOW(),
             status = CASE
-              WHEN retry_count + 1 >= $3 THEN 'failed_terminal'
+              WHEN $4::boolean AND retry_count + 1 >= $3 THEN 'failed_terminal'
               ELSE 'failed_retryable'
             END
-      WHERE event_id = $1
+      WHERE event_id = $1 AND processing_lease_id=$5::uuid
+        AND status='processing'
   RETURNING status`,
-    [event.id, (reason || '').slice(0, 500), MAX_WEBHOOK_RETRIES]
+    [event.id, (reason || '').slice(0, 500), MAX_WEBHOOK_RETRIES, terminalize, leaseId]
   );
+  assertPlatformLeaseFinish(rows.length);
   return rows[0]?.status;
 }
 
@@ -262,73 +596,68 @@ async function markFailedAfterError(event, reason) {
 // Routing
 // ═══════════════════════════════════════════════════════════
 async function routeSucceeded(pi) {
-  let topup = await findTopupByIntent(pi.id);
-  if (!topup && pi.metadata?.topup_id) {
-    topup = await reconcileTopupByMetadata(pi.id, pi.metadata.topup_id);
-  }
-  if (topup) { await handleTopupSucceeded(topup); return true; }
+  if (await routeTopupIntent(pi)) return true;
 
   let attempt = await findAttemptByIntent(pi.id);
   if (!attempt && pi.metadata?.attempt_id) {
-    attempt = await reconcileAttemptByMetadata(pi.id, pi.metadata.attempt_id);
+    attempt = await reconcileAttemptByMetadata(pi, pi.metadata.attempt_id, 'succeeded');
   }
-  if (attempt) { await handleMesaPaymentSucceeded(attempt); return true; }
+  if (attempt) {
+    assertAttemptIntentContract(attempt, pi, null, 'succeeded');
+    await mirrorIntentPaymentMethodIfRequested(pi);
+    await handleMesaPaymentSucceeded(attempt, pi, null);
+    return true;
+  }
   return false;
 }
 
-async function routeFailed(pi) {
-  let topup = await findTopupByIntent(pi.id);
-  if (!topup && pi.metadata?.topup_id) {
-    topup = await reconcileTopupByMetadata(pi.id, pi.metadata.topup_id);
+async function mirrorIntentPaymentMethodIfRequested(pi) {
+  if (pi?.metadata?.save_pm !== '1' || !pi.payment_method
+      || !pi.metadata.user_id || pi.metadata.user_id === 'guest') {
+    return { skipped: true };
   }
-  if (topup) { await handleTopupFailed(topup, pi); return true; }
+  return savedCards.mirrorSavedPaymentMethod(pi.metadata.user_id, pi.payment_method);
+}
+
+async function routeFailed(pi) {
+  if (await routeTopupIntent(pi)) return true;
 
   let attempt = await findAttemptByIntent(pi.id);
   if (!attempt && pi.metadata?.attempt_id) {
-    attempt = await reconcileAttemptByMetadata(pi.id, pi.metadata.attempt_id);
+    attempt = await reconcileAttemptByMetadata(
+      pi, pi.metadata.attempt_id, 'requires_payment_method'
+    );
   }
-  if (attempt) { await handleMesaPaymentFailed(attempt, pi); return true; }
+  if (attempt) {
+    assertAttemptIntentContract(attempt, pi, null, 'requires_payment_method');
+    await handleMesaPaymentFailed(attempt, pi);
+    return true;
+  }
   return false;
 }
 
 async function routeCancelled(pi) {
-  let topup = await findTopupByIntent(pi.id);
-  if (!topup && pi.metadata?.topup_id) {
-    topup = await reconcileTopupByMetadata(pi.id, pi.metadata.topup_id);
-  }
-  if (topup) {
-    // v2.11 (A12): nunca cancelar un topup ya acreditado/terminal (out-of-order)
-    await pool.query(
-      `UPDATE topups SET status='cancelled' WHERE id=$1 AND status IN ('pending','processing')`,
-      [topup.id]
-    );
-    return true;
-  }
+  if (await routeTopupIntent(pi)) return true;
   let attempt = await findAttemptByIntent(pi.id);
   if (!attempt && pi.metadata?.attempt_id) {
-    attempt = await reconcileAttemptByMetadata(pi.id, pi.metadata.attempt_id);
+    attempt = await reconcileAttemptByMetadata(pi, pi.metadata.attempt_id, 'canceled');
   }
-  if (attempt) { await handleMesaPaymentCancelled(attempt); return true; }
+  if (attempt) {
+    assertAttemptIntentContract(attempt, pi, null, 'canceled');
+    await handleMesaPaymentCancelled(attempt);
+    return true;
+  }
   return false;
 }
 
 async function routeProcessing(pi) {
-  let topup = await findTopupByIntent(pi.id);
-  if (!topup && pi.metadata?.topup_id) {
-    topup = await reconcileTopupByMetadata(pi.id, pi.metadata.topup_id);
-  }
-  if (topup) {
-    await pool.query(
-      `UPDATE topups SET status='processing' WHERE id=$1 AND status IN ('pending')`,
-      [topup.id]
-    );
-    return true;
-  }
+  if (await routeTopupIntent(pi)) return true;
   let attempt = await findAttemptByIntent(pi.id);
   if (!attempt && pi.metadata?.attempt_id) {
-    attempt = await reconcileAttemptByMetadata(pi.id, pi.metadata.attempt_id);
+    attempt = await reconcileAttemptByMetadata(pi, pi.metadata.attempt_id, 'processing');
   }
   if (attempt) {
+    assertAttemptIntentContract(attempt, pi, null, 'processing');
     await pool.tx(async (client) => {
       const { rows } = await client.query(
         `SELECT status FROM payment_attempts WHERE id = $1 FOR UPDATE`, [attempt.id]
@@ -359,217 +688,116 @@ async function findTopupByIntent(intentId) {
   return rows[0] || null;
 }
 
-async function findAttemptByIntent(intentId) {
+async function findTopupByMetadataId(topupId) {
+  if (typeof topupId !== 'string') return null;
   const { rows } = await pool.query(
-    `SELECT id, status, mesa_id, user_id, stripe_payment_intent_id
-       FROM payment_attempts WHERE stripe_payment_intent_id = $1`, [intentId]
+    `SELECT id, user_id, method, amount_cents, status, stripe_payment_intent_id
+       FROM topups WHERE id::text=$1`,
+    [topupId]
   );
   return rows[0] || null;
 }
 
-async function reconcileTopupByMetadata(intentId, topupId) {
-  const { rows } = await pool.query(
-    `UPDATE topups
-        SET stripe_payment_intent_id = $1
-      WHERE id = $2 AND stripe_payment_intent_id IS NULL
-  RETURNING id, user_id, method, amount_cents, status`,
-    [intentId, topupId]
-  );
-  const t = rows[0];
-  if (t) {
-    logger.audit('topup_reconciled_by_metadata', { topup_id: t.id, intent_id: intentId });
-    return t;
+/**
+ * Metadata sólo localiza. El processor vuelve a leer bajo FOR UPDATE y exige
+ * monto, moneda, customer, método, tipo, id y snapshot durable exactos antes
+ * de bindear o mover un centavo.
+ */
+async function routeTopupIntent(pi) {
+  const bound = await findTopupByIntent(pi.id);
+  const metadataTopup = pi.metadata?.topup_id
+    ? await findTopupByMetadataId(pi.metadata.topup_id)
+    : null;
+  if (bound && metadataTopup && bound.id !== metadataTopup.id) {
+    const err = new Error('topup_payment_intent_metadata_binding_conflict');
+    err.code = 'topup_payment_intent_metadata_binding_conflict';
+    throw err;
   }
-  const { rows: existing } = await pool.query(
-    `SELECT id, user_id, method, amount_cents, status FROM topups WHERE id = $1`, [topupId]
-  );
-  return existing[0] || null;
+  const topup = bound || metadataTopup;
+  if (!topup) return false;
+  await topupProcessor.applyTopupIntent({ topupId: topup.id, intent: pi });
+  return true;
 }
 
-async function reconcileAttemptByMetadata(intentId, attemptId) {
+async function findAttemptByIntent(intentId) {
   const { rows } = await pool.query(
-    `UPDATE payment_attempts
-        SET stripe_payment_intent_id = $1
-      WHERE id = $2 AND stripe_payment_intent_id IS NULL
-  RETURNING id, status, mesa_id, user_id`,
-    [intentId, attemptId]
+    `SELECT id, status, mesa_id, user_id, stripe_payment_intent_id,
+            stripe_account_id, gross_amount_cents, application_fee_cents,
+            payment_type, operation_type, stripe_contract_prepared_at,
+            stripe_source_payment_method_id, stripe_charge_payment_method_id,
+            stripe_customer_id_snapshot, stripe_used_saved_card,
+            stripe_save_payment_method,
+            card_policy_version, card_brand_snapshot, card_funding_snapshot,
+            card_verified_at, charge_card_verified_at
+       FROM payment_attempts
+      WHERE stripe_payment_intent_id = $1 AND stripe_account_id IS NULL`, [intentId]
   );
-  const a = rows[0];
-  if (a) {
-    logger.audit('attempt_reconciled_by_metadata', { attempt_id: a.id, intent_id: intentId });
-    return a;
+  return rows[0] || null;
+}
+
+async function reconcileAttemptByMetadata(pi, attemptId, expectedStatus) {
+  return pool.tx(async (client) => {
+    const { rows: [attempt] } = await client.query(
+      `SELECT id, status, mesa_id, user_id, stripe_payment_intent_id,
+              stripe_account_id, gross_amount_cents, application_fee_cents,
+              payment_type, operation_type, stripe_contract_prepared_at,
+              stripe_source_payment_method_id, stripe_charge_payment_method_id,
+              stripe_customer_id_snapshot, stripe_used_saved_card,
+              stripe_save_payment_method,
+              card_policy_version, card_brand_snapshot, card_funding_snapshot,
+              card_verified_at, charge_card_verified_at
+         FROM payment_attempts WHERE id=$1 FOR UPDATE`,
+      [attemptId]
+    );
+    if (!attempt || attempt.stripe_account_id
+        || (attempt.stripe_payment_intent_id && attempt.stripe_payment_intent_id !== pi.id)) {
+      return null;
+    }
+    assertAttemptIntentContract(attempt, pi, null, expectedStatus, {
+      allowIntentBinding: true,
+    });
+    if (!attempt.stripe_payment_intent_id) {
+      await client.query(
+        `UPDATE payment_attempts SET stripe_payment_intent_id=$2 WHERE id=$1`,
+        [attemptId, pi.id]
+      );
+      logger.audit('attempt_reconciled_by_metadata', {
+        attempt_id: attempt.id, intent_id: pi.id,
+      });
+    }
+    return { ...attempt, stripe_payment_intent_id: pi.id };
+  });
+}
+
+function assertAttemptIntentContract(
+  attempt, pi, connectedAccountId = null, expectedStatus = null, options = {}
+) {
+  try {
+    return assertPaymentIntentContract(attempt, pi, {
+      stripeAccountId: connectedAccountId,
+      expectedStatus,
+      allowIntentBinding: options.allowIntentBinding === true,
+    });
+  } catch (err) {
+    logger.error('payment_intent_contract_mismatch', {
+      attempt_id: attempt?.id || null,
+      intent_id: pi?.id || null,
+      expected_account: connectedAccountId,
+      local_account: attempt?.stripe_account_id || null,
+      mismatches: err.details?.mismatches || null,
+    });
+    throw err;
   }
-  const { rows: existing } = await pool.query(
-    `SELECT id, status, mesa_id, user_id FROM payment_attempts WHERE id = $1`, [attemptId]
-  );
-  return existing[0] || null;
 }
 
 // ═══════════════════════════════════════════════════════════
 // Handlers
 // ═══════════════════════════════════════════════════════════
-async function handleTopupSucceeded(topup) {
-  if (topup.status === 'succeeded') return;
-  await pool.tx(async (client) => {
-    const { rows: fresh } = await client.query(
-      `SELECT id, user_id, method, amount_cents, status FROM topups WHERE id = $1 FOR UPDATE`,
-      [topup.id]
-    );
-    const t = fresh[0];
-    if (!t || t.status === 'succeeded') return;
-
-    const { rows: wRows } = await client.query(
-      `SELECT id, balance_cents FROM wallets WHERE user_id = $1 FOR UPDATE`, [t.user_id]
-    );
-    let wallet = wRows[0];
-    if (!wallet) {
-      const { rows: newW } = await client.query(
-        `INSERT INTO wallets (user_id, balance_cents) VALUES ($1, 0) RETURNING id, balance_cents`,
-        [t.user_id]
-      );
-      wallet = newW[0];
-    }
-    const newBalance = Number(wallet.balance_cents) + Number(t.amount_cents);
-    await client.query(`UPDATE topups SET status='succeeded', updated_at=NOW() WHERE id=$1`, [t.id]);
-    await client.query(`UPDATE wallets SET balance_cents=$1, updated_at=NOW() WHERE id=$2`, [newBalance, wallet.id]);
-
-    const txType = t.method === 'oxxo' ? 'topup_oxxo' : 'topup_card';
-    await client.query(
-      `INSERT INTO wallet_transactions
-         (wallet_id, user_id, type, amount_cents, balance_after_cents,
-          related_entity_type, related_entity_id, description)
-       VALUES ($1,$2,$3,$4,$5,'topup',$6,$7)`,
-      [wallet.id, t.user_id, txType, t.amount_cents, newBalance,
-       t.id, `Carga de saldo vía ${t.method.toUpperCase()}`]
-    );
-    await notifs.create({
-      client, user_id: t.user_id, type: 'topup_succeeded',
-      body: `Se acreditaron ${centsToDisplay(Number(t.amount_cents))} a tu saldo PayMe`,
-      payload: {
-        amount_cents: Number(t.amount_cents),
-        method: t.method, new_balance: newBalance,
-      },
-      related_entity_type: 'topup', related_entity_id: t.id,
-    });
-  });
-}
-
-async function handleTopupFailed(topup, pi) {
-  // v2.11 (A12): los webhooks de Stripe pueden llegar FUERA DE ORDEN. Un
-  // 'payment_failed' tardío nunca debe pisar un topup ya acreditado
-  // ('succeeded' con saldo sumado) ni uno terminal.
-  const { rowCount } = await pool.query(
-    `UPDATE topups SET status='failed', failure_reason=$1
-      WHERE id=$2 AND status IN ('pending','processing')`,
-    [pi.last_payment_error?.message || 'unknown', topup.id]
-  );
-  if (rowCount === 0) {
-    logger.warn('topup_failed_ignored_terminal', { topup_id: topup.id, status: topup.status });
-    return;
-  }
-  await notifs.create({
-    user_id: topup.user_id, type: 'topup_failed',
-    body: `No pudimos acreditar tu carga de ${centsToDisplay(Number(topup.amount_cents))}.`,
-    payload: {
-      amount_cents: Number(topup.amount_cents),
-      reason: pi.last_payment_error?.code,
-    },
-    related_entity_type: 'topup', related_entity_id: topup.id,
-  });
-}
-
-async function handleMesaPaymentSucceeded(attempt) {
-  await pool.tx(async (client) => {
-    const { rows } = await client.query(
-      `SELECT status FROM payment_attempts WHERE id = $1 FOR UPDATE`, [attempt.id]
-    );
-    const cur = rows[0]?.status;
-    if (!cur) return;
-
-    if (cur === 'cancelling') {
-      logger.warn('webhook_succeeded_while_cancelling', { attempt_id: attempt.id });
-      await client.query(`UPDATE payment_attempts SET status='succeeded' WHERE id = $1`, [attempt.id]);
-      await client.query(
-        `INSERT INTO state_transitions
-           (entity_type, entity_id, from_state, to_state, reason, triggered_by)
-         VALUES ('payment_attempt', $1, 'cancelling', 'succeeded', 'webhook_won_race', 'webhook')`,
-        [attempt.id]
-      );
-    } else if (['succeeded','processed','refunded'].includes(cur)) {
-      // ya está
-    } else if (['cancelled', 'failed'].includes(cur)) {
-      // ── v2.11 (A11 · P0): Stripe cobró pero el attempt ya fue cerrado local ──
-      // Pasa cuando el timer/settle canceló ANTES de que llegara este webhook
-      // (la orden común: cancelIntent falla porque el PI ya cobró, y el webhook
-      // tarda segundos), o cuando un PI falló y luego se confirmó. Sin esta rama,
-      // cancelled/failed→succeeded viola el FSM → 409 → retry-loop de Stripe →
-      // "cobrado pero no registrado" terminal.
-      // v2.18 (fracciones): el rescate opera sobre CLAIMS. Conflicto = alguna
-      // fracción liberada ya no entra en su ítem (otro la tomó). Dos pasadas:
-      // primero verifica todas, después restaura — fiel al A11 original (en
-      // conflicto NO se restaura nada: succeeded sin procesar → revisión manual).
-      const rescue = await itemClaims.restoreAttemptClaims(client, attempt.id);
-      let conflict = rescue.conflict;
-      if (!conflict && rescue.restored === 0) {
-        // COMPAT pre-v2.18: attempt de consumo sin claims — rescate viejo por
-        // payment_attempt_items (división 'iguales' queda excluida: sus filas
-        // G-07 son dato declarado, no tenencia).
-        const { rows: legacyItems } = await client.query(
-          `SELECT mi.id, mi.status FROM payment_attempt_items pai
-             JOIN mesa_items mi ON mi.id = pai.mesa_item_id
-             JOIN mesas m ON m.id = mi.mesa_id
-            WHERE pai.payment_attempt_id = $1 AND m.division_mode = 'consumo'
-            FOR UPDATE OF mi`,
-          [attempt.id]
-        );
-        conflict = legacyItems.some((r) => r.status !== 'released');
-        if (!conflict) {
-          for (const it of legacyItems) {
-            await client.query(
-              `UPDATE mesa_items SET status='locked', locked_by_attempt=$2
-                WHERE id=$1 AND status='released'`,
-              [it.id, attempt.id]
-            );
-            await stateMachine.transition({
-              client, entityType: 'mesa_item', entityId: it.id,
-              fromState: 'released', toState: 'locked',
-              reason: 'webhook_late_rescue', triggeredBy: 'webhook',
-            });
-          }
-        }
-      }
-      await client.query(
-        `UPDATE payment_attempts SET status='succeeded', failure_reason=NULL WHERE id = $1`,
-        [attempt.id]
-      );
-      await client.query(
-        `INSERT INTO state_transitions
-           (entity_type, entity_id, from_state, to_state, reason, triggered_by)
-         VALUES ('payment_attempt', $1, $2, 'succeeded', $3, 'webhook')`,
-        [attempt.id, cur, conflict ? 'webhook_late_success_conflict' : 'webhook_late_rescue']
-      );
-      if (conflict) {
-        // Alguien más tomó las fracciones liberadas: NO pisar. El cobro queda
-        // 'succeeded' SIN procesar → cola de revisión manual (refund probable).
-        logger.error('late_success_conflict_manual_review', {
-          attempt_id: attempt.id, previous_status: cur, item_id: rescue.item_id,
-        });
-        return;
-      }
-      // restoreAttemptClaims ya re-tomó los claims (released→locked) para que
-      // processSuccessfulPayment pueda marcarlos paid (released→paid es inválido).
-      logger.warn('webhook_late_rescue', {
-        attempt_id: attempt.id, previous_status: cur, claims: rescue.restored,
-      });
-    } else {
-      await client.query(`UPDATE payment_attempts SET status='succeeded' WHERE id = $1`, [attempt.id]);
-      await stateMachine.transition({
-        client, entityType: 'payment_attempt', entityId: attempt.id,
-        fromState: cur, toState: 'succeeded',
-        reason: 'stripe_webhook', triggeredBy: 'webhook',
-      });
-    }
-    await paymentProcessor.processSuccessfulPayment(client, attempt.id, { triggeredBy: 'webhook' });
+async function handleMesaPaymentSucceeded(attempt, remoteIntent, connectedAccountId = null) {
+  return settlement.reconcileSucceededAttempt({
+    attemptId: attempt.id, mesaId: attempt.mesa_id,
+    remoteIntent, stripeAccountId: connectedAccountId,
+    triggeredBy: 'webhook',
   });
 }
 
@@ -583,52 +811,26 @@ async function handleMesaPaymentFailed(attempt, pi) {
 }
 
 async function handleMesaPaymentCancelled(attempt) {
-  await pool.tx(async (client) => {
-    const { rows } = await client.query(
-      `SELECT status FROM payment_attempts WHERE id = $1 FOR UPDATE`, [attempt.id]
-    );
-    const cur = rows[0]?.status;
-    if (!cur || cur === 'cancelled') return;
-    if (['succeeded','processed','refunded'].includes(cur)) {
-      logger.warn('webhook_cancelled_but_attempt_succeeded', { attempt_id: attempt.id, status: cur });
-      return;
-    }
-    await client.query(`UPDATE payment_attempts SET status='cancelled' WHERE id=$1`, [attempt.id]);
-    await stateMachine.transition({
-      client, entityType: 'payment_attempt', entityId: attempt.id,
-      fromState: cur, toState: 'cancelled', triggeredBy: 'webhook',
-    });
-    await client.query(
-      `UPDATE mesa_items
-          SET status='released',
-              locked_by_attempt=NULL,
-              locked_by_user_id=NULL,
-              locked_by_guest_token=NULL,
-              locked_by_guest_token_hash=NULL,
-              lock_token=NULL,
-              lock_expires_at=NULL
-        WHERE locked_by_attempt = $1 AND status = 'locked'`,
-      [attempt.id]
-    );
-    await client.query(
-      `UPDATE mesa_division_slots
-          SET status='available',
-              claimed_by_attempt_id=NULL,
-              claimed_by_user_id=NULL,
-              claimed_by_guest_token=NULL,
-              claimed_by_guest_token_hash=NULL,
-              claimed_at=NULL
-        WHERE claimed_by_attempt_id = $1 AND status = 'claimed'`,
-      [attempt.id]
-    );
+  const result = await settlement.finalizeCancellingAttempt(attempt.id, {
+    reason: 'stripe_webhook_cancelled',
+    triggeredBy: 'webhook',
+    allowedFrom: ['pending', 'requires_action', 'processing', 'authorized', 'cancelling'],
   });
+  if (!result.finalized && ['succeeded', 'processed', 'refunded'].includes(result.status)) {
+    logger.warn('webhook_cancelled_but_attempt_succeeded', {
+      attempt_id: attempt.id, status: result.status,
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
 // charge.refunded (v2.5.1 P0 #4 + #5; v2.5.2 P1 #6 via processRefund)
 // ═══════════════════════════════════════════════════════════
-async function handleChargeRefunded(charge, event) {
-  let attempt = await findAttemptByIntent(charge.payment_intent);
+async function handleChargeRefunded(charge, event, preauthenticatedAttempt = null) {
+  // El endpoint Connect ya autenticó cuenta+restaurant+PI antes de llegar acá.
+  // No se vuelve a buscar con el filtro de plataforma (`account IS NULL`), que
+  // hacía ACK/ignore del refund directo y dejaba el ledger local mintiendo.
+  let attempt = preauthenticatedAttempt || await findAttemptByIntent(charge.payment_intent);
   if (!attempt) {
     // v2.11 (A13): un refund de TOPUP no está soportado en MVP (habría que
     // debitar la wallet, posiblemente a saldo negativo → decisión de producto).
@@ -680,82 +882,231 @@ async function handleChargeRefunded(charge, event) {
 // v2.11 (parche §3) — eventos de PaymentIntents de GARANTÍA
 // (metadata.kind === 'guarantee_auth'; los crea settlement.placeCardHold)
 // ═══════════════════════════════════════════════════════════
-async function handleGuaranteeIntentEvent(type, pi, connectedAccountId = null) {
+async function handleGuaranteeIntentEvent(
+  type, pi, connectedAccountId = null, restaurantId = null
+) {
   const mesaId = pi.metadata?.mesa_id;
   if (!mesaId) {
     logger.warn('guarantee_event_without_mesa', { intent_id: pi.id, type });
-    return true;
+    return { handled: false, ignored: 'mesa_missing' };
   }
-  switch (type) {
-    case 'payment_intent.amount_capturable_updated': {
-      // 3DS completado: el hold quedó autorizado → activar la mesa
-      const upd = await pool.tx(async (client) => {
-        const r = await client.query(
-          `UPDATE mesas
-              SET status='open', auth_method='card',
-                  auth_payment_intent_id=$2,
-                  auth_amount_cents=COALESCE(auth_amount_cents, $3),
-                  -- v2.24: este UPDATE es el camino de RECUPERACIÓN del 3DS.
-                  -- Sin persistir la cuenta, un hold que vive en la conectada
-                  -- quedaría marcado como de plataforma y la captura del
-                  -- faltante iría a la cuenta equivocada: el restaurante nunca
-                  -- cobraría y el hold del comensal quedaría vivo hasta vencer.
-                  auth_stripe_account_id=COALESCE(auth_stripe_account_id, $4)
-            WHERE id=$1 AND status='pending_auth'`,
-          [mesaId, pi.id, pi.amount_capturable ?? pi.amount ?? null, connectedAccountId]
-        );
-        // Outbox E1c: table_opened cuando el 3DS activa la mesa (misma tx).
-        if (r.rowCount === 1) {
-          await eventEmitter.enqueueTableOpened(client, mesaId);
-          // Outbox E6 (v2.13): hold autorizado → payment_secured (misma tx, seq siguiente).
-          await eventEmitter.enqueuePaymentSecured(client, mesaId);
+  return pool.tx(async (client) => {
+    const { rows: [row] } = await client.query(
+      `SELECT id, restaurant_id, opener_user_id, total_cents,
+              status, guarantee_mode, auth_method,
+              auth_payment_intent_id, auth_amount_cents, auth_stripe_account_id,
+              auth_application_fee_cents, auth_source_payment_method_id,
+              auth_charge_payment_method_id,
+              auth_stripe_customer_id, auth_off_session, auth_save_payment_method,
+              auth_card_policy_version, auth_card_brand, auth_card_funding,
+              auth_card_verified_at, auth_charge_card_verified_at
+         FROM mesas WHERE id=$1 FOR UPDATE`,
+      [mesaId]
+    );
+    const mismatches = guaranteeIntentMismatches(row, pi, {
+      stripeAccountId: connectedAccountId,
+      restaurantId,
+      eventType: type,
+    });
+    if (row?.status === 'pending_auth' && !row.auth_payment_intent_id
+        && mismatches.length === 1 && mismatches[0] === 'intent_id') {
+      // La respuesta de create puede haberse perdido después de crear el hold
+      // remoto pero antes del binding local. Ni siquiera una firma Connect y una
+      // metadata exacta prueban que un PI de una cuenta Standard sea nuestro:
+      // se pide retry acotado hasta que el replay API bindea el PI por la key
+      // `guarantee_${mesaId}`. Jamás se abre desde este payload.
+      const err = new Error('guarantee_binding_pending');
+      err.code = 'guarantee_binding_pending';
+      throw err;
+    }
+    if (mismatches.length > 0) {
+      logger.warn('guarantee_webhook_binding_rejected', {
+        mesa_id: mesaId, intent_id: pi.id || null, type,
+        account: connectedAccountId || null, mismatches,
+      });
+      const boundLocalIntent = !!row
+        && row.auth_payment_intent_id === pi?.id
+        && (row.auth_stripe_account_id || null) === (connectedAccountId || null);
+      if (boundLocalIntent) {
+        await quarantineGuaranteeContractDrift(client, row, type, pi, mismatches);
+        return { handled: true, manual_review: true };
+      }
+      return { handled: false, ignored: `binding_mismatch:${mismatches.join(',')}` };
+    }
+
+    switch (type) {
+      case 'payment_intent.amount_capturable_updated': {
+        // No se bindea nada desde metadata: id, riel, monto y fee ya debían estar
+        // persistidos antes del primer call a Stripe. Acá sólo cambia el estado.
+        if (row.status === 'open') return { handled: true, idempotent: true };
+        if (row.status !== 'pending_auth') {
+          return { handled: false, ignored: `state_${row.status}` };
         }
-        return r;
-      });
-      if (upd.rowCount === 1) {
-        try {
-          await stateMachine.transition({
-            entityType: 'mesa', entityId: mesaId,
-            fromState: 'pending_auth', toState: 'open',
-            reason: 'guarantee_hold_authorized', triggeredBy: 'webhook',
-          });
-        } catch (e) { logger.warn('guarantee_transition_failed', { mesa_id: mesaId, error: e.message }); }
+        const upd = await client.query(
+          `UPDATE mesas
+              SET status='open', auth_application_fee_cents=$2
+            WHERE id=$1 AND status='pending_auth'`,
+          [mesaId, Number(pi.application_fee_amount || 0)]
+        );
+        if (upd.rowCount !== 1) throw new Error('guarantee_webhook_state_race');
+        await stateMachine.transition({
+          client, entityType: 'mesa', entityId: mesaId,
+          fromState: 'pending_auth', toState: 'open',
+          reason: 'guarantee_hold_authorized', triggeredBy: 'webhook',
+        });
+        await eventEmitter.enqueueTableOpened(client, mesaId);
+        await eventEmitter.enqueuePaymentSecured(client, mesaId);
         logger.audit('guarantee_hold_authorized', { mesa_id: mesaId, intent_id: pi.id });
+        return { handled: true };
       }
-      return true;
-    }
-    case 'payment_intent.payment_failed': {
-      const upd = await pool.query(
-        `UPDATE mesas SET status='auth_failed' WHERE id=$1 AND status = 'pending_auth'`,
-        [mesaId]
-      );
-      if (upd.rowCount === 1) {
-        try {
-          await stateMachine.transition({
-            entityType: 'mesa', entityId: mesaId,
-            fromState: 'pending_auth', toState: 'auth_failed',
-            reason: pi.last_payment_error?.code || 'guarantee_auth_failed',
-            triggeredBy: 'webhook',
-          });
-        } catch (e) { logger.warn('guarantee_transition_failed', { mesa_id: mesaId, error: e.message }); }
+      case 'payment_intent.payment_failed': {
+        if (row.status === 'auth_failed') return { handled: true, idempotent: true };
+        if (row.status !== 'pending_auth') {
+          return { handled: false, ignored: `state_${row.status}` };
+        }
+        const upd = await client.query(
+          `UPDATE mesas SET status='auth_failed'
+            WHERE id=$1 AND status='pending_auth'`,
+          [mesaId]
+        );
+        if (upd.rowCount !== 1) throw new Error('guarantee_webhook_state_race');
+        await stateMachine.transition({
+          client, entityType: 'mesa', entityId: mesaId,
+          fromState: 'pending_auth', toState: 'auth_failed',
+          reason: pi.last_payment_error?.code || 'guarantee_auth_failed',
+          triggeredBy: 'webhook',
+        });
         logger.warn('guarantee_auth_failed_webhook', { mesa_id: mesaId, intent_id: pi.id });
+        return { handled: true };
       }
-      return true;
+      case 'payment_intent.succeeded':
+        if (['pending_auth', 'open', 'partially_paid', 'fully_paid', 'expired'].includes(row.status)) {
+          await quarantineGuaranteeRemoteIntervention(client, row, type, pi);
+          return { handled: true, manual_review: true };
+        }
+        if (['auth_failed', 'cancelled'].includes(row.status)) {
+          await markGuaranteeTerminalIntervention(client, row, type, pi);
+          return { handled: true, manual_review: true };
+        }
+        logger.audit('guarantee_capture_confirmed', {
+          mesa_id: mesaId, intent_id: pi.id, amount_received: pi.amount_received,
+        });
+        return { handled: true };
+      case 'payment_intent.canceled':
+        if (['pending_auth', 'open', 'partially_paid', 'fully_paid', 'expired'].includes(row.status)) {
+          await quarantineGuaranteeRemoteIntervention(client, row, type, pi);
+          return { handled: true, manual_review: true };
+        }
+        if (['auth_failed', 'cancelled'].includes(row.status)) {
+          await markGuaranteeTerminalIntervention(client, row, type, pi);
+          return { handled: true, manual_review: true };
+        }
+        logger.audit('guarantee_hold_released', { mesa_id: mesaId, intent_id: pi.id });
+        return { handled: true };
+      default:
+        logger.debug('guarantee_event_ignored', { type, mesa_id: mesaId });
+        return { handled: true, ignored: 'event_type' };
     }
-    case 'payment_intent.succeeded':
-      // Captura del faltante al liquidar (settlement Fase 2). Solo traza.
-      logger.audit('guarantee_capture_confirmed', {
-        mesa_id: mesaId, intent_id: pi.id, amount_received: pi.amount_received,
-      });
-      return true;
-    case 'payment_intent.canceled':
-      // Liberación del hold (shortfall 0 o timer). Solo traza.
-      logger.audit('guarantee_hold_released', { mesa_id: mesaId, intent_id: pi.id });
-      return true;
-    default:
-      logger.debug('guarantee_event_ignored', { type, mesa_id: mesaId });
-      return true;
+  });
+}
+
+async function quarantineGuaranteeContractDrift(client, row, type, pi, mismatches) {
+  const review = {
+    reason: 'guarantee_remote_contract_drift',
+    event_type: type,
+    intent_id: pi?.id || null,
+    mismatches: [...new Set(mismatches)].sort(),
+    observed_at: new Date().toISOString(),
+  };
+  const quarantineStates = new Set([
+    'pending_auth', 'open', 'partially_paid', 'fully_paid', 'expired',
+  ]);
+  if (quarantineStates.has(row.status)) {
+    const upd = await client.query(
+      `UPDATE mesas
+          SET status='settling',
+              metadata=jsonb_set(
+                COALESCE(metadata, '{}'::jsonb),
+                '{guarantee_manual_review}', $2::jsonb, true
+              )
+        WHERE id=$1 AND status=$3`,
+      [row.id, JSON.stringify(review), row.status]
+    );
+    if (upd.rowCount !== 1) throw new Error('guarantee_contract_drift_quarantine_race');
+    await stateMachine.transition({
+      client, entityType: 'mesa', entityId: row.id,
+      fromState: row.status, toState: 'settling',
+      reason: review.reason, triggeredBy: 'webhook',
+      metadata: { intent_id: pi?.id || null, event_type: type, mismatches: review.mismatches },
+    });
+  } else {
+    const upd = await client.query(
+      `UPDATE mesas
+          SET metadata=jsonb_set(
+                COALESCE(metadata, '{}'::jsonb),
+                '{guarantee_manual_review}', $2::jsonb, true
+              )
+        WHERE id=$1 AND status=$3`,
+      [row.id, JSON.stringify(review), row.status]
+    );
+    if (upd.rowCount !== 1) throw new Error('guarantee_contract_drift_review_race');
   }
+  logger.error('guarantee_remote_contract_drift_manual_review', {
+    mesa_id: row.id, intent_id: pi?.id || null, type,
+    previous_status: row.status, mismatches: review.mismatches,
+  });
+}
+
+async function quarantineGuaranteeRemoteIntervention(client, row, type, pi) {
+  const review = guaranteeInterventionReview(type, pi);
+  const upd = await client.query(
+    `UPDATE mesas
+        SET status='settling',
+            metadata=jsonb_set(
+              COALESCE(metadata, '{}'::jsonb),
+              '{guarantee_manual_review}', $2::jsonb, true
+            )
+      WHERE id=$1 AND status=$3`,
+    [row.id, JSON.stringify(review), row.status]
+  );
+  if (upd.rowCount !== 1) throw new Error('guarantee_quarantine_state_race');
+  await stateMachine.transition({
+    client, entityType: 'mesa', entityId: row.id,
+    fromState: row.status, toState: 'settling',
+    reason: review.reason, triggeredBy: 'webhook',
+    metadata: { intent_id: pi.id, event_type: type },
+  });
+  logger.error('guarantee_remote_intervention_manual_review', {
+    mesa_id: row.id, intent_id: pi.id, type, previous_status: row.status,
+  });
+}
+
+async function markGuaranteeTerminalIntervention(client, row, type, pi) {
+  const review = guaranteeInterventionReview(type, pi);
+  const upd = await client.query(
+    `UPDATE mesas
+        SET metadata=jsonb_set(
+              COALESCE(metadata, '{}'::jsonb),
+              '{guarantee_manual_review}', $2::jsonb, true
+            )
+      WHERE id=$1 AND status=$3`,
+    [row.id, JSON.stringify(review), row.status]
+  );
+  if (upd.rowCount !== 1) throw new Error('guarantee_terminal_review_state_race');
+  logger.error('guarantee_terminal_intervention_manual_review', {
+    mesa_id: row.id, intent_id: pi.id, type, terminal_status: row.status,
+  });
+}
+
+function guaranteeInterventionReview(type, pi) {
+  return {
+    reason: type === 'payment_intent.succeeded'
+      ? 'guarantee_captured_outside_settlement'
+      : 'guarantee_canceled_outside_settlement',
+    event_type: type,
+    intent_id: pi.id,
+    observed_at: new Date().toISOString(),
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -788,76 +1139,99 @@ async function handleGuaranteeIntentEvent(type, pi, connectedAccountId = null) {
  * Returns: 'acquired' | 'duplicate_processed' | 'in_progress' | 'failed_terminal'
  */
 /**
- * Resuelve el attempt de un PI que llegó por el endpoint Connect, EXIGIENDO que
- * pertenezca a esta cuenta conectada. Dos formas de atarlo, ninguna basada en
- * confiar en la metadata a secas:
- *   1. la fila ya tiene registrada la cuenta (camino normal), o
- *   2. la metadata apunta a un attempt cuya MESA es de este restaurante — la
- *      relación mesa→restaurante la controla PayMe, no el restaurante, así que
- *      un id ajeno no pasa. Cubre la carrera en la que el webhook llega antes
- *      del UPDATE local, y de paso repara el vínculo.
+ * Resuelve únicamente un PI que PayMe ya bindeó durablemente en esta cuenta.
+ * En una cuenta Connect Standard el restaurante puede crear objetos propios y
+ * elegir metadata, por lo que ni un snapshot v1 exacto autoriza a adoptar un
+ * intent_id nuevo desde el webhook. La API/worker con la idempotency key de
+ * PayMe debe recuperar y bindear primero; el evento queda retryable mientras
+ * tanto.
  */
-async function findConnectAttempt(pi, acctId, restaurantId) {
+async function findConnectAttempt(pi, acctId) {
   const { rows } = await pool.query(
-    `SELECT id, status, mesa_id, user_id, stripe_payment_intent_id
+    `SELECT id, status, mesa_id, user_id, stripe_payment_intent_id,
+            stripe_account_id, gross_amount_cents, application_fee_cents,
+            payment_type, operation_type, stripe_contract_prepared_at,
+            stripe_source_payment_method_id, stripe_charge_payment_method_id,
+            stripe_customer_id_snapshot, stripe_used_saved_card,
+            stripe_save_payment_method,
+            card_policy_version, card_brand_snapshot, card_funding_snapshot,
+            card_verified_at, charge_card_verified_at
        FROM payment_attempts
       WHERE stripe_payment_intent_id = $1 AND stripe_account_id = $2`,
     [pi.id, acctId]
   );
-  if (rows[0]) return rows[0];
-
-  const metaId = pi.metadata?.attempt_id;
-  if (!metaId || !/^[0-9a-f-]{36}$/i.test(metaId)) return null;
-
-  const { rows: fixed } = await pool.query(
-    `UPDATE payment_attempts pa
-        SET stripe_payment_intent_id = COALESCE(pa.stripe_payment_intent_id, $1),
-            stripe_account_id = $2
-       FROM mesas m
-      WHERE pa.id = $3
-        AND m.id = pa.mesa_id
-        AND m.restaurant_id = $4
-        AND (pa.stripe_payment_intent_id IS NULL OR pa.stripe_payment_intent_id = $1)
-  RETURNING pa.id, pa.status, pa.mesa_id, pa.user_id, pa.stripe_payment_intent_id`,
-    [pi.id, acctId, metaId, restaurantId]
-  );
-  if (fixed[0]) {
-    logger.audit('connect_attempt_reconciliado', {
-      attempt_id: fixed[0].id, intent_id: pi.id, account: acctId,
-    });
-    return fixed[0];
-  }
-  return null;
+  return rows[0] || null;
 }
 
-// Un PI de la cuenta conectada que no podemos atar a un attempt nuestro es, casi
-// siempre, un cobro PROPIO del restaurante (su cuenta Standard le permite
-// vender por su lado). Se ACKea. Solo se pide reintento un par de veces por si
-// es la carrera con nuestro propio POST /pay.
-const CONNECT_UNBOUND_RETRIES = 3;
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+// Metadata nunca acredita ownership ni autoriza un binding: sólo permite
+// decidir si un evento sin intent_id local corresponde a una operación que
+// PayMe realmente dejó preparada en ESA cuenta. Un Standard puede fabricar
+// PIs y metadata arbitraria; random/foreign/already-bound se ACKean para no
+// convertir esa superficie en una cola de retries infinita.
 async function ackOrRetryUnbound(event, pi, acctId) {
-  const esNuestro = !!pi.metadata?.attempt_id;
+  const attemptId = typeof pi?.metadata?.attempt_id === 'string'
+    ? pi.metadata.attempt_id
+    : '';
+  if (!CANONICAL_UUID.test(attemptId) || typeof pi?.id !== 'string' || !pi.id) {
+    logger.info('connect_cobro_propio_del_restaurante', {
+      intent_id: pi?.id || null, account: acctId, reason: 'metadata_not_local',
+    });
+    return { retry: false, reason: 'attempt_metadata_not_local' };
+  }
+
+  const { rows: [candidate] } = await pool.query(
+    `SELECT id,status,payment_type,operation_type,stripe_payment_intent_id,
+            stripe_account_id,stripe_contract_prepared_at
+       FROM payment_attempts
+      WHERE id=$1::uuid AND stripe_account_id=$2`,
+    [attemptId, acctId]
+  );
+
+  if (!candidate) {
+    logger.warn('connect_attempt_metadata_rejected', {
+      event_id: event.id, intent_id: pi.id, account: acctId,
+      reason: 'attempt_not_local_to_account',
+    });
+    return { retry: false, reason: 'attempt_metadata_not_local' };
+  }
+
+  if (candidate.stripe_payment_intent_id) {
+    if (candidate.stripe_payment_intent_id === pi.id) {
+      // Carrera acotada: findConnectAttempt leyó antes del COMMIT que selló
+      // el mismo PI. No se muta desde metadata; la próxima pasada lo hallará
+      // exclusivamente por intent_id + account_id durables.
+      return { retry: true, reason: 'attempt_binding_race' };
+    }
+    logger.warn('connect_attempt_metadata_rejected', {
+      event_id: event.id, intent_id: pi.id, account: acctId,
+      attempt_id: candidate.id, reason: 'attempt_already_bound',
+    });
+    return { retry: false, reason: 'attempt_metadata_not_local' };
+  }
+
+  const recoverable = candidate.operation_type === 'mesa_pay'
+    && candidate.payment_type === 'card'
+    && !!candidate.stripe_contract_prepared_at
+    && ['pending', 'cancelling'].includes(candidate.status);
+  if (!recoverable) {
+    logger.warn('connect_attempt_metadata_rejected', {
+      event_id: event.id, intent_id: pi.id, account: acctId,
+      attempt_id: candidate.id, reason: 'attempt_not_recoverable',
+    });
+    return { retry: false, reason: 'attempt_metadata_not_local' };
+  }
+
   const { rows } = await pool.query(
     `SELECT retry_count FROM processed_webhook_events WHERE event_id = $1`, [event.id]
   );
   const intentos = Number(rows[0]?.retry_count || 0);
-  if (esNuestro && intentos < CONNECT_UNBOUND_RETRIES) {
-    await finishConnectSlot(event.id, false, 'attempt_no_encontrado_todavia');
-    logger.warn('connect_attempt_no_encontrado', {
-      event_id: event.id, intent_id: pi.id, account: acctId, intentos,
-    });
-    return { retry: true };
-  }
-  if (esNuestro) {
-    logger.error('connect_attempt_irrecuperable', {
-      event_id: event.id, intent_id: pi.id, account: acctId,
-      nota: 'metadata dice que es nuestro pero no se pudo atar al restaurante de la cuenta',
-    });
-  } else {
-    logger.info('connect_cobro_propio_del_restaurante', { intent_id: pi.id, account: acctId });
-  }
-  await finishConnectSlot(event.id, true, esNuestro ? 'unbound_giveup' : 'cobro_ajeno');
-  return { retry: false, reason: esNuestro ? 'unbound' : 'not_ours' };
+  logger.warn('connect_attempt_no_encontrado', {
+    event_id: event.id, intent_id: pi.id, account: acctId,
+    attempt_id: candidate.id, intentos,
+  });
+  return { retry: true, reason: 'attempt_binding_pending' };
 }
 
 /** Marca 'processing' un attempt del riel directo (equivalente a routeProcessing). */
@@ -879,31 +1253,47 @@ async function handleAttemptProcessing(attempt) {
 }
 
 async function acquireConnectSlot(event) {
-  const meta = { livemode: event.livemode, account: event.account || null };
+  const meta = webhookInboxMetadata(event);
   try {
-    await pool.query(
+    const { rows: [inserted] } = await pool.query(
       `INSERT INTO processed_webhook_events
          (event_id, provider, event_type, status, metadata)
-       VALUES ($1, 'stripe_connect', $2, 'processing', $3)`,
+       VALUES ($1, 'stripe_connect', $2, 'processing', $3)
+       RETURNING processing_lease_id::text AS lease_id`,
       [event.id, event.type, meta]
     );
-    return 'acquired';
+    return { state: 'acquired', leaseId: inserted.lease_id };
   } catch (err) {
     if (err.code !== '23505') throw err;
 
     const { rows } = await pool.query(
-      `SELECT status, retry_count FROM processed_webhook_events WHERE event_id = $1`,
+      `SELECT provider, event_type, status, retry_count, metadata
+         FROM processed_webhook_events WHERE event_id = $1`,
       [event.id]
     );
+    assertWebhookSlotBinding(rows[0], event, 'stripe_connect');
     const cur = rows[0]?.status;
     const retryCount = Number(rows[0]?.retry_count || 0);
 
-    if (cur === 'processed') return 'duplicate_processed';
-    if (cur === 'processing') return 'in_progress';
-    if (cur === 'failed_terminal') return 'failed_terminal';
+    if (cur === 'processed') return { state: 'duplicate_processed' };
+    if (cur === 'processing') return { state: 'in_progress' };
+    if (cur === 'failed_terminal') {
+      if (!eventRequiresDurableReplay(event)) return { state: 'failed_terminal' };
+      const { rows: [reacquired] } = await pool.query(
+        `UPDATE processed_webhook_events
+            SET status='processing', processing_started_at=NOW(), last_attempt_at=NOW(),
+                processing_lease_id=uuid_generate_v4()
+          WHERE event_id=$1 AND status='failed_terminal'
+        RETURNING processing_lease_id::text AS lease_id`,
+        [event.id]
+      );
+      return reacquired
+        ? { state: 'acquired', leaseId: reacquired.lease_id }
+        : { state: 'in_progress' };
+    }
 
     if (cur === 'failed_retryable') {
-      if (retryCount >= MAX_WEBHOOK_RETRIES) {
+      if (retryCount >= MAX_WEBHOOK_RETRIES && !eventRequiresDurableReplay(event)) {
         await pool.query(
           `UPDATE processed_webhook_events
               SET status='failed_terminal',
@@ -912,35 +1302,283 @@ async function acquireConnectSlot(event) {
             WHERE event_id = $1`,
           [event.id]
         );
-        return 'failed_terminal';
+        return { state: 'failed_terminal' };
       }
       // Re-adquisición ATÓMICA: si dos entregas compiten, solo una gana.
-      const { rowCount } = await pool.query(
+      const { rows: [reacquired] } = await pool.query(
         `UPDATE processed_webhook_events
-            SET status='processing', retry_count = retry_count + 1, last_attempt_at = NOW()
-          WHERE event_id = $1 AND status = 'failed_retryable'`,
+            SET status='processing', retry_count = retry_count + 1,
+                processing_started_at=NOW(), last_attempt_at=NOW(),
+                processing_lease_id=uuid_generate_v4()
+          WHERE event_id = $1 AND status = 'failed_retryable'
+        RETURNING processing_lease_id::text AS lease_id`,
         [event.id]
       );
-      return rowCount === 1 ? 'acquired' : 'in_progress';
+      return reacquired
+        ? { state: 'acquired', leaseId: reacquired.lease_id }
+        : { state: 'in_progress' };
     }
-    return 'duplicate_processed';
+    return { state: 'duplicate_processed' };
   }
 }
 
-// Nunca lanza: se llama desde el catch del handler, y si el fallo original fue
-// de la base, este UPDATE también fallaría y se llevaría puesto al catch.
-async function finishConnectSlot(eventId, ok, reason) {
-  try {
-    await pool.query(
-      `UPDATE processed_webhook_events
-          SET status = $2, processed_at = NOW(), last_attempt_at = NOW(),
-              failure_reason = $3
-        WHERE event_id = $1`,
-      [eventId, ok ? 'processed' : 'failed_retryable', reason ? String(reason).slice(0, 500) : null]
-    );
-  } catch (e) {
-    logger.error('connect_webhook_slot_update_failed', { event_id: eventId, error: e.message });
+async function finishConnectSlot(eventId, leaseId, ok, reason) {
+  const { rowCount } = await pool.query(
+    `UPDATE processed_webhook_events
+        SET status = $3::varchar,
+            processed_at = CASE WHEN $3::varchar='processed' THEN NOW() ELSE NULL END,
+            last_attempt_at = NOW(),
+            failure_reason = $4,
+            metadata = CASE WHEN $3::varchar='processed'
+              THEN metadata - 'event_snapshot' ELSE metadata END
+      WHERE event_id = $1 AND processing_lease_id=$2::uuid AND status='processing'`,
+    [eventId, leaseId, ok ? 'processed' : 'failed_retryable',
+      reason ? String(reason).slice(0, 500) : null]
+  );
+  if (rowCount !== 1) {
+    const err = new Error('connect_webhook_processing_lease_lost');
+    err.code = 'connect_webhook_processing_lease_lost';
+    throw err;
   }
+}
+
+async function processConnectRefundEvent(event, restaurant) {
+  const acctId = event.account || null;
+  if (!acctId || !restaurant?.id || !event.data?.object) {
+    throw new Error('connect_refund_identity_missing');
+  }
+  if (event.type === 'charge.refunded') {
+    const result = await connectRefundProcessor.processChargeRefundWakeup({
+      charge: event.data.object,
+      eventId: event.id,
+      stripeAccountId: acctId,
+      triggeredBy: 'webhook',
+    });
+    const handled = result.refunds.filter((entry) => !entry.ignored);
+    return handled.length === 0
+      ? { ignored: 'refund_not_ours', refund: result }
+      : { refund: result };
+  }
+  const refund = await connectRefundProcessor.processCanonicalRefundEvent({
+    refund: event.data.object,
+    eventId: event.id,
+    eventType: event.type,
+    stripeAccountId: acctId,
+    triggeredBy: 'webhook',
+  });
+  return refund.ignored ? { ignored: refund.ignored, refund } : { refund };
+}
+
+async function replayConnectInboxEvent(event, restaurant) {
+  const acctId = event.account;
+  const piGar = event.type.startsWith('payment_intent.') ? event.data?.object : null;
+  if (piGar?.metadata?.kind === 'guarantee_auth') {
+    const guarantee = await handleGuaranteeIntentEvent(
+      event.type, piGar, acctId, restaurant.id
+    );
+    return { handled: true, guarantee, ignored: guarantee.ignored || null };
+  }
+
+  if ([
+    'payment_intent.succeeded',
+    'payment_intent.payment_failed',
+    'payment_intent.canceled',
+    'payment_intent.processing',
+  ].includes(event.type)) {
+    const pi = event.data.object;
+    const expectedStatus = {
+      'payment_intent.succeeded': 'succeeded',
+      'payment_intent.payment_failed': 'requires_payment_method',
+      'payment_intent.canceled': 'canceled',
+      'payment_intent.processing': 'processing',
+    }[event.type];
+    const attempt = await findConnectAttempt(pi, acctId);
+    if (!attempt) {
+      const unbound = await ackOrRetryUnbound(event, pi, acctId);
+      if (unbound.retry) {
+        const err = new Error('connect_attempt_no_encontrado_todavia');
+        err.code = unbound.reason || 'connect_attempt_no_encontrado_todavia';
+        throw err;
+      }
+      return { handled: true, ignored: unbound.reason };
+    }
+    assertAttemptIntentContract(attempt, pi, acctId, expectedStatus);
+    const handler = {
+      'payment_intent.succeeded': (a) => handleMesaPaymentSucceeded(a, pi, acctId),
+      'payment_intent.payment_failed': (a) => handleMesaPaymentFailed(a, pi),
+      'payment_intent.canceled': handleMesaPaymentCancelled,
+      'payment_intent.processing': (a) => handleAttemptProcessing(a),
+    }[event.type];
+    await handler(attempt);
+    return { handled: true, attemptId: attempt.id };
+  }
+
+  if (['charge.refunded', 'refund.created', 'refund.updated', 'refund.failed']
+    .includes(event.type)) {
+    const result = await processConnectRefundEvent(event, restaurant);
+    if (result.refund?.partial) {
+      logger.error('connect_partial_refund_manual_review', {
+        event_id: event.id, attempt_id: result.attemptId,
+        obligation_id: result.refund.obligationId,
+        reason: 'partial_refund_principal_tip_policy_pending',
+      });
+    }
+    return { handled: true, ...result };
+  }
+
+  return { handled: true, ignored: 'event_type' };
+}
+
+async function sweepRetryableConnectRefundInbox({ limit = 25 } = {}) {
+  const safeLimit = Number.isSafeInteger(limit) && limit > 0 && limit <= 100 ? limit : 25;
+  const { rows } = await pool.tx(async (client) => {
+    const { rows: candidates } = await client.query(
+      `SELECT event_id
+         FROM processed_webhook_events
+        WHERE provider='stripe_connect' AND event_type=ANY($2::varchar[])
+          AND status='failed_retryable' AND metadata ? 'event_snapshot'
+        ORDER BY last_attempt_at ASC, event_id ASC
+        LIMIT $1 FOR UPDATE SKIP LOCKED`,
+      [safeLimit, [...CONNECT_REPLAY_REQUIRED_EVENT_TYPES]]
+    );
+    if (candidates.length === 0) return { rows: [] };
+    const ids = candidates.map((row) => row.event_id);
+    return client.query(
+      `UPDATE processed_webhook_events
+          SET status='processing', retry_count=retry_count+1,
+              processing_started_at=NOW(), last_attempt_at=NOW(),
+              processing_lease_id=uuid_generate_v4()
+        WHERE event_id=ANY($1::varchar[]) AND status='failed_retryable'
+      RETURNING event_id, metadata, processing_lease_id::text AS lease_id`,
+      [ids]
+    );
+  });
+  const outcomes = [];
+  for (const row of rows) {
+    let eventLock = null;
+    try {
+      const event = row.metadata?.event_snapshot;
+      if (!event || event.id !== row.event_id
+          || !CONNECT_REPLAY_REQUIRED_EVENT_TYPES.has(event.type)
+          || typeof event.account !== 'string' || !event.data?.object
+          || !stripeEventModeMatches(event)) {
+        throw new Error('connect_webhook_inbox_snapshot_invalid');
+      }
+      eventLock = await holdWebhookEventLock(event.id);
+      if (!eventLock) throw new Error('connect_webhook_worker_in_progress');
+      const restaurant = await connectService.findRestaurantByAccount(event.account);
+      if (!restaurant) throw new Error('connect_webhook_inbox_account_unbound');
+      const result = await replayConnectInboxEvent(event, restaurant);
+      await finishConnectSlot(row.event_id, row.lease_id, true, result.ignored || null);
+      outcomes.push({ eventId: row.event_id, processed: !result.ignored, ...result });
+    } catch (err) {
+      try {
+        await finishConnectSlot(row.event_id, row.lease_id, false, err.code || err.message);
+      } catch (finishErr) {
+        logger.error('connect_webhook_inbox_finish_failed', {
+          event_id: row.event_id, error: finishErr.message,
+        });
+      }
+      logger.error('connect_webhook_inbox_retry_failed', {
+        event_id: row.event_id, error: err.message, code: err.code || null,
+      });
+      outcomes.push({ eventId: row.event_id, error: err.code || err.message });
+    } finally {
+      if (eventLock) await eventLock.release();
+    }
+  }
+  return outcomes;
+}
+
+async function sweepRetryablePlatformWebhookInbox({ limit = 25 } = {}) {
+  const safeLimit = Number.isSafeInteger(limit) && limit > 0 && limit <= 100 ? limit : 25;
+  const { rows } = await pool.tx(async (client) => {
+    const { rows: candidates } = await client.query(
+      `SELECT event_id
+         FROM processed_webhook_events
+        WHERE provider='stripe'
+          AND status IN ('failed_retryable','retryable_no_local_record')
+          AND metadata ? 'event_snapshot'
+          AND event_type=ANY($2::varchar[])
+        ORDER BY last_attempt_at ASC, event_id ASC
+        LIMIT $1 FOR UPDATE SKIP LOCKED`,
+      [safeLimit, [...REPLAY_REQUIRED_EVENT_TYPES]]
+    );
+    if (candidates.length === 0) return { rows: [] };
+    return client.query(
+      `UPDATE processed_webhook_events
+          SET status='processing', retry_count=retry_count+1,
+              processing_started_at=NOW(), last_attempt_at=NOW(),
+              processing_lease_id=uuid_generate_v4()
+        WHERE event_id=ANY($1::varchar[])
+          AND status IN ('failed_retryable','retryable_no_local_record')
+      RETURNING event_id, metadata, processing_lease_id::text AS lease_id`,
+      [candidates.map((row) => row.event_id)]
+    );
+  });
+
+  const outcomes = [];
+  for (const row of rows) {
+    let eventLock = null;
+    try {
+      const event = row.metadata?.event_snapshot;
+      if (!event || event.id !== row.event_id
+          || !REPLAY_REQUIRED_EVENT_TYPES.has(event.type)
+          || event.account !== null || !event.data?.object
+          || !stripeEventModeMatches(event)) {
+        throw new Error('platform_webhook_inbox_snapshot_invalid');
+      }
+      eventLock = await holdWebhookEventLock(event.id);
+      if (!eventLock) throw new Error('platform_webhook_worker_in_progress');
+      const result = await dispatchPlatformEvent(event);
+      if (result.foundLocal === false) {
+        const finished = await pool.query(
+          `UPDATE processed_webhook_events
+              SET status='retryable_no_local_record',
+                  failure_reason='no_local_record', last_attempt_at=NOW()
+            WHERE event_id=$1 AND processing_lease_id=$2::uuid
+              AND status='processing'`,
+          [event.id, row.lease_id]
+        );
+        assertPlatformLeaseFinish(finished.rowCount);
+        outcomes.push({ eventId: event.id, processed: false, noLocalRecord: true });
+      } else {
+        const finished = await pool.query(
+          `UPDATE processed_webhook_events
+              SET status='processed', processed_at=NOW(), failure_reason=NULL,
+                  last_attempt_at=NOW(), metadata=metadata - 'event_snapshot'
+            WHERE event_id=$1 AND processing_lease_id=$2::uuid
+              AND status='processing'`,
+          [event.id, row.lease_id]
+        );
+        assertPlatformLeaseFinish(finished.rowCount);
+        outcomes.push({ eventId: event.id, processed: true, ...result });
+      }
+    } catch (err) {
+      try {
+        const finished = await pool.query(
+          `UPDATE processed_webhook_events
+              SET status='failed_retryable', failure_reason=$3,
+                  last_attempt_at=NOW()
+            WHERE event_id=$1 AND processing_lease_id=$2::uuid
+              AND status='processing'`,
+          [row.event_id, row.lease_id, String(err.code || err.message).slice(0, 500)]
+        );
+        assertPlatformLeaseFinish(finished.rowCount);
+      } catch (finishErr) {
+        logger.error('platform_webhook_inbox_finish_failed', {
+          event_id: row.event_id, error: finishErr.message,
+        });
+      }
+      logger.error('platform_webhook_inbox_retry_failed', {
+        event_id: row.event_id, error: err.message, code: err.code || null,
+      });
+      outcomes.push({ eventId: row.event_id, error: err.code || err.message });
+    } finally {
+      if (eventLock) await eventLock.release();
+    }
+  }
+  return outcomes;
 }
 
 router.post('/stripe/connect', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -960,6 +1598,11 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  if (!stripeEventModeMatches(event)) {
+    logger.error('connect_webhook_livemode_mismatch', { event_id: event.id, type: event.type, account: event.account || null, livemode: event.livemode });
+    return res.status(400).json({ received: false, error: 'webhook_livemode_mismatch' });
+  }
+
   const acctId = event.account || null;
   logger.info('connect_webhook_received', {
     event_id: event.id, type: event.type, account: acctId,
@@ -975,20 +1618,40 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
     return res.json({ received: true, ignored: 'no_account' });
   }
 
+  // N-01: mismo cierre que en /stripe. Este endpoint tenía el defecto idéntico.
+  const lockResult = await acquireWebhookEventLock(event.id);
+  if (lockResult.status === 'unavailable') {
+    logger.error('connect_webhook_lock_unavailable', {
+      event_id: event.id, type: event.type, account: acctId,
+      error: lockResult.error.message, code: lockResult.error.code || null,
+    });
+    return res.status(503).json({ received: false, error: 'webhook_lock_unavailable' });
+  }
+  if (lockResult.status === 'in_progress') {
+    logger.info('connect_webhook_worker_in_progress', {
+      event_id: event.id, type: event.type, account: acctId,
+    });
+    return res.status(503).json({ received: false, in_progress: true });
+  }
+  const eventLock = lockResult.lock;
+  releaseWebhookLockWithResponse(res, eventLock);
+
+  let connectLeaseId = null;
   try {
     const slot = await acquireConnectSlot(event);
-    if (slot === 'duplicate_processed') return res.json({ received: true, duplicate: true });
-    if (slot === 'in_progress') return res.status(503).json({ received: false, in_progress: true });
-    if (slot === 'failed_terminal') {
+    if (slot.state === 'duplicate_processed') return res.json({ received: true, duplicate: true });
+    if (slot.state === 'in_progress') return res.status(503).json({ received: false, in_progress: true });
+    if (slot.state === 'failed_terminal') {
       logger.error('connect_webhook_failed_terminal', { event_id: event.id, type: event.type });
       return res.json({ received: true, terminal: true });
     }
+    connectLeaseId = slot.leaseId;
 
     const restaurant = await connectService.findRestaurantByAccount(acctId);
     if (!restaurant) {
       // Cuenta que no conocemos (huérfana de una carrera, o de otro entorno).
       logger.warn('connect_webhook_unknown_account', { event_id: event.id, account: acctId });
-      await finishConnectSlot(event.id, true, 'unknown_account');
+      await finishConnectSlot(event.id, connectLeaseId, true, 'unknown_account');
       return res.json({ received: true, ignored: 'unknown_account' });
     }
 
@@ -999,31 +1662,19 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
     // ESTE restaurante — relación que controla PayMe, no la cuenta conectada.
     const piGar = event.type.startsWith('payment_intent.') ? event.data?.object : null;
     if (restaurant && piGar?.metadata?.kind === 'guarantee_auth') {
-      const mesaId = piGar.metadata.mesa_id;
-      // No alcanza con que la mesa sea del restaurante: sin atar el PI, la
-      // cuenta conectada podría mandar un intent PROPIO apuntando a una mesa
-      // suya y hacer que la mesa se abra como "garantizada" sin hold real.
-      // Se acepta sólo si es el hold que ya conocemos, o si la mesa sigue en
-      // pending_auth — la ventana legítima del 3DS.
-      const propia = mesaId && /^[0-9a-f-]{36}$/i.test(mesaId)
-        ? (await pool.query(
-            `SELECT 1 FROM mesas
-              WHERE id = $1 AND restaurant_id = $2
-                AND (auth_payment_intent_id = $3
-                     OR (auth_payment_intent_id IS NULL AND status = 'pending_auth'))`,
-            [mesaId, restaurant.id, piGar.id]
-          )).rowCount === 1
-        : false;
-      if (!propia) {
-        logger.warn('connect_guarantee_mesa_ajena', {
-          event_id: event.id, account: acctId, mesa_id: mesaId,
-        });
-        await finishConnectSlot(event.id, true, 'guarantee_mesa_ajena');
-        return res.json({ received: true, ignored: 'not_ours' });
-      }
-      await handleGuaranteeIntentEvent(event.type, piGar, acctId);
-      await finishConnectSlot(event.id, true, null);
-      return res.json({ received: true });
+      // Una cuenta Standard controla por completo sus PaymentIntents y metadata.
+      // El handler exige el PI/riel/monto/fee ya sellados localmente; jamás bindea
+      // o abre una mesa a partir del payload del restaurante.
+      const guaranteeResult = await handleGuaranteeIntentEvent(
+        event.type, piGar, acctId, restaurant.id
+      );
+      await finishConnectSlot(
+        event.id, connectLeaseId, true, guaranteeResult.ignored || null
+      );
+      return res.json({
+        received: true,
+        ...(guaranteeResult.ignored && { ignored: guaranteeResult.ignored }),
+      });
     }
 
     switch (event.type) {
@@ -1068,25 +1719,38 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
       // metadata. Por eso este camino NO usa el ruteo de la plataforma:
       //   · JAMÁS toca topups (viven siempre en la cuenta de PayMe): sin este
       //     corte, un `metadata.topup_id` inventado acreditaría saldo gratis.
-      //   · Solo actúa sobre un attempt que podamos ATAR a ESTA cuenta: o su
-      //     fila ya la tiene registrada, o su mesa pertenece al restaurante
-      //     dueño de la cuenta. Un id ajeno en la metadata no alcanza.
-      // Lo que no se puede atar es un cobro propio del restaurante (venta suya,
-      // ajena a PayMe): se ACKea y se ignora — devolver 500 generaría una
-      // tormenta de reintentos y Stripe terminaría deshabilitando el endpoint.
+      //   · Solo actúa sobre un attempt cuyo intent_id y account_id PayMe ya
+      //     selló. Pertenecer al restaurante o copiar metadata NO alcanza.
+      // Un cobro sin metadata PayMe se ACKea como ajeno. Si declara attempt_id
+      // pero aún no existe binding durable, queda retryable para que la API o
+      // el worker recupere el PI con la idempotency key de PayMe.
       case 'payment_intent.succeeded':
       case 'payment_intent.payment_failed':
       case 'payment_intent.canceled':
       case 'payment_intent.processing': {
         const pi = event.data.object;
-        const attempt = await findConnectAttempt(pi, acctId, restaurant.id);
+        const expectedStatus = {
+          'payment_intent.succeeded': 'succeeded',
+          'payment_intent.payment_failed': 'requires_payment_method',
+          'payment_intent.canceled': 'canceled',
+          'payment_intent.processing': 'processing',
+        }[event.type];
+        const attempt = await findConnectAttempt(pi, acctId);
         if (!attempt) {
           const ajeno = await ackOrRetryUnbound(event, pi, acctId);
-          if (ajeno.retry) return res.status(500).json({ received: false, retry: true });
+          if (ajeno.retry) {
+            await finishConnectSlot(
+              event.id, connectLeaseId, false,
+              ajeno.reason || 'attempt_no_encontrado_todavia'
+            );
+            return res.status(500).json({ received: false, retry: true });
+          }
+          await finishConnectSlot(event.id, connectLeaseId, true, ajeno.reason);
           return res.json({ received: true, ignored: ajeno.reason });
         }
+        assertAttemptIntentContract(attempt, pi, acctId, expectedStatus);
         const handler = {
-          'payment_intent.succeeded': handleMesaPaymentSucceeded,
+          'payment_intent.succeeded': (a) => handleMesaPaymentSucceeded(a, pi, acctId),
           'payment_intent.payment_failed': (a) => handleMesaPaymentFailed(a, pi),
           'payment_intent.canceled': handleMesaPaymentCancelled,
           'payment_intent.processing': (a) => handleAttemptProcessing(a),
@@ -1094,48 +1758,51 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
         await handler(attempt);
         break;
       }
-      case 'charge.refunded': {
-        // Bajo direct charges el refund sale del balance DEL RESTAURANTE y la
-        // application_fee (comisión + propina) NO vuelve sola. Eso invierte el
-        // cálculo de D1, que el acta dejó explícitamente RE-ABIERTO y sin
-        // resolver. Hasta que haya acta nueva: se asienta el refund como
-        // siempre y se deja alerta con los números para revisión manual.
-        const ch = event.data.object;
-        const { rows: at } = await pool.query(
-          `SELECT id, application_fee_cents, items_amount_cents, tip_amount_cents
-             FROM payment_attempts
-            WHERE stripe_payment_intent_id = $1 AND stripe_account_id = $2`,
-          [ch.payment_intent, acctId]
-        );
-        if (!at[0]) {
-          logger.warn('connect_refund_sin_attempt_propio', {
-            event_id: event.id, account: acctId, intent_id: ch.payment_intent,
-          });
-          await finishConnectSlot(event.id, true, 'refund_ajeno');
-          return res.json({ received: true, ignored: 'refund_not_ours' });
+      case 'charge.refunded':
+      case 'refund.created':
+      case 'refund.updated':
+      case 'refund.failed': {
+        const result = await processConnectRefundEvent(event, restaurant);
+        if (result.ignored) {
+          await finishConnectSlot(event.id, connectLeaseId, true, result.ignored);
+          return res.json({ received: true, ignored: result.ignored });
         }
-        logger.error('connect_refund_manual_review', {
-          attempt_id: at[0].id, account: acctId,
-          application_fee_cents: Number(at[0].application_fee_cents),
-          tip_cents: Number(at[0].tip_amount_cents),
-          nota: 'D1 re-abierta por el pivote: el refund lo absorbe el restaurante y la comisión+propina no vuelve sola',
-        });
-        await handleChargeRefunded(ch, event);
+        if (result.refund?.partial) {
+          logger.error('connect_partial_refund_manual_review', {
+            event_id: event.id, attempt_id: result.attemptId,
+            obligation_id: result.refund.obligationId,
+            reason: 'partial_refund_principal_tip_policy_pending',
+          });
+        }
         break;
       }
       default:
         logger.debug('connect_webhook_unhandled', { type: event.type, account: acctId });
     }
 
-    await finishConnectSlot(event.id, true, null);
+    await finishConnectSlot(event.id, connectLeaseId, true, null);
     return res.json({ received: true });
   } catch (err) {
     logger.error('connect_webhook_failed', {
       event_id: event.id, type: event.type, account: acctId, error: err.message,
     });
-    await finishConnectSlot(event.id, false, err.message);
-    return res.status(500).json({ received: false });
+    if (connectLeaseId) {
+      try {
+        await finishConnectSlot(event.id, connectLeaseId, false, err.message);
+      } catch (finishErr) {
+        logger.error('connect_webhook_slot_update_failed', {
+          event_id: event.id, error: finishErr.message,
+        });
+      }
+    }
+    const status = err.code === 'webhook_event_binding_conflict' ? 400 : 500;
+    return res.status(status).json({
+      received: false,
+      ...(status === 400 && { error: err.code }),
+    });
   }
 });
 
+router.sweepRetryableConnectRefundInbox = sweepRetryableConnectRefundInbox;
+router.sweepRetryablePlatformWebhookInbox = sweepRetryablePlatformWebhookInbox;
 module.exports = router;

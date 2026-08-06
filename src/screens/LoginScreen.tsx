@@ -24,9 +24,16 @@ function errorMessage(err: unknown): string {
   return 'No pudimos conectar. Probá de nuevo.';
 }
 
-export function LoginScreen() {
+/**
+ * `initialMode` existe para la entrada por link (SPEC_APP.md §1.2-A): esa
+ * pantalla ofrece **dos** acciones —"Crear cuenta gratis" y "Ya tengo cuenta ·
+ * Entrar"— y cada una tiene que abrir el formulario ya en su modo. Sin esto,
+ * quien viene a registrarse aterriza en el login y tiene que buscar el toggle.
+ * El alta en sí NO se rediseña acá: sigue siendo este formulario tal cual.
+ */
+export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' | 'register' } = {}) {
   const { login, register } = useAuth();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -54,10 +61,10 @@ export function LoginScreen() {
   return (
     <div className="login-screen">
       <div style={{ textAlign: 'center', marginBottom: 22 }}>
-        <div className="logo" style={{ fontSize: 'var(--fs-3xl)' }}>
+        <div className="logo" style={{ fontSize: 'var(--fs-legacy-3xl)' }}>
           Pay<span className="t">Me</span>
         </div>
-        <div className="hero-sub" style={{ fontSize: 'var(--fs-base)' }}>
+        <div className="hero-sub" style={{ fontSize: 'var(--fs-legacy-base)' }}>
           Dividí y pagá la cuenta desde la mesa
         </div>
       </div>

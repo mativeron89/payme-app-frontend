@@ -43,6 +43,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Pages no publica un artefacto cuyo comportamiento no pasó la suite.
+      - run: npm test
+      - run: npm run typecheck
 
       # 1) Build MOCK primero (a dist/ raíz).
       - run: npm run build -- --base=/payme-app-frontend/

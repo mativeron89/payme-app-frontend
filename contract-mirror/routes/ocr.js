@@ -55,6 +55,32 @@ const upload = multer({
   },
 });
 
+const uploadImage = upload.single('image');
+
+// Multer/Busboy corre antes del handler async. Por eso estos errores no llegan
+// al try/catch de la ruta y deben traducirse en el callback del middleware.
+// Además de mantener un contrato 4xx honesto, este wrapper permite comprobar
+// que un multipart truncado no tumba ni envenena el proceso tras migrar a
+// Multer >= 2.1.1 (GHSA-5528-5vmv-3xc2).
+function parseImageUpload(req, res, next) {
+  uploadImage(req, res, (err) => {
+    if (!err) return next();
+    if (err.message === 'invalid_image_type') {
+      return res.status(400).json({ error: 'invalid_image_type' });
+    }
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'image_too_large' });
+      }
+      return res.status(400).json({ error: 'invalid_multipart' });
+    }
+    if (err.message === 'Unexpected end of form') {
+      return res.status(400).json({ error: 'invalid_multipart' });
+    }
+    return next(err);
+  });
+}
+
 const ocrLimiter = rateLimit({
   windowMs: 60_000,
   max: Number(process.env.RATE_LIMIT_OCR_MAX) || 10,
@@ -118,7 +144,7 @@ function magicMatchesMime(magic, mimetype) {
 router.use(requireAuth);
 router.use(ocrLimiter);
 
-router.post('/', upload.single('image'), async (req, res, next) => {
+router.post('/', parseImageUpload, async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'no_image' });
 

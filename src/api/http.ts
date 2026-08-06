@@ -1,4 +1,4 @@
-import { clearSession, loadSession, saveSession, type StoredSession } from './storage';
+import { createSession, invalidateSession, isCurrentSession, loadSession, persistSessionTombstone, replaceCurrentSession, saveSession, type StoredSession } from './storage';
 import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenPair } from './types';
 
 /**
@@ -12,8 +12,10 @@ import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenP
  */
 
 const BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const SESSION_LOCK = 'payme-session-state';
 
 let onSessionExpiredCb: (() => void) | null = null;
+const refreshInFlight = new Map<string, Promise<StoredSession | null>>();
 
 export function setOnSessionExpired(cb: (() => void) | null): void {
   onSessionExpiredCb = cb;
@@ -28,6 +30,12 @@ export class HttpError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+async function withSessionLock<T>(action: () => Promise<T> | T): Promise<T | null> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) return null;
+  return locks.request(SESSION_LOCK, { mode: 'exclusive' }, action);
 }
 
 async function parseBody(res: Response): Promise<ApiError | null> {
@@ -46,51 +54,76 @@ async function parseBody(res: Response): Promise<ApiError | null> {
  * se conserva, así que el reintento cae en el replay del backend).
  */
 const REQUEST_TIMEOUT_MS = 30_000;
+export const OCR_TIMEOUT_MS = 60_000;
 
 async function rawRequest<T>(
   method: string,
   path: string,
   body?: unknown,
   token?: string,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (body !== undefined && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-  let res: Response;
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    res = await fetch(`${BASE_URL}/api${path}`, {
+    const res = await fetch(`${BASE_URL}/api${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
       signal: ctrl.signal,
     });
+    // El body puede colgar después de recibir headers: conservar el timer
+    // hasta json() evita dejar un journal monetario en sending eterno.
+    if (!res.ok) throw new HttpError(res.status, await parseBody(res));
+    return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) throw new HttpError(res.status, await parseBody(res));
-  return (await res.json()) as T;
 }
 
 /** Refresh con rotación: guarda el par nuevo de tokens antes de devolver. */
 async function tryRefresh(session: StoredSession): Promise<StoredSession | null> {
-  try {
-    // El refresh devuelve SOLO tokens (sin `user` — decisión G-02 v2.20).
-    const r = await rawRequest<TokenPair>('POST', '/auth/refresh', {
-      refresh_token: session.refresh_token,
-    });
-    const updated: StoredSession = {
-      access_token: r.access_token,
-      refresh_token: r.refresh_token,
-      user: session.user,
-    };
-    saveSession(updated);
-    return updated;
-  } catch {
-    return null;
+  if (!isCurrentSession(session)) {
+    const current = loadSession();
+    // R1 pudo rotar antes de que R2 procese su 401: reutilizar SOLO la misma
+    // familia/principal evita un refresh viejo y permite un único retry.
+    return current && current.family_id === session.family_id && current.principal_id === session.principal_id
+      ? current
+      : null;
   }
+  const existing = refreshInFlight.get(session.family_id);
+  if (existing) return existing;
+  const run = async () => {
+    if (!isCurrentSession(session)) return null;
+    return withSessionLock(async () => {
+      const current = loadSession();
+      if (!current || current.family_id !== session.family_id || current.principal_id !== session.principal_id) return null;
+      if (current.refresh_token !== session.refresh_token) return current;
+      try {
+        // El refresh devuelve SOLO tokens (sin `user` — decisión G-02 v2.20).
+        const r = await rawRequest<TokenPair>('POST', '/auth/refresh', {
+          refresh_token: session.refresh_token,
+        });
+        const updated: StoredSession = {
+          access_token: r.access_token,
+          refresh_token: r.refresh_token,
+          user: session.user,
+          family_id: session.family_id,
+          principal_id: session.principal_id,
+        };
+        return replaceCurrentSession(session, updated) ? updated : null;
+      } catch {
+        return null;
+      }
+    });
+  };
+  const pending = run().finally(() => refreshInFlight.delete(session.family_id));
+  refreshInFlight.set(session.family_id, pending);
+  return pending;
 }
 
 /** Request PÚBLICA (sin sesión): hoy solo restaurantes (G-01, v2.21). */
@@ -99,17 +132,33 @@ export async function httpPublicRequest<T>(method: string, path: string): Promis
 }
 
 /** Request autenticada con retry-tras-refresh (una sola vez). */
-export async function httpRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const session = loadSession();
-  if (!session) throw new HttpError(401, { error: 'auth_required' });
+export async function httpRequest<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  expectedSession?: StoredSession,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  const session = expectedSession ?? loadSession();
+  if (!session || !isCurrentSession(session)) throw new HttpError(401, { error: 'auth_required' });
   try {
-    return await rawRequest<T>(method, path, body, session.access_token);
+    return await rawRequest<T>(method, path, body, session.access_token, timeoutMs);
   } catch (err) {
     if (err instanceof HttpError && err.status === 401) {
       const refreshed = await tryRefresh(session);
-      if (refreshed) return rawRequest<T>(method, path, body, refreshed.access_token);
-      clearSession();
-      onSessionExpiredCb?.();
+      if (refreshed && refreshed.family_id === session.family_id && refreshed.principal_id === session.principal_id && isCurrentSession(refreshed)) {
+        return rawRequest<T>(method, path, body, refreshed.access_token, timeoutMs);
+      }
+      // El tombstone se escribe antes de esperar el lock. Así un refresh de
+      // otra pestaña que ya está en red no puede restaurar esta familia.
+      let invalidatedCurrent = false;
+      try {
+        persistSessionTombstone(session);
+        invalidatedCurrent = (await withSessionLock(() => invalidateSession(session))) ?? false;
+      } catch {
+        // persistSessionTombstone conserva un marcador fail-closed en memoria.
+      }
+      if (invalidatedCurrent) onSessionExpiredCb?.();
     }
     throw err;
   }
@@ -131,51 +180,58 @@ export async function httpGuestRequest<T>(
   // la pantalla muerta y empuja al reintento a ciegas — el mismo agujero.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-  let res: Response;
   try {
-    res = await fetch(`${BASE_URL}/api${path}`, {
+    const res = await fetch(`${BASE_URL}/api${path}`, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: ctrl.signal,
     });
+    if (!res.ok) throw new HttpError(res.status, await parseBody(res));
+    return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) throw new HttpError(res.status, await parseBody(res));
-  return (await res.json()) as T;
 }
 
 export async function httpLogin(email: string, password: string): Promise<StoredSession> {
   const r = await rawRequest<LoginResponse>('POST', '/auth/login', { email, password });
-  const session: StoredSession = {
+  const session = createSession({
     access_token: r.access_token,
     refresh_token: r.refresh_token,
     user: r.user,
-  };
-  saveSession(session);
+  });
+  // La UI y httpRequest leen la misma fuente. No se publica una sesión que
+  // localStorage no pudo confirmar con round-trip.
+  const saved = await withSessionLock(() => saveSession(session));
+  // En un navegador sin Web Locks no existe refresh concurrente (tryRefresh
+  // falla cerrado) y logout deja el tombstone sin borrar a ciegas. Persistir
+  // el login explícito sigue siendo seguro y evita bloquear navegadores viejos.
+  if (saved === null) saveSession(session);
   return session;
 }
 
 export async function httpRegister(data: RegisterRequest): Promise<StoredSession> {
   const r = await rawRequest<RegisterResponse>('POST', '/auth/register', data);
-  const session: StoredSession = {
+  const session = createSession({
     access_token: r.access_token,
     refresh_token: r.refresh_token,
     user: r.user,
-  };
-  saveSession(session);
+  });
+  const saved = await withSessionLock(() => saveSession(session));
+  if (saved === null) saveSession(session);
   return session;
 }
 
 export async function httpLogout(): Promise<void> {
   const session = loadSession();
-  if (session) {
-    try {
-      await rawRequest('POST', '/auth/logout', undefined, session.access_token);
-    } catch {
-      // logout best-effort: la sesión local se limpia igual
-    }
-  }
-  clearSession();
+  // Cerrar la UI no espera la red: un logout colgado no puede dejar a la
+  // persona firmando operaciones 30s más. El bearer capturado se revoca en
+  // background y nunca se lee una sesión nueva para esa llamada.
+  if (!session) return;
+  void rawRequest('POST', '/auth/logout', undefined, session.access_token, 3_000).catch(() => undefined);
+  // Invalidación durable inmediata; la limpieza física se serializa con el
+  // mismo lock que refresh/login. Si apareció otra familia, no se borra.
+  persistSessionTombstone(session);
+  await withSessionLock(() => invalidateSession(session));
 }

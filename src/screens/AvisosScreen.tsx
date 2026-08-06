@@ -1,17 +1,64 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { AppNotification, PendingInvitation } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
+import { AppBottomBar } from '../components/AppBottomBar';
+import { AppHeader } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
-import { TopBar, useToast } from '../components/ui';
+import { useToast } from '../components/ui';
 import { navigate } from '../router';
+import { relTime } from '../utils/format';
 
 /**
  * Avisos: invitaciones in-app pendientes (GET /invitations + accept) arriba,
  * y el inbox de notificaciones (GET /notifications) abajo.
+ *
+ * SPEC_APP.md §1.8, aplicado. Lo que cambia respecto de lo construido y por qué:
+ *
+ *  - **Cabecera de PRIMER NIVEL, y eso NO es cosmética: es navegación.** Se
+ *    llega por la campana, no por la barra, así que la pantalla deja de tener
+ *    flecha de volver. Logo + `payme_id` + campana en `--brand` sin badge —
+ *    naranja porque ya estás adentro; el badge cuenta lo que no viste, y acá lo
+ *    estás viendo. La salida es cualquiera de los cinco ítems de la barra, que
+ *    §1.8 nombra explícitamente como la forma de salir. El botón Atrás del
+ *    navegador sigue funcionando igual: el router es de hash y no se tocó.
+ *  - **"Marcar leídos" baja del encabezado**: es una acción sobre la lista, no
+ *    parte de la identidad de la pantalla.
+ *  - **Sin tarjeta de título**, textual del spec: se probó una que decía
+ *    "Avisos" y se sacó.
+ *  - **La tarjeta de invitación deja de ser `card` blanca**: fondo `--teal-l` y
+ *    borde `--action-2`, que es lo que la separa del resto de la lista. El
+ *    texto va en **dos líneas** —"{Nombre} te invitó a" / "{Restaurante}"— y
+ *    nunca en una sola línea larga, que era lo que se partía feo con nombres
+ *    reales.
+ *  - **El botón dice "Sumarme"**, el mismo verbo que "Sumate a la mesa" de la
+ *    entrada por link (§1.2). Sigue en `--action` navy: el naranja se evaluó
+ *    como quinta excepción y se rechazó, porque esta pantalla muestra la barra
+ *    con su propio círculo naranja.
+ *  - **No leído = punto `--action` navy de 8px a la izquierda Y peso 700.** Dos
+ *    señales, no una. El punto era `--action-2` teal; el spec dice navy.
+ *  - **El leído ya no se atenúa con `opacity` sobre la fila entera.** Bajar la
+ *    opacidad del contenedor arrastra el texto por debajo del mínimo de
+ *    contraste. La diferencia la marcan el peso y el punto.
+ *  - **Vacío real sin borde**, con la copy del spec.
+ *  - Barra de cinco posiciones **sin ítem activo**: ninguna de las cinco
+ *    representa "estoy en Avisos".
+ *
+ * **El ícono de la invitación NO puede ser el de la categoría del restaurante,
+ * que es lo que pide el spec: G-31.** `GET /invitations` proyecta
+ * `r.name AS restaurant_name` y nada más — no manda `category` ni el id del
+ * restaurante con el que pedirla, y `GET /mesas/:code` exige ser participante,
+ * que es justo lo que todavía no sos. Se usa `store` —un local—, que es
+ * genérico y no afirma ninguna cocina. Antes había un `sushi` hardcodeado: eso
+ * no era un ícono genérico, era decir que el restaurante es japonés sin saberlo.
  */
 
 const NOTIF_ICON: Record<string, IconName> = {
   invitation_received: 'dining',
+  // OLA 3C: aviso nuevo del backend v2.29 (la plantilla existía y ninguna ruta
+  // la usaba). Sin ícono propio caía en la campana genérica.
+  friend_request_received: 'users',
+  friend_added: 'users',
   transfer_received: 'arrow-down-left',
   transfer_sent: 'arrow-up-right',
   topup_succeeded: 'check-circle',
@@ -21,18 +68,9 @@ const NOTIF_ICON: Record<string, IconName> = {
   payment_failed: 'x-circle',
 };
 
-function relTime(iso: string): string {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (mins < 1) return 'recién';
-  if (mins < 60) return `hace ${mins} min`;
-  const hs = Math.floor(mins / 60);
-  if (hs < 24) return `hace ${hs} h`;
-  const days = Math.floor(hs / 24);
-  return days === 1 ? 'ayer' : `hace ${days} días`;
-}
-
 export function AvisosScreen() {
   const toast = useToast();
+  const { session } = useAuth();
   const [notifs, setNotifs] = useState<AppNotification[] | null>(null);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -69,79 +107,94 @@ export function AvisosScreen() {
   const hasUnread = notifs?.some((n) => !n.read_at) ?? false;
 
   return (
-    <div className="screen">
-      <TopBar
-        title="Avisos"
-        onBack={() => navigate('home')}
-        right={
-          hasUnread ? (
-            <button className="login-toggle" style={{ padding: 4 }} onClick={markAll}>
-              Marcar leídos
-            </button>
-          ) : undefined
-        }
-      />
-      <div className="scroll" style={{ padding: '14px 16px' }}>
+    <div className="screen has-appbar">
+      <AppHeader paymeId={session?.user?.payme_id} bellHere />
+      {/* Fuera del encabezado: es una acción sobre la lista, no identidad de la
+          pantalla. Ocupa su propia fila para no empujar nada de la banda. */}
+      <div className="avisos-actions">
+        {hasUnread && (
+          <button type="button" className="linkbtn" onClick={markAll}>
+            Marcar leídos
+          </button>
+        )}
+      </div>
+      <div className="scroll flow-scroll">
         {invitations.length > 0 && (
           <>
-            <div className="sectlabel">Te invitaron</div>
+            <h2 className="sectlabel">Te invitaron</h2>
             {invitations.map((inv) => (
-              <div key={inv.id} className="card card-p" style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <Icon name="sushi" size={26} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 'var(--fs-base)', fontWeight: 700 }}>
-                      {inv.inviter_first_name} te invitó a {inv.restaurant_name}
-                    </div>
-                    <div className="caption">
+              <div key={inv.id} className="inv-card">
+                <div className="inv-head">
+                  {/* G-31: genérico a propósito. El contrato no manda la
+                      categoría del restaurante, y el `sushi` que había acá
+                      afirmaba una cocina que nadie nos dijo. `store` —un local—
+                      y no `dining`: a 26px los dos círculos concéntricos de
+                      `dining` se leen como una diana, no como un plato. El
+                      ícono de la fila de notificación sigue siendo `dining`
+                      porque ahí habla del EVENTO; acá habla del restaurante. */}
+                  <Icon name="store" size={26} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* DOS líneas, nunca una sola larga: con nombres reales,
+                        "Sofía te invitó a Hanzo Sushi" se parte donde cae. */}
+                    <div className="inv-l1">{inv.inviter_first_name} te invitó a</div>
+                    <div className="inv-l2">{inv.restaurant_name}</div>
+                    <div className="inv-meta">
                       Mesa {inv.mesa_code} · {relTime(inv.created_at)}
                     </div>
                   </div>
                 </div>
-                <button
-                  className="btn btn-primary"
-                  style={{ padding: 12, fontSize: 'var(--fs-base)' }}
-                  onClick={() => accept(inv)}
-                  disabled={busyId === inv.id}
-                >
-                  {busyId === inv.id ? 'Sumándote…' : 'Aceptar y ver la mesa →'}
-                </button>
+                {/* Navy y no naranja: el naranja se evaluó como quinta excepción
+                    de la lista cerrada y se RECHAZÓ, porque esta pantalla
+                    muestra la barra con su círculo naranja y serían dos
+                    naranjas compitiendo. Navy da 16.36:1.
+                    A la derecha y del ancho de su texto, como el esquema del
+                    spec: a ancho completo pesaba más que el nombre del
+                    restaurante, que es el dato que la persona vino a leer. */}
+                <div className="inv-cta">
+                  <button
+                    className="btn btn-navy btn-fit"
+                    onClick={() => accept(inv)}
+                    disabled={busyId === inv.id}
+                  >
+                    {busyId === inv.id ? 'Sumándote…' : 'Sumarme'}
+                  </button>
+                </div>
               </div>
             ))}
           </>
         )}
 
-        <div className="sectlabel">Notificaciones</div>
+        <h2 className="sectlabel">Notificaciones</h2>
         {notifs === null && <div className="loading">Cargando avisos…</div>}
         {notifs?.length === 0 && invitations.length === 0 && (
-          <div className="empty">
+          <div className="empty aviso-empty">
             <div className="emoji"><Icon name="bell" size={40} /></div>
-            Nada nuevo por acá.
+            No tenés avisos.
           </div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {notifs?.map((n) => (
-            <div
-              key={n.id}
-              className="card card-p"
-              style={{ display: 'flex', gap: 12, alignItems: 'flex-start', opacity: n.read_at ? 0.65 : 1 }}
-            >
-              <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 'var(--fs-base)', fontWeight: n.read_at ? 500 : 700, fontFamily: 'var(--font-body)', color: 'var(--navy)' }}>
-                  {n.body}
-                </div>
-                <div className="caption" style={{ marginTop: 2 }}>
-                  {relTime(n.created_at)}
+          {notifs?.map((n) => {
+            const sinLeer = !n.read_at;
+            return (
+              <div key={n.id} className="card card-p aviso-row">
+                <span
+                  className={`aviso-dot ${sinLeer ? '' : 'off'}`}
+                  aria-hidden={sinLeer ? undefined : 'true'}
+                  aria-label={sinLeer ? 'Sin leer' : undefined}
+                  role={sinLeer ? 'img' : undefined}
+                />
+                <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className={`aviso-title ${sinLeer ? 'unread' : ''}`}>{n.body}</div>
+                  <div className="aviso-time">{relTime(n.created_at)}</div>
                 </div>
               </div>
-              {!n.read_at && (
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--orange)', marginTop: 6, flexShrink: 0 }} />
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
+      {/* Ningún ítem activo: ninguna de las cinco posiciones es "Avisos". */}
+      <AppBottomBar active={null} />
     </div>
   );
 }

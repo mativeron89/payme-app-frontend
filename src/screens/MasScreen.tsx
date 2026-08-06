@@ -1,0 +1,147 @@
+import { IS_MOCK } from '../api';
+import { resetDemo } from '../api/mock/store';
+import { useAuth } from '../auth/AuthContext';
+import { AppBottomBar } from '../components/AppBottomBar';
+import { Icon } from '../components/Icon';
+import { Avatar, TopBar } from '../components/ui';
+import { navigate } from '../router';
+import { useWalletRail } from '../api/walletRail';
+
+/**
+ * **`Más`** — la quinta posición de la barra. `s-perfil` del spec.
+ *
+ * §1.9, resuelto por Diseño el 2026-08-05: **`Más` ES Perfil, no la contiene.**
+ * Se evaluó que fuera un menú con una fila "Perfil" y se descartó — *un menú de
+ * una sola fila útil agrega fricción sin agregar nada* — y **"configuración" no
+ * entra**: cero spec, cero pantalla, cero contrato detrás. Una fila que no lleva
+ * a ningún lado es el tratamiento que el spec ya le negó al QR de Compartir y a
+ * Cuentas Asociadas.
+ *
+ * Identidad + email + **Mis tarjetas** + cerrar sesión. Nada de saldo, cargar,
+ * transferir ni CLABE.
+ */
+export function MasScreen() {
+  const { session, logout } = useAuth();
+  // OLA 5D · el rótulo de la fila lo decide el BACKEND, no este repo.
+  const { walletRailEnabled } = useWalletRail();
+  const user = session?.user;
+
+  return (
+    <div className="screen has-appbar">
+      <TopBar title="Más" />
+      {/* Longhands y no `padding: 16`: el shorthand inline PISA el
+          `padding-bottom: 140px` de `.has-appbar .scroll`, y la última fila
+          —"Cerrar sesión"— queda debajo de la barra. Está advertido en el CSS y
+          es exactamente el modo en que se cuela. */}
+      <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
+        <div style={{ textAlign: 'center', padding: '6px 0 18px' }}>
+          <Avatar name={user ? `${user.first_name} ${user.last_name}` : 'PayMe'} size={80} />
+          <div className="h2" style={{ marginTop: 10 }}>
+            {user ? `${user.first_name} ${user.last_name}` : 'Tu cuenta'}
+          </div>
+          {user && (
+            <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 'var(--fs-legacy-sm)', color: 'var(--gray-txt)' }}>
+              {user.payme_id}
+            </div>
+          )}
+        </div>
+        {!user && (
+          <div className="note note-orange" style={{ marginBottom: 12 }}>
+            Tus datos van a aparecer acá en cuanto termines de crear tu cuenta.
+          </div>
+        )}
+        <div className="card" style={{ marginBottom: 12 }}>
+          {user && (
+            <div className="list-row" style={{ cursor: 'default' }}>
+              <span><Icon name="mail" size={16} /></span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>Email</div>
+                <div className="caption">{user.email}</div>
+              </div>
+            </div>
+          )}
+          {/* §1.9 · paso 2 · va a `#/tarjetas`, la pantalla de PRIMER NIVEL que
+              §1.11 estrenó, y no a la Cuenta vieja que §1.9 retira.
+
+              Esta fila era el ÚNICO camino VIVO a `cuenta`. Los otros **DIEZ**
+              son código durmiente del riel saldo y **no se tocan**: están
+              preservados por ratificación, y reinterpretar navegación durmiente
+              no es tarea de un cambio de destino. Por eso `case 'cuenta'`
+              también sigue en pie.
+
+              🔴 **Diez, no ocho.** Son ocho `navigate('cuenta')` —`HomeScreen`
+              ×2 adentro de bloques `walletRailEnabled`, `TopupScreen` ×5,
+              `TransferScreen` ×1— **más dos `goBack('cuenta')`**
+              (`TopupScreen:237`, `TransferScreen:126`), que caen en la misma
+              ruta porque `goBack` **llama a `navigate(fallback)`** cuando no hay
+              historial propio (`router.ts:150`) — el caso de quien entra en frío
+              a esa URL. Un `grep` de `navigate('cuenta')` no los ve, así que el
+              conteo viejo no sólo erraba el número: **mandaba a buscar mal.**
+
+              OJO con el rótulo de abajo: sigue gateado por el riel saldo (OLA 5C
+              c) y esta orden no lo toca. Con el riel encendido diría "Saldo y
+              tarjetas" apuntando a una pantalla que sólo tiene tarjetas. Hoy es
+              inalcanzable —el riel falla cerrado y su reactivación exige orden
+              nueva— pero queda dicho, no descubierto después. */}
+          <button className="list-row" onClick={() => navigate('tarjetas')}>
+            <span><Icon name="card" size={16} /></span>
+            {/* OLA 5C (c): con el riel saldo apagado, "Saldo y tarjetas" nombraba
+                algo que no existe en el build real. NO se oculta la fila: es el
+                ÚNICO acceso a gestión de tarjetas, que es card-only ratificado.
+                Se renombra. */}
+            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
+              {walletRailEnabled ? 'Saldo y tarjetas' : 'Mis tarjetas'}
+            </div>
+            <span style={{ color: 'var(--gray-b)' }}>→</span>
+          </button>
+          {/* §1.9 · **Amigos y Grupos salieron de acá.** No es recorte: las dos
+              son POSICIONES de la barra inferior desde §1.9 · paso 3 —Grupos
+              como pestaña dentro de Amigos—, así que estas filas eran un segundo
+              camino al mismo lugar. Un acceso duplicado no es redundancia
+              inofensiva: es una navegación que hay que mantener coherente en dos
+              lados y que se desincroniza sola.
+
+              "Mis tarjetas" se queda porque NO es eso: es el único acceso a la
+              gestión de tarjetas, superficie card-only ratificada, y la barra no
+              tiene posición para ella. */}
+        </div>
+        {IS_MOCK && (
+          <>
+            <div className="note note-teal" style={{ marginBottom: 12 }}>
+              <b>Modo demo:</b> los datos son de ejemplo y se guardan solo en este teléfono.
+              Nada de lo que hagas acá mueve dinero de verdad.
+            </div>
+            <button
+              className="btn btn-ghost"
+              style={{ marginBottom: 12 }}
+              onClick={() => {
+                if (!window.confirm('¿Volver la demo a su estado inicial?')) return;
+                resetDemo();
+                window.location.reload();
+              }}
+            >
+              <Icon name="refresh" size={16} className="ico-inline" /> Reiniciar la demo
+            </button>
+          </>
+        )}
+        <button
+          className="btn btn-ghost"
+          onClick={() => {
+            void logout();
+          }}
+        >
+          Cerrar sesión
+        </button>
+      </div>
+      {/* §1.9 · paso 3 · la barra de cinco posiciones, montada por la pantalla.
+          `mas` activa porque hoy esa posición apunta acá: la pantalla Más no
+          existe todavía y Perfil ES la lista de opciones que va a vivir adentro
+          (`AppBottomBar`, SPEC_APP.md §1.9).
+
+          Va junto con sacar `perfil` de `showNav` en `App.tsx`, en el MISMO
+          commit: montar la barra nueva sin sacar la vieja deja las dos
+          conviviendo, superpuestas. */}
+      <AppBottomBar active="mas" />
+    </div>
+  );
+}

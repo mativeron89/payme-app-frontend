@@ -8,13 +8,10 @@
  *     estados/targets), nunca quita transiciones previas → no puede introducir
  *     un throw que antes no existía.
  *
- *   ⚠ NOTA DE AUDIT-TRAIL: hoy settlement.js hace UPDATEs crudos sobre mesas.status
- *   (no llama a transition()) para settling/settled/dispersing/completed. Esta tabla
- *   deja DEFINIDAS esas transiciones; para CERRAR el gap de auditoría (que queden
- *   filas en state_transitions) hay que además hacer que settlement.js llame a
- *   stateMachine.transition() en esos cambios. Eso va en el parche de settlement.js
- *   (ver _PARCHES_PENDIENTES_v2.10.md). Mientras no se haga, la liquidación funciona
- *   igual; solo falta el rastro de auditoría de esas transiciones de mesa.
+ * Settlement registra las transiciones de liquidación. Cuando el cambio de
+ * estado y su auditoría comparten transacción, un fallo del INSERT debe abortar
+ * ambos; los callers que declaran una transición observacional fuera de la
+ * operación de dominio son responsables de aislarla explícitamente.
  *
  * Cambios v2.4 (se mantienen):
  *   - payment_attempt agrega: requires_action, processing, cancelling
@@ -30,14 +27,19 @@ const TRANSITIONS = {
   mesa: {
     // pending_auth: mesa creada con garantía; hold en pre-autorización (v2.8).
     //   amount_capturable_updated → open ; payment_failed → auth_failed
-    pending_auth:    ['open', 'auth_failed', 'cancelled'],
+    // `settling` es la cuarentena fail-closed cuando Stripe informa que el PI
+    // legítimo fue capturado/cancelado fuera de nuestra saga (p. ej. por una
+    // cuenta Standard). No autoriza refund ni cierre automático.
+    pending_auth:    ['open', 'auth_failed', 'settling', 'cancelled'],
     open:            ['partially_paid', 'fully_paid', 'expired', 'settling', 'cancelled'],
     partially_paid:  ['fully_paid', 'expired', 'settling', 'cancelled'],
     fully_paid:      ['settling', 'dispersed'],
     expired:         ['settling', 'cancelled'],
     // settling/settled/dispersing/completed: liquidación + dispersión con garantía (v2.8/v2.9)
     settling:        ['settled'],
-    settled:         ['dispersing'],
+    // Cuando Stripe Connect ya liquidó el 100% en la cuenta del restaurante
+    // no existe dispersión SPEI: el cierre salta legítimamente a completed.
+    settled:         ['dispersing', 'completed'],
     dispersing:      ['completed', 'settled'],   // settled = re-intento de dispersión
     completed:       [],
     auth_failed:     [],
@@ -59,9 +61,13 @@ const TRANSITIONS = {
     // processed: side-effects aplicados. Terminal salvo refund.
     processed:       ['refunded'],
     // cancelling: timer marcó para cancelar antes de llamar Stripe (lock intermedio)
-    cancelling:      ['cancelled', 'failed'],
-    failed:          [],
-    cancelled:       [],
+    // Stripe puede confirmar mientras el worker intenta cancelar; el webhook
+    // o el binder sincrónico deben poder registrar que el cobro ganó la carrera.
+    cancelling:      ['cancelled', 'failed', 'succeeded'],
+    // Stripe puede entregar éxito después de un fallo/cancelación local. El
+    // rescate es excepcional pero monetariamente obligatorio y queda auditado.
+    failed:          ['succeeded'],
+    cancelled:       ['succeeded'],
     refunded:        [],
   },
   mesa_item: {
@@ -108,10 +114,9 @@ async function transition({
        (entity_type, entity_id, from_state, to_state, reason, triggered_by, metadata)
      VALUES ($1,$2,$3,$4,$5,$6,$7)`,
     // v2.18.1: reason TRUNCADO a los 200 de la columna. Sin esto, un mensaje de
-    // error largo (los de Stripe superan 200 chars) reventaba el INSERT de
-    // auditoría y hacía ROLLBACK de la operación real que lo traía — así quedó
-    // un attempt colgado con su fracción presa en el primer E2E de fracciones.
-    // La auditoría jamás debe poder tumbar la operación que audita.
+    // error largo (los de Stripe superan 200 chars) reventaba el INSERT. El
+    // truncado evita esa falla conocida; la atomicidad final la decide el
+    // caller según ejecute la transición dentro o fuera de su tx de dominio.
     [entityType, entityId, fromState, toState,
      reason ? String(reason).slice(0, 200) : null, triggeredBy, metadata]
   );
@@ -130,8 +135,8 @@ function mapStripeStatus(stripeStatus) {
     case 'succeeded':                return 'succeeded';
     case 'processing':               return 'processing';
     case 'requires_action':
-    case 'requires_confirmation':
-    case 'requires_payment_method':  return 'requires_action';
+    case 'requires_confirmation':    return 'requires_action';
+    case 'requires_payment_method':  return 'failed';
     case 'requires_capture':         return 'authorized';  // legacy manual capture
     case 'canceled':                 return 'cancelled';
     default:                         return 'pending';

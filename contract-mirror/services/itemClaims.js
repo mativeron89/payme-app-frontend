@@ -62,18 +62,35 @@ function effectiveBps(requestedBps, remainingBps) {
   return (remainingBps - requestedBps < COMPLETING_TOLERANCE_BPS) ? remainingBps : requestedBps;
 }
 
+/** Importe de línea: unitario × cantidad, sin coerción ni overflow IEEE-754. */
+function lineTotalCents(unitPriceCents, quantity) {
+  if (!Number.isSafeInteger(unitPriceCents) || unitPriceCents < 0 ||
+      !Number.isSafeInteger(quantity) || quantity < 1) {
+    throw new Error('invalid_line_amount');
+  }
+  const total = BigInt(unitPriceCents) * BigInt(quantity);
+  if (total > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('line_amount_overflow');
+  return Number(total);
+}
+
 /**
  * Precio de una fracción dado el resto de claims vivos del ítem
  * (otherLive: [{ fraction_bps, amount_cents|null }]).
  * Completa (suma llega a 10000) → ajusta contra los demás (preciados o nominal).
  */
 function priceFraction(priceCents, effBps, otherLive) {
+  if (!Number.isSafeInteger(priceCents) || priceCents < 0) throw new Error('invalid_line_amount');
   const otherBps = otherLive.reduce((s, c) => s + Number(c.fraction_bps), 0);
   if (otherBps + effBps >= 10000) {
     const others = otherLive.reduce(
-      (s, c) => s + (c.amount_cents != null ? Number(c.amount_cents) : fractionAmount(priceCents, Number(c.fraction_bps))),
+      (s, c) => {
+        const amount = c.amount_cents != null ? Number(c.amount_cents) : fractionAmount(priceCents, Number(c.fraction_bps));
+        if (!Number.isSafeInteger(amount) || amount < 0) throw new Error('invalid_claim_amount');
+        return s + amount;
+      },
       0
     );
+    if (!Number.isSafeInteger(others) || others > priceCents) throw new Error('invalid_claim_amount');
     return Math.max(0, priceCents - others);
   }
   return fractionAmount(priceCents, effBps);
@@ -155,7 +172,9 @@ async function acquire(client, {
 
   const taken = others.reduce((s, c) => s + Number(c.fraction_bps), 0);
   const effBps = effectiveBps(requestedBps, 10000 - taken);
-  const amountCents = price ? priceFraction(Number(item.price_cents), effBps, others) : null;
+  const amountCents = price
+    ? priceFraction(lineTotalCents(Number(item.price_cents), Number(item.quantity)), effBps, others)
+    : null;
 
   const { rows } = await client.query(
     `INSERT INTO mesa_item_claims
@@ -191,17 +210,47 @@ async function bindToAttempt(client, claimIds, attemptId, lockExpiresAt) {
 }
 
 /**
+ * Serializa cualquier mutación de claims sobre la misma fila de `mesa_items`.
+ * Los attempts distintos pueden compartir un ítem fraccionado; bloquear sólo
+ * sus filas de claim permite que ambos calculen un estado agregado obsoleto.
+ * El orden por UUID evita además invertir el orden cuando un pago toca varios
+ * ítems.
+ */
+async function lockAttemptClaimItems(client, attemptId, statuses) {
+  const { rows } = await client.query(
+    `SELECT DISTINCT mesa_item_id
+       FROM mesa_item_claims
+      WHERE payment_attempt_id=$1 AND status = ANY($2::text[])
+      ORDER BY mesa_item_id`,
+    [attemptId, statuses]
+  );
+  const itemIds = rows.map((row) => row.mesa_item_id);
+  if (itemIds.length > 0) {
+    await client.query(
+      `SELECT id FROM mesa_items
+        WHERE id = ANY($1::uuid[])
+        ORDER BY id
+        FOR UPDATE`,
+      [itemIds]
+    );
+  }
+  return itemIds;
+}
+
+/**
  * Pago confirmado: claims del attempt → paid; refleja mesa_items
  * ('paid' SOLO con 10000 bps pagados). Devuelve ítems tocados.
  */
 async function markAttemptPaid(client, attemptId, triggeredBy = 'system') {
+  const lockedItemIds = await lockAttemptClaimItems(client, attemptId, ['locked']);
   const { rows: claims } = await client.query(
     `UPDATE mesa_item_claims SET status='paid', paid_at=NOW()
       WHERE payment_attempt_id=$1 AND status='locked'
       RETURNING mesa_item_id`,
     [attemptId]
   );
-  const itemIds = [...new Set(claims.map((c) => c.mesa_item_id))];
+  const changed = new Set(claims.map((c) => c.mesa_item_id));
+  const itemIds = lockedItemIds.filter((itemId) => changed.has(itemId));
   const fullyPaid = [];
   for (const itemId of itemIds) {
     const { rows } = await client.query(
@@ -237,13 +286,15 @@ async function markAttemptPaid(client, attemptId, triggeredBy = 'system') {
  * 'released' SOLO si no le quedan claims vivos (parciales siguen 'locked').
  */
 async function releaseAttemptClaims(client, attemptId, triggeredBy = 'system') {
+  const lockedItemIds = await lockAttemptClaimItems(client, attemptId, ['locked']);
   const { rows: claims } = await client.query(
     `UPDATE mesa_item_claims SET status='released'
       WHERE payment_attempt_id=$1 AND status='locked'
       RETURNING mesa_item_id`,
     [attemptId]
   );
-  const itemIds = [...new Set(claims.map((c) => c.mesa_item_id))];
+  const changed = new Set(claims.map((c) => c.mesa_item_id));
+  const itemIds = lockedItemIds.filter((itemId) => changed.has(itemId));
   for (const itemId of itemIds) {
     const { rows } = await client.query(
       `SELECT COUNT(*)::int AS vivos FROM mesa_item_claims
@@ -278,13 +329,15 @@ async function releaseAttemptClaims(client, attemptId, triggeredBy = 'system') {
  * hace E3 como siempre — acá solo tenencia.
  */
 async function refundAttemptClaims(client, attemptId, triggeredBy = 'webhook') {
+  const lockedItemIds = await lockAttemptClaimItems(client, attemptId, ['paid']);
   const { rows: claims } = await client.query(
     `UPDATE mesa_item_claims SET status='released'
       WHERE payment_attempt_id=$1 AND status='paid'
       RETURNING mesa_item_id`,
     [attemptId]
   );
-  const itemIds = [...new Set(claims.map((c) => c.mesa_item_id))];
+  const changed = new Set(claims.map((c) => c.mesa_item_id));
+  const itemIds = lockedItemIds.filter((itemId) => changed.has(itemId));
   let itemsReleased = 0;
   for (const itemId of itemIds) {
     const { rows } = await client.query(
@@ -293,19 +346,25 @@ async function refundAttemptClaims(client, attemptId, triggeredBy = 'webhook') {
       [itemId]
     );
     const nuevo = Number(rows[0].vivos) === 0 ? 'released' : 'locked';
-    const upd = await client.query(
-      `UPDATE mesa_items SET status=$2, paid_at=NULL
-        WHERE id=$1 AND status='paid' RETURNING id`,
-      [itemId, nuevo]
+    const { rows: [item] } = await client.query(
+      `SELECT status FROM mesa_items WHERE id=$1`, [itemId]
     );
-    if (upd.rowCount === 1) {
+    if (item && item.status !== nuevo && ['paid', 'locked'].includes(item.status)) {
+      const upd = await client.query(
+        `UPDATE mesa_items SET status=$2, paid_at=NULL
+          WHERE id=$1 AND status=$3 RETURNING id`,
+        [itemId, nuevo, item.status]
+      );
+      if (upd.rowCount !== 1) throw new Error('mesa_item_refund_state_race');
       await client.query(
         `INSERT INTO state_transitions
            (entity_type, entity_id, from_state, to_state, reason, triggered_by)
-         VALUES ('mesa_item', $1, 'paid', $2, 'refund', $3)`,
-        [itemId, nuevo, triggeredBy]
+         VALUES ('mesa_item', $1, $2, $3, 'refund', $4)`,
+        [itemId, item.status, nuevo, triggeredBy]
       );
       itemsReleased++;
+    } else if (item) {
+      await client.query(`UPDATE mesa_items SET paid_at=NULL WHERE id=$1`, [itemId]);
     }
   }
   return { itemIds, itemsReleased };
@@ -361,6 +420,7 @@ module.exports = {
   FRACTION_VALUES,
   COMPLETING_TOLERANCE_BPS,
   effectiveBps,
+  lineTotalCents,
   priceFraction,
   acquire,
   bindToAttempt,

@@ -1,6 +1,9 @@
-import { centsToDisplay, fractionAmount, splitEqual, tipFromBps } from '../../utils/money';
-import { saveSession, type StoredSession } from '../storage';
+import { centsToDisplay, fractionAmount, splitEqual, sumCents, tipFromBps } from '../../utils/money';
+import { createSession, loadSession, saveSession, type StoredSession } from '../storage';
 import type {
+  AcceptInvitationLinkResponse,
+  AppConfig,
+  AttachPaymentMethodResponse,
   MeResponse,
   RestaurantResponse,
   BalanceResponse,
@@ -8,9 +11,12 @@ import type {
   CreateInvitationResponse,
   CreateMesaRequest,
   CreateMesaResponse,
+  CreateSetupIntentResponse,
   CreateTransferRequest,
   CreateTransferResponse,
-  Friend,
+  FriendRequestCreatedResponse,
+  FriendRequestDirection,
+  FriendRequestsResponse,
   FriendsResponse,
   GroupDetailResponse,
   GroupsResponse,
@@ -21,11 +27,10 @@ import type {
   OpenMesasResponse,
   PayMesaRequest,
   PayMesaResponse,
+  PaymentMethod,
   PaymentMethodsResponse,
   PendingInvitationsResponse,
   StatsResponse,
-  TopupCardResponse,
-  TopupOxxoResponse,
   TransfersResponse,
   WalletTransactionsResponse,
   HistoryResponse,
@@ -47,8 +52,10 @@ import {
   toOpenMesa,
   takenBps,
   type MockClaim,
+  type MockIdemEntry,
   type MockIdentity,
   type MockMesa,
+  type MockSlot,
 } from './store';
 
 /**
@@ -59,11 +66,21 @@ import {
 
 const LATENCY_MS = 350;
 
+function validNonNegativeCents(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function validPositiveCents(value: unknown): value is number {
+  return validNonNegativeCents(value) && value > 0;
+}
+
+function validIdempotencyKey(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 8 && value.length <= 100;
+}
+
 /**
- * B-06: réplica de la idempotencia del backend. En memoria del módulo (no
- * persistida): alcanza para demostrar que un reintento con la MISMA clave
- * devuelve el mismo resultado en vez de cobrar de nuevo, que es lo que el
- * fix del front tiene que ejercer.
+ * B-06: réplica de la idempotencia del backend. El ledger vive dentro del
+ * estado persistido del mock: una recarga restaura mutación y clave juntas.
  *
  * Guarda el HASH del payload junto a la respuesta, como el backend: misma
  * clave + mismo contenido = replay; misma clave + otro contenido =
@@ -71,11 +88,38 @@ const LATENCY_MS = 350;
  * pagos distintos con la misma clave y tapaba en la demo justo los bugs que
  * el fix tiene que evitar.
  */
-interface MockIdemEntry {
-  hash: string;
-  response: unknown;
+function readMockIdempotency(key: string): MockIdemEntry | undefined {
+  return state.idempotency[key];
 }
-const mockIdempotency = new Map<string, MockIdemEntry>();
+
+function writeMockIdempotency(key: string, entry: MockIdemEntry): void {
+  state.idempotency[key] = entry;
+}
+
+/** El backend actualiza la fila canónica antes de resolver un replay. */
+function invitationReplay(entry: MockIdemEntry): CreateInvitationResponse {
+  const response = entry.response as CreateInvitationResponse;
+  const expiry = Date.parse(response.invitation?.expires_at ?? '');
+  if (response.invitation?.status === 'pending' && Number.isFinite(expiry) && expiry <= Date.now()) {
+    return {
+      ...response,
+      invitation: { ...response.invitation, status: 'expired' },
+    };
+  }
+  return response;
+}
+
+function readPendingInvitationAuthority(key: string): MockIdemEntry | undefined {
+  const entry = readMockIdempotency(key);
+  if (!entry) return undefined;
+  const response = entry.response as CreateInvitationResponse;
+  const expiry = Date.parse(response.invitation?.expires_at ?? '');
+  if (response.invitation?.status !== 'pending' || !Number.isFinite(expiry) || expiry <= Date.now()) {
+    delete state.idempotency[key];
+    return undefined;
+  }
+  return entry;
+}
 
 /**
  * Mismos subconjuntos de campos que `PAYLOAD_KEYS` del backend. `lock_tokens`
@@ -84,8 +128,6 @@ const mockIdempotency = new Map<string, MockIdemEntry>();
  */
 const MOCK_PAYLOAD_KEYS = {
   mesa_pay: [
-    'payment_method_id',
-    'stripe_payment_method_id',
     'payment_type',
     'item_ids',
     'items',
@@ -101,19 +143,48 @@ const MOCK_PAYLOAD_KEYS = {
     'guarantee_method',
     'items',
   ],
+  transfer: ['amount_cents', 'to_payme_id', 'to_email', 'to_user_id', 'concept'],
+  topup_oxxo: ['amount_cents'],
+  topup_card: ['amount_cents', 'payment_method_id'],
+  invitation: ['type', 'invited_user_id'],
 } as const;
+
+const MOCK_UNORDERED_ARRAY_KEYS = new Set(['item_ids', 'slot_ids', 'items']);
+
+/** Misma representación canónica recursiva que utils/idempotency.js del backend. */
+function canonicalizeMockPayload(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalizeMockPayload).join(',')}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalizeMockPayload(object[key])}`)
+    .join(',')}}`;
+}
+
+function sortUnorderedMockArray(value: unknown[]): unknown[] {
+  const hasObjects = value.some((item) => item !== null && typeof item === 'object');
+  if (!hasObjects) return [...value].map(String).sort();
+  return [...value]
+    .map((item) => ({ item, canonical: canonicalizeMockPayload(item) }))
+    .sort((a, b) => (a.canonical < b.canonical ? -1 : a.canonical > b.canonical ? 1 : 0))
+    .map(({ item }) => item);
+}
 
 function mockPayloadHash(payload: unknown, keep: readonly string[]): string {
   const src = (payload ?? {}) as Record<string, unknown>;
   const subset: Record<string, unknown> = {};
-  for (const k of [...keep].sort()) {
-    if (src[k] === undefined || src[k] === null) continue;
+  for (const k of keep) {
+    if (!Object.prototype.hasOwnProperty.call(src, k) || src[k] === undefined) continue;
     const v = src[k];
-    subset[k] = Array.isArray(v)
-      ? [...(v as unknown[])].map((x) => JSON.stringify(x)).sort()
+    subset[k] = MOCK_UNORDERED_ARRAY_KEYS.has(k) && Array.isArray(v)
+      ? sortUnorderedMockArray(v)
       : v;
   }
-  return JSON.stringify(subset);
+  // No se necesita SHA-256 en el mock: comparar la forma canónica conserva
+  // exactamente la igualdad/conflicto que el backend aplica antes de hashear.
+  return canonicalizeMockPayload(subset);
 }
 
 export class MockApiError extends Error {
@@ -143,6 +214,44 @@ function fail(status: number, error: string, extra: Record<string, unknown> = {}
   );
 }
 
+// ─── Config ────────────────────────────────────────────────
+
+/**
+ * `GET /api/config` — OLA 5D.
+ *
+ * El mock **también respeta la capability**, y eso es una decisión, no un
+ * detalle: si el mock se saltara `wallet_rail` y el riel quedara apagado por
+ * otro camino, el mock estaría *ignorando* la capability en vez de respetarla,
+ * y el artefacto de desarrollo enseñaría un producto donde el apagado del riel
+ * no depende del backend. Ya pasó en este repo que un mock permisivo le ocultó
+ * un defecto vivo a quien verificaba a mano.
+ *
+ * Los valores replican **exactos** los del emisor
+ * (`contract-mirror/routes/config.js:43-46`), y hay un test que lee el espejo
+ * como texto y falla si se separan.
+ *
+ * `stripe_publishable_key: undefined` es fiel: el mock no carga Stripe.js ni
+ * depende de credenciales.
+ */
+export async function mockGetConfig(): Promise<AppConfig> {
+  return delay({
+    version: 'mock',
+    currency: 'mxn',
+    stripe_publishable_key: undefined,
+    mesa_hold_seconds: 1800,
+    payment_hold_seconds: 420,
+    invitation_expiry_seconds: 86400,
+    item_lock_seconds: 600,
+    features: {
+      apple_pay: false,
+      google_pay: false,
+      stp_dispersal: false,
+      ocr_real: false,
+      wallet_rail: { enabled: false, account_activity: true },
+    },
+  });
+}
+
 // ─── Auth ──────────────────────────────────────────────────
 
 /** "sofi.lopez@mail.com" → "Sofi": el que prueba la demo se ve saludado por su
@@ -163,11 +272,11 @@ export async function mockLogin(email: string, _password: string): Promise<Store
     ...(derived && { first_name: derived, last_name: '' }),
   };
   state.user = user;
-  const session: StoredSession = {
+  const session = createSession({
     access_token: 'mock-access-token',
     refresh_token: 'mock-refresh-token',
     user,
-  };
+  });
   saveSession(session);
   return delay(session);
 }
@@ -183,11 +292,11 @@ export async function mockRegister(data: {
   last_name: string;
 }): Promise<StoredSession> {
   state.user = { ...MOCK_USER, ...data };
-  const session: StoredSession = {
+  const session = createSession({
     access_token: 'mock-access-token',
     refresh_token: 'mock-refresh-token',
     user: state.user,
-  };
+  });
   saveSession(session);
   return delay(session);
 }
@@ -231,12 +340,28 @@ export async function mockHistory(params?: {
   from?: string;
   to?: string;
   limit?: number;
+  offset?: number;
 }): Promise<HistoryResponse> {
   const limit = Math.min(params?.limit ?? 20, 100);
+  // `offset` espeja `historyQuery` del emisor: entero, mínimo 0, default 0.
+  const offset = Math.max(0, Math.trunc(params?.offset ?? 0));
   let sorted = [...state.history].sort((a, b) => b.date.localeCompare(a.date));
   if (params?.from) sorted = sorted.filter((h) => h.date >= params.from!);
   if (params?.to) sorted = sorted.filter((h) => h.date <= params.to!);
-  return delay({ history: sorted.slice(0, limit), limit, offset: 0 });
+  /**
+   * `mesa_status` es VIVO, no foto: el emisor lo proyecta con `JOIN mesas` al
+   * momento de la consulta (`routes/account.js`). `mockPayMesa` guarda el
+   * estado del momento del pago, así que servirlo tal cual mentiría en el caso
+   * corriente: pagás tu parte (la entrada nace `partially_paid`), la mesa
+   * termina después, y el historial la seguiría mostrando viva — Historial
+   * (§1.10) la excluiría para siempre. Se re-lee la mesa al servir; las del
+   * seed sin mesa viva conservan su estado guardado.
+   */
+  const vivas = new Map(state.mesas.map((m) => [m.code, m.status]));
+  const proyectado = sorted
+    .slice(offset, offset + limit)
+    .map((h) => (vivas.has(h.mesa_code) ? { ...h, mesa_status: vivas.get(h.mesa_code)! } : h));
+  return delay({ history: proyectado, limit, offset });
 }
 
 // ─── v2.18 · Fracciones (réplica de services/itemClaims.js del espejo) ─────
@@ -273,7 +398,19 @@ export async function mockOpenMesas(): Promise<OpenMesasResponse> {
   state.mesas.forEach(settleIfExpired);
   return delay({
     mesas: state.mesas
-      .filter((m) => m.openedByUser && (m.status === 'open' || m.status === 'partially_paid'))
+      // G-28, cerrado en el backend v2.42.0: la mesa abierta es de **todos sus
+      // participantes**, no sólo de quien la abrió. Filtrar por `openedByUser`
+      // era acá el mismo defecto que `opener_user_id` allá — quien se sumaba
+      // por un link leía "No tenés mesas abiertas" mientras debía plata, y sin
+      // error que lo delatara.
+      //
+      // `joinedMesaCodes` es en el mock lo que `mesa_participants` con
+      // `status = 'active'` es en el contrato: se escribe al canjear el link.
+      .filter(
+        (m) =>
+          (m.openedByUser || state.joinedMesaCodes.includes(m.code)) &&
+          (m.status === 'open' || m.status === 'partially_paid'),
+      )
       .map(toOpenMesa),
   });
 }
@@ -309,15 +446,28 @@ let pending3ds: MockMesa | null = null;
 let pending3dsSave: string | null = null;
 
 export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesaResponse> {
-  const sum = req.items.reduce((s, i) => s + i.price_cents * i.quantity, 0);
+  if (!validIdempotencyKey(req.idempotency_key) || !validPositiveCents(req.total_cents) || !Array.isArray(req.items) || req.items.length === 0 ||
+      req.items.some((item) => !validNonNegativeCents(item.price_cents) || !Number.isSafeInteger(item.quantity) || item.quantity < 1)) {
+    return fail(400, 'validation_error');
+  }
+  let sum: number;
+  try {
+    sum = sumCents(...req.items.map((item) => {
+      const line = BigInt(item.price_cents) * BigInt(item.quantity);
+      if (line > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('line_overflow');
+      return Number(line);
+    }));
+  } catch {
+    return fail(400, 'validation_error');
+  }
   if (sum !== req.total_cents) {
     return fail(400, 'total_mismatch', { expected: sum, received: req.total_cents });
   }
   // B-06 (v2.25): misma clave → misma mesa, sin abrir una segunda con otra
   // garantía por el total.
-  const idemKey = req.idempotency_key ? `mesa:${req.idempotency_key}` : null;
+  const idemKey = `mesa:${req.idempotency_key}`;
   const idemHash = mockPayloadHash(req, MOCK_PAYLOAD_KEYS.create_mesa);
-  const previoMesa = idemKey ? mockIdempotency.get(idemKey) : undefined;
+  const previoMesa = readMockIdempotency(idemKey);
   if (previoMesa) {
     if (previoMesa.hash !== idemHash) return fail(409, 'idempotency_conflict');
     return delay({ ...(previoMesa.response as CreateMesaResponse), idempotent: true });
@@ -396,7 +546,7 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
     };
     // B-06: esta rama volvía ANTES de guardar la idempotencia, así que en la
     // demo el reintento de una garantía WALLET retenía el total otra vez.
-    if (idemKey) mockIdempotency.set(idemKey, { hash: idemHash, response: respuestaWallet });
+    writeMockIdempotency(idemKey, { hash: idemHash, response: respuestaWallet });
     return delay(respuestaWallet);
   }
 
@@ -430,7 +580,7 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
       ...(connectedAccountId && { connected_account_id: connectedAccountId }),
     },
   };
-  if (idemKey) mockIdempotency.set(idemKey, { hash: idemHash, response: respuestaMesa });
+  writeMockIdempotency(idemKey, { hash: idemHash, response: respuestaMesa });
   return delay(respuestaMesa);
 }
 
@@ -500,13 +650,40 @@ export async function mockPayMesa(
   req: PayMesaRequest,
   identity: MockIdentity,
 ): Promise<PayMesaResponse> {
+  if (!validIdempotencyKey(req.idempotency_key) ||
+      (req.tip_cents !== undefined && !validNonNegativeCents(req.tip_cents)) ||
+      (req.tip_bps !== undefined && (!Number.isSafeInteger(req.tip_bps) || req.tip_bps < 0 || req.tip_bps > 10_000)) ||
+      (req.items !== undefined && (!Array.isArray(req.items) || req.items.length === 0 || req.items.some((item) => !FRACTION_VALUES.includes(item.fraction_bps))))) {
+    return fail(400, 'validation_error');
+  }
   // B-06: misma clave → replay, sin volver a cobrar (igual que el backend).
-  const idemKey = req.idempotency_key ? `pay:${code}:${req.idempotency_key}` : null;
+  const idemKey = `pay:${code}:${req.idempotency_key}`;
   const idemHash = mockPayloadHash(req, MOCK_PAYLOAD_KEYS.mesa_pay);
-  const previoPago = idemKey ? mockIdempotency.get(idemKey) : undefined;
+  const previoPago = readMockIdempotency(idemKey);
   if (previoPago) {
     if (previoPago.hash !== idemHash) return fail(409, 'idempotency_conflict');
-    return delay({ ...(previoPago.response as PayMesaResponse), idempotent: true });
+    const previous = previoPago.response as PayMesaResponse;
+    // Forma del replay unificado coordinado: tip/tipo, detalle de consumo y
+    // neutros Stripe. En igualdad `items` permanece ausente por contrato.
+    return delay({
+      idempotent: true,
+      attempt: {
+        id: previous.attempt.id,
+        status: previous.attempt.status,
+        gross_amount_cents: previous.attempt.gross_amount_cents,
+        tip_cents: previous.attempt.tip_cents,
+        payment_type: previous.attempt.payment_type,
+        ...(previous.attempt.items && { items: previous.attempt.items }),
+        ...(previous.attempt.payment_type === 'wallet' && previous.attempt.gross_display && {
+          gross_display: previous.attempt.gross_display,
+        }),
+        ...(previous.attempt.payment_type !== 'wallet' && {
+          client_secret: previous.attempt.client_secret ?? null,
+          requires_action: previous.attempt.status === 'requires_action',
+        }),
+        ...(previous.attempt.connected_account_id && { connected_account_id: previous.attempt.connected_account_id }),
+      },
+    });
   }
   const mesa = findMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
@@ -528,6 +705,7 @@ export async function mockPayMesa(
       : (req.tip_cents ?? 0);
 
   let itemsAmount = 0;
+  let selectedEqualSlot: MockSlot | null = null;
   // v2.18: recibo de fracciones cobradas (solo consumo).
   const pricedItems: Array<{ item_id: string; fraction_bps: number; amount_cents: number }> = [];
   if (mesa.division_mode === 'consumo') {
@@ -545,7 +723,7 @@ export async function mockPayMesa(
         const eff = effectiveBps(rq.fraction_bps, remaining);
         const amount = priceFraction(item.price_cents * item.quantity, eff, others);
         pricedItems.push({ item_id: rq.item_id, fraction_bps: eff, amount_cents: amount });
-        itemsAmount += amount;
+        itemsAmount = sumCents(itemsAmount, amount);
       }
     } catch (e) {
       if (e instanceof MockApiError) return fail(e.status, e.message, e.extra);
@@ -554,26 +732,32 @@ export async function mockPayMesa(
   } else {
     const slot = mesa.slots?.find((s) => s.status === 'available');
     if (!slot) return fail(409, 'no_slots_available');
-    slot.status = 'paid';
-    slot.claimedBy = identity;
+    // Seleccionar no es mutar: la parte se confirma recién después de validar
+    // el saldo. Así un rechazo jamás necesita adivinar qué slot deshacer.
+    selectedEqualSlot = slot;
     itemsAmount = slot.amount_cents;
   }
 
-  const gross = itemsAmount + tipCents;
+  let gross: number;
+  try {
+    gross = sumCents(itemsAmount, tipCents);
+  } catch {
+    return fail(400, 'validation_error');
+  }
 
   if (req.payment_type === 'wallet') {
     const available = availableBalance();
     if (available < gross) {
-      // liberar el slot recién tomado si no alcanza
-      if (mesa.division_mode === 'igual') {
-        const slot = mesa.slots?.find((s) => s.claimedBy === identity && s.status === 'paid');
-        if (slot) {
-          slot.status = 'available';
-          slot.claimedBy = null;
-        }
-      }
       return fail(402, 'insufficient_funds', { available, required: gross });
     }
+  }
+
+  if (selectedEqualSlot) {
+    selectedEqualSlot.status = 'paid';
+    selectedEqualSlot.claimedBy = identity;
+  }
+
+  if (req.payment_type === 'wallet') {
     state.balance_cents -= gross;
     pushWalletTx('payment_mesa', -gross, `Pago mesa ${mesa.code}`);
   }
@@ -605,6 +789,7 @@ export async function mockPayMesa(
       amount_cents: gross,
       date: new Date().toISOString(),
       mesa_code: mesa.code,
+      mesa_status: mesa.status,
       restaurant: mesa.restaurant.name,
       category: mesa.restaurant.category,
     });
@@ -636,7 +821,11 @@ export async function mockPayMesa(
       gross_display: centsToDisplay(gross),
       status: req.payment_type === 'wallet' ? 'processed' : 'succeeded',
       payment_type: req.payment_type,
-      requires_action: false,
+      ...(req.payment_type !== 'wallet' && {
+        client_secret: 'mock_payment_secret',
+        stripe_status: 'succeeded',
+        requires_action: false,
+      }),
       ...(connectedAccountId && { connected_account_id: connectedAccountId }),
       // G-10 (Connect, mock-first): con tarjeta el comercio es el RESTAURANTE.
       // Forma acordada; el contrato real todavía no expone el campo.
@@ -645,19 +834,46 @@ export async function mockPayMesa(
       }),
     },
   };
-  if (idemKey) mockIdempotency.set(idemKey, { hash: idemHash, response: respuesta });
+  writeMockIdempotency(idemKey, { hash: idemHash, response: respuesta });
   return delay(respuesta);
 }
 
 /** POST /:code/invitations type in_app: invita a un amigo por payme_id. */
-export async function mockInviteFriend(code: string, paymeId: string): Promise<CreateInvitationResponse> {
+export async function mockInviteFriend(
+  code: string,
+  paymeId: string,
+  idempotencyKey: string,
+): Promise<CreateInvitationResponse> {
+  if (!validIdempotencyKey(idempotencyKey)) {
+    return fail(400, 'validation_error');
+  }
   const mesa = findMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   if (!mesaPayable(mesa)) return fail(409, 'mesa_not_invitable', { status: mesa.status });
-  if (!state.friends.some((f) => f.payme_id === paymeId)) {
+  const invited = state.friends.find((f) => f.payme_id === paymeId);
+  if (!invited) {
     return fail(404, 'invited_user_not_found');
   }
-  return delay({
+  // La autoridad canónica es el uuid resuelto por el backend, no el alias
+  // `payme_id` aportado por el cliente.
+  const payload = { type: 'in_app', invited_user_id: invited.id };
+  const ledgerKey = `invitation:${state.user.id}:${mesa.id}:${idempotencyKey}`;
+  const naturalKey = `invitation-natural:${state.user.id}:${mesa.id}:in_app:${invited.id}`;
+  const hash = mockPayloadHash(payload, MOCK_PAYLOAD_KEYS.invitation);
+  const previous = readMockIdempotency(ledgerKey);
+  if (previous) {
+    if (previous.hash !== hash) return fail(409, 'idempotency_conflict');
+    return delay({ ...invitationReplay(previous), idempotent: true });
+  }
+  // Igual que invitationAuthority: otra key para el mismo destinatario
+  // converge a la única invitación pending natural y queda ligada a ella.
+  const natural = readPendingInvitationAuthority(naturalKey);
+  if (natural) {
+    const response = { ...(natural.response as CreateInvitationResponse), idempotent: true };
+    writeMockIdempotency(ledgerKey, { hash, response: natural.response });
+    return delay(response);
+  }
+  const response: CreateInvitationResponse = {
     invitation: {
       id: mockId('f'),
       invitation_type: 'in_app' as const,
@@ -665,15 +881,40 @@ export async function mockInviteFriend(code: string, paymeId: string): Promise<C
       expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
       created_at: new Date().toISOString(),
     },
-  });
+  };
+  writeMockIdempotency(naturalKey, { hash, response });
+  writeMockIdempotency(ledgerKey, { hash, response });
+  return delay(response);
 }
 
-export async function mockCreateInvitation(code: string): Promise<CreateInvitationResponse> {
+export async function mockCreateInvitation(
+  code: string,
+  idempotencyKey: string,
+): Promise<CreateInvitationResponse> {
+  if (!validIdempotencyKey(idempotencyKey)) {
+    return fail(400, 'validation_error');
+  }
   const mesa = findMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   if (!mesaPayable(mesa)) return fail(409, 'mesa_not_invitable', { status: mesa.status });
   const base = `${window.location.origin}${window.location.pathname}`;
-  return delay({
+  const payload = { type: 'link' };
+  const ledgerKey = `invitation:${state.user.id}:${mesa.id}:${idempotencyKey}`;
+  const naturalKey = `invitation-natural:${state.user.id}:${mesa.id}:link`;
+  const hash = mockPayloadHash(payload, MOCK_PAYLOAD_KEYS.invitation);
+  const previous = readMockIdempotency(ledgerKey);
+  if (previous) {
+    if (previous.hash !== hash) return fail(409, 'idempotency_conflict');
+    return delay({ ...invitationReplay(previous), idempotent: true });
+  }
+  const natural = readPendingInvitationAuthority(naturalKey);
+  if (natural) {
+    const response = { ...(natural.response as CreateInvitationResponse), idempotent: true };
+    writeMockIdempotency(ledgerKey, { hash, response: natural.response });
+    return delay(response);
+  }
+  const token = `mock-guest-${Date.now().toString(36)}`;
+  const response: CreateInvitationResponse = {
     invitation: {
       id: mockId('f'),
       invitation_type: 'link',
@@ -681,60 +922,115 @@ export async function mockCreateInvitation(code: string): Promise<CreateInvitati
       expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
       created_at: new Date().toISOString(),
     },
-    // rawToken se devuelve UNA sola vez, como el backend (P1 #8).
-    link: `${base}#/mesa/${code}?t=mock-guest-${Date.now().toString(36)}`,
-  });
+    // El mismo UUID canónico reconstruye el mismo link en cada replay.
+    link: `${base}#/mesa/${code}?t=${token}`,
+  };
+  // El token nombra SU mesa, como en el backend. Sin esto `accept-link` tendría
+  // que aceptar cualquier string y el mock enseñaría que todo link sirve.
+  state.linkTokens[token] = code;
+  writeMockIdempotency(naturalKey, { hash, response });
+  writeMockIdempotency(ledgerKey, { hash, response });
+  return delay(response);
 }
 
 // ─── Topup (A-3: tres vías) ────────────────────────────────
 
-export async function mockTopupOxxo(amountCents: number): Promise<TopupOxxoResponse> {
-  if (amountCents < 5000 || amountCents > 1_000_000) return fail(400, 'validation_error');
+export async function mockTopupOxxo(amountCents: number, idempotencyKey: string): Promise<unknown> {
+  if (!validPositiveCents(amountCents) || amountCents < 5000 || amountCents > 1_000_000) return fail(400, 'validation_error');
+  const req = { amount_cents: amountCents };
+  // App Backend comparte UNIQUE(user_id,idempotency_key) entre ambos rieles.
+  const idemKey = `topup:${idempotencyKey}`;
+  const idemHash = mockPayloadHash(req, MOCK_PAYLOAD_KEYS.topup_oxxo);
+  const previous = readMockIdempotency(idemKey);
+  if (previous) {
+    if (previous.hash !== idemHash) return fail(409, 'idempotency_conflict');
+    return delay(previous.response);
+  }
   const ref = `93${String(Math.floor(Math.random() * 1e10)).padStart(10, '0')}`;
-  return delay({
+  const id = mockId('f');
+  const voucherExpires = new Date(Date.now() + 48 * 60 * 60_000).toISOString();
+  const voucherReference = ref.replace(/(\d{4})(?=\d)/g, '$1 ');
+  const fresh = {
     topup: {
-      id: mockId('f'),
+      id,
       status: 'processing',
       amount_cents: amountCents,
       amount_display: centsToDisplay(amountCents),
-      voucher_reference: ref.replace(/(\d{4})(?=\d)/g, '$1 '),
+      voucher_reference: voucherReference,
       stripe_voucher_url: null,
-      voucher_expires_at: new Date(Date.now() + 48 * 60 * 60_000).toISOString(),
+      voucher_expires_at: voucherExpires,
+    },
+  };
+  writeMockIdempotency(idemKey, {
+    hash: idemHash,
+    response: {
+      idempotent: true,
+      topup: {
+        ...fresh.topup,
+        method: 'oxxo',
+      },
     },
   });
+  return delay(fresh);
 }
 
 export async function mockTopupCard(
   amountCents: number,
   paymentMethodId: string,
-): Promise<TopupCardResponse> {
-  if (amountCents < 5000 || amountCents > 1_000_000) return fail(400, 'validation_error');
+  idempotencyKey: string,
+): Promise<unknown> {
+  if (!validPositiveCents(amountCents) || amountCents < 5000 || amountCents > 1_000_000) return fail(400, 'validation_error');
+  const req = { amount_cents: amountCents, payment_method_id: paymentMethodId };
+  // Mismo namespace que OXXO: cambiar de riel con la misma key es conflicto.
+  const idemKey = `topup:${idempotencyKey}`;
+  const idemHash = mockPayloadHash(req, MOCK_PAYLOAD_KEYS.topup_card);
+  const previous = readMockIdempotency(idemKey);
+  if (previous) {
+    if (previous.hash !== idemHash) return fail(409, 'idempotency_conflict');
+    return delay(previous.response);
+  }
   if (!state.paymentMethods.some((pm) => pm.id === paymentMethodId)) {
     return fail(404, 'payment_method_not_found');
   }
   state.balance_cents += amountCents;
   pushWalletTx('topup_card', amountCents, 'Carga de saldo vía CARD');
-  return delay({
+  const id = mockId('f');
+  const fresh = {
     topup: {
-      id: mockId('f'),
+      id,
       status: 'succeeded',
       amount_cents: amountCents,
       amount_display: centsToDisplay(amountCents),
     },
     requires_action: false,
+  };
+  writeMockIdempotency(idemKey, {
+    hash: idemHash,
+    response: {
+      idempotent: true,
+      topup: {
+        ...fresh.topup,
+        method: 'card',
+      },
+    },
   });
+  return delay(fresh);
 }
 
+/**
+ * OLA 5C (b): el riel saldo está apagado y esta lectura queda DURMIENTE.
+ *
+ * Además se elimina un defecto propio, independiente del wallet: la versión
+ * anterior **acuñaba y persistía** una CLABE dentro de un `GET`. Una lectura que
+ * escribe es un defecto por sí mismo, y no vuelve así aunque el riel se
+ * reactive dentro de dos años.
+ *
+ * Falla cerrada en vez de fabricar: si algo llegara acá con el riel apagado, es
+ * un camino que no debería existir, y devolver una CLABE inventada sería
+ * enseñar un riel inexistente a quien usa el mock para entender el producto.
+ */
 export async function mockGetClabe(): Promise<ClabeResponse> {
-  if (!state.clabe) {
-    state.clabe = `6461800000${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
-  }
-  return delay({
-    clabe: state.clabe,
-    banco: 'STP',
-    beneficiario: 'PayMe',
-    instrucciones: 'Transferí por SPEI a esta CLABE desde tu banco; el saldo se acredita solo.',
-  });
+  return fail(404, 'wallet_rail_disabled');
 }
 
 // ─── Transfers ─────────────────────────────────────────────
@@ -742,8 +1038,19 @@ export async function mockGetClabe(): Promise<ClabeResponse> {
 export async function mockCreateTransfer(
   req: CreateTransferRequest,
 ): Promise<CreateTransferResponse> {
+  if (!validPositiveCents(req.amount_cents)) return fail(400, 'validation_error');
+  const idemKey = `transfer:${req.idempotency_key}`;
+  const idemHash = mockPayloadHash(req, MOCK_PAYLOAD_KEYS.transfer);
+  const previous = readMockIdempotency(idemKey);
+  if (previous) {
+    if (previous.hash !== idemHash) return fail(409, 'idempotency_conflict');
+    return delay(previous.response as CreateTransferResponse);
+  }
+  // C3/C4: `email` ya no viaja en el shape de amigo. El destinatario por correo
+  // sigue siendo válido en el contrato de transferencias, pero el mock no puede
+  // resolverlo desde su lista: se busca por payme_id o id.
   const to = state.friends.find(
-    (f) => f.payme_id === req.to_payme_id || f.email === req.to_email || f.id === req.to_user_id,
+    (f) => f.payme_id === req.to_payme_id || f.id === req.to_user_id,
   );
   if (!to) return fail(404, 'recipient_not_found');
   const available = availableBalance();
@@ -765,7 +1072,7 @@ export async function mockCreateTransfer(
     counterparty_payme_id: to.payme_id,
     counterparty_name: to.full_name,
   });
-  return delay({
+  const fresh: CreateTransferResponse = {
     transfer: {
       id: state.transfers[0].id,
       amount_cents: req.amount_cents,
@@ -774,7 +1081,22 @@ export async function mockCreateTransfer(
       amount_display: centsToDisplay(req.amount_cents),
       to: { payme_id: to.payme_id, full_name: to.full_name },
     },
-  });
+  };
+  // Replay exacto del espejo: recipient se acredita por UUID estable.
+  const replay: CreateTransferResponse = {
+    idempotent: true,
+    transfer: {
+      id: state.transfers[0].id,
+      amount_cents: req.amount_cents,
+      concept: req.concept ?? null,
+      completed_at: now,
+      amount_display: centsToDisplay(req.amount_cents),
+      status: 'completed',
+      to_user_id: to.id,
+    },
+  };
+  writeMockIdempotency(idemKey, { hash: idemHash, response: replay });
+  return delay(fresh);
 }
 
 export async function mockListTransfers(): Promise<TransfersResponse> {
@@ -799,8 +1121,22 @@ export async function mockRemovePaymentMethod(id: string): Promise<void> {
   return delay(undefined);
 }
 
-export async function mockCreateSetupIntent(): Promise<{ client_secret: string }> {
-  return delay({ client_secret: 'seti_mock_secret' });
+export async function mockCreateSetupIntent(
+  idempotencyKey: string,
+): Promise<CreateSetupIntentResponse> {
+  if (!validIdempotencyKey(idempotencyKey)) {
+    return fail(400, 'validation_error');
+  }
+  const ledgerKey = `setup-intent:${state.user.id}:${idempotencyKey}`;
+  const previous = readMockIdempotency(ledgerKey);
+  if (previous) return delay(previous.response as CreateSetupIntentResponse);
+  const setupIntentId = `seti_mock_${mockId('f')}`;
+  const response: CreateSetupIntentResponse = {
+    setup_intent_id: setupIntentId,
+    client_secret: `${setupIntentId}_secret_mock`,
+  };
+  writeMockIdempotency(ledgerKey, { hash: '{}', response });
+  return delay(response);
 }
 
 /**
@@ -810,7 +1146,7 @@ export async function mockCreateSetupIntent(): Promise<{ client_secret: string }
  * por pm_ (el backend real también deduplica el attach), pero un dupe con
  * set_as_default SÍ actualiza la principal.
  */
-export function saveMockCard(stripePaymentMethodId: string, setAsDefault?: boolean): void {
+export function saveMockCard(stripePaymentMethodId: string, setAsDefault?: boolean): PaymentMethod {
   const existing = state.paymentMethods.find(
     (pm) => pm.stripe_payment_method_id === stripePaymentMethodId,
   );
@@ -821,7 +1157,7 @@ export function saveMockCard(stripePaymentMethodId: string, setAsDefault?: boole
         is_default: pm.stripe_payment_method_id === stripePaymentMethodId,
       }));
     }
-    return;
+    return state.paymentMethods.find((pm) => pm.id === existing.id)!;
   }
   if (setAsDefault) {
     state.paymentMethods = state.paymentMethods.map((pm) => ({ ...pm, is_default: false }));
@@ -829,7 +1165,7 @@ export function saveMockCard(stripePaymentMethodId: string, setAsDefault?: boole
   const banks = ['BBVA', 'Banorte', 'HSBC', 'Citibanamex'];
   const bank = banks[state.paymentMethods.length % banks.length];
   const lastFour = String(Math.floor(1000 + Math.random() * 9000));
-  state.paymentMethods.push({
+  const created: PaymentMethod = {
     id: mockId('b'),
     stripe_payment_method_id: stripePaymentMethodId,
     brand: 'visa',
@@ -840,15 +1176,20 @@ export function saveMockCard(stripePaymentMethodId: string, setAsDefault?: boole
     exp_year: 2030,
     is_default: !!setAsDefault || state.paymentMethods.length === 0,
     display: `${bank} · Débito · •••• ${lastFour}`,
-  });
+  };
+  state.paymentMethods.push(created);
+  return created;
 }
 
 export async function mockAttachPaymentMethod(
   stripePaymentMethodId: string,
   setAsDefault?: boolean,
-): Promise<void> {
-  saveMockCard(stripePaymentMethodId, setAsDefault);
-  return delay(undefined);
+): Promise<AttachPaymentMethodResponse> {
+  const existed = state.paymentMethods.some(
+    (pm) => pm.stripe_payment_method_id === stripePaymentMethodId,
+  );
+  const paymentMethod = saveMockCard(stripePaymentMethodId, setAsDefault);
+  return delay({ payment_method: paymentMethod, ...(existed && { idempotent: true }) });
 }
 
 // ─── Notifications / invitaciones in-app ───────────────────
@@ -870,6 +1211,38 @@ export async function mockMarkAllNotificationsRead(): Promise<void> {
 
 export async function mockPendingInvitations(): Promise<PendingInvitationsResponse> {
   return delay({ invitations: [...state.pendingInvitations] });
+}
+
+/**
+ * `POST /invitations/accept-link` — CIERRE DEL PAGO SIN CUENTA (v2.32.0).
+ *
+ * Replica las propiedades del emisor que importan, no su implementación:
+ *
+ *  - **Ciego a propósito.** Token inexistente, de otra mesa que ya no está, o
+ *    basura: todos el MISMO 403 `invitation_link_not_valid`. El emisor no
+ *    distingue inválido de vencido de cancelado de supersedido porque hacerlo
+ *    le diría a un desconocido si una mesa existe. Un mock que devolviera
+ *    404 para "no existe" y 403 para "vencido" **enseñaría el oráculo que el
+ *    contrato eliminó** — que es la lección 18 de este ciclo, ya pagada.
+ *  - **Idempotente.** Canjear dos veces deja una sola inscripción.
+ *  - **No consume el link.** Es MULTIUSO: canjearlo no lo invalida para el
+ *    resto de la mesa.
+ *  - **Requiere sesión.** Sin ella el adaptador real da 401 y acá también.
+ */
+export async function mockAcceptInvitationLink(
+  token: string,
+): Promise<AcceptInvitationLinkResponse> {
+  if (typeof token !== 'string' || token.length < 8 || token.length > 200) {
+    return fail(400, 'invitation_token_required');
+  }
+  if (!loadSession()) return fail(401, 'auth_required');
+  const code = state.linkTokens[token];
+  const mesa = code ? findMesa(code) : null;
+  // Un solo 403 para los cuatro motivos. No agregar ramas que los separen.
+  if (!code || !mesa) return fail(403, 'invitation_link_not_valid');
+  // La inscripción es por usuario y el link NO se marca consumido.
+  if (!state.joinedMesaCodes.includes(code)) state.joinedMesaCodes.push(code);
+  return delay({ joined: true as const, mesa_code: code });
 }
 
 export async function mockAcceptInvitation(id: string): Promise<{ accepted: boolean }> {
@@ -909,23 +1282,126 @@ export async function mockStats(): Promise<StatsResponse> {
 // ─── Friends / Groups ──────────────────────────────────────
 
 export async function mockFriends(): Promise<FriendsResponse> {
-  return delay({ friends: [...state.friends] });
+  // C3: el contrato de amigos ya no lleva `email`. Se proyecta explícitamente
+  // para que el mock no pueda filtrarlo por descuido.
+  return delay({
+    friends: state.friends.map(({ email: _email, ...persona }) => persona),
+  });
 }
 
-export async function mockAddFriend(query: { email?: string; payme_id?: string }): Promise<Friend> {
-  const handle = (query.email ?? query.payme_id ?? 'nuevo').split('@')[0].replace(/^payme_mx_/, '');
-  const first = handle.charAt(0).toUpperCase() + handle.slice(1);
-  const friend: Friend = {
-    id: mockId('a'),
-    payme_id: query.payme_id ?? `payme_mx_${handle.slice(0, 4).padEnd(4, 'x')}`,
-    first_name: first,
-    last_name: 'Demo',
-    full_name: `${first} Demo`,
-    email: query.email ?? `${handle}@mail.com`,
-    added_at: new Date().toISOString(),
-  };
-  state.friends.push(friend);
-  return delay(friend);
+/**
+ * C1/C2 · una solicitud es una INTENCIÓN, no un vínculo.
+ *
+ * Responde 202 `{ requested: true }` SIEMPRE: exista o no la persona, sea o no
+ * ya tu amigo, te haya bloqueado o no. El mock replica esa ceguera a propósito
+ * — si acá devolviera 404 cuando no encuentra a nadie, la demo enseñaría un
+ * comportamiento que el backend eliminó justamente por ser un oráculo.
+ */
+export async function mockAddFriend(query: { email?: string; payme_id?: string }): Promise<FriendRequestCreatedResponse> {
+  // El backend BUSCA primero, y si no encuentra a nadie activo no inserta nada
+  // (`routes/friends.js:136-151`). El mock hacía lo contrario: inventaba una
+  // persona para cualquier texto, así que la solicitud saliente aparecía
+  // siempre y la demo no podía mostrar —ni delatar— el comportamiento real.
+  const email = query.email?.trim().toLowerCase();
+  const destino = [...state.friends, ...state.directory].find(
+    (p) => (email !== undefined && p.email.toLowerCase() === email)
+      || (query.payme_id !== undefined && p.payme_id === query.payme_id),
+  );
+
+  if (destino) {
+    const bloqueado = state.blockedUserIds.includes(destino.id);
+    const yaEsAmigo = state.friends.some((f) => f.id === destino.id);
+    const yaPedida = state.friendRequests.some(
+      (r) => r.direction === 'outgoing' && r.person.id === destino.id,
+    );
+    // Si el otro YA me pidió, pedirle yo equivale a aceptar: el contrato evita
+    // así dos pendientes cruzadas que nadie resuelve.
+    const reciproca = state.friendRequests.findIndex(
+      (r) => r.direction === 'incoming' && r.person.id === destino.id,
+    );
+    if (!bloqueado && !yaEsAmigo && !yaPedida) {
+      if (reciproca !== -1) {
+        const [req] = state.friendRequests.splice(reciproca, 1);
+        state.friends.push({ ...req.person, added_at: new Date().toISOString() });
+      } else {
+        state.friendRequests.push({
+          id: mockId('f'),
+          direction: 'outgoing',
+          person: destino,
+          requested_at: new Date().toISOString(),
+        });
+      }
+    }
+  }
+  // Misma respuesta en TODOS los casos: no existe, existe, ya es amigo, ya hay
+  // pendiente, o me bloqueó. Es la ceguera que el endpoint tiene a propósito.
+  return delay({ requested: true as const });
+}
+
+export async function mockFriendRequests(direction: FriendRequestDirection): Promise<FriendRequestsResponse> {
+  return delay({
+    direction,
+    requests: state.friendRequests
+      .filter((r) => r.direction === direction)
+      .map((r) => ({
+        id: r.id,
+        // La persona va ANIDADA: `id` es el de la solicitud, no el suyo.
+        user: {
+          id: r.person.id,
+          payme_id: r.person.payme_id,
+          first_name: r.person.first_name,
+          last_name: r.person.last_name,
+          full_name: r.person.full_name,
+        },
+        requested_at: r.requested_at,
+      })),
+  });
+}
+
+/** Aceptar: sólo una ENTRANTE. Una saliente no es mía para aceptar. */
+export async function mockAcceptFriendRequest(requestId: string): Promise<void> {
+  const i = state.friendRequests.findIndex((r) => r.id === requestId && r.direction === 'incoming');
+  if (i === -1) return fail(404, 'request_not_found');
+  const [req] = state.friendRequests.splice(i, 1);
+  state.friends.push({ ...req.person, added_at: new Date().toISOString() });
+  return delay(undefined);
+}
+
+export async function mockRejectFriendRequest(requestId: string): Promise<void> {
+  const i = state.friendRequests.findIndex((r) => r.id === requestId && r.direction === 'incoming');
+  if (i === -1) return fail(404, 'request_not_found');
+  state.friendRequests.splice(i, 1);
+  return delay(undefined);
+}
+
+/** Cancelar: sólo una PROPIA todavía pendiente. */
+export async function mockCancelFriendRequest(requestId: string): Promise<void> {
+  const i = state.friendRequests.findIndex((r) => r.id === requestId && r.direction === 'outgoing');
+  if (i === -1) return fail(404, 'request_not_found');
+  state.friendRequests.splice(i, 1);
+  return delay(undefined);
+}
+
+/**
+ * Bloquear rompe la amistad en ambos sentidos y borra cualquier solicitud viva
+ * con esa persona, igual que el backend.
+ */
+export async function mockBlockUser(userId: string): Promise<void> {
+  if (userId === state.user.id) return fail(400, 'cannot_block_self');
+  const conocido =
+    state.friends.some((f) => f.id === userId) ||
+    state.friendRequests.some((r) => r.person.id === userId);
+  if (!conocido) return fail(404, 'user_not_found');
+  state.friends = state.friends.filter((f) => f.id !== userId);
+  state.friendRequests = state.friendRequests.filter((r) => r.person.id !== userId);
+  if (!state.blockedUserIds.includes(userId)) state.blockedUserIds.push(userId);
+  return delay(undefined);
+}
+
+export async function mockUnblockUser(userId: string): Promise<void> {
+  if (!state.blockedUserIds.includes(userId)) return fail(404, 'block_not_found');
+  state.blockedUserIds = state.blockedUserIds.filter((id) => id !== userId);
+  return delay(undefined);
 }
 
 export async function mockRemoveFriend(friendId: string): Promise<void> {
@@ -950,6 +1426,7 @@ export async function mockGroupDetail(id: string): Promise<GroupDetailResponse> 
       payme_id: m.payme_id,
       first_name: m.first_name,
       last_name: m.last_name,
+      // Grupos SÍ conserva el correo (contract-mirror/routes/groups.js).
       email: m.email,
     })),
   });

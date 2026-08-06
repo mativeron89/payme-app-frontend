@@ -10,6 +10,116 @@
 }
 
 :root {
+  /* ══════════════════════════════════════════════════════════════════════
+     SISTEMA DE DISEÑO · tokens de ../diseno/SISTEMA_DISENO.md §1–§3
+     Fuente: v1 2026-08-03, con la enmienda del cuarto uso del naranja
+     (§1, 2026-08-04). El dueño del documento es la conversación de Diseño;
+     acá se COPIAN valores, no se deciden.
+
+     Estos tokens son ADITIVOS: al momento de agregarlos no los usa nadie.
+     Las pantallas migran de a una (SISTEMA_DISENO §2 lo manda así), y hasta
+     que una pantalla migre sigue leyendo la escala --fs-legacy-* de abajo.
+
+     Los ratios de contraste anotados están MEDIDOS con la fórmula WCAG 2.1
+     sobre estos hex exactos, no estimados. Los fija designTokens.test.ts:
+     si cambiás un hex, el test lo vuelve a medir y falla si no llega.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /* §1 · Color — marca.
+     El naranja es UNA acción, no una paleta: botón circular "Nueva", ítem
+     activo de la barra inferior, badge de no leídos, y el CTA de pantalla de
+     primer contacto (cuarto uso, ratificado 2026-08-04). Nada más. */
+  --brand: #ff6b35;
+  --brand-fg: #0f1f3d; /* glifo sobre --brand · 5.77:1 — NUNCA blanco (2.84:1) */
+  --brand-soft: #fff0eb;
+  --brand-ink: #c2410c; /* naranja COMO TEXTO sobre claro · 5.18:1 */
+
+  /* §1 · Color — acción. --brand y --brand-ink no son intercambiables:
+     #ff6b35 como texto sobre blanco da 2.6:1 y está prohibido. */
+  --action: #0f1f3d;
+  --action-fg: #ffffff; /* 16.36:1 */
+  --action-2: #00c2cb;
+  --action-2-fg: #0f1f3d; /* 7.46:1 */
+  --link: #0a7b80; /* el teal #00c2cb como texto da 2.19:1: como texto va este */
+
+  /* §1 · Color — superficie y texto. */
+  --bg: #f4f7fa;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --border: #e2e8f0;
+  --text: #0f1f3d; /* 15.21:1 sobre --bg — el doc dice 15.4, ver designTokens.test.ts */
+  --text-muted: #5b6b82; /* 5.05 sobre --bg · 5.43 sobre --surface · 5.19 sobre --surface-2 */
+  --text-faint: #7d8ca1; /* 3.42:1 — SOLO decorativo, nunca información */
+  --on-dark: #ffffff; /* 16.36:1 sobre navy */
+  --on-dark-muted: rgba(255, 255, 255, 0.72); /* ≥8:1 sobre navy */
+
+  /* §1 · Color — semánticos. Texto y tinte son valores DISTINTOS.
+     Regla dura: el color nunca es el único portador de significado; todo
+     estado va con texto o ícono (§5). */
+  --success: #047857;
+  --success-tint: #ecfdf5; /* 5.21:1 */
+  --warning: #92620a;
+  --warning-tint: #fffbeb; /* 5.10:1 */
+  --danger: #b42318;
+  --danger-tint: #fef2f2; /* 6.01:1 */
+  --info: #0a6c85;
+  --info-tint: #e6f6fa; /* 5.41:1 */
+
+  /* §2 · Tipografía — escala del sistema. SEIS tamaños, no hay un séptimo.
+     Nada baja de 12px, y 12px solo para etiquetas.
+     El cuerpo a 16px es obligatorio y NO se sube de una: cada SPEC lo aplica
+     en su pantalla (§2, "deuda declarada"). */
+  --fs-display: 40px; /* el importe grande del pago · peso 800 */
+  --lh-display: 1.05;
+  --fs-h1: 28px; /* título de pantalla · peso 800 */
+  --lh-h1: 1.2;
+  --fs-h2: 20px; /* título de tarjeta y de sección · peso 700 */
+  --lh-h2: 1.25;
+  --fs-body: 16px; /* cuerpo · peso 400–500 · NUNCA menos de 16px en la app */
+  --lh-body: 1.5;
+  --fs-sm: 14px; /* secundario, metadatos · peso 500 */
+  --lh-sm: 1.45;
+  --fs-xs: 12px; /* etiquetas en MAYÚSCULA · peso 700 · PROHIBIDO para datos */
+  --lh-xs: 1.4;
+
+  /* §2 · Tipografía — familia mono. SOLO códigos de mesa: los importes van en
+     display con tabular-nums, nunca en mono.
+     Las familias display y cuerpo ya existen abajo como --font-display y
+     --font-body. NO se redefinen acá: el sistema declara otra cadena de
+     fallback (system-ui, -apple-system) y cambiarla movería la fuente durante
+     la carga de la webfont. Es un cambio visible, no aditivo — se reconcilia
+     cuando se migre la tipografía, no ahora. */
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* §3 · Espaciado, base 4. No se mezcla con otra escala. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
+
+  /* §3 · Radios. TRES, no seis. --r-lg es el de la tarjeta montada sobre la
+     banda: el gesto que se toma de la referencia, tiene que ser generoso. */
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-full: 9999px;
+
+  /* §3 · Elevación — suave y baja, nunca dramática. La sombra ACOMPAÑA al
+     borde, no lo reemplaza: toda tarjeta lleva 1px solid var(--border)
+     además de su sombra. En monitor barato la sombra casi no se ve. */
+  --sh-1: 0 1px 2px rgba(15, 31, 61, 0.06);
+  --sh-2: 0 2px 8px rgba(15, 31, 61, 0.08);
+  --sh-3: 0 8px 24px rgba(15, 31, 61, 0.1);
+
+  /* §3 · Área táctil mínima en la app, sin excepción. Se usa parada, con una
+     mano, apurada. */
+  --tap-min: 44px;
+
+  /* ══════════ fin de los tokens del sistema · abajo, lo preexistente ══════════ */
+
   --navy: #0f1f3d;
   --teal: #00c2cb;
   --teal-l: #e0f8f9;
@@ -30,19 +140,26 @@
   --orange-txt: #c2410c;
   --teal-txt: #0a7b80;
   --gray-txt: #64748b;
-  /* T-D3: escala tipográfica ÚNICA (antes: ~25 tamaños ad-hoc). Regla de
-     migración: 10-10.5→2xs · 11-11.5→xs · 12-13→sm · 13.5-14.5→base ·
-     15-16→md · 17-18→lg · 19-22→xl · 24-28→2xl · 32-36→3xl · 38-44→hero. */
-  --fs-2xs: 10.5px;
-  --fs-xs: 11.5px;
-  --fs-sm: 12.5px;
-  --fs-base: 14px;
-  --fs-md: 15.5px;
-  --fs-lg: 17px;
-  --fs-xl: 20px;
-  --fs-2xl: 26px;
-  --fs-3xl: 33px;
-  --fs-hero: 40px;
+  /* ESCALA LEGACY EN MIGRACIÓN — no se usa en pantalla nueva.
+     Viene de T-D3 (escala ÚNICA que reemplazó ~25 tamaños ad-hoc). Se renombró
+     con prefijo `legacy-` para liberar los nombres de la escala del sistema de
+     diseño (SISTEMA_DISENO.md §2), que reusa `--fs-sm` y `--fs-xs` con OTROS
+     valores: 12.5→14 y 11.5→12. Sin el prefijo, definir la escala nueva movía
+     44 usos de tamaño en silencio.
+     El rename NO cambió un pixel: es el mismo valor con otro nombre.
+     DEUDA: 100 usos a migrar a la escala del sistema, pantalla por pantalla
+     (el propio sistema lo manda así, §2 "los SPEC lo aplican pantalla por
+     pantalla"). Cuando el último uso muera, este bloque se borra entero. */
+  --fs-legacy-2xs: 10.5px;
+  --fs-legacy-xs: 11.5px;
+  --fs-legacy-sm: 12.5px;
+  --fs-legacy-base: 14px;
+  --fs-legacy-md: 15.5px;
+  --fs-legacy-lg: 17px;
+  --fs-legacy-xl: 20px;
+  --fs-legacy-2xl: 26px;
+  --fs-legacy-3xl: 33px;
+  --fs-legacy-hero: 40px;
   --radius: 16px;
   --radius-sm: 10px;
   --shadow-sm: 0 2px 8px rgba(15, 31, 61, 0.08);
@@ -158,7 +275,11 @@ body {
   color: var(--gray-d);
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  margin-bottom: 8px;
+  /* El reset del margen del <h2> va acá, en la regla BASE, y no en un override
+     más abajo: §1.7 y §1.8 montan estos rótulos como <h2>, y un `margin-top: 0`
+     declarado después le ganaba a los `margin-top` que otras pantallas le
+     ponen a un rótulo suyo — misma especificidad, gana el último. */
+  margin: 0 0 8px;
 }
 /* Texto de apoyo chico. Va en la fuente de CUERPO: la display a 10-11px
    se lee mal y quedaba inconsistente entre pantallas. */
@@ -445,52 +566,13 @@ body {
   bottom: 24px;
 }
 
-/* Barra inferior fija: Inicio · Amigos · Grupos · Perfil. */
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px; /* mismo ancho que .app */
-  background: #fff;
-  border-top: 1px solid var(--gray-l);
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-  z-index: 19;
-}
-.nav-item {
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 0;
-  font-family: var(--font-body);
-  font-size: 11px;
-  color: var(--gray-txt);
-}
-.nav-item .ico {
-  font-size: 20px;
-}
-.nav-item.on {
-  color: var(--navy);
-  font-weight: 700;
-}
-/* Con barra de nav, el action-bar (CTA fijo al pie) debe quedar POR ENCIMA
-   de la nav fija — sin esto, la nav lo tapa (feedback del hermano de Mati,
-   2026-07-24: "la navegación está tapando el botón para agregar amigo"). */
-.has-nav .action-bar {
-  padding-bottom: calc(84px + env(safe-area-inset-bottom));
-}
+/* La barra inferior VIEJA vivía acá: `.bottom-nav`, `.nav-item` y los dos
+   `.has-nav` que le hacían lugar. Se fue con §1.9 · paso 3, cuando la última
+   pantalla pasó a `AppBottomBar`. Sus dos reglas de layout tienen gemelo en la
+   sección §5 bis: `.has-appbar .scroll` y `.has-appbar .action-bar`.
 
-/* Las pantallas con barra dejan aire para barra + flotante. */
-.has-nav .scroll {
-  padding-bottom: 150px;
-}
+   `.fab`, `.fab.solo` y `.cta-float` NO se van: siguen vivos en Mesas y en los
+   dos flujos de mesa. */
 
 /* ─── Batch UX 2026-07-23 ─── */
 
@@ -984,6 +1066,89 @@ body {
   color: #fff;
 }
 
+/* ─── Selector de propina · SPEC_APP.md §1.5 bis ───
+   🔴 El marco es el que distingue "todavía no elegí" de "elegí 0 %". Vive acá
+   y NO en la píldora a propósito: si la distinción viviera en la píldora, el
+   0 % necesitaría un estado visual propio y sería de segunda clase. Con el
+   marco, el 0 % se rellena igual que 10/15/20 y la señal de que falta elegir
+   la lleva la sección entera. */
+.tip-block {
+  border: 1.4px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  transition: border-color 0.18s, background 0.18s;
+}
+.tip-block .tip-row {
+  margin-bottom: 0;
+}
+/* Con el 5 % son SEIS controles y a 375px no entran en una fila: "Otro" se
+   salía de la pantalla. El spec ya lo dibuja abajo —[0][5][10][15][20] y
+   [Otro] en su propia línea— así que la fila envuelve y "Otro" ocupa el ancho.
+   Medido en el teléfono, no deducido. */
+.tip-choices {
+  flex-wrap: wrap;
+}
+/* `flex: 1` con base automática deja que el ancho del texto decida, y a 375px
+   los cinco porcentajes ya no entraban: uno se caía a la fila de abajo
+   estirado. Con base 0 reparten el ancho en partes iguales y el padding
+   lateral baja lo justo para que el más ancho ("10%") quepa. */
+.tip-choices .tip-pill {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.tip-choices .tip-pill--otro {
+  flex: 0 0 100%;
+}
+.tip-block-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tip-block--pending {
+  border-style: dashed;
+  border-color: var(--warning);
+  background: var(--warning-tint);
+}
+/* El texto también carga la señal, no sólo el color: el título cambia de
+   "Tu propina" a "Elegí tu propina" y se pinta en --warning (5.10:1 sobre
+   --warning-tint). */
+.tip-block--pending .tip-block-title {
+  color: var(--warning);
+}
+/* Se toca "Pagar" sin elegir: el borde pulsa UNA vez. Es lo que trae el ojo
+   después del scroll; el toast solo se pierde arriba. */
+.tip-block--pulse {
+  animation: tip-pulse 0.6s ease-out 1;
+}
+@keyframes tip-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(146, 98, 10, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(146, 98, 10, 0);
+  }
+}
+/* Sin movimiento, pero la animación SIGUE existiendo: es su `animationend` el
+   que apaga la clase. Anularla con `animation: none` dejaría el pulso pegado
+   para siempre y el segundo intento no avisaría nada. */
+@media (prefers-reduced-motion: reduce) {
+  .tip-block--pulse {
+    animation-duration: 0.01ms;
+  }
+}
+/* §1.5 bis · la píldora elegida va en --action-2, incluida la de 0 %. Se
+   scopea a `.tip-choices` para no repintar las píldoras del mesero, que este
+   spec no toca. */
+.tip-choices .tip-pill.sel {
+  background: var(--action-2);
+  border-color: var(--action-2);
+  color: var(--action-2-fg);
+}
+
 /* ─── División (s-division) ─── */
 .div-card {
   background: #fff;
@@ -1000,9 +1165,13 @@ body {
   font-family: var(--font-display);
   text-align: left;
 }
+/* §1.4 · la selección pasó de naranja a teal: el naranja ya no marca estado
+   dentro de una tarjeta, marca marca. Y nunca es sólo el borde — el radio se
+   llena, que es la señal que sobrevive a la escala de grises. */
 .div-card.sel {
-  border-color: var(--orange);
-  background: #fff9f6;
+  border-width: 2px;
+  border-color: var(--action-2);
+  background: var(--surface);
 }
 .div-radio {
   width: 24px;
@@ -1015,14 +1184,14 @@ body {
   justify-content: center;
 }
 .div-card.sel .div-radio {
-  border-color: var(--orange);
+  border-color: var(--action-2);
 }
 .div-card.sel .div-radio::after {
   content: '';
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--orange);
+  background: var(--action-2);
 }
 .div-ico {
   width: 48px;
@@ -1037,8 +1206,8 @@ body {
   color: var(--navy);
 }
 .div-card.sel .div-ico {
-  background: var(--orange-l);
-  color: var(--orange);
+  background: var(--teal-l);
+  color: var(--link); /* el teal como TEXTO va en --link: 5.05:1 */
 }
 .div-title {
   font-size: 16px;
@@ -1047,7 +1216,8 @@ body {
   margin-bottom: 3px;
 }
 .div-sub {
-  font-size: 12px;
+  /* Era 12px: información por debajo del mínimo del sistema. */
+  font-size: var(--fs-sm);
   color: var(--gray-d);
   line-height: 1.4;
   font-family: var(--font-body);
@@ -1069,8 +1239,9 @@ body {
   justify-content: center;
 }
 .stepper button {
-  width: 40px;
-  height: 40px;
+  /* Área táctil mínima de la app, sin excepción (§1.4 lo pide explícito). */
+  width: var(--tap-min);
+  height: var(--tap-min);
   border-radius: 50%;
   border: 1.5px solid var(--gray-b);
   background: #fff;
@@ -1203,18 +1374,34 @@ body {
   font-family: var(--font-display);
 }
 
-/* ─── Scan (s-scan) ─── */
+/* ══════════════════════════════════════════════════════════════════════════
+   ESCANEAR · SPEC_APP.md §1.6
+   Se probó con la pantalla ENTERA en navy —la idea era que reforzara la
+   metáfora de cámara— y Mati la rechazó. Fondo claro estándar y cabecera navy
+   curva de siempre: Escanear no es una excepción de esqueleto, es una pantalla
+   más del flujo con un componente oscuro adentro.
+
+   Por eso el marco pasa de ser EL FONDO a ser UNA TARJETA flotante: ancho
+   completo de la columna, radio del sistema y la sombra de la tarjeta montada
+   (§5 bis · D). Es el único elemento oscuro de la pantalla.
+   ══════════════════════════════════════════════════════════════════════════ */
 .scan-frame {
-  margin: 0 auto;
-  width: min(240px, 70vw);
   height: 300px;
-  border-radius: 18px;
+  border-radius: var(--r-lg);
   background: linear-gradient(135deg, #1a2942, #0d1829);
+  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+/* El ícono del centro es decorativo: la instrucción la da el texto de abajo. */
+.scan-glyph {
+  display: flex;
+  color: var(--white);
+  opacity: 0.3;
 }
 .scan-corner {
   position: absolute;
@@ -1259,14 +1446,50 @@ body {
   box-shadow: 0 0 8px var(--teal);
   animation: scan 2.4s ease-in-out infinite;
 }
+/* En porcentajes, no en píxeles: los 30px/270px de antes estaban atados a la
+   altura exacta del marco viejo y se salían del recuadro al cambiarla. */
 @keyframes scan {
   0%,
   100% {
-    top: 30px;
+    top: 10%;
   }
   50% {
-    top: 270px;
+    top: 88%;
   }
+}
+
+/* §1.6 lo pide explícito, y hasta hoy no se cumplía: el barrido es el único
+   bucle de esta pantalla. Con movimiento reducido la línea se queda quieta al
+   medio — sigue marcando el marco como activo sin animar nada. El estado real
+   lo dicen el texto y el `aria-busy`, no la línea. */
+@media (prefers-reduced-motion: reduce) {
+  .scan-line {
+    animation: none;
+    top: 50%;
+  }
+}
+
+/* La instrucción y el estado comparten lugar: en reposo dice cómo encuadrar,
+   mientras sube dice que está subiendo. Un solo renglón, con `aria-live`. */
+.scan-hint {
+  margin: var(--sp-4) 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* El aviso de que todavía no leemos la foto de verdad es INFORMACIÓN, y la
+   regla transversal del spec dice que ninguna información baja de 14px: `.note`
+   está en 12.5px. Se sube acá y no en `.note`, que es legacy compartida por
+   media app — cambiarla de una es un barrido propio, no un renglón de §1.6.
+   El margen superior le devuelve el ritmo de 16px cuando viene pegada a un
+   cartel de estado. */
+.scan-note {
+  margin-top: var(--sp-4);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 
 /* ─── Voucher OXXO / CLABE ─── */
@@ -1312,6 +1535,20 @@ body {
 .friend-row.sel {
   background: var(--teal-l);
 }
+/* Fila con TRES acciones (solicitud entrante: aceptar/rechazar/bloquear). A
+   375px no entran junto al avatar y el nombre, y `.fr-name` se encogía hasta
+   que el texto quedaba debajo de los botones. Las acciones bajan a una segunda
+   línea, alineadas con el nombre (avatar 42 + gap 12). */
+.friend-row.with-actions {
+  flex-wrap: wrap;
+}
+.friend-row.with-actions .fr-actions {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  padding-left: 54px;
+  margin-top: 8px;
+}
 .avatar {
   width: 42px;
   height: 42px;
@@ -1333,8 +1570,18 @@ body {
   font-weight: 600;
   color: var(--navy);
 }
+/* §1.9 · el identificador SUBE de 11px a `--fs-sm` (14px). Era información en
+   11px, que el sistema prohíbe: su piso es 14px.
+
+   Sigue en `monospace` a propósito — el cambio que el spec pide es el tamaño,
+   y un `payme_mx_…` se lee mejor con ancho fijo.
+
+   Toca tres superficies, no sólo la sección social: `InviteFriends` y
+   `TransferScreen` usan la misma fila. Es lo correcto —el piso de tamaño es
+   del sistema, no de una pantalla— y por eso va en commit propio. */
 .fr-name .id {
-  font-size: 11px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--gray-d);
   font-family: monospace;
 }
@@ -1490,7 +1737,2430 @@ body {
   font-family: var(--font-body);
   font-size: 13.5px;
 }
+/* `text-align: center` del contenedor sólo centra contenido EN LÍNEA, y desde
+   que acá adentro va un <svg> del set de íconos en vez de un emoji de texto,
+   el ícono quedaba pegado a la izquierda con la frase centrada debajo.
+   Encontrado forzando el vacío de Avisos a 375px. Con flex se centran los dos
+   casos: el emoji de texto queda como ítem anónimo y también centrado. */
 .empty .emoji {
+  display: flex;
+  justify-content: center;
   font-size: 40px;
   margin-bottom: 8px;
+}
+
+/* ─── Cierre del pago sin cuenta · banner del canje por link ───
+   Encabeza el alta cuando alguien abre un link de invitación sin sesión. Dice
+   POR QUÉ se le pide cuenta, sin revelar nada de la mesa: ni restaurante, ni
+   total, ni gente. Antes de canjear el token no hay de dónde sacarlo —las tres
+   rutas de mesa exigen sesión desde v2.32.0— y está bien que no lo haya. */
+.join-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 16px 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--teal-l);
+  color: #0a7b80;
+}
+.join-banner-title {
+  font-weight: 700;
+  font-size: var(--fs-legacy-base);
+  color: var(--navy);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ESTRUCTURA DE LA APP · SISTEMA_DISENO.md §5 bis
+   Tres componentes compartidos por toda la app del comensal. Ninguna pantalla
+   inventa su propio encabezado ni su propia navegación.
+   `.bottom-nav` ya se borró: la última pantalla migró en §1.9 · paso 3. Siguen
+   conviviendo `.fab` y `.cta-float`, que todavía tienen call sites en Mesas y
+   en los dos flujos de mesa.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── §5 bis · C · Barra inferior de cinco posiciones ─── */
+.appbar-block {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px; /* mismo ancho que .app */
+  background: var(--surface);
+  /* Sombra hacia arriba, SIN línea divisoria: la difuminada la reemplaza. */
+  box-shadow: 0 -8px 22px rgba(15, 31, 61, 0.1);
+  z-index: 19;
+}
+
+/* Fila propia arriba de la barra: acá vive lo dinámico (el importe), para que
+   el nav item de abajo no cambie de texto según el estado. */
+.appbar-above {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.appbar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: end;
+  padding: var(--sp-2) var(--sp-2) calc(var(--sp-2) + env(safe-area-inset-bottom));
+}
+
+.appbar-item,
+.appbar-center {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+  /* Área táctil mínima de la app, sin excepción. */
+  min-height: var(--tap-min);
+  padding: var(--sp-2) 0 var(--sp-1);
+}
+
+.appbar-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted); /* ítem inactivo */
+  font-weight: 400;
+}
+
+/* Las etiquetas van a 11px. Es la ÚNICA excepción al mínimo de 12px del
+   sistema, y solo porque el ícono y la posición acompañan siempre al texto. */
+.appbar-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+/* Ítem activo: ícono Y etiqueta en --brand-ink (5.18:1). No se usa --brand:
+   #ff6b35 sobre blanco da 2.6:1 y a 11px es ilegible. */
+.appbar-item.on {
+  color: var(--brand-ink);
+  font-weight: 500;
+}
+
+/* Rayita del activo, pegada al borde superior de la barra. */
+.appbar-tick {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 3px;
+  border-radius: var(--r-full);
+  background: var(--brand-ink);
+}
+
+/* Círculo central, montado 22px sobre el borde de la barra. */
+.appbar-fab {
+  width: 46px;
+  height: 46px;
+  margin-top: -22px;
+  border-radius: var(--r-full);
+  border: none;
+  cursor: pointer;
+  background: var(--brand);
+  /* Glifo NAVY, nunca blanco: blanco sobre --brand da 2.84:1 y un ícono de
+     control necesita 3:1. Navy da 5.77:1. */
+  color: var(--brand-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--sh-2);
+  transition: transform var(--mo-fast, 120ms) ease-out;
+}
+.appbar-fab:active {
+  transform: scale(0.96);
+}
+.appbar-fab:disabled {
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: default;
+}
+.appbar-center .appbar-label {
+  color: var(--text-muted);
+}
+
+/* Foco visible: 2px sólido con 2px de offset, navy sobre fondo claro. */
+.appbar-item:focus-visible,
+.appbar-fab:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* Aire para que el contenido no quede debajo de la barra.
+   140px y no 108: el bloque mide 69px con la barra sola, pero 135px cuando
+   lleva su fila `above` (el motivo por el que Continuar está apagado, §1.3).
+   Con 108 la última fila quedaba tapada, y `scrollIntoView` —que mide contra
+   el padding del contenedor, no contra lo que la barra fija ocluye— creía
+   haberla dejado visible.
+
+   OJO al usarlo: un `style={{ padding: … }}` inline en el `.scroll` PISA este
+   padding-bottom, porque el shorthand inline le gana al longhand de la clase.
+   Por eso las pantallas del flujo llevan `.flow-scroll` y no padding inline. */
+.has-appbar .scroll {
+  padding-bottom: 140px;
+}
+
+/* §1.9 · paso 3 · el gemelo de `.has-nav .action-bar`, y existe por la misma
+   razón: el `.action-bar` NO es fijo, la barra SÍ, así que sin este aire la
+   barra se le monta encima al CTA. Es literalmente el bug que reportó el
+   hermano de Mati en 2026-07-24 —"la navegación está tapando el botón para
+   agregar amigo"— y la conversión a la barra nueva lo reabre si se olvida.
+
+   81px = los 69 que mide el bloque de la barra + los 12 de aire que el propio
+   `.action-bar` ya usa arriba. Medido en el navegador, no estimado. */
+.has-appbar .action-bar {
+  padding-bottom: calc(81px + env(safe-area-inset-bottom));
+}
+
+/* Padding lateral de las pantallas del flujo, en longhands a propósito: así no
+   se lleva puesto el padding-bottom de arriba. */
+.flow-scroll {
+  padding-left: var(--sp-4);
+  padding-right: var(--sp-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appbar-fab {
+    transition: none;
+  }
+  .appbar-fab:active {
+    transform: none;
+  }
+}
+
+/* ─── §5 bis · A · Cabecera navy de borde curvo ─── */
+.hdr {
+  background: var(--action);
+  color: var(--on-dark);
+  /* NO es rectangular: es el gesto que se toma de la referencia. */
+  border-radius: 0 0 34px 34px;
+  padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-6);
+}
+
+/* Variante COMPACTA — solo la entrada por link (SPEC_APP.md §1.2). Menos
+   padding, logo más chico, curva más cerrada. No usarla en ningún otro lado. */
+.hdr-compact {
+  border-radius: 0 0 26px 26px;
+  padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-4);
+}
+.hdr-compact .hdr-logo {
+  font-size: 22px;
+}
+
+.hdr-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--tap-min);
+}
+
+.hdr-logo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  color: var(--on-dark);
+  flex: none;
+}
+/* El `Me` en teal sobre navy: 7.46:1. */
+.hdr-logo-me {
+  color: var(--action-2);
+}
+
+/* Nombre COMPLETO del usuario. Trunca con elipsis; nunca empuja la campana. */
+.hdr-user {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--on-dark-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hdr-bell {
+  position: relative;
+  margin-left: auto;
+  flex: none;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--on-dark);
+}
+
+/* Badge de no leídos: --brand con el número en navy — 5.77:1. Es uno de los
+   usos permitidos del naranja. */
+.hdr-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--brand);
+  color: var(--brand-fg);
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Volver: flecha Y texto, no solo ícono. */
+.hdr-back {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--on-dark);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.hdr-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hdr-step {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--on-dark-muted);
+}
+
+/* Sobre la banda navy el foco va en teal — 7.46:1. El navy sobre navy no se
+   vería, y el teal sobre claro no llega a 3:1: por eso son dos reglas. */
+.hdr button:focus-visible,
+.btab:focus-visible {
+  outline: 2px solid var(--action-2);
+  outline-offset: 2px;
+}
+
+/* ─── §5 bis · B · Pestañas en burbuja ─── */
+.btabs {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-1);
+  margin: var(--sp-4) calc(var(--sp-4) * -1) calc(var(--sp-6) * -1);
+  padding: 0 var(--sp-4);
+}
+
+.btab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: var(--sp-2) var(--sp-4);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  /* Inactiva: texto plano sobre el navy, SIN fondo. El fondo translúcido que
+     se probó casi no se veía — es un bug corregido, no una opción. */
+  background: none;
+  color: var(--on-dark-muted);
+  font-weight: 400;
+  border-radius: 14px 14px 0 0;
+}
+
+/* Activa: burbuja blanca enganchada a la tarjeta — una sola pieza continua. */
+.btab.on {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.28);
+}
+
+/* Badge de conteo de la pestaña: mismo tratamiento que el de la campana. */
+.btab-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--brand);
+  color: var(--brand-fg);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Tarjeta montada sobre la banda ─── */
+.mounted-card {
+  position: relative;
+  z-index: 1;
+  /* Sube 24px sobre la banda: el navy asoma a los costados. */
+  margin: -24px var(--sp-4) 0;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
+}
+
+/* Esquina superior izquierda cuadrada SOLO cuando la pestaña activa es la
+   primera: así burbuja y tarjeta leen como una sola pieza. Si la activa está
+   al medio o al final, las cuatro esquinas van redondeadas y el enganche se
+   da por contacto. */
+.mounted-card.flush {
+  border-top-left-radius: 0;
+}
+
+/* Con pestañas, la tarjeta NO sube: ya está pegada a la burbuja activa, que
+   llega hasta el borde de abajo de la banda.
+
+   El selector `.btabs + .mounted-card` que había acá no matcheaba nunca: las
+   pestañas van DENTRO del `<header>` y la tarjeta va afuera, así que no son
+   hermanas. Era CSS muerto, y el -24px de arriba se aplicaba igual — con la
+   tarjeta adentro de un `.scroll` (que es `overflow-y: auto`) el margen
+   negativo la recorta por arriba en vez de montarla. Se marca desde el header,
+   que es quien sabe si tiene pestañas o no. */
+.hdr-tabbed + .scroll > .mounted-card:first-child {
+  margin-top: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ENTRADA POR LINK · SPEC_APP.md §1.2 — 401, 403 y "Sumate a la mesa"
+
+   Es la primera pantalla que ve casi todo el mundo que llega por link, y su
+   esqueleto es DISTINTO del resto de la app (v5, ratificado 2026-08-04):
+   banda compacta, una burbuja angosta flotando en el medio exacto del espacio
+   libre, y el bloque de acción pegado abajo.
+
+   Ninguna de las tres lleva barra inferior: nadie de estas pantallas tiene
+   home todavía.
+
+   Lo que ninguna de las tres puede hacer: nombrar el restaurante o la mesa
+   ANTES del canje. Ni el 401 ni el 403. Después del canje sí (§1.2-C), porque
+   ahí ya hay sesión y quien mira es un participante inscripto — son dos
+   momentos con permisos distintos, y que el copy difiera es correcto.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.link-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+
+/* El espacio libre entre la banda y el bloque de abajo. La burbuja flota en el
+   MEDIO EXACTO, con aire parejo arriba y abajo: un solo tramo flexible
+   centrado da los dos espaciadores iguales del spec sin nodos vacíos. */
+.link-mid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: var(--sp-6) var(--sp-4);
+  text-align: center;
+}
+
+/* La burbuja NO va de borde a borde: es angosta y centrada. */
+.link-bubble {
+  width: 240px;
+  max-width: 100%;
+  padding: var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
+}
+
+.link-bubble-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.link-bubble-body {
+  margin-top: var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted); /* 5.43:1 sobre --surface */
+}
+
+/* Bloque de acción, pegado abajo. */
+.link-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) calc(var(--sp-6) + env(safe-area-inset-bottom));
+  text-align: center;
+}
+
+.link-foot-copy {
+  margin-bottom: var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-body); /* el cuerpo a 16px, aplicado en esta pantalla */
+  line-height: var(--lh-body);
+  color: var(--text-muted); /* 5.05:1 sobre --bg */
+}
+
+/* Los dos botones del 401 son de ANCHO COMPLETO, no el círculo naranja: es la
+   primera acción que ve un desconocido sin ningún contexto de la app, y un
+   ícono minimalista ahí sería críptico. */
+.link-btn {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+
+/* ⭐ CUARTO uso permitido del naranja (SISTEMA_DISENO.md §1, enmienda del
+   2026-08-04): acción principal de una pantalla de PRIMER CONTACTO. Es una
+   excepción con fundamento, no una puerta abierta — esta pantalla no compite
+   con ningún otro elemento naranja porque nadie ve el círculo "Nueva" ni la
+   barra activa antes de tener cuenta.
+   El texto va en NAVY (5.77:1). Blanco daría 2.84:1 y no pasa. */
+.link-btn-brand {
+  background: var(--brand);
+  color: var(--brand-fg);
+}
+
+/* "Ya tengo cuenta · Entrar" es un botón CON BORDE, no un link suelto: como
+   texto plano se perdía entre el resto del contenido. Con borde propio tiene el
+   mismo peso visual que el primario sin competirle en color. */
+.link-btn-outline {
+  background: var(--surface);
+  color: var(--action); /* 16.36:1 sobre blanco */
+  border: 1.5px solid var(--action);
+}
+
+.link-btn:focus-visible,
+.link-round:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* La salida del 403 y del canje: círculo de 56px. Nunca una pantalla sin
+   acción — el código ya documenta el bug donde alguien quedaba atrapado en una
+   vista de solo lectura. */
+.link-round {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-full);
+  border: none;
+  cursor: pointer;
+  background: var(--brand);
+  color: var(--brand-fg); /* glifo navy, 5.77:1 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--sh-2);
+}
+
+/* §1.2-C · el tilde del canje: 72px en --success, con el glifo en blanco
+   (5.48:1). El ícono va SIEMPRE con texto al lado — el color no es el único
+   portador de significado. */
+.link-check {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--r-full);
+  background: var(--success);
+  color: var(--action-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.link-ok-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* El nombre del restaurante, SIN el código de mesa: no aporta nada en el
+   momento de celebrar. */
+.link-ok-sub {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COMPARTIR · SPEC_APP.md §1.7
+   El momento de triunfo del organizador. El código es el protagonista y el
+   canal real es WhatsApp; el QR queda afuera hasta que exista una orden de
+   dependencia, y no se dibuja su superficie mientras tanto.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* La barra reducida: una sola columna en vez de cinco. El resto —bloque,
+   sombra, círculo— es exactamente el de la barra de cinco.
+
+   El `min-height` de la posición existe para garantizar el área táctil de los
+   ítems con ícono + etiqueta; acá no hay etiqueta y el círculo ya mide 46px,
+   por encima del mínimo. Dejándolo puesto, el círculo quedaba HUNDIDO adentro
+   del bloque —medido: 2px debajo del borde superior y 12px del borde de la
+   pantalla— y se perdía el gesto de "montado sobre el borde" que es lo que lo
+   hace leer como la misma barra. Sin él, el margen negativo hace su trabajo. */
+.appbar-solo {
+  grid-template-columns: 1fr;
+  padding-bottom: calc(var(--sp-6) + env(safe-area-inset-bottom));
+}
+
+.appbar-solo .appbar-center {
+  min-height: 0;
+  padding: 0;
+}
+
+.share-card {
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+}
+
+/* Tocar el código copia. Es un botón de ancho completo y no un ícono suelto:
+   el área táctil es todo el renglón, que es como se toca esto con una mano. */
+.share-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.share-code:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.share-code:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* Mono: es un código de mesa, el único uso de la familia mono del sistema.
+   Los importes NO van acá — van en display con tabular-nums.
+
+   §1.7 pide `--fs-lg` y **ese token no existe**: la escala del sistema declara
+   SEIS tamaños y dice que no hay un séptimo. Se mapea al más cercano hacia
+   arriba, `--fs-h1`, porque el código es el protagonista de la pantalla — lo
+   que la persona lee en voz alta y copia. Inventar el token sería agregar el
+   séptimo tamaño de contrabando. */
+.share-code-txt {
+  font-family: var(--font-mono);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* `#075E54` es el teal oscuro histórico de WhatsApp. El verde moderno
+   `#25D366` —que es lo que había— da 1.98:1 con texto blanco y reprueba AA de
+   punta a punta; sobre este teal el blanco da 7.67:1. */
+.share-wa {
+  background: #075e54;
+  color: var(--on-dark);
+  text-decoration: none;
+}
+
+.share-wa.off {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* El link en texto, seleccionable. Corta por caracter porque una URL con token
+   no tiene espacios y si no se sale de la pantalla. */
+.share-link {
+  margin: 0 0 var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--link);
+  word-break: break-all;
+}
+
+.share-note {
+  margin: var(--sp-3) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* ─── El panel de invitar: sin pestañas, una sola sección ─── */
+.inv-panel {
+  margin-top: var(--sp-6);
+}
+
+.inv-list {
+  margin-top: var(--sp-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  overflow: hidden;
+}
+
+.inv-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.inv-row:last-child {
+  border-bottom: none;
+}
+
+/* Fila de grupo: ícono propio, nombre, conteo y chevron. Es un botón entero
+   —área táctil de todo el renglón— y no un chevron chiquito al costado. */
+.inv-group {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+
+.inv-group:last-child {
+  border-bottom: none;
+}
+
+.inv-group:focus-visible,
+.inv-row .btn:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
+
+.inv-group-ico {
+  flex: none;
+  width: 32px;
+  font-size: 22px;
+  line-height: 1;
+  text-align: center;
+}
+
+/* Gira al abrir. Con movimiento reducido cambia igual, sin transición: la
+   dirección del glifo es información, la animación no. */
+.inv-chevron {
+  flex: none;
+  display: flex;
+  color: var(--text-muted);
+  transition: transform var(--mo-fast, 120ms) ease-out;
+}
+
+.inv-chevron.on {
+  transform: rotate(180deg);
+}
+
+/* Los integrantes van indentados bajo su grupo: empujan a los grupos de abajo,
+   que es el gesto de acordeón que pide el spec. */
+.inv-members {
+  padding-left: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.inv-none {
+  margin: var(--sp-3) 0;
+  padding: 0 var(--sp-4);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* Botón CON BORDE y sin relleno: es una acción repetible sobre una lista, no
+   el cierre de una pantalla. */
+.btn-outline {
+  background: none;
+  border: 1.5px solid var(--action);
+  color: var(--action);
+}
+
+.inv-groups-label {
+  margin-top: var(--sp-6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inv-chevron {
+    transition: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   AVISOS · SPEC_APP.md §1.8
+   No leído = punto --action navy de 8px A LA IZQUIERDA **más** peso 700 en el
+   título. El punto solo no alcanza: son dos señales porque una sola se pierde
+   en escala de grises y con daltonismo.
+
+   Es de PRIMER NIVEL: se llega por la campana, no por la barra, así que no
+   lleva flecha de volver. La campana queda en --brand y sin badge — el badge
+   cuenta lo que no viste, y acá lo estás viendo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* La campana de "ya estás acá". `--brand` sobre la banda navy mide 5.82:1, muy
+   por encima del 3:1 que pide un objeto gráfico. No es un botón: no hace nada. */
+.hdr-bell-here {
+  color: var(--brand);
+  cursor: default;
+}
+
+/* "Marcar leídos" en su propia fila, DEBAJO del encabezado. Alineado a la
+   derecha porque es una acción global sobre la lista que sigue. La fila existe
+   aunque no haya nada sin leer: si apareciera y desapareciera, la lista saltaría
+   hacia arriba justo cuando la persona termina de marcar. */
+.avisos-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-4);
+}
+
+.linkbtn {
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--link);
+}
+
+.linkbtn:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* La tarjeta de invitación. NO es `card` blanca: fondo --teal-l y borde
+   --action-2 son lo que la separa del resto de la lista — y es esa separación,
+   no el color del botón, la que le da la jerarquía (§1.8). */
+.inv-card {
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--action-2);
+  border-radius: var(--r-lg);
+  background: var(--teal-l);
+}
+
+.inv-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  color: var(--text);
+}
+
+/* Dos líneas, nunca una sola larga. La primera es el contexto y la segunda es
+   el dato: el restaurante va con más peso porque es lo que la persona busca. */
+.inv-l1 {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.inv-l2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.inv-cta {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.inv-meta {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* Los rótulos de sección son <h2> desde §1.8: sin tarjeta de título, esta
+   pantalla no tenía NINGÚN encabezado para un lector de pantalla. El reset del
+   margen del <h2> vive en la regla base de `.sectlabel`, no acá. */
+
+.aviso-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+/* §1.8 lo pone en `--action` navy, no en `--action-2` teal. El punto ACOMPAÑA:
+   la señal principal es el peso 700 del título, y por eso el punto no necesita
+   competir por atención con nada. Naranja está descartado explícitamente — esta
+   pantalla ya muestra la barra con su círculo naranja. */
+.aviso-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: var(--r-full);
+  background: var(--action);
+}
+
+/* El leído conserva el hueco del punto: sin esto la lista se desalinea fila a
+   fila y el ojo pierde la columna. */
+.aviso-dot.off {
+  background: none;
+}
+
+.aviso-title {
+  font-family: var(--font-body);
+  font-size: var(--fs-body); /* el cuerpo a 16px, aplicado en esta pantalla */
+  line-height: var(--lh-body);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.aviso-title.unread {
+  font-weight: 700;
+}
+
+.aviso-time {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* Vacío REAL: sin borde. Si hubiera borde, habría algo que no estás viendo —
+   ésa es la diferencia con supresión y con desconocido (§5 del sistema). */
+.aviso-empty {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FLUJO DE ARMAR MESA · SPEC_APP.md §1.3–§1.6
+   Cabecera de dos filas (tercera variante) y tarjeta de título. La banda lleva
+   MENOS padding abajo que la de primer nivel, para que no quede aire entre
+   "Volver" y la tarjeta montada.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.hdr-flow {
+  padding-bottom: var(--sp-6);
+}
+
+.hdr-flow .hdr-row {
+  min-height: 0;
+}
+
+.hdr-row-2 {
+  margin-top: var(--sp-2);
+  min-height: var(--tap-min);
+}
+
+/* El ID del usuario, no su nombre: en el flujo identifica la cuenta con la que
+   se está armando la mesa. Trunca antes de empujar nada. */
+.hdr-id {
+  margin-left: auto;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--on-dark-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* La tarjeta de título, montada sobre la banda. Lleva SIEMPRE el título
+   centrado; lo que va debajo depende de cada pantalla y puede no haber nada
+   (§1.4). En División va en --teal-l, no blanca. */
+.title-card {
+  position: relative;
+  z-index: 1;
+  margin: -24px var(--sp-4) var(--sp-4);
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--teal-l);
+  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
+  text-align: center;
+}
+
+.title-card-title {
+  /* Escanear (§1.6) lo monta como <h1>: es el único título de esa pantalla y
+     sin él no queda encabezado ninguno. El reset del margen del <h1> vive acá
+     y no en un `style` inline, que es exactamente el override silencioso que
+     ya rompió el padding de la barra una vez. */
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* §1.4 · el importe por persona, en vivo mientras se mueve el stepper: es la
+   información que la persona está buscando, así que va en --fs-h1 y no en una
+   píldora al costado. */
+.split-amt {
+  margin-top: var(--sp-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: center;
+}
+
+.split-amt-lbl {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TICKET · SPEC_APP.md §1.3
+   Una sola tarjeta de título: restaurante + ubicación arriba, y debajo de la
+   línea el total con su observación. Se probaron y descartaron dos variantes
+   con pestaña fusionada al estilo Inicio; Mati rechazó las dos.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Ubicación bajo el nombre del restaurante, centrada como él. */
+.title-card-sub {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* La MISMA línea que separa las filas de la lista de consumos: la tarjeta y la
+   lista tienen que leerse como el mismo documento, no como dos bloques. */
+.title-card-div {
+  /* De borde a borde de la tarjeta: el negativo cancela el padding de
+     .title-card. Media línea suelta en el medio partiría la tarjeta en dos
+     bloques, y es UNA sola tarjeta. */
+  margin: var(--sp-3) calc(var(--sp-4) * -1);
+  border-top: 1px solid var(--border);
+}
+
+.title-card-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.title-card-total-lbl {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.title-card-total-amt {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Observación INFORMATIVA: no es un error, así que va en --text-muted y nunca
+   en --warning mientras los números cierren.
+   El spec la dibuja en --fs-xs (12px); va en --fs-sm porque §2 del sistema
+   reserva 12px para etiquetas en MAYÚSCULA y lo prohíbe para datos, y esto es
+   una oración que la persona tiene que leer con el ticket de papel en la mano. */
+.title-card-note {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.title-card-note svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* Los números NO cierran. Deja de ser informativa: el ícono cambia de info a
+   warning, el color pasa a --warning y el texto dice la diferencia exacta.
+   Jamás se ajusta el total en silencio. */
+.title-card-note.warn {
+  color: var(--warning);
+  font-weight: 500;
+}
+
+/* ─── La lista de consumos ─── */
+
+/* Texto limpio, como en Mis ítems: en la vista normal no hay ni un recuadro de
+   input a la vista. Los controles aparecen recién en modo edición. */
+/* `center` y no `baseline`: cantidad, nombre y precio comparten tamaño y
+   line-height, así que las dos se ven igual — pero la fila también lleva un
+   botón de 44px SIN texto, y la línea de base de un elemento que no tiene
+   ninguna se sintetiza desde su borde inferior. Centrar no depende de eso.
+   (Con `baseline` la fila también medía 52px: el 121px que aparecía en las
+   filas sin nombre era la colisión con `.empty`, no la alineación.) */
+.tk-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tk-qty {
+  flex: none;
+  min-width: 22px;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.tk-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+  /* `break-word` y no `anywhere`: los dos parten un nombre larguísimo, pero
+     `anywhere` además reduce el ancho mínimo intrínseco del elemento, y en un
+     flex eso lo deja competir por el espacio desde casi cero. */
+  overflow-wrap: break-word;
+}
+
+/* Sin nombre todavía (consumo recién agregado): es un hueco a completar, no un
+   dato. Se dice con palabras además del color.
+   NO se llama `.empty`: esa clase ya existe como estado vacío global, con
+   `padding: 36px 24px` y `text-align: center`, y la fila se los comía enteros
+   —121px de alto en vez de 53—. Un nombre genérico en una hoja única es una
+   colisión esperando. */
+.tk-name.tk-sin-nombre {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.tk-price {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: right;
+}
+
+/* El lápiz de cada fila, sólo en modo edición. Área táctil completa aunque el
+   glifo sea chico. */
+.tk-pencil {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  /* Negativo para que los 44px de área táctil no engorden una fila cuya línea
+     de texto mide 24: el botón se sale del padding de la fila sin empujarla. */
+  margin: calc(var(--sp-2) * -1) 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--link);
+  cursor: pointer;
+}
+
+/* La última fila lleva una línea más marcada antes de la acción de editar. */
+.tk-list {
+  border-bottom: 2px solid var(--border);
+}
+
+.tk-list .tk-row:last-child {
+  border-bottom: 0;
+}
+
+/* Fila expandida. El monto se vuelve editable con borde --action-2; el nombre y
+   la cantidad también, porque un consumo agregado nace vacío y sin eso no habría
+   forma de nombrarlo (desvío del spec, decidido con Mati el 2026-08-05). */
+.tk-edit {
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--border);
+  /* Quien scrollea es el documento, y `scrollIntoView` alinea contra el borde
+     del viewport: no tiene forma de saber que la barra fija tapa los últimos
+     135px. `scroll-margin-bottom` es exactamente cómo se le dice. Sin esto la
+     fila recién abierta quedaba "visible" para el navegador y debajo de la
+     barra para la persona. */
+  scroll-margin-bottom: 148px;
+}
+
+.tk-edit-field {
+  display: block;
+  margin-bottom: var(--sp-3);
+}
+
+.tk-edit-lbl {
+  display: block;
+  margin-bottom: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.tk-edit-input {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--sp-2) var(--sp-3);
+  border: 2px solid var(--action-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+}
+
+.tk-edit-input.amt {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tk-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+/* Eliminar en --danger, con tacho. Nunca sólo el ícono: el texto va al lado. */
+.tk-del {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+/* Al pie de la lista: un LINK con lápiz, no un botón con borde. */
+.tk-edit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--link);
+  cursor: pointer;
+}
+
+.tk-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0 var(--sp-4);
+}
+
+/* Motivo por el que Continuar está apagado. Va en la fila propia de la barra,
+   no flotando sobre el contenido como antes. */
+.tk-invalid {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MIS ÍTEMS · SPEC_APP.md §1.5
+   La pantalla que gobierna a cualquier participante autenticado de la mesa.
+   Reusa la tarjeta de título y el .flow-scroll de §1.3: es el mismo sistema,
+   no una variante — acá la tarjeta SÍ lleva contenido debajo del título.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Progreso de pago de la mesa completa, dentro de la tarjeta de título. */
+.mi-progress {
+  height: 8px;
+  border-radius: var(--r-full);
+  background: rgba(15, 31, 61, 0.1);
+  overflow: hidden;
+}
+
+.mi-progress-fill {
+  height: 100%;
+  border-radius: var(--r-full);
+  background: var(--action-2);
+  transition: width 0.3s ease;
+}
+
+.mi-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.mi-meta-amt {
+  font-variant-numeric: tabular-nums;
+}
+
+/* El countdown. En --brand-ink (5.18:1) cuando falta menos de una hora: es el
+   naranja COMO TEXTO, nunca --brand, que sobre claro da 2.6:1. */
+.mi-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.mi-count.urgent {
+  color: var(--brand-ink);
+  font-weight: 700;
+}
+
+/* ─── La lista ─── */
+
+.mi-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-3) var(--sp-2);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.mi-row:disabled {
+  cursor: default;
+}
+
+/* Seleccionado: fondo de fila al 8%. Es tinte, no el color pleno — el pleno
+   sobre el que después va texto no llega a contraste. */
+.mi-row.sel {
+  background: rgba(0, 194, 203, 0.08);
+}
+
+/* Checkbox. Los CUATRO estados se distinguen por FORMA además de color: vacío,
+   tilde teal, tilde verde y candado. En escala de grises "lo eligió otro" y
+   "lo elegí yo" no se pueden confundir (§1.5 lo pide explícito). */
+.mi-check {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: transparent;
+}
+
+.mi-check.on {
+  border-color: var(--action-2);
+  background: var(--action-2);
+  color: var(--action-2-fg);
+}
+
+.mi-check.paid {
+  border-color: var(--success);
+  background: var(--success);
+  color: #fff;
+}
+
+.mi-check.taken {
+  border-color: var(--border);
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+.mi-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mi-name {
+  /* `block` explícito: son spans dentro de un <button>, y en línea el estado se
+     pegaba al nombre — "Pizza MargheritaPagado". */
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+.mi-row.sel .mi-name {
+  font-weight: 600;
+}
+
+/* Se atenúan NOMBRE y PRECIO, nunca la fila entera: bajarle la opacidad al
+   contenedor arrastra el texto de ayuda por debajo del mínimo de contraste.
+   Ya pasó una vez; la corrección se conserva (§1.5). */
+.mi-name.dim,
+.mi-price.dim {
+  color: var(--text-muted);
+}
+
+.mi-name.paid {
+  text-decoration: line-through;
+}
+
+/* El estado, con PALABRAS. El color y el ícono nunca son el único portador. */
+.mi-tag {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.mi-price {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: right;
+}
+
+.mi-row.sel .mi-price {
+  font-weight: 700;
+}
+
+/* ─── Selector de porción ─── */
+
+/* Desplegable debajo del ítem, INDENTADO para que se lea como suyo y no como
+   otra fila de la lista. Arranca con "1" marcada: tildar y listo sigue siendo
+   el flujo de siempre, y el selector sólo pesa si alguien lo cambia. */
+.mi-frac {
+  padding: var(--sp-3) var(--sp-2) var(--sp-4) 44px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 194, 203, 0.08);
+}
+
+.mi-frac-lbl {
+  margin-bottom: var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* Mismo componente .seg del sistema, con el área táctil de la app. */
+.mi-frac .seg {
+  margin-bottom: var(--sp-2);
+  background: var(--surface);
+}
+
+.mi-frac .seg-btn {
+  min-height: var(--tap-min);
+  font-size: var(--fs-body);
+}
+
+.mi-frac .seg-btn.on {
+  background: var(--action-2);
+  color: var(--action-2-fg);
+}
+
+.mi-frac-amt {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--link);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── "Mi parte", la fila propia arriba de la barra ─── */
+
+/* Lo dinámico vive acá y NO en la etiqueta del centro de la barra: un nav item
+   que cambia de texto según el estado es un nav item inestable (§1.5). */
+.mi-parte {
+  /* `flex: 1` porque `.appbar-above` es un flex container: sin esto la fila
+     medía lo que mide su contenido (154px de 375) y el monto quedaba pegado a
+     la etiqueta en vez de contra el borde derecho. */
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+.mi-parte-amt {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §1.1 · INICIO + §1.11 · las tres pestañas — son la MISMA pantalla.
+
+   Estructura, de arriba abajo: banda navy con las pestañas en burbuja →
+   tarjeta montada con los ACCESOS (la pestaña lanza, no muestra) → la burbuja
+   de la mesa abierta → barra de cinco posiciones.
+
+   La mesa va al MEDIO, no arriba (decisión de Mati): tiene más impacto debajo
+   de los accesos que encabezando la pantalla.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Accesos de la pestaña (§5 bis · B) ───
+   SIN fondo propio: la pestaña y su contenido son una sola burbuja blanca
+   continua. Lo único que los separa es una línea de --border — vertical si son
+   dos, horizontal si van apilados. */
+.launch-pair {
+  display: flex;
+  align-items: stretch;
+}
+.launch-pair > .launch + .launch {
+  border-left: 1px solid var(--border);
+}
+
+.launch-stack {
+  display: flex;
+  flex-direction: column;
+}
+.launch-stack > .launch + .launch {
+  border-top: 1px solid var(--border);
+}
+
+.launch {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  /* Mucho más que el mínimo táctil: es el objeto principal de la tarjeta. */
+  min-height: 84px;
+  padding: var(--sp-4) var(--sp-3);
+  background: none;
+  border: none;
+  /* SIN border-radius, y no es un olvido: la línea que separa los accesos es un
+     `border-left`, y un radio acá se la lleva puesta — el divisor se curvaba en
+     las dos puntas y leía como si el acceso de la derecha fuera otra tarjeta.
+     Visto a 375px antes de commitear. */
+  cursor: pointer;
+  text-align: center;
+}
+
+/* El ícono del acceso va en --link. Es la señal de "esto lleva a otro lado". */
+.launch-ico {
+  color: var(--link);
+  display: flex;
+}
+
+.launch-label {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* La frase de invitación de la pestaña Estadísticas, textual de Mati. */
+.launch-invite {
+  margin: 0;
+  padding: var(--sp-4) var(--sp-4) 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.launch:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
+
+/* ─── Estado DESCONOCIDO (§5) — punteado + --surface-2 ───
+   "Existe pero no se muestra / todavía no existe". Punteado y sólido no son
+   decoración: punteado dice que hay algo que no estás viendo. */
+.state-unknown {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin: var(--sp-4);
+  padding: var(--sp-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.state-unknown-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.state-unknown-body {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* ─── Estado ERROR DE RED (§5) — borde SÓLIDO --danger + tinte + Reintentar ───
+   Un error nunca puede leerse como vacío: por eso lleva borde y el vacío no. */
+.state-error {
+  display: flex;
+  /* El botón va en su PROPIA fila y no al costado del texto: a 375px el título
+     quedaba partido en dos con el botón al lado y el bloque leía desbalanceado.
+     Verificado en pantalla forzando la falla, no imaginado. */
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-lg);
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.state-error-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.state-error-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.state-error-body {
+  margin: 2px 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* ─── Estado ADVERTENCIA (§1.6) — mismo esqueleto que el error, otro color ───
+   Una foto de más de 8 MB no es una falla: es un límite conocido con una
+   salida obvia. Va en --warning y NO en --danger, que queda para lo que sí
+   salió mal. Borde SÓLIDO igual: "esto es lo que hay" (§5). */
+.state-warn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--warning);
+  border-radius: var(--r-lg);
+  background: var(--warning-tint);
+  color: var(--warning);
+}
+
+/* Dos salidas lado a lado —Reintentar y Cargarlo a mano— repartidas en partes
+   iguales. Con una sola, ocupa el ancho entero igual que en `.state-error`. */
+.state-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.state-actions > .btn {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── La burbuja de la mesa ─── */
+.home-mesa {
+  display: block;
+  margin: var(--sp-6) var(--sp-4) 0;
+}
+
+.mesa-card {
+  display: block;
+  width: 100%;
+  padding: var(--sp-4);
+  border: none;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mesa-card:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.mesa-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.mesa-kicker {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--text-muted);
+}
+
+.mesa-name {
+  margin-top: var(--sp-2);
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.mesa-meta {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* La jerarquía dice "cuánto falta", no "cuánto es": lo pagado manda. */
+.mesa-money {
+  margin-top: var(--sp-4);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  /* El `gap` NO es cosmético: al ser ítems flex, el espacio en blanco del texto
+     se colapsa y quedaba "$325.00de $840.00". Se vio en pantalla, no leyendo. */
+  gap: var(--sp-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.mesa-paid {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: 800;
+  color: var(--text);
+}
+
+.mesa-total {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+/* La barra NUNCA es el único indicador: los dos importes de arriba son el
+   dato, esto es el refuerzo. Por eso arriba va aria-hidden. */
+.mesa-bar {
+  margin-top: var(--sp-2);
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.mesa-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-full);
+  background: var(--action-2);
+}
+
+.mesa-foot {
+  margin-top: var(--sp-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+.mesa-cd {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--text-muted);
+}
+/* Bajo 1 h. NO parpadea: un countdown que titila apura, no informa. */
+.mesa-cd.urgent {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.mesa-go {
+  color: var(--link);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Vacío REAL: el único estado del sistema SIN borde. Y sin botón propio — la
+   acción ya está en el círculo naranja de la barra, a un centímetro. */
+.mesa-empty {
+  padding: var(--sp-6) var(--sp-4);
+  text-align: center;
+}
+
+.mesa-empty-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mesa-empty-body {
+  margin: var(--sp-1) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* ─── Cargando: esqueleto con la SILUETA del contenido real, nunca un spinner
+   centrado (§5). Cada línea tiene el ancho de lo que va a reemplazar. ─── */
+.mesa-card.sk {
+  cursor: default;
+}
+
+.sk-line {
+  display: block;
+  height: 12px;
+  margin-bottom: var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.sk-line.tall {
+  height: 20px;
+}
+.sk-line.bar {
+  height: 8px;
+  margin-bottom: 0;
+  border-radius: var(--r-full);
+}
+.sk-line.w40 { width: 40%; }
+.sk-line.w55 { width: 55%; }
+.sk-line.w70 { width: 70%; }
+.sk-line.w100 { width: 100%; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §1.11 · las tres pantallas que lanzan las pestañas: Tarjetas, Pagos y
+   Estadísticas. La pestaña lanza; el contenido completo vive acá.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Tarjetas ─── */
+.pm-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+}
+
+.pm-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.pm-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* El banco es lo que cede: puede ser largo y no identifica nada por sí solo. */
+.pm-bank {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Los últimos cuatro NO se truncan nunca: son lo único que distingue una
+   tarjeta de otra. Con banco y dígitos en un mismo texto, la elipsis se comía
+   los dígitos y quedaba "Santander ···· 4…". */
+.pm-last {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pm-state {
+  margin-top: var(--sp-2);
+}
+
+.pm-default {
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
+  color: var(--link);
+}
+
+.pm-meta {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+/* La ÚNICA fila punteada de la app que no significa "dato oculto": por eso
+   lleva el `+` y la palabra, nunca un ícono solo. */
+.pm-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: var(--tap-min);
+  margin-top: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-lg);
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--link);
+}
+
+/* ─── Pagos ─── */
+
+/* Pegajoso: con varios meses cargados, saber en cuál estás no puede depender
+   de acordarte de lo que scrolleaste. */
+.mes-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: var(--sp-4) 0 var(--sp-2);
+  padding: var(--sp-2) 0;
+  background: var(--bg);
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.pago-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+}
+
+.pago-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.pago-rest {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pago-meta {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.pago-amt {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* ─── Historial · SPEC_APP.md §1.10 (la entrada "Mesas" de la barra) ─── */
+
+/* Píldora de título angosta y centrada, NO la tarjeta de ancho completo: un
+   título sin total ni progreso debajo quedaba desproporcionado a todo lo
+   ancho (se probó, §1.10). Medidas del spec: ancho del texto, --r-full,
+   14px 32px, --fs-h2 — el tamaño más cercano de la escala de seis. */
+.hist-pill-wrap {
+  display: flex;
+  justify-content: center;
+  margin: var(--sp-4) 0 var(--sp-2);
+}
+
+.hist-pill {
+  margin: 0;
+  padding: 14px 32px;
+  border-radius: var(--r-full);
+  background: var(--teal-l);
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.hist-item {
+  margin-bottom: var(--sp-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  overflow: hidden;
+}
+
+/* Botón entero —área táctil de todo el renglón—, como .inv-group. */
+.hist-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+
+.hist-row:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
+
+/* Abierta: la fila se tiñe apenas — tinte al 8%, no el color pleno, igual que
+   un ítem seleccionado en Mis ítems (§1.10 lo pide con esa referencia). */
+.hist-item.on .hist-row {
+  background: rgba(0, 194, 203, 0.08);
+}
+
+.hist-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.hist-rest {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hist-meta {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.hist-amt {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Gira de abajo a arriba al abrir. Con movimiento reducido cambia igual, sin
+   transición: la dirección del glifo es información, la animación no. */
+.hist-chevron {
+  flex: none;
+  display: flex;
+  color: var(--text-muted);
+  transition: transform var(--mo-fast, 120ms) ease-out;
+}
+
+.hist-chevron.on {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hist-chevron {
+    transition: none;
+  }
+}
+
+/* El desconocido va DENTRO de la tarjeta de la fila: hereda .state-unknown
+   (punteado + --surface-2) y sólo ajusta el margen exterior. */
+.hist-unknown {
+  margin: 0 var(--sp-3) var(--sp-3);
+}
+
+/* La página siguiente falló, pero lo ya mostrado sigue siendo correcto. Se
+   dice, no se borra la lista. */
+.pago-fallo {
+  margin: var(--sp-3) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.pago-row.sk {
+  display: block;
+}
+
+/* ─── Estadísticas ─── */
+
+/* El ancla de la pantalla: el gasto del mes en display, tabular. */
+.stat-hero {
+  padding: var(--sp-6) var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  text-align: center;
+}
+
+.stat-hero-lbl {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.stat-hero-amt {
+  margin-top: var(--sp-2);
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  line-height: var(--lh-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.stat-pair {
+  display: flex;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+
+.stat-cell {
+  flex: 1;
+  min-width: 0;
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  text-align: center;
+}
+
+.stat-num {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+.stat-num.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-lbl {
+  margin-top: var(--sp-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.stat-sect {
+  margin: var(--sp-6) 0 var(--sp-2);
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.stat-rest + .stat-rest {
+  margin-top: var(--sp-4);
+}
+
+.stat-rest-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+
+.stat-rest-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* La barra NUNCA va sola: este número siempre está, en texto. */
+.stat-rest-visits {
+  flex: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-dish {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-full);
+  background: var(--teal-l);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.stat-hero.sk {
+  text-align: left;
+}
+
+/* ─── §1.9 · Sección social ───
+   La burbuja de contenido que va DEBAJO de la tarjeta montada: el tile de
+   "Nuevo amigo"/"Nuevo grupo" es una pieza y el buscador con su listado es
+   otra, separadas a propósito (el spec las dibuja como dos burbujas). */
+.social-list {
+  margin: var(--sp-4) var(--sp-4) 0;
+}
+
+/* Buscador SIEMPRE visible, arriba del listado y dentro de la misma burbuja.
+   Se separa de las filas con la misma línea que separa fila de fila. */
+.social-search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.social-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--text);
+  font-family: var(--font-body);
+  /* ≥16px evita el zoom automático de iOS al enfocar, igual que `.input`. */
+  font-size: 16px;
+}
+.social-search-input::placeholder {
+  color: var(--text-muted);
+}
+.social-search-input:focus {
+  outline: none;
+}
+.social-search:focus-within {
+  outline: 2px solid var(--action-2);
+  outline-offset: -2px;
+}
+
+/* Ícono propio de cada grupo (§1.9: "no uno repetido"). */
+.group-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--orange-l);
+  font-size: var(--fs-legacy-xl);
+}
+
+/* Elegir el ícono al crear el grupo. Es la superficie que faltaba: el contrato
+   ya aceptaba `icon` opcional, y sin esto todos nacían con el default. */
+.icon-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.icon-pick-opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: var(--fs-legacy-xl);
+  cursor: pointer;
+}
+.icon-pick-opt.on {
+  border-color: var(--action-2);
+  background: var(--teal-l);
+}
+.icon-pick-opt:focus-visible {
+  outline: 2px solid var(--action-2);
+  outline-offset: 2px;
+}
+
+/* Solicitudes muestra directo dentro de la tarjeta montada: sus rótulos
+   necesitan el aire lateral que las filas ya traen. */
+.solicitudes > .sectlabel {
+  padding: var(--sp-3) var(--sp-4) 0;
 }

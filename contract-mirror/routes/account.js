@@ -9,8 +9,13 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
-const { movementsQuery, historyQuery, walletTxQuery, validateQuery } = require('../schemas');
+const {
+  movementsQuery, historyQuery, walletTxQuery, updateMe, uuidIdParam,
+  validateQuery, validateBody, validateParams,
+} = require('../schemas');
 const { centsToDisplay } = require('../utils/money');
+const logger = require('../utils/logger');
+const consent = require('../services/consent');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -21,15 +26,91 @@ router.use(requireAuth);
 // engordar una query que corre en CADA request autenticado). Jamás exponer
 // password_hash / stripe_customer_id / email_normalized / kyc_status.
 // Mismo shape que register (+ phone/created_at); wrapper { user } idéntico.
+/**
+ * Perfil propio, en UN solo lugar (v2.28).
+ *
+ * Antes GET y PATCH armaban la respuesta por separado y PATCH se olvidaba de
+ * `is_adult`: el front recibía de PATCH un `user` con la misma pinta que el de
+ * GET pero sin el veredicto de edad, o sea `undefined`, que es falsy — un adulto
+ * recién declarado parecía menor hasta que el front hiciera otro GET. La única
+ * defensa real contra eso es que haya una sola función que arme el objeto.
+ *
+ * Devuelve null si el usuario no existe.
+ */
+async function perfilPropio(userId) {
+  const { rows } = await pool.query(
+    `SELECT id, payme_id, email, first_name, last_name, phone,
+            to_char(birth_date, 'YYYY-MM-DD') AS birth_date, created_at
+       FROM users WHERE id = $1`,
+    [userId]
+  );
+  if (!rows[0]) return null;
+  return {
+    ...rows[0],
+    // Pedido explícito del front (GAPS.md G-13): saber SI hay fecha sin tener
+    // que leer la fecha. Es el campo que debería alcanzarle para decidir si
+    // pregunta o no; `birth_date` crudo se mantiene por compatibilidad.
+    birth_date_set: rows[0].birth_date !== null,
+    // D-11: el veredicto de mayoría de edad lo da el BACKEND. Si el front
+    // calculara la edad desde la fecha cruda repetiría el bug de husos que ya
+    // nos pasó una vez (con TZ al este de México, un menor pasaba por mayor).
+    is_adult: await consent.edadConocida(userId),
+  };
+}
+
 router.get('/me', async (req, res, next) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT id, payme_id, email, first_name, last_name, phone, created_at
-         FROM users WHERE id = $1`,
-      [req.user.id]
+    const user = await perfilPropio(req.user.id);
+    if (!user) return res.status(404).json({ error: 'user_not_found' });
+    res.json({ user });
+  } catch (err) { next(err); }
+});
+
+/**
+ * PATCH /me — declarar la fecha de nacimiento (D-03 / D-11).
+ *
+ * Existe porque el registro pasó a exigirla, pero TODOS los usuarios previos
+ * quedaron sin ella — y sin fecha, el gate de menores los bloquea para siempre.
+ *
+ * Se puede declarar UNA sola vez: cambiarla después devuelve 409 y va a
+ * soporte. Si se pudiera editar libremente, el gate de D-11 no protegería nada
+ * (bastaría con corregirla para saltearlo).
+ */
+router.patch('/me', validateBody(updateMe), async (req, res, next) => {
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE users SET birth_date = $2 WHERE id = $1 AND birth_date IS NULL`,
+      [req.user.id, req.body.birth_date]
     );
-    if (!rows[0]) return res.status(404).json({ error: 'user_not_found' });
-    res.json({ user: rows[0] });
+    if (rowCount === 0) {
+      const { rows } = await pool.query(
+        `SELECT to_char(birth_date, 'YYYY-MM-DD') AS bd FROM users WHERE id = $1`,
+        [req.user.id]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'user_not_found' });
+      // IDEMPOTENTE: reenviar la MISMA fecha no es un conflicto. Un reintento
+      // por red perdida no puede parecerle al usuario un error.
+      if (rows[0].bd !== req.body.birth_date) {
+        // NADA de fecha en el log: ni completa, ni el año, ni la diferencia de
+        // años. El logger enmascara email/phone/clabe/rfc pero NO birth_date, y
+        // el log general no necesita datos de nacimiento para nada — quien tenga
+        // autorización para revisar el caso consulta la cuenta por su canal.
+        // Con user_id y el código del evento alcanza para encontrarlo.
+        logger.error('birth_date_cambio_rechazado_revision_manual', {
+          user_id: req.user.id,
+        });
+        return res.status(409).json({
+          error: 'birth_date_already_set',
+          detail: 'La fecha de nacimiento ya fue declarada y no se puede cambiar desde la app.',
+        });
+      }
+    }
+    logger.audit('birth_date_declarada', { user_id: req.user.id });
+    // Mismo armador que GET /me: la respuesta trae `is_adult` y `birth_date_set`,
+    // así el front no necesita un GET extra para saber si quedó habilitado.
+    const user = await perfilPropio(req.user.id);
+    if (!user) return res.status(404).json({ error: 'user_not_found' });
+    res.json({ user });
   } catch (err) { next(err); }
 });
 
@@ -97,7 +178,7 @@ router.get('/movements', validateQuery(movementsQuery), async (req, res, next) =
   } catch (err) { next(err); }
 });
 
-router.get('/movements/:id', async (req, res, next) => {
+router.get('/movements/:id', validateParams(uuidIdParam), async (req, res, next) => {
   try {
     const { rows: aRows } = await pool.query(
       `SELECT pa.*, m.code AS mesa_code, r.name AS restaurant_name, r.category,
@@ -113,7 +194,8 @@ router.get('/movements/:id', async (req, res, next) => {
     if (!a) return res.status(404).json({ error: 'movement_not_found' });
 
     const { rows: items } = await pool.query(
-      `SELECT mi.name, mi.price_cents, mi.quantity, mi.category
+      `SELECT mi.name, mi.price_cents, mi.quantity, mi.category,
+              pai.amount_cents, pai.fraction_bps
          FROM payment_attempt_items pai
          JOIN mesa_items mi ON mi.id = pai.mesa_item_id
         WHERE pai.payment_attempt_id = $1`, [a.id]
@@ -129,6 +211,11 @@ router.get('/movements/:id', async (req, res, next) => {
       items: items.map(i => ({
         name: i.name, price_cents: Number(i.price_cents),
         quantity: i.quantity, category: i.category,
+        // En consumo estos dos campos son el importe/fracción realmente
+        // cobrados. En partes iguales quedan null a propósito: el item fue
+        // declarado como consumo, pero el cobro correspondió al slot.
+        amount_cents: i.amount_cents == null ? null : Number(i.amount_cents),
+        fraction_bps: i.fraction_bps == null ? null : Number(i.fraction_bps),
       })),
       items_amount_cents: Number(a.items_amount_cents),
       tip_amount_cents: Number(a.tip_amount_cents),
@@ -192,8 +279,17 @@ router.get('/history', validateQuery(historyQuery), async (req, res, next) => {
     params.push(limit, offset);
 
     const { rows } = await pool.query(
+      // `m.status` (aditivo): el front no tenía forma de saber si la mesa de un
+      // pago sigue abierta, así que pintaba las mesas vivas del invitado bajo un
+      // encabezado de mes, como si ya hubieran terminado.
+      //
+      // ⚠️ La GRANULARIDAD no cambia: esto devuelve UN RENGLÓN POR PAGO y también
+      // alimenta PagosScreen, que es superficie card-only ratificada. Hacerlo
+      // devolver una fila por mesa mutaría una superficie ratificada para
+      // acomodar una pantalla nueva. La agregación se queda en el front.
       `SELECT pa.id, pa.gross_amount_cents, pa.created_at,
-              m.code AS mesa_code, r.name AS restaurant_name, r.category
+              m.code AS mesa_code, m.status AS mesa_status,
+              r.name AS restaurant_name, r.category
          FROM payment_attempts pa
          JOIN mesas m ON m.id = pa.mesa_id
          JOIN restaurants r ON r.id = m.restaurant_id
@@ -208,6 +304,7 @@ router.get('/history', validateQuery(historyQuery), async (req, res, next) => {
         amount_cents: Number(r.gross_amount_cents),
         date: r.created_at,
         mesa_code: r.mesa_code,
+        mesa_status: r.mesa_status,
         restaurant: r.restaurant_name,
         category: r.category,
       })),
