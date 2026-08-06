@@ -294,6 +294,12 @@ function seedMesas(): MockMesa[] {
       guarantee_method: 'card',
     },
     // A-2 demo: mesa que expiró sin completarse; la garantía cubrió el faltante.
+    // `completed` A PROPÓSITO (auditoría 2026-08-06): la pantalla A-2 rica
+    // ("Se cerró por tiempo · Cubrió tu garantía $X") sólo se renderiza con el
+    // único estado que ACREDITA cierre y dispersión — con `settled` cae en la
+    // vaga honesta "Mesa liquidada", y el atajo de demo del Historial prometía
+    // una historia que nunca mostraba. Venció hace una hora; en demo, el
+    // proceso de cierre ya terminó.
     {
       id: mockId('c'),
       code: 'PA-1099',
@@ -303,7 +309,7 @@ function seedMesas(): MockMesa[] {
       tip_amount_cents: 9000,
       division_mode: 'igual',
       expected_participants: 4,
-      status: 'settled',
+      status: 'completed',
       expires_at: iso(-60 * 60_000),
       items: [],
       slots: splitEqual(84000, 4).map((amount, idx) => ({
