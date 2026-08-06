@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { joinLinkMessage, joinLinkStage, type JoinLinkOutcome } from './joinLinkView';
 
-const OUTCOMES: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'unavailable', 'error'];
+const OUTCOMES: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'mesa_cerrada', 'unavailable', 'error'];
 
 /**
  * CIERRE DEL PAGO SIN CUENTA · lo que se fija acá es una regla de PRIVACIDAD,
@@ -22,8 +22,11 @@ describe('el rechazo de un link es CIEGO a su motivo', () => {
   it('sólo existe UN estado de rechazo, no cuatro', () => {
     // Si alguien agrega 'expired' | 'cancelled' | 'superseded' al tipo, esto
     // deja de compilar o deja de cubrir — y hay que venir a leer este bloque.
-    const todos: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'unavailable', 'error'];
-    expect(todos).toHaveLength(5);
+    // v2.45.0 agregó 'mesa_cerrada' y ESTE bloque se vino a leer: NO es un
+    // quinto motivo del 403 — es otro STATUS (410), que sólo llega con token
+    // validado como genuino. El rechazo ciego sigue siendo UNO.
+    const todos: JoinLinkOutcome[] = ['joining', 'rejected', 'invalid', 'mesa_cerrada', 'unavailable', 'error'];
+    expect(todos).toHaveLength(6);
   });
 
   /**
@@ -37,7 +40,7 @@ describe('el rechazo de un link es CIEGO a su motivo', () => {
       'no existe', 'inexistente', 'no encontr', 'inválid', 'invalid',
     ];
     const ofensores: string[] = [];
-    for (const outcome of ['joining', 'rejected', 'invalid', 'unavailable', 'error'] as JoinLinkOutcome[]) {
+    for (const outcome of OUTCOMES) {
       const m = joinLinkMessage(outcome);
       const texto = `${m.title} ${m.body}`.toLowerCase();
       for (const palabra of DELATORES) {
@@ -145,6 +148,7 @@ describe('§1.2 · ninguna pantalla queda sin salida', () => {
   it('los terminales van al bloque con círculo de salida', () => {
     expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'rejected' })).toBe('blocked');
     expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'invalid' })).toBe('blocked');
+    expect(joinLinkStage({ hasSession: true, hasJoined: false, outcome: 'mesa_cerrada' })).toBe('blocked');
   });
 
   it('los reintentables ofrecen reintentar, no una salida ciega', () => {
@@ -162,7 +166,7 @@ describe('§1.2 · ninguna pantalla queda sin salida', () => {
 });
 
 describe('todos los estados tienen mensaje', () => {
-  it.each(['joining', 'rejected', 'invalid', 'unavailable', 'error'] as JoinLinkOutcome[])(
+  it.each(OUTCOMES)(
     '%s produce título y cuerpo no vacíos',
     (outcome) => {
       const m = joinLinkMessage(outcome);
@@ -170,4 +174,43 @@ describe('todos los estados tienen mensaje', () => {
       expect(m.body.length).toBeGreaterThan(0);
     },
   );
+});
+
+describe('§1.2-D · la mesa muerta con token genuino (v2.45.0)', () => {
+  /**
+   * El 410 NO se funde con el rechazo ciego, a propósito: el 403 protege al
+   * desconocido (no acredita que la mesa exista); el 410 sólo llega después
+   * de validar el token, así que decir "esta mesa ya cerró" no regala el
+   * oráculo que el 403 paga.
+   */
+  it('tiene copy propia y dice que ES esta mesa — no el link — lo que murió', () => {
+    const m = joinLinkMessage('mesa_cerrada');
+    expect(m.title).toBe('Esta mesa ya cerró');
+    expect(m.body).toBe('Hablá con quien te invitó si creés que es un error.');
+    expect(m.retryable).toBe(false);
+  });
+
+  it('se distingue del rechazo ciego: no comparten ni título ni cuerpo', () => {
+    const d = joinLinkMessage('mesa_cerrada');
+    const b = joinLinkMessage('rejected');
+    expect(d.title).not.toBe(b.title);
+    expect(d.body).not.toBe(b.body);
+  });
+
+  it('cierra el círculo del recién registrado: la nota de cuenta-lista existe SOLO acá', () => {
+    // Diseño (2026-08-06): la explicación del Inicio vacío vive en la
+    // pantalla que sabe qué pasó — Inicio no adivina. Y ninguna otra pantalla
+    // la necesita: sus caminos no nacen de un alta hecha para este link.
+    expect(joinLinkMessage('mesa_cerrada').nota).toBe(
+      'Tu cuenta ya está lista — podés abrir tu propia mesa cuando quieras.',
+    );
+    for (const outcome of ['joining', 'rejected', 'invalid', 'unavailable', 'error'] as const) {
+      expect(joinLinkMessage(outcome).nota).toBeUndefined();
+    }
+  });
+
+  it('sin nombrar restaurante: la cautela de A se conserva', () => {
+    const m = joinLinkMessage('mesa_cerrada');
+    expect(`${m.title} ${m.body} ${m.nota}`).not.toMatch(/Parolaccia|Hanzo|restaurante/i);
+  });
 });

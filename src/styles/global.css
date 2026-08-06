@@ -2222,6 +2222,18 @@ body {
   color: var(--text-muted); /* 5.43:1 sobre --surface */
 }
 
+/* Pantalla D · la línea "tu cuenta ya está lista", entre la burbuja y el
+   círculo. Fuera de la burbuja a propósito: es otra información (tu cuenta),
+   no parte del rechazo (la mesa). */
+.link-nota {
+  margin: var(--sp-4) var(--sp-4) 0;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
 /* Bloque de acción, pegado abajo. */
 .link-foot {
   display: flex;
@@ -2635,6 +2647,25 @@ body {
 .inv-cta {
   display: flex;
   justify-content: flex-end;
+}
+
+/* v2.45.0 · invitación a mesa muerta: APAGADA, no desaparecida. Pierde el
+   teal de "hay algo para hacer acá" y el peso — sin `opacity` sobre el
+   contenedor, que arrastraría el texto bajo el mínimo de contraste (misma
+   regla que el leído de la lista). */
+.inv-card--cerrada {
+  background: var(--bg);
+  border-color: var(--border);
+}
+.inv-card--cerrada .inv-l2 {
+  color: var(--text-muted);
+}
+.inv-cerrada-copy {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .inv-meta {

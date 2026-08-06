@@ -217,8 +217,8 @@ function seedItems(): MockItem[] {
  * IMPOSIBLE en producción, que esta noche hizo perder tiempo buscando un
  * atrape que en real no existe. Suman exactamente `igualTotal` (62000).
  */
-function seedItemsIgual(): MockItem[] {
-  const mk = (name: string, price: number): MockItem => ({
+function seedItemsIgual(menu: ReadonlyArray<readonly [string, number]>): MockItem[] {
+  return menu.map(([name, price]) => ({
     id: mockId('d'),
     name,
     category: 'other',
@@ -228,13 +228,7 @@ function seedItemsIgual(): MockItem[] {
     lockedBy: null,
     lock_expires_at: null,
     claims: [],
-  });
-  return [
-    mk('Omakase para dos', 26000),
-    mk('Sashimi mixto', 14000),
-    mk('Tempura de camarón', 12000),
-    mk('Sake (botella)', 10000),
-  ];
+  }));
 }
 
 function seedMesas(): MockMesa[] {
@@ -284,7 +278,12 @@ function seedMesas(): MockMesa[] {
       expected_participants: 4,
       status: 'partially_paid',
       expires_at: iso(12 * 60_000),
-      items: seedItemsIgual(),
+      items: seedItemsIgual([
+        ['Omakase para dos', 26000],
+        ['Sashimi mixto', 14000],
+        ['Tempura de camarón', 12000],
+        ['Sake (botella)', 10000],
+      ]),
       slots,
       active_staff: STAFF,
       openedByUser: true,
@@ -308,7 +307,14 @@ function seedMesas(): MockMesa[] {
       expected_participants: 3,
       status: 'open',
       expires_at: iso(26 * 60_000),
-      items: [],
+      // Mismo defecto que tenía PA-3121: items:[] viola el .min(1) de
+      // POST /mesas — un seed no modela estados imposibles. Suman 96000.
+      items: seedItemsIgual([
+        ['Barco de sushi (grande)', 42000],
+        ['Ramen tonkotsu', 22000],
+        ['Gyozas de cerdo', 18000],
+        ['Té verde (tetera)', 14000],
+      ]),
       slots: splitEqual(96000, 3).map((amount, idx) => ({
         slot_index: idx,
         amount_cents: amount,
@@ -558,6 +564,10 @@ function seedNotifications(mesas: MockMesa[]): {
           inviter_first_name: 'Sofía',
           inviter_last_name: 'Fernández',
           inviter_payme_id: 'payme_mx_sofi',
+          // v2.45.0 · valores del momento del seed. El GET los RE-COMPUTA en
+          // vivo con mesaViva(): esto es sólo el punto de partida.
+          mesa_joinable: true,
+          mesa_status: invitedMesa.status,
         },
       ]
     : [];

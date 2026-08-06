@@ -50,6 +50,16 @@ export type JoinLinkOutcome =
    * se lo manden de nuevo, o abrirlo completo—. No revela nada de la mesa.
    */
   | 'invalid'
+  /**
+   * 410 `mesa_not_joinable` (v2.45.0) · el token era GENUINO pero la mesa ya
+   * no está viva. Pantalla D de §1.2, hermana de las otras — y NO se funde
+   * con `rejected` a propósito: el 403 opaco protege al desconocido (no
+   * acredita que la mesa exista); el 410 sólo llega DESPUÉS de validar el
+   * token, así que quien lo recibe fue invitado de verdad y merece saber qué
+   * pasó. Decir "esta mesa ya cerró" acá no regala el oráculo que el 403
+   * paga. Terminal: la mesa no revive, no hay replay útil.
+   */
+  | 'mesa_cerrada'
   /** 503 · el emisor no pudo verificar. Reintentable. */
   | 'unavailable'
   /** Red caída, timeout, 5xx genérico, 2xx malformado. Reintentable. */
@@ -59,6 +69,15 @@ export interface JoinLinkMessage {
   readonly title: string;
   readonly body: string;
   readonly retryable: boolean;
+  /**
+   * Línea extra ANTES del círculo (pantalla D): el recién registrado que
+   * canjeó y encontró la mesa muerta queda con cuenta nueva y cero mesas —
+   * un Inicio vacío justo después de un alta se lee como rotura. La
+   * explicación vive ACÁ, que es la pantalla que sabe qué pasó: Inicio no
+   * tiene por qué adivinar por qué está vacío (Diseño, 2026-08-06). Cada
+   * pantalla dice lo que sabe, y nada que tenga que adivinar.
+   */
+  readonly nota?: string;
 }
 
 /**
@@ -124,6 +143,15 @@ export function joinLinkMessage(outcome: JoinLinkOutcome): JoinLinkMessage {
         title: 'Este link está incompleto',
         body: 'Puede haberse cortado al copiarlo. Pedí que te lo manden de nuevo y abrilo entero.',
         retryable: false,
+      };
+    case 'mesa_cerrada':
+      // Copy de Diseño, textual (§1.2-D, 2026-08-06). Genérica, sin nombrar
+      // restaurante —misma cautela que A—, pero sí dice que ES esta mesa.
+      return {
+        title: 'Esta mesa ya cerró',
+        body: 'Hablá con quien te invitó si creés que es un error.',
+        retryable: false,
+        nota: 'Tu cuenta ya está lista — podés abrir tu propia mesa cuando quieras.',
       };
     case 'unavailable':
       return {

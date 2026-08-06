@@ -45,6 +45,9 @@ function invitacion(id: string, expiraEnMs: number): PendingInvitation {
     inviter_first_name: 'Sofía',
     inviter_last_name: 'Fernández',
     inviter_payme_id: 'payme_mx_sofi',
+    // v2.45.0 · foto del seed; el GET los re-computa en vivo.
+    mesa_joinable: true,
+    mesa_status: 'open',
   };
 }
 
@@ -91,6 +94,80 @@ describe('invitaciones in-app · vencidas (espejo del emisor)', () => {
     await mock.mockAcceptInvitation('viva');
     const despues = await mock.mockOpenMesas();
     expect(despues.mesas.map((m) => m.code)).toContain(viva.code);
+  });
+
+  it('mesa muerta → 410 mesa_not_joinable con su estado, y la invitación QUEDA pendiente', async () => {
+    // v2.45.0: la invitación viva no alcanza — la MESA tiene que estar viva.
+    // Y a diferencia del vencimiento, acá la pendiente NO se consume: la mesa
+    // no revive, la invitación vence sola (semántica del emisor, textual).
+    const { mock, state } = await cargar();
+    const muerta = state.mesas.find((m) => m.status === 'completed')!;
+    state.pendingInvitations = [{ ...invitacion('a-mesa-muerta', 60_000), mesa_code: muerta.code }];
+    try {
+      await mock.mockAcceptInvitation('a-mesa-muerta');
+      expect.unreachable('aceptar hacia una mesa muerta no puede resolver');
+    } catch (e) {
+      if (!(e instanceof mock.MockApiError)) throw e;
+      expect(e.status).toBe(410);
+      expect(e.message).toBe('mesa_not_joinable');
+      expect(e.extra.mesa_status).toBe('completed');
+    }
+    expect(state.pendingInvitations).toHaveLength(1);
+    expect(state.joinedMesaCodes).not.toContain(muerta.code);
+  });
+
+  it('🔴 PUERTA B en POSITIVO: fully_paid está VIVA y el accept ADMITE', async () => {
+    // Decisión B ratificada: pagada entera pero aún no cerrada admite gente.
+    // Es la mesa que un espejo apurado apaga por parecerse a "ya no hay nada
+    // que hacer acá" — por eso se afirma que ENTRA, no sólo que otras no.
+    const { mock, state } = await cargar();
+    const mesa = state.mesas.find((m) => m.status === 'open' && !m.openedByUser)!;
+    mesa.status = 'fully_paid';
+    state.pendingInvitations = [{ ...invitacion('a-fully-paid', 60_000), mesa_code: mesa.code }];
+    const r = await mock.mockAcceptInvitation('a-fully-paid');
+    expect(r.accepted).toBe(true);
+    expect(state.joinedMesaCodes).toContain(mesa.code);
+  });
+
+  it('accept-link: mismo gate — 410 con mesa muerta, y fully_paid canjea', async () => {
+    // Decisión C: una sola regla, dos puertas. El 403 opaco sigue PRIMERO
+    // (token basura no revela nada); el 410 sólo llega con token válido.
+    const { mock, state } = await cargar();
+    // El canje exige sesión (401 sin ella) — el gate corre DESPUÉS de auth.
+    await mock.mockLogin('prueba@demo.mx', 'x');
+    const mesa = state.mesas.find((m) => m.status === 'open' && !m.openedByUser)!;
+    state.linkTokens['token-de-prueba-valido'] = mesa.code;
+
+    mesa.status = 'settled';
+    try {
+      await mock.mockAcceptInvitationLink('token-de-prueba-valido');
+      expect.unreachable('canjear hacia una mesa muerta no puede resolver');
+    } catch (e) {
+      if (!(e instanceof mock.MockApiError)) throw e;
+      expect(e.status).toBe(410);
+      expect(e.message).toBe('mesa_not_joinable');
+      expect(e.extra.mesa_status).toBe('settled');
+    }
+
+    mesa.status = 'fully_paid';
+    const r = await mock.mockAcceptInvitationLink('token-de-prueba-valido');
+    expect(r.joined).toBe(true);
+  });
+
+  it('el GET MARCA, no filtra: la invitación de mesa muerta viene con mesa_joinable false', async () => {
+    const { mock, state } = await cargar();
+    const muerta = state.mesas.find((m) => m.status === 'completed')!;
+    const viva = state.mesas.find((m) => m.status === 'open' && !m.openedByUser)!;
+    state.pendingInvitations = [
+      { ...invitacion('hacia-muerta', 60_000), mesa_code: muerta.code },
+      { ...invitacion('hacia-viva', 60_000), mesa_code: viva.code },
+    ];
+    const r = await mock.mockPendingInvitations();
+    const porId = new Map(r.invitations.map((i) => [i.id, i]));
+    // Las DOS vienen: desaparecer la muerta parecería un bug.
+    expect(r.invitations).toHaveLength(2);
+    expect(porId.get('hacia-muerta')).toMatchObject({ mesa_joinable: false, mesa_status: 'completed' });
+    expect(porId.get('hacia-viva')).toMatchObject({ mesa_joinable: true, mesa_status: 'open' });
   });
 
   it('la invitación del SEED no promete más vida que su mesa', async () => {

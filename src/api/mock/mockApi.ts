@@ -1227,12 +1227,39 @@ export async function mockMarkAllNotificationsRead(): Promise<void> {
   return delay(undefined);
 }
 
+/**
+ * Espejo de `utils/stateMachine.js · mesaViva()` (v2.45.0): UNA mesa está
+ * viva cuando todavía se puede estar en ella. `fully_paid` está viva A
+ * PROPÓSITO (decisión B ratificada 2026-08-06: pagada entera pero no cerrada
+ * admite gente). Es EL MISMO predicado para las tres puertas — las dos de
+ * entrar y el marcador del listado —, igual que en el emisor: una segunda
+ * expresión de la regla se desincroniza sola.
+ *
+ * ⚠️ NO confundir con el filtro de `/mesas/open` (open|partially_paid): son
+ * dos conjuntos distintos por contrato — una fully_paid admite gente pero no
+ * se lista como "abierta".
+ */
+function mesaViva(status: MockMesa['status']): boolean {
+  return status === 'open' || status === 'partially_paid' || status === 'fully_paid';
+}
+
 export async function mockPendingInvitations(): Promise<PendingInvitationsResponse> {
-  // Espejo del WHERE del emisor (`routes/invitations.js:31-34`): pendiente Y
-  // NO VENCIDA (`expires_at > NOW()`). El mock servía la tarjeta para siempre
-  // — "Sumarme" sobre una invitación muerta, éxito y aterrizaje en la nada.
+  // Espejo del WHERE del emisor (`routes/invitations.js`): pendiente Y NO
+  // VENCIDA. Y desde v2.45.0 el listado MARCA, no filtra: la invitación de
+  // mesa muerta sigue viniendo —desaparecerla parecería un bug— con
+  // `mesa_joinable: false` computado en vivo con el MISMO `mesaViva()` de las
+  // puertas, y el `mesa_status` actual para el copy.
   const ahora = new Date().toISOString();
-  return delay({ invitations: state.pendingInvitations.filter((i) => i.expires_at > ahora) });
+  state.mesas.forEach(settleIfExpired);
+  return delay({
+    invitations: state.pendingInvitations
+      .filter((i) => i.expires_at > ahora)
+      .map((i) => {
+        const mesa = findMesa(i.mesa_code);
+        const status = mesa ? mesa.status : i.mesa_status;
+        return { ...i, mesa_status: status, mesa_joinable: mesaViva(status) };
+      }),
+  });
 }
 
 /**
@@ -1262,6 +1289,13 @@ export async function mockAcceptInvitationLink(
   const mesa = code ? findMesa(code) : null;
   // Un solo 403 para los cuatro motivos. No agregar ramas que los separen.
   if (!code || !mesa) return fail(403, 'invitation_link_not_valid');
+  // Gate de admisión (v2.45.0 · decisión C): el MISMO `mesaViva()` que la
+  // puerta in-app, DESPUÉS del 403 opaco — el 410 revela el estado de la mesa
+  // sólo a quien ya probó tener un token válido.
+  settleIfExpired(mesa);
+  if (!mesaViva(mesa.status)) {
+    return fail(410, 'mesa_not_joinable', { mesa_status: mesa.status });
+  }
   // La inscripción es por usuario y el link NO se marca consumido.
   if (!state.joinedMesaCodes.includes(code)) state.joinedMesaCodes.push(code);
   return delay({ joined: true as const, mesa_code: code });
@@ -1276,6 +1310,18 @@ export async function mockAcceptInvitation(id: string): Promise<{ accepted: bool
   if (inv.expires_at <= new Date().toISOString()) {
     state.pendingInvitations = state.pendingInvitations.filter((i) => i.id !== id);
     return fail(410, 'invitation_expired');
+  }
+  // Gate de admisión (v2.45.0): la invitación está viva; ahora la MESA tiene
+  // que estarlo. Mismo orden que el emisor (vencimiento primero, mesa
+  // después) y mismo detalle: la invitación QUEDA pendiente — la mesa no
+  // revive, y consumirla acá sería inventar semántica.
+  {
+    const mesaInv = findMesa(inv.mesa_code);
+    if (mesaInv) settleIfExpired(mesaInv);
+    const st = mesaInv ? mesaInv.status : inv.mesa_status;
+    if (!mesaViva(st)) {
+      return fail(410, 'mesa_not_joinable', { mesa_status: st });
+    }
   }
   state.pendingInvitations = state.pendingInvitations.filter((i) => i.id !== id);
   // El emisor INSERTA en mesa_participants al aceptar (routes/invitations.js:102)

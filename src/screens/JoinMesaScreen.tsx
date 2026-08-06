@@ -319,6 +319,10 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
           <div className="link-bubble-title">{message.title}</div>
           <div className="link-bubble-body">{message.body}</div>
         </div>
+        {/* Pantalla D · la línea que cierra el círculo ANTES de soltar al
+            recién registrado a un Inicio vacío: la explicación vive acá, que
+            es la pantalla que sabe qué pasó — Inicio no adivina. */}
+        {message.nota && <p className="link-nota">{message.nota}</p>}
       </div>
       <div className="link-foot">
         {stage === 'retry' && (
