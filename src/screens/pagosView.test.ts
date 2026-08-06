@@ -7,6 +7,7 @@ const pago = (id: string, date: string): HistoryEntry => ({
   amount_cents: 12345,
   date,
   mesa_code: `PA-${id}`,
+  mesa_status: 'completed',
   restaurant: 'La Parolaccia',
   category: 'italian',
 });

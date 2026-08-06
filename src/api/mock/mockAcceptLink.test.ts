@@ -24,7 +24,7 @@ const mk = () => ({
 vi.stubGlobal('localStorage', mk());
 vi.stubGlobal('window', { location: { origin: 'https://payme.test', pathname: '/' } });
 
-const { mockAcceptInvitationLink, mockCreateInvitation, MockApiError } = await import('./mockApi');
+const { mockAcceptInvitationLink, mockCreateInvitation, mockOpenMesas, MockApiError } = await import('./mockApi');
 const { state } = await import('./store');
 const { saveSession } = await import('../storage');
 
@@ -84,6 +84,34 @@ describe('el mock del canje replica la CEGUERA del emisor', () => {
     const token = new URL(inv.link!).hash.split('t=')[1];
     await mockAcceptInvitationLink(token);
     await expect(mockAcceptInvitationLink(token)).resolves.toMatchObject({ joined: true });
+  });
+
+  /**
+   * ⭐ **G-28.** Canjear el link tiene que dejar la mesa donde la persona la va
+   * a buscar. Antes de v2.42.0 no: `GET /mesas/open` filtraba por quién la
+   * abrió y era el ÚNICO listado del contrato, así que quien se sumaba veía
+   * "No tenés mesas abiertas" **mientras debía plata** — y no daba error, que
+   * es lo que lo hacía difícil de ver.
+   *
+   * Se afirma sobre una mesa que el usuario NO abrió, porque sobre una propia
+   * el test pasaría igual sin el arreglo.
+   */
+  it('la mesa a la que me sumé aparece en mis mesas abiertas', async () => {
+    const ajena = state.mesas.find((m) => !m.openedByUser && m.status === 'open');
+    expect(ajena, 'el seed no tiene ninguna mesa abierta ajena').toBeTruthy();
+    // Los tests de arriba canjean sus propios links y el `state` del mock es
+    // compartido: se limpian las inscripciones para que lo que se afirme sea
+    // ESTE canje y no el rastro de otro.
+    state.joinedMesaCodes.length = 0;
+
+    const antes = await mockOpenMesas();
+    expect(antes.mesas.map((m) => m.code)).not.toContain(ajena!.code);
+
+    const inv = await mockCreateInvitation(ajena!.code, 'idem-canje-g28');
+    await mockAcceptInvitationLink(new URL(inv.link!).hash.split('t=')[1]!);
+
+    const despues = await mockOpenMesas();
+    expect(despues.mesas.map((m) => m.code)).toContain(ajena!.code);
   });
 
   it('sin sesión da 401, igual que el adaptador real', async () => {

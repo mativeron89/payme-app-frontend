@@ -385,7 +385,19 @@ export async function mockOpenMesas(): Promise<OpenMesasResponse> {
   state.mesas.forEach(settleIfExpired);
   return delay({
     mesas: state.mesas
-      .filter((m) => m.openedByUser && (m.status === 'open' || m.status === 'partially_paid'))
+      // G-28, cerrado en el backend v2.42.0: la mesa abierta es de **todos sus
+      // participantes**, no sólo de quien la abrió. Filtrar por `openedByUser`
+      // era acá el mismo defecto que `opener_user_id` allá — quien se sumaba
+      // por un link leía "No tenés mesas abiertas" mientras debía plata, y sin
+      // error que lo delatara.
+      //
+      // `joinedMesaCodes` es en el mock lo que `mesa_participants` con
+      // `status = 'active'` es en el contrato: se escribe al canjear el link.
+      .filter(
+        (m) =>
+          (m.openedByUser || state.joinedMesaCodes.includes(m.code)) &&
+          (m.status === 'open' || m.status === 'partially_paid'),
+      )
       .map(toOpenMesa),
   });
 }
@@ -764,6 +776,7 @@ export async function mockPayMesa(
       amount_cents: gross,
       date: new Date().toISOString(),
       mesa_code: mesa.code,
+      mesa_status: mesa.status,
       restaurant: mesa.restaurant.name,
       category: mesa.restaurant.category,
     });

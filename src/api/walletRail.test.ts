@@ -234,23 +234,45 @@ describe('el MOCK respeta la capability, no la ignora', () => {
    * como texto y los compara.
    */
   it('los valores del mock son los que declara el espejo del emisor', async () => {
-    const fuentes = import.meta.glob('/contract-mirror/routes/config.js', {
-      query: '?raw',
-      import: 'default',
-      eager: true,
-    }) as Record<string, string>;
-    const texto = Object.values(fuentes)[0];
+    const fuentes = import.meta.glob(
+      ['/contract-mirror/routes/config.js', '/contract-mirror/services/walletRail.js'],
+      { query: '?raw', import: 'default', eager: true },
+    ) as Record<string, string>;
+    const config = fuentes['/contract-mirror/routes/config.js'];
+    const servicio = fuentes['/contract-mirror/services/walletRail.js'];
     // Si el espejo se mueve de lugar o se renombra, esto falla en vez de pasar
     // en vacío — que es como muere una verificación estructural.
-    expect(texto, 'no se encontró contract-mirror/routes/config.js').toBeTruthy();
+    expect(config, 'no se encontró contract-mirror/routes/config.js').toBeTruthy();
+    expect(servicio, 'no se encontró contract-mirror/services/walletRail.js').toBeTruthy();
 
-    const bloque = /const WALLET_RAIL = Object\.freeze\(\{([\s\S]*?)\}\);/.exec(texto!);
+    const bloque = /const WALLET_RAIL = Object\.freeze\(\{([\s\S]*?)\}\);/.exec(config!);
     expect(bloque, 'no se encontró el bloque WALLET_RAIL en el espejo').toBeTruthy();
 
     const declarado: Record<string, boolean> = {};
     for (const m of bloque![1].matchAll(/(\w+):\s*(true|false)/g)) {
       declarado[m[1]] = m[2] === 'true';
     }
+
+    /**
+     * 🔴 **v2.42.0 movió la autoridad de `enabled`, y este test la sigue.**
+     *
+     * Antes era un literal `false` acá adentro. Ahora `/api/config` publica
+     * `walletRailCapability()` y la única fuente es la constante del servicio:
+     * el emisor tenía DOS declaraciones que podían describir estados opuestos
+     * —la capability apagada mientras el runtime aceptaba operaciones wallet—,
+     * y eliminó una. Seguir raspando literales acá habría dejado este test
+     * comparando un solo campo y **pasando en vacío sobre el que importa**.
+     */
+    expect(Object.keys(declarado).sort()).toEqual(['account_activity']);
+    expect(
+      /enabled:\s*walletRailCapability\(\)/.test(bloque![1]),
+      '`enabled` volvió a ser un literal en config.js: la autoridad se movió y hay que revisar dónde',
+    ).toBe(true);
+
+    const riel = /const RIEL_HABILITADO = (true|false);/.exec(servicio!);
+    expect(riel, 'no se encontró la constante autoritativa del riel').toBeTruthy();
+    declarado.enabled = riel![1] === 'true';
+
     expect(Object.keys(declarado).sort()).toEqual([...WALLET_RAIL_KEYS]);
 
     const { mockGetConfig } = await import('./mock/mockApi');

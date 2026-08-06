@@ -159,12 +159,26 @@ export interface WalletTransactionsResponse {
   offset: number;
 }
 
-/** Elemento de GET /api/account/history — un pago propio en una mesa. */
+/**
+ * Elemento de GET /api/account/history — **un pago propio**, no una mesa.
+ *
+ * 🔴 La granularidad es UN RENGLÓN POR PAGO y el emisor la fijó con test
+ * (backend v2.42.0): esta misma respuesta alimenta `PagosScreen`, que es
+ * superficie card-only ratificada. Dos pagos a la misma mesa son dos renglones,
+ * y agruparlos es trabajo del front — `groupByMesa()` ya lo hace. No pedir que
+ * el contrato agrupe.
+ */
 export interface HistoryEntry {
   id: string;
   amount_cents: number;
   date: string;
   mesa_code: string;
+  /**
+   * Aditivo en v2.42.0. Sin esto el front no podía saber si la mesa de un pago
+   * sigue viva, y pintaba mesas abiertas bajo un encabezado de mes como si ya
+   * hubieran terminado.
+   */
+  mesa_status: MesaStatus;
   restaurant: string;
   category: string;
 }
