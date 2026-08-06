@@ -6,14 +6,38 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-05**.
+- Fecha del refresh: **2026-08-06**.
 - Fuente local: `../payme-app-backend`.
-- Commit exacto: `22b84a2d65fc16048e320a18779ca92b631c0507`.
-- Versión de `package.json`: **2.42.0**.
+- Commit exacto: `58b05d1fc5601206be84cc81fc40403f88764bab` (v2.45.0; el
+  commit de versión es `9fe2235478ff7e00fe991c636705f662ecf6b08e`).
+- Versión de `package.json`: **2.45.0**.
 - Rama fuente: `codex/audit-2026-08-02-app-backend`.
 
 Paridad verificada con `scripts/verificar-mirror.sh`: **70 espejados · 70
 idénticos · 0 diferencias · 0 sin fuente.**
+
+### Qué trajo el refresh a v2.45.0 · tres archivos, todo aditivo
+
+**El gate de admisión de la mesa muerta (ratificado por Mati el 2026-08-06)**
+— la ventana que la auditoría de este front descubrió arreglando el mock:
+
+1. **`utils/stateMachine.js` · `mesaViva()`**: UN predicado — viva =
+   `open | partially_paid | fully_paid` — clasificación EXHAUSTIVA sobre la
+   máquina de estados, con `fully_paid` viva A PROPÓSITO (decisión B: pagada
+   entera pero no cerrada admite gente).
+2. **`routes/invitations.js` · las dos puertas de entrar** contestan
+   **`410 { error: 'mesa_not_joinable', mesa_status }`** cuando la mesa no
+   está viva — código DISTINTO del `409 mesa_not_invitable` (crear) y del
+   `410 invitation_expired`, porque el front necesita copys distintos. En
+   `accept-link` el 410 sólo llega DESPUÉS del 403 opaco: revela estado de
+   mesa únicamente a quien probó un token válido.
+3. **`GET /invitations` MARCA, no filtra**: cada fila suma `mesa_joinable`
+   (computado en JS con el MISMO `mesaViva()` — no en SQL, que sería una
+   segunda expresión de la regla desincronizándose sola) y `mesa_status`
+   para el copy. El front lee `mesa_joinable` DIRECTO, sin inferir.
+
+`docs/settlement.js.ref` acompaña (el cierre toma el mismo lock que el gate:
+la mesa no puede morir entre el chequeo y el INSERT del participante).
 
 ### Qué trajo este refresh · cinco archivos, ningún cambio que rompa
 
