@@ -92,6 +92,17 @@ export interface MockMesa {
   /** A-2: faltante capturado a la garantía al liquidar. */
   captured_shortfall_cents: number;
   guarantee_method: 'card' | 'wallet' | null;
+  /**
+   * G-36 (2026-08-07) · SÓLO en mesas del seed que cuentan la parte VIVA de
+   * la demo: cómo relanzarlas cuando el reloj las dejó atrás. Los vencimientos
+   * del seed son relativos a la PRIMERA carga y el estado persiste: a los
+   * ~30-45 min de sesión la demo se pudría entera y sólo la curaba un reset
+   * manual que nada sugería. Al hidratar, una mesa con esto puesto y NUNCA
+   * TOCADA por el usuario vuelve a su estado sembrado con el reloj adelante.
+   * Las tocadas y las creadas por el usuario no se reescriben JAMÁS, y
+   * PA-1099 no lo lleva: su historia ES estar cerrada (A-2).
+   */
+  seedRelanzable?: { status: MesaStatus; expiraEnMs: number };
 }
 
 export interface MockIdemEntry {
@@ -260,6 +271,7 @@ function seedMesas(): MockMesa[] {
       expected_participants: 4,
       status: 'partially_paid',
       expires_at: iso(29 * 60_000),
+      seedRelanzable: { status: 'partially_paid', expiraEnMs: 29 * 60_000 },
       items: consumoItems,
       slots: null,
       active_staff: STAFF,
@@ -278,6 +290,7 @@ function seedMesas(): MockMesa[] {
       expected_participants: 4,
       status: 'partially_paid',
       expires_at: iso(12 * 60_000),
+      seedRelanzable: { status: 'partially_paid', expiraEnMs: 12 * 60_000 },
       items: seedItemsIgual([
         ['Omakase para dos', 26000],
         ['Sashimi mixto', 14000],
@@ -307,6 +320,7 @@ function seedMesas(): MockMesa[] {
       expected_participants: 3,
       status: 'open',
       expires_at: iso(26 * 60_000),
+      seedRelanzable: { status: 'open', expiraEnMs: 26 * 60_000 },
       // Mismo defecto que tenía PA-3121: items:[] viola el .min(1) de
       // POST /mesas — un seed no modela estados imposibles. Suman 96000.
       items: seedItemsIgual([
@@ -722,6 +736,52 @@ function seedState(): MockState {
 
 const STORAGE_KEY = 'payme_mock_state_v1';
 
+/**
+ * G-36 · ¿el usuario tocó esta mesa? Lo tocado NO se reescribe jamás: un pago
+ * propio, un canje, un casillero o un consumo reclamado son historia de la
+ * persona, y relanzarle la mesa abajo sería el mock inventando pasado. Los
+ * pagos del seed histórico usan códigos que no existen en `mesas` (PA-8712…),
+ * así que cualquier fila de `history` con un código VIVO es del usuario.
+ */
+function tocadaPorElUsuario(st: MockState, mesa: MockMesa): boolean {
+  return (
+    st.history.some((h) => h.mesa_code === mesa.code) ||
+    st.joinedMesaCodes.includes(mesa.code) ||
+    (mesa.slots ?? []).some((s) => s.claimedBy === 'user') ||
+    mesa.items.some((i) => i.lockedBy === 'user' || i.claims.some((c) => c.who === 'user'))
+  );
+}
+
+/**
+ * G-36 (2026-08-07, orden 2-A.4) · EL SEED QUE ENVEJECE SE RE-SIEMBRA SOLO.
+ *
+ * Corre UNA vez, al hidratar desde persistencia — nunca sobre un seed fresco
+ * ni en caliente: relanzar con la app viva le cambiaría la mesa a alguien
+ * mirándola. Sólo mesas con `seedRelanzable` (la parte viva de la demo) cuyo
+ * reloj quedó atrás y que el usuario NUNCA tocó vuelven a su estado sembrado
+ * con el vencimiento adelante. La invitación del seed viaja atada al reloj de
+ * su mesa, como siempre. PA-1099 no se toca (su historia ES estar cerrada) y
+ * las mesas del usuario tampoco (no llevan la marca).
+ *
+ * La expiración REAL sigue funcionando igual dentro de una sesión: esto no
+ * congela relojes — los relanza entre sesiones, que es cuando la demo
+ * aparecía podrida sin que nada lo explicara ni lo curara.
+ */
+function relanzarSeedVencido(st: MockState): void {
+  const ahora = Date.now();
+  for (const mesa of st.mesas) {
+    if (!mesa.seedRelanzable) continue;
+    if (new Date(mesa.expires_at).getTime() > ahora) continue; // reloj vigente
+    if (tocadaPorElUsuario(st, mesa)) continue;
+    mesa.status = mesa.seedRelanzable.status;
+    mesa.expires_at = new Date(ahora + mesa.seedRelanzable.expiraEnMs).toISOString();
+    mesa.captured_shortfall_cents = 0;
+    for (const inv of st.pendingInvitations) {
+      if (inv.mesa_code === mesa.code) inv.expires_at = mesa.expires_at;
+    }
+  }
+}
+
 function loadPersisted(): MockState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -783,6 +843,11 @@ function loadPersisted(): MockState | null {
       const durmientes: readonly string[] = WALLET_NOTIFICATION_TYPES;
       parsed.notifications = parsed.notifications.filter((n) => !durmientes.includes(n.type));
     }
+    if (!Array.isArray(parsed.pendingInvitations)) parsed.pendingInvitations = [];
+    // G-36: al final de las migraciones, con el estado ya saneado. Un estado
+    // persistido ANTERIOR a la marca `seedRelanzable` no relanza nada — para
+    // ése sigue existiendo "Reiniciar la demo", igual que hoy.
+    relanzarSeedVencido(parsed);
     return parsed;
   } catch {
     return null;
