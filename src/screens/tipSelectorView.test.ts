@@ -3,6 +3,8 @@ import {
   NO_TIP_CHOSEN,
   TIP_OPTIONS,
   type TipChoice,
+  propinaDesmedida,
+  sanearMontoPropio,
   tipCentsFor,
   tipIsChosen,
   tipPayloadFor,
@@ -78,6 +80,45 @@ describe('el monto a mano', () => {
   it('vacío o ilegible es 0, no una excepción en la pantalla de pago', () => {
     expect(tipCentsFor({ mode: 'custom' }, { ...BASE, customStr: '' })).toBe(0);
     expect(tipCentsFor({ mode: 'custom' }, { ...BASE, customStr: '1.2.3' })).toBe(0);
+  });
+});
+
+describe('el saneo del monto a mano (auditoría 2026-08-06 · la coma ×100)', () => {
+  it('"12,34" son 1234 centavos — la coma es EL decimal, no basura que se borra', () => {
+    // El saneo viejo borraba la coma: "12,34" → "1234" → $1,234.00 de propina,
+    // ×100 en silencio. Este test ancla el MONTO, no el string: si alguien
+    // vuelve al replace viejo, acá se cobra 123400 y el test lo dice.
+    const saneado = sanearMontoPropio('12,34');
+    expect(saneado).toBe('12.34');
+    expect(tipCentsFor({ mode: 'custom' }, { ...BASE, customStr: saneado })).toBe(1234);
+  });
+
+  it('lo ambiguo se rechaza al camino inválido (propina 0), no se adivina', () => {
+    // "1,234.56" tiene dos separadores: normalizar la coma la vuelve "1.234.56"
+    // y stringToCents la rechaza — 0, como todo lo ilegible. Rechazar gana a
+    // adivinar cuando hay plata en el medio.
+    const saneado = sanearMontoPropio('1,234.56');
+    expect(tipCentsFor({ mode: 'custom' }, { ...BASE, customStr: saneado })).toBe(0);
+  });
+
+  it('el punto de siempre sigue intacto, y las letras siguen saliendo', () => {
+    expect(sanearMontoPropio('12.34')).toBe('12.34');
+    expect(sanearMontoPropio('$50')).toBe('50');
+    expect(sanearMontoPropio('abc')).toBe('');
+  });
+});
+
+describe('la reconfirmación de propina desmedida (§1.5 bis, 2026-08-06)', () => {
+  it('3× exacto NO reconfirma: es el borde permitido, no el primero sospechoso', () => {
+    expect(propinaDesmedida(63000, 21000)).toBe(false);
+  });
+  it('un centavo por encima de 3× sí', () => {
+    expect(propinaDesmedida(63001, 21000)).toBe(true);
+  });
+  it('sin base no hay comparación honesta que mostrar: no reconfirma', () => {
+    // El diálogo del spec exige monto + comparación, nunca un "¿seguro?"
+    // genérico — sin base, la comparación no existe.
+    expect(propinaDesmedida(999999, 0)).toBe(false);
   });
 });
 

@@ -210,6 +210,33 @@ function seedItems(): MockItem[] {
   ];
 }
 
+/**
+ * Ítems de la mesa IGUAL del seed (auditoría 2026-08-06, H-14): `items: []`
+ * violaba el contrato — `POST /mesas` exige al menos un ítem
+ * (`schemas/index.js:195`, `.min(1)` sin optional) — y modelaba un estado
+ * IMPOSIBLE en producción, que esta noche hizo perder tiempo buscando un
+ * atrape que en real no existe. Suman exactamente `igualTotal` (62000).
+ */
+function seedItemsIgual(): MockItem[] {
+  const mk = (name: string, price: number): MockItem => ({
+    id: mockId('d'),
+    name,
+    category: 'other',
+    price_cents: price,
+    quantity: 1,
+    status: 'available',
+    lockedBy: null,
+    lock_expires_at: null,
+    claims: [],
+  });
+  return [
+    mk('Omakase para dos', 26000),
+    mk('Sashimi mixto', 14000),
+    mk('Tempura de camarón', 12000),
+    mk('Sake (botella)', 10000),
+  ];
+}
+
 function seedMesas(): MockMesa[] {
   const parolaccia = MOCK_RESTAURANTS[0];
   const hanzo = MOCK_RESTAURANTS[1];
@@ -257,7 +284,7 @@ function seedMesas(): MockMesa[] {
       expected_participants: 4,
       status: 'partially_paid',
       expires_at: iso(12 * 60_000),
-      items: [],
+      items: seedItemsIgual(),
       slots,
       active_staff: STAFF,
       openedByUser: true,
@@ -294,6 +321,12 @@ function seedMesas(): MockMesa[] {
       guarantee_method: 'card',
     },
     // A-2 demo: mesa que expiró sin completarse; la garantía cubrió el faltante.
+    // `completed` A PROPÓSITO (auditoría 2026-08-06): la pantalla A-2 rica
+    // ("Se cerró por tiempo · Cubrió tu garantía $X") sólo se renderiza con el
+    // único estado que ACREDITA cierre y dispersión — con `settled` cae en la
+    // vaga honesta "Mesa liquidada", y el atajo de demo del Historial prometía
+    // una historia que nunca mostraba. Venció hace una hora; en demo, el
+    // proceso de cierre ya terminó.
     {
       id: mockId('c'),
       code: 'PA-1099',
@@ -303,7 +336,7 @@ function seedMesas(): MockMesa[] {
       tip_amount_cents: 9000,
       division_mode: 'igual',
       expected_participants: 4,
-      status: 'settled',
+      status: 'completed',
       expires_at: iso(-60 * 60_000),
       items: [],
       slots: splitEqual(84000, 4).map((amount, idx) => ({
@@ -512,7 +545,13 @@ function seedNotifications(mesas: MockMesa[]): {
           mesa_id: invitedMesa.id,
           invitation_type: 'in_app',
           status: 'pending',
-          expires_at: iso(24 * 60 * 60_000),
+          // Atada al reloj de SU MESA, no a las 24 h del contrato (auditoría
+          // 2026-08-06): con 24 h acá y la mesa muriendo a los ~26 min, la
+          // tarjeta "Sumarme" sobrevivía HORAS a la mesa — éxito seguido de
+          // "Mesa liquidada". Una invitación de demo no puede prometer más
+          // vida que la mesa que invita. (Si el emisor debería atarlas también
+          // en el riel real es pregunta de contrato, elevada.)
+          expires_at: invitedMesa.expires_at,
           created_at: iso(-8 * 60_000),
           mesa_code: invitedMesa.code,
           restaurant_name: invitedMesa.restaurant.name,
@@ -836,7 +875,13 @@ export function materializeDemoMesa(code: string): MockMesa | null {
 export function settleIfExpired(mesa: MockMesa): void {
   const active = mesa.status === 'open' || mesa.status === 'partially_paid';
   if (!active || new Date(mesa.expires_at).getTime() > Date.now()) return;
-  mesa.status = 'settled';
+  // `completed` A PROPÓSITO, y SÓLO en el mock (auditoría 2026-08-06): acá el
+  // cierre por vencimiento ES el cierre completo — no hay dispersión pendiente
+  // que esperar, porque no hay dispersión. Dejarlo en 'settled' no modelaba un
+  // estado intermedio real: modelaba uno que en el mock nunca avanza, y la
+  // pantalla A-2 rica ("Tu garantía cubrió $X") quedaba inalcanzable por el
+  // camino vivo. En el riel real 'settled' es correcto y significa algo.
+  mesa.status = 'completed';
   mesa.captured_shortfall_cents = Math.max(0, mesa.total_cents - mesa.paid_amount_cents);
   if (mesa.openedByUser && mesa.captured_shortfall_cents > 0) {
     if (mesa.guarantee_method === 'wallet') {

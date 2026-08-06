@@ -45,10 +45,13 @@ import { FRACTIONS, bpsLabel, itemsAmountFor } from './mesaItemsView';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { tipFromBps } from '../utils/money';
+import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import {
   NO_TIP_CHOSEN,
   TIP_OPTIONS,
   type TipChoice,
+  propinaDesmedida,
+  sanearMontoPropio,
   tipCentsFor,
   tipIsChosen,
   tipPayloadFor,
@@ -188,7 +191,7 @@ function TipSelector({
             inputMode="decimal"
             placeholder="0.00"
             value={customTipStr}
-            onChange={(e) => onCustomChange(e.target.value.replace(/[^0-9.]/g, ''))}
+            onChange={(e) => onCustomChange(sanearMontoPropio(e.target.value))}
             disabled={disabled}
             aria-label="Monto de propina a mano"
           />
@@ -285,6 +288,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   /** El pulso de una sola vez del borde cuando se toca "Pagar" sin elegir. */
   const [tipPulse, setTipPulse] = useState(false);
   const tipSectionRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * §1.5 bis (2026-08-06) · reconfirmación de propina desmedida (> 3× la
+   * base). `tipConfirmedRef` = "esta propina ya fue reconfirmada": expira en
+   * cuanto la propina CAMBIA — una confirmación no puede cubrir un monto
+   * distinto del que se mostró en el diálogo.
+   */
+  const [showTipConfirm, setShowTipConfirm] = useState(false);
+  const tipConfirmedRef = useRef(false);
+  useEffect(() => {
+    tipConfirmedRef.current = false;
+    setShowTipConfirm(false);
+  }, [tip, customTipStr]);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [payType, setPayType] = useState<PaymentType>('card');
   // Feedback Mati: las tarjetas van en un desglosable, no sueltas en la lista.
@@ -295,12 +310,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const shareLinksRef = useRef<Map<string, string>>(new Map());
   const shareInFlightRef = useRef(createInFlightMutex());
   // D4: tarjetas guardadas. `cardChoice` = pm_… elegido o 'new' (otra
-  // tarjeta); `saveCard` = checkbox "guardar" (ratificado: prendido). El
-  // invitado sin cuenta no tenía guardadas: siempre tarjeta nueva sin checkbox.
+  // tarjeta); `saveCard` = checkbox "guardar" — nace DESMARCADO (Mati,
+  // 2026-08-06; el porqué vive en `saveCardView.ts`). El invitado sin cuenta
+  // no tenía guardadas: siempre tarjeta nueva sin checkbox.
   // (Rama inalcanzable desde v2.32.0 — ver el docblock de `isGuest`.)
   const [cards, setCards] = useState<PaymentMethod[]>([]);
   const [cardChoice, setCardChoice] = useState<string>('new');
-  const [saveCard, setSaveCard] = useState(true);
+  const [saveCard, setSaveCard] = useState(GUARDAR_TARJETA_DEFAULT);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<CardFieldState>({
     complete: false,
@@ -344,7 +360,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     setTipSelectorFailed(false); setTipPulse(false);
     setPayType('card'); setCardsOpen(false); setInviteOpen(false); setCards([]);
     shareInFlightRef.current = createInFlightMutex();
-    setCardChoice('new'); setSaveCard(true); setCardEl(null);
+    // El reset por mesa vuelve AL DEFAULT, no a un literal propio: acá vivía
+    // el segundo `true`, igual que el segundo `15` de la propina.
+    setCardChoice('new'); setSaveCard(GUARDAR_TARJETA_DEFAULT); setCardEl(null);
     const emptyCard: CardFieldState = { complete: false, error: null, empty: true };
     cardStateRef.current = emptyCard; setCardState(emptyCard);
     payStartedRef.current = false; payInFlightRef.current = createInFlightMutex();
@@ -534,9 +552,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         setBusy(false);
       }
     } else {
-      // Partes iguales: el monto es la parte, pero marcar lo consumido es
-      // obligatorio (info para el restaurante).
-      if (selected.size === 0) return;
+      // Partes iguales (H-14, auditoría 2026-08-06): marcar lo consumido es
+      // INFORMACIÓN para el restaurante — la propia pantalla dice "no cambia
+      // lo que pagás" — y por eso NO condiciona el pago. El guard viejo
+      // (`selected.size === 0 → return`) era el mismo gate contradictorio que
+      // el `disabled` de la barra, en su segundo lugar. El contrato acompaña:
+      // `payMesa` acepta `item_ids: []` (schemas/index.js:233, default []).
       setView('pay');
     }
   }
@@ -914,6 +935,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // el toast y el pulso siguen siendo la señal.
       tipSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
       setTipPulse(true);
+      payInFlightRef.current.leave();
+      return;
+    }
+    /**
+     * §1.5 bis (2026-08-06) · propina desmedida: > 3× la base del emisor.
+     * Chequeo SECUENCIAL — corre después del de "sin elegir", no en su
+     * lugar — y NO es el bloqueo que el acta prohíbe: el diálogo siempre
+     * tiene "Sí, pagar". Quien quiere dejar una propina enorme a propósito,
+     * puede — con un toque más.
+     */
+    if (mesa && !tipConfirmedRef.current && propinaDesmedida(tipCents, mesa.tip_base_cents)) {
+      setShowTipConfirm(true);
       payInFlightRef.current.leave();
       return;
     }
@@ -1436,6 +1469,37 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           {/* N-08: este dispositivo ya pagó una parte de esta mesa, por esta
               identidad o por la otra puerta (invitado/autenticado). No se
               bloquea —pagar varias partes es legítimo— pero se confirma. */}
+          {/* §1.5 bis · reconfirmación de propina desmedida. Monto exacto +
+              comparación, nunca un "¿estás seguro?" genérico. La salida
+              afirmativa existe SIEMPRE (el acta prohíbe bloquear); la de
+              editar conserva el valor tipeado intacto. */}
+          {showTipConfirm && mesa && (
+            <div className="note note-orange" role="alertdialog" aria-label="Confirmar propina">
+              <b>Tu propina: {formatMXN(tipCents)}.</b> Es más de 3 veces la base de{' '}
+              {formatMXN(mesa.tip_base_cents)} (la cuenta ÷ {mesa.expected_participants}).
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-sm btn-teal btn-fit"
+                  onClick={() => {
+                    setShowTipConfirm(false);
+                    tipSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                  }}
+                >
+                  Volver a editar
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm btn-fit"
+                  onClick={() => {
+                    tipConfirmedRef.current = true;
+                    setShowTipConfirm(false);
+                    void doPay();
+                  }}
+                >
+                  Sí, pagar
+                </button>
+              </div>
+            </div>
+          )}
           {showExtraPartConfirm && (
             <div className="note note-orange" role="alertdialog" aria-label="Confirmar parte adicional">
               <b>Desde este teléfono ya se pagó una parte de esta mesa.</b>{' '}

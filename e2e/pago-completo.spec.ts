@@ -54,8 +54,11 @@ test.describe('el camino de pago completo', () => {
     // Marcar lo consumido: en partes iguales es informativo para el
     // restaurante y NO cambia lo que se paga. Esa promesa está en pantalla.
     await expect(page.getByText('no cambia lo que pagás')).toBeVisible();
-    // Antes de elegir, la fila de la barra pide elegir y no muestra monto.
-    await expect(page.getByText('Marcá lo que consumiste')).toBeVisible();
+    // H-14 (2026-08-06): la fila muestra "Mi parte" ANTES de marcar nada — el
+    // monto es el del casillero y no depende de la selección, y el gate que
+    // exigía marcar contradecía la promesa de arriba. Acá vivía la afirmación
+    // vieja ("Marcá lo que consumiste" sin monto), que anclaba el gate
+    // contradictorio. Marcar sigue siendo posible, y sigue sin mover un peso:
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
 
     // §1.5 · el monto vive en su fila propia ARRIBA de la barra, no en la

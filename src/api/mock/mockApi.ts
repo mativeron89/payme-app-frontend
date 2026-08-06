@@ -286,12 +286,30 @@ export async function mockGetMe(): Promise<MeResponse> {
   return delay({ user: state.user });
 }
 
+/** "Sofía" → "payme_mx_sofia": el payme_id de una cuenta nueva sale de SU
+ *  nombre, como en el backend real — no del usuario de ejemplo. */
+function paymeIdFromName(firstName: string): string {
+  const plano = firstName
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  return `payme_mx_${plano || 'nueva'}`;
+}
+
 export async function mockRegister(data: {
   email: string;
   first_name: string;
   last_name: string;
 }): Promise<StoredSession> {
-  state.user = { ...MOCK_USER, ...data };
+  // Una cuenta NUEVA nace como en el backend real: sin métodos de pago y con
+  // payme_id propio. Heredar los del seed hacía INEJERCITABLE el camino del
+  // pagador primerizo —el primero que recorre un usuario real, porque la
+  // garantía exige tarjeta guardada y Apple/Google están apagados— y servía
+  // el payme_id de la persona de ejemplo a cualquier registro. El usuario del
+  // SEED conserva sus dos tarjetas: entra por mockLogin, que no toca esto.
+  state.user = { ...MOCK_USER, ...data, payme_id: paymeIdFromName(data.first_name) };
+  state.paymentMethods = [];
   const session = createSession({
     access_token: 'mock-access-token',
     refresh_token: 'mock-refresh-token',
@@ -1210,7 +1228,11 @@ export async function mockMarkAllNotificationsRead(): Promise<void> {
 }
 
 export async function mockPendingInvitations(): Promise<PendingInvitationsResponse> {
-  return delay({ invitations: [...state.pendingInvitations] });
+  // Espejo del WHERE del emisor (`routes/invitations.js:31-34`): pendiente Y
+  // NO VENCIDA (`expires_at > NOW()`). El mock servía la tarjeta para siempre
+  // — "Sumarme" sobre una invitación muerta, éxito y aterrizaje en la nada.
+  const ahora = new Date().toISOString();
+  return delay({ invitations: state.pendingInvitations.filter((i) => i.expires_at > ahora) });
 }
 
 /**
@@ -1248,7 +1270,21 @@ export async function mockAcceptInvitationLink(
 export async function mockAcceptInvitation(id: string): Promise<{ accepted: boolean }> {
   const inv = state.pendingInvitations.find((i) => i.id === id);
   if (!inv) return fail(404, 'invitation_not_found');
+  // El emisor valida el vencimiento AL ACEPTAR y contesta 410 marcándola
+  // 'expired' (`routes/invitations.js:69-74`). El mock aceptaba incondicional:
+  // "Te sumaste ✓" a una invitación muerta.
+  if (inv.expires_at <= new Date().toISOString()) {
+    state.pendingInvitations = state.pendingInvitations.filter((i) => i.id !== id);
+    return fail(410, 'invitation_expired');
+  }
   state.pendingInvitations = state.pendingInvitations.filter((i) => i.id !== id);
+  // El emisor INSERTA en mesa_participants al aceptar (routes/invitations.js:102)
+  // y `joinedMesaCodes` es su espejo acá. Sin esta línea, aceptar era un no-op
+  // de participación: la mesa aceptada JAMÁS aparecía en /mesas/open — el
+  // síntoma de G-28, reproducido por el mock en el riel de invitaciones in-app.
+  if (!state.joinedMesaCodes.includes(inv.mesa_code)) {
+    state.joinedMesaCodes.push(inv.mesa_code);
+  }
   state.notifications = state.notifications.map((n) =>
     n.type === 'invitation_received' ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n,
   );

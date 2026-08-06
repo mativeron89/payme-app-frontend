@@ -54,6 +54,48 @@ export function tipIsChosen(tip: TipChoice): boolean {
 }
 
 /**
+ * Saneo del monto a mano — auditoría 2026-08-06, plata mal cobrada.
+ *
+ * El saneo viejo era `replace(/[^0-9.]/g, '')`: BORRABA la coma en vez de
+ * interpretarla o rechazarla, y "12,34" se volvía "1234" — **$1,234.00 de
+ * propina, ×100 en silencio**. En México el separador decimal oficial es el
+ * punto, pero medio continente tipea coma por hábito: no es un caso raro.
+ *
+ * La regla: **el saneo no puede convertir una entrada inválida en una válida
+ * DISTINTA de la que la persona quiso.**
+ * - Una coma sola tiene UNA lectura razonable —es el decimal— y se normaliza
+ *   a punto: "12,34" → "12.34" → 1234 centavos.
+ * - Una entrada con más de un separador ("1,234.56") es ambigua: se deja con
+ *   sus puntos y `stringToCents` la RECHAZA — `tipCentsFor` la trata como el
+ *   resto de lo inválido (propina 0, el CTA muestra la base sola). Rechazar
+ *   gana a adivinar cuando hay plata en el medio.
+ */
+export function sanearMontoPropio(crudo: string): string {
+  return crudo.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+}
+
+/**
+ * ¿La propina amerita reconfirmación? — §1.5 bis, decisión de Mati del
+ * 2026-08-06 con spec de Diseño.
+ *
+ * Umbral RELATIVO: propina > 3× la base — el mismo `tip_base_cents` que el
+ * emisor ya calcula y publica (`routes/mesas.js:780`, total ÷ N). "Fijo
+ * envejece, relativo no; y 300 % no tiene lectura legítima frecuente."
+ *
+ * NO es el bloqueo que el acta prohíbe: el diálogo tiene siempre la salida
+ * "Sí, pagar" — quien quiere dejar una propina enorme a propósito, puede.
+ * Y se dispara DESPUÉS del gate de "sin elegir": dos chequeos secuenciales,
+ * no uno reemplazando al otro.
+ *
+ * `>` estricto a propósito: 3× exacto es el borde permitido, no el primero
+ * sospechoso. Base 0 o negativa no reconfirma nada — sin base no hay
+ * comparación honesta que mostrar, y el diálogo exige mostrar la comparación.
+ */
+export function propinaDesmedida(tipCents: number, baseCents: number): boolean {
+  return baseCents > 0 && tipCents > 3 * baseCents;
+}
+
+/**
  * D7 (v2.17): la propina es % de tu parte IGUALITARIA (total ÷ N), no de tu
  * consumo. Réplica exacta de `tipFromBps`; el cobro real lo computa el server y
  * el comprobante usa SU `tip_cents`.
