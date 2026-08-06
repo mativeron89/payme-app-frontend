@@ -72,6 +72,41 @@ function guestHashOf(req) {
 // v2.23/v2.24 · Connect: el gate de cobro (kill switch + estado de la cuenta)
 // vive en services/connect.js — lo comparten el pago de mesa y la garantía.
 const connect = require('../services/connect');
+// ORDEN OLA 4 · 4B: el gate TIPADO de 4A. `connect.resolveChargeTarget` sigue
+// exportado (lo usan el onboarding y el ruteo del webhook), pero ningún camino
+// monetario lo consulta más: devolvía `null` ante la duda y ese null era
+// indistinguible de "cobrá por plataforma".
+const connectGate = require('../services/connectGate');
+
+/**
+ * Status HTTP de una no-aptitud Connect.
+ *
+ * Dos buckets, y la diferencia es accionable: `connect_evidence_unreadable` es
+ * la ÚNICA causa transitoria (timeout, 5xx, red caída, lectura local fallida) —
+ * reintentar con la misma clave es lo correcto. Todas las demás son
+ * estructurales: hasta que el restaurante o la configuración cambien, el mismo
+ * request va a fallar igual, y un 503 invitaría a un loop de reintentos que no
+ * puede converger.
+ *
+ * La distinción fina —"todavía no terminaste el alta" vs. "tu cuenta se
+ * restringió"— viaja en `reason`, con los códigos disjuntos que ya tipó 4A. No
+ * se agrega ninguna distinción nueva acá.
+ */
+function connectGateHttpStatus(code) {
+  return code === connectGate.CODIGOS.EVIDENCE_UNREADABLE ? 503 : 409;
+}
+
+function connectGateBody(error) {
+  const status = connectGateHttpStatus(error.code);
+  return {
+    status,
+    body: {
+      error: 'connect_account_not_ready',
+      reason: error.code,
+      ...(status === 503 && { retry_with_same_idempotency_key: true }),
+    },
+  };
+}
 
 function storedPaymentMethodCardSnapshot(row) {
   const snapshot = {
@@ -220,14 +255,27 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
       );
       if (rOk === 0) return res.status(404).json({ error: 'restaurant_not_found' });
 
-      // Stripe exige application_fee < monto. Es configuración local y
-      // determinista: detectarla antes de leer/crear Customer, mesa o hold
-      // evita dejar una `pending_auth` que ningún retry podría reparar.
+      // ORDEN OLA 4 · 4B — el gate manda ACÁ, antes de tocar Customer, mesa o
+      // hold. Bajo el MVP card-only una cuenta Connect no apta no degrada a
+      // plataforma: no hay mesa que abrir. Rechazar en este punto es lo que
+      // garantiza el "cero artefactos" del fallo cerrado — más abajo ya se crea
+      // la fila `pending_auth`.
+      //
+      // Stripe exige además application_fee < monto: es configuración local y
+      // determinista, y detectarla acá evita dejar una `pending_auth` que ningún
+      // retry podría reparar.
       if (guarantee_method === 'card') {
         let target;
         try {
-          target = await connect.resolveChargeTarget(restaurant_id);
+          target = await connectGate.requireChargeTarget({ restaurantId: restaurant_id });
         } catch (error) {
+          if (error instanceof connectGate.ConnectGateError) {
+            logger.warn('guarantee_connect_gate_rejected', {
+              restaurant_id, code: error.code,
+            });
+            const rechazo = connectGateBody(error);
+            return res.status(rechazo.status).json(rechazo.body);
+          }
           logger.error('guarantee_target_preflight_failed', {
             restaurant_id, error: error.message,
           });
@@ -236,23 +284,21 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
             retry_with_same_idempotency_key: true,
           });
         }
-        if (target) {
-          let applicationFee;
-          try {
-            applicationFee = calculateFee(total_cents, target.feePct);
-          } catch (_) {
-            applicationFee = NaN;
-          }
-          if (!Number.isSafeInteger(applicationFee)
-              || applicationFee < 0 || applicationFee >= total_cents) {
-            logger.error('guarantee_application_fee_preflight_rejected', {
-              restaurant_id, amount_cents: total_cents,
-            });
-            return res.status(422).json({
-              error: 'guarantee_configuration_invalid',
-              reason: 'application_fee_invalid',
-            });
-          }
+        let applicationFee;
+        try {
+          applicationFee = calculateFee(total_cents, target.feePct);
+        } catch (_) {
+          applicationFee = NaN;
+        }
+        if (!Number.isSafeInteger(applicationFee)
+            || applicationFee < 0 || applicationFee >= total_cents) {
+          logger.error('guarantee_application_fee_preflight_rejected', {
+            restaurant_id, amount_cents: total_cents,
+          });
+          return res.status(422).json({
+            error: 'guarantee_configuration_invalid',
+            reason: 'application_fee_invalid',
+          });
         }
       }
     }
@@ -585,13 +631,39 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
   } catch (err) { next(err); }
 });
 
+// G-28: la mesa abierta es de TODOS sus participantes, no sólo de quien la abrió.
+// Filtrar por `opener_user_id` dejaba al invitado sin ver su mesa en ningún lado,
+// y por eso el historial se la mostraba bajo un encabezado de mes como si ya
+// hubiera terminado.
+//
+// El criterio de participante NO se inventa acá: es el mismo que ya usan
+// `requireMesaParticipant` (middleware/auth.js) e `invitationAuthority.js` —
+// `mesa_participants` con `status = 'active'`. La tabla declara también 'left',
+// que hoy NO lo escribe nadie: un participante que se fue simplemente no está
+// activo, y este filtro lo excluye sin necesidad de darle semántica nueva.
+//
+// EXISTS y no JOIN: un JOIN duplicaría la mesa por cada fila de participante.
+// `idx_mesa_participants_user (user_id, status)` cubre la búsqueda.
+//
+// Se conserva la rama del opener aunque `POST /mesas` le inserte su propia fila
+// 'opener'/'active': un opener sin fila —de historia o de otro camino de alta—
+// seguiría viendo su mesa, que es exactamente el comportamiento de hoy.
 router.get('/open', requireAuth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT m.id, m.code, m.total_cents, m.paid_amount_cents, m.status, m.expires_at,
               r.name AS restaurant_name, r.category
          FROM mesas m JOIN restaurants r ON r.id = m.restaurant_id
-        WHERE m.opener_user_id = $1 AND m.status IN ('open','partially_paid')
+        WHERE (
+                m.opener_user_id = $1
+                OR EXISTS (
+                  SELECT 1 FROM mesa_participants mp
+                   WHERE mp.mesa_id = m.id
+                     AND mp.user_id = $1
+                     AND mp.status = 'active'
+                )
+              )
+          AND m.status IN ('open','partially_paid')
         ORDER BY m.created_at DESC`, [req.user.id]
     );
     res.json({
@@ -1503,33 +1575,68 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
     const stripePmId = attempt.stripe_source_payment_method_id;
     const customerId = attempt.stripe_customer_id_snapshot || null;
 
-    // ─── v2.23 · Connect: ¿este cobro va a la cuenta del restaurante? ───────
-    // Gate por restaurante: null explícito conserva el riel previo; un fallo
-    // técnico NO puede cambiar merchant-of-record silenciosamente.
+    // ─── ORDEN OLA 4 · 4B · Connect: este cobro va SIEMPRE a la cuenta del
+    // restaurante, o no va. El `null` de `resolveChargeTarget` significaba a la
+    // vez "no sé" y "cobrá por plataforma"; el gate tipado no puede devolver
+    // ninguna de las dos: o entrega una cuenta apta o lanza.
     let connectTarget = null;
     let chargePmId = attempt.stripe_charge_payment_method_id || null;
     let appFeeCents = Number(attempt.application_fee_cents || 0);
     if (attempt.stripe_contract_prepared_at) {
-      connectTarget = attempt.stripe_account_id
-        ? { accountId: attempt.stripe_account_id }
-        : null;
+      if (!attempt.stripe_account_id) {
+        // Contrato sellado SIN cuenta = fila de plataforma anterior a 4B (desde
+        // 4B ninguna se puede sellar así: el gate falla cerrado antes). No se
+        // reemite create ni se toca su destino económico —eso es 4C—; se frena
+        // acá para que un replay no cree un PaymentIntent nuevo en plataforma.
+        logger.error('payment_attempt_legacy_platform_binding_blocked', {
+          attempt_id: attempt.id, mesa_id: mesa.id, status: attempt.status,
+        });
+        return res.status(409).json({
+          error: 'payment_legacy_platform_binding_quarantined',
+          attempt_status: attempt.status,
+        });
+      }
+      connectTarget = { accountId: attempt.stripe_account_id };
       if (attempt.stripe_source_payment_method_id !== stripePmId) {
         logger.error('payment_attempt_source_method_conflict', { attempt_id: attempt.id });
         return res.status(503).json(paymentReconciliationPendingBody(attempt.status));
       }
     } else {
       try {
-        connectTarget = await connect.resolveChargeTarget(mesa.restaurant_id);
+        connectTarget = await connectGate.requireChargeTarget({
+          restaurantId: mesa.restaurant_id,
+        });
       } catch (e) {
-        logger.error('connect_target_lookup_failed', { mesa_id: mesa.id, error: e.message });
-        if (!await releaseAttemptItems(attempt.id, 'connect_target_unavailable')) {
+        const gateRejected = e instanceof connectGate.ConnectGateError;
+        logger[gateRejected ? 'warn' : 'error']('connect_target_lookup_failed', {
+          mesa_id: mesa.id, attempt_id: attempt.id,
+          code: gateRejected ? e.code : null, error: e.message,
+        });
+        // El claim se libera SIEMPRE que se pueda: el comensal no cobró nada y
+        // el casillero no puede quedar tomado por un rechazo del gate.
+        if (!await releaseAttemptItems(attempt.id, gateRejected ? e.code : 'connect_target_unavailable')) {
           return res.status(503).json(paymentReconciliationPendingBody(attempt.status));
+        }
+        if (gateRejected) {
+          const rechazo = connectGateBody(e);
+          return res.status(rechazo.status).json(rechazo.body);
         }
         return res.status(503).json({ error: 'connect_charge_target_unavailable' });
       }
     }
 
-    if (connectTarget && !attempt.stripe_contract_prepared_at) {
+    // ORDEN OLA 4 · 4B — invariante estructural, no defensa decorativa: desde
+    // acá `connectTarget` es una cuenta apta o el request ya terminó. Sin esta
+    // guarda, cualquier camino futuro que dejara `connectTarget` en null sellaría
+    // el contrato con `stripe_account_id=null` y cobraría por plataforma.
+    if (!connectTarget?.accountId) {
+      logger.error('payment_connect_target_missing_after_gate', {
+        attempt_id: attempt.id, mesa_id: mesa.id,
+      });
+      return res.status(503).json(paymentReconciliationPendingBody(attempt.status));
+    }
+
+    if (!attempt.stripe_contract_prepared_at) {
       // El bruto completo (incluida la propina) queda en la cuenta conectada
       // del restaurante. La application fee contiene ÚNICAMENTE la comisión
       // de PayMe; este riel no acredita ni recupera tip-wallet.
@@ -1558,7 +1665,9 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
       try {
         const prepared = await prepareAttemptStripeContract({
           attemptId: attempt.id,
-          stripeAccountId: connectTarget?.accountId || null,
+          // Nunca `|| null`: sellar el contrato sin cuenta es exactamente la
+          // fila card-only con account null que la orden prohíbe crear.
+          stripeAccountId: connectTarget.accountId,
           applicationFeeCents: appFeeCents,
           sourcePaymentMethodId: stripePmId,
           sourceCardSnapshot,
@@ -1575,7 +1684,7 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
       }
     }
 
-    if (connectTarget && !chargePmId) {
+    if (!chargePmId) {
       try {
         const clon = await stripeService.clonePaymentMethodToAccount({
           payment_method_id: stripePmId,
@@ -1612,20 +1721,10 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
           retry_with_same_idempotency_key: true,
         });
       }
-    } else if (!connectTarget && !chargePmId) {
-      chargePmId = stripePmId;
-      try {
-        const persisted = await persistAttemptChargePaymentMethod(
-          attempt.id, chargePmId, sourceCardSnapshot.verifiedAt
-        );
-        attempt.charge_card_verified_at = persisted.verifiedAt;
-      } catch (err) {
-        logger.error('payment_attempt_method_persistence_failed', {
-          attempt_id: attempt.id, error: err.message,
-        });
-        return res.status(503).json(paymentReconciliationPendingBody(attempt.status));
-      }
     }
+    // 4B: se eliminó la rama que, sin cuenta conectada, cobraba con el pm_ de
+    // plataforma. No era código muerto inofensivo — era el fallback prohibido
+    // esperando a que alguien volviera a dejar el target en null.
     if (!chargePmId || !attempt.charge_card_verified_at) {
       logger.error('payment_attempt_charge_card_verification_missing', {
         attempt_id: attempt.id,
@@ -1639,34 +1738,28 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
     try {
       const stripeIntent = await stripeService.createPaymentIntent({
         amount_cents: attempt.grossAmount,
-        customer_id: connectTarget ? undefined : customerId,
+        // En direct charge el customer es de plataforma: no viaja.
+        customer_id: undefined,
         payment_method_id: chargePmId,
         idempotency_key: `pay_${attempt.id}`,
-        // v2.23 · direct charge sobre la cuenta conectada del restaurante
-        ...(connectTarget && {
-          stripe_account: connectTarget.accountId,
-          application_fee_cents: appFeeCents,
-        }),
+        // 4B · direct charge sobre la cuenta conectada del restaurante. Ya no es
+        // condicional: sacar esta línea es el mutante "omitir account en create".
+        stripe_account: connectTarget.accountId,
+        application_fee_cents: appFeeCents,
         // D4: tarjeta guardada → off_session (Stripe intenta sin fricción; si
         // el emisor exige 3DS, el catch de abajo lo devuelve como
         // requires_action + client_secret, igual que cualquier 3DS).
         off_session: usedSavedCard,
-        // D4 + Connect: setup_future_usage sobre un direct charge adjuntaría la
-        // tarjeta a la cuenta del RESTAURANTE (y sin customer, Stripe lo
-        // rechaza). Guardar tarjeta es de la bóveda de PayMe: en el riel
-        // directo no se pide acá. La tarjeta igual se cobra normal.
-        ...(wantsSave && !connectTarget && { setup_future_usage: 'off_session' }),
+        // D4 + Connect: `setup_future_usage` adjuntaría la tarjeta a la cuenta
+        // del RESTAURANTE, no a la bóveda de PayMe. Bajo card-only todo cobro es
+        // direct, así que nunca se pide acá (4E define el vault correcto).
         metadata: {
           mesa_id: mesa.id, mesa_code: mesa.code,
           user_id: userId || 'guest',
           attempt_id: attempt.id,
           // En direct charges la propina permanece en fondos del restaurante;
           // no se promete una acreditación individual por metadata.
-          tip_to_staff_id: connectTarget ? '' : (tip_to_staff_id || ''),
-          // D4: el webhook 3DS espeja la tarjeta cuando el pago confirma.
-          // En el riel directo NO se marca: el pm del intent es el clon, que
-          // vive en la cuenta del restaurante y no pertenece a la bóveda.
-          ...(wantsSave && !connectTarget && { save_pm: '1' }),
+          tip_to_staff_id: '',
         },
       });
 
@@ -1674,12 +1767,12 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
         attemptId: attempt.id,
         mesaId: mesa.id,
         amountCents: Number(attempt.grossAmount),
-        stripeAccountId: connectTarget?.accountId || null,
+        stripeAccountId: connectTarget.accountId,
         applicationFeeCents: Number(appFeeCents || 0),
         chargePaymentMethodId: chargePmId,
-        customerId: connectTarget ? null : customerId,
+        customerId: null,
         offSession: usedSavedCard,
-        setupFutureUsage: wantsSave && !connectTarget ? 'off_session' : null,
+        setupFutureUsage: null,
       });
 
       const newStatus = stateMachine.mapStripeStatus(stripeIntent.status);
@@ -1690,7 +1783,7 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
           intentId: stripeIntent.id,
           clientSecret: stripeIntent.client_secret,
           newStatus,
-          stripeAccountId: connectTarget ? connectTarget.accountId : null,
+          stripeAccountId: connectTarget.accountId,
           applicationFeeCents: appFeeCents || 0,
         });
       } catch (bindingErr) {

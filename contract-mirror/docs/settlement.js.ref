@@ -39,7 +39,9 @@ const {
   loadPaymentAttemptContract,
 } = require('./paymentIntentContract');
 const stp = require('./stp');
-const connect = require('./connect');   // v2.24: gate de cobro compartido
+const connect = require('./connect');   // v2.24: onboarding y ruteo de webhook
+// ORDEN OLA 4 · 4B: el gate TIPADO de 4A gobierna todo camino que mueva plata.
+const connectGate = require('./connectGate');
 const stateMachine = require('../utils/stateMachine');
 const notifs = require('./notifications');
 const { centsToDisplay, calculateFee, prorateCents, sumCents } = require('../utils/money');
@@ -368,19 +370,34 @@ async function decideCardGuaranteeRail({
   const existing = await readDurableCardDecision(mesaId, organizerId, amountCents);
   if (existing) return existing;
 
+  // ORDEN OLA 4 · 4B — el riel de una garantía NUEVA lo decide el gate tipado.
+  // `resolveChargeTargetByMesa` devolvía null ante la duda y ese null se sellaba
+  // como `auth_stripe_account_id=NULL`, o sea una garantía card-only de
+  // plataforma: el fallback prohibido, ya durable.
   let candidate;
   try {
-    candidate = await connect.resolveChargeTargetByMesa(mesaId);
+    candidate = await connectGate.requireChargeTarget({ mesaId });
   } catch (err) {
-    // Otra request pudo haber decidido mientras fallaba la lectura del target.
+    // Otra request pudo haber decidido mientras se evaluaba el gate.
     const raced = await readDurableCardDecision(mesaId, organizerId, amountCents);
     if (raced) return raced;
+    if (err instanceof connectGate.ConnectGateError) {
+      // Una comisión fuera del dominio `[0,1)` es configuración inválida, no un
+      // estado transitorio: se conserva el código histórico para que siga
+      // terminalizando la mesa (`markInvalidGuaranteeConfiguration`) en vez de
+      // dejarla en `pending_auth` esperando un retry que nunca puede converger.
+      if (err.code === connectGate.CODIGOS.FEE_INVALID) {
+        throw guaranteeInvariantError('guarantee_application_fee_invalid');
+      }
+      throw guaranteeInvariantError('guarantee_connect_account_not_ready',
+        { connect_code: err.code });
+    }
     throw err;
   }
-  const candidateAccount = candidate?.accountId || null;
-  const candidateFee = candidate ? calculateFee(amountCents, candidate.feePct) : 0;
+  const candidateAccount = candidate.accountId;
+  const candidateFee = calculateFee(amountCents, candidate.feePct);
   if (!Number.isSafeInteger(candidateFee) || candidateFee < 0
-      || (candidateAccount && candidateFee >= amountCents)) {
+      || candidateFee >= amountCents) {
     throw guaranteeInvariantError('guarantee_application_fee_invalid');
   }
   if (!customerId) throw guaranteeInvariantError('guarantee_customer_missing');
@@ -442,6 +459,12 @@ async function decideCardGuaranteeRail({
       offSession = row.auth_off_session;
       savePaymentMethod = row.auth_save_payment_method;
       sourceCardSnapshot = presealedSnapshot;
+    }
+    // 4B · última línea antes de sellar: una decisión card-only NUEVA no puede
+    // quedar durable con account null. Es el mutante "persistir null pese a
+    // target directo", y acá es donde se vuelve irreversible.
+    if (!candidateAccount) {
+      throw guaranteeInvariantError('guarantee_connect_account_missing_on_seal');
     }
     await client.query(
       `UPDATE mesas
@@ -686,6 +709,20 @@ async function placeCardHold({
           mesa_id: mesaId, error: terminalError.message,
         });
       }
+    }
+    if (e.code === 'guarantee_connect_account_not_ready') {
+      // 4B · la mesa queda en `pending_auth` sin hold ni PI. NO se termina la
+      // mesa: la cuenta puede volver a ser apta en minutos y el mismo
+      // idempotency_key tiene que poder converger. Lo que no puede pasar —y no
+      // pasa— es que se cree un hold de plataforma mientras tanto.
+      logger.warn('guarantee_connect_gate_rejected', {
+        mesa_id: mesaId, code: e.details?.connect_code || null,
+      });
+      return {
+        status: 'reconciliation_pending',
+        reason: 'connect_account_not_ready',
+        connectCode: e.details?.connect_code || null,
+      };
     }
     logger.error('guarantee_connect_target_failed', { mesa_id: mesaId, error: e.message });
     return { status: 'reconciliation_pending', reason: 'connect_target_unavailable' };
@@ -1542,6 +1579,36 @@ async function settleMesa(mesaId) {
     const authAcct = m.auth_stripe_account_id || null;
     try {
       if (shortfall > 0) {
+        // ── ORDEN OLA 4 · 4B · el gate antes de la CAPTURA ──────────────────
+        // Capturar mueve plata. Entre el hold y este momento pueden haber
+        // pasado horas: la cuenta pudo restringirse, perder `card_payments` o
+        // dejar de existir. Se revalida la MISMA cuenta durable —nunca se
+        // elige otra— y cualquier no-aptitud frena la captura. El hold sigue
+        // vivo y el sweep reintenta; lo que no ocurre es un cargo sobre una
+        // cuenta que hoy no está apta.
+        //
+        // LÍMITE DECLARADO: `authAcct === null` es una garantía de PLATAFORMA
+        // anterior a 4B. Su destino económico lo decide 4C ("cuarentena, no
+        // decidir automáticamente"); 4B no lo toca y no inventa esa política.
+        if (authAcct) {
+          let vigente;
+          try {
+            vigente = await connectGate.requireChargeTarget({ mesaId });
+          } catch (gateErr) {
+            throw gateErr instanceof connectGate.ConnectGateError
+              ? guaranteeInvariantError('guarantee_capture_connect_not_ready', {
+                connect_code: gateErr.code, auth_account: authAcct,
+              })
+              : gateErr;
+          }
+          if (vigente.accountId !== authAcct) {
+            // Un retry JAMÁS puede capturar contra otra cuenta que la que
+            // autorizó el hold, aunque el restaurante haya migrado la suya.
+            throw guaranteeInvariantError('guarantee_capture_account_mismatch', {
+              durable: authAcct, vigente: vigente.accountId,
+            });
+          }
+        }
         // Comisión RECALCULADA sobre lo que se captura de verdad: Stripe la
         // capa al monto capturado pero NO la prorratea (Fase 0 · E8).
         // Prorrateo de la comisión AUTORIZADA (no del fee_pct vivo): el
@@ -1707,10 +1774,17 @@ async function settleMesa(mesaId) {
     // Outbox E3: table_charged en 'settled' — cubre fully_paid Y expired+garantía;
     // hereda el re-check FOR UPDATE de arriba (anti doble emisión).
     await eventEmitter.enqueueTableCharged(client, mesaId);
-    // Outbox Etapa 2 (OLA 2-A): corre bajo SAVEPOINT. Un fallo TÉCNICO ya no
-    // revierte esta fase —el dinero ya se capturó en la Fase 2— sino que difiere
-    // el lote a `settlement_aggregate_backlog` para reintento observable. La
-    // violación de privacidad sí sigue abortando todo.
+    // Outbox Etapa 2 (OLA 2-A · ampliado por ORDEN 1A): corre bajo SAVEPOINT y
+    // NINGÚN fallo del lote revierte esta fase —el dinero ya se capturó en la
+    // Fase 2—, sino que lo difiere a `settlement_aggregate_backlog` para
+    // reintento observable.
+    //
+    // ⚠️ Eso incluye la violación de PRIVACIDAD. Hasta ORDEN 1A ese caso sí
+    // relanzaba, y era el defecto P0: la excepción atravesaba el SAVEPOINT,
+    // revertía `settled` + E3 con la plata ya capturada y dejaba la mesa
+    // `settling` para que el sweep volviera a pasarle por encima. El payload
+    // rechazado sigue sin salir —lo revierte el SAVEPOINT—; lo que se le quitó
+    // a la analítica es el poder de veto sobre el dinero, no el rigor.
     await aggregateEmitter.enqueueSettledMesaAggregates(client, mesaId);
     return { raced: false };
   });
@@ -2998,13 +3072,17 @@ async function sweepSettlements() {
     try {
       // enqueueSettledMesaAggregates se re-anota sola con backoff si vuelve a
       // fallar, así que este loop no necesita administrar reintentos.
-      await pool.tx(async (client) => {
-        await aggregateEmitter.enqueueSettledMesaAggregates(client, r.mesa_id);
-      });
-      aggregatesRetried++;
+      const res = await pool.tx(async (client) =>
+        aggregateEmitter.enqueueSettledMesaAggregates(client, r.mesa_id));
+      // ⭐ ORDEN 1A: contar la VUELTA como progreso era mentira de métrica. Un
+      // lote diferido o saltado no emitió nada, y desde que privacidad también
+      // se difiere en vez de lanzar, la mentira sería permanente: el sweep
+      // reportaría `aggregates_retried` creciendo mientras el backlog no baja.
+      if (res && !res.deferred && !res.skipped) aggregatesRetried++;
     } catch (e) {
-      // Sólo llega acá una violación de privacidad (no se difiere, aborta) o un
-      // fallo de la propia anotación. Ninguna de las dos puede quedar callada.
+      // Desde ORDEN 1A el lote NO propaga —ni siquiera privacidad, que ahora se
+      // anota como cuarentena—, así que acá sólo llega un fallo de la propia
+      // anotación o de la transacción. Ninguno puede quedar callado.
       logger.error('sweep_aggregate_backlog_error', {
         mesa_id: r.mesa_id, error: e.message, code: e.code || null,
       });

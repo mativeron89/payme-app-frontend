@@ -279,8 +279,17 @@ router.get('/history', validateQuery(historyQuery), async (req, res, next) => {
     params.push(limit, offset);
 
     const { rows } = await pool.query(
+      // `m.status` (aditivo): el front no tenía forma de saber si la mesa de un
+      // pago sigue abierta, así que pintaba las mesas vivas del invitado bajo un
+      // encabezado de mes, como si ya hubieran terminado.
+      //
+      // ⚠️ La GRANULARIDAD no cambia: esto devuelve UN RENGLÓN POR PAGO y también
+      // alimenta PagosScreen, que es superficie card-only ratificada. Hacerlo
+      // devolver una fila por mesa mutaría una superficie ratificada para
+      // acomodar una pantalla nueva. La agregación se queda en el front.
       `SELECT pa.id, pa.gross_amount_cents, pa.created_at,
-              m.code AS mesa_code, r.name AS restaurant_name, r.category
+              m.code AS mesa_code, m.status AS mesa_status,
+              r.name AS restaurant_name, r.category
          FROM payment_attempts pa
          JOIN mesas m ON m.id = pa.mesa_id
          JOIN restaurants r ON r.id = m.restaurant_id
@@ -295,6 +304,7 @@ router.get('/history', validateQuery(historyQuery), async (req, res, next) => {
         amount_cents: Number(r.gross_amount_cents),
         date: r.created_at,
         mesa_code: r.mesa_code,
+        mesa_status: r.mesa_status,
         restaurant: r.restaurant_name,
         category: r.category,
       })),

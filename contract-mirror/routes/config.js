@@ -13,6 +13,7 @@
 const express = require('express');
 const { birthDateRequeridaEnRegistro } = require('../schemas');
 const { stpRestaurantDispersalReady } = require('../middleware/envValidation');
+const { walletRailCapability } = require('../services/walletRail');
 const { version } = require('../package.json');
 const router = express.Router();
 
@@ -41,7 +42,11 @@ const router = express.Router();
  * `supported` como en `account_birth_date`.
  */
 const WALLET_RAIL = Object.freeze({
-  enabled: false,
+  // P0 · ORDEN 1 · NO es un literal: sale de `services/walletRail`, que es la
+  // única fuente autoritativa. Antes eran DOS fuentes —un `false` acá y una
+  // bandera allá— y podían describir estados opuestos: la capability decía
+  // apagado mientras el runtime aceptaba operaciones wallet.
+  enabled: walletRailCapability(),
   account_activity: true,
 });
 

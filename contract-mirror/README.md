@@ -6,11 +6,43 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-04** (tercero del día · ORDEN 3A).
+- Fecha del refresh: **2026-08-05**.
 - Fuente local: `../payme-app-backend`.
-- Commit exacto: `a79938e306a7c3f2e7aae7eedd4cd43c5ae9e405`.
-- Versión de `package.json`: **2.34.4**.
+- Commit exacto: `22b84a2d65fc16048e320a18779ca92b631c0507`.
+- Versión de `package.json`: **2.42.0**.
 - Rama fuente: `codex/audit-2026-08-02-app-backend`.
+
+Paridad verificada con `scripts/verificar-mirror.sh`: **70 espejados · 70
+idénticos · 0 diferencias · 0 sin fuente.**
+
+### Qué trajo este refresh · cinco archivos, ningún cambio que rompa
+
+El backend fue de v2.34.4 a v2.42.0 y del espejo se movieron cinco archivos.
+**Los dos cambios de contrato son ADITIVOS**: nada de lo que este front ya
+consume cambió de forma.
+
+1. **`routes/mesas.js` · `GET /mesas/open` cierra G-28.** La mesa abierta pasa a
+   ser de **todos sus participantes**, no sólo de quien la abrió: `opener_user_id
+   OR EXISTS(mesa_participants … status='active')`. **Mismo shape, más filas** —
+   quien se sumó por un link deja de tener una mesa invisible mientras debe
+   plata. El criterio de participante no es nuevo: es el que ya usaban
+   `requireMesaParticipant` e `invitationAuthority`.
+2. **`routes/account.js` · `GET /account/history` agrega `mesa_status`.** Clave
+   nueva en cada renglón; las siete anteriores intactas. 🔴 **La granularidad NO
+   cambió: sigue siendo UN RENGLÓN POR PAGO**, y el emisor lo fijó con test
+   porque esa misma respuesta alimenta `PagosScreen`, que es superficie
+   card-only ratificada. La agregación por mesa se queda en el front, donde
+   `groupByMesa()` ya la hace. **No pedir que cambie.**
+3. **`routes/config.js` + `services/walletRail.js` · el riel wallet se endurece,
+   no se afloja.** `wallet_rail.enabled` dejó de ser un literal `false` y sale
+   del servicio autoritativo, que **eliminó la env var `LEGACY_WALLET_ENABLED`**:
+   ya no existe variable de entorno que reabra la creación de obligaciones
+   nuevas. `account_activity: true` no se movió — historial y estadísticas
+   propias siguen siendo card-only ratificado. Este front lo lee igual, en
+   `src/api/walletRail.ts`, y sigue fallando cerrado.
+4. **`docs/settlement.js.ref` · gate Connect tipado (OLA 4B)** en el camino de la
+   garantía: una cuenta no apta falla cerrada en vez de degradar a plataforma.
+   No cambia ningún shape que este front consuma.
 
 ### ORDEN 5 · el espejo NO quedó atrasado, y esto lo dice sin ambigüedad
 
