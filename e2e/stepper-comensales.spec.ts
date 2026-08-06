@@ -69,6 +69,43 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByText('(la cuenta ÷ 3)')).toBeVisible();
   });
 
+  test('partes iguales con N=3: viaja el 3 elegido y la parte es $280.00 — no el 4 fantasma (2-A.3)', async ({ page }) => {
+    // El hueco que Codex midió: el caso de iguales sólo probaba el reset a
+    // '—', nunca CREABA una mesa con N distinto de 4 — "un mutante que
+    // reponga 4 sólo para division='igual' podría sobrevivir". Acá se elige
+    // 3 en IGUAL, se abre la mesa, y se afirman las dos consecuencias: el N
+    // que viajó y la parte por persona (840÷3 = $280.00 — con el 4 fantasma
+    // sería $210.00).
+    await ingresar(page);
+    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Capturar' }).click();
+    await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continuar' }).click();
+
+    await page.getByRole('button', { name: /En partes iguales/ }).click();
+    const mas = page.getByRole('button', { name: 'Un comensal más' });
+    await mas.click(); // — → 2 (piso de iguales, del contrato)
+    await mas.click(); // 2 → 3
+    await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('3');
+    await expect(page.getByText('$280.00')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
+    await page.getByRole('button', { name: 'Confirmar autorización' }).click();
+    await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
+
+    const texto = await page.getByText(/#\/mesa\/PA-/).first().innerText();
+    const codigo = /#\/mesa\/(PA-[A-Za-z0-9]+)/.exec(texto.trim())![1]!;
+    const mesa = await page.evaluate((code) => {
+      const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
+      const m = st.mesas.find((x: { code: string }) => x.code === code);
+      return { n: m.expected_participants, slots: m.slots?.length, primera: m.slots?.[0]?.amount_cents };
+    }, codigo);
+    expect(mesa.n).toBe(3);
+    expect(mesa.slots).toBe(3);
+    expect(mesa.primera).toBe(28000);
+  });
+
   test('pasar a partes iguales con N=1 elegido vuelve a preguntar: el piso es 2, del contrato', async ({ page }) => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();

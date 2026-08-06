@@ -24,6 +24,21 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # 2-A.3 (2026-08-07): el gate del espejo, ANTES que las suites — si el
+      # contrato copiado no es el que el manifiesto declara, nada de lo que
+      # sigue mide contra el contrato real. `--manifiesto` porque acá no
+      # existe ../payme-app-backend; la paridad contra el commit declarado se
+      # corre en local, donde el repo hermano está. El script sale ≠0 ante
+      # archivo distinto, faltante, intruso o manifiesto ausente — la versión
+      # anterior REPORTABA diferencias y devolvía 0, y este workflow ni
+      # siquiera lo invocaba: dos maneras de tener un espejo roto en verde.
+      - run: bash scripts/verificar-mirror.sh --manifiesto
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      # Los 78 recorridos de navegador también son gate: la auditoría del
+      # 2026-08-06 encontró en ellos lo que ninguna suite sin navegador vio
+      # (el Shell pisando la pantalla de rechazo, la coma ×100 en el input).
+      # Sólo chromium: es el proyecto único de playwright.config.
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
