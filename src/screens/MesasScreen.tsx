@@ -13,6 +13,7 @@ import {
   FRANJA_LABEL,
   franjaDe,
   mesasCerradas,
+  traerHistorialCompleto,
   type Franja,
 } from './historialView';
 
@@ -41,9 +42,6 @@ function fechaDeFila(iso: string): string {
   return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
 }
 
-/** Tope del emisor: `historyQuery` valida `limit` entre 1 y 100. */
-const PAGINA = 20;
-
 /**
  * **Mesas ES el historial** — `SPEC_APP.md` §1.10, definido por Mati: *"una
  * forma más rápida de ir al histórico de mesas"*. Como nunca hay más de una
@@ -65,31 +63,29 @@ const PAGINA = 20;
 export function MesasScreen() {
   const { session } = useAuth();
   const [pagos, setPagos] = useState<HistoryEntry[] | null>(null);
-  const [hayMas, setHayMas] = useState(false);
-  const [cargandoMas, setCargandoMas] = useState(false);
   const [fallo, setFallo] = useState(false);
   const [unread, setUnread] = useState(0);
   const [abierta, setAbierta] = useState<string | null>(null);
 
-  const traer = useCallback(async (offset: number) => {
-    const r = await api.getHistory({ limit: PAGINA, offset });
-    // El contrato no publica `has_more`: la única señal honesta de que quedan
-    // más es que la página vino LLENA (mismo razonamiento que PagosScreen).
-    setHayMas(r.history.length === PAGINA);
-    return r.history;
-  }, []);
-
-  const primeraPagina = useCallback(() => {
+  /**
+   * TODO el historial antes de agrupar, sin "Cargar más": una página parcial
+   * dejaría a una mesa partida en el borde con su total SUBCONTADO en
+   * pantalla. O está todo, o es el estado de error — la falla a mitad de
+   * carga propaga a propósito (ver `traerHistorialCompleto`).
+   */
+  const cargarHistorial = useCallback(() => {
     setFallo(false);
     setPagos(null);
-    traer(0)
+    traerHistorialCompleto((limit, offset) =>
+      api.getHistory({ limit, offset }).then((r) => r.history),
+    )
       .then(setPagos)
       .catch(() => setFallo(true));
-  }, [traer]);
+  }, []);
 
   useEffect(() => {
-    primeraPagina();
-  }, [primeraPagina]);
+    cargarHistorial();
+  }, [cargarHistorial]);
 
   useEffect(() => {
     let alive = true;
@@ -98,21 +94,6 @@ export function MesasScreen() {
       alive = false;
     };
   }, []);
-
-  async function cargarMas() {
-    if (cargandoMas || !pagos) return;
-    setCargandoMas(true);
-    try {
-      // El offset es sobre PAGOS (renglones del contrato), no sobre mesas.
-      const mas = await traer(pagos.length);
-      setPagos((prev) => [...(prev ?? []), ...mas]);
-    } catch {
-      // Falla al paginar: NO se borra lo que ya se mostró.
-      setFallo(true);
-    } finally {
-      setCargandoMas(false);
-    }
-  }
 
   const cerradas = pagos ? mesasCerradas(pagos) : null;
   const grupos = cerradas ? agruparPorMes(cerradas) : [];
@@ -143,7 +124,7 @@ export function MesasScreen() {
                 <p className="state-error-body">Revisá la conexión y probá de nuevo.</p>
               </div>
             </div>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={primeraPagina}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={cargarHistorial}>
               Reintentar
             </button>
           </div>
@@ -225,23 +206,6 @@ export function MesasScreen() {
               </section>
             ))}
 
-            {fallo && (
-              <p className="pago-fallo" role="status">
-                No pudimos traer más mesas. Lo que ves sigue siendo correcto.
-              </p>
-            )}
-
-            {hayMas && (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ marginTop: 12 }}
-                onClick={() => void cargarMas()}
-                disabled={cargandoMas}
-              >
-                {cargandoMas ? 'Cargando…' : 'Cargar más'}
-              </button>
-            )}
           </>
         )}
 

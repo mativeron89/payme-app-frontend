@@ -105,6 +105,43 @@ export function franjaDe(iso: string): Franja | null {
   return 'noche';
 }
 
+// ─── Carga completa ────────────────────────────────────────
+
+/**
+ * Trae TODO el historial, página a página, antes de agrupar.
+ *
+ * No es un lujo: `agruparPorMesa` SUMA los pagos propios de cada mesa, y con
+ * una página parcial en pantalla una mesa cuyos renglones quedaron partidos
+ * entre dos páginas mostraría un total SUBCONTADO como si fuera el real —
+ * plata que la persona pagó y la pantalla no cuenta. Y como el emisor ordena
+ * por fecha DESC, no alcanza con descartar la última mesa cargada: cualquier
+ * mesa cerca del borde puede tener renglones en la página siguiente.
+ *
+ * Por eso acá no hay "Cargar más": o está todo, o es el estado de error.
+ * Una falla a mitad de carga PROPAGA — mostrar totales parciales sería el
+ * mismo defecto con otra cara. (Límite marcado por el Bibliotecario-Auditor
+ * el 2026-08-05: §1.10 no se implementa con la llamada pelada.)
+ */
+export async function traerHistorialCompleto(
+  traerPagina: (limit: number, offset: number) => Promise<HistoryEntry[]>,
+  /** Tope del emisor: `historyQuery` valida `limit` entre 1 y 100. */
+  limit = 100,
+): Promise<HistoryEntry[]> {
+  /**
+   * Backstop anti-loop: si el backend devolviera páginas llenas para siempre
+   * (un bug de offset, por ejemplo), esto corta con error en vez de colgar el
+   * teléfono. 50 páginas × 100 = 5000 pagos propios; nadie real llega ahí.
+   */
+  const MAX_PAGINAS = 50;
+  const todo: HistoryEntry[] = [];
+  for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
+    const renglones = await traerPagina(limit, todo.length);
+    todo.push(...renglones);
+    if (renglones.length < limit) return todo;
+  }
+  throw new Error(`historial: más de ${MAX_PAGINAS} páginas llenas — offset roto o volumen imposible`);
+}
+
 // ─── Agrupado por mes ──────────────────────────────────────
 
 export interface MesDeHistorial {

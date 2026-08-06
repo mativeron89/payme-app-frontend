@@ -6,6 +6,7 @@ import {
   esMesaAbierta,
   franjaDe,
   mesasCerradas,
+  traerHistorialCompleto,
 } from './historialView';
 
 const pago = (
@@ -121,6 +122,59 @@ describe('franjaDe — cortes locales decididos por este front', () => {
 
   it('fecha ilegible: null, nunca una franja inventada', () => {
     expect(franjaDe('no-es-una-fecha')).toBeNull();
+  });
+});
+
+describe('traerHistorialCompleto — todo antes de agrupar, o error', () => {
+  const universo = (n: number) => Array.from({ length: n }, (_, i) => pago(`p${i}`));
+  const fetcher = (entradas: HistoryEntry[], llamadas: Array<[number, number]>) =>
+    (limit: number, offset: number) => {
+      llamadas.push([limit, offset]);
+      return Promise.resolve(entradas.slice(offset, offset + limit));
+    };
+
+  it('pagina hasta la página corta y devuelve todos los renglones', async () => {
+    const llamadas: Array<[number, number]> = [];
+    const todo = await traerHistorialCompleto(fetcher(universo(250), llamadas), 100);
+    expect(todo).toHaveLength(250);
+    expect(llamadas).toEqual([[100, 0], [100, 100], [100, 200]]);
+  });
+
+  /**
+   * El caso del borde que motivó la carga completa: una mesa con renglones en
+   * DOS páginas suma completa igual. Con la página pelada de antes, esta mesa
+   * mostraba la mitad de lo pagado como si fuera el total.
+   */
+  it('una mesa partida entre dos páginas suma COMPLETA', async () => {
+    const entradas = [
+      ...Array.from({ length: 99 }, (_, i) => pago(`otro${i}`, { mesa_code: `PA-${i}` })),
+      pago('a', { mesa_code: 'PA-BORDE', amount_cents: 3000 }), // renglón 100: cierra la página 1
+      pago('b', { mesa_code: 'PA-BORDE', amount_cents: 4500 }), // renglón 101: abre la página 2
+    ];
+    const todo = await traerHistorialCompleto(fetcher(entradas, []), 100);
+    const borde = agruparPorMesa(todo).find((m) => m.mesa_code === 'PA-BORDE');
+    expect(borde?.amount_cents).toBe(7500);
+  });
+
+  it('un universo que entra en una página hace UNA llamada', async () => {
+    const llamadas: Array<[number, number]> = [];
+    await traerHistorialCompleto(fetcher(universo(3), llamadas), 100);
+    expect(llamadas).toEqual([[100, 0]]);
+  });
+
+  it('una falla a mitad de carga PROPAGA: nunca totales parciales', async () => {
+    let llamada = 0;
+    const falible = (limit: number, offset: number) => {
+      llamada++;
+      if (llamada === 2) return Promise.reject(new Error('red caída'));
+      return Promise.resolve(universo(300).slice(offset, offset + limit));
+    };
+    await expect(traerHistorialCompleto(falible, 100)).rejects.toThrow('red caída');
+  });
+
+  it('backstop: páginas llenas para siempre cortan con error, no cuelgan', async () => {
+    const roto = (limit: number) => Promise.resolve(universo(limit));
+    await expect(traerHistorialCompleto(roto, 100)).rejects.toThrow(/páginas llenas/);
   });
 });
 
