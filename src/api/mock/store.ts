@@ -210,6 +210,33 @@ function seedItems(): MockItem[] {
   ];
 }
 
+/**
+ * Ítems de la mesa IGUAL del seed (auditoría 2026-08-06, H-14): `items: []`
+ * violaba el contrato — `POST /mesas` exige al menos un ítem
+ * (`schemas/index.js:195`, `.min(1)` sin optional) — y modelaba un estado
+ * IMPOSIBLE en producción, que esta noche hizo perder tiempo buscando un
+ * atrape que en real no existe. Suman exactamente `igualTotal` (62000).
+ */
+function seedItemsIgual(): MockItem[] {
+  const mk = (name: string, price: number): MockItem => ({
+    id: mockId('d'),
+    name,
+    category: 'other',
+    price_cents: price,
+    quantity: 1,
+    status: 'available',
+    lockedBy: null,
+    lock_expires_at: null,
+    claims: [],
+  });
+  return [
+    mk('Omakase para dos', 26000),
+    mk('Sashimi mixto', 14000),
+    mk('Tempura de camarón', 12000),
+    mk('Sake (botella)', 10000),
+  ];
+}
+
 function seedMesas(): MockMesa[] {
   const parolaccia = MOCK_RESTAURANTS[0];
   const hanzo = MOCK_RESTAURANTS[1];
@@ -257,7 +284,7 @@ function seedMesas(): MockMesa[] {
       expected_participants: 4,
       status: 'partially_paid',
       expires_at: iso(12 * 60_000),
-      items: [],
+      items: seedItemsIgual(),
       slots,
       active_staff: STAFF,
       openedByUser: true,

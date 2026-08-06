@@ -156,16 +156,19 @@ export function MesaDetailView({
    * dice "Continuar" siempre: un nav item que cambia de texto según el estado
    * es un nav item inestable (§1.5).
    *
-   * **Se decide por la SELECCIÓN, no por el monto**, y ahí me aparté del spec.
-   * Su tabla dice `$0.00` → *"Elegí lo que consumiste"* y `> $0.00` → *"Mi
-   * parte"*, que es correcto en división por consumo, donde el monto sale de lo
-   * elegido. Pero en partes iguales el monto es el del casillero libre y **no
-   * depende de la selección**: vale $210 desde que se entra, sin haber tocado
-   * nada. Con la regla literal, la fila decía "Mi parte $210.00" mientras
-   * Continuar estaba apagado y sin decir por qué — el mismo defecto que ya
-   * había corregido en Ticket. Lo detectó un e2e, no yo.
+   * **La selección sólo manda en CONSUMO** (auditoría 2026-08-06, H-14). En
+   * ese modo el monto SALE de lo elegido, así que sin selección la fila guía
+   * ("Elegí lo que consumiste") y Continuar espera. En PARTES IGUALES marcar
+   * es información para el restaurante y la propia pantalla lo dice — "no
+   * cambia lo que pagás" —, pero el gate viejo exigía seleccionar igual:
+   * copy y gate se contradecían, y con una mesa sin ítems el Continuar
+   * quedaba apagado PARA SIEMPRE, sin salida al pago. En igual la fila
+   * muestra "Mi parte" desde que se entra (el monto es el del casillero
+   * libre, como manda la tabla del spec) y Continuar sólo espera a que haya
+   * casillero. El contrato acompaña: `payMesa` acepta `item_ids: []`
+   * (`schemas/index.js:233`, default []).
    */
-  const faltaElegir = selected.size === 0;
+  const faltaElegir = esConsumo && selected.size === 0;
   const miParte = (
     <div className="mi-parte">
       {nothingLeft ? (
@@ -173,7 +176,7 @@ export function MesaDetailView({
       ) : !esConsumo && availableSlots === 0 ? (
         <span>No quedan partes</span>
       ) : faltaElegir ? (
-        <span>{esConsumo ? 'Elegí lo que consumiste' : 'Marcá lo que consumiste'}</span>
+        <span>Elegí lo que consumiste</span>
       ) : (
         <>
           <span>{mySlotsTaken > 0 && !esConsumo ? 'Otra parte' : 'Mi parte'}</span>
@@ -184,7 +187,7 @@ export function MesaDetailView({
   );
 
   const continuarDeshabilitado =
-    busy || selected.size === 0 || (!esConsumo && availableSlots === 0);
+    busy || (esConsumo ? selected.size === 0 : availableSlots === 0);
 
   return (
     <div className="screen has-appbar">

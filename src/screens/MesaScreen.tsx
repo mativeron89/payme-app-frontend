@@ -535,9 +535,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         setBusy(false);
       }
     } else {
-      // Partes iguales: el monto es la parte, pero marcar lo consumido es
-      // obligatorio (info para el restaurante).
-      if (selected.size === 0) return;
+      // Partes iguales (H-14, auditoría 2026-08-06): marcar lo consumido es
+      // INFORMACIÓN para el restaurante — la propia pantalla dice "no cambia
+      // lo que pagás" — y por eso NO condiciona el pago. El guard viejo
+      // (`selected.size === 0 → return`) era el mismo gate contradictorio que
+      // el `disabled` de la barra, en su segundo lugar. El contrato acompaña:
+      // `payMesa` acepta `item_ids: []` (schemas/index.js:233, default []).
       setView('pay');
     }
   }
