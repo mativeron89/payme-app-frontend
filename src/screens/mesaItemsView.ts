@@ -21,6 +21,43 @@ export const FRACTIONS: ReadonlyArray<{ bps: number; label: string }> = [
   { bps: 2500, label: '¼' },
 ];
 
+/**
+ * ORDEN 1A.3 · `remaining_bps` ES DATO DEL CONTRATO Y SE VALIDA COMO TAL.
+ *
+ * `GET /mesas/:code` no pasa por ningún decoder: la respuesta se castea a
+ * `MesaDetailResponse` y las pantallas leen el campo como si fuera número.
+ * Con `undefined`, las dos comparaciones de `rowStateOf` daban `false`
+ * (`undefined <= 0` y `undefined > 0`), así que un ítem 100 % tomado por otro
+ * se pintaba DISPONIBLE — sin candado, sin "Lo eligió otro" y con el precio
+ * entero. La persona tocaba el plato de otro y el `POST /items/lock` rebotaba:
+ * el backend salva la plata, pero la pantalla ya invitó a un camino muerto.
+ *
+ * 🔴 Y el default fabricado era el MÁXIMO: `item?.remaining_bps ?? 10000` más
+ * `FRACTIONS.find(...)?.bps ?? 10000` preseleccionaban **el plato entero** —
+ * la opción más cara y la que más consume del ítem— cuando el dato faltaba.
+ * Es la lección de `tipSelectorView` ("el sistema elegía por la persona, y
+ * elegía con su plata") en otra pantalla: ante la duda no se elige el máximo,
+ * no se elige nada.
+ *
+ * Válido = entero entre 0 y 10000 inclusive. Cualquier otra cosa —ausente,
+ * `null`, string, `NaN`, negativo, > 10000, fraccionario— es respuesta
+ * inválida, y el ítem queda NO SELECCIONABLE. Esto es contrato y UX: no
+ * inventa ni mueve un centavo.
+ */
+export function bpsValido(valor: unknown): valor is number {
+  return typeof valor === 'number' && Number.isInteger(valor) && valor >= 0 && valor <= 10000;
+}
+
+/**
+ * La fracción con la que se PRESELECCIONA un ítem recién tildado: la mayor que
+ * entra en lo que queda. `null` cuando el dato no es válido o cuando no entra
+ * ninguna — y `null` significa "no se selecciona", nunca "tomá el entero".
+ */
+export function fraccionInicial(remainingBps: unknown): number | null {
+  if (!bpsValido(remainingBps)) return null;
+  return FRACTIONS.find((f) => f.bps <= remainingBps)?.bps ?? null;
+}
+
 export function bpsLabel(bps: number): string {
   if (bps >= 10000) return 'entero';
   if (bps === 5000) return '½';

@@ -4,6 +4,8 @@ import {
   FRACTIONS,
   availableSlotsOf,
   bpsLabel,
+  bpsValido,
+  fraccionInicial,
   fractionPreview,
   itemsAmountFor,
   nothingLeftFor,
@@ -219,5 +221,49 @@ describe('availableSlotsOf', () => {
 
   it('sin casilleros da cero, no explota', () => {
     expect(availableSlotsOf(mesa())).toBe(0);
+  });
+});
+
+/**
+ * ORDEN 1A.3 · `remaining_bps` ES DATO DEL CONTRATO Y SE VALIDA COMO TAL.
+ *
+ * `GET /mesas/:code` no pasa por decoder: el campo llega casteado. Con
+ * `undefined`, las DOS comparaciones de `rowStateOf` daban `false`
+ * (`undefined <= 0` y `undefined > 0`), así que un ítem 100 % tomado por otro
+ * se pintaba DISPONIBLE. Y el default fabricado era el MÁXIMO: `?? 10000`
+ * preseleccionaba el plato entero — la opción más cara — justo cuando no se
+ * sabía cuánto quedaba.
+ */
+describe('bpsValido · la tabla de lo que NO es un bps', () => {
+  it('acepta sólo enteros de 0 a 10000 inclusive', () => {
+    for (const ok of [0, 1, 2500, 3333, 5000, 10000]) expect(bpsValido(ok)).toBe(true);
+  });
+
+  it('🔴 rechaza ausente, null, string, NaN, negativo, >10000 y fraccionario', () => {
+    for (const malo of [undefined, null, '5000', NaN, Infinity, -1, -0.5, 10001, 25000, 2500.5, {}, []]) {
+      expect(bpsValido(malo), String(malo)).toBe(false);
+    }
+  });
+});
+
+describe('fraccionInicial · ante la duda NO se elige el máximo', () => {
+  it('elige la fracción más grande que entra en lo que queda', () => {
+    expect(fraccionInicial(10000)).toBe(10000);
+    expect(fraccionInicial(5000)).toBe(5000);
+    expect(fraccionInicial(4000)).toBe(3333);
+    expect(fraccionInicial(2500)).toBe(2500);
+  });
+
+  it('🔴 con dato inválido devuelve null — jamás el 10000 fabricado', () => {
+    for (const malo of [undefined, null, NaN, '10000', -1, 10001]) {
+      expect(fraccionInicial(malo), String(malo)).toBeNull();
+    }
+  });
+
+  it('si no entra NINGUNA fracción tampoco inventa: null', () => {
+    // Queda menos que la fracción más chica (¼). Antes esto caía en el
+    // `?? 10000` y preseleccionaba el ítem entero sobre un resto de 1 bps.
+    expect(fraccionInicial(1)).toBeNull();
+    expect(fraccionInicial(0)).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import {
   FRACTIONS,
   availableSlotsOf,
   bpsLabel,
+  bpsValido,
   countdownIsUrgent,
   fractionPreview,
   nothingLeftFor,
@@ -70,11 +71,16 @@ export interface MesaDetailViewProps {
  * cada rama del JSX, porque de eso depende qué ve alguien sobre un plato que
  * quizá ya pagó: confundir "tomado" con "pagado" es confundir plata.
  */
-type RowState = 'disponible' | 'parcial' | 'seleccionado' | 'tomado' | 'pagado';
+type RowState = 'disponible' | 'parcial' | 'seleccionado' | 'tomado' | 'pagado' | 'indeterminado';
 
 function rowStateOf(item: MesaItem, selected: Map<string, number>): RowState {
   if (selected.has(item.id)) return 'seleccionado';
   if (item.status === 'paid') return 'pagado';
+  // ORDEN 1A.3 · sin un `remaining_bps` válido no se puede afirmar NADA de
+  // este ítem: ni que está libre (era lo que pasaba: `undefined <= 0` y
+  // `undefined > 0` son los dos `false`, así que caía en 'disponible') ni que
+  // lo tomó otro. Queda no seleccionable y lo dice.
+  if (!bpsValido(item.remaining_bps)) return 'indeterminado';
   // Bloqueado sólo si NO queda nada y nada es mío.
   if (item.remaining_bps <= 0 && item.my_bps === 0) return 'tomado';
   if (item.remaining_bps > 0 && item.remaining_bps < 10000) return 'parcial';
@@ -93,6 +99,8 @@ function rowStateOf(item: MesaItem, selected: Map<string, number>): RowState {
 function rowTag(state: RowState, item: MesaItem): string | null {
   if (state === 'pagado') return 'Pagado';
   if (state === 'tomado') return 'Lo eligió otro';
+  // No afirma que lo tomó otro —no lo sabemos—: dice que no pudimos leerlo.
+  if (state === 'indeterminado') return 'No pudimos leer este ítem';
   if (state === 'parcial') return `Queda ${bpsLabel(item.remaining_bps)}`;
   return null;
 }
@@ -244,7 +252,9 @@ export function MesaDetailView({
             const fullPrice = i.price_cents * i.quantity;
             const state = rowStateOf(i, selected);
             const sel = state === 'seleccionado';
-            const bloqueado = state === 'tomado' || state === 'pagado';
+            // 1A.3 · 'indeterminado' bloquea igual que 'tomado': sin dato
+            // válido no se ofrece tomar nada.
+            const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
             const tag = rowTag(state, i);
             const myBpsSel = selected.get(i.id) ?? 10000;
             // En partes iguales marcar es informativo y no reserva nada, así

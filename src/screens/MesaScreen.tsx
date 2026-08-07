@@ -41,7 +41,7 @@ import {
   requiresReconciliation,
 } from './freezeMachine';
 import { MesaDetailView } from './MesaDetailView';
-import { FRACTIONS, bpsLabel, itemsAmountFor } from './mesaItemsView';
+import { bpsLabel, fraccionInicial, itemsAmountFor } from './mesaItemsView';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { tipFromBps } from '../utils/money';
@@ -490,8 +490,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       next.delete(id);
     } else {
       const item = mesa?.items.find((i) => i.id === id);
-      const remaining = item?.remaining_bps ?? 10000;
-      const def = FRACTIONS.find((f) => f.bps <= remaining)?.bps ?? 10000;
+      // ORDEN 1A.3 · acá vivían DOS defaults fabricados —`?? 10000` dos
+      // veces— que ante la ausencia del dato preseleccionaban EL PLATO
+      // ENTERO: la opción más cara. Ahora, sin `remaining_bps` válido no se
+      // selecciona nada; la fila ya se muestra bloqueada por `rowStateOf`.
+      const def = fraccionInicial(item?.remaining_bps);
+      if (def === null) {
+        toast('No pudimos leer cuánto queda de ese ítem. Actualizá la mesa.');
+        return;
+      }
       next.set(id, def);
     }
     setSelected(next);
