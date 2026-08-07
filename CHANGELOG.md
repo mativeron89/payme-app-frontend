@@ -1,5 +1,46 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.58.0 — la garantía no se le atribuye a una tarjeta que nadie eligió (2026-08-07)
+
+Cierra la **ORDEN 1-B**, que nació de un caso que yo había descartado **por
+argumento estructural**. El argumento era verdadero y contestaba otra pregunta:
+*"`is_default` no viaja en el request"* es cierto **sobre la identidad
+económica**, y el caso era **sobre qué tarjeta se le muestra a la persona**.
+
+🔴 **Y el defecto no era sólo visual.** `loadCards()` autoselecciona la tarjeta
+DEFAULT; tras recargar sobre una apertura congelada hecha con una guardada
+NO-default, la pantalla la atribuía a la default, con los botones
+deshabilitados. En `requires_action` eso es una mentira visual —el backend
+recupera la fuente durable— **pero en `not_found` el reenvío CREA por primera
+vez y esa tarjeta ES la que respalda la garantía**: la persona quedaba
+garantizando con una tarjeta que no eligió, en el cobro.
+
+**El contrato no permite restaurarla:** el backend guarda
+`auth_source_payment_method_id` y **no lo publica en ninguna respuesta** — y su
+propio comentario dice que esa fila *"nunca debe filtrarse por un spread"*. Así
+que no se inventó el campo: `cardChoice` gana un tercer valor —**no elegida**,
+porque los dos que había eran los dos una afirmación—, la pantalla **dice que
+no sabe**, y el reenvío exige elección explícita. **G-38** pide el dato con la
+forma mínima que alcanza: marca y últimos cuatro.
+
+El radio de **saldo** no se aflojó: `guarantee_method` sí está en
+`PAYLOAD_KEYS`, así que cambiar de riel es otra intención económica.
+
+🔴 **Un defecto de UI que apareció al correr, no al leer.** Playwright reportó
+`<button disabled class="cta-float"> intercepts pointer events` sobre la opción
+"Usar otra tarjeta": el `.scroll` de Garantía llevaba un `padding` shorthand
+inline que **pisa** el `padding-bottom` que despeja la píldora flotante. **En un
+teléfono esa opción no se puede tocar** — y con el estado nuevo, que exige
+elegir, la persona quedaba trabada. El aviso ya estaba escrito en el CSS; esta
+pantalla quedó afuera del barrido que arregló Ticket y División. Se arregla en
+la UI, no en el test.
+
+**Y dos correcciones propias declaradas:** el e2e de 2-A **no recorría la
+tarjeta tipeada** aunque lo declaré así —`loadCards()` autoselecciona antes de
+llegar— y el test saved-only mezclaba dos fuentes en un payload que el schema
+del backend rechaza. Los dos reemplazados por el flujo real, y el mutante
+re-medido contra el spec corregido.
+
 ## 0.57.0 — la identidad económica se alinea con el dueño (2026-08-07)
 
 Cierra la **ORDEN 2-A** sobre backend **v2.48.0** (`2966aab`): espejo a 72
