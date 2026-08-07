@@ -4,7 +4,7 @@
  * `MesaScreen`) y para el reset por mesa de `MesaScreen`.
  *
  * **DESMARCADO, ratificado por Mati el 2026-08-06 (vía Bibliotecario) — y la
- * decisión SOBREVIVE al cierre de G-11 (backend v2.46.0, 2026-08-07):** un
+ * decisión SOBREVIVE al cierre de G-11 (backend v2.46.0, 2026-08-06):** un
  * casillero marcado por defecto hace la promesa sin que la persona la pida,
  * y eso era cierto cuando el riel la incumplía y sigue siendo cierto ahora
  * que la cumple. Lo que cambió es lo otro: **quien lo marca, guarda DE

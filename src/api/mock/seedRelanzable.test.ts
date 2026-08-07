@@ -41,7 +41,7 @@ describe('G-36 · relanzamiento del seed vencido, con reloj controlado', () => {
     vi.unstubAllGlobals();
     setupStorage();
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-07T20:00:00Z'));
+    vi.setSystemTime(new Date('2026-08-06T20:00:00Z'));
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -56,7 +56,7 @@ describe('G-36 · relanzamiento del seed vencido, con reloj controlado', () => {
 
     // Adelantar el tiempo MÁS ALLÁ de todas las expiraciones (la más larga es
     // 29 min) y recargar desde persistencia.
-    vi.setSystemTime(new Date('2026-08-07T22:00:00Z'));
+    vi.setSystemTime(new Date('2026-08-06T22:00:00Z'));
     const { state: renacido } = await persistirYRehidratar();
 
     for (const c of codigos) {
@@ -73,7 +73,7 @@ describe('G-36 · relanzamiento del seed vencido, con reloj controlado', () => {
 
   it('PA-1099 NO se relanza: su historia ES estar cerrada (A-2)', async () => {
     await import('./store');
-    vi.setSystemTime(new Date('2026-08-07T22:00:00Z'));
+    vi.setSystemTime(new Date('2026-08-06T22:00:00Z'));
     const { state: renacido } = await persistirYRehidratar();
     expect(renacido.mesas.find((m) => m.code === 'PA-1099')!.status).toBe('completed');
   });
@@ -91,7 +91,7 @@ describe('G-36 · relanzamiento del seed vencido, con reloj controlado', () => {
       category: 'japanese',
     });
 
-    vi.setSystemTime(new Date('2026-08-07T22:00:00Z'));
+    vi.setSystemTime(new Date('2026-08-06T22:00:00Z'));
     const { state: renacido } = await persistirYRehidratar();
 
     // PA-3121 quedó donde el reloj la dejó (vencida, NO relanzada)…
@@ -113,7 +113,7 @@ describe('G-36 · relanzamiento del seed vencido, con reloj controlado', () => {
       expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
     });
 
-    vi.setSystemTime(new Date('2026-08-07T22:00:00Z'));
+    vi.setSystemTime(new Date('2026-08-06T22:00:00Z'));
     const { state: renacido } = await persistirYRehidratar();
     const propia = renacido.mesas.find((m) => m.code === 'PA-9001')!;
     expect(new Date(propia.expires_at).getTime()).toBeLessThan(Date.now());
@@ -128,7 +128,7 @@ describe('G-36 · relanzamiento del seed vencido, con reloj controlado', () => {
  * migración le pone la marca a lo que es INEQUÍVOCAMENTE del seed y nadie
  * tocó — y estos tests recorren, uno por uno, los daños que una migración
  * ingenua causaría (cada `it` es un riesgo medido en la auditoría del
- * 2026-08-07, no una hipótesis).
+ * 2026-08-06, no una hipótesis).
  */
 
 /** Un estado como el que hay HOY en un teléfono viejo: sin marca y vencido. */
@@ -186,7 +186,7 @@ describe('G-36 legacy · el estado pre-67fc0de se rescata sólo si se acredita',
     vi.unstubAllGlobals();
     setupStorage();
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-07T20:00:00Z'));
+    vi.setSystemTime(new Date('2026-08-06T20:00:00Z'));
   });
   afterEach(() => {
     vi.useRealTimers();

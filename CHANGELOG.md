@@ -1,6 +1,6 @@
 # CHANGELOG — payme-app-frontend
 
-## 0.55.0 — la población del espejo la declara el dueño, y G-11 cierra de verdad (2026-08-07)
+## 0.55.0 — la población del espejo la declara el dueño, y G-11 cierra de verdad (2026-08-06)
 
 Cierra la ORDEN R3-A y el hallazgo #2 de 1-C.
 
@@ -50,7 +50,7 @@ funcionaba, en las dos fachadas.
 Cierre: **635 vitest (52 archivos) · 81/81 Playwright · integridad + paridad
 + vigencia del espejo · builds real y mock**, por exit code.
 
-## 0.54.0 — fallar cerrado de verdad, rescatar los teléfonos rotos, y un cierre que no era (2026-08-07)
+## 0.54.0 — fallar cerrado de verdad, rescatar los teléfonos rotos, y un cierre que no era (2026-08-06)
 
 Cierra la ORDEN 1-C y la 2-A.4, que se quedó sin entrada propia. El hilo que
 une todo: **un gate que sólo bloquea el caso que alguien pensó no es un
@@ -124,7 +124,7 @@ no se reescriben; queda dicho acá.
 Cierre: **624 vitest (52 archivos) · 81/81 Playwright · gate del espejo ·
 typecheck · builds real y mock**, por exit code.
 
-## 0.53.0 — el gate de admisión: la mesa muerta lo dice, y fully_paid admite (2026-08-07)
+## 0.53.0 — el gate de admisión: la mesa muerta lo dice, y fully_paid admite (2026-08-06)
 
 La ventana que la auditoría descubrió arreglando el mock —invitación viva,
 mesa muerta, "Te sumaste ✓" hacia la nada— quedó cerrada de punta a punta.
@@ -181,7 +181,7 @@ mismo evaluate), y la cadena de exit codes cazó un hash corto en el README
 del espejo antes del commit — el gate arreglado en v0.52.0 ya cobró.
 
 Cierre: **580 vitest · 80 Playwright · typecheck · builds real y mock**,
-_(decía 78/78: número escrito antes de leer el log. Corregido el 2026-08-07.)_
+_(decía 78/78: número escrito antes de leer el log. Corregido el 2026-08-06.)_
 todo por exit code.
 
 ## 0.52.0 — las tres decisiones de Mati sobre lo que la auditoría dejó a la vista (2026-08-06)

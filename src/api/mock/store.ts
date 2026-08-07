@@ -93,7 +93,7 @@ export interface MockMesa {
   captured_shortfall_cents: number;
   guarantee_method: 'card' | 'wallet' | null;
   /**
-   * G-36 (2026-08-07) · SÓLO en mesas del seed que cuentan la parte VIVA de
+   * G-36 (2026-08-06) · SÓLO en mesas del seed que cuentan la parte VIVA de
    * la demo: cómo relanzarlas cuando el reloj las dejó atrás. Los vencimientos
    * del seed son relativos a la PRIMERA carga y el estado persiste: a los
    * ~30-45 min de sesión la demo se pudría entera y sólo la curaba un reset
@@ -763,7 +763,7 @@ function tocadaPorElUsuario(st: MockState, mesa: MockMesa): boolean {
 }
 
 /**
- * G-36 · legacy (ORDEN 1-C·B, 2026-08-07) · IDENTIDAD RECONOCIBLE DEL SEED.
+ * G-36 · legacy (ORDEN 1-C·B, 2026-08-06) · IDENTIDAD RECONOCIBLE DEL SEED.
  *
  * Tabla EXPLÍCITA en vez de leer `seedMesas()`: la definición del seed cambió
  * entre versiones —`guarantee_method` de PA-3121 fue `wallet` y hoy es `card`,
@@ -948,7 +948,7 @@ export function demoSeedIrrecuperable(): boolean {
 }
 
 /**
- * G-36 (2026-08-07, orden 2-A.4) · EL SEED QUE ENVEJECE SE RE-SIEMBRA SOLO.
+ * G-36 (2026-08-06, orden 2-A.4) · EL SEED QUE ENVEJECE SE RE-SIEMBRA SOLO.
  *
  * Corre UNA vez, al hidratar desde persistencia — nunca sobre un seed fresco
  * ni en caliente: relanzar con la app viva le cambiaría la mesa a alguien

@@ -1,7 +1,7 @@
 /**
  * C-01 · ADMISIÓN DE UNA INVITACIÓN, DECODIFICADA SIN CONFIAR EN NADA.
  *
- * ## El defecto que cierra (residual encontrado en auditoría, 2026-08-07)
+ * ## El defecto que cierra (residual encontrado en auditoría, 2026-08-06)
  *
  * `AvisosScreen` gateaba el botón "Sumarme" con `inv.mesa_joinable === false`.
  * Eso bloquea **sólo el caso en que el emisor dijo explícitamente que no**, y

@@ -107,7 +107,7 @@ describe('el link de invitación se valida contra un ORIGEN confiable', () => {
     invitation_type: 'link' as const,
     status: 'pending',
     expires_at: '2026-08-08T00:00:00.000Z',
-    created_at: '2026-08-07T00:00:00.000Z',
+    created_at: '2026-08-06T00:00:00.000Z',
   };
   const CONFIABLE = ['https://payme.test'];
   const conLink = (link: string) => ({ invitation: invitacion, link });

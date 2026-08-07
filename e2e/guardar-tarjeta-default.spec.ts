@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 /**
  * G-11 · EL CHECKBOX NACE DESMARCADO (Mati, 2026-08-06) — Y DESDE EL CIERRE
- * DE G-11 (backend v2.46.0, `7e45db0`, 2026-08-07), MARCARLO GUARDA DE
+ * DE G-11 (backend v2.46.0, `7e45db0`, 2026-08-06), MARCARLO GUARDA DE
  * VERDAD también bajo direct charge.
  *
  * La decisión del default sobrevive al cierre: un casillero marcado por

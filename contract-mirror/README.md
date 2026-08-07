@@ -6,7 +6,7 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-07** (R3-A).
+- Fecha del refresh: **2026-08-06** (R3-A).
 - Fuente local: `../payme-app-backend`.
 - Commit exacto: `5c8436c7d3bb5efc1b8b53c95340ec6690877a50` (el commit
   espejado).
@@ -46,12 +46,12 @@ primero: su `--check` gritaba con cada commit posterior aunque ningún archivo
 del contrato hubiera cambiado, *"y un gate que grita por lo que no es un
 desvío se termina ignorando"*. Que el HEAD avance no es un desvío del espejo.
 
-**Verificado el 2026-08-07:** integridad ✅ 71/71 · paridad ✅ contra
+**Verificado el 2026-08-06:** integridad ✅ 71/71 · paridad ✅ contra
 `aa28e84` · vigencia ✅ (HEAD del backend no movió nada de lo espejado).
 
 ### ✅ G-11 CERRADO DE VERDAD (v2.47.0) · y la provisionalidad se levanta
 
-**Registrado el 2026-08-07, tras reauditar.** El cierre anterior (`7e45db0`,
+**Registrado el 2026-08-06, tras reauditar.** El cierre anterior (`7e45db0`,
 v2.46.0) **fue refutado**: tenía cinco huecos, y el peor era que la wallet
 nativa **se adjuntaba a Stripe ANTES de validarla** — *"rechazar después de
 mutar no es rechazar"*, escribe el propio dueño. Este espejo consumía ese

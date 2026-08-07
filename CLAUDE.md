@@ -21,8 +21,15 @@ Workspace local `PayMe/` con carpetas hermanas:
 
 1. `payme-app-backend` — **EL CONTRATO DE ESTE FRONT** (Node/CommonJS,
    Stripe Connect; su checkpoint final se verifica, no se presume). El espejo
-   vigente usa exactamente `db48cf69422fb0edbeb633e883c14405174a549b`
-   (v2.31.0), copiado en `contract-mirror/`; no implica que esté publicado.
+   vigente usa exactamente `5c8436c7d3bb5efc1b8b53c95340ec6690877a50`
+   (contenido de `aa28e842fe0332a54c80231b241ff4d57100c7fa`, v2.47.0), copiado
+   en `contract-mirror/`; no implica que esté publicado. **La población la
+   declara el DUEÑO** (`scripts/mirror-inventory.json`, copia de su
+   `contract/mirror-inventory.json`, con mapeo `origen→destino`: siete de los
+   71 se espejan renombrados). El gate `scripts/verificar-mirror.mjs` separa
+   INTEGRIDAD (fiel al inventario · lo único verificable sin la fuente, y en
+   CI se llama así, NO "paridad"), PARIDAD (la fuente respalda al inventario;
+   sin fuente → exit 2 NO CERTIFICADO) y VIGENCIA (sigue igual en HEAD).
    Mueve dinero real.
    **SOLO LECTURA ABSOLUTA: no se edita, no se "arregla", jamás.**
    ⚡ Trae el **pivote a Stripe Connect** (v2.22–v2.24): el pago con tarjeta es
@@ -104,12 +111,20 @@ archivo, la maqueta, el mock o `GAPS.md`.
   off-session ni guardado. Permanecen **apagados en real y mock** hasta cerrar
   la integración y prueba física iPhone/Safari y Android/Chrome. Un enum,
   botón mock o capability hardcodeada no acredita soporte.
-- **G-11 es P0 contractual**: en direct charges el backend no cumple hoy
-  `save_payment_method`; una advertencia posterior no corrige una promesa
-  previa. No liberar el front mientras el checkbox pueda prometer guardado sin
-  una solución contractual/fail-closed coordinada.
+- **G-11 CERRADO (backend v2.47.0, `aa28e84`), y la historia importa.** En
+  direct charges el backend NO cumplía `save_payment_method`, y una
+  advertencia posterior no corrige una promesa previa. El primer cierre
+  (v2.46.0, `7e45db0`) fue **refutado** —cinco huecos; el peor: la wallet
+  nativa se adjuntaba a Stripe ANTES de validarla—. `aa28e84` lo cierra en la
+  causa (elegibilidad verificada antes de cualquier mutación remota) y hace
+  **converger** la promesa (`card_save_intents` + sweep: un timeout ya no
+  pierde la tarjeta, la resuelve en el tick siguiente). Este front lo consumió
+  y lo reauditó leyendo el código espejado. 🔴 **La decisión de producto NO se
+  revirtió**: el checkbox "Guardar esta tarjeta" sigue naciendo DESMARCADO
+  (Mati, 2026-08-06) — una promesa por defecto es una promesa que nadie pidió,
+  cumplible o no. Lo que cambió es que elegirla ahora se cumple.
 - **El candidato sigue NO-GO de release/piloto** aunque sus checks locales
-  cierren: además de G-11, App Backend conserva el fallback Connect→plataforma,
+  cierren: App Backend conserva el fallback Connect→plataforma,
   D1-D/E incompletas, agregados con cohorte insuficiente y skips sin replay
   cuando falta el mapping de branch. El inventario vigente está en `GAPS.md`.
 - **PQ-2 sigue en STOP de producto:** el checkpoint técnico y el espejo ya

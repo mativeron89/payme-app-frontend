@@ -24,7 +24,7 @@ const BASE = {
   mesa_code: 'PA-4520',
   restaurant_name: 'Hanzo Sushi',
   inviter_first_name: 'Sofía',
-  created_at: '2026-08-07T20:00:00.000Z',
+  created_at: '2026-08-06T20:00:00.000Z',
 };
 
 describe('admisionDeInvitacion · la tabla completa de los seis', () => {

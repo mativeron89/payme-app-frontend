@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
  * EL GATE DEL ESPEJO, PROBADO COMO CAJA NEGRA (ORDEN 1-C·C, ampliado en R3-A).
  *
  * El verificador decide si el contrato copiado sigue siendo el que el emisor
- * publicó — y hasta el 2026-08-07 **reportaba diferencias y devolvía exit 0**.
+ * publicó — y hasta el 2026-08-06 **reportaba diferencias y devolvía exit 0**.
  * Después cortó, pero su población salía de un manifiesto que él mismo
  * generaba desde el espejo: **el inventariado se inventariaba a sí mismo**, y
  * una omisión coordinada (borrar y regenerar) pasaba en verde. Desde R3-A la
