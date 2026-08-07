@@ -1,5 +1,60 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.56.0 — la apertura ambigua se pregunta por su clave (2026-08-06)
+
+Cierra la **ORDEN 2A**: espejo a `03fb3b9` y consumo del contrato que el dueño
+publicó para el P0 de la reconciliación.
+
+🔴 **Antes se infería; ahora se pregunta.** La reconciliación de una apertura
+congelada acreditaba comparando **nombres de restaurante** contra
+`GET /mesas/open`, y la orden 1A.1 encontró la mitad simétrica: **la ausencia
+en ese listado tampoco probaba nada**, porque filtra `open | partially_paid` y
+una mesa en `pending_auth` —justo el caso que se reconcilia— no se lista. El
+botón "Entiendo, desbloquear" se había retirado declarando su costo. Con
+`GET /mesas/creations/:idempotency_key` (v2.47.0) la autoridad pasa a ser
+`(opener_user_id, idempotency_key)`, la misma unicidad que gobierna la
+creación.
+
+**Consultar es de solo lectura.** El dueño no reusó `mesaReplayResponse`
+porque ésa reconduce holds contra Stripe: *"consultar no puede mover un
+centavo"*. Diagnóstico y acción, separados.
+
+**El journal se libera SÓLO ante prueba positiva exacta.** `open`,
+`partially_paid` y `replayable` liberan y navegan a ESA mesa; `terminal` libera
+sin navegar porque la creación murió; `requires_action`, `not_found`,
+`payload_hash_conflict`, la red caída y cualquier cuerpo ilegible **conservan
+el freeze**. Y `not_found` no libera aunque el contrato habilite reintentar: el
+404 dice que ESA CLAVE no creó nada, no dice nada de una generación anterior.
+Lo que se habilita es reenviar **con la misma clave**, que por B-06 no puede
+duplicar.
+
+🔴 **Un callejón sin salida con cartel, encontrado recorriendo el flujo.**
+Tras una recarga la app vuelve al paso 1 —los ítems viven en memoria— y ahí
+sólo aparecía el aviso de que la apertura estaba bloqueada: **el botón que la
+reconcilia estaba tres pasos más adelante**. Ahora el panel y su salida viajan
+juntos por los cuatro pasos, y el `alert` duplicado se retiró (seguía diciendo
+"no vamos a reenviarla" después de que el contrato autorizara el reenvío).
+
+**Dos precisiones leídas en el código y no en el anuncio:**
+`retry_with_same_idempotency_key` es `true` sólo en `requires_action` *entre
+las respuestas `found: true`* — el 404 también lo manda en `true` —, y
+`total_cents` viaja como **string** (bigint del driver), que el mock espeja
+tal cual para no tapar la forma real.
+
+**`payload_hash` no se manda, y se declara por qué:** exigiría reimplementar el
+`payloadHash` del dueño, y un hash mal replicado da 409 → freeze conservado, o
+sea el mismo costo que este endpoint viene a sacar. La protección ya existe
+localmente: el journal se niega a reusar una clave con otro payload.
+
+**Límite declarado:** con tarjeta tipeada y tras un reload, el `pm_` cambia y
+el fingerprint LOCAL —que cubre el request entero, a diferencia del hash del
+backend— corta el reenvío con `monetary_payload_ambiguous`. Es fail-closed, y
+alinear el journal con `PAYLOAD_KEYS` merece su propia orden.
+
+Los mutantes de 1A.1 se mudaron a un test de fuente: sin listado que pedir no
+queda parámetro que mutar, y lo imposible por construcción es justo lo que hay
+que fijar porque no deja rastro cuando se rompe.
+
 ## 0.55.0 — la población del espejo la declara el dueño, y G-11 cierra de verdad (2026-08-06)
 
 Cierra la ORDEN R3-A y el hallazgo #2 de 1-C.
