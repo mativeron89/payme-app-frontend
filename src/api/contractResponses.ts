@@ -4,6 +4,9 @@ import type {
   AttachedPaymentMethod,
   CreateInvitationResponse,
   CreateSetupIntentResponse,
+  MesaCreationLookup,
+  MesaCreationOutcome,
+  MesaStatus,
 } from './types';
 
 /** Un 2xx malformado no acredita éxito: el caller debe conservar su intento. */
@@ -144,6 +147,109 @@ export function acceptInvitationResponse(value: unknown): { accepted: true } {
     throw new ContractResponseError('invitations/accept');
   }
   return value as { accepted: true };
+}
+
+// ─── ORDEN 2A · la reconciliación de una creación ─────────────────────────
+
+/** Los siete del contrato. Un `outcome` fuera de esta lista NO se interpreta. */
+const OUTCOMES: readonly MesaCreationOutcome[] = [
+  'not_found', 'requires_action', 'open', 'partially_paid',
+  'terminal', 'replayable', 'payload_hash_conflict',
+];
+
+/** Los estados de mesa de `utils/stateMachine.js`. Nada más se acepta. */
+const ESTADOS: readonly MesaStatus[] = [
+  'pending_auth', 'open', 'partially_paid', 'fully_paid', 'expired',
+  'settling', 'settled', 'dispersing', 'completed', 'auth_failed', 'cancelled',
+];
+
+/**
+ * `total_cents` viaja como **STRING** — deliberado del dueño: sale del mismo
+ * helper que el 201 de `POST /mesas` y es un bigint del driver; normalizarlo
+ * sólo acá daría dos formas del mismo campo. Se acepta también el entero, que
+ * es la forma a la que el dueño podría migrarlo algún día: aceptar las dos no
+ * inventa contrato —ninguna decisión de este flujo depende del total— y evita
+ * que una normalización futura vuelva a trabar al organizador.
+ */
+function centavosDelContrato(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
+  const n = Number(value);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+/**
+ * `GET /mesas/creations/:idempotency_key`, decodificado FAIL-CLOSED.
+ *
+ * ## Qué se decide con esto, y por eso la dureza
+ *
+ * De esta respuesta depende **si se libera el journal monetario de una
+ * apertura con garantía**. Liberar de más es una segunda retención por el
+ * total de la mesa. Así que un 2xx que no traiga el shape completo **no es un
+ * resultado**: es un error, y el caller conserva el freeze.
+ *
+ * - `outcome` tiene que ser uno de los siete. Un valor nuevo del backend no se
+ *   adivina por parecido: **no saber no es saber que no**.
+ * - `found` y `retry_with_same_idempotency_key` tienen que ser **booleanos de
+ *   verdad**. `"false"` es verdadero en JS, que es la trampa que
+ *   `walletRail.ts` y `invitacionAdmision.ts` ya bloquean con `typeof`.
+ * - Con `found: true` **exigimos `mesa.code` y `mesa.status`**: sin código no
+ *   hay a dónde navegar ni qué acreditar, y ese código es toda la prueba.
+ * - `payload_hash_conflict` es la excepción declarada por el dueño: llega
+ *   **sin datos de mesa a propósito** (reusar la clave con otro payload es un
+ *   error del cliente, no un estado de la creación).
+ */
+export function mesaCreationResponse(value: unknown): MesaCreationLookup {
+  const body = record(value);
+  const endpoint = 'mesas/creations';
+  if (!body) throw new ContractResponseError(endpoint);
+
+  const outcome = body.outcome;
+  if (typeof outcome !== 'string' || !OUTCOMES.includes(outcome as MesaCreationOutcome)) {
+    throw new ContractResponseError(endpoint);
+  }
+  if (typeof body.found !== 'boolean') throw new ContractResponseError(endpoint);
+  if (typeof body.retry_with_same_idempotency_key !== 'boolean') {
+    throw new ContractResponseError(endpoint);
+  }
+  // Coherencia interna: `not_found` con `found: true` —o al revés— es un
+  // cuerpo contradictorio, y un cuerpo contradictorio no acredita nada.
+  if ((outcome === 'not_found') === body.found) throw new ContractResponseError(endpoint);
+
+  const base = {
+    found: body.found,
+    outcome: outcome as MesaCreationOutcome,
+    retryWithSameKey: body.retry_with_same_idempotency_key,
+  };
+  if (outcome === 'not_found' || outcome === 'payload_hash_conflict') {
+    return { ...base, mesa: null, guarantee: null };
+  }
+
+  const mesa = record(body.mesa);
+  const estado = mesa?.status;
+  const totalCents = centavosDelContrato(mesa?.total_cents);
+  if (
+    !mesa || !nonEmpty(mesa.code) ||
+    typeof estado !== 'string' || !ESTADOS.includes(estado as MesaStatus) ||
+    totalCents === null
+  ) {
+    throw new ContractResponseError(endpoint);
+  }
+
+  // `guarantee` sí se lee blando: es informativo para el copy y no gobierna
+  // ninguna transición del journal. Endurecerlo trabaría al organizador por
+  // un campo que no decide nada.
+  const guarantee = record(body.guarantee);
+  return {
+    ...base,
+    mesa: { code: mesa.code, status: estado as MesaStatus, totalCents },
+    guarantee: guarantee
+      ? {
+          method: typeof guarantee.method === 'string' ? guarantee.method : null,
+          authorized: guarantee.authorized === true,
+        }
+      : null,
+  };
 }
 
 export function setupIntentResponse(value: unknown): CreateSetupIntentResponse {

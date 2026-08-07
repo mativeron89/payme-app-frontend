@@ -1,95 +1,162 @@
-import type { OpenMesa } from '../api/types';
+import type { MesaCreationLookup } from '../api/types';
 
 /**
- * P0 · RECONCILIAR UNA APERTURA CONGELADA — CON PRUEBA EXACTA O NO SE RESUELVE.
+ * P0 · QUÉ SE HACE CON UNA APERTURA CONGELADA — ORDEN 2A.
  *
- * ## El defecto que contiene (ORDEN 1A.1, medido y confirmado por Codex)
+ * ## De dónde viene este archivo
  *
- * `checkMesaReconciliation` decidía si la mesa congelada YA se había creado
- * buscando en `GET /mesas/open` una mesa cuyo **nombre de restaurante**
- * coincidiera con el del estado local:
+ * Nació en la orden 1A.1 conteniendo un defecto: la reconciliación acreditaba
+ * una creación **comparando nombres de restaurante** contra `GET /mesas/open`.
+ * Tres escenarios, ninguno hipotético, daban "la mesa ya existe":
+ * `undefined === undefined` cuando el objeto `restaurant` no venía, la mesa de
+ * un amigo en el mismo restaurante (G-28 hace que `/mesas/open` las traiga), y
+ * dos sucursales homónimas. La contención fue exigir el **código** de la mesa,
+ * guardado como referencia en el journal.
  *
- *     abiertas.mesas.find((m) => m.restaurant?.name === restaurant?.name)
- *
- * Tres formas de acreditar una creación que nunca ocurrió, ninguna hipotética:
- *
- * 1. **`undefined === undefined` → `true`.** Los dos lados llevaban `?.`: si
- *    el fetch del restaurante había fallado (`restaurant` en `null`) y alguna
- *    mesa venía sin ese objeto, la comparación daba verdadera y el intento se
- *    cerraba dando la mesa por creada.
- * 2. **La mesa de OTRO.** Desde G-28 `/mesas/open` trae también las mesas
- *    donde sos PARTICIPANTE — la mesa de un amigo en el mismo restaurante
- *    matchea. Es nuestra propia corrección volviendo a morder.
- * 3. **Restaurantes homónimos.** Dos sucursales, dos "La Parolaccia".
- *
- * **El nombre de un restaurante no identifica una mesa.** Y esto decide si se
- * libera el journal para reintentar una apertura CON GARANTÍA: acreditar de
- * más es una segunda retención por el total.
- *
- * ## Y el segundo defecto, que no estaba en el enunciado
- *
- * **La AUSENCIA en `/mesas/open` tampoco probaba nada.** Ese endpoint filtra
- * `status IN ('open','partially_paid')`: una mesa creada cuya garantía quedó
- * en `pending_auth` —justo el caso que se está reconciliando— **no aparece**.
+ * 🔴 **Y la mitad simétrica, que era peor:** la AUSENCIA en `/mesas/open`
+ * tampoco probaba nada. Ese listado filtra `open | partially_paid`, así que
+ * una mesa en `pending_auth` —justo el caso que se reconcilia— **no se lista**.
  * El código viejo leía esa ausencia como "no llegó a crearse" y ofrecía
- * desbloquear. No inventar ausencia es la mitad simétrica de no inventar
- * éxito, y las dos terminan en la misma retención duplicada.
+ * desbloquear: reintentar una garantía sobre una mesa que podía existir con su
+ * retención puesta. Se retiró el botón declarando su costo.
  *
- * ## La regla
+ * ## Lo que cambió acá
  *
- * Sólo el CÓDIGO de la mesa, guardado como referencia del journal en el
- * momento en que la respuesta de creación llegó, acredita. Sin esa referencia
- * no hay prueba exacta posible desde este front hoy, y entonces **el journal
- * queda congelado**: no se libera, no se navega a una mesa inferida, no se
- * afirma ni éxito ni ausencia. La salida real la habilita el contrato que App
- * Backend está diseñando (consulta por clave de idempotencia); hasta que
- * exista, quedarse frenado es el único estado honesto.
+ * El dueño publicó la evidencia exacta (`GET /mesas/creations/:key`,
+ * v2.47.0), resuelta por `(opener_user_id, idempotency_key)`. **Ya no se
+ * infiere: se pregunta.** Y como el endpoint es de solo lectura —el dueño no
+ * reusó `mesaReplayResponse` porque ésa reconduce holds contra Stripe—,
+ * consultar no puede mover un centavo. Diagnóstico y acción, separados.
+ *
+ * ## La regla que gobierna todo lo de abajo
+ *
+ * **El journal se libera SÓLO ante prueba positiva exacta.** Liberar de más es
+ * una segunda retención por el total de la mesa; liberar de menos es un
+ * organizador trabado. Los dos males son reales y no son simétricos: el
+ * segundo se arregla con una consulta más, el primero con un refund.
+ *
+ * 🔴 **`not_found` NO libera, y no es exceso de celo.** El 404 dice que ESA
+ * CLAVE no creó nada; no dice nada de una generación anterior. El journal rota
+ * la clave ante errores definitivos (`shouldRotateOnError`), así que una mesa
+ * creada por la clave previa seguiría existiendo, con su hold, mientras esta
+ * consulta contesta "no hay nada". Lo que sí habilita el contrato en ese caso
+ * es **reintentar con la MISMA clave**, que por B-06 no puede duplicar: si el
+ * 404 era cierto, crea por primera vez; si mintió, devuelve la mesa existente.
  */
 
 export type VeredictoReconciliacion =
-  /** Hay referencia exacta y esa mesa está en el listado. Se puede cerrar. */
+  /** La mesa existe y avanzó. Prueba positiva exacta: se libera y se navega. */
   | 'acreditada'
-  /** No hay referencia: la respuesta nunca llegó. Nada que consultar. */
-  | 'sin_evidencia'
-  /** Hay referencia y no aparece — que NO prueba que no exista (pending_auth). */
+  /** `auth_failed | cancelled | expired`: la creación terminó y está muerta. */
+  | 'muerta'
+  /** La mesa existe en `pending_auth`: el hold quedó sin autorizar. */
+  | 'a_medias'
+  /** Esa clave no creó nada. NO se libera; se puede reintentar con ella. */
+  | 'sin_rastro'
+  /** La misma clave con otra intención económica. Nada que acreditar. */
+  | 'conflicto'
+  /** No se pudo verificar: red, 5xx o un cuerpo que no decodifica. */
   | 'no_concluyente';
 
-export interface ResultadoReconciliacion {
+export interface DecisionReconciliacion {
   readonly veredicto: VeredictoReconciliacion;
-  /** El código PROBADO, sólo cuando `acreditada`. Nunca uno inferido. */
-  readonly code: string | null;
+  /**
+   * 🔴 El único campo que mueve plata indirectamente: `true` termina el intento
+   * y devuelve al organizador la capacidad de abrir mesas. Sólo lo ponen
+   * `acreditada` y `muerta`, que son las dos ramas con prueba exacta.
+   */
+  readonly liberaJournal: boolean;
+  /** Adónde navegar. `null` cuando navegar no tiene sentido o no hay mesa. */
+  readonly navegarA: string | null;
+  /**
+   * Habilita reenviar el POST **con la MISMA clave de idempotencia**. Lo dice
+   * el contrato (`retry_with_same_idempotency_key`), no lo deduce esta vista.
+   * Nunca autoriza una clave nueva: eso sí duplicaría la garantía.
+   */
+  readonly permiteReintento: boolean;
+  /** `null` cuando la superficie es la navegación y no hace falta texto. */
+  readonly copy: string | null;
+}
+
+const NO_CONCLUYENTE: DecisionReconciliacion = {
+  veredicto: 'no_concluyente',
+  liberaJournal: false,
+  navegarA: null,
+  permiteReintento: false,
+  copy: 'No pudimos verificar cómo quedó esa apertura. Probá de nuevo en un momento; no vamos a abrir otra mesa mientras tanto.',
+};
+
+/** Cuando no se pudo consultar (red, 5xx, cuerpo inválido): no se concluye. */
+export function decisionSinRespuesta(): DecisionReconciliacion {
+  return NO_CONCLUYENTE;
 }
 
 /**
- * `referencia` es el `mesa_code` que el journal guardó al recibir la respuesta
- * de `POST /mesas`. Es lo ÚNICO que identifica la mesa de este intento.
+ * @param referenciaGuardada  El `mesa_code` que el journal anotó cuando llegó
+ *   la respuesta de creación, si llegó. **Es una SEGUNDA fuente independiente**
+ *   y por eso se cruza: si el endpoint contesta un código distinto del que
+ *   este navegador vio, alguna de las dos miente y no se acredita ninguna. El
+ *   caso normal es que no haya referencia (la respuesta nunca llegó), y
+ *   entonces no hay nada que cruzar.
  */
-export function veredictoReconciliacion(args: {
-  readonly referencia: string | null | undefined;
-  readonly mesas: readonly OpenMesa[] | null | undefined;
-}): ResultadoReconciliacion {
-  const referencia = typeof args.referencia === 'string' ? args.referencia.trim() : '';
-  if (!referencia) return { veredicto: 'sin_evidencia', code: null };
-  const mesas = Array.isArray(args.mesas) ? args.mesas : [];
-  // Igualdad EXACTA de código. Ni nombre, ni prefijo, ni "la única del
-  // restaurante": el código es el identificador y es el único que se compara.
-  const encontrada = mesas.some((m) => typeof m?.code === 'string' && m.code === referencia);
-  return encontrada
-    ? { veredicto: 'acreditada', code: referencia }
-    : { veredicto: 'no_concluyente', code: null };
-}
-
-/**
- * Qué se le dice a la persona. Ninguna de las dos ramas no-acreditadas afirma
- * un hecho: dicen lo que sabemos —nada— y que por eso no se toca la garantía.
- */
-export function copyReconciliacion(veredicto: VeredictoReconciliacion): string | null {
-  switch (veredicto) {
-    case 'acreditada':
-      return null;
-    case 'sin_evidencia':
-      return 'No podemos verificar si esa mesa llegó a crearse: la respuesta se perdió antes de que supiéramos su código. Por seguridad no reintentamos la garantía ni abrimos otra mesa. Si la mesa existe, la vas a ver en Inicio.';
-    case 'no_concluyente':
-      return 'No pudimos confirmar el estado de esa apertura. Que no aparezca entre tus mesas abiertas no prueba que no exista —una mesa cuya garantía quedó a medias no se lista—, así que no la damos por creada ni por ausente, y no reintentamos la garantía.';
+export function decisionReconciliacion(
+  lookup: MesaCreationLookup,
+  referenciaGuardada?: string | null,
+): DecisionReconciliacion {
+  const code = lookup.mesa?.code ?? null;
+  const referencia = typeof referenciaGuardada === 'string' ? referenciaGuardada.trim() : '';
+  if (referencia && code && code !== referencia) return NO_CONCLUYENTE;
+  switch (lookup.outcome) {
+    case 'open':
+    case 'partially_paid':
+    case 'replayable': {
+      // Prueba positiva exacta. Sin código no se acredita: el código ES la
+      // prueba, y sin él no habría a dónde llevar a la persona.
+      if (!code) return NO_CONCLUYENTE;
+      return { veredicto: 'acreditada', liberaJournal: true, navegarA: code, permiteReintento: false, copy: null };
+    }
+    case 'terminal':
+      // La creación terminó y su mesa está muerta: no hay hold que duplicar.
+      // Es la misma lectura que hace el dueño en `POST /mesas`, que ante un
+      // estado muerto contesta 409 "rotá la clave" — o sea, abrí una nueva.
+      return {
+        veredicto: 'muerta',
+        liberaJournal: true,
+        navegarA: null,
+        permiteReintento: false,
+        copy: code
+          ? `Esa apertura terminó sin quedar en pie (mesa ${code}). Ya podés abrir una nueva.`
+          : 'Esa apertura terminó sin quedar en pie. Ya podés abrir una nueva.',
+      };
+    case 'requires_action':
+      // La mesa existe con su hold SIN autorizar. No se libera nada: abrir
+      // otra sería un segundo hold por el total.
+      return {
+        veredicto: 'a_medias',
+        liberaJournal: false,
+        navegarA: null,
+        permiteReintento: lookup.retryWithSameKey,
+        copy: code
+          ? `La mesa ${code} se creó, pero su garantía quedó sin confirmar. Podemos retomar ESA misma garantía; no abrimos otra mesa.`
+          : 'La mesa se creó, pero su garantía quedó sin confirmar. No abrimos otra mesa.',
+      };
+    case 'not_found':
+      return {
+        veredicto: 'sin_rastro',
+        liberaJournal: false,
+        navegarA: null,
+        permiteReintento: lookup.retryWithSameKey,
+        copy: 'No encontramos ninguna mesa creada con este intento. Podemos reenviarlo tal cual: si llegó a crearse, te devolvemos esa misma mesa en vez de retener el total otra vez.',
+      };
+    case 'payload_hash_conflict':
+      // Llega sin datos de mesa a propósito. No se libera ni se reintenta: la
+      // misma clave con otra intención económica no se resuelve sola.
+      return {
+        veredicto: 'conflicto',
+        liberaJournal: false,
+        navegarA: null,
+        permiteReintento: false,
+        copy: 'Este intento no coincide con la apertura que quedó pendiente. No vamos a reenviarlo ni a abrir otra mesa: escribinos para resolverlo.',
+      };
   }
 }

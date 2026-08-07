@@ -3,6 +3,7 @@ import {
   acceptInvitationResponse,
   attachPaymentMethodResponse,
   invitationResponse,
+  mesaCreationResponse,
   setupIntentResponse,
 } from './contractResponses';
 
@@ -151,5 +152,111 @@ describe('el link de invitación se valida contra un ORIGEN confiable', () => {
   it('el token sigue siendo obligatorio, y el código tiene que ser el pedido', () => {
     expect(() => invitationResponse(conLink('https://payme.test/mesa/ABC'), 'link', 'ABC', CONFIABLE)).toThrow();
     expect(() => invitationResponse(conLink('https://payme.test/mesa/OTRA?t=tok'), 'link', 'ABC', CONFIABLE)).toThrow();
+  });
+});
+
+/**
+ * ORDEN 2A · `GET /mesas/creations/:idempotency_key`, decodificado fail-closed.
+ *
+ * De esta respuesta depende si se libera el journal de una apertura CON
+ * GARANTÍA, así que un 2xx incompleto no es un resultado a medias: es un
+ * error, y el caller conserva el freeze.
+ */
+describe('mesaCreationResponse', () => {
+  const ok = {
+    found: true,
+    outcome: 'open',
+    retry_with_same_idempotency_key: false,
+    mesa: {
+      id: 'uuid',
+      code: 'PA-2847',
+      total_cents: '84000',
+      division_mode: 'consumo',
+      expected_participants: 4,
+      status: 'open',
+      expires_at: new Date().toISOString(),
+    },
+    guarantee: { method: 'card', authorized: true },
+  };
+
+  it('el 200 completo decodifica, y `total_cents` STRING sale como ENTERO', () => {
+    const r = mesaCreationResponse(ok);
+    expect(r.outcome).toBe('open');
+    expect(r.mesa).toEqual({ code: 'PA-2847', status: 'open', totalCents: 84000 });
+    expect(r.guarantee).toEqual({ method: 'card', authorized: true });
+    expect(r.retryWithSameKey).toBe(false);
+  });
+
+  it('🔴 MUTANTE · un `outcome` que el contrato no declara NO se interpreta', () => {
+    // No saber no es saber que no: un backend con un estado nuevo tiene que
+    // dejar el intento como está, no caer en la rama más parecida.
+    for (const outcome of ['abierta', 'OPEN', '', 'requires-action', 42, null]) {
+      expect(() => mesaCreationResponse({ ...ok, outcome }), String(outcome))
+        .toThrow('contract_response_invalid');
+    }
+  });
+
+  it('🔴 MUTANTE · los booleanos se exigen por TIPO: "false" es verdadero en JS', () => {
+    expect(() => mesaCreationResponse({ ...ok, found: 'true' })).toThrow();
+    expect(() => mesaCreationResponse({ ...ok, retry_with_same_idempotency_key: 'false' })).toThrow();
+    expect(() => mesaCreationResponse({ ...ok, retry_with_same_idempotency_key: 1 })).toThrow();
+  });
+
+  it('🔴 MUTANTE · un cuerpo que se contradice a sí mismo no acredita nada', () => {
+    // `not_found` con `found: true`, o al revés.
+    expect(() => mesaCreationResponse({ ...ok, outcome: 'not_found' })).toThrow();
+    expect(() => mesaCreationResponse({
+      found: false, outcome: 'open', retry_with_same_idempotency_key: false, mesa: ok.mesa,
+    })).toThrow();
+  });
+
+  it('🔴 MUTANTE · con `found: true` el CÓDIGO es obligatorio: es toda la prueba', () => {
+    expect(() => mesaCreationResponse({ ...ok, mesa: { ...ok.mesa, code: '' } })).toThrow();
+    expect(() => mesaCreationResponse({ ...ok, mesa: { ...ok.mesa, code: null } })).toThrow();
+    expect(() => mesaCreationResponse({ ...ok, mesa: undefined })).toThrow();
+  });
+
+  it('🔴 un `status` fuera de la máquina de estados no pasa', () => {
+    expect(() => mesaCreationResponse({ ...ok, mesa: { ...ok.mesa, status: 'abierta' } })).toThrow();
+  });
+
+  it('🔴 un `total_cents` que no es un entero seguro no pasa', () => {
+    for (const total of ['84000.5', '-1', 'ochenta', '', null, 1.5, NaN, '9007199254740993']) {
+      expect(() => mesaCreationResponse({ ...ok, mesa: { ...ok.mesa, total_cents: total } }), String(total))
+        .toThrow();
+    }
+  });
+
+  it('acepta también el entero: el dueño podría normalizarlo y no debe trabar a nadie', () => {
+    expect(mesaCreationResponse({ ...ok, mesa: { ...ok.mesa, total_cents: 84000 } }).mesa?.totalCents).toBe(84000);
+  });
+
+  it('el 404 `not_found` es una RESPUESTA del contrato, no una falla', () => {
+    const r = mesaCreationResponse({
+      found: false, outcome: 'not_found', retry_with_same_idempotency_key: true,
+    });
+    expect(r.outcome).toBe('not_found');
+    expect(r.retryWithSameKey).toBe(true);
+    expect(r.mesa).toBeNull();
+  });
+
+  it('el 409 `payload_hash_conflict` llega SIN datos de mesa, a propósito', () => {
+    const r = mesaCreationResponse({
+      found: true, outcome: 'payload_hash_conflict', retry_with_same_idempotency_key: false,
+    });
+    expect(r.mesa).toBeNull();
+    expect(r.guarantee).toBeNull();
+  });
+
+  it('`guarantee` se lee blando: informa el copy y no gobierna ninguna transición', () => {
+    expect(mesaCreationResponse({ ...ok, guarantee: undefined }).guarantee).toBeNull();
+    expect(mesaCreationResponse({ ...ok, guarantee: { method: 7, authorized: 'si' } }).guarantee)
+      .toEqual({ method: null, authorized: false });
+  });
+
+  it('un cuerpo que no es objeto no es una respuesta', () => {
+    for (const raro of [null, undefined, 'ok', 42, []]) {
+      expect(() => mesaCreationResponse(raro)).toThrow('contract_response_invalid');
+    }
   });
 });

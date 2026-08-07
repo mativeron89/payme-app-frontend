@@ -21,7 +21,9 @@ import type {
   GroupDetailResponse,
   GroupsResponse,
   LockItemsResponse,
+  MesaCreationOutcome,
   MesaDetailResponse,
+  MesaStatus,
   NotificationsResponse,
   OcrResponse,
   OpenMesasResponse,
@@ -604,6 +606,95 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   };
   writeMockIdempotency(idemKey, { hash: idemHash, response: respuestaMesa });
   return delay(respuestaMesa);
+}
+
+/** `routes/mesas.js` · `CREACION_ESTADOS_TERMINALES`, espejado exacto. */
+const CREACION_ESTADOS_TERMINALES = new Set<MesaStatus>(['auth_failed', 'cancelled', 'expired']);
+
+/** `routes/mesas.js` · `outcomeDeCreacion(status)`, espejado exacto. */
+function outcomeDeCreacion(status: MesaStatus): MesaCreationOutcome {
+  if (status === 'pending_auth') return 'requires_action';
+  if (status === 'open') return 'open';
+  if (status === 'partially_paid') return 'partially_paid';
+  if (CREACION_ESTADOS_TERMINALES.has(status)) return 'terminal';
+  // fully_paid, settling, settled, dispersing, completed: la mesa existe y
+  // avanzó más allá de la apertura. La creación NO debe reintentarse.
+  return 'replayable';
+}
+
+/**
+ * `GET /mesas/creations/:idempotency_key` — ORDEN 2A · backend v2.47.0.
+ *
+ * Espejo del riel real, con sus dos rarezas conservadas porque el mock no
+ * puede ser más lindo que el contrato:
+ *
+ * 1. **`total_cents` sale como STRING.** El real lo manda así (bigint del
+ *    driver, mismo helper que el 201 de `POST /mesas`). Un mock que mandara el
+ *    entero taparía el día que el decoder deje de aceptar la forma real.
+ * 2. **El estado se lee de la mesa VIVA, no de la respuesta guardada.** La
+ *    respuesta del idempotency store congeló el estado del momento de crear
+ *    (`pending_auth`); el sentido del endpoint es decir en qué quedó, así que
+ *    consultarla después del 3DS tiene que dar `open`.
+ *
+ * La autoridad es la clave, igual que allá: no hay búsqueda por nombre, por
+ * restaurante ni por "la más reciente".
+ *
+ * `payloadHash` es opcional y **este front todavía no lo manda** (ver el
+ * porqué en `getMesaCreation` de la fachada). Se implementa igual para que el
+ * mock no sea una versión recortada del contrato.
+ */
+export async function mockGetMesaCreation(
+  idempotencyKey: string,
+  payloadHash?: string,
+): Promise<unknown> {
+  if (typeof idempotencyKey !== 'string' || idempotencyKey.length < 1 || idempotencyKey.length > 200) {
+    return fail(400, 'idempotency_key_invalid');
+  }
+  const previo = readMockIdempotency(`mesa:${idempotencyKey}`);
+  if (!previo) {
+    // El 404 del contrato TRAE cuerpo: no es una falla, es una respuesta.
+    return fail(404, 'creation_not_found', {
+      found: false,
+      outcome: 'not_found',
+      retry_with_same_idempotency_key: true,
+    });
+  }
+  if (typeof payloadHash === 'string' && payloadHash.length > 0 && payloadHash !== previo.hash) {
+    // Sin datos de la mesa, a propósito: la misma clave con otra intención
+    // económica es un error del cliente, no un estado de la creación.
+    return fail(409, 'payload_hash_conflict', {
+      found: true,
+      outcome: 'payload_hash_conflict',
+      retry_with_same_idempotency_key: false,
+    });
+  }
+  const code = (previo.response as CreateMesaResponse)?.mesa?.code;
+  const mesa = state.mesas.find((m) => m.code === code);
+  // Una fila que se evaporó es una inconsistencia del propio mock, no un
+  // estado del contrato. Se contesta error genérico —el front conserva el
+  // freeze— en vez de inventar un `not_found` que diría lo que no sabemos.
+  if (!mesa) return fail(500, 'internal_error');
+
+  const outcome = outcomeDeCreacion(mesa.status);
+  return delay({
+    found: true,
+    outcome,
+    retry_with_same_idempotency_key: outcome === 'requires_action',
+    ...(payloadHash ? { payload_hash_matches: true } : {}),
+    mesa: {
+      id: mesa.id,
+      code: mesa.code,
+      total_cents: String(mesa.total_cents),
+      division_mode: mesa.division_mode,
+      expected_participants: mesa.expected_participants,
+      status: mesa.status,
+      expires_at: mesa.expires_at,
+    },
+    guarantee: {
+      method: mesa.guarantee_method,
+      authorized: mesa.guarantee_method !== null && mesa.status !== 'pending_auth',
+    },
+  });
 }
 
 /**

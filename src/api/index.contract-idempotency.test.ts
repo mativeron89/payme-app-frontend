@@ -169,3 +169,87 @@ describe('fachada real: contrato idempotente aditivo', () => {
     await expect(api.createInvitation('PM-123', 'invite-malformed-key')).rejects.toThrow('contract_response_invalid');
   });
 });
+
+/**
+ * ORDEN 2A · la fachada real de `GET /mesas/creations/:idempotency_key`.
+ *
+ * El punto fino: **el 404 y el 409 de este endpoint son RESPUESTAS del
+ * contrato, no fallas.** Si la fachada los dejara pasar como error, "no existe
+ * ninguna creación con tu clave" llegaría a la pantalla como "no pudimos
+ * consultar" — justo la confusión que este endpoint viene a terminar. Y al
+ * revés: cualquier OTRO error tiene que seguir siendo error, porque un 500 o
+ * una red caída no dicen nada sobre la creación.
+ */
+describe('fachada real: reconciliación de una creación', () => {
+  const CLAVE = '11111111-2222-4333-8444-555555555555';
+
+  it('el 200 decodifica y la clave viaja escapada en el path', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(String(url)).toContain(`/mesas/creations/${encodeURIComponent(CLAVE)}`);
+      return jsonResponse({
+        found: true,
+        outcome: 'requires_action',
+        retry_with_same_idempotency_key: true,
+        mesa: { code: 'PA-2847', status: 'pending_auth', total_cents: '84000' },
+        guarantee: { method: 'card', authorized: false },
+      }, 200);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const r = await api.getMesaCreation(CLAVE);
+    expect(r.outcome).toBe('requires_action');
+    expect(r.mesa).toEqual({ code: 'PA-2847', status: 'pending_auth', totalCents: 84000 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('⭐ el 404 `not_found` NO llega como falla: es la respuesta del contrato', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      found: false, outcome: 'not_found', retry_with_same_idempotency_key: true,
+    }, 404)));
+
+    const r = await api.getMesaCreation(CLAVE);
+    expect(r.outcome).toBe('not_found');
+    expect(r.retryWithSameKey).toBe(true);
+    expect(r.mesa).toBeNull();
+  });
+
+  it('el 409 `payload_hash_conflict` tampoco: llega decodificado y sin mesa', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      found: true, outcome: 'payload_hash_conflict', retry_with_same_idempotency_key: false,
+    }, 409)));
+
+    const r = await api.getMesaCreation(CLAVE);
+    expect(r.outcome).toBe('payload_hash_conflict');
+    expect(r.retryWithSameKey).toBe(false);
+  });
+
+  it('🔴 MUTANTE · un 500 SIGUE siendo un error: no sabemos nada de la creación', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'internal_error' }, 500)));
+    await expect(api.getMesaCreation(CLAVE)).rejects.toThrow();
+  });
+
+  it('🔴 MUTANTE · un 404 con cuerpo que NO decodifica se relanza, no se inventa', async () => {
+    // Fabricar un `not_found` acá sería afirmar que no existe una creación
+    // sobre la que el backend no dijo nada legible.
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'not_found' }, 404)));
+    await expect(api.getMesaCreation(CLAVE)).rejects.toThrow();
+  });
+
+  it('🔴 MUTANTE · un 200 malformado no es un resultado', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      found: true, outcome: 'open', retry_with_same_idempotency_key: false, mesa: { code: '' },
+    }, 200)));
+    await expect(api.getMesaCreation(CLAVE)).rejects.toThrow('contract_response_invalid');
+  });
+
+  it('🔴 la consulta es un GET: diagnosticar no puede mover un centavo', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(init?.method).toBe('GET');
+      expect(init?.body).toBeUndefined();
+      return jsonResponse({ found: false, outcome: 'not_found', retry_with_same_idempotency_key: true }, 404);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await api.getMesaCreation(CLAVE);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

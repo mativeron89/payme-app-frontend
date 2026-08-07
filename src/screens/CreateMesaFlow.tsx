@@ -24,9 +24,9 @@ import {
 } from '../api/idempotency';
 import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
 import {
-  copyReconciliacion,
-  veredictoReconciliacion,
-  type VeredictoReconciliacion,
+  decisionReconciliacion,
+  decisionSinRespuesta,
+  type DecisionReconciliacion,
 } from './reconciliacionMesaView';
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
@@ -243,6 +243,10 @@ export function CreateMesaFlow() {
     setFrozen(null);
     setPriorAttemptCheckedFor('');
     setPriorAttemptCheckFailedFor('');
+    // El diagnóstico y su autorización de reenvío pertenecen al intento que se
+    // estaba mirando: cambiar de principal los invalida a los dos.
+    setDecision(null);
+    setReplayAutorizado(null);
     if (!mesaScopeBase) return;
     let alive = true;
     void readUnconfirmed(mesaScopeBase, 'create_mesa')
@@ -250,9 +254,12 @@ export function CreateMesaFlow() {
         if (!alive) return;
         setFrozen(attempt);
         setPriorAttemptCheckedFor(mesaScopeBase);
-        if (attempt?.reconciliationRequired) {
-          setError('Hay una apertura de una sesión anterior. No vamos a reenviarla ni abrir otra hasta reconciliarla.');
-        }
+        // ORDEN 2A · acá se seteaba además un `role="alert"` con casi el mismo
+        // texto que el panel. Dos motivos para sacarlo: quedaban DOS avisos
+        // apilados diciendo lo mismo —y sólo uno con la salida—, y el del
+        // alert decía "no vamos a reenviarla" incluso después de que el
+        // contrato autorizara el reenvío. Un cartel que no se entera de que la
+        // puerta se abrió es peor que no tener cartel.
       })
       .catch(() => {
         if (!alive) return;
@@ -285,71 +292,129 @@ export function CreateMesaFlow() {
    * el área de `create_mesa` es GLOBAL por principal, así que un corte de red
    * abriendo una mesa dejaba al organizador sin poder abrir NINGUNA mesa nunca
    * más en ese navegador — y no existía transición posible.
-   *
-   * La evidencia autoritativa es `GET /mesas/open`: si la mesa llegó a crearse,
-   * está ahí con su garantía. Sin TTL ni desbloqueo automático.
    */
   const [reconciling, setReconciling] = useState(false);
-  const [reconcileVerdict, setReconcileVerdict] = useState<VeredictoReconciliacion | null>(null);
+  const [decision, setDecision] = useState<DecisionReconciliacion | null>(null);
+  /**
+   * ORDEN 2A · autorización de REENVÍO, y sólo con la MISMA clave. Guarda el
+   * handle exacto que el contrato habilitó, no un booleano: si `frozen` cambia
+   * de generación, esta autorización deja de aplicar sola en vez de quedar
+   * flotando sobre un intento distinto.
+   */
+  const [replayAutorizado, setReplayAutorizado] = useState<MonetaryIntentHandle | null>(null);
+  const replayHabilitado =
+    !!frozen && !!replayAutorizado &&
+    replayAutorizado.key === frozen.handle.key &&
+    replayAutorizado.generation === frozen.handle.generation;
 
   /**
-   * ORDEN 1A.1 · la reconciliación exige PRUEBA EXACTA. El porqué de cada
-   * rama vive en `reconciliacionMesaView.ts`; acá queda sólo el efecto.
+   * ORDEN 2A · la reconciliación PREGUNTA en vez de inferir.
    *
-   * La referencia es el `mesa_code` que el journal guardó cuando la respuesta
-   * de creación llegó. Si no hay referencia, la respuesta nunca llegó y no
-   * existe nada que consultar: el intento QUEDA CONGELADO. Si hay y la mesa
-   * aparece, se cierra el intento y se navega a ESA mesa —probada, no
-   * inferida—. Si hay y no aparece, tampoco se concluye: `/mesas/open` no
-   * lista una mesa en `pending_auth`, que es justo el caso reconciliado.
+   * Hasta acá la evidencia era `GET /mesas/open` y no alcanzaba en ninguna de
+   * las dos direcciones: por presencia acreditaba mesas ajenas del mismo
+   * restaurante, y por ausencia "probaba" que no existía una mesa que ese
+   * listado no muestra (`pending_auth` no se lista). Ahora se consulta
+   * `GET /mesas/creations/:idempotency_key`, resuelto por
+   * `(opener_user_id, idempotency_key)` — la misma unicidad que gobierna la
+   * creación. **La clave es `frozen.handle.key`**: la que el journal ya tiene,
+   * la que se mandó, la que B-06 respeta.
+   *
+   * El endpoint es de SOLO LECTURA (el dueño no reusó `mesaReplayResponse`
+   * porque ésa reconduce holds contra Stripe), así que consultar las veces que
+   * haga falta no mueve un centavo.
+   *
+   * 🔴 **Cruce con la referencia guardada.** Si el journal guardó el código de
+   * la mesa cuando llegó la respuesta, tiene que coincidir con el que contesta
+   * el endpoint. Dos fuentes independientes que se contradicen no acreditan
+   * nada: el veredicto pasa a NO CONCLUYENTE y el intento sigue congelado.
    */
   async function checkMesaReconciliation() {
     if (!frozen) return;
     setReconciling(true);
     setError(null);
+    setDecision(null);
+    setReplayAutorizado(null);
     try {
-      const referencia = await readMonetaryReference(frozen.scope, 'create_mesa');
-      // Sin referencia ni siquiera se pregunta: no hay con qué comparar, y
-      // preguntar invitaría a mirar el listado buscando "la mía".
-      if (!referencia?.reference) {
-        setReconcileVerdict('sin_evidencia');
-        return;
-      }
-      const abiertas = await api.getOpenMesas();
-      const { veredicto, code } = veredictoReconciliacion({
-        referencia: referencia.reference,
-        mesas: abiertas.mesas,
-      });
-      if (veredicto === 'acreditada' && code) {
+      const lookup = await api.getMesaCreation(frozen.handle.key);
+      const referencia = await readMonetaryReference(frozen.scope, 'create_mesa').catch(() => null);
+      const resultado = decisionReconciliacion(lookup, referencia?.reference);
+      if (resultado.liberaJournal) {
         await reconcileMonetaryIntent(frozen.scope, 'create_mesa', frozen.handle);
         setFrozen(null);
-        setReconcileVerdict(null);
-        toast(`Esa mesa ya existe: ${code}`);
-        navigate('mesa', code);
-        return;
+        if (resultado.navegarA) {
+          setDecision(null);
+          toast(`Esa mesa ya existe: ${resultado.navegarA}`);
+          navigate('mesa', resultado.navegarA);
+          return;
+        }
       }
-      setReconcileVerdict(veredicto);
+      if (resultado.permiteReintento) setReplayAutorizado(frozen.handle);
+      setDecision(resultado);
     } catch {
-      setError('No pudimos consultar tus mesas abiertas. Probá de nuevo en un momento.');
+      // Cualquier cosa que no sea una respuesta del contrato —red, 5xx, un
+      // cuerpo que no decodifica— es "no sabemos", y no sabemos NO es saber
+      // que no: el intento queda como estaba.
+      setDecision(decisionSinRespuesta());
     } finally {
       setReconciling(false);
     }
   }
 
   /**
-   * ⚠️ RETIRADA POR LA ORDEN 1A.1, y con un costo que se declara en vez de
-   * disimularse: acá vivía "Entiendo, desbloquear", que liberaba el journal
-   * cuando la mesa NO aparecía en `/mesas/open`. Esa ausencia no probaba
-   * nada —una mesa en `pending_auth` no se lista— así que el botón ofrecía
-   * reintentar una garantía sobre una mesa que podía existir: la segunda
-   * retención por el total.
+   * 🔴 EL AVISO Y SU SALIDA VIVEN JUNTOS, EN TODOS LOS PASOS (ORDEN 2A).
    *
-   * El costo es real y es el de N-07: sin prueba exacta, el organizador
-   * queda sin poder abrir mesas en ese navegador. Se acepta a propósito —
-   * mejor frenado que garantizado dos veces— y la salida definitiva la
-   * habilita el contrato que App Backend está diseñando (consulta por clave
-   * de idempotencia). La función NO se reescribe hasta entonces.
+   * Defecto encontrado recorriendo el flujo con el e2e nuevo, no leyéndolo:
+   * tras la recarga la app vuelve al **paso 1 (Escaneá el ticket)** —los ítems
+   * y la división son estado en memoria y no sobreviven— y ahí sólo aparecía
+   * el `role="alert"` diciendo *"no vamos a reenviarla ni abrir otra hasta
+   * reconciliarla"*. **El botón que reconcilia estaba tres pasos más
+   * adelante**, dentro del paso de garantía: había que volver a escanear y a
+   * dividir para encontrar la única salida que existe.
+   *
+   * Un aviso que nombra una acción y no la ofrece donde la nombra es un
+   * callejón sin salida con cartel. Por eso el panel es una función y se
+   * pinta desde el primer paso: consultar es de solo lectura y ofrecerlo
+   * temprano no puede mover un centavo.
    */
+  function avisoApertura() {
+    if (!frozen) return null;
+    return (
+      // B-06: apertura sin confirmar. La mesa PUEDE existir ya con su garantía
+      // retenida: cambiar el método abriría una segunda.
+      <div className="note note-orange" role="status">
+        {frozenRequiresReconciliation ? (
+          <>
+            <b>Hay una apertura de una sesión anterior.</b> Puede que la garantía ya exista.
+            {replayHabilitado
+              ? ' Ya sabemos cómo quedó: podés reenviarla tal cual desde el botón de abajo.'
+              : ' Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa.'}
+            {/* N-07: la salida. Antes este estado dejaba al organizador sin
+                poder abrir NINGUNA mesa en este navegador.
+                ORDEN 2A · el veredicto ya no se infiere de `/mesas/open`
+                —que no acredita ni por presencia ni por ausencia— sino que se
+                PREGUNTA por la clave de idempotencia. Y sigue pudiendo ser
+                "no lo sabemos": ahí la pantalla lo dice sin ofrecer una
+                salida que cobre de nuevo. */}
+            <div style={{ marginTop: 10 }}>
+              {decision?.copy && (
+                <div style={{ marginBottom: 8 }}>{decision.copy}</div>
+              )}
+              <button
+                className="btn btn-sm btn-teal btn-fit"
+                onClick={() => void checkMesaReconciliation()}
+                disabled={reconciling}
+              >
+                {reconciling ? 'Consultando…' : 'Revisar cómo quedó esa apertura'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <><b>Tenés una apertura sin confirmar.</b> Puede que la mesa ya se haya creado con su garantía. Reintentala tal cual: si ya existe, te devolvemos esa misma mesa en vez de retener el total otra vez.</>
+        )}
+      </div>
+    );
+  }
+
   const ticketValid =
     editItems.length > 0 &&
     editItems.every((i, index) => i.name.trim().length > 0 && lineTotals[index] !== null) &&
@@ -501,7 +566,19 @@ export function CreateMesaFlow() {
       createInFlightRef.current.leave();
       return;
     }
-    if (frozenRequiresReconciliation) {
+    // ORDEN 2A · el bloqueo se levanta SÓLO con un diagnóstico del contrato que
+    // habilite reenviar, y lo que se habilita es reenviar ESTE intento con SU
+    // clave —nunca abrir otro—: `intent` sale de `frozen.handle` unas líneas
+    // más abajo y no se rota. Por B-06 eso no puede duplicar: si la mesa ya
+    // existe, el backend devuelve ESA; si no, la crea por primera vez.
+    //
+    // ⚠️ LÍMITE DECLARADO: con tarjeta TIPEADA y tras un reload, el `pm_` ya no
+    // está en memoria y Stripe.js devuelve otro por invocación. El backend lo
+    // deja fuera del hash a propósito (`PAYLOAD_KEYS.create_mesa`), pero el
+    // fingerprint LOCAL cubre el request entero, así que `prepareMonetaryRequest`
+    // va a cortar con `monetary_payload_ambiguous`. Es fail-closed —corta, no
+    // duplica— y por eso el reenvío sirve hoy con tarjeta guardada.
+    if (frozenRequiresReconciliation && !replayHabilitado) {
       setError('Esta apertura pertenece a una sesión anterior. Está bloqueada hasta reconciliar su resultado; no abrimos otra mesa.');
       createInFlightRef.current.leave();
       return;
@@ -848,6 +925,9 @@ export function CreateMesaFlow() {
               {error}
             </div>
           )}
+          {/* La apertura congelada avisa DESDE ACÁ, con su salida al lado: es
+              el paso al que vuelve la app después de una recarga. */}
+          {avisoApertura()}
           {/* G-01: un QR roto/suspendido se avisa acá, antes de armar nada. */}
           {restaurantError && <div className="note note-orange">{restaurantError}</div>}
           {scanIssue === 'ocr' && (
@@ -988,6 +1068,7 @@ export function CreateMesaFlow() {
           </div>
         </div>
         <div className="scroll flow-scroll">
+          {avisoApertura()}
           <div className="tk-list">
             {editItems.map((it, idx) => {
               const nombre = it.name.trim();
@@ -1126,6 +1207,7 @@ export function CreateMesaFlow() {
             padding-bottom de `.has-appbar .scroll` y dejaba a División sin
             separación con la barra. No se veía porque su contenido es corto. */}
         <div className="scroll flow-scroll">
+          {avisoApertura()}
           <button className={`div-card ${division === 'consumo' ? 'sel' : ''}`} onClick={() => setDivision('consumo')}>
             <div className="div-radio" />
             <div className="div-ico">
@@ -1255,39 +1337,7 @@ export function CreateMesaFlow() {
             {error}
           </div>
         )}
-          {/* B-06: apertura sin confirmar. La mesa PUEDE existir ya con su
-              garantía retenida: cambiar el método abriría una segunda. */}
-          {frozen && (
-            <div className="note note-orange" role="status">
-              {frozenRequiresReconciliation ? (
-                <>
-                  <b>Hay una apertura de una sesión anterior.</b> Puede que la garantía ya exista.
-                  Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa.
-                  {/* N-07: la salida. Antes este estado dejaba al organizador
-                      sin poder abrir NINGUNA mesa en este navegador. */}
-                  {/* ORDEN 1A.1 · el veredicto puede ser "no lo sabemos", y
-                      entonces la pantalla lo dice sin ofrecer una salida que
-                      cobre de nuevo. El botón consulta las veces que haga
-                      falta; lo que ya no existe es "desbloquear" sobre una
-                      ausencia que no prueba nada. */}
-                  <div style={{ marginTop: 10 }}>
-                    {reconcileVerdict && (
-                      <div style={{ marginBottom: 8 }}>{copyReconciliacion(reconcileVerdict)}</div>
-                    )}
-                    <button
-                      className="btn btn-sm btn-teal btn-fit"
-                      onClick={() => void checkMesaReconciliation()}
-                      disabled={reconciling}
-                    >
-                      {reconciling ? 'Consultando…' : 'Revisar si la mesa se creó'}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <><b>Tenés una apertura sin confirmar.</b> Puede que la mesa ya se haya creado con su garantía. Reintentala tal cual: si ya existe, te devolvemos esa misma mesa en vez de retener el total otra vez.</>
-              )}
-            </div>
-          )}
+          {avisoApertura()}
           <div className="sectlabel" id="lbl-garantia">
             ¿Con qué garantizás?
           </div>
@@ -1402,7 +1452,7 @@ export function CreateMesaFlow() {
             busy ||
             !priorAttemptChecked ||
             priorAttemptCheckFailed ||
-            frozenRequiresReconciliation ||
+            (frozenRequiresReconciliation && !replayHabilitado) ||
             (!frozen &&
               !IS_MOCK &&
               method === 'card' &&
@@ -1412,7 +1462,7 @@ export function CreateMesaFlow() {
         >
           {busy ? (
             'Autorizando…'
-          ) : frozenRequiresReconciliation ? (
+          ) : frozenRequiresReconciliation && !replayHabilitado ? (
             <>
               <Icon name="lock" size={16} className="ico-inline" /> Reconciliación necesaria
             </>

@@ -14,8 +14,10 @@ import {
   acceptInvitationResponse,
   attachPaymentMethodResponse,
   invitationResponse,
+  mesaCreationResponse,
   setupIntentResponse,
 } from './contractResponses';
+import { extractApiError } from './errors';
 import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
 import { invalidateSession, loadSession, type StoredSession } from './storage';
@@ -34,6 +36,7 @@ import type {
   CreateSetupIntentResponse,
   CreateMesaRequest,
   CreateMesaResponse,
+  MesaCreationLookup,
   CreateTransferRequest,
   CreateTransferResponse,
   FriendRequestCreatedResponse,
@@ -163,6 +166,12 @@ export interface Api {
   getMesa(code: string, guestToken?: string): Promise<MesaDetailResponse>;
   scanTicket(image?: Blob): Promise<OcrResponse>;
   createMesa(req: CreateMesaRequest, intent: MonetaryIntentHandle): Promise<CreateMesaResponse>;
+  /**
+   * ORDEN 2A · `GET /mesas/creations/:idempotency_key` (backend v2.47.0).
+   * La evidencia EXACTA de una apertura ambigua. **De solo lectura: no mueve
+   * un centavo ni crea una segunda mesa.** Diagnóstico; la acción es aparte.
+   */
+  getMesaCreation(idempotencyKey: string): Promise<MesaCreationLookup>;
   /** Mock: simula la confirmación 3DS de la garantía. En T7: Stripe.js. */
   /** @param connectedAccountId v2.24: si el hold vive en la cuenta del restaurante. */
   confirmGuarantee3ds(
@@ -248,6 +257,31 @@ export function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }
 
+/**
+ * ORDEN 2A · el 404 y el 409 de `GET /mesas/creations/:key` **son respuestas
+ * del contrato, no fallas**: `not_found` y `payload_hash_conflict` traen su
+ * cuerpo y su `outcome`. Sin esto, "no existe ninguna creación con tu clave"
+ * llegaría a la pantalla como "no pudimos consultar", que es justo la
+ * confusión que este endpoint viene a terminar.
+ *
+ * **Cualquier otro error se relanza**, y ahí sí el caller conserva el freeze:
+ * un 401, un 500 o una red caída no dicen nada sobre la creación. Y un 404/409
+ * cuyo cuerpo no decodifica tampoco se interpreta — se relanza el error
+ * original, que es más honesto que fabricar un `not_found`.
+ *
+ * Vale para los dos rieles: `extractApiError` normaliza `HttpError` (real) y
+ * `MockApiError` (mock) al mismo `{code, extra, status}`.
+ */
+function creacionDesdeError(err: unknown): MesaCreationLookup {
+  const { extra, status } = extractApiError(err);
+  if (status !== 404 && status !== 409) throw err;
+  try {
+    return mesaCreationResponse(extra);
+  } catch {
+    throw err;
+  }
+}
+
 const realApi: Api = {
   getConfig: () => httpPublicRequest<AppConfig>('GET', '/config'),
   login: (email, password) => httpLogin(email, password),
@@ -297,6 +331,32 @@ const realApi: Api = {
       undefined,
       async (session) => createMesaResponse(await httpRequest<unknown>('POST', '/mesas', req, session), req),
     ),
+  /**
+   * 🔴 NO pasa por `withPreparedMonetaryRequest` **a propósito**: eso es para
+   * MUTACIONES —marca `sending`, cuenta reintentos, y en caso de error deja el
+   * journal `ambiguous`—. Esto es un GET que no mueve nada; hacerlo pasar por
+   * ahí ensuciaría el journal del intento que estamos tratando de diagnosticar.
+   *
+   * `payload_hash` NO se manda, y es una decisión con motivo: exigiría
+   * reimplementar acá el `payloadHash` del dueño (`utils/idempotency.js`:
+   * subset por `PAYLOAD_KEYS.create_mesa`, `items` ordenados sin perder
+   * información, canonicalización propia, sha256). Un hash mal replicado
+   * devuelve **409 `payload_hash_conflict`**, que este front trata como
+   * "conservá el freeze" — o sea que el error de replicación volvería a trabar
+   * al organizador, que es exactamente el costo que este endpoint viene a
+   * sacar. Y la protección que el hash da ya existe del lado local: el journal
+   * refuse reusar una clave con otro payload (`monetary_payload_ambiguous`),
+   * que es el único camino por el que este front podría producir el conflicto.
+   */
+  getMesaCreation: async (idempotencyKey) => {
+    try {
+      return mesaCreationResponse(
+        await httpRequest<unknown>('GET', `/mesas/creations/${encodeURIComponent(idempotencyKey)}`),
+      );
+    } catch (err) {
+      return creacionDesdeError(err);
+    }
+  },
   /**
    * 3DS de la garantía: se confirma con Stripe.js y después se espera a que la
    * mesa pase a 'open'. Ese cambio lo hace el WEBHOOK
@@ -521,6 +581,13 @@ const mockApi: Api = {
       undefined,
       async () => createMesaResponse(await mock.mockCreateMesa(req), req),
     ),
+  getMesaCreation: async (idempotencyKey) => {
+    try {
+      return mesaCreationResponse(await mock.mockGetMesaCreation(idempotencyKey));
+    } catch (err) {
+      return creacionDesdeError(err);
+    }
+  },
   async confirmGuarantee3ds(code) {
     const result = await mock.mockConfirmGuarantee3ds(code);
     return { ...result, outcome: result.status === 'open' ? 'success' as const : 'ambiguous' as const };

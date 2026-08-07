@@ -1,114 +1,166 @@
 import { describe, expect, it } from 'vitest';
-import type { OpenMesa } from '../api/types';
-import { copyReconciliacion, veredictoReconciliacion } from './reconciliacionMesaView';
+import type { MesaCreationLookup, MesaCreationOutcome, MesaStatus } from '../api/types';
+import { decisionReconciliacion, decisionSinRespuesta } from './reconciliacionMesaView';
 
 /**
- * P0 · LA RECONCILIACIÓN NO ACREDITA POR PARECIDO (ORDEN 1A.1).
+ * P0 · QUÉ LIBERA EL JOURNAL DE UNA APERTURA CON GARANTÍA (ORDEN 2A).
  *
- * Lo que se decide acá es si se libera el journal de una apertura CON
- * GARANTÍA: acreditar de más significa una segunda retención por el total de
- * la mesa. El código viejo comparaba **nombres de restaurante**, así que tres
- * escenarios distintos —ninguno hipotético— daban "la mesa ya existe":
- * `undefined === undefined`, la mesa de un amigo en el mismo restaurante
- * (G-28 hizo que `/mesas/open` las traiga), y dos sucursales homónimas.
+ * Lo que se decide acá es si se termina el intento monetario de una apertura
+ * congelada. **Liberar de más es una segunda retención por el total de la
+ * mesa.** Liberar de menos es un organizador que no puede abrir ninguna mesa
+ * en ese navegador. Los dos males son reales; el segundo se arregla con una
+ * consulta más, el primero con un refund.
  *
- * Cada `it` de abajo es uno de los mutantes que la orden pidió acreditar.
+ * La versión anterior de este archivo probaba la contención de 1A.1: que la
+ * reconciliación no acreditara por NOMBRE de restaurante ni leyera la ausencia
+ * en `/mesas/open` como prueba. Esa mecánica ya no existe —ahora se pregunta
+ * por la clave de idempotencia— así que esos mutantes se mudaron: viven en
+ * `reconciliacionFuente.test.ts`, que mira el código de la pantalla y falla si
+ * alguno de los dos vuelve.
  */
 
-function mesa(code: string, restaurante: string | null): OpenMesa {
+function lookup(
+  outcome: MesaCreationOutcome,
+  opciones: { code?: string | null; status?: MesaStatus; retry?: boolean } = {},
+): MesaCreationLookup {
+  const conMesa = outcome !== 'not_found' && outcome !== 'payload_hash_conflict';
+  const code = opciones.code === undefined ? 'PA-2847' : opciones.code;
   return {
-    id: `id-${code}`,
-    code,
-    full_name: `Mesa ${code}`,
-    // `restaurant` es obligatorio en el tipo, pero el runtime puede traer
-    // cualquier cosa: el escenario `undefined === undefined` nacía de ahí.
-    restaurant: (restaurante === null ? undefined : { name: restaurante, category: 'other' }) as OpenMesa['restaurant'],
-    total_cents: 84000,
-    paid_amount_cents: 0,
-    pct_paid: 0,
-    status: 'open',
-    expires_at: new Date().toISOString(),
+    found: outcome !== 'not_found',
+    outcome,
+    retryWithSameKey: opciones.retry ?? (outcome === 'requires_action' || outcome === 'not_found'),
+    mesa: conMesa && code
+      ? { code, status: opciones.status ?? 'open', totalCents: 84000 }
+      : null,
+    guarantee: conMesa ? { method: 'card', authorized: outcome !== 'requires_action' } : null,
   };
 }
 
-describe('sólo el CÓDIGO acredita', () => {
-  it('con referencia exacta y la mesa presente → acreditada, con SU código', () => {
-    const r = veredictoReconciliacion({
-      referencia: 'PA-2847',
-      mesas: [mesa('PA-1111', 'Otro'), mesa('PA-2847', 'La Parolaccia')],
-    });
-    expect(r).toEqual({ veredicto: 'acreditada', code: 'PA-2847' });
+describe('sólo la prueba positiva exacta libera el journal', () => {
+  it.each(['open', 'partially_paid', 'replayable'] as const)(
+    '%s → acreditada: libera y navega a ESA mesa',
+    (outcome) => {
+      const d = decisionReconciliacion(lookup(outcome));
+      expect(d.veredicto).toBe('acreditada');
+      expect(d.liberaJournal).toBe(true);
+      expect(d.navegarA).toBe('PA-2847');
+      expect(d.permiteReintento).toBe(false);
+    },
+  );
+
+  it('terminal → libera SIN navegar: la mesa existe pero está muerta', () => {
+    // Misma lectura que hace el dueño en `POST /mesas`: ante un estado muerto
+    // contesta 409 "rotá la clave", o sea "abrí una nueva".
+    const d = decisionReconciliacion(lookup('terminal', { status: 'cancelled' }));
+    expect(d.veredicto).toBe('muerta');
+    expect(d.liberaJournal).toBe(true);
+    expect(d.navegarA).toBeNull();
+    expect(d.permiteReintento).toBe(false);
+    expect(d.copy).toContain('PA-2847');
   });
 
-  it('🔴 MUTANTE · la mesa de OTRO PARTICIPANTE en el mismo restaurante NO acredita', () => {
-    // Desde G-28, `/mesas/open` trae también las mesas donde sos participante:
-    // la de un amigo en La Parolaccia matcheaba por nombre. Con código, no.
-    const r = veredictoReconciliacion({
-      referencia: 'PA-2847',
-      mesas: [mesa('PA-9999', 'La Parolaccia')],
-    });
-    expect(r.veredicto).toBe('no_concluyente');
-    expect(r.code).toBeNull();
+  it('🔴 MUTANTE · requires_action NO libera: hay un hold sin autorizar', () => {
+    const d = decisionReconciliacion(lookup('requires_action', { status: 'pending_auth' }));
+    expect(d.veredicto).toBe('a_medias');
+    expect(d.liberaJournal).toBe(false);
+    // No se navega: una mesa en pending_auth no es una mesa usable todavía.
+    expect(d.navegarA).toBeNull();
+    // Pero sí se puede retomar ESA garantía, que es lo que dice el contrato.
+    expect(d.permiteReintento).toBe(true);
   });
 
-  it('🔴 MUTANTE · un restaurante HOMÓNIMO no acredita', () => {
-    const r = veredictoReconciliacion({
-      referencia: 'PA-2847',
-      mesas: [mesa('PA-5050', 'La Parolaccia'), mesa('PA-6060', 'La Parolaccia')],
-    });
-    expect(r.veredicto).toBe('no_concluyente');
+  it('🔴 MUTANTE · not_found NO libera, aunque el contrato habilite reintentar', () => {
+    // El 404 dice que ESA CLAVE no creó nada. No dice nada de una generación
+    // anterior, y el journal rota la clave ante errores definitivos: una mesa
+    // creada por la clave previa seguiría existiendo con su hold.
+    const d = decisionReconciliacion(lookup('not_found'));
+    expect(d.veredicto).toBe('sin_rastro');
+    expect(d.liberaJournal).toBe(false);
+    expect(d.permiteReintento).toBe(true);
   });
 
-  it('🔴 MUTANTE · `undefined === undefined`: mesas sin restaurante no acreditan nada', () => {
-    // El caso que no necesitaba dato malformado ni mala fe: el fetch del
-    // restaurante falla, la mesa viene sin el objeto, y los dos `?.` daban
-    // `undefined` — comparación verdadera, intento cerrado, mesa dada por
-    // creada. Acá el nombre no participa de la decisión en ningún caso.
-    const r = veredictoReconciliacion({
-      referencia: 'PA-2847',
-      mesas: [mesa('PA-7777', null), mesa('PA-8888', null)],
-    });
-    expect(r.veredicto).toBe('no_concluyente');
+  it('🔴 MUTANTE · payload_hash_conflict no libera NI reintenta', () => {
+    const d = decisionReconciliacion(lookup('payload_hash_conflict'));
+    expect(d.veredicto).toBe('conflicto');
+    expect(d.liberaJournal).toBe(false);
+    expect(d.permiteReintento).toBe(false);
+    expect(d.navegarA).toBeNull();
   });
 
-  it('sin referencia NO se consulta ni se concluye: la respuesta nunca llegó', () => {
-    for (const vacia of [null, undefined, '', '   ']) {
-      const r = veredictoReconciliacion({ referencia: vacia, mesas: [mesa('PA-2847', 'La Parolaccia')] });
-      expect(r.veredicto).toBe('sin_evidencia');
-      expect(r.code).toBeNull();
-    }
+  it('no saber no libera nada', () => {
+    const d = decisionSinRespuesta();
+    expect(d.veredicto).toBe('no_concluyente');
+    expect(d.liberaJournal).toBe(false);
+    expect(d.permiteReintento).toBe(false);
+    expect(d.navegarA).toBeNull();
+    expect(d.copy).toBeTruthy();
+  });
+});
+
+describe('el reintento que se habilita es SIEMPRE con la misma clave', () => {
+  it('permiteReintento sale del contrato, no de la clasificación local', () => {
+    // Si el emisor dijera `false` en un `requires_action`, se le hace caso: el
+    // contrato es quien sabe cuándo repetir el POST hace algo útil.
+    const d = decisionReconciliacion(lookup('requires_action', { status: 'pending_auth', retry: false }));
+    expect(d.permiteReintento).toBe(false);
   });
 
-  it('una respuesta de listado rota no acredita ni revienta', () => {
-    for (const raro of [null, undefined, [] as OpenMesa[]]) {
-      expect(veredictoReconciliacion({ referencia: 'PA-2847', mesas: raro }).veredicto).toBe('no_concluyente');
+  it('ninguna rama que libera habilita además reintentar', () => {
+    // Liberar + reintentar a la vez sería clave nueva sobre mesa viva: el
+    // segundo hold. Las dos cosas nunca pueden ser ciertas juntas.
+    for (const o of ['open', 'partially_paid', 'replayable', 'terminal'] as const) {
+      const d = decisionReconciliacion(lookup(o));
+      expect(d.liberaJournal && d.permiteReintento, o).toBe(false);
     }
   });
 });
 
-describe('la ausencia tampoco es prueba', () => {
-  it('🔴 "no está en /mesas/open" NO es "no existe": una mesa en pending_auth no se lista', () => {
-    // La mitad simétrica del defecto: el código viejo leía la ausencia como
-    // "no llegó a crearse" y ofrecía desbloquear — o sea, reintentar la
-    // garantía sobre una mesa que podía existir con su retención puesta.
-    const r = veredictoReconciliacion({ referencia: 'PA-2847', mesas: [] });
-    expect(r.veredicto).toBe('no_concluyente');
-    expect(r.veredicto).not.toBe('sin_evidencia');
+describe('dos fuentes que se contradicen no acreditan ninguna', () => {
+  it('🔴 MUTANTE · la referencia guardada difiere del código que contesta el endpoint', () => {
+    // El journal anotó PA-2847 cuando llegó la respuesta; el endpoint contesta
+    // otra mesa para la misma clave. Alguna de las dos miente.
+    const d = decisionReconciliacion(lookup('open', { code: 'PA-9999' }), 'PA-2847');
+    expect(d.veredicto).toBe('no_concluyente');
+    expect(d.liberaJournal).toBe(false);
   });
 
-  it('ninguna copy afirma que la mesa no existe, ni promete desbloquear', () => {
-    for (const v of ['sin_evidencia', 'no_concluyente'] as const) {
-      const texto = copyReconciliacion(v)!.toLowerCase();
-      expect(texto.length).toBeGreaterThan(0);
-      for (const prohibida of ['no llegó a crearse', 'no existe', 'desbloquear', 'podés abrir']) {
-        expect(texto, `"${prohibida}" en el veredicto ${v}`).not.toContain(prohibida);
-      }
-      // Y sí dice lo único cierto: que no se reintenta la garantía.
-      expect(texto).toContain('no reintentamos la garantía');
+  it('coinciden → se acredita igual que sin referencia', () => {
+    expect(decisionReconciliacion(lookup('open'), 'PA-2847').liberaJournal).toBe(true);
+    expect(decisionReconciliacion(lookup('open'), '  PA-2847  ').liberaJournal).toBe(true);
+  });
+
+  it('sin referencia —el caso normal: la respuesta nunca llegó— no hay nada que cruzar', () => {
+    for (const vacia of [null, undefined, '', '   ']) {
+      expect(decisionReconciliacion(lookup('open'), vacia).liberaJournal).toBe(true);
     }
   });
 
-  it('la acreditada no tiene copy: su superficie es la navegación a esa mesa', () => {
-    expect(copyReconciliacion('acreditada')).toBeNull();
+  it('una referencia sin mesa en la respuesta no bloquea el 404', () => {
+    // `not_found` llega sin datos de mesa: no hay contradicción posible, y el
+    // veredicto sigue siendo el suyo (que tampoco libera).
+    const d = decisionReconciliacion(lookup('not_found'), 'PA-2847');
+    expect(d.veredicto).toBe('sin_rastro');
+  });
+});
+
+describe('la copy no afirma lo que no sabemos', () => {
+  it('acreditada no tiene copy: su superficie es la navegación', () => {
+    expect(decisionReconciliacion(lookup('open')).copy).toBeNull();
+  });
+
+  it('ninguna rama no acreditada dice "no existe" ni promete desbloquear', () => {
+    for (const o of ['requires_action', 'not_found', 'payload_hash_conflict'] as const) {
+      const texto = decisionReconciliacion(lookup(o)).copy!.toLowerCase();
+      expect(texto.length).toBeGreaterThan(0);
+      for (const prohibida of ['no existe', 'desbloquear', 'no llegó a crearse']) {
+        expect(texto, `"${prohibida}" en ${o}`).not.toContain(prohibida);
+      }
+    }
+  });
+
+  it('una mesa acreditable SIN código no se acredita: el código ES la prueba', () => {
+    const d = decisionReconciliacion(lookup('open', { code: null }));
+    expect(d.veredicto).toBe('no_concluyente');
+    expect(d.liberaJournal).toBe(false);
   });
 });

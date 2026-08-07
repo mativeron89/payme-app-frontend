@@ -207,6 +207,58 @@ export type MesaStatus =
 
 export type ItemStatus = 'available' | 'locked' | 'paid' | 'released';
 
+// ─── Reconciliación de una creación (v2.47.0 · orden 1B del dueño) ─────────
+//
+// `GET /api/mesas/creations/:idempotency_key` — la evidencia EXACTA de una
+// apertura ambigua, resuelta por `(opener_user_id, idempotency_key)`. Es la
+// respuesta del dueño al P0 que este front contuvo: acreditar una creación
+// por el NOMBRE del restaurante, y —peor— leer la ausencia en `/mesas/open`
+// como prueba de que no existía, cuando una mesa en `pending_auth` no se
+// lista ahí.
+//
+// 🔴 De SOLO LECTURA. El dueño NO reusó `mesaReplayResponse` porque ésa
+// reconduce holds contra Stripe: *"consultar no puede mover un centavo"*.
+// Diagnóstico y acción, separados.
+
+/** Los siete `outcome` del contrato. Cualquier otro valor NO se interpreta. */
+export type MesaCreationOutcome =
+  /** No hay creación con esa clave para este opener. */
+  | 'not_found'
+  /** La mesa quedó en `pending_auth`: existe, con su hold sin autorizar. */
+  | 'requires_action'
+  | 'open'
+  | 'partially_paid'
+  /** `auth_failed | cancelled | expired`: la creación terminó y está muerta. */
+  | 'terminal'
+  /** `fully_paid` y posteriores: la mesa avanzó más allá de la apertura. */
+  | 'replayable'
+  /** La misma clave con OTRA intención económica. Llega SIN datos de mesa. */
+  | 'payload_hash_conflict';
+
+/** Resultado ya decodificado. `mesa` es `null` en las ramas sin datos. */
+export interface MesaCreationLookup {
+  readonly found: boolean;
+  readonly outcome: MesaCreationOutcome;
+  /**
+   * Lo dice el CONTRATO, no se deduce. `true` en `requires_action` (repetir el
+   * POST reconduce el hold y devuelve `client_secret`) y también en el 404
+   * `not_found` (si no hay nada creado, repetir con la misma clave crea por
+   * primera vez, y si el 404 mintió, B-06 devuelve la mesa existente en vez de
+   * abrir una segunda).
+   */
+  readonly retryWithSameKey: boolean;
+  readonly mesa: {
+    readonly code: string;
+    readonly status: MesaStatus;
+    /** ⚠️ El contrato lo manda como STRING (bigint del driver). Acá, entero. */
+    readonly totalCents: number;
+  } | null;
+  readonly guarantee: {
+    readonly method: string | null;
+    readonly authorized: boolean;
+  } | null;
+}
+
 /** Elemento de GET /api/mesas/open. */
 export interface OpenMesa {
   id: string;
