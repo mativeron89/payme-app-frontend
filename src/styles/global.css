@@ -3748,6 +3748,19 @@ body {
   margin-top: var(--sp-2);
 }
 
+/* G-36 · la salida honesta cuando la demo del seed venció y no se pudo
+   rescatar. Separada del vacío real por una línea: el vacío dice "no tenés
+   mesas", esto dice "los datos de ejemplo vencieron" — dos cosas distintas. */
+.demo-reset {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
 /* Vacío REAL: el único estado del sistema SIN borde. Y sin botón propio — la
    acción ya está en el círculo naranja de la barra, a un centímetro. */
 .mesa-empty {

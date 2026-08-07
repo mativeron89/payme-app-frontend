@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, IS_MOCK } from '../api';
 import type { BalanceResponse, OpenMesasResponse, WalletTransaction } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { navigate } from '../router';
@@ -8,6 +8,7 @@ import { countdownLong, formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { mesaStatusLabel, walletTxIcon, walletTxLabel } from '../utils/labels';
 import { etiquetaMasMesas, ordenarPorUrgencia } from './homeMesasView';
+import { demoSeedIrrecuperable, resetDemo } from '../api/mock/store';
 import { Icon } from '../components/Icon';
 import { AppBottomBar } from '../components/AppBottomBar';
 import {
@@ -135,6 +136,10 @@ export function HomeScreen() {
   const mesa = porUrgencia[0] ?? null;
   const otras = porUrgencia.slice(1);
   const cuenta = mesa ? countdownLong(mesa.expires_at) : null;
+  // Sólo se pregunta cuando no hay nada vivo, y sólo en mock: el build real
+  // no tiene seed que vencer. `IS_MOCK` es constante, así que el bundler
+  // puede podar la rama entera.
+  const demoVencida = IS_MOCK && openMesas !== null && mesa === null && demoSeedIrrecuperable();
   const masked = '$ ••••';
 
   return (
@@ -288,6 +293,29 @@ export function HomeScreen() {
             <div className="mesa-empty">
               <div className="mesa-empty-title">No tenés mesas abiertas</div>
               <p className="mesa-empty-body">Tocá el + para abrir una</p>
+              {/* G-36 · la mitad honesta del rescate (ORDEN 1-C·B): lo que no
+                  se puede acreditar intacto NO se relanza — se conserva. Pero
+                  entonces la demo puede quedar sin nada vivo y sin que nada lo
+                  explique, que fue exactamente el problema original. Acá se
+                  dice qué pasó y se ofrece la salida que ya existía en `Más`.
+                  Sólo en mock: en el build real no existe. */}
+              {IS_MOCK && demoVencida && (
+                <div className="demo-reset">
+                  <p className="mesa-empty-body">
+                    Los datos de ejemplo de esta demo ya vencieron.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm btn-fit"
+                    onClick={() => {
+                      resetDemo();
+                      window.location.reload();
+                    }}
+                  >
+                    <Icon name="refresh" size={16} className="ico-inline" /> Reiniciar la demo
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>

@@ -744,12 +744,207 @@ const STORAGE_KEY = 'payme_mock_state_v1';
  * así que cualquier fila de `history` con un código VIVO es del usuario.
  */
 function tocadaPorElUsuario(st: MockState, mesa: MockMesa): boolean {
+  // 'guest' cuenta como tocada: es LA MISMA PERSONA en el mismo teléfono —
+  // el camino de quien entraba por link antes del cierre v2.32.0. Sus pagos
+  // dejaron `claimedBy: 'guest'` y claims de 'guest', y NO escribieron fila de
+  // `history` (mockApi excluye guest) ni `joinedMesaCodes`. Contar sólo 'user'
+  // hacía parecer intactas mesas que la persona pagó.
+  const mio = (quien: unknown) => quien === 'user' || quien === 'guest';
+  const items = Array.isArray(mesa.items) ? mesa.items : [];
+  const slots = Array.isArray(mesa.slots) ? mesa.slots : [];
   return (
-    st.history.some((h) => h.mesa_code === mesa.code) ||
-    st.joinedMesaCodes.includes(mesa.code) ||
-    (mesa.slots ?? []).some((s) => s.claimedBy === 'user') ||
-    mesa.items.some((i) => i.lockedBy === 'user' || i.claims.some((c) => c.who === 'user'))
+    (Array.isArray(st.history) && st.history.some((h) => h?.mesa_code === mesa.code)) ||
+    (Array.isArray(st.joinedMesaCodes) && st.joinedMesaCodes.includes(mesa.code)) ||
+    slots.some((s) => mio(s?.claimedBy)) ||
+    items.some(
+      (i) => mio(i?.lockedBy) || (Array.isArray(i?.claims) && i.claims.some((c) => mio(c?.who))),
+    )
   );
+}
+
+/**
+ * G-36 · legacy (ORDEN 1-C·B, 2026-08-07) · IDENTIDAD RECONOCIBLE DEL SEED.
+ *
+ * Tabla EXPLÍCITA en vez de leer `seedMesas()`: la definición del seed cambió
+ * entre versiones —`guarantee_method` de PA-3121 fue `wallet` y hoy es `card`,
+ * los `items` de las mesas iguales fueron `[]`, el `status` de PA-1099 fue
+ * `settled`— así que compararse contra el seed de HOY rechazaría justo a los
+ * estados viejos que hay que rescatar. Acá se fija el subconjunto que **nunca
+ * cambió en ninguna versión**, y un test lo mantiene alineado con el seed.
+ *
+ * `PA-1099` NO está: su historia ES estar cerrada (A-2), y pasa todos los
+ * filtros de "intacta" porque nadie la toca nunca. Sin esta lista blanca,
+ * cualquier migración razonable la revive y borra la pantalla de la garantía.
+ */
+const SEED_LEGACY_RELANZABLE: Record<
+  string,
+  {
+    readonly status: MesaStatus;
+    readonly expiraEnMs: number;
+    readonly total_cents: number;
+    readonly division_mode: 'consumo' | 'igual';
+    readonly expected_participants: number;
+    readonly restaurante: string;
+    readonly openedByUser: boolean;
+    /** El de HOY. Un legacy con `wallet` NO se migra: ver `migrarSeedLegacy`. */
+    readonly guarantee_method: 'card' | 'wallet' | null;
+    /** Lo que pagaron OTROS en el seed. Si subió, pagó el usuario. */
+    readonly paid_amount_cents: number;
+  }
+> = {
+  'PA-2847': {
+    status: 'partially_paid',
+    expiraEnMs: 29 * 60_000,
+    total_cents: 84000,
+    division_mode: 'consumo',
+    expected_participants: 4,
+    restaurante: 'La Parolaccia',
+    openedByUser: true,
+    guarantee_method: 'card',
+    paid_amount_cents: 32500,
+  },
+  'PA-3121': {
+    status: 'partially_paid',
+    expiraEnMs: 12 * 60_000,
+    total_cents: 62000,
+    division_mode: 'igual',
+    expected_participants: 4,
+    restaurante: 'Hanzo Sushi',
+    openedByUser: true,
+    guarantee_method: 'card',
+    paid_amount_cents: 31000,
+  },
+  'PA-4520': {
+    status: 'open',
+    expiraEnMs: 26 * 60_000,
+    total_cents: 96000,
+    division_mode: 'igual',
+    expected_participants: 3,
+    restaurante: 'Hanzo Sushi',
+    openedByUser: false,
+    guarantee_method: 'card',
+    paid_amount_cents: 0,
+  },
+};
+
+/** Sólo para el test que mantiene la tabla alineada con el seed vigente. */
+export const SEED_LEGACY_CODES = Object.keys(SEED_LEGACY_RELANZABLE);
+export function plantillaLegacy(code: string) {
+  return SEED_LEGACY_RELANZABLE[code];
+}
+
+/**
+ * G-36 · legacy · **le pone la marca a lo que es INEQUÍVOCAMENTE del seed y
+ * nadie tocó.** Corre ANTES del relanzamiento y sólo sobre mesas SIN marca:
+ * un estado persistido anterior a `67fc0de` no la tiene, y sin esto queda
+ * podrido para siempre — que es justo el estado que hay en los dispositivos
+ * existentes, incluido el teléfono de Mati.
+ *
+ * Nueve condiciones, cada una por un daño concreto y medido:
+ *
+ *  1. **Código en la lista blanca.** La firma sola no alcanza:
+ *     `materializeDemoMesa` fabrica mesas con la firma EXACTA de PA-2847 para
+ *     cualquier código, y el ticket del scan es el mismo — marcarlas por firma
+ *     reescribiría mesas del usuario.
+ *  2. **Código ÚNICO en el estado.** Los códigos nuevos salen de
+ *     `PA-<1000..9999>` sin chequeo de unicidad, así que una mesa propia puede
+ *     nacer literalmente "PA-2847". Si hay dos, no se puede acreditar cuál es
+ *     cuál: no se migra ninguna.
+ *  3. **Firma inmutable idéntica** (total, modo, comensales, restaurante,
+ *     `openedByUser`). Distingue además la materializada (`false`) de PA-2847
+ *     (`true`).
+ *  4. **`paid_amount_cents` igual al del seed.** Es el único campo económico
+ *     que el vencimiento NO ensucia y que un pago propio SIEMPRE mueve.
+ *  5. **`guarantee_method` igual al de hoy (`card`).** Un legacy de PA-3121
+ *     trae `wallet`, y relanzarla la haría vencer de nuevo cada sesión
+ *     **debitando saldo cada vez** (`settleIfExpired`) hasta dejarlo negativo.
+ *     No se migra: se conserva y se ofrece el reset.
+ *  6. **Nadie la tocó** (`tocadaPorElUsuario`, ya con 'guest' adentro).
+ *  7. **Si el seed le sembró una invitación, tiene que seguir ahí.** En legacy
+ *     aceptar sólo la borraba del array sin dejar rastro: su ausencia es la
+ *     única huella de que el usuario aceptó PA-4520.
+ *  8. **La plantilla sale de la TABLA**, nunca del estado persistido — que
+ *     está sucio por definición (`completed` + `expires_at` pasado). Derivarla
+ *     de ahí grabaría una marca basura, y la marca se PERSISTE: quedaría el
+ *     teléfono podrido *y* marcado, peor que hoy.
+ *  9. **Nada de esto puede lanzar.** Todo `loadPersisted` vive en un
+ *     `try/catch` que descarta el estado ENTERO: un `.length` sobre un
+ *     `undefined` le borraría al usuario mesas, tarjetas, amigos e historial
+ *     — un daño mucho mayor que el que esto viene a curar.
+ */
+function migrarSeedLegacy(st: MockState): void {
+  const mesas = Array.isArray(st.mesas) ? st.mesas : [];
+  const cuantas = new Map<string, number>();
+  for (const m of mesas) {
+    if (m && typeof m.code === 'string') cuantas.set(m.code, (cuantas.get(m.code) ?? 0) + 1);
+  }
+  const invitaciones = Array.isArray(st.pendingInvitations) ? st.pendingInvitations : [];
+
+  for (const mesa of mesas) {
+    if (!mesa || typeof mesa.code !== 'string') continue;
+    if (mesa.seedRelanzable) continue; // ya migrada o nacida con la marca
+    const plantilla = SEED_LEGACY_RELANZABLE[mesa.code];
+    if (!plantilla) continue; // no es del seed relanzable (PA-1099 incluida)
+    if ((cuantas.get(mesa.code) ?? 0) !== 1) continue; // código duplicado: ambiguo
+    const firmaIgual =
+      mesa.total_cents === plantilla.total_cents &&
+      mesa.division_mode === plantilla.division_mode &&
+      mesa.expected_participants === plantilla.expected_participants &&
+      mesa.restaurant?.name === plantilla.restaurante &&
+      mesa.openedByUser === plantilla.openedByUser &&
+      mesa.guarantee_method === plantilla.guarantee_method &&
+      mesa.paid_amount_cents === plantilla.paid_amount_cents;
+    if (!firmaIgual) continue;
+    if (tocadaPorElUsuario(st, mesa)) continue;
+    // La invitación sembrada es parte de la historia de PA-4520: si no está,
+    // el usuario la aceptó (en legacy eso no dejaba otro rastro).
+    const sembradaParaEstaMesa = mesa.code === 'PA-4520';
+    if (sembradaParaEstaMesa && !invitaciones.some((i) => i?.mesa_code === mesa.code)) continue;
+
+    mesa.seedRelanzable = { status: plantilla.status, expiraEnMs: plantilla.expiraEnMs };
+    // H-14: los legacy de las mesas IGUALES traen `items: []`, un estado que
+    // `POST /mesas` prohíbe. Revivirlas con el ticket vacío resucitaría el
+    // defecto; se backfillea sólo si está vacío, nunca se pisan ítems reales.
+    if (plantilla.division_mode === 'igual' && (!Array.isArray(mesa.items) || mesa.items.length === 0)) {
+      mesa.items = itemsIgualPara(mesa.code);
+    }
+  }
+}
+
+/** Los ítems del seed vigente para una mesa igual, o `[]` si no la conocemos. */
+function itemsIgualPara(code: string): MockItem[] {
+  if (code === 'PA-3121') {
+    return seedItemsIgual([
+      ['Omakase para dos', 26000],
+      ['Sashimi mixto', 14000],
+      ['Tempura de camarón', 12000],
+      ['Sake (botella)', 10000],
+    ]);
+  }
+  if (code === 'PA-4520') {
+    return seedItemsIgual([
+      ['Barco de sushi (grande)', 42000],
+      ['Ramen tonkotsu', 22000],
+      ['Gyozas de cerdo', 18000],
+      ['Té verde (tetera)', 14000],
+    ]);
+  }
+  return [];
+}
+
+/**
+ * ¿Quedó demo del seed que NO se pudo rescatar? Es la mitad honesta de la
+ * migración: lo que no se acredita intacto **se conserva**, y entonces hay que
+ * poder ofrecer la salida en vez de dejar una demo muerta sin explicación.
+ *
+ * Verdadero cuando no queda NINGUNA mesa viva y hay al menos una del seed
+ * muerta. Sólo lo consume la UI del mock.
+ */
+export function demoSeedIrrecuperable(): boolean {
+  const mesas = Array.isArray(state.mesas) ? state.mesas : [];
+  const hayViva = mesas.some((m) => m?.status === 'open' || m?.status === 'partially_paid');
+  if (hayViva) return false;
+  return mesas.some((m) => m && SEED_LEGACY_RELANZABLE[m.code] !== undefined);
 }
 
 /**
@@ -794,6 +989,14 @@ function loadPersisted(): MockState | null {
     // Migración 0.21 (fracciones): items persistidos sin `claims` — backfill
     // desde el estado legacy (paid entero = claim 10000 pagado).
     for (const mesa of parsed.mesas) {
+      // Tolerante a propósito (ORDEN 1-C·B): esta migración iteraba
+      // `mesa.items` a ciegas, y una sola fila podrida —`items` que no es
+      // array, una mesa `null`— lanzaba y hacía que el `catch` de abajo
+      // DESCARTARA EL ESTADO ENTERO: mesas, tarjetas, amigos, historial y
+      // ledger de idempotencia, en silencio y sin aviso. Perder todo por una
+      // fila mala es mucho peor que conservar la fila mala. Lo encontró el
+      // test del estado legacy, no una lectura.
+      if (!mesa || !Array.isArray(mesa.items)) continue;
       for (const it of mesa.items) {
         if (!Array.isArray(it.claims)) {
           it.claims =
@@ -844,10 +1047,23 @@ function loadPersisted(): MockState | null {
       parsed.notifications = parsed.notifications.filter((n) => !durmientes.includes(n.type));
     }
     if (!Array.isArray(parsed.pendingInvitations)) parsed.pendingInvitations = [];
-    // G-36: al final de las migraciones, con el estado ya saneado. Un estado
-    // persistido ANTERIOR a la marca `seedRelanzable` no relanza nada — para
-    // ése sigue existiendo "Reiniciar la demo", igual que hoy.
-    relanzarSeedVencido(parsed);
+    /**
+     * G-36 · al final de las migraciones, con el estado ya saneado, y en un
+     * `try/catch` PROPIO: el de afuera descarta el estado ENTERO —mesas,
+     * tarjetas, amigos, historial, ledger— y un bug acá le costaría al usuario
+     * mucho más de lo que esto viene a curar. Si algo sale mal, la demo queda
+     * como estaba y "Reiniciar la demo" sigue siendo la salida.
+     *
+     * El orden importa: primero se le pone la marca a lo legacy que se puede
+     * acreditar, y recién después se relanza lo vencido — así el rescate de
+     * `67fc0de` alcanza también a los dispositivos que ya venían rotos.
+     */
+    try {
+      migrarSeedLegacy(parsed);
+      relanzarSeedVencido(parsed);
+    } catch {
+      /* La demo queda como estaba: conservar gana a arriesgar el estado. */
+    }
     return parsed;
   } catch {
     return null;
