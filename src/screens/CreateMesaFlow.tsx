@@ -10,6 +10,8 @@ import {
   completeMonetaryIntent,
   markUnconfirmed,
   prepareMonetaryRequest,
+  readMonetaryReference,
+  rememberMonetaryReference,
   readUnconfirmed,
   reconcileMonetaryIntent,
   recallPaymentMethod,
@@ -21,6 +23,11 @@ import {
   type UnconfirmedAttempt,
 } from '../api/idempotency';
 import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
+import {
+  copyReconciliacion,
+  veredictoReconciliacion,
+  type VeredictoReconciliacion,
+} from './reconciliacionMesaView';
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
@@ -283,24 +290,45 @@ export function CreateMesaFlow() {
    * está ahí con su garantía. Sin TTL ni desbloqueo automático.
    */
   const [reconciling, setReconciling] = useState(false);
-  const [reconcileVerdict, setReconcileVerdict] = useState<'absent' | null>(null);
+  const [reconcileVerdict, setReconcileVerdict] = useState<VeredictoReconciliacion | null>(null);
 
+  /**
+   * ORDEN 1A.1 · la reconciliación exige PRUEBA EXACTA. El porqué de cada
+   * rama vive en `reconciliacionMesaView.ts`; acá queda sólo el efecto.
+   *
+   * La referencia es el `mesa_code` que el journal guardó cuando la respuesta
+   * de creación llegó. Si no hay referencia, la respuesta nunca llegó y no
+   * existe nada que consultar: el intento QUEDA CONGELADO. Si hay y la mesa
+   * aparece, se cierra el intento y se navega a ESA mesa —probada, no
+   * inferida—. Si hay y no aparece, tampoco se concluye: `/mesas/open` no
+   * lista una mesa en `pending_auth`, que es justo el caso reconciliado.
+   */
   async function checkMesaReconciliation() {
     if (!frozen) return;
     setReconciling(true);
     setError(null);
     try {
+      const referencia = await readMonetaryReference(frozen.scope, 'create_mesa');
+      // Sin referencia ni siquiera se pregunta: no hay con qué comparar, y
+      // preguntar invitaría a mirar el listado buscando "la mía".
+      if (!referencia?.reference) {
+        setReconcileVerdict('sin_evidencia');
+        return;
+      }
       const abiertas = await api.getOpenMesas();
-      const propia = abiertas.mesas.find((m) => m.restaurant?.name === restaurant?.name);
-      if (propia) {
+      const { veredicto, code } = veredictoReconciliacion({
+        referencia: referencia.reference,
+        mesas: abiertas.mesas,
+      });
+      if (veredicto === 'acreditada' && code) {
         await reconcileMonetaryIntent(frozen.scope, 'create_mesa', frozen.handle);
         setFrozen(null);
         setReconcileVerdict(null);
-        toast(`Esa mesa ya existe: ${propia.code}`);
-        navigate('mesas');
-      } else {
-        setReconcileVerdict('absent');
+        toast(`Esa mesa ya existe: ${code}`);
+        navigate('mesa', code);
+        return;
       }
+      setReconcileVerdict(veredicto);
     } catch {
       setError('No pudimos consultar tus mesas abiertas. Probá de nuevo en un momento.');
     } finally {
@@ -308,21 +336,20 @@ export function CreateMesaFlow() {
     }
   }
 
-  async function releaseMesaAfterReconciliation() {
-    if (!frozen) return;
-    setReconciling(true);
-    try {
-      await reconcileMonetaryIntent(frozen.scope, 'create_mesa', frozen.handle);
-      setFrozen(null);
-      setReconcileVerdict(null);
-      setError(null);
-      toast('Listo: podés abrir la mesa de nuevo');
-    } catch {
-      setError('No pudimos cerrar ese intento. Sigue bloqueado por seguridad.');
-    } finally {
-      setReconciling(false);
-    }
-  }
+  /**
+   * ⚠️ RETIRADA POR LA ORDEN 1A.1, y con un costo que se declara en vez de
+   * disimularse: acá vivía "Entiendo, desbloquear", que liberaba el journal
+   * cuando la mesa NO aparecía en `/mesas/open`. Esa ausencia no probaba
+   * nada —una mesa en `pending_auth` no se lista— así que el botón ofrecía
+   * reintentar una garantía sobre una mesa que podía existir: la segunda
+   * retención por el total.
+   *
+   * El costo es real y es el de N-07: sin prueba exacta, el organizador
+   * queda sin poder abrir mesas en ese navegador. Se acepta a propósito —
+   * mejor frenado que garantizado dos veces— y la salida definitiva la
+   * habilita el contrato que App Backend está diseñando (consulta por clave
+   * de idempotencia). La función NO se reescribe hasta entonces.
+   */
   const ticketValid =
     editItems.length > 0 &&
     editItems.every((i, index) => i.name.trim().length > 0 && lineTotals[index] !== null) &&
@@ -564,6 +591,14 @@ export function CreateMesaFlow() {
       };
       await prepareMonetaryRequest(mesaScope, 'create_mesa', intent, request);
       const r = await api.createMesa(request, intent);
+      // ORDEN 1A.1 · la ÚNICA prueba exacta de esta apertura, guardada apenas
+      // llega y ANTES del 3DS: si la pestaña muere durante el desafío del
+      // banco, la reconciliación tiene el código en vez de tener que
+      // adivinarlo por el nombre del restaurante. Best-effort: el journal ya
+      // hizo lo suyo y un fallo acá no puede tumbar una mesa creada.
+      try {
+        await rememberMonetaryReference(mesaScope, 'create_mesa', intent, r.mesa.code);
+      } catch { /* sin referencia, la reconciliación dirá "sin evidencia". */ }
       setCreated(r);
       // G-11 CERRADO (backend v2.46.0, 7e45db0): acá se anotaba que el hold
       // directo IGNORABA save_payment_method, para avisarlo en "compartir".
@@ -1230,32 +1265,23 @@ export function CreateMesaFlow() {
                   Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa.
                   {/* N-07: la salida. Antes este estado dejaba al organizador
                       sin poder abrir NINGUNA mesa en este navegador. */}
-                  {reconcileVerdict !== 'absent' ? (
-                    <div style={{ marginTop: 10 }}>
-                      <button
-                        className="btn btn-sm btn-teal btn-fit"
-                        onClick={() => void checkMesaReconciliation()}
-                        disabled={reconciling}
-                      >
-                        {reconciling ? 'Consultando…' : 'Revisar si la mesa se creó'}
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: 10 }}>
-                      <div>
-                        No encontramos ninguna mesa abierta tuya en este restaurante: esa apertura
-                        no llegó a crearse. Si continuás, se retiene el total de nuevo.
-                      </div>
-                      <button
-                        className="btn btn-sm btn-teal btn-fit"
-                        style={{ marginTop: 8 }}
-                        onClick={() => void releaseMesaAfterReconciliation()}
-                        disabled={reconciling}
-                      >
-                        {reconciling ? 'Cerrando…' : 'Entiendo, desbloquear'}
-                      </button>
-                    </div>
-                  )}
+                  {/* ORDEN 1A.1 · el veredicto puede ser "no lo sabemos", y
+                      entonces la pantalla lo dice sin ofrecer una salida que
+                      cobre de nuevo. El botón consulta las veces que haga
+                      falta; lo que ya no existe es "desbloquear" sobre una
+                      ausencia que no prueba nada. */}
+                  <div style={{ marginTop: 10 }}>
+                    {reconcileVerdict && (
+                      <div style={{ marginBottom: 8 }}>{copyReconciliacion(reconcileVerdict)}</div>
+                    )}
+                    <button
+                      className="btn btn-sm btn-teal btn-fit"
+                      onClick={() => void checkMesaReconciliation()}
+                      disabled={reconciling}
+                    >
+                      {reconciling ? 'Consultando…' : 'Revisar si la mesa se creó'}
+                    </button>
+                  </div>
                 </>
               ) : (
                 <><b>Tenés una apertura sin confirmar.</b> Puede que la mesa ya se haya creado con su garantía. Reintentala tal cual: si ya existe, te devolvemos esa misma mesa en vez de retener el total otra vez.</>
