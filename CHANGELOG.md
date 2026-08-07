@@ -1,5 +1,55 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.55.0 — la población del espejo la declara el dueño, y G-11 cierra de verdad (2026-08-07)
+
+Cierra la ORDEN R3-A y el hallazgo #2 de 1-C.
+
+🔴 **El inventariado se inventariaba a sí mismo.** La lista de archivos del
+`contract-mirror` salía de un manifiesto que ESTE repo generaba desde el
+propio espejo: una omisión coordinada —borrar un archivo y regenerar— pasaba
+en verde. Ahora la población la declara **el artefacto del dueño**
+(`contract/mirror-inventory.json` de App Backend, copiado verbatim), con su
+mapeo **`origen → destino` explícito**: siete de los 71 archivos se espejan
+renombrados, y compararlos por convención daría "ausente" a archivos que sí
+están. Se usa el mapeo tal cual viene.
+
+**El verificador se reescribió en Node**, y la razón es la clase de defecto,
+no el gusto: su chequeo de intruso usaba un `grep` anclado sólo por la
+izquierda, así que un path que era PREFIJO de otro pasaba como inventariado.
+Con JSON real y pertenencia por conjunto, esa clase **no existe** en vez de
+estar tapada — y el marcador `test.fails` que la documentaba se retiró, que
+era exactamente para lo que se puso.
+
+**Tres preguntas separadas**, con la lección que el dueño pagó primero (su
+gate gritaba con cada commit posterior aunque el contrato no se moviera, *"y
+un gate que grita por lo que no es un desvío se termina ignorando"*):
+`--integridad` (¿el espejo es fiel al inventario? lo único verificable sin la
+fuente), `--paridad` (¿la fuente respalda al inventario en su commit
+declarado? sin fuente → **NO CERTIFICADO**, jamás verde) y `--vigencia` (¿el
+contenido sigue igual en HEAD?). Y `--generar-manifiesto` murió: bendecía el
+espejo tal como estuviera. Su reemplazo verifica **antes** de escribir. En CI
+el step se llama ahora **"Integridad local del contract-mirror (NO es
+paridad)"** — antes decía paridad y medía otra cosa.
+
+✅ **G-11 cierra de verdad.** El cierre anterior fue refutado —la wallet
+nativa se adjuntaba a Stripe **antes** de validarla: *"rechazar después de
+mutar no es rechazar"*—. Reauditado leyendo el código espejado y no el
+anuncio: `aa28e84` verifica la elegibilidad **antes de cualquier mutación
+remota** y la promesa **converge** (si el guardado falla por timeout, la
+tarjeta aparece en el tick siguiente en vez de perderse). Cero campos nuevos:
+lo que este front consumió era correcto y ahora está respaldado. Queda
+declarado el límite del mock, que guarda siempre sincrónico — diferencia de
+momento, no de forma.
+
+**Y la puerta in-app se puso a la altura de su hermana:** `accept-link`
+exigía `joined === true` desde hace versiones, y el accept in-app tenía
+`accepted` tipado y **jamás leído** — cualquier 2xx decía "Te sumaste ✓" y
+navegaba. No era una defensa faltante, era una asimetría; se copió la que ya
+funcionaba, en las dos fachadas.
+
+Cierre: **635 vitest (52 archivos) · 81/81 Playwright · integridad + paridad
++ vigencia del espejo · builds real y mock**, por exit code.
+
 ## 0.54.0 — fallar cerrado de verdad, rescatar los teléfonos rotos, y un cierre que no era (2026-08-07)
 
 Cierra la ORDEN 1-C y la 2-A.4, que se quedó sin entrada propia. El hilo que
