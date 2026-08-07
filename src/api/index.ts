@@ -9,7 +9,13 @@ import {
   setOnSessionExpired,
 } from './http';
 import * as mock from './mock/mockApi';
-import { acceptInvitationLinkResponse, attachPaymentMethodResponse, invitationResponse, setupIntentResponse } from './contractResponses';
+import {
+  acceptInvitationLinkResponse,
+  acceptInvitationResponse,
+  attachPaymentMethodResponse,
+  invitationResponse,
+  setupIntentResponse,
+} from './contractResponses';
 import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
 import { invalidateSession, loadSession, type StoredSession } from './storage';
@@ -430,8 +436,12 @@ const realApi: Api = {
     await httpRequest('PATCH', '/notifications/read-all');
   },
   getPendingInvitations: () => httpRequest<PendingInvitationsResponse>('GET', '/invitations'),
-  acceptInvitation: (id) =>
-    httpRequest<{ accepted: boolean }>('POST', `/invitations/${encodeURIComponent(id)}/accept`),
+  // Decodificado como su puerta hermana `accept-link`: un 2xx malformado no
+  // acredita la inscripción (ver `acceptInvitationResponse`).
+  acceptInvitation: async (id) =>
+    acceptInvitationResponse(
+      await httpRequest<unknown>('POST', `/invitations/${encodeURIComponent(id)}/accept`),
+    ),
   acceptInvitationLink: async (token) =>
     acceptInvitationLinkResponse(
       await httpRequest<unknown>('POST', '/invitations/accept-link', { token }),
@@ -560,7 +570,7 @@ const mockApi: Api = {
   getUnreadCount: () => mock.mockUnreadCount(),
   markAllNotificationsRead: () => mock.mockMarkAllNotificationsRead(),
   getPendingInvitations: () => mock.mockPendingInvitations(),
-  acceptInvitation: (id) => mock.mockAcceptInvitation(id),
+  acceptInvitation: async (id) => acceptInvitationResponse(await mock.mockAcceptInvitation(id)),
   acceptInvitationLink: async (token) =>
     acceptInvitationLinkResponse(await mock.mockAcceptInvitationLink(token)),
 

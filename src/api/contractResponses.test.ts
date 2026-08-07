@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  acceptInvitationResponse,
   attachPaymentMethodResponse,
   invitationResponse,
   setupIntentResponse,
@@ -27,6 +28,33 @@ const invitation = {
 };
 
 describe('decoders fail-closed de mutaciones no monetarias', () => {
+  /**
+   * La ASIMETRÍA que este decoder cierra: `accept-link` exigía `joined===true`
+   * desde el cierre del pago sin cuenta, y el accept IN-APP —su puerta
+   * hermana— tenía el campo `accepted` tipado y jamás leído. Cualquier 2xx
+   * mostraba "Te sumaste a la mesa ✓" y navegaba a una mesa donde el próximo
+   * request iba a dar 403 sin explicación. Una de las dos puertas ya sabía
+   * hacerlo bien; acá se iguala, no se inventa.
+   */
+  it('el accept in-app exige accepted === true, como su puerta hermana', () => {
+    const valid = { accepted: true };
+    expect(acceptInvitationResponse(valid)).toBe(valid);
+    for (const malformed of [
+      {},
+      { accepted: false },
+      // Los verdaderos-por-descuido: sin `=== true` estricto, los tres pasan.
+      { accepted: 'true' },
+      { accepted: 1 },
+      { accepted: 'si' },
+      null,
+      undefined,
+      'ok',
+      [{ accepted: true }],
+    ]) {
+      expect(() => acceptInvitationResponse(malformed)).toThrow('contract_response_invalid');
+    }
+  });
+
   it('acepta setup completo y rechaza cualquier 2xx sin ambos identificadores', () => {
     const valid = { setup_intent_id: 'seti_1', client_secret: 'seti_1_secret_1' };
     expect(setupIntentResponse(valid)).toBe(valid);

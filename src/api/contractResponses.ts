@@ -63,6 +63,29 @@ export function acceptInvitationLinkResponse(value: unknown): AcceptInvitationLi
   return value as AcceptInvitationLinkResponse;
 }
 
+/**
+ * El 200 de `POST /invitations/:id/accept` — la puerta IN-APP.
+ *
+ * Existía la asimetría, no la defensa: `accept-link` (la puerta hermana, acá
+ * arriba) exige `joined === true` desde el cierre del pago sin cuenta, y este
+ * accept estaba tipado `{accepted:boolean}` con el campo **sin leer jamás**.
+ * Cualquier 2xx alcanzaba: un `{}`, un `{accepted:false}`, un `{accepted:"si"}`
+ * o el cuerpo de otra versión del backend mostraban "Te sumaste a la mesa ✓" y
+ * navegaban a una mesa donde el siguiente request iba a dar 403 sin explicar
+ * nada — exactamente el daño que el decoder del link describe en su docblock.
+ *
+ * No se inventa una defensa: **se iguala la que una de las dos puertas ya
+ * sabía hacer**. Y `=== true` estricto por lo mismo que allá: `"true"` y `1`
+ * son verdaderos-por-descuido si uno se conforma con leer la clave.
+ */
+export function acceptInvitationResponse(value: unknown): { accepted: true } {
+  const body = record(value);
+  if (!body || body.accepted !== true) {
+    throw new ContractResponseError('invitations/accept');
+  }
+  return value as { accepted: true };
+}
+
 export function setupIntentResponse(value: unknown): CreateSetupIntentResponse {
   const body = record(value);
   if (!body || !nonEmpty(body.setup_intent_id) || !nonEmpty(body.client_secret)) {
