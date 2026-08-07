@@ -9,15 +9,39 @@ desde `src/` y nunca se corrige a mano.
 - Fecha del refresh: **2026-08-07**.
 - Fuente local: `../payme-app-backend`.
 - Commit exacto: `7e45db00876963e091169fb63fa876716c22a653` (v2.46.0 — el
-  hash CONGELADO del cierre de G-11; el backend siguió a v2.46.1 y este
-  espejo NO lo persigue: la procedencia es este hash).
+  hash CONGELADO del INTENTO de cierre de G-11, 🟡 refutado después: ver el
+  aviso de abajo. El backend siguió a v2.46.1 y este espejo NO lo persigue:
+  la procedencia es este hash).
 - Versión de `package.json`: **2.46.0**.
 - Rama fuente: `codex/audit-2026-08-02-app-backend`.
 
 Paridad verificada con `scripts/verificar-mirror.sh` (modo completo, contra
 el commit declarado): **70 espejados · 70 idénticos · 0 diferencias.**
 
-### Qué trajo el refresh a v2.46.0 · G-11 CERRADO, cero contrato nuevo
+### 🟡 ESTE REFRESH ES PROVISIONAL · el cierre de G-11 fue REFUTADO
+
+**Registrado el 2026-08-07, después de espejar.** Una auditoría externa
+(Codex) refutó el cierre de G-11 en este mismo hash: `7e45db0` **tenía cinco
+huecos**, y el peor es que **la wallet nativa se adjuntaba a Stripe ANTES de
+validarla** (medido: `attaches_remotos: 1`). App Backend está reabriendo G-11
+con una migración nueva.
+
+**Qué significa para este espejo, con precisión:**
+
+- Lo espejado abajo **describe fielmente `7e45db0`** — el espejo no está mal:
+  copia lo que el dueño publicó y declaró cerrado.
+- **Pero `7e45db0` NO es el cierre definitivo de G-11.** El consumo que este
+  front hizo de él (commit `0d9c475`) queda **PROVISIONAL** y se corrige con
+  un follow-up cuando el dueño publique el hash bueno.
+- **Este espejo NO se refresca hasta entonces** (congelado por orden): un
+  mirror puesto al día hoy queda obsoleto antes de que la corrección termine.
+
+**Por qué no se revierte:** el espejo copió bien y el front consumió bien lo
+que había. Revertir borraría trabajo correcto sobre una base equivocada en vez
+de corregir la base. Lo que sí se corrige ahora es **la afirmación**: nada acá
+puede seguir diciendo que G-11 está cerrado y listo.
+
+### Qué trajo el refresh a v2.46.0 · el intento de cierre de G-11, cero contrato nuevo
 
 Cuatro archivos (`routes/mesas.js`, `routes/webhooks.js`,
 `services/savedCards.js`, `docs/settlement.js.ref`) y **ningún campo ni
