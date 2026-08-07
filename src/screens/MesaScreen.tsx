@@ -214,8 +214,6 @@ interface PayResult {
   chargedByRestaurant: boolean;
   /** G-10: descriptor del resumen de tarjeta. Ausente hasta que el contrato lo exponga. */
   statementDescriptor: string | null;
-  /** v2.24: se pidió guardar la tarjeta pero el riel directo la ignora (G-11). */
-  saveOmitidoPorConnect: boolean;
 }
 
 /**
@@ -804,7 +802,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     const savedCard = body.payment_method_id
       ? (cards.find((c) => c.id === body.payment_method_id) ?? null)
       : null;
-    const savingNewCard = !!body.save_payment_method;
+    // Acá vivía `savingNewCard`, que sólo alimentaba el aviso de guardado
+    // omitido — retirado con el cierre de G-11 (v2.46.0).
     // El pago con tarjeta puede volver en `requires_action`: ahí el banco
     // pide 3DS y hay que confirmarlo con Stripe.js antes de dar por hecho el
     // cobro. Sin esto el usuario vería "pagado" con el cobro sin confirmar.
@@ -895,7 +894,6 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // DIRECTO. En el de plataforma cobra PayMe — afirmarlo siempre era
       // mentirle al comensal en el 99% de los pagos de hoy.
       chargedByRestaurant: payKind !== 'wallet' && !!r.attempt.connected_account_id,
-      saveOmitidoPorConnect: savingNewCard && !!r.attempt.connected_account_id,
       statementDescriptor: r.attempt.statement_descriptor ?? null,
     });
     // Intento completado: el próximo pago de esta mesa (otra parte, otro
@@ -1324,15 +1322,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 </b>
               </div>
             )}
-            {/* G-11: el aviso vive ACÁ y no en un toast — el toast se pisaba
-                con la animación de "Cobrando…" y se apagaba antes de que el
-                comensal llegara al comprobante. */}
-            {result.saveOmitidoPorConnect && (
-              <div className="caption" style={{ marginTop: -4, marginBottom: 8 }}>
-                En este restaurante la tarjeta no se guarda. Podés guardarla desde{' '}
-                <b style={{ color: 'var(--navy)' }}>Cuenta</b>.
-              </div>
-            )}
+            {/* G-11 CERRADO (backend v2.46.0): acá vivía el aviso "en este
+                restaurante la tarjeta no se guarda" — la advertencia posterior
+                que nunca corrige una promesa previa. El guardado bajo direct
+                charge es real desde 7e45db0 y el workaround se retiró. */}
             <div className="receipt-row">
               <span className="lbl">{mesa.division_mode === 'igual' ? 'Mi parte' : 'Mis consumos'}</span>
               <span className="val">{formatMXN(result.itemsAmount)}</span>

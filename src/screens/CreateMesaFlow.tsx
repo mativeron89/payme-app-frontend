@@ -138,8 +138,6 @@ export function CreateMesaFlow() {
   const [cards, setCards] = useState<PaymentMethod[]>([]);
   const [cardChoice, setCardChoice] = useState<string>('new');
   const [saveCard, setSaveCard] = useState(GUARDAR_TARJETA_DEFAULT);
-  /** v2.24 (G-11): se pidió guardar la tarjeta y el riel directo la ignoró. */
-  const [saveOmitidoConnect, setSaveOmitidoConnect] = useState(false);
   const [busy, setBusy] = useState(false);
   const createInFlightRef = useRef(createInFlightMutex());
   const confirm3dsInFlightRef = useRef(createInFlightMutex());
@@ -567,12 +565,10 @@ export function CreateMesaFlow() {
       await prepareMonetaryRequest(mesaScope, 'create_mesa', intent, request);
       const r = await api.createMesa(request, intent);
       setCreated(r);
-      // v2.24 (Connect): con hold directo el backend IGNORA
-      // save_payment_method — la tarjeta no queda en la bóveda de PayMe (G-11).
-      // Se ANOTA acá pero se avisa recién en "compartir", que solo se alcanza
-      // con la retención ya autorizada: decirlo antes del 3DS sería anunciar
-      // una garantía que el banco todavía puede rechazar.
-      setSaveOmitidoConnect(savingNewCard && !!r.guarantee.connected_account_id);
+      // G-11 CERRADO (backend v2.46.0, 7e45db0): acá se anotaba que el hold
+      // directo IGNORABA save_payment_method, para avisarlo en "compartir".
+      // El guardado de la garantía es real también en directo (post-3DS lo
+      // cubre el webhook del emisor) y el aviso se retiró con su workaround.
       if (r.guarantee.status === 'requires_action') {
         // OJO: acá NO se rota. La mesa existe pero su garantía todavía no está
         // autorizada, y no hay endpoint para re-garantizar: conservar la clave
@@ -1587,13 +1583,6 @@ export function CreateMesaFlow() {
                 Reintentar el mismo link
               </button>
             </div>
-          )}
-          {/* G-11: se avisa acá (garantía YA autorizada), no antes del 3DS. */}
-          {saveOmitidoConnect && (
-            <p className="share-note">
-              En este restaurante la tarjeta no se guarda. Podés guardarla desde{' '}
-              <b>Cuenta</b>.
-            </p>
           )}
           <InviteFriends code={code} />
         </div>

@@ -573,11 +573,15 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   // guardáramos acá, cada reintento cancelado acumularía tarjetas fantasma
   // (el backend real también guarda recién en el webhook del hold).
   pending3ds = mesa;
-  // v2.24 (Connect): con hold DIRECTO el backend ignora save_payment_method
-  // (la tarjeta quedaría en la bóveda del restaurante, no en la de PayMe).
+  // El riel del restaurante sigue informándose en la respuesta (Connect).
   const connectedAccountId = MOCK_CONNECTED_ACCOUNTS[req.restaurant_id];
+  // G-11 CERRADO (backend v2.46.0): el guardado de la garantía es real
+  // TAMBIÉN con hold directo — la condición `!connectedAccountId` que vivía
+  // acá modelaba el v2.24 que lo ignoraba. Sigue PENDIENTE hasta el 3DS
+  // (comentario de arriba): el camino post-3DS del backend lo cubre el
+  // webhook de éxito, y acá lo cubre la confirmación.
   pending3dsSave =
-    !connectedAccountId && req.save_payment_method && req.stripe_payment_method_id
+    req.save_payment_method && req.stripe_payment_method_id
       ? req.stripe_payment_method_id
       : null;
   const respuestaMesa: CreateMesaResponse = {
@@ -818,11 +822,15 @@ export async function mockPayMesa(
   const connectedAccountId =
     req.payment_type !== 'wallet' ? MOCK_CONNECTED_ACCOUNTS[mesa.restaurant.id] : undefined;
 
-  // D4: guardar la tarjeta nueva si lo pidieron (solo usuarios con cuenta).
-  // v2.24: en el riel directo el backend IGNORA save_payment_method — la
-  // tarjeta quedaría en la bóveda del restaurante, no en la de PayMe.
+  // D4 + G-11 CERRADO (backend v2.46.0, 7e45db0): el guardado es REAL también
+  // bajo direct charge — attach del pm_ FUENTE al Customer de PayMe tras el
+  // éxito del cobro, misma semántica que el vault. La condición
+  // `!connectedAccountId` que vivía acá modelaba el v2.24 que ignoraba el
+  // guardado en el riel directo; conservarla habría sido el mock mintiendo
+  // AL REVÉS que antes. Sigue el contrato: sólo tarjeta ('card' — las wallets
+  // nativas son no-op, cardEligibility las rechaza), sólo con cuenta.
   if (
-    !connectedAccountId &&
+    req.payment_type === 'card' &&
     req.save_payment_method &&
     req.stripe_payment_method_id &&
     identity !== 'guest'

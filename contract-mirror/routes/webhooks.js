@@ -19,7 +19,6 @@ const pool = require('../db/pool');
 const eventEmitter = require('../services/eventEmitter');
 const stripeService = require('../services/stripe');
 const savedCards = require('../services/savedCards');   // D4 (v2.16)
-const itemClaims = require('../services/itemClaims');   // v2.18 (fracciones)
 const stateMachine = require('../utils/stateMachine');
 const paymentProcessor = require('../services/paymentProcessor');
 const settlement = require('../services/settlement');
@@ -328,6 +327,15 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
   const acquired = slot.state;
   const platformLeaseId = slot.leaseId || null;
   if (acquired === 'duplicate_processed') {
+    // v2.45.1 · el lock se suelta ANTES de toda respuesta 2xx que acredita
+    // fila terminal del inbox: con la fila en processed/failed_terminal el
+    // lock ya no protege nada, y soltarlo después de responder (hook
+    // finish/close, fire-and-forget) dejaba una ventana post-respuesta donde
+    // un duplicado inmediato veía in_progress → 503 (flaky
+    // topup-integrity:463 en CI). "Recibí el 2xx" ahora implica "lock libre".
+    // Los hooks quedan como red para los caminos de error; release es
+    // idempotente. El orden lo fija tests/webhook-lock-release-order.test.js.
+    await eventLock.release();
     return res.json({ received: true, duplicate: true });
   }
   if (acquired === 'in_progress') {
@@ -337,6 +345,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
     logger.error('webhook_terminal_failure_received_again', {
       event_id: event.id, type: event.type,
     });
+    await eventLock.release();   // misma invariante: fila terminal ⇒ lock libre antes del 2xx
     return res.json({ received: true, terminal: true });
   }
 
@@ -363,6 +372,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
         logger.error('webhook_max_retries_reached', {
           event_id: event.id, type: event.type, retry_count: newCount,
         });
+        await eventLock.release();   // fila recién terminalizada ⇒ lock libre antes del 2xx
         return res.json({
           received: true, terminal: true, reason: 'max_retries_no_local_record',
         });
@@ -379,6 +389,11 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
       [event.id, platformLeaseId]
     );
     assertPlatformLeaseFinish(finished.rowCount);
+    // La sección crítica terminó con el UPDATE a 'processed' commiteado: el
+    // lock no protege nada más. Se suelta ANTES de responder (ver comentario
+    // en duplicate_processed) para que el duplicado inmediato vea siempre la
+    // fila terminal y conteste 200, nunca el 503 de la ventana post-respuesta.
+    await eventLock.release();
     res.json({
       received: true,
       ...(outcome.guarantee && { guarantee: true }),
@@ -611,6 +626,23 @@ async function routeSucceeded(pi) {
   return false;
 }
 
+// G-11 · localiza la mesa por su binding sellado y delega en el guardado
+// durable (que gatea método card, opt-in y snapshot). Nunca lanza.
+async function saveGuaranteeSourceCardBySealedIntent(piId, acctId) {
+  try {
+    const { rows: [mesa] } = await pool.query(
+      `SELECT id FROM mesas
+        WHERE auth_payment_intent_id=$1 AND auth_stripe_account_id=$2`,
+      [piId, acctId]
+    );
+    if (!mesa) return { skipped: 'sealed_binding_not_found' };
+    return await savedCards.saveDurableSourceCard({ kind: 'guarantee', id: mesa.id });
+  } catch (err) {
+    logger.warn('save_guarantee_source_card_failed', { pi_id: piId, error: err.message });
+    return { skipped: 'error' };
+  }
+}
+
 async function mirrorIntentPaymentMethodIfRequested(pi) {
   if (pi?.metadata?.save_pm !== '1' || !pi.payment_method
       || !pi.metadata.user_id || pi.metadata.user_id === 'guest') {
@@ -794,11 +826,20 @@ function assertAttemptIntentContract(
 // Handlers
 // ═══════════════════════════════════════════════════════════
 async function handleMesaPaymentSucceeded(attempt, remoteIntent, connectedAccountId = null) {
-  return settlement.reconcileSucceededAttempt({
+  const result = await settlement.reconcileSucceededAttempt({
     attemptId: attempt.id, mesaId: attempt.mesa_id,
     remoteIntent, stripeAccountId: connectedAccountId,
     triggeredBy: 'webhook',
   });
+  // G-11 · éxito asíncrono (3DS/redelivery) de un cargo DIRECTO con opt-in:
+  // el guardado adjunta el pm_ FUENTE durable al Customer de PayMe y espeja
+  // (la autoridad es el flag durable del attempt; el helper gatea method,
+  // opt-in y snapshot, y es idempotente). El riel plataforma legacy conserva
+  // su espejo vía mirrorIntentPaymentMethodIfRequested. Best-effort.
+  if (connectedAccountId || attempt.stripe_account_id) {
+    await savedCards.saveDurableSourceCard({ kind: 'attempt', id: attempt.id });
+  }
+  return result;
 }
 
 async function handleMesaPaymentFailed(attempt, pi) {
@@ -1668,6 +1709,14 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
       const guaranteeResult = await handleGuaranteeIntentEvent(
         event.type, piGar, acctId, restaurant.id
       );
+      // G-11 · garantía DIRECTA con opt-in autorizada por 3DS: guardar la
+      // fuente. La mesa se resuelve por el binding SELLADO local
+      // (auth_payment_intent_id + auth_stripe_account_id) — jamás por la
+      // metadata, que la controla la cuenta conectada. Best-effort.
+      if (!guaranteeResult.ignored
+          && event.type === 'payment_intent.amount_capturable_updated') {
+        await saveGuaranteeSourceCardBySealedIntent(piGar.id, acctId);
+      }
       await finishConnectSlot(
         event.id, connectLeaseId, true, guaranteeResult.ignored || null
       );

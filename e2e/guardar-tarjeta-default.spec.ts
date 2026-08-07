@@ -1,18 +1,20 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * G-11 · EL CHECKBOX "GUARDAR ESTA TARJETA" NACE DESMARCADO (Mati, 2026-08-06).
+ * G-11 · EL CHECKBOX NACE DESMARCADO (Mati, 2026-08-06) — Y DESDE EL CIERRE
+ * DE G-11 (backend v2.46.0, `7e45db0`, 2026-08-07), MARCARLO GUARDA DE
+ * VERDAD también bajo direct charge.
  *
- * Un casillero marcado por defecto hace la promesa sin que la persona la
- * pida, y el backend hoy NO cumple `save_payment_method` en direct charges
- * (G-11, P0 de release). El recorrido es el del PAGADOR PRIMERIZO —cuenta
- * nueva, cero tarjetas, alcanzable desde el fix de la auditoría—, que es
- * exactamente donde el checkbox aparece.
+ * La decisión del default sobrevive al cierre: un casillero marcado por
+ * defecto hace la promesa sin que la persona la pida — eso era cierto cuando
+ * el riel la incumplía y sigue siéndolo ahora que la cumple. El recorrido es
+ * el del PAGADOR PRIMERIZO —cuenta nueva, cero tarjetas—, que es exactamente
+ * donde el checkbox aparece.
  *
- * Se afirman las dos direcciones: nace desmarcado en LAS DOS superficies
- * (garantía y pago), y MARCARLO SIGUE FUNCIONANDO — un fix que desmarca puede
- * desmarcar de más, y sin la segunda mitad nadie se entera hasta que la
- * función desaparece de la demo.
+ * Tres direcciones afirmadas: nace desmarcado en LAS DOS superficies;
+ * MARCARLO guarda (la tarjeta aparece en Mis tarjetas — opt-in que deja de
+ * mentir); y SIN MARCAR no aparece — la que convierte el default en una
+ * decisión real y no en una decoración.
  */
 
 test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async ({ page }) => {
@@ -66,4 +68,41 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   await expect(page.getByText('Agregar tarjeta')).toBeVisible();
   // La cuenta nació con CERO: la única guardada es la que se ELIGIÓ guardar.
   await expect(page.getByText(/···· \d{4}/).first()).toBeVisible();
+});
+
+test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una decoración', async ({ page }) => {
+  // Mismo recorrido primerizo, checkbox intacto en las dos superficies.
+  await page.goto('/');
+  await page.getByRole('button', { name: /Registrate/ }).click();
+  await page.getByPlaceholder('Nombre').fill('Primeriza');
+  await page.getByPlaceholder('Apellido').fill('SinGuardar');
+  await page.getByPlaceholder('Email').fill('primeriza-negativa@demo.mx');
+  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+  await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
+  await page.getByRole('button', { name: 'Confirmar autorización', exact: true }).click();
+  await page.getByRole('button', { name: 'Ver mesa', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+
+  // Sin tocar el checkbox: paga y listo.
+  const propinas = page.getByRole('radiogroup', { name: /propina/i });
+  await propinas.getByRole('radio', { name: '0%', exact: true }).click();
+  await page.getByRole('button', { name: /^Pagar \$/ }).click();
+  await expect(page.getByText('¡Listo!')).toBeVisible();
+
+  // Mis tarjetas: VACÍO. Ni la garantía ni el pago guardaron lo no pedido.
+  await page.goto('/#/tarjetas');
+  await expect(page.getByText('Agregar tarjeta')).toBeVisible();
+  await expect(page.getByText(/···· \d{4}/)).toHaveCount(0);
 });

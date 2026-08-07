@@ -39,7 +39,6 @@ const {
   loadPaymentAttemptContract,
 } = require('./paymentIntentContract');
 const stp = require('./stp');
-const connect = require('./connect');   // v2.24: onboarding y ruteo de webhook
 // ORDEN OLA 4 · 4B: el gate TIPADO de 4A gobierna todo camino que mueva plata.
 const connectGate = require('./connectGate');
 // El gate de 4B decide sobre riel NUEVO. Las filas que YA existen con cuenta
@@ -810,7 +809,10 @@ async function placeCardHold({
       ...(durableSavePm && !targetAccount && { setup_future_usage: 'off_session' }),
       metadata: {
         kind: 'guarantee_auth', mesa_id: mesaId, user_id: organizer.id,
-        ...(durableSavePm && !targetAccount && { save_pm: '1' }),   // el webhook 3DS espeja al autorizar
+        // G-11: sin save_pm nuevo en direct — mismo metadata bajo la misma
+        // key `guarantee_<mesa>` (un retry pre-deploy chocaría en Stripe).
+        // La autoridad es el flag durable auth_save_payment_method.
+        ...(durableSavePm && !targetAccount && { save_pm: '1' }),   // legacy plataforma
       },
     });
   } catch (err) {
@@ -888,19 +890,18 @@ async function placeCardHold({
       return { status: 'reconciliation_pending', reason: 'guarantee_reconciliation_pending' };
     }
     logger.audit('guarantee_hold_placed', { mesa_id: mesaId, method: 'card', intent_id: intent.id, amount: amountCents });
-    // D4: hold autorizado sin 3DS y con opt-in de guardado → espejar sync
-    // (best-effort, jamás lanza). El camino 3DS lo cubre el webhook.
-    // OJO: se espeja intent.payment_method (lo que Stripe ADJUNTÓ), no el id
-    // del request — los alias de test (pm_card_visa) y algunos wallets se
-    // materializan en otro pm_ al confirmar.
+    // G-11: hold autorizado sin 3DS y con opt-in → guardar sync. En el riel
+    // plataforma legacy Stripe adjuntó vía setup_future_usage y se espeja lo
+    // adjuntado; bajo direct charge el pm del intent es el CLON de la cuenta
+    // del restaurante, así que el guardado adjunta el pm_ FUENTE durable al
+    // Customer de PayMe (misma semántica que el vault) y espeja verificado.
+    // El camino 3DS lo cubre el webhook. Best-effort: jamás rompe el hold.
     if (durableSavePm && !targetAccount) {
       await savedCards.mirrorSavedPaymentMethod(
         organizer.id, intent.payment_method || durableSourcePmId
       );
     } else if (durableSavePm && targetAccount) {
-      logger.warn('save_pm_omitido_en_garantia_directa', {
-        mesa_id: mesaId, account: targetAccount,
-      });
+      await savedCards.saveDurableSourceCard({ kind: 'guarantee', id: mesaId });
     }
     return { status: 'open', connectedAccountId: targetAccount };
   }

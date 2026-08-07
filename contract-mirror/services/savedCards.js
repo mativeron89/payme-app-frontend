@@ -210,4 +210,103 @@ async function mirrorSavedPaymentMethod(userId, stripePmId) {
   }
 }
 
-module.exports = { ensureStripeCustomer, mirrorSavedPaymentMethod, customerIdempotencyKey };
+/**
+ * G-11 (ORDEN 1-A · 2026-08-06) — guardado REAL de la tarjeta manual bajo
+ * direct charges, para pago y garantía.
+ *
+ * ARQUITECTURA ELEGIDA (y por qué, contra la alternativa SetupIntent):
+ * el guardado es un artefacto de PLATAFORMA con la MISMA semántica que el
+ * vault durable ratificado (`POST /payment-methods`): attach del pm_ FUENTE
+ * al Customer de PayMe + espejo verificado en `payment_methods`. El cargo no
+ * se toca: sigue siendo direct charge del CLON sobre la cuenta conectada.
+ *
+ *   1. UNA sola definición de "tarjeta guardada" en el sistema. Una tarjeta
+ *      guardada al pagar es indistinguible de una guardada por el vault: el
+ *      mismo attach, el mismo espejo, la misma elegibilidad, la misma
+ *      reutilización (clon por cobro + off_session con fallback 3DS que
+ *      /pay ya maneja y ya está testeado).
+ *   2. CERO superficie nueva de contrato y cero hojas extra: el guardado es
+ *      determinístico server-side tras el éxito del cobro; el front lo ve en
+ *      GET /payment-methods.
+ *   3. Un SetupIntent de plataforma daría un mandato off_session más fuerte,
+ *      pero al precio de un leg asíncrono (requires_action → client_secret →
+ *      confirmación del front → webhook setup_intent.*) que crea DOS calidades
+ *      de tarjeta guardada y un contrato nuevo. Si el negocio algún día exige
+ *      mandato fuerte, se migra el vault ENTERO en una orden propia — no se
+ *      bifurca acá.
+ *
+ * Los guards que la orden exige viven en capas que ya existían:
+ *   - pm_ efímero de Apple/Google Pay: `cardEligibility` rechaza CUALQUIER
+ *     wallet (walletPresent → ineligible), y el espejo verifica elegibilidad.
+ *     Además el caller gatea por payment_type/auth_method === 'card'.
+ *   - identidad ante el restaurante: el attach es en PLATAFORMA; a la cuenta
+ *     conectada solo viaja el clon sin customer, como siempre.
+ *   - fuente durable: SIEMPRE el pm_ FUENTE sellado en la fila
+ *     (stripe_source_payment_method_id / auth_source_payment_method_id) —
+ *     jamás `intent.payment_method`, que bajo direct charge es el CLON de la
+ *     cuenta del restaurante y no pertenece a la bóveda de PayMe.
+ *
+ * Best-effort deliberado, como el espejo: el cobro ya salió y vale más que el
+ * guardado; un fallo se loguea y la tarjeta se puede guardar por el vault.
+ */
+async function saveDurableSourceCard({ kind, id }) {
+  try {
+    let row;
+    if (kind === 'attempt') {
+      ({ rows: [row] } = await pool.query(
+        `SELECT user_id, payment_type AS method,
+                stripe_save_payment_method AS wants_save,
+                stripe_source_payment_method_id AS source_pm,
+                stripe_customer_id_snapshot AS customer_id
+           FROM payment_attempts WHERE id=$1`, [id]
+      ));
+    } else if (kind === 'guarantee') {
+      ({ rows: [row] } = await pool.query(
+        `SELECT opener_user_id AS user_id, auth_method AS method,
+                auth_save_payment_method AS wants_save,
+                auth_source_payment_method_id AS source_pm,
+                auth_stripe_customer_id AS customer_id
+           FROM mesas WHERE id=$1`, [id]
+      ));
+    } else {
+      return { skipped: 'unknown_kind' };
+    }
+    if (!row) return { skipped: 'row_missing' };
+    // El flag durable manda; el efímero de wallet nativa jamás entra (method
+    // 'card' + elegibilidad del espejo, que rechaza cualquier wallet).
+    if (row.method !== 'card') return { skipped: 'not_card' };
+    if (row.wants_save !== true) return { skipped: 'no_opt_in' };
+    if (!row.user_id || !row.source_pm || !row.customer_id) {
+      return { skipped: 'incomplete_snapshot' };
+    }
+
+    try {
+      await stripeService.attachPaymentMethod(
+        row.customer_id, row.source_pm, `attach_save_${kind}_${id}`
+      );
+    } catch (err) {
+      // El attach de un pm_ ya adjunto falla; si quedó adjunto AL MISMO
+      // customer (retry con otra key, carrera con el vault), el espejo de
+      // abajo lo verifica y sigue. Adjunto a OTRO customer → el espejo lo
+      // rechaza por ownership. Cualquier otro fallo: best-effort, se loguea.
+      logger.warn('save_source_card_attach_failed', {
+        kind, id, error: err.message, code: err.code || null,
+      });
+    }
+    const mirror = await mirrorSavedPaymentMethod(row.user_id, row.source_pm);
+    if (mirror.mirrored || mirror.skipped === 'already_mirrored') {
+      logger.audit('save_source_card_saved', { kind, id, user_id: row.user_id });
+      return { saved: true };
+    }
+    logger.warn('save_source_card_not_saved', { kind, id, reason: mirror.skipped });
+    return { skipped: mirror.skipped };
+  } catch (err) {
+    logger.warn('save_source_card_failed', { kind, id, error: err.message });
+    return { skipped: 'error' };
+  }
+}
+
+module.exports = {
+  ensureStripeCustomer, mirrorSavedPaymentMethod, customerIdempotencyKey,
+  saveDurableSourceCard,
+};

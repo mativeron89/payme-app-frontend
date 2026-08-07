@@ -6,15 +6,33 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-06**.
+- Fecha del refresh: **2026-08-07**.
 - Fuente local: `../payme-app-backend`.
-- Commit exacto: `58b05d1fc5601206be84cc81fc40403f88764bab` (v2.45.0; el
-  commit de versión es `9fe2235478ff7e00fe991c636705f662ecf6b08e`).
-- Versión de `package.json`: **2.45.0**.
+- Commit exacto: `7e45db00876963e091169fb63fa876716c22a653` (v2.46.0 — el
+  hash CONGELADO del cierre de G-11; el backend siguió a v2.46.1 y este
+  espejo NO lo persigue: la procedencia es este hash).
+- Versión de `package.json`: **2.46.0**.
 - Rama fuente: `codex/audit-2026-08-02-app-backend`.
 
-Paridad verificada con `scripts/verificar-mirror.sh`: **70 espejados · 70
-idénticos · 0 diferencias · 0 sin fuente.**
+Paridad verificada con `scripts/verificar-mirror.sh` (modo completo, contra
+el commit declarado): **70 espejados · 70 idénticos · 0 diferencias.**
+
+### Qué trajo el refresh a v2.46.0 · G-11 CERRADO, cero contrato nuevo
+
+Cuatro archivos (`routes/mesas.js`, `routes/webhooks.js`,
+`services/savedCards.js`, `docs/settlement.js.ref`) y **ningún campo ni
+request nuevo: el cambio es de COMPORTAMIENTO.**
+
+- `POST /mesas/:code/pay` (y la garantía de `POST /mesas`) con
+  `save_payment_method: true` + tarjeta tipeada → **la tarjeta APARECE en
+  `GET /payment-methods`** tras el éxito del cobro — guardado sync sin 3DS,
+  o vía webhook de éxito con 3DS. Attach del **pm_ FUENTE** al Customer de
+  PayMe (nunca el clon de la cuenta conectada), misma semántica que el vault
+  `POST /payment-methods`. Best-effort: un fallo del guardado jamás rompe el
+  cobro ya hecho.
+- La guardada se reutiliza como siempre (`payment_method_id` → off_session,
+  en cualquier restaurante). `save_payment_method` sigue siendo **no-op para
+  guest** y para **wallets nativas** (que siguen 422).
 
 ### Qué trajo el refresh a v2.45.0 · tres archivos, todo aditivo
 

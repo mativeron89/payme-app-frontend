@@ -69,13 +69,11 @@ function guestHashOf(req) {
   return tok ? (req.guestTokenHash || tokenHash(tok)) : null;
 }
 
-// v2.23/v2.24 · Connect: el gate de cobro (kill switch + estado de la cuenta)
-// vive en services/connect.js — lo comparten el pago de mesa y la garantía.
-const connect = require('../services/connect');
 // ORDEN OLA 4 · 4B: el gate TIPADO de 4A. `connect.resolveChargeTarget` sigue
-// exportado (lo usan el onboarding y el ruteo del webhook), pero ningún camino
-// monetario lo consulta más: devolvía `null` ante la duda y ese null era
-// indistinguible de "cobrá por plataforma".
+// exportado en services/connect.js (lo usan el onboarding y el ruteo del
+// webhook), pero ningún camino monetario lo consulta más: devolvía `null`
+// ante la duda y ese null era indistinguible de "cobrá por plataforma".
+// (El require muerto de services/connect.js salió por el gate de lint, G-11.)
 const connectGate = require('../services/connectGate');
 
 /**
@@ -1760,6 +1758,11 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
           // En direct charges la propina permanece en fondos del restaurante;
           // no se promete una acreditación individual por metadata.
           tip_to_staff_id: '',
+          // G-11: a propósito SIN save_pm nuevo en direct — cambiar el
+          // metadata bajo la misma idempotency key `pay_<attempt>` haría
+          // chocar en Stripe el retry de un attempt pre-deploy. La autoridad
+          // del guardado es el flag DURABLE del attempt; los caminos de
+          // webhook leen la fila, no el metadata.
         },
       });
 
@@ -1836,22 +1839,15 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
         binding.status = processing.status || binding.status;
       }
 
-      // D4: sin 3DS el intent ya confirmó acá → espejar sync (best-effort,
-      // mirrorSavedPaymentMethod jamás lanza). El camino 3DS lo cubre el
-      // webhook payment_intent.succeeded vía metadata.save_pm.
-      // Se espeja stripeIntent.payment_method (lo ADJUNTADO): los alias de
-      // test y algunos wallets se materializan en otro pm_ al confirmar.
-      // OJO (v2.23): en direct charge el payment_method del intent es el CLON,
-      // que vive en la cuenta conectada — espejarlo metería en la bóveda de
-      // PayMe un pm_ que no le pertenece. Se espeja el de plataforma.
-      if (wantsSave && !connectTarget && stripeIntent.status === 'succeeded') {
-        await savedCards.mirrorSavedPaymentMethod(
-          userId, stripeIntent.payment_method || stripePmId
-        );
-      } else if (wantsSave && connectTarget) {
-        logger.warn('save_pm_omitido_en_direct_charge', {
-          mesa_id: mesa.id, attempt_id: attempt.id, account: connectTarget.accountId,
-        });
+      // G-11 (ORDEN 1-A): sin 3DS el cobro ya confirmó acá → guardar sync.
+      // Bajo direct charge `stripeIntent.payment_method` es el CLON de la
+      // cuenta del restaurante — jamás se guarda ese: el guardado adjunta el
+      // pm_ FUENTE durable al Customer de PayMe (misma semántica que el vault
+      // POST /payment-methods) y espeja verificado. El camino 3DS lo cubre el
+      // webhook de éxito (handleMesaPaymentSucceeded). Best-effort: jamás
+      // rompe el pago ya cobrado.
+      if (wantsSave && stripeIntent.status === 'succeeded') {
+        await savedCards.saveDurableSourceCard({ kind: 'attempt', id: attempt.id });
       }
 
       logger.audit('payment_attempt_created', {
