@@ -1,0 +1,195 @@
+{
+  "_comentario": [
+    "VECTORES CANONICOS DE IDENTIDAD ECONOMICA de POST /mesas (ORDEN 1-A).",
+    "GENERADOS desde utils/idempotency.PAYLOAD_KEYS.create_mesa con el mismo",
+    "payloadHash del runtime — no escritos a mano. App Frontend alinea su",
+    "fingerprint contra esto: su implementacion cubre el request ENTERO,",
+    "mientras el hash del dueño deja la FUENTE DE PAGO afuera A PROPOSITO.",
+    "Incluirla haria que un reload con tarjeta tipeada rotara la clave y",
+    "abriera una SEGUNDA mesa con un SEGUNDO hold — el bug B-06.",
+    "Ningun vector persiste payload crudo ni datos de tarjeta: solo hashes,",
+    "ids sinteticos y la descripcion del cambio."
+  ],
+  "version": 1,
+  "payload_keys": [
+    "restaurant_id",
+    "total_cents",
+    "division_mode",
+    "expected_participants",
+    "guarantee_method",
+    "items"
+  ],
+  "base_sha256": "0ce58d38e9232d93b788e20b95aaee19f996139f89aa76335f8b1ccaf4c4644e",
+  "vectores": [
+    {
+      "id": "base",
+      "cambio": {},
+      "misma_identidad": true,
+      "porque": "referencia",
+      "sha256": "0ce58d38e9232d93b788e20b95aaee19f996139f89aa76335f8b1ccaf4c4644e"
+    },
+    {
+      "id": "otro_pm_tipeado",
+      "cambio": {
+        "stripe_payment_method_id": "pm_dos"
+      },
+      "misma_identidad": true,
+      "porque": "Stripe.js materializa otro pm_ por invocacion; incluirlo forzaria clave nueva y segunda mesa con segundo hold (B-06)",
+      "sha256": "0ce58d38e9232d93b788e20b95aaee19f996139f89aa76335f8b1ccaf4c4644e"
+    },
+    {
+      "id": "pm_guardado_distinto",
+      "cambio": {
+        "payment_method_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "misma_identidad": true,
+      "porque": "la fuente de pago no es intencion economica",
+      "sha256": "0ce58d38e9232d93b788e20b95aaee19f996139f89aa76335f8b1ccaf4c4644e"
+    },
+    {
+      "id": "save_payment_method_true",
+      "cambio": {
+        "save_payment_method": true
+      },
+      "misma_identidad": true,
+      "porque": "el opt-in de guardado no cambia cuanto se cobra ni a quien",
+      "sha256": "0ce58d38e9232d93b788e20b95aaee19f996139f89aa76335f8b1ccaf4c4644e"
+    },
+    {
+      "id": "items_reordenados",
+      "cambio": {
+        "items": [
+          {
+            "name": "Flan",
+            "category": "dessert",
+            "price_cents": 20000,
+            "quantity": 1
+          },
+          {
+            "name": "Pizza",
+            "category": "italian",
+            "price_cents": 30000,
+            "quantity": 1
+          }
+        ]
+      },
+      "misma_identidad": true,
+      "porque": "el orden de items no tiene semantica: se ordena antes de hashear",
+      "sha256": "0ce58d38e9232d93b788e20b95aaee19f996139f89aa76335f8b1ccaf4c4644e"
+    },
+    {
+      "id": "otra_idempotency_key",
+      "cambio": {
+        "idempotency_key": "vector-canonico-9999"
+      },
+      "misma_identidad": true,
+      "porque": "la clave identifica la operacion, no su contenido economico",
+      "sha256": "0ce58d38e9232d93b788e20b95aaee19f996139f89aa76335f8b1ccaf4c4644e"
+    },
+    {
+      "id": "otro_restaurante",
+      "cambio": {
+        "restaurant_id": "33333333-3333-4333-8333-333333333333"
+      },
+      "misma_identidad": false,
+      "porque": "otro merchant of record: otra operacion economica",
+      "sha256": "2a3606713e8ac58f10022eb679f8f21d7f5c89ed1509458b5745676dede230c1"
+    },
+    {
+      "id": "otro_total",
+      "cambio": {
+        "total_cents": 60000
+      },
+      "misma_identidad": false,
+      "porque": "otro monto garantizado",
+      "sha256": "3e2cd136d3d9e7e6702b1cd8980a7f33f0a78421acfd6aea69e2a2057c381667"
+    },
+    {
+      "id": "otro_division_mode",
+      "cambio": {
+        "division_mode": "igual"
+      },
+      "misma_identidad": false,
+      "porque": "cambia como se reparte el cobro",
+      "sha256": "abf2a3277570ea6194d3c944a4f922bee2ae4d8cefbdd4679a09f5e4e85cdbf3"
+    },
+    {
+      "id": "otros_participantes",
+      "cambio": {
+        "expected_participants": 4
+      },
+      "misma_identidad": false,
+      "porque": "cambia la base de la propina por comensal (D7)",
+      "sha256": "f5dffd5ae39ad0f85e6efbb8fe01d98fc00ac96e8c2b84ed90dd070667d17927"
+    },
+    {
+      "id": "otra_garantia",
+      "cambio": {
+        "guarantee_method": "wallet"
+      },
+      "misma_identidad": false,
+      "porque": "otro riel de garantia",
+      "sha256": "8e3e45e3a156c50918a30db381f0c817694051dd747089009d73d5a974cfac25"
+    },
+    {
+      "id": "otro_precio_item",
+      "cambio": {
+        "items": [
+          {
+            "name": "Pizza",
+            "category": "italian",
+            "price_cents": 31000,
+            "quantity": 1
+          },
+          {
+            "name": "Flan",
+            "category": "dessert",
+            "price_cents": 20000,
+            "quantity": 1
+          }
+        ]
+      },
+      "misma_identidad": false,
+      "porque": "otro importe",
+      "sha256": "e6fdfbb66db337c974d0c42681b9e37a8cc74c3d973071605d32e885fea990f9"
+    },
+    {
+      "id": "otra_cantidad",
+      "cambio": {
+        "items": [
+          {
+            "name": "Pizza",
+            "category": "italian",
+            "price_cents": 30000,
+            "quantity": 2
+          },
+          {
+            "name": "Flan",
+            "category": "dessert",
+            "price_cents": 20000,
+            "quantity": 1
+          }
+        ]
+      },
+      "misma_identidad": false,
+      "porque": "otro importe de linea",
+      "sha256": "4cb384d33b35a40847d12cbb0d4468c08b953e555311e7bf49d2d78f8eae3b4c"
+    },
+    {
+      "id": "item_removido",
+      "cambio": {
+        "items": [
+          {
+            "name": "Pizza",
+            "category": "italian",
+            "price_cents": 30000,
+            "quantity": 1
+          }
+        ]
+      },
+      "misma_identidad": false,
+      "porque": "otra composicion de la cuenta",
+      "sha256": "715aaa6e432799ec5ccc58cb9e4af7acaba09a4651ff167fb1bf232e21ed071d"
+    }
+  ]
+}

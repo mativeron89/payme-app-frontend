@@ -704,20 +704,47 @@ router.get('/open', requireAuth, async (req, res, next) => {
 // La autoridad es `(opener_user_id, idempotency_key)`, la MISMA unicidad que
 // gobierna la creación: jamás nombre, restaurante, posición ni "la más
 // reciente".
-const CREACION_ESTADOS_TERMINALES = new Set(['auth_failed', 'cancelled', 'expired']);
+// ORDEN 1-A · clasificación EXHAUSTIVA y bidireccional sobre TRANSITIONS.mesa,
+// igual que `MESA_ESTADOS_VIVOS`: la unión de estos cuatro grupos tiene que
+// ser EXACTAMENTE el conjunto de estados de la FSM, sin solapes, y el test lo
+// verifica en los dos sentidos. Un estado nuevo en la FSM sin clasificar acá
+// rompe el build; y un estado desconocido NO se clasifica por accidente —
+// `outcomeDeCreacion` lo devuelve como `unknown`, que es fail-closed: el
+// consumidor no recibe una etiqueta inventada.
+const CREACION_REQUIERE_ACCION = Object.freeze(['pending_auth']);
+const CREACION_ABIERTA = Object.freeze(['open']);
+const CREACION_PARCIAL = Object.freeze(['partially_paid']);
+const CREACION_TERMINAL = Object.freeze(['auth_failed', 'cancelled', 'expired']);
+// La mesa existe y avanzó más allá de la apertura: la creación NO se
+// reintenta. `dispersed` es el terminal del flujo legacy sin garantía y entra
+// acá por la misma razón que `completed`.
+const CREACION_REPLAYABLE = Object.freeze([
+  'fully_paid', 'settling', 'settled', 'dispersing', 'completed', 'dispersed',
+]);
 
 function outcomeDeCreacion(status) {
-  if (status === 'pending_auth') return 'requires_action';
-  if (status === 'open') return 'open';
-  if (status === 'partially_paid') return 'partially_paid';
-  if (CREACION_ESTADOS_TERMINALES.has(status)) return 'terminal';
-  // fully_paid, settling, settled, dispersing, completed, dispersed: la mesa
-  // existe y avanzó más allá de la apertura. La creación NO debe reintentarse.
-  return 'replayable';
+  if (CREACION_REQUIERE_ACCION.includes(status)) return 'requires_action';
+  if (CREACION_ABIERTA.includes(status)) return 'open';
+  if (CREACION_PARCIAL.includes(status)) return 'partially_paid';
+  if (CREACION_TERMINAL.includes(status)) return 'terminal';
+  if (CREACION_REPLAYABLE.includes(status)) return 'replayable';
+  return 'unknown';
 }
 
 router.get('/creations/:idempotency_key', requireAuth, async (req, res, next) => {
   try {
+    // ORDEN 1-A · POR QUÉ EL LÍMITE NO COINCIDE CON EL DEL POST, a propósito.
+    // `POST /mesas` valida la clave con `z.string().min(8).max(100)`. Acá se
+    // acepta 1–200 y NO se alinea, porque son operaciones de naturaleza
+    // distinta: el POST define qué clave puede NACER; este GET pregunta por
+    // una que quizá YA EXISTE. Endurecerlo a 8–100 haría que una clave
+    // histórica fuera de ese rango recibiera 400 —negando evidencia de una
+    // mesa que sí existe y que el front necesita reconciliar—, y no puedo
+    // acreditar desde acá que no exista ninguna en producción: comprobarlo es
+    // un gate externo, no una suposición. Rechazar por longitud en una
+    // consulta es afirmar algo sobre el pasado sin haberlo medido.
+    // El tope de 200 es un límite de entrada sano, no una regla de dominio;
+    // no hay fuga porque una clave inexistente responde el mismo 404.
     const key = req.params.idempotency_key;
     if (typeof key !== 'string' || key.length < 1 || key.length > 200) {
       return res.status(400).json({ error: 'idempotency_key_invalid' });
@@ -754,8 +781,15 @@ router.get('/creations/:idempotency_key', requireAuth, async (req, res, next) =>
     return res.json({
       found: true,
       outcome,
-      // `requires_action` es el único caso donde repetir el POST con la MISMA
-      // clave hace algo útil (reconduce el hold y devuelve client_secret).
+      // ORDEN 1-A · reconciliación del comentario con el código: reintentar
+      // el POST es útil en DOS situaciones, no en una, y por razones
+      // distintas — el comentario anterior decía "el único" y contradecía al
+      // 404, que también publica `true`. App Frontend lo midió.
+      //   · `not_found` (404) — la creación NUNCA ocurrió: reintentar CREA.
+      //   · `requires_action` (acá) — la mesa existe con el 3DS sin
+      //     completar: reintentar RECONDUCE el hold y devuelve client_secret.
+      // En todo otro outcome la creación ya está resuelta y repetir el POST
+      // no aporta nada: `false`.
       retry_with_same_idempotency_key: outcome === 'requires_action',
       ...(hashCoincide !== null && { payload_hash_matches: hashCoincide }),
       mesa: publicCreatedMesa(mesa),
@@ -3052,5 +3086,15 @@ async function finalizeRemoteTerminalStrict(attemptId, terminalStatus, reason) {
   }
   return failAttemptStrict(attemptId, reason);
 }
+
+// ORDEN 1-A · expuesto para el test de exhaustividad bidireccional.
+router.CREACION_OUTCOMES = Object.freeze({
+  requires_action: CREACION_REQUIERE_ACCION,
+  open: CREACION_ABIERTA,
+  partially_paid: CREACION_PARCIAL,
+  terminal: CREACION_TERMINAL,
+  replayable: CREACION_REPLAYABLE,
+});
+router.outcomeDeCreacion = outcomeDeCreacion;
 
 module.exports = router;

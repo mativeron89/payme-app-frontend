@@ -6,17 +6,17 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-06** (ORDEN 2A).
+- Fecha del refresh: **2026-08-07** (ORDEN 2-A · v2.48.0).
 - Fuente local: `../payme-app-backend`.
-- Commit exacto: `03fb3b9ac8f4eaf4b243eb660d751b213d48f872` (el commit
-  espejado · orden 1B cerrada).
-- **Procedencia del CONTENIDO: `ce4fb40820f69711a171457d93664f7314e1d9b8`**
-  (`feat(1b): GET /mesas/creations/:idempotency_key`), que es lo que declara el
-  inventario autoritativo. Son dos preguntas distintas y por eso hay dos
-  hashes: el inventario no puede contener su propio hash, y `03fb3b9` —el
-  commit que lo publica— **no cambió ningún archivo del contrato** (tocó el
-  inventario, su generador y el test del generador; ninguno de los tres está
-  en la población).
+- Commit exacto: `2966aab143c3218a938f6e22892d617f3b690b3e` (el commit
+  espejado · v2.48.0, orden 1-A del dueño cerrada).
+- **Procedencia del CONTENIDO: `ea31324b505b97ccd6400fcca171e53fa536161e`**
+  (`feat(1-a): la matriz exhaustiva, los vectores canónicos y el contrato
+  reconciliado`), que es lo que declara el inventario autoritativo. Son dos
+  preguntas distintas y por eso hay dos hashes: el inventario no puede
+  contener su propio hash, y `2966aab` —el commit que lo publica— **no cambió
+  ningún archivo del contrato** (tocó el inventario, la población, el
+  generador, el CHANGELOG y dos tests; ninguno está en la población).
 - Rama fuente: `main`.
   🔴 **Corrección:** hasta este refresh esta línea decía
   `codex/audit-2026-08-02-app-backend`, y era falso desde antes: `git branch
@@ -25,9 +25,10 @@ desde `src/` y nunca se corrige a mano.
   ninguna verificación mira la rama —el gate resuelve por hash, que es lo
   correcto— así que el dato quedó ahí describiendo un estado que no era.
 
-**71 archivos espejados** más este README de procedencia — **la población no
-cambió**: mismos 71 destinos, mismos siete renombres. Cambió **un solo
-archivo**, `routes/mesas.js`.
+**72 archivos espejados** más este README de procedencia — **uno más**:
+`contract/create-mesa-identity-vectors.json`, que el dueño metió en la
+población porque **es contrato, no documentación**. Los siete renombres siguen
+iguales, y del resto cambió **un solo archivo**: `routes/mesas.js`.
 
 ### 🔴 LA POBLACIÓN LA DECLARA EL DUEÑO, no este repo
 
@@ -54,11 +55,67 @@ primero: su `--check` gritaba con cada commit posterior aunque ningún archivo
 del contrato hubiera cambiado, *"y un gate que grita por lo que no es un
 desvío se termina ignorando"*. Que el HEAD avance no es un desvío del espejo.
 
-**Verificado el 2026-08-06 (ORDEN 2A):** integridad ✅ 71/71 · paridad ✅ contra
-`ce4fb40` · vigencia ✅ (el HEAD del backend es `03fb3b9` y no movió nada de lo
+**Verificado el 2026-08-07 (ORDEN 2-A):** integridad ✅ 72/72 · paridad ✅ contra
+`ea31324` · vigencia ✅ (el HEAD del backend es `2966aab` y no movió nada de lo
 espejado).
 
-### 🆕 Qué trajo este refresh · UN archivo · `GET /mesas/creations/:idempotency_key`
+### 🆕 Qué trajo el refresh a v2.48.0 · la matriz exhaustiva y los vectores
+
+**Un archivo modificado (`routes/mesas.js`) y uno NUEVO en la población.**
+
+#### 1 · `outcome` pasa a ser exhaustivo, y lo desconocido se llama `unknown`
+
+`dispersed` caía en `replayable` **por descarte** y sin test. Ahora la
+clasificación es bidireccional sobre `TRANSITIONS.mesa` —la unión de los cinco
+grupos es EXACTAMENTE la FSM, sin solapes— y un estado que no esté en ninguno
+devuelve **`unknown`**, no `replayable`: *"inventarle una etiqueta a un estado
+que nadie declaró es mentirle al consumidor"*.
+
+| grupo | estados |
+| --- | --- |
+| `requires_action` | `pending_auth` |
+| `open` | `open` |
+| `partially_paid` | `partially_paid` |
+| `terminal` | `auth_failed` · `cancelled` · `expired` |
+| `replayable` | `fully_paid` · `settling` · `settled` · `dispersing` · `completed` · **`dispersed`** |
+| **`unknown`** | cualquier otro — **fail-closed, no se interpreta** |
+
+Más los dos que no salen de un estado de mesa: `not_found` (404) y
+`payload_hash_conflict` (409).
+
+#### 2 · El comentario del 404 se corrigió, no el código
+
+Este repo midió que `retry_with_same_idempotency_key` también viaja `true` en
+el 404 mientras el comentario decía "el único caso". **El dueño corrigió el
+comentario**: son **dos** reintentos útiles por razones distintas —
+`not_found`: la creación nunca ocurrió, reintentar **CREA**; `requires_action`:
+la mesa existe con el 3DS sin completar, reintentar **RECONDUCE** el hold.
+
+#### 3 · 🔴 `contract/create-mesa-identity-vectors.json` · los 14 vectores
+
+**Es el artefacto que resuelve la divergencia que este repo declaró:** nuestro
+fingerprint del journal cubría el request ENTERO, y el hash del dueño **deja la
+fuente de pago afuera A PROPÓSITO**. En sus palabras: *"incluirla haría que un
+reload con tarjeta tipeada rotara la clave y abriera una SEGUNDA mesa con un
+SEGUNDO hold — el bug B-06"*.
+
+- **NO cambian identidad:** otro `pm_` tipeado · otro `payment_method_id`
+  guardado · `save_payment_method` · **reordenar ítems** · otra
+  `idempotency_key`.
+- **SÍ la cambian:** restaurante · total · `division_mode` · participantes ·
+  método de garantía · precio · cantidad · ítem removido.
+- No persiste payload crudo ni datos de tarjeta: sólo hashes, ids sintéticos y
+  la descripción del cambio.
+
+⚠️ **LÍMITE DEL ARTEFACTO, MEDIDO ACÁ:** **no publica el payload BASE**, así
+que **no alcanza para acreditar un hash ABSOLUTO** — sólo la partición
+(qué cambio conserva la identidad y cuál no). `restaurant_id` y
+`expected_participants` de la base no son deducibles desde los `cambio`. Este
+repo acredita la igualdad byte a byte contra **la implementación espejada**
+(`utils/idempotency.js`), y usa los vectores para la partición. Ver
+`scripts/payloadIdentity.mirror.test.ts` y `src/utils/payloadIdentity.vectors.test.ts`.
+
+### Qué trajo el refresh anterior · `GET /mesas/creations/:idempotency_key`
 
 **El endpoint que le da al front la evidencia exacta que le faltaba.** Es la
 respuesta del dueño al P0 que este repo contuvo en `43c1459`: la reconciliación

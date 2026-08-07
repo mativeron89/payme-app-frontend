@@ -1,9 +1,15 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "ce4fb40820f69711a171457d93664f7314e1d9b8",
-  "total": 71,
+  "commit": "ea31324b505b97ccd6400fcca171e53fa536161e",
+  "total": 72,
   "archivos": [
+    {
+      "origen": "contract/create-mesa-identity-vectors.json",
+      "destino": "contract/create-mesa-identity-vectors.json",
+      "sha256": "4f3a833a4d3eecade7c870ec0c9b0145ac19d645ebf27cfb70543f8c78808a45",
+      "bytes": 5967
+    },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
       "destino": "db/migrate_abono_spei_v2.8.sql",
@@ -265,8 +271,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "9ebd041ef92c548744c8e1c1a3cb6304fab1a9d1eb474d8963ff44125775a1a6",
-      "bytes": 137418
+      "sha256": "8f2414869c7d67794268861484e14fc85ac0d8beb1b4e51efe28469fc288e22a",
+      "bytes": 140113
     },
     {
       "origen": "routes/notifications.js",
