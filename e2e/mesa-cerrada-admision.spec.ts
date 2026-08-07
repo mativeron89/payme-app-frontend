@@ -17,6 +17,17 @@ import { abrirMesaConLink, ingresar } from './_app';
  * 3. 🔴 PUERTA B EN POSITIVO: `fully_paid` está VIVA por decisión ratificada
  *    — es la mesa que un espejo apurado apaga por parecerse a "ya no hay nada
  *    que hacer acá". Se afirma que ENTRA, no sólo que otras no.
+ *
+ * ## Límite declarado del harness · el caso AUSENTE no se puede montar acá
+ *
+ * C-01 exige que un `mesa_joinable` ausente/null/malformado tampoco habilite.
+ * Esos casos **no son alcanzables desde el navegador en modo mock**: el
+ * adaptador corre EN PROCESO (no hay HTTP que interceptar con `page.route`) y
+ * el mock siempre computa el campo, porque modela v2.45.0 correctamente.
+ * Producirlos exigiría un emisor de otra versión o un flag de simulación —
+ * inventar superficie para probar. Viven en `invitacionAdmision.test.ts`, que
+ * recorre los seis casos; acá se acredita el CABLEADO con los dos estados
+ * que el mock sí produce (admite / cerrada).
  */
 
 /**

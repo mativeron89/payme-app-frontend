@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import type { AppNotification, PendingInvitation } from '../api/types';
+import type { AppNotification } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeader } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
 import { useToast } from '../components/ui';
 import { extractApiError } from '../api/errors';
+import {
+  copyAdmision,
+  invitacionesMostrables,
+  metaInvitacion,
+  type InvitacionMostrable,
+} from './invitacionAdmision';
 import { navigate } from '../router';
 import { relTime } from '../utils/format';
 
@@ -73,21 +79,30 @@ export function AvisosScreen() {
   const toast = useToast();
   const { session } = useAuth();
   const [notifs, setNotifs] = useState<AppNotification[] | null>(null);
-  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  // C-01: la lista se guarda YA DECODIFICADA. El tipo del contrato promete
+  // campos que la red puede no traer, y confiar en esa promesa era lo que
+  // dejaba entrar a mesas muertas (y reventaba la pantalla con una fila mala).
+  const [invitations, setInvitations] = useState<InvitacionMostrable[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   function load() {
     api.getNotifications().then((r) => setNotifs(r.notifications)).catch(() => setNotifs([]));
-    api.getPendingInvitations().then((r) => setInvitations(r.invitations)).catch(() => undefined);
+    api
+      .getPendingInvitations()
+      .then((r) => setInvitations(invitacionesMostrables(r.invitations)))
+      .catch(() => undefined);
   }
   useEffect(load, []);
 
-  async function accept(inv: PendingInvitation) {
+  async function accept(inv: InvitacionMostrable) {
     setBusyId(inv.id);
     try {
       await api.acceptInvitation(inv.id);
       toast('Te sumaste a la mesa ✓');
-      navigate('mesa', inv.mesa_code);
+      // Sin código no se navega a ciegas: se recarga y la lista se corrige
+      // sola. Sólo llega acá una fila `admite`, que en el contrato trae code.
+      if (inv.mesaCode) navigate('mesa', inv.mesaCode);
+      else load();
     } catch (err) {
       // v2.45.0 · la carrera entre el GET y el toque: la tarjeta vino viva y
       // la mesa murió en el medio. El 410 tiene copy propia (Diseño) — el
@@ -129,15 +144,18 @@ export function AvisosScreen() {
             <h2 className="sectlabel">Te invitaron</h2>
             {invitations.map((inv) => (
               /**
-               * v2.45.0 · el listado MARCA, no filtra: `mesa_joinable` se lee
-               * DIRECTO — el emisor lo computa con el mismo predicado que
-               * gatea el accept; inferirlo acá sería una segunda expresión de
-               * la regla. La tarjeta de mesa muerta se muestra APAGADA con
-               * "Esta mesa ya cerró" en vez de desaparecer (una invitación
-               * que se esfuma parece bug) y en vez de invitar a un camino
-               * muerto (el momento horrible que la auditoría midió).
+               * v2.45.0 · el listado MARCA, no filtra: `mesa_joinable` lo
+               * computa el emisor con el mismo predicado que gatea el accept.
+               * La tarjeta de mesa muerta se muestra APAGADA en vez de
+               * desaparecer (una invitación que se esfuma parece bug) y en
+               * vez de invitar a un camino muerto.
+               *
+               * C-01 · el estado lo decide el decoder, no una comparación
+               * suelta: **sólo `admite` deja el botón**. Ausente, null,
+               * string o forma rara caen en `desconocida`, que apaga la
+               * tarjeta igual pero con copy distinta — no sabemos que cerró.
                */
-              <div key={inv.id} className={`inv-card${inv.mesa_joinable === false ? ' inv-card--cerrada' : ''}`}>
+              <div key={inv.id} className={`inv-card${inv.admision !== 'admite' ? ' inv-card--cerrada' : ''}`}>
                 <div className="inv-head">
                   {/* G-31: genérico a propósito. El contrato no manda la
                       categoría del restaurante, y el `sushi` que había acá
@@ -149,12 +167,17 @@ export function AvisosScreen() {
                   <Icon name="store" size={26} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {/* DOS líneas, nunca una sola larga: con nombres reales,
-                        "Sofía te invitó a Hanzo Sushi" se parte donde cae. */}
-                    <div className="inv-l1">{inv.inviter_first_name} te invitó a</div>
-                    <div className="inv-l2">{inv.restaurant_name}</div>
-                    <div className="inv-meta">
-                      Mesa {inv.mesa_code} · {relTime(inv.created_at)}
+                        "Sofía te invitó a Hanzo Sushi" se parte donde cae.
+                        C-01: cada dato puede faltar sin llevarse la fila —
+                        una invitación a medias se muestra genérica, no se
+                        pinta "undefined te invitó a undefined". */}
+                    <div className="inv-l1">
+                      {inv.invitador ? `${inv.invitador} te invitó a` : 'Te invitaron a una mesa'}
                     </div>
+                    {inv.restaurante && <div className="inv-l2">{inv.restaurante}</div>}
+                    {metaInvitacion(inv, relTime) && (
+                      <div className="inv-meta">{metaInvitacion(inv, relTime)}</div>
+                    )}
                   </div>
                 </div>
                 {/* Navy y no naranja: el naranja se evaluó como quinta excepción
@@ -165,12 +188,13 @@ export function AvisosScreen() {
                     spec: a ancho completo pesaba más que el nombre del
                     restaurante, que es el dato que la persona vino a leer. */}
                 <div className="inv-cta">
-                  {inv.mesa_joinable === false ? (
-                    /* Sin botón: no se ofrece entrar a donde ya no se puede.
-                       El texto dice lo que pasó — copy de Diseño, sin el
-                       bloque de cuenta-lista de la pantalla D: quien mira
-                       Avisos no está en su primer minuto. */
-                    <span className="inv-cerrada-copy">Esta mesa ya cerró</span>
+                  {inv.admision !== 'admite' ? (
+                    /* Sin botón: no se ofrece entrar a donde ya no se puede —
+                       ni a donde no sabemos si se puede. La copy distingue
+                       las dos cosas (`copyAdmision`): "ya cerró" sólo cuando
+                       el emisor lo dijo; si el dato no vino, lo honesto es
+                       decir que no pudimos verificar. */
+                    <span className="inv-cerrada-copy">{copyAdmision(inv.admision)}</span>
                   ) : (
                     <button
                       className="btn btn-navy btn-fit"
