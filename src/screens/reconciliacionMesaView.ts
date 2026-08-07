@@ -158,5 +158,13 @@ export function decisionReconciliacion(
         permiteReintento: false,
         copy: 'Este intento no coincide con la apertura que quedó pendiente. No vamos a reenviarlo ni a abrir otra mesa: escribinos para resolverlo.',
       };
+    case 'unknown':
+      // 🔴 v2.48.0 · el emisor encontró un estado que su propia matriz no
+      // clasifica y lo DICE en vez de inventarle una etiqueta. Del lado de
+      // acá la conclusión es la misma que la de cualquier duda: no se libera
+      // nada. Ojo con la tentación de tratarlo como `replayable` "porque la
+      // mesa existe": si el emisor no sabe en qué quedó la creación, nosotros
+      // tampoco, y liberar sería una segunda retención por el total.
+      return NO_CONCLUYENTE;
   }
 }

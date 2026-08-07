@@ -10,6 +10,7 @@ import {
   completeMonetaryIntent,
   markUnconfirmed,
   prepareMonetaryRequest,
+  readEconomicFingerprint,
   readMonetaryReference,
   rememberMonetaryReference,
   readUnconfirmed,
@@ -335,7 +336,12 @@ export function CreateMesaFlow() {
     setDecision(null);
     setReplayAutorizado(null);
     try {
-      const lookup = await api.getMesaCreation(frozen.handle.key);
+      // ORDEN 2-A · el `payload_hash` sale del JOURNAL: es el sello congelado
+      // antes del primer envío. No se recalcula desde el formulario —tras un
+      // reload los ítems ni existen— y si el sello es de la versión vieja
+      // viene `null` y la consulta va sin hash, que el contrato permite.
+      const sello = await readEconomicFingerprint(frozen.scope, 'create_mesa').catch(() => null);
+      const lookup = await api.getMesaCreation(frozen.handle.key, sello ?? undefined);
       const referencia = await readMonetaryReference(frozen.scope, 'create_mesa').catch(() => null);
       const resultado = decisionReconciliacion(lookup, referencia?.reference);
       if (resultado.liberaJournal) {

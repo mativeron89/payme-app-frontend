@@ -171,7 +171,7 @@ export interface Api {
    * La evidencia EXACTA de una apertura ambigua. **De solo lectura: no mueve
    * un centavo ni crea una segunda mesa.** Diagnóstico; la acción es aparte.
    */
-  getMesaCreation(idempotencyKey: string): Promise<MesaCreationLookup>;
+  getMesaCreation(idempotencyKey: string, payloadHash?: string): Promise<MesaCreationLookup>;
   /** Mock: simula la confirmación 3DS de la garantía. En T7: Stripe.js. */
   /** @param connectedAccountId v2.24: si el hold vive en la cuenta del restaurante. */
   confirmGuarantee3ds(
@@ -337,21 +337,28 @@ const realApi: Api = {
    * journal `ambiguous`—. Esto es un GET que no mueve nada; hacerlo pasar por
    * ahí ensuciaría el journal del intento que estamos tratando de diagnosticar.
    *
-   * `payload_hash` NO se manda, y es una decisión con motivo: exigiría
-   * reimplementar acá el `payloadHash` del dueño (`utils/idempotency.js`:
-   * subset por `PAYLOAD_KEYS.create_mesa`, `items` ordenados sin perder
-   * información, canonicalización propia, sha256). Un hash mal replicado
-   * devuelve **409 `payload_hash_conflict`**, que este front trata como
-   * "conservá el freeze" — o sea que el error de replicación volvería a trabar
-   * al organizador, que es exactamente el costo que este endpoint viene a
-   * sacar. Y la protección que el hash da ya existe del lado local: el journal
-   * refuse reusar una clave con otro payload (`monetary_payload_ambiguous`),
-   * que es el único camino por el que este front podría producir el conflicto.
+   * **ORDEN 2-A · ahora SÍ se manda `payload_hash`**, y lo que cambió no es la
+   * opinión sino la evidencia. Antes no se mandaba porque replicar el
+   * `payloadHash` del dueño de memoria era peligroso en la dirección fea: un
+   * hash mal calculado devuelve **409 `payload_hash_conflict`**, que este
+   * front lee como "conservá el freeze" — el error de réplica habría vuelto a
+   * trabar al organizador. Con el dueño publicando sus vectores y el
+   * algoritmo espejado, la réplica se acredita **ejecutando su propio JS**
+   * (`scripts/payloadIdentity.mirror.test.ts`), no citándolo.
+   *
+   * 🔴 **El hash lo entrega el JOURNAL, no se recalcula acá.** Es el sello
+   * congelado antes del primer envío, y por eso sobrevive al reload: si se
+   * recalculara desde un payload reconstruido, un `pm_` nuevo o un ítem
+   * reordenado darían otro valor y la consulta mentiría sobre lo que se
+   * mandó. Y `readEconomicFingerprint` devuelve `null` cuando el sello es de
+   * la versión vieja: un digest del request entero no es reproducible por el
+   * dueño y garantizaría un 409.
    */
-  getMesaCreation: async (idempotencyKey) => {
+  getMesaCreation: async (idempotencyKey, payloadHash) => {
+    const query = payloadHash ? `?payload_hash=${encodeURIComponent(payloadHash)}` : '';
     try {
       return mesaCreationResponse(
-        await httpRequest<unknown>('GET', `/mesas/creations/${encodeURIComponent(idempotencyKey)}`),
+        await httpRequest<unknown>('GET', `/mesas/creations/${encodeURIComponent(idempotencyKey)}${query}`),
       );
     } catch (err) {
       return creacionDesdeError(err);
@@ -581,9 +588,9 @@ const mockApi: Api = {
       undefined,
       async () => createMesaResponse(await mock.mockCreateMesa(req), req),
     ),
-  getMesaCreation: async (idempotencyKey) => {
+  getMesaCreation: async (idempotencyKey, payloadHash) => {
     try {
-      return mesaCreationResponse(await mock.mockGetMesaCreation(idempotencyKey));
+      return mesaCreationResponse(await mock.mockGetMesaCreation(idempotencyKey, payloadHash));
     } catch (err) {
       return creacionDesdeError(err);
     }

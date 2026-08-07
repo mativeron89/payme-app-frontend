@@ -26,6 +26,12 @@ const MESA_STATUS: Record<MesaStatus, string> = {
   completed: 'Cerrada',
   auth_failed: 'Sin garantía',
   cancelled: 'Cancelada',
+  // 🔴 FALTABA (ORDEN 2-A, 2026-08-07): `dispersed` está en la FSM del dueño
+  // —terminal del flujo legacy sin garantía— y este `Record` exhaustivo no lo
+  // tenía, porque el union `MesaStatus` tampoco. Caía en el `?? 'En curso'`
+  // del getter: una mesa TERMINADA se leía como si siguiera viva. Para el
+  // comensal es una mesa cerrada y así se dice.
+  dispersed: 'Cerrada',
 };
 
 export function mesaStatusLabel(status: MesaStatus | string): string {
@@ -35,7 +41,7 @@ export function mesaStatusLabel(status: MesaStatus | string): string {
 /** Clase del badge acorde al estado (el color acompaña al texto, no lo reemplaza). */
 export function mesaStatusBadgeClass(status: MesaStatus | string): string {
   if (status === 'partially_paid') return 'badge badge-orange';
-  if (status === 'fully_paid' || status === 'completed' || status === 'settled') {
+  if (status === 'fully_paid' || status === 'completed' || status === 'settled' || status === 'dispersed') {
     return 'badge badge-gray';
   }
   return 'badge badge-teal';

@@ -1,4 +1,5 @@
 import { centsToDisplay, fractionAmount, splitEqual, sumCents, tipFromBps } from '../../utils/money';
+import { payloadCanonical, sha256Hex } from '../../utils/payloadIdentity';
 import { createSession, loadSession, saveSession, type StoredSession } from '../storage';
 import type {
   AcceptInvitationLinkResponse,
@@ -38,6 +39,7 @@ import type {
   HistoryResponse,
   FractionRequest,
 } from '../types';
+import { MESA_CREATION_OUTCOME_BY_STATUS } from '../types';
 import { MOCK_CONNECTED_ACCOUNTS, MOCK_RESTAURANTS, MOCK_USER } from './seedData';
 import {
   availableBalance,
@@ -151,42 +153,23 @@ const MOCK_PAYLOAD_KEYS = {
   invitation: ['type', 'invited_user_id'],
 } as const;
 
-const MOCK_UNORDERED_ARRAY_KEYS = new Set(['item_ids', 'slot_ids', 'items']);
-
-/** Misma representación canónica recursiva que utils/idempotency.js del backend. */
-function canonicalizeMockPayload(value: unknown): string {
-  if (value === null || value === undefined) return 'null';
-  if (typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalizeMockPayload).join(',')}]`;
-  const object = value as Record<string, unknown>;
-  return `{${Object.keys(object)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalizeMockPayload(object[key])}`)
-    .join(',')}}`;
-}
-
-function sortUnorderedMockArray(value: unknown[]): unknown[] {
-  const hasObjects = value.some((item) => item !== null && typeof item === 'object');
-  if (!hasObjects) return [...value].map(String).sort();
-  return [...value]
-    .map((item) => ({ item, canonical: canonicalizeMockPayload(item) }))
-    .sort((a, b) => (a.canonical < b.canonical ? -1 : a.canonical > b.canonical ? 1 : 0))
-    .map(({ item }) => item);
-}
-
+/**
+ * ORDEN 2-A · UNA SOLA COPIA DEL ALGORITMO, no dos.
+ *
+ * Acá vivía una réplica propia de la canonicalización del backend
+ * (`canonicalizeMockPayload` + `sortUnorderedMockArray` + `mockPayloadHash`),
+ * paralela a la que ahora usa el journal. Dos copias del mismo algoritmo es
+ * la forma más silenciosa de que se separen: se corrige una y la otra sigue
+ * viva. Se unifican en `src/utils/payloadIdentity.ts`, que además está
+ * acreditado byte a byte contra el JS espejado del dueño.
+ *
+ * Se conserva la decisión de guardar la forma CANÓNICA y no el sha256: para
+ * detectar conflicto alcanza, es sincrónico, y el hash del dueño es
+ * exactamente `sha256(esta cadena)` — así que cuando el front manda su
+ * `payload_hash`, `mockGetMesaCreation` lo compara hasheando lo guardado.
+ */
 function mockPayloadHash(payload: unknown, keep: readonly string[]): string {
-  const src = (payload ?? {}) as Record<string, unknown>;
-  const subset: Record<string, unknown> = {};
-  for (const k of keep) {
-    if (!Object.prototype.hasOwnProperty.call(src, k) || src[k] === undefined) continue;
-    const v = src[k];
-    subset[k] = MOCK_UNORDERED_ARRAY_KEYS.has(k) && Array.isArray(v)
-      ? sortUnorderedMockArray(v)
-      : v;
-  }
-  // No se necesita SHA-256 en el mock: comparar la forma canónica conserva
-  // exactamente la igualdad/conflicto que el backend aplica antes de hashear.
-  return canonicalizeMockPayload(subset);
+  return payloadCanonical(payload, keep);
 }
 
 export class MockApiError extends Error {
@@ -608,18 +591,18 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   return delay(respuestaMesa);
 }
 
-/** `routes/mesas.js` · `CREACION_ESTADOS_TERMINALES`, espejado exacto. */
-const CREACION_ESTADOS_TERMINALES = new Set<MesaStatus>(['auth_failed', 'cancelled', 'expired']);
-
-/** `routes/mesas.js` · `outcomeDeCreacion(status)`, espejado exacto. */
-function outcomeDeCreacion(status: MesaStatus): MesaCreationOutcome {
-  if (status === 'pending_auth') return 'requires_action';
-  if (status === 'open') return 'open';
-  if (status === 'partially_paid') return 'partially_paid';
-  if (CREACION_ESTADOS_TERMINALES.has(status)) return 'terminal';
-  // fully_paid, settling, settled, dispersing, completed: la mesa existe y
-  // avanzó más allá de la apertura. La creación NO debe reintentarse.
-  return 'replayable';
+/**
+ * `routes/mesas.js` · `outcomeDeCreacion(status)`, espejado exacto (v2.48.0).
+ *
+ * 🔴 **Ya no cae en `replayable` por descarte.** La matriz del dueño pasó a
+ * ser exhaustiva y bidireccional sobre la FSM, con `dispersed` declarado, y lo
+ * que no está en ningún grupo devuelve **`unknown`** — *"inventarle una
+ * etiqueta a un estado que nadie declaró es mentirle al consumidor"*. El mock
+ * usa la MISMA tabla que el decoder (`MESA_CREATION_OUTCOME_BY_STATUS`), así
+ * que no puede desincronizarse de él.
+ */
+function outcomeDeCreacion(status: MesaStatus | string): MesaCreationOutcome {
+  return MESA_CREATION_OUTCOME_BY_STATUS[status as MesaStatus] ?? 'unknown';
 }
 
 /**
@@ -659,14 +642,20 @@ export async function mockGetMesaCreation(
       retry_with_same_idempotency_key: true,
     });
   }
-  if (typeof payloadHash === 'string' && payloadHash.length > 0 && payloadHash !== previo.hash) {
-    // Sin datos de la mesa, a propósito: la misma clave con otra intención
-    // económica es un error del cliente, no un estado de la creación.
-    return fail(409, 'payload_hash_conflict', {
-      found: true,
-      outcome: 'payload_hash_conflict',
-      retry_with_same_idempotency_key: false,
-    });
+  if (typeof payloadHash === 'string' && payloadHash.length > 0) {
+    // ORDEN 2-A · el front manda el sha256 del dueño; el store guarda la forma
+    // CANÓNICA. El hash del dueño es exactamente `sha256(canónica)`, así que
+    // se compara hasheando lo guardado — sin una segunda definición de "el
+    // mismo request", que es cómo se separan dos implementaciones.
+    if (payloadHash !== await sha256Hex(previo.hash)) {
+      // Sin datos de la mesa, a propósito: la misma clave con otra intención
+      // económica es un error del cliente, no un estado de la creación.
+      return fail(409, 'payload_hash_conflict', {
+        found: true,
+        outcome: 'payload_hash_conflict',
+        retry_with_same_idempotency_key: false,
+      });
+    }
   }
   const code = (previo.response as CreateMesaResponse)?.mesa?.code;
   const mesa = state.mesas.find((m) => m.code === code);
@@ -679,6 +668,8 @@ export async function mockGetMesaCreation(
   return delay({
     found: true,
     outcome,
+    // El decoder exige la coherencia declarada: sólo estos dos habilitan
+    // repetir el POST. `not_found` sale por el 404 de más arriba.
     retry_with_same_idempotency_key: outcome === 'requires_action',
     ...(payloadHash ? { payload_hash_matches: true } : {}),
     mesa: {
@@ -704,14 +695,34 @@ export async function mockGetMesaCreation(
  */
 export async function mockConfirmGuarantee3ds(code: string): Promise<{ status: 'open' }> {
   const mesa = findMesa(code);
-  if (!mesa || mesa !== pending3ds) return fail(404, 'mesa_not_found');
+  // 🔴 ORDEN 2-A · EL GATE ES EL ESTADO DE LA MESA, no una variable de módulo.
+  //
+  // Acá decía `mesa !== pending3ds`, y `pending3ds` es memoria del módulo: se
+  // pierde con cualquier recarga. O sea que **el mock volvía IMPOSIBLE de
+  // completar el escenario de la respuesta perdida** —garantizar, recargar,
+  // reenviar, confirmar— cuando el backend real lo permite sin problema: allá
+  // el 3DS se confirma contra Stripe con el `client_secret` y el webhook abre
+  // la mesa; no hay ninguna variable en memoria que lo gatee.
+  //
+  // Un mock MÁS DURO que el real es tan mentiroso como uno más blando: hace
+  // fallar en la demo algo que en producción funciona, y —peor— vuelve
+  // inalcanzable el camino que hay que probar. La verdad durable es
+  // `status === 'pending_auth'`, que sobrevive al reload igual que la mesa.
+  if (!mesa || mesa.status !== 'pending_auth') return fail(404, 'mesa_not_found');
   mesa.status = 'open';
-  pending3ds = null;
+  if (pending3ds === mesa) pending3ds = null;
   // D4: el hold quedó autorizado → recién ahora se guarda la tarjeta nueva.
+  // ⚠️ Tras un reload esta intención se perdió con el módulo: el backend real
+  // la sella en la mesa ANTES de Stripe y no depende de la sesión del
+  // navegador. Diferencia declarada, no simulada — el mock no inventa un
+  // guardado que no puede acreditar.
   if (pending3dsSave) {
     saveMockCard(pending3dsSave);
     pending3dsSave = null;
   }
+  // No pasa por `delay()`, así que persiste explícito: sin esto la mesa queda
+  // abierta sólo en memoria y la siguiente recarga la muestra en pending_auth.
+  persist();
   return new Promise((resolve) => setTimeout(() => resolve({ status: 'open' }), 1500));
 }
 

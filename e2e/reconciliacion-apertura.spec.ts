@@ -1,5 +1,22 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+
+/**
+ * El estado del mock, leído del `localStorage` de la página. Se mira acá y no
+ * en la UI porque la afirmación que importa —**cuántas mesas existen**— no
+ * está en ninguna pantalla: la de compartir muestra la mesa recién abierta y
+ * se vería idéntica si hubiera dos.
+ */
+async function mesasDelMock(page: Page): Promise<{ total: number; ultimoCodigo: string | null }> {
+  const datos = await page.evaluate(() => {
+    const crudo = localStorage.getItem('payme_mock_state_v1');
+    if (!crudo) return null;
+    const mesas = (JSON.parse(crudo) as { mesas?: Array<{ code: string }> }).mesas ?? [];
+    return { total: mesas.length, ultimoCodigo: mesas[0]?.code ?? null };
+  });
+  expect(datos, 'no se pudo leer el estado del mock').not.toBeNull();
+  return datos!;
+}
 
 /**
  * ORDEN 2A · LA APERTURA QUE QUEDÓ COLGADA, RECORRIDA COMO LA VIVE UNA PERSONA.
@@ -75,5 +92,23 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await page.getByRole('button', { name: 'Continuar' }).click();
   await expect(page.getByRole('heading', { name: 'Garantizá la mesa' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Reconciliación necesaria/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Reintentar esta apertura/ })).toBeEnabled();
+
+  // ⭐ ORDEN 2-A · EL REENVÍO SE COMPLETA DE VERDAD, no se verifica que el
+  // botón esté habilitado y listo. Acá es donde vivía la divergencia: tras el
+  // reload el `pm_` de la tarjeta tipeada ya no está en memoria y el mock
+  // materializa otro, exactamente como Stripe.js. Con el fingerprint viejo
+  // —que cubría el request ENTERO— este click moría con
+  // `monetary_payload_ambiguous` y el organizador quedaba sin salida.
+  const antes = await mesasDelMock(page);
+  await page.getByRole('button', { name: /Reintentar esta apertura/ }).click();
+  await expect(page.getByRole('heading', { name: 'Confirmá con tu banco' })).toBeVisible();
+  await page.getByRole('button', { name: 'Confirmar autorización' }).click();
+  await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
+
+  // 🔴 LA AFIRMACIÓN QUE IMPORTA: se reanudó LA MISMA apertura. Si el reenvío
+  // hubiera rotado la clave, acá habría DOS mesas y dos holds por el total.
+  const despues = await mesasDelMock(page);
+  expect(despues.total, 'el reenvío creó una segunda mesa').toBe(antes.total);
+  expect(despues.ultimoCodigo).toBe(antes.ultimoCodigo);
+  await expect(page.getByText(despues.ultimoCodigo!, { exact: true })).toBeVisible();
 });

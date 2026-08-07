@@ -8,6 +8,7 @@ import type {
   MesaCreationOutcome,
   MesaStatus,
 } from './types';
+import { MESA_CREATION_OUTCOME_BY_STATUS } from './types';
 
 /** Un 2xx malformado no acredita éxito: el caller debe conservar su intento. */
 export class ContractResponseError extends Error {
@@ -151,17 +152,22 @@ export function acceptInvitationResponse(value: unknown): { accepted: true } {
 
 // ─── ORDEN 2A · la reconciliación de una creación ─────────────────────────
 
-/** Los siete del contrato. Un `outcome` fuera de esta lista NO se interpreta. */
+/** Los del contrato, más `unknown` (v2.48.0). Nada fuera de acá se interpreta. */
 const OUTCOMES: readonly MesaCreationOutcome[] = [
   'not_found', 'requires_action', 'open', 'partially_paid',
-  'terminal', 'replayable', 'payload_hash_conflict',
+  'terminal', 'replayable', 'payload_hash_conflict', 'unknown',
 ];
 
-/** Los estados de mesa de `utils/stateMachine.js`. Nada más se acepta. */
-const ESTADOS: readonly MesaStatus[] = [
-  'pending_auth', 'open', 'partially_paid', 'fully_paid', 'expired',
-  'settling', 'settled', 'dispersing', 'completed', 'auth_failed', 'cancelled',
-];
+/** Los que llegan SIN datos de mesa, por diseño del emisor. */
+const SIN_MESA: readonly MesaCreationOutcome[] = ['not_found', 'payload_hash_conflict'];
+
+/**
+ * Los DOS que habilitan repetir el POST, y por razones distintas: `not_found`
+ * —la creación nunca ocurrió, reintentar CREA— y `requires_action` —la mesa
+ * existe con el 3DS sin completar, reintentar RECONDUCE el hold—. Lo declara
+ * el emisor en su propio test; acá se exige, no se deduce.
+ */
+const CON_REINTENTO: readonly MesaCreationOutcome[] = ['not_found', 'requires_action'];
 
 /**
  * `total_cents` viaja como **STRING** — deliberado del dueño: sale del mismo
@@ -188,8 +194,10 @@ function centavosDelContrato(value: unknown): number | null {
  * total de la mesa. Así que un 2xx que no traiga el shape completo **no es un
  * resultado**: es un error, y el caller conserva el freeze.
  *
- * - `outcome` tiene que ser uno de los siete. Un valor nuevo del backend no se
- *   adivina por parecido: **no saber no es saber que no**.
+ * - `outcome` tiene que ser uno de los declarados. Un valor nuevo del backend
+ *   no se adivina por parecido: **no saber no es saber que no**. (Y `unknown`
+ *   sí es uno de ellos desde v2.48.0: es el emisor diciendo que un estado de
+ *   su FSM no está clasificado, en vez de inventarle una etiqueta.)
  * - `found` y `retry_with_same_idempotency_key` tienen que ser **booleanos de
  *   verdad**. `"false"` es verdadero en JS, que es la trampa que
  *   `walletRail.ts` y `invitacionAdmision.ts` ya bloquean con `typeof`.
@@ -198,6 +206,27 @@ function centavosDelContrato(value: unknown): number | null {
  * - `payload_hash_conflict` es la excepción declarada por el dueño: llega
  *   **sin datos de mesa a propósito** (reusar la clave con otro payload es un
  *   error del cliente, no un estado de la creación).
+ *
+ * ## 🔴 Las COHERENCIAS, que son lo nuevo de la ORDEN 2-A
+ *
+ * Un cuerpo puede tener todos sus campos bien tipados y aun así **decir dos
+ * cosas incompatibles**. Un emisor desincronizado —o cualquier cosa que
+ * conteste por él— produce justo eso, y de esta respuesta depende si se libera
+ * una garantía. Se exige que concuerden entre sí:
+ *
+ * 1. `found: false` ⟺ `outcome: 'not_found'`.
+ * 2. `retry_with_same_idempotency_key` ⟺ outcome ∈ {`not_found`,
+ *    `requires_action`}. Lo declara el emisor; un `true` sobre `open` es
+ *    "reintentá el POST sobre una mesa ya abierta", que es la duplicación.
+ * 3. **`mesa.status` tiene que mapear al `outcome` que la respuesta afirma**,
+ *    según la matriz del emisor replicada en `MESA_CREATION_OUTCOME_BY_STATUS`.
+ *    Decir `open` sobre una mesa `pending_auth` no acredita nada.
+ *    ⚠️ **Donde la réplica no conoce el estado, manda el emisor**: es la
+ *    autoridad sobre su propia máquina, y rechazar un estado futuro por no
+ *    estar en nuestra tabla trabaría a la persona por una desactualización
+ *    nuestra. Que la tabla no envejezca lo sostiene `mesaStatus.mirror.test.ts`.
+ * 4. `payload_hash_matches: false` en un 200 es imposible: el emisor
+ *    cortocircuita a 409 antes de mirar el estado.
  */
 export function mesaCreationResponse(value: unknown): MesaCreationLookup {
   const body = record(value);
@@ -212,28 +241,43 @@ export function mesaCreationResponse(value: unknown): MesaCreationLookup {
   if (typeof body.retry_with_same_idempotency_key !== 'boolean') {
     throw new ContractResponseError(endpoint);
   }
-  // Coherencia interna: `not_found` con `found: true` —o al revés— es un
-  // cuerpo contradictorio, y un cuerpo contradictorio no acredita nada.
-  if ((outcome === 'not_found') === body.found) throw new ContractResponseError(endpoint);
+  // Coherencia 1 · `not_found` con `found: true` —o al revés— es un cuerpo
+  // contradictorio, y un cuerpo contradictorio no acredita nada.
+  const declarado = outcome as MesaCreationOutcome;
+  if ((declarado === 'not_found') === body.found) throw new ContractResponseError(endpoint);
+  // Coherencia 2 · sólo dos outcomes habilitan repetir el POST.
+  if (body.retry_with_same_idempotency_key !== CON_REINTENTO.includes(declarado)) {
+    throw new ContractResponseError(endpoint);
+  }
 
   const base = {
     found: body.found,
-    outcome: outcome as MesaCreationOutcome,
+    outcome: declarado,
     retryWithSameKey: body.retry_with_same_idempotency_key,
   };
-  if (outcome === 'not_found' || outcome === 'payload_hash_conflict') {
+  if (SIN_MESA.includes(declarado)) {
     return { ...base, mesa: null, guarantee: null };
   }
 
   const mesa = record(body.mesa);
   const estado = mesa?.status;
   const totalCents = centavosDelContrato(mesa?.total_cents);
-  if (
-    !mesa || !nonEmpty(mesa.code) ||
-    typeof estado !== 'string' || !ESTADOS.includes(estado as MesaStatus) ||
-    totalCents === null
-  ) {
+  if (!mesa || !nonEmpty(mesa.code) || typeof estado !== 'string' || totalCents === null) {
     throw new ContractResponseError(endpoint);
+  }
+  // Coherencia 3 · el estado tiene que mapear al outcome afirmado. Si la
+  // réplica no conoce el estado, no se contradice al emisor: es su FSM.
+  const esperado = MESA_CREATION_OUTCOME_BY_STATUS[estado as MesaStatus] as MesaCreationOutcome | undefined;
+  if (esperado !== undefined && esperado !== declarado) throw new ContractResponseError(endpoint);
+  if (esperado === undefined && declarado !== 'unknown' && declarado !== 'replayable') {
+    // Un estado que no conocemos sólo puede venir con la etiqueta que el
+    // emisor reserva para lo no clasificado, o con la del grupo al que suma
+    // estados nuevos. Cualquier otra combinación es desincronización.
+    throw new ContractResponseError(endpoint);
+  }
+  // Coherencia 4 · un 200 no puede decir que el hash no coincide.
+  if (body.payload_hash_matches !== undefined) {
+    if (body.payload_hash_matches !== true) throw new ContractResponseError(endpoint);
   }
 
   // `guarantee` sí se lee blando: es informativo para el copy y no gobierna

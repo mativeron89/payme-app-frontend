@@ -69,7 +69,17 @@ describe('la reconciliación no puede volver a acreditar por parecido', () => {
 
   it('la reconciliación consulta POR LA CLAVE del intento congelado', () => {
     const cuerpo = reconciliacion();
-    expect(cuerpo).toContain('api.getMesaCreation(frozen.handle.key)');
+    expect(cuerpo).toContain('api.getMesaCreation(frozen.handle.key, sello ?? undefined)');
+  });
+
+  it('🔴 MUTANTE · el `payload_hash` sale del JOURNAL, no se recalcula', () => {
+    // Recalcularlo desde el formulario sería mentir sobre lo que se mandó:
+    // tras un reload los ítems ni existen, y un `pm_` nuevo daría otro valor.
+    // El sello se congela antes del primer envío y se lee tal cual.
+    const cuerpo = reconciliacion();
+    expect(cuerpo).toContain("readEconomicFingerprint(frozen.scope, 'create_mesa')");
+    expect(cuerpo, 'el hash no puede recalcularse en la reconciliación')
+      .not.toContain('payloadHash(');
   });
 
   it('🔴 el journal sólo se termina cuando la decisión lo autoriza', () => {

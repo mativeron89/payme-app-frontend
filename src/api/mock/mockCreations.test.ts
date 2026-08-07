@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PAYLOAD_KEYS, payloadHash } from '../../utils/payloadIdentity';
 import { mesaCreationResponse } from '../contractResponses';
 import type { CreateMesaRequest, CreateMesaResponse } from '../types';
 import { mockConfirmGuarantee3ds, mockCreateMesa, mockGetMesaCreation } from './mockApi';
@@ -21,8 +22,8 @@ function key(): string {
   return `mock-creations-${n}-${'0'.repeat(4)}`;
 }
 
-async function crearMesa(idempotencyKey: string): Promise<CreateMesaResponse> {
-  const req: CreateMesaRequest = {
+function requestDeMesa(idempotencyKey: string): CreateMesaRequest {
+  return {
     restaurant_id: MOCK_RESTAURANTS[0].id,
     total_cents: 30000,
     division_mode: 'consumo',
@@ -31,7 +32,10 @@ async function crearMesa(idempotencyKey: string): Promise<CreateMesaResponse> {
     idempotency_key: idempotencyKey,
     items: [{ name: 'Pizza', price_cents: 30000, quantity: 1 }],
   };
-  return mockCreateMesa(req);
+}
+
+async function crearMesa(idempotencyKey: string): Promise<CreateMesaResponse> {
+  return mockCreateMesa(requestDeMesa(idempotencyKey));
 }
 
 describe('mock · la creación se consulta POR SU CLAVE', () => {
@@ -97,6 +101,7 @@ describe('mock · la creación se consulta POR SU CLAVE', () => {
       ['fully_paid', 'replayable'],
       ['settling', 'replayable'],
       ['completed', 'replayable'],
+      ['dispersed', 'replayable'],
       ['partially_paid', 'partially_paid'],
       ['open', 'open'],
       ['pending_auth', 'requires_action'],
@@ -106,14 +111,55 @@ describe('mock · la creación se consulta POR SU CLAVE', () => {
     }
   });
 
-  it('el hash del payload, cuando se manda, distingue otra intención económica', async () => {
-    // Este front todavía NO lo manda (ver `getMesaCreation` en la fachada),
-    // pero el mock no puede ser una versión recortada del contrato.
+  it('🔴 v2.48.0 · un estado que la matriz no clasifica NO cae en `replayable`', async () => {
+    // El emisor devuelve `unknown` en vez de inventar una etiqueta, y el mock
+    // usa su misma tabla. Si esto se aflojara, una creación en un estado que
+    // nadie clasificó liberaría el journal.
     const k = key();
-    await crearMesa(k);
-    await expect(mockGetMesaCreation(k, 'sha256-de-otra-cosa')).rejects.toMatchObject({
+    const creada = await crearMesa(k);
+    const mesa = state.mesas.find((m) => m.code === creada.mesa.code)!;
+    (mesa as { status: string }).status = 'estado_que_no_existe';
+    const r = mesaCreationResponse(await mockGetMesaCreation(k));
+    expect(r.outcome).toBe('unknown');
+    expect(r.retryWithSameKey).toBe(false);
+  });
+
+  it('⭐ el `payload_hash` del FRONT coincide con el del mock: mismo algoritmo', async () => {
+    // El front sella con `payloadHash(request, PAYLOAD_KEYS.create_mesa)` y el
+    // mock guarda la forma canónica; el hash del dueño es `sha256(canónica)`.
+    // Si las dos definiciones de "el mismo request" se separaran, el mock
+    // contestaría 409 sobre su propia mesa — y el front lo leería como
+    // "conservá el freeze". Este test es el que impide esa separación.
+    const k = key();
+    const req = requestDeMesa(k);
+    await mockCreateMesa(req);
+    const hash = await payloadHash(req, PAYLOAD_KEYS.create_mesa);
+    const r = mesaCreationResponse(await mockGetMesaCreation(k, hash));
+    expect(r.outcome).toBe('requires_action');
+  });
+
+  it('🔴 y un hash de OTRA intención económica sí da 409', async () => {
+    const k = key();
+    const req = requestDeMesa(k);
+    await mockCreateMesa(req);
+    const otro = await payloadHash({ ...req, total_cents: 999999 }, PAYLOAD_KEYS.create_mesa);
+    await expect(mockGetMesaCreation(k, otro)).rejects.toMatchObject({
       status: 409,
       extra: { found: true, outcome: 'payload_hash_conflict', retry_with_same_idempotency_key: false },
     });
+  });
+
+  it('🔴 cambiar SÓLO la fuente de pago NO da conflicto: no es intención económica', async () => {
+    // El corazón del B-06: Stripe.js materializa otro `pm_` por invocación, y
+    // si eso rotara la clave se abriría una segunda mesa con un segundo hold.
+    const k = key();
+    const req = requestDeMesa(k);
+    await mockCreateMesa(req);
+    const conOtroPm = await payloadHash(
+      { ...req, stripe_payment_method_id: 'pm_otro_distinto', save_payment_method: true },
+      PAYLOAD_KEYS.create_mesa,
+    );
+    const r = mesaCreationResponse(await mockGetMesaCreation(k, conOtroPm));
+    expect(r.outcome).toBe('requires_action');
   });
 });

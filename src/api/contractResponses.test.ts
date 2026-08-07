@@ -260,3 +260,97 @@ describe('mesaCreationResponse', () => {
     }
   });
 });
+
+/**
+ * ORDEN 2-A · lo que agregó v2.48.0 al decoder: `unknown`, `dispersed`, y las
+ * COHERENCIAS.
+ *
+ * Un cuerpo puede tener todos los campos bien tipados y aun así decir dos
+ * cosas incompatibles. De esta respuesta depende si se libera una garantía, y
+ * un emisor desincronizado —o cualquier cosa que conteste por él— produce
+ * exactamente eso.
+ */
+describe('mesaCreationResponse · v2.48.0', () => {
+  function cuerpo(over: Record<string, unknown> = {}, mesaOver: Record<string, unknown> = {}) {
+    return {
+      found: true,
+      outcome: 'open',
+      retry_with_same_idempotency_key: false,
+      mesa: {
+        code: 'PA-2847', status: 'open', total_cents: '84000', ...mesaOver,
+      },
+      guarantee: { method: 'card', authorized: true },
+      ...over,
+    };
+  }
+
+  it('`unknown` es un outcome legítimo: el emisor no clasifica y lo dice', () => {
+    const r = mesaCreationResponse(cuerpo(
+      { outcome: 'unknown' },
+      { status: 'estado_del_futuro' },
+    ));
+    expect(r.outcome).toBe('unknown');
+    expect(r.mesa?.code).toBe('PA-2847');
+  });
+
+  it('`dispersed` decodifica como `replayable`, que es como lo clasifica el emisor', () => {
+    const r = mesaCreationResponse(cuerpo(
+      { outcome: 'replayable' },
+      { status: 'dispersed' },
+    ));
+    expect(r.outcome).toBe('replayable');
+    expect(r.mesa?.status).toBe('dispersed');
+  });
+
+  it('🔴 COHERENCIA · el `status` tiene que mapear al `outcome` afirmado', () => {
+    // "abierta" sobre una mesa que está esperando el 3DS: la respuesta se
+    // contradice a sí misma y no acredita nada.
+    expect(() => mesaCreationResponse(cuerpo({ outcome: 'open' }, { status: 'pending_auth' })))
+      .toThrow('contract_response_invalid');
+    expect(() => mesaCreationResponse(cuerpo(
+      { outcome: 'replayable' }, { status: 'cancelled' },
+    ))).toThrow();
+    expect(() => mesaCreationResponse(cuerpo(
+      { outcome: 'terminal' }, { status: 'completed' },
+    ))).toThrow();
+  });
+
+  it('🔴 COHERENCIA · sólo `not_found` y `requires_action` habilitan reintentar', () => {
+    // Un `true` sobre `open` es "repetí el POST sobre una mesa ya abierta":
+    // la duplicación exacta que el journal existe para impedir.
+    expect(() => mesaCreationResponse(cuerpo({ retry_with_same_idempotency_key: true })))
+      .toThrow('contract_response_invalid');
+    expect(() => mesaCreationResponse({
+      found: true, outcome: 'requires_action', retry_with_same_idempotency_key: false,
+      mesa: { code: 'PA-1', status: 'pending_auth', total_cents: '1' },
+    })).toThrow();
+    expect(() => mesaCreationResponse({
+      found: false, outcome: 'not_found', retry_with_same_idempotency_key: false,
+    })).toThrow();
+  });
+
+  it('🔴 COHERENCIA · un 200 no puede decir que el hash NO coincide', () => {
+    // El emisor cortocircuita a 409 antes de mirar el estado: un 200 con
+    // `payload_hash_matches:false` no puede haber salido de él.
+    expect(() => mesaCreationResponse(cuerpo({ payload_hash_matches: false }))).toThrow();
+    expect(() => mesaCreationResponse(cuerpo({ payload_hash_matches: 'si' }))).toThrow();
+    expect(mesaCreationResponse(cuerpo({ payload_hash_matches: true })).outcome).toBe('open');
+  });
+
+  it('un estado que la réplica no conoce se acepta SÓLO con la etiqueta del emisor', () => {
+    // El emisor es la autoridad sobre su propia FSM: rechazar un estado futuro
+    // por no estar en nuestra tabla trabaría por una desactualización nuestra.
+    // Pero tampoco puede venir con cualquier etiqueta.
+    expect(mesaCreationResponse(cuerpo(
+      { outcome: 'replayable' }, { status: 'estado_del_futuro' },
+    )).outcome).toBe('replayable');
+    expect(() => mesaCreationResponse(cuerpo(
+      { outcome: 'open' }, { status: 'estado_del_futuro' },
+    ))).toThrow();
+  });
+
+  it('el estado sigue siendo obligatorio: sin él no hay coherencia que verificar', () => {
+    expect(() => mesaCreationResponse(cuerpo({}, { status: undefined }))).toThrow();
+    expect(() => mesaCreationResponse(cuerpo({}, { status: 42 }))).toThrow();
+  });
+});

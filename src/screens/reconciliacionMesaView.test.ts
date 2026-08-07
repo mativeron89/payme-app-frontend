@@ -23,6 +23,8 @@ function lookup(
   outcome: MesaCreationOutcome,
   opciones: { code?: string | null; status?: MesaStatus; retry?: boolean } = {},
 ): MesaCreationLookup {
+  // `unknown` SÍ trae mesa: el emisor conoce la fila, lo que no clasifica es
+  // su estado. Los únicos sin datos de mesa son los dos declarados.
   const conMesa = outcome !== 'not_found' && outcome !== 'payload_hash_conflict';
   const code = opciones.code === undefined ? 'PA-2847' : opciones.code;
   return {
@@ -85,6 +87,24 @@ describe('sólo la prueba positiva exacta libera el journal', () => {
     expect(d.liberaJournal).toBe(false);
     expect(d.permiteReintento).toBe(false);
     expect(d.navegarA).toBeNull();
+  });
+
+  it('🔴 MUTANTE · `unknown` NO libera, aunque venga con una mesa adentro', () => {
+    // v2.48.0 · el emisor encontró un estado que su matriz no clasifica y lo
+    // dice en vez de inventarle etiqueta. La tentación es leerlo como
+    // `replayable` "porque la mesa existe": si el emisor no sabe en qué quedó
+    // la creación, nosotros tampoco, y liberar sería un segundo hold.
+    const d = decisionReconciliacion(lookup('unknown', { status: 'completed' }));
+    expect(d.veredicto).toBe('no_concluyente');
+    expect(d.liberaJournal).toBe(false);
+    expect(d.permiteReintento).toBe(false);
+    expect(d.navegarA).toBeNull();
+  });
+
+  it('`dispersed` llega como `replayable` y acredita: es una mesa que avanzó', () => {
+    const d = decisionReconciliacion(lookup('replayable', { status: 'dispersed' }));
+    expect(d.veredicto).toBe('acreditada');
+    expect(d.liberaJournal).toBe(true);
   });
 
   it('no saber no libera nada', () => {

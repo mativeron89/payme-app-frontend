@@ -191,7 +191,21 @@ export interface HistoryResponse {
 
 // ─── Mesas (routes/mesas.js) ───────────────────────────────
 
-/** Estados reales de mesa (utils/stateMachine.js — TRANSITIONS.mesa). */
+/**
+ * Estados reales de mesa (`utils/stateMachine.js` — `TRANSITIONS.mesa`).
+ *
+ * 🔴 **`dispersed` FALTABA, y faltaba desde siempre** (encontrado en la ORDEN
+ * 2-A, 2026-08-07). Es el terminal del flujo legacy sin garantía y está en la
+ * FSM del dueño desde antes de este espejo; acá el union tenía once estados y
+ * la máquina tiene doce. Nadie lo notó porque **ningún gate comparaba las dos
+ * listas**: TypeScript no valida contra el backend, y un `status` que el tipo
+ * no declara igual llega en runtime. El MVP card-only no crea mesas que lo
+ * alcancen, pero una mesa histórica sí puede estar ahí — y desde v2.48.0 el
+ * emisor lo clasifica explícitamente en `replayable`.
+ *
+ * Ahora hay gate: `mesaStatus.mirror.test.ts` compara este union contra las
+ * claves de `TRANSITIONS.mesa` del espejo, en las dos direcciones.
+ */
 export type MesaStatus =
   | 'pending_auth'
   | 'open'
@@ -203,7 +217,16 @@ export type MesaStatus =
   | 'dispersing'
   | 'completed'
   | 'auth_failed'
-  | 'cancelled';
+  | 'cancelled'
+  /** Legacy: flujo viejo sin garantía. Terminal. */
+  | 'dispersed';
+
+/** El union de arriba, como valor — para verificarlo y para iterarlo. */
+export const MESA_STATUSES: readonly MesaStatus[] = [
+  'pending_auth', 'open', 'partially_paid', 'fully_paid', 'expired',
+  'settling', 'settled', 'dispersing', 'completed', 'auth_failed',
+  'cancelled', 'dispersed',
+];
 
 export type ItemStatus = 'available' | 'locked' | 'paid' | 'released';
 
@@ -220,7 +243,7 @@ export type ItemStatus = 'available' | 'locked' | 'paid' | 'released';
 // reconduce holds contra Stripe: *"consultar no puede mover un centavo"*.
 // Diagnóstico y acción, separados.
 
-/** Los siete `outcome` del contrato. Cualquier otro valor NO se interpreta. */
+/** Los `outcome` del contrato. Cualquier otro valor NO se interpreta. */
 export type MesaCreationOutcome =
   /** No hay creación con esa clave para este opener. */
   | 'not_found'
@@ -230,10 +253,42 @@ export type MesaCreationOutcome =
   | 'partially_paid'
   /** `auth_failed | cancelled | expired`: la creación terminó y está muerta. */
   | 'terminal'
-  /** `fully_paid` y posteriores: la mesa avanzó más allá de la apertura. */
+  /**
+   * `fully_paid | settling | settled | dispersing | completed | dispersed`:
+   * la mesa avanzó más allá de la apertura. Desde v2.48.0 el grupo es
+   * EXHAUSTIVO y declarado — `dispersed` caía acá por descarte y sin test.
+   */
   | 'replayable'
   /** La misma clave con OTRA intención económica. Llega SIN datos de mesa. */
-  | 'payload_hash_conflict';
+  | 'payload_hash_conflict'
+  /**
+   * v2.48.0 · un estado de mesa que la matriz del emisor NO clasifica. **No
+   * es un error: es el emisor negándose a inventar una etiqueta.** Nunca
+   * libera el journal ni habilita acción — no saber no es saber que no.
+   */
+  | 'unknown';
+
+/**
+ * La matriz `status → outcome` del emisor (`routes/mesas.js`,
+ * `CREACION_OUTCOMES`), replicada para **verificar coherencia**, no para
+ * decidir: si el emisor dice `open` sobre una mesa `pending_auth`, la
+ * respuesta se contradice y no acredita nada. Donde esta réplica no conoce el
+ * estado, manda el emisor: es la autoridad sobre su propia máquina.
+ */
+export const MESA_CREATION_OUTCOME_BY_STATUS: Readonly<Record<MesaStatus, MesaCreationOutcome>> = {
+  pending_auth: 'requires_action',
+  open: 'open',
+  partially_paid: 'partially_paid',
+  auth_failed: 'terminal',
+  cancelled: 'terminal',
+  expired: 'terminal',
+  fully_paid: 'replayable',
+  settling: 'replayable',
+  settled: 'replayable',
+  dispersing: 'replayable',
+  completed: 'replayable',
+  dispersed: 'replayable',
+};
 
 /** Resultado ya decodificado. `mesa` es `null` en las ramas sin datos. */
 export interface MesaCreationLookup {

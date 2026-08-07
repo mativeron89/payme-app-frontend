@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { economicKeysFor, payloadHash } from '../utils/payloadIdentity';
 import { isDefinitiveMutationError } from './mutationRetry';
 import { loadSession, type StoredSession } from './storage';
 
@@ -27,7 +28,15 @@ const SEPARATOR = '::';
 const memoryPm = new Map<string, string>();
 const memoryPending = new Map<string, UnconfirmedAttempt>();
 
-interface Journal { v: number; actor: string; family: string; area: string; key: string; generation: number; fingerprint?: string; state: 'prepared' | 'in_flight' | 'sending' | 'ambiguous' | 'terminal'; at: number; retries?: number; reference?: string; }
+/**
+ * `fpv` — VERSIÓN DEL FINGERPRINT (ORDEN 2-A). Ausente = 1, el digest del
+ * request ENTERO. `2` = identidad económica alineada con `PAYLOAD_KEYS` del
+ * dueño. Se guarda en vez de deducirse porque un journal escrito por la
+ * versión anterior sigue vivo en el navegador de alguien: sin la marca, su
+ * fingerprint viejo se compararía contra el algoritmo nuevo y un reintento
+ * legítimo moriría con `monetary_payload_ambiguous`.
+ */
+interface Journal { v: number; actor: string; family: string; area: string; key: string; generation: number; fingerprint?: string; fpv?: number; state: 'prepared' | 'in_flight' | 'sending' | 'ambiguous' | 'terminal'; at: number; retries?: number; reference?: string; }
 
 function stable(value: unknown): string { return JSON.stringify(value); }
 function journalKey(index: string): string { return JOURNAL_PREFIX + index; }
@@ -49,6 +58,7 @@ function readEntry(index: string): Journal | null {
       !Number.isSafeInteger(entry.at) || entry.at < 0 ||
       !['prepared', 'in_flight', 'sending', 'ambiguous', 'terminal'].includes(entry.state) ||
       (entry.fingerprint !== undefined && !/^[0-9a-f]{64}$/.test(entry.fingerprint)) ||
+      (entry.fpv !== undefined && entry.fpv !== 2) ||
       (entry.retries !== undefined && (!Number.isSafeInteger(entry.retries) || entry.retries < 0)) ||
       (entry.reference !== undefined && (typeof entry.reference !== 'string' || !entry.reference))
     ) throw new Error('legacy');
@@ -298,9 +308,52 @@ export function recallPaymentMethod(scope: string, handle: MonetaryIntentHandle)
   }
   catch { return undefined; }
 }
+/**
+ * ORDEN 2-A · EL SELLO DEL INTENTO PASA A SER SU IDENTIDAD ECONÓMICA.
+ *
+ * Antes era `sha256(JSON.stringify(request))` — el request ENTERO — y eso es
+ * **más grueso que el contrato**: el dueño hashea un subconjunto declarado y
+ * **deja la fuente de pago afuera a propósito**, porque Stripe.js materializa
+ * otro `pm_` por invocación y meterlo adentro rota la clave en un reload con
+ * tarjeta tipeada → segunda mesa con segundo hold (B-06).
+ *
+ * Consecuencia real y medida: el organizador que perdía la pestaña durante el
+ * 3DS **no podía reenviar** aunque el backend lo hubiera aceptado. Fallaba
+ * cerrado —cortaba, no duplicaba— pero trababa por una diferencia que no es
+ * económica.
+ *
+ * 🔴 **Sólo se alinea donde hay llaves declaradas** (`economicKeysFor`, hoy
+ * `create_mesa`). Para el resto se conserva el digest grueso, que es MÁS
+ * estricto: traba de más, nunca de menos.
+ *
+ * @returns el fingerprint sellado y su versión.
+ */
+async function fingerprintDe(operation: string, payload: unknown): Promise<{ value: string; fpv?: 2 }> {
+  const keys = economicKeysFor(operation);
+  if (!keys) return { value: await digest(stable(payload)) };
+  return { value: await payloadHash(payload, keys), fpv: 2 };
+}
+
+/**
+ * ¿El payload que llega es el mismo que se selló? La comparación usa **el
+ * algoritmo con el que se selló**, no el vigente: un journal escrito por la
+ * versión anterior guarda un digest v1, y compararlo contra el hash económico
+ * mataría un reintento legítimo con `monetary_payload_ambiguous`.
+ *
+ * Un match v1 implica que el request es byte-idéntico, o sea que la identidad
+ * económica **también** lo es: por eso el caller puede reescribir el sello a
+ * v2 sin aflojar nada.
+ */
+function selloCoincide(found: Journal, nuevo: { value: string; fpv?: 2 }, legacy: string): boolean {
+  if (!found.fingerprint) return true;
+  return found.fpv === 2 ? found.fingerprint === nuevo.value : found.fingerprint === legacy;
+}
+
 export async function prepareMonetaryRequest(scope: string, operation: string, handle: MonetaryIntentHandle, payload: unknown): Promise<void> {
   if (!validHandle(handle) || !payloadUsesHandle(payload, handle)) throw new MonetarySafetyError('monetary_attempt_ambiguous');
-  const id = await identities(scope, operation); const fingerprint = await digest(stable(payload));
+  const id = await identities(scope, operation);
+  const sello = await fingerprintDe(operation, payload);
+  const legacy = await digest(stable(payload));
   await withLock(id.index, async () => {
     guardLegacy(id.area, operation);
     guardPreviousJournal(id.area);
@@ -309,16 +362,20 @@ export async function prepareMonetaryRequest(scope: string, operation: string, h
     if (found.family !== id.family) throw new MonetarySafetyError('monetary_family_reconciliation_required');
     if (!sameHandle(found, handle)) throw new MonetarySafetyError('monetary_generation_stale');
     if (found.state === 'terminal') throw new MonetarySafetyError('monetary_area_frozen');
-    if (found.fingerprint && found.fingerprint !== fingerprint) throw new MonetarySafetyError('monetary_payload_ambiguous');
+    if (!selloCoincide(found, sello, legacy)) throw new MonetarySafetyError('monetary_payload_ambiguous');
     // Se escribe ANTES de toda red. `sending` con el mismo fingerprint también
     // puede volver a in_flight: significa que el proceso cayó después del POST;
     // el replay conserva la misma key y nunca duplica la intención económica.
-    writeEntry(id.index, { ...found, fingerprint, state: 'in_flight', at: Date.now() });
+    // Una entrada v1 que coincidió se REESCRIBE a v2: el request era
+    // byte-idéntico, así que su identidad económica está acreditada.
+    writeEntry(id.index, { ...found, fingerprint: sello.value, ...(sello.fpv ? { fpv: sello.fpv } : {}), state: 'in_flight', at: Date.now() });
   });
 }
 export async function withPreparedMonetaryRequest<T>(operation: string, handle: MonetaryIntentHandle, payload: unknown, guestToken: string | undefined, send: (session: StoredSession | undefined) => Promise<T>): Promise<T> {
   if (!validHandle(handle) || !payloadUsesHandle(payload, handle)) throw new MonetarySafetyError('monetary_request_unprepared');
-  const actor = await resolveMoneyActor(guestToken); const scope = scopeForActor(actor, 'runtime'); const id = await identities(scope, operation); const fingerprint = await digest(stable(payload));
+  const actor = await resolveMoneyActor(guestToken); const scope = scopeForActor(actor, 'runtime'); const id = await identities(scope, operation);
+  const sello = await fingerprintDe(operation, payload);
+  const legacy = await digest(stable(payload));
   return withLock(id.index, async () => {
     guardPreviousJournal(id.area);
     const found = readEntry(id.index);
@@ -326,7 +383,10 @@ export async function withPreparedMonetaryRequest<T>(operation: string, handle: 
     if (found.actor !== id.actor || found.area !== id.area) throw new MonetarySafetyError('monetary_journal_ambiguous');
     if (found.family !== id.family) throw new MonetarySafetyError('monetary_family_reconciliation_required');
     if (!sameHandle(found, handle)) throw new MonetarySafetyError('monetary_generation_stale');
-    if (found.fingerprint !== fingerprint) throw new MonetarySafetyError('monetary_request_unprepared');
+    // Acá se exige que YA esté sellado —a diferencia de `prepare`, donde el
+    // sello puede no existir todavía—: mandar sin preparar es el agujero que
+    // esta función cierra. Por eso `!found.fingerprint` también corta.
+    if (!found.fingerprint || !selloCoincide(found, sello, legacy)) throw new MonetarySafetyError('monetary_request_unprepared');
     if (found.state === 'terminal') throw new MonetarySafetyError('monetary_generation_stale');
     if (!['in_flight', 'ambiguous'].includes(found.state)) throw new MonetarySafetyError('monetary_request_unprepared');
     writeEntry(id.index, { ...found, state: 'sending', at: Date.now(), retries: (found.retries ?? 0) + 1 });
@@ -397,6 +457,28 @@ export async function rememberMonetaryReference(scope: string, operation: string
     if (found.family !== id.family) throw new MonetarySafetyError('monetary_family_reconciliation_required');
     if (!sameHandle(found, handle)) throw new MonetarySafetyError('monetary_generation_stale');
     writeEntry(id.index, { ...found, reference, at: Date.now() });
+  });
+}
+/**
+ * ORDEN 2-A · el `payload_hash` que se manda en
+ * `GET /mesas/creations/:idempotency_key`, leído del journal.
+ *
+ * 🔴 **Devuelve `null` salvo que el sello sea v2, y esa condición es la que
+ * hace segura la consulta.** Un sello v1 es el digest del request ENTERO —un
+ * número que el dueño no puede reproducir— así que mandarlo daría **409
+ * `payload_hash_conflict` garantizado**, y este front lee ese 409 como
+ * "conservá el freeze": el organizador quedaría trabado por un dato que
+ * nosotros mandamos mal. Mejor no mandar hash: el endpoint contesta igual, sin
+ * el chequeo extra.
+ */
+export async function readEconomicFingerprint(scope: string, operation: string): Promise<string | null> {
+  const id = await identities(scope, operation);
+  return withLock(id.index, async () => {
+    guardPreviousJournal(id.area);
+    const found = readEntry(id.index);
+    if (!found || found.actor !== id.actor || found.area !== id.area) return null;
+    if (found.state === 'terminal' || found.state === 'prepared') return null;
+    return found.fpv === 2 && found.fingerprint ? found.fingerprint : null;
   });
 }
 export async function readMonetaryReference(scope: string, operation: string): Promise<{ reference: string; handle: MonetaryIntentHandle } | null> {
