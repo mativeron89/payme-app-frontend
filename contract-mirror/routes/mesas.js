@@ -679,6 +679,96 @@ router.get('/open', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ORDEN 1B · GET /mesas/creations/:idempotency_key — reconciliación EXACTA
+// de una creación ambigua. App Backend es dueño de este contrato.
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// 🔴 EL DEFECTO QUE CIERRA. Sin este endpoint, el front acreditaba una
+// creación buscando en `GET /mesas/open` una mesa cuyo `restaurant.name`
+// coincidiera (`CreateMesaFlow.tsx:294`). Dos razones por las que eso miente:
+//   1. `/mesas/open` incluye mesas donde el usuario es opener O PARTICIPANTE
+//      (G-28, mío): la mesa de un amigo en el mismo restaurante hacía creer
+//      que la apertura propia ya existía.
+//   2. Dos sucursales homónimas son indistinguibles por nombre.
+// Y no es cosmético: de esa inferencia depende si se reintenta una apertura
+// CON GARANTÍA — o sea, plata.
+//
+// 🔴 ES DE SOLO LECTURA, Y ESO GOBIERNA EL DISEÑO. A propósito NO reusa
+// `mesaReplayResponse`: ésa invoca `reconcileGuaranteeReplay`, que reconduce
+// holds contra Stripe. Consultar no puede mover un centavo ni crear una
+// segunda mesa/garantía. Cuando la respuesta dice `requires_action`, el
+// camino para actuar sigue siendo el `POST /mesas` idempotente de siempre —
+// que ahí sí devuelve `client_secret`. Diagnóstico y acción, separados.
+//
+// La autoridad es `(opener_user_id, idempotency_key)`, la MISMA unicidad que
+// gobierna la creación: jamás nombre, restaurante, posición ni "la más
+// reciente".
+const CREACION_ESTADOS_TERMINALES = new Set(['auth_failed', 'cancelled', 'expired']);
+
+function outcomeDeCreacion(status) {
+  if (status === 'pending_auth') return 'requires_action';
+  if (status === 'open') return 'open';
+  if (status === 'partially_paid') return 'partially_paid';
+  if (CREACION_ESTADOS_TERMINALES.has(status)) return 'terminal';
+  // fully_paid, settling, settled, dispersing, completed, dispersed: la mesa
+  // existe y avanzó más allá de la apertura. La creación NO debe reintentarse.
+  return 'replayable';
+}
+
+router.get('/creations/:idempotency_key', requireAuth, async (req, res, next) => {
+  try {
+    const key = req.params.idempotency_key;
+    if (typeof key !== 'string' || key.length < 1 || key.length > 200) {
+      return res.status(400).json({ error: 'idempotency_key_invalid' });
+    }
+    // Owner-first: la búsqueda ya está acotada al opener autenticado, así que
+    // la mesa de otro usuario con la misma clave es indistinguible de "no
+    // existe" — no se filtra ni su existencia.
+    const mesa = await findExistingMesa(req.user.id, key);
+    if (!mesa) {
+      return res.status(404).json({
+        found: false,
+        outcome: 'not_found',
+        retry_with_same_idempotency_key: true,
+      });
+    }
+
+    // Conflicto de hash: la misma clave con OTRA intención económica. Se
+    // responde antes que cualquier dato de la mesa: reusar la clave con otro
+    // payload es un error del cliente, no un estado de la creación.
+    const hashPedido = req.query.payload_hash;
+    let hashCoincide = null;
+    if (typeof hashPedido === 'string' && hashPedido.length > 0) {
+      hashCoincide = hashesMatch(hashPedido, mesa.idempotency_payload_hash || '');
+      if (!hashCoincide) {
+        return res.status(409).json({
+          found: true,
+          outcome: 'payload_hash_conflict',
+          retry_with_same_idempotency_key: false,
+        });
+      }
+    }
+
+    const outcome = outcomeDeCreacion(mesa.status);
+    return res.json({
+      found: true,
+      outcome,
+      // `requires_action` es el único caso donde repetir el POST con la MISMA
+      // clave hace algo útil (reconduce el hold y devuelve client_secret).
+      retry_with_same_idempotency_key: outcome === 'requires_action',
+      ...(hashCoincide !== null && { payload_hash_matches: hashCoincide }),
+      mesa: publicCreatedMesa(mesa),
+      guarantee: {
+        method: mesa.auth_method || null,
+        authorized: !!mesa.auth_payment_intent_id && mesa.status !== 'pending_auth',
+        ...(mesa.auth_stripe_account_id
+          && { connected_account_id: mesa.auth_stripe_account_id }),
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 // CIERRE DEL PAGO SIN CUENTA · C1. Ver el bloque de C3 en `/:code/pay`.
 router.get('/:code', requireAuth, requireMesaParticipant, async (req, res, next) => {
   try {

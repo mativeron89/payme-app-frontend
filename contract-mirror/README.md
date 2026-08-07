@@ -6,20 +6,28 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-06** (R3-A).
+- Fecha del refresh: **2026-08-06** (ORDEN 2A).
 - Fuente local: `../payme-app-backend`.
-- Commit exacto: `5c8436c7d3bb5efc1b8b53c95340ec6690877a50` (el commit
-  espejado).
-- **Procedencia del CONTENIDO: `aa28e842fe0332a54c80231b241ff4d57100c7fa`**
-  (v2.47.0 · G-11 cerrado de verdad), que es lo que declara el inventario
-  autoritativo. Son dos preguntas distintas y por eso hay dos hashes: el
-  inventario no puede contener su propio hash, y `5c8436c` —el commit que lo
-  publica— no cambió ningún archivo del contrato.
-- Rama fuente: `codex/audit-2026-08-02-app-backend`.
+- Commit exacto: `03fb3b9ac8f4eaf4b243eb660d751b213d48f872` (el commit
+  espejado · orden 1B cerrada).
+- **Procedencia del CONTENIDO: `ce4fb40820f69711a171457d93664f7314e1d9b8`**
+  (`feat(1b): GET /mesas/creations/:idempotency_key`), que es lo que declara el
+  inventario autoritativo. Son dos preguntas distintas y por eso hay dos
+  hashes: el inventario no puede contener su propio hash, y `03fb3b9` —el
+  commit que lo publica— **no cambió ningún archivo del contrato** (tocó el
+  inventario, su generador y el test del generador; ninguno de los tres está
+  en la población).
+- Rama fuente: `main`.
+  🔴 **Corrección:** hasta este refresh esta línea decía
+  `codex/audit-2026-08-02-app-backend`, y era falso desde antes: `git branch
+  --contains 5c8436c` devuelve **sólo `main`**. La rama de auditoría existe,
+  pero no contiene el commit que el espejo declaraba. Nadie lo notó porque
+  ninguna verificación mira la rama —el gate resuelve por hash, que es lo
+  correcto— así que el dato quedó ahí describiendo un estado que no era.
 
-**71 archivos espejados** más este README de procedencia — uno más que el
-refresh anterior: `db/migrate_card_save_intents_v2.47.0.sql`, la migración del
-cierre real de G-11.
+**71 archivos espejados** más este README de procedencia — **la población no
+cambió**: mismos 71 destinos, mismos siete renombres. Cambió **un solo
+archivo**, `routes/mesas.js`.
 
 ### 🔴 LA POBLACIÓN LA DECLARA EL DUEÑO, no este repo
 
@@ -46,8 +54,50 @@ primero: su `--check` gritaba con cada commit posterior aunque ningún archivo
 del contrato hubiera cambiado, *"y un gate que grita por lo que no es un
 desvío se termina ignorando"*. Que el HEAD avance no es un desvío del espejo.
 
-**Verificado el 2026-08-06:** integridad ✅ 71/71 · paridad ✅ contra
-`aa28e84` · vigencia ✅ (HEAD del backend no movió nada de lo espejado).
+**Verificado el 2026-08-06 (ORDEN 2A):** integridad ✅ 71/71 · paridad ✅ contra
+`ce4fb40` · vigencia ✅ (el HEAD del backend es `03fb3b9` y no movió nada de lo
+espejado).
+
+### 🆕 Qué trajo este refresh · UN archivo · `GET /mesas/creations/:idempotency_key`
+
+**El endpoint que le da al front la evidencia exacta que le faltaba.** Es la
+respuesta del dueño al P0 que este repo contuvo en `43c1459`: la reconciliación
+de una apertura ambigua acreditaba comparando **nombres de restaurante**, y
+después —peor— leía la ausencia en `GET /mesas/open` como prueba de que la mesa
+no existía, cuando una mesa en `pending_auth` **no se lista ahí**.
+
+```
+GET /api/mesas/creations/:idempotency_key[?payload_hash=<sha256>]
+```
+
+- La autoridad es **`(opener_user_id, idempotency_key)`** — la misma unicidad
+  que gobierna la creación. Nunca nombre, restaurante, posición ni "la más
+  reciente".
+- 🔴 **Es de SOLO LECTURA y eso gobierna su diseño.** El dueño escribe por qué
+  no reusó `mesaReplayResponse`: *"ésa invoca `reconcileGuaranteeReplay`, que
+  reconduce holds contra Stripe. Consultar no puede mover un centavo ni crear
+  una segunda mesa/garantía."* **Diagnóstico y acción, separados.**
+- **`outcome`** ∈ `not_found` · `requires_action` (la mesa quedó en
+  `pending_auth`) · `open` · `partially_paid` · `terminal`
+  (`auth_failed|cancelled|expired`) · `replayable` (`fully_paid` y posteriores)
+  · `payload_hash_conflict`.
+- **`retry_with_same_idempotency_key` es `true` SÓLO en `requires_action`** —
+  el único caso donde repetir el `POST /mesas` hace algo útil (reconduce el
+  hold y devuelve `client_secret`). **El contrato dice cuándo reintentar
+  sirve; el front no lo deduce.** En `not_found` también viaja `true`, que es
+  coherente: si no hay nada creado, repetir el POST con la misma clave crea
+  por primera vez.
+- **404** `{found:false, outcome:'not_found'}` · **409**
+  `{found:true, outcome:'payload_hash_conflict'}` **sin datos de la mesa, a
+  propósito** (la misma clave con otra intención económica es un error del
+  cliente, no un estado de la creación) · **400** `idempotency_key_invalid`
+  fuera de 1..200 caracteres · **401** sin sesión.
+- 🔴 **La búsqueda ya está acotada al opener autenticado**, así que la mesa de
+  OTRO usuario con la misma clave es indistinguible de "no existe": no se
+  filtra ni su existencia.
+- ⚠️ **`total_cents` viaja como STRING**, igual que el 201 de `POST /mesas`
+  (mismo helper, bigint del driver). Deliberado del dueño: cambiarlo sólo acá
+  daría dos formas del mismo campo.
 
 ### ✅ G-11 CERRADO DE VERDAD (v2.47.0) · y la provisionalidad se levanta
 

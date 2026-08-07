@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "aa28e842fe0332a54c80231b241ff4d57100c7fa",
+  "commit": "ce4fb40820f69711a171457d93664f7314e1d9b8",
   "total": 71,
   "archivos": [
     {
@@ -265,8 +265,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "00de34c33dab1b8acdb5ee2014b77f6b7488191cf5ca42e39725b2ecfc545e63",
-      "bytes": 132893
+      "sha256": "9ebd041ef92c548744c8e1c1a3cb6304fab1a9d1eb474d8963ff44125775a1a6",
+      "bytes": 137418
     },
     {
       "origen": "routes/notifications.js",
