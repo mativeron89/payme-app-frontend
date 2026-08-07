@@ -88,6 +88,10 @@ describe('fachada real: contrato idempotente aditivo', () => {
     };
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse(body, status));
     vi.stubGlobal('fetch', fetchMock);
+    // ORDEN 1A.2 · el link se valida contra el ORIGEN donde corre la app. En
+    // node no hay `window`, así que el decoder rechaza TODO —fail-closed
+    // correcto— y el test tiene que declarar desde dónde se sirve la app.
+    vi.stubGlobal('window', { location: { origin: 'https://payme.test' } });
 
     await expect(api.createInvitation('PM-123', 'invitation-idem-key-1')).resolves.toEqual(body);
     const init = fetchMock.mock.calls[0][1] as RequestInit;
