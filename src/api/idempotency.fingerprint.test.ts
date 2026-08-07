@@ -109,11 +109,10 @@ describe('el sello de `create_mesa` es la identidad económica del dueño', () =
     }))).resolves.toBeUndefined();
   });
 
-  it('lo mismo con la tarjeta guardada, el opt-in de guardado y el orden de ítems', async () => {
+  it('lo mismo con el opt-in de guardado y el orden de ítems', async () => {
     const { scope, handle } = await abrir();
     await money.prepareMonetaryRequest(scope, 'create_mesa', handle, request(handle));
     for (const variante of [
-      { payment_method_id: '22222222-2222-4222-8222-222222222222' },
       { save_payment_method: true },
       { items: [...ITEMS].reverse() },
     ]) {
@@ -122,6 +121,52 @@ describe('el sello de `create_mesa` es la identidad económica del dueño', () =
         JSON.stringify(variante),
       ).resolves.toBeUndefined();
     }
+  });
+
+  it('⭐ TARJETA GUARDADA · el flujo saved-only REAL, sin mezclar fuentes', async () => {
+    // 🔴 Este test estaba MAL y lo encontró Codex: agregaba `payment_method_id`
+    // sobre una base que YA traía `stripe_payment_method_id`, o sea un payload
+    // con las DOS fuentes — que el schema del dueño rechaza
+    // (`sources === 1`, `schemas/index.js`). Probaba que el hash ignora un
+    // campo, no el flujo de tarjeta guardada.
+    //
+    // Acá la base es saved-only de verdad y lo que cambia entre los dos
+    // intentos es CUÁL guardada — que es el caso de una persona que garantizó
+    // con una tarjeta y al reintentar tiene otra seleccionada.
+    const { scope, handle } = await abrir();
+    const savedOnly = (pm: string) => ({
+      restaurant_id: '11111111-1111-4111-8111-111111111111',
+      total_cents: 50000,
+      division_mode: 'consumo',
+      expected_participants: 3,
+      guarantee_method: 'card',
+      idempotency_key: handle.key,
+      payment_method_id: pm,
+      items: ITEMS,
+    });
+    await money.prepareMonetaryRequest(scope, 'create_mesa', handle,
+      savedOnly('11111111-1111-4111-8111-111111111111'));
+    await expect(money.prepareMonetaryRequest(scope, 'create_mesa', handle,
+      savedOnly('22222222-2222-4222-8222-222222222222'))).resolves.toBeUndefined();
+  });
+
+  it('🔴 y saved-only → tipeada tampoco cambia la identidad económica', async () => {
+    // La otra transición real: garantizó con guardada y al reintentar la
+    // pantalla la manda a tipear. Sigue siendo la MISMA intención económica.
+    const { scope, handle } = await abrir();
+    const base = {
+      restaurant_id: '11111111-1111-4111-8111-111111111111',
+      total_cents: 50000,
+      division_mode: 'consumo',
+      expected_participants: 3,
+      guarantee_method: 'card',
+      idempotency_key: handle.key,
+      items: ITEMS,
+    };
+    await money.prepareMonetaryRequest(scope, 'create_mesa', handle,
+      { ...base, payment_method_id: '11111111-1111-4111-8111-111111111111' });
+    await expect(money.prepareMonetaryRequest(scope, 'create_mesa', handle,
+      { ...base, stripe_payment_method_id: 'pm_tipeada' })).resolves.toBeUndefined();
   });
 
   it('🔴 MUTANTE · un cambio ECONÓMICO sigue cortando', async () => {

@@ -110,3 +110,93 @@ describe('el reenvío nunca puede rotar la clave', () => {
     expect(texto).toContain('replayAutorizado.generation === frozen.handle.generation');
   });
 });
+
+/**
+ * ⭐ ORDEN 1-B · LA UI NO PUEDE ATRIBUIRLE LA GARANTÍA A UNA TARJETA QUE NADIE
+ * ELIGIÓ.
+ *
+ * El defecto que encontró Codex, y por qué se nos pasó a los dos: yo argumenté
+ * que `is_default` no viaja en el request y por lo tanto **no puede cambiar la
+ * identidad económica**. Es cierto — y era la pregunta equivocada. El caso no
+ * era sobre el hash: era sobre **qué tarjeta se le MUESTRA a la persona**.
+ * Los dos razonamos sobre el hash y ninguno miró la pantalla.
+ *
+ * El mecanismo: `loadCards()` autoselecciona la DEFAULT; tras una recarga
+ * sobre una apertura congelada, si la garantía se hizo con una guardada
+ * NO-default, la pantalla muestra la default como seleccionada — y los botones
+ * están deshabilitados, así que la persona tampoco puede corregirlo.
+ *
+ * 🔴 Y hay un caso donde NO es sólo visual: si el diagnóstico da `not_found`,
+ * el reenvío CREA por primera vez y la fuente que se manda ES la que respalda
+ * la garantía. Autoseleccionar la default ahí la vuelve real.
+ */
+describe('la garantía congelada no se le atribuye a la default', () => {
+  it('🔴 MUTANTE · `loadCards` NO autoselecciona con un intento congelado', () => {
+    expect(pantalla()).toContain(
+      'if (def && cardStateRef.current.empty && !sinAutoseleccionRef.current) setCardChoice(def.id);',
+    );
+  });
+
+  it('🔴 MUTANTE · descubrir el intento congelado LIMPIA la selección', () => {
+    // Cubre la carrera al revés: si `loadCards` llegó primero y ya había
+    // autoseleccionado, el efecto que descubre el congelado lo deshace.
+    const texto = pantalla();
+    expect(texto).toContain('sinAutoseleccionRef.current = true;');
+    expect(texto).toContain('setCardChoice(SIN_TARJETA_ELEGIDA);');
+  });
+
+  it('🔴 MUTANTE · sin elección explícita el envío se corta', () => {
+    // La guarda dura, no sólo el `disabled` del botón: el silencio no puede
+    // resolverse con la default.
+    expect(pantalla()).toContain(
+      "if (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) {",
+    );
+  });
+
+  it('🔴 el sentinela NO es `new` ni un uuid: los dos afirman algo', () => {
+    expect(pantalla()).toContain("const SIN_TARJETA_ELEGIDA = '';");
+  });
+
+  it('la selección de TARJETA vuelve a estar viva cuando el reenvío está autorizado', () => {
+    // Si el diagnóstico dijo `not_found`, la persona TIENE que poder elegir:
+    // esa fuente es la que va a respaldar la garantía. Son dos radios —las
+    // guardadas y "usar otra"— y los dos tienen que aflojar.
+    const texto = pantalla();
+    expect((texto.match(/disabled=\{!!frozen && !replayHabilitado\}/g) ?? [])).toHaveLength(2);
+  });
+
+  it('🔴 pero el radio de SALDO sigue duro: cambiar de riel SÍ cambia la identidad', () => {
+    // `guarantee_method` está en `PAYLOAD_KEYS.create_mesa`, así que pasar de
+    // tarjeta a saldo es otra intención económica — y además el riel saldo
+    // está apagado. Su `disabled={!!frozen}` NO se aflojó, y eso es
+    // deliberado: el mutante sería "aflojé todos los radios de una".
+    const texto = pantalla();
+    const wallet = texto.indexOf("method === 'wallet' ? 'sel' : ''");
+    expect(wallet, 'no se encontró el radio de saldo').toBeGreaterThan(-1);
+    expect(texto.slice(wallet, wallet + 300)).toContain('disabled={!!frozen}');
+  });
+
+  it('🔴 y la pantalla DICE que no sabe, en vez de mostrar una cualquiera', () => {
+    expect(pantalla()).toContain('No podemos mostrarte con qué tarjeta se garantizó esta mesa.');
+  });
+});
+
+/**
+ * Los comentarios que describían un estado que dejó de ser cierto. Un texto
+ * así es una orden latente: alguien lo lee y actúa sobre un límite que ya no
+ * existe.
+ */
+describe('los comentarios vencidos de la ORDEN 2-A quedaron corregidos', () => {
+  it('ya no se afirma que el reenvío con tarjeta tipeada corta', () => {
+    // Decía: "va a cortar con `monetary_payload_ambiguous`". Con la identidad
+    // económica alineada eso ES FALSO.
+    const texto = pantalla();
+    expect(texto).not.toContain('va a cortar con `monetary_payload_ambiguous`');
+    expect(texto).toContain('CORREGIDO EN LA ORDEN 2-A');
+  });
+
+  it('ya no se afirma que un pm_ nuevo daría 409 en bucle', () => {
+    // El backend EXCLUYE la fuente del hash a propósito: ese 409 no ocurre.
+    expect(pantalla()).not.toContain('daría 409 idempotency_conflict en bucle');
+  });
+});

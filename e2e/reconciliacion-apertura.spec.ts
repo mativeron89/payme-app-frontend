@@ -52,6 +52,14 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await page.getByRole('button', { name: 'Continuar' }).click();
   await expect(page.getByRole('heading', { name: 'Garantizá la mesa' })).toBeVisible();
 
+  // 🔴 SE ELIGE "otra tarjeta" EXPLÍCITAMENTE, y no es un detalle: sin esto el
+  // spec usaba la guardada por default que `loadCards()` autoselecciona, o sea
+  // que NO recorría el camino de tarjeta tipeada — que es el único donde el
+  // `pm_` cambia en cada invocación y por lo tanto el único que necesitaba la
+  // identidad económica alineada. (Lo declaré cubierto antes de que lo
+  // estuviera; ver el mensaje del commit de esta corrección.)
+  await page.getByRole('radio').filter({ hasText: 'Usar otra tarjeta' }).click();
+
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
   // Acá la mesa YA existe en `pending_auth` y el hold está puesto: el backend
   // contestó `requires_action` y el journal quedó congelado a propósito.
@@ -99,6 +107,11 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   // materializa otro, exactamente como Stripe.js. Con el fingerprint viejo
   // —que cubría el request ENTERO— este click moría con
   // `monetary_payload_ambiguous` y el organizador quedaba sin salida.
+  // ORDEN 1-B · ninguna tarjeta viene elegida —la app ya no se la atribuye a la
+  // default— así que hay que elegir, y el CTA está muerto hasta entonces.
+  await expect(page.getByRole('button', { name: /Reintentar esta apertura/ })).toBeDisabled();
+  await page.getByRole('radio').filter({ hasText: 'Usar otra tarjeta' }).click();
+
   const antes = await mesasDelMock(page);
   await page.getByRole('button', { name: /Reintentar esta apertura/ }).click();
   await expect(page.getByRole('heading', { name: 'Confirmá con tu banco' })).toBeVisible();

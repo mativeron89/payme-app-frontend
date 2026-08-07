@@ -30,6 +30,12 @@ import {
   type DecisionReconciliacion,
 } from './reconciliacionMesaView';
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
+
+/**
+ * ORDEN 1-B · "todavía nadie eligió". No es `'new'` —que ya significa "voy a
+ * tipear otra"— ni el uuid de una guardada: los dos afirman algo.
+ */
+const SIN_TARJETA_ELEGIDA = '';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types';
@@ -144,8 +150,34 @@ export function CreateMesaFlow() {
   // tarjeta); `saveCard` = checkbox "guardar" — nace DESMARCADO (Mati,
   // 2026-08-06; el porqué vive en `saveCardView.ts`).
   const [cards, setCards] = useState<PaymentMethod[]>([]);
+  /**
+   * 🔴 ORDEN 1-B · `cardChoice` también puede estar SIN ELEGIR (`''`), y ese
+   * estado no existía. Sus dos valores previos —el uuid de una guardada o
+   * `'new'`— son los dos una AFIRMACIÓN sobre con qué se garantiza; después de
+   * un reload sobre una apertura congelada no tenemos derecho a hacer ninguna.
+   * Ver `sinAutoseleccionRef`.
+   */
   const [cardChoice, setCardChoice] = useState<string>('new');
   const [saveCard, setSaveCard] = useState(GUARDAR_TARJETA_DEFAULT);
+  /**
+   * 🔴 ORDEN 1-B · LA UI NO PUEDE ATRIBUIRLE LA GARANTÍA A UNA TARJETA QUE NO
+   * ELIGIÓ NADIE.
+   *
+   * `loadCards()` autoselecciona la tarjeta DEFAULT. Después de recargar sobre
+   * una apertura congelada eso produce una MENTIRA VISUAL: si la garantía se
+   * hizo con una guardada NO-default, la pantalla muestra la default como
+   * seleccionada y los botones están deshabilitados, así que la persona
+   * tampoco puede corregirlo.
+   *
+   * Y en un caso NO es sólo visual: si el diagnóstico dice `not_found` —la
+   * creación nunca ocurrió— el reenvío CREA por primera vez, y entonces la
+   * fuente que mandamos ES la que respalda la garantía. Autoseleccionar la
+   * default ahí garantizaría una mesa con una tarjeta que la persona no eligió.
+   *
+   * El backend NO publica cuál fue la fuente original (auditado en la orden;
+   * G-38), así que no se puede restaurar: lo honesto es no afirmar nada.
+   */
+  const sinAutoseleccionRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const createInFlightRef = useRef(createInFlightMutex());
   const confirm3dsInFlightRef = useRef(createInFlightMutex());
@@ -248,6 +280,7 @@ export function CreateMesaFlow() {
     // estaba mirando: cambiar de principal los invalida a los dos.
     setDecision(null);
     setReplayAutorizado(null);
+    sinAutoseleccionRef.current = false;
     if (!mesaScopeBase) return;
     let alive = true;
     void readUnconfirmed(mesaScopeBase, 'create_mesa')
@@ -255,6 +288,12 @@ export function CreateMesaFlow() {
         if (!alive) return;
         setFrozen(attempt);
         setPriorAttemptCheckedFor(mesaScopeBase);
+        if (attempt?.reconciliationRequired) {
+          // Sin la fuente original no hay nada que restaurar y sí algo que NO
+          // afirmar. Se limpia incluso si `loadCards` ya autoseleccionó.
+          sinAutoseleccionRef.current = true;
+          setCardChoice(SIN_TARJETA_ELEGIDA);
+        }
         // ORDEN 2A · acá se seteaba además un `role="alert"` con casi el mismo
         // texto que el panel. Dos motivos para sacarlo: quedaban DOS avisos
         // apilados diciendo lo mismo —y sólo uno con la salida—, y el del
@@ -541,7 +580,11 @@ export function CreateMesaFlow() {
       const def = r.payment_methods.find((p) => p.is_default) ?? r.payment_methods[0];
       // Si la respuesta llegó tarde y el usuario YA está tipeando una tarjeta
       // nueva, no le pisamos la selección (destruiría lo tipeado).
-      if (def && cardStateRef.current.empty) setCardChoice(def.id);
+      // ORDEN 1-B · y si hay una apertura congelada, no se autoselecciona
+      // NADA: la selección sería una afirmación sobre con qué se garantizó.
+      // El ref cubre las dos carreras — si `loadCards` llega primero, el
+      // efecto que descubre el intento congelado limpia la selección después.
+      if (def && cardStateRef.current.empty && !sinAutoseleccionRef.current) setCardChoice(def.id);
     } catch {
       setCards([]);
     }
@@ -578,14 +621,23 @@ export function CreateMesaFlow() {
     // más abajo y no se rota. Por B-06 eso no puede duplicar: si la mesa ya
     // existe, el backend devuelve ESA; si no, la crea por primera vez.
     //
-    // ⚠️ LÍMITE DECLARADO: con tarjeta TIPEADA y tras un reload, el `pm_` ya no
-    // está en memoria y Stripe.js devuelve otro por invocación. El backend lo
-    // deja fuera del hash a propósito (`PAYLOAD_KEYS.create_mesa`), pero el
-    // fingerprint LOCAL cubre el request entero, así que `prepareMonetaryRequest`
-    // va a cortar con `monetary_payload_ambiguous`. Es fail-closed —corta, no
-    // duplica— y por eso el reenvío sirve hoy con tarjeta guardada.
+    // ✅ CORREGIDO EN LA ORDEN 2-A. Acá decía que con tarjeta TIPEADA el reenvío
+    // tras un reload iba a cortar con `monetary_payload_ambiguous`, porque el
+    // fingerprint local cubría el request entero mientras el del dueño deja la
+    // fuente de pago afuera. **Ya no**: el sello es la identidad económica
+    // (`src/utils/payloadIdentity.ts`), así que otro `pm_` no rompe nada. El
+    // texto viejo describía un límite que dejó de existir, y un comentario que
+    // describe un estado que no es, es una orden latente.
     if (frozenRequiresReconciliation && !replayHabilitado) {
       setError('Esta apertura pertenece a una sesión anterior. Está bloqueada hasta reconciliar su resultado; no abrimos otra mesa.');
+      createInFlightRef.current.leave();
+      return;
+    }
+    // ORDEN 1-B · sin elección explícita no se reenvía. El silencio no puede
+    // resolverse con la default: si la creación nunca ocurrió, esa default
+    // TERMINA respaldando la garantía.
+    if (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) {
+      setError('Elegí con qué tarjeta reenviar esta apertura.');
       createInFlightRef.current.leave();
       return;
     }
@@ -619,9 +671,13 @@ export function CreateMesaFlow() {
             setBusy(false);
             return;
           }
-          // B-06: en el reintento se reusa el pm_ ya tokenizado. Stripe.js
-          // devuelve uno distinto por invocación y el backend lo hashea: sin
-          // esto, la clave estable daría 409 idempotency_conflict en bucle.
+          // B-06: en el reintento se reusa el pm_ ya tokenizado.
+          // ⚠️ EL MOTIVO CAMBIÓ y el comentario decía el viejo: NO es que "el
+          // backend lo hashea y daría 409" — `PAYLOAD_KEYS.create_mesa`
+          // EXCLUYE la fuente a propósito, justamente para que un pm_ nuevo no
+          // rote la clave. Reusarlo sigue valiendo por dos razones reales: no
+          // acumular PaymentMethods huérfanos en Stripe por cada reintento, y
+          // conservar la fuente que la persona eligió dentro de la sesión.
           const cached = recallPaymentMethod(mesaScope, intent);
           if (cached) {
             stripePmId = cached;
@@ -1320,7 +1376,19 @@ export function CreateMesaFlow() {
     return (
       <div className="screen has-cta">
         <TopBar title="Garantizá la mesa" onBack={back} />
-        <div className="scroll" style={{ padding: 16 }}>
+        {/* 🔴 ORDEN 1-B · LONGHANDS, NO EL SHORTHAND — y no es prolijidad.
+            Acá había `style={{ padding: 16 }}`, y el shorthand inline PISA el
+            `padding-bottom: 110px` de `.has-cta .scroll`. Sin ese aire, la
+            píldora flotante se le monta al final de la lista: medido con
+            Playwright, que reportó `<button disabled class="cta-float">
+            intercepts pointer events` sobre la opción "Usar otra tarjeta".
+            **No era un problema del test: en un teléfono esa opción no se
+            puede tocar.** Y con el estado nuevo de la ORDEN 1-B —que exige
+            elegir tarjeta— la persona quedaba trabada: el CTA le pide elegir y
+            la opción está debajo del CTA.
+            El aviso ya existía en `global.css:1909-1911` y esta pantalla fue
+            la que quedó afuera del barrido que arregló Ticket y División. */}
+        <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
           <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 14 }}>
             <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Garantía de la mesa
@@ -1347,6 +1415,22 @@ export function CreateMesaFlow() {
           <div className="sectlabel" id="lbl-garantia">
             ¿Con qué garantizás?
           </div>
+          {/* 🔴 ORDEN 1-B · EL ESTADO HONESTO CUANDO NO SABEMOS CON QUÉ SE
+              GARANTIZÓ. Antes acá no había nada y la lista de abajo mostraba
+              la tarjeta DEFAULT seleccionada — una afirmación que nadie hizo.
+              El backend guarda la fuente original (`auth_source_payment_method_id`)
+              pero NO la publica en ninguna respuesta: ni el 201 de `POST /mesas`
+              ni `GET /mesas/creations/:key` traen más que `method` y
+              `authorized`. Está anotado como G-38; hasta entonces lo único
+              honesto es decir que no lo sabemos. */}
+          {frozenRequiresReconciliation && (
+            <div className="note" role="status">
+              <b>No podemos mostrarte con qué tarjeta se garantizó esta mesa.</b>{' '}
+              {decision?.veredicto === 'a_medias'
+                ? 'La mesa ya existe y su garantía sigue respaldada por la tarjeta original: la que elijas acá acompaña el reenvío, no la reemplaza.'
+                : 'Elegí con cuál reenviar.'}
+            </div>
+          )}
           <div role="radiogroup" aria-labelledby="lbl-garantia">
           {/* Sin opción "Tarjeta" padre (redundante — feedback de Mati): las
               tarjetas guardadas SON las opciones. Elegir una = garantizar con
@@ -1359,7 +1443,11 @@ export function CreateMesaFlow() {
                   setMethod('card');
                   setCardChoice(c.id);
                 }}
-                disabled={!!frozen}
+                // ORDEN 1-B · con el reenvío autorizado la selección VUELVE a
+                // estar viva: si el diagnóstico dijo `not_found`, la fuente que
+                // se mande es la que va a respaldar la garantía, y tiene que
+                // elegirla la persona.
+                disabled={!!frozen && !replayHabilitado}
                 role="radio"
                 aria-checked={method === 'card' && cardChoice === c.id}
               >
@@ -1387,7 +1475,7 @@ export function CreateMesaFlow() {
                 setMethod('card');
                 setCardChoice('new');
               }}
-              disabled={!!frozen}
+              disabled={!!frozen && !replayHabilitado}
               role="radio"
               aria-checked={method === 'card' && cardChoice === 'new'}
             >
@@ -1459,6 +1547,7 @@ export function CreateMesaFlow() {
             !priorAttemptChecked ||
             priorAttemptCheckFailed ||
             (frozenRequiresReconciliation && !replayHabilitado) ||
+            (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) ||
             (!frozen &&
               !IS_MOCK &&
               method === 'card' &&

@@ -445,7 +445,36 @@ export async function mockScanTicket(): Promise<OcrResponse> {
 
 /** Garantía 3DS pendiente del mock (mesa creada con card, aún pending_auth). */
 let pending3ds: MockMesa | null = null;
-/** D4: pm_ de la tarjeta nueva a guardar RECIÉN cuando el 3DS confirme. */
+/**
+ * D4: pm_ de la tarjeta nueva a guardar RECIÉN cuando el 3DS confirme.
+ *
+ * 🔴 QUÉ CUBRIÓ N-16 Y QUÉ NO — con precisión, porque la mitad se arregló y la
+ * otra mitad no, y decir "arreglado" a secas sería falso.
+ *
+ * · **CUBIERTO:** la FINALIZACIÓN del 3DS ya no depende de memoria de módulo.
+ *   `mockConfirmGuarantee3ds` gateaba con `mesa !== pending3ds` y eso volvía
+ *   imposible confirmar tras una recarga; ahora el gate es
+ *   `status === 'pending_auth'`, que es durable. Ése era el defecto que
+ *   bloqueaba el camino.
+ *
+ * · **NO CUBIERTO:** esta variable. La INTENCIÓN de guardar la tarjeta sigue
+ *   viviendo sólo en memoria del módulo, así que tras una recarga se pierde y
+ *   el mock no guarda la tarjeta aunque la persona hubiera marcado el
+ *   checkbox. **El backend real NO tiene ese agujero**: sella
+ *   `auth_save_payment_method` en la fila de la mesa ANTES de Stripe y el
+ *   webhook de éxito la guarda igual.
+ *
+ * · **Alcance de la divergencia:** sólo el efecto "la tarjeta aparece después
+ *   en Mis tarjetas", y sólo en el mock, y sólo si hubo recarga entre la
+ *   garantía y el 3DS. No toca dinero, no toca el reenvío, no toca la
+ *   identidad económica. Y el checkbox nace DESMARCADO (`saveCardView.ts`),
+ *   así que el camino por defecto ni siquiera lo activa.
+ *
+ * · **Por qué no se amplía acá:** persistir la intención exige tocar la forma
+ *   del estado guardado del mock por un observable de demo. Queda declarado en
+ *   vez de arreglado a medias — y declarado con su alcance, no con un "ojo,
+ *   puede fallar".
+ */
 let pending3dsSave: string | null = null;
 
 export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesaResponse> {
@@ -622,9 +651,10 @@ function outcomeDeCreacion(status: MesaStatus | string): MesaCreationOutcome {
  * La autoridad es la clave, igual que allá: no hay búsqueda por nombre, por
  * restaurante ni por "la más reciente".
  *
- * `payloadHash` es opcional y **este front todavía no lo manda** (ver el
- * porqué en `getMesaCreation` de la fachada). Se implementa igual para que el
- * mock no sea una versión recortada del contrato.
+ * `payloadHash` es opcional y **desde la ORDEN 2-A el front SÍ lo manda**: el
+ * sello v2 del journal es el `payloadHash` del contrato. (Este comentario decía
+ * lo contrario y quedó vencido el mismo día.) El mock compara hasheando su
+ * forma canónica guardada, que es exactamente lo que el dueño hashea.
  */
 export async function mockGetMesaCreation(
   idempotencyKey: string,
