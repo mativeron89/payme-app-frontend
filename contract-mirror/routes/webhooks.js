@@ -417,6 +417,11 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
       throw finishErr;
     }
     if (failStatus === 'failed_terminal') {
+      // R1-A (sexto hueco) · misma invariante que las otras salidas 2xx: la
+      // fila del inbox quedó terminal, el lock ya no protege nada y se suelta
+      // ANTES de responder. Sin esto, un redelivery inmediato de un evento que
+      // acaba de terminalizar caía en la ventana post-respuesta y recibía 503.
+      await eventLock.release();
       return res.json({ received: true, terminal: true, error: 'handler_failed' });
     }
     res.status(500).json({ received: false, error: 'handler_failed' });
@@ -1417,6 +1422,14 @@ async function replayConnectInboxEvent(event, restaurant) {
     const guarantee = await handleGuaranteeIntentEvent(
       event.type, piGar, acctId, restaurant.id
     );
+    // R1-A (hueco B) · el replay durable NO guardaba: el guardado sólo estaba
+    // cableado en la ruta HTTP (:1709). Es el mismo defecto de fondo que la
+    // orden ataca —cablear por caller en vez de converger—, y por eso además
+    // del cableado acá el sweep de savedCards deriva del estado monetario.
+    if (!guarantee.ignored
+        && event.type === 'payment_intent.amount_capturable_updated') {
+      await saveGuaranteeSourceCardBySealedIntent(piGar.id, acctId);
+    }
     return { handled: true, guarantee, ignored: guarantee.ignored || null };
   }
 
@@ -1854,4 +1867,9 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
 
 router.sweepRetryableConnectRefundInbox = sweepRetryableConnectRefundInbox;
 router.sweepRetryablePlatformWebhookInbox = sweepRetryablePlatformWebhookInbox;
+// R1-A · expuesto para que el replay durable sea ejercitable por test sin
+// fabricar una fila de inbox: el hueco B vivía justamente acá y su cableado
+// eager necesita detector propio (el sweep de savedCards lo cubre igual, pero
+// varias horas después — la latencia también es contrato con el usuario).
+router.replayConnectInboxEvent = replayConnectInboxEvent;
 module.exports = router;

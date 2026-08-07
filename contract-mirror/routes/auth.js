@@ -267,7 +267,7 @@ router.post('/logout', async (req, res, next) => {
 
     let payload;
     try { payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] }); }
-    catch (err) { return res.status(401).json({ error: 'invalid_token' }); }
+    catch (_) { return res.status(401).json({ error: 'invalid_token' }); }
 
     // Conserva compatibilidad con tokens viejos sin claims, pero no permite que
     // un token que sí declara issuer/audience ajenos revoque una sesión válida.

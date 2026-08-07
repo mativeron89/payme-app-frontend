@@ -249,64 +249,226 @@ async function mirrorSavedPaymentMethod(userId, stripePmId) {
  * Best-effort deliberado, como el espejo: el cobro ya salió y vale más que el
  * guardado; un fallo se loguea y la tarjeta se puede guardar por el vault.
  */
-async function saveDurableSourceCard({ kind, id }) {
+const OWNER_TYPES = { attempt: 'payment_attempt', guarantee: 'mesa_guarantee' };
+const RETRY_BACKOFF_MIN = Number(process.env.CARD_SAVE_RETRY_MIN) || 5;
+const SAVE_SWEEP_BATCH = Number(process.env.CARD_SAVE_SWEEP_BATCH) || 25;
+
+/** Re-deriva los HECHOS desde la fila de dinero. Nunca desde la intención. */
+async function loadSaveOwner(kind, id) {
+  if (kind === 'attempt') {
+    const { rows: [row] } = await pool.query(
+      `SELECT user_id, payment_type AS method, status,
+              stripe_save_payment_method AS wants_save,
+              stripe_source_payment_method_id AS source_pm,
+              stripe_customer_id_snapshot AS customer_id
+         FROM payment_attempts WHERE id=$1`, [id]
+    );
+    return row
+      ? { ...row, succeeded: ['succeeded', 'processed', 'refunded'].includes(row.status) }
+      : null;
+  }
+  if (kind === 'guarantee') {
+    const { rows: [row] } = await pool.query(
+      `SELECT opener_user_id AS user_id, auth_method AS method, status,
+              auth_payment_intent_id,
+              auth_save_payment_method AS wants_save,
+              auth_source_payment_method_id AS source_pm,
+              auth_stripe_customer_id AS customer_id
+         FROM mesas WHERE id=$1`, [id]
+    );
+    return row
+      ? {
+        ...row,
+        succeeded: !!row.auth_payment_intent_id
+          && !['pending_auth', 'auth_failed', 'cancelled'].includes(row.status),
+      }
+      : null;
+  }
+  return null;
+}
+
+async function recordIntent(kind, id, status, lastError = null) {
+  const terminal = status !== 'pending';
+  await pool.query(
+    `INSERT INTO card_save_intents
+       (owner_type, owner_id, status, attempts, last_error, next_attempt_at, resolved_at)
+     VALUES ($1,$2,$3,1,LEFT($4,300),
+             NOW() + ($5 || ' minutes')::interval,
+             CASE WHEN $6::boolean THEN NOW() ELSE NULL END)
+     ON CONFLICT (owner_type, owner_id) DO UPDATE
+        SET status=EXCLUDED.status,
+            attempts=card_save_intents.attempts + 1,
+            last_error=EXCLUDED.last_error,
+            next_attempt_at=EXCLUDED.next_attempt_at,
+            resolved_at=CASE WHEN $6::boolean
+                             THEN COALESCE(card_save_intents.resolved_at, NOW())
+                             ELSE NULL END,
+            updated_at=NOW()
+      WHERE card_save_intents.status = 'pending'`,
+    [OWNER_TYPES[kind], id, status, lastError, String(RETRY_BACKOFF_MIN), terminal]
+  );
+}
+
+/**
+ * Resuelve la intención de guardar de UNA fila de dinero. Idempotente y
+ * seguro de invocar desde cualquier camino (eager) y desde el sweep.
+ *
+ * ORDEN R1-A.1 · la elegibilidad se verifica ANTES de tocar Stripe. La versión
+ * de v2.46.0 adjuntaba y recién después validaba en el espejo: un `pm_` de
+ * wallet nativa quedaba ADJUNTADO al Customer de plataforma y sólo entonces se
+ * rechazaba (medido: `attaches_remotos: 1, filas_locales: 0`). Rechazar
+ * después de mutar no es rechazar.
+ *
+ * Nunca lanza: el éxito monetario no puede fallar porque falle el guardado.
+ * Pero tampoco pierde la intención: todo resultado no terminal queda `pending`
+ * en `card_save_intents` y el sweep lo hace converger.
+ */
+async function resolveCardSaveIntent({ kind, id }) {
+  if (!OWNER_TYPES[kind]) return { skipped: 'unknown_kind' };
   try {
-    let row;
-    if (kind === 'attempt') {
-      ({ rows: [row] } = await pool.query(
-        `SELECT user_id, payment_type AS method,
-                stripe_save_payment_method AS wants_save,
-                stripe_source_payment_method_id AS source_pm,
-                stripe_customer_id_snapshot AS customer_id
-           FROM payment_attempts WHERE id=$1`, [id]
-      ));
-    } else if (kind === 'guarantee') {
-      ({ rows: [row] } = await pool.query(
-        `SELECT opener_user_id AS user_id, auth_method AS method,
-                auth_save_payment_method AS wants_save,
-                auth_source_payment_method_id AS source_pm,
-                auth_stripe_customer_id AS customer_id
-           FROM mesas WHERE id=$1`, [id]
-      ));
-    } else {
-      return { skipped: 'unknown_kind' };
-    }
+    const row = await loadSaveOwner(kind, id);
     if (!row) return { skipped: 'row_missing' };
-    // El flag durable manda; el efímero de wallet nativa jamás entra (method
-    // 'card' + elegibilidad del espejo, que rechaza cualquier wallet).
-    if (row.method !== 'card') return { skipped: 'not_card' };
+    // Sin opt-in no se registra intención: no hay nada que converger.
     if (row.wants_save !== true) return { skipped: 'no_opt_in' };
+    if (row.method !== 'card') {
+      // Riel que no admite bóveda (wallet nativa declarada como tal): terminal.
+      await recordIntent(kind, id, 'rejected', `method:${row.method}`);
+      return { skipped: 'not_card' };
+    }
+    if (!row.succeeded) return { skipped: 'not_succeeded_yet' };
     if (!row.user_id || !row.source_pm || !row.customer_id) {
+      await recordIntent(kind, id, 'pending', 'incomplete_snapshot');
       return { skipped: 'incomplete_snapshot' };
     }
 
+    // ── 1) ELEGIBILIDAD ANTES DE CUALQUIER MUTACIÓN REMOTA ────────────────
+    // `typed_user` admite la fuente sin adjuntar (tarjeta recién tipeada) o ya
+    // adjunta a NUESTRO customer (retry, o reuso de una guardada); rechaza la
+    // adjunta a un tercero. Y rechaza CUALQUIER wallet tokenizada, que es el
+    // caso que la orden exige cerrar con cero attach remoto.
+    let verified;
     try {
-      await stripeService.attachPaymentMethod(
-        row.customer_id, row.source_pm, `attach_save_${kind}_${id}`
-      );
-    } catch (err) {
-      // El attach de un pm_ ya adjunto falla; si quedó adjunto AL MISMO
-      // customer (retry con otra key, carrera con el vault), el espejo de
-      // abajo lo verifica y sigue. Adjunto a OTRO customer → el espejo lo
-      // rechaza por ownership. Cualquier otro fallo: best-effort, se loguea.
-      logger.warn('save_source_card_attach_failed', {
-        kind, id, error: err.message, code: err.code || null,
+      verified = await cardEligibility.retrieveEligibleCard({
+        paymentMethodId: row.source_pm,
+        expectedCustomerId: row.customer_id,
+        ownership: 'typed_user',
+        reconciliationCode: 'card_save_verification_unavailable',
       });
+    } catch (error) {
+      const terminal = error.status === 422 || error.status === 409;
+      await recordIntent(
+        kind, id,
+        terminal ? (error.status === 422 ? 'rejected' : 'manual_review') : 'pending',
+        error.code || error.message
+      );
+      logger[terminal ? 'warn' : 'error']('card_save_ineligible_or_unverified', {
+        kind, id, code: error.code || null, status: error.status || null,
+      });
+      return { skipped: error.code || 'ineligible_or_unverified' };
     }
+
+    // ── 2) ATTACH idempotente (sólo sobre una fuente ya probada elegible) ──
+    // La key es estable por dueño: un reintento del sweep no puede duplicar
+    // ownership. Si Stripe la reporta ya adjunta a NUESTRO customer, el
+    // ownership ya es el correcto y se sigue al espejo.
+    const yaEsNuestra = cardEligibility.remoteId(verified.remote.customer) === row.customer_id;
+    if (!yaEsNuestra) {
+      try {
+        await stripeService.attachPaymentMethod(
+          row.customer_id, row.source_pm, `attach_save_${kind}_${id}`
+        );
+      } catch (error) {
+        await recordIntent(kind, id, 'pending', error.code || error.message);
+        logger.error('card_save_attach_failed', {
+          kind, id, error: error.message, code: error.code || null,
+        });
+        return { skipped: 'attach_failed' };
+      }
+    }
+
+    // ── 3) ESPEJO local (vuelve a verificar ownership ya adjunto) ─────────
     const mirror = await mirrorSavedPaymentMethod(row.user_id, row.source_pm);
     if (mirror.mirrored || mirror.skipped === 'already_mirrored') {
-      logger.audit('save_source_card_saved', { kind, id, user_id: row.user_id });
+      await recordIntent(kind, id, 'saved');
+      logger.audit('card_save_completed', { kind, id, user_id: row.user_id });
       return { saved: true };
     }
-    logger.warn('save_source_card_not_saved', { kind, id, reason: mirror.skipped });
+    const terminalMirror = ['ineligible_or_unverified', 'remote_owner_mismatch', 'local_conflict']
+      .includes(mirror.skipped);
+    await recordIntent(
+      kind, id,
+      terminalMirror ? 'manual_review' : 'pending',
+      `mirror:${mirror.skipped}`
+    );
+    logger.warn('card_save_not_completed', { kind, id, reason: mirror.skipped });
     return { skipped: mirror.skipped };
-  } catch (err) {
-    logger.warn('save_source_card_failed', { kind, id, error: err.message });
+  } catch (error) {
+    // Fallo inesperado: la intención queda pendiente, jamás se pierde.
+    try { await recordIntent(kind, id, 'pending', error.message); } catch (_) { /* noop */ }
+    logger.error('card_save_failed', { kind, id, error: error.message });
     return { skipped: 'error' };
   }
 }
 
+/**
+ * Convergencia. 🔴 DERIVA sus candidatos del ESTADO MONETARIO, no de
+ * `card_save_intents`: un camino de éxito nuevo que nadie se acuerde de
+ * cablear queda cubierto igual, porque su fila de dinero ya lo delata. Ésa es
+ * la diferencia entre "hay que acordarse de llamarlo" y "es imposible de
+ * saltear" (condición 3 de la orden R1-A).
+ */
+async function sweepCardSaveIntents({ limit = SAVE_SWEEP_BATCH } = {}) {
+  const { rows } = await pool.query(
+    `SELECT 'attempt' AS kind, pa.id
+       FROM payment_attempts pa
+       LEFT JOIN card_save_intents csi
+         ON csi.owner_type='payment_attempt' AND csi.owner_id=pa.id
+      WHERE pa.stripe_save_payment_method = true
+        AND pa.payment_type = 'card'
+        -- 'refunded' INCLUIDO a propósito (enumeración exhaustiva R1-A):
+        -- el cobro OCURRIÓ y el opt-in fue explícito; una devolución
+        -- posterior no retira el consentimiento de guardar la tarjeta. Y hay
+        -- un camino —connectRefundProcessor.applyNetZeroFull— que lleva la
+        -- fila cancelling→succeeded→refunded en UNA SOLA transacción: nunca
+        -- es visible en 'succeeded' desde afuera, así que sin este estado se
+        -- perdería para siempre.
+        AND pa.status IN ('succeeded','processed','refunded')
+        AND (csi.id IS NULL
+             OR (csi.status='pending' AND csi.next_attempt_at <= NOW()))
+      UNION ALL
+     SELECT 'guarantee' AS kind, m.id
+       FROM mesas m
+       LEFT JOIN card_save_intents csi
+         ON csi.owner_type='mesa_guarantee' AND csi.owner_id=m.id
+      WHERE m.auth_save_payment_method = true
+        AND m.auth_method = 'card'
+        AND m.auth_payment_intent_id IS NOT NULL
+        -- El PI se sella TAMBIÉN cuando el hold quedó en requires_action
+        -- (3DS sin completar): ahí la mesa sigue en 'pending_auth' y todavía
+        -- no hay autorización. Guardar entonces sería adjuntar por un hold
+        -- que puede no existir nunca. auth_failed/cancelled son el mismo caso
+        -- ya resuelto en contra.
+        AND m.status NOT IN ('pending_auth','auth_failed','cancelled')
+        AND (csi.id IS NULL
+             OR (csi.status='pending' AND csi.next_attempt_at <= NOW()))
+      LIMIT $1`,
+    [limit]
+  );
+  let saved = 0; let pending = 0;
+  for (const row of rows) {
+    const result = await resolveCardSaveIntent({ kind: row.kind, id: row.id });
+    if (result.saved) saved += 1; else pending += 1;
+  }
+  if (rows.length > 0) {
+    logger.info('card_save_sweep', { revisados: rows.length, saved, pending });
+  }
+  return { revisados: rows.length, saved, pending };
+}
+
 module.exports = {
   ensureStripeCustomer, mirrorSavedPaymentMethod, customerIdempotencyKey,
-  saveDurableSourceCard,
+  resolveCardSaveIntent,
+  sweepCardSaveIntents,
+  // Alias histórico de G-11 (v2.46.0): los callers ya cableados lo invocan.
+  saveDurableSourceCard: resolveCardSaveIntent,
 };

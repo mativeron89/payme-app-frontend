@@ -79,7 +79,7 @@ async function requireAuth(req, res, next) {
     let payload;
     try {
       payload = verifyJwt(token);
-    } catch (err) {
+    } catch (_) {
       return res.status(401).json({ error: 'invalid_token' });
     }
 

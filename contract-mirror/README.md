@@ -6,42 +6,80 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-07**.
+- Fecha del refresh: **2026-08-07** (R3-A).
 - Fuente local: `../payme-app-backend`.
-- Commit exacto: `7e45db00876963e091169fb63fa876716c22a653` (v2.46.0 — el
-  hash CONGELADO del INTENTO de cierre de G-11, 🟡 refutado después: ver el
-  aviso de abajo. El backend siguió a v2.46.1 y este espejo NO lo persigue:
-  la procedencia es este hash).
-- Versión de `package.json`: **2.46.0**.
+- Commit exacto: `5c8436c7d3bb5efc1b8b53c95340ec6690877a50` (el commit
+  espejado).
+- **Procedencia del CONTENIDO: `aa28e842fe0332a54c80231b241ff4d57100c7fa`**
+  (v2.47.0 · G-11 cerrado de verdad), que es lo que declara el inventario
+  autoritativo. Son dos preguntas distintas y por eso hay dos hashes: el
+  inventario no puede contener su propio hash, y `5c8436c` —el commit que lo
+  publica— no cambió ningún archivo del contrato.
 - Rama fuente: `codex/audit-2026-08-02-app-backend`.
 
-Paridad verificada con `scripts/verificar-mirror.sh` (modo completo, contra
-el commit declarado): **70 espejados · 70 idénticos · 0 diferencias.**
+**71 archivos espejados** más este README de procedencia — uno más que el
+refresh anterior: `db/migrate_card_save_intents_v2.47.0.sql`, la migración del
+cierre real de G-11.
 
-### 🟡 ESTE REFRESH ES PROVISIONAL · el cierre de G-11 fue REFUTADO
+### 🔴 LA POBLACIÓN LA DECLARA EL DUEÑO, no este repo
 
-**Registrado el 2026-08-07, después de espejar.** Una auditoría externa
-(Codex) refutó el cierre de G-11 en este mismo hash: `7e45db0` **tenía cinco
-huecos**, y el peor es que **la wallet nativa se adjuntaba a Stripe ANTES de
-validarla** (medido: `attaches_remotos: 1`). App Backend está reabriendo G-11
-con una migración nueva.
+Hasta R3-A la lista de archivos salía de un manifiesto que este repo generaba
+**desde el propio espejo**: el inventariado se inventariaba a sí mismo, así que
+una omisión coordinada —borrar un archivo y regenerar— pasaba en verde. Ahora
+la fuente de la población es `scripts/mirror-inventory.json`, copia verbatim
+del artefacto que publica App Backend (`contract/mirror-inventory.json`), con
+su mapeo **`origen → destino` explícito**: **siete de los 71 se espejan
+renombrados** (`services/settlement.js` → `docs/settlement.js.ref`,
+`docs/history/*` y tres `CHANGELOG_*` → `docs/*`). Compararlos por convención
+daría "ausente" a archivos que sí están.
 
-**Qué significa para este espejo, con precisión:**
+El gate (`scripts/verificar-mirror.mjs`) responde **tres preguntas separadas**:
 
-- Lo espejado abajo **describe fielmente `7e45db0`** — el espejo no está mal:
-  copia lo que el dueño publicó y declaró cerrado.
-- **Pero `7e45db0` NO es el cierre definitivo de G-11.** El consumo que este
-  front hizo de él (commit `0d9c475`) queda **PROVISIONAL** y se corrige con
-  un follow-up cuando el dueño publique el hash bueno.
-- **Este espejo NO se refresca hasta entonces** (congelado por orden): un
-  mirror puesto al día hoy queda obsoleto antes de que la corrección termine.
+| Modo | Pregunta | Sin la fuente |
+| --- | --- | --- |
+| `--integridad` | ¿el espejo es fiel al INVENTARIO? | ✅ es lo único verificable — **y no se llama paridad** |
+| `--paridad` | ¿la FUENTE respalda al inventario en el commit declarado? | ❌ exit 2 · NO CERTIFICADO |
+| `--vigencia` | ¿el contenido sigue igual en HEAD? | ❌ exit 2 |
 
-**Por qué no se revierte:** el espejo copió bien y el front consumió bien lo
-que había. Revertir borraría trabajo correcto sobre una base equivocada en vez
-de corregir la base. Lo que sí se corrige ahora es **la afirmación**: nada acá
-puede seguir diciendo que G-11 está cerrado y listo.
+Separar **integridad** de **vigencia** es la lección que el dueño pagó
+primero: su `--check` gritaba con cada commit posterior aunque ningún archivo
+del contrato hubiera cambiado, *"y un gate que grita por lo que no es un
+desvío se termina ignorando"*. Que el HEAD avance no es un desvío del espejo.
 
-### Qué trajo el refresh a v2.46.0 · el intento de cierre de G-11, cero contrato nuevo
+**Verificado el 2026-08-07:** integridad ✅ 71/71 · paridad ✅ contra
+`aa28e84` · vigencia ✅ (HEAD del backend no movió nada de lo espejado).
+
+### ✅ G-11 CERRADO DE VERDAD (v2.47.0) · y la provisionalidad se levanta
+
+**Registrado el 2026-08-07, tras reauditar.** El cierre anterior (`7e45db0`,
+v2.46.0) **fue refutado**: tenía cinco huecos, y el peor era que la wallet
+nativa **se adjuntaba a Stripe ANTES de validarla** — *"rechazar después de
+mutar no es rechazar"*, escribe el propio dueño. Este espejo consumía ese
+hash, así que el consumo (`0d9c475`) quedó marcado PROVISIONAL.
+
+**`aa28e84` (v2.47.0) lo cierra en serio, y lo verifiqué en el código
+espejado, no en el anuncio:**
+
+- **La elegibilidad se verifica ANTES de cualquier mutación remota**
+  (`services/savedCards.js`, "1) ELEGIBILIDAD ANTES DE CUALQUIER MUTACIÓN
+  REMOTA"). El hueco refutado está cerrado en su causa, no en su síntoma.
+- **La promesa CONVERGE**: la intención de guardar se registra en
+  `card_save_intents` (migración nueva, `db/migrate_card_save_intents_v2.47.0.sql`
+  — el archivo 71) y un sweep la resuelve. Si el guardado falla por timeout,
+  **la tarjeta aparece en el tick siguiente en vez de perderse**.
+- **Cero campos nuevos**: el contrato que este front consume no cambió de
+  forma. El consumo de `0d9c475` sigue siendo correcto y ahora está
+  respaldado de verdad.
+- Sigue siendo **no-op para wallets** (`method !== 'card'` → rechazo
+  terminal) y para guest, que es lo que el mock espeja.
+
+🔴 **Límite declarado del mock:** el real puede guardar **eager o en el tick
+siguiente**; el mock guarda siempre sincrónico tras el éxito. Es una
+diferencia de MOMENTO, no de forma — el mock no puede modelar un Stripe que
+falle sin inventar un disparador de fallas que este repo no tiene. Lo
+observable para la UI (la tarjeta aparece en `GET /payment-methods`) coincide.
+
+### Qué trajo el refresh a v2.46.0 · el primer intento de cierre de G-11 (refutado)
 
 Cuatro archivos (`routes/mesas.js`, `routes/webhooks.js`,
 `services/savedCards.js`, `docs/settlement.js.ref`) y **ningún campo ni
@@ -154,7 +192,8 @@ y que no entraba en ningún conteo. Que hoy resultara idéntico fue suerte, no
 método. El error de conteo era el síntoma; el agujero de verificación era el
 defecto.
 
-**Enumeración correcta al 2026-08-04:** **70 archivos espejados** más este
+**Enumeración correcta al 2026-08-04** _(histórico; el número vigente está
+arriba)_: **70 archivos espejados en ese momento** más este
 README de procedencia. Eran 69 antes de agregar `services/walletRail.js` en este
 refresh — el 69 que midió la reauditoría era el número correcto de ese momento.
 

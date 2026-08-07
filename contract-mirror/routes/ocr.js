@@ -30,7 +30,6 @@ const USE_REAL = process.env.OCR_FEATURE_FLAG === 'real';
 // v2.19 (D5): proveedor real integrado — Amazon Textract (services/ocrTextract).
 // El DEFAULT sigue siendo mock: nada cambia hasta setear OCR_FEATURE_FLAG=real
 // + credenciales AWS por entorno.
-const HAS_REAL_IMPL = true;
 
 // ─── FAIL-FAST AL STARTUP (mismo espíritu que P1 #8) ───
 // Modo real sin credenciales AWS → abortar el arranque, no fallar en runtime.

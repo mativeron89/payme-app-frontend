@@ -25,7 +25,7 @@ import { MAX_TICKET_IMAGE_BYTES } from './index';
  * ## Límite declarado
  *
  * Lee `contract-mirror/`, que es una copia — no el backend corriendo. Que el
- * espejo esté fresco lo acredita `scripts/verificar-mirror.sh`, no este test.
+ * espejo esté fresco lo acredita `scripts/verificar-mirror.mjs`, no este test.
  */
 
 const espejo = import.meta.glob('/contract-mirror/routes/ocr.js', {

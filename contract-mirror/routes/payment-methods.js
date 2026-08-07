@@ -84,7 +84,7 @@ async function confirmRemoteOwner(customerId, paymentMethodId) {
   let remote;
   try {
     remote = await stripeService.retrievePaymentMethod(paymentMethodId);
-  } catch (err) {
+  } catch (_) {
     // Los códigos del SDK/proxy no forman parte de nuestro contrato HTTP. Un
     // timeout o error de transporte deja el attach en estado desconocido.
     throw codedError('payment_method_attach_unresolved', 502);
@@ -469,7 +469,7 @@ async function waitForDetachOutcome(userId, paymentMethodId) {
 }
 
 // ─── POST /setup-intent ───────────────────────────────────
-router.post('/setup-intent', validateBody(setupIntent), async (req, res, next) => {
+router.post('/setup-intent', validateBody(setupIntent), async (req, res, _next) => {
   let intent;
   try {
     req.user.stripe_customer_id = await ensureStripeCustomer(req.user);
@@ -605,7 +605,7 @@ router.post('/', validateBody(attachPaymentMethod), async (req, res, next) => {
     try {
       pm = await stripeService.attachPaymentMethod(req.user.stripe_customer_id, stripe_payment_method_id,
         attachIdempotencyKey(req.user.id, stripe_payment_method_id));
-    } catch (attachErr) {
+    } catch (_attachErr) {
       // Timeout/5xx ambiguo: solo convergemos si Stripe confirma ownership por
       // el customer esperado; jamás adjudicamos un pm_ por metadata del cliente.
       try {
