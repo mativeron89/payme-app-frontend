@@ -1,5 +1,58 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.57.0 — la identidad económica se alinea con el dueño (2026-08-07)
+
+Cierra la **ORDEN 2-A** sobre backend **v2.48.0** (`2966aab`): espejo a 72
+archivos y consumo de la matriz exhaustiva, los vectores canónicos y el
+contrato reconciliado.
+
+🔴 **Nuestro journal era más estricto que el contrato, y eso trababa gente.**
+Sellaba el intento con `sha256(JSON.stringify(request))` —el request ENTERO—
+mientras el dueño hashea un subconjunto declarado que **deja la fuente de pago
+afuera A PROPÓSITO**: *"incluirla haría que un reload con tarjeta tipeada
+rotara la clave y abriera una SEGUNDA mesa con un SEGUNDO hold — el bug
+B-06"*. Consecuencia medida: el organizador que perdía la pestaña durante el
+3DS con tarjeta tipeada **no podía reenviar**, porque Stripe.js materializa
+otro `pm_` por invocación. Fallaba cerrado —cortaba, no duplicaba— pero
+trababa por una diferencia que no es económica.
+
+Ahora `create_mesa` sella con el `payloadHash` del contrato, y el sello viaja
+como `payload_hash` en la consulta de reconciliación. **La réplica se acredita
+ejecutando el JS espejado del dueño**, no citándolo, y la partición se acredita
+contra sus 14 vectores. Los journals de la versión anterior no se rompen: la
+entrada lleva `fpv` y se compara con el algoritmo con el que se selló,
+migrando a v2 recién cuando un match acredita que el request es idéntico.
+
+**El riel de PAGO queda afuera a propósito** (G-37): el mismo defecto existe,
+pero el dueño mantiene dos tablas —`mesa_pay` y `mesa_pay_legacy`— y desde el
+front no se puede saber cuál aplica. Elegir mal daría un hash incorrecto, y un
+hash incorrecto **traba a la persona**: el mismo síntoma que se viene a
+eliminar, sobre el riel que mueve plata en cada pago.
+
+**El decoder rechaza cuerpos que se contradicen a sí mismos**: `found` contra
+`outcome`, `retry` fuera de los dos casos declarados, un `status` que no mapea
+al `outcome` afirmado, y un 200 que diga que el hash no coincide. Donde la
+réplica no conoce el estado manda el emisor: es la autoridad sobre su propia
+máquina. Y **`unknown` nunca libera el journal** — si el emisor no clasifica
+un estado, nosotros tampoco sabemos en qué quedó la creación.
+
+🔴 **`dispersed` FALTABA en `MesaStatus`, y faltaba desde siempre.** La FSM del
+dueño tiene doce estados y este front declaraba once. No lo notó nadie porque
+**ninguna verificación comparaba las dos listas**. No era inofensivo:
+`mesaStatusLabel` es un `Record` exhaustivo, así que `dispersed` caía en el
+fallback y **una mesa terminada se leía "En curso"**. Ahora hay gate
+(`mesaStatus.mirror.test.ts`), en las dos direcciones.
+
+🔴 **El mock era MÁS DURO que el real, y eso también es mentir.** El 3DS del
+mock se gateaba con una variable de módulo (`pending3ds`) que muere con
+cualquier recarga: volvía **imposible de completar** el escenario de la
+respuesta perdida, que en producción funciona. El gate pasa a ser el estado de
+la mesa, que sobrevive al reload. Sin ese arreglo, el e2e del reenvío real no
+existía.
+
+Y el `package-lock` volvió a estar sincronizado: la desincronización era mía,
+de `c430d88`.
+
 ## 0.56.0 — la apertura ambigua se pregunta por su clave (2026-08-06)
 
 Cierra la **ORDEN 2A**: espejo a `03fb3b9` y consumo del contrato que el dueño
