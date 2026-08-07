@@ -1,5 +1,79 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.54.0 — fallar cerrado de verdad, rescatar los teléfonos rotos, y un cierre que no era (2026-08-07)
+
+Cierra la ORDEN 1-C y la 2-A.4, que se quedó sin entrada propia. El hilo que
+une todo: **un gate que sólo bloquea el caso que alguien pensó no es un
+gate**, y **un documento que declara cerrado lo que está abierto es una orden
+latente**.
+
+🟡 **G-11 vuelve a estar ABIERTA y el consumo queda PROVISIONAL.** El dueño
+publicó `7e45db0` (v2.46.0) declarando el P0 cerrado y este front lo consumió
+en v0.53.0; horas después una auditoría externa refutó ese cierre — **cinco
+huecos, el peor que la wallet nativa se adjuntaba a Stripe ANTES de
+validarla**. No se revierte nada: el espejo copió bien y el front consumió
+bien lo publicado, y revertir borraría trabajo correcto en vez de corregir la
+base. Lo que sí se corrigió son **las afirmaciones**: el README del espejo y
+las dos entradas de `GAPS.md` dicen ahora PROVISIONAL, con qué se refutó y
+qué falta. El espejo queda congelado hasta el hash bueno.
+
+**C-01 · sólo `mesa_joinable === true` habilita entrar.** La tarjeta de
+invitación bloqueaba con `=== false`, o sea sólo el "no" explícito del
+emisor: campo **ausente** (un backend anterior a v2.45.0 — el caso normal de
+un deploy desincronizado), `null`, string `"false"` (verdadero en JS) o forma
+inesperada ofrecían "Sumarme" hacia una mesa que podía estar muerta. **Un
+campo que falta no es un campo en `false`.** El decoder nuevo sigue el patrón
+de `walletRail`: puro sobre `unknown`, tipo exigido, tres estados.
+🔴 Y la mitad que lo hace honesto: **no saber no es saber que cerró**.
+"Cerrada" afirma el cierre porque el emisor lo dijo; "desconocida" usa el
+estado DESCONOCIDO de §5 —"No pudimos verificar esta invitación"— porque
+inventar el rechazo es el error inverso al que se está corrigiendo. De paso,
+la lista dejó de renderizarse cruda: un elemento `null` reventaba el `.map` y
+dejaba **la pantalla de Avisos en blanco**, fail-open en su peor forma.
+
+**G-36 · el rescate llega a los teléfonos que YA estaban rotos.** v0.53.0
+relanzaba el seed vencido sólo si llevaba la marca nueva; un `localStorage`
+anterior no la tiene, y ése es justo el estado podrido que hay en los
+dispositivos existentes. Ahora se migra —**sólo lo que se puede acreditar**:
+lista blanca de códigos (PA-1099 EXCLUIDA: su historia es estar cerrada),
+código único en el estado (los códigos nuevos salen del mismo rango y pueden
+colisionar), firma inmutable, `paid_amount_cents` intacto, `guarantee_method`
+de hoy (un legacy con `wallet` **debitaría saldo cada sesión** si se
+relanzara: se conserva), nadie la tocó —con **'guest' contando como tocada**,
+que es la misma persona—, y la invitación sembrada todavía presente. La
+plantilla sale de una tabla explícita y **nunca del estado persistido**, que
+está sucio por definición: una marca mal calculada se persiste y dejaría el
+teléfono podrido *y* marcado. **Lo que no se acredita se conserva**, y
+entonces Inicio ofrece la salida honesta ("Los datos de ejemplo de esta demo
+ya vencieron" + Reiniciar), sólo en mock.
+
+🔴 **Un test destapó un bug preexistente que nadie conocía**: la migración
+0.21 del store itera `mesa.items` a ciegas, y como todo el cargador vive en
+un `try/catch` que descarta el estado ENTERO, **una sola fila podrida le
+borraba al usuario mesas, tarjetas, amigos, historial y ledger de
+idempotencia — en silencio**. Arreglado, y la migración nueva corre además en
+su propio `try/catch`: conservar gana a arriesgar.
+
+**El gate del espejo, probado como caja negra.** Se lo copia a un árbol
+temporal (copiar no es modificar) y se ejercitan sus clases: intacto → 0,
+cambiado → 1, borrado → 1, intruso → 1, sin manifiesto → 2, README editable
+sin romper paridad. Corre en la CI con todo lo demás.
+🔴 **Y queda un defecto documentado, no tapado**: el chequeo de intruso usa
+`grep` de subcadena sin anclar, así que un path que es PREFIJO de otro pasa
+como inventariado. La orden pidió los tests y **no** tocar el verificador; el
+caso lleva `test.fails`, que documenta el defecto **y se pone rojo cuando se
+arregle** —verificado aplicando el fix hipotético— obligando a retirar el
+marcador. Un `skip` se olvida; un test que afirma la conducta buggy la
+bendice.
+
+**Corrección documental:** la entrada 0.53.0 y el commit `5fc1f71` dicen
+"78/78 Playwright" y eran **80** — el número se escribió antes de leer el
+log, el mismo defecto de instrumento que esa versión documenta. Los commits
+no se reescriben; queda dicho acá.
+
+Cierre: **624 vitest (52 archivos) · 81/81 Playwright · gate del espejo ·
+typecheck · builds real y mock**, por exit code.
+
 ## 0.53.0 — el gate de admisión: la mesa muerta lo dice, y fully_paid admite (2026-08-07)
 
 La ventana que la auditoría descubrió arreglando el mock —invitación viva,
@@ -56,7 +130,8 @@ del e2e (mutar localStorage con el mock vivo en memoria; hash+reload en el
 mismo evaluate), y la cadena de exit codes cazó un hash corto en el README
 del espejo antes del commit — el gate arreglado en v0.52.0 ya cobró.
 
-Cierre: **580 vitest · 78/78 Playwright · typecheck · builds real y mock**,
+Cierre: **580 vitest · 80 Playwright · typecheck · builds real y mock**,
+_(decía 78/78: número escrito antes de leer el log. Corregido el 2026-08-07.)_
 todo por exit code.
 
 ## 0.52.0 — las tres decisiones de Mati sobre lo que la auditoría dejó a la vista (2026-08-06)

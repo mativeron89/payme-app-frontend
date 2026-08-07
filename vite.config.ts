@@ -15,6 +15,10 @@ export default defineConfig({
     // specs importan `@playwright/test` y explotan fuera de su runner — y el
     // error que tira no dice "runner equivocado", así que se pierde un rato
     // largo. Los dos runners conviven porque cada uno tiene su carpeta.
-    include: ['src/**/*.test.{ts,tsx}'],
+    // `scripts/` entra desde la ORDEN 1-C·C: el gate del espejo (un .sh) se
+    // prueba como CAJA NEGRA desde un test de node, y tiene que correr en la
+    // CI con todo lo demás — un gate cuyo comportamiento nadie verifica es
+    // justo el que devolvía exit 0 con tres archivos distintos.
+    include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts'],
   },
 });
