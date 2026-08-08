@@ -40,6 +40,24 @@ naturaleza del artefacto — y ese cambio es lo que detecta el primer test.
 para cargarlo hace falta un `<script>`. Ese script lo mata *«el artefacto no
 tiene una sola línea de JavaScript»*.
 
+## ⚠️ En DESARROLLO la página tiene un script. En el artefacto, cero.
+
+`vite dev` inyecta su cliente de HMR (`@vite/client`), así que si mirás el
+inspector en `localhost:5176` vas a ver **un** `<script>` y dos recursos que no
+están en el build. **No es de esta página y no viaja al artefacto**: el test
+corre sobre `vite build`, donde `document.scripts.length` es cero.
+
+🔴 Está escrito acá y no sólo en un reporte porque **las capturas sobreviven a
+los reportes**: una captura de dev, sin esta nota, se lee como que la guarda de
+"cero JavaScript" está fallando.
+
+Verificación honesta de esa afirmación:
+
+```bash
+npm run build:landing
+grep -c '<script' dist-landing/index.html   # → 0
+```
+
 ## Cero terceros, incluidas las tipografías
 
 `index.html` de la webapp trae Plus Jakarta Sans y DM Sans desde el CDN de
