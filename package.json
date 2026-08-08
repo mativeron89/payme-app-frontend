@@ -8,6 +8,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "build:landing": "vite build --config vite.landing.config.ts",
     "preview": "vite preview",
     "e2e": "playwright test"
   },

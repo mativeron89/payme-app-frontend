@@ -1,5 +1,9 @@
 node_modules/
 dist/
+# Salida del build de la landing (CARRIL 1A). Va aparte de `dist/` a
+# propósito: son dos artefactos y dos deploy targets distintos, y compartir
+# carpeta volvería esa separación una afirmación en vez de un hecho.
+dist-landing/
 *.local
 .DS_Store
 

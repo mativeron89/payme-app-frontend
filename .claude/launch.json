@@ -12,6 +12,20 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--no-install", "vite", "--port", "5175", "--strictPort", "--mode", "mock"],
       "port": 5175
+    },
+    {
+      "name": "payme-landing",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--no-install",
+        "vite",
+        "--config",
+        "vite.landing.config.ts",
+        "--port",
+        "5176",
+        "--strictPort"
+      ],
+      "port": 5176
     }
   ]
 }

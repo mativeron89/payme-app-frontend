@@ -19,6 +19,10 @@ export default defineConfig({
     // prueba como CAJA NEGRA desde un test de node, y tiene que correr en la
     // CI con todo lo demás — un gate cuyo comportamiento nadie verifica es
     // justo el que devolvía exit 0 con tres archivos distintos.
-    include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts'],
+    // `landing/` entra desde la ORDEN CARRIL 1A: la landing es un artefacto
+    // SEPARADO y sus tests viven con ella, pero tienen que correr en la
+    // misma suite — un aislamiento que se verifica en otra corrida es un
+    // aislamiento que alguien puede olvidarse de correr.
+    include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts', 'landing/**/*.test.ts'],
   },
 });
