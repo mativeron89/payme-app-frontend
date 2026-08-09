@@ -78,40 +78,55 @@ describe('gate IFPE de release', () => {
    * pantalla, otro flag, un helper nuevo— este test lo frena.
    */
   /**
-   * 🔴 FASE 3 · NINGÚN EGRESS DE TIPOGRAFÍAS DESDE EL CÓDIGO DE LA APP.
+   * 🔴 REGLA GENERAL DE EGRESS EN EL FUENTE · reemplaza la lista negra.
    *
-   * `CardField.tsx` le pasaba a Stripe Elements un `cssSrc` a
-   * `fonts.googleapis.com`. Era el TERCER egress del repo y **el que no se ve
-   * leyendo el `index.html`**: vivía en TypeScript, dentro de la config de un
-   * SDK. Se retiró, y sin esta guarda vuelve en silencio — es la superficie
-   * más fácil de reintroducir, porque el ejemplo de la documentación de Stripe
-   * usa literalmente una URL de Google Fonts.
+   * Hasta la fase anterior esto prohibía CUATRO proveedores de tipografías:
+   * `googleapis`, `gstatic`, `typekit`, `bunny`. **Una lista negra deja pasar
+   * el quinto**, y el quinto es justamente el que importa, porque el que se
+   * cuela es siempre el que nadie anticipó. Se invierte la lógica: **sólo pasa
+   * lo que está en la allowlist, con su motivo; cualquier otro host es rojo.**
    *
-   * ⚠️ ALCANCE, actualizado en la FASE 4 y dicho con precisión: ahora barre
-   * **`src/` Y `index.html`**. Hasta la fase anterior el HTML quedaba afuera a
-   * propósito, porque sus tres etiquetas a Google seguían vivas esperando las
-   * tipografías propias. Ya no están, así que la promesa se puede hacer entera
-   * — y el compromiso que quedó escrito ahí («cuando se cierre esa superficie,
-   * el barrido se extiende al HTML») se cumple acá.
+   * Prohibir `fonts.googleapis.com` deja de ser una regla propia y pasa a ser
+   * una consecuencia: no está en la lista de abajo.
    *
-   * 🔴 Sigue sin cubrir `landing/`: ése tiene su propia guarda, más estricta
-   * —prohíbe TODO host externo, no sólo los de tipografías— y corre sobre el
-   * artefacto construido en vez de sobre el fuente. No se declara más ancho de
-   * lo que mide.
+   * ## Por qué ESTE barrido existe además del del artefacto
+   *
+   * `scripts/artefactos.test.ts` mira los bytes emitidos, que es más fuerte…
+   * salvo en un punto: **el bundler elimina lo que no se usa.** Un destino
+   * escrito en `src/` y todavía no invocado —una constante durmiente, una rama
+   * apagada por un flag— NO llega al artefacto y ese barrido no lo ve. Éste
+   * sí. Se verificó con un mutante: una constante con un CDN desconocido deja
+   * el artefacto limpio y pone rojo este archivo.
+   *
+   * Los dos cubren poblaciones distintas y ninguno alcanza solo.
+   *
+   * ⚠️ ALCANCE: barre `src/` e `index.html`. **No cubre `landing/`**, que
+   * tiene su guarda propia y más estricta sobre el artefacto construido.
    */
-  const HOSTS_DE_FUENTES = [
-    'fonts.googleapis.com',
-    'fonts.gstatic.com',
-    'use.typekit',
-    'fonts.bunny.net',
-  ];
+  const DESTINOS_PERMITIDOS = [
+    { host: 'localhost', porque: 'default de desarrollo de la API y de Stripe; no es destino de producción' },
+    { host: 'wa.me', porque: 'DESTINO DE NAVEGACIÓN al compartir el link, no un recurso que se cargue solo' },
+  ] as const;
 
-  it('🔴 ningún host de fuentes de terceros en `src/`', () => {
+  /** Todo host absoluto que aparezca en un texto, sin juzgar todavía. */
+  const hostsDe = (texto: string): string[] =>
+    [...texto.matchAll(/https?:\/\/([a-zA-Z0-9._-]+)/g)].map((m) => m[1]!);
+
+  const noPermitidos = (texto: string): string[] => {
+    const ok = new Set<string>(DESTINOS_PERMITIDOS.map((d) => d.host));
+    return [...new Set(hostsDe(texto))].filter((h) => !ok.has(h));
+  };
+
+  it('🔴 MUTANTE · ningún destino fuera de la allowlist en `src/`', () => {
     const fuentes = import.meta.glob('/src/**/*.{ts,tsx}', {
       query: '?raw',
       import: 'default',
       eager: true,
     }) as Record<string, string>;
+    expect(Object.keys(fuentes).length, 'el glob no encontró fuentes').toBeGreaterThan(20);
+    const queSeCompilan = Object.keys(fuentes).filter((r) => !/\.test\.tsx?$/.test(r));
+    expect(queSeCompilan.length, 'quedaron cero archivos por barrer').toBeGreaterThan(20);
+
     const ofensores: string[] = [];
     for (const [ruta, cuerpo] of Object.entries(fuentes)) {
       // 🔴 ACÁ los comentarios se IGNORAN, y en la landing CUENTAN. No es
@@ -119,16 +134,40 @@ describe('gate IFPE de release', () => {
       // aplicado a dos casos distintos. El HTML de la landing SE PUBLICA, así
       // que un comentario suyo es información que viaja al navegador; este
       // archivo SE COMPILA, y un comentario no sobrevive ni hace una request.
-      // Lo que se persigue es el `cssSrc`, no la palabra.
-      if (ruta.endsWith('releaseGates.test.ts')) continue;
+      //
+      // 🔴 Los archivos de test se saltean, y la población es la correcta:
+      // esto persigue EGRESS, y un test no se compila al artefacto ni hace una
+      // request en producción. Barrerlos daba siete falsos positivos —
+      // `evil.example`, `payme.test`, `demo.payme.test`— que son fixtures
+      // adversariales, justamente de las guardas que protegen esto.
+      //
+      // Y la contracara importa: dejarlos adentro obligaría a meter esos
+      // dominios en la allowlist, que es como una allowlist se convierte en
+      // una lista de cualquier cosa y deja de decir nada.
+      if (/\.test\.tsx?$/.test(ruta)) continue;
       const sinComentarios = cuerpo
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^\s*\/\/.*$/gm, '');
-      for (const host of HOSTS_DE_FUENTES) {
-        if (sinComentarios.includes(host)) ofensores.push(`${ruta} → ${host}`);
-      }
+      for (const host of noPermitidos(sinComentarios)) ofensores.push(`${ruta} → ${host}`);
     }
-    expect(ofensores, `egress de tipografías en código vivo: ${ofensores.join(' · ')}`).toEqual([]);
+    expect(ofensores, `destinos que nadie autorizó: ${ofensores.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 CASO LEGÍTIMO · los dos destinos autorizados SÍ pasan', () => {
+    // Sin esto, una guarda que rechazara absolutamente todo dejaría el mutante
+    // en rojo igual, y nadie notaría que rompió el compartir por WhatsApp.
+    expect(noPermitidos('https://wa.me/?text=hola')).toEqual([]);
+    expect(noPermitidos('http://localhost:3000/api')).toEqual([]);
+    // Y la contracara: un CDN cualquiera no pasa.
+    expect(noPermitidos('https://cdn-que-nadie-nombro.example.net/x.js')).toEqual([
+      'cdn-que-nadie-nombro.example.net',
+    ]);
+  });
+
+  it('🔴 cada destino permitido dice por qué está', () => {
+    for (const d of DESTINOS_PERMITIDOS) {
+      expect(d.porque.length, `${d.host} sin motivo`).toBeGreaterThan(20);
+    }
   });
 
   /**
@@ -146,7 +185,7 @@ describe('gate IFPE de release', () => {
    * acaso". Un `<link>` comentado no carga nada hoy, pero es la línea que se
    * descomenta sin pensarlo dentro de seis meses.
    */
-  it('🔴 FASE 4 · ningún host de fuentes en `index.html`, comentarios incluidos', () => {
+  it('🔴 ningún destino fuera de la allowlist en `index.html`, comentarios incluidos', () => {
     const htmls = import.meta.glob('/index.html', {
       query: '?raw',
       import: 'default',
@@ -160,11 +199,9 @@ describe('gate IFPE de release', () => {
 
     const ofensores: string[] = [];
     for (const [ruta, cuerpo] of Object.entries(htmls)) {
-      for (const host of HOSTS_DE_FUENTES) {
-        if (cuerpo.includes(host)) ofensores.push(`${ruta} → ${host}`);
-      }
+      for (const host of noPermitidos(cuerpo)) ofensores.push(`${ruta} → ${host}`);
     }
-    expect(ofensores, `egress de tipografías en el HTML: ${ofensores.join(' · ')}`).toEqual([]);
+    expect(ofensores, `destinos que nadie autorizó en el HTML: ${ofensores.join(' · ')}`).toEqual([]);
   });
 
   /**
@@ -193,8 +230,8 @@ describe('gate IFPE de release', () => {
       expect(cara, `un @font-face sin ruta propia: ${cara}`).toMatch(
         /url\(\s*'\.\.\/assets\/fonts\/[A-Za-z-]+\.ttf'\s*\)/,
       );
-      // Y ninguno de los hosts prohibidos aparece en él.
-      for (const host of HOSTS_DE_FUENTES) expect(cara).not.toContain(host);
+      // Y no apunta a ningún host: ni a los de tipografías ni a ningún otro.
+      expect(noPermitidos(cara), `el @font-face apunta afuera: ${cara}`).toEqual([]);
       // `swap`: el texto se lee desde el primer frame.
       expect(cara, `un @font-face sin swap: ${cara}`).toMatch(/font-display\s*:\s*swap/);
     }
