@@ -1,5 +1,23 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.65.1 — la captura de la landing sale limpia (2026-08-09)
+
+PATCH: cambia una imagen del artefacto, nada del comportamiento.
+
+Instrucción literal de Mati: *«Las imagenes que le compartas al chat de diseño de
+app/dashboard, que no tengan la leyenda "Demo.." por favor, tienen que estar
+clean.»* Lo dijo para las imágenes de Diseño, y **una imagen en la landing
+pública está más expuesta, no menos**.
+
+🔴 **Se saca de la FOTO, no de la app.** La leyenda «Demo · datos de ejemplo, no
+se cobra dinero real» **sigue en el producto**: en un link público que va a
+desconocidos, es lo que evita que alguien crea que le cobraron. Cero archivos de
+`src/` tocados.
+
+**Se oculta por TEXTO, no por clase** — una clase cambia con cualquier refactor y
+el script queda apuntando a nada, en silencio, produciendo capturas con la
+leyenda otra vez.
+
 ## 0.65.0 — la landing dice qué es PayMe y lo muestra (2026-08-09)
 
 MINOR: cambia lo que ve quien entra al link.
