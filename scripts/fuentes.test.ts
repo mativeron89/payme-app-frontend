@@ -36,6 +36,17 @@ const sha256 = (ruta: string): string =>
  * Se lee el README en vez de repetir los hashes acá: si estuvieran duplicados,
  * el test verificaría su propia copia y el documento podría envejecer solo.
  */
+/**
+ * Dónde vive cada archivo de la tabla. Los binarios están junto al código que
+ * los referencia; **las licencias viven en `public/` porque tienen que VIAJAR
+ * con el artefacto** — la cláusula 2 de la OFL pide el aviso y la licencia en
+ * cada copia distribuida, y `public/` es lo único que Vite emite sin que nadie
+ * lo referencie. Que estén emitidas lo verifica `scripts/artefactos.test.ts`
+ * sobre el build; acá sólo se verifica su contenido.
+ */
+const ubicacionDe = (destino: string): string =>
+  destino.startsWith('OFL-') ? 'public/fonts' : 'src/assets/fonts';
+
 function filasDelReadme(): Array<{ destino: string; sha: string }> {
   const md = readFileSync(join(RAIZ, 'src/assets/fonts/README.md'), 'utf8');
   return [...md.matchAll(/^\|\s*`[^`]+`\s*\|\s*`([^`]+)`\s*\|\s*`([0-9a-f]{64})`\s*\|$/gm)].map(
@@ -61,7 +72,7 @@ describe('la procedencia de las tipografías es verificable, no declarativa', ()
   it('🔴 cada archivo del repo tiene el SHA-256 que el README dice', () => {
     const desvios: string[] = [];
     for (const { destino, sha } of filasDelReadme()) {
-      const ruta = join(RAIZ, 'src/assets/fonts', destino);
+      const ruta = join(RAIZ, ubicacionDe(destino), destino);
       if (!existsSync(ruta)) {
         desvios.push(`${destino}: NO EXISTE`);
         continue;
@@ -82,7 +93,7 @@ describe('la procedencia de las tipografías es verificable, no declarativa', ()
 
   it('🔴 las dos licencias OFL están completas y con su aviso de copyright', () => {
     for (const archivo of ['OFL-PlusJakartaSans.txt', 'OFL-DMSans.txt']) {
-      const texto = readFileSync(join(RAIZ, 'src/assets/fonts', archivo), 'utf8');
+      const texto = readFileSync(join(RAIZ, 'public/fonts', archivo), 'utf8');
       expect(texto, `${archivo} sin aviso de copyright`).toMatch(/^Copyright \d{4} The .+ Project Authors/);
       // Las cinco condiciones y el disclaimer: que sea el texto ENTERO, no un
       // resumen. Recortar una licencia es incumplirla.
@@ -95,17 +106,62 @@ describe('la procedencia de las tipografías es verificable, no declarativa', ()
     }
   });
 
-  it('🔴 ninguna familia declara Reserved Font Name (y si un día lo hace, se entera acá)', () => {
-    // La OFL define el RFN como "any names specified as such AFTER the
-    // copyright statement(s)". Sin RFN, la cláusula 3 no tiene objeto; con
-    // RFN, convertir el formato dejaría de poder conservar el nombre. El día
-    // que se actualice una fuente y el upstream agregue uno, esto lo grita.
+  /**
+   * 🔴 RESERVED FONT NAMES · sobre TODO el texto, no sobre la primera línea.
+   *
+   * La versión anterior de este test leía **la línea 1** y nada más. Era la
+   * misma falla que este repo viene cazando toda la semana: la conclusión
+   * —"ninguna familia declara RFN"— más ancha que el instrumento —"la primera
+   * línea no lo dice"—.
+   *
+   * Y no era teórica: la OFL define el RFN como *"any names specified as such
+   * **after the copyright statement(s)**"*, en plural. **Una licencia puede
+   * tener varios avisos de copyright, en cualquier parte del archivo**, y el
+   * RFN puede colgar de cualquiera de ellos.
+   *
+   * ## Por qué no alcanza con buscar la frase suelta
+   *
+   * El texto de CUALQUIER OFL contiene "Reserved Font Name" al menos dos
+   * veces: en las definiciones y en la cláusula 3. Un `includes()` daría
+   * siempre positivo. Lo que se busca es la frase **colgando de un aviso de
+   * copyright**, que es donde la licencia dice que se declara.
+   */
+  const avisosDeCopyright = (texto: string): string[] =>
+    texto.split(/\r?\n/).filter((l) => /^\s*Copyright\b/i.test(l));
+
+  const declaraRFN = (texto: string): boolean =>
+    avisosDeCopyright(texto).some((l) => /reserved font name/i.test(l));
+
+  it('🔴 ninguna familia declara Reserved Font Name — leyendo el texto ENTERO', () => {
     for (const archivo of ['OFL-PlusJakartaSans.txt', 'OFL-DMSans.txt']) {
-      const primera = readFileSync(join(RAIZ, 'src/assets/fonts', archivo), 'utf8')
-        .split(/\r?\n/)[0]!;
-      expect(primera.toLowerCase(), `${archivo} ahora declara un Reserved Font Name: ${primera}`)
-        .not.toContain('reserved font name');
+      const texto = readFileSync(join(RAIZ, 'public/fonts', archivo), 'utf8');
+      // Sonda: si el detector de avisos dejara de encontrar ninguno, la
+      // afirmación de abajo pasaría en vacío para siempre.
+      expect(avisosDeCopyright(texto).length, `${archivo}: no se encontró ningún aviso de copyright`)
+        .toBeGreaterThan(0);
+      expect(declaraRFN(texto), `${archivo} ahora declara un Reserved Font Name`).toBe(false);
     }
+  });
+
+  it('🔴 CASO POSITIVO · el detector SÍ detecta un RFN declarado', () => {
+    // Sin esto, un detector que devolviera `false` siempre pasaría el test de
+    // arriba y nadie se enteraría nunca de un RFN nuevo. Se prueba con las dos
+    // formas: en el primer aviso y en uno MÁS ABAJO, que es el caso que la
+    // versión anterior —que leía sólo la línea 1— dejaba pasar.
+    const base = readFileSync(join(RAIZ, 'public/fonts/OFL-DMSans.txt'), 'utf8');
+
+    const arriba = base.replace(
+      /^Copyright (\d{4}) (.+)$/m,
+      'Copyright $1 $2 with Reserved Font Name "DM Sans"',
+    );
+    expect(declaraRFN(arriba), 'no detectó un RFN en el primer aviso').toBe(true);
+
+    const lineas = base.split(/\r?\n/);
+    lineas.splice(40, 0, 'Copyright 2019 Otro Autor with Reserved Font Name "Otra"');
+    const abajo = lineas.join('\n');
+    expect(declaraRFN(abajo), 'no detectó un RFN en un aviso posterior').toBe(true);
+    // Y la prueba de que el caso de abajo es REALMENTE el que fallaba antes:
+    expect(/reserved font name/i.test(abajo.split(/\r?\n/)[0]!)).toBe(false);
   });
 });
 

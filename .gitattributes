@@ -18,5 +18,8 @@
 # problema: `-text` impide que git les cambie los fines de línea al clonar en
 # una máquina con `core.autocrlf`, y `-whitespace` saca del chequeo un archivo
 # que nadie debe editar.
-src/assets/fonts/OFL-*.txt -text -whitespace
-landing/fonts/OFL-*.txt    -text -whitespace
+# Viven en `public/` porque tienen que VIAJAR con el artefacto: la cláusula 2
+# de la OFL pide el aviso Y la licencia en cada copia distribuida, y `public/`
+# es lo único que Vite emite sin que nadie lo referencie. Una por artefacto.
+public/fonts/OFL-*.txt         -text -whitespace
+landing/public/fonts/OFL-*.txt -text -whitespace

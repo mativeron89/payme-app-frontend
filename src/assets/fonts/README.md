@@ -29,6 +29,12 @@ renombra en silencio.**
 | `plusjakartasans/OFL.txt` | `OFL-PlusJakartaSans.txt` | `995c7199cab65954f545996326755daee7b63cc6b42b06c13da1f9502ab08a99` |
 | `dmsans/OFL.txt` | `OFL-DMSans.txt` | `9af36190332437f5ecd09974de43c1f7c77a310a996cdd8ceb25628b458840e1` |
 
+🔴 **Los dos `.ttf` viven acá; las dos `OFL-*.txt` viven en `../../../public/fonts/`.**
+No es desprolijidad: los binarios los referencia el CSS y Vite los hashea, mientras
+que **la licencia tiene que VIAJAR con el artefacto sin que nadie la referencie**, y
+`public/` es lo único que Vite emite por el solo hecho de estar ahí. La landing
+tiene su propio par en `landing/fonts/` y `landing/public/fonts/`.
+
 **Renombrar el ARCHIVO no renombra la FUENTE.** La OFL restringe el nombre de la
 familia declarado dentro del binario —que sigue siendo `Plus Jakarta Sans` y
 `DM Sans`—, no cómo se llama el archivo en disco.
@@ -138,12 +144,11 @@ Modified Version en absoluto**, que es la posición más simple de sostener.
 **Si algún día se convierte o se subsetea, esa nota deja de ser teórica** y hay
 que releer las cláusulas 1 y 3 antes de tocar nada.
 
-### Y el aviso viaja DENTRO del binario
+### 🔴 La licencia viaja con el artefacto — corregido el 2026-08-09
 
-La cláusula 1 pide que el aviso de copyright y el de licencia estén *"en todas
-las copias"*. **Están: los propios autores los pusieron en la tabla `name`**, y
-por eso sobreviven al hash de Vite, al deploy y a cualquier copia futura.
-Verificado leyendo la tabla:
+**La versión anterior de este documento decía que NO hacía falta publicar los
+`.txt`, porque el aviso ya viaja en la tabla `name` del binario.** Es cierto que
+viaja:
 
 ```
 nameID  0  Copyright 2020 The Plus Jakarta Sans Project Authors (…)
@@ -151,10 +156,19 @@ nameID 13  This Font Software is licensed under the SIL Open Font License, Versi
 nameID 14  https://scripts.sil.org/OFL
 ```
 
-**Por eso NO se agregó un `public/` sólo para publicar los `.txt`**: el texto
-completo vive en el repo —que es lo que pide la orden— y el aviso viaja dentro
-de cada binario servido. Si algún día se quiere publicarlos en la raíz del
-sitio, es una decisión de hosting, no un requisito pendiente.
+**Y aun así era insuficiente.** La cláusula 2 pide *"the above copyright notice
+**and this license**"* en cada copia distribuida. El `nameID 13` es **un puntero
+de una línea**, no la licencia. Los builds contenían los `.ttf` y ningún `OFL`.
+
+**Queda anotado el modo de falla, que es más útil que el error:** el argumento
+era verdadero y sirvió para no hacer el trabajo. Un dato correcto puede sostener
+una conclusión que no se sigue de él.
+
+**Ahora las licencias se emiten desde `public/fonts/` y lo verifica
+`scripts/artefactos.test.ts` CONSTRUYENDO y mirando los bytes emitidos** —no el
+fuente, que era exactamente el hueco—. La lista de licencias requeridas se
+**deriva de las tipografías que el artefacto emite**: agregar una familia sin su
+licencia pone el test en rojo solo.
 
 ## Por qué la landing tiene su propia copia
 

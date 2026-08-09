@@ -74,6 +74,8 @@ interface Artefacto {
   readonly porArchivo: Readonly<Record<string, string>>;
   /** Ruta relativa → SHA-256, sólo de los binarios emitidos. */
   readonly binarios: Readonly<Record<string, string>>;
+  /** Rutas INERTES: se verifican por identidad, no se barren. */
+  readonly inertes: readonly string[];
 }
 
 /**
@@ -85,6 +87,20 @@ interface Artefacto {
  * lista de abajo (no está autorizado) y además lo barre el escáner de hosts.
  */
 const BINARIO_AUTORIZADO = /^PlusJakartaSans-variable-[A-Za-z0-9_-]+\.ttf$/;
+
+/**
+ * 🔴 La licencia OFL es un archivo INERTE, y por eso no entra al barrido.
+ *
+ * Contiene `http://scripts.sil.org/OFL` y `github.com` en su aviso de
+ * copyright: **texto que la licencia OBLIGA a incluir y que no se puede
+ * sacar**. Un `.txt` servido como archivo estático no lo parsea nadie — no
+ * hace una request ni ejecuta nada. Barrerlo buscando hosts marcaría algo
+ * imposible de arreglar, y una guarda imposible se afloja el día que estorba.
+ *
+ * No se le hace una excepción: **se verifica con el otro instrumento**, por
+ * identidad byte a byte contra la copia del repo (PROPIEDAD 5).
+ */
+const INERTE_AUTORIZADO = /^OFL-[A-Za-z]+\.txt$/;
 
 const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 
@@ -142,9 +158,12 @@ beforeAll(() => {
   })(salida);
 
   const binarios: Record<string, string> = {};
+  const inertes: string[] = [];
   const texto: string[] = [];
   for (const a of archivos) {
-    if (BINARIO_AUTORIZADO.test(basename(a))) binarios[relative(salida, a)] = sha256(readFileSync(a));
+    const nombre = basename(a);
+    if (BINARIO_AUTORIZADO.test(nombre)) binarios[relative(salida, a)] = sha256(readFileSync(a));
+    else if (INERTE_AUTORIZADO.test(nombre)) inertes.push(relative(salida, a));
     else texto.push(a);
   }
 
@@ -152,7 +171,8 @@ beforeAll(() => {
   const todo = texto.map((a) => `${relative(salida, a)}\n${readFileSync(a, 'utf8')}`).join('\n');
   const porArchivo: Record<string, string> = {};
   for (const a of texto) porArchivo[relative(salida, a)] = readFileSync(a, 'utf8');
-  build = { archivos: archivos.map((a) => relative(salida, a)), html, todo, porArchivo, binarios };
+  for (const rel of inertes) porArchivo[rel] = readFileSync(join(salida, rel), 'utf8');
+  build = { archivos: archivos.map((a) => relative(salida, a)), html, todo, porArchivo, binarios, inertes };
 }, 60_000);
 
 describe('el artefacto de la landing existe y es lo que dice ser', () => {
@@ -481,6 +501,55 @@ describe('PROPIEDAD 4 · la tipografía es propia, y es la misma de siempre', ()
     // falla. Un `--font-display: 'Plus Jakarta Sans'` a secas dejaría la
     // página sin plan B.
     expect(cssDelBuild()).toMatch(/--font-display:[^;]*sans-serif/);
+  });
+});
+
+/**
+ * 🔴 PROPIEDAD 5 · LA LICENCIA VIAJA CON EL ARTEFACTO.
+ *
+ * La landing distribuye Plus Jakarta Sans, así que la cláusula 2 de la OFL le
+ * exige llevar el aviso **y la licencia**. Hasta hoy emitía el `.ttf` y ningún
+ * `OFL`: el texto estaba en el repo, que no es donde la licencia lo pide.
+ *
+ * Y la lista de licencias requeridas **se deriva de lo que el artefacto
+ * emite**, no está escrita a mano: si algún día la landing suma una familia,
+ * su licencia se vuelve obligatoria sola.
+ */
+describe('PROPIEDAD 5 · la licencia viaja con la tipografía', () => {
+  it('🔴 cada tipografía emitida tiene su licencia COMPLETA en el artefacto', () => {
+    const familias = Object.keys(build.binarios).map((a) =>
+      basename(a).replace(/-variable-[A-Za-z0-9_-]+\.ttf$/, ''),
+    );
+    expect(familias.length, 'el artefacto no emitió ninguna tipografía').toBeGreaterThan(0);
+
+    for (const familia of familias) {
+      const ruta = `fonts/OFL-${familia}.txt`;
+      expect(build.archivos, `falta la licencia de ${familia}`).toContain(ruta);
+      const texto = build.porArchivo[ruta] ?? '';
+      expect(texto).toMatch(/^Copyright \d{4} The .+ Project Authors/);
+      expect(texto).toContain('SIL OPEN FONT LICENSE Version 1.1');
+      for (const clausula of ['1)', '2)', '3)', '4)', '5)']) {
+        expect(texto, `${ruta} sin la cláusula ${clausula}`).toContain(clausula);
+      }
+      expect(texto).toContain('DISCLAIMER');
+    }
+  });
+
+  it('🔴 la licencia emitida es byte-idéntica a la del repo', () => {
+    expect(build.inertes.length, 'no se clasificó ningún archivo inerte').toBe(1);
+    for (const ruta of build.inertes) {
+      const emitido = sha256(Buffer.from(build.porArchivo[ruta] ?? '', 'utf8'));
+      const enRepo = sha256(readFileSync(join(RAIZ, 'landing/public', ruta)));
+      expect(emitido, `${ruta} difiere del repo`).toBe(enRepo);
+    }
+  });
+
+  it('🔴 y el INERTE no se coló al barrido de hosts por accidente', () => {
+    // Sonda de la clasificación: si `INERTE_AUTORIZADO` dejara de matchear, el
+    // `.txt` volvería a `todo` y la PROPIEDAD 2 se pondría roja por un archivo
+    // que la licencia obliga a incluir. Esto lo dice antes y con nombre.
+    expect(build.todo, 'la licencia entró al texto barrido').not.toContain('scripts.sil.org');
+    expect(build.inertes).toEqual(['fonts/OFL-PlusJakartaSans.txt']);
   });
 });
 
