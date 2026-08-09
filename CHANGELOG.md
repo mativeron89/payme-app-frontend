@@ -1,5 +1,43 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.66.0 — la captura del panel dice que sus datos son de ejemplo (2026-08-09)
+
+MINOR: cambia lo que se lee en la landing publicada.
+
+Decisión de Mati. La captura del panel muestra $2.560 de propinas, 8.21 % sobre
+ventas y **dos personas con su rendimiento individual**. Sin marca, eso se lee
+como el desempeño real de un restaurante real. **Es el seed.**
+
+🔴 **Y la ironía, que no vio nadie:** la leyenda «Demo» se sacó de las capturas
+en 0.65.1 porque Mati las quería limpias — y al sacarla, la del panel perdió lo
+único que decía que no era real. **La instrucción era correcta; el efecto
+lateral se nos pasó a todos.**
+
+Se compone **en la página**, no sobre la imagen: 12 px, gris, debajo del panel.
+La captura no se vuelve a ensuciar.
+
+**La de la app no lleva pie, y es decisión declarada:** lleva su leyenda dentro
+del producto y quien toque «Comensal» la ve en dos segundos. El panel no tiene
+esa salida porque su link no existe. **El test lo dice, para que se sepa que fue
+elegido y no olvidado.**
+
+### La foto de banda, preparada — sin maquetar nada
+
+Dan Gold · Unsplash · uso comercial libre. **2000×1500 (421 KB) → 1400×1050
+(246 KB)**, con su atribución al lado, misma disciplina que la OFL.
+
+🔴 **El número de la orden no servía:** se pidió «calidad ~75», pero la escala de
+`sips` no es la de ImageMagick y su `75` pesa **más que el original**. Se eligió
+`normal` midiendo las siete opciones y mirándolas.
+
+**No va en `public/`**: todavía no la referencia nadie, y `public/` se emite
+entero — serían 246 KB que nadie ve. Es el modo de falla que la propia guarda
+persigue. Vive lista en `landing/img/`; cuando la maqueta de Diseño la
+referencie, Vite la emite con hash.
+
+⚠️ **La landing completa se rehace desde la spec de Diseño**, que llega como
+HTML/CSS. Lo publicado hoy es la provisional.
+
 ## 0.65.1 — la captura de la landing sale limpia (2026-08-09)
 
 PATCH: cambia una imagen del artefacto, nada del comportamiento.
