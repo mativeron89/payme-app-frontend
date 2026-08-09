@@ -1,5 +1,54 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.59.0 — la landing de `paymemx.com`, y las guardas que probaban menos de lo que decían (2026-08-07)
+
+🔴 **Esta entrada cubre DOS órdenes: el CARRIL 1A —la landing, que quedó SIN
+VERSIONAR por una omisión mía— y su cierre 1B.** Se dice explícito para que
+dentro de un mes nadie busque «la entrada de 1A» y no la encuentre: no existe
+por separado, es ésta.
+
+1B nació de una auditoría independiente de Codex: *GREEN funcional, AMBER de
+cierre*. Lo que se había declarado cerrado estaba sobredeclarado.
+
+**La landing** vive en `landing/`, es un **artefacto separado** con su propia
+config de build (`npm run build:landing` → `dist-landing/`), pesa 8 KB y **no
+tiene una sola línea de JavaScript**. El texto es el literal autorizado —`PayMe`
+y dos accesos— porque el copy es decisión de Mati y todavía no existe. **No
+carga terceros, ni siquiera las tipografías:** el CDN de fuentes recibiría la IP
+de quien entra antes de que toque nada. La contrapartida se declara — sin esas
+familias instaladas se ve con la sans del sistema — y auto-hospedarlas es orden
+aparte.
+
+🔴 **Las guardas probaban menos de lo que declaraban, y eran el trabajo del que
+más orgullosos estábamos.** Cuatro agujeros, todos de la misma confusión: los
+dos subdominios se usaban como **permiso global de URL**, cuando están
+autorizados como **destinos de navegación** y no como **orígenes de recursos**
+— una hoja de estilos servida desde `app.paymemx.com` pasaba. Más: el barrido
+de hosts no veía `//host`; los handlers inline sólo buscaban `onclick`; y "cero
+JavaScript" no rechazaba `javascript:`.
+
+Ahora son **tres propiedades separadas** —navegación, recursos, ejecución—, se
+barre también `@import` y `url(...)` del CSS emitido, y hay **guarda de cero
+comentarios HTML**: el comentario que sobrevivía nombraba el spec y el README
+en la misma página cuyo README explica que los comentarios se publican.
+
+🔴 **Y el aislamiento de tipos no se cumplía, medido con una sonda.**
+`@types/node` entró como devDependency (ratificado por Mati) y la primera
+lectura fue *"`types: ["vite/client"]` ya protege a `src/`"* — cierto, y
+contestaba otra pregunta: una sonda `process.env` en `src/` **compilaba
+limpio**, porque los tests importan `vitest` y sus tipos arrastran `@types/node`
+por dependencia transitiva. `types` gobierna los globals automáticos, no lo que
+entra por un `import`. Se separó en **tres proyectos** —código de navegador,
+tests de navegador, tests de Node— y ahora la sonda falla, que es la prueba de
+que el aislamiento existe.
+
+También: el test de la landing **limpia su temporal** aunque falle, y `npm run
+typecheck` cubre los tres proyectos.
+
+⚠️ **1A no está cerrado.** Falta el OK visual de Mati, y llega después de que
+él y diseño cierren el copy. Lo que vio es el mínimo literal: tenía que verse
+sin terminar.
+
 ## 0.58.0 — la garantía no se le atribuye a una tarjeta que nadie eligió (2026-08-07)
 
 Cierra la **ORDEN 1-B**, que nació de un caso que yo había descartado **por
