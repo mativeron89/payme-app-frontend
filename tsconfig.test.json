@@ -1,0 +1,15 @@
+{
+  // ══════════════════════════════════════════════════════════════════════════
+  // Los tests de `src/` — navegador, pero SÍ ven los tipos de vitest (y con
+  // ellos, inevitablemente, los de Node que vitest arrastra).
+  //
+  // Existen aparte para que esa contaminación NO alcance al código que se
+  // despacha. Ver el comentario de `tsconfig.json`: la medición está ahí.
+  // ══════════════════════════════════════════════════════════════════════════
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "exclude": []
+}

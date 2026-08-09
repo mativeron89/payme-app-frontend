@@ -1,0 +1,52 @@
+{
+  // ══════════════════════════════════════════════════════════════════════════
+  // PROYECTO SEPARADO para los tests que corren en NODE, no en el navegador.
+  //
+  // ## Por qué existe (ORDEN 2A · A2)
+  //
+  // `tsconfig.json` incluye sólo `src`, así que `scripts/**/*.test.ts` y
+  // `landing/**/*.test.ts` NUNCA se typechequeaban: vitest transpila sin
+  // verificar tipos, y esos archivos podían pudrirse en silencio. El mecanismo
+  // ya existía —los tests de `scripts/` arrastraban el hueco— pero el CARRIL 1A
+  // agregó una unidad TypeScript nueva sin cobertura, así que llamarlo
+  // "preexistente" y seguir de largo era incompleto.
+  //
+  // ## Por qué SEPARADO y no un `include` más en el de siempre
+  //
+  // 🔴 Estos tests usan `node:fs`, `node:child_process`, `node:os`. Meterlos en
+  // el proyecto del navegador obligaría a agregar `"node"` a sus `types`, y
+  // entonces **`src/` vería globals de Node que en el navegador NO EXISTEN**:
+  // un `process.env` o un `Buffer` escrito por descuido compilaría sin queja y
+  // reventaría en runtime, en producción. La separación no es prolijidad: es
+  // lo que mantiene honesto al typecheck del código que corre en el teléfono.
+  //
+  // `tsconfig.json` ya declara `"types": ["vite/client"]` de forma EXPLÍCITA,
+  // así que instalar `@types/node` no lo contamina — TypeScript sólo incluye
+  // automáticamente todos los `@types/*` cuando `types` está ausente. Eso ya
+  // estaba bien y se conserva a propósito; hay un test que lo fija.
+  //
+  // `@types/node` es devDependency, ratificado por Mati (2026-08-07) con esta
+  // forma exacta: "únicamente como devDependency de desarrollo, con un tsconfig
+  // separado para typecheckear los tests Node sin exponer globals Node al
+  // código browser". Se fijó en 24.x para que coincida con el runtime (v24).
+  // ══════════════════════════════════════════════════════════════════════════
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    // Node y el cliente de Vite: los tests importan de `src/` (que usa
+    // `import.meta.glob` y `?raw`) además de módulos de Node.
+    "types": ["node", "vite/client"]
+  },
+  "include": ["scripts/**/*.test.ts", "landing/**/*.test.ts"]
+}

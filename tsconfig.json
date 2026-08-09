@@ -16,5 +16,21 @@
     "noEmit": true,
     "types": ["vite/client"]
   },
-  "include": ["src"]
+  // 🔴 LOS TESTS SE EXCLUYEN, y no es prolijidad — es lo único que hace REAL
+  // el aislamiento que pide la ORDEN 2A · A2.
+  //
+  // MEDIDO, no supuesto: con los tests adentro, una sonda `process.env.HOME`
+  // en `src/` COMPILABA LIMPIO aunque `types` diga sólo `["vite/client"]`.
+  // El camino lo mostró `tsc --explainFiles`: los tests importan `vitest`, y
+  // los tipos de vitest arrastran `@types/node` como dependencia transitiva
+  // (`packageId … +@types/node@24.13.3`). `types` gobierna la inclusión
+  // AUTOMÁTICA de globals, no lo que entra por un `import` de un archivo del
+  // programa — así que por ahí se filtraba.
+  //
+  // Con los tests afuera, este proyecto es CÓDIGO QUE CORRE EN EL TELÉFONO y
+  // nada más: un `process` o un `Buffer` escrito por descuido ahora falla el
+  // typecheck en vez de reventar en producción. Los tests no quedan sin
+  // cobertura: viven en `tsconfig.test.json`.
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }
