@@ -1,5 +1,41 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.65.0 — la landing dice qué es PayMe y lo muestra (2026-08-09)
+
+MINOR: cambia lo que ve quien entra al link.
+
+⚠️ **Estructura PROVISIONAL**, decidida por el Bibliotecario-Auditor porque
+Diseño no contestó y hacía falta un link hoy. **No es la landing definitiva:**
+se reemplaza sin discusión cuando Diseño mande la suya.
+
+```
+PayMe
+«Divide la cuenta del restaurante y paga tu parte desde tu teléfono.»
+[captura de la app]  ·  [captura del panel]
+Comensal (vivo)  ·  Restaurante «Muy pronto»
+```
+
+🔴 **Hasta hoy la landing no decía en ningún lado qué es PayMe.** Tenía la marca
+y dos botones: quien llegara sin saber, se iba sin saber.
+
+**Las imágenes viven DENTRO del artefacto** (`landing/public/img/`). La guarda
+exige que todo recurso sea relativo y propio, y eso no se afloja para meter dos
+capturas: los `.png` se clasifican como binario —verificado por hash, igual que
+el TTF— y se exige que el HTML **los use**.
+
+🔴 **La captura de la app se regeneró:** la anterior mostraba `payme_mx_mati`,
+el defecto que acabábamos de arreglar. La nueva entra con un usuario neutro y
+muestra `payme_mx_demo` — el arreglo visible y sin nombre propio en una imagen
+pública.
+
+**Y un defecto que encontró la guarda de licencias al sumarse las imágenes:**
+derivaba las familias tipográficas de *todos* los binarios y empezó a exigir
+`OFL-app-dividir-cuenta.png.txt`. **La derivación estaba bien; el conjunto del
+que derivaba, no.**
+
+Verificado a 375 px: las dos cargan, `alt` de verdad, **cero desborde
+horizontal**. El artefacto pasa de 178 KB a **734 KB** — 550 KB son las capturas.
+
 ## 0.64.0 — la landing se publica, y sus botones llevan a algún lado (2026-08-09)
 
 MINOR: aparece una superficie nueva publicada.
