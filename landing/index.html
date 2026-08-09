@@ -4,40 +4,202 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0f1f3d" />
-    <title>PayMe</title>
+    <title>PayMe — divide la cuenta del restaurante</title>
     <link rel="stylesheet" href="./landing.css" />
   </head>
   <body>
-    <main class="landing">
-      <header class="landing-intro">
-        <h1 class="landing-marca">PayMe</h1>
-        <p class="landing-frase">
-          Divide la cuenta del restaurante y paga tu parte desde tu teléfono.
-        </p>
-      </header>
-      <div class="landing-muestras">
-        <img
-          class="landing-muestra landing-muestra-app"
-          src="./img/app-dividir-cuenta.png"
-          width="1125"
-          height="2436"
-          alt="Pantalla de PayMe en un teléfono: la mesa de La Parolaccia con su cuenta desglosada en platillos, dos ya pagados y uno tomado por otra persona."
-        />
-        <figure class="landing-figura">
-          <img
-            class="landing-muestra landing-muestra-panel"
-            src="./img/panel-propinas.png"
-            width="2880"
-            height="1800"
-            alt="Panel del restaurante: propinas por mesa y por mesero, con el total del turno."
-          />
-          <figcaption class="landing-pie">Datos de ejemplo — panel en modo demo</figcaption>
-        </figure>
+<nav class="nav" id="nav" aria-label="Accesos a PayMe">
+  <div class="nav-mark">Pay<span>Me</span></div>
+  <div class="nav-anchors">
+    <a class="nav-anchor" href="#como-funciona">Cómo funciona</a>
+    <a class="nav-anchor" href="#restaurante">Para tu restaurante</a>
+    <a class="nav-anchor" href="#comensal">Para quien paga</a>
+  </div>
+  <div class="login-menu" id="login-menu">
+    <button class="login-trigger" id="login-trigger" aria-expanded="false" aria-haspopup="true">
+      Iniciar sesión
+      <svg class="login-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="login-panel" role="menu" aria-label="Iniciar sesión">
+      <span class="login-row featured pronto" role="menuitem" aria-disabled="true">
+        Restaurante <span class="pill-pronto">Muy pronto</span>
+      </span>
+      <a class="login-row" href="https://mativeron89.github.io/payme-app-frontend/" role="menuitem">
+        Comensal <span class="login-row-arrow" aria-hidden="true">→</span>
+      </a>
+      <div class="login-divider"></div>
+      <a class="login-row muted" href="#como-funciona" role="menuitem">
+        ¿Aún no eres cliente?
+      </a>
+    </div>
+  </div>
+  <div class="nav-divider" aria-hidden="true"></div>
+  <div class="progress" id="progress"></div>
+</nav>
+
+<main>
+  <section class="hero">
+    <span class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>Una mesa, muchas tarjetas</span>
+    <h1>Cada quien paga lo suyo, desde su teléfono</h1>
+    <p>La cuenta se divide en el celular y cada persona paga su parte con tarjeta.</p>
+    <div class="cta-row">
+      <span class="cta primary pronto" aria-disabled="true">
+        Entrar como restaurante <span class="pill-pronto">Muy pronto</span>
+      </span>
+      <a class="cta secondary" href="https://mativeron89.github.io/payme-app-frontend/">
+        Entrar como comensal
+      </a>
+    </div>
+  </section>
+
+  <section class="photo-band">
+    <img src="./img/mesa-comida.jpg" alt="Un grupo de amigos comiendo en un restaurante, compartiendo platos en la mesa" loading="lazy">
+  </section>
+
+  <section class="block" id="como-funciona">
+    <div class="block-head">
+      <span class="block-eyebrow">Cómo funciona</span>
+      <h2 class="block-title">Cuatro pasos, una cuenta</h2>
+    </div>
+    <div class="steps-wrap">
+      <svg class="steps-connector" viewBox="0 0 640 640" aria-hidden="true">
+        <circle cx="320" cy="320" r="255" fill="none" stroke="var(--action-2)" stroke-width="1.5" stroke-dasharray="2 10" stroke-linecap="round" opacity="0.5"/>
+      </svg>
+      <div class="steps">
+        <div class="step step-1">
+          <span class="step-num" aria-hidden="true">1</span>
+          <h3>Abre la mesa</h3>
+          <p>Quien organiza registra la mesa y deja una tarjeta como garantía.</p>
+        </div>
+        <div class="step step-2">
+          <span class="step-num" aria-hidden="true">2</span>
+          <h3>Comparte el link</h3>
+          <p>Les llega por la app o por WhatsApp, y entran con su cuenta.</p>
+        </div>
+        <div class="step step-3">
+          <span class="step-num" aria-hidden="true">3</span>
+          <h3>Cada quien elige</h3>
+          <p>Toma sus platillos o divide en partes iguales.</p>
+        </div>
+        <div class="step step-4">
+          <span class="step-num" aria-hidden="true">4</span>
+          <h3>Pagan y listo</h3>
+          <p>Cada persona paga su parte con tarjeta y elige la propina.</p>
+        </div>
       </div>
-      <nav class="landing-accesos" aria-label="Accesos a PayMe">
-        <a class="landing-acceso" href="https://mativeron89.github.io/payme-app-frontend/">Comensal</a>
-        <p class="landing-acceso landing-acceso-pronto">Restaurante <span>Muy pronto</span></p>
-      </nav>
-    </main>
+    </div>
+  </section>
+
+  <section class="block" id="restaurante">
+    <div class="audience">
+      <div class="audience-copy">
+        <span class="audience-tag">Para restaurantes</span>
+        <h2>Tu equipo deja de pasar la terminal</h2>
+        <p>Los comensales pagan desde su teléfono. El cobro va directo a la cuenta del restaurante, y el panel muestra qué mesa pagó cuánto.</p>
+      </div>
+      <div class="audience-art dashboard">
+          <img src="./img/panel-propinas.png" alt="Panel del restaurante, sección Propinas: propina por franja horaria, por tamaño de grupo y por mesero">
+          <span class="audience-caption">Datos de ejemplo — panel en modo demo</span>
+        </div>
+    </div>
+    <div class="perks">
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></span>
+        <p>El cobro va directo a la cuenta del restaurante</p>
+      </div>
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></span>
+        <p>Ves cada mesa: total, propina y mesero</p>
+      </div>
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20"/><circle cx="5.5" cy="6" r="0.6" fill="currentColor" stroke="none"/></svg></span>
+        <p>El panel funciona en el navegador, sin instalar nada</p>
+      </div>
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg></span>
+        <p>La garantía cubre si alguien se va sin pagar</p>
+      </div>
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.4" fill="currentColor" stroke="none"/></svg></span>
+        <p>Cada comensal paga con su propia tarjeta</p>
+      </div>
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V10l8-6 8 6v11"/><path d="M9 21v-7h6v7"/></svg></span>
+        <p>El cobro sale a nombre de tu restaurante</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="comensal">
+    <div class="audience reverse">
+      <div class="audience-copy">
+        <span class="audience-tag">Para comensales</span>
+        <h2>Paga lo tuyo sin sacar cuentas</h2>
+        <p>Entras por el link que te comparten, eliges lo que consumiste o divides en partes iguales, y pagas con tu tarjeta.</p>
+      </div>
+      <div class="audience-art app">
+          <img src="./img/app-dividir-cuenta.png" alt="App del comensal: mesa donde cada quien elige lo que consumió, con su parte calculada">
+        </div>
+    </div>
+    <div class="perks">
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M9 15l6-6"/></svg></span>
+        <p>Tomas solo tus platillos de la cuenta</p>
+      </div>
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="2.2"/><circle cx="17" cy="17" r="2.2"/><path d="M17 7L7 17"/></svg></span>
+        <p>Eliges cuánta propina dejar</p>
+      </div>
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4"/></svg></span>
+        <p>Pagas con tarjeta desde tu teléfono</p>
+      </div>
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="12" height="12" rx="2"/><rect x="9" y="3" width="12" height="12" rx="2"/></svg></span>
+        <p>Puedes pagar más de una parte, si te toca</p>
+      </div>
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.4"/><path d="M4 20L20 4"/></svg></span>
+        <p>Nadie en la mesa ve qué pediste</p>
+      </div>
+      <div class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+        <p>Te queda el historial de lo que pagaste</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+var nav = document.getElementById('nav');
+var bar = document.getElementById('progress');
+function onScroll() {
+  var y = window.scrollY || document.documentElement.scrollTop;
+  nav.classList.toggle('shrink', y > 24);
+  var h = document.documentElement.scrollHeight - window.innerHeight;
+  var pct = h > 0 ? Math.min(1, y / h) : 0;
+  bar.style.transform = 'scaleX(' + pct + ')';
+}
+window.addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+var loginMenu = document.getElementById('login-menu');
+var loginTrigger = document.getElementById('login-trigger');
+function closeMenu() {
+  loginMenu.classList.remove('open');
+  loginTrigger.setAttribute('aria-expanded', 'false');
+}
+loginTrigger.addEventListener('click', function (e) {
+  e.stopPropagation();
+  var isOpen = loginMenu.classList.toggle('open');
+  loginTrigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+});
+document.addEventListener('click', function (e) {
+  if (!loginMenu.contains(e.target)) closeMenu();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') closeMenu();
+});
+</script>
   </body>
 </html>

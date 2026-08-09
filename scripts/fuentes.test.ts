@@ -83,12 +83,17 @@ describe('la procedencia de las tipografías es verificable, no declarativa', ()
     expect(desvios, `procedencia rota: ${desvios.join(' · ')}`).toEqual([]);
   });
 
-  it('🔴 las dos copias de Plus Jakarta Sans son byte-idénticas', () => {
+  it('🔴 las copias de la landing son byte-idénticas a las de la webapp', () => {
     // Duplicadas a propósito —`D-WEB-1-BIS`: la landing es otro ORIGEN— y por
     // eso necesitan comparador: dos copias sin gate es como nace la deriva.
-    const webapp = sha256(join(RAIZ, 'src/assets/fonts/PlusJakartaSans-variable.ttf'));
-    const landing = sha256(join(RAIZ, 'landing/fonts/PlusJakartaSans-variable.ttf'));
-    expect(landing, `webapp ${webapp.slice(0, 12)}… ≠ landing ${landing.slice(0, 12)}…`).toBe(webapp);
+    // DM Sans se sumó el 2026-08-09 con el boceto: mismo binario, cero
+    // descargas nuevas.
+    for (const f of ['PlusJakartaSans-variable.ttf', 'DMSans-variable.ttf']) {
+      const webapp = sha256(join(RAIZ, 'src/assets/fonts', f));
+      const landing = sha256(join(RAIZ, 'landing/fonts', f));
+      expect(landing, `${f}: webapp ${webapp.slice(0, 12)}… ≠ landing ${landing.slice(0, 12)}…`)
+        .toBe(webapp);
+    }
   });
 
   it('🔴 las dos licencias OFL están completas y con su aviso de copyright', () => {
@@ -294,7 +299,11 @@ describe('los `@font-face` apuntan a archivos que existen', () => {
    */
   const HOJAS = [
     { css: 'src/styles/global.css', esperadas: 2 },
-    { css: 'landing/landing.css', esperadas: 1 },
+    // 🔴 La landing pasó de 1 a 2 el 2026-08-09: el boceto de Diseño usa DM
+    // Sans para TODO el cuerpo —párrafos, nav, perks, pasos— y hasta entonces
+    // la landing sólo servía Plus Jakarta Sans. No hubo descarga nueva: es el
+    // mismo binario que ya usaba la webapp, con su OFL adentro del artefacto.
+    { css: 'landing/landing.css', esperadas: 2 },
   ] as const;
 
   for (const { css, esperadas } of HOJAS) {

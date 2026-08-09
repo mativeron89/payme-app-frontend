@@ -1,342 +1,556 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   LANDING de `paymemx.com` — hoja ÚNICA de un artefacto SEPARADO.
+   LANDING de `paymemx.com` · PORTADA DESDE EL BOCETO DE DISEÑO
 
-   ## Por qué no importa `src/styles/global.css`
+   Fuente: `diseno/referencias/landing-boceto-ESTRUCTURA-para-bibliotecario.html`,
+   validado por Diseño con Mati. **Se portó el archivo, no una descripción de
+   él** — reconstruir desde una descripción es lo que produjo el desvío
+   anterior, cuando se publicó una landing provisional que nadie había elegido.
 
-   El spec deja abierta una pregunta de empaquetado: *"cómo el bundle/entry
-   SEPARADO accede al mismo archivo de tokens sin cargar el resto del shell
-   autenticado"*. `global.css` son 113 KB de shell —cabecera navy, pestañas,
-   barra de cinco posiciones, pantallas de pago— y §1 bis del spec dice que
-   ese shell **no es de la landing**. Importarlo entero para usar doce tokens
-   sería arrastrar justamente lo que la separación existe para evitar.
+   Lo que se cambió respecto del boceto, y NADA MÁS:
 
-   ## Y por qué copiar tokens no genera deriva acá
+   1. las tres `@font-face` con `data:` URI vaciado → archivos locales TTF;
+   2. las tres imágenes → copias dentro del artefacto, rutas relativas;
+   3. los cuatro enlaces a dominios que no existen → destino vivo o apagado;
+   4. el tratamiento del acceso sin destino, que el boceto NO trae.
 
-   Los valores de abajo están COPIADOS de `global.css`, y
-   `landing/landing.test.ts` **parsea los dos archivos y exige que coincidan
-   token por token**. Si alguien cambia un hex en el sistema y no acá, el test
-   se pone rojo con el nombre del token. Es el mismo patrón que este repo usa
-   para el `contract-mirror`: replicar y poner un gate encima, en vez de
-   confiar en que alguien se acuerde.
-
-   Fuente: `../diseno/SISTEMA_DISENO.md` §1–§3, vía `src/styles/global.css`.
-   Acá se COPIAN valores, no se deciden.
+   Cada uno está comentado donde ocurre.
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* ══════════════════════════════════════════════════════════════════════════
-   TIPOGRAFÍA PROPIA · `D-FUENTES-1`, superficie 2 de 3
+   TIPOGRAFÍAS · `D-FUENTES-1` + `F-1`
 
-   🔴 La ruta apunta a `./fonts/`, que es de ESTE artefacto. `D-WEB-1-BIS` manda
-   que la landing sea otro ORIGEN: una landing que trae la tipografía del origen
-   de la webapp no está separada, está acoplada, y la separación pasa a ser una
-   afirmación en vez de un hecho.
+   🔴 El boceto declara `.woff2` embebidos como `data:` URI y su comentario
+   dice que el artefacto real debe servir `.woff2` como archivos. **Las dos
+   cosas quedaron viejas.** `F-1` ratificó **TTF variable**: el upstream
+   autorizado no publica WOFF2 y la ganancia real de convertir está sin medir.
+   No se reabre.
 
-   El archivo es byte-idéntico al de `src/assets/fonts/`, y `landing.test.ts`
-   compara los dos SHA-256. Mismo patrón que los tokens de color de acá abajo:
-   se COPIA y se pone un gate encima.
+   Lo que sí se toma del boceto: `font-display: swap` y el fallback
+   `system-ui, sans-serif` en cada cadena.
 
-   UNA sola familia. La cadena de abajo es `'Plus Jakarta Sans', 'DM Sans',
-   sans-serif`: si PJS carga, DM Sans no se dibuja nunca. Traer sus 240 KB para
-   un fallback que no se va a usar sería engordar el artefacto por simetría con
-   la webapp, no por necesidad.
-
-   COSTO, medido: el artefacto pasa de 2.344 B a ~178 KB. Es un salto real y se
-   declara. Lo paga una sola familia variable que cubre los tres pesos que la
-   landing usa —400 el cuerpo, 700 los accesos, 800 la marca— y se recupera casi
-   entero con compresión en el host (65.729 B con brotli).
+   **Cero descargas nuevas.** DM Sans ya vivía en la webapp; se copió el mismo
+   binario (`8cd08d97…`) y su OFL viaja en `public/fonts/`. Un archivo variable
+   cubre 400 y 500, que son los pesos que el boceto pide.
 
    Procedencia completa: `./fonts/README.md`.
    ══════════════════════════════════════════════════════════════════════════ */
 
 @font-face {
-  font-family: 'Plus Jakarta Sans';
+  font-family: 'PJS';
   src: url('./fonts/PlusJakartaSans-variable.ttf') format('truetype');
   font-weight: 200 800;
   font-style: normal;
-  /* El texto se lee desde el primer frame con el sans del sistema. Quien
-     escribe `paymemx.com` a mano no puede quedarse mirando una pantalla en
-     blanco por una tipografía. */
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DMS';
+  src: url('./fonts/DMSans-variable.ttf') format('truetype');
+  /* Un solo archivo variable en vez de los dos estáticos del boceto: cubre
+     400 y 500 —y todo lo que haya en el medio— sin una segunda descarga. */
+  font-weight: 100 1000;
+  font-style: normal;
   font-display: swap;
 }
 
 :root {
-  /* §1 · Color. Los dos accesos usan --action / --action-fg (16.36:1). */
-  --action: #0f1f3d;
-  --action-fg: #ffffff;
-  --bg: #f4f7fa;
-  --text: #0f1f3d;
-
-  /* §2 · Tipografía. Misma cadena que el sistema, con su fallback intacto: la
-     landing no carga fuentes de TERCEROS — desde `D-FUENTES-1` sirve la suya,
-     con el `@font-face` de acá arriba. */
-  --font-display: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
-  --fs-h1: 28px;
-  --lh-h1: 1.2;
-  --fs-body: 16px;
-
-  /* §3 · Espaciado, radios, y el mínimo táctil NO negociable. */
-  --sp-3: 12px;
-  --sp-4: 16px;
-  --sp-6: 24px;
-  --sp-8: 32px;
-  --sp-12: 48px;
+  --bg: #F4F7FA;
+  --surface: #FFFFFF;
+  --teal-l: #E4FBFC;
+  --border: #E2E8F0;
+  --action: #0F1F3D;
+  --action-fg: #FFFFFF;
+  --action-2: #00C2CB;
+  --action-2-fg: #0F1F3D;
+  --brand: #FF6B35;
+  --brand-fg: #0F1F3D;
+  --text: #0F1F3D;
+  --text-muted: #5B6B82;
+  --sh-2: 0 2px 8px rgba(15,31,61,0.08);
+  --sh-3: 0 8px 24px rgba(15,31,61,0.10);
+  --r-sm: 10px;
   --r-md: 16px;
-  --tap-min: 44px;
+  --r-lg: 22px;
+  --r-full: 9999px;
 }
 
-* {
-  box-sizing: border-box;
+/* Sin modo oscuro, a propósito: SISTEMA_DISENO.md no define uno —
+   PayMe es de tema único hoy— así que esta maqueta no inventa una
+   paleta oscura que el producto no tiene. Se fuerza el tema claro
+   sin importar el sistema operativo o el toggle del visor. */
+:root[data-theme="dark"] {
+  --bg: #F4F7FA;
+  --surface: #FFFFFF;
+  --teal-l: #E4FBFC;
+  --border: #E2E8F0;
+  --action: #0F1F3D;
+  --action-fg: #FFFFFF;
+  --action-2: #00C2CB;
+  --action-2-fg: #0F1F3D;
+  --brand: #FF6B35;
+  --brand-fg: #0F1F3D;
+  --text: #0F1F3D;
+  --text-muted: #5B6B82;
+  --sh-2: 0 2px 8px rgba(15,31,61,0.08);
+  --sh-3: 0 8px 24px rgba(15,31,61,0.10);
 }
 
-html,
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
   margin: 0;
-  padding: 0;
-}
-
-body {
-  min-height: 100vh;
+  min-width: 1040px;
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-display);
-  /* §2 · el cuerpo NUNCA baja de 16px. */
-  font-size: var(--fs-body);
+  font-family: 'DMS', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--action-2); outline-offset: 2px; }
 
-/* Mobile-first radical: una columna centrada que en un teléfono ocupa el alto
-   completo. La razón NO es que el comensal llegue de WhatsApp —los deep links
-   BYPASSAN la landing— sino que quien escribe `paymemx.com` a mano llega
-   mayoritariamente desde un teléfono, y el resto del producto es mobile-first. */
-.landing {
-  min-height: 100vh;
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  overflow: visible;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--sp-8);
-  padding: var(--sp-6) var(--sp-4);
-  /* El notch: la webapp ya usa `viewport-fit=cover` y esto lo acompaña. */
-  padding-top: max(var(--sp-6), env(safe-area-inset-top));
-  padding-bottom: max(var(--sp-6), env(safe-area-inset-bottom));
+  justify-content: space-between;
+  padding: 22px 40px;
+  background: var(--bg);
+  transition: padding 180ms ease, box-shadow 180ms ease, background 180ms ease;
 }
-
-.landing-marca {
-  margin: 0;
-  font-size: var(--fs-h1);
-  line-height: var(--lh-h1);
+.nav.shrink {
+  padding: 12px 40px;
+  background: var(--surface);
+  box-shadow: var(--sh-2);
+}
+.progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--action-2);
+  transform-origin: left;
+  transform: scaleX(0);
+  z-index: 1;
+}
+.nav-divider {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(91,107,130,0.4) 50%, transparent 100%);
+  z-index: 1;
+}
+.nav-mark {
+  font-family: 'PJS', system-ui, sans-serif;
   font-weight: 800;
+  font-size: 21px;
   letter-spacing: -0.01em;
 }
-
-.landing-accesos {
+.nav-mark span { color: var(--action-2); }
+.nav-anchors {
   display: flex;
+  gap: 28px;
+}
+.nav-anchor {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.nav-anchor:hover { color: var(--text); }
+.login-menu {
+  position: relative;
+}
+.login-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(180deg, #FFA36B 0%, #FF9152 100%);
+  border: none;
+  border-radius: var(--r-full);
+  font-family: 'DMS', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #FFFFFF;
+  padding: 10px 20px;
+  box-shadow: 0 4px 12px rgba(255,107,53,0.35);
+  cursor: pointer;
+}
+.login-chevron {
+  transition: transform 160ms ease;
+}
+.login-menu.open .login-chevron { transform: rotate(180deg); }
+.login-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-3);
+  padding: 8px;
+  display: none;
   flex-direction: column;
-  gap: var(--sp-4);
-  width: 100%;
-  max-width: 320px;
+  gap: 2px;
+  z-index: 60;
+}
+.login-menu.open .login-panel { display: flex; }
+.login-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: var(--r-sm);
+  text-decoration: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 120ms ease;
+}
+.login-row:hover { background: var(--bg); }
+.login-row.featured { font-weight: 700; }
+.login-row-arrow { color: var(--text-muted); }
+.login-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 4px;
+}
+.login-row.muted { color: var(--text-muted); font-weight: 500; }
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--teal-l);
+  padding: 7px 14px;
+  border-radius: var(--r-full);
+  margin-bottom: 28px;
+}
+.eyebrow-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--action-2); }
+
+.hero {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 8vh 40px 10vh;
+  text-align: center;
+}
+.hero h1 {
+  font-family: 'PJS', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(36px, 5vw, 56px);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  margin: 0 0 20px;
+  text-wrap: balance;
+}
+.hero p {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 46ch;
+  margin: 0 auto 40px;
+}
+.cta-row {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'DMS', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 16px;
+  text-decoration: none;
+  padding: 15px 28px;
+  border-radius: var(--r-md);
+  min-height: 44px;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.cta:hover { transform: translateY(-2px); }
+.cta.primary {
+  background: linear-gradient(135deg, #1E3A63 0%, var(--action) 100%);
+  color: var(--action-fg);
+  font-family: 'DMS', system-ui, sans-serif;
+  font-weight: 700;
+  border-radius: var(--r-full);
+  padding: 13px 26px;
+  box-shadow: var(--sh-3);
+}
+.cta.secondary {
+  background: linear-gradient(135deg, #1E3A63 0%, var(--action) 100%);
+  color: var(--action-fg);
+  font-weight: 700;
+  border-radius: var(--r-full);
+  border: none;
+  padding: 13px 26px;
+  box-shadow: var(--sh-3);
 }
 
-/* 🔴 Los DOS en navy. Cuál puerta es la principal es una decisión de producto
-   que no está tomada (SPEC_LANDING §5, séptima pregunta abierta): pintar una
-   de naranja sería declararla la acción principal. El default honesto mientras
-   tanto es que ninguna se empuje sobre la otra. */
-.landing-acceso {
-  display: flex;
+.photo-band {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 40px 9vh;
+}
+.photo-band img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 21 / 8;
+  object-fit: cover;
+  object-position: center 30%;
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-3);
+}
+
+.block {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 9vh 40px;
+  scroll-margin-top: 90px;
+}
+.block-head {
+  max-width: 560px;
+  margin: 0 auto 52px;
+  text-align: center;
+}
+.block-eyebrow {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.block-title {
+  font-family: 'PJS', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(26px, 3.4vw, 34px);
+  line-height: 1.15;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.steps-wrap {
+  position: relative;
+  max-width: 660px;
+  margin: 0 auto;
+  height: 640px;
+}
+.steps { height: 100%; }
+.steps-connector {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+.step {
+  position: absolute;
+  width: 232px;
+  padding: 22px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  text-align: center;
+  box-shadow: var(--sh-2);
+  z-index: 1;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(155deg, rgba(91,107,130,0.35) 0%, rgba(91,107,130,0.08) 55%, rgba(91,107,130,0.3) 100%) border-box;
+}
+.step-1 { top: 0; left: 50%; transform: translateX(-50%); }
+.step-2 { top: 50%; right: 0; transform: translateY(-50%); }
+.step-3 { bottom: 0; left: 50%; transform: translateX(-50%); }
+.step-4 { top: 50%; left: 0; transform: translateY(-50%); }
+.step-num {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* min-height Y padding: el mínimo táctil se cumple aunque el texto crezca. */
-  min-height: var(--tap-min);
-  padding: var(--sp-4);
-  border-radius: var(--r-md);
-  background: var(--action);
-  color: var(--action-fg);
-  font-size: var(--fs-body);
-  font-weight: 700;
-  text-decoration: none;
-  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--teal-l);
+  color: var(--text);
+  font-family: 'PJS', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 16px;
 }
-
-.landing-acceso:hover {
-  transform: translateY(-1px);
+.step h3 {
+  font-family: 'DMS', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 17px;
+  margin: 0 0 8px;
 }
-
-/* ══════════════════════════════════════════════════════════════════════════
-   ⚠️ ESTRUCTURA PROVISIONAL · decidida por el Bibliotecario-Auditor el
-   2026-08-09 porque Diseño no contestó y hacía falta un link HOY.
-
-   **No es la landing definitiva.** Es la mínima honesta: qué es PayMe, cómo se
-   ve, y por dónde se entra. **Se reemplaza sin discusión el día que Diseño
-   mande la suya**, y esta nota se borra con ella.
-   ══════════════════════════════════════════════════════════════════════════ */
-
-/* La marca y la frase van juntas: son una sola unidad de lectura, y separarlas
-   con el `gap` general las dejaba huérfanas una de otra. */
-.landing-intro {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-3);
-  text-align: center;
-}
-
-/* §2 · Lo primero que la landing NO decía: qué es esto. Ancho acotado porque
-   una línea de más de ~50 caracteres en teléfono se lee peor. */
-.landing-frase {
+.step p {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-muted);
   margin: 0;
-  max-width: 26em;
-  font-size: var(--fs-body);
-  line-height: 1.5;
-  opacity: 0.82;
 }
 
-/* Las dos capturas. En teléfono se APILAN —una columna— y en escritorio
-   conviven. La de la app va primero y más chica: es el producto. */
-.landing-muestras {
+.audience {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 56px;
+  align-items: center;
+}
+.audience.reverse .audience-copy { order: 2; }
+.audience.reverse .audience-art { order: 1; }
+.audience-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.audience-copy h2 {
+  font-family: 'PJS', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(24px, 3vw, 30px);
+  line-height: 1.18;
+  margin: 0 0 16px;
+  text-wrap: balance;
+}
+.audience-copy > p {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0 0 24px;
+  max-width: 42ch;
+}
+.audience-art {
+  border-radius: var(--r-lg);
+  background: var(--teal-l);
+  min-height: 260px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--sp-6);
-  width: 100%;
-  max-width: 320px;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+  gap: 12px;
 }
-
-/* 🔴 `max-width: 100%` + `height: auto` es lo que evita el desborde
-   horizontal. Los atributos `width`/`height` del HTML están puestos con las
-   dimensiones REALES para que el navegador reserve el espacio antes de
-   descargar la imagen y la página no salte al cargar. */
-.landing-muestra {
+.audience-art img {
   display: block;
   max-width: 100%;
-  height: auto;
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-2);
+  border: 1px solid var(--border);
+}
+.audience-art.dashboard img { width: 100%; }
+.audience-art.app img { max-height: 460px; width: auto; border-radius: 22px; }
+.audience-caption {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.perks {
+  margin-top: 44px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.perk-card {
+  padding: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--r-md);
 }
-
-.landing-muestra-app {
-  /* El teléfono no necesita ocupar todo el ancho: se lee mejor acotado. */
-  max-width: 210px;
-  box-shadow: 0 8px 28px rgba(15, 31, 61, 0.16);
+.perk-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--teal-l);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.perk-card p {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
 }
 
-.landing-muestra-panel {
-  width: 100%;
-  border: 1px solid rgba(15, 31, 61, 0.12);
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .nav, .cta { transition: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   🔴 «Datos de ejemplo» · decisión de Mati, 2026-08-09.
+   🔴 EL ACCESO QUE TODAVÍA NO TIENE ADÓNDE IR · esto NO viene del boceto.
 
-   La captura del panel muestra $2.560 de propinas, 8.21 % sobre ventas y dos
-   personas con su rendimiento individual. **Sin una marca, eso se lee como el
-   desempeño real de un restaurante real.** No lo es: es el seed.
+   El boceto manda los dos accesos a `panel.paymemx.com` y `app.paymemx.com`.
+   **`panel.` no existe** —sin DNS, sin hosting, y el repo del dashboard es
+   privado—. Publicar un enlace ahí entrega un botón que no lleva a ningún
+   lado, que es peor que no tener el botón.
 
-   ⚠️ Y la ironía que nadie vio a tiempo: la leyenda «Demo» se sacó de las
-   capturas porque Mati las quería limpias — y al sacarla, a la del panel se le
-   fue lo único que decía que no era real. **La instrucción era correcta; el
-   efecto lateral no lo vio nadie.**
+   El boceto no está mal escrito: **está escrito para el futuro ratificado**.
+   `D-WEB-1-BIS` manda esos orígenes y algún día van a ser correctos. **El
+   defecto no es el destino: es la fecha.**
 
-   Se compone EN LA PÁGINA, no sobre la imagen: la captura no se vuelve a
-   ensuciar. Discreto pero legible — es una aclaración, no una advertencia.
+   Tratamiento: `<span>` y no `<a>` —no navegable, no focuseable—, sin `href`,
+   `cursor: not-allowed`, y una pastilla «Muy pronto» que lo dice antes del
+   clic. Se ve deliberado, no roto.
 
-   La de la app NO lleva pie: lleva su propia leyenda dentro del producto, y
-   quien haga clic la ve en dos segundos. El panel no tiene esa salida porque
-   su link todavía no existe.
+   🔴 SEAM: cuando exista el DNS, los dos vuelven a `<a href>` con `app.` y
+   `panel.`, y este bloque se borra entero.
    ══════════════════════════════════════════════════════════════════════════ */
-.landing-figura {
-  margin: 0;
-  width: 100%;
+.cta.pronto,
+.login-row.pronto {
+  cursor: not-allowed;
 }
 
-.landing-pie {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 1.4;
-  text-align: center;
-  opacity: 0.6;
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
-   🔴 EL ACCESO QUE TODAVÍA NO TIENE ADÓNDE IR.
-
-   `panel.paymemx.com` no existe: no hay DNS ni hosting, y el repo del
-   dashboard es privado. Un botón que no lleva a ningún lado es PEOR que no
-   tener botón — la persona hace clic, no pasa nada, y lo lee como roto.
-
-   Así que no es un enlace: es un `<p>`. No tiene `href`, no se puede tocar, y
-   **se ve distinto a propósito** para que la diferencia se note antes del
-   clic, no después. Fondo hueco con borde en vez de navy sólido.
-
-   ⚠️ NO es una decisión de diseño nueva: es el estado honesto mientras la
-   compuerta está cerrada. Cuando el panel tenga dónde vivir, vuelve a ser un
-   `<a class="landing-acceso">` igual que el otro y esta regla se borra entera.
-   ══════════════════════════════════════════════════════════════════════════ */
-.landing-acceso-pronto {
-  margin: 0;
-  gap: 8px;
+.cta.pronto {
+  /* Hueco con borde en vez de sólido: la diferencia se nota de lejos. */
   background: transparent;
   color: var(--action);
   border: 2px solid var(--action);
-  /* Sin `cursor: pointer` y sin transición: no invita a tocarlo. */
-  cursor: default;
+  box-shadow: none;
 }
 
-.landing-acceso-pronto span {
-  font-size: 13px;
-  font-weight: 500;
-  opacity: 0.72;
-}
-
-.landing-acceso-pronto:hover,
-.landing-acceso-pronto:active {
+.cta.pronto:hover,
+.login-row.pronto:hover {
   transform: none;
+  background: transparent;
 }
 
-.landing-acceso:active {
-  transform: translateY(0) scale(0.99);
+.pill-pronto {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  background: rgba(15, 31, 61, 0.08);
+  color: var(--text-muted);
+  font-family: 'DMS', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  vertical-align: middle;
 }
 
-/* §7 · foco visible SIEMPRE, y con offset para que se lea sobre el navy.
-   Se usa :focus-visible y no :focus para no dibujarlo en un click de mouse,
-   igual que el resto del sistema. */
-.landing-acceso:focus-visible {
-  outline: 3px solid var(--action);
-  outline-offset: 3px;
-}
-
-/* §6 · Motion. Nada en bucle y todo se apaga si la persona lo pidió. */
-@media (prefers-reduced-motion: reduce) {
-  .landing-acceso {
-    transition: none;
-  }
-  .landing-acceso:hover,
-  .landing-acceso:active {
-    transform: none;
-  }
-}
-
-/* El escritorio es secundario y sólo respira un poco más. */
-@media (min-width: 768px) {
-  .landing-accesos {
-    flex-direction: row;
-    max-width: 480px;
-  }
-  .landing-accesos .landing-acceso {
-    flex: 1;
-  }
-  /* Las dos capturas caben una al lado de la otra, y el panel es el que gana
-     ancho: es la pieza que se entiende peor achicada. */
-  .landing-muestras {
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    max-width: 880px;
-  }
-  .landing-muestra-app {
-    max-width: 190px;
-    flex: 0 0 auto;
-  }
-  .landing-muestra-panel {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
+.login-row.pronto {
+  color: var(--text-muted);
 }
