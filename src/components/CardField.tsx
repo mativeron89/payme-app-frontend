@@ -38,13 +38,37 @@ export function CardField({ onReady, onChange }: Props) {
       try {
         const stripe = await getStripe();
         if (cancelled || !stripe || !holder.current) return;
-        // T-D1: el iframe de Stripe no hereda las fuentes de la página — hay
-        // que pasárselas acá o el `fontFamily` de abajo cae al sans del sistema.
-        const elements = stripe.elements({
-          fonts: [
-            { cssSrc: 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap' },
-          ],
-        });
+        /**
+         * 🔴 FASE 3 · SE RETIRÓ EL `cssSrc` A GOOGLE, Y EL COSTO SE DECLARA.
+         *
+         * Acá se le pasaba a Elements una hoja de `fonts.googleapis.com`. Era
+         * el TERCER egress de tipografías del repo —el que no se ve leyendo el
+         * `index.html`— y ocurría **al montar el campo**, sin que la persona
+         * tocara nada.
+         *
+         * CONSECUENCIA, medida y acotada: el `fontFamily` de abajo pide
+         * `'DM Sans'`, que dentro del iframe ya no está. **El texto que se
+         * tipea en el campo —número, vencimiento, CVC y su placeholder— pasa a
+         * verse con el sans del sistema.** El resto de la pantalla NO cambia:
+         * esa tipografía la sirve nuestra propia página.
+         *
+         * POR QUÉ NO SE REEMPLAZA YA. El contrato de Stripe sí lo soporta
+         * (`CustomFontSource` = `{family, src, weight}`, `elements-group.d.ts:1149`),
+         * pero exige dos cosas que hoy no existen:
+         *   1. una URL ABSOLUTA a un host propio — el iframe corre en
+         *      `js.stripe.com` y una ruta relativa resuelve contra ÉL; y
+         *      `app.paymemx.com` no tiene DNS ni TLS todavía;
+         *   2. **CORS** en ese host para `js.stripe.com`, porque una fuente
+         *      cross-origin lo exige. Es configuración de hosting **no
+         *      ratificada**, y acá no se inventa configuración.
+         *
+         * Queda como requisito con nombre en el Carril 7. Hay una tercera vía
+         * —embeber la fuente como `data:` URI en el `src`— que se MIDIÓ y se
+         * descartó: son ~30–55 KB en base64 por peso para un campo de
+         * formulario, es una decisión de arquitectura que nadie ratificó, y no
+         * está verificado que la CSP de Stripe la acepte.
+         */
+        const elements = stripe.elements();
         card = elements.create('card', {
           hidePostalCode: true,
           style: {
