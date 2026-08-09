@@ -553,7 +553,74 @@ describe('PROPIEDAD 6 · las imágenes', () => {
   });
 });
 
-describe('PROPIEDAD 7 · el contenido es el del boceto', () => {
+/**
+ * 📱 PROPIEDAD 7 · EL LAYOUT MÓVIL DE §6.
+ *
+ * El boceto es la versión de computadora y su CSS lo decía: `min-width: 1040px`
+ * en el `body`, una sola media query. **Medido en un iPhone 13 antes de
+ * arreglarlo: 1040 px de layout sobre 390 pt de pantalla, factor 0.38×, el
+ * cuerpo de 18 px viéndose a 6.8 pt.** Ilegible sin zoom — y el link se
+ * comparte por WhatsApp, donde casi todo se abre en un teléfono.
+ *
+ * §6 de la spec de Diseño lo especifica, y aclara que **esto SÍ cambia respecto
+ * del boceto**. Breakpoint ÚNICO en 640 px.
+ *
+ * Se verifica sobre el CSS emitido; el comportamiento real se midió en tres
+ * dispositivos emulados antes de publicar: escala 1.00× y cuerpo a 18 pt.
+ */
+describe('PROPIEDAD 7 · el layout móvil de §6', () => {
+  const bloque640 = (): string => {
+    const css = cssDelBuild();
+    const i = css.indexOf('@media (max-width:640px)') >= 0
+      ? css.indexOf('@media (max-width:640px)')
+      : css.indexOf('@media (max-width: 640px)');
+    expect(i, 'no existe el breakpoint de 640 px que §6 manda').toBeGreaterThan(-1);
+    return css.slice(i);
+  };
+
+  it('🔴 el `body` NO tiene `min-width`: era lo que forzaba el viewport de escritorio', () => {
+    const css = cssDelBuild();
+    const body = css.match(/(?:^|\})body\{([^}]*)\}/)?.[1] ?? '';
+    expect(body.length, 'no se encontró la regla de `body`').toBeGreaterThan(10);
+    expect(body, 'volvió el `min-width` del boceto: la landing se rompe en teléfono')
+      .not.toContain('min-width');
+  });
+
+  it('🔴 UN solo breakpoint, como dice §6', () => {
+    // Cada breakpoint que se agregue después es una decisión de Diseño, no una
+    // comodidad de implementación. `prefers-reduced-motion` no cuenta: no es
+    // un breakpoint de ancho.
+    const anchos = [...cssDelBuild().matchAll(/@media[^{]*\(max-width:\s*(\d+)px\)/g)]
+      .map((m) => m[1]!);
+    expect(anchos, `breakpoints de ancho: ${anchos.join(', ')}`).toEqual(['640']);
+  });
+
+  it('🔴 los seis cambios de §6 están en el breakpoint', () => {
+    const b = bloque640();
+    const exigidos: Array<[string, RegExp]> = [
+      ['el nav esconde las anclas', /\.nav-anchors\{[^}]*display:none/],
+      ['los CTA del hero se apilan', /\.cta-row\{[^}]*flex-direction:column/],
+      ['los pasos dejan de ser absolutos', /\.step\{[^}]*position:static/],
+      ['el conector circular se oculta', /\.steps-connector\{[^}]*display:none/],
+      ['la audiencia va a una columna', /\.audience\{[^}]*grid-template-columns:1fr/],
+      ['los perks van a una columna', /\.perks\{[^}]*grid-template-columns:1fr/],
+    ];
+    const faltan = exigidos.filter(([, re]) => !re.test(b)).map(([q]) => q);
+    expect(faltan, `§6 incompleto: ${faltan.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 y el escritorio NO se tocó: las reglas base siguen ahí', () => {
+    // La contracara. Un breakpoint que además rompe el escritorio pasaría los
+    // tests de arriba igual.
+    const css = cssDelBuild();
+    const base = css.slice(0, css.indexOf('@media'));
+    expect(base, 'el nav perdió sus anclas en escritorio').toMatch(/\.nav-anchors\{[^}]*display:flex/);
+    expect(base, 'los pasos perdieron su posición circular').toMatch(/\.step\{[^}]*position:absolute/);
+    expect(base, 'la audiencia perdió sus dos columnas').toMatch(/\.audience\{[^}]*grid-template-columns:1\.1fr 1fr/);
+  });
+});
+
+describe('PROPIEDAD 8 · el contenido es el del boceto', () => {
   /**
    * No se congela cada string —la página es larga y sería mantenimiento puro—
    * pero sí la ESTRUCTURA de encabezados, que es lo que cambia cuando alguien

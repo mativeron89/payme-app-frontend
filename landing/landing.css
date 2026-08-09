@@ -99,7 +99,14 @@
 html { scroll-behavior: smooth; }
 body {
   margin: 0;
-  min-width: 1040px;
+  /* 🔴 El boceto traía `min-width: 1040px`. Es lo que forzaba el viewport de
+     escritorio: en un iPhone la página se servía a 1040 px de layout sobre
+     390 pt de pantalla, el navegador la achicaba a 0.38× y el cuerpo de 18 px
+     terminaba viéndose a 6.8 pt. Ilegible sin zoom.
+
+     Se retira porque §6 de la spec de Diseño manda layout móvil, y dice
+     textual que **esto SÍ cambia respecto del boceto**: «la landing real la
+     abren del celular». El boceto era la versión computadora. */
   background: var(--bg);
   color: var(--text);
   font-family: 'DMS', system-ui, sans-serif;
@@ -553,4 +560,107 @@ a { color: inherit; }
 
 .login-row.pronto {
   color: var(--text-muted);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   📱 MÓVIL · §6 de la spec de Diseño, breakpoint ÚNICO en 640 px.
+
+   Textual, y la aclaración importa: *«esto SÍ cambia respecto al boceto — la
+   landing real la abren del celular»*. El boceto es la versión de computadora;
+   esto no lo contradice, lo completa.
+
+   Lo que §6 pide, punto por punto:
+     · el nav esconde las tres anclas y deja logo + login
+     · los CTA del hero se apilan
+     · la banda de foto ya es fluida (no hace falta tocarla)
+     · «Cómo funciona» pasa de circular a lista vertical simple
+     · los bloques de audiencia van a UNA columna: copy arriba, imagen debajo
+     · los perks de tres columnas a una
+
+   🔴 Un solo breakpoint, como dice la spec. Cada uno que se agregue después es
+   una decisión de Diseño, no una comodidad de implementación.
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* El nav deja logo + login. Las anclas se esconden: en 375 px no entran, y
+     apilarlas empujaría el hero fuera de la primera pantalla. */
+  .nav-anchors {
+    display: none;
+  }
+
+  .nav {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  /* Respirar menos a los costados: 40 px de padding en 375 px se come el 21 %
+     del ancho útil. */
+  .hero,
+  .block {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .hero {
+    padding-top: 6vh;
+    padding-bottom: 7vh;
+  }
+
+  /* Los dos CTA apilados y a todo el ancho: en una columna, dos botones al
+     lado quedan de 150 px y el texto se parte. */
+  .cta-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cta {
+    justify-content: center;
+  }
+
+  /* 🔴 «Cómo funciona»: de círculo a lista vertical.
+
+     Los cuatro pasos están posicionados en ABSOLUTO sobre un contenedor de
+     640 px de alto, con el conector SVG en el medio. En un teléfono eso no
+     entra: se vuelve flujo normal y el círculo desaparece. */
+  .steps-wrap {
+    height: auto;
+    max-width: 100%;
+  }
+
+  .steps-connector {
+    display: none;
+  }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: auto;
+  }
+
+  .step {
+    position: static;
+    width: 100%;
+    transform: none;
+    text-align: left;
+  }
+
+  /* Audiencia: una columna, copy arriba e imagen debajo. El `order` del
+     bloque invertido se anula — en vertical, «primero el texto» es siempre
+     lo correcto y alternar el orden sólo confunde. */
+  .audience {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .audience.reverse .audience-copy,
+  .audience.reverse .audience-art {
+    order: initial;
+  }
+
+  /* Perks: de tres columnas a una. */
+  .perks {
+    grid-template-columns: 1fr;
+    margin-top: 28px;
+  }
 }
