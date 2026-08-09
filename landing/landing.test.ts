@@ -110,8 +110,14 @@ interface Artefacto {
  * Cualquier archivo que NO matchee esto se lee como texto y entra al barrido
  * de red — así, un binario nuevo dispara las dos guardas a la vez: falla la
  * lista de abajo (no está autorizado) y además lo barre el escáner de hosts.
+ *
+ * 🔴 Los `.png` se suman el 2026-08-09 con las capturas, y NO es aflojar la
+ * guarda: es clasificarlos con el instrumento correcto. Un PNG leído como utf8
+ * es ruido — puede inventar un `//algo.com` con bytes que cayeron así, y no
+ * puede contener una referencia que el navegador siga. **Se verifican por
+ * identidad (hash) igual que el TTF, y se exige que el CSS/HTML los use.**
  */
-const BINARIO_AUTORIZADO = /^PlusJakartaSans-variable-[A-Za-z0-9_-]+\.ttf$/;
+const BINARIO_AUTORIZADO = /^(?:PlusJakartaSans-variable-[A-Za-z0-9_-]+\.ttf|[a-z-]+\.png)$/;
 
 /**
  * 🔴 La licencia OFL es un archivo INERTE, y por eso no entra al barrido.
@@ -523,11 +529,36 @@ describe('PROPIEDAD 4 · la tipografía es propia, y es la misma de siempre', ()
    */
   const SHA_UPSTREAM = '89b3fb38aa0d275d7a731d0d817a4f1622b316b4d7fbdedcf02ee9099ff68bc8';
 
-  it('🔴 el artefacto emite UN solo binario, y es la tipografía', () => {
-    const emitidos = Object.keys(build.binarios);
+  it('🔴 los binarios emitidos son EXACTAMENTE los esperados', () => {
+    const emitidos = Object.keys(build.binarios).map((a) => basename(a)).sort();
     // Si el detector dejara de matchear, `binarios` quedaría vacío y las
-    // afirmaciones de abajo pasarían en vacío. Por eso se exige el 1 primero.
-    expect(emitidos, `binarios emitidos: ${emitidos.join(' · ') || 'ninguno'}`).toHaveLength(1);
+    // afirmaciones de abajo pasarían en vacío. Por eso se enumera, no se cuenta.
+    expect(emitidos.filter((n) => n.endsWith('.png'))).toEqual([
+      'app-dividir-cuenta.png',
+      'panel-propinas.png',
+    ]);
+    expect(emitidos.filter((n) => n.endsWith('.ttf'))).toHaveLength(1);
+  });
+
+  it('🔴 las dos capturas se USAN: nada de peso muerto en el artefacto', () => {
+    // 227 KB + 320 KB que nadie referencia serían el peor tipo de bulto: se
+    // descargan igual y no se ven.
+    for (const png of ['app-dividir-cuenta.png', 'panel-propinas.png']) {
+      expect(build.html, `${png} está emitida pero nadie la referencia`).toContain(png);
+    }
+  });
+
+  it('🔴 cada imagen tiene `alt` de verdad, no vacío', () => {
+    const imgs = tags(build.html).filter((t) => t.nombre === 'img');
+    expect(imgs.length, 'no se emitió ninguna imagen').toBe(2);
+    for (const i of imgs) {
+      const alt = atributos(i.crudo).find((a) => a.nombre === 'alt')?.valor ?? '';
+      expect(alt.length, `un <img> sin alt útil: ${i.crudo.slice(0, 60)}`).toBeGreaterThan(20);
+      // Y dimensiones declaradas: sin ellas la página salta al cargar.
+      for (const dim of ['width', 'height']) {
+        expect(atributos(i.crudo).some((a) => a.nombre === dim), `falta ${dim}`).toBe(true);
+      }
+    }
   });
 
   it('🔴 el binario emitido es byte-idéntico al del repo, y al upstream', () => {
@@ -608,6 +639,9 @@ describe('PROPIEDAD 6 · fail-closed: sólo lo que la landing necesita', () => {
   /** Todo lo que las 19 líneas usan de verdad. Nada más entra. */
   const ATRIBUTOS_PERMITIDOS = [
     'lang', 'charset', 'name', 'content', 'rel', 'href', 'class', 'aria-label',
+    // Los de `<img>`: `src` ya está en ATRIBUTOS_DE_RECURSO y se verifica que
+    // sea relativo; `alt`, `width` y `height` no cargan nada.
+    'src', 'alt', 'width', 'height',
   ];
 
   it('🔴 MUTANTE · ningún atributo fuera de la allowlist (mata srcset, style y on*)', () => {
@@ -667,9 +701,12 @@ describe('PROPIEDAD 6 · fail-closed: sólo lo que la landing necesita', () => {
 
 describe('PROPIEDAD 5 · la licencia viaja con la tipografía', () => {
   it('🔴 cada tipografía emitida tiene su licencia COMPLETA en el artefacto', () => {
-    const familias = Object.keys(build.binarios).map((a) =>
-      basename(a).replace(/-variable-[A-Za-z0-9_-]+\.ttf$/, ''),
-    );
+    // 🔴 Sólo los `.ttf`. Antes derivaba de TODOS los binarios y, al sumarse las
+    // capturas, exigía `OFL-app-dividir-cuenta.png.txt`. La derivación estaba
+    // bien; el conjunto del que derivaba, no. Una imagen no es una tipografía.
+    const familias = Object.keys(build.binarios)
+      .filter((a) => a.endsWith('.ttf'))
+      .map((a) => basename(a).replace(/-variable-[A-Za-z0-9_-]+\.ttf$/, ''));
     expect(familias.length, 'el artefacto no emitió ninguna tipografía').toBeGreaterThan(0);
 
     for (const familia of familias) {
@@ -716,7 +753,13 @@ describe('el contenido es el literal autorizado, y nada más', () => {
     // 🔴 «Muy pronto» se suma el 2026-08-09 y NO es copy nuevo por gusto: es
     // lo que hace que el acceso sin destino se lea como deliberado y no como
     // roto. Sale el día que el panel tenga adónde ir.
-    expect(textos).toEqual(['PayMe', 'Comensal', 'Restaurante', 'Muy pronto']);
+    expect(textos).toEqual([
+      'PayMe',
+      'Divide la cuenta del restaurante y paga tu parte desde tu teléfono.',
+      'Comensal',
+      'Restaurante',
+      'Muy pronto',
+    ]);
   });
 
   it('no promete nada de lo que §3 prohíbe prometer', () => {

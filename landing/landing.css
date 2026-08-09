@@ -75,8 +75,10 @@
   --fs-body: 16px;
 
   /* §3 · Espaciado, radios, y el mínimo táctil NO negociable. */
+  --sp-3: 12px;
   --sp-4: 16px;
   --sp-6: 24px;
+  --sp-8: 32px;
   --sp-12: 48px;
   --r-md: 16px;
   --tap-min: 44px;
@@ -112,7 +114,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--sp-12);
+  gap: var(--sp-8);
   padding: var(--sp-6) var(--sp-4);
   /* El notch: la webapp ya usa `viewport-fit=cover` y esto lo acompaña. */
   padding-top: max(var(--sp-6), env(safe-area-inset-top));
@@ -157,6 +159,68 @@ body {
 
 .landing-acceso:hover {
   transform: translateY(-1px);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⚠️ ESTRUCTURA PROVISIONAL · decidida por el Bibliotecario-Auditor el
+   2026-08-09 porque Diseño no contestó y hacía falta un link HOY.
+
+   **No es la landing definitiva.** Es la mínima honesta: qué es PayMe, cómo se
+   ve, y por dónde se entra. **Se reemplaza sin discusión el día que Diseño
+   mande la suya**, y esta nota se borra con ella.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* La marca y la frase van juntas: son una sola unidad de lectura, y separarlas
+   con el `gap` general las dejaba huérfanas una de otra. */
+.landing-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  text-align: center;
+}
+
+/* §2 · Lo primero que la landing NO decía: qué es esto. Ancho acotado porque
+   una línea de más de ~50 caracteres en teléfono se lee peor. */
+.landing-frase {
+  margin: 0;
+  max-width: 26em;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  opacity: 0.82;
+}
+
+/* Las dos capturas. En teléfono se APILAN —una columna— y en escritorio
+   conviven. La de la app va primero y más chica: es el producto. */
+.landing-muestras {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-6);
+  width: 100%;
+  max-width: 320px;
+}
+
+/* 🔴 `max-width: 100%` + `height: auto` es lo que evita el desborde
+   horizontal. Los atributos `width`/`height` del HTML están puestos con las
+   dimensiones REALES para que el navegador reserve el espacio antes de
+   descargar la imagen y la página no salte al cargar. */
+.landing-muestra {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-md);
+}
+
+.landing-muestra-app {
+  /* El teléfono no necesita ocupar todo el ancho: se lee mejor acotado. */
+  max-width: 210px;
+  box-shadow: 0 8px 28px rgba(15, 31, 61, 0.16);
+}
+
+.landing-muestra-panel {
+  width: 100%;
+  border: 1px solid rgba(15, 31, 61, 0.12);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -226,5 +290,21 @@ body {
   }
   .landing-accesos .landing-acceso {
     flex: 1;
+  }
+  /* Las dos capturas caben una al lado de la otra, y el panel es el que gana
+     ancho: es la pieza que se entiende peor achicada. */
+  .landing-muestras {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    max-width: 880px;
+  }
+  .landing-muestra-app {
+    max-width: 190px;
+    flex: 0 0 auto;
+  }
+  .landing-muestra-panel {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 }
