@@ -90,7 +90,21 @@
      activo de la barra inferior, badge de no leídos, y el CTA de pantalla de
      primer contacto (cuarto uso, ratificado 2026-08-04). Nada más. */
   --brand: #ff6b35;
-  --brand-fg: #0f1f3d; /* glifo sobre --brand · 5.77:1 — NUNCA blanco (2.84:1) */
+  /* 🔴 ENMIENDA RATIFICADA 2026-08-08 · el glifo sobre --brand pasa a BLANCO.
+     Antes: #0f1f3d, 5.77:1, con el comentario "NUNCA blanco (2.84:1)".
+     Ahora: #ffffff, 2.84:1 — REPRUEBA AA (mínimo 4.5:1) Y reprueba el mínimo
+     de ícono de control (3:1).
+
+     NO ES UN DESCUIDO. Mati vio los cuatro usos del naranja lado a lado, con
+     el contraste medido al lado de cada uno, y eligió éste igual. Su
+     respuesta, literal: "Quiero los propuestos en la app por favor."
+     Fuente: `../../../diseno/SISTEMA_DISENO.md` §1, tabla de Marca.
+
+     Si aparece en una auditoría de contraste, es la regla vigente y no un
+     hallazgo. `designTokens.test.ts` lo registra como excepción con fecha, en
+     vez de dejar de medirlo: el número sigue fijado en 2.84 para que un
+     retoque del naranja no lo hunda todavía más sin que nadie se entere. */
+  --brand-fg: #ffffff; /* sobre --brand · 2.84:1 · excepción ratificada */
   --brand-soft: #fff0eb;
   --brand-ink: #c2410c; /* naranja COMO TEXTO sobre claro · 5.18:1 */
 
@@ -1931,8 +1945,9 @@ body {
   border: none;
   cursor: pointer;
   background: var(--brand);
-  /* Glifo NAVY, nunca blanco: blanco sobre --brand da 2.84:1 y un ícono de
-     control necesita 3:1. Navy da 5.77:1. */
+  /* Glifo BLANCO desde la enmienda del 2026-08-08 (antes navy). Da 2.84:1 y un
+     ícono de control necesita 3:1: no llega, y es decisión de Mati con el
+     número a la vista. Ver `--brand-fg`. */
   color: var(--brand-fg);
   display: flex;
   align-items: center;
@@ -2068,8 +2083,9 @@ body {
   color: var(--on-dark);
 }
 
-/* Badge de no leídos: --brand con el número en navy — 5.77:1. Es uno de los
-   usos permitidos del naranja. */
+/* Badge de no leídos: --brand con el número BLANCO desde la enmienda del
+   2026-08-08 (antes navy). 2.84:1, reprobado a propósito. Es uno de los tres
+   usos permitidos del naranja como FONDO. */
 .hdr-badge {
   position: absolute;
   top: 4px;
@@ -2169,7 +2185,12 @@ body {
   box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.28);
 }
 
-/* Badge de conteo de la pestaña: mismo tratamiento que el de la campana. */
+/* Badge de conteo de la pestaña: mismo tratamiento que el de la campana, así
+   que el número también pasa a blanco con la enmienda del 2026-08-08.
+
+   🔴 Igual que `.link-round`: la tabla de usos permitidos de `--brand` nombra
+   el badge de avisos —"la campana, misma ranura"— y éste vive dentro de una
+   PESTAÑA, que no es esa ranura. Deriva preexistente, reportada. */
 .btab-badge {
   min-width: 18px;
   height: 18px;
@@ -2332,7 +2353,12 @@ body {
    excepción con fundamento, no una puerta abierta — esta pantalla no compite
    con ningún otro elemento naranja porque nadie ve el círculo "Nueva" ni la
    barra activa antes de tener cuenta.
-   El texto va en NAVY (5.77:1). Blanco daría 2.84:1 y no pasa. */
+
+   🔴 El texto va en BLANCO desde la enmienda del 2026-08-08 (antes navy,
+   5.77:1). Da 2.84:1 y NO pasa AA — ratificado por Mati con el número
+   adelante. Acá pesa más que en los otros dos usos: es la PRIMERA pantalla
+   que ve un desconocido, y suele mirarse con poca luz. Queda dicho, no
+   escondido. */
 .link-btn-brand {
   background: var(--brand);
   color: var(--brand-fg);
@@ -2363,7 +2389,13 @@ body {
   border: none;
   cursor: pointer;
   background: var(--brand);
-  color: var(--brand-fg); /* glifo navy, 5.77:1 */
+  /* 🔴 ESTE SITIO NO ESTÁ EN LA TABLA DE USOS PERMITIDOS DE `--brand`.
+     La enmienda del 2026-08-08 cambia el TOKEN —"glifo e íconos sobre
+     --brand"— así que este glifo pasa a blanco por arrastre, no porque nadie
+     lo haya mirado. Lo que nadie ratificó es que este círculo tenga fondo
+     naranja: `SISTEMA_DISENO.md` §1 lista TRES fondos `--brand` y éste no es
+     ninguno. Es deriva preexistente, y queda reportada. */
+  color: var(--brand-fg); /* blanco, 2.84:1 — ver arriba */
   display: flex;
   align-items: center;
   justify-content: center;

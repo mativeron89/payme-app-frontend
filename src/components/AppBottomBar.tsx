@@ -143,9 +143,15 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
  * —por eso vive acá y no en la pantalla—, pero sin las cuatro posiciones y
  * **sin etiqueta**: no es navegación, es el cierre del flujo de armar mesa.
  *
- * El glifo va en navy sobre `--brand`, 5.77:1. El nombre accesible lo lleva el
- * `aria-label`, que es lo único que tiene: sin etiqueta visible, un botón sin
- * nombre sería un círculo mudo para quien no ve la pantalla.
+ * El glifo va en BLANCO sobre `--brand` desde la enmienda del 2026-08-08
+ * (antes navy, 5.77:1): son 2.84:1, por debajo del 3:1 que pide un ícono de
+ * control, y es decisión de Mati con el número a la vista. El nombre accesible
+ * lo lleva el `aria-label`, que es lo único que tiene: sin etiqueta visible,
+ * un botón sin nombre sería un círculo mudo para quien no ve la pantalla.
+ *
+ * 🔴 Y ahí el `aria-label` deja de ser sólo accesibilidad de lector de
+ * pantalla: con el contraste por debajo del mínimo, el nombre accesible es lo
+ * único que no depende de distinguir el glifo. Razón de más para no tocarlo.
  */
 export function AppBottomCta({
   label,

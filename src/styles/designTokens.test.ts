@@ -59,7 +59,8 @@ describe('sistema de diseño · §1 color', () => {
   it('declara la paleta con los hex exactos del sistema', () => {
     // Marca. --brand y --brand-ink NO son intercambiables.
     expect(token('brand')).toBe('#ff6b35')
-    expect(token('brand-fg')).toBe('#0f1f3d')
+    // 🔴 Enmienda del 2026-08-08: era `#0f1f3d`. Ver EXCEPCIONES_AA abajo.
+    expect(token('brand-fg')).toBe('#ffffff')
     expect(token('brand-soft')).toBe('#fff0eb')
     expect(token('brand-ink')).toBe('#c2410c')
     // Acción.
@@ -90,7 +91,9 @@ describe('sistema de diseño · §1 color', () => {
   })
 
   it('mide los ratios que el sistema declara verificados', () => {
-    expect(contrast('brand-fg', 'brand')).toBeCloseTo(5.77, 1)
+    // 🔴 2.84 y no 5.77 desde la enmienda del 2026-08-08. Se sigue MIDIENDO y
+    // se sigue FIJANDO: la excepción es al mínimo AA, no a la medición.
+    expect(contrast('brand-fg', 'brand')).toBeCloseTo(2.84, 1)
     expect(contrast('brand-ink', 'surface')).toBeCloseTo(5.18, 1)
     expect(contrast('action-fg', 'action')).toBeCloseTo(16.36, 1)
     expect(contrast('action-2-fg', 'action-2')).toBeCloseTo(7.46, 1)
@@ -155,14 +158,76 @@ describe('sistema de diseño · §1 color', () => {
     expect(ratio(composed, channels(token('action')))).toBeGreaterThanOrEqual(8)
   })
 
-  describe('las prohibiciones del sistema siguen justificadas', () => {
-    it('blanco sobre --brand reprueba: por eso el glifo va en navy', () => {
-      const blancoSobreNaranja = ratio([255, 255, 255], channels(token('brand')))
-      expect(blancoSobreNaranja).toBeCloseTo(2.84, 1)
-      expect(blancoSobreNaranja).toBeLessThan(3) // ni el mínimo de ícono de control
-      expect(contrast('brand-fg', 'brand')).toBeGreaterThanOrEqual(4.5)
+  /**
+   * 🔴 REGISTRO DE EXCEPCIONES AA · 2026-08-08
+   *
+   * Esto NO es una guarda aflojada. Es lo contrario: la excepción queda
+   * ANOTADA, con su número, su fecha y quién la tomó, y se sigue midiendo.
+   *
+   * El caso: `#FFFFFF` sobre `#FF6B35` da 2.84:1 — reprueba el mínimo AA de
+   * 4.5:1 y también el 3:1 de un ícono de control. Es exactamente el número
+   * que el sistema de diseño citaba como el problema a resolver. Mati vio los
+   * cuatro usos del naranja lado a lado, con el contraste medido al lado de
+   * cada uno, y eligió éste igual.
+   *
+   * 🔴 Por qué no se borra el test y ya: **una guarda desactivada sin
+   * explicación es peor que no tenerla**, porque la próxima persona no puede
+   * saber si fue decisión o descuido. Acá el que la lea encuentra la decisión,
+   * la fecha y la frase textual.
+   *
+   * Y el registro corta para los dos lados: si una excepción empieza a PASAR
+   * —porque alguien oscureció el naranja, digamos— deja de ser excepción y
+   * tiene que salir de la lista. El test de abajo lo exige.
+   */
+  const EXCEPCIONES_AA = [
+    {
+      fg: 'brand-fg',
+      bg: 'brand',
+      ratio: 2.84,
+      minimo: 4.5,
+      fecha: '2026-08-08',
+      decide: 'Mati',
+      literal: 'Quiero los propuestos en la app por favor.',
+      fuente: 'diseno/SISTEMA_DISENO.md §1 · tabla de Marca',
+    },
+  ] as const
+
+  describe('las excepciones a AA están registradas, no escondidas', () => {
+    it('🔴 cada excepción sigue MEDIDA y sigue por debajo de su mínimo', () => {
+      expect(EXCEPCIONES_AA.length, 'el registro quedó vacío: nada que verificar').toBe(1)
+      for (const e of EXCEPCIONES_AA) {
+        const medido = contrast(e.fg, e.bg)
+        // Fijado: la excepción es al MÍNIMO, no a la medición. Si alguien
+        // retoca el naranja y lo hunde todavía más, se entera acá.
+        expect(medido, `--${e.fg} sobre --${e.bg}`).toBeCloseTo(e.ratio, 1)
+        expect(medido, `--${e.fg} sobre --${e.bg} ya PASA ${e.minimo}: sacala del registro`)
+          .toBeLessThan(e.minimo)
+      }
     })
 
+    it('🔴 cada excepción dice quién, cuándo y dónde — sin eso es un descuido', () => {
+      for (const e of EXCEPCIONES_AA) {
+        expect(e.fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+        expect(e.decide.length).toBeGreaterThan(0)
+        expect(e.literal.length, 'sin la frase textual no se puede auditar la decisión')
+          .toBeGreaterThan(10)
+        expect(e.fuente).toContain('SISTEMA_DISENO.md')
+      }
+    })
+
+    it('🔴 y la excepción NO se derramó: el resto sigue pasando AA', () => {
+      // El riesgo de aceptar un incumplimiento es que se vuelva costumbre.
+      // Estos pares no están en el registro y tienen que seguir pasando.
+      expect(contrast('brand-ink', 'surface')).toBeGreaterThanOrEqual(4.5)
+      expect(contrast('action-fg', 'action')).toBeGreaterThanOrEqual(4.5)
+      expect(contrast('action-2-fg', 'action-2')).toBeGreaterThanOrEqual(4.5)
+      expect(contrast('link', 'surface')).toBeGreaterThanOrEqual(4.5)
+      expect(contrast('text', 'bg')).toBeGreaterThanOrEqual(4.5)
+      expect(contrast('text-muted', 'bg')).toBeGreaterThanOrEqual(4.5)
+    })
+  })
+
+  describe('las prohibiciones del sistema siguen justificadas', () => {
     it('--brand como TEXTO sobre blanco reprueba: por eso existe --brand-ink', () => {
       expect(contrast('brand', 'surface')).toBeLessThan(3)
       expect(contrast('brand-ink', 'surface')).toBeGreaterThanOrEqual(4.5)
@@ -273,20 +338,30 @@ function rule(selector: string): string {
 describe('entrada por link · SPEC_APP.md §1.2', () => {
   /**
    * El CUARTO uso del naranja es una EXCEPCIÓN ratificada (SISTEMA_DISENO.md
-   * §1, enmienda del 2026-08-04), no una puerta abierta. Se fija acá porque el
-   * modo en que se rompería es silencioso: alguien pone `color: #fff` "para que
-   * se vea más" y el botón cae a 2.84:1 en la primera pantalla que ve un
-   * desconocido, que además se usa con poca luz.
+   * §1, enmienda del 2026-08-04), no una puerta abierta.
+   *
+   * 🔴 ENMENDADO 2026-08-08: el texto pasó de navy a BLANCO. Este test decía
+   * "nunca blanco" y prohibía explícitamente `color: #fff`; hoy eso es falso y
+   * la prohibición está retirada.
+   *
+   * Lo que se CONSERVA es la propiedad que de verdad importaba y que no
+   * cambió: **el color sale del TOKEN, no de un literal escrito acá**. El modo
+   * silencioso de romperlo sigue existiendo, sólo que ahora al revés — alguien
+   * que ponga `color: #fff` a mano "para que quede igual" desengancha este
+   * botón del sistema, y el día que Mati revierta la enmienda este lugar no se
+   * entera.
    */
-  it('el CTA de primer contacto es --brand con el texto en NAVY, nunca blanco', () => {
+  it('el CTA de primer contacto toma su color del token, no de un literal', () => {
     const cta = rule('.link-btn-brand')
     expect(cta).toContain('background: var(--brand)')
     expect(cta).toContain('color: var(--brand-fg)')
-    expect(cta).not.toMatch(/color:\s*(#fff|#ffffff|white|var\(--action-fg\)|var\(--on-dark\))/i)
-    expect(contrast('brand-fg', 'brand')).toBeGreaterThanOrEqual(4.5)
+    // Cualquier color escrito a mano —blanco, navy o el que sea— rompe acá.
+    expect(cta, 'el color va por token, no hardcodeado').not.toMatch(
+      /color:\s*(#[0-9a-f]{3,8}|white|black|rgb)/i,
+    )
   })
 
-  it('el círculo de salida lleva el glifo en navy, igual que el de la barra', () => {
+  it('el círculo de salida toma el mismo token que el de la barra', () => {
     const circulo = rule('.link-round')
     expect(circulo).toContain('background: var(--brand)')
     expect(circulo).toContain('color: var(--brand-fg)')
