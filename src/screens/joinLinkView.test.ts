@@ -186,7 +186,7 @@ describe('§1.2-D · la mesa muerta con token genuino (v2.45.0)', () => {
   it('tiene copy propia y dice que ES esta mesa — no el link — lo que murió', () => {
     const m = joinLinkMessage('mesa_cerrada');
     expect(m.title).toBe('Esta mesa ya cerró');
-    expect(m.body).toBe('Hablá con quien te invitó si creés que es un error.');
+    expect(m.body).toBe('Habla con quien te invitó si crees que es un error.');
     expect(m.retryable).toBe(false);
   });
 
@@ -197,12 +197,12 @@ describe('§1.2-D · la mesa muerta con token genuino (v2.45.0)', () => {
     expect(d.body).not.toBe(b.body);
   });
 
-  it('cierra el círculo del recién registrado: la nota de cuenta-lista existe SOLO acá', () => {
+  it('cierra el círculo del recién registrado: la nota de cuenta-lista existe SOLO aquí', () => {
     // Diseño (2026-08-06): la explicación del Inicio vacío vive en la
     // pantalla que sabe qué pasó — Inicio no adivina. Y ninguna otra pantalla
     // la necesita: sus caminos no nacen de un alta hecha para este link.
     expect(joinLinkMessage('mesa_cerrada').nota).toBe(
-      'Tu cuenta ya está lista — podés abrir tu propia mesa cuando quieras.',
+      'Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.',
     );
     for (const outcome of ['joining', 'rejected', 'invalid', 'unavailable', 'error'] as const) {
       expect(joinLinkMessage(outcome).nota).toBeUndefined();

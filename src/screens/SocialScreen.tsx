@@ -171,7 +171,7 @@ export function SocialScreen() {
       // a contestar: aparecía una fila nueva si la cuenta existía y ninguna si
       // no. La solicitud se ve al volver a entrar.
     } catch {
-      toast('No pudimos enviar la solicitud. Probá de nuevo.');
+      toast('No pudimos enviar la solicitud. Prueba de nuevo.');
     } finally {
       setBusy(false);
     }
@@ -521,7 +521,7 @@ export function SocialScreen() {
                 <div className="empty">
                   <div className="emoji"><Icon name="users-group" size={40} /></div>
                   {groups?.length === 0
-                    ? 'Creá un grupo para dividir siempre con la misma gente.'
+                    ? 'Crea un grupo para dividir siempre con la misma gente.'
                     : 'Sin resultados para esa búsqueda.'}
                 </div>
               )}
@@ -591,7 +591,7 @@ function SolicitudesPanel({
     return (
       <div className="empty" style={{ padding: '28px 18px' }}>
         <div className="emoji"><Icon name="users" size={40} /></div>
-        No tenés solicitudes pendientes.
+        No tienes solicitudes pendientes.
       </div>
     );
   }

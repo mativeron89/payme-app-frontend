@@ -32,7 +32,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
     await expect(continuar).toBeEnabled();
     await continuar.click();
-    await expect(page.getByText('Elegí cuántos son')).toBeVisible();
+    await expect(page.getByText('Elige cuántos son')).toBeVisible();
     await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
 
     // Elegir 3: piso 1 + dos toques. La vista en vivo es la MISMA cuenta que
@@ -45,7 +45,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByText('base de propina · c/u')).toBeVisible();
 
     await continuar.click();
-    await expect(page.getByRole('heading', { name: 'Garantizá la mesa' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
     await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
     await page.getByRole('button', { name: 'Confirmar autorización' }).click();
     await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();

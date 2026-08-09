@@ -68,8 +68,8 @@ test('pantalla D: el link a una mesa muerta lo dice, cierra el círculo y no ofr
 
   // La D, textual de Diseño: qué pasó, sin restaurante, sin reintento.
   await expect(page.getByText('Esta mesa ya cerró')).toBeVisible();
-  await expect(page.getByText('Hablá con quien te invitó si creés que es un error.')).toBeVisible();
-  await expect(page.getByText('Tu cuenta ya está lista — podés abrir tu propia mesa cuando quieras.')).toBeVisible();
+  await expect(page.getByText('Habla con quien te invitó si crees que es un error.')).toBeVisible();
+  await expect(page.getByText('Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Reintentar' })).toHaveCount(0);
 
   // La salida es el círculo, y funciona.

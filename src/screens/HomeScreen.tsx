@@ -167,7 +167,7 @@ export function HomeScreen() {
           {tab === 'estadisticas' && (
             <div className="launch-stack">
               {/* La frase es de Mati, textual, y va como invitación arriba. */}
-              <p className="launch-invite">¿Querés ver qué consumís, cuánto y dónde?</p>
+              <p className="launch-invite">¿Quieres ver qué consumes, cuánto y dónde?</p>
               <Launcher
                 icon="chart"
                 label="Ver mis estadísticas"
@@ -216,7 +216,7 @@ export function HomeScreen() {
                 <Icon name="x-circle" size={22} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="state-error-title">No pudimos cargar tu mesa</div>
-                  <p className="state-error-body">Revisá la conexión y probá de nuevo.</p>
+                  <p className="state-error-body">Revisa la conexión y prueba de nuevo.</p>
                 </div>
               </div>
               {/* La salida es OBLIGATORIA: un estado que congela sin acción
@@ -291,8 +291,8 @@ export function HomeScreen() {
                botón propio. La acción ya está en el círculo naranja de la barra,
                a un centímetro: duplicarla sería competirle. */
             <div className="mesa-empty">
-              <div className="mesa-empty-title">No tenés mesas abiertas</div>
-              <p className="mesa-empty-body">Tocá el + para abrir una</p>
+              <div className="mesa-empty-title">No tienes mesas abiertas</div>
+              <p className="mesa-empty-body">Toca el + para abrir una</p>
               {/* G-36 · la mitad honesta del rescate (ORDEN 1-C·B): lo que no
                   se puede acreditar intacto NO se relanza — se conserva. Pero
                   entonces la demo puede quedar sin nada vivo y sin que nada lo

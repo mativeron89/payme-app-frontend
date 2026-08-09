@@ -46,7 +46,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await page.goto('/#/mesa/PA-2847');
 
     await expect(page.getByText('Tagliatelle Bolognese')).toBeVisible();
-    await expect(page.getByText('Elegí lo que consumiste').first()).toBeVisible();
+    await expect(page.getByText('Elige lo que consumiste').first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeDisabled();
   });
 });

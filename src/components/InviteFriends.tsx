@@ -107,7 +107,7 @@ export function InviteFriends({ code }: { code: string }) {
       if (invitation.invitation.status === 'expired') {
         invitationKeysRef.current.delete(operation);
         sentRef.current.delete(f.payme_id);
-        toast(`La invitación anterior a ${f.first_name} venció. Tocá de nuevo para generar otra.`);
+        toast(`La invitación anterior a ${f.first_name} venció. Toca de nuevo para generar otra.`);
         return;
       }
       invitationKeysRef.current.delete(operation);
@@ -122,10 +122,10 @@ export function InviteFriends({ code }: { code: string }) {
         failure.code === 'mesa_not_invitable'
           ? 'La mesa ya no acepta invitados'
           : isServiceUnavailable(failure.status)
-            ? `El servicio no pudo confirmar la invitación a ${f.first_name}. Reintentá esta misma invitación; no generes otra.`
+            ? `El servicio no pudo confirmar la invitación a ${f.first_name}. Reintenta esta misma invitación; no generes otra.`
             : definitive
               ? `No pudimos invitar a ${f.first_name}`
-              : `No pudimos confirmar la invitación a ${f.first_name}. Reintentá la misma: vamos a reutilizarla.`,
+              : `No pudimos confirmar la invitación a ${f.first_name}. Reintenta la misma: vamos a reutilizarla.`,
       );
     } finally {
       setBusy((s) => {
@@ -204,7 +204,7 @@ export function InviteFriends({ code }: { code: string }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="state-error-title">No pudimos cargar tus contactos</div>
               <p className="state-error-body">
-                Podés compartir el link igual mientras tanto.
+                Puedes compartir el link igual mientras tanto.
               </p>
             </div>
           </div>
@@ -235,7 +235,7 @@ export function InviteFriends({ code }: { code: string }) {
 
       {groups.length > 0 && (
         <>
-          <h2 className="sectlabel inv-groups-label">O invitá a un grupo</h2>
+          <h2 className="sectlabel inv-groups-label">O invita a un grupo</h2>
           {/* Lista VERTICAL, no burbujas lado a lado: con más de dos grupos no
               entran en una fila. */}
           <div className="inv-list">

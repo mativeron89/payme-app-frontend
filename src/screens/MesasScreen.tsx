@@ -121,7 +121,7 @@ export function MesasScreen() {
               <Icon name="x-circle" size={22} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="state-error-title">No pudimos cargar tu historial</div>
-                <p className="state-error-body">Revisá la conexión y probá de nuevo.</p>
+                <p className="state-error-body">Revisa la conexión y prueba de nuevo.</p>
               </div>
             </div>
             <button type="button" className="btn btn-ghost btn-sm" onClick={cargarHistorial}>
@@ -194,7 +194,7 @@ export function MesasScreen() {
                               El detalle de esta mesa todavía no está disponible
                             </div>
                             <p className="state-unknown-body">
-                              No podemos confirmar que sea seguro de mostrar. Lo que pagaste vos
+                              No podemos confirmar que sea seguro de mostrar. Lo que pagaste tú
                               es el monto de esta fila.
                             </p>
                           </div>
@@ -211,7 +211,7 @@ export function MesasScreen() {
 
         {IS_MOCK && (
           <div className="note note-amber" style={{ marginTop: 14 }}>
-            <b>Atajo de demo:</b> mirá cómo queda una mesa que venció sin que todos pagaran y la
+            <b>Atajo de demo:</b> mira cómo queda una mesa que venció sin que todos pagaran y la
             garantía cubrió el faltante.
             <button
               className="btn btn-ghost btn-sm"

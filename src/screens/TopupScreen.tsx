@@ -89,7 +89,7 @@ export function TopupScreen() {
       navigate('cuenta');
     } else if (reconciled.outcome === 'definitive') {
       await completeMonetaryIntent(scope, 'topup_card', intent);
-      setError('Ese cobro no prosperó. Podés iniciar una nueva carga.');
+      setError('Ese cobro no prosperó. Puedes iniciar una nueva carga.');
     } else {
       setError('La carga sigue en confirmación. No inicies otra carga hasta que se resuelva.');
     }
@@ -128,7 +128,7 @@ export function TopupScreen() {
           navigate('cuenta');
         } else if (outcome === 'definitive') {
           await completeMonetaryIntent(topupScope, 'topup_oxxo', intent);
-          setError('Esa carga no prosperó. Podés iniciar otra.');
+          setError('Esa carga no prosperó. Puedes iniciar otra.');
         } else if (hasVoucher(r.topup)) {
           await completeMonetaryIntent(topupScope, 'topup_oxxo', intent);
           setVoucher(r.topup);
@@ -171,7 +171,7 @@ export function TopupScreen() {
         // acreditado un cobro que nunca prosperó.
         if (topupOutcome(r.topup.status, r.requires_action === true, r.client_secret) === 'definitive') {
           await completeMonetaryIntent(topupScope, 'topup_card', intent);
-          setError('Ese cobro no prosperó. Probá de nuevo o con otra tarjeta.');
+          setError('Ese cobro no prosperó. Prueba de nuevo o con otra tarjeta.');
           return;
         }
         await completeMonetaryIntent(topupScope, 'topup_card', intent);
@@ -186,8 +186,8 @@ export function TopupScreen() {
       // no hay nada.
       setError(
         via === 'oxxo'
-          ? 'No pudimos confirmar la referencia. Reintentá: si ya se había generado, te devolvemos la misma (no una segunda).'
-          : 'No pudimos confirmar la carga. Revisá tu saldo antes de reintentar: si el cobro salió, el reintento no cobra de nuevo.',
+          ? 'No pudimos confirmar la referencia. Reintenta: si ya se había generado, te devolvemos la misma (no una segunda).'
+          : 'No pudimos confirmar la carga. Revisa tu saldo antes de reintentar: si el cobro salió, el reintento no cobra de nuevo.',
       );
     } finally {
       topupInFlightRef.current.leave();
@@ -206,7 +206,7 @@ export function TopupScreen() {
               <Icon name="store" size={40} />
             </div>
             <div className="h2" style={{ marginTop: 8 }}>
-              Pagá en cualquier OXXO
+              Paga en cualquier OXXO
             </div>
           </div>
           <div className="voucher">
@@ -215,7 +215,7 @@ export function TopupScreen() {
             <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 700, marginBottom: 4 }}>{formatMXN(voucher.amount_cents)}</div>
             <div className="caption">
               Vence el {new Date(voucher.voucher_expires_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })} ·
-              mostrá este número en caja
+              muestra este número en caja
             </div>
           </div>
           <div className="note note-teal" style={{ marginTop: 12 }}>
@@ -295,7 +295,7 @@ export function TopupScreen() {
               <div className="radio" />
             </div>
           ) : (
-            <div className="note note-orange">No tenés tarjetas guardadas todavía.</div>
+            <div className="note note-orange">No tienes tarjetas guardadas todavía.</div>
           ))}
 
         {via === 'spei' && (
@@ -327,7 +327,7 @@ export function TopupScreen() {
             )}
             <div className="note note-teal" style={{ marginTop: 12 }}>
               {clabe?.instrucciones ??
-                'Transferí por SPEI a esta CLABE desde tu banco; el saldo se acredita solo.'}{' '}
+                'Transfiere por SPEI a esta CLABE desde tu banco; el saldo se acredita solo.'}{' '}
               Sin monto mínimo, disponible 24/7.
             </div>
           </>

@@ -96,7 +96,7 @@ export function CardField({ onReady, onChange }: Props) {
       } catch {
         if (!cancelled) {
           setLoading(false);
-          setLoadError('No pudimos cargar el formulario de pago. Revisá tu conexión.');
+          setLoadError('No pudimos cargar el formulario de pago. Revisa tu conexión.');
         }
       }
     })();

@@ -50,7 +50,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await masUno.click();
   await masUno.click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantizá la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
 
   // 🔴 SE ELIGE "otra tarjeta" EXPLÍCITAMENTE, y no es un detalle: sin esto el
   // spec usaba la guardada por default que `loadCards()` autoselecciona, o sea
@@ -63,7 +63,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
   // Acá la mesa YA existe en `pending_auth` y el hold está puesto: el backend
   // contestó `requires_action` y el journal quedó congelado a propósito.
-  await expect(page.getByRole('heading', { name: 'Confirmá con tu banco' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
 
   // ⚡ La pestaña muere en el peor momento posible.
   await page.reload();
@@ -72,7 +72,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   // sobreviven. Este spec encontró que el aviso aparecía acá y su único botón
   // estaba tres pasos más adelante, en Garantía — o sea, había que volver a
   // escanear y dividir para encontrar la salida. Ahora viajan juntos.
-  await expect(page.getByRole('heading', { name: 'Escaneá el ticket' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();
   await expect(page.getByText('Hay una apertura de una sesión anterior.')).toBeVisible();
 
   // El diagnóstico: se pregunta por la clave, no se adivina por el listado.
@@ -85,7 +85,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   // 🔴 Y NO dice ninguna de las dos mentiras posibles.
   await expect(page.getByText(/desbloquear/i)).toHaveCount(0);
   await expect(page.getByText(/no llegó a crearse/i)).toHaveCount(0);
-  await expect(page.getByText(/podés reenviarla tal cual/)).toBeVisible();
+  await expect(page.getByText(/puedes reenviarla tal cual/)).toBeVisible();
 
   // Y la salida existe de verdad: rehecho el ticket, el CTA deja de decir
   // "Reconciliación necesaria" y pasa a ofrecer reenviar ESTE intento —con SU
@@ -98,7 +98,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await otroMas.click();
   await otroMas.click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantizá la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Reconciliación necesaria/ })).toHaveCount(0);
 
   // ⭐ ORDEN 2-A · EL REENVÍO SE COMPLETA DE VERDAD, no se verifica que el
@@ -114,7 +114,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
 
   const antes = await mesasDelMock(page);
   await page.getByRole('button', { name: /Reintentar esta apertura/ }).click();
-  await expect(page.getByRole('heading', { name: 'Confirmá con tu banco' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar autorización' }).click();
   await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 

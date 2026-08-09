@@ -111,9 +111,9 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
       if (intent && shouldRotateOnError(code, status)) await completeMonetaryIntent(transferScope, 'transfer', intent);
       if (code === 'insufficient_funds') {
         const available = typeof extra.available === 'number' ? extra.available : 0;
-        setError(`Saldo insuficiente: tenés ${formatMXN(available)} disponibles.`);
+        setError(`Saldo insuficiente: tienes ${formatMXN(available)} disponibles.`);
       } else {
-        setError('No pudimos confirmar la transferencia. Revisá tu saldo antes de reintentar.');
+        setError('No pudimos confirmar la transferencia. Revisa tu saldo antes de reintentar.');
       }
     } finally {
       transferInFlightRef.current.leave();
@@ -130,14 +130,14 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
           <>
             <input
               className="input"
-              placeholder="Buscá por nombre, email o ID PayMe"
+              placeholder="Busca por nombre, email o ID PayMe"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             />
             <div className="card" style={{ marginBottom: 12 }}>
               {visible.length === 0 && (
                 <div className="empty" style={{ padding: 20 }}>
-                  {friends.length === 0 ? 'Todavía no tenés amigos — agregá desde Amigos.' : 'Sin resultados.'}
+                  {friends.length === 0 ? 'Todavía no tienes amigos — agrega desde Amigos.' : 'Sin resultados.'}
                 </div>
               )}
               {visible.map((f) => (
@@ -196,7 +196,7 @@ export function TransferScreen({ preselectPaymeId }: { preselectPaymeId?: string
             ? 'Enviando…'
             : to && amountCents > 0
               ? `Enviar ${formatMXN(amountCents)} a ${to.first_name}`
-              : 'Elegí amigo y monto'}
+              : 'Elige amigo y monto'}
         </button>
       </div>
     </div>

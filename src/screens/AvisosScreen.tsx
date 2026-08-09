@@ -215,7 +215,7 @@ export function AvisosScreen() {
         {notifs?.length === 0 && invitations.length === 0 && (
           <div className="empty aviso-empty">
             <div className="emoji"><Icon name="bell" size={40} /></div>
-            No tenés avisos.
+            No tienes avisos.
           </div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

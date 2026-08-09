@@ -92,7 +92,7 @@ export function PagosScreen() {
             <Icon name="info" size={20} />
             <div>
               <div className="state-unknown-title">No podemos mostrar tus pagos ahora</div>
-              <p className="state-unknown-body">Probá de nuevo más tarde.</p>
+              <p className="state-unknown-body">Prueba de nuevo más tarde.</p>
             </div>
           </div>
         ) : fallo && !pagos ? (
@@ -101,7 +101,7 @@ export function PagosScreen() {
               <Icon name="x-circle" size={22} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="state-error-title">No pudimos cargar tus pagos</div>
-                <p className="state-error-body">Revisá la conexión y probá de nuevo.</p>
+                <p className="state-error-body">Revisa la conexión y prueba de nuevo.</p>
               </div>
             </div>
             <button type="button" className="btn btn-ghost btn-sm" onClick={primeraPagina}>

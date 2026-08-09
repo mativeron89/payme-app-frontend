@@ -75,7 +75,7 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   // §1.6 renombró el título al aplicar el rediseño: la cabecera navy de dos
   // filas no lleva título, y el <h1> pasó a la tarjeta de título `--teal-l`.
-  await expect(page.getByRole('heading', { name: 'Escaneá el ticket' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Capturar' }).click();
   // El OCR mock tarda. Se espera al ticket, no a un número de milisegundos.
@@ -96,10 +96,10 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('4');
 
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantizá la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
 
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
-  await expect(page.getByRole('heading', { name: 'Confirmá con tu banco' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Confirmar autorización' }).click();
   // §1.7 le puso el título del spec: la pantalla es el momento de triunfo del

@@ -151,7 +151,7 @@ function TipSelector({
     >
       <div className="sectlabel tip-block-title" id="lbl-propina">
         {pending && <Icon name="warning" size={14} aria-hidden="true" />}
-        {pending ? 'Elegí tu propina' : 'Tu propina'}
+        {pending ? 'Elige tu propina' : 'Tu propina'}
       </div>
       <div className="caption" style={{ margin: '0 2px 8px' }}>
         Tu base: {formatMXN(baseCents)} (la cuenta ÷ {participants})
@@ -377,11 +377,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         const invitation = await api.createInvitation(code, key);
         if (invitation.invitation.status === 'expired') {
           shareAttemptsRef.current.delete(code);
-          toast('La invitación anterior venció. Tocá de nuevo para generar otra.');
+          toast('La invitación anterior venció. Toca de nuevo para generar otra.');
           return;
         }
         if (!invitation.link) {
-          toast('La invitación pudo haberse creado, pero no recibimos el link. Reintentá la misma operación; no generes otra.');
+          toast('La invitación pudo haberse creado, pero no recibimos el link. Reintenta la misma operación; no generes otra.');
           return;
         }
         // La mutación terminó. Si falla el clipboard, se conserva SOLO el
@@ -396,7 +396,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         shareLinksRef.current.delete(code);
         toast('Link de invitación copiado ✓');
       } catch {
-        toast('El link ya se generó, pero no se pudo copiar. Tocá de nuevo: no vamos a crear otro.');
+        toast('El link ya se generó, pero no se pudo copiar. Toca de nuevo: no vamos a crear otro.');
       }
     } catch (err) {
       const failure = extractApiError(err);
@@ -404,10 +404,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       if (definitive) shareAttemptsRef.current.delete(code);
       toast(
         isServiceUnavailable(failure.status)
-          ? 'El servicio no pudo confirmar el link. Reintentá esta misma operación; no generes otra.'
+          ? 'El servicio no pudo confirmar el link. Reintenta esta misma operación; no generes otra.'
           : definitive
             ? 'No se pudo generar el link'
-            : 'No pudimos confirmar el link. Reintentá la misma operación: vamos a reutilizarla.',
+            : 'No pudimos confirmar el link. Reintenta la misma operación: vamos a reutilizarla.',
       );
     } finally {
       shareInFlightRef.current.leave();
@@ -482,7 +482,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     // payload de la clave congelada → 409 en el reintento (o, peor, un cobro
     // nuevo). Primero se resuelve ese pago.
     if (frozenRef.current) {
-      toast('Tenés un pago sin confirmar: resolvelo antes de cambiar tu selección');
+      toast('Tienes un pago sin confirmar: resuélvelo antes de cambiar tu selección');
       return;
     }
     const next = new Map(selected);
@@ -496,7 +496,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // selecciona nada; la fila ya se muestra bloqueada por `rowStateOf`.
       const def = fraccionInicial(item?.remaining_bps);
       if (def === null) {
-        toast('No pudimos leer cuánto queda de ese ítem. Actualizá la mesa.');
+        toast('No pudimos leer cuánto queda de ese ítem. Actualiza la mesa.');
         return;
       }
       next.set(id, def);
@@ -506,7 +506,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   function setFraction(id: string, bps: number) {
     if (frozenRef.current) {
-      toast('Tenés un pago sin confirmar: resolvelo antes de cambiar tu selección');
+      toast('Tienes un pago sin confirmar: resuélvelo antes de cambiar tu selección');
       return;
     }
     const next = new Map(selected);
@@ -660,7 +660,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           setError('Hay un pago de una sesión anterior. No vamos a reenviarlo ni iniciar otro hasta reconciliarlo.');
         }
       })
-      .catch(() => alive && identityEpochRef.current.isCurrent(identityEpoch) && setError('Hay un pago anterior que no podemos atribuir de forma segura. Esperá la reconciliación antes de pagar.'));
+      .catch(() => alive && identityEpochRef.current.isCurrent(identityEpoch) && setError('Hay un pago anterior que no podemos atribuir de forma segura. Espera la reconciliación antes de pagar.'));
     return () => { alive = false; };
   }, [payArea, code]);
   useEffect(() => { setFrozen(null); }, [guestToken, code]);
@@ -772,7 +772,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         setReconcileVerdict('absent');
       }
     } catch {
-      setError('No pudimos consultar el estado de la mesa. Probá de nuevo en un momento.');
+      setError('No pudimos consultar el estado de la mesa. Prueba de nuevo en un momento.');
     } finally {
       setReconciling(false);
     }
@@ -786,7 +786,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       setFrozen(null);
       setReconcileVerdict(null);
       setError(null);
-      toast('Listo: podés pagar de nuevo');
+      toast('Listo: puedes pagar de nuevo');
     } catch {
       setError('No pudimos cerrar ese intento. Sigue bloqueado por seguridad.');
     } finally {
@@ -851,7 +851,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           // Se cayó la red durante el 3DS: el banco pudo haber autorizado
           // igual. Se congela; el reintento replaya en vez de re-cobrar.
           freezePay(scope, intent, body);
-          setError('Se cortó la conexión mientras el banco confirmaba. No reintentes con otro método: tocá "Reintentar el pago sin confirmar".');
+          setError('Se cortó la conexión mientras el banco confirmaba. No reintentes con otro método: toca "Reintentar el pago sin confirmar".');
         }
         setBusy(false);
         reload();
@@ -860,7 +860,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // La aprobación de Stripe no acredita sola el pago en PayMe. Esperamos
       // el estado del backend y conservamos key/payload mientras tanto.
       freezePay(scope, intent, body);
-      setError('Tu banco aprobó la operación; todavía estamos confirmando el pago. Reintentá esta misma confirmación, sin cambiar el método.');
+      setError('Tu banco aprobó la operación; todavía estamos confirmando el pago. Reintenta esta misma confirmación, sin cambiar el método.');
       setBusy(false);
       reload();
       return;
@@ -869,7 +869,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     if (outcome === 'definitive') {
       await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
       unfreezePay(intent);
-      setError('Ese pago no prosperó. Podés iniciar uno nuevo.');
+      setError('Ese pago no prosperó. Puedes iniciar uno nuevo.');
       setBusy(false);
       reload();
       return;
@@ -935,7 +935,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
      * selector y el borde pulsa una vez. Elegir es un toque, y el 0 % está ahí.
      */
     if (tipPending) {
-      toast('Elegí tu propina para pagar');
+      toast('Elige tu propina para pagar');
       // `scrollIntoView` es opcional a propósito: si el navegador no lo tiene,
       // el toast y el pulso siguen siendo la señal.
       tipSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
@@ -1004,7 +1004,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           savingNewCard = !isGuest && saveCard;
         } else {
           if (!cardEl) {
-            setError('Ingresá los datos de la tarjeta para continuar.');
+            setError('Ingresa los datos de la tarjeta para continuar.');
             setBusy(false);
             return;
           }
@@ -1085,7 +1085,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           await completeMonetaryIntent(scope, `mesa_pay:${code}`, intent);
           unfreezePay(intent);
         }
-        setError('Ese intento de pago ya no sirve. Probá de nuevo.');
+        setError('Ese intento de pago ya no sirve. Prueba de nuevo.');
         reload();
       } else if (ec === 'monetary_generation_stale') {
         setError('Otra pestaña ya cerró este intento. Actualizamos la mesa antes de permitir una nueva acción.');
@@ -1094,7 +1094,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         // Hay un intento VIVO con otro payload. Rotar acá sería el doble
         // cobro; se congela en el scope que el backend ya conoce.
         if (intent) freezePay(scope, intent, sentBody ?? frozen?.payload);
-        setError('Tenés un pago sin confirmar en esta mesa. Reintentá ese mismo pago antes de cambiar nada.');
+        setError('Tienes un pago sin confirmar en esta mesa. Reintenta ese mismo pago antes de cambiar nada.');
         reload();
       } else if (ec === 'insufficient_funds') {
         const available = typeof extra.available === 'number' ? extra.available : 0;
@@ -1102,14 +1102,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           // Sin riel saldo, "Cargá saldo" manda a #/cargar, que responde con la
           // pantalla de bloqueo: sería empujar a una ruta muerta.
           walletRailEnabled
-            ? `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Cargá saldo o pagá con tarjeta.`
-            : `Saldo insuficiente: tenés ${formatMXN(available)} disponibles y necesitás ${formatMXN(gross)}. Pagá con tarjeta.`,
+            ? `Saldo insuficiente: tienes ${formatMXN(available)} disponibles y necesitas ${formatMXN(gross)}. Carga saldo o paga con tarjeta.`
+            : `Saldo insuficiente: tienes ${formatMXN(available)} disponibles y necesitas ${formatMXN(gross)}. Paga con tarjeta.`,
         );
       } else if (ec === 'wallet_requires_auth') {
         setError(
           walletRailEnabled
-            ? 'Para pagar con saldo PayMe tenés que iniciar sesión.'
-            : 'Ese método de pago no está disponible. Pagá con tarjeta.',
+            ? 'Para pagar con saldo PayMe tienes que iniciar sesión.'
+            : 'Ese método de pago no está disponible. Paga con tarjeta.',
         );
       } else if (ec === 'mesa_not_payable') {
         setError('La mesa ya cerró.');
@@ -1120,7 +1120,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       } else if (definitivo) {
         // 4xx sin código propio: el backend dijo que NO y ya liberó lo tomado.
         // La clave se rotó arriba, así que reintentar arranca de cero.
-        setError('No pudimos completar el pago. Revisá la mesa y probá de nuevo.');
+        setError('No pudimos completar el pago. Revisa la mesa y prueba de nuevo.');
         reload();
       } else {
         // Error ambiguo (5xx, red, timeout): puede que el cobro SÍ haya salido.
@@ -1129,7 +1129,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         // cambio generaría clave nueva y cobraría de nuevo). La mesa se
         // recarga solo para mostrar estado; ningún agregado cierra el intento.
         if (intent) freezePay(scope, intent, sentBody ?? frozen?.payload);
-        setError('No pudimos confirmar el pago. Puede que se haya cobrado igual: reintentá ESTE mismo pago, no armes otro.');
+        setError('No pudimos confirmar el pago. Puede que se haya cobrado igual: reintenta ESTE mismo pago, no armes otro.');
         reload();
       }
       setBusy(false);
@@ -1350,7 +1350,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           </div>
           {isGuest && (
             <div className="note note-teal" style={{ marginTop: 14 }}>
-              Con una cuenta PayMe podés abrir la mesa vos la próxima vez.
+              Con una cuenta PayMe puedes abrir la mesa tú la próxima vez.
             </div>
           )}
         </div>
@@ -1401,7 +1401,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         <div className="scroll" style={{ padding: 16 }}>
           <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 16 }}>
             <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              {frozenRequiresReconciliation ? 'Reconciliación necesaria' : frozenScope ? 'Pendiente de confirmar' : 'Pagás SOLO tu parte'}
+              {frozenRequiresReconciliation ? 'Reconciliación necesaria' : frozenScope ? 'Pendiente de confirmar' : 'Pagas SOLO tu parte'}
             </div>
             {/* Con un intento congelado, el monto de la pantalla NO es el del
                 pago que quedó en el aire (tras una recarga la selección
@@ -1414,7 +1414,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
                   {frozenRequiresReconciliation
                     ? 'No podemos reenviar este pago desde la sesión actual. No iniciaremos otro hasta reconciliarlo.'
-                    : 'Reintentalo para saber si se cobró: mandamos el mismo pago, no uno nuevo.'}
+                    : 'Reinténtalo para saber si se cobró: mandamos el mismo pago, no uno nuevo.'}
                 </div>
                 {/* N-07: la salida. Antes este estado no tenía ninguna y el
                     área quedaba bloqueada para siempre. Se resuelve con la
@@ -1432,7 +1432,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 {frozenRequiresReconciliation && reconcileVerdict === 'absent' && (
                   <div style={{ marginTop: 12 }}>
                     <div style={{ fontSize: 'var(--fs-legacy-xs)', color: '#fff', fontFamily: 'var(--font-body)' }}>
-                      No encontramos ese pago en la mesa: no llegó a tomar tu parte. Si continuás,
+                      No encontramos ese pago en la mesa: no llegó a tomar tu parte. Si continúas,
                       el próximo intento es un <b>cobro nuevo</b>.
                     </div>
                     <button
@@ -1460,7 +1460,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 </div>
                 {tipPending && (
                   <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)' }}>
-                    + propina (elegí abajo)
+                    + propina (elige abajo)
                   </div>
                 )}
               </>
@@ -1506,7 +1506,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               {mySlotsTaken > 0
                 ? 'Tu parte ya figura pagada.'
                 : 'Fue con otra sesión (link de invitado o tu cuenta).'}{' '}
-              Si continuás vas a pagar una parte <b>adicional</b>, y se cobra aparte.
+              Si continúas vas a pagar una parte <b>adicional</b>, y se cobra aparte.
               <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                 <button
                   className="btn btn-sm btn-teal btn-fit"
@@ -1539,13 +1539,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               {frozenRequiresReconciliation ? (
                 <><b>Hay un pago que no podemos reenviar.</b> Pertenece a una sesión anterior o se perdió su cuerpo exacto al recargar. Sigue bloqueado para evitar un segundo cobro.</>
               ) : (
-                <><b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal cual está: si ya salió, no te cobramos de nuevo. Hasta resolverlo no podés cambiar propina, método ni consumos.</>
+                <><b>Tienes un pago sin confirmar.</b> Puede que ya se haya cobrado. Reinténtalo tal cual está: si ya salió, no te cobramos de nuevo. Hasta resolverlo no puedes cambiar propina, método ni consumos.</>
               )}
             </div>
           )}
           {refundedNotice && (
             <div className="note note-amber" role="status">
-              Ese pago se te <b>reembolsó</b>. No lo repetimos solos: si querés pagar igual, tocá
+              Ese pago se te <b>reembolsó</b>. No lo repetimos solos: si quieres pagar igual, toca
               el botón de abajo.
             </div>
           )}
@@ -1649,10 +1649,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   {cards.length > 0
                     ? (cards.find((c) => c.id === cardChoice)
                         ? `${cards.find((c) => c.id === cardChoice)!.bank_name ?? cards.find((c) => c.id === cardChoice)!.brand} ···· ${cards.find((c) => c.id === cardChoice)!.last_four}`
-                        : 'Elegí una guardada o usá otra')
+                        : 'Elige una guardada o usa otra')
                     : IS_MOCK
-                      ? 'La ingresás al confirmar (segura, vía Stripe)'
-                      : 'Ingresá los datos abajo (seguro, vía Stripe)'}
+                      ? 'La ingresas al confirmar (segura, vía Stripe)'
+                      : 'Ingresa los datos abajo (seguro, vía Stripe)'}
                 </div>
               </div>
               {cards.length > 0 && (
@@ -1793,7 +1793,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               {/* OLA 5C (c): esta nota se lee SIN sesión, por URL pública — es
                   la ruta de más tráfico. Con el riel apagado le anunciaba al
                   comensal un saldo PayMe que no existe. */}
-              Sin iniciar sesión pagás con tarjeta{WALLET_PAY_ENABLED ? ' o Apple Pay' : ''}
+              Sin iniciar sesión pagas con tarjeta{WALLET_PAY_ENABLED ? ' o Apple Pay' : ''}
               {walletRailEnabled ? ' (el saldo PayMe pide cuenta)' : ''}.
             </div>
           )}

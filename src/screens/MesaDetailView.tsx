@@ -147,7 +147,7 @@ export function MesaDetailView({
 
   const avisoPagoCongelado = frozenScope && (
     <div className="note note-orange" role="status" style={{ marginBottom: 12 }}>
-      <b>Tenés un pago sin confirmar.</b> Puede que ya se haya cobrado. Reintentalo tal cual
+      <b>Tienes un pago sin confirmar.</b> Puede que ya se haya cobrado. Reinténtalo tal cual
       antes de cambiar tu selección.
       <button
         className="btn btn-ghost btn-sm btn-fit"
@@ -184,7 +184,7 @@ export function MesaDetailView({
       ) : !esConsumo && availableSlots === 0 ? (
         <span>No quedan partes</span>
       ) : faltaElegir ? (
-        <span>Elegí lo que consumiste</span>
+        <span>Elige lo que consumiste</span>
       ) : (
         <>
           <span>{mySlotsTaken > 0 && !esConsumo ? 'Otra parte' : 'Mi parte'}</span>
@@ -231,7 +231,7 @@ export function MesaDetailView({
         {esConsumo ? (
           <>
             <div className="caption" style={{ marginBottom: 8 }}>
-              Tocá lo que consumiste. Al elegirlo queda <b>reservado</b> para vos.
+              Toca lo que consumiste. Al elegirlo queda <b>reservado</b> para ti.
             </div>
             {nothingLeft && (
               <div className="note note-amber" style={{ marginBottom: 12 }}>
@@ -243,7 +243,7 @@ export function MesaDetailView({
           <>
             <div className="sectlabel">¿Qué consumiste?</div>
             <div className="caption" style={{ margin: '0 2px 8px' }}>
-              Marcalo para el restaurante — no cambia lo que pagás.
+              Márcalo para el restaurante — no cambia lo que pagas.
             </div>
           </>
         )}
@@ -299,7 +299,7 @@ export function MesaDetailView({
                 {sel && esConsumo && (
                   <div className="mi-frac">
                     <div className="mi-frac-lbl" id={`frac-${i.id}`}>
-                      ¿Cuánto tomás vos?
+                      ¿Cuánto tomas tú?
                     </div>
                     <div className="seg" role="radiogroup" aria-labelledby={`frac-${i.id}`}>
                       {FRACTIONS.filter((f) => f.bps <= i.remaining_bps).map((f) => (
@@ -339,7 +339,7 @@ export function MesaDetailView({
         {mySlotsTaken > 0 && !esConsumo && (
           <div className="note note-teal" style={{ marginTop: 8 }}>
             <b>Ya pagaste {mySlotsTaken === 1 ? 'tu parte' : `${mySlotsTaken} partes`} ✓</b>
-            {availableSlots > 0 && ' Si tocás pagar de nuevo, cubrís la parte de otro comensal.'}
+            {availableSlots > 0 && ' Si tocas pagar de nuevo, cubres la parte de otro comensal.'}
           </div>
         )}
         {/* T-F1: el organizador puede invitar amigos in-app también acá —

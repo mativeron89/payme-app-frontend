@@ -13,15 +13,15 @@ const ERROR_TEXT: Record<string, string> = {
   invalid_credentials: 'Email o contraseña incorrectos.',
   email_already_registered: 'Ese email ya está registrado.',
   user_suspended: 'Tu cuenta está suspendida. Escribinos.',
-  too_many_auth_attempts: 'Demasiados intentos. Esperá un minuto.',
-  validation_error: 'Revisá los datos: email válido y contraseña de al menos 8 caracteres.',
+  too_many_auth_attempts: 'Demasiados intentos. Espera un minuto.',
+  validation_error: 'Revisa los datos: email válido y contraseña de al menos 8 caracteres.',
 };
 
 function errorMessage(err: unknown): string {
   if (err instanceof HttpError) {
-    return ERROR_TEXT[err.message] ?? 'No pudimos conectar. Probá de nuevo.';
+    return ERROR_TEXT[err.message] ?? 'No pudimos conectar. Prueba de nuevo.';
   }
-  return 'No pudimos conectar. Probá de nuevo.';
+  return 'No pudimos conectar. Prueba de nuevo.';
 }
 
 /**
@@ -65,13 +65,13 @@ export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' |
           Pay<span className="t">Me</span>
         </div>
         <div className="hero-sub" style={{ fontSize: 'var(--fs-legacy-base)' }}>
-          Dividí y pagá la cuenta desde la mesa
+          Divide y paga la cuenta desde la mesa
         </div>
       </div>
 
       <form className="login-card" onSubmit={onSubmit}>
         <div className="h2" style={{ marginBottom: 14 }}>
-          {mode === 'login' ? 'Entrá a tu cuenta' : 'Creá tu cuenta'}
+          {mode === 'login' ? 'Entra a tu cuenta' : 'Crea tu cuenta'}
         </div>
         {error && (
           <div className="form-error" role="alert">
@@ -129,12 +129,12 @@ export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' |
               setError(null);
             }}
           >
-            {mode === 'login' ? '¿No tenés cuenta? Registrate' : 'Ya tengo cuenta → entrar'}
+            {mode === 'login' ? '¿No tienes cuenta? Regístrate' : 'Ya tengo cuenta → entrar'}
           </button>
         </div>
       </form>
 
-      {IS_MOCK && <div className="mock-hint">Modo demo: entrá con cualquier email y contraseña.</div>}
+      {IS_MOCK && <div className="mock-hint">Modo demo: entra con cualquier email y contraseña.</div>}
     </div>
   );
 }

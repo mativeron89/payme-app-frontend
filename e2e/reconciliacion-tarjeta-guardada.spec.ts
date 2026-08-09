@@ -52,7 +52,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await masUno.click();
   await masUno.click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantizá la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
 
   // El seed trae dos guardadas. Se elige EXPLÍCITAMENTE la que NO es la
   // principal: ahí es donde la default puede mentir después.
@@ -63,11 +63,11 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
     .toHaveAttribute('aria-checked', 'false');
 
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
-  await expect(page.getByRole('heading', { name: 'Confirmá con tu banco' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
 
   // ⚡ Muere la pestaña con el hold ya puesto sobre la NO-default.
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Escaneá el ticket' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();
   await page.getByRole('button', { name: 'Revisar cómo quedó esa apertura' }).click();
   await expect(page.getByText(/se creó, pero su garantía quedó sin confirmar/)).toBeVisible();
 
@@ -80,7 +80,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await otroMas.click();
   await otroMas.click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantizá la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
 
   // 🔴 LA AFIRMACIÓN CENTRAL: NINGUNA tarjeta aparece elegida — y menos la
   // default. Antes de este arreglo, Santander ···· 4532 estaba marcada.
@@ -100,7 +100,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   const cta = page.getByRole('button', { name: /Reintentar esta apertura/ });
   await expect(cta).toBeEnabled();
   await cta.click();
-  await expect(page.getByRole('heading', { name: 'Confirmá con tu banco' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar autorización' }).click();
   await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 

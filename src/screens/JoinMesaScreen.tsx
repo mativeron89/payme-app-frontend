@@ -270,7 +270,7 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
             <div>
               <div className="join-banner-title">Te invitaron a una mesa</div>
               <div className="caption">
-                Creá tu cuenta o entrá para sumarte y pagar tu parte.
+                Crea tu cuenta o entra para sumarte y pagar tu parte.
               </div>
             </div>
           </div>
@@ -288,7 +288,7 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
         </div>
         <div className="link-foot">
           <p className="link-foot-copy">
-            Para ver la mesa y pagar tu parte, necesitás una cuenta de PayMe
+            Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe
           </p>
           {/* Único elemento naranja de la pantalla, con el texto en navy. */}
           <button

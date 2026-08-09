@@ -64,7 +64,7 @@ describe('los presets', () => {
     expect(tipIsChosen(NO_TIP_CHOSEN)).toBe(false);
   });
 
-  it('el 0 % elegido es una elección de primera clase, no un "no elegí"', () => {
+  it('el 0 % elegido es una elección de primera clase, no un "no elige"', () => {
     const cero: TipChoice = { mode: 'pct', pct: 0 };
     expect(tipIsChosen(cero)).toBe(true);
     expect(tipCentsFor(cero, BASE)).toBe(0);

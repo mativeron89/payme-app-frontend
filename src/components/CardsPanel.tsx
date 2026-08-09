@@ -127,7 +127,7 @@ export function CardsPanel() {
     }
     const origin = loadSession();
     if (!origin) {
-      toast('Tu sesión ya no está disponible. Volvé a ingresar antes de guardar una tarjeta.');
+      toast('Tu sesión ya no está disponible. Vuelve a ingresar antes de guardar una tarjeta.');
       addCardInFlightRef.current.leave();
       return;
     }
@@ -160,7 +160,7 @@ export function CardsPanel() {
         let pmId = `pm_mock_${attempt.setupKey.replace(/[^a-zA-Z0-9]/g, '')}`;
         if (!IS_MOCK) {
           if (!cardEl || !attempt.clientSecret) {
-            setCardState((s) => ({ ...s, error: 'Cargá los datos de la tarjeta para continuar.' }));
+            setCardState((s) => ({ ...s, error: 'Carga los datos de la tarjeta para continuar.' }));
             setCardRetryStage('setup');
             return;
           }
@@ -236,10 +236,10 @@ export function CardsPanel() {
       }
       toast(
         isServiceUnavailable(failure.status)
-          ? 'El servicio no pudo confirmar la tarjeta. Reintentá esta misma operación; no agregues otra.'
+          ? 'El servicio no pudo confirmar la tarjeta. Reintenta esta misma operación; no agregues otra.'
           : definitive
-            ? 'No pudimos guardar la tarjeta. Revisá los datos y probá de nuevo.'
-            : 'No pudimos confirmar si la tarjeta se guardó. Reintentá la misma operación: no vamos a crear otra.',
+            ? 'No pudimos guardar la tarjeta. Revisa los datos y prueba de nuevo.'
+            : 'No pudimos confirmar si la tarjeta se guardó. Reintenta la misma operación: no vamos a crear otra.',
       );
     } finally {
       addCardInFlightRef.current.leave();
@@ -315,8 +315,8 @@ export function CardsPanel() {
           {cardRetryStage !== 'none' && (
             <div className="note note-orange" style={{ marginBottom: 12 }} role="status">
               {cardRetryStage === 'attach'
-                ? 'Esta tarjeta quedó sin confirmar. Reintentá la misma operación: conservamos el mismo registro y no vamos a generar otra.'
-                : 'Esta alta quedó sin confirmar. Reintentá la misma operación: conservamos su clave.'}
+                ? 'Esta tarjeta quedó sin confirmar. Reintenta la misma operación: conservamos el mismo registro y no vamos a generar otra.'
+                : 'Esta alta quedó sin confirmar. Reintenta la misma operación: conservamos su clave.'}
             </div>
           )}
           {cardSetupBlocked && (

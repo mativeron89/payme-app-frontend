@@ -47,7 +47,7 @@ export function MasScreen() {
         </div>
         {!user && (
           <div className="note note-orange" style={{ marginBottom: 12 }}>
-            Tus datos van a aparecer acá en cuanto termines de crear tu cuenta.
+            Tus datos van a aparecer aquí en cuanto termines de crear tu cuenta.
           </div>
         )}
         <div className="card" style={{ marginBottom: 12 }}>
@@ -109,7 +109,7 @@ export function MasScreen() {
           <>
             <div className="note note-teal" style={{ marginBottom: 12 }}>
               <b>Modo demo:</b> los datos son de ejemplo y se guardan solo en este teléfono.
-              Nada de lo que hagas acá mueve dinero de verdad.
+              Nada de lo que hagas aquí mueve dinero de verdad.
             </div>
             <button
               className="btn btn-ghost"

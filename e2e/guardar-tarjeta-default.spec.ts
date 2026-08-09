@@ -20,7 +20,7 @@ import { expect, test } from '@playwright/test';
 test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async ({ page }) => {
   // Cuenta nueva: nace sin tarjetas (el camino primerizo real).
   await page.goto('/');
-  await page.getByRole('button', { name: /Registrate/ }).click();
+  await page.getByRole('button', { name: /Regístrate/ }).click();
   await page.getByPlaceholder('Nombre').fill('Primeriza');
   await page.getByPlaceholder('Apellido').fill('SinTarjeta');
   await page.getByPlaceholder('Email').fill('primeriza-e2e@demo.mx');
@@ -38,7 +38,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
 
   // SUPERFICIE 1 · garantía: el checkbox existe y NACE DESMARCADO.
-  await expect(page.getByText('Garantizá la mesa')).toBeVisible();
+  await expect(page.getByText('Garantiza la mesa')).toBeVisible();
   const checkGarantia = page.getByRole('checkbox');
   await expect(checkGarantia).toBeVisible();
   await expect(checkGarantia).not.toBeChecked();
@@ -73,7 +73,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
 test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una decoración', async ({ page }) => {
   // Mismo recorrido primerizo, checkbox intacto en las dos superficies.
   await page.goto('/');
-  await page.getByRole('button', { name: /Registrate/ }).click();
+  await page.getByRole('button', { name: /Regístrate/ }).click();
   await page.getByPlaceholder('Nombre').fill('Primeriza');
   await page.getByPlaceholder('Apellido').fill('SinGuardar');
   await page.getByPlaceholder('Email').fill('primeriza-negativa@demo.mx');

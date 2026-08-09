@@ -83,7 +83,7 @@ const NO_CONCLUYENTE: DecisionReconciliacion = {
   liberaJournal: false,
   navegarA: null,
   permiteReintento: false,
-  copy: 'No pudimos verificar cómo quedó esa apertura. Probá de nuevo en un momento; no vamos a abrir otra mesa mientras tanto.',
+  copy: 'No pudimos verificar cómo quedó esa apertura. Prueba de nuevo en un momento; no vamos a abrir otra mesa mientras tanto.',
 };
 
 /** Cuando no se pudo consultar (red, 5xx, cuerpo inválido): no se concluye. */
@@ -125,8 +125,8 @@ export function decisionReconciliacion(
         navegarA: null,
         permiteReintento: false,
         copy: code
-          ? `Esa apertura terminó sin quedar en pie (mesa ${code}). Ya podés abrir una nueva.`
-          : 'Esa apertura terminó sin quedar en pie. Ya podés abrir una nueva.',
+          ? `Esa apertura terminó sin quedar en pie (mesa ${code}). Ya puedes abrir una nueva.`
+          : 'Esa apertura terminó sin quedar en pie. Ya puedes abrir una nueva.',
       };
     case 'requires_action':
       // La mesa existe con su hold SIN autorizar. No se libera nada: abrir

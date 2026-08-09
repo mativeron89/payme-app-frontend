@@ -137,7 +137,7 @@ const ESPERADO: Record<PageId, Esperado> = {
    * heading de la app dice así. El heading "Mesas" murió con la TopBar vieja.
    */
   mesas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Historial' } },
-  scan: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Escaneá el ticket' } },
+  scan: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Escanea el ticket' } },
   mas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Más' } },
   avisos: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Notificaciones' } },
 

@@ -141,7 +141,7 @@ export function joinLinkMessage(outcome: JoinLinkOutcome): JoinLinkMessage {
     case 'invalid':
       return {
         title: 'Este link está incompleto',
-        body: 'Puede haberse cortado al copiarlo. Pedí que te lo manden de nuevo y abrilo entero.',
+        body: 'Puede haberse cortado al copiarlo. Pide que te lo manden de nuevo y ábrelo entero.',
         retryable: false,
       };
     case 'mesa_cerrada':
@@ -149,20 +149,20 @@ export function joinLinkMessage(outcome: JoinLinkOutcome): JoinLinkMessage {
       // restaurante —misma cautela que A—, pero sí dice que ES esta mesa.
       return {
         title: 'Esta mesa ya cerró',
-        body: 'Hablá con quien te invitó si creés que es un error.',
+        body: 'Habla con quien te invitó si crees que es un error.',
         retryable: false,
-        nota: 'Tu cuenta ya está lista — podés abrir tu propia mesa cuando quieras.',
+        nota: 'Tu cuenta ya está lista — puedes abrir tu propia mesa cuando quieras.',
       };
     case 'unavailable':
       return {
         title: 'No pudimos verificar el link',
-        body: 'No es que no sirva: no pudimos comprobarlo ahora. Probá de nuevo en un momento.',
+        body: 'No es que no sirva: no pudimos comprobarlo ahora. Prueba de nuevo en un momento.',
         retryable: true,
       };
     case 'error':
       return {
         title: 'No pudimos sumarte',
-        body: 'Puede ser la conexión. Probá de nuevo.',
+        body: 'Puede ser la conexión. Prueba de nuevo.',
         retryable: true,
       };
   }

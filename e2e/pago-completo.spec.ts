@@ -53,7 +53,7 @@ test.describe('el camino de pago completo', () => {
 
     // Marcar lo consumido: en partes iguales es informativo para el
     // restaurante y NO cambia lo que se paga. Esa promesa está en pantalla.
-    await expect(page.getByText('no cambia lo que pagás')).toBeVisible();
+    await expect(page.getByText('no cambia lo que pagas')).toBeVisible();
     // H-14 (2026-08-06): la fila muestra "Mi parte" ANTES de marcar nada — el
     // monto es el del casillero y no depende de la selección, y el gate que
     // exigía marcar contradecía la promesa de arriba. Acá vivía la afirmación
@@ -76,7 +76,7 @@ test.describe('el camino de pago completo', () => {
     // $241.50 —base + 15 % que nadie eligió— y ése era el defecto: un número
     // en pantalla, y después en el cable, que la persona nunca decidió.
     await expect(page.getByText('Tu parte $210.00', { exact: true })).toBeVisible();
-    await expect(page.getByText('+ propina (elegí abajo)')).toBeVisible();
+    await expect(page.getByText('+ propina (elige abajo)')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Pagar $210.00' })).toBeVisible();
 
     // Ninguna píldora rellena, **ni la de 0 %**: que el 0 % se vea elegido sólo
@@ -89,7 +89,7 @@ test.describe('el camino de pago completo', () => {
     // Tocar "Pagar" sin elegir NO envía nada, y tampoco deja a nadie encerrado:
     // el botón sigue activo y lo que aparece es el pedido de elegir.
     await page.getByRole('button', { name: 'Pagar $210.00' }).click();
-    await expect(page.getByText('Elegí tu propina para pagar')).toBeVisible();
+    await expect(page.getByText('Elige tu propina para pagar')).toBeVisible();
     await expect(page.getByText('¡Listo!')).toHaveCount(0);
 
     // Recién con la elección hecha el total incluye la propina.
@@ -156,7 +156,7 @@ test.describe('el camino de pago completo', () => {
     // marcada. Es el mismo estado que dejaría cualquier otro preset.
     await expect(propinas.getByRole('radio', { name: '0%', exact: true })).toBeChecked();
     await expect(propinas.getByRole('radio', { checked: true })).toHaveCount(1);
-    await expect(page.getByText('+ propina (elegí abajo)')).toHaveCount(0);
+    await expect(page.getByText('+ propina (elige abajo)')).toHaveCount(0);
 
     // Y paga, sin pedir nada más.
     await page.getByRole('button', { name: 'Pagar $210.00' }).click();

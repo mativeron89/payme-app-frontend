@@ -138,6 +138,6 @@ export function copyAdmision(estado: AdmisionEstado): string | null {
     case 'desconocida':
       // Estado DESCONOCIDO de SISTEMA_DISENO §5: no afirma que la mesa cerró
       // —no lo sabemos— ni ofrece entrar. Dice qué pasa y qué hacer.
-      return 'No pudimos verificar esta invitación. Actualizá en un momento.';
+      return 'No pudimos verificar esta invitación. Actualiza en un momento.';
   }
 }
