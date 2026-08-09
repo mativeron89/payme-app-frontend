@@ -1,0 +1,22 @@
+# ── Tipografías auto-hospedadas (`D-FUENTES-1`) ──────────────────────────────
+#
+# Estos archivos son BYTE-IDÉNTICOS al upstream y su valor depende de eso: el
+# README de `src/assets/fonts/` publica el SHA-256 de cada uno, y un test
+# compara las dos copias de Plus Jakarta Sans. Cualquier normalización de git
+# los rompería en silencio.
+
+# Un TTF con conversión de fin de línea es un TTF corrupto. `binary` implica
+# `-text -diff -merge`: ni se normaliza, ni se intenta diffear.
+*.ttf binary
+
+# Las OFL van verbatim, y traen su desprolijidad de origen: `OFL-DMSans.txt`
+# viene con CRLF (93 líneas) y `OFL-PlusJakartaSans.txt` con un espacio final
+# en la línea 21. `git diff --check` los marcaba en cada commit.
+#
+# 🔴 No se limpian. La licencia se conserva COMO SE RECIBIÓ — es texto legal de
+# terceros, no código de este repo. Lo que se calla es la advertencia, no el
+# problema: `-text` impide que git les cambie los fines de línea al clonar en
+# una máquina con `core.autocrlf`, y `-whitespace` saca del chequeo un archivo
+# que nadie debe editar.
+src/assets/fonts/OFL-*.txt -text -whitespace
+landing/fonts/OFL-*.txt    -text -whitespace
