@@ -81,19 +81,26 @@ grep -c '<script' dist-landing/index.html   # → 0
 
 ## Cero terceros, incluidas las tipografías
 
-`index.html` de la webapp trae Plus Jakarta Sans y DM Sans desde el CDN de
-fuentes de Google. **Acá no.** Es una request a un tercero que ocurre **antes
-de que la persona toque nada** — le manda su IP en la primera impresión de
-PayMe, cuando todavía no tiene cuenta.
+Ni la landing ni la webapp le piden la tipografía a nadie. Una request a un CDN
+de fuentes ocurre **antes de que la persona toque nada** y le manda su IP en la
+primera impresión de PayMe, cuando todavía no tiene cuenta.
 
-🔴 **La consecuencia se declara, no se disimula:** la landing usa la misma
-cadena `--font-display` del sistema con su fallback, así que en un equipo sin
-esas familias instaladas **se ve con la sans del sistema**. Es una diferencia
-visual con la app.
+🔴 **ACTUALIZADO el 2026-08-09 · esta sección decía lo contrario y quedó vieja.**
+Decía que la landing *"se ve con la sans del sistema"* y que auto-hospedar era
+una decisión pendiente. **Ya está hecho** (`D-FUENTES-1`, v0.61.0): la landing
+sirve **su propia copia** de Plus Jakarta Sans desde `./fonts/`, byte-idéntica a
+la de la webapp y con un test que compara los dos SHA-256.
 
-**Resolverlo bien es auto-hospedar los archivos de fuente** — decisión de
-licencia y de peso que no le corresponde a esta sesión. Queda **abierto y
-escalado**, no resuelto por descarte.
+Su propia copia y no la de la webapp: `D-WEB-1-BIS` manda que sea otro ORIGEN, y
+un artefacto que toma la tipografía del origen vecino no está separado.
+
+**Y la licencia viaja con ella**, en `fonts/OFL-PlusJakartaSans.txt` dentro del
+artefacto emitido — la cláusula 2 de la OFL lo exige, y que esté en el repo no
+alcanza. Lo verifica `landing.test.ts` sobre el build, no sobre el fuente.
+
+**Formato TTF y no WOFF2**, con el motivo completo en
+`../src/assets/fonts/README.md`: el upstream autorizado no publica WOFF2 y la
+ganancia real de convertir está sin medir.
 
 ## Los tokens se copian, y hay un gate que lo sostiene
 

@@ -46,6 +46,12 @@ export function CardField({ onReady, onChange }: Props) {
          * `index.html`— y ocurría **al montar el campo**, sin que la persona
          * tocara nada.
          *
+         * 🔴 ESTO ES UN FALLBACK TEMPORAL, NO UN CIERRE. `D-FUENTES-1` está
+         * cerrada para la webapp y la landing; **esta superficie sigue
+         * ABIERTA** y su restauración es trabajo pendiente del Carril 7. Quien
+         * lea "cerrada" en el CHANGELOG y no lea esto se lleva la idea
+         * equivocada, así que queda dicho acá también.
+         *
          * CONSECUENCIA, medida y acotada: el `fontFamily` de abajo pide
          * `'DM Sans'`, que dentro del iframe ya no está. **El texto que se
          * tipea en el campo —número, vencimiento, CVC y su placeholder— pasa a

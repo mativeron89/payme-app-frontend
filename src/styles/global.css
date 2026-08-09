@@ -100,8 +100,12 @@
      respuesta, literal: "Quiero los propuestos en la app por favor."
      Fuente: `../../../diseno/SISTEMA_DISENO.md` §1, tabla de Marca.
 
+     🔴 CÓMO SE NOMBRA ESTO. Es un RIESGO ACEPTADO, con nombre y fecha. NO se
+     escribe "cumple AA", ni "conforme", ni "excepción aprobada por
+     accesibilidad": no cumple, y la diferencia entre aceptar un riesgo y
+     declararlo conforme es la que permite volver a discutirlo más adelante.
      Si aparece en una auditoría de contraste, es la regla vigente y no un
-     hallazgo. `designTokens.test.ts` lo registra como excepción con fecha, en
+     hallazgo nuevo. `designTokens.test.ts` lo registra con fecha, en
      vez de dejar de medirlo: el número sigue fijado en 2.84 para que un
      retoque del naranja no lo hunda todavía más sin que nadie se entere. */
   --brand-fg: #ffffff; /* sobre --brand · 2.84:1 · excepción ratificada */
@@ -2084,8 +2088,8 @@ body {
 }
 
 /* Badge de no leídos: --brand con el número BLANCO desde la enmienda del
-   2026-08-08 (antes navy). 2.84:1, reprobado a propósito. Es uno de los tres
-   usos permitidos del naranja como FONDO. */
+   2026-08-08 (antes navy). 2.84:1, riesgo aceptado. Es uno de los CINCO usos
+   permitidos del naranja como FONDO (eran tres hasta el 2026-08-09). */
 .hdr-badge {
   position: absolute;
   top: 4px;
@@ -2188,9 +2192,9 @@ body {
 /* Badge de conteo de la pestaña: mismo tratamiento que el de la campana, así
    que el número también pasa a blanco con la enmienda del 2026-08-08.
 
-   🔴 Igual que `.link-round`: la tabla de usos permitidos de `--brand` nombra
-   el badge de avisos —"la campana, misma ranura"— y éste vive dentro de una
-   PESTAÑA, que no es esa ranura. Deriva preexistente, reportada. */
+   🔴 RATIFICADO el 2026-08-09 junto con `.link-round`. Se había reportado como
+   deriva —la tabla nombraba el badge de la campana y éste vive dentro de una
+   PESTAÑA— y Mati ratificó los CINCO usos. Deja de ser deriva. */
 .btab-badge {
   min-width: 18px;
   height: 18px;
@@ -2389,12 +2393,11 @@ body {
   border: none;
   cursor: pointer;
   background: var(--brand);
-  /* 🔴 ESTE SITIO NO ESTÁ EN LA TABLA DE USOS PERMITIDOS DE `--brand`.
-     La enmienda del 2026-08-08 cambia el TOKEN —"glifo e íconos sobre
-     --brand"— así que este glifo pasa a blanco por arrastre, no porque nadie
-     lo haya mirado. Lo que nadie ratificó es que este círculo tenga fondo
-     naranja: `SISTEMA_DISENO.md` §1 lista TRES fondos `--brand` y éste no es
-     ninguno. Es deriva preexistente, y queda reportada. */
+  /* 🔴 RATIFICADO el 2026-08-09, después de haberlo reportado como deriva.
+     Cuando se aplicó la enmienda, este círculo usaba fondo `--brand` sin estar
+     en la tabla de tres usos permitidos, y se reportó como tal. Mati lo revisó
+     y ratificó los CINCO usos, no tres. Ya no es deriva: es un uso aprobado, y
+     su glifo blanco sigue la misma regla que los demás. */
   color: var(--brand-fg); /* blanco, 2.84:1 — ver arriba */
   display: flex;
   align-items: center;

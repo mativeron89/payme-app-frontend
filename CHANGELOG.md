@@ -31,6 +31,11 @@ componentes, así que aterriza en todo lo que ponga texto sobre un fondo
 | `.btab-badge` · badge de conteo dentro de una pestaña | ❌ arrastrado |
 | `.link-round` · círculo de salida de 56px | ❌ arrastrado |
 
+> 🔴 **Resuelto en 0.62.1:** los dos "arrastrados" se elevaron a Mati y **quedaron
+> RATIFICADOS el 2026-08-09**. Los usos permitidos de `--brand` como fondo pasan
+> a ser **cinco**, no tres. Esta tabla describe lo que se sabía al publicar
+> 0.62.0 y se conserva por eso.
+
 🔴 **Los dos últimos no están en la tabla de usos permitidos de `--brand`**, que
 lista TRES fondos naranjas. Cambian de color por arrastre correcto del token,
 pero **lo que nadie ratificó nunca es que tengan fondo naranja**. Es deriva

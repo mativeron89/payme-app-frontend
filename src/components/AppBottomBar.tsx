@@ -149,9 +149,17 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
  * lo lleva el `aria-label`, que es lo único que tiene: sin etiqueta visible,
  * un botón sin nombre sería un círculo mudo para quien no ve la pantalla.
  *
- * 🔴 Y ahí el `aria-label` deja de ser sólo accesibilidad de lector de
- * pantalla: con el contraste por debajo del mínimo, el nombre accesible es lo
- * único que no depende de distinguir el glifo. Razón de más para no tocarlo.
+ * 🔴 CORRECCIÓN de lo que decía acá antes. El texto anterior presentaba el
+ * `aria-label` como si compensara el contraste bajo: *"es lo único que no
+ * depende de distinguir el glifo"*. **Eso es engañoso y lo escribí yo.**
+ *
+ * Un `aria-label` sirve a quien usa lector de pantalla. **No hace nada por
+ * quien MIRA la pantalla y no distingue el glifo**, que es exactamente la
+ * persona a la que afecta un contraste de 2.84:1. Son dos poblaciones
+ * distintas y la etiqueta sólo alcanza a una.
+ *
+ * El riesgo del contraste queda ACEPTADO y sin mitigar. Escribirlo como si
+ * estuviera mitigado es peor que el riesgo, porque cierra la discusión.
  */
 export function AppBottomCta({
   label,
