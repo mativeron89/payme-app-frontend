@@ -1,5 +1,68 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.64.0 — la landing se publica, y sus botones llevan a algún lado (2026-08-09)
+
+MINOR: aparece una superficie nueva publicada.
+
+Mati autorizó el push para poder compartir links y recibir feedback. Esta
+versión es lo que hacía falta para que esos links no defraudaran.
+
+### 🔴 Los dos botones de la landing eran links muertos
+
+```html
+<a href="https://app.paymemx.com">Comensal</a>
+<a href="https://panel.paymemx.com">Restaurante</a>
+```
+
+**Esos dominios no existen** —no hay DNS ni hosting—. Publicar así habría
+entregado una página linda donde hacés clic y no pasa nada: **peor que no tener
+landing**.
+
+⚠️ **Y el archivo no estaba mal escrito: estaba escrito para el futuro
+ratificado.** `D-WEB-1-BIS` manda esos tres orígenes y algún día van a ser
+correctos. **El defecto no era el destino: era la fecha.**
+
+- **Comensal** → el build mock de Pages, verificado 200.
+- **Restaurante** → **deja de ser un enlace.** Sin `href`, con su leyenda «Muy
+  pronto», hueco con borde en vez de navy sólido: la diferencia se nota **antes**
+  del clic. Honesto, no roto. El repo del dashboard es privado y esa decisión es
+  de Mati.
+
+**La guarda que faltaba:** *ningún enlace apunta a un dominio que todavía no
+existe*. La anterior verificaba que los destinos fueran los **autorizados** — y
+lo eran, por gobierno. 🔴 **Estar ratificado y estar vivo son dos cosas
+distintas, y un enlace sólo sirve si la segunda es cierta.**
+
+### La landing entra al deploy · como PREVIEW
+
+`deploy-demo.yml` publicaba dos builds y la landing no estaba en ninguno: hasta
+hoy **no se publicaba en ningún lado**. Entra como tercero, con verificación
+post-copia —HTML, assets relativos, tipografía y licencia— que falla el job
+antes de subir un artefacto a medio construir.
+
+⚠️ **Es una preview bajo un prefijo, no la arquitectura ratificada.** Cuando
+exista el dominio, la landing se muda a su origen y esta entrada se retira.
+
+### `base: './'` en vez de una bandera
+
+Vite emitía `/assets/…` absoluto: bajo un prefijo eso apunta a la raíz del
+dominio y **la página carga sin un solo estilo**. La salida obvia era pasar
+`--base` en el workflow; depende de que alguien se acuerde. `base: './'` anda en
+la raíz **y** bajo cualquier prefijo: **elimina el modo de falla en vez de
+esquivarlo.**
+
+### El `payme_id` mostraba el nombre de otro
+
+`mockLogin` derivaba el nombre del email pero **heredaba el `payme_id` del
+usuario sembrado**: entrabas como `juan@ejemplo.mx` y veías `payme_mx_mati` en
+Más y en el encabezado de Avisos.
+
+No es cosmético — **el `payme_id` es la identidad con la que te encuentran tus
+amigos**, y en un link público cada desconocido veía el nombre del dueño de la
+demo como si fuera el suyo. 🔴 **Y el comentario de `paymeIdFromName` ya
+prometía la conducta correcta: un comentario correcto al lado de un código que
+hace otra cosa es peor que no tener comentario.**
+
 ## 0.63.0 — el producto habla español mexicano (2026-08-09)
 
 MINOR: cambia lo que ve el usuario en casi todas las pantallas.
