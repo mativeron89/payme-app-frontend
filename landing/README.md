@@ -21,13 +21,34 @@ emite lo que `index.html` referencia, así que un `.md` suelto en la raíz del
 entry no se copia a `dist-landing/`.
 
 Y hay una razón más fuerte, que descubrí escribiendo el test: las guardas
-prohíben que el artefacto contenga las cadenas `AuthProvider`, `<script`,
-`onclick`, `localStorage`, y cualquier host externo — **sin excepción para
-comentarios**. Mi primera versión del HTML explicaba las prohibiciones
-*nombrándolas*, y los tests se pusieron rojos con razón: la regla es que esas
-cadenas **no están en el artefacto**, y "es sólo un comentario" es exactamente
-la excepción por la que después vuelve la cosa real. Además, una página pública
-no tiene por qué contarle su arquitectura interna a quien mire el fuente.
+barren el artefacto ENTERO **sin excepción para comentarios**. Mi primera
+versión del HTML explicaba las prohibiciones *nombrándolas*, y los tests se
+pusieron rojos con razón: la regla es que esas cadenas **no están en el
+artefacto**, y "es sólo un comentario" es exactamente la excepción por la que
+después vuelve la cosa real.
+
+🔴 **Y quedó un resto que Codex encontró:** el comentario que sobrevivía
+nombraba `SPEC_LANDING` y este README **en la misma página cuyo README explica
+que los comentarios se publican**. Eliminado, y ahora hay guarda: **cero
+comentarios HTML en el artefacto**. Una página pública no le cuenta su
+arquitectura a quien mire el fuente.
+
+## Las guardas prueban TRES propiedades distintas, no una
+
+Estaban mezcladas y por eso probaban menos de lo que declaraban:
+
+1. **Navegación** — exactamente dos `<a>`, con sus `href` exactos y absolutos.
+2. **Recursos** — cero cross-origin: todo lo que el navegador carga solo tiene
+   que ser relativo al propio origen. Incluye `@import` y `url(...)` del CSS.
+3. **Ejecución** — cero `<script>`, `javascript:`, handlers `on*=`, `meta
+   refresh`, `iframe`, `object`, `embed` y formularios.
+
+🔴 **El agujero que la separación cierra:** los dos subdominios estaban siendo
+usados como **permiso global de URL**, así que una hoja de estilos servida
+desde `app.paymemx.com` pasaba. No debería: esos orígenes están autorizados
+como **destinos de navegación** —adonde va la persona cuando toca— **no como
+proveedores de recursos** que el navegador carga antes de que nadie toque nada.
+Dos permisos con nombre parecido y consecuencias muy distintas.
 
 ## Cero JavaScript, y es la forma más fuerte de cumplir §2
 

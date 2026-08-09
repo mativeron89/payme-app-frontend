@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /**
  * ⭐ CARRIL 1A · EL AISLAMIENTO DE LA LANDING, PROBADO SOBRE EL BUILD.
@@ -50,15 +50,33 @@ interface Artefacto {
   readonly archivos: readonly string[];
   readonly html: string;
   readonly todo: string;
+  /** Contenido por ruta relativa, para poder mirar el CSS por separado. */
+  readonly porArchivo: Readonly<Record<string, string>>;
 }
 
 let build: Artefacto;
+/**
+ * A5 · el temporal que crea ESTE test, para poder borrarlo después. Dos
+ * corridas de Codex dejaron dos `payme-landing-*` colgados en `/tmp`: crear y
+ * no limpiar es basura que se acumula en la máquina de otro.
+ *
+ * 🔴 Se guarda LA RUTA QUE CREAMOS, no un glob de `payme-landing-*`: barrer
+ * por patrón borraría el temporal de una corrida ajena que esté en curso.
+ */
+let temporal: string | null = null;
+
+afterAll(() => {
+  // `finally` de facto: corre aunque el `beforeAll` o los tests hayan fallado.
+  if (temporal) rmSync(temporal, { recursive: true, force: true });
+  temporal = null;
+});
 
 beforeAll(() => {
   // A un temporal y no a `dist-landing/`: así el test no depende de que
   // alguien haya corrido el build antes, ni deja el árbol sucio, ni mide un
   // artefacto viejo que quedó de otra corrida.
   const salida = mkdtempSync(join(tmpdir(), 'payme-landing-'));
+  temporal = salida;
   execFileSync(
     'npx',
     ['vite', 'build', '--config', 'vite.landing.config.ts', '--outDir', salida, '--logLevel', 'error'],
@@ -76,7 +94,9 @@ beforeAll(() => {
 
   const html = archivos.filter((a) => a.endsWith('.html')).map((a) => readFileSync(a, 'utf8')).join('\n');
   const todo = archivos.map((a) => `${relative(salida, a)}\n${readFileSync(a, 'utf8')}`).join('\n');
-  build = { archivos: archivos.map((a) => relative(salida, a)), html, todo };
+  const porArchivo: Record<string, string> = {};
+  for (const a of archivos) porArchivo[relative(salida, a)] = readFileSync(a, 'utf8');
+  build = { archivos: archivos.map((a) => relative(salida, a)), html, todo, porArchivo };
 }, 60_000);
 
 describe('el artefacto de la landing existe y es lo que dice ser', () => {
@@ -104,34 +124,108 @@ describe('el artefacto de la landing existe y es lo que dice ser', () => {
   });
 });
 
-describe('las prohibiciones de §2 del spec, sobre los bytes emitidos', () => {
-  it('🔴 ni AuthProvider, ni capa de API, ni Stripe, ni el dashboard', () => {
-    for (const prohibido of [
-      'AuthProvider',
-      'useAuth',
-      'stripe',
-      'Stripe',
-      'payme-dashboard',
-      'contract-mirror',
-    ]) {
-      expect(build.todo, `el artefacto contiene "${prohibido}"`).not.toContain(prohibido);
-    }
+/**
+ * 🔴 A3 · TRES PROPIEDADES DISTINTAS, SEPARADAS — antes estaban mezcladas en
+ * una sola y por eso probaban menos de lo que declaraban. Codex encontró
+ * cuatro agujeros y los cuatro venían de la misma confusión.
+ *
+ * El peor: `DESTINOS_AUTORIZADOS` se usaba como **permiso global de URL**, así
+ * que una hoja de estilos servida desde `https://app.paymemx.com/x.css`
+ * pasaba. Y no debería: esos dos orígenes están autorizados como **DESTINOS DE
+ * NAVEGACIÓN** —adonde mandamos a la persona cuando toca— **no como orígenes
+ * de recursos** que el navegador carga solo, antes de que nadie toque nada.
+ * Son dos permisos con nombres parecidos y consecuencias muy distintas.
+ *
+ * Los otros tres: el regex de hosts sólo veía `http(s)://` y no
+ * `//host` protocol-relative; los handlers inline sólo buscaban `onclick` y no
+ * `onload`/`onerror`/ningún `on*=`; y "cero JavaScript" no rechazaba
+ * `javascript:`, que ejecuta sin ser un `<script>`.
+ */
+
+/** Atributos que hacen que el NAVEGADOR cargue algo por su cuenta. */
+const ATRIBUTOS_DE_RECURSO = [
+  'src', 'srcset', 'poster', 'data', 'action', 'formaction', 'manifest', 'background', 'ping',
+];
+
+/** Cada tag del HTML con su nombre y su texto crudo de atributos. */
+function tags(html: string): Array<{ nombre: string; crudo: string }> {
+  return [...html.matchAll(/<([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*)>/g)]
+    .map((m) => ({ nombre: m[1]!.toLowerCase(), crudo: m[2]! }));
+}
+
+/** Los pares `attr="valor"` de un tag. */
+function atributos(crudo: string): Array<{ nombre: string; valor: string }> {
+  return [...crudo.matchAll(/([a-zA-Z-]+)\s*=\s*"([^"]*)"/g)]
+    .map((m) => ({ nombre: m[1]!.toLowerCase(), valor: m[2]! }));
+}
+
+describe('PROPIEDAD 1 · exactamente dos anchors de navegación', () => {
+  it('🔴 dos `<a>`, con los href exactos y en orden', () => {
+    const anchors = tags(build.html).filter((t) => t.nombre === 'a');
+    expect(anchors).toHaveLength(2);
+    const hrefs = anchors.map((t) => atributos(t.crudo).find((a) => a.nombre === 'href')?.valor);
+    expect(hrefs).toEqual([...DESTINOS_AUTORIZADOS]);
   });
 
-  it('🔴 cero fetch, cero storage, cero cookies', () => {
-    for (const prohibido of ['fetch(', 'localStorage', 'sessionStorage', 'document.cookie', 'XMLHttpRequest']) {
-      expect(build.todo, `el artefacto contiene "${prohibido}"`).not.toContain(prohibido);
+  it('🔴 URLs ABSOLUTAS: es lo que hace el seam de `payme-web`', () => {
+    // Con rutas relativas la landing no se podría retirar de la raíz sin mover
+    // `app.` ni `panel.`: el seam sería una intención escrita, no un hecho.
+    for (const href of DESTINOS_AUTORIZADOS) expect(build.html).toContain(`href="${href}"`);
+  });
+});
+
+describe('PROPIEDAD 2 · cero recursos cross-origin o de terceros', () => {
+  /**
+   * 🔴 Acá NO se consulta `DESTINOS_AUTORIZADOS`, y es el punto entero de la
+   * separación: un recurso sólo puede ser RELATIVO al propio origen. Ni
+   * `https://`, ni `//host`, ni `http://`, ni siquiera los dos subdominios de
+   * PayMe — que son destinos de navegación, no proveedores de assets.
+   */
+  function esRelativo(valor: string): boolean {
+    const v = valor.trim();
+    if (!v) return true;
+    if (v.startsWith('//')) return false;               // protocol-relative
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)) return false; // cualquier esquema
+    return true;
+  }
+
+  it('🔴 MUTANTE · ningún atributo de recurso apunta fuera del origen', () => {
+    const ajenos: string[] = [];
+    for (const t of tags(build.html)) {
+      for (const a of atributos(t.crudo)) {
+        const esRecurso = ATRIBUTOS_DE_RECURSO.includes(a.nombre)
+          // `href` es recurso en TODO menos en un anchor: `<link>`, `<base>`…
+          || (a.nombre === 'href' && t.nombre !== 'a');
+        if (esRecurso && !esRelativo(a.valor)) ajenos.push(`<${t.nombre} ${a.nombre}="${a.valor}">`);
+      }
     }
+    expect(ajenos, `recursos que no son del propio origen: ${ajenos.join(' · ')}`).toEqual([]);
   });
 
-  it('⭐ CERO HOSTS EXTERNOS · sin excepciones ni lista de perdón', () => {
-    // La guarda que protege la decisión de no cargar fuentes de terceros: sin
-    // esto, alguien copia el <head> de la webapp y la revierte sin enterarse.
-    // Se barre el artefacto ENTERO —incluidos los comentarios— porque una
-    // excepción "es sólo un comentario" es por donde vuelve.
-    const hosts = [...build.todo.matchAll(/https?:\/\/[^\s"'<>)]+/g)].map((m) => m[0]);
-    const ajenos = hosts.filter((u) => !DESTINOS_AUTORIZADOS.some((d) => u === d || u.startsWith(`${d}/`)));
-    expect(ajenos, `hosts externos en el artefacto: ${ajenos.join(', ')}`).toEqual([]);
+  it('🔴 MUTANTE · el CSS emitido no importa ni carga nada', () => {
+    // `@import` y `url(...)` son las dos vías por las que una hoja de estilos
+    // trae algo de afuera — incluidas las fuentes, que es justo lo que esta
+    // landing decidió no hacer.
+    const css = build.archivos
+      .filter((a) => a.endsWith('.css'))
+      .map((a) => build.porArchivo[a] ?? '')
+      .join('\n');
+    expect(css.length, 'no se encontró CSS emitido: el test no probaría nada').toBeGreaterThan(100);
+    expect(css).not.toMatch(/@import/i);
+    expect(css).not.toMatch(/url\s*\(/i);
+  });
+
+  it('🔴 MUTANTE · ni protocol-relative ni ningún host en el artefacto entero', () => {
+    // Barrido de red, además del estructural: incluye comentarios, porque una
+    // excepción "es sólo un comentario" es por donde vuelve la cosa real.
+    const conEsquema = [...build.todo.matchAll(/\bhttps?:\/\/[^\s"'<>)]+/g)].map((m) => m[0]);
+    const ajenos = conEsquema.filter(
+      (u) => !DESTINOS_AUTORIZADOS.some((d) => u === d || u.startsWith(`${d}/`)),
+    );
+    expect(ajenos, `hosts externos: ${ajenos.join(', ')}`).toEqual([]);
+    // Protocol-relative: `//host` que no sea parte de un `esquema://`.
+    const protocolRelative = [...build.todo.matchAll(/(^|[^:a-zA-Z0-9])\/\/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/g)];
+    expect(protocolRelative.map((m) => m[0].trim()), 'URLs protocol-relative').toEqual([]);
   });
 
   it('no hay preconnect, dns-prefetch ni preload a ningún lado', () => {
@@ -139,23 +233,54 @@ describe('las prohibiciones de §2 del spec, sobre los bytes emitidos', () => {
   });
 });
 
+describe('PROPIEDAD 3 · cero ejecución, en cualquiera de sus formas', () => {
+  it('🔴 MUTANTE · ningún handler inline: `on*=`, no sólo `onclick`', () => {
+    const conHandler = tags(build.html)
+      .flatMap((t) => atributos(t.crudo).map((a) => ({ t, a })))
+      .filter(({ a }) => /^on[a-z]+$/.test(a.nombre));
+    expect(conHandler.map(({ t, a }) => `<${t.nombre} ${a.nombre}>`)).toEqual([]);
+  });
+
+  it('🔴 MUTANTE · ningún `javascript:` en ningún atributo', () => {
+    // Ejecuta sin ser un `<script>`: "cero JavaScript" no lo cubría.
+    expect(build.todo.toLowerCase()).not.toContain('javascript:');
+  });
+
+  it('🔴 MUTANTE · ningún `meta refresh`', () => {
+    // Es navegación automática: manda a la persona a otro lado sin que toque.
+    expect(build.html).not.toMatch(/<meta[^>]+http-equiv\s*=\s*["']?\s*refresh/i);
+  });
+
+  it('🔴 ni iframe, ni object, ni embed, ni formulario', () => {
+    const prohibidos = tags(build.html)
+      .map((t) => t.nombre)
+      .filter((n) => ['script', 'iframe', 'object', 'embed', 'form', 'base'].includes(n));
+    expect(prohibidos).toEqual([]);
+  });
+
+  it('el artefacto no contiene AuthProvider, la capa de API, Stripe ni el dashboard', () => {
+    for (const prohibido of ['AuthProvider', 'useAuth', 'stripe', 'Stripe', 'payme-dashboard', 'contract-mirror']) {
+      expect(build.todo, `el artefacto contiene "${prohibido}"`).not.toContain(prohibido);
+    }
+  });
+
+  it('cero fetch, cero storage, cero cookies', () => {
+    for (const prohibido of ['fetch(', 'localStorage', 'sessionStorage', 'document.cookie', 'XMLHttpRequest']) {
+      expect(build.todo, `el artefacto contiene "${prohibido}"`).not.toContain(prohibido);
+    }
+  });
+
+  it('🔴 A4 · CERO COMENTARIOS HTML en el artefacto', () => {
+    // Los comentarios viajan al navegador. La primera versión de esta página
+    // explicaba sus prohibiciones nombrándolas, y además le contaba su
+    // arquitectura a cualquiera que mirara el fuente. El porqué vive en
+    // `landing/README.md`, que no se emite.
+    const comentarios = [...build.html.matchAll(/<!--[\s\S]*?-->/g)].map((m) => m[0]);
+    expect(comentarios, `comentarios en el HTML público: ${comentarios.join(' · ')}`).toEqual([]);
+  });
+});
+
 describe('el contenido es el literal autorizado, y nada más', () => {
-  it('🔴 los dos href son EXACTAMENTE los dos subdominios', () => {
-    const hrefs = [...build.html.matchAll(/<a\b[^>]*href="([^"]*)"/g)].map((m) => m[1]);
-    expect(hrefs).toEqual([...DESTINOS_AUTORIZADOS]);
-  });
-
-  it('🔴 URLs ABSOLUTAS, que es lo que hace el seam de `payme-web`', () => {
-    // Con rutas relativas la landing no se podría retirar de la raíz sin mover
-    // `app.` ni `panel.`: el seam sería una intención escrita, no un hecho.
-    for (const href of DESTINOS_AUTORIZADOS) expect(build.html).toContain(`href="${href}"`);
-  });
-
-  it('los accesos son ENLACES REALES, no divs con onClick', () => {
-    expect(build.html).not.toMatch(/onclick/i);
-    expect((build.html.match(/<a\b/g) ?? []).length).toBe(2);
-  });
-
   it('⭐ el copy es sólo PayMe / Comensal / Restaurante — sin tagline', () => {
     // El copy está ABIERTO y es decisión de Mati. Este test es lo que impide
     // que alguien "mejore" la página con una línea de presentación: cualquier
