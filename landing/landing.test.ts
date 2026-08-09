@@ -153,10 +153,32 @@ function tags(html: string): Array<{ nombre: string; crudo: string }> {
     .map((m) => ({ nombre: m[1]!.toLowerCase(), crudo: m[2]! }));
 }
 
-/** Los pares `attr="valor"` de un tag. */
+/**
+ * Los atributos de un tag, **en las TRES formas que acepta HTML**.
+ *
+ * 🔴 FASE 2 · A — antes esto sólo reconocía `attr="valor"`, y las otras dos
+ * pasaban por abajo de todas las guardas. Los dos casos sin comillas son los
+ * peores porque **son HTML perfectamente válido** y el navegador los ejecuta
+ * igual:
+ *
+ *     <link rel=stylesheet href=https://app.paymemx.com/x.css>
+ *     <body onload=alert(1)>
+ *
+ * Un parser que cubre un solo formato no es una guarda parcial: es una guarda
+ * que se puede esquivar sin esfuerzo y sin mala fe — basta con no poner
+ * comillas.
+ *
+ * El orden de las alternativas importa: primero las comilladas (que pueden
+ * contener espacios), y el caso sin comillas al final, terminado por espacio o
+ * fin de tag.
+ */
 function atributos(crudo: string): Array<{ nombre: string; valor: string }> {
-  return [...crudo.matchAll(/([a-zA-Z-]+)\s*=\s*"([^"]*)"/g)]
-    .map((m) => ({ nombre: m[1]!.toLowerCase(), valor: m[2]! }));
+  const re = /([a-zA-Z_:][a-zA-Z0-9_:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
+  return [...crudo.matchAll(re)].map((m) => ({
+    nombre: m[1]!.toLowerCase(),
+    // Exactamente una de las tres alternativas matcheó.
+    valor: m[2] ?? m[3] ?? m[4] ?? '',
+  }));
 }
 
 describe('PROPIEDAD 1 · exactamente dos anchors de navegación', () => {
@@ -165,6 +187,18 @@ describe('PROPIEDAD 1 · exactamente dos anchors de navegación', () => {
     expect(anchors).toHaveLength(2);
     const hrefs = anchors.map((t) => atributos(t.crudo).find((a) => a.nombre === 'href')?.valor);
     expect(hrefs).toEqual([...DESTINOS_AUTORIZADOS]);
+  });
+
+  it('🔴 las tres formas de atributo se parsean, no sólo la comillada', () => {
+    // Sonda del propio parser: si dejara de ver alguna forma, las guardas de
+    // abajo pasarían en vacío sin que nadie se entere.
+    const muestra = atributos(` a="uno" b='dos' c=tres d = cuatro `);
+    expect(muestra).toEqual([
+      { nombre: 'a', valor: 'uno' },
+      { nombre: 'b', valor: 'dos' },
+      { nombre: 'c', valor: 'tres' },
+      { nombre: 'd', valor: 'cuatro' },
+    ]);
   });
 
   it('🔴 URLs ABSOLUTAS: es lo que hace el seam de `payme-web`', () => {
