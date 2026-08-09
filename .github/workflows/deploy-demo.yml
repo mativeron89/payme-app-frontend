@@ -61,6 +61,29 @@ jobs:
           # NO se hardcodea: lo resuelve GET /api/restaurants/:id (G-01, v2.21).
           VITE_RESTAURANT_ID: 00000000-0000-4000-8000-000000000001
 
+      # 3) La LANDING, a dist/landing/.
+      #
+      # ⚠️ ESTO ES UNA PREVIEW, NO LA ARQUITECTURA RATIFICADA. `D-WEB-1-BIS`
+      # manda TRES ORÍGENES con dominio propio —`paymemx.com`, `app.` y
+      # `panel.`— y esas compuertas siguen cerradas: no hay DNS ni hosting.
+      # Publicarla bajo un prefijo de Pages es un LINK PARA QUE LA GENTE MIRE
+      # mientras tanto. Cuando exista el dominio, la landing se muda a su
+      # origen y esta entrada se retira.
+      #
+      # No lleva `--base`: `vite.landing.config.ts` ya usa `base: './'`, que
+      # anda en la raíz de un dominio Y bajo cualquier prefijo. Una bandera acá
+      # dependería de que alguien se acuerde y de que el prefijo no cambie.
+      - run: npm run build:landing
+      - run: cp -R dist-landing dist/landing
+      # Que no se publique un artefacto vacío o a medio construir sin avisar.
+      - name: Verificar que la landing salió entera
+        run: |
+          test -f dist/landing/index.html
+          grep -q './assets/' dist/landing/index.html
+          test -n "$(find dist/landing -name '*.ttf' -print -quit)"
+          test -f dist/landing/fonts/OFL-PlusJakartaSans.txt
+          echo "landing OK: html + assets relativos + tipografía + licencia"
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
