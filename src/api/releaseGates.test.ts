@@ -77,6 +77,48 @@ describe('gate IFPE de release', () => {
    * función: si alguien reintroduce `pm_card_visa` por cualquier vía —otra
    * pantalla, otro flag, un helper nuevo— este test lo frena.
    */
+  /**
+   * 🔴 FASE 3 · NINGÚN EGRESS DE TIPOGRAFÍAS DESDE EL CÓDIGO DE LA APP.
+   *
+   * `CardField.tsx` le pasaba a Stripe Elements un `cssSrc` a
+   * `fonts.googleapis.com`. Era el TERCER egress del repo y **el que no se ve
+   * leyendo el `index.html`**: vivía en TypeScript, dentro de la config de un
+   * SDK. Se retiró, y sin esta guarda vuelve en silencio — es la superficie
+   * más fácil de reintroducir, porque el ejemplo de la documentación de Stripe
+   * usa literalmente una URL de Google Fonts.
+   *
+   * ⚠️ ALCANCE, dicho con precisión: esto barre **`src/`**, no el árbol
+   * entero. Los dos `<link>` y el `<link rel=stylesheet>` de `index.html`
+   * SIGUEN VIVOS a propósito —la superficie 1 espera los `.woff2` propios— y
+   * este test no los mira. Cuando se cierre esa superficie, el barrido se
+   * extiende al HTML. No se declara más ancho de lo que mide.
+   */
+  it('🔴 ningún host de fuentes de terceros en `src/`', () => {
+    const fuentes = import.meta.glob('/src/**/*.{ts,tsx}', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>;
+    const HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'use.typekit', 'fonts.bunny.net'];
+    const ofensores: string[] = [];
+    for (const [ruta, cuerpo] of Object.entries(fuentes)) {
+      // 🔴 ACÁ los comentarios se IGNORAN, y en la landing CUENTAN. No es
+      // inconsistencia: es el mismo fundamento —qué le llega al usuario—
+      // aplicado a dos casos distintos. El HTML de la landing SE PUBLICA, así
+      // que un comentario suyo es información que viaja al navegador; este
+      // archivo SE COMPILA, y un comentario no sobrevive ni hace una request.
+      // Lo que se persigue es el `cssSrc`, no la palabra.
+      if (ruta.endsWith('releaseGates.test.ts')) continue;
+      const sinComentarios = cuerpo
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      for (const host of HOSTS) {
+        if (sinComentarios.includes(host)) ofensores.push(`${ruta} → ${host}`);
+      }
+    }
+    expect(ofensores, `egress de tipografías en código vivo: ${ofensores.join(' · ')}`).toEqual([]);
+  });
+
   it('G-24 · ningún PaymentMethod de prueba de Stripe existe en el código fuente', () => {
     // `import.meta.glob` es nativo de Vite: barre el árbol sin agregar ninguna
     // dependencia (los tipos de node lo serían).
