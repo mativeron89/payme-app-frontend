@@ -87,19 +87,31 @@ describe('gate IFPE de release', () => {
    * más fácil de reintroducir, porque el ejemplo de la documentación de Stripe
    * usa literalmente una URL de Google Fonts.
    *
-   * ⚠️ ALCANCE, dicho con precisión: esto barre **`src/`**, no el árbol
-   * entero. Los dos `<link>` y el `<link rel=stylesheet>` de `index.html`
-   * SIGUEN VIVOS a propósito —la superficie 1 espera los `.woff2` propios— y
-   * este test no los mira. Cuando se cierre esa superficie, el barrido se
-   * extiende al HTML. No se declara más ancho de lo que mide.
+   * ⚠️ ALCANCE, actualizado en la FASE 4 y dicho con precisión: ahora barre
+   * **`src/` Y `index.html`**. Hasta la fase anterior el HTML quedaba afuera a
+   * propósito, porque sus tres etiquetas a Google seguían vivas esperando las
+   * tipografías propias. Ya no están, así que la promesa se puede hacer entera
+   * — y el compromiso que quedó escrito ahí («cuando se cierre esa superficie,
+   * el barrido se extiende al HTML») se cumple acá.
+   *
+   * 🔴 Sigue sin cubrir `landing/`: ése tiene su propia guarda, más estricta
+   * —prohíbe TODO host externo, no sólo los de tipografías— y corre sobre el
+   * artefacto construido en vez de sobre el fuente. No se declara más ancho de
+   * lo que mide.
    */
+  const HOSTS_DE_FUENTES = [
+    'fonts.googleapis.com',
+    'fonts.gstatic.com',
+    'use.typekit',
+    'fonts.bunny.net',
+  ];
+
   it('🔴 ningún host de fuentes de terceros en `src/`', () => {
     const fuentes = import.meta.glob('/src/**/*.{ts,tsx}', {
       query: '?raw',
       import: 'default',
       eager: true,
     }) as Record<string, string>;
-    const HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'use.typekit', 'fonts.bunny.net'];
     const ofensores: string[] = [];
     for (const [ruta, cuerpo] of Object.entries(fuentes)) {
       // 🔴 ACÁ los comentarios se IGNORAN, y en la landing CUENTAN. No es
@@ -112,11 +124,80 @@ describe('gate IFPE de release', () => {
       const sinComentarios = cuerpo
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^\s*\/\/.*$/gm, '');
-      for (const host of HOSTS) {
+      for (const host of HOSTS_DE_FUENTES) {
         if (sinComentarios.includes(host)) ofensores.push(`${ruta} → ${host}`);
       }
     }
     expect(ofensores, `egress de tipografías en código vivo: ${ofensores.join(' · ')}`).toEqual([]);
+  });
+
+  /**
+   * 🔴 FASE 4 · el mismo invariante sobre el HTML, que es por donde entró la
+   * primera vez.
+   *
+   * Acá los comentarios CUENTAN, al revés que arriba. No es inconsistencia: es
+   * el mismo fundamento —qué le llega al usuario— aplicado a dos casos
+   * distintos. `index.html` **se publica tal cual**, así que un `<!-- … -->`
+   * suyo es texto que viaja al navegador; los `.ts` se compilan y sus
+   * comentarios no sobreviven ni hacen una request.
+   *
+   * Y hay una razón práctica además de la doctrinal: la forma más probable de
+   * que esto vuelva es alguien dejando el `<link>` viejo comentado "por si
+   * acaso". Un `<link>` comentado no carga nada hoy, pero es la línea que se
+   * descomenta sin pensarlo dentro de seis meses.
+   */
+  it('🔴 FASE 4 · ningún host de fuentes en `index.html`, comentarios incluidos', () => {
+    const htmls = import.meta.glob('/index.html', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>;
+
+    // Sonda: si el glob dejara de resolver, el `for` iteraría vacío y esto
+    // pasaría sin mirar nada. Es exactamente cómo una guarda queda en verde
+    // sin verificar.
+    expect(Object.keys(htmls), 'el glob no encontró `index.html`').toHaveLength(1);
+
+    const ofensores: string[] = [];
+    for (const [ruta, cuerpo] of Object.entries(htmls)) {
+      for (const host of HOSTS_DE_FUENTES) {
+        if (cuerpo.includes(host)) ofensores.push(`${ruta} → ${host}`);
+      }
+    }
+    expect(ofensores, `egress de tipografías en el HTML: ${ofensores.join(' · ')}`).toEqual([]);
+  });
+
+  /**
+   * 🔴 EL CASO LEGÍTIMO de las dos guardas de arriba.
+   *
+   * Cinco mutantes en rojo son compatibles con una guarda que rechaza todo. Lo
+   * que ninguno de ellos prueba es que la tipografía PROPIA se acepte — y una
+   * guarda que la bloqueara se aflojaría el día que estorbe, que es justo
+   * cuando hace falta. Esto afirma que el `@font-face` existe, apunta a un
+   * archivo del repo, y no dispara nada.
+   */
+  it('🔴 CASO LEGÍTIMO · el `@font-face` propio existe y NO es egress', () => {
+    const hojas = import.meta.glob('/src/styles/global.css', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>;
+    const css = Object.values(hojas)[0] ?? '';
+    expect(css.length, 'no se pudo leer `global.css`').toBeGreaterThan(1000);
+
+    const caras = [...css.matchAll(/@font-face\s*\{[^}]*\}/g)].map((m) => m[0]);
+    expect(caras.length, 'no hay ningún @font-face propio declarado').toBe(2);
+
+    for (const cara of caras) {
+      // Apunta al repo, no a un host.
+      expect(cara, `un @font-face sin ruta propia: ${cara}`).toMatch(
+        /url\(\s*'\.\.\/assets\/fonts\/[A-Za-z-]+\.ttf'\s*\)/,
+      );
+      // Y ninguno de los hosts prohibidos aparece en él.
+      for (const host of HOSTS_DE_FUENTES) expect(cara).not.toContain(host);
+      // `swap`: el texto se lee desde el primer frame.
+      expect(cara, `un @font-face sin swap: ${cara}`).toMatch(/font-display\s*:\s*swap/);
+    }
   });
 
   it('G-24 · ningún PaymentMethod de prueba de Stripe existe en el código fuente', () => {

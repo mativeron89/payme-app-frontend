@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -49,9 +50,57 @@ const DESTINOS_AUTORIZADOS = [
 interface Artefacto {
   readonly archivos: readonly string[];
   readonly html: string;
+  /**
+   * Todo el TEXTO emitido, concatenado, para los barridos de red.
+   *
+   * 🔴 FASE 4 · dice TEXTO y no "todo" a propósito. Desde que la landing sirve
+   * su propia tipografía hay un binario de 176 KB en el artefacto, y leerlo
+   * como utf8 para buscarle URLs adentro es un instrumento equivocado dos
+   * veces: no encuentra las que SÍ tiene —la tabla `name` guarda el aviso de
+   * copyright en UTF-16, o sea con un NUL entre letra y letra, que ningún
+   * regex de `https?://` va a matchear— y en cambio puede inventar un
+   * `//algo.com` con bytes que cayeron así por azar.
+   *
+   * Y sobre todo: **una URL adentro de un TTF no es una referencia.** El
+   * navegador no la pide. Es el aviso de la OFL, que además NO SE PUEDE sacar
+   * sin violar la licencia. Una guarda que la marcara estaría pidiendo algo
+   * imposible, y se terminaría aflojando.
+   *
+   * Los binarios se verifican con el instrumento que corresponde: por hash,
+   * abajo, contra una lista explícita.
+   */
   readonly todo: string;
   /** Contenido por ruta relativa, para poder mirar el CSS por separado. */
   readonly porArchivo: Readonly<Record<string, string>>;
+  /** Ruta relativa → SHA-256, sólo de los binarios emitidos. */
+  readonly binarios: Readonly<Record<string, string>>;
+}
+
+/**
+ * El ÚNICO binario que este artefacto tiene derecho a emitir: la tipografía
+ * propia, con el hash que Vite le agrega al nombre.
+ *
+ * Cualquier archivo que NO matchee esto se lee como texto y entra al barrido
+ * de red — así, un binario nuevo dispara las dos guardas a la vez: falla la
+ * lista de abajo (no está autorizado) y además lo barre el escáner de hosts.
+ */
+const BINARIO_AUTORIZADO = /^PlusJakartaSans-variable-[A-Za-z0-9_-]+\.ttf$/;
+
+const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
+
+/**
+ * El CSS emitido, concatenado. Vive a nivel de módulo porque lo usan dos
+ * propiedades distintas —la de recursos y la de tipografía— y tener dos
+ * lectores del mismo artefacto es como se termina midiendo cosas distintas
+ * sin darse cuenta.
+ */
+function cssDelBuild(): string {
+  const css = build.archivos
+    .filter((a) => a.endsWith('.css'))
+    .map((a) => build.porArchivo[a] ?? '')
+    .join('\n');
+  expect(css.length, 'no se encontró CSS emitido: el test no probaría nada').toBeGreaterThan(100);
+  return css;
 }
 
 let build: Artefacto;
@@ -92,11 +141,18 @@ beforeAll(() => {
     }
   })(salida);
 
-  const html = archivos.filter((a) => a.endsWith('.html')).map((a) => readFileSync(a, 'utf8')).join('\n');
-  const todo = archivos.map((a) => `${relative(salida, a)}\n${readFileSync(a, 'utf8')}`).join('\n');
+  const binarios: Record<string, string> = {};
+  const texto: string[] = [];
+  for (const a of archivos) {
+    if (BINARIO_AUTORIZADO.test(basename(a))) binarios[relative(salida, a)] = sha256(readFileSync(a));
+    else texto.push(a);
+  }
+
+  const html = texto.filter((a) => a.endsWith('.html')).map((a) => readFileSync(a, 'utf8')).join('\n');
+  const todo = texto.map((a) => `${relative(salida, a)}\n${readFileSync(a, 'utf8')}`).join('\n');
   const porArchivo: Record<string, string> = {};
-  for (const a of archivos) porArchivo[relative(salida, a)] = readFileSync(a, 'utf8');
-  build = { archivos: archivos.map((a) => relative(salida, a)), html, todo, porArchivo };
+  for (const a of texto) porArchivo[relative(salida, a)] = readFileSync(a, 'utf8');
+  build = { archivos: archivos.map((a) => relative(salida, a)), html, todo, porArchivo, binarios };
 }, 60_000);
 
 describe('el artefacto de la landing existe y es lo que dice ser', () => {
@@ -259,25 +315,27 @@ describe('PROPIEDAD 2 · cero recursos cross-origin o de terceros', () => {
     return [...css.matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/g)].map((m) => m[2]!.trim());
   }
 
-  function cssEmitido(): string {
-    const css = build.archivos
-      .filter((a) => a.endsWith('.css'))
-      .map((a) => build.porArchivo[a] ?? '')
-      .join('\n');
-    expect(css.length, 'no se encontró CSS emitido: el test no probaría nada').toBeGreaterThan(100);
-    return css;
-  }
-
   it('🔴 MUTANTE · todo `url(...)` del CSS es RELATIVO al propio artefacto', () => {
-    const ajenos = urlsDelCss(cssEmitido()).filter((u) => !esRelativo(u));
+    const ajenos = urlsDelCss(cssDelBuild()).filter((u) => !esRelativo(u));
     expect(ajenos, `recursos del CSS fuera del origen: ${ajenos.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 CASO LEGÍTIMO · la tipografía propia SÍ pasa la guarda', () => {
+    // La contracara del mutante, y la que no se puede deducir de él: cinco
+    // mutantes en rojo son compatibles con una guarda que rechaza TODO. Esta
+    // afirma que el `url(...)` que el artefacto emite de verdad —el `.ttf`
+    // propio— está y es aceptado. Si mañana alguien endurece `esRelativo`
+    // hasta prohibir la forma, se entera acá y no en producción.
+    const propias = urlsDelCss(cssDelBuild()).filter((u) => u.endsWith('.ttf'));
+    expect(propias, 'el CSS no referencia ninguna tipografía propia').not.toEqual([]);
+    for (const u of propias) expect(esRelativo(u), `${u} no se aceptó como propia`).toBe(true);
   });
 
   it('🔴 MUTANTE · ningún `data:` — no está autorizado, ni siquiera para fuentes', () => {
     // Se nombra aparte de `esRelativo` para que el mensaje de falla diga QUÉ
     // pasó: un `data:` embebido es una decisión de arquitectura, no un detalle
     // de empaquetado, y nadie la ratificó.
-    expect(cssEmitido().toLowerCase(), 'hay un data: URI en el CSS').not.toContain('data:');
+    expect(cssDelBuild().toLowerCase(), 'hay un data: URI en el CSS').not.toContain('data:');
     expect(build.html.toLowerCase()).not.toContain('data:');
   });
 
@@ -285,7 +343,7 @@ describe('PROPIEDAD 2 · cero recursos cross-origin o de terceros', () => {
     // Más estricto que lo que pide la orden —que sólo prohíbe el externo— y a
     // propósito: la landing tiene UNA hoja por construcción, así que cualquier
     // `@import` es una segunda hoja que nadie decidió agregar.
-    expect(cssEmitido()).not.toMatch(/@import/i);
+    expect(cssDelBuild()).not.toMatch(/@import/i);
   });
 
   it('🔴 MUTANTE · ni protocol-relative ni ningún host en el artefacto entero', () => {
@@ -350,6 +408,79 @@ describe('PROPIEDAD 3 · cero ejecución, en cualquiera de sus formas', () => {
     // `landing/README.md`, que no se emite.
     const comentarios = [...build.html.matchAll(/<!--[\s\S]*?-->/g)].map((m) => m[0]);
     expect(comentarios, `comentarios en el HTML público: ${comentarios.join(' · ')}`).toEqual([]);
+  });
+});
+
+/**
+ * 🔴 PROPIEDAD 4 · LA TIPOGRAFÍA ES PROPIA, Y ES LA MISMA.
+ *
+ * `D-FUENTES-1`, superficie 2. Acá se verifican tres cosas que la PROPIEDAD 2
+ * no puede: que el binario emitido sea EXACTAMENTE el del repo, que la copia
+ * de la landing no haya derivado de la de la webapp, y que el CSS realmente lo
+ * use — un artefacto que arrastra 176 KB que nadie referencia es peor que uno
+ * sin tipografía propia.
+ *
+ * La duplicación con `src/assets/fonts/` es deliberada (`D-WEB-1-BIS`: otro
+ * ORIGEN), y por eso necesita gate: dos copias sin comparador es como nace la
+ * deriva. Mismo patrón que los tokens de color de acá abajo y que el
+ * `contract-mirror`.
+ */
+describe('PROPIEDAD 4 · la tipografía es propia, y es la misma de siempre', () => {
+  const rutaLanding = join(RAIZ, 'landing', 'fonts', 'PlusJakartaSans-variable.ttf');
+  const rutaWebapp = join(RAIZ, 'src', 'assets', 'fonts', 'PlusJakartaSans-variable.ttf');
+
+  /**
+   * El hash del upstream, escrito a mano. Comparar las dos copias entre sí no
+   * alcanza: si alguien reemplaza LAS DOS por otro archivo, seguirían
+   * coincidiendo. Este número las ancla al binario que se descargó y que el
+   * README publica.
+   */
+  const SHA_UPSTREAM = '89b3fb38aa0d275d7a731d0d817a4f1622b316b4d7fbdedcf02ee9099ff68bc8';
+
+  it('🔴 el artefacto emite UN solo binario, y es la tipografía', () => {
+    const emitidos = Object.keys(build.binarios);
+    // Si el detector dejara de matchear, `binarios` quedaría vacío y las
+    // afirmaciones de abajo pasarían en vacío. Por eso se exige el 1 primero.
+    expect(emitidos, `binarios emitidos: ${emitidos.join(' · ') || 'ninguno'}`).toHaveLength(1);
+  });
+
+  it('🔴 el binario emitido es byte-idéntico al del repo, y al upstream', () => {
+    const [emitido] = Object.values(build.binarios);
+    expect(emitido).toBe(SHA_UPSTREAM);
+    expect(sha256(readFileSync(rutaLanding)), 'la copia de la landing').toBe(SHA_UPSTREAM);
+  });
+
+  it('🔴 MUTANTE · las dos copias del repo no derivaron', () => {
+    // La de la landing y la de la webapp son el MISMO archivo duplicado a
+    // propósito. Si alguien actualiza una sola, esto se pone rojo con los dos
+    // hashes en el mensaje.
+    const landing = sha256(readFileSync(rutaLanding));
+    const webapp = sha256(readFileSync(rutaWebapp));
+    expect(landing, `landing ${landing} ≠ webapp ${webapp}`).toBe(webapp);
+  });
+
+  it('🔴 el CSS REFERENCIA el binario emitido — no es peso muerto', () => {
+    const referencias = [...cssDelBuild().matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)]
+      .map((m) => basename(m[1]!.trim()));
+    const emitido = basename(Object.keys(build.binarios)[0] ?? '');
+    expect(referencias, `el CSS pide ${referencias.join(', ')} y el build emitió ${emitido}`)
+      .toContain(emitido);
+  });
+
+  it('🔴 `font-display: swap` — nadie se queda mirando texto invisible', () => {
+    const css = cssDelBuild();
+    const caras = [...css.matchAll(/@font-face\s*\{[^}]*\}/g)].map((m) => m[0]);
+    expect(caras.length, 'no hay ningún @font-face: el test no probaría nada').toBeGreaterThan(0);
+    for (const cara of caras) {
+      expect(cara, `un @font-face sin swap: ${cara}`).toMatch(/font-display\s*:\s*swap/);
+    }
+  });
+
+  it('🔴 la cadena conserva su fallback de sistema', () => {
+    // Es lo que se ve durante el `swap` y lo único que queda si el binario
+    // falla. Un `--font-display: 'Plus Jakarta Sans'` a secas dejaría la
+    // página sin plan B.
+    expect(cssDelBuild()).toMatch(/--font-display:[^;]*sans-serif/);
   });
 });
 
