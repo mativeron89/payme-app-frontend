@@ -548,6 +548,22 @@ describe('PROPIEDAD 4 · la tipografía es propia, y es la misma de siempre', ()
     }
   });
 
+  it('🔴 la captura del panel dice que sus datos son de ejemplo', () => {
+    // Sin esta línea, $2.560 de propinas y dos personas con su rendimiento se
+    // leen como el desempeño real de un restaurante real. Es el seed.
+    expect(build.html, 'la captura del panel no avisa que es una demo')
+      .toMatch(/panel-propinas\.png[\s\S]{0,400}Datos de ejemplo/);
+  });
+
+  it('🔴 y la de la app NO lleva pie — lleva su leyenda dentro del producto', () => {
+    // Decisión declarada, no omisión: quien toque «Comensal» ve la leyenda del
+    // modo demo en dos segundos. El panel no tiene esa salida: su link no
+    // existe todavía. Si algún día el panel se publica, esto se revisa.
+    const pies = [...build.html.matchAll(/<figcaption[^>]*>([^<]*)</g)].map((m) => m[1]!.trim());
+    expect(pies, 'apareció un pie de más, o el del panel se duplicó')
+      .toEqual(['Datos de ejemplo — panel en modo demo']);
+  });
+
   it('🔴 cada imagen tiene `alt` de verdad, no vacío', () => {
     const imgs = tags(build.html).filter((t) => t.nombre === 'img');
     expect(imgs.length, 'no se emitió ninguna imagen').toBe(2);
@@ -756,6 +772,11 @@ describe('el contenido es el literal autorizado, y nada más', () => {
     expect(textos).toEqual([
       'PayMe',
       'Divide la cuenta del restaurante y paga tu parte desde tu teléfono.',
+      // 🔴 Decisión de Mati, 2026-08-09. La captura del panel muestra cifras y
+      // dos personas con su rendimiento; sin esta línea se leen como el
+      // desempeño real de un restaurante real. Va en la PÁGINA, no sobre la
+      // imagen: la captura no se vuelve a ensuciar.
+      'Datos de ejemplo — panel en modo demo',
       'Comensal',
       'Restaurante',
       'Muy pronto',

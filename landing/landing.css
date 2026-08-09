@@ -224,6 +224,38 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   🔴 «Datos de ejemplo» · decisión de Mati, 2026-08-09.
+
+   La captura del panel muestra $2.560 de propinas, 8.21 % sobre ventas y dos
+   personas con su rendimiento individual. **Sin una marca, eso se lee como el
+   desempeño real de un restaurante real.** No lo es: es el seed.
+
+   ⚠️ Y la ironía que nadie vio a tiempo: la leyenda «Demo» se sacó de las
+   capturas porque Mati las quería limpias — y al sacarla, a la del panel se le
+   fue lo único que decía que no era real. **La instrucción era correcta; el
+   efecto lateral no lo vio nadie.**
+
+   Se compone EN LA PÁGINA, no sobre la imagen: la captura no se vuelve a
+   ensuciar. Discreto pero legible — es una aclaración, no una advertencia.
+
+   La de la app NO lleva pie: lleva su propia leyenda dentro del producto, y
+   quien haga clic la ve en dos segundos. El panel no tiene esa salida porque
+   su link todavía no existe.
+   ══════════════════════════════════════════════════════════════════════════ */
+.landing-figura {
+  margin: 0;
+  width: 100%;
+}
+
+.landing-pie {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0.6;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    🔴 EL ACCESO QUE TODAVÍA NO TIENE ADÓNDE IR.
 
    `panel.paymemx.com` no existe: no hay DNS ni hosting, y el repo del
