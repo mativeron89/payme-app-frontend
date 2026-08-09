@@ -1,5 +1,64 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.60.0 — el egress de tipografías que no se veía leyendo el HTML (2026-08-08)
+
+🔴 **`D-FUENTES-1` NO queda cerrada, y se dice acá y no sólo en un reporte.**
+De las tres superficies, **una se cierra, dos siguen abiertas**, y el motivo de
+cada una está abajo. MINOR y no patch: cambia lo que la app carga en runtime.
+
+**El barrido corrigió el alcance de la orden.** Se hablaba de tres puntos de
+egress; son **cuatro líneas en dos hosts distintos**: los dos `preconnect`
+—`fonts.googleapis.com` sirve el CSS, `fonts.gstatic.com` sirve los `.woff2`—
+son egress por sí mismos, abren TLS antes de que exista una request. Quien
+saque sólo el `<link rel=stylesheet>` deja dos conexiones vivas.
+
+**Superficie 3 · Stripe Elements — el egress se CIERRA, con su costo declarado.**
+`CardField.tsx` le pasaba a Elements un `cssSrc` de Google, y era el que **no se
+ve leyendo el `index.html`**: vivía en TypeScript, dentro de la config de un
+SDK, y disparaba **al montar el campo**, sin que la persona tocara nada.
+Retirado. **Consecuencia acotada y medida: el texto que se tipea en el campo
+—número, vencimiento, CVC y placeholder— pasa a verse con el sans del sistema.
+El resto de la pantalla no cambia**, porque esa tipografía la sirve nuestra
+página.
+
+**No se reemplaza todavía y el bloqueo es de infraestructura, no de API.** El
+contrato de Stripe sí lo soporta (`CustomFontSource = {family, src, weight}`,
+verificado en los tipos instalados 9.10.0), pero exige una **URL absoluta a un
+host propio** —el iframe corre en `js.stripe.com` y `app.paymemx.com` no tiene
+DNS ni TLS— **y CORS** en ese host para `js.stripe.com`, que es configuración
+**no ratificada**. Queda como requisito con nombre en el Carril 7. La tercera
+vía —embeber la fuente como `data:` URI— se **midió y se descartó**: ~30–55 KB
+en base64 por peso para un campo de formulario, decisión de arquitectura que
+nadie ratificó, y sin verificar que la CSP de Stripe la acepte.
+
+**Superficies 1 y 2 — webapp y landing — siguen ABIERTAS**: necesitan los
+`.woff2` propios, y bajarlos requiere una autorización que al cerrar esta
+versión no estaba dada. Sacar los `<link>` sin tener las fuentes degradaría la
+tipografía de toda la app, que es peor que el egress.
+
+**Los pesos, medidos en el navegador y no en el CSS.** No se puede resolver
+estáticamente —75 reglas usan `--font-body`, otras tantas `--font-display`, y
+el resto hereda—, así que se recorrieron **12 pantallas** enumerando el
+`(familia, peso)` computado: **Plus Jakarta Sans 400/500/600/700/800** y
+**DM Sans 400/500/600/700**. Nueve archivos. Coinciden en número con los nueve
+que se piden hoy **y no son los mismos nueve**: entra `PJS 500` —que hoy el
+navegador **sintetiza**, porque se usa y no se pide— y sale `DM Sans 300`, que
+se pide y no se usa en ninguna pantalla. El `font-weight: 900` del CSS **no es
+de ninguna de las dos familias**: es el chip de marca de tarjeta, que declara
+Arial a propósito para imitar el logotipo.
+
+**La guarda de la landing distingue en vez de prohibir.** Rechazaba `url(...)`
+entero, lo cual habría bloqueado las tipografías propias el día que lleguen.
+Ahora **lo que se prohíbe es el ORIGEN, no la forma**: sólo relativo al propio
+artefacto. Siguen rojos el esquema externo, el `//host`, **los subdominios de
+PayMe como origen de recurso** —son destinos de navegación, no proveedores—,
+el `@import` y el `data:`. Cinco mutantes **y el caso legítimo**, que es el que
+verifica que la guarda **distingue** y no que niega todo.
+
+Y una guarda nueva en `releaseGates`: ningún host de tipografías de terceros en
+`src/`. Su alcance se declara — barre `src/`, no el HTML, que todavía los tiene
+a propósito.
+
 ## 0.59.1 — las guardas parseaban un solo formato, y 24 archivos no los miraba nadie (2026-08-08)
 
 Bugfix del cierre de 1B, tras una reauditoría de Codex. PATCH y no minor: no
