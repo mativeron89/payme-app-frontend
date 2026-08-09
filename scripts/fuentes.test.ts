@@ -165,6 +165,128 @@ describe('la procedencia de las tipografías es verificable, no declarativa', ()
   });
 });
 
+/**
+ * 🔴 PROCEDENCIA INMUTABLE · lo que el README dice, leído DEL BINARIO.
+ *
+ * El SHA-256 ya estaba verificado, y con eso alcanza para saber que el archivo
+ * no cambió. **No alcanza para saber que el README lo describe bien.** Un hash
+ * correcto convive perfectamente con una tabla que dice "wght 200…800" cuando
+ * el eje real es otro, o con una versión mal transcrita — y esos son los datos
+ * que alguien va a usar para decidir si le sirve la fuente.
+ *
+ * Acá se parsea el TTF y se compara contra el documento: familia, versión,
+ * ejes y tamaño. La documentación deja de describir y pasa a ser verificada.
+ */
+describe('el README describe el binario que hay, no el que había', () => {
+  const u16 = (b: Buffer, o: number) => b.readUInt16BE(o);
+  const u32 = (b: Buffer, o: number) => b.readUInt32BE(o);
+
+  /** Tabla de tablas del sfnt: tag → offset. */
+  function tablas(b: Buffer): Record<string, number> {
+    const n = u16(b, 4);
+    const t: Record<string, number> = {};
+    for (let i = 0; i < n; i++) {
+      const o = 12 + 16 * i;
+      t[b.subarray(o, o + 4).toString('latin1')] = u32(b, o + 8);
+    }
+    return t;
+  }
+
+  /** Un registro de la tabla `name` por su id (UTF-16BE en plataforma 3). */
+  function nombre(b: Buffer, id: number): string | null {
+    const off = tablas(b).name;
+    if (off === undefined) return null;
+    const cuenta = u16(b, off + 2);
+    const almacen = off + u16(b, off + 4);
+    for (let i = 0; i < cuenta; i++) {
+      const r = off + 6 + 12 * i;
+      if (u16(b, r + 6) !== id) continue;
+      const len = u16(b, r + 8);
+      const so = u16(b, r + 10);
+      const crudo = Buffer.from(b.subarray(almacen + so, almacen + so + len));
+      // Plataforma 3 (Windows) guarda UTF-16 BIG endian y Node sólo decodifica
+      // little endian, así que hay que dar vuelta los pares de bytes.
+      // Plataforma 1 (Macintosh) es de un byte y se lee directo.
+      if (u16(b, r) !== 3) return crudo.toString('latin1');
+      return crudo.length % 2 === 0 ? crudo.swap16().toString('utf16le') : crudo.toString('latin1');
+    }
+    return null;
+  }
+
+  /** Los ejes de una fuente variable, leídos de `fvar`. */
+  function ejes(b: Buffer): Array<{ tag: string; min: number; max: number }> {
+    const off = tablas(b).fvar;
+    if (off === undefined) return [];
+    const ao = off + u16(b, off + 4);
+    const cuenta = u16(b, off + 8);
+    const tam = u16(b, off + 10);
+    const out: Array<{ tag: string; min: number; max: number }> = [];
+    for (let i = 0; i < cuenta; i++) {
+      const o = ao + tam * i;
+      out.push({
+        tag: b.subarray(o, o + 4).toString('latin1'),
+        min: b.readInt32BE(o + 4) / 65536,
+        max: b.readInt32BE(o + 12) / 65536,
+      });
+    }
+    return out;
+  }
+
+  const ESPERADO = [
+    {
+      archivo: 'PlusJakartaSans-variable.ttf',
+      familia: 'Plus Jakarta Sans',
+      version: '2.071',
+      bytes: 176288,
+      ejes: [{ tag: 'wght', min: 200, max: 800 }],
+    },
+    {
+      archivo: 'DMSans-variable.ttf',
+      familia: 'DM Sans 9pt',
+      version: '4.004',
+      bytes: 240164,
+      ejes: [{ tag: 'opsz', min: 9, max: 40 }, { tag: 'wght', min: 100, max: 1000 }],
+    },
+  ] as const;
+
+  it('🔴 el parser lee de verdad (si no, todo lo de abajo pasaría en vacío)', () => {
+    const b = readFileSync(join(RAIZ, 'src/assets/fonts/PlusJakartaSans-variable.ttf'));
+    expect(Object.keys(tablas(b)).length, 'no se leyó la tabla de tablas').toBeGreaterThan(10);
+    expect(tablas(b).fvar, 'no se encontró `fvar`: ¿dejó de ser variable?').toBeDefined();
+  });
+
+  for (const e of ESPERADO) {
+    it(`🔴 ${e.archivo}: familia, versión, ejes y tamaño salen del binario`, () => {
+      const ruta = join(RAIZ, 'src/assets/fonts', e.archivo);
+      const b = readFileSync(ruta);
+
+      expect(b.length, 'el tamaño cambió').toBe(e.bytes);
+      expect(nombre(b, 1), 'la familia declarada adentro cambió').toBe(e.familia);
+      // nameID 5 es "Version 2.071;gftools[…]": alcanza con que contenga el número.
+      expect(nombre(b, 5) ?? '', `la versión no es ${e.version}`).toContain(e.version);
+
+      const reales = ejes(b).map((x) => ({ tag: x.tag, min: x.min, max: x.max }));
+      expect(reales, 'los ejes reales no son los documentados').toEqual(
+        e.ejes.map((x) => ({ tag: x.tag, min: x.min, max: x.max })),
+      );
+    });
+  }
+
+  it('🔴 y el README publica exactamente esos ejes', () => {
+    // El documento y el binario tienen que decir lo mismo. Si alguien
+    // actualiza la fuente y no el README, o al revés, se pone rojo.
+    const md = readFileSync(join(RAIZ, 'src/assets/fonts/README.md'), 'utf8');
+    expect(md).toContain('`wght 200 … 800`');
+    expect(md).toContain('`opsz 9 … 40`');
+    expect(md).toContain('`wght 100 … 1000`');
+    expect(md).toContain('`2.071`');
+    expect(md).toContain('`4.004`');
+    for (const e of ESPERADO) expect(md, `el README no publica ${e.bytes}`).toContain(
+      e.bytes.toLocaleString('de-DE'),
+    );
+  });
+});
+
 describe('los `@font-face` apuntan a archivos que existen', () => {
   /**
    * El modo de falla que esto ataca: un `url(...)` con un typo no rompe nada
