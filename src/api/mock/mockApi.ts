@@ -254,7 +254,30 @@ export async function mockLogin(email: string, _password: string): Promise<Store
   const user = {
     ...MOCK_USER,
     email: email || MOCK_USER.email,
-    ...(derived && { first_name: derived, last_name: '' }),
+    /**
+     * 🔴 El `payme_id` SIGUE AL NOMBRE, y esto es un arreglo.
+     *
+     * Antes se derivaba `first_name` del email y se heredaba el `payme_id` del
+     * usuario sembrado. Resultado: alguien entraba como `juan@ejemplo.mx`, la
+     * app lo saludaba «Juan» y le mostraba **`payme_mx_mati`** en Más y en el
+     * encabezado de Avisos.
+     *
+     * Por qué importa más de lo que parece:
+     *  · el `payme_id` es **la identidad con la que te encuentran tus amigos**.
+     *    Que sea la de otra persona contradice el modelo que la demo enseña;
+     *  · en un link público, cada desconocido veía el nombre propio del dueño
+     *    de la demo como si fuera su identificador;
+     *  · está en el encabezado de Avisos: no hay que buscarlo.
+     *
+     * El comentario de `paymeIdFromName` ya prometía esta conducta —"sale de SU
+     * nombre, no del usuario de ejemplo"— y `mockRegister` la cumplía. El que
+     * no la cumplía era este camino. **Un comentario correcto al lado de un
+     * código que hace otra cosa es peor que no tener comentario.**
+     *
+     * Quien entre con el email del usuario sembrado obtiene `payme_mx_mati`
+     * igual, porque el nombre deriva a lo mismo: no es un caso especial.
+     */
+    ...(derived && { first_name: derived, last_name: '', payme_id: paymeIdFromName(derived) }),
   };
   state.user = user;
   const session = createSession({
