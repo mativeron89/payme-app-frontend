@@ -159,6 +159,42 @@ body {
   transform: translateY(-1px);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   🔴 EL ACCESO QUE TODAVÍA NO TIENE ADÓNDE IR.
+
+   `panel.paymemx.com` no existe: no hay DNS ni hosting, y el repo del
+   dashboard es privado. Un botón que no lleva a ningún lado es PEOR que no
+   tener botón — la persona hace clic, no pasa nada, y lo lee como roto.
+
+   Así que no es un enlace: es un `<p>`. No tiene `href`, no se puede tocar, y
+   **se ve distinto a propósito** para que la diferencia se note antes del
+   clic, no después. Fondo hueco con borde en vez de navy sólido.
+
+   ⚠️ NO es una decisión de diseño nueva: es el estado honesto mientras la
+   compuerta está cerrada. Cuando el panel tenga dónde vivir, vuelve a ser un
+   `<a class="landing-acceso">` igual que el otro y esta regla se borra entera.
+   ══════════════════════════════════════════════════════════════════════════ */
+.landing-acceso-pronto {
+  margin: 0;
+  gap: 8px;
+  background: transparent;
+  color: var(--action);
+  border: 2px solid var(--action);
+  /* Sin `cursor: pointer` y sin transición: no invita a tocarlo. */
+  cursor: default;
+}
+
+.landing-acceso-pronto span {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.72;
+}
+
+.landing-acceso-pronto:hover,
+.landing-acceso-pronto:active {
+  transform: none;
+}
+
 .landing-acceso:active {
   transform: translateY(0) scale(0.99);
 }

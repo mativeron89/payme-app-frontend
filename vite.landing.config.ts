@@ -26,6 +26,25 @@ import { defineConfig } from 'vite';
  */
 export default defineConfig({
   root: 'landing',
+  /**
+   * 🔴 RUTAS RELATIVAS, y esto ELIMINA un modo de falla en vez de esquivarlo.
+   *
+   * Por defecto Vite emite `/assets/…` — absoluto, pensado para la raíz de un
+   * dominio. La landing va a vivir en `paymemx.com` raíz algún día, pero la
+   * PREVIEW vive bajo un prefijo (`…github.io/payme-app-frontend/landing/`), y
+   * ahí un `/assets/…` apunta a la raíz de `github.io`: **la página carga y no
+   * aparece ni un estilo.** Falla en silencio, que es lo peor que puede hacer.
+   *
+   * La salida obvia era pasar `--base=/payme-app-frontend/landing/` en el
+   * workflow. Funciona, y depende de que alguien se acuerde de la bandera cada
+   * vez y de que el prefijo no cambie. **`base: './'` anda en la raíz Y bajo
+   * cualquier prefijo**, así que el día que la landing se mude a su dominio
+   * propio sigue andando sin que nadie toque nada.
+   *
+   * Se verifica en el `dist`, no en la teoría: `landing.test.ts` exige que las
+   * rutas emitidas empiecen con `./`.
+   */
+  base: './',
   // Fuera de `dist/`, que es del artefacto de la webapp. Dos targets, dos
   // carpetas: si compartieran salida, "artefactos separados" sería una
   // afirmación y no un hecho verificable.

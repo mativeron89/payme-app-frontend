@@ -41,11 +41,36 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(AQUI, '..');
 
-/** Lo único que la landing tiene derecho a apuntar hacia afuera. */
+/**
+ * Lo único que la landing tiene derecho a apuntar hacia afuera.
+ *
+ * 🔴 CAMBIÓ el 2026-08-09, y el motivo es el hallazgo más caro de la orden:
+ * hasta hoy eran `https://app.paymemx.com` y `https://panel.paymemx.com`.
+ * **Esos dominios NO EXISTEN** —no hay DNS ni hosting, la compuerta está
+ * cerrada— así que publicar la landing con ellos habría entregado dos botones
+ * que no llevan a ningún lado. Peor que no tener landing.
+ *
+ * El archivo no estaba mal escrito: **estaba escrito para el futuro
+ * ratificado**. `D-WEB-1-BIS` manda esos tres orígenes y algún día van a ser
+ * correctos. El defecto no era el destino, era la FECHA.
+ *
+ * 🔴 SEAM: cuando exista el DNS, esto vuelve a `app.` y `panel.` y la preview
+ * se retira. Que el próximo que lo lea no crea que esto era la arquitectura.
+ */
 const DESTINOS_AUTORIZADOS = [
-  'https://app.paymemx.com',
-  'https://panel.paymemx.com',
+  'https://mativeron89.github.io/payme-app-frontend/',
 ] as const;
+
+/**
+ * 🔴 Dominios RATIFICADOS pero que TODAVÍA NO EXISTEN. Prohibidos como destino
+ * hasta que la compuerta de DNS se abra.
+ *
+ * Ésta es la guarda que faltaba: la anterior verificaba que los destinos
+ * fueran los autorizados, y ellos ERAN los autorizados — por el gobierno, no
+ * por la realidad. **Estar ratificado y estar vivo son dos cosas distintas, y
+ * un enlace sólo sirve si la segunda es cierta.**
+ */
+const DOMINIOS_SIN_DNS = ['app.paymemx.com', 'panel.paymemx.com'] as const;
 
 interface Artefacto {
   readonly archivos: readonly string[];
@@ -272,11 +297,42 @@ function atributos(crudo: string): Array<{ nombre: string; valor: string }> {
 }
 
 describe('PROPIEDAD 1 · exactamente dos anchors de navegación', () => {
-  it('🔴 dos `<a>`, con los href exactos y en orden', () => {
+  it('🔴 los `<a>` son exactamente los destinos autorizados, y en orden', () => {
     const anchors = tags(build.html).filter((t) => t.nombre === 'a');
-    expect(anchors).toHaveLength(2);
+    expect(anchors).toHaveLength(DESTINOS_AUTORIZADOS.length);
     const hrefs = anchors.map((t) => atributos(t.crudo).find((a) => a.nombre === 'href')?.valor);
     expect(hrefs).toEqual([...DESTINOS_AUTORIZADOS]);
+  });
+
+  it('🔴 MUTANTE · ningún enlace apunta a un dominio que TODAVÍA NO EXISTE', () => {
+    // La guarda que faltaba. Publicar un botón hacia un dominio sin DNS es
+    // peor que no publicarlo: la persona toca y no pasa nada.
+    const ofensores: string[] = [];
+    for (const d of DOMINIOS_SIN_DNS) {
+      if (build.todo.includes(d)) ofensores.push(d);
+    }
+    expect(ofensores, `destinos sin DNS en el artefacto: ${ofensores.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 el acceso al panel existe pero NO es un enlace, y lo dice', () => {
+    // Honesto, no roto: sin `href`, con su leyenda, y visualmente distinto.
+    // Si alguien lo convierte en `<a>` apuntando a cualquier lado, cae acá.
+    expect(build.html, 'falta el acceso al panel').toContain('landing-acceso-pronto');
+    expect(build.html, 'el acceso al panel no avisa que todavía no está')
+      .toMatch(/Restaurante[\s\S]{0,60}Muy pronto/);
+    const anchors = tags(build.html).filter((t) => t.nombre === 'a');
+    expect(anchors.some((a) => /Restaurante/.test(a.crudo)), 'el panel volvió a ser un enlace')
+      .toBe(false);
+  });
+
+  it('🔴 CASO LEGÍTIMO · el acceso del comensal SÍ es un enlace vivo', () => {
+    // La contracara: prohibir los dos habría dejado la página sin ninguna
+    // salida, que es el otro modo de arruinarla.
+    const anchors = tags(build.html).filter((t) => t.nombre === 'a');
+    expect(anchors.length, 'no quedó ningún acceso navegable').toBeGreaterThan(0);
+    const href = atributos(anchors[0]!.crudo).find((a) => a.nombre === 'href')?.valor ?? '';
+    expect(href).toBe(DESTINOS_AUTORIZADOS[0]);
+    expect(href, 'el destino del comensal no es absoluto').toMatch(/^https:\/\//);
   });
 
   it('🔴 las tres formas de atributo se parsean, no sólo la comillada', () => {
@@ -289,6 +345,16 @@ describe('PROPIEDAD 1 · exactamente dos anchors de navegación', () => {
       { nombre: 'c', valor: 'tres' },
       { nombre: 'd', valor: 'cuatro' },
     ]);
+  });
+
+  it('🔴 los recursos del HTML salen RELATIVOS (`base: \'./\'`)', () => {
+    // Sin esto la landing carga bajo un prefijo y NO aparece ni un estilo:
+    // `/assets/…` apunta a la raíz del dominio, no a la del artefacto. Falla
+    // en silencio, que es lo peor que puede hacer.
+    const recursos = [...build.html.matchAll(/(?:href|src)="([^"]*)"/g)].map((m) => m[1]!)
+      .filter((v) => v.includes('assets/') || v.endsWith('.css') || v.endsWith('.js'));
+    expect(recursos.length, 'no se encontró ningún recurso en el HTML').toBeGreaterThan(0);
+    for (const r of recursos) expect(r, `${r} no es relativo`).toMatch(/^\.\//);
   });
 
   it('🔴 URLs ABSOLUTAS: es lo que hace el seam de `payme-web`', () => {
@@ -647,7 +713,10 @@ describe('el contenido es el literal autorizado, y nada más', () => {
       .replace(/<head[\s\S]*?<\/head>/i, '')
       .replace(/<[^>]+>/g, '\n');
     const textos = cuerpo.split('\n').map((t) => t.trim()).filter(Boolean);
-    expect(textos).toEqual(['PayMe', 'Comensal', 'Restaurante']);
+    // 🔴 «Muy pronto» se suma el 2026-08-09 y NO es copy nuevo por gusto: es
+    // lo que hace que el acceso sin destino se lea como deliberado y no como
+    // roto. Sale el día que el panel tenga adónde ir.
+    expect(textos).toEqual(['PayMe', 'Comensal', 'Restaurante', 'Muy pronto']);
   });
 
   it('no promete nada de lo que §3 prohíbe prometer', () => {
