@@ -90,6 +90,16 @@ const BINARIOS_AUTORIZADOS = [
  *
  * La diferencia con "hacer una excepción" es que **la clase se verifica igual,
  * con otro instrumento**: identidad byte a byte en vez de barrido de texto.
+ *
+ * 🔴 Dicho de una vez: **un `.txt` y un `.ttf` NO HACEN REQUESTS. Verificarlos
+ * por identidad es el instrumento correcto; buscarles URLs adentro es el
+ * equivocado.** La salida cómoda era una excepción —"la OFL no cuenta"—, que
+ * habría funcionado hoy y se habría podido invocar mañana para cualquier
+ * archivo incómodo. Una clase se puede auditar; una excepción se hereda.
+ *
+ * Y **lo que no cae en ninguna categoría es ROJO**: eso es lo que la vuelve una
+ * regla y no una lista. Un archivo nuevo de tipo inesperado no pasa por
+ * default — tiene que clasificarlo alguien, a mano, y eso es una decisión.
  */
 const esBinario = (nombre: string) => nombre.endsWith('.ttf');
 const esInerte = (nombre: string) => nombre.endsWith('.txt');
