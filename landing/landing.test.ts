@@ -515,6 +515,90 @@ describe('PROPIEDAD 4 · la tipografía es propia, y es la misma de siempre', ()
  * emite**, no está escrita a mano: si algún día la landing suma una familia,
  * su licencia se vuelve obligatoria sola.
  */
+/**
+ * 🔴 PROPIEDAD 6 · LAS EVASIONES SE PROHÍBEN, NO SE PARSEAN.
+ *
+ * Codex enumeró seis formas de esquivar el parser de atributos: un `>` dentro
+ * de un valor citado, entities en las URLs, `srcset` con varias entradas,
+ * `style="…url(…)"` inline y escapes CSS.
+ *
+ * **Escribir un parser HTML correcto para cubrirlas es la respuesta
+ * equivocada**, y no por pereza: sería código nuevo, sin dependencia que lo
+ * respalde, custodiando una página de DIECINUEVE LÍNEAS. Un parser propio con
+ * un bug es indistinguible de no tener guarda — y ya pasó acá, cuando el
+ * parser veía una sola de las tres formas de comilla.
+ *
+ * La landing no necesita NINGUNA de esas formas. Así que se rechazan por
+ * no-necesarias, que es una regla que no se puede evadir porque no depende de
+ * interpretar bien lo que se escribió.
+ *
+ * ## La allowlist de atributos es la que mata cinco de un tiro
+ *
+ * `srcset`, `style`, cualquier `on*`, `formaction`, `data`, `ping`: no están
+ * en la lista, así que son rojo sin necesidad de nombrarlos. Y lo que aparezca
+ * mañana con un nombre que nadie anticipó, también.
+ */
+describe('PROPIEDAD 6 · fail-closed: sólo lo que la landing necesita', () => {
+  /** Todo lo que las 19 líneas usan de verdad. Nada más entra. */
+  const ATRIBUTOS_PERMITIDOS = [
+    'lang', 'charset', 'name', 'content', 'rel', 'href', 'class', 'aria-label',
+  ];
+
+  it('🔴 MUTANTE · ningún atributo fuera de la allowlist (mata srcset, style y on*)', () => {
+    const ajenos: string[] = [];
+    for (const t of tags(build.html)) {
+      for (const a of atributos(t.crudo)) {
+        if (!ATRIBUTOS_PERMITIDOS.includes(a.nombre)) ajenos.push(`<${t.nombre} ${a.nombre}>`);
+      }
+    }
+    expect(ajenos, `atributos no autorizados: ${ajenos.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 CASO LEGÍTIMO · los ocho atributos que la página SÍ usa se aceptan', () => {
+    // Sin esto, una allowlist vacía dejaría el mutante en rojo igual y nadie
+    // notaría que rompió la página entera.
+    const usados = new Set(tags(build.html).flatMap((t) => atributos(t.crudo).map((a) => a.nombre)));
+    expect(usados.size, 'no se leyó ningún atributo: el parser dejó de ver').toBeGreaterThan(4);
+    for (const u of usados) expect(ATRIBUTOS_PERMITIDOS, `${u} debería estar permitido`).toContain(u);
+  });
+
+  it('🔴 MUTANTE · ninguna entity en el HTML', () => {
+    // `&#x68;ttps://…` esquiva cualquier comparación de cadena. La landing no
+    // tiene un solo carácter que necesite escaparse, así que se prohíben todas
+    // —numéricas y con nombre— en vez de intentar decodificarlas bien.
+    const entities = [...build.html.matchAll(/&(#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]{1,31});/g)]
+      .map((m) => m[0]);
+    expect(entities, `entities en el HTML: ${entities.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 MUTANTE · ningún `>` dentro de un valor citado', () => {
+    // Trunca el regex de tags y todo lo que venga después del tag queda sin
+    // mirar. No se resuelve parseando mejor: se prohíbe, porque ningún valor
+    // de esta página lo necesita.
+    const citados = [...build.html.matchAll(/=\s*("([^"]*)"|'([^']*)')/g)]
+      .map((m) => m[2] ?? m[3] ?? '');
+    const conMayor = citados.filter((v) => v.includes('>'));
+    expect(conMayor, `valores con '>' adentro: ${conMayor.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 MUTANTE · ningún escape CSS ni entity en la hoja', () => {
+    // `\75 rl(...)` es `url(...)` para el navegador y no matchea ningún regex
+    // de `url(`. La hoja de la landing no tiene ningún carácter que escapar.
+    const css = cssDelBuild();
+    const escapes = [...css.matchAll(/\\[0-9a-fA-F]{1,6}\s?/g)].map((m) => m[0]);
+    expect(escapes, `escapes CSS: ${escapes.join(' · ')}`).toEqual([]);
+    expect(css, 'hay una barra invertida en el CSS').not.toContain('\\');
+  });
+
+  it('🔴 CASO LEGÍTIMO · el CSS real pasa las cuatro prohibiciones', () => {
+    // La contracara: las reglas de arriba no pueden ser tan anchas que la hoja
+    // que de verdad se emite no las cumpla.
+    const css = cssDelBuild();
+    expect(css, 'la hoja emitida perdió su tipografía propia').toContain('@font-face');
+    expect(css).toContain('.ttf');
+  });
+});
+
 describe('PROPIEDAD 5 · la licencia viaja con la tipografía', () => {
   it('🔴 cada tipografía emitida tiene su licencia COMPLETA en el artefacto', () => {
     const familias = Object.keys(build.binarios).map((a) =>
