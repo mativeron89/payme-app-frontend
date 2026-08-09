@@ -23,6 +23,42 @@
    Acá se COPIAN valores, no se deciden.
    ══════════════════════════════════════════════════════════════════════════ */
 
+/* ══════════════════════════════════════════════════════════════════════════
+   TIPOGRAFÍA PROPIA · `D-FUENTES-1`, superficie 2 de 3
+
+   🔴 La ruta apunta a `./fonts/`, que es de ESTE artefacto. `D-WEB-1-BIS` manda
+   que la landing sea otro ORIGEN: una landing que trae la tipografía del origen
+   de la webapp no está separada, está acoplada, y la separación pasa a ser una
+   afirmación en vez de un hecho.
+
+   El archivo es byte-idéntico al de `src/assets/fonts/`, y `landing.test.ts`
+   compara los dos SHA-256. Mismo patrón que los tokens de color de acá abajo:
+   se COPIA y se pone un gate encima.
+
+   UNA sola familia. La cadena de abajo es `'Plus Jakarta Sans', 'DM Sans',
+   sans-serif`: si PJS carga, DM Sans no se dibuja nunca. Traer sus 240 KB para
+   un fallback que no se va a usar sería engordar el artefacto por simetría con
+   la webapp, no por necesidad.
+
+   COSTO, medido: el artefacto pasa de 2.344 B a ~178 KB. Es un salto real y se
+   declara. Lo paga una sola familia variable que cubre los tres pesos que la
+   landing usa —400 el cuerpo, 700 los accesos, 800 la marca— y se recupera casi
+   entero con compresión en el host (65.729 B con brotli).
+
+   Procedencia completa: `./fonts/README.md`.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('./fonts/PlusJakartaSans-variable.ttf') format('truetype');
+  font-weight: 200 800;
+  font-style: normal;
+  /* El texto se lee desde el primer frame con el sans del sistema. Quien
+     escribe `paymemx.com` a mano no puede quedarse mirando una pantalla en
+     blanco por una tipografía. */
+  font-display: swap;
+}
+
 :root {
   /* §1 · Color. Los dos accesos usan --action / --action-fg (16.36:1). */
   --action: #0f1f3d;
@@ -30,8 +66,9 @@
   --bg: #f4f7fa;
   --text: #0f1f3d;
 
-  /* §2 · Tipografía. Misma cadena que el sistema, con su fallback: la landing
-     no carga fuentes de terceros (el porqué está en `index.html`). */
+  /* §2 · Tipografía. Misma cadena que el sistema, con su fallback intacto: la
+     landing no carga fuentes de TERCEROS — desde `D-FUENTES-1` sirve la suya,
+     con el `@font-face` de acá arriba. */
   --font-display: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
   --fs-h1: 28px;
   --lh-h1: 1.2;
