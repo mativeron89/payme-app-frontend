@@ -70,20 +70,45 @@ Convertir exige un conversor (`fontTools`+`brotli` o `woff2_compress`), no hay
 ninguno en la máquina, y bajarlo es *otra descarga de otro origen*: justamente lo
 que el gate prohíbe. **Así que se sirve el TTF tal como está upstream.**
 
-El costo se midió en vez de estimarse:
+Lo que **sí** está medido:
 
 ```
-                    crudo      gzip     brotli      ← WOFF2 es brotli + una transformación
+                    crudo      gzip     brotli
 PlusJakartaSans   176.288    79.781     65.729
 DMSans            240.164   110.278     92.043
-TOTAL             416.452   190.059    157.772         WOFF2 real ≈ 145.000
+TOTAL             416.452   190.059    157.772
 ```
 
-🔴 **Con compresión en el host la diferencia es ~13 KB (8 %); sin compresión son
-416 KB contra 145 KB. Lo que falta NO es formato: es configuración de hosting, y
-eso es Carril 7.** WOFF2 entra ahí, junto con la compresión, donde se puede
-verificar la cadena entera en vez de optimizar contra un host que todavía no
-existe.
+### 🔴 Y lo que NO está medido, que es justo el número que decidiría
+
+**Nadie tiene el peso de un WOFF2 producido por el encoder de referencia.** Un
+WOFF2 es brotli **más** una transformación de las tablas `glyf`/`loca`, y esa
+transformación es la única parte que no se puede estimar mirando el brotli.
+
+Dos números circularon y **ninguno de los dos es ése**:
+
+| Número | Qué es realmente |
+|---|---|
+| `≈145.000` | **Estimación**, escrita acá en la primera versión de este documento. No se midió nada. |
+| `157.333` | Medición de `payme-dashboard-frontend`, pero de un WOFF2 **fabricado con null transform** — o sea TTF + brotli metido en otro contenedor. Mide el sobrecosto del envase, **no la ganancia de la transformación**. |
+
+Que los dos difieran no es el hallazgo; el hallazgo es que **el número que
+importa no lo produjo nadie**, porque el encoder de referencia no existe en esta
+máquina.
+
+🔴 **Por eso la decisión se difiere, y por este motivo y no por el tamaño:
+optimizar hacia un formato cuya ganancia real está SIN MEDIR, contra un host que
+todavía no existe, es adivinar dos veces.** WOFF2 entra en Carril 7 junto con la
+compresión, donde se puede medir la cadena entera de una vez.
+
+### 🔴 Requisito de hosting que viaja con estos archivos
+
+**El host DEBE comprimir `.ttf` en tránsito** — `br` preferido, `gzip`
+aceptable—, y se verifica con la cabecera `content-encoding` de la respuesta.
+Sin eso son 416 KB en vez de 158 KB.
+
+Está en `ops/INVENTARIO_CARRIL_7_PENDIENTE`, y se repite acá a propósito: **el
+que lo va a necesitar toca este repo, no lee `ops/`.**
 
 **Mientras tanto `font-display: swap` acota el daño:** el texto se lee desde el
 primer frame con el sans del sistema y la tipografía propia entra cuando llega.

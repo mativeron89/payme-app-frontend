@@ -36,7 +36,13 @@
 
    TTF y no WOFF2 — el motivo completo, con las mediciones y el análisis de la
    OFL, está en `../assets/fonts/README.md`. Resumido: el upstream autorizado no
-   publica WOFF2, y convertirlo exigía una descarga que el gate prohíbe.
+   publica WOFF2, convertirlo exigía una descarga que el gate prohíbe, y **la
+   ganancia real de convertir está SIN MEDIR** (nadie produjo un WOFF2 del
+   encoder de referencia). Se decide en Carril 7, junto con la compresión.
+
+   🔴 Y con eso viaja un requisito de hosting: **el host debe comprimir `.ttf`
+   en tránsito** —`br` preferido, `gzip` aceptable—, verificable con la cabecera
+   `content-encoding`. Sin eso son 416 KB en vez de 158 KB.
    ══════════════════════════════════════════════════════════════════════════ */
 
 @font-face {
