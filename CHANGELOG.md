@@ -1,5 +1,30 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.68.0 — la landing se lee en un teléfono (2026-08-09)
+
+MINOR: cambia cómo se ve la landing en móvil, que es donde se abre un link de
+WhatsApp.
+
+§6 de la spec de Diseño, que aclara textual que **esto SÍ cambia respecto del
+boceto**: *«la landing real la abren del celular»*.
+
+### 🔴 El defecto, medido antes y después
+
+```
+antes   layout 1040 px sobre 390 pt de pantalla · escala 0.38×
+        el cuerpo de 18 px se veía a 6.8 pt      ← ilegible sin zoom
+ahora   layout 390 px = pantalla · escala 1.00×
+        el cuerpo de 18 px se ve a 18 pt
+```
+
+Lo causaba `body { min-width: 1040px }` — lo que forzaba el viewport de
+escritorio. **Breakpoint único en 640 px**, con los seis cambios de §6: el nav
+esconde las anclas, los CTA se apilan, «Cómo funciona» pasa de circular a lista
+vertical, los bloques de audiencia y los perks van a una columna.
+
+**Verificado midiendo, no mirando:** iPhone 13, Pixel 7 e iPhone SE, los tres a
+escala 1.00× y sin desborde horizontal. **El escritorio, intacto.**
+
 ## 0.67.0 — la landing es la que Diseño validó con Mati (2026-08-09)
 
 MINOR: la landing cambia entera.
