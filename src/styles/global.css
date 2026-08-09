@@ -1,6 +1,60 @@
 /* Estética de la maqueta preview_segun_backend_v2_7_COMPLETO.html,
    adaptada a app real mobile-first (sin phone-frame: la pantalla ES el frame). */
 
+/* ══════════════════════════════════════════════════════════════════════════
+   TIPOGRAFÍAS PROPIAS · `D-FUENTES-1`, superficie 1 de 3
+
+   Hasta hoy `index.html` traía tres etiquetas a Google —dos `preconnect` y la
+   hoja de `fonts.googleapis.com`—. Cada persona que abría PayMe le contaba a
+   un tercero, antes de ver nada, que había abierto PayMe. Ahora las
+   tipografías salen de este repo.
+
+   ## Un archivo por familia, no nueve
+
+   Son fuentes VARIABLES: un solo binario cubre todo el eje de peso. Por eso
+   `font-weight` declara un RANGO y no un número. Lo que se evita es una lista
+   manual de nueve estáticas que alguien tendría que mantener sincronizada con
+   los ~150 lugares donde este archivo pide un peso; el día que se desincroniza,
+   el navegador sintetiza en silencio y nadie se entera.
+
+   El eje de Plus Jakarta Sans termina en 800. Eso también contesta, por
+   construcción, la pregunta del `900`: era inalcanzable aun pidiéndolo.
+
+   ## `swap`, y qué se ve mientras carga
+
+   `font-display: swap` significa que el texto se lee desde el primer frame con
+   el sans del sistema y cambia de tipografía cuando el binario llega. Se elige
+   a propósito sobre el default (`block`, que deja el texto INVISIBLE hasta
+   ~3 s): en la mesa de un restaurante, con datos móviles, un salto tipográfico
+   es mucho mejor que una pantalla en blanco.
+
+   Por eso `--font-display` y `--font-body` conservan su fallback de sistema:
+   es lo que se ve durante ese intervalo, y lo único que queda si el binario
+   falla.
+
+   ## Formato
+
+   TTF y no WOFF2 — el motivo completo, con las mediciones y el análisis de la
+   OFL, está en `../assets/fonts/README.md`. Resumido: el upstream autorizado no
+   publica WOFF2, y convertirlo exigía una descarga que el gate prohíbe.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('../assets/fonts/PlusJakartaSans-variable.ttf') format('truetype');
+  font-weight: 200 800; /* el eje real del archivo, medido en su tabla `fvar` */
+  font-style: normal; /* upstream tiene cursivas y NO se bajaron: no se usan */
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  src: url('../assets/fonts/DMSans-variable.ttf') format('truetype');
+  font-weight: 100 1000;
+  font-style: normal;
+  font-display: swap;
+}
+
 *,
 *::before,
 *::after {
