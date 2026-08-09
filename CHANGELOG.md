@@ -1,5 +1,70 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.62.0 — el texto sobre el naranja pasa a blanco (2026-08-08)
+
+**Enmienda del sistema de diseño ratificada por Mati**, relayada por el chat de
+Diseño y ya bajada a `diseno/SISTEMA_DISENO.md` §1. Su respuesta, literal:
+*"Quiero los propuestos en la app por favor."* MINOR: cambia lo que se ve.
+
+`--brand-fg`: `#0f1f3d` → `#ffffff`.
+
+### 🔴 Reprueba AA, y es a propósito
+
+Blanco sobre `#FF6B35` da **2.84:1** — por debajo del mínimo AA de 4.5:1 y
+también del 3:1 que pide un ícono de control. **Es el mismo número que el
+sistema de diseño citaba como el problema a resolver.** Mati vio los cuatro usos
+del naranja lado a lado, con el contraste medido al lado de cada uno, y eligió
+éste igual. Si aparece en una auditoría de contraste **es la regla vigente, no
+un hallazgo**.
+
+### La orden decía tres lugares. Son cinco.
+
+La enmienda cambia el **token** —"glifo e íconos sobre `--brand`"—, no tres
+componentes, así que aterriza en todo lo que ponga texto sobre un fondo
+`--brand`:
+
+| | Ratificado |
+|---|---|
+| `.appbar-fab` · glifo del botón circular central | ✅ |
+| `.hdr-badge` · número del badge de avisos | ✅ |
+| `.link-btn-brand` · CTA de primer contacto | ✅ |
+| `.btab-badge` · badge de conteo dentro de una pestaña | ❌ arrastrado |
+| `.link-round` · círculo de salida de 56px | ❌ arrastrado |
+
+🔴 **Los dos últimos no están en la tabla de usos permitidos de `--brand`**, que
+lista TRES fondos naranjas. Cambian de color por arrastre correcto del token,
+pero **lo que nadie ratificó nunca es que tengan fondo naranja**. Es deriva
+**preexistente** —no la introduce esta versión— y queda anotada en el CSS de
+cada uno.
+
+**No se toca el ítem activo de la barra:** usa `--brand-ink` `#C2410C`, sigue en
+5.18:1. Ahí el naranja **es** el color del texto; no hay fondo naranja debajo al
+que ponerle blanco encima.
+
+### La guarda no se afloja: se convierte en registro
+
+Había un test llamado *"blanco sobre `--brand` reprueba: por eso el glifo va en
+navy"*. **Borrarlo habría sido lo cómodo y lo peor:** una guarda desactivada sin
+explicación es indistinguible de un descuido, y la próxima persona no puede
+saber cuál fue.
+
+En su lugar hay un **`EXCEPCIONES_AA`** con el par, el ratio, el mínimo que no
+alcanza, la fecha, quién decidió, la frase textual y el documento fuente. Y tres
+tests encima: el ratio sigue **medido y fijado** en 2.84 —la excepción es al
+mínimo, no a la medición—; 🔴 **corta para los dos lados** (si una excepción
+empieza a PASAR AA, deja de ser excepción y sale del registro); y **la excepción
+no se derramó**: los otros seis pares siguen exigiendo 4.5.
+
+Cinco mutantes en rojo, sonda inocente en verde.
+
+### Predicción fallada, y por qué
+
+Declaré **62 archivos / 834 tests** y son **63 / 838**. **La aritmética estaba
+bien; la base estaba vieja:** anclé en el 832/62 que había reportado antes, sin
+arrastrar la guarda de puertos que yo mismo agregué después (+1 archivo, +4
+tests). 832 + 4 = 836, + 2 de `designTokens` = 838. **Una predicción se re-deriva
+del estado actual, no se copia del último número propio.**
+
 ## 0.61.0 — las tipografías son propias (2026-08-08)
 
 🔴 **`D-FUENTES-1` cierra sus tres superficies, y una cierra DEGRADADA.** PayMe
