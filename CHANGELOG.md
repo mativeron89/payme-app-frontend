@@ -1,5 +1,120 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.62.1 — la licencia viaja, y el egress se prohíbe por defecto (2026-08-09)
+
+PATCH: no cambia lo que la app hace. Cierra ocho hallazgos de la reauditoría de
+Codex, y **el más caro estaba en un test que yo había escrito el día anterior**.
+
+### 🔴 1 · La licencia no viajaba con el artefacto
+
+`dist/`, `dist-mock/` y `dist-landing/` contenían los `.ttf` y **ningún `OFL`**.
+La cláusula 2 de la OFL pide el aviso *y esta licencia* en cada copia
+distribuida. Los tests miraban `src/`, así que todos pasaban y el
+incumplimiento seguía ahí.
+
+**Mi defensa anterior era cierta y aun así insuficiente:** el aviso viaja en la
+tabla `name` del binario (IDs 0/13/14) — verificado —, pero el `nameID 13` es un
+**puntero de una línea**, no la licencia. Un argumento verdadero sirvió para no
+hacer el trabajo, que es peor que un dato equivocado: **un argumento verdadero
+no se vuelve a revisar.**
+
+Las licencias se **mueven** —no se copian— a `public/fonts/` y
+`landing/public/fonts/`: una por artefacto distribuible. Copiarlas habría dejado
+cuatro copias de la misma licencia.
+
+### 🔴 2 · El test que inspeccionaba el artefacto equivocado
+
+`scripts/artefactos.test.ts` construye la webapp para mirar los bytes emitidos.
+**vitest exporta `NODE_ENV=test`, y un `vite build` lanzado desde adentro lo
+hereda:** construía el bundle de DESARROLLO de React y lo llamaba "el artefacto
+distribuible".
+
+```
+NODE_ENV=production   js 362.737 B   github.com ×0
+NODE_ENV=test         js 709.149 B   github.com ×2
+```
+
+**Casi el doble, con avisos y enlaces de debug adentro.** Un test que mide el
+artefacto equivocado no falla: **aprueba**, y por eso es peor que no tenerlo.
+
+### 3 · La lista negra de cuatro proveedores → allowlist
+
+Prohibir `googleapis`, `gstatic`, `typekit` y `bunny` deja pasar **el quinto**, y
+el quinto es el que importa: el que se cuela es siempre el que nadie anticipó.
+Se invierte. Prohibir Google Fonts deja de ser una regla propia y pasa a ser una
+consecuencia de no estar en la lista.
+
+🔴 **Y hacen falta las DOS guardas, medido:** un CDN desconocido en una constante
+todavía sin usar deja el artefacto limpio —el bundler la borra— y pone rojo el
+barrido del fuente. Cubren poblaciones distintas.
+
+### 4 · Las seis evasiones del parser: prohibidas, no parseadas
+
+Codex enumeró seis formas de esquivar el parser de atributos de la landing.
+**Escribir un parser HTML correcto es la respuesta equivocada:** código nuevo,
+sin dependencia que lo respalde, custodiando una página de diecinueve líneas.
+
+Se rechazan por no-necesarias. Una **allowlist de ocho atributos** mata cinco de
+un tiro —incluido el que aparezca mañana con un nombre que nadie anticipó— más
+tres prohibiciones puntuales: entities, `>` dentro de un valor citado, y escapes
+CSS. Un mutante por clase, los seis en rojo.
+
+### 5 · La clase INERTE
+
+La licencia contiene `scripts.sil.org` en su aviso de copyright: texto que la
+OFL **obliga** a incluir. El barrido de hosts lo marcaba, o sea pedía algo
+imposible — y una guarda imposible se afloja el día que estorba. Ya había pasado
+dos veces acá, con el TTF y con `url(...)`.
+
+Cada archivo emitido se clasifica: **BINARIO** y **INERTE** se verifican por
+hash, **PARSEADO** entra al barrido. No es una excepción: es el mismo rigor con
+el instrumento que corresponde. Y es fail-closed — una extensión sin clasificar
+pone el test en rojo.
+
+### 6 · Reserved Font Names, sobre el texto entero
+
+El test leía **la primera línea**. La OFL define el RFN como los nombres
+declarados *"after the copyright statement(s)"*, en plural: puede haber varios
+avisos en cualquier parte del archivo. Ahora recorre todos, y lleva **caso
+positivo** — se fabrica una licencia con el RFN en un aviso posterior y se exige
+detectarlo. Sin eso, un detector que devolviera `false` siempre pasaría el test
+para siempre.
+
+### 7 · Procedencia leída del binario
+
+El SHA-256 acredita que el archivo no cambió; **no acredita que el README lo
+describa bien**. Se parsea el TTF —`name`, `fvar`— y se comparan familia,
+versión, ejes y tamaño contra el documento.
+
+### 8 · El arnés fuera de la raíz, y el censo derivado
+
+`.tsprobe.json` vivía en la raíz con nombre fijo: dos corridas simultáneas se
+pisaban, y **`.gitignore` tapaba el residuo**, así que ni aparecía en
+`git status`. Ahora `node_modules/.cache/payme-tsprobe-XXXX/` con `mkdtemp`.
+
+El censo TS/TSX→proyecto vivía en un mensaje entre sesiones. Ahora se deriva con
+`tsc --listFilesOnly` y se compara contra `git ls-files`: **154 archivos, cero
+huérfanos**. `docs/CENSO_PROYECTOS_TS.md` explica el reparto.
+
+### Cinco correcciones de documentación
+
+🔴 **La peor la había escrito yo el día anterior:** que el `aria-label`
+compensaba el contraste bajo. **No compensa nada.** Sirve a quien usa lector de
+pantalla; no hace nada por quien MIRA y no distingue el glifo, que es la persona
+afectada por 2.84:1. **Escribir un riesgo como si estuviera mitigado es peor que
+el riesgo, porque cierra la discusión.**
+
+Además: 2.84:1 se nombra **riesgo aceptado**, nunca "AA" ni "conforme" · los usos
+de `--brand` como fondo son **cinco** y quedaron ratificados el 2026-08-09 · la
+landing **ya tiene** fuente local · **CardField es un fallback temporal**, no un
+cierre: esa superficie sigue abierta para el Carril 7.
+
+### Decisiones de Mati incorporadas
+
+`F-1` TTF ratificado como excepción expresa · `L-1` la landing vigente es la
+mínima, y `D-LAND-1` queda **ratificado y NO implementado**: los dos accesos
+siguen navy.
+
 ## 0.62.0 — el texto sobre el naranja pasa a blanco (2026-08-08)
 
 **Enmienda del sistema de diseño ratificada por Mati**, relayada por el chat de
