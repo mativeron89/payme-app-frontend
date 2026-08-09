@@ -22,10 +22,10 @@
         "--config",
         "vite.landing.config.ts",
         "--port",
-        "5176",
+        "5177",
         "--strictPort"
       ],
-      "port": 5176
+      "port": 5177
     }
   ]
 }
