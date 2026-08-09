@@ -1,6 +1,49 @@
 # CHANGELOG — payme-app-frontend
 
-## 0.59.0 — la landing de `paymemx.com`, y las guardas que probaban menos de lo que decían (2026-08-07)
+## 0.59.1 — las guardas parseaban un solo formato, y 24 archivos no los miraba nadie (2026-08-08)
+
+Bugfix del cierre de 1B, tras una reauditoría de Codex. PATCH y no minor: no
+agrega funcionalidad — arregla verificaciones que probaban menos de lo que
+declaraban, que es la misma clase que 0.50.1.
+
+🔴 **Las guardas de la landing reconocían `attr="valor"` y nada más.** HTML
+acepta tres formas, y las otras dos pasaban por abajo de todo. Los dos casos
+**sin comillas** son los peores porque son HTML perfectamente válido y el
+navegador los ejecuta igual: `<link rel=stylesheet href=https://…>` y
+`<body onload=alert(1)>`. Un parser que cubre un formato no es una guarda
+parcial: es una guarda que se esquiva sin esfuerzo y sin mala fe.
+
+🔴 **Y 24 archivos `.ts` no estaban en ningún proyecto de TypeScript:** los 21
+de `e2e/`, `playwright.config.ts`, `vite.config.ts` y `vite.landing.config.ts`
+—este último creado en el propio Carril 1A, así que el hueco no era sólo
+heredado—. Hizo falta un cuarto proyecto y no meterlos en el de Node: los specs
+usan `window` dentro de `page.evaluate(...)`, que corre en la página. Un spec de
+Playwright necesita DOM **y** Node a la vez.
+
+**Cerrar ese hueco destapó un defecto real:** `vite.config.ts` importaba
+`defineConfig` de `vite`, que no conoce el bloque `test`, así que **la
+configuración de la suite estaba sin tipar** — un `include` mal escrito pasaba
+en silencio. Corregido a `vitest/config`.
+
+🔴 **Y un comentario propio afirmaba un test que no existía.** Decía que
+`types: ["vite/client"]` bastaba —lo que la orden anterior ya había refutado— y
+que «hay un test que lo fija». La verificación había sido manual y de una sola
+vez. Ahora existe: `scripts/tsProjectIsolation.test.ts` **compila el programa de
+producción real con una sonda `process`/`Buffer` y exige que `tsc` la rechace**.
+No lee la configuración: leer la configuración es exactamente lo que falló antes.
+
+⭐ **La sonda inversa se ganó el sueldo en el primer intento**: el arnés
+original ponía el tsconfig en `/tmp`, donde no hay `node_modules`, y `tsc` moría
+por no encontrar `vite/client` — la sonda «fallaba» por el arnés y el test
+habría pasado en verde por la razón equivocada.
+
+**Correcciones documentales.** El artefacto **no pesa 8 KB**: eso era ocupación
+por bloques de disco (dos archivos × 4 KB). El tamaño lógico es **2344 bytes**
+—678 el HTML, 1666 el CSS, 1022 comprimido—, medible con
+`find dist-landing -type f -exec cat {} + | wc -c`. Y las fechas de la
+ratificación de `@types/node` y del release 0.59.0 son **2026-08-08**.
+
+## 0.59.0 — la landing de `paymemx.com`, y las guardas que probaban menos de lo que decían (2026-08-08)
 
 🔴 **Esta entrada cubre DOS órdenes: el CARRIL 1A —la landing, que quedó SIN
 VERSIONAR por una omisión mía— y su cierre 1B.** Se dice explícito para que
@@ -11,8 +54,9 @@ por separado, es ésta.
 cierre*. Lo que se había declarado cerrado estaba sobredeclarado.
 
 **La landing** vive en `landing/`, es un **artefacto separado** con su propia
-config de build (`npm run build:landing` → `dist-landing/`), pesa 8 KB y **no
-tiene una sola línea de JavaScript**. El texto es el literal autorizado —`PayMe`
+config de build (`npm run build:landing` → `dist-landing/`), pesa **2344 bytes
+lógicos** —678 el HTML y 1666 el CSS, 1022 comprimido— y **no tiene una sola
+línea de JavaScript**. El texto es el literal autorizado —`PayMe`
 y dos accesos— porque el copy es decisión de Mati y todavía no existe. **No
 carga terceros, ni siquiera las tipografías:** el CDN de fuentes recibiría la IP
 de quien entra antes de que toque nada. La contrapartida se declara — sin esas
