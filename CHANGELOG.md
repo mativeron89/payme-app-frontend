@@ -1,5 +1,148 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.61.0 — las tipografías son propias (2026-08-08)
+
+🔴 **`D-FUENTES-1` cierra sus tres superficies, y una cierra DEGRADADA.** PayMe
+ya no le pide una tipografía a nadie: cero requests a `fonts.googleapis.com` y
+`fonts.gstatic.com` en la carga completa de la app, verificado en el navegador.
+MINOR: cambia lo que la app carga en runtime.
+
+**Mati autorizó la descarga en el chat.** El gate `D-GATE-1` ya existía desde el
+día anterior y no alcanzaba: un gobierno que aprueba el alcance no es la persona
+autorizando la ejecución, y para una descarga eso le toca a ella.
+
+### 🔴 El upstream autorizado NO tiene WOFF2. Se sirve TTF, y se declara.
+
+`D-GATE-1` acota la descarga a `github.com/google/fonts`, "WOFF2 + OFL, ningún
+otro origen, ninguna otra descarga". **Ese repo publica TTF variable**; los
+`.woff2` que sirve Google se generan en el borde y no están versionados ahí. La
+combinación que pide el gate no existe.
+
+Convertir exige un conversor —`fontTools`+`brotli` o `woff2_compress`—, no hay
+ninguno en la máquina, y bajarlo es *otra descarga de otro origen*: exactamente
+lo que el gate prohíbe. **No se bajó.**
+
+Lo que **sí** está medido:
+
+```
+                    crudo      gzip     brotli
+PlusJakartaSans   176.288    79.781     65.729
+DMSans            240.164   110.278     92.043
+TOTAL             416.452   190.059    157.772
+```
+
+🔴 **Y el número que decidiría NO está medido: nadie tiene el peso de un WOFF2
+del encoder de referencia.** Un WOFF2 es brotli **más** una transformación de las
+tablas `glyf`/`loca`, y esa parte es la única que no se deduce del brotli.
+Circularon dos cifras y **ninguna es ésa**: el `≈145.000` que decía la primera
+versión de este documento era una **estimación**, y los `157.333` que midió
+`payme-dashboard-frontend` son un WOFF2 **fabricado con null transform** —TTF +
+brotli en otro envase—, que mide el contenedor y no la ganancia.
+
+**Por eso se difiere, y por este motivo y no por el tamaño: optimizar hacia un
+formato cuya ganancia real está sin medir, contra un host que todavía no existe,
+es adivinar dos veces.** WOFF2 entra en Carril 7 junto con la compresión, para
+medir la cadena entera de una vez.
+
+**Requisito de hosting que viaja con los archivos:** el host **debe comprimir
+`.ttf` en tránsito** (`br` preferido, `gzip` aceptable), verificable con la
+cabecera `content-encoding`. Está en `ops/INVENTARIO_CARRIL_7_PENDIENTE` y
+también en `src/assets/fonts/README.md`, a propósito: el que lo va a necesitar
+toca este repo, no lee `ops/`.
+
+### Un archivo por familia, no nueve
+
+Son fuentes **variables**: `font-weight` declara un RANGO —`200 800` y
+`100 1000`, los ejes reales medidos en la tabla `fvar`— y un solo binario cubre
+todos los pesos. Desaparece la lista manual de nueve estáticas que alguien
+tendría que mantener sincronizada con los ~150 lugares donde el CSS pide un peso;
+cuando esa lista se desincroniza, el navegador sintetiza en silencio.
+
+**Y contesta por construcción la pregunta del `900`:** el eje de Plus Jakarta Sans
+termina en 800, así que era inalcanzable aun pidiéndolo.
+
+### Las tres superficies
+
+**1 · Webapp — CERRADA.** Se retiran las tres etiquetas de `index.html` (dos
+`preconnect` y la hoja de estilos) y `global.css` declara su propio `@font-face`.
+
+**2 · Landing — CERRADA, y con su propia copia.** `D-WEB-1-BIS` manda que sea otro
+ORIGEN: una landing que trae la tipografía del origen de la webapp no está
+separada. El binario se duplica a propósito y un test compara los dos SHA-256.
+**El artefacto pasa de 2.344 B a 178.803 B** — 76×, para un título y dos botones.
+Se dice en vez de esconderse; con brotli la tipografía baja a 65.729 B, y
+`font-display: swap` hace que nadie espere.
+
+**3 · Stripe Elements — el egress ya estaba cerrado en 0.60.0; la restauración
+SIGUE BLOQUEADA.** El contrato lo soporta (`CustomFontSource`), pero exige URL
+absoluta a un host propio **y CORS** para `js.stripe.com`: configuración no
+ratificada. El texto DENTRO del campo de tarjeta se sigue viendo con el sans del
+sistema. Requisito con nombre en Carril 7.
+
+### Licencia
+
+Texto **completo** de las dos OFL, con su aviso de copyright, y el aviso viaja
+además dentro de cada binario (tabla `name`, IDs 0/13/14), así que sobrevive al
+hash de Vite y a cualquier copia futura.
+
+🔴 **Ninguna de las dos familias declara Reserved Font Name** — verificado contra
+la definición de la propia licencia. Importa porque OFL 1.1 define *Modified
+Version* incluyendo textualmente **"by changing formats"**: convertir a WOFF2, o
+subsetear, **es derivar**. Un TTF byte-idéntico al upstream no lo es, que es la
+posición más simple de sostener. Un test se pone rojo si un upstream futuro
+agrega un RFN.
+
+### Verificado en el navegador, no por lectura
+
+Un `@font-face` mal escrito **falla en silencio**: cae al fallback y la pantalla
+se ve casi igual. Así que se midió el ancho de un texto a 40 px:
+
+```
+PJS   200→395.92   400→400.37   600→407.24   800→414.13
+DMS   100→319.16   400→356.28   700→385.03  1000→405.32
+fallback del sistema: 402.45
+```
+
+Los anchos crecen de forma monótona: el eje variable funciona. Si el navegador
+hubiera cargado una instancia estática, los cuatro medirían igual.
+
+🔴 **Y la sonda inocente corrigió evidencia que se había citado:**
+`document.fonts.check()` devuelve `true` para una familia **inexistente**. No
+acredita nada — es un gate que informa sin verificar. Lo que acredita es la
+medición. De paso descarta la otra lectura posible: `'DM Sans'` sin `@font-face`
+mide igual que el fallback, o sea que no está instalada en la máquina, o sea que
+lo medido era la fuente descargada.
+
+### Las guardas
+
+`index.html` **entra al barrido de egress**, cumpliendo el compromiso que 0.60.0
+dejó escrito. Ahí los comentarios **cuentan** (el HTML se publica) y en `src/` se
+ignoran (se compila): mismo fundamento, dos casos — y porque la forma más
+probable de que esto vuelva es un `<link>` comentado "por si acaso".
+
+La tabla de SHA-256 del README **deja de ser documentación**: un test la parsea y
+la compara contra el disco. Era el dato que ningún gate miraba.
+
+La guarda de la landing **deja de leer binarios como texto**, y verifica los
+binarios por hash contra una lista explícita.
+
+**Seis mutantes en rojo y la sonda inocente en verde.** Y cada guarda nueva
+afirma también que **lo legítimo PASA** — seis mutantes en rojo son compatibles
+con una guarda que rechaza todo, que es lo que casi pasa en 0.60.0.
+
+### Además · un defecto de puertos encontrado corriendo el gate
+
+`.claude/launch.json` le daba a la preview de la landing **el mismo puerto** que
+`playwright.config.ts` usa para su `webServer`. Con `reuseExistingServer`,
+playwright no levanta el mock: se conecta a lo que haya, y los veinte specs de
+la app terminan apuntando a una página con un título y dos botones.
+
+🔴 **Lo caro no es el error, es el diagnóstico:** no hay ningún mensaje que diga
+"puerto equivocado", hay veinte tests que fallan por timeout — exactamente lo
+que parece una suite lenta o una máquina cargada. La landing se mueve a 5177 y
+`scripts/puertosDev.test.ts` lo gatea, porque esto no se ve leyendo ninguno de
+los dos archivos: hay que tener los dos abiertos a la vez.
+
 ## 0.60.0 — el egress de tipografías que no se veía leyendo el HTML (2026-08-08)
 
 🔴 **`D-FUENTES-1` NO queda cerrada, y se dice acá y no sólo en un reporte.**
