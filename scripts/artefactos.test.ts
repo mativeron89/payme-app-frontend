@@ -264,7 +264,7 @@ describe.each([0, 1])('artefacto distribuible #%i', (i) => {
     const encontrados = new Set(
       [...art().texto.matchAll(/https?:\/\/([a-zA-Z0-9._-]+)/g)].map((m) => m[1]!),
     );
-    const permitidos = new Set(HOSTS_PERMITIDOS.map((h) => h.host));
+    const permitidos = new Set<string>(HOSTS_PERMITIDOS.map((h) => h.host));
     const ajenos = [...encontrados].filter((h) => !permitidos.has(h));
     expect(ajenos, `hosts que nadie autorizó: ${ajenos.join(' · ')}`).toEqual([]);
   });
