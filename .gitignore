@@ -4,6 +4,10 @@ dist/
 # propósito: son dos artefactos y dos deploy targets distintos, y compartir
 # carpeta volvería esa separación una afirmación en vez de un hecho.
 dist-landing/
+# Config efímera de la sonda de aislamiento de tipos
+# (`scripts/tsProjectIsolation.test.ts`). Se borra en un `finally` y en el
+# `afterAll`; esto es la red por si el proceso muere de golpe.
+.tsprobe.json
 *.local
 .DS_Store
 

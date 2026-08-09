@@ -16,8 +16,13 @@
     "noEmit": true,
     "types": ["vite/client"]
   },
-  // 🔴 LOS TESTS SE EXCLUYEN, y no es prolijidad — es lo único que hace REAL
-  // el aislamiento que pide la ORDEN 2A · A2.
+  // 🔴 LOS TESTS SE EXCLUYEN, y no es prolijidad: es lo que hace REAL el
+  // aislamiento que pide la ORDEN 2A · A2.
+  //
+  // ⚠️ Esta separación es UNA solución medida y demostrada, no la única
+  // concebible — se podría atacar por otro lado (aislar los tipos de vitest,
+  // por ejemplo). Se eligió porque es la que se pudo VERIFICAR con una sonda,
+  // no porque no hubiera alternativas.
   //
   // MEDIDO, no supuesto: con los tests adentro, una sonda `process.env.HOME`
   // en `src/` COMPILABA LIMPIO aunque `types` diga sólo `["vite/client"]`.

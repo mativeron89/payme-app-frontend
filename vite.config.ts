@@ -1,5 +1,12 @@
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+// 🔴 `vitest/config` y no `vite`: este archivo declara un bloque `test`, y el
+// `defineConfig` de vite NO lo conoce — daba
+// `TS2769 … 'test' does not exist in type 'UserConfigExport'`.
+// Nadie lo veía porque este archivo no estaba en ningún proyecto de TypeScript
+// (FASE 2 · B). O sea que la config de la suite estaba SIN TIPAR: un `include`
+// mal escrito o una opción inexistente pasaban en silencio.
+// `vitest` ya es devDependency; no se agrega nada.
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [react()],

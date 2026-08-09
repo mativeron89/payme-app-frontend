@@ -1,0 +1,35 @@
+{
+  // ══════════════════════════════════════════════════════════════════════════
+  // CUARTO PROYECTO · los recorridos de navegador y los archivos de CONFIG.
+  //
+  // ## Por qué existe (FASE 2 · B)
+  //
+  // El inventario mostró que 24 archivos `.ts` fuera de `src/` no los cubría
+  // NINGÚN proyecto: los 21 de `e2e/`, `playwright.config.ts`, `vite.config.ts`
+  // y `vite.landing.config.ts` — este último creado por mí en el CARRIL 1A, así
+  // que el hueco no era sólo heredado.
+  //
+  // ## Por qué no entran en `tsconfig.node.json`
+  //
+  // Medido: los specs usan globals del NAVEGADOR dentro de `page.evaluate(...)`
+  // —`window`, `getComputedStyle`— porque ese callback corre en la página, no
+  // en Node. Con `lib: ["ES2022"]` a secas dan `TS2304: Cannot find name
+  // 'window'`. Necesitan DOM **y** Node a la vez, que es exactamente lo que un
+  // spec de Playwright es: proceso Node que evalúa código en un navegador.
+  //
+  // 🔴 Y eso NO afloja el aislamiento del programa de producción: `tsconfig.json`
+  // sigue sin Node, y `npm run typecheck` corre los cuatro — el proyecto más
+  // estricto sigue gobernando. La sonda `process` en `src/` sigue fallando.
+  // ══════════════════════════════════════════════════════════════════════════
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "e2e/**/*.ts",
+    "playwright.config.ts",
+    "vite.config.ts",
+    "vite.landing.config.ts"
+  ]
+}

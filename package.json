@@ -1,12 +1,12 @@
 {
   "name": "payme-app-frontend",
   "private": true,
-  "version": "0.59.0",
+  "version": "0.59.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.node.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.e2e.json",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "build:landing": "vite build --config vite.landing.config.ts",
     "preview": "vite preview",

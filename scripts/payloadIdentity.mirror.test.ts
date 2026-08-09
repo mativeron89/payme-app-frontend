@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, mkdtempSync, readFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import {
   PAYLOAD_KEYS,
   canonicalizeForHash,
@@ -50,6 +50,23 @@ function sha256Archivo(ruta: string): string {
 }
 
 /**
+ * 🔴 El temporal que crea este test, para poder borrarlo. Lo medí en la FASE 2
+ * contando `payme-*` antes y después de una corrida: **12 → 13**. Este archivo
+ * dejaba UNO por corrida desde que lo escribí — la misma clase que Codex marcó
+ * para `landing/landing.test.ts` (A5), en un test mío que el arreglo de
+ * entonces no alcanzó. Crear y no limpiar es basura en la máquina de otro.
+ *
+ * Se guarda LA RUTA CREADA, nunca un glob `payme-mirror-idem-*`: barrer por
+ * patrón borraría el temporal de una corrida ajena en curso.
+ */
+let temporal: string | null = null;
+
+afterAll(() => {
+  if (temporal) rmSync(temporal, { recursive: true, force: true });
+  temporal = null;
+});
+
+/**
  * ⚠️ El espejo se carga desde una COPIA `.cjs` en un temporal, y no es un
  * atajo: el `package.json` de este repo declara `"type": "module"`, así que
  * node trata cualquier `.js` de acá como ESM y el `require('crypto')` del
@@ -63,6 +80,7 @@ function sha256Archivo(ruta: string): string {
  */
 function cargarEspejo() {
   const dir = mkdtempSync(join(tmpdir(), 'payme-mirror-idem-'));
+  temporal = dir;
   const destino = join(dir, 'idempotency.cjs');
   copyFileSync(ORIGEN, destino);
   if (sha256Archivo(destino) !== sha256Archivo(ORIGEN)) {

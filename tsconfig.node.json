@@ -20,12 +20,17 @@
   // reventaría en runtime, en producción. La separación no es prolijidad: es
   // lo que mantiene honesto al typecheck del código que corre en el teléfono.
   //
-  // `tsconfig.json` ya declara `"types": ["vite/client"]` de forma EXPLÍCITA,
-  // así que instalar `@types/node` no lo contamina — TypeScript sólo incluye
-  // automáticamente todos los `@types/*` cuando `types` está ausente. Eso ya
-  // estaba bien y se conserva a propósito; hay un test que lo fija.
+  // ⚠️ CORRECCIÓN de lo que decía antes acá. El texto anterior afirmaba que
+  // `types: ["vite/client"]` bastaba para que instalar `@types/node` no
+  // contaminara `src/`, y que "hay un test que lo fija". Las dos partes eran
+  // falsas: `types` gobierna la inclusión AUTOMÁTICA de globals y NO lo que
+  // entra por un `import` —los tests importaban `vitest`, que arrastra
+  // `@types/node`— y el test no existía, la verificación había sido manual y
+  // de una sola vez. Ahora existe: `scripts/tsProjectIsolation.test.ts`
+  // compila el programa de producción REAL con una sonda `process`/`Buffer` y
+  // exige que `tsc` la rechace.
   //
-  // `@types/node` es devDependency, ratificado por Mati (2026-08-07) con esta
+  // `@types/node` es devDependency, ratificado por Mati (2026-08-08) con esta
   // forma exacta: "únicamente como devDependency de desarrollo, con un tsconfig
   // separado para typecheckear los tests Node sin exponer globals Node al
   // código browser". Se fijó en 24.x para que coincida con el runtime (v24).
