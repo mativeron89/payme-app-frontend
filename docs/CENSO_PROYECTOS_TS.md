@@ -1,0 +1,57 @@
+# Censo de proyectos TypeScript
+
+**Qué archivo typechequea cuál de los cuatro proyectos, y por qué son cuatro.**
+
+🔴 **La autoridad NO es este documento: es `scripts/tsProjectIsolation.test.ts`.**
+Ese test deriva la cobertura con `tsc --listFilesOnly` —que resuelve `include`,
+`exclude` y el grafo de imports— y la compara contra `git ls-files`. Si un
+archivo queda fuera de todos los proyectos, se pone rojo. Acá se explica el
+reparto para quien lea; **los números y la verdad salen del test.**
+
+Antes esto vivía en una tabla dentro de un mensaje entre sesiones, que es como
+no tenerlo: los mensajes se pierden, y una tabla escrita a mano nace vieja el
+día que alguien agrega un archivo.
+
+## El reparto
+
+| Proyecto | Qué cubre | `types` | Por qué existe |
+|---|---|---|---|
+| `tsconfig.json` | `src/`, **sin** los `*.test.*` | `vite/client` | El código que se despacha al teléfono. Es el único que importa que esté limpio de globals de Node. |
+| `tsconfig.test.json` | `src/**/*.test.ts(x)` | `vite/client` | Los tests de `src/` corren en jsdom pero importan `vitest`, que arrastra `@types/node` por el grafo de módulos. Separados para que esa contaminación no llegue al de arriba. |
+| `tsconfig.node.json` | `scripts/**/*.test.ts`, `landing/**/*.test.ts` | `node`, `vite/client` | Tests que usan `node:fs`, `node:child_process`, `node:os`. Necesitan los globals de Node de verdad. |
+| `tsconfig.e2e.json` | `e2e/` | Playwright | Otro runner, otro entorno. Su `page.evaluate` corre en el navegador y el spec corre en Node: dos mundos en un archivo. |
+
+## 🔴 Por qué separados y no un `include` más
+
+Si los tests de Node vivieran en el proyecto del navegador habría que agregar
+`"node"` a sus `types`, y entonces **`src/` vería globals que en el teléfono NO
+EXISTEN**. Un `process.env` o un `Buffer` escrito por descuido compilaría sin
+queja y reventaría en runtime, en producción.
+
+Eso no es una hipótesis: la primera versión de esta separación se justificó con
+un argumento sobre `types` que era **verdadero y contestaba otra pregunta**, y
+una sonda `process.env` en `src/` compiló limpio igual. El test de aislamiento
+existe por eso, y compila el programa REAL con una sonda en vez de leer la
+configuración.
+
+## Solapamiento, que es esperado
+
+Un archivo puede estar en varios proyectos y está bien: un módulo de `src/` que
+un test importa aparece en `tsconfig.json` **y** en `tsconfig.test.json`. Lo que
+el test prohíbe es lo contrario — que un archivo no esté en **ninguno**.
+
+## Qué hacer si el test se pone rojo
+
+Dice qué archivos quedaron sin cobertura. Las salidas, en orden de preferencia:
+
+1. **El archivo pertenece a un proyecto existente** → ajustar su `include`.
+2. **Es una unidad nueva de verdad** (otro runner, otro entorno de ejecución) →
+   proyecto propio, agregarlo al script `typecheck` de `package.json`, y
+   agregarlo a la tabla de arriba. El test verifica que los tres pasos
+   coincidan.
+3. **El archivo no debería existir** → borrarlo.
+
+**Lo que NO es una salida: sacarlo del censo.** Un archivo sin typecheck compila
+y corre igual —vitest y Vite transpilan sin verificar tipos— y se pudre en
+silencio hasta que rompe en runtime. Ya pasó: `scripts/` y `landing/` estuvieron
+sin cobertura hasta la ORDEN 2A, y el hueco no lo encontró nadie leyendo.

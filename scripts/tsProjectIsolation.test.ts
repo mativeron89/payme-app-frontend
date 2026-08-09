@@ -1,7 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -37,24 +36,38 @@ import { afterAll, describe, expect, it } from 'vitest';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(AQUI, '..');
 
-let temporal: string | null = null;
 /**
- * ⚠️ El tsconfig de la sonda tiene que vivir EN LA RAÍZ DEL REPO, no en el
- * temporal. Medido: desde `/tmp` la resolución de tipos arranca en ese
- * directorio, que no tiene `node_modules`, y `tsc` muere con
- * `TS2688: Cannot find type definition file for 'vite/client'` — o sea que la
- * sonda "fallaba" por el arnés y no por el aislamiento. **Lo detectó la sonda
- * INVERSA**, que también dio rojo cuando debía compilar.
+ * 🔴 DÓNDE VIVE EL ARNÉS, corregido.
  *
- * El nombre NO empieza con `tsconfig` a propósito: el test de más abajo
- * enumera los proyectos con `/^tsconfig…/` y un residuo lo confundiría.
+ * La versión anterior escribía `RAIZ/.tsprobe.json` — **nombre fijo, en la raíz
+ * observable del repo**. Tres problemas, y el tercero es el grave:
+ *
+ *   1. ensucia la raíz, que es justo donde todo el mundo mira;
+ *   2. dos corridas simultáneas se pisan el archivo y se sabotean entre sí;
+ *   3. si el proceso moría entre el `writeFileSync` y el `finally`, el residuo
+ *      quedaba en el árbol de trabajo — y `.gitignore` lo tapaba, así que ni
+ *      siquiera aparecía en `git status`.
+ *
+ * Ahora vive en `node_modules/.cache/payme-tsprobe-XXXX/`, con `mkdtemp`:
+ * único por corrida, fuera de todo lo que se audita, y en un directorio que ya
+ * es descartable por definición.
+ *
+ * ⚠️ Y NO en `/tmp`, que fue el primer intento: desde ahí la resolución de
+ * tipos arranca en un directorio sin `node_modules` y `tsc` muere con
+ * `TS2688: Cannot find type definition file for 'vite/client'`. La sonda
+ * "fallaba" por el arnés y no por el aislamiento. Lo detectó la sonda INVERSA.
+ * Debajo de `node_modules/` la resolución sube y encuentra todo, y además el
+ * `extends`, el `include` y el `exclude` se escriben ABSOLUTOS para que la
+ * ubicación deje de importar.
  */
-const CONFIG_SONDA = join(RAIZ, '.tsprobe.json');
+const CACHE = join(RAIZ, 'node_modules', '.cache');
+const arneses: string[] = [];
 
 afterAll(() => {
-  if (temporal) rmSync(temporal, { recursive: true, force: true });
-  temporal = null;
-  rmSync(CONFIG_SONDA, { force: true });
+  // Red de seguridad: el `finally` de cada compilación ya limpia lo suyo, y
+  // esto cubre el caso de que un test explote antes de llegar al `finally`.
+  for (const dir of arneses) rmSync(dir, { recursive: true, force: true });
+  arneses.length = 0;
 });
 
 /**
@@ -65,17 +78,19 @@ afterAll(() => {
  * @returns la salida de `tsc` (vacía si compiló limpio).
  */
 function compilarConSonda(cuerpo: string): string {
-  const dir = temporal ?? mkdtempSync(join(tmpdir(), 'payme-tsprobe-'));
-  temporal = dir;
+  mkdirSync(CACHE, { recursive: true });
+  const dir = mkdtempSync(join(CACHE, 'payme-tsprobe-'));
+  arneses.push(dir);
   const sonda = join(dir, 'sonda.ts');
   writeFileSync(sonda, cuerpo);
-  writeFileSync(CONFIG_SONDA, JSON.stringify({
-    extends: './tsconfig.json',
-    include: ['./src', sonda],
-    exclude: ['./src/**/*.test.ts', './src/**/*.test.tsx'],
+  const config = join(dir, 'tsconfig.json');
+  writeFileSync(config, JSON.stringify({
+    extends: join(RAIZ, 'tsconfig.json'),
+    include: [join(RAIZ, 'src'), sonda],
+    exclude: [join(RAIZ, 'src/**/*.test.ts'), join(RAIZ, 'src/**/*.test.tsx')],
   }));
   try {
-    execFileSync('npx', ['tsc', '--noEmit', '-p', CONFIG_SONDA], {
+    execFileSync('npx', ['tsc', '--noEmit', '-p', config], {
       cwd: RAIZ, stdio: 'pipe', encoding: 'utf8',
     });
     return '';
@@ -83,7 +98,8 @@ function compilarConSonda(cuerpo: string): string {
     const err = e as { stdout?: string; stderr?: string };
     return `${err.stdout ?? ''}${err.stderr ?? ''}`;
   } finally {
-    rmSync(CONFIG_SONDA, { force: true });
+    // Éxito Y error: el temporal se borra acá, y `afterAll` es la red.
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 
@@ -115,5 +131,74 @@ describe('el programa de producción NO ve los tipos de Node', () => {
     for (const p of proyectos) {
       expect(pkg.scripts.typecheck, `\`typecheck\` no corre ${p}`).toContain(p);
     }
+  });
+});
+
+/**
+ * 🔴 EL CENSO · ningún `.ts`/`.tsx` del repo queda fuera de todo proyecto.
+ *
+ * El censo existía como una tabla en un mensaje entre sesiones — o sea, no
+ * existía: los mensajes se pierden y una tabla escrita a mano nace vieja el
+ * día que alguien agrega un archivo.
+ *
+ * Acá se DERIVA. `tsc --listFilesOnly` dice qué archivos entran de verdad en
+ * cada programa —resolviendo `include`, `exclude` y el grafo de imports, que
+ * es justo lo que una lista manual no puede hacer— y se compara contra el
+ * árbol real.
+ *
+ * ## Qué se rompe si esto falta
+ *
+ * Un archivo fuera de todo proyecto **no se typechequea nunca**. Vitest y Vite
+ * transpilan sin verificar tipos, así que el archivo compila y corre igual, y
+ * se pudre en silencio hasta que rompe en runtime. Ya pasó: `scripts/` y
+ * `landing/` estuvieron sin cobertura hasta la ORDEN 2A.
+ *
+ * `docs/CENSO_PROYECTOS_TS.md` explica el reparto para quien lea; **la
+ * autoridad es este test**, no el documento.
+ */
+describe('censo de cobertura TypeScript', () => {
+  const PROYECTOS = [
+    'tsconfig.json', 'tsconfig.test.json', 'tsconfig.node.json', 'tsconfig.e2e.json',
+  ] as const;
+
+  /** Los `.ts`/`.tsx` del repo que un proyecto incluye de verdad. */
+  function archivosDe(proyecto: string): string[] {
+    const salida = execFileSync('npx', ['tsc', '-p', proyecto, '--noEmit', '--listFilesOnly'], {
+      cwd: RAIZ, stdio: 'pipe', encoding: 'utf8',
+    });
+    return salida
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.includes('node_modules') && /\.tsx?$/.test(l))
+      .map((l) => relative(RAIZ, resolve(RAIZ, l)));
+  }
+
+  /** Todo `.ts`/`.tsx` versionado, según git — no un `glob` propio. */
+  function archivosDelRepo(): string[] {
+    const salida = execFileSync('git', ['ls-files', '*.ts', '*.tsx'], {
+      cwd: RAIZ, stdio: 'pipe', encoding: 'utf8',
+    });
+    return salida.split('\n').map((l) => l.trim()).filter(Boolean);
+  }
+
+  it('🔴 CERO huérfanos: todo archivo está en al menos un proyecto', () => {
+    const cubiertos = new Set(PROYECTOS.flatMap((p) => archivosDe(p)));
+    const todos = archivosDelRepo();
+
+    // Dos sondas antes de la afirmación. Sin ellas, un `git ls-files` que
+    // devolviera vacío o un `tsc` que no listara nada darían verde sin mirar.
+    expect(todos.length, 'git no listó ningún .ts: el censo pasaría en vacío').toBeGreaterThan(100);
+    expect(cubiertos.size, 'ningún proyecto listó archivos').toBeGreaterThan(100);
+
+    const huerfanos = todos.filter((f) => !cubiertos.has(f));
+    expect(huerfanos, `sin typecheck: ${huerfanos.join(' · ')}`).toEqual([]);
+  }, 120_000);
+
+  it('🔴 el documento del censo nombra exactamente los proyectos que existen', () => {
+    // Que el doc no envejezca sin que nadie lo note: si mañana aparece un
+    // quinto proyecto y nadie lo explica, esto se pone rojo.
+    const doc = readFileSync(join(RAIZ, 'docs/CENSO_PROYECTOS_TS.md'), 'utf8');
+    const enDoc = [...doc.matchAll(/`(tsconfig(?:\.[a-z0-9]+)?\.json)`/g)].map((m) => m[1]!);
+    expect(new Set(enDoc), 'el doc no coincide con los proyectos reales').toEqual(new Set(PROYECTOS));
   });
 });

@@ -4,10 +4,10 @@ dist/
 # propósito: son dos artefactos y dos deploy targets distintos, y compartir
 # carpeta volvería esa separación una afirmación en vez de un hecho.
 dist-landing/
-# Config efímera de la sonda de aislamiento de tipos
-# (`scripts/tsProjectIsolation.test.ts`). Se borra en un `finally` y en el
-# `afterAll`; esto es la red por si el proceso muere de golpe.
-.tsprobe.json
+# 🔴 `.tsprobe.json` ya no existe: el arnés de `scripts/tsProjectIsolation.test.ts`
+# se mudó a `node_modules/.cache/payme-tsprobe-XXXX/` con `mkdtemp`. Vivía en la
+# raíz con nombre fijo, así que dos corridas simultáneas se pisaban — y este
+# mismo `.gitignore` tapaba el residuo, o sea que ni aparecía en `git status`.
 *.local
 .DS_Store
 
