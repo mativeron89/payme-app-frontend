@@ -1,5 +1,61 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.67.0 — la landing es la que Diseño validó con Mati (2026-08-09)
+
+MINOR: la landing cambia entera.
+
+**Se portó el ARCHIVO de Diseño**, no una descripción de él —
+`diseno/referencias/landing-boceto-ESTRUCTURA-para-bibliotecario.html`.
+Reconstruir desde una descripción es lo que produjo el desvío anterior, cuando
+se publicó una provisional que nadie había elegido.
+
+Nav con anclas y desplegable · hero · banda de foto · cuatro pasos · dos bloques
+de audiencia con sus capturas.
+
+### Lo que se cambió del boceto, y nada más
+
+**Tipografías** → archivos locales TTF. El boceto pide WOFF2; `F-1` ratificó
+TTF. **Cero descargas nuevas:** DM Sans ya vivía en la webapp, mismo binario,
+con su OFL adentro del artefacto.
+
+**Imágenes** → copias propias, procesadas por Vite en vez de servidas crudas:
+las hashea y **falla el build si una ruta no resuelve**.
+
+**Los cuatro enlaces a dominios que no existen** → Comensal al build vivo;
+Restaurante **apagado** (`<span>` sin href, «Muy pronto») en el hero y en el
+desplegable. Ese tratamiento no viene del boceto.
+
+### 🔴 La invariante de JavaScript se movió, no se borró
+
+Decía *«el artefacto no tiene una sola línea de JavaScript»*. El boceto trae un
+`<script>` inline de ~25 líneas. **Un script inline sin una sola importación no
+crea grafo de módulos**, así que no puede arrastrar `AuthProvider`, la capa de
+API ni Stripe: **el propósito se conserva, la letra no.**
+
+La guarda se reescribió a lo que ahora protege —cero `.js` emitidos, un solo
+script inline, sin `src`/`module`/`import`/`fetch`— y sobre todo: **⭐ el acceso
+vivo funciona sin JavaScript**, verificado con JS deshabilitado. Si el único
+camino al link fuera el desplegable, un script roto dejaría la landing sin
+salida.
+
+### Una sonda que encontró un defecto en la propia guarda
+
+El parser de atributos leía `bar.style.transform`, `isOpen` y `pct` **como si
+fueran atributos HTML** — cualquier asignación de JS tiene la forma
+`nombre = valor`. Ahora se parsea sobre el HTML sin el script.
+
+🔴 Y la primera versión de esa sonda buscaba `isOpen` en el HTML **construido**,
+donde Vite ya minificó y renombró: **medía algo que no puede pasar.** Se prueba
+directo sobre el parser.
+
+### ⚠️ El boceto es de escritorio
+
+Su CSS lo dice: `body { min-width: 1040px }` y cero media queries — coincide con
+las palabras de Mati, *«versión computadora»*. **Medido en un iPhone 13:** 1040
+px de layout sobre 390 pt de pantalla, factor 0.38×, **el cuerpo de 18 px se ve
+a 6.8 pt**. No se inventó una versión móvil: es trabajo de Diseño y queda
+reportado.
+
 ## 0.66.0 — la captura del panel dice que sus datos son de ejemplo (2026-08-09)
 
 MINOR: cambia lo que se lee en la landing publicada.
