@@ -1,5 +1,84 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.63.0 — el producto habla español mexicano (2026-08-09)
+
+MINOR: cambia lo que ve el usuario en casi todas las pantallas.
+
+Decisión de Mati por el canal de Diseño, literal: *«Cambiar el mockup para que
+el lenguaje sea español mexicano por favor»*. La pregunta era sobre una captura,
+pero **los strings viven en los componentes y son los mismos en mock y en real**:
+no existe forma de cambiar el idioma del demo sin cambiar el del producto.
+
+### 🔴 El alcance es una decisión, no un descuido: se traduce el PRODUCTO
+
+Se convierte **el texto que ve el usuario**. **No se tocan los comentarios de
+código ni los títulos de `describe()`/`it()`.** Tres motivos:
+
+1. **El gobierno de este repo manda rioplatense para el trabajo** (`CLAUDE.md`:
+   *"Idioma: español rioplatense"*). **El equipo habla rioplatense; el producto
+   habla mexicano.** Es una división limpia, no una excepción.
+2. Un comentario no le llega a nadie que use la app — misma doctrina que ya se
+   aplica al egress: en `src/` los comentarios se ignoran porque se compilan.
+3. Reescribir cientos de comentarios sería un diff enorme donde el cambio real
+   se pierde, y **traducir prosa técnica a granel es donde el sentido se
+   desvía** — que es justo lo que la orden prohíbe.
+
+### 🔴 Por qué NO fue un `sed`, con los casos que lo prueban
+
+```
+mostrá      sed→ mostra    ✗   correcto→ muestra     (o → ue)
+Transferí   sed→ Transferi ✗   correcto→ Transfiere  (e → ie)
+Pedí        sed→ Pedi      ✗   correcto→ Pide        (e → i)
+continuás   sed→ continuas ✗   correcto→ continúas   (lleva tilde en la ú)
+consumís    sed→ consumis  ✗   correcto→ consumes    (−ir pasa a −es)
+Registrate  sed→ Registrate✗   correcto→ Regístrate  (sólo cambia el acento)
+```
+
+Y los pronombres, que ninguna sustitución de palabra resuelve:
+
+```
+«¿Cuánto tomás vos?»       → «¿Cuánto tomas tú?»
+«reservado para vos»       → «reservado para ti»
+«Lo que pagaste vos»       → «Lo que pagaste tú»
+```
+
+### 🔴 Mi censo estaba corto, dos veces
+
+```
+primer barrido    65 ocurrencias   ← sin las formas capitalizadas
+censo completo   139 ocurrencias   ← Probá ×17, Elegí ×12, Revisá ×11, Tenés ×8
+barrido ancho    +90 más           ← Reintentá ×15, Garantizá ×9, Escaneá ×5…
+```
+
+**El instrumento más angosto que la conclusión, otra vez.** La lista de diez
+formas de la orden, y mi lista de cuarenta, dejaban afuera treinta verbos que
+nadie había nombrado. **Lo que los encontró no fue una lista mejor: fue un
+PATRÓN** —la morfología del voseo— aplicado al árbol entero.
+
+### La guarda deriva, no enumera
+
+`src/api/registroMexicano.test.ts` detecta por patrón (imperativo en `á`/`é`/`í`
+tónica, presente en `ás`/`és`/`ís`) con una **allowlist de español legítimo**
+—`está`, `además`, `sección`—. Una lista de prohibidos no se puede auditar
+porque no se sabe qué le falta; **una allowlist sí, y crece por evidencia**: la
+primera corrida encontró que faltaba `qué` en ocho lugares.
+
+Tres mutantes: una frase nueva en rioplatense → ROJO · un presente voseo que
+ninguna lista nombraba → ROJO · **voseo en un COMENTARIO → VERDE**, que es la
+decisión de alcance vuelta test.
+
+### Los diez archivos de test se actualizaron
+
+Cinco en `src/**/*.test.ts` y cinco en `e2e/`. **Un test verde con el texto
+viejo habría sido peor que el rojo**, y los rojos sirvieron de censo: marcaron
+exactamente qué strings se habían movido.
+
+### Corrección al despacho
+
+La orden decía **6 archivos de test/e2e**; son **diez**. Y su conteo de ~100
+ocurrencias no se pudo reproducir: mi medición da 64 sin capitalizadas y 139 con
+ellas. **Se declara la discrepancia en vez de adoptar el número ajeno.**
+
 ## 0.62.1 — la licencia viaja, y el egress se prohíbe por defecto (2026-08-09)
 
 PATCH: no cambia lo que la app hace. Cierra ocho hallazgos de la reauditoría de
