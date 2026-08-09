@@ -142,6 +142,20 @@ describe('el artefacto de la landing existe y es lo que dice ser', () => {
  * `javascript:`, que ejecuta sin ser un `<script>`.
  */
 
+/**
+ * ¿El valor apunta al PROPIO origen? Sólo lo relativo. Ni `//host`
+ * protocol-relative, ni ningún esquema —`https:`, `http:`, `data:`—, ni
+ * siquiera los subdominios de PayMe: son destinos de navegación, no
+ * proveedores de recursos.
+ */
+function esRelativo(valor: string): boolean {
+  const v = valor.trim();
+  if (!v) return true;
+  if (v.startsWith('//')) return false;                   // protocol-relative
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)) return false;  // cualquier esquema
+  return true;
+}
+
 /** Atributos que hacen que el NAVEGADOR cargue algo por su cuenta. */
 const ATRIBUTOS_DE_RECURSO = [
   'src', 'srcset', 'poster', 'data', 'action', 'formaction', 'manifest', 'background', 'ping',
@@ -215,14 +229,6 @@ describe('PROPIEDAD 2 · cero recursos cross-origin o de terceros', () => {
    * `https://`, ni `//host`, ni `http://`, ni siquiera los dos subdominios de
    * PayMe — que son destinos de navegación, no proveedores de assets.
    */
-  function esRelativo(valor: string): boolean {
-    const v = valor.trim();
-    if (!v) return true;
-    if (v.startsWith('//')) return false;               // protocol-relative
-    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)) return false; // cualquier esquema
-    return true;
-  }
-
   it('🔴 MUTANTE · ningún atributo de recurso apunta fuera del origen', () => {
     const ajenos: string[] = [];
     for (const t of tags(build.html)) {
@@ -236,17 +242,50 @@ describe('PROPIEDAD 2 · cero recursos cross-origin o de terceros', () => {
     expect(ajenos, `recursos que no son del propio origen: ${ajenos.join(' · ')}`).toEqual([]);
   });
 
-  it('🔴 MUTANTE · el CSS emitido no importa ni carga nada', () => {
-    // `@import` y `url(...)` son las dos vías por las que una hoja de estilos
-    // trae algo de afuera — incluidas las fuentes, que es justo lo que esta
-    // landing decidió no hacer.
+  /**
+   * 🔴 FASE 3 · la guarda del CSS deja de prohibir `url(...)` A SECAS.
+   *
+   * Prohibirlo entero era correcto mientras la landing no tenía ningún
+   * recurso propio. Al auto-hospedar las tipografías **va a haber `url(...)`
+   * legítimos** —los `.woff2` que emite este mismo artefacto— y una guarda
+   * que los rechace obligaría a aflojarla justo cuando más hace falta.
+   *
+   * Lo que se prohíbe no es la FORMA sino el ORIGEN: un recurso del CSS sólo
+   * puede ser **relativo al propio artefacto**. Y `DESTINOS_AUTORIZADOS` NO se
+   * consulta acá — la separación de 1B se mantiene: los dos subdominios son
+   * destinos de navegación, nunca proveedores de recursos.
+   */
+  function urlsDelCss(css: string): string[] {
+    return [...css.matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/g)].map((m) => m[2]!.trim());
+  }
+
+  function cssEmitido(): string {
     const css = build.archivos
       .filter((a) => a.endsWith('.css'))
       .map((a) => build.porArchivo[a] ?? '')
       .join('\n');
     expect(css.length, 'no se encontró CSS emitido: el test no probaría nada').toBeGreaterThan(100);
-    expect(css).not.toMatch(/@import/i);
-    expect(css).not.toMatch(/url\s*\(/i);
+    return css;
+  }
+
+  it('🔴 MUTANTE · todo `url(...)` del CSS es RELATIVO al propio artefacto', () => {
+    const ajenos = urlsDelCss(cssEmitido()).filter((u) => !esRelativo(u));
+    expect(ajenos, `recursos del CSS fuera del origen: ${ajenos.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 MUTANTE · ningún `data:` — no está autorizado, ni siquiera para fuentes', () => {
+    // Se nombra aparte de `esRelativo` para que el mensaje de falla diga QUÉ
+    // pasó: un `data:` embebido es una decisión de arquitectura, no un detalle
+    // de empaquetado, y nadie la ratificó.
+    expect(cssEmitido().toLowerCase(), 'hay un data: URI en el CSS').not.toContain('data:');
+    expect(build.html.toLowerCase()).not.toContain('data:');
+  });
+
+  it('🔴 ningún `@import`, ni siquiera relativo', () => {
+    // Más estricto que lo que pide la orden —que sólo prohíbe el externo— y a
+    // propósito: la landing tiene UNA hoja por construcción, así que cualquier
+    // `@import` es una segunda hoja que nadie decidió agregar.
+    expect(cssEmitido()).not.toMatch(/@import/i);
   });
 
   it('🔴 MUTANTE · ni protocol-relative ni ningún host en el artefacto entero', () => {
