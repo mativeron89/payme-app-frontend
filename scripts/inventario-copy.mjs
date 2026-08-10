@@ -59,7 +59,10 @@ function pareceFrase(s) {
   if (/\s/.test(t) || /[áéíóúñ¿¡]/i.test(t)) return true;
   // …o UNA PALABRA CAPITALIZADA. `Cancelar`, `Volver`, `Principal` son copy;
   // los valores de enum de este repo son minúscula (`card`, `open`, `pending`).
-  return /^[A-ZÁÉÍÓÚÑ][a-záéíóúñü]{2,}$/.test(t);
+  // …o UNA PALABRA CAPITALIZADA, con o sin puntuación final. El `…` de
+  // `Procesando…` y el `:` de `Ojo:` mataban la regex anclada en `$`, y con
+  // ellos se perdía LA FAMILIA ENTERA de botones en curso de la app.
+  return /^[A-ZÁÉÍÓÚÑ][a-záéíóúñü]{2,}[…:.!?]?$/.test(t);
 }
 
 
@@ -111,7 +114,112 @@ function contexto(n, sf) {
   return { prop, variable, llamada, funcion };
 }
 
-const A = [], B = [], C = [], D = [];
+/** ¿Es una palabra o frase legible, aunque no «parezca frase»? */
+function esPalabra(s) {
+  const t = s.trim();
+  return /^[A-Za-zÁÉÍÓÚÑáéíóúñü][A-Za-zÁÉÍÓÚÑáéíóúñü ]{1,60}[…:.!?]?$/.test(t);
+}
+
+/**
+ * 🔴 Clases CSS DERIVADAS del CSS real, no adivinadas por forma.
+ * `'toast toast-hidden'` y `'badge badge-orange'` entraban como copy. En vez
+ * de inventar una heurística de aspecto, se leen los selectores que existen:
+ * si todos los tokens del string son clases declaradas, es un className.
+ */
+const CLASES_CSS = (() => {
+  const set = new Set();
+  for (const f of ['src/styles/global.css', 'landing/landing.css']) {
+    try {
+      for (const m of readFileSync(join(RAIZ, f), 'utf8').matchAll(/\.([a-z][a-z0-9_-]*)/gi)) set.add(m[1]);
+    } catch { /* si no está, la guarda simplemente no excluye nada */ }
+  }
+  return set;
+})();
+const esClaseCss = (s) => {
+  const tk = s.trim().split(/\s+/);
+  return tk.length > 0 && tk.every((x) => CLASES_CSS.has(x));
+};
+
+/** Valores de opción de `Intl`/`toLocale*`: `'long'`, `'numeric'`, `'2-digit'`. */
+const OPCION_INTL = new Set(['long', 'short', 'narrow', 'numeric', '2-digit', 'currency', 'decimal', 'percent']);
+
+/**
+ * 🔴 Cuatro exclusiones ESTRUCTURALES. Ninguna mira la forma del string:
+ * miran qué hace el código con él. Salieron de que el barrido dejó pasar
+ * `'Authorization'`, `'expired'` y `'ellipsis'`, que por aspecto son
+ * indistinguibles de `'Cancelar'`.
+ */
+function usoNoEsCopy(n) {
+  const p = n.parent;
+  if (!p) return false;
+  // `headers['Authorization']` — índice de objeto, no texto.
+  if (ts.isElementAccessExpression(p) && p.argumentExpression === n) return true;
+  // `status === 'expired'` — se COMPARA contra él; nadie lo lee.
+  if (ts.isBinaryExpression(p) && [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken,
+    ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken].includes(p.operatorToken.kind)) return true;
+  if (ts.isCaseClause(p)) return true;
+  // `style={{ textOverflow: 'ellipsis' }}` — todo lo de adentro es CSS.
+  let q = n.parent;
+  for (let i = 0; q && i < 6; i += 1, q = q.parent) {
+    if (ts.isJsxAttribute(q) && q.name.getText(sfActual) === 'style') return true;
+  }
+  return false;
+}
+let sfActual = null;
+
+/**
+ * 🔴 DEVUELTO, no PASADO. La vecindad sola no alcanzaba: `back`, `makeLink` y
+ * `addCard` muestran copy Y además navegan, así que rescataban `'home'`,
+ * `'share'` y `'GET'` junto con las frases.
+ *
+ * La distinción estructural que sí sirve: una palabra suelta que la función
+ * DEVUELVE es parte de lo que produce —`return days === 1 ? 'ayer' : …`—;
+ * una que le PASA a otra función es un token de esa otra función.
+ */
+const esDevuelto = (n) => {
+  let q = n.parent;
+  for (let i = 0; q && i < 6; i += 1, q = q.parent) {
+    if (ts.isCallExpression(q) || ts.isNewExpression(q)) return false;
+    if (ts.isReturnStatement(q)) return true;
+    if (ts.isArrowFunction(q)) return q.body === (i === 0 ? n : q.body);
+  }
+  return false;
+};
+
+/**
+ * 🔴 El rescate pasa por LOS MISMOS filtros que el camino principal.
+ * Sin esto, `'numeric'` volvía a entrar: vive en `txDate`, que sí fabrica copy
+ * («Hoy», «Ayer»), así que la vecindad lo salvaba… salteándose la exclusión de
+ * opciones de `Intl` que el camino normal ya le había aplicado.
+ *
+ * Es la TERCERA vez en este archivo que una rama alternativa se saltea los
+ * filtros —antes fueron las plantillas y el propio rescate—. El patrón es el
+ * mismo: cada camino nuevo hacia «esto es copy» tiene que atravesar las mismas
+ * puertas, o abre un agujero exactamente del tamaño de lo que las puertas
+ * filtraban.
+ */
+const enIntlOpt = (n, ctx) => OPCION_INTL.has(n.text)
+  && /toLocale|Intl|NumberFormat|DateTimeFormat/.test(ctx?.llamada ?? '');
+
+/** Nombre de la función que envuelve, para el rescate por vecindad. */
+function funcionDe(n, sf) {
+  let q = n.parent;
+  for (let i = 0; q && i < 14; i += 1, q = q.parent) {
+    if ((ts.isFunctionDeclaration(q) || ts.isMethodDeclaration(q) || ts.isArrowFunction(q) || ts.isFunctionExpression(q))) {
+      const d = ts.isVariableDeclaration(q.parent) ? q.parent.name.getText(sf) : (q.name ? q.name.getText(sf) : null);
+      // 🔴 Sólo HELPERS, no componentes. `MesaScreen` tiene mil líneas y
+      // «fabrica copy» por definición: rescatar por vecindad adentro de un
+      // componente rescata `'home'`, `'login'`, `'GET'` y `'nearest'` junto
+      // con las frases. Los helpers de copy de este repo son camelCase
+      // —`relTime`, `bpsLabel`, `txDate`—; los componentes, PascalCase.
+      // La vecindad sólo dice algo cuando el vecindario es chico.
+      if (d) return /^[A-Z]/.test(d) ? null : d;
+    }
+  }
+  return null;
+}
+
+const A = [], B = [], C = [], D = [], RESCATABLES = [];
 
 // El `<title>` vive fuera de `src/` y es lo primero que una persona lee: el
 // nombre de la pestaña. Ninguna lente de código lo mira.
@@ -128,6 +236,7 @@ for (const abs of archivos(SRC)) {
   const rel = relative(RAIZ, abs);
   const texto = readFileSync(abs, 'utf8');
   const sf = ts.createSourceFile(abs, texto, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  sfActual = sf;
   const linea = (n) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1;
   const esMock = /\/api\/mock\//.test(rel) || /mockSeed|mockData/i.test(rel);
 
@@ -180,6 +289,27 @@ for (const abs of archivos(SRC)) {
       const esImport = p && (ts.isImportDeclaration(p) || ts.isExportDeclaration(p));
       const esNombreProp = p && ts.isPropertyAssignment(p) && p.name === n;
       const ctxPre = (!enJsxAttr && !esImport && !esNombreProp) ? contexto(n, sf) : null;
+      // 🔴 SI VIVE DENTRO DE UNA LLAVE DE JSX, SE RENDERIZA. No se le pide que
+      // «parezca frase»: la posición ya lo dice. Era el hueco de los plurales
+      // en ternario —`{n === 1 ? 'miembro' : 'miembros'}`—, que no tienen ni
+      // acento ni un nombre que los rescate.
+      //
+      // El caso que lo prueba: `hay $X de ${diff > 0 ? 'más' : 'menos'}`.
+      // `'más'` entraba por su acento y `'menos'` no: las dos mitades de la
+      // misma frase, en la misma línea, y una sola inventariada.
+      // ⚠️ Y CORTA EN EL BORDE DE UNA FUNCIÓN. `onClick={() => navigate('home')}`
+      // también vive «dentro de una llave de JSX», y `'home'` es una ruta, no
+      // texto. Lo que se renderiza es lo que está en el camino de render SIN
+      // una función en el medio; cruzar una función es pasar de «lo que se
+      // muestra» a «lo que se ejecuta».
+      const enJsx = (() => {
+        let q = n.parent;
+        for (let i = 0; q && i < 8; i += 1, q = q.parent) {
+          if (ts.isArrowFunction(q) || ts.isFunctionExpression(q) || ts.isFunctionDeclaration(q)) return false;
+          if (ts.isJsxExpression(q)) return true;
+        }
+        return false;
+      })();
       // Una palabra suelta en minúscula (`entero`) no «parece frase», y sin
       // embargo es la etiqueta que el comensal lee. Lo salva el CONTEXTO: vive
       // dentro de `bpsLabel`. La forma no alcanzaba; el nombre de quien la
@@ -187,10 +317,17 @@ for (const abs of archivos(SRC)) {
       const porContexto = ctxPre
         && /label|etiqueta|texto|copy|titulo|title|leyenda/i.test(`${ctxPre.variable ?? ''} ${ctxPre.funcion ?? ''} ${ctxPre.prop ?? ''}`)
         && /^[a-záéíóúñü][a-záéíóúñü ]{2,}$/i.test(n.text.trim());
-      if (!enJsxAttr && !esImport && !esNombreProp && (pareceFrase(n.text) || porContexto)) {
+      if (!enJsxAttr && !esImport && !esNombreProp && !pareceFrase(n.text) && !porContexto && !enJsx
+          && esPalabra(n.text) && !usoNoEsCopy(n) && !esClaseCss(n.text) && !enIntlOpt(n, ctxPre)
+          && esDevuelto(n)) {
+        RESCATABLES.push({ archivo: rel, linea: linea(n), texto: n.text, via: 'vecindad', fn: funcionDe(n, sf), ctx: ctxPre });
+      }
+      if (!enJsxAttr && !esImport && !esNombreProp && (pareceFrase(n.text) || porContexto || (enJsx && esPalabra(n.text)))) {
         const ctx = ctxPre;
-        const fila = { archivo: rel, linea: linea(n), texto: n.text, via: 'literal', ctx };
-        if (esPathSvg(n.text) || esValorCss(n.text)) { /* geometría o CSS, no copy */ }
+        const fila = { archivo: rel, linea: linea(n), texto: n.text, via: 'literal', ctx, fn: funcionDe(n, sf) };
+        const enCase = n.parent && ts.isCaseClause(n.parent);
+        const enIntl = OPCION_INTL.has(n.text) && /toLocale|Intl|NumberFormat|DateTimeFormat/.test(ctx?.llamada ?? '');
+        if (esPathSvg(n.text) || esValorCss(n.text) || esClaseCss(n.text) || enCase || enIntl || usoNoEsCopy(n)) { /* no es copy */ }
         else if (PROP_NO_COPY.has(ctx.prop)) { /* className, id, icono… */ }
         else if (ctx.llamada && LLAMADA_DEV.has(ctx.llamada)) D.push(fila);
         else if (esMock) C.push(fila);
@@ -230,6 +367,19 @@ const dedup = (xs) => {
   for (const x of xs) m.set(`${x.archivo}:${x.linea}:${x.texto}`, x);
   return [...m.values()];
 };
+/**
+ * 🔴 RESCATE POR VECINDAD. `'ayer'` (format.ts:72) no tiene acento ni un nombre
+ * que lo salve, y vive cinco líneas debajo de `'recién'`, en la MISMA función
+ * `relTime`, que ya produjo copy aceptada. Una función que fabrica frases
+ * fabrica frases: sus otras palabras sueltas también se leen.
+ *
+ * Es derivación, no lista: no hay que acordarse de agregar `relTime`.
+ */
+const fabricasDeCopy = new Set(B.filter((x) => x.fn).map((x) => `${x.archivo}::${x.fn}`));
+for (const r of RESCATABLES) {
+  if (r.fn && fabricasDeCopy.has(`${r.archivo}::${r.fn}`)) B.push(r);
+}
+
 const a = dedup(A), b = dedup(B), c = dedup(C), dd = dedup(D);
 console.log(JSON.stringify({
   A_jsx_visible: a, B_copy_en_ts: b, C_datos_del_mock: c, D_mensajes_de_dev: dd,

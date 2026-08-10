@@ -5,7 +5,7 @@
 adivinando. Generado el 2026-08-10 sobre `6864e43`.
 
 ```
-802 apariciones · 703 textos únicos · 36 archivos
+826 apariciones · 724 textos únicos · 36 archivos
 ```
 
 ## Cómo se midió, y por qué no con `grep`
@@ -16,17 +16,32 @@ el salto de línea no existe. No es teórico — el `console.error` de
 `walletRail.ts:204` está partido con `+` y el AST lo encontró entero.
 
 🔴 **Y el AST solo no alcanzó.** Cinco lentes independientes barrieron el repo
-sin ver esta lista y encontraron **79 textos únicos que se me habían escapado
-—un 11 %—**, por dos huecos de mi discriminador:
+sin ver esta lista, y un reconciliador verificó cada hallazgo contra el archivo.
+**Encontraron 100 textos únicos que se me habían escapado —un 12 %—**, todos por
+el mismo punto débil: **el discriminador de UNA sola palabra.**
 
 | El hueco | Qué perdía |
 |---|---|
-| Exigía un espacio o un acento para considerar algo «frase» | **toda etiqueta de UNA palabra sin acento**: `Inicio`, `Mesas`, `Volver`, `Cancelar`, `Entrar`, `Principal` |
-| Sólo miraba `src/` | el `<title>` de la pestaña, en `index.html` |
+| Pedía un espacio o un acento para considerar algo «frase» | **toda etiqueta de una palabra sin acento**: `Inicio`, `Mesas`, `Volver`, `Cancelar`, `Entrar` |
+| La regex de palabra suelta estaba anclada en `$`, sin puntuación | **la familia entera de botones en curso**: `Procesando…`, `Guardando…`, `Enviando…`, `Autorizando…`, `Confirmando…` |
+| Descartaba la minúscula suelta para matar enums | **los plurales en ternario**: `miembro`/`miembros`, `visita`/`visitas`, `vez`/`veces`, y `ayer` |
+| Sólo miraba `src/` | el `<title>` de la pestaña |
 
-Los dos corregidos. Lo dejo escrito porque el número que importa de un
-inventario no es cuánto encontró: es cuánto se le escapó, y esto ya se le
-escapó una vez.
+🔴 **El caso que mejor lo muestra**, y que ninguna lente nombró — lo derivó el
+reconciliador: `CreateMesaFlow.tsx:1127` dice `hay $X de ${diff > 0 ? 'más' :
+'menos'}`. **`más` estaba en el inventario y `menos` no.** Las dos mitades de la
+misma frase, en la misma línea: una entró por su acento y la otra no tenía
+ninguno.
+
+**Todos corregidos, y la corrección no fue ampliar la heurística sino cambiar de
+pregunta:** ya no se pregunta si el string *parece* una frase, sino **qué hace
+el código con él**. Si está entre tags, se ve. Si la función lo *devuelve*, es
+parte de lo que produce; si se lo *pasa* a otra función, es un token de esa
+otra. Las clases CSS se descartan **leyendo el CSS real**, no adivinando por
+forma.
+
+Lo dejo escrito porque en un inventario el número que importa no es cuánto
+encontró, sino cuánto se le escapó — y a éste se le escapó en tres pasadas.
 
 ## 🔴 Lo que NO entra, y por qué
 
@@ -102,10 +117,11 @@ ahora evita prometer una app bilingüe que no lo es:
 
 ---
 
+---
 
 ### Abrir mesa y garantía
 
-_149 apariciones · 146 textos únicos_
+_157 apariciones · 154 textos únicos_
 
 
 **`src/screens/CreateMesaFlow.tsx`**
@@ -120,6 +136,7 @@ _149 apariciones · 146 textos únicos_
 | 432 | Puede que la garantía ya exista. |
 | 434 |  Ya sabemos cómo quedó: puedes reenviarla tal cual desde el botón de abajo. |
 | 435 |  Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa. |
+| 452 | Consultando… |
 | 452 | Revisar cómo quedó esa apertura |
 | 457 | Tienes una apertura sin confirmar. |
 | 457 | Puede que la mesa ya se haya creado con su garantía. Reinténtala tal cual: si ya existe, te devolvemos esa misma mesa en vez de retener el total otra vez. |
@@ -166,6 +183,7 @@ _149 apariciones · 146 textos únicos_
 | 1024 | Prueba con menos calidad. |
 | 1029 | Sacar otra foto |
 | 1042 | Modo demo: |
+| 1042 | Ojo: |
 | 1044 | todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo. |
 | 1045 | todavía no leemos la foto de verdad — sacala igual y vas a recibir un ticket de ejemplo para continuar. |
 | 1072 | Capturar |
@@ -173,8 +191,11 @@ _149 apariciones · 146 textos únicos_
 | 1106 | Restaurante |
 | 1114 | Total |
 | 1121 | title-card-note {totalMismatch ? 'warn' : ''} |
+| 1124 | warning |
+| 1124 | info |
 | 1127 | No coincide con el total del ticket ({formatMXN(totalMismatch.prin}): hay {formatMXN(Math.abs(totalMism} de {totalMismatch.diff > 0 ? 'má}. |
 | 1127 | más |
+| 1127 | menos |
 | 1128 | Checa que el total coincida con el total del ticket |
 | 1137 | consumo {idx + 1} |
 | 1142 | Consumo |
@@ -188,6 +209,8 @@ _149 apariciones · 146 textos únicos_
 | 1190 | tk-name {nombre ? '' : 'tk-sin-nombre} |
 | 1191 | Sin nombre |
 | 1200 | Modificar {etiqueta} |
+| 1217 | check |
+| 1217 | pencil |
 | 1218 | Listo |
 | 1218 | Modificar ítems |
 | 1222 | Agregar consumo |
@@ -201,7 +224,6 @@ _149 apariciones · 146 textos únicos_
 | 1295 | En partes iguales |
 | 1296 | El total dividido entre todos |
 | 1309 | card card-p{participants === null ? ' ti}{stepperPulse ? ' tip-block--} |
-| 1309 |  tip-block tip-block--pending |
 | 1315 | ¿Cuántos pagan? |
 | 1315 | ¿Cuántos son en la mesa? |
 | 1317 | Cantidad de comensales |
@@ -232,6 +254,7 @@ _149 apariciones · 146 textos únicos_
 | 1533 | Saldo PayMe |
 | 1535 | Congela |
 | 1535 | de tu saldo hasta que la mesa cierre |
+| 1559 | Autorizando… |
 | 1562 | Reconciliación necesaria |
 | 1566 | Reintentar esta apertura |
 | 1570 | Garantizar |
@@ -242,6 +265,7 @@ _149 apariciones · 146 textos únicos_
 | 1597 | La retención de |
 | 1597 | necesita que la confirmes con tu banco. |
 | 1606 | En la versión final, aquí se abre la verificación de tu banco. |
+| 1609 | Confirmando… |
 | 1609 | Confirmar autorización |
 | 1617 | Cancelar y elegir otra garantía |
 | 1684 | Link de invitación copiado ✓ |
@@ -264,19 +288,15 @@ _149 apariciones · 146 textos únicos_
 
 ### La mesa · dividir, elegir y pagar
 
-_280 apariciones · 259 textos únicos_
+_278 apariciones · 258 textos únicos_
 
 
 **`src/screens/invitacionAdmision.ts`**
 
 | línea | texto |
 |---:|---|
-| 59 | string |
 | 117 | Mesa {inv.mesaCode} |
-| 132 | admite |
-| 134 | cerrada |
 | 137 | Esta mesa ya cerró |
-| 138 | desconocida |
 | 141 | No pudimos verificar esta invitación. Actualiza en un momento. |
 
 **`src/screens/joinLinkView.ts`**
@@ -341,7 +361,6 @@ _280 apariciones · 259 textos únicos_
 | 234 | para ti. |
 | 238 | Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues. |
 | 244 | ¿Qué consumiste? |
-| 245 | 0 2px 8px |
 | 246 | Márcalo para el restaurante — no cambia lo que pagas. |
 | 271 | mi-row {sel ? 'sel' : ''} |
 | 275 | {i.name}{i.quantity > 1 ? ` por ${i.q}{tag ? `, ${tag}` : ''} |
@@ -372,7 +391,6 @@ _280 apariciones · 259 textos únicos_
 |---:|---|
 | 154 | Elige tu propina |
 | 154 | Tu propina |
-| 156 | 0 2px 8px |
 | 157 | Tu base: |
 | 157 | (la cuenta ÷ |
 | 165 | tip-pill {elegida ? 'sel' : ''} |
@@ -380,7 +398,6 @@ _280 apariciones · 259 textos únicos_
 | 182 | Otro |
 | 192 | 0.00 |
 | 196 | Monto de propina a mano |
-| 378 | expired |
 | 380 | La invitación anterior venció. Toca de nuevo para generar otra. |
 | 384 | La invitación pudo haberse creado, pero no recibimos el link. Reintenta la misma operación; no generes otra. |
 | 397 | Link de invitación copiado ✓ |
@@ -421,7 +438,6 @@ _280 apariciones · 259 textos únicos_
 | 863 | Tu banco aprobó la operación; todavía estamos confirmando el pago. Reintenta esta misma confirmación, sin cambiar el método. |
 | 872 | Ese pago no prosperó. Puedes iniciar uno nuevo. |
 | 881 | Estamos confirmando este pago. No inicies otro ni cambies el método hasta que se resuelva. |
-| 887 | wallet |
 | 888 | Saldo PayMe |
 | 890 | Apple Pay |
 | 892 | Ⓖ Google Pay |
@@ -455,6 +471,7 @@ _280 apariciones · 259 textos únicos_
 | 1187 | ← Volver a mi cuenta |
 | 1204 | Actualizar estado |
 | 1213 | Cierre completado |
+| 1220 | clock |
 | 1223 | Se cerró por tiempo |
 | 1223 | Quedó todo pago |
 | 1226 | · Mesa |
@@ -495,9 +512,11 @@ _280 apariciones · 259 textos únicos_
 | 1412 | Pago sin confirmar |
 | 1416 | No podemos reenviar este pago desde la sesión actual. No iniciaremos otro hasta reconciliarlo. |
 | 1417 | Reinténtalo para saber si se cobró: mandamos el mismo pago, no uno nuevo. |
+| 1429 | Consultando… |
 | 1429 | Revisar si se cobró |
 | 1435 | No encontramos ese pago en la mesa: no llegó a tomar tu parte. Si continúas, el próximo intento es un |
 | 1436 | cobro nuevo |
+| 1444 | Cerrando… |
 | 1444 | Entiendo, desbloquear el pago |
 | 1458 | Tu parte |
 | 1458 | Tus consumos |
@@ -525,7 +544,6 @@ _280 apariciones · 259 textos únicos_
 | 1548 | Ese pago se te |
 | 1548 | reembolsó |
 | 1548 | . No lo repetimos solos: si quieres pagar igual, toca el botón de abajo. |
-| 1557 | 0 2px 16px |
 | 1561 | No pudimos cargar las opciones de propina — tu pago sigue sin propina. |
 | 1582 | ¿Para quién? |
 | 1588 | tip-pill {staffId === s.id ? 'sel' : '} |
@@ -560,6 +578,7 @@ _280 apariciones · 259 textos únicos_
 | 1796 |  o Apple Pay |
 | 1797 |  (el saldo PayMe pide cuenta) |
 | 1807 | Ese intento reembolsado requiere reconciliación antes de iniciar otro pago. |
+| 1825 | Procesando… |
 | 1827 | Reconciliación necesaria |
 | 1829 | Reintentar el pago sin confirmar |
 | 1831 | Pagar de nuevo {formatMXN(gross)} |
@@ -570,16 +589,19 @@ _280 apariciones · 259 textos únicos_
 | línea | texto |
 |---:|---|
 | 86 | No pudimos verificar cómo quedó esa apertura. Prueba de nuevo en un momento; no vamos a abrir otra mesa mientras tanto. |
+| 116 | acreditada |
+| 123 | muerta |
 | 128 | Esa apertura terminó sin quedar en pie (mesa {code}). Ya puedes abrir una nueva. |
 | 129 | Esa apertura terminó sin quedar en pie. Ya puedes abrir una nueva. |
 | 140 | La mesa {code} se creó, pero su garantía quedó sin confirmar. Podemos retomar ESA misma garantía; no abrimos otra mesa. |
 | 141 | La mesa se creó, pero su garantía quedó sin confirmar. No abrimos otra mesa. |
 | 149 | No encontramos ninguna mesa creada con este intento. Podemos reenviarlo tal cual: si llegó a crearse, te devolvemos esa misma mesa en vez de retener el total otra vez. |
+| 155 | conflicto |
 | 159 | Este intento no coincide con la apertura que quedó pendiente. No vamos a reenviarlo ni a abrir otra mesa: escribinos para resolverlo. |
 
 ### Inicio y mesas
 
-_66 apariciones · 58 textos únicos_
+_65 apariciones · 57 textos únicos_
 
 
 **`src/screens/historialView.ts`**
@@ -590,8 +612,6 @@ _66 apariciones · 58 textos únicos_
 | 92 | Mediodía |
 | 93 | Tarde |
 | 94 | Noche |
-| 173 | long |
-| 173 | numeric |
 | 174 | Sin fecha |
 
 **`src/screens/homeMesasView.ts`**
@@ -634,12 +654,12 @@ _66 apariciones · 58 textos únicos_
 | 335 | Tu saldo PayMe |
 | 344 | Ocultar saldo |
 | 344 | Mostrar saldo |
+| 347 | eye |
 | 349 | Ir a Cuenta |
 | 355 | Cargar |
 | 362 | Transferir |
 | 371 | Últimos movimientos |
 | 373 | Ver más |
-| 392 | ellipsis |
 | 429 | Mesas abiertas |
 | 433 | Tus otras mesas abiertas |
 | 437 | Cerrar |
@@ -661,6 +681,7 @@ _66 apariciones · 58 textos únicos_
 | 132 | Cargando tu historial |
 | 143 | Todavía no cerraste ninguna mesa. |
 | 154 | hist-item {on ? 'on' : ''} |
+| 162 | dining |
 | 182 | hist-chevron {on ? 'on' : ''} |
 | 194 | El detalle de esta mesa todavía no está disponible |
 | 197 | No podemos confirmar que sea seguro de mostrar. Lo que pagaste tú es el monto de esta fila. |
@@ -670,7 +691,7 @@ _66 apariciones · 58 textos únicos_
 
 ### Social · amigos, grupos, invitaciones
 
-_91 apariciones · 81 textos únicos_
+_97 apariciones · 87 textos únicos_
 
 
 **`src/components/InviteFriends.tsx`**
@@ -686,6 +707,7 @@ _91 apariciones · 81 textos únicos_
 | 164 | {m.first_name} {m.last_name} |
 | 188 | btn btn-sm btn-fit {done ? 'btn-ghost' : 'btn-ou} |
 | 192 | Invitado ✓ |
+| 192 | Enviando… |
 | 192 | Invitar |
 | 205 | No pudimos cargar tus contactos |
 | 207 | Puedes compartir el link igual mientras tanto. |
@@ -695,6 +717,8 @@ _91 apariciones · 81 textos únicos_
 | 229 | Buscar contactos para invitar |
 | 233 | Ningún contacto coincide con “ |
 | 238 | O invita a un grupo |
+| 261 | integrante |
+| 261 | integrantes |
 | 264 | inv-chevron {abierto ? 'on' : ''} |
 | 270 | Cargando integrantes… |
 | 273 | No pudimos abrir el grupo. |
@@ -737,6 +761,7 @@ _91 apariciones · 81 textos únicos_
 | 373 | Agregar amigo |
 | 376 | Email o ID PayMe (payme_mx_xxxx) |
 | 386 | Cancelar |
+| 394 | Buscando… |
 | 394 | Agregar |
 | 404 | Buscar entre tus amigos |
 | 405 | Buscar entre tus amigos |
@@ -755,6 +780,7 @@ _91 apariciones · 81 textos únicos_
 | 481 | Ícono {ic} |
 | 482 | icon-pick-opt {ic === newIcon ? 'on' : ''} |
 | 495 | Cancelar |
+| 503 | Creando… |
 | 503 | Crear |
 | 513 | Buscar entre tus grupos |
 | 514 | Buscar entre tus grupos |
@@ -762,13 +788,14 @@ _91 apariciones · 81 textos únicos_
 | 524 | Crea un grupo para dividir siempre con la misma gente. |
 | 525 | Sin resultados para esa búsqueda. |
 | 533 | No pudimos abrir el grupo |
+| 540 | miembro |
+| 540 | miembros |
 | 594 | No tienes solicitudes pendientes. |
 | 603 | Te quieren agregar ( |
 | 617 | Aceptar |
 | 624 | Rechazar |
 | 628 | Bloquear a {r.fullName} |
 | 642 | Enviadas ( |
-| 646 | 0 16px 6px |
 | 647 | Por privacidad no mostramos a quién hasta que acepte. |
 | 659 | Solicitud enviada |
 | 660 | · pendiente |
@@ -776,7 +803,7 @@ _91 apariciones · 81 textos únicos_
 
 ### Cuenta · tarjetas, pagos, estadísticas
 
-_86 apariciones · 81 textos únicos_
+_90 apariciones · 85 textos únicos_
 
 
 **`src/api/paymentStatus.ts`**
@@ -845,6 +872,7 @@ _86 apariciones · 81 textos únicos_
 | 333 | En la demo no pedimos datos reales: se agrega una tarjeta de ejemplo. |
 | 344 | Los datos van directo a Stripe: PayMe nunca ve el número completo. |
 | 356 | Cancelar |
+| 364 | Guardando… |
 | 366 | Reintentar la misma tarjeta |
 | 367 | Guardar tarjeta |
 | 379 | Agregar tarjeta |
@@ -865,7 +893,11 @@ _86 apariciones · 81 textos únicos_
 | 125 | Visitas |
 | 129 | Promedio por visita |
 | 135 | Tus restaurantes |
+| 144 | visita |
+| 144 | visitas |
 | 164 | Plato más pedido |
+| 169 | vez |
+| 169 | veces |
 | 177 | Tipo de cocina favorito |
 | 193 | Todavía no existe en el contrato |
 | 195 | Comparación con el mes anterior · propinas acumuladas · ranking por tipología de plato. |
@@ -884,14 +916,13 @@ _86 apariciones · 81 textos únicos_
 | 124 | Todavía no pagaste ninguna mesa. |
 | 138 | Mesa |
 | 152 | No pudimos traer más pagos. Lo que ves sigue siendo correcto. |
+| 164 | Cargando… |
 | 164 | Cargar más |
 
 **`src/screens/pagosView.ts`**
 
 | línea | texto |
 |---:|---|
-| 54 | long |
-| 54 | numeric |
 | 55 | Sin fecha |
 
 **`src/screens/TarjetasScreen.tsx`**
@@ -902,7 +933,7 @@ _86 apariciones · 81 textos únicos_
 
 ### Avisos
 
-_16 apariciones · 16 textos únicos_
+_19 apariciones · 19 textos únicos_
 
 
 **`src/screens/AvisosScreen.tsx`**
@@ -923,12 +954,15 @@ _16 apariciones · 16 textos únicos_
 | 214 | Cargando avisos… |
 | 218 | No tienes avisos. |
 | 227 | aviso-dot {sinLeer ? '' : 'off'} |
+| 228 | true |
 | 229 | Sin leer |
+| 230 | img |
+| 232 | bell |
 | 234 | aviso-title {sinLeer ? 'unread' : ''} |
 
 ### Entrar y perfil
 
-_35 apariciones · 32 textos únicos_
+_36 apariciones · 33 textos únicos_
 
 
 **`src/screens/LoginScreen.tsx`**
@@ -964,6 +998,7 @@ _35 apariciones · 32 textos únicos_
 |---:|---|
 | 31 | Más |
 | 38 | {user.first_name} {user.last_name} |
+| 38 | PayMe |
 | 40 | {user.first_name} {user.last_name} |
 | 40 | Tu cuenta |
 | 50 | Tus datos van a aparecer aquí en cuanto termines de crear tu cuenta. |
@@ -978,7 +1013,7 @@ _35 apariciones · 32 textos únicos_
 
 ### Marco de la app
 
-_26 apariciones · 21 textos únicos_
+_27 apariciones · 22 textos únicos_
 
 
 **`src/App.tsx`**
@@ -997,6 +1032,7 @@ _26 apariciones · 21 textos únicos_
 | 61 | Más |
 | 89 | Nueva |
 | 101 | appbar-item {on ? 'on' : ''} |
+| 103 | page |
 | 117 | Navegación principal |
 
 **`src/components/AppHeader.tsx`**
@@ -1025,28 +1061,34 @@ _26 apariciones · 21 textos únicos_
 | 9 | Pay |
 | 9 | Me |
 | 18 | Volver |
-| 84 | toast toast-hidden |
+| 64 | VISA |
 
 ### Etiquetas y formatos compartidos
 
-_51 apariciones · 47 textos únicos_
+_55 apariciones · 47 textos únicos_
 
 
 **`src/api/http.ts`**
 
 | línea | texto |
 |---:|---|
-| 68 | Authorization |
 | 68 | Bearer {token} |
 
 **`src/api/index.ts`**
 
 | línea | texto |
 |---:|---|
+| 377 | definitive |
+| 377 | ambiguous |
 | 379 | No pudimos confirmar la respuesta de tu banco. |
+| 379 | ambiguous |
 | 392 | La garantía ya no está vigente. |
 | 395 | Tu banco pudo haber autorizado la garantía; todavía la estamos verificando. |
+| 395 | ambiguous |
 | 399 | Tu banco pudo haber autorizado la garantía; todavía la estamos verificando. |
+| 399 | ambiguous |
+| 600 | success |
+| 600 | ambiguous |
 
 **`src/api/invitationLink.ts`**
 
@@ -1074,6 +1116,7 @@ _51 apariciones · 47 textos únicos_
 | 68 | hace {mins} min |
 | 70 | hace {hs} h |
 | 72 | hace {days} días |
+| 72 | ayer |
 
 **`src/utils/labels.ts`**
 
@@ -1092,9 +1135,6 @@ _51 apariciones · 47 textos únicos_
 | 28 | Cancelada |
 | 34 | Cerrada |
 | 38 | En curso |
-| 43 | badge badge-orange |
-| 45 | badge badge-gray |
-| 47 | badge badge-teal |
 | 51 | Carga en OXXO |
 | 52 | Carga con tarjeta |
 | 53 | Abono por SPEI |

@@ -1,5 +1,61 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.73.1 — el inventario, corregido: 100 faltantes y 16 falsos positivos (2026-08-10)
+
+PATCH sobre `0.73.0`, que publicó el inventario con **82 textos menos de los que
+hay**. Cierre del barrido de completitud.
+
+```
+826 apariciones · 724 textos únicos   (era 802 · 703)
+```
+
+### 🔴 Todo salió del mismo punto débil: la palabra suelta
+
+Un reconciliador verificó los 245 hallazgos de las lentes contra el archivo, uno
+por uno. **Ninguna lente inventó nada.** Las dos clases:
+
+- **capitalizada con puntuación final** — la regex estaba anclada en `$` sin
+  puntuación, así que el `…` y el `:` mataban la única vía que tenía una palabra
+  sola. Se perdía **la familia entera de botones en curso**: `Procesando…`,
+  `Guardando…`, `Enviando…`, `Autorizando…`, `Confirmando…`, `Cerrando…`;
+- **minúscula suelta en ternario de plural** — descartada a propósito para matar
+  enums, y con ella se iban `miembro`/`miembros`, `visita`/`visitas`,
+  `vez`/`veces`, `integrante`/`integrantes` y `ayer`.
+
+🔴 **El caso que lo prueba, y que ninguna lente vio:** `CreateMesaFlow.tsx:1127`
+dice `hay $X de ${diff > 0 ? 'más' : 'menos'}`. **`más` estaba y `menos` no** —
+las dos mitades de la misma frase, en la misma línea, una salvada por su acento.
+
+### La corrección no fue ampliar la heurística: fue cambiar de pregunta
+
+Ya no se pregunta si el string **parece** una frase, sino **qué hace el código
+con él**:
+
+```
+entre tags            → se ve. Sin heurística.
+lo DEVUELVE la función → es parte de lo que produce  (`return … ? 'ayer' : …`)
+se lo PASA a otra      → es un token de esa otra     (`navigate('home')`)
+comparado con ===      → nadie lo lee
+índice de objeto       → `headers['Authorization']`
+dentro de `style={{}}` → es CSS
+```
+
+Las clases CSS se descartan **leyendo los selectores del CSS real**, no
+adivinando por forma: `toast toast-hidden` y `badge badge-orange` salieron así.
+
+### 🔴 Y tres veces se me escapó por la MISMA causa
+
+Cada camino nuevo hacia «esto es copy» se salteaba los filtros que el camino
+principal ya aplicaba: primero las plantillas, después el rescate por vecindad,
+después el borde de JSX —`onClick={() => navigate('home')}` también vive «dentro
+de una llave»—. **Un atajo nuevo abre un agujero exactamente del tamaño de lo
+que los filtros filtraban.**
+
+El rescate por vecindad además nació demasiado ancho: `funcionDe` devolvía el
+nombre del componente, y `MesaScreen` «fabrica copy» por definición. Quedó
+acotado a helpers camelCase **y** a valores devueltos.
+
+
 ## 0.73.0 — el inventario de copy, y los 79 textos que mi primer barrido perdió (2026-08-10)
 
 MINOR: agrega `scripts/inventario-copy.mjs` y `docs/INVENTARIO_COPY_UI.md`.
