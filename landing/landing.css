@@ -528,64 +528,30 @@ a { color: inherit; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   🔴 EL ACCESO QUE TODAVÍA NO TIENE ADÓNDE IR · esto NO viene del boceto.
+   🔴 EL TRATAMIENTO DE «ACCESO APAGADO» SE RETIRÓ · 2026-08-09.
 
-   El boceto manda los dos accesos a `panel.paymemx.com` y `app.paymemx.com`.
-   **`panel.` no existe** —sin DNS, sin hosting, y el repo del dashboard es
-   privado—. Publicar un enlace ahí entrega un botón que no lleva a ningún
-   lado, que es peor que no tener el botón.
+   Existió unas horas: `panel.paymemx.com` no tenía DNS y publicar un botón
+   hacia un dominio inexistente entrega un clic que no hace nada — peor que no
+   tener el botón. Era `<span>` sin `href`, no focuseable, con una pastilla
+   «Muy pronto».
 
-   El boceto no está mal escrito: **está escrito para el futuro ratificado**.
-   `D-WEB-1-BIS` manda esos orígenes y algún día van a ser correctos. **El
-   defecto no es el destino: es la fecha.**
+   **Su motivo desapareció: el panel existe y responde 200.** Así que el
+   tratamiento se borra entero en vez de quedar durmiente — una regla sin
+   objeto es la que alguien reaplica por analogía en un caso que no
+   corresponde.
 
-   Tratamiento: `<span>` y no `<a>` —no navegable, no focuseable—, sin `href`,
-   `cursor: not-allowed`, y una pastilla «Muy pronto» que lo dice antes del
-   clic. Se ve deliberado, no roto.
+   ⚠️ **Y con esto vuelve la jerarquía que Diseño definió.** El hueco con borde
+   era lo que hacía que «Comensal» se leyera como principal; ahora «Entrar como
+   restaurante» recupera su `.cta.primary` sólido, que es lo que el boceto
+   tenía. La inversión había sido un efecto lateral del apagado, no una
+   decisión — quedó anotada como tal y se deshace sola al reactivar.
 
-   🔴 SEAM: cuando exista el DNS, los dos vuelven a `<a href>` con `app.` y
-   `panel.`, y este bloque se borra entero.
+   🔴 SEAM ACTUALIZADO. Ya no dice «cuando exista el DNS»: el DNS existe.
+   `app.` y `panel.` son los destinos definitivos de `D-WEB-1-BIS`. **Lo que
+   sigue pendiente es `paymemx.com` a secas para ESTA landing** — hoy el apex
+   redirige a una página de parking (`paymemx-com.l.ink`), así que la landing
+   todavía no tiene su origen propio.
    ══════════════════════════════════════════════════════════════════════════ */
-.cta.pronto,
-.login-row.pronto {
-  cursor: not-allowed;
-}
-
-.cta.pronto {
-  /* Hueco con borde en vez de sólido: la diferencia se nota de lejos. */
-  background: transparent;
-  color: var(--action);
-  border: 2px solid var(--action);
-  box-shadow: none;
-}
-
-.cta.pronto:hover,
-.login-row.pronto:hover {
-  transform: none;
-  background: transparent;
-}
-
-/* 🔴 `--text`, no `--text-muted`: medido, el gris sobre este fondo daba 3.01:1
-   y AA pide 4.5 para 12 px. Es MI pastilla —no viene del boceto— así que el
-   defecto era mío y se corrige acá, no se reporta. Con `--text` da 13.7:1 y se
-   sigue leyendo secundaria por el tamaño y el fondo, no por el gris. */
-.pill-pronto {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
-  border-radius: var(--r-full);
-  background: rgba(15, 31, 61, 0.08);
-  color: var(--text);
-  font-family: 'DMS', system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-  vertical-align: middle;
-}
-
-.login-row.pronto {
-  color: var(--text-muted);
-}
 
 
 /* ══════════════════════════════════════════════════════════════════════════

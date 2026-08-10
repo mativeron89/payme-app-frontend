@@ -50,18 +50,30 @@ const RAIZ = join(AQUI, '..');
 /**
  * Lo único que la landing tiene derecho a apuntar hacia afuera.
  *
- * 🔴 El boceto manda a `app.paymemx.com` y `panel.paymemx.com`. **Esos dominios
- * NO EXISTEN** —sin DNS, sin hosting— así que publicarlo tal cual habría
- * entregado botones que no llevan a ningún lado. El boceto no está mal
- * escrito: **está escrito para el futuro ratificado. El defecto es la fecha.**
+ * 🔴 ACTUALIZADO el 2026-08-09: son los DEFINITIVOS de `D-WEB-1-BIS`.
  *
- * 🔴 SEAM: cuando exista el DNS, vuelven `app.` y `panel.`, la preview se
- * retira, y el tratamiento de acceso apagado se borra entero.
+ * Durante unas horas apuntaron a un build de GitHub Pages, porque estos dos
+ * dominios no tenían DNS y publicar un enlace hacia un dominio inexistente
+ * entrega un clic que no hace nada. **Ahora existen y responden 200**,
+ * verificado con `curl` y certificado válido antes de tocar el HTML.
  */
-const DESTINOS_AUTORIZADOS = ['https://mativeron89.github.io/payme-app-frontend/'] as const;
+const DESTINOS_AUTORIZADOS = [
+  'https://app.paymemx.com',
+  'https://panel.paymemx.com',
+] as const;
 
-/** Ratificados pero todavía sin DNS. Prohibidos como destino hasta que existan. */
-const DOMINIOS_SIN_DNS = ['app.paymemx.com', 'panel.paymemx.com'] as const;
+/**
+ * 🔴 Destinos que TODAVÍA NO SON NUESTROS. Prohibidos como enlace.
+ *
+ * La lista cambió de contenido pero no de propósito, y ése es el punto: la
+ * guarda no era «no linkeés a paymemx» sino **«no linkeés a algo que no
+ * responde lo que creés»**. `app.` y `panel.` salieron porque ya responden;
+ * el apex ENTRÓ porque hoy redirige a una página de parking
+ * (`paymemx-com.l.ink`) — o sea que todavía no es de PayMe.
+ *
+ * Sale de acá el día que `paymemx.com` sirva esta misma landing.
+ */
+const DOMINIOS_SIN_DNS = ['paymemx-com.l.ink'] as const;
 
 interface Artefacto {
   readonly archivos: readonly string[];
@@ -285,22 +297,43 @@ describe('PROPIEDAD 2 · destinos honestos', () => {
     }
   });
 
-  it('🔴 MUTANTE · ningún enlace a un dominio que TODAVÍA NO EXISTE', () => {
+  it('🔴 MUTANTE · ningún enlace a un destino que no es nuestro todavía', () => {
     const ofensores = DOMINIOS_SIN_DNS.filter((d) => build.todo.includes(d));
-    expect(ofensores, `destinos sin DNS en el artefacto: ${ofensores.join(' · ')}`).toEqual([]);
+    expect(ofensores, `destinos ajenos en el artefacto: ${ofensores.join(' · ')}`).toEqual([]);
+    // Y el apex a secas: hoy redirige a un parking, así que no se enlaza.
+    // Se busca como href EXACTO porque `paymemx.com` como substring matchea
+    // `app.paymemx.com`, que sí es válido.
+    const hrefs = tags(build.htmlSinScript)
+      .flatMap((t) => atributos(t.crudo).filter((a) => a.nombre === 'href').map((a) => a.valor));
+    const apex = hrefs.filter((h) => /^https?:\/\/(www\.)?paymemx\.com\/?$/.test(h));
+    expect(apex, 'la landing enlaza al apex, que hoy es un parking').toEqual([]);
   });
 
-  it('🔴 los dos accesos del restaurante están APAGADOS y lo dicen', () => {
-    // `<span>` y no `<a>`: no navegable, no focuseable. Con su pastilla, para
-    // que se lea antes del clic. Uno en el hero, otro en el desplegable.
-    const apagados = tags(build.htmlSinScript).filter((t) => /\bpronto\b/.test(t.crudo));
-    expect(apagados.length, 'faltan los accesos apagados').toBeGreaterThanOrEqual(2);
-    for (const t of apagados) {
-      if (t.nombre === 'span' && /pill-pronto/.test(t.crudo)) continue;
-      expect(t.nombre, `el acceso apagado volvió a ser <${t.nombre}>`).toBe('span');
-      expect(atributos(t.crudo).map((a) => a.nombre), 'un acceso apagado con href').not.toContain('href');
+  /**
+   * 🔴 EL INVERSO DEL TEST QUE HABÍA ACÁ · 2026-08-09.
+   *
+   * Hasta hoy exigía que los dos accesos al panel estuvieran APAGADOS
+   * —`<span>` sin `href`, con pastilla «Muy pronto»—, porque
+   * `panel.paymemx.com` no existía. **Existe.** El tratamiento se retiró y el
+   * test se da vuelta: ahora exige que los CUATRO accesos sean enlaces vivos.
+   *
+   * No se borró: se invirtió, y queda escrito por qué. Un test que desaparece
+   * en silencio no deja rastro de que la condición existió.
+   */
+  it('🔴 los CUATRO accesos son enlaces vivos · nada apagado', () => {
+    expect(build.html, 'quedó un resto del tratamiento apagado').not.toContain('pronto');
+    expect(build.html, 'quedó la pastilla «Muy pronto»').not.toContain('Muy pronto');
+
+    const porDestino = new Map<string, number>();
+    for (const t of tags(build.htmlSinScript).filter((t) => t.nombre === 'a')) {
+      const h = atributos(t.crudo).find((a) => a.nombre === 'href')?.valor ?? '';
+      if (h.startsWith('http')) porDestino.set(h, (porDestino.get(h) ?? 0) + 1);
     }
-    expect((build.html.match(/Muy pronto/g) ?? []).length, 'no dice «Muy pronto»').toBeGreaterThanOrEqual(2);
+    // Dos por destino: el CTA del hero y la fila del desplegable.
+    expect(Object.fromEntries([...porDestino].sort())).toEqual({
+      'https://app.paymemx.com': 2,
+      'https://panel.paymemx.com': 2,
+    });
   });
 });
 
