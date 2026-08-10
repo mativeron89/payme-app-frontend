@@ -1,5 +1,50 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.69.0 — los accesos van a su dominio propio (2026-08-09)
+
+MINOR: cambia adónde lleva la landing.
+
+`app.paymemx.com` y `panel.paymemx.com` **existen y responden**. Verificado
+antes de tocar el HTML: HTTP 200, Let's Encrypt válido hasta el 8-nov, y `app.`
+sirve el bundle mock.
+
+```
+Comensal     → https://app.paymemx.com      (antes: el build de GitHub Pages)
+Restaurante  → https://panel.paymemx.com    (antes: <span> apagado)
+```
+
+**El tratamiento de «acceso apagado» se borra entero.** Existió unas horas y
+cumplió su función; su motivo desapareció. 🔴 **Una regla sin objeto es la que
+alguien reaplica por analogía donde no corresponde.**
+
+⚠️ **Con eso vuelve la jerarquía que Diseño definió**: el hueco con borde era lo
+que hacía leer «Comensal» como principal. Estaba anotado como efecto lateral y
+no como decisión — se deshizo solo al reactivar.
+
+### 🔴 El apex todavía no es nuestro
+
+Medido: **`paymemx.com` a secas devuelve 302 a `paymemx-com.l.ink`**, una página
+de parking. Así que la guarda de destinos cambia de contenido y no de propósito:
+nunca fue *«no enlaces a paymemx»*, fue **«no enlaces a algo que no responde lo
+que creés»**. `app.` y `panel.` salieron de la lista; el apex entró.
+
+Se busca como `href` **exacto**: `paymemx.com` como substring matchea
+`app.paymemx.com`, que sí es válido.
+
+### El test no se borró: se invirtió
+
+Donde exigía dos accesos apagados, ahora exige **los cuatro vivos** y que no
+quede un resto de `pronto`. **Un test que desaparece en silencio no deja rastro
+de que la condición existió.**
+
+### La frase del cobro, autorizada con su condición escrita
+
+Mati autorizó publicar *«el cobro va directo a la cuenta del restaurante»*: sin
+pagos reales nadie puede ser inducido a error, y una landing para inversores
+describe el producto. **La condición queda en
+`docs/PENDIENTE_ANTES_DEL_PRIMER_COBRO.md`, no en la landing** — porque *una
+autorización dada bajo una condición se recuerda como una autorización a secas*.
+
 ## 0.68.0 — la landing se lee en un teléfono (2026-08-09)
 
 MINOR: cambia cómo se ve la landing en móvil, que es donde se abre un link de
