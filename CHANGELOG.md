@@ -1,5 +1,55 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.73.2 — el comentario del deploy mentía en las DOS direcciones (2026-08-10)
+
+PATCH: sólo comentarios, documento y una guarda. **Cero cambios en el producto.**
+
+`deploy-demo.yml` decía que ese camino publica «**SIN COMPUERTA**» y que su copia
+«puede quedar publicada desde un commit cuya suite falló». **Las dos frases son
+falsas**, y las escribí yo: en Actions un paso que falla **aborta el job**, así
+que `npm test` en rojo no llega nunca al `upload-pages-artifact`.
+
+### 🔴 Y lo que el comentario tapaba es peor que lo que denunciaba
+
+Los dos caminos corren pruebas — corren pruebas **DISTINTAS**:
+
+```
+ci.yml          → Vercel   espejo · test · typecheck · build · PLAYWRIGHT
+deploy-demo.yml → Pages    test · typecheck · build
+```
+
+**A Pages le faltan DOS: los recorridos de navegador y el gate del contrato
+espejado.** Un commit que pasa los unitarios y reprueba Playwright —o que rompe
+la integridad del espejo— **se publica en Pages y NO en Vercel**: las dos
+superficies divergen, con la MENOS verificada arriba.
+
+Es la forma de defecto que apareció hoy dos veces en dominios sin relación:
+**una defensa construida sobre un canal, con un segundo canal que la esquiva.**
+
+**Se corrige el comentario, no el workflow.** Retirar el camino de Pages es una
+orden que ya existe y tiene su ventana. 🔴 **Un comentario que exagera en una
+dirección hace que el lector descarte también la parte que sí importa** — y acá
+lo que importa es la divergencia, no una ausencia que no existe.
+
+### La divergencia queda MEDIDA, no descrita
+
+Guarda nueva en `scripts/despliegue.test.ts`: deriva del `run:` de cada workflow
+qué verifica, y exige que la diferencia sea **exactamente** `espejo + playwright`.
+Corta para los dos lados — si alguien le agrega Playwright a Pages, o se lo saca
+al CI, cae y hay que actualizar lo escrito.
+
+⚠️ **Y su primera versión prohibía la frase «sin gate» en todo el archivo, con
+lo que prohibía la propia corrección**, que necesita citar lo que reemplazó.
+Ahora distingue **afirmar** de **citar**. Matcher demasiado ancho, otra vez.
+
+### Verificación estática del candado, que sí se puede hacer
+
+`success()` en Actions es **de alcance por job**, y `ci.yml` tiene **un solo
+job**: cubre todos los pasos anteriores. 🔴 Con dos jobs sin `needs:` habría
+cubierto sólo el suyo y el candado sería decorativo. Acreditado por
+configuración, sin provocar un CI rojo — que sigue sin observarse en vivo.
+
+
 ## 0.73.1 — el inventario, corregido: 100 faltantes y 16 falsos positivos (2026-08-10)
 
 PATCH sobre `0.73.0`, que publicó el inventario con **82 textos menos de los que

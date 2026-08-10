@@ -37,16 +37,37 @@
 # apaga el automático de `main` y `ci.yml` llama a los Deploy Hooks al final,
 # sólo con todo en verde. El porqué en `docs/DESPLIEGUE_GATEADO.md`.
 #
-# 🔴 PERO ESTE WORKFLOW SIGUE SIN COMPUERTA, y hay que saberlo:
+# 🔴 CORREGIDO EL 2026-08-10, y en las DOS direcciones.
 #
-#     paymemx.com · app. · panel.   →  ci.yml, DESPUÉS de la suite   ✅ gateado
-#     …github.io/payme-app-frontend →  este archivo, en cada push    🔴 sin gate
+# Acá decía «este workflow sigue SIN COMPUERTA» y «la copia de Pages puede
+# quedar publicada desde un commit cuya suite falló». **Las dos frases son
+# falsas.** En Actions un paso que falla ABORTA el job, así que `npm test` en
+# rojo no llega nunca al `upload-pages-artifact` del final: hay compuerta, y es
+# la de la secuencia.
 #
-# O sea: **la copia de Pages puede quedar publicada desde un commit cuya suite
-# falló.** No es producción —nadie la visita— pero está viva y es pública.
-# No se toca hoy: está en su ventana de gracia de siete días, y cuando cierre
-# este workflow se retira por orden propia. Que quede escrito para que nadie
-# descubra la asimetría por accidente.
+# ⚠️ **Pero el problema real es otro y es PEOR que el que el comentario
+# denunciaba.** Los dos caminos corren pruebas — corren pruebas DISTINTAS:
+#
+#   ci.yml          → Vercel   INTEGRIDAD DEL ESPEJO · test · typecheck ·
+#                              build · PLAYWRIGHT
+#   este archivo    → Pages    test · typecheck · build
+#
+# **A Pages le faltan DOS: los 78 recorridos de navegador y el gate del
+# contrato espejado.** O sea:
+#
+# > Un commit que pasa los unitarios y REPRUEBA Playwright —o que rompe la
+# > integridad del espejo— **se publica en Pages y NO en Vercel.** Las dos
+# > superficies quedan divergentes, con la MENOS verificada publicada y la más
+# > verificada quedándose atrás.
+#
+# 🔴 Y la forma del defecto es la que importa: **una defensa construida sobre
+# un canal, con un segundo canal que la esquiva.** No se arregla poniéndole más
+# pruebas a este archivo sin decidirlo: se arregla retirando este camino cuando
+# cierre su ventana de gracia, que es la orden que ya existe.
+#
+# Se corrige el comentario y no el workflow a propósito. **Un comentario que
+# exagera en una dirección hace que el lector descarte también la parte que sí
+# importa**, y acá la parte que importa es la divergencia, no la ausencia.
 # Requiere una vez: Settings → Pages → Source: "GitHub Actions".
 #
 # El build /live/ apunta al backend real (VITE_MOCK=0). La publishable key de

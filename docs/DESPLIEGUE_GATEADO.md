@@ -69,12 +69,38 @@ no acreditado**.
 4. **La URL del hook no se imprime.** GitHub la enmascara por ser secreto, pero
    no se escribe igual.
 
-## Lo que este gate NO cubre
+## 🔴 Lo que este gate NO cubre · corregido el 2026-08-10
 
-**`deploy-demo.yml` sigue publicando GitHub Pages en cada push, sin gate.** No
-se toca todavía: está en su ventana de gracia de siete días, y cuando cierre se
-retira por orden propia.
+Acá decía que `deploy-demo.yml` publica «sin gate» y que su copia «puede quedar
+publicada desde un commit cuya suite falló». **Las dos cosas son falsas:** en
+Actions un paso que falla aborta el job, así que `npm test` en rojo no llega al
+`upload-pages-artifact`.
 
-⚠️ **Mientras tanto hay DOS caminos de publicación y sólo uno está gateado.** La
-copia de Pages puede quedar publicada desde un commit cuya suite falló. No es
-producción —nadie la visita— pero está viva y es pública.
+⚠️ **El problema real es otro, y es peor.** Los dos caminos corren pruebas, pero
+corren pruebas **distintas**:
+
+| Camino | Qué corre antes de publicar | Adónde |
+|---|---|---|
+| `ci.yml` | integridad del espejo · test · typecheck · build · **Playwright** | Vercel |
+| `deploy-demo.yml` | test · typecheck · build | Pages |
+
+**A Pages le faltan dos: los recorridos de navegador y el gate del contrato
+espejado.** Un commit que pasa los unitarios y reprueba Playwright —o que rompe
+la integridad del espejo— **se publica en Pages y no en Vercel**: las dos
+superficies divergen, con la menos verificada arriba.
+
+No se arregla agregándole pruebas a `deploy-demo.yml` sin decidirlo: se arregla
+**retirando ese camino** cuando cierre su ventana de gracia, que es la orden que
+ya existe.
+
+## Y una verificación estática del candado, que sí se puede hacer
+
+`success()` en Actions es **de alcance por job**. Este repo tiene **un solo job**
+(`build`) en `ci.yml`, así que `success()` en el paso de publicar cubre todos
+los pasos anteriores. 🔴 **Con dos jobs sin `needs:`, habría cubierto sólo el
+suyo y el candado sería decorativo.** Queda acreditado por configuración, sin
+tener que provocar un CI rojo.
+
+⚠️ **Lo que sigue sin acreditarse en el pipeline real: qué pasa con el CI en
+rojo.** Está probado en local contra un `curl` sustituido —200 pasa, 401/500 y
+caída cortan— pero nunca se observó en vivo, y no se va a provocar.

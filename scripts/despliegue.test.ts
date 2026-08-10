@@ -325,3 +325,67 @@ describe('vercel.json · el despliegue automático sigue apagado', () => {
     expect(doc, 'no declara qué queda sin gatear').toContain('deploy-demo.yml');
   });
 });
+
+/**
+ * 🔴 LOS DOS CAMINOS DE PUBLICACIÓN CORREN PRUEBAS DISTINTAS · 2026-08-10.
+ *
+ * El comentario de `deploy-demo.yml` decía que ese camino publicaba «sin
+ * gate». Era falso —un paso que falla aborta el job— y además tapaba el
+ * problema real, que es peor:
+ *
+ *   ci.yml          → Vercel   espejo · test · typecheck · build · PLAYWRIGHT
+ *   deploy-demo.yml → Pages    test · typecheck · build
+ *
+ * Un commit que pasa los unitarios y reprueba Playwright, o que rompe la
+ * integridad del espejo, **se publica en Pages y no en Vercel**. Las dos
+ * superficies divergen con la MENOS verificada arriba.
+ *
+ * Esta guarda no arregla la divergencia —retirar el camino de Pages es una
+ * orden aparte—: la mide, para que no cambie sin que nadie se entere. Y corta
+ * para los dos lados: si alguien le agrega Playwright a Pages, o se lo saca a
+ * `ci.yml`, este test cae y hay que actualizar lo escrito.
+ */
+describe('los dos pipelines · la divergencia está medida, no supuesta', () => {
+  const leer = (f: string) => readFileSync(join(RAIZ, '.github', 'workflows', f), 'utf8');
+  /** Pasos que verifican algo, derivados del `run:` — no una lista a mano. */
+  const gates = (yml: string) => {
+    const s = new Set<string>();
+    if (/npm test/.test(yml)) s.add('test');
+    if (/npm run typecheck/.test(yml)) s.add('typecheck');
+    if (/npm run build/.test(yml)) s.add('build');
+    if (/playwright test/.test(yml)) s.add('playwright');
+    if (/verificar-mirror\.mjs/.test(yml)) s.add('espejo');
+    return s;
+  };
+
+  it('🔴 la diferencia es EXACTAMENTE playwright + espejo', () => {
+    const ci = gates(leer('ci.yml'));
+    const pages = gates(leer('deploy-demo.yml'));
+    expect(ci.size, 'no se parsearon los gates de ci.yml').toBeGreaterThan(3);
+    expect(pages.size, 'no se parsearon los gates de deploy-demo.yml').toBeGreaterThan(2);
+
+    const faltanEnPages = [...ci].filter((g) => !pages.has(g)).sort();
+    expect(
+      faltanEnPages,
+      'cambió qué verifica cada camino: actualizá docs/DESPLIEGUE_GATEADO.md y el comentario de deploy-demo.yml',
+    ).toEqual(['espejo', 'playwright']);
+
+    // Y al revés: Pages no debe verificar nada que `ci.yml` no verifique.
+    expect([...pages].filter((g) => !ci.has(g)), 'Pages verifica algo que el CI no').toEqual([]);
+  });
+
+  it('🔴 y el comentario NO vuelve a AFIRMAR «sin gate» · citarlo sí vale', () => {
+    const yml = leer('deploy-demo.yml');
+    // ⚠️ La corrección tiene que poder CITAR lo que reemplazó —«Acá decía…»—,
+    // así que prohibir la frase a secas prohibiría la propia corrección. Mi
+    // primera versión hacía eso y caía sobre el archivo ya corregido: matcher
+    // demasiado ancho, otra vez.
+    const afirmaciones = yml
+      .split('\n')
+      .filter((l) => /SIN COMPUERTA|sin gate/i.test(l))
+      .filter((l) => !/decía|Acá decía|«/.test(l));
+    expect(afirmaciones, `el comentario vuelve a afirmar que Pages no tiene compuerta:\n${afirmaciones.join('\n')}`)
+      .toEqual([]);
+    expect(yml, 'el comentario ya no nombra la divergencia real').toMatch(/pruebas DISTINTAS/);
+  });
+});
