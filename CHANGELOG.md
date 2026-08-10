@@ -76,6 +76,14 @@ suite que falla la mitad de las veces enseña a **volver a correrla hasta que d�
 verde**, y ahí la compuerta deja de ser compuerta. Queda **abierto y sin causa
 raíz** — descartar la autoría no es encontrar la causa.
 
+🔴 **Y no es la primera vez: es la SEGUNDA.** El 2026-08-06 quedó registrado
+*«el e2e flakea 1-3 tests bajo carga alta (timeout en el `goto`), medido contra
+HEAD con stash: preexistente y ambiental»*. **Misma firma, mismo método de
+descarte, misma conclusión — y ninguna causa.** Hoy volví a recorrer el camino
+entero desde cero porque el diagnóstico anterior no dejó nada accionable:
+«ambiental» dice dónde está, no qué es. **Dos descartes de autoría no suman un
+diagnóstico**, y el costo de re-descubrirlo ya se pagó dos veces.
+
 **No diagnosticado:** por qué el dev server de Vite entrega una página muerta.
 Hipótesis sin verificar (contención, transform frío, cache del optimizador). Va
 sin arreglo deliberadamente: instrumentar esto es orden propia.
