@@ -93,6 +93,27 @@ No se arregla agregándole pruebas a `deploy-demo.yml` sin decidirlo: se arregla
 **retirando ese camino** cuando cierre su ventana de gracia, que es la orden que
 ya existe.
 
+### ✅ Y el 2026-08-10 pasó, con un commit real
+
+`82a833e` cambió copy visible y dejó cuatro e2e afirmando el texto viejo:
+
+```
+22:17:35  Pages publica          ← no corre Playwright
+22:21:15  CI FAILURE · paso 11 «Publicar en Vercel» SKIPPED
+          producción retenida en el bundle anterior
+22:44:17  con el arreglo: CI verde, paso 11 success, producción avanza
+```
+
+**Las dos mitades del candado quedaron medidas en el pipeline real**, sin
+provocar ninguna. Antes estaba probado sólo contra un `curl` sustituido.
+
+⚠️ **Dicho con precisión, porque descrito de más se desarma:** ese día **Pages
+tenía el copy CORRECTO y producción el viejo**, y los tests fallaban por
+afirmar el texto anterior. **No fue producto roto.** 🔴 **Lo que el episodio
+acredita no es el daño de ese día: es que el camino de Pages publica sin
+preguntarle a Playwright — y la próxima vez el contenido puede ser un fallo
+real.**
+
 ## Y una verificación estática del candado, que sí se puede hacer
 
 `success()` en Actions es **de alcance por job**. Este repo tiene **un solo job**

@@ -1,5 +1,34 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.74.2 — el incidente descrito de más pierde fuerza (2026-08-10)
+
+PATCH: sólo redacción, en dos documentos. **Cero `src/`.**
+
+Escribí que el 2026-08-10 «una superficie pública quedó publicada desde un
+commit cuya suite falló». Es literalmente cierto **y suena peor de lo que fue**:
+
+```
+Pages sirvió   «Pídele», «mesero»   ← el copy CORRECTO
+Vercel sirvió  «Pedile», «mozo»     ← el viejo, retenido por el candado
+los 4 tests fallaron por afirmar el copy VIEJO
+```
+
+**Ese día Pages tenía lo bueno y producción lo obsoleto. El fallo fue de
+expectativas rancias, no de producto roto.**
+
+🔴 **Y el argumento no se desactiva: se desplaza al lugar correcto.** Lo grave
+no es lo que se publicó ese día — es que **ese camino publica sin preguntarle a
+Playwright**, y la próxima vez el contenido puede ser un fallo real.
+
+**Un incidente descrito de más se desarma cuando alguien lo revisa y encuentra
+que el contenido estaba bien.** Descrito con precisión, es el argumento para
+retirar ese camino cuando cierre su ventana.
+
+⚠️ Y esta entrada se escribió DOS veces: la primera se coló con el bloque de
+código vacío porque los backticks, dentro de comillas dobles en zsh, **se
+ejecutan**. Ya me había comido una palabra de un mensaje de commit hoy. **El
+texto con backticks va por heredoc, nunca por `-c "…"`.**
+
 ## 0.74.1 — los e2e afirmaban el copy viejo, y el candado aguantó (2026-08-10)
 
 PATCH: arregla el CI rojo que dejó `0.74.0`.
@@ -17,9 +46,19 @@ PATCH: arregla el CI rojo que dejó `0.74.0`.
 probado sólo contra un `curl` sustituido en local; **ahora está medido en el
 pipeline real, y sin provocarlo.**
 
-⚠️ **Y la divergencia dejó de ser hipótesis:** durante cuatro minutos Pages
-sirvió «Pídele/mesero» mientras producción servía «Pedile/mozo». **Una
-superficie pública quedó publicada desde un commit cuya suite falló.**
+⚠️ **Y la divergencia dejó de ser hipótesis** — pero hay que decirla con
+precisión, porque descrita de más pierde fuerza:
+
+```
+Pages sirvió   «Pídele», «mesero»   ← el copy CORRECTO
+Vercel sirvió  «Pedile», «mozo»     ← el copy viejo, retenido
+los 4 tests fallaron por afirmar el copy VIEJO
+```
+
+**Hoy Pages tenía lo bueno y producción lo obsoleto: el fallo fue de
+expectativas rancias, no de producto roto.** 🔴 **Lo grave no es lo que se
+publicó hoy — es que ese camino publica sin preguntarle a Playwright, y la
+próxima vez el contenido puede ser un fallo de verdad.**
 
 ### El error, sin adornos
 
