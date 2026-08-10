@@ -1,5 +1,83 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.72.0 — producción deja de publicarse antes que el CI (2026-08-10)
+
+MINOR: cambia cuándo se publica. **Mati autorizó gatear el despliegue** después
+de leer la medición que lo destrabó:
+
+```
+push                              06:01:05Z
+ÁPICE PUBLICADO por Vercel        06:03:01Z   ← producción viva
+CI (vitest + typecheck + e2e)     06:05:56Z   ← 2 m 55 s DESPUÉS
+```
+
+El único gate que había —el de Pages— **protegía la copia que nadie visita**.
+
+**Cómo queda:** `vercel.json` apaga el despliegue automático de `main`, y
+`ci.yml` llama a los Deploy Hooks al final, sólo con todo en verde. Se eligió
+esta forma sobre apagarlo desde el panel de Vercel **porque queda en git**: se
+ve quién lo cambió y cuándo.
+
+### 🔴 El porqué NO va dentro de `vercel.json`, y el motivo importa
+
+La orden pedía dejarlo escrito ahí. **No se puede sin riesgo:** `vercel.json` es
+JSON estricto y una clave que Vercel no reconozca puede invalidar la
+configuración de despliegue entera — arriesgar eso para poner un comentario es
+mal negocio. El porqué vive en `docs/DESPLIEGUE_GATEADO.md`, **y hay una guarda
+que cae si alguien reenciende el flag**. Es más fuerte que un comentario:
+un comentario no se pone rojo.
+
+### 🔴 Un script, para poder romperlo
+
+El disparo no son cuatro líneas en el YAML: es `scripts/publicar-vercel.sh`.
+**Un `run:` embebido no se puede mutar** — la única forma de saber si corta
+sería pushear y romper producción a propósito. Afuera se le planta un servidor
+que contesta mal.
+
+```
+200  → sale 0, el CI sigue           ✅
+500  → sale ≠0, el job CAE           🔴  ← la condición que más importa
+429  → sale ≠0: sólo 2xx publica     🔴
+nadie escuchando → sale ≠0           🔴
+secreto vacío → no dispara y avisa   🔴  fail-closed
+```
+
+Y una que se verifica en negativo: **el script no imprime la URL del hook.**
+
+### Qué se acreditó EJECUTANDO y qué sólo por LECTURA
+
+No se mezclan. **Ejecutando:** el comportamiento del script, arriba.
+**Por lectura:** el condicional del YAML —`success()`, `push`, `main`—, porque
+correr el workflow es acción externa y ver su rojo exigiría romper producción.
+Queda declarado como no ejecutado, no disfrazado de verificación. Sus tres
+mutantes sí caen: aflojar el `success()`, meter un paso después de publicar, y
+reencender el flag.
+
+### 🔴 Y mi propia sonda se deadlockeó
+
+La primera versión usaba `spawnSync`, que **bloquea el event loop** — el mismo
+donde vivía el servidor de prueba. `curl` esperaba una respuesta que el servidor
+no podía dar. **La suite colgó más de 120 s; el script tarda 4.** El síntoma
+—«el gate es lentísimo»— invita a subir el timeout, y el timeout no tenía nada
+que ver.
+
+### Lo que este gate NO cubre, dicho antes de que alguien lo descubra
+
+```
+paymemx.com · app. · panel.      ci.yml, después de la suite    ✅ gateado
+…github.io/payme-app-frontend    deploy-demo.yml, cada push     🔴 sin gate
+```
+
+**La copia de Pages puede quedar publicada desde un commit cuya suite falló.**
+No es producción, pero está viva y es pública. Se retira por orden propia cuando
+cierre su ventana de gracia.
+
+⚠️ **Y el gate está IMPLEMENTADO, no ACREDITADO.** Dos proyectos de Vercel leen
+este repo; un solo `vercel.json` en la raíz los apaga a los dos **si los dos
+tienen la raíz como Root Directory**, que es lo esperable y no se puede
+verificar desde acá. **Se acredita observando el primer push**: ninguno debe
+desplegar solo, y los dos deben salir recién cuando el CI llame a los hooks.
+
 ## 0.71.0 — los tokens se anclan al sistema de diseño, no entre sí (2026-08-10)
 
 MINOR: dos valores de color cambian, y nace `design-mirror/`.

@@ -45,3 +45,33 @@ jobs:
       # Sólo chromium: es el proyecto único de playwright.config.
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
+
+      # ══════════════════════════════════════════════════════════════════
+      # 🔴 LA COMPUERTA DE PUBLICACIÓN · 2026-08-10
+      #
+      # Hasta hoy Vercel publicaba solo en cada push, en PARALELO con esto.
+      # Medido en `a79c6a3`: producción quedó viva a las 06:03:01 y este job
+      # terminó 06:05:56 — dos minutos 55 DESPUÉS. Si la suite se ponía roja,
+      # Pages se plantaba y Vercel publicaba igual: el único gate que había
+      # protegía la copia que nadie visita.
+      #
+      # Ahora `vercel.json` apaga el despliegue automático de `main` y la
+      # publicación pasa por acá. El porqué completo, y qué NO cubre, en
+      # `docs/DESPLIEGUE_GATEADO.md`.
+      #
+      # ⚠️ El `success()` va EXPLÍCITO. Actions lo aplica implícito cuando hay
+      # un `if:` sin función de estado, pero la regla no debería depender de
+      # que quien lea esto conozca esa sutileza.
+      #
+      # ⚠️ `deploy-demo.yml` sigue publicando Pages en cada push SIN gate,
+      # dentro de su ventana de gracia. Hay dos caminos y sólo uno está
+      # gateado; se retira por orden propia cuando la ventana cierre.
+      # ══════════════════════════════════════════════════════════════════
+      - name: Publicar en Vercel (sólo con TODO en verde)
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          bash scripts/publicar-vercel.sh app "$HOOK_APP"
+          bash scripts/publicar-vercel.sh landing "$HOOK_LANDING"
+        env:
+          HOOK_APP: ${{ secrets.VERCEL_HOOK_APP }}
+          HOOK_LANDING: ${{ secrets.VERCEL_HOOK_LANDING }}

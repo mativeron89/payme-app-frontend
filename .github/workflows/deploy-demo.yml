@@ -30,10 +30,23 @@
 # visita**: si la suite se pone roja, Pages se planta en el commit anterior y
 # **Vercel publica igual**.
 #
-# **El gate está al revés.** El que queda viejo es el verificado; el que sale a
-# producción es el que ningún gate nuestro frenó. No se arregla desde acá —el
-# despliegue del ápice no es de este repo—: queda declarado para que nadie lea
-# el verde de Pages como si cubriera lo que la gente ve.
+# **El gate estaba al revés.** El que quedaba viejo era el verificado; el que
+# salía a producción era el que ningún gate nuestro frenó.
+#
+# ✅ CORREGIDO EL MISMO DÍA. Mati autorizó gatear el despliegue: `vercel.json`
+# apaga el automático de `main` y `ci.yml` llama a los Deploy Hooks al final,
+# sólo con todo en verde. El porqué en `docs/DESPLIEGUE_GATEADO.md`.
+#
+# 🔴 PERO ESTE WORKFLOW SIGUE SIN COMPUERTA, y hay que saberlo:
+#
+#     paymemx.com · app. · panel.   →  ci.yml, DESPUÉS de la suite   ✅ gateado
+#     …github.io/payme-app-frontend →  este archivo, en cada push    🔴 sin gate
+#
+# O sea: **la copia de Pages puede quedar publicada desde un commit cuya suite
+# falló.** No es producción —nadie la visita— pero está viva y es pública.
+# No se toca hoy: está en su ventana de gracia de siete días, y cuando cierre
+# este workflow se retira por orden propia. Que quede escrito para que nadie
+# descubra la asimetría por accidente.
 # Requiere una vez: Settings → Pages → Source: "GitHub Actions".
 #
 # El build /live/ apunta al backend real (VITE_MOCK=0). La publishable key de
