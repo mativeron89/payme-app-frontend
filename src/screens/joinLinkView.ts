@@ -135,7 +135,7 @@ export function joinLinkMessage(outcome: JoinLinkOutcome): JoinLinkMessage {
       // la mesa: coherente con que esta pantalla no acredita que la mesa exista.
       return {
         title: 'Este link ya no funciona',
-        body: 'Pedile a quien te invitó que te comparta uno nuevo.',
+        body: 'Pídele a quien te invitó que te comparta uno nuevo.',
         retryable: false,
       };
     case 'invalid':

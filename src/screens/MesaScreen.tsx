@@ -586,7 +586,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           ]
         : []),
       `${mesa.division_mode === 'igual' ? 'Mi parte' : 'Mis consumos'}: ${formatMXN(result.itemsAmount)}`,
-      `Propina (al mozo): ${formatMXN(result.tip)}`,
+      `Propina (al mesero): ${formatMXN(result.tip)}`,
       `Total pagado: ${formatMXN(result.gross)}`,
     ].join('\n');
   }
@@ -1338,7 +1338,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <span className="val">{formatMXN(result.itemsAmount)}</span>
             </div>
             <div className="receipt-row">
-              <span className="lbl">Propina (al mozo)</span>
+              <span className="lbl">Propina (al mesero)</span>
               <span className="val">{formatMXN(result.tip)}</span>
             </div>
             <div className="receipt-row">
@@ -1578,10 +1578,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           </TipSelectorBoundary>
           {tipCents > 0 && mesa.active_staff.length > 0 && (
             <>
-              <div className="sectlabel" id="lbl-mozo">
+              <div className="sectlabel" id="lbl-mesero">
                 ¿Para quién?
               </div>
-              <div className="tip-row" style={{ flexWrap: 'wrap' }} role="group" aria-labelledby="lbl-mozo">
+              <div className="tip-row" style={{ flexWrap: 'wrap' }} role="group" aria-labelledby="lbl-mesero">
                 {mesa.active_staff.map((s) => (
                   <button
                     key={s.id}

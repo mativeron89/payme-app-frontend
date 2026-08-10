@@ -52,6 +52,53 @@ import { describe, expect, it } from 'vitest';
  */
 const PATRON_VOSEO = /(?<![A-Za-zÁÉÍÓÚáéíóúñÑ])([A-Za-zñÑ]{2,}(?:[áéí]|[áéí]s))(?![A-Za-zÁÉÍÓÚáéíóúñÑ])/g;
 
+/**
+ * 🔴 EL VOSEO CON ENCLÍTICO NO LLEVA TILDE, así que el patrón de arriba NO
+ * PUEDE VERLO: `pedí` + `le` = `pedile`, `escribí` + `nos` = `escribinos`.
+ * Al pegarse el pronombre, la tilde deja de ser final y se escapa **la clase
+ * entera** — `tocalo`, `elegilo`, `pasalo`, `fijate`, `acordate`.
+ *
+ * **Había TRES en el producto y la guarda pasaba en verde**, desde que se
+ * escribió: `joinLinkView.ts` («Pedile»), `reconciliacionMesaView.ts` y
+ * `LoginScreen.tsx` («Escribinos»).
+ *
+ * ⚠️ **ACÁ SÍ ES UNA LISTA, y digo por qué en vez de disimularlo.** Enfoque
+ * tomado de `espanolMexicano.test.ts` de Dashboard Frontend, que ya resolvió
+ * esto y **midió** el motivo: la regla morfológica pura —«palabra en
+ * `-alo/-ate/-ame` sin tilde»— da falsos positivos masivos contra
+ * identificadores en inglés (`navigate`, `create`, `invalidate`, `username`,
+ * `candidate`, `activate`). **Una guarda que se pone roja con `navigate` se
+ * termina apagando, y ahí se pierde de verdad.**
+ *
+ * 🔴 Es el punto débil conocido de esta mitad: cubre lo visto y lo cercano, no
+ * lo desconocido. La cobertura fuerte —mundo cerrado— es la del patrón de
+ * arriba. No se disimula: se declara.
+ */
+const RAICES_VOSEO = [
+  'manda', 'hace', 'usa', 'toca', 'elegi', 'proba', 'mira', 'deja', 'carga',
+  'guarda', 'revisa', 'escribi', 'pedi', 'conta', 'fija', 'acorda', 'queda',
+  'anda', 'suma', 'pasa', 'busca', 'agrega', 'confirma', 'avisa',
+];
+const CLITICOS = new RegExp(
+  `\\b(${RAICES_VOSEO.join('|')})(lo|la|los|las|me|te|nos|le|les|se)\\b`,
+  'gi',
+);
+
+/**
+ * 🔴 CENSO LÉXICO · otra familia, y la guarda de arriba no puede verla.
+ *
+ * «Mozo» es rioplatense; en México se dice **«mesero»**. No es voseo: es
+ * vocabulario, y el patrón morfológico mira terminaciones verbales. **Que sea
+ * su límite no lo deja sin dueño** — por eso este censo aparte, chico y
+ * explícito.
+ */
+const LEXICO_RIOPLATENSE: ReadonlyArray<readonly [string, string]> = [
+  ['mozo', 'mesero'],
+  ['mozos', 'meseros'],
+  ['plata', 'dinero'],
+  ['celular', 'celular'],
+];
+
 /** Español legítimo que el patrón matchea. Cada entrada es una palabra real. */
 const ESPANOL_LEGITIMO = new Set([
   // Verbos y adverbios de uso común con tilde final.
@@ -100,9 +147,22 @@ function sinComentarios(texto: string): string {
 
 /** Palabras que disparan la guarda dentro de un texto ya sin comentarios. */
 export function vosesEn(texto: string): string[] {
-  return [...texto.matchAll(PATRON_VOSEO)]
+  const porTilde = [...texto.matchAll(PATRON_VOSEO)]
     .map((m) => m[1]!)
     .filter((w) => !ESPANOL_LEGITIMO.has(w.toLowerCase()));
+  const porClitico = [...texto.matchAll(CLITICOS)].map((m) => m[0]);
+  return [...porTilde, ...porClitico];
+}
+
+/** Regionalismos léxicos. Devuelve `palabra → reemplazo mexicano`. */
+export function lexicoEn(texto: string): string[] {
+  const out: string[] = [];
+  for (const [rio, mex] of LEXICO_RIOPLATENSE) {
+    if (rio === mex) continue;
+    const re = new RegExp(`(?<![A-Za-zÁÉÍÓÚáéíóúñÑ])${rio}(?![A-Za-zÁÉÍÓÚáéíóúñÑ])`, 'gi');
+    for (const m of texto.matchAll(re)) out.push(`${m[0]} → ${mex}`);
+  }
+  return out;
 }
 
 /** Títulos de `describe()`/`it()`: lenguaje del equipo, no del producto. */
@@ -133,6 +193,31 @@ describe('el producto habla español mexicano', () => {
       for (const w of vosesEn(sinComentarios(cuerpo))) ofensores.push(`${ruta} → ${w}`);
     }
     expect(ofensores, `voseo en el producto: ${ofensores.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 MUTANTE · ningún regionalismo LÉXICO en el texto de usuario', () => {
+    const ofensores: string[] = [];
+    for (const [ruta, cuerpo] of Object.entries(fuentes)) {
+      if (ruta.endsWith('registroMexicano.test.ts')) continue;
+      if (LENGUAJE_DEL_EQUIPO.some((f) => ruta.endsWith(f))) continue;
+      for (const w of lexicoEn(sinComentarios(cuerpo))) ofensores.push(`${ruta} → ${w}`);
+    }
+    expect(ofensores, `regionalismos en el producto: ${ofensores.join(' · ')}`).toEqual([]);
+  });
+
+  /**
+   * 🔴 SONDA de las dos mitades nuevas. Sin esto, una lista vacía o una regex
+   * rota dejarían el mutante de arriba en verde para siempre.
+   */
+  it('🔴 SONDA · el enclítico y el léxico SE DETECTAN, y lo legítimo no', () => {
+    for (const mal of ['Pedile', 'escribinos', 'tocalo', 'Elegilo', 'fijate', 'acordate'])
+      expect(vosesEn(mal), `se escapó ${mal}`).not.toEqual([]);
+    // Identificadores en inglés: la razón por la que esto es una lista y no
+    // una regla morfológica. Si alguna cayera, la guarda se terminaría apagando.
+    for (const bien of ['navigate', 'create', 'invalidate', 'username', 'candidate', 'activate', 'translate'])
+      expect(vosesEn(bien), `falso positivo con ${bien}`).toEqual([]);
+    expect(lexicoEn('el mozo trajo la cuenta')).toEqual(['mozo → mesero']);
+    expect(lexicoEn('el mesero trajo la cuenta'), 'marcó el término correcto').toEqual([]);
   });
 
   /**

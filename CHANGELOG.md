@@ -1,5 +1,54 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.74.0 — el voseo con enclítico, y «mozo» era mesero (2026-08-10)
+
+MINOR: **cambia copy visible.** La guarda extendida y el arreglo del texto van
+en el MISMO commit, porque separarlos deja la suite roja entre los dos.
+
+### 🔴 Había voseo VIVO y la guarda pasaba en verde
+
+```
+joinLinkView.ts:138            «Pedile a quien te invitó…»    → «Pídele…»
+reconciliacionMesaView.ts:159  «escribinos para resolverlo»   → «escríbenos…»
+LoginScreen.tsx:15             «Escribinos.»                  → «Escríbenos.»
+```
+
+`PATRON_VOSEO` exige á/é/í **tónica final**, y al pegarse un enclítico la tilde
+deja de estar al final: `pedí` + `le` → `pedile`. **Se escapaba la clase
+entera** — `tocalo`, `elegilo`, `fijate`, `acordate`.
+
+### La solución NO la inventé: ya estaba escrita en el repo de al lado
+
+`espanolMexicano.test.ts` de Dashboard Frontend resolvió esto días atrás **y
+midió el motivo**: la regla morfológica pura —«palabra en `-alo/-ate/-ame` sin
+tilde»— revienta contra identificadores en inglés (`navigate`, `create`,
+`invalidate`, `username`, `candidate`). 🔴 **Una guarda que se pone roja con
+`navigate` se termina apagando, y ahí se pierde de verdad.**
+
+Por eso esta mitad **sí es una lista**, y se dice por qué en vez de disimularlo.
+Su límite queda declarado: cubre lo visto y lo cercano, no lo desconocido.
+
+**Tres repos construyeron la misma guarda por separado y uno resolvió un hueco
+que los otros dos tenían.** Adoptar en vez de reinventar ahorró la tarde.
+
+### Y una familia que la morfología NO puede ver
+
+**«Mozo» es rioplatense; en México es «mesero».** No es voseo: es vocabulario, y
+un patrón de terminaciones verbales no lo alcanza. **Que sea su límite no lo
+deja sin dueño** — censo léxico chico y explícito, con su par de reemplazo.
+
+`MesaScreen.tsx:589` y `:1341` corregidos. Y el `id="lbl-mozo"` pasa a
+`lbl-mesero`: **es un identificador, no copy, pero renombrarlo evita tener que
+escribirle una excepción al censo.** Una guarda sin salvedades se audita mejor.
+
+### Sondas de las dos mitades
+
+Seis formas con enclítico **se detectan**; siete identificadores en inglés **no
+disparan** —es la razón misma de que sea lista—; y el censo léxico marca `mozo`
+y deja pasar `mesero`. Tres mutantes: reponer cada frase vieja pone la suite en
+rojo.
+
+
 ## 0.73.3 — el inventario queda RECONCILIADO, y 25 huecos venían mutilados (2026-08-10)
 
 PATCH: cierra la verificación independiente. **Cero cambios en el producto.**

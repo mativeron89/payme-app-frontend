@@ -156,7 +156,7 @@ export function decisionReconciliacion(
         liberaJournal: false,
         navegarA: null,
         permiteReintento: false,
-        copy: 'Este intento no coincide con la apertura que quedó pendiente. No vamos a reenviarlo ni a abrir otra mesa: escribinos para resolverlo.',
+        copy: 'Este intento no coincide con la apertura que quedó pendiente. No vamos a reenviarlo ni a abrir otra mesa: escríbenos para resolverlo.',
       };
     case 'unknown':
       // 🔴 v2.48.0 · el emisor encontró un estado que su propia matriz no

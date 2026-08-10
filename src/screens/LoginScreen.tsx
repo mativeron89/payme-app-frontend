@@ -12,7 +12,7 @@ import { useAuth } from '../auth/AuthContext';
 const ERROR_TEXT: Record<string, string> = {
   invalid_credentials: 'Email o contraseña incorrectos.',
   email_already_registered: 'Ese email ya está registrado.',
-  user_suspended: 'Tu cuenta está suspendida. Escribinos.',
+  user_suspended: 'Tu cuenta está suspendida. Escríbenos.',
   too_many_auth_attempts: 'Demasiados intentos. Espera un minuto.',
   validation_error: 'Revisa los datos: email válido y contraseña de al menos 8 caracteres.',
 };
