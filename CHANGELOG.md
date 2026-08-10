@@ -1,5 +1,48 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.69.1 — «Iniciar sesión» en blanco, sobre el naranja ratificado (2026-08-09)
+
+PATCH: un color de texto.
+
+**Decisión de Mati, con captura: quiere el botón con letra blanca.** Revierte el
+navy que se había puesto unas horas antes por contraste.
+
+⚠️ **Pero no sobre el degradado del boceto, y el motivo es medible:**
+
+```
+blanco sobre #FFA36B  (degradado, parada clara)   1.96:1
+blanco sobre #FF9152  (degradado, parada oscura)  2.23:1
+blanco sobre #FF6B35  (marca, RATIFICADO)         2.84:1   ← el elegido
+mínimo WCAG AA                                    4.50
+```
+
+Blanco sobre el degradado **abriría una excepción nueva y peor** que la que Mati
+ya aceptó el 2026-08-08. Sobre `--brand` queda **dentro** de la que ya existía.
+🔴 No contradice *«una excepción a un color no se extiende a otro color»*: es
+por esa regla que el botón usa el color **de** la excepción.
+
+### El «cero fallas de contraste» deja de ser cierto, y no se deja escrito
+
+El barrido dio cero fallas en 45 nodos; **ese número ya no vale**. La landing
+estrena su `EXCEPCIONES_AA` —el mismo patrón que la app— con par, ratio, mínimo,
+fecha, autor y motivo. **En un test y no en un comentario, porque un comentario
+no se pone rojo.**
+
+### 🔴 Y el registro encontró su propio defecto en el primer mutante
+
+La primera versión medía entre las dos cadenas escritas **en el registro**. Un
+mutante que oscurecía `--brand` en el CSS la dejaba verde: el registro seguía
+afirmando sobre un color que la página ya no usaba.
+
+**Misma clase que el README jurando «cero JavaScript»: un registro que describe
+algo que el artefacto perdió.** Se arregla igual — derivando el color del CSS
+emitido. Ahora un test exige que registro y CSS digan lo mismo, y el otro mide
+con el del CSS.
+
+Control positivo que evita la lectura fácil: **navy sobre ese mismo naranja SÍ
+pasaría AA.** La excepción existe porque Mati eligió blanco, no porque no
+hubiera alternativa.
+
 ## 0.69.0 — los accesos van a su dominio propio (2026-08-09)
 
 MINOR: cambia adónde lleva la landing.
