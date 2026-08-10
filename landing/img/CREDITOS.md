@@ -43,13 +43,22 @@ artefactos visibles en las texturas ni bandeo en los degradados. `low` ahorra
 sips -Z 1400 -s format jpeg -s formatOptions normal <original> --out mesa-comida.jpg
 ```
 
-## Por qué NO está en `landing/public/`
+## Dónde vive, y por qué hay dos archivos
 
-**Todavía no la referencia nadie.** `public/` se emite entero, así que ponerla
-ahí hoy publicaría 246 KB que nadie descarga a propósito y nadie ve — que es
-exactamente el modo de falla que `landing.test.ts` persigue con *"las capturas
-se USAN"*.
+**`landing/img/mesa-comida.jpg`** es la fuente: la referencia el HTML, así que
+Vite la procesa y la emite **con hash** —cache-busting gratis, y si la ruta
+tuviera un typo el build falla en vez de servir un hueco—.
 
-Vive acá, lista. **Cuando la maqueta de Diseño la referencie desde el CSS o el
-HTML, Vite la procesa y la emite con hash** — igual que la tipografía de
-`landing/fonts/`. Es un cambio de una línea.
+**`landing/public/img/CREDITOS.txt`** es la atribución, y va en `public/` porque
+tiene que VIAJAR con el artefacto aunque nadie la referencie. Es exactamente el
+mismo tratamiento que las OFL de las tipografías: `public/` es lo único que Vite
+emite por el solo hecho de estar ahí.
+
+🔴 **Este archivo `.md` NO se publica** —contiene rutas internas y explica la
+arquitectura— y por eso existe el `.txt`: mismo contenido esencial, sin nada
+que no deba salir. Si cambia uno, cambia el otro.
+
+⚠️ Corrección del 2026-08-09: hasta el port del boceto, acá decía que la foto
+NO debía ir a `public/` porque *"todavía no la referencia nadie"*. Era cierto
+ese día y dejó de serlo cuando la maqueta la usó. **Quedó escrito para que no
+se lea como una regla: era el estado de ese momento.**

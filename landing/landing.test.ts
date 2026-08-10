@@ -92,8 +92,13 @@ const BINARIO_AUTORIZADO = /\.(?:ttf|png|jpe?g)$/i;
  * la licencia OBLIGA a incluir. Marcarlo sería pedir algo imposible, y una
  * guarda imposible se afloja el día que estorba. Se verifica con el otro
  * instrumento: identidad byte a byte contra la copia del repo.
+ *
+ * 🔴 `CREDITOS.txt` se suma el 2026-08-09 por el mismo motivo: la atribución de
+ * la foto tiene que VIAJAR con el artefacto, no quedarse en el repositorio. Un
+ * asset publicado sin su procedencia al lado es un asset que nadie puede
+ * auditar después. Misma disciplina que la OFL, y misma clase.
  */
-const INERTE_AUTORIZADO = /^OFL-[A-Za-z]+\.txt$/;
+const INERTE_AUTORIZADO = /^(?:OFL-[A-Za-z]+|CREDITOS)\.txt$/;
 
 const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 
@@ -209,11 +214,13 @@ describe('el artefacto de la landing existe y es lo que dice ser', () => {
     expect(build.html).toContain('PayMe');
   });
 
-  it('🔴 ni el README de decisiones ni los créditos se publican', () => {
-    // Contienen a propósito cadenas que las guardas prohíben —las nombran para
-    // explicarlas— y además una página pública no le cuenta su arquitectura a
-    // quien mire el fuente.
-    expect(build.archivos.filter((a) => /readme|creditos/i.test(a))).toEqual([]);
+  it('🔴 el README de decisiones NO se publica, y los CRÉDITOS SÍ', () => {
+    // El `.md` contiene rutas internas y explica la arquitectura: una página
+    // pública no le cuenta eso a quien mire el fuente. El `.txt` es lo
+    // contrario — tiene que salir, porque la atribución de la foto viaja con
+    // el artefacto igual que la OFL de las tipografías.
+    expect(build.archivos.filter((a) => /readme|\.md$/i.test(a))).toEqual([]);
+    expect(build.archivos, 'la atribución de la foto no viaja').toContain('img/CREDITOS.txt');
   });
 });
 
@@ -498,11 +505,25 @@ describe('PROPIEDAD 5 · las tipografías y sus licencias', () => {
     expect([...build.inertes].sort()).toEqual([
       'fonts/OFL-DMSans.txt',
       'fonts/OFL-PlusJakartaSans.txt',
+      'img/CREDITOS.txt',
     ]);
   });
 });
 
 describe('PROPIEDAD 6 · las imágenes', () => {
+  it('🔴 la atribución de la foto viaja y nombra autor, fuente y licencia', () => {
+    // La Unsplash License no EXIGE atribución. Se deja igual: el costo es un
+    // archivo de texto y el beneficio es poder responder dentro de un año de
+    // dónde salió la foto sin buscar en un chat.
+    const cred = build.porArchivo['img/CREDITOS.txt'] ?? '';
+    expect(cred.length, 'el archivo de créditos está vacío o no viaja').toBeGreaterThan(200);
+    for (const dato of ['Dan Gold', 'Unsplash', 'mesa-comida.jpg']) {
+      expect(cred, `la atribución no dice \`${dato}\``).toContain(dato);
+    }
+    // Y declara que la imagen es derivada: se redimensionó y recomprimió.
+    expect(cred, 'no declara los cambios sobre el original').toMatch(/1400x1050|redimensionada/);
+  });
+
   it('🔴 los binarios emitidos son EXACTAMENTE los esperados', () => {
     // `.map(basename)` NO: `map` le pasa el índice como segundo argumento y
     // `basename(x, 0)` explota con «suffix must be a string». Lo aprendí acá.

@@ -544,13 +544,17 @@ a { color: inherit; }
   background: transparent;
 }
 
+/* 🔴 `--text`, no `--text-muted`: medido, el gris sobre este fondo daba 3.01:1
+   y AA pide 4.5 para 12 px. Es MI pastilla —no viene del boceto— así que el
+   defecto era mío y se corrige acá, no se reporta. Con `--text` da 13.7:1 y se
+   sigue leyendo secundaria por el tamaño y el fondo, no por el gris. */
 .pill-pronto {
   display: inline-block;
   margin-left: 8px;
   padding: 2px 8px;
   border-radius: var(--r-full);
   background: rgba(15, 31, 61, 0.08);
-  color: var(--text-muted);
+  color: var(--text);
   font-family: 'DMS', system-ui, sans-serif;
   font-size: 12px;
   font-weight: 500;

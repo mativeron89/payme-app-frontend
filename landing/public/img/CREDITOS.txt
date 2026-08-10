@@ -1,0 +1,18 @@
+CREDITOS DE IMAGEN — landing de PayMe
+=====================================
+
+mesa-comida.jpg
+  Autor      Dan Gold
+  Fuente     Unsplash — https://unsplash.com
+  Licencia   Unsplash License (uso comercial libre, sin pedir permiso)
+  Cambios    redimensionada a 1400x1050 y recomprimida. Sin recortes ni
+             retoques de contenido.
+
+  La Unsplash License no EXIGE atribucion. Se deja igual, y viaja dentro del
+  artefacto en vez de quedarse en el repositorio: un asset publicado sin su
+  procedencia al lado es un asset que nadie puede auditar despues. Misma
+  disciplina que la licencia OFL de las tipografias, en /fonts/.
+
+app-dividir-cuenta.png   captura de la propia app de PayMe (modo demo)
+panel-propinas.png       captura del propio panel de PayMe (modo demo)
+  Producidas por PayMe. Sus datos son de ejemplo, no de un restaurante real.

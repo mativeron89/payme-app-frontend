@@ -40,8 +40,9 @@ Estaban mezcladas y por eso probaban menos de lo que declaraban:
 1. **Navegación** — exactamente dos `<a>`, con sus `href` exactos y absolutos.
 2. **Recursos** — cero cross-origin: todo lo que el navegador carga solo tiene
    que ser relativo al propio origen. Incluye `@import` y `url(...)` del CSS.
-3. **Ejecución** — cero `<script>`, `javascript:`, handlers `on*=`, `meta
-   refresh`, `iframe`, `object`, `embed` y formularios.
+3. **Ejecución** — un único `<script>` inline y acotado (ver abajo); cero
+   `javascript:`, handlers `on*=`, `meta refresh`, `iframe`, `object`, `embed`
+   y formularios.
 
 🔴 **El agujero que la separación cierra:** los dos subdominios estaban siendo
 usados como **permiso global de URL**, así que una hoja de estilos servida
@@ -50,34 +51,54 @@ como **destinos de navegación** —adonde va la persona cuando toca— **no com
 proveedores de recursos** que el navegador carga antes de que nadie toque nada.
 Dos permisos con nombre parecido y consecuencias muy distintas.
 
-## Cero JavaScript, y es la forma más fuerte de cumplir §2
+## 🔴 El JavaScript: la invariante se MOVIÓ el 2026-08-09
 
-La página son dos enlaces. **No tiene una sola línea de JS**, así que no existe
-grafo de módulos donde el contexto de sesión, la capa de API o Stripe puedan
-entrar. La prohibición no se vigila: se vuelve imposible sin cambiar la
-naturaleza del artefacto — y ese cambio es lo que detecta el primer test.
+⚠️ **CORRECCIÓN.** Hasta esta fecha esta sección decía *«cero JavaScript, y es
+la forma más fuerte de cumplir §2»*, y traía una receta —`grep -c '<script'
+dist-landing/index.html # → 0`— que **hoy devuelve 1**.
 
-**El mutante:** para importar el contexto de sesión hace falta un módulo, y
-para cargarlo hace falta un `<script>`. Ese script lo mata *«el artefacto no
-tiene una sola línea de JavaScript»*.
+**Era cierto y dejó de serlo cuando se portó el boceto de Diseño**, que trae un
+`<script>` inline. El documento se quedó afirmando la propiedad vieja: un
+artefacto que ya no la cumple y un README que jura que sí. Lo encontró el
+Auditor de Codex, no nosotros. **Un documento que afirma una propiedad que el
+artefacto perdió es peor que no tener documento, porque desactiva al que lee.**
 
-## ⚠️ En DESARROLLO la página tiene un script. En el artefacto, cero.
+### Qué hace el script, y por qué se aceptó
 
-`vite dev` inyecta su cliente de HMR (`@vite/client`), así que si mirás el
-inspector en `localhost:5176` vas a ver **un** `<script>` y dos recursos que no
-están en el build. **No es de esta página y no viaja al artefacto**: el test
-corre sobre `vite build`, donde `document.scripts.length` es cero.
+Tres cosas, ninguna con red: el nav se achica al scrollear, una barra de
+progreso de lectura, y el desplegable de «Iniciar sesión».
 
-🔴 Está escrito acá y no sólo en un reporte porque **las capturas sobreviven a
-los reportes**: una captura de dev, sin esta nota, se lee como que la guarda de
-"cero JavaScript" está fallando.
+El motivo original de la invariante era concreto: *sin grafo de módulos no hay
+dónde colar el contexto de sesión, la capa de API ni Stripe.* **Un script
+inline sin una sola importación no crea grafo de módulos y no puede arrastrar
+nada de eso. El PROPÓSITO se conserva; la LETRA no.**
 
-Verificación honesta de esa afirmación:
+### Lo que la guarda exige HOY
+
+`landing.test.ts` no se borró: se movió a lo que ahora protege.
+
+- **cero archivos `.js` emitidos** — no hay entry de módulo;
+- **exactamente UN `<script>`**, para que un segundo no entre callado;
+- **sin `src` y sin `type="module"`** — un script externo sería un tercero;
+- **sin `import`, `require`, `fetch`, `XMLHttpRequest`, `eval`, storage ni
+  cookies** — verificado sobre el contenido del script emitido;
+- ⭐ **y el acceso vivo funciona SIN JavaScript.** Es la condición que importa:
+  si el único camino al link fuera el desplegable, un script roto dejaría la
+  landing sin salida. El CTA del hero es un `<a href>` puro, y se verifica con
+  el navegador y JS deshabilitado antes de publicar.
+
+### Verificación honesta
 
 ```bash
 npm run build:landing
-grep -c '<script' dist-landing/index.html   # → 0
+grep -c '<script' dist-landing/index.html      # → 1, inline y acotado
+find dist-landing -name '*.js' | wc -l          # → 0, no hay entry de módulo
 ```
+
+⚠️ **En desarrollo hay OTRO script:** `vite dev` inyecta su cliente de HMR. No
+es de esta página y no viaja al artefacto. Está escrito acá porque **las
+capturas sobreviven a los reportes**: una captura de dev, sin esta nota, se lee
+como que la guarda falla.
 
 ## Cero terceros, incluidas las tipografías
 
