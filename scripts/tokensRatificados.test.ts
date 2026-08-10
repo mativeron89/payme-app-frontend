@@ -31,11 +31,19 @@ import { describe, expect, it } from 'vitest';
  *
  * ## 🔴 Por qué un ESPEJO y no leer la fuente directo
  *
- * Diseño pidió anclar contra el archivo fuente. Es la intención correcta y hoy
- * es imposible: **`diseno/` NO está versionado** —ni él ni la raíz son
- * repositorios git—, así que un runner que hace checkout de este repo no puede
- * leerlo. Una guarda que lo lea directo anda en la Mac y falla en CI, o peor,
- * se saltea y pasa en verde: la clase que este repo viene persiguiendo.
+ * Diseño pidió anclar contra el archivo fuente. Es la intención correcta, y no
+ * se puede desde acá: **`diseno/` es OTRO repositorio**, así que un runner que
+ * hace checkout de éste no tiene ese archivo. Una guarda que lo lea directo
+ * anda en la Mac y falla en CI, o peor, se saltea y pasa en verde: la clase que
+ * este repo viene persiguiendo.
+ *
+ * 🔴 Acá decía «`diseno/` NO está versionado». **Era cierto cuando se escribió
+ * —08:09 del 2026-08-10— y dejó de serlo 115 segundos después**, cuando el
+ * commit `c35570e` puso el sistema de diseño bajo control de versiones. Se
+ * corrigió recién ~15 h más tarde. La diferencia importa: «no hay repo» dice
+ * que anclar es imposible para siempre; «es otro repo» dice que se puede fijar
+ * un commit, como hace `contract-mirror/`. Detalle y regla —fechar toda
+ * afirmación sobre algo externo— en `design-mirror/README.md`.
  *
  * Se espeja, con la disciplina del `contract-mirror/`: copia con procedencia,
  * solo lectura, y **tres verificaciones separadas que NO se funden en un
@@ -233,10 +241,10 @@ describe('POBLACIÓN · el espejo no perdió tokens en silencio', () => {
  *   fuente no legible  → SKIPPED, con el motivo en el nombre
  *
  * El tercero es el que importa y por eso no se aprueba: **«no pude verificar»
- * y «verifiqué y coincide» no pueden salir iguales.** En CI la fuente NUNCA va
- * a estar —`diseno/` no está versionado—, así que ahí este bloque se saltea
- * SIEMPRE y lo que corre es INTEGRIDAD. El step de CI se llama por lo que mide:
- * integridad, jamás «vigencia».
+ * y «verifiqué y coincide» no pueden salir iguales.** En CI la fuente no está
+ * —vive en el repo `diseno`, y el runner hace checkout de éste—, así que ahí
+ * este bloque se saltea SIEMPRE y lo que corre es INTEGRIDAD. El step de CI se
+ * llama por lo que mide: integridad, jamás «vigencia».
  *
  * Es la misma separación que `verificar-mirror.mjs` hace para el contrato.
  */
@@ -245,8 +253,9 @@ describe('VIGENCIA · el espejo sigue igual a la fuente', () => {
     if (!existsSync(FUENTE)) {
       ctx.skip(
         `NO CERTIFICADO: ${FUENTE} no existe en este checkout. ` +
-          '`diseno/` no está versionado, así que en CI esto se saltea siempre. ' +
-          'La vigencia sólo se puede acreditar en una máquina que tenga el workspace.',
+          'Vive en el repo `diseno`, que es otro, así que en CI esto se saltea ' +
+          'siempre. La vigencia sólo se puede acreditar en una máquina que ' +
+          'tenga el workspace completo.',
       );
       return;
     }

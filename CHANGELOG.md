@@ -1,5 +1,85 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.74.3 — una verdad de 115 segundos, publicada quince horas (2026-08-10)
+
+PATCH: sólo redacción y comentarios. **Cero `src/`, cero cambio de conducta.**
+
+Este repo afirmaba en cuatro lugares que **`diseno/` no está versionado**. Es
+falso desde las 08:11 del 2026-08-10:
+
+```
+08:09:08  202ae1b  este repo escribe «diseno/ no está versionado»    ← cierto
+08:11:03  c35570e  «El sistema de diseño entra bajo control de
+                    versiones» — 41 archivos, SISTEMA_DISENO.md
+                    entre ellos                                       ← deja de serlo
+─────────
+115 segundos de vigencia · ~15 h publicado como si siguiera valiendo
+```
+
+**No fue inventado: fue medido, correcto, y nunca vuelto a medir.** El README
+incluso citaba la salida del comando —`fatal: not a git repository`— que hoy
+contesta `.git`. Y el ⚠️ que ese mismo archivo elevaba a Mati como problema
+abierto —«el sistema de diseño sigue sin historia, sin diff y sin forma de
+volver atrás»— **estaba resuelto dos minutos después**, y el documento lo siguió
+reportando abierto.
+
+🔴 **Es la forma que el Bibliotecario nombró ese día en otros dos repos** —un
+número correcto en su momento, propagado como si siguiera vigente— **cometida
+por el archivo cuyo objeto es impedir que un dato viejo pase por ratificado.**
+
+### Qué cambia, medido
+
+| | |
+|---|---|
+| **Conducta del gate** | **nada.** VIGENCIA se sigue salteando en CI y sigue saliendo `NO CERTIFICADO`. El archivo no está en *este* checkout, y eso no cambió. |
+| **El motivo escrito** | «no hay repo» → **«es otro repo»**. No es matiz: el primero dice que anclar es imposible para siempre; el segundo, que se le puede fijar un commit como hace `contract-mirror/`. La frase vieja desviaba de una solución que existe. |
+| **El ⚠️ elevado a Mati** | **cerrado.** Historia, diff y vuelta atrás: las tres. |
+
+**Anclar la fuente por commit NO se implementó acá** — es trabajo con orden
+propia, y esta entrada sólo registra que dejó de ser imposible.
+
+**Regla que deja:** una afirmación sobre algo que vive **fuera de este repo** se
+escribe **con la fecha en que se midió**, o no se escribe. Sin fecha nadie sabe
+si hay que volver a mirarla — y la de arriba tenía dos minutos de vida útil.
+
+Tocados: `design-mirror/README.md`, `scripts/tokensRatificados.test.ts`
+(comentarios y el motivo del skip), y un puntero en la entrada 0.71.0, que se
+conserva como quedó.
+
+### 🔴 Hallazgo aparte · el e2e tiene un rojo intermitente, y no es de este cambio
+
+Verificando esta entrada —que no toca `src/`— la suite de navegador se puso roja.
+Seis corridas completas:
+
+```
+previa (1d10114)   83 passed
+1 · con cambios    1 failed   link-rechazado #34   pantalla en blanco, 30s
+2 · con cambios    1 failed   link-rechazado #35   pantalla en blanco, 30s
+3 · HEAD limpio    83 passed
+4 · con cambios    1 failed   compartir      #16   pantalla en blanco, 30s
+5 · con cambios    83 passed
+```
+
+Las tres rojas son **tests distintos**, con la **misma firma**: `page.goto('/')`
+y la app no renderiza nada —captura en blanco puro— hasta el timeout de 30s. Al
+correr su spec aislado, pasa en 14s.
+
+**Las tres primeras rojas cayeron todas del lado «con cambios», y eso invitaba a
+culpar al diff.** Es una correlación de muestra chica: el diff es CHANGELOG,
+README, un comentario y el campo `version`; ninguno llega al navegador. La quinta
+corrida, verde con los cambios puestos, la rompe. **Un mecanismo imposible no se
+vuelve posible porque la correlación sea prolija.**
+
+⚠️ **Por qué importa aunque falle del lado seguro.** Rojo = la compuerta retiene
+producción, que es la dirección correcta. El riesgo real es de conducta: una
+suite que falla la mitad de las veces enseña a **volver a correrla hasta que dé
+verde**, y ahí la compuerta deja de ser compuerta. Queda **abierto y sin causa
+raíz** — descartar la autoría no es encontrar la causa.
+
+**No diagnosticado:** por qué el dev server de Vite entrega una página muerta.
+Hipótesis sin verificar (contención, transform frío, cache del optimizador). Va
+sin arreglo deliberadamente: instrumentar esto es orden propia.
+
 ## 0.74.2 — el incidente descrito de más pierde fuerza (2026-08-10)
 
 PATCH: sólo redacción, en dos documentos. **Cero `src/`.**
@@ -493,6 +573,11 @@ correcta y hoy es imposible: **`diseno/` no está versionado** —ni él ni la r
 son repositorios git—, así que un runner que hace checkout de este repo no puede
 leerlo. Una guarda que lo lea directo anda en la Mac y falla en CI, **o peor, se
 saltea y pasa en verde**.
+
+> ⚠️ **La frase en negrita de arriba dejó de ser cierta 115 segundos después de
+> escribirse** — `diseno/` pasó a ser repo git a las 08:11 del mismo día. El
+> párrafo se conserva como quedó; la corrección y lo que cambia están en
+> **0.74.3**. La conclusión —espejar— sigue siendo la correcta.
 
 Se espeja con la disciplina del `contract-mirror`: copia con procedencia (sha256
 y bytes de la fuente, fecha, línea de cada token), solo lectura, y **tres

@@ -19,18 +19,39 @@ antigüedad en vez de ratificación.
 
 ## 🔴 Por qué una COPIA y no leer la fuente directo
 
+**El motivo es que es OTRO repo, no que no haya repo.** Un runner de CI hace
+checkout de *este* repo y punto: `diseno/SISTEMA_DISENO.md` no existe ahí. Una
+guarda que lo lea directo anda en la Mac y falla en CI — o peor, lo saltea y
+pasa en verde, que es la clase que este repo viene persiguiendo.
+
+### 🔴 Corrección · acá decía «`diseno/` no está versionado» y era falso
+
 ```
-git -C diseno rev-parse --git-dir   →  fatal: not a git repository
+        08:09:08   202ae1b escribe acá «diseno/ no está versionado»   ← cierto
+        08:11:03   c35570e «El sistema de diseño entra bajo control
+                            de versiones»                             ← deja de serlo
+        ─────────
+        115 segundos de vigencia · ~15 h publicado como si siguiera valiendo
 ```
 
-**`diseno/` no está versionado.** Ni él ni la raíz del workspace. Un runner de
-CI hace checkout de *este* repo y punto: ese archivo no existe ahí. Una guarda
-que lo lea directo anda en la Mac y falla en CI — o peor, lo saltea y pasa en
-verde, que es la clase que este repo viene persiguiendo.
+Hoy `git -C diseno rev-parse --git-dir` contesta `.git`, hay 41 archivos
+trackeados y **`SISTEMA_DISENO.md` es uno de ellos**. La frase no fue inventada:
+fue **medida, correcta, y nunca vuelta a medir**. Es exactamente la forma que el
+Bibliotecario nombró ese mismo día en otros dos repos —un número correcto en su
+momento, propagado como si siguiera vigente— y la cometió el archivo que
+existía para evitar que un dato viejo pasara por ratificado.
 
-⚠️ **El espejo mitiga esto para los tokens. No lo resuelve para el resto:** el
-sistema de diseño ratificado sigue sin historia, sin diff y sin forma de volver
-atrás si alguien lo edita mal. Está elevado a Mati como problema propio.
+**Regla que deja:** una afirmación sobre el estado de algo que vive fuera de
+este repo se escribe **con la fecha en que se midió**, o no se escribe. Sin
+fecha, nadie sabe si hay que volver a mirarla.
+
+### Qué cambia y qué no
+
+| | |
+|---|---|
+| **No cambia** | VIGENCIA se sigue salteando en CI: el archivo no está en *este* checkout. El espejo sigue siendo necesario. |
+| **Sí cambia** | Ya **no es imposible** anclar a la fuente: con la fuente versionada se le puede fijar un commit, como hace `contract-mirror/` con el backend. Deja de ser «nunca» y pasa a ser trabajo con orden propia — **no implementado acá**. |
+| **Se resolvió** | El ⚠️ que decía «sin historia, sin diff y sin forma de volver atrás», elevado a Mati: **ya tiene las tres**. Se resolvió dos minutos después de escribirlo y este archivo lo siguió reportando abierto. |
 
 ## Las tres verificaciones, y por qué no se funden en una
 
@@ -43,12 +64,13 @@ atrás si alguien lo edita mal. Está elevado a Mati como problema propio.
 | **SIN ANCLA** | los tokens que el sistema nombra pero no valúa (`--r-*`) no se separan entre artefactos | sí |
 | **VIGENCIA** | el espejo sigue igual a la fuente | **no — se SALTEA** |
 
-🔴 **VIGENCIA necesita la fuente, y en CI nunca va a estar.** Cuando falta, el
-test se **saltea con su motivo**, no se aprueba:
+🔴 **VIGENCIA necesita la fuente, y en el checkout de CI no está** —vive en el
+repo `diseno`, que es otro—. Cuando falta, el test se **saltea con su motivo**,
+no se aprueba:
 
 ```
 Tests  N passed | 1 skipped
-  ↓ VIGENCIA … [NO CERTIFICADO: … `diseno/` no está versionado …]
+  ↓ VIGENCIA … [NO CERTIFICADO: … no existe en este checkout …]
 ```
 
 **«No pude verificar» y «verifiqué y coincide» tienen que salir distintos.** Por
