@@ -564,11 +564,25 @@ a { color: inherit; }
    tenía. La inversión había sido un efecto lateral del apagado, no una
    decisión — quedó anotada como tal y se deshace sola al reactivar.
 
-   🔴 SEAM ACTUALIZADO. Ya no dice «cuando exista el DNS»: el DNS existe.
-   `app.` y `panel.` son los destinos definitivos de `D-WEB-1-BIS`. **Lo que
-   sigue pendiente es `paymemx.com` a secas para ESTA landing** — hoy el apex
-   redirige a una página de parking (`paymemx-com.l.ink`), así que la landing
-   todavía no tiene su origen propio.
+   🔴 SEAM · ACTUALIZADO POR SEGUNDA VEZ el 2026-08-10.
+
+   Decía: *«Lo que sigue pendiente es `paymemx.com` a secas para ESTA landing
+   — hoy el apex redirige a una página de parking»*. **Ya no.** Los TRES
+   orígenes de `D-WEB-1-BIS` están vivos, medido hoy:
+
+     paymemx.com · www.paymemx.com · app.paymemx.com · panel.paymemx.com
+
+   El ápice sirve ESTE artefacto —CSS byte-idéntico al de `dist-landing/`—, así
+   que la landing ya ocupa su origen propio.
+
+   **Lo que sigue pendiente es OTRA cosa, y conviene no confundirlas:** el
+   traspaso de la raíz a `payme-web`, que es la decisión que este seam existe
+   para permitir. Que la landing esté en la raíz no la vuelve permanente ahí.
+
+   ⚠️ Y aparece un pendiente nuevo que NO es mío: `paymemx.com` y
+   `www.paymemx.com` devuelven los dos 200 sin redirigirse entre sí. Para el
+   navegador son DOS orígenes, y `D-WEB-1-BIS` manda cookies host-only y
+   orígenes WebAuthn exactos. Cuál es el canónico lo decide Mati.
    ══════════════════════════════════════════════════════════════════════════ */
 
 

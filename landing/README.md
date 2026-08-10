@@ -9,8 +9,33 @@ paymemx.com          ← esta página
   └── Restaurante →  https://panel.paymemx.com
 ```
 
-**Cero publicación.** Desarrollo local únicamente: `npm run build:landing`
-emite a `dist-landing/`, fuera del `dist/` de la webapp.
+🔴 **PUBLICADA, y por dos caminos distintos. Corregido el 2026-08-10.**
+
+Acá decía **«Cero publicación. Desarrollo local únicamente»**. Era verdad
+cuando se escribió (`dbf2b2e`, 2026-08-07) y hoy es falsa dos veces:
+
+| Desde | Dónde | Quién la publica |
+|---|---|---|
+| 2026-08-09 | `…github.io/payme-app-frontend/landing/` | el CI de este repo (`deploy-demo.yml`) |
+| 2026-08-10 | `paymemx.com` y `www.paymemx.com` | **Vercel, desde fuera de este repo** |
+
+**Un cambio acá sale a producción, no a un sandbox.**
+
+⚠️ **Qué NO acredita eso.** Que el ápice sirva los mismos bytes **no prueba que
+salgan de este CI** — el ápice responde `server: Vercel` y en el repo no hay
+`vercel.json`, ni `CNAME`, ni una línea que mencione ese despliegue. El cotejo
+—CSS del ápice byte-idéntico a `dist-landing/`, sha256 `1d224ad7…`— fue
+**manual y una sola vez**. No hay gate que lo repita: este párrafo se pudre
+igual que el anterior si nadie lo mira.
+
+🔴 **Y la frase vieja ya era falsa desde ayer, no desde hoy.** `b012a30` agregó
+el tercer build a Pages y la falsificó; el hecho de hoy la falsifica por segunda
+vez. Peor: `6a90bd2` editó **este mismo archivo** para arreglar el «cero
+JavaScript» —la misma clase de defecto— y pasó tres renglones por encima de
+ésta. **Corregir una afirmación vieja no hace mirar a las vecinas.**
+
+`npm run build:landing` sigue emitiendo a `dist-landing/`. Lo que dejó de ser
+cierto es que ahí se termine: el CI hace `cp -R dist-landing dist/landing`.
 
 ---
 
@@ -123,15 +148,39 @@ alcanza. Lo verifica `landing.test.ts` sobre el build, no sobre el fuente.
 `../src/assets/fonts/README.md`: el upstream autorizado no publica WOFF2 y la
 ganancia real de convertir está sin medir.
 
-## Los tokens se copian, y hay un gate que lo sostiene
+## Los tokens se copian · 🔴 y el gate NO existía (2026-08-10)
 
 `landing.css` no importa `src/styles/global.css`: son 113 KB de shell
 autenticado —cabecera, pestañas, barra inferior— y §1 bis del spec dice que ese
 shell **no es de la landing**.
 
-Los valores están **copiados**, y `landing.test.ts` parsea los dos archivos y
-exige que coincidan token por token. Mismo patrón que el `contract-mirror`:
-replicar y poner una guarda encima, en vez de confiar en que alguien se acuerde.
+⚠️ Esta sección decía: *«`landing.test.ts` parsea los dos archivos y exige que
+coincidan token por token»*. **No los parseaba. Nunca se escribió ese test.**
+
+Lo acredité rompiendo: puse `--border: #FF00FF` en la landing y **las 886
+pruebas pasaron en verde**.
+
+🔴 **Y ya había consecuencia, no era hipotética.** De los 18 tokens compartidos,
+**cuatro** habían divergido sin que nada avisara:
+
+```
+--brand-fg   app #ffffff   landing #0f1f3d    ← valores OPUESTOS
+--teal-l     app #e0f8f9   landing #e4fbfc
+--sh-2/--sh-3                                  sólo espacios y `0.1` vs `0.10`
+```
+
+**Un README que describe una guarda inexistente es peor que no tener la guarda:
+apaga la sospecha.** Misma clase que el «cero JavaScript» de más arriba.
+
+**El gate ahora existe** (`PROPIEDAD 9` en `landing.test.ts`) y compara
+normalizando espacios, así que las dos diferencias de formato no ensucian. Las
+dos reales viven en un registro con fecha y motivo, igual que `EXCEPCIONES_AA`:
+**cualquier divergencia NUEVA se pone en rojo**, y una registrada que vuelva a
+coincidir también — tiene que salir del registro.
+
+🔴 **Lo que el gate NO hace es decidir cuál valor gana.** `--brand-fg` es de
+Diseño y está pendiente de su respuesta; la landing hoy ni siquiera lo usa.
+Un gate no es el lugar donde se toma una decisión de marca.
 
 ## Los dos accesos van navy
 
@@ -140,8 +189,21 @@ tomada** (§5, séptima pregunta abierta). Pintar una de naranja sería tomarla:
 *"el naranja es UNA acción"*, singular. Mientras la pregunta esté abierta,
 ninguna puerta se empuja sobre la otra.
 
-Si Mati decide que sí hay una principal, esa va `--brand` y **su texto va navy,
-nunca blanco** — blanco sobre naranja da 2.84:1 y no pasa.
+🔴 **CORREGIDO el 2026-08-10 · esta regla la rompe la propia página.** Decía:
+*«esa va `--brand` y su texto va navy, **nunca blanco** — blanco sobre naranja
+da 2.84:1 y no pasa»*.
+
+El «2.84:1 y no pasa» sigue siendo cierto. El **«nunca blanco»** ya no: el
+botón «Iniciar sesión» es `--brand` con texto **blanco**, por decisión de Mati
+del 2026-08-09, y Diseño eligió el naranja sólido *«para no abrir una excepción
+nueva»*. Está registrado en `landing.test.ts` (`EXCEPCIONES_AA`) con su ratio,
+su fecha y sus dos autores.
+
+**No la escribí mal: la rompí yo, unas horas después, y no volví a mirar acá.**
+Verificar que la instrucción se cumplió no verifica qué rompió al cumplirse.
+
+Lo que sí sigue en pie es lo de arriba: **cuál puerta es la principal no está
+decidido**, y ninguna se empuja sobre la otra hasta que Mati lo diga.
 
 ## Config propia, no una segunda entry
 

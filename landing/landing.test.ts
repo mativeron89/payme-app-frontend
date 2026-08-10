@@ -63,15 +63,30 @@ const DESTINOS_AUTORIZADOS = [
 ] as const;
 
 /**
- * 🔴 Destinos que TODAVÍA NO SON NUESTROS. Prohibidos como enlace.
+ * 🔴 Hosts de terceros que alguna vez estuvieron en el camino del dominio.
+ * Prohibidos como enlace. **Renombrado y re-fundado el 2026-08-10.**
  *
- * La lista cambió de contenido pero no de propósito, y ése es el punto: la
- * guarda no era «no linkeés a paymemx» sino **«no linkeés a algo que no
- * responde lo que creés»**. `app.` y `panel.` salieron porque ya responden;
- * el apex ENTRÓ porque hoy redirige a una página de parking
- * (`paymemx-com.l.ink`) — o sea que todavía no es de PayMe.
+ * ⚠️ Este docblock decía, en presente y sin fecha: *«el apex ENTRÓ porque hoy
+ * redirige a una página de parking (`paymemx-com.l.ink`) — o sea que todavía
+ * no es de PayMe»*, y se ponía su propia condición de salida: *«Sale de acá el
+ * día que `paymemx.com` sirva esta misma landing»*.
  *
- * Sale de acá el día que `paymemx.com` sirva esta misma landing.
+ * **Ese día llegó.** Medido el 2026-08-10: `paymemx.com` y `www.paymemx.com`
+ * responden 200 sin redirect y sirven ESTE artefacto — el CSS del ápice
+ * resultó byte-idéntico al de `dist-landing/` (sha256 `1d224ad7…`).
+ *
+ * 🔴 Y sin embargo la lista NO se retira, por dos razones que conviene separar:
+ *
+ *   1. El host de parking sigue siendo un tercero. Que ya no esté en el camino
+ *      no lo vuelve un destino legítimo.
+ *   2. **No está subsumida por el barrido de allowlist.** Ese barrido sólo ve
+ *      URLs CON esquema (`/\bhttps?:\/\//`); un `paymemx-com.l.ink` suelto en
+ *      el texto no lo activa. Retirarla «porque ya está cubierta» habría sido
+ *      aflojar una guarda con un argumento que suena bien y es falso.
+ *
+ * Lo que sí cambió es el NOMBRE y el motivo, porque el viejo describía un
+ * hecho que dejó de ocurrir. El nombre además nunca fue exacto: `l.ink` tiene
+ * DNS de sobra; lo que no tenía era relación con PayMe.
  */
 const DOMINIOS_SIN_DNS = ['paymemx-com.l.ink'] as const;
 
@@ -214,6 +229,36 @@ function esRelativo(valor: string): boolean {
   return true;
 }
 
+/**
+ * 🔴 ¿Esta URL apunta a un ORIGEN autorizado? Por origen parseado, NUNCA por
+ * prefijo de cadena. 2026-08-10.
+ *
+ * Lo que había acá era `u.startsWith(d)`, y lo acredité rompiéndolo: metí
+ * `https://app.paymemx.com.evil.example/x` como TEXTO en el artefacto y **los
+ * 45 tests pasaron en verde**. `app.paymemx.com` es prefijo de
+ * `app.paymemx.com.evil.example`, y también de `app.paymemx.company`.
+ *
+ * 🔴 Es la MISMA CLASE que el `grep -F "  $rel"` del verificador del espejo
+ * —comparar por subcadena lo que es pertenencia a un conjunto— que ya había
+ * corregido en otro archivo. Estaba viva acá desde entonces: **nombrar la
+ * regla no exime de haberla roto en otro lado.**
+ *
+ * Y la ocasión que la vuelve urgente: con el ápice vivo, el próximo movimiento
+ * natural es agregar `https://paymemx.com` a la lista. Como prefijo, ese solo
+ * agregado autorizaría `paymemx.company` y `paymemx.com.evil.example` de una.
+ *
+ * Falla cerrado: lo que no parsea como URL, no está autorizado.
+ */
+function origenAutorizado(u: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(u);
+  } catch {
+    return false;
+  }
+  return (DESTINOS_AUTORIZADOS as readonly string[]).includes(parsed.origin);
+}
+
 /** Atributos que hacen que el NAVEGADOR cargue algo por su cuenta. */
 const ATRIBUTOS_DE_RECURSO = [
   'src', 'srcset', 'poster', 'data', 'action', 'formaction', 'manifest', 'background', 'ping',
@@ -297,16 +342,22 @@ describe('PROPIEDAD 2 · destinos honestos', () => {
     }
   });
 
-  it('🔴 MUTANTE · ningún enlace a un destino que no es nuestro todavía', () => {
+  it('🔴 MUTANTE · ni terceros ajenos ni el propio origen hard-codeado', () => {
     const ofensores = DOMINIOS_SIN_DNS.filter((d) => build.todo.includes(d));
     expect(ofensores, `destinos ajenos en el artefacto: ${ofensores.join(' · ')}`).toEqual([]);
-    // Y el apex a secas: hoy redirige a un parking, así que no se enlaza.
+    // 🔴 El apex a secas sigue prohibido, pero POR OTRO MOTIVO desde el
+    // 2026-08-10. Antes era «es un parking ajeno»; hoy el ápice es nuestro y
+    // sirve esta misma página. El objeto nuevo es PORTABILIDAD: la landing se
+    // sirve desde tres orígenes —ápice, `www.` y el prefijo de Pages— y un
+    // href absoluto a sí misma saca al visitante de la copia que está mirando.
+    // También rompería el seam de `D-WEB-2`: el día que `payme-web` tome la
+    // raíz, ese link apuntaría a otra página.
     // Se busca como href EXACTO porque `paymemx.com` como substring matchea
     // `app.paymemx.com`, que sí es válido.
     const hrefs = tags(build.htmlSinScript)
       .flatMap((t) => atributos(t.crudo).filter((a) => a.nombre === 'href').map((a) => a.valor));
     const apex = hrefs.filter((h) => /^https?:\/\/(www\.)?paymemx\.com\/?$/.test(h));
-    expect(apex, 'la landing enlaza al apex, que hoy es un parking').toEqual([]);
+    expect(apex, 'la landing hard-codea su propio origen: deja de ser portable').toEqual([]);
   });
 
   /**
@@ -320,7 +371,18 @@ describe('PROPIEDAD 2 · destinos honestos', () => {
    * No se borró: se invirtió, y queda escrito por qué. Un test que desaparece
    * en silencio no deja rastro de que la condición existió.
    */
-  it('🔴 los CUATRO accesos son enlaces vivos · nada apagado', () => {
+  // 🔴 RENOMBRADO el 2026-08-10. Se llamaba «los CUATRO accesos son enlaces
+  // VIVOS», y no mide eso: cuenta `href`. Si `panel.paymemx.com` se cayera
+  // mañana este test sigue verde **y su nombre sigue diciendo «vivos»** en la
+  // salida de la corrida. La palabra era ambigua desde que se escribió: el
+  // 2026-08-09 «vivo» quería decir «es un `<a href>` y no un `<span>` apagado».
+  //
+  // El arreglo NO es un test de red —sería un gate que se pone rojo cuando se
+  // cae el wifi, instrumento que este repo ya rechazó bien para las fuentes—:
+  // es que el nombre diga lo que mide. Un verde que promete de más apaga la
+  // sospecha del que lo lee. Que los destinos respondan 200 se verificó a mano
+  // el 2026-08-09 y quedó fechado arriba, que es todo lo que se puede afirmar.
+  it('🔴 los CUATRO accesos son ENLACES y no `<span>` apagados · nada apagado', () => {
     expect(build.html, 'quedó un resto del tratamiento apagado').not.toContain('pronto');
     expect(build.html, 'quedó la pastilla «Muy pronto»').not.toContain('Muy pronto');
 
@@ -377,12 +439,81 @@ describe('PROPIEDAD 3 · cero recursos cross-origin o de terceros', () => {
 
   it('🔴 MUTANTE · ni protocol-relative ni ningún host en el TEXTO emitido', () => {
     const conEsquema = [...build.todo.matchAll(/\bhttps?:\/\/[^\s"'<>)]+/g)].map((m) => m[0]);
-    const ajenos = conEsquema.filter(
-      (u) => !DESTINOS_AUTORIZADOS.some((d) => u === d || u.startsWith(d)),
-    );
+    const ajenos = conEsquema.filter((u) => !origenAutorizado(u));
     expect(ajenos, `hosts externos: ${ajenos.join(', ')}`).toEqual([]);
     const protocolRelative = [...build.todo.matchAll(/(^|[^:a-zA-Z0-9])\/\/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/g)];
     expect(protocolRelative.map((m) => m[0].trim()), 'URLs protocol-relative').toEqual([]);
+  });
+
+  /**
+   * 🔴 SONDA del instrumento de arriba · 2026-08-10.
+   *
+   * El barrido sólo vale lo que valga `origenAutorizado`. Se prueba el
+   * PREDICADO directamente y no inyectando en el build, por la misma razón que
+   * la sonda del parser de atributos: un caso inyectado puede quedar atajado
+   * por OTRA guarda más estricta y dar la falsa impresión de que ésta funciona.
+   *
+   * Me pasó justo acá: mi primer mutante metió el host malicioso como
+   * `<a href>`, lo atajó el test de destinos EXACTOS de PROPIEDAD 2, y el
+   * agujero de PROPIEDAD 3 quedó sin tocar. Recién como texto suelto salió a
+   * la luz.
+   */
+  /**
+   * 🔴 LA GUARDA QUE EL CONFIG DECÍA QUE EXISTÍA · 2026-08-10.
+   *
+   * `vite.landing.config.ts` afirma, textual: *«Se verifica en el `dist`, no en
+   * la teoría: `landing.test.ts` exige que las rutas emitidas empiecen con
+   * `./`»*. **No lo exigía.** Lo acredité cambiando `base: './'` por `'/'`:
+   * el build emitió `/assets/index-*.css` y de 45 tests cayó UNO — y no éste,
+   * sino «las tres imágenes se USAN», por un efecto lateral de su regex.
+   *
+   * O sea que la propiedad se sostenía de rebote, y el mensaje que iba a leer
+   * quien la rompiera hablaba de peso muerto. **Es la misma clase que el README
+   * jurando una comparación de tokens que nadie escribió: un documento que
+   * describe una guarda inexistente es peor que no tener la guarda, porque
+   * apaga la sospecha.**
+   *
+   * Y ahora importa más que ayer: con el ápice sirviendo la raíz, cambiar
+   * `base` a `'/'` parece una limpieza inofensiva y rompe en silencio las otras
+   * dos copias —la preview bajo prefijo y el `dev` local—.
+   */
+  it('🔴 toda ruta de recurso emitida empieza con `./` · las tres copias', () => {
+    const rutas: string[] = [];
+    for (const t of tags(build.htmlSinScript)) {
+      for (const a of atributos(t.crudo)) {
+        const esRecurso = ATRIBUTOS_DE_RECURSO.includes(a.nombre)
+          || (a.nombre === 'href' && t.nombre !== 'a');
+        if (esRecurso && a.valor.trim()) rutas.push(a.valor.trim());
+      }
+    }
+    const css = cssDelBuild();
+    rutas.push(...[...css.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)].map((m) => m[1]!.trim()));
+
+    expect(rutas.length, 'no se encontró ninguna ruta de recurso: el barrido mide en vacío')
+      .toBeGreaterThan(3);
+    const absolutas = rutas.filter((r) => !r.startsWith('./'));
+    expect(absolutas, `rutas que no empiezan con './': ${absolutas.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 SONDA · el sufijo goloso NO pasa, y los destinos reales SÍ', () => {
+    const impostores = [
+      'https://app.paymemx.com.evil.example/x',   // el sufijo: prefijo compartido
+      'https://app.paymemx.company/x',            // el TLD vecino, sin punto de por medio
+      'https://paymemx.com.attacker.test/',       // el que habilitaría sumar el ápice
+      'http://app.paymemx.com',                   // mismo host, esquema distinto: otro origen
+      'https://evil.example/?u=https://app.paymemx.com', // el autorizado, pero como parámetro
+      'no-es-una-url',                            // no parsea → fail-closed
+    ];
+    for (const u of impostores) {
+      expect(origenAutorizado(u), `pasó un impostor: ${u}`).toBe(false);
+    }
+
+    // CASO LEGÍTIMO: si esto se pusiera en rojo, la guarda sería inútil por el
+    // otro lado — rechazaría los destinos que la landing necesita.
+    for (const d of DESTINOS_AUTORIZADOS) {
+      expect(origenAutorizado(d), `rechazó un destino real: ${d}`).toBe(true);
+      expect(origenAutorizado(`${d}/ruta?q=1#a`), `rechazó una ruta de ${d}`).toBe(true);
+    }
   });
 
   it('no hay preconnect, dns-prefetch ni preload a ningún lado', () => {
@@ -730,8 +861,17 @@ describe('PROPIEDAD 6 · las imágenes', () => {
 
   it('🔴 y la de la app NO lleva caption — lleva su leyenda dentro del producto', () => {
     // Decisión declarada, no omisión: quien toque «Comensal» ve la leyenda del
-    // modo demo en dos segundos. El panel no tiene esa salida: su link no
-    // existe. Si algún día se publica, esto se revisa.
+    // modo demo en dos segundos.
+    //
+    // 🔴 CORREGIDO el 2026-08-10. Acá decía «El panel no tiene esa salida: su
+    // link no existe. Si algún día se publica, esto se revisa.» Se publicó: la
+    // landing enlaza `panel.paymemx.com` DOS veces —lo afirma el test de los
+    // cuatro accesos, unas líneas más arriba—. El comentario quedó atrás
+    // cuando ese test se invirtió el 2026-08-09.
+    //
+    // La revisión que él mismo pedía queda ABIERTA y es de Diseño, no mía: si
+    // ahora se puede entrar al panel, ¿el caption «Datos de ejemplo» sigue
+    // haciendo falta? La aserción de abajo no se toca hasta que contesten.
     const captions = [...build.html.matchAll(/class="audience-caption"[^>]*>([^<]*)</g)].map((m) => m[1]!.trim());
     expect(captions).toEqual(['Datos de ejemplo — panel en modo demo']);
   });
@@ -830,6 +970,117 @@ describe('PROPIEDAD 8 · el contenido es el del boceto', () => {
     expect(new Set(anclas).size).toBeGreaterThan(0);
     for (const a of new Set(anclas)) {
       expect(build.html, `el ancla #${a} no lleva a ningún lado`).toContain(`id="${a}"`);
+    }
+  });
+});
+
+/**
+ * 🔴 PROPIEDAD 9 · los tokens copiados coinciden con los de la webapp.
+ * **Escrita el 2026-08-10, porque NO EXISTÍA y el README juraba que sí.**
+ *
+ * `landing/README.md` afirmaba: *«`landing.test.ts` parsea los dos archivos y
+ * exige que coincidan token por token»*. No los parseaba. Lo acredité poniendo
+ * `--border: #FF00FF` en la landing: **886 pruebas en verde**.
+ *
+ * Y ya había cuatro divergencias vivas, entre ellas `--brand-fg` con valores
+ * OPUESTOS —blanco en la app, navy acá—. Un documento que describe una guarda
+ * inexistente **apaga la sospecha**: nadie va a buscar lo que cree cubierto.
+ *
+ * ⚠️ ESTE GATE NO DECIDE CUÁL VALOR GANA. Las divergencias conocidas van a un
+ * registro con fecha y motivo; lo que corta es que aparezca una NUEVA. Elegir
+ * el valor de `--brand-fg` es de Diseño, y un gate no es donde se toma una
+ * decisión de marca — sólo donde se deja de perder de vista.
+ *
+ * Corta para los dos lados: si una divergencia registrada vuelve a coincidir,
+ * el test se pone rojo y la entrada tiene que salir.
+ */
+describe('PROPIEDAD 9 · los tokens de la landing no derivan de los de la app', () => {
+  /**
+   * 🔴 Normaliza lo que es FORMATO y nada más.
+   *
+   * `rgba(15, 31, 61, 0.1)` y `rgba(15,31,61,0.10)` son el mismo color escrito
+   * distinto; marcarlos sería empujar a registrar no-divergencias, y un
+   * registro con ruido deja de leerse.
+   *
+   * ⚠️ Mi primera versión hacía `replace(/\s+/g, '')` y convertía
+   * `0 8px 24px` en `08px24px`: **dos sombras distintas podían normalizar
+   * igual**. Se colapsan espacios, no se borran.
+   */
+  const normalizar = (v: string): string =>
+    v
+      .trim()
+      .toLowerCase()
+      .replace(/\s*,\s*/g, ',')
+      .replace(/\s+/g, ' ')
+      // `0.10` → `0.1`, `.5` → `0.5`: mismo número, escritura distinta.
+      .replace(/(?<![\w.])\d*\.\d+(?![\w.])/g, (n) => String(Number(n)));
+
+  const tokensDe = (ruta: string): Map<string, string> => {
+    const texto = readFileSync(join(RAIZ, ruta), 'utf8');
+    const m = new Map<string, string>();
+    for (const t of texto.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)) {
+      if (!m.has(t[1]!)) m.set(t[1]!, normalizar(t[2]!));
+    }
+    return m;
+  };
+
+  /**
+   * Divergencias CONOCIDAS. Cada una con su fecha y por qué sigue abierta.
+   * No es una excepción permanente: es una lista de pendientes con dueño.
+   */
+  const DIVERGENCIAS_CONOCIDAS = [
+    {
+      token: 'brand-fg',
+      app: '#ffffff',
+      landing: '#0f1f3d',
+      desde: '2026-08-10',
+      dueño: 'Diseño',
+      porque:
+        'la app lo movió a blanco el 2026-08-08 y la landing quedó en navy; la landing NO lo usa ' +
+        '(cero `var(--brand-fg)` en landing.css), así que hoy no se ve — pero el próximo que lo use ' +
+        'hereda el valor equivocado. Cuál gana lo decide Diseño.',
+    },
+    {
+      token: 'teal-l',
+      app: '#e0f8f9',
+      landing: '#e4fbfc',
+      desde: '2026-08-10',
+      dueño: 'Diseño',
+      porque: 'dos tintes de teal claro distintos, sin decisión registrada de cuál es el de la marca',
+    },
+  ] as const;
+
+  it('🔴 el barrido encuentra población: si no, todo lo de abajo pasa en vacío', () => {
+    const app = tokensDe('src/styles/global.css');
+    const landing = tokensDe('landing/landing.css');
+    expect(app.size, 'no se parsearon tokens de la app').toBeGreaterThan(50);
+    expect(landing.size, 'no se parsearon tokens de la landing').toBeGreaterThan(10);
+    const comunes = [...landing.keys()].filter((k) => app.has(k));
+    expect(comunes.length, 'ningún token en común: el parser mide otra cosa').toBeGreaterThan(10);
+  });
+
+  it('🔴 ninguna divergencia NUEVA entre los tokens compartidos', () => {
+    const app = tokensDe('src/styles/global.css');
+    const landing = tokensDe('landing/landing.css');
+    const registradas = new Set<string>(DIVERGENCIAS_CONOCIDAS.map((d) => d.token));
+    const nuevas: string[] = [];
+    for (const [k, v] of landing) {
+      const enApp = app.get(k);
+      if (enApp === undefined || registradas.has(k)) continue;
+      if (enApp !== v) nuevas.push(`--${k}: app=${enApp} landing=${v}`);
+    }
+    expect(nuevas, `divergencias sin registrar: ${nuevas.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 y las registradas siguen divergiendo · si coinciden, salen del registro', () => {
+    const app = tokensDe('src/styles/global.css');
+    const landing = tokensDe('landing/landing.css');
+    for (const d of DIVERGENCIAS_CONOCIDAS) {
+      expect(app.get(d.token), `--${d.token} en la app cambió: re-medí el registro`).toBe(d.app);
+      expect(landing.get(d.token), `--${d.token} en la landing cambió`).toBe(d.landing);
+      expect(d.app, `--${d.token} ya COINCIDE: sacala del registro`).not.toBe(d.landing);
+      expect(d.porque.length, 'sin motivo no se puede auditar').toBeGreaterThan(30);
+      expect(d.dueño.length).toBeGreaterThan(0);
     }
   });
 });

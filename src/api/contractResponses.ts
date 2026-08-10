@@ -44,8 +44,15 @@ function optionalBoolean(value: unknown): boolean {
  * dominio al que manda a la gente.
  *
  * **Origen confiable, sin inventar dominios:** el propio origen donde corre
- * la app. Es lo único explícitamente acreditable hoy — el dominio definitivo
- * todavía no se compró, y hardcodear uno inexistente sería fingir una defensa.
+ * la app. Es lo único explícitamente acreditable hoy.
+ *
+ * 🔴 ACTUALIZADO el 2026-08-10: acá decía que «el dominio definitivo todavía no
+ * se compró». **Se compró y está vivo** (`app.paymemx.com` sirve la webapp).
+ * El diseño no cambia —el origen propio sigue siendo lo acreditable— pero el
+ * motivo escrito era falso, y hoy SÍ hay un host que se podría declarar.
+ * Ningún `.env` del repo define `VITE_LINK_ORIGINS`; hoy no hace falta porque
+ * el backend emite links del mismo host que sirve la app, pero deja de ser
+ * cierto el día que no coincidan.
  * `VITE_LINK_ORIGINS` (lista separada por comas) permite declarar orígenes
  * adicionales el día que el backend sirva links de un host distinto al que
  * sirve la app; **ausente no es permisivo**: sin orígenes acreditables, nada

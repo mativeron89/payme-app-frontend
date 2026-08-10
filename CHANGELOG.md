@@ -1,5 +1,92 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.70.0 — el ápice se conectó, y arrastró trece afirmaciones falsas (2026-08-10)
+
+MINOR: dos guardas nuevas y una corregida. **Cero cambios en el artefacto.**
+
+Mati conectó `paymemx.com` mientras la sesión trabajaba. **Los tres orígenes de
+`D-WEB-1-BIS` están vivos**, medido — no inferido de que alguien lo dijera:
+
+```
+paymemx.com  ·  www.paymemx.com   200, sin redirect, server: Vercel
+app.paymemx.com                   200, sirve el bundle MOCK
+panel.paymemx.com                 200
+```
+
+El ápice, `www.`, GitHub Pages y `dist-landing/` local devuelven el **mismo
+`index.html` byte por byte** (sha256 idéntico en los cuatro).
+
+### 🔴 Un cambio de estado es un censo, y este dejó trece frases mintiendo
+
+Cinco barridos ciegos entre sí y un refutador por hallazgo: **8 sobreviven, 1
+refutado.** Lo corregido, con su clase:
+
+- **Prosa en presente que hoy es falsa** — `landing/README.md` («Cero
+  publicación»), `landing.css` (el seam), `deploy-demo.yml` («no hay DNS ni
+  hosting», «DOS builds» cuando eran tres), `vite.landing.config.ts` («algún
+  día»), `CardField.tsx` («`app.` no tiene DNS ni TLS»), `contractResponses.ts`
+  («el dominio todavía no se compró»), `src/assets/fonts/README.md`.
+- **Guardas cuyo motivo declarado murió** — `DOMINIOS_SIN_DNS` y la prohibición
+  de enlazar al ápice. **Ninguna se retiró.** Se les acreditó el objeto nuevo:
+  la del ápice pasó de «es un parking ajeno» a **portabilidad** (la landing se
+  sirve desde tres orígenes; un href absoluto a sí misma saca al visitante de la
+  copia que está mirando). Y se documentó por qué la lista NO está subsumida por
+  el barrido de allowlist: ése sólo ve URLs **con esquema**.
+- **Historia fechada** — cinco entradas viejas del CHANGELOG que hoy son falsas
+  **quedan intactas**. Reescribir el registro es peor que dejarlo viejo.
+
+### 🔴 Y aparecieron dos guardas que no eran lo que decían
+
+**(1) La allowlist comparaba por PREFIJO DE CADENA.** Puse
+`https://app.paymemx.com.evil.example/x` en la página y **los 45 tests pasaron
+en verde**. Ahora compara `new URL(u).origin`, falla cerrado, y hay una sonda
+que prueba el predicado directo con seis impostores y los destinos reales.
+
+Es la **misma clase** que el `grep -F` del verificador del espejo, que ya había
+corregido en otro archivo. Estaba viva acá desde entonces: **nombrar la regla no
+exime de haberla roto en otro lado.** Y se volvía urgente justo ahora — agregar
+`paymemx.com` a la lista, el próximo movimiento natural, habría autorizado
+`paymemx.company` de una.
+
+**(2) El README juraba un gate de tokens que nadie escribió.** Puse
+`--border: #FF00FF` en la landing: **886 en verde.** Ya había cuatro
+divergencias vivas, dos reales:
+
+```
+--brand-fg   app #ffffff   landing #0f1f3d    ← valores OPUESTOS
+--teal-l     app #e0f8f9   landing #e4fbfc
+```
+
+`PROPIEDAD 9` lo cubre ahora, con registro fechado y dueño. **No decide cuál
+valor gana** — eso es de Diseño; `--brand-fg` ni se usa en la landing. Un gate
+no es donde se toma una decisión de marca, es donde se deja de perderla de vista.
+
+### El requisito de hosting dejó de ser inverificable
+
+```
+                      encoding   total servido
+paymemx.com (Vercel)  br             186.662 B
+GitHub Pages          gzip           189.457 B
+crudo                                416.452 B
+```
+
+🔴 **El brotli del host es más flojo que el local (157.772 B):** casi 29 KB de
+diferencia. Se cumple, y el número optimista que estaba escrito no era el real.
+
+### Lo que NO toqué, y por qué
+
+`www.` y el ápice son **dos orígenes** que responden 200 sin redirigirse: para
+WebAuthn son sitios distintos. **Cuál es el canónico lo decide Mati.**
+`app.paymemx.com` sirve el **mock** y la landing manda gente real ahí — decisión
+de producto, ya elevada. La copia de Pages **no se retira**: hoy es la única
+publicación de la landing que sale de este repo y que el CI puede verificar.
+
+🔴 **Y el que más incomoda:** la línea «Cero publicación» **ya era falsa desde
+ayer** —`b012a30` agregó el build a Pages— y `6a90bd2` editó **ese mismo
+archivo** para arreglar el «cero JavaScript», la misma clase de defecto, pasando
+tres renglones por encima. **Corregir una afirmación vieja no hace mirar a las
+vecinas.**
+
 ## 0.69.2 — el color era de Diseño y lo elegí yo (2026-08-09)
 
 PATCH de **procedencia**. 🔴 **No cambia un byte del artefacto publicado** —

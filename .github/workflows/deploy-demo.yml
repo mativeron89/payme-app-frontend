@@ -1,8 +1,39 @@
-# Publica DOS builds del front en GitHub Pages en cada push a main:
+# Publica TRES builds del front en GitHub Pages en cada push a main:
 #   /              → demo MOCK (para feedback de diseño, sin backend)
 #   /live/         → real, contra el backend vivo de Railway (para el video YC)
+#   /landing/      → la landing (paso 3, abajo)
 # La URL queda en https://mativeron89.github.io/payme-app-frontend/
 #                  y https://mativeron89.github.io/payme-app-frontend/live/
+#
+# 🔴 ESTE ARCHIVO NO ES EL MAPA COMPLETO DE LO PUBLICADO · 2026-08-10.
+# Decía «DOS builds» cuando ya eran tres, y sigue sin poder describir lo que
+# más importa: los dominios propios NO salen de acá.
+#
+#   paymemx.com · www.paymemx.com   → los sirve VERCEL, desde fuera de este repo
+#   app.paymemx.com                 → los sirve VERCEL, desde fuera de este repo
+#   panel.paymemx.com               → es de `payme-dashboard-frontend`
+#
+# En el repo no hay `vercel.json`, ni `CNAME`, ni un secreto ni un paso que
+# mencione ese despliegue: **el artefacto que ve el público se publica por un
+# camino que este repo no describe, no reproduce y no verifica.** Queda
+# registrado acá porque es donde alguien lo va a buscar.
+#
+# 🔴 Y DE AHÍ SALE ALGO PEOR, MEDIDO EN EL COMMIT `a79c6a3`:
+#
+#     push                            06:01:05Z
+#     este workflow termina           06:02:53Z
+#     ápice publicado por Vercel      06:03:01Z   ← producción VIVA
+#     CI (vitest+typecheck+e2e)       06:05:56Z   ← 2 m 55 s DESPUÉS
+#
+# Más abajo este archivo dice, textual, que «Pages no publica un artefacto cuyo
+# comportamiento no pasó la suite». Es cierto **y protege la copia que nadie
+# visita**: si la suite se pone roja, Pages se planta en el commit anterior y
+# **Vercel publica igual**.
+#
+# **El gate está al revés.** El que queda viejo es el verificado; el que sale a
+# producción es el que ningún gate nuestro frenó. No se arregla desde acá —el
+# despliegue del ápice no es de este repo—: queda declarado para que nadie lea
+# el verde de Pages como si cubriera lo que la gente ve.
 # Requiere una vez: Settings → Pages → Source: "GitHub Actions".
 #
 # El build /live/ apunta al backend real (VITE_MOCK=0). La publishable key de
@@ -63,12 +94,24 @@ jobs:
 
       # 3) La LANDING, a dist/landing/.
       #
-      # ⚠️ ESTO ES UNA PREVIEW, NO LA ARQUITECTURA RATIFICADA. `D-WEB-1-BIS`
-      # manda TRES ORÍGENES con dominio propio —`paymemx.com`, `app.` y
-      # `panel.`— y esas compuertas siguen cerradas: no hay DNS ni hosting.
-      # Publicarla bajo un prefijo de Pages es un LINK PARA QUE LA GENTE MIRE
-      # mientras tanto. Cuando exista el dominio, la landing se muda a su
-      # origen y esta entrada se retira.
+      # ⚠️ ESTO SIGUE SIENDO UNA PREVIEW, NO LA ARQUITECTURA RATIFICADA:
+      # publicar bajo un prefijo de Pages no es `D-WEB-1-BIS`.
+      #
+      # 🔴 PERO SU MOTIVO CAMBIÓ · 2026-08-10. Acá decía «esas compuertas
+      # siguen cerradas: no hay DNS ni hosting», y que la entrada se retiraba
+      # «cuando exista el dominio». **Los tres orígenes están vivos y el ápice
+      # sirve esta misma landing** (medido: 200 sin redirect, CSS byte-idéntico
+      # al de `dist-landing/`). La condición se cumplió.
+      #
+      # NO se retira el paso, y la razón no es inercia: hoy esta copia es la
+      # ÚNICA publicación de la landing que sale de este repo y que el CI puede
+      # verificar. Retirarla dejaría el artefacto público sin ningún gate
+      # nuestro encima. Queda como espejo secundario, declarado.
+      #
+      # ⚠️ Lo que este paso NO puede hacer: garantizar que el ápice sirva lo
+      # mismo. Son dos tuberías distintas. Hoy coinciden porque lo comparé a
+      # mano una vez; nada lo vuelve a comprobar. Que el ápice quede servido de
+      # una versión vieja es un riesgo real y sin dueño.
       #
       # No lleva `--base`: `vite.landing.config.ts` ya usa `base: './'`, que
       # anda en la raíz de un dominio Y bajo cualquier prefijo. Una bandera acá

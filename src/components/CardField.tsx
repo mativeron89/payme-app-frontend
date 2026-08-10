@@ -62,8 +62,10 @@ export function CardField({ onReady, onChange }: Props) {
          * (`CustomFontSource` = `{family, src, weight}`, `elements-group.d.ts:1149`),
          * pero exige dos cosas que hoy no existen:
          *   1. una URL ABSOLUTA a un host propio — el iframe corre en
-         *      `js.stripe.com` y una ruta relativa resuelve contra ÉL; y
-         *      `app.paymemx.com` no tiene DNS ni TLS todavía;
+         *      `js.stripe.com` y una ruta relativa resuelve contra ÉL.
+         *      🔴 ACTUALIZADO el 2026-08-10: acá decía «`app.paymemx.com` no
+         *      tiene DNS ni TLS todavía». **Lo tiene**, y sirve la webapp. Este
+         *      requisito ya NO bloquea; queda el 2;
          *   2. **CORS** en ese host para `js.stripe.com`, porque una fuente
          *      cross-origin lo exige. Es configuración de hosting **no
          *      ratificada**, y acá no se inventa configuración.

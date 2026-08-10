@@ -103,15 +103,47 @@ importa no lo produjo nadie**, porque el encoder de referencia no existe en esta
 máquina.
 
 🔴 **Por eso la decisión se difiere, y por este motivo y no por el tamaño:
-optimizar hacia un formato cuya ganancia real está SIN MEDIR, contra un host que
-todavía no existe, es adivinar dos veces.** WOFF2 entra en Carril 7 junto con la
-compresión, donde se puede medir la cadena entera de una vez.
+optimizar hacia un formato cuya ganancia real está SIN MEDIR es adivinar.**
+WOFF2 entra en Carril 7 junto con la compresión.
+
+⚠️ **ACTUALIZADO el 2026-08-10 · una de las dos razones se cayó.** Este párrafo
+decía «adivinar DOS veces»: ganancia sin medir **y** *«contra un host que
+todavía no existe»*. El host existe. Queda una sola razón en pie, y dejarlo sin
+corregir hacía leer el diferimiento como más fundamentado de lo que está.
+
+Y el dato nuevo **debilita** el diferimiento en vez de reforzarlo: el TTF ya
+viaja en brotli (ver abajo), y WOFF2 es brotli por dentro. La ganancia probable
+es chica — **probable, no medida**: sigue sin existir el encoder de referencia.
 
 ### 🔴 Requisito de hosting que viaja con estos archivos
 
 **El host DEBE comprimir `.ttf` en tránsito** — `br` preferido, `gzip`
 aceptable—, y se verifica con la cabecera `content-encoding` de la respuesta.
 Sin eso son 416 KB en vez de 158 KB.
+
+✅ **MEDIDO el 2026-08-10 · el host CUMPLE**, con una salvedad de tamaño:
+
+```
+                      encoding   DM Sans            Plus Jakarta        total
+paymemx.com (Vercel)  br         240.164 → 108.292  176.288 →  78.370   186.662
+GitHub Pages          gzip       240.164 → 110.054  176.288 →  79.403   189.457
+crudo                 —          240.164            176.288             416.452
+brotli local (máx)    —           92.043             65.729             157.772
+```
+
+🔴 **El «158 KB» de arriba NO es lo que viaja.** Ése es el brotli local a
+compresión máxima; **el del host es más flojo: 186.662 B, casi 29 KB más.** El
+requisito se cumple —hay compresión y es `br`—, pero declararlo «cumplido» a
+secas dejaría el número optimista escrito como si fuera el real.
+
+**Método**: GET con `Accept-Encoding: br, gzip`, contando los bytes recibidos
+sin descomprimir. **No HEAD** — `ops/INVENTARIO_CARRIL_7_PENDIENTE §6 bis` ya
+registró que `curl -I` puede dar por cumplido lo que no lo está.
+
+**Qué NO acredita esto:** que siga cumpliéndose. Es una medición fechada contra
+una configuración de host que este repo no controla ni puede verificar desde la
+suite —una request de red dentro de los tests sería un gate que depende de
+Internet—. Si el host cambia, este bloque envejece sin avisar.
 
 Está en `ops/INVENTARIO_CARRIL_7_PENDIENTE`, y se repite acá a propósito: **el
 que lo va a necesitar toca este repo, no lee `ops/`.**
@@ -172,9 +204,14 @@ licencia pone el test en rojo solo.
 
 ## Por qué la landing tiene su propia copia
 
-`landing/fonts/` repite `PlusJakartaSans-variable.ttf` byte por byte. **No es
-descuido: `D-WEB-1-BIS` manda que la landing sea otro ORIGEN**, y un artefacto
-que toma su tipografía del origen de la webapp no está separado, está acoplado.
+`landing/fonts/` repite **las dos** familias byte por byte —
+`PlusJakartaSans-variable.ttf` y, desde el 2026-08-09, `DMSans-variable.ttf`.
+**No es descuido: `D-WEB-1-BIS` manda que la landing sea otro ORIGEN**, y un
+artefacto que toma su tipografía del origen de la webapp no está separado, está
+acoplado.
+
+*(Acá decía sólo `PlusJakartaSans`; corregido el 2026-08-10. La landing usa dos
+familias desde que se portó el boceto de Diseño.)*
 
 La duplicación se protege igual que los tokens de color: **un test compara los
 SHA-256 de las dos copias y se pone rojo si divergen.** Replicar y poner un gate

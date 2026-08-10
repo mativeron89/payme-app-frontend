@@ -30,10 +30,15 @@ export default defineConfig({
    * 🔴 RUTAS RELATIVAS, y esto ELIMINA un modo de falla en vez de esquivarlo.
    *
    * Por defecto Vite emite `/assets/…` — absoluto, pensado para la raíz de un
-   * dominio. La landing va a vivir en `paymemx.com` raíz algún día, pero la
-   * PREVIEW vive bajo un prefijo (`…github.io/payme-app-frontend/landing/`), y
-   * ahí un `/assets/…` apunta a la raíz de `github.io`: **la página carga y no
-   * aparece ni un estilo.** Falla en silencio, que es lo peor que puede hacer.
+   * dominio. La landing vive HOY en TRES lugares a la vez —`paymemx.com` raíz,
+   * `www.` y el prefijo `…github.io/payme-app-frontend/landing/`—, y bajo un
+   * prefijo un `/assets/…` apunta a la raíz de `github.io`: **la página carga y
+   * no aparece ni un estilo.** Falla en silencio, que es lo peor que puede
+   * hacer.
+   *
+   * 🔴 ACTUALIZADO el 2026-08-10: acá decía «va a vivir en `paymemx.com` raíz
+   * algún día». Ya vive. Y la decisión salió REFORZADA: el ápice sirve el
+   * artefacto **sin ningún rebasing y sin que nadie tocara una bandera**.
    *
    * La salida obvia era pasar `--base=/payme-app-frontend/landing/` en el
    * workflow. Funciona, y depende de que alguien se acuerde de la bandera cada
@@ -43,6 +48,17 @@ export default defineConfig({
    *
    * Se verifica en el `dist`, no en la teoría: `landing.test.ts` exige que las
    * rutas emitidas empiecen con `./`.
+   *
+   * 🔴 Y hasta el 2026-08-10 esa frase prometía más de lo que había —aunque
+   * NO era falsa, y la distinción importa—. No existía ningún test que
+   * exigiera el `./`: cambiar `base` a `'/'` ponía la suite en rojo igual,
+   * pero por **«las tres imágenes se USAN»**, cuyo regex casa `src="./assets/…"`
+   * y dejaba de encontrarlas. O sea: la propiedad estaba protegida **de
+   * rebote**, y quien la rompiera se iba a investigar peso muerto.
+   *
+   * Un gate que falla con el nombre equivocado manda a la persona a otro lado.
+   * **Ahora existe el test propio** y falla diciendo lo que pasó. El de las
+   * imágenes se conserva: cubre otra cosa.
    */
   base: './',
   // Fuera de `dist/`, que es del artefacto de la webapp. Dos targets, dos
