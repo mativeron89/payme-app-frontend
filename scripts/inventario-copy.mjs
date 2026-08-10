@@ -338,7 +338,15 @@ for (const abs of archivos(SRC)) {
     // ── plantillas con interpolación: se reconstruyen con {…} donde va el hueco
     if (ts.isTemplateExpression(n)) {
       let s = n.head.text;
-      for (const sp of n.templateSpans) s += `{${sp.expression.getText(sf).slice(0, 28)}}` + sp.literal.text;
+      // 🔴 SIN TRUNCAR. Antes cortaba la expresión a 28 caracteres «para que
+      // no molestara», y mutilaba el hueco en silencio: `Cargar {amountOk ?
+      // formatMXN(amountC}` — llave sin cerrar, placeholder irrecuperable.
+      // El copy seguía siendo legible, así que el defecto no se veía leyendo:
+      // lo encontró un round-trip. Un recorte cosmético sobre un dato que
+      // alguien va a volver a parsear no es cosmético.
+      for (const sp of n.templateSpans) {
+        s += `{${sp.expression.getText(sf).replace(/\s+/g, ' ').trim()}}` + sp.literal.text;
+      }
       if (pareceFrase(s.replace(/\{[^}]*\}/g, 'X'))) {
         // 🔴 Las plantillas pasan por el MISMO filtro de contexto que los
         // literales. Antes lo salteaban entero, y por eso un `console.error`

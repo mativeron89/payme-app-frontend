@@ -5,8 +5,14 @@
 adivinando. Generado el 2026-08-10 sobre `6864e43`.
 
 ```
-826 apariciones · 724 textos únicos · 36 archivos
+828 apariciones · 727 textos únicos · 36 archivos
 ```
+
+✅ **RECONCILIADO el 2026-08-10.** Tres lentes ciegas barrieron el repo sin ver
+esta lista y nombraron 242 candidatos únicos. **Faltantes reales: CERO.** Un
+verificador abrió cada archivo antes de acusar — varios «faltantes» no existían
+textualmente. Y un barrido independiente de todo `src/` encontró 53 literales
+sin cubrir: **todos clases CSS, claves y formatos. Cero copy nuevo.**
 
 ## Cómo se midió, y por qué no con `grep`
 
@@ -66,6 +72,29 @@ escrito: una ausencia sin registro se lee como descuido y alguien la «completa�
 **Fuera también:** datos del mock (91), mensajes de `console.*` y `new Error`
 que no se muestran (30), clases y valores CSS, paths de SVG.
 
+## 🔴 Los cinco límites del método · lo que este inventario NO cubre
+
+Están declarados, no descubiertos: traducir sabiendo esto es trabajo válido.
+
+1. **Frases COMPUESTAS en runtime.** Medido ejecutando las 12 funciones que
+   producen copy sobre su dominio: **una sola** se arma de fragmentos
+   independientes — `metaInvitacion()` → `Mesa PA-4520 · hace 8 min`. Esa línea
+   no existe en ningún archivo. Las otras 13 salidas fuera del inventario son
+   **instancias de plantillas que sí están** (`+{n} mesas abiertas más`), y
+   traducir la plantilla las cubre a todas.
+2. **25 frases de wallet dentro de archivos vivos.** Medidas una por una:
+   **ninguna es alcanzable** con el riel apagado —por bandera, por flujo o por
+   datos—. No se traducen. Dos de ellas (`CreateMesaFlow:793`,
+   `MesaScreen:1106`) dicen «Saldo insuficiente» en la rama de riel APAGADO:
+   deuda cosmética, sin riesgo, verificado en el backend.
+3. **Texto de terceros**: el iframe de Stripe y el `window.confirm` nativo.
+4. **Formatos dependientes de locale**: `Intl.NumberFormat('es-MX')`,
+   `toLocaleDateString`, y un segundo camino de importes (`centsToDisplay`).
+5. **~4,8 % de ruido en el bloque B**: 21 de 443 son tokens técnicos —nombres de
+   ícono, valores ARIA, enums—. 🔴 **No se filtran por «parece identificador»:
+   de los 32 tokens ASCII minúsculos, 11 SÍ son copy** (`integrante`, `vez`,
+   `entero`, `ayer`, `menos`). Filtrar por forma tiraría esos once.
+
 ## 🔴 Cuatro cosas que hay que decidir ANTES de traducir
 
 **1 · Hay voseo rioplatense vivo en un producto que habla mexicano.** Tres
@@ -119,9 +148,11 @@ ahora evita prometer una app bilingüe que no lo es:
 
 ---
 
+---
+
 ### Abrir mesa y garantía
 
-_157 apariciones · 154 textos únicos_
+_157 apariciones · 155 textos únicos_
 
 
 **`src/screens/CreateMesaFlow.tsx`**
@@ -193,7 +224,7 @@ _157 apariciones · 154 textos únicos_
 | 1121 | title-card-note {totalMismatch ? 'warn' : ''} |
 | 1124 | warning |
 | 1124 | info |
-| 1127 | No coincide con el total del ticket ({formatMXN(totalMismatch.prin}): hay {formatMXN(Math.abs(totalMism} de {totalMismatch.diff > 0 ? 'má}. |
+| 1127 | No coincide con el total del ticket ({formatMXN(totalMismatch.printed)}): hay {formatMXN(Math.abs(totalMismatch.diff))} de {totalMismatch.diff > 0 ? 'más' : 'menos'}. |
 | 1127 | más |
 | 1127 | menos |
 | 1128 | Checa que el total coincida con el total del ticket |
@@ -206,7 +237,7 @@ _157 apariciones · 154 textos únicos_
 | 1166 | Una unidad menos de {etiqueta} |
 | 1175 | Una unidad más de {etiqueta} |
 | 1181 | Eliminar |
-| 1190 | tk-name {nombre ? '' : 'tk-sin-nombre} |
+| 1190 | tk-name {nombre ? '' : 'tk-sin-nombre'} |
 | 1191 | Sin nombre |
 | 1200 | Modificar {etiqueta} |
 | 1217 | check |
@@ -217,13 +248,13 @@ _157 apariciones · 154 textos únicos_
 | 1231 | Continuar |
 | 1264 | Paso 3 de 5 |
 | 1266 | ¿Cómo dividen? |
-| 1273 | div-card {division === 'consumo' ? 'se} |
+| 1273 | div-card {division === 'consumo' ? 'sel' : ''} |
 | 1279 | Por lo que pidió cada uno |
 | 1280 | Cada uno elige sus platos |
-| 1284 | div-card {division === 'igual' ? 'sel'} |
+| 1284 | div-card {division === 'igual' ? 'sel' : ''} |
 | 1295 | En partes iguales |
 | 1296 | El total dividido entre todos |
-| 1309 | card card-p{participants === null ? ' ti}{stepperPulse ? ' tip-block--} |
+| 1309 | card card-p{participants === null ? ' tip-block tip-block--pending' : ''}{stepperPulse ? ' tip-block--pulse' : ''} |
 | 1315 | ¿Cuántos pagan? |
 | 1315 | ¿Cuántos son en la mesa? |
 | 1317 | Cantidad de comensales |
@@ -240,17 +271,17 @@ _157 apariciones · 154 textos únicos_
 | 1428 | No podemos mostrarte con qué tarjeta se garantizó esta mesa. |
 | 1430 | La mesa ya existe y su garantía sigue respaldada por la tarjeta original: la que elijas aquí acompaña el reenvío, no la reemplaza. |
 | 1431 | Elige con cuál reenviar. |
-| 1441 | method-card {method === 'card' && cardCho} |
+| 1441 | method-card {method === 'card' && cardChoice === c.id ? 'sel' : ''} |
 | 1460 | Principal |
 | 1465 | Vence |
-| 1473 | method-card {method === 'card' && cardCho} |
+| 1473 | method-card {method === 'card' && cardChoice === 'new' ? 'sel' : ''} |
 | 1487 | Usar otra tarjeta |
 | 1487 | Tarjeta |
 | 1489 | Retención en la tarjeta (puede pedir confirmación del banco) |
 | 1498 | La ingresas al confirmar (segura, vía Stripe). |
 | 1508 | Los datos van directo a Stripe: PayMe nunca ve el número completo. |
 | 1518 | Guardar esta tarjeta para la próxima |
-| 1523 | method-card {method === 'wallet' ? 'sel' } |
+| 1523 | method-card {method === 'wallet' ? 'sel' : ''} |
 | 1533 | Saldo PayMe |
 | 1535 | Congela |
 | 1535 | de tu saldo hasta que la mesa cierre |
@@ -288,7 +319,7 @@ _157 apariciones · 154 textos únicos_
 
 ### La mesa · dividir, elegir y pagar
 
-_278 apariciones · 258 textos únicos_
+_279 apariciones · 259 textos únicos_
 
 
 **`src/screens/invitacionAdmision.ts`**
@@ -363,15 +394,15 @@ _278 apariciones · 258 textos únicos_
 | 244 | ¿Qué consumiste? |
 | 246 | Márcalo para el restaurante — no cambia lo que pagas. |
 | 271 | mi-row {sel ? 'sel' : ''} |
-| 275 | {i.name}{i.quantity > 1 ? ` por ${i.q}{tag ? `, ${tag}` : ''} |
+| 275 | {i.name}{i.quantity > 1 ? ` por ${i.quantity}` : ''}{tag ? `, ${tag}` : ''} |
 | 275 | por {i.quantity} |
 | 275 | , {tag} |
-| 278 | mi-check {sel ? 'on' : ''} {state === 'pagado' ? 'paid' } {state === 'tomado' ? 'taken'} |
-| 288 | mi-name {bloqueado ? 'dim' : ''} {state === 'pagado' ? 'paid' } |
+| 278 | mi-check {sel ? 'on' : ''} {state === 'pagado' ? 'paid' : ''} {state === 'tomado' ? 'taken' : ''} |
+| 288 | mi-name {bloqueado ? 'dim' : ''} {state === 'pagado' ? 'paid' : ''} |
 | 290 | × {i.quantity} |
 | 294 | mi-price {bloqueado ? 'dim' : ''} |
 | 302 | ¿Cuánto tomas tú? |
-| 309 | seg-btn {myBpsSel === f.bps ? 'on' : } |
+| 309 | seg-btn {myBpsSel === f.bps ? 'on' : ''} |
 | 313 | Entero |
 | 320 | Tu parte: |
 | 330 | La cuenta se dividió en |
@@ -394,7 +425,7 @@ _278 apariciones · 258 textos únicos_
 | 157 | Tu base: |
 | 157 | (la cuenta ÷ |
 | 165 | tip-pill {elegida ? 'sel' : ''} |
-| 176 | tip-pill tip-pill--otro {tip.mode === 'custom' ? 'sel} |
+| 176 | tip-pill tip-pill--otro {tip.mode === 'custom' ? 'sel' : ''} |
 | 182 | Otro |
 | 192 | 0.00 |
 | 196 | Monto de propina a mano |
@@ -415,11 +446,11 @@ _278 apariciones · 258 textos únicos_
 | 574 | Comprobante PayMe |
 | 575 | Restaurante: {mesa.restaurant.name} |
 | 576 | Mesa: {code} |
-| 577 | Fecha: {new Date().toLocaleString('e} |
+| 577 | Fecha: {new Date().toLocaleString('es-MX')} |
 | 578 | Método: {result.methodLabel} |
 | 582 | Cobrado por: {mesa.restaurant.name} |
 | 584 | En tu resumen de tarjeta: {result.statementDescriptor} |
-| 588 | {mesa.division_mode === 'igua}: {formatMXN(result.itemsAmount} |
+| 588 | {mesa.division_mode === 'igual' ? 'Mi parte' : 'Mis consumos'}: {formatMXN(result.itemsAmount)} |
 | 588 | Mi parte |
 | 588 | Mis consumos |
 | 589 | Propina (al mozo): {formatMXN(result.tip)} |
@@ -441,7 +472,8 @@ _278 apariciones · 258 textos únicos_
 | 888 | Saldo PayMe |
 | 890 | Apple Pay |
 | 892 | Ⓖ Google Pay |
-| 893 | {savedCard.brand === 'visa' ?} ··{savedCard.last_four} |
+| 893 | {savedCard ? `${savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··${savedCard.last_four}` : 'Tarjeta'} |
+| 893 | {savedCard.brand === 'visa' ? 'Visa' : savedCard.brand} ··{savedCard.last_four} |
 | 893 | Visa |
 | 893 | Tarjeta |
 | 922 | No pudimos verificar una identidad segura para este pago. |
@@ -546,29 +578,29 @@ _278 apariciones · 258 textos únicos_
 | 1548 | . No lo repetimos solos: si quieres pagar igual, toca el botón de abajo. |
 | 1561 | No pudimos cargar las opciones de propina — tu pago sigue sin propina. |
 | 1582 | ¿Para quién? |
-| 1588 | tip-pill {staffId === s.id ? 'sel' : '} |
+| 1588 | tip-pill {staffId === s.id ? 'sel' : ''} |
 | 1601 | Método |
 | 1609 | Estás pagando tu parte en |
 | 1610 | — PayMe divide la cuenta. |
-| 1617 | method-card {payType === 'wallet' ? 'sel'} |
+| 1617 | method-card {payType === 'wallet' ? 'sel' : ''} |
 | 1627 | Saldo PayMe |
-| 1633 | method-card {payType === 'card' ? 'sel' :} |
+| 1633 | method-card {payType === 'card' ? 'sel' : ''} |
 | 1647 | Tarjeta de crédito o débito |
-| 1651 | {cards.find((c) => c.id === c} ···· {cards.find((c) => c.id === c} |
+| 1651 | {cards.find((c) => c.id === cardChoice)!.bank_name ?? cards.find((c) => c.id === cardChoice)!.brand} ···· {cards.find((c) => c.id === cardChoice)!.last_four} |
 | 1652 | Elige una guardada o usa otra |
 | 1654 | La ingresas al confirmar (segura, vía Stripe) |
 | 1655 | Ingresa los datos abajo (seguro, vía Stripe) |
 | 1668 | Tarjeta guardada |
-| 1672 | method-card {cardChoice === c.id ? 'sel' } |
+| 1672 | method-card {cardChoice === c.id ? 'sel' : ''} |
 | 1684 | Principal |
 | 1689 | Vence |
-| 1696 | method-card {cardChoice === 'new' ? 'sel'} |
+| 1696 | method-card {cardChoice === 'new' ? 'sel' : ''} |
 | 1706 | Usar otra tarjeta |
 | 1736 | Guardar esta tarjeta para la próxima |
-| 1746 | method-card {payType === 'apple_pay' ? 's} |
+| 1746 | method-card {payType === 'apple_pay' ? 'sel' : ''} |
 | 1756 | Apple Pay |
 | 1757 | vía Stripe |
-| 1764 | method-card {payType === 'google_pay' ? '} |
+| 1764 | method-card {payType === 'google_pay' ? 'sel' : ''} |
 | 1775 | G |
 | 1778 | Google Pay |
 | 1779 | vía Stripe |
@@ -644,7 +676,7 @@ _65 apariciones · 57 textos únicos_
 | 246 | Tu mesa abierta |
 | 254 | Mesa |
 | 260 | de |
-| 270 | mesa-cd {cuenta.urgent ? 'urgent' : '} |
+| 270 | mesa-cd {cuenta.urgent ? 'urgent' : ''} |
 | 271 | Vence en |
 | 274 | Ver mesa → |
 | 294 | No tienes mesas abiertas |
@@ -705,7 +737,7 @@ _97 apariciones · 87 textos únicos_
 | 127 | No pudimos invitar a {f.first_name} |
 | 128 | No pudimos confirmar la invitación a {f.first_name}. Reintenta la misma: vamos a reutilizarla. |
 | 164 | {m.first_name} {m.last_name} |
-| 188 | btn btn-sm btn-fit {done ? 'btn-ghost' : 'btn-ou} |
+| 188 | btn btn-sm btn-fit {done ? 'btn-ghost' : 'btn-outline'} |
 | 192 | Invitado ✓ |
 | 192 | Enviando… |
 | 192 | Invitar |
@@ -1167,3 +1199,9 @@ _55 apariciones · 47 textos únicos_
 | línea | texto |
 |---:|---|
 | 62 | entero |
+
+**`src/utils/payloadIdentity.ts`**
+
+| línea | texto |
+|---:|---|
+| 83 | {{Object.keys(object) .sort() .map((key) => `${JSON.stringify(key)}:${canonicalizeForHash(object[key])}`) .join(',')}} |

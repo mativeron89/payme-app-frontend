@@ -1,5 +1,54 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.73.3 — el inventario queda RECONCILIADO, y 25 huecos venían mutilados (2026-08-10)
+
+PATCH: cierra la verificación independiente. **Cero cambios en el producto.**
+
+```
+828 apariciones · 727 textos únicos
+```
+
+### ✅ Faltantes reales: CERO
+
+Tres lentes ciegas —una dedicada a etiquetas de UNA palabra, otra a atributos y
+props, otra a texto compuesto— nombraron **242 candidatos únicos** sin ver el
+inventario. Un verificador **abrió cada archivo antes de acusar**, y varios
+«faltantes» no existían textualmente. Más un barrido independiente de todo
+`src/`: **53 literales sin cubrir, todos clases CSS, claves y formatos.**
+
+Las cuatro causas de los falsos faltantes, ninguna del inventario: el extractor
+**fragmenta** el JSX en los bordes de `{expr}` y `<b>`; las lentes citaron la
+**firma** de la función en vez del literal; citaron la **línea entera** en vez
+del literal; y descartes correctos leídos como omisiones.
+
+### 🔴 Pero encontró un defecto de FIDELIDAD, y era mío
+
+**25 entradas tenían el placeholder mutilado.** Causa: un `.slice(0, 28)` que
+puse **a propósito** para que los huecos «no molestaran».
+
+```
+antes  'div-card {division === 'consumo' ? 'se}'     ← llave sin cerrar
+ahora  'div-card {division === 'consumo' ? 'sel' : ''}'
+```
+
+⚠️ **El copy seguía siendo legible, así que el defecto no se veía leyendo el
+documento.** Lo encontró un round-trip. 🔴 **Un recorte cosmético sobre un dato
+que alguien va a volver a parsear no es cosmético.** Sin truncar: **cero llaves
+desbalanceadas.**
+
+*(El reconciliador diagnosticó «corta en la primera comilla». La causa real es
+el `slice(0, 28)`: el hallazgo era correcto, el mecanismo no.)*
+
+### Los cinco límites, declarados en el documento
+
+Frases compuestas en runtime —**una**, `metaInvitacion()`—; las 25 de wallet,
+**ninguna alcanzable**; texto de terceros; formatos de locale; y **4,8 % de
+ruido en el bloque B**. 🔴 Ese ruido **no se filtra por «parece identificador»**:
+de los 32 tokens ASCII minúsculos, **11 son copy** (`integrante`, `vez`,
+`entero`, `ayer`, `menos`). Filtrar por forma tiraría esos once — es el mismo
+eje que ya falló tres veces hoy, ahora del lado de limpiar de más.
+
+
 ## 0.73.2 — el comentario del deploy mentía en las DOS direcciones (2026-08-10)
 
 PATCH: sólo comentarios, documento y una guarda. **Cero cambios en el producto.**
