@@ -47,7 +47,7 @@ test.describe('el 403 es ciego', () => {
        */
       await expect(page.getByText('Este link ya no funciona', { exact: true })).toBeVisible();
       await expect(
-        page.getByText('Pedile a quien te invitó que te comparta uno nuevo.', { exact: true }),
+        page.getByText('Pídele a quien te invitó que te comparta uno nuevo.', { exact: true }),
       ).toBeVisible();
 
       const cuerpo = await page.locator('body').innerText();

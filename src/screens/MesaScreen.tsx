@@ -63,7 +63,7 @@ import { writeClipboardText } from '../utils/clipboard';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
- * propina al mozo, procesando → comprobante, y cierre con semántica A-2
+ * propina al mesero, procesando → comprobante, y cierre con semántica A-2
  * ("tu garantía cubrió $X"). Sirve para organizador, participante e
  * INVITADO por link (#/mesa/:code?t=token, sin login).
  */

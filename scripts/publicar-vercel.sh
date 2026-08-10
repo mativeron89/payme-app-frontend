@@ -14,6 +14,16 @@
 # Condición 3 de la orden, la que más importa: **si el disparo falla, esto sale
 # ≠0**. Un `curl` que devuelve error y no corta deja creyendo que se publicó.
 
+# 🔴 EL INSTRUMENTO CALLADO SE CONFUNDE CON EL RESULTADO TRANQUILO.
+# Tres veces el 2026-08-10, en tres repos:
+#   · un `jq` que no matcheó y una salida vacía — «no apareció» leído como
+#     «no corrió», sobre un paso que SÍ había corrido;
+#   · un vigía cuya salida quedó en el buffer de Python: vivo y mudo;
+#   · un `400` por payload roto y un `409` por gate, idénticos en una tabla.
+# Lo que salvó en las tres fue buscar la CONFIRMACIÓN POSITIVA —el paso 11,
+# el hash nuevo, el payload bien armado— en vez de leer la ausencia como
+# respuesta. Por eso este script imprime SIEMPRE una línea con el código,
+# también cuando sale bien.
 set -euo pipefail
 
 nombre="${1:?falta el nombre del proyecto}"

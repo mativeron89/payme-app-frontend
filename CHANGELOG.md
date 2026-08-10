@@ -1,5 +1,52 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.74.1 — los e2e afirmaban el copy viejo, y el candado aguantó (2026-08-10)
+
+PATCH: arregla el CI rojo que dejó `0.74.0`.
+
+### 🔴 Primero lo que importa: LA COMPUERTA SE PROBÓ SOLA
+
+```
+22:17:35  Deploy demo → success · Pages PUBLICA el copy nuevo
+22:21:15  CI → FAILURE · playwright 4/83
+          paso 11 «Publicar en Vercel» → SKIPPED
+          app.paymemx.com sigue en index-z7He-ZCs.js — el bundle VIEJO
+```
+
+**`if: success()` hizo lo suyo con un CI rojo de verdad.** Hasta hoy eso estaba
+probado sólo contra un `curl` sustituido en local; **ahora está medido en el
+pipeline real, y sin provocarlo.**
+
+⚠️ **Y la divergencia dejó de ser hipótesis:** durante cuatro minutos Pages
+sirvió «Pídele/mesero» mientras producción servía «Pedile/mozo». **Una
+superficie pública quedó publicada desde un commit cuya suite falló.**
+
+### El error, sin adornos
+
+**Cambié copy visible y mi gate local no corre Playwright.** Los cuatro tests
+que cayeron afirman el texto literal que acababa de cambiar:
+
+```
+e2e/link-rechazado.spec.ts   'Pedile a quien te invitó que te comparta uno nuevo.'
+e2e/pago-completo.spec.ts    'Propina (al mozo)'
+```
+
+**Estaban bien escritos: fallaron porque el copy cambió, que es su trabajo.** No
+los actualicé en el mismo commit, y no lo vi porque **mi rutina previa al push
+tenía el mismo hueco que el camino de Pages: le faltaba Playwright.**
+
+🔴 **Y otra vez corregí una frase sin mirar a sus vecinas** —los e2e que la
+afirman y tres comentarios que la describían—. Misma clase que el «cero
+JavaScript» de la mañana, con el agravante de tenerla ya nombrada.
+
+### Y una nota de método donde se lee
+
+`publicar-vercel.sh` se lleva la regla de las tres fallas del día: **el
+instrumento callado se confunde con el resultado tranquilo.** Un `jq` sin match,
+un vigía con la salida en el buffer, y un `400` indistinguible de un `409`. **Se
+busca la confirmación POSITIVA, no se lee la ausencia como respuesta.**
+
+
 ## 0.74.0 — el voseo con enclítico, y «mozo» era mesero (2026-08-10)
 
 MINOR: **cambia copy visible.** La guarda extendida y el arreglo del texto van

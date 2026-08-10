@@ -162,7 +162,7 @@ test.describe('el camino de pago completo', () => {
     await page.getByRole('button', { name: 'Pagar $210.00' }).click();
     await expect(page.getByText('¡Listo!')).toBeVisible();
     const comprobante = await page.locator('body').innerText();
-    expect(comprobante).toContain('Propina (al mozo)');
+    expect(comprobante).toContain('Propina (al mesero)');
     expect(comprobante).toContain('$0.00');
   });
 
