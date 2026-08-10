@@ -486,6 +486,124 @@ describe('PROPIEDAD 4 · fail-closed: sólo lo que la landing necesita', () => {
   });
 });
 
+/**
+ * 🔴 REGISTRO DE EXCEPCIONES AA · el «cero fallas» dejó de ser cierto.
+ *
+ * El barrido de contraste del 2026-08-09 dio **cero fallas en 45 nodos**. Ese
+ * número **ya no vale**, y no se deja escrito en ningún lado como si valiera:
+ * Mati pidió el botón «Iniciar sesión» con letra blanca, y blanco sobre
+ * naranja no llega a AA.
+ *
+ * **No es un descuido: es la excepción que él ratificó el 2026-08-08**, con los
+ * cuatro usos del naranja a la vista y el contraste medido al lado de cada uno.
+ *
+ * ⚠️ Lo que SÍ hubo que decidir es sobre QUÉ naranja:
+ *
+ *     blanco sobre #FFA36B (degradado del boceto)   1.96:1   ← excepción NUEVA
+ *     blanco sobre #FF9152 (degradado del boceto)   2.23:1   ← excepción NUEVA
+ *     blanco sobre #FF6B35 (marca, ratificado)      2.84:1   ← el elegido
+ *
+ * **Cumplir el pedido sobre el degradado habría abierto una excepción nueva y
+ * PEOR que la existente.** Sobre `--brand` queda exactamente dentro de la que
+ * ya estaba aceptada — que es lo que la regla *«una excepción a un color no se
+ * extiende a otro color»* pide: usar el color DE la excepción.
+ *
+ * 🔴 Va en un test y no en un comentario **porque un comentario no se pone
+ * rojo**. Y corta para los dos lados: si alguien oscurece `--brand` hasta que
+ * el par PASE, deja de ser excepción y tiene que salir del registro.
+ */
+describe('PROPIEDAD 5 bis · las excepciones AA están registradas, no escondidas', () => {
+  const hex = (h: string): [number, number, number] =>
+    [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
+  const lum = (c: readonly number[]) =>
+    0.2126 * canal(c[0]!) + 0.7152 * canal(c[1]!) + 0.0722 * canal(c[2]!);
+  function canal(v: number) {
+    const x = v / 255;
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  }
+  const ratio = (a: string, b: string) => {
+    const [x, y] = [lum(hex(a)), lum(hex(b))].sort((m, n) => n - m);
+    return (x! + 0.05) / (y! + 0.05);
+  };
+
+  const EXCEPCIONES_AA = [
+    {
+      donde: '.login-trigger',
+      fg: '#FFFFFF',
+      bg: '#FF6B35',
+      ratio: 2.84,
+      minimo: 4.5,
+      fecha: '2026-08-09',
+      decide: 'Mati',
+      porque: 'pidió letra blanca, con captura; se usa el naranja de marca para no abrir una excepción nueva',
+    },
+  ] as const;
+
+  it('🔴 el registro no está vacío, y cada entrada dice quién y cuándo', () => {
+    expect(EXCEPCIONES_AA.length, 'el registro quedó vacío: nada que verificar').toBe(1);
+    for (const e of EXCEPCIONES_AA) {
+      expect(e.fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(e.decide.length).toBeGreaterThan(0);
+      expect(e.porque.length, 'sin motivo no se puede auditar la decisión').toBeGreaterThan(30);
+    }
+  });
+
+  /**
+   * 🔴 EL COLOR SE DERIVA DEL CSS EMITIDO, no del hex escrito en el registro.
+   *
+   * La primera versión de este test calculaba el ratio entre las dos cadenas
+   * de `EXCEPCIONES_AA`. **Un mutante que oscurecía `--brand` en el CSS lo
+   * dejaba VERDE**: el registro seguía afirmando sobre `#FF6B35` aunque la
+   * página ya usara otro color.
+   *
+   * Es la misma clase que el README que juraba «cero JavaScript»: **un
+   * documento —o un registro— que describe algo que el artefacto ya no
+   * tiene.** Se arregla igual: derivando del artefacto en vez de repetirlo.
+   */
+  const tokenDelCss = (nombre: string): string => {
+    const css = cssDelBuild();
+    const m = css.match(new RegExp(`--${nombre}:\\s*(#[0-9a-fA-F]{6})`));
+    expect(m, `no se encontró el token --${nombre} en el CSS emitido`).not.toBeNull();
+    return m![1]!.toUpperCase();
+  };
+
+  it('🔴 el registro describe el color que la página USA de verdad', () => {
+    for (const e of EXCEPCIONES_AA) {
+      expect(tokenDelCss('brand'), `el registro dice ${e.bg} y el CSS usa otro color`).toBe(e.bg);
+      expect(tokenDelCss('action-fg'), `el registro dice ${e.fg} y el CSS usa otro`).toBe(e.fg);
+    }
+  });
+
+  it('🔴 cada excepción sigue MEDIDA y sigue por debajo de su mínimo', () => {
+    for (const e of EXCEPCIONES_AA) {
+      // Los colores salen del CSS emitido, no del registro: si el token
+      // cambia, cambia la medición.
+      const medido = ratio(tokenDelCss('action-fg'), tokenDelCss('brand'));
+      expect(medido, `${e.donde}`).toBeCloseTo(e.ratio, 1);
+      expect(medido, `${e.donde} ya PASA ${e.minimo}: sacala del registro`).toBeLessThan(e.minimo);
+    }
+  });
+
+  it('🔴 MUTANTE · el botón usa el naranja RATIFICADO, no el degradado del boceto', () => {
+    // El degradado daba 1.96 y 2.23: peor que la excepción existente. Si
+    // alguien lo repone, esto cae.
+    const css = cssDelBuild();
+    const regla = css.match(/\.login-trigger\{[^}]*\}/)?.[0] ?? '';
+    expect(regla.length, 'no se encontró la regla de `.login-trigger`').toBeGreaterThan(40);
+    expect(regla, 'volvió el degradado claro: eso abre una excepción nueva y peor')
+      .not.toMatch(/linear-gradient/);
+    expect(regla, 'el fondo dejó de ser el naranja de marca').toMatch(/background:var\(--brand\)|#ff6b35/i);
+  });
+
+  it('🔴 y las alternativas peores están medidas, no supuestas', () => {
+    expect(ratio('#FFFFFF', '#FFA36B')).toBeCloseTo(1.96, 1);
+    expect(ratio('#FFFFFF', '#FF9152')).toBeCloseTo(2.23, 1);
+    // Y el control positivo: navy sobre el mismo naranja SÍ pasaría — la
+    // excepción existe porque Mati eligió blanco, no porque no hubiera opción.
+    expect(ratio('#0F1F3D', '#FF6B35')).toBeGreaterThan(4.5);
+  });
+});
+
 describe('PROPIEDAD 5 · las tipografías y sus licencias', () => {
   const copias = [
     { landing: 'landing/fonts/PlusJakartaSans-variable.ttf', webapp: 'src/assets/fonts/PlusJakartaSans-variable.ttf' },
