@@ -1,5 +1,75 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.71.0 — los tokens se anclan al sistema de diseño, no entre sí (2026-08-10)
+
+MINOR: dos valores de color cambian, y nace `design-mirror/`.
+
+**Diseño resolvió las dos divergencias que el gate inexistente escondía:**
+
+```
+--brand-fg   gana #FFFFFF   la LANDING estaba vieja  (era #0F1F3D)
+--teal-l     gana #E4FBFC   la APP tenía deriva      (era #e0f8f9)
+--sh-2/--sh-3                falsa alarma: `0.1` y `0.10`, mismo valor
+```
+
+Su motivo, textual: *«la landing con `#0F1F3D` está desactualizada, no es una
+segunda decisión válida — quedó vieja porque nadie la tocó, no porque alguien la
+haya elegido distinta»*.
+
+**El celeste aclara, así que el par de la advertencia MEJORA: 4.77 → 4.91.** Se
+re-mide, no se afloja — el número viejo describía un color que la app ya no usa.
+Cotejo del instrumento: el sistema publica 15.19:1 y 5.04:1 para navy y
+`--text-muted` sobre ese celeste, y acá dan 15.19 y 5.04.
+
+### 🔴 Por qué un espejo y no leer el sistema de diseño directo
+
+Diseño pidió anclar contra `diseno/SISTEMA_DISENO.md`. La intención es la
+correcta y hoy es imposible: **`diseno/` no está versionado** —ni él ni la raíz
+son repositorios git—, así que un runner que hace checkout de este repo no puede
+leerlo. Una guarda que lo lea directo anda en la Mac y falla en CI, **o peor, se
+saltea y pasa en verde**.
+
+Se espeja con la disciplina del `contract-mirror`: copia con procedencia (sha256
+y bytes de la fuente, fecha, línea de cada token), solo lectura, y **tres
+verificaciones que no se funden en un veredicto único**.
+
+### 🔴 «No pude verificar» y «verifiqué y coincide» salen DISTINTOS
+
+```
+INTEGRIDAD   los dos artefactos vs. el espejo    corre siempre, también en CI
+POBLACIÓN    el espejo no perdió tokens          corre siempre
+SIN ANCLA    los --r-* que el sistema no valúa   corre siempre
+VIGENCIA     el espejo vs. la fuente             SE SALTEA si la fuente falta
+```
+
+El cuarto es el que importa: cuando la fuente no está, **se saltea con su motivo
+en el nombre**, no se aprueba. Acreditado en un sandbox sin `diseno/` al lado:
+`6 passed | 1 skipped`, con `NO CERTIFICADO` en la salida.
+
+### 🔴 Y el espejo casi puede bendecirse a sí mismo
+
+VIGENCIA tenía un atajo: `if (sha === espejado) return`. **Un mutante lo mató** —
+edité el espejo Y los dos artefactos para que coincidieran entre sí, sin tocar la
+fuente: **los 7 tests en verde.**
+
+El sha prueba que la **fuente** no cambió; no dice nada sobre si alguien editó el
+**espejo**, que es la forma más fácil de «arreglar» un rojo. Es la misma clase
+que el manifiesto que se inventariaba a sí mismo. Ahora se compara siempre, y el
+error señala al culpable: *«la fuente NO cambió, así que lo que se editó fue EL
+ESPEJO»*.
+
+**Otro mutante encontró un segundo defecto:** borrar un token del espejo fallaba
+bajo el nombre «el espejo tiene población» —25 sigue siendo > 20, lo que caía era
+otra afirmación del mismo test—. Separado: **una afirmación por test.** Misma
+clase que la guarda del `./` fallando bajo «las tres imágenes se USAN».
+
+### `PROPIEDAD 9` se mudó y quedó dicho dónde
+
+Vivía en `landing/landing.test.ts` y gobernaba también a la app. Un test que
+decide sobre `src/styles/global.css` no se busca en el archivo de la landing —y
+parte de por qué el README pudo jurar durante días una guarda inexistente es que
+su lugar natural estaba vacío. **No se borró en silencio: quedó la nota.**
+
 ## 0.70.0 — el ápice se conectó, y arrastró trece afirmaciones falsas (2026-08-10)
 
 MINOR: dos guardas nuevas y una corregida. **Cero cambios en el artefacto.**

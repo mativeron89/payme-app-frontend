@@ -172,15 +172,25 @@ pruebas pasaron en verde**.
 **Un README que describe una guarda inexistente es peor que no tener la guarda:
 apaga la sospecha.** Misma clase que el «cero JavaScript» de más arriba.
 
-**El gate ahora existe** (`PROPIEDAD 9` en `landing.test.ts`) y compara
-normalizando espacios, así que las dos diferencias de formato no ensucian. Las
-dos reales viven en un registro con fecha y motivo, igual que `EXCEPCIONES_AA`:
-**cualquier divergencia NUEVA se pone en rojo**, y una registrada que vuelva a
-coincidir también — tiene que salir del registro.
+**El gate ahora existe, y NO vive acá:** `scripts/tokensRatificados.test.ts`,
+contra `design-mirror/`.
 
-🔴 **Lo que el gate NO hace es decidir cuál valor gana.** `--brand-fg` es de
-Diseño y está pendiente de su respuesta; la landing hoy ni siquiera lo usa.
-Un gate no es el lugar donde se toma una decisión de marca.
+🔴 **Y no compara los dos artefactos entre sí** — eso fue mi primera versión y
+Diseño la corrigió: *«la landing con `#0F1F3D` está desactualizada, no es una
+segunda decisión válida»*. Comparar artefacto contra artefacto dice **que**
+difieren, no **cuál** tiene razón; sin un tercero gana el que alguien tocó
+último. Los dos se comparan contra el espejo del sistema de diseño.
+
+**Las dos divergencias quedaron resueltas por Diseño, no registradas:**
+
+```
+--brand-fg  gana #FFFFFF   la landing estaba vieja
+--teal-l    gana #E4FBFC   la app tenía deriva
+--sh-2/-3   falsa alarma   `0.1` y `0.10`, mismo valor escrito distinto
+```
+
+El detalle de por qué es un espejo y no una lectura directa —`diseno/` no está
+versionado— está en [`../design-mirror/README.md`](../design-mirror/README.md).
 
 ## Los dos accesos van navy
 

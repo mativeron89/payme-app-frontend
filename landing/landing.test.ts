@@ -975,112 +975,24 @@ describe('PROPIEDAD 8 · el contenido es el del boceto', () => {
 });
 
 /**
- * 🔴 PROPIEDAD 9 · los tokens copiados coinciden con los de la webapp.
- * **Escrita el 2026-08-10, porque NO EXISTÍA y el README juraba que sí.**
+ * 🔴 PROPIEDAD 9 SE MUDÓ · 2026-08-10 → `scripts/tokensRatificados.test.ts`.
  *
- * `landing/README.md` afirmaba: *«`landing.test.ts` parsea los dos archivos y
- * exige que coincidan token por token»*. No los parseaba. Lo acredité poniendo
- * `--border: #FF00FF` en la landing: **886 pruebas en verde**.
+ * Existió unas horas acá y se retira por dos motivos, los dos de Diseño:
  *
- * Y ya había cuatro divergencias vivas, entre ellas `--brand-fg` con valores
- * OPUESTOS —blanco en la app, navy acá—. Un documento que describe una guarda
- * inexistente **apaga la sospecha**: nadie va a buscar lo que cree cubierto.
+ * 1. **Comparaba los dos artefactos ENTRE SÍ**, y eso sólo dice que difieren:
+ *    no dice cuál tiene razón. El desempate lo ganaba el que alguien tocó
+ *    último —antigüedad en vez de ratificación—. Ahora los dos se comparan
+ *    contra un ESPEJO de `diseno/SISTEMA_DISENO.md`.
+ * 2. **Gobernaba a la app desde el archivo de la LANDING.** Un test que decide
+ *    sobre `src/styles/global.css` no se busca acá, y parte de por qué el
+ *    README pudo jurar durante días una guarda inexistente es que su lugar
+ *    natural estaba vacío.
  *
- * ⚠️ ESTE GATE NO DECIDE CUÁL VALOR GANA. Las divergencias conocidas van a un
- * registro con fecha y motivo; lo que corta es que aparezca una NUEVA. Elegir
- * el valor de `--brand-fg` es de Diseño, y un gate no es donde se toma una
- * decisión de marca — sólo donde se deja de perder de vista.
+ * Las dos divergencias que encontró quedaron RESUELTAS por Diseño, no
+ * registradas: `--brand-fg` gana `#FFFFFF` (la landing estaba vieja) y
+ * `--teal-l` gana `#E4FBFC` (la app tenía deriva). `--sh-2`/`--sh-3` eran
+ * falsa alarma: `0.1` y `0.10` escritos distinto.
  *
- * Corta para los dos lados: si una divergencia registrada vuelve a coincidir,
- * el test se pone rojo y la entrada tiene que salir.
+ * No se borró en silencio: queda esta nota, que es lo que faltó las otras
+ * veces.
  */
-describe('PROPIEDAD 9 · los tokens de la landing no derivan de los de la app', () => {
-  /**
-   * 🔴 Normaliza lo que es FORMATO y nada más.
-   *
-   * `rgba(15, 31, 61, 0.1)` y `rgba(15,31,61,0.10)` son el mismo color escrito
-   * distinto; marcarlos sería empujar a registrar no-divergencias, y un
-   * registro con ruido deja de leerse.
-   *
-   * ⚠️ Mi primera versión hacía `replace(/\s+/g, '')` y convertía
-   * `0 8px 24px` en `08px24px`: **dos sombras distintas podían normalizar
-   * igual**. Se colapsan espacios, no se borran.
-   */
-  const normalizar = (v: string): string =>
-    v
-      .trim()
-      .toLowerCase()
-      .replace(/\s*,\s*/g, ',')
-      .replace(/\s+/g, ' ')
-      // `0.10` → `0.1`, `.5` → `0.5`: mismo número, escritura distinta.
-      .replace(/(?<![\w.])\d*\.\d+(?![\w.])/g, (n) => String(Number(n)));
-
-  const tokensDe = (ruta: string): Map<string, string> => {
-    const texto = readFileSync(join(RAIZ, ruta), 'utf8');
-    const m = new Map<string, string>();
-    for (const t of texto.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)) {
-      if (!m.has(t[1]!)) m.set(t[1]!, normalizar(t[2]!));
-    }
-    return m;
-  };
-
-  /**
-   * Divergencias CONOCIDAS. Cada una con su fecha y por qué sigue abierta.
-   * No es una excepción permanente: es una lista de pendientes con dueño.
-   */
-  const DIVERGENCIAS_CONOCIDAS = [
-    {
-      token: 'brand-fg',
-      app: '#ffffff',
-      landing: '#0f1f3d',
-      desde: '2026-08-10',
-      dueño: 'Diseño',
-      porque:
-        'la app lo movió a blanco el 2026-08-08 y la landing quedó en navy; la landing NO lo usa ' +
-        '(cero `var(--brand-fg)` en landing.css), así que hoy no se ve — pero el próximo que lo use ' +
-        'hereda el valor equivocado. Cuál gana lo decide Diseño.',
-    },
-    {
-      token: 'teal-l',
-      app: '#e0f8f9',
-      landing: '#e4fbfc',
-      desde: '2026-08-10',
-      dueño: 'Diseño',
-      porque: 'dos tintes de teal claro distintos, sin decisión registrada de cuál es el de la marca',
-    },
-  ] as const;
-
-  it('🔴 el barrido encuentra población: si no, todo lo de abajo pasa en vacío', () => {
-    const app = tokensDe('src/styles/global.css');
-    const landing = tokensDe('landing/landing.css');
-    expect(app.size, 'no se parsearon tokens de la app').toBeGreaterThan(50);
-    expect(landing.size, 'no se parsearon tokens de la landing').toBeGreaterThan(10);
-    const comunes = [...landing.keys()].filter((k) => app.has(k));
-    expect(comunes.length, 'ningún token en común: el parser mide otra cosa').toBeGreaterThan(10);
-  });
-
-  it('🔴 ninguna divergencia NUEVA entre los tokens compartidos', () => {
-    const app = tokensDe('src/styles/global.css');
-    const landing = tokensDe('landing/landing.css');
-    const registradas = new Set<string>(DIVERGENCIAS_CONOCIDAS.map((d) => d.token));
-    const nuevas: string[] = [];
-    for (const [k, v] of landing) {
-      const enApp = app.get(k);
-      if (enApp === undefined || registradas.has(k)) continue;
-      if (enApp !== v) nuevas.push(`--${k}: app=${enApp} landing=${v}`);
-    }
-    expect(nuevas, `divergencias sin registrar: ${nuevas.join(' · ')}`).toEqual([]);
-  });
-
-  it('🔴 y las registradas siguen divergiendo · si coinciden, salen del registro', () => {
-    const app = tokensDe('src/styles/global.css');
-    const landing = tokensDe('landing/landing.css');
-    for (const d of DIVERGENCIAS_CONOCIDAS) {
-      expect(app.get(d.token), `--${d.token} en la app cambió: re-medí el registro`).toBe(d.app);
-      expect(landing.get(d.token), `--${d.token} en la landing cambió`).toBe(d.landing);
-      expect(d.app, `--${d.token} ya COINCIDE: sacala del registro`).not.toBe(d.landing);
-      expect(d.porque.length, 'sin motivo no se puede auditar').toBeGreaterThan(30);
-      expect(d.dueño.length).toBeGreaterThan(0);
-    }
-  });
-});

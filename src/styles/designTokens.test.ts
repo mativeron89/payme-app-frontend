@@ -144,9 +144,18 @@ describe('sistema de diseño · §1 color', () => {
    * `--teal-l`. Es un fondo más claro y el ratio BAJA: pasa AA, pero por menos
    * margen. Queda fijado acá para que un retoque del celeste no lo hunda en
    * silencio en el único lugar donde la app dice que las cuentas no cierran.
+   *
+   * 🔴 RE-MEDIDO el 2026-08-10 · `4.77` → `4.91`. `--teal-l` pasó de `#e0f8f9`
+   * a `#e4fbfc`, **el valor ratificado del sistema de diseño**: el de la app
+   * era DERIVA (decisión de Diseño; el de la landing era el bueno). El celeste
+   * aclara, así que este par MEJORA. Se re-mide, no se afloja: el número
+   * anterior describía un color que la app ya no usa.
+   *
+   * Cotejo del instrumento: el sistema publica 15.19:1 para navy y 5.04:1 para
+   * `--text-muted` sobre este celeste, y acá dan 15.19 y 5.04.
    */
   it('la advertencia del total pasa AA sobre el celeste de la tarjeta', () => {
-    expect(contrast('warning', 'teal-l')).toBeCloseTo(4.77, 1)
+    expect(contrast('warning', 'teal-l')).toBeCloseTo(4.91, 1)
     expect(contrast('warning', 'teal-l')).toBeGreaterThanOrEqual(4.5)
     // Y el texto normal de la misma tarjeta, que comparte fondo.
     expect(contrast('text-muted', 'teal-l')).toBeGreaterThanOrEqual(4.5)
