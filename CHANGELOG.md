@@ -1,5 +1,33 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.72.1 — ahora se prueba el `run:` de verdad, no el script que invoca (2026-08-10)
+
+PATCH: sólo tests. Cierra un hueco de `0.72.0`.
+
+**Probar `publicar-vercel.sh` no prueba que el workflow lo invoque.** Si alguien
+reescribe las dos líneas del `run:`, le saca un `"$HOOK_LANDING"` o le agrega un
+`|| true`, **las seis sondas de 0.72.0 seguían todas en verde**.
+
+Método tomado de Dashboard Frontend, que lo acreditó mejor: **se extrae el
+cuerpo literal del `.yml` y se ejecuta**, con `curl` sustituido por un doble.
+Se invoca igual que Actions —`bash --noprofile --norc -eo pipefail`— porque ese
+`-e` es parte del comportamiento: sin él, si el disparo de `app` falla, el de
+`landing` correría igual y el paso terminaría en 0.
+
+```
+200         → el paso sale 0 y dispara los DOS proyectos   ✅
+401 · 500   → el paso FALLA                                🔴
+curl cae    → el paso FALLA                                🔴
+y en los CUATRO casos la URL del hook no aparece en la salida
+```
+
+Mutantes sobre el YAML real, los tres en rojo: **`|| true` en el disparo**,
+**borrar la línea de `landing`**, **escribir la URL del hook a mano**.
+
+🔴 **Queda UNA sola cosa sin ejecutar y se dice cuál:** el condicional
+—`success()`, `push`, `main`—, porque lo evalúa Actions y verlo en rojo exigiría
+romper producción a propósito.
+
 ## 0.72.0 — producción deja de publicarse antes que el CI (2026-08-10)
 
 MINOR: cambia cuándo se publica. **Mati autorizó gatear el despliegue** después

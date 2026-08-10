@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -21,16 +22,22 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  *
  * No las mezclo, porque valen distinto:
  *
- *   EJECUTANDO   el comportamiento de `publicar-vercel.sh` contra un servidor
- *                real que contesta 200, 500 y que se cae. Es la condición 3 de
- *                la orden —«si el curl falla, el job falla»— y es la que más
- *                importa, porque un curl que informa y no corta deja creyendo
- *                que se publicó.
+ *   EJECUTANDO   (a) `publicar-vercel.sh` contra un servidor real que contesta
+ *                200, 429, 500 y que se cae; y (b) **el cuerpo literal del
+ *                `run:` extraído del `.yml`**, con `curl` sustituido. Es la
+ *                condición 3 de la orden —«si el curl falla, el job falla»— y
+ *                es la que más importa: un curl que informa y no corta deja
+ *                creyendo que se publicó.
  *
- *   POR LECTURA  el condicional del YAML (`success()`, `push`, `main`). Correr
- *                el workflow de verdad es una acción externa y además exigiría
- *                romper producción a propósito para ver el rojo. **Queda
- *                declarado como no ejecutado**, no disfrazado de verificación.
+ *   POR LECTURA  sólo el condicional (`success()`, `push`, `main`), que lo
+ *                evalúa Actions. **Queda declarado como no ejecutado**, no
+ *                disfrazado de verificación.
+ *
+ * 🔴 (b) SE AGREGÓ DESPUÉS, y tapa un hueco de (a). Probar el script no prueba
+ * que el workflow lo INVOQUE: si alguien reescribe esas dos líneas del `run:`,
+ * le saca un `"$HOOK_LANDING"` o le agrega un `|| true`, las sondas de (a)
+ * siguen todas en verde. Método tomado de Dashboard Frontend: **se prueba el
+ * workflow, no una reescritura propia del workflow.**
  */
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
@@ -129,10 +136,15 @@ describe('EJECUTANDO · el disparo corta cuando el hook no acepta', () => {
 });
 
 /**
- * 🔴 POR LECTURA, y lo digo: esto NO se ejecutó. Correr el workflow es acción
- * externa y ver su rojo exigiría romper producción a propósito. Lo que sigue
- * afirma sobre el TEXTO del YAML — vale para que nadie afloje el condicional
- * sin querer, no como prueba de que Actions se comporta así.
+ * 🔴 POR LECTURA, y lo digo: esto NO se ejecutó.
+ *
+ * ⚠️ Es lo ÚNICO que queda sin ejecutar. El cuerpo del `run:` sí se corre —ver
+ * el bloque de más abajo—; lo que no se puede correr es el CONDICIONAL, porque
+ * `success()`, `github.event_name` y `github.ref` los evalúa Actions y verlos
+ * en rojo exigiría romper producción a propósito.
+ *
+ * Lo que sigue afirma sobre el TEXTO del YAML: vale para que nadie afloje el
+ * condicional sin querer, no como prueba de que Actions se comporta así.
  */
 describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
   const ci = readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');
@@ -169,6 +181,121 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
     expect(ci).toContain('${{ secrets.VERCEL_HOOK_LANDING }}');
     expect(ci, 'hay una URL de hook escrita a mano').not.toMatch(/api\/deploy\/prj_/);
     expect(ci, 'hay un hook de vercel hardcodeado').not.toMatch(/vercel\.com\/v1\/integrations/);
+  });
+});
+
+/**
+ * 🔴 EJECUTANDO EL CUERPO REAL DEL `run:` · el hueco que dejaba lo de arriba.
+ *
+ * Los tests de más arriba corren `publicar-vercel.sh`, que es lo que el
+ * workflow invoca. **Pero no verifican que el workflow lo invoque.** Si alguien
+ * reescribe esas dos líneas del `run:` —o le saca un `"$HOOK_LANDING"`, o le
+ * agrega un `|| true`— mis sondas siguen todas en verde.
+ *
+ * Método tomado de Dashboard Frontend, que lo acreditó mejor: **se extrae el
+ * cuerpo del `.yml` y se ejecuta**, con `curl` sustituido por un doble que
+ * contesta lo que el caso pida. Se prueba el workflow, no una reescritura mía
+ * del workflow.
+ *
+ * Se invoca igual que Actions —`bash --noprofile --norc -eo pipefail`—, porque
+ * ese `-e` es parte del comportamiento: sin él, si el disparo de `app` falla,
+ * el de `landing` correría igual y el paso terminaría en 0.
+ */
+describe('EJECUTANDO el `run:` del workflow · con curl sustituido', () => {
+  const ciTexto = readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');
+
+  /** El cuerpo literal del `run: |` del paso de publicación. */
+  const cuerpo = (() => {
+    const lineas = ciTexto.split('\n');
+    const i = lineas.findIndex((l) => l.includes('- name: Publicar en Vercel'));
+    const j = lineas.findIndex((l, k) => k > i && l.trim() === 'run: |');
+    const sangria = (lineas[j]!.match(/^\s*/)?.[0].length ?? 0) + 2;
+    const out: string[] = [];
+    for (let k = j + 1; k < lineas.length; k += 1) {
+      const l = lineas[k]!;
+      if (l.trim() && !l.startsWith(' '.repeat(sangria))) break;
+      out.push(l.slice(sangria));
+    }
+    return out.join('\n').trimEnd();
+  })();
+
+  const URL_FALSA = 'https://api.vercel.com/v1/integrations/deploy/prj_FALSO/tokenSECRETO123';
+
+  /**
+   * Corre el cuerpo con un `curl` doble adelante en el PATH.
+   * `codigo` es lo que el doble imprime; `salida` con qué exit code termina.
+   */
+  function correrCuerpo(codigo: string, salida: number): Promise<{ code: number; out: string }> {
+    const dir = mkdtempSync(join(tmpdir(), 'payme-hook-'));
+    writeFileSync(
+      join(dir, 'curl'),
+      `#!/usr/bin/env bash\nprintf '%s' "${codigo}"\nexit ${salida}\n`,
+      { mode: 0o755 },
+    );
+    writeFileSync(join(dir, 'cuerpo.sh'), cuerpo);
+    return new Promise((resolver) => {
+      execFile(
+        'bash',
+        ['--noprofile', '--norc', '-eo', 'pipefail', join(dir, 'cuerpo.sh')],
+        {
+          cwd: RAIZ,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            PATH: `${dir}:${process.env.PATH ?? ''}`,
+            HOOK_APP: URL_FALSA,
+            HOOK_LANDING: URL_FALSA,
+          },
+        },
+        (err, out, errOut) => {
+          rmSync(dir, { recursive: true, force: true });
+          const code = err && typeof err.code === 'number' ? err.code : err ? -1 : 0;
+          resolver({ code, out: `${out}${errOut}` });
+        },
+      );
+    });
+  }
+
+  it('🔴 el cuerpo se extrajo de verdad · si viniera vacío, todo pasaría en vacío', () => {
+    expect(cuerpo.length, 'no se extrajo el `run:` del paso').toBeGreaterThan(40);
+    expect(cuerpo, 'el cuerpo no dispara el hook de app').toContain('publicar-vercel.sh app');
+    expect(cuerpo, 'el cuerpo no dispara el hook de landing').toContain('publicar-vercel.sh landing');
+    expect(cuerpo, 'alguien le puso un escape que anula el corte').not.toMatch(/\|\|\s*true|;\s*exit 0/);
+  });
+
+  it('✅ 200 · el paso termina en 0 y publica los DOS proyectos', async () => {
+    const r = await correrCuerpo('200', 0);
+    expect(r.code, `el paso falló con dos hooks sanos:\n${r.out}`).toBe(0);
+    expect(r.out).toContain('app');
+    expect(r.out, 'no llegó a disparar landing: el `-e` cortó antes o falta la línea')
+      .toContain('landing');
+  });
+
+  for (const codigo of ['401', '500'] as const) {
+    it(`🔴 ${codigo} · el paso FALLA · nada se da por publicado`, async () => {
+      const r = await correrCuerpo(codigo, 0);
+      expect(r.code, `el paso aprobó un hook que contestó ${codigo}:\n${r.out}`).not.toBe(0);
+      expect(r.out).toContain(codigo);
+    });
+  }
+
+  it('🔴 curl falla (red) · el paso FALLA', async () => {
+    const r = await correrCuerpo('', 7);
+    expect(r.code, `un curl caído no puede dar por publicado:\n${r.out}`).not.toBe(0);
+  });
+
+  it('🔴 y en los CUATRO casos la URL del hook NO aparece en la salida', async () => {
+    const salidas = await Promise.all([
+      correrCuerpo('200', 0),
+      correrCuerpo('401', 0),
+      correrCuerpo('500', 0),
+      correrCuerpo('', 7),
+    ]);
+    expect(salidas.length, 'no se corrió ningún caso').toBe(4);
+    for (const s of salidas) {
+      expect(s.out, `la URL del hook salió al log:\n${s.out}`).not.toContain('tokenSECRETO123');
+      expect(s.out).not.toContain('prj_FALSO');
+    }
   });
 });
 
