@@ -1,5 +1,74 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.73.0 — el inventario de copy, y los 79 textos que mi primer barrido perdió (2026-08-10)
+
+MINOR: agrega `scripts/inventario-copy.mjs` y `docs/INVENTARIO_COPY_UI.md`.
+**Cero cambios en el producto.** Insumo de `D-IDIOMA-1` para que Diseño traduzca
+con la frase a la vista.
+
+```
+802 apariciones · 703 textos únicos · 36 archivos
+```
+
+### Por AST, no por `grep`
+
+Un string que el formateador partió en tres líneas es invisible para un `grep`
+de una línea. No es teórico: el `console.error` de `walletRail.ts:204` está
+partido con `+`, y el parser lo trajo entero.
+
+### 🔴 Y el AST solo no alcanzó — 79 únicos perdidos, un 11 %
+
+Cinco lentes independientes barrieron el repo sin ver la lista del extractor.
+Encontraron dos huecos **del discriminador, no del parser**:
+
+- **exigía un espacio o un acento** para considerar algo una frase, así que
+  perdía **toda etiqueta de una palabra sin acento** — `Inicio`, `Mesas`,
+  `Volver`, `Cancelar`, `Entrar`, `Principal`. Los strings más frecuentes de
+  cualquier app;
+- **sólo miraba `src/`**, así que perdía el `<title>` de la pestaña.
+
+Corregidos los dos. Para texto entre tags ya no hay heurística: **si está entre
+tags, se ve.** Y una palabra minúscula suelta (`entero`) entra por el nombre de
+quien la devuelve —`bpsLabel`—, porque la forma no alcanzaba y el contexto sí.
+
+**Es la misma clase que el censo de voseo que salió corto dos veces:** el
+discriminador demasiado angosto. Van tres.
+
+### 🔴 Voseo VIVO, y la guarda pasa en verde
+
+```
+joinLinkView.ts:138            «Pedile a quien te invitó…»
+reconciliacionMesaView.ts:159  «escribinos para resolverlo.»
+LoginScreen.tsx:15             «Tu cuenta está suspendida. Escribinos.»
+```
+
+`PATRON_VOSEO` exige á/é/í tónica **final**; al pegarse un enclítico el acento
+deja de estar al final —`Pedí` + `le` → `Pedile`—, así que **se escapa la clase
+entera**: `Tocalo`, `Elegilo`, `Escribinos`. No se corrige acá: cambiar copy es
+de Diseño, y la guarda extendida y el arreglo del texto tienen que entrar en el
+mismo commit o la suite queda roja.
+
+Aparte y de otra familia: **«mozo» es rioplatense; en México es «mesero»**
+(`MesaScreen.tsx:589` y `:1341`). La guarda no lo mira —detecta morfología
+verbal, no vocabulario— y eso es su límite, no su falla.
+
+### Lo que queda declarado fuera
+
+**Legales: ninguno.** Verificado por tres caminos —endpoints, `PAGES`, y cero
+`innerHTML`—. ⚠️ Pero limpio **por ausencia**: `LoginScreen` crea cuentas sin
+mostrar ni enlazar aviso, mientras el backend ya tiene `legal_texts` esperando.
+Gap de producto, avisado.
+
+**Wallet dormido: 63 frases excluidas a propósito**, con las rutas verificadas
+sin un solo `navigate` que llegue. Se deja escrito: una ausencia sin registro se
+lee como descuido.
+
+**Y hay texto en pantalla que el selector NO va a poder cambiar** —el iframe de
+Stripe, el `window.confirm` nativo, `Intl.NumberFormat('es-MX')` clavado, los
+nombres de mes, y los plurales escritos a mano—. Está tabulado en el documento
+para no prometer una app bilingüe que no lo sería.
+
+
 ## 0.72.1 — ahora se prueba el `run:` de verdad, no el script que invoca (2026-08-10)
 
 PATCH: sólo tests. Cierra un hueco de `0.72.0`.
