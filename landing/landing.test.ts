@@ -497,7 +497,9 @@ describe('PROPIEDAD 4 · fail-closed: sólo lo que la landing necesita', () => {
  * **No es un descuido: es la excepción que él ratificó el 2026-08-08**, con los
  * cuatro usos del naranja a la vista y el contraste medido al lado de cada uno.
  *
- * ⚠️ Lo que SÍ hubo que decidir es sobre QUÉ naranja:
+ * ⚠️ Sobre QUÉ naranja lo decidió DISEÑO, que es el dueño del color —«sólido,
+ * no abro una excepción nueva»— y de paso retiró su propio degradado por haber
+ * quedado desactualizado. Los números que tuvo a la vista:
  *
  *     blanco sobre #FFA36B (degradado del boceto)   1.96:1   ← excepción NUEVA
  *     blanco sobre #FF9152 (degradado del boceto)   2.23:1   ← excepción NUEVA
@@ -530,12 +532,16 @@ describe('PROPIEDAD 5 bis · las excepciones AA están registradas, no escondida
     {
       donde: '.login-trigger',
       fg: '#FFFFFF',
+      decideFg: 'Mati',
       bg: '#FF6B35',
+      decideBg: 'Diseño',
       ratio: 2.84,
       minimo: 4.5,
       fecha: '2026-08-09',
-      decide: 'Mati',
-      porque: 'pidió letra blanca, con captura; se usa el naranja de marca para no abrir una excepción nueva',
+      ratifica: 'Mati · 2026-08-08',
+      porque:
+        'Mati pidió letra blanca, con captura; Diseño eligió el naranja SÓLIDO de marca ' +
+        '—«no abro una excepción nueva»— y retiró su propio degradado por quedar desactualizado',
     },
   ] as const;
 
@@ -543,7 +549,13 @@ describe('PROPIEDAD 5 bis · las excepciones AA están registradas, no escondida
     expect(EXCEPCIONES_AA.length, 'el registro quedó vacío: nada que verificar').toBe(1);
     for (const e of EXCEPCIONES_AA) {
       expect(e.fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(e.decide.length).toBeGreaterThan(0);
+      expect(e.ratifica).toMatch(/\d{4}-\d{2}-\d{2}$/);
+      // 🔴 Dos autores DISTINTOS, y por eso dos campos y no uno: el texto lo
+      // decidió Mati y el fondo lo decidió Diseño. Un solo `decide` obligaba a
+      // atribuirle a uno lo que eligió el otro — que es exactamente el error
+      // que hubo que corregir para llegar hasta acá.
+      expect(e.decideFg.length, 'sin autor del color de texto').toBeGreaterThan(0);
+      expect(e.decideBg.length, 'sin autor del color de fondo').toBeGreaterThan(0);
       expect(e.porque.length, 'sin motivo no se puede auditar la decisión').toBeGreaterThan(30);
     }
   });

@@ -1,5 +1,35 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.69.2 — el color era de Diseño y lo elegí yo (2026-08-09)
+
+PATCH de **procedencia**. 🔴 **No cambia un byte del artefacto publicado** —
+medido, no supuesto: el CSS emitido conserva su hash porque lo único que se
+tocó son comentarios y un registro de tests.
+
+**Qué pasó.** Apliqué blanco sobre `#FF6B35` por criterio propio y pusheé. Un
+minuto después llegó el freno: *«el naranja de fondo lo decide Diseño, no yo»*
+—Mati corrigió el procedimiento: *«el chat de diseño tiene cómo debería ser»*—.
+**El freno llegó tarde para frenar nada: `a6441a5` ya estaba publicado.**
+
+Diseño contestó `#FF6B35` sólido. **El resultado coincide; el procedimiento no.**
+
+```
+texto blanco       MATI    · «tiene que ser la letra blanca»
+naranja #FF6B35    DISEÑO  · «sólido, no abro una excepción nueva»
+2.84:1             MATI    · excepción ya ratificada el 2026-08-08, con su número
+el degradado       DISEÑO  · retirado POR SU AUTOR, por quedar desactualizado
+```
+
+🔴 **Acertar no es lo mismo que corresponder.** Que el color que elegí sea el
+que Diseño eligió no convierte mi elección en la suya, y un CHANGELOG que
+atribuya mal una decisión de marca es el documento que alguien va a citar dentro
+de seis meses. **Por eso el registro de excepciones ahora tiene DOS autores y no
+uno:** obligar a un solo campo era obligar a atribuirle a uno lo que eligió el
+otro.
+
+El degradado ya no vuelve por descuido: el mutante que lo repone bajo texto
+blanco estaba desde `97d26d9` y sigue en rojo.
+
 ## 0.69.1 — «Iniciar sesión» en blanco, sobre el naranja ratificado (2026-08-09)
 
 PATCH: un color de texto.
