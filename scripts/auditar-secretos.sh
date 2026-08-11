@@ -39,9 +39,23 @@ BASE="${1:-origin/main}"
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$RAIZ" || exit 2
 
+# 🔴 EL DETECTOR NO PUEDE SER SU PROPIO SUJETO, y lo aprendí en su primer uso.
+#
+# Este gate CORTÓ sobre el commit que lo introduce, por dos motivos que son la
+# misma trampa: el script **nombra** `SECRETOS_DEMO_RAILWAY` porque tiene que
+# detectarlo, y el CHANGELOG **cita** el literal de la fuga plantada para
+# documentar cómo se acreditó.
+#
+# **Prohibir una cadena no distingue AFIRMAR de CITAR** — la tercera vez que
+# aparece hoy en este repo, después de «sin gate» y del voseo.
+#
+# Se excluye SÓLO este archivo, por nombre, como hace `registroMexicano.test.ts`
+# consigo mismo. **No se excluye el CHANGELOG**: un secreto real puede aterrizar
+# ahí igual que en cualquier otro lado, así que el ejemplo se reescribe para que
+# no tenga forma de valor.
 diff_file="$(mktemp)"
 trap 'rm -f "$diff_file"' EXIT
-git diff "$BASE"..HEAD > "$diff_file" 2>/dev/null || {
+git diff "$BASE"..HEAD -- . ':(exclude)scripts/auditar-secretos.sh' > "$diff_file" 2>/dev/null || {
   echo "🔴 no pude calcular el diff contra $BASE" >&2; exit 2;
 }
 

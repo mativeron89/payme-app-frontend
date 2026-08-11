@@ -37,10 +37,17 @@ const { password }    ← NO corta · es un nombre de campo
 `sk_live_…` en prosa  ← NO corta · no tiene cuerpo
 ```
 
-**Acreditado plantando una fuga real:** con `sk_live_51QwErTy…` y
-`password = "hunter2-de-verdad"` en un commit temporal, **exit 1 y los dos
-patrones reportados**. Sin el mutante, un gate de secretos que nunca vio uno no
-está verificado.
+**Acreditado plantando una fuga real** —una clave `sk_live_` con cuerpo
+completo y una asignación de contraseña con literal— en un commit temporal:
+**exit 1 y los dos patrones reportados.** Sin el mutante, un gate de secretos
+que nunca vio uno no está verificado.
+
+⚠️ **Los literales exactos NO se transcriben acá, y el motivo es un hallazgo del
+propio gate:** cortó sobre el commit que lo introduce, porque este párrafo los
+citaba. **Prohibir una cadena no distingue AFIRMAR de CITAR** — tercera vez hoy,
+después de «sin gate» y del voseo. El script se excluye a sí mismo por nombre
+—necesita nombrar lo que detecta— pero **el CHANGELOG NO se excluye**: un
+secreto real puede aterrizar acá igual que en cualquier otro lado.
 
 ### Dos conductas que se conservan
 
