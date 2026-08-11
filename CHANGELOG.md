@@ -1,5 +1,67 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.76.1 — el lector del riel de dinero: fail-closed sobre la TARJETA (2026-08-11)
+
+El espejo llegó a `0ce21f4` con `services/moneyRail.js`, así que `money_rail` ya
+se puede leer por el camino sancionado. **`src/api/moneyRail.ts`, sin superficie
+de UI todavía: el cartel espera copy de Diseño.**
+
+### 🔴 El fail-closed no es sobre el cartel: es sobre la tarjeta
+
+La pregunta parecía «¿mostrar o no mostrar el aviso de tarjeta de prueba?».
+**Ahí está la trampa, porque las dos salidas son malas:**
+
+```
+mostrar el cartel con real_money=true  → le decís a alguien con dinero real
+                                         que use una tarjeta falsa; su pago falla
+ocultarlo con real_money=false         → alguien tipea su tarjeta REAL
+```
+
+**Elegir entre esas dos es elegir cuál error cometer.** La salida —decisión del
+Bibliotecario— es la de `wallet_rail`: **si no se determina el estado, no se
+habilita la superficie.** Nadie escribe un número de tarjeta cuando no sabemos
+qué pasa con él.
+
+```
+real_money === false  LEÍDO   → tarjeta + cartel
+real_money === true   LEÍDO   → tarjeta, sin cartel
+cualquier otra cosa           → NO se ofrece tarjeta
+```
+
+**Así el cartel deja de ser una decisión de riesgo: aparece sólo con un `false`
+leído.** Nunca por default, nunca por deducción.
+
+### `real_money` se LEE, jamás se deduce de `mode`
+
+El emisor documenta la versión negativa de este error —*«un `!== "disabled"`
+habilitaría cualquier basura»*— y acá se fija la positiva: **un modo futuro que
+este front no conoce, con `real_money: true`, NO muestra cartel.** Manda el
+campo, no el nombre. Hay una **sonda que verifica que el código ejecutable no
+nombre ningún modo**: si alguien mete `mode === 'sandbox'` en la lógica, la
+decisión vuelve a depender de una lista que envejece.
+
+### Un caso que merece su párrafo
+
+**Con `real_money: false` presente pero `payments_enabled` ausente, CIERRA.** La
+tentación es mostrar el cartel igual, porque el dato que importa está leído.
+**Una respuesta a medias no acredita nada sobre la otra mitad**, y abrir el
+formulario apoyándose en medio contrato es cómo alguien termina tipeando una
+tarjeta sin que sepamos qué pasa con ella.
+
+### Lo que este módulo NO puede acreditar, dicho
+
+🔴 **Lo que hace seguro a `sandbox` no es el modo: es que la clave de Stripe sea
+de prueba.** El emisor lo dice y lo hace cumplir en el arranque
+(`middleware/envValidation.js`): `sandbox` con `sk_live_…` cobraría de verdad y
+el proceso no arranca. **Desde el front eso no se verifica.** Leer
+`real_money: false` acredita lo que el backend DECLARA, no la clave con la que
+corre.
+
+**18 tests · 3 mutantes** (siempre-ofrece-tarjeta, deducir el cartel con
+`!real`, y ausencia-abre) **rojos**, más el control sin el cual el fail-closed
+sería un apagón: con la forma buena SÍ abre.
+
+
 ## 0.76.0 — el mock modela los tres modos monetarios; el resto está BLOQUEADO (2026-08-11)
 
 MINOR de mock y tipos. **Cero superficie de producto: ningún código lee
