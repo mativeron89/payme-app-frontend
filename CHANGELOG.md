@@ -1,5 +1,60 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.76.3 — mi auditoría de secretos informaba y no cortaba (2026-08-11)
+
+PATCH: `scripts/auditar-secretos.sh`. **Cero `src/`.**
+
+🔴 **Falla mía, en el chequeo de mayor consecuencia que tiene este repo.**
+
+El repo es PÚBLICO y la regla es auditar antes de cada push. Yo la venía
+cumpliendo con una línea suelta en la terminal:
+
+```
+[ "$n" -eq 0 ] && echo "✅ cero coincidencias"
+```
+
+**Eso informa y no corta.** En el push de v0.76.2 marcó `password × 2` y
+`sk_live × 3` **y el push salió igual, en el mismo bloque, sin que yo leyera las
+cinco.** Resultaron benignas —`sk_live_…` con puntos suspensivos en comentarios,
+y `password` como nombre de campo del contrato espejado— **pero eso lo verifiqué
+DESPUÉS.**
+
+**La diferencia entre «salió bien» y «estaba controlado» es exactamente ésta.**
+Es la familia que este repo persiguió todo el día —el gate que informa sin
+cortar— cometida por mí sobre secretos, en un repo público.
+
+### Cómo distingue una MENCIÓN de un VALOR
+
+Prohibir la palabra `password` sería inútil: aparece como nombre de campo en
+todo el contrato espejado, y **una guarda que grita siempre se apaga sola**. Se
+buscan valores con forma de secreto: prefijo Y cuerpo largo, o asignación Y
+literal.
+
+```
+sk_live_ABC123…       ← corta
+password: "hunter2"   ← corta
+const { password }    ← NO corta · es un nombre de campo
+`sk_live_…` en prosa  ← NO corta · no tiene cuerpo
+```
+
+**Acreditado plantando una fuga real:** con `sk_live_51QwErTy…` y
+`password = "hunter2-de-verdad"` en un commit temporal, **exit 1 y los dos
+patrones reportados**. Sin el mutante, un gate de secretos que nunca vio uno no
+está verificado.
+
+### Dos conductas que se conservan
+
+**Sólo mira líneas AGREGADAS.** Una ELIMINACIÓN con forma de secreto es lo
+contrario de un problema — ya pasó con `fonts.googleapis.com`: nueve
+coincidencias, las nueve borrados.
+
+**Con diff vacío dice «NO se auditó nada», no «cero hallazgos».** Un cero sobre
+cero líneas no es un cero.
+
+⚠️ **Y el límite, escrito en el script: es un PISO, no una garantía.** Un
+secreto sin forma reconocible —una CLABE, un token propio— pasa igual.
+
+
 ## 0.76.2 — el cartel de tarjeta de prueba, y el mock no puede probarlo (2026-08-11)
 
 **Copy ratificada por Mati el 2026-08-11**, inglés verificado por el
