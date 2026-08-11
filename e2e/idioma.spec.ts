@@ -40,7 +40,18 @@ test.describe('la app en inglés no deja copy en español', () => {
       await page.goto(`/#/${ruta}`);
       await page.waitForTimeout(400);
       const hits = await page.evaluate(async () => {
-        const mod = await import('/src/i18n/en.ts');
+        /**
+         * 🔴 El especificador va por VARIABLE, y no es estilo: este `import()`
+         * lo resuelve VITE EN EL NAVEGADOR, pero `tsc` type-chequea el archivo
+         * e intenta resolverlo como módulo del proyecto — y falla.
+         *
+         * Lo destapó CI, no mi gate local, y el motivo importa más que el
+         * defecto: **yo verifiqué con `tsc -b` y CI corre `npm run typecheck`,
+         * que son comandos distintos.** Verificar con un instrumento que no es
+         * el del gate deja pasar justo lo que el gate mira.
+         */
+        const ruta = '/src/i18n/' + 'en.ts';
+        const mod = await import(/* @vite-ignore */ ruta);
         const claves = new Set(
           Object.keys((mod as { EN: Record<string, string> }).EN)
             // Las plantillas nunca aparecen literales en pantalla, y las que
@@ -80,7 +91,8 @@ test.describe('la app en inglés no deja copy en español', () => {
     await page.getByRole('button', { name: 'EN', exact: true }).click();
 
     const loVio = await page.evaluate(async () => {
-      const mod = await import('/src/i18n/en.ts');
+      const ruta = '/src/i18n/' + 'en.ts';        // ver la nota de arriba
+      const mod = await import(/* @vite-ignore */ ruta);
       const EN = (mod as { EN: Record<string, string> }).EN;
       const clave = Object.keys(EN).find((k) => !k.includes('{') && EN[k] !== k)!;
       const d = document.createElement('div');
