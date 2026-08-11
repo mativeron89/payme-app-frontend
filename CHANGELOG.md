@@ -1,5 +1,73 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.74.4 — el blanco intermitente tenía causa, y era la red del equipo (2026-08-10)
+
+PATCH: una línea de `playwright.config.ts`. **Cero `src/`.**
+
+### La rama muerta con cartel de rama viva
+
+```
+trace:   'on-first-retry'        ← el trace se captura en el PRIMER REINTENTO
+retries: process.env.CI ? 2 : 0  ← en local no hay reintentos
+─────────────────────────────────────────────────────────────────
+en local no hay primer reintento ⇒ NUNCA se capturaba un trace
+```
+
+Y el comentario al lado decía *«traza y captura sólo cuando algo falla»*. **La
+captura sí; la traza no, nunca.** Las tres fallas de v0.74.3 dejaron un PNG en
+blanco y un `error-context.md` — **y la corrida siguiente los borra**.
+
+Es la misma familia que el README que juraba un gate que nadie escribió: **una
+configuración que se lee como protección y no protege.** Acá no hacía falta
+ningún componente nuevo, sólo que el valor correspondiera al comentario.
+
+🔴 **Por qué NO se arregló subiendo `retries` en local**, que era la otra forma
+de que `on-first-retry` disparara: **reintentar hasta que pase es exactamente la
+conducta que vacía una compuerta de publicación**, sólo que automatizada.
+`retain-on-failure` deja la evidencia **sin reintentar nada**.
+
+### ⭐ Se pagó solo en la primera corrida
+
+El intermitente apareció —dos tests, otra vez distintos— y esta vez dejó traces.
+Adentro:
+
+```
+net::ERR_NETWORK_CHANGED   × 25    trace 1 · abortados en 8 ms
+net::ERR_NETWORK_CHANGED   ×  2    trace 2 · mismo instante
+```
+
+**No es contención, no es Vite, no es carga.** La configuración de red del equipo
+cambia durante la corrida y **Chromium aborta todo lo que tiene en vuelo**. Se
+cae un pedazo del grafo de módulos —`http.ts`, `mockApi.ts`, `format.ts`,
+`AppHeader.tsx`…—, React nunca monta y la pantalla queda en blanco hasta el
+timeout de 30 s.
+
+Explica todo lo que «ambiental» dejaba sin explicar: por qué es un test **al
+azar** (el que esté cargando cuando pasa), por qué ~la mitad de las corridas (una
+ventana de 3 minutos atrapa un parpadeo; el spec aislado, de 14 s, no), y por qué
+**no aparece en CI**, donde la red del runner no cambia.
+
+⚠️ **Consecuencia para la compuerta de publicación: no la amenaza.** Esta causa
+es local. Pero un rojo local de esta clase **no es un defecto de producto**, y
+ahora se identifica abriendo un archivo en vez de re-derivarlo entero.
+
+**Dos traces independientes coinciden.** Un solo instrumento no habría alcanzado.
+
+### Medido, no estimado
+
+```
+verdes sin trace   175 · 167 · 208 s
+con trace          228 s, con 2×30 s de timeout adentro → ~168 s efectivos
+sonda              test rojo deja trace.zip (356 KB) · test verde no deja nada
+```
+
+**Queda abierto y es de la máquina, no del repo:** qué cambia la red del equipo
+—VPN, Wi-Fi, una interfaz que sube y baja—. No se investiga desde acá.
+
+⚠️ **Anotado sin arreglar:** `playwright-report/` no está en `.gitignore`
+(`test-results/` sí). Y en CI el trace **sí** se captura (`retries: 2`) pero
+`ci.yml` no sube ningún artefacto: **se genera y se destruye con el runner.**
+
 ## 0.74.3 — una verdad de 115 segundos, publicada quince horas (2026-08-10)
 
 PATCH: sólo redacción y comentarios. **Cero `src/`, cero cambio de conducta.**

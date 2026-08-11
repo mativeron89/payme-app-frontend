@@ -49,9 +49,40 @@ export default defineConfig({
 
   use: {
     baseURL: 'http://localhost:5176',
-    // Traza y captura sólo cuando algo falla: son para diagnosticar, no para
-    // acumular archivos de corridas verdes.
-    trace: 'on-first-retry',
+
+    /**
+     * 🔴 Acá decía `on-first-retry`, con el comentario *"traza sólo cuando algo
+     * falla"*. **La traza nunca se capturaba en local, y el comentario tapaba
+     * el hueco**: `retries` es 0 fuera de CI, así que no hay primer reintento
+     * al cual engancharse. Una rama muerta con cartel de rama viva.
+     *
+     * Se descubrió el 2026-08-10 con un intermitente que apareció 3 de 6
+     * corridas: `page.goto('/')` y la app no pinta nada hasta el timeout de
+     * 30 s. Quedaron una captura en blanco y nada más — **y la captura la
+     * borra la corrida siguiente**. Segunda vez que ese flake obligaba a
+     * re-derivar todo desde cero, porque la anterior no dejó evidencia.
+     *
+     * 🔴 **Por qué NO se arregló subiendo `retries` en local.** Sería la otra
+     * forma de que `on-first-retry` disparara, y es peor: **reintentar hasta
+     * que pase es exactamente la conducta que vacía una compuerta de
+     * publicación**, sólo que automatizada y sin que nadie la vea.
+     * `retain-on-failure` deja la evidencia SIN reintentar nada.
+     *
+     * Costo MEDIDO, no estimado: verdes sin trace 175 · 167 · 208 s; la primera
+     * con trace, 228 s **con dos timeouts de 30 s adentro** → ~168 s de trabajo
+     * efectivo, dentro del rango previo. **El sobrecosto es chico.** Y se
+     * descarta al pasar: una corrida verde no deja archivos (acreditado con una
+     * sonda de dos tests, uno rojo y uno verde).
+     *
+     * ⭐ **Se pagó solo en la PRIMERA corrida.** El intermitente apareció, dejó
+     * dos traces, y la causa estaba adentro: **`net::ERR_NETWORK_CHANGED`**, 25
+     * requests abortados **en 8 ms** en un trace y 2 en el otro. No es
+     * contención ni Vite: **la red del equipo cambia de configuración durante la
+     * corrida y Chromium mata lo que está en vuelo**, se cae parte del grafo de
+     * módulos y React nunca monta. Cuatro días de «ambiental» los cerró un
+     * archivo de 356 KB.
+     */
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
 
