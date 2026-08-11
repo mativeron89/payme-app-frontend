@@ -21,6 +21,24 @@ import { ingresar } from './_app';
  * ⚠️ Lo que NO cubre, dicho: copy compuesta cuya forma final no es una clave
  * (se arma interpolando), datos del restaurante, nombres de personas y copy del
  * backend que el mock replica. Esas cuatro clases se ven en español a propósito.
+ *
+ * 🔴 **Y EL LÍMITE QUE MÁS ENGAÑA, medido el 2026-08-11: este barrido mide UNA
+ * PANTALLA, no una pantalla POSIBLE.**
+ *
+ * `· Vence 08/28` quedó en español dentro de la app en inglés **con este
+ * recorrido en verde**. La traducción existía; el código nunca la usaba. No la
+ * vio porque **la fila sólo se renderiza cuando hay tarjetas cargadas**, y el
+ * DOM que se recorre es el del estado en el que uno está.
+ *
+ * ```
+ * el barrido ve   lo RENDERIZADO en el estado actual
+ * no ve           filas condicionadas por datos, estados de error,
+ *                 pantallas detrás de un flujo, superficie gateada por IS_MOCK
+ * ```
+ *
+ * **Recorrer más rutas no lo arregla: hay que recorrer más ESTADOS**, y eso no
+ * se deriva de una lista de rutas. Queda como límite declarado, no resuelto —
+ * la red que lo agarra sigue siendo mirar la pantalla con datos distintos.
  */
 
 const RUTAS = ['home', 'mesas', 'amigos', 'mas', 'tarjetas', 'avisos', 'pagos'] as const;

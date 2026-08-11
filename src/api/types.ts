@@ -77,26 +77,30 @@ export interface AppConfig {
      */
     wallet_rail?: unknown;
     /**
-     * 🔴 `D-FF-2-BIS` · modo monetario global. **SIN TIPAR, y sin lector todavía.**
+     * 🔴 `D-FF-2-BIS` · modo monetario global. **`unknown` A PROPÓSITO, Y ES
+     * PERMANENTE — no un placeholder hasta espejar.**
      *
-     * ⚠️ **FORMA LEÍDA DE LA FUENTE, NO ESPEJADA.** Lo que sé de este campo lo
-     * leí en `../payme-app-backend/services/moneyRail.js:138` —
-     * `{ mode, payments_enabled, real_money }` — **y eso NO es el contrato: el
-     * contrato es lo que declara el inventario del dueño.**
+     * El espejo YA trajo la forma (`contract-mirror/services/moneyRail.js`,
+     * commit `0ce21f4`): `{ mode, payments_enabled, real_money }`. **Y aun así
+     * no se tipa.**
      *
-     * **Su inventario declara `df32a6b` (v2.48.0, 2026-08-07) y `money_rail`
-     * nace en `5e19ec5` (2026-08-10). El espejo no puede traerlo todavía.**
-     * Republicado pedido a App Backend el 2026-08-11.
+     * ⚠️ **Porque el espejo declara lo que la FUENTE tiene, no lo que el
+     * DESPLEGADO devuelve.** Tiparlo haría que el compilador avale una forma que
+     * sólo el runtime puede confirmar, y después `readMoneyRail` estaría
+     * validando algo que el tipo ya dio por cierto — o sea una validación que
+     * nadie va a mantener.
      *
-     * 🔴 **Por eso acá sólo se admite la CLAVE, no su forma.** `unknown` no
-     * afirma nada: obliga a que el día que exista un lector, valide en runtime
-     * y falle cerrado — igual que `readWalletRail`. **Tiparlo ahora sería que
-     * el compilador respalde una forma que nadie verificó contra el contrato**,
-     * que es exactamente lo que el espejo existe para impedir.
+     * 🔴 **No es una precaución teórica: pasó el 2026-08-10.** El backend
+     * desplegó `money_rail` en producción **tres días antes** de que su contrato
+     * lo declarara. En esa ventana un tipo optimista habría afirmado una forma
+     * que el espejo no tenía, y uno pesimista habría negado una que ya estaba
+     * viva. `unknown` no afirma ninguna de las dos.
      *
-     * **Hoy sólo lo produce el mock** (`mockApi.ts`), para poder probar el
-     * cartel de tarjeta de prueba en sus dos estados. **Ningún código de
-     * producto lo lee.**
+     * Es exactamente el tratamiento de `wallet_rail`, y por el mismo motivo.
+     *
+     * **Se lee con `readMoneyRail` (`./moneyRail.ts`), que valida el conjunto
+     * CERRADO de claves y falla cerrado sobre la SUPERFICIE DE TARJETA: si no se
+     * determina `real_money`, no se ofrece escribir un número.**
      */
     money_rail?: unknown;
   };
