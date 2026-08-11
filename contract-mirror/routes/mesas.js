@@ -31,6 +31,7 @@ const schemas = require('../schemas');
 const stateMachine = require('../utils/stateMachine');
 const stripeService = require('../services/stripe');
 const { rechazaPorRielApagado } = require('../services/walletRail');
+const { rechazaPorDineroApagado } = require('../services/moneyRail');
 const cardEligibility = require('../services/cardEligibility');
 const savedCards = require('../services/savedCards');   // D4 (v2.16)
 const paymentMethodLifecycle = require('../services/paymentMethodLifecycle');
@@ -192,6 +193,14 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
     // dejaría una mesa creada por un método que el riel no admite.
     if (guarantee_method === 'wallet'
         && rechazaPorRielApagado(req, res, 'guarantee_method')) return;
+    // D-FF-2 · gate no-money. Va DESPUÉS del rechazo wallet y por eso NO es
+    // middleware: un request de wallet tiene que seguir viendo 410 gone —
+    // wallet está REMOVIDO (IFPE, 1–2 años), no apagado por la prueba cerrada.
+    // Contestarle 409 payments_disabled invitaría a inferir que vuelve cuando
+    // vuelvan los pagos, que es exactamente la inferencia que el gobierno
+    // prohíbe. Y va ANTES del hash de idempotencia (:208), del hold y del
+    // INSERT (:398), por el mismo motivo que el bloque de arriba.
+    if (rechazaPorDineroApagado(req, res, 'guarantee_method')) return;
     // ── B-06 §4.1 (v2.25): idempotencia de la CREACIÓN ──
     // Sin esto, perder la respuesta después del hold hacía que el reintento
     // creara una SEGUNDA mesa con un SEGUNDO hold por el total — y la mesa
@@ -777,8 +786,19 @@ router.get('/creations/:idempotency_key', requireAuth, async (req, res, next) =>
       }
     }
 
-    const outcome = outcomeDeCreacion(mesa.status);
-    return res.json({
+    return res.json(cuerpoCreacionEncontrada(mesa, hashCoincide));
+  } catch (err) { next(err); }
+});
+
+/**
+ * ORDEN 1-A · refactor MÍNIMO: el cuerpo del 200 se arma en una función PURA
+ * para que la matriz found/outcome/retry se pueda probar atravesando el
+ * helper PRODUCTIVO en vez de arrays declarados por el test. No cambia ni un
+ * campo del contrato HTTP: la ruta devuelve exactamente esto.
+ */
+function cuerpoCreacionEncontrada(mesa, hashCoincide = null) {
+  const outcome = outcomeDeCreacion(mesa.status);
+  return {
       found: true,
       outcome,
       // ORDEN 1-A · reconciliación del comentario con el código: reintentar
@@ -799,9 +819,8 @@ router.get('/creations/:idempotency_key', requireAuth, async (req, res, next) =>
         ...(mesa.auth_stripe_account_id
           && { connected_account_id: mesa.auth_stripe_account_id }),
       },
-    });
-  } catch (err) { next(err); }
-});
+  };
+}
 
 // CIERRE DEL PAGO SIN CUENTA · C1. Ver el bloque de C3 en `/:code/pay`.
 router.get('/:code', requireAuth, requireMesaParticipant, async (req, res, next) => {
@@ -1052,6 +1071,9 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
     // eso debe correr para un riel que no admite obligaciones nuevas.
     if (payment_type === 'wallet'
         && rechazaPorRielApagado(req, res, 'payment_type')) return;
+    // D-FF-2 · gate no-money, después del rechazo wallet (410 gone manda sobre
+    // 409) y antes del hash, del replay gate y del INSERT del attempt (:1172).
+    if (rechazaPorDineroApagado(req, res, 'payment_type')) return;
     const userId = req.user?.id || null;
     const guestTok = req.isGuest ? req.guestToken : null;
     const guestTokHash = guestHashOf(req);  // v2.5.2 P1 #2
@@ -3096,5 +3118,6 @@ router.CREACION_OUTCOMES = Object.freeze({
   replayable: CREACION_REPLAYABLE,
 });
 router.outcomeDeCreacion = outcomeDeCreacion;
+router.cuerpoCreacionEncontrada = cuerpoCreacionEncontrada;
 
 module.exports = router;

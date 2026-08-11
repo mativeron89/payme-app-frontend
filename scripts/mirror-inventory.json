@@ -1,14 +1,14 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "ea31324b505b97ccd6400fcca171e53fa536161e",
-  "total": 72,
+  "commit": "0ce21f4bb580acf5756809c6502e503fe707e1d1",
+  "total": 73,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
       "destino": "contract/create-mesa-identity-vectors.json",
-      "sha256": "4f3a833a4d3eecade7c870ec0c9b0145ac19d645ebf27cfb70543f8c78808a45",
-      "bytes": 5967
+      "sha256": "3a300b5c26abb38b5187fe1818f8bcfddf9b84f4645a6e56e4d791814daac96b",
+      "bytes": 6785
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -229,26 +229,26 @@
     {
       "origen": "routes/auth.js",
       "destino": "routes/auth.js",
-      "sha256": "786d8661620d18d823a51ce709f142318dba58164de5937c92ff2dee4a631288",
-      "bytes": 14093
+      "sha256": "31c98f3cb88ce141d526b58033f57079b4b79bc09d807ca8d781f58180f871ef",
+      "bytes": 14681
     },
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "e02c76b1eef3603ab32f54100bfaabd89c64c0d7ced34cf3101d492279201424",
-      "bytes": 5083
+      "sha256": "f3aa2c4b5149016ea6e938cf701e452f96b95d6224979c4c758b86158f897a09",
+      "bytes": 5480
     },
     {
       "origen": "routes/connect.js",
       "destino": "routes/connect.js",
-      "sha256": "9ce9bc353e88d16b9772c99f49fbac34c277fdcbed7ebf69e49422d3ff743d5d",
-      "bytes": 8362
+      "sha256": "44489a21d89332ed99a8480f441947f8d18b2448da51b265719df4baf79b55cc",
+      "bytes": 8482
     },
     {
       "origen": "routes/consent.js",
       "destino": "routes/consent.js",
-      "sha256": "02b46b240ac8b79370ebf4928ff676efdaa34abef83690de5a3f9f50131f4cf4",
-      "bytes": 5444
+      "sha256": "534887fb90ca398df868a2a36b3dd3537e4a64b62464cdce94cded0ca9928ba1",
+      "bytes": 7134
     },
     {
       "origen": "routes/friends.js",
@@ -259,8 +259,8 @@
     {
       "origen": "routes/groups.js",
       "destino": "routes/groups.js",
-      "sha256": "685be2eccf9f09bc049fc5ffb9bfd97b99ca14b0a0c5c9ca9ff3a46fd1d02bde",
-      "bytes": 4633
+      "sha256": "6c5ed67c1b80ce904e66193d140906218804e08fd01feb88f68ef195e12a7435",
+      "bytes": 5016
     },
     {
       "origen": "routes/invitations.js",
@@ -271,8 +271,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "8f2414869c7d67794268861484e14fc85ac0d8beb1b4e51efe28469fc288e22a",
-      "bytes": 140113
+      "sha256": "90cc84f1a55140a62b244380f3baeb3b76687cc69ffec20c3f42710ad08617ca",
+      "bytes": 141501
     },
     {
       "origen": "routes/notifications.js",
@@ -289,8 +289,8 @@
     {
       "origen": "routes/payment-methods.js",
       "destino": "routes/payment-methods.js",
-      "sha256": "e58e5b59751d7b31900d318125cb73c0dacb0c8f85be87baccfd98b73950590d",
-      "bytes": 31744
+      "sha256": "24fbb430965b037b73329a13b3628fde09fb2eaafe604e66b8374e82f0021672",
+      "bytes": 31864
     },
     {
       "origen": "routes/restaurants.js",
@@ -307,8 +307,8 @@
     {
       "origen": "routes/staff.js",
       "destino": "routes/staff.js",
-      "sha256": "f274f2fda04c560923112e616b3adf444dab50084232c140f71b6e5952603431",
-      "bytes": 7249
+      "sha256": "faa7bd45feac8f8ab38ebbe4ad16f76433f6f6fcc6d4f29c15def62a5c76ec59",
+      "bytes": 7843
     },
     {
       "origen": "routes/stp-webhook.js",
@@ -337,8 +337,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "358e2beec8175169ea634f9538fd964d75801b87e701ef11ae887b5b1020b904",
-      "bytes": 16582
+      "sha256": "908618c83305729187331f7f3468a42e6bc466ff3cbb9fb06d792f99c930e3ed",
+      "bytes": 17225
     },
     {
       "origen": "services/cardEligibility.js",
@@ -355,8 +355,8 @@
     {
       "origen": "services/consent.js",
       "destino": "services/consent.js",
-      "sha256": "159f0ba3cec1156c2d5d4b6e0a6a8a44c7977dd7ad54d530d11ef2f250e8411d",
-      "bytes": 8369
+      "sha256": "f8b35b5abe3e6df501c480a2ae9b898e4344668a41cfcf735410f090fb289dd9",
+      "bytes": 9191
     },
     {
       "origen": "services/invitationAuthority.js",
@@ -369,6 +369,12 @@
       "destino": "services/itemClaims.js",
       "sha256": "feae2003b6c9dc7ba634202966c393aade23bac50f2e0b88c40f47c67e0f3cea",
       "bytes": 17609
+    },
+    {
+      "origen": "services/moneyRail.js",
+      "destino": "services/moneyRail.js",
+      "sha256": "643aad1b3a7d782447e0d49dc461df71d00ac56bc0d2849fa85da498177c23f4",
+      "bytes": 8994
     },
     {
       "origen": "services/notifications.js",
@@ -433,8 +439,8 @@
     {
       "origen": "utils/tokens.js",
       "destino": "utils/tokens.js",
-      "sha256": "16cee4b44d155afcd6a42091dc8089168f40a6145e9b64de8b451ce9ad4709b5",
-      "bytes": 4201
+      "sha256": "93484d9b15a324c9e94b5d62db46cc98c7cf9c0118e8e780b7c76bf5d624ef7a",
+      "bytes": 3897
     }
   ]
 }

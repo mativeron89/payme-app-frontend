@@ -35,7 +35,12 @@ router.get('/:id', async (req, res, next) => {
     const group = rows[0];
     if (!group) return res.status(404).json({ error: 'group_not_found' });
     const { rows: members } = await pool.query(
-      `SELECT u.id, u.payme_id, u.first_name, u.last_name, u.email
+      // El correo NO sale de acá. Era un SELECT de más —la UI nunca lo usó— y
+      // le entregaba al dueño del grupo el correo de cada integrante. El aviso
+      // de privacidad de la prueba entre amigos afirma «tus amigos no ven tu
+      // correo»: mientras esta línea lo devolviera, esa frase era falsa.
+      // El identificador que se comparte a propósito es `payme_id`.
+      `SELECT u.id, u.payme_id, u.first_name, u.last_name
          FROM friend_group_members m JOIN users u ON u.id = m.friend_user_id
         WHERE m.group_id = $1`, [group.id]
     );

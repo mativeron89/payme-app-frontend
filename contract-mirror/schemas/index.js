@@ -19,7 +19,6 @@ const email = z.preprocess(
 );
 
 const paymeId  = z.string().regex(/^payme_[a-z]{2}_[a-z0-9]{4}$/);
-const phone    = z.string().regex(/^\+?[0-9]{10,15}$/).optional();
 // bcrypt procesa como máximo 72 BYTES, no caracteres. Aceptar más truncaría
 // silenciosamente contraseñas Unicode distintas al mismo hash.
 // Las credenciales nuevas no pueden exceder el límite en BYTES de bcrypt.
@@ -57,7 +56,15 @@ const birthDate = z.string()
   .refine((v) => v >= '1900-01-01', { message: 'birth_date fuera de rango' });
 
 const registerBase = z.object({
-  email, phone, password: passwordNew,
+  email,
+  // ORDEN 1B (2026-08-10) · el teléfono DEJA DE PEDIRSE. El inventario de
+  // datos personales lo midió: no tenía un solo consumidor lógico —el login
+  // busca por email_normalized, la búsqueda de amigos por email/payme_id, el
+  // alta de staff por email/payme_id—. Declarar en el aviso que guardábamos
+  // un dato inútil era peor que no guardarlo. La COLUMNA `users.phone` se
+  // conserva (hay filas históricas y borrarlas es otra decisión); lo que se
+  // corta es la RECOLECCIÓN.
+  password: passwordNew,
   // Nombre COMPLETO obligatorio (decisión de Mati, 2026-07-25).
   // `.trim()` antes de validar: con min(1) a secas, un solo espacio pasaba y el
   // "obligatorio" era decorativo. NO cambia en el modo de compatibilidad: el
@@ -290,12 +297,15 @@ const createTransfer = z.object({
 });
 
 // STAFF
+// ⚠️ CONTRATO: `email` se retiró y `payme_id` pasó a ser OBLIGATORIO. El alta
+// de personal por correo era un oráculo correo→identidad (ver routes/staff.js).
+// Un request que mande `email` recibe 400: Zod descarta la clave no declarada
+// y `payme_id` ausente falla la validación. App Frontend espeja este cambio.
 const addStaff = z.object({
-  payme_id: paymeId.optional(),
-  email: email.optional(),
+  payme_id: paymeId,
   display_name: z.string().min(1).max(100),
   role: z.enum(['waiter','bartender','manager','host','runner']).default('waiter'),
-}).refine(d => d.payme_id || d.email, { message: 'payme_id or email required' });
+});
 const updateStaff = z.object({
   display_name: z.string().min(1).max(100).optional(),
   role: z.enum(['waiter','bartender','manager','host','runner']).optional(),

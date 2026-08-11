@@ -109,8 +109,28 @@ async function getAllConsentStates(userId) {
   return out;
 }
 
-/** Inserta el evento con el texto vigente capturado EN EL MOMENTO DEL ACTO. */
-async function registrar({ userId, purposeKey, state, channel, ip, userAgent, appVersion }) {
+/**
+ * Inserta el evento con el texto vigente capturado EN EL MOMENTO DEL ACTO.
+ *
+ * 🔴 `ip` y `user_agent` NO se escriben (2026-08-10). Las columnas siguen
+ * existiendo; lo que se apaga es la escritura.
+ *
+ * La IP ya se había cerrado en ORDEN 1B con este argumento, y el user-agent
+ * quedó atrás — se cierra ahora por lo mismo, y con urgencia propia: **esta
+ * tabla es APPEND-ONLY por trigger (D-06), así que un dato que entra acá es
+ * IMBORRABLE.** Ningún `SELECT` del runtime los lee nunca: el único que existe
+ * (`getConsentState`) pide `state`, `notice_version`, `notice_hash` y
+ * `created_at`.
+ *
+ * ⚠️ **Se hace HOY porque la tabla está VACÍA** —nadie puede otorgar
+ * consentimiento mientras campañas no tenga superficie—. El día que la tenga,
+ * cada fila nueva traería un user-agent que ya no se podría sacar. Es el único
+ * lugar del repo donde «lo arreglo después» tiene costo permanente.
+ *
+ * La prueba del consentimiento se sostiene con lo que sí se lee: estado,
+ * versión del aviso y su hash.
+ */
+async function registrar({ userId, purposeKey, state, channel, appVersion }) {
   const cfg = PURPOSES[purposeKey];
   const vigente = await legal.getVigente(cfg.notice_kind);
   if (!vigente) {
@@ -122,11 +142,11 @@ async function registrar({ userId, purposeKey, state, channel, ip, userAgent, ap
   const { rows } = await pool.query(
     `INSERT INTO consent_events
        (user_id, purpose_key, state, notice_kind, notice_version, notice_hash,
-        channel, ip, user_agent, app_version)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        channel, app_version)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
      RETURNING id, created_at`,
     [userId, purposeKey, state, vigente.kind, vigente.version, vigente.hash,
-     channel, ip || null, (userAgent || '').slice(0, 500) || null, appVersion || null]
+     channel, appVersion || null]
   );
   logger.audit('consent_event', {
     consent_id: rows[0].id, user_id: userId, purpose_key: purposeKey,
@@ -156,7 +176,7 @@ async function registrar({ userId, purposeKey, state, channel, ip, userAgent, ap
  * siempre**. Preferible bloquear una finalidad opcional que incumplir D-11 en
  * silencio; el acta es explícita en que rechazar NO degrada el servicio.
  */
-async function grantConsent({ userId, purposeKey, channel = 'app', ip, userAgent, appVersion }) {
+async function grantConsent({ userId, purposeKey, channel = 'app', appVersion }) {
   if (!isPurpose(purposeKey)) throw Object.assign(new Error('unknown_purpose'), { status: 400 });
   if (!CHANNELS.includes(channel)) throw Object.assign(new Error('unknown_channel'), { status: 400 });
 
@@ -175,17 +195,17 @@ async function grantConsent({ userId, purposeKey, channel = 'app', ip, userAgent
       });
     }
   }
-  return registrar({ userId, purposeKey, state: 'granted', channel, ip, userAgent, appVersion });
+  return registrar({ userId, purposeKey, state: 'granted', channel, appVersion });
 }
 
 /**
  * Revocar. SIN gate de edad: retirar el consentimiento siempre se puede, y su
  * efecto es inmediato en la siguiente lectura (no hay job de por medio).
  */
-async function revokeConsent({ userId, purposeKey, channel = 'app', ip, userAgent, appVersion }) {
+async function revokeConsent({ userId, purposeKey, channel = 'app', appVersion }) {
   if (!isPurpose(purposeKey)) throw Object.assign(new Error('unknown_purpose'), { status: 400 });
   if (!CHANNELS.includes(channel)) throw Object.assign(new Error('unknown_channel'), { status: 400 });
-  return registrar({ userId, purposeKey, state: 'revoked', channel, ip, userAgent, appVersion });
+  return registrar({ userId, purposeKey, state: 'revoked', channel, appVersion });
 }
 
 module.exports = {

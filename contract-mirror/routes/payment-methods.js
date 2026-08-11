@@ -12,6 +12,7 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const { requireDineroHabilitado } = require('../services/moneyRail');
 const {
   attachPaymentMethod, setupIntent, uuidIdParam,
   validateBody, validateParams,
@@ -469,7 +470,7 @@ async function waitForDetachOutcome(userId, paymentMethodId) {
 }
 
 // ─── POST /setup-intent ───────────────────────────────────
-router.post('/setup-intent', validateBody(setupIntent), async (req, res, _next) => {
+router.post('/setup-intent', requireDineroHabilitado, validateBody(setupIntent), async (req, res, _next) => {
   let intent;
   try {
     req.user.stripe_customer_id = await ensureStripeCustomer(req.user);
@@ -508,7 +509,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // ─── POST / (reserva durable → attach Stripe → promoción local) ─
-router.post('/', validateBody(attachPaymentMethod), async (req, res, next) => {
+router.post('/', requireDineroHabilitado, validateBody(attachPaymentMethod), async (req, res, next) => {
   try {
     const { stripe_payment_method_id, set_as_default } = req.body;
     if (!req.user.stripe_customer_id) {

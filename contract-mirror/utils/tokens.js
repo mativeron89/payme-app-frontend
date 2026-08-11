@@ -5,7 +5,11 @@
  *   - generateToken(bytes): token crudo random (base64url)
  *   - tokenHash(token): SHA-256 hex de un token
  *   - normalizeEmail(email): trim + lowercase (P1 #7)
- *   - hashIp(ip): SHA-256 hex de IP para almacenar sin exponer
+ *
+ * `hashIp` se retiró el 2026-08-10 junto con su último consumidor: ni
+ * user_sessions ni consent_events guardan IP, así que hashearlas no tenía
+ * quién. Un helper de dato personal sin consumidores es una invitación a
+ * volver a recolectarlo «porque ya está la función».
  */
 'use strict';
 
@@ -88,16 +92,6 @@ function normalizeEmail(email) {
   return email.trim().toLowerCase();
 }
 
-function hashIp(ip) {
-  if (typeof ip !== 'string' || ip.length === 0) return null;
-  const pepper = process.env.IP_HASH_PEPPER || process.env.JWT_SECRET;
-  // Sin una clave secreta, almacenar un digest enumerable sería peor que no
-  // persistirlo. JWT_SECRET es fallback compatible; IP_HASH_PEPPER permite
-  // rotación y separación explícitas en entornos que lo configuren.
-  if (typeof pepper !== 'string' || pepper.length < 16) return null;
-  return createHmac('sha256', pepper).update(ip).digest('hex');
-}
-
 module.exports = {
   generateToken,
   tokenHash,
@@ -107,5 +101,4 @@ module.exports = {
   invitationLinkToken,
   verifyInvitationLinkToken,
   normalizeEmail,
-  hashIp,
 };

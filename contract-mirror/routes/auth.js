@@ -23,7 +23,10 @@ const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
 const schemas = require('../schemas');
-const { generateToken, tokenHash, normalizeEmail, hashIp } = require('../utils/tokens');
+// `hashIp` ya no se importa: nadie hashea IPs acá desde que user_sessions dejó
+// de guardarlas — y desde el mismo día tampoco EXISTE, porque era su último
+// consumidor. Ver utils/tokens.js.
+const { generateToken, tokenHash, normalizeEmail } = require('../utils/tokens');
 const { generatePaymeId } = require('../utils/userId');
 const logger = require('../utils/logger');
 const { loadActiveSession } = require('../middleware/auth');
@@ -41,7 +44,16 @@ const JWT_AUD = process.env.JWT_AUDIENCE || 'payme-app';
 // el email no existe. No representa una cuenta ni una credencial utilizable.
 const DUMMY_PASSWORD_HASH = '$2b$10$/ydJ9mGw8xoJfSyW9XQUP.BweuZ9D/ddrClj4M1ST.StKd.AyaqJW';
 
-async function createSession({ userId, userAgent, ip, client = pool }) {
+// 🔴 `user_agent` e `ip_hash` DEJARON DE ESCRIBIRSE (2026-08-10). Se escribían
+// en cada alta y en cada login, y el barrido midió que NINGÚN código de runtime
+// los leía nunca: eran dos datos personales acumulándose sin un solo consumidor.
+// El IP hasheado sigue siendo dato personal — un hash sin sal sobre un espacio
+// tan chico como el de las IPv4 se revierte por fuerza bruta.
+//
+// Mismo tratamiento que `phone`: LAS COLUMNAS SE CONSERVAN, con sus filas
+// históricas, y lo que se apaga es la escritura nueva. Quedan en NULL por
+// omisión en el INSERT. Volver a llenarlas exige declarar antes quién las lee.
+async function createSession({ userId, client = pool }) {
   const jti = randomUUID();
   const rawRefresh = generateToken(32);
   const refreshHash = tokenHash(rawRefresh);
@@ -49,9 +61,9 @@ async function createSession({ userId, userAgent, ip, client = pool }) {
 
   await client.query(
     `INSERT INTO user_sessions
-       (user_id, jti, refresh_token_hash, user_agent, ip_hash, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [userId, jti, refreshHash, (userAgent || '').slice(0, 500), hashIp(ip), expiresAt]
+       (user_id, jti, refresh_token_hash, expires_at)
+     VALUES ($1, $2, $3, $4)`,
+    [userId, jti, refreshHash, expiresAt]
   );
 
   return { jti, rawRefresh, expiresAt };
@@ -78,7 +90,7 @@ router.post('/register', validateRegister, async (req, res, next) => {
   try {
     // req.body.email ya viene normalizado por el schema (P1 #4), pero
     // normalizeEmail es idempotente y lo dejamos por claridad.
-    const { email, phone, password, first_name, last_name, birth_date } = req.body;
+    const { email, password, first_name, last_name, birth_date } = req.body;
     const normalized = normalizeEmail(email);
 
     const hash = await bcrypt.hash(password, 10);
@@ -95,7 +107,7 @@ router.post('/register', validateRegister, async (req, res, next) => {
           // `?? null` explícito: en modo de compatibilidad birth_date llega undefined.
           // pg ya lo mapearía a NULL, pero acá el NULL es la conducta ratificada
           // (cuenta sin fecha = gate de menores cerrado), no un efecto del driver.
-          [paymeId, email, normalized, phone || null, hash, first_name, last_name, birth_date ?? null]
+          [paymeId, email, normalized, null, hash, first_name, last_name, birth_date ?? null]
         );
         const createdUser = rows[0];
         // ORDEN 1A · el alta ya no acuña wallet. NO es un 410: registrarse es
@@ -105,9 +117,7 @@ router.post('/register', validateRegister, async (req, res, next) => {
         if (walletRailEnabled()) {
           await client.query(`INSERT INTO wallets (user_id, balance_cents) VALUES ($1, 0)`, [createdUser.id]);
         }
-        const createdSession = await createSession({
-          userId: createdUser.id, userAgent: req.headers['user-agent'], ip: req.ip, client,
-        });
+        const createdSession = await createSession({ userId: createdUser.id, client });
           return { user: createdUser, session: createdSession };
         });
       } catch (err) {
@@ -166,9 +176,7 @@ router.post('/login', validateBody(schemas.login), async (req, res, next) => {
       [normalized, user.id]
     );
 
-    const session = await createSession({
-      userId: user.id, userAgent: req.headers['user-agent'], ip: req.ip,
-    });
+    const session = await createSession({ userId: user.id });
     const accessToken = issueAccessToken({ userId: user.id, jti: session.jti });
 
     logger.audit('user_login', { user_id: user.id });

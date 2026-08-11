@@ -14,6 +14,7 @@ const express = require('express');
 const { birthDateRequeridaEnRegistro } = require('../schemas');
 const { stpRestaurantDispersalReady } = require('../middleware/envValidation');
 const { walletRailCapability } = require('../services/walletRail');
+const { modoMonetarioCapability } = require('../services/moneyRail');
 const { version } = require('../package.json');
 const router = express.Router();
 
@@ -75,6 +76,11 @@ router.get('/', (req, res) => {
       ocr_real: process.env.OCR_FEATURE_FLAG === 'real',
       // OLA 5 · ver WALLET_RAIL arriba. Constante, no bandera.
       wallet_rail: WALLET_RAIL,
+      // D-FF-2 (2026-08-10) · modo monetario global. Sale de
+      // services/moneyRail.js, que es una CONSTANTE del código y no una
+      // bandera de entorno: el front LEE esto, no lo decide ni lo hardcodea.
+      // Cubre TODO el dinero (tarjeta incluida), no sólo wallet.
+      money_rail: modoMonetarioCapability(),
       // PQ-2 (v2.28). Cuatro booleanos, cada uno con una decisión del front detrás:
       //   supported  → ¿existe el campo? Un backend ≤ v2.27 no manda esta clave.
       //                Es explícito y no por presencia para que el front pueda

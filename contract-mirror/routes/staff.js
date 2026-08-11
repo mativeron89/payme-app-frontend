@@ -55,10 +55,21 @@ router.get('/:rid/staff/active', async (req, res, next) => {
 
 router.post('/:rid/staff', requireAuth, requireManager, validateBody(addStaff), async (req, res, next) => {
   try {
-    const { payme_id, email, display_name, role } = req.body;
-    const lookup = payme_id
-      ? await pool.query(`SELECT id, payme_id, first_name, last_name FROM users WHERE payme_id = $1 AND status = 'active'`, [payme_id])
-      : await pool.query(`SELECT id, payme_id, first_name, last_name FROM users WHERE email = $1 AND status = 'active'`, [email]);
+    // 🔴 El alta por CORREO se retiró. Resolvía cualquier email registrado a
+    // `payme_id + nombre + apellido`, para cualquier manager, sin relación
+    // previa con esa persona: un oráculo correo→identidad sobre TODA la base.
+    // Y no hacía falta ni mirar el cuerpo — el 404 contra el 201 ya delataba
+    // si un correo estaba registrado.
+    //
+    // Queda sólo `payme_id`, que es el identificador que la persona comparte a
+    // propósito. Es el mismo criterio con el que `routes/friends.js:127-152`
+    // resolvió su propio oráculo, y el que sostiene la frase del aviso sobre
+    // el correo. Echar el nombre en la respuesta sigue siendo legítimo: quien
+    // lo agrega ya tenía su identificador.
+    const { payme_id, display_name, role } = req.body;
+    const lookup = await pool.query(
+      `SELECT id, payme_id, first_name, last_name FROM users
+        WHERE payme_id = $1 AND status = 'active'`, [payme_id]);
     const user = lookup.rows[0];
     if (!user) return res.status(404).json({ error: 'user_not_found' });
 

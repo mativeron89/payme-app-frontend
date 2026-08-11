@@ -45,11 +45,38 @@ publicRouter.get('/', async (req, res, next) => {
 });
 
 /**
+ * 🔴 QUÉ SE SIRVE SIN SESIÓN, Y POR QUÉ NO ES TODO (2026-08-10).
+ *
+ * El aviso de privacidad TIENE que leerse sin cuenta: se muestra antes de
+ * registrarse, y esconderlo detrás de un login lo volvería inútil.
+ *
+ * El aviso de campañas es lo contrario. Su propio cuerpo dice, en el texto
+ * publicado, «Marcador de posición pendiente de redacción legal. No debe
+ * publicarse a usuarios reales» (legal/aviso_campanas.md:8) — y el endpoint
+ * lo estaba entregando a cualquiera que pidiera la URL, sin sesión. Un
+ * documento que se declara a sí mismo no publicable no puede ser lo más
+ * público de la API.
+ *
+ * Queda accesible CON sesión, que es lo que necesita el flujo real: el
+ * consentimiento se otorga por /api/account/consents, que ya exige auth. No
+ * se rompe ninguna funcionalidad; deja de estar expuesto a quien pasa.
+ *
+ * La lista de `GET /api/legal` NO se toca: publica kind, versión y hash, no
+ * el cuerpo. Esconder que el documento existe sería otra decisión.
+ */
+const KINDS_SIN_SESION = new Set(['aviso_privacidad']);
+
+function sesionSalvoPublico(req, res, next) {
+  if (KINDS_SIN_SESION.has(req.params.kind)) return next();
+  return requireAuth(req, res, next);
+}
+
+/**
  * GET /api/legal/:kind — el texto VIGENTE, con su versión y hash.
  * El hash que se devuelve acá es el mismo que queda grabado en el
  * consentimiento: así el front puede probar qué mostró.
  */
-publicRouter.get('/:kind', async (req, res, next) => {
+publicRouter.get('/:kind', sesionSalvoPublico, async (req, res, next) => {
   try {
     if (!legal.KINDS.includes(req.params.kind)) {
       return res.status(404).json({ error: 'legal_text_not_found' });
@@ -65,8 +92,10 @@ publicRouter.get('/:kind', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// El histórico va por la misma puerta: servir la v0.1.0 sin sesión mientras la
+// vigente pide sesión sería dejar la ventana abierta al lado de la puerta.
 /** GET /api/legal/:kind/versions/:version — recupera un texto HISTÓRICO. */
-publicRouter.get('/:kind/versions/:version', async (req, res, next) => {
+publicRouter.get('/:kind/versions/:version', sesionSalvoPublico, async (req, res, next) => {
   try {
     const v = await legal.getVersion(req.params.kind, req.params.version);
     if (!v) return res.status(404).json({ error: 'legal_text_not_found' });
@@ -102,8 +131,10 @@ accountRouter.get('/:purpose', async (req, res, next) => {
 function datosDelActo(req) {
   return {
     channel: req.body?.channel || 'app',
-    ip: req.ip,
-    userAgent: req.headers['user-agent'],
+    // 2026-08-10 · ni IP ni user-agent viajan al servicio: consent_events dejó
+    // de escribirlos. La IP se había cerrado en ORDEN 1B; el user-agent quedó
+    // atrás y se cierra ahora por el mismo motivo — esta tabla es append-only
+    // por trigger, así que lo que entra acá es IMBORRABLE. Ver services/consent.js.
     appVersion: req.body?.app_version || req.headers['x-app-version'] || null,
   };
 }

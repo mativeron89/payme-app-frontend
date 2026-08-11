@@ -1,16 +1,18 @@
 {
   "_comentario": [
     "VECTORES CANONICOS DE IDENTIDAD ECONOMICA de POST /mesas (ORDEN 1-A).",
-    "GENERADOS desde utils/idempotency.PAYLOAD_KEYS.create_mesa con el mismo",
-    "payloadHash del runtime — no escritos a mano. App Frontend alinea su",
-    "fingerprint contra esto: su implementacion cubre el request ENTERO,",
-    "mientras el hash del dueño deja la FUENTE DE PAGO afuera A PROPOSITO.",
-    "Incluirla haria que un reload con tarjeta tipeada rotara la clave y",
-    "abriera una SEGUNDA mesa con un SEGUNDO hold — el bug B-06.",
-    "Ningun vector persiste payload crudo ni datos de tarjeta: solo hashes,",
-    "ids sinteticos y la descripcion del cambio."
+    "GENERADO por scripts/generar-vectores-identidad.js — no editar a mano.",
+    "La base canonica y las transformaciones viven en ESE script (trackeado);",
+    "cada sha256 sale de utils/idempotency.payloadHash, la misma funcion que",
+    "sella la creacion en produccion. El validador recalcula todo desde el",
+    "runtime: corromper un sha de este archivo HACE FALLAR la verificacion.",
+    "App Frontend alinea su fingerprint contra esto: su implementacion cubre",
+    "el request ENTERO, mientras el hash del dueño deja la FUENTE DE PAGO",
+    "afuera A PROPOSITO. Incluirla haria que un reload con tarjeta tipeada",
+    "rotara la clave y abriera una SEGUNDA mesa con un SEGUNDO hold (B-06).",
+    "No se persisten datos de tarjeta: los ids son sinteticos y fijos."
   ],
-  "version": 1,
+  "version": 2,
   "payload_keys": [
     "restaurant_id",
     "total_cents",
@@ -19,6 +21,31 @@
     "guarantee_method",
     "items"
   ],
+  "base": {
+    "restaurant_id": "11111111-1111-4111-8111-111111111111",
+    "total_cents": 50000,
+    "division_mode": "consumo",
+    "expected_participants": 2,
+    "guarantee_method": "card",
+    "items": [
+      {
+        "name": "Pizza",
+        "category": "italian",
+        "price_cents": 30000,
+        "quantity": 1
+      },
+      {
+        "name": "Flan",
+        "category": "dessert",
+        "price_cents": 20000,
+        "quantity": 1
+      }
+    ],
+    "idempotency_key": "vector-canonico-0001",
+    "stripe_payment_method_id": "pm_uno",
+    "payment_method_id": null,
+    "save_payment_method": false
+  },
   "base_sha256": "0ce58d38e9232d93b788e20b95aaee19f996139f89aa76335f8b1ccaf4c4644e",
   "vectores": [
     {

@@ -22,6 +22,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const connect = require('../services/connect');
+const { requireDineroHabilitado } = require('../services/moneyRail');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -83,7 +84,7 @@ router.get('/:rid/connect/status', requireAuth, requireManager, async (req, res,
 });
 
 // ─── POST /:rid/connect/account — crear la cuenta conectada ─────────────────
-router.post('/:rid/connect/account', requireAuth, requireManager, async (req, res, next) => {
+router.post('/:rid/connect/account', requireAuth, requireManager, requireDineroHabilitado, async (req, res, next) => {
   try {
     const r = await loadRestaurant(req.params.rid);
     if (!r) return res.status(404).json({ error: 'restaurant_not_found' });
@@ -113,7 +114,7 @@ router.post('/:rid/connect/account', requireAuth, requireManager, async (req, re
 });
 
 // ─── POST /:rid/connect/onboarding-link — link hosted de KYC ────────────────
-router.post('/:rid/connect/onboarding-link', requireAuth, requireManager, async (req, res, next) => {
+router.post('/:rid/connect/onboarding-link', requireAuth, requireManager, requireDineroHabilitado, async (req, res, next) => {
   try {
     const r = await loadRestaurant(req.params.rid);
     if (!r) return res.status(404).json({ error: 'restaurant_not_found' });

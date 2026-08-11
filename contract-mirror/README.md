@@ -6,7 +6,36 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-07** (ORDEN 2-A · v2.48.0).
+- Fecha del refresh: **2026-08-11** (`D-FF-2-BIS` · sandbox).
+- Commit exacto y procedencia del CONTENIDO: **`0ce21f4bb580acf5756809c6502e503fe707e1d1`**
+  (`feat(legal): aviso 2.1.0 — la prueba ahora tiene pagos`). Esta vez los dos
+  hashes COINCIDEN: el inventario del dueño declara el mismo commit que espeja.
+
+🆕 **73 archivos espejados** más este README — entra `services/moneyRail.js`.** Es la capability
+`money_rail` de `D-FF-2-BIS`: `{ mode, payments_enabled, real_money }`.
+
+🔴 **Y cómo llegó importa más que el archivo.** El dueño desplegó `sandbox` a
+producción **sin republicar su inventario**: el contrato decía que esa
+capability no existía mientras ya estaba viva. Espejar por el camino sancionado
+era imposible, y **copiar el archivo a mano habría sido que el espejo se
+acredite a sí mismo** — exactamente lo que R3-A vino a impedir. Se pidió el
+republicado y se esperó.
+
+⚠️ **LÍMITE DEL GUARD DEL DUEÑO, que este espejo hereda.** Su
+`tests/mirror-inventory.test.js` contrasta la población contra las RUTAS de
+Express. `moneyRail` es un **service** que ninguna ruta nueva importa, así que
+quedó fuera de su alcance **por diseño**: no faltó por descuido, faltó porque el
+guard no mira servicios. **Regenerar mil veces no lo habría agregado, y el
+número nuevo habría hecho parecer resuelto el problema.** Lo encontraron
+comparando contra `walletRail.js`, que sí estaba: dos archivos con el mismo rol,
+uno adentro y otro no.
+
+**Consecuencia para quien lea esto: el espejo puede quedar ciego a un service
+nuevo sin que nada se ponga rojo de ningún lado.** Si sabés que algo existe y no
+aparece acá, ésa es la primera hipótesis.
+
+### Refresh anterior · 2026-08-07 (ORDEN 2-A · v2.48.0)
+
 - Fuente local: `../payme-app-backend`.
 - Commit exacto: `2966aab143c3218a938f6e22892d617f3b690b3e` (el commit
   espejado · v2.48.0, orden 1-A del dueño cerrada).
@@ -25,7 +54,14 @@ desde `src/` y nunca se corrige a mano.
   ninguna verificación mira la rama —el gate resuelve por hash, que es lo
   correcto— así que el dato quedó ahí describiendo un estado que no era.
 
-**72 archivos espejados** más este README de procedencia — **uno más**:
+Aquel refresh dejó **72 archivos** más el README de procedencia — uno más que
+el anterior:
+
+> ⚠️ La frase canónica «N archivos espejados» va **una sola vez y arriba**:
+> `contractMirror.test.ts` toma la PRIMERA coincidencia, así que un número
+> histórico escrito con esas mismas palabras la secuestra. Pasó al espejar
+> `0ce21f4`, y el guard lo cazó — que es justamente su trabajo.
+
 `contract/create-mesa-identity-vectors.json`, que el dueño metió en la
 población porque **es contrato, no documentación**. Los siete renombres siguen
 iguales, y del resto cambió **un solo archivo**: `routes/mesas.js`.
@@ -55,9 +91,12 @@ primero: su `--check` gritaba con cada commit posterior aunque ningún archivo
 del contrato hubiera cambiado, *"y un gate que grita por lo que no es un
 desvío se termina ignorando"*. Que el HEAD avance no es un desvío del espejo.
 
-**Verificado el 2026-08-07 (ORDEN 2-A):** integridad ✅ 72/72 · paridad ✅ contra
-`ea31324` · vigencia ✅ (el HEAD del backend es `2966aab` y no movió nada de lo
-espejado).
+**Verificado el 2026-08-11 (`D-FF-2-BIS`):** integridad ✅ 73/73 · paridad ✅
+contra `0ce21f4` · el inventario se adoptó con `--adoptar-inventario`, que
+**verifica ANTES de escribir**.
+
+*(Verificado el 2026-08-07, ORDEN 2-A: integridad 72/72 · paridad contra
+`ea31324` · vigencia OK.)*
 
 ### 🆕 Qué trajo el refresh a v2.48.0 · la matriz exhaustiva y los vectores
 
