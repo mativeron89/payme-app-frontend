@@ -44,6 +44,18 @@
  * marcadas «ES corregido» en el documento de Diseño.
  */
 export const EN: Record<string, string> = {
+  /**
+   * 🔴 CARTEL DE TARJETA DE PRUEBA · copy de DINERO, ratificada por Mati el
+   * 2026-08-11 y su inglés verificado por el Bibliotecario contra tres
+   * criterios: las dos cláusulas SEPARADAS (quita obligación / declara
+   * intención), «test» y no «demo» —es el término que usa el propio Stripe—,
+   * y CERO afirmación sobre que Stripe rechace un número real, que nadie midió.
+   *
+   * ⚠️ «and we don't want it» suena inusual en inglés A PROPÓSITO.
+   * Colapsarlo en algo más natural —«a real card isn't needed»— pierde la
+   * mitad que más tranquiliza. NO SE SUAVIZA.
+   */
+  "Esto es una prueba. Usa una tarjeta de prueba — no hace falta la tuya, y no la queremos.": "This is a test. Use a test card — you don't need your own, and we don't want it.",
   "(después puedes generar otro desde la mesa).": "(you can generate another one later from the table).",
   "(la cuenta ÷": "(the bill ÷",
   "+ propina (elige abajo)": "+ tip (choose below)",

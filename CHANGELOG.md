@@ -1,5 +1,71 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.76.2 — el cartel de tarjeta de prueba, y el mock no puede probarlo (2026-08-11)
+
+**Copy ratificada por Mati el 2026-08-11**, inglés verificado por el
+Bibliotecario contra tres criterios:
+
+```
+ES  Esto es una prueba. Usa una tarjeta de prueba — no hace falta la tuya,
+    y no la queremos.
+EN  This is a test. Use a test card — you don't need your own,
+    and we don't want it.
+```
+
+⚠️ **«and we don't want it» suena inusual en inglés A PROPÓSITO.** Colapsarlo en
+algo más natural —«a real card isn't needed»— pierde la mitad que más
+tranquiliza. **No se suaviza.**
+
+### Dónde vive, y por qué ahí
+
+**Dentro de `CardField`**, que es *donde se ESCRIBE el número*. Un aviso leído
+tres pantallas antes no está presente cuando la persona tipea.
+
+**Y `CardField` es UNO solo**: lo usan garantía (`CreateMesaFlow`), pago
+(`MesaScreen`) y alta (`CardsPanel`). Ponerlo adentro cubre las tres **por
+construcción**; ponerlo en cada call site sería una lista escrita a mano que
+envejece en el primer lugar nuevo que nadie recuerde.
+
+### 🔴 LO QUE NO SE PUDO PROBAR, Y LO EXIGÍ YO
+
+El requisito —mío antes que de nadie— era probar los **tres** casos: aparece con
+`real_money:false`, **no** aparece con `true`, y no se ofrece tarjeta si no se
+determina. **Medido: el mock NO puede llegar a la superficie donde vive el
+cartel.**
+
+```
+CardsPanel:333       IS_MOCK ? «se agrega una tarjeta de ejemplo» : <CardField/>
+CreateMesaFlow:1497  IS_MOCK ? «la ingresas al confirmar»         : <CardField/>
+MesaScreen:1712      !IS_MOCK && <CardField/>
+```
+
+**En mock nadie tipea un número, así que `CardField` no se monta en ninguna de
+las tres.** Es el patrón que este repo ya nombró: *el mock más duro que el real
+no deja pasar algo falso — deja INALCANZABLE el camino que hay que probar.*
+
+**El e2e que había escrito se BORRÓ en vez de dejarlo verde por vacío.** Tres de
+sus cinco casos «pasaban» porque el cartel no aparecía nunca, incluido el que
+verificaba que no apareciera.
+
+**Lo que sí queda probado:** la DECISIÓN (`moneyRail.test.ts`, 18 casos y 3
+mutantes) y que el componente la consulte en vez de decidir
+(`cartelDePrueba.test.ts`, 4 guardas de fuente). **Verificar el cartel en el
+build real exige Stripe cargando contra un backend: acción externa, declarada
+como hueco.**
+
+### Dos cosas que salieron de rebote
+
+**`· Vence 08/28` seguía en español en la app en inglés.** La traducción existía
+(`· Expires {0}`) y el código nunca la usaba: un template literal que el codemod
+no ubicó. Envuelto.
+
+🔴 **Y mi propia guarda de español mexicano cazó mi propio voseo**, en la línea
+de un test que existía *para prohibirlo*. Es la trampa de «sin gate» otra vez:
+**una guarda que prohíbe una forma en todo el árbol no distingue AFIRMAR de
+CITAR.** Se retiró la aserción en vez de pedir excepción — la guarda global ya
+hace ese trabajo, y una excepción se lo habría sacado.
+
+
 ## 0.76.1 — el lector del riel de dinero: fail-closed sobre la TARJETA (2026-08-11)
 
 El espejo llegó a `0ce21f4` con `services/moneyRail.js`, así que `money_rail` ya

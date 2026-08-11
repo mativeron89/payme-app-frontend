@@ -282,7 +282,7 @@ export function CardsPanel() {
               </div>
               <div className="pm-meta">
                 {pm.type === 'credit' ? t('Crédito') : t('Débito')}
-                {vto ? ` · Vence ${vto}` : ''}
+                {vto ? t('· Vence {0}', vto) : ''}
               </div>
               {/* Badge y acción van DEBAJO, no al costado, y los dos en el
                   mismo lugar: al costado le robaban el ancho al dato que

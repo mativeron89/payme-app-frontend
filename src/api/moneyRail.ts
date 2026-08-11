@@ -147,3 +147,72 @@ export function readMoneyRail(config: unknown): MoneyRailState {
     offendingKeys: [],
   };
 }
+
+// ─── Estado compartido ──────────────────────────────────────────────────────
+//
+// Mismo molde que `walletRail.ts`: un store chico con `useSyncExternalStore`,
+// la capability pedida UNA vez por carga, y el estado inicial `pending` — que
+// acá significa **la superficie de tarjeta cerrada**. Nadie escribe un número
+// mientras no sepamos qué pasa con él, ni siquiera durante el primer render.
+
+import { useEffect, useSyncExternalStore } from 'react';
+import { api } from './index';
+
+let state: MoneyRailState = CERRADO;
+let inFlight: Promise<void> | null = null;
+const listeners = new Set<() => void>();
+
+function emitir(next: MoneyRailState): void {
+  state = next;
+  for (const l of [...listeners]) l();
+}
+
+export function applyMoneyRailConfig(config: unknown): void {
+  emitir(readMoneyRail(config));
+}
+
+function subscribe(l: () => void): () => void {
+  listeners.add(l);
+  return () => { listeners.delete(l); };
+}
+
+const getState = (): MoneyRailState => state;
+
+/** Sólo para tests: vuelve al estado inicial, o sea la superficie CERRADA. */
+export function resetMoneyRailForTests(): void {
+  state = CERRADO;
+  inFlight = null;
+  for (const l of [...listeners]) l();
+}
+
+/**
+ * Pide la capability una sola vez por carga. Idempotente.
+ *
+ * Un fallo de red **no** deja la promesa envenenada: se limpia para que el
+ * próximo montaje reintente. Mientras tanto el estado sigue siendo `pending`,
+ * **que acá NO es «todavía no sé, mostrá algo»: es «no se ofrece tarjeta»**.
+ */
+export function ensureMoneyRailCapability(): Promise<void> {
+  if (state.status !== 'pending') return Promise.resolve();
+  if (!inFlight) {
+    inFlight = api
+      .getConfig()
+      .then((config) => { applyMoneyRailConfig(config); })
+      .catch(() => {
+        // Silencio deliberado: sin capability la superficie queda cerrada, que
+        // es el estado correcto. Ruidear acá sería alarmar por el caso seguro.
+      })
+      .finally(() => { inFlight = null; });
+  }
+  return inFlight;
+}
+
+/**
+ * El hook que usan las pantallas. Devuelve el estado completo y no un booleano
+ * suelto, para que nadie tenga que acordarse de consultar el segundo campo —
+ * que acá es la diferencia entre «mostrar el cartel» y «ofrecer la tarjeta».
+ */
+export function useMoneyRail(): MoneyRailState {
+  useEffect(() => { void ensureMoneyRailCapability(); }, []);
+  return useSyncExternalStore(subscribe, getState, getState);
+}

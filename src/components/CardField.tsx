@@ -1,4 +1,5 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
+import { useMoneyRail } from '../api/moneyRail';
 import { useIdioma } from '../i18n/idioma';
 import { useEffect, useRef, useState } from 'react';
 import { getStripe } from '../api/stripe';
@@ -28,6 +29,7 @@ interface Props {
 
 export function CardField({ onReady, onChange }: Props) {
   const { t } = useIdioma();
+  const { mostrarAvisoDePrueba } = useMoneyRail();
   const holder = useRef<HTMLDivElement | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,6 +129,31 @@ export function CardField({ onReady, onChange }: Props) {
 
   return (
     <div>
+      {/* 🔴 EL CARTEL DE TARJETA DE PRUEBA VA ACÁ, Y ACÁ ES LA DECISIÓN.
+          `D-FF-2-BIS` · copy ratificada por Mati el 2026-08-11.
+
+          Va DENTRO de `CardField` y no en las pantallas que lo usan, por dos
+          motivos que se refuerzan:
+
+          1. **Es donde se ESCRIBE el número.** Un aviso leído tres pantallas
+             antes no está presente cuando la persona tipea. Requisito explícito
+             del Bibliotecario.
+          2. **Lo usan TRES pantallas** —garantía en `CreateMesaFlow`, pago en
+             `MesaScreen`, alta en `CardsPanel`— y mañana puede usarlo una
+             cuarta. Ponerlo acá lo cubre **por construcción**; ponerlo en cada
+             call site sería una lista escrita a mano que envejece en el primer
+             lugar nuevo que nadie recuerde.
+
+          ⚠️ Y lo que este cartel NO acredita, dicho donde se escribe: **lo que
+          hace seguro al modo prueba no es el modo, es que la clave de Stripe
+          sea de prueba** — el backend lo impone en su arranque
+          (`middleware/envValidation.js`). Desde acá se lee lo que el backend
+          DECLARA, no la clave con la que corre. */}
+      {mostrarAvisoDePrueba && (
+        <div className="note note-teal" style={{ marginBottom: 12 }} role="note">
+          {t('Esto es una prueba. Usa una tarjeta de prueba — no hace falta la tuya, y no la queremos.')}
+        </div>
+      )}
       <div
         ref={holder}
         className="input"
