@@ -1,5 +1,54 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.74.6 — la guarda nueva habría frenado el deploy, y el hueco que reporté no existía (2026-08-10)
+
+PATCH: una consulta en `scripts/reportarFlaky.test.ts`. **Cero `src/`.** Las dos
+cosas salen del **mismo instrumento mal usado**, y la segunda es la grave.
+
+### El instrumento
+
+```
+.gitignore línea 17    test-results/          ← con barra: matchea sólo DIRECTORIOS
+.gitignore línea 18    playwright-report/     ← idem
+
+git check-ignore test-results        ✅ ignorado      ← el directorio EXISTÍA en disco
+git check-ignore playwright-report   🔴 NO ignorado   ← no existía
+```
+
+**Un patrón con barra final matchea sólo directorios, y `git check-ignore` sobre
+una ruta pelada no puede saber que algo es un directorio si no existe en disco.**
+Comparé dos rutas **en condiciones distintas** y leí como diferencia del
+`.gitignore` lo que era diferencia del disco.
+
+🔴 **Consecuencia 1 · reporté un hueco que no existe.** `playwright-report/`
+estaba ignorado desde siempre. El Bibliotecario emitió una orden —«ponelo en
+`.gitignore`, en su propio commit»— **sobre un defecto inexistente**, y esa orden
+queda **sin objeto**. La corrección vale más que el dato: el `.gitignore` no se
+tocó.
+
+🔴 **Consecuencia 2, la grave · mi guarda nueva se habría puesto ROJA EN CI.**
+`reportarFlaky.test.ts` preguntaba por `test-results` pelado. En CI **vitest
+corre en el paso 6 y Playwright en el 10**: cuando se evalúa, ese directorio
+**todavía no existe**.
+
+```
+una guarda de VISIBILIDAD de flakes
+  habría roto la suite en CI
+    frenando el deploy
+      que es exactamente la compuerta que vino a cuidar
+```
+
+**Pasa a preguntar por `test-results/resultados.json`** —la ruta que el script
+realmente lee— que sí resuelve sin el directorio en disco. **Acreditado con
+`test-results/` borrado**, o sea reproduciendo la condición de CI en vez de
+razonarla.
+
+### Por qué no se detectó antes
+
+Porque **verde no significa correcto**: los 12 tests pasaron en local, donde
+`test-results/` existía porque yo acababa de correr Playwright. **El entorno que
+hace pasar un test puede ser justo el que oculta que está mal escrito.**
+
 ## 0.74.5 — un flake que pasa al reintentar publica en silencio; ahora se ve (2026-08-10)
 
 MINOR de infraestructura de CI. **Cero `src/`.** Orden del Bibliotecario.
@@ -124,6 +173,11 @@ sonda              test rojo deja trace.zip (356 KB) · test verde no deja nada
 ⚠️ **Anotado sin arreglar:** `playwright-report/` no está en `.gitignore`
 (`test-results/` sí). Y en CI el trace **sí** se captura (`retries: 2`) pero
 `ci.yml` no sube ningún artefacto: **se genera y se destruye con el runner.**
+
+> 🔴 **La primera frase de arriba es FALSA y se conserva como quedó.**
+> `playwright-report/` estaba en `.gitignore` desde siempre, en la línea 18. Lo
+> que falló fue mi instrumento. **Corregido en 0.74.6**, donde está el porqué —
+> vale más que el dato.
 
 ## 0.74.3 — una verdad de 115 segundos, publicada quince horas (2026-08-10)
 

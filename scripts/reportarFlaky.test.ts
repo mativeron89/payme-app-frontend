@@ -148,9 +148,30 @@ describe('POR LECTURA · el JSON que alimenta el reporte existe en la config', (
     expect(yml).toContain('test-results/resultados.json');
   });
 
+  /**
+   * 🔴 SE PREGUNTA POR EL ARCHIVO, NO POR EL DIRECTORIO PELADO. No es estilo.
+   *
+   * El patrón del `.gitignore` es `test-results/`, **con barra final: matchea
+   * sólo DIRECTORIOS**. Y `git check-ignore test-results` —sin barra— depende
+   * de que el directorio EXISTA EN DISCO, porque si no, git no sabe que lo es
+   * y el patrón no aplica.
+   *
+   * En CI vitest corre en el paso 6 y Playwright en el 10: **cuando esto se
+   * evalúa, `test-results/` todavía no existe**. La primera versión de este
+   * test preguntaba por el directorio pelado y **se habría puesto roja en CI,
+   * frenando el deploy** — una guarda de visibilidad rompiendo la compuerta
+   * que vino a cuidar.
+   *
+   * Y el mismo instrumento me hizo reportar un hueco inexistente: medí
+   * `test-results` (existía en disco) contra `playwright-report` (no existía) y
+   * leí como diferencia del `.gitignore` lo que era diferencia del disco.
+   * **Los dos estaban bien ignorados desde siempre.**
+   */
   it('🔴 y esa ruta está gitignoreada · un artefacto de corrida no entra al árbol', async () => {
     // `check-ignore` sale 1 si NO está ignorado, así que el rechazo ES el fallo.
-    const { stdout } = await ejecutar('git', ['check-ignore', 'test-results'], { cwd: RAIZ });
-    expect(stdout.trim()).toBe('test-results');
+    const { stdout } = await ejecutar('git', ['check-ignore', 'test-results/resultados.json'], {
+      cwd: RAIZ,
+    });
+    expect(stdout.trim()).toBe('test-results/resultados.json');
   });
 });
