@@ -264,7 +264,7 @@ export function SocialScreen() {
                       setDetail(await api.getGroup(detail.group.id));
                       loadGroups();
                     } catch {
-                      toast(t('No se pudo quitar'));
+                      toast(t('No se pudo quitar del grupo'));
                     }
                   }}
                 >
@@ -312,7 +312,7 @@ export function SocialScreen() {
                 setDetail(null);
                 loadGroups();
               } catch {
-                toast(t('No se pudo eliminar'));
+                toast(t('No se pudo eliminar el grupo'));
               }
             }}
           >
@@ -446,7 +446,7 @@ export function SocialScreen() {
                         toast(t('Amigo quitado'));
                         loadFriends();
                       } catch {
-                        toast(t('No se pudo quitar'));
+                        toast(t('No se pudo quitar de tus amigos'));
                       }
                     }}
                   >

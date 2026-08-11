@@ -2,18 +2,15 @@
  * Traducción EN · la clave es el string en ESPAÑOL.
  *
  * **Generado de `diseno/referencias/TRADUCCION_EN_APP_2026-08-10.md`**, que
- * produjo Diseño y verifiqué entera el 2026-08-10 (las 💰 de dinero una por una
- * contra `retención → hold, NUNCA charge`; las ⚠️ de privacidad mecanizadas con
- * muestra a mano previa; el resto con la pantalla montada). **No se edita a
- * mano: se regenera.**
+ * produjo Diseño y verifiqué entera el 2026-08-10. **No se edita a mano: se
+ * regenera.**
  *
  * 🔴 POR QUÉ LA CLAVE ES EL TEXTO Y NO UN IDENTIFICADOR
  *
  *  1. **El fallback es correcto por construcción**: si falta una entrada se ve
  *     el español, que es texto real. Un `mesa.garantia.error` filtrado a la
  *     pantalla es un defecto visible; el español es sólo el idioma equivocado.
- *  2. No hay que inventar 643 nombres ni mantener el mapeo nombre↔texto, que es
- *     donde se desincroniza.
+ *  2. No hay que inventar 646 nombres ni mantener el mapeo nombre↔texto.
  *  3. El inventario ya existía y es la fuente.
  *
  * ⚠️ EL COSTO, dicho: **cambiar una frase en español rompe su traducción en
@@ -22,49 +19,31 @@
  *
  * ── Placeholders POSICIONALES · `{0}`, `{1}` ──
  *
- * 68 frases se arman con interpolación. **La frase interpolada no puede ser la
- * clave**: en runtime «Propina (al mesero): $123.00» no matchea nada. La clave
- * es la PLANTILLA y los valores entran por posición.
+ * La frase interpolada no puede ser la clave: en runtime «Propina (al mesero):
+ * $123.00» no matchea nada. La clave es la PLANTILLA y los valores entran por
+ * posición. Me aparté a propósito de la normalización de dígitos de Dashboard
+ * Frontend: resuelve otro caso y a cambio toca cualquier número de cualquier
+ * frase.
  *
- * 🔴 **Acá me aparté a propósito de lo que hizo Dashboard Frontend**, que
- * normaliza los dígitos a `{n}`. Esa heurística resuelve números que llegan ya
- * interpolados, y a cambio toca CUALQUIER número de CUALQUIER frase: un importe,
- * un código de mesa, un año. Los placeholders explícitos no se disparan solos.
- * Su caso lo justificaba —copy de privacidad con el mínimo de cohorte adentro—;
- * el mío no lo tiene.
+ * 🔵 **Las 20 de WALLET quedan FUERA a propósito.** El riel está muerto, sus
+ * pantallas no son navegables, y traducir superficie apagada la haría parecer
+ * viva.
  *
- * 🔵 **Las 20 de WALLET quedan FUERA a propósito.** El riel está muerto
- * (`ACTA_2026-08-02`), sus pantallas no son navegables, y traducir superficie
- * apagada la haría parecer viva. Diseño las marcó una por una en el documento.
+ * ✅ **EL CONFLICTO DE «No se pudo eliminar» SE CERRÓ, y era más grande de lo
+ * que yo había reportado.** Yo vi dos pantallas con la misma frase; Diseño
+ * encontró **cuatro acciones con dos frases genéricas**:
  *
- * ⚠️ **UN CONFLICTO SIN RESOLVER, declarado y no escondido.** Diseño tradujo
- * «No se pudo eliminar» de dos formas, porque son dos pantallas:
+ *     eliminar una TARJETA     ┐ las dos decían «No se pudo eliminar»
+ *     eliminar un GRUPO        ┘
+ *     quitar un MIEMBRO        ┐ las dos decían «No se pudo quitar»
+ *     quitar un AMIGO          ┘
  *
- *     CardsPanel.tsx:113    una tarjeta   → "Couldn't delete"
- *     SocialScreen.tsx:313  un amigo      → "Couldn't remove"
- *
- * **Con la clave siendo el español, sólo una puede ganar.** Va `"Couldn't
- * delete"` como provisional —es la superficie de tarjetas— y está pedido a
- * Diseño: **la salida buena es que el ESPAÑOL diga cosas distintas**, porque hoy
- * las dos pantallas dan el mismo mensaje para dos acciones distintas. Esa
- * decisión es de ellos. `traduccion.test.ts` lo fija para que no se olvide.
+ * 🔴 **La salida no fue elegir una traducción: fue que el ESPAÑOL diga cosas
+ * distintas.** Era un defecto del español que el inglés destapó — cuatro
+ * acciones distintas mostrando dos mensajes. Las cuatro frases nuevas están
+ * marcadas «ES corregido» en el documento de Diseño.
  */
 export const EN: Record<string, string> = {
-  /**
-   * ⚠️ PROVISIONAL · la ÚNICA entrada que no viene del documento de Diseño.
-   *
-   * La fila de idioma nació DESPUÉS del inventario, así que su propia copy no
-   * estaba. Y el spec es explícito: *«Copy completo pendiente de inventario real
-   * por App Frontend antes de traducir nada — no se inventa desde acá»*, o sea
-   * que **avisarle a Diseño qué strings agrega la fila era trabajo mío**.
-   *
-   * Se pone «Language» y se declara, en vez de dejarla caer al español: la fila
-   * que cambia el idioma mostrándose en español dentro de la app en inglés es
-   * exactamente el «traduce el 60 %» que esta orden prohíbe. **Está pedida a
-   * Diseño; cuando conteste, esta entrada sale de acá y entra por el documento
-   * como todas las demás.**
-   */
-  'Idioma': 'Language',
   "(después puedes generar otro desde la mesa).": "(you can generate another one later from the table).",
   "(la cuenta ÷": "(the bill ÷",
   "+ propina (elige abajo)": "+ tip (choose below)",
@@ -283,6 +262,7 @@ export const EN: Record<string, string> = {
   "Historial": "History",
   "Hoy": "Today",
   "Identificando el restaurante… prueba de nuevo en un momento.": "Identifying the restaurant… try again in a moment.",
+  "Idioma": "Language",
   "Ingresa los datos abajo (seguro, vía Stripe)": "Enter your details below (secure, via Stripe)",
   "Ingresa los datos de la tarjeta para continuar.": "Enter your card details to continue.",
   "Inicio": "Home",
@@ -422,10 +402,12 @@ export const EN: Record<string, string> = {
   "No se pudo actualizar": "Couldn't update",
   "No se pudo agregar": "Couldn't add",
   "No se pudo copiar: tu navegador no habilitó el portapapeles": "Couldn't copy: your browser didn't enable the clipboard",
-  "No se pudo eliminar": "Couldn't delete",
+  "No se pudo eliminar el grupo": "Couldn't delete the group",
+  "No se pudo eliminar la tarjeta": "Couldn't delete the card",
   "No se pudo generar el link": "We couldn't generate the link",
   "No se pudo marcar como leído": "Couldn't mark as read",
-  "No se pudo quitar": "Couldn't remove",
+  "No se pudo quitar de tus amigos": "Couldn't remove from your friends",
+  "No se pudo quitar del grupo": "Couldn't remove from the group",
   "No tienes avisos.": "You have no notifications.",
   "No tienes mesas abiertas": "You have no open tables",
   "No tienes solicitudes pendientes.": "You have no pending requests.",

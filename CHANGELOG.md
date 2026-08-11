@@ -1,5 +1,44 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.75.2 — cuatro acciones distintas mostraban dos mensajes (2026-08-11)
+
+PATCH: copy en español + su traducción. **Diseño resolvió los dos pedidos
+abiertos, y el primero era más grande de lo que yo había reportado.**
+
+Yo reporté DOS pantallas con la misma frase. Diseño encontró **CUATRO acciones
+con dos frases genéricas**:
+
+```
+eliminar una TARJETA   ┐ las dos decían «No se pudo eliminar»
+eliminar un GRUPO      ┘
+quitar un MIEMBRO      ┐ las dos decían «No se pudo quitar»
+quitar un AMIGO        ┘
+```
+
+🔴 **La salida no fue elegir una traducción: fue que el ESPAÑOL diga cosas
+distintas.** Era un defecto del español —cuatro acciones mostrando dos
+mensajes— que **el inglés destapó**. Traducir obliga a mirar cada frase de
+nuevo, y ahí se ve lo que la costumbre tapaba.
+
+```
+No se pudo eliminar la tarjeta      Couldn't delete the card
+No se pudo eliminar el grupo        Couldn't delete the group
+No se pudo quitar del grupo         Couldn't remove from the group
+No se pudo quitar de tus amigos     Couldn't remove from your friends
+```
+
+**Las dos frases genéricas ya no existen** — verificado en el código y en el
+diccionario, con exit propio y no con un `||` colgado de un `sed`.
+
+**Y `Idioma` → `Language` entró por el documento**, así que **deja de ser la
+entrada provisional escrita a mano**: `en.ts` vuelve a ser 100 % generado.
+646 entradas, **cero conflictos**.
+
+Gate con los comandos **textuales** del `ci.yml`, leídos del archivo: `npm test`
+941 · `npm run typecheck` 4 proyectos · `npm run build` · `build:landing` ·
+`npx playwright test` 86. Todo en 0.
+
+
 ## 0.75.1 — mi gate local miraba 69 archivos y decía cuatro proyectos (2026-08-11)
 
 PATCH: documentación. **Cero `src/`.**

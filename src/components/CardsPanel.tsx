@@ -112,7 +112,7 @@ export function CardsPanel() {
       toast(t('Tarjeta eliminada'));
       loadPms();
     } catch {
-      toast(t('No se pudo eliminar'));
+      toast(t('No se pudo eliminar la tarjeta'));
     }
   }
 
