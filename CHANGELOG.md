@@ -53,6 +53,19 @@ mutantes) y que el componente la consulte en vez de decidir
 build real exige Stripe cargando contra un backend: acción externa, declarada
 como hueco.**
 
+### 🔴 El corolario que nada de este lado puede cerrar
+
+**Aporte del Bibliotecario, anotado en `moneyRail.ts` y no resuelto:**
+
+> Si algún día el backend publicara `real_money` **sin** el acople modo↔clave en
+> el arranque, este lector seguiría diciendo lo mismo y el cartel seguiría
+> apareciendo — **sin nada que lo respalde**.
+
+**La declaración y la garantía viven en repos distintos y nada las ata.** Desde
+acá los dos mundos se ven **idénticos**: no hay guarda de este lado que pueda
+notar la diferencia. Se cierra del lado del emisor —publicando algo que dependa
+del acople y no de una constante— o no se cierra.
+
 ### Dos cosas que salieron de rebote
 
 **`· Vence 08/28` seguía en español en la app en inglés.** La traducción existía

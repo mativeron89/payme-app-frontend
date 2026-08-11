@@ -53,6 +53,21 @@ import type { AppConfig } from './types';
  * de verdad, y el proceso no arranca. **Desde el front eso no se puede
  * verificar.** Leer `real_money: false` acredita lo que el backend DECLARA, no
  * la clave con la que corre.
+ *
+ * ✅ **No es un defecto: es la división correcta.** Lo que sí sería un defecto
+ * es que alguien lea este `real_money: false` como si fuera una medición de
+ * este repo.
+ *
+ * 🔴 **Y el corolario, que NO se resuelve acá y por eso se escribe** (aporte del
+ * Bibliotecario, 2026-08-11): **si algún día el backend publicara `real_money`
+ * sin ese acople en el arranque, este lector seguiría diciendo lo mismo y el
+ * cartel seguiría apareciendo — sin nada que lo respalde.**
+ *
+ * **La declaración y la garantía viven en repos distintos y nada las ata.** No
+ * hay guarda de este lado que pueda notarlo: desde acá los dos mundos se ven
+ * IDÉNTICOS. Si alguna vez se quiere cerrar, se cierra del lado del emisor —
+ * publicando algo que dependa del acople y no de una constante— y eso es orden
+ * suya, no nuestra.
  */
 
 export type MoneyRailStatus =
