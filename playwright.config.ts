@@ -45,7 +45,20 @@ export default defineConfig({
   // servida desde localhost, no está lento: está roto.
   expect: { timeout: 10_000 },
 
-  reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : [['list']],
+  /**
+   * El `json` de CI existe para UNA cosa: `stats.flaky`. Con `retries: 2`, un
+   * test que falla y pasa al reintentar deja la corrida en verde y publica —
+   * `scripts/reportar-flaky.sh` lo hace visible sin bloquear (orden del
+   * Bibliotecario, 2026-08-10).
+   *
+   * 🔴 Sale a `test-results/`, que YA está en `.gitignore`, y se lee en un paso
+   * SEPARADO. **El paso `npx playwright test` no se toca**: es el que gatea la
+   * publicación, y meterle un pipe le comería el exit code — el shell por
+   * defecto de un `run:` es `bash -e`, sin `pipefail`.
+   */
+  reporter: process.env.CI
+    ? [['line'], ['html', { open: 'never' }], ['json', { outputFile: 'test-results/resultados.json' }]]
+    : [['list']],
 
   use: {
     baseURL: 'http://localhost:5176',

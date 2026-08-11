@@ -46,6 +46,17 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
 
+      # 🔴 Se lee el resultado en un paso APARTE, y el de arriba queda intacto.
+      # Ese `run:` es el que gatea la publicación: un pipe para capturar su
+      # salida le comería el exit code (el shell por defecto es `bash -e`, SIN
+      # `pipefail`) y la compuerta quedaría abierta en silencio.
+      #
+      # `if: always()` porque un flaky puede convivir con una corrida roja, y
+      # ahí también hay que verlo. El script NUNCA sale ≠0: informa, no bloquea.
+      - name: Reportar flaky de Playwright (informa, NO bloquea)
+        if: always()
+        run: bash scripts/reportar-flaky.sh test-results/resultados.json
+
       # ══════════════════════════════════════════════════════════════════
       # 🔴 LA COMPUERTA DE PUBLICACIÓN · 2026-08-10
       #

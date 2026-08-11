@@ -1,5 +1,62 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.74.5 — un flake que pasa al reintentar publica en silencio; ahora se ve (2026-08-10)
+
+MINOR de infraestructura de CI. **Cero `src/`.** Orden del Bibliotecario.
+
+### El agujero
+
+```
+retries: 2 en CI
+  → un test falla, reintenta, pasa
+  → Playwright lo marca «flaky» y sale 0
+  → la corrida queda VERDE y PUBLICA
+```
+
+**Es «re-correr hasta que dé verde» ya integrado en la configuración**, automatizado y sin que nadie lo vea. La compuerta de publicación que se acreditó hoy en el pipeline real se desarma así, sin tocar una línea.
+
+🔴 **Y la decisión NO fue sacar los reintentos.** Quitarlos cambia el problema de lado: **un parpadeo de red en el runner bloquearía un deploy sano** — y hoy sabemos que ese parpadeo existe (ver 0.74.4). El criterio:
+
+```
+la compuerta existe para impedir que se publique código ROTO
+un test que pasa al reintentar NO es evidencia de código roto  → no debe bloquear
+pero degradarse en silencio SÍ es un problema                  → tiene que verse
+```
+
+⚠️ **El límite, escrito porque es fácil leer de más: esto hace que la degradación sea VISIBLE. No hace que no ocurra.** Un `flaky > 0` se investiga; sigue publicando.
+
+### Cómo, sin tocar el paso que gatea
+
+**`- run: npx playwright test` queda BYTE-IDÉNTICO.** La tentación natural era capturarle la salida con un pipe para contar los flaky — y ahí estaba la trampa:
+
+> el shell por defecto de un `run:` es **`bash -e`, SIN `pipefail`**: el exit de Playwright se lo comería `tee` y **la compuerta quedaría abierta en silencio**.
+
+Es la cuarta vez hoy que la misma forma —el exit code que se pierde en un pipe— aparece en este repo. Acá habría sido la peor.
+
+En su lugar: reporter `json` **sólo en CI**, a `test-results/` (ya gitignoreado), leído por `scripts/reportar-flaky.sh` en un **paso aparte** con `if: always()`.
+
+### El script y su modo de falla INVERSO
+
+`publicar-vercel.sh` **debe cortar** cuando el hook no acepta. Éste **no debe cortar jamás**: un paso de reporte que tumba el job convierte un informe en una compuerta. Por eso **no lleva `set -e`**, y sale 0 con el JSON ausente, vacío o roto — **diciéndolo**, nunca callado.
+
+```
+flaky > 0    ::warning en la UI + resumen del job + «publica igual»
+flaky = 0    lo dice en voz alta — un cero callado se confunde con no haber corrido
+sin JSON     avisa que NO se midió, y sale 0
+```
+
+### Acreditado rompiendo · 3 mutantes
+
+```
+pipe en el paso que gatea        → 1 rojo   («sigue pelado»)
+set -e en el reporte             → 1 rojo   (la sonda)
+reporte fail-closed sin JSON     → 2 rojos
+```
+
+⚠️ **El primer intento de mutante NO se aplicó** —usé `|` como delimitador de `perl` y el reemplazo contenía `|`— y devolvió «0 rojos». **Un mutante que no se aplica reporta exactamente lo mismo que una guarda que no sirve.** Se rehízo verificando que la sustitución ocurrió antes de creerle al resultado.
+
+**12 tests nuevos** en `scripts/reportarFlaky.test.ts`.
+
 ## 0.74.4 — el blanco intermitente tenía causa, y era la red del equipo (2026-08-10)
 
 PATCH: una línea de `playwright.config.ts`. **Cero `src/`.**
