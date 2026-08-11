@@ -1,5 +1,80 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.76.0 — el mock modela los tres modos monetarios; el resto está BLOQUEADO (2026-08-11)
+
+MINOR de mock y tipos. **Cero superficie de producto: ningún código lee
+`money_rail` todavía, a propósito.**
+
+### 🔴 Por qué sólo el mock · el contrato publicado va ATRÁS del código desplegado
+
+```
+2966aab  2026-08-07  money_rail=0   ← el espejo de este repo
+df32a6b  2026-08-07  money_rail=0   ← el commit que DECLARA el inventario del dueño
+5e19ec5  2026-08-10  money_rail=1   ← nace la capability
+0ce21f4  2026-08-10  money_rail=1   ← HEAD del backend, YA DESPLEGADO en sandbox
+```
+
+**App Backend desplegó `sandbox` sin republicar `contract/mirror-inventory.json`
+—su último cambio es del 07-08—, así que el camino sancionado no puede traer
+`money_rail`.** Adoptar su inventario movería el espejo un commit y la
+capability seguiría sin aparecer.
+
+⚠️ **NO se copió el archivo a mano.** `CLAUDE.md`: *«la población la declara el
+DUEÑO»*, y este repo ya midió por qué — cuando el espejo se inventariaba a sí
+mismo, **una omisión coordinada pasaba en verde**. Además `--paridad` daría rojo
+con razón: un archivo de `0ce21f4` dentro de un espejo que declara `df32a6b` es
+exactamente la inconsistencia que ese verificador existe para cazar.
+
+🔴 **Y el hallazgo de fondo, que es del emisor y ya lo asumió:** el backend
+cambió **comportamiento observable en producción** y su contrato todavía dice
+que esa capability no existe. **Un consumidor que hace lo correcto queda ciego a
+un cambio que ya está vivo.** Es la versión inversa de lo que pasó con el panel,
+donde el desplegado iba atrás del repo.
+
+### Lo que sí entró
+
+**El mock modela los tres modos**, con la forma leída en
+`../payme-app-backend/services/moneyRail.js:138`:
+
+```
+disabled   payments_enabled: false   real_money: false
+sandbox    payments_enabled: true    real_money: false   ← lo desplegado hoy
+live       payments_enabled: true    real_money: true
+```
+
+⚠️ **Declarado donde se lee, no sólo acá: FORMA LEÍDA, NO ESPEJADA.** Si el
+espejo llega distinto, ese comentario es lo único que evita que alguien crea que
+el mock estaba verificado contra el contrato.
+
+**Por qué los tres y no dos:** el cartel de «tarjeta de prueba» tiene que
+aparecer con `real_money: false` **y NO aparecer con `true`**. Sin los dos
+estados alcanzables se prueba que aparece; **no que desaparece** — y ésa es la
+mitad que importa, porque mostrarlo de más le dice a alguien con dinero real que
+use una tarjeta falsa.
+
+**`money_rail?: unknown` en `AppConfig`**, igual que `wallet_rail`: admite la
+CLAVE, no su forma. Tiparlo haría que el compilador respalde algo que nadie
+verificó contra el contrato.
+
+**9 tests**, con dos controles: que cambiar el modo CAMBIE la respuesta de
+`/api/config` —sin eso, un valor fijo pasaría todo— y que con el storage sano
+vuelva a leer de verdad, que mata un `return MODOS.sandbox` al tope.
+
+### Declarado y NO hecho
+
+```
+· leer money_rail fail-closed          bloqueado por el espejo
+· el cartel de tarjeta de prueba       espera copy de Diseño
+· el 409 payments_disabled             orden propia (Bibliotecario, 2026-08-11)
+```
+
+🔴 **Sobre el 409: hoy no se dispara porque el modo es `sandbox`, pero el front
+NO lo maneja.** Con `disabled`, quien tocaba «pagar» recibía un error genérico:
+no estaba bloqueado con una explicación, **estaba roto con un mensaje
+equivocado**. El cambio de modo lo TAPA, no lo arregla — y vuelve el día que se
+apague, o si el backend desplegado va atrás.
+
+
 ## 0.75.3 — una lectura sola no distingue «no cambió» de «todavía no llegó» (2026-08-11)
 
 PATCH: comentarios en `scripts/publicar-vercel.sh`. **Cero `src/`.**

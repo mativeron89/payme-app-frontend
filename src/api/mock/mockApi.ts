@@ -218,6 +218,60 @@ function fail(status: number, error: string, extra: Record<string, unknown> = {}
  * `stripe_publishable_key: undefined` es fiel: el mock no carga Stripe.js ni
  * depende de credenciales.
  */
+/**
+ * MODO MONETARIO DEL MOCK · `D-FF-2-BIS`.
+ *
+ * ⚠️ **FORMA LEÍDA DE LA FUENTE, NO ESPEJADA.** Los tres modos y sus tres
+ * campos salen de `../payme-app-backend/services/moneyRail.js:138`, leído
+ * directo. **Eso no es el contrato:** el contrato es lo que declara el
+ * inventario del dueño, y su inventario está en `df32a6b` (2026-08-07), tres
+ * días antes de que `money_rail` naciera en `5e19ec5`.
+ *
+ * 🔴 **Si el espejo llega con una forma distinta de la que asumí acá, este
+ * comentario es lo único que evita que alguien crea que el mock estaba
+ * verificado contra el contrato. No lo borres al espejar: corregilo.**
+ *
+ * ── Por qué el mock tiene que modelar los TRES ──
+ *
+ * El cartel de «tarjeta de prueba» tiene que aparecer con `real_money: false`
+ * **y NO aparecer con `real_money: true`**. Sin los dos estados alcanzables se
+ * puede probar que aparece; **no se puede probar que desaparece**, que es la
+ * mitad que importa: mostrarlo de más le dice a alguien con dinero real que use
+ * una tarjeta falsa.
+ *
+ * ── Por qué `localStorage` y no una variable de entorno ──
+ *
+ * Se cambia en caliente desde un test o desde la consola, sin rebuild. La clave
+ * va namespaceada por lo de `storage.ts:10-13`: mock y build real compartieron
+ * origen una vez y una sesión se habría filtrado.
+ */
+const CLAVE_MODO = 'payme.app.mock.money_rail.v1';
+
+export type ModoMonetarioMock = 'disabled' | 'sandbox' | 'live';
+
+/** Igual que el emisor: `payments_enabled` y `real_money` son INDEPENDIENTES. */
+const MODOS: Record<ModoMonetarioMock, { mode: string; payments_enabled: boolean; real_money: boolean }> = {
+  disabled: { mode: 'disabled', payments_enabled: false, real_money: false },
+  sandbox: { mode: 'sandbox', payments_enabled: true, real_money: false },
+  live: { mode: 'live', payments_enabled: true, real_money: true },
+};
+
+export function modoMonetarioMock(): unknown {
+  try {
+    const v = localStorage.getItem(CLAVE_MODO);
+    // Default `sandbox`: es lo que hay desplegado hoy. Un default distinto del
+    // real haría que la demo no muestre lo que la gente se va a encontrar.
+    return MODOS[(v as ModoMonetarioMock) in MODOS ? (v as ModoMonetarioMock) : 'sandbox'];
+  } catch {
+    return MODOS.sandbox;
+  }
+}
+
+/** Para tests y consola. No hay UI: esto no es una preferencia del usuario. */
+export function setModoMonetarioMock(m: ModoMonetarioMock): void {
+  try { localStorage.setItem(CLAVE_MODO, m); } catch { /* ver modoMonetarioMock */ }
+}
+
 export async function mockGetConfig(): Promise<AppConfig> {
   return delay({
     version: 'mock',
@@ -233,6 +287,7 @@ export async function mockGetConfig(): Promise<AppConfig> {
       stp_dispersal: false,
       ocr_real: false,
       wallet_rail: { enabled: false, account_activity: true },
+      money_rail: modoMonetarioMock(),
     },
   });
 }

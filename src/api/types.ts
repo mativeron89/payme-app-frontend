@@ -76,6 +76,29 @@ export interface AppConfig {
      * APAGADO.
      */
     wallet_rail?: unknown;
+    /**
+     * 🔴 `D-FF-2-BIS` · modo monetario global. **SIN TIPAR, y sin lector todavía.**
+     *
+     * ⚠️ **FORMA LEÍDA DE LA FUENTE, NO ESPEJADA.** Lo que sé de este campo lo
+     * leí en `../payme-app-backend/services/moneyRail.js:138` —
+     * `{ mode, payments_enabled, real_money }` — **y eso NO es el contrato: el
+     * contrato es lo que declara el inventario del dueño.**
+     *
+     * **Su inventario declara `df32a6b` (v2.48.0, 2026-08-07) y `money_rail`
+     * nace en `5e19ec5` (2026-08-10). El espejo no puede traerlo todavía.**
+     * Republicado pedido a App Backend el 2026-08-11.
+     *
+     * 🔴 **Por eso acá sólo se admite la CLAVE, no su forma.** `unknown` no
+     * afirma nada: obliga a que el día que exista un lector, valide en runtime
+     * y falle cerrado — igual que `readWalletRail`. **Tiparlo ahora sería que
+     * el compilador respalde una forma que nadie verificó contra el contrato**,
+     * que es exactamente lo que el espejo existe para impedir.
+     *
+     * **Hoy sólo lo produce el mock** (`mockApi.ts`), para poder probar el
+     * cartel de tarjeta de prueba en sus dos estados. **Ningún código de
+     * producto lo lee.**
+     */
+    money_rail?: unknown;
   };
 }
 
