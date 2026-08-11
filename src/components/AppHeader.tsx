@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useIdioma } from '../i18n/idioma';
 import { Icon, type IconName } from './Icon';
 
 /**
@@ -71,6 +72,7 @@ export function AppHeader({
    */
   bellHere?: boolean;
 }) {
+  const { t } = useIdioma();
   const identidad = userName ?? paymeId;
   return (
     <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
@@ -82,15 +84,15 @@ export function AppHeader({
              ningún lado es una promesa rota, y encima entra en el orden de
              tabulación. Lleva nombre accesible porque, sin tarjeta de título,
              es lo único que dice de qué pantalla se trata. */
-          <span className="hdr-bell hdr-bell-here" role="img" aria-label="Estás en Avisos">
+          <span className="hdr-bell hdr-bell-here" role="img" aria-label={t('Estás en Avisos')}>
             <Icon name="bell" size={22} />
           </span>
         ) : (
           onBell && (
-            <button type="button" className="hdr-bell" onClick={onBell} aria-label="Avisos">
+            <button type="button" className="hdr-bell" onClick={onBell} aria-label={t('Avisos')}>
               <Icon name="bell" size={22} />
               {unread > 0 && (
-                <span className="hdr-badge" aria-label={`${unread} sin leer`}>
+                <span className="hdr-badge" aria-label={t('{0} sin leer', unread)}>
                   {unread}
                 </span>
               )}
@@ -121,12 +123,13 @@ export function AppHeaderBack({
   /** Ej.: "Paso 2 de 5". En Mis ítems no hay: no es un paso de flujo lineal. */
   step?: ReactNode;
 }) {
+  const { t } = useIdioma();
   return (
     <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
       <div className="hdr-row">
         <button type="button" className="hdr-back" onClick={onBack}>
           <Icon name="arrow-left" size={20} />
-          Volver
+          {t('Volver')}
         </button>
         {title && <span className="hdr-title">{title}</span>}
         {step && <span className="hdr-step">{step}</span>}
@@ -187,6 +190,7 @@ export function AppHeaderFlow({
    */
   action?: ReactNode;
 }) {
+  const { t } = useIdioma();
   return (
     <header className={`hdr hdr-flow ${compact ? 'hdr-compact' : ''}`}>
       <div className="hdr-row">
@@ -196,7 +200,7 @@ export function AppHeaderFlow({
       <div className="hdr-row hdr-row-2">
         <button type="button" className="hdr-back" onClick={onBack}>
           <Icon name={backIcon} size={20} />
-          {backLabel}
+          {t(backLabel)}
         </button>
         {step && <span className="hdr-step">{step}</span>}
         {action}
@@ -233,20 +237,21 @@ export function BubbleTabs({
   active: string;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useIdioma();
   return (
     <div className="btabs" role="tablist">
-      {tabs.map((t) => {
-        const on = t.id === active;
+      {tabs.map((tab) => {
+        const on = tab.id === active;
         return (
           <button
-            key={t.id}
+            key={tab.id}
             type="button"
             role="tab"
             aria-selected={on}
             className={`btab ${on ? 'on' : ''}`}
-            onClick={() => onSelect(t.id)}
+            onClick={() => onSelect(tab.id)}
           >
-            {t.label}
+            {tab.label}
             {/* El conteo entra al NOMBRE ACCESIBLE de la pestaña, y tiene que
                 entrar: una persona que no ve el círculo naranja igual necesita
                 saber que hay algo esperándola. Por eso lleva su propio texto
@@ -255,9 +260,9 @@ export function BubbleTabs({
                 Consecuencia para quien escriba tests: el nombre de una pestaña
                 con badge NO es su etiqueta pelada. Buscarla con `exact: true`
                 falla en cuanto el contador deja de estar en cero. */}
-            {t.badge != null && t.badge > 0 && (
-              <span className="btab-badge" aria-label={`${t.badge} pendientes`}>
-                {t.badge}
+            {tab.badge != null && tab.badge > 0 && (
+              <span className="btab-badge" aria-label={t('{0} pendientes', tab.badge)}>
+                {tab.badge}
               </span>
             )}
           </button>

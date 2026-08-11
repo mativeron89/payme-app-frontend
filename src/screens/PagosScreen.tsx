@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import type { HistoryEntry } from '../api/types';
 import { useWalletRail } from '../api/walletRail';
@@ -28,6 +29,7 @@ import { agruparPorMes } from './pagosView';
 const PAGINA = 20;
 
 export function PagosScreen() {
+  const { t } = useIdioma();
   const { walletRailEnabled, accountActivity } = useWalletRail();
   const vista = accountRailView(walletRailEnabled, accountActivity);
 
@@ -82,7 +84,7 @@ export function PagosScreen() {
 
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack title="Mis pagos" onBack={() => goBack('home')} />
+      <AppHeaderBack title={t('Mis pagos')} onBack={() => goBack('home')} />
 
       <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>
         {!vista.showAccountActivity ? (
@@ -91,8 +93,8 @@ export function PagosScreen() {
           <div className="state-unknown">
             <Icon name="info" size={20} />
             <div>
-              <div className="state-unknown-title">No podemos mostrar tus pagos ahora</div>
-              <p className="state-unknown-body">Prueba de nuevo más tarde.</p>
+              <div className="state-unknown-title">{t('No podemos mostrar tus pagos ahora')}</div>
+              <p className="state-unknown-body">{t('Prueba de nuevo más tarde.')}</p>
             </div>
           </div>
         ) : fallo && !pagos ? (
@@ -100,16 +102,16 @@ export function PagosScreen() {
             <div className="state-error-row">
               <Icon name="x-circle" size={22} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="state-error-title">No pudimos cargar tus pagos</div>
-                <p className="state-error-body">Revisa la conexión y prueba de nuevo.</p>
+                <div className="state-error-title">{t('No pudimos cargar tus pagos')}</div>
+                <p className="state-error-body">{t('Revisa la conexión y prueba de nuevo.')}</p>
               </div>
             </div>
             <button type="button" className="btn btn-ghost btn-sm" onClick={primeraPagina}>
-              Reintentar
+              {t('Reintentar')}
             </button>
           </div>
         ) : pagos === null ? (
-          <div aria-busy="true" aria-label="Cargando tus pagos">
+          <div aria-busy="true" aria-label={t('Cargando tus pagos')}>
             {[0, 1, 2].map((i) => (
               <div key={i} className="pago-row sk">
                 <span className="sk-line w55" />
@@ -121,7 +123,7 @@ export function PagosScreen() {
           /* Vacío REAL: sin borde. Es el único estado del sistema que no lo
              lleva — si hay borde, hay algo que no estás viendo. */
           <div className="mesa-empty">
-            <div className="mesa-empty-title">Todavía no pagaste ninguna mesa.</div>
+            <div className="mesa-empty-title">{t('Todavía no pagaste ninguna mesa.')}</div>
           </div>
         ) : (
           <>
@@ -135,7 +137,7 @@ export function PagosScreen() {
                     <div className="pago-main">
                       <div className="pago-rest">{h.restaurant}</div>
                       <div className="pago-meta">
-                        Mesa {h.mesa_code} · {new Date(h.date).toLocaleDateString('es-MX', {
+                        {t('Mesa')} {h.mesa_code} · {new Date(h.date).toLocaleDateString('es-MX', {
                           day: 'numeric',
                           month: 'short',
                         })}
@@ -149,7 +151,7 @@ export function PagosScreen() {
 
             {fallo && (
               <p className="pago-fallo" role="status">
-                No pudimos traer más pagos. Lo que ves sigue siendo correcto.
+                {t('No pudimos traer más pagos. Lo que ves sigue siendo correcto.')}
               </p>
             )}
 
@@ -161,7 +163,7 @@ export function PagosScreen() {
                 onClick={() => void cargarMas()}
                 disabled={cargandoMas}
               >
-                {cargandoMas ? 'Cargando…' : 'Cargar más'}
+                {cargandoMas ? t('Cargando…') : t('Cargar más')}
               </button>
             )}
           </>

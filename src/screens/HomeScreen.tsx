@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useIdioma } from '../i18n/idioma';
 import { api, IS_MOCK } from '../api';
 import type { BalanceResponse, OpenMesasResponse, WalletTransaction } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -44,21 +45,24 @@ import {
 /** Las tres de §1.11. `asociadas` existe y no tiene interior: ver abajo. */
 type TabId = 'cuenta' | 'estadisticas' | 'asociadas';
 
+/** Español a propósito: constante de módulo, se traduce al renderizar
+ *  (ver el `.map` que las pasa a `BubbleTabs`). Sin `t` en este ámbito. */
 const TABS: BubbleTab[] = [
   { id: 'cuenta', label: 'Cuenta' },
   { id: 'estadisticas', label: 'Estadísticas' },
   { id: 'asociadas', label: 'Asociadas' },
 ];
 
-function txDate(iso: string): string {
+function txDate(iso: string, locale: string, t: (s: string, ...a: unknown[]) => string): string {
   const d = new Date(iso);
   const diffDays = Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60_000));
-  if (diffDays === 0) return 'Hoy';
-  if (diffDays === 1) return 'Ayer';
-  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+  if (diffDays === 0) return t('Hoy');
+  if (diffDays === 1) return t('Ayer');
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
 export function HomeScreen() {
+  const { t, locale } = useIdioma();
   const { session } = useAuth();
   // OLA 5D · saldo y movimientos son riel saldo: los habilita el BACKEND.
   // Arranca apagado, así que ni siquiera se PIDEN mientras la capability viaja.
@@ -148,7 +152,7 @@ export function HomeScreen() {
         userName={nombre ?? undefined}
         unread={unread}
         onBell={() => navigate('avisos')}
-        tabs={<BubbleTabs tabs={TABS} active={tab} onSelect={(id) => setTab(id as TabId)} />}
+        tabs={<BubbleTabs tabs={TABS.map((x) => ({ ...x, label: t(x.label) }))} active={tab} onSelect={(id) => setTab(id as TabId)} />}
       />
 
       <div className="scroll">
@@ -159,18 +163,18 @@ export function HomeScreen() {
         <MountedCard flush={tab === TABS[0]!.id}>
           {tab === 'cuenta' && (
             <div className="launch-pair">
-              <Launcher icon="card" label="Ver tarjetas" onClick={() => navigate('tarjetas')} />
-              <Launcher icon="receipt" label="Ver pagos" onClick={() => navigate('pagos')} />
+              <Launcher icon="card" label={t('Ver tarjetas')} onClick={() => navigate('tarjetas')} />
+              <Launcher icon="receipt" label={t('Ver pagos')} onClick={() => navigate('pagos')} />
             </div>
           )}
 
           {tab === 'estadisticas' && (
             <div className="launch-stack">
               {/* La frase es de Mati, textual, y va como invitación arriba. */}
-              <p className="launch-invite">¿Quieres ver qué consumes, cuánto y dónde?</p>
+              <p className="launch-invite">{t('¿Quieres ver qué consumes, cuánto y dónde?')}</p>
               <Launcher
                 icon="chart"
-                label="Ver mis estadísticas"
+                label={t('Ver mis estadísticas')}
                 onClick={() => navigate('estadisticas')}
               />
             </div>
@@ -195,10 +199,9 @@ export function HomeScreen() {
               <div className="state-unknown">
                 <Icon name="info" size={20} />
                 <div>
-                  <div className="state-unknown-title">Todavía no está disponible</div>
+                  <div className="state-unknown-title">{t('Todavía no está disponible')}</div>
                   <p className="state-unknown-body">
-                    Asociar la cuenta de otra persona toca cómo se autoriza un pago, así que no la
-                    abrimos hasta tenerlo resuelto.
+                    {t('Asociar la cuenta de otra persona toca cómo se autoriza un pago, así que no la abrimos hasta tenerlo resuelto.')}
                   </p>
                 </div>
               </div>
@@ -207,7 +210,7 @@ export function HomeScreen() {
         </MountedCard>
 
         {/* ─── La burbuja de la mesa. Va DEBAJO de los accesos, no arriba. ─── */}
-        <section className="home-mesa" aria-label="Tu mesa abierta">
+        <section className="home-mesa" aria-label={t('Tu mesa abierta')}>
           {mesasFallaron ? (
             /* Error de red: borde SÓLIDO --danger + nube tachada + Reintentar.
                Las pestañas de arriba siguen funcionando (§1.1). */
@@ -215,20 +218,20 @@ export function HomeScreen() {
               <div className="state-error-row">
                 <Icon name="x-circle" size={22} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="state-error-title">No pudimos cargar tu mesa</div>
-                  <p className="state-error-body">Revisa la conexión y prueba de nuevo.</p>
+                  <div className="state-error-title">{t('No pudimos cargar tu mesa')}</div>
+                  <p className="state-error-body">{t('Revisa la conexión y prueba de nuevo.')}</p>
                 </div>
               </div>
               {/* La salida es OBLIGATORIA: un estado que congela sin acción
                   visible es un defecto de diseño, no una medida de seguridad. */}
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => void cargarMesas()}>
-                Reintentar
+                {t('Reintentar')}
               </button>
             </div>
           ) : openMesas === null ? (
             /* Cargando: esqueleto con la SILUETA de la burbuja, nunca un spinner
                centrado (§5 · Estados honestos). */
-            <div className="mesa-card sk" aria-busy="true" aria-label="Cargando tu mesa">
+            <div className="mesa-card sk" aria-busy="true" aria-label={t('Cargando tu mesa')}>
               <span className="sk-line w40" />
               <span className="sk-line w70 tall" />
               <span className="sk-line w55" />
@@ -243,21 +246,21 @@ export function HomeScreen() {
               const tarjeta = (
                 <button type="button" className="mesa-card" onClick={() => navigate('mesa', mesa.code)}>
                   <div className="mesa-top">
-                    <span className="mesa-kicker">Tu mesa abierta</span>
+                    <span className="mesa-kicker">{t('Tu mesa abierta')}</span>
                     {/* Teal siempre: el naranja tiene una lista cerrada de cuatro
                         usos permitidos y un badge de estado no es ninguno. */}
-                    <span className="badge badge-teal">{mesaStatusLabel(mesa.status)}</span>
+                    <span className="badge badge-teal">{t(mesaStatusLabel(mesa.status))}</span>
                   </div>
                   <div className="mesa-name">{mesa.restaurant.name}</div>
                   {/* G-27: el spec pide "· 4 personas" y `GET /mesas/open` no trae
                       el número de comensales. No se infiere ni se inventa. */}
-                  <div className="mesa-meta">Mesa {mesa.code}</div>
+                  <div className="mesa-meta">{t('Mesa')} {mesa.code}</div>
 
                   {/* La jerarquía dice "cuánto falta", no "cuánto es": lo pagado en
                       --fs-h1 tabular, el total en --fs-body muted. */}
                   <div className="mesa-money">
                     <span className="mesa-paid">{formatMXN(mesa.paid_amount_cents)}</span>
-                    <span className="mesa-total">de {formatMXN(mesa.total_cents)}</span>
+                    <span className="mesa-total">{t('de')} {formatMXN(mesa.total_cents)}</span>
                   </div>
                   {/* La barra NUNCA va sola: los dos importes de arriba son el dato,
                       esto es el refuerzo. Por eso es aria-hidden. */}
@@ -268,10 +271,10 @@ export function HomeScreen() {
                   <div className="mesa-foot">
                     {cuenta && (
                       <span className={`mesa-cd ${cuenta.urgent ? 'urgent' : ''}`}>
-                        <Icon name="clock" size={15} className="ico-inline" /> Vence en {cuenta.text}
+                        <Icon name="clock" size={15} className="ico-inline" /> {t('Vence en')} {cuenta.text}
                       </span>
                     )}
-                    <span className="mesa-go">Ver mesa →</span>
+                    <span className="mesa-go">{t('Ver mesa →')}</span>
                   </div>
                 </button>
               );
@@ -281,7 +284,7 @@ export function HomeScreen() {
                 <div className="mesa-card-group">
                   {tarjeta}
                   <button type="button" className="mesa-more" onClick={() => setHojaAbierta(true)}>
-                    {etiquetaMasMesas(otras.length)} <span aria-hidden="true">›</span>
+                    {etiquetaMasMesas(otras.length, t)} <span aria-hidden="true">›</span>
                   </button>
                 </div>
               );
@@ -291,8 +294,8 @@ export function HomeScreen() {
                botón propio. La acción ya está en el círculo naranja de la barra,
                a un centímetro: duplicarla sería competirle. */
             <div className="mesa-empty">
-              <div className="mesa-empty-title">No tienes mesas abiertas</div>
-              <p className="mesa-empty-body">Toca el + para abrir una</p>
+              <div className="mesa-empty-title">{t('No tienes mesas abiertas')}</div>
+              <p className="mesa-empty-body">{t('Toca el + para abrir una')}</p>
               {/* G-36 · la mitad honesta del rescate (ORDEN 1-C·B): lo que no
                   se puede acreditar intacto NO se relanza — se conserva. Pero
                   entonces la demo puede quedar sin nada vivo y sin que nada lo
@@ -302,7 +305,7 @@ export function HomeScreen() {
               {IS_MOCK && demoVencida && (
                 <div className="demo-reset">
                   <p className="mesa-empty-body">
-                    Los datos de ejemplo de esta demo ya vencieron.
+                    {t('Los datos de ejemplo de esta demo ya vencieron.')}
                   </p>
                   <button
                     type="button"
@@ -312,7 +315,7 @@ export function HomeScreen() {
                       window.location.reload();
                     }}
                   >
-                    <Icon name="refresh" size={16} className="ico-inline" /> Reiniciar la demo
+                    <Icon name="refresh" size={16} className="ico-inline" /> {t('Reiniciar la demo')}
                   </button>
                 </div>
               )}
@@ -346,7 +349,7 @@ export function HomeScreen() {
               >
                 <Icon name={showBalance ? 'eye-off' : 'eye'} size={18} className="ico-inline" />
               </button>
-              <button className="saldo-arrow" onClick={() => navigate('cuenta')} aria-label="Ir a Cuenta">
+              <button className="saldo-arrow" onClick={() => navigate('cuenta')} aria-label={t('Ir a Cuenta')}>
                 →
               </button>
             </div>
@@ -370,13 +373,13 @@ export function HomeScreen() {
             <div className="sect-row">
               <div className="sect-title">Últimos movimientos</div>
               <button className="vermas" onClick={() => navigate('cuenta')}>
-                Ver más
+                {t('Ver más')}
               </button>
             </div>
             <div className="card" style={{ padding: '2px 16px' }}>
-              {txs.map((t, idx) => (
+              {txs.map((tx, idx) => (
                 <div
-                  key={t.id}
+                  key={tx.id}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -386,13 +389,13 @@ export function HomeScreen() {
                   }}
                 >
                   <span style={{ color: 'var(--gray-txt)' }} aria-hidden="true">
-                    <Icon name={walletTxIcon(t.type)} size={20} />
+                    <Icon name={walletTxIcon(tx.type)} size={20} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 'var(--fs-legacy-base)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {t.description ?? walletTxLabel(t.type)}
+                      {tx.description ?? walletTxLabel(tx.type)}
                     </div>
-                    <div className="caption">{txDate(t.date)}</div>
+                    <div className="caption">{txDate(tx.date, locale, t)}</div>
                   </div>
                   {/* El monto respeta el mismo ojito que el saldo. */}
                   <div
@@ -400,11 +403,11 @@ export function HomeScreen() {
                       fontWeight: 700,
                       fontSize: 'var(--fs-legacy-base)',
                       fontVariantNumeric: 'tabular-nums',
-                      color: showBalance ? (t.sign === 'credit' ? 'var(--green)' : 'var(--red)') : 'var(--gray-txt)',
+                      color: showBalance ? (tx.sign === 'credit' ? 'var(--green)' : 'var(--red)') : 'var(--gray-txt)',
                     }}
                   >
                     {showBalance
-                      ? `${t.sign === 'credit' ? '+' : '−'}${formatMXN(Math.abs(t.amount_cents))}`
+                      ? `${tx.sign === 'credit' ? '+' : '−'}${formatMXN(Math.abs(tx.amount_cents))}`
                       : masked}
                   </div>
                 </div>
@@ -426,15 +429,15 @@ export function HomeScreen() {
             className="sheet"
             role="dialog"
             aria-modal="true"
-            aria-label="Mesas abiertas"
+            aria-label={t('Mesas abiertas')}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="sheet-head">
-              <span className="sheet-title">Tus otras mesas abiertas</span>
+              <span className="sheet-title">{t('Tus otras mesas abiertas')}</span>
               <button
                 type="button"
                 className="sheet-close"
-                aria-label="Cerrar"
+                aria-label={t('Cerrar')}
                 onClick={() => setHojaAbierta(false)}
               >
                 ✕
@@ -451,18 +454,18 @@ export function HomeScreen() {
                 >
                   <div className="sheet-mesa-top">
                     <span className="sheet-mesa-name">{m.restaurant.name}</span>
-                    <span className="mesa-meta">Mesa {m.code}</span>
+                    <span className="mesa-meta">{t('Mesa')} {m.code}</span>
                   </div>
                   <div className="mesa-bar" aria-hidden="true">
                     <span style={{ width: `${Math.min(100, Math.max(0, m.pct_paid))}%` }} />
                   </div>
                   <div className="sheet-mesa-foot">
                     <span className="mesa-total">
-                      {formatMXN(m.paid_amount_cents)} de {formatMXN(m.total_cents)}
+                      {formatMXN(m.paid_amount_cents)} {t('de')} {formatMXN(m.total_cents)}
                     </span>
                     {cd && (
                       <span className={`mesa-cd ${cd.urgent ? 'urgent' : ''}`}>
-                        <Icon name="clock" size={14} className="ico-inline" /> Vence en {cd.text}
+                        <Icon name="clock" size={14} className="ico-inline" /> {t('Vence en')} {cd.text}
                       </span>
                     )}
                   </div>

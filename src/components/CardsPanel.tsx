@@ -1,4 +1,5 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
+import { useIdioma } from '../i18n/idioma';
 import { useEffect, useRef, useState } from 'react';
 import { api, IS_MOCK, newIdempotencyKey } from '../api';
 import {
@@ -54,11 +55,11 @@ function assertCardSetupOrigin(origin: StoredSession): StoredSession {
   return current;
 }
 
-function initialCardAttempt(): { attempt: CardSetupAttempt | null; error: string | null } {
+function initialCardAttempt(t: (s: string, ...a: unknown[]) => string): { attempt: CardSetupAttempt | null; error: string | null } {
   try {
     return { attempt: readCardSetupAttempt(), error: null };
   } catch {
-    return { attempt: null, error: 'No podemos verificar el alta anterior de tarjeta. No vamos a crear otra hasta recuperar el estado local.' };
+    return { attempt: null, error: t('No podemos verificar el alta anterior de tarjeta. No vamos a crear otra hasta recuperar el estado local.') };
   }
 }
 
@@ -69,8 +70,9 @@ function vencimiento(pm: PaymentMethod): string | null {
 }
 
 export function CardsPanel() {
+  const { t } = useIdioma();
   const toast = useToast();
-  const initialAttempt = useRef(initialCardAttempt()).current;
+  const initialAttempt = useRef(initialCardAttempt(t)).current;
   const [adding, setAdding] = useState(!!initialAttempt.attempt || !!initialAttempt.error);
   const [busyCard, setBusyCard] = useState(false);
   const addCardInFlightRef = useRef(createInFlightMutex());
@@ -99,18 +101,18 @@ export function CardsPanel() {
       await api.setDefaultPaymentMethod(id);
       loadPms();
     } catch {
-      toast('No se pudo actualizar');
+      toast(t('No se pudo actualizar'));
     }
   }
 
   async function removePm(pm: PaymentMethod) {
-    if (!window.confirm(`¿Quitar la tarjeta terminada en ${pm.last_four}?`)) return;
+    if (!window.confirm(t('¿Quitar la tarjeta terminada en {0}?', pm.last_four))) return;
     try {
       await api.removePaymentMethod(pm.id);
-      toast('Tarjeta eliminada');
+      toast(t('Tarjeta eliminada'));
       loadPms();
     } catch {
-      toast('No se pudo eliminar');
+      toast(t('No se pudo eliminar'));
     }
   }
 
@@ -127,7 +129,7 @@ export function CardsPanel() {
     }
     const origin = loadSession();
     if (!origin) {
-      toast('Tu sesión ya no está disponible. Vuelve a ingresar antes de guardar una tarjeta.');
+      toast(t('Tu sesión ya no está disponible. Vuelve a ingresar antes de guardar una tarjeta.'));
       addCardInFlightRef.current.leave();
       return;
     }
@@ -160,7 +162,7 @@ export function CardsPanel() {
         let pmId = `pm_mock_${attempt.setupKey.replace(/[^a-zA-Z0-9]/g, '')}`;
         if (!IS_MOCK) {
           if (!cardEl || !attempt.clientSecret) {
-            setCardState((s) => ({ ...s, error: 'Carga los datos de la tarjeta para continuar.' }));
+            setCardState((s) => ({ ...s, error: t('Carga los datos de la tarjeta para continuar.') }));
             setCardRetryStage('setup');
             return;
           }
@@ -174,7 +176,7 @@ export function CardsPanel() {
                 cardAttemptRef.current = null;
                 setCardRetryStage('none');
               } catch {
-                setCardSetupBlocked('El banco rechazó la tarjeta, pero no pudimos limpiar el intento local. No vamos a reenviarlo.');
+                setCardSetupBlocked(t('El banco rechazó la tarjeta, pero no pudimos limpiar el intento local. No vamos a reenviarlo.'));
               }
             } else {
               setCardRetryStage('setup');
@@ -207,7 +209,7 @@ export function CardsPanel() {
       cardAttemptRef.current = null;
       setCardRetryStage('none');
       setCardSetupBlocked(null);
-      toast('Tarjeta guardada ✓');
+      toast(t('Tarjeta guardada ✓'));
       setAdding(false);
       setCardEl(null);
       setCardState({ complete: false, error: null, empty: true });
@@ -215,7 +217,7 @@ export function CardsPanel() {
     } catch (err) {
       if (err instanceof CardSetupAttemptError) {
         if (err.message === 'card_setup_actor_changed') return;
-        const message = 'No pudimos guardar de forma segura el estado de esta alta. No vamos a enviar otra operación.';
+        const message = t('No pudimos guardar de forma segura el estado de esta alta. No vamos a enviar otra operación.');
         setCardSetupBlocked(message);
         toast(message);
         return;
@@ -229,17 +231,17 @@ export function CardsPanel() {
           cardAttemptRef.current = null;
           setCardRetryStage('none');
         } catch {
-          setCardSetupBlocked('El rechazo fue definitivo, pero no pudimos limpiar el intento local. No vamos a reenviarlo.');
+          setCardSetupBlocked(t('El rechazo fue definitivo, pero no pudimos limpiar el intento local. No vamos a reenviarlo.'));
         }
       } else {
         setCardRetryStage(cardAttemptRef.current?.paymentMethodId ? 'attach' : 'setup');
       }
       toast(
         isServiceUnavailable(failure.status)
-          ? 'El servicio no pudo confirmar la tarjeta. Reintenta esta misma operación; no agregues otra.'
+          ? t('El servicio no pudo confirmar la tarjeta. Reintenta esta misma operación; no agregues otra.')
           : definitive
-            ? 'No pudimos guardar la tarjeta. Revisa los datos y prueba de nuevo.'
-            : 'No pudimos confirmar si la tarjeta se guardó. Reintenta la misma operación: no vamos a crear otra.',
+            ? t('No pudimos guardar la tarjeta. Revisa los datos y prueba de nuevo.')
+            : t('No pudimos confirmar si la tarjeta se guardó. Reintenta la misma operación: no vamos a crear otra.'),
       );
     } finally {
       addCardInFlightRef.current.leave();
@@ -249,15 +251,15 @@ export function CardsPanel() {
 
   return (
     <>
-      {pms === null && <div className="loading">Cargando tarjetas…</div>}
+      {pms === null && <div className="loading">{t('Cargando tarjetas…')}</div>}
 
       {/* Vacío REAL: sin borde, y con su acción. Es el único estado del sistema
           que no lleva borde. */}
       {pms?.length === 0 && !adding && (
         <div className="mesa-empty">
-          <div className="mesa-empty-title">Todavía no guardaste ninguna tarjeta.</div>
+          <div className="mesa-empty-title">{t('Todavía no guardaste ninguna tarjeta.')}</div>
           <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setAdding(true)}>
-            Agregar tarjeta
+            {t('Agregar tarjeta')}
           </button>
         </div>
       )}
@@ -279,7 +281,7 @@ export function CardsPanel() {
                 <span className="pm-last">···· {pm.last_four}</span>
               </div>
               <div className="pm-meta">
-                {pm.type === 'credit' ? 'Crédito' : 'Débito'}
+                {pm.type === 'credit' ? t('Crédito') : t('Débito')}
                 {vto ? ` · Vence ${vto}` : ''}
               </div>
               {/* Badge y acción van DEBAJO, no al costado, y los dos en el
@@ -289,10 +291,10 @@ export function CardsPanel() {
                   además evita que la fila salte de alto al hacer principal. */}
               <div className="pm-state">
                 {pm.is_default ? (
-                  <span className="badge badge-teal">Principal</span>
+                  <span className="badge badge-teal">{t('Principal')}</span>
                 ) : (
                   <button type="button" className="pm-default" onClick={() => setDefault(pm.id)}>
-                    Hacer principal
+                    {t('Hacer principal')}
                   </button>
                 )}
               </div>
@@ -300,7 +302,7 @@ export function CardsPanel() {
             <button
               className="back-btn"
               style={{ width: 30, height: 30, fontSize: 'var(--fs-legacy-base)' }}
-              aria-label={`Quitar tarjeta ${pm.last_four}`}
+              aria-label={t('Quitar tarjeta {0}', pm.last_four)}
               onClick={() => removePm(pm)}
             >
               ✕
@@ -311,12 +313,12 @@ export function CardsPanel() {
 
       {adding ? (
         <div className="card card-p" style={{ marginTop: 6 }}>
-          <div className="sectlabel">Nueva tarjeta</div>
+          <div className="sectlabel">{t('Nueva tarjeta')}</div>
           {cardRetryStage !== 'none' && (
             <div className="note note-orange" style={{ marginBottom: 12 }} role="status">
               {cardRetryStage === 'attach'
-                ? 'Esta tarjeta quedó sin confirmar. Reintenta la misma operación: conservamos el mismo registro y no vamos a generar otra.'
-                : 'Esta alta quedó sin confirmar. Reintenta la misma operación: conservamos su clave.'}
+                ? t('Esta tarjeta quedó sin confirmar. Reintenta la misma operación: conservamos el mismo registro y no vamos a generar otra.')
+                : t('Esta alta quedó sin confirmar. Reintenta la misma operación: conservamos su clave.')}
             </div>
           )}
           {cardSetupBlocked && (
@@ -326,11 +328,11 @@ export function CardsPanel() {
           )}
           {cardRetryStage === 'attach' ? (
             <div className="caption" style={{ marginBottom: 12 }}>
-              La tarjeta ya fue materializada por Stripe. Solo reintentaremos registrar esa misma referencia.
+              {t('La tarjeta ya fue materializada por Stripe. Solo reintentaremos registrar esa misma referencia.')}
             </div>
           ) : IS_MOCK ? (
             <div className="note note-teal" style={{ marginBottom: 12 }}>
-              En la demo no pedimos datos reales: se agrega una tarjeta de ejemplo.
+              {t('En la demo no pedimos datos reales: se agrega una tarjeta de ejemplo.')}
             </div>
           ) : (
             <>
@@ -341,7 +343,7 @@ export function CardsPanel() {
                 </div>
               )}
               <div className="caption" style={{ marginBottom: 12 }}>
-                Los datos van directo a Stripe: PayMe nunca ve el número completo.
+                {t('Los datos van directo a Stripe: PayMe nunca ve el número completo.')}
               </div>
             </>
           )}
@@ -353,7 +355,7 @@ export function CardsPanel() {
                 setCardEl(null);
               }}
             >
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button
               className="btn btn-primary btn-sm"
@@ -361,10 +363,10 @@ export function CardsPanel() {
               disabled={!!cardSetupBlocked || busyCard || (!IS_MOCK && cardRetryStage !== 'attach' && !cardState.complete)}
             >
               {busyCard
-                ? 'Guardando…'
+                ? t('Guardando…')
                 : cardRetryStage === 'attach'
-                  ? 'Reintentar la misma tarjeta'
-                  : 'Guardar tarjeta'}
+                  ? t('Reintentar la misma tarjeta')
+                  : t('Guardar tarjeta')}
             </button>
           </div>
         </div>
@@ -376,7 +378,7 @@ export function CardsPanel() {
              lleva el `+` y la palabra, nunca un ícono solo. */
           <button type="button" className="pm-add" onClick={() => setAdding(true)}>
             <Icon name="plus" size={18} />
-            Agregar tarjeta
+            {t('Agregar tarjeta')}
           </button>
         )
       )}

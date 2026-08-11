@@ -62,14 +62,27 @@ export function countdownLong(isoDate: string, now: Date = new Date()): LongCoun
  * solicitud saliente ya no muestra a quién y la antigüedad es lo único que le
  * queda al usuario para distinguirlas.
  */
-export function relTime(isoDate: string, now: Date = new Date()): string {
+export function relTime(
+  isoDate: string,
+  now: Date = new Date(),
+  /**
+   * 🔴 Con `t`, porque esto devolvía la frase YA INTERPOLADA —«hace 2 h»— y las
+   * claves son PLANTILLAS. Lo encontró el barrido de la pantalla en inglés: la
+   * fila decía «Table PA-4520 · hace 2 h», mitad y mitad.
+   *
+   * Default con interpolación: reproduce el comportamiento viejo exacto, así
+   * los tests de esta función pura no cambian.
+   */
+  t: (s: string, ...a: unknown[]) => string =
+    (s, ...a) => s.replace(/\{0\}/g, String(a[0])),
+): string {
   const mins = Math.floor((now.getTime() - new Date(isoDate).getTime()) / 60_000);
-  if (mins < 1) return 'recién';
-  if (mins < 60) return `hace ${mins} min`;
+  if (mins < 1) return t('recién');
+  if (mins < 60) return t('hace {0} min', mins);
   const hs = Math.floor(mins / 60);
-  if (hs < 24) return `hace ${hs} h`;
+  if (hs < 24) return t('hace {0} h', hs);
   const days = Math.floor(hs / 24);
-  return days === 1 ? 'ayer' : `hace ${days} días`;
+  return days === 1 ? t('ayer') : t('hace {0} días', days);
 }
 
 /** Normaliza para búsqueda: sin acentos y en minúsculas ("José" → "jose"). */

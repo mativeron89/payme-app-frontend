@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import type { AppNotification } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -76,6 +77,7 @@ const NOTIF_ICON: Record<string, IconName> = {
 };
 
 export function AvisosScreen() {
+  const { t } = useIdioma();
   const toast = useToast();
   const { session } = useAuth();
   const [notifs, setNotifs] = useState<AppNotification[] | null>(null);
@@ -98,7 +100,7 @@ export function AvisosScreen() {
     setBusyId(inv.id);
     try {
       await api.acceptInvitation(inv.id);
-      toast('Te sumaste a la mesa ✓');
+      toast(t('Te sumaste a la mesa ✓'));
       // Sin código no se navega a ciegas: se recarga y la lista se corrige
       // sola. Sólo llega acá una fila `admite`, que en el contrato trae code.
       if (inv.mesaCode) navigate('mesa', inv.mesaCode);
@@ -108,7 +110,7 @@ export function AvisosScreen() {
       // la mesa murió en el medio. El 410 tiene copy propia (Diseño) — el
       // genérico diría "no pudimos" cuando lo que pasó es "ya no hay dónde".
       const { status } = extractApiError(err);
-      toast(status === 410 ? 'Esta mesa ya cerró.' : 'No pudimos aceptar la invitación');
+      toast(status === 410 ? t('Esta mesa ya cerró.') : t('No pudimos aceptar la invitación'));
       load();
     } finally {
       setBusyId(null);
@@ -120,7 +122,7 @@ export function AvisosScreen() {
       await api.markAllNotificationsRead();
       load();
     } catch {
-      toast('No se pudo marcar como leído');
+      toast(t('No se pudo marcar como leído'));
     }
   }
 
@@ -134,14 +136,14 @@ export function AvisosScreen() {
       <div className="avisos-actions">
         {hasUnread && (
           <button type="button" className="linkbtn" onClick={markAll}>
-            Marcar leídos
+            {t('Marcar leídos')}
           </button>
         )}
       </div>
       <div className="scroll flow-scroll">
         {invitations.length > 0 && (
           <>
-            <h2 className="sectlabel">Te invitaron</h2>
+            <h2 className="sectlabel">{t('Te invitaron')}</h2>
             {invitations.map((inv) => (
               /**
                * v2.45.0 · el listado MARCA, no filtra: `mesa_joinable` lo
@@ -172,11 +174,11 @@ export function AvisosScreen() {
                         una invitación a medias se muestra genérica, no se
                         pinta "undefined te invitó a undefined". */}
                     <div className="inv-l1">
-                      {inv.invitador ? `${inv.invitador} te invitó a` : 'Te invitaron a una mesa'}
+                      {inv.invitador ? t('{0} te invitó a', inv.invitador) : t('Te invitaron a una mesa')}
                     </div>
                     {inv.restaurante && <div className="inv-l2">{inv.restaurante}</div>}
-                    {metaInvitacion(inv, relTime) && (
-                      <div className="inv-meta">{metaInvitacion(inv, relTime)}</div>
+                    {metaInvitacion(inv, (iso) => relTime(iso, undefined, t), t) && (
+                      <div className="inv-meta">{metaInvitacion(inv, (iso) => relTime(iso, undefined, t), t)}</div>
                     )}
                   </div>
                 </div>
@@ -201,7 +203,7 @@ export function AvisosScreen() {
                       onClick={() => accept(inv)}
                       disabled={busyId === inv.id}
                     >
-                      {busyId === inv.id ? 'Sumándote…' : 'Sumarme'}
+                      {busyId === inv.id ? t('Sumándote…') : t('Sumarme')}
                     </button>
                   )}
                 </div>
@@ -210,12 +212,12 @@ export function AvisosScreen() {
           </>
         )}
 
-        <h2 className="sectlabel">Notificaciones</h2>
-        {notifs === null && <div className="loading">Cargando avisos…</div>}
+        <h2 className="sectlabel">{t('Notificaciones')}</h2>
+        {notifs === null && <div className="loading">{t('Cargando avisos…')}</div>}
         {notifs?.length === 0 && invitations.length === 0 && (
           <div className="empty aviso-empty">
             <div className="emoji"><Icon name="bell" size={40} /></div>
-            No tienes avisos.
+            {t('No tienes avisos.')}
           </div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -226,13 +228,13 @@ export function AvisosScreen() {
                 <span
                   className={`aviso-dot ${sinLeer ? '' : 'off'}`}
                   aria-hidden={sinLeer ? undefined : 'true'}
-                  aria-label={sinLeer ? 'Sin leer' : undefined}
+                  aria-label={sinLeer ? t('Sin leer') : undefined}
                   role={sinLeer ? 'img' : undefined}
                 />
                 <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className={`aviso-title ${sinLeer ? 'unread' : ''}`}>{n.body}</div>
-                  <div className="aviso-time">{relTime(n.created_at)}</div>
+                  <div className="aviso-time">{relTime(n.created_at, undefined, t)}</div>
                 </div>
               </div>
             );

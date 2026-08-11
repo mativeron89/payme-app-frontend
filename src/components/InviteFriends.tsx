@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useIdioma } from '../i18n/idioma';
 import { api, newIdempotencyKey } from '../api';
 import { extractApiError } from '../api/errors';
 import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
@@ -45,6 +46,7 @@ interface Invitable {
 }
 
 export function InviteFriends({ code }: { code: string }) {
+  const { t } = useIdioma();
   const toast = useToast();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -107,12 +109,12 @@ export function InviteFriends({ code }: { code: string }) {
       if (invitation.invitation.status === 'expired') {
         invitationKeysRef.current.delete(operation);
         sentRef.current.delete(f.payme_id);
-        toast(`La invitación anterior a ${f.first_name} venció. Toca de nuevo para generar otra.`);
+        toast(t('La invitación anterior a {0} venció. Toca de nuevo para generar otra.', f.first_name));
         return;
       }
       invitationKeysRef.current.delete(operation);
       setInvited((s) => new Set(s).add(f.payme_id));
-      toast(`Invitación enviada a ${f.first_name} ✓`);
+      toast(t('Invitación enviada a {0} ✓', f.first_name));
     } catch (err) {
       const failure = extractApiError(err);
       const definitive = isDefinitiveMutationError(failure.code, failure.status);
@@ -120,12 +122,12 @@ export function InviteFriends({ code }: { code: string }) {
       sentRef.current.delete(f.payme_id);
       toast(
         failure.code === 'mesa_not_invitable'
-          ? 'La mesa ya no acepta invitados'
+          ? t('La mesa ya no acepta invitados')
           : isServiceUnavailable(failure.status)
-            ? `El servicio no pudo confirmar la invitación a ${f.first_name}. Reintenta esta misma invitación; no generes otra.`
+            ? t('El servicio no pudo confirmar la invitación a {0}. Reintenta esta misma invitación; no generes otra.', f.first_name)
             : definitive
-              ? `No pudimos invitar a ${f.first_name}`
-              : `No pudimos confirmar la invitación a ${f.first_name}. Reintenta la misma: vamos a reutilizarla.`,
+              ? t('No pudimos invitar a {0}', f.first_name)
+              : t('No pudimos confirmar la invitación a {0}. Reintenta la misma: vamos a reutilizarla.', f.first_name),
       );
     } finally {
       setBusy((s) => {
@@ -161,7 +163,7 @@ export function InviteFriends({ code }: { code: string }) {
           id: m.id,
           payme_id: m.payme_id,
           first_name: m.first_name,
-          full_name: `${m.first_name} ${m.last_name}`.trim(),
+          full_name: t('{0} {1}', m.first_name, m.last_name).trim(),
         })),
       }));
     } catch {
@@ -189,7 +191,7 @@ export function InviteFriends({ code }: { code: string }) {
           disabled={done || busy.has(f.payme_id)}
           onClick={() => void invite(f)}
         >
-          {done ? 'Invitado ✓' : busy.has(f.payme_id) ? 'Enviando…' : 'Invitar'}
+          {done ? t('Invitado ✓') : busy.has(f.payme_id) ? t('Enviando…') : t('Invitar')}
         </button>
       </div>
     );
@@ -202,14 +204,14 @@ export function InviteFriends({ code }: { code: string }) {
           <div className="state-error-row">
             <Icon name="x-circle" size={22} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="state-error-title">No pudimos cargar tus contactos</div>
+              <div className="state-error-title">{t('No pudimos cargar tus contactos')}</div>
               <p className="state-error-body">
-                Puedes compartir el link igual mientras tanto.
+                {t('Puedes compartir el link igual mientras tanto.')}
               </p>
             </div>
           </div>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTick((t) => t + 1)}>
-            Reintentar
+            {t('Reintentar')}
           </button>
         </div>
       </div>
@@ -220,13 +222,13 @@ export function InviteFriends({ code }: { code: string }) {
 
   return (
     <div className="inv-panel">
-      <h2 className="sectlabel">Invitar</h2>
+      <h2 className="sectlabel">{t('Invitar')}</h2>
       <input
         className="input"
-        placeholder="Buscar por nombre o ID"
+        placeholder={t('Buscar por nombre o ID')}
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        aria-label="Buscar contactos para invitar"
+        aria-label={t('Buscar contactos para invitar')}
       />
       {shown.length > 0 && <div className="inv-list">{shown.map((f) => fila(f, f.id))}</div>}
       {q.trim() && shown.length === 0 && (
@@ -235,7 +237,7 @@ export function InviteFriends({ code }: { code: string }) {
 
       {groups.length > 0 && (
         <>
-          <h2 className="sectlabel inv-groups-label">O invita a un grupo</h2>
+          <h2 className="sectlabel inv-groups-label">{t('O invita a un grupo')}</h2>
           {/* Lista VERTICAL, no burbujas lado a lado: con más de dos grupos no
               entran en una fila. */}
           <div className="inv-list">
@@ -258,7 +260,7 @@ export function InviteFriends({ code }: { code: string }) {
                     <div className="fr-name">
                       <div className="n">{g.name}</div>
                       <div className="id">
-                        {g.member_count} {g.member_count === 1 ? 'integrante' : 'integrantes'}
+                        {g.member_count} {g.member_count === 1 ? t('integrante') : t('integrantes')}
                       </div>
                     </div>
                     <span className={`inv-chevron ${abierto ? 'on' : ''}`} aria-hidden="true">
@@ -267,16 +269,16 @@ export function InviteFriends({ code }: { code: string }) {
                   </button>
                   {abierto && (
                     <div className="inv-members">
-                      {loadingGroup === g.id && <p className="inv-none">Cargando integrantes…</p>}
+                      {loadingGroup === g.id && <p className="inv-none">{t('Cargando integrantes…')}</p>}
                       {groupError === g.id && (
                         <p className="inv-none">
-                          No pudimos abrir el grupo.{' '}
+                          {t('No pudimos abrir el grupo.')}{' '}
                           <button type="button" className="linkbtn" onClick={() => void toggleGroup(g)}>
-                            Reintentar
+                            {t('Reintentar')}
                           </button>
                         </p>
                       )}
-                      {gente?.length === 0 && <p className="inv-none">Este grupo no tiene integrantes.</p>}
+                      {gente?.length === 0 && <p className="inv-none">{t('Este grupo no tiene integrantes.')}</p>}
                       {gente?.map((m) => fila(m, `${g.id}::${m.payme_id}`))}
                     </div>
                   )}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useIdioma } from '../i18n/idioma';
 import { api, IS_MOCK } from '../api';
 import type { HistoryEntry } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -33,13 +34,13 @@ const FRANJA_ICON: Record<Franja, IconName> = {
   noche: 'moon',
 };
 
-function fechaDeFila(iso: string): string {
+function fechaDeFila(iso: string, locale: string, t: (s: string, ...a: unknown[]) => string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   const diffDays = Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60_000));
-  if (diffDays === 0) return 'Hoy';
-  if (diffDays === 1) return 'Ayer';
-  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+  if (diffDays === 0) return t('Hoy');
+  if (diffDays === 1) return t('Ayer');
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
 /**
@@ -61,6 +62,7 @@ function fechaDeFila(iso: string): string {
  * `SISTEMA_DISENO.md` §5. Nunca un mock que aparente funcionar.
  */
 export function MesasScreen() {
+  const { t, locale } = useIdioma();
   const { session } = useAuth();
   const [pagos, setPagos] = useState<HistoryEntry[] | null>(null);
   const [fallo, setFallo] = useState(false);
@@ -96,7 +98,7 @@ export function MesasScreen() {
   }, []);
 
   const cerradas = pagos ? mesasCerradas(pagos) : null;
-  const grupos = cerradas ? agruparPorMes(cerradas) : [];
+  const grupos = cerradas ? agruparPorMes(cerradas, locale) : [];
 
   return (
     <div className="screen has-appbar">
@@ -112,7 +114,7 @@ export function MesasScreen() {
             (se probó, §1.10). --fs-h2 es el tamaño más cercano de la escala
             de seis, no un séptimo de contrabando. */}
         <div className="hist-pill-wrap">
-          <h1 className="hist-pill">Historial</h1>
+          <h1 className="hist-pill">{t('Historial')}</h1>
         </div>
 
         {fallo && !pagos ? (
@@ -120,16 +122,16 @@ export function MesasScreen() {
             <div className="state-error-row">
               <Icon name="x-circle" size={22} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="state-error-title">No pudimos cargar tu historial</div>
-                <p className="state-error-body">Revisa la conexión y prueba de nuevo.</p>
+                <div className="state-error-title">{t('No pudimos cargar tu historial')}</div>
+                <p className="state-error-body">{t('Revisa la conexión y prueba de nuevo.')}</p>
               </div>
             </div>
             <button type="button" className="btn btn-ghost btn-sm" onClick={cargarHistorial}>
-              Reintentar
+              {t('Reintentar')}
             </button>
           </div>
         ) : cerradas === null ? (
-          <div aria-busy="true" aria-label="Cargando tu historial">
+          <div aria-busy="true" aria-label={t('Cargando tu historial')}>
             {[0, 1, 2].map((i) => (
               <div key={i} className="pago-row sk">
                 <span className="sk-line w55" />
@@ -140,7 +142,7 @@ export function MesasScreen() {
         ) : cerradas.length === 0 ? (
           /* Vacío REAL: sin borde, único estado del sistema que no lo lleva. */
           <div className="mesa-empty">
-            <div className="mesa-empty-title">Todavía no cerraste ninguna mesa.</div>
+            <div className="mesa-empty-title">{t('Todavía no cerraste ninguna mesa.')}</div>
           </div>
         ) : (
           <>
@@ -164,11 +166,11 @@ export function MesasScreen() {
                         <div className="hist-main">
                           <div className="hist-rest">{m.restaurant}</div>
                           <div className="hist-meta">
-                            {fechaDeFila(m.date)}
+                            {fechaDeFila(m.date, locale, t)}
                             {franja && (
                               <>
                                 {' · '}
-                                {FRANJA_LABEL[franja]}{' '}
+                                {t(FRANJA_LABEL[franja])}{' '}
                                 <Icon
                                   name={FRANJA_ICON[franja]}
                                   size={14}
@@ -191,11 +193,10 @@ export function MesasScreen() {
                           <Icon name="help" size={20} />
                           <div>
                             <div className="state-unknown-title">
-                              El detalle de esta mesa todavía no está disponible
+                              {t('El detalle de esta mesa todavía no está disponible')}
                             </div>
                             <p className="state-unknown-body">
-                              No podemos confirmar que sea seguro de mostrar. Lo que pagaste tú
-                              es el monto de esta fila.
+                              {t('No podemos confirmar que sea seguro de mostrar. Lo que pagaste tú es el monto de esta fila.')}
                             </p>
                           </div>
                         </div>
@@ -211,14 +212,13 @@ export function MesasScreen() {
 
         {IS_MOCK && (
           <div className="note note-amber" style={{ marginTop: 14 }}>
-            <b>Atajo de demo:</b> mira cómo queda una mesa que venció sin que todos pagaran y la
-            garantía cubrió el faltante.
+            <b>{t('Atajo de demo:')}</b> {t('mira cómo queda una mesa que venció sin que todos pagaran y la garantía cubrió el faltante.')}
             <button
               className="btn btn-ghost btn-sm"
               style={{ marginTop: 10 }}
               onClick={() => navigate('mesa', 'PA-1099')}
             >
-              Ver mesa vencida (ejemplo) →
+              {t('Ver mesa vencida (ejemplo) →')}
             </button>
           </div>
         )}

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import { useIdioma } from '../i18n/idioma';
 
 /** Piezas chicas compartidas: top bar, toast y avatar con color estable. */
 
@@ -22,12 +23,13 @@ export function TopBar({
   right?: ReactNode;
   backLabel?: string;
 }) {
+  const { t } = useIdioma();
   // El cabezal SIEMPRE lleva el logo PayMe (pedido de Mati); el título de la
   // pantalla lo acompaña en gris.
   return (
     <div className="top-bar">
       {onBack && (
-        <button className="back-btn" onClick={onBack} aria-label={backLabel}>
+        <button className="back-btn" onClick={onBack} aria-label={t(backLabel)}>
           <span aria-hidden="true">←</span>
         </button>
       )}
@@ -55,13 +57,14 @@ export function TopBar({
 
 /** Chip de marca de tarjeta: VISA en texto, Mastercard con sus círculos. */
 export function CardBrandChip({ brand }: { brand: string }) {
+  const { t } = useIdioma();
   const b = brand.toLowerCase();
   if (b === 'mastercard') {
     return <div className="cc visa mc" aria-hidden="true" />;
   }
   return (
     <div className="cc visa" aria-hidden="true">
-      {b === 'visa' ? 'VISA' : brand.toUpperCase().slice(0, 4)}
+      {b === 'visa' ? t('VISA') : brand.toUpperCase().slice(0, 4)}
     </div>
   );
 }

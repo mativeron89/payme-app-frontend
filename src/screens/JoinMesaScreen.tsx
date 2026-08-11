@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import { useAuth } from '../auth/AuthContext';
@@ -85,6 +86,7 @@ function salirAMisItems(mesaCode: string): void {
 }
 
 export function JoinMesaScreen({ code, token }: { code: string; token: string }) {
+  const { t } = useIdioma();
   const { session } = useAuth();
   const [outcome, setOutcome] = useState<JoinLinkOutcome>('joining');
   /**
@@ -234,7 +236,7 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
             <Icon name="check" size={38} />
           </div>
           <div>
-            <div className="link-ok-title">¡Te sumaste a la mesa!</div>
+            <div className="link-ok-title">{t('¡Te sumaste a la mesa!')}</div>
             {/* Sin el código de mesa: no aporta nada en el momento de celebrar. */}
             {restaurant && <div className="link-ok-sub">{restaurant}</div>}
           </div>
@@ -244,7 +246,7 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
             type="button"
             className="link-round"
             onClick={() => salirAMisItems(joined)}
-            aria-label="Ver mis ítems"
+            aria-label={t('Ver mis ítems')}
           >
             <Icon name="arrow-right" size={24} />
           </button>
@@ -268,9 +270,9 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
           <div className="join-banner">
             <Icon name="sushi" size={22} />
             <div>
-              <div className="join-banner-title">Te invitaron a una mesa</div>
+              <div className="join-banner-title">{t('Te invitaron a una mesa')}</div>
               <div className="caption">
-                Crea tu cuenta o entra para sumarte y pagar tu parte.
+                {t('Crea tu cuenta o entra para sumarte y pagar tu parte.')}
               </div>
             </div>
           </div>
@@ -283,12 +285,12 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
         <AppHeader compact />
         <div className="link-mid">
           <div className="link-bubble">
-            <div className="link-bubble-title">Te invitaron a una mesa</div>
+            <div className="link-bubble-title">{t('Te invitaron a una mesa')}</div>
           </div>
         </div>
         <div className="link-foot">
           <p className="link-foot-copy">
-            Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe
+            {t('Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe')}
           </p>
           {/* Único elemento naranja de la pantalla, con el texto en navy. */}
           <button
@@ -296,14 +298,14 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
             className="link-btn link-btn-brand"
             onClick={() => setAuthMode('register')}
           >
-            Crear cuenta gratis
+            {t('Crear cuenta gratis')}
           </button>
           <button
             type="button"
             className="link-btn link-btn-outline"
             onClick={() => setAuthMode('login')}
           >
-            Ya tengo cuenta · Entrar
+            {t('Ya tengo cuenta · Entrar')}
           </button>
         </div>
       </div>
@@ -331,7 +333,7 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
             className="link-btn link-btn-outline"
             onClick={() => setAttempt((n) => n + 1)}
           >
-            Reintentar
+            {t('Reintentar')}
           </button>
         )}
         {/**
@@ -345,7 +347,7 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
             type="button"
             className="link-round"
             onClick={() => navigate('home')}
-            aria-label="Ir a PayMe"
+            aria-label={t('Ir a PayMe')}
           >
             <Icon name="arrow-right" size={24} />
           </button>

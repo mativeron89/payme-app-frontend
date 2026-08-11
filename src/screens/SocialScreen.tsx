@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import type { Friend, Group, GroupDetailResponse } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -60,6 +61,7 @@ function alfabetico(a: string, b: string): number {
 const ICONOS_GRUPO = ['👨‍👩‍👧', '💼', '🎉', '⚽', '🎓', '🏠', '✈️', '🍕'];
 
 export function SocialScreen() {
+  const { t } = useIdioma();
   const { session } = useAuth();
   // OLA 5D · el atajo "transferir" es riel saldo: lo habilita el BACKEND.
   const { walletRailEnabled } = useWalletRail();
@@ -127,15 +129,15 @@ export function SocialScreen() {
       else if (action === 'reject') await api.rejectFriendRequest(requestId);
       else await api.cancelFriendRequest(requestId);
       toast(
-        action === 'accept' ? `Ahora son amigos con ${quien} ✓`
-          : action === 'reject' ? 'Solicitud rechazada'
-            : 'Solicitud cancelada',
+        action === 'accept' ? t('Ahora son amigos con {0} ✓', quien)
+          : action === 'reject' ? t('Solicitud rechazada')
+            : t('Solicitud cancelada'),
       );
       loadFriends();
       loadRequests();
     } catch {
       // 404 = la solicitud ya no está (la resolvieron del otro lado o venció).
-      toast('Esa solicitud ya no está disponible');
+      toast(t('Esa solicitud ya no está disponible'));
       loadRequests();
     } finally {
       setReqBusy(null);
@@ -143,14 +145,14 @@ export function SocialScreen() {
   }
 
   async function block(userId: string, quien: string) {
-    if (!window.confirm(`¿Bloquear a ${quien}? Se rompe la amistad y no van a poder mandarse solicitudes.`)) return;
+    if (!window.confirm(t('¿Bloquear a {0}? Se rompe la amistad y no van a poder mandarse solicitudes.', quien))) return;
     try {
       await api.blockUser(userId);
-      toast(`${quien} quedó bloqueado`);
+      toast(t('{0} quedó bloqueado', quien));
       loadFriends();
       loadRequests();
     } catch {
-      toast('No pudimos bloquear a esa persona');
+      toast(t('No pudimos bloquear a esa persona'));
     }
   }
 
@@ -163,7 +165,7 @@ export function SocialScreen() {
       // C1/C2: el backend responde 202 igual exista o no la persona. La app NO
       // puede decir "no encontramos a nadie": esa respuesta era un oráculo para
       // descubrir cuentas probando correos. El copy no afirma nada del otro.
-      toast('Si tiene PayMe, le va a llegar tu solicitud');
+      toast(t('Si tiene PayMe, le va a llegar tu solicitud'));
       setNewQuery('');
       setAdding(false);
       // ⚠️ A propósito NO se recarga la lista acá. Recargar contestaba, medio
@@ -171,7 +173,7 @@ export function SocialScreen() {
       // a contestar: aparecía una fila nueva si la cuenta existía y ninguna si
       // no. La solicitud se ve al volver a entrar.
     } catch {
-      toast('No pudimos enviar la solicitud. Prueba de nuevo.');
+      toast(t('No pudimos enviar la solicitud. Prueba de nuevo.'));
     } finally {
       setBusy(false);
     }
@@ -182,13 +184,13 @@ export function SocialScreen() {
     setGroupBusy(true);
     try {
       await api.createGroup(newName.trim(), newIcon);
-      toast('Grupo creado ✓');
+      toast(t('Grupo creado ✓'));
       setNewName('');
       setNewIcon(ICONOS_GRUPO[0]!);
       setCreating(false);
       loadGroups();
     } catch {
-      toast('No pudimos crear el grupo');
+      toast(t('No pudimos crear el grupo'));
     } finally {
       setGroupBusy(false);
     }
@@ -219,9 +221,9 @@ export function SocialScreen() {
   const pendientes = incoming.length;
 
   const TABS: BubbleTab[] = [
-    { id: 'amigos', label: 'Amigos' },
-    { id: 'grupos', label: 'Grupos' },
-    { id: 'solicitudes', label: 'Solicitudes', badge: pendientes },
+    { id: 'amigos', label: t('Amigos') },
+    { id: 'grupos', label: t('Grupos') },
+    { id: 'solicitudes', label: t('Solicitudes'), badge: pendientes },
   ];
 
   // ─── Detalle de un grupo ───
@@ -232,20 +234,20 @@ export function SocialScreen() {
     return (
       <div className="screen has-appbar">
         <AppHeaderBack
-          title={`${detail.group.icon} ${detail.group.name}`}
+          title={t('{0} {1}', detail.group.icon, detail.group.name)}
           onBack={() => setDetail(null)}
         />
         {/* Longhands: el shorthand inline pisa el `padding-bottom` de
             `.has-appbar .scroll` y "Eliminar grupo" queda abajo de la barra. */}
         <div className="scroll" style={{ paddingTop: 14, paddingLeft: 16, paddingRight: 16 }}>
-          <div className="sectlabel">Miembros ({detail.members.length})</div>
+          <div className="sectlabel">{t('Miembros (')}{detail.members.length})</div>
           <div className="card" style={{ marginBottom: 16 }}>
             {detail.members.length === 0 && (
-              <div className="empty" style={{ padding: 18 }}>Sin miembros todavía.</div>
+              <div className="empty" style={{ padding: 18 }}>{t('Sin miembros todavía.')}</div>
             )}
             {detail.members.map((m) => (
               <div key={m.id} className="friend-row" style={{ cursor: 'default' }}>
-                <Avatar name={`${m.first_name} ${m.last_name}`} />
+                <Avatar name={t('{0} {1}', m.first_name, m.last_name)} />
                 <div className="fr-name">
                   <div className="n">
                     {m.first_name} {m.last_name}
@@ -255,14 +257,14 @@ export function SocialScreen() {
                 <button
                   className="back-btn"
                   style={{ width: 30, height: 30, fontSize: 'var(--fs-legacy-sm)' }}
-                  aria-label={`Quitar a ${m.first_name} del grupo`}
+                  aria-label={t('Quitar a {0} del grupo', m.first_name)}
                   onClick={async () => {
                     try {
                       await api.removeGroupMember(detail.group.id, m.id);
                       setDetail(await api.getGroup(detail.group.id));
                       loadGroups();
                     } catch {
-                      toast('No se pudo quitar');
+                      toast(t('No se pudo quitar'));
                     }
                   }}
                 >
@@ -273,7 +275,7 @@ export function SocialScreen() {
           </div>
           {addable.length > 0 && (
             <>
-              <div className="sectlabel">Agregar del listado de amigos</div>
+              <div className="sectlabel">{t('Agregar del listado de amigos')}</div>
               <div className="card" style={{ marginBottom: 16 }}>
                 {addable.map((f) => (
                   <button
@@ -285,7 +287,7 @@ export function SocialScreen() {
                         setDetail(await api.getGroup(detail.group.id));
                         loadGroups();
                       } catch {
-                        toast('No se pudo agregar');
+                        toast(t('No se pudo agregar'));
                       }
                     }}
                   >
@@ -294,7 +296,7 @@ export function SocialScreen() {
                       <div className="n">{f.full_name}</div>
                       <div className="id">{f.payme_id}</div>
                     </div>
-                    <span className="badge badge-teal">+ sumar</span>
+                    <span className="badge badge-teal">{t('+ sumar')}</span>
                   </button>
                 ))}
               </div>
@@ -303,18 +305,18 @@ export function SocialScreen() {
           <button
             className="btn btn-ghost"
             onClick={async () => {
-              if (!window.confirm(`¿Eliminar el grupo "${detail.group.name}"?`)) return;
+              if (!window.confirm(t('¿Eliminar el grupo "{0}"?', detail.group.name))) return;
               try {
                 await api.deleteGroup(detail.group.id);
-                toast('Grupo eliminado');
+                toast(t('Grupo eliminado'));
                 setDetail(null);
                 loadGroups();
               } catch {
-                toast('No se pudo eliminar');
+                toast(t('No se pudo eliminar'));
               }
             }}
           >
-            <Icon name="trash" size={16} className="ico-inline" /> Eliminar grupo
+            <Icon name="trash" size={16} className="ico-inline" /> {t('Eliminar grupo')}
           </button>
         </div>
         {/* El detalle TAMBIÉN la lleva: que tenga flecha de volver no alcanza,
@@ -342,13 +344,13 @@ export function SocialScreen() {
                "Buscar amigo" al lado y se sacó: la búsqueda vive siempre
                visible en su propia burbuja, acá abajo. */
             <div className="launch-stack">
-              <Launcher icon="users" label="Nuevo amigo" onClick={() => setAdding(true)} />
+              <Launcher icon="users" label={t('Nuevo amigo')} onClick={() => setAdding(true)} />
             </div>
           )}
 
           {tab === 'grupos' && (
             <div className="launch-stack">
-              <Launcher icon="users-group" label="Nuevo grupo" onClick={() => setCreating(true)} />
+              <Launcher icon="users-group" label={t('Nuevo grupo')} onClick={() => setCreating(true)} />
             </div>
           )}
 
@@ -370,10 +372,10 @@ export function SocialScreen() {
           <div className="social-list">
             {adding && (
               <div className="card card-p" style={{ marginBottom: 12 }}>
-                <div className="sectlabel">Agregar amigo</div>
+                <div className="sectlabel">{t('Agregar amigo')}</div>
                 <input
                   className="input"
-                  placeholder="Email o ID PayMe (payme_mx_xxxx)"
+                  placeholder={t('Email o ID PayMe (payme_mx_xxxx)')}
                   value={newQuery}
                   onChange={(e) => setNewQuery(e.target.value)}
                 />
@@ -383,7 +385,7 @@ export function SocialScreen() {
                     style={{ padding: 12, fontSize: 'var(--fs-legacy-sm)' }}
                     onClick={() => setAdding(false)}
                   >
-                    Cancelar
+                    {t('Cancelar')}
                   </button>
                   <button
                     className="btn btn-primary"
@@ -391,7 +393,7 @@ export function SocialScreen() {
                     onClick={addFriend}
                     disabled={busy || !newQuery.trim()}
                   >
-                    {busy ? 'Buscando…' : 'Agregar'}
+                    {busy ? t('Buscando…') : t('Agregar')}
                   </button>
                 </div>
               </div>
@@ -401,19 +403,19 @@ export function SocialScreen() {
                 <Icon name="search" size={18} aria-hidden="true" />
                 <input
                   className="social-search-input"
-                  placeholder="Buscar entre tus amigos"
-                  aria-label="Buscar entre tus amigos"
+                  placeholder={t('Buscar entre tus amigos')}
+                  aria-label={t('Buscar entre tus amigos')}
                   value={filtroAmigos}
                   onChange={(e) => setFiltroAmigos(e.target.value)}
                 />
               </div>
-              {amigosVisibles === null && <div className="loading">Cargando amigos…</div>}
+              {amigosVisibles === null && <div className="loading">{t('Cargando amigos…')}</div>}
               {amigosVisibles?.length === 0 && (
                 <div className="empty">
                   <div className="emoji"><Icon name="users" size={40} /></div>
                   {friends?.length === 0
-                    ? 'Todavía no agregaste amigos.'
-                    : 'Sin resultados para esa búsqueda.'}
+                    ? t('Todavía no agregaste amigos.')
+                    : t('Sin resultados para esa búsqueda.')}
                 </div>
               )}
               {amigosVisibles?.map((f) => (
@@ -436,15 +438,15 @@ export function SocialScreen() {
                   <button
                     className="back-btn"
                     style={{ width: 30, height: 30, fontSize: 'var(--fs-legacy-sm)' }}
-                    aria-label={`Quitar a ${f.first_name}`}
+                    aria-label={t('Quitar a {0}', f.first_name)}
                     onClick={async () => {
-                      if (!window.confirm(`¿Quitar a ${f.full_name} de tus amigos?`)) return;
+                      if (!window.confirm(t('¿Quitar a {0} de tus amigos?', f.full_name))) return;
                       try {
                         await api.removeFriend(f.id);
-                        toast('Amigo quitado');
+                        toast(t('Amigo quitado'));
                         loadFriends();
                       } catch {
-                        toast('No se pudo quitar');
+                        toast(t('No se pudo quitar'));
                       }
                     }}
                   >
@@ -460,25 +462,25 @@ export function SocialScreen() {
           <div className="social-list">
             {creating && (
               <div className="card card-p" style={{ marginBottom: 12 }}>
-                <div className="sectlabel">Nuevo grupo</div>
+                <div className="sectlabel">{t('Nuevo grupo')}</div>
                 <input
                   className="input"
-                  placeholder="Nombre (Familia, Trabajo…)"
+                  placeholder={t('Nombre (Familia, Trabajo…)')}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   maxLength={100}
                 />
                 {/* §1.9 pide ícono propio por fila. Sin esto el backend le pone
                     su default a todos y la lista entera se ve igual. */}
-                <div className="sectlabel">Ícono</div>
-                <div className="icon-pick" role="radiogroup" aria-label="Ícono del grupo">
+                <div className="sectlabel">{t('Ícono')}</div>
+                <div className="icon-pick" role="radiogroup" aria-label={t('Ícono del grupo')}>
                   {ICONOS_GRUPO.map((ic) => (
                     <button
                       key={ic}
                       type="button"
                       role="radio"
                       aria-checked={ic === newIcon}
-                      aria-label={`Ícono ${ic}`}
+                      aria-label={t('Ícono {0}', ic)}
                       className={`icon-pick-opt ${ic === newIcon ? 'on' : ''}`}
                       onClick={() => setNewIcon(ic)}
                     >
@@ -492,7 +494,7 @@ export function SocialScreen() {
                     style={{ padding: 12, fontSize: 'var(--fs-legacy-sm)' }}
                     onClick={() => setCreating(false)}
                   >
-                    Cancelar
+                    {t('Cancelar')}
                   </button>
                   <button
                     className="btn btn-primary"
@@ -500,7 +502,7 @@ export function SocialScreen() {
                     onClick={createGroup}
                     disabled={groupBusy || !newName.trim()}
                   >
-                    {groupBusy ? 'Creando…' : 'Crear'}
+                    {groupBusy ? t('Creando…') : t('Crear')}
                   </button>
                 </div>
               </div>
@@ -510,19 +512,19 @@ export function SocialScreen() {
                 <Icon name="search" size={18} aria-hidden="true" />
                 <input
                   className="social-search-input"
-                  placeholder="Buscar entre tus grupos"
-                  aria-label="Buscar entre tus grupos"
+                  placeholder={t('Buscar entre tus grupos')}
+                  aria-label={t('Buscar entre tus grupos')}
                   value={filtroGrupos}
                   onChange={(e) => setFiltroGrupos(e.target.value)}
                 />
               </div>
-              {gruposVisibles === null && <div className="loading">Cargando grupos…</div>}
+              {gruposVisibles === null && <div className="loading">{t('Cargando grupos…')}</div>}
               {gruposVisibles?.length === 0 && (
                 <div className="empty">
                   <div className="emoji"><Icon name="users-group" size={40} /></div>
                   {groups?.length === 0
-                    ? 'Crea un grupo para dividir siempre con la misma gente.'
-                    : 'Sin resultados para esa búsqueda.'}
+                    ? t('Crea un grupo para dividir siempre con la misma gente.')
+                    : t('Sin resultados para esa búsqueda.')}
                 </div>
               )}
               {gruposVisibles?.map((g) => (
@@ -530,14 +532,14 @@ export function SocialScreen() {
                   try {
                     setDetail(await api.getGroup(g.id));
                   } catch {
-                    toast('No pudimos abrir el grupo');
+                    toast(t('No pudimos abrir el grupo'));
                   }
                 }}>
                   <div className="group-ico" aria-hidden="true">{g.icon}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 'var(--fs-legacy-base)', fontWeight: 600 }}>{g.name}</div>
                     <div className="caption">
-                      {g.member_count} {g.member_count === 1 ? 'miembro' : 'miembros'}
+                      {g.member_count} {g.member_count === 1 ? t('miembro') : t('miembros')}
                     </div>
                   </div>
                   <span style={{ color: 'var(--gray-b)' }}>→</span>
@@ -587,11 +589,12 @@ function SolicitudesPanel({
   onResolve: (id: string, action: 'accept' | 'reject' | 'cancel', quien?: string) => void;
   onBlock: (userId: string, quien: string) => void;
 }) {
+  const { t } = useIdioma();
   if (incoming.length === 0 && outgoing.length === 0) {
     return (
       <div className="empty" style={{ padding: '28px 18px' }}>
         <div className="emoji"><Icon name="users" size={40} /></div>
-        No tienes solicitudes pendientes.
+        {t('No tienes solicitudes pendientes.')}
       </div>
     );
   }
@@ -600,7 +603,7 @@ function SolicitudesPanel({
     <div className="solicitudes">
       {incoming.length > 0 && (
         <>
-          <div className="sectlabel">Te quieren agregar ({incoming.length})</div>
+          <div className="sectlabel">{t('Te quieren agregar (')}{incoming.length})</div>
           {incoming.map((r) => (
             <div key={r.requestId} className="friend-row with-actions" style={{ cursor: 'default' }}>
               <Avatar name={r.fullName} />
@@ -614,18 +617,18 @@ function SolicitudesPanel({
                   disabled={reqBusy === r.requestId}
                   onClick={() => onResolve(r.requestId, 'accept', r.firstName)}
                 >
-                  Aceptar
+                  {t('Aceptar')}
                 </button>
                 <button
                   className="btn btn-ghost btn-sm btn-fit"
                   disabled={reqBusy === r.requestId}
                   onClick={() => onResolve(r.requestId, 'reject', r.firstName)}
                 >
-                  Rechazar
+                  {t('Rechazar')}
                 </button>
                 <button
                   className="btn btn-ghost btn-sm btn-fit"
-                  aria-label={`Bloquear a ${r.fullName}`}
+                  aria-label={t('Bloquear a {0}', r.fullName)}
                   disabled={reqBusy === r.requestId}
                   onClick={() => onBlock(r.userId, r.firstName)}
                 >
@@ -639,12 +642,12 @@ function SolicitudesPanel({
 
       {outgoing.length > 0 && (
         <>
-          <div className="sectlabel">Enviadas ({outgoing.length})</div>
+          <div className="sectlabel">{t('Enviadas (')}{outgoing.length})</div>
           {/* Sin nombre ni avatar: ver friendRequestsView.ts. Quien todavía no
               aceptó no eligió darse a conocer, y pintarlo acá le entregaba
               nombre y apellido a cualquiera que tipeara su correo. */}
           <div className="caption" style={{ margin: '0 16px 6px' }}>
-            Por privacidad no mostramos a quién hasta que acepte.
+            {t('Por privacidad no mostramos a quién hasta que acepte.')}
           </div>
           {outgoing.map((r) => (
             <div key={r.requestId} className="friend-row" style={{ cursor: 'default' }}>
@@ -656,15 +659,15 @@ function SolicitudesPanel({
                 <Icon name="clock" size={18} />
               </div>
               <div className="fr-name">
-                <div className="n">Solicitud enviada</div>
-                <div className="id">{relTime(r.requestedAt)} · pendiente</div>
+                <div className="n">{t('Solicitud enviada')}</div>
+                <div className="id">{relTime(r.requestedAt, undefined, t)} {t('· pendiente')}</div>
               </div>
               <button
                 className="btn btn-ghost btn-sm btn-fit"
                 disabled={reqBusy === r.requestId}
                 onClick={() => onResolve(r.requestId, 'cancel')}
               >
-                Cancelar
+                {t('Cancelar')}
               </button>
             </div>
           ))}

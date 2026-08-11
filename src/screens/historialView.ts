@@ -87,6 +87,10 @@ export function mesasCerradas(entries: readonly HistoryEntry[]): HistorialMesa[]
  */
 export type Franja = 'manana' | 'mediodia' | 'tarde' | 'noche';
 
+/** Español a propósito: constante de módulo, sin `t` en este ámbito. Se
+ *  traduce al renderizar en `MesasScreen`. Lo encontró el barrido contra el
+ *  diccionario —no una lista de palabras a mano—, que es la única lista
+ *  completa que existe de lo que debería estar traducido. */
 export const FRANJA_LABEL: Record<Franja, string> = {
   manana: 'Mañana',
   mediodia: 'Mediodía',

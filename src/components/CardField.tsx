@@ -1,4 +1,5 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
+import { useIdioma } from '../i18n/idioma';
 import { useEffect, useRef, useState } from 'react';
 import { getStripe } from '../api/stripe';
 
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export function CardField({ onReady, onChange }: Props) {
+  const { t } = useIdioma();
   const holder = useRef<HTMLDivElement | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,7 +100,7 @@ export function CardField({ onReady, onChange }: Props) {
       } catch {
         if (!cancelled) {
           setLoading(false);
-          setLoadError('No pudimos cargar el formulario de pago. Revisa tu conexión.');
+          setLoadError(t('No pudimos cargar el formulario de pago. Revisa tu conexión.'));
         }
       }
     })();
@@ -130,7 +132,7 @@ export function CardField({ onReady, onChange }: Props) {
         className="input"
         style={{ padding: '15px 14px', marginBottom: loading ? 4 : 12 }}
       />
-      {loading && <div className="caption">Cargando el formulario seguro…</div>}
+      {loading && <div className="caption">{t('Cargando el formulario seguro…')}</div>}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useIdioma } from '../i18n/idioma';
 import { IS_MOCK } from '../api';
 import { HttpError } from '../api/http';
 import { useAuth } from '../auth/AuthContext';
@@ -17,11 +18,14 @@ const ERROR_TEXT: Record<string, string> = {
   validation_error: 'Revisa los datos: email válido y contraseña de al menos 8 caracteres.',
 };
 
-function errorMessage(err: unknown): string {
+function errorMessage(err: unknown, t: (s: string, ...a: unknown[]) => string): string {
   if (err instanceof HttpError) {
-    return ERROR_TEXT[err.message] ?? 'No pudimos conectar. Prueba de nuevo.';
+    // 🔴 `ERROR_TEXT` es constante de MÓDULO: sus valores están en español y
+    // se traducen ACÁ, que es donde `t` existe. Envolverlos arriba no compila.
+    const crudo = ERROR_TEXT[err.message];
+    return crudo ? t(crudo) : t('No pudimos conectar. Prueba de nuevo.');
   }
-  return 'No pudimos conectar. Prueba de nuevo.';
+  return t('No pudimos conectar. Prueba de nuevo.');
 }
 
 /**
@@ -32,6 +36,7 @@ function errorMessage(err: unknown): string {
  * El alta en sí NO se rediseña acá: sigue siendo este formulario tal cual.
  */
 export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' | 'register' } = {}) {
+  const { t } = useIdioma();
   const { login, register } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [email, setEmail] = useState('');
@@ -52,7 +57,7 @@ export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' |
         await register({ email, password, first_name: firstName, last_name: lastName });
       }
     } catch (err) {
-      setError(errorMessage(err));
+      setError(errorMessage(err, t));
     } finally {
       setBusy(false);
     }
@@ -65,13 +70,13 @@ export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' |
           Pay<span className="t">Me</span>
         </div>
         <div className="hero-sub" style={{ fontSize: 'var(--fs-legacy-base)' }}>
-          Divide y paga la cuenta desde la mesa
+          {t('Divide y paga la cuenta desde la mesa')}
         </div>
       </div>
 
       <form className="login-card" onSubmit={onSubmit}>
         <div className="h2" style={{ marginBottom: 14 }}>
-          {mode === 'login' ? 'Entra a tu cuenta' : 'Crea tu cuenta'}
+          {mode === 'login' ? t('Entra a tu cuenta') : t('Crea tu cuenta')}
         </div>
         {error && (
           <div className="form-error" role="alert">
@@ -82,7 +87,7 @@ export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' |
           <>
             <input
               className="input"
-              placeholder="Nombre"
+              placeholder={t('Nombre')}
               autoComplete="given-name"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
@@ -90,7 +95,7 @@ export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' |
             />
             <input
               className="input"
-              placeholder="Apellido"
+              placeholder={t('Apellido')}
               autoComplete="family-name"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
@@ -101,7 +106,7 @@ export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' |
         <input
           className="input"
           type="email"
-          placeholder="Email"
+          placeholder={t('Email')}
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -110,7 +115,7 @@ export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' |
         <input
           className="input"
           type="password"
-          placeholder="Contraseña"
+          placeholder={t('Contraseña')}
           autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
           minLength={8}
           value={password}
@@ -118,7 +123,7 @@ export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' |
           required
         />
         <button className="btn btn-primary" type="submit" disabled={busy}>
-          {busy ? 'Un segundo…' : mode === 'login' ? 'Entrar' : 'Registrarme'}
+          {busy ? t('Un segundo…') : mode === 'login' ? t('Entrar') : t('Registrarme')}
         </button>
         <div style={{ textAlign: 'center', marginTop: 6 }}>
           <button
@@ -129,12 +134,12 @@ export function LoginScreen({ initialMode = 'login' }: { initialMode?: 'login' |
               setError(null);
             }}
           >
-            {mode === 'login' ? '¿No tienes cuenta? Regístrate' : 'Ya tengo cuenta → entrar'}
+            {mode === 'login' ? t('¿No tienes cuenta? Regístrate') : t('Ya tengo cuenta → entrar')}
           </button>
         </div>
       </form>
 
-      {IS_MOCK && <div className="mock-hint">Modo demo: entra con cualquier email y contraseña.</div>}
+      {IS_MOCK && <div className="mock-hint">{t('Modo demo: entra con cualquier email y contraseña.')}</div>}
     </div>
   );
 }

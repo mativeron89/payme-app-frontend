@@ -34,6 +34,16 @@ const MESA_STATUS: Record<MesaStatus, string> = {
   dispersed: 'Cerrada',
 };
 
+/**
+ * 🔴 LOS RÓTULOS DE ACÁ ESTÁN EN ESPAÑOL A PROPÓSITO y se traducen AL
+ * RENDERIZAR. Son constantes de módulo: no hay `t` en este ámbito.
+ *
+ * Lo destapó UNA CAPTURA, no el barrido del DOM: la insignia decía «Pago en
+ * curso» dentro de la app en inglés, y mi detector de español no la vio
+ * porque la frase **no lleva ni un acento** y ninguna de sus palabras estaba
+ * en mi lista. **Un discriminador incompleto informa lo mismo que una
+ * pantalla limpia.**
+ */
 export function mesaStatusLabel(status: MesaStatus | string): string {
   return MESA_STATUS[status as MesaStatus] ?? 'En curso';
 }

@@ -34,12 +34,27 @@ const ATRIBUTOS_NUNCA = new Set([
   'data-testid', 'viewBox', 'd', 'fill', 'stroke', 'xmlns', 'transform',
 ]);
 
+/**
+ * 🔴 `src/i18n/` SE EXCLUYE, y hay que verificar que la exclusión EXCLUYA.
+ *
+ * `en.ts` es un diccionario de 643 frases en español: si entra, el inventario
+ * las cuenta como copy del producto y **se triplica solo**. Pasó en la primera
+ * corrida después de crearlo — B saltó de 443 a 1058.
+ *
+ * Y es el agujero exacto que tuvo Dashboard Frontend: su exclusión de `/i18n/`
+ * no matcheaba porque su glob entregaba `./en.ts`, sin el segmento. Acá el
+ * camino viene de recorrer el disco, así que incluye `src/i18n/`, **pero eso se
+ * comprueba con el conteo, no se supone**: si `B` vuelve a pasar de ~450, la
+ * exclusión dejó de excluir.
+ */
+const EXCLUIDOS = /(^|[/\\])i18n[/\\]/;
+
 function archivos(dir) {
   const out = [];
   for (const n of readdirSync(dir)) {
     const p = join(dir, n);
     if (statSync(p).isDirectory()) out.push(...archivos(p));
-    else if (/\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n)) out.push(p);
+    else if (/\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) && !EXCLUIDOS.test(p)) out.push(p);
   }
   return out;
 }

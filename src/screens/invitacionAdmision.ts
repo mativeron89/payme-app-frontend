@@ -112,9 +112,18 @@ export function invitacionesMostrables(raw: unknown): InvitacionMostrable[] {
 export function metaInvitacion(inv: {
   readonly mesaCode: string | null;
   readonly creada: string | null;
-}, formatearFecha: (iso: string) => string): string | null {
+}, formatearFecha: (iso: string) => string,
+   /** Default con interpolación: reproduce el comportamiento viejo exacto,
+    *  así los tests de esta función pura no tienen que conocer el idioma.
+    *  Con identidad pelada devolvía «Mesa {0}» literal — lo cazaron ellos. */
+   t: (s: string, ...a: unknown[]) => string =
+     (s, ...a) => s.replace(/\{0\}/g, String(a[0]))): string | null {
+  // 🔴 COPY COMPUESTA EN RUNTIME: «Mesa PA-4520 · hace 2 h» no existe entera en
+  // ningún archivo, así que ni el inventario ni la guarda de cobertura la ven.
+  // Se arma acá y se traduce acá. El `t` por defecto es la identidad para que
+  // los tests de esta función pura no tengan que conocer el idioma.
   const partes: string[] = [];
-  if (inv.mesaCode) partes.push(`Mesa ${inv.mesaCode}`);
+  if (inv.mesaCode) partes.push(t('Mesa {0}', inv.mesaCode));
   if (inv.creada) partes.push(formatearFecha(inv.creada));
   return partes.length > 0 ? partes.join(' · ') : null;
 }

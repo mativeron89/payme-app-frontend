@@ -4413,3 +4413,38 @@ body {
 .solicitudes > .sectlabel {
   padding: var(--sp-3) var(--sp-4) 0;
 }
+
+/* ── SELECTOR DE IDIOMA · fila de `Más` ─────────────────────────────────────
+   Va donde las otras filas ponen la flecha `→`, así que es MÁS ANCHO que
+   ellas. En el panel, un control así dentro de una fila llena montó la píldora
+   sobre el nombre; acá la fila tiene ícono + rótulo flexible + esto, y el
+   rótulo cede espacio porque lleva `flex: 1`. Verificado con captura a 375 px
+   en los dos idiomas, no sólo leyendo el DOM. */
+.lang-switch {
+  display: inline-flex;
+  flex: 0 0 auto;          /* no se estira ni se comprime: ancho propio */
+  border: 1px solid var(--gray-l);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.lang-btn {
+  border: 0;
+  background: none;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: var(--fs-legacy-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  /* 44 px de alto táctil sin agrandar la fila: el área crece con el padding
+     de `.list-row`, que ya es de 13 px arriba y abajo. */
+  min-height: 28px;
+}
+
+/* `aria-pressed` ya dice cuál está activo para quien no ve el color; esto es
+   la contraparte visual, no la única señal. */
+.lang-btn-on {
+  background: var(--brand);
+  color: var(--brand-fg);
+}

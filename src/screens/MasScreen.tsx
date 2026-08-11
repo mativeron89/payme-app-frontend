@@ -1,4 +1,6 @@
 import { IS_MOCK } from '../api';
+import { SelectorIdioma } from '../components/SelectorIdioma';
+import { useIdioma } from '../i18n/idioma';
 import { resetDemo } from '../api/mock/store';
 import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -21,6 +23,7 @@ import { useWalletRail } from '../api/walletRail';
  * transferir ni CLABE.
  */
 export function MasScreen() {
+  const { t } = useIdioma();
   const { session, logout } = useAuth();
   // OLA 5D · el rótulo de la fila lo decide el BACKEND, no este repo.
   const { walletRailEnabled } = useWalletRail();
@@ -28,16 +31,16 @@ export function MasScreen() {
 
   return (
     <div className="screen has-appbar">
-      <TopBar title="Más" />
+      <TopBar title={t('Más')} />
       {/* Longhands y no `padding: 16`: el shorthand inline PISA el
           `padding-bottom: 140px` de `.has-appbar .scroll`, y la última fila
           —"Cerrar sesión"— queda debajo de la barra. Está advertido en el CSS y
           es exactamente el modo en que se cuela. */}
       <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
         <div style={{ textAlign: 'center', padding: '6px 0 18px' }}>
-          <Avatar name={user ? `${user.first_name} ${user.last_name}` : 'PayMe'} size={80} />
+          <Avatar name={user ? t('{0} {1}', user.first_name, user.last_name) : t('PayMe')} size={80} />
           <div className="h2" style={{ marginTop: 10 }}>
-            {user ? `${user.first_name} ${user.last_name}` : 'Tu cuenta'}
+            {user ? t('{0} {1}', user.first_name, user.last_name) : t('Tu cuenta')}
           </div>
           {user && (
             <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 'var(--fs-legacy-sm)', color: 'var(--gray-txt)' }}>
@@ -47,7 +50,7 @@ export function MasScreen() {
         </div>
         {!user && (
           <div className="note note-orange" style={{ marginBottom: 12 }}>
-            Tus datos van a aparecer aquí en cuanto termines de crear tu cuenta.
+            {t('Tus datos van a aparecer aquí en cuanto termines de crear tu cuenta.')}
           </div>
         )}
         <div className="card" style={{ marginBottom: 12 }}>
@@ -55,7 +58,7 @@ export function MasScreen() {
             <div className="list-row" style={{ cursor: 'default' }}>
               <span><Icon name="mail" size={16} /></span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>Email</div>
+                <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>{t('Email')}</div>
                 <div className="caption">{user.email}</div>
               </div>
             </div>
@@ -83,6 +86,26 @@ export function MasScreen() {
               tarjetas" apuntando a una pantalla que sólo tiene tarjetas. Hoy es
               inalcanzable —el riel falla cerrado y su reactivación exige orden
               nueva— pero queda dicho, no descubierto después. */}
+          {/* IDIOMA · pedido de Mati el 2026-08-10: *«necesita el mismo toggle
+              en "Más"»*. La app no tiene Configuración, así que `Más` ES el
+              equivalente del `ConfigPage` del panel.
+
+              🔴 El segmentado va donde las otras filas ponen la flecha `→`, y es
+              MÁS ANCHO que ella. En el panel, un control así en una fila llena
+              montó la píldora sobre el nombre — y la revisión de desbordes de
+              TEXTO lo dio por bueno, porque no era texto que crecía sino un
+              elemento nuevo. Acá se verificó con CAPTURA a 375 px, en los dos
+              idiomas.
+
+              Ícono `settings` y no `globe`: `globe` no existe en `Icon.tsx`, y
+              inventarlo era trabajo de diseño que nadie pidió. */}
+          <div className="list-row" style={{ cursor: 'default' }}>
+            <span><Icon name="settings" size={16} /></span>
+            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
+              {t('Idioma')}
+            </div>
+            <SelectorIdioma />
+          </div>
           <button className="list-row" onClick={() => navigate('tarjetas')}>
             <span><Icon name="card" size={16} /></span>
             {/* OLA 5C (c): con el riel saldo apagado, "Saldo y tarjetas" nombraba
@@ -90,7 +113,7 @@ export function MasScreen() {
                 ÚNICO acceso a gestión de tarjetas, que es card-only ratificado.
                 Se renombra. */}
             <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
-              {walletRailEnabled ? 'Saldo y tarjetas' : 'Mis tarjetas'}
+              {walletRailEnabled ? 'Saldo y tarjetas' : t('Mis tarjetas')}
             </div>
             <span style={{ color: 'var(--gray-b)' }}>→</span>
           </button>
@@ -108,19 +131,18 @@ export function MasScreen() {
         {IS_MOCK && (
           <>
             <div className="note note-teal" style={{ marginBottom: 12 }}>
-              <b>Modo demo:</b> los datos son de ejemplo y se guardan solo en este teléfono.
-              Nada de lo que hagas aquí mueve dinero de verdad.
+              <b>{t('Modo demo:')}</b> {t('los datos son de ejemplo y se guardan solo en este teléfono. Nada de lo que hagas aquí mueve dinero de verdad.')}
             </div>
             <button
               className="btn btn-ghost"
               style={{ marginBottom: 12 }}
               onClick={() => {
-                if (!window.confirm('¿Volver la demo a su estado inicial?')) return;
+                if (!window.confirm(t('¿Volver la demo a su estado inicial?'))) return;
                 resetDemo();
                 window.location.reload();
               }}
             >
-              <Icon name="refresh" size={16} className="ico-inline" /> Reiniciar la demo
+              <Icon name="refresh" size={16} className="ico-inline" /> {t('Reiniciar la demo')}
             </button>
           </>
         )}
@@ -130,7 +152,7 @@ export function MasScreen() {
             void logout();
           }}
         >
-          Cerrar sesión
+          {t('Cerrar sesión')}
         </button>
       </div>
       {/* §1.9 · paso 3 · la barra de cinco posiciones, montada por la pantalla.

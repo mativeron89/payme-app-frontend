@@ -1,4 +1,5 @@
 import { Icon, type IconName } from './Icon';
+import { useIdioma } from '../i18n/idioma';
 import { navigate, type PageId } from '../router';
 
 /**
@@ -39,6 +40,16 @@ interface SideItem {
   page: PageId;
 }
 
+/**
+ * 🔴 LOS `label` DE ACÁ ESTÁN EN ESPAÑOL A PROPÓSITO, y se traducen AL
+ * RENDERIZAR (`t(it.label)` más abajo).
+ *
+ * Son constantes de MÓDULO: no hay hook del que sacar `t` en este ámbito.
+ * Envolverlas acá no compila. **Y es la clase exacta que dejó la navegación
+ * entera de Dashboard Frontend en español con 753 tests en verde** — el
+ * envoltorio automático no ve las constantes de módulo, así que nadie se
+ * enteró hasta que alguien miró la pantalla.
+ */
 const LEFT: SideItem[] = [
   { slot: 'home', label: 'Inicio', icon: 'home', page: 'home' },
   { slot: 'mesas', label: 'Mesas', icon: 'receipt', page: 'mesas' },
@@ -85,8 +96,9 @@ export interface AppBottomBarProps {
 }
 
 export function AppBottomBar({ active = null, center, above }: AppBottomBarProps) {
+  const { t } = useIdioma();
   const centro = center ?? {
-    label: 'Nueva',
+    label: t('Nueva'),
     icon: 'plus' as IconName,
     onClick: () => navigate('scan'),
     disabled: false,
@@ -106,7 +118,7 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
             y `aria-current` lo dice de verdad. */}
         {on && <span className="appbar-tick" aria-hidden="true" />}
         <Icon name={it.icon} size={22} />
-        <span className="appbar-label">{it.label}</span>
+        <span className="appbar-label">{t(it.label)}</span>
       </button>
     );
   };
@@ -114,7 +126,7 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
   return (
     <div className="appbar-block">
       {above && <div className="appbar-above">{above}</div>}
-      <nav className="appbar" aria-label="Navegación principal">
+      <nav className="appbar" aria-label={t('Navegación principal')}>
         {LEFT.map(item)}
         <div className="appbar-center">
           <button
@@ -122,11 +134,11 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
             className="appbar-fab"
             onClick={centro.onClick}
             disabled={centro.disabled}
-            aria-label={centro.label}
+            aria-label={t(centro.label)}
           >
             <Icon name={centro.icon} size={24} />
           </button>
-          <span className="appbar-label">{centro.label}</span>
+          <span className="appbar-label">{t(centro.label)}</span>
         </div>
         {RIGHT.map(item)}
       </nav>

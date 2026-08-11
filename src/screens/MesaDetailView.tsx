@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderFlow } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
@@ -96,12 +97,12 @@ function rowStateOf(item: MesaItem, selected: Map<string, number>): RowState {
  * polling ni WebSocket que traiga en vivo lo que hace otro comensal. Prometer
  * "todavía no pagó" como hecho instantáneo no sería cierto (§1.5).
  */
-function rowTag(state: RowState, item: MesaItem): string | null {
-  if (state === 'pagado') return 'Pagado';
-  if (state === 'tomado') return 'Lo eligió otro';
+function rowTag(state: RowState, item: MesaItem, t: (s: string, ...a: unknown[]) => string): string | null {
+  if (state === 'pagado') return t('Pagado');
+  if (state === 'tomado') return t('Lo eligió otro');
   // No afirma que lo tomó otro —no lo sabemos—: dice que no pudimos leerlo.
-  if (state === 'indeterminado') return 'No pudimos leer este ítem';
-  if (state === 'parcial') return `Queda ${bpsLabel(item.remaining_bps)}`;
+  if (state === 'indeterminado') return t('No pudimos leer este ítem');
+  if (state === 'parcial') return t('Queda {0}', bpsLabel(item.remaining_bps));
   return null;
 }
 
@@ -125,6 +126,7 @@ export function MesaDetailView({
   onCopyInvitationLink,
   onBack,
 }: MesaDetailViewProps) {
+  const { t } = useIdioma();
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
   const pct = mesa.total_cents > 0 ? Math.round((mesa.paid_amount_cents / mesa.total_cents) * 100) : 0;
@@ -138,7 +140,7 @@ export function MesaDetailView({
     <button
       type="button"
       className="hdr-back"
-      aria-label="Copiar link de invitación"
+      aria-label={t('Copiar link de invitación')}
       onClick={onCopyInvitationLink}
     >
       <Icon name="link" size={20} />
@@ -147,14 +149,13 @@ export function MesaDetailView({
 
   const avisoPagoCongelado = frozenScope && (
     <div className="note note-orange" role="status" style={{ marginBottom: 12 }}>
-      <b>Tienes un pago sin confirmar.</b> Puede que ya se haya cobrado. Reinténtalo tal cual
-      antes de cambiar tu selección.
+      <b>{t('Tienes un pago sin confirmar.')}</b> {t('Puede que ya se haya cobrado. Reinténtalo tal cual antes de cambiar tu selección.')}
       <button
         className="btn btn-ghost btn-sm btn-fit"
         style={{ marginTop: 8 }}
         onClick={onRetryFrozenPay}
       >
-        Reintentar ese pago
+        {t('Reintentar ese pago')}
       </button>
     </div>
   );
@@ -180,14 +181,14 @@ export function MesaDetailView({
   const miParte = (
     <div className="mi-parte">
       {nothingLeft ? (
-        <span>No queda nada por pagar</span>
+        <span>{t('No queda nada por pagar')}</span>
       ) : !esConsumo && availableSlots === 0 ? (
-        <span>No quedan partes</span>
+        <span>{t('No quedan partes')}</span>
       ) : faltaElegir ? (
-        <span>Elige lo que consumiste</span>
+        <span>{t('Elige lo que consumiste')}</span>
       ) : (
         <>
-          <span>{mySlotsTaken > 0 && !esConsumo ? 'Otra parte' : 'Mi parte'}</span>
+          <span>{mySlotsTaken > 0 && !esConsumo ? t('Otra parte') : t('Mi parte')}</span>
           <span className="mi-parte-amt">{formatMXN(itemsAmount)}</span>
         </>
       )}
@@ -203,7 +204,7 @@ export function MesaDetailView({
       <div className="title-card">
         <div className="title-card-title">{mesa.restaurant.name}</div>
         <div className="title-card-sub">
-          Mesa {code} · {esConsumo ? 'cada uno lo suyo' : 'partes iguales'}
+          {t('Mesa')} {code} · {esConsumo ? t('cada uno lo suyo') : t('partes iguales')}
         </div>
         <div className="title-card-div" />
         <div
@@ -212,16 +213,16 @@ export function MesaDetailView({
           aria-valuenow={pct}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label={`Pagado ${pct}% de la mesa`}
+          aria-label={t('Pagado {0}% de la mesa', pct)}
         >
           <div className="mi-progress-fill" style={{ width: `${pct}%` }} />
         </div>
         <div className="mi-meta">
           <span className="mi-meta-amt">
-            {formatMXN(mesa.paid_amount_cents)} de {formatMXN(mesa.total_cents)} ({pct}%)
+            {formatMXN(mesa.paid_amount_cents)} {t('de')} {formatMXN(mesa.total_cents)} ({pct}%)
           </span>
           <span className={`mi-count ${urgente ? 'urgent' : ''}`}>
-            <Icon name="clock" size={14} /> {cd ?? 'venció'}
+            <Icon name="clock" size={14} /> {cd ?? t('venció')}
           </span>
         </div>
       </div>
@@ -231,19 +232,19 @@ export function MesaDetailView({
         {esConsumo ? (
           <>
             <div className="caption" style={{ marginBottom: 8 }}>
-              Toca lo que consumiste. Al elegirlo queda <b>reservado</b> para ti.
+              {t('Toca lo que consumiste. Al elegirlo queda')} <b>{t('reservado')}</b> {t('para ti.')}
             </div>
             {nothingLeft && (
               <div className="note note-amber" style={{ marginBottom: 12 }}>
-                Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.
+                {t('Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.')}
               </div>
             )}
           </>
         ) : (
           <>
-            <div className="sectlabel">¿Qué consumiste?</div>
+            <div className="sectlabel">{t('¿Qué consumiste?')}</div>
             <div className="caption" style={{ margin: '0 2px 8px' }}>
-              Márcalo para el restaurante — no cambia lo que pagas.
+              {t('Márcalo para el restaurante — no cambia lo que pagas.')}
             </div>
           </>
         )}
@@ -255,7 +256,7 @@ export function MesaDetailView({
             // 1A.3 · 'indeterminado' bloquea igual que 'tomado': sin dato
             // válido no se ofrece tomar nada.
             const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
-            const tag = rowTag(state, i);
+            const tag = rowTag(state, i, t);
             const myBpsSel = selected.get(i.id) ?? 10000;
             // En partes iguales marcar es informativo y no reserva nada, así
             // que ahí NUNCA se bloquea una fila: el monto no depende de esto.
@@ -272,7 +273,7 @@ export function MesaDetailView({
                   onClick={() => !disabled && onToggleItem(i.id)}
                   disabled={disabled}
                   aria-pressed={disabled ? undefined : sel}
-                  aria-label={`${i.name}${i.quantity > 1 ? ` por ${i.quantity}` : ''}${tag ? `, ${tag}` : ''}`}
+                  aria-label={`${i.name}${i.quantity > 1 ? ` por ${i.quantity}` : ''}${tag ? t(', {0}', tag) : ''}`}
                 >
                   <span
                     className={`mi-check ${sel ? 'on' : ''} ${state === 'pagado' ? 'paid' : ''} ${state === 'tomado' ? 'taken' : ''}`}
@@ -299,7 +300,7 @@ export function MesaDetailView({
                 {sel && esConsumo && (
                   <div className="mi-frac">
                     <div className="mi-frac-lbl" id={`frac-${i.id}`}>
-                      ¿Cuánto tomas tú?
+                      {t('¿Cuánto tomas tú?')}
                     </div>
                     <div className="seg" role="radiogroup" aria-labelledby={`frac-${i.id}`}>
                       {FRACTIONS.filter((f) => f.bps <= i.remaining_bps).map((f) => (
@@ -310,14 +311,14 @@ export function MesaDetailView({
                           onClick={() => onSetFraction(i.id, f.bps)}
                           role="radio"
                           aria-checked={myBpsSel === f.bps}
-                          aria-label={f.bps >= 10000 ? 'Entero' : bpsLabel(f.bps)}
+                          aria-label={f.bps >= 10000 ? t('Entero') : bpsLabel(f.bps)}
                         >
                           {f.label}
                         </button>
                       ))}
                     </div>
                     <div className="mi-frac-amt" aria-live="polite">
-                      Tu parte: {formatMXN(fractionPreview(fullPrice, myBpsSel, i.remaining_bps))}
+                      {t('Tu parte:')} {formatMXN(fractionPreview(fullPrice, myBpsSel, i.remaining_bps))}
                     </div>
                   </div>
                 )}
@@ -327,8 +328,8 @@ export function MesaDetailView({
         </div>
         {!esConsumo && (
           <div className="note note-teal">
-            La cuenta se dividió en {mesa.expected_participants} partes iguales de{' '}
-            <b>{formatMXN(itemsAmount)}</b>. Quedan <b>{availableSlots}</b> por pagar.
+            {t('La cuenta se dividió en')} {mesa.expected_participants} {t('partes iguales de')}{' '}
+            <b>{formatMXN(itemsAmount)}</b>{t('. Quedan')} <b>{availableSlots}</b> {t('por pagar.')}
           </div>
         )}
         {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al
@@ -338,7 +339,7 @@ export function MesaDetailView({
             2026-07-25), pero tiene que ser una decisión, no un accidente. */}
         {mySlotsTaken > 0 && !esConsumo && (
           <div className="note note-teal" style={{ marginTop: 8 }}>
-            <b>Ya pagaste {mySlotsTaken === 1 ? 'tu parte' : `${mySlotsTaken} partes`} ✓</b>
+            <b>{t('Ya pagaste')} {mySlotsTaken === 1 ? t('tu parte') : t('{0} partes', mySlotsTaken)} ✓</b>
             {availableSlots > 0 && ' Si tocas pagar de nuevo, cubres la parte de otro comensal.'}
           </div>
         )}
@@ -350,7 +351,7 @@ export function MesaDetailView({
               <InviteFriends code={code} />
             ) : (
               <button className="btn btn-ghost btn-sm btn-fit" onClick={onOpenInvite}>
-                <Icon name="users" size={16} className="ico-inline" /> Invitar amigos de PayMe
+                <Icon name="users" size={16} className="ico-inline" /> {t('Invitar amigos de PayMe')}
               </button>
             )}
           </div>
@@ -360,7 +361,7 @@ export function MesaDetailView({
         active={null}
         above={miParte}
         center={{
-          label: 'Continuar',
+          label: t('Continuar'),
           icon: 'arrow-right',
           onClick: onGoToPay,
           disabled: continuarDeshabilitado,

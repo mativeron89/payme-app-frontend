@@ -1,4 +1,5 @@
 import { AppBottomBar } from '../components/AppBottomBar';
+import { useIdioma } from '../i18n/idioma';
 import { AppHeaderBack } from '../components/AppHeader';
 import { CardsPanel } from '../components/CardsPanel';
 import { goBack } from '../router';
@@ -17,9 +18,10 @@ import { goBack } from '../router';
  * vacío o deshabilitado.
  */
 export function TarjetasScreen() {
+  const { t } = useIdioma();
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack title="Mis tarjetas" onBack={() => goBack('home')} />
+      <AppHeaderBack title={t('Mis tarjetas')} onBack={() => goBack('home')} />
       <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>
         <CardsPanel />
       </div>
