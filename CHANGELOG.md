@@ -1,5 +1,44 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.75.3 — una lectura sola no distingue «no cambió» de «todavía no llegó» (2026-08-11)
+
+PATCH: comentarios en `scripts/publicar-vercel.sh`. **Cero `src/`.**
+
+Verificando el push de v0.75.2, el ápice devolvió **dos hashes distintos en dos
+momentos, de algo que no toqué**. En vez de anotarlo como ruido se persiguió:
+
+```
+10 pedidos seguidos    los 10 idénticos, mismo nodo   → no alterna por pedido
+build local ×2         determinista, mismo hash        → no es el build
+lo servido AHORA       = exactamente el build local    → lo servido es correcto
+```
+
+**Las dos lecturas raras cayeron dentro de ventanas de deploy: era caché sin
+propagar.**
+
+🔴 **Y eso rompe una suposición del método que este archivo documenta.** La
+verificación se venía tomando con **una** lectura apenas terminaba el CI, y una
+lectura dentro de la ventana de propagación devuelve la versión anterior.
+
+⚠️ **El error es ASIMÉTRICO, que es lo que lo vuelve peligroso:**
+
+```
+cuando se espera que CAMBIE      leer viejo → falso NEGATIVO, alarma de más
+cuando se espera que NO cambie   leer viejo → falso POSITIVO, CONFIRMA
+```
+
+**Un instrumento que falla en la dirección de lo que uno quiere creer no da
+ninguna señal de que haya que mirar.** Es la familia de «el verde crece cuanto
+menos mira», con una vuelta más: **acá el defecto no es de cobertura sino de
+MOMENTO, y el momento se elige justo cuando uno está más ansioso por
+confirmar.**
+
+**Regla, ya en el script junto a las otras dos: se toman DOS muestras separadas
+(~15 s); si difieren, se espera y se repite.** Las tres que hacen falta para
+creerle a una publicación quedan juntas donde se leen: separar ocurrió/cambió,
+comparar el CUERPO y no el nombre, y tomar dos lecturas.
+
+
 ## 0.75.2 — cuatro acciones distintas mostraban dos mensajes (2026-08-11)
 
 PATCH: copy en español + su traducción. **Diseño resolvió los dos pedidos

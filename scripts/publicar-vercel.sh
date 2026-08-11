@@ -49,6 +49,26 @@
 # `index-XXXX.js` homónimo con contenido distinto pasa el chequeo flojo: el
 # nombre lleva hash de contenido sólo mientras nadie sirva otra cosa bajo el
 # mismo nombre, y eso es una suposición sobre el host, no una medición.
+#
+# 🔴 TERCERA REGLA · DOS LECTURAS, NO UNA · 2026-08-11
+#
+# Una lectura tomada dentro de la ventana de propagación del CDN devuelve la
+# versión ANTERIOR. Medido: el ápice dio dos hashes distintos en dos momentos,
+# y perseguirlo lo aclaró — 10 pedidos seguidos idénticos, build local
+# determinista, y lo servido coincidiendo con ese build. **No alternaba: las
+# dos lecturas raras cayeron justo después de un deploy.**
+#
+# ⚠️ **Y el error es ASIMÉTRICO, que es lo que lo vuelve peligroso:**
+#
+#     cuando se espera que CAMBIE      leer viejo → falso NEGATIVO, alarma de más
+#     cuando se espera que NO cambie   leer viejo → falso POSITIVO, CONFIRMA
+#
+# **Un instrumento que falla en la dirección de lo que uno quiere creer no da
+# ninguna señal de que haya que mirar.** Y el momento de la lectura se elige
+# justo cuando uno está más ansioso por confirmar: apenas termina el CI.
+#
+# **Se toman DOS muestras separadas (~15 s). Si difieren, se espera y se repite.
+# Una sola lectura no distingue «no cambió» de «todavía no llegó».**
 # ══════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
