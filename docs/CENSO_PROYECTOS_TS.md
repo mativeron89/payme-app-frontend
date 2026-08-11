@@ -1,5 +1,36 @@
 # Censo de proyectos TypeScript
 
+## 🔴 `tsc -b` NO ES EL TYPECHECK DE ESTE REPO · 2026-08-11
+
+```
+npx tsc -b --force   →   69 archivos     ← UN proyecto
+npm run typecheck    →  229 archivos     ← los CUATRO, y es lo que corre CI
+```
+
+**`tsconfig.json` no declara `references`, así que el modo build compila el
+proyecto raíz y nada más.** Los otros tres —tests de `src`, node y `e2e`— quedan
+sin mirar.
+
+**Acreditado rompiendo:** con un error de tipos plantado en `e2e/_app.ts`,
+`npx tsc -b --force` sale **0 con cero errores** y `npm run typecheck` sale **2
+con dos**.
+
+⚠️ **Costó un CI rojo con Mati esperando.** Corrí `tsc -b` como gate local
+durante todo el 2026-08-10 y reporté *«typecheck 4 proyectos = 0»* en varios
+mensajes. **Era un proyecto.** El defecto que se coló —una ruta absoluta en
+`e2e/idioma.spec.ts` que sólo resuelve Vite— vivía justamente en el proyecto que
+`tsc -b` no mira.
+
+**Regla: el gate local usa los comandos TEXTUALES del `ci.yml`.** No uno
+equivalente, no uno más rápido: **el mismo**. Un instrumento que mide *casi* lo
+mismo deja pasar exactamente lo que el gate mira.
+
+**Por qué no se «arregla» agregando `references`:** haría falta `composite: true`
+en los cuatro y emitiría `.tsbuildinfo` por proyecto — un cambio de
+configuración con efectos propios para volver cómodo un atajo que no hace falta.
+`npm run typecheck` ya existe, ya es correcto y ya es el que manda.
+
+
 **Qué archivo typechequea cuál de los cuatro proyectos, y por qué son cuatro.**
 
 🔴 **La autoridad NO es este documento: es `scripts/tsProjectIsolation.test.ts`.**

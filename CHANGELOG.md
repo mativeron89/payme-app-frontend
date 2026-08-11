@@ -1,5 +1,46 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.75.1 — mi gate local miraba 69 archivos y decía cuatro proyectos (2026-08-11)
+
+PATCH: documentación. **Cero `src/`.**
+
+`8a0c515` —el commit del selector de idioma— **puso CI en rojo con Mati
+esperando la entrega.** El defecto era chico: `e2e/idioma.spec.ts` importaba
+`/src/i18n/en.ts` con ruta absoluta dentro de un `page.evaluate`. Eso lo resuelve
+Vite en el navegador; `tsc` lo type-chequea igual y no lo encuentra. Corregido en
+`519a499`.
+
+🔴 **Lo grave es por qué mi gate no lo vio, y lo pidió medir el Bibliotecario:**
+
+```
+npx tsc -b --force   →   69 archivos del repo    ← lo que yo corría
+npm run typecheck    →  229 archivos, 4 proyectos ← lo que corre CI
+```
+
+**`tsconfig.json` no declara `references`**, así que el modo build compila el
+proyecto raíz y nada más. Los tests de `src`, los de node y **los 22 de `e2e`**
+quedaban sin mirar — y el defecto vivía justo ahí.
+
+**Acreditado rompiendo:** con un error de tipos plantado en `e2e/_app.ts`,
+`tsc -b --force` sale **0 con cero errores**; `npm run typecheck` sale **2**.
+
+⚠️ **Corrección que alcanza a varios mensajes de ayer: cada
+«typecheck 4 proyectos = 0» que reporté era UN proyecto.** El número no estaba
+inventado —lo leía de una corrida real— pero medía otra cosa que la que yo
+decía. **Es la misma forma que vengo persiguiendo todo el día: un instrumento
+que devuelve algo plausible sobre una pregunta distinta.**
+
+**Regla, en `docs/CENSO_PROYECTOS_TS.md`: el gate local usa los comandos
+TEXTUALES del `ci.yml`.** No uno equivalente, no uno más rápido: el mismo.
+
+✅ **Y la compuerta funcionó por segunda vez con un rojo real:** paso 12
+`SKIPPED`, los cuatro artefactos intactos y el marcador de contenido en cero
+hasta que el arreglo pasó. **Ya no es una acreditación aislada.**
+
+⚠️ **Pages publicó igual sobre el commit rojo** —tenía el marcador en 1 mientras
+Vercel seguía en 0—. Es `deploy-demo.yml`, sin gate y ya registrado.
+
+
 ## 0.74.6 — la guarda nueva habría frenado el deploy, y el hueco que reporté no existía (2026-08-10)
 
 PATCH: una consulta en `scripts/reportarFlaky.test.ts`. **Cero `src/`.** Las dos
