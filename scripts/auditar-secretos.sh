@@ -30,9 +30,16 @@
 #     password: "hunter2" ← asignación Y literal
 #
 # ⚠️ **Y el costo, dicho: esto NO detecta un secreto sin forma reconocible.**
-# Una CLABE, un token propio o una URL de hook con formato libre pasan. La lista
-# es un piso, no una garantía — por eso el `--paranoico` de abajo muestra TODAS
-# las menciones para leerlas a mano cuando el diff es grande o toca config.
+# Una CLABE, un token propio o una URL de hook con formato libre pasan. **La
+# lista es un piso, no una garantía**, y cuando el diff toca config hay que
+# leerlo igual.
+#
+# 🔴 Acá decía «por eso el `--paranoico` de abajo muestra TODAS las menciones».
+# **Ese flag NO EXISTE.** Lo escribí describiendo algo que pensaba agregar y no
+# agregué — la misma clase que este repo corrigió tres veces hoy: un comentario
+# que promete una conducta que el código no tiene, y que se lee como si la
+# tuviera. **Si algún día hace falta, se implementa; mientras tanto no se
+# nombra.**
 set -uo pipefail
 
 BASE="${1:-origin/main}"
