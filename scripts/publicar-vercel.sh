@@ -24,6 +24,32 @@
 # el hash nuevo, el payload bien armado— en vez de leer la ausencia como
 # respuesta. Por eso este script imprime SIEMPRE una línea con el código,
 # también cuando sale bien.
+#
+# ══════════════════════════════════════════════════════════════════════════
+# 🔴 CÓMO SE VERIFICA UN DESPLIEGUE QUE NO DEBE CAMBIAR NADA · 2026-08-10
+#
+# El caso concreto de la regla de arriba, y el que más cuesta ver: un push de
+# sólo documentación. La predicción es que producción NO se mueve. Y entonces
+# un artefacto quieto **es compatible con dos historias opuestas**:
+#
+#     se publicó y salió idéntico      ← lo que se espera
+#     no se publicó nada               ← la compuerta falló en silencio
+#
+# **Un hash igual, solo, NO puede distinguirlas.** Hacen falta DOS mediciones
+# independientes, y son afirmaciones distintas:
+#
+#     ¿OCURRIÓ?    el 201 de este script  +  `last-modified` del bundle servido
+#     ¿CAMBIÓ?     sha256 del CUERPO, antes y después
+#
+# Medido así el 2026-08-10 en v0.74.3: hook a las 23:55:12, `last-modified`
+# 23:55:23 —once segundos después, el deploy aterrizó— y los cuatro cuerpos
+# byte-idénticos. Recién con las dos se puede decir «se publicó y no cambió».
+#
+# ⚠️ **Y se compara el sha256 del CUERPO, nunca el nombre del asset.** Un
+# `index-XXXX.js` homónimo con contenido distinto pasa el chequeo flojo: el
+# nombre lleva hash de contenido sólo mientras nadie sirva otra cosa bajo el
+# mismo nombre, y eso es una suposición sobre el host, no una medición.
+# ══════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
 nombre="${1:?falta el nombre del proyecto}"
