@@ -158,4 +158,16 @@ describe('sesión observable y CAS', () => {
     expect(api.invalidateSession(a)).toBe(false);
     expect(api.loadSession()).toMatchObject({ family_id: b.family_id, principal_id: b.principal_id });
   });
+
+  it('si el tombstone durable falla, igual intenta borrar físicamente la familia invalidada', () => {
+    const a = stored('tombstone-fallido');
+    api.saveSession(a);
+    storage.failSet = true;
+
+    expect(() => api.invalidateSession(a)).toThrow('session_storage_unavailable');
+    expect(
+      storage.values.has('payme_app_session'),
+      'el mapa volátil oculta la sesión, pero el token físico quedó en storage',
+    ).toBe(false);
+  });
 });

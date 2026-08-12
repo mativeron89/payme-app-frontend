@@ -1,5 +1,22 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.77.2 — la invalidación limpia el bearer aun sin journal durable (2026-08-11)
+
+PATCH de robustez local, sin cambio de API ni contrato.
+
+- `invalidateSession` conserva el tombstone volátil fail-closed, pero ya no
+  abandona el borrado físico CAS cuando falla la persistencia del journal.
+- Logout y expiración escriben el tombstone antes de esperar el lock y siempre
+  llegan al intento de limpieza. Sin Web Locks usan el mismo CAS en vez de
+  quedarse únicamente con una invalidación lógica de esa pestaña.
+- Las regresiones cubren journal no escribible, ausencia de Web Locks y familia
+  nueva concurrente. Antes del fix quedaron rojos los casos de bearer físico;
+  después pasan 23/23 en las dos suites focales.
+
+El fallo de storage sigue propagándose: haber logrado borrar el token no permite
+declarar durable una invalidación cuyo journal no se pudo confirmar.
+
+
 ## 0.77.1 — el gate de secretos ya no exime líneas completas (2026-08-11)
 
 PATCH de seguridad y CI, sin cambios en `src/` ni en contratos.

@@ -102,20 +102,33 @@ export function persistSessionTombstone(session: StoredSession): void {
 
 /** Borra solo la familia invalidada; una familia de relogin queda intacta. */
 export function invalidateSession(session: StoredSession): boolean {
-  persistSessionTombstone(session);
-  let current: StoredSession | null;
+  let storageUnavailable = false;
   try {
-    current = readRawSession();
-    if (!current || !sameFamily(current, session)) return false;
-    localStorage.removeItem(KEY);
-    const after = readRawSession();
-    if (after && sameFamily(after, session)) throw new Error('roundtrip');
+    persistSessionTombstone(session);
   } catch {
-    throw new Error('session_storage_unavailable');
+    // El mapa volátil ya dejó la familia fail-closed. Aun sin journal durable,
+    // intentamos quitar sus tokens físicos; abandonar acá los dejaría vivos
+    // para una pestaña o proceso nuevo que no comparta ese mapa.
+    storageUnavailable = true;
+  }
+
+  let removed = false;
+  try {
+    const current = readRawSession();
+    if (current && sameFamily(current, session)) {
+      localStorage.removeItem(KEY);
+      const after = readRawSession();
+      if (after && sameFamily(after, session)) throw new Error('roundtrip');
+      removed = true;
+    }
+  } catch {
+    storageUnavailable = true;
   } finally {
     notify();
   }
-  return true;
+
+  if (storageUnavailable) throw new Error('session_storage_unavailable');
+  return removed;
 }
 
 export function createSession(session: Omit<StoredSession, 'family_id' | 'principal_id'>): StoredSession {

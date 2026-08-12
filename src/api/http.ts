@@ -38,6 +38,21 @@ async function withSessionLock<T>(action: () => Promise<T> | T): Promise<T | nul
   return locks.request(SESSION_LOCK, { mode: 'exclusive' }, action);
 }
 
+/**
+ * Marca la familia antes de esperar el lock y después ejecuta el CAS físico.
+ * Si el primer journal falla, `invalidateSession` conserva el marcador volátil,
+ * intenta la limpieza física y recién entonces propaga el fallo de storage.
+ */
+async function invalidateSessionSerialized(session: StoredSession): Promise<boolean> {
+  try {
+    persistSessionTombstone(session);
+  } catch {
+    // No se abandona la limpieza física por un fallo del journal.
+  }
+  const locked = await withSessionLock(() => invalidateSession(session));
+  return locked ?? invalidateSession(session);
+}
+
 async function parseBody(res: Response): Promise<ApiError | null> {
   try {
     return (await res.json()) as ApiError;
@@ -153,8 +168,7 @@ export async function httpRequest<T>(
       // otra pestaña que ya está en red no puede restaurar esta familia.
       let invalidatedCurrent = false;
       try {
-        persistSessionTombstone(session);
-        invalidatedCurrent = (await withSessionLock(() => invalidateSession(session))) ?? false;
+        invalidatedCurrent = await invalidateSessionSerialized(session);
       } catch {
         // persistSessionTombstone conserva un marcador fail-closed en memoria.
       }
@@ -232,6 +246,5 @@ export async function httpLogout(): Promise<void> {
   void rawRequest('POST', '/auth/logout', undefined, session.access_token, 3_000).catch(() => undefined);
   // Invalidación durable inmediata; la limpieza física se serializa con el
   // mismo lock que refresh/login. Si apareció otra familia, no se borra.
-  persistSessionTombstone(session);
-  await withSessionLock(() => invalidateSession(session));
+  await invalidateSessionSerialized(session);
 }

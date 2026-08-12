@@ -2,8 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 class MemoryStorage {
   values = new Map<string, string>();
+  failSet = false;
   getItem(key: string) { return this.values.get(key) ?? null; }
-  setItem(key: string, value: string) { this.values.set(key, value); }
+  setItem(key: string, value: string) {
+    if (this.failSet) throw new Error('blocked');
+    this.values.set(key, value);
+  }
   removeItem(key: string) { this.values.delete(key); }
 }
 
@@ -39,6 +43,7 @@ const user = { id: 'u-1', payme_id: 'u1', email: 'u@example.com', first_name: 'U
 
 afterEach(() => {
   storage.values.clear();
+  storage.failSet = false;
   lockTail = Promise.resolve();
   lockNames.length = 0;
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks } });
@@ -79,6 +84,23 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
     await expect(httpLogout()).resolves.toBeUndefined();
     expect(loadSession()).toBeNull();
     release?.();
+  });
+
+  it('logout intenta el borrado físico aunque falle el tombstone durable', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      if ((init?.body as string | undefined)?.includes('password')) {
+        return response({ access_token: 'access-fisico', refresh_token: 'refresh-fisico', expires_in: 900, user });
+      }
+      return response({ ok: true });
+    }));
+    await httpLogin(user.email, 'password');
+    storage.failSet = true;
+
+    await expect(httpLogout()).rejects.toThrow('session_storage_unavailable');
+    expect(
+      storage.values.has('payme_app_session'),
+      'logout abortó antes de intentar quitar el bearer físico',
+    ).toBe(false);
   });
 
   it('logout invalida un refresh en vuelo y el par tardío no revive la familia', async () => {
@@ -163,6 +185,10 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
     await httpLogin(user.email, 'password');
     await httpLogout();
     expect(loadSession()).toBeNull();
+    expect(
+      storage.values.has('payme_app_session'),
+      'sin Web Locks el logout quedó sólo lógico y conservó el bearer físico',
+    ).toBe(false);
     await httpLogin(userB.email, 'password');
     expect(loadSession()).toMatchObject({ principal_id: userB.id, user: { email: userB.email } });
   });
