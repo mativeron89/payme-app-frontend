@@ -31,6 +31,8 @@ const { generatePaymeId } = require('../utils/userId');
 const logger = require('../utils/logger');
 const { loadActiveSession } = require('../middleware/auth');
 const { walletRailEnabled } = require('../services/walletRail');
+const signupInvitations = require('../services/signupInvitations');
+const legal = require('../services/legal');
 
 const router = express.Router();
 const { validateBody } = schemas;
@@ -86,11 +88,31 @@ function validateRegister(req, res, next) {
   return validateBody(schemas.registerSchema())(req, res, next);
 }
 
-router.post('/register', validateRegister, async (req, res, next) => {
+async function requirePrivacyNotice(req, res, next) {
+  try {
+    const status = await legal.getRequiredPublicationStatus();
+    if (!status.ready) {
+      logger.error('registration_legal_not_ready', {
+        states: status.required.map((x) => `${x.kind}:${x.state}`),
+        correlation_id: req.correlationId,
+      });
+      return res.status(503).json({ error: 'registration_unavailable' });
+    }
+    return next();
+  } catch (err) {
+    logger.error('registration_legal_check_failed', {
+      code: err.code,
+      correlation_id: req.correlationId,
+    });
+    return res.status(503).json({ error: 'registration_unavailable' });
+  }
+}
+
+router.post('/register', requirePrivacyNotice, validateRegister, async (req, res, next) => {
   try {
     // req.body.email ya viene normalizado por el schema (P1 #4), pero
     // normalizeEmail es idempotente y lo dejamos por claridad.
-    const { email, password, first_name, last_name, birth_date } = req.body;
+    const { email, password, first_name, last_name, birth_date, invitation_token } = req.body;
     const normalized = normalizeEmail(email);
 
     const hash = await bcrypt.hash(password, 10);
@@ -99,6 +121,14 @@ router.post('/register', validateRegister, async (req, res, next) => {
       const paymeId = await generatePaymeId(first_name, last_name);
       try {
         created = await pool.tx(async (client) => {
+        let signupInvitation = null;
+        if (signupInvitations.invitacionRequerida()) {
+          signupInvitation = await signupInvitations.bloquearInvitacion(client, {
+            token: invitation_token,
+            email: normalized,
+          });
+          if (!signupInvitation) throw signupInvitations.registroNoDisponible();
+        }
         const { rows } = await client.query(
           `INSERT INTO users (payme_id, email, email_normalized, phone, password_hash,
                              first_name, last_name, birth_date)
@@ -118,18 +148,35 @@ router.post('/register', validateRegister, async (req, res, next) => {
           await client.query(`INSERT INTO wallets (user_id, balance_cents) VALUES ($1, 0)`, [createdUser.id]);
         }
         const createdSession = await createSession({ userId: createdUser.id, client });
+        if (signupInvitation) {
+          await signupInvitations.marcarConsumida(client, {
+            invitationId: signupInvitation.id,
+            userId: createdUser.id,
+          });
+        }
           return { user: createdUser, session: createdSession };
         });
       } catch (err) {
         // La constraint es la fuente de verdad ante registros concurrentes.
         if (err.code === '23505' && (err.constraint === 'uq_users_email_normalized' ||
             err.constraint === 'users_email_key')) {
+          // D-FF-1: email ya registrado NO se distingue de token inexistente,
+          // usado, vencido o ligado a otro email. Una sola forma pública.
+          if (signupInvitations.invitacionRequerida()) {
+            const opaque = signupInvitations.registroNoDisponible();
+            return res.status(opaque.status).json({ error: opaque.code });
+          }
+          // Compatibilidad exclusiva del seam de tests históricos. Producción
+          // no puede abrir el alta y jamás alcanza esta rama.
           return res.status(409).json({ error: 'email_already_registered' });
         }
         // generatePaymeId reduce la colisión, pero la UNIQUE constraint cierra
         // la carrera entre procesos; un rollback deja cero escrituras parciales.
         if (err.code === '23505' && err.constraint === 'users_payme_id_key' && attempt < 9) {
           continue;
+        }
+        if (err.code === signupInvitations.ERROR_PUBLICO) {
+          return res.status(err.status).json({ error: err.code });
         }
         throw err;
       }

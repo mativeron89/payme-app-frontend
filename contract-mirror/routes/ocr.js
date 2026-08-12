@@ -23,6 +23,9 @@ const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
 const matching = require('../services/matching');
 const logger = require('../utils/logger');
+const {
+  respuestaOcr, respuestaProveedorNoDisponible, errorOcr,
+} = require('../services/ocrResponseContract');
 
 const router = express.Router();
 
@@ -71,16 +74,20 @@ function parseImageUpload(req, res, next) {
   uploadImage(req, res, (err) => {
     if (!err) return next();
     if (err.message === 'invalid_image_type') {
-      return res.status(400).json({ error: 'invalid_image_type' });
+      const out = errorOcr('invalid_image_type');
+      return res.status(out.status).json(out.body);
     }
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(413).json({ error: 'image_too_large' });
+        const out = errorOcr('image_too_large');
+        return res.status(out.status).json(out.body);
       }
-      return res.status(400).json({ error: 'invalid_multipart' });
+      const out = errorOcr('invalid_multipart');
+      return res.status(out.status).json(out.body);
     }
     if (err.message === 'Unexpected end of form') {
-      return res.status(400).json({ error: 'invalid_multipart' });
+      const out = errorOcr('invalid_multipart');
+      return res.status(out.status).json(out.body);
     }
     return next(err);
   });
@@ -151,7 +158,10 @@ router.use(ocrLimiter);
 
 router.post('/', parseImageUpload, async (req, res, next) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'no_image' });
+    if (!req.file) {
+      const out = errorOcr('no_image');
+      return res.status(out.status).json(out.body);
+    }
 
     const magic = detectMagicBytes(req.file.buffer);
     if (!magic || !magicMatchesMime(magic, req.file.mimetype)) {
@@ -161,10 +171,10 @@ router.post('/', parseImageUpload, async (req, res, next) => {
         detected_magic: magic,
         size: req.file.size,
       });
-      return res.status(400).json({
-        error: 'invalid_image_type',
+      const out = errorOcr('invalid_image_type', {
         message: 'File content does not match declared image type',
       });
+      return res.status(out.status).json(out.body);
     }
 
     logger.audit('ocr_request', {
@@ -190,11 +200,11 @@ router.post('/', parseImageUpload, async (req, res, next) => {
       logger.warn('ocr_unsupported_for_provider', {
         user_id: req.user.id, mime: req.file.mimetype, magic,
       });
-      return res.status(415).json({
-        error: 'unsupported_image_type_for_provider',
+      const out = errorOcr('unsupported_image_type_for_provider', {
         provider_mime_types: [...MIME_PROVEEDOR],
         message: 'El proveedor de lectura no procesa este formato de imagen.',
       });
+      return res.status(out.status).json(out.body);
     }
 
     if (USE_REAL) {
@@ -203,25 +213,23 @@ router.post('/', parseImageUpload, async (req, res, next) => {
       // edite a mano — el flujo de dividir la cuenta NUNCA se rompe por OCR.
       try {
         const result = await ocrTextract.analyzeExpense(req.file.buffer);
-        return res.json({ ...result, mock: false });
+        return res.json(respuestaOcr(result, { mock: false }));
       } catch (e) {
         logger.error('ocr_provider_error', { user_id: req.user.id, error: e.message });
-        return res.json({
-          items: [], total_cents: 0, warnings: ['provider_error'], mock: false,
-        });
+        return res.json(respuestaProveedorNoDisponible());
       }
     }
 
     const items = matching.parseTicket(mockTicketText());
-    res.json({
+    res.json(respuestaOcr({
       items,
       total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0),
       warnings: [],
-      mock: true,
-    });
+    }, { mock: true }));
   } catch (err) {
     if (err.message === 'invalid_image_type') {
-      return res.status(400).json({ error: 'invalid_image_type' });
+      const out = errorOcr('invalid_image_type');
+      return res.status(out.status).json(out.body);
     }
     next(err);
   }

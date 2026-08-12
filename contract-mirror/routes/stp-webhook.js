@@ -8,9 +8,10 @@
  * SIN rate limit, SIN auth de usuario):
  *     app.use('/webhooks/stp', stpWebhookRoutes);
  *
- * ⚠️ Seguridad: además del secreto opcional (STP_ABONO_SECRET), restringí por
- *    allowlist de IP de STP a nivel infra. Confirmá el formato del payload y del
- *    ack con el manual de STP. Probar en DEMO.
+ * ⚠️ Seguridad: STP_ABONO_SECRET es obligatorio para HABILITAR este callback.
+ *    Ausente queda en 503; placeholder impide el arranque. Además, restringí
+ *    por allowlist de IP de STP a nivel infra. Confirmá el formato del payload
+ *    y del ack con el manual de STP. Probar en DEMO.
  *
  * Repositorio destino: routes/stp-webhook.js
  */
@@ -28,6 +29,10 @@ const router = express.Router();
 router.use(express.json({ limit: '256kb' }));
 
 router.post('/abono', async (req, res) => {
+  if (!stpAbono.abonoLegacyHabilitado()) {
+    logger.warn('stp_abono_disabled', { reason: 'STP_ABONO_SECRET_missing' });
+    return res.status(503).json(stpAbono.buildAbonoAck(req.body, { ok: false }));
+  }
   let parsed;
   try {
     parsed = stpAbono.validateAbono(req.body, req.headers);

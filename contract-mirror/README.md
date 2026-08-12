@@ -6,43 +6,39 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-11** (`D-FF-2-BIS` · sandbox, y después OCR).
-- Commit exacto y procedencia del CONTENIDO: **`a8611eca7c78dd42ba0b32e8fd0ff42b8dbdca07`**
-  (`feat(legal): aviso 2.1.0 — la prueba ahora tiene pagos`). Esta vez los dos
-  hashes COINCIDEN: el inventario del dueño declara el mismo commit que espeja.
+- Fecha del refresh: **2026-08-12** (`D-FF-1` · alta cerrada, aviso previo y
+  contrato OCR explícito).
+- Commit exacto y procedencia del CONTENIDO:
+  **`415651ca4ef393a333206269e4a7f598c2b647de`**
+  (`feat(legal): acreditar aviso antes del alta`).
+- Commit que publicó el inventario autoritativo:
+  **`5edae8ec9c2acb85dab90be6b178e83c6c6435a4`**
+  (`chore(contrato): publicar compuerta legal de alta`). Como siempre, el
+  inventario declara el commit del contenido, no su propio commit.
 
-🆕 **74 archivos espejados** más este README.
+🆕 **79 archivos espejados** más este README.
 
-- `a8611ec` (2026-08-11) suma **`routes/ocr.js` y `services/ocrRail.js`**: la
-  capability del lector de tickets, con `provider_mime_types`. El emisor la
-  publicó **para que el front construya su `accept` desde el dueño del contrato**
-  en vez de una lista escrita a mano — que ya se había desincronizado.
-- `0ce21f4` había sumado `services/moneyRail.js`.
+Este refresh agrega cinco fuentes que el consumidor necesita para el carril
+F&F y actualiza siete ya espejadas:
 
-✅ **Y esta vez el contrato llegó ANTES de que lo necesitáramos**, al revés que
-con `money_rail` — que estuvo vivo en producción tres días antes de que su
-inventario lo declarara. Se nota y se dice. Es la capability
-`money_rail` de `D-FF-2-BIS`: `{ mode, payments_enabled, real_money }`.
+- `services/signupInvitations.js` y las dos migraciones de alta/rate limit:
+  `POST /auth/register` exige `invitation_token`, ligado al email, vigente y de
+  un uso; todos los rechazos de autoridad comparten
+  `registration_not_available`.
+- `services/signupRateLimit.js`: la limitación durable del alta y sus errores
+  `too_many_signup_attempts` / `registration_unavailable`.
+- `routes/consent.js`: el aviso de privacidad vigente se lee sin sesión y
+  falla con `legal_text_unavailable` si su publicación no está íntegra.
+- `services/ocrResponseContract.js`: shape cerrado de ítems, señales
+  `confidence` / `low_confidence`, `warnings`, `total_detected_cents` y la
+  taxonomía de errores HTTP del OCR.
+- `routes/auth.js`, `routes/ocr.js`, `schemas/index.js`, `db/schema.sql` y el
+  callback STP quedan sincronizados con el mismo corte del dueño.
 
-🔴 **Y cómo llegó importa más que el archivo.** El dueño desplegó `sandbox` a
-producción **sin republicar su inventario**: el contrato decía que esa
-capability no existía mientras ya estaba viva. Espejar por el camino sancionado
-era imposible, y **copiar el archivo a mano habría sido que el espejo se
-acredite a sí mismo** — exactamente lo que R3-A vino a impedir. Se pidió el
-republicado y se esperó.
-
-⚠️ **LÍMITE DEL GUARD DEL DUEÑO, que este espejo hereda.** Su
-`tests/mirror-inventory.test.js` contrasta la población contra las RUTAS de
-Express. `moneyRail` es un **service** que ninguna ruta nueva importa, así que
-quedó fuera de su alcance **por diseño**: no faltó por descuido, faltó porque el
-guard no mira servicios. **Regenerar mil veces no lo habría agregado, y el
-número nuevo habría hecho parecer resuelto el problema.** Lo encontraron
-comparando contra `walletRail.js`, que sí estaba: dos archivos con el mismo rol,
-uno adentro y otro no.
-
-**Consecuencia para quien lea esto: el espejo puede quedar ciego a un service
-nuevo sin que nada se ponga rojo de ningún lado.** Si sabés que algo existe y no
-aparece acá, ésa es la primera hipótesis.
+La adopción se verificó contra la fuente antes de editar runtime del
+consumidor: **paridad 79/79** y **vigencia verde** contra App Backend HEAD
+`98f9d800f0b5a2e0436bbe015a1512770395b107`. Eso acredita el árbol local; no
+afirma push, deploy ni producción.
 
 ### Refresh anterior · 2026-08-07 (ORDEN 2-A · v2.48.0)
 

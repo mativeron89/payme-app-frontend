@@ -18,6 +18,12 @@ const email = z.preprocess(
   z.string().email().max(255)
 );
 
+/** Parser compartido por rutas y operaciones repo-locales. */
+function normalizarEmailDeContrato(value) {
+  const parsed = email.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
 const paymeId  = z.string().regex(/^payme_[a-z]{2}_[a-z0-9]{4}$/);
 // bcrypt procesa como máximo 72 BYTES, no caracteres. Aceptar más truncaría
 // silenciosamente contraseñas Unicode distintas al mismo hash.
@@ -57,6 +63,14 @@ const birthDate = z.string()
 
 const registerBase = z.object({
   email,
+  // D-FF-1: opcional EN EL SCHEMA para que ausente, inválido, usado, vencido y
+  // email distinto lleguen a una única respuesta opaca de la autoridad. La
+  // obligación la aplica la ruta; validarlo como campo requerido acá revelaría
+  // otra forma de error antes de consultar la compuerta.
+  // `unknown` es deliberado: hasta un número/objeto malformado tiene que llegar
+  // a la misma respuesta opaca que un token usado o vencido. La autoridad lo
+  // convierte en un hash imposible sin procesar contenido arbitrariamente largo.
+  invitation_token: z.unknown().optional(),
   // ORDEN 1B (2026-08-10) · el teléfono DEJA DE PEDIRSE. El inventario de
   // datos personales lo midió: no tenía un solo consumidor lógico —el login
   // busca por email_normalized, la búsqueda de amigos por email/payme_id, el
@@ -401,6 +415,7 @@ function validateParams(schema) {
 }
 
 module.exports = {
+  normalizarEmailDeContrato,
   register, registerCompat, registerSchema, birthDateRequeridaEnRegistro,
   login, refreshToken, updateMe,
   attachPaymentMethod, setupIntent, setDefaultPaymentMethod, uuidIdParam,

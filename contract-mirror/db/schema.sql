@@ -24,7 +24,7 @@ CREATE OR REPLACE FUNCTION trg_set_updated_at()
 RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ LANGUAGE plpgsql;
 
 -- ─── USERS + WALLET ───────────────────────────────────────
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   payme_id        VARCHAR(50) UNIQUE NOT NULL,
   email           VARCHAR(255) UNIQUE NOT NULL,
@@ -41,14 +41,15 @@ CREATE TABLE users (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_users_payme_id ON users(payme_id);
-CREATE INDEX idx_users_email    ON users(email);
-CREATE UNIQUE INDEX uq_users_email_normalized
+CREATE INDEX IF NOT EXISTS idx_users_payme_id ON users(payme_id);
+CREATE INDEX IF NOT EXISTS idx_users_email    ON users(email);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_normalized
   ON users(email_normalized) WHERE email_normalized IS NOT NULL;
+DROP TRIGGER IF EXISTS trg_users_updated ON users;
 CREATE TRIGGER trg_users_updated BEFORE UPDATE ON users
   FOR EACH ROW EXECUTE FUNCTION trg_set_updated_at();
 
-CREATE TABLE wallets (
+CREATE TABLE IF NOT EXISTS wallets (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   balance_cents   BIGINT NOT NULL DEFAULT 0
@@ -59,10 +60,11 @@ CREATE TABLE wallets (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+DROP TRIGGER IF EXISTS trg_wallets_updated ON wallets;
 CREATE TRIGGER trg_wallets_updated BEFORE UPDATE ON wallets
   FOR EACH ROW EXECUTE FUNCTION trg_set_updated_at();
 
-CREATE TABLE wallet_transactions (
+CREATE TABLE IF NOT EXISTS wallet_transactions (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   wallet_id       UUID NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
   user_id         UUID NOT NULL REFERENCES users(id),
@@ -82,11 +84,11 @@ CREATE TABLE wallet_transactions (
   metadata        JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_wallet_tx_user ON wallet_transactions(user_id, created_at DESC);
-CREATE INDEX idx_wallet_tx_type ON wallet_transactions(type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wallet_tx_user ON wallet_transactions(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wallet_tx_type ON wallet_transactions(type, created_at DESC);
 
 -- ─── USER SESSIONS (v2.5.1 P1 #6 + v2.5.2 P2 #10 rotation) ─
-CREATE TABLE user_sessions (
+CREATE TABLE IF NOT EXISTS user_sessions (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   jti             VARCHAR(100) UNIQUE,
@@ -103,17 +105,58 @@ CREATE TABLE user_sessions (
   revoked_reason  VARCHAR(100),
   last_seen_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_user_sessions_user ON user_sessions(user_id, status);
-CREATE INDEX idx_user_sessions_jti  ON user_sessions(jti) WHERE jti IS NOT NULL;
-CREATE INDEX idx_user_sessions_refresh
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_jti  ON user_sessions(jti) WHERE jti IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_sessions_refresh
   ON user_sessions(refresh_token_hash) WHERE refresh_token_hash IS NOT NULL;
-CREATE INDEX idx_user_sessions_prev_refresh
+CREATE INDEX IF NOT EXISTS idx_user_sessions_prev_refresh
   ON user_sessions(prev_refresh_token_hash) WHERE prev_refresh_token_hash IS NOT NULL;
-CREATE INDEX idx_user_sessions_expires
+CREATE INDEX IF NOT EXISTS idx_user_sessions_expires
   ON user_sessions(expires_at) WHERE status = 'active';
 
+-- ─── SIGNUP INVITATIONS · D-FF-1 ──────────────────────────
+-- Autoridad de ALTA (no confundir con invitaciones a mesa). El raw token jamás
+-- se persiste; register bloquea la fila y la consume en la misma tx del user.
+CREATE TABLE IF NOT EXISTS signup_invitations (
+  id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  token_hash           CHAR(64) NOT NULL UNIQUE
+                       CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  email_normalized     VARCHAR(255) NOT NULL
+                       CHECK (email_normalized = LOWER(BTRIM(email_normalized))),
+  cohort               VARCHAR(100) NOT NULL,
+  issued_by_actor      VARCHAR(200) NOT NULL,
+  authorization_ticket VARCHAR(200) NOT NULL,
+  issued_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at           TIMESTAMPTZ NOT NULL,
+  consumed_at          TIMESTAMPTZ,
+  consumed_by_user_id  UUID REFERENCES users(id),
+  CONSTRAINT chk_signup_invitation_expiry CHECK (expires_at > issued_at),
+  CONSTRAINT chk_signup_invitation_consumption CHECK (
+    (consumed_at IS NULL AND consumed_by_user_id IS NULL)
+    OR (consumed_at IS NOT NULL AND consumed_by_user_id IS NOT NULL
+        AND consumed_at >= issued_at)
+  )
+);
+CREATE INDEX IF NOT EXISTS idx_signup_invitations_email
+  ON signup_invitations(email_normalized, expires_at DESC);
+CREATE INDEX IF NOT EXISTS idx_signup_invitations_open
+  ON signup_invitations(expires_at) WHERE consumed_at IS NULL;
+
+-- ─── DURABLE SIGNUP RATE LIMIT · D-HOLD-1 ───────────────
+-- Sin IP/email/token crudo/digest individual: 64 shards fijos y global.
+CREATE TABLE IF NOT EXISTS signup_rate_limit_counters (
+  scope       VARCHAR(64) NOT NULL,
+  key_digest  CHAR(64) NOT NULL CHECK (key_digest ~ '^[0-9a-f]{64}$'),
+  hits        INTEGER NOT NULL CHECK (hits > 0),
+  reset_at    TIMESTAMPTZ NOT NULL,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (scope,key_digest)
+);
+CREATE INDEX IF NOT EXISTS idx_signup_rate_limit_expiry
+  ON signup_rate_limit_counters(reset_at);
+
 -- ─── PAYMENT METHODS ──────────────────────────────────────
-CREATE TABLE payment_methods (
+CREATE TABLE IF NOT EXISTS payment_methods (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   stripe_payment_method_id VARCHAR(100) UNIQUE NOT NULL,
@@ -148,13 +191,13 @@ CREATE TABLE payment_methods (
       AND card_verified_at IS NOT NULL)
   )
 );
-CREATE INDEX idx_payment_methods_user ON payment_methods(user_id, status);
-CREATE UNIQUE INDEX uq_payment_methods_one_default
+CREATE INDEX IF NOT EXISTS idx_payment_methods_user ON payment_methods(user_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_methods_one_default
   ON payment_methods(user_id) WHERE is_default AND status = 'active';
 
 -- Los IDs source sólo se definen al INSERT: ningún UPDATE puede cambiarlos, ni
 -- siquiera NULL -> ID. Una promoción v0 -> v1 conserva la identidad ya ligada.
-CREATE FUNCTION payme_card_snapshot_payment_method_write_once()
+CREATE OR REPLACE FUNCTION payme_card_snapshot_payment_method_write_once()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.stripe_payment_method_id IS DISTINCT FROM
@@ -173,12 +216,13 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+DROP TRIGGER IF EXISTS trg_payment_methods_card_snapshot_write_once ON payment_methods;
 CREATE TRIGGER trg_payment_methods_card_snapshot_write_once
   BEFORE UPDATE ON payment_methods
   FOR EACH ROW EXECUTE FUNCTION payme_card_snapshot_payment_method_write_once();
 
 -- ─── RESTAURANTS ──────────────────────────────────────────
-CREATE TABLE restaurants (
+CREATE TABLE IF NOT EXISTS restaurants (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name            VARCHAR(200) NOT NULL,
   rfc             VARCHAR(20),
@@ -195,7 +239,7 @@ CREATE TABLE restaurants (
 );
 
 -- ─── MESAS ────────────────────────────────────────────────
-CREATE TABLE mesas (
+CREATE TABLE IF NOT EXISTS mesas (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   code            VARCHAR(20) UNIQUE NOT NULL,
   restaurant_id   UUID NOT NULL REFERENCES restaurants(id),
@@ -268,13 +312,14 @@ CREATE TABLE mesas (
                AND auth_charge_card_verified_at IS NOT NULL)))
   )
 );
-CREATE INDEX idx_mesas_code       ON mesas(code);
-CREATE INDEX idx_mesas_opener     ON mesas(opener_user_id, status);
-CREATE INDEX idx_mesas_restaurant ON mesas(restaurant_id, status);
+CREATE INDEX IF NOT EXISTS idx_mesas_code       ON mesas(code);
+CREATE INDEX IF NOT EXISTS idx_mesas_opener     ON mesas(opener_user_id, status);
+CREATE INDEX IF NOT EXISTS idx_mesas_restaurant ON mesas(restaurant_id, status);
+DROP TRIGGER IF EXISTS trg_mesas_updated ON mesas;
 CREATE TRIGGER trg_mesas_updated BEFORE UPDATE ON mesas
   FOR EACH ROW EXECUTE FUNCTION trg_set_updated_at();
 
-CREATE FUNCTION payme_card_snapshot_mesa_write_once()
+CREATE OR REPLACE FUNCTION payme_card_snapshot_mesa_write_once()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.auth_source_payment_method_id IS DISTINCT FROM
@@ -326,11 +371,12 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+DROP TRIGGER IF EXISTS trg_mesas_card_snapshot_write_once ON mesas;
 CREATE TRIGGER trg_mesas_card_snapshot_write_once
   BEFORE UPDATE ON mesas
   FOR EACH ROW EXECUTE FUNCTION payme_card_snapshot_mesa_write_once();
 
-CREATE FUNCTION guard_mesas_settlement_fence_immutable()
+CREATE OR REPLACE FUNCTION guard_mesas_settlement_fence_immutable()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
   IF OLD.settlement_fenced_at IS NOT NULL
@@ -352,11 +398,12 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+DROP TRIGGER IF EXISTS trg_mesas_settlement_fence_immutable ON mesas;
 CREATE TRIGGER trg_mesas_settlement_fence_immutable
   BEFORE UPDATE ON mesas
   FOR EACH ROW EXECUTE FUNCTION guard_mesas_settlement_fence_immutable();
 
-CREATE TABLE mesa_participants (
+CREATE TABLE IF NOT EXISTS mesa_participants (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   mesa_id         UUID NOT NULL REFERENCES mesas(id) ON DELETE CASCADE,
   user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -369,15 +416,15 @@ CREATE TABLE mesa_participants (
   joined_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT participant_subject CHECK (user_id IS NOT NULL OR guest_token IS NOT NULL OR guest_token_hash IS NOT NULL)
 );
-CREATE UNIQUE INDEX uq_mesa_participants_user
+CREATE UNIQUE INDEX IF NOT EXISTS uq_mesa_participants_user
   ON mesa_participants(mesa_id, user_id) WHERE user_id IS NOT NULL;
-CREATE UNIQUE INDEX uq_mesa_participants_guest
+CREATE UNIQUE INDEX IF NOT EXISTS uq_mesa_participants_guest
   ON mesa_participants(mesa_id, guest_token) WHERE guest_token IS NOT NULL;
-CREATE UNIQUE INDEX uq_mesa_participants_guest_hash
+CREATE UNIQUE INDEX IF NOT EXISTS uq_mesa_participants_guest_hash
   ON mesa_participants(mesa_id, guest_token_hash) WHERE guest_token_hash IS NOT NULL;
-CREATE INDEX idx_mesa_participants_user ON mesa_participants(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_mesa_participants_user ON mesa_participants(user_id, status);
 
-CREATE TABLE mesa_items (
+CREATE TABLE IF NOT EXISTS mesa_items (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   mesa_id         UUID NOT NULL REFERENCES mesas(id) ON DELETE CASCADE,
   name            VARCHAR(200) NOT NULL,
@@ -396,17 +443,17 @@ CREATE TABLE mesa_items (
   paid_at         TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_mesa_items_mesa     ON mesa_items(mesa_id, status);
-CREATE INDEX idx_mesa_items_locker_user
+CREATE INDEX IF NOT EXISTS idx_mesa_items_mesa     ON mesa_items(mesa_id, status);
+CREATE INDEX IF NOT EXISTS idx_mesa_items_locker_user
   ON mesa_items(locked_by_user_id) WHERE locked_by_user_id IS NOT NULL;
-CREATE INDEX idx_mesa_items_locker_guest
+CREATE INDEX IF NOT EXISTS idx_mesa_items_locker_guest
   ON mesa_items(locked_by_guest_token) WHERE locked_by_guest_token IS NOT NULL;
-CREATE INDEX idx_mesa_items_locker_guest_hash
+CREATE INDEX IF NOT EXISTS idx_mesa_items_locker_guest_hash
   ON mesa_items(locked_by_guest_token_hash) WHERE locked_by_guest_token_hash IS NOT NULL;
-CREATE INDEX idx_mesa_items_lock_expires
+CREATE INDEX IF NOT EXISTS idx_mesa_items_lock_expires
   ON mesa_items(lock_expires_at) WHERE status = 'locked' AND lock_expires_at IS NOT NULL;
 
-CREATE TABLE payment_attempts (
+CREATE TABLE IF NOT EXISTS payment_attempts (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   mesa_id         UUID NOT NULL REFERENCES mesas(id),
   user_id         UUID REFERENCES users(id),
@@ -455,6 +502,7 @@ CREATE TABLE payment_attempts (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE payment_attempts DROP CONSTRAINT IF EXISTS chk_payment_attempts_stripe_contract_snapshot;
 ALTER TABLE payment_attempts
   ADD CONSTRAINT chk_payment_attempts_stripe_contract_snapshot
   CHECK (
@@ -465,6 +513,7 @@ ALTER TABLE payment_attempts
       AND stripe_save_payment_method IS NOT NULL
     )
   );
+ALTER TABLE payment_attempts DROP CONSTRAINT IF EXISTS chk_payment_attempts_card_policy_snapshot;
 ALTER TABLE payment_attempts
   ADD CONSTRAINT chk_payment_attempts_card_policy_snapshot
   CHECK (
@@ -486,22 +535,23 @@ ALTER TABLE payment_attempts
            OR (stripe_charge_payment_method_id IS NOT NULL
                AND charge_card_verified_at IS NOT NULL)))
   );
-CREATE UNIQUE INDEX uq_payment_attempts_idem_user
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_attempts_idem_user
   ON payment_attempts(user_id, mesa_id, operation_type, idempotency_key)
   WHERE user_id IS NOT NULL;
-CREATE UNIQUE INDEX uq_payment_attempts_idem_guest
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_attempts_idem_guest
   ON payment_attempts(guest_token, mesa_id, operation_type, idempotency_key)
   WHERE guest_token IS NOT NULL;
-CREATE UNIQUE INDEX uq_payment_attempts_idem_guest_hash
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_attempts_idem_guest_hash
   ON payment_attempts(guest_token_hash, mesa_id, operation_type, idempotency_key)
   WHERE guest_token_hash IS NOT NULL;
-CREATE INDEX idx_payment_attempts_mesa   ON payment_attempts(mesa_id, status);
-CREATE INDEX idx_payment_attempts_user   ON payment_attempts(user_id, status, created_at DESC);
-CREATE INDEX idx_payment_attempts_stripe ON payment_attempts(stripe_payment_intent_id);
+CREATE INDEX IF NOT EXISTS idx_payment_attempts_mesa   ON payment_attempts(mesa_id, status);
+CREATE INDEX IF NOT EXISTS idx_payment_attempts_user   ON payment_attempts(user_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_attempts_stripe ON payment_attempts(stripe_payment_intent_id);
+DROP TRIGGER IF EXISTS trg_payment_attempts_updated ON payment_attempts;
 CREATE TRIGGER trg_payment_attempts_updated BEFORE UPDATE ON payment_attempts
   FOR EACH ROW EXECUTE FUNCTION trg_set_updated_at();
 
-CREATE FUNCTION payme_card_snapshot_attempt_write_once()
+CREATE OR REPLACE FUNCTION payme_card_snapshot_attempt_write_once()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.stripe_source_payment_method_id IS DISTINCT FROM
@@ -552,6 +602,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+DROP TRIGGER IF EXISTS trg_payment_attempts_card_snapshot_write_once ON payment_attempts;
 CREATE TRIGGER trg_payment_attempts_card_snapshot_write_once
   BEFORE UPDATE ON payment_attempts
   FOR EACH ROW EXECUTE FUNCTION payme_card_snapshot_attempt_write_once();
@@ -559,7 +610,7 @@ CREATE TRIGGER trg_payment_attempts_card_snapshot_write_once
 -- Un éxito Stripe observado después del fence no se acredita contra la mesa:
 -- hacerlo sumaría el pago al hold ya capturado. La obligación conserva la
 -- evidencia exacta para el tratamiento D1-D sin ejecutar un refund implícito.
-CREATE TABLE late_payment_obligations (
+CREATE TABLE IF NOT EXISTS late_payment_obligations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   payment_attempt_id UUID NOT NULL UNIQUE
     REFERENCES payment_attempts(id) ON DELETE RESTRICT,
@@ -604,21 +655,22 @@ CREATE TABLE late_payment_obligations (
       OR (status = 'resolved' AND resolved_at IS NOT NULL AND resolution IS NOT NULL)
     )
 );
-CREATE INDEX idx_late_payment_obligations_review
+CREATE INDEX IF NOT EXISTS idx_late_payment_obligations_review
   ON late_payment_obligations(detected_at, payment_attempt_id)
   WHERE status = 'manual_review';
 
+ALTER TABLE mesa_items DROP CONSTRAINT IF EXISTS fk_mesa_items_locked_by_attempt;
 ALTER TABLE mesa_items
   ADD CONSTRAINT fk_mesa_items_locked_by_attempt
   FOREIGN KEY (locked_by_attempt) REFERENCES payment_attempts(id) ON DELETE SET NULL;
 
-CREATE TABLE payment_attempt_items (
+CREATE TABLE IF NOT EXISTS payment_attempt_items (
   payment_attempt_id UUID NOT NULL REFERENCES payment_attempts(id) ON DELETE CASCADE,
   mesa_item_id    UUID NOT NULL REFERENCES mesa_items(id),
   PRIMARY KEY (payment_attempt_id, mesa_item_id)
 );
 
-CREATE TABLE mesa_division_slots (
+CREATE TABLE IF NOT EXISTS mesa_division_slots (
   mesa_id         UUID NOT NULL REFERENCES mesas(id) ON DELETE CASCADE,
   slot_index      SMALLINT NOT NULL CHECK (slot_index >= 0),
   amount_cents    BIGINT NOT NULL CHECK (amount_cents >= 0),
@@ -631,19 +683,20 @@ CREATE TABLE mesa_division_slots (
                   CHECK (status IN ('available','claimed','paid','released')),
   PRIMARY KEY (mesa_id, slot_index)
 );
-CREATE INDEX idx_division_slots_status ON mesa_division_slots(mesa_id, status);
+CREATE INDEX IF NOT EXISTS idx_division_slots_status ON mesa_division_slots(mesa_id, status);
 
+ALTER TABLE payment_attempts DROP CONSTRAINT IF EXISTS fk_payment_attempts_division_slot;
 ALTER TABLE payment_attempts
   ADD CONSTRAINT fk_payment_attempts_division_slot
   FOREIGN KEY (mesa_id, division_slot_index)
   REFERENCES mesa_division_slots(mesa_id, slot_index)
   DEFERRABLE INITIALLY IMMEDIATE;
-CREATE INDEX idx_payment_attempts_division_slot
+CREATE INDEX IF NOT EXISTS idx_payment_attempts_division_slot
   ON payment_attempts(mesa_id, division_slot_index)
   WHERE division_slot_index IS NOT NULL;
 
 -- ─── processed_webhook_events ─────────────────────────────
-CREATE TABLE processed_webhook_events (
+CREATE TABLE IF NOT EXISTS processed_webhook_events (
   event_id        VARCHAR(100) PRIMARY KEY,
   provider        VARCHAR(20) NOT NULL DEFAULT 'stripe',
   event_type      VARCHAR(100) NOT NULL,
@@ -659,16 +712,16 @@ CREATE TABLE processed_webhook_events (
   processing_lease_id UUID NOT NULL DEFAULT uuid_generate_v4(),
   metadata        JSONB NOT NULL DEFAULT '{}'::jsonb
 );
-CREATE INDEX idx_processed_events_type
+CREATE INDEX IF NOT EXISTS idx_processed_events_type
   ON processed_webhook_events(event_type, processing_started_at DESC);
-CREATE INDEX idx_processed_events_stuck
+CREATE INDEX IF NOT EXISTS idx_processed_events_stuck
   ON processed_webhook_events(processing_started_at) WHERE status = 'processing';
-CREATE INDEX idx_processed_events_retryable
+CREATE INDEX IF NOT EXISTS idx_processed_events_retryable
   ON processed_webhook_events(status, last_attempt_at)
   WHERE status IN ('retryable_no_local_record','failed_retryable');
 
 -- ─── FRIENDS + GROUPS ─────────────────────────────────────
-CREATE TABLE friendships (
+CREATE TABLE IF NOT EXISTS friendships (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   friend_user_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -678,9 +731,9 @@ CREATE TABLE friendships (
   CONSTRAINT no_self_friendship CHECK (user_id <> friend_user_id),
   UNIQUE (user_id, friend_user_id)
 );
-CREATE INDEX idx_friendships_user ON friendships(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id, status);
 
-CREATE TABLE friend_groups (
+CREATE TABLE IF NOT EXISTS friend_groups (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name            VARCHAR(100) NOT NULL,
@@ -689,7 +742,7 @@ CREATE TABLE friend_groups (
   UNIQUE (user_id, name)
 );
 
-CREATE TABLE friend_group_members (
+CREATE TABLE IF NOT EXISTS friend_group_members (
   group_id        UUID NOT NULL REFERENCES friend_groups(id) ON DELETE CASCADE,
   friend_user_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   added_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -697,7 +750,7 @@ CREATE TABLE friend_group_members (
 );
 
 -- ─── INVITATIONS ──────────────────────────────────────────
-CREATE TABLE invitations (
+CREATE TABLE IF NOT EXISTS invitations (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   mesa_id         UUID NOT NULL REFERENCES mesas(id) ON DELETE CASCADE,
   inviter_user_id UUID NOT NULL REFERENCES users(id),
@@ -718,16 +771,16 @@ CREATE TABLE invitations (
   CONSTRAINT chk_invitation_not_self_superseded
     CHECK (superseded_by_id IS NULL OR superseded_by_id <> id)
 );
-CREATE INDEX idx_invitations_mesa    ON invitations(mesa_id, status);
-CREATE INDEX idx_invitations_invited ON invitations(invited_user_id, status);
-CREATE INDEX idx_invitations_token   ON invitations(token) WHERE token IS NOT NULL;
-CREATE UNIQUE INDEX uq_invitations_token_hash
+CREATE INDEX IF NOT EXISTS idx_invitations_mesa    ON invitations(mesa_id, status);
+CREATE INDEX IF NOT EXISTS idx_invitations_invited ON invitations(invited_user_id, status);
+CREATE INDEX IF NOT EXISTS idx_invitations_token   ON invitations(token) WHERE token IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_invitations_token_hash
   ON invitations(token_hash) WHERE token_hash IS NOT NULL;
-CREATE UNIQUE INDEX uq_invitations_pending_in_app
+CREATE UNIQUE INDEX IF NOT EXISTS uq_invitations_pending_in_app
   ON invitations(mesa_id, inviter_user_id, invited_user_id)
   WHERE invitation_type = 'in_app' AND status = 'pending'
     AND superseded_by_id IS NULL;
-CREATE UNIQUE INDEX uq_invitations_pending_link
+CREATE UNIQUE INDEX IF NOT EXISTS uq_invitations_pending_link
   ON invitations(mesa_id, inviter_user_id)
   WHERE invitation_type = 'link' AND status = 'pending'
     AND superseded_by_id IS NULL;
@@ -735,7 +788,7 @@ CREATE UNIQUE INDEX uq_invitations_pending_link
 -- Cada clave de request queda ligada a la autoridad canónica que produjo. Más
 -- de una clave puede converger a la misma invitación sin perder detección de
 -- reuse con otro payload.
-CREATE TABLE invitation_requests (
+CREATE TABLE IF NOT EXISTS invitation_requests (
   inviter_user_id UUID NOT NULL REFERENCES users(id),
   mesa_id         UUID NOT NULL REFERENCES mesas(id) ON DELETE CASCADE,
   idempotency_key VARCHAR(100) NOT NULL,
@@ -744,11 +797,11 @@ CREATE TABLE invitation_requests (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (inviter_user_id, mesa_id, idempotency_key)
 );
-CREATE INDEX idx_invitation_requests_invitation
+CREATE INDEX IF NOT EXISTS idx_invitation_requests_invitation
   ON invitation_requests(invitation_id);
 
 -- ─── TOPUPS + TRANSFERS ───────────────────────────────────
-CREATE TABLE topups (
+CREATE TABLE IF NOT EXISTS topups (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL REFERENCES users(id),
   method          VARCHAR(20) NOT NULL CHECK (method IN ('oxxo','card','spei')),
@@ -775,13 +828,14 @@ CREATE TABLE topups (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX uq_topups_idem_user ON topups(user_id, idempotency_key);
-CREATE INDEX idx_topups_user ON topups(user_id, status, created_at DESC);
-CREATE INDEX idx_topups_stripe ON topups(stripe_payment_intent_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_topups_idem_user ON topups(user_id, idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_topups_user ON topups(user_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_topups_stripe ON topups(stripe_payment_intent_id);
+DROP TRIGGER IF EXISTS trg_topups_updated ON topups;
 CREATE TRIGGER trg_topups_updated BEFORE UPDATE ON topups
   FOR EACH ROW EXECUTE FUNCTION trg_set_updated_at();
 
-CREATE TABLE transfers (
+CREATE TABLE IF NOT EXISTS transfers (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   from_user_id    UUID NOT NULL REFERENCES users(id),
   to_user_id      UUID NOT NULL REFERENCES users(id),
@@ -796,12 +850,12 @@ CREATE TABLE transfers (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT no_self_transfer CHECK (from_user_id <> to_user_id)
 );
-CREATE UNIQUE INDEX uq_transfers_idem ON transfers(from_user_id, idempotency_key);
-CREATE INDEX idx_transfers_from ON transfers(from_user_id, created_at DESC);
-CREATE INDEX idx_transfers_to   ON transfers(to_user_id,   created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_transfers_idem ON transfers(from_user_id, idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_transfers_from ON transfers(from_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_transfers_to   ON transfers(to_user_id,   created_at DESC);
 
 -- ─── RESTAURANT STAFF + TIPS ─────────────────────────────
-CREATE TABLE restaurant_staff (
+CREATE TABLE IF NOT EXISTS restaurant_staff (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   restaurant_id   UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -816,10 +870,10 @@ CREATE TABLE restaurant_staff (
                   CHECK (status IN ('active','suspended','removed')),
   UNIQUE (restaurant_id, user_id)
 );
-CREATE INDEX idx_staff_restaurant ON restaurant_staff(restaurant_id, status);
-CREATE INDEX idx_staff_user       ON restaurant_staff(user_id);
+CREATE INDEX IF NOT EXISTS idx_staff_restaurant ON restaurant_staff(restaurant_id, status);
+CREATE INDEX IF NOT EXISTS idx_staff_user       ON restaurant_staff(user_id);
 
-CREATE TABLE tip_distributions (
+CREATE TABLE IF NOT EXISTS tip_distributions (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   payment_attempt_id UUID NOT NULL REFERENCES payment_attempts(id) ON DELETE CASCADE,
   mesa_id         UUID NOT NULL REFERENCES mesas(id),
@@ -831,10 +885,10 @@ CREATE TABLE tip_distributions (
   reversed_at     TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_tips_staff   ON tip_distributions(staff_id, status, created_at DESC);
-CREATE INDEX idx_tips_attempt ON tip_distributions(payment_attempt_id);
+CREATE INDEX IF NOT EXISTS idx_tips_staff   ON tip_distributions(staff_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tips_attempt ON tip_distributions(payment_attempt_id);
 
-CREATE TABLE tip_refund_reversals (
+CREATE TABLE IF NOT EXISTS tip_refund_reversals (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tip_distribution_id UUID NOT NULL REFERENCES tip_distributions(id) ON DELETE CASCADE,
   payment_attempt_id  UUID NOT NULL REFERENCES payment_attempts(id) ON DELETE CASCADE,
@@ -847,11 +901,11 @@ CREATE TABLE tip_refund_reversals (
   reason          VARCHAR(500),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_tip_reversals_attempt ON tip_refund_reversals(payment_attempt_id);
-CREATE INDEX idx_tip_reversals_review
+CREATE INDEX IF NOT EXISTS idx_tip_reversals_attempt ON tip_refund_reversals(payment_attempt_id);
+CREATE INDEX IF NOT EXISTS idx_tip_reversals_review
   ON tip_refund_reversals(status) WHERE status = 'manual_review';
 
-CREATE TABLE payment_refunds (
+CREATE TABLE IF NOT EXISTS payment_refunds (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   payment_attempt_id UUID NOT NULL REFERENCES payment_attempts(id) ON DELETE CASCADE,
   stripe_charge_id  VARCHAR(100),
@@ -869,14 +923,14 @@ CREATE TABLE payment_refunds (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   processed_at    TIMESTAMPTZ
 );
-CREATE UNIQUE INDEX uq_payment_refunds_raw_event
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_refunds_raw_event
   ON payment_refunds(raw_event_id) WHERE raw_event_id IS NOT NULL;
-CREATE INDEX idx_payment_refunds_attempt ON payment_refunds(payment_attempt_id);
-CREATE INDEX idx_payment_refunds_review
+CREATE INDEX IF NOT EXISTS idx_payment_refunds_attempt ON payment_refunds(payment_attempt_id);
+CREATE INDEX IF NOT EXISTS idx_payment_refunds_review
   ON payment_refunds(status, created_at DESC) WHERE status = 'pending_review';
 
 -- ─── NOTIFICATIONS + PUSH + MISC ─────────────────────────
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   type            VARCHAR(50) NOT NULL,
@@ -889,13 +943,13 @@ CREATE TABLE notifications (
   pushed_at       TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_notif_user_unread
+CREATE INDEX IF NOT EXISTS idx_notif_user_unread
   ON notifications(user_id, created_at DESC) WHERE read_at IS NULL;
-CREATE INDEX idx_notif_user ON notifications(user_id, created_at DESC);
-CREATE INDEX idx_notif_push_pending
+CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notif_push_pending
   ON notifications(created_at) WHERE pushed_at IS NULL;
 
-CREATE TABLE push_devices (
+CREATE TABLE IF NOT EXISTS push_devices (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token           VARCHAR(500) NOT NULL,
@@ -906,9 +960,9 @@ CREATE TABLE push_devices (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, token)
 );
-CREATE INDEX idx_push_devices_user ON push_devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_push_devices_user ON push_devices(user_id);
 
-CREATE TABLE state_transitions (
+CREATE TABLE IF NOT EXISTS state_transitions (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   entity_type     VARCHAR(30) NOT NULL,
   entity_id       UUID NOT NULL,
@@ -919,10 +973,10 @@ CREATE TABLE state_transitions (
   metadata        JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_state_transitions_entity
+CREATE INDEX IF NOT EXISTS idx_state_transitions_entity
   ON state_transitions(entity_type, entity_id, created_at DESC);
 
-CREATE TABLE dispersals (
+CREATE TABLE IF NOT EXISTS dispersals (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   mesa_id         UUID NOT NULL REFERENCES mesas(id),
   restaurant_id   UUID NOT NULL REFERENCES restaurants(id),
@@ -975,11 +1029,12 @@ CREATE TABLE dispersals (
                AND stp_provider_id IS NOT NULL AND stp_submitted_at IS NOT NULL
                AND stp_confirmed_at IS NOT NULL))
 );
-CREATE INDEX idx_dispersals_status ON dispersals(status, next_retry_at);
+CREATE INDEX IF NOT EXISTS idx_dispersals_status ON dispersals(status, next_retry_at);
+DROP TRIGGER IF EXISTS trg_dispersals_updated ON dispersals;
 CREATE TRIGGER trg_dispersals_updated BEFORE UPDATE ON dispersals
   FOR EACH ROW EXECUTE FUNCTION trg_set_updated_at();
 
-CREATE FUNCTION guard_dispersal_stp_request_immutable()
+CREATE OR REPLACE FUNCTION guard_dispersal_stp_request_immutable()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
   IF OLD.stp_request_hash IS NOT NULL
@@ -991,6 +1046,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+DROP TRIGGER IF EXISTS trg_dispersal_stp_request_immutable ON dispersals;
 CREATE TRIGGER trg_dispersal_stp_request_immutable
   BEFORE UPDATE ON dispersals
   FOR EACH ROW EXECUTE FUNCTION guard_dispersal_stp_request_immutable();

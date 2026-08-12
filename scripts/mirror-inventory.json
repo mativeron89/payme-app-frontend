@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "a8611eca7c78bf5bcc5f238a5821a34376d41235",
-  "total": 74,
+  "commit": "415651ca4ef393a333206269e4a7f598c2b647de",
+  "total": 79,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -137,6 +137,18 @@
       "bytes": 1317
     },
     {
+      "origen": "db/migrate_signup_invitations_v2.49.0.sql",
+      "destino": "db/migrate_signup_invitations_v2.49.0.sql",
+      "sha256": "a872838524c9722aec8ff618e50dc58fdf69b2e2472875db051873e3fe9d6893",
+      "bytes": 1766
+    },
+    {
+      "origen": "db/migrate_signup_rate_limits_v2.49.0.sql",
+      "destino": "db/migrate_signup_rate_limits_v2.49.0.sql",
+      "sha256": "0228d47ae8006115500f17a692b0565e454d38137e7453ea2268e8ee2579aca8",
+      "bytes": 744
+    },
+    {
       "origen": "db/migrate_topup_stripe_contract_v2.28.4.sql",
       "destino": "db/migrate_topup_stripe_contract_v2.28.4.sql",
       "sha256": "6567d33603c0ecc871054ddad56152bcf4069e07736b0b174b3ca0476353a3ac",
@@ -163,8 +175,8 @@
     {
       "origen": "db/schema.sql",
       "destino": "db/schema.sql",
-      "sha256": "7be0f52e0819bc07370612903b3c488755def5da633b75c59342fa4eab592b9c",
-      "bytes": 47740
+      "sha256": "1ad1ab21cde9a694a2f4a80d8677a4abcb8409b417aec832d865e2629101207b",
+      "bytes": 52318
     },
     {
       "origen": "docs/history/CHANGELOG_v2.11.md",
@@ -229,8 +241,8 @@
     {
       "origen": "routes/auth.js",
       "destino": "routes/auth.js",
-      "sha256": "31c98f3cb88ce141d526b58033f57079b4b79bc09d807ca8d781f58180f871ef",
-      "bytes": 14681
+      "sha256": "bf62d25b25faa1a18a8acc9897b56d9079dcdaa9156cb78a8bb85e2bb31922cf",
+      "bytes": 16674
     },
     {
       "origen": "routes/config.js",
@@ -247,8 +259,8 @@
     {
       "origen": "routes/consent.js",
       "destino": "routes/consent.js",
-      "sha256": "534887fb90ca398df868a2a36b3dd3537e4a64b62464cdce94cded0ca9928ba1",
-      "bytes": 7134
+      "sha256": "b4505bbea9f336e13383e3523ba65f94d3c11347d7e1960a8fa654b87d5634bc",
+      "bytes": 7814
     },
     {
       "origen": "routes/friends.js",
@@ -283,8 +295,8 @@
     {
       "origen": "routes/ocr.js",
       "destino": "routes/ocr.js",
-      "sha256": "224b68b9483d5e76b424d18b156c0b7dd78e89398f0b6a5c06ab33e9fec89c48",
-      "bytes": 9752
+      "sha256": "0195dfa12e238f3baee31326315001705613a11bd621a9e5b2b757cc730852e4",
+      "bytes": 10110
     },
     {
       "origen": "routes/payment-methods.js",
@@ -313,8 +325,8 @@
     {
       "origen": "routes/stp-webhook.js",
       "destino": "routes/stp-webhook.js",
-      "sha256": "b53b35a5bbe57254dce22efe21cc9cb2a163f9f76489bd971eea41dd9578a3d7",
-      "bytes": 2554
+      "sha256": "cb3d55d71728a134c873e9943dc33f48aaa0d622337f7d74a8aeba97e0cafff4",
+      "bytes": 2844
     },
     {
       "origen": "routes/topup.js",
@@ -337,8 +349,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "908618c83305729187331f7f3468a42e6bc466ff3cbb9fb06d792f99c930e3ed",
-      "bytes": 17225
+      "sha256": "cb5d4f65791b17ebbcd7b4570fb4e8b0b80cc4fc9e3cfbc631dfe52e8dcfde70",
+      "bytes": 18036
     },
     {
       "origen": "services/cardEligibility.js",
@@ -389,6 +401,12 @@
       "bytes": 4360
     },
     {
+      "origen": "services/ocrResponseContract.js",
+      "destino": "services/ocrResponseContract.js",
+      "sha256": "2b0d6068d2e704d4fa178e708d8384d0b059ed6c7b4c3e735a60b79fc64cd25f",
+      "bytes": 3603
+    },
+    {
       "origen": "services/paymentAttemptReconciler.js",
       "destino": "services/paymentAttemptReconciler.js",
       "sha256": "79d3fa336cfb3f4cea4d4ba200fb8bb49793716042cca2e6be19d9b47f38c74c",
@@ -411,6 +429,18 @@
       "destino": "services/savedCards.js",
       "sha256": "07fa9c4ba8d40d4b1ade75f45fb0f7fe1ce1895b2dc75a095f7a0f39e32ec973",
       "bytes": 21493
+    },
+    {
+      "origen": "services/signupInvitations.js",
+      "destino": "services/signupInvitations.js",
+      "sha256": "c111f01a4123580ab56f92ae6d5da8d222e6b6fe9891f43da4984695fddbfc0d",
+      "bytes": 5348
+    },
+    {
+      "origen": "services/signupRateLimit.js",
+      "destino": "services/signupRateLimit.js",
+      "sha256": "8633e72df914c073d9017f739e6ae1ac42fa02bba36f37aae2286da24166f0d1",
+      "bytes": 6205
     },
     {
       "origen": "services/topupProcessor.js",

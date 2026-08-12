@@ -81,7 +81,16 @@ publicRouter.get('/:kind', sesionSalvoPublico, async (req, res, next) => {
     if (!legal.KINDS.includes(req.params.kind)) {
       return res.status(404).json({ error: 'legal_text_not_found' });
     }
-    const v = await legal.getVigente(req.params.kind);
+    let v;
+    if (legal.REQUIRED_AT_STARTUP.includes(req.params.kind)) {
+      const verified = await legal.getVerifiedCurrent(req.params.kind);
+      if (!verified.status.ready) {
+        return res.status(503).json({ error: 'legal_text_unavailable' });
+      }
+      v = verified.vigente;
+    } else {
+      v = await legal.getVigente(req.params.kind);
+    }
     if (!v) return res.status(404).json({ error: 'legal_text_not_published' });
     res.json({
       legal_text: {
@@ -97,8 +106,17 @@ publicRouter.get('/:kind', sesionSalvoPublico, async (req, res, next) => {
 /** GET /api/legal/:kind/versions/:version — recupera un texto HISTÓRICO. */
 publicRouter.get('/:kind/versions/:version', sesionSalvoPublico, async (req, res, next) => {
   try {
+    if (legal.REQUIRED_AT_STARTUP.includes(req.params.kind)) {
+      const status = await legal.getPublicationStatus(req.params.kind);
+      if (!status.ready) {
+        return res.status(503).json({ error: 'legal_text_unavailable' });
+      }
+    }
     const v = await legal.getVersion(req.params.kind, req.params.version);
     if (!v) return res.status(404).json({ error: 'legal_text_not_found' });
+    if (legal.hashBody(v.body) !== v.hash) {
+      return res.status(503).json({ error: 'legal_text_unavailable' });
+    }
     res.json({
       legal_text: {
         kind: v.kind, version: v.version, hash: v.hash,
