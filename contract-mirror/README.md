@@ -19,14 +19,14 @@ desde `src/` y nunca se corrige a mano.
 🆕 **79 archivos espejados** más este README.
 
 Este refresh agrega cinco fuentes que el consumidor necesita para el carril
-F&F y actualiza siete ya espejadas:
+F&F y actualiza seis ya espejadas:
 
 - `services/signupInvitations.js` y las dos migraciones de alta/rate limit:
   `POST /auth/register` exige `invitation_token`, ligado al email, vigente y de
   un uso; todos los rechazos de autoridad comparten
   `registration_not_available`.
 - `services/signupRateLimit.js`: la limitación durable del alta y sus errores
-  `too_many_signup_attempts` / `registration_unavailable`.
+  `too_many_signup_attempts` / `rate_limit_unavailable`.
 - `routes/consent.js`: el aviso de privacidad vigente se lee sin sesión y
   falla con `legal_text_unavailable` si su publicación no está íntegra.
 - `services/ocrResponseContract.js`: shape cerrado de ítems, señales

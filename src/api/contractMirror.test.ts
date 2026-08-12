@@ -30,6 +30,23 @@ const espejo = import.meta.glob('/contract-mirror/**/*', {
   eager: true,
 }) as Record<string, string>;
 
+const inventarioRaw = import.meta.glob('/scripts/mirror-inventory.json', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
+interface MirrorInventory {
+  commit: string;
+  total: number;
+}
+
+function inventario(): MirrorInventory {
+  const raw = inventarioRaw['/scripts/mirror-inventory.json'];
+  expect(raw, 'no se encontró el inventario autoritativo adoptado').toBeTruthy();
+  return JSON.parse(raw!) as MirrorInventory;
+}
+
 /** El README de procedencia es la ÚNICA exclusión legítima. */
 const PROCEDENCIA = '/contract-mirror/README.md';
 
@@ -66,9 +83,15 @@ describe('inventario del contract-mirror', () => {
     const m = /\*\*(\d+) archivos espejados\*\*/.exec(readme!);
     expect(m, 'el README debe declarar "**N archivos espejados**"').toBeTruthy();
     expect(Number(m![1])).toBe(espejados.length);
+    expect(inventario().total).toBe(espejados.length);
   });
 
-  it('el README declara el commit fuente con hash completo de 40 caracteres', () => {
-    expect(espejo[PROCEDENCIA]!).toMatch(/Commit exacto: `[0-9a-f]{40}`/);
+  it('la procedencia VIGENTE declara exactamente el commit del inventario', () => {
+    const readme = espejo[PROCEDENCIA]!;
+    const vigente = readme.split('### Refresh anterior', 1)[0] ?? '';
+    const hashes = [...vigente.matchAll(/`([0-9a-f]{40})`/g)].map((m) => m[1]);
+    expect(hashes.length, 'la procedencia vigente debe declarar al menos contenido y publicación')
+      .toBeGreaterThanOrEqual(2);
+    expect(hashes[0]).toBe(inventario().commit);
   });
 });
