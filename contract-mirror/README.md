@@ -6,12 +6,22 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-11** (`D-FF-2-BIS` · sandbox).
-- Commit exacto y procedencia del CONTENIDO: **`0ce21f4bb580acf5756809c6502e503fe707e1d1`**
+- Fecha del refresh: **2026-08-11** (`D-FF-2-BIS` · sandbox, y después OCR).
+- Commit exacto y procedencia del CONTENIDO: **`a8611eca7c78dd42ba0b32e8fd0ff42b8dbdca07`**
   (`feat(legal): aviso 2.1.0 — la prueba ahora tiene pagos`). Esta vez los dos
   hashes COINCIDEN: el inventario del dueño declara el mismo commit que espeja.
 
-🆕 **73 archivos espejados** más este README — entra `services/moneyRail.js`.** Es la capability
+🆕 **74 archivos espejados** más este README.
+
+- `a8611ec` (2026-08-11) suma **`routes/ocr.js` y `services/ocrRail.js`**: la
+  capability del lector de tickets, con `provider_mime_types`. El emisor la
+  publicó **para que el front construya su `accept` desde el dueño del contrato**
+  en vez de una lista escrita a mano — que ya se había desincronizado.
+- `0ce21f4` había sumado `services/moneyRail.js`.
+
+✅ **Y esta vez el contrato llegó ANTES de que lo necesitáramos**, al revés que
+con `money_rail` — que estuvo vivo en producción tres días antes de que su
+inventario lo declarara. Se nota y se dice. Es la capability
 `money_rail` de `D-FF-2-BIS`: `{ mode, payments_enabled, real_money }`.
 
 🔴 **Y cómo llegó importa más que el archivo.** El dueño desplegó `sandbox` a

@@ -15,6 +15,7 @@ const { birthDateRequeridaEnRegistro } = require('../schemas');
 const { stpRestaurantDispersalReady } = require('../middleware/envValidation');
 const { walletRailCapability } = require('../services/walletRail');
 const { modoMonetarioCapability } = require('../services/moneyRail');
+const { ocrCapability } = require('../services/ocrRail');
 const { version } = require('../package.json');
 const router = express.Router();
 
@@ -73,7 +74,17 @@ router.get('/', (req, res) => {
       // Sólo describe la capacidad de dispersar settlement al restaurante;
       // nunca es un gate de wallet/IFPE ni habilita endpoints de saldo.
       stp_dispersal: stpRestaurantDispersalReady(),
-      ocr_real: process.env.OCR_FEATURE_FLAG === 'real',
+      // ⚠️ `ocr_real` se CONSERVA con su valor de siempre: es contrato vigente y
+      // el front lo lee. Lo que NO hace es lo que su nombre sugiere — publica
+      // el FLAG, no que el OCR funcione.
+      ocr_real: ocrCapability().mode === 'real',
+      // 🔴 Lo aditivo y honesto. `credentials_present` dice exactamente lo que
+      // mide: que las tres variables de AWS están definidas. NO acredita que la
+      // clave sirva, que el rol tenga permiso de Textract, que la región sea la
+      // correcta ni que haya salida a internet — eso sólo lo prueba un escaneo.
+      // Prometer más sería la misma mentira por omisión que un `/ready` que
+      // sólo mira que el proceso esté vivo.
+      ocr: ocrCapability(),
       // OLA 5 · ver WALLET_RAIL arriba. Constante, no bandera.
       wallet_rail: WALLET_RAIL,
       // D-FF-2 (2026-08-10) · modo monetario global. Sale de

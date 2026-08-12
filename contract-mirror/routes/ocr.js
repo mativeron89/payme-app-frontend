@@ -26,7 +26,13 @@ const logger = require('../utils/logger');
 
 const router = express.Router();
 
-const USE_REAL = process.env.OCR_FEATURE_FLAG === 'real';
+// 🔴 El modo sale de `services/ocrRail.js`, que lo parsea ESTRICTO. Antes acá
+// decía `process.env.OCR_FEATURE_FLAG === 'real'`, y con eso `Real`, `REAL`,
+// `true` o un typo caían a mock EN SILENCIO: quien configuró AWS quedaba
+// convencido de haberlo prendido, y el síntoma habría sido que los tickets se
+// leen mal —porque el mock inventa— sin un solo error en los logs.
+const { ocrRealHabilitado, proveedorSoporta, MIME_PROVEEDOR } = require('../services/ocrRail');
+const USE_REAL = ocrRealHabilitado();
 // v2.19 (D5): proveedor real integrado — Amazon Textract (services/ocrTextract).
 // El DEFAULT sigue siendo mock: nada cambia hasta setear OCR_FEATURE_FLAG=real
 // + credenciales AWS por entorno.
@@ -165,6 +171,31 @@ router.post('/', parseImageUpload, async (req, res, next) => {
       user_id: req.user.id, size_bytes: req.file.size,
       mime: req.file.mimetype, magic, mode: USE_REAL ? 'real' : 'mock',
     });
+
+    // 🔴 En modo REAL, cortar acá lo que Textract no procesa (webp y heic).
+    // NO cambia SI falla —hoy ya falla— sino CUÁNDO y con qué claridad: antes
+    // la foto viajaba entera, pasaba magic bytes y moría al final con un
+    // `provider_error` genérico, indistinguible de una caída de AWS.
+    //
+    // ⚠️ El código es PROPIO a propósito: el front tiene que poder decirle a la
+    // persona «esa foto está en un formato que no podemos leer» en vez de
+    // «falló el servicio». Y se publica la lista en /api/config para que arme
+    // su `accept` desde el dueño del contrato.
+    //
+    // En modo MOCK se siguen aceptando los cuatro: apretarlo antes de que
+    // exista la decisión de producto rompería la demo para todos los iPhone
+    // —HEIC es su formato por defecto— que es justo la prueba que está por
+    // abrirse.
+    if (USE_REAL && !proveedorSoporta(req.file.mimetype)) {
+      logger.warn('ocr_unsupported_for_provider', {
+        user_id: req.user.id, mime: req.file.mimetype, magic,
+      });
+      return res.status(415).json({
+        error: 'unsupported_image_type_for_provider',
+        provider_mime_types: [...MIME_PROVEEDOR],
+        message: 'El proveedor de lectura no procesa este formato de imagen.',
+      });
+    }
 
     if (USE_REAL) {
       // v2.19 (D5): Textract. Política del acta ante fallo del proveedor:

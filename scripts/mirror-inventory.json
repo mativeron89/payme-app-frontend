@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "0ce21f4bb580acf5756809c6502e503fe707e1d1",
-  "total": 73,
+  "commit": "a8611eca7c78bf5bcc5f238a5821a34376d41235",
+  "total": 74,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -235,8 +235,8 @@
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "f3aa2c4b5149016ea6e938cf701e452f96b95d6224979c4c758b86158f897a09",
-      "bytes": 5480
+      "sha256": "99832225650c20249f5795f363de493a8682a86d732ac652644c1d35c57d94cd",
+      "bytes": 6224
     },
     {
       "origen": "routes/connect.js",
@@ -283,8 +283,8 @@
     {
       "origen": "routes/ocr.js",
       "destino": "routes/ocr.js",
-      "sha256": "bac08e63e2495751e3fa0d015d25ddc8b3724b326f7d0dd89cbba764e09cf764",
-      "bytes": 7993
+      "sha256": "224b68b9483d5e76b424d18b156c0b7dd78e89398f0b6a5c06ab33e9fec89c48",
+      "bytes": 9752
     },
     {
       "origen": "routes/payment-methods.js",
@@ -381,6 +381,12 @@
       "destino": "services/notifications.js",
       "sha256": "a4b4bbf765961fb4f20bcb09a8b3a983de5cd5c1bfeb8fc91eb9787aecd8114e",
       "bytes": 6030
+    },
+    {
+      "origen": "services/ocrRail.js",
+      "destino": "services/ocrRail.js",
+      "sha256": "bddc9d221c986f92e9ba5fd977225e08bb9a834c211e381d445d2655ebe18ae1",
+      "bytes": 4360
     },
     {
       "origen": "services/paymentAttemptReconciler.js",
