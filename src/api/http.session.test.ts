@@ -89,7 +89,7 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
   it('logout intenta el borrado físico aunque falle el tombstone durable', async () => {
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
       if ((init?.body as string | undefined)?.includes('password')) {
-        return response({ access_token: 'access-fisico', refresh_token: 'refresh-fisico', expires_in: 900, user });
+        return response({ access_token: 'a-fis', refresh_token: 'r-fis', expires_in: 900, user });
       }
       return response({ ok: true });
     }));
