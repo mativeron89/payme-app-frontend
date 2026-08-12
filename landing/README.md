@@ -90,8 +90,9 @@ artefacto perdió es peor que no tener documento, porque desactiva al que lee.**
 
 ### Qué hace el script, y por qué se aceptó
 
-Tres cosas, ninguna con red: el nav se achica al scrollear, una barra de
-progreso de lectura, y el desplegable de «Iniciar sesión».
+Cuatro cosas, ninguna con red: agrega sombra al nav al scrollear sin cambiar
+su tamaño, actualiza una barra de progreso de lectura, controla el desplegable
+de «Iniciar sesión» y aplica el diccionario ES/EN embebido.
 
 El motivo original de la invariante era concreto: *sin grafo de módulos no hay
 dónde colar el contexto de sesión, la capa de API ni Stripe.* **Un script
@@ -105,8 +106,9 @@ nada de eso. El PROPÓSITO se conserva; la LETRA no.**
 - **cero archivos `.js` emitidos** — no hay entry de módulo;
 - **exactamente UN `<script>`**, para que un segundo no entre callado;
 - **sin `src` y sin `type="module"`** — un script externo sería un tercero;
-- **sin `import`, `require`, `fetch`, `XMLHttpRequest`, `eval`, storage ni
-  cookies** — verificado sobre el contenido del script emitido;
+- **sin `import`, `require`, `fetch`, `XMLHttpRequest`, `eval`, cookies ni
+  storage de sesión** — el único storage persistente permitido es
+  `localStorage["payme-landing-lang"]`, limitado por test a los valores ES/EN;
 - ⭐ **y el acceso vivo funciona SIN JavaScript.** Es la condición que importa:
   si el único camino al link fuera el desplegable, un script roto dejaría la
   landing sin salida. El CTA del hero es un `<a href>` puro, y se verifica con
