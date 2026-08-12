@@ -115,7 +115,7 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
         return Promise.resolve(response({ access_token: 'a-residual', refresh_token: 'r-residual', expires_in: 900, user }));
       }
       return new Promise<Response>((resolve) => {
-        releaseLogout = () => resolve(response({ ok: true }));
+        releaseLogout = () => resolve(response({ revoked: true }));
       });
     }));
     await httpLogin(user.email, 'password');
@@ -144,6 +144,21 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
         return Promise.resolve(response({ access_token: 'a-sin-salida', refresh_token: 'r-sin-salida', expires_in: 900, user }));
       }
       return Promise.reject(new Error('network_down'));
+    }));
+    await httpLogin(user.email, 'password');
+    storage.failSet = true;
+    storage.failRemove = true;
+
+    await expect(httpLogout()).rejects.toThrow('session_storage_unavailable');
+    expect(storage.values.has('payme_app_session')).toBe(true);
+  });
+
+  it('un 200 que no revocó sesión no reemplaza la invalidación durable local', async () => {
+    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => {
+      if ((init?.body as string | undefined)?.includes('password')) {
+        return Promise.resolve(response({ access_token: 'a-legacy', refresh_token: 'r-legacy', expires_in: 900, user }));
+      }
+      return Promise.resolve(response({ revoked: false, reason: 'legacy_token_no_session' }));
     }));
     await httpLogin(user.email, 'password');
     storage.failSet = true;

@@ -1,5 +1,16 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.77.6 — logout acredita la revocación, no sólo el HTTP 200 (2026-08-11)
+
+PATCH del consumidor del contrato vigente, sin cambio de API backend.
+
+- Cuando storage no puede invalidar ni borrar el bearer, sólo
+  `{ revoked: true }` acredita la salida remota.
+- Un `200` legacy con `revoked: false` mantiene el fallo cerrado y se informa al
+  caller; ya no se confunde transporte exitoso con sesión revocada.
+- La regresión reproduce ese cuerpo exacto del contrato espejado.
+
+
 ## 0.77.5 — el scanner conserva identificadores compuestos (2026-08-11)
 
 PATCH del instrumento de seguridad, sin cambio de runtime ni contrato.

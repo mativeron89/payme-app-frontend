@@ -247,8 +247,8 @@ export async function httpLogout(): Promise<void> {
   // quede sin handler. Normalmente la limpieza local permite continuar sin
   // esperar la red; si storage falla por completo, esta revocación pasa a ser
   // la única invalidación durable disponible y deja de ser fire-and-forget.
-  const remoteRevoked = rawRequest('POST', '/auth/logout', undefined, session.access_token, 3_000).then(
-    () => true,
+  const remoteRevoked = rawRequest<{ revoked?: unknown }>('POST', '/auth/logout', undefined, session.access_token, 3_000).then(
+    (result) => result?.revoked === true,
     () => false,
   );
   // Invalidación durable inmediata; la limpieza física se serializa con el
