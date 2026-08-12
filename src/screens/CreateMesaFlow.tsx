@@ -1,4 +1,5 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
+import { useOcrRail } from '../api/ocrRail';
 import { useIdioma } from '../i18n/idioma';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey } from '../api';
@@ -90,6 +91,7 @@ function lineTotalCents(it: EditItem): number | null {
 
 export function CreateMesaFlow() {
   const { t } = useIdioma();
+  const { accept: acceptOcr } = useOcrRail();
   // OLA 5D · el método "Saldo PayMe" de la garantía lo habilita el BACKEND.
   const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
@@ -1048,10 +1050,18 @@ export function CreateMesaFlow() {
           </div>
           {/* Real: abre la cámara del teléfono. POST /api/ocr es multipart y
               valida los magic bytes, así que necesita una imagen de verdad. */}
+            {/* 🔴 El `accept` sale del DUEÑO del contrato, no de una lista acá.
+                Estaba hardcodeado con los cuatro formatos y Textract procesa
+                jpeg y png: un HEIC —el default del iPhone— se elegía, se subía
+                entero y moría en el proveedor. `readOcrRail` lo construye según
+                el modo publicado; el porqué del fallback vive en `api/ocrRail.ts`.
+
+                ⚠️ `accept` es una SUGERENCIA, no un gate: deja de invitarlo, no
+                lo impide. Convertir en el servidor es otra orden. */}
           <input
             ref={fileInput}
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic"
+            accept={acceptOcr}
             capture="environment"
             hidden
             onChange={(e) => {

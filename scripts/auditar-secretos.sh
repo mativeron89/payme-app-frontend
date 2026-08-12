@@ -91,14 +91,33 @@ PATRONES=(
   'postgres(ql)?://[^\s"'"'"']+:[^\s"'"'"']+@'
 )
 
+# 🔴 UN FALSO POSITIVO REAL, MEDIDO · lista CERRADA y nombrada.
+#
+# `autoComplete={mode === 'login' ? 'current-password' : 'new-password'}` son los
+# tokens ESTÁNDAR de HTML, no valores. El patrón de asignación matchea el tramo
+# `password' : 'new-password` **en la forma ternaria con comillas simples**, así
+# que cualquier diff que toque `LoginScreen` haría gritar a este gate.
+#
+# ⚠️ **Y la primera medición me dijo lo contrario.** Probé
+# `<input autoComplete="new-password" />` —forma de atributo, comillas dobles—
+# que **NO matchea**, y estuve a punto de no agregar esta excepción. La forma que
+# el archivo usa de verdad sí matchea. **Dos formas del mismo token, una matchea
+# y la otra no: probar la que uno imagina no es probar la que hay.**
+#
+# Se excluyen los DOS tokens, no la categoría. Una guarda que grita siempre se
+# apaga sola; una que excluye de más deja de vigilar. Tercer token estándar → se
+# agrega acá con su nombre, nunca un comodín.
+BENIGNOS='(current|new)-password'
+
 hallazgos=0
 for p in "${PATRONES[@]}"; do
   # Sólo líneas AGREGADAS: una ELIMINACIÓN de algo con forma de secreto es lo
   # contrario de un problema, y confundirlas ya pasó una vez con las URLs de
   # Google Fonts —nueve coincidencias, las nueve borrados—.
-  if grep -qE "^\+.*$p" "$diff_file"; then
+  reales=$(grep -nE "^\+.*$p" "$diff_file" | grep -vE "$BENIGNOS" || true)
+  if [ -n "$reales" ]; then
     echo "🔴 VALOR con forma de secreto: /$p/" >&2
-    grep -nE "^\+.*$p" "$diff_file" | head -3 | sed 's/^/     /' >&2
+    printf '%s\n' "$reales" | head -3 | sed 's/^/     /' >&2
     hallazgos=$((hallazgos + 1))
   fi
 done

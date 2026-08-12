@@ -1,5 +1,72 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.77.0 — el `accept` del lector de tickets sale del contrato (2026-08-11)
+
+`CreateMesaFlow` tenía `accept="image/jpeg,image/png,image/webp,image/heic"`
+**hardcodeado**. Textract procesa **jpeg y png, nada más**: un HEIC —el formato
+por defecto del iPhone— se elegía, se subía entero, pasaba los magic bytes y
+**recién moría en el proveedor**. Hoy no muerde porque el OCR está en mock;
+muerde el día que se prenda.
+
+Ahora lo construye `readOcrRail` desde `features.ocr`, que el emisor publicó
+**exactamente para esto**.
+
+### 🔴 Refuto la orden: `provider_mime_types` a secas mide de menos
+
+Pedían usar esa lista como `accept`. **El propio emisor explica por qué no
+alcanza:**
+
+> *«En modo MOCK se siguen aceptando los cuatro, A PROPÓSITO: apretar el mock
+> antes de que exista la decisión rompería la demo para todos los iPhone, que es
+> justo la prueba que está por abrirse.»*
+
+**En mock nada llega a Textract**, así que el HEIC funciona de punta a punta.
+Aplicar la lista del proveedor sin mirar el modo **le angostaría el selector a
+los iPhone en la demo** — la decisión que el backend tomó y descartó de su lado.
+
+```
+mode 'real'         → provider_mime_types
+mode 'mock'         → accepted_mime_types
+modo desconocido    → provider_mime_types   (no se deduce del nombre)
+```
+
+**El mutante que aplica la orden literal —«nunca ensanchar»— pone en rojo el
+caso del iPhone en mock.** Es la evidencia de la refutación, no un argumento.
+
+### El fallback, y el criterio
+
+Sin capability no hay listas y el fallback es una constante: **la
+INTERSECCIÓN**, `image/jpeg,image/jpg,image/png`. **El criterio es la asimetría
+del error, no la permisividad:**
+
+```
+estricto y era mock    el selector no ofrece HEIC  → falla TEMPRANO y a la vista
+permisivo y era real   se elige, se sube, se espera → 415 DESPUÉS del esfuerzo
+```
+
+Y como `accept` **no es un gate**, el fallback estricto no bloquea a nadie:
+**deja de invitar**. ⚠️ Esto **NO resuelve** el HEIC —el iPhone puede entregarlo
+igual—; convertir en el servidor es otra orden.
+
+**13 tests · 3 mutantes rojos**, incluido el `accept` vacío: un input sin
+`accept` ofrece cualquier archivo.
+
+### 🔴 Y un falso positivo REAL en el gate de secretos, medido dos veces
+
+`autoComplete={mode === 'login' ? 'current-password' : 'new-password'}` son
+tokens estándar de HTML. El patrón de asignación **matchea la forma ternaria con
+comillas simples**, así que cualquier diff sobre `LoginScreen` haría gritar al
+gate.
+
+⚠️ **Y la primera medición dijo lo contrario.** Probé la forma de atributo con
+comillas dobles —que NO matchea— y estuve a punto de descartar la excepción.
+**Dos formas del mismo token: una matchea y la otra no. Probar la que uno
+imagina no es probar la que hay.**
+
+Se excluyen **los dos tokens por nombre**, no la categoría, con sonda que
+verifica que un secreto de verdad en la misma corrida **sigue cortando**.
+
+
 ## 0.76.3 — mi auditoría de secretos informaba y no cortaba (2026-08-11)
 
 PATCH: `scripts/auditar-secretos.sh`. **Cero `src/`.**

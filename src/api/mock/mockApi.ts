@@ -288,6 +288,20 @@ export async function mockGetConfig(): Promise<AppConfig> {
       ocr_real: false,
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
+      /**
+       * ⚠️ FORMA ESPEJADA (`contract-mirror/services/ocrRail.js`, `a8611ec`),
+       * a diferencia de `money_rail`, que se leyó de la fuente sin contrato.
+       *
+       * El mock es `mode: 'mock'` y ahí el emisor acepta los CUATRO a propósito
+       * —nada llega a Textract—, así que el `accept` del selector se ensancha.
+       * Es lo que hace que la demo no le angoste el picker a los iPhone.
+       */
+      ocr: {
+        mode: 'mock',
+        credentials_present: false,
+        accepted_mime_types: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic'],
+        provider_mime_types: ['image/jpeg', 'image/png'],
+      },
     },
   });
 }

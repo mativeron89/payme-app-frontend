@@ -103,6 +103,18 @@ export interface AppConfig {
      * determina `real_money`, no se ofrece escribir un número.**
      */
     money_rail?: unknown;
+    /**
+     * `ocr` · capability del lector de tickets (`services/ocrRail.js`, espejado
+     * en `a8611ec`). **`unknown` por el mismo motivo que sus dos vecinos:** el
+     * espejo declara lo que la FUENTE tiene, no lo que el DESPLEGADO devuelve.
+     *
+     * Publica `mode`, `credentials_present`, `accepted_mime_types` y
+     * `provider_mime_types`. **Se lee con `readOcrRail` (`./ocrRail.ts`)**, que
+     * construye el `accept` del selector de archivos desde el dueño del
+     * contrato en vez de una lista escrita a mano — que ya se desincronizó una
+     * vez y por eso el emisor publicó esto.
+     */
+    ocr?: unknown;
   };
 }
 
