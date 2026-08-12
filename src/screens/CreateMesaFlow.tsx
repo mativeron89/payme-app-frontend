@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey } from '../api';
 import { useWalletRail } from '../api/walletRail';
 import { extractApiError } from '../api/errors';
-import { HttpError } from '../api/http';
 import { canUseCardRail, useMoneyRail } from '../api/moneyRail';
 import {
   acquireMonetaryIntent,
@@ -33,6 +32,7 @@ import {
   type DecisionReconciliacion,
 } from './reconciliacionMesaView';
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
+import { decideOcrScan } from './ocrScanView';
 
 /**
  * ORDEN 1-B · "todavía nadie eligió". No es `'new'` —que ya significa "voy a
@@ -78,6 +78,9 @@ interface EditItem {
   priceStr: string;
   quantity: number;
   category?: string;
+  confidence?: number;
+  /** Señal del owner: se conserva incluso después de editar; no se finge certeza. */
+  lowConfidence?: true;
 }
 
 function priceCentsOf(it: EditItem): number {
@@ -97,7 +100,7 @@ function lineTotalCents(it: EditItem): number | null {
 
 export function CreateMesaFlow() {
   const { t } = useIdioma();
-  const { accept: acceptOcr } = useOcrRail();
+  const { accept: acceptOcr, mode: ocrMode } = useOcrRail();
   const moneyRail = useMoneyRail();
   // OLA 5D · el método "Saldo PayMe" de la garantía lo habilita el BACKEND.
   const { walletRailEnabled } = useWalletRail();
@@ -109,12 +112,13 @@ export function CreateMesaFlow() {
   const [scanning, setScanning] = useState(false);
   const [editItems, setEditItems] = useState<EditItem[]>([]);
   /**
-   * §1.6 · qué salió mal en la captura. Era un booleano y no alcanzaba: la foto
-   * demasiado grande y el OCR que no pudo leer son estados DISTINTOS, con color
-   * distinto y con salidas distintas. Meterlos en el mismo cartel obligaba a
-   * elegir un copy que no fuera cierto para uno de los dos.
+   * §1.6 · qué salió mal en la captura. Son estados distintos porque tamaño,
+   * formato, cero ítems y proveedor caído tienen salidas/consejos diferentes;
+   * colapsarlos vuelve falsa al menos una explicación.
    */
-  const [scanIssue, setScanIssue] = useState<'ocr' | 'too_large' | null>(null);
+  const [scanIssue, setScanIssue] = useState<
+    'ocr' | 'no_items' | 'provider' | 'image_type' | 'too_large' | null
+  >(null);
   /**
    * §1.3 · el total que el OCR leyó del ticket IMPRESO, tal como vino. Existe
    * sólo para poder contrastarlo contra la suma de las filas y avisar la
@@ -550,32 +554,47 @@ export function CreateMesaFlow() {
     setScanIssue(null);
     try {
       const r = await api.scanTicket(image);
+      const decision = decideOcrScan(r);
+      if (decision.kind === 'provider_unavailable') {
+        setScannedTotalCents(null);
+        setScanIssue('provider');
+        return;
+      }
+      if (decision.kind === 'no_items') {
+        setScannedTotalCents(null);
+        setScanIssue('no_items');
+        return;
+      }
       setEditItems(
-        r.items.map((i) => ({
+        decision.response.items.map((i) => ({
           name: i.name,
           priceStr: centsToString(i.price_cents),
           quantity: i.quantity,
           ...(i.category && { category: i.category }),
+          ...(i.confidence !== undefined && { confidence: i.confidence }),
+          ...(i.low_confidence === true && { lowConfidence: true as const }),
         })),
       );
-      // El total impreso, para contrastarlo (§1.3). Un OCR que no lo pudo leer
-      // manda 0: eso no es "el ticket sumaba cero", es "no lo sé" → sin dato,
-      // no se compara y la observación queda informativa.
-      setScannedTotalCents(r.total_cents > 0 ? r.total_cents : null);
+      // El total impreso, para contrastarlo (§1.3). Ausente significa “no lo
+      // sé”; cero PRESENTE sí es un valor contractual y debe producir mismatch.
+      setScannedTotalCents(decision.printedTotalCents);
       setScanIssue(null);
-      // El OCR puede contestar 200 con CERO ítems (routes/ocr.js devuelve
-      // `items: []` ante `provider_error`). Con la lista vacía y la vista normal
-      // no habría ni una fila ni el "+ Agregar consumo", que vive en el modo
-      // edición: la pantalla quedaría sin salida. Se abre ya en edición.
-      setEditingItems(r.items.length === 0);
+      // La baja confianza abre los lápices desde el primer frame. No bloquea
+      // continuar: la persona ve la señal y decide qué corregir.
+      setEditingItems(decision.hasLowConfidence);
       setExpandedItem(null);
       setStep('ticket');
     } catch (err) {
-      // El techo se mira ANTES de subir, así que acá sólo cae lo que pasó el
-      // chequeo local y el backend igual rechazó (413 `image_too_large`, p.ej.
-      // un proxy con otro límite). Mismo cartel, misma salida.
-      const tooLarge = err instanceof HttpError && (err.status === 413 || err.body?.error === 'image_too_large');
-      setScanIssue(tooLarge ? 'too_large' : 'ocr');
+      // El techo se mira ANTES de subir, pero el backend sigue siendo autoridad:
+      // clasifica tamaño, formato y multipart; red/timeout/2xx malformado quedan
+      // neutrales porque no prueban que haya faltado luz.
+      const apiError = extractApiError(err);
+      const tooLarge = apiError.status === 413 || apiError.code === 'image_too_large';
+      const imageType = apiError.status === 415
+        || apiError.code === 'unsupported_image_type_for_provider'
+        || apiError.code === 'invalid_image_type'
+        || apiError.code === 'invalid_multipart';
+      setScanIssue(tooLarge ? 'too_large' : imageType ? 'image_type' : 'ocr');
       // El cartel de §1.6 dice lo mismo con sus dos salidas al lado. El toast
       // encima era el segundo aviso del mismo hecho, y tapaba justo la barra.
     } finally {
@@ -1015,9 +1034,7 @@ export function CreateMesaFlow() {
                 <Icon name="x-circle" size={22} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
-                  <p className="state-error-body">
-                    {t('Prueba sacar la foto de nuevo con más luz, o carga los consumos a mano.')}
-                  </p>
+                  <p className="state-error-body">{t('Prueba de nuevo más tarde.')}</p>
                 </div>
               </div>
               {/* Las DOS salidas, al lado. Un OCR que falla no puede terminar
@@ -1025,6 +1042,67 @@ export function CreateMesaFlow() {
               <div className="state-actions">
                 <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
                   {t('Reintentar')}
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                  {t('Cargarlo a mano')}
+                </button>
+              </div>
+            </div>
+          )}
+          {scanIssue === 'no_items' && (
+            <div className="state-error" role="alert">
+              <div className="state-error-row">
+                <Icon name="x-circle" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
+                  <p className="state-error-body">
+                    {t('Prueba sacar la foto de nuevo con más luz, o carga los consumos a mano.')}
+                  </p>
+                </div>
+              </div>
+              <div className="state-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  {t('Reintentar')}
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                  {t('Cargarlo a mano')}
+                </button>
+              </div>
+            </div>
+          )}
+          {scanIssue === 'provider' && (
+            <div className="state-error" role="alert">
+              <div className="state-error-row">
+                <Icon name="x-circle" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
+                  <p className="state-error-body">{t('Prueba de nuevo más tarde.')}</p>
+                </div>
+              </div>
+              <div className="state-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  {t('Reintentar')}
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                  {t('Cargarlo a mano')}
+                </button>
+              </div>
+            </div>
+          )}
+          {scanIssue === 'image_type' && (
+            <div className="state-warn" role="alert">
+              <div className="state-error-row">
+                <Icon name="warning" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
+                </div>
+              </div>
+              {/* Sin el consejo falso de “más luz”: formato/bytes requieren
+                  otra imagen o carga manual. La copy nominal de formato queda
+                  para Diseño; estas dos salidas ya son exactas. */}
+              <div className="state-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  {t('Sacar otra foto')}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
                   {t('Cargarlo a mano')}
@@ -1055,12 +1133,12 @@ export function CreateMesaFlow() {
               la nota de la mesa garantizada— para que en Escanear el amarillo
               signifique exactamente una cosa: algo que la persona tiene que
               resolver ahora. */}
-          <div className="note note-teal scan-note">
-            <b>{IS_MOCK ? t('Modo demo:') : t('Ojo:')}</b>{' '}
-            {IS_MOCK
-              ? t('todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo.')
-              : t('todavía no leemos la foto de verdad — sacala igual y vas a recibir un ticket de ejemplo para continuar.')}
-          </div>
+          {(IS_MOCK || ocrMode === 'mock') && (
+            <div className="note note-teal scan-note">
+              <b>{t('Modo demo:')}</b>{' '}
+              {t('todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo.')}
+            </div>
+          )}
           {/* Real: abre la cámara del teléfono. POST /api/ocr es multipart y
               valida los magic bytes, así que necesita una imagen de verdad. */}
             {/* 🔴 El `accept` sale del DUEÑO del contrato, no de una lista acá.
@@ -1149,7 +1227,7 @@ export function CreateMesaFlow() {
             <Icon name={totalMismatch ? 'warning' : 'info'} size={16} />
             <span>
               {totalMismatch
-                ? t('No coincide con el total del ticket ({0}): hay {1} de {2}.', formatMXN(totalMismatch.printed), formatMXN(Math.abs(totalMismatch.diff)), totalMismatch.diff > 0 ? t('más') : t('menos'))
+                ? <>{t('Checa que el total coincida con el total del ticket')}: {formatMXN(totalMismatch.printed)} · {formatMXN(Math.abs(totalMismatch.diff))} {totalMismatch.diff > 0 ? t('más') : t('menos')}</>
                 : t('Checa que el total coincida con el total del ticket')}
             </span>
           </div>
@@ -1160,9 +1238,23 @@ export function CreateMesaFlow() {
             {editItems.map((it, idx) => {
               const nombre = it.name.trim();
               const etiqueta = nombre || t('consumo {0}', idx + 1);
+              const confidenceWarning = it.lowConfidence ? (
+                <span
+                  className="tk-confidence-warning"
+                  role="img"
+                  aria-label={t('No pudimos leer este ítem')}
+                >
+                  ?
+                </span>
+              ) : null;
               if (editingItems && expandedItem === idx) {
                 return (
-                  <div className="tk-edit" key={idx} ref={expandedRowRef}>
+                  <div
+                    className={`tk-edit ${it.lowConfidence ? 'tk-edit-warning' : ''}`}
+                    key={idx}
+                    ref={expandedRowRef}
+                  >
+                    {confidenceWarning}
                     <label className="tk-edit-field">
                       <span className="tk-edit-lbl">{t('Consumo')}</span>
                       <input
@@ -1210,8 +1302,9 @@ export function CreateMesaFlow() {
                 );
               }
               return (
-                <div className="tk-row" key={idx}>
+                <div className={`tk-row ${it.lowConfidence ? 'tk-row-warning' : ''}`} key={idx}>
                   <span className="tk-qty">{it.quantity}</span>
+                  {confidenceWarning}
                   <span className={`tk-name ${nombre ? '' : 'tk-sin-nombre'}`}>
                     {nombre || t('Sin nombre')}
                   </span>

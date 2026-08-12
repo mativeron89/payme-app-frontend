@@ -36,6 +36,14 @@ const espejo = import.meta.glob('/contract-mirror/routes/ocr.js', {
 
 const ocr = espejo['/contract-mirror/routes/ocr.js'];
 
+const espejoRespuesta = import.meta.glob('/contract-mirror/services/ocrResponseContract.js', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
+const contratoRespuesta = espejoRespuesta['/contract-mirror/services/ocrResponseContract.js'];
+
 /** `limits: { fileSize: 8 * 1024 * 1024 }` → 8388608. */
 const LIMITE = /limits:\s*\{\s*fileSize:\s*(\d+)\s*\*\s*(\d+)\s*\*\s*(\d+)\s*\}/;
 
@@ -64,6 +72,8 @@ describe('el techo de la imagen del OCR sale del contrato', () => {
     // backend, no sólo con el chequeo local: si el código de error cambia, el
     // front cae al cartel genérico de "no pudimos leer el ticket", que es otra
     // cosa y manda a la persona a sacar la foto de nuevo por nada.
-    expect(ocr).toContain("res.status(413).json({ error: 'image_too_large' })");
+    expect(contratoRespuesta, 'no se pudo leer el contrato de respuesta OCR').toBeTypeOf('string');
+    expect(contratoRespuesta).toMatch(/image_too_large:\s*413/);
+    expect(ocr).toContain("errorOcr('image_too_large')");
   });
 });

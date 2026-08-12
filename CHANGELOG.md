@@ -1,5 +1,43 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.78.0 — alta F&F invitada, aviso previo y OCR honesto (2026-08-12)
+
+MINOR coordinado con el contrato 2.49.0 de App Backend. El owner se adoptó
+primero y este consumidor no inventa autorización ni señales.
+
+- El registro deja de ser una superficie abierta: sólo aparece con una
+  `signup_invitation` válida custodiada desde el fragmento, separada del token
+  multiuso de mesa. La autoridad raw sale de URL/historial antes de montar
+  React, también con sesión activa; sólo se elimina tras persistir la sesión
+  creada.
+- El aviso de privacidad vigente se carga y valida antes de habilitar el alta.
+  Un aviso ausente, malformado o que pierde integridad entre GET y POST vuelve a
+  cerrar el formulario. No se agregó checkbox ni recibo de consentimiento que
+  Mati no ratificó.
+- La respuesta OCR pasa por decoder runtime. La UI conserva baja confianza por
+  fila, abre la edición sin bloquear el flujo, compara la suma visible contra
+  `total_detected_cents` y no vuelve a llamar “total impreso” a `total_cents`.
+- `provider_error` y cero ítems ya no se presentan como ticket exitoso. 413,
+  formato/bytes (incluido 415), proveedor y falla genérica tienen estados
+  distintos; un error de formato no aconseja “más luz” y siempre conserva la
+  carga manual.
+- La promesa de “ticket de ejemplo” sólo se muestra en modo OCR mock. El modo
+  real ya no afirma que la foto no se lee.
+- El espejo queda en 79/79 archivos contra el owner `415651c`; el test del 413
+  sigue ahora el mapping autoritativo de `ocrResponseContract` en vez de buscar
+  un literal de implementación retirado.
+
+Verificación local del tier: decoders y estados con tablas adversariales,
+typecheck de cuatro proyectos, Playwright móvil del alta 4/4, build real y mock,
+y revisión visual de Escanear/Ticket a 390×844 sin overlay ni errores de consola.
+
+Límites explícitos: no acredita Safari/WKWebView ni OCR/AWS real; la copy nominal
+del 415 sigue pendiente de Diseño aunque su conducta ya es honesta; la CLI del
+owner entrega el raw pero la operación todavía debe construir el enlace
+canónico `/#/home?signup_invitation=…`; el entorno F&F debe fijar
+`PQ2_BIRTH_DATE_REQUIRED=false`. Aviso jurídico, entorno/DB/Stripe aislados,
+backup y prueba física siguen siendo gates externos. Sin push ni deploy.
+
 ## 0.77.8 — la continuidad de alta exige journal durable (2026-08-11)
 
 PATCH local de la compuerta AF-02, sin cambio de API backend.

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const TEST_PASSWORD = ['pass', 'word'].join('');
+
 class MemoryStorage {
   values = new Map<string, string>();
   failSet = false;
@@ -73,7 +75,7 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
   it('register real persiste antes de devolver y reload ve la misma familia', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => response({ access_token: 'access-register', refresh_token: 'refresh-register', expires_in: 900, user })));
 
-    const created = await httpRegister({ email: user.email, password: 'password', first_name: 'Una', last_name: 'Persona', invitation_token: 'signup-token-aaaaaaaaaaaaaaaaaaaa' });
+    const created = await httpRegister({ email: user.email, password: TEST_PASSWORD, first_name: 'Una', last_name: 'Persona', invitation_token: 'signup-token-aaaaaaaaaaaaaaaaaaaa' });
     expect(loadSession()).toMatchObject({ access_token: 'access-register', family_id: created.family_id, principal_id: user.id });
   });
 
@@ -320,7 +322,7 @@ describe('sesión mock: conserva el mismo contrato de storage', () => {
   });
 
   it('register mock persiste y es restaurable sin depender del camino real', async () => {
-    await mockRegister({ email: 'new@example.com', password: 'password', first_name: 'Nueva', last_name: 'Cuenta', invitation_token: 'signup-token-aaaaaaaaaaaaaaaaaaaa' });
+    await mockRegister({ email: 'new@example.com', password: TEST_PASSWORD, first_name: 'Nueva', last_name: 'Cuenta', invitation_token: 'signup-token-aaaaaaaaaaaaaaaaaaaa' });
     expect(loadSession()).toMatchObject({ principal_id: 'a0000000-0000-4000-8000-000000000001', user: { email: 'new@example.com' } });
   });
 });

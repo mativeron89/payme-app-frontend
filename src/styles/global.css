@@ -3038,6 +3038,34 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* Textract marcó la fila como dudosa. Interrogación + borde: no depende sólo
+   del color, y los lápices se abren automáticamente para poder corregirla. */
+.tk-row.tk-row-warning {
+  margin-inline: calc(-1 * var(--sp-2));
+  padding-inline: var(--sp-2);
+  border-left: 3px solid var(--warning);
+  background: var(--warning-tint);
+}
+
+.tk-confidence-warning {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--warning);
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--warning);
+}
+
+.tk-edit.tk-edit-warning {
+  border-left: 3px solid var(--warning);
+  background: var(--warning-tint);
+}
+
 .tk-qty {
   flex: none;
   min-width: 22px;
