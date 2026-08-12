@@ -924,6 +924,36 @@ body {
   font-family: var(--font-body);
   padding: 8px;
 }
+.legal-notice-state {
+  color: var(--navy);
+  font-size: 13px;
+  margin: 4px 0 12px;
+}
+.legal-notice {
+  border: 1px solid var(--gray-b);
+  border-radius: 10px;
+  background: #fff;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 2px 0 12px;
+  padding: 12px;
+}
+.legal-notice pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--navy);
+  font: 12px/1.5 var(--font-body);
+}
+.legal-notice-language,
+.legal-notice-meta {
+  margin: 0 0 9px;
+  color: var(--gray-txt);
+  font: 11px/1.4 var(--font-body);
+}
+.legal-notice-meta {
+  margin: 9px 0 0;
+}
 .mock-hint {
   margin-top: 14px;
   text-align: center;

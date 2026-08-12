@@ -14,7 +14,9 @@ import {
   acceptInvitationResponse,
   attachPaymentMethodResponse,
   invitationResponse,
+  legalTextResponse,
   mesaCreationResponse,
+  ocrResponse,
   setupIntentResponse,
 } from './contractResponses';
 import { extractApiError } from './errors';
@@ -29,6 +31,7 @@ import type {
   BalanceResponse,
   AttachPaymentMethodResponse,
   MeResponse,
+  LegalTextResponse,
   RestaurantResponse,
   FractionRequest,
   ClabeResponse,
@@ -142,6 +145,8 @@ export interface Api {
    * ignoraría, y volvería a enseñar el comportamiento que se eliminó.
    */
   getConfig(): Promise<AppConfig>;
+  /** Aviso vigente que debe ponerse a disposición antes del alta. Público. */
+  getPrivacyNotice(): Promise<LegalTextResponse>;
   // auth
   login(email: string, password: string): Promise<StoredSession>;
   register(data: RegisterRequest): Promise<StoredSession>;
@@ -284,6 +289,9 @@ function creacionDesdeError(err: unknown): MesaCreationLookup {
 
 const realApi: Api = {
   getConfig: () => httpPublicRequest<AppConfig>('GET', '/config'),
+  getPrivacyNotice: async () => legalTextResponse(
+    await httpPublicRequest<unknown>('GET', '/legal/aviso_privacidad'),
+  ),
   login: (email, password) => httpLogin(email, password),
   register: (data) => httpRegister(data),
   logout: () => httpLogout(),
@@ -321,7 +329,7 @@ const realApi: Api = {
     if (!image || image.size <= 0 || image.size > MAX_TICKET_IMAGE_BYTES) throw new Error('scanTicket requiere una imagen de hasta 8 MiB');
     const form = new FormData();
     form.append('image', image, 'ticket.jpg');
-    return httpRequest<OcrResponse>('POST', '/ocr', form, undefined, OCR_TIMEOUT_MS);
+    return ocrResponse(await httpRequest<unknown>('POST', '/ocr', form, undefined, OCR_TIMEOUT_MS));
   },
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(
@@ -561,6 +569,7 @@ const realApi: Api = {
 
 const mockApi: Api = {
   getConfig: () => mock.mockGetConfig(),
+  getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
   login: (email, password) => mock.mockLogin(email, password),
   register: (data) => mock.mockRegister(data),
   async logout() {
@@ -579,7 +588,7 @@ const mockApi: Api = {
 
   getOpenMesas: () => mock.mockOpenMesas(),
   getMesa: (code, guestToken) => mock.mockGetMesa(code, guestToken ? 'guest' : 'user'),
-  scanTicket: () => mock.mockScanTicket(),
+  scanTicket: async () => ocrResponse(await mock.mockScanTicket()),
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(
       'create_mesa',

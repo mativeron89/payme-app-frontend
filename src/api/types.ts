@@ -41,10 +41,22 @@ export interface MeResponse {
 
 export interface RegisterRequest {
   email: string;
-  phone?: string;
   password: string;
   first_name: string;
   last_name: string;
+  /** D-FF-1 · autoridad one-use, ligada por el owner al email normalizado. */
+  invitation_token: string;
+}
+
+/** GET /api/legal/aviso_privacidad → texto vigente verificado por el owner. */
+export interface LegalTextResponse {
+  legal_text: {
+    kind: 'aviso_privacidad';
+    version: string;
+    hash: string;
+    effective_from: string;
+    body: string;
+  };
 }
 
 // ─── Config (routes/config.js) ─────────────────────────────
@@ -591,10 +603,27 @@ export interface CreateInvitationResponse {
 
 // ─── OCR (routes/ocr.js) ───────────────────────────────────
 
-/** POST /api/ocr → 200 (mock declarado: HAS_REAL_IMPL=false). */
+export type OcrCategory = 'italian' | 'japanese' | 'mexican' | 'cafe' | 'other';
+export type OcrWarning =
+  | 'no_items_found'
+  | 'low_confidence_items'
+  | 'total_mismatch'
+  | 'provider_error';
+
+/** POST /api/ocr → 200; shape autoritativo de ocrResponseContract.js. */
 export interface OcrResponse {
-  items: Array<{ name: string; price_cents: number; quantity: number; category?: string }>;
+  items: Array<{
+    name: string;
+    category: OcrCategory;
+    price_cents: number;
+    quantity: number;
+    confidence?: number;
+    low_confidence?: true;
+  }>;
   total_cents: number;
+  /** Total IMPRESO detectado; `total_cents` es la suma de las filas. */
+  total_detected_cents?: number;
+  warnings: OcrWarning[];
   mock: boolean;
 }
 

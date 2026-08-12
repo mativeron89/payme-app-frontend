@@ -4,9 +4,13 @@ import type {
   AttachedPaymentMethod,
   CreateInvitationResponse,
   CreateSetupIntentResponse,
+  LegalTextResponse,
   MesaCreationLookup,
   MesaCreationOutcome,
   MesaStatus,
+  OcrCategory,
+  OcrResponse,
+  OcrWarning,
 } from './types';
 import { MESA_CREATION_OUTCOME_BY_STATUS } from './types';
 
@@ -30,6 +34,104 @@ function nonEmpty(value: unknown): value is string {
 
 function optionalBoolean(value: unknown): boolean {
   return value === undefined || typeof value === 'boolean';
+}
+
+function exactKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  const keys = Object.keys(value);
+  return keys.length === allowed.length && keys.every((key) => allowed.includes(key));
+}
+
+// ─── D-FF · aviso público y OCR ───────────────────────────────────────────
+
+/** El aviso controla si el alta puede ofrecerse; un 2xx incompleto no alcanza. */
+export function legalTextResponse(value: unknown): LegalTextResponse {
+  const body = record(value);
+  const legal = record(body?.legal_text);
+  const endpoint = 'legal/aviso_privacidad';
+  if (!body || !legal
+      || !exactKeys(body, ['legal_text'])
+      || !exactKeys(legal, ['kind', 'version', 'hash', 'effective_from', 'body'])
+      || legal.kind !== 'aviso_privacidad'
+      || typeof legal.version !== 'string'
+      || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(legal.version)
+      || legal.version.length > 30
+      || typeof legal.hash !== 'string' || !/^[a-f0-9]{64}$/.test(legal.hash)
+      || typeof legal.effective_from !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(legal.effective_from)
+      || !Number.isFinite(Date.parse(legal.effective_from))
+      || typeof legal.body !== 'string' || !legal.body.trim()) {
+    throw new ContractResponseError(endpoint);
+  }
+  return {
+    legal_text: {
+      kind: 'aviso_privacidad',
+      version: legal.version,
+      hash: legal.hash,
+      effective_from: legal.effective_from,
+      body: legal.body,
+    },
+  };
+}
+
+const OCR_CATEGORIES: readonly OcrCategory[] = ['italian', 'japanese', 'mexican', 'cafe', 'other'];
+const OCR_WARNINGS: readonly OcrWarning[] = [
+  'no_items_found', 'low_confidence_items', 'total_mismatch', 'provider_error',
+];
+const OCR_ITEM_KEYS = ['name', 'category', 'price_cents', 'quantity', 'confidence', 'low_confidence'];
+
+function safeNonNegative(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** Replica el validador publicado por el owner, sin inferir señales ausentes. */
+export function ocrResponse(value: unknown): OcrResponse {
+  const body = record(value);
+  if (!body || !Array.isArray(body.items)
+      || !safeNonNegative(body.total_cents)
+      || (body.total_detected_cents !== undefined && !safeNonNegative(body.total_detected_cents))
+      || !Array.isArray(body.warnings)
+      || body.warnings.some((warning) => !OCR_WARNINGS.includes(warning as OcrWarning))
+      || new Set(body.warnings).size !== body.warnings.length
+      || typeof body.mock !== 'boolean') {
+    throw new ContractResponseError('ocr');
+  }
+
+  const items: OcrResponse['items'] = [];
+  for (const raw of body.items) {
+    const item = record(raw);
+    if (!item
+        || Object.keys(item).some((key) => !OCR_ITEM_KEYS.includes(key))
+        || typeof item.name !== 'string' || !item.name || item.name.length > 200
+        || item.name !== item.name.trim()
+        || !OCR_CATEGORIES.includes(item.category as OcrCategory)
+        || !safeNonNegative(item.price_cents) || item.price_cents === 0
+        || typeof item.quantity !== 'number' || !Number.isSafeInteger(item.quantity) || item.quantity < 1
+        || (item.confidence !== undefined
+          && (typeof item.confidence !== 'number' || !Number.isInteger(item.confidence)
+            || item.confidence < 0 || item.confidence > 100))
+        || (item.low_confidence !== undefined && item.low_confidence !== true)
+        || (item.low_confidence === true && item.confidence === undefined)) {
+      throw new ContractResponseError('ocr');
+    }
+    items.push({
+      name: item.name,
+      category: item.category as OcrCategory,
+      price_cents: item.price_cents,
+      quantity: item.quantity,
+      ...(item.confidence !== undefined ? { confidence: item.confidence as number } : {}),
+      ...(item.low_confidence === true ? { low_confidence: true as const } : {}),
+    });
+  }
+
+  return {
+    items,
+    total_cents: body.total_cents,
+    ...(body.total_detected_cents !== undefined
+      ? { total_detected_cents: body.total_detected_cents }
+      : {}),
+    warnings: [...body.warnings] as OcrWarning[],
+    mock: body.mock,
+  };
 }
 
 /**

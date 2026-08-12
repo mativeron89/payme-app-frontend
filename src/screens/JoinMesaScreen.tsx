@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
+import { signupInvitationSnapshot, subscribeSignupInvitation } from '../api/signupInvitation';
 import { useAuth } from '../auth/AuthContext';
 import { AppHeader } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
@@ -110,6 +111,14 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
    * que el barrido adversarial acaba de cazar en `HomeScreen`.
    */
   const [attempt, setAttempt] = useState(0);
+  // La invitación de mesa no autoriza el alta. El botón de crear cuenta sólo
+  // existe si esta misma navegación trae/custodia además una autoridad D-FF-1.
+  const signup = useSyncExternalStore(
+    subscribeSignupInvitation,
+    signupInvitationSnapshot,
+    signupInvitationSnapshot,
+  );
+  const signupAvailable = signup.status === 'available';
 
   /**
    * ⭐ LA SECUENCIA DE CUSTODIA, Y EL ORDEN NO ES NEGOCIABLE.
@@ -272,7 +281,9 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
             <div>
               <div className="join-banner-title">{t('Te invitaron a una mesa')}</div>
               <div className="caption">
-                {t('Crea tu cuenta o entra para sumarte y pagar tu parte.')}
+                {authMode === 'register'
+                  ? t('Crea tu cuenta o entra para sumarte y pagar tu parte.')
+                  : t('Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe')}
               </div>
             </div>
           </div>
@@ -293,13 +304,15 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
             {t('Para ver la mesa y pagar tu parte, necesitas una cuenta de PayMe')}
           </p>
           {/* Único elemento naranja de la pantalla, con el texto en navy. */}
-          <button
-            type="button"
-            className="link-btn link-btn-brand"
-            onClick={() => setAuthMode('register')}
-          >
-            {t('Crear cuenta gratis')}
-          </button>
+          {signupAvailable && (
+            <button
+              type="button"
+              className="link-btn link-btn-brand"
+              onClick={() => setAuthMode('register')}
+            >
+              {t('Crear cuenta gratis')}
+            </button>
+          )}
           <button
             type="button"
             className="link-btn link-btn-outline"

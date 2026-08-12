@@ -22,6 +22,7 @@ import type {
   GroupDetailResponse,
   GroupsResponse,
   LockItemsResponse,
+  LegalTextResponse,
   MesaCreationOutcome,
   MesaDetailResponse,
   MesaStatus,
@@ -38,6 +39,7 @@ import type {
   WalletTransactionsResponse,
   HistoryResponse,
   FractionRequest,
+  RegisterRequest,
 } from '../types';
 import { MESA_CREATION_OUTCOME_BY_STATUS } from '../types';
 import { MOCK_CONNECTED_ACCOUNTS, MOCK_RESTAURANTS, MOCK_USER } from './seedData';
@@ -374,18 +376,23 @@ function paymeIdFromName(firstName: string): string {
   return `payme_mx_${plano || 'nueva'}`;
 }
 
-export async function mockRegister(data: {
-  email: string;
-  first_name: string;
-  last_name: string;
-}): Promise<StoredSession> {
+export async function mockRegister(data: RegisterRequest): Promise<StoredSession> {
+  // El mock recorre la misma compuerta de superficie: sin una autoridad con
+  // forma válida no hay alta. No pretende validar email/TTL/one-use —eso sólo
+  // lo acredita el owner y PostgreSQL—, pero tampoco enseña un registro abierto.
+  if (typeof data.invitation_token !== 'string'
+      || data.invitation_token.length < 20
+      || data.invitation_token.length > 200) {
+    throw new MockApiError(403, 'registration_not_available');
+  }
   // Una cuenta NUEVA nace como en el backend real: sin métodos de pago y con
   // payme_id propio. Heredar los del seed hacía INEJERCITABLE el camino del
   // pagador primerizo —el primero que recorre un usuario real, porque la
   // garantía exige tarjeta guardada y Apple/Google están apagados— y servía
   // el payme_id de la persona de ejemplo a cualquier registro. El usuario del
   // SEED conserva sus dos tarjetas: entra por mockLogin, que no toca esto.
-  state.user = { ...MOCK_USER, ...data, payme_id: paymeIdFromName(data.first_name) };
+  const { invitation_token: _authority, password: _password, ...profile } = data;
+  state.user = { ...MOCK_USER, ...profile, payme_id: paymeIdFromName(data.first_name) };
   state.paymentMethods = [];
   const session = createSession({
     access_token: 'mock-access-token',
@@ -394,6 +401,19 @@ export async function mockRegister(data: {
   });
   saveSession(session);
   return delay(session);
+}
+
+/** Fixture de UI, no copia del aviso legal productivo ni aprobación jurídica. */
+export async function mockGetPrivacyNotice(): Promise<LegalTextResponse> {
+  return delay({
+    legal_text: {
+      kind: 'aviso_privacidad',
+      version: '0.0.0-demo-local',
+      hash: '0'.repeat(64),
+      effective_from: '2026-08-12T00:00:00.000Z',
+      body: 'AVISO DE DEMOSTRACIÓN. Este texto sólo ejercita la puesta a disposición en el modo demo; no es el aviso productivo de PayMe.',
+    },
+  });
 }
 
 export async function mockLogout(): Promise<void> {
@@ -522,16 +542,16 @@ export async function mockGetMesa(code: string, identity: MockIdentity): Promise
 export async function mockScanTicket(): Promise<OcrResponse> {
   // Mismo ticket que devuelve el mock del backend (routes/ocr.js).
   const items = [
-    { name: 'Tagliatelle Bolognese', price_cents: 19500, quantity: 1 },
-    { name: 'Risotto ai Funghi', price_cents: 22000, quantity: 1 },
-    { name: 'Pizza Margherita', price_cents: 18500, quantity: 1 },
-    { name: 'Tiramisú', price_cents: 7000, quantity: 2 },
-    { name: 'Agua mineral', price_cents: 4000, quantity: 1 },
-    { name: 'Vino tinto (copa)', price_cents: 6000, quantity: 1 },
+    { name: 'Tagliatelle Bolognese', category: 'italian' as const, price_cents: 19500, quantity: 1 },
+    { name: 'Risotto ai Funghi', category: 'italian' as const, price_cents: 22000, quantity: 1 },
+    { name: 'Pizza Margherita', category: 'italian' as const, price_cents: 18500, quantity: 1 },
+    { name: 'Tiramisú', category: 'italian' as const, price_cents: 7000, quantity: 2 },
+    { name: 'Agua mineral', category: 'other' as const, price_cents: 4000, quantity: 1 },
+    { name: 'Vino tinto (copa)', category: 'other' as const, price_cents: 6000, quantity: 1 },
   ];
   const total = items.reduce((s, i) => s + i.price_cents * i.quantity, 0);
   return new Promise((resolve) =>
-    setTimeout(() => resolve({ items, total_cents: total, mock: true }), 1200),
+    setTimeout(() => resolve({ items, total_cents: total, warnings: [], mock: true }), 1200),
   );
 }
 
