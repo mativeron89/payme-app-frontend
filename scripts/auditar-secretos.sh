@@ -86,39 +86,22 @@ PATRONES=(
   'xoxb-[A-Za-z0-9-]{20,}'
   'AKIA[0-9A-Z]{16}'
   '-----BEGIN [A-Z ]*PRIVATE KEY-----'
-  '(password|passwd|secret|token|api_?key)["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+  '(^|[^A-Za-z0-9_-])(password|passwd|secret|token|api_?key)["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
   'https://api\.vercel\.com/v[0-9]+/integrations/deploy/[A-Za-z0-9_/-]{16,}'
   'postgres(ql)?://[^\s"'"'"']+:[^\s"'"'"']+@'
 )
 
-# 🔴 UN FALSO POSITIVO REAL, MEDIDO · lista CERRADA y nombrada.
-#
-# `autoComplete={mode === 'login' ? 'current-password' : 'new-password'}` son los
-# tokens ESTÁNDAR de HTML, no valores. El patrón de asignación matchea el tramo
-# `password' : 'new-password` **en la forma ternaria con comillas simples**, así
-# que cualquier diff que toque `LoginScreen` haría gritar a este gate.
-#
-# ⚠️ **Y la primera medición me dijo lo contrario.** Probé
-# `<input autoComplete="new-password" />` —forma de atributo, comillas dobles—
-# que **NO matchea**, y estuve a punto de no agregar esta excepción. La forma que
-# el archivo usa de verdad sí matchea. **Dos formas del mismo token, una matchea
-# y la otra no: probar la que uno imagina no es probar la que hay.**
-#
-# Se neutralizan los DOS tokens, no la línea ni la categoría. Una guarda que
-# grita siempre se apaga sola; una que excluye una línea completa deja de
-# vigilar cualquier valor real que comparta esa línea. Tercer token estándar →
-# se agrega acá con su nombre, nunca un comodín.
-BENIGNOS='(current|new)-password'
+# Los tokens HTML `current-password` y `new-password` no requieren una lista de
+# excepciones: el límite izquierdo del patrón excluye identificadores unidos por
+# `-`. En cambio `password = 'current-password'` conserva el límite y se audita
+# como asignación real. Esto evita neutralizar contenido antes de inspeccionarlo.
 
 hallazgos=0
 for p in "${PATRONES[@]}"; do
   # Sólo líneas AGREGADAS: una ELIMINACIÓN de algo con forma de secreto es lo
   # contrario de un problema, y confundirlas ya pasó una vez con las URLs de
   # Google Fonts —nueve coincidencias, las nueve borrados—.
-  # Quita sólo el span benigno ANTES de aplicar el patrón. `grep -v` sobre el
-  # resultado completo eximiría también un secreto real que estuviera en la
-  # misma línea que `current-password` o `new-password`.
-  reales=$(sed -E "s/$BENIGNOS//g" "$diff_file" | grep -nE "^\+.*$p" || true)
+  reales=$(grep -nE "^\+.*$p" "$diff_file" || true)
   if [ -n "$reales" ]; then
     echo "🔴 VALOR con forma de secreto: /$p/" >&2
     printf '%s\n' "$reales" | head -3 | sed 's/^/     /' >&2

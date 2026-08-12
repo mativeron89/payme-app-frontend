@@ -1,5 +1,20 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.77.3 — el scanner distingue tokens HTML de passwords reales (2026-08-11)
+
+PATCH del instrumento de seguridad, sin cambio de runtime ni contrato.
+
+- El patrón de asignación exige ahora un límite de identificador. Por eso los
+  dos tokens HTML de autocompletado siguen siendo benignos, pero asignar uno de
+  esos textos a una variable de password conserva el fallo.
+- Se eliminó la neutralización previa del texto auditado: ningún valor se borra
+  del diff antes de aplicar los patrones.
+- Dos regresiones reproducen ambas caras del límite. El password real quedó
+  rojo antes de la corrección y los cuatro casos focales pasan después.
+
+El scanner continúa siendo un piso de patrones, no una prueba de ausencia de
+secretos ni una afirmación sobre CI remoto.
+
 ## 0.77.2 — la invalidación limpia el bearer aun sin journal durable (2026-08-11)
 
 PATCH de robustez local, sin cambio de API ni contrato.

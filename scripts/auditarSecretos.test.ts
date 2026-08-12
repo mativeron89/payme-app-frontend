@@ -40,6 +40,35 @@ afterEach(() => {
 });
 
 describe('auditoría de secretos', () => {
+  it('un password real no se vuelve benigno por usar el mismo texto que autocomplete', () => {
+    // Se construye para que el instrumento pueda auditar este mismo commit sin
+    // confundir el fixture del test con una credencial agregada al producto.
+    const tokenHtml = ['current', 'password'].join('-');
+    const { dir, base } = repoConCambio(`const password = '${tokenHtml}';`);
+
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+    expect(result.status, 'la excepción de autocomplete ocultó un password asignado').toBe(1);
+  });
+
+  it('los tokens HTML de autocomplete, por sí solos, siguen siendo benignos', () => {
+    const { dir, base } = repoConCambio(
+      "const input = { autoComplete: mode === 'login' ? 'current-password' : 'new-password' };",
+    );
+
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('cero valores con forma de secreto');
+    expect(result.status).toBe(0);
+  });
+
   it('un token HTML benigno no puede ocultar un secreto real en la misma línea', () => {
     // Se arma en runtime para que el propio test no contenga un valor con forma
     // de clave y pueda ser auditado por el instrumento que está probando.
