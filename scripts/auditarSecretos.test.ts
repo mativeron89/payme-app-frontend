@@ -70,6 +70,22 @@ describe('auditoría de secretos', () => {
     expect(result.status).toBe(0);
   });
 
+  it.each(['db_password', 'client_secret', 'auth_token'])(
+    'los identificadores compuestos %s conservan la guarda',
+    (identifier) => {
+      const value = ['valor', 'sintetico', 'largo'].join('_');
+      const { dir, base } = repoConCambio(`const ${identifier} = '${value}';`);
+
+      const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+
+      expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+      expect(result.status, `el límite omitió ${identifier}`).toBe(1);
+    },
+  );
+
   it('un token HTML benigno no puede ocultar un secreto real en la misma línea', () => {
     // Se arma en runtime para que el propio test no contenga un valor con forma
     // de clave y pueda ser auditado por el instrumento que está probando.

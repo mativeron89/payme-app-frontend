@@ -86,7 +86,7 @@ PATRONES=(
   'xoxb-[A-Za-z0-9-]{20,}'
   'AKIA[0-9A-Z]{16}'
   '-----BEGIN [A-Z ]*PRIVATE KEY-----'
-  '(^|[^A-Za-z0-9_-])(password|passwd|secret|token|api_?key)["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+  '(^|[^A-Za-z0-9-])(password|passwd|secret|token|api_?key)["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
   'https://api\.vercel\.com/v[0-9]+/integrations/deploy/[A-Za-z0-9_/-]{16,}'
   'postgres(ql)?://[^\s"'"'"']+:[^\s"'"'"']+@'
 )

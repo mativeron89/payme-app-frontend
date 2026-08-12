@@ -1,5 +1,15 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.77.5 — el scanner conserva identificadores compuestos (2026-08-11)
+
+PATCH del instrumento de seguridad, sin cambio de runtime ni contrato.
+
+- El límite que evita confundir los tokens HTML con un password ya no excluye
+  `_`: `db_password`, `client_secret` y `auth_token` vuelven a ser auditados.
+- Tres regresiones reproducen la pérdida de cobertura y quedan verdes junto con
+  los casos de autocompletado benigno.
+
+
 ## 0.77.4 — logout espera la revocación si storage queda inutilizable (2026-08-11)
 
 PATCH de sesión, sin cambio de API ni contrato backend.
