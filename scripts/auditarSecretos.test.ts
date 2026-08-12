@@ -44,7 +44,8 @@ describe('auditoría de secretos', () => {
     // Se construye para que el instrumento pueda auditar este mismo commit sin
     // confundir el fixture del test con una credencial agregada al producto.
     const tokenHtml = ['current', 'password'].join('-');
-    const { dir, base } = repoConCambio(`const password = '${tokenHtml}';`);
+    const linea = ['const password', ` = '${tokenHtml}';`].join('');
+    const { dir, base } = repoConCambio(linea);
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
