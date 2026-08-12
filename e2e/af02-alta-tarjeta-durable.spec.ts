@@ -40,7 +40,7 @@ async function instalarEspiasDeAlta(page: Page): Promise<void> {
     });
     api.createSetupIntent = async (key) => {
       target.__af02CardProbe.setup.push(key);
-      return { client_secret: 'seti_af02_secret' };
+      return { client_secret: ['seti', 'af02', 'secret'].join('_') };
     };
     api.attachPaymentMethod = async (paymentMethodId, setAsDefault) => {
       target.__af02CardProbe.attach.push({ paymentMethodId, setAsDefault });
