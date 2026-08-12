@@ -1,5 +1,20 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.77.8 — la continuidad de alta exige journal durable (2026-08-11)
+
+PATCH local de la compuerta AF-02, sin cambio de API backend.
+
+- Un fallo al generar la idempotency key antes de persistir ya no fabrica un
+  estado de reintento en React ni atraviesa una capability que luego cierre.
+- Ante un resultado ambiguo, el alta relee `cardSetupAttempt` y sólo ofrece
+  continuidad si esa misma autoridad existe y pasó la validación durable.
+- Las continuidades `setup` y `attach` que sí estaban journalizadas conservan
+  la misma key o referencia y siguen disponibles con el riel cerrado.
+
+La regresión de navegador reproduce el fallo de key, fuerza luego
+`payments_enabled: false` e invoca adversarialmente el handler: no se crea
+SetupIntent ni attach. Dos controles positivos preservan ambos stages durables.
+
 ## 0.77.7 — la capability monetaria cierra inicios nuevos de tarjeta (2026-08-11)
 
 PATCH del consumidor del contrato vigente, sin cambio de API backend.

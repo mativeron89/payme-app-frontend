@@ -237,6 +237,7 @@ export function CardsPanel() {
       }
       const failure = extractApiError(err);
       const definitive = isDefinitiveMutationError(failure.code, failure.status);
+      let durableRetry = false;
       if (definitive) {
         const setupKey = cardAttemptRef.current?.setupKey;
         try {
@@ -247,12 +248,38 @@ export function CardsPanel() {
           setCardSetupBlocked(t('El rechazo fue definitivo, pero no pudimos limpiar el intento local. No vamos a reenviarlo.'));
         }
       } else {
-        setCardRetryStage(cardAttemptRef.current?.paymentMethodId ? 'attach' : 'setup');
+        try {
+          // AF-02 · un estado React no acredita una continuidad. La autoridad
+          // se relee del journal durable: si la key falló antes de persistir,
+          // no existe nada que pueda atravesar un rail luego cerrado.
+          const durable = readCardSetupAttempt();
+          if (durable) {
+            const current = cardAttemptRef.current;
+            cardAttemptRef.current = {
+              ...durable,
+              ...(current?.setupKey === durable.setupKey && current.clientSecret
+                ? { clientSecret: current.clientSecret }
+                : {}),
+            };
+            setCardRetryStage(durable.stage);
+            durableRetry = true;
+          } else {
+            cardAttemptRef.current = null;
+            setCardRetryStage('none');
+          }
+        } catch {
+          cardAttemptRef.current = null;
+          setCardRetryStage('none');
+          const message = t('No pudimos guardar de forma segura el estado de esta alta. No vamos a enviar otra operación.');
+          setCardSetupBlocked(message);
+          toast(message);
+          return;
+        }
       }
       toast(
-        isServiceUnavailable(failure.status)
+        durableRetry && isServiceUnavailable(failure.status)
           ? t('El servicio no pudo confirmar la tarjeta. Reintenta esta misma operación; no agregues otra.')
-          : definitive
+          : !durableRetry
             ? t('No pudimos guardar la tarjeta. Revisa los datos y prueba de nuevo.')
             : t('No pudimos confirmar si la tarjeta se guardó. Reintenta la misma operación: no vamos a crear otra.'),
       );
