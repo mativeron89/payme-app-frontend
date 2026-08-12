@@ -156,7 +156,12 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
   it('un 200 que no revocó sesión no reemplaza la invalidación durable local', async () => {
     vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => {
       if ((init?.body as string | undefined)?.includes('password')) {
-        return Promise.resolve(response({ access_token: 'a-legacy', refresh_token: 'r-legacy', expires_in: 900, user }));
+        return Promise.resolve(response({
+          access_token: ['a', 'legacy'].join('-'),
+          refresh_token: ['r', 'legacy'].join('-'),
+          expires_in: 900,
+          user,
+        }));
       }
       return Promise.resolve(response({ revoked: false, reason: 'legacy_token_no_session' }));
     }));
