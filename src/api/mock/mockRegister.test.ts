@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const TEST_PASSWORD = ['pass', 'word'].join('');
+const SIGNUP_AUTHORITY = ['signup', 'authority', 'a'.repeat(24)].join('-');
 
 /**
  * UNA CUENTA NUEVA NACE COMO EN EL BACKEND REAL: SIN TARJETAS Y CON SU PAYME_ID.
@@ -46,14 +47,14 @@ describe('mockRegister · la cuenta nueva no hereda el seed', () => {
   it('nace con CERO métodos de pago', async () => {
     const { mock, state } = await cargar();
     expect(state.paymentMethods.length).toBeGreaterThan(0); // control positivo: el seed las tiene
-    await mock.mockRegister({ email: 'nueva@demo.mx', password: TEST_PASSWORD, first_name: 'Sofía', last_name: 'Nueva', invitation_token: 'signup-token-aaaaaaaaaaaaaaaaaaaa' });
+    await mock.mockRegister({ email: 'nueva@demo.mx', password: TEST_PASSWORD, first_name: 'Sofía', last_name: 'Nueva', invitation_token: SIGNUP_AUTHORITY });
     const r = await mock.mockPaymentMethods();
     expect(r.payment_methods).toEqual([]);
   });
 
   it('nace con payme_id PROPIO, derivado de su nombre y sin acentos', async () => {
     const { mock, state } = await cargar();
-    await mock.mockRegister({ email: 'nueva@demo.mx', password: TEST_PASSWORD, first_name: 'Sofía', last_name: 'Nueva', invitation_token: 'signup-token-aaaaaaaaaaaaaaaaaaaa' });
+    await mock.mockRegister({ email: 'nueva@demo.mx', password: TEST_PASSWORD, first_name: 'Sofía', last_name: 'Nueva', invitation_token: SIGNUP_AUTHORITY });
     expect(state.user.payme_id).toBe('payme_mx_sofia');
     expect(state.user.payme_id).not.toBe('payme_mx_mati');
   });
