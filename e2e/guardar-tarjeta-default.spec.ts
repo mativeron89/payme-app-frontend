@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+const SIGNUP_GUARDADA = 'signup-token-guardar-tarjeta-aaaa';
+const SIGNUP_SIN_GUARDAR = 'signup-token-no-guardar-bbbbbbb';
+
 /**
  * G-11 · EL CHECKBOX NACE DESMARCADO (Mati, 2026-08-06) — Y DESDE EL CIERRE
  * DE G-11 (backend v2.46.0, `7e45db0`, 2026-08-06), MARCARLO GUARDA DE
@@ -18,9 +21,9 @@ import { expect, test } from '@playwright/test';
  */
 
 test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async ({ page }) => {
-  // Cuenta nueva: nace sin tarjetas (el camino primerizo real).
-  await page.goto('/');
-  await page.getByRole('button', { name: /Regístrate/ }).click();
+  // Cuenta nueva invitada: nace sin tarjetas (el camino primerizo F&F real).
+  await page.goto(`/#/home?signup_invitation=${SIGNUP_GUARDADA}`);
+  await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
   await page.getByPlaceholder('Nombre').fill('Primeriza');
   await page.getByPlaceholder('Apellido').fill('SinTarjeta');
   await page.getByPlaceholder('Email').fill('primeriza-e2e@demo.mx');
@@ -71,9 +74,9 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
 });
 
 test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una decoración', async ({ page }) => {
-  // Mismo recorrido primerizo, checkbox intacto en las dos superficies.
-  await page.goto('/');
-  await page.getByRole('button', { name: /Regístrate/ }).click();
+  // Mismo recorrido primerizo invitado, checkbox intacto en las dos superficies.
+  await page.goto(`/#/home?signup_invitation=${SIGNUP_SIN_GUARDAR}`);
+  await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
   await page.getByPlaceholder('Nombre').fill('Primeriza');
   await page.getByPlaceholder('Apellido').fill('SinGuardar');
   await page.getByPlaceholder('Email').fill('primeriza-negativa@demo.mx');

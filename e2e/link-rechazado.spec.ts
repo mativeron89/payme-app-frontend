@@ -32,6 +32,8 @@ const TOKENS_RECHAZADOS = [
   ['un token largo', `tok-${'x'.repeat(120)}`],
 ] as const;
 
+const SIGNUP_PARA_LINK = 'signup-token-link-mesa-aaaaaaaa';
+
 test.describe('el 403 es ciego', () => {
   for (const [nombre, token] of TOKENS_RECHAZADOS) {
     test(`${nombre} muestra el rechazo genérico y nada más`, async ({ page }) => {
@@ -120,11 +122,12 @@ test.describe('el 403 es ciego', () => {
    * prohíbe. Además, un link reenviado le confirmaría a cualquiera dónde está
    * comiendo otra persona.
    */
-  test('sin sesión, el link lleva al alta sin contar nada de la mesa', async ({ page }) => {
+  test('sin sesión, el link no ofrece alta sin autoridad F&F ni cuenta nada de la mesa', async ({ page }) => {
     await page.goto('/#/mesa/PA-0001?t=tok-cualquiera-largo');
 
     await expect(page.getByText('Te invitaron a una mesa')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Crear cuenta gratis' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Crear cuenta gratis' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Ya tengo cuenta · Entrar' })).toBeVisible();
 
     const cuerpo = await page.locator('body').innerText();
     for (const r of ['La Parolaccia', 'Hanzo Sushi']) {
@@ -140,8 +143,10 @@ test.describe('el 403 es ciego', () => {
    * invitaron** — peor que el defecto que el cierre del pago sin cuenta vino a
    * cerrar.
    */
-  test('el token sobrevive al alta: sigue custodiado mientras se crea la cuenta', async ({ page }) => {
-    await page.goto('/#/mesa/PA-0001?t=tok-que-tiene-que-sobrevivir');
+  test('el token de mesa sobrevive al alta F&F: las autoridades quedan separadas', async ({ page }) => {
+    await page.goto(
+      `/#/mesa/PA-0001?t=tok-que-tiene-que-sobrevivir&signup_invitation=${SIGNUP_PARA_LINK}`,
+    );
     await expect(page.getByText('Te invitaron a una mesa')).toBeVisible();
 
     await page.getByRole('button', { name: 'Crear cuenta gratis' }).click();

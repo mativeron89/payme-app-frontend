@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { abrirMesaConLink, ingresar } from './_app';
 
+const SIGNUP_MESA_CERRADA = 'signup-token-mesa-cerrada-aaaaaa';
+
 /**
  * GATE DE ADMISIÓN (v2.45.0, ratificado 2026-08-06) · LA VENTANA DE LA MESA
  * MUERTA, CERRADA EN PANTALLA.
@@ -57,7 +59,7 @@ test('pantalla D: el link a una mesa muerta lo dice, cierra el círculo y no ofr
   const hashLink = mesa.link.slice(mesa.link.indexOf('#'));
   await page.evaluate(matarMesa, { code: mesa.code, status: 'settled', clearSession: true });
   await page.reload();
-  await page.goto(`/${hashLink}`);
+  await page.goto(`/${hashLink}&signup_invitation=${SIGNUP_MESA_CERRADA}`);
   await expect(page.getByText('Te invitaron a una mesa')).toBeVisible();
   await page.getByRole('button', { name: 'Crear cuenta gratis' }).click();
   await page.getByPlaceholder('Nombre').fill('Tardía');
