@@ -30,6 +30,16 @@ export interface StoredSession {
   principal_id: string;
 }
 
+export class SessionStorageInvalidationError extends Error {
+  readonly physicalSessionRemoved: boolean;
+
+  constructor(physicalSessionRemoved: boolean) {
+    super('session_storage_unavailable');
+    this.name = 'SessionStorageInvalidationError';
+    this.physicalSessionRemoved = physicalSessionRemoved;
+  }
+}
+
 interface SessionTombstone {
   family_id: string;
   principal_id: string;
@@ -127,7 +137,7 @@ export function invalidateSession(session: StoredSession): boolean {
     notify();
   }
 
-  if (storageUnavailable) throw new Error('session_storage_unavailable');
+  if (storageUnavailable) throw new SessionStorageInvalidationError(removed);
   return removed;
 }
 

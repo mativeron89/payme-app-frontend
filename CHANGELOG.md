@@ -1,5 +1,20 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.77.4 — logout espera la revocación si storage queda inutilizable (2026-08-11)
+
+PATCH de sesión, sin cambio de API ni contrato backend.
+
+- El camino normal conserva el cierre inmediato: si el tombstone o el borrado
+  físico protegen la familia, la UI no espera la red.
+- Si fallan tanto el journal como el borrado del bearer, la revocación remota
+  deja de ser fire-and-forget y el logout espera su resultado.
+- Una revocación confirmada permite cerrar aun si queda una copia local inerte;
+  si también falla la red, el caller recibe el error y no declara un cierre
+  durable inexistente.
+- Las regresiones cubren las dos salidas y preservan el contrato anterior cuando
+  el bearer físico sí pudo eliminarse.
+
+
 ## 0.77.3 — el scanner distingue tokens HTML de passwords reales (2026-08-11)
 
 PATCH del instrumento de seguridad, sin cambio de runtime ni contrato.

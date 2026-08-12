@@ -3,12 +3,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 class MemoryStorage {
   values = new Map<string, string>();
   failSet = false;
+  failRemove = false;
   getItem(key: string) { return this.values.get(key) ?? null; }
   setItem(key: string, value: string) {
     if (this.failSet) throw new Error('blocked');
     this.values.set(key, value);
   }
-  removeItem(key: string) { this.values.delete(key); }
+  removeItem(key: string) {
+    if (this.failRemove) throw new Error('blocked');
+    this.values.delete(key);
+  }
 }
 
 const storage = new MemoryStorage();
@@ -44,6 +48,7 @@ const user = { id: 'u-1', payme_id: 'u1', email: 'u@example.com', first_name: 'U
 afterEach(() => {
   storage.values.clear();
   storage.failSet = false;
+  storage.failRemove = false;
   lockTail = Promise.resolve();
   lockNames.length = 0;
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks } });
@@ -101,6 +106,51 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
       storage.values.has('payme_app_session'),
       'logout abortó antes de intentar quitar el bearer físico',
     ).toBe(false);
+  });
+
+  it('si storage no puede invalidarse, espera que el servidor revoque antes de declarar logout', async () => {
+    let releaseLogout: (() => void) | undefined;
+    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => {
+      if ((init?.body as string | undefined)?.includes('password')) {
+        return Promise.resolve(response({ access_token: 'a-residual', refresh_token: 'r-residual', expires_in: 900, user }));
+      }
+      return new Promise<Response>((resolve) => {
+        releaseLogout = () => resolve(response({ ok: true }));
+      });
+    }));
+    await httpLogin(user.email, 'password');
+    storage.failSet = true;
+    storage.failRemove = true;
+
+    let settled = false;
+    const outcome = httpLogout().then(
+      () => { settled = true; return 'revoked'; },
+      (error: unknown) => { settled = true; return error; },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled, 'logout descartó la única invalidación durable disponible').toBe(false);
+
+    releaseLogout?.();
+    await expect(outcome).resolves.toBe('revoked');
+    expect(
+      storage.values.has('payme_app_session'),
+      'la prueba debe ejercer el fallback remoto con el bearer físico todavía presente',
+    ).toBe(true);
+  });
+
+  it('si fallan storage y revocación remota, el logout informa que no pudo cerrar durablemente', async () => {
+    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => {
+      if ((init?.body as string | undefined)?.includes('password')) {
+        return Promise.resolve(response({ access_token: 'a-sin-salida', refresh_token: 'r-sin-salida', expires_in: 900, user }));
+      }
+      return Promise.reject(new Error('network_down'));
+    }));
+    await httpLogin(user.email, 'password');
+    storage.failSet = true;
+    storage.failRemove = true;
+
+    await expect(httpLogout()).rejects.toThrow('session_storage_unavailable');
+    expect(storage.values.has('payme_app_session')).toBe(true);
   });
 
   it('logout invalida un refresh en vuelo y el par tardío no revive la familia', async () => {

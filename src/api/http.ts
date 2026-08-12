@@ -1,4 +1,4 @@
-import { createSession, invalidateSession, isCurrentSession, loadSession, persistSessionTombstone, replaceCurrentSession, saveSession, type StoredSession } from './storage';
+import { createSession, invalidateSession, isCurrentSession, loadSession, persistSessionTombstone, replaceCurrentSession, saveSession, SessionStorageInvalidationError, type StoredSession } from './storage';
 import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenPair } from './types';
 
 /**
@@ -243,8 +243,25 @@ export async function httpLogout(): Promise<void> {
   // persona firmando operaciones 30s más. El bearer capturado se revoca en
   // background y nunca se lee una sesión nueva para esa llamada.
   if (!session) return;
-  void rawRequest('POST', '/auth/logout', undefined, session.access_token, 3_000).catch(() => undefined);
+  // El resultado se captura desde el inicio para que un rechazo temprano no
+  // quede sin handler. Normalmente la limpieza local permite continuar sin
+  // esperar la red; si storage falla por completo, esta revocación pasa a ser
+  // la única invalidación durable disponible y deja de ser fire-and-forget.
+  const remoteRevoked = rawRequest('POST', '/auth/logout', undefined, session.access_token, 3_000).then(
+    () => true,
+    () => false,
+  );
   // Invalidación durable inmediata; la limpieza física se serializa con el
   // mismo lock que refresh/login. Si apareció otra familia, no se borra.
-  await invalidateSessionSerialized(session);
+  try {
+    await invalidateSessionSerialized(session);
+  } catch (storageError) {
+    // Si el bearer físico ya desapareció, se conserva el contrato previo: el
+    // fallo del journal se informa de inmediato y la red sigue en background.
+    if (storageError instanceof SessionStorageInvalidationError && storageError.physicalSessionRemoved) {
+      throw storageError;
+    }
+    if (await remoteRevoked) return;
+    throw storageError;
+  }
 }
