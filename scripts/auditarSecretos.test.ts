@@ -86,6 +86,22 @@ describe('auditoría de secretos', () => {
     },
   );
 
+  it.each(['password', 'secret', 'token'])(
+    'una asignación %s en columna cero conserva la guarda',
+    (identifier) => {
+      const value = ['valor', 'sintetico', 'largo'].join('_');
+      const { dir, base } = repoConCambio(`${identifier}='${value}';`);
+
+      const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+
+      expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+      expect(result.status, `el marcador + consumió el inicio de ${identifier}`).toBe(1);
+    },
+  );
+
   it('un token HTML benigno no puede ocultar un secreto real en la misma línea', () => {
     // Se arma en runtime para que el propio test no contenga un valor con forma
     // de clave y pueda ser auditado por el instrumento que está probando.

@@ -112,7 +112,12 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
     let releaseLogout: (() => void) | undefined;
     vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => {
       if ((init?.body as string | undefined)?.includes('password')) {
-        return Promise.resolve(response({ access_token: 'a-residual', refresh_token: 'r-residual', expires_in: 900, user }));
+        return Promise.resolve(response({
+          access_token: ['a', 'residual'].join('-'),
+          refresh_token: ['r', 'residual'].join('-'),
+          expires_in: 900,
+          user,
+        }));
       }
       return new Promise<Response>((resolve) => {
         releaseLogout = () => resolve(response({ revoked: true }));
@@ -141,7 +146,12 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
   it('si fallan storage y revocación remota, el logout informa que no pudo cerrar durablemente', async () => {
     vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => {
       if ((init?.body as string | undefined)?.includes('password')) {
-        return Promise.resolve(response({ access_token: 'a-sin-salida', refresh_token: 'r-sin-salida', expires_in: 900, user }));
+        return Promise.resolve(response({
+          access_token: ['a', 'sin', 'salida'].join('-'),
+          refresh_token: ['r', 'sin', 'salida'].join('-'),
+          expires_in: 900,
+          user,
+        }));
       }
       return Promise.reject(new Error('network_down'));
     }));

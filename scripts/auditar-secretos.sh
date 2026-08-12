@@ -101,7 +101,10 @@ for p in "${PATRONES[@]}"; do
   # Sólo líneas AGREGADAS: una ELIMINACIÓN de algo con forma de secreto es lo
   # contrario de un problema, y confundirlas ya pasó una vez con las URLs de
   # Google Fonts —nueve coincidencias, las nueve borrados—.
-  reales=$(grep -nE "^\+.*$p" "$diff_file" || true)
+  # Quita sólo el marcador `+` del diff y aplica el patrón a la línea real.
+  # Dejar el marcador dentro de `^\+.*` consume el inicio y vuelve inalcanzable
+  # la alternativa `^` del patrón para asignaciones en columna cero.
+  reales=$(grep '^+' "$diff_file" | cut -c2- | grep -nE -- "$p" || true)
   if [ -n "$reales" ]; then
     echo "🔴 VALOR con forma de secreto: /$p/" >&2
     printf '%s\n' "$reales" | head -3 | sed 's/^/     /' >&2
