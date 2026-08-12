@@ -1,5 +1,25 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.77.7 — la capability monetaria cierra inicios nuevos de tarjeta (2026-08-11)
+
+PATCH del consumidor del contrato vigente, sin cambio de API backend.
+
+- `pending`, capability ausente o malformada y `payments_enabled: false`
+  impiden iniciar alta/attach, garantía o pago nuevos, tanto con tarjeta
+  guardada como tipeada. El cierre ocurre antes de crear clave, journal,
+  SetupIntent o llamada Stripe/API.
+- `sandbox` mantiene el formulario y su aviso ratificado; `live` mantiene el
+  formulario sin ese aviso. La copy de cierre es neutral y no deduce el modo.
+- Una intención durable anterior conserva su camino de replay, 3DS y
+  reconciliación. El gate no se llevó a los helpers Stripe ni a los GET de
+  diagnóstico.
+- Listar, quitar y elegir una tarjeta principal continúan disponibles: no
+  crean una operación monetaria ni una tarjeta nueva.
+
+Las regresiones cubren la matriz de capability, los tres mounts/call-sites y
+mutantes que moverían el gate después de crear la autoridad local o esconderían
+una continuidad existente.
+
 ## 0.77.6 — logout acredita la revocación, no sólo el HTTP 200 (2026-08-11)
 
 PATCH del consumidor del contrato vigente, sin cambio de API backend.

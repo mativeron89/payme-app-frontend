@@ -162,7 +162,8 @@ describe('la garantía congelada no se le atribuye a la default', () => {
     // esa fuente es la que va a respaldar la garantía. Son dos radios —las
     // guardadas y "usar otra"— y los dos tienen que aflojar.
     const texto = pantalla();
-    expect((texto.match(/disabled=\{!!frozen && !replayHabilitado\}/g) ?? [])).toHaveLength(2);
+    expect(texto).toContain('canUseCardRail(moneyRail, !!frozen)');
+    expect((texto.match(/disabled=\{!cardRailAvailable \|\| \(!!frozen && !replayHabilitado\)\}/g) ?? [])).toHaveLength(2);
   });
 
   it('🔴 pero el radio de SALDO sigue duro: cambiar de riel SÍ cambia la identidad', () => {

@@ -40,9 +40,9 @@ const { modoMonetarioMock, setModoMonetarioMock, mockGetConfig } = await import(
  * importa, porque mostrarlo de más le dice a alguien con dinero real que use
  * una tarjeta falsa.
  *
- * 🔴 **Ningún código de producto lee `money_rail` todavía.** El lector
- * fail-closed espera al espejo: leerlo contra un tipo que el espejo no tiene
- * sería inventar el contrato.
+ * 🔴 **AF-02 ya consume `money_rail` en producto.** El lector fail-closed
+ * cierra los inicios nuevos cuando la capability no los habilita y conserva
+ * las continuidades acreditadas (replay, 3DS y reconciliación).
  */
 
 describe('los tres modos del mock · `payments_enabled` y `real_money` son INDEPENDIENTES', () => {

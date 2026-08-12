@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readMoneyRail } from './moneyRail';
+import { canUseCardRail, MONEY_RAIL_CERRADO, readMoneyRail } from './moneyRail';
 
 /**
  * `readMoneyRail` · fail-closed sobre la SUPERFICIE DE TARJETA, no sobre el
@@ -117,5 +117,35 @@ describe('🔴 `real_money` se LEE, jamás se deduce de `mode`', () => {
     for (const modo of ['sandbox', 'live', 'disabled']) {
       expect(codigo, `el código compara contra '${modo}'`).not.toContain(`'${modo}'`);
     }
+  });
+});
+
+describe('AF-02 · inicio nuevo versus continuidad acreditada', () => {
+  const closed = [
+    ['pending', MONEY_RAIL_CERRADO],
+    ['absent', readMoneyRail({ features: {} })],
+    ['malformed', readMoneyRail({ features: { money_rail: { mode: 'sandbox' } } })],
+    ['disabled', readMoneyRail(cfg({ mode: 'disabled', payments_enabled: false, real_money: false }))],
+  ] as const;
+
+  it.each(closed)('%s no permite iniciar otra operación de tarjeta', (_case, rail) => {
+    expect(canUseCardRail(rail, false)).toBe(false);
+  });
+
+  it.each([
+    ['sandbox', readMoneyRail(cfg({ mode: 'sandbox', payments_enabled: true, real_money: false }))],
+    ['live', readMoneyRail(cfg({ mode: 'live', payments_enabled: true, real_money: true }))],
+  ] as const)('%s permite iniciar una operación nueva', (_case, rail) => {
+    expect(canUseCardRail(rail, false)).toBe(true);
+  });
+
+  it.each(closed)('%s no oculta una continuidad ya acreditada', (_case, rail) => {
+    expect(canUseCardRail(rail, true)).toBe(true);
+  });
+
+  it('no usa el cartel como permiso: live abre aunque no muestre aviso', () => {
+    const live = readMoneyRail(cfg({ mode: 'live', payments_enabled: true, real_money: true }));
+    expect(live.mostrarAvisoDePrueba).toBe(false);
+    expect(canUseCardRail(live, false)).toBe(true);
   });
 });

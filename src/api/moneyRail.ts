@@ -112,6 +112,18 @@ const CERRADO: MoneyRailState = {
 
 export const MONEY_RAIL_CERRADO: MoneyRailState = CERRADO;
 
+/**
+ * AF-02 · la capability gobierna INICIOS nuevos. Una intención ya durable no
+ * se borra ni se oculta porque el modo cambie mientras estaba en curso: 3DS,
+ * replay y reconciliación deben poder terminar sobre esa misma autoridad.
+ */
+export function canUseCardRail(
+  rail: Pick<MoneyRailState, 'puedeCargarTarjeta'>,
+  continuation: boolean,
+): boolean {
+  return continuation || rail.puedeCargarTarjeta;
+}
+
 /** El conjunto CERRADO del contrato. Una clave de más es forma inesperada. */
 const CLAVES = Object.freeze(['mode', 'payments_enabled', 'real_money']);
 

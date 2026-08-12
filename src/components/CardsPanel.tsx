@@ -10,12 +10,18 @@ import {
   type CardSetupAttemptState,
 } from '../api/cardSetupAttempt';
 import { extractApiError } from '../api/errors';
+import { canUseCardRail, useMoneyRail } from '../api/moneyRail';
 import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
 import { loadSession, type StoredSession } from '../api/storage';
 import { confirmCardSetup } from '../api/stripe';
 import type { PaymentMethod } from '../api/types';
 import { createInFlightMutex } from '../utils/inFlight';
-import { CardField, type CardFieldState } from './CardField';
+import {
+  CARD_RAIL_UNAVAILABLE_COPY,
+  CardField,
+  CardRailUnavailable,
+  type CardFieldState,
+} from './CardField';
 import { Icon } from './Icon';
 import { CardBrandChip, useToast } from './ui';
 
@@ -72,12 +78,15 @@ function vencimiento(pm: PaymentMethod): string | null {
 export function CardsPanel() {
   const { t } = useIdioma();
   const toast = useToast();
+  const moneyRail = useMoneyRail();
   const initialAttempt = useRef(initialCardAttempt(t)).current;
   const [adding, setAdding] = useState(!!initialAttempt.attempt || !!initialAttempt.error);
   const [busyCard, setBusyCard] = useState(false);
   const addCardInFlightRef = useRef(createInFlightMutex());
   const cardAttemptRef = useRef<CardSetupAttempt | null>(initialAttempt.attempt);
   const [cardRetryStage, setCardRetryStage] = useState<CardRetryStage>(initialAttempt.attempt?.stage ?? 'none');
+  const cardRailContinuation = cardRetryStage !== 'none';
+  const cardRailAvailable = canUseCardRail(moneyRail, cardRailContinuation);
   const [cardSetupBlocked, setCardSetupBlocked] = useState<string | null>(initialAttempt.error);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<CardFieldState>({
@@ -121,6 +130,10 @@ export function CardsPanel() {
    * `pm_…` → se registra. La tarjeta nunca pasa por PayMe.
    */
   async function addCard() {
+    if (!cardRailAvailable) {
+      toast(t(CARD_RAIL_UNAVAILABLE_COPY));
+      return;
+    }
     if (!addCardInFlightRef.current.tryEnter()) return;
     if (cardSetupBlocked) {
       toast(cardSetupBlocked);
@@ -258,7 +271,13 @@ export function CardsPanel() {
       {pms?.length === 0 && !adding && (
         <div className="mesa-empty">
           <div className="mesa-empty-title">{t('Todavía no guardaste ninguna tarjeta.')}</div>
-          <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setAdding(true)}>
+          {!cardRailAvailable && <CardRailUnavailable />}
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: 12 }}
+            onClick={() => setAdding(true)}
+            disabled={!cardRailAvailable}
+          >
             {t('Agregar tarjeta')}
           </button>
         </div>
@@ -330,13 +349,18 @@ export function CardsPanel() {
             <div className="caption" style={{ marginBottom: 12 }}>
               {t('La tarjeta ya fue materializada por Stripe. Solo reintentaremos registrar esa misma referencia.')}
             </div>
-          ) : IS_MOCK ? (
+          ) : cardRailAvailable ? (
+            IS_MOCK ? (
             <div className="note note-teal" style={{ marginBottom: 12 }}>
               {t('En la demo no pedimos datos reales: se agrega una tarjeta de ejemplo.')}
             </div>
-          ) : (
+            ) : (
             <>
-              <CardField onReady={setCardEl} onChange={setCardState} />
+              <CardField
+                onReady={setCardEl}
+                onChange={setCardState}
+                continuation={cardRailContinuation}
+              />
               {cardState.error && (
                 <div className="caption" style={{ color: 'var(--red)' }} role="alert">
                   {cardState.error}
@@ -346,6 +370,9 @@ export function CardsPanel() {
                 {t('Los datos van directo a Stripe: PayMe nunca ve el número completo.')}
               </div>
             </>
+            )
+          ) : (
+            <CardRailUnavailable />
           )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -360,7 +387,12 @@ export function CardsPanel() {
             <button
               className="btn btn-primary btn-sm"
               onClick={addCard}
-              disabled={!!cardSetupBlocked || busyCard || (!IS_MOCK && cardRetryStage !== 'attach' && !cardState.complete)}
+              disabled={
+                !!cardSetupBlocked ||
+                busyCard ||
+                !cardRailAvailable ||
+                (!IS_MOCK && cardRetryStage !== 'attach' && !cardState.complete)
+              }
             >
               {busyCard
                 ? t('Guardando…')
@@ -376,10 +408,18 @@ export function CardsPanel() {
           /* Fila punteada con `+` y texto, al final de la lista. Es la ÚNICA
              fila punteada de la app que no significa "dato oculto" — por eso
              lleva el `+` y la palabra, nunca un ícono solo. */
-          <button type="button" className="pm-add" onClick={() => setAdding(true)}>
-            <Icon name="plus" size={18} />
-            {t('Agregar tarjeta')}
-          </button>
+          <>
+            {!cardRailAvailable && <CardRailUnavailable />}
+            <button
+              type="button"
+              className="pm-add"
+              onClick={() => setAdding(true)}
+              disabled={!cardRailAvailable}
+            >
+              <Icon name="plus" size={18} />
+              {t('Agregar tarjeta')}
+            </button>
+          </>
         )
       )}
     </>

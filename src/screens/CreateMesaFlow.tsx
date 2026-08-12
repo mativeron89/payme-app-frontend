@@ -6,6 +6,7 @@ import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyK
 import { useWalletRail } from '../api/walletRail';
 import { extractApiError } from '../api/errors';
 import { HttpError } from '../api/http';
+import { canUseCardRail, useMoneyRail } from '../api/moneyRail';
 import {
   acquireMonetaryIntent,
   clearUnconfirmed,
@@ -44,7 +45,12 @@ import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types
 import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar, AppBottomCta } from '../components/AppBottomBar';
 import { AppHeaderFlow } from '../components/AppHeader';
-import { CardField, type CardFieldState } from '../components/CardField';
+import {
+  CARD_RAIL_UNAVAILABLE_COPY,
+  CardField,
+  CardRailUnavailable,
+  type CardFieldState,
+} from '../components/CardField';
 import { Icon } from '../components/Icon';
 import { InviteFriends } from '../components/InviteFriends';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
@@ -92,6 +98,7 @@ function lineTotalCents(it: EditItem): number | null {
 export function CreateMesaFlow() {
   const { t } = useIdioma();
   const { accept: acceptOcr } = useOcrRail();
+  const moneyRail = useMoneyRail();
   // OLA 5D · el método "Saldo PayMe" de la garantía lo habilita el BACKEND.
   const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
@@ -315,6 +322,7 @@ export function CreateMesaFlow() {
   }, [mesaScopeBase]);
   const mesaScope = frozen?.scope ?? contentScope;
   const frozenRequiresReconciliation = frozen?.reconciliationRequired === true;
+  const cardRailAvailable = canUseCardRail(moneyRail, !!frozen);
   function freezeMesa(scope: string, handle: MonetaryIntentHandle) {
     if (!mesaScopeBase) throw new Error('money_actor_unavailable');
     try {
@@ -642,6 +650,11 @@ export function CreateMesaFlow() {
     // TERMINA respaldando la garantía.
     if (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) {
       setError(t('Elige con qué tarjeta reenviar esta apertura.'));
+      createInFlightRef.current.leave();
+      return;
+    }
+    if (method === 'card' && !cardRailAvailable) {
+      setError(t(CARD_RAIL_UNAVAILABLE_COPY));
       createInFlightRef.current.leave();
       return;
     }
@@ -1425,6 +1438,7 @@ export function CreateMesaFlow() {
           <div className="sectlabel" id="lbl-garantia">
             {t('¿Con qué garantizas?')}
           </div>
+          {method === 'card' && !cardRailAvailable && <CardRailUnavailable />}
           {/* 🔴 ORDEN 1-B · EL ESTADO HONESTO CUANDO NO SABEMOS CON QUÉ SE
               GARANTIZÓ. Antes acá no había nada y la lista de abajo mostraba
               la tarjeta DEFAULT seleccionada — una afirmación que nadie hizo.
@@ -1457,7 +1471,7 @@ export function CreateMesaFlow() {
                 // estar viva: si el diagnóstico dijo `not_found`, la fuente que
                 // se mande es la que va a respaldar la garantía, y tiene que
                 // elegirla la persona.
-                disabled={!!frozen && !replayHabilitado}
+                disabled={!cardRailAvailable || (!!frozen && !replayHabilitado)}
                 role="radio"
                 aria-checked={method === 'card' && cardChoice === c.id}
               >
@@ -1485,7 +1499,7 @@ export function CreateMesaFlow() {
                 setMethod('card');
                 setCardChoice('new');
               }}
-              disabled={!!frozen && !replayHabilitado}
+              disabled={!cardRailAvailable || (!!frozen && !replayHabilitado)}
               role="radio"
               aria-checked={method === 'card' && cardChoice === 'new'}
             >
@@ -1504,11 +1518,16 @@ export function CreateMesaFlow() {
           {/* Tarjeta nueva: Elements en real; en mock no se pide número. */}
           {method === 'card' && (cards.length === 0 || cardChoice === 'new') && (
             <div style={{ margin: '4px 0 12px' }}>
-              {IS_MOCK ? (
+              {cardRailAvailable ? (
+                IS_MOCK ? (
                 <div className="caption">{t('La ingresas al confirmar (segura, vía Stripe).')}</div>
-              ) : (
+                ) : (
                 <>
-                  <CardField onReady={setCardEl} onChange={handleCardChange} />
+                  <CardField
+                    onReady={setCardEl}
+                    onChange={handleCardChange}
+                    continuation={!!frozen}
+                  />
                   {cardState.error && (
                     <div className="caption" style={{ color: 'var(--red)' }} role="alert">
                       {cardState.error}
@@ -1518,11 +1537,13 @@ export function CreateMesaFlow() {
                     {t('Los datos van directo a Stripe: PayMe nunca ve el número completo.')}
                   </div>
                 </>
-              )}
+                )
+              ) : null}
               <label className="caption" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
                 <input
                   type="checkbox"
                   checked={saveCard}
+                  disabled={!cardRailAvailable}
                   onChange={(e) => setSaveCard(e.target.checked)}
                 />
                 {t('Guardar esta tarjeta para la próxima')}
@@ -1558,6 +1579,7 @@ export function CreateMesaFlow() {
             priorAttemptCheckFailed ||
             (frozenRequiresReconciliation && !replayHabilitado) ||
             (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) ||
+            (!frozen && method === 'card' && !cardRailAvailable) ||
             (!frozen &&
               !IS_MOCK &&
               method === 'card' &&

@@ -20,11 +20,17 @@ import {
 } from '../api/idempotency';
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { extractApiError } from '../api/errors';
+import { canUseCardRail, useMoneyRail } from '../api/moneyRail';
 import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
 import { mesaClosureView, mesaPaymentOutcome } from '../api/paymentStatus';
 import { payableEqualSlotAmounts, type PayMesaExpectation } from '../api/moneyGuards';
 import { confirmCardPayment, createCardPaymentMethod } from '../api/stripe';
-import { CardField, type CardFieldState } from '../components/CardField';
+import {
+  CARD_RAIL_UNAVAILABLE_COPY,
+  CardField,
+  CardRailUnavailable,
+  type CardFieldState,
+} from '../components/CardField';
 import { Icon } from '../components/Icon';
 import type {
   FractionRequest,
@@ -244,6 +250,7 @@ function payExpectationFor(mesa: MesaDetail, body: PayMesaRequest): PayMesaExpec
 
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
   const { t } = useIdioma();
+  const moneyRail = useMoneyRail();
   // OLA 5D · método de pago con saldo y copy asociada: los declara el BACKEND.
   const { walletRailEnabled } = useWalletRail();
   const { session } = useAuth();
@@ -668,6 +675,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }, [payArea, code]);
   useEffect(() => { setFrozen(null); }, [guestToken, code]);
   const frozenScope = frozen?.scope ?? null;
+  const cardRailAvailable = canUseCardRail(moneyRail, !!frozenScope);
   // La decisión vive en `freezeMachine.ts`, que sí tiene cobertura: acá sólo
   // se consume. Antes era lógica inline sin un solo test.
   const frozenRequiresReconciliation = requiresReconciliation(frozen);
@@ -963,6 +971,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     if (!frozen && needsExtraPartConfirmation) {
       setError(null);
       setShowExtraPartConfirm(true);
+      payInFlightRef.current.leave();
+      return;
+    }
+    if (payType === 'card' && !cardRailAvailable) {
+      setError(t(CARD_RAIL_UNAVAILABLE_COPY));
       payInFlightRef.current.leave();
       return;
     }
@@ -1608,6 +1621,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <b style={{ color: 'var(--navy)' }}>{mesa.restaurant.name}</b> {t('— PayMe divide la cuenta.')}
             </div>
           )}
+          {payType === 'card' && !cardRailAvailable && <CardRailUnavailable />}
           <div role="radiogroup" aria-labelledby="lbl-metodo">
             {!isGuest && walletRailEnabled && (
               <button
@@ -1668,7 +1682,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     key={c.id}
                     className={`method-card ${cardChoice === c.id ? 'sel' : ''}`}
                     onClick={() => setCardChoice(c.id)}
-                    disabled={!!frozenScope}
+                    disabled={!!frozenScope || !cardRailAvailable}
                     role="radio"
                     aria-checked={cardChoice === c.id}
                   >
@@ -1692,7 +1706,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <button
                   className={`method-card ${cardChoice === 'new' ? 'sel' : ''}`}
                   onClick={() => setCardChoice('new')}
-                  disabled={!!frozenScope}
+                  disabled={!!frozenScope || !cardRailAvailable}
                   role="radio"
                   aria-checked={cardChoice === 'new'}
                 >
@@ -1709,16 +1723,20 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             {/* Tarjeta nueva: Elements en real; en mock no se pide número. */}
             {payType === 'card' && (cards.length === 0 || (cardChoice === 'new' && cardsOpen)) && (
               <div style={{ margin: '2px 0 10px' }}>
-                {!IS_MOCK && (
+                {!IS_MOCK && (cardRailAvailable ? (
                   <>
-                    <CardField onReady={setCardEl} onChange={handleCardChange} />
+                    <CardField
+                      onReady={setCardEl}
+                      onChange={handleCardChange}
+                      continuation={!!frozenScope}
+                    />
                     {cardState.error && (
                       <div className="caption" style={{ color: 'var(--red)' }} role="alert">
                         {cardState.error}
                       </div>
                     )}
                   </>
-                )}
+                ) : null)}
                 {!isGuest && (
                   <label
                     className="caption"
@@ -1727,7 +1745,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     <input
                       type="checkbox"
                       checked={saveCard}
-                      disabled={!!frozenScope}
+                      disabled={!!frozenScope || !cardRailAvailable}
                       onChange={(e) => setSaveCard(e.target.checked)}
                     />
                     {t('Guardar esta tarjeta para la próxima')}
@@ -1810,6 +1828,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             busy ||
             frozenRequiresReconciliation ||
             (!frozenScope && gross === 0) ||
+            (!frozenScope && payType === 'card' && !cardRailAvailable) ||
             (!frozenScope &&
               !IS_MOCK &&
               payType === 'card' &&

@@ -1,5 +1,5 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
-import { useMoneyRail } from '../api/moneyRail';
+import { canUseCardRail, useMoneyRail } from '../api/moneyRail';
 import { useIdioma } from '../i18n/idioma';
 import { useEffect, useRef, useState } from 'react';
 import { getStripe } from '../api/stripe';
@@ -25,18 +25,43 @@ interface Props {
   onReady(card: StripeCardElement | null): void;
   /** Se llama cuando cambia el estado del campo (y se RESETEA al desmontar). */
   onChange?(state: CardFieldState): void;
+  /** Hay una intención durable previa: continuarla no inicia otra operación. */
+  continuation?: boolean;
 }
 
-export function CardField({ onReady, onChange }: Props) {
+export const CARD_RAIL_UNAVAILABLE_COPY = 'Todavía no está disponible';
+
+export function CardRailUnavailable() {
   const { t } = useIdioma();
-  const { mostrarAvisoDePrueba } = useMoneyRail();
+  return (
+    <div className="note" role="status">
+      <b>{t('Tarjeta de crédito o débito')}</b> · {t(CARD_RAIL_UNAVAILABLE_COPY)}
+    </div>
+  );
+}
+
+export function CardField({ onReady, onChange, continuation = false }: Props) {
+  const { t } = useIdioma();
+  const moneyRail = useMoneyRail();
+  const { mostrarAvisoDePrueba, puedeCargarTarjeta } = moneyRail;
+  const cardRailAvailable = canUseCardRail({ puedeCargarTarjeta }, continuation);
   const holder = useRef<HTMLDivElement | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!cardRailAvailable) {
+      setLoading(false);
+      setLoadError(null);
+      onReady(null);
+      onChange?.({ complete: false, error: null, empty: true });
+      return;
+    }
     let cancelled = false;
     let card: StripeCardElement | null = null;
+
+    setLoading(true);
+    setLoadError(null);
 
     (async () => {
       try {
@@ -117,7 +142,9 @@ export function CardField({ onReady, onChange }: Props) {
       card?.destroy();
     };
     // onReady/onChange se asumen estables (useCallback en el padre).
-  }, [onReady, onChange]);
+  }, [cardRailAvailable, onReady, onChange]);
+
+  if (!cardRailAvailable) return <CardRailUnavailable />;
 
   if (loadError) {
     return (
