@@ -20,9 +20,9 @@ import { defineConfig } from 'vite';
  * dos despliegues. Puede. La independencia es **de artefacto y de origen, no
  * de tubería** (`SPEC_LANDING.md` §2).
  *
- * Sin el plugin de React a propósito: la landing no tiene una sola línea de
- * JS. Es la forma más fuerte de cumplir las prohibiciones de §2 del spec — sin
- * grafo de módulos no hay dónde colar `AuthProvider`, la capa de API ni Stripe.
+ * Sin el plugin de React a propósito: la landing sólo tiene un script inline
+ * acotado, sin entry ni grafo de módulos. Por construcción no hay dónde colar
+ * `AuthProvider`, la capa de API ni Stripe.
  */
 export default defineConfig({
   root: 'landing',

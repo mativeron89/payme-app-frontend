@@ -11,26 +11,29 @@
 <nav class="nav" id="nav" aria-label="Accesos a PayMe">
   <div class="nav-mark">Pay<span>Me</span></div>
   <div class="nav-anchors">
-    <a class="nav-anchor" href="#como-funciona">Cómo funciona</a>
-    <a class="nav-anchor" href="#restaurante">Para tu restaurante</a>
-    <a class="nav-anchor" href="#comensal">Para quien paga</a>
+    <a class="nav-anchor" href="#como-funciona" data-i18n="nav.anchor.como">Cómo funciona</a>
+    <a class="nav-anchor" href="#restaurante" data-i18n="nav.anchor.restaurante">Para tu restaurante</a>
+    <a class="nav-anchor" href="#comensal" data-i18n="nav.anchor.comensal">Para quien paga</a>
   </div>
-  <div class="login-menu" id="login-menu">
-    <button class="login-trigger" id="login-trigger" aria-expanded="false" aria-haspopup="true">
-      Iniciar sesión
-      <svg class="login-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-    </button>
-    <div class="login-panel" role="menu" aria-label="Iniciar sesión">
-      <a class="login-row featured" href="https://panel.paymemx.com" role="menuitem">
-        Restaurante <span class="login-row-arrow" aria-hidden="true">→</span>
-      </a>
-      <a class="login-row" href="https://app.paymemx.com" role="menuitem">
-        Comensal <span class="login-row-arrow" aria-hidden="true">→</span>
-      </a>
-      <div class="login-divider"></div>
-      <a class="login-row muted" href="#como-funciona" role="menuitem">
-        ¿Aún no eres cliente?
-      </a>
+  <div class="nav-right">
+    <button class="lang-toggle" id="lang-toggle" type="button" aria-label="Switch to English">EN</button>
+    <div class="login-menu" id="login-menu">
+      <button class="login-trigger" id="login-trigger" type="button" aria-expanded="false" aria-haspopup="true">
+        <span data-i18n="nav.login.trigger">Iniciar sesión</span>
+        <svg class="login-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="login-panel" role="menu" aria-label="Iniciar sesión">
+        <a class="login-row featured" href="https://panel.paymemx.com" role="menuitem">
+          <span data-i18n="nav.login.restaurante">Restaurante</span> <span class="login-row-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="login-row" href="https://app.paymemx.com" role="menuitem">
+          <span data-i18n="nav.login.comensal">Comensal</span> <span class="login-row-arrow" aria-hidden="true">→</span>
+        </a>
+        <div class="login-divider"></div>
+        <a class="login-row muted" href="#como-funciona" role="menuitem">
+          <span data-i18n="nav.login.noclient">¿Aún no eres cliente?</span>
+        </a>
+      </div>
     </div>
   </div>
   <div class="nav-divider" aria-hidden="true"></div>
@@ -39,14 +42,14 @@
 
 <main>
   <section class="hero">
-    <span class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>Una mesa, muchas tarjetas</span>
-    <h1>Cada quien paga lo suyo, desde su teléfono</h1>
-    <p>La cuenta se divide en el celular y cada persona paga su parte con tarjeta.</p>
+    <span class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span><span data-i18n="hero.eyebrow">Una mesa, muchas tarjetas</span></span>
+    <h1 data-i18n="hero.h1">Cada quien paga lo suyo, desde su teléfono</h1>
+    <p data-i18n="hero.sub">La cuenta se divide en el celular y cada persona paga su parte con tarjeta.</p>
     <div class="cta-row">
-      <a class="cta primary" href="https://panel.paymemx.com">
+      <a class="cta primary" href="https://panel.paymemx.com" data-i18n="hero.cta.restaurante">
         Entrar como restaurante
       </a>
-      <a class="cta secondary" href="https://app.paymemx.com">
+      <a class="cta secondary" href="https://app.paymemx.com" data-i18n="hero.cta.comensal">
         Entrar como comensal
       </a>
     </div>
@@ -58,84 +61,91 @@
 
   <section class="block" id="como-funciona">
     <div class="block-head">
-      <span class="block-eyebrow">Cómo funciona</span>
-      <h2 class="block-title">Cuatro pasos, una cuenta</h2>
+      <span class="block-eyebrow" data-i18n="steps.eyebrow">Cómo funciona</span>
+      <h2 class="block-title" data-i18n="steps.title">Cuatro pasos, una cuenta</h2>
     </div>
     <div class="steps-wrap">
       <svg class="steps-connector" viewBox="0 0 640 640" aria-hidden="true">
-        <circle cx="320" cy="320" r="255" fill="none" stroke="var(--action-2)" stroke-width="1.5" stroke-dasharray="2 10" stroke-linecap="round" opacity="0.5"/>
+        <defs>
+          <marker id="stepArrow" viewBox="0 0 10 10" refX="6.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--action-2)"/>
+          </marker>
+        </defs>
+        <path d="M 320 65  A 255 255 0 0 1 575 320" fill="none" stroke="var(--action-2)" stroke-width="3" stroke-linecap="round" marker-end="url(#stepArrow)"/>
+        <path d="M 575 320 A 255 255 0 0 1 320 575" fill="none" stroke="var(--action-2)" stroke-width="3" stroke-linecap="round" marker-end="url(#stepArrow)"/>
+        <path d="M 320 575 A 255 255 0 0 1 65 320" fill="none" stroke="var(--action-2)" stroke-width="3" stroke-linecap="round" marker-end="url(#stepArrow)"/>
       </svg>
       <div class="steps">
         <div class="step step-1">
           <span class="step-num" aria-hidden="true">1</span>
-          <h3>Abre la mesa</h3>
-          <p>Quien organiza registra la mesa y deja una tarjeta como garantía.</p>
+          <h3 data-i18n="step1.h3">Abre la mesa</h3>
+          <p data-i18n="step1.p">Quien organiza registra la mesa y deja una tarjeta como garantía.</p>
         </div>
         <div class="step step-2">
           <span class="step-num" aria-hidden="true">2</span>
-          <h3>Comparte el link</h3>
-          <p>Les llega por la app o por WhatsApp, y entran con su cuenta.</p>
+          <h3 data-i18n="step2.h3">Comparte el link</h3>
+          <p data-i18n="step2.p">Les llega por la app o por WhatsApp, y entran con su cuenta.</p>
         </div>
         <div class="step step-3">
           <span class="step-num" aria-hidden="true">3</span>
-          <h3>Cada quien elige</h3>
-          <p>Toma sus platillos o divide en partes iguales.</p>
+          <h3 data-i18n="step3.h3">Cada quien elige</h3>
+          <p data-i18n="step3.p">Toma sus platillos o divide en partes iguales.</p>
         </div>
         <div class="step step-4">
           <span class="step-num" aria-hidden="true">4</span>
-          <h3>Pagan y listo</h3>
-          <p>Cada persona paga su parte con tarjeta y elige la propina.</p>
+          <h3 data-i18n="step4.h3">Pagan y listo</h3>
+          <p data-i18n="step4.p">Cada persona paga su parte con tarjeta y elige la propina.</p>
         </div>
       </div>
     </div>
   </section>
 
   <section class="block" id="restaurante">
-    <div class="audience">
-      <div class="audience-copy">
-        <span class="audience-tag">Para restaurantes</span>
-        <h2>Tu equipo deja de pasar la terminal</h2>
-        <p>Los comensales pagan desde su teléfono. El cobro va directo a la cuenta del restaurante, y el panel muestra qué mesa pagó cuánto.</p>
+    <div class="audience-visual restaurante">
+      <div class="audience-copy-card">
+        <span class="audience-tag" data-i18n="restaurante.tag">Para restaurantes</span>
+        <h2 data-i18n="restaurante.h2">Tu equipo deja de pasar la terminal</h2>
+        <p data-i18n="restaurante.p">Los comensales pagan desde su teléfono. El cobro va directo a la cuenta del restaurante, y el panel muestra qué mesa pagó cuánto.</p>
       </div>
       <div class="audience-art dashboard">
           <img src="./img/panel-propinas.png" alt="Panel del restaurante, sección Propinas: propina por franja horaria, por tamaño de grupo y por mesero">
-          <span class="audience-caption">Datos de ejemplo — panel en modo demo</span>
+          <span class="audience-caption" data-i18n="restaurante.caption">Datos de ejemplo — panel en modo demo</span>
         </div>
     </div>
     <div class="perks">
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></span>
-        <p>El cobro va directo a la cuenta del restaurante</p>
+        <p data-i18n="restaurante.perk1">El cobro va directo a la cuenta del restaurante</p>
       </div>
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></span>
-        <p>Ves cada mesa: total, propina y mesero</p>
+        <p data-i18n="restaurante.perk2">Ves cada mesa: total, propina y mesero</p>
       </div>
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20"/><circle cx="5.5" cy="6" r="0.6" fill="currentColor" stroke="none"/></svg></span>
-        <p>El panel funciona en el navegador, sin instalar nada</p>
+        <p data-i18n="restaurante.perk3">El panel funciona en el navegador, sin instalar nada</p>
       </div>
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg></span>
-        <p>La garantía cubre si alguien se va sin pagar</p>
+        <p data-i18n="restaurante.perk4">La garantía cubre si alguien se va sin pagar</p>
       </div>
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.4" fill="currentColor" stroke="none"/></svg></span>
-        <p>Cada comensal paga con su propia tarjeta</p>
+        <p data-i18n="restaurante.perk5">Cada comensal paga con su propia tarjeta</p>
       </div>
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V10l8-6 8 6v11"/><path d="M9 21v-7h6v7"/></svg></span>
-        <p>El cobro sale a nombre de tu restaurante</p>
+        <p data-i18n="restaurante.perk6">El cobro sale a nombre de tu restaurante</p>
       </div>
     </div>
   </section>
 
   <section class="block" id="comensal">
-    <div class="audience reverse">
-      <div class="audience-copy">
-        <span class="audience-tag">Para comensales</span>
-        <h2>Paga lo tuyo sin sacar cuentas</h2>
-        <p>Entras por el link que te comparten, eliges lo que consumiste o divides en partes iguales, y pagas con tu tarjeta.</p>
+    <div class="audience-visual comensal">
+      <div class="audience-copy-card">
+        <span class="audience-tag" data-i18n="comensal.tag">Para comensales</span>
+        <h2 data-i18n="comensal.h2">Paga lo tuyo sin sacar cuentas</h2>
+        <p data-i18n="comensal.p">Entras por el link que te comparten, eliges lo que consumiste o divides en partes iguales, y pagas con tu tarjeta.</p>
       </div>
       <div class="audience-art app">
           <img src="./img/app-dividir-cuenta.png" alt="App del comensal: mesa donde cada quien elige lo que consumió, con su parte calculada">
@@ -144,33 +154,144 @@
     <div class="perks">
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M9 15l6-6"/></svg></span>
-        <p>Tomas solo tus platillos de la cuenta</p>
+        <p data-i18n="comensal.perk1">Tomas solo tus platillos de la cuenta</p>
       </div>
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="2.2"/><circle cx="17" cy="17" r="2.2"/><path d="M17 7L7 17"/></svg></span>
-        <p>Eliges cuánta propina dejar</p>
+        <p data-i18n="comensal.perk2">Eliges cuánta propina dejar</p>
       </div>
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4"/></svg></span>
-        <p>Pagas con tarjeta desde tu teléfono</p>
+        <p data-i18n="comensal.perk3">Pagas con tarjeta desde tu teléfono</p>
       </div>
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="12" height="12" rx="2"/><rect x="9" y="3" width="12" height="12" rx="2"/></svg></span>
-        <p>Puedes pagar más de una parte, si te toca</p>
+        <p data-i18n="comensal.perk4">Puedes pagar más de una parte, si te toca</p>
       </div>
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.4"/><path d="M4 20L20 4"/></svg></span>
-        <p>Nadie en la mesa ve qué pediste</p>
+        <p data-i18n="comensal.perk5">Nadie en la mesa ve qué pediste</p>
       </div>
       <div class="perk-card">
         <span class="perk-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
-        <p>Te queda el historial de lo que pagaste</p>
+        <p data-i18n="comensal.perk6">Te queda el historial de lo que pagaste</p>
       </div>
     </div>
   </section>
 </main>
 
 <script>
+var I18N = {
+  es: {
+    'nav.anchor.como': 'Cómo funciona',
+    'nav.anchor.restaurante': 'Para tu restaurante',
+    'nav.anchor.comensal': 'Para quien paga',
+    'nav.login.trigger': 'Iniciar sesión',
+    'nav.login.restaurante': 'Restaurante',
+    'nav.login.comensal': 'Comensal',
+    'nav.login.noclient': '¿Aún no eres cliente?',
+    'hero.eyebrow': 'Una mesa, muchas tarjetas',
+    'hero.h1': 'Cada quien paga lo suyo, desde su teléfono',
+    'hero.sub': 'La cuenta se divide en el celular y cada persona paga su parte con tarjeta.',
+    'hero.cta.restaurante': 'Entrar como restaurante',
+    'hero.cta.comensal': 'Entrar como comensal',
+    'steps.eyebrow': 'Cómo funciona',
+    'steps.title': 'Cuatro pasos, una cuenta',
+    'step1.h3': 'Abre la mesa',
+    'step1.p': 'Quien organiza registra la mesa y deja una tarjeta como garantía.',
+    'step2.h3': 'Comparte el link',
+    'step2.p': 'Les llega por la app o por WhatsApp, y entran con su cuenta.',
+    'step3.h3': 'Cada quien elige',
+    'step3.p': 'Toma sus platillos o divide en partes iguales.',
+    'step4.h3': 'Pagan y listo',
+    'step4.p': 'Cada persona paga su parte con tarjeta y elige la propina.',
+    'restaurante.tag': 'Para restaurantes',
+    'restaurante.h2': 'Tu equipo deja de pasar la terminal',
+    'restaurante.p': 'Los comensales pagan desde su teléfono. El cobro va directo a la cuenta del restaurante, y el panel muestra qué mesa pagó cuánto.',
+    'restaurante.caption': 'Datos de ejemplo — panel en modo demo',
+    'restaurante.perk1': 'El cobro va directo a la cuenta del restaurante',
+    'restaurante.perk2': 'Ves cada mesa: total, propina y mesero',
+    'restaurante.perk3': 'El panel funciona en el navegador, sin instalar nada',
+    'restaurante.perk4': 'La garantía cubre si alguien se va sin pagar',
+    'restaurante.perk5': 'Cada comensal paga con su propia tarjeta',
+    'restaurante.perk6': 'El cobro sale a nombre de tu restaurante',
+    'comensal.tag': 'Para comensales',
+    'comensal.h2': 'Paga lo tuyo sin sacar cuentas',
+    'comensal.p': 'Entras por el link que te comparten, eliges lo que consumiste o divides en partes iguales, y pagas con tu tarjeta.',
+    'comensal.perk1': 'Tomas solo tus platillos de la cuenta',
+    'comensal.perk2': 'Eliges cuánta propina dejar',
+    'comensal.perk3': 'Pagas con tarjeta desde tu teléfono',
+    'comensal.perk4': 'Puedes pagar más de una parte, si te toca',
+    'comensal.perk5': 'Nadie en la mesa ve qué pediste',
+    'comensal.perk6': 'Te queda el historial de lo que pagaste'
+  },
+  en: {
+    'nav.anchor.como': 'How it works',
+    'nav.anchor.restaurante': 'For your restaurant',
+    'nav.anchor.comensal': "For whoever's paying",
+    'nav.login.trigger': 'Log in',
+    'nav.login.restaurante': 'Restaurant',
+    'nav.login.comensal': 'Diner',
+    'nav.login.noclient': 'Not a customer yet?',
+    'hero.eyebrow': 'One table, many cards',
+    'hero.h1': 'Everyone pays their share, from their phone',
+    'hero.sub': 'The bill splits on the phone, and everyone pays their part with a card.',
+    'hero.cta.restaurante': 'Enter as a restaurant',
+    'hero.cta.comensal': 'Enter as a diner',
+    'steps.eyebrow': 'How it works',
+    'steps.title': 'Four steps, one bill',
+    'step1.h3': 'Open the table',
+    'step1.p': "Whoever's organizing registers the table and leaves a card as a guarantee.",
+    'step2.h3': 'Share the link',
+    'step2.p': 'It reaches them through the app or WhatsApp, and they join with their account.',
+    'step3.h3': 'Everyone picks their own',
+    'step3.p': 'Choose your dishes, or split it evenly instead.',
+    'step4.h3': 'Pay and done',
+    'step4.p': 'Everyone pays their part with a card and chooses their own tip.',
+    'restaurante.tag': 'For restaurants',
+    'restaurante.h2': 'Your team stops passing the card reader around',
+    'restaurante.p': "Diners pay from their phone. The charge goes straight to the restaurant's account, and the panel shows which table paid what.",
+    'restaurante.caption': 'Example data — panel in demo mode',
+    'restaurante.perk1': "The charge goes straight to the restaurant's account",
+    'restaurante.perk2': 'See every table: total, tip, and waiter',
+    'restaurante.perk3': 'The panel runs in the browser, nothing to install',
+    'restaurante.perk4': 'The guarantee covers it if someone leaves without paying',
+    'restaurante.perk5': 'Every diner pays with their own card',
+    'restaurante.perk6': "The charge is issued under your restaurant's name",
+    'comensal.tag': 'For diners',
+    'comensal.h2': 'Pay your part without doing the math',
+    'comensal.p': "Join through the link they share with you, pick what you had or split it evenly, and pay with your card.",
+    'comensal.perk1': 'You only take your own dishes off the bill',
+    'comensal.perk2': 'You choose how much tip to leave',
+    'comensal.perk3': 'Pay with your card, right from your phone',
+    'comensal.perk4': "You can pay more than one share, if it's on you",
+    'comensal.perk5': 'No one at the table sees what you ordered',
+    'comensal.perk6': "You keep a history of what you've paid"
+  }
+};
+
+var langToggle = document.getElementById('lang-toggle');
+var i18nNodes = document.querySelectorAll('[data-i18n]');
+function applyLang(requestedLang) {
+  var lang = requestedLang === 'en' ? 'en' : 'es';
+  var dict = I18N[lang];
+  i18nNodes.forEach(function (el) {
+    var key = el.getAttribute('data-i18n');
+    if (dict[key]) el.textContent = dict[key];
+  });
+  document.documentElement.setAttribute('lang', lang);
+  langToggle.textContent = lang === 'es' ? 'EN' : 'ES';
+  langToggle.setAttribute('aria-label', lang === 'es' ? 'Switch to English' : 'Cambiar a español');
+  try { localStorage.setItem('payme-landing-lang', lang); } catch (err) {}
+}
+var savedLang = 'es';
+try { savedLang = localStorage.getItem('payme-landing-lang') || 'es'; } catch (err) {}
+applyLang(savedLang);
+langToggle.addEventListener('click', function () {
+  var current = document.documentElement.getAttribute('lang') === 'en' ? 'en' : 'es';
+  applyLang(current === 'es' ? 'en' : 'es');
+});
+
 var nav = document.getElementById('nav');
 var bar = document.getElementById('progress');
 function onScroll() {

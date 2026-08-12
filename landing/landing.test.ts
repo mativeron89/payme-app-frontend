@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /**
@@ -22,8 +23,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * grafo de módulos no hay dónde colar `AuthProvider`, la capa de API ni
  * Stripe.
  *
- * **El boceto de Diseño trae un `<script>` inline de ~25 líneas** —nav que se
- * achica, barra de progreso, desplegable de «Iniciar sesión»—. El
+ * **El boceto de Diseño trae un `<script>` inline acotado** —sombra y progreso
+ * de scroll, desplegable de «Iniciar sesión» e idioma ES/EN—. El
  * Bibliotecario-Auditor lo aceptó con condiciones, y el razonamiento es el que
  * importa: **un script inline SIN una sola importación no crea grafo de
  * módulos y no puede arrastrar nada de eso. El PROPÓSITO de la invariante se
@@ -307,10 +308,24 @@ describe('PROPIEDAD 1 · el JavaScript no puede arrastrar el shell', () => {
     const s = build.scripts.join('\n');
     for (const prohibido of [
       'import', 'require(', 'fetch(', 'XMLHttpRequest', 'WebSocket',
-      'eval(', 'new Function', 'localStorage', 'sessionStorage', 'document.cookie',
+      'eval(', 'new Function', 'sessionStorage', 'document.cookie',
     ]) {
       expect(s, `el script hace \`${prohibido}\``).not.toContain(prohibido);
     }
+  });
+
+  it('🔴 STORAGE ACOTADO · sólo persiste el idioma en `payme-landing-lang`', () => {
+    const s = build.scripts.join('\n');
+    const usos = [...s.matchAll(/localStorage\.(getItem|setItem)\(([^)]*)\)/g)]
+      .map((m) => ({ metodo: m[1]!, argumentos: m[2]! }));
+    expect(usos).toHaveLength(2);
+    expect(usos.map((u) => u.metodo).sort()).toEqual(['getItem', 'setItem']);
+    for (const uso of usos) {
+      expect(uso.argumentos, `${uso.metodo} usa otra clave`).toMatch(/^['"]payme-landing-lang['"](?:,\s*lang)?$/);
+    }
+    expect(s.match(/localStorage/g)).toHaveLength(2);
+    expect(s, 'un storage bloqueado rompería la landing').toMatch(/try\s*\{[^}]*localStorage\.setItem[^}]*\}\s*catch/);
+    expect(s, 'un storage bloqueado rompería la carga').toMatch(/try\s*\{[^}]*localStorage\.getItem[^}]*\}\s*catch/);
   });
 
   it('⭐ CONDICIÓN 3 · el acceso vivo funciona SIN JavaScript', () => {
@@ -327,6 +342,44 @@ describe('PROPIEDAD 1 · el JavaScript no puede arrastrar el shell', () => {
     // Y el del hero específicamente: no puede quedar sólo el del desplegable.
     const hero = build.htmlSinScript.match(/<section class="hero"[\s\S]*?<\/section>/)?.[0] ?? '';
     expect(hero, 'el hero perdió su enlace vivo').toContain(`href="${DESTINOS_AUTORIZADOS[0]}"`);
+  });
+});
+
+describe('PROPIEDAD 1 bis · el selector bilingüe es completo y falla seguro', () => {
+  function leerDiccionario(): Record<'es' | 'en', Record<string, string>> {
+    const s = build.scripts.join('\n');
+    const literal = s.match(/var I18N\s*=\s*(\{[\s\S]*?\n\});\s*\n\s*var langToggle/)?.[1];
+    expect(literal, 'no se encontró el diccionario embebido').toBeTruthy();
+    const value = runInNewContext(`(${literal})`, Object.create(null), { timeout: 100 });
+    return JSON.parse(JSON.stringify(value)) as Record<'es' | 'en', Record<string, string>>;
+  }
+
+  it('🔴 las 41 claves del DOM coinciden exactamente con ES y EN', () => {
+    const dom = [...build.htmlSinScript.matchAll(/\bdata-i18n="([^"]+)"/g)].map((m) => m[1]!);
+    const dict = leerDiccionario();
+    const esperadas = [...new Set(dom)].sort();
+    expect(dom, 'hay claves data-i18n duplicadas').toHaveLength(esperadas.length);
+    expect(esperadas).toHaveLength(41);
+    expect(Object.keys(dict.es).sort()).toEqual(esperadas);
+    expect(Object.keys(dict.en).sort()).toEqual(esperadas);
+    expect(Object.values(dict.es).every((v) => typeof v === 'string' && v.length > 0)).toBe(true);
+    expect(Object.values(dict.en).every((v) => typeof v === 'string' && v.length > 0)).toBe(true);
+  });
+
+  it('⭐ conserva las decisiones de copy que Mati ya revisó', () => {
+    const dict = leerDiccionario();
+    expect(dict.es['steps.title']).toBe('Cuatro pasos, una cuenta');
+    expect(dict.en['steps.title']).toBe('Four steps, one bill');
+    expect(dict.en['comensal.perk2']).toBe('You choose how much tip to leave');
+    expect(dict.en['nav.anchor.comensal']).toBe("For whoever's paying");
+  });
+
+  it('🔴 valor persistido ajeno vuelve a español y el botón anuncia el destino', () => {
+    const s = build.scripts.join('\n');
+    expect(s).toContain("requestedLang === 'en' ? 'en' : 'es'");
+    expect(s).toContain("lang === 'es' ? 'EN' : 'ES'");
+    expect(s).toContain("lang === 'es' ? 'Switch to English' : 'Cambiar a español'");
+    expect(s).toContain("document.documentElement.setAttribute('lang', lang)");
   });
 });
 
@@ -530,7 +583,7 @@ describe('PROPIEDAD 4 · fail-closed: sólo lo que la landing necesita', () => {
    */
   const ATRIBUTOS_PERMITIDOS = [
     // documento
-    'lang', 'charset', 'name', 'content', 'rel', 'href', 'class', 'id',
+    'lang', 'charset', 'name', 'content', 'rel', 'href', 'class', 'id', 'type', 'data-i18n',
     // accesibilidad y semántica
     'role', 'alt', 'aria-label', 'aria-hidden', 'aria-expanded', 'aria-haspopup', 'aria-disabled',
     // imágenes
@@ -538,6 +591,7 @@ describe('PROPIEDAD 4 · fail-closed: sólo lo que la landing necesita', () => {
     // SVG del boceto (íconos y el conector de los pasos)
     'viewbox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
     'stroke-dasharray', 'opacity', 'd', 'cx', 'cy', 'r', 'x', 'y', 'rx',
+    'refx', 'refy', 'markerwidth', 'markerheight', 'orient', 'marker-end',
   ];
 
   it('🔴 MUTANTE · ningún atributo fuera de la allowlist (mata srcset, style y on*)', () => {
@@ -925,8 +979,8 @@ describe('PROPIEDAD 7 · el layout móvil de §6', () => {
       ['el nav esconde las anclas', /\.nav-anchors\{[^}]*display:none/],
       ['los CTA del hero se apilan', /\.cta-row\{[^}]*flex-direction:column/],
       ['los pasos dejan de ser absolutos', /\.step\{[^}]*position:static/],
-      ['el conector circular se oculta', /\.steps-connector\{[^}]*display:none/],
-      ['la audiencia va a una columna', /\.audience\{[^}]*grid-template-columns:1fr/],
+      ['el conector de pasos se oculta', /\.steps-connector\{[^}]*display:none/],
+      ['la audiencia va a una columna', /\.audience-visual(?:,[^{]+)?\{[^}]*grid-template-columns:1fr/],
       ['los perks van a una columna', /\.perks\{[^}]*grid-template-columns:1fr/],
     ];
     const faltan = exigidos.filter(([, re]) => !re.test(b)).map(([q]) => q);
@@ -940,7 +994,57 @@ describe('PROPIEDAD 7 · el layout móvil de §6', () => {
     const base = css.slice(0, css.indexOf('@media'));
     expect(base, 'el nav perdió sus anclas en escritorio').toMatch(/\.nav-anchors\{[^}]*display:flex/);
     expect(base, 'los pasos perdieron su posición circular').toMatch(/\.step\{[^}]*position:absolute/);
-    expect(base, 'la audiencia perdió sus dos columnas').toMatch(/\.audience\{[^}]*grid-template-columns:1\.1fr 1fr/);
+    expect(base, 'restaurante perdió su composición de dos columnas')
+      .toMatch(/\.audience-visual\.restaurante\{[^}]*grid-template-columns:340px 1fr/);
+    expect(base, 'comensal perdió su composición espejada')
+      .toMatch(/\.audience-visual\.comensal\{[^}]*grid-template-columns:1fr 340px/);
+  });
+});
+
+describe('PROPIEDAD 7 bis · tratamiento visual ratificado', () => {
+  it('🔴 el conector tiene exactamente tres flechas visibles y ya no el círculo tenue', () => {
+    const svg = build.htmlSinScript.match(/<svg class="steps-connector"[\s\S]*?<\/svg>/)?.[0] ?? '';
+    expect(svg).toContain('<marker id="stepArrow"');
+    expect(svg.match(/marker-end="url\(#stepArrow\)"/g)).toHaveLength(3);
+    expect(svg).not.toContain('<circle');
+    expect(svg.match(/stroke-width="3"/g)).toHaveLength(3);
+    expect(svg).not.toContain('opacity=');
+  });
+
+  it('🔴 la nav es blanca, centrada y no cambia de tamaño al scrollear', () => {
+    const css = cssDelBuild();
+    const nav = css.match(/\.nav\{([^}]*)\}/)?.[1] ?? '';
+    const scrolled = css.match(/\.nav\.shrink\{([^}]*)\}/)?.[1] ?? '';
+    expect(nav).toContain('display:grid');
+    expect(nav).toContain('grid-template-columns:1fr auto 1fr');
+    expect(nav).toContain('background:var(--surface)');
+    expect(scrolled).toBe('box-shadow:var(--sh-2)');
+    expect(css).toMatch(/\.nav-right\{[^}]*justify-self:end/);
+    expect(css).toMatch(/\.nav-anchors\{[^}]*align-items:center[^}]*gap:clamp\(6px,[^}]*top:2px/);
+    expect(css).toMatch(/\.nav-anchor\{[^}]*font-size:clamp\(11px,[^}]*white-space:nowrap/);
+    expect(css).toMatch(/\.login-trigger\{[^}]*font-size:clamp\(11px,[^}]*padding:10px clamp\(4px/);
+  });
+
+  it('🔴 las tarjetas son blancas, quedan a 16 px de las imágenes y no usan blur/degradado', () => {
+    const css = cssDelBuild();
+    const card = css.match(/\.audience-copy-card\{([^}]*)\}/)?.[1] ?? '';
+    expect(card).toContain('background:var(--surface)');
+    expect(card).toContain('box-shadow:var(--sh-3)');
+    expect(card).not.toContain('linear-gradient');
+    expect(card).not.toContain('backdrop-filter');
+    expect(css).toMatch(/\.audience-visual\.restaurante \.audience-copy-card\{[^}]*margin-left:-28px[^}]*margin-right:16px/);
+    expect(css).toMatch(/\.audience-visual\.comensal \.audience-copy-card\{[^}]*margin-right:-28px[^}]*margin-left:16px/);
+    expect(css).toMatch(/\.audience-art\.dashboard\{[^}]*min-height:460px[^}]*padding:10px/);
+    expect(css).toMatch(/\.audience-art\.app\{[^}]*min-height:560px[^}]*padding:14px/);
+    expect(css).toMatch(/\.audience-art\.app img\{[^}]*max-height:640px/);
+  });
+
+  it('⭐ los íconos de perks conservan el relieve pedido', () => {
+    const css = cssDelBuild();
+    const icon = css.match(/\.perk-icon\{([^}]*)\}/)?.[1] ?? '';
+    expect(icon).toContain('linear-gradient(155deg,#F3FEFE 0%,var(--teal-l) 100%)');
+    expect(icon).toContain('border:1px solid rgba(0,194,203,.22)');
+    expect(icon).toContain('box-shadow:0 3px 8px');
   });
 });
 

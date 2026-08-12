@@ -1,5 +1,28 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.78.0 — landing bilingüe y composición visual ratificada (2026-08-12)
+
+- La landing incorpora el diccionario ES/EN de 41 claves validado por Diseño,
+  sin dependencias ni red. El selector anuncia el idioma de destino, actualiza
+  `html.lang` y conserva únicamente `payme-landing-lang`; cualquier valor
+  persistido ajeno vuelve a español y un storage bloqueado no rompe la página.
+- La nav es blanca desde el primer frame, mantiene su tamaño al hacer scroll y
+  centra las anclas con una grilla independiente del ancho del logo y de los
+  controles derechos. Entre 641 y 1024 px compacta tipografía, separaciones y
+  padding de manera fluida, sin sumar otro breakpoint ni partir los enlaces.
+- El conector circular tenue se reemplaza por tres flechas visibles entre los
+  cuatro pasos; en móvil sigue oculto y la secuencia conserva el orden DOM.
+- Los bloques de restaurante y comensal usan tarjetas blancas elevadas con 16
+  px de separación respecto de imágenes ampliadas. Se conserva el breakpoint
+  único de 640 px, sin restaurar el `min-width` del viejo visor.
+- Los íconos de los doce perks reciben el relieve ratificado. El título de los
+  pasos ya participa del contrato bilingüe.
+
+La guarda del artefacto mantiene cero bundles JavaScript, cero módulos, cero
+red/cookies/sessionStorage y limita `localStorage` a la única clave de idioma.
+No cambia el `<title>`, las rutas, los `alt`, las fuentes ni ninguna superficie
+de la app autenticada.
+
 ## 0.77.8 — la continuidad de alta exige journal durable (2026-08-11)
 
 PATCH local de la compuerta AF-02, sin cambio de API backend.
