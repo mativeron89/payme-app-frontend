@@ -104,9 +104,10 @@ PATRONES=(
 # el archivo usa de verdad sí matchea. **Dos formas del mismo token, una matchea
 # y la otra no: probar la que uno imagina no es probar la que hay.**
 #
-# Se excluyen los DOS tokens, no la categoría. Una guarda que grita siempre se
-# apaga sola; una que excluye de más deja de vigilar. Tercer token estándar → se
-# agrega acá con su nombre, nunca un comodín.
+# Se neutralizan los DOS tokens, no la línea ni la categoría. Una guarda que
+# grita siempre se apaga sola; una que excluye una línea completa deja de
+# vigilar cualquier valor real que comparta esa línea. Tercer token estándar →
+# se agrega acá con su nombre, nunca un comodín.
 BENIGNOS='(current|new)-password'
 
 hallazgos=0
@@ -114,7 +115,10 @@ for p in "${PATRONES[@]}"; do
   # Sólo líneas AGREGADAS: una ELIMINACIÓN de algo con forma de secreto es lo
   # contrario de un problema, y confundirlas ya pasó una vez con las URLs de
   # Google Fonts —nueve coincidencias, las nueve borrados—.
-  reales=$(grep -nE "^\+.*$p" "$diff_file" | grep -vE "$BENIGNOS" || true)
+  # Quita sólo el span benigno ANTES de aplicar el patrón. `grep -v` sobre el
+  # resultado completo eximiría también un secreto real que estuviera en la
+  # misma línea que `current-password` o `new-password`.
+  reales=$(sed -E "s/$BENIGNOS//g" "$diff_file" | grep -nE "^\+.*$p" || true)
   if [ -n "$reales" ]; then
     echo "🔴 VALOR con forma de secreto: /$p/" >&2
     printf '%s\n' "$reales" | head -3 | sed 's/^/     /' >&2

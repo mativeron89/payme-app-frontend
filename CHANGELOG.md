@@ -1,5 +1,23 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.77.1 — el gate de secretos ya no exime líneas completas (2026-08-11)
+
+PATCH de seguridad y CI, sin cambios en `src/` ni en contratos.
+
+- Los tokens HTML `current-password` y `new-password` se neutralizan por
+  fragmento antes de escanear. Ya no descartan la línea completa: un secreto
+  real en esa misma línea conserva el `exit 1`.
+- El scanner entra al job de CI antes de instalar dependencias. En `push`
+  compara contra `github.event.before`; en PR, contra el SHA base; y el checkout
+  trae el historial para que esos objetos existan. `workflow_dispatch` usa
+  `HEAD^` como fallback explícito.
+- La regresión ejecuta el script en un repositorio temporal. Antes del fix, el
+  caso secreto + token benigno y el cableado de CI fallaron; después, 2/2 pasan.
+
+El instrumento sigue siendo un piso de patrones, no una garantía de ausencia
+de secretos. No se afirma ejecución de CI remoto.
+
+
 ## 0.77.0 — el `accept` del lector de tickets sale del contrato (2026-08-11)
 
 `CreateMesaFlow` tenía `accept="image/jpeg,image/png,image/webp,image/heic"`
