@@ -125,6 +125,46 @@ describe('auditoría de secretos', () => {
     expect(result.status, 'cerrar los agujeros convirtió la línea real en falso positivo').toBe(0);
   });
 
+  it('la clave ENTRE COMILLAS con forma de JSON se marca', () => {
+    // El formato del artefacto que filtra de verdad: nadie pega una variable
+    // suelta, pega un archivo de configuración entero. `"clave": "valor"` es
+    // estructuralmente idéntico al ternario de `autocomplete`, así que acá el
+    // límite izquierdo no alcanza y desempata el VALOR.
+    const clave = ['db', 'password'].join('-');
+    const valor = ['valor', 'sintetico', 'largo'].join('_');
+    const { dir, base } = repoConCambio(`  "${clave}": "${valor}",`);
+
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+    expect(result.status, `la clave citada ${clave} pasó sin marcar`).toBe(1);
+  });
+
+  it('el desempate por valor es por COINCIDENCIA, no por línea', () => {
+    // Si el token benigno eximiera la línea entera, una sola línea con el
+    // ternario de `autoComplete` alcanzaría para colar un JSON con la clave
+    // real al lado. Es el mismo principio que ya fija el caso de `sk_live`,
+    // aplicado al desempate nuevo.
+    const actual = ['current', 'password'].join('-');
+    const nuevo = ['new', 'password'].join('-');
+    const clave = ['db', 'password'].join('-');
+    const valor = ['valor', 'sintetico', 'largo'].join('_');
+    const { dir, base } = repoConCambio(
+      `<input autoComplete={x ? '${actual}' : '${nuevo}'} data-cfg='{"${clave}": "${valor}"}' />`,
+    );
+
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+    expect(result.status, 'el token benigno eximió la línea y ocultó la clave citada').toBe(1);
+  });
+
   it.each(['db_password', 'client_secret', 'auth_token'])(
     'los identificadores compuestos %s conservan la guarda',
     (identifier) => {

@@ -1,5 +1,35 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.79.2 — el gate de secretos cierra la clave entre comillas (2026-08-13)
+
+PATCH que cierra el hueco residual que 0.79.1 dejó documentado y medido.
+
+- **`"db-password": "…"` ya se marca.** Era el más peligroso de los tres,
+  aunque apareciera último: los otros dos eran variantes de cómo se **nombra**
+  una clave; éste es **la forma de un archivo de configuración JSON o YAML**, o
+  sea el objeto que alguien pega entero en un commit sin mirarlo.
+- **El valor desempata SÓLO cuando la clave viene entre comillas.** La clave
+  desnuda se sigue marcando siempre, sin mirar el valor: es lo que impide que
+  `const password = 'current-password'` quede exento, y está cubierto desde
+  antes por `auditarSecretos.test.ts:43`.
+- 🔴 **El desempate es por COINCIDENCIA, no por línea.** Eximir la línea entera
+  habría dejado que un ternario de `autoComplete` tape un JSON con la clave real
+  escrito al lado — el mismo agujero que ya cubría el caso de `sk_live`. Se
+  extrae cada coincidencia por separado y se filtra una por una, con un test
+  propio que lo fija.
+- **La lista de valores benignos se limita a los dos tokens que el repo usa.**
+  No se agregaron otros «por si acaso»: cada entrada es una exención, y una
+  exención sin un caso real que la exija es superficie regalada.
+
+⚠️ **Costo irreducible del desempate, medido y escrito:** `"db-password":
+"new-password"` —clave citada **y** valor igual al token— no se marca. No hay
+regla que lo evite sin reabrir el falso positivo. Queda acotado por dos lados:
+la variante **desnuda** sí se marca, y usar literalmente `new-password` como
+contraseña real es la hipótesis menos probable de la familia.
+
+Suite 1090 tests (+2), typecheck limpio, gate verde sobre su propio commit.
+Sin push ni deploy.
+
 ## 0.79.1 — el gate de secretos deja de exentar la clave, no el valor (2026-08-13)
 
 PATCH de seguridad sobre `scripts/auditar-secretos.sh`. Este es el único repo

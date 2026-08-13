@@ -113,13 +113,30 @@ PATRONES=(
 # La búsqueda de esta familia además es `i:` (insensible al caso): `DB_PASSWORD`
 # es la forma canónica de una variable de entorno y `grep -E` distingue el caso.
 #
-# ⚠️ **HUECO RESIDUAL CONOCIDO, dicho porque el test no lo cubre:** una clave
-# ENTRE COMILLAS sigue sin detectarse — `"db-password": "…"` en JSON o YAML es
-# **estructuralmente idéntico** al ternario de arriba, y ninguna regla sobre el
-# límite puede separarlos. Ahí el único discriminador es el VALOR: token de
-# `autocomplete` (`current-password`, `new-password`) contra literal arbitrario.
-# Cerrarlo exige un segundo paso de filtrado por valor; no se hace acá para no
-# mezclarlo con esta corrección. **Está medido, no supuesto.**
+# ─── La clave ENTRE COMILLAS · el único lugar donde desempata el VALOR ──────
+#
+# 🔴 CERRADO 2026-08-13. `"db-password": "…"` es **estructuralmente idéntico**
+# al ternario de arriba: literal entre comillas terminado en `-password`,
+# seguido de `:` y de otro literal. **Ninguna regla sobre el límite izquierdo
+# puede separarlos**, y por eso quedó afuera de la corrección anterior.
+#
+# ⚠️ Y es el más peligroso de los tres, aunque se haya encontrado último: los
+# otros dos son variantes de cómo se **nombra** una clave; **éste es la forma de
+# un archivo de configuración JSON o YAML** — el objeto que alguien pega entero
+# en un commit sin mirarlo.
+#
+# Se cierra con un segundo paso, y la restricción importante es DÓNDE aplica:
+#
+#   · clave DESNUDA   → se marca SIEMPRE, sin mirar el valor. Es lo que impide
+#                       que `const password = 'current-password'` quede exento,
+#                       cubierto por `auditarSecretos.test.ts:43`.
+#   · clave CITADA    → sólo ahí desempata el valor: token de `autocomplete`
+#                       contra literal arbitrario.
+#
+# 🔴 **Y el desempate es por COINCIDENCIA, no por línea** — de ahí el `-o`. Si
+# eximiera la línea entera, bastaría un ternario de `autoComplete` para colar un
+# JSON con la clave real en la misma línea. Es el mismo principio que ya fijaba
+# el caso de `sk_live`, que no deja que un token benigno tape un secreto vecino.
 
 hallazgos=0
 for entrada in "${PATRONES[@]}"; do
@@ -147,6 +164,32 @@ for entrada in "${PATRONES[@]}"; do
     hallazgos=$((hallazgos + 1))
   fi
 done
+
+# Clave ENTRE COMILLAS. `-o` extrae CADA coincidencia por separado para poder
+# descartarlas una por una: eximir la línea entera dejaría que un ternario de
+# `autoComplete` tape un JSON con la clave real escrito al lado.
+CLAVE_CITADA='["'"'"'][A-Za-z0-9_-]*(password|passwd|secret|token|api_?key)["'"'"']\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+
+# La lista de valores benignos se limita a los tokens de `autocomplete` que este
+# repo USA —los dos de `LoginScreen.tsx:202`—. No se agregan otros «por si
+# acaso»: cada entrada acá es una exención, y una exención sin un caso real que
+# la exija es superficie regalada en la guarda de mayor consecuencia del repo.
+VALOR_BENIGNO='[:=][[:space:]]*["'"'"'](current-password|new-password)$'
+
+# ⚠️ COSTO IRREDUCIBLE DEL DESEMPATE, medido: `"db-password": "new-password"`
+# —clave citada Y valor igual al token— NO se marca. Es lo que se paga por
+# poder distinguir el ternario, y no hay regla que lo evite sin reabrirlo.
+# Acotado por dos lados: la variante DESNUDA (`db-password: "new-password"`)
+# sí se marca, porque ahí no hay exención; y usar literalmente `new-password`
+# como contraseña real es la hipótesis menos probable de la familia.
+
+citadas=$(grep '^+' "$diff_file" | cut -c2- | grep -oEi -- "$CLAVE_CITADA" \
+  | grep -vEi -- "$VALOR_BENIGNO" || true)
+if [ -n "$citadas" ]; then
+  echo "🔴 VALOR con forma de secreto: clave entre comillas (JSON/YAML)" >&2
+  printf '%s\n' "$citadas" | head -3 | sed 's/^/     /' >&2
+  hallazgos=$((hallazgos + 1))
+fi
 
 # El archivo prohibido, por nombre: nunca se lee, nunca se cita, nunca se sube.
 if grep -q 'SECRETOS_DEMO_RAILWAY' "$diff_file"; then
