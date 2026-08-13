@@ -1903,13 +1903,25 @@ export function CreateMesaFlow() {
           )}
           <InviteFriends code={code} />
         </div>
-        {/* Variante REDUCIDA de la barra: el círculo no significa "avanzar un
-            paso", cierra el flujo. Y desde el 2026-08-13 lo cierra DONDE el
-            ciclo termina —Mis ítems—, no expulsando a Inicio. Glifo de plato,
-            no de casa: la casa se fue al encabezado con su etiqueta visible. */}
+        {/* Variante REDUCIDA de la barra. Hasta el 2026-08-13 el círculo NO
+            llevaba flecha, y el motivo estaba escrito: "no significa avanzar un
+            paso, cierra el flujo". **Eso dejó de ser cierto cuando el destino
+            pasó a ser Mis ítems**: ahí el organizador sí avanza, a lo único que
+            le falta hacer.
+
+            🔴 **Flecha, elegida por Mati mirando la pantalla.** El glifo de
+            plato era correcto como sustantivo —adónde vas— y mudo como verbo:
+            no decía que hubiera algo por hacer. La flecha se apoya en lo que el
+            propio asistente ya enseñó cuatro veces, porque es el MISMO círculo
+            que en los pasos 1 a 4 dice "Continuar". **Es lo más parecido a una
+            etiqueta que este control puede tener sin romper §1.7**, que lo dejó
+            sin texto visible a propósito.
+
+            El nombre accesible sigue siendo "Elegir mis ítems": la flecha
+            resuelve a quien MIRA, y el `aria-label` a quien no. */}
         <AppBottomCta
           label={t('Elegir mis ítems')}
-          icon="tools-kitchen-2"
+          icon="arrow-right"
           onClick={() => navigate('mesa', code)}
         />
       </div>

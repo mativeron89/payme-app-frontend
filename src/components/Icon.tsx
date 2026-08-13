@@ -61,6 +61,17 @@ const GLYPHS = {
   },
   dining: { d: ['M12 19.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15Z', 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z'] },
   /**
+   * ⚠️ **SIN USO DESDE EL 2026-08-13, y se conserva a propósito.** Se dibujó
+   * para el control "Ver mesa" de Compartir; ese control ya no existe —el
+   * destino se movió al círculo del pie y Mati eligió **flecha** para él, porque
+   * ahí el organizador avanza en vez de salir—. **No queda ninguna pantalla
+   * usando este glifo.**
+   *
+   * No se borra porque **la medición de abajo sigue siendo válida y es lo caro
+   * de reconstruir**: si algún día hace falta un glifo de plato a tamaño chico,
+   * ya está resuelto cuál sirve y por qué el obvio no. Lo que se corrige es la
+   * primera línea, que afirmaba un uso que dejó de existir.
+   *
    * SPEC_APP.md §1.7 · el control "Ver mesa" de Compartir. El spec lo nombra
    * `ti-tools-kitchen-2` y lo describe como *"ícono de plato"*, agregando entre
    * paréntesis *"el mismo que usa la categoría de restaurante en otras

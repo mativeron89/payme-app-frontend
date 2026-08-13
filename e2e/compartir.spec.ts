@@ -134,11 +134,19 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
    * control**: quedó bien nombrado y escondido igual. Un test que sólo pidiera
    * el nombre habría pasado en verde todo ese tiempo.
    *
-   * Las dos mitades: que el principal LLEVA a la mesa, y que la salida a Inicio
-   * sigue existiendo. Sólo la primera dejaría pasar que se perdiera la salida
-   * que Mati quiso conservar.
+   * Las dos mitades siguen exigidas, pero **repartidas entre los dos tests**:
+   * acá el destino del principal, y arriba que la salida a Inicio existe y que
+   * no quedó duplicada.
+   *
+   * ⚠️ **Acá había un `goBack()` para tomar la otra salida en el mismo test, y
+   * se sacó: era INTERMITENTE** —cinco de seis en una corrida, seis en la
+   * siguiente—. Volver por historial deja la URL en `#/scan` pero **no
+   * garantiza que el asistente reconstruya el paso `share`**, que vive en
+   * memoria. Un test que a veces pasa no acredita nada y además entrena a
+   * ignorar el rojo. La cobertura no se pierde: la salida a Inicio se afirma
+   * arriba, sobre la pantalla recién montada.
    */
-  test('el CTA principal lleva a Mis ítems, y la salida a Inicio sigue disponible', async ({ page }) => {
+  test('el CTA principal lleva a Mis ítems', async ({ page }) => {
     await ingresar(page);
     await abrirMesaConLink(page);
 
@@ -146,10 +154,5 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
     await expect(principal).toBeVisible();
     await principal.click();
     await expect(page).toHaveURL(/#\/mesa\/PA-/);
-
-    // La salida a Inicio se conserva: se vuelve a compartir y se toma la otra.
-    await page.goBack();
-    await page.getByRole('button', { name: 'Ir a Inicio', exact: true }).click();
-    await expect(page).toHaveURL(/#\/home$/);
   });
 });

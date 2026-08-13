@@ -11,6 +11,39 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.79.6 — el círculo de Compartir vuelve a llevar flecha (2026-08-13)
+
+**Elegido por Mati mirando la pantalla publicada**, sobre el glifo de plato que
+había quedado en `0.79.5`.
+
+- 🔴 **El motivo por el que ese círculo NO llevaba flecha dejó de ser cierto en
+  `0.79.5`.** El comentario decía *«no significa avanzar un paso, cierra el
+  flujo»* — y era correcto mientras el destino era Inicio. Con el destino en Mis
+  ítems, **el organizador sí avanza**, a lo único que le falta hacer.
+- **El plato era correcto como sustantivo y mudo como verbo:** decía *adónde
+  vas*, no *que hay algo por hacer*. La flecha se apoya en lo que el propio
+  asistente ya enseñó cuatro veces —es el MISMO círculo que en los pasos 1 a 4
+  dice «Continuar»—, así que **es lo más parecido a una etiqueta que este
+  control puede tener sin romper §1.7**, que lo dejó sin texto visible.
+- El nombre accesible sigue siendo «Elegir mis ítems»: la flecha resuelve a
+  quien MIRA, el `aria-label` a quien no.
+- `tools-kitchen-2` **queda sin uso y se conserva**, con su primera línea
+  corregida: afirmaba un control que ya no existe. No se borra porque la
+  medición que lo justificó —`dining` se lee como una diana a 20 px— es lo caro
+  de reconstruir.
+
+⚠️ **Se retiró medio test por INTERMITENTE, no por incómodo.** El recorrido del
+destino cerraba volviendo con `goBack()` para tomar la salida a Inicio: dio
+cinco de seis en una corrida y seis en la siguiente. Volver por historial deja
+la URL en `#/scan` pero **no garantiza que el asistente reconstruya el paso
+`share`**, que vive en memoria. **La cobertura no se perdió**: la salida a Inicio
+se afirma en el test de al lado, sobre la pantalla recién montada. Un test que a
+veces pasa no acredita nada y entrena a ignorar el rojo.
+
+Suite 1091, **Playwright 94** (tres corridas seguidas del recorrido tocado, 6/6
+las tres), typecheck, builds, espejo y gate de secretos verdes. Verificado en
+teléfono. Sin push ni deploy.
+
 ## 0.79.5 — el organizador ya no queda expulsado a Inicio (2026-08-13)
 
 Decisión de Mati: *«el último paso, en vez de ser seleccionar lo que consumió,
