@@ -1,5 +1,36 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.79.3 — la suite no ejercitaba el instrumento real (2026-08-13)
+
+🔴 **El gate de secretos salía `exit 1` contra `origin/main` con la suite en
+15/15 verde.** Los dos hechos convivieron porque **medían cosas distintas**: los
+fixtures ejercitaban el patrón, y **nadie ejercitaba el documento**.
+
+- **El falso positivo era la documentación de 0.79.2.** El párrafo que explica
+  qué **no** hay que eximir citaba el ejemplo como asignación literal, y el gate
+  lo marcaba. **El instrumento se trabó con el texto que lo describe** — la
+  misma trampa que el propio script ya documenta para su nombre de archivo:
+  prohibir una cadena no distingue **afirmar** de **citar**.
+- **Se corrigió la PROSA, no el instrumento.** Cero exenciones nuevas, cero
+  aflojamiento del detector. Las seis formas siguen dando rojo y están
+  acreditadas con test: `password` desnudo, `DB_PASSWORD`, `db-password`, clave
+  citada JSON/YAML, y secreto junto a un token HTML benigno en la misma línea.
+- **La prueba nueva corre el instrumento sobre la documentación REAL del repo**,
+  no sobre fixtures sintéticos, y **deriva la lista de `git ls-files`** para que
+  un documento nuevo quede cubierto sin que nadie se acuerde de agregarlo.
+  Excluye `contract-mirror/`: es del dueño del contrato y este repo no puede
+  editarlo — una guarda que se pone roja sobre algo intocable es un bloqueo, no
+  una guarda.
+
+🔴 **Y se corrigió una afirmación falsa en la entrada 0.79.2: decía «gate verde
+sobre su propio commit».** El gate se había corrido **antes** de redactar esa
+entrada, así que no la auditó — y esa entrada era precisamente la que lo ponía
+en rojo. **Una verificación que no cubrió a su sujeto no es una verificación**, y
+afirmarla es la falla que este repo viene persiguiendo todo el día.
+
+Suite 1091 tests (+1). **Esta vez el gate se corrió DESPUÉS de escribir esta
+entrada y contra el commit que la contiene.** Sin push ni deploy.
+
 ## 0.79.2 — el gate de secretos cierra la clave entre comillas (2026-08-13)
 
 PATCH que cierra el hueco residual que 0.79.1 dejó documentado y medido.
@@ -10,8 +41,10 @@ PATCH que cierra el hueco residual que 0.79.1 dejó documentado y medido.
   sea el objeto que alguien pega entero en un commit sin mirarlo.
 - **El valor desempata SÓLO cuando la clave viene entre comillas.** La clave
   desnuda se sigue marcando siempre, sin mirar el valor: es lo que impide que
-  `const password = 'current-password'` quede exento, y está cubierto desde
-  antes por `auditarSecretos.test.ts:43`.
+  una asignación a `password` cuyo valor sea el token de `autocomplete` quede
+  exenta, y está cubierto desde antes por `auditarSecretos.test.ts:43`.
+  *(Redactado así a propósito: escrito como asignación literal, este párrafo
+  disparaba el propio gate. Ver 0.79.3.)*
 - 🔴 **El desempate es por COINCIDENCIA, no por línea.** Eximir la línea entera
   habría dejado que un ternario de `autoComplete` tape un JSON con la clave real
   escrito al lado — el mismo agujero que ya cubría el caso de `sk_live`. Se
@@ -27,8 +60,12 @@ regla que lo evite sin reabrir el falso positivo. Queda acotado por dos lados:
 la variante **desnuda** sí se marca, y usar literalmente `new-password` como
 contraseña real es la hipótesis menos probable de la familia.
 
-Suite 1090 tests (+2), typecheck limpio, gate verde sobre su propio commit.
-Sin push ni deploy.
+Suite 1090 tests (+2), typecheck limpio. Sin push ni deploy.
+
+🔴 **CORREGIDO en 0.79.3: acá decía «gate verde sobre su propio commit» y era
+FALSO.** El gate se corrió **antes** de redactar esta entrada, así que nunca la
+auditó — y esta entrada era justamente la que lo ponía en rojo. Afirmar una
+verificación que no cubrió al sujeto es la misma familia que este PATCH cierra.
 
 ## 0.79.1 — el gate de secretos deja de exentar la clave, no el valor (2026-08-13)
 

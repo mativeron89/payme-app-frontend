@@ -214,6 +214,60 @@ describe('auditoría de secretos', () => {
     expect(result.status, 'el token benigno eximió la línea completa').toBe(1);
   });
 
+  it('el instrumento corre limpio sobre la documentación REAL del repo', () => {
+    // 🔴 ESTE ES EL HUECO QUE LA SUITE NO VEÍA, y costó un rojo real: 15/15 en
+    // verde con fixtures sintéticos mientras `auditar-secretos.sh origin/main`
+    // salía 1. **Los fixtures ejercitaban el patrón; nadie ejercitaba el
+    // documento.** El CHANGELOG que describe este mismo arreglo citaba el
+    // ejemplo que NO hay que eximir, y el gate lo marcaba: el instrumento se
+    // trabó con el texto que lo describe.
+    //
+    // La lista se DERIVA de git en vez de escribirse a mano: un archivo nuevo
+    // queda cubierto sin que nadie se acuerde de agregarlo acá. Se excluye
+    // `contract-mirror/` porque es del dueño del contrato y este repo no puede
+    // editarlo — una guarda que se pone roja sobre algo que no podés tocar no
+    // es una guarda, es un bloqueo.
+    const listado = spawnSync(
+      'git',
+      ['ls-files', '--', '*.md', ':(exclude)contract-mirror/*'],
+      { cwd: RAIZ, encoding: 'utf8' },
+    );
+    expect(listado.status, listado.stderr).toBe(0);
+    const documentos = listado.stdout.split('\n').filter(Boolean);
+    expect(documentos.length, 'no se encontró documentación que auditar').toBeGreaterThan(0);
+    expect(documentos).toContain('CHANGELOG.md');
+
+    const dir = mkdtempSync(join(tmpdir(), 'payme-secret-docs-'));
+    temporales.push(dir);
+    mkdirSync(join(dir, 'scripts'), { recursive: true });
+    copyFileSync(SCRIPT, join(dir, 'scripts', 'auditar-secretos.sh'));
+    writeFileSync(join(dir, '.keep'), 'baseline\n');
+    git(dir, 'init', '-q');
+    git(dir, 'config', 'user.email', 'probe@payme.invalid');
+    git(dir, 'config', 'user.name', 'PayMe probe');
+    git(dir, 'add', '--', '.keep', 'scripts/auditar-secretos.sh');
+    git(dir, 'commit', '-qm', 'baseline');
+    const base = git(dir, 'rev-parse', 'HEAD');
+
+    for (const documento of documentos) {
+      const destino = join(dir, documento);
+      mkdirSync(dirname(destino), { recursive: true });
+      copyFileSync(join(RAIZ, documento), destino);
+    }
+    git(dir, 'add', '--', ...documentos);
+    git(dir, 'commit', '-qm', 'documentacion real');
+
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(
+      result.status,
+      `la documentación real dispara el gate:\n${result.stdout}${result.stderr}`,
+    ).toBe(0);
+  });
+
   it('CI entrega una base alcanzable y no vacía tanto en push como en PR', () => {
     const ci = readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');
     expect(ci).toContain('fetch-depth: 0');
