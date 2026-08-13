@@ -21,12 +21,15 @@ Workspace local `PayMe/` con carpetas hermanas:
 
 1. `payme-app-backend` — **EL CONTRATO DE ESTE FRONT** (Node/CommonJS,
    Stripe Connect; su checkpoint final se verifica, no se presume). El espejo
-   vigente usa exactamente `5c8436c7d3bb5efc1b8b53c95340ec6690877a50`
-   (contenido de `aa28e842fe0332a54c80231b241ff4d57100c7fa`, v2.47.0), copiado
-   en `contract-mirror/`; no implica que esté publicado. **La población la
-   declara el DUEÑO** (`scripts/mirror-inventory.json`, copia de su
+   vigente usa exactamente `415651ca4ef393a333206269e4a7f598c2b647de`
+   (App Backend **v2.49.0**), copiado en `contract-mirror/`: **79 archivos**.
+   ⚠️ **Es un commit LOCAL del dueño, aún sin publicar** — `origin/main` está en
+   `86f53bc`, v2.48.0. Espejar nunca implica que esté publicado, y acá la
+   distancia es real: quien lea «v2.49.0» y lo busque en el remoto no lo va a
+   encontrar. **La población la declara el DUEÑO**
+   (`scripts/mirror-inventory.json`, copia de su
    `contract/mirror-inventory.json`, con mapeo `origen→destino`: siete de los
-   71 se espejan renombrados). El gate `scripts/verificar-mirror.mjs` separa
+   79 se espejan renombrados). El gate `scripts/verificar-mirror.mjs` separa
    INTEGRIDAD (fiel al inventario · lo único verificable sin la fuente, y en
    CI se llama así, NO "paridad"), PARIDAD (la fuente respalda al inventario;
    sin fuente → exit 2 NO CERTIFICADO) y VIGENCIA (sigue igual en HEAD).
