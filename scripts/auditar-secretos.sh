@@ -86,25 +86,61 @@ PATRONES=(
   'xoxb-[A-Za-z0-9-]{20,}'
   'AKIA[0-9A-Z]{16}'
   '-----BEGIN [A-Z ]*PRIVATE KEY-----'
-  '(^|[^A-Za-z0-9-])(password|passwd|secret|token|api_?key)["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+  'i:(^|[^A-Za-z0-9_'"'"'"-])[A-Za-z0-9_-]*(password|passwd|secret|token|api_?key)["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
   'https://api\.vercel\.com/v[0-9]+/integrations/deploy/[A-Za-z0-9_/-]{16,}'
   'postgres(ql)?://[^\s"'"'"']+:[^\s"'"'"']+@'
 )
 
-# Los tokens HTML `current-password` y `new-password` no requieren una lista de
-# excepciones: el límite izquierdo del patrón excluye identificadores unidos por
-# `-`. En cambio `password = 'current-password'` conserva el límite y se audita
-# como asignación real. Esto evita neutralizar contenido antes de inspeccionarlo.
+# ─── El límite izquierdo, y por qué mira la COMILLA y no el guion ───────────
+#
+# 🔴 CORREGIDO 2026-08-13. Antes el límite excluía **todo** identificador unido
+# por `-`, para dejar pasar el ternario real de `LoginScreen.tsx:202`:
+#
+#     autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+#
+# Ahí `password'` va seguido de ` : '` y de un literal largo, así que tiene la
+# forma exacta de una asignación. Excluir el guion lo silenciaba — **y de paso
+# silenciaba `db-password: "…"`, que es una de las dos formas más comunes de
+# escribir una clave en configuración.** Una exención escrita para un caso tapó
+# otro que no tenía nada que ver.
+#
+# El discriminador correcto no es el guion: es **de dónde sale la clave**. En el
+# ternario, `current-password` es el contenido de un literal entre comillas; en
+# `db-password:` es un identificador desnudo. Por eso el límite ahora excluye
+# `'` y `"` —una comilla no puede abrir una clave— y en cambio ADMITE prefijos
+# con `-` y `_`, que es lo que cierra los dos agujeros.
+#
+# La búsqueda de esta familia además es `i:` (insensible al caso): `DB_PASSWORD`
+# es la forma canónica de una variable de entorno y `grep -E` distingue el caso.
+#
+# ⚠️ **HUECO RESIDUAL CONOCIDO, dicho porque el test no lo cubre:** una clave
+# ENTRE COMILLAS sigue sin detectarse — `"db-password": "…"` en JSON o YAML es
+# **estructuralmente idéntico** al ternario de arriba, y ninguna regla sobre el
+# límite puede separarlos. Ahí el único discriminador es el VALOR: token de
+# `autocomplete` (`current-password`, `new-password`) contra literal arbitrario.
+# Cerrarlo exige un segundo paso de filtrado por valor; no se hace acá para no
+# mezclarlo con esta corrección. **Está medido, no supuesto.**
 
 hallazgos=0
-for p in "${PATRONES[@]}"; do
+for entrada in "${PATRONES[@]}"; do
+  # Un patrón prefijado con `i:` se busca SIN distinguir mayúsculas. El flag va
+  # por patrón y no global a propósito: `AKIA[0-9A-Z]{16}` y los prefijos de
+  # Stripe son sensibles al caso por definición, y aflojarlos agregaría ruido
+  # sin cerrar nada. Una guarda que grita de más se apaga sola, y este archivo
+  # ya documenta esa familia.
+  flags=(-nE)
+  p="$entrada"
+  if [ "${p#i:}" != "$p" ]; then
+    flags=(-nEi)
+    p="${p#i:}"
+  fi
   # Sólo líneas AGREGADAS: una ELIMINACIÓN de algo con forma de secreto es lo
   # contrario de un problema, y confundirlas ya pasó una vez con las URLs de
   # Google Fonts —nueve coincidencias, las nueve borrados—.
   # Quita sólo el marcador `+` del diff y aplica el patrón a la línea real.
   # Dejar el marcador dentro de `^\+.*` consume el inicio y vuelve inalcanzable
   # la alternativa `^` del patrón para asignaciones en columna cero.
-  reales=$(grep '^+' "$diff_file" | cut -c2- | grep -nE -- "$p" || true)
+  reales=$(grep '^+' "$diff_file" | cut -c2- | grep "${flags[@]}" -- "$p" || true)
   if [ -n "$reales" ]; then
     echo "🔴 VALOR con forma de secreto: /$p/" >&2
     printf '%s\n' "$reales" | head -3 | sed 's/^/     /' >&2

@@ -1,5 +1,39 @@
 # CHANGELOG — payme-app-frontend
 
+## 0.79.1 — el gate de secretos deja de exentar la clave, no el valor (2026-08-13)
+
+PATCH de seguridad sobre `scripts/auditar-secretos.sh`. Este es el único repo
+público del workspace y tiene Pages activo: un secreto filtrado acá no se puede
+des-publicar, así que el gate falla cerrado o no sirve.
+
+- **Dos formas comunes de escribir una clave pasaban sin detección**, y ninguna
+  era exótica: `db-password: "…"` —el límite izquierdo excluía todo
+  identificador unido por `-`— y `DB_PASSWORD="…"`, que no detectaba ninguna
+  versión porque la alternancia sólo listaba minúsculas y `grep -E` distingue el
+  caso. Un test rojo reproduce cada una antes del arreglo.
+- **La exención estaba puesta sobre el objeto equivocado.** El guion se excluyó
+  para no marcar el ternario real de `src/screens/LoginScreen.tsx:202`
+  (`autoComplete={… ? 'current-password' : 'new-password'}`), que tiene forma de
+  asignación. Pero lo benigno ahí no es que la clave lleve guion: es que la
+  clave **sale de un literal entre comillas**. El límite ahora excluye `'` y `"`
+  —una comilla no abre una clave— y admite prefijos con `-` y `_`. La búsqueda
+  de esa familia pasa a ser insensible al caso, con el flag **por patrón**: los
+  prefijos de Stripe y `AKIA…` son sensibles al caso por definición y aflojarlos
+  agregaría ruido sin cerrar nada.
+- **Se acredita que cerrar los agujeros no creó un falso positivo**: la línea de
+  `LoginScreen` entra al test textual, no parafraseada.
+
+⚠️ **Hueco residual conocido y medido, no supuesto:** una clave **entre
+comillas** sigue sin detectarse. `"db-password": "…"` en JSON o YAML es
+estructuralmente idéntico al ternario de `autocomplete`, y ninguna regla sobre
+el límite izquierdo puede separarlos: ahí el único discriminador es el **valor**
+—token de `autocomplete` contra literal arbitrario— y exige un segundo paso de
+filtrado. Queda documentado en el script y sin cerrar en este commit para no
+mezclarlo con esta corrección.
+
+Suite 1088 tests (+3), typecheck y `git diff --check` limpios. El gate corre
+verde sobre su propio commit. Sin push ni deploy.
+
 ## 0.79.0 — landing bilingüe y composición visual ratificada (2026-08-12)
 
 - La landing incorpora el diccionario ES/EN de 41 claves validado por Diseño,

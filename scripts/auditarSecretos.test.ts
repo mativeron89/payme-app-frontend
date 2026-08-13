@@ -70,6 +70,61 @@ describe('auditoría de secretos', () => {
     expect(result.status).toBe(0);
   });
 
+  it('la clave unida por guion NO queda exenta: el guion es de la clave, no del valor', () => {
+    // `db-password: "…"` es de las dos formas más comunes de escribir una clave
+    // en configuración. El límite izquierdo excluía TODO identificador unido por
+    // `-` para dejar pasar `current-password`, y de paso dejaba pasar esto.
+    // Se arma en runtime: escrito literal, el fixture sería un valor con forma
+    // de secreto en el diff que este mismo gate audita.
+    const clave = ['db', 'password'].join('-');
+    const valor = ['valor', 'sintetico', 'largo'].join('_');
+    const { dir, base } = repoConCambio(`${clave}: '${valor}'`);
+
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+    expect(result.status, `el límite por guion omitió ${clave}`).toBe(1);
+  });
+
+  it('la clave en MAYÚSCULAS conserva la guarda: la búsqueda no puede ser sensible al caso', () => {
+    // `DB_PASSWORD="…"` es la forma canónica de una variable de entorno, y la
+    // alternancia sólo listaba minúsculas con `grep -E`, que distingue el caso.
+    const clave = ['DB', 'PASSWORD'].join('_');
+    const valor = ['valor', 'sintetico', 'largo'].join('_');
+    const { dir, base } = repoConCambio(`${clave}='${valor}'`);
+
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+    expect(result.status, `la búsqueda sensible al caso omitió ${clave}`).toBe(1);
+  });
+
+  it('la línea REAL de LoginScreen con autocomplete ternario sigue sin disparar', () => {
+    // Caso inocente tomado de `src/screens/LoginScreen.tsx:202`, textual salvo el
+    // armado en runtime. Es la ÚNICA ocurrencia de estos tokens en `src/`, y es
+    // la que el límite por guion protegía: al cerrar los dos agujeros de arriba
+    // hay que acreditar que ésta no se convirtió en falso positivo.
+    const actual = ['current', 'password'].join('-');
+    const nuevo = ['new', 'password'].join('-');
+    const { dir, base } = repoConCambio(
+      `          autoComplete={mode === 'login' ? '${actual}' : '${nuevo}'}`,
+    );
+
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('cero valores con forma de secreto');
+    expect(result.status, 'cerrar los agujeros convirtió la línea real en falso positivo').toBe(0);
+  });
+
   it.each(['db_password', 'client_secret', 'auth_token'])(
     'los identificadores compuestos %s conservan la guarda',
     (identifier) => {
