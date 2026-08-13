@@ -11,6 +11,60 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.79.4 — los cuatro pasos de la landing cierran el ciclo del ticket (2026-08-13)
+
+Ratificado por Mati en vivo con Diseño, mirando capturas reales editadas en el
+navegador. Sólo texto de las cuatro tarjetas de «Cómo funciona», más un ícono.
+**No toca estructura, layout ni el resto de la página.**
+
+- **`step1` pasa de «Abre la mesa» a «Escanea el ticket».** Es el cambio de
+  fondo: el ciclo no explicaba de dónde salían los platillos que el paso 3 hace
+  elegir —el ticket no se mencionaba en ningún lado—. Ahora cierra:
+  ticket → ítems → cada quien elige → paga.
+- **`step2` reemplaza la palabra «WhatsApp» por su glifo inline**, 18×18,
+  alineado a la línea de base. **La clave se partió en `p_before`/`p_after`**
+  con el ícono fijo en el HTML entre las dos. 🔴 **La decisión se tomó midiendo,
+  no suponiendo:** `applyLang` asigna con `textContent`, así que un `<svg>`
+  dentro del string del diccionario se escaparía y se vería como texto crudo.
+  Se descartó pasar esa inserción a `innerHTML`: meter HTML del diccionario al
+  DOM por una tarjeta no paga el riesgo que abre. El glifo lleva `aria-label`
+  porque acá el ícono **es** la palabra.
+- **`step3` se simplifica a una idea** y **`step4` deja de mencionar la propina**
+  —pedido explícito de Mati, no un olvido—.
+- **Los dos idiomas cambian juntos.** Verificado en navegador: ES y EN muestran
+  las cuatro tarjetas nuevas y el glifo persiste al alternar.
+- La guarda del artefacto pasa de 41 a **42 claves**, por la clave partida.
+  Sigue en cero bundles JS, cero módulos, cero red, sin `data:` URI y con los
+  tres `<img>` de siempre. El glifo no agregó un `<img>`: es `<svg>` inline.
+
+⚠️ **NO SE CUMPLE la verificación que el propio spec pedía, y se deja escrito.**
+El motivo del ícono era que la tarjeta 2 crecía más que las otras. **Medido en
+desktop (1280 px), quedó peor:**
+
+```
+             antes                   ahora
+tarjetas     188 · 188 · 166 · 188   188 · 209 · 166 · 166
+tarjeta 2    empatada con la 1 y 4   la más alta, +21 px
+```
+
+**La causa es que el texto nuevo es más largo que el viejo** (60 → 81 caracteres
+en ES): el ícono ahorra la palabra «WhatsApp», y la reescritura agrega más de lo
+que el ícono ahorra. ✅ **En móvil (375 px) el problema no existe** —166 · 166 ·
+144 · 144, sin desborde—, y la landing es mobile-first, así que no bloquea.
+**No se toca el copy ratificado para arreglarlo:** si Mati quiere las cuatro
+parejas en desktop, es una decisión suya sobre el texto, no una corrección
+técnica.
+
+**Vocabulario:** «respalda» es una palabra **nueva** en el producto, elegida por
+Mati sabiendo que ya existen «Garantía/Garantizada» en la app del comensal y
+«Asegurada» en el dashboard. **No se armonizó por cuenta propia:** unificar
+vocabulario entre superficies es una decisión aparte y no está tomada.
+`restaurante.perk4` en inglés también dice «guarantee» y **no se tocó** — es
+otra sección, fuera de lo que Mati revisó.
+
+Suite 1091 tests, typecheck, builds real/mock/landing, Playwright 93, espejo en
+paridad y gate de secretos verdes. Sin push ni deploy.
+
 ## 0.79.3 — la suite no ejercitaba el instrumento real (2026-08-13)
 
 🔴 **El gate de secretos salía `exit 1` contra `origin/main` con la suite en

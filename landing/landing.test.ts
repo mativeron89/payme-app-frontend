@@ -354,12 +354,19 @@ describe('PROPIEDAD 1 bis · el selector bilingüe es completo y falla seguro', 
     return JSON.parse(JSON.stringify(value)) as Record<'es' | 'en', Record<string, string>>;
   }
 
-  it('🔴 las 41 claves del DOM coinciden exactamente con ES y EN', () => {
+  it('🔴 las 42 claves del DOM coinciden exactamente con ES y EN', () => {
+    // 41 → 42 el 2026-08-13: `step2.p` se partió en `p_before`/`p_after` para
+    // que el glifo de WhatsApp quede FIJO en el HTML entre las dos mitades.
+    // 🔴 El motivo es medido, no estético: `applyLang` asigna con `textContent`,
+    // así que un `<svg>` dentro del string del diccionario se escaparía y se
+    // vería como texto crudo. La alternativa era pasar esa inserción a
+    // `innerHTML`, y se descartó: meter HTML del diccionario al DOM por una
+    // tarjeta no paga el riesgo que abre.
     const dom = [...build.htmlSinScript.matchAll(/\bdata-i18n="([^"]+)"/g)].map((m) => m[1]!);
     const dict = leerDiccionario();
     const esperadas = [...new Set(dom)].sort();
     expect(dom, 'hay claves data-i18n duplicadas').toHaveLength(esperadas.length);
-    expect(esperadas).toHaveLength(41);
+    expect(esperadas).toHaveLength(42);
     expect(Object.keys(dict.es).sort()).toEqual(esperadas);
     expect(Object.keys(dict.en).sort()).toEqual(esperadas);
     expect(Object.values(dict.es).every((v) => typeof v === 'string' && v.length > 0)).toBe(true);
@@ -1060,7 +1067,11 @@ describe('PROPIEDAD 8 · el contenido es el del boceto', () => {
     expect(enc).toEqual([
       'h1 Cada quien paga lo suyo, desde su teléfono',
       'h2 Cuatro pasos, una cuenta',
-      'h3 Abre la mesa',
+      // 🔴 Era «Abre la mesa». Cambiado el 2026-08-13 por Mati: el ciclo no
+      // explicaba de dónde salían los platillos que el paso 3 hace elegir —el
+      // ticket no se mencionaba en ningún lado—. Ahora el paso 1 lo dice y el
+      // ciclo cierra: ticket → ítems → cada quien elige → paga.
+      'h3 Escanea el ticket',
       'h3 Comparte el link',
       'h3 Cada quien elige',
       'h3 Pagan y listo',

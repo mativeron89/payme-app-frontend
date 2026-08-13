@@ -452,6 +452,17 @@ a { color: inherit; }
     linear-gradient(var(--surface), var(--surface)) padding-box,
     linear-gradient(155deg, rgba(91,107,130,0.35) 0%, rgba(91,107,130,0.08) 55%, rgba(91,107,130,0.3) 100%) border-box;
 }
+/* Glifo de WhatsApp del paso 2. REEMPLAZA la palabra, no la acompaña: escrita,
+   esa tarjeta crecía más que las otras tres. Va inline y del alto de la línea.
+   `vertical-align` levemente NEGATIVO y no `middle`: centrado sobre la x-height
+   el glifo flota por encima de la base del texto y se lee como un adorno suelto
+   en vez de como una palabra más de la oración. */
+.wa-glifo {
+  width: 18px;
+  height: 18px;
+  vertical-align: -0.18em;
+  margin: 0 0.12em;
+}
 .step-1 { top: 0; left: 50%; transform: translateX(-50%); }
 .step-2 { top: 50%; right: 0; transform: translateY(-50%); }
 .step-3 { bottom: 0; left: 50%; transform: translateX(-50%); }
