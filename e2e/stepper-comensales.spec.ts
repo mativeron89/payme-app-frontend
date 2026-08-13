@@ -63,7 +63,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     expect(enviado).toBe(3);
 
     // Y la base de §1.5 bis dice la misma división que la vista del stepper.
-    await page.getByRole('button', { name: 'Ver mesa', exact: true }).click();
+    await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByText('(la cuenta ÷ 3)')).toBeVisible();

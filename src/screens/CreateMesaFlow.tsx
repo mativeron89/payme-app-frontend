@@ -1782,23 +1782,42 @@ export function CreateMesaFlow() {
    *
    * **Y por eso ya no se llama "Volver" (Diseño, 2026-08-04).** El destino era
    * correcto y el nombre no: *un control que dice "Volver" y no retrocede es
-   * una etiqueta que miente*. Pasa a **"Ver mesa"**, con ícono de plato y sin
-   * flecha de retroceso.
+   * una etiqueta que miente*.
    *
-   * El renombre resuelve además algo que esta pantalla había perdido: al pasar
-   * el CTA del pie al círculo con casa, **nada le decía al organizador que
-   * todavía le falta elegir lo suyo**. El camino existía —casa → Inicio → la
-   * burbuja de la mesa— pero ningún control lo nombraba. Ahora lo nombra, **sin
-   * agregar un segundo botón**: es el mismo control.
-   *
-   * **Se retira "Paso 5 de 5"** por lo mismo. "Ver mesa" no es un paso hacia
+   * **Se retira "Paso 5 de 5"** por lo mismo: ir a la mesa no es un paso hacia
    * atrás del asistente sino una salida lateral a la mesa en vivo; contar pasos
    * al lado de un control que no navega el asistente ya no significa nada.
    *
-   * El destino se verificó antes de cablear, y no hubo nada que recablear:
+   * ─── 🔴 2026-08-13 · el organizador ya no queda expulsado a Inicio ─────────
+   *
+   * **Los dos destinos se INTERCAMBIARON. Decisión de Mati**, con su motivo:
+   * el que escanea crea la mesa, comparte el link y *«el último paso, en vez de
+   * ser seleccionar lo que consumió, lo manda al Home para que luego busque la
+   * mesa»*. El ciclo tiene que cerrar donde el organizador elige lo suyo.
+   *
+   * **Nada hubo que recablear: los dos destinos ya existían y funcionaban.**
    * `navigate('mesa', code)` **ya era** Mis ítems (§1.5) —`#/mesa/:code` monta
-   * `MesaScreen`, que es esa pantalla— y acepta el código. Lo único que estaba
-   * mal era cómo se llamaba el control.
+   * `MesaScreen`— y `navigate('home')` ya era Inicio. **Lo que estaba mal era
+   * la JERARQUÍA**: el camino que cierra el ciclo vivía en la flecha y el que
+   * expulsa ocupaba el control principal.
+   *
+   * 🔴 **Y el renombre de 2026-08-04 arregló el NOMBRE sin mover la POSICIÓN.**
+   * El comentario de acá arriba celebraba que ya *"lo nombra"* — y era cierto,
+   * pero lo nombraba en el control chico mientras el grande seguía expulsando.
+   * **Quedó bien nombrado y escondido igual.** Se deja escrito porque es la
+   * clase de corrección que se siente completa y no lo está.
+   *
+   * ⚠️ **La salida a Inicio se conserva —Mati la quiso— pero deja de ser la
+   * destacada:** baja al encabezado, que además **sí muestra etiqueta visible**
+   * (`AppHeaderFlow` pinta `backLabel`; el círculo del pie es `aria-label` y
+   * nada más, por §1.7). Por eso **el subtítulo nombra lo que sigue**: es el
+   * único lugar donde quien MIRA la pantalla lee que todavía le falta elegir lo
+   * suyo. El círculo no puede decirlo sin romper §1.7, que Mati ratificó.
+   *
+   * 🔴 **Y sigue vigente el límite de arriba: la flecha NO puede retroceder a
+   * División.** Al liberarla de "Ver mesa" lo natural es hacerla "volver", y
+   * eso abriría una segunda mesa con un segundo hold por el total (B-06).
+   * Por eso lleva a Inicio, que es una salida lateral, y no al paso anterior.
    */
   if (step === 'share' && created) {
     const code = created.mesa.code;
@@ -1812,13 +1831,17 @@ export function CreateMesaFlow() {
       <div className="screen has-appbar">
         <AppHeaderFlow
           paymeId={session?.user?.payme_id}
-          onBack={() => navigate('mesa', code)}
-          backLabel={t('Ver mesa')}
-          backIcon="tools-kitchen-2"
+          onBack={() => navigate('home')}
+          backLabel={t('Ir a Inicio')}
+          backIcon="home"
         />
         <div className="title-card">
           <h1 className="title-card-title">{t('¡Mesa garantizada!')}</h1>
-          <div className="title-card-sub">{t('Comparte el código para que se sumen')}</div>
+          {/* Nombra las DOS cosas: compartir y lo que al organizador todavía le
+              falta. El círculo del pie no puede decirlo —§1.7 lo dejó sin
+              etiqueta visible a propósito—, así que si esto no lo dice, para
+              quien mira la pantalla no lo dice nada. */}
+          <div className="title-card-sub">{t('Comparte el código y después elige lo que consumiste')}</div>
         </div>
         <div className="scroll flow-scroll">
           <div className="share-card">
@@ -1881,8 +1904,14 @@ export function CreateMesaFlow() {
           <InviteFriends code={code} />
         </div>
         {/* Variante REDUCIDA de la barra: el círculo no significa "avanzar un
-            paso", cierra el flujo. Glifo de casa, no flecha. */}
-        <AppBottomCta label={t('Ir a Inicio')} icon="home" onClick={() => navigate('home')} />
+            paso", cierra el flujo. Y desde el 2026-08-13 lo cierra DONDE el
+            ciclo termina —Mis ítems—, no expulsando a Inicio. Glifo de plato,
+            no de casa: la casa se fue al encabezado con su etiqueta visible. */}
+        <AppBottomCta
+          label={t('Elegir mis ítems')}
+          icon="tools-kitchen-2"
+          onClick={() => navigate('mesa', code)}
+        />
       </div>
     );
   }

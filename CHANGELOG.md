@@ -11,6 +11,54 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.79.5 — el organizador ya no queda expulsado a Inicio (2026-08-13)
+
+Decisión de Mati: *«el último paso, en vez de ser seleccionar lo que consumió,
+lo manda al Home para que luego busque la mesa»*. El que escanea creaba la mesa,
+compartía el link y terminaba fuera de su propio ciclo.
+
+- **Los dos destinos se intercambiaron.** El círculo del pie —el control
+  principal del asistente, el mismo que en los pasos 1 a 4 dice «Continuar»—
+  pasa a llevar a **Mis ítems**; la salida a Inicio, que Mati quiso conservar,
+  baja al encabezado como salida secundaria.
+- 🔴 **No hubo nada que recablear: los dos destinos ya existían y funcionaban.**
+  `navigate('mesa', code)` ya era Mis ítems y `navigate('home')` ya era Inicio.
+  **Lo que estaba mal era la jerarquía**, no el cableado.
+- 🔴 **Y explica por qué el arreglo anterior no alcanzó.** El 2026-08-04 se
+  renombró ese control de «Volver» a «Ver mesa» justamente porque *«nada le
+  decía al organizador que todavía le falta elegir lo suyo»*. **Se corrigió el
+  NOMBRE y no la POSICIÓN: quedó bien nombrado y escondido igual**, mientras el
+  control grande seguía expulsando. Queda escrito porque es la clase de
+  corrección que se siente completa y no lo está.
+- **El subtítulo nombra lo que sigue.** El círculo no lleva etiqueta visible
+  —§1.7, ratificado— así que su `aria-label` no alcanza para quien MIRA la
+  pantalla. Si el subtítulo no lo dice, no lo dice nada.
+- **La flecha del encabezado sigue sin poder retroceder.** Al liberarla de «Ver
+  mesa» lo natural era hacerla «volver», y volver a División abriría **una
+  segunda mesa con un segundo hold por el total** (B-06). Lleva a Inicio, que es
+  una salida lateral.
+
+**El test nuevo afirma el DESTINO, no el rótulo** — y ésa es la lección del
+punto anterior: un test que pidiera el nombre habría estado verde los nueve días
+en que el control estuvo bien nombrado y mal ubicado. Se afirman las dos
+mitades: que el principal lleva a la mesa **y** que la salida a Inicio sigue
+existiendo.
+
+Se actualizaron cinco recorridos que llegaban a Mis ítems por el control viejo.
+
+⚠️ **Copy: el CTA dice «Elegir mis ítems» y no «Elegir lo que consumí».** La
+guarda de español mexicano marca `consumí`, y tiene razón: es idéntico al
+imperativo voseante de *consumir*, así que el patrón no puede distinguirlo del
+pretérito. **No se agregó a la allowlist**: había copy alternativo, y una
+excepción para una palabra ambigua debilita la guarda para el voseo real.
+
+Verificado en teléfono (375 px) además de la suite: encabezado con casa y texto
+visible, subtítulo, círculo con glifo de plato, y el destino comprobado en vivo
+—`#/scan` → `#/mesa/PA-3810`—.
+
+Suite 1091 tests, **Playwright 94** (+1), typecheck, builds real/mock/landing,
+espejo en paridad y gate de secretos verdes. Sin push ni deploy.
+
 ## 0.79.4 — los cuatro pasos de la landing cierran el ciclo del ticket (2026-08-13)
 
 Ratificado por Mati en vivo con Diseño, mirando capturas reales editadas en el

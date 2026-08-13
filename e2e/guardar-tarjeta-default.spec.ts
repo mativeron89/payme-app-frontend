@@ -48,7 +48,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
 
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
   await page.getByRole('button', { name: 'Confirmar autorización', exact: true }).click();
-  await page.getByRole('button', { name: 'Ver mesa', exact: true }).click();
+  await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
 
   // Tomar un ítem y llegar al pago.
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
@@ -92,7 +92,7 @@ test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una dec
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
   await page.getByRole('button', { name: 'Confirmar autorización', exact: true }).click();
-  await page.getByRole('button', { name: 'Ver mesa', exact: true }).click();
+  await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
 
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
