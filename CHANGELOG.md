@@ -1,5 +1,16 @@
 # CHANGELOG — payme-app-frontend
 
+> 🔴 **ESTADO DE PUBLICACIÓN — leer antes que cualquier entrada.** El repo está
+> publicado **desde `0.79.3` (2026-08-13)** hacia atrás: ese push subió también
+> `0.78.0`, `0.79.0`, `0.79.1` y `0.79.2`, que hasta entonces eran locales. La
+> landing de `0.79.0` ya estaba publicada antes, por separado, como `514cb01`.
+>
+> **Varias de esas entradas dicen «Sin push ni deploy» y eran ciertas cuando se
+> escribieron.** No se reescriben: cambiar el texto de un release pasado
+> falsifica lo que dijo en su momento. **Esta nota dice la verdad de hoy sin
+> tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
+> se refiere al día en que se redactó, no a hoy.
+
 ## 0.79.3 — la suite no ejercitaba el instrumento real (2026-08-13)
 
 🔴 **El gate de secretos salía `exit 1` contra `origin/main` con la suite en
@@ -122,7 +133,16 @@ verde sobre su propio commit. Sin push ni deploy.
 La guarda del artefacto mantiene cero bundles JavaScript, cero módulos, cero
 red/cookies/sessionStorage y limita `localStorage` a la única clave de idioma.
 No cambia el `<title>`, las rutas, los `alt`, las fuentes ni ninguna superficie
-de la app autenticada. Sin push ni deploy.
+de la app autenticada.
+
+🔴 **CORREGIDO: acá decía «Sin push ni deploy» y es falso.** Este mismo trabajo
+**ya estaba publicado** desde el commit `514cb01` de `origin/main`, donde iba
+rotulado **`0.78.0`**. Las dos líneas hicieron el cambio en paralelo —`landing/`
+es byte por byte idéntico en las dos— y numeraron distinto porque `514cb01`
+salió de `4516c7c`, antes de los seis commits del alta F&F: en esa rama el
+número libre era `0.78.0`, y en ésta ya se lo había llevado el F&F. **Se
+registra aquel rótulo para no perder el dato, sin robárselo a la entrada que lo
+ocupa.**
 
 ## 0.78.0 — alta F&F invitada, aviso previo y OCR honesto (2026-08-12)
 
