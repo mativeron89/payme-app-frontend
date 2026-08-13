@@ -49,6 +49,32 @@ import { describe, expect, it } from 'vitest';
  * `sección`— hay una allowlist de excepciones, cada una una palabra real del
  * idioma. **Ese es el precio de derivar: la allowlist se audita, una lista de
  * prohibidos no se puede auditar porque no se sabe qué falta.**
+ *
+ * ─── 🔴 LO QUE NO VA A LA ALLOWLIST, Y POR QUÉ (2026-08-13) ─────────────────
+ *
+ * **La primera persona del pretérito choca con el patrón y NO se exenta.**
+ * Medido:
+ *
+ *     Todavía no elegí   → marca `elegí`     primera persona, legítima
+ *     Ya pagué           → marca `pagué`     primera persona, legítima
+ *     Elegí lo que…      → marca `Elegí`     imperativo voseante, real
+ *
+ * 🔴 **`elegí`, `consumí` y `compartí` son SIMULTÁNEAMENTE la primera persona
+ * del pretérito y el imperativo voseante: son la misma cadena.** Meterlas acá
+ * no elimina un falso positivo — **apaga la detección del voseo real justo en
+ * los verbos que más usa este producto.** La ambigüedad es irreducible para un
+ * patrón morfológico: es el límite del método, no un defecto que se pula.
+ *
+ * **La política es evitar la palabra ambigua en el copy, no exentarla.** Ya se
+ * aplicó dos veces el 2026-08-13: el CTA de Compartir quedó «Elegir mis ítems»
+ * en vez de «Elegir lo que consumí» —el infinitivo no es ambiguo y dice lo
+ * mismo—, y Diseño dejó «Todavía no elegí» fuera de su corrección de 16 voseos
+ * por ser legítima.
+ *
+ * ⚠️ **La colisión que todavía no ocurrió y va a ocurrir: `pagué`.** Esto es
+ * una app de pagos y «Ya pagué» / «Pagué mi parte» son frases que el producto
+ * va a querer decir. Hoy no hay ninguna en `src/`. **Cuando llegue, se
+ * reescribe la frase; no se agrega la palabra.**
  */
 const PATRON_VOSEO = /(?<![A-Za-zÁÉÍÓÚáéíóúñÑ])([A-Za-zñÑ]{2,}(?:[áéí]|[áéí]s))(?![A-Za-zÁÉÍÓÚáéíóúñÑ])/g;
 

@@ -11,6 +11,34 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.79.7 — la guarda de voseo declara qué NO va a su allowlist (2026-08-13)
+
+Documentación de una política que se aplicó dos veces el mismo día sin estar
+escrita, y que la próxima vez se iba a resolver mal.
+
+- 🔴 **La primera persona del pretérito choca con el patrón y no se exenta.**
+  Medido: `Todavía no elegí` marca `elegí`, `Ya pagué` marca `pagué`. Son
+  legítimas y la guarda igual las frena.
+- **Por qué no se arreglan con la allowlist:** `elegí`, `consumí` y `compartí`
+  son **simultáneamente** primera persona del pretérito e imperativo voseante —
+  la misma cadena de caracteres. Exentarlas **apaga la detección del voseo real
+  en los verbos que más usa este producto.** La ambigüedad es irreducible para
+  un patrón morfológico: es el límite del método, no un defecto pulible.
+- **La política es reescribir la frase, no exentar la palabra.** Ya se aplicó
+  dos veces hoy: el CTA de Compartir quedó «Elegir mis ítems» en vez de «Elegir
+  lo que consumí», y Diseño dejó «Todavía no elegí» fuera de su corrección de
+  16 voseos por ser legítima.
+- ⚠️ **La colisión anunciada: `pagué`.** Esto es una app de pagos y «Ya pagué»
+  es una frase que el producto va a querer decir. Hoy no existe en `src/`.
+  Queda escrito qué hacer cuando llegue.
+
+**Origen:** lo detectó Diseño barriendo `SPEC_APP.md` con la misma regla, donde
+encontró **16 formas voseantes más** en ocho pantallas. El aporte de acá fue
+medir el alcance real contra el patrón —incluido `pagué`, que ese barrido no
+listaba— y establecer que la salida no es la allowlist.
+
+Sin cambio de conducta: la guarda no se tocó, sólo su documentación. Suite 1091.
+
 ## 0.79.6 — el círculo de Compartir vuelve a llevar flecha (2026-08-13)
 
 **Elegido por Mati mirando la pantalla publicada**, sobre el glifo de plato que
