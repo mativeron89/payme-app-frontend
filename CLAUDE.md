@@ -23,10 +23,22 @@ Workspace local `PayMe/` con carpetas hermanas:
    Stripe Connect; su checkpoint final se verifica, no se presume). El espejo
    vigente usa exactamente `415651ca4ef393a333206269e4a7f598c2b647de`
    (App Backend **v2.49.0**), copiado en `contract-mirror/`: **79 archivos**.
-   ⚠️ **Es un commit LOCAL del dueño, aún sin publicar** — `origin/main` está en
-   `86f53bc`, v2.48.0. Espejar nunca implica que esté publicado, y acá la
-   distancia es real: quien lea «v2.49.0» y lo busque en el remoto no lo va a
-   encontrar. **La población la declara el DUEÑO**
+   🔴 **CORREGIDO el 2026-08-16 y remedido.** Acá decía *«es un commit LOCAL del
+   dueño, aún sin publicar — `origin/main` está en `86f53bc`, v2.48.0»*, y **las
+   dos mitades ya son falsas**: `415651c` **está publicado** (`git branch -r
+   --contains` lo ubica en `origin/main`) y el remoto del dueño está en
+   `c800a0d`, **v2.49.1**, con su HEAD local en `68d2982`, v2.49.2.
+   ⚠️ **El aviso caducó por progreso ajeno, no por un error de quien lo escribió:
+   era cierto el 13/08 y el dueño publicó después.** Es la clase de afirmación
+   que ningún gate mira —el gate compara contenido, no si el commit salió— así
+   que se remide, no se infiere.
+   **La lección que el aviso traía SIGUE VIGENTE y por eso no se borra: espejar
+   nunca implica que esté publicado.** Que hoy coincidan es una casualidad
+   fechada, no una propiedad.
+   ✅ **Remedido el 2026-08-16:** `--vigencia` verde —los 79 archivos siguen
+   idénticos en el HEAD del dueño— y su inventario sólo cambió el campo `commit`:
+   **misma población, mismo contenido.** El espejo no está atrasado.
+   **La población la declara el DUEÑO**
    (`scripts/mirror-inventory.json`, copia de su
    `contract/mirror-inventory.json`, con mapeo `origen→destino`: siete de los
    79 se espejan renombrados). El gate `scripts/verificar-mirror.mjs` separa
