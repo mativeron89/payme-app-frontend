@@ -21,11 +21,50 @@ import { mesaStatusLabel } from '../utils/labels';
  * Ahora esto lo contradice, en las dos direcciones.
  */
 
-const ESPEJO = import.meta.glob('/contract-mirror/utils/stateMachine.js', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
+const ESPEJO = import.meta.glob(
+  ['/contract-mirror/utils/stateMachine.js', '/contract-mirror/routes/mesas.js'],
+  { query: '?raw', import: 'default', eager: true },
+) as Record<string, string>;
+
+/**
+ * 🔴 LA CLASIFICACIÓN, LEÍDA DEL ESPEJO · corregido el 2026-08-16.
+ *
+ * Acá abajo había una copia A MANO de `CREACION_OUTCOMES`, y su comentario
+ * prometía: *«si el dueño reclasifica un estado, esto queda rojo»*. **Era
+ * falso.** El test comparaba el union contra **otra constante de este mismo
+ * repo**, sin abrir `routes/mesas.js` nunca. Si el dueño movía `settled` de
+ * `replayable` a `terminal`, el espejo cambiaba y **esto seguía verde**: lo
+ * único que lo ponía rojo era editar `types.ts`, o sea el lado equivocado.
+ *
+ * Es la clase que el Bibliotecario señaló como la más dura: **una afirmación de
+ * fidelidad que ninguna guarda sostiene** — con el agravante de que acá el
+ * comentario afirmaba la guarda que faltaba, así que quien lo leyera quedaba
+ * tranquilo por escrito.
+ *
+ * Ahora los cinco grupos se leen del espejo. El fallback `unknown` no se lee:
+ * es lo que la función devuelve cuando ningún grupo matchea, y se afirma abajo
+ * como propiedad, no como lista.
+ */
+function clasificacionDelEmisor(): Record<string, string> {
+  const fuente = ESPEJO['/contract-mirror/routes/mesas.js'];
+  expect(fuente, 'no se pudo leer routes/mesas.js del espejo').toBeTruthy();
+  const grupos: [string, string][] = [
+    ['CREACION_REQUIERE_ACCION', 'requires_action'],
+    ['CREACION_ABIERTA', 'open'],
+    ['CREACION_PARCIAL', 'partially_paid'],
+    ['CREACION_TERMINAL', 'terminal'],
+    ['CREACION_REPLAYABLE', 'replayable'],
+  ];
+  const fuera: Record<string, string> = {};
+  for (const [constante, outcome] of grupos) {
+    const bloque = new RegExp(`const ${constante}\\s*=\\s*Object\\.freeze\\(\\[([\\s\\S]*?)\\]\\)`).exec(fuente!);
+    expect(bloque, `no se encontró ${constante} en el espejo`).toBeTruthy();
+    const estados = [...bloque![1]!.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
+    expect(estados.length, `${constante} quedó vacío: el parseo mediría en vacío`).toBeGreaterThan(0);
+    for (const e of estados) fuera[e] = outcome;
+  }
+  return fuera;
+}
 
 /**
  * Se leen las claves del bloque `mesa: { … }` de `TRANSITIONS`. Es parsing de
@@ -77,23 +116,28 @@ describe('MesaStatus espeja la FSM del dueño', () => {
     expect(Object.keys(MESA_CREATION_OUTCOME_BY_STATUS).sort()).toEqual(fsm);
   });
 
-  it('la clasificación coincide con la que declara el emisor', () => {
-    // Copiada de `CREACION_OUTCOMES` en `routes/mesas.js` (v2.48.0). Si el
-    // dueño reclasifica un estado, esto queda rojo antes de que el decoder
-    // empiece a rechazar respuestas legítimas por "incoherentes".
-    expect(MESA_CREATION_OUTCOME_BY_STATUS).toEqual({
-      pending_auth: 'requires_action',
-      open: 'open',
-      partially_paid: 'partially_paid',
-      auth_failed: 'terminal',
-      cancelled: 'terminal',
-      expired: 'terminal',
-      fully_paid: 'replayable',
-      settling: 'replayable',
-      settled: 'replayable',
-      dispersing: 'replayable',
-      completed: 'replayable',
-      dispersed: 'replayable',
-    });
+  it('🔴 la clasificación se LEE del espejo · si el dueño reclasifica, esto queda rojo', () => {
+    // Ahora sí hace lo que su comentario prometía: la expectativa sale de
+    // `contract-mirror/routes/mesas.js`, no de una copia a mano de este repo.
+    expect(MESA_CREATION_OUTCOME_BY_STATUS).toEqual(clasificacionDelEmisor());
+  });
+
+  it('🔴 SONDA · el parseo del espejo encontró los cinco grupos de verdad', () => {
+    // Sin esto, un regex que dejara de matchear devolvería `{}` y el test de
+    // arriba compararía contra vacío… y pasaría sólo si el union también
+    // estuviera vacío. Se afirma la forma, no sólo que no explotó.
+    const emisor = clasificacionDelEmisor();
+    expect(Object.keys(emisor).length, 'el espejo devolvió menos estados que la FSM').toBe(fsm.length);
+    expect(new Set(Object.values(emisor))).toEqual(
+      new Set(['requires_action', 'open', 'partially_paid', 'terminal', 'replayable']),
+    );
+  });
+
+  it('🔴 `unknown` NO sale de una lista: es lo que el emisor devuelve por descarte', () => {
+    // El sexto outcome no está en ningún grupo del espejo a propósito — es el
+    // `return 'unknown'` final de `outcomeDeCreacion`. Se afirma como propiedad
+    // para que nadie lo agregue a la tabla creyendo que faltaba.
+    expect(Object.values(clasificacionDelEmisor())).not.toContain('unknown');
+    expect(MESA_CREATION_OUTCOME_BY_STATUS['estado_del_futuro' as never]).toBeUndefined();
   });
 });

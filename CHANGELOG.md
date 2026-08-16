@@ -11,6 +11,45 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.79.10 — una guarda de espejo que prometía lo que no hacía (2026-08-16)
+
+Barrido de afirmaciones de versión y fidelidad **en comentarios de código** — el
+universo que `0.79.9` había declarado abierto. `payme-dashboard-frontend` avisó
+que ahí vive el drift más duro, porque es lo que menos se mira.
+
+**221 afirmaciones en comentarios de 188 archivos.** Las de versión (`74`) son
+todas del tipo *«desde v2.4x»*: fechan cuándo apareció una conducta, no afirman
+estado actual. Las de fidelidad (`142`) son las que había que auditar.
+
+🔴 **Y una era falsa de la peor manera: el comentario afirmaba la guarda que
+faltaba.** `mesaStatus.mirror.test.ts` decía *«si el dueño reclasifica un estado,
+esto queda rojo»* y **comparaba `MESA_CREATION_OUTCOME_BY_STATUS` contra una
+copia A MANO** escrita en el propio test. Nunca abría `routes/mesas.js`.
+
+```
+si el dueño movía `settled` de replayable a terminal
+   el espejo cambiaba          →  el test seguía VERDE
+lo único que lo ponía rojo     →  editar types.ts, o sea el lado equivocado
+```
+
+- **Ahora los cinco grupos se leen de `contract-mirror/routes/mesas.js`**, igual
+  que hacen las otras guardas de espejo del repo. La expectativa sale de la
+  fuente, no de una transcripción.
+- **`unknown` se afirma como PROPIEDAD, no como lista:** es el `return` por
+  descarte de `outcomeDeCreacion` y no está en ningún grupo. Queda fijado para
+  que nadie lo agregue a la tabla creyendo que faltaba.
+- **Sonda del parseo:** exige que salgan los 12 estados en 5 grupos. Sin ella un
+  regex que dejara de matchear devolvería `{}` y compararía contra vacío.
+
+⚠️ **ACREDITACIÓN MÁS DÉBIL QUE UN MUTANTE, y se dice:** probar el rojo exigiría
+**editar `contract-mirror/`, que es solo lectura absoluta por gobierno**. No se
+hizo. Lo que sostiene el cambio es estructural —la expectativa se deriva del
+archivo espejado— más la sonda del parseo. **No es lo mismo que haberlo roto y
+visto en rojo**, y mezclarlas sería exactamente lo que este repo persigue.
+
+Suite 1096 (+2), typecheck, build, espejo en paridad y vigencia, gate de
+secretos verdes. Sin push.
+
 ## 0.79.9 — la clase de `t()` que el extractor no puede ver, enumerada (2026-08-16)
 
 El extractor de la guarda de traducción es `/\bt\('…'/`: **sólo ve comilla
