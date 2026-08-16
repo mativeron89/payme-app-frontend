@@ -11,6 +11,50 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.79.9 — la clase de `t()` que el extractor no puede ver, enumerada (2026-08-16)
+
+El extractor de la guarda de traducción es `/\bt\('…'/`: **sólo ve comilla
+simple pegada al paréntesis.** Un `t(VARIABLE)` no entra al inventario y **nada
+avisa**: el texto sale en español dentro de la pantalla en inglés.
+`payme-dashboard-frontend` chocó tres veces con esto en un día.
+
+**Censo medido con un artefacto propio, sobre el repo trackeado:**
+
+```
+658  t(  en total
+638  con literal de comilla simple  → el extractor los ve
+ 17  con identificador o expresión  → invisibles (14 en producción)
+  3  `t()` citado en prosa del propio test, no son llamadas
+```
+
+🔴 **Particiona sin resto: 638 + 17 + 3 = 658.** Se verificó además que **no
+hay** comilla doble, backtick, `t(` multilínea ni `t('…' + var)` — esta última
+es la peor, porque el extractor ve el prefijo y el runtime compone otra cosa.
+
+- **El contador lo produce el mismo artefacto que lo vigila.** Un conteo hecho
+  con una herramienta y fijado con otra mide dos poblaciones distintas y nadie
+  se entera: al panel le quedó un contador «en 55» vigilando 57 porque su
+  barrido descartaba `t(x ? 'A' : 'B')`, que **empieza con comilla sin ser un
+  literal**. Ese caso tiene sonda propia acá.
+- **Acreditado con mutante:** agregar un `t(VARIABLE)` pone el contador en rojo.
+  Verificado agregándolo y revirtiéndolo.
+- **Cobertura familia por familia, con la constante real** y no un caso
+  genérico: `mesaStatusLabel` (13 valores, con su fallback), `FRANJA_LABEL` (4),
+  `CARD_RAIL_UNAVAILABLE_COPY` (4 sitios), las etiquetas de la barra, el centro
+  por defecto y `backLabel`. **Los 24 valores tienen entrada EN: cero faltantes
+  hoy.** Lo que faltaba no era la traducción, era la guarda.
+
+⚠️ **EL UNIVERSO QUE ESTE ARTEFACTO NO PUEDE CERRAR, declarado y no disimulado:**
+`LoginScreen.tsx:33` y `EstadisticasScreen.tsx:51` pasan a `t()` **texto que
+llega del backend en runtime**. No hay constante que enumerar —su universo lo
+define otro repo— y el fallback al español es el comportamiento correcto.
+
+**Y el límite viejo sigue abierto:** esta guarda mira los `t()` que EXISTEN, no
+el texto visible que nadie envolvió. Eso lo agarra mirar la pantalla.
+
+Suite 1094 (+3), Playwright 94, typecheck, builds, espejos y gate de secretos
+verdes. Sin push.
+
 ## 0.79.8 — migración del logo: navy y cian nuevos en toda la superficie (2026-08-15)
 
 **Autorización literal de Mati:** *«Avanzá con lo que dice diseño, es quién tiene
