@@ -11,6 +11,57 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.79.8 — migración del logo: navy y cian nuevos en toda la superficie (2026-08-15)
+
+**Autorización literal de Mati:** *«Avanzá con lo que dice diseño, es quién tiene
+la información más actualizada con respecto al diseño SIEMPRE.»* Ante divergencia
+entre `diseno/SISTEMA_DISENO.md` y el CSS, manda el sistema de diseño.
+
+**Origen:** `diseno` commit `766d1fc` del **2026-08-14** ratificó el logo nuevo y
+migró navy y cian. La guarda `tokensRatificados.test.ts` se puso roja sola —
+nadie de este repo tocó nada— y así se detectó.
+
+```
+--action      #0F1F3D → #101E3B      --text     #0F1F3D → #101E3B
+--action-2    #00C2CB → #0FB5C9      --secured  (nuevo) #4338CA
+--action-2-fg #0F1F3D → #101E3B      --brand    #FF6B35 SIN CAMBIO
+```
+
+- **Contrastes MEDIDOS acá, no copiados del documento:** `--action-fg` sobre
+  `--action` **16.52** · `--action-2-fg` sobre `--action-2` **6.67** (bajó de
+  7.46 y sigue muy sobre el mínimo 4.5) · `--text` sobre `--bg` **15.37** ·
+  el cian como texto sobre blanco **2.48** — **sube de 2.19 y sigue prohibido**.
+- 🔴 **El alcance real era MAYOR que «la landing».** La cadena es
+  `fuente → design-mirror/tokens.json → los DOS artefactos`, y
+  `tokensRatificados.test.ts:160-169` compara **cada CSS contra el espejo**.
+  Migrar sólo `landing/landing.css` habría puesto en rojo la comparación de
+  `src/styles/global.css`: **la orden acotada a la landing no era ejecutable sin
+  romper su propia condición de suite verde.** Se migraron los tres a la vez.
+- **El espejo se RE-ESPEJÓ con el parser de la propia guarda**, no a mano: mismo
+  algoritmo que audita, más `sha256` y bytes de procedencia actualizados. Su
+  README lo exige — *«no se edita para que un test pase»*.
+- **`--secured` (#4338CA) entra SÓLO al espejo, no a ningún CSS.** El sistema lo
+  define para *«mesa con garantía activa»* en el listado y el mapa del panel, y
+  **ninguna superficie de esta app lo usa**. La guarda compara sólo tokens
+  compartidos, así que no hacía falta — y agregarlo «por completitud» habría
+  sido inventar color en un artefacto que no lo pinta.
+- **La población de tokens nombrados-sin-valor sube 20 → 21**, a mano y con el
+  motivo escrito: la fuente empezó a nombrar `--teal` en prosa
+  (`SISTEMA_DISENO.md:329`) sin valuarlo en ninguna tabla. Ese contador está
+  fijado a propósito para obligar a mirarlo.
+
+⚠️ **Una discrepancia vieja quedó SIN OBJETO, no arreglada.** El test se llamaba
+*«`--text` sobre `--bg` mide 15.21, no 15.4 como dice el documento»*. Con el navy
+nuevo la medición da 15.37 y el documento declara 15.38: coinciden. Se reescribió
+el test con la historia a la vista en vez de cambiarle el número, porque quien lea
+un doc viejo con «15.4» va a querer saber si eso sigue abierto.
+
+🔴 **CAMBIA EL COLOR DE TODA LA APP, no sólo de la landing.** Mati es el juez
+visual y esto **no se publicó**: commit local. Se mira antes de salir.
+
+Suite 1091, Playwright 94, typecheck, builds real/mock/landing, espejo del
+contrato en paridad y gate de secretos verdes. Sin push.
+
 ## 0.79.7 — la guarda de voseo declara qué NO va a su allowlist (2026-08-13)
 
 Documentación de una política que se aplicó dos veces el mismo día sin estar

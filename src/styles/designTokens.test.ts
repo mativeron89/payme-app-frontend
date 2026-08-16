@@ -64,17 +64,17 @@ describe('sistema de diseño · §1 color', () => {
     expect(token('brand-soft')).toBe('#fff0eb')
     expect(token('brand-ink')).toBe('#c2410c')
     // Acción.
-    expect(token('action')).toBe('#0f1f3d')
+    expect(token('action')).toBe('#101e3b')
     expect(token('action-fg')).toBe('#ffffff')
-    expect(token('action-2')).toBe('#00c2cb')
-    expect(token('action-2-fg')).toBe('#0f1f3d')
+    expect(token('action-2')).toBe('#0fb5c9')
+    expect(token('action-2-fg')).toBe('#101e3b')
     expect(token('link')).toBe('#0a7b80')
     // Superficie y texto.
     expect(token('bg')).toBe('#f4f7fa')
     expect(token('surface')).toBe('#ffffff')
     expect(token('surface-2')).toBe('#f8fafc')
     expect(token('border')).toBe('#e2e8f0')
-    expect(token('text')).toBe('#0f1f3d')
+    expect(token('text')).toBe('#101e3b')
     expect(token('text-muted')).toBe('#5b6b82')
     expect(token('text-faint')).toBe('#7d8ca1')
     expect(token('on-dark')).toBe('#ffffff')
@@ -95,24 +95,29 @@ describe('sistema de diseño · §1 color', () => {
     // se sigue FIJANDO: la excepción es al mínimo AA, no a la medición.
     expect(contrast('brand-fg', 'brand')).toBeCloseTo(2.84, 1)
     expect(contrast('brand-ink', 'surface')).toBeCloseTo(5.18, 1)
-    expect(contrast('action-fg', 'action')).toBeCloseTo(16.36, 1)
-    expect(contrast('action-2-fg', 'action-2')).toBeCloseTo(7.46, 1)
+    expect(contrast('action-fg', 'action')).toBeCloseTo(16.52, 1)
+    expect(contrast('action-2-fg', 'action-2')).toBeCloseTo(6.67, 1)
     expect(contrast('link', 'surface')).toBeCloseTo(5.05, 1)
-    expect(contrast('on-dark', 'action')).toBeCloseTo(16.36, 1)
+    expect(contrast('on-dark', 'action')).toBeCloseTo(16.52, 1)
   })
 
-  it('--text sobre --bg mide 15.21, no 15.4 como dice el documento', () => {
-    // Discrepancia encontrada al automatizar la medición, reportada al
-    // Bibliotecario-Auditor: SISTEMA_DISENO.md §1 declara 15.4:1 en dos
-    // lugares (tabla de superficie y checklist de verificación). El valor
-    // real de #0f1f3d sobre #f4f7fa es 15.21:1. Tampoco corresponde a las
-    // otras dos superficies (--surface da 16.36, --surface-2 da 15.64), así
-    // que no es que hayan medido sobre el fondo equivocado.
+  it('--text sobre --bg mide 15.37, y el documento ya coincide', () => {
+    // 🔴 ESTE TEST SE LLAMABA «mide 15.21, no 15.4 como dice el documento», y
+    // esa discrepancia SE CERRÓ SOLA con la migración de logo del 2026-08-14.
     //
-    // SIN consecuencia de accesibilidad: el mínimo AA es 4.5 y esto lo pasa
-    // por más de tres veces. Se fija el valor MEDIDO, no el declarado — el
-    // documento es de la conversación de Diseño y no se edita desde acá.
-    expect(contrast('text', 'bg')).toBeCloseTo(15.21, 1)
+    // La historia, porque explica por qué el título cambió: al automatizar la
+    // medición apareció que `SISTEMA_DISENO.md` declaraba 15.4:1 en dos lugares
+    // mientras el navy viejo `#0f1f3d` sobre `#f4f7fa` daba 15.21:1. Se fijó el
+    // valor MEDIDO y se reportó, sin editar el documento —que es de Diseño—.
+    //
+    // Con el navy nuevo `#101e3b` la medición da **15.37** y el documento
+    // declara **15.38**: coinciden dentro del redondeo. **La discrepancia no se
+    // arregló, se volvió sin objeto** — conviene decirlo así y no borrar el
+    // rastro, porque el próximo que lea «15.4» en un doc viejo va a querer
+    // saber si esto sigue abierto.
+    //
+    // Sin consecuencia de accesibilidad ni antes ni ahora: el mínimo AA es 4.5.
+    expect(contrast('text', 'bg')).toBeCloseTo(15.37, 1)
     expect(contrast('text', 'bg')).toBeGreaterThanOrEqual(4.5)
   })
 
@@ -242,8 +247,10 @@ describe('sistema de diseño · §1 color', () => {
       expect(contrast('brand-ink', 'surface')).toBeGreaterThanOrEqual(4.5)
     })
 
-    it('el teal --action-2 como TEXTO sobre blanco reprueba: por eso existe --link', () => {
-      expect(contrast('action-2', 'surface')).toBeCloseTo(2.19, 1)
+    it('el cian --action-2 como TEXTO sobre blanco reprueba: por eso existe --link', () => {
+      // 2.48 con el cian nuevo `#0fb5c9`; era 2.19 con el teal viejo. **Sube y
+      // sigue reprobando** — la prohibición no depende de cuánto reprueba.
+      expect(contrast('action-2', 'surface')).toBeCloseTo(2.48, 1)
       expect(contrast('link', 'surface')).toBeGreaterThanOrEqual(4.5)
     })
 

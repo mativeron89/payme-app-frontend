@@ -218,13 +218,19 @@ describe('SIN ANCLA · los tokens que el sistema nombra pero no valúa', () => {
 
 describe('POBLACIÓN · el espejo no perdió tokens en silencio', () => {
   /**
-   * El sistema NOMBRA 20 tokens que no valúa (`--sp-*`, `--r-*`, `--fs-*`,
+   * El sistema NOMBRA 21 tokens que no valúa (`--sp-*`, `--r-*`, `--fs-*`,
    * `--mo-*`). No se inventan. Se fija el número para que **el día que la
    * fuente les dé valor, esto se ponga rojo** en vez de que el espejo siga
    * afirmando una población vieja.
+   *
+   * 🔴 **20 → 21 el 2026-08-15, y el número hizo exactamente lo suyo.** La
+   * fuente empezó a nombrar `--teal` en prosa (`SISTEMA_DISENO.md:329`, al
+   * describir el cian de "Libre") **sin darle valor en ninguna tabla**. Se sube
+   * a mano y con el motivo escrito, que es la conducta que este contador pide:
+   * si se actualizara solo, no avisaría nada.
    */
   it('🔴 los tokens SIN valor ratificado están declarados, no omitidos', () => {
-    expect(espejo.POBLACION.mencionados_sin_valor.length).toBe(20);
+    expect(espejo.POBLACION.mencionados_sin_valor.length).toBe(21);
     expect(espejo.POBLACION.mencionados_sin_valor).toContain('--sp-1');
     for (const t of espejo.POBLACION.mencionados_sin_valor) {
       expect(t, `${t} tiene valor ratificado y sigue listado como que no`).not.toBeUndefined();

@@ -114,18 +114,21 @@
 
   /* §1 · Color — acción. --brand y --brand-ink no son intercambiables:
      #ff6b35 como texto sobre blanco da 2.6:1 y está prohibido. */
-  --action: #0f1f3d;
-  --action-fg: #ffffff; /* 16.36:1 */
-  --action-2: #00c2cb;
-  --action-2-fg: #0f1f3d; /* 7.46:1 */
-  --link: #0a7b80; /* el teal #00c2cb como texto da 2.19:1: como texto va este */
+  /* 🔴 Migración de logo, 2026-08-14 (`diseno` commit 766d1fc): navy y cyan
+     cambiaron de hex y TODO ratio de acá está recalculado sobre los valores
+     nuevos, no arrastrado. Medidos en esta máquina, no copiados del doc. */
+  --action: #101e3b;
+  --action-fg: #ffffff; /* 16.52:1 sobre --action */
+  --action-2: #0fb5c9;
+  --action-2-fg: #101e3b; /* 6.67:1 sobre --action-2 — antes 7.46 con el teal viejo */
+  --link: #0a7b80; /* el cyan #0fb5c9 como texto da 2.48:1: como texto va este */
 
   /* §1 · Color — superficie y texto. */
   --bg: #f4f7fa;
   --surface: #ffffff;
   --surface-2: #f8fafc;
   --border: #e2e8f0;
-  --text: #0f1f3d; /* 15.21:1 sobre --bg — el doc dice 15.4, ver designTokens.test.ts */
+  --text: #101e3b; /* 15.37:1 sobre --bg — medido acá; el doc dice 15.38 (redondeo) */
   --text-muted: #5b6b82; /* 5.05 sobre --bg · 5.43 sobre --surface · 5.19 sobre --surface-2 */
   --text-faint: #7d8ca1; /* 3.42:1 — SOLO decorativo, nunca información */
   --on-dark: #ffffff; /* 16.36:1 sobre navy */
