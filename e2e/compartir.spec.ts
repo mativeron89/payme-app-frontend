@@ -62,6 +62,37 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
     await expect(page.getByText('Leo Paz')).not.toHaveCount(0);
   });
 
+  /**
+   * 🔴 A1 · LA QUINTA AUSENCIA (Diseño, ratificado 2026-08-16).
+   *
+   * El link con token **dejó de imprimirse en pantalla** y con él el aviso «se
+   * muestra una sola vez». La copia pasa a un botón que la nombra.
+   *
+   * ⚠️ **Se afirma como AUSENCIA porque esto revierte una decisión del 04/08 que
+   * tenía tres razones escritas** —el portapapeles puede fallar, es como se
+   * comporta el backend real, y sin el link visible no queda de dónde copiar a
+   * mano—. Mati lo sacó con esas tres a la vista, etiqueta «Confirmo sacarlo».
+   * **Un argumento que sigue en pie es exactamente lo que hace que alguien lo
+   * reponga de buena fe dentro de un mes.**
+   *
+   * Se afirman las dos mitades: que el link NO está impreso **y** que la vía de
+   * copia SÍ existe. Sólo la primera dejaría pasar que se perdieran las dos.
+   */
+  test('el link con token no se imprime, y la copia se nombra en un botón', async ({ page }) => {
+    await ingresar(page);
+    const mesa = await abrirMesaConLink(page);
+
+    // El token no aparece como texto en ningún lado de la pantalla.
+    await expect(page.getByText(mesa.token, { exact: false })).toHaveCount(0);
+    await expect(page.getByText(/se muestra/i)).toHaveCount(0);
+    await expect(page.getByText(/una sola vez/i)).toHaveCount(0);
+
+    // Y la salida de copia existe y está habilitada.
+    const copiar = page.getByRole('button', { name: 'Copiar link', exact: true });
+    await expect(copiar).toBeVisible();
+    await expect(copiar).toBeEnabled();
+  });
+
   test('WhatsApp comparte el LINK, no el código suelto', async ({ page }) => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);

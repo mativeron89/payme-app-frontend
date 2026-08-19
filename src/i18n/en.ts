@@ -56,7 +56,6 @@ export const EN: Record<string, string> = {
    * mitad que más tranquiliza. NO SE SUAVIZA.
    */
   "Esto es una prueba. Usa una tarjeta de prueba — no hace falta la tuya, y no la queremos.": "This is a test. Use a test card — you don't need your own, and we don't want it.",
-  "(después puedes generar otro desde la mesa).": "(you can generate another one later from the table).",
   "(la cuenta ÷": "(the bill ÷",
   "+ propina (elige abajo)": "+ tip (choose below)",
   "+ propina {0}": "+ tip {0}",
@@ -150,6 +149,7 @@ export const EN: Record<string, string> = {
   "Continuar": "Continue",
   "Contraseña": "Password",
   "Copiar el link de invitación de la mesa {0}": "Copy the invitation link for table {0}",
+  "Copiar link": "Copy link",
   "Copiar link de invitación": "Copy invitation link",
   "Crea tu cuenta": "Create your account",
   "Crea tu cuenta o entra para sumarte y pagar tu parte.": "Create an account or log in to join and pay your part.",
@@ -261,7 +261,6 @@ export const EN: Record<string, string> = {
   "Grupo creado ✓": "Group created ✓",
   "Grupo eliminado": "Group deleted",
   "Grupos": "Groups",
-  "Guarda el link: por seguridad se muestra": "Save the link: for security, it's shown",
   "Guardando…": "Saving…",
   "Guardar esta tarjeta para la próxima": "Save this card for next time",
   "Guardar tarjeta": "Save card",
@@ -653,7 +652,6 @@ export const EN: Record<string, string> = {
   "todavía no leemos la foto de verdad — sacala igual y vas a recibir un ticket de ejemplo para continuar.": "we don't actually read the photo yet — take it anyway and you'll get a sample ticket to continue.",
   "todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo.": "we don't read the photo yet. We use a sample ticket so you can try the rest of the flow.",
   "tu parte": "your share",
-  "una sola vez": "only once",
   "veces": "times",
   "venció": "expired",
   "vez": "time",

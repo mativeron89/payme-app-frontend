@@ -1859,6 +1859,21 @@ export function CreateMesaFlow() {
               <span className="share-code-txt">{code}</span>
               <Icon name="copy" size={20} />
             </button>
+            {/* 🔴 A1 · el BOTÓN reemplaza al link impreso (Diseño, ratificado
+                2026-08-16, etiqueta «Confirmo sacarlo»). Antes el link viajaba
+                también como texto en pantalla y el código era el único control
+                de copia; ahora la acción se nombra.
+                ⚠️ El riesgo va aceptado a sabiendas y está en el acta: si el
+                portapapeles falla, NO queda de dónde copiar a mano. Por eso el
+                botón se apaga sin link en vez de fingir que copió. */}
+            <button
+              type="button"
+              className="btn btn-ghost share-copy"
+              onClick={copiarLink}
+              disabled={!link}
+            >
+              <Icon name="copy" size={18} className="ico-inline" /> {t('Copiar link')}
+            </button>
             <a
               className={`btn share-wa ${link ? '' : 'off'}`}
               href={link ? `https://wa.me/?text=${encodeURIComponent(t('Súmate a la mesa {0} en PayMe: {1}', code, link))}` : undefined}
@@ -1869,17 +1884,15 @@ export function CreateMesaFlow() {
               <Icon name="message" size={18} className="ico-inline" /> {t('Compartir por WhatsApp')}
             </a>
           </div>
-          {/* El link se muestra UNA sola vez y en texto: es una credencial, y
-              esconderla detrás del portapapeles deja a quien no pudo copiar sin
-              nada. La advertencia es de comportamiento real del backend. */}
-          {linkState === 'ready' && link && (
-            <>
-              <p className="share-link">{link}</p>
-              <div className="note note-orange">
-                {t('Guarda el link: por seguridad se muestra')} <b>{t('una sola vez')}</b> {t('(después puedes generar otro desde la mesa).')}
-              </div>
-            </>
-          )}
+          {/* 🔴 A1 · ACÁ SE IMPRIMÍA EL LINK Y SU AVISO, y se retiraron.
+              El comentario viejo defendía lo contrario —«esconderla detrás del
+              portapapeles deja a quien no pudo copiar sin nada»— y ese argumento
+              NO se refutó: Mati lo eligió igual, con las tres razones del 04/08 a
+              la vista. La pregunta se lo dijo textual y respondió «Confirmo
+              sacarlo». Queda escrito porque el próximo que lea sólo el diseño no
+              va a saber que se está pagando un precio conocido.
+              ⚠️ Lo que se retira es el link EN TEXTO, no el estado: «generando» y
+              el error siguen, porque un fallo silencioso sería otra cosa. */}
           {linkState === 'loading' && (
             <p className="share-link" aria-busy="true">
               {t('Generando el link…')}

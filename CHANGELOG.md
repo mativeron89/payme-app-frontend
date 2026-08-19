@@ -11,6 +11,54 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.80.0 — Compartir deja de imprimir el link (2026-08-19)
+
+**Diseño `A1`**, ratificado por Mati el 2026-08-16, etiqueta literal **«Confirmo
+sacarlo»**. Bajo la orden `P2` del Bibliotecario-Auditor (`ops` `4c3fdce`).
+
+```
+ANTES                              DESPUÉS
+código + 📋                        código + 📋
+link completo EN TEXTO             [ Copiar link ]
+«se muestra una sola vez»          [ Compartir por WhatsApp ]
+[ Compartir por WhatsApp ]
+```
+
+🔴 **Esto REVIERTE una decisión del 04/08 que tenía tres razones escritas** —el
+portapapeles puede fallar, es como se comporta el backend real, y sin el link
+visible no queda de dónde copiar a mano—. **Ninguna se refutó.** La pregunta se
+las citó textuales y Mati eligió sacarlo igual, descartando «lo dejamos como
+estaba», que era la recomendación de Diseño.
+
+⚠️ **El riesgo va aceptado a sabiendas y queda escrito en el código:** si el
+portapapeles falla, **hoy no hay backup para copiar el link a mano**. El botón se
+apaga sin link en vez de fingir que copió.
+
+- **Lo que se retira es el link EN TEXTO, no el estado.** «Generando el link…» y
+  el error con su reintento siguen: un fallo silencioso sería otra cosa.
+- **Guarda de AUSENCIA nueva**, porque una superficie retirada la repone alguien
+  de buena fe — y acá el argumento que la sostenía **sigue en pie**. Afirma las
+  dos mitades: que el token no se imprime **y** que la vía de copia existe.
+- Tres claves EN quedaron muertas y se retiraron; `Copiar link` entró.
+
+🔴 **Y sacar la superficie rompió tres lectores que nadie había enumerado.** El
+helper de e2e y dos casos del stepper **leían el link raspando el texto de la
+pantalla**:
+
+```
+e2e/_app.ts                    → ahora lee el href de WhatsApp
+                                 (sigue siendo lo que la persona puede MANDAR,
+                                  no un endpoint: ese criterio no cambió)
+e2e/stepper-comensales.spec.ts → ×2 · sólo necesitaban el CÓDIGO, no el link
+                                 apuntados al código en pantalla
+```
+
+**Se enumeró la clase entera con `grep` antes de tocar, no se arregló el que
+falló:** eran tres, dos de ellas en un archivo que el primer rojo no señalaba.
+
+Suite 1096 · **Playwright 95 (+1)** · typecheck, builds real/mock/landing y
+`git diff --check` limpios. Sin push.
+
 ## 0.79.10 — una guarda de espejo que prometía lo que no hacía (2026-08-16)
 
 Barrido de afirmaciones de versión y fidelidad **en comentarios de código** — el

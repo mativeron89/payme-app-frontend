@@ -2550,6 +2550,16 @@ body {
 /* `#075E54` es el teal oscuro histórico de WhatsApp. El verde moderno
    `#25D366` —que es lo que había— da 1.98:1 con texto blanco y reprueba AA de
    punta a punta; sobre este teal el blanco da 7.67:1. */
+/* 🔴 A1 · el botón que reemplaza al link impreso (Diseño, 2026-08-16).
+   Va ANTES de WhatsApp y con jerarquía menor: compartir por WhatsApp es el
+   camino principal —es por donde llega el invitado— y copiar es la salida
+   para quien comparte por otro lado. El mismo ancho para que la tarjeta lea
+   como una columna de acciones y no como un botón con un apéndice. */
+.share-copy {
+  width: 100%;
+  margin-bottom: var(--sp-2);
+}
+
 .share-wa {
   background: #075e54;
   color: var(--on-dark);

@@ -106,10 +106,19 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   // organizador, no un formulario de invitación.
   await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 
-  // El link se muestra UNA sola vez, en texto. Se lee de la pantalla y no de un
-  // endpoint: lo que importa es lo que la persona puede copiar y mandar.
-  const texto = await page.getByText(/#\/mesa\/PA-/).first().innerText();
-  const link = texto.trim();
+  // 🔴 CAMBIÓ CON A1 (2026-08-16): el link YA NO se imprime en pantalla, así
+  // que dejó de haber texto de dónde leerlo. Se lee del `href` de WhatsApp, que
+  // es la superficie que de verdad lo transporta al invitado.
+  //
+  // ⚠️ **Sigue siendo lo que la persona puede mandar, no un endpoint** — que era
+  // el criterio del helper y no cambió. Lo que cambió es por dónde sale: antes
+  // era texto copiable, ahora es el destino del botón. Leerlo de un endpoint
+  // haría que el test pasara aunque la pantalla no ofreciera ninguna vía.
+  const wa = page.getByRole('link', { name: /Compartir por WhatsApp/ });
+  const href = await wa.getAttribute('href');
+  expect(href, 'la pantalla no ofrece ninguna vía para compartir el link').not.toBeNull();
+  const link = decodeURIComponent(new URL(href!).searchParams.get('text') ?? '')
+    .match(/https?:\/\/\S+/)?.[0] ?? '';
   const match = /#\/mesa\/(PA-[A-Za-z0-9]+)\?t=([^\s&]+)/.exec(link);
   expect(match, `no pude leer el link de invitación de: ${link}`).not.toBeNull();
   return { code: match![1]!, token: match![2]!, link };

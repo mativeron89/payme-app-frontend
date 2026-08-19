@@ -54,8 +54,10 @@ test.describe('el stepper de comensales (§1.4)', () => {
     // La mesa se busca POR EL CÓDIGO que muestra la pantalla: el mock
     // unshiftea las nuevas y "la última del array" es una del seed (con 4 —
     // exactamente el número fantasma que este test existe para matar).
-    const texto = await page.getByText(/#\/mesa\/PA-/).first().innerText();
-    const codigo = /#\/mesa\/(PA-[A-Za-z0-9]+)/.exec(texto.trim())![1]!;
+    // 🔴 Se lee del CÓDIGO en pantalla, no del link impreso: A1 (2026-08-16)
+    // retiró el link como texto. Este test nunca necesitó el link —sólo el
+    // código— así que apuntarlo al código es además lo que siempre quiso decir.
+    const codigo = (await page.locator('.share-code-txt').innerText()).trim();
     const enviado = await page.evaluate((code) => {
       const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
       return st.mesas.find((m: { code: string }) => m.code === code).expected_participants;
@@ -94,8 +96,10 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await page.getByRole('button', { name: 'Confirmar autorización' }).click();
     await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 
-    const texto = await page.getByText(/#\/mesa\/PA-/).first().innerText();
-    const codigo = /#\/mesa\/(PA-[A-Za-z0-9]+)/.exec(texto.trim())![1]!;
+    // 🔴 Se lee del CÓDIGO en pantalla, no del link impreso: A1 (2026-08-16)
+    // retiró el link como texto. Este test nunca necesitó el link —sólo el
+    // código— así que apuntarlo al código es además lo que siempre quiso decir.
+    const codigo = (await page.locator('.share-code-txt').innerText()).trim();
     const mesa = await page.evaluate((code) => {
       const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
       const m = st.mesas.find((x: { code: string }) => x.code === code);
