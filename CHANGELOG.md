@@ -11,6 +11,32 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.80.1 — el favicon del símbolo nuevo (2026-08-19)
+
+**Diseño `A2`, parcial.** Ratificado 2026-08-14, etiqueta «Sí, adoptarlo».
+
+- **`public/favicon.svg`** — es el `favicon.svg` del handoff, **no el símbolo
+  escalado**: viene re-centrado para 16-32px, y ésa es toda la diferencia entre
+  los dos archivos. La app no tenía favicon: esto es adición, no reemplazo.
+- **Copia local, cero red.** Tres paths, sin `<text>`, así que no depende de
+  ninguna tipografía. Usa los hex nuevos (`#0FB5C9`, `#101E3B`), consistente
+  con `A3`.
+
+🔴 **La guarda del artefacto lo frenó y hubo que clasificar `.svg` a mano.** Es
+la primera extensión que se suma desde que existe esa guarda, y entra **del lado
+de TEXTO** —`esBinario` sólo exime al `.ttf`—, así que **el barrido de URLs la
+alcanza**. No es un detalle: un SVG puede traer `<image href>`, un `@font-face`
+o un `xlink:href` a otro dominio, y sería un origen externo entrando por un
+archivo que «es sólo un ícono». El del handoff no tiene ninguno.
+
+⚠️ **Los otros tres puntos de `A2` quedan SIN implementar y con motivo medido**
+—ícono de app, splash y navbar—: ver el reporte al Bibliotecario. Dos de ellos
+están bloqueados por los assets, no por el código.
+
+Suite y builds verdes salvo un rojo AJENO identificado: la vigencia del espejo
+de tokens, que se puso roja mientras trabajaba porque Diseño migró las sombras
+en la fuente. No es de este commit y se cierra en el barrido.
+
 ## 0.80.0 — Compartir deja de imprimir el link (2026-08-19)
 
 **Diseño `A1`**, ratificado por Mati el 2026-08-16, etiqueta literal **«Confirmo

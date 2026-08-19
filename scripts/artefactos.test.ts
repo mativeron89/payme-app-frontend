@@ -325,7 +325,15 @@ describe.each([0, 1])('artefacto distribuible #%i', (i) => {
     // Si mañana el build emite un `.wasm`, un `.map` o un `.json`, cae acá en
     // vez de colarse sin que nadie lo mire. La lista se amplía a mano, y esa
     // es la idea: agregar una clase nueva es una decisión, no un accidente.
-    const CONOCIDAS = ['.html', '.css', '.js', '.ttf', '.txt'];
+    //
+    // 🔴 `.svg` entra el 2026-08-19 con el favicon del símbolo nuevo (A2), y
+    // entra como DECISIÓN: es la primera extensión que se suma desde que existe
+    // esta guarda. Va del lado de TEXTO a propósito —`esBinario` sólo exime al
+    // `.ttf`—, así que el barrido de URLs lo alcanza. **Eso no es un detalle:
+    // un SVG puede traer `<image href>`, un `@font-face` o un `xlink:href` a
+    // otro dominio, y sería un origen externo entrando por un archivo que
+    // "es sólo un ícono".** El del handoff no tiene ninguno: son tres paths.
+    const CONOCIDAS = ['.html', '.css', '.js', '.ttf', '.txt', '.svg'];
     const raras = art()
       .archivos.filter((a) => !CONOCIDAS.some((e) => a.endsWith(e)));
     expect(raras, `archivos de tipo no clasificado: ${raras.join(' · ')}`).toEqual([]);
