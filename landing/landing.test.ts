@@ -804,7 +804,14 @@ describe('PROPIEDAD 5 bis · las excepciones AA están registradas, no escondida
     expect(ratio('#FFFFFF', '#FF9152')).toBeCloseTo(2.23, 1);
     // Y el control positivo: navy sobre el mismo naranja SÍ pasaría — la
     // excepción existe porque Mati eligió blanco, no porque no hubiera opción.
-    expect(ratio('#0F1F3D', '#FF6B35')).toBeGreaterThan(4.5);
+    //
+    // 🔴 Clasificado con la regla de Dashboard Backend (2026-08-16): el navy acá
+    // es VEHÍCULO, no objeto. Lo que se afirma es «existía una alternativa que
+    // pasaba», y para que ese control siga significando algo tiene que hablar
+    // del navy que el producto USA HOY. Con el viejo `#0F1F3D` seguiría verde
+    // afirmando un color que ya no existe. Re-medido: 5.83 con el nuevo, 5.77
+    // con el viejo — la conclusión no cambia, y ése es el punto.
+    expect(ratio('#101E3B', '#FF6B35')).toBeGreaterThan(4.5);
   });
 });
 
@@ -1050,7 +1057,7 @@ describe('PROPIEDAD 7 bis · tratamiento visual ratificado', () => {
     const css = cssDelBuild();
     const icon = css.match(/\.perk-icon\{([^}]*)\}/)?.[1] ?? '';
     expect(icon).toContain('linear-gradient(155deg,#F3FEFE 0%,var(--teal-l) 100%)');
-    expect(icon).toContain('border:1px solid rgba(0,194,203,.22)');
+    expect(icon).toContain('border:1px solid rgba(15,181,201,.22)');
     expect(icon).toContain('box-shadow:0 3px 8px');
   });
 });

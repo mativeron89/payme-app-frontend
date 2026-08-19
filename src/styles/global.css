@@ -191,9 +191,9 @@
   /* §3 · Elevación — suave y baja, nunca dramática. La sombra ACOMPAÑA al
      borde, no lo reemplaza: toda tarjeta lleva 1px solid var(--border)
      además de su sombra. En monitor barato la sombra casi no se ve. */
-  --sh-1: 0 1px 2px rgba(15, 31, 61, 0.06);
-  --sh-2: 0 2px 8px rgba(15, 31, 61, 0.08);
-  --sh-3: 0 8px 24px rgba(15, 31, 61, 0.1);
+  --sh-1: 0 1px 2px rgba(16, 30, 59, 0.06);
+  --sh-2: 0 2px 8px rgba(16, 30, 59, 0.08);
+  --sh-3: 0 8px 24px rgba(16, 30, 59, 0.1);
 
   /* §3 · Área táctil mínima en la app, sin excepción. Se usa parada, con una
      mano, apurada. */
@@ -201,8 +201,14 @@
 
   /* ══════════ fin de los tokens del sistema · abajo, lo preexistente ══════════ */
 
-  --navy: #0f1f3d;
-  --teal: #00c2cb;
+  /* 🔴 D-EJE-8 · migrados el 2026-08-19 con el resto del navy y el cian.
+     Son ALIAS preexistentes de los mismos colores de marca, y por eso pintan
+     lo mismo que `--action`/`--action-2`. **Ninguna guarda los miraba**: el
+     espejo de tokens sólo compara los que él declara, y estos dos no están en
+     el sistema de diseño. Se usan 40 y 22 veces — o sea que la migración de
+     `--action` sola dejaba la mayor parte de la app en el navy viejo. */
+  --navy: #101e3b;
+  --teal: #0fb5c9;
   --teal-l: #e4fbfc;
   --orange: #ff6b35;
   --orange-l: #fff0eb;
@@ -243,7 +249,7 @@
   --fs-legacy-hero: 40px;
   --radius: 16px;
   --radius-sm: 10px;
-  --shadow-sm: 0 2px 8px rgba(15, 31, 61, 0.08);
+  --shadow-sm: 0 2px 8px rgba(16, 30, 59, 0.08);
   /* T-D1 (Mati eligió la opción C, 2026-07-22): Plus Jakarta Sans reemplaza a
      Syne en display; el cuerpo sigue en DM Sans. */
   --font-display: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
@@ -906,7 +912,8 @@ body {
 /* ─── Login ─── */
 .login-screen {
   min-height: 100dvh;
-  background: linear-gradient(135deg, #0f1f3d 0%, #1a3a5c 100%);
+  /* D-EJE-8: el primer stop es el navy de marca, hardcodeado acá. */
+  background: linear-gradient(135deg, #101e3b 0%, #1a3a5c 100%);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1500,7 +1507,7 @@ body {
   height: 300px;
   border-radius: var(--r-lg);
   background: linear-gradient(135deg, #1a2942, #0d1829);
-  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
+  box-shadow: 0 6px 20px rgba(16, 30, 59, 0.12);
   position: relative;
   display: flex;
   align-items: center;
@@ -1900,7 +1907,7 @@ body {
   max-width: 480px; /* mismo ancho que .app */
   background: var(--surface);
   /* Sombra hacia arriba, SIN línea divisoria: la difuminada la reemplaza. */
-  box-shadow: 0 -8px 22px rgba(15, 31, 61, 0.1);
+  box-shadow: 0 -8px 22px rgba(16, 30, 59, 0.1);
   z-index: 19;
 }
 
@@ -2250,7 +2257,7 @@ body {
   margin: -24px var(--sp-4) 0;
   background: var(--surface);
   border-radius: var(--r-lg);
-  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
+  box-shadow: 0 6px 20px rgba(16, 30, 59, 0.12);
 }
 
 /* Esquina superior izquierda cuadrada SOLO cuando la pestaña activa es la
@@ -2321,7 +2328,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
+  box-shadow: 0 6px 20px rgba(16, 30, 59, 0.12);
 }
 
 .link-bubble-title {
@@ -2501,7 +2508,7 @@ body {
   padding: var(--sp-4);
   border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
 }
 
 /* Tocar el código copia. Es un botón de ancho completo y no un ícono suelto:
@@ -2599,7 +2606,7 @@ body {
   margin-top: var(--sp-2);
   border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
   overflow: hidden;
 }
 
@@ -2915,7 +2922,7 @@ body {
   padding: var(--sp-4);
   border-radius: var(--r-lg);
   background: var(--teal-l);
-  box-shadow: 0 6px 20px rgba(15, 31, 61, 0.12);
+  box-shadow: 0 6px 20px rgba(16, 30, 59, 0.12);
   text-align: center;
 }
 
@@ -3271,7 +3278,7 @@ body {
 .mi-progress {
   height: 8px;
   border-radius: var(--r-full);
-  background: rgba(15, 31, 61, 0.1);
+  background: rgba(16, 30, 59, 0.1);
   overflow: hidden;
 }
 
@@ -3336,7 +3343,7 @@ body {
 /* Seleccionado: fondo de fila al 8%. Es tinte, no el color pleno — el pleno
    sobre el que después va texto no llega a contraste. */
 .mi-row.sel {
-  background: rgba(0, 194, 203, 0.08);
+  background: rgba(15, 181, 201, 0.08);
 }
 
 /* Checkbox. Los CUATRO estados se distinguen por FORMA además de color: vacío,
@@ -3438,7 +3445,7 @@ body {
 .mi-frac {
   padding: var(--sp-3) var(--sp-2) var(--sp-4) 44px;
   border-bottom: 1px solid var(--border);
-  background: rgba(0, 194, 203, 0.08);
+  background: rgba(15, 181, 201, 0.08);
 }
 
 .mi-frac-lbl {
@@ -3692,7 +3699,7 @@ body {
   border: none;
   border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
   text-align: left;
   cursor: pointer;
 }
@@ -3810,7 +3817,7 @@ body {
    existe y .mesa-card queda exactamente como siempre. */
 .mesa-card-group {
   border-radius: var(--r-lg);
-  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
 }
 .mesa-card-group .mesa-card {
   border-radius: var(--r-lg) var(--r-lg) 0 0;
@@ -3844,7 +3851,7 @@ body {
 .sheet-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 31, 61, 0.45);
+  background: rgba(16, 30, 59, 0.45);
   z-index: 40;
   display: flex;
   align-items: flex-end;
@@ -3990,7 +3997,7 @@ body {
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
 }
 
 .pm-main {
@@ -4098,7 +4105,7 @@ body {
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
 }
 
 .pago-main {
@@ -4162,7 +4169,7 @@ body {
   margin-bottom: var(--sp-2);
   border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
   overflow: hidden;
 }
 
@@ -4189,7 +4196,7 @@ body {
 /* Abierta: la fila se tiñe apenas — tinte al 8%, no el color pleno, igual que
    un ítem seleccionado en Mis ítems (§1.10 lo pide con esa referencia). */
 .hist-item.on .hist-row {
-  background: rgba(0, 194, 203, 0.08);
+  background: rgba(15, 181, 201, 0.08);
 }
 
 .hist-main {
@@ -4272,7 +4279,7 @@ body {
   padding: var(--sp-6) var(--sp-4);
   border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
   text-align: center;
 }
 
@@ -4305,7 +4312,7 @@ body {
   padding: var(--sp-4);
   border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.09);
+  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
   text-align: center;
 }
 

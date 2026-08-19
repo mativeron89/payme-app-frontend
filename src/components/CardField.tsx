@@ -111,7 +111,10 @@ export function CardField({ onReady, onChange, continuation = false }: Props) {
           style: {
             base: {
               fontSize: '16px', // ≥16px: evita el zoom automático de iOS
-              color: '#0f1f3d',
+              // Hex literal y no `var(--action)`: Stripe Elements corre en un
+              // iframe de otro origen y no ve las variables de este documento.
+              // Migrado con D-EJE-8 (navy nuevo): acá NADA lo hubiera avisado.
+              color: '#101e3b',
               fontFamily: "'DM Sans', sans-serif",
               '::placeholder': { color: '#64748b' },
             },

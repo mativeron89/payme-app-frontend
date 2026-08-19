@@ -68,8 +68,8 @@
   --brand-fg: #FFFFFF;
   --text: #101E3B;
   --text-muted: #5B6B82;
-  --sh-2: 0 2px 8px rgba(15,31,61,0.08);
-  --sh-3: 0 8px 24px rgba(15,31,61,0.10);
+  --sh-2: 0 2px 8px rgba(16,30,59,0.08);
+  --sh-3: 0 8px 24px rgba(16,30,59,0.10);
   --r-sm: 10px;
   --r-md: 16px;
   --r-lg: 22px;
@@ -93,8 +93,8 @@
   --brand-fg: #FFFFFF;
   --text: #101E3B;
   --text-muted: #5B6B82;
-  --sh-2: 0 2px 8px rgba(15,31,61,0.08);
-  --sh-3: 0 8px 24px rgba(15,31,61,0.10);
+  --sh-2: 0 2px 8px rgba(16,30,59,0.08);
+  --sh-3: 0 8px 24px rgba(16,30,59,0.10);
 }
 
 * { box-sizing: border-box; }
@@ -601,8 +601,8 @@ a { color: inherit; }
   height: 44px;
   border-radius: var(--r-md);
   background: linear-gradient(155deg, #F3FEFE 0%, var(--teal-l) 100%);
-  border: 1px solid rgba(0,194,203,0.22);
-  box-shadow: 0 3px 8px rgba(15,31,61,0.12), inset 0 1px 0 rgba(255,255,255,0.7);
+  border: 1px solid rgba(15,181,201,0.22);
+  box-shadow: 0 3px 8px rgba(16,30,59,0.12), inset 0 1px 0 rgba(255,255,255,0.7);
   color: var(--text);
   display: inline-flex;
   align-items: center;

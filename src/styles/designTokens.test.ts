@@ -311,9 +311,9 @@ describe('sistema de diseño · §3 espaciado, radios y elevación', () => {
   })
 
   it('declara las tres elevaciones', () => {
-    expect(token('sh-1')).toBe('0 1px 2px rgba(15, 31, 61, 0.06)')
-    expect(token('sh-2')).toBe('0 2px 8px rgba(15, 31, 61, 0.08)')
-    expect(token('sh-3')).toBe('0 8px 24px rgba(15, 31, 61, 0.1)')
+    expect(token('sh-1')).toBe('0 1px 2px rgba(16, 30, 59, 0.06)')
+    expect(token('sh-2')).toBe('0 2px 8px rgba(16, 30, 59, 0.08)')
+    expect(token('sh-3')).toBe('0 8px 24px rgba(16, 30, 59, 0.1)')
   })
 
   it('el área táctil mínima de la app es 44px, sin excepción', () => {

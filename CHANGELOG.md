@@ -11,6 +11,46 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.80.2 — el barrido de color, y lo que ningún guard miraba (2026-08-19)
+
+`D-EJE-8`/`D-EJE-9`, lado app. **El conteo del plan decía 3 ocurrencias. Eran
+más de 60, en tres clases que ningún patrón anterior tocaba.**
+
+```
+① DECIMAL   rgba(15,31,61) ES #0F1F3D en disfraz · 28 · sombras y overlays
+            rgba(0,194,203) ES #00C2CB           ·  5
+② ALIAS     --navy #0f1f3d  y  --teal #00c2cb    ·  usados 40 y 22 veces
+③ HEX       theme-color ×2 · Stripe Elements ×1  ·  degradado de login ×1
+```
+
+🔴 **② es el hallazgo grande: la app pintaba el navy VIEJO en la mayor parte de
+su superficie.** `c709880` migró `--action`/`--action-2`, pero el grueso de la
+app pinta por los alias preexistentes `--navy`/`--teal`, que quedaron en el
+valor viejo. **Ninguna guarda podía verlo**: el espejo de tokens sólo compara
+los que él declara, y esos dos no están en el sistema de diseño.
+
+⚠️ **① se escapó porque el navy venía en DECIMAL.** Re-medí «los hex viejos» y
+conté 3 — correcto para hex y ciego a `rgba(15,31,61,…)`, que es el mismo color.
+**Lo cazó una guarda ajena**: Diseño migró las sombras en la fuente y la vigencia
+del espejo se puso roja. Sin eso, la clase entera seguía viva.
+
+- **`design-mirror/tokens.json` re-espejado** con el parser de la propia guarda:
+  sólo cambian las tres sombras, misma población (27 tokens · 21 sin valor).
+- **`CardField.tsx`** lleva el hex literal porque **Stripe Elements corre en un
+  iframe de otro origen y no ve las variables de este documento**. Queda dicho
+  ahí: es el único lugar donde nada lo hubiera avisado.
+- **`landing.test.ts:807` clasificado**, con la regla de Dashboard Backend: el
+  navy ahí es **vehículo**, no objeto — lo que afirma es «existía una alternativa
+  que pasaba», y para que el control siga significando algo tiene que hablar del
+  navy de hoy. Re-medido **5.83** con el nuevo contra 5.77 con el viejo: la
+  conclusión no cambia, y ése es exactamente el punto.
+- **Las ~20 ocurrencias históricas NO se tocaron** —CHANGELOG, READMEs y
+  comentarios que explican por qué el valor cambió—. Barrer historia sería
+  falsificar el registro.
+
+Suite 1096 · Playwright 95 · typecheck, builds real/mock/landing, espejo del
+contrato en paridad y gate de secretos verdes. Sin push.
+
 ## 0.80.1 — el favicon del símbolo nuevo (2026-08-19)
 
 **Diseño `A2`, parcial.** Ratificado 2026-08-14, etiqueta «Sí, adoptarlo».

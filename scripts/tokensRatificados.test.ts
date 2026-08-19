@@ -78,7 +78,7 @@ const espejo: Espejo = JSON.parse(
   readFileSync(join(RAIZ, 'design-mirror', 'tokens.json'), 'utf8'),
 ) as Espejo;
 
-/** Normaliza SÓLO formato: `rgba(15, 31, 61, 0.10)` === `rgba(15,31,61,0.1)`. */
+/** Normaliza SÓLO formato: `rgba(16, 30, 59, 0.10)` === `rgba(16,30,59,0.1)`. */
 const normalizar = (v: string): string =>
   v
     .trim()
