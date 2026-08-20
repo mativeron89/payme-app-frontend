@@ -722,6 +722,24 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * importa quién gane la carrera, y no se agrega latencia al caso normal.
    */
   const journalResueltoRef = useRef(false);
+  /**
+   * 🔴 P2 DE LA TERCERA VUELTA · LA VENTANA SE CIERRA, NO SE LIMPIA DESPUÉS.
+   *
+   * `atribucionInicial()` contesta **cuál tarjeta al entrar**, y eso estaba
+   * bien — pero **nadie gobernaba la elección HUMANA hecha durante la
+   * ventana**. Si las tarjetas resolvían con el journal pendiente, la persona
+   * podía elegir una guardada; cuando después aparecía el replay, la regla
+   * devolvía `null` y **no limpiaba esa elección**: la pantalla seguía
+   * atribuyendo una tarjeta mientras el reintento enviaba otra.
+   *
+   * Limpiar después sería peor: la app le sacaría de las manos algo que la
+   * persona acaba de tocar. **Mientras no se sepa si hay replay no existe
+   * elección legítima**, así que el selector no se ofrece. Es un instante, y
+   * el estado honesto es «todavía no sé», no «elegí lo que quieras y después
+   * te lo cambio».
+   */
+  const [journalPendiente, setJournalPendiente] = useState(true);
+  useEffect(() => { setJournalPendiente(true); }, [guestToken, code]);
   const defaultCandidatoRef = useRef<string | null>(null);
   const aplicarAtribucion = useCallback(() => {
     // Las dos condiciones de UI —tipeando una tarjeta nueva, o pago ya en
@@ -753,6 +771,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         // resolvió con el valor viejo.
         frozenAttemptRef.current = attempt;
         journalResueltoRef.current = true;
+        setJournalPendiente(false);
         aplicarAtribucion();
         if (attempt?.reconciliationRequired) {
           setError(t('Hay un pago de una sesión anterior. No vamos a reenviarlo ni iniciar otro hasta reconciliarlo.'));
@@ -1760,7 +1779,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               onCustomChange={setCustomTipStr}
               baseCents={mesa.tip_base_cents}
               participants={mesa.expected_participants || 1}
-              disabled={!!frozenScope}
+              disabled={!!frozenScope || journalPendiente}
               pending={tipPending}
               pulse={tipPulse}
               onPulseEnd={() => setTipPulse(false)}
@@ -1778,7 +1797,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     className={`tip-pill ${staffId === s.id ? 'sel' : ''}`}
                     style={{ flex: 'none' }}
                     onClick={() => setStaffId(staffId === s.id ? null : s.id)}
-                    disabled={!!frozenScope}
+                    disabled={!!frozenScope || journalPendiente}
                     aria-pressed={staffId === s.id}
                   >
                     {s.display_name}
@@ -1806,7 +1825,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <button
                 className={`method-card ${payType === 'wallet' ? 'sel' : ''}`}
                 onClick={() => setPayType('wallet')}
-                disabled={!!frozenScope}
+                disabled={!!frozenScope || journalPendiente}
                 role="radio"
                 aria-checked={payType === 'wallet'}
               >
@@ -1825,7 +1844,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 setPayType('card');
                 if (cards.length > 0) setCardsOpen((v) => payType !== 'card' ? true : !v);
               }}
-              disabled={!!frozenScope}
+              disabled={!!frozenScope || journalPendiente}
               role="radio"
               aria-checked={payType === 'card'}
               aria-expanded={cards.length > 0 ? cardsOpen : undefined}
@@ -1861,7 +1880,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     key={c.id}
                     className={`method-card ${cardChoice === c.id ? 'sel' : ''}`}
                     onClick={() => setCardChoice(c.id)}
-                    disabled={!!frozenScope || !cardRailAvailable}
+                    disabled={!!frozenScope || !cardRailAvailable || journalPendiente}
                     role="radio"
                     aria-checked={cardChoice === c.id}
                   >
@@ -1885,7 +1904,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <button
                   className={`method-card ${cardChoice === 'new' ? 'sel' : ''}`}
                   onClick={() => setCardChoice('new')}
-                  disabled={!!frozenScope || !cardRailAvailable}
+                  disabled={!!frozenScope || !cardRailAvailable || journalPendiente}
                   role="radio"
                   aria-checked={cardChoice === 'new'}
                 >
@@ -1924,7 +1943,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     <input
                       type="checkbox"
                       checked={saveCard}
-                      disabled={!!frozenScope || !cardRailAvailable}
+                      disabled={!!frozenScope || !cardRailAvailable || journalPendiente}
                       onChange={(e) => setSaveCard(e.target.checked)}
                     />
                     {t('Guardar esta tarjeta para la próxima')}
@@ -1939,7 +1958,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <button
               className={`method-card ${payType === 'apple_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('apple_pay')}
-              disabled={!!frozenScope}
+              disabled={!!frozenScope || journalPendiente}
               role="radio"
               aria-checked={payType === 'apple_pay'}
             >
@@ -1957,7 +1976,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <button
               className={`method-card ${payType === 'google_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('google_pay')}
-              disabled={!!frozenScope}
+              disabled={!!frozenScope || journalPendiente}
               role="radio"
               aria-checked={payType === 'google_pay'}
             >

@@ -11,6 +11,62 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.95.0 — la ventana se cierra, no se limpia después (2026-08-20)
+
+Tercera vuelta del P20. Lo cerrado quedó acreditado; lo abierto era **una
+variante que ni Codex ni yo habíamos visto en las dos vueltas anteriores**: la
+carrera sobrevivía **por interacción humana**.
+
+🔴 **El defecto ya no era de scheduling sino de ESTADO INCOMPLETO.**
+`atribucionInicial()` contesta *«cuál tarjeta al entrar»* — y eso estaba
+bien—, **pero nadie gobernaba la elección que la persona hacía DURANTE la
+ventana**. Si las tarjetas resolvían con el journal pendiente, se podía elegir
+una guardada; cuando después aparecía el replay, la regla devolvía `null` y
+**no limpiaba esa elección**. La pantalla seguía atribuyendo una tarjeta
+mientras el reintento enviaba otra. Reproducido **1/1 con Playwright** por
+Codex.
+
+**Se cierra la ventana en vez de limpiarla después**, y el motivo no es
+comodidad: limpiar sería **sacarle de las manos algo que la persona acaba de
+tocar**. Mientras no se sepa si hay replay **no existe elección legítima**, así
+que el selector no se ofrece. El estado honesto es *«todavía no sé»*, no
+*«elegí lo que quieras y después te lo cambio»*.
+
+### La refutación que me corrige, y es la parte que importa
+
+Codex refutó mi claim de «tests de componente» **con un experimento, no con un
+argumento**: reintrodujo la autoselección vieja en un clon y **mis 1.145
+unitarios quedaron VERDES**. Llamaban a las funciones puras que el componente
+usa — no a los efectos, ni al selector, ni al replay.
+
+⚠️ **«Tests de componente» ≠ «tests de las funciones que el componente
+llama».** Es mi propia clase del espejo de lógica, **un nivel más arriba**: ahí
+la función probada era una copia; acá la función es la real **y lo que no se
+prueba es el CABLEADO**.
+
+**El E2E nuevo fuerza la ventana de forma determinista**, no por suerte: el
+journal calcula su índice con `crypto.subtle.digest` y las tarjetas no, así que
+**demorando el digest las tarjetas resuelven primero** — el orden que fallaba —
+sin tocar una línea de producción. **Mutante acreditado:** quitar la condición
+deja el test rojo.
+
+🔴 **Y un hallazgo del propio arnés, que casi lo deja verde por la razón
+equivocada:** `MesaScreen` **monta una sola vez** y después cambia de vista, así
+que el journal se lee **al entrar a la mesa, no al entrar a Pagar**. Con el
+freno puesto más tarde, la carrera ya había terminado y el test medía **una
+ventana cerrada**.
+
+**Y la enumeración falló otra vez por la misma causa:** apliqué la condición
+buscando una cadena exacta y **seis superficies usaban la variante
+`disabled={!!frozenScope}` sola**. Se corrigió por patrón; ahora son **nueve**.
+Tercera vez esta semana que enumerar por texto deja afuera una variante.
+
+**También entra el E2E que P17 pedía y no existía:** el comprobante tras
+remount, verificado **en pantalla y en el archivo descargado** — la
+trazabilidad en código estaba, el recorrido no.
+
+Suite: **1145 unitarios · 110 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.94.0 — la reauditoría P17: dos carreras y una puerta (2026-08-20)
 
 Codex confirmó los cierres grandes del rework anterior —espejo vigente,
