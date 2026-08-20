@@ -105,3 +105,30 @@ test('🔴 P3-02 · la selección tiene semántica, no sólo una clase CSS', asy
   // Y el nombre accesible del stepper sigue a la pregunta de la pantalla.
   await expect(page.getByRole('group', { name: '¿Cuántos pagan?' })).toBeVisible();
 });
+
+/**
+ * ③ · «Esperando a tu banco» SÓLO durante la espera real.
+ *
+ * Este test existe por el freno: el cartel llegó pedido como elemento
+ * permanente y la pantalla **no espera nada** hasta que se toca Confirmar.
+ * Afirmar una espera inexistente es lo que `SISTEMA_DISENO.md §5` prohíbe, y
+ * sin esta guarda nada impide que alguien lo vuelva a poner fijo «porque en
+ * el diseño se ve así».
+ *
+ * Se afirma la AUSENCIA además de la presencia: lo que el spec saca a
+ * propósito se rompe con la mejor intención.
+ */
+test('🔴 el cartel de espera del 3DS no existe antes de la espera', async ({ page }) => {
+  await hastaLaPantallaFusionada(page);
+  await page.getByRole('radio', { name: /En partes iguales/ }).click();
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
+  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
+  await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
+
+  // Llegamos al 3DS y NO se está esperando nada: el banco todavía no fue
+  // consultado. El cartel no puede estar.
+  await expect(page.getByText('Esperando a tu banco')).toHaveCount(0);
+  await expect(page.getByText(/No cierres la app/)).toHaveCount(0);
+});

@@ -458,6 +458,8 @@ export const EN: Record<string, string> = {
   "Tarjeta que se autoriza": "Card being authorized",
   "Pagar": "Pay",
   "Pagar de nuevo": "Pay again",
+  "Esperando a tu banco": "Waiting for your bank",
+  "No cierres la app: estamos confirmando la autorización.": "Do not close the app: we are confirming the authorization.",
   "Paso 1 de 4": "Step 1 of 4",
   "Paso 2 de 4": "Step 2 of 4",
   "Paso 3 de 4": "Step 3 of 4",

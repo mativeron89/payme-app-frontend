@@ -11,6 +11,24 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.88.1 — la espera del 3DS existe cuando la espera existe (2026-08-20)
+
+Cierra el defecto **③** de la tanda de 3DS, que yo había **frenado**: llegó
+pedido como tarjeta permanente, y **la pantalla no espera nada hasta que la
+persona toca Confirmar**. Un cartel de espera sin espera es exactamente lo que
+`SISTEMA_DISENO.md §5` prohíbe. **Diseño lo cerró a favor de ese criterio**
+señalando que su propio texto —*«la confirmación se abre EN UN MOMENTO»*— ya
+describía algo transitorio.
+
+Ahora existe, y existe **sólo durante `busy`**, con `role="status"` y
+`aria-live` para que quien no ve la pantalla se entere de que empezó a
+esperar.
+
+**La guarda afirma la AUSENCIA, no sólo la presencia** — lo que un spec saca a
+propósito es lo que alguien restaura con la mejor intención, «porque en el
+diseño se ve así». **Mutante acreditado:** volverlo permanente (`busy &&` →
+`true &&`) la pone roja; restaurarlo, verde.
+
 ## 0.88.0 — fidelidad tanda 3: Pagar mi parte (2026-08-20)
 
 Tercera tanda de `FIDELIDAD_VISUAL_APP_2026-08-20.md` (`1b99639`).

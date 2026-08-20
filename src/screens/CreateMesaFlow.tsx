@@ -1748,9 +1748,31 @@ export function CreateMesaFlow() {
           </div>
         </div>
         <div className="scroll" style={{ paddingTop: 16, paddingLeft: 20, paddingRight: 20 }}>
-          <div style={{ textAlign: 'center', padding: '16px 0' }} role="status" aria-live="polite">
-            <div className="spinner" aria-hidden="true" />
-          </div>
+          {/* 🔴 «ESPERANDO A TU BANCO» · SÓLO DURANTE `busy` (defecto ③ de la
+              tanda de 3DS, resuelto por Diseño a favor de este criterio).
+
+              Lo frené cuando llegó pedido como tarjeta permanente: **la
+              pantalla no está esperando nada hasta que la persona toca
+              Confirmar**, y pintar «esperando… no cierres la app» antes de eso
+              afirma algo falso. No era preferencia: `SISTEMA_DISENO.md §5`
+              manda estados honestos, y un cartel de espera sin espera es
+              exactamente lo que esa regla prohíbe.
+
+              Diseño lo cerró señalando que su propio texto —*«la confirmación
+              se abre EN UN MOMENTO»*— ya describía algo transitorio. Así que
+              el cartel existe, y existe **cuando la espera existe**.
+
+              `role="status"` + `aria-live` para que el cambio se anuncie:
+              quien no ve la pantalla necesita saber que empezó a esperar. */}
+          {busy && (
+            <div className="tds-espera" role="status" aria-live="polite">
+              <div className="spinner" aria-hidden="true" />
+              <div className="tds-espera-tit">{t('Esperando a tu banco')}</div>
+              <div className="tds-espera-sub">
+                {t('No cierres la app: estamos confirmando la autorización.')}
+              </div>
+            </div>
+          )}
           {/* 🔴 Defecto 4 · QUÉ TARJETA SE ESTÁ AUTORIZANDO. Sólo se muestra
               cuando de verdad se sabe: con tarjeta tipeada, Stripe Elements no
               publica marca ni últimos cuatro antes de confirmar, y **una fila
