@@ -100,7 +100,7 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('4');
 
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
 
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
   await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();

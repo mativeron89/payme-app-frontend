@@ -65,7 +65,7 @@ test('🔴 «Pagar el total» reparte el total entre los que cubren, como igual'
   await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('2');
 
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
   await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar autorización' }).click();

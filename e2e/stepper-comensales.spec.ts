@@ -44,7 +44,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByText('base de propina · c/u')).toBeVisible();
 
     await continuar.click();
-    await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
     await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
     await page.getByRole('button', { name: 'Confirmar autorización' }).click();
     await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();

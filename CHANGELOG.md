@@ -11,6 +11,47 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.85.0 — fidelidad visual: Garantía y Compartir como se diseñaron (2026-08-20)
+
+**Pedido de Mati:** que la app se vea **exactamente** como se diseñó, no
+«parecido». Fuente: `diseno/referencias/FIDELIDAD_VISUAL_APP_2026-08-20.md`
+(`f4fefc0`), que auditó la app real corriendo contra las referencias. Cuatro
+defectos medidos, los cuatro corregidos.
+
+**① Garantía tenía otra cabecera.** Era un `TopBar` blanco de una fila: la
+única pantalla del flujo con cabecera propia. Pasa a la navy de dos filas de
+§1.3. 🔴 **Dice `Paso 3 de 4`, no `4 de 5`:** la fusión de §1.3-bis dejó el
+flujo en cuatro pasos y este número la sigue.
+
+**② La tarjeta del monto estaba con el color INVERTIDO** —navy con texto
+claro— cuando todas las tarjetas de título del flujo son `--teal-l` con texto
+navy. ⚠️ **Estaba escrita con estilos inline, y por eso ninguna guarda de color
+la vio**: pasa a clases (`.gar-amount*`), que además la vuelve visible para la
+guarda de colores migrados.
+
+**③ El párrafo explicativo se muda al PIE**, después de la lista de tarjetas y
+antes del botón. Decisión explícita del paquete, citada literal: *«la pantalla
+pide una decisión y el párrafo se le adelantaba… Al pie queda la mecánica, no
+la tranquilidad.»*
+
+**④ Compartir: WhatsApp primero, Copiar link segundo.** Estaban al revés.
+El orden del DOM es también el orden del foco por teclado, así que no es sólo
+visual.
+
+**Efecto lateral declarado, y se resolvió sin bajar el estándar:** la cabecera
+nueva no lleva título, así que la pantalla se quedaba **sin encabezado
+accesible** — un defecto peor que el de color. La etiqueta de la tarjeta teal
+pasa a ser el `<h1>`, igual que `Escanea el ticket` en scan. Eso cambió el
+marcador de **8 aserciones en 6 specs**, enumeradas con grep y actualizadas
+todas de una, no las que se pusieron rojas.
+
+⚠️ **Intermitente ambiental declarado:** una corrida dio 99/100 con un timeout
+en `ingresar` (página en blanco). Es el `ERR_NETWORK_CHANGED` ya diagnosticado
+el 2026-08-10, no la fidelidad: **la corrida siguiente dio 100/100 sin tocar
+nada.** Se declara en vez de taparse.
+
+Suite: **1120 unitarios · 100 e2e** · builds real/mock. Sin push.
+
 ## 0.84.0 — Ticket y División se fusionan, y aparece «Pagar el total» (2026-08-20)
 
 **Ratificado por Mati.** Pregunta literal: *«¿Querés avanzar con la fusión Ticket

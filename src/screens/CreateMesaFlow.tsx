@@ -1474,7 +1474,14 @@ export function CreateMesaFlow() {
   if (step === 'garantia') {
     return (
       <div className="screen has-cta">
-        <TopBar title={t('Garantiza la mesa')} onBack={back} />
+        {/* 🔴 FIDELIDAD VISUAL (2026-08-20, `diseno/referencias/
+            FIDELIDAD_VISUAL_APP_2026-08-20.md` @ f4fefc0 · defecto 1). Acá
+            había un `TopBar` blanco de una fila, que dejaba a Garantía como la
+            única pantalla del flujo con otra cabecera. Va la navy de dos filas
+            de §1.3, igual que Ticket/División y Mis ítems.
+            **`Paso 3 de 4` y no 4 de 5:** la fusión de §1.3-bis dejó el flujo
+            en cuatro pasos, y este número tiene que seguirla. */}
+        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step={t('Paso 3 de 4')} />
         {/* 🔴 ORDEN 1-B · LONGHANDS, NO EL SHORTHAND — y no es prolijidad.
             Acá había `style={{ padding: 16 }}`, y el shorthand inline PISA el
             `padding-bottom: 110px` de `.has-cta .scroll`. Sin ese aire, la
@@ -1488,20 +1495,16 @@ export function CreateMesaFlow() {
             El aviso ya existía en `global.css:1909-1911` y esta pantalla fue
             la que quedó afuera del barrido que arregló Ticket y División. */}
         <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
-          <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 14 }}>
-            <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              {t('Garantía de la mesa')}
-            </div>
-            <div style={{ fontSize: 'var(--fs-legacy-3xl)', fontWeight: 800, color: '#fff' }}>{formatMXN(total)}</div>
-            <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.45)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+          {/* 🔴 Defecto 2: la tarjeta estaba con el color INVERTIDO —navy con
+              texto claro— cuando el resto del flujo usa `--teal-l` con texto
+              navy (`SISTEMA_DISENO.md §5 bis · A`). Se pasa a las clases del
+              sistema en vez de otro bloque de estilos inline. */}
+          <div className="gar-amount">
+            <h1 className="gar-amount-lbl">{t('Garantía de la mesa')}</h1>
+            <div className="gar-amount-amt">{formatMXN(total)}</div>
+            <div className="gar-amount-sub">
               {t('Se retiene, no se cobra. Si todos pagan, se libera completa.')}
             </div>
-          </div>
-          <div className="note note-teal" style={{ marginBottom: 16 }}>
-            {/* Connect (v2.24): la retención puede vivir en la cuenta del
-                restaurante o en la de PayMe según el restaurante. El texto no
-                nombra al dueño de la retención: es verdadero en los dos rieles. */}
-            {t('Para abrir la mesa se retiene el total como garantía: el restaurante cobra sí o sí. Cuando todos pagan su parte, la retención se libera. Si alguien no paga, tu garantía cubre solo ese faltante.')}
           </div>
           {error && (
           <div className="form-error" role="alert">
@@ -1642,6 +1645,19 @@ export function CreateMesaFlow() {
             </div>
             <div className="radio" aria-hidden="true" />
           </button>}
+          </div>
+          {/* 🔴 Defecto 3 · EL PÁRRAFO VA ACÁ, AL PIE — no arriba. Decisión
+              explícita del paquete de diseño, citada literal en
+              `FIDELIDAD_VISUAL_APP_2026-08-20.md`: *«la pantalla pide una
+              decisión y el párrafo se le adelantaba. Con las tarjetas arriba,
+              lo primero que hay que elegir queda primero, después del monto.
+              Al pie queda la mecánica, no la tranquilidad.»*
+
+              Connect (v2.24): la retención puede vivir en la cuenta del
+              restaurante o en la de PayMe según el restaurante. El texto no
+              nombra al dueño de la retención: es verdadero en los dos rieles. */}
+          <div className="note note-teal" style={{ marginTop: 16 }}>
+            {t('Para abrir la mesa se retiene el total como garantía: el restaurante cobra sí o sí. Cuando todos pagan su parte, la retención se libera. Si alguien no paga, tu garantía cubre solo ese faltante.')}
           </div>
         </div>
         <button
@@ -1847,14 +1863,11 @@ export function CreateMesaFlow() {
                 ⚠️ El riesgo va aceptado a sabiendas y está en el acta: si el
                 portapapeles falla, NO queda de dónde copiar a mano. Por eso el
                 botón se apaga sin link en vez de fingir que copió. */}
-            <button
-              type="button"
-              className="btn btn-ghost share-copy"
-              onClick={copiarLink}
-              disabled={!link}
-            >
-              <Icon name="copy" size={18} className="ico-inline" /> {t('Copiar link')}
-            </button>
+            {/* 🔴 FIDELIDAD VISUAL (2026-08-20, defecto 4): WhatsApp va
+                PRIMERO. Es el canal por el que la gente manda esto de verdad,
+                así que es la acción principal; «Copiar link» es la salida
+                secundaria. Estaban al revés. El orden del DOM es también el
+                orden del foco por teclado, así que esto no es sólo visual. */}
             <a
               className={`btn share-wa ${link ? '' : 'off'}`}
               href={link ? `https://wa.me/?text=${encodeURIComponent(t('Súmate a la mesa {0} en PayMe: {1}', code, link))}` : undefined}
@@ -1864,6 +1877,14 @@ export function CreateMesaFlow() {
             >
               <Icon name="message" size={18} className="ico-inline" /> {t('Compartir por WhatsApp')}
             </a>
+            <button
+              type="button"
+              className="btn btn-ghost share-copy"
+              onClick={copiarLink}
+              disabled={!link}
+            >
+              <Icon name="copy" size={18} className="ico-inline" /> {t('Copiar link')}
+            </button>
           </div>
           {/* 🔴 A1 · ACÁ SE IMPRIMÍA EL LINK Y SU AVISO, y se retiraron.
               El comentario viejo defendía lo contrario —«esconderla detrás del

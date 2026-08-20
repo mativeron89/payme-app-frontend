@@ -457,6 +457,7 @@ export const EN: Record<string, string> = {
   "Total del ticket": "Receipt total",
   "Paso 1 de 4": "Step 1 of 4",
   "Paso 2 de 4": "Step 2 of 4",
+  "Paso 3 de 4": "Step 3 of 4",
   "PayMe": "PayMe",
   "Pendiente de confirmar": "Pending confirmation",
   "Pertenece a una sesión anterior o se perdió su cuerpo exacto al recargar. Sigue bloqueado para evitar un segundo cobro.": "It belongs to a previous session, or its exact payload was lost on reload. It's still blocked to avoid a second charge.",

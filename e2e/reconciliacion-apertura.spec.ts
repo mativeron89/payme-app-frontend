@@ -49,7 +49,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await masUno.click();
   await masUno.click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
 
   // 🔴 SE ELIGE "otra tarjeta" EXPLÍCITAMENTE, y no es un detalle: sin esto el
   // spec usaba la guardada por default que `loadCards()` autoselecciona, o sea
@@ -96,7 +96,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await otroMas.click();
   await otroMas.click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Reconciliación necesaria/ })).toHaveCount(0);
 
   // ⭐ ORDEN 2-A · EL REENVÍO SE COMPLETA DE VERDAD, no se verifica que el

@@ -41,7 +41,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
 
   // SUPERFICIE 1 · garantía: el checkbox existe y NACE DESMARCADO.
-  await expect(page.getByText('Garantiza la mesa')).toBeVisible();
+  await expect(page.getByText('Garantía de la mesa')).toBeVisible();
   const checkGarantia = page.getByRole('checkbox');
   await expect(checkGarantia).toBeVisible();
   await expect(checkGarantia).not.toBeChecked();
