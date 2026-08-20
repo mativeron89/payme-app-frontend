@@ -119,3 +119,27 @@ export function payGate(input: {
 export function puedeAtribuirTarjeta(frozen: UnconfirmedAttempt | null | undefined): boolean {
   return !canReplayFrozen(frozen);
 }
+
+/**
+ * 🔴 LA COORDINACIÓN DE LA CARRERA (P2-①), como función pura.
+ *
+ * `getPaymentMethods()` y `readUnconfirmed()` resuelven en efectos distintos y
+ * **sin orden garantizado**. La regla no es esperar a una: es que **el que
+ * termina último aplique**, con los dos datos sobre la mesa. Así no importa
+ * quién gane y el caso normal no paga latencia.
+ *
+ * `journalResuelto: false` incluye el journal **ilegible**: si no se pudo leer,
+ * no se sabe si hay replay, y **en la duda no se afirma ninguna tarjeta**.
+ *
+ * Vive acá y no dentro del componente para que la prueben los tests **tal como
+ * corre**. Tener la regla en el componente y una copia en el test es
+ * exactamente el defecto que el dictamen señaló con `payGate`.
+ */
+export function atribucionInicial(input: {
+  journalResuelto: boolean;
+  defaultCandidato: string | null;
+  frozen: UnconfirmedAttempt | null | undefined;
+}): string | null {
+  if (!input.journalResuelto || !input.defaultCandidato) return null;
+  return puedeAtribuirTarjeta(input.frozen) ? input.defaultCandidato : null;
+}

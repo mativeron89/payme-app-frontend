@@ -32,6 +32,7 @@ import {
   type CardFieldState,
 } from '../components/CardField';
 import { AppHeader, AppHeaderFlow } from '../components/AppHeader';
+import { metadatosDelBody } from './comprobanteDelBody';
 import { filaPropina } from './propinaRecibo';
 import { AppBottomBar, AppBottomCta } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
@@ -46,8 +47,8 @@ import type {
 import { useAuth } from '../auth/AuthContext';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import {
+  atribucionInicial,
   payGate,
-  puedeAtribuirTarjeta,
   paymentLanded,
   requiresReconciliation,
 } from './freezeMachine';
@@ -484,10 +485,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
            * no es que nadie eligió, es que **eligió otra vez, antes, y no
            * sabemos cuál**.
            */
-          const atribuible = puedeAtribuirTarjeta(frozenAttemptRef.current);
-          if (def && cardStateRef.current.empty && !payStartedRef.current && atribuible) {
-            setCardChoice(def.id);
-          }
+          defaultCandidatoRef.current = def?.id ?? null;
+          aplicarAtribucion();
         })
         .catch(() => { if (alive && identityEpochRef.current.isCurrent(identityEpoch)) setCards([]); });
       return () => { alive = false; };
@@ -705,6 +704,42 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    */
   const frozenAttemptRef = useRef<UnconfirmedAttempt | null>(null);
   useEffect(() => { frozenAttemptRef.current = frozen; }, [frozen]);
+  /**
+   * 🔴 P2-① · COORDINACIÓN DE LAS DOS PROMESAS, porque la regla de atribución
+   * cerraba por ESTADO y no por TIEMPO.
+   *
+   * `getPaymentMethods()` y `readUnconfirmed()` corren en efectos distintos y
+   * **no tienen orden garantizado**. Si las tarjetas resolvían primero, el
+   * journal todavía no había dicho «hay un replay» y la pantalla
+   * preseleccionaba la default — la misma atribución falsa que AF-05 vino a
+   * cerrar, sólo que por una ventana temporal en vez de por lógica.
+   *
+   * ⚠️ **Mi guarda de AF-05 no lo vio porque en tests el orden era el
+   * inverso**: el fixture no producía el caso. Por eso los tests nuevos
+   * FUERZAN los dos órdenes en vez de dejarlos al azar del runner.
+   *
+   * La coordinación no es esperar: **el que termina último aplica**. Así no
+   * importa quién gane la carrera, y no se agrega latencia al caso normal.
+   */
+  const journalResueltoRef = useRef(false);
+  const defaultCandidatoRef = useRef<string | null>(null);
+  const aplicarAtribucion = useCallback(() => {
+    // Las dos condiciones de UI —tipeando una tarjeta nueva, o pago ya en
+    // vuelo— son de este componente. La REGLA está en `atribucionInicial`, que
+    // es la que prueban los tests: acá no se decide, se aplica.
+    if (!cardStateRef.current.empty || payStartedRef.current) return;
+    const elegida = atribucionInicial({
+      journalResuelto: journalResueltoRef.current,
+      defaultCandidato: defaultCandidatoRef.current,
+      frozen: frozenAttemptRef.current,
+    });
+    if (elegida) setCardChoice(elegida);
+  }, []);
+  useEffect(() => {
+    // Identidad o mesa nuevas: la carrera se corre otra vez desde cero.
+    journalResueltoRef.current = false;
+    defaultCandidatoRef.current = null;
+  }, [guestToken, code]);
   useEffect(() => {
     if (!payArea) return;
     let alive = true;
@@ -713,13 +748,25 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       .then((attempt) => {
         if (!alive || !identityEpochRef.current.isCurrent(identityEpoch)) return;
         setFrozen(attempt);
+        // El ref se actualiza ACÁ y no por el efecto de `frozen`: ese efecto
+        // corre en el commit siguiente, y para entonces la carrera ya se
+        // resolvió con el valor viejo.
+        frozenAttemptRef.current = attempt;
+        journalResueltoRef.current = true;
+        aplicarAtribucion();
         if (attempt?.reconciliationRequired) {
           setError(t('Hay un pago de una sesión anterior. No vamos a reenviarlo ni iniciar otro hasta reconciliarlo.'));
         }
       })
-      .catch(() => alive && identityEpochRef.current.isCurrent(identityEpoch) && setError(t('Hay un pago anterior que no podemos atribuir de forma segura. Espera la reconciliación antes de pagar.')));
+      .catch(() => {
+        if (!alive || !identityEpochRef.current.isCurrent(identityEpoch)) return;
+        // 🔴 Un journal ilegible NO habilita la atribución: si no se pudo leer,
+        // no se sabe si hay replay, y en la duda no se afirma una tarjeta.
+        // `journalResueltoRef` queda en false a propósito.
+        setError(t('Hay un pago anterior que no podemos atribuir de forma segura. Espera la reconciliación antes de pagar.'));
+      });
     return () => { alive = false; };
-  }, [payArea, code]);
+  }, [payArea, code, aplicarAtribucion]);
   useEffect(() => { setFrozen(null); }, [guestToken, code]);
   const frozenScope = frozen?.scope ?? null;
   const cardRailAvailable = canUseCardRail(moneyRail, !!frozenScope);
@@ -857,6 +904,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * pantalla — tras una recarga ese estado ya no existe.
    */
   async function handlePayResponse(r: PayMesaResponse, scope: string, intent: MonetaryIntentHandle, body: PayMesaRequest) {
+    // El comprobante se deriva del CUERPO, que es lo único que sobrevive a un
+    // remount. Se calcula una sola vez, acá arriba, para que no haya dos
+    // caminos que puedan divergir.
+    const metaPropina = metadatosDelBody(body, mesa?.active_staff);
     const payKind = body.payment_type;
     const savedCard = body.payment_method_id
       ? (cards.find((c) => c.id === body.payment_method_id) ?? null)
@@ -954,12 +1005,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // mentirle al comensal en el 99% de los pagos de hoy.
       chargedByRestaurant: payKind !== 'wallet' && !!r.attempt.connected_account_id,
       statementDescriptor: r.attempt.statement_descriptor ?? null,
-      // 🔴 Se capturan ACÁ, no se leen al pintar el comprobante: `tip` y
-      // `staffId` se resetean al cerrar el intento, así que leerlos después
-      // daría un comprobante sin porcentaje ni nombre — y el comprobante es
-      // el papel que la persona guarda.
-      tipPct: tip.mode === 'pct' ? tip.pct : null,
-      tipToName: mesa?.active_staff.find((x) => x.id === staffId)?.display_name ?? null,
+      // 🔴 P2-② · SALEN DEL BODY QUE VIAJÓ, no del estado visual.
+      //
+      // Acá decía «se capturan al pagar porque `tip` y `staffId` se resetean».
+      // Era la mitad correcta del razonamiento: **en un replay tras remount el
+      // estado visual es NUEVO** —la selección arranca vacía— y el cuerpo que
+      // se reenvía es el ORIGINAL. Capturar «al pagar» seguía siendo capturar
+      // del lugar equivocado: el importe salía bien —lo devuelve el server—
+      // pero el porcentaje y el mesero se perdían, y vista, compartir y
+      // descargar quedaban **uniformemente incorrectos**. Uniformes y mal es
+      // peor que divergentes: no hay dos superficies que se contradigan.
+      tipPct: metaPropina.pct,
+      tipToName: metaPropina.nombre,
     });
     // Intento completado: el próximo pago de esta mesa (otra parte, otro
     // plato) es una intención NUEVA y necesita clave nueva.
@@ -976,13 +1033,43 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     // (una respuesta tardía de /payment-methods, un re-render), la clave que
     // se conserva para el reintento sigue siendo la de ESTE intento.
     const scope = payScope;
-    if (!scope || !actor) {
-      setError(actorError ? t('No pudimos verificar una identidad segura para este pago.') : t('Preparando una identidad segura para este pago…'));
+    /**
+     * 🔴 P3 · LA PUERTA VA PRIMERO Y ES UNA SOLA.
+     *
+     * Acá había DOS cortes —actor y reconciliación— **antes** de llamar a
+     * `payGate`, y más abajo la llamada real. Con cortes previos la primitiva
+     * no era la autoridad: era la tercera opinión, y la que los tests cubrían.
+     * Ahora **nada decide sobre el cobro antes que ella**.
+     *
+     * El copy sigue siendo el específico de cada caso: unificar la DECISIÓN no
+     * significa unificar lo que se le dice a la persona.
+     */
+    const puerta = payGate({
+      hasActor: !!actor && !!scope,
+      frozen,
+      acknowledged: crossActorAcknowledged,
+      crossActorIntent: crossActor,
+      mySlotsTaken,
+    });
+    if (!puerta.allowed) {
+      if (puerta.reason === 'no_actor') {
+        setError(actorError ? t('No pudimos verificar una identidad segura para este pago.') : t('Preparando una identidad segura para este pago…'));
+      } else if (puerta.reason === 'frozen_reconcile') {
+        setError(t('Este pago no puede reenviarse desde la sesión actual. Sigue bloqueado hasta reconciliar su resultado.'));
+      } else {
+        // N-08: no se emite una clave nueva sobre una mesa donde este
+        // dispositivo (o esta identidad) ya tiene un pago, sin confirmarlo.
+        setError(null);
+        setShowExtraPartConfirm(true);
+      }
       payInFlightRef.current.leave();
       return;
     }
-    if (frozenRequiresReconciliation) {
-      setError(t('Este pago no puede reenviarse desde la sesión actual. Sigue bloqueado hasta reconciliar su resultado.'));
+    // Estrechamiento de tipo, NO una política: `payGate` ya garantizó que hay
+    // actor, y `payScope` es no vacío exactamente cuando lo hay. Queda para
+    // que TypeScript lo sepa; alcanzarlo sería un defecto de esa equivalencia,
+    // no una decisión de producto.
+    if (!scope) {
       payInFlightRef.current.leave();
       return;
     }
@@ -1010,44 +1097,6 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
      */
     if (mesa && !tipConfirmedRef.current && propinaDesmedida(tipCents, mesa.tip_base_cents)) {
       setShowTipConfirm(true);
-      payInFlightRef.current.leave();
-      return;
-    }
-    /**
-     * 🔴 AF-04 DEL DICTAMEN (2026-08-20): `payGate` estaba **probado como
-     * primitiva y no lo consumía nadie** — el flujo productivo recomponía las
-     * guardas en línea. Dos definiciones de la misma regla, y sólo una
-     * cubierta por tests: la que no corre.
-     *
-     * **La conversión PRESERVA la conducta, y eso se midió antes de tocar:**
-     * `frozenView` tiene tres salidas y **todo congelado o pide reconciliación
-     * o es replayable** (`freezeMachine.ts:26-30`), así que un intento
-     * congelado nunca caía en la rama de confirmación — el `!frozen &&` de
-     * antes daba el mismo resultado que el orden de ramas de `payGate`.
-     *
-     * Lo que SÍ agrega es defensa en profundidad: `no_actor` y
-     * `frozen_reconcile` se verifican **acá también**, no sólo en el
-     * `disabled` del botón. Un `disabled` es una afirmación sobre la UI; esto
-     * es la puerta del cobro.
-     */
-    const puerta = payGate({
-      hasActor: !!actor,
-      frozen,
-      acknowledged: crossActorAcknowledged,
-      crossActorIntent: crossActor,
-      mySlotsTaken,
-    });
-    if (!puerta.allowed) {
-      if (puerta.reason === 'confirm_extra_part') {
-        // N-08: no se emite una clave nueva sobre una mesa donde este
-        // dispositivo (o esta identidad) ya tiene un pago, sin confirmación.
-        setError(null);
-        setShowExtraPartConfirm(true);
-      } else if (puerta.reason === 'frozen_reconcile') {
-        setError(t('Hay un pago anterior que no podemos atribuir de forma segura. Espera la reconciliación antes de pagar.'));
-      } else {
-        setError(t('No pudimos identificar tu sesión para pagar. Vuelve a entrar.'));
-      }
       payInFlightRef.current.leave();
       return;
     }

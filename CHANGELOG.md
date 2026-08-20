@@ -11,6 +11,66 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.94.0 — la reauditoría P17: dos carreras y una puerta (2026-08-20)
+
+Codex confirmó los cierres grandes del rework anterior —espejo vigente,
+`total=1`, el piso de `igual` separado, el formatter único— **y bloqueó por dos
+P2 nuevos y más finos: los dos de scheduling de promesas.**
+
+### P2-① · la regla cerraba por ESTADO y no por TIEMPO
+
+`getPaymentMethods()` y `readUnconfirmed()` corren en efectos distintos y **no
+tienen orden garantizado**. Si las tarjetas resolvían primero, el journal
+todavía no había dicho *«hay un replay»* y la pantalla preseleccionaba la
+default: **la misma atribución falsa que AF-05 cerró, por una ventana temporal
+en vez de por lógica.**
+
+⚠️ **Mi guarda de AF-05 no lo vio porque en los tests el orden era el inverso:
+el fixture no producía el caso.** Es la familia «el fixture no produce el
+caso», en su forma temporal — la más fácil de no ver, porque el test es
+correcto y verde.
+
+**La coordinación no es esperar a una: es que el que termina último aplique.**
+Así no importa quién gane la carrera y el caso normal no paga latencia. Un
+journal **ilegible** cuenta como no resuelto: si no se sabe si hay replay,
+**en la duda no se afirma ninguna tarjeta.**
+
+### P2-② · mi propia lección, a medio aplicar
+
+Yo ya sabía que `tip` y `staffId` se resetean, y por eso los capturaba **al
+pagar** en vez de al pintar. **Lo que no vi es que en un replay tras remount el
+estado visual es NUEVO** mientras el cuerpo reenviado es el ORIGINAL. Capturar
+«al pagar» seguía siendo capturar del lugar equivocado: el importe salía bien
+—lo devuelve el server— pero **el porcentaje y el mesero se perdían**.
+
+🔴 **Y el modo de falla era peor que una divergencia: vista, compartir y
+descargar quedaban UNIFORMEMENTE incorrectos.** No había dos superficies
+contradiciéndose para delatarlo — justo después de que el rework anterior las
+unificara. **Unificar propaga también el error.**
+
+`metadatosDelBody()` los deriva del **cuerpo exacto que viajó**, que es lo
+único que sobrevive a un remount.
+
+### P3 · la puerta no era la única autoridad
+
+Había **dos cortes —actor y reconciliación— ANTES** de llamar a `payGate`, y la
+llamada real más abajo. Con cortes previos la primitiva no era la puerta: era
+la tercera opinión, y la que los tests cubrían. Ahora **nada decide sobre el
+cobro antes que ella**, y el copy sigue siendo el específico de cada caso:
+unificar la decisión no es unificar lo que se le dice a la persona.
+
+### Y una corrección de método, sobre el propio test
+
+La primera versión de la prueba de la carrera traía un **«espejo exacto»** de
+la lógica del componente. 🔴 **Eso es literalmente el defecto que el dictamen
+señaló con `payGate`**: la versión probada y la que corre pueden separarse sin
+que nada se ponga rojo. La regla se extrajo a `atribucionInicial()` y **los
+tests ejercitan la función real**. Los dos órdenes de promesas se **fuerzan**,
+no se dejan al azar del runner. **Mutante acreditado:** ignorar
+`journalResuelto` enrojece exactamente el orden que fallaba.
+
+Suite: **1145 unitarios · 108 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.93.0 — los dos residuales del P12: una sola puerta, un solo relato (2026-08-20)
 
 ### AF-04 · `payGate` estaba probado y no lo usaba nadie
