@@ -1064,7 +1064,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
      * significa unificar lo que se le dice a la persona.
      */
     const puerta = payGate({
-      hasActor: !!actor && !!scope,
+      // 🔴 P23-AF-04 · LA VENTANA SE ADJUDICA ACÁ, EXPLÍCITAMENTE.
+      //
+      // No cobraba de más —el journal durable frenaba— **pero eso era una
+      // inferencia de seguridad, no una decisión**: la puerta no sabía nada de
+      // la ventana. Con el journal pendiente **no se sabe si hay un replay**,
+      // así que iniciar un pago sería emitir una clave sin saber si ya hay una
+      // viva. Se trata como falta de actor: no hay identidad monetaria
+      // resuelta todavía.
+      hasActor: !!actor && !!scope && !journalPendiente,
       frozen,
       acknowledged: crossActorAcknowledged,
       crossActorIntent: crossActor,
@@ -1924,6 +1932,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 {!IS_MOCK && (cardRailAvailable ? (
                   <>
                     <CardField
+                      // P23-AF-01: la novena superficie, y la única que no es
+                      // un control HTML — por eso faltaba.
+                      disabled={journalPendiente}
                       onReady={setCardEl}
                       onChange={handleCardChange}
                       continuation={!!frozenScope}
@@ -2055,6 +2066,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           })();
           },
             disabled:
+            // 🔴 P23-AF-04 · el CTA también mira la ventana. Ofrecer «Pagar»
+            // mientras está abierta invita a una acción que la puerta va a
+            // rechazar: un botón que se puede tocar y no hace nada es peor
+            // que uno apagado por un instante.
+            journalPendiente ||
             busy ||
             frozenRequiresReconciliation ||
             (!frozenScope && gross === 0) ||

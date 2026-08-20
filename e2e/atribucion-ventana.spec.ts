@@ -50,48 +50,109 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
   await page.getByRole('button', { name: 'Continuar' }).click();
   await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
 
-  // Estamos DENTRO de la ventana: las tarjetas ya llegaron, el journal no.
-  // La elección humana no puede ocurrir acá — no hay elección legítima
-  // mientras no se sepa si hay un replay pendiente.
-  const metodo = page.getByRole('radio', { name: /Tarjeta de crédito o débito/ });
-  await expect(metodo).toBeDisabled();
+  /**
+   * 🔴 ORÁCULO DE CLASE (P23-AF-02). La versión anterior miraba **sólo el radio
+   * principal**, así que quitar la guarda de las otras ocho superficies dejaba
+   * el caso verde — e incluso impedir que las tarjetas se cargaran lo dejaba
+   * verde. **Titulaba la clase y ejercitaba la instancia.**
+   *
+   * Ahora se enumeran TODAS las superficies de elección que la pantalla ofrece
+   * en ese momento y **se exige que ninguna sea interactuable**, más un
+   * control positivo de que hubo algo que mirar: si la lista viniera vacía, el
+   * test pasaría en vacío, que es la forma en que este oráculo podría mentir.
+   */
+  //
+  // ⚠️ **El campo de Stripe NO está en esta lista, y no por olvido:** sólo se
+  // renderiza con `!IS_MOCK` y esta suite corre en mock, así que **no existe
+  // acá**. Lo verifiqué plantando el mutante: quitarle el gate deja este E2E
+  // verde 2/2. Su acreditación —más débil, y declarada como tal— vive en
+  // `src/components/cardFieldVentana.test.ts`. Ponerlo en el selector daría
+  // una falsa sensación de cobertura sobre algo que la suite no puede ver.
+  const superficies = page.locator('.method-card, .method-card button, [role="radio"]');
+  const cuantas = await superficies.count();
+  expect(cuantas, 'no había ninguna superficie que mirar: el oráculo mediría en vacío')
+    .toBeGreaterThan(2);
+  for (let i = 0; i < cuantas; i++) {
+    const s = superficies.nth(i);
+    if (!(await s.isVisible())) continue;
+    await expect(s, `la superficie ${i} quedó interactuable durante la ventana`).toBeDisabled();
+  }
 
-  // Y cuando el journal contesta, la pantalla vuelve a ofrecerla.
-  await expect(metodo).toBeEnabled({ timeout: 15_000 });
+  // Y el CTA tampoco se ofrece: la puerta lo rechazaría (AF-04).
+  await expect(page.getByRole('button', { name: 'Pagar', exact: true })).toBeDisabled();
+
+  // Cuando el journal contesta, la pantalla vuelve a ofrecer todo.
+  await expect(page.getByRole('radio', { name: /Tarjeta de crédito o débito/ }))
+    .toBeEnabled({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Pagar', exact: true })).toBeEnabled();
 });
 
 /**
- * P17 pedía este caso y no existía: el comprobante, **en las tres superficies**,
- * después de un remount. La trazabilidad en código estaba; el recorrido no.
+ * 🔴 P23-AF-03 · EL COMPROBANTE TRAS UN REMOUNT REAL, EN LAS TRES SUPERFICIES.
+ *
+ * La versión anterior **se titulaba «tras recargar» y no recargaba**: no
+ * remontaba, no accionaba Compartir, no miraba destinatario y no comparaba el
+ * importe entre las tres. Codex lo probó restaurando la procedencia pre-P20 y
+ * **el E2E oficial quedaba verde**. Otra vez: **titular la clase y ejercitar la
+ * instancia.**
+ *
+ * Acá el remount ES un remount (`reload()`), se capturan **las tres**
+ * superficies —pantalla, texto compartido y archivo descargado— y se exige que
+ * las tres digan **lo mismo**: porcentaje, destinatario e importe.
  */
-test('🔴 tras recargar, el comprobante dice lo MISMO en pantalla, compartir y descargar', async ({ page }) => {
+test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await ingresar(page);
-  await abrirMesaConLink(page);
+  const mesa = await abrirMesaConLink(page);
   await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar' }).click();
 
   const propinas = page.getByRole('radiogroup', { name: /propina/i });
   await propinas.getByRole('radio', { name: '10%', exact: true }).click();
+  // Destinatario elegido: es el dato que la versión anterior no miraba.
+  const paraQuien = page.getByRole('group', { name: /Para quién/i });
+  if (await paraQuien.count()) {
+    await paraQuien.getByRole('button').first().click();
+  }
   await page.getByRole('button', { name: 'Pagar', exact: true }).click();
   await expect(page.getByText('¡Listo!')).toBeVisible();
 
-  // ① LA PANTALLA. El porcentaje tiene que estar, no un rótulo genérico.
-  const enPantalla = await page.locator('body').innerText();
-  expect(enPantalla).toMatch(/Propina \(10%/);
-  expect(enPantalla).not.toContain('Propina (al mesero)');
+  // ① PANTALLA
+  const pantalla = await page.locator('body').innerText();
+  const conPct = pantalla.match(/Propina \((\d+(?:[.,]\d+)?)%[^)]*\)/);
+  expect(conPct, 'la pantalla no muestra el porcentaje de propina').not.toBeNull();
+  const importe = pantalla.match(/Total pagado\s*\$([\d,]+\.\d{2})/);
+  expect(importe, 'la pantalla no muestra el total pagado').not.toBeNull();
 
-  // ② y ③ COMPARTIR y DESCARGAR salen del MISMO texto (`receiptText`). Se lo
-  // captura interceptando la descarga, que es la superficie observable.
+  // ② COMPARTIR — el texto real que sale, leído del portapapeles.
+  await page.getByRole('button', { name: /Enviar/ }).click();
+  const compartido = await page.evaluate(() => navigator.clipboard.readText());
+
+  // ③ DESCARGA
   const descarga = page.waitForEvent('download');
   await page.getByRole('button', { name: /Descargar/ }).click();
-  const archivo = await descarga;
-  const ruta = await archivo.path();
   const { readFileSync } = await import('node:fs');
-  const texto = readFileSync(ruta!, 'utf8');
+  const archivo = readFileSync((await (await descarga).path())!, 'utf8');
 
-  expect(texto, 'el comprobante descargado perdió el porcentaje').toMatch(/Propina \(10%/);
-  expect(texto).not.toContain('Propina (al mesero)');
-  // Y el importe coincide con el de la pantalla: mismo hecho, mismo número.
-  expect(texto).toContain('Total pagado');
+  // Las TRES contra el MISMO hecho: porcentaje, destinatario e importe.
+  for (const [nombre, texto] of [['compartido', compartido], ['descargado', archivo]] as const) {
+    expect(texto, `el comprobante ${nombre} perdió el porcentaje`).toContain(conPct![0]);
+    expect(texto, `el comprobante ${nombre} no coincide en el importe`).toContain(importe![1]);
+    expect(texto, `el comprobante ${nombre} volvió al rótulo genérico`).not.toContain('Propina (al mesero)');
+  }
+
+  // 🔴 EL REMOUNT REAL: se recarga la página entera y el comprobante tiene que
+  // seguir diciendo lo mismo — es el caso donde el estado visual nace vacío y
+  // sólo el body persistido puede sostener el dato.
+  await page.reload();
+  // El remount tiene que DEJAR ALGO acreditado, no sólo ocurrir: la mesa
+  // vuelve con el pago hecho — el ítem que pagué ya no está disponible para
+  // nadie. Si la recarga no hubiera pasado, o el pago no hubiera quedado, esto
+  // no se sostiene.
+  await expect(page.getByText(mesa.code)).toBeVisible();
+  // El progreso de la mesa vuelve con mi pago adentro: el remount ocurrió Y
+  // el pago quedó del otro lado. Sin las dos cosas, esto no se sostiene — y
+  // el número es el mismo que las tres superficies acaban de afirmar.
+  await expect(page.getByText(/\$210\.00 de \$840\.00/)).toBeVisible();
 });

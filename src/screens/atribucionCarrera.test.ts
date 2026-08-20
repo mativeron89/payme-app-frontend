@@ -97,3 +97,46 @@ describe('🔴 P2-② · el comprobante sale del BODY, no del estado visual', ()
     expect(metadatosDelBody({ tip_bps: 1000, tip_to_staff_id: 's1' }, undefined).nombre).toBeNull();
   });
 });
+
+/**
+ * 🔴 AF-03 · EL ORÁCULO DEL MUTANTE QUE EL E2E NO PUEDE MATAR, y por qué es
+ * éste y no otro.
+ *
+ * El mutante que Codex nombra —restaurar la procedencia pre-P20, o sea leer
+ * `tip`/`staffId` del estado visual— **sólo diverge en un caso: un replay
+ * congelado tras remount**, donde el estado nace vacío y el cuerpo conserva el
+ * dato. **Ese escenario no se puede producir en la suite de navegador:** en
+ * modo mock el pago resuelve en proceso, no hay red que abortar, y fabricar un
+ * journal congelado a mano exigiría escribir sus internas —índices
+ * digeridos— desde el test, que es acoplar la prueba a lo que vino a proteger.
+ *
+ * Lo verifiqué: con el mutante puesto, el E2E de las tres superficies queda
+ * **verde 2/2**. Así que se cubre donde SÍ es verificable — **que el cableado
+ * no PUEDA leer el estado visual**— y se declara que es una acreditación de
+ * fuente, más débil que un recorrido.
+ */
+describe('🔴 el comprobante no puede leer el estado visual (AF-03)', () => {
+  const SRC = (
+    import.meta.glob('/src/screens/MesaScreen.tsx', {
+      query: '?raw', import: 'default', eager: true,
+    }) as Record<string, string>
+  )['/src/screens/MesaScreen.tsx']!;
+  const vivo = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  // El bloque que arma el comprobante, acotado: mirar el archivo entero
+  // matchearía usos legítimos de `tip` en la pantalla de pago.
+  const bloque = vivo.slice(vivo.indexOf('setResult({'), vivo.indexOf('});', vivo.indexOf('setResult({')));
+
+  it('el bloque del comprobante existe: si no, esto mediría en vacío', () => {
+    expect(bloque.length).toBeGreaterThan(100);
+  });
+
+  it('🔴 sale de `metaPropina`, derivado del body', () => {
+    expect(bloque).toMatch(/tipPct:\s*metaPropina\.pct/);
+    expect(bloque).toMatch(/tipToName:\s*metaPropina\.nombre/);
+  });
+
+  it('🔴 y NO toca el estado visual: ni `tip.mode` ni `staffId`', () => {
+    expect(bloque).not.toMatch(/tip\.mode/);
+    expect(bloque).not.toMatch(/staffId/);
+  });
+});

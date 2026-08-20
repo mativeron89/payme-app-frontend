@@ -11,6 +11,60 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.96.0 — la superficie que no era HTML, y oráculos de clase (2026-08-20)
+
+Cuarta vuelta del P23. **El patrón era uno solo, y el Bibliotecario lo nombró
+mejor que yo: conté controles HTML, y el campo de Stripe no es uno.**
+
+### AF-01 · la novena superficie
+
+`CardField` vive en un **iframe de otro origen**: `disabled={...}` no lo toca y
+**una enumeración de controles del DOM no lo ve** — que es exactamente cómo se
+me escapó. El gate va por la API del SDK: `element.update({ disabled })`, y
+**también al montar**, para que un campo que nace dentro de la ventana nazca
+cerrado en vez de habilitarse un instante.
+
+### AF-04 · la puerta adjudica la ventana, no la infiere
+
+No cobraba de más —el journal durable frenaba— **pero eso era una inferencia de
+seguridad, no una decisión**. Con el journal pendiente **no se sabe si hay
+replay**, así que iniciar un pago sería emitir una clave sin saber si ya hay
+una viva: se trata como falta de actor. El CTA también, porque **un botón que
+se puede tocar y no hace nada es peor que uno apagado por un instante**.
+
+### AF-02 y AF-03 · los E2E titulaban la clase y ejercitaban la instancia
+
+- **Oráculo de clase:** ahora itera **todas** las superficies visibles y exige
+  que ninguna sea interactuable, **con control positivo** de que había algo que
+  mirar — sin eso, el oráculo podría pasar en vacío, que es su única forma de
+  mentir. **Mutante acreditado:** quitar la guarda de las otras ocho lo pone
+  rojo.
+- **El comprobante ahora ejerce un remount REAL** y compara **las tres**
+  superficies —pantalla, texto compartido leído del portapapeles, y archivo
+  descargado— contra el mismo porcentaje, destinatario e importe. Tras la
+  recarga, el progreso de la mesa vuelve con el pago adentro: **el remount
+  ocurrió y el pago quedó**.
+
+### 🔴 Dos límites declarados, porque acreditarlos de mentira sería peor
+
+1. **El campo de Stripe NO se puede cubrir por E2E:** sólo se renderiza con
+   `!IS_MOCK` y la suite corre en mock. **Lo comprobé plantando el mutante: el
+   E2E quedó verde 2/2.** Su acreditación vive en `cardFieldVentana.test.ts` y
+   es **de fuente — más débil, y se declara**: verifica el cableado, no la
+   conducta. Meterlo igual en el selector daría falsa cobertura.
+2. **El mutante de la procedencia sólo diverge en un replay congelado tras
+   remount**, y ese escenario **no se puede producir en mock**: el pago
+   resuelve en proceso, no hay red que abortar, y fabricar un journal congelado
+   exigiría escribir sus internas desde el test. Se cubre con un oráculo de
+   fuente que exige que el bloque del comprobante **no pueda** tocar
+   `tip.mode` ni `staffId`. **Mutante acreditado.**
+
+⚠️ **Y un error de método propio, el mismo del día:** apliqué la guarda del CTA
+con un reemplazo por cadena exacta que **no matcheó y falló en silencio** — el
+test lo encontró. Los reemplazos ahora van con aserción.
+
+Suite: **1152 unitarios · 110 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.95.0 — la ventana se cierra, no se limpia después (2026-08-20)
 
 Tercera vuelta del P20. Lo cerrado quedó acreditado; lo abierto era **una

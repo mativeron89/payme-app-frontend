@@ -27,6 +27,18 @@ interface Props {
   onChange?(state: CardFieldState): void;
   /** Hay una intención durable previa: continuarla no inicia otra operación. */
   continuation?: boolean;
+  /**
+   * 🔴 P23-AF-01 · CIERRA EL CAMPO DE STRIPE DURANTE LA VENTANA.
+   *
+   * La pantalla de pago deshabilita sus nueve controles mientras el journal no
+   * dijo si hay un replay pendiente. **Este campo se quedaba afuera, y no por
+   * olvido: no es un control HTML.** Vive en un iframe de otro origen, así que
+   * `disabled={...}` no lo toca y **una enumeración de controles del DOM no lo
+   * ve** — que es exactamente cómo se me escapó.
+   *
+   * El gate va por la API del SDK: `element.update({ disabled })`.
+   */
+  disabled?: boolean;
 }
 
 export const CARD_RAIL_UNAVAILABLE_COPY = 'Todavía no está disponible';
@@ -40,12 +52,24 @@ export function CardRailUnavailable() {
   );
 }
 
-export function CardField({ onReady, onChange, continuation = false }: Props) {
+export function CardField({ onReady, onChange, continuation = false, disabled = false }: Props) {
   const { t } = useIdioma();
   const moneyRail = useMoneyRail();
   const { mostrarAvisoDePrueba, puedeCargarTarjeta } = moneyRail;
   const cardRailAvailable = canUseCardRail({ puedeCargarTarjeta }, continuation);
   const holder = useRef<HTMLDivElement | null>(null);
+  /**
+   * El elemento montado y el `disabled` vigente, en refs: el efecto de montaje
+   * corre una sola vez y no puede leer props posteriores, y **re-montar el
+   * campo por un cambio de `disabled` perdería lo que la persona tipeó**.
+   */
+  const cardRef = useRef<StripeCardElement | null>(null);
+  const disabledRef = useRef(disabled);
+  useEffect(() => {
+    disabledRef.current = disabled;
+    // `update` es idempotente y no toca el contenido: sólo la interacción.
+    cardRef.current?.update({ disabled });
+  }, [disabled]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,6 +77,7 @@ export function CardField({ onReady, onChange, continuation = false }: Props) {
     if (!cardRailAvailable) {
       setLoading(false);
       setLoadError(null);
+      cardRef.current = null;
       onReady(null);
       onChange?.({ complete: false, error: null, empty: true });
       return;
@@ -124,7 +149,11 @@ export function CardField({ onReady, onChange, continuation = false }: Props) {
         card.on('change', (e) => {
           onChange?.({ complete: e.complete, error: e.error?.message ?? null, empty: e.empty });
         });
+        // El estado inicial también se aplica: si el campo se monta DENTRO de
+        // la ventana, nace deshabilitado en vez de habilitarse un instante.
+        card.update({ disabled: disabledRef.current });
         card.mount(holder.current);
+        cardRef.current = card;
         setLoading(false);
         onReady(card);
       } catch {
@@ -137,6 +166,7 @@ export function CardField({ onReady, onChange, continuation = false }: Props) {
 
     return () => {
       cancelled = true;
+      cardRef.current = null;
       onReady(null);
       // Al desmontar, el estado del padre debe volver a "vacío": si quedara
       // `complete: true` colgado, el botón de pagar/garantizar seguiría
