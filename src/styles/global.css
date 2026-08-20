@@ -4667,3 +4667,20 @@ body {
 h1.gar-amount-lbl {
   margin: 0;
 }
+
+/* Fila de «qué tarjeta se autoriza» en 3DS (fidelidad 2026-08-20, defecto 4).
+   Sólo aparece cuando la tarjeta se conoce de verdad. */
+.tds-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: var(--sp-3);
+}
+.tds-card-txt {
+  font-size: var(--fs-sm);
+  color: var(--text);
+}

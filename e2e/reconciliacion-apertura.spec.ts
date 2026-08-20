@@ -62,7 +62,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
   // Acá la mesa YA existe en `pending_auth` y el hold está puesto: el backend
   // contestó `requires_action` y el journal quedó congelado a propósito.
-  await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
 
   // ⚡ La pestaña muere en el peor momento posible.
   await page.reload();
@@ -112,7 +112,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
 
   const antes = await mesasDelMock(page);
   await page.getByRole('button', { name: /Reintentar esta apertura/ }).click();
-  await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar autorización' }).click();
   await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 

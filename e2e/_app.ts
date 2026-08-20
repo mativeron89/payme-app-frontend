@@ -103,7 +103,7 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
 
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
-  await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Confirmar autorización' }).click();
   // §1.7 le puso el título del spec: la pantalla es el momento de triunfo del

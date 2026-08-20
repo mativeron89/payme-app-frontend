@@ -62,7 +62,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
     .toHaveAttribute('aria-checked', 'false');
 
   await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
-  await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
 
   // ⚡ Muere la pestaña con el hold ya puesto sobre la NO-default.
   await page.reload();
@@ -98,7 +98,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   const cta = page.getByRole('button', { name: /Reintentar esta apertura/ });
   await expect(cta).toBeEnabled();
   await cta.click();
-  await expect(page.getByRole('heading', { name: 'Confirma con tu banco' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar autorización' }).click();
   await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 

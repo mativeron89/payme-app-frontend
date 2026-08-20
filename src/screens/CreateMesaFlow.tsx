@@ -61,7 +61,7 @@ import {
 } from '../components/CardField';
 import { Icon } from '../components/Icon';
 import { InviteFriends } from '../components/InviteFriends';
-import { CardBrandChip, TopBar, useToast } from '../components/ui';
+import { CardBrandChip, useToast } from '../components/ui';
 import { navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { centsToString, splitEqual, stringToCents, sumCents } from '../utils/money';
@@ -1701,31 +1701,57 @@ export function CreateMesaFlow() {
   if (step === 'threeds') {
     return (
       <div className="screen">
-        {/* Antes este paso no tenía ninguna salida: la mesa quedaba sin
-            garantizar y el usuario atrapado en la pantalla. */}
-        <TopBar
-          title={t('Confirma con tu banco')}
+        {/* 🔴 FIDELIDAD VISUAL (2026-08-20 @ 8183295 · defectos 1, 2, 4 y 5).
+            Los 3 y 6 quedaron FRENADOS y declarados al Bibliotecario: no se
+            resuelven por inferencia sobre el corazón del pago.
+
+            Antes este paso no tenía ninguna salida: la mesa quedaba sin
+            garantizar y el usuario atrapado en la pantalla. El `backLabel`
+            propio se conserva — la salida dice adónde lleva. **Sin contador
+            de paso**, como Compartir: 3DS no es un paso más del armado, es
+            una interrupción del banco dentro de la garantía. */}
+        <AppHeaderFlow
+          paymeId={session?.user?.payme_id}
           onBack={() => setStep('garantia')}
           backLabel={t('Volver a elegir la garantía')}
         />
-        <div className="scroll" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        {/* Defecto 2: el título y el subtítulo estaban sueltos en el cuerpo;
+            van en la tarjeta `--teal-l`, como todo el flujo. */}
+        <div className="title-card">
+          <h1 className="title-card-title">{t('Tu banco pide confirmar')}</h1>
+          <div className="title-card-sub">
+            {t('La retención de')} {formatMXN(total)} {t('necesita que la confirmes con tu banco.')}
+          </div>
+        </div>
+        <div className="scroll" style={{ paddingTop: 16, paddingLeft: 20, paddingRight: 20 }}>
           <div style={{ textAlign: 'center', padding: '16px 0' }} role="status" aria-live="polite">
             <div className="spinner" aria-hidden="true" />
-            <div className="h2" style={{ marginTop: 18 }}>
-              {t('Tu banco pide confirmar')}
-            </div>
-            <div className="body-text" style={{ marginTop: 6 }}>
-              {t('La retención de')} {formatMXN(total)} {t('necesita que la confirmes con tu banco.')}
-            </div>
           </div>
+          {/* 🔴 Defecto 4 · QUÉ TARJETA SE ESTÁ AUTORIZANDO. Sólo se muestra
+              cuando de verdad se sabe: con tarjeta tipeada, Stripe Elements no
+              publica marca ni últimos cuatro antes de confirmar, y **una fila
+              inventada acá diría con qué se está reteniendo plata**. Cuando no
+              se sabe, no se dice nada — el hueco honesto. */}
+          {(() => {
+            const elegida = cards.find((c) => c.id === cardChoice);
+            if (!elegida) return null;
+            return (
+              <div className="tds-card" role="group" aria-label={t('Tarjeta que se autoriza')}>
+                <Icon name="card" size={18} className="ico-inline" />
+                <span className="tds-card-txt">
+                  {elegida.brand} {elegida.bank_name ?? ''} ···· {elegida.last_four}
+                </span>
+              </div>
+            );
+          })()}
           {error && (
             <div className="form-error" role="alert">
               {error}
             </div>
           )}
-          <div className="note note-teal" style={{ marginTop: 12 }}>
-            {t('En la versión final, aquí se abre la verificación de tu banco.')}
-          </div>
+          {/* Defecto 5: se retiró el aviso «En la versión final, aquí se abre
+              la verificación de tu banco.» — decisión explícita del paquete.
+              Se sacó EL TEXTO; no había lógica detrás de él. */}
           <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={confirm3ds} disabled={busy}>
             {busy ? t('Confirmando…') : t('Confirmar autorización')}
           </button>

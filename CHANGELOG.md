@@ -11,6 +11,46 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.86.0 — fidelidad visual: «Confirma con tu banco» (2026-08-20)
+
+Segunda tanda de `FIDELIDAD_VISUAL_APP_2026-08-20.md` (`8183295`), sobre 3DS.
+**Seis defectos medidos: cuatro corregidos, DOS FRENADOS y declarados.**
+
+**Corregidos — visuales, sin tocar conducta de pago:**
+- **①** cabecera blanca → la navy de dos filas del flujo. **Sin contador de
+  paso**, como Compartir: 3DS no es un paso más del armado, es una
+  interrupción del banco dentro de la garantía. El `backLabel` propio se
+  conserva.
+- **②** título y subtítulo sueltos → tarjeta de título `--teal-l`.
+- **④** fila de qué tarjeta se autoriza. 🔴 **Sólo cuando se sabe de verdad:**
+  con tarjeta tipeada, Stripe Elements no publica marca ni últimos cuatro
+  antes de confirmar, y una fila inventada ahí diría con qué se está
+  reteniendo plata. Sin dato, no se dice nada.
+- **⑤** se retiró el aviso de demo. Se sacó **el texto**, no lógica: no había.
+
+🔴 **FRENADOS, con motivo, y a la espera de decisión:**
+- **③ la tarjeta «Esperando a tu banco».** Hoy la pantalla **no está
+  esperando nada**: en mock nada corre hasta que la persona toca Confirmar.
+  Pintar un «esperando… no cierres la app» permanente **afirma algo falso**, y
+  los estados honestos son regla del sistema, no preferencia.
+- **⑥ mover el CTA a la barra de cinco posiciones.** No es sólo mover un
+  botón: **la barra AGREGA cuatro salidas de navegación a una pantalla que hoy
+  no tiene ninguna**, y *«qué pasa si la persona sale de la app con una
+  autorización 3DS en curso»* es un hueco **explícitamente sin decidir** en
+  `INSTRUCCIONES_DISENO_APP_2026-08-18 §C`. Implementarlo sería resolver por
+  inferencia una pregunta abierta sobre el corazón del pago.
+
+**Efecto lateral, misma clase que la tanda anterior:** al pasar el título a la
+tarjeta, el marcador `Confirma con tu banco` dejó de existir — **6 aserciones
+en 4 specs**, enumeradas con grep y actualizadas de una. `TopBar` ya no se
+importa acá; **el componente sigue vivo** para `Más` y las pantallas dormidas
+del riel saldo.
+
+⚠️ **Intermitente, declarado y no tapado:** en la corrida completa, un e2e del
+splash dio timeout; **aislado pasa 2/2**. Puede ser el `ERR_NETWORK_CHANGED`
+conocido o el defecto del runner que Codex acaba de reportar
+(`reuseExistingServer` adoptando un servidor ajeno). **No se declara resuelto.**
+
 ## 0.85.0 — fidelidad visual: Garantía y Compartir como se diseñaron (2026-08-20)
 
 **Pedido de Mati:** que la app se vea **exactamente** como se diseñó, no
