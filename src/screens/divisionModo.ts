@@ -47,6 +47,25 @@ export function modoContrato(m: ModoUI): ModoContrato {
  * Piso del stepper. Sale del CONTRATO (`igual` exige >= 2), no de criterio:
  * las dos formas que reparten el total heredan 2; «cada uno lo suyo» va con 1
  * porque el número ahí sólo fija la base de propina.
+ *
+ * 🔴 **VENCIDO PARA «PAGAR EL TOTAL», y sigue en 2 a propósito.** Mati ratificó
+ * el 2026-08-19 que **una persona sola puede** cubrir el total — etiqueta
+ * literal **«Una persona puede»**, en
+ * `ops/actas/[PAYME]_ACTA_2026-08-19_PAGAR_EL_TOTAL_UNA_PERSONA.md`. Desde esa
+ * acta, **el 2 que devuelve esta función para `'total'` contradice la conducta
+ * ratificada**: la pantalla no deja elegir 1, que es justo lo que se habilitó.
+ *
+ * **No se corrige acá porque el piso no es nuestro:** vive en el contrato de
+ * App Backend, y el dueño va primero. Cuando publique la semántica, este front
+ * espeja y recién ahí cambia. **Este comentario NO adelanta cómo la va a
+ * resolver** —si `igual` con piso 1 o un modo nuevo—: sólo deja dicho que el
+ * número de abajo está vencido.
+ *
+ * ⚠️ Se escribe porque el resto de este archivo explica el piso 2 **citando el
+ * refine del contrato como si fuera la verdad ratificada**, y el próximo que lo
+ * lea —incluida una sesión mía en frío— no tendría forma de saber que Mati
+ * decidió lo contrario. Un comentario que certifica algo vencido es peor que
+ * no tener ninguno.
  */
 export function pisoDe(m: ModoUI): number {
   return modoContrato(m) === 'igual' ? 2 : 1;
