@@ -11,6 +11,31 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.91.0 — la barra de cinco entra al 3DS (2026-08-20)
+
+Cierra el **⑥** de la tanda de 3DS, **que yo había frenado y cuyo motivo era
+real**: la barra agrega cuatro salidas de navegación a la pantalla donde se
+autoriza una retención, y *«qué pasa si la persona sale con un 3DS en curso»*
+era un hueco **explícitamente sin decidir**.
+
+**Lo destrabó una decisión, no una insistencia:** el acta «A+B»
+(`[PAYME]_ACTA_2026-08-19_3DS_ABANDONADO_RETOMAR_Y_BARRER.md`) declaró que
+salir queda **seguro y con retome** — y el retome ya es alcanzable desde
+Inicio (orden A, `9d2dc88`). 🔴 **Sin esa segunda mitad, esta barra seguiría
+siendo una salida a ninguna parte**: el orden importó.
+
+**Lo que NO cambia, que es lo único que importa en esta pantalla:**
+`confirm3ds` y su `disabled` son **los mismos**. Cambia dónde vive el botón.
+
+«Cancelar y elegir otra garantía» baja a `--link`: eran dos botones del mismo
+peso para acciones de peso muy distinto — una confirma una retención, la otra
+vuelve atrás. Con `busy` no se cancela: hay una autorización en vuelo.
+
+⚠️ **El ⑥ de tanda 3 (control de método) sigue SIN hacer, y no por este freno:
+lo refuté por otra razón** —reintroduce la tarjeta preseleccionada que cerró
+la ORDEN 1-B— y está en el canal de Diseño. **A+B levantó el freno de
+navegación, no la refutación.**
+
 ## 0.90.0 — «Seguí con tu autorización», desde donde la persona vuelve (2026-08-20)
 
 **Orden A**, ratificada en `[PAYME]_ACTA_2026-08-19_3DS_ABANDONADO_RETOMAR_Y_BARRER.md`.

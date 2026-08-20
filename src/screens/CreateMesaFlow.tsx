@@ -1724,7 +1724,7 @@ export function CreateMesaFlow() {
   // ─── Paso 4b: 3DS (requires_action) ──────────────────────
   if (step === 'threeds') {
     return (
-      <div className="screen">
+      <div className="screen has-appbar">
         {/* 🔴 FIDELIDAD VISUAL (2026-08-20 @ 8183295 · defectos 1, 2, 4 y 5).
             Los 3 y 6 quedaron FRENADOS y declarados al Bibliotecario: no se
             resuelven por inferencia sobre el corazón del pago.
@@ -1798,18 +1798,41 @@ export function CreateMesaFlow() {
           {/* Defecto 5: se retiró el aviso «En la versión final, aquí se abre
               la verificación de tu banco.» — decisión explícita del paquete.
               Se sacó EL TEXTO; no había lógica detrás de él. */}
-          <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={confirm3ds} disabled={busy}>
-            {busy ? t('Confirmando…') : t('Confirmar autorización')}
-          </button>
+          {/* 🔴 ⑥ · «Cancelar y elegir otra garantía» baja a LINK y el CTA sube
+              a la barra. Eran dos botones del mismo peso para acciones de peso
+              muy distinto: una confirma una retención, la otra vuelve atrás.
+              Con `busy` no se cancela: hay una autorización en vuelo. */}
           <button
-            className="btn btn-ghost btn-sm"
-            style={{ marginTop: 10 }}
+            type="button"
+            className="linkbtn tds-cancelar"
             onClick={() => setStep('garantia')}
             disabled={busy}
           >
             {t('Cancelar y elegir otra garantía')}
           </button>
         </div>
+        {/* 🔴 LA BARRA DE CINCO EN 3DS · destrabada por el acta «A+B»
+            (`[PAYME]_ACTA_2026-08-19_3DS_ABANDONADO_RETOMAR_Y_BARRER.md`).
+
+            **Esto estuvo FRENADO por mí y el motivo era real:** la barra agrega
+            cuatro salidas de navegación a la pantalla donde se autoriza una
+            retención, y *«qué pasa si la persona sale con un 3DS en curso»*
+            era un hueco **explícitamente sin decidir**. Mati lo decidió: salir
+            queda **seguro y con retome** — y el retome ya es alcanzable desde
+            Inicio (orden A). Sin esa segunda mitad, esta barra seguiría siendo
+            una salida a ninguna parte.
+
+            **Lo que NO cambia, y es lo único que importa acá:** `confirm3ds` y
+            su `disabled` son los mismos. Cambia dónde vive el botón. */}
+        <AppBottomBar
+          active={null}
+          center={{
+            label: busy ? t('Confirmando…') : t('Confirmar autorización'),
+            icon: 'check',
+            onClick: confirm3ds,
+            disabled: busy,
+          }}
+        />
       </div>
     );
   }

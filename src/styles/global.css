@@ -4799,3 +4799,11 @@ h1.pay-title-lbl {
   margin-bottom: var(--sp-3);
   min-height: var(--tap-min);
 }
+/* «Cancelar y elegir otra garantía»: link centrado, no un botón del mismo
+   peso que confirmar una retención. */
+.tds-cancelar {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: var(--sp-4);
+}
