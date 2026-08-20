@@ -11,6 +11,53 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.82.0 — splash sólo cuando la carga tarda (2026-08-19)
+
+**Decisión de Mati, mirando dos capturas (A sin splash · B con splash).**
+Etiqueta literal: **«B sólo cuando tarda»** — descartó «A · directo, sin splash
+(Recomendada)» y «B · con splash siempre». El splash aparece **únicamente
+mientras la app de verdad está cargando**: cero tiempo fijo, cero espera
+artificial. Es un estado de carga con marca, no un gesto obligatorio.
+
+**Qué se ve.** El lockup vertical nuevo de Diseño (re-entrega `f067b75`, ya
+sin Poppins: tipea Plus Jakarta Sans) centrado sobre navy `#101E3B`, a 84px de
+símbolo como pide `A2` — exactamente la captura B que Mati eligió. Vive
+**inline en `index.html`** a propósito: es lo único que puede pintar antes de
+que cargue el grafo de módulos. Cero requests nuevas: SVG y CSS van adentro
+del HTML (la guarda de destinos de `releaseGates.test.ts` lo sigue barriendo).
+
+**El mecanismo y sus tres números, declarados acá porque la orden delegó el
+umbral:**
+
+- **300ms de retardo de aparición** (CSS puro). Si React monta antes, el
+  splash no se ve nunca — la rama rápida que eligió Mati. Debajo de ~300ms
+  un indicador de carga es ruido, no información.
+- **500ms de mínimo visible si asomó** (`src/splash.ts`). El anti-flash de la
+  orden: montar a los 310ms ya no arranca un splash a mitad de fundido. El
+  costo declarado del caso borde: hasta ~800ms con la app lista debajo.
+- **12s de rendición, CSS sin JS.** Si el grafo de módulos muere (pasó:
+  `ERR_NETWORK_CHANGED`, 2026-08-10), el splash se retira solo en vez de
+  quedar eterno tapando una app muerta con cara de viva.
+
+**Sin variante on-light:** la app no tiene sistema de tema (cero
+`prefers-color-scheme`, cero `data-theme`, medido hoy), así que la cláusula
+condicional de la orden no aplica y queda una sola cara, la ratificada.
+
+**Guardas:** `src/splash.test.ts` cubre la función pura del retiro y ata el
+retardo del CSS a la constante de `splash.ts` (las dos copias no pueden
+divergir en silencio); `e2e/splash.spec.ts` prueba las dos ramas en navegador
+real — la lenta se fuerza demorando el módulo de entrada por ruta interceptada,
+porque localhost no tarda solo.
+
+**Residual declarado:** el wordmark del splash hereda `font-display: swap` —
+en una carga lenta puede pintar un instante en la fallback del sistema hasta
+que llega Plus Jakarta Sans. Es la misma conducta que ya tiene el wordmark de
+la navbar; resolverlo exigiría vectorizar el texto o precargar la fuente desde
+el HTML, y ninguna de las dos se decide acá.
+
+Trabajo **posterior al paquete entregado a Codex** (REWORK 2): va al próximo
+lote. Sin push ni deploy.
+
 ## 0.81.0 — la marca de la app: símbolo y wordmark (2026-08-19)
 
 **Diseño `A2`, el punto de navbar que estaba bloqueado.** Se destrabó con dos

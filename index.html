@@ -16,9 +16,75 @@
          Google (dos preconnect y una hoja de estilos): se retiraron en
          `D-FUENTES-1` y NO se vuelven a poner. El `@font-face` vive en
          `src/styles/global.css`, junto al resto del sistema. -->
+    <style>
+      /* Splash de carga · decisión de Mati 2026-08-19, etiqueta literal
+         «B sólo cuando tarda»: aparece ÚNICAMENTE mientras la app de verdad
+         está cargando. Cero tiempo fijo, cero espera artificial.
+
+         Vive acá, inline, a propósito: es lo ÚNICO que pinta ANTES de que
+         cargue el grafo de módulos — si viviera en global.css llegaría junto
+         con la app y ya no tendría a quién tapar.
+
+         Los tres tiempos y su porqué (espejados en `src/splash.ts`, y hay un
+         test que impide que las dos copias se separen):
+         · 300ms de retardo de aparición — si la app monta antes, el splash
+           no se ve NUNCA (el caso rápido que eligió Mati).
+         · 200ms de fundido de entrada.
+         · 12s de rendición — si el grafo de módulos muere (ya pasó:
+           ERR_NETWORK_CHANGED, 2026-08-10), el splash se retira solo en vez
+           de quedar eterno tapando una app muerta con cara de viva. Vuelve
+           al blanco de hoy, que es feo pero no miente. */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #101e3b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        animation:
+          splash-aparecer 200ms ease 300ms forwards,
+          splash-rendirse 400ms ease 12s forwards;
+      }
+      /* 221px = 200 × 84/76: el asset trae el símbolo a 76px en un viewBox de
+         200×150 y A2 pide 84px de símbolo en splash. */
+      #splash svg {
+        width: 221px;
+        height: auto;
+      }
+      @keyframes splash-aparecer {
+        to { opacity: 1; }
+      }
+      @keyframes splash-rendirse {
+        to { opacity: 0; visibility: hidden; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <!-- El lockup vertical on-dark del handoff (f067b75, sin Poppins),
+         inline para que pinte sin ninguna request. 🔴 ÚNICO lugar donde el
+         splash referencia el asset: si Diseño re-entrega el lockup (aviso del
+         Bibliotecario, 2026-08-19), el cambio es reemplazar SOLO este <svg> —
+         la lógica de aparición/retiro no lo conoce. No hay variante on-light:
+         la app no tiene sistema de tema (cero prefers-color-scheme, cero
+         data-theme, medido 2026-08-19) y lo que Mati eligió mirando fue la
+         captura B, que es exactamente esto. `aria-hidden`: es decorativo y
+         transitorio, un lector de pantalla no gana nada anunciándolo. -->
+    <div id="splash" aria-hidden="true">
+      <!-- Sin xmlns a propósito: inline en HTML el parser ya lo pone en el
+           namespace SVG, y la URL del atributo (aunque jamás se pide por red)
+           dispara la guarda de destinos — que tiene razón en no distinguir. -->
+      <svg viewBox="0 0 200 150">
+        <g transform="translate(62,0)">
+          <rect width="76" height="76" rx="21" fill="#0FB5C9"></rect>
+          <path d="M18.5 21 L27.5 21 L36.5 38 L27.5 55 L18.5 55 L27.5 38 Z" fill="#101E3B"></path>
+          <path d="M39.5 21 L48.5 21 L57.5 38 L48.5 55 L39.5 55 L48.5 38 Z" fill="#FFFFFF"></path>
+        </g>
+        <text x="100" y="118" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-weight="700" font-size="44" letter-spacing="-1.3" dominant-baseline="central" fill="#FFFFFF">Pay<tspan fill="#0FB5C9">Me</tspan></text>
+      </svg>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

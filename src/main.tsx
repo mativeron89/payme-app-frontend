@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { IdiomaProvider } from './i18n/idioma';
 import { bootstrapSignupInvitationCustody } from './api/signupInvitation';
+import { retirarSplash } from './splash';
 import './styles/global.css';
 
 const el = document.getElementById('root');
@@ -28,3 +29,8 @@ createRoot(el).render(
     </IdiomaProvider>
   </StrictMode>,
 );
+
+// El splash de `index.html` se retira recién cuando hay algo pintado debajo.
+// `render` ENCOLA el commit, no lo ejecuta: retirar en la línea siguiente
+// podría destapar un frame de blanco. El rAF corre después del primer paint.
+requestAnimationFrame(() => retirarSplash());
