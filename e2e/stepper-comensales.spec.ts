@@ -20,8 +20,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
     await page.getByRole('button', { name: 'Capturar' }).click();
-    await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
-    await page.getByRole('button', { name: 'Continuar' }).click();
+    await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
     await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
 
     // Nace sin elegir: sin número, y la pregunta del modo consumo.
@@ -81,8 +80,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
     await page.getByRole('button', { name: 'Capturar' }).click();
-    await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
-    await page.getByRole('button', { name: 'Continuar' }).click();
+    await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
 
     await page.getByRole('button', { name: /En partes iguales/ }).click();
     const mas = page.getByRole('button', { name: 'Un comensal más' });
@@ -114,8 +112,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
     await page.getByRole('button', { name: 'Capturar' }).click();
-    await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
-    await page.getByRole('button', { name: 'Continuar' }).click();
+    await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
 
     // En consumo el piso es 1: un toque lo elige.
     await page.getByRole('button', { name: 'Un comensal más' }).click();

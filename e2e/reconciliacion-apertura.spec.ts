@@ -43,8 +43,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
 
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await page.getByRole('button', { name: 'Capturar' }).click();
-  await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
-  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
   await page.getByRole('button', { name: /En partes iguales/ }).click();
   const masUno = page.getByRole('button', { name: 'Un comensal más' });
   await masUno.click();
@@ -91,8 +90,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   // "Reconciliación necesaria" y pasa a ofrecer reenviar ESTE intento —con SU
   // clave, que es lo único que no puede duplicar la garantía—.
   await page.getByRole('button', { name: 'Capturar' }).click();
-  await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
-  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
   await page.getByRole('button', { name: /En partes iguales/ }).click();
   const otroMas = page.getByRole('button', { name: 'Un comensal más' });
   await otroMas.click();

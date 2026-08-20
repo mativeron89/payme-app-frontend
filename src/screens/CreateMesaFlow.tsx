@@ -1,5 +1,13 @@
 import type { StripeCardElement } from '@stripe/stripe-js';
 import { useOcrRail } from '../api/ocrRail';
+import {
+  type ModoUI,
+  modoContrato,
+  participantesTrasCambio,
+  pisoDe,
+  reparteElTotal,
+  tituloStepper,
+} from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey } from '../api';
@@ -66,7 +74,7 @@ import { writeClipboardText } from '../utils/clipboard';
  * cuando la garantía queda autorizada: sin garantía no hay mesa (D1).
  */
 
-type Step = 'scan' | 'ticket' | 'division' | 'garantia' | 'threeds' | 'share';
+type Step = 'scan' | 'ticket' | 'garantia' | 'threeds' | 'share';
 type LinkState = 'idle' | 'loading' | 'ready' | 'error';
 
 /**
@@ -145,7 +153,12 @@ export function CreateMesaFlow() {
     if (expandedItem === null) return;
     expandedRowRef.current?.scrollIntoView({ block: 'nearest' });
   }, [expandedItem]);
-  const [division, setDivision] = useState<'consumo' | 'igual'>('consumo');
+  // TRES formas en la UI (§1.3-bis) y DOS en el contrato: la traducción vive
+  // entera en `divisionModo.ts`, nunca acá.
+  const [division, setDivision] = useState<ModoUI>('consumo');
+  // El ticket nace PLEGADO. `totalMismatch` lo fuerza a abrirse, así que este
+  // booleano es la intención de la persona, no el estado visible.
+  const [ticketAbierto, setTicketAbierto] = useState(false);
   /**
    * §1.4 (spec 2026-08-06): el stepper se pregunta SIEMPRE y nace SIN ELEGIR.
    * Acá vivía `useState(4)` — un 4 que en modo consumo nadie veía ni podía
@@ -159,7 +172,7 @@ export function CreateMesaFlow() {
   const stepperRef = useRef<HTMLDivElement | null>(null);
   // Piso del CONTRATO, no inventado: `schemas/index.js` exige >= 2 en partes
   // iguales (refine sobre division_mode) y >= 1 en el resto.
-  const pisoComensales = division === 'igual' ? 2 : 1;
+  const pisoComensales = pisoDe(division);
   const [method, setMethod] = useState<'card' | 'wallet'>('card');
   // D4: tarjetas guardadas. `cardChoice` es el pm_… elegido o 'new' (otra
   // tarjeta); `saveCard` = checkbox "guardar" — nace DESMARCADO (Mati,
@@ -624,13 +637,13 @@ export function CreateMesaFlow() {
   async function createMesa() {
     if (!ticketValid) return;
     // §1.4: sin N elegido no se abre mesa. Este guard NO inventa un default —
-    // el gate de División ya lo exige, y si algún camino nuevo llegara acá sin
-    // elección, vuelve a División en vez de fabricar un número. Que no exista
-    // camino que mande un N que el usuario no eligió es la condición de la
-    // orden, y un `?? 4` acá la violaría en silencio.
+    // el gate de la pantalla fusionada ya lo exige, y si algún camino nuevo
+    // llegara acá sin elección, vuelve a ELLA en vez de fabricar un número.
+    // Que no exista camino que mande un N que el usuario no eligió es la
+    // condición de la orden, y un `?? 4` acá la violaría en silencio.
     if (participants === null) {
       toast(t('Elige cuántos son'));
-      setStep('division');
+      setStep('ticket');
       return;
     }
     if (!createInFlightRef.current.tryEnter()) return;
@@ -740,7 +753,7 @@ export function CreateMesaFlow() {
       const request = {
         restaurant_id: restaurant.id,
         total_cents: total,
-        division_mode: division,
+        division_mode: modoContrato(division),
         // El N que la persona ELIGIÓ, en los dos modos. El ternario viejo era
         // inerte (las dos ramas mandaban el mismo default invisible).
         expected_participants: participants,
@@ -960,8 +973,7 @@ export function CreateMesaFlow() {
     }
     if (step === 'scan') return navigate('home');
     if (step === 'ticket') return setStep('scan');
-    if (step === 'division') return setStep('ticket');
-    if (step === 'garantia') return setStep('division');
+    if (step === 'garantia') return setStep('ticket');
     // threeds/share: la mesa ya existe (o está autorizándose); no se vuelve.
     return navigate('home');
   }
@@ -997,7 +1009,7 @@ export function CreateMesaFlow() {
   if (step === 'scan') {
     return (
       <div className="screen has-appbar">
-        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step={t('Paso 1 de 5')} />
+        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step={t('Paso 1 de 4')} />
         <div className="title-card">
           {/* <h1> y no <div>: es el único título de esta pantalla. */}
           <h1 className="title-card-title">{t('Escanea el ticket')}</h1>
@@ -1178,250 +1190,72 @@ export function CreateMesaFlow() {
     );
   }
 
-  // ─── Paso 2: ticket ──────────────────────────────────────
+  // ─── Paso 2: TICKET Y DIVISIÓN FUSIONADAS (§1.3-bis) ─────
   /**
-   * SPEC_APP.md §1.3, aplicado. Lo que cambia y por qué:
+   * 🔴 **Una sola pantalla, ratificada por Mati el 2026-08-20** — pregunta
+   * literal *"¿Querés avanzar con la fusión Ticket + División en una sola
+   * pantalla, con 'Pagar el total' como tercera forma de dividir?"*, etiqueta
+   * **"Sí, ratificar y armar el lote"**. Supersede la separación en dos
+   * pantallas de §1.3/§1.4.
    *
-   *  - Cabecera de flujo de dos filas y tarjeta de título `--teal-l`, la misma
-   *    que estrenó División. Acá la tarjeta SÍ lleva contenido debajo del
-   *    título: total y observación, separados por la misma línea que separa la
-   *    lista. Es UNA tarjeta — las dos variantes con pestaña fusionada al
-   *    estilo Inicio se probaron y Mati las rechazó.
-   *  - La lista deja de ser una grilla de inputs y pasa a texto limpio. Los
-   *    controles aparecen recién en modo edición: la vista normal es para leer
-   *    el ticket, no para tipearlo.
-   *  - El stepper de cantidad pasa de 22×22 a 44×44. Estaba en la MITAD del
-   *    mínimo del sistema, en una pantalla que se usa parado y con una mano.
-   *  - Desaparece el copy "N consumos · corregí lo que haga falta": el spec
-   *    manda no mostrar el conteo, y "corregí lo que haga falta" ya lo dice el
-   *    link de modificar.
-   *  - CTA: la barra de cinco posiciones con "Continuar", sin ítem activo. El
-   *    motivo de invalidez sube a la fila propia de la barra en vez de flotar
-   *    sobre el contenido a `bottom: 78px`, que se apoyaba en la altura del
-   *    botón viejo. Salir del flujo acá no deja nada a medias: el freeze
-   *    monetario empieza en la garantía, dos pasos más adelante.
+   * **No reescribe ninguna de las dos: las combina.** La pregunta y las tres
+   * formas arriba, con el mismo stepper y las mismas reglas de §1.4; el ticket
+   * de §1.3 abajo, íntegro, sólo que **plegado por default**.
+   *
+   * 🔴 **La tensión que la fusión introduce, y cómo se resuelve.** §1.3 exige
+   * que la suma de las filas y el total coincidan EN PANTALLA, y plegar el
+   * ticket esconde esa verificación. Por eso el pliegue **no es libre cuando
+   * hay conflicto**: si el total no cierra, el ticket se expande solo, la
+   * observación pasa a `--warning` con la diferencia exacta, y **no se puede
+   * volver a plegar** — un error escondido detrás de un pliegue es peor que
+   * el pliegue.
+   *
+   * El tercer modo NO agrega un título de stepper: son DOS títulos para TRES
+   * formas, porque "pagar el total" reparte lo mismo que "partes iguales".
+   * Toda esa traducción vive en `divisionModo.ts`, en un solo lugar.
    */
   if (step === 'ticket') {
-    return (
-      <div className="screen has-appbar">
-        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step={t('Paso 2 de 5')} />
-        <div className="title-card">
-          <div className="title-card-title">{restaurant?.name ?? t('Restaurante')}</div>
-          {restaurant?.address && (
-            <div className="title-card-sub">
-              <Icon name="pin" size={14} className="ico-inline" /> {restaurant.address}
-            </div>
-          )}
-          <div className="title-card-div" />
-          <div className="title-card-total">
-            <span className="title-card-total-lbl">{t('Total')}</span>
-            <span className="title-card-total-amt">{formatMXN(total)}</span>
-          </div>
-          {/* Informativa mientras cierre; --warning con la diferencia exacta
-              cuando no. `aria-live` porque el salto de una a otra pasa mientras
-              la persona edita y no vuelve a leer la tarjeta. */}
-          <div
-            className={`title-card-note ${totalMismatch ? 'warn' : ''}`}
-            aria-live="polite"
-          >
-            <Icon name={totalMismatch ? 'warning' : 'info'} size={16} />
-            <span>
-              {totalMismatch
-                ? <>{t('Checa que el total coincida con el total del ticket')}: {formatMXN(totalMismatch.printed)} · {formatMXN(Math.abs(totalMismatch.diff))} {totalMismatch.diff > 0 ? t('más') : t('menos')}</>
-                : t('Checa que el total coincida con el total del ticket')}
-            </span>
-          </div>
-        </div>
-        <div className="scroll flow-scroll">
-          {avisoApertura()}
-          <div className="tk-list">
-            {editItems.map((it, idx) => {
-              const nombre = it.name.trim();
-              const etiqueta = nombre || t('consumo {0}', idx + 1);
-              const confidenceWarning = it.lowConfidence ? (
-                <span
-                  className="tk-confidence-warning"
-                  role="img"
-                  aria-label={t('No pudimos leer este ítem')}
-                >
-                  ?
-                </span>
-              ) : null;
-              if (editingItems && expandedItem === idx) {
-                return (
-                  <div
-                    className={`tk-edit ${it.lowConfidence ? 'tk-edit-warning' : ''}`}
-                    key={idx}
-                    ref={expandedRowRef}
-                  >
-                    {confidenceWarning}
-                    <label className="tk-edit-field">
-                      <span className="tk-edit-lbl">{t('Consumo')}</span>
-                      <input
-                        className="tk-edit-input"
-                        value={it.name}
-                        placeholder={t('Nombre del consumo')}
-                        onChange={(e) => updateItem(idx, { name: e.target.value })}
-                      />
-                    </label>
-                    <label className="tk-edit-field">
-                      <span className="tk-edit-lbl">{t('Precio por unidad')}</span>
-                      <input
-                        className="tk-edit-input amt"
-                        inputMode="decimal"
-                        value={it.priceStr}
-                        placeholder="0"
-                        onChange={(e) =>
-                          updateItem(idx, { priceStr: e.target.value.replace(/[^0-9.]/g, '') })
-                        }
-                      />
-                    </label>
-                    <div className="tk-edit-row">
-                      <div className="stepper" role="group" aria-label={t('Cantidad de {0}', etiqueta)}>
-                        <button
-                          onClick={() => updateItem(idx, { quantity: Math.max(1, it.quantity - 1) })}
-                          aria-label={t('Una unidad menos de {0}', etiqueta)}
-                        >
-                          −
-                        </button>
-                        <div className="val" aria-live="polite">
-                          {it.quantity}
-                        </div>
-                        <button
-                          onClick={() => updateItem(idx, { quantity: it.quantity + 1 })}
-                          aria-label={t('Una unidad más de {0}', etiqueta)}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <button className="tk-del" onClick={() => removeItem(idx)}>
-                        <Icon name="trash" size={18} /> {t('Eliminar')}
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-              return (
-                <div className={`tk-row ${it.lowConfidence ? 'tk-row-warning' : ''}`} key={idx}>
-                  <span className="tk-qty">{it.quantity}</span>
-                  {confidenceWarning}
-                  <span className={`tk-name ${nombre ? '' : 'tk-sin-nombre'}`}>
-                    {nombre || t('Sin nombre')}
-                  </span>
-                  <span className="tk-price">
-                    {lineTotals[idx] === null ? '—' : formatMXN(lineTotals[idx] as number)}
-                  </span>
-                  {editingItems && (
-                    <button
-                      className="tk-pencil"
-                      onClick={() => setExpandedItem(idx)}
-                      aria-label={t('Modificar {0}', etiqueta)}
-                    >
-                      <Icon name="pencil" size={20} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="tk-foot">
-            <button
-              className="tk-edit-link"
-              onClick={() => {
-                setEditingItems((on) => !on);
-                setExpandedItem(null);
-              }}
-            >
-              <Icon name={editingItems ? 'check' : 'pencil'} size={18} />
-              {editingItems ? t('Listo') : t('Modificar ítems')}
-            </button>
-            {editingItems && (
-              <button className="tk-edit-link" onClick={addItem}>
-                <Icon name="plus" size={18} /> {t('Agregar consumo')}
-              </button>
-            )}
-          </div>
-        </div>
-        <AppBottomBar
-          active={null}
-          above={!ticketValid ? <div className="tk-invalid">{ticketInvalidReason}</div> : undefined}
-          center={{
-            label: t('Continuar'),
-            icon: 'arrow-right',
-            onClick: () => setStep('division'),
-            disabled: !ticketValid,
-          }}
-        />
-      </div>
-    );
-  }
-
-  // ─── Paso 3: división ────────────────────────────────────
-  /**
-   * SPEC_APP.md §1.4, aplicado. Lo que cambia y por qué:
-   *
-   *  - Cabecera de DOS filas (§1.3) en vez de la `TopBar` genérica, y tarjeta
-   *    de título `--teal-l` montada sobre la banda, con el título centrado y
-   *    **nada debajo** — a diferencia de Ticket, que sí trae total.
-   *  - La selección pasó de naranja a teal: dentro de una tarjeta el naranja ya
-   *    no marca estado, marca marca. Y no es sólo el borde — el radio se llena.
-   *  - El importe por persona sube a `--fs-h1` y se muestra **en vivo** con el
-   *    stepper: es la información que la persona está buscando. Antes era una
-   *    píldora chica al costado de la tarjeta.
-   *  - CTA: la barra de cinco posiciones con "Continuar" en el centro, sin
-   *    ítem activo. Deja salir del flujo a mitad de camino, y es intencional.
-   *    Acá todavía no hay nada congelado —el freeze empieza en la garantía—,
-   *    así que irse no deja ninguna operación monetaria a medias.
-   */
-  if (step === 'division') {
-    // splitEqual, igual que el backend: la suma de las partes da el total exacto
-    // (el primer comensal absorbe los centavos sobrantes).
+    // splitEqual, igual que el backend: la suma de las partes da el total
+    // exacto (el primer comensal absorbe los centavos sobrantes).
     const perSlot = participants !== null && participants > 0 ? splitEqual(total, participants)[0] : total;
+    const ticketVisible = ticketAbierto || !!totalMismatch;
     return (
       <div className="screen has-appbar">
-        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step={t('Paso 3 de 5')} />
+        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step={t('Paso 2 de 4')} />
         <div className="title-card">
           <div className="title-card-title">{t('¿Cómo dividen?')}</div>
         </div>
-        {/* Mismo cambio que Ticket: el padding inline que había acá pisaba el
-            padding-bottom de `.has-appbar .scroll` y dejaba a División sin
-            separación con la barra. No se veía porque su contenido es corto. */}
         <div className="scroll flow-scroll">
           {avisoApertura()}
-          <button className={`div-card ${division === 'consumo' ? 'sel' : ''}`} onClick={() => setDivision('consumo')}>
-            <div className="div-radio" />
-            <div className="div-ico">
-              <Icon name="users" size={22} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="div-title">{t('Por lo que pidió cada uno')}</div>
-              <div className="div-sub">{t('Cada uno elige sus platos')}</div>
-            </div>
-          </button>
-          <button
-            className={`div-card ${division === 'igual' ? 'sel' : ''}`}
-            onClick={() => {
-              setDivision('igual');
-              // El piso de iguales es 2 (contrato): un 1 elegido en consumo
-              // deja de ser válido y se vuelve a preguntar, no se corrige solo.
-              if (participants !== null && participants < 2) setParticipants(null);
-            }}
-          >
-            <div className="div-radio" />
-            <div className="div-ico">÷</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="div-title">{t('En partes iguales')}</div>
-              <div className="div-sub">{t('El total dividido entre todos')}</div>
-            </div>
-          </button>
-          {/* §1.4 (2026-08-06): el stepper SIEMPRE — se sacó el `if`, no se
-              agregó pantalla. El copy cambia porque el número hace algo
-              distinto: en iguales determina el importe; en consumo sólo fija
-              la base de propina — la MISMA "cuenta ÷ N" que la persona va a
-              ver en §1.5 bis, con la MISMA fórmula del emisor
-              (Math.round(total/N), routes/mesas.js:780). Nace SIN ELEGIR con
-              el patrón exacto del selector de propina: marco pendiente,
-              Continuar nunca se apaga, toast + scroll si tocan sin elegir. */}
+          {/* Las tres formas salen de UNA lista, no de tres bloques copiados:
+              con tres copias, agregar un estado visual a una y olvidarse de
+              las otras es cuestión de tiempo. */}
+          {([
+            { modo: 'consumo', ico: <Icon name="users" size={22} />, title: 'Por lo que pidió cada uno', sub: 'Cada uno elige sus platos' },
+            { modo: 'igual', ico: '÷', title: 'En partes iguales', sub: 'El total dividido entre todos' },
+            { modo: 'total', ico: '$', title: 'Pagar el total', sub: 'Uno o varios cubren toda la cuenta' },
+          ] as const).map((op) => (
+            <button
+              key={op.modo}
+              className={`div-card ${division === op.modo ? 'sel' : ''}`}
+              onClick={() => {
+                setDivision(op.modo);
+                // Un N que deja de ser válido se vuelve a preguntar, NO se
+                // corrige solo: un número que la app ajusta sin avisar es un
+                // número que nadie eligió.
+                setParticipants((n) => participantesTrasCambio(n, op.modo));
+              }}
+            >
+              <div className="div-radio" />
+              <div className="div-ico">{op.ico}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="div-title">{t(op.title)}</div>
+                <div className="div-sub">{t(op.sub)}</div>
+              </div>
+            </button>
+          ))}
+          {/* §1.4 sin cambios: nace SIN ELEGIR, Continuar nunca se apaga,
+              toast + scroll + pulso si tocan sin elegir. */}
           <div
             ref={stepperRef}
             className={`card card-p${participants === null ? ' tip-block tip-block--pending' : ''}${stepperPulse ? ' tip-block--pulse' : ''}`}
@@ -1430,7 +1264,7 @@ export function CreateMesaFlow() {
           >
             <div className="sectlabel tip-block-title">
               {participants === null && <Icon name="warning" size={14} aria-hidden="true" />}
-              {division === 'igual' ? t('¿Cuántos pagan?') : t('¿Cuántos son en la mesa?')}
+              {t(tituloStepper(division))}
             </div>
             <div className="stepper" role="group" aria-label={t('Cantidad de comensales')}>
               <button
@@ -1449,45 +1283,192 @@ export function CreateMesaFlow() {
                 +
               </button>
             </div>
-            {/* Sin elegir, sin número: un importe calculado sobre un N que
-                nadie eligió es exactamente lo que este stepper mata. */}
             {participants !== null && (
               <>
                 <div className="split-amt" aria-live="polite">
-                  {division === 'igual'
+                  {reparteElTotal(division)
                     ? formatMXN(perSlot)
                     : formatMXN(Math.round(total / participants))}
                 </div>
                 <div className="split-amt-lbl">
-                  {division === 'igual' ? 'c/u' : t('base de propina · c/u')}
+                  {reparteElTotal(division) ? 'c/u' : t('base de propina · c/u')}
                 </div>
               </>
+            )}
+          </div>
+          {/* EL TICKET, plegado por default. Mismo contenido de §1.3. */}
+          <div className="card tk-fold">
+            <button
+              className="tk-fold-head"
+              onClick={() => setTicketAbierto((o) => !o)}
+              aria-expanded={ticketVisible}
+              // Con el total sin cerrar no se puede plegar: la verificación que
+              // §1.3 exige en pantalla no puede quedar detrás de un toque.
+              disabled={!!totalMismatch}
+            >
+              <span className="tk-fold-lbl">{t('Total del ticket')}</span>
+              <span className="tk-fold-amt">{formatMXN(total)}</span>
+              <Icon
+                name="chevron-down"
+                size={18}
+                className={`tk-fold-chev ${ticketVisible ? 'open' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
+            {ticketVisible && (
+              <div className="tk-fold-body">
+                <div className="tk-fold-restaurant">
+                  <div className="tk-fold-name">{restaurant?.name ?? t('Restaurante')}</div>
+                  {restaurant?.address && (
+                    <div className="tk-fold-addr">
+                      <Icon name="pin" size={14} className="ico-inline" /> {restaurant.address}
+                    </div>
+                  )}
+                </div>
+                <div className={`title-card-note ${totalMismatch ? 'warn' : ''}`} aria-live="polite">
+                  <Icon name={totalMismatch ? 'warning' : 'info'} size={16} />
+                  <span>
+                    {totalMismatch
+                      ? <>{t('Checa que el total coincida con el total del ticket')}: {formatMXN(totalMismatch.printed)} · {formatMXN(Math.abs(totalMismatch.diff))} {totalMismatch.diff > 0 ? t('más') : t('menos')}</>
+                      : t('Checa que el total coincida con el total del ticket')}
+                  </span>
+                </div>
+              <div className="tk-list">
+                {editItems.map((it, idx) => {
+                  const nombre = it.name.trim();
+                  const etiqueta = nombre || t('consumo {0}', idx + 1);
+                  const confidenceWarning = it.lowConfidence ? (
+                    <span
+                      className="tk-confidence-warning"
+                      role="img"
+                      aria-label={t('No pudimos leer este ítem')}
+                    >
+                      ?
+                    </span>
+                  ) : null;
+                  if (editingItems && expandedItem === idx) {
+                    return (
+                      <div
+                        className={`tk-edit ${it.lowConfidence ? 'tk-edit-warning' : ''}`}
+                        key={idx}
+                        ref={expandedRowRef}
+                      >
+                        {confidenceWarning}
+                        <label className="tk-edit-field">
+                          <span className="tk-edit-lbl">{t('Consumo')}</span>
+                          <input
+                            className="tk-edit-input"
+                            value={it.name}
+                            placeholder={t('Nombre del consumo')}
+                            onChange={(e) => updateItem(idx, { name: e.target.value })}
+                          />
+                        </label>
+                        <label className="tk-edit-field">
+                          <span className="tk-edit-lbl">{t('Precio por unidad')}</span>
+                          <input
+                            className="tk-edit-input amt"
+                            inputMode="decimal"
+                            value={it.priceStr}
+                            placeholder="0"
+                            onChange={(e) =>
+                              updateItem(idx, { priceStr: e.target.value.replace(/[^0-9.]/g, '') })
+                            }
+                          />
+                        </label>
+                        <div className="tk-edit-row">
+                          <div className="stepper" role="group" aria-label={t('Cantidad de {0}', etiqueta)}>
+                            <button
+                              onClick={() => updateItem(idx, { quantity: Math.max(1, it.quantity - 1) })}
+                              aria-label={t('Una unidad menos de {0}', etiqueta)}
+                            >
+                              −
+                            </button>
+                            <div className="val" aria-live="polite">
+                              {it.quantity}
+                            </div>
+                            <button
+                              onClick={() => updateItem(idx, { quantity: it.quantity + 1 })}
+                              aria-label={t('Una unidad más de {0}', etiqueta)}
+                            >
+                              +
+                            </button>
+                          </div>
+                          <button className="tk-del" onClick={() => removeItem(idx)}>
+                            <Icon name="trash" size={18} /> {t('Eliminar')}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className={`tk-row ${it.lowConfidence ? 'tk-row-warning' : ''}`} key={idx}>
+                      <span className="tk-qty">{it.quantity}</span>
+                      {confidenceWarning}
+                      <span className={`tk-name ${nombre ? '' : 'tk-sin-nombre'}`}>
+                        {nombre || t('Sin nombre')}
+                      </span>
+                      <span className="tk-price">
+                        {lineTotals[idx] === null ? '—' : formatMXN(lineTotals[idx] as number)}
+                      </span>
+                      {editingItems && (
+                        <button
+                          className="tk-pencil"
+                          onClick={() => setExpandedItem(idx)}
+                          aria-label={t('Modificar {0}', etiqueta)}
+                        >
+                          <Icon name="pencil" size={20} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="tk-foot">
+                <button
+                  className="tk-edit-link"
+                  onClick={() => {
+                    setEditingItems((on) => !on);
+                    setExpandedItem(null);
+                  }}
+                >
+                  <Icon name={editingItems ? 'check' : 'pencil'} size={18} />
+                  {editingItems ? t('Listo') : t('Modificar ítems')}
+                </button>
+                {editingItems && (
+                  <button className="tk-edit-link" onClick={addItem}>
+                    <Icon name="plus" size={18} /> {t('Agregar consumo')}
+                  </button>
+                )}
+                </div>
+              </div>
             )}
           </div>
         </div>
         <AppBottomBar
           active={null}
+          above={!ticketValid ? <div className="tk-invalid">{ticketInvalidReason}</div> : undefined}
           center={{
             label: t('Continuar'),
             icon: 'arrow-right',
             onClick: () => {
-              // §1.4: el CTA nunca se apaga — frena explicando, igual que la
-              // propina. Un botón muerto sin motivo es el defecto que Ticket
-              // ya pagó.
+              // El CTA nunca se apaga por el stepper: frena explicando (§1.4).
               if (participants === null) {
                 toast(t('Elige cuántos son'));
                 stepperRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
                 setStepperPulse(true);
                 return;
               }
+              if (!ticketValid) return;
               void loadCards();
               setStep('garantia');
             },
+            disabled: !ticketValid,
           }}
         />
       </div>
     );
   }
+
 
   // ─── Paso 4: GARANTÍA (A-1, pantalla nueva) ──────────────
   if (step === 'garantia') {

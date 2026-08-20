@@ -78,10 +78,14 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Capturar' }).click();
-  // El OCR mock tarda. Se espera al ticket, no a un número de milisegundos.
-  await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
+  // 🔴 CAMBIÓ CON §1.3-bis (2026-08-20): Ticket y División son UNA pantalla, y
+  // el ticket nace PLEGADO — «Modificar ítems» ya no está visible al llegar, y
+  // esperar por él acá dejaba el helper colgado. Se espera la forma de dividir,
+  // que es lo primero que la pantalla fusionada ofrece.
+  //
+  // El OCR mock tarda: se espera a la pantalla, no a un número de milisegundos.
+  await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Continuar' }).click();
   await page.getByRole('button', { name: /En partes iguales/ }).click();
   await expect(page.getByRole('button', { name: 'Un comensal más' })).toBeVisible();
 

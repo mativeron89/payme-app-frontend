@@ -45,8 +45,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
 
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await page.getByRole('button', { name: 'Capturar' }).click();
-  await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
-  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
   await page.getByRole('button', { name: /En partes iguales/ }).click();
   const masUno = page.getByRole('button', { name: 'Un comensal más' });
   await masUno.click();
@@ -73,8 +72,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
 
   // Se rehace el ticket para llegar a la pantalla de garantía.
   await page.getByRole('button', { name: 'Capturar' }).click();
-  await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
-  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
   await page.getByRole('button', { name: /En partes iguales/ }).click();
   const otroMas = page.getByRole('button', { name: 'Un comensal más' });
   await otroMas.click();

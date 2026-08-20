@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { tituloStepper } from '../screens/divisionModo';
 import { EN } from './en';
 import { traducir } from './idioma';
 
@@ -89,7 +90,11 @@ function envueltos(): { ruta: string; texto: string }[] {
  * de los dos ve el texto visible que nadie envolvió en `t()`: ése es el límite
  * ya declarado arriba y sigue abierto.
  */
-const T_SIN_LITERAL = 14;
+// 🔴 SUBIÓ A 17 EL 2026-08-20, con intención: la pantalla fusionada (§1.3-bis)
+// agrega `t(op.title)`, `t(op.sub)` —las tres formas de dividir salen de UNA
+// lista, no de tres bloques copiados— y `t(tituloStepper(division))`. Los tres
+// están cubiertos por familia acá abajo, que es lo que este número exige.
+const T_SIN_LITERAL = 17;
 
 function sitiosSinLiteral(): string[] {
   const out: string[] = [];
@@ -159,6 +164,17 @@ describe('🔴 los `t()` que NO reciben literal · el extractor no los ve', () =
       'el centro por defecto': ['Nueva'],
       // AppHeader.tsx:132 y ui.tsx:32 · `t(backLabel)` con su valor por defecto.
       'backLabel por defecto': ['Volver'],
+      // §1.3-bis · CreateMesaFlow: las tres formas de dividir viven en una
+      // lista y se traducen por variable. Se enumeran los SEIS strings.
+      'las tres formas de dividir': [
+        'Por lo que pidió cada uno', 'Cada uno elige sus platos',
+        'En partes iguales', 'El total dividido entre todos',
+        'Pagar el total', 'Uno o varios cubren toda la cuenta',
+      ],
+      // §1.3-bis · `t(tituloStepper(division))`: DOS títulos para TRES formas.
+      // Se derivan de la función real, no se copian — si alguien agrega un
+      // título nuevo allá, este test lo exige acá sin que nadie se acuerde.
+      'tituloStepper': [...new Set((['consumo', 'igual', 'total'] as const).map(tituloStepper))],
     };
 
     const sinEntrada: string[] = [];

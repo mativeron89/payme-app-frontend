@@ -11,6 +11,60 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.84.0 — Ticket y División se fusionan, y aparece «Pagar el total» (2026-08-20)
+
+**Ratificado por Mati.** Pregunta literal: *«¿Querés avanzar con la fusión Ticket
++ División en una sola pantalla, con "Pagar el total" como tercera forma de
+dividir?»* — etiqueta elegida: **«Sí, ratificar y armar el lote»**. Fuente:
+`diseno/SPEC_APP.md §1.3-bis` (`a3e71f6`). Supersede la separación en dos
+pantallas de §1.3/§1.4, que **no se reescriben: se combinan**.
+
+**La pantalla.** La pregunta y las tres formas arriba, con el mismo stepper y
+las mismas reglas de §1.4; el ticket de §1.3 abajo, íntegro, **plegado por
+default**. El flujo pasa de 5 pasos a 4 (`Paso 2 de 4`), y el paso suelto de
+División deja de existir — `type Step` ya no lo tiene.
+
+🔴 **«Pagar el total» NO necesitó contrato nuevo, y eso se midió antes de
+escribir una línea.** El contrato declara `division_mode: z.enum(['consumo',
+'igual'])` (`contract-mirror/schemas/index.js:199`) y `'igual'` ejecuta
+`splitEqual(total_cents, expected_participants)` (`routes/mesas.js:504`): es
+**exactamente** repartir el total entre N. La diferencia entre las dos formas es
+qué significa N para la persona —cuántos hay en la mesa vs. cuántos pagan—, que
+es copy. La confirmación no fue el razonamiento sino el propio contrato: ya
+exige `expected_participants >= 2` para `igual`, que es el piso que §1.3-bis le
+asigna a «pagar el total» *«porque divide lo mismo»*.
+
+⚠️ **CONSECUENCIA DECLARADA, encolada como decisión de producto:** al viajar las
+dos como `'igual'`, **el backend no puede distinguirlas**. Hoy nada depende de
+esa diferencia; si mañana el panel o la analítica quieren saber CÓMO se dividió
+una mesa, recuperarlo sería cambio de contrato **con datos históricos ya
+indistinguibles**. Se declara con el trabajo sin empezar, que es cuando más
+barato es decidirlo.
+
+**Tres modos de UI, dos de contrato, UNA traducción** (`src/screens/divisionModo.ts`,
+puro y testeable sin navegador). El piso, el título del stepper y el
+comportamiento al cambiar de forma se **derivan** de ahí: con la regla copiada en
+dos lugares, se desincronizan calladas.
+
+**El pliegue no es libre cuando hay conflicto.** §1.3 exige que la suma de las
+filas y el total coincidan EN PANTALLA. Si el total no cierra, el ticket **se
+expande solo y no se puede volver a plegar**: un error escondido detrás de un
+pliegue es peor que el pliegue.
+
+**Guardas:** `divisionModo.test.ts` (8) **lee el enum del espejo en vez de
+copiarlo** —si el dueño agrega una tercera forma de verdad, se pone rojo—, y
+`e2e/division-fusionada.spec.ts` (3) cubre la pantalla única, el plegado y que
+«Pagar el total» reparta el total. 🔴 **Ese último NO espía el request:** en modo
+mock no hay red que espiar y un `waitForRequest` se cuelga 30 s dando falsa
+sensación de rigor — se mide la conducta (el casillero de 840÷2 que sólo existe
+con `igual`).
+
+**La clase completa, no la instancia:** el cambio de flujo rompió 7 marcadores
+de `Modificar ítems` en 3 specs y el helper `_app.ts`. Se enumeraron con grep
+**antes** de tocar, en vez de arreglar los que se pusieron rojos.
+
+Suite: **1120 unitarios · 100 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.83.0 — la navbar pasa de C3 a la regla de composición de Diseño (2026-08-19)
 
 **Decisión de Mati viendo D contra C3.** Pregunta: *«Viendo C3 y D: ¿cuál queda
