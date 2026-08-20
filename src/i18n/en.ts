@@ -467,6 +467,7 @@ export const EN: Record<string, string> = {
   "Enviar": "Send",
   "Dejaste una autorización sin confirmar.": "You left an authorization unconfirmed.",
   "Sigue con esa garantía: no abras otra mesa.": "Continue with that guarantee: do not open another table.",
+  "No pudimos identificar tu sesión para pagar. Vuelve a entrar.": "We could not identify your session to pay. Please sign in again.",
   "Paso 1 de 4": "Step 1 of 4",
   "Paso 2 de 4": "Step 2 of 4",
   "Paso 3 de 4": "Step 3 of 4",

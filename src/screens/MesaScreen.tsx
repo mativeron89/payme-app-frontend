@@ -46,7 +46,8 @@ import type {
 import { useAuth } from '../auth/AuthContext';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import {
-  needsExtraPartConfirmation as needsExtraPartConfirmationOf,
+  payGate,
+  puedeAtribuirTarjeta,
   paymentLanded,
   requiresReconciliation,
 } from './freezeMachine';
@@ -467,9 +468,26 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           // D4 (v2.16): las guardadas se reusan con su uuid (payment_method_id).
           setCards(r.payment_methods);
           const def = r.payment_methods.find((p) => p.is_default) ?? r.payment_methods[0];
-          // No pisar la selección si el usuario ya está tipeando una nueva —
-          // ni si ya hay un pago en curso (B-06: movería la clave).
-          if (def && cardStateRef.current.empty && !payStartedRef.current) setCardChoice(def.id);
+          /**
+           * 🔴 AF-05 DEL DICTAMEN (2026-08-20) · EN UN REPLAY CONGELADO NO SE
+           * ATRIBUYE NINGUNA TARJETA.
+           *
+           * El cobro estaba bien —el replay reenvía `frozen.payload`, el cuerpo
+           * original, y por eso no hay doble cobro—, **pero la pantalla
+           * preseleccionaba la tarjeta por defecto**, que puede no ser la del
+           * intento congelado. La persona leía «voy a pagar con esta» mientras
+           * el reenvío usaba otra. **El dinero estaba bien y el relato no**, y
+           * en una pantalla de cobro el relato también importa.
+           *
+           * Es la misma corrección que la ORDEN 1-B hizo en la garantía: no
+           * afirmar una tarjeta que nadie eligió. Acá el matiz es más fino —
+           * no es que nadie eligió, es que **eligió otra vez, antes, y no
+           * sabemos cuál**.
+           */
+          const atribuible = puedeAtribuirTarjeta(frozenAttemptRef.current);
+          if (def && cardStateRef.current.empty && !payStartedRef.current && atribuible) {
+            setCardChoice(def.id);
+          }
         })
         .catch(() => { if (alive && identityEpochRef.current.isCurrent(identityEpoch)) setCards([]); });
       return () => { alive = false; };
@@ -679,6 +697,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    */
   const payArea = actor ? scopeForActor(actor, `pay:${code}`) : '';
   const [frozen, setFrozen] = useState<UnconfirmedAttempt | null>(null);
+  /**
+   * El INTENTO congelado, no su scope. `frozenRef` guarda el scope (un string)
+   * y es otra cosa: usarla para decidir la atribución visual habría comparado
+   * la cosa equivocada. Existe porque el efecto que carga tarjetas corre antes
+   * de esta declaración y necesita el valor vigente, no el del primer render.
+   */
+  const frozenAttemptRef = useRef<UnconfirmedAttempt | null>(null);
+  useEffect(() => { frozenAttemptRef.current = frozen; }, [frozen]);
   useEffect(() => {
     if (!payArea) return;
     let alive = true;
@@ -745,12 +771,6 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     return () => { alive = false; };
   }, [payArea, code]);
   useEffect(() => { setCrossActorAcknowledged(false); setShowExtraPartConfirm(false); }, [guestToken, code]);
-  /** Se pide confirmación por evidencia del backend (mi casillero) o del dispositivo. */
-  const needsExtraPartConfirmation = needsExtraPartConfirmationOf({
-    acknowledged: crossActorAcknowledged,
-    crossActorIntent: crossActor,
-    mySlotsTaken,
-  });
 
   const freezePay = useCallback(
     (scope: string, handle: MonetaryIntentHandle, payload?: unknown) => {
@@ -993,11 +1013,41 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       payInFlightRef.current.leave();
       return;
     }
-    // N-08: no se emite una clave nueva sobre una mesa donde este dispositivo
-    // (o esta identidad) ya tiene un pago, sin que el usuario lo confirme.
-    if (!frozen && needsExtraPartConfirmation) {
-      setError(null);
-      setShowExtraPartConfirm(true);
+    /**
+     * 🔴 AF-04 DEL DICTAMEN (2026-08-20): `payGate` estaba **probado como
+     * primitiva y no lo consumía nadie** — el flujo productivo recomponía las
+     * guardas en línea. Dos definiciones de la misma regla, y sólo una
+     * cubierta por tests: la que no corre.
+     *
+     * **La conversión PRESERVA la conducta, y eso se midió antes de tocar:**
+     * `frozenView` tiene tres salidas y **todo congelado o pide reconciliación
+     * o es replayable** (`freezeMachine.ts:26-30`), así que un intento
+     * congelado nunca caía en la rama de confirmación — el `!frozen &&` de
+     * antes daba el mismo resultado que el orden de ramas de `payGate`.
+     *
+     * Lo que SÍ agrega es defensa en profundidad: `no_actor` y
+     * `frozen_reconcile` se verifican **acá también**, no sólo en el
+     * `disabled` del botón. Un `disabled` es una afirmación sobre la UI; esto
+     * es la puerta del cobro.
+     */
+    const puerta = payGate({
+      hasActor: !!actor,
+      frozen,
+      acknowledged: crossActorAcknowledged,
+      crossActorIntent: crossActor,
+      mySlotsTaken,
+    });
+    if (!puerta.allowed) {
+      if (puerta.reason === 'confirm_extra_part') {
+        // N-08: no se emite una clave nueva sobre una mesa donde este
+        // dispositivo (o esta identidad) ya tiene un pago, sin confirmación.
+        setError(null);
+        setShowExtraPartConfirm(true);
+      } else if (puerta.reason === 'frozen_reconcile') {
+        setError(t('Hay un pago anterior que no podemos atribuir de forma segura. Espera la reconciliación antes de pagar.'));
+      } else {
+        setError(t('No pudimos identificar tu sesión para pagar. Vuelve a entrar.'));
+      }
       payInFlightRef.current.leave();
       return;
     }

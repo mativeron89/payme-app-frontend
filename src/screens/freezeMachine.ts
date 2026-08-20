@@ -96,3 +96,26 @@ export function payGate(input: {
     ? { allowed: false, reason: 'confirm_extra_part' }
     : { allowed: true };
 }
+
+/**
+ * 🔴 LA REGLA VISUAL DE UN REPLAY CONGELADO (pregunta 10 del dictamen, y
+ * AF-05): **¿la pantalla puede atribuir una tarjeta?**
+ *
+ * `false` cuando hay un intento replayable: el reenvío manda el cuerpo
+ * ORIGINAL (`frozen.payload`), que puede traer una tarjeta distinta de la que
+ * la UI preseleccionaría. El cobro estaba bien —de ahí que no haya doble
+ * cobro— **pero la pantalla decía «vas a pagar con ésta» mientras el reenvío
+ * usaba otra.**
+ *
+ * Es la misma familia que la ORDEN 1-B, con un matiz más fino: allá el defecto
+ * era afirmar una tarjeta que **nadie** eligió; acá es afirmar una cuando
+ * **se eligió otra vez, antes, y no sabemos cuál** — el backend guarda la
+ * fuente original y no la publica (G-38).
+ *
+ * Tiene nombre propio en vez de resolverse con un `canReplayFrozen` suelto
+ * porque **es una regla de producto y se decide una vez**: si mañana el
+ * contrato publica la fuente, cambia acá y en ningún otro lado.
+ */
+export function puedeAtribuirTarjeta(frozen: UnconfirmedAttempt | null | undefined): boolean {
+  return !canReplayFrozen(frozen);
+}

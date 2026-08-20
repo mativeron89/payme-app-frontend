@@ -11,6 +11,56 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.93.0 — los dos residuales del P12: una sola puerta, un solo relato (2026-08-20)
+
+### AF-04 · `payGate` estaba probado y no lo usaba nadie
+
+La primitiva existía, con tests, **y el flujo productivo recomponía las guardas
+en línea**. Dos definiciones de la misma regla, y **la cubierta por tests era
+la que no corría**.
+
+🔴 **La conversión PRESERVA la conducta, y eso se midió antes de tocar:**
+`frozenView` tiene tres salidas y **todo intento congelado o pide
+reconciliación o es replayable** (`freezeMachine.ts:26-30`), así que nunca caía
+en la rama de confirmación — el `!frozen &&` de antes daba el mismo resultado
+que el orden de ramas de `payGate`. **No era un refactor a ciegas sobre el
+camino del cobro.**
+
+Lo que **sí** agrega: `no_actor` y `frozen_reconcile` se verifican también en
+la puerta, no sólo en el `disabled` del botón. **Un `disabled` es una
+afirmación sobre la UI; esto es la puerta del cobro.**
+
+**Guarda de fuente:** `MesaScreen` llama a `payGate` **y no recompone sus
+partes** — el `needsExtraPartConfirmation` suelto y el `!frozen && …` no
+vuelven. Sin eso, el próximo que agregue una condición la escribe al lado y
+los tests de la primitiva siguen verdes mientras la conducta se aparta.
+
+### AF-05 · el dinero estaba bien y el relato no
+
+En un **replay congelado** el reenvío manda el cuerpo original
+(`frozen.payload`) — por eso no había doble cobro — **pero la pantalla
+preseleccionaba la tarjeta por defecto**, que puede no ser la del intento. La
+persona leía *«voy a pagar con ésta»* mientras el reenvío usaba otra.
+
+Es la familia de la ORDEN 1-B con un matiz más fino: allá el defecto era
+afirmar una tarjeta que **nadie** eligió; acá, afirmar una cuando **se eligió
+otra vez, antes, y no sabemos cuál** (el backend guarda la fuente y no la
+publica — G-38).
+
+🔴 **La regla tiene NOMBRE PROPIO —`puedeAtribuirTarjeta()`— y no se resolvió
+con un `canReplayFrozen` suelto**, por dos motivos: es una **regla de producto
+que se decide una vez** (si mañana el contrato publica la fuente, cambia en un
+solo lugar), y deja el veto de la guarda **absoluto, sin excepciones**. ⚠️ **La
+primera versión sí usaba la función suelta, y mi propia guarda de AF-04 la
+frenó** — con razón.
+
+**Y una distinción que el test fija explícitamente:** con un intento que exige
+reconciliación, `puedeAtribuirTarjeta` devuelve `true` **a propósito** — frenar
+el pago no es su trabajo, es de `payGate`. **Confundir esas dos reglas fue
+exactamente lo que produjo AF-04.**
+
+Suite: **1136 unitarios · 108 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.92.0 — los dos bloqueantes del dictamen P12 (2026-08-20)
 
 Codex auditó `9d2dc88c…` y devolvió **`REWORK_BLOQUEANTE`**. Los dos, cerrados.

@@ -7,6 +7,7 @@ import {
   needsExtraPartConfirmation,
   payGate,
   paymentLanded,
+  puedeAtribuirTarjeta,
   requiresReconciliation,
 } from './freezeMachine';
 
@@ -139,5 +140,64 @@ describe('puerta del pago · prioridades', () => {
 
   it('tras confirmar, deja pagar la parte adicional', () => {
     expect(payGate(input({ mySlotsTaken: 1, crossActorIntent: true, acknowledged: true }))).toEqual({ allowed: true });
+  });
+});
+
+/**
+ * 🔴 AF-04 · que la primitiva EXISTA y esté probada no servía de nada mientras
+ * el flujo productivo recomponía las guardas en línea. Esta guarda ata las dos
+ * cosas: `MesaScreen` **consume `payGate`** y **no vuelve a componer la regla
+ * por su cuenta**.
+ *
+ * Sin esto, el próximo que agregue una condición al pago la escribe al lado —
+ * como estaba— y los tests de la primitiva siguen verdes mientras la conducta
+ * real se aparta.
+ */
+describe('🔴 la puerta del pago es UNA sola, y la usa el flujo productivo', () => {
+  const SRC = (
+    import.meta.glob('/src/screens/MesaScreen.tsx', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>
+  )['/src/screens/MesaScreen.tsx']!;
+  const vivo = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  it('MesaScreen llama a payGate', () => {
+    expect(vivo).toMatch(/payGate\(\{/);
+  });
+
+  it('🔴 y NO recompone sus partes por fuera', () => {
+    // Los ingredientes de la puerta sólo pueden entrar por payGate.
+    expect(vivo).not.toMatch(/needsExtraPartConfirmation/);
+    // `canReplayFrozen` tampoco se usa suelto: la regla visual del replay
+    // tiene su propio nombre (`puedeAtribuirTarjeta`), justamente para que
+    // este veto siga siendo absoluto y no haya que exceptuarlo.
+    expect(vivo).not.toMatch(/canReplayFrozen\(/);
+    // `!frozen && …` era la forma exacta que se había desviado de la primitiva.
+    expect(vivo).not.toMatch(/!frozen\s*&&\s*needs/);
+  });
+});
+
+describe('🔴 la regla visual de un replay congelado (AF-05)', () => {
+  const replayable = { actor: 'a', scope: 'a::x', handle: { key: 'k', generation: 1 } as never, payload: {} };
+  const aReconciliar = { actor: 'a', scope: 'a::x', handle: { key: 'k', generation: 1 } as never, reconciliationRequired: true };
+
+  it('con un replay pendiente NO se atribuye tarjeta: el reenvío usa el cuerpo original', () => {
+    expect(puedeAtribuirTarjeta(replayable as never)).toBe(false);
+  });
+
+  it('sin intento congelado, la pantalla puede preseleccionar como siempre', () => {
+    expect(puedeAtribuirTarjeta(null)).toBe(true);
+    expect(puedeAtribuirTarjeta(undefined)).toBe(true);
+  });
+
+  it('un intento que exige reconciliación no habilita replay, y ahí el bloqueo lo pone payGate', () => {
+    // Acá `puedeAtribuirTarjeta` devuelve true a propósito: no es su trabajo
+    // frenar el pago — de eso se ocupa la puerta, y confundir las dos reglas
+    // fue exactamente lo que produjo AF-04.
+    expect(puedeAtribuirTarjeta(aReconciliar as never)).toBe(true);
+    expect(payGate({ hasActor: true, frozen: aReconciliar as never, acknowledged: false, crossActorIntent: false, mySlotsTaken: 0 }))
+      .toEqual({ allowed: false, reason: 'frozen_reconcile' });
   });
 });
