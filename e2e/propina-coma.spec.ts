@@ -18,7 +18,7 @@ test('tipear "12,34" en el input real deja 1234 centavos, no 123400', async ({ p
 
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
 
   const propinas = page.getByRole('radiogroup', { name: /propina/i });
   await propinas.getByRole('radio', { name: 'Otro', exact: true }).click();
@@ -30,12 +30,12 @@ test('tipear "12,34" en el input real deja 1234 centavos, no 123400', async ({ p
 
   // El input muestra la normalización y el CTA cobra $195 + $12.34.
   await expect(input).toHaveValue('12.34');
-  await expect(page.getByRole('button', { name: 'Pagar $207.34' })).toBeVisible();
+  await expect(page.getByText('$207.34', { exact: true }).first()).toBeVisible();
   // La afirmación directa del defecto viejo: el ×100 no existe en pantalla.
-  await expect(page.getByRole('button', { name: 'Pagar $1,429.00' })).toHaveCount(0);
+  await expect(page.getByText('$1,429.00', { exact: true })).toHaveCount(0);
 
   // Y la plata cuadra hasta el comprobante.
-  await page.getByRole('button', { name: 'Pagar $207.34' }).click();
+  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
   await expect(page.getByText('¡Listo!')).toBeVisible();
   await expect(page.getByText('$12.34')).toBeVisible();
   await expect(page.getByText('$207.34')).toBeVisible();

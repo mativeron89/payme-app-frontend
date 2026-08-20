@@ -4684,3 +4684,34 @@ h1.gar-amount-lbl {
   font-size: var(--fs-sm);
   color: var(--text);
 }
+
+/* ── Pagar mi parte · tarjeta de título (fidelidad 2026-08-20) ────────────
+   Era la misma tarjeta navy inventada que ya se sacó de Garantía. Va en
+   `--teal-l` con texto navy, como el resto del flujo, y con el contexto del
+   restaurante debajo del rótulo. */
+.pay-title {
+  background: var(--teal-l);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.pay-title-lbl {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--action);
+  margin-bottom: 4px;
+}
+.pay-title-place {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--action);
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+/* El <h1> de la tarjeta de pago hereda el tamaño de etiqueta, no el de título:
+   lo que pesa en la pantalla es el monto, no el rótulo. */
+h1.pay-title-lbl {
+  margin: 0;
+}

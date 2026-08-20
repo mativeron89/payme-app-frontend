@@ -53,7 +53,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   // Tomar un ítem y llegar al pago.
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
 
   // SUPERFICIE 2 · pago: también nace desmarcado.
   const checkPago = page.getByRole('checkbox');
@@ -64,7 +64,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   await checkPago.check();
   const propinas = page.getByRole('radiogroup', { name: /propina/i });
   await propinas.getByRole('radio', { name: '0%', exact: true }).click();
-  await page.getByRole('button', { name: /^Pagar \$/ }).click();
+  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
   await expect(page.getByText('¡Listo!')).toBeVisible();
 
   await page.goto('/#/tarjetas');
@@ -96,12 +96,12 @@ test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una dec
 
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
 
   // Sin tocar el checkbox: paga y listo.
   const propinas = page.getByRole('radiogroup', { name: /propina/i });
   await propinas.getByRole('radio', { name: '0%', exact: true }).click();
-  await page.getByRole('button', { name: /^Pagar \$/ }).click();
+  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
   await expect(page.getByText('¡Listo!')).toBeVisible();
 
   // Mis tarjetas: VACÍO. Ni la garantía ni el pago guardaron lo no pedido.

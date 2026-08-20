@@ -34,10 +34,10 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(continuar).toBeEnabled();
     await continuar.click();
 
-    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
     const propinas = page.getByRole('radiogroup', { name: /propina/i });
     await propinas.getByRole('radio', { name: '0%', exact: true }).click();
-    await page.getByRole('button', { name: 'Pagar $155.00' }).click();
+    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
     await expect(page.getByText('¡Listo!')).toBeVisible();
   });
 

@@ -70,14 +70,14 @@ test.describe('el camino de pago completo', () => {
     await expect(filaMiParte).toContainText('$210.00');
 
     await page.getByRole('button', { name: 'Continuar' }).click();
-    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
 
     // 🔴 §1.5 bis · ANTES DE ELEGIR NO HAY PROPINA. Acá la pantalla mostraba
     // $241.50 —base + 15 % que nadie eligió— y ése era el defecto: un número
     // en pantalla, y después en el cable, que la persona nunca decidió.
     await expect(page.getByText('Tu parte $210.00', { exact: true })).toBeVisible();
     await expect(page.getByText('+ propina (elige abajo)')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Pagar $210.00' })).toBeVisible();
+    await expect(page.getByText('$210.00', { exact: true }).first()).toBeVisible();
 
     // Ninguna píldora rellena, **ni la de 0 %**: que el 0 % se vea elegido sólo
     // cuando se elige es lo que lo distingue de "todavía no elegí".
@@ -88,16 +88,16 @@ test.describe('el camino de pago completo', () => {
 
     // Tocar "Pagar" sin elegir NO envía nada, y tampoco deja a nadie encerrado:
     // el botón sigue activo y lo que aparece es el pedido de elegir.
-    await page.getByRole('button', { name: 'Pagar $210.00' }).click();
+    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
     await expect(page.getByText('Elige tu propina para pagar')).toBeVisible();
     await expect(page.getByText('¡Listo!')).toHaveCount(0);
 
     // Recién con la elección hecha el total incluye la propina.
     await propinas.getByRole('radio', { name: '15%', exact: true }).click();
     await expect(page.getByText('Tu parte $210.00 + propina $31.50')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Pagar $241.50' })).toBeVisible();
+    await expect(page.getByText('$241.50', { exact: true }).first()).toBeVisible();
 
-    await page.getByRole('button', { name: 'Pagar $241.50' }).click();
+    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
 
     // El comprobante, que es lo último que ve la persona y lo que le queda.
     await expect(page.getByText('¡Listo!')).toBeVisible();
@@ -124,11 +124,11 @@ test.describe('el camino de pago completo', () => {
     // La propina es un `radiogroup`, no botones sueltos: es una elección entre
     // opciones excluyentes y así la anuncia un lector de pantalla.
     await page.getByRole('radio', { name: '0%', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Pagar $210.00' })).toBeVisible();
+    await expect(page.getByText('$210.00', { exact: true }).first()).toBeVisible();
 
     await page.getByRole('radio', { name: '20%', exact: true }).click();
     // $210.00 + 20% = $252.00.
-    await expect(page.getByRole('button', { name: 'Pagar $252.00' })).toBeVisible();
+    await expect(page.getByText('$252.00', { exact: true }).first()).toBeVisible();
   });
 
   /**
@@ -159,7 +159,7 @@ test.describe('el camino de pago completo', () => {
     await expect(page.getByText('+ propina (elige abajo)')).toHaveCount(0);
 
     // Y paga, sin pedir nada más.
-    await page.getByRole('button', { name: 'Pagar $210.00' }).click();
+    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
     await expect(page.getByText('¡Listo!')).toBeVisible();
     const comprobante = await page.locator('body').innerText();
     expect(comprobante).toContain('Propina (al mesero)');

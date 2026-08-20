@@ -80,11 +80,11 @@ test.describe('Historial (§1.10)', () => {
     await expect(page.getByText('$840.00')).toBeVisible();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('button', { name: 'Continuar' }).click();
-    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
 
     const propinas = page.getByRole('radiogroup', { name: /propina/i });
     await propinas.getByRole('radio', { name: '15%', exact: true }).click();
-    await page.getByRole('button', { name: 'Pagar $241.50' }).click();
+    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
     await expect(page.getByText('¡Listo!')).toBeVisible();
     await expect(page.getByText('La mesa sigue abierta para los demás')).toBeVisible();
 

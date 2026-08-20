@@ -456,6 +456,8 @@ export const EN: Record<string, string> = {
   "Uno o varios cubren toda la cuenta": "One or more people cover the entire bill",
   "Total del ticket": "Receipt total",
   "Tarjeta que se autoriza": "Card being authorized",
+  "Pagar": "Pay",
+  "Pagar de nuevo": "Pay again",
   "Paso 1 de 4": "Step 1 of 4",
   "Paso 2 de 4": "Step 2 of 4",
   "Paso 3 de 4": "Step 3 of 4",

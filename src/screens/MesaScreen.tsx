@@ -31,6 +31,8 @@ import {
   CardRailUnavailable,
   type CardFieldState,
 } from '../components/CardField';
+import { AppHeaderFlow } from '../components/AppHeader';
+import { AppBottomBar } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
 import type {
   FractionRequest,
@@ -1403,28 +1405,50 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // ─── Pago (s-payment) ────────────────────────────────────
   if (view === 'pay') {
     return (
-      <div className="screen has-cta">
-        <TopBar
-          title={t('Pagar mi parte')}
+      <div className="screen has-appbar">
+        {/* 🔴 FIDELIDAD VISUAL (2026-08-20 @ 1b99639 · defectos 1 a 5; el 6
+            quedó FRENADO y declarado). Era la misma cabecera blanca de una
+            fila que ya se corrigió en Garantía y 3DS. **Sin contador de
+            paso:** esta pantalla no es un paso del armado, se vuelve a ella
+            mientras la mesa siga abierta.
+            🔴 **Y el candado sale**, textual del paquete: *«no es un control
+            del sistema»* — un ícono que no hace nada en la pantalla donde se
+            paga sugiere una garantía que nadie prometió. */}
+        <AppHeaderFlow
+          paymeId={session?.user?.payme_id}
           onBack={() => setView('detail')}
           backLabel={t('Volver a la mesa')}
-          right={<Icon name="lock" size={18} />}
         />
         {guestHeader}
         <div className="scroll" style={{ padding: 16 }}>
-          <div style={{ background: 'var(--navy)', borderRadius: 16, padding: '18px 20px', marginBottom: 16 }}>
-            <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {/* 🔴 Defecto 2: era la MISMA tarjeta navy inventada que ya se sacó
+              de Garantía. Pasa a `--teal-l` con texto navy, como todo el
+              flujo. Los estilos inline se van a clases: mientras vivían
+              inline, ninguna guarda de color los veía. */}
+          <div className="pay-title">
+            {/* <h1> y no <div>: con la cabecera navy la pantalla se quedaba
+                SIN encabezado accesible, que es peor que el defecto de color
+                que vino a arreglarse. Mismo patrón que scan, Garantía y 3DS. */}
+            <h1 className="pay-title-lbl">
               {frozenRequiresReconciliation ? t('Reconciliación necesaria') : frozenScope ? t('Pendiente de confirmar') : t('Pagas SOLO tu parte')}
-            </div>
+            </h1>
+            {/* Defecto 3: el contexto del restaurante vive acá, no en la fila
+                de método. Es el dato que dice DÓNDE se está pagando. */}
+            {mesa?.restaurant?.name && (
+              <div className="pay-title-place">
+                {mesa.restaurant.name}
+                {mesa.restaurant.address ? ` · ${mesa.restaurant.address}` : ''}
+              </div>
+            )}
             {/* Con un intento congelado, el monto de la pantalla NO es el del
                 pago que quedó en el aire (tras una recarga la selección
                 arranca vacía). Mostrarlo sería mentir sobre lo que se reenvía. */}
             {frozenScope ? (
               <>
-                <div style={{ fontSize: 'var(--fs-legacy-xl)', fontWeight: 800, color: '#fff' }}>
+                <div style={{ fontSize: 'var(--fs-legacy-xl)', fontWeight: 800, color: 'var(--action)' }}>
                   {t('Pago sin confirmar')}
                 </div>
-                <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+                <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'var(--action)', opacity: 0.75, marginTop: 4, fontFamily: 'var(--font-body)' }}>
                   {frozenRequiresReconciliation
                     ? t('No podemos reenviar este pago desde la sesión actual. No iniciaremos otro hasta reconciliarlo.')
                     : t('Reinténtalo para saber si se cobró: mandamos el mismo pago, no uno nuevo.')}
@@ -1435,7 +1459,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 {frozenRequiresReconciliation && reconcileVerdict !== 'absent' && (
                   <button
                     className="btn btn-sm"
-                    style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', marginTop: 12 }}
+                    style={{ background: 'rgba(16,30,59,0.10)', color: 'var(--action)', marginTop: 12 }}
                     onClick={() => void checkReconciliation()}
                     disabled={reconciling}
                   >
@@ -1444,7 +1468,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 )}
                 {frozenRequiresReconciliation && reconcileVerdict === 'absent' && (
                   <div style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 'var(--fs-legacy-xs)', color: '#fff', fontFamily: 'var(--font-body)' }}>
+                    <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'var(--action)', fontFamily: 'var(--font-body)' }}>
                       {t('No encontramos ese pago en la mesa: no llegó a tomar tu parte. Si continúas, el próximo intento es un')} <b>{t('cobro nuevo')}</b>.
                     </div>
                     <button
@@ -1463,15 +1487,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 {/* §1.5 bis · antes de elegir se muestra LA BASE SOLA. Acá
                     salía base + 15 % adivinado: un número en pantalla que la
                     persona no eligió, que es el bug que esto cierra. */}
-                <div style={{ fontSize: 'var(--fs-legacy-3xl)', fontWeight: 800, color: '#fff' }}>
+                <div style={{ fontSize: 'var(--fs-legacy-3xl)', fontWeight: 800, color: 'var(--action)' }}>
                   {formatMXN(tipPending ? itemsAmount : gross)}
                 </div>
-                <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', marginTop: 4, fontFamily: 'var(--font-body)' }}>
+                <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'var(--action)', opacity: 0.75, marginTop: 4, fontFamily: 'var(--font-body)' }}>
                   {mesa.division_mode === 'igual' ? t('Tu parte') : t('Tus consumos')} {formatMXN(itemsAmount)}
                   {tipPending ? '' : ` + propina ${formatMXN(tipCents)}`}
                 </div>
                 {tipPending && (
-                  <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-body)' }}>
+                  <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'var(--action)', opacity: 0.75, fontFamily: 'var(--font-body)' }}>
                     {t('+ propina (elige abajo)')}
                   </div>
                 )}
@@ -1797,11 +1821,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </button>
             )}
           </div>
-          {IS_MOCK && (
-            <div className="note note-amber" style={{ marginTop: 6 }}>
-              <b>{t('Es una demo:')}</b> {t('no se cobra nada de verdad y no hay ninguna tarjeta real conectada.')}
-            </div>
-          )}
+          {/* 🔴 Defecto 4: acá había un segundo aviso de demo, en amarillo,
+              que repetía la banda que ya está fija arriba de la app. Textual
+              del paquete: *«El cuadro amarillo repetía la banda de arriba»*.
+              Se retira EL AVISO duplicado; la banda —que es la que de verdad
+              impide creer que se cobró— no se toca. */
+          }
           {isGuest && (
             <div className="note note-orange" style={{ marginTop: 6 }}>
               {/* OLA 5C (c): esta nota se lee SIN sesión, por URL pública — es
@@ -1812,9 +1837,40 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
           )}
         </div>
-        <button
-          className="cta-float"
-          onClick={() => { void (async () => {
+        {/* 🔴 Defecto 5 · LA BARRA DE CINCO POSICIONES, con el círculo diciendo
+            sólo «Pagar». El monto ya está arriba, en la tarjeta: repetirlo en
+            el botón es el mismo dato dos veces.
+
+            ⚠️ **Este bloque se escribió bajo un freno que YA SE LEVANTÓ, y se
+            re-adjudicó en vez de darlo por bueno.** Cuando se escribió, el
+            equivalente de 3DS estaba frenado porque la barra agregaba las
+            primeras salidas de navegación a una pantalla que no tenía ninguna,
+            y *«qué pasa si la persona sale con una autorización en curso»*
+            era un hueco sin decidir. **Mati lo decidió** (acta
+            `[PAYME]_ACTA_2026-08-19_3DS_ABANDONADO_RETOMAR_Y_BARRER.md`,
+            «A+B»): salir queda declarado seguro **y con retome**.
+
+            Acá, además, la salida **ya existía** —la cabecera siempre tuvo
+            «Volver a la mesa»—, así que esta barra nunca habilitó un camino
+            nuevo: cambia dónde vive el mismo botón. **Las dos razones apuntan
+            igual, pero la que manda ahora es el acta, no mi comparación.**
+
+            **El handler, el `disabled` y todos sus estados quedan EXACTAMENTE
+            iguales.** Lo único que cambia es el envoltorio. */}
+        <AppBottomBar
+          active={null}
+          center={{
+            label: busy
+              ? t('Procesando…')
+              : frozenRequiresReconciliation
+                ? t('Reconciliación necesaria')
+                : frozenScope
+                  ? t('Reintentar el pago sin confirmar')
+                  : refundedNotice
+                    ? t('Pagar de nuevo')
+                    : t('Pagar'),
+            icon: 'arrow-right',
+            onClick: () => { void (async () => {
             // Reembolsado: volver a pagar es una decisión explícita del
             // usuario, nunca automática (rotar solo = re-cobrar un reembolso).
             if (refundedNotice) {
@@ -1823,8 +1879,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             }
             await doPay();
           })();
-          }}
-          disabled={
+          },
+            disabled:
             busy ||
             frozenRequiresReconciliation ||
             (!frozenScope && gross === 0) ||
@@ -1833,19 +1889,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               !IS_MOCK &&
               payType === 'card' &&
               (cards.length === 0 || cardChoice === 'new') &&
-              !cardState.complete)
-          }
-        >
-          {busy
-            ? t('Procesando…')
-            : frozenRequiresReconciliation
-              ? t('Reconciliación necesaria')
-              : frozenScope
-              ? t('Reintentar el pago sin confirmar')
-              : refundedNotice
-                ? t('Pagar de nuevo {0}', formatMXN(gross))
-                : t('Pagar {0}', formatMXN(gross))}
-        </button>
+              !cardState.complete),
+          }}
+        />
       </div>
     );
   }

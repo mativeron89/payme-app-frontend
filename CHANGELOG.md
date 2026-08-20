@@ -11,6 +11,55 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.88.0 — fidelidad tanda 3: Pagar mi parte (2026-08-20)
+
+Tercera tanda de `FIDELIDAD_VISUAL_APP_2026-08-20.md` (`1b99639`).
+**Cinco de seis. El ⑥ NO se implementa: su premisa no se sostiene medida.**
+
+**El WIP venía de ayer, escrito bajo un freno que se levantó — y se
+RE-ADJUDICÓ, no se dio por bueno.** El acta «A+B»
+(`[PAYME]_ACTA_2026-08-19_3DS_ABANDONADO_RETOMAR_Y_BARRER.md`) declaró segura
+la salida con autorización en curso, **con retome**, así que el ⑤ sobrevive —
+pero se decidió mirándolo. **El comentario que lo justificaba quedó vencido y
+se reescribió:** citaba mi comparación con el 3DS frenado, y hoy manda el acta.
+
+- **①** cabecera navy de dos filas y **fuera el candado**, textual: *«no es un
+  control del sistema»* — un ícono que no hace nada en la pantalla donde se
+  paga sugiere una garantía que nadie prometió.
+- **②** la tarjeta de título deja de ser navy inventada y pasa a `--teal-l`.
+  🔴 **Ocho textos quedaban en blanco sobre fondo claro: invisibles.** Los
+  encontró el propio cambio, no una revisión posterior.
+- **③** el contexto del restaurante entra en la tarjeta.
+- **④** fuera el segundo aviso de demo, que repetía la banda fija de arriba.
+  Se sacó **el aviso**, no la lógica.
+- **⑤** la barra de cinco posiciones, con el círculo diciendo sólo «Pagar»:
+  el monto ya está arriba y repetirlo era el mismo dato dos veces.
+
+🔴 **⑥ NO SE IMPLEMENTA — la premisa del paquete es falsa, medida.** Dice que
+la fila tiene *«dos afordancias para lo mismo»* (chevron + radio). **No son
+para lo mismo:** el `▾` despliega las tarjetas guardadas y el radio indica
+**qué método de pago está elegido** —son controles de dos cosas distintas—.
+Cambiarlo por «la tarjeta elegida + Cambiar» además **reintroduciría el
+defecto que cerró la ORDEN 1-B**: mostrar una tarjeta elegida cuando nadie
+eligió. Queda declarado para Diseño, no resuelto por inferencia.
+
+**Efecto lateral, tercera vez la misma clase:** la pantalla se quedó sin
+encabezado accesible al perder el título de la `TopBar`; la etiqueta de la
+tarjeta pasa a `<h1>`, y eso movió **7 marcadores en 7 specs**.
+
+**Y una decisión de método que vale más que el cambio:** el CTA dejó de
+repetir el monto, así que **15 aserciones apuntaban al texto de un botón que
+ya no lo dice**. No se borraron: se **movieron al importe de la tarjeta**, que
+es donde la persona lee el número. La cobertura de *«la propina entra en lo
+que se paga»* se conserva y queda anclada a lo que se ve.
+
+⚠️ **Punto ciego del método, segunda vez en dos días:** dos marcadores estaban
+escritos como regex (`/^Pagar \$/`) y la enumeración por texto no los vio —
+igual que el `new RegExp(forma)` de ayer. **Enumerar con una expresión no
+cubre lo que esa expresión no ve; el rojo los encontró, no el grep.**
+
+Suite: **1120 unitarios · 104 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.87.2 — el sentinela se ensuciaba al medirse (2026-08-20)
 
 **El rojo intermitente del gate tenía UNA causa y la nombró el propio

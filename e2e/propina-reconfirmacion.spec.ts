@@ -23,16 +23,16 @@ test('la propina desmedida pide reconfirmar: editar conserva el valor, y "Sí, p
 
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
 
   // Propina a mano: $700 > 3 × $210 = $630.
   const propinas = page.getByRole('radiogroup', { name: /propina/i });
   await propinas.getByRole('radio', { name: 'Otro', exact: true }).click();
   await page.getByLabel('Monto de propina a mano').fill('700');
-  await expect(page.getByRole('button', { name: 'Pagar $895.00' })).toBeVisible();
+  await expect(page.getByText('$895.00', { exact: true }).first()).toBeVisible();
 
   // Pagar → NO paga: reconfirma con el monto exacto y la comparación.
-  await page.getByRole('button', { name: 'Pagar $895.00' }).click();
+  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
   const dialogo = page.getByRole('alertdialog', { name: 'Confirmar propina' });
   await expect(dialogo).toBeVisible();
   await expect(dialogo).toContainText('Tu propina: $700.00');
@@ -44,7 +44,7 @@ test('la propina desmedida pide reconfirmar: editar conserva el valor, y "Sí, p
   await expect(page.getByLabel('Monto de propina a mano')).toHaveValue('700');
 
   // Pagar de nuevo → reconfirma de nuevo (editar no fue un "sí").
-  await page.getByRole('button', { name: 'Pagar $895.00' }).click();
+  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
   await expect(dialogo).toBeVisible();
 
   // Salida 2: "Sí, pagar" — la salida hacia adelante. Paga de una, sin
