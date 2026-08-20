@@ -11,6 +11,26 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.87.1 — el intermitente del splash tenía causa, y era mía (2026-08-20)
+
+**No era carga ni red: el test le erraba al recurso.** `page.route('**/src/main.tsx')`
+**no matchea** cuando Vite sirve el módulo con query (`?v=…`, `?t=…`), y lo
+hace según el estado de su caché de dependencias. Sin intercepción no hay
+demora → la app monta rápido → **el splash nunca asoma** → la aserción cae.
+Pasa a regex y matchea las dos formas: `--repeat-each=3` da 6/6 y la suite
+completa 104/104.
+
+🔴 **Esto retira, con causa, una de las dos atribuciones que ya había
+retirado sin ella.** Ayer declaré dos intermitentes como `ERR_NETWORK_CHANGED`;
+después retiré la atribución al aparecer el defecto del runner. **Ahora uno de
+los dos tiene causa propia y no era ninguna de las dos cosas.** Descartar dos
+explicaciones no era haber encontrado la tercera.
+
+**El sentinela ahora NOMBRA el archivo que ensucia** en vez de decir sólo
+`+sucio`. Apareció un rojo del propio sentinela durante el gate y el mensaje
+pelado obligaba a adivinar. **La guarda no se aflojó para que dejara de
+molestar** — se la hizo más informativa, que es lo contrario.
+
 ## 0.87.0 — los tres reworks de Codex sobre la fusión (2026-08-20)
 
 Dictamen `[PAYME]_AUDITORIA_FUSION_DIVISION_APP_FRONTEND_CODEX_2026-08-19.md`.

@@ -20,7 +20,12 @@ test('carga rápida: la app abre directo y el splash no queda en el árbol', asy
 });
 
 test('carga lenta: el splash asoma mientras tarda y se retira al montar', async ({ page }) => {
-  await page.route('**/src/main.tsx', async (ruta) => {
+  // 🔴 El glob `**/src/main.tsx` NO matchea cuando Vite sirve el módulo con
+  // query (`?v=…`, `?t=…`), y lo hace según el estado de su caché de deps. Ese
+  // era el intermitente: sin intercepción no hay demora, la app monta rápido,
+  // el splash NUNCA asoma y la aserción cae. **El test no era frágil por
+  // carga: le erraba al recurso.** Con regex matchea las dos formas.
+  await page.route(/\/src\/main\.tsx(\?.*)?$/, async (ruta) => {
     // Bien pasado el retardo de aparición (300ms), lejos del timeout global.
     await new Promise((listo) => setTimeout(listo, 1_200));
     await ruta.continue();

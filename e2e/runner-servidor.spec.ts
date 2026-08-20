@@ -17,8 +17,9 @@ import { test, expect } from '@playwright/test';
 
 function arbolLocal(): string {
   const head = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
-  const sucio = execSync('git status --porcelain', { encoding: 'utf8' }).trim() !== '';
-  return `${head}${sucio ? '+sucio' : ''}`;
+  const porcelain = execSync('git status --porcelain', { encoding: 'utf8' }).trim();
+  const primero = porcelain.split('\n')[0]?.trim() ?? '';
+  return `${head}${porcelain ? `+sucio(${primero})` : ''}`;
 }
 
 test('🔴 la app servida es la de ESTE árbol, no la de otro', async ({ page }) => {

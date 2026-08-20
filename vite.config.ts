@@ -30,8 +30,12 @@ import { defineConfig } from 'vitest/config';
 function arbolServido(): string {
   try {
     const head = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
-    const sucio = execSync('git status --porcelain', { encoding: 'utf8' }).trim() !== '';
-    return `${head}${sucio ? '+sucio' : ''}`;
+    // 🔴 Cuando está sucio NOMBRA EL PRIMER ARCHIVO, no sólo el hecho. Un
+    // «+sucio» pelado obliga a adivinar qué lo ensució, y el instrumento que
+    // sólo dice que algo pasa hace perder más tiempo del que ahorra.
+    const porcelain = execSync('git status --porcelain', { encoding: 'utf8' }).trim();
+    const primero = porcelain.split('\n')[0]?.trim() ?? '';
+    return `${head}${porcelain ? `+sucio(${primero})` : ''}`;
   } catch {
     return 'desconocido';
   }
