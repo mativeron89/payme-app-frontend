@@ -84,9 +84,9 @@ describe('🔴 los colores migrados no vuelven, en ninguna grafía', () => {
     expect(
       hallazgos,
       `volvió un color migrado:\n  ${hallazgos.join('\n  ')}\n\n` +
-        'Los valores vigentes son #101e3b (navy) y #0fb5c9 (cian). Si necesitás el ' +
-        'viejo para explicar la historia, va en un comentario: esta guarda barre ' +
-        'código, no prosa.',
+        'Los valores vigentes son #101e3b (navy) y #0fb5c9 (cian). Si hace falta ' +
+        'el viejo para explicar la historia, va en un comentario: esta guarda ' +
+        'barre código, no prosa.',
     ).toEqual([]);
   });
 
