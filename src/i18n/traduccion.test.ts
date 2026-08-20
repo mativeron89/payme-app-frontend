@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { tituloStepper } from '../screens/divisionModo';
+import { rotuloPropina } from '../screens/propinaRecibo';
 import { EN } from './en';
 import { traducir } from './idioma';
 
@@ -98,7 +99,10 @@ function envueltos(): { ruta: string; texto: string }[] {
 // dejó de ser el literal «Cantidad de comensales» y pasa a seguir a
 // `tituloStepper`, para que quien no ve la pantalla reciba LA MISMA pregunta
 // que quien la ve. Ya está cubierto por la familia `tituloStepper`.
-const T_SIN_LITERAL = 18;
+// 🔴 SUBIÓ A 19 el 2026-08-20 (tanda 4, ítem 4): el rótulo de la propina del
+// comprobante sale de `rotuloPropina()`, que elige entre CUATRO claves según
+// qué se sepa —porcentaje y/o destinatario—. Cubierto por familia acá abajo.
+const T_SIN_LITERAL = 19;
 
 function sitiosSinLiteral(): string[] {
   const out: string[] = [];
@@ -179,6 +183,20 @@ describe('🔴 los `t()` que NO reciben literal · el extractor no los ve', () =
       // Se derivan de la función real, no se copian — si alguien agrega un
       // título nuevo allá, este test lo exige acá sin que nadie se acuerde.
       'tituloStepper': [...new Set((['consumo', 'igual', 'total'] as const).map(tituloStepper))],
+      // Tanda 4 · `t(r.clave, ...r.args)` en el comprobante. Las CUATRO claves
+      // se derivan de la función real recorriendo sus cuatro combinaciones: si
+      // alguien agrega una quinta forma allá, este test la exige acá sin que
+      // nadie se acuerde de venir a escribirla.
+      'rotuloPropina': [
+        ...new Set(
+          [
+            { pct: 10, nombre: 'x' },
+            { pct: 10, nombre: null },
+            { pct: null, nombre: 'x' },
+            { pct: null, nombre: null },
+          ].map((c) => rotuloPropina(c).clave),
+        ),
+      ],
     };
 
     const sinEntrada: string[] = [];

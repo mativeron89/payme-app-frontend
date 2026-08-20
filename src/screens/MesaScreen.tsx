@@ -31,8 +31,9 @@ import {
   CardRailUnavailable,
   type CardFieldState,
 } from '../components/CardField';
-import { AppHeaderFlow } from '../components/AppHeader';
-import { AppBottomBar } from '../components/AppBottomBar';
+import { AppHeader, AppHeaderFlow } from '../components/AppHeader';
+import { rotuloPropina } from './propinaRecibo';
+import { AppBottomBar, AppBottomCta } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
 import type {
   FractionRequest,
@@ -224,6 +225,14 @@ interface PayResult {
   chargedByRestaurant: boolean;
   /** G-10: descriptor del resumen de tarjeta. Ausente hasta que el contrato lo exponga. */
   statementDescriptor: string | null;
+  /**
+   * Fidelidad tanda 4 · lo que hace falta para el rótulo de la propina, y se
+   * captura al pagar porque `tip`/`staffId` se resetean al cerrar el intento.
+   * `null` = monto libre (sin porcentaje) o sin destinatario elegido; los dos
+   * son estados legítimos y **no se rellenan** (`propinaRecibo.ts`).
+   */
+  tipPct: number | null;
+  tipToName: string | null;
 }
 
 /**
@@ -915,6 +924,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // mentirle al comensal en el 99% de los pagos de hoy.
       chargedByRestaurant: payKind !== 'wallet' && !!r.attempt.connected_account_id,
       statementDescriptor: r.attempt.statement_descriptor ?? null,
+      // 🔴 Se capturan ACÁ, no se leen al pintar el comprobante: `tip` y
+      // `staffId` se resetean al cerrar el intento, así que leerlos después
+      // daría un comprobante sin porcentaje ni nombre — y el comprobante es
+      // el papel que la persona guarda.
+      tipPct: tip.mode === 'pct' ? tip.pct : null,
+      tipToName: mesa?.active_staff.find((x) => x.id === staffId)?.display_name ?? null,
     });
     // Intento completado: el próximo pago de esta mesa (otra parte, otro
     // plato) es una intención NUEVA y necesita clave nueva.
@@ -1295,13 +1310,21 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // ─── Comprobante ─────────────────────────────────────────
   if (view === 'confirm' && result) {
     return (
-      <div className="screen">
+      <div className="screen has-appbar">
+        {/* 🔴 FIDELIDAD tanda 4 (`724d6fe`) · ① la pantalla arrancaba en el
+            vacío, sin cabecera. Va la navy de una fila, como Avisos (§1.8), y
+            **sin «Volver»: acá no hay paso atrás al que volver, el pago ya
+            pasó.** Un botón de volver sobre un pago hecho promete deshacerlo. */}
+        <AppHeader paymeId={session?.user?.payme_id} />
         <div className="scroll" style={{ padding: '24px 20px' }}>
-          <div style={{ textAlign: 'center', padding: '16px 0 22px' }}>
+          {/* ② el tilde vivía SUELTO sobre el fondo, arriba de la tarjeta: era
+              un cierre partido en dos. Entra a la tarjeta, con el título y el
+              subtítulo — un solo bloque. */}
+          <div className="recibo-cierre">
             <div className="success-circle">✓</div>
-            <div className="h1" style={{ marginTop: 14, marginBottom: 6 }}>
+            <h1 className="recibo-cierre-tit">
               {t('¡Listo!')}
-            </div>
+            </h1>
             <div className="body-text">
               {t('Pagaste tu parte.')}{' '}
               {mesa.paid_amount_cents < mesa.total_cents ? (
@@ -1352,15 +1375,37 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <span className="lbl">{mesa.division_mode === 'igual' ? t('Mi parte') : t('Mis consumos')}</span>
               <span className="val">{formatMXN(result.itemsAmount)}</span>
             </div>
-            <div className="receipt-row">
-              <span className="lbl">{t('Propina (al mesero)')}</span>
-              <span className="val">{formatMXN(result.tip)}</span>
-            </div>
+            {/* ④ decía «Propina (al mesero)», genérico. Ahora trae el
+                porcentaje y el nombre — **los que existan**: con monto libre
+                no hay porcentaje y elegir destinatario es opcional. La regla
+                vive en `propinaRecibo.ts`: lo que no se sabe, no se nombra.
+                Y la fila **no aparece sin propina** (`tip > 0`), en vez de
+                mostrar un $0.00 que nadie dejó. */}
+            {result.tip > 0 && (() => {
+              const r = rotuloPropina({ pct: result.tipPct, nombre: result.tipToName });
+              return (
+                <div className="receipt-row">
+                  <span className="lbl">{t(r.clave, ...r.args)}</span>
+                  <span className="val">{formatMXN(result.tip)}</span>
+                </div>
+              );
+            })()}
             <div className="receipt-row">
               <span className="lbl" style={{ fontWeight: 700, color: 'var(--navy)' }}>
                 Total pagado
               </span>
-              <span className="val hl">{formatMXN(result.gross)}</span>
+              {/* ③ estaba en `--action-2` sobre blanco: **2.6:1, ilegible**
+                  para el número más importante de la pantalla. Va en navy y
+                  más grande. */}
+              <span className="val recibo-total">{formatMXN(result.gross)}</span>
+            </div>
+            <div className="recibo-acciones">
+              <button type="button" className="linkbtn" onClick={() => void shareReceipt()}>
+                <Icon name="share" size={16} className="ico-inline" /> {t('Enviar')}
+              </button>
+              <button type="button" className="linkbtn" onClick={downloadReceipt}>
+                <Icon name="download" size={16} className="ico-inline" /> {t('Descargar')}
+              </button>
             </div>
           </div>
           {isGuest && (
@@ -1369,18 +1414,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </div>
           )}
         </div>
+        {/* 🔴 ⑤ · UN SOLO PATRÓN EN EL PIE. Había TRES apilados: dos botones
+            outline lado a lado y abajo uno navy de ancho completo — el mismo
+            defecto que el paquete señala como el que existía ANTES del
+            rediseño. «Enviar» y «Descargar» bajan a acciones `--link` al pie
+            de la tarjeta del comprobante, **donde está el comprobante que
+            accionan**, y el cierre queda en la barra reducida.
+            ⚠️ La rama de invitado NO se toca: está durmiente desde v2.32.0 y
+            mezclar su retiro con un cambio visual es cómo se cuelan errores. */}
+        {isGuest ? (
         <div className="action-bar">
-          {/* Feedback Mati: el comprobante se puede enviar o descargar
-              (contabilidad del comensal). */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <button className="btn btn-ghost" onClick={() => void shareReceipt()}>
-              <Icon name="share" size={16} className="ico-inline" /> {t('Enviar comprobante')}
-            </button>
-            <button className="btn btn-ghost" onClick={downloadReceipt}>
-              <Icon name="download" size={16} className="ico-inline" /> {t('Descargar')}
-            </button>
-          </div>
-          {isGuest ? (
+          {(
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="btn btn-ghost"
@@ -1392,12 +1436,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 {t('Crear mi cuenta')}
               </button>
             </div>
-          ) : (
-            <button className="btn btn-navy" onClick={() => navigate('home')}>
-              <Icon name="home" size={16} className="ico-inline" /> {t('Inicio')}
-            </button>
           )}
         </div>
+        ) : (
+          /* El círculo de casa CIERRA el flujo, no lo avanza: es el único
+             lugar del paquete donde ese glifo significa terminar. */
+          <AppBottomCta label={t('Ir a Inicio')} icon="home" onClick={() => navigate('home')} />
+        )}
       </div>
     );
   }

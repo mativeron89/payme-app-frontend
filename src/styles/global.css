@@ -4739,3 +4739,49 @@ h1.pay-title-lbl {
   font-size: var(--fs-sm);
   color: var(--text-muted);
 }
+
+/* ── Comprobante · tanda 4 de fidelidad (2026-08-20) ──────────────────────
+   El tilde vivía suelto sobre el fondo: el cierre estaba partido en dos. */
+.recibo-cierre {
+  background: var(--teal-l);
+  border-radius: 16px;
+  padding: 22px 20px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+.recibo-cierre-tit {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--fs-h1);
+  color: var(--action);
+  margin: 14px 0 6px;
+}
+/* El total en navy y más grande: en `--action-2` sobre blanco daba 2.6:1 —
+   ilegible justo en el número más importante de la pantalla. */
+.val.recibo-total {
+  color: var(--action);
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+/* Enviar / Descargar como acciones de la tarjeta, no como botones del pie. */
+.recibo-acciones {
+  display: flex;
+  gap: var(--sp-4);
+  padding-top: var(--sp-3);
+  margin-top: var(--sp-2);
+  border-top: 1px solid var(--border);
+}
+.linkbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--link);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--tap-min);
+}

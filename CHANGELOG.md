@@ -11,6 +11,47 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.89.0 — fidelidad tanda 4: el comprobante (2026-08-20)
+
+Cuarta y última tanda de `FIDELIDAD_VISUAL_APP_2026-08-20.md` (`724d6fe`).
+**Los cinco defectos, corregidos.**
+
+- **①** la pantalla arrancaba **sin cabecera**, en el vacío. Va la navy de una
+  fila (logo + ID), como Avisos, y **sin «Volver»: el pago ya pasó** — un
+  botón de volver sobre un pago hecho promete deshacerlo.
+- **②** el tilde de éxito flotaba **suelto sobre el fondo**: el cierre estaba
+  partido en dos. Entra a la tarjeta con el título y el subtítulo.
+- **③** el total salía en `--action-2` sobre blanco: **2.6:1, ilegible**, y
+  justo en el número más importante de la pantalla. Navy y 26px.
+- **④** la fila de propina decía «(al mesero)», genérico. Ahora trae
+  **porcentaje y nombre**, y **la fila no aparece sin propina**.
+- **⑤** había **TRES patrones de botón apilados** en el pie — el mismo defecto
+  que el paquete señala como previo al rediseño. «Enviar» y «Descargar» bajan
+  a `--link` **al pie de la tarjeta que accionan**, y el cierre queda en la
+  barra reducida con el círculo de casa.
+
+🔴 **El ④ es una función pura (`propinaRecibo.ts`) y no una plantilla, porque
+los dos datos pueden faltar por separado:** con **monto libre** no hay
+porcentaje, y elegir destinatario es **opcional**. **Lo que no se sabe, no se
+nombra** — un «para —» o un «0%» de relleno en el papel que la persona guarda
+es peor que el genérico que vino a reemplazar. Se capturan **al pagar**: `tip`
+y `staffId` se resetean al cerrar el intento, y leerlos después daría un
+comprobante mudo.
+
+**Se conservan a propósito** las filas «Cobrado por» y el descriptor del
+resumen: bajo direct charges el merchant of record es el restaurante
+(`services/stripe.js:144-145`). **Lo que se corrige es el mockup, no la app** —
+confirmado por App Backend.
+
+**Y una prueba que se actualizó sin perder su propósito:** el test del 0 %
+afirmaba que el comprobante decía «Propina (al mesero) · $0.00». Con la fila
+oculta sin propina, eso dejó de describir la pantalla. **No se borró la
+aserción: se reemplazó por una más fuerte** — la fila **no está** y el total
+pagado es **exactamente la parte**. Antes ese `$0.00` podía venir de una
+propina que nadie eligió; ahora la ausencia lo prueba.
+
+Suite: **1125 unitarios · 105 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.88.1 — la espera del 3DS existe cuando la espera existe (2026-08-20)
 
 Cierra el defecto **③** de la tanda de 3DS, que yo había **frenado**: llegó

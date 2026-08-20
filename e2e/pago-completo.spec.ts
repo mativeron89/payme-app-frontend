@@ -161,9 +161,17 @@ test.describe('el camino de pago completo', () => {
     // Y paga, sin pedir nada más.
     await page.getByRole('button', { name: 'Pagar', exact: true }).click();
     await expect(page.getByText('¡Listo!')).toBeVisible();
+    // 🔴 CAMBIÓ CON LA TANDA 4 (2026-08-20) y el propósito del test NO: el
+    // comprobante **ya no lista la propina cuando no hubo** —decisión
+    // explícita del paquete—, así que afirmar «Propina (al mesero)» y «$0.00»
+    // dejó de describir la pantalla. Lo que este test protege sigue siendo
+    // «el 0 % es una elección que se respeta», y eso se acredita mejor:
+    // la fila NO está, y el total pagado es EXACTAMENTE la parte, sin nada
+    // agregado. Antes el $0.00 podía venir de una propina no elegida.
     const comprobante = await page.locator('body').innerText();
-    expect(comprobante).toContain('Propina (al mesero)');
-    expect(comprobante).toContain('$0.00');
+    expect(comprobante).not.toContain('Propina');
+    expect(comprobante).toContain('Total pagado');
+    expect(comprobante).toContain('$210.00');
   });
 
   /**
