@@ -11,6 +11,47 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.97.1 — evidencia: censo por exhaución y la cadena del nacer (2026-08-20)
+
+Sexta vuelta del P30. 🔴 **Codex abre con *«No reproduje una falla funcional en
+la ref exacta»*: el código productivo está bien y NO se toca. El bloqueo es de
+EVIDENCIA**, y este commit es de tests y arnés únicamente.
+
+### ① El umbral no era un censo
+
+El oráculo de fuente exigía **«más de cinco coincidencias»**, así que quitarle
+la guarda **al botón de mesero** —o al checkbox de guardar tarjeta— dejaba seis
+y **sobrevivía**. 🔴 **Un censo parcial afirma la clase sin enumerarla:** es la
+clase de la proyección en su forma de umbral.
+
+Ahora **no se cuenta**: se exige que **TODA** superficie deshabilitable de la
+vista de pago lleve el predicado, con **dos excepciones nombradas** (los
+botones de reconciliación, que dependen de su propia operación en vuelo). Si
+aparece una superficie nueva sin guarda, el test **la nombra**. Y las que Codex
+señaló van además **por identidad**, con ancla propia: un censo por forma
+pasaría si alguna desapareciera del árbol en vez de perder la guarda.
+
+⚠️ **Y el primer intento de ancla volvió a fallar por literal:** `<CardField`
+matchea `useState<CardFieldState>` —un parámetro de tipo— y el test buscaba la
+guarda **12.000 caracteres más allá**. Las anclas son regex.
+
+### ② La mitad del «nacer» no tenía testigo
+
+`disabledRef.current = disabled` → `= false` dejaba que **el campo naciera
+habilitado aunque el prop ya fuera `true`**, y **sobrevivían 22/22 focales y la
+suite entera**: mi test sólo miraba que el montaje usara `disabledRef.current`,
+y **eso seguía siendo cierto con el ref mintiendo**.
+
+El testigo ahora cubre **los tres eslabones, y cada uno se puede romper solo**:
+el ref se **inicializa con el prop**, el efecto lo **sincroniza**, y el montaje
+lo **aplica al seam del SDK**. **Los cuatro mutantes que Codex nombró mueren**
+—`= false`, `useRef(false)`, mesero y checkbox— verificados uno por uno.
+
+**Sigue declarado, sin cambios:** ésta es acreditación **de fuente**, más débil
+que un recorrido, porque el campo real no monta en la suite mock.
+
+Suite: **1161 unitarios · 110 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.97.0 — un solo predicado, y cuatro evidencias que no probaban (2026-08-20)
 
 Quinta vuelta del P27. **El funcional era uno y era de máquina de estados.**

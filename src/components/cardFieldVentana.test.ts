@@ -53,13 +53,67 @@ describe('🔴 el campo de Stripe se cierra durante la ventana (AF-01, P27)', ()
     expect(def).toMatch(/frozenScope/);
   });
 
-  it('🔴 y TODAS las superficies lo consumen: nadie conserva llave propia', () => {
+  /**
+   * 🔴 P30 · CENSO POR EXHAUCIÓN, NO POR UMBRAL.
+   *
+   * La versión anterior pedía **«más de cinco coincidencias»**, y con eso
+   * quitarle la guarda al botón de mesero —o al checkbox de guardar tarjeta—
+   * **sobrevivía**: quedaban seis y el umbral se cumplía. **Un censo parcial
+   * afirma la clase sin enumerarla**, que es la clase de la proyección en su
+   * forma de umbral.
+   *
+   * Ahora no se cuenta: se exige que **TODA** superficie deshabilitable de la
+   * vista de pago lleve el predicado, con **dos excepciones nombradas** —los
+   * botones de reconciliación, que dependen de su propia operación en vuelo—.
+   * Si aparece una superficie nueva sin la guarda, esto la nombra.
+   */
+  it('🔴 NINGUNA superficie de la vista de pago se deshabilita sin el predicado', () => {
     const v = vivo(PANTALLA);
-    // Ninguna superficie de elección vuelve a componer el predicado a mano.
-    expect(v).not.toMatch(/disabled=\{!!frozenScope \|\| journalPendiente\}/);
-    expect(v).not.toMatch(/disabled=\{!!frozenScope\}/);
-    // Control positivo: hay varias consumiéndolo, no una.
-    expect([...v.matchAll(/disabled=\{seleccionBloqueada/g)].length).toBeGreaterThan(5);
+    const ini = v.indexOf("if (view === 'pay')");
+    expect(ini, 'no se encontró la vista de pago').toBeGreaterThan(-1);
+    const fin = v.indexOf('// ─── Detalle', ini);
+    const region = v.slice(ini, fin > ini ? fin : undefined);
+
+    const EXCEPCIONES = ['disabled={reconciling}'];
+    const todos = [...region.matchAll(/disabled=\{[^}]*\}/g)].map((m) => m[0]);
+    // Control positivo: si el recorte fallara, esto mediría en vacío.
+    expect(todos.length, 'la región no tiene superficies: el censo mediría en vacío')
+      .toBeGreaterThan(8);
+
+    const sinGuarda = todos.filter(
+      (d) => !d.includes('seleccionBloqueada') && !EXCEPCIONES.includes(d),
+    );
+    expect(sinGuarda, `superficies deshabilitables SIN el predicado: ${sinGuarda.join(' · ')}`)
+      .toEqual([]);
+  });
+
+  /**
+   * Y las que Codex nombró una por una, por IDENTIDAD: un censo por forma
+   * podría pasar si alguna desapareciera del árbol en vez de perder la guarda.
+   */
+  it('🔴 las superficies nombradas están, cada una con su guarda', () => {
+    const v = vivo(PANTALLA);
+    // ⚠️ Las anclas son REGEX y no cadenas sueltas: `<CardField` a secas
+    // matchea `useState<CardFieldState>` —un parámetro de tipo— y el test
+    // buscaba la guarda 12.000 caracteres más allá. Mismo error que vengo
+    // corrigiendo toda la semana: el literal nunca solo.
+    const ANCLAS: ReadonlyArray<readonly [string, RegExp]> = [
+      ['mesero', /aria-labelledby="lbl-mesero"/],
+      ['tarjetas guardadas', /aria-label=\{t\('Tarjeta guardada'\)\}/],
+      ['usar otra tarjeta', /t\('Usar otra tarjeta'\)/],
+      ['guardar esta tarjeta', /t\('Guardar esta tarjeta para la próxima'\)/],
+      ['campo de Stripe', /<CardField\s*\n/],
+    ];
+    const faltan: string[] = [];
+    for (const [nombre, ancla] of ANCLAS) {
+      const i = v.search(ancla);
+      if (i < 0) { faltan.push(`${nombre}: desapareció del árbol`); continue; }
+      // La guarda vive dentro del mismo elemento: se mira una ventana amplia
+      // hacia los dos lados, porque el orden de props varía.
+      const ventana = v.slice(Math.max(0, i - 900), i + 900);
+      if (!ventana.includes('seleccionBloqueada')) faltan.push(`${nombre}: sin la guarda`);
+    }
+    expect(faltan, faltan.join(' · ')).toEqual([]);
   });
 
   it('🔴 el campo lo aplica por la API del SDK, no por el DOM', () => {
@@ -69,9 +123,35 @@ describe('🔴 el campo de Stripe se cierra durante la ventana (AF-01, P27)', ()
     expect(vivo(CAMPO)).toMatch(/update\(\{\s*disabled\s*\}\)/);
   });
 
-  it('🔴 y lo aplica también AL MONTAR: si nace dentro de la ventana, nace cerrado', () => {
-    // Sin esto, un campo montado durante la ventana quedaba interactivo hasta
-    // el primer cambio de prop — el mismo hueco, una vez más.
+  /**
+   * 🔴 P30 · EL MUTANTE `disabledRef.current = false`.
+   *
+   * Codex cambió **sólo esa asignación** y el campo **podía nacer habilitado
+   * aunque el prop ya fuera `true`** — sobrevivieron 22/22 focales y la suite
+   * entera. Mi test anterior sólo miraba que el montaje usara
+   * `disabledRef.current`, y **eso seguía siendo cierto con el ref mintiendo**.
+   *
+   * El testigo tiene que cubrir **la cadena completa del NACER**, que son tres
+   * eslabones y cada uno se puede romper solo:
+   *   ① el ref se INICIALIZA con el prop, no con `false`;
+   *   ② el efecto lo SINCRONIZA con el prop en cada cambio;
+   *   ③ el montaje APLICA ese valor al seam del SDK.
+   *
+   * ⚠️ Es acreditación **de fuente** —el campo no monta en la suite mock— y se
+   * declara como tal, igual que el resto de este archivo.
+   */
+  it('🔴 ① el ref del estado inicial se inicializa CON EL PROP, no con un literal', () => {
+    expect(vivo(CAMPO)).toMatch(/useRef\(disabled\)/);
+    expect(vivo(CAMPO)).not.toMatch(/useRef\((?:false|true)\)\s*;?\s*\n[\s\S]{0,80}disabledRef/);
+  });
+
+  it('🔴 ② el efecto lo sincroniza con el prop, sin literal de por medio', () => {
+    expect(vivo(CAMPO)).toMatch(/disabledRef\.current\s*=\s*disabled\s*;/);
+    // El mutante exacto que sobrevivió: la asignación forzada a un literal.
+    expect(vivo(CAMPO)).not.toMatch(/disabledRef\.current\s*=\s*(?:false|true)\s*;/);
+  });
+
+  it('🔴 ③ y el montaje aplica ese valor al seam del SDK', () => {
     expect(vivo(CAMPO)).toMatch(/update\(\{\s*disabled:\s*disabledRef\.current\s*\}\)/);
   });
 
