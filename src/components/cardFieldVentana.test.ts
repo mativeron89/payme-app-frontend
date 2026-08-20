@@ -54,67 +54,23 @@ describe('🔴 el campo de Stripe se cierra durante la ventana (AF-01, P27)', ()
   });
 
   /**
-   * 🔴 P30 · CENSO POR EXHAUCIÓN, NO POR UMBRAL.
+   * 🔴 P34 · EL CENSO SE MUDÓ, Y SE MUDÓ PORQUE ESTABA MAL.
    *
-   * La versión anterior pedía **«más de cinco coincidencias»**, y con eso
-   * quitarle la guarda al botón de mesero —o al checkbox de guardar tarjeta—
-   * **sobrevivía**: quedaban seis y el umbral se cumplía. **Un censo parcial
-   * afirma la clase sin enumerarla**, que es la clase de la proyección en su
-   * forma de umbral.
+   * Acá vivían dos oráculos que Codex **refutó con cuatro sondas verdes**:
+   *   · un «censo por exhaución» que construía su universo buscando
+   *     `disabled={…}` — o sea, la PROYECCIÓN de la población y no la
+   *     población: borrar el prop sacaba la superficie del censo en vez de
+   *     denunciarla, y su control positivo era un umbral (`> 8`) que doce
+   *     superficies satisfacían aunque una perdiera la guarda;
+   *   · unas anclas «por identidad» que miraban ±900 caracteres alrededor y
+   *     **aceptaban la guarda de un vecino**.
    *
-   * Ahora no se cuenta: se exige que **TODA** superficie deshabilitable de la
-   * vista de pago lleve el predicado, con **dos excepciones nombradas** —los
-   * botones de reconciliación, que dependen de su propia operación en vuelo—.
-   * Si aparece una superficie nueva sin la guarda, esto la nombra.
+   * El reemplazo vive en `src/screens/censoSuperficiesPago.test.ts`, deriva la
+   * población por AST de las superficies interactuables y ata cada guarda al
+   * atributo propio del elemento. **No se aflojó nada acá: se sacó lo que
+   * afirmaba de más.** Lo que queda en este archivo es lo que de verdad es de
+   * `CardField` — su cableado y la cadena del nacer.
    */
-  it('🔴 NINGUNA superficie de la vista de pago se deshabilita sin el predicado', () => {
-    const v = vivo(PANTALLA);
-    const ini = v.indexOf("if (view === 'pay')");
-    expect(ini, 'no se encontró la vista de pago').toBeGreaterThan(-1);
-    const fin = v.indexOf('// ─── Detalle', ini);
-    const region = v.slice(ini, fin > ini ? fin : undefined);
-
-    const EXCEPCIONES = ['disabled={reconciling}'];
-    const todos = [...region.matchAll(/disabled=\{[^}]*\}/g)].map((m) => m[0]);
-    // Control positivo: si el recorte fallara, esto mediría en vacío.
-    expect(todos.length, 'la región no tiene superficies: el censo mediría en vacío')
-      .toBeGreaterThan(8);
-
-    const sinGuarda = todos.filter(
-      (d) => !d.includes('seleccionBloqueada') && !EXCEPCIONES.includes(d),
-    );
-    expect(sinGuarda, `superficies deshabilitables SIN el predicado: ${sinGuarda.join(' · ')}`)
-      .toEqual([]);
-  });
-
-  /**
-   * Y las que Codex nombró una por una, por IDENTIDAD: un censo por forma
-   * podría pasar si alguna desapareciera del árbol en vez de perder la guarda.
-   */
-  it('🔴 las superficies nombradas están, cada una con su guarda', () => {
-    const v = vivo(PANTALLA);
-    // ⚠️ Las anclas son REGEX y no cadenas sueltas: `<CardField` a secas
-    // matchea `useState<CardFieldState>` —un parámetro de tipo— y el test
-    // buscaba la guarda 12.000 caracteres más allá. Mismo error que vengo
-    // corrigiendo toda la semana: el literal nunca solo.
-    const ANCLAS: ReadonlyArray<readonly [string, RegExp]> = [
-      ['mesero', /aria-labelledby="lbl-mesero"/],
-      ['tarjetas guardadas', /aria-label=\{t\('Tarjeta guardada'\)\}/],
-      ['usar otra tarjeta', /t\('Usar otra tarjeta'\)/],
-      ['guardar esta tarjeta', /t\('Guardar esta tarjeta para la próxima'\)/],
-      ['campo de Stripe', /<CardField\s*\n/],
-    ];
-    const faltan: string[] = [];
-    for (const [nombre, ancla] of ANCLAS) {
-      const i = v.search(ancla);
-      if (i < 0) { faltan.push(`${nombre}: desapareció del árbol`); continue; }
-      // La guarda vive dentro del mismo elemento: se mira una ventana amplia
-      // hacia los dos lados, porque el orden de props varía.
-      const ventana = v.slice(Math.max(0, i - 900), i + 900);
-      if (!ventana.includes('seleccionBloqueada')) faltan.push(`${nombre}: sin la guarda`);
-    }
-    expect(faltan, faltan.join(' · ')).toEqual([]);
-  });
 
   it('🔴 el campo lo aplica por la API del SDK, no por el DOM', () => {
     // `disabled={...}` no toca un iframe de otro origen: el gate es

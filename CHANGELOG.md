@@ -11,6 +11,105 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.97.2 — evidencia: el censo deriva la población, no la proyecta (2026-08-20)
+
+Séptima vuelta. 🔴 **Codex vuelve a acreditar que el código productivo está
+bien —byte-idéntico a `0.97.1` y correcto— y a bloquear por EVIDENCIA.** Este
+commit es de tests y arnés: **producción no se toca.**
+
+### ① El censo enumeraba la PROYECCIÓN de la población, no la población
+
+La vuelta anterior cambió el umbral por «exhaución» y **seguía sin detectar lo
+que decía detectar**. Codex lo probó con **cuatro sondas, las cuatro verdes**:
+borrarle el `disabled` al botón de mesero, al checkbox de guardar tarjeta y al
+`<TipSelector>`, y **agregar una superficie interactiva nueva sin guarda**.
+
+🔴 **La causa es una sola y es la clase madre del día:** el test construía su
+universo buscando `disabled={…}`. O sea que enumeraba **el conjunto de los que
+ya tenían guarda**. Cuando el mutante borra el prop, la superficie **no aparece
+como falta: desaparece del censo.** El oráculo no ve un incumplimiento, ve un
+conjunto más chico — y un conjunto más chico no dispara nada.
+
+Se sumaban tres agravantes, **cada uno suficiente solo**:
+
+- el recorte de la región terminaba en un **comentario** (`// ─── Detalle`) que
+  el propio helper borraba antes de buscarlo: `indexOf` daba `-1` y la región
+  **se comía el archivo hasta EOF**;
+- las anclas «por identidad» miraban **±900 caracteres** alrededor y por eso
+  **aceptaban la guarda de un vecino**;
+- el control positivo era `todos.length > 8`: con doce superficies, perder una
+  guarda dejaba once y **seguía verde**.
+
+### ② Cómo se arregla — `src/screens/censoSuperficiesPago.test.ts`
+
+**La población se DERIVA de lo que la superficie ES**, nunca de lo que ya tiene
+escrito: los controles del DOM (`button`, `input`, `select`, `textarea`) más
+**los componentes que declaran un prop `disabled` en su propio tipo de props**,
+resuelto por AST a través del árbol (`TipSelector` y `CardField`; `AppBottomBar`
+NO, porque su `disabled` está anidado dentro de `center` y su CTA se acredita
+aparte). 🔴 **Un `<button>` sigue siendo un botón después de que le borren el
+`disabled`** — y por eso el mutante ahora aparece como falta.
+
+Lo demás, punto por punto:
+
+- **cada guarda se lee del atributo PROPIO del elemento**, por AST. Se acabaron
+  las ventanas de caracteres: un vecino no puede prestar su guarda;
+- **la región se ubica por AST** —el nodo del `if (view === 'pay')`, que tiene
+  fin propio— y un test afirma que **no llega al final del archivo**;
+- **las excepciones se nombran por identidad**, por su handler
+  (`checkReconciliation`, `releaseAfterReconciliation`), y cada una tiene que
+  casar con **exactamente un** elemento que además **lleve su propia guarda**:
+  una excepción que dejó de corresponder pone el test **rojo**, en vez de seguir
+  tapando. Los diálogos de confirmación son una excepción **derivada** —sus
+  controles sólo existen tras un intento que la puerta ya dejó pasar— y para que
+  la zona **no se agrande sola** se exige que los `role="alertdialog"` sean
+  exactamente esos dos, nombrados por su `aria-label`;
+- **el control positivo es de PRESENCIA y por identidad**, no un umbral: cada
+  superficie nombrada tiene que estar **en la población**, identificada por su
+  handler —que es justo lo que el mutante del `disabled` no toca—;
+- **si un componente no resuelve, el test lo denuncia** en vez de asumir que no
+  lleva `disabled`: una población que no se puede cerrar se declara, no se
+  supone.
+
+Y se agrega un **segundo censo, dentro de `TipSelector`**: sus píldoras viven en
+otra función —tiene que ser así, por el error boundary— y el censo del llamador
+**no las ve**. Sin esto, una píldora nueva sin guarda no la mira nadie.
+
+### ③ Lo que se SACÓ de `cardFieldVentana.test.ts`
+
+Los dos oráculos refutados —el censo por proyección y las anclas de ±900— **se
+retiran**. 🔴 **No se aflojó nada: se sacó lo que afirmaba de más.** Un oráculo
+que no puede fallar es peor que no tenerlo, porque ocupa el lugar donde alguien
+busca la respuesta. Queda ahí lo que de verdad es de `CardField`: su cableado al
+SDK y la cadena del nacer.
+
+### ④ Mutantes, uno por uno
+
+Los cuatro de Codex **mueren**, y cinco más que planté para no volver a firmar
+un censo sin sondearlo:
+
+| # | Mutante | Resultado |
+|---|---|---|
+| ① | mesero sin el prop `disabled` | **muerto** · `button@1821 → SIN disabled` |
+| ② | checkbox «Guardar esta tarjeta» sin el prop | **muerto** · `input@1974` |
+| ③ | `<TipSelector>` sin el prop | **muerto** · `TipSelector@1800` |
+| ④ | superficie interactiva **nueva** sin guarda | **muerto** · la nombra por línea |
+| ⑤ | mesero con `disabled={false}` (guarda muerta) | **muerto** |
+| ⑥ | píldora **nueva** dentro de `TipSelector` sin el prop | **muerto** |
+| ⑦ | un **tercer** `alertdialog` abriendo zona de excusa | **muerto** |
+| ⑧ | la excepción de reconciliación pierde **su** guarda | **muerto** |
+| ⑨ | «usar otra tarjeta» desaparece del árbol | **muerto** |
+
+⚠️ **Lo que sigue declarado, sin cambios:** esto es **acreditación de fuente**,
+más débil que la observable. `CardField` no monta en la suite mock y varios de
+estos estados no se alcanzan en el navegador — se verifica **el cableado**, no
+la conducta. Y el ⑨ es el recordatorio de por qué el control positivo es de
+presencia: **una superficie que desaparece calla igual que una que cumple.**
+
+**Medido:** typecheck ✓ · **1164** unitarios (89 archivos; eran 1161 en 88) ·
+**110** e2e · builds real, mock y landing ✓ · espejo 79 ✓ · `diff --check` ✓.
+**Sin push ni deploy.**
+
 ## 0.97.1 — evidencia: censo por exhaución y la cadena del nacer (2026-08-20)
 
 Sexta vuelta del P30. 🔴 **Codex abre con *«No reproduje una falla funcional en
