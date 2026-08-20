@@ -11,6 +11,39 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.80.3 — la guarda que le faltaba al barrido (2026-08-19)
+
+**REWORK 2 de la auditoría de Codex** sobre el corte `6f66e23`
+(`ops/[PAYME]_AUDITORIA_33_REWORK_001_CODEX_2026-08-19.md`, commit `a1cd222`).
+
+`0.80.2` barrió los colores viejos. **Esto impide que vuelvan** — que es otra
+cosa, y es la que faltaba: el defecto original no fue no barrer, fue que
+**nada avisaba**.
+
+- **Barre las CUATRO grafías** en que cada color se puede escribir:
+  `#0f1f3d` · `rgba(15,31,61,…)` · `#00c2cb` · `rgba(0,194,203,…)`.
+  🔴 **Mira VALORES, no nombres de token**: un alias nuevo con el valor viejo se
+  llamaría distinto y pintaría igual. Es exactamente lo que pasó con
+  `--navy`/`--teal`, invisibles para el espejo porque no están en el sistema.
+- **Quita los comentarios antes de barrer.** El CHANGELOG y varios comentarios
+  **citan** los hex viejos para explicar por qué cambiaron; barrer eso obligaría
+  a borrar el registro para que un test pase. **Se barre código, no prosa** — y
+  hay sonda propia que lo fija en las tres sintaxis de comentario.
+- **Control positivo**: exige más de 100 archivos y los tres CSS por nombre. Un
+  glob roto devolvería `{}` y la guarda aprobaría en vacío, que es justo cómo el
+  defecto sobrevivió cuatro días.
+- **Mutante acreditado sobre el árbol real**: un archivo con las cuatro grafías
+  la pone roja y las nombra una por una; al retirarlo vuelve a verde.
+- **Y no marca lo vigente** —`#101e3b`, `#0fb5c9`, `rgba(16,30,59,…)`—: una
+  guarda que grita con el valor correcto se apaga sola.
+
+**Revalidación del lote** `3c13550` · `ec83b66` · `40b8036`, que son posteriores
+al corte auditado y por eso no se asumían verdes: medido en el árbol real, con
+el WIP de navbar preservado y sin commitear.
+
+**Cero ocurrencias vivas** en 149 archivos barridos; 4 en comentarios, que son
+historia. Sin push, sin deploy, sin secretos.
+
 ## 0.80.2 — el barrido de color, y lo que ningún guard miraba (2026-08-19)
 
 `D-EJE-8`/`D-EJE-9`, lado app. **El conteo del plan decía 3 ocurrencias. Eran
