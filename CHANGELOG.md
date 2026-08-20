@@ -11,6 +11,129 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.98.0 — §1.5 bis: el método de pago tampoco se adivina (2026-08-20)
+
+Cierra el **⑥** de la tanda 3 de fidelidad visual y su **anexo**, los dos
+resueltos por Diseño el mismo día (`diseno/SPEC_APP.md` §1.5 bis · «El selector
+de método de pago», commits `a4165da` + `e8de3b7`). 🔴 **Es la opción que salió
+de refutar el paquete, no la que el paquete pedía.**
+
+### ① Qué pedía el paquete, y por qué no se hizo
+
+Pedía *«un solo control — la tarjeta elegida con Cambiar»*. **La premisa era
+falsa** —el chevron y el radio no señalan lo mismo— y el patrón propuesto
+**reintroducía el defecto que cerró la ORDEN 1-B**: nombrar una tarjeta cuando
+nadie eligió. Diseño resolvió con **un control y dos estados honestos**, que es
+el mismo marco «sin elegir / elegido» que la propina de esta pantalla ya usa.
+
+| | SIN ELEGIR | ELEGIDO |
+|---|---|---|
+| borde | punteado `--warning` | sólido |
+| ícono | ⚠ | tarjeta |
+| primer renglón | «Elige tu método de pago» | **la tarjeta** |
+| segundo | — | «Tarjeta de crédito o débito» |
+| pista | `›` | «Cambiar» en `--link` |
+
+🔴 **Sin elegir NO nombra ninguna tarjeta** — ni la default ni la última usada.
+Cero token nuevo, cero componente nuevo: reusa `.tip-block--pending` (punteado +
+`--warning` + `--warning-tint`) y hasta su keyframe de pulso.
+
+### ② El anexo NO era «sólo estado», y eso lo encontró la medición
+
+La spec cierra el anexo con *«el arreglo es de estado, no de diseño»*.
+**Visualmente cierto; funcionalmente incompleto, y el faltante cae del lado del
+dinero.** `cardChoice` nacía en `'new'` —una elección real que nadie hizo— y
+moverlo a un sentinela propio **desarma la condición que apagaba el CTA**:
+
+- en **mock**, `savedCard` da `null`, el envío cae al camino de la tarjeta nueva
+  y **cobra con un `pm_` que nadie eligió**;
+- en **real**, muere pidiendo *«Ingresa los datos de la tarjeta»* **apuntando a
+  un campo que no está en pantalla** — un callejón sin salida con cartel.
+
+Se implementa **completo**, con el patrón que ORDEN 1-B ya dejó en el árbol.
+
+### ③ La mitad dura es la guarda, no el botón
+
+🔴 **El CTA NO se apaga**, y es decisión ratificada de ESTA pantalla: *«un botón
+gris se lee como error del sistema, no como te falta un paso»* (Mati, sobre la
+propina obligatoria). Se avisa, se lleva el ojo al selector y el borde pulsa una
+vez — **igual que la propina, porque es el mismo problema**. Lo que no puede
+pasar es que se envíe algo, y de eso se ocupa un corte en `doPay`.
+
+🔴 **Y ese corte lleva `!frozen?.payload`, que no es defensivo: sin eso TRABA el
+reintento.** Un reenvío congelado manda el cuerpo original —que ya trae su
+método—, pero tras una recarga la pantalla arranca sin selección; pedir que se
+elija cortaría **la única salida de ese estado**. ⚠️ En Garantía la guarda
+equivalente **sí** corta el reenvío, y no es incoherencia: allá el reenvío CREA
+por primera vez y la tarjeta que viaja ES la que respalda la garantía. **Misma
+regla, dos consecuencias, porque «reenviar» no significa lo mismo en las dos
+pantallas.**
+
+### ④ Lo que se conserva a propósito, contra la letra del mockup
+
+**La semántica `role="radio"` se queda**, aunque hoy el grupo tenga un solo
+miembro (saldo apagado por capability; Apple y Google por `WALLET_PAY_ENABLED`).
+**Es justamente por eso que la fila se lee redundante hoy** — y es lo que va a
+hacer falta el día que los hermanos vuelvan, que son MUST ratificado. Se retira
+la duplicación **visual**; la semántica no. Sacarla es fácil y reponerla bien no.
+
+⚠️ **Queda declarado el efecto lateral de ese día:** cuando Apple/Google
+enciendan, sus filas van a mostrar el círculo de radio y ésta «Cambiar». Esa
+inconsistencia es real y se resuelve entonces, con las tres filas a la vista —
+no ahora, adivinando.
+
+### ⑤ El sentinela se mudó, y el oráculo se mudó con él
+
+`SIN_TARJETA_ELEGIDA` vivía dentro de `CreateMesaFlow`. Pasa a
+`src/screens/tarjetaElegida.ts` porque **las dos pantallas lo usan y una copia se
+desincroniza sin que nadie lo note**. `reconciliacionFuente.test.ts` sigue
+afirmando que el valor no es `'new'` ni un uuid —ahora sobre el módulo— **y
+agrega que la pantalla lo IMPORTA**: una copia local vuelve a poner el test rojo.
+
+### ⑥ Mutantes, uno por uno
+
+| # | Mutante | Resultado |
+|---|---|---|
+| ① | `cardChoice` vuelve a nacer en `'new'` | **muerto** |
+| ② | el reset por mesa vuelve al literal `'new'` | **muerto** |
+| ③ | desaparece la mitad dura del corte | **muerto** |
+| ④ | el corte pierde `!frozen?.payload` y traba el reintento | **muerto** |
+| ⑤ | alguien «completa» la guarda apagando el CTA | **muerto** |
+| ⑥ | el aviso pierde el `scrollIntoView` | **muerto** |
+| ⑦ | la fila vuelve a nombrar tarjeta sin elección (fuente) | **muerto** |
+| ⑧ | el predicado se cablea mal (`cards.length` → `0`) | **muerto, y SÓLO en el navegador** |
+
+El ⑧ es el que justifica el E2E: ningún oráculo de fuente lo ve.
+
+### ⑦ El testigo del E2E cambió de lugar, y no se aflojó
+
+`atribucion-ventana.spec.ts` usaba **el glifo `▾`** como prueba de que las
+tarjetas se habían cargado. §1.5 bis lo retiró. El reemplazo es
+`aria-expanded`, que la fila publica **exactamente con la misma condición**
+(`cards.length > 0`), leído de la semántica en vez de la decoración — que es
+donde tendría que haber estado desde el principio. Y el spec gana una aserción
+nueva: durante la ventana, la fila **no puede contener los dígitos de ninguna
+guardada**.
+
+### ⑧ Método — un error propio que casi cuesta el trabajo
+
+🔴 **Restauré un mutante con `git checkout -- MesaScreen.tsx` teniendo el
+baseline SIN COMMITEAR, y me llevé puestos todos los cambios del archivo.** Se
+rehicieron desde la conversación, pero la lección es del oficio: **el revert de
+un mutante se hace contra una copia, nunca contra `HEAD`, mientras el trabajo no
+esté commiteado.** El resto de la tanda corrió con la copia y salió limpia.
+
+⚠️ **Y un intermitente declarado y NO atribuido:** en una corrida completa
+aparecieron **40 fallas** —splash, rutas, stepper— que en la corrida siguiente
+no se repitieron, y el spec del splash falló una vez más y pasó aislado. Las
+corridas finales dan **110/110 dos veces**. **No se declara resuelto ni se le
+pone causa:** descartar dos explicaciones no es haber encontrado la tercera.
+
+**Medido:** typecheck ✓ · **1178** unitarios (91 archivos; eran 1164 en 89) ·
+**110** e2e · builds real, mock y landing ✓ · espejo 79 ✓ · tokens ratificados ✓
+· `diff --check` ✓. Verificado además **en el navegador, a 375×812 y en mock**,
+con captura de los dos estados. **Sin push ni deploy.**
+
 ## 0.97.2 — evidencia: el censo deriva la población, no la proyecta (2026-08-20)
 
 Séptima vuelta. 🔴 **Codex vuelve a acreditar que el código productivo está
@@ -616,7 +739,14 @@ se reescribió:** citaba mi comparación con el 3DS frenado, y hoy manda el acta
 🔴 **⑥ NO SE IMPLEMENTA — la premisa del paquete es falsa, medida.** Dice que
 la fila tiene *«dos afordancias para lo mismo»* (chevron + radio). **No son
 para lo mismo:** el `▾` despliega las tarjetas guardadas y el radio indica
-**qué método de pago está elegido** —son controles de dos cosas distintas—.
+**qué método de pago está elegido**.
+
+> 🔴 **CORREGIDO el 2026-08-20 en `0.98.0`, por mí y sobre mi propio texto.**
+> Acá decía *«son controles de dos cosas distintas»*. **No son controles:** los
+> dos son `aria-hidden` dentro de UN solo `<button role="radio">`, o sea
+> decoración. Lo cierto —y lo que sostiene la refutación— es que **indican dos
+> ESTADOS distintos**: el `▾` espeja `aria-expanded` y el círculo `aria-checked`.
+> La conclusión no cambia; la razón sí, y era la frase que Diseño iba a citar.
 Cambiarlo por «la tarjeta elegida + Cambiar» además **reintroduciría el
 defecto que cerró la ORDEN 1-B**: mostrar una tarjeta elegida cuando nadie
 eligió. Queda declarado para Diseño, no resuelto por inferencia.

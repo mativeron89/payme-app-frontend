@@ -28,16 +28,22 @@ import { describe, expect, it } from 'vitest';
  * puede confundir.
  */
 
-const FUENTE = import.meta.glob('/src/screens/CreateMesaFlow.tsx', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
+const FUENTE = import.meta.glob(
+  ['/src/screens/CreateMesaFlow.tsx', '/src/screens/tarjetaElegida.ts'],
+  { query: '?raw', import: 'default', eager: true },
+) as Record<string, string>;
 
 function pantalla(): string {
   const texto = FUENTE['/src/screens/CreateMesaFlow.tsx'];
   // Sin esto, un glob que no encuentra nada dejaría pasar TODO en verde.
   expect(texto, 'no se pudo leer CreateMesaFlow.tsx').toBeTruthy();
+  return texto!;
+}
+
+/** El módulo compartido donde vive el sentinela desde §1.5 bis. */
+function modulo(): string {
+  const texto = FUENTE['/src/screens/tarjetaElegida.ts'];
+  expect(texto, 'no se pudo leer tarjetaElegida.ts').toBeTruthy();
   return texto!;
 }
 
@@ -153,8 +159,20 @@ describe('la garantía congelada no se le atribuye a la default', () => {
     );
   });
 
+  /**
+   * 🔴 P36-bis · el sentinela SE MUDÓ a `tarjetaElegida.ts` porque §1.5 bis lo
+   * reusa en Pagar mi parte, y la spec pide **el mismo identificador, no uno
+   * nuevo**. El oráculo no se aflojó: sigue afirmando que el valor no es
+   * `'new'` ni un uuid, y agrega que la pantalla lo IMPORTA — una copia local
+   * que se desincronice vuelve a poner esto rojo.
+   */
   it('🔴 el sentinela NO es `new` ni un uuid: los dos afirman algo', () => {
-    expect(pantalla()).toContain("const SIN_TARJETA_ELEGIDA = '';");
+    expect(modulo()).toContain("export const SIN_TARJETA_ELEGIDA = '';");
+  });
+
+  it('🔴 la pantalla lo IMPORTA: no puede volver a declararlo por su cuenta', () => {
+    expect(pantalla()).toContain("import { SIN_TARJETA_ELEGIDA } from './tarjetaElegida';");
+    expect(pantalla()).not.toMatch(/const\s+SIN_TARJETA_ELEGIDA\s*=/);
   });
 
   it('la selección de TARJETA vuelve a estar viva cuando el reenvío está autorizado', () => {

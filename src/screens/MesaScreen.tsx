@@ -58,6 +58,7 @@ import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { tipFromBps } from '../utils/money';
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
+import { metodoSinElegir, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import {
   NO_TIP_CHOSEN,
   TIP_OPTIONS,
@@ -309,6 +310,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   /** El pulso de una sola vez del borde cuando se toca "Pagar" sin elegir. */
   const [tipPulse, setTipPulse] = useState(false);
   const tipSectionRef = useRef<HTMLDivElement | null>(null);
+  const [metodoPulse, setMetodoPulse] = useState(false);
+  const metodoSectionRef = useRef<HTMLButtonElement | null>(null);
   /**
    * §1.5 bis (2026-08-06) · reconfirmación de propina desmedida (> 3× la
    * base). `tipConfirmedRef` = "esta propina ya fue reconfirmada": expira en
@@ -336,7 +339,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // no tenía guardadas: siempre tarjeta nueva sin checkbox.
   // (Rama inalcanzable desde v2.32.0 — ver el docblock de `isGuest`.)
   const [cards, setCards] = useState<PaymentMethod[]>([]);
-  const [cardChoice, setCardChoice] = useState<string>('new');
+  /**
+   * §1.5 bis · **nace SIN ELEGIR, no en `'new'`.** `'new'` es una elección
+   * real —«voy a tipear otra»— y nacía marcada sin que nadie la tocara: la
+   * lista desplegada mostraba «Usar otra tarjeta» con su `aria-checked` desde
+   * el arranque. Es la misma familia de afirmación sin elección que la
+   * ORDEN 1-B corrigió en Garantía, un nivel más adentro.
+   */
+  const [cardChoice, setCardChoice] = useState<string>(SIN_TARJETA_ELEGIDA);
   const [saveCard, setSaveCard] = useState(GUARDAR_TARJETA_DEFAULT);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const [cardState, setCardState] = useState<CardFieldState>({
@@ -378,12 +388,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     setMesa(null); setNotFound(false); setSelected(new Map()); setLockTokens([]);
     // La mesa nueva también nace sin elegir: acá estaba el segundo `15`.
     setTip(NO_TIP_CHOSEN); setCustomTipStr(''); setStaffId(null);
-    setTipSelectorFailed(false); setTipPulse(false);
+    setTipSelectorFailed(false); setTipPulse(false); setMetodoPulse(false);
     setPayType('card'); setCardsOpen(false); setInviteOpen(false); setCards([]);
     shareInFlightRef.current = createInFlightMutex();
     // El reset por mesa vuelve AL DEFAULT, no a un literal propio: acá vivía
     // el segundo `true`, igual que el segundo `15` de la propina.
-    setCardChoice('new'); setSaveCard(GUARDAR_TARJETA_DEFAULT); setCardEl(null);
+    setCardChoice(SIN_TARJETA_ELEGIDA); setSaveCard(GUARDAR_TARJETA_DEFAULT); setCardEl(null);
     const emptyCard: CardFieldState = { complete: false, error: null, empty: true };
     cardStateRef.current = emptyCard; setCardState(emptyCard);
     payStartedRef.current = false; payInFlightRef.current = createInFlightMutex();
@@ -806,6 +816,25 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * todas lo consumen — `CardField` deja de tener llave propia.
    */
   const seleccionBloqueada = journalPendiente || !!frozenScope;
+  /**
+   * §1.5 bis · «hay entre qué elegir y nadie eligió». La REGLA vive en
+   * `tarjetaElegida.ts` —pura y probada aparte—; acá sólo se aplica.
+   */
+  const metodoPendiente = metodoSinElegir(payType, cards.length, cardChoice);
+  /**
+   * Qué dice la fila cuando SÍ hay elección: la guardada, o «Usar otra
+   * tarjeta» si se eligió tipear una. `null` = no hay nada que nombrar —ni
+   * porque no eligió, ni porque no hay guardadas—, y entonces la fila vuelve
+   * a su rótulo genérico.
+   *
+   * 🔴 Se calcula UNA vez. Antes el `cards.find(...)` estaba escrito TRES
+   * veces en la misma expresión, con dos `!` de por medio.
+   */
+  const tarjetaElegidaTexto = ((): string | null => {
+    if (cardChoice === 'new') return t('Usar otra tarjeta');
+    const guardada = cards.find((c) => c.id === cardChoice);
+    return guardada ? t('{0} ···· {1}', guardada.bank_name ?? guardada.brand, guardada.last_four) : null;
+  })();
   const cardRailAvailable = canUseCardRail(moneyRail, !!frozenScope);
   // La decisión vive en `freezeMachine.ts`, que sí tiene cobertura: acá sólo
   // se consume. Antes era lógica inline sin un solo test.
@@ -1130,6 +1159,42 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // el toast y el pulso siguen siendo la señal.
       tipSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
       setTipPulse(true);
+      payInFlightRef.current.leave();
+      return;
+    }
+    /**
+     * §1.5 bis · EL MÉTODO TAMPOCO SE ADIVINA — y esta es la mitad DURA.
+     *
+     * 🔴 El `disabled` del CTA no alcanzaría, y acá ni siquiera se usa: esta
+     * pantalla ya decidió —y Mati lo ratificó para la propina, dos párrafos
+     * arriba— que **un botón gris se lee como error del sistema, no como «te
+     * falta un paso»**. Se avisa, se lleva el ojo al selector y el borde pulsa
+     * una vez, igual que la propina. Elegir es un toque.
+     *
+     * Lo que NO puede pasar es que se envíe algo: sin esta guarda, con
+     * guardadas y ninguna elegida, `savedCard` da `null` y el envío cae al
+     * camino de la tarjeta NUEVA — en mock cobra con un `pm_` inventado que
+     * nadie eligió, y en real muere pidiendo datos de un campo que ni siquiera
+     * está en pantalla. **La guarda dura es esta, no el botón.**
+     *
+     * 🔴 `!frozen?.payload` NO es defensivo: sin eso esto TRABA el reintento.
+     *
+     * Un reintento congelado reenvía `frozen.payload` —el cuerpo original, que
+     * ya trae su método— y por eso `cardChoice` no interviene. Pero tras una
+     * recarga la pantalla arranca sin selección, así que `metodoPendiente`
+     * daría `true` y esta guarda cortaría **la única salida que tiene ese
+     * estado**, pidiendo elegir algo que no se va a usar.
+     *
+     * ⚠️ En Garantía la guarda equivalente SÍ corta el reenvío, y no es una
+     * incoherencia: allá, con `not_found`, el reenvío CREA por primera vez y la
+     * tarjeta que se manda ES la que respalda la garantía. Acá el cuerpo ya
+     * está escrito. **Misma regla, dos consecuencias, porque el reenvío no
+     * significa lo mismo en las dos pantallas.**
+     */
+    if (!frozen?.payload && metodoPendiente) {
+      toast(t('Elige tu método de pago'));
+      metodoSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      setMetodoPulse(true);
       payInFlightRef.current.leave();
       return;
     }
@@ -1864,8 +1929,29 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <div className="radio" aria-hidden="true" />
               </button>
             )}
+            {/* 🔴 §1.5 bis · UN CONTROL CON DOS ESTADOS HONESTOS, no dos
+                controles fijos. Acá convivían el chevron y el círculo de radio
+                —los dos `aria-hidden`, o sea DECORACIÓN— espejando dos estados
+                distintos: si la lista está abierta y si el método elegido es
+                tarjeta. **Se leían redundantes** mirando la pantalla quieta, y
+                la fidelidad visual pidió reemplazarlos por «la tarjeta elegida
+                + Cambiar».
+
+                ⚠️ Esa propuesta, tal cual, **reintroducía el defecto que cerró
+                la ORDEN 1-B**: nombrar una tarjeta cuando nadie eligió. Diseño
+                resolvió con el mismo marco «sin elegir / elegido» que ya usa la
+                propina de esta pantalla, y por eso el estado vacío NO nombra
+                ninguna tarjeta —ni la default ni la última—.
+
+                ⚠️ **La semántica `role="radio"` se CONSERVA aunque hoy el grupo
+                tenga un solo miembro** (saldo apagado por capability, Apple y
+                Google por `WALLET_PAY_ENABLED`). Es lo que hace que la fila se
+                lea redundante hoy, y lo que va a hacer falta el día que los
+                hermanos vuelvan: sacarla es fácil, reponerla bien no. */}
             <button
-              className={`method-card ${payType === 'card' ? 'sel' : ''}`}
+              ref={metodoSectionRef}
+              className={`method-card ${payType === 'card' ? 'sel' : ''}${metodoPendiente ? ' method-card--pending' : ''}${metodoPulse ? ' method-card--pulse' : ''}`}
+              onAnimationEnd={() => setMetodoPulse(false)}
               onClick={() => {
                 setPayType('card');
                 if (cards.length > 0) setCardsOpen((v) => payType !== 'card' ? true : !v);
@@ -1875,27 +1961,43 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               aria-checked={payType === 'card'}
               aria-expanded={cards.length > 0 ? cardsOpen : undefined}
             >
-              <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
-                <Icon name="card" size={22} />
+              <div
+                className="method-icon"
+                style={{ background: metodoPendiente ? 'var(--warning-tint)' : 'var(--gray-l)' }}
+                aria-hidden="true"
+              >
+                <Icon name={metodoPendiente ? 'warning' : 'card'} size={22} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>{t('Tarjeta de crédito o débito')}</div>
-                <div className="caption">
-                  {cards.length > 0
-                    ? (cards.find((c) => c.id === cardChoice)
-                        ? t('{0} ···· {1}', cards.find((c) => c.id === cardChoice)!.bank_name ?? cards.find((c) => c.id === cardChoice)!.brand, cards.find((c) => c.id === cardChoice)!.last_four)
-                        : t('Elige una guardada o usa otra'))
-                    : IS_MOCK
-                      ? t('La ingresas al confirmar (segura, vía Stripe)')
-                      : t('Ingresa los datos abajo (seguro, vía Stripe)')}
+                {/* Los dos renglones SE INVIERTEN entre estados, como pide la
+                    spec: elegido, manda la tarjeta; sin elegir, manda la
+                    instrucción y la tarjeta no aparece en ningún lado. */}
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 'var(--fs-legacy-base)',
+                    ...(metodoPendiente && { color: 'var(--warning)' }),
+                  }}
+                >
+                  {metodoPendiente ? t('Elige tu método de pago') : (tarjetaElegidaTexto ?? t('Tarjeta de crédito o débito'))}
                 </div>
+                {!metodoPendiente && (
+                  <div className="caption">
+                    {tarjetaElegidaTexto
+                      ? t('Tarjeta de crédito o débito')
+                      : IS_MOCK
+                        ? t('La ingresas al confirmar (segura, vía Stripe)')
+                        : t('Ingresa los datos abajo (seguro, vía Stripe)')}
+                  </div>
+                )}
               </div>
+              {/* La pista de que la fila entera es tocable — no un control
+                  aparte: vive DENTRO del mismo botón y es `aria-hidden`. */}
               {cards.length > 0 && (
-                <span className="caption" aria-hidden="true" style={{ marginRight: 6 }}>
-                  {cardsOpen ? '▴' : '▾'}
-                </span>
+                metodoPendiente
+                  ? <span className="method-hint method-hint--warning" aria-hidden="true">›</span>
+                  : <span className="method-hint method-hint--link" aria-hidden="true">{t('Cambiar')}</span>
               )}
-              <div className="radio" aria-hidden="true" />
             </button>
             {/* D4 + feedback Mati: las guardadas viven en el desglosable, no
                 sueltas en la lista principal. */}

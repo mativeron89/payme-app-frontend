@@ -1112,6 +1112,43 @@ body {
   opacity: 0.5;
   cursor: default;
 }
+/* §1.5 bis · «sin elegir» del selector de método. MISMO lenguaje que el
+   bloque de propina (`.tip-block--pending`): punteado + --warning +
+   --warning-tint. Cero token nuevo — la spec lo pide explícitamente, y dos
+   estados «te falta un paso» que se ven distinto enseñan dos cosas. */
+.method-card--pending {
+  border-style: dashed;
+  border-color: var(--warning);
+  background: var(--warning-tint);
+}
+/* Gana sobre `.sel`: mientras no se eligió tarjeta, que la fila esté teal
+   —«método elegido: tarjeta»— compite con el punteado que dice que falta
+   algo. La verdad más urgente es la que falta. */
+.method-card.sel.method-card--pending {
+  border-color: var(--warning);
+  background: var(--warning-tint);
+}
+/* Se toca «Pagar» sin elegir método: el borde pulsa UNA vez, igual que la
+   propina. Reusa su keyframe, no uno propio. */
+.method-card--pulse {
+  animation: tip-pulse 0.6s ease-out 1;
+}
+/* La pista de que la fila entera es tocable. NO es un control: vive dentro
+   del botón y es aria-hidden. */
+.method-hint {
+  font-family: var(--font-body);
+  font-size: var(--fs-legacy-xs);
+  font-weight: 700;
+  margin-left: 6px;
+  flex: none;
+}
+.method-hint--warning {
+  color: var(--warning);
+  font-size: var(--fs-legacy-md);
+}
+.method-hint--link {
+  color: var(--link);
+}
 .method-icon {
   width: 44px;
   height: 44px;

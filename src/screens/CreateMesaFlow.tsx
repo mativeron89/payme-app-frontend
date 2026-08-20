@@ -40,13 +40,9 @@ import {
   type DecisionReconciliacion,
 } from './reconciliacionMesaView';
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
+import { SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import { decideOcrScan } from './ocrScanView';
 
-/**
- * ORDEN 1-B · "todavía nadie eligió". No es `'new'` —que ya significa "voy a
- * tipear otra"— ni el uuid de una guardada: los dos afirman algo.
- */
-const SIN_TARJETA_ELEGIDA = '';
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types';

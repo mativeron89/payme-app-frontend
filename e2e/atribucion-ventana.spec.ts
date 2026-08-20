@@ -83,19 +83,46 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
    * tarjetas guardadas y la lista está desplegada** — o sea, hay superficies
    * que SIN la guarda estarían habilitadas.
    */
+  // 🔴 §1.5 bis · el matcher cubre LOS DOS estados honestos de la fila. Antes
+  // nombraba sólo «Tarjeta de crédito o débito», que es el rótulo del estado
+  // ELEGIDO; con la fila «sin elegir» ese texto no existe y el ancla se caía
+  // sin que hubiera defecto.
+  const filaTarjeta = page.getByRole('radio', {
+    name: /Tarjeta de crédito o débito|Elige tu método de pago/,
+  });
   await expect(
-    page.getByRole('radio', { name: /Tarjeta de crédito o débito/ }),
+    filaTarjeta,
     'el escenario no tiene la fila de tarjeta: el caso mediría otra cosa',
   ).toBeVisible();
   // ⚠️ La LISTA de guardadas no se puede exigir acá y el intento me lo enseñó:
-  // sólo se despliega al tocar el chevron, y durante la ventana eso está
-  // cerrado. Lo que sí prueba que las tarjetas **se cargaron** —y por tanto
-  // que hay algo que sin la guarda sería elegible— es el propio chevron, que
-  // sólo se pinta con `cards.length > 0`.
+  // sólo se despliega al tocar la fila, y durante la ventana eso está cerrado.
+  // Lo que sí prueba que las tarjetas **se cargaron** —y por tanto que hay algo
+  // que sin la guarda sería elegible— es `aria-expanded`, que la fila sólo
+  // publica con `cards.length > 0`.
+  //
+  // 🔴 Antes el testigo era el glifo `▾`, y §1.5 bis lo retiró. **Se cambió el
+  // testigo, no se aflojó el control:** `aria-expanded` es la MISMA condición
+  // (`cards.length > 0`), leída de la semántica en vez de la decoración — que
+  // es donde tendría que haber estado desde el principio.
   await expect(
-    page.getByText('▾', { exact: true }),
+    filaTarjeta,
     'las tarjetas no se cargaron: sin ellas el oráculo pasa aunque falten las guardas',
-  ).toBeVisible();
+  ).toHaveAttribute('aria-expanded', /^(true|false)$/);
+
+  /**
+   * 🔴 §1.5 bis · Y ACÁ SE VE EL ESTADO HONESTO, que es lo único observable en
+   * navegador de toda esta sección: con el journal pendiente **no hubo
+   * atribución**, así que nadie eligió — y la fila NO nombra ninguna tarjeta.
+   *
+   * Es la ORDEN 1-B un nivel más adentro. Los cuatro dígitos son los del seed
+   * del mock; si el seed cambia, esta aserción tiene que cambiar con él y no
+   * al revés.
+   */
+  await expect(filaTarjeta).toContainText('Elige tu método de pago');
+  await expect(
+    filaTarjeta,
+    'la fila nombra una tarjeta que nadie eligió: es el defecto que cerró la ORDEN 1-B',
+  ).not.toContainText(/4532|8821|····/);
   for (let i = 0; i < cuantas; i++) {
     const s = superficies.nth(i);
     if (!(await s.isVisible())) continue;
@@ -106,8 +133,7 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
   await expect(page.getByRole('button', { name: 'Pagar', exact: true })).toBeDisabled();
 
   // Cuando el journal contesta, la pantalla vuelve a ofrecer todo.
-  await expect(page.getByRole('radio', { name: /Tarjeta de crédito o débito/ }))
-    .toBeEnabled({ timeout: 15_000 });
+  await expect(filaTarjeta).toBeEnabled({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Pagar', exact: true })).toBeEnabled();
 });
 
