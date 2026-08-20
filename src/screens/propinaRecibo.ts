@@ -37,3 +37,27 @@ export function rotuloPropina({ pct, nombre }: PropinaRecibo): RotuloPropina {
   if (nombre !== null) return { clave: 'Propina (para {0})', args: [nombre] };
   return { clave: 'Propina', args: [] };
 }
+
+/**
+ * 🔴 LA DECISIÓN COMPLETA DE LA FILA DE PROPINA, en un solo lugar: **si
+ * aparece** y **cómo se llama**.
+ *
+ * Existe por el bloqueante 2 de la auditoría del 2026-08-20. La vista ya
+ * aplicaba el rótulo nuevo y ocultaba la propina cero, pero `receiptText()`
+ * —el que alimenta *compartir* y *descargar*— seguía emitiendo
+ * `Propina (al mesero)` fijo, incluso con cero. **La misma operación se
+ * contaba distinto en pantalla que en el papel que la persona manda.**
+ *
+ * `rotuloPropina` sola no alcanzaba para impedirlo: dejaba la mitad de la
+ * decisión —el `tip > 0`— repetida en cada superficie, y una copia se
+ * desincronizó. Acá viajan **las dos mitades juntas**: `null` significa
+ * *«esta fila no va»*, y no hay forma de usar el rótulo sin pasar por la
+ * omisión.
+ */
+export function filaPropina(
+  tipCents: number,
+  datos: PropinaRecibo,
+): RotuloPropina | null {
+  if (tipCents <= 0) return null;
+  return rotuloPropina(datos);
+}

@@ -6,15 +6,22 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-12** (`D-FF-1` · alta cerrada, aviso previo y
-  contrato OCR explícito).
+- Fecha del refresh: **2026-08-20** (bloqueante 1 de la auditoría del P12: el
+  espejo mantenía el piso 2 de `expected_participants` que el dueño ya había
+  retirado, y **la UI prometía «uno o varios» impidiendo uno**).
 - Commit exacto y procedencia del CONTENIDO:
-  **`415651ca4ef393a333206269e4a7f598c2b647de`**
-  (`feat(legal): acreditar aviso antes del alta`).
+  **`6ec93ce41506db382d48dc154e1c28d27a27b174`**
+  (`feat(garantía): la garantía abandonada se muere, y sólo si de verdad murió · v2.53.0`).
 - Commit que publicó el inventario autoritativo:
-  **`5edae8ec9c2acb85dab90be6b178e83c6c6435a4`**
-  (`chore(contrato): publicar compuerta legal de alta`). Como siempre, el
+  **`168066f9be6381dec93a1a21a73e9d3dae8a37e4`**
+  (`chore(garantía): declarar el barrido nuevo en la guarda del timer y republicar`). Como siempre, el
   inventario declara el commit del contenido, no su propio commit.
+
+⚠️ **El HEAD del dueño estaba MÁS ADELANTE (`168066f`) y NO se espejó ese:** se
+espeja **el commit que su inventario declara**, que es quien define la
+población. Medido antes de copiar: entre `6ec93ce` y su HEAD **ninguno de los
+79 archivos cambia**, así que espejar uno u otro da el mismo contenido — pero
+anclar al inventario es lo que mantiene verificable la paridad.
 
 🆕 **79 archivos espejados** más este README.
 

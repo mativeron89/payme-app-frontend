@@ -44,31 +44,32 @@ export function modoContrato(m: ModoUI): ModoContrato {
 }
 
 /**
- * Piso del stepper. Sale del CONTRATO (`igual` exige >= 2), no de criterio:
- * las dos formas que reparten el total heredan 2; «cada uno lo suyo» va con 1
- * porque el número ahí sólo fija la base de propina.
+ * Piso del stepper. **Son DOS reglas distintas y conviene no confundirlas:**
  *
- * 🔴 **VENCIDO PARA «PAGAR EL TOTAL», y sigue en 2 a propósito.** Mati ratificó
- * el 2026-08-19 que **una persona sola puede** cubrir el total — etiqueta
- * literal **«Una persona puede»**, en
- * `ops/actas/[PAYME]_ACTA_2026-08-19_PAGAR_EL_TOTAL_UNA_PERSONA.md`. Desde esa
- * acta, **el 2 que devuelve esta función para `'total'` contradice la conducta
- * ratificada**: la pantalla no deja elegir 1, que es justo lo que se habilitó.
+ * ```
+ * «Pagar el total»      piso 1   ← del CONTRATO, y es lo que Mati ratificó
+ * «En partes iguales»   piso 2   ← de la UI, decisión SEPARADA de Mati
+ * «cada uno lo suyo»    piso 1   ← el número sólo fija la base de propina
+ * ```
  *
- * **No se corrige acá porque el piso no es nuestro:** vive en el contrato de
- * App Backend, y el dueño va primero. Cuando publique la semántica, este front
- * espeja y recién ahí cambia. **Este comentario NO adelanta cómo la va a
- * resolver** —si `igual` con piso 1 o un modo nuevo—: sólo deja dicho que el
- * número de abajo está vencido.
+ * 🔴 **El piso 1 salió del contrato el 2026-08-19** — acta
+ * `[PAYME]_ACTA_2026-08-19_PAGAR_EL_TOTAL_UNA_PERSONA.md`, etiqueta literal
+ * **«Una persona puede»**. El dueño lo implementó: `schemas/index.js:203` pasó
+ * a `min(1)` y **`optional()`**, y el refine (`:221`) ya no pide `>= 2` sino
+ * que el campo **esté presente** cuando el modo es `igual` — *el piso baja, la
+ * obligación de declararlo NO*. Este front siempre lo manda.
  *
- * ⚠️ Se escribe porque el resto de este archivo explica el piso 2 **citando el
- * refine del contrato como si fuera la verdad ratificada**, y el próximo que lo
- * lea —incluida una sesión mía en frío— no tendría forma de saber que Mati
- * decidió lo contrario. Un comentario que certifica algo vencido es peor que
- * no tener ninguno.
+ * 🔴 **Y el 2 de «partes iguales» NO es un resto del piso viejo: es una
+ * decisión propia de Mati, del 2026-08-20, con su texto literal:** *«"En
+ * partes iguales" tiene un mínimo de dos»*. **El backend no distingue de qué
+ * pantalla vino el request**, así que esa distinción vive acá y sólo acá.
+ *
+ * ⚠️ **Por eso hay un test que lo defiende explícitamente:** quien lea el
+ * contrato nuevo y vea `min(1)` va a querer «corregir» esta UI. No es un
+ * descuido: es lo ratificado, y aflojarlo contradice a Mati.
  */
 export function pisoDe(m: ModoUI): number {
-  return modoContrato(m) === 'igual' ? 2 : 1;
+  return m === 'igual' ? 2 : 1;
 }
 
 /**

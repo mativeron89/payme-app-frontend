@@ -102,7 +102,12 @@ function envueltos(): { ruta: string; texto: string }[] {
 // 🔴 SUBIÓ A 19 el 2026-08-20 (tanda 4, ítem 4): el rótulo de la propina del
 // comprobante sale de `rotuloPropina()`, que elige entre CUATRO claves según
 // qué se sepa —porcentaje y/o destinatario—. Cubierto por familia acá abajo.
-const T_SIN_LITERAL = 19;
+// 🔴 SUBIÓ A 20 el 2026-08-20 (bloqueante 2 de Codex): `receiptText()` —el que
+// alimenta compartir y descargar— pasó a usar el MISMO rótulo que la vista en
+// vez de emitir «Propina (al mesero)» fijo. Es un `t(VARIABLE)` más, y es
+// justamente el que hace que las tres superficies digan lo mismo. La familia
+// `rotuloPropina` de abajo ya lo cubre.
+const T_SIN_LITERAL = 20;
 
 function sitiosSinLiteral(): string[] {
   const out: string[] = [];

@@ -60,8 +60,12 @@ test('🔴 «Pagar el total» reparte el total entre los que cubren, como igual'
   // Comparte título con partes iguales: DOS títulos para TRES formas.
   await expect(page.getByText('¿Cuántos pagan?')).toBeVisible();
 
-  // Piso 2, heredado del contrato: el primer toque no puede dejar un 1.
-  await page.getByRole('button', { name: 'Un comensal más' }).click();
+  // 🔴 CAMBIÓ CON «Una persona puede» (2026-08-19): el piso de esta forma es
+  // 1, así que llegar a DOS ahora son dos toques. El test sigue probando lo
+  // mismo —el total repartido entre los que cubren— con N=2.
+  const masUno = page.getByRole('button', { name: 'Un comensal más' });
+  await masUno.click();
+  await masUno.click();
   await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('2');
 
   await page.getByRole('button', { name: 'Continuar' }).click();
@@ -131,4 +135,48 @@ test('🔴 el cartel de espera del 3DS no existe antes de la espera', async ({ p
   // consultado. El cartel no puede estar.
   await expect(page.getByText('Esperando a tu banco')).toHaveCount(0);
   await expect(page.getByText(/No cierres la app/)).toHaveCount(0);
+});
+
+/**
+ * 🔴 EL CASO QUE MATI HABILITÓ: una persona sola cubre toda la cuenta.
+ *
+ * Va en la dirección CONTRARIA al que habría escrito con la otra rama de la
+ * decisión — y por eso importa: hasta el 2026-08-19 la app hacía este caso
+ * imposible, y la spec ya prometía «Uno o varios cubren toda la cuenta».
+ */
+test('🔴 UNA persona puede pagar el total: el stepper llega a 1 y la mesa se abre', async ({ page }) => {
+  await hastaLaPantallaFusionada(page);
+  await page.getByRole('radio', { name: /Pagar el total/ }).click();
+
+  const grupo = page.getByRole('group', { name: '¿Cuántos pagan?' });
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
+  await expect(grupo).toContainText('1');
+  // Y no puede bajar de 1: no existe media persona pagando.
+  await page.getByRole('button', { name: 'Un comensal menos' }).click();
+  await expect(grupo).toContainText('1');
+
+  // El caso llega hasta el final: si el backend rechazara el 1, la mesa no abriría.
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
+  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
+  await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
+  await page.getByRole('button', { name: 'Confirmar autorización' }).click();
+  await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
+});
+
+/**
+ * 🔴 Y LA DIRECCIÓN OPUESTA, que protege una decisión y no un límite técnico:
+ * el contrato admite 1 para `igual`, pero Mati dijo textual *«"En partes
+ * iguales" tiene un mínimo de dos»*. Quien lea el contrato nuevo va a querer
+ * «corregir» esta pantalla; esto se lo impide.
+ */
+test('🔴 «En partes iguales» no baja de 2, aunque el contrato lo admita', async ({ page }) => {
+  await hastaLaPantallaFusionada(page);
+  await page.getByRole('radio', { name: /En partes iguales/ }).click();
+
+  const grupo = page.getByRole('group', { name: '¿Cuántos pagan?' });
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
+  await expect(grupo).toContainText('2');
+  await page.getByRole('button', { name: 'Un comensal menos' }).click();
+  await expect(grupo, 'partes iguales no puede bajar de 2: lo ratificó Mati').toContainText('2');
 });

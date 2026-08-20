@@ -11,6 +11,59 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.92.0 — los dos bloqueantes del dictamen P12 (2026-08-20)
+
+Codex auditó `9d2dc88c…` y devolvió **`REWORK_BLOQUEANTE`**. Los dos, cerrados.
+
+### Bloqueante 1 · el espejo mantenía un piso que el dueño ya había retirado
+
+La UI prometía *«Uno o varios cubren toda la cuenta»* **y a la vez impedía
+uno**. El espejo estaba anclado a `415651c`, anterior a que el dueño bajara el
+piso. ⚠️ **La paridad pasaba y la vigencia fallaba** — y el CI sólo corre
+integridad, así que **podía publicar la contradicción**.
+
+- Espejo sincronizado al **commit que declara el inventario del dueño**
+  (`6ec93ce`, v2.53.0), no a su HEAD (`168066f`). Medido antes de copiar:
+  entre los dos **ninguno de los 79 archivos cambia** — pero anclar al
+  inventario es lo que mantiene verificable la paridad. Tres archivos
+  cambiaron; los tres modos (integridad · paridad · vigencia) quedan verdes.
+- 🔴 **`pisoDe('total')` pasa a 1** — acta «Una persona puede».
+- 🔴 **`pisoDe('igual')` SIGUE en 2, y no es un resto del piso viejo:** es una
+  decisión **separada** de Mati, textual *«"En partes iguales" tiene un mínimo
+  de dos»*. **El backend no distingue de qué pantalla vino el request**, así
+  que esa distinción vive sólo acá — y por eso tiene **un test que la defiende
+  explícitamente**: quien lea `min(1)` en el contrato va a querer «corregir»
+  esta UI, y estaría deshaciendo a Mati.
+- **Dos casos discriminantes en E2E, en direcciones opuestas:** una persona
+  sola abre mesa con «Pagar el total» **hasta el final**; y «partes iguales»
+  **no baja de 2** aunque el contrato lo admita.
+
+### Bloqueante 2 · el comprobante decía cosas distintas según la superficie
+
+La vista aplicaba el rótulo nuevo y ocultaba la propina cero, pero
+`receiptText()` —el que alimenta **compartir y descargar**— seguía emitiendo
+`Propina (al mesero)` fijo, **incluso sin mesero atribuido y con cero**.
+
+🔴 **Era mío y de una clase conocida: arreglé la vista y no miré las
+superficies vecinas del mismo dato.** `rotuloPropina` sola no alcanzaba —
+dejaba **la mitad de la decisión (`tip > 0`) repetida en cada superficie**, y
+una copia se desincronizó. Ahora `filaPropina()` lleva **las dos mitades
+juntas**: `null` significa *«esta fila no va»*, y **no hay forma de usar el
+rótulo sin pasar por la omisión**.
+
+**El caso que Codex pidió**, con el límite dicho: no se puede comparar JSX
+contra texto sin montar la app (jsdom vetado), así que se verifica lo
+verificable y lo que importa — **que ninguna superficie decida por su cuenta**:
+el rótulo viejo no vuelve, hay **exactamente dos** llamadas a `filaPropina`, y
+**nadie repite el `tip > 0` por fuera**.
+
+⚠️ **Y la misma trampa por tercera vez en la semana:** el primer intento de
+guarda barría el archivo entero buscando `expected_participants >= 2` y
+matcheaba **el comentario del dueño que explica el piso viejo**. Se ancla a la
+línea del `refine`. **Se veta lo que EJECUTA, nunca lo que se cuenta.**
+
+Suite: **1131 unitarios · 108 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.91.0 — la barra de cinco entra al 3DS (2026-08-20)
 
 Cierra el **⑥** de la tanda de 3DS, **que yo había frenado y cuyo motivo era

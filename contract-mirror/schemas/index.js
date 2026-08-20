@@ -197,7 +197,10 @@ const createMesa = z.object({
   restaurant_id: uuid,
   total_cents: strictPositive,
   division_mode: z.enum(['consumo', 'igual']).default('consumo'),
-  expected_participants: safeInt.min(1).max(20).default(1),
+  // 🔴 SIN `.default(1)` A PROPÓSITO — ver el refine de abajo. El default se
+  // aplica al final, en el `.transform`, para que el refine pueda distinguir
+  // "no lo mandaron" de "mandaron 1".
+  expected_participants: safeInt.min(1).max(20).optional(),
   // v2.11 (parche §2 · garantía): el organizador garantiza el total al crear
   guarantee_method: z.enum(['card', 'wallet']),
   stripe_payment_method_id: stripePmId.optional(),
@@ -215,8 +218,21 @@ const createMesa = z.object({
     price_cents: positiveCents,
     quantity: safeInt.min(1).max(32767).default(1),
   })).min(1).max(100),
-}).refine(d => d.division_mode !== 'igual' || d.expected_participants >= 2, {
-  message: 'igual requires expected_participants >= 2',
+}).refine(d => d.division_mode !== 'igual' || d.expected_participants !== undefined, {
+  // 🔴 ACTA 2026-08-19 · «PAGAR EL TOTAL» ADMITE UNA PERSONA.
+  // Etiqueta literal de Mati: «Una persona puede». Acá decía
+  // `expected_participants >= 2`, y ese piso hacía IMPOSIBLE el caso más
+  // literal de la spec ratificada —«Uno o varios cubren toda la cuenta»—:
+  // una persona sola cubriendo la cuenta terminaba convertida en dos partes
+  // iguales, que es dato falso. Lo frenó Codex en la fusión de App Frontend
+  // (P2-01) y lo resolvió Mati del lado del contrato, no del copy.
+  //
+  // ⚠️ LO QUE SE CONSERVA, y no es lo mismo que el piso: con `igual` el número
+  // sigue siendo OBLIGATORIO y explícito. El piso 2 lo volvía obligatorio de
+  // rebote —el default 1 no pasaba—, así que relajarlo a 1 sin este refine
+  // habría convertido "me olvidé el campo" en una mesa de un casillero, en
+  // silencio. El piso baja; la obligación de declararlo NO.
+  message: 'igual requires an explicit expected_participants (>= 1)',
 }).refine(d => d.guarantee_method !== 'card' || !!d.idempotency_key, {
   message: 'card guarantee requires idempotency_key',
 }).refine(d => {
@@ -224,7 +240,10 @@ const createMesa = z.object({
   return d.guarantee_method === 'card' ? sources === 1 : sources === 0;
 }, {
   message: 'card guarantee requires exactly one payment source; wallet requires none',
-});
+// El default va DESPUÉS de los refines: antes lo ponía `.default(1)` en el
+// campo y el refine ya no podía ver la ausencia. `validateBody` reemplaza
+// `req.body` con este resultado, así que la ruta sigue recibiendo el número.
+}).transform(d => ({ ...d, expected_participants: d.expected_participants ?? 1 }));
 
 // v2.18 (fracciones): reclamo de una fracción de un ítem. Valores ratificados:
 // ¼ | ⅓ | ½ | entero. El server valida contra lo disponible y computa montos.

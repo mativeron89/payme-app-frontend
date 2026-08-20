@@ -939,7 +939,7 @@ async function handleGuaranteeIntentEvent(
   return pool.tx(async (client) => {
     const { rows: [row] } = await client.query(
       `SELECT id, restaurant_id, opener_user_id, total_cents,
-              status, guarantee_mode, auth_method,
+              status, guarantee_mode, auth_method, metadata,
               auth_payment_intent_id, auth_amount_cents, auth_stripe_account_id,
               auth_application_fee_cents, auth_source_payment_method_id,
               auth_charge_payment_method_id,
@@ -1039,6 +1039,23 @@ async function handleGuaranteeIntentEvent(
         });
         return { handled: true };
       case 'payment_intent.canceled':
+        // 🔴 EL CANCEL PROPIO NO ES INTERVENCIÓN EXTERNA (orden B del acta 3DS,
+        // 2026-08-20). `settlement.sweepAbandonedGuarantees` sella la intención
+        // en `metadata` DENTRO de una tx y con compare-and-set ANTES de llamar a
+        // Stripe. Si el evento que llega corresponde a ESA marca y a ESE intent,
+        // la mesa muere como corresponde: `auth_failed`.
+        //
+        // ⚠️ Sin esta rama, el barrido fabricaría una fila de REVISIÓN MANUAL
+        // por cada abandono — exactamente el trabajo humano que viene a evitar.
+        //
+        // 🔴 Y el discriminador es la MARCA LOCAL, no `cancellation_reason`: ese
+        // campo lo escribe el emisor y viaja por Stripe, así que no puede ser
+        // autoridad sobre una intención nuestra. Un cancel SIN la marca sigue
+        // yendo a cuarentena, con la misma severidad de antes.
+        if (row.status === 'pending_auth' && esCancelPropio(row, pi)) {
+          const t = await transitionAuthFailedDesdeWebhook(client, row, pi);
+          return { handled: true, ...(t.changed ? {} : { idempotent: true }) };
+        }
         if (['pending_auth', 'open', 'partially_paid', 'fully_paid', 'expired'].includes(row.status)) {
           await quarantineGuaranteeRemoteIntervention(client, row, type, pi);
           return { handled: true, manual_review: true };
@@ -1101,6 +1118,36 @@ async function quarantineGuaranteeContractDrift(client, row, type, pi, mismatche
     mesa_id: row.id, intent_id: pi?.id || null, type,
     previous_status: row.status, mismatches: review.mismatches,
   });
+}
+
+/**
+ * ¿Este `payment_intent.canceled` es el que ESTE backend pidió?
+ *
+ * Exige las dos cosas: que la mesa lleve la marca sellada por el barrido Y que
+ * el intent del evento sea EXACTAMENTE el marcado. Con sólo la marca, un cancel
+ * ajeno sobre otro intent de la misma mesa pasaría por propio.
+ */
+function esCancelPropio(row, pi) {
+  const marca = row.metadata && row.metadata[settlement.MARCA_ABANDONO];
+  return !!marca && marca.intent_id === pi.id;
+}
+
+/** Cierre limpio del abandono: la mesa muere como `auth_failed`. */
+async function transitionAuthFailedDesdeWebhook(client, row, pi) {
+  const upd = await client.query(
+    `UPDATE mesas SET status='auth_failed'
+      WHERE id=$1 AND status='pending_auth'`,
+    [row.id]
+  );
+  if (upd.rowCount !== 1) return { changed: false };
+  await stateMachine.transition({
+    client, entityType: 'mesa', entityId: row.id,
+    fromState: 'pending_auth', toState: 'auth_failed',
+    reason: 'guarantee_abandoned_3ds', triggeredBy: 'webhook',
+    metadata: { intent_id: pi.id },
+  });
+  logger.audit('guarantee_abandon_confirmed', { mesa_id: row.id, intent_id: pi.id });
+  return { changed: true };
 }
 
 async function quarantineGuaranteeRemoteIntervention(client, row, type, pi) {

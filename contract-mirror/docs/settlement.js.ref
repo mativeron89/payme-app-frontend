@@ -1035,6 +1035,160 @@ async function sweepPreparedGuarantees({ limit = SETTLE_BATCH, mesaId = null } =
   };
 }
 
+/**
+ * 🔴 ORDEN B DEL ACTA 3DS (2026-08-20) · barrer las garantías abandonadas.
+ *
+ * `ops/actas/[PAYME]_ACTA_2026-08-19_3DS_ABANDONADO_RETOMAR_Y_BARRER.md`.
+ * Etiqueta de Mati: «A+B juntas». La mitad A —retomar— vive en App Frontend;
+ * esta es la B.
+ *
+ * EL PROBLEMA QUE CIERRA: una mesa cuyo 3DS se abandona queda en `pending_auth`
+ * PARA SIEMPRE. `expireStaleMesas` sólo barre `open` y `partially_paid`, así que
+ * su `expires_at` nunca se dispara. No se ve en `GET /mesas/open` y sólo se
+ * retoma con la `idempotency_key`.
+ *
+ * ⚠️ POR QUÉ NO ALCANZA CON MARCARLA MUERTA. Si no se cancela el PI, el 3DS
+ * SIGUE COMPLETABLE: el comensal autentica media hora después y queda un hold
+ * AUTORIZADO sobre una mesa muerta — plata retenida en su tarjeta sin mesa que
+ * la justifique. Eso sería peor que el problema original.
+ *
+ * 🔴 Y POR QUÉ HAY QUE SELLAR LA INTENCIÓN ANTES. Cancelar emite
+ * `payment_intent.canceled`, y `routes/webhooks.js` trata ese evento sobre una
+ * mesa `pending_auth` como INTERVENCIÓN EXTERNA: la manda a `settling` con
+ * revisión manual. Sin la marca, este barrido fabricaría una fila humana por
+ * cada abandono — justo lo que viene a evitar. La marca se sella DENTRO de una
+ * transacción y con compare-and-set, ANTES del side effect, que es la misma
+ * disciplina con la que este repo sella el PI antes de llamar a Stripe.
+ *
+ * ⚠️ EL DISCRIMINADOR ES LA MARCA LOCAL, NO `cancellation_reason`. Ese campo lo
+ * escribe el emisor y viaja por Stripe: no es autoridad sobre una intención
+ * nuestra. (Medido: hoy NADIE lo lee en `routes/` ni en `services/`.)
+ *
+ * 🔴 LA DECISIÓN LA TOMA EL ESTADO REMOTO, NUNCA EL LOCAL:
+ *   requires_capture / succeeded / processing → LLEGÓ TARDE PERO LLEGÓ: no se toca
+ *   canceled / requires_payment_method        → ya está muerta: se marca
+ *   requires_action                           → se cancela; y sólo si Stripe
+ *                                               devuelve `canceled` se marca
+ *   cualquier otra cosa                       → `stripe_cancel_uncertain`, nada
+ *
+ * `transitionMesaAuthFailed` hace compare-and-set sobre `pending_auth`, así que
+ * si el webhook ganó la carrera este barrido no pisa nada: la idempotencia
+ * dirime, no un guard de estado ciego.
+ *
+ * 📌 FUERA DE ALCANCE, declarado: las `pending_auth` SIN PI —preparadas y nunca
+ * enviadas a Stripe— NO se tocan. Son de `sweepPreparedGuarantees`, que intenta
+ * PROMOVERLAS, y barrerlas en paralelo abriría una carrera entre marcarlas
+ * muertas y darles el hold. Nunca empezaron un 3DS: están fuera del acta. Pero
+ * quedan igual de colgadas, y eso queda dicho, no resuelto.
+ */
+const MARCA_ABANDONO = 'guarantee_abandon_requested';
+
+/** Sella la intención de cancelar. Devuelve false si la mesa ya no aplica. */
+async function sellarIntencionDeAbandono(mesaId, intentId) {
+  return pool.tx(async (client) => {
+    const upd = await client.query(
+      `UPDATE mesas
+          SET metadata = jsonb_set(
+                COALESCE(metadata, '{}'::jsonb),
+                '{${MARCA_ABANDONO}}', $2::jsonb, true)
+        WHERE id=$1 AND status='pending_auth'
+        RETURNING id`,
+      [mesaId, JSON.stringify({ intent_id: intentId, at: new Date().toISOString() })]
+    );
+    return upd.rowCount === 1;
+  });
+}
+
+async function sweepAbandonedGuarantees({ limit = SETTLE_BATCH, mesaId = null } = {}) {
+  const safeLimit = Number.isSafeInteger(Number(limit))
+    ? Math.max(1, Math.min(Number(limit), 100))
+    : SETTLE_BATCH;
+
+  const { rows } = await pool.query(
+    `SELECT id, auth_payment_intent_id, auth_stripe_account_id
+       FROM mesas
+      WHERE status='pending_auth' AND guarantee_mode=true
+        AND auth_method='card'
+        AND auth_payment_intent_id IS NOT NULL
+        AND expires_at < now()
+        AND ($1::uuid IS NULL OR id=$1)
+      ORDER BY expires_at
+      LIMIT $2`,
+    [mesaId, safeLimit]
+  );
+
+  let cerradas = 0;
+  let vivas = 0;
+  let inciertas = 0;
+
+  for (const m of rows) {
+    const cuenta = m.auth_stripe_account_id || null;
+    let intent = null;
+    try {
+      intent = await stripeService.retrieveIntent(m.auth_payment_intent_id, cuenta);
+    } catch (err) {
+      inciertas += 1;
+      logger.error('guarantee_abandon_remote_unreadable', {
+        mesa_id: m.id, intent_id: m.auth_payment_intent_id, error: err.message,
+      });
+      continue;
+    }
+
+    if (['requires_capture', 'succeeded', 'processing'].includes(intent.status)) {
+      vivas += 1;
+      logger.warn('guarantee_abandon_skipped_live_auth', {
+        mesa_id: m.id, intent_id: intent.id, stripe_status: intent.status,
+      });
+      continue;
+    }
+
+    if (['canceled', 'requires_payment_method'].includes(intent.status)) {
+      const r = await markAuthFailed(m.id, `guarantee_abandoned_${intent.status}`);
+      if (r.changed) cerradas += 1;
+      continue;
+    }
+
+    if (intent.status !== 'requires_action') {
+      inciertas += 1;
+      logger.error('guarantee_abandon_unexpected_remote_status', {
+        mesa_id: m.id, intent_id: intent.id, stripe_status: intent.status,
+      });
+      continue;
+    }
+
+    // Sellar ANTES de cancelar. Si la mesa ya no está `pending_auth`, alguien
+    // ganó la carrera y no hay nada que abandonar.
+    if (!await sellarIntencionDeAbandono(m.id, intent.id)) {
+      vivas += 1;
+      continue;
+    }
+
+    let cancelado = null;
+    try {
+      cancelado = await stripeService.cancelIntent(intent.id, 'abandoned', cuenta);
+    } catch (err) {
+      inciertas += 1;
+      logger.error('stripe_cancel_uncertain', {
+        mesa_id: m.id, intent_id: intent.id, error: err.message,
+        contexto: 'guarantee_abandon',
+      });
+      continue;
+    }
+    if (cancelado?.status !== 'canceled') {
+      inciertas += 1;
+      logger.error('stripe_cancel_uncertain', {
+        mesa_id: m.id, intent_id: intent.id,
+        remote_status: cancelado?.status || null, contexto: 'guarantee_abandon',
+      });
+      continue;
+    }
+    const r = await markAuthFailed(m.id, 'guarantee_abandoned_3ds');
+    if (r.changed) cerradas += 1;
+  }
+
+  return { selected: rows.length, cerradas, vivas, inciertas };
+}
+
 async function placeWalletHold({ mesaId, organizer, amountCents }) {
   try {
     return await pool.tx(async (client) => {
@@ -3293,6 +3447,8 @@ async function sweepSettlements() {
 module.exports = {
   placeGuaranteeHold,
   sweepPreparedGuarantees,
+  sweepAbandonedGuarantees,
+  MARCA_ABANDONO,
   reconcileGuaranteeReplay,
   settleMesa,
   disperseMesa,

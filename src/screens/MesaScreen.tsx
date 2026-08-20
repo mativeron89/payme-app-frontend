@@ -32,7 +32,7 @@ import {
   type CardFieldState,
 } from '../components/CardField';
 import { AppHeader, AppHeaderFlow } from '../components/AppHeader';
-import { rotuloPropina } from './propinaRecibo';
+import { filaPropina } from './propinaRecibo';
 import { AppBottomBar, AppBottomCta } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
 import type {
@@ -607,7 +607,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           ]
         : []),
       t('{0}: {1}', mesa.division_mode === 'igual' ? t('Mi parte') : t('Mis consumos'), formatMXN(result.itemsAmount)),
-      t('Propina (al mesero): {0}', formatMXN(result.tip)),
+      // 🔴 BLOQUEANTE 2 DE CODEX (2026-08-20), y era mío: al arreglar la fila de
+      // propina de la VISTA no miré las superficies vecinas del mismo dato.
+      // Acá seguía saliendo `Propina (al mesero)` fijo — incluso sin mesero
+      // atribuido y con propina CERO—, así que **la misma operación se contaba
+      // distinto en pantalla que en el papel que la persona manda o guarda**.
+      // Ahora las tres superficies usan LA MISMA función pura del rótulo y la
+      // MISMA regla de omisión, y hay un caso que lo fija.
+      ...(() => {
+        const r = filaPropina(result.tip, { pct: result.tipPct, nombre: result.tipToName });
+        return r ? [t('{0}: {1}', t(r.clave, ...r.args), formatMXN(result.tip))] : [];
+      })(),
       t('Total pagado: {0}', formatMXN(result.gross)),
     ].join('\n');
   }
@@ -1381,8 +1391,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 vive en `propinaRecibo.ts`: lo que no se sabe, no se nombra.
                 Y la fila **no aparece sin propina** (`tip > 0`), en vez de
                 mostrar un $0.00 que nadie dejó. */}
-            {result.tip > 0 && (() => {
-              const r = rotuloPropina({ pct: result.tipPct, nombre: result.tipToName });
+            {(() => {
+              const r = filaPropina(result.tip, { pct: result.tipPct, nombre: result.tipToName });
+              if (!r) return null;
               return (
                 <div className="receipt-row">
                   <span className="lbl">{t(r.clave, ...r.args)}</span>

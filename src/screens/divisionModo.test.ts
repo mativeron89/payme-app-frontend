@@ -39,10 +39,37 @@ describe('las tres formas de dividir de §1.3-bis contra las dos del contrato', 
     expect(modoContrato('consumo')).toBe('consumo');
   });
 
-  it('🔴 el piso sale del contrato: el refine exige >= 2 para igual', () => {
-    expect(SCHEMAS).toMatch(/division_mode\s*!==\s*'igual'\s*\|\|\s*d\.expected_participants\s*>=\s*2/);
+  it('🔴 el contrato ya NO exige >= 2: pide que el campo ESTÉ, no que valga 2', () => {
+    // El piso bajó a 1 el 2026-08-19 («Una persona puede»), pero la obligación
+    // de declarar el número NO: el refine pasó de comparar a exigir presencia.
+    // 🔴 Se mira LA LÍNEA DEL REFINE, no el archivo entero: el comentario del
+    // dueño explica el piso viejo citándolo («`expected_participants >= 2`, y
+    // ese piso hacía IMPOSIBLE…»), así que un barrido global matchea la
+    // explicación y no la regla. Tercera vez esta semana: se veta lo que
+    // EJECUTA, nunca lo que se cuenta.
+    const refine = SCHEMAS.match(/\}\)\.refine\(d => d\.division_mode[^\n]*/)?.[0] ?? '';
+    expect(refine, 'el espejo perdió el refine de division_mode').not.toBe('');
+    expect(refine).not.toMatch(/>=\s*2/);
+    expect(refine).toMatch(/expected_participants\s*!==\s*undefined/);
+    expect(SCHEMAS).toMatch(/expected_participants:\s*safeInt\.min\(1\)/);
+  });
+
+  it('🔴 UNA persona puede «Pagar el total» — es lo que Mati ratificó', () => {
+    expect(pisoDe('total')).toBe(1);
+  });
+
+  /**
+   * 🔴 ESTE TEST DEFIENDE UNA DECISIÓN, NO UN LÍMITE TÉCNICO, y va en la
+   * dirección CONTRARIA al de arriba a propósito.
+   *
+   * El contrato admite 1 para `igual`. Quien lo lea y vea `min(1)` va a querer
+   * «corregir» esta UI — y estaría deshaciendo a Mati, que el 2026-08-20 dijo
+   * textual: *«"En partes iguales" tiene un mínimo de dos»*. El backend no
+   * distingue de qué pantalla vino el request, así que **si este piso se
+   * afloja, no queda nada que lo sostenga.**
+   */
+  it('🔴 «En partes iguales» conserva el mínimo 2, aunque el contrato admita 1', () => {
     expect(pisoDe('igual')).toBe(2);
-    expect(pisoDe('total')).toBe(2); // hereda el piso porque divide lo mismo
     expect(pisoDe('consumo')).toBe(1);
   });
 
@@ -61,8 +88,11 @@ describe('las tres formas de dividir de §1.3-bis contra las dos del contrato', 
 
   describe('cambiar de forma no corrige el número por su cuenta', () => {
     it('un N que deja de ser válido vuelve a preguntarse, no se ajusta', () => {
+      // Sólo «partes iguales» invalida el 1, y por su piso de UI. 🔴 «Pagar el
+      // total» YA NO lo invalida: una persona sola es el caso que Mati
+      // habilitó, y devolver `null` acá lo volvería a hacer imposible.
       expect(participantesTrasCambio(1, 'igual')).toBeNull();
-      expect(participantesTrasCambio(1, 'total')).toBeNull();
+      expect(participantesTrasCambio(1, 'total')).toBe(1);
     });
 
     it('un N que sigue siendo válido se conserva', () => {
