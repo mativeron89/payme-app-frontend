@@ -11,6 +11,43 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.83.0 — la navbar pasa de C3 a la regla de composición de Diseño (2026-08-19)
+
+**Decisión de Mati viendo D contra C3.** Pregunta: *«Viendo C3 y D: ¿cuál queda
+como la barra definitiva de la app?»* — etiqueta elegida: **«D · la regla nueva
+de Diseño»**, descartada «C3 · la que elegí hoy». **Supersede su elección C3 de
+esa misma tarde**: mismo decisor, más información — la proporción 1.2× que C3
+no tenía. La historia queda intacta (`ef1df49` no se revierte; esto va encima).
+
+**La regla** (diseno `283d88d` · SISTEMA_DISENO §1): símbolo centrado en la
+banda de mayúsculas vía `align-items: center` + `line-height: 1` +
+`margin-top: 1px`, y proporción **símbolo = 1.2× el cuerpo** («30px de cuadrado
+para 25px de texto en la cabecera»). Se retira el `translateY(-3.7px)` de C3 y
+su nota de medición: los reemplaza una regla de spec, no otra medición a mano.
+
+**La proporción se DERIVA, no se copia:** `.hdr-mark` fija el cuerpo (25px) y
+es la única perilla; el símbolo mide `1.2em` y el wordmark `1em`, así que
+escalar el contenedor escala los dos. El SVG perdió sus atributos
+`width`/`height` —eran una segunda copia del tamaño— y el prop `size` de
+`PayMeLogo` pasó al contenedor por el mismo motivo. La variante compacta
+(cuerpo 22px) conserva la proporción **sin código propio**: medido en
+navegador, símbolo 26.39px / razón 1.1996, y 26.4 ≥ 24px del mínimo del
+handoff para símbolo en lockup.
+
+**Verificado contra lo que Mati eligió:** el código real reproduce la captura
+D número por número — símbolo lado 30 centro 64.5 · palabra alto 25 centro
+64.0, idéntico a la medición efímera de la captura. `D-regla-diseno.png` quedó
+regenerada desde el código real.
+
+**Guarda nueva** (`src/styles/marcaNavbar.test.ts`, 4 tests): derivación en em,
+centrado de la regla, veto a la DECLARACIÓN `transform: translateY(-3.7px)` (el
+comentario que cuenta la historia la nombra, y cazó a la guarda en su primera
+corrida — se veta lo que ejecuta, no lo que se cuenta), y que la compacta
+achique el cuerpo, no el wordmark suelto. Mutante acreditado: `1.2em → 1em`
+pone dos tests en rojo.
+
+Trabajo del **próximo lote** (posterior al paquete de Codex). Sin push.
+
 ## 0.82.0 — splash sólo cuando la carga tarda (2026-08-19)
 
 **Decisión de Mati, mirando dos capturas (A sin splash · B con splash).**

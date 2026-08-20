@@ -2075,7 +2075,9 @@ body {
   border-radius: 0 0 26px 26px;
   padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-4);
 }
-.hdr-compact .hdr-logo {
+/* Se achica el CUERPO en `.hdr-mark` — no el wordmark suelto — para que el
+   símbolo (1.2em) baje con él y la proporción de 283d88d se conserve sola. */
+.hdr-compact .hdr-mark {
   font-size: 22px;
 }
 
@@ -2086,50 +2088,48 @@ body {
   min-height: var(--tap-min);
 }
 
-/* Símbolo + wordmark (Mati, 2026-08-19). El `gap` es la mitad del lado del
-   símbolo: el handoff pide una separación clara sin que el par se lea como dos
-   objetos sueltos. `flex: none` para que la marca no se comprima cuando el
-   nombre de usuario de al lado es largo. */
+/* Marca compuesta según la REGLA DE COMPOSICIÓN DEL LOCKUP (diseno 283d88d,
+   SISTEMA_DISENO §1) — elegida por Mati el 2026-08-19 viendo D contra C3,
+   etiqueta «D · la regla nueva de Diseño»; SUPERSEDE su elección C3 de esa
+   misma tarde (mismo decisor, más información: la proporción 1.2×).
+
+   El font-size de acá es EL CUERPO del lockup y la única perilla de tamaño:
+   el símbolo mide `1.2em` («30px de cuadrado para 25px de texto») y el
+   wordmark `1em`, así que escalar esto escala los dos y la proporción no se
+   puede desarmar tocando uno solo. `flex: none` para que la marca no se
+   comprima cuando el nombre de usuario de al lado es largo. */
 .hdr-mark {
   display: inline-flex;
-  align-items: center;
+  align-items: center; /* nunca baseline: un SVG apoya su borde inferior en la base */
   gap: 8px;
   flex: none;
+  font-size: 25px;
 }
 
-/* El glifo no se achica con el texto: 24px es el mínimo del handoff para el
-   símbolo dentro de un lockup. Por debajo de eso, el handoff manda usarlo solo. */
+/* 1.2× el cuerpo (283d88d). El `margin-top: 1px` es el ajuste fino que la
+   propia regla trae para la cabecera de la app. El mínimo del handoff para el
+   símbolo dentro de un lockup sigue siendo 24px: con la variante compacta
+   (cuerpo 22px → símbolo 26.4px) todavía se cumple. */
 .hdr-symbol {
   display: block;
   flex: none;
+  width: 1.2em;
+  height: 1.2em;
+  margin-top: 1px;
 }
 
 .hdr-logo {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 26px;
+  font-size: 1em;
+  /* `line-height: 1` saca el descendente de la «y» de la caja: el centrado de
+     flex pasa a caer en la banda de mayúsculas, que es donde la regla manda
+     centrar el símbolo. Acá vivió un `translateY(-3.7px)` medido a mano (C3):
+     lo reemplaza esta regla de spec, no una re-medición. */
+  line-height: 1;
   letter-spacing: -0.02em;
   color: var(--on-dark);
   flex: none;
-  /* 🔴 CENTRADO ÓPTICO CONTRA EL SÍMBOLO · elegido por Mati el 2026-08-19,
-     etiqueta «C3 · la que se nota», descartando «C2 · la técnicamente
-     correcta» y dejarlo como estaba.
-
-     El navegador centra la CAJA DE LÍNEA, y esa caja incluye la cola de la
-     «y». Medido en pantalla, con el símbolo de 24px:
-
-         símbolo   arriba 52.0   abajo 76.0   centro 64.0
-         wordmark  arriba 55.1   abajo 80.2   centro óptico 64.8
-
-     O sea que la palabra empieza 3,1 px más abajo y termina 4,2 px más abajo
-     que el cuadrado: por eso los números decían «centrado» y el ojo decía que
-     no. Subirla 3,7 px hace que su bloque de tinta ocupe la misma franja
-     vertical que el símbolo.
-
-     ⚠️ ESTE NÚMERO ESTÁ ATADO A `--font-display` (Plus Jakarta Sans 800) Y A
-     `font-size: 26px`. Si cambia cualquiera de los dos, la medición deja de
-     valer y NADA lo va a avisar: se vuelve a medir contra el símbolo. */
-  transform: translateY(-3.7px);
 }
 /* El `Me` en teal sobre navy: 7.46:1. */
 .hdr-logo-me {

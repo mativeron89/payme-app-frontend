@@ -39,21 +39,19 @@ import { Icon, type IconName } from './Icon';
  * `Pay` en blanco + `Me` en teal — 7.46:1 sobre la banda navy.
  */
 export function PayMeLogo({ size }: { size?: number }) {
+  /* El `size` (y el font-size en general) va en `.hdr-mark`, NO en el
+     wordmark: el símbolo mide `1.2em` en CSS (regla de composición 283d88d),
+     así que escalar el contenedor escala LOS DOS y la proporción no se puede
+     romper por ajustar uno solo. El SVG no lleva width/height: los gobierna
+     esa misma regla — un atributo acá sería una segunda copia del tamaño. */
   return (
-    <span className="hdr-mark">
-      <svg
-        className="hdr-symbol"
-        viewBox="0 0 76 76"
-        width="24"
-        height="24"
-        aria-hidden="true"
-        focusable="false"
-      >
+    <span className="hdr-mark" style={size ? { fontSize: size } : undefined}>
+      <svg className="hdr-symbol" viewBox="0 0 76 76" aria-hidden="true" focusable="false">
         <rect width="76" height="76" rx="21" fill="#0FB5C9" />
         <path d="M18.5 21 L27.5 21 L36.5 38 L27.5 55 L18.5 55 L27.5 38 Z" fill="#101E3B" />
         <path d="M39.5 21 L48.5 21 L57.5 38 L48.5 55 L39.5 55 L48.5 38 Z" fill="#FFFFFF" />
       </svg>
-      <span className="hdr-logo" style={size ? { fontSize: size } : undefined}>
+      <span className="hdr-logo">
         Pay<span className="hdr-logo-me">Me</span>
       </span>
     </span>
