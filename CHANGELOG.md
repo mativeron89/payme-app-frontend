@@ -256,6 +256,27 @@ un doc viejo con «15.4» va a querer saber si eso sigue abierto.
 🔴 **CAMBIA EL COLOR DE TODA LA APP, no sólo de la landing.** Mati es el juez
 visual y esto **no se publicó**: commit local. Se mira antes de salir.
 
+> 🔴 **ESA AFIRMACIÓN ERA FALSA. Corregida el 2026-08-19 desde `0.80.3`, sin
+> reescribir esta entrada.** `c709880` migró `--action` y `--action-2`, **no**
+> toda la app: `global.css` conservaba `--navy: #0f1f3d` (40 usos) y
+> `--teal: #00c2cb` (22 usos), más 33 sombras y overlays con el mismo navy
+> escrito en decimal —`rgba(15,31,61,…)`—, los dos `theme-color`, el hex de
+> Stripe Elements y el degradado del login.
+>
+> **La mayor parte de la superficie siguió pintando el color viejo durante
+> cuatro días, con la suite en verde.** Lo cerró `40b8036`; lo detectó la
+> auditoría de Codex sobre el corte `6f66e23` y, en paralelo, la vigencia del
+> espejo de tokens al migrar Diseño las sombras en la fuente.
+>
+> ⚠️ **Por qué ninguna guarda lo vio, que es lo que había que arreglar:** el
+> espejo compara sólo los tokens que él declara, y `--navy`/`--teal` no están en
+> el sistema de diseño; y el barrido manual contó **hex**, ciego a la misma
+> pintura escrita en decimal. **Desde `0.80.3` hay una guarda que barre las
+> cuatro grafías.**
+>
+> **La entrada NO se edita**: dice lo que se creyó el 15/08, y este bloque dice
+> lo que se midió. Borrarla haría desaparecer el error en vez de registrarlo.
+
 Suite 1091, Playwright 94, typecheck, builds real/mock/landing, espejo del
 contrato en paridad y gate de secretos verdes. Sin push.
 
