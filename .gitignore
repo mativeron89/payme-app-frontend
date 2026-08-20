@@ -8,6 +8,15 @@ dist-landing/
 # se mudó a `node_modules/.cache/payme-tsprobe-XXXX/` con `mkdtemp`. Vivía en la
 # raíz con nombre fijo, así que dos corridas simultáneas se pisaban — y este
 # mismo `.gitignore` tapaba el residuo, o sea que ni aparecía en `git status`.
+# 🔴 Temporal que Vite escribe AL LADO de la config para poder cargar un
+# `vite.config.ts` (lo crea y lo borra en cada arranque). Nunca se commitea, y
+# hasta hoy tampoco estaba ignorado: aparecía en `git status` durante cualquier
+# corrida. Lo cazó el sentinela del árbol servido (P2-02) al ponerse rojo
+# contra sí mismo — **el temporal lo crea el mismo `vite.config.ts` que calcula
+# el sentinela, así que la medición se ensuciaba al medirse.**
+vite.config.ts.timestamp-*.mjs
+vite.*.config.ts.timestamp-*.mjs
+
 *.local
 .DS_Store
 

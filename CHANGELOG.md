@@ -11,6 +11,29 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.87.2 — el sentinela se ensuciaba al medirse (2026-08-20)
+
+**El rojo intermitente del gate tenía UNA causa y la nombró el propio
+instrumento** apenas se le pidió que dijera *qué* ensuciaba en vez de sólo
+*que* algo ensuciaba:
+
+```
+16fc482+sucio(?? vite.config.ts.timestamp-1787205914400-….mjs)
+```
+
+🔴 **Es el temporal que Vite escribe al lado de la config para poder cargar un
+`vite.config.ts`** — lo crea y lo borra en cada arranque, nunca estuvo
+ignorado, y **lo crea el mismo `vite.config.ts` que calcula el sentinela**. La
+medición se ensuciaba al medirse. Entra a `.gitignore`, que es donde tenía que
+haber estado siempre: es un artefacto de herramienta, no del proyecto.
+
+⚠️ **La tentación era aflojar la guarda** —dejar de comparar el estado sucio,
+que habría puesto el gate en verde al instante— **y habría tapado un archivo
+que ensuciaba `git status` en toda corrida de cualquiera.** El instrumento se
+hizo más específico, no más permisivo.
+
+E2E: **104/104 en dos corridas consecutivas.**
+
 ## 0.87.1 — el intermitente del splash tenía causa, y era mía (2026-08-20)
 
 **No era carga ni red: el test le erraba al recurso.** `page.route('**/src/main.tsx')`
