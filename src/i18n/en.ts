@@ -465,6 +465,8 @@ export const EN: Record<string, string> = {
   "Propina ({0}% · para {1})": "Tip ({0}% · for {1})",
   "Propina": "Tip",
   "Enviar": "Send",
+  "Dejaste una autorización sin confirmar.": "You left an authorization unconfirmed.",
+  "Sigue con esa garantía: no abras otra mesa.": "Continue with that guarantee: do not open another table.",
   "Paso 1 de 4": "Step 1 of 4",
   "Paso 2 de 4": "Step 2 of 4",
   "Paso 3 de 4": "Step 3 of 4",

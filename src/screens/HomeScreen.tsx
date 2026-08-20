@@ -4,6 +4,7 @@ import { api, IS_MOCK } from '../api';
 import type { BalanceResponse, OpenMesasResponse, WalletTransaction } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { navigate } from '../router';
+import { readUnconfirmed, scopeForActor, useMoneyActor } from '../api/idempotency';
 import { useWalletRail } from '../api/walletRail';
 import { countdownLong, formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
@@ -64,6 +65,40 @@ function txDate(iso: string, locale: string, t: (s: string, ...a: unknown[]) => 
 export function HomeScreen() {
   const { t, locale } = useIdioma();
   const { session } = useAuth();
+  /**
+   * 🔴 ORDEN A · «SEGUÍ CON TU AUTORIZACIÓN» (acta
+   * `[PAYME]_ACTA_2026-08-19_3DS_ABANDONADO_RETOMAR_Y_BARRER.md`).
+   *
+   * **Lo medido antes de escribir esto, porque la orden se ejecuta sobre lo
+   * medido y no sobre lo que el acta asume:**
+   *  - la referencia de retome **YA se guarda durable** — el journal vive en
+   *    `localStorage` (`payme_money_journal_v5_*`), no en memoria;
+   *  - y **YA existe** la salida que retoma esa garantía sin abrir otra.
+   *
+   * ⚠️ **El hueco real era OTRO: la salida sólo se veía DENTRO del flujo de
+   * crear mesa.** Quien abandonaba el 3DS y volvía a abrir la app aterrizaba
+   * en Inicio, donde nada se lo decía: para enterarse tenía que entrar a
+   * «Nueva», que es justo la puerta equivocada — no quiere abrir otra mesa,
+   * quiere terminar la que dejó. **Es la misma clase que ya nos mordió: la
+   * salida existía y era inalcanzable desde donde la persona vuelve.**
+   *
+   * El área de `create_mesa` es **independiente del restaurante** por diseño
+   * del journal (*«una sola intención viva por principal»*,
+   * `idempotency.ts:104-107`), así que Inicio puede preguntar sin conocerlo.
+   * Esto **sólo LEE**: no reenvía, no libera y no abre nada.
+   */
+  const { actor } = useMoneyActor();
+  const [aperturaPendiente, setAperturaPendiente] = useState(false);
+  useEffect(() => {
+    if (!actor) return;
+    let alive = true;
+    void readUnconfirmed(scopeForActor(actor, 'mesa:pendiente'), 'create_mesa')
+      .then((attempt) => { if (alive) setAperturaPendiente(!!attempt); })
+      // Un journal ilegible NO se anuncia como «tenés algo pendiente»: se
+      // calla. Afirmarlo sin poder leerlo sería inventar una deuda.
+      .catch(() => { if (alive) setAperturaPendiente(false); });
+    return () => { alive = false; };
+  }, [actor]);
   // OLA 5D · saldo y movimientos son riel saldo: los habilita el BACKEND.
   // Arranca apagado, así que ni siquiera se PIDEN mientras la capability viaja.
   const { walletRailEnabled } = useWalletRail();
@@ -156,6 +191,12 @@ export function HomeScreen() {
       />
 
       <div className="scroll">
+        {aperturaPendiente && (
+          <button type="button" className="note note-orange aviso-retome" onClick={() => navigate('scan')}>
+            <b>{t('Dejaste una autorización sin confirmar.')}</b>{' '}
+            {t('Sigue con esa garantía: no abras otra mesa.')}
+          </button>
+        )}
         {/* La tarjeta va CUADRADA arriba a la izquierda sólo cuando la pestaña
             activa es la primera: así burbuja y tarjeta leen como una sola
             pieza. Si la activa está al medio o al final, las cuatro esquinas

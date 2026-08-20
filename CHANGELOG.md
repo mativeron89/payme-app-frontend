@@ -11,6 +11,42 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.90.0 — «Seguí con tu autorización», desde donde la persona vuelve (2026-08-20)
+
+**Orden A**, ratificada en `[PAYME]_ACTA_2026-08-19_3DS_ABANDONADO_RETOMAR_Y_BARRER.md`.
+Parte de la orden era **medir**, no asumir. Medido primero:
+
+```
+¿la referencia de retome se guarda DURABLE?   SÍ, ya · localStorage, payme_money_journal_v5_*
+¿existe la salida que retoma esa garantía?    SÍ, ya · sin ofrecer «desbloquear» ni abrir otra
+```
+
+🔴 **El hueco era OTRO, y sólo aparece recorriendo:** esa salida **sólo se veía
+DENTRO del flujo de crear mesa**. Quien abandonaba el 3DS y volvía a abrir la
+app aterrizaba en **Inicio**, donde nada se lo decía; para enterarse tenía que
+entrar a «Nueva» — **la puerta equivocada: no quiere abrir otra mesa, quiere
+terminar la que dejó**. Es la misma clase que ya mordió en la ORDEN 2A: *la
+salida existía y era inalcanzable desde donde se anunciaba*.
+
+**Lo agregado:** Inicio pregunta por la apertura sin confirmar y, si la hay,
+ofrece retomarla. **Sólo LEE** — no reenvía, no libera, no abre nada. Un
+journal ilegible **no se anuncia**: afirmar una deuda que no se puede leer
+sería inventarla.
+
+**No hizo falta tocar el módulo de dinero**, y eso también se midió: el área de
+`create_mesa` es **independiente del restaurante** por diseño del journal
+(*«una sola intención viva por principal»*, `idempotency.ts:104-107`), así que
+Inicio puede preguntar sin conocerlo. La alternativa —un enumerador nuevo
+sobre `localStorage` dentro de `idempotency.ts`— habría sido código nuevo en
+el riel monetario para un problema que no lo necesitaba.
+
+**Guarda** (`e2e/retome-apertura.spec.ts`): recorre abandonar en 3DS → volver
+a Inicio → el aviso está y lleva al retome. **Afirma también el caso limpio**
+—sin apertura colgada el aviso NO existe—, porque sin esa mitad pasaría igual
+con un cartel pegado siempre. **Mutante acreditado.**
+
+Suite: **1125 unitarios · 106 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.89.0 — fidelidad tanda 4: el comprobante (2026-08-20)
 
 Cuarta y última tanda de `FIDELIDAD_VISUAL_APP_2026-08-20.md` (`724d6fe`).

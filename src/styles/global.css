@@ -4785,3 +4785,17 @@ h1.pay-title-lbl {
   gap: 4px;
   min-height: var(--tap-min);
 }
+
+/* Aviso de apertura sin confirmar en Inicio (orden A). Es un <button> real
+   —no un div con onClick— porque lleva a algún lado: tiene que alcanzarse por
+   teclado y anunciarse como acción, no como texto. */
+.aviso-retome {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  margin-bottom: var(--sp-3);
+  min-height: var(--tap-min);
+}
