@@ -17,11 +17,45 @@ import { Icon, type IconName } from './Icon';
  * terminó fusionando `s-account` dentro de las pestañas de Inicio.
  */
 
-/** `Pay` en blanco + `Me` en teal — 7.46:1 sobre la banda navy. */
+/**
+ * Símbolo + wordmark, en ese orden. **Texto de Mati, 2026-08-19:** *«quiero que
+ * esté el logo (como en la segunda imagen) y a la derecha "PayMe", tienen que
+ * estar ambos»* — no eligió ninguna de las dos capturas que se le mostraron.
+ *
+ * 🔴 **El símbolo se COMPONE con el wordmark de texto, y NO se usa el lockup
+ * del handoff.** Los dos `payme-lockup-*.svg` tipean el wordmark con **Poppins**
+ * en un `<text>`, y `A4` ratificó lo contrario —*«Mantener Plus Jakarta Sans +
+ * DM Sans»*—. Además `D-FUENTES-1` sacó las tres etiquetas a Google y no
+ * vuelven: un lockup así renderizaría la marca en una fallback, **en silencio**.
+ * Componer acá deja el símbolo importado y el texto tipeado por la app, con la
+ * tipografía vigente.
+ *
+ * El glifo va inline —como el de WhatsApp en la landing— porque es parte del
+ * chrome: un `<img>` agregaría una request para 340 bytes que ya están en el
+ * bundle. Variante CYAN: la banda es navy, y es la que el handoff marca para
+ * superficie oscura. `aria-hidden` porque el wordmark de al lado ya nombra la
+ * marca; dos veces «PayMe» seguidas sería ruido para un lector de pantalla.
+ *
+ * `Pay` en blanco + `Me` en teal — 7.46:1 sobre la banda navy.
+ */
 export function PayMeLogo({ size }: { size?: number }) {
   return (
-    <span className="hdr-logo" style={size ? { fontSize: size } : undefined}>
-      Pay<span className="hdr-logo-me">Me</span>
+    <span className="hdr-mark">
+      <svg
+        className="hdr-symbol"
+        viewBox="0 0 76 76"
+        width="24"
+        height="24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <rect width="76" height="76" rx="21" fill="#0FB5C9" />
+        <path d="M18.5 21 L27.5 21 L36.5 38 L27.5 55 L18.5 55 L27.5 38 Z" fill="#101E3B" />
+        <path d="M39.5 21 L48.5 21 L57.5 38 L48.5 55 L39.5 55 L48.5 38 Z" fill="#FFFFFF" />
+      </svg>
+      <span className="hdr-logo" style={size ? { fontSize: size } : undefined}>
+        Pay<span className="hdr-logo-me">Me</span>
+      </span>
     </span>
   );
 }

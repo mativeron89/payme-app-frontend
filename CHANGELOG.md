@@ -11,6 +11,50 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.81.0 — la marca de la app: símbolo y wordmark (2026-08-19)
+
+**Diseño `A2`, el punto de navbar que estaba bloqueado.** Se destrabó con dos
+decisiones de Mati, ninguna de las cuales era una de las opciones que se le
+dieron.
+
+**① Qué va en la barra.** Se le mostraron dos capturas —wordmark solo, símbolo
+solo— y **escribió su propia salida**: *«quiero que esté el logo (como en la
+segunda imagen) y a la derecha "PayMe", tienen que estar ambos»*.
+
+🔴 **El símbolo se COMPONE con el wordmark de texto: NO se usa el lockup del
+handoff.** Los dos `payme-lockup-*.svg` tipean el wordmark con **Poppins** en un
+`<text>`, y `A4` ratificó mantener Plus Jakarta Sans + DM Sans; además
+`D-FUENTES-1` sacó las tres etiquetas a Google y no vuelven. Un lockup así
+renderizaría la marca en una fallback, **en silencio**. Componer deja el símbolo
+importado y el texto tipeado por la app.
+
+**② El centrado.** Sobre la primera captura dijo *«tiene que estar mas centrado
+"PayMe"»* sin decir el eje. **Se midió en vez de suponer**, y una hipótesis se
+cayó: el conjunto **ya estaba** centrado en la barra —fila, marca, usuario y
+campana, todos con centro en 64.0—. Lo desalineado era óptico, con dos lecturas
+posibles; se le mostró una captura de cada una y eligió **«C3 · la que se
+nota»**, descartando la técnicamente correcta.
+
+```
+            símbolo   wordmark
+arriba       52.0      55.1
+abajo        76.0      80.2      ← la cola de la «y»
+centro       64.0      64.8 óptico · 67.7 de tinta
+```
+
+**El navegador centra la caja de línea, y esa caja incluye la cola de la «y»** —
+por eso los números daban «centrado» y el ojo decía que no. Sube 3,7 px.
+
+⚠️ **El número está atado a `--font-display` y a `font-size: 26px`, y queda
+escrito así en el CSS: si cambian, la medición deja de valer y nada lo avisa.**
+
+- El glifo va **inline**: es chrome, y un `<img>` sumaría una request para 340
+  bytes que ya viajan en el bundle.
+- `aria-hidden` en el símbolo: el wordmark de al lado ya nombra la marca, y dos
+  «PayMe» seguidos serían ruido para un lector de pantalla.
+
+Suite 1101 · Playwright 95 · typecheck y builds verdes. Sin push.
+
 ## 0.80.3 — la guarda que le faltaba al barrido (2026-08-19)
 
 **REWORK 2 de la auditoría de Codex** sobre el corte `6f66e23`

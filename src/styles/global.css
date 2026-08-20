@@ -2086,6 +2086,24 @@ body {
   min-height: var(--tap-min);
 }
 
+/* Símbolo + wordmark (Mati, 2026-08-19). El `gap` es la mitad del lado del
+   símbolo: el handoff pide una separación clara sin que el par se lea como dos
+   objetos sueltos. `flex: none` para que la marca no se comprima cuando el
+   nombre de usuario de al lado es largo. */
+.hdr-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* El glifo no se achica con el texto: 24px es el mínimo del handoff para el
+   símbolo dentro de un lockup. Por debajo de eso, el handoff manda usarlo solo. */
+.hdr-symbol {
+  display: block;
+  flex: none;
+}
+
 .hdr-logo {
   font-family: var(--font-display);
   font-weight: 800;
@@ -2093,6 +2111,25 @@ body {
   letter-spacing: -0.02em;
   color: var(--on-dark);
   flex: none;
+  /* 🔴 CENTRADO ÓPTICO CONTRA EL SÍMBOLO · elegido por Mati el 2026-08-19,
+     etiqueta «C3 · la que se nota», descartando «C2 · la técnicamente
+     correcta» y dejarlo como estaba.
+
+     El navegador centra la CAJA DE LÍNEA, y esa caja incluye la cola de la
+     «y». Medido en pantalla, con el símbolo de 24px:
+
+         símbolo   arriba 52.0   abajo 76.0   centro 64.0
+         wordmark  arriba 55.1   abajo 80.2   centro óptico 64.8
+
+     O sea que la palabra empieza 3,1 px más abajo y termina 4,2 px más abajo
+     que el cuadrado: por eso los números decían «centrado» y el ojo decía que
+     no. Subirla 3,7 px hace que su bloque de tinta ocupe la misma franja
+     vertical que el símbolo.
+
+     ⚠️ ESTE NÚMERO ESTÁ ATADO A `--font-display` (Plus Jakarta Sans 800) Y A
+     `font-size: 26px`. Si cambia cualquiera de los dos, la medición deja de
+     valer y NADA lo va a avisar: se vuelve a medir contra el símbolo. */
+  transform: translateY(-3.7px);
 }
 /* El `Me` en teal sobre navy: 7.46:1. */
 .hdr-logo-me {
