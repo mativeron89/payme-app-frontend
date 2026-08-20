@@ -788,6 +788,24 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }, [payArea, code, aplicarAtribucion]);
   useEffect(() => { setFrozen(null); }, [guestToken, code]);
   const frozenScope = frozen?.scope ?? null;
+  /**
+   * 🔴 EL PREDICADO ÚNICO DE LA SELECCIÓN (P27, quinta vuelta).
+   *
+   * La ventana tiene **DOS estados que la cierran**, y son distintos:
+   *   · `journalPendiente` — *«todavía no sé si hay replay»*
+   *   · `frozenScope`      — *«sé que hay uno, y el reenvío manda su cuerpo»*
+   *
+   * Le pasé a `CardField` **sólo la primera**, así que cuando el journal
+   * resolvía **EN frozen** la primera se apagaba, la segunda nunca le llegaba,
+   * y el SDK volvía a habilitar el campo: con cero tarjetas guardadas la
+   * persona podía tipear otra **mientras el aviso decía que el método no se
+   * puede cambiar y `doPay()` reenviaba el cuerpo original sin mirarla**.
+   *
+   * Es la clase de la proyección: **la superficie especial recibió una copia
+   * parcial del predicado en vez del predicado.** Por eso ahora hay UNO solo y
+   * todas lo consumen — `CardField` deja de tener llave propia.
+   */
+  const seleccionBloqueada = journalPendiente || !!frozenScope;
   const cardRailAvailable = canUseCardRail(moneyRail, !!frozenScope);
   // La decisión vive en `freezeMachine.ts`, que sí tiene cobertura: acá sólo
   // se consume. Antes era lógica inline sin un solo test.
@@ -1787,7 +1805,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               onCustomChange={setCustomTipStr}
               baseCents={mesa.tip_base_cents}
               participants={mesa.expected_participants || 1}
-              disabled={!!frozenScope || journalPendiente}
+              disabled={seleccionBloqueada}
               pending={tipPending}
               pulse={tipPulse}
               onPulseEnd={() => setTipPulse(false)}
@@ -1805,7 +1823,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     className={`tip-pill ${staffId === s.id ? 'sel' : ''}`}
                     style={{ flex: 'none' }}
                     onClick={() => setStaffId(staffId === s.id ? null : s.id)}
-                    disabled={!!frozenScope || journalPendiente}
+                    disabled={seleccionBloqueada}
                     aria-pressed={staffId === s.id}
                   >
                     {s.display_name}
@@ -1833,7 +1851,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <button
                 className={`method-card ${payType === 'wallet' ? 'sel' : ''}`}
                 onClick={() => setPayType('wallet')}
-                disabled={!!frozenScope || journalPendiente}
+                disabled={seleccionBloqueada}
                 role="radio"
                 aria-checked={payType === 'wallet'}
               >
@@ -1852,7 +1870,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 setPayType('card');
                 if (cards.length > 0) setCardsOpen((v) => payType !== 'card' ? true : !v);
               }}
-              disabled={!!frozenScope || journalPendiente}
+              disabled={seleccionBloqueada}
               role="radio"
               aria-checked={payType === 'card'}
               aria-expanded={cards.length > 0 ? cardsOpen : undefined}
@@ -1888,7 +1906,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     key={c.id}
                     className={`method-card ${cardChoice === c.id ? 'sel' : ''}`}
                     onClick={() => setCardChoice(c.id)}
-                    disabled={!!frozenScope || !cardRailAvailable || journalPendiente}
+                    disabled={seleccionBloqueada || !cardRailAvailable}
                     role="radio"
                     aria-checked={cardChoice === c.id}
                   >
@@ -1912,7 +1930,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 <button
                   className={`method-card ${cardChoice === 'new' ? 'sel' : ''}`}
                   onClick={() => setCardChoice('new')}
-                  disabled={!!frozenScope || !cardRailAvailable || journalPendiente}
+                  disabled={seleccionBloqueada || !cardRailAvailable}
                   role="radio"
                   aria-checked={cardChoice === 'new'}
                 >
@@ -1933,8 +1951,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   <>
                     <CardField
                       // P23-AF-01: la novena superficie, y la única que no es
-                      // un control HTML — por eso faltaba.
-                      disabled={journalPendiente}
+                      // un control HTML. 🔴 P27: recibe el predicado UNIFICADO,
+                      // no una copia parcial — ése fue el defecto de la vuelta
+                      // anterior.
+                      disabled={seleccionBloqueada}
                       onReady={setCardEl}
                       onChange={handleCardChange}
                       continuation={!!frozenScope}
@@ -1954,7 +1974,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                     <input
                       type="checkbox"
                       checked={saveCard}
-                      disabled={!!frozenScope || !cardRailAvailable || journalPendiente}
+                      disabled={seleccionBloqueada || !cardRailAvailable}
                       onChange={(e) => setSaveCard(e.target.checked)}
                     />
                     {t('Guardar esta tarjeta para la próxima')}
@@ -1969,7 +1989,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <button
               className={`method-card ${payType === 'apple_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('apple_pay')}
-              disabled={!!frozenScope || journalPendiente}
+              disabled={seleccionBloqueada}
               role="radio"
               aria-checked={payType === 'apple_pay'}
             >
@@ -1987,7 +2007,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <button
               className={`method-card ${payType === 'google_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('google_pay')}
-              disabled={!!frozenScope || journalPendiente}
+              disabled={seleccionBloqueada}
               role="radio"
               aria-checked={payType === 'google_pay'}
             >

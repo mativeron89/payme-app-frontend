@@ -26,9 +26,40 @@ const CAMPO = FUENTES['/src/components/CardField.tsx']!;
 const PANTALLA = FUENTES['/src/screens/MesaScreen.tsx']!;
 const vivo = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-describe('🔴 el campo de Stripe se cierra durante la ventana (AF-01)', () => {
-  it('la pantalla le pasa la ventana al campo', () => {
-    expect(vivo(PANTALLA)).toMatch(/<CardField[\s\S]{0,200}disabled=\{journalPendiente\}/);
+describe('🔴 el campo de Stripe se cierra durante la ventana (AF-01, P27)', () => {
+  /**
+   * 🔴 P27-① · SE AFIRMA EL CABLEADO AL PREDICADO, NO UN LITERAL.
+   *
+   * La versión anterior matcheaba `disabled={journalPendiente}` — y por eso
+   * quedaba **verde 4/4 con el valor forzado a `false`**, y también con la
+   * copia PARCIAL del predicado que fue el defecto funcional de esta vuelta.
+   * Ahora se exige que reciba **el mismo predicado unificado que las demás
+   * superficies**, y que ese predicado contenga sus dos términos: mutar
+   * cualquiera de los dos pone esto rojo.
+   */
+  it('🔴 el campo recibe el PREDICADO UNIFICADO, no una copia ni un literal', () => {
+    expect(vivo(PANTALLA)).toMatch(/<CardField[\s\S]{0,300}disabled=\{seleccionBloqueada\}/);
+    // Y no una llave propia: si vuelve a tener la suya, esto cae.
+    expect(vivo(PANTALLA)).not.toMatch(/<CardField[\s\S]{0,300}disabled=\{journalPendiente\}/);
+    expect(vivo(PANTALLA)).not.toMatch(/<CardField[\s\S]{0,300}disabled=\{(true|false)\}/);
+  });
+
+  it('🔴 el predicado cierra la ventana por SUS DOS estados, no por uno', () => {
+    // «todavía no sé» y «sé que hay replay» son distintos: pasarle sólo el
+    // primero fue exactamente el defecto del P27.
+    const def = vivo(PANTALLA).match(/const seleccionBloqueada = [^;]+;/)?.[0] ?? '';
+    expect(def, 'desapareció el predicado unificado').not.toBe('');
+    expect(def).toMatch(/journalPendiente/);
+    expect(def).toMatch(/frozenScope/);
+  });
+
+  it('🔴 y TODAS las superficies lo consumen: nadie conserva llave propia', () => {
+    const v = vivo(PANTALLA);
+    // Ninguna superficie de elección vuelve a componer el predicado a mano.
+    expect(v).not.toMatch(/disabled=\{!!frozenScope \|\| journalPendiente\}/);
+    expect(v).not.toMatch(/disabled=\{!!frozenScope\}/);
+    // Control positivo: hay varias consumiéndolo, no una.
+    expect([...v.matchAll(/disabled=\{seleccionBloqueada/g)].length).toBeGreaterThan(5);
   });
 
   it('🔴 el campo lo aplica por la API del SDK, no por el DOM', () => {

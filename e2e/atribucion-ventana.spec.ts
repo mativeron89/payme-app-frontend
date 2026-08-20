@@ -72,6 +72,30 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
   const cuantas = await superficies.count();
   expect(cuantas, 'no había ninguna superficie que mirar: el oráculo mediría en vacío')
     .toBeGreaterThan(2);
+
+  /**
+   * 🔴 P27-② · CONTROL POSITIVO REAL, no un conteo.
+   *
+   * Codex midió que este caso pasaba **sin tarjetas cargadas y con los guards
+   * retirados**: con la lista vacía no hay nada que quede interactuable, así
+   * que la ausencia de fallas no probaba que las guardas existieran. Ahora se
+   * exige, ANTES de afirmar, que el escenario sea el que dice ser: **hay
+   * tarjetas guardadas y la lista está desplegada** — o sea, hay superficies
+   * que SIN la guarda estarían habilitadas.
+   */
+  await expect(
+    page.getByRole('radio', { name: /Tarjeta de crédito o débito/ }),
+    'el escenario no tiene la fila de tarjeta: el caso mediría otra cosa',
+  ).toBeVisible();
+  // ⚠️ La LISTA de guardadas no se puede exigir acá y el intento me lo enseñó:
+  // sólo se despliega al tocar el chevron, y durante la ventana eso está
+  // cerrado. Lo que sí prueba que las tarjetas **se cargaron** —y por tanto
+  // que hay algo que sin la guarda sería elegible— es el propio chevron, que
+  // sólo se pinta con `cards.length > 0`.
+  await expect(
+    page.getByText('▾', { exact: true }),
+    'las tarjetas no se cargaron: sin ellas el oráculo pasa aunque falten las guardas',
+  ).toBeVisible();
   for (let i = 0; i < cuantas; i++) {
     const s = superficies.nth(i);
     if (!(await s.isVisible())) continue;

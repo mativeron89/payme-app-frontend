@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { atribucionInicial } from './freezeMachine';
+import { atribucionInicial, payGate } from './freezeMachine';
 import { metadatosDelBody } from './comprobanteDelBody';
 import type { UnconfirmedAttempt } from '../api/idempotency';
 
@@ -124,7 +124,15 @@ describe('🔴 el comprobante no puede leer el estado visual (AF-03)', () => {
   const vivo = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   // El bloque que arma el comprobante, acotado: mirar el archivo entero
   // matchearía usos legítimos de `tip` en la pantalla de pago.
-  const bloque = vivo.slice(vivo.indexOf('setResult({'), vivo.indexOf('});', vivo.indexOf('setResult({')));
+  /**
+   * 🔴 P27-③ · EL RECORTE DEJABA AFUERA LO QUE DEBÍA CUSTODIAR. Cortaba en el
+   * primer `});` después de `setResult({`, y **la asignación de `metaPropina`
+   * vive ANTES**, al principio de `handlePayResponse`. Con ese recorte, mutar
+   * la derivación no enrojecía nada. Ahora el bloque va desde la función
+   * entera, que es donde se decide.
+   */
+  const iniFn = vivo.indexOf('async function handlePayResponse');
+  const bloque = vivo.slice(iniFn, vivo.indexOf('});', vivo.indexOf('setResult({', iniFn)));
 
   it('el bloque del comprobante existe: si no, esto mediría en vacío', () => {
     expect(bloque.length).toBeGreaterThan(100);
@@ -135,8 +143,51 @@ describe('🔴 el comprobante no puede leer el estado visual (AF-03)', () => {
     expect(bloque).toMatch(/tipToName:\s*metaPropina\.nombre/);
   });
 
+  it('🔴 y `metaPropina` se DERIVA DEL BODY — la asignación que el recorte dejaba afuera', () => {
+    expect(bloque).toMatch(/const metaPropina = metadatosDelBody\(\s*body\s*,/);
+    // Mutar la fuente —pasarle otra cosa que no sea el body— pone esto rojo.
+    expect(bloque).not.toMatch(/metadatosDelBody\(\s*\{/);
+  });
+
   it('🔴 y NO toca el estado visual: ni `tip.mode` ni `staffId`', () => {
     expect(bloque).not.toMatch(/tip\.mode/);
     expect(bloque).not.toMatch(/staffId/);
+  });
+});
+
+/**
+ * 🔴 P27-④ · MUTANTE DISCRIMINANTE DE LA PUERTA, sin el CTA en el medio.
+ *
+ * Codex midió que retirar `journalPendiente` **sólo de `payGate`** dejaba todo
+ * verde: el CTA deshabilitado tapaba al caller, así que ningún caso llegaba a
+ * la puerta con la ventana abierta. **La implementación existía y no tenía
+ * mutante propio** — que es otra forma de «probado por casualidad».
+ *
+ * Acá se llama a la puerta **directo**, con la ventana abierta, sin pasar por
+ * ninguna UI.
+ */
+describe('🔴 la puerta rechaza con la ventana abierta, sin CTA de por medio', () => {
+  const base = { frozen: null, acknowledged: false, crossActorIntent: false, mySlotsTaken: 0 };
+
+  it('con journal pendiente, la puerta NO deja pagar', () => {
+    // Es como se cablea en MesaScreen: la ventana entra por `hasActor`, porque
+    // sin journal resuelto no hay identidad monetaria decidida todavía.
+    expect(payGate({ ...base, hasActor: true && !true })).toEqual({ allowed: false, reason: 'no_actor' });
+  });
+
+  it('con el journal resuelto y todo lo demás en orden, deja pagar', () => {
+    expect(payGate({ ...base, hasActor: true && !false })).toEqual({ allowed: true });
+  });
+
+  it('🔴 y el CABLEADO real lo lleva: la pantalla mete la ventana en `hasActor`', () => {
+    const SRC = (
+      import.meta.glob('/src/screens/MesaScreen.tsx', {
+        query: '?raw', import: 'default', eager: true,
+      }) as Record<string, string>
+    )['/src/screens/MesaScreen.tsx']!;
+    const vivo = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    // Sin esto, la puerta sería correcta y nadie le pasaría la ventana — el
+    // caso de arriba pasaría igual y no probaría nada del producto.
+    expect(vivo).toMatch(/hasActor:\s*!!actor\s*&&\s*!!scope\s*&&\s*!journalPendiente/);
   });
 });

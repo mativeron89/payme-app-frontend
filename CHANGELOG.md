@@ -11,6 +11,51 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.97.0 — un solo predicado, y cuatro evidencias que no probaban (2026-08-20)
+
+Quinta vuelta del P27. **El funcional era uno y era de máquina de estados.**
+
+### El defecto · una copia PARCIAL del predicado
+
+La ventana de `CardField` tiene **dos estados que la cierran**, y son
+distintos: *«todavía no sé si hay replay»* (`journalPendiente`) y *«sé que hay
+uno»* (`frozenScope`). **Le pasé sólo el primero.** Cuando el journal resolvía
+**EN frozen**, el primero se apagaba, el segundo nunca le llegaba y el SDK
+volvía a habilitar el campo: con cero tarjetas guardadas **la persona podía
+tipear otra mientras el aviso decía que el método no se puede cambiar y
+`doPay()` reenviaba el cuerpo original sin mirarla**.
+
+🔴 **Es la clase de la proyección: la superficie especial recibió una copia
+parcial del predicado en vez del predicado.** Por eso la corrección no es
+`journalPendiente || frozenScope` en ese punto, sino **un predicado único
+(`seleccionBloqueada`) que consumen las diez superficies** — `CardField` deja
+de tener llave propia. **Mutante acreditado por cada término:** quitar
+cualquiera de los dos pone la guarda roja.
+
+### Las cuatro evidencias que pasaban sin probar
+
+- **①** el test del campo matcheaba `disabled={journalPendiente}`, así que
+  **quedaba verde con el valor forzado a `false`** y con la copia parcial.
+  Ahora afirma el **cableado al predicado**, y que el predicado tenga **sus dos
+  términos**.
+- **②** el oráculo de clase **pasaba sin tarjetas cargadas**: con la lista
+  vacía no hay nada que quede interactuable, así que la ausencia de fallas no
+  probaba nada. Ahora exige **antes de afirmar** que el escenario sea el que
+  dice ser. ⚠️ Y el primer intento de control positivo —pedir la lista de
+  guardadas— **era imposible por construcción**: sólo se despliega al tocar el
+  chevron, y durante la ventana eso está cerrado. El marcador correcto es el
+  chevron mismo, que sólo existe con tarjetas cargadas.
+- **③** el oráculo de fuente **recortaba fuera la asignación que debía
+  custodiar**: cortaba en el `setResult({`, y `metaPropina` se deriva **antes**.
+  Ahora el bloque abarca la función entera y exige que la derivación salga
+  **del body**.
+- **④** retirar `journalPendiente` **sólo de la puerta** quedaba verde porque
+  el CTA tapaba al caller: **la implementación existía sin mutante propio.**
+  Ahora hay un caso que llama a `payGate` **directo**, más una guarda del
+  cableado — sin ella, la puerta sería correcta y nadie le pasaría la ventana.
+
+Suite: **1158 unitarios · 110 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.96.0 — la superficie que no era HTML, y oráculos de clase (2026-08-20)
 
 Cuarta vuelta del P23. **El patrón era uno solo, y el Bibliotecario lo nombró
