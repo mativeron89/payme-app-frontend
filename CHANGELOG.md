@@ -11,6 +11,56 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.87.0 — los tres reworks de Codex sobre la fusión (2026-08-20)
+
+Dictamen `[PAYME]_AUDITORIA_FUSION_DIVISION_APP_FRONTEND_CODEX_2026-08-19.md`.
+**P2-01 NO se toca: espera decisión literal de Mati.** Los otros tres, hechos.
+
+**P2-02 · el runner podía correr contra OTRO árbol, y salir verde.** Codex lo
+reprodujo determinista: `reuseExistingServer: !process.env.CI` hacía que
+Playwright **adoptara** cualquier servidor en el puerto, aunque fuera de otro
+árbol de trabajo. 🔴 **Un verde así no prueba nada del commit auditado, y no
+deja rastro: no hay rojo que investigar, hay evidencia que no vale.**
+
+- `reuseExistingServer: false` **siempre**. Con `--strictPort`, un puerto
+  ocupado hace **fallar el arranque** en vez de adoptar lo que haya.
+- **Acreditado plantando el caso, no razonándolo:** con un servidor ajeno en
+  el 5176, el runner corta con *«http://localhost:5176 is already used»*.
+  **Lo rechaza; no lo adopta.**
+- **Sentinela del árbol servido:** `vite.config.ts` inyecta `HEAD` (+`sucio`)
+  y `e2e/runner-servidor.spec.ts` lo compara contra el `git rev-parse` local.
+  Si alguien reactiva la reutilización, la discrepancia **se ve** en vez de
+  pasar callada. El spec verifica además que la config no vuelva a depender
+  del entorno: `!process.env.CI` dejaba viva la reutilización **justo en
+  local, que es donde se corren los gates antes de pedir un push**.
+- ⚠️ **Costo declarado:** ya no se puede reusar un `vite` a mano entre
+  corridas. Son segundos. La alternativa era conservar la comodidad y no
+  poder afirmar contra qué código corrió el gate que autoriza publicar.
+- 🔴 **Y una atribución mía que RETIRO:** hoy declaré dos intermitentes como
+  ambientales (`ERR_NETWORK_CHANGED`). Con este hallazgo **ya no puedo
+  afirmarlo**: pudieron ser el runner. Quedan sin causa asignada.
+
+**P3-01 · el ticket reescaneado heredaba el acordeón abierto.** Abrir → Volver
+→ escanear otro y el ticket nuevo nacía abierto: el estado de un ticket que ya
+no existe. `setTicketAbierto(false)` en los **dos** caminos —OCR aceptado y
+carga a mano—, con e2e del recorrido completo.
+
+**P3-02 · la selección de forma no tenía semántica.** Eran `<button>` y lo
+elegido **sólo vivía en la clase `sel`**: un lector de pantalla no podía decir
+cuál estaba elegido ni que fueran alternativas de una misma pregunta. Ahora
+`role="radiogroup"` + `role="radio"` + `aria-checked`. Y el stepper anunciaba
+«Cantidad de comensales» aunque la pantalla preguntara «¿Cuántos pagan?»:
+su nombre accesible **sigue a `tituloStepper`**, así que quien no ve la
+pantalla recibe la misma pregunta que quien la ve.
+
+**Clase enumerada, no instancia:** el cambio de rol movió **18 marcadores en 5
+specs**, más 6 del nombre del stepper. ⚠️ **Y el grep tenía un punto ciego:**
+uno se construía con `new RegExp(forma)` dentro de un bucle y no matcheaba el
+patrón — apareció al correr, no al enumerar. **Enumerar con una expresión
+también deja afuera lo que esa expresión no ve.**
+
+Suite: **1120 unitarios · 104 e2e** · builds real/mock/landing. Sin push.
+
 ## 0.86.0 — fidelidad visual: «Confirma con tu banco» (2026-08-20)
 
 Segunda tanda de `FIDELIDAD_VISUAL_APP_2026-08-20.md` (`8183295`), sobre 3DS.

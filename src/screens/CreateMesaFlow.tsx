@@ -552,6 +552,12 @@ export function CreateMesaFlow() {
   function cargarAMano() {
     setScanIssue(null);
     setScannedTotalCents(null);
+    // 🔴 P3-01 (Codex, 2026-08-20): el ticket vuelve a nacer PLEGADO en cada
+    // llegada a la pantalla. Sin este reset, abrir el acordeón, volver y
+    // escanear otro ticket lo mostraba abierto — el estado de un ticket que
+    // ya no existe. Es estado de VISTA, no de datos: se reinicia donde se
+    // reinician los datos.
+    setTicketAbierto(false);
     setEditItems([{ name: '', priceStr: '', quantity: 1 }]);
     setEditingItems(true);
     setExpandedItem(0);
@@ -594,6 +600,12 @@ export function CreateMesaFlow() {
       setScanIssue(null);
       // La baja confianza abre los lápices desde el primer frame. No bloquea
       // continuar: la persona ve la señal y decide qué corregir.
+    // 🔴 P3-01 (Codex, 2026-08-20): el ticket vuelve a nacer PLEGADO en cada
+    // llegada a la pantalla. Sin este reset, abrir el acordeón, volver y
+    // escanear otro ticket lo mostraba abierto — el estado de un ticket que
+    // ya no existe. Es estado de VISTA, no de datos: se reinicia donde se
+    // reinician los datos.
+    setTicketAbierto(false);
       setEditingItems(decision.hasLowConfidence);
       setExpandedItem(null);
       setStep('ticket');
@@ -1230,6 +1242,11 @@ export function CreateMesaFlow() {
           {/* Las tres formas salen de UNA lista, no de tres bloques copiados:
               con tres copias, agregar un estado visual a una y olvidarse de
               las otras es cuestión de tiempo. */}
+          {/* 🔴 P3-02 (Codex): eran `<button>` sin semántica — el elegido sólo
+              vivía en la clase `sel`, así que un lector de pantalla no podía
+              decir cuál estaba elegido ni que fueran alternativas de una misma
+              pregunta. `radiogroup` + `aria-checked` lo dicen. */}
+          <div role="radiogroup" aria-label={t('¿Cómo dividen?')}>
           {([
             { modo: 'consumo', ico: <Icon name="users" size={22} />, title: 'Por lo que pidió cada uno', sub: 'Cada uno elige sus platos' },
             { modo: 'igual', ico: '÷', title: 'En partes iguales', sub: 'El total dividido entre todos' },
@@ -1238,6 +1255,8 @@ export function CreateMesaFlow() {
             <button
               key={op.modo}
               className={`div-card ${division === op.modo ? 'sel' : ''}`}
+              role="radio"
+              aria-checked={division === op.modo}
               onClick={() => {
                 setDivision(op.modo);
                 // Un N que deja de ser válido se vuelve a preguntar, NO se
@@ -1254,6 +1273,7 @@ export function CreateMesaFlow() {
               </div>
             </button>
           ))}
+          </div>
           {/* §1.4 sin cambios: nace SIN ELEGIR, Continuar nunca se apaga,
               toast + scroll + pulso si tocan sin elegir. */}
           <div
@@ -1266,7 +1286,11 @@ export function CreateMesaFlow() {
               {participants === null && <Icon name="warning" size={14} aria-hidden="true" />}
               {t(tituloStepper(division))}
             </div>
-            <div className="stepper" role="group" aria-label={t('Cantidad de comensales')}>
+            {/* 🔴 P3-02: el nombre accesible SIGUE a `tituloStepper`. Antes
+                decía siempre «Cantidad de comensales» aunque la pantalla
+                preguntara «¿Cuántos pagan?»: quien no ve la pantalla recibía
+                otra pregunta que quien la ve. */}
+            <div className="stepper" role="group" aria-label={t(tituloStepper(division))}>
               <button
                 onClick={() => setParticipants(participants === null ? pisoComensales : Math.max(pisoComensales, participants - 1))}
                 aria-label={t('Un comensal menos')}

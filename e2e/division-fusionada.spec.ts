@@ -13,7 +13,7 @@ async function hastaLaPantallaFusionada(page: import('@playwright/test').Page) {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await page.getByRole('button', { name: 'Capturar' }).click();
-  await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
+  await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 }
 
 test('las tres formas y el ticket viven en UNA pantalla, en el paso 2 de 4', async ({ page }) => {
@@ -21,7 +21,7 @@ test('las tres formas y el ticket viven en UNA pantalla, en el paso 2 de 4', asy
 
   await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
   for (const forma of ['Por lo que pidió cada uno', 'En partes iguales', 'Pagar el total']) {
-    await expect(page.getByRole('button', { name: new RegExp(forma) })).toBeVisible();
+    await expect(page.getByRole('radio', { name: new RegExp(forma) })).toBeVisible();
   }
   // El ticket está en la MISMA pantalla, y su total también.
   await expect(page.getByText('Total del ticket')).toBeVisible();
@@ -56,13 +56,13 @@ test('🔴 el ticket nace PLEGADO y se abre con sus consumos', async ({ page }) 
 test('🔴 «Pagar el total» reparte el total entre los que cubren, como igual', async ({ page }) => {
   await hastaLaPantallaFusionada(page);
 
-  await page.getByRole('button', { name: /Pagar el total/ }).click();
+  await page.getByRole('radio', { name: /Pagar el total/ }).click();
   // Comparte título con partes iguales: DOS títulos para TRES formas.
   await expect(page.getByText('¿Cuántos pagan?')).toBeVisible();
 
   // Piso 2, heredado del contrato: el primer toque no puede dejar un 1.
   await page.getByRole('button', { name: 'Un comensal más' }).click();
-  await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('2');
+  await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('2');
 
   await page.getByRole('button', { name: 'Continuar' }).click();
   await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
@@ -75,4 +75,33 @@ test('🔴 «Pagar el total» reparte el total entre los que cubren, como igual'
   // 840 ÷ 2 = 420: el total repartido entre los DOS que cubren. Con `consumo`
   // no existiría este casillero, existiría la lista de platos.
   await expect(page.getByText('$420.00').first()).toBeVisible();
+});
+
+test('🔴 P3-01 · reescanear no hereda el acordeón abierto del ticket anterior', async ({ page }) => {
+  await hastaLaPantallaFusionada(page);
+  await page.getByRole('button', { name: /Total del ticket/ }).click();
+  await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
+
+  // Volver y escanear OTRO ticket: el acordeón no puede recordar el anterior.
+  await page.getByRole('button', { name: /Volver/ }).click();
+  await page.getByRole('button', { name: 'Capturar' }).click();
+  await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
+});
+
+test('🔴 P3-02 · la selección tiene semántica, no sólo una clase CSS', async ({ page }) => {
+  await hastaLaPantallaFusionada(page);
+  const grupo = page.getByRole('radiogroup', { name: '¿Cómo dividen?' });
+  await expect(grupo).toBeVisible();
+
+  const consumo = page.getByRole('radio', { name: /Por lo que pidió cada uno/ });
+  const total = page.getByRole('radio', { name: /Pagar el total/ });
+  await expect(consumo).toHaveAttribute('aria-checked', 'true');
+  await expect(total).toHaveAttribute('aria-checked', 'false');
+
+  await total.click();
+  await expect(total).toHaveAttribute('aria-checked', 'true');
+  await expect(consumo).toHaveAttribute('aria-checked', 'false');
+  // Y el nombre accesible del stepper sigue a la pregunta de la pantalla.
+  await expect(page.getByRole('group', { name: '¿Cuántos pagan?' })).toBeVisible();
 });

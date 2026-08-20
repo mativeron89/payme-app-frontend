@@ -94,7 +94,11 @@ function envueltos(): { ruta: string; texto: string }[] {
 // agrega `t(op.title)`, `t(op.sub)` —las tres formas de dividir salen de UNA
 // lista, no de tres bloques copiados— y `t(tituloStepper(division))`. Los tres
 // están cubiertos por familia acá abajo, que es lo que este número exige.
-const T_SIN_LITERAL = 17;
+// 🔴 SUBIÓ A 18 el mismo día, por P3-02 (Codex): el `aria-label` del stepper
+// dejó de ser el literal «Cantidad de comensales» y pasa a seguir a
+// `tituloStepper`, para que quien no ve la pantalla reciba LA MISMA pregunta
+// que quien la ve. Ya está cubierto por la familia `tituloStepper`.
+const T_SIN_LITERAL = 18;
 
 function sitiosSinLiteral(): string[] {
   const out: string[] = [];

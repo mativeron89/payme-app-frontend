@@ -123,10 +123,29 @@ export default defineConfig({
     },
   ],
 
+  /**
+   * 🔴 `reuseExistingServer: false` SIEMPRE — antes era `!process.env.CI`.
+   *
+   * Hallazgo de Codex (P2-02, 2026-08-20), reproducido determinista: con la
+   * reutilización activa, Playwright **adopta cualquier servidor que encuentre
+   * en el puerto**, aunque sea de otro árbol de trabajo. Corrió specs de un
+   * commit contra el build de otro **y salió verde**. Un verde así no prueba
+   * nada sobre el commit auditado, y el modo de falla no deja rastro: no hay
+   * rojo que investigar, hay una evidencia que no vale.
+   *
+   * ⚠️ **Lo que se pierde y por qué se paga:** ya no se puede dejar un `vite`
+   * a mano en el 5176 y reusarlo entre corridas. Cuesta unos segundos por
+   * corrida. **La alternativa era conservar la comodidad y no poder afirmar
+   * contra qué código corrió el gate que autoriza publicar.**
+   *
+   * Con `--strictPort`, si el 5176 está ocupado por un servidor ajeno el
+   * arranque **falla** en vez de adoptarlo: el runner lo RECHAZA, que es la
+   * conducta que `runner-servidor.spec.ts` acredita.
+   */
   webServer: {
     command: 'npx --no-install vite --port 5176 --strictPort --mode mock',
     url: 'http://localhost:5176',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 });

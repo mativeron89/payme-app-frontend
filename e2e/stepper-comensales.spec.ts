@@ -20,12 +20,12 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
     await page.getByRole('button', { name: 'Capturar' }).click();
-    await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
+    await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
 
     // Nace sin elegir: sin número, y la pregunta del modo consumo.
     await expect(page.getByText('¿Cuántos son en la mesa?')).toBeVisible();
-    await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('—');
+    await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('—');
 
     // Continuar NUNCA está deshabilitado: frena explicando, como la propina.
     const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
@@ -80,13 +80,13 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
     await page.getByRole('button', { name: 'Capturar' }).click();
-    await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
+    await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 
-    await page.getByRole('button', { name: /En partes iguales/ }).click();
+    await page.getByRole('radio', { name: /En partes iguales/ }).click();
     const mas = page.getByRole('button', { name: 'Un comensal más' });
     await mas.click(); // — → 2 (piso de iguales, del contrato)
     await mas.click(); // 2 → 3
-    await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('3');
+    await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('3');
     await expect(page.getByText('$280.00')).toBeVisible();
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
@@ -112,16 +112,16 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
     await page.getByRole('button', { name: 'Capturar' }).click();
-    await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
+    await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 
     // En consumo el piso es 1: un toque lo elige.
     await page.getByRole('button', { name: 'Un comensal más' }).click();
-    await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('1');
+    await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('1');
 
     // Al pasar a iguales, 1 viola el piso del contrato (>= 2): se vuelve a
     // preguntar — no se "corrige" solo a un número que nadie eligió.
-    await page.getByRole('button', { name: /En partes iguales/ }).click();
+    await page.getByRole('radio', { name: /En partes iguales/ }).click();
     await expect(page.getByText('¿Cuántos pagan?')).toBeVisible();
-    await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('—');
+    await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('—');
   });
 });

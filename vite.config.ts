@@ -6,11 +6,41 @@ import react from '@vitejs/plugin-react';
 // (FASE 2 · B). O sea que la config de la suite estaba SIN TIPAR: un `include`
 // mal escrito o una opción inexistente pasaban en silencio.
 // `vitest` ya es devDependency; no se agrega nada.
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vitest/config';
+
+/**
+ * 🔴 SENTINELA DEL ÁRBOL SERVIDO (P2-02, hallazgo de Codex 2026-08-20).
+ *
+ * Codex reprodujo, determinista, que una corrida de Playwright puede ejecutar
+ * los specs de UN árbol contra el servidor de OTRO —`reuseExistingServer`
+ * adopta lo que encuentre en el puerto— y **el resultado sale verde igual**.
+ * Un verde así no prueba nada del commit que se está auditando.
+ *
+ * El arreglo primario es no reutilizar servidores (ver `playwright.config.ts`).
+ * Esto es la segunda línea: el servidor **declara qué árbol es**, y un spec lo
+ * compara contra el repo local. Si alguien reactiva la reutilización, la
+ * discrepancia se ve en vez de pasar callada.
+ *
+ * Sale `git rev-parse HEAD` + si el árbol está sucio: servir un árbol sucio es
+ * legítimo en desarrollo, pero **una evidencia de auditoría tiene que decir que
+ * lo estaba**. Falla a `'desconocido'` en vez de romper el build: esto es
+ * instrumentación, no una compuerta.
+ */
+function arbolServido(): string {
+  try {
+    const head = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+    const sucio = execSync('git status --porcelain', { encoding: 'utf8' }).trim() !== '';
+    return `${head}${sucio ? '+sucio' : ''}`;
+  } catch {
+    return 'desconocido';
+  }
+}
 
 export default defineConfig({
   plugins: [react()],
   server: { port: 5174 },
+  define: { __ARBOL_SERVIDO__: JSON.stringify(arbolServido()) },
   // Sin esto, vitest reemplaza todo módulo CSS por un stub vacío (`css: false`
   // es su default), incluso el import `?raw` con el que designTokens.test.ts
   // verifica los tokens del sistema de diseño: el archivo llegaba como "".

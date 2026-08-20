@@ -6,6 +6,17 @@ import { bootstrapSignupInvitationCustody } from './api/signupInvitation';
 import { retirarSplash } from './splash';
 import './styles/global.css';
 
+/**
+ * 🔴 SENTINELA DEL ÁRBOL SERVIDO (P2-02). Lo inyecta `vite.config.ts`. Existe
+ * para que una corrida de e2e pueda AFIRMAR contra qué código corrió, en vez
+ * de suponerlo: si alguien reactiva la reutilización de servidores, un
+ * servidor de otro árbol se delata acá en vez de pasar en verde.
+ * No es dato de producto ni sale a ninguna red: es un string en `window`.
+ */
+declare const __ARBOL_SERVIDO__: string;
+(window as unknown as { __ARBOL_SERVIDO__?: string }).__ARBOL_SERVIDO__ =
+  typeof __ARBOL_SERVIDO__ === 'string' ? __ARBOL_SERVIDO__ : 'desconocido';
+
 const el = document.getElementById('root');
 if (!el) throw new Error('No existe #root');
 

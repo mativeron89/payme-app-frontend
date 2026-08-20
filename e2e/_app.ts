@@ -84,9 +84,9 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   // que es lo primero que la pantalla fusionada ofrece.
   //
   // El OCR mock tarda: se espera a la pantalla, no a un número de milisegundos.
-  await expect(page.getByRole('button', { name: /Pagar el total/ })).toBeVisible();
+  await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 
-  await page.getByRole('button', { name: /En partes iguales/ }).click();
+  await page.getByRole('radio', { name: /En partes iguales/ }).click();
   await expect(page.getByRole('button', { name: 'Un comensal más' })).toBeVisible();
 
   // §1.4 (2026-08-06): el stepper nace SIN ELEGIR y el N lo pone la persona —
@@ -97,7 +97,7 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await masUno.click();
   await masUno.click();
   await masUno.click();
-  await expect(page.getByRole('group', { name: 'Cantidad de comensales' })).toContainText('4');
+  await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('4');
 
   await page.getByRole('button', { name: 'Continuar' }).click();
   await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
