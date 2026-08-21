@@ -100,6 +100,29 @@ const TIENE_ATRIBUTO_ACCIONABLE = (s: Superficie) =>
  * aportar interacción o la guarda misma, un componente cuyos props no resuelven—
  * **no se supone inocente: se denuncia**.
  */
+/**
+ * ⚠️ **EL LÍMITE DE CUALQUIER CENSO DE JSX, espejado acá porque es acá donde se
+ * decide** — estaba dicho en el test y no en la función, que es donde lo busca
+ * el que quiera saber hasta dónde llega esta clasificación.
+ *
+ * 🔴 **Un componente que no declara NINGÚN prop y renderiza un botón adentro es
+ * invisible para esto, y no hay forma de arreglarlo desde el JSX del llamador.**
+ * `<MiBoton />` sin props no ofrece nada que mirar: ni handler, ni rol, ni
+ * `disabled`, ni un tipo que consultar. El control existe, se puede tocar, y
+ * **quedaría clasificado INERTE con toda razón aparente**.
+ *
+ * Lo que hoy lo contiene, y conviene decirlo para no exagerar el agujero: si
+ * ese componente vive en el árbol, **su propio subárbol tiene el `<button>`**, y
+ * el censo se puede correr sobre él —como ya se hace con `TipSelector`—. Lo que
+ * no existe es el paso automático: **hay que acordarse de censarlo**, y eso es
+ * exactamente la clase de mantenimiento a mano que este archivo viene evitando.
+ *
+ * **Condición de disparo:** si aparece en la vista de pago un componente propio
+ * sin props que encapsule un control, este censo lo va a dar por inerte. La
+ * salida no es una lista de componentes «a revisar» —volveríamos al defecto que
+ * costó cuatro vueltas— sino censar los subárboles derivándolos: los componentes
+ * locales que la región usa, no los que alguien anote.
+ */
 function clasificar(s: Superficie): { clase: Clase; motivo?: string } {
   // Un spread puede traer `role`, un handler o el propio `disabled`. No hay
   // forma de saberlo leyendo esto, así que no se decide: se denuncia.
