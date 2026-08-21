@@ -58,7 +58,7 @@ import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { tipFromBps } from '../utils/money';
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
-import { metodoSinElegir, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
+import { frenoPorMetodo, metodoSinElegir, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import {
   NO_TIP_CHOSEN,
   TIP_OPTIONS,
@@ -1191,7 +1191,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
      * está escrito. **Misma regla, dos consecuencias, porque el reenvío no
      * significa lo mismo en las dos pantallas.**
      */
-    if (!frozen?.payload && metodoPendiente) {
+    if (frenoPorMetodo({ metodoPendiente, frozenTienePayload: !!frozen?.payload })) {
       toast(t('Elige tu método de pago'));
       metodoSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
       setMetodoPulse(true);

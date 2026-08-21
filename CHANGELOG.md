@@ -11,6 +11,58 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.100.1 — el freno del método, y por qué su test de navegador NO PUEDE existir (2026-08-20)
+
+Cierra la exigencia (a) del L2 — **y la cierra diciendo que, tal como está
+formulada, no se puede cumplir.** Vale más eso que un test que la simule.
+
+### ① Lo que se pidió, y lo que la medición contestó
+
+Se pidió un test de regresión del caso mock: **«CTA tocado sin elección ⇒ no
+paga, avisa, y el journal no registra intento»**, que muriera solo si alguien
+restaura el nacimiento en `'new'` o quita el corte.
+
+🔴 **MEDIDO: ese caso no se alcanza en el riel mock.** Quité el corte **entero**
+de `doPay` y la suite quedó **verde salvo los oráculos de fuente** — **1199
+unitarios y 110 e2e**. La causa es estructural, no un descuido del arnés:
+
+```
+metodoPendiente = tarjeta · hay guardadas · ninguna elegida
+lo único que impide la AUTOSELECCIÓN de la default es
+   · el campo de Stripe con contenido  → no monta en mock (`!IS_MOCK`)
+   · un intento congelado              → sale por otra puerta (payGate / replay)
+⇒ en mock, con el CTA vivo, el estado NO EXISTE
+```
+
+⚠️ **Y por eso el riesgo que la exigencia nombraba no se materializa en mock:**
+la autoselección ocupa el hueco antes de que nadie pueda tocar «Pagar».
+**Dónde vive el riesgo de verdad:** en el riel **REAL**, cuando las tarjetas
+guardadas llegan **después** de que la persona empezó a tipear una nueva — ahí
+`aplicarAtribucion` se abstiene, `cardChoice` queda en el sentinela con
+`cards.length > 0`, y el CTA está vivo.
+
+🔴 **No se simula.** Un mock que finja el campo de Stripe sería un oráculo
+mirando algo que no es Stripe — la misma decisión que ya está tomada para
+`CardField`. **El límite se declara.**
+
+### ② Lo que sí se puede probar, y se hizo
+
+La decisión sale del JSX y pasa a `frenoPorMetodo()` en `tarjetaElegida.ts`,
+donde se puede ejercitar sin pantalla: **frena sin elección · NO frena con
+reintento congelado · no frena con método elegido**. Y el oráculo de fuente pasa
+a afirmar **el cableado**: que el call site le pasa `frozenTienePayload`.
+
+Los dos niveles hacen falta y ninguno reemplaza al otro — **probar la función no
+es probar el cableado**, que es la lección que este repo ya pagó dos veces.
+
+**Cuatro mutantes, los cuatro muertos:** desaparece el corte del call site · el
+call site deja de pasarle el reintento (**trabaría el reenvío**, que es la
+trampa que casi queda puesta) · la regla pierde la exclusión · la regla nunca
+frena.
+
+**Medido:** typecheck ✓ · **1209** unitarios · **110** e2e ✓ · builds ✓.
+**Sin push ni deploy.**
+
 ## 0.100.0 — sin `VITE_API_URL` no hay build real, y dos costuras escritas (2026-08-20)
 
 Cierra **L3** y el resto de **L2**. Producción cambia en un solo lugar y es el

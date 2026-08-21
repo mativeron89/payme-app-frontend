@@ -49,7 +49,7 @@ describe('§1.5 bis · el método de pago no se adivina', () => {
     // Sin esto, con guardadas y ninguna elegida `savedCard` da null y el envío
     // cae al camino de la tarjeta NUEVA: en mock cobra con un `pm_` que nadie
     // eligió, en real muere pidiendo un campo que no está en pantalla.
-    expect(vivo(pantalla())).toMatch(/if \(!frozen\?\.payload && metodoPendiente\) \{/);
+    expect(vivo(pantalla())).toMatch(/if \(frenoPorMetodo\(\{ metodoPendiente, frozenTienePayload: !!frozen\?\.payload \}\)\) \{/);
   });
 
   it('🔴 y NO traba el reintento congelado: la condición lleva su exclusión', () => {
@@ -57,9 +57,12 @@ describe('§1.5 bis · el método de pago no se adivina', () => {
     // `frozen.payload`, que ya trae su método; pedir que se elija cortaría la
     // única salida de ese estado.
     const v = vivo(pantalla());
-    const corte = v.match(/if \([^)]*metodoPendiente\) \{/)?.[0] ?? '';
+    const corte = v.match(/if \(frenoPorMetodo\([^;]*?\)\) \{/)?.[0] ?? '';
     expect(corte, 'desapareció el corte del método').not.toBe('');
-    expect(corte, 'el corte dejó de excluir el reintento congelado').toContain('!frozen?.payload');
+    // 🔴 Se afirma que el call site le PASA el estado del reintento. La regla
+    // está probada pura en `tarjetaElegida.test.ts`; acá se prueba el CABLEADO,
+    // que es lo que un test de la función sola nunca ve.
+    expect(corte, 'el corte dejó de pasarle el reintento congelado').toContain('frozenTienePayload: !!frozen?.payload');
   });
 
   /**
@@ -92,7 +95,7 @@ describe('§1.5 bis · el método de pago no se adivina', () => {
     // Sin el scroll, en un teléfono el toast se pierde arriba y el borde que
     // pulsa está fuera de pantalla: el aviso existiría y nadie lo vería.
     const v = vivo(pantalla());
-    const bloque = v.slice(v.indexOf('if (!frozen?.payload && metodoPendiente)'));
+    const bloque = v.slice(v.indexOf('if (frenoPorMetodo('));
     expect(bloque.slice(0, 400)).toContain("toast(t('Elige tu método de pago'))");
     expect(bloque.slice(0, 400)).toContain('metodoSectionRef.current?.scrollIntoView');
     expect(bloque.slice(0, 400)).toContain('setMetodoPulse(true)');

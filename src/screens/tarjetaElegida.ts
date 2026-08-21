@@ -32,3 +32,31 @@ export function metodoSinElegir(
 ): boolean {
   return payType === 'card' && cantidadDeTarjetas > 0 && cardChoice === SIN_TARJETA_ELEGIDA;
 }
+
+/**
+ * §1.5 bis · ¿el pago se FRENA porque no se eligió método?
+ *
+ * 🔴 Vive acá, pura, porque el caso que importa **no se puede alcanzar en el
+ * navegador** y por lo tanto no hay dónde más probarlo. Medido: quitando el
+ * corte entero de `doPay`, la suite queda verde salvo los oráculos de fuente
+ * —1199 unitarios y 110 e2e— porque en el riel mock el estado «hay guardadas y
+ * ninguna elegida» **no se alcanza con el CTA vivo**: lo único que impide la
+ * autoselección es el campo de Stripe con contenido, y ese campo no monta en
+ * mock. **El límite se declara; no se disfraza con un mock que finja el campo.**
+ *
+ * 🔴 `frozenTienePayload` NO es defensivo: sin eso, esto TRABA el reintento.
+ * Un reenvío congelado manda el cuerpo ORIGINAL, que ya trae su método, así que
+ * `cardChoice` no interviene — pero tras una recarga la pantalla arranca sin
+ * selección y el freno cortaría **la única salida que ese estado tiene**.
+ *
+ * ⚠️ En Garantía la guarda equivalente **sí** corta el reenvío, y no es una
+ * incoherencia: allá, con `not_found`, el reenvío CREA por primera vez y la
+ * tarjeta que viaja ES la que respalda la garantía. **Misma regla, dos
+ * consecuencias, porque «reenviar» no significa lo mismo en las dos pantallas.**
+ */
+export function frenoPorMetodo(input: {
+  metodoPendiente: boolean;
+  frozenTienePayload: boolean;
+}): boolean {
+  return !input.frozenTienePayload && input.metodoPendiente;
+}
