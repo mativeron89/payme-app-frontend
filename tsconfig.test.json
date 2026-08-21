@@ -10,6 +10,6 @@
   "compilerOptions": {
     "types": ["vite/client"]
   },
-  "include": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/arnes/**/*.ts"],
   "exclude": []
 }

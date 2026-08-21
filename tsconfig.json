@@ -36,6 +36,25 @@
   // nada más: un `process` o un `Buffer` escrito por descuido ahora falla el
   // typecheck en vez de reventar en producción. Los tests no quedan sin
   // cobertura: viven en `tsconfig.test.json`.
+  //
+  // `src/arnes/**` también queda AFUERA, y por el mismo motivo que los tests:
+  // son oráculos, importan `typescript` —devDependency— y **no pueden viajar en
+  // el bundle**.
+  //
+  // 🔴 **Y ACÁ VA LO QUE ESTA EXCLUSIÓN NO HACE, porque yo mismo escribí lo
+  // contrario y lo medí después.** `exclude` filtra el DESCUBRIMIENTO por
+  // `include`; **no impide que un archivo entre arrastrado por un `import`.**
+  // Sonda: agregué `import { parsear } from '../arnes/jsxGuardas'` en
+  // `src/utils/format.ts` y **`npm run typecheck` salió 0 y `npm run build`
+  // compiló** — con el compilador de TypeScript adentro del bundle (el build
+  // pasó de 1 s a 12 s, que fue la única señal).
+  //
+  // Así que la exclusión sirve para que el arnés no se typechequee con las
+  // reglas del teléfono, **no como barrera**. La barrera es un test derivado
+  // del árbol: `src/arnes/jsxGuardas.test.ts` exige que ningún archivo de
+  // producción lo importe. Un comentario que promete una guarda que no existe
+  // es peor que no tener guarda: la respuesta ya está escrita donde uno la
+  // busca.
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/arnes/**"]
 }

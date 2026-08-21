@@ -11,6 +11,133 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.99.0 — el oráculo demuestra, no reconoce · P36 + pinning de sesión (2026-08-20)
+
+Octava vuelta del mismo gate y **cierre por adelantado de la misma clase en el
+otro extremo del repo**. 🔴 **Producción intacta las dos veces: esto es arnés.**
+
+### ① Las tres caídas del mismo censo, escritas juntas
+
+Vale ponerlas en fila porque son **una sola familia con tres caras**, y la
+tercera sólo se ve teniendo las dos anteriores al lado:
+
+| vuelta | qué hacía el oráculo | por qué pasaba el mutante |
+|---|---|---|
+| P27 | **contaba** (`> 5 coincidencias`) | con doce, perder una dejaba once |
+| P34 | enumeraba buscando `disabled={…}` | borrar el prop **sacaba la superficie del censo** |
+| P36 | validaba que el atributo **estuviera** | `disabled={!seleccionBloqueada}` deja el control **vivo durante la ventana** |
+
+🔴 **Contar no es enumerar · enumerar los que ya cumplen no es enumerar la
+población · que el atributo exista no es que el control quede cerrado.**
+
+### ② Lo que reemplaza a todo eso: un evaluador que DEMUESTRA
+
+Nuevo `src/arnes/jsxGuardas.ts`. De cada superficie se prueba la implicación
+**`seleccionBloqueada ⇒ disabled`** por **tabla de verdad completa** sobre las
+hojas libres de la expresión.
+
+🔴 **No hay lista de formas malas, y esa es la decisión de diseño entera.** Una
+lista negra sólo conoce los mutantes que ya vimos. Acá los únicos conectivos que
+el evaluador entiende son `!`, `&&`, `||` y paréntesis; **todo lo demás entra
+como hoja opaca y se enumera en sus dos valores** — un ternario, un `??`, una
+llamada, una comparación. Si la implicación no se sostiene en **alguna**
+asignación, **no está probada**, y lo no probado no pasa. Un mutante con una
+forma que nadie previó cae por el mismo camino que los cinco que sí previmos.
+
+### ③ La población, cerrada de verdad
+
+- **Herencia CALIFICADA** (`extends React.ButtonHTMLAttributes<…>`): antes esa
+  rama **se salteaba en silencio** y el componente quedaba con sus miembros
+  propios, así que uno que hereda `disabled` de React **pasaba censo y
+  typecheck**. Ahora es irresoluble y se denuncia por nombre.
+- **Parámetro sin anotación** (`const X: React.FC<Props> = ({…}) =>`): era `[]`
+  —«no declara `disabled`»— sobre un componente que sí lo declara. Ahora
+  irresoluble.
+- **Elementos CRUDOS accionables** (`<div role="button" onClick>`): el
+  `disabled` no les aplica, así que el censo ni los miraba — **y no mirarlos es
+  suponerlos inocentes**. Ahora se clasifican: hoy la lista está vacía, y el día
+  que aparezca uno el test lo nombra y hay que decidir cómo se apaga.
+
+### ④ Las excepciones, por atributo EXACTO
+
+`role="alertdialog"` se reconocía por **substring**, satisfacible desde un
+`aria-label` o una clase. Y la guarda de la excepción se aceptaba si *contenía*
+`reconciling`, así que **`disabled={!reconciling}`** —que deja el botón vivo
+mientras la consulta vuela, o sea lo contrario de lo que promete— pasaba. Ahora
+se leen los nodos `JsxAttribute` y se comparan por igualdad exacta.
+
+### ⑤ L1 · el pinning de sesión, que NADIE verificaba
+
+Nuevo `src/api/pinningDeSesion.test.ts`. El invariante: **una mutación de dinero
+nunca sale autenticada por una sesión distinta de la que el journal selló.**
+
+🔴 **Medido antes de escribirlo:** le saqué el argumento `session` a los CINCO
+caminos y **el gate quedó entero en verde** —typecheck, 1164 unitarios— y el
+E2E ni lo mira, porque **el riel mock ignora ese parámetro en los cinco**. La
+función estaba probada; el cableado no.
+
+La población se **deriva**: son todas las llamadas a
+`withPreparedMonetaryRequest` del riel real, así que un sexto camino entra solo.
+Las puertas de red se detectan por prefijo `http` y se resuelven contra una
+tabla; **una puerta nueva sin clasificar es roja, no un permiso**.
+
+⚠️ **Dos límites declarados DENTRO del test, no en un comentario que envejece:**
+la ventana que esto protege es **angosta** —el journal ya bloquea el cruce entre
+familias antes de `send`; lo que agrega el pinning es el tramo entre esa
+verificación y el fetch, donde una pestaña puede cerrar sesión porque **el
+logout usa OTRO lock**— y es **acreditación de fuente**, porque el mock no
+recibe la sesión. Esa asimetría es una **aserción**: si el mock empieza a
+recibirla, el test manda escribir el E2E en vez de dejar la nota.
+
+### ⑥ Un comentario mío que prometía una guarda inexistente
+
+Escribí en `tsconfig.json` que excluir `src/arnes/**` convertía un import desde
+producción en **un error de compilación**. 🔴 **Lo medí y es falso:** `exclude`
+filtra el descubrimiento por `include`, **no lo que entra arrastrado por un
+`import`**. Con la sonda puesta en `src/utils/format.ts`, `typecheck` salió 0 y
+el build **compiló con el compilador de TypeScript adentro del bundle** — el
+único síntoma fue que tardó **12 s en vez de 1 s**.
+
+La barrera real es ahora un test derivado del árbol: ningún archivo de
+producción importa del arnés, con control positivo y acreditado plantando el
+import. **Un comentario que promete una guarda que no existe es peor que no
+tener guarda: la respuesta ya está escrita donde uno la busca.**
+
+### ⑦ Y el skip que mi grep no vio
+
+Codex reconcilió la discrepancia a favor de los dos: en workspace son **1164/0
+skips**, como medí; en clon aislado son **1163 + 1 skip DINÁMICO**, porque falta
+`../diseno/SISTEMA_DISENO.md` y la suite hace `ctx.skip(...)`
+(`scripts/tokensRatificados.test.ts:260`).
+
+🔴 **Mi frase «grep sin `.skip`/`.todo`, sin resultados» era literalmente falsa,
+y la causa es la clase del día otra vez:** busqué `it.skip`, `describe.skip`,
+`test.skip` y `.todo(` — **las formas SINTÁCTICAS de saltear**— y declaré sobre
+la población «tests que se saltean», que además tiene una forma **de runtime**.
+Enumeré una proyección y afirmé el conjunto. Es exactamente lo que bloqueó el
+censo, cometido el mismo día, en un mensaje donde yo estaba corrigiendo a otro.
+
+### ⑧ Mutantes — dieciséis, todos muertos individualmente
+
+**Los cinco de Codex:** `disabled={!seleccionBloqueada}` · `disabled={g && false}`
+· `disabled={!reconciling}` en la excepción · `<div role="button" onClick>` sin
+censar · herencia calificada en los props de un componente.
+
+**Cuatro de regresión del censo:** prop ausente en mesero y en `<TipSelector>` ·
+superficie nueva sin guarda · píldora con la guarda negada dentro del selector.
+
+**Siete de L1**, y cada uno **nombra su propio camino**: los cinco caminos
+perdiendo el pinning uno por uno (incluido `loadSession()` en lugar de la sesión
+sellada, que es el mutante fino) · un camino conocido que desaparece · una
+puerta de red nueva sin clasificar.
+
+Más los del evaluador contra sí mismo: `!g`, `g && false`, `false`, una guarda
+ajena, `g && otra`, ternario, `??`, y el techo de hojas.
+
+**Medido:** typecheck ✓ · **1202** unitarios (93 archivos; eran 1178 en 91) ·
+**110** e2e ✓ · builds real, mock y landing ✓ · espejo 79 ✓ · secretos ✓ ·
+`diff --check` ✓ · y el bundle **sin rastro del arnés**. **Sin push ni deploy.**
+
 ## 0.98.0 — §1.5 bis: el método de pago tampoco se adivina (2026-08-20)
 
 Cierra el **⑥** de la tanda 3 de fidelidad visual y su **anexo**, los dos

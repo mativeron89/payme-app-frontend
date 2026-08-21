@@ -1,210 +1,110 @@
 import { describe, expect, it } from 'vitest';
 import ts from 'typescript';
+import {
+  atributo,
+  atributoLiteral,
+  CONTROLES_HTML,
+  elementosJsx,
+  expresionDe,
+  HANDLERS,
+  implicaVerdadero,
+  parsear,
+  propsDeclarados,
+  ROLES_INTERACTIVOS,
+  type Arbol,
+  type Superficie,
+} from '../arnes/jsxGuardas';
 
 /**
- * 🔴 P34 · CENSO DE LAS SUPERFICIES DE LA PANTALLA DE PAGO — y por qué la
- * versión anterior de este censo estaba MAL, que es lo que hay que leer.
+ * 🔴 P36 · CENSO DE LAS SUPERFICIES DE LA PANTALLA DE PAGO — tercera versión, y
+ * las dos anteriores fallaron por la MISMA familia con dos caras distintas.
  *
- * ⚠️ **El código productivo NO cambia en este commit.** Codex reauditó `d43db12`
- * y no encontró defecto funcional: el bloqueo fue de EVIDENCIA. El censo que
- * vivía en `cardFieldVentana.test.ts` **no detectaba la regresión que decía
- * detectar**, y lo probó con cuatro sondas que quedaron las cuatro verdes:
- * borrarle el `disabled` al botón de mesero, al checkbox de guardar tarjeta y
- * al selector de propina, y agregar una superficie interactiva nueva sin
- * guarda.
+ * ⚠️ **El código productivo nunca estuvo mal.** Las tres vueltas bloquearon la
+ * EVIDENCIA, y por eso vale escribir las tres caídas juntas:
  *
- * 🔴 **LA CAUSA, que es la clase madre y no un descuido puntual: el censo
- * construía su universo buscando `disabled={…}`.** O sea que enumeraba una
- * PROYECCIÓN de la población, no la población. Cuando el mutante borra el prop,
- * la superficie **desaparece del censo** en vez de aparecer como falta — el
- * oráculo no ve un incumplimiento, ve un conjunto más chico. Y el control
- * positivo era `todos.length > 8`: de doce a once seguía verde.
+ *   · **umbral** (P27) — «más de cinco coincidencias»: con doce superficies,
+ *     quitarle la guarda a una dejaba once y seguía verde;
+ *   · **proyección** (P34) — el universo se construía buscando `disabled={…}`,
+ *     así que **borrar el prop sacaba la superficie del censo** en vez de
+ *     denunciarla. El oráculo no veía un incumplimiento: veía un conjunto más
+ *     chico, y un conjunto más chico no dispara nada;
+ *   · **presencia** (P36) — se validaba que el atributo ESTUVIERA, no lo que
+ *     DICE. `disabled={!seleccionBloqueada}` y `disabled={seleccionBloqueada &&
+ *     false}` dejan el control **habilitado justo durante la ventana** y
+ *     pasaban enteros. La excepción admitía `disabled={!reconciling}`.
  *
- * Se sumaban tres agravantes, cada uno suficiente solo:
- *   · el recorte de la región terminaba en un COMENTARIO (`// ─── Detalle`) que
- *     el propio helper borraba antes de buscarlo, así que llegaba hasta EOF;
- *   · las anclas «por identidad» miraban ±900 caracteres alrededor y **aceptaban
- *     la guarda de un vecino**;
- *   · el E2E no observa mesero, checkbox ni píldoras: corre en mock y esos
- *     estados no se alcanzan.
+ * 🔴 **La lección común, y la única que hace falta recordar: un oráculo tiene
+ * que DEMOSTRAR lo que promete.** Contar no es enumerar; enumerar los que ya
+ * cumplen no es enumerar la población; y que el atributo exista no es que el
+ * control quede cerrado.
  *
- * **Cómo se arregla, punto por punto:**
- *   ① la población se DERIVA de las superficies interactuables —los controles
- *      del DOM más los componentes que DECLARAN un prop `disabled` en su propio
- *      tipo de props—, nunca de los `disabled` ya escritos en el llamador. Un
- *      prop borrado deja la superficie EN el censo, sin guarda, y eso es rojo;
- *   ② cada guarda se lee del ATRIBUTO PROPIO del elemento, por AST. No hay
- *      ventanas de caracteres: un vecino no puede prestar su guarda;
- *   ③ las excepciones se nombran POR IDENTIDAD —por su handler— y cada una
- *      tiene que casar con EXACTAMENTE UN elemento: una excepción que dejó de
- *      corresponder pone el test rojo en vez de seguir tapando;
- *   ④ el control positivo es de PRESENCIA y por identidad: cada superficie
- *      nombrada tiene que estar en la población. No hay umbrales de conteo.
+ * **Qué hace esta versión, y por qué cada cosa:**
+ *   ① la población se DERIVA de lo que la superficie ES —controles del DOM,
+ *      componentes que DECLARAN `disabled`, y elementos crudos accionables por
+ *      rol o handler—, nunca de los `disabled` ya escritos;
+ *   ② de cada superficie se PRUEBA la implicación `seleccionBloqueada ⇒
+ *      disabled`, por tabla de verdad completa sobre las hojas libres. No hay
+ *      lista de formas malas: **lo que no se puede demostrar, no pasa**;
+ *   ③ las excepciones se atan a ATRIBUTOS EXACTOS por AST, nunca a substrings;
+ *   ④ todo lo irresoluble —herencia calificada, tipos externos, parámetros sin
+ *      anotar— se denuncia por nombre en vez de asumirse inocente.
  *
- * ⚠️ **Sigue siendo acreditación DE FUENTE**, y se declara igual que antes: el
- * campo de Stripe no monta en la suite mock y varios de estos estados no se
- * alcanzan en el navegador. Esto verifica el CABLEADO, no la conducta.
+ * ⚠️ **Sigue siendo acreditación DE FUENTE, y se declara:** `CardField` no monta
+ * en la suite mock y varios de estos estados no se alcanzan en el navegador.
+ * Verifica el CABLEADO y la SEMÁNTICA de las guardas, no la conducta.
  */
 
-// ── El árbol, sin los tests: la resolución de componentes mira código que
-//    corre, no oráculos. ────────────────────────────────────────────────────
-const FUENTES = import.meta.glob(['/src/**/*.ts', '/src/**/*.tsx', '!/src/**/*.test.ts', '!/src/**/*.test.tsx'], {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
+const FUENTES = import.meta.glob(
+  ['/src/**/*.ts', '/src/**/*.tsx', '!/src/**/*.test.ts', '!/src/**/*.test.tsx'],
+  { query: '?raw', import: 'default', eager: true },
+) as Record<string, string>;
 
-const ARBOL: Record<string, ts.SourceFile> = Object.fromEntries(
-  Object.entries(FUENTES).map(([ruta, texto]) => [
-    ruta,
-    ts.createSourceFile(ruta, texto, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TSX),
-  ]),
-);
-
+const ARBOL: Arbol = parsear(FUENTES);
 const PANTALLA = ARBOL['/src/screens/MesaScreen.tsx']!;
 
-/** Controles del DOM que se deshabilitan por atributo propio del HTML. */
-const CONTROLES_HTML = ['button', 'input', 'select', 'textarea'];
+/** El predicado unificado que TODA superficie de pago tiene que respetar. */
+const GUARDA = 'seleccionBloqueada';
+
+interface Censo {
+  superficies: Superficie[];
+  irresolubles: string[];
+  crudas: Superficie[];
+}
+
+function esCruda(s: Superficie): boolean {
+  const rol = atributoLiteral(s, 'role');
+  if (rol && ROLES_INTERACTIVOS.includes(rol)) return true;
+  return HANDLERS.some((h) => atributo(s, h) !== null);
+}
 
 /**
- * Los miembros de PRIMER NIVEL de un tipo de props.
+ * La población: superficies INTERACTUABLES del subárbol.
  *
- * De primer nivel a propósito: `AppBottomBar` tiene un `disabled` ANIDADO
- * dentro de `center`, y no es un prop `disabled` del componente — su CTA se
- * acredita aparte (P23-AF-04). Un `includes('disabled')` sobre el texto lo
- * habría metido en la población por la razón equivocada.
- *
- * Devuelve `null` cuando NO puede resolver: eso es una población que no se
- * puede cerrar, y el test la denuncia en vez de asumir que no hay `disabled`.
+ * 🔴 Derivada de lo que la superficie ES. Un `<button>` sigue siendo un botón
+ * después de que le borren el `disabled`, y un `<div role="button" onClick>`
+ * es accionable aunque el atributo `disabled` ni siquiera le aplique.
  */
-function miembrosDeTipo(
-  tipo: ts.TypeNode | undefined,
-  sf: ts.SourceFile,
-  visto = new Set<string>(),
-): string[] | null {
-  if (!tipo) return [];
-  if (ts.isTypeLiteralNode(tipo)) return tipo.members.map((m) => m.name?.getText(sf) ?? '');
-  if (ts.isIntersectionTypeNode(tipo)) {
-    const partes = tipo.types.map((t) => miembrosDeTipo(t, sf, visto));
-    return partes.some((p) => p === null) ? null : (partes as string[][]).flat();
-  }
-  if (ts.isTypeReferenceNode(tipo)) {
-    const nombre = tipo.typeName.getText(sf);
-    if (visto.has(nombre)) return [];
-    visto.add(nombre);
-    for (const fuente of Object.values(ARBOL)) {
-      let hallado: string[] | null | undefined;
-      fuente.forEachChild((n) => {
-        if (hallado !== undefined) return;
-        if (ts.isInterfaceDeclaration(n) && n.name.text === nombre) {
-          let miembros = n.members.map((m) => m.name?.getText(fuente) ?? '');
-          for (const clausula of n.heritageClauses ?? []) {
-            for (const padre of clausula.types) {
-              if (!ts.isIdentifier(padre.expression)) continue;
-              const heredados = miembrosDeTipo(
-                ts.factory.createTypeReferenceNode(padre.expression.text),
-                fuente,
-                visto,
-              );
-              if (heredados) miembros = miembros.concat(heredados);
-            }
-          }
-          hallado = miembros;
-        }
-        if (ts.isTypeAliasDeclaration(n) && n.name.text === nombre) {
-          hallado = miembrosDeTipo(n.type, fuente, visto);
-        }
-      });
-      if (hallado !== undefined) return hallado;
+function censar(raiz: ts.Node): Censo {
+  const todos = elementosJsx(raiz, PANTALLA);
+  const superficies: Superficie[] = [];
+  const irresolubles: string[] = [];
+  const crudas: Superficie[] = [];
+  for (const s of todos) {
+    if (CONTROLES_HTML.includes(s.tag)) { superficies.push(s); continue; }
+    if (/^[A-Z]/.test(s.tag)) {
+      const props = propsDeclarados(s.tag, ARBOL);
+      if (props === undefined) { irresolubles.push(`${s.tag}@${s.linea}: no se encontró su declaración`); continue; }
+      if (props === null) { irresolubles.push(`${s.tag}@${s.linea}: sus props no se pudieron resolver (¿herencia calificada o tipo externo?)`); continue; }
+      if (props.includes('disabled')) superficies.push(s);
+      continue;
     }
-    return null;
+    // Elemento crudo: no es control del DOM ni componente. Si es accionable,
+    // se CLASIFICA — no se ignora.
+    if (esCruda(s)) crudas.push(s);
   }
-  return null;
+  return { superficies, irresolubles, crudas };
 }
 
-/** Los props que DECLARA un componente, buscándolo por nombre en todo el árbol. */
-function propsDeclarados(nombre: string): string[] | null | undefined {
-  for (const fuente of Object.values(ARBOL)) {
-    let resultado: string[] | null | undefined;
-    fuente.forEachChild((n) => {
-      if (resultado !== undefined) return;
-      if (ts.isFunctionDeclaration(n) && n.name?.text === nombre) {
-        resultado = miembrosDeTipo(n.parameters[0]?.type, fuente);
-      } else if (ts.isVariableStatement(n)) {
-        for (const d of n.declarationList.declarations) {
-          if (
-            d.name.getText(fuente) === nombre &&
-            d.initializer &&
-            (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer))
-          ) {
-            resultado = miembrosDeTipo(d.initializer.parameters[0]?.type, fuente);
-          }
-        }
-      } else if (ts.isClassDeclaration(n) && n.name?.text === nombre) {
-        resultado = miembrosDeTipo(n.heritageClauses?.[0]?.types?.[0]?.typeArguments?.[0], fuente);
-      }
-    });
-    if (resultado !== undefined) return resultado;
-  }
-  return undefined;
-}
-
-interface Superficie {
-  tag: string;
-  linea: number;
-  /** El valor del atributo `disabled` PROPIO del elemento, o `null` si no lo lleva. */
-  guarda: string | null;
-  /** Texto de los atributos, para identificar por handler. */
-  atributos: string;
-  /** Tags de los elementos JSX que lo contienen, y sus atributos. */
-  ancestros: { tag: string; atributos: string }[];
-}
-
-/** Todo elemento JSX de un subárbol, con su cadena de ancestros JSX. */
-function elementosJsx(raiz: ts.Node, sf: ts.SourceFile): Superficie[] {
-  const salida: Superficie[] = [];
-  const pila: { tag: string; atributos: string }[] = [];
-
-  const atributosDe = (el: ts.JsxOpeningElement | ts.JsxSelfClosingElement) =>
-    el.attributes.properties.map((p) => p.getText(sf)).join(' ');
-
-  const registrar = (el: ts.JsxOpeningElement | ts.JsxSelfClosingElement) => {
-    const propio = el.attributes.properties
-      .filter(ts.isJsxAttribute)
-      .find((a) => a.name.getText(sf) === 'disabled');
-    salida.push({
-      tag: el.tagName.getText(sf),
-      linea: sf.getLineAndCharacterOfPosition(el.getStart(sf)).line + 1,
-      guarda: propio ? (propio.initializer?.getText(sf) ?? 'true') : null,
-      atributos: atributosDe(el),
-      ancestros: [...pila],
-    });
-  };
-
-  const recorrer = (n: ts.Node) => {
-    if (ts.isJsxSelfClosingElement(n)) {
-      registrar(n);
-      n.forEachChild(recorrer);
-      return;
-    }
-    if (ts.isJsxElement(n)) {
-      registrar(n.openingElement);
-      pila.push({ tag: n.openingElement.tagName.getText(sf), atributos: atributosDe(n.openingElement) });
-      n.children.forEach(recorrer);
-      // Los atributos del elemento abierto también contienen JSX (props como
-      // `fallback={<div/>}`): se recorren fuera de la pila propia.
-      pila.pop();
-      n.openingElement.attributes.forEachChild(recorrer);
-      return;
-    }
-    n.forEachChild(recorrer);
-  };
-
-  recorrer(raiz);
-  return salida;
-}
-
-/** El nodo del `if (view === 'pay')`, ubicado por AST y no por un comentario. */
 function bloqueDeLaVistaDePago(): ts.Node | null {
   let hallado: ts.Node | null = null;
   const buscar = (n: ts.Node) => {
@@ -215,7 +115,6 @@ function bloqueDeLaVistaDePago(): ts.Node | null {
   return hallado;
 }
 
-/** El cuerpo de una función declarada por nombre en la pantalla. */
 function funcionDeLaPantalla(nombre: string): ts.Node | null {
   let hallado: ts.Node | null = null;
   const buscar = (n: ts.Node) => {
@@ -226,118 +125,128 @@ function funcionDeLaPantalla(nombre: string): ts.Node | null {
   return hallado;
 }
 
-/**
- * La población: superficies INTERACTUABLES del subárbol.
- *
- * 🔴 Derivada de lo que la superficie ES, no de lo que ya tiene escrito. Un
- * `<button>` sigue siendo un botón después de que le borren el `disabled`.
- */
-function poblacion(raiz: ts.Node): { superficies: Superficie[]; sinResolver: string[] } {
-  const todos = elementosJsx(raiz, PANTALLA);
-  const superficies: Superficie[] = [];
-  const sinResolver: string[] = [];
-  for (const s of todos) {
-    if (CONTROLES_HTML.includes(s.tag)) {
-      superficies.push(s);
-      continue;
-    }
-    if (!/^[A-Z]/.test(s.tag)) continue;
-    const props = propsDeclarados(s.tag);
-    if (props === undefined || props === null) {
-      sinResolver.push(`${s.tag} (línea ${s.linea})`);
-      continue;
-    }
-    if (props.includes('disabled')) superficies.push(s);
+/** ¿Esta superficie prueba que se cierra cuando la ventana se abre? */
+function pruebaLaGuarda(s: Superficie, guarda: string): { ok: boolean; motivo: string } {
+  if (!s.guarda) return { ok: false, motivo: 'SIN atributo `disabled`' };
+  const init = s.guarda.initializer;
+  // `<button disabled>` sin valor es `true` constante: cierra siempre.
+  if (!init) return { ok: true, motivo: 'atributo booleano sin valor' };
+  if (!ts.isJsxExpression(init) || !init.expression) {
+    return { ok: false, motivo: `valor no evaluable: ${init.getText(s.sf)}` };
   }
-  return { superficies, sinResolver };
+  const r = implicaVerdadero(init.expression, s.sf, { [guarda]: true });
+  return { ok: r.probada, motivo: r.motivo };
 }
 
 const enAlertDialog = (s: Superficie) =>
-  s.ancestros.some((a) => a.atributos.includes('role="alertdialog"'));
+  s.ancestros.some((a) => {
+    const rol = a.attributes.properties
+      .filter(ts.isJsxAttribute)
+      .find((x) => x.name.getText(PANTALLA) === 'role');
+    return !!rol?.initializer && ts.isStringLiteral(rol.initializer) && rol.initializer.text === 'alertdialog';
+  });
 
-describe('🔴 P34 · censo de superficies de la pantalla de pago', () => {
+describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
   const bloque = bloqueDeLaVistaDePago();
 
-  it('🔴 la región se ubica por AST: el recorte anterior llegaba hasta EOF', () => {
-    // El censo viejo cortaba en `// ─── Detalle`, un COMENTARIO que su propio
-    // helper borraba antes de buscarlo: `indexOf` daba -1 y la región se comía
-    // el resto del archivo. Un `if` es un nodo: tiene fin propio.
-    expect(bloque, 'no se encontró el bloque `if (view === \'pay\')`').not.toBeNull();
+  it('🔴 la región se ubica por AST, y no llega al final del archivo', () => {
+    expect(bloque, "no se encontró el bloque `if (view === 'pay')`").not.toBeNull();
     const fin = PANTALLA.getLineAndCharacterOfPosition(bloque!.getEnd()).line + 1;
     const total = PANTALLA.getLineAndCharacterOfPosition(PANTALLA.getEnd()).line + 1;
     expect(fin, 'la región llega al final del archivo: se está censando de más').toBeLessThan(total - 10);
   });
 
-  it('🔴 toda superficie interactuable resuelve: la población se puede cerrar', () => {
-    const { sinResolver } = poblacion(bloque!);
+  it('🔴 la población se puede CERRAR: nada quedó sin resolver', () => {
+    const { irresolubles } = censar(bloque!);
     expect(
-      sinResolver,
-      `componentes cuyos props no se pudieron resolver — el censo NO puede afirmar que no llevan \`disabled\`: ${sinResolver.join(' · ')}`,
+      irresolubles,
+      `el censo NO puede afirmar nada sobre estos: ${irresolubles.join(' · ')}`,
     ).toEqual([]);
   });
 
   /**
-   * 🔴 EL CENSO. La población son los controles del DOM más los componentes que
-   * declaran `disabled` en SU PROPIO tipo de props: `TipSelector` y `CardField`.
-   * Borrarles el prop en el llamador NO los saca de acá — que es exactamente lo
-   * que la versión anterior no lograba.
+   * 🔴 Los elementos CRUDOS accionables (un `<div role="button" onClick>`) no
+   * llevan `disabled` —el atributo no les aplica— y por eso el censo anterior
+   * ni los miraba. **No mirarlos es suponerlos inocentes:** un control así
+   * queda vivo durante la ventana y nadie lo denuncia.
+   *
+   * No se los obliga a tener `disabled`: se los obliga a EXISTIR EN LA LISTA.
+   * Hoy la lista está vacía, y por eso el oráculo es simple; el día que alguien
+   * agregue uno, esto lo nombra y hay que decidir qué se hace con él.
    */
-  it('🔴 NINGUNA superficie interactuable de la vista de pago queda sin el predicado', () => {
-    const { superficies } = poblacion(bloque!);
+  it('🔴 no hay superficies CRUDAS accionables sin clasificar', () => {
+    const { crudas } = censar(bloque!);
+    const nombres = crudas.map((s) => `${s.tag}@${s.linea}`);
+    expect(
+      nombres,
+      `elementos accionables que no son controles ni componentes: ${nombres.join(' · ')}. ` +
+        'Un `disabled` no les aplica, así que la ventana NO los cierra: hay que decidir cómo se apagan.',
+    ).toEqual([]);
+  });
 
-    const EXCEPCIONES: ReadonlyArray<{ nombre: string; identidad: RegExp; guardaEsperada: RegExp }> = [
-      // Los dos botones de reconciliación dependen de SU PROPIA operación en
-      // vuelo, no de la ventana: son la salida del estado congelado, y taparlos
-      // con el predicado los dejaría muertos justo cuando hacen falta.
-      // Se nombran por su HANDLER, que es identidad y no forma.
-      { nombre: 'reconciliación · consultar', identidad: /checkReconciliation\(\)/, guardaEsperada: /\breconciling\b/ },
-      { nombre: 'reconciliación · desbloquear', identidad: /releaseAfterReconciliation\(\)/, guardaEsperada: /\breconciling\b/ },
-    ];
+  it('🔴 TODA superficie PRUEBA que se cierra durante la ventana', () => {
+    const { superficies } = censar(bloque!);
 
-    // Cada excepción tiene que corresponder a EXACTAMENTE UN elemento. Una
-    // excepción que dejó de aplicar es una puerta abierta que nadie mira.
+    /**
+     * Las excepciones, por ATRIBUTO EXACTO. Los dos botones de reconciliación
+     * dependen de SU PROPIA operación en vuelo, no de la ventana: son la salida
+     * del estado congelado y taparlos con el predicado los dejaría muertos justo
+     * cuando hacen falta.
+     *
+     * 🔴 La identidad es el TEXTO EXACTO de su `onClick`, y su guarda tiene que
+     * ser EXACTAMENTE el identificador `reconciling` — no una expresión que lo
+     * contenga. `disabled={!reconciling}` deja el botón vivo mientras la consulta
+     * está en vuelo, que es lo contrario de lo que promete, y el substring lo
+     * aceptaba.
+     */
+    const EXCEPCIONES = [
+      { nombre: 'reconciliación · consultar', onClick: '() => void checkReconciliation()' },
+      { nombre: 'reconciliación · desbloquear', onClick: '() => void releaseAfterReconciliation()' },
+    ] as const;
+
     const excepcionadas = new Set<Superficie>();
     for (const ex of EXCEPCIONES) {
-      const casan = superficies.filter((s) => ex.identidad.test(s.atributos));
+      const casan = superficies.filter((s) => expresionDe(atributo(s, 'onClick'), s.sf) === ex.onClick);
       expect(casan.length, `la excepción «${ex.nombre}» casa con ${casan.length} elementos, no con uno`).toBe(1);
       expect(
-        casan[0]!.guarda ?? '',
-        `la excepción «${ex.nombre}» ya no lleva su propia guarda`,
-      ).toMatch(ex.guardaEsperada);
+        expresionDe(casan[0]!.guarda, casan[0]!.sf),
+        `la excepción «${ex.nombre}» ya no lleva EXACTAMENTE su propia guarda`,
+      ).toBe('reconciling');
       excepcionadas.add(casan[0]!);
     }
 
     // Los diálogos de confirmación son la otra excepción, y es DERIVADA: sus
     // controles sólo existen como consecuencia de un intento de pago que la
-    // puerta ya dejó pasar. Para que la zona no se agrande sola, los diálogos
-    // se nombran por identidad y se exige que sean esos dos y nada más.
-    const dialogos = elementosJsx(bloque!, PANTALLA).filter((s) =>
-      s.atributos.includes('role="alertdialog"'),
-    );
+    // puerta ya dejó pasar. Para que la zona no se agrande sola, se exige que
+    // los `role="alertdialog"` sean exactamente esos dos, por su `aria-label`.
+    const dialogos = elementosJsx(bloque!, PANTALLA).filter((s) => atributoLiteral(s, 'role') === 'alertdialog');
     expect(
-      dialogos.map((d) => d.atributos.match(/aria-label=\{t\('([^']+)'\)\}/)?.[1] ?? '?').sort(),
+      dialogos.map((d) => expresionDe(atributo(d, 'aria-label'), d.sf) ?? '?').sort(),
       'cambió el conjunto de diálogos de confirmación: la excepción derivada ya no está acotada',
-    ).toEqual(['Confirmar parte adicional', 'Confirmar propina']);
+    ).toEqual(["t('Confirmar parte adicional')", "t('Confirmar propina')"]);
 
-    const faltan = superficies
+    const fallan = superficies
       .filter((s) => !excepcionadas.has(s) && !enAlertDialog(s))
-      .filter((s) => !(s.guarda ?? '').includes('seleccionBloqueada'))
-      .map((s) => `${s.tag}@${s.linea} → ${s.guarda === null ? 'SIN disabled' : s.guarda}`);
+      .map((s) => ({ s, r: pruebaLaGuarda(s, GUARDA) }))
+      .filter((x) => !x.r.ok)
+      .map((x) => `${x.s.tag}@${x.s.linea} → ${x.s.guardaTexto ?? 'sin disabled'} · ${x.r.motivo}`);
 
-    expect(faltan, `superficies de pago sin el predicado unificado: ${faltan.join(' · ')}`).toEqual([]);
+    expect(
+      fallan,
+      `superficies que NO prueban cerrarse durante la ventana:\n  ${fallan.join('\n  ')}`,
+    ).toEqual([]);
   });
 
   /**
-   * 🔴 CONTROL POSITIVO — de PRESENCIA y por identidad, no por conteo.
+   * 🔴 CONTROL POSITIVO — de PRESENCIA y por identidad, nunca por conteo.
    *
-   * El anterior era `todos.length > 8`: con doce superficies, borrar una guarda
-   * dejaba once y seguía verde. Éste exige que cada superficie nombrada esté
-   * EN LA POBLACIÓN, identificada por su handler — que es lo que el mutante del
-   * `disabled` no toca. Si una desaparece del árbol, esto la nombra; si pierde
-   * la guarda, sigue en la población y la denuncia el censo de arriba.
+   * El de la primera versión era `todos.length > 8`: con doce superficies,
+   * perder una guarda dejaba once y seguía verde. Éste exige que cada
+   * superficie nombrada esté EN LA POBLACIÓN, identificada por su handler —que
+   * es lo que el mutante del `disabled` no toca—.
    */
   it('🔴 las superficies nombradas están en la población, cada una por su identidad', () => {
-    const { superficies } = poblacion(bloque!);
+    const { superficies } = censar(bloque!);
     const IDENTIDADES: ReadonlyArray<readonly [string, RegExp]> = [
       ['mesero', /setStaffId\(/],
       ['guardar esta tarjeta', /setSaveCard\(/],
@@ -350,7 +259,9 @@ describe('🔴 P34 · censo de superficies de la pantalla de pago', () => {
     ];
     const problemas: string[] = [];
     for (const [nombre, identidad] of IDENTIDADES) {
-      const casan = superficies.filter((s) => identidad.test(s.atributos) || identidad.test(s.tag));
+      const casan = superficies.filter(
+        (s) => identidad.test(s.tag) || s.atributos.some((a) => identidad.test(a.getText(s.sf))),
+      );
       if (casan.length !== 1) problemas.push(`${nombre}: ${casan.length} en la población, se esperaba 1`);
     }
     expect(problemas, problemas.join(' · ')).toEqual([]);
@@ -361,11 +272,12 @@ describe('🔴 P34 · censo de superficies de la pantalla de pago', () => {
    * boundary— y sus píldoras viven adentro. Sin este censo, una píldora nueva
    * sin guarda no la ve nadie: el de arriba sólo mira el llamador.
    */
-  it('🔴 dentro del selector de propina, ninguna píldora queda sin su prop', () => {
+  it('🔴 dentro del selector de propina, cada píldora prueba su prop', () => {
     const selector = funcionDeLaPantalla('TipSelector');
     expect(selector, 'desapareció la función TipSelector').not.toBeNull();
-    const { superficies, sinResolver } = poblacion(selector!);
-    expect(sinResolver).toEqual([]);
+    const { superficies, irresolubles, crudas } = censar(selector!);
+    expect(irresolubles).toEqual([]);
+    expect(crudas.map((s) => `${s.tag}@${s.linea}`)).toEqual([]);
 
     const IDENTIDADES: ReadonlyArray<readonly [string, RegExp]> = [
       ['píldora de porcentaje', /mode: 'pct'/],
@@ -374,14 +286,16 @@ describe('🔴 P34 · censo de superficies de la pantalla de pago', () => {
     ];
     for (const [nombre, identidad] of IDENTIDADES) {
       expect(
-        superficies.filter((s) => identidad.test(s.atributos)).length,
+        superficies.filter((s) => s.atributos.some((a) => identidad.test(a.getText(s.sf)))).length,
         `${nombre} no está en la población del selector`,
       ).toBe(1);
     }
 
-    const faltan = superficies
-      .filter((s) => !/^\{disabled\}$/.test(s.guarda ?? ''))
-      .map((s) => `${s.tag}@${s.linea} → ${s.guarda === null ? 'SIN disabled' : s.guarda}`);
-    expect(faltan, `superficies del selector sin el prop \`disabled\`: ${faltan.join(' · ')}`).toEqual([]);
+    // Acá el predicado es el PROP `disabled`, que el llamador cablea.
+    const fallan = superficies
+      .map((s) => ({ s, r: pruebaLaGuarda(s, 'disabled') }))
+      .filter((x) => !x.r.ok)
+      .map((x) => `${x.s.tag}@${x.s.linea} → ${x.s.guardaTexto ?? 'sin disabled'} · ${x.r.motivo}`);
+    expect(fallan, `píldoras que no prueban su prop:\n  ${fallan.join('\n  ')}`).toEqual([]);
   });
 });
