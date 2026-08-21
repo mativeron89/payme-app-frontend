@@ -8,6 +8,7 @@ import react from '@vitejs/plugin-react';
 // `vitest` ya es devDependency; no se agrega nada.
 import { execSync } from 'node:child_process';
 import { defineConfig } from 'vitest/config';
+import { loadEnv, type Plugin } from 'vite';
 
 /**
  * 🔴 SENTINELA DEL ÁRBOL SERVIDO (P2-02, hallazgo de Codex 2026-08-20).
@@ -41,8 +42,50 @@ function arbolServido(): string {
   }
 }
 
+/**
+ * 🔴 SIN `VITE_API_URL` NO HAY BUILD REAL — falla temprano y acá, no tarde y
+ * delante de la persona.
+ *
+ * `src/api/http.ts` y `src/api/stripe.ts` caen a `http://localhost:3000` cuando
+ * la variable falta. En desarrollo eso es exactamente lo que se quiere; **en un
+ * artefacto publicado es una app que no habla con nada**, y el modo en que
+ * falla es el problema: el navegador en `https://` bloquea el mixed content,
+ * así que **no anda nada y el primero en enterarse es quien intenta pagar**.
+ * Una aserción de build convierte eso en un rojo nuestro, minutos antes.
+ *
+ * ⚠️ **Lo que esta guarda NO hace, dicho para que nadie lo estire:** no verifica
+ * que la URL sea la correcta, ni que el backend exista, ni que la variable esté
+ * cargada en Vercel — **ese valor vive fuera de este repo y sigue fuera de
+ * alcance**. Lo que hace es volver ese límite irrelevante en la única dirección
+ * que importa: **sin variable no hay artefacto que publicar.** El `vite.config`
+ * corre también en el build de Vercel, así que la compuerta viaja con él.
+ *
+ * `apply: 'build'` a propósito: `npm run dev` conserva su fallback, y el riel
+ * mock también — ahí no hay backend al que apuntar y exigir la variable sería
+ * pedir un dato que no existe.
+ */
+function exigirApiUrl(): Plugin {
+  return {
+    name: 'payme-exigir-api-url',
+    apply: 'build',
+    config(_config, { mode }) {
+      const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
+      if (env.VITE_MOCK === '1') return;
+      if (env.VITE_API_URL) return;
+      throw new Error(
+        'BUILD REAL SIN `VITE_API_URL`.\n' +
+          '  El bundle habría quedado apuntando a http://localhost:3000, que en un\n' +
+          '  origen https ni siquiera llega a intentarlo: mixed content bloqueado.\n' +
+          '  · en local:  VITE_API_URL=http://localhost:3000 npm run build\n' +
+          '  · el riel mock no la necesita: VITE_MOCK=1 npm run build\n' +
+          '  · en Vercel: la variable va en el proyecto, no en el repo.',
+      );
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), exigirApiUrl()],
   server: { port: 5174 },
   define: { __ARBOL_SERVIDO__: JSON.stringify(arbolServido()) },
   // Sin esto, vitest reemplaza todo módulo CSS por un stub vacío (`css: false`

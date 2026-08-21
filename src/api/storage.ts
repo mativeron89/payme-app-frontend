@@ -7,10 +7,25 @@ import type { User } from './types';
  * GET /account/me al restaurar (AuthContext).
  */
 
-// La demo mock (/) y el build real (/live/) viven en el MISMO origen de GitHub
-// Pages, así que comparten localStorage. Si la clave fuera única, una sesión
-// mock se filtraría al build real (y su token falso iría al backend real).
-// Namespaced por modo para que cada deploy tenga su propia sesión aislada.
+// 🔴 EL PORQUÉ ES HISTÓRICO, Y SE ESCRIBE EN PASADO A PROPÓSITO.
+//
+// **Ocurrió** cuando la demo mock (`/`) y el build real (`/live/`) vivían en el
+// MISMO origen de GitHub Pages: compartían `localStorage`, así que con una
+// clave única **una sesión mock se habría filtrado al build real** y su token
+// falso habría viajado al backend real. Se mitigó namespaceando por modo.
+//
+// ⚠️ **Hoy el hosting es otro** —tres orígenes distintos en `paymemx.com`, por
+// `D-WEB-1-BIS`— y este párrafo estaba redactado en PRESENTE, como si describiera
+// el despliegue vigente. **El hecho sigue siendo cierto como historia; la
+// descripción había caducado.** Se corrige el tiempo verbal, no el contenido: el
+// `CLAUDE.md` de la raíz cita estas líneas como evidencia de por qué se eligieron
+// tres orígenes, y ese argumento **se apoya en que el incidente ocurrió acá**, no
+// en que siga ocurriendo.
+//
+// 🔴 **Y el namespacing NO se retira por haber cambiado de hosting.** Separa dos
+// rieles que nunca deben mezclarse; que hoy además haya orígenes distintos lo
+// hace redundante, no innecesario — una demo servida por error desde el origen
+// de la app volvería a cruzarlos, y esta clave es lo único que lo impediría.
 const KEY = import.meta.env.VITE_MOCK === '1' ? 'payme_app_session__mock' : 'payme_app_session';
 const TOMBSTONE_KEY = `${KEY}__invalidated_families_v1`;
 const TOMBSTONE_VERSION = 1;

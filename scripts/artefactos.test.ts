@@ -153,7 +153,19 @@ beforeAll(() => {
       //
       // Es la misma clase de defecto que este archivo persigue: el
       // instrumento midiendo algo distinto de lo que la conclusión declara.
-      env: { ...process.env, NODE_ENV: 'production' },
+      //
+      // 🔴 `VITE_API_URL` desde 0.100.0: el build real ahora FALLA sin ella
+      // (`exigirApiUrl` en `vite.config.ts`), y este archivo construye
+      // justamente el artefacto real para inspeccionarlo. Sin esta línea, el
+      // gate nuevo rompía este oráculo — y el reflejo habría sido aflojar el
+      // gate en vez de darle a su vecino lo que ahora necesita.
+      //
+      // ⚠️ El valor es de UTILERÍA y da igual cuál sea: acá no se hace ninguna
+      // request. Lo que este archivo mide es qué HOSTS aparecen en el bundle,
+      // y por eso el host elegido tiene que ser uno que la allowlist ya
+      // contemple o el propio oráculo lo denunciaría — se usa `localhost`,
+      // que es el mismo fallback que el código traía.
+      env: { ...process.env, NODE_ENV: 'production', VITE_API_URL: 'http://localhost:3000' },
     });
 
     const abs: string[] = [];

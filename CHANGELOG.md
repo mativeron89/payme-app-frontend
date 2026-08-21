@@ -11,6 +11,105 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.100.0 — sin `VITE_API_URL` no hay build real, y dos costuras escritas (2026-08-20)
+
+Cierra **L3** y el resto de **L2**. Producción cambia en un solo lugar y es el
+`vite.config`; el resto es documentación y un test de caja negra.
+
+### ① El build real exige `VITE_API_URL` — falla temprano y acá
+
+`src/api/http.ts:14` y `src/api/stripe.ts:19` caen a `http://localhost:3000`
+cuando la variable falta. **En desarrollo es lo que se quiere; en un artefacto
+publicado es una app que no habla con nada** — y el modo en que falla es el
+problema: el navegador en `https://` bloquea el mixed content, así que **no anda
+nada y el primero en enterarse es quien intenta pagar**.
+
+🔴 **La asimetría es toda la decisión:** hoy falla **tarde y delante de la
+persona**; con la aserción falla **temprano y delante nuestro**, minutos antes,
+con un mensaje que dice cómo seguir.
+
+⚠️ **Lo que la guarda NO hace, para que nadie lo estire:** no verifica que la URL
+sea correcta, ni que el backend exista, ni que la variable esté cargada en
+Vercel — **ese valor vive fuera del repo y sigue fuera de alcance**. Lo que hace
+es volver ese límite irrelevante en la única dirección que importa: **sin
+variable no hay artefacto que publicar**, y el `vite.config` corre también en el
+build de Vercel, así que la compuerta viaja con él.
+
+`apply: 'build'`, así que **`npm run dev` y el riel mock conservan su fallback**:
+ahí no hay backend al que apuntar y exigir la variable sería pedir un dato que
+no existe.
+
+**Y la CI necesitaba su parte, o el gate caía en rojo sin nada roto.** Su `npm
+run build` es una **compuerta de compilación**, no el artefacto que se publica,
+y ahora recibe la variable en el step. El valor es el mismo que
+`deploy-demo.yml` ya tiene en claro: una URL pública, no un secreto. **Lo que se
+compila ahí no llega a producción**, y la línea lo dice para que nadie lea ese
+archivo buscando a qué backend apunta la app publicada.
+
+**La compuerta se prueba corriéndola**, no leyendo que existe
+(`scripts/apiUrlObligatoria.test.ts`): cuatro `vite build` de verdad — sin
+variable **cae**, con variable **pasa** (control positivo, sin el cual un build
+roto por cualquier otra causa daría el mismo rojo y celebraríamos una compuerta
+inexistente), el mock **pasa**, y se afirma que la CI le pasa la variable.
+**Mutante acreditado:** sacar el plugin de `plugins: []` pone el test rojo.
+
+### ② `storage.ts` dejó de describir en presente un hosting que ya no existe
+
+El párrafo decía que la demo mock y el build real *«viven en el MISMO origen de
+GitHub Pages»*. **Como historia es cierto; como descripción del despliegue
+vigente, caducó** — hoy son tres orígenes en `paymemx.com` por `D-WEB-1-BIS`.
+
+🔴 **Importa más de lo que parece porque el `CLAUDE.md` de la raíz cita estas
+líneas por número** como evidencia de por qué se eligieron tres orígenes, y ese
+argumento **se apoya en que el incidente OCURRIÓ**, no en que siga ocurriendo.
+Se corrige el tiempo verbal, no el contenido. Se declaró el rango nuevo al
+Bibliotecario, que mantiene la cita de la raíz.
+
+Y queda escrito lo que la reescritura podía invitar a hacer: **el namespacing no
+se retira por haber cambiado de hosting.** Que hoy además haya orígenes distintos
+lo vuelve redundante, **no innecesario**.
+
+### ③ `docs/COSTURAS_CONOCIDAS.md` — con condición de disparo, o no sirve
+
+Archivo nuevo, dueño declarado en su encabezado. Va lo que **no es gap de
+contrato ni defecto**: código correcto hoy cuya guarda depende de algo que nadie
+vigila.
+
+🔴 **Cada entrada trae su CONDICIÓN DE DISPARO.** Una nota que dice «ojo con
+esto» no sirve: en tres semanas nadie sabe si sigue importando. La condición es
+lo que permite cerrarla o confirmarla **sin volver a razonar el caso entero**.
+
+- **C-01 · el mock es más blando que el real en identidad y sesión** — tres
+  conductas que ninguna corrida de navegador puede observar. ⚠️ Con la aclaración
+  que evita el pánico: la capa **sí** tiene 13 casos unitarios sobre el riel
+  real; lo ausente es lo observable en navegador.
+- **C-02 · `withSessionLock` distingue «sin Web Locks» de «corrió bien» por
+  `null` vs `undefined`** — hoy correcto porque `invalidateSession` usa `??` y
+  no `||`. Disparo preciso: el día que una acción resuelva `null`
+  legítimamente, **se ejecutaría dos veces**.
+- **C-03 · la única interpolación de la fachada sin `encodeURIComponent`** — hoy
+  **no es defecto** (el tipo es una unión de literales) y por eso no se reporta
+  como tal. Se cierra con **guarda de clase**, nunca con un parche puntual:
+  arreglar sólo ésa borra el único síntoma sin cerrar la clase.
+- **C-04 · el VALOR de `VITE_API_URL` en Vercel** — un valor presente y
+  equivocado compila igual.
+
+### ④ La consecuencia que el gate nuevo tuvo sobre su vecino
+
+`scripts/artefactos.test.ts` **construye el artefacto real** para inspeccionarlo,
+así que la exigencia nueva lo puso rojo. Recibe su variable —de utilería, con el
+mismo `localhost` que el código traía, porque ahí no se hace ninguna request y lo
+que ese archivo mide son los HOSTS del bundle—.
+
+🔴 **Se anota porque el reflejo era el equivocado:** ante un vecino en rojo, lo
+fácil es aflojar el gate recién puesto. Lo correcto era darle a ese vecino lo que
+ahora necesita. **Y sólo apareció por correr la suite ENTERA:** verificar que la
+instrucción se cumplió no verifica qué se rompió al cumplirla.
+
+**Medido:** typecheck ✓ · **1206** unitarios (94 archivos) · **110** e2e ✓ ·
+builds mock y landing ✓, real ✓ **con** la variable y **rojo a propósito** sin
+ella · espejo 79 ✓ · secretos ✓ · `diff --check` ✓. **Sin push ni deploy.**
+
 ## 0.99.0 — el oráculo demuestra, no reconoce · P36 + pinning de sesión (2026-08-20)
 
 Octava vuelta del mismo gate y **cierre por adelantado de la misma clase en el

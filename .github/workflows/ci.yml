@@ -45,7 +45,20 @@ jobs:
         run: node scripts/verificar-mirror.mjs --integridad
       - run: npm test
       - run: npm run typecheck
+      # 🔴 `VITE_API_URL` va acá desde 0.100.0, y NO es configuración de
+      # despliegue: este `build` es una COMPUERTA DE COMPILACIÓN, no el
+      # artefacto que se publica —eso lo construye Vercel con su propia
+      # variable—. Sin la variable el build ahora FALLA a propósito
+      # (`exigirApiUrl` en `vite.config.ts`), y sin este `env` la compuerta
+      # caería en rojo sin que hubiera nada roto.
+      #
+      # ⚠️ El valor es el mismo que `deploy-demo.yml` ya tiene en claro: es una
+      # URL pública, no un secreto. Y lo que se compila acá NO llega a
+      # producción: si alguien lee esta línea buscando "a qué backend apunta la
+      # app publicada", la respuesta está en Vercel, no en este archivo.
       - run: npm run build
+        env:
+          VITE_API_URL: https://payme-app-backend-production.up.railway.app
       # Los 78 recorridos de navegador también son gate: la auditoría del
       # 2026-08-06 encontró en ellos lo que ninguna suite sin navegador vio
       # (el Shell pisando la pantalla de rechazo, la coma ×100 en el input).
