@@ -135,6 +135,30 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * ⚠️ **LO QUE ESTE ARCHIVO NO MATA, medido y no supuesto.**
+ *
+ * El mutante `send(actor.session ?? loadSession())` **SOBREVIVE** a los dos
+ * casos de abajo. No es un hueco del arnés: es que **en el riel autenticado ese
+ * `??` nunca se ejerce**. `resolveMoneyActor` devuelve la sesión SIEMPRE que
+ * hay login —`{ id: 'auth:…', session }`, y si no hay sesión tira
+ * `money_actor_unavailable` antes—, así que el operando izquierdo jamás es
+ * nulo y las dos ramas dan lo mismo.
+ *
+ * **Dónde divergiría:** en el actor INVITADO, que es el único que no lleva
+ * sesión (`{ id: 'guest:…' }`, sin `session`). Ahí el target manda `undefined`
+ * y el mutante mandaría la sesión vigente.
+ *
+ * 🔴 **Y ese riel está DURMIENTE** desde el cierre del pago sin cuenta (backend
+ * v2.32.0): la fachada ya no recibe `guestToken` de ningún lado, y que nadie lo
+ * produzca lo acredita `pagoSinCuenta.test.ts`. **Escribir un caso invitado acá
+ * probaría un camino que hoy no se puede alcanzar**, y sería peor que este
+ * párrafo: un test verde sobre superficie muerta se lee como cobertura.
+ *
+ * **Condición de disparo, para el que reabra esto:** si el riel de invitado
+ * vuelve a producirse —o si `resolveMoneyActor` deja de garantizar la sesión en
+ * el camino autenticado—, este límite caduca y el caso hay que escribirlo.
+ */
 describe('🔴 P40-③ · la mutación viaja con la sesión que el journal selló', () => {
   it('🔴 el callback recibe A, la red NO se inicia, y con B vigente corta 401', async () => {
     const b = sesionCruda('b');
