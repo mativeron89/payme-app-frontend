@@ -390,51 +390,98 @@ function sinComentario(l: string): string {
   return l;
 }
 
+/**
+ * 🔴 P60 · UN PASO SE IDENTIFICA POR SER UN ÍTEM DE `steps:`, NO POR SU PRIMERA
+ * CLAVE — y mi versión anterior dependía de la primera clave.
+ *
+ * Abría un paso al ver `- name:`, `- uses:`, `- run:` o `- if:`. **El orden de
+ * las claves de un mapping YAML no significa nada**, así que un paso
+ * perfectamente válido cuya primera clave fuera otra —`continue-on-error`,
+ * `env`, `with`, `id`, `timeout-minutes`— **no abría paso y desaparecía del
+ * censo**. Codex lo mostró con el contraejemplo exacto:
+ *
+ * ```yaml
+ * - continue-on-error: false
+ *   run: npx vercel --prod
+ * ```
+ *
+ * **Lo verifiqué en mi propio árbol antes de tocar nada: 41/41 verde, con un
+ * publicador entero invisible.** 🔴 **Un paso invisible es peor que uno mal
+ * adjudicado: no llega ni a la denuncia.**
+ *
+ * ⚠️ **Y es la misma clase que ya cerré una vez, en otro eje:** allá el
+ * resultado dependía del ORDEN DE RECORRIDO del censo, acá del ORDEN DE LAS
+ * CLAVES del YAML. Las dos veces la estructura decía algo que el formato no
+ * garantiza.
+ *
+ * Ahora el ítem se reconoce **por la estructura de la lista** —un `- ` a la
+ * indentación de los ítems de `steps:`— y de ahí se lee **el mapping entero**,
+ * venga la clave que venga y en el orden que venga.
+ */
 function pasosDe(yml: string): Paso[] {
   const lineas = yml.split('\n');
   const pasos: Paso[] = [];
-  let actual: Paso | null = null;
-  let bloque: { indent: number; partes: string[] } | null = null;
 
-  const cerrar = () => { if (actual) pasos.push(actual); actual = null; bloque = null; };
+  const iSteps = lineas.findIndex((l) => /^\s*steps:\s*$/.test(sinComentario(l)));
+  if (iSteps < 0) return pasos;
 
-  for (let i = 0; i < lineas.length; i++) {
-    const cruda = lineas[i]!;
-    if (bloque) {
-      const indent = cruda.search(/\S/);
-      if (cruda.trim() === '' || indent > bloque.indent) { bloque.partes.push(sinComentario(cruda)); continue; }
-      actual!.run = bloque.partes.join('\n');
-      bloque = null;
-    }
-    const l = sinComentario(cruda);
-    if (/^\s*-\s+(name|uses|run|if):/.test(l)) { cerrar(); actual = { nombre: '', uses: null, run: null, condicion: null, toleraError: null, linea: i + 1 }; }
-    if (!actual) continue;
-    const m = l.match(/^\s*(?:-\s+)?(name|uses|run|if|continue-on-error):\s*(.*)$/);
-    if (!m) continue;
-    const [, clave, valor] = m;
-    if (clave === 'name') actual.nombre = valor!.trim();
-    else if (clave === 'if') actual.condicion = valor!.trim();
-    else if (clave === 'continue-on-error') actual.toleraError = valor!.trim();
-    else if (clave === 'uses') actual.uses = valor!.trim();
-    else if (clave === 'run') {
-      if (valor!.trim() === '|' || valor!.trim() === '|-') bloque = { indent: cruda.search(/\S/), partes: [] };
-      else actual.run = valor!.trim();
-    }
+  // La indentación de los ítems la fija el PRIMER ítem, no una constante.
+  let sangria = -1;
+  for (let i = iSteps + 1; i < lineas.length; i++) {
+    const m = sinComentario(lineas[i]!).match(/^(\s*)-\s/);
+    if (m) { sangria = m[1]!.length; break; }
+    if (sinComentario(lineas[i]!).trim() && !/^\s/.test(lineas[i]!)) break;
   }
-  cerrar();
+  if (sangria < 0) return pasos;
+
+  /** Los renglones de cada ítem, cortados por el `- ` siguiente a la misma sangría. */
+  const bloques: { desde: number; lineas: string[] }[] = [];
+  let actual: { desde: number; lineas: string[] } | null = null;
+  for (let i = iSteps + 1; i < lineas.length; i++) {
+    const cruda = lineas[i]!;
+    const l = sinComentario(cruda);
+    const indent = l.search(/\S/);
+    if (indent >= 0 && indent < sangria && l.trim()) break; // salió de `steps:`
+    if (indent === sangria && /^\s*-\s/.test(l)) {
+      if (actual) bloques.push(actual);
+      actual = { desde: i + 1, lineas: [l.replace(/^(\s*)-\s/, '$1  ')] };
+      continue;
+    }
+    if (actual) actual.lineas.push(l);
+  }
+  if (actual) bloques.push(actual);
+
+  for (const b of bloques) {
+    const paso: Paso = { nombre: '', uses: null, run: null, condicion: null, toleraError: null, linea: b.desde };
+    // Las claves propias del paso están a la sangría del primer renglón; lo más
+    // profundo es de un sub-mapping (`with:`, `env:`) y no se mira acá.
+    const propia = b.lineas[0]!.search(/\S/);
+    let bloqueRun: string[] | null = null;
+    for (const l of b.lineas) {
+      const indent = l.search(/\S/);
+      if (bloqueRun) {
+        if (!l.trim() || indent > propia) { bloqueRun.push(l); continue; }
+        paso.run = bloqueRun.join('\n'); bloqueRun = null;
+      }
+      if (indent !== propia) continue;
+      const m = l.trim().match(/^([A-Za-z-]+):\s*(.*)$/);
+      if (!m) continue;
+      const [, clave, valor] = m;
+      if (clave === 'name') paso.nombre = valor!.trim();
+      else if (clave === 'if') paso.condicion = valor!.trim();
+      else if (clave === 'continue-on-error') paso.toleraError = valor!.trim();
+      else if (clave === 'uses') paso.uses = valor!.trim();
+      else if (clave === 'run') {
+        if (valor!.trim() === '|' || valor!.trim() === '|-') bloqueRun = [];
+        else paso.run = valor!.trim();
+      }
+    }
+    if (bloqueRun) paso.run = bloqueRun.join('\n');
+    pasos.push(paso);
+  }
   return pasos;
 }
 
-/**
- * Los comandos efectivos de un `run:`, partidos por separadores de shell.
- *
- * 🔴 **No se parte a ciegas, y el primer intento sí lo hacía:** el paso de
- * secretos lleva `"${{ a || b || 'HEAD^' }}"` —una expresión de GitHub con `||`
- * ADENTRO— y quedaba troceada en pedazos que después figuraban como «pasos sin
- * adjudicar». El separador tiene que respetar comillas y `${{ … }}`, o el
- * fail-closed empieza a denunciar cosas que no existen **y a alguien se le
- * ocurre aflojarlo para que calle**.
- */
 /**
  * 🔴 P58 · UNA GRAMÁTICA POSITIVA — y por qué lo anterior estaba MAL aunque
  * matara los mutantes que le pusieron.
@@ -557,6 +604,71 @@ function comandosDe(run: string): string[] {
  * Por eso la mitad de los casos de acá son sintaxis que **no aparece en ningún
  * comentario de este archivo**.
  */
+/**
+ * 🔴 P60 · UN PASO NO SE IDENTIFICA POR SU PRIMERA CLAVE.
+ *
+ * **El orden de las claves de un mapping YAML no significa nada.** Mi parser
+ * abría paso al ver `- name:`, `- uses:`, `- run:` o `- if:`, así que un paso
+ * válido que empezara por otra clave **desaparecía del censo** — y un paso
+ * invisible **no llega ni a la denuncia**.
+ *
+ * ⚠️ Es la misma clase que ya cerré en otro eje: allá el resultado dependía del
+ * ORDEN DE RECORRIDO, acá del ORDEN DE LAS CLAVES. **Las dos veces la
+ * implementación apoyaba una conclusión en algo que el formato no garantiza.**
+ *
+ * Los casos de abajo incluyen **dos claves que ningún comentario de este archivo
+ * nombra** (`id`, `timeout-minutes`): si el parser se apoyara en una lista de
+ * primeras claves conocidas, ésas volverían a pasar.
+ */
+describe('🔴 el paso se reconoce por ser ítem de `steps:`', () => {
+  const armar = (primerPaso: string) => `
+name: sonda
+on: [push]
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+${primerPaso}
+      - run: npm ci
+`;
+
+  const PRIMERAS_CLAVES = [
+    ['continue-on-error — el contraejemplo de Codex', '      - continue-on-error: false\n        run: npx vercel --prod'],
+    ['if', '      - if: always()\n        run: npx vercel --prod'],
+    ['env', '      - env:\n          X: "1"\n        run: npx vercel --prod'],
+    // ── de acá abajo, claves que NINGÚN comentario de este archivo nombra.
+    ['id', '      - id: escondido\n        run: npx vercel --prod'],
+    ['timeout-minutes', '      - timeout-minutes: 5\n        run: npx vercel --prod'],
+    ['working-directory', '      - working-directory: .\n        run: npx vercel --prod'],
+  ] as const;
+
+  for (const [nombre, bloque] of PRIMERAS_CLAVES) {
+    it(`🔴 un paso que empieza por \`${nombre}\` NO desaparece`, () => {
+      const pasos = pasosDe(armar(bloque));
+      expect(pasos.length, 'se perdió un paso entero').toBe(2);
+      const cmds = pasos.flatMap((p) => comandosDe(p.run ?? ''));
+      expect(cmds, `el comando del primer paso no se ve: ${JSON.stringify(cmds)}`)
+        .toContain('npx vercel --prod');
+    });
+  }
+
+  it('⭐ y los metadatos se leen aunque no vengan primeros', () => {
+    // Sin esto, «reconocer el ítem» podría lograrse perdiendo el resto del
+    // mapping: el paso entraría al censo pero sin su `if` ni su tolerancia.
+    const pasos = pasosDe(armar('      - continue-on-error: true\n        if: always()\n        run: npm test'));
+    expect(pasos[0]!.toleraError).toBe('true');
+    expect(pasos[0]!.condicion).toBe('always()');
+    expect(comandosDe(pasos[0]!.run ?? '')).toEqual(['npm test']);
+  });
+
+  it('⭐ CONTROL · un paso normal sigue leyéndose entero', () => {
+    const pasos = pasosDe(armar('      - name: normal\n        uses: actions/checkout@v4'));
+    expect(pasos.length).toBe(2);
+    expect(pasos[0]!.nombre).toBe('normal');
+    expect(pasos[0]!.uses).toBe('actions/checkout@v4');
+  });
+});
+
 describe('🔴 la gramática afirma lo simple, no enumera lo complejo', () => {
   const NO_AFIRMABLES: ReadonlyArray<readonly [string, string]> = [
     ['sustitución de proceso (lectura) — la sonda de Codex', 'bash x.sh <(npx vercel --prod)'],

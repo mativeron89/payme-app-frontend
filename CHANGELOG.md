@@ -11,6 +11,64 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.108.0 — un paso se identifica por ser ítem de `steps:`, no por su primera clave (2026-08-21)
+
+Cierra un hallazgo **preliminar** de Codex —quedó bloqueado por el gate de su
+plataforma a mitad de la auditoría del P60— **verificado por mí antes de tocar
+nada**. Sin regresión; el diff no toca `src/`.
+
+### ① El contraejemplo, y lo que midió mi propia sonda
+
+```yaml
+- continue-on-error: false
+  run: npx vercel --prod
+```
+
+🔴 **Verificado en mi árbol: 41/41 VERDE, con un publicador entero invisible.**
+
+`pasosDe()` abría un paso al ver `- name:`, `- uses:`, `- run:` o `- if:`. **El
+orden de las claves de un mapping YAML no significa nada**, así que un paso
+perfectamente válido que empezara por otra clave **no abría paso y desaparecía
+del censo**.
+
+⚠️ **Un paso invisible es peor que uno mal adjudicado: no llega ni a la
+denuncia.** El censo no lo reporta como dudoso — no lo reporta.
+
+### ② Es la MISMA clase que ya cerré, en otro eje
+
+| vuelta | de qué dependía la conclusión | qué no lo garantiza |
+|---|---|---|
+| `0.105.0` | el **orden de recorrido** del censo | nada obliga a recorrer en un orden |
+| ésta | el **orden de las claves** del YAML | el formato dice explícito que no es semántico |
+
+**Las dos veces apoyé una conclusión en algo que el formato no garantiza.** La
+primera la encontró Codex; ésta también.
+
+### ③ El cierre: por estructura de lista
+
+El ítem se reconoce **por ser un `- ` a la indentación de los ítems de
+`steps:`** —indentación que fija **el primer ítem**, no una constante— y de ahí
+se lee **el mapping entero**, venga la clave que venga y en el orden que venga.
+
+**Seis casos permanentes**, y **tres de ellos con claves que ningún comentario
+de este archivo nombra** (`id`, `timeout-minutes`, `working-directory`): si el
+parser volviera a apoyarse en una lista de primeras claves conocidas, ésas
+pasarían otra vez.
+
+⭐ **Y dos controles**: que los metadatos se lean **aunque no vengan primeros**
+—reconocer el ítem perdiendo el resto del mapping sería un arreglo a medias— y
+que un paso normal se siga leyendo entero.
+
+### ④ Sobre la procedencia de este hallazgo
+
+🔴 **Llegó por CAPTURA, no por sobre firmado** — Codex no alcanzó a emitir
+dictamen. **Por eso lo verifiqué yo antes de mover una línea**, y por eso esta
+entrada empieza por la medición y no por la cita. Un hallazgo sin firma **vale
+lo que valga su contraejemplo**, y éste valía.
+
+**Medido:** typecheck ✓ · **1258** unitarios · **110** e2e ✓ · builds ✓ · espejo
+79 ✓.
+
 ## 0.107.0 — una gramática positiva, porque lo anterior era una denylist con cartel de fail-closed (2026-08-21)
 
 Cierra el P2 del BLOCK sobre `34e65c8`. **Sin regresión; el diff no toca `src/`.**
