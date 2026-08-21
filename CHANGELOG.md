@@ -11,6 +11,92 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.105.0 — retornos implícitos, memoria con contexto, y los pasos leídos como pasos (2026-08-21)
+
+Cierra los cuatro P2 del BLOCK sobre `136ece4`. **Sin regresión runtime; la web
+publicada no se toca; el push sigue retenido por el incidente.**
+
+🔴 **Los cuatro son la misma clase con cuatro caras**, y conviene decirlo así
+porque es lo que se aprende: **un cambio futuro perfectamente válido dejaba
+verde una compuerta que se presenta como fail-closed.**
+
+### ① P2-01 · un arrow con cuerpo-EXPRESIÓN devolvía sin que nadie lo viera
+
+`const crearCta = () => <button…/>` **devuelve sin `return`**. `retornosDe()`
+buscaba `ReturnStatement`, así que ese cuerpo salía **vacío**: ni JSX que
+recorrer ni retorno que declarar indecidible. **Se perdía en silencio**, que es
+la peor de las tres salidas.
+
+⚠️ Es la lección de siempre en envase nuevo: **buscar la FORMA SINTÁCTICA
+(`return`) en vez de la COSA (lo que el cuerpo devuelve)**. Un retorno implícito
+es un retorno.
+
+📌 **Y de mis dos sondas, sólo UNA discrimina** — medido plantando el rival. La
+del arrow directo **pasa igual sin el arreglo**, porque ese JSX es **léxico** y
+el recorrido del cuerpo lo encuentra de todos modos. La que prueba el arreglo es
+la encadenada (`arrow → condicional → helper`), donde el JSX vive detrás de una
+llamada. **Contar dos donde hay una es cómo una batería de mutantes empieza a
+mentir sobre su propia fuerza.**
+
+### ② P2-02 · un `Set` haciendo dos trabajos, y el resultado dependía del ORDEN
+
+`visitados` era global **por nombre** y cortaba ciclos *y* evitaba repetir
+trabajo. 🔴 **No es dedup neutro:** el mismo helper alcanzado primero desde un
+componente **con** `disabled` y después desde uno **sin** guarda quedaba cortado
+la segunda vez — **e invertir el orden invertía cuál clasificación sobrevive**.
+Un censo cuyo resultado depende del orden de recorrido **no está midiendo lo que
+dice**.
+
+Ahora son dos estructuras con dos trabajos: **una PILA** corta ciclos `A→B→A` y
+se saca al volver; **la memoización** lleva identidad de declaración **más
+contexto de guarda**, porque el mismo helper bajo `disabled` y bajo «sin guarda»
+son dos visitas con conclusiones distintas.
+
+### ③ P2-03 · exigir el ARCHIVO no dice nada de sus PASOS
+
+Un `- run: npx vercel --prod` metido dentro de `ci.yml`, antes de los gates,
+dejaba la suite **20/20**. Yo censaba el conjunto de **archivos**.
+
+**Ahora se adjudica PASO POR PASO**, y la lista es de lo **adjudicado**, no de lo
+prohibido: **un mecanismo nuevo no puede colarse por no parecerse a nada
+conocido**. Once entradas, cada una con su razón al lado.
+
+### ④ P2-04 · mencionar un gate no es ejecutarlo
+
+`- run: echo "npm test"` y un `# npm test` al lado de un `uses:` dejaban la suite
+verde: el detector buscaba **substrings** tras quitar sólo comentarios de línea
+completa.
+
+Ahora se **leen los pasos como pasos**: se separan `uses:` de `run:`, se respeta
+que un `#` **dentro de comillas no abre comentario**, y un gate cuenta sólo si
+es el **comienzo de un comando efectivo** — así `echo "npm test"` empieza con
+`echo` y no cuenta.
+
+🔴 **Y el partidor tampoco podía ser a ciegas:** el paso de secretos lleva
+`"${{ a || b || 'HEAD^' }}"` —una expresión de GitHub con `||` adentro— y
+quedaba troceada en pedazos que figuraban como «pasos sin adjudicar».
+**Un fail-closed que denuncia cosas que no existen es un fail-closed que alguien
+va a aflojar para que calle.**
+
+### ⑤ Mutantes — cuatro sondas de Codex, dos rivales y un control legítimo
+
+| # | Mutante | Resultado |
+|---|---|---|
+| Ⓐ | arrow con cuerpo-expresión (encadenado) | **muerto** |
+| Ⓑ | el mismo helper bajo **dos guardas distintas** | **muerto** |
+| Ⓒ | segundo publicador **dentro** de `ci.yml` | **muerto** |
+| Ⓓ | el gate es un `echo`, no el comando | **muerto** |
+| Ⓔ | el gate como **comentario** al lado de un `uses:` | **muerto** |
+| Ⓡ¹ | RIVAL: `retornosDe` sin cuerpo-expresión | **muerto** (cae sólo el encadenado) |
+| Ⓡ² | RIVAL: memoización por nombre | **muerto** |
+| ⭐ | **control legítimo**: `run: |` multilínea con `npm test` adentro | **queda VERDE**, como debe |
+
+El control legítimo importa tanto como los mutantes: sin él, «denunciar todo»
+pasaría las cinco sondas y volvería la guarda inservible por ruido.
+
+**Medido:** typecheck ✓ · **1230** unitarios · **110** e2e ✓ · builds ✓ · espejo
+79 ✓. **Sin push:** conjuntiva pendiente **y** retención por el incidente.
+
 ## 0.104.0 — la recursión sigue los RETORNOS, y los gates dejan de leerse en comentarios (2026-08-21)
 
 Cierra los tres P2 del BLOCK sobre `8679654`. **Sin regresión runtime en el

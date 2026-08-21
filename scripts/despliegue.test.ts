@@ -345,65 +345,175 @@ describe('vercel.json · el despliegue automático sigue apagado', () => {
  * lección que costó cuatro vueltas en el censo de la pantalla de pago: una
  * lista de lo conocido falla abierta.
  */
-describe('un solo camino de publicación · y sus gates, leídos de los PASOS', () => {
-  const DIR = join(RAIZ, '.github', 'workflows');
+/**
+ * 🔴 P53-03/04 · UN PARSER DE PASOS, porque el regex sobre el texto MIENTE.
+ *
+ * Codex mostró las dos formas en que mentía, y son la misma familia:
+ * ① **un segundo publicador DENTRO del archivo permitido** —`- run: npx vercel
+ *    --prod` antes de los gates— quedaba invisible: yo censaba el conjunto de
+ *    ARCHIVOS y no sus PASOS;
+ * ② **mencionar un gate no es ejecutarlo**: `- run: echo "npm test"` y un
+ *    `uses:` con `# npm test` al lado dejaban la suite verde.
+ *
+ * Lo que sigue no es «mejores regex»: es leer los pasos como pasos. Se separan
+ * `uses:` de `run:`, se respeta que un `#` dentro de comillas **no** abre
+ * comentario, y un gate cuenta sólo si algún **segmento de comando** EMPIEZA
+ * con él — así `echo "npm test"` empieza con `echo` y no cuenta.
+ */
+interface Paso { nombre: string; uses: string | null; run: string | null; linea: number }
 
-  /**
-   * 🔴 P50-02/03 · SIN COMENTARIOS Y SIN SUBSTRINGS — las dos formas en que
-   * esta guarda mentía, encontradas por Codex el mismo día.
-   *
-   * ① **Reconocía TRES cadenas** para decidir si un workflow publica, así que
-   *    un `- run: npx vercel --prod` la dejaba **20/20 verde**. Lo refutado no
-   *    era un detalle: era la garantía que yo había escrito con todas las
-   *    letras — *«un camino nuevo aparece solo»*.
-   * ② **Acreditaba los cinco gates con un regex sobre el TEXTO COMPLETO**, así
-   *    que reemplazar el paso real de Playwright por **un comentario que
-   *    conserva la frase** también quedaba verde. El comentario certificando la
-   *    guarda que reemplazó, otra vez.
-   *
-   * Ahora: **los comentarios se borran antes de mirar**, los gates se buscan en
-   * líneas `run:`/`uses:` **que PRECEDEN a la publicación**, y el conjunto de
-   * workflows se compara **exacto** — cualquiera que no sea `ci.yml` es rojo
-   * hasta que alguien lo adjudique. Es la opción más chica y fail-closed con el
-   * árbol de hoy: **no hay heurística que decida si un workflow desconocido
-   * publica; lo decide una persona.**
-   */
-  const sinComentarios = (yml: string) =>
-    yml.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+/** Quita el comentario YAML de una línea respetando comillas. */
+function sinComentario(l: string): string {
+  let dentro: string | null = null;
+  for (let i = 0; i < l.length; i++) {
+    const c = l[i]!;
+    if (dentro) { if (c === dentro) dentro = null; continue; }
+    if (c === '"' || c === "'") { dentro = c; continue; }
+    if (c === '#') return l.slice(0, i);
+  }
+  return l;
+}
+
+function pasosDe(yml: string): Paso[] {
+  const lineas = yml.split('\n');
+  const pasos: Paso[] = [];
+  let actual: Paso | null = null;
+  let bloque: { indent: number; partes: string[] } | null = null;
+
+  const cerrar = () => { if (actual) pasos.push(actual); actual = null; bloque = null; };
+
+  for (let i = 0; i < lineas.length; i++) {
+    const cruda = lineas[i]!;
+    if (bloque) {
+      const indent = cruda.search(/\S/);
+      if (cruda.trim() === '' || indent > bloque.indent) { bloque.partes.push(sinComentario(cruda)); continue; }
+      actual!.run = bloque.partes.join('\n');
+      bloque = null;
+    }
+    const l = sinComentario(cruda);
+    if (/^\s*-\s+(name|uses|run):/.test(l)) { cerrar(); actual = { nombre: '', uses: null, run: null, linea: i + 1 }; }
+    if (!actual) continue;
+    const m = l.match(/^\s*(?:-\s+)?(name|uses|run):\s*(.*)$/);
+    if (!m) continue;
+    const [, clave, valor] = m;
+    if (clave === 'name') actual.nombre = valor!.trim();
+    else if (clave === 'uses') actual.uses = valor!.trim();
+    else if (clave === 'run') {
+      if (valor!.trim() === '|' || valor!.trim() === '|-') bloque = { indent: cruda.search(/\S/), partes: [] };
+      else actual.run = valor!.trim();
+    }
+  }
+  cerrar();
+  return pasos;
+}
+
+/**
+ * Los comandos efectivos de un `run:`, partidos por separadores de shell.
+ *
+ * 🔴 **No se parte a ciegas, y el primer intento sí lo hacía:** el paso de
+ * secretos lleva `"${{ a || b || 'HEAD^' }}"` —una expresión de GitHub con `||`
+ * ADENTRO— y quedaba troceada en pedazos que después figuraban como «pasos sin
+ * adjudicar». El separador tiene que respetar comillas y `${{ … }}`, o el
+ * fail-closed empieza a denunciar cosas que no existen **y a alguien se le
+ * ocurre aflojarlo para que calle**.
+ */
+function comandosDe(run: string): string[] {
+  const partes: string[] = [];
+  let actual = '';
+  let cita: string | null = null;
+  let expr = 0;
+  for (let i = 0; i < run.length; i++) {
+    const c = run[i]!;
+    const dos = run.slice(i, i + 2);
+    if (cita) { actual += c; if (c === cita) cita = null; continue; }
+    if (c === '"' || c === "'") { cita = c; actual += c; continue; }
+    if (dos === '${' && run.slice(i, i + 3) === '${{') { expr++; actual += dos; i++; continue; }
+    if (expr > 0 && dos === '}}') { expr--; actual += dos; i++; continue; }
+    if (expr === 0) {
+      if (dos === '&&' || dos === '||') { partes.push(actual); actual = ''; i++; continue; }
+      if (c === '\n' || c === ';' || c === '|') { partes.push(actual); actual = ''; continue; }
+    }
+    actual += c;
+  }
+  partes.push(actual);
+  return partes.map((c) => c.trim()).filter(Boolean);
+}
+
+describe('el camino de publicación · leído de los PASOS, no del texto', () => {
+  const DIR = join(RAIZ, '.github', 'workflows');
 
   it('🔴 el conjunto de workflows es EXACTAMENTE el adjudicado', () => {
     const archivos = readdirSync(DIR).filter((f) => /\.ya?ml$/.test(f)).sort();
     expect(
       archivos,
-      `apareció o desapareció un workflow. Cualquiera que no sea \`ci.yml\` es rojo hasta ` +
-        `adjudicarlo: hay que decidir si publica, si se gatea o si se retira — no dejarlo pasar ` +
-        `porque «no parece» publicar.`,
+      'apareció o desapareció un workflow. Cualquiera que no sea ci.yml es rojo hasta ' +
+        'adjudicarlo: hay que decidir si publica, si se gatea o si se retira.',
     ).toEqual(['ci.yml']);
   });
 
-  it('🔴 los CINCO gates son pasos REALES y preceden a la publicación', () => {
-    const yml = sinComentarios(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
-    const lineas = yml.split('\n');
-    const iPublica = lineas.findIndex((l) => /^\s*(- )?run:.*publicar-vercel\.sh|publicar-vercel\.sh/.test(l));
-    // Control positivo: sin el paso de publicación, «todos preceden» sería
-    // trivialmente cierto y este test pasaría sobre un CI que no publica nada.
-    expect(iPublica, 'no se encontró el paso de publicación: el test mediría en vacío').toBeGreaterThan(0);
+  /**
+   * 🔴 P53-03 · **cada PASO adjudicado, uno por uno.** Exigir que el archivo sea
+   * `ci.yml` no dice nada de lo que hay adentro: un `- run: npx vercel --prod`
+   * metido antes de los gates dejaba la suite 20/20. Ahora **todo paso que no
+   * esté en esta lista es rojo** — y la lista es de lo ADJUDICADO, no de lo
+   * prohibido: un mecanismo nuevo no tiene forma de colarse por no parecerse a
+   * nada conocido.
+   */
+  it('🔴 TODO paso del workflow está adjudicado', () => {
+    const pasos = pasosDe(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    expect(pasos.length, 'no se parsearon pasos: el censo mediría en vacío').toBeGreaterThan(8);
 
-    const GATES: ReadonlyArray<readonly [string, RegExp]> = [
-      ['espejo', /verificar-mirror\.mjs/],
-      ['test', /npm test\b/],
-      ['typecheck', /npm run typecheck/],
-      ['build', /npm run build\b/],
-      ['playwright', /playwright test/],
+    const ADJUDICADOS: RegExp[] = [
+      /^actions\/(checkout|setup-node)@/,          // traer el repo y node
+      /^bash scripts\/auditar-secretos\.sh\b/,      // gate de secretos
+      /^npm ci$/,                                   // dependencias
+      /^node scripts\/verificar-mirror\.mjs\b/,     // gate del espejo
+      /^npm test$/, /^npm run typecheck$/, /^npm run build$/,
+      /^npx playwright install\b/, /^npx playwright test$/,
+      /^bash scripts\/reportar-flaky\.sh\b/,        // informa, no bloquea
+      /^bash scripts\/publicar-vercel\.sh\b/,       // LA publicación
     ];
-    const faltan: string[] = [];
-    for (const [nombre, re] of GATES) {
-      const i = lineas.findIndex((l, k) => k < iPublica && /^\s*(- )?(run|uses):/.test(l) && re.test(l));
-      if (i < 0) faltan.push(nombre);
+    const sinAdjudicar: string[] = [];
+    for (const p of pasos) {
+      const trozos = p.uses ? [p.uses] : comandosDe(p.run ?? '');
+      if (!trozos.length) { sinAdjudicar.push(`línea ${p.linea}: paso sin \`run\` ni \`uses\``); continue; }
+      for (const t of trozos) {
+        if (!ADJUDICADOS.some((re) => re.test(t))) sinAdjudicar.push(`línea ${p.linea}: \`${t}\``);
+      }
     }
     expect(
+      sinAdjudicar,
+      'pasos SIN adjudicar en el único camino de publicación — decidí qué son antes de dejarlos:\n  ' +
+        sinAdjudicar.join('\n  '),
+    ).toEqual([]);
+  });
+
+  /**
+   * 🔴 P53-04 · **mencionar un gate no es ejecutarlo.** El detector buscaba
+   * substrings, así que `- run: echo "npm test"` y un comentario al lado de un
+   * `uses:` lo dejaban verde. Ahora un gate cuenta sólo si es el **comienzo de
+   * un comando efectivo** dentro de un paso `run:` que **precede** a la
+   * publicación.
+   */
+  it('🔴 los CINCO gates se EJECUTAN, y antes de publicar', () => {
+    const pasos = pasosDe(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    const iPublica = pasos.findIndex((p) => comandosDe(p.run ?? '').some((c) => /^bash scripts\/publicar-vercel\.sh/.test(c)));
+    // Control positivo: sin paso de publicación, «todos preceden» sería cierto
+    // sobre un CI que no publica nada.
+    expect(iPublica, 'no se encontró el paso de publicación: el test mediría en vacío').toBeGreaterThan(0);
+
+    const antes = pasos.slice(0, iPublica).flatMap((p) => comandosDe(p.run ?? ''));
+    const GATES: ReadonlyArray<readonly [string, RegExp]> = [
+      ['espejo', /^node scripts\/verificar-mirror\.mjs\b/],
+      ['test', /^npm test$/],
+      ['typecheck', /^npm run typecheck$/],
+      ['build', /^npm run build$/],
+      ['playwright', /^npx playwright test$/],
+    ];
+    const faltan = GATES.filter(([, re]) => !antes.some((c) => re.test(c))).map(([n]) => n);
+    expect(
       faltan,
-      `el único camino de publicación dejó de verificar (como PASO real, antes de publicar): ${faltan.join(' · ')}`,
+      `gates que NO se EJECUTAN antes de publicar (mencionarlos no cuenta): ${faltan.join(' · ')}`,
     ).toEqual([]);
   });
 
