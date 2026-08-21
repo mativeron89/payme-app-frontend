@@ -345,39 +345,66 @@ describe('vercel.json · el despliegue automático sigue apagado', () => {
  * lección que costó cuatro vueltas en el censo de la pantalla de pago: una
  * lista de lo conocido falla abierta.
  */
-describe('un solo camino de publicación · derivado del árbol', () => {
+describe('un solo camino de publicación · y sus gates, leídos de los PASOS', () => {
   const DIR = join(RAIZ, '.github', 'workflows');
 
-  /** Un workflow publica si despliega Pages o dispara los hooks de Vercel. */
-  const publica = (yml: string) =>
-    /actions\/deploy-pages|upload-pages-artifact|publicar-vercel\.sh/.test(yml);
+  /**
+   * 🔴 P50-02/03 · SIN COMENTARIOS Y SIN SUBSTRINGS — las dos formas en que
+   * esta guarda mentía, encontradas por Codex el mismo día.
+   *
+   * ① **Reconocía TRES cadenas** para decidir si un workflow publica, así que
+   *    un `- run: npx vercel --prod` la dejaba **20/20 verde**. Lo refutado no
+   *    era un detalle: era la garantía que yo había escrito con todas las
+   *    letras — *«un camino nuevo aparece solo»*.
+   * ② **Acreditaba los cinco gates con un regex sobre el TEXTO COMPLETO**, así
+   *    que reemplazar el paso real de Playwright por **un comentario que
+   *    conserva la frase** también quedaba verde. El comentario certificando la
+   *    guarda que reemplazó, otra vez.
+   *
+   * Ahora: **los comentarios se borran antes de mirar**, los gates se buscan en
+   * líneas `run:`/`uses:` **que PRECEDEN a la publicación**, y el conjunto de
+   * workflows se compara **exacto** — cualquiera que no sea `ci.yml` es rojo
+   * hasta que alguien lo adjudique. Es la opción más chica y fail-closed con el
+   * árbol de hoy: **no hay heurística que decida si un workflow desconocido
+   * publica; lo decide una persona.**
+   */
+  const sinComentarios = (yml: string) =>
+    yml.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
-  it('🔴 exactamente UN workflow publica, y es el gateado', () => {
-    const archivos = readdirSync(DIR).filter((f) => /\.ya?ml$/.test(f));
-    // Control positivo: si el directorio viniera vacío, todo lo de abajo
-    // pasaría en vacío y el gate diría «un solo camino» sobre ninguno.
-    expect(archivos.length, 'no se leyeron workflows: el censo mediría en vacío').toBeGreaterThan(0);
-
-    const publicadores = archivos.filter((f) => publica(readFileSync(join(DIR, f), 'utf8')));
+  it('🔴 el conjunto de workflows es EXACTAMENTE el adjudicado', () => {
+    const archivos = readdirSync(DIR).filter((f) => /\.ya?ml$/.test(f)).sort();
     expect(
-      publicadores,
-      `caminos de publicación encontrados: ${publicadores.join(' · ')}. ` +
-        'Si aparece uno nuevo hay que decidir si se gatea o se retira, no dejarlo.',
+      archivos,
+      `apareció o desapareció un workflow. Cualquiera que no sea \`ci.yml\` es rojo hasta ` +
+        `adjudicarlo: hay que decidir si publica, si se gatea o si se retira — no dejarlo pasar ` +
+        `porque «no parece» publicar.`,
     ).toEqual(['ci.yml']);
   });
 
-  it('🔴 y ese único camino verifica las CINCO cosas', () => {
-    // Si alguien le saca Playwright o el espejo al que quedó, no hay un
-    // segundo pipeline que lo disimule: se publica menos verificado y punto.
-    const yml = readFileSync(join(DIR, 'ci.yml'), 'utf8');
-    const faltan = [
+  it('🔴 los CINCO gates son pasos REALES y preceden a la publicación', () => {
+    const yml = sinComentarios(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    const lineas = yml.split('\n');
+    const iPublica = lineas.findIndex((l) => /^\s*(- )?run:.*publicar-vercel\.sh|publicar-vercel\.sh/.test(l));
+    // Control positivo: sin el paso de publicación, «todos preceden» sería
+    // trivialmente cierto y este test pasaría sobre un CI que no publica nada.
+    expect(iPublica, 'no se encontró el paso de publicación: el test mediría en vacío').toBeGreaterThan(0);
+
+    const GATES: ReadonlyArray<readonly [string, RegExp]> = [
       ['espejo', /verificar-mirror\.mjs/],
-      ['test', /npm test/],
+      ['test', /npm test\b/],
       ['typecheck', /npm run typecheck/],
-      ['build', /npm run build/],
+      ['build', /npm run build\b/],
       ['playwright', /playwright test/],
-    ].filter(([, re]) => !(re as RegExp).test(yml)).map(([n]) => n);
-    expect(faltan, `el único camino de publicación dejó de verificar: ${faltan.join(' · ')}`).toEqual([]);
+    ];
+    const faltan: string[] = [];
+    for (const [nombre, re] of GATES) {
+      const i = lineas.findIndex((l, k) => k < iPublica && /^\s*(- )?(run|uses):/.test(l) && re.test(l));
+      if (i < 0) faltan.push(nombre);
+    }
+    expect(
+      faltan,
+      `el único camino de publicación dejó de verificar (como PASO real, antes de publicar): ${faltan.join(' · ')}`,
+    ).toEqual([]);
   });
 
   it('🔴 el retiro está EXPLICADO donde alguien lo va a buscar', () => {

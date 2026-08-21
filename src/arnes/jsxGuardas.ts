@@ -477,7 +477,13 @@ export function cuerpoDelComponente(
       if (ts.isFunctionDeclaration(n) && n.name?.text === nombre && n.body) {
         hallado = { nodo: n.body, sf: fuente };
       } else if (ts.isClassDeclaration(n) && n.name?.text === nombre) {
-        hallado = { nodo: n, sf: fuente };
+        // 🔴 El cuerpo de un componente de clase es su `render()`, no la clase
+        // entera: mirar la clase mete `getDerivedStateFromError` y los demás
+        // métodos, que no son lo que se renderiza.
+        const render = n.members.find(
+          (m) => ts.isMethodDeclaration(m) && m.name.getText(fuente) === 'render',
+        ) as ts.MethodDeclaration | undefined;
+        hallado = render?.body ? { nodo: render.body, sf: fuente } : null;
       } else if (ts.isVariableStatement(n)) {
         for (const d of n.declarationList.declarations) {
           if (d.name.getText(fuente) !== nombre || !d.initializer) continue;
@@ -490,6 +496,97 @@ export function cuerpoDelComponente(
     if (hallado) return hallado;
   }
   return null;
+}
+
+/**
+ * 🔴 P50-01 · LOS RETORNOS DE UN CUERPO, clasificados — y por qué hace falta.
+ *
+ * El censo bajaba al JSX escrito **léxicamente** en el cuerpo de un componente.
+ * Codex mostró el nivel siguiente: un helper que **devuelve** el botón y un
+ * componente que **sólo lo llama**. Nada de eso es JSX léxico del componente, y
+ * el censo lo daba por vacío.
+ *
+ * ⚠️ **Es la misma clase del M16, un nivel indirecto** — la capa que yo misma
+ * había anunciado que iba a aparecer. La forma de cerrarla no es agregar «y
+ * también seguir llamadas»: es **decidir qué se acepta como retorno probado** y
+ * **fallar cerrado con todo lo demás**.
+ *
+ * Se aceptan, y cada uno por su razón:
+ *   · **JSX** — ya se recorrió léxicamente;
+ *   · **`null`/`undefined`/literal** — no hay superficie;
+ *   · **condicional o lógico** — se clasifica cada rama;
+ *   · **llamada a una función local resoluble** — se SIGUE su cuerpo;
+ *   · **algo de los props** (`props.x`, `this.props.x`) — es JSX del LLAMADOR,
+ *     y se recorre donde está escrito, que es el sitio de la llamada.
+ *
+ * Todo lo demás —una variable, una llamada que no se puede resolver, un acceso
+ * a otra cosa— **es indecidible**. No es que sea peligroso: es que **no se puede
+ * demostrar que no lo sea**, y ésa es la única respuesta honesta.
+ */
+export type Retorno =
+  | { tipo: 'ok' }
+  | { tipo: 'seguir'; nombre: string }
+  | { tipo: 'indecidible'; texto: string };
+
+export function clasificarRetorno(
+  expr: ts.Expression | undefined,
+  sf: ts.SourceFile,
+  nombresDeProps: string[],
+): Retorno[] {
+  if (!expr) return [{ tipo: 'ok' }];
+  if (ts.isParenthesizedExpression(expr)) return clasificarRetorno(expr.expression, sf, nombresDeProps);
+  if (ts.isJsxElement(expr) || ts.isJsxSelfClosingElement(expr) || ts.isJsxFragment(expr)) return [{ tipo: 'ok' }];
+  if (
+    expr.kind === ts.SyntaxKind.NullKeyword ||
+    ts.isStringLiteral(expr) || ts.isNumericLiteral(expr) ||
+    (ts.isIdentifier(expr) && expr.text === 'undefined')
+  ) return [{ tipo: 'ok' }];
+  if (ts.isConditionalExpression(expr)) {
+    return [...clasificarRetorno(expr.whenTrue, sf, nombresDeProps), ...clasificarRetorno(expr.whenFalse, sf, nombresDeProps)];
+  }
+  if (ts.isBinaryExpression(expr) &&
+      (expr.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+       expr.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+       expr.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)) {
+    return [...clasificarRetorno(expr.left, sf, nombresDeProps), ...clasificarRetorno(expr.right, sf, nombresDeProps)];
+  }
+  if (ts.isCallExpression(expr) && ts.isIdentifier(expr.expression)) {
+    return [{ tipo: 'seguir', nombre: expr.expression.text }];
+  }
+  // `this.props.x` o `props.x`: JSX que escribió el llamador y que se recorre
+  // en el sitio de la llamada. No es un agujero, es otro lugar.
+  if (ts.isPropertyAccessExpression(expr)) {
+    const raiz = expr.expression.getText(sf);
+    if (/^this\.props$/.test(raiz) || nombresDeProps.includes(raiz)) return [{ tipo: 'ok' }];
+  }
+  return [{ tipo: 'indecidible', texto: expr.getText(sf).replace(/\s+/g, ' ').slice(0, 60) }];
+}
+
+/**
+ * Los `return` **propios** de un cuerpo.
+ *
+ * 🔴 **No entra en funciones anidadas, y el primer intento sí lo hacía.** El
+ * síntoma fue inmediato y valió la pena: dio por indecidibles el
+ * `return { failed: true }` de un `getDerivedStateFromError` y el
+ * `return () => { … }` de la limpieza de un `useEffect`. **Ninguno de los dos
+ * es lo que el componente RENDERIZA** — son el retorno de otra función que
+ * vive adentro. Contarlos habría obligado a declarar irresoluble medio árbol y
+ * a aflojar la regla para compensar, que es cómo un fail-closed se vuelve
+ * ruido y después permiso.
+ */
+export function retornosDe(cuerpo: ts.Node): ts.ReturnStatement[] {
+  const salida: ts.ReturnStatement[] = [];
+  const recorrer = (n: ts.Node) => {
+    if (
+      ts.isArrowFunction(n) || ts.isFunctionExpression(n) ||
+      ts.isFunctionDeclaration(n) || ts.isMethodDeclaration(n)
+    ) return;
+    if (ts.isReturnStatement(n)) salida.push(n);
+    n.forEachChild(recorrer);
+  };
+  if (ts.isBlock(cuerpo)) cuerpo.statements.forEach(recorrer);
+  else recorrer(cuerpo);
+  return salida;
 }
 
 /**

@@ -4,7 +4,9 @@ import {
   atributo,
   atributoLiteral,
   CONTROLES_HTML,
+  clasificarRetorno,
   cuerpoDelComponente,
+  retornosDe,
   elementosJsx,
   expresionDe,
   ATRIBUTOS_ACCIONABLES,
@@ -151,6 +153,44 @@ function censar(
   const acc: Censo = { accionables: [], fronteras: [], indecidibles: [] };
   const visitados = new Set<string>();
 
+  /**
+   * 🔴 P50-01 · SEGUIR UN CUERPO ES DOS COSAS: recorrer su JSX léxico Y
+   * clasificar sus RETORNOS.
+   *
+   * Codex mostró el nivel indirecto: un helper que **devuelve** el botón y un
+   * componente que **sólo lo llama**. Nada de eso es JSX léxico, así que el
+   * censo lo daba por vacío. Ahora un retorno que no se puede probar inofensivo
+   * —una variable, una llamada irresoluble— **es indecidible**, y una llamada
+   * a una función local **se sigue**.
+   */
+  const seguirCuerpo = (
+    nombre: string,
+    donde: string,
+    guardaInterna: string | null,
+    propsDelComponente: string[],
+  ) => {
+    if (visitados.has(nombre)) return;
+    visitados.add(nombre);
+    const cuerpo = cuerpoDelComponente(nombre, arbol);
+    if (!cuerpo) {
+      acc.indecidibles.push(`${donde}: no se pudo seguir su cuerpo (¿externo?)`);
+      return;
+    }
+    bajar(cuerpo.nodo, cuerpo.sf, `${donde} > `, guardaInterna);
+    for (const r of retornosDe(cuerpo.nodo)) {
+      for (const c of clasificarRetorno(r.expression, cuerpo.sf, propsDelComponente)) {
+        if (c.tipo === 'ok') continue;
+        if (c.tipo === 'indecidible') {
+          acc.indecidibles.push(`${donde}: devuelve algo que no se puede probar inofensivo → \`${c.texto}\``);
+          continue;
+        }
+        // Una llamada local: se sigue con la MISMA guarda del nivel. Si no se
+        // puede resolver, `seguirCuerpo` la declara indecidible por su cuenta.
+        seguirCuerpo(c.nombre, `${donde} > ${c.nombre}()`, guardaInterna, propsDelComponente);
+      }
+    }
+  };
+
   const bajar = (nodo: ts.Node, sf: ts.SourceFile, ruta: string, guarda: string | null) => {
     for (const s of elementosJsx(nodo, sf)) {
       const donde = `${ruta}${s.tag}@${s.linea}`;
@@ -182,14 +222,7 @@ function censar(
 
       // 🔴 Y ACÁ SE BAJA, pase lo que pase arriba: que el elemento no tenga
       // superficie propia no dice NADA sobre lo que renderiza adentro.
-      if (visitados.has(s.tag)) continue;
-      visitados.add(s.tag);
-      const cuerpo = cuerpoDelComponente(s.tag, arbol);
-      if (!cuerpo) {
-        acc.indecidibles.push(`${donde}: no se pudo seguir su cuerpo (¿externo?)`);
-        continue;
-      }
-      bajar(cuerpo.nodo, cuerpo.sf, `${donde} > `, declaraDisabled ? 'disabled' : null);
+      seguirCuerpo(s.tag, donde, declaraDisabled ? 'disabled' : null, props);
     }
   };
 
@@ -315,6 +348,58 @@ describe('🔴 la regla INVERTIDA, y no una lista más larga', () => {
       visto.some((r) => /CtaAutocontenido@\d+ > button@\d+/.test(r)),
       `el botón interno no apareció en el censo: ${visto.join(' · ') || '(nada)'}`,
     ).toBe(true);
+  });
+
+  /**
+   * 🔴 P50-01 · LA SONDA DE CODEX — el M16 **un nivel indirecto**.
+   *
+   * Un helper que **devuelve** el botón y un componente que **sólo lo llama**.
+   * Nada de eso es JSX léxico del componente, así que la recursión del P45 —que
+   * ya bajaba al cuerpo— **lo daba por vacío igual**.
+   *
+   * ⚠️ **Es la capa que yo misma había anunciado** al cerrar el P45: *«si
+   * aparece un P52 no será faltó un caso, será otra capa»*. Llegó. **Anticiparla
+   * no la cerró** — lo único que cambió es que se reconoció rápido.
+   */
+  it('🔴 SONDA DE CODEX · un componente que sólo LLAMA a un helper que devuelve el botón', () => {
+    const c = censarSuelto(`
+      function crearCtaIndirectoP51() {
+        return <button onClick={() => { window.location.hash = '#/'; }}>mutante</button>;
+      }
+      function P51IndirectCta() { return crearCtaIndirectoP51(); }
+      const _ = <div><P51IndirectCta /></div>;
+    `);
+    const visto = [...c.fronteras.map((f) => f.ruta), ...c.accionables.map((a) => a.ruta), ...c.indecidibles];
+    expect(
+      visto.some((r) => /crearCtaIndirectoP51\(\) > button@\d+/.test(r)),
+      `el botón del helper no apareció: ${visto.join(' · ') || '(nada)'}`,
+    ).toBe(true);
+  });
+
+  it('🔴 y un retorno que NO se puede probar inofensivo es indecidible', () => {
+    // Una variable devuelta: puede ser JSX, puede no serlo, y este arnés no lo
+    // resuelve. No se aprueba — se denuncia y alguien decide.
+    const c = censarSuelto(`
+      function Opaco() { const algo = hacerCosas(); return algo; }
+      const _ = <div><Opaco /></div>;
+    `);
+    expect(c.indecidibles.join(' '), 'un retorno opaco pasó sin denunciarse').toMatch(/no se puede probar inofensivo/);
+  });
+
+  it('⭐ CONTROL NEGATIVO · los retornos legítimos NO se denuncian', () => {
+    // Sin esto, «declarar indecidible todo retorno» pasaría los dos casos de
+    // arriba y volvería el censo inservible por ruido. `null`, un ternario de
+    // JSX y lo que llega por props tienen que pasar limpio.
+    //
+    // ⚠️ El parámetro va TIPADO y no es decoración del test: un props sin
+    // anotación ya es irresoluble por la regla del P40, y sin el tipo este
+    // control fallaba por ESA causa y no por la que viene a medir — un negativo
+    // que se cae por el motivo equivocado no controla nada.
+    const c = censarSuelto(`
+      function Limpio({ hijos }: { hijos: unknown }) { return hijos ? <div /> : null; }
+      const _ = <div><Limpio hijos={<span />} /></div>;
+    `);
+    expect(c.indecidibles, `denunció retornos legítimos: ${c.indecidibles.join(' · ')}`).toEqual([]);
   });
 
   it('🔴 y lo que NO se puede seguir se declara, en vez de suponerse inerte', () => {

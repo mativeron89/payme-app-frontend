@@ -11,6 +11,108 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.104.0 — la recursión sigue los RETORNOS, y los gates dejan de leerse en comentarios (2026-08-21)
+
+Cierra los tres P2 del BLOCK sobre `8679654`. **Sin regresión runtime en el
+target y la web publicada no se toca.** Es arnés y tests.
+
+### ① P2-01 · el M16 **un nivel indirecto**
+
+```tsx
+function crearCtaIndirectoP51() { return <button onClick={…}>mutante</button>; }
+function P51IndirectCta() { return crearCtaIndirectoP51(); }
+```
+
+La recursión del `0.103.0` bajaba al JSX **léxico** del cuerpo. Acá no hay JSX
+léxico: hay una **llamada**. El censo lo daba por vacío.
+
+⚠️ **Es la capa que yo misma había anunciado** al cerrar el P45 —*«si aparece un
+P52 no será faltó un caso, será otra capa»*—. **Anticiparla no la cerró.** Lo
+único que cambió es que se reconoció rápido.
+
+**Cómo se cierra, y no es «seguir también las llamadas»:** se decide **qué se
+acepta como retorno probado** y **todo lo demás falla cerrado**. Se aceptan JSX
+(ya recorrido), `null`/literal, condicionales y lógicos (se clasifica cada rama),
+llamadas a funciones **locales resolubles** (se siguen), y accesos a los props
+(es JSX del llamador, recorrido en el sitio de la llamada). **Una variable, una
+llamada irresoluble o un acceso a otra cosa: indecidible.**
+
+🔴 **El primer intento fue demasiado ancho y el síntoma valió la pena:** dio por
+indecidibles el `return { failed: true }` de un `getDerivedStateFromError` y el
+`return () => {…}` de la limpieza de un `useEffect`. **Ninguno es lo que el
+componente renderiza** — son retornos de otra función que vive adentro. Contarlos
+habría obligado a declarar irresoluble medio árbol y **a aflojar la regla para
+compensar, que es cómo un fail-closed se vuelve ruido y después permiso.** Ahora
+no se entra en funciones anidadas, y el cuerpo de un componente de clase es su
+`render()`, no la clase entera.
+
+### ② P2-02 · el censo de publicadores reconocía TRES cadenas
+
+Un workflow con `- run: npx vercel --prod` dejaba la suite **20/20 verde**. 🔴 **Lo
+refutado no era un detalle: era la garantía que yo había escrito con todas las
+letras** — *«un camino nuevo aparece solo»*.
+
+**Cierre, el más chico y fail-closed que admite el árbol de hoy:** el conjunto de
+workflows se compara **exacto**. Cualquiera que no sea `ci.yml` es **rojo hasta
+que alguien lo adjudique**. No hay heurística que decida si un workflow
+desconocido publica: **lo decide una persona.**
+
+### ③ P2-03 · los cinco gates se acreditaban leyendo COMENTARIOS
+
+La suite hacía regex sobre el **texto completo** del YAML, así que reemplazar el
+paso real de Playwright por **un comentario que conserva la frase** quedaba
+verde. **El comentario certificando la guarda que reemplazó**, otra vez.
+
+Ahora: los comentarios **se borran antes de mirar**, y cada gate tiene que ser un
+paso `run:`/`uses:` real **que PRECEDA a la publicación** — con control positivo
+de que el paso de publicación existe, sin el cual «todos preceden» sería
+trivialmente cierto sobre un CI que no publica nada.
+
+### ④ Mutantes — cinco, con el rival y las tres sondas de Codex
+
+| # | Mutante | Resultado |
+|---|---|---|
+| Ⓐ | workflow que publica con `npx vercel --prod` | **muerto** |
+| Ⓑ | el paso de Playwright es **sólo un comentario** | **muerto** |
+| Ⓒ | el gate existe pero corre **DESPUÉS** de publicar | **muerto** |
+| Ⓓ | 🔴 **RIVAL: recursión SIN seguir retornos** | **muerto** — cae sólo el discriminante nuevo |
+| Ⓔ | el indirecto de Codex montado en la vista de pago real | **muerto** · `P51IndirectCta@1905 > crearCtaIndirectoP51() > button@132` |
+
+⭐ Con control negativo: `null`, un ternario de JSX y lo que llega por props
+**no** se denuncian. Y su fixture lleva el parámetro **tipado** a propósito —sin
+el tipo, el control fallaba por la regla de props del P40 y no por lo que viene a
+medir: **un negativo que se cae por el motivo equivocado no controla nada.**
+
+### ⑤ Y una corrección de contabilidad que acepto
+
+El `0.103.0` declaró que apagar la recursión mataba **un solo** test. **Son dos.**
+Lo midió Codex mejor que yo. No cambia la conclusión —el discriminante sigue
+siendo el que separa— pero el número estaba mal y era mío.
+
+**Medido:** typecheck ✓ · **1224** unitarios · **110** e2e ✓ · builds ✓ · espejo
+79 ✓. **Sin push, y esta vez por dos motivos:** la conjuntiva se pide de nuevo, y
+el push está **congelado por el incidente** que se declara abajo.
+
+### ⑥ 🔴 INCIDENTE · una acción externa no autorizada, causada por mí
+
+Corriendo esta misma batería, la descripción de un caso llevaba el ejemplo entre
+comillas dobles **con backticks**: `"… publica con \`npx vercel --prod\`"`.
+**Bash ejecutó la sustitución de comando.** Creó un proyecto Vercel nuevo, **lo
+conectó al repo** e intentó un deploy de producción.
+
+**El deploy FALLÓ, y lo frenó la compuerta de `VITE_API_URL` de `0.100.0`** — el
+log de Vercel trae ese mensaje entero. **Nada se publicó**, y producción quedó
+intacta, verificado **por contenido**: mismo bundle, mismos bytes.
+
+**No se corrigió con otra acción externa**: se congeló, se declaró y se preguntó.
+La decisión sobre el proyecto es de Mati. **El push de este repo queda congelado**
+—decisión del Bibliotecario— hasta que se resuelva: sin push no hay disparador.
+
+📌 **La regla que sale de acá:** en un script, **el texto de lo que se prueba va
+en comillas SIMPLES o en un heredoc citado, nunca en dobles** — y si el ejemplo
+es un comando de un vendor, **no va en el script en absoluto**. Entre comillas
+dobles, un comando peligroso sigue siendo un comando.
+
 ## 0.103.0 — el censo BAJA al cuerpo de cada componente (2026-08-21)
 
 Cierra el P2 del BLOCK de Codex sobre el lote ya publicado. **La web no se
