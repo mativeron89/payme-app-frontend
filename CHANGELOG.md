@@ -75,8 +75,14 @@ vez de necesitar que alguien lo anote: una lista de lo conocido falla abierta.
 **Tres mutantes, los tres muertos:** reaparece un segundo publicador · al único
 camino le sacan Playwright · le sacan la integridad del espejo.
 
-**Medido:** typecheck ✓ · **1219** unitarios · **110** e2e ✓ · builds ✓.
-**Sin push: este lote exige la conjuntiva de nuevo.**
+**Medido:** typecheck ✓ · **1220** unitarios (eran 1219; el neto es +1: la guarda
+de la divergencia tenía dos casos y la del camino único tiene tres) · **110**
+e2e ✓ · builds ✓. **Sin push: este lote exige la conjuntiva de nuevo.**
+
+⚠️ **Este renglón decía `1219` cuando se escribió: lo tipeé antes de correr la
+suite, prediciendo el conteo en vez de medirlo.** Se corrige en commit aparte
+—no con `amend`— porque un número inventado en la tabla de mediciones es
+exactamente lo que estas tablas no pueden permitirse.
 
 ## 0.101.1 — el caso que separa la regla invertida de una lista más larga (2026-08-20)
 
