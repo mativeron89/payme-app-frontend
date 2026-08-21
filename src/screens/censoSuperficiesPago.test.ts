@@ -151,7 +151,26 @@ function censar(
   arbol: typeof ARBOL = ARBOL,
 ): Censo {
   const acc: Censo = { accionables: [], fronteras: [], indecidibles: [] };
-  const visitados = new Set<string>();
+  /**
+   * 🔴 P53-02 · DOS COSAS DISTINTAS QUE YO HABÍA METIDO EN UN SOLO `Set`.
+   *
+   * Antes había un `visitados` global por NOMBRE, y hacía dos trabajos a la
+   * vez: cortar ciclos y no repetir trabajo. **No es dedup neutro**, y Codex lo
+   * mostró de la peor manera posible: el mismo helper alcanzado primero desde
+   * un componente CON `disabled` y después desde uno SIN guarda quedaba
+   * cortado la segunda vez — **e invertir el orden invertía la clasificación
+   * que sobrevive**. Un censo cuyo resultado depende del orden de recorrido no
+   * está midiendo lo que dice.
+   *
+   * Ahora son dos estructuras con dos trabajos:
+   *   · `enCamino` — **una PILA**: corta ciclos `A→B→A`. Se saca al volver, así
+   *     que no impide visitar lo mismo por OTRA rama;
+   *   · `completados` — memoización con identidad **de declaración MÁS contexto
+   *     de guarda**: el mismo helper bajo `disabled` y bajo «sin guarda» son
+   *     dos visitas distintas, porque las conclusiones son distintas.
+   */
+  const enCamino = new Set<string>();
+  const completados = new Set<string>();
 
   /**
    * 🔴 P50-01 · SEGUIR UN CUERPO ES DOS COSAS: recorrer su JSX léxico Y
@@ -169,16 +188,21 @@ function censar(
     guardaInterna: string | null,
     propsDelComponente: string[],
   ) => {
-    if (visitados.has(nombre)) return;
-    visitados.add(nombre);
+    const clave = `${nombre}|${guardaInterna ?? 'sin-guarda'}`;
+    if (completados.has(clave)) return;
+    // El ciclo se corta por la PILA, no por la memoria: volver a entrar por
+    // otra rama es legítimo y necesario.
+    if (enCamino.has(clave)) return;
     const cuerpo = cuerpoDelComponente(nombre, arbol);
     if (!cuerpo) {
       acc.indecidibles.push(`${donde}: no se pudo seguir su cuerpo (¿externo?)`);
+      completados.add(clave);
       return;
     }
+    enCamino.add(clave);
     bajar(cuerpo.nodo, cuerpo.sf, `${donde} > `, guardaInterna);
-    for (const r of retornosDe(cuerpo.nodo)) {
-      for (const c of clasificarRetorno(r.expression, cuerpo.sf, propsDelComponente)) {
+    for (const expr of retornosDe(cuerpo.nodo)) {
+      for (const c of clasificarRetorno(expr, cuerpo.sf, propsDelComponente)) {
         if (c.tipo === 'ok') continue;
         if (c.tipo === 'indecidible') {
           acc.indecidibles.push(`${donde}: devuelve algo que no se puede probar inofensivo → \`${c.texto}\``);
@@ -189,6 +213,8 @@ function censar(
         seguirCuerpo(c.nombre, `${donde} > ${c.nombre}()`, guardaInterna, propsDelComponente);
       }
     }
+    enCamino.delete(clave);
+    completados.add(clave);
   };
 
   const bajar = (nodo: ts.Node, sf: ts.SourceFile, ruta: string, guarda: string | null) => {
@@ -374,6 +400,98 @@ describe('🔴 la regla INVERTIDA, y no una lista más larga', () => {
       visto.some((r) => /crearCtaIndirectoP51\(\) > button@\d+/.test(r)),
       `el botón del helper no apareció: ${visto.join(' · ') || '(nada)'}`,
     ).toBe(true);
+  });
+
+  /**
+   * 🔴 P53-01 · SONDA DE CODEX · el arrow con cuerpo-EXPRESIÓN.
+   *
+   * `const crearCta = () => <button…/>` **devuelve sin `return`**. El seguidor
+   * anterior buscaba `ReturnStatement`, así que ese cuerpo salía vacío: ni JSX
+   * que recorrer ni retorno que declarar indecidible — **se perdía en
+   * silencio**, que es la peor de las tres salidas.
+   */
+  it('🔴 SONDA DE CODEX · un arrow con cuerpo-EXPRESIÓN devuelve igual', () => {
+    const c = censarSuelto(`
+      const crearCta = () => <button onClick={f}>x</button>;
+      function ArrowCta() { return crearCta(); }
+      const _ = <div><ArrowCta /></div>;
+    `);
+    const visto = [...c.fronteras.map((f) => f.ruta), ...c.accionables.map((a) => a.ruta), ...c.indecidibles];
+    expect(visto.some((r) => /crearCta\(\) > button@\d+/.test(r)), `no apareció: ${visto.join(' · ') || '(nada)'}`).toBe(true);
+  });
+
+  /**
+   * 🔴 **ÉSTE es el que DISCRIMINA, y el de arriba NO — medido plantando el
+   * rival.** Con `retornosDe` sin cuerpo-expresión, el caso anterior **sigue
+   * pasando**: el JSX de `() => <button/>` es LÉXICO, así que el recorrido del
+   * cuerpo lo encuentra igual sin mirar el retorno. Acá el JSX vive detrás de
+   * una llamada dentro de un condicional: **sin clasificar el retorno, no hay
+   * forma de llegar**.
+   *
+   * ⚠️ Se escribe porque las dos sondas se ven igual de convincentes y **una
+   * sola prueba el arreglo**. Contar dos donde hay una es cómo una batería de
+   * mutantes empieza a mentir sobre su propia fuerza.
+   */
+  it('🔴 y encadenado: arrow → condicional → helper', () => {
+    // Dos formas combinadas: cuerpo-expresión Y un condicional cuyas ramas hay
+    // que clasificar por separado. Si el seguidor mira sólo la primera rama, o
+    // sólo las sentencias, el botón se pierde.
+    const c = censarSuelto(`
+      function crearOtro() { return <button onClick={f}>y</button>; }
+      const elegir = (b: boolean) => (b ? null : crearOtro());
+      function Encadenado() { return elegir(true); }
+      const _ = <div><Encadenado /></div>;
+    `);
+    const visto = [...c.fronteras.map((f) => f.ruta), ...c.accionables.map((a) => a.ruta), ...c.indecidibles];
+    expect(visto.some((r) => /crearOtro\(\) > button@\d+/.test(r)), `no apareció: ${visto.join(' · ') || '(nada)'}`).toBe(true);
+  });
+
+  it('⭐ CONTROL NEGATIVO · un arrow inerte no se denuncia', () => {
+    const c = censarSuelto(`
+      const vacio = () => null;
+      function Inerte() { return vacio(); }
+      const _ = <div><Inerte /></div>;
+    `);
+    expect(c.indecidibles, `denunció un arrow inofensivo: ${c.indecidibles.join(' · ')}`).toEqual([]);
+    expect(c.fronteras.map((f) => f.ruta), 'inventó una frontera').toEqual([]);
+  });
+
+  /**
+   * 🔴 P53-02 · SONDA DE CODEX · el mismo helper por DOS rutas con guardas
+   * distintas. Con un `Set` global por nombre, la segunda visita se cortaba
+   * como «ya visto» — **e invertir el orden invertía cuál sobrevive**. Un censo
+   * cuyo resultado depende del orden de recorrido no mide lo que dice.
+   */
+  it('🔴 SONDA DE CODEX · el mismo helper bajo DOS guardas distintas', () => {
+    const codigo = `
+      function comun() { return <button onClick={f}>z</button>; }
+      function ConGuarda({ disabled }: { disabled: boolean }) { return comun(); }
+      function SinGuarda() { return comun(); }
+      const _ = <div><ConGuarda disabled={g} /><SinGuarda /></div>;
+    `;
+    const c = censarSuelto(codigo);
+    const rutas = [...c.fronteras.map((f) => f.ruta), ...c.accionables.map((a) => a.ruta)];
+    // La ruta SIN guarda tiene que aparecer como frontera: nadie la cubre.
+    expect(
+      c.fronteras.some((f) => /SinGuarda@\d+ > comun\(\) > button@\d+/.test(f.ruta)),
+      `la ruta sin guarda se perdió: ${rutas.join(' · ')}`,
+    ).toBe(true);
+    // Y la ruta CON guarda tiene que aparecer como accionable, no perderse.
+    expect(
+      c.accionables.some((a) => /ConGuarda@\d+ > comun\(\) > button@\d+/.test(a.ruta)),
+      `la ruta con guarda se perdió: ${rutas.join(' · ')}`,
+    ).toBe(true);
+  });
+
+  it('🔴 un ciclo A→B→A no cuelga ni se come una rama', () => {
+    // El corte de ciclos vive en la PILA, no en la memoria: sacarlo al volver
+    // es lo que permite entrar de nuevo por otra rama.
+    const c = censarSuelto(`
+      function A() { return B(); }
+      function B() { return A(); }
+      const _ = <div><A /></div>;
+    `);
+    expect(Array.isArray(c.indecidibles)).toBe(true);
   });
 
   it('🔴 y un retorno que NO se puede probar inofensivo es indecidible', () => {

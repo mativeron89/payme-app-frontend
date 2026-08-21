@@ -563,29 +563,40 @@ export function clasificarRetorno(
 }
 
 /**
- * Los `return` **propios** de un cuerpo.
+ * Las EXPRESIONES QUE UN CUERPO DEVUELVE — y ojo con el nombre: no son «los
+ * `return`», y confundir las dos cosas fue el defecto.
  *
- * 🔴 **No entra en funciones anidadas, y el primer intento sí lo hacía.** El
- * síntoma fue inmediato y valió la pena: dio por indecidibles el
- * `return { failed: true }` de un `getDerivedStateFromError` y el
- * `return () => { … }` de la limpieza de un `useEffect`. **Ninguno de los dos
- * es lo que el componente RENDERIZA** — son el retorno de otra función que
- * vive adentro. Contarlos habría obligado a declarar irresoluble medio árbol y
- * a aflojar la regla para compensar, que es cómo un fail-closed se vuelve
- * ruido y después permiso.
+ * 🔴 **P53-01 · un arrow con cuerpo-EXPRESIÓN no tiene `ReturnStatement`.**
+ * `const crearCta = () => <button…/>` devuelve, pero no hay `return` que
+ * encontrar. La versión anterior buscaba sentencias, así que ese cuerpo salía
+ * **vacío**: ni JSX que recorrer ni retorno que declarar indecidible. **Se
+ * perdía en silencio**, que es la peor forma de las tres.
+ *
+ * ⚠️ Es la misma lección de siempre en un envase nuevo: **buscar la FORMA
+ * SINTÁCTICA (`return`) en vez de la COSA (lo que el cuerpo devuelve)**. Un
+ * retorno implícito es un retorno.
+ *
+ * 🔴 **No entra en funciones anidadas**, y el primer intento sí lo hacía: dio
+ * por indecidibles el `return { failed: true }` de un `getDerivedStateFromError`
+ * y el `return () => {…}` de la limpieza de un `useEffect`. **Ninguno es lo que
+ * el componente renderiza.** Contarlos habría obligado a aflojar la regla para
+ * compensar, que es cómo un fail-closed se vuelve ruido y después permiso.
  */
-export function retornosDe(cuerpo: ts.Node): ts.ReturnStatement[] {
-  const salida: ts.ReturnStatement[] = [];
+export function retornosDe(cuerpo: ts.Node): ts.Expression[] {
+  // Cuerpo-expresión: el cuerpo ES el retorno. No hay sentencia que buscar.
+  if (!ts.isBlock(cuerpo)) {
+    return ts.isExpression(cuerpo) ? [cuerpo] : [];
+  }
+  const salida: ts.Expression[] = [];
   const recorrer = (n: ts.Node) => {
     if (
       ts.isArrowFunction(n) || ts.isFunctionExpression(n) ||
       ts.isFunctionDeclaration(n) || ts.isMethodDeclaration(n)
     ) return;
-    if (ts.isReturnStatement(n)) salida.push(n);
+    if (ts.isReturnStatement(n)) { if (n.expression) salida.push(n.expression); return; }
     n.forEachChild(recorrer);
   };
-  if (ts.isBlock(cuerpo)) cuerpo.statements.forEach(recorrer);
-  else recorrer(cuerpo);
+  cuerpo.statements.forEach(recorrer);
   return salida;
 }
 
