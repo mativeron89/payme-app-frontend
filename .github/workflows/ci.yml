@@ -52,8 +52,8 @@ jobs:
       # (`exigirApiUrl` en `vite.config.ts`), y sin este `env` la compuerta
       # caería en rojo sin que hubiera nada roto.
       #
-      # ⚠️ El valor es el mismo que `deploy-demo.yml` ya tiene en claro: es una
-      # URL pública, no un secreto. Y lo que se compila acá NO llega a
+      # ⚠️ El valor es una URL pública, no un secreto —lo tenía en claro también
+      # el retirado `deploy-demo.yml`—. Y lo que se compila acá NO llega a
       # producción: si alguien lee esta línea buscando "a qué backend apunta la
       # app publicada", la respuesta está en Vercel, no en este archivo.
       - run: npm run build
@@ -94,9 +94,13 @@ jobs:
       # un `if:` sin función de estado, pero la regla no debería depender de
       # que quien lea esto conozca esa sutileza.
       #
-      # ⚠️ `deploy-demo.yml` sigue publicando Pages en cada push SIN gate,
-      # dentro de su ventana de gracia. Hay dos caminos y sólo uno está
-      # gateado; se retira por orden propia cuando la ventana cierre.
+      # 🔴 DESDE 0.102.0 ÉSTE ES EL ÚNICO CAMINO DE PUBLICACIÓN. Acá decía que
+      # `deploy-demo.yml` publicaba «SIN gate» dentro de una ventana de gracia.
+      # **Las dos mitades eran falsas y las propagué**: ese workflow SÍ tenía
+      # compuerta —la de la secuencia: un paso en rojo aborta el job— y su
+      # propio comentario ya lo había corregido. Lo que tenía era una compuerta
+      # MÁS DÉBIL (sin Playwright ni integridad del espejo), que es peor y es
+      # otra cosa. Se retiró por eso, no por lo que este comentario decía.
       # ══════════════════════════════════════════════════════════════════
       - name: Publicar en Vercel (sólo con TODO en verde)
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'

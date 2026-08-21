@@ -125,3 +125,52 @@ tener que provocar un CI rojo.
 ⚠️ **Lo que sigue sin acreditarse en el pipeline real: qué pasa con el CI en
 rojo.** Está probado en local contra un `curl` sustituido —200 pasa, 401/500 y
 caída cortan— pero nunca se observó en vivo, y no se va a provocar.
+
+---
+
+## 🔴 El camino de Pages se RETIRÓ · 2026-08-21
+
+`deploy-demo.yml` **ya no existe**. Publicaba tres artefactos en
+`https://mativeron89.github.io/payme-app-frontend/` — demo mock en `/`, build
+real contra Railway en `/live/`, landing en `/landing/` — en cada push a `main`.
+
+### Por qué, medido y no supuesto
+
+El 2026-08-21 se publicó por primera vez la web productiva con este workflow
+todavía vivo. Los dos corrieron **en paralelo** sobre el mismo commit y los dos
+salieron verdes. **Ese verde no dice nada sobre lo que habría pasado en rojo**, y
+ahí estaba el problema, que no es el que se le atribuía:
+
+| camino | verificaba | publicaba |
+|---|---|---|
+| `ci.yml` | espejo · test · typecheck · build · **Playwright** | Vercel → `paymemx.com`, `app.paymemx.com` |
+| `deploy-demo.yml` | test · typecheck · build | Pages |
+
+⚠️ **La acusación corriente era falsa y la propagué en el comentario de
+`ci.yml`:** Pages **no** publicaba «sin gate» — un paso en rojo aborta el job, así
+que había compuerta. Lo que tenía era una compuerta **más débil**, sin Playwright
+ni integridad del espejo. **Eso es peor que no tener ninguna**, porque un commit
+que reprueba los recorridos de navegador **se publicaba en Pages y no en
+Vercel**: las dos superficies divergían con **la menos verificada arriba**.
+
+### Dónde queda la demo — y esto es lo que hay que saber
+
+🔴 **No desaparece: se congela.** Retirar el workflow deja de actualizar Pages;
+**el último artefacto publicado sigue sirviéndose** en
+`https://mativeron89.github.io/payme-app-frontend/` hasta que alguien **apague
+Pages en la configuración del repositorio**. Eso es una acción de plataforma y
+**está fuera del alcance de las sesiones**: la decide y la ejecuta Mati.
+
+⚠️ **Lo que eso significa mientras tanto:** esa URL va a mostrar el estado del
+front al 2026-08-21 **para siempre**, sin avisar que quedó vieja — incluida la
+copia `/live/`, que apunta al backend real de Railway. Quien la use para mirar
+«cómo está la app» va a estar mirando una foto. **El riesgo se declara acá porque
+apagarlo no es una decisión de este repo.**
+
+### Qué lo guarda ahora
+
+`scripts/despliegue.test.ts` dejó de medir la divergencia entre dos caminos y
+pasa a afirmar que hay **UNO SOLO**, derivándolo del árbol: un workflow «publica»
+si despliega Pages o llama a `publicar-vercel.sh`, y el censo escanea
+`.github/workflows/`. **Un camino nuevo aparece solo** en vez de necesitar que
+alguien se acuerde de anotarlo — una lista de lo conocido falla abierta.

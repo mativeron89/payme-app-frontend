@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -322,70 +322,70 @@ describe('vercel.json · el despliegue automático sigue apagado', () => {
     expect(doc).toContain('deploymentEnabled');
     expect(doc, 'el doc no trae la medición que motivó el gate').toContain('06:03:01');
     expect(doc, 'no advierte sobre los dos proyectos').toContain('Root Directory');
-    expect(doc, 'no declara qué queda sin gatear').toContain('deploy-demo.yml');
+    expect(doc, 'no declara el retiro del camino de Pages').toContain('deploy-demo.yml');
   });
 });
 
 /**
- * 🔴 LOS DOS CAMINOS DE PUBLICACIÓN CORREN PRUEBAS DISTINTAS · 2026-08-10.
+ * 🔴 YA NO HAY DOS CAMINOS · el de Pages se retiró el 2026-08-21.
  *
- * El comentario de `deploy-demo.yml` decía que ese camino publicaba «sin
- * gate». Era falso —un paso que falla aborta el job— y además tapaba el
- * problema real, que es peor:
+ * Acá vivía la guarda que MEDÍA la divergencia entre los dos pipelines:
+ * `ci.yml` corría espejo + Playwright y `deploy-demo.yml` no, así que un commit
+ * que reprobaba Playwright **se publicaba en Pages y no en Vercel** — las dos
+ * superficies divergían con **la menos verificada arriba**.
  *
- *   ci.yml          → Vercel   espejo · test · typecheck · build · PLAYWRIGHT
- *   deploy-demo.yml → Pages    test · typecheck · build
+ * Esa guarda hizo su trabajo: midió la divergencia hasta que se decidió
+ * retirarla. **Lo que la reemplaza no es menos, es otra afirmación**: que hay
+ * **UN SOLO** camino de publicación, y que es el gateado.
  *
- * Un commit que pasa los unitarios y reprueba Playwright, o que rompe la
- * integridad del espejo, **se publica en Pages y no en Vercel**. Las dos
- * superficies divergen con la MENOS verificada arriba.
- *
- * Esta guarda no arregla la divergencia —retirar el camino de Pages es una
- * orden aparte—: la mide, para que no cambie sin que nadie se entere. Y corta
- * para los dos lados: si alguien le agrega Playwright a Pages, o se lo saca a
- * `ci.yml`, este test cae y hay que actualizar lo escrito.
+ * ⚠️ **Y se deriva del árbol, no de una lista.** Un workflow «publica» si
+ * despliega Pages o llama al script de Vercel; se detecta escaneando
+ * `.github/workflows/`, así que **un workflow nuevo que publique aparece solo**
+ * en vez de necesitar que alguien se acuerde de agregarlo acá. Es la misma
+ * lección que costó cuatro vueltas en el censo de la pantalla de pago: una
+ * lista de lo conocido falla abierta.
  */
-describe('los dos pipelines · la divergencia está medida, no supuesta', () => {
-  const leer = (f: string) => readFileSync(join(RAIZ, '.github', 'workflows', f), 'utf8');
-  /** Pasos que verifican algo, derivados del `run:` — no una lista a mano. */
-  const gates = (yml: string) => {
-    const s = new Set<string>();
-    if (/npm test/.test(yml)) s.add('test');
-    if (/npm run typecheck/.test(yml)) s.add('typecheck');
-    if (/npm run build/.test(yml)) s.add('build');
-    if (/playwright test/.test(yml)) s.add('playwright');
-    if (/verificar-mirror\.mjs/.test(yml)) s.add('espejo');
-    return s;
-  };
+describe('un solo camino de publicación · derivado del árbol', () => {
+  const DIR = join(RAIZ, '.github', 'workflows');
 
-  it('🔴 la diferencia es EXACTAMENTE playwright + espejo', () => {
-    const ci = gates(leer('ci.yml'));
-    const pages = gates(leer('deploy-demo.yml'));
-    expect(ci.size, 'no se parsearon los gates de ci.yml').toBeGreaterThan(3);
-    expect(pages.size, 'no se parsearon los gates de deploy-demo.yml').toBeGreaterThan(2);
+  /** Un workflow publica si despliega Pages o dispara los hooks de Vercel. */
+  const publica = (yml: string) =>
+    /actions\/deploy-pages|upload-pages-artifact|publicar-vercel\.sh/.test(yml);
 
-    const faltanEnPages = [...ci].filter((g) => !pages.has(g)).sort();
+  it('🔴 exactamente UN workflow publica, y es el gateado', () => {
+    const archivos = readdirSync(DIR).filter((f) => /\.ya?ml$/.test(f));
+    // Control positivo: si el directorio viniera vacío, todo lo de abajo
+    // pasaría en vacío y el gate diría «un solo camino» sobre ninguno.
+    expect(archivos.length, 'no se leyeron workflows: el censo mediría en vacío').toBeGreaterThan(0);
+
+    const publicadores = archivos.filter((f) => publica(readFileSync(join(DIR, f), 'utf8')));
     expect(
-      faltanEnPages,
-      'cambió qué verifica cada camino: actualizá docs/DESPLIEGUE_GATEADO.md y el comentario de deploy-demo.yml',
-    ).toEqual(['espejo', 'playwright']);
-
-    // Y al revés: Pages no debe verificar nada que `ci.yml` no verifique.
-    expect([...pages].filter((g) => !ci.has(g)), 'Pages verifica algo que el CI no').toEqual([]);
+      publicadores,
+      `caminos de publicación encontrados: ${publicadores.join(' · ')}. ` +
+        'Si aparece uno nuevo hay que decidir si se gatea o se retira, no dejarlo.',
+    ).toEqual(['ci.yml']);
   });
 
-  it('🔴 y el comentario NO vuelve a AFIRMAR «sin gate» · citarlo sí vale', () => {
-    const yml = leer('deploy-demo.yml');
-    // ⚠️ La corrección tiene que poder CITAR lo que reemplazó —«Acá decía…»—,
-    // así que prohibir la frase a secas prohibiría la propia corrección. Mi
-    // primera versión hacía eso y caía sobre el archivo ya corregido: matcher
-    // demasiado ancho, otra vez.
-    const afirmaciones = yml
-      .split('\n')
-      .filter((l) => /SIN COMPUERTA|sin gate/i.test(l))
-      .filter((l) => !/decía|Acá decía|«/.test(l));
-    expect(afirmaciones, `el comentario vuelve a afirmar que Pages no tiene compuerta:\n${afirmaciones.join('\n')}`)
-      .toEqual([]);
-    expect(yml, 'el comentario ya no nombra la divergencia real').toMatch(/pruebas DISTINTAS/);
+  it('🔴 y ese único camino verifica las CINCO cosas', () => {
+    // Si alguien le saca Playwright o el espejo al que quedó, no hay un
+    // segundo pipeline que lo disimule: se publica menos verificado y punto.
+    const yml = readFileSync(join(DIR, 'ci.yml'), 'utf8');
+    const faltan = [
+      ['espejo', /verificar-mirror\.mjs/],
+      ['test', /npm test/],
+      ['typecheck', /npm run typecheck/],
+      ['build', /npm run build/],
+      ['playwright', /playwright test/],
+    ].filter(([, re]) => !(re as RegExp).test(yml)).map(([n]) => n);
+    expect(faltan, `el único camino de publicación dejó de verificar: ${faltan.join(' · ')}`).toEqual([]);
+  });
+
+  it('🔴 el retiro está EXPLICADO donde alguien lo va a buscar', () => {
+    // Un workflow que desaparece sin rastro se lee como un borrado accidental
+    // seis meses después, y la demo sigue viva en su URL sin que nadie sepa
+    // por qué dejó de actualizarse.
+    const doc = readFileSync(join(RAIZ, 'docs', 'DESPLIEGUE_GATEADO.md'), 'utf8');
+    expect(doc, 'el doc no explica el retiro de Pages').toMatch(/retirad|se retiró/i);
+    expect(doc, 'el doc no dice dónde queda la demo').toContain('github.io/payme-app-frontend');
   });
 });

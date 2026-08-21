@@ -11,6 +11,73 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.102.0 — se retira el segundo camino de publicación, y dos límites escritos (2026-08-21)
+
+Primer lote **después del push** (`c40b0c4` publicó `paymemx.com` y
+`app.paymemx.com`). Tres ítems, tres commits.
+
+### ① El límite del pinning, medido antes de escribirlo
+
+`send(actor.session ?? loadSession())` **sobrevive** a `pinningConductual.test.ts`.
+🔴 **No es un hueco del arnés:** en el riel autenticado ese `??` **nunca se
+ejerce** — `resolveMoneyActor` devuelve la sesión siempre que hay login y tira
+`money_actor_unavailable` antes si no la hay—. Divergiría sólo en el actor
+**invitado**, que es el único sin sesión, y **ese riel está durmiente** desde el
+cierre del pago sin cuenta. **Escribir el caso probaría un camino inalcanzable, y
+un test verde sobre superficie muerta se lee como cobertura.** Queda con su
+condición de disparo.
+
+### ② El límite del censo, espejado donde se decide
+
+Estaba en el test y no en `clasificar()`. **Un componente sin props que renderiza
+un botón adentro es invisible para cualquier censo de JSX del llamador**: no
+ofrece handler, ni rol, ni `disabled`, ni tipo que consultar — queda inerte con
+toda razón aparente. Se dice también qué lo contiene hoy (su subárbol se puede
+censar, como ya se hace con `TipSelector`) y **qué NO es la salida**: una lista de
+componentes «a revisar» sería volver al defecto que costó cuatro vueltas.
+
+### ③ `deploy-demo.yml` retirado — y la acusación corriente era FALSA
+
+🔴 **Lo primero, porque yo mismo lo propagué:** el comentario de `ci.yml` decía
+que Pages publicaba **«SIN gate»**. **Es falso** — un paso en rojo aborta el job,
+así que había compuerta — **y el propio `deploy-demo.yml` ya lo había corregido
+en su cabecera**. Cité el comentario equivocado de los dos que se contradecían, y
+se lo declaré así al Bibliotecario. Corregido en los dos lados.
+
+**El problema real es peor que el que se le atribuía:**
+
+| camino | verificaba | publicaba |
+|---|---|---|
+| `ci.yml` | espejo · test · typecheck · build · **Playwright** | Vercel → los dominios |
+| `deploy-demo.yml` | test · typecheck · build | Pages |
+
+Un commit que reprueba los recorridos de navegador **se publicaba en Pages y no
+en Vercel**: las dos superficies divergían **con la menos verificada arriba**. El
+2026-08-21 los dos corrieron en paralelo sobre el mismo commit, con la web
+productiva de por medio, y los dos salieron verdes — **y ese verde no dice nada
+sobre lo que habría pasado en rojo**.
+
+🔴 **Dónde queda la demo: no desaparece, se CONGELA.** Retirar el workflow deja
+de actualizar Pages; el último artefacto **sigue sirviéndose** en
+`https://mativeron89.github.io/payme-app-frontend/` hasta que alguien apague
+Pages en la configuración del repositorio — **acción de plataforma, fuera del
+alcance de las sesiones**. ⚠️ Mientras tanto esa URL muestra el front al
+2026-08-21 **para siempre y sin avisar**, incluida la copia `/live/` que apunta al
+backend real. **Se declara porque apagarlo no es decisión de este repo.**
+
+**Y la guarda cambia de objeto, no se retira:** `despliegue.test.ts` dejaba de
+medir la divergencia entre dos caminos y pasa a afirmar que hay **UNO SOLO**,
+**derivado del árbol** —un workflow publica si despliega Pages o llama a
+`publicar-vercel.sh`, y se escanea `.github/workflows/`—, más que ese único
+camino conserva **las cinco** verificaciones. **Un camino nuevo aparece solo**, en
+vez de necesitar que alguien lo anote: una lista de lo conocido falla abierta.
+
+**Tres mutantes, los tres muertos:** reaparece un segundo publicador · al único
+camino le sacan Playwright · le sacan la integridad del espejo.
+
+**Medido:** typecheck ✓ · **1219** unitarios · **110** e2e ✓ · builds ✓.
+**Sin push: este lote exige la conjuntiva de nuevo.**
+
 ## 0.101.1 — el caso que separa la regla invertida de una lista más larga (2026-08-20)
 
 **Producción intacta.** Cierra la exigencia que faltaba del ②: un caso

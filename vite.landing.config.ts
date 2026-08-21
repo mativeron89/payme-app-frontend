@@ -6,7 +6,8 @@ import { defineConfig } from 'vite';
  * La alternativa era agregar una segunda entry a `vite.config.ts` con
  * `rollupOptions.input`. Se descartó por dos razones concretas:
  *
- * 1. **El build de la webapp no se toca.** `deploy-demo.yml` lo invoca dos
+ * 1. **El build de la webapp no se toca.** `deploy-demo.yml` —retirado el
+ *    2026-08-21, ver `docs/DESPLIEGUE_GATEADO.md`— lo invocaba dos
  *    veces con `--base` y `--outDir` distintos; meterle una entry más cambia
  *    lo que produce ese pipeline sin que nadie lo haya pedido. Esta orden dice
  *    "cero deploy", y la forma más segura de cumplirlo es no modificar el

@@ -16,7 +16,7 @@ cuando se escribió (`dbf2b2e`, 2026-08-07) y hoy es falsa dos veces:
 
 | Desde | Dónde | Quién la publica |
 |---|---|---|
-| 2026-08-09 | `…github.io/payme-app-frontend/landing/` | el CI de este repo (`deploy-demo.yml`) |
+| 2026-08-09 | `…github.io/payme-app-frontend/landing/` | el CI de este repo (`deploy-demo.yml`, **retirado el 2026-08-21** — ver `docs/DESPLIEGUE_GATEADO.md`) |
 | 2026-08-10 | `paymemx.com` y `www.paymemx.com` | **Vercel, desde fuera de este repo** |
 
 **Un cambio acá sale a producción, no a un sandbox.**
@@ -222,7 +222,8 @@ decidido**, y ninguna se empuja sobre la otra hasta que Mati lo diga.
 `vite.landing.config.ts` existe en vez de agregarle `rollupOptions.input` a
 `vite.config.ts` por dos razones:
 
-1. **El build de la webapp no se toca.** `deploy-demo.yml` lo invoca dos veces
+1. **El build de la webapp no se toca.** `deploy-demo.yml` —retirado el
+   2026-08-21— lo invocaba dos veces
    con `--base` y `--outDir` distintos; meterle una entry más cambia lo que
    produce ese pipeline sin que nadie lo haya pedido.
 2. **Grafos disjuntos por construcción.** Dos invocaciones de Rollup que no se
