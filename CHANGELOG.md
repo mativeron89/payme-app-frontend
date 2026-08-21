@@ -11,6 +11,48 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.101.1 — el caso que separa la regla invertida de una lista más larga (2026-08-20)
+
+**Producción intacta.** Cierra la exigencia que faltaba del ②: un caso
+discriminante que **sólo la regla invertida atrapa**.
+
+### ① Por qué los mutantes de Codex NO discriminaban
+
+`<a href>` y `onDoubleClick` los atraparía también un censo con las listas más
+largas: alcanzaba con agregar `a` y `onDoubleClick`. 🔴 **Matar esos mutantes no
+prueba que se hizo el arreglo grande — prueba que se cubrieron sus instancias**,
+que es exactamente lo que las tres vueltas anteriores hicieron.
+
+### ② El caso que sí discrimina
+
+Un handler **que no existe**: `onActivar`, inventado en el propio test. **Ninguna
+lista de handlers permitidos lo puede contener, por definición**; la regla
+invertida lo toma porque **todo `on*` es interacción salvo los seis de ciclo de
+vida**. Más el `spread`, que **no se puede clasificar en ninguna dirección** —
+podría aportar el `role`, el handler o la guarda misma— y sólo el fail-closed lo
+denuncia.
+
+**Acreditado plantando el arreglo chico:** con una lista engordada —con
+`onDoubleClick`, `onActivate` y todo lo que Codex nombró— la suite del censo
+queda **9 pasan / 1 falla**, y la que falla es exactamente ésta. Los demás
+mutantes pasan. **Eso es lo que hace al caso discriminante.**
+
+⭐ **Con control negativo, sin el cual sería inservible:** un `<div className>`
+decorativo y un `<span aria-hidden>` siguen siendo inertes, y `onAnimationEnd`
+no convierte en control. Sin eso, «clasificar todo como accionable» pasaría los
+dos casos de arriba.
+
+### ③ Un error propio, del tipo que aprueba el defecto
+
+El helper armaba el elemento sintético con `elementosJsx(sf, PANTALLA)`: la raíz
+correcta y **el archivo equivocado** para leer los textos. Los nodos son de otro
+archivo, así que `getText()` los recorta contra posiciones ajenas. 🔴 **El
+síntoma fue un `onActivar` clasificado como INERTE — o sea el test aprobando
+exactamente el defecto que venía a cazar.** Queda escrito en el helper.
+
+**Medido:** typecheck ✓ · **1219** unitarios · **110** e2e ✓ · builds ✓.
+**Sin push ni deploy.**
+
 ## 0.101.0 — los tres falsos verdes del P40, cerrados por la clase (2026-08-20)
 
 **Producción intacta: arnés y tests.** Codex volvió a no encontrar defecto

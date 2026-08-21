@@ -180,6 +180,65 @@ const enAlertDialog = (s: Superficie) =>
     return !!rol?.initializer && ts.isStringLiteral(rol.initializer) && rol.initializer.text === 'alertdialog';
   });
 
+/**
+ * 🔴 EL CASO DISCRIMINANTE — el que separa la regla INVERTIDA de una lista
+ * engordada, que es lo único que prueba que el arreglo fue el grande.
+ *
+ * Los mutantes que Codex nombró (`<a href>`, `onDoubleClick`) los atraparía
+ * también un censo con las listas más largas: alcanzaba con agregar `a` y
+ * `onDoubleClick`. **No discriminan.** Los de acá sí, porque **ninguna lista
+ * escrita hoy los puede contener**:
+ *
+ *   · un handler que NO EXISTE — `onActivar`, inventado en este test. Una lista
+ *     de handlers permitidos nunca lo va a tener, por definición; la regla
+ *     invertida lo toma porque **todo `on*` es interacción salvo los seis de
+ *     ciclo de vida**;
+ *   · un `spread`, que **no se puede clasificar en ninguna dirección**: podría
+ *     aportar el `role`, el handler o la guarda misma. Una lista no tiene dónde
+ *     ponerlo; sólo el fail-closed lo denuncia.
+ *
+ * ⭐ Y con su control negativo: un `<div>` decorativo tiene que seguir siendo
+ * inerte. Sin eso, «todo es accionable» pasaría este test y sería inservible.
+ */
+function elementoSuelto(jsx: string): Superficie {
+  const sf = ts.createSourceFile('d.tsx', `const _ = ${jsx};`, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TSX);
+  // 🔴 Las DOS veces `sf`: la primera es la raíz a recorrer y la segunda es el
+  // archivo contra el que se leen los textos. Pasar `PANTALLA` en la segunda
+  // —mi primer intento— devuelve basura: los nodos son de OTRO archivo y
+  // `getText()` los recorta contra posiciones ajenas. El síntoma fue un
+  // `onActivar` clasificado como inerte, o sea el test aprobando el defecto.
+  const [uno] = elementosJsx(sf, sf);
+  expect(uno, `no se parseó ${jsx}`).toBeTruthy();
+  return uno!;
+}
+
+describe('🔴 la regla INVERTIDA, y no una lista más larga', () => {
+  it('🔴 un handler que NO EXISTE en ninguna lista entra igual', () => {
+    // `onActivar` es inventado acá. Ninguna lista de handlers permitidos, por
+    // larga que sea, lo puede contener — y ése es exactamente el punto.
+    expect(clasificar(elementoSuelto('<div onActivar={f}>x</div>')).clase).toBe('accionable');
+    expect(clasificar(elementoSuelto('<div onLoQueSea={f}>x</div>')).clase).toBe('accionable');
+  });
+
+  it('🔴 un spread NO se clasifica: se denuncia', () => {
+    const r = clasificar(elementoSuelto('<div {...props}>x</div>'));
+    expect(r.motivo, 'el spread pasó sin denunciarse').toMatch(/spread/);
+  });
+
+  it('⭐ CONTROL NEGATIVO · lo decorativo sigue siendo inerte', () => {
+    // Sin esto, «clasificar todo como accionable» pasaría los dos casos de
+    // arriba y el censo entero quedaría inservible por ruido.
+    expect(clasificar(elementoSuelto('<div className="caption">x</div>')).clase).toBe('inerte');
+    expect(clasificar(elementoSuelto('<span aria-hidden="true">▾</span>')).clase).toBe('inerte');
+  });
+
+  it('⭐ y los handlers de CICLO DE VIDA no convierten en control', () => {
+    // La lista al revés tiene que ser corta y justificada: si `onAnimationEnd`
+    // contara, el bloque de propina entero pasaría a exigir guarda propia.
+    expect(clasificar(elementoSuelto('<div onAnimationEnd={f}>x</div>')).clase).toBe('inerte');
+  });
+});
+
 describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
   const bloque = bloqueDeLaVistaDePago();
 
