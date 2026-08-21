@@ -11,6 +11,121 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.101.0 — los tres falsos verdes del P40, cerrados por la clase (2026-08-20)
+
+**Producción intacta: arnés y tests.** Codex volvió a no encontrar defecto
+funcional —*«no alego doble cobro ni bug productivo vigente»*— y a bloquear por
+evidencia, con tres falsos verdes demostrados cada uno con su mutante vivo.
+
+### ① El evaluador correlacionaba evaluaciones opacas por TEXTO
+
+```tsx
+disabled={Math.random() > 0.5 || !(Math.random() > 0.5)}
+```
+
+quedaba modelado como `x || !x` —una tautología— y el arnés lo declaraba
+**PROBADO**. JavaScript evalúa **dos llamadas independientes** y puede dar
+`false || !true`: el control queda habilitado, sin relación con la guarda.
+
+🔴 **Refutaba la garantía central del archivo desde adentro**, que es la peor
+forma: el mecanismo que hacía sano al método era justo el que fallaba.
+
+Ahora sólo se correlaciona lo que se puede sostener: **un identificador pelado**
+comparte valor entre ocurrencias —un binding no cambia entre dos lecturas
+sincrónicas—; **todo lo demás recibe identidad por OCURRENCIA**; y si la
+expresión contiene **algo efectual**, ni los identificadores se correlacionan,
+porque la llamada del medio pudo cambiarlos. ⚠️ El cambio sólo puede volver el
+arnés **más estricto**: separar una hoja en dos agrega asignaciones, y agregar
+asignaciones sólo puede quitar implicaciones probadas.
+
+**Y hubo que agregar una prueba ESTRUCTURAL**, de un solo lado, porque la tabla
+sola no alcanzaba: el `disabled` del CTA tiene **24 hojas** —2^24— y quedaba en
+«demasiadas hojas», o sea **sin acreditar**. Una disyunción se prueba con un
+disyunto. `demuestra`/`refuta` sólo contestan `true` con certeza; ante la duda
+cae a la tabla completa. **Nunca puede aprobar algo falso.**
+
+### ② La población «interactuable» seguía siendo una lista
+
+Tres vueltas cayendo por lo mismo, y esta vez la formulación es la correcta:
+**una lista de lo incluido falla ABIERTA** — lo que no está, no se mira. Por eso
+sobrevivían `<a href>`, `onDoubleClick`, un spread que aporta `role/onClick`, y
+un custom con `onActivate`.
+
+🔴 **La regla se invirtió: la pregunta ya no es «¿está en mi lista?» sino
+«¿puedo DEMOSTRAR que esto es inerte?».** Un elemento entra si es control del
+DOM, o si lleva `href`/`tabIndex`/`contentEditable`/`disabled`, o un `role`
+interactivo, o **cualquier** `on*` que no esté en la lista —ahora escrita al
+revés— de los seis handlers de ciclo de vida que no dispara una persona. Un
+handler nuevo entra como interacción **por defecto**.
+
+Y lo que no se puede decidir **no se supone inocente**: un `spread` que podría
+aportar interacción o la guarda misma es **rojo**, con su nombre.
+
+⚠️ **El call site también es evidencia, y omitirlo dejaba vivo un mutante:** un
+componente que recibe `onActivate` sin declararlo —porque renderiza un botón
+adentro— quedaba inerte mirando sólo sus props.
+
+**Las fronteras que Codex nombró como omitidas ya no están en el limbo**, y
+entran **derivadas, no nombradas**:
+
+| frontera | por qué no lleva el predicado | qué se afirma en su lugar |
+|---|---|---|
+| `AppHeaderFlow` | es **la salida**: apagarla con un pago congelado encierra a la persona en el estado que menos se puede abandonar | tiene `onBack` y **NO** tiene `disabled` |
+| `AppBottomBar` | su seam vive en `center.disabled`, y su predicado es otro —con un pago sin confirmar el CTA sigue vivo para **reintentarlo** | que `center.disabled` **pruebe** cerrarse con el journal pendiente |
+| `TipSelectorBoundary` | no es un control: su `onFail` lo dispara React, no una persona | tiene `onFail` y `fallback` |
+
+**Una excepción sin aserción es una omisión con mejor letra**, así que cada una
+tiene la suya y una frontera nueva sin enumerar pone el test rojo.
+
+### ③ El pinning no probaba el eslabón donde nace el dato
+
+`pinningDeSesion.test.ts` demuestra que los cinco caminos pasan la sesión que
+reciben, **pero no de dónde sale**. El mutante de Codex, en la primitiva:
+
+```diff
+- try { return await send(actor.session); }
++ try { return await send(loadSession() ?? undefined); }
+```
+
+conservaba typecheck y **los 35 tests oficiales**.
+
+Nuevo `src/api/pinningConductual.test.ts`, y acá **sí hay conducta que
+observar**: la primitiva es lógica pura sobre `localStorage`, locks y `crypto`,
+así que el escenario se monta entero. **Su ausencia era una omisión, no un
+límite** — el reverso exacto del caso de la pantalla.
+
+🔴 **El primer intento estuvo MAL y queda escrito:** cambié la sesión durante el
+`digest` y la mutación **no llegaba al callback**, porque `identities()` lee la
+familia después de su primer digest y moría antes con
+`monetary_family_reconciliation_required`. **Eso es conducta correcta** —la
+guarda gruesa que ya existía— pero no la ventana que este test cubre. La ventana
+real está **más adentro**: entre la verificación del journal y el `send`, dentro
+del mismo lock, y el único seam ahí es la escritura del estado `sending`.
+
+El caso exige **las tres cosas juntas**: el callback recibe A · la red **no se
+inicia** · el corte es un 401 explícito. Con control positivo: **sin** cambio de
+sesión, la misma cadena tiene que llegar al fetch con `Bearer a-access` — sin
+eso, el caso pasaría también si la red nunca se iniciara por cualquier motivo.
+
+### ④ Mutantes — trece, todos muertos individualmente
+
+**De Codex:** la tautología efectual (aislada **y** plantada en una guarda real)
+· `<a href>` sin guarda · `onDoubleClick` · un spread que aporta interacción ·
+un custom con handler no declarado · `send(loadSession() ?? undefined)`.
+
+**De regresión propios:** el CTA deja de cerrarse con el journal pendiente ·
+alguien «completa» la guarda y **apaga la salida** · `send(undefined)` · y los
+controles positivos que impiden que el arreglo fuera «nunca correlacionar nada»
+(`g || !g` sigue probándose) o que el negativo pasara en vacío.
+
+**Residual P3 declarado y NO cerrado:** `propsDeclarados()` toma el primer
+homónimo global en vez de resolver el símbolo del call site. Hoy no hay
+homónimos y no cambia ningún resultado; **queda anotado en la propia función**,
+donde lo ve quien busque garantías, y no en un archivo aparte.
+
+**Medido:** typecheck ✓ · **1215** unitarios (95 archivos; eran 1209 en 94) ·
+**110** e2e ✓ · builds ✓ · espejo 79 ✓ · secretos ✓. **Sin push ni deploy.**
+
 ## 0.100.1 — el freno del método, y por qué su test de navegador NO PUEDE existir (2026-08-20)
 
 Cierra la exigencia (a) del L2 — **y la cierra diciendo que, tal como está

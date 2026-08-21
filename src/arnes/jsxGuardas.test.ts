@@ -107,6 +107,46 @@ describe('🔴 la implicación se DEMUESTRA, no se reconoce por su forma', () =>
     expect(prueba('!(g)').probada).toBe(false);
   });
 
+  /**
+   * 🔴 P40-① · EL MUTANTE DE CODEX, Y POR QUÉ ERA GRAVE.
+   *
+   * El evaluador identificaba cada hoja por su TEXTO. Dos ocurrencias
+   * textualmente iguales de una llamada se colapsaban en **una sola hoja**, así
+   * que esto quedaba modelado como `x || !x` —una tautología— y el arnés lo
+   * declaraba **PROBADO**. JavaScript, en cambio, evalúa **dos llamadas
+   * independientes** y puede dar `false || !true`: el control queda habilitado,
+   * sin ninguna relación con la guarda.
+   *
+   * ⚠️ **Refutaba la garantía central de este archivo** —«lo que no se puede
+   * demostrar, no pasa»— desde adentro, que es la peor forma: el mecanismo que
+   * hacía sano al método era justo el que fallaba.
+   */
+  it('🔴 MUTANTE DE CODEX · dos llamadas iguales NO son la misma hoja', () => {
+    const r = prueba('Math.random() > 0.5 || !(Math.random() > 0.5)');
+    expect(r.probada, 'colapsó dos evaluaciones independientes en una tautología').toBe(false);
+  });
+
+  it('🔴 y tampoco con la guarda al lado: la tautología falsa no la salva', () => {
+    // Sin `g` de por medio, para que quede claro que el defecto era del modelo
+    // y no de la interacción con el `dado`.
+    expect(prueba('cargar() || !cargar()').probada).toBe(false);
+    expect(prueba('a.b || !a.b').probada, 'un acceso puede ser un getter: no se correlaciona').toBe(false);
+  });
+
+  it('⭐ CONTROL POSITIVO · un identificador pelado SÍ se correlaciona', () => {
+    // Sin esto, el arreglo podría haber sido «nunca correlacionar nada», que
+    // deja el evaluador incapaz de probar hasta la guarda más simple. Un
+    // binding no cambia entre dos lecturas sincrónicas.
+    expect(prueba('g || !g').probada).toBe(true);
+    expect(prueba('g').probada, 'la guarda sola dejó de probarse').toBe(true);
+  });
+
+  it('🔴 con algo EFECTUAL adentro, ni los identificadores se correlacionan', () => {
+    // `a || f() || !a`: la llamada del medio puede haber cambiado `a`. No se
+    // hace análisis de alias — se falla cerrado.
+    expect(prueba('g || efecto() || !g', { g: false }).probada).toBe(false);
+  });
+
   it('🔴 con demasiadas hojas contesta que NO PUDO, y no que está bien', () => {
     const muchas = Array.from({ length: 13 }, (_, i) => `x${i}`).join(' || ');
     const r = prueba(muchas);

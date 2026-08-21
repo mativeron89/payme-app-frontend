@@ -6,11 +6,13 @@ import {
   CONTROLES_HTML,
   elementosJsx,
   expresionDe,
-  HANDLERS,
+  ATRIBUTOS_ACCIONABLES,
+  esHandlerDeInteraccion,
   implicaVerdadero,
   parsear,
   propsDeclarados,
   ROLES_INTERACTIVOS,
+  tieneSeamAnidado,
   type Arbol,
   type Superficie,
 } from '../arnes/jsxGuardas';
@@ -65,44 +67,76 @@ const PANTALLA = ARBOL['/src/screens/MesaScreen.tsx']!;
 /** El predicado unificado que TODA superficie de pago tiene que respetar. */
 const GUARDA = 'seleccionBloqueada';
 
+type Clase = 'accionable' | 'seam-anidado' | 'interactivo-sin-seam' | 'inerte';
+
 interface Censo {
-  superficies: Superficie[];
-  irresolubles: string[];
-  crudas: Superficie[];
+  /** Deben PROBAR la implicación. */
+  accionables: Superficie[];
+  /** Llevan el seam en otro lado o no lo tienen: exigen excepción nombrada. */
+  fronteras: { s: Superficie; clase: Clase }[];
+  /** No se puede decidir qué son: rojo, con el motivo. */
+  indecidibles: string[];
 }
 
-function esCruda(s: Superficie): boolean {
+const ROL_INTERACTIVO = (s: Superficie) => {
   const rol = atributoLiteral(s, 'role');
-  if (rol && ROLES_INTERACTIVOS.includes(rol)) return true;
-  return HANDLERS.some((h) => atributo(s, h) !== null);
-}
+  return !!rol && ROLES_INTERACTIVOS.includes(rol);
+};
+const TIENE_HANDLER = (s: Superficie) =>
+  s.atributos.some((a) => esHandlerDeInteraccion(a.name.getText(s.sf)));
+const TIENE_ATRIBUTO_ACCIONABLE = (s: Superficie) =>
+  s.atributos.some((a) => ATRIBUTOS_ACCIONABLES.includes(a.name.getText(s.sf)));
 
 /**
- * La población: superficies INTERACTUABLES del subárbol.
+ * 🔴 P40-② · LA REGLA SE INVIRTIÓ, y ése es el arreglo entero.
  *
- * 🔴 Derivada de lo que la superficie ES. Un `<button>` sigue siendo un botón
- * después de que le borren el `disabled`, y un `<div role="button" onClick>`
- * es accionable aunque el atributo `disabled` ni siquiera le aplique.
+ * Las tres versiones anteriores preguntaban **«¿está en mi lista de cosas
+ * interactivas?»**, y por eso sobrevivían `<a href>`, `onDoubleClick`, un spread
+ * que aporta `role`, y un componente con `onActivate`. **Una lista de lo
+ * incluido falla ABIERTA:** lo que no está, no se mira.
+ *
+ * Ahora se pregunta al revés: **¿se puede DEMOSTRAR que este elemento es
+ * inerte?** Si no, entra. Y lo que no se puede decidir —un spread que podría
+ * aportar interacción o la guarda misma, un componente cuyos props no resuelven—
+ * **no se supone inocente: se denuncia**.
  */
-function censar(raiz: ts.Node): Censo {
-  const todos = elementosJsx(raiz, PANTALLA);
-  const superficies: Superficie[] = [];
-  const irresolubles: string[] = [];
-  const crudas: Superficie[] = [];
-  for (const s of todos) {
-    if (CONTROLES_HTML.includes(s.tag)) { superficies.push(s); continue; }
-    if (/^[A-Z]/.test(s.tag)) {
-      const props = propsDeclarados(s.tag, ARBOL);
-      if (props === undefined) { irresolubles.push(`${s.tag}@${s.linea}: no se encontró su declaración`); continue; }
-      if (props === null) { irresolubles.push(`${s.tag}@${s.linea}: sus props no se pudieron resolver (¿herencia calificada o tipo externo?)`); continue; }
-      if (props.includes('disabled')) superficies.push(s);
-      continue;
+function clasificar(s: Superficie): { clase: Clase; motivo?: string } {
+  // Un spread puede traer `role`, un handler o el propio `disabled`. No hay
+  // forma de saberlo leyendo esto, así que no se decide: se denuncia.
+  if (s.tieneSpread) return { clase: 'inerte', motivo: 'lleva un spread: podría aportar interacción o la guarda' };
+
+  if (/^[A-Z]/.test(s.tag)) {
+    const props = propsDeclarados(s.tag, ARBOL);
+    if (props === undefined) return { clase: 'inerte', motivo: 'no se encontró su declaración' };
+    if (props === null) return { clase: 'inerte', motivo: 'sus props no se pudieron resolver (¿herencia calificada o tipo externo?)' };
+    if (props.includes('disabled') || TIENE_ATRIBUTO_ACCIONABLE(s)) return { clase: 'accionable' };
+    if (tieneSeamAnidado(s.tag, ARBOL)) return { clase: 'seam-anidado' };
+    // 🔴 El CALL SITE también es evidencia, y omitirlo dejaba vivo un mutante:
+    // un componente que recibe `onActivate` sin declararlo —porque renderiza un
+    // botón adentro, o porque el prop se agregó y el tipo no— quedaba INERTE
+    // mirando sólo sus props declarados. Se mira la unión de las dos fuentes.
+    if (props.some((n) => esHandlerDeInteraccion(n)) || TIENE_HANDLER(s) || ROL_INTERACTIVO(s)) {
+      return { clase: 'interactivo-sin-seam' };
     }
-    // Elemento crudo: no es control del DOM ni componente. Si es accionable,
-    // se CLASIFICA — no se ignora.
-    if (esCruda(s)) crudas.push(s);
+    return { clase: 'inerte' };
   }
-  return { superficies, irresolubles, crudas };
+
+  if (CONTROLES_HTML.includes(s.tag)) return { clase: 'accionable' };
+  if (TIENE_ATRIBUTO_ACCIONABLE(s) || ROL_INTERACTIVO(s) || TIENE_HANDLER(s)) return { clase: 'accionable' };
+  return { clase: 'inerte' };
+}
+
+function censar(raiz: ts.Node): Censo {
+  const accionables: Superficie[] = [];
+  const fronteras: { s: Superficie; clase: Clase }[] = [];
+  const indecidibles: string[] = [];
+  for (const s of elementosJsx(raiz, PANTALLA)) {
+    const r = clasificar(s);
+    if (r.motivo) { indecidibles.push(`${s.tag}@${s.linea}: ${r.motivo}`); continue; }
+    if (r.clase === 'accionable') accionables.push(s);
+    else if (r.clase !== 'inerte') fronteras.push({ s, clase: r.clase });
+  }
+  return { accionables, fronteras, indecidibles };
 }
 
 function bloqueDeLaVistaDePago(): ts.Node | null {
@@ -156,36 +190,101 @@ describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
     expect(fin, 'la región llega al final del archivo: se está censando de más').toBeLessThan(total - 10);
   });
 
-  it('🔴 la población se puede CERRAR: nada quedó sin resolver', () => {
-    const { irresolubles } = censar(bloque!);
+  it('🔴 la población se puede CERRAR: nada quedó indecidible', () => {
+    // Un spread, un tipo externo o un componente que no resuelve NO se suponen
+    // inocentes: el censo dice que no puede decidir, y eso es rojo.
+    const { indecidibles } = censar(bloque!);
     expect(
-      irresolubles,
-      `el censo NO puede afirmar nada sobre estos: ${irresolubles.join(' · ')}`,
+      indecidibles,
+      `el censo NO puede afirmar nada sobre estos: ${indecidibles.join(' · ')}`,
     ).toEqual([]);
   });
 
   /**
-   * 🔴 Los elementos CRUDOS accionables (un `<div role="button" onClick>`) no
-   * llevan `disabled` —el atributo no les aplica— y por eso el censo anterior
-   * ni los miraba. **No mirarlos es suponerlos inocentes:** un control así
-   * queda vivo durante la ventana y nadie lo denuncia.
+   * 🔴 P40-② · LAS FRONTERAS INTERACTIVAS, ENUMERADAS UNA POR UNA.
    *
-   * No se los obliga a tener `disabled`: se los obliga a EXISTIR EN LA LISTA.
-   * Hoy la lista está vacía, y por eso el oráculo es simple; el día que alguien
-   * agregue uno, esto lo nombra y hay que decidir qué se hace con él.
+   * Codex nombró `AppHeaderFlow` y `AppBottomBar` como **omitidas sin
+   * enumerar**: no son violaciones vigentes, pero el censo las daba por
+   * inertes y **eso volvía falsa su exhaustividad**.
+   *
+   * Ahora entran solas —derivadas, no nombradas—: una porque declara un handler
+   * de interacción sin ningún `disabled`, la otra porque su tipo de props lleva
+   * el seam **anidado** dentro de `center`. Y cada una tiene que estar acá, con
+   * su razón y con una aserción propia: **una excepción sin aserción es una
+   * omisión con mejor letra**.
    */
-  it('🔴 no hay superficies CRUDAS accionables sin clasificar', () => {
-    const { crudas } = censar(bloque!);
-    const nombres = crudas.map((s) => `${s.tag}@${s.linea}`);
+  it('🔴 cada frontera interactiva está ENUMERADA, con su razón y su aserción', () => {
+    const { fronteras } = censar(bloque!);
+
+    const ESPERADAS: ReadonlyArray<{
+      tag: string;
+      clase: Clase;
+      /** Por qué no lleva el predicado, y qué se afirma en su lugar. */
+      afirmar: (s: Superficie) => void;
+    }> = [
+      {
+        // La salida de la pantalla. 🔴 NUNCA se apaga, y no es un olvido: con
+        // un pago congelado, apagar el «Volver a la mesa» dejaría a la persona
+        // encerrada en el estado que menos se puede abandonar.
+        tag: 'AppHeaderFlow',
+        clase: 'interactivo-sin-seam',
+        afirmar: (s) => {
+          expect(atributo(s, 'onBack'), 'dejó de ser la salida de la pantalla').not.toBeNull();
+          expect(atributo(s, 'disabled'), 'la salida NO puede llevar guarda: encerraría a la persona').toBeNull();
+        },
+      },
+      {
+        // El CTA. Su seam vive en `center.disabled` y su predicado es OTRO
+        // —`journalPendiente || busy || …`— porque con un pago sin confirmar
+        // el botón tiene que seguir vivo para REINTENTARLO. Lo que sí comparte
+        // con las demás es cerrar durante la ventana del journal (P23-AF-04),
+        // y eso se prueba acá con la misma maquinaria.
+        tag: 'AppBottomBar',
+        clase: 'seam-anidado',
+        afirmar: (s) => {
+          const centro = atributo(s, 'center')?.initializer;
+          expect(centro && ts.isJsxExpression(centro) && centro.expression, 'desapareció el `center` del CTA').toBeTruthy();
+          const obj = (centro as ts.JsxExpression).expression!;
+          expect(ts.isObjectLiteralExpression(obj), 'el `center` dejó de ser un objeto literal: no se puede leer su seam').toBe(true);
+          const prop = (obj as ts.ObjectLiteralExpression).properties
+            .filter(ts.isPropertyAssignment)
+            .find((x) => x.name.getText(PANTALLA) === 'disabled');
+          expect(prop, 'el CTA se quedó SIN seam de apagado').toBeTruthy();
+          const r = implicaVerdadero(prop!.initializer, PANTALLA, { journalPendiente: true });
+          expect(r.probada, `el CTA no prueba cerrarse con el journal pendiente: ${r.motivo}`).toBe(true);
+        },
+      },
+      {
+        // No es un control: es el error boundary del selector de propina. Su
+        // `onFail` no lo dispara una persona, lo dispara React al romperse el
+        // subárbol. Apagarlo no significaría nada.
+        tag: 'TipSelectorBoundary',
+        clase: 'interactivo-sin-seam',
+        afirmar: (s) => {
+          expect(atributo(s, 'onFail'), 'dejó de ser un boundary').not.toBeNull();
+          expect(atributo(s, 'fallback'), 'un boundary sin fallback no protege nada').not.toBeNull();
+        },
+      },
+    ];
+
+    const sinEnumerar = fronteras
+      .filter((f) => !ESPERADAS.some((e) => e.tag === f.s.tag))
+      .map((f) => `${f.s.tag}@${f.s.linea} (${f.clase})`);
     expect(
-      nombres,
-      `elementos accionables que no son controles ni componentes: ${nombres.join(' · ')}. ` +
-        'Un `disabled` no les aplica, así que la ventana NO los cierra: hay que decidir cómo se apagan.',
+      sinEnumerar,
+      `fronteras interactivas SIN enumerar — el censo no puede afirmar exhaustividad: ${sinEnumerar.join(' · ')}`,
     ).toEqual([]);
+
+    for (const e of ESPERADAS) {
+      const casan = fronteras.filter((f) => f.s.tag === e.tag);
+      expect(casan.length, `la frontera «${e.tag}» casa con ${casan.length} elementos, no con uno`).toBe(1);
+      expect(casan[0]!.clase, `«${e.tag}» cambió de clase: la razón escrita ya no corresponde`).toBe(e.clase);
+      e.afirmar(casan[0]!.s);
+    }
   });
 
   it('🔴 TODA superficie PRUEBA que se cierra durante la ventana', () => {
-    const { superficies } = censar(bloque!);
+    const { accionables: superficies } = censar(bloque!);
 
     /**
      * Las excepciones, por ATRIBUTO EXACTO. Los dos botones de reconciliación
@@ -246,7 +345,7 @@ describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
    * es lo que el mutante del `disabled` no toca—.
    */
   it('🔴 las superficies nombradas están en la población, cada una por su identidad', () => {
-    const { superficies } = censar(bloque!);
+    const { accionables: superficies } = censar(bloque!);
     const IDENTIDADES: ReadonlyArray<readonly [string, RegExp]> = [
       ['mesero', /setStaffId\(/],
       ['guardar esta tarjeta', /setSaveCard\(/],
@@ -275,9 +374,9 @@ describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
   it('🔴 dentro del selector de propina, cada píldora prueba su prop', () => {
     const selector = funcionDeLaPantalla('TipSelector');
     expect(selector, 'desapareció la función TipSelector').not.toBeNull();
-    const { superficies, irresolubles, crudas } = censar(selector!);
-    expect(irresolubles).toEqual([]);
-    expect(crudas.map((s) => `${s.tag}@${s.linea}`)).toEqual([]);
+    const { accionables: superficies, indecidibles, fronteras } = censar(selector!);
+    expect(indecidibles).toEqual([]);
+    expect(fronteras.map((f) => `${f.s.tag}@${f.s.linea}`)).toEqual([]);
 
     const IDENTIDADES: ReadonlyArray<readonly [string, RegExp]> = [
       ['píldora de porcentaje', /mode: 'pct'/],

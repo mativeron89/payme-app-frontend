@@ -63,6 +63,56 @@ function esConectivo(n: ts.Node): boolean {
 }
 
 /**
+ * 🔴 P40-① · ¿la expresión contiene algo que pueda TENER EFECTOS?
+ *
+ * Si lo tiene, **ni siquiera los identificadores se pueden correlacionar**: en
+ * `a || f() || !a`, la llamada del medio puede haber cambiado `a`. Es una
+ * respuesta gruesa a propósito — acá no se hace análisis de alias, se falla
+ * cerrado.
+ */
+function tieneEfectos(n: ts.Node): boolean {
+  if (
+    ts.isCallExpression(n) || ts.isNewExpression(n) || ts.isAwaitExpression(n) ||
+    ts.isYieldExpression(n) || ts.isTaggedTemplateExpression(n) ||
+    (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken) ||
+    ts.isPostfixUnaryExpression(n) ||
+    (ts.isPrefixUnaryExpression(n) &&
+      (n.operator === ts.SyntaxKind.PlusPlusToken || n.operator === ts.SyntaxKind.MinusMinusToken))
+  ) return true;
+  let hallado = false;
+  n.forEachChild((h) => { if (tieneEfectos(h)) hallado = true; });
+  return hallado;
+}
+
+/**
+ * La CLAVE de una hoja — y acá está el arreglo del P40-①.
+ *
+ * 🔴 **Antes la clave era el TEXTO, y dos ocurrencias efectuales textualmente
+ * iguales se colapsaban en una sola hoja.** Codex lo mató con un mutante que
+ * compila: `disabled={Math.random() > 0.5 || !(Math.random() > 0.5)}` quedaba
+ * modelado como `x || !x` —una tautología— y el arnés lo declaraba PROBADO,
+ * aunque JavaScript evalúa **dos llamadas independientes** y puede dar
+ * `false || !true`, dejando el control habilitado.
+ *
+ * Ahora sólo se correlaciona lo que se puede sostener:
+ *   · un **identificador pelado** comparte valor entre ocurrencias — un binding
+ *     no cambia entre dos lecturas sincrónicas;
+ *   · **cualquier otra cosa** (llamada, acceso que puede ser getter,
+ *     comparación, ternario) recibe identidad **POR OCURRENCIA**, así que dos
+ *     iguales se enumeran por separado y la tautología desaparece;
+ *   · y si en la expresión hay **algo efectual**, **ni los identificadores se
+ *     correlacionan**: la llamada del medio puede haberlos cambiado.
+ *
+ * ⚠️ **Esto sólo puede volver el arnés MÁS estricto, nunca más permisivo:**
+ * separar una hoja en dos agrega asignaciones a la tabla de verdad, y agregar
+ * asignaciones sólo puede quitar implicaciones probadas.
+ */
+function claveDeHoja(n: ts.Node, sf: ts.SourceFile, correlacionar: boolean): string {
+  if (correlacionar && ts.isIdentifier(n)) return n.text;
+  return `${n.getText(sf)}@${n.getStart(sf)}`;
+}
+
+/**
  * Las hojas de la expresión: todo lo que no es `!`, `&&`, `||` o paréntesis.
  *
  * 🔴 Tratar una hoja desconocida como **booleano opaco** es lo que hace sano
@@ -70,35 +120,87 @@ function esConectivo(n: ts.Node): boolean {
  * átomos y se enumeran en SUS DOS valores; si la implicación no se sostiene con
  * alguno, no está probada. **No hay forma de que una hoja rara pase por sana.**
  */
-function hojas(n: ts.Node, sf: ts.SourceFile, acc: Set<string>): void {
+function hojas(n: ts.Node, sf: ts.SourceFile, acc: Set<string>, correlacionar: boolean): void {
   if (n.kind === ts.SyntaxKind.TrueKeyword || n.kind === ts.SyntaxKind.FalseKeyword) return;
   if (esConectivo(n)) {
-    n.forEachChild((h) => hojas(h, sf, acc));
+    n.forEachChild((h) => hojas(h, sf, acc, correlacionar));
     return;
   }
-  acc.add(n.getText(sf));
+  acc.add(claveDeHoja(n, sf, correlacionar));
 }
 
-function evaluar(n: ts.Node, sf: ts.SourceFile, val: Map<string, boolean>): boolean {
+function evaluar(n: ts.Node, sf: ts.SourceFile, val: Map<string, boolean>, correlacionar: boolean): boolean {
   if (n.kind === ts.SyntaxKind.TrueKeyword) return true;
   if (n.kind === ts.SyntaxKind.FalseKeyword) return false;
-  if (ts.isParenthesizedExpression(n)) return evaluar(n.expression, sf, val);
+  if (ts.isParenthesizedExpression(n)) return evaluar(n.expression, sf, val, correlacionar);
   if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken) {
-    return !evaluar(n.operand, sf, val);
+    return !evaluar(n.operand, sf, val, correlacionar);
   }
   if (ts.isBinaryExpression(n)) {
     if (n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
-      return evaluar(n.left, sf, val) && evaluar(n.right, sf, val);
+      return evaluar(n.left, sf, val, correlacionar) && evaluar(n.right, sf, val, correlacionar);
     }
     if (n.operatorToken.kind === ts.SyntaxKind.BarBarToken) {
-      return evaluar(n.left, sf, val) || evaluar(n.right, sf, val);
+      return evaluar(n.left, sf, val, correlacionar) || evaluar(n.right, sf, val, correlacionar);
     }
   }
-  return val.get(n.getText(sf))!;
+  return val.get(claveDeHoja(n, sf, correlacionar))!;
 }
 
-/** Techo del barrido. Con tantas hojas la expresión ya no es una guarda. */
+/** Techo del barrido exhaustivo. Sólo se llega acá si la prueba estructural falló. */
 const MAX_HOJAS = 12;
+
+/**
+ * 🔴 PRUEBA ESTRUCTURAL — un procedimiento de UN SOLO LADO, y por eso es sano.
+ *
+ * `demuestra` sólo devuelve `true` cuando la expresión es verdadera **con
+ * certeza** bajo `dado`; ante la duda contesta `false` y el llamador cae a la
+ * tabla de verdad. **Nunca puede aprobar algo falso; a lo sumo no aprueba algo
+ * cierto**, y eso es exactamente el lado seguro.
+ *
+ * Existe porque la tabla sola no alcanza: el `disabled` del CTA tiene 24 hojas
+ * —2^24 asignaciones— y quedaba en «demasiadas hojas», o sea SIN acreditar,
+ * cuando en realidad su primer término **es** la guarda y alcanza con eso. Una
+ * disyunción se prueba con UN disyunto.
+ *
+ * `refuta` es su dual y hace falta para el `!`: para probar `!X` hay que
+ * demostrar que `X` es falsa, no basta con no poder probarla.
+ */
+function demuestra(n: ts.Node, sf: ts.SourceFile, dado: Record<string, boolean>, corr: boolean): boolean {
+  if (n.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (n.kind === ts.SyntaxKind.FalseKeyword) return false;
+  if (ts.isParenthesizedExpression(n)) return demuestra(n.expression, sf, dado, corr);
+  if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken) {
+    return refuta(n.operand, sf, dado, corr);
+  }
+  if (ts.isBinaryExpression(n)) {
+    if (n.operatorToken.kind === ts.SyntaxKind.BarBarToken) {
+      return demuestra(n.left, sf, dado, corr) || demuestra(n.right, sf, dado, corr);
+    }
+    if (n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+      return demuestra(n.left, sf, dado, corr) && demuestra(n.right, sf, dado, corr);
+    }
+  }
+  return dado[claveDeHoja(n, sf, corr)] === true;
+}
+
+function refuta(n: ts.Node, sf: ts.SourceFile, dado: Record<string, boolean>, corr: boolean): boolean {
+  if (n.kind === ts.SyntaxKind.TrueKeyword) return false;
+  if (n.kind === ts.SyntaxKind.FalseKeyword) return true;
+  if (ts.isParenthesizedExpression(n)) return refuta(n.expression, sf, dado, corr);
+  if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken) {
+    return demuestra(n.operand, sf, dado, corr);
+  }
+  if (ts.isBinaryExpression(n)) {
+    if (n.operatorToken.kind === ts.SyntaxKind.BarBarToken) {
+      return refuta(n.left, sf, dado, corr) && refuta(n.right, sf, dado, corr);
+    }
+    if (n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+      return refuta(n.left, sf, dado, corr) || refuta(n.right, sf, dado, corr);
+    }
+  }
+  return dado[claveDeHoja(n, sf, corr)] === false;
+}
 
 export interface Implicacion {
   /** `true` SÓLO si se demostró. «No pude» y «es falso» NO se confunden. */
@@ -118,8 +220,16 @@ export function implicaVerdadero(
   sf: ts.SourceFile,
   dado: Record<string, boolean>,
 ): Implicacion {
+  // 🔴 Con algo efectual adentro, NADA se correlaciona: es la forma gruesa y
+  // fail-closed de contestar «no puedo sostener que dos lecturas den lo mismo».
+  const correlacionar = !tieneEfectos(expr);
+  // Primero la prueba estructural: barata, de un solo lado, y la única que
+  // puede acreditar expresiones grandes como el `disabled` del CTA.
+  if (demuestra(expr, sf, dado, correlacionar)) {
+    return { probada: true, motivo: 'demostrada por estructura' };
+  }
   const todas = new Set<string>();
-  hojas(expr, sf, todas);
+  hojas(expr, sf, todas, correlacionar);
   const libres = [...todas].filter((h) => !(h in dado));
   if (libres.length > MAX_HOJAS) {
     return { probada: false, motivo: `demasiadas hojas (${libres.length}): no se puede demostrar` };
@@ -127,7 +237,7 @@ export function implicaVerdadero(
   for (let mascara = 0; mascara < 1 << libres.length; mascara++) {
     const val = new Map<string, boolean>(Object.entries(dado));
     libres.forEach((h, i) => val.set(h, (mascara & (1 << i)) !== 0));
-    if (!evaluar(expr, sf, val)) {
+    if (!evaluar(expr, sf, val, correlacionar)) {
       const contra = libres.map((h) => `${h}=${val.get(h)}`).join(', ');
       return {
         probada: false,
@@ -146,6 +256,35 @@ export function implicaVerdadero(
 
 /** Controles del DOM que se deshabilitan por atributo propio del HTML. */
 export const CONTROLES_HTML = ['button', 'input', 'select', 'textarea'];
+
+/**
+ * 🔴 P40-② · LOS HANDLERS QUE **NO** SON INTERACCIÓN — y es la única lista de
+ * este archivo, escrita al revés a propósito.
+ *
+ * La versión anterior enumeraba **los handlers que sí** (`onClick`,
+ * `onChange`, …) y por eso `onDoubleClick`, `onActivate` y cualquier `on*`
+ * futuro quedaban afuera del censo: **una lista de lo permitido falla abierta**.
+ * Acá se enumera lo EXCLUIDO, así que **un handler nuevo entra como
+ * interacción por defecto** y hay que sacarlo a mano si no lo es.
+ *
+ * Los cuatro que están son ciclo de vida del navegador —animación, transición,
+ * carga— y ninguno lo dispara una persona tocando la pantalla.
+ */
+export const HANDLERS_NO_INTERACTIVOS = [
+  'onAnimationStart', 'onAnimationEnd', 'onAnimationIteration', 'onTransitionEnd',
+  'onLoad', 'onError',
+];
+
+const esHandler = (nombre: string) => /^on[A-Z]/.test(nombre);
+export const esHandlerDeInteraccion = (nombre: string) =>
+  esHandler(nombre) && !HANDLERS_NO_INTERACTIVOS.includes(nombre);
+
+/**
+ * Atributos que vuelven accionable a CUALQUIER etiqueta, sin importar cuál sea.
+ * `href` mete a `<a>` sin necesidad de nombrarlo; `tabIndex` y
+ * `contentEditable` meten a los que reciben foco o edición.
+ */
+export const ATRIBUTOS_ACCIONABLES = ['href', 'tabIndex', 'contentEditable', 'disabled'];
 
 /**
  * Roles ARIA que hacen INTERACTUABLE a un elemento cualquiera. Los de
@@ -172,6 +311,8 @@ export interface Superficie {
   /** Texto de la expresión de la guarda, para los mensajes. */
   guardaTexto: string | null;
   atributos: ts.JsxAttribute[];
+  /** 🔴 Un spread puede aportar `role`, un handler o la guarda: NO es decidible. */
+  tieneSpread: boolean;
   ancestros: ts.JsxOpeningElement[];
   nodo: ts.JsxOpeningElement | ts.JsxSelfClosingElement;
   sf: ts.SourceFile;
@@ -211,6 +352,7 @@ export function elementosJsx(raiz: ts.Node, sf: ts.SourceFile): Superficie[] {
 
   const registrar = (el: ts.JsxOpeningElement | ts.JsxSelfClosingElement) => {
     const atributos = el.attributes.properties.filter(ts.isJsxAttribute);
+    const tieneSpread = el.attributes.properties.some(ts.isJsxSpreadAttribute);
     const guarda = atributos.find((a) => a.name.getText(sf) === 'disabled') ?? null;
     salida.push({
       tag: el.tagName.getText(sf),
@@ -218,6 +360,7 @@ export function elementosJsx(raiz: ts.Node, sf: ts.SourceFile): Superficie[] {
       guarda,
       guardaTexto: guarda ? (guarda.initializer ? guarda.initializer.getText(sf) : 'true') : null,
       atributos,
+      tieneSpread,
       ancestros: [...pila],
       nodo: el,
       sf,
@@ -309,11 +452,56 @@ export function miembrosDeTipo(
 }
 
 /**
+ * 🔴 P40-② · ¿alguno de los props lleva el seam de apagado ANIDADO?
+ *
+ * `AppBottomBar` no declara `disabled` arriba: lo lleva dentro de `center`, y
+ * por eso el censo anterior lo daba por inerte **al CTA de la pantalla de
+ * pago**. Codex lo nombró como «frontera interactiva omitida». Esto lo detecta
+ * **derivándolo del tipo**, no nombrándolo: cualquier componente cuyo tipo de
+ * props tenga un miembro-objeto con `disabled` adentro entra a la población.
+ */
+export function tieneSeamAnidado(nombre: string, arbol: Arbol): boolean {
+  for (const fuente of Object.values(arbol)) {
+    let hallado = false;
+    const mirarTipo = (tipo: ts.TypeNode | undefined) => {
+      if (!tipo) return;
+      const miembros = ts.isTypeLiteralNode(tipo) ? tipo.members : null;
+      if (!miembros) return;
+      for (const m of miembros) {
+        const t = (m as ts.PropertySignature).type;
+        if (t && ts.isTypeLiteralNode(t) && t.members.some((x) => x.name?.getText(fuente) === 'disabled')) {
+          hallado = true;
+        }
+      }
+    };
+    fuente.forEachChild((n) => {
+      if (ts.isInterfaceDeclaration(n) && n.name.text === `${nombre}Props`) {
+        for (const m of n.members) {
+          const t = (m as ts.PropertySignature).type;
+          if (t && ts.isTypeLiteralNode(t) && t.members.some((x) => x.name?.getText(fuente) === 'disabled')) {
+            hallado = true;
+          }
+        }
+      }
+      if (ts.isFunctionDeclaration(n) && n.name?.text === nombre) mirarTipo(n.parameters[0]?.type);
+    });
+    if (hallado) return true;
+  }
+  return false;
+}
+
+/**
  * Los props que DECLARA un componente, buscándolo por nombre en todo el árbol.
  *
  * `undefined` = no se encontró la declaración · `null` = se encontró y no se
  * pudo resolver. Las dos son fail-closed para el llamador; se distinguen para
  * que el mensaje diga cuál es.
+ *
+ * ⚠️ **Residual conocido (P3 del P40, declarado y NO cerrado):** ante dos
+ * componentes HOMÓNIMOS en archivos distintos, esto toma el primero que
+ * encuentra en vez de resolver el símbolo del call site. Hoy no hay homónimos
+ * en el árbol y por eso no cambia ningún resultado; se anota acá porque el que
+ * lo lea buscando garantías tiene que ver el límite donde vive la función.
  */
 export function propsDeclarados(nombre: string, arbol: Arbol): string[] | null | undefined {
   for (const fuente of Object.values(arbol)) {
