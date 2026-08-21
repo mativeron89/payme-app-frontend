@@ -436,24 +436,91 @@ function pasosDe(yml: string): Paso[] {
  * ocurre aflojarlo para que calle**.
  */
 /**
- * 🔴 P55 · EVALUACIÓN ANIDADA — **leer el comando no es leer lo que EVALÚA.**
+ * 🔴 P58 · UNA GRAMÁTICA POSITIVA — y por qué lo anterior estaba MAL aunque
+ * matara los mutantes que le pusieron.
  *
- * Codex: `bash scripts/reportar-flaky.sh … "$(npx vercel --prod)"`. El shell
- * evalúa la sustitución **ANTES** de invocar el script, así que el allowlist
- * —que acepta por PREFIJO— lo daba por adjudicado: el prefijo es el script
- * permitido y lo peligroso viaja adentro, como argumento.
+ * En el P55 escribí, con todas las letras, que esto **no se cierra listando
+ * formas malas**… **y construí una lista de cuatro formas malas** (`$()`,
+ * backticks, `eval`, `bash -c`). Codex la refutó con la quinta: **la
+ * sustitución de proceso de Bash**, `<(npx vercel --prod)` como argumento de un
+ * comando permitido por prefijo. Todo verde.
  *
- * 🔴 **No se cierra listando formas malas.** Se declara al revés: **si un
- * comando contiene evaluación anidada, este arnés NO PUEDE decir qué ejecuta**,
- * y lo que no se puede decidir no se aprueba. `$( )`, backticks, `eval` y
- * `bash -c` son las formas que hoy sé nombrar; el punto no es la lista, es que
- * la respuesta ante cualquiera de ellas es **«no sé», y «no sé» es rojo**.
+ * 🔴 **Y la parte que duele es la correcta: la prosa afirmaba más que el
+ * código.** Es la clase que vengo cazando hace ocho vueltas —el comentario que
+ * certifica una guarda que no existe— cometida **en mi propio paquete, en el
+ * párrafo donde declaraba la virtud**. Agregar `<(` y `>(` a la lista habría
+ * sido la novena vuelta esperando una sintaxis nueva de shell.
+ *
+ * **Lo que reemplaza a la lista: se afirma lo SIMPLE, no se enumera lo
+ * complejo.** Un comando es *afirmable* si cada uno de sus tokens es una de
+ * estas formas, y **nada más**:
+ *
+ *   · una palabra desnuda sin metacaracteres (`npm`, `--integridad`, una ruta);
+ *   · un literal entre comillas SIMPLES (el shell no expande nada adentro);
+ *   · un literal entre comillas dobles **cuyo contenido sólo tenga texto,
+ *     `$VAR`/`${VAR}` o una expresión `${{ … }}` de GitHub**;
+ *   · una variable suelta `$VAR` / `${VAR}`.
+ *
+ * **Todo lo demás es INDECIDIBLE** — no «prohibido», indecidible: paréntesis,
+ * redirecciones, `<(`, `>(`, `&`, globs, backticks, `$(`. **No hace falta
+ * nombrarlos**, y ése es el punto: una sintaxis de shell que nadie previó cae
+ * del lado correcto **por no ser ninguna de las cuatro formas afirmables**.
+ *
+ * ⚠️ **`${{ … }}` NO es evaluación de shell:** lo sustituye GitHub antes de que
+ * el shell vea el script. Se acepta sólo con contenido simple —identificadores,
+ * puntos, `||` y literales entre comillas simples— porque un `${{ }}` con
+ * cualquier cosa adentro es otra vez algo que este arnés no puede afirmar.
  */
-function evaluacionAnidada(cmd: string): string | null {
-  if (/\$\(/.test(cmd)) return 'sustitución `$(…)`';
-  if (/`/.test(cmd)) return 'sustitución con backticks';
-  if (/(^|\s)eval(\s|$)/.test(cmd)) return '`eval`';
-  if (/(^|\s)bash\s+-c(\s|$)/.test(cmd)) return '`bash -c`';
+const PALABRA = /^[A-Za-z0-9._/=:@,+-]+$/;
+const VARIABLE = /^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$/;
+const EXPR_GITHUB_SEGURA = /^[A-Za-z0-9_.\s|'^-]+$/;
+
+/** Parte un comando en tokens respetando comillas. `null` si las comillas no cierran. */
+function tokens(cmd: string): string[] | null {
+  const salida: string[] = [];
+  let actual = '';
+  let cita: string | null = null;
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i]!;
+    if (cita) { actual += c; if (c === cita) cita = null; continue; }
+    if (c === '"' || c === "'") { cita = c; actual += c; continue; }
+    if (/\s/.test(c)) { if (actual) { salida.push(actual); actual = ''; } continue; }
+    actual += c;
+  }
+  if (cita) return null;
+  if (actual) salida.push(actual);
+  return salida;
+}
+
+/** El contenido de unas comillas dobles, ¿es sólo texto, `$VAR` y `${{ … }}`? */
+function dobleComillaSegura(cuerpo: string): boolean {
+  let resto = cuerpo;
+  // Las expresiones de GitHub se sacan primero, verificando su interior.
+  const expr = /\$\{\{([^}]*)\}\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = expr.exec(cuerpo)) !== null) {
+    if (!EXPR_GITHUB_SEGURA.test(m[1]!)) return false;
+  }
+  resto = resto.replace(expr, '');
+  if (/[`\\]/.test(resto)) return false;
+  // Lo que quede con `$` tiene que ser una variable simple.
+  return !/\$(?!\{?[A-Za-z_])/.test(resto) && !/\$\(/.test(resto);
+}
+
+/**
+ * ¿Puede este arnés AFIRMAR qué ejecuta este comando? Devuelve el motivo cuando
+ * no, y `null` cuando sí. **La respuesta ante lo no afirmable es «no sé», y «no
+ * sé» es rojo.**
+ */
+function noAfirmable(cmd: string): string | null {
+  const ts = tokens(cmd);
+  if (ts === null) return 'comillas sin cerrar';
+  for (const t of ts) {
+    if (PALABRA.test(t) || VARIABLE.test(t)) continue;
+    if (t.startsWith("'") && t.endsWith("'") && t.length >= 2 && !t.slice(1, -1).includes("'")) continue;
+    if (t.startsWith('"') && t.endsWith('"') && t.length >= 2 && dobleComillaSegura(t.slice(1, -1))) continue;
+    return `el token \`${t}\` no es una forma que este arnés pueda afirmar sin evaluarla`;
+  }
   return null;
 }
 
@@ -478,6 +545,61 @@ function comandosDe(run: string): string[] {
   partes.push(actual);
   return partes.map((c) => c.trim()).filter(Boolean);
 }
+
+/**
+ * 🔴 P58 · LA GRAMÁTICA POSITIVA, PROBADA COMO GRAMÁTICA.
+ *
+ * No alcanza con matar las formas que el auditor nombró: eso es lo que hace una
+ * denylist bien mantenida, y **la denylist bien mantenida fue exactamente el
+ * defecto**. Lo que hay que demostrar es la propiedad: **una forma que nadie
+ * enumeró cae del lado correcto por no ser afirmable**, no por estar prohibida.
+ *
+ * Por eso la mitad de los casos de acá son sintaxis que **no aparece en ningún
+ * comentario de este archivo**.
+ */
+describe('🔴 la gramática afirma lo simple, no enumera lo complejo', () => {
+  const NO_AFIRMABLES: ReadonlyArray<readonly [string, string]> = [
+    ['sustitución de proceso (lectura) — la sonda de Codex', 'bash x.sh <(npx vercel --prod)'],
+    ['sustitución de proceso (escritura)', 'bash x.sh >(npx vercel --prod)'],
+    ['sustitución de comando', 'bash x.sh $(npx vercel --prod)'],
+    ['backticks', 'bash x.sh `npx vercel --prod`'],
+    // ── de acá para abajo, formas que NINGÚN comentario de este archivo nombra.
+    ['expansión con separador', 'bash x.sh ${IFS}algo'],
+    ['glob', 'bash x.sh archivo*.json'],
+    ['segundo plano', 'bash x.sh a&b'],
+    ['redirección', 'bash x.sh > salida.txt'],
+    ['tilde de home', 'bash x.sh ~/algo'],
+    ['expansión de llaves', 'bash x.sh {a,b}.json'],
+    ['subshell', 'bash x.sh (algo)'],
+    ['aritmética', 'bash x.sh $((1+1))'],
+    ['comillas sin cerrar', 'bash x.sh "abierta'],
+  ];
+  for (const [nombre, cmd] of NO_AFIRMABLES) {
+    it(`🔴 no afirmable · ${nombre}`, () => {
+      expect(noAfirmable(cmd), `pasó como afirmable: ${cmd}`).not.toBeNull();
+    });
+  }
+
+  /**
+   * ⭐ Y LA MITAD QUE NADIE ESCRIBE. Sin esto, «declarar todo indecidible»
+   * mataría los trece casos de arriba y dejaría el arnés inservible: no habría
+   * comando que pudiera adjudicarse jamás.
+   */
+  const AFIRMABLES: ReadonlyArray<readonly [string, string]> = [
+    ['palabras y flags', 'npx playwright install --with-deps chromium'],
+    ['ruta y argumento literal', 'bash scripts/reportar-flaky.sh test-results/resultados.json'],
+    ['variable entre comillas', 'bash scripts/publicar-vercel.sh app "$HOOK_APP"'],
+    ['literal entre comillas simples', "bash x.sh 'con espacios adentro'"],
+    ['flag con valor', 'node scripts/verificar-mirror.mjs --integridad'],
+    ['expresión de GitHub, que la sustituye GitHub y no el shell',
+     'bash scripts/auditar-secretos.sh "${{ github.event.before || \'HEAD^\' }}"'],
+  ];
+  for (const [nombre, cmd] of AFIRMABLES) {
+    it(`⭐ afirmable · ${nombre}`, () => {
+      expect(noAfirmable(cmd), `lo dio por opaco: ${cmd}`).toBeNull();
+    });
+  }
+});
 
 describe('el camino de publicación · leído de los PASOS, no del texto', () => {
   const DIR = join(RAIZ, '.github', 'workflows');
@@ -521,9 +643,9 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
         // 🔴 Primero lo indecidible: un prefijo permitido NO adjudica lo que el
         // comando evalúe adentro. El orden importa — si se mirara el allowlist
         // primero, `bash permitido.sh "$(peligroso)"` pasaría por el prefijo.
-        const anidada = evaluacionAnidada(t);
-        if (anidada) {
-          sinAdjudicar.push(`línea ${p.linea}: lleva ${anidada} — no se puede saber qué ejecuta: \`${t}\``);
+        const opaco = noAfirmable(t);
+        if (opaco) {
+          sinAdjudicar.push(`línea ${p.linea}: ${opaco} → \`${t}\``);
           continue;
         }
         if (!ADJUDICADOS.some((re) => re.test(t))) sinAdjudicar.push(`línea ${p.linea}: \`${t}\``);

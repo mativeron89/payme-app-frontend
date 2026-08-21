@@ -11,6 +11,67 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.107.0 — una gramática positiva, porque lo anterior era una denylist con cartel de fail-closed (2026-08-21)
+
+Cierra el P2 del BLOCK sobre `34e65c8`. **Sin regresión; el diff no toca `src/`.**
+
+### ① 🔴 LA OBJECIÓN ES UNA CONTRADICCIÓN MÍA, Y ES LA MÁS FINA DEL CIRCUITO
+
+En el `0.106.0` escribí, textual: *«no se cierra listando formas malas»*… **y
+construí una lista de cuatro formas malas** (`$()`, backticks, `eval`,
+`bash -c`). Codex la refutó con la quinta: la **sustitución de proceso** de Bash,
+`<(npx vercel --prod)` como argumento de un comando permitido por prefijo. Todo
+verde: oráculo 1/1, focal 22/22, suite completa.
+
+Su frase, que es mi propio principio devuelto: **«la implementación vigente es
+precisamente una denylist de cuatro formas»**.
+
+⚠️ **Es la clase que vengo cazando hace ocho vueltas —el comentario que certifica
+una guarda que no existe— cometida en mi propio paquete, en el párrafo donde
+declaraba la virtud.** La prosa afirmaba más que el código. Y agregar `<(` y
+`>(` a la lista habría sido **la novena vuelta esperando una sintaxis nueva de
+shell**.
+
+### ② Lo que reemplaza a la lista: se afirma lo SIMPLE
+
+Un comando es *afirmable* si **cada uno de sus tokens** es una de cuatro formas,
+y nada más: una **palabra desnuda** sin metacaracteres · un literal entre
+**comillas simples** · un literal entre **comillas dobles** cuyo contenido sea
+sólo texto, `$VAR` o `${{ … }}` · una **variable suelta**.
+
+🔴 **Todo lo demás es INDECIDIBLE — no «prohibido», indecidible — y no hace
+falta nombrarlo.** Ése es el punto entero: una sintaxis que nadie previó cae del
+lado correcto **por no ser ninguna de las cuatro formas afirmables**.
+
+⚠️ `${{ … }}` **no es evaluación de shell** —lo sustituye GitHub antes— y se
+acepta sólo con contenido simple.
+
+### ③ Probada COMO GRAMÁTICA, no contra los casos que el auditor nombró
+
+Matar las formas nombradas es lo que hace **una denylist bien mantenida**, que
+fue exactamente el defecto. Lo que hay que demostrar es la **propiedad**. Por eso
+de los **trece** casos no-afirmables, **nueve no aparecen en ningún comentario de
+este archivo**:
+
+| nombradas por Codex | **que nadie enumeró** |
+|---|---|
+| `<(…)` · `>(…)` · `$(…)` · backticks | `${IFS}` · glob `*` · `&` · redirección `>` · `~/` · `{a,b}` · subshell `(…)` · aritmética `$((…))` · comillas sin cerrar |
+
+⭐ **Y seis casos AFIRMABLES**, sin los cuales «declarar todo indecidible»
+mataría los trece de arriba y dejaría el arnés inservible: no habría comando
+adjudicable jamás.
+
+### ④ El comentario, alineado con el alcance real
+
+Punto ④ del cierre de Codex, y el que más me importa: **el docblock ya no afirma
+fail-closed general mientras decide por lista.** Describe la gramática, dice qué
+acepta, y dice que lo no afirmable es indecidible **por no matchear**, no por
+estar enumerado.
+
+**Medido:** typecheck ✓ · **1250** unitarios · **110** e2e ✓ · builds ✓ · espejo
+79 ✓. **Sin push hasta la conjuntiva** — el freno por el incidente de Vercel ya
+no rige: **Mati borró el proyecto espurio él mismo**.
+
 ## 0.106.0 — leer el paso no es leer si el paso CORRE (2026-08-21)
 
 Cierra el P2 del BLOCK sobre `32266c5`. **Sin regresión; la web publicada no se
