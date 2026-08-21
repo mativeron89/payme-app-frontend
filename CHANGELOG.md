@@ -11,6 +11,84 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.103.0 — el censo BAJA al cuerpo de cada componente (2026-08-21)
+
+Cierra el P2 del BLOCK de Codex sobre el lote ya publicado. **La web no se
+toca:** *«no encontré un defecto funcional vigente en las pantallas del
+target»*. Es arnés y tests.
+
+### ① El agujero, y por qué mi arreglo anterior NO era el cierre
+
+Un componente **autocontenido** —cero props, cero spread, cero `disabled`, con
+un `<button onClick>` adentro— quedaba `inerte`. **El censo decidía mirando el
+LLAMADOR**, y el llamador no dice nada de lo que el componente renderiza.
+
+🔴 **En `0.102.0` yo había cerrado esto DOCUMENTANDO el límite. Codex lo
+rechazó, y su frase corrige el error de fondo:** *«una función sin parámetro
+produce una lista conocida y VACÍA de props, NO un resultado indecidible»*. Yo
+trataba **«no declara props»** como **«no tiene superficie»**, y son cosas
+distintas. Más la regla que la sigue: *«aunque se decidiera que esa salida es
+legítima, debe quedar como frontera enumerada y afirmada, no como inerte
+silencioso»*.
+
+⚠️ **Documentar un límite no lo cierra cuando el límite se puede levantar.** El
+commit `dd2514b` describía con precisión un agujero que se podía tapar.
+
+### ② El censo ahora RECURRE
+
+Se sigue el cuerpo renderizado de cada custom alcanzable, con la guarda que
+corresponde a cada nivel:
+
+| nivel | guarda exigida |
+|---|---|
+| la vista de pago | `seleccionBloqueada` |
+| dentro de un custom que **declara** `disabled` | ese prop — el llamador ya probó que su valor cierra la ventana |
+| dentro de un custom **sin** `disabled` | ninguna: **toda superficie de ahí adentro es frontera** y va enumerada |
+
+🔴 **Y lo que no se puede seguir NO se aprueba: se declara indecidible.** Un
+componente de otro paquete no se recorre — y eso es justamente lo que impide que
+este censo tenga que recorrer el universo. **El fail-closed acota el alcance y lo
+dice**, en vez de acotarlo en silencio.
+
+**El sub-censo de `TipSelector`, que estaba escrito a mano, se borra:** la
+recursión lo cubre y ahora es derivado. Menos código y más alcance.
+
+### ③ Tres fronteras que ninguna versión anterior veía
+
+| frontera | qué es | qué se afirma |
+|---|---|---|
+| `AppHeaderFlow > button` | **la salida** («Volver a la mesa») | llama al `onBack` del llamador **y NO lleva `disabled`** |
+| `AppBottomBar > button` (nav) | Inicio · Mesas · Amigos · Más | navega, y **no lleva guarda**: salir está declarado seguro **con retome** por el acta del 19/08 |
+| `AppBottomBar > button` (fab) | **el CTA** | lee `centro.disabled`, que es **el mismo seam que el llamador prueba** |
+
+🔴 **La tercera cierra un circuito que antes quedaba abierto:** el llamador
+afirmaba que `center.disabled` cerraba con el journal pendiente, y **se confiaba
+en que el componente lo usara**. Ahora se afirman las dos puntas. **Que ya
+estuvieran bien no las hacía menos invisibles.**
+
+### ④ Mutantes — cinco, y uno es el rival
+
+| # | Mutante | Resultado |
+|---|---|---|
+| Ⓐ | **el M16 exacto de Codex** montado en la vista de pago | **muerto** · `P45SelfContainedCta@1904 > button@132` |
+| Ⓑ | el CTA interno deja de leer `centro.disabled` | **muerto** |
+| Ⓒ | **apagan la salida desde adentro** de `AppHeaderFlow` | **muerto** |
+| Ⓓ | una píldora interna de `TipSelector` pierde su prop | **muerto** (vía recursión, sin el sub-censo a mano) |
+| Ⓔ | 🔴 **EL RIVAL: se apaga la recursión** | **muerto** — y sólo cae el caso M16 |
+
+**Ⓔ es la acreditación que importa**, y es la misma técnica de la vuelta
+anterior: se planta el arreglo rival —el que Codex rechazó, «documentar el
+límite»— y se mira **qué test lo distingue**. Cae uno solo: el discriminante.
+
+### ⑤ Un residual que se cierra de paso
+
+`propsDeclarados()` seguía tomando el primer homónimo global (P3 del P40). Sigue
+igual **y sigue declarado dentro de la función** — no cambió, se anota para que
+no se lea como cerrado por omisión.
+
+**Medido:** typecheck ✓ · **1221** unitarios (95 archivos; eran 1220) · **110**
+e2e ✓ · builds ✓ · espejo 79 ✓. **Sin push: la conjuntiva se pide de nuevo.**
+
 ## 0.102.0 — se retira el segundo camino de publicación, y dos límites escritos (2026-08-21)
 
 Primer lote **después del push** (`c40b0c4` publicó `paymemx.com` y

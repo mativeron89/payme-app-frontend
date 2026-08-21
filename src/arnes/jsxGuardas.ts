@@ -452,6 +452,47 @@ export function miembrosDeTipo(
 }
 
 /**
+ * 🔴 P45-M16 · EL CUERPO RENDERIZADO de un componente, para poder RECORRERLO.
+ *
+ * Codex mostró que un custom **autocontenido** —cero props, cero spread, cero
+ * `disabled`, con un `<button onClick>` adentro— quedaba `inerte` y **el censo
+ * ni miraba su cuerpo**. Su frase, que es la que corrige el error de fondo:
+ * **«una función sin parámetro produce una lista conocida y VACÍA de props, NO
+ * un resultado indecidible»**. Yo estaba tratando «no declara props» como «no
+ * tiene superficie», y son cosas distintas.
+ *
+ * Devuelve `null` cuando el componente **no se puede seguir** —vive en otro
+ * paquete, es un alias, no se encuentra—. Ese `null` es fail-closed para el
+ * llamador: **es lo que evita tener que censar el universo** (una librería
+ * externa no se recorre; se declara que no se pudo y se decide a mano).
+ */
+export function cuerpoDelComponente(
+  nombre: string,
+  arbol: Arbol,
+): { nodo: ts.Node; sf: ts.SourceFile } | null {
+  for (const fuente of Object.values(arbol)) {
+    let hallado: { nodo: ts.Node; sf: ts.SourceFile } | null = null;
+    fuente.forEachChild((n) => {
+      if (hallado) return;
+      if (ts.isFunctionDeclaration(n) && n.name?.text === nombre && n.body) {
+        hallado = { nodo: n.body, sf: fuente };
+      } else if (ts.isClassDeclaration(n) && n.name?.text === nombre) {
+        hallado = { nodo: n, sf: fuente };
+      } else if (ts.isVariableStatement(n)) {
+        for (const d of n.declarationList.declarations) {
+          if (d.name.getText(fuente) !== nombre || !d.initializer) continue;
+          if (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer)) {
+            hallado = { nodo: d.initializer.body, sf: fuente };
+          }
+        }
+      }
+    });
+    if (hallado) return hallado;
+  }
+  return null;
+}
+
+/**
  * 🔴 P40-② · ¿alguno de los props lleva el seam de apagado ANIDADO?
  *
  * `AppBottomBar` no declara `disabled` arriba: lo lleva dentro de `center`, y
