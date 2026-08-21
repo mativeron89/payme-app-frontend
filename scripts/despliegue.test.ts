@@ -360,7 +360,23 @@ describe('vercel.json · el despliegue automático sigue apagado', () => {
  * comentario, y un gate cuenta sólo si algún **segmento de comando** EMPIEZA
  * con él — así `echo "npm test"` empieza con `echo` y no cuenta.
  */
-interface Paso { nombre: string; uses: string | null; run: string | null; linea: number }
+interface Paso {
+  nombre: string;
+  uses: string | null;
+  run: string | null;
+  /**
+   * 🔴 P55 · LOS DOS METADATOS QUE DECIDEN SI UN PASO CORRE Y SI BLOQUEA.
+   *
+   * Codex mostró que **leer el paso no es leer si el paso CORRE**: con
+   * `if: false`, GitHub **no lo ejecuta**, y con `continue-on-error: true` lo
+   * ejecuta pero **tolera su fallo**. Los dos dejaban la suite 21/21 verde
+   * porque yo guardaba `run`/`uses` y tiraba el resto — o sea que probaba que
+   * el gate **está escrito**, no que **gatea**.
+   */
+  condicion: string | null;
+  toleraError: string | null;
+  linea: number;
+}
 
 /** Quita el comentario YAML de una línea respetando comillas. */
 function sinComentario(l: string): string {
@@ -391,12 +407,14 @@ function pasosDe(yml: string): Paso[] {
       bloque = null;
     }
     const l = sinComentario(cruda);
-    if (/^\s*-\s+(name|uses|run):/.test(l)) { cerrar(); actual = { nombre: '', uses: null, run: null, linea: i + 1 }; }
+    if (/^\s*-\s+(name|uses|run|if):/.test(l)) { cerrar(); actual = { nombre: '', uses: null, run: null, condicion: null, toleraError: null, linea: i + 1 }; }
     if (!actual) continue;
-    const m = l.match(/^\s*(?:-\s+)?(name|uses|run):\s*(.*)$/);
+    const m = l.match(/^\s*(?:-\s+)?(name|uses|run|if|continue-on-error):\s*(.*)$/);
     if (!m) continue;
     const [, clave, valor] = m;
     if (clave === 'name') actual.nombre = valor!.trim();
+    else if (clave === 'if') actual.condicion = valor!.trim();
+    else if (clave === 'continue-on-error') actual.toleraError = valor!.trim();
     else if (clave === 'uses') actual.uses = valor!.trim();
     else if (clave === 'run') {
       if (valor!.trim() === '|' || valor!.trim() === '|-') bloque = { indent: cruda.search(/\S/), partes: [] };
@@ -417,6 +435,28 @@ function pasosDe(yml: string): Paso[] {
  * fail-closed empieza a denunciar cosas que no existen **y a alguien se le
  * ocurre aflojarlo para que calle**.
  */
+/**
+ * 🔴 P55 · EVALUACIÓN ANIDADA — **leer el comando no es leer lo que EVALÚA.**
+ *
+ * Codex: `bash scripts/reportar-flaky.sh … "$(npx vercel --prod)"`. El shell
+ * evalúa la sustitución **ANTES** de invocar el script, así que el allowlist
+ * —que acepta por PREFIJO— lo daba por adjudicado: el prefijo es el script
+ * permitido y lo peligroso viaja adentro, como argumento.
+ *
+ * 🔴 **No se cierra listando formas malas.** Se declara al revés: **si un
+ * comando contiene evaluación anidada, este arnés NO PUEDE decir qué ejecuta**,
+ * y lo que no se puede decidir no se aprueba. `$( )`, backticks, `eval` y
+ * `bash -c` son las formas que hoy sé nombrar; el punto no es la lista, es que
+ * la respuesta ante cualquiera de ellas es **«no sé», y «no sé» es rojo**.
+ */
+function evaluacionAnidada(cmd: string): string | null {
+  if (/\$\(/.test(cmd)) return 'sustitución `$(…)`';
+  if (/`/.test(cmd)) return 'sustitución con backticks';
+  if (/(^|\s)eval(\s|$)/.test(cmd)) return '`eval`';
+  if (/(^|\s)bash\s+-c(\s|$)/.test(cmd)) return '`bash -c`';
+  return null;
+}
+
 function comandosDe(run: string): string[] {
   const partes: string[] = [];
   let actual = '';
@@ -478,6 +518,14 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
       const trozos = p.uses ? [p.uses] : comandosDe(p.run ?? '');
       if (!trozos.length) { sinAdjudicar.push(`línea ${p.linea}: paso sin \`run\` ni \`uses\``); continue; }
       for (const t of trozos) {
+        // 🔴 Primero lo indecidible: un prefijo permitido NO adjudica lo que el
+        // comando evalúe adentro. El orden importa — si se mirara el allowlist
+        // primero, `bash permitido.sh "$(peligroso)"` pasaría por el prefijo.
+        const anidada = evaluacionAnidada(t);
+        if (anidada) {
+          sinAdjudicar.push(`línea ${p.linea}: lleva ${anidada} — no se puede saber qué ejecuta: \`${t}\``);
+          continue;
+        }
         if (!ADJUDICADOS.some((re) => re.test(t))) sinAdjudicar.push(`línea ${p.linea}: \`${t}\``);
       }
     }
@@ -515,6 +563,51 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
       faltan,
       `gates que NO se EJECUTAN antes de publicar (mencionarlos no cuenta): ${faltan.join(' · ')}`,
     ).toEqual([]);
+  });
+
+  /**
+   * 🔴 P55 · Y ADEMÁS TIENEN QUE CORRER Y BLOQUEAR — que es otra afirmación.
+   *
+   * El test de arriba prueba que el gate **está como comando** antes de
+   * publicar. **No prueba que GitHub lo ejecute ni que su fallo frene nada.**
+   * Codex lo mostró con dos mutantes de YAML perfectamente válido, uno por vez:
+   *   · `if: false` → el paso **no se ejecuta**;
+   *   · `continue-on-error: true` → se ejecuta y **su fallo se tolera**.
+   * Los dos dejaban la suite **21/21 verde**: yo guardaba `run`/`uses` y tiraba
+   * el resto, así que probaba que el gate **está escrito**, no que **gatea**.
+   *
+   * La regla es fail-closed y no interpreta condiciones: **un gate con
+   * CUALQUIER `if:` es rojo**. No intento evaluar si esa condición es cierta en
+   * el evento que publica — eso es un intérprete de expresiones de GitHub, y un
+   * intérprete a medias es justo lo que vengo cerrando hace seis vueltas. Si
+   * algún día un gate necesita condición, se adjudica a mano y se escribe por
+   * qué.
+   */
+  it('🔴 los gates CORREN y su fallo BLOQUEA: sin `if:` y sin tolerar error', () => {
+    const pasos = pasosDe(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    const iPublica = pasos.findIndex((p) => comandosDe(p.run ?? '').some((c) => /^bash scripts\/publicar-vercel\.sh/.test(c)));
+    expect(iPublica, 'no se encontró el paso de publicación').toBeGreaterThan(0);
+
+    const GATES = [
+      /^node scripts\/verificar-mirror\.mjs\b/, /^npm test$/, /^npm run typecheck$/,
+      /^npm run build$/, /^npx playwright test$/,
+    ];
+    const problemas: string[] = [];
+    for (const p of pasos.slice(0, iPublica)) {
+      const cmds = comandosDe(p.run ?? '');
+      if (!GATES.some((re) => cmds.some((c) => re.test(c)))) continue;
+      if (p.condicion !== null) {
+        problemas.push(`línea ${p.linea}: el gate lleva \`if: ${p.condicion}\` — puede no ejecutarse`);
+      }
+      if (p.toleraError !== null && p.toleraError !== 'false') {
+        problemas.push(`línea ${p.linea}: \`continue-on-error: ${p.toleraError}\` — su fallo NO frena la publicación`);
+      }
+    }
+    // Control positivo: si ningún paso matcheara como gate, el bucle no miraría
+    // nada y esto pasaría en vacío sobre un CI sin gates.
+    const cuantos = pasos.slice(0, iPublica).filter((p) => GATES.some((re) => comandosDe(p.run ?? '').some((c) => re.test(c)))).length;
+    expect(cuantos, 'no se reconoció ningún gate: el test mediría en vacío').toBe(5);
+    expect(problemas, `gates que están escritos pero no gatean:\n  ${problemas.join('\n  ')}`).toEqual([]);
   });
 
   it('🔴 el retiro está EXPLICADO donde alguien lo va a buscar', () => {

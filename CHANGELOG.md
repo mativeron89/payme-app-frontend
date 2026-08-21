@@ -11,6 +11,77 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.106.0 — leer el paso no es leer si el paso CORRE (2026-08-21)
+
+Cierra el P2 del BLOCK sobre `32266c5`. **Sin regresión; la web publicada no se
+toca; el push sigue retenido por el incidente de Vercel.**
+
+Codex cerró los cuatro P2 anteriores —sus rivales mueren— y encontró el nivel
+siguiente **del mismo eje**, que se dice en dos frases:
+
+> **Leer el paso no es leer si el paso CORRE.**
+> **Leer el comando no es leer lo que el comando EVALÚA.**
+
+### ① Un gate PRESENTE puede no ejecutarse — o no bloquear
+
+Dos mutantes de YAML **perfectamente válido**, uno por vez, sobre el paso real
+de unitarios, **los dos dejaban la suite 21/21 verde**:
+
+| mutante | qué hace GitHub | qué probaba mi guarda |
+|---|---|---|
+| `if: false` | **no ejecuta el paso** | que el gate está escrito |
+| `continue-on-error: true` | lo ejecuta y **tolera su fallo** | que el gate está escrito |
+
+🔴 **Yo guardaba `run`/`uses` y tiraba el resto**, así que mi contrato decía
+«estos cinco gates se ejecutan y bloquean» y lo que verificaba era **que el texto
+estuviera antes de publicar**. Dos afirmaciones distintas, una sola comprobada.
+
+**El cierre es fail-closed y no interpreta condiciones: un gate con CUALQUIER
+`if:` es rojo.** No intento evaluar si esa condición es cierta en el evento que
+publica — eso sería un intérprete de expresiones de GitHub, **y un intérprete a
+medias es exactamente lo que vengo cerrando hace seis vueltas**. Si algún día un
+gate necesita condición, se adjudica a mano y se escribe por qué.
+
+### ② Un prefijo permitido no adjudica lo que el comando evalúa adentro
+
+```yaml
+run: bash scripts/reportar-flaky.sh … "$(npx vercel --prod)"
+```
+
+El shell evalúa la sustitución **ANTES** de invocar el script, así que el
+allowlist —que acepta **por prefijo**— lo daba por adjudicado: el prefijo es el
+script permitido y **lo peligroso viaja adentro, como argumento**.
+
+🔴 **No se cierra listando formas malas.** Se declara al revés: **si un comando
+lleva evaluación anidada, este arnés NO PUEDE decir qué ejecuta**, y lo que no se
+puede decidir no se aprueba. `$( )`, backticks, `eval` y `bash -c` son las formas
+que hoy sé nombrar; **el punto no es la lista, es que la respuesta ante
+cualquiera es «no sé», y «no sé» es rojo**.
+
+⚠️ **Y el ORDEN importa**: lo indecidible se mira **antes** que el allowlist. Al
+revés, `bash permitido.sh "$(peligroso)"` pasaría por el prefijo.
+
+### ③ Mutantes — las tres sondas de Codex y un control legítimo
+
+| # | Mutante | Resultado |
+|---|---|---|
+| Ⓐ | `npm test` con `if: false` | **muerto** |
+| Ⓑ | `npm test` con `continue-on-error: true` | **muerto** |
+| Ⓒ | evaluación anidada dentro de un comando permitido | **muerto** |
+| ⭐ | **control legítimo**: `continue-on-error: false` explícito | **queda VERDE** |
+
+Y el censo de gates lleva **control positivo de cardinalidad**: si ningún paso se
+reconociera como gate, el bucle no miraría nada y el test pasaría en vacío sobre
+un CI sin gates.
+
+📌 **La irónica de esta vuelta:** el testigo de Codex usa `$(npx vercel --prod)`
+— **el mismo comando que ayer ejecuté por accidente** desde un script mío. Él lo
+usó como mutación estática en un clon, sin ejecutarlo. **La diferencia entre las
+dos veces no es el comando: es dónde vivía.**
+
+**Medido:** typecheck ✓ · **1231** unitarios · **110** e2e ✓ · builds ✓ · espejo
+79 ✓. **Sin push:** conjuntiva pendiente **y** retención por el incidente.
+
 ## 0.105.0 — retornos implícitos, memoria con contexto, y los pasos leídos como pasos (2026-08-21)
 
 Cierra los cuatro P2 del BLOCK sobre `136ece4`. **Sin regresión runtime; la web
