@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fallasDeAliases, faltantesDeColeccion, fuentesSinProyecto } from './verificar-aliases.mjs';
+import {
+  fallasDeAliases,
+  faltantesDeColeccion,
+  fuentesSinProyecto,
+  fallaDeFrescura,
+} from './verificar-aliases.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(AQUI, '..');
@@ -233,4 +238,46 @@ describe('🔴 el universo cubre todas las extensiones efectivas', () => {
     it(`🔴 «${f}» entra al universo TS de typecheck`, () =>
       expect(ES_FUENTE_TS.test(f)).toBe(true));
   }
+});
+
+/**
+ * 🔴 P92 · LA FRESCURA ES PROPIEDAD DEL GATE, NO DEL ORDEN DE LOS PASOS.
+ *
+ * `--artefacto` exigía que `dist` fuera posterior a un sello; `--corrida` **no
+ * miraba la fecha del reporte en ningún lado**. Medido: con
+ * `touch -t 202001010000 .vitest-corrida.json` el gate salía **0** afirmando
+ * «la suite EJECUTÓ todos los archivos» sin que la suite hubiera corrido.
+ *
+ * En el CI el reporte era fresco porque `npm test` precede a `--corrida`, y esa
+ * precedencia **no la fijaba ningún test**. 🔴 **Una propiedad sostenida por tres
+ * cosas coordinadas no es una propiedad, es una coincidencia mantenida** — y el
+ * gate afirmaba algo más fuerte que su evidencia, que es la clase que este arnés
+ * viene cerrando hace catorce vueltas. Esta vez la escribí yo.
+ *
+ * ⚠️ Lo encontró medir una aspereza que el revisor había marcado **y después
+ * desarmado** como «transitivamente cerrada». Medirla en vez de aceptar el
+ * razonamiento es lo que la convirtió en hallazgo.
+ */
+describe('🔴 el resultado tiene que ser de ESTA ejecución', () => {
+  it('✅ CONTROL POSITIVO · un resultado posterior al sello pasa', () => {
+    expect(fallaDeFrescura(1_000, 2_000, 'la suite')).toBeNull();
+  });
+
+  it('🔴 un resultado ANTERIOR al sello → RECHAZADO (el mutante del reporte de 2020)', () => {
+    expect(fallaDeFrescura(2_000, 1_000, 'la suite')).toMatch(/ANTERIOR al sello/);
+  });
+
+  it('🔴 sin sello previo → RECHAZADO · no se puede acreditar procedencia', () => {
+    expect(fallaDeFrescura(null, 1_000, 'la suite')).toMatch(/no hay sello previo/);
+  });
+
+  it('🔴 sin resultado → RECHAZADO', () => {
+    expect(fallaDeFrescura(1_000, null, 'el build')).toMatch(/no existe el resultado/);
+  });
+
+  it('🔴 el borde: mismo instante que el sello CUENTA como fresco', () => {
+    // Un `>=` y no `>`: en un filesystem de baja resolución, sello y resultado
+    // pueden caer en el mismo tick, y un `>` daría falsos rojos intermitentes.
+    expect(fallaDeFrescura(1_000, 1_000, 'la suite')).toBeNull();
+  });
 });

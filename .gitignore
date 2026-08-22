@@ -40,4 +40,5 @@ blob-report/
 
 # Reporte de la corrida real de Vitest (gate del P90) — efímero
 .vitest-corrida.json
-.artefacto-sello
+.sello-corrida
+.sello-build

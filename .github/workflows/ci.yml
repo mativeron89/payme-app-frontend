@@ -55,6 +55,12 @@ jobs:
       # lo es, la guarda no corre y su silencio se lee como verde—.
       - name: El alias ejecuta su herramienta, sobre la población real
         run: node scripts/verificar-aliases.mjs --aliases
+      # 🔴 El sello ANTES de la suite (P92). Sin él, `--corrida` sólo comparaba
+      # población y no la FECHA del reporte: un `.vitest-corrida.json` viejo le
+      # hacía afirmar «la suite ejecutó todo» con la suite sin correr. La
+      # frescura la sostenía el orden de los pasos, que ningún test fijaba.
+      - name: Sellar el instante previo a la suite
+        run: node scripts/verificar-aliases.mjs --sellar corrida
       - run: npm test
       # 🔴 Y DESPUÉS SE MIRA QUÉ CORRIÓ DE VERDAD (P90). El paso de arriba mira
       # el mundo ANTES de que las herramientas corran, y eso es un TOCTOU por
@@ -79,7 +85,7 @@ jobs:
       # El sello marca el instante previo: sin él, un `dist` de otra ejecución
       # es indistinguible del que este build tenía que escribir.
       - name: Sellar el instante previo al build
-        run: node scripts/verificar-aliases.mjs --sellar
+        run: node scripts/verificar-aliases.mjs --sellar build
       - run: npm run build
         env:
           VITE_API_URL: https://payme-app-backend-production.up.railway.app

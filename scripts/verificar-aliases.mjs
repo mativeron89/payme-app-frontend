@@ -171,6 +171,33 @@ export function fallasDeAliases(scripts, existeConfig, entorno = {}) {
   return out;
 }
 
+/**
+ * 🔴 P92 · LA FRESCURA, UNA SOLA DEFINICIÓN PARA LOS DOS GATES.
+ *
+ * `--artefacto` exigía que `dist` fuera posterior a un sello; `--corrida` **no
+ * miraba la fecha del reporte en ningún lado**. La asimetría era un hueco real:
+ * con `touch -t 202001010000 .vitest-corrida.json` el gate decía «la suite
+ * EJECUTÓ todos los archivos» y salía **0** sin que la suite hubiera corrido.
+ *
+ * En el CI el reporte era fresco por el ORDEN de los pasos —`npm test` antes de
+ * `--corrida`—, y eso alcanzaba... hasta que alguien reordene. 🔴 **Una
+ * propiedad sostenida por tres cosas coordinadas no es una propiedad, es una
+ * coincidencia mantenida.** Acá pasa a ser propiedad del gate.
+ *
+ * Una función y no dos: dos implementaciones de «es fresco» es exactamente el
+ * defecto que el P85 cerró en el arnés YAML.
+ */
+export function fallaDeFrescura(mtimeSello, mtimeObjeto, etiqueta) {
+  if (mtimeSello === null) {
+    return `no hay sello previo de ${etiqueta}: sin él, un resultado de otra ejecución es indistinguible del que esta corrida tenía que producir`;
+  }
+  if (mtimeObjeto === null) return `no existe el resultado de ${etiqueta}`;
+  if (mtimeObjeto < mtimeSello) {
+    return `el resultado de ${etiqueta} es ANTERIOR al sello: es de otra ejecución, y esta no produjo nada`;
+  }
+  return null;
+}
+
 /** Los archivos que existen en disco y el runner NO recolecta. */
 export function faltantesDeColeccion(enDisco, recolectados) {
   if (enDisco.length === 0) return ['__VACIO__'];
@@ -330,6 +357,11 @@ function acreditarCorrida() {
     );
     return;
   }
+  // 🔴 P92 · Y TIENE QUE SER DE ESTA CORRIDA. Sin esto, un reporte viejo hacía
+  // que el gate afirmara «la suite EJECUTÓ todos los archivos» con la suite sin
+  // correr: la afirmación era más fuerte que su evidencia.
+  const viejo = fallaDeFrescura(cuando(join(RAIZ, SELLOS.corrida)), cuando(ruta), 'la suite');
+  if (viejo !== null) { fallar(viejo); return; }
   let reporte;
   try {
     reporte = JSON.parse(readFileSync(ruta, 'utf8'));
@@ -392,15 +424,10 @@ function acreditarArtefacto(dir) {
    * El sello se escribe ANTES del build y se compara contra las fechas de lo
    * producido. Existencia y tamaño no acreditan procedencia.
    */
-  const sello = join(RAIZ, '.artefacto-sello');
-  if (!existsSync(sello)) {
-    fallar(
-      'no hay sello previo: sin él, un `dist` de otra ejecución es indistinguible ' +
-        'del que este build tenía que escribir (correr `--sellar` antes del build)',
-    );
-    return;
-  }
-  const t0 = statSync(sello).mtimeMs;
+  const sello = join(RAIZ, SELLOS.build);
+  const t0 = cuando(sello);
+  const viejoSello = fallaDeFrescura(t0, t0 === null ? null : t0, 'el build');
+  if (viejoSello !== null) { fallar(viejoSello); return; }
   if (!existsSync(base)) {
     fallar(`el build no dejó «${dir}»: el comando salió 0 sin producir artefacto`);
     return;
@@ -410,12 +437,9 @@ function acreditarArtefacto(dir) {
     fallar(`«${dir}» existe pero no tiene index.html`);
     return;
   }
-  if (statSync(html).mtimeMs < t0) {
-    fallar(
-      `«${dir}/index.html» es ANTERIOR al sello: es un artefacto viejo y este build no escribió`,
-    );
-    return;
-  }
+  // La MISMA función de frescura que usa `--corrida`: una definición, dos gates.
+  const viejoHtml = fallaDeFrescura(t0, cuando(html), `el build (\`${dir}/index.html\`)`);
+  if (viejoHtml !== null) { fallar(viejoHtml); return; }
   const bundles = buscar(base, /\.js$/);
   const frescos = bundles.filter((f) => {
     const s = statSync(join(RAIZ, f));
@@ -429,9 +453,22 @@ function acreditarArtefacto(dir) {
   }
 }
 
-/** Marca el instante previo al build, para poder exigir artefacto fresco. */
-function sellar() {
-  writeFileSync(join(RAIZ, '.artefacto-sello'), `sello ${process.pid}\n`);
+/** Los dos momentos que se sellan, cada uno antes de la herramienta que acredita. */
+const SELLOS = Object.freeze({ corrida: '.sello-corrida', build: '.sello-build' });
+
+/** Marca el instante previo a una herramienta, para poder exigir su resultado fresco. */
+function sellar(cual) {
+  const archivo = SELLOS[cual];
+  if (archivo === undefined) {
+    fallar(`sello «${cual}» no adjudicado: sólo ${Object.keys(SELLOS).join(' y ')}`);
+    return;
+  }
+  writeFileSync(join(RAIZ, archivo), `sello ${cual} ${process.pid}\n`);
+}
+
+/** mtime de un archivo, o `null` si no está — para alimentar `fallaDeFrescura`. */
+function cuando(ruta) {
+  return existsSync(ruta) ? statSync(ruta).mtimeMs : null;
 }
 
 /**
@@ -505,7 +542,7 @@ if (modo === '--aliases') {
 } else if (modo === '--corrida') {
   acreditarCorrida();
 } else if (modo === '--sellar') {
-  sellar();
+  sellar(process.argv[3] ?? '(sin nombre)');
 } else if (modo === '--artefacto') {
   acreditarArtefacto(process.argv[3] ?? '(sin destino)');
 } else {

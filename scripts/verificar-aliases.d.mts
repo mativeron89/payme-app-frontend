@@ -35,3 +35,13 @@ export function fuentesSinProyecto(
   enDisco: readonly string[],
   cubiertos: readonly string[],
 ): string[];
+
+/**
+ * Falla de frescura de un resultado contra su sello, o `null` si es de esta
+ * ejecución. Una sola definición para `--corrida` y `--artefacto`.
+ */
+export function fallaDeFrescura(
+  mtimeSello: number | null,
+  mtimeObjeto: number | null,
+  etiqueta: string,
+): string | null;

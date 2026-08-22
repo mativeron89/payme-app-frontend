@@ -861,7 +861,8 @@ const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = 
   espejo: {},
   aliases: {},
   corrida: {},
-  sello: {},
+  'sello-corrida': {},
+  'sello-build': {},
   artefacto: {},
   test: {},
   typecheck: {},
@@ -906,7 +907,11 @@ const ROL_DE_PASO: ReadonlyArray<readonly [RegExp, string]> = [
   // satisfaciendo la exigencia y el mutante sobrevivía 85/85.
   [/^node scripts\/verificar-aliases\.mjs --aliases$/, 'aliases'],
   [/^node scripts\/verificar-aliases\.mjs --corrida$/, 'corrida'],
-  [/^node scripts\/verificar-aliases\.mjs --sellar$/, 'sello'],
+  // 🔴 P92 · CADA SELLO ES SU PROPIO ROL. Con un rol común, sacar uno del
+  // workflow dejaba al otro satisfaciendo la exigencia — el mismo defecto que
+  // ya se pagó con los dos modos del verificador.
+  [/^node scripts\/verificar-aliases\.mjs --sellar corrida$/, 'sello-corrida'],
+  [/^node scripts\/verificar-aliases\.mjs --sellar build$/, 'sello-build'],
   // 🔴 P90 · EL COMANDO COMPLETO, CON SU DESTINO. `rolDePaso` compara prefijos
   // de hasta 3 tokens, así que el 4º —`dist`— quedaba fuera del rol y del censo:
   // cambiarlo por `--artefacto .` daba exit 0 sobre el `index.html` de la raíz y
@@ -1503,7 +1508,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
   const previos = publicadores.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub));
   for (const pub of publicadores) {
     const suyos = new Set(pasosGarantizadosAntesDe(jobs, pub).map((p) => rolDePaso(p.claves)));
-    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'corrida', 'sello', 'artefacto'] as const) {
+    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'sello-corrida', 'corrida', 'sello-build', 'artefacto'] as const) {
       if (!suyos.has(g)) {
         fallasPorPublicador.push(
           `${pub.job}.steps[${pub.indice}]: publica sin el gate «${g}» garantizado antes`,
@@ -1553,7 +1558,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
    * estuviera bien.
    */
   const rolesVistos = new Set(previos.map((p) => rolDePaso(p.claves)));
-  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'corrida', 'sello', 'artefacto'] as const) {
+  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'sello-corrida', 'corrida', 'sello-build', 'artefacto'] as const) {
     if (!rolesVistos.has(g)) fallas.push(`el gate «${g}» no está entre los pasos previos`);
   }
   return fallas;

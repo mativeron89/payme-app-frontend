@@ -11,6 +11,52 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.125.0 — la frescura es propiedad del gate, no del orden de los pasos (2026-08-22)
+
+**No sale de un dictamen: sale de medir una aspereza que el revisor había marcado
+y después desarmado solo.** Él vio que `--artefacto` tenía sello de frescura y
+`--corrida` no, y concluyó que estaba «transitivamente cerrada» por tres razones
+coordinadas. Medirla en vez de aceptar el razonamiento la convirtió en hallazgo:
+
+```bash
+touch -t 202001010000 .vitest-corrida.json     # la suite NO corrió
+node scripts/verificar-aliases.mjs --corrida
+── corrida OK: la suite EJECUTÓ todos los archivos de test que existen en disco.
+exit=0
+```
+
+🔴 **El gate afirmaba algo más fuerte que su evidencia** — la clase que este arnés
+viene cerrando hace catorce vueltas, esta vez escrita por mí.
+
+Sus tres razones eran ciertas y no se refutan: el pin del alias, el conjunto
+completo de scripts y los pasos separados sí hacen que en el CI el reporte sea
+fresco. Lo que ninguna cubría es que **`--corrida` nunca miraba la fecha**. La
+frescura la sostenía el ORDEN de los pasos, y ningún test lo fijaba: reordenar el
+workflow la rompía sin tocar el gate, y en local ya daba falso verde.
+
+> **Una propiedad sostenida por tres cosas coordinadas no es una propiedad, es
+> una coincidencia mantenida.**
+
+### El fix, con una sola definición
+
+`fallaDeFrescura()` es **una** función que usan los dos gates —dos
+implementaciones de «es fresco» sería el defecto que el P85 cerró—. Cada
+herramienta tiene su sello propio (`--sellar corrida` antes de la suite,
+`--sellar build` antes del build) y **cada sello es su propio rol**: con un rol
+común, sacar uno del workflow dejaba al otro satisfaciendo la exigencia, que es
+un defecto que ya se pagó una vez esta noche.
+
+Sacar cualquiera de los dos sellos pone ahora **2 casos en rojo**.
+
+### Por qué se movió una ref ya empaquetada
+
+`5adc1494` tenía un **falso verde conocido**. La regla de no mover una ref
+auditada protege contra nitpicks y mejoras; **esto era una correctitud**, y mandar
+a auditar una ref que sabemos rota gasta el presupuesto del auditor para nada. El
+paquete anterior se retira con errata.
+
+**Sin push ni deploy.** El intermitente E2E sigue **ABIERTO**.
+
 ## 0.124.0 — cierre del BLOCK P90: TOCTOU, y el gate mira el efecto terminal (2026-08-22)
 
 El gate del P88 miraba el mundo **antes** de que las herramientas corrieran, y eso
