@@ -4724,6 +4724,25 @@ body {
   color: var(--on-dark);
   min-height: var(--tap-min);
 }
+/* Ticket INCOMPLETO — el mismo par «pendiente + pulso» que el stepper y el
+   selector de propina (§1.4, §1.5 bis), extendido acá por §5 bis · E: el
+   círculo dejó de apagarse por esto, así que el bloque que falta tiene que
+   señalarse solo. Sin el borde punteado, el pulso no tendría sobre qué pulsar. */
+.tk-fold--pending {
+  border: 1px dashed var(--warning);
+}
+.tk-fold--pulse {
+  animation: tip-pulse 0.6s ease-out 1;
+}
+/* Igual que `.tip-block--pulse`: NO se anula la animación, se acorta. Es su
+   `animationend` el que apaga la clase, y sin él el pulso queda pegado y el
+   segundo intento no avisa nada. */
+@media (prefers-reduced-motion: reduce) {
+  .tk-fold--pulse {
+    animation-duration: 0.01ms;
+  }
+}
+
 .tk-fold-ico {
   flex: none;
   /* §5 bis · F reserva `--action-2` para «seleccionado», y esto NO lo

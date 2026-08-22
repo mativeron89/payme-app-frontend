@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderFlow } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
+import { useToast } from '../components/ui';
 import { InviteFriends } from '../components/InviteFriends';
 import type { MesaDetail, MesaItem } from '../api/types';
 import { countdownTo, formatMXN } from '../utils/format';
@@ -127,6 +128,10 @@ export function MesaDetailView({
   onBack,
 }: MesaDetailViewProps) {
   const { t } = useIdioma();
+  const toast = useToast();
+  /** El par «scroll + pulso» de §1.4/§1.5 bis, acá para la lista de consumos. */
+  const [itemsPulse, setItemsPulse] = useState(false);
+  const itemsRef = useRef<HTMLDivElement | null>(null);
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
   const pct = mesa.total_cents > 0 ? Math.round((mesa.paid_amount_cents / mesa.total_cents) * 100) : 0;
@@ -195,8 +200,24 @@ export function MesaDetailView({
     </div>
   );
 
-  const continuarDeshabilitado =
-    busy || (esConsumo ? selected.size === 0 : availableSlots === 0);
+  /**
+   * 🔴 §5 bis · E, adjudicado 2026-08-21 — el círculo no se apaga por FALTA DE
+   * UN DATO. Acá había tres razones mezcladas en una línea y sólo UNA es de esa
+   * clase; se separan porque las otras dos NO se retiran:
+   *
+   *   busy                  operación EN VUELO   → sigue apagando (AF-04)
+   *   availableSlots === 0  no quedan casilleros  → sigue apagando · ver abajo
+   *   selected.size === 0   falta elegir ítems    → SE RETIRA, frena explicando
+   *
+   * ⚠️ `availableSlots === 0` NO es «falta un dato», aunque se le parezca: no
+   * hay nada que la persona pueda completar para avanzar — la mesa se llenó.
+   * Un círculo tocable que no puede avanzar nunca es el botón muerto que §E
+   * quiere evitar, no el que quiere habilitar. Le declaré esta fila al
+   * Bibliotecario como «se retira `selected.size===0`, se conserva `busy`»;
+   * mirándola de cerca son TRES razones, no dos.
+   */
+  const faltaElegirConsumos = esConsumo && selected.size === 0;
+  const continuarDeshabilitado = busy || (!esConsumo && availableSlots === 0);
 
   return (
     <div className="screen has-appbar">
@@ -248,7 +269,12 @@ export function MesaDetailView({
             </div>
           </>
         )}
-        <div className="card" style={{ marginBottom: 14 }}>
+        <div
+          ref={itemsRef}
+          className={`card${faltaElegirConsumos ? ' tk-fold--pending' : ''}${itemsPulse ? ' tk-fold--pulse' : ''}`}
+          style={{ marginBottom: 14 }}
+          onAnimationEnd={() => setItemsPulse(false)}
+        >
           {mesa.items.map((i) => {
             const fullPrice = i.price_cents * i.quantity;
             const state = rowStateOf(i, selected);
@@ -363,7 +389,17 @@ export function MesaDetailView({
         center={{
           label: t('Continuar'),
           icon: 'arrow-right',
-          onClick: onGoToPay,
+          onClick: () => {
+            // Frena explicando, no apagado (§5 bis · E): toast + scroll + pulso,
+            // las tres. `onGoToPay` no se llama: no se avanza sin elegir.
+            if (faltaElegirConsumos) {
+              toast(t('Elige lo que consumiste para continuar'));
+              itemsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+              setItemsPulse(true);
+              return;
+            }
+            onGoToPay();
+          },
           disabled: continuarDeshabilitado,
         }}
       />

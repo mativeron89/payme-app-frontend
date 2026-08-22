@@ -166,6 +166,13 @@ export function CreateMesaFlow() {
   const [participants, setParticipants] = useState<number | null>(null);
   const [stepperPulse, setStepperPulse] = useState(false);
   const stepperRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Lo mismo que el stepper, para el TICKET incompleto — §5 bis · E, adjudicado
+   * por Diseño el 2026-08-21 (`diseno@0206d44`): el círculo no se apaga por
+   * falta de un dato, y responde con toast + scroll + pulso, LAS TRES JUNTAS.
+   */
+  const [ticketPulse, setTicketPulse] = useState(false);
+  const ticketRef = useRef<HTMLDivElement | null>(null);
   // Piso del CONTRATO, no inventado: `schemas/index.js` exige >= 2 en partes
   // iguales (refine sobre division_mode) y >= 1 en el resto.
   const pisoComensales = pisoDe(division);
@@ -1332,7 +1339,11 @@ export function CreateMesaFlow() {
             )}
           </div>
           {/* EL TICKET, plegado por default. Mismo contenido de §1.3. */}
-          <div className="card tk-fold">
+          <div
+            ref={ticketRef}
+            className={`card tk-fold${!ticketValid ? ' tk-fold--pending' : ''}${ticketPulse ? ' tk-fold--pulse' : ''}`}
+            onAnimationEnd={() => setTicketPulse(false)}
+          >
             <button
               className="tk-fold-head"
               onClick={() => setTicketAbierto((o) => !o)}
@@ -1514,11 +1525,27 @@ export function CreateMesaFlow() {
                 setStepperPulse(true);
                 return;
               }
-              if (!ticketValid) return;
+              /**
+               * 🔴 EL TICKET INCOMPLETO YA NO APAGA EL CÍRCULO (§5 bis · E,
+               * adjudicado 2026-08-21). Faltar consumos ES «falta un dato para
+               * avanzar», así que frena explicando, igual que el stepper.
+               *
+               * ⚠️ SE ABRE EL ACORDEÓN ANTES DE SCROLLEAR, y no es un extra:
+               * el ticket nace PLEGADO, así que scrollear sin abrirlo deja a la
+               * persona mirando una barra cerrada que no dice cuál consumo está
+               * incompleto. Un cartel que nombra el problema y no lleva a
+               * resolverlo es peor que no avisar.
+               */
+              if (!ticketValid) {
+                toast(ticketInvalidReason);
+                setTicketAbierto(true);
+                ticketRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                setTicketPulse(true);
+                return;
+              }
               void loadCards();
               setStep('garantia');
             },
-            disabled: !ticketValid,
           }}
         />
       </div>

@@ -41,12 +41,50 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.getByText('¡Listo!')).toBeVisible();
   });
 
-  test('consumo: sin elegir, Continuar sigue deshabilitado — ahí la selección ES el monto', async ({ page }) => {
+  /**
+   * 🔴 ESTE TEST AFIRMABA `toBeDisabled()` Y AHORA AFIRMA ALGO MÁS FUERTE.
+   * Se cambia el MECANISMO, no la semántica que H-14 vino a proteger.
+   *
+   * `SISTEMA_DISENO.md` §5 bis · E (2026-08-21, adjudicado en `diseno@0206d44`)
+   * retira el apagado del círculo **cuando lo que falta es un dato**, y lo
+   * reemplaza por toast + scroll + pulso. Es el patrón que §1.4 (stepper) y
+   * §1.5 bis (propina) ya ratificaban: *"no se envía nada"* con el botón
+   * visualmente activo.
+   *
+   * ⚠️ LA MITAD QUE H-14 CUIDA NO SE MOVIÓ, y por eso este test se refuerza en
+   * vez de aflojarse: en `consumo` la selección SIGUE determinando el monto y
+   * SIGUE sin poderse avanzar sin ella. Lo que cambió es cómo se comunica.
+   * `toBeDisabled()` probaba el mecanismo viejo; estas tres afirmaciones
+   * prueban la CONDUCTA, que es lo que la auditoría quería fijar:
+   *
+   *   ① tocar sin elegir NO lleva al pago
+   *   ② y explica por qué, en vez de no hacer nada
+   *   ③ con un ítem elegido, sí lleva
+   *
+   * Si alguien "se pasa de alcance" y deja avanzar sin selección, ① cae — que
+   * es exactamente lo que el centinela original detectaba.
+   */
+  test('consumo: sin elegir NO se avanza y se explica — ahí la selección ES el monto', async ({
+    page,
+  }) => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
 
     await expect(page.getByText('Tagliatelle Bolognese')).toBeVisible();
     await expect(page.getByText('Elige lo que consumiste').first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeDisabled();
+
+    const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
+    // El círculo ya no nace apagado: §5 bis · E.
+    await expect(continuar).toBeEnabled();
+    await continuar.click();
+
+    // ① no llegó al pago  ② lo dijo
+    await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toHaveCount(0);
+    await expect(page.getByText('Elige lo que consumiste para continuar')).toBeVisible();
+
+    // ③ con un consumo elegido, el mismo control sí avanza.
+    await page.getByText('Tagliatelle Bolognese').click();
+    await continuar.click();
+    await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
   });
 });

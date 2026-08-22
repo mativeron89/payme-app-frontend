@@ -230,7 +230,13 @@ describe('POBLACIÓN · el espejo no perdió tokens en silencio', () => {
    * si se actualizara solo, no avisaría nada.
    */
   it('🔴 los tokens SIN valor ratificado están declarados, no omitidos', () => {
-    expect(espejo.POBLACION.mencionados_sin_valor.length).toBe(21);
+    // 🔴 21 → 22 el 2026-08-21: entra `--channel-whatsapp`. NO es un token
+    // nuevo del sistema —existía en §5 bis · F desde el 21/08— sino que la
+    // corrección de esa sección (`diseno@7bb13e3`) lo dejó mencionado en PROSA,
+    // que es lo que este parser cuenta. Sigue sin valor en tabla, y por eso
+    // cae de este lado. El número se mueve por RE-ESPEJADO, nunca para
+    // silenciar el rojo.
+    expect(espejo.POBLACION.mencionados_sin_valor.length).toBe(22);
     expect(espejo.POBLACION.mencionados_sin_valor).toContain('--sp-1');
     for (const t of espejo.POBLACION.mencionados_sin_valor) {
       expect(t, `${t} tiene valor ratificado y sigue listado como que no`).not.toBeUndefined();
