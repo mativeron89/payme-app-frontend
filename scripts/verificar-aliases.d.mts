@@ -37,11 +37,12 @@ export function fuentesSinProyecto(
 ): string[];
 
 /**
- * Falla de frescura de un resultado contra su sello, o `null` si es de esta
- * ejecución. Una sola definición para `--corrida` y `--artefacto`.
+ * Patrón ANCHO de archivo de test: cualquier extensión de código con `.test.`
+ * adentro. Se exporta para que los centinelas lo IMPORTEN en vez de re-declarar
+ * una copia —el defecto del P94—: estrechar esta constante tiene que matar una
+ * hoja del arnés.
  */
-export function fallaDeFrescura(
-  mtimeSello: number | null,
-  mtimeObjeto: number | null,
-  etiqueta: string,
-): string | null;
+export const ES_TEST: RegExp;
+
+/** Patrón ancho de fuente TypeScript, con sus variantes `.mts`/`.cts`. */
+export const ES_FUENTE_TS: RegExp;

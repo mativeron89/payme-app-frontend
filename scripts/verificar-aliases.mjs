@@ -40,9 +40,12 @@
  *                 Vitest y Playwright cubre todo lo que existe en disco.
  *   --corrida     Corre DESPUÉS de la suite: lee el reporte que Vitest escribió y
  *                 acredita QUÉ SE EJECUTÓ, no qué se iba a ejecutar.
- *   --sellar      Marca el instante previo al build.
- *   --artefacto   Corre DESPUÉS del build: el artefacto existe, tiene sustancia
- *                 y es POSTERIOR al sello — o sea, lo escribió esta ejecución.
+ *   --invalidar   BORRA el resultado de una herramienta antes de correrla, para
+ *                 que su reaparición sea la acreditación. Reemplaza al sello por
+ *                 `mtime`, que era manipulable con un `touch`.
+ *   --artefacto   Corre DESPUÉS del build: `dist` existe y tiene sustancia — y
+ *                 como se borró antes, existir significa que ESTE build lo
+ *                 escribió, sin depender de ninguna fecha.
  *
  * ## 🔴 Por qué hay modos «antes» y modos «después» (P90)
  *
@@ -52,10 +55,10 @@
  * scripts cierra la vía conocida; **los modos `--corrida` y `--artefacto`
  * cierran la clase**, porque no preguntan qué VA A pasar sino qué PASÓ.
  */
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, dirname, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 /**
@@ -111,10 +114,10 @@ const CONFIG_PROHIBIDA = ['.npmrc'];
  * `.test.` adentro—: si algo así existe y el runner no lo recolecta, es rojo. Un
  * universo más ancho que el real falla del lado seguro; uno más angosto miente.
  */
-const ES_TEST = /\.test\.[cm]?[jt]sx?$/;
+export const ES_TEST = /\.test\.[cm]?[jt]sx?$/;
 
 /** Fuentes que un proyecto de TypeScript debería compilar, con sus variantes. */
-const ES_FUENTE_TS = /\.[cm]?tsx?$/;
+export const ES_FUENTE_TS = /\.[cm]?tsx?$/;
 
 const fallas = [];
 const fallar = (m) => fallas.push(m);
@@ -172,31 +175,36 @@ export function fallasDeAliases(scripts, existeConfig, entorno = {}) {
 }
 
 /**
- * 🔴 P92 · LA FRESCURA, UNA SOLA DEFINICIÓN PARA LOS DOS GATES.
+ * 🔴 P94 · INVALIDACIÓN EFECTIVA PREVIA — la ausencia es la prueba.
  *
- * `--artefacto` exigía que `dist` fuera posterior a un sello; `--corrida` **no
- * miraba la fecha del reporte en ningún lado**. La asimetría era un hueco real:
- * con `touch -t 202001010000 .vitest-corrida.json` el gate decía «la suite
- * EJECUTÓ todos los archivos» y salía **0** sin que la suite hubiera corrido.
+ * Antes esto era un SELLO: se escribía un archivo antes de la herramienta y se
+ * exigía que el resultado tuviera `mtime` posterior. Tapaba el exploit conocido
+ * —un reporte viejo pasando por verde— **y su instrumento era manipulable**:
  *
- * En el CI el reporte era fresco por el ORDEN de los pasos —`npm test` antes de
- * `--corrida`—, y eso alcanzaba... hasta que alguien reordene. 🔴 **Una
- * propiedad sostenida por tres cosas coordinadas no es una propiedad, es una
- * coincidencia mantenida.** Acá pasa a ser propiedad del gate.
+ * ```
+ * sellar → (NO se corre el build) → touch dist/* → gate
+ * ── artefacto OK: «lo escribió ESTA ejecución»      exit 0   ← falso
+ * ```
  *
- * Una función y no dos: dos implementaciones de «es fresco» es exactamente el
- * defecto que el P85 cerró en el arnés YAML.
+ * 🔴 **`mtime` lo mueve cualquiera que controle el filesystem, así que arreglé
+ * «no midas con un instrumento que el atacante mueve» con OTRO instrumento que
+ * el atacante mueve.** Verificamos que el fix tapaba el exploit; no preguntamos
+ * de qué dependía la evidencia NUEVA. Son dos preguntas y la segunda es la que
+ * decide.
+ *
+ * La salida no fue afinar el sello sino cambiarlo: **se BORRA el resultado antes
+ * de correr la herramienta, y su existencia después es la prueba.** No depende
+ * de ninguna fecha, no hay nada que falsificar con un `touch`, y el arnés queda
+ * más chico. Codex lo llama «invalidación efectiva previa».
+ *
+ * ⚠️ **Destructivo en local, a propósito y documentado:** correr el gate borra
+ * tu `dist` y tu reporte. Los dos están gitignored y se reconstruyen con un
+ * rebuild — es el precio de que la ausencia signifique algo.
  */
-export function fallaDeFrescura(mtimeSello, mtimeObjeto, etiqueta) {
-  if (mtimeSello === null) {
-    return `no hay sello previo de ${etiqueta}: sin él, un resultado de otra ejecución es indistinguible del que esta corrida tenía que producir`;
-  }
-  if (mtimeObjeto === null) return `no existe el resultado de ${etiqueta}`;
-  if (mtimeObjeto < mtimeSello) {
-    return `el resultado de ${etiqueta} es ANTERIOR al sello: es de otra ejecución, y esta no produjo nada`;
-  }
-  return null;
-}
+const INVALIDABLES = Object.freeze({
+  corrida: '.vitest-corrida.json',
+  build: 'dist',
+});
 
 /** Los archivos que existen en disco y el runner NO recolecta. */
 export function faltantesDeColeccion(enDisco, recolectados) {
@@ -224,6 +232,24 @@ export function fuentesSinProyecto(enDisco, cubiertos) {
   if (enDisco.length === 0) return ['__VACIO__'];
   const set = new Set(cubiertos);
   return enDisco.filter((f) => !set.has(f));
+}
+
+/**
+ * 🔴 P94 · LA RAÍZ TAMBIÉN ES UNIVERSO — y quedaba afuera de los dos censos.
+ *
+ * Los censos recorrían `src/`, `scripts/`, `e2e/` y `landing/`. Un `.mts` en la
+ * RAÍZ con un error de tipo real (`const n: number = 'texto'`) dejaba **el
+ * typecheck en 0 y el gate en 0**: la extensión ancha cubría el nombre, pero
+ * ningún recorrido pasaba por ahí.
+ *
+ * Se lista PLANO y no recursivo a propósito: recursivo desde la raíz barrería
+ * `dist/`, `coverage/` y todo lo generado, y un universo lleno de artefactos
+ * daría rojos que no son defectos.
+ */
+function buscarEnRaiz(re) {
+  return readdirSync(RAIZ, { withFileTypes: true })
+    .filter((e) => e.isFile() && !e.name.startsWith('.') && re.test(e.name))
+    .map((e) => e.name);
 }
 
 /** Archivos bajo `dir` que matcheen `re`, recursivo, ignorando `node_modules`. */
@@ -299,6 +325,7 @@ function adjudicarPoblacion() {
     ...buscar(join(RAIZ, 'src'), ES_TEST),
     ...buscar(join(RAIZ, 'scripts'), ES_TEST),
     ...buscar(join(RAIZ, 'landing'), ES_TEST),
+    ...buscarEnRaiz(ES_TEST),
   ];
   acreditarColeccion('Vitest', unitarios, () =>
     execFileSync('npx', ['vitest', 'list', '--filesOnly'], {
@@ -357,11 +384,9 @@ function acreditarCorrida() {
     );
     return;
   }
-  // 🔴 P92 · Y TIENE QUE SER DE ESTA CORRIDA. Sin esto, un reporte viejo hacía
-  // que el gate afirmara «la suite EJECUTÓ todos los archivos» con la suite sin
-  // correr: la afirmación era más fuerte que su evidencia.
-  const viejo = fallaDeFrescura(cuando(join(RAIZ, SELLOS.corrida)), cuando(ruta), 'la suite');
-  if (viejo !== null) { fallar(viejo); return; }
+  // 🔴 P94 · La frescura ya no se compara: el reporte se BORRA antes de la
+  // suite, así que existir es haber sido escrito por esta corrida. El `if` de
+  // arriba —que exige su existencia— es toda la guarda, y no depende de fechas.
   let reporte;
   try {
     reporte = JSON.parse(readFileSync(ruta, 'utf8'));
@@ -376,6 +401,7 @@ function acreditarCorrida() {
     ...buscar(join(RAIZ, 'src'), ES_TEST),
     ...buscar(join(RAIZ, 'scripts'), ES_TEST),
     ...buscar(join(RAIZ, 'landing'), ES_TEST),
+    ...buscarEnRaiz(ES_TEST),
   ];
   const ausentes = faltantesDeColeccion(enDisco, corridos);
   if (ausentes[0] === '__VACIO__') {
@@ -424,10 +450,7 @@ function acreditarArtefacto(dir) {
    * El sello se escribe ANTES del build y se compara contra las fechas de lo
    * producido. Existencia y tamaño no acreditan procedencia.
    */
-  const sello = join(RAIZ, SELLOS.build);
-  const t0 = cuando(sello);
-  const viejoSello = fallaDeFrescura(t0, t0 === null ? null : t0, 'el build');
-  if (viejoSello !== null) { fallar(viejoSello); return; }
+  // 🔴 P94 · `dist` se borra antes del build: que exista ES la acreditación.
   if (!existsSync(base)) {
     fallar(`el build no dejó «${dir}»: el comando salió 0 sin producir artefacto`);
     return;
@@ -437,38 +460,15 @@ function acreditarArtefacto(dir) {
     fallar(`«${dir}» existe pero no tiene index.html`);
     return;
   }
-  // La MISMA función de frescura que usa `--corrida`: una definición, dos gates.
-  const viejoHtml = fallaDeFrescura(t0, cuando(html), `el build (\`${dir}/index.html\`)`);
-  if (viejoHtml !== null) { fallar(viejoHtml); return; }
+
   const bundles = buscar(base, /\.js$/);
-  const frescos = bundles.filter((f) => {
-    const s = statSync(join(RAIZ, f));
-    return s.size > 1024 && s.mtimeMs >= t0;
-  });
+  const frescos = bundles.filter((f) => statSync(join(RAIZ, f)).size > 1024);
   if (frescos.length === 0) {
     fallar(
       `«${dir}» no tiene ningún bundle .js con sustancia escrito por ESTA ejecución: ` +
         'el build fue no-op y quedó el artefacto anterior',
     );
   }
-}
-
-/** Los dos momentos que se sellan, cada uno antes de la herramienta que acredita. */
-const SELLOS = Object.freeze({ corrida: '.sello-corrida', build: '.sello-build' });
-
-/** Marca el instante previo a una herramienta, para poder exigir su resultado fresco. */
-function sellar(cual) {
-  const archivo = SELLOS[cual];
-  if (archivo === undefined) {
-    fallar(`sello «${cual}» no adjudicado: sólo ${Object.keys(SELLOS).join(' y ')}`);
-    return;
-  }
-  writeFileSync(join(RAIZ, archivo), `sello ${cual} ${process.pid}\n`);
-}
-
-/** mtime de un archivo, o `null` si no está — para alimentar `fallaDeFrescura`. */
-function cuando(ruta) {
-  return existsSync(ruta) ? statSync(ruta).mtimeMs : null;
 }
 
 /**
@@ -521,6 +521,7 @@ function adjudicarProyectosTs() {
     ...buscar(join(RAIZ, 'scripts'), ES_FUENTE_TS),
     ...buscar(join(RAIZ, 'e2e'), ES_FUENTE_TS),
     ...buscar(join(RAIZ, 'landing'), ES_FUENTE_TS),
+    ...buscarEnRaiz(ES_FUENTE_TS),
   ];
   const huerfanos = fuentesSinProyecto(enDisco, [...cubiertos]);
   if (huerfanos[0] === '__VACIO__') {
@@ -534,6 +535,28 @@ function adjudicarProyectosTs() {
   }
 }
 
+/** Borra el resultado de una herramienta, para que su reaparición lo acredite. */
+function invalidar(cual) {
+  const objetivo = INVALIDABLES[cual];
+  if (objetivo === undefined) {
+    fallar(`«${cual}» no es invalidable: sólo ${Object.keys(INVALIDABLES).join(' y ')}`);
+    return;
+  }
+  rmSync(join(RAIZ, objetivo), { recursive: true, force: true });
+}
+
+/**
+ * 🔴 P94 · EL CLI SÓLO CORRE COMO SCRIPT, NUNCA AL SER IMPORTADO.
+ *
+ * Sin este guard, `import { ES_TEST } from './verificar-aliases.mjs'` ejecutaba
+ * el gate ENTERO dentro del test —incluido su `process.exit`—. Apareció al hacer
+ * que el centinela importe los patrones productivos en vez de copiarlos: el
+ * arreglo correcto destapó que el módulo no era importable de verdad.
+ */
+if (import.meta.url !== pathToFileURL(process.argv[1] ?? '').href) {
+  // Importado como módulo: sólo se exponen las funciones puras.
+} else {
+
 const modo = process.argv[2] ?? '--aliases';
 if (modo === '--aliases') {
   adjudicarAliases();
@@ -541,8 +564,8 @@ if (modo === '--aliases') {
   adjudicarPoblacion();
 } else if (modo === '--corrida') {
   acreditarCorrida();
-} else if (modo === '--sellar') {
-  sellar(process.argv[3] ?? '(sin nombre)');
+} else if (modo === '--invalidar') {
+  invalidar(process.argv[3] ?? '(sin nombre)');
 } else if (modo === '--artefacto') {
   acreditarArtefacto(process.argv[3] ?? '(sin destino)');
 } else {
@@ -565,7 +588,9 @@ console.log(
       '── aliases OK: el conjunto de scripts es el adjudicado y la colección declarada cubre ' +
       'todo lo que existe en disco.',
     '--corrida': '── corrida OK: la suite EJECUTÓ todos los archivos de test que existen en disco.',
-    '--sellar': '── sello escrito: el artefacto de este build tendrá que ser posterior.',
+    '--invalidar': '── invalidado: el resultado anterior se borró, así que reaparecer lo acredita.',
     '--artefacto': '── artefacto OK: `dist` lo escribió ESTA ejecución, no un build anterior.',
   }[modo],
 );
+
+}

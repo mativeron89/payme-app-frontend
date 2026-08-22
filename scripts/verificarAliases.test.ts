@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
@@ -8,7 +8,8 @@ import {
   fallasDeAliases,
   faltantesDeColeccion,
   fuentesSinProyecto,
-  fallaDeFrescura,
+  ES_TEST,
+  ES_FUENTE_TS,
 } from './verificar-aliases.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
@@ -213,14 +214,47 @@ describe('🔴 el ejecutable LLAMA a la adjudicación, no sólo la exporta', () 
  * ⚠️ El defecto no fue olvidarse del `tsx`: fue **escribir la extensión a mano**.
  */
 describe('🔴 el universo cubre todas las extensiones efectivas', () => {
-  const ES_TEST = /\.test\.[cm]?[jt]sx?$/;
-  const ES_FUENTE_TS = /\.[cm]?tsx?$/;
+  /**
+   * 🔴 P94 · SE IMPORTAN, NO SE RE-DECLARAN — y acá estuvo el defecto.
+   *
+   * Este bloque definía sus PROPIAS copias de los dos patrones. Revertir el del
+   * módulo al defectuoso —`/\.test\.ts$/`, el que dejaba escapar
+   * `walletRouteGuard.test.tsx`— dejaba este archivo en **41/41 verde**: el
+   * centinela vigilaba una copia que nadie toca.
+   *
+   * Es la clase del P85 por TERCERA vez en la jornada, cometida en el commit
+   * donde la lección estaba fresca. La forma que corta no es entenderla mejor,
+   * es el gesto mecánico: **un centinela referencia el MISMO objeto que usa
+   * producción, por `import`; si el módulo no lo exporta, exportarlo es parte
+   * del arreglo.** Al fijar un patrón en un test, buscar ese literal en el
+   * módulo: si aparece dos veces, una es la falsa.
+   */
 
   it('🔴 `.test.tsx` cuenta como test — el archivo real que se escapaba', () => {
     expect(ES_TEST.test('walletRouteGuard.test.tsx')).toBe(true);
     expect(existsSync(join(RAIZ, 'src/walletRouteGuard.test.tsx')),
       'el archivo que motivó el hallazgo dejó de existir: este caso ya no mide lo que dice')
       .toBe(true);
+  });
+
+  /**
+   * 🔴 P94 · EL CONTROL COMPUESTO: patrón + CONFIG + archivo real.
+   *
+   * Que `ES_TEST` cubra `.tsx` no alcanza — la población efectiva la deciden DOS
+   * cosas, y el falso verde salía de mirar una sola. Este caso liga las tres:
+   * el archivo existe, el patrón productivo lo reconoce, **y la config de Vitest
+   * lo incluye**. Estrechar cualquiera de las dos primeras rompe acá; estrechar
+   * la config rompe el gate `--aliases`, que compara disco contra colección real.
+   */
+  it('🔴 COMPUESTO · el archivo, el patrón productivo Y la config lo cubren', () => {
+    const archivo = 'src/walletRouteGuard.test.tsx';
+    expect(existsSync(join(RAIZ, archivo)), 'el archivo que motivó el hallazgo ya no existe')
+      .toBe(true);
+    expect(ES_TEST.test(archivo), 'el patrón productivo dejó de reconocer `.tsx`').toBe(true);
+    const cfg = readFileSync(join(RAIZ, 'vite.config.ts'), 'utf8');
+    const include = /include:\s*\[([^\]]*)\]/.exec(cfg)?.[1] ?? '';
+    expect(include, 'la config de Vitest no lo incluye: el patrón lo ve y el runner no')
+      .toMatch(/\{ts,tsx\}/);
   });
 
   for (const f of ['a.test.ts', 'a.test.mts', 'a.test.cts', 'a.test.js', 'a.test.jsx']) {
@@ -241,43 +275,90 @@ describe('🔴 el universo cubre todas las extensiones efectivas', () => {
 });
 
 /**
- * 🔴 P92 · LA FRESCURA ES PROPIEDAD DEL GATE, NO DEL ORDEN DE LOS PASOS.
+ * 🔴 P94 · LA INVALIDACIÓN EFECTIVA, probada por CONDUCTA.
  *
- * `--artefacto` exigía que `dist` fuera posterior a un sello; `--corrida` **no
- * miraba la fecha del reporte en ningún lado**. Medido: con
- * `touch -t 202001010000 .vitest-corrida.json` el gate salía **0** afirmando
- * «la suite EJECUTÓ todos los archivos» sin que la suite hubiera corrido.
+ * El sello por `mtime` que había acá tapaba el exploit del reporte viejo **y su
+ * instrumento era manipulable**: `touch` a un `dist` viejo lo hacía pasar como
+ * recién escrito, sin correr el build. Se arregló una instancia de «no midas con
+ * un instrumento que el atacante mueve» **con otro instrumento que el atacante
+ * mueve**.
  *
- * En el CI el reporte era fresco porque `npm test` precede a `--corrida`, y esa
- * precedencia **no la fijaba ningún test**. 🔴 **Una propiedad sostenida por tres
- * cosas coordinadas no es una propiedad, es una coincidencia mantenida** — y el
- * gate afirmaba algo más fuerte que su evidencia, que es la clase que este arnés
- * viene cerrando hace catorce vueltas. Esta vez la escribí yo.
- *
- * ⚠️ Lo encontró medir una aspereza que el revisor había marcado **y después
- * desarmado** como «transitivamente cerrada». Medirla en vez de aceptar el
- * razonamiento es lo que la convirtió en hallazgo.
+ * Ahora el resultado se BORRA antes de la herramienta, y su existencia después
+ * es la prueba: no hay fecha que falsificar. Estos casos invocan el EJECUTABLE,
+ * no una función pura, porque lo que hay que acreditar es que el borrado ocurre
+ * de verdad — un test que llamara a `invalidar()` directo probaría la función y
+ * no el cable, que es el defecto que este mismo commit corrige en otro lado.
  */
-describe('🔴 el resultado tiene que ser de ESTA ejecución', () => {
-  it('✅ CONTROL POSITIVO · un resultado posterior al sello pasa', () => {
-    expect(fallaDeFrescura(1_000, 2_000, 'la suite')).toBeNull();
+describe('🔴 la invalidación borra de verdad', () => {
+  const correr = (args: readonly string[], raiz: string) =>
+    spawnSync(process.execPath, [join(AQUI, 'verificar-aliases.mjs'), ...args], {
+      env: { ...process.env, PAYME_RAIZ_VERIFICACION: raiz },
+      encoding: 'utf8',
+    });
+
+  it('🔴 `--invalidar build` borra el `dist` anterior', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'payme-inval-'));
+    try {
+      mkdirSync(join(tmp, 'dist'));
+      writeFileSync(join(tmp, 'dist', 'index.html'), '<html>viejo</html>');
+      expect(existsSync(join(tmp, 'dist')), 'el escenario no se plantó').toBe(true);
+      correr(['--invalidar', 'build'], tmp);
+      expect(existsSync(join(tmp, 'dist')), 'el artefacto viejo sobrevivió a la invalidación')
+        .toBe(false);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
-  it('🔴 un resultado ANTERIOR al sello → RECHAZADO (el mutante del reporte de 2020)', () => {
-    expect(fallaDeFrescura(2_000, 1_000, 'la suite')).toMatch(/ANTERIOR al sello/);
+  it('🔴 `--invalidar corrida` borra el reporte anterior', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'payme-inval-'));
+    try {
+      writeFileSync(join(tmp, '.vitest-corrida.json'), '{"testResults":[]}');
+      correr(['--invalidar', 'corrida'], tmp);
+      expect(existsSync(join(tmp, '.vitest-corrida.json')), 'el reporte viejo sobrevivió')
+        .toBe(false);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
-  it('🔴 sin sello previo → RECHAZADO · no se puede acreditar procedencia', () => {
-    expect(fallaDeFrescura(null, 1_000, 'la suite')).toMatch(/no hay sello previo/);
+  it('🔴 un objetivo NO adjudicado no se borra · fail-closed', () => {
+    // Sin esto, `--invalidar <lo-que-sea>` sería un `rm -rf` con argumento libre
+    // dentro de un gate de CI. La allowlist es la guarda, y se afirma.
+    const tmp = mkdtempSync(join(tmpdir(), 'payme-inval-'));
+    try {
+      writeFileSync(join(tmp, 'importante.txt'), 'no se toca');
+      const r = correr(['--invalidar', 'importante.txt'], tmp);
+      expect(existsSync(join(tmp, 'importante.txt')), 'el gate borró algo no adjudicado')
+        .toBe(true);
+      expect(r.status, 'un objetivo no adjudicado tiene que ser rojo').not.toBe(0);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
+});
 
-  it('🔴 sin resultado → RECHAZADO', () => {
-    expect(fallaDeFrescura(1_000, null, 'el build')).toMatch(/no existe el resultado/);
-  });
-
-  it('🔴 el borde: mismo instante que el sello CUENTA como fresco', () => {
-    // Un `>=` y no `>`: en un filesystem de baja resolución, sello y resultado
-    // pueden caer en el mismo tick, y un `>` daría falsos rojos intermitentes.
-    expect(fallaDeFrescura(1_000, 1_000, 'la suite')).toBeNull();
+/**
+ * 🔴 P94 · EL CALLSITE DE `--corrida`, no sólo su lógica.
+ *
+ * Es la condición 5 del dictamen y la misma clase del P85: retirar
+ * `acreditarCorrida()` del dispatcher tiene que dejar hoja causal roja. Se
+ * invoca el EJECUTABLE sobre un árbol sin reporte; si el modo dejara de llamar
+ * al validador, saldría 0 y este caso cae.
+ */
+describe('🔴 el modo `--corrida` LLAMA a su validador', () => {
+  it('🔴 sin reporte, el ejecutable sale ≠0 y lo dice', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'payme-corrida-'));
+    try {
+      const r = spawnSync(process.execPath, [join(AQUI, 'verificar-aliases.mjs'), '--corrida'], {
+        env: { ...process.env, PAYME_RAIZ_VERIFICACION: tmp },
+        encoding: 'utf8',
+      });
+      expect(`${r.stdout}${r.stderr}`, 'el dispatcher no pasó por `acreditarCorrida`')
+        .toMatch(/no existe `\.vitest-corrida\.json`/);
+      expect(r.status, 'certificó una corrida sin reporte').not.toBe(0);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

@@ -861,8 +861,8 @@ const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = 
   espejo: {},
   aliases: {},
   corrida: {},
-  'sello-corrida': {},
-  'sello-build': {},
+  'invalidar-corrida': {},
+  'invalidar-build': {},
   artefacto: {},
   test: {},
   typecheck: {},
@@ -910,8 +910,8 @@ const ROL_DE_PASO: ReadonlyArray<readonly [RegExp, string]> = [
   // 🔴 P92 · CADA SELLO ES SU PROPIO ROL. Con un rol común, sacar uno del
   // workflow dejaba al otro satisfaciendo la exigencia — el mismo defecto que
   // ya se pagó con los dos modos del verificador.
-  [/^node scripts\/verificar-aliases\.mjs --sellar corrida$/, 'sello-corrida'],
-  [/^node scripts\/verificar-aliases\.mjs --sellar build$/, 'sello-build'],
+  [/^node scripts\/verificar-aliases\.mjs --invalidar corrida$/, 'invalidar-corrida'],
+  [/^node scripts\/verificar-aliases\.mjs --invalidar build$/, 'invalidar-build'],
   // 🔴 P90 · EL COMANDO COMPLETO, CON SU DESTINO. `rolDePaso` compara prefijos
   // de hasta 3 tokens, así que el 4º —`dist`— quedaba fuera del rol y del censo:
   // cambiarlo por `--artefacto .` daba exit 0 sobre el `index.html` de la raíz y
@@ -1508,7 +1508,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
   const previos = publicadores.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub));
   for (const pub of publicadores) {
     const suyos = new Set(pasosGarantizadosAntesDe(jobs, pub).map((p) => rolDePaso(p.claves)));
-    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'sello-corrida', 'corrida', 'sello-build', 'artefacto'] as const) {
+    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'invalidar-corrida', 'corrida', 'invalidar-build', 'artefacto'] as const) {
       if (!suyos.has(g)) {
         fallasPorPublicador.push(
           `${pub.job}.steps[${pub.indice}]: publica sin el gate «${g}» garantizado antes`,
@@ -1558,7 +1558,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
    * estuviera bien.
    */
   const rolesVistos = new Set(previos.map((p) => rolDePaso(p.claves)));
-  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'sello-corrida', 'corrida', 'sello-build', 'artefacto'] as const) {
+  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'invalidar-corrida', 'corrida', 'invalidar-build', 'artefacto'] as const) {
     if (!rolesVistos.has(g)) fallas.push(`el gate «${g}» no está entre los pasos previos`);
   }
   return fallas;
@@ -2014,6 +2014,40 @@ describe('🔴 P65 · los caminos que quedaban fuera del modelo', () => {
  * Esto lo convierte en test. Es la misma forma que la guarda de `js-yaml`: el
  * límite VERIFICADO en vez de prometido.
  */
+/**
+ * 🔴 P94 · EL ORDEN DEL PIPELINE ES PARTE DE LA GARANTÍA.
+ *
+ * `--invalidar X` sólo acredita si corre ANTES de la herramienta, y el validador
+ * sólo acredita si corre DESPUÉS. Con los pasos en otro orden cada gate sigue
+ * existiendo y **no garantiza nada**: se borraría lo que la herramienta acaba de
+ * escribir, o se validaría lo que quedó de la corrida anterior.
+ *
+ * Ese orden no lo fijaba nada — vivía en el archivo y en la buena memoria de
+ * quien lo editara. Acá pasa a ser afirmación verificada.
+ */
+describe('🔴 invalidar → herramienta → validar, en ese orden', () => {
+  const TRIOS = [
+    ['la suite', 'invalidar-corrida', 'test', 'corrida'],
+    ['el build', 'invalidar-build', 'build', 'artefacto'],
+  ] as const;
+
+  for (const [que, antes, herramienta, despues] of TRIOS) {
+    it(`🔴 ${que}: se invalida ANTES y se valida DESPUÉS`, () => {
+      const yml = readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');
+      const { jobs, problemas } = leerWorkflow(yml);
+      expect(problemas).toEqual([]);
+      const pasos = jobs.flatMap((j) => [...j.pasos]);
+      const idx = (rol: string) => pasos.findIndex((p) => rolDePaso(p.claves) === rol);
+      const [i, j, k] = [idx(antes), idx(herramienta), idx(despues)];
+      // Control positivo: los tres tienen que EXISTIR, o el orden se cumpliría
+      // en vacío con -1 < -1 siendo falso por accidente.
+      expect([i, j, k].every((n) => n >= 0), `falta alguno de los tres pasos de ${que}`).toBe(true);
+      expect(i, `la invalidación de ${que} no precede a su herramienta`).toBeLessThan(j);
+      expect(j, `el validador de ${que} no sucede a su herramienta`).toBeLessThan(k);
+    });
+  }
+});
+
 describe('🔴 el helper de contexto vive SÓLO dentro de las políticas', () => {
   /**
    * Allowlist positiva: las funciones que PUEDEN consumirlo. Una función nueva

@@ -11,6 +11,71 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.126.0 — cierre del BLOCK P94: invalidar por ausencia, no sellar por fecha (2026-08-22)
+
+Tres falsos verdes, **los tres míos y los tres reproducidos antes del dictamen**.
+
+### ① El sello medía con un instrumento que el atacante mueve
+
+```
+--sellar build → (NO se corre el build) → touch dist/* → --artefacto dist
+── artefacto OK: «lo escribió ESTA ejecución»          exit 0   ← falso
+```
+
+🔴 **`mtime` lo mueve cualquiera con acceso al filesystem.** Arreglamos una
+instancia de «no midas con un instrumento que el atacante mueve» **con otro
+instrumento que el atacante mueve**: verificamos que el fix tapaba el exploit
+conocido y no preguntamos de qué dependía la evidencia nueva. Son dos preguntas,
+y la segunda es la que decide.
+
+La salida no fue afinar el sello sino **cambiarlo**: el resultado se **borra**
+antes de correr la herramienta, y su existencia después es la prueba. No hay
+fecha que falsificar, y el arnés queda **más chico** — `fallaDeFrescura` y los dos
+sellos desaparecen. Codex lo llama «invalidación efectiva previa».
+
+⚠️ **Es destructivo en local y está documentado en el código:** correr el gate
+borra tu `dist` y tu reporte. Los dos están gitignored y se reconstruyen — es el
+precio de que la ausencia signifique algo.
+
+### ② El centinela vigilaba una copia · TERCERA vez en la jornada
+
+El test del universo de extensiones **re-declaraba los regex** en vez de
+importarlos, y el módulo ni los exportaba. Revertir el patrón productivo al
+defectuoso dejaba el archivo en **41/41 verde**.
+
+Es la clase del P85 otra vez, **en el commit donde la lección estaba fresca**. La
+forma que corta no es entenderla mejor, es el gesto mecánico: **un centinela
+referencia el mismo objeto que usa producción, por `import`; si el módulo no lo
+exporta, exportarlo es parte del arreglo.** Al fijar un patrón en un test, buscar
+ese literal en el módulo: si aparece dos veces, una es la falsa.
+
+Ahora revertir el patrón mata **5 casos**.
+
+⚠️ Y arreglarlo destapó que el módulo **no era importable de verdad**: ejecutaba
+su CLI al ser importado, `process.exit` incluido. Lleva guard de `main`.
+
+### ③ La raíz no era universo
+
+Un `.mts` en la raíz con `const n: number = 'texto'` dejaba **typecheck en 0 y el
+gate en 0**: la extensión ancha cubría el nombre, pero ningún recorrido pasaba por
+ahí. Los dos censos suman la raíz, listada **plano** —recursiva barrería `dist/` y
+todo lo generado—.
+
+### Y el orden del pipeline pasa a ser afirmación
+
+`--invalidar` sólo acredita si corre **antes** de la herramienta, y el validador
+sólo si corre **después**. Ese orden vivía en el archivo y en la memoria de quien
+lo editara. Ahora hay dos casos que lo fijan: invertir un paso los pone rojos.
+
+### Conteo corregido
+
+Sacar un rol del workflow da **1 fallo / 77** en `51dd9a6a` —no «2/76» como
+declaré: un caso agrupaba dos diagnósticos—. En esta ref son **3 de 80**, porque
+los casos de orden lo cazan también. **Tercera vez que un conteo mío se vence por
+su forma: un conteo lleva su población Y su granularidad.**
+
+**Sin push ni deploy.** El intermitente E2E sigue **ABIERTO**.
+
 ## 0.125.0 — la frescura es propiedad del gate, no del orden de los pasos (2026-08-22)
 
 **No sale de un dictamen: sale de medir una aspereza que el revisor había marcado
