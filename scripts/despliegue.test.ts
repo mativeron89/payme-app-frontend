@@ -197,100 +197,11 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
    * rojo y hay que venir a decidirlo a mano. **En el gate que decide si se
    * publica producción, esa fricción es la función, no el efecto secundario.**
    */
-  const CONDICION_CANONICA =
-    "success() && github.event_name == 'push' && github.ref == 'refs/heads/main'";
-
   it('🔴 CADA publicador lleva la condición canónica, y su JOB no la afloja', () => {
-    const { jobs, problemas } = leerWorkflow(ci);
-    expect(problemas, 'el modelo no pudo adjudicar el workflow').toEqual([]);
-
-    const publicadores = jobs.flatMap((j) =>
-      j.pasos
-        .filter((p) => pasoPublica(texto(p.claves['run'])))
-        .map((p) => ({ paso: p, job: j })),
-    );
-    // Control positivo: sin publicadores esto pasaría en vacío.
-    expect(publicadores.length, 'no se encontró ningún publicador: mediría en vacío')
-      .toBeGreaterThan(0);
-
-    const fallas: string[] = [];
-    for (const { paso, job } of publicadores) {
-      const donde = `${paso.job}.steps[${paso.indice}]`;
-      const condicionDelPaso = texto(paso.claves['if']);
-      if (condicionDelPaso === null) {
-        fallas.push(`${donde}: publica SIN \`if:\` — se dispararía en cualquier evento`);
-      } else if (condicionDelPaso.trim() !== CONDICION_CANONICA) {
-        fallas.push(
-          `${donde}: la condición no es la canónica\n     esperada: ${CONDICION_CANONICA}\n     hallada:  ${condicionDelPaso.trim()}`,
-        );
-      }
-      /**
-       * El `if` del JOB también decide si el paso corre. Cualquier condición a
-       * ese nivel es roja: no se interpreta, se rechaza.
-       *
-       * 🔴 P73 · SE COMPARA CONTRA `undefined`, NO CONTRA `null`. Con `if: true`
-       * YAML entrega un booleano; el modelo viejo lo guardaba como `null` y esta
-       * guarda lo leía como «no hay condición». **`null` mezclaba «ausente» con
-       * «presente en una forma que no supe leer»**, y la segunda tiene que ser
-       * roja — es exactamente donde se esconde lo que no anticipé.
-       */
-      if (job.condicion !== undefined) {
-        fallas.push(
-          `${donde}: su job «${job.nombre}» lleva \`if: ${JSON.stringify(job.condicion)}\` — puede aflojar la compuerta`,
-        );
-      }
-
-      /**
-       * 🔴 P73 · `strategy` EN EL JOB DEL PUBLICADOR ES ROJO, sin interpretar.
-       *
-       * Una matriz expande el job en varias ejecuciones, **cada una con su paso
-       * publicador completo**. Con `matrix: replica: [1,2]` el workflow dispara
-       * App y Landing dos veces cada una —cuatro hooks— mientras el gate de
-       * abajo certifica «exactamente dos invocaciones». **Contaba líneas y creía
-       * contar ejecuciones.**
-       *
-       * Se prohíbe en vez de modelar la expansión: modelarla pide reproducir las
-       * reglas de `matrix`, `include`, `exclude` y `fail-fast` — otro intérprete
-       * a medias, que es la clase que este arnés viene cerrando hace quince
-       * vueltas. Un job que publica no tiene por qué correr en matriz; si algún
-       * día lo necesita, se decide a mano y a la vista.
-       */
-      if (job.estrategia !== undefined) {
-        fallas.push(
-          `${donde}: su job «${job.nombre}» declara \`strategy\` — se expandiría en varias ` +
-            'ejecuciones y publicaría más de una vez',
-        );
-      }
-
-      /**
-       * 🔴 P73 · UN FALLO DEL PUBLICADOR NO PUEDE QUEDAR TOLERADO.
-       *
-       * La guarda de más abajo ya rechazaba `continue-on-error` — **pero sólo al
-       * recorrer los cinco gates ANTERIORES**. Al paso que importa, el que
-       * dispara los hooks, nadie se lo miraba: con `continue-on-error: true` un
-       * hook que devuelve error queda tolerado y la corrida no se rompe.
-       *
-       * Eso contradice la garantía central del arnés —que un disparo fallido
-       * corta la publicación—, y la sonda ejecutable no alcanza a verlo: puede
-       * demostrar que el CUERPO termina ≠0 mientras la corrida real queda verde.
-       * El estado del script no sustituye la semántica del paso que Actions
-       * ejecuta.
-       */
-      /**
-       * 🔴 P75 · SÓLO AUSENCIA O EL BOOLEANO `false`. La cadena `'false'` era
-       * aceptada como si fuera el booleano, y **no lo es**: el schema del runner
-       * tipa ese campo como boolean, así que `'false'` produce un workflow
-       * INVÁLIDO. No es un bypass de publicación —Actions falla cerrado antes de
-       * ejecutar— pero el arnés lo daba por bueno, que es un falso verde de
-       * gramática: decía «esto es válido y seguro» sobre algo que ni siquiera
-       * corre. Cualquier otra forma —expresión, número, `null`, objeto— también
-       * queda roja sin enumerarlas.
-       */
-      // Todo el contexto de ejecución, por la definición única.
-      fallas.push(
-        ...fallasDeContexto(ci, job.nombre, paso.claves, donde, 'el publicador', 'publicador'),
-      );
-    }
+    // 🔴 P85 · una sola política, en `fallasDelPublicador`. Este `it()` la corre
+    // sobre el `ci.yml` real; los casos adversariales la corren sobre el mismo
+    // workflow mutado. Desconectar su interior mata a los dos.
+    const fallas = fallasDelPublicador(ci);
     expect(fallas, `la compuerta del publicador no está cerrada:\n  ${fallas.join('\n  ')}`)
       .toEqual([]);
   });
@@ -913,7 +824,14 @@ const defaultRun = (n: unknown, clave: string): unknown => {
  * más, y **una guarda que cierra de más también es un defecto**: enseña a
  * desconfiar del gate, y un gate del que se desconfía se termina aflojando.
  */
-function mismoMapping(a: unknown, b: Readonly<Record<string, string>>): boolean {
+/**
+ * 🔴 P81 · POR PAREJAS CLAVE/VALOR, NO POR `JSON.stringify`: en YAML el orden de
+ * un mapping no cambia su significado, y comparar el texto serializado ponía rojo
+ * un swap de orden inocuo. 🔴 P85 · el valor se tipa `unknown` porque el `with`
+ * del checkout trae `fetch-depth: 0` **numérico**; forzarlo a `'0'` habría dado
+ * un falso rojo en el nominal. La comparación sigue siendo estricta.
+ */
+function mismoMapping(a: unknown, b: Readonly<Record<string, unknown>>): boolean {
   if (typeof a !== 'object' || a === null || Array.isArray(a)) return false;
   const m = a as Record<string, unknown>;
   const claves = Object.keys(m).sort();
@@ -1262,6 +1180,318 @@ function comandosDe(run: string): string[] {
 }
 
 /**
+ * 🔴 P85 · LAS POLÍTICAS SON FUNCIONES, PARA QUE EL CENTINELA ATRAVIESE EL SEAM.
+ *
+ * Hasta P83 cada política vivía **dentro** de su `it()`, y los casos
+ * adversariales —los que plantan una forma mala sobre el workflow real— llamaban
+ * por su cuenta al helper `fallasDeContexto`. Parecía equivalente y **no lo es**:
+ * probaban que el HELPER reconoce la forma, no que la POLÍTICA siga llamándolo.
+ *
+ * Codex lo midió con cuatro mutantes, uno por seam: retirar **sólo** la llamada
+ * real —el `fallasDeContexto` del bucle de gates, el del publicador, la guarda de
+ * `strategy`, la igualdad exacta del checkout— dejaba la focal **83/83 verde**.
+ * El centinela apuntaba a un llamado privado que se le parecía.
+ *
+ * ⚠️ **Es la misma lección que ya tenía escrita de una vuelta anterior** —probar
+ * la función no es probar el cableado— y la volví a cometer en la forma de al
+ * lado. La forma que la cierra no es un mutante más: es que **no exista** un
+ * segundo camino. Una política = una función; el `it()` nominal la llama con el
+ * `ci.yml` real, el adversarial con el mutado, y **desconectar el interior mata a
+ * los dos**.
+ *
+ * Los controles positivos viajan DENTRO de la función, como fallas: si el
+ * workflow mutado dejara de tener publicador, checkout o gates, la política lo
+ * dice en vez de pasar en vacío.
+ */
+const CONDICION_CANONICA =
+  "success() && github.event_name == 'push' && github.ref == 'refs/heads/main'";
+
+/** Toda la compuerta del publicador: condición, `if` del job, `strategy` y contexto. */
+function fallasDelPublicador(yml: string): string[] {
+  const { jobs, problemas } = leerWorkflow(yml);
+  if (problemas.length > 0) return problemas.map((p) => `el modelo no pudo adjudicar: ${p}`);
+
+  const publicadores = jobs.flatMap((j) =>
+    j.pasos
+      .filter((p) => pasoPublica(texto(p.claves['run'])))
+      .map((p) => ({ paso: p, job: j })),
+  );
+  // Control positivo, adentro: sin publicadores esto mediría en vacío.
+  if (publicadores.length === 0) return ['no se encontró ningún publicador: mediría en vacío'];
+
+  const fallas: string[] = [];
+  for (const { paso, job } of publicadores) {
+    const donde = `${paso.job}.steps[${paso.indice}]`;
+    const condicionDelPaso = texto(paso.claves['if']);
+    if (condicionDelPaso === null) {
+      fallas.push(`${donde}: publica SIN \`if:\` — se dispararía en cualquier evento`);
+    } else if (condicionDelPaso.trim() !== CONDICION_CANONICA) {
+      fallas.push(
+        `${donde}: la condición no es la canónica\n     esperada: ${CONDICION_CANONICA}\n     hallada:  ${condicionDelPaso.trim()}`,
+      );
+    }
+    /**
+     * El `if` del JOB también decide si el paso corre. Cualquier condición a
+     * ese nivel es roja: no se interpreta, se rechaza.
+     *
+     * 🔴 P73 · SE COMPARA CONTRA `undefined`, NO CONTRA `null`. Con `if: true`
+     * YAML entrega un booleano; el modelo viejo lo guardaba como `null` y esta
+     * guarda lo leía como «no hay condición». **`null` mezclaba «ausente» con
+     * «presente en una forma que no supe leer»**, y la segunda tiene que ser
+     * roja — es exactamente donde se esconde lo que no anticipé.
+     */
+    if (job.condicion !== undefined) {
+      fallas.push(
+        `${donde}: su job «${job.nombre}» lleva \`if: ${JSON.stringify(job.condicion)}\` — puede aflojar la compuerta`,
+      );
+    }
+    /**
+     * 🔴 P73 · `strategy` EN EL JOB DEL PUBLICADOR ES ROJO, sin interpretar.
+     *
+     * Una matriz expande el job en varias ejecuciones, **cada una con su paso
+     * publicador completo**. Con `matrix: replica: [1,2]` el workflow dispara
+     * App y Landing dos veces cada una —cuatro hooks— mientras el gate de abajo
+     * certifica «exactamente dos invocaciones». **Contaba líneas y creía contar
+     * ejecuciones.**
+     *
+     * Se prohíbe en vez de modelar la expansión: modelarla pide reproducir las
+     * reglas de `matrix`, `include`, `exclude` y `fail-fast` — otro intérprete a
+     * medias, que es la clase que este arnés viene cerrando hace quince vueltas.
+     */
+    if (job.estrategia !== undefined) {
+      fallas.push(
+        `${donde}: su job «${job.nombre}» declara \`strategy\` — se expandiría en varias ` +
+          'ejecuciones y publicaría más de una vez',
+      );
+    }
+    /**
+     * 🔴 P73 · UN FALLO DEL PUBLICADOR NO PUEDE QUEDAR TOLERADO, y 🔴 P75 · SÓLO
+     * AUSENCIA O EL BOOLEANO `false`: la cadena `'false'` produce un workflow
+     * INVÁLIDO y el arnés lo daba por bueno. Todo el contexto de ejecución sale
+     * de la definición única.
+     */
+    fallas.push(
+      ...fallasDeContexto(yml, job.nombre, paso.claves, donde, 'el publicador', 'publicador'),
+    );
+  }
+  return fallas;
+}
+
+/**
+ * El censo: todo job y todo paso del workflow, adjudicados por allowlist.
+ *
+ * 🔴 P68 · MIRA JOBS, NO SÓLO PASOS. El parser YA representaba `jobs.<id>.uses`
+ * —un reusable workflow, que ejecuta con sus secretos y NO tiene `steps`—, y
+ * había un test del modelo puro que lo probaba. **Pero el censo integrado volvía
+ * a aplanar sólo `jobs[].pasos`**: Codex agregó un reusable job real y quedó
+ * 61/61 focal y 96/96 la full.
+ *
+ * ⚠️ **La lección es del patrón:** arreglar la REPRESENTACIÓN no arregla a los
+ * CONSUMIDORES, y un test del modelo puro puede estar verde mientras el gate
+ * integrado no usa lo que el modelo aprendió.
+ */
+function fallasDelCenso(yml: string): string[] {
+  const { jobs, problemas } = leerWorkflow(yml);
+  if (problemas.length > 0) return problemas.map((p) => `hay jobs que el modelo no puede adjudicar: ${p}`);
+  // Controles positivos, adentro: sin jobs ni pasos el censo mediría en vacío.
+  if (jobs.length === 0) return ['no se leyó ningún job: el censo mediría en vacío'];
+
+  const fallas: string[] = [];
+  /**
+   * Reusables ADJUDICADOS: hoy ninguno. No es una lista vacía por descuido — es
+   * la declaración de que este repo no delega su CI en un workflow ajeno. El día
+   * que se quiera, se agrega acá con su `owner/repo/.../wf.yml@ref` exacto y se
+   * decide qué secretos recibe.
+   */
+  const REUSABLES_ADJUDICADOS: readonly string[] = [];
+  for (const j of jobs) {
+    if (j.usa !== null && !REUSABLES_ADJUDICADOS.includes(j.usa)) {
+      fallas.push(
+        `job «${j.nombre}» delega su ejecución en un workflow ajeno y nadie lo adjudicó: ` +
+          `uses ${j.usa} (secrets: ${JSON.stringify(j.secretos)})`,
+      );
+    }
+  }
+
+  const pasos = pasosDe(yml);
+  if (pasos.length <= 8) return [...fallas, `sólo se parsearon ${pasos.length} pasos: el censo mediría en vacío`];
+
+  /**
+   * 🔴 P60 · SE ADJUDICA POR TOKENS EXACTOS, NO POR PREFIJO DE CADENA. La lista
+   * anterior usaba `/^bash scripts\/reportar-flaky\.sh\b/`, y `\b` **no delimita
+   * ante un guion**, así que `…-alternativo` quedaba adjudicado como si fuera el
+   * script conocido. ⚠️ Es la MISMA clase que la allowlist de dominios —comparar
+   * por prefijo en vez de por la unidad real—; se repitió en otro archivo con
+   * otra herramienta: la lección no había viajado.
+   */
+  const ADJUDICADOS: readonly (readonly string[])[] = [
+    ['npm', 'ci'], // dependencias
+    ['npm', 'test'],
+    ['npm', 'run', 'typecheck'],
+    ['npm', 'run', 'build'],
+    ['npx', 'playwright', 'install'],
+    ['npx', 'playwright', 'test'],
+    ['bash', 'scripts/auditar-secretos.sh'], // gate de secretos
+    ['node', 'scripts/verificar-mirror.mjs'], // gate del espejo
+    ['bash', 'scripts/reportar-flaky.sh'], // informa, no bloquea
+    // 🔴 P77 · LA PUBLICACIÓN NO VA EN ESTA LISTA. Tenía su propia tupla acá, en
+    // paralelo a `esInvocacionPublicador`. Hoy las dos coincidían, **y ésa es la
+    // trampa**: dos fuentes que coinciden hoy son una casualidad fechada, no una
+    // propiedad. Ahora el censo delega en el MISMO predicado.
+  ];
+  /** `uses:` no es un comando: se adjudica por la acción exacta y su versión. */
+  const USES_ADJUDICADOS = /^actions\/(checkout|setup-node)@[A-Za-z0-9._-]+$/;
+
+  const adjudicaComando = (cmd: string): boolean => {
+    if (esInvocacionPublicador(cmd)) return true;
+    const ts = tokens(cmd);
+    if (ts === null) return false;
+    return ADJUDICADOS.some((patron) => patron.every((tok, k) => ts[k] === tok));
+  };
+
+  for (const p of pasos) {
+    const donde = `${p.job}.steps[${p.indice}]`;
+    if (p.uses !== null) {
+      if (!USES_ADJUDICADOS.test(p.uses)) fallas.push(`${donde}: uses \`${p.uses}\``);
+      continue;
+    }
+    const trozos = comandosDe(p.run ?? '');
+    if (!trozos.length) { fallas.push(`${donde}: paso sin \`run\` ni \`uses\``); continue; }
+    for (const t of trozos) {
+      // 🔴 Primero lo indecidible: un prefijo permitido NO adjudica lo que el
+      // comando evalúe adentro. El orden importa — si se mirara el allowlist
+      // primero, `bash permitido.sh "$(peligroso)"` pasaría por el prefijo.
+      const opaco = noAfirmable(t);
+      if (opaco) { fallas.push(`${donde}: ${opaco} → \`${t}\``); continue; }
+      if (!adjudicaComando(t)) fallas.push(`${donde}: \`${t}\``);
+    }
+  }
+  return fallas;
+}
+
+/** El checkout: único, versión adjudicada, `with` EXACTO y contexto gobernado. */
+function fallasDelCheckout(yml: string): string[] {
+  const { jobs, problemas } = leerWorkflow(yml);
+  if (problemas.length > 0) return problemas.map((p) => `el modelo no pudo adjudicar: ${p}`);
+
+  const checkouts = jobs.flatMap((j) =>
+    j.pasos
+      .filter((p) => typeof p.claves['uses'] === 'string' &&
+        /^actions\/checkout@/.test(p.claves['uses'] as string))
+      .map((p) => ({ paso: p, job: j.nombre })),
+  );
+  // Control positivo, adentro: sin checkout único el resto pasaría en vacío.
+  if (checkouts.length !== 1) {
+    return [`hay ${checkouts.length} checkouts y debe haber exactamente 1: el workspace no es único`];
+  }
+
+  const fallas: string[] = [];
+  const { paso, job } = checkouts[0]!;
+  if (paso.claves['uses'] !== 'actions/checkout@v4') {
+    fallas.push(`la versión de la acción no es la adjudicada: ${JSON.stringify(paso.claves['uses'])}`);
+  }
+  /**
+   * 🔴 P85 · LA IGUALDAD EXACTA ES LA GUARDA, y se afirma acá — no en el test.
+   *
+   * El caso adversarial de P83 plantaba `ref` y afirmaba que el `with` **no** era
+   * igual al canónico. Eso es la PRECONDICIÓN del rechazo, no el rechazo: con la
+   * guarda debilitada a «`with` presente» el caso seguía verde. Ahora la
+   * desigualdad la evalúa esta función, que es la misma que corre el nominal.
+   */
+  if (!mismoMapping(paso.claves['with'], { 'fetch-depth': 0 })) {
+    fallas.push(
+      'el `with` del checkout no es el exacto: `ref`/`repository`/`path` desacoplan el ' +
+        `workspace del evento y los gates medirían OTROS bytes que los que se publican — ${JSON.stringify(paso.claves['with'])}`,
+    );
+  }
+  fallas.push(
+    ...fallasDeContexto(yml, job, paso.claves, `${job}.steps[${paso.indice}]`, 'el checkout', 'checkout'),
+  );
+  return fallas;
+}
+
+/** Todo paso que precede al publicador: rol declarado, sin `if:` y contexto gobernado. */
+function fallasDeGatesPrevios(yml: string): string[] {
+  const { jobs, problemas } = leerWorkflow(yml);
+  if (problemas.length > 0) return problemas.map((p) => `el modelo no pudo adjudicar: ${p}`);
+
+  const todos = jobs.flatMap((j) => [...j.pasos]);
+  const publicadores = todos.filter((p) => pasoPublica(texto(p.claves['run'])));
+  if (publicadores.length === 0) return ['no se encontró el paso de publicación'];
+  /**
+   * 🔴 P85 · LOS GATES SE EXIGEN POR PUBLICADOR, NO SOBRE LA UNIÓN.
+   *
+   * Acá había un `flatMap` que juntaba los previos de todos los publicadores y
+   * después verificaba los roles sobre ese conjunto. **La unión tapaba al
+   * individuo**: un publicador en un job suelto —sin `needs`, corriendo en
+   * paralelo— tiene CERO gates garantizados antes, y los gates del publicador
+   * legítimo completaban la lista por él. Lo destapó el caso ② al atravesar la
+   * política real en vez de afirmar sobre el helper.
+   *
+   * Es la misma clase que el dictamen vino a señalar, una capa más abajo: un
+   * agregado que se lee como cobertura individual.
+   */
+  const fallasPorPublicador: string[] = [];
+  const previos = publicadores.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub));
+  for (const pub of publicadores) {
+    const suyos = new Set(pasosGarantizadosAntesDe(jobs, pub).map((p) => rolDePaso(p.claves)));
+    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner'] as const) {
+      if (!suyos.has(g)) {
+        fallasPorPublicador.push(
+          `${pub.job}.steps[${pub.indice}]: publica sin el gate «${g}» garantizado antes`,
+        );
+      }
+    }
+  }
+
+  /**
+   * 🔴 P81 · LA POBLACIÓN ES **TODO** LO QUE PRECEDE AL PUBLICADOR, con rol.
+   *
+   * Antes acá había una lista de cinco gates y **el resto de los pasos no pasaba
+   * por ninguna política**. El auditor de secretos quedaba fuera: su
+   * `env.BASH_ENV` lo volvía no-op y la suite seguía verde con el scanner
+   * terminando 0 sin ejecutarse. Ahora **cada paso previo tiene que tener un rol
+   * declarado** —incluidos setup, instalación y reporter— y todos pasan por el
+   * mismo contexto. Un paso sin rol es rojo: así un paso NUEVO no entra callado.
+   */
+  const fallas: string[] = [...fallasPorPublicador];
+  for (const p of previos) {
+    const donde = `${p.job}.steps[${p.indice}]`;
+    const rolP = rolDePaso(p.claves);
+    if (rolP === null) {
+      fallas.push(`${donde}: paso SIN ROL declarado — no se puede adjudicar su contexto`);
+      continue;
+    }
+    const condicion = p.claves['if'];
+    if (condicion !== undefined && !ROLES_QUE_NO_BLOQUEAN.has(rolP)) {
+      fallas.push(
+        `${donde}: el paso «${rolP}» BLOQUEA y lleva \`if: ${JSON.stringify(condicion)}\` — puede no ejecutarse`,
+      );
+    }
+    /**
+     * 🔴 P77 · EL GATE PASA POR EL MISMO CONTEXTO QUE EL PUBLICADOR. Antes acá
+     * sólo se miraba `if` y `continue-on-error`, y este último por `texto()`, que
+     * aceptaba la cadena `'false'`. **Un gate con otro `working-directory` o con
+     * `shell: bash -c 'true # {0}'` terminaba 0 sin ejecutar nada** y el arnés lo
+     * contaba como gate cumplido. Es la misma llamada que hace el publicador —
+     * una definición, dos poblaciones.
+     */
+    fallas.push(...fallasDeContexto(yml, p.job, p.claves, donde, `el paso «${rolP}»`, rolP));
+  }
+
+  /**
+   * Controles positivos, adentro: si ningún paso matcheara, el bucle mediría
+   * sobre una población vacía o incompleta y devolvería `[]` como si todo
+   * estuviera bien.
+   */
+  const rolesVistos = new Set(previos.map((p) => rolDePaso(p.claves)));
+  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner'] as const) {
+    if (!rolesVistos.has(g)) fallas.push(`el gate «${g}» no está entre los pasos previos`);
+  }
+  return fallas;
+}
+
+/**
  * 🔴 P58 · LA GRAMÁTICA POSITIVA, PROBADA COMO GRAMÁTICA.
  *
  * No alcanza con matar las formas que el auditor nombró: eso es lo que hace una
@@ -1493,154 +1723,22 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
    * propio workflow (el scanner compara contra la base del push/PR).
    */
   it('🔴 UN checkout causal, con su `with` EXACTO', () => {
-    const { jobs, problemas } = leerWorkflow(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
-    expect(problemas).toEqual([]);
-
-    const checkouts = jobs.flatMap((j) =>
-      j.pasos
-        .filter((p) => typeof p.claves['uses'] === 'string' &&
-          /^actions\/checkout@/.test(p.claves['uses'] as string))
-        .map((p) => ({ paso: p, job: j.nombre })),
-    );
-    // Control positivo: sin checkout, el resto pasaría en vacío.
-    expect(checkouts.length, 'no hay checkout, o hay más de uno: el workspace no es único')
-      .toBe(1);
-
-    const { paso, job } = checkouts[0]!;
-    expect(paso.claves['uses'], 'la versión de la acción no es la adjudicada')
-      .toBe('actions/checkout@v4');
-    expect(
-      paso.claves['with'],
-      'el `with` del checkout no es el exacto: `ref`/`repository`/`path` desacoplan el ' +
-        'workspace del evento y los gates medirían OTROS bytes que los que se publican',
-    ).toEqual({ 'fetch-depth': 0 });
-
-    // Y su contexto pasa por la misma política que todos.
-    expect(
-      fallasDeContexto(
-        readFileSync(join(DIR, 'ci.yml'), 'utf8'),
-        job,
-        paso.claves,
-        `${job}.steps[${paso.indice}]`,
-        'el checkout',
-        'checkout',
-      ),
-    ).toEqual([]);
+    // 🔴 P85 · la igualdad exacta vive en `fallasDelCheckout`, no acá: el caso
+    // adversarial planta `ref` y corre ESTA misma función. Debilitar la guarda a
+    // «`with` presente» pone rojos los dos.
+    const fallas = fallasDelCheckout(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    expect(fallas, `el checkout no es el adjudicado:\n  ${fallas.join('\n  ')}`).toEqual([]);
   });
 
   it('🔴 TODO JOB y TODO paso del workflow están adjudicados', () => {
-    /**
-     * 🔴 P68 · EL CENSO MIRA JOBS, NO SÓLO PASOS — y ésta es la corrección que
-     * el dictamen llama «un único validador integrado».
-     *
-     * El parser YA representaba `jobs.<id>.uses` (un reusable workflow, que
-     * ejecuta con sus secretos y NO tiene `steps`), y hasta había un test del
-     * modelo puro que lo probaba. **Pero este censo —el que corre sobre el
-     * `ci.yml` real— volvía a aplanar sólo `jobs[].pasos`.** Codex agregó un
-     * reusable job real y quedó 61/61 focal y 96/96 la full.
-     *
-     * ⚠️ **La lección es del patrón, no del caso:** arreglar la REPRESENTACIÓN
-     * no arregla a los CONSUMIDORES, y un test del modelo puro puede estar
-     * verde mientras el gate integrado no usa lo que el modelo aprendió. Dos
-     * vistas del mismo workflow es exactamente lo que produjo esto.
-     */
-    const { jobs, problemas } = leerWorkflow(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
-    expect(problemas, 'hay jobs que el modelo no puede adjudicar').toEqual([]);
-    expect(jobs.length, 'no se leyó ningún job: el censo mediría en vacío').toBeGreaterThan(0);
-
-    /**
-     * Reusables ADJUDICADOS: hoy ninguno. No es una lista vacía por descuido —
-     * es la declaración de que este repo no delega su CI en un workflow ajeno.
-     * El día que se quiera, se agrega acá con su `owner/repo/.../wf.yml@ref`
-     * exacto y se decide qué secretos recibe.
-     */
-    const REUSABLES_ADJUDICADOS: readonly string[] = [];
-    const jobsSinAdjudicar = jobs
-      .filter((j) => j.usa !== null && !REUSABLES_ADJUDICADOS.includes(j.usa))
-      .map((j) => `job «${j.nombre}»: uses ${j.usa} (secrets: ${JSON.stringify(j.secretos)})`);
+    // 🔴 P85 · el censo es `fallasDelCenso`. El caso adversarial ① —un reusable
+    // job ajeno— corre ESTA función en vez de reconstruir la adjudicación a mano,
+    // así que retirar la guarda de `uses` de job pone rojos los dos.
+    const fallas = fallasDelCenso(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
     expect(
-      jobsSinAdjudicar,
-      'un job delega su ejecución en un workflow ajeno y nadie lo adjudicó:\n  ' +
-        jobsSinAdjudicar.join('\n  '),
-    ).toEqual([]);
-
-    const pasos = pasosDe(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
-    expect(pasos.length, 'no se parsearon pasos: el censo mediría en vacío').toBeGreaterThan(8);
-
-    /**
-     * 🔴 P60 · SE ADJUDICA POR TOKENS EXACTOS, NO POR PREFIJO DE CADENA.
-     *
-     * La lista anterior usaba `/^bash scripts\/reportar-flaky\.sh\b/`, y `\b`
-     * **no delimita ante un guion**: entre `h` y `-` hay frontera de palabra,
-     * así que `bash scripts/reportar-flaky.sh-alternativo` quedaba adjudicado
-     * como si fuera el script conocido.
-     *
-     * ⚠️ Es la MISMA clase que ya cerré en la allowlist de dominios —comparar
-     * por prefijo de cadena en vez de por la unidad real, que allá era el
-     * origen y acá es el token—. Se repitió en otro archivo y con otra
-     * herramienta: la lección no había viajado.
-     *
-     * Cada entrada es la secuencia de tokens con la que el comando tiene que
-     * EMPEZAR, comparados uno a uno con `===`. Los argumentos posteriores
-     * quedan libres, y de su contenido responde `noAfirmable`.
-     */
-    const ADJUDICADOS: readonly (readonly string[])[] = [
-      ['npm', 'ci'], // dependencias
-      ['npm', 'test'],
-      ['npm', 'run', 'typecheck'],
-      ['npm', 'run', 'build'],
-      ['npx', 'playwright', 'install'],
-      ['npx', 'playwright', 'test'],
-      ['bash', 'scripts/auditar-secretos.sh'], // gate de secretos
-      ['node', 'scripts/verificar-mirror.mjs'], // gate del espejo
-      ['bash', 'scripts/reportar-flaky.sh'], // informa, no bloquea
-      // 🔴 P77 · LA PUBLICACIÓN NO VA EN ESTA LISTA. Tenía su propia tupla acá,
-      // re-tokenizada por el censo, en paralelo a `esInvocacionPublicador`. Hoy
-      // las dos coincidían, **y ésa es exactamente la trampa**: la unificación
-      // de la vuelta pasada alcanzó a los seis consumidores y dejó al censo con
-      // su copia. Dos fuentes que coinciden hoy son una casualidad fechada, no
-      // una propiedad — y con el helper revertido al regex de un espacio, el
-      // censo seguía allowlisteando al publicador de dos espacios que los
-      // consumidores ya no veían.
-      //
-      // Ahora el censo delega en el MISMO predicado (ver `adjudicaComando`).
-    ];
-    /** `uses:` no es un comando: se adjudica por la acción exacta y su versión. */
-    const USES_ADJUDICADOS = /^actions\/(checkout|setup-node)@[A-Za-z0-9._-]+$/;
-
-    const adjudicaComando = (cmd: string): boolean => {
-      // La publicación se reconoce por la ÚNICA definición, no por una tupla
-      // propia: una sola fuente para el censo y para los seis consumidores.
-      if (esInvocacionPublicador(cmd)) return true;
-      const ts = tokens(cmd);
-      if (ts === null) return false;
-      return ADJUDICADOS.some((patron) => patron.every((tok, k) => ts[k] === tok));
-    };
-    const sinAdjudicar: string[] = [];
-    for (const p of pasos) {
-      const donde = `${p.job}.steps[${p.indice}]`;
-      if (p.uses !== null) {
-        if (!USES_ADJUDICADOS.test(p.uses)) sinAdjudicar.push(`${donde}: uses \`${p.uses}\``);
-        continue;
-      }
-      const trozos = comandosDe(p.run ?? '');
-      if (!trozos.length) { sinAdjudicar.push(`${donde}: paso sin \`run\` ni \`uses\``); continue; }
-      for (const t of trozos) {
-        // 🔴 Primero lo indecidible: un prefijo permitido NO adjudica lo que el
-        // comando evalúe adentro. El orden importa — si se mirara el allowlist
-        // primero, `bash permitido.sh "$(peligroso)"` pasaría por el prefijo.
-        const opaco = noAfirmable(t);
-        if (opaco) {
-          sinAdjudicar.push(`${donde}: ${opaco} → \`${t}\``);
-          continue;
-        }
-        if (!adjudicaComando(t)) sinAdjudicar.push(`${donde}: \`${t}\``);
-      }
-    }
-    expect(
-      sinAdjudicar,
-      'pasos SIN adjudicar en el único camino de publicación — decidí qué son antes de dejarlos:\n  ' +
-        sinAdjudicar.join('\n  '),
+      fallas,
+      'pasos o jobs SIN adjudicar en el único camino de publicación — decidí qué son antes de dejarlos:\n  ' +
+        fallas.join('\n  '),
     ).toEqual([]);
   });
 
@@ -1722,69 +1820,12 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
    * qué.
    */
   it('🔴 los gates CORREN y su fallo BLOQUEA: sin `if:` y sin tolerar error', () => {
-    // Mismo cambio de modelo que el test de arriba: «antes» es causalidad.
-    const yml = readFileSync(join(DIR, 'ci.yml'), 'utf8');
-    const { jobs } = leerWorkflow(yml);
-    const todos = jobs.flatMap((j) => [...j.pasos]);
-    const publicadores2 = todos.filter((p) =>
-      pasoPublica(texto(p.claves['run'])),
-    );
-    expect(publicadores2.length, 'no se encontró el paso de publicación').toBeGreaterThan(0);
-    // Mismo criterio que arriba: cada publicador responde por sus antecesores.
-    const previos = publicadores2.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub));
-
-    /**
-     * 🔴 P81 · LA POBLACIÓN ES **TODO** LO QUE PRECEDE AL PUBLICADOR, con rol.
-     *
-     * Antes acá había una lista de cinco gates y **el resto de los pasos no
-     * pasaba por ninguna política**. El auditor de secretos quedaba fuera: su
-     * `env.BASH_ENV` lo volvía no-op y la suite seguía verde con el scanner
-     * terminando 0 sin ejecutarse.
-     *
-     * Ahora **cada paso previo tiene que tener un rol declarado** —incluidos
-     * setup, instalación y reporter— y todos pasan por el mismo contexto. Un
-     * paso sin rol es rojo: es la forma de que un paso NUEVO no entre callado.
-     */
-    const problemas: string[] = [];
-    for (const p of previos) {
-      const donde = `${p.job}.steps[${p.indice}]`;
-      const rolP = rolDePaso(p.claves);
-      if (rolP === null) {
-        problemas.push(`${donde}: paso SIN ROL declarado — no se puede adjudicar su contexto`);
-        continue;
-      }
-      const condicion = p.claves['if'];
-      if (condicion !== undefined && !ROLES_QUE_NO_BLOQUEAN.has(rolP)) {
-        problemas.push(
-          `${donde}: el paso «${rolP}» BLOQUEA y lleva \`if: ${JSON.stringify(condicion)}\` — puede no ejecutarse`,
-        );
-      }
-      /**
-       * 🔴 P77 · EL GATE PASA POR EL MISMO CONTEXTO QUE EL PUBLICADOR.
-       *
-       * Antes acá sólo se miraba `if` y `continue-on-error`, y este último por
-       * `texto()`, que aceptaba la cadena `'false'`. **Un gate con otro
-       * `working-directory` o con `shell: bash -c 'true # {0}'` terminaba 0 sin
-       * ejecutar nada** y el arnés lo contaba como gate cumplido: el publicador
-       * se dispararía después de una verificación que no verificó.
-       *
-       * Es la misma llamada que hace el publicador — una definición, dos
-       * poblaciones.
-       */
-      problemas.push(...fallasDeContexto(yml, p.job, p.claves, donde, `el paso «${rolP}»`, rolP));
-    }
-    // Control positivo: si ningún paso matcheara como gate, el bucle no miraría
-    // nada y esto pasaría en vacío sobre un CI sin gates.
-    // Control positivo: los cinco gates de verificación TIENEN que estar entre
-    // los roles vistos; si no, este bucle habría medido sobre una población
-    // vacía o incompleta.
-    const rolesVistos = new Set(previos.map((p) => rolDePaso(p.claves)));
-    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright'] as const) {
-      expect(rolesVistos.has(g), `el gate «${g}» no está entre los pasos previos`).toBe(true);
-    }
-    // Y el scanner, que es el que se había quedado afuera de la población.
-    expect(rolesVistos.has('scanner'), 'el auditor de secretos no entró a la población').toBe(true);
-    expect(problemas, `gates que están escritos pero no gatean:\n  ${problemas.join('\n  ')}`).toEqual([]);
+    // 🔴 P85 · el recorrido y sus controles positivos viven en
+    // `fallasDeGatesPrevios`. El caso del scanner corre ESTA función sobre el
+    // workflow mutado, así que omitir su llamada a `fallasDeContexto` —el mutante
+    // P2-01— pone rojo el adversarial además del nominal.
+    const fallas = fallasDeGatesPrevios(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    expect(fallas, `gates que están escritos pero no gatean:\n  ${fallas.join('\n  ')}`).toEqual([]);
   });
 
   it('🔴 el retiro está EXPLICADO donde alguien lo va a buscar', () => {
@@ -1818,15 +1859,14 @@ describe('🔴 P65 · los caminos que quedaban fuera del modelo', () => {
     const reusable = jobs.find((j) => j.usa !== null);
     expect(reusable, 'el reusable job no entró al modelo: volvería a ser invisible').toBeDefined();
 
-    // Y el censo lo tiene que denunciar: ningún `uses` de job está adjudicado.
-    const USES_DE_JOB_ADJUDICADOS: readonly string[] = [];
-    const sinAdjudicar = jobs
-      .filter((j) => j.usa !== null && !USES_DE_JOB_ADJUDICADOS.includes(j.usa))
-      .map((j) => `${j.nombre}: uses ${j.usa}`);
+    // 🔴 P85 · Y EL CENSO REAL lo tiene que denunciar. Antes acá se reconstruía
+    // la adjudicación a mano —un oráculo sombra: probaba que ESTE test sabe
+    // filtrar, no que el censo lo rechace—. Ahora corre `fallasDelCenso`, la
+    // misma función que corre sobre el `ci.yml` sin mutar.
     expect(
-      sinAdjudicar.length,
+      fallasDelCenso(conReusable).join(' · '),
       'un job que llama a un workflow ajeno pasó sin adjudicación',
-    ).toBeGreaterThan(0);
+    ).toMatch(/workflow ajeno/);
   });
 
   it('🔴 ② un publicador en SEGUNDO JOB sin `needs` no cuenta como gateado', () => {
@@ -1849,6 +1889,15 @@ describe('🔴 P65 · los caminos que quedaban fuera del modelo', () => {
       previos,
       'el modelo le atribuyó gates previos a un job que corre en paralelo',
     ).toEqual([]);
+
+    // 🔴 P85 · y la consecuencia, por la POLÍTICA y no por el modelo: sin gates
+    // garantizados antes, la compuerta de gates previos no puede certificarse.
+    // Antes esto terminaba en la línea de arriba —una propiedad del helper— y
+    // dejaba sin acreditar que alguna política actúe sobre ella.
+    expect(
+      fallasDeGatesPrevios(conSuelto).length,
+      'un publicador sin ningún gate garantizado antes no fue denunciado por la política',
+    ).toBeGreaterThan(0);
   });
 
   it('🔴 ③ `github.workflow` en un `run:` deja de ser afirmable', () => {
@@ -2003,57 +2052,57 @@ describe('🔴 P83 · las formas del P81, versionadas y con control ejecutable',
     return yml.replace(de, a);
   };
 
-  it('🔴 (a) `container.env` del job es RECHAZADO sobre el workflow real', () => {
+  /**
+   * 🔴 P85 · CADA CASO ATRAVIESA LA POLÍTICA REAL, NO EL HELPER.
+   *
+   * Hasta P83 estos casos llamaban `fallasDeContexto` por su cuenta. Codex midió
+   * que retirar el callsite verdadero —el del bucle de gates, el del publicador,
+   * la guarda de `strategy`, la igualdad del checkout— dejaba todo verde: yo
+   * acreditaba que el helper reconoce la forma, **no que la política lo use**.
+   *
+   * Ahora cada caso corre `fallasDeGatesPrevios` / `fallasDelPublicador` /
+   * `fallasDelCheckout` — las mismas funciones que corren los `it()` nominales
+   * sobre el `ci.yml` sin mutar. **Desconectar el seam pone rojos a los dos.**
+   *
+   * Los cinco casos son la clase entera, no los cuatro que el dictamen nombró:
+   * `container` compartía el defecto y se convierte con los otros.
+   */
+  it('🔴 `container.env` del job → RECHAZADO por la política de gates', () => {
     const mutado = conMutacion(
       '  build:\n    runs-on: ubuntu-latest',
       '  build:\n    container:\n      image: node:20\n      env:\n' +
         '        npm_config_script_shell: /usr/bin/true\n    runs-on: ubuntu-latest',
     );
-    const { jobs } = leerWorkflow(mutado);
-    const job = jobs[0]!;
-    const paso = job.pasos.find((p) => rolDePaso(p.claves) === 'test');
-    expect(paso, 'no se encontró el gate `npm test` en el workflow mutado').toBeDefined();
-
-    const fallas = fallasDeContexto(mutado, job.nombre, paso!.claves, 'sonda', 'el gate', 'test');
     expect(
-      fallas.join(' · '),
+      fallasDeGatesPrevios(mutado).join(' · '),
       'el arnés no rechazó `container`: su env llega a TODOS los pasos',
     ).toMatch(/container/);
   });
 
-  it('🔴 (a) `step.env.BASH_ENV` en el SCANNER es RECHAZADO sobre el workflow real', () => {
+  it('🔴 `step.env.BASH_ENV` en el SCANNER → RECHAZADO por la política de gates', () => {
     const mutado = conMutacion(
       '        run: bash scripts/auditar-secretos.sh',
       '        env:\n          BASH_ENV: .noop.sh\n        run: bash scripts/auditar-secretos.sh',
     );
-    const { jobs } = leerWorkflow(mutado);
-    const job = jobs[0]!;
-    const paso = job.pasos.find((p) => rolDePaso(p.claves) === 'scanner');
-    expect(paso, 'el scanner no está en la población rolada').toBeDefined();
-
-    const fallas = fallasDeContexto(mutado, job.nombre, paso!.claves, 'sonda', 'el scanner', 'scanner');
+    // 🔴 Atraviesa el consumidor integrado: si el bucle dejara de llamar a
+    // `fallasDeContexto` para el rol scanner, esto queda rojo.
     expect(
-      fallas.join(' · '),
+      fallasDeGatesPrevios(mutado).join(' · '),
       'el arnés no rechazó el env del scanner: su rol no exige mapping vacío',
     ).toMatch(/env/);
   });
 
   /**
-   * 🔴 LA CLASE ENTERA, no sólo los dos que el dictamen nombró.
+   * 🔴 LA CLASE ENTERA, no sólo las que el dictamen nombró.
    *
-   * Censé el archivo buscando qué otras formas adversariales de la jornada
-   * vivían **sólo en replays ad-hoc** —corridas a mano, reportadas en un
-   * paquete, sin `it()` que las plante—. Aparecieron cinco más.
-   *
-   * ⚠️ **Las versiono ahora en vez de anotarlas.** La vuelta pasada enumeré una
-   * deuda, la presenté como método y el BLOCK siguiente entró por el agujero que
-   * yo mismo había dibujado. **Enumerar la clase y no cerrarla es lo que produjo
-   * este dictamen**; hacerlo dos veces seguidas sería no haber entendido nada.
+   * Censé el archivo buscando qué formas adversariales de la jornada vivían
+   * **sólo en replays ad-hoc** —corridas a mano, reportadas en un paquete, sin
+   * `it()` que las plante—. Aparecieron seis.
    *
    * No entran acá `NODE_OPTIONS` ni ninguna otra variable de entorno, **y eso es
    * a propósito**: la allowlist positiva las cubre por construcción, sin
-   * nombrarlas. Un mutante por cada nombre sería volver a la denylist que
-   * costó ocho vueltas abandonar.
+   * nombrarlas. Un mutante por cada nombre sería volver a la denylist que costó
+   * ocho vueltas abandonar.
    */
   const FORMAS: ReadonlyArray<readonly [string, string, string, RegExp]> = [
     [
@@ -2071,7 +2120,7 @@ describe('🔴 P83 · las formas del P81, versionadas y con control ejecutable',
     [
       'shell propio en el publicador',
       '        run: |\n          bash scripts/publicar-vercel.sh app',
-      "        shell: bash {0}\n        run: |\n          bash scripts/publicar-vercel.sh app",
+      '        shell: bash {0}\n        run: |\n          bash scripts/publicar-vercel.sh app',
       /shell/,
     ],
     [
@@ -2080,55 +2129,57 @@ describe('🔴 P83 · las formas del P81, versionadas y con control ejecutable',
       '      - name: Publicar en Vercel (sólo con TODO en verde)\n        continue-on-error: true',
       /continue-on-error/,
     ],
+    [
+      'swap de secretos, con ambas referencias presentes',
+      '          HOOK_APP: ${{ secrets.VERCEL_HOOK_APP }}',
+      '          HOOK_APP: ${{ secrets.VERCEL_HOOK_LANDING }}\n' +
+        '          UNUSED_HOOK_APP: ${{ secrets.VERCEL_HOOK_APP }}',
+      /env/,
+    ],
   ];
 
   for (const [nombre, de, a, esperado] of FORMAS) {
-    it(`🔴 ${nombre} → RECHAZADO`, () => {
-      const mutado = conMutacion(de, a);
-      const { jobs } = leerWorkflow(mutado);
-      const job = jobs[0]!;
-      const paso = job.pasos.find((p) => rolDePaso(p.claves) === 'publicador');
-      expect(paso, 'no se encontró el publicador en el workflow mutado').toBeDefined();
-      const fallas = fallasDeContexto(
-        mutado, job.nombre, paso!.claves, 'sonda', 'el publicador', 'publicador',
-      );
-      // `strategy` y la condición se adjudican en la política del publicador,
-      // que vive en su propio test; acá se afirma lo que `fallasDeContexto` ve.
-      const todo = [...fallas, job.estrategia !== undefined ? 'strategy presente' : ''].join(' · ');
-      expect(todo, `el arnés no rechazó «${nombre}»`).toMatch(esperado);
+    it(`🔴 ${nombre} → RECHAZADO por la política del publicador`, () => {
+      // 🔴 `strategy` incluida: la adjudica `fallasDelPublicador`, no un oráculo
+      // sombra escrito en el test. Retirar esa guarda pone rojo este caso.
+      expect(
+        fallasDelPublicador(conMutacion(de, a)).join(' · '),
+        `el arnés no rechazó «${nombre}»`,
+      ).toMatch(esperado);
     });
   }
 
-  it('🔴 el checkout con `ref` a un ancestro → RECHAZADO', () => {
+  /**
+   * 🔴 P85 · LOS CONTROLES POSITIVOS DE LAS POLÍTICAS, VERSIONADOS.
+   *
+   * Cada política lleva adentro su control de «no medir en vacío» —sin
+   * publicador, sin checkout, sin pasos, devuelve falla en vez de `[]`—. Vivían
+   * sólo en el cuerpo de la función: **si alguien los retirara, la política
+   * devolvería `[]` sobre un workflow vacío y todo quedaría verde.**
+   *
+   * Un `[]` puede significar «no encontré nada malo» o «no miré nada», y son
+   * cosas distintas. Esto fija cuál de las dos es.
+   */
+  it('🔴 ninguna política devuelve `[]` sobre un workflow VACÍO', () => {
+    const vacio = 'name: CI\non: push\njobs: {}\n';
+    expect(fallasDelPublicador(vacio), 'el publicador midió en vacío').not.toEqual([]);
+    expect(fallasDelCheckout(vacio), 'el checkout midió en vacío').not.toEqual([]);
+    expect(fallasDeGatesPrevios(vacio), 'los gates midieron en vacío').not.toEqual([]);
+    expect(fallasDelCenso(vacio), 'el censo midió en vacío').not.toEqual([]);
+  });
+
+  it('🔴 el checkout con `ref` a un ancestro → RECHAZADO por la igualdad exacta', () => {
     const mutado = conMutacion(
       '          fetch-depth: 0',
       '          ref: 7d5b92088416eff648f87c6901c75ad77fe331ec\n          fetch-depth: 0',
     );
-    const { jobs } = leerWorkflow(mutado);
-    const checkout = jobs[0]!.pasos.find((p) => rolDePaso(p.claves) === 'checkout');
-    expect(checkout, 'no se encontró el checkout').toBeDefined();
-    // 🔴 La guarda real es la igualdad EXACTA del `with`: cualquier clave de más
-    // cae sin necesidad de nombrarla. Se planta la peor —`ref`, que desacopla el
-    // workspace de lo que se publica— para dejarlo escrito con su motivo.
-    expect(checkout!.claves['with']).not.toEqual({ 'fetch-depth': 0 });
-  });
-
-  it('🔴 el swap de secretos → RECHAZADO aunque ambas referencias sigan presentes', () => {
-    const mutado = conMutacion(
-      '          HOOK_APP: ${{ secrets.VERCEL_HOOK_APP }}',
-      '          HOOK_APP: ${{ secrets.VERCEL_HOOK_LANDING }}\n' +
-        '          UNUSED_HOOK_APP: ${{ secrets.VERCEL_HOOK_APP }}',
-    );
-    const { jobs } = leerWorkflow(mutado);
-    const job = jobs[0]!;
-    const paso = job.pasos.find((p) => rolDePaso(p.claves) === 'publicador');
-    const fallas = fallasDeContexto(
-      mutado, job.nombre, paso!.claves, 'sonda', 'el publicador', 'publicador',
-    );
+    // 🔴 Antes esto afirmaba que el `with` NO era igual al canónico — la
+    // PRECONDICIÓN del rechazo, no el rechazo. Ahora corre la guarda real:
+    // debilitarla a «`with` presente» deja este caso rojo.
     expect(
-      fallas.join(' · '),
-      'App se dispararía dos veces y Landing ninguna, con ambas referencias presentes',
-    ).toMatch(/env/);
+      fallasDelCheckout(mutado).join(' · '),
+      '`ref` desacopla el workspace de lo que se publica y el arnés no lo rechazó',
+    ).toMatch(/with|exacto/);
   });
 
   /**

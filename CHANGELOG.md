@@ -11,6 +11,75 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.122.0 — cierre del BLOCK P85: el centinela atraviesa el seam (2026-08-22)
+
+Las regresiones de `0.121.0` fijaban **el interior del helper `fallasDeContexto`,
+no el seam entre la política real y ese helper**. Codex lo midió con cuatro
+mutantes: retirar **sólo** el callsite verdadero —el del bucle de gates, el del
+publicador, la guarda de `strategy`, la igualdad exacta del checkout— dejaba la
+focal **83/83 verde**.
+
+🔴 **Yo acreditaba que el helper reconoce la forma, no que la política lo use.**
+Los casos adversariales llamaban al helper por su cuenta; el `it()` nominal lo
+llamaba desde la política. Dos caminos que se parecen, y sólo uno es el que
+corre en producción del gate.
+
+### La forma que lo cierra no es un mutante más
+
+Es que **no exista un segundo camino**. Cada política pasó a ser una función:
+`fallasDelPublicador`, `fallasDelCheckout`, `fallasDeGatesPrevios` y
+`fallasDelCenso`. El `it()` nominal la corre sobre el `ci.yml` real; el
+adversarial la corre sobre el mismo workflow mutado en memoria. **Desconectar el
+interior pone rojos a los dos.**
+
+Los controles positivos —«sin publicador esto mediría en vacío»— viajan **dentro**
+de la función, porque un `[]` puede significar «no encontré nada malo» o «no miré
+nada», y son cosas distintas. Un test nuevo fija cuál de las dos es.
+
+### Seis seams, no cuatro
+
+El dictamen nombró cuatro y pidió enumerar la clase. Aparecieron dos más que
+compartían el defecto: el caso de `container` y el reusable job ①, que
+reconstruía la adjudicación **a mano** dentro del test —un oráculo sombra que
+probaba que el test sabe filtrar, no que el censo rechace—.
+
+| seam desconectado | antes | ahora |
+|---|---|---|
+| gates no llama al helper (scanner) | 83/83 | **1 / 82** |
+| publicador no llama al helper | 83/83 | **4 / 79** |
+| sin la guarda de `strategy` | 83/83 | **1 / 82** |
+| checkout debilitado a «`with` presente» | 83/83 | **1 / 82** |
+| censo no adjudica `uses` de job | — | **1 / 82** |
+| gates por unión y no por publicador | — | **1 / 82** |
+
+### 🔴 Y apareció un hueco real que ningún dictamen había nombrado
+
+Al hacer que el caso ② atravesara la política en vez de afirmar sobre el helper,
+quedó rojo — **y tenía razón**. `fallasDeGatesPrevios` verificaba los roles sobre
+**la unión** de los previos de todos los publicadores: un publicador en un job
+suelto, sin `needs` y corriendo en paralelo, tiene cero gates garantizados antes,
+y **los gates del publicador legítimo completaban la lista por él**.
+
+Ahora se exige **por publicador**. Es la misma clase del dictamen una capa más
+abajo: un agregado que se lee como cobertura individual.
+
+📌 **El hueco no lo encontró un mutante: lo encontró conectar bien el centinela.**
+Arreglar el instrumento hizo visible un defecto del gate que el instrumento mal
+conectado no podía ver.
+
+### Editorial
+
+El CHANGELOG de `0.121.0` decía «cinco formas más» y enumeraba seis. **Corregido
+en su línea, no con una nota al pie**: a diferencia de un «sin push» que era
+cierto el día que se escribió, un conteo mal **nunca** fue cierto, así que
+corregirlo restaura en vez de falsificar. El rastro queda acá.
+
+**Sin push ni deploy.** La conjuntiva no está cumplida: falta el visto bueno de
+Codex sobre esta ref. Y en este repo el push **publica** los dos dominios, así
+que la publicación sigue siendo decisión de Mati, preguntada aparte.
+
+El intermitente E2E sigue **ABIERTO**, sin causa asignada.
+
 ## 0.121.0 — cierre del BLOCK P83: las sondas pasan a regresiones versionadas (2026-08-22)
 
 El P81 no pedía correr dos sondas una vez: pedía **mutantes permanentes y
@@ -37,7 +106,7 @@ sería medir con el instrumento que el ataque manipula.
 ### Y la clase era más grande que los dos casos
 
 Censé el archivo **sobre código, sin comentarios** —contar menciones en prosa
-fue el error de la vuelta pasada— y aparecieron cinco formas más viviendo sólo
+fue el error de la vuelta pasada— y aparecieron seis formas más viviendo sólo
 en replays ad-hoc: `strategy`, `working-directory`, `shell`,
 `continue-on-error`, el checkout con `ref` vieja y el swap de secretos.
 **Todas versionadas.**
