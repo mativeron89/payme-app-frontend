@@ -60,8 +60,23 @@ export interface JobYaml {
    * su job: Actions no corre el job si la condición del job es falsa, y la
    * corre igual si es `always()`. Mirar sólo `step.if` deja la mitad afuera, y
    * fue por ahí que un publicador con `job.if: always()` pasó verde.
+   *
+   * 🔴 P73 · ES `unknown`, NO `string | null`, y la diferencia es el hallazgo.
+   * Antes se guardaba sólo si `js-yaml` lo entregaba como string: con `if: true`
+   * YAML produce un BOOLEANO y el modelo guardaba `null`, o sea **«ausente»**.
+   * `null` mezclaba dos cosas que no son lo mismo: *no está* y *está en una
+   * forma que no supe adjudicar*. Ahora `undefined` es ausencia y cualquier otro
+   * valor es presencia — el consumidor decide, y decide en rojo.
    */
-  readonly condicion: string | null;
+  readonly condicion: unknown;
+  /**
+   * `strategy` — P73. Una matriz EXPANDE el job en varias ejecuciones, cada una
+   * con sus pasos completos. El modelo no la tenía, así que el arnés contaba
+   * las LÍNEAS del paso publicador y creía estar contando sus EJECUCIONES: con
+   * `matrix: replica: [1,2]`, App y Landing se disparan DOS veces cada una
+   * —cuatro hooks— mientras el gate certificaba «exactamente dos».
+   */
+  readonly estrategia: unknown;
 }
 
 export interface Workflow {
@@ -116,7 +131,8 @@ export function leerWorkflow(texto: string): Workflow {
           secretos: job['secrets'],
           pasos: [],
           necesita,
-          condicion: typeof job['if'] === 'string' ? job['if'] : null,
+          condicion: job['if'],
+          estrategia: job['strategy'],
         });
       } else {
         problemas.push(
@@ -143,7 +159,8 @@ export function leerWorkflow(texto: string): Workflow {
       secretos: job['secrets'],
       pasos,
       necesita,
-      condicion: typeof job['if'] === 'string' ? job['if'] : null,
+      condicion: job['if'],
+      estrategia: job['strategy'],
     });
   }
   return { jobs, problemas };

@@ -197,6 +197,13 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
    * rojo y hay que venir a decidirlo a mano. **En el gate que decide si se
    * publica producción, esa fricción es la función, no el efecto secundario.**
    */
+  /** El mapping crudo de un job — para claves que el modelo no expone aún. */
+  const jobCrudo = (yml: string, nombre: string): Record<string, unknown> | undefined => {
+    const doc = load(yml) as { jobs?: Record<string, unknown> } | undefined;
+    const j = doc?.jobs?.[nombre];
+    return typeof j === 'object' && j !== null ? (j as Record<string, unknown>) : undefined;
+  };
+
   const CONDICION_CANONICA =
     "success() && github.event_name == 'push' && github.ref == 'refs/heads/main'";
 
@@ -228,11 +235,68 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
           `${donde}: la condición no es la canónica\n     esperada: ${CONDICION_CANONICA}\n     hallada:  ${condicionDelPaso.trim()}`,
         );
       }
-      // El `if` del JOB también decide si el paso corre. Cualquier condición a
-      // ese nivel es roja: no se interpreta, se rechaza.
-      if (job.condicion !== null) {
+      /**
+       * El `if` del JOB también decide si el paso corre. Cualquier condición a
+       * ese nivel es roja: no se interpreta, se rechaza.
+       *
+       * 🔴 P73 · SE COMPARA CONTRA `undefined`, NO CONTRA `null`. Con `if: true`
+       * YAML entrega un booleano; el modelo viejo lo guardaba como `null` y esta
+       * guarda lo leía como «no hay condición». **`null` mezclaba «ausente» con
+       * «presente en una forma que no supe leer»**, y la segunda tiene que ser
+       * roja — es exactamente donde se esconde lo que no anticipé.
+       */
+      if (job.condicion !== undefined) {
         fallas.push(
-          `${donde}: su job «${job.nombre}» lleva \`if: ${job.condicion}\` — puede aflojar la compuerta`,
+          `${donde}: su job «${job.nombre}» lleva \`if: ${JSON.stringify(job.condicion)}\` — puede aflojar la compuerta`,
+        );
+      }
+
+      /**
+       * 🔴 P73 · `strategy` EN EL JOB DEL PUBLICADOR ES ROJO, sin interpretar.
+       *
+       * Una matriz expande el job en varias ejecuciones, **cada una con su paso
+       * publicador completo**. Con `matrix: replica: [1,2]` el workflow dispara
+       * App y Landing dos veces cada una —cuatro hooks— mientras el gate de
+       * abajo certifica «exactamente dos invocaciones». **Contaba líneas y creía
+       * contar ejecuciones.**
+       *
+       * Se prohíbe en vez de modelar la expansión: modelarla pide reproducir las
+       * reglas de `matrix`, `include`, `exclude` y `fail-fast` — otro intérprete
+       * a medias, que es la clase que este arnés viene cerrando hace quince
+       * vueltas. Un job que publica no tiene por qué correr en matriz; si algún
+       * día lo necesita, se decide a mano y a la vista.
+       */
+      if (job.estrategia !== undefined) {
+        fallas.push(
+          `${donde}: su job «${job.nombre}» declara \`strategy\` — se expandiría en varias ` +
+            'ejecuciones y publicaría más de una vez',
+        );
+      }
+
+      /**
+       * 🔴 P73 · UN FALLO DEL PUBLICADOR NO PUEDE QUEDAR TOLERADO.
+       *
+       * La guarda de más abajo ya rechazaba `continue-on-error` — **pero sólo al
+       * recorrer los cinco gates ANTERIORES**. Al paso que importa, el que
+       * dispara los hooks, nadie se lo miraba: con `continue-on-error: true` un
+       * hook que devuelve error queda tolerado y la corrida no se rompe.
+       *
+       * Eso contradice la garantía central del arnés —que un disparo fallido
+       * corta la publicación—, y la sonda ejecutable no alcanza a verlo: puede
+       * demostrar que el CUERPO termina ≠0 mientras la corrida real queda verde.
+       * El estado del script no sustituye la semántica del paso que Actions
+       * ejecuta.
+       */
+      const toleraPaso = paso.claves['continue-on-error'];
+      if (toleraPaso !== undefined && toleraPaso !== false && toleraPaso !== 'false') {
+        fallas.push(
+          `${donde}: \`continue-on-error: ${JSON.stringify(toleraPaso)}\` — un hook rojo NO cortaría`,
+        );
+      }
+      const toleraJob = jobCrudo(ci, job.nombre)?.['continue-on-error'];
+      if (toleraJob !== undefined && toleraJob !== false && toleraJob !== 'false') {
+        fallas.push(
+          `${donde}: su job «${job.nombre}» lleva \`continue-on-error: ${JSON.stringify(toleraJob)}\``,
         );
       }
     }
