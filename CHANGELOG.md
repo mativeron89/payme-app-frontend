@@ -11,6 +11,54 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.119.0 — cierre del BLOCK P79: allowlist positiva y checkout adjudicado (2026-08-22)
+
+Novena vuelta, y la primera que ataca **la clase entera** en vez de una
+dimensión más.
+
+**Sin push ni deploy.** La conjuntiva no está cumplida.
+
+### El giro: dejar de enumerar lo malo
+
+Ocho vueltas agregando guardas que **rechazan** formas conocidas, y cada vuelta
+aparecía la siguiente. Esta vez, además de `BASH_ENV` en el paso, sobrevivieron
+`npm_config_script_shell: /usr/bin/true` y
+`NODE_OPTIONS=--import=data:...process.exit(0)` — **cada uno dejando el gate en
+0 sin ejecutar nada**.
+
+**La lista de lo malo no tiene fin.** Ahora cada rol declara el `env` que
+necesita y todo lo no declarado es rojo, sin importar cómo se llame:
+
+```
+checkout · espejo · test · typecheck · playwright   {}  ← ninguna, y se afirma
+build                                               VITE_API_URL
+publicador                                          HOOK_APP + HOOK_LANDING
+```
+
+🔴 **Y lo que más vale registrar: es la misma forma que este repo ya usaba para
+la gramática de shell —afirmar lo simple en vez de enumerar lo complejo—
+escrita en el mismo archivo, unas líneas más arriba.** Hicieron falta ocho
+vueltas para aplicarla al ambiente teniéndola delante. **Conocer la forma no es
+lo mismo que reconocer dónde falta.**
+
+### El checkout: el agujero más grande de las nueve vueltas
+
+El censo aceptaba la acción y **no miraba su `with`**. Con `ref: <ancestro>` el
+workspace queda en bytes viejos: los cinco gates miden esos bytes y el paso
+final sólo llama los hooks, sin transmitir ningún SHA.
+
+**Se pierde la identidad entre lo verificado y lo que se publica.** No rompe una
+guarda: **las deja a todas midiendo el objeto equivocado**.
+
+```
+env BASH_ENV / npm_config_script_shell / NODE_OPTIONS → 1/1/1 · checkout ref vieja → 1
+CONTROL: el env legítimo del build no cae → 66 passed
+replays: dos espacios 5 · strategy 1 · BASH_ENV job 3 · swap 2 · gate wd 1 · recaída helper 5
+```
+
+Todos los mutantes con **control de plantado previo** — condición del dictamen, y
+salida de mi propio error de la vuelta anterior.
+
 ## 0.118.0 — cierre del BLOCK P77: el contexto de ejecución, uno solo (2026-08-22)
 
 Octava vuelta, y el principio que la resume vale más que los cuatro puntos: **de
