@@ -1741,6 +1741,23 @@ body {
   font-size: 15px;
   flex-shrink: 0;
 }
+
+/* Variante de MARCA — monograma navy sobre `--teal-l`, SIN color por persona
+   (reconciliación 2026-08-21, cambio 10). Hoy sólo Compartir; el censo de los
+   ocho usos está en `ui.tsx`.
+
+   ⚠️ VA DESPUÉS DE `.avatar` A PROPÓSITO: misma especificidad, así que gana la
+   última. Escrita arriba, el `color: #fff` de la base le ganaba y el monograma
+   salía blanco sobre celeste — 1.3:1, ilegible. Lo pinté al revés la primera
+   vez y lo cazó el navegador.
+
+   Navy sobre este celeste da 15.19:1, el par que `designTokens.test.ts` ya
+   mide como cotejo del instrumento. */
+.avatar-marca {
+  background: var(--teal-l);
+  color: var(--action);
+}
+
 .fr-name {
   flex: 1;
   min-width: 0;
@@ -2665,8 +2682,26 @@ body {
    camino principal —es por donde llega el invitado— y copiar es la salida
    para quien comparte por otro lado. El mismo ancho para que la tarjeta lea
    como una columna de acciones y no como un botón con un apéndice. */
+/* LAS DOS ACCIONES DE LA CREDENCIAL, del MISMO tamaño — reconciliación
+   2026-08-21, cambio 10: *"código + dos acciones de 50px de alto, mismo
+   tamaño"*. Antes cada una tomaba su alto del padding del `.btn` base y del
+   contenido, así que el de WhatsApp —con ícono y texto más largo— quedaba más
+   alto que «Copiar link» sin que nadie lo hubiera decidido.
+
+   `white-space: nowrap` para que ninguna parta en dos líneas: a 375px «Compartir
+   por WhatsApp» entra justo, y una segunda línea rompería el par de alturas que
+   este bloque acaba de fijar. */
+.share-wa,
 .share-copy {
   width: 100%;
+  height: 50px;
+  min-height: 50px;
+  padding-top: 0;
+  padding-bottom: 0;
+  white-space: nowrap;
+}
+
+.share-copy {
   margin-bottom: var(--sp-2);
 }
 

@@ -177,7 +177,11 @@ export function InviteFriends({ code }: { code: string }) {
     const done = invited.has(f.payme_id);
     return (
       <div key={key} className="inv-row">
-        <Avatar name={f.full_name} />
+        {/* Monograma navy sobre `--teal-l`, SIN color por persona
+            (reconciliación 2026-08-21). El color por hash no lo elegía nadie y
+            metía un sexto color sin token en la única pantalla donde §5 bis · F
+            declara que hay uno solo. */}
+        <Avatar name={f.full_name} variant="marca" />
         <div className="fr-name">
           <div className="n">{f.full_name}</div>
           <div className="id">{f.payme_id}</div>

@@ -95,9 +95,38 @@ export function useToast(): (msg: string) => void {
   return useContext(ToastContext);
 }
 
+/**
+ * 🔴 SEIS COLORES SIN TOKEN, y ninguna guarda los mira. No salen de la paleta
+ * de marca ni figuran en `SISTEMA_DISENO.md`: entran por un hash del nombre,
+ * así que qué color pinta cada persona no lo decidió nadie.
+ *
+ * Esto vuelve FALSA, mientras se usen en Compartir, la afirmación de §5 bis · F
+ * de que `--channel-whatsapp` es *"el único color de las pantallas de compartir
+ * que no sale de la paleta de marca"*. La variante `marca` de abajo es la que
+ * cierra ese hueco — pero sólo donde se la use.
+ */
 const AVATAR_COLORS = ['#7c3aed', '#0891b2', '#ea580c', '#059669', '#be185d', '#4f46e5'];
 
-export function Avatar({ name, size = 42 }: { name: string; size?: number }) {
+/**
+ * `variant`:
+ *  - `color` (default) — el hash histórico. Lo usan Amigos, Grupos, Transferir
+ *    y Perfil, que están FUERA de AF-DISENO-01 y no se tocan sin orden.
+ *  - `marca` — monograma navy sobre `--teal-l`, **sin color por persona**
+ *    (reconciliación 2026-08-21, cambio 10). Hoy sólo Compartir.
+ *
+ * ⚠️ Que convivan dos estilos NO es el estado deseable: es el alcance de la
+ * orden. Unificar los ocho usos es decisión de Diseño, no de esta sesión —
+ * declarado al Bibliotecario junto con el censo.
+ */
+export function Avatar({
+  name,
+  size = 42,
+  variant = 'color',
+}: {
+  name: string;
+  size?: number;
+  variant?: 'color' | 'marca';
+}) {
   const initials = name
     .split(' ')
     .map((p) => p.charAt(0))
@@ -109,8 +138,15 @@ export function Avatar({ name, size = 42 }: { name: string; size?: number }) {
   const color = AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
   return (
     <div
-      className="avatar"
-      style={{ background: color, width: size, height: size, fontSize: size * 0.36 }}
+      className={`avatar ${variant === 'marca' ? 'avatar-marca' : ''}`}
+      style={{
+        // En `marca` el fondo lo pone la clase, con tokens. Pasarlo por `style`
+        // ganaría siempre y dejaría el token sin efecto.
+        ...(variant === 'marca' ? null : { background: color }),
+        width: size,
+        height: size,
+        fontSize: size * 0.36,
+      }}
       aria-hidden="true"
     >
       {initials}
