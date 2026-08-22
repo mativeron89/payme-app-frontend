@@ -197,13 +197,6 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
    * rojo y hay que venir a decidirlo a mano. **En el gate que decide si se
    * publica producción, esa fricción es la función, no el efecto secundario.**
    */
-  /** El mapping crudo de un job — para claves que el modelo no expone aún. */
-  const jobCrudo = (yml: string, nombre: string): Record<string, unknown> | undefined => {
-    const doc = load(yml) as { jobs?: Record<string, unknown> } | undefined;
-    const j = doc?.jobs?.[nombre];
-    return typeof j === 'object' && j !== null ? (j as Record<string, unknown>) : undefined;
-  };
-
   const CONDICION_CANONICA =
     "success() && github.event_name == 'push' && github.ref == 'refs/heads/main'";
 
@@ -293,56 +286,8 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
        * corre. Cualquier otra forma —expresión, número, `null`, objeto— también
        * queda roja sin enumerarlas.
        */
-      const toleranciaValida = (v: unknown): boolean => v === undefined || v === false;
-      const toleraPaso = paso.claves['continue-on-error'];
-      if (!toleranciaValida(toleraPaso)) {
-        fallas.push(
-          `${donde}: \`continue-on-error: ${JSON.stringify(toleraPaso)}\` — un hook rojo NO cortaría (sólo se admite ausencia o el booleano false)`,
-        );
-      }
-      const crudo = jobCrudo(ci, job.nombre);
-      if (!toleranciaValida(crudo?.['continue-on-error'])) {
-        fallas.push(
-          `${donde}: su job «${job.nombre}» lleva \`continue-on-error: ${JSON.stringify(crudo?.['continue-on-error'])}\``,
-        );
-      }
-
-      /**
-       * 🔴 P75 · `working-directory` CAMBIA EL EJECUTABLE SIN CAMBIAR LA
-       * EVIDENCIA — y es la dimensión de ejecución que faltaba gobernar.
-       *
-       * Con `working-directory: landing`, Actions resuelve
-       * `landing/scripts/publicar-vercel.sh`: **otro archivo**. La sonda de este
-       * arnés ejecuta el cuerpo con `cwd` en la raíz, así que certificaría el
-       * script de la raíz mientras el CI corre otro. Codex lo montó y quedó
-       * 63/63.
-       *
-       * Se rechaza fail-closed en los TRES niveles —paso, `defaults.run` del job
-       * y `defaults.run` del workflow— en vez de resolver el directorio efectivo:
-       * resolverlo pide reimplementar la precedencia de defaults de Actions, que
-       * es la misma familia de intérprete a medias que ya costó varias vueltas.
-       * Un paso que publica no tiene por qué correr desde otro directorio.
-       */
-      const wdPaso = paso.claves['working-directory'];
-      if (wdPaso !== undefined) {
-        fallas.push(
-          `${donde}: \`working-directory: ${JSON.stringify(wdPaso)}\` — Actions resolvería OTRO script`,
-        );
-      }
-      const wdDefault = (n: unknown): unknown => {
-        if (typeof n !== 'object' || n === null) return undefined;
-        const d = (n as Record<string, unknown>)['defaults'];
-        if (typeof d !== 'object' || d === null) return undefined;
-        const r = (d as Record<string, unknown>)['run'];
-        if (typeof r !== 'object' || r === null) return undefined;
-        return (r as Record<string, unknown>)['working-directory'];
-      };
-      if (wdDefault(crudo) !== undefined) {
-        fallas.push(`${donde}: su job «${job.nombre}» declara \`defaults.run.working-directory\``);
-      }
-      if (wdDefault(load(ci)) !== undefined) {
-        fallas.push(`${donde}: el WORKFLOW declara \`defaults.run.working-directory\``);
-      }
+      // Todo el contexto de ejecución, por la definición única.
+      fallas.push(...fallasDeContexto(ci, job.nombre, paso.claves, donde, 'el publicador'));
     }
     expect(fallas, `la compuerta del publicador no está cerrada:\n  ${fallas.join('\n  ')}`)
       .toEqual([]);
@@ -901,6 +846,122 @@ function expresionDeDominioAcotado(dentro: string): boolean {
 }
 
 /** Parte un comando en tokens respetando comillas. `null` si las comillas no cierran. */
+/** El mapping crudo de un job — para claves que el modelo no expone aún. */
+const jobCrudo = (yml: string, nombre: string): Record<string, unknown> | undefined => {
+  const doc = load(yml) as { jobs?: Record<string, unknown> } | undefined;
+  const j = doc?.jobs?.[nombre];
+  return typeof j === 'object' && j !== null ? (j as Record<string, unknown>) : undefined;
+};
+
+/**
+ * 🔴 P77 · EL CONTEXTO DE EJECUCIÓN EFECTIVO DE UN PASO, EN UN SOLO LUGAR.
+ *
+ * Las vueltas anteriores fueron agregando dimensiones —`shell`,
+ * `working-directory`, `continue-on-error`, `strategy`— **y todas se
+ * escribieron sólo para el PUBLICADOR**. Codex mostró la consecuencia: los
+ * CINCO GATES que autorizan a publicar quedaban sin gobierno, así que
+ * `npm test` con `working-directory: .audit-fake-gate` (un `package.json`
+ * no-op) o con `shell: bash -c 'true # {0}'` **terminaba 0 sin ejecutar
+ * nada**, y el arnés lo seguía contando como gate real.
+ *
+ * 📌 **El principio que sale de ahí, y es el que vale más que el parche: de
+ * nada sirve blindar al que publica si el que lo AUTORIZA a publicar puede
+ * volverse un no-op.**
+ *
+ * Por eso esto no es un chequeo más: es **una sola definición de "contexto
+ * gobernado"** que se aplica a toda la población que importa —el publicador y
+ * cada gate—. La dimensión que se agregue mañana entra acá y cubre a todos;
+ * escrita en el consumidor de turno, vuelve a dejar la mitad afuera, que es
+ * exactamente lo que pasó cuatro vueltas seguidas.
+ */
+const TOLERANCIA_VALIDA = (v: unknown): boolean => v === undefined || v === false;
+
+/** `defaults.run.<clave>` de un mapping (workflow o job). */
+const defaultRun = (n: unknown, clave: string): unknown => {
+  if (typeof n !== 'object' || n === null) return undefined;
+  const d = (n as Record<string, unknown>)['defaults'];
+  if (typeof d !== 'object' || d === null) return undefined;
+  const r = (d as Record<string, unknown>)['run'];
+  if (typeof r !== 'object' || r === null) return undefined;
+  return (r as Record<string, unknown>)[clave];
+};
+
+/**
+ * `BASH_ENV` heredado — P77.
+ *
+ * 🔴 Bash NO INTERACTIVO ejecuta el archivo que apunta `BASH_ENV` **antes**
+ * del script, y `--noprofile --norc` no lo neutraliza. Codex redefinió `bash`
+ * desde ese prelude y **las dos líneas del publicador terminaron 0 sin
+ * ejecutar `publicar-vercel.sh`**: el arnés certificaba un cuerpo que no
+ * corrió.
+ *
+ * Se rechaza heredado de workflow y de job. No se intenta "modelar el env
+ * efectivo": eso es reimplementar la precedencia de env de Actions, la misma
+ * familia de intérprete a medias que ya costó varias vueltas.
+ */
+const bashEnvDe = (n: unknown): unknown => {
+  if (typeof n !== 'object' || n === null) return undefined;
+  const e = (n as Record<string, unknown>)['env'];
+  if (typeof e !== 'object' || e === null) return undefined;
+  return (e as Record<string, unknown>)['BASH_ENV'];
+};
+
+/**
+ * Las fallas del contexto de ejecución de UN paso, mirando sus tres niveles.
+ * `que` nombra el rol para que el mensaje diga qué se rompe: «el publicador»
+ * o «el gate `npm test`».
+ */
+const fallasDeContexto = (
+  yml: string,
+  nombreJob: string,
+  claves: { readonly [k: string]: unknown },
+  donde: string,
+  que: string,
+): string[] => {
+  const out: string[] = [];
+  const crudoJob = jobCrudo(yml, nombreJob);
+  const doc = load(yml);
+
+  if (claves['shell'] !== undefined) {
+    out.push(`${donde}: ${que} declara \`shell: ${JSON.stringify(claves['shell'])}\` — otra semántica`);
+  }
+  if (defaultRun(crudoJob, 'shell') !== undefined) {
+    out.push(`${donde}: el job «${nombreJob}» declara \`defaults.run.shell\``);
+  }
+  if (defaultRun(doc, 'shell') !== undefined) {
+    out.push(`${donde}: el WORKFLOW declara \`defaults.run.shell\``);
+  }
+
+  if (claves['working-directory'] !== undefined) {
+    out.push(
+      `${donde}: ${que} declara \`working-directory: ${JSON.stringify(claves['working-directory'])}\` — correría en otro lado`,
+    );
+  }
+  if (defaultRun(crudoJob, 'working-directory') !== undefined) {
+    out.push(`${donde}: el job «${nombreJob}» declara \`defaults.run.working-directory\``);
+  }
+  if (defaultRun(doc, 'working-directory') !== undefined) {
+    out.push(`${donde}: el WORKFLOW declara \`defaults.run.working-directory\``);
+  }
+
+  if (!TOLERANCIA_VALIDA(claves['continue-on-error'])) {
+    out.push(
+      `${donde}: ${que} lleva \`continue-on-error: ${JSON.stringify(claves['continue-on-error'])}\` — sólo se admite ausencia o el booleano false`,
+    );
+  }
+  if (!TOLERANCIA_VALIDA(crudoJob?.['continue-on-error'])) {
+    out.push(`${donde}: su job «${nombreJob}» lleva \`continue-on-error\` inválido o verdadero`);
+  }
+
+  if (bashEnvDe(crudoJob) !== undefined) {
+    out.push(`${donde}: el job «${nombreJob}» hereda \`BASH_ENV\` — se ejecutaría ANTES del cuerpo`);
+  }
+  if (bashEnvDe(doc) !== undefined) {
+    out.push(`${donde}: el WORKFLOW hereda \`BASH_ENV\` — se ejecutaría ANTES del cuerpo`);
+  }
+  return out;
+};
+
 /**
  * 🔴 P75 · LA ÚNICA FORMA DE RECONOCER UNA INVOCACIÓN DEL PUBLICADOR.
  *
@@ -1168,6 +1229,60 @@ describe('🔴 la gramática afirma lo simple, no enumera lo complejo', () => {
   }
 });
 
+/**
+ * 🔴 P77 · EL ORÁCULO QUE MATA LA RECAÍDA, POR SÍ SOLO.
+ *
+ * `esInvocacionPublicador` existe desde la vuelta pasada, pero **nada la
+ * probaba directamente**: se la ejercitaba de refilón a través del `ci.yml`
+ * real, que sólo contiene la forma canónica de un espacio. Codex lo mostró de la
+ * peor manera posible: revirtiendo el helper al regex sensible al espacio, la
+ * focal quedó **63/63** — o sea que la corrección central de la vuelta 7 no
+ * tenía ningún testigo propio.
+ *
+ * Es la misma lección que ya me costó el parser (`yamlWorkflow.test.ts`): **un
+ * reconocedor probado sólo contra la entrada que ya funciona no tiene cómo
+ * fallar en el test y sí en la realidad.**
+ *
+ * Estos casos no dependen del workflow: si alguien vuelve a un patrón que exija
+ * un espacio exacto, esto se pone rojo solo.
+ */
+describe('🔴 el reconocedor del publicador no depende del whitespace', () => {
+  const EQUIVALENTES = [
+    ['un espacio (canónico)', 'bash scripts/publicar-vercel.sh app "$HOOK_APP"'],
+    ['dos espacios', 'bash  scripts/publicar-vercel.sh app "$HOOK_APP"'],
+    ['tres espacios', 'bash   scripts/publicar-vercel.sh landing "$HOOK_LANDING"'],
+    ['tabulador', 'bash\tscripts/publicar-vercel.sh app "$HOOK_APP"'],
+    ['espacios mezclados', 'bash \t scripts/publicar-vercel.sh app "$HOOK_APP"'],
+  ] as const;
+
+  for (const [nombre, cmd] of EQUIVALENTES) {
+    it(`⭐ lo reconoce con ${nombre}`, () => {
+      expect(
+        esInvocacionPublicador(cmd),
+        'un separador distinto lo volvió invisible: volvió el regex spacing-sensitive',
+      ).toBe(true);
+    });
+  }
+
+  /**
+   * Control NEGATIVO: reconocer de más es tan malo como reconocer de menos —
+   * marcaría como publicador algo que no lo es y el gate pediría condiciones a
+   * un paso cualquiera.
+   */
+  const AJENOS = [
+    ['otro script', 'bash scripts/auditar-secretos.sh'],
+    ['sufijo parecido', 'bash scripts/publicar-vercel.sh-alternativo app'],
+    ['otro intérprete', 'sh scripts/publicar-vercel.sh app'],
+    ['ruta distinta', 'bash otro/scripts/publicar-vercel.sh app'],
+  ] as const;
+
+  for (const [nombre, cmd] of AJENOS) {
+    it(`⭐ NO lo confunde con ${nombre}`, () => {
+      expect(esInvocacionPublicador(cmd), 'reconoció de más').toBe(false);
+    });
+  }
+});
+
 describe('el camino de publicación · leído de los PASOS, no del texto', () => {
   const DIR = join(RAIZ, '.github', 'workflows');
 
@@ -1254,12 +1369,24 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
       ['bash', 'scripts/auditar-secretos.sh'], // gate de secretos
       ['node', 'scripts/verificar-mirror.mjs'], // gate del espejo
       ['bash', 'scripts/reportar-flaky.sh'], // informa, no bloquea
-      ['bash', 'scripts/publicar-vercel.sh'], // LA publicación
+      // 🔴 P77 · LA PUBLICACIÓN NO VA EN ESTA LISTA. Tenía su propia tupla acá,
+      // re-tokenizada por el censo, en paralelo a `esInvocacionPublicador`. Hoy
+      // las dos coincidían, **y ésa es exactamente la trampa**: la unificación
+      // de la vuelta pasada alcanzó a los seis consumidores y dejó al censo con
+      // su copia. Dos fuentes que coinciden hoy son una casualidad fechada, no
+      // una propiedad — y con el helper revertido al regex de un espacio, el
+      // censo seguía allowlisteando al publicador de dos espacios que los
+      // consumidores ya no veían.
+      //
+      // Ahora el censo delega en el MISMO predicado (ver `adjudicaComando`).
     ];
     /** `uses:` no es un comando: se adjudica por la acción exacta y su versión. */
     const USES_ADJUDICADOS = /^actions\/(checkout|setup-node)@[A-Za-z0-9._-]+$/;
 
     const adjudicaComando = (cmd: string): boolean => {
+      // La publicación se reconoce por la ÚNICA definición, no por una tupla
+      // propia: una sola fuente para el censo y para los seis consumidores.
+      if (esInvocacionPublicador(cmd)) return true;
       const ts = tokens(cmd);
       if (ts === null) return false;
       return ADJUDICADOS.some((patron) => patron.every((tok, k) => ts[k] === tok));
@@ -1371,20 +1498,15 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
    */
   it('🔴 los gates CORREN y su fallo BLOQUEA: sin `if:` y sin tolerar error', () => {
     // Mismo cambio de modelo que el test de arriba: «antes» es causalidad.
-    const { jobs } = leerWorkflow(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    const yml = readFileSync(join(DIR, 'ci.yml'), 'utf8');
+    const { jobs } = leerWorkflow(yml);
     const todos = jobs.flatMap((j) => [...j.pasos]);
     const publicadores2 = todos.filter((p) =>
       pasoPublica(texto(p.claves['run'])),
     );
     expect(publicadores2.length, 'no se encontró el paso de publicación').toBeGreaterThan(0);
     // Mismo criterio que arriba: cada publicador responde por sus antecesores.
-    const previos = publicadores2.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub)).map((p) => ({
-      job: p.job,
-      indice: p.indice,
-      run: texto(p.claves['run']),
-      condicion: texto(p.claves['if']),
-      toleraError: texto(p.claves['continue-on-error']),
-    }));
+    const previos = publicadores2.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub));
 
     const GATES = [
       /^node scripts\/verificar-mirror\.mjs\b/, /^npm test$/, /^npm run typecheck$/,
@@ -1392,18 +1514,35 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
     ];
     const problemas: string[] = [];
     for (const p of previos) {
-      const cmds = comandosDe(p.run ?? '');
-      if (!GATES.some((re) => cmds.some((c) => re.test(c)))) continue;
-      if (p.condicion !== null) {
-        problemas.push(`${p.job}.steps[${p.indice}]: el gate lleva \`if: ${p.condicion}\` — puede no ejecutarse`);
+      const cmds = comandosDe(texto(p.claves['run']) ?? '');
+      const gate = GATES.find((re) => cmds.some((c) => re.test(c)));
+      if (!gate) continue;
+      const donde = `${p.job}.steps[${p.indice}]`;
+      const condicion = p.claves['if'];
+      if (condicion !== undefined) {
+        problemas.push(`${donde}: el gate lleva \`if: ${JSON.stringify(condicion)}\` — puede no ejecutarse`);
       }
-      if (p.toleraError !== null && p.toleraError !== 'false') {
-        problemas.push(`${p.job}.steps[${p.indice}]: \`continue-on-error: ${p.toleraError}\` — su fallo NO frena la publicación`);
-      }
+      /**
+       * 🔴 P77 · EL GATE PASA POR EL MISMO CONTEXTO QUE EL PUBLICADOR.
+       *
+       * Antes acá sólo se miraba `if` y `continue-on-error`, y este último por
+       * `texto()`, que aceptaba la cadena `'false'`. **Un gate con otro
+       * `working-directory` o con `shell: bash -c 'true # {0}'` terminaba 0 sin
+       * ejecutar nada** y el arnés lo contaba como gate cumplido: el publicador
+       * se dispararía después de una verificación que no verificó.
+       *
+       * Es la misma llamada que hace el publicador — una definición, dos
+       * poblaciones.
+       */
+      problemas.push(
+        ...fallasDeContexto(yml, p.job, p.claves, donde, `el gate \`${cmds[0] ?? ''}\``),
+      );
     }
     // Control positivo: si ningún paso matcheara como gate, el bucle no miraría
     // nada y esto pasaría en vacío sobre un CI sin gates.
-    const cuantos = previos.filter((p) => GATES.some((re) => comandosDe(p.run ?? '').some((c) => re.test(c)))).length;
+    const cuantos = previos.filter((p) =>
+      GATES.some((re) => comandosDe(texto(p.claves['run']) ?? '').some((c) => re.test(c))),
+    ).length;
     expect(cuantos, 'no se reconoció ningún gate: el test mediría en vacío').toBe(5);
     expect(problemas, `gates que están escritos pero no gatean:\n  ${problemas.join('\n  ')}`).toEqual([]);
   });
