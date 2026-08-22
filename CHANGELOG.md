@@ -11,6 +11,28 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.115.1 — el gate de secretos cortó sobre mi propio cambio (2026-08-22)
+
+Al dar destinos distinguibles a la sonda usé dos constantes con **la forma exacta
+de un Deploy Hook de Vercel**. El gate de secretos cortó el push, y con razón:
+este repo es público y esa forma es justo la que no puede aparecer en el árbol.
+
+La sonda no necesitaba URLs verosímiles — necesitaba destinos **distinguibles**,
+que es lo único que acredita qué variable alimenta qué proyecto. Pasan a
+`https://ejemplo.invalid/destino-{app,landing}`.
+
+🔴 **Remediado con commit sucesor, no reescribiendo el anterior**: amend/rebase
+están prohibidos y esa regla gana. El gobierno prevé exactamente este caso —
+remediar, declarar, enumerar la clase.
+
+**Clase enumerada** sobre el diff aislado de los 19 commits del rango: la forma
+aparece en **un solo commit** (`a3da315`, 2 líneas) y en ningún otro.
+
+⚠️ Las cadenas eran inventadas y nunca fueron un secreto real. **Pero la forma es
+lo que el gate mira, y hace bien: distinguir «inventada» de «real» es
+precisamente lo que un barrido no puede hacer.** Un gate que confiara en esa
+distinción no serviría para nada.
+
 ## 0.115.0 — cierre del BLOCK P71: la certificación pasa del texto al modelo (2026-08-22)
 
 Al cerrar el P68 aposté que una quinta vuelta estaría «en algo que doy por
