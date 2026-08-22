@@ -1,142 +1,123 @@
 import { describe, expect, it } from 'vitest';
-import { parsearYaml, pasosDeWorkflow } from './yamlWorkflow';
+import { esperaA, leerWorkflow, pasosDeWorkflow } from './yamlWorkflow';
 
 /**
- * Los contraejemplos del dictamen P60, uno por uno, más los controles.
+ * 🔴 QUÉ PRUEBA ESTE ARCHIVO AHORA, Y QUÉ DEJÓ DE PROBAR.
  *
- * 🔴 Este archivo prueba **el instrumento**, no el workflow. Es la lección de
- * las tres vueltas anteriores: cada vez que el centinela falló, falló porque su
- * LECTOR no veía algo, y el lector nunca tuvo pruebas propias — se lo probaba
- * de refilón a través del `ci.yml` real, que por definición sólo contiene las
- * formas que ya usamos. Un lector probado sólo contra la entrada que ya
- * funciona no tiene cómo fallar en el test y sí en la realidad.
+ * Con `js-yaml` adentro, **el parseo dejó de ser nuestro**: anchors, tags, flow,
+ * multi-documento y comillas los resuelve la librería, y probarlos acá sería
+ * testear a `js-yaml`. Los casos de «FALLA CERRADO ante lo que no entiende» que
+ * llenaban este archivo se fueron con el parser propio que los necesitaba.
+ *
+ * Lo que queda es **el MODELO**, que es lo único nuestro y es exactamente donde
+ * el P65 encontró los tres agujeros:
+ *
+ *   población   ¿qué cuenta como camino ejecutable? (un reusable job lo es)
+ *   causalidad  ¿qué acredita que algo corre ANTES? (`needs`, no la posición)
+ *   frontera    ¿qué valores llegan al shell? (vive en `despliegue.test.ts`)
+ *
+ * Los dos contraejemplos del P60 —guion solo, segundo job— se conservan como
+ * pruebas de REGRESIÓN: hoy los resuelve la librería, y el día que alguien
+ * quiera volver a un lector propio, tiene que pasarlos.
  */
-describe('parser YAML · los contraejemplos que dejaron 49/49 verde', () => {
-  it('🔴 ① el guion SOLO en su renglón abre un ítem igual', () => {
+describe('modelo del workflow · la población de caminos ejecutables', () => {
+  it('🔴 P65 · un REUSABLE JOB entra al censo, no se saltea', () => {
+    const { jobs, problemas } = leerWorkflow(`
+jobs:
+  build:
+    steps:
+      - run: npm test
+  publicador_reusable_no_adjudicado:
+    uses: acme/deploy/.github/workflows/vercel.yml@main
+    secrets: inherit
+`);
+    expect(problemas).toEqual([]);
+    expect(jobs).toHaveLength(2);
+    const reusable = jobs.find((j) => j.usa !== null);
+    expect(reusable, 'el job reusable no llegó al modelo: quedaría sin adjudicar').toBeDefined();
+    expect(reusable!.usa).toBe('acme/deploy/.github/workflows/vercel.yml@main');
+    // Sus secretos también son parte de lo que hay que adjudicar.
+    expect(reusable!.secretos).toBe('inherit');
+  });
+
+  it('🔴 un job SIN `steps` y SIN `uses` es indecidible, no un job vacío', () => {
+    const { problemas } = leerWorkflow('jobs:\n  raro:\n    runs-on: ubuntu-latest\n');
+    expect(problemas.join(' ')).toMatch(/no se puede adjudicar qué ejecuta/);
+  });
+
+  it('⭐ REGRESIÓN P60 · el guion solo y el segundo job siguen entrando', () => {
     const { pasos, indecidibles } = pasosDeWorkflow(`
-name: CI
 jobs:
   build:
     steps:
       -
         run: npx vercel --prod
-      - uses: actions/checkout@v4
-`);
-    expect(indecidibles).toEqual([]);
-    expect(pasos).toHaveLength(2);
-    // El publicador estaba PRIMERO, que es justo donde desaparecía.
-    expect(pasos[0]!.claves['run']).toBe('npx vercel --prod');
-    expect(pasos[1]!.claves['uses']).toBe('actions/checkout@v4');
-  });
-
-  it('🔴 ② un SEGUNDO job con pasos también se recorre', () => {
-    const { pasos, indecidibles } = pasosDeWorkflow(`
-jobs:
-  build:
-    steps:
-      - run: npm test
   colado:
     steps:
-      - run: npx vercel --prod
+      - run: npm test
 `);
     expect(indecidibles).toEqual([]);
-    expect(pasos.map((p) => p.job)).toEqual(['build', 'colado']);
-    expect(pasos[1]!.claves['run']).toBe('npx vercel --prod');
-  });
-
-  it('⭐ el mapping se lee entero, venga la clave que venga primero', () => {
-    const { pasos } = pasosDeWorkflow(`
-jobs:
-  build:
-    steps:
-      - continue-on-error: false
-        name: publicar
-        run: npx vercel --prod
-`);
-    expect(pasos[0]!.claves).toMatchObject({
-      'continue-on-error': 'false',
-      name: 'publicar',
-      run: 'npx vercel --prod',
-    });
-  });
-
-  it('⭐ los `run:` de bloque conservan sus renglones', () => {
-    const { pasos } = pasosDeWorkflow(`
-jobs:
-  build:
-    steps:
-      - run: |
-          echo uno
-          echo dos
-`);
-    expect(pasos[0]!.claves['run']).toBe('echo uno\necho dos');
+    expect(pasos.map((p) => `${p.job}[${p.indice}]`)).toEqual(['build[0]', 'colado[0]']);
+    expect(pasos[0]!.claves['run']).toBe('npx vercel --prod');
   });
 });
 
-describe('parser YAML · FALLA CERRADO ante lo que no entiende', () => {
-  /**
-   * 🔴 ESTE BLOQUE ES EL DISEÑO, no una lista de casos raros.
-   *
-   * Las tres vueltas anteriores fallaron porque lo no reconocido DESAPARECÍA.
-   * Acá se denuncia, y el centinela que consume esto trata un `indecidible`
-   * como rojo. Un lector incompleto que calla es un falso verde; uno que grita
-   * es una limitación honesta.
-   */
-  const fuera: ReadonlyArray<readonly [string, string]> = [
-    ['flow collection', 'jobs:\n  b:\n    steps: [{ run: npx vercel --prod }]\n'],
-    ['anchor', 'jobs:\n  b:\n    steps:\n      - &x\n        run: npx vercel --prod\n'],
-    ['tag', 'jobs:\n  b:\n    steps:\n      - run: !!str npx vercel --prod\n'],
-    ['tab en la indentación', 'jobs:\n  b:\n    steps:\n\t      - run: npx vercel\n'],
-    ['varios documentos', '---\njobs:\n  b:\n    steps:\n      - run: npm test\n'],
-    ['clave explícita', 'jobs:\n  b:\n    steps:\n      - ? complejo\n'],
-  ];
-
-  for (const [nombre, yml] of fuera) {
-    it(`🔴 ${nombre} → INDECIDIBLE, nunca invisible`, () => {
-      const { indecidibles } = pasosDeWorkflow(yml);
-      expect(
-        indecidibles.length,
-        `«${nombre}» pasó sin denuncia: el parser lo ignoró en vez de denunciarlo`,
-      ).toBeGreaterThan(0);
-    });
-  }
-
-  it('⭐ CONTROL · el subconjunto declarado NO produce indecidibles', () => {
-    const { indecidibles } = parsearYaml(`
-name: CI
-on:
-  push:
-    branches: [main]
+/**
+ * 🔴 EL BLOQUE QUE CIERRA EL SEGUNDO HALLAZGO DEL P65.
+ *
+ * «Está más abajo en el archivo» no significa «corre después». Dos jobs sin
+ * `needs` corren EN PARALELO, así que el publicador podía estar textualmente
+ * último y no esperar a ningún gate — con el focal en verde.
+ */
+describe('modelo del workflow · causalidad por `needs`, nunca por posición', () => {
+  const wf = `
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  test:
     steps:
-      - uses: actions/checkout@v4
-      - name: correr
-        run: |
-          npm ci
-          npm test
-`);
-    expect(indecidibles).toEqual([]);
+      - run: npm test
+  build:
+    needs: test
+    steps:
+      - run: npm run build
+  publica:
+    needs: [build]
+    steps:
+      - run: bash scripts/publicar-vercel.sh app "$HOOK_APP"
+  suelto:
+    steps:
+      - run: bash scripts/publicar-vercel.sh app "$HOOK_APP"
+`;
+  const { jobs } = leerWorkflow(wf);
+
+  it('🔴 la dependencia vale TRANSITIVA', () => {
+    expect(esperaA(jobs, 'publica', 'build'), 'no vio la arista directa').toBe(true);
+    expect(esperaA(jobs, 'publica', 'test'), 'no siguió la cadena publica→build→test').toBe(true);
   });
 
-  /**
-   * 🔴 EL CORTE DEL FLOW NO ES ARBITRARIO, y este par de casos ES el corte.
-   *
-   * `branches: [main]` se acepta —el `ci.yml` real lo usa, y un gate que no se
-   * puede correr se termina aflojando—; `steps: [{ run: … }]` sigue indecidible,
-   * porque un mapping adentro del flow es **la forma con la que se colaría un
-   * paso sin que el censo lo vea**. Se cortan las llaves y el anidamiento, no
-   * los corchetes.
-   *
-   * Los dos juntos, porque uno solo no dice dónde está la línea.
-   */
-  it('⭐ el flow de escalares pasa · el flow con mapping NO', () => {
-    expect(parsearYaml('branches: [main, next]\n').indecidibles).toEqual([]);
-    expect(parsearYaml('branches: [main, next]\n').raiz).toEqual({ branches: ['main', 'next'] });
+  it('🔴 un job SIN `needs` no espera a nadie, esté donde esté en el archivo', () => {
+    // `suelto` es el ÚLTIMO del documento y no espera nada. Es exactamente la
+    // sonda con la que Codex dejó el focal en 61/61.
+    expect(esperaA(jobs, 'suelto', 'test')).toBe(false);
+    expect(esperaA(jobs, 'suelto', 'build')).toBe(false);
+  });
 
-    const conMapping = pasosDeWorkflow('jobs:\n  b:\n    steps: [{ run: npx vercel --prod }]\n');
-    expect(conMapping.indecidibles.length).toBeGreaterThan(0);
-    expect(conMapping.pasos, 'un paso escondido en flow NO puede entrar al censo').toEqual([]);
+  it('⭐ y la relación no es simétrica: `test` no espera a `publica`', () => {
+    expect(esperaA(jobs, 'test', 'publica')).toBe(false);
+  });
+
+  it('⭐ un ciclo no cuelga el recorrido', () => {
+    const { jobs: ciclo } = leerWorkflow(`
+jobs:
+  a:
+    needs: b
+    steps:
+      - run: npm test
+  b:
+    needs: a
+    steps:
+      - run: npm test
+`);
+    expect(esperaA(ciclo, 'a', 'inexistente')).toBe(false);
+    expect(esperaA(ciclo, 'a', 'b')).toBe(true);
   });
 });

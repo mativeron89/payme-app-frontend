@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { pasosDeWorkflow } from './yamlWorkflow';
+import { leerWorkflow, pasosDeWorkflow, pasosGarantizadosAntesDe } from './yamlWorkflow';
 
 /**
  * ⭐ LA COMPUERTA DE PUBLICACIÓN · que corte de verdad, no que lo diga.
@@ -411,6 +411,20 @@ interface Paso {
  * indentación de los ítems de `steps:`— y de ahí se lee **el mapping entero**,
  * venga la clave que venga y en el orden que venga.
  */
+/**
+ * Un escalar del YAML como texto.
+ *
+ * 🔴 Con `js-yaml` los escalares LLEGAN TIPADOS: `continue-on-error: true` es el
+ * booleano `true`, no la cadena `'true'`. El lector propio devolvía todo como
+ * string, así que un `typeof v === 'string'` dejaba ese metadato en `null` — y
+ * el gate que mira si un paso tolera errores lo leía como «no declarado».
+ * **Un efecto del cambio de instrumento que ningún punto del dictamen nombra, y
+ * que apareció al correrlo.** Se normaliza acá, donde el resto del archivo
+ * espera texto.
+ */
+const texto = (v: unknown): string | null =>
+  typeof v === 'string' ? v : typeof v === 'boolean' || typeof v === 'number' ? String(v) : null;
+
 function pasosDe(yml: string): Paso[] {
   const { pasos, indecidibles } = pasosDeWorkflow(yml);
 
@@ -426,7 +440,6 @@ function pasosDe(yml: string): Paso[] {
     );
   }
 
-  const texto = (v: unknown): string | null => (typeof v === 'string' ? v : null);
   return pasos.map((p) => ({
     nombre: texto(p.claves['name']) ?? '',
     uses: texto(p.claves['uses']),
@@ -525,18 +538,38 @@ const EXPANSION_SIMPLE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
  * lo fija. Un secreto igual no debería interpolarse sin comillas — por eso esto
  * sólo se consulta DENTRO de comillas dobles.
  */
+/**
+ * 🔴 P65 · LA LISTA SE ACHICÓ A LO DEMOSTRABLE, y el hallazgo que lo obligó es
+ * el más fino de las trece vueltas.
+ *
+ * La versión anterior admitía `github.workflow` **por el nombre del selector**.
+ * Codex mostró que su VALOR es el `name:` del propio workflow, o sea texto que
+ * alguien edita:
+ *
+ * ```yaml
+ * name: 'CI"; npx vercel --prod; echo "'
+ * - run: bash scripts/reportar-flaky.sh "${{ github.workflow }}"
+ * ```
+ *
+ * Actions interpola **antes** de que bash vea el script, así que el `run` final
+ * contiene un comando extra. **61/61 verde.** Lo mismo vale para `github.ref` y
+ * `ref_name` (una rama puede llamarse casi cualquier cosa) y para `secrets.*`
+ * (su valor no lo demuestra nadie).
+ *
+ * **El criterio pasa a ser: sólo entra por interpolación directa lo que tiene
+ * FORMA DEMOSTRABLE.** Un SHA de Git es 40 hexadecimales; no hay comilla que
+ * meterle. Todo lo demás **viaja por `env:` y se consume como `"$VAR"`**, que
+ * es como el `ci.yml` ya pasa los hooks (`env: HOOK_APP: ${{ secrets… }}`) —
+ * ahí no hay shell interpretando, hay una asignación.
+ *
+ * ⚠️ Esto es exactamente lo que Codex pidió no hacer al revés: *«la reparación
+ * no es sumar otra regex»*. Sacar tres selectores es más chico que agregar uno,
+ * y es lo que cierra la clase.
+ */
 const SELECTORES_DE_DOMINIO_ACOTADO: readonly RegExp[] = [
-  /^secrets\.[A-Za-z_][A-Za-z0-9_]*$/,
-  /^github\.(sha|ref|ref_name|repository|run_id|run_number|workflow|job|actor)$/,
-  // 🔴 `event.before`/`event.after` SÍ entran, y son la excepción que obliga a
-  // pensar el criterio en vez de escribir `github.event.*`: su valor es un SHA
-  // —40 hexadecimales que produce Git, no una persona—. `event.head_commit.message`
-  // queda AFUERA por lo mismo al revés: lo escribe quien pushea. **La familia
-  // `github.event` no se adjudica entera: se adjudica campo por campo.**
+  /^github\.sha$/,
   /^github\.event\.(before|after)$/,
   /^github\.event\.pull_request\.(base|head)\.sha$/,
-  /^runner\.(os|arch|temp)$/,
-  /^job\.status$/,
 ];
 
 /**
@@ -889,13 +922,31 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
    * publicación.
    */
   it('🔴 los CINCO gates se EJECUTAN, y antes de publicar', () => {
-    const pasos = pasosDe(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
-    const iPublica = pasos.findIndex((p) => comandosDe(p.run ?? '').some((c) => /^bash scripts\/publicar-vercel\.sh/.test(c)));
+    /**
+     * 🔴 P65 · «ANTES» YA NO ES POSICIÓN EN EL ARCHIVO, ES CAUSALIDAD.
+     *
+     * Esto tomaba `pasos.slice(0, iPublica)` sobre los jobs aplanados, o sea
+     * «lo que está más arriba». Codex movió el publicador a un SEGUNDO job sin
+     * `needs` y el focal quedó 61/61 verde: en Actions dos jobs sin arista
+     * corren EN PARALELO, así que el publicador no esperaba ningún gate y el
+     * test lo daba por gateado sólo porque los gates estaban escritos antes.
+     *
+     * Ahora se pregunta por el modelo: mismo job con índice menor, o job del
+     * que se depende transitivamente por `needs`.
+     */
+    const { jobs, problemas } = leerWorkflow(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    expect(problemas, 'el workflow tiene jobs que este modelo no puede adjudicar').toEqual([]);
+    const pasos = jobs.flatMap((j) => [...j.pasos]);
+    const publicador = pasos.find((p) =>
+      comandosDe(texto(p.claves['run']) ?? '').some((c) => /^bash scripts\/publicar-vercel\.sh/.test(c)),
+    );
     // Control positivo: sin paso de publicación, «todos preceden» sería cierto
     // sobre un CI que no publica nada.
-    expect(iPublica, 'no se encontró el paso de publicación: el test mediría en vacío').toBeGreaterThan(0);
+    expect(publicador, 'no se encontró el paso de publicación: el test mediría en vacío').toBeDefined();
 
-    const antes = pasos.slice(0, iPublica).flatMap((p) => comandosDe(p.run ?? ''));
+    const antes = pasosGarantizadosAntesDe(jobs, publicador!).flatMap((p) =>
+      comandosDe(texto(p.claves['run']) ?? ''),
+    );
     const GATES: ReadonlyArray<readonly [string, RegExp]> = [
       ['espejo', /^node scripts\/verificar-mirror\.mjs\b/],
       ['test', /^npm test$/],
@@ -929,16 +980,27 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
    * qué.
    */
   it('🔴 los gates CORREN y su fallo BLOQUEA: sin `if:` y sin tolerar error', () => {
-    const pasos = pasosDe(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
-    const iPublica = pasos.findIndex((p) => comandosDe(p.run ?? '').some((c) => /^bash scripts\/publicar-vercel\.sh/.test(c)));
-    expect(iPublica, 'no se encontró el paso de publicación').toBeGreaterThan(0);
+    // Mismo cambio de modelo que el test de arriba: «antes» es causalidad.
+    const { jobs } = leerWorkflow(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    const todos = jobs.flatMap((j) => [...j.pasos]);
+    const publicador = todos.find((p) =>
+      comandosDe(texto(p.claves['run']) ?? '').some((c) => /^bash scripts\/publicar-vercel\.sh/.test(c)),
+    );
+    expect(publicador, 'no se encontró el paso de publicación').toBeDefined();
+    const previos = pasosGarantizadosAntesDe(jobs, publicador!).map((p) => ({
+      job: p.job,
+      indice: p.indice,
+      run: texto(p.claves['run']),
+      condicion: texto(p.claves['if']),
+      toleraError: texto(p.claves['continue-on-error']),
+    }));
 
     const GATES = [
       /^node scripts\/verificar-mirror\.mjs\b/, /^npm test$/, /^npm run typecheck$/,
       /^npm run build$/, /^npx playwright test$/,
     ];
     const problemas: string[] = [];
-    for (const p of pasos.slice(0, iPublica)) {
+    for (const p of previos) {
       const cmds = comandosDe(p.run ?? '');
       if (!GATES.some((re) => cmds.some((c) => re.test(c)))) continue;
       if (p.condicion !== null) {
@@ -950,7 +1012,7 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
     }
     // Control positivo: si ningún paso matcheara como gate, el bucle no miraría
     // nada y esto pasaría en vacío sobre un CI sin gates.
-    const cuantos = pasos.slice(0, iPublica).filter((p) => GATES.some((re) => comandosDe(p.run ?? '').some((c) => re.test(c)))).length;
+    const cuantos = previos.filter((p) => GATES.some((re) => comandosDe(p.run ?? '').some((c) => re.test(c)))).length;
     expect(cuantos, 'no se reconoció ningún gate: el test mediría en vacío').toBe(5);
     expect(problemas, `gates que están escritos pero no gatean:\n  ${problemas.join('\n  ')}`).toEqual([]);
   });
@@ -962,5 +1024,130 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
     const doc = readFileSync(join(RAIZ, 'docs', 'DESPLIEGUE_GATEADO.md'), 'utf8');
     expect(doc, 'el doc no explica el retiro de Pages').toMatch(/retirad|se retiró/i);
     expect(doc, 'el doc no dice dónde queda la demo').toContain('github.io/payme-app-frontend');
+  });
+});
+
+/**
+ * 🔴 LOS TRES CAMINOS DEL P65, COMO TESTS PERMANENTES.
+ *
+ * Codex los plantó como sondas manuales sobre el `ci.yml` y las retiró. Acá el
+ * mutante se construye **en memoria sobre el workflow real**: el archivo no se
+ * toca y la guarda queda viva, que es la diferencia entre «se probó una vez» y
+ * «no puede volver».
+ */
+describe('🔴 P65 · los caminos que quedaban fuera del modelo', () => {
+  const ci = () => readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');
+
+  it('🔴 ① un REUSABLE JOB no puede colarse sin adjudicar', () => {
+    const conReusable = `${ci()}
+  publicador_reusable_no_adjudicado:
+    uses: acme/deploy/.github/workflows/vercel.yml@main
+    secrets: inherit
+`;
+    const { jobs } = leerWorkflow(conReusable);
+    const reusable = jobs.find((j) => j.usa !== null);
+    expect(reusable, 'el reusable job no entró al modelo: volvería a ser invisible').toBeDefined();
+
+    // Y el censo lo tiene que denunciar: ningún `uses` de job está adjudicado.
+    const USES_DE_JOB_ADJUDICADOS: readonly string[] = [];
+    const sinAdjudicar = jobs
+      .filter((j) => j.usa !== null && !USES_DE_JOB_ADJUDICADOS.includes(j.usa))
+      .map((j) => `${j.nombre}: uses ${j.usa}`);
+    expect(
+      sinAdjudicar.length,
+      'un job que llama a un workflow ajeno pasó sin adjudicación',
+    ).toBeGreaterThan(0);
+  });
+
+  it('🔴 ② un publicador en SEGUNDO JOB sin `needs` no cuenta como gateado', () => {
+    const conSuelto = `${ci()}
+  publica_suelto:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bash scripts/publicar-vercel.sh app "$HOOK_APP"
+`;
+    const { jobs } = leerWorkflow(conSuelto);
+    const suelto = jobs
+      .flatMap((j) => [...j.pasos])
+      .find((p) => p.job === 'publica_suelto');
+    expect(suelto, 'no se encontró el paso del job suelto').toBeDefined();
+
+    // 🔴 LA AFIRMACIÓN CENTRAL: ese publicador NO tiene ningún gate garantizado
+    // antes, aunque esté escrito al final del archivo y todos los gates arriba.
+    const previos = pasosGarantizadosAntesDe(jobs, suelto!);
+    expect(
+      previos,
+      'el modelo le atribuyó gates previos a un job que corre en paralelo',
+    ).toEqual([]);
+  });
+
+  it('🔴 ③ `github.workflow` en un `run:` deja de ser afirmable', () => {
+    // El valor de ese context es el `name:` del propio workflow — texto que
+    // alguien edita. Con `name: 'CI"; npx vercel --prod; echo "'`, Actions
+    // interpola ANTES que bash y el `run` termina con un comando de más.
+    const cmd = 'bash scripts/reportar-flaky.sh "${{ github.workflow }}"';
+    expect(
+      noAfirmable(cmd),
+      'el instrumento sigue aceptando un context cuyo valor no es demostrable',
+    ).not.toBeNull();
+
+    // Control positivo: un SHA sí es demostrable —40 hexadecimales— y pasa.
+    expect(noAfirmable('bash scripts/auditar-secretos.sh "${{ github.sha }}"')).toBeNull();
+  });
+});
+
+/**
+ * 🔴 LA CONDICIÓN DE LA DEPENDENCIA, VERIFICADA Y NO PROMETIDA.
+ *
+ * `js-yaml` entró como devDependency para el instrumento de tests, autorizada
+ * por Mati con esa condición explícita. **Una promesa de «sólo en tests» se
+ * rompe sin que nadie se entere**: alcanza con que alguien importe el módulo
+ * desde `src/` para meter un parser YAML en el bundle que baja un teléfono en
+ * la mesa de un restaurante.
+ */
+describe('🔴 js-yaml vive SÓLO en el instrumento de tests', () => {
+  const FUENTES_DEL_BUNDLE = ['src', 'landing'] as const;
+
+  it('🔴 ningún archivo de `src/` ni `landing/` lo importa', () => {
+    const culpables: string[] = [];
+    const barrer = (dir: string): void => {
+      for (const e of readdirSync(join(RAIZ, dir), { withFileTypes: true })) {
+        const ruta = join(dir, e.name);
+        if (e.isDirectory()) { barrer(ruta); continue; }
+        if (!/\.(ts|tsx|js|mjs|html)$/.test(e.name)) continue;
+        const texto = readFileSync(join(RAIZ, ruta), 'utf8');
+        if (/from\s+['"]js-yaml['"]|require\(['"]js-yaml['"]\)/.test(texto)) culpables.push(ruta);
+      }
+    };
+    for (const d of FUENTES_DEL_BUNDLE) barrer(d);
+    expect(
+      culpables,
+      `js-yaml importado desde código de producción:\n  ${culpables.join('\n  ')}`,
+    ).toEqual([]);
+  });
+
+  it('🔴 y no aparece en ningún bundle ya construido', () => {
+    // Si los `dist*` no existen todavía, este test NO puede afirmar nada y lo
+    // dice: un `if (!existe) return` disfrazaría de verde una medición ausente.
+    const dists = readdirSync(RAIZ, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && e.name.startsWith('dist'))
+      .map((e) => e.name);
+    expect(dists.length, 'no hay ningún `dist*`: correr los builds antes de afirmar esto')
+      .toBeGreaterThan(0);
+
+    const conYaml: string[] = [];
+    const barrer = (dir: string): void => {
+      for (const e of readdirSync(join(RAIZ, dir), { withFileTypes: true })) {
+        const ruta = join(dir, e.name);
+        if (e.isDirectory()) { barrer(ruta); continue; }
+        if (!/\.(js|mjs|css|html)$/.test(e.name)) continue;
+        // `js-yaml` deja rastros propios; se busca su firma, no su nombre, que
+        // podría no sobrevivir a la minificación.
+        const texto = readFileSync(join(RAIZ, ruta), 'utf8');
+        if (/YAMLException|js-yaml/.test(texto)) conYaml.push(ruta);
+      }
+    };
+    for (const d of dists) barrer(d);
+    expect(conYaml, `js-yaml llegó a un artefacto servido:\n  ${conYaml.join('\n  ')}`).toEqual([]);
   });
 });
