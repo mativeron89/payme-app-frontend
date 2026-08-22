@@ -136,7 +136,10 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
             disabled={centro.disabled}
             aria-label={t(centro.label)}
           >
-            <Icon name={centro.icon} size={24} />
+            {/* 22px — §5 bis · E. El círculo pasó a 48px y el glifo BAJA de 24
+                a 22: la proporción del disco es la que Diseño midió, no la que
+                sale de agrandar las dos cosas juntas. */}
+            <Icon name={centro.icon} size={22} />
           </button>
           <span className="appbar-label">{t(centro.label)}</span>
         </div>
@@ -187,7 +190,9 @@ export function AppBottomCta({
       <div className="appbar appbar-solo">
         <div className="appbar-center">
           <button type="button" className="appbar-fab" onClick={onClick} aria-label={label}>
-            <Icon name={icon} size={24} />
+            {/* 22px, igual que la barra de cinco: §5 bis · E unifica LAS DOS
+                variantes, y ésta comparte el mismo `.appbar-fab`. */}
+            <Icon name={icon} size={22} />
           </button>
         </div>
       </div>

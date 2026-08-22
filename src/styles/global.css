@@ -2018,10 +2018,22 @@ body {
 }
 
 /* Círculo central, montado 22px sobre el borde de la barra. */
+/* 48px y `-16px` de montaje — SISTEMA_DISENO.md §5 bis · E (2026-08-21), que
+   supersede el 46px de §5 bis · C.
+
+   ⚠️ EL VALOR SE APLICA; SU DIAGNÓSTICO ERA FALSO Y NO SE PROPAGA. §E dice
+   corregir «la inconsistencia real entre pantallas» — 56px en Compartir contra
+   48px en la barra de cinco. **Acá no existía tal inconsistencia**: medido en
+   `7d5b920`, `.appbar-fab` era 46px y es la ÚNICA regla de tamaño del círculo;
+   `.appbar-solo` (la variante de Compartir) no lo redefine, sólo cambia grid y
+   padding. Ni 56 ni 48: 46, uno solo, compartido por las dos variantes.
+
+   El 56px que Diseño vio es OTRO círculo — el de la salida del 403 y del canje
+   (más abajo en este archivo), que no es la barra inferior y NO se toca. */
 .appbar-fab {
-  width: 46px;
-  height: 46px;
-  margin-top: -22px;
+  width: 48px;
+  height: 48px;
+  margin-top: -16px;
   border-radius: var(--r-full);
   border: none;
   cursor: pointer;
@@ -2959,8 +2971,17 @@ body {
    "Volver" y la tarjeta montada.
    ══════════════════════════════════════════════════════════════════════════ */
 
+/* GEOMETRÍA DE SUBPANTALLA — SISTEMA_DISENO.md §5 bis · E (2026-08-21).
+   `padding: 16px 20px 56px` y esquinas inferiores de 26px. El 34px de `.hdr` es
+   el radio de PRIMER NIVEL y no se toca: las dos variantes no comparten radio.
+
+   ⚠️ El `16px` de arriba va envuelto en el `calc(… + env(safe-area-inset-top))`
+   que `.hdr` ya traía. El spec da la geometría de la banda, no el notch; fijar
+   16px pelado le comería la cabecera a un iPhone con isla. El valor del spec se
+   respeta — es el sumando. */
 .hdr-flow {
-  padding-bottom: var(--sp-6);
+  border-radius: 0 0 26px 26px;
+  padding: calc(16px + env(safe-area-inset-top)) 20px 56px;
 }
 
 .hdr-flow .hdr-row {
@@ -2989,14 +3010,26 @@ body {
 /* La tarjeta de título, montada sobre la banda. Lleva SIEMPRE el título
    centrado; lo que va debajo depende de cada pantalla y puede no haber nada
    (§1.4). En División va en --teal-l, no blanca. */
+/* Geometría medida por Diseño en §5 bis · E (2026-08-21): solape de 42px —el
+   "sube 24px" de 2026-08-04 era el valor viejo—, radio 22px y una sombra mucho
+   más chata que la de la tarjeta montada de primer nivel.
+
+   🔴 EL COLOR DE LA SOMBRA NO ES EL QUE DICE LA FUENTE, y es a propósito.
+   §5 bis · E pide `rgba(15,31,61,0.08)`, que es `#0f1f3d` — el navy SUPERSEDIDO
+   por la migración del 14/08. Esa sección se escribió el 21/08 con el navy que
+   §5 bis · D ya había corregido el 19/08. Escribirlo literal deja la suite en
+   rojo contra `coloresMigrados.test.ts:53`, que barre ese valor por VALOR y no
+   por nombre. Se implementa con el navy vigente `#101E3B` = rgb(16,30,59), que
+   además es el que usan las otras cuatro sombras de estructura de §D.
+   Declarado al Bibliotecario para que corrija la fuente. */
 .title-card {
   position: relative;
   z-index: 1;
-  margin: -24px var(--sp-4) var(--sp-4);
+  margin: -42px var(--sp-4) 0;
   padding: var(--sp-4);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-lg); /* 22px — el token ya valía lo que §E pide */
   background: var(--teal-l);
-  box-shadow: 0 6px 20px rgba(16, 30, 59, 0.12);
+  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.08);
   text-align: center;
 }
 
