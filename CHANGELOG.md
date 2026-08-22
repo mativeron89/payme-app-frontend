@@ -79,6 +79,18 @@ reabriera el P83. Ahora hay guarda viva: `fallasDeContexto` sólo puede invocars
 desde las cuatro políticas, verificado con su control positivo. **Una propiedad
 sostenida por la memoria de dos sesiones no es una propiedad.**
 
+### 🔴 Y un defecto MÍO que cazó mi propio mutante, dentro de este lote
+
+Al medir «sacar el gate de aliases del workflow» el mutante **sobrevivió 85/85**.
+No era un falso positivo: los **dos** pasos del verificador —`--aliases` y
+`--artefacto`— compartían el rol `aliases`, así que la exigencia «existe un paso
+con rol X» quedaba satisfecha por el otro. **Sacar uno no se notaba.**
+
+El rol pasa a llevar el modo. Ahora sacar cualquiera de los dos pone **2 casos en
+rojo**. Corregido en commit sucesor —nunca amend—, y vale decir de dónde salió:
+lo encontró medir un mutante propio, no un dictamen. Sin esa medición habría
+entregado un gate que no protege lo que dice proteger.
+
 **Sin push ni deploy.** Falta el visto bueno de Codex sobre esta ref, y acá el
 push **publica** los dos dominios: eso lo decide Mati, preguntado aparte.
 

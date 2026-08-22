@@ -860,6 +860,7 @@ const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = 
   instalacion: {},
   espejo: {},
   aliases: {},
+  artefacto: {},
   test: {},
   typecheck: {},
   build: { VITE_API_URL: 'https://payme-app-backend-production.up.railway.app' },
@@ -898,7 +899,12 @@ const ROL_DE_PASO: ReadonlyArray<readonly [RegExp, string]> = [
   [/^bash scripts\/auditar-secretos\.sh$/, 'scanner'],
   [/^npm ci$/, 'instalacion'],
   [/^node scripts\/verificar-mirror\.mjs$/, 'espejo'],
-  [/^node scripts\/verificar-aliases\.mjs$/, 'aliases'],
+  // 🔴 P88 · EL ROL LLEVA EL MODO. Los dos pasos son el mismo ejecutable con
+  // banderas distintas; con un rol común, sacar uno del workflow dejaba al otro
+  // satisfaciendo la exigencia y el mutante sobrevivía 85/85.
+  [/^node scripts\/verificar-aliases\.mjs --aliases$/, 'aliases'],
+  [/^node scripts\/verificar-aliases\.mjs --artefacto$/, 'artefacto'],
+
   [/^npm test$/, 'test'],
   [/^npm run typecheck$/, 'typecheck'],
   [/^npm run build$/, 'build'],
@@ -1483,7 +1489,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
   const previos = publicadores.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub));
   for (const pub of publicadores) {
     const suyos = new Set(pasosGarantizadosAntesDe(jobs, pub).map((p) => rolDePaso(p.claves)));
-    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases'] as const) {
+    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'artefacto'] as const) {
       if (!suyos.has(g)) {
         fallasPorPublicador.push(
           `${pub.job}.steps[${pub.indice}]: publica sin el gate «${g}» garantizado antes`,
@@ -1533,7 +1539,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
    * estuviera bien.
    */
   const rolesVistos = new Set(previos.map((p) => rolDePaso(p.claves)));
-  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases'] as const) {
+  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'artefacto'] as const) {
     if (!rolesVistos.has(g)) fallas.push(`el gate «${g}» no está entre los pasos previos`);
   }
   return fallas;
