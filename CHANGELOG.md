@@ -11,6 +11,71 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.111.0 — cierre del BLOCK P62: las tres señales, cada una con su testigo (2026-08-21)
+
+Codex dictaminó **BLOCK sobre `abd2faa`**, y conviene decir de qué tipo: **de
+evidencia, no de conducta.** Revalidó el gate entero, corrió una sonda propia de
+navegador sobre el ticket inválido y confirmó que el código hace lo correcto;
+AF-04 intacta con las 87 focales de dinero verdes. Lo que no vigilaba era el
+gate.
+
+**Sin push ni deploy.** La conjuntiva sigue sin cumplirse.
+
+### 🔴 Corrección de una afirmación FALSA que publicó `0.110.0`
+
+Esa entrada decía que el mutante `if (false && faltaElegirConsumos)` acreditaba
+el no-avance. **No lo acredita, y no era cierto cuando lo escribí** — por eso se
+corrige acá con entrada nueva en vez de retocar la vieja, igual que hizo
+`0.74.3`.
+
+`MesaScreen.goToPay` conserva su propio corte duro (`selected.size === 0 →
+return`, `MesaScreen.tsx:569`): la vista puede llamar al owner y el owner frena
+igual. **El test caía por el TOAST ausente.** Lo que ese mutante acredita es la
+rama de FEEDBACK. El no-avance está defendido por dos capas y la de abajo no
+depende de la de arriba: buena noticia de diseño, mala para quien quiera usar
+ese mutante como prueba de la semántica.
+
+### Las tres señales de §5 bis · E, ahora afirmadas por separado
+
+H-14 miraba sólo el toast; la rama del ticket incompleto no tenía **ninguna**
+cobertura, y `if (false && !ticketValid)` —que permite llegar a Garantía con un
+ticket roto— dejaba los 8 e2e verdes.
+
+```
+H-14              toast → failed   scroll → failed   pulso → failed   sano 2 passed
+ticket incompleto bypass → failed  toast → failed    abrir → failed
+                  scroll → failed  pulso → failed    sano 1 passed
+```
+
+🔴 **El mutante del toast sobrevivió a mi primera versión del centinela nuevo, y
+es el mismo defecto que este release cierra.** Afirmaba el texto suelto, y ese
+texto vive también en el aviso permanente de la barra: matcheaba ahí y pasaba
+sin toast. Ahora se afirma dentro de `.toast:not(.toast-hidden)`. **Lo cacé
+plantando el mutante, no releyendo el test.**
+
+### Dos vueltas perdidas en el instrumento, escritas para que no se repitan
+
+El espía del pulso nació como `MutationObserver` sobre `class`, con dos
+suposiciones mías y las dos falsas: que `documentElement` existe dentro de
+`addInitScript` (es `null`, `observe()` lanzaba y el observer quedaba sin
+instalar — lo delató que el espía de scroll, definido tres líneas antes, sí
+funcionaba), y que la clase se apagaría demasiado rápido para verla (una sonda
+la leyó puesta mucho después: bajo Playwright el `animationend` no dispara).
+
+**El pulso no necesitaba espía — `toHaveClass` alcanza.** Se retiró la
+maquinaria entera; queda sólo el espía de scroll, la única de las tres señales
+que de verdad no deja rastro en el DOM.
+
+### P3 del dictamen, plegados
+
+`var(--sh-2)` en `.title-card` (el valor literal que yo mismo había escrito
+teniendo el token 200 líneas arriba) y la frase de `design-mirror/tokens.json`
+que decía que la fuente no está en ningún repo, contradiciendo sus propios
+campos.
+
+Gate: typecheck 0 · **1259 unitarios / 95 archivos** · **111 e2e** (+1) ·
+builds real/mock/landing · secretos · espejo · `diff --check` limpio.
+
 ## 0.110.0 — AF-DISENO-01 completa: entra el cambio 6 (2026-08-21)
 
 **La entrada de `0.109.0` decía «diez de once» y el 6 frenado. Era cierta cuando
