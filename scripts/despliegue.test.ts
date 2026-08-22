@@ -859,6 +859,7 @@ const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = 
   setup: {},
   instalacion: {},
   espejo: {},
+  aliases: {},
   test: {},
   typecheck: {},
   build: { VITE_API_URL: 'https://payme-app-backend-production.up.railway.app' },
@@ -897,6 +898,7 @@ const ROL_DE_PASO: ReadonlyArray<readonly [RegExp, string]> = [
   [/^bash scripts\/auditar-secretos\.sh$/, 'scanner'],
   [/^npm ci$/, 'instalacion'],
   [/^node scripts\/verificar-mirror\.mjs$/, 'espejo'],
+  [/^node scripts\/verificar-aliases\.mjs$/, 'aliases'],
   [/^npm test$/, 'test'],
   [/^npm run typecheck$/, 'typecheck'],
   [/^npm run build$/, 'build'],
@@ -1313,6 +1315,55 @@ function fallasDelCenso(yml: string): string[] {
     }
   }
 
+  /**
+   * 🔴 P88 · LA ACCIÓN Y SU `with`, EXACTOS — antes era una regex laxa.
+   *
+   * Acá había `/^actions\/(checkout|setup-node)@[A-Za-z0-9._-]+$/` **con un
+   * comentario que decía «la acción exacta y su versión»**. La regex aceptaba
+   * CUALQUIER ref: `actions/setup-node@main` pasaba, y con él `node-version: 24`
+   * — un runtime distinto del adjudicado, en los gates que preceden a la
+   * publicación. El checkout tenía política exacta; setup-node no tenía ninguna.
+   *
+   * ⚠️ **Y el comentario era lo peor del defecto**, no un detalle: afirmaba la
+   * garantía que faltaba, justo donde alguien iría a verificarla. Se caza
+   * comparando qué LEE la guarda contra qué NOMBRA su comentario.
+   *
+   * Ahora cada acción declara su `with` completo. Una clave de más, una de
+   * menos o un valor distinto es rojo sin enumerar cuál — misma forma que el
+   * `env` por rol.
+   */
+  const ACCIONES_ADJUDICADAS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+    'actions/checkout@v4': { 'fetch-depth': 0 },
+    'actions/setup-node@v4': { 'node-version': 20, cache: 'npm' },
+  };
+
+  /**
+   * 🔴 P88 · CADA ACCIÓN, CON SU `with` COMPLETO. Se recorre el MODELO y no
+   * `pasosDe`, porque `Paso` no conserva el `with` — y sin el `with` se puede
+   * adjudicar `setup-node@v4` mientras pide `node-version: 24`.
+   */
+  let accionesVistas = 0;
+  for (const j of jobs) {
+    for (const p of j.pasos) {
+      const usa = p.claves['uses'];
+      if (typeof usa !== 'string') continue;
+      accionesVistas++;
+      const donde = `${p.job}.steps[${p.indice}]`;
+      const esperado = ACCIONES_ADJUDICADAS[usa];
+      if (esperado === undefined) {
+        fallas.push(`${donde}: uses \`${usa}\` — acción o versión NO adjudicada`);
+      } else if (!mismoMapping(p.claves['with'] ?? {}, esperado)) {
+        fallas.push(
+          `${donde}: el \`with\` de \`${usa}\` no es el exacto — esperado ` +
+            `${JSON.stringify(esperado)}, hallado ${JSON.stringify(p.claves['with'] ?? {})}`,
+        );
+      }
+    }
+  }
+  // Control positivo, adentro: el workflow usa acciones; cero significa que este
+  // bucle no midió nada, no que todas estuvieran bien.
+  if (accionesVistas === 0) fallas.push('no se vio ninguna acción `uses:`: el censo mediría en vacío');
+
   const pasos = pasosDe(yml);
   if (pasos.length <= 8) return [...fallas, `sólo se parsearon ${pasos.length} pasos: el censo mediría en vacío`];
 
@@ -1333,14 +1384,13 @@ function fallasDelCenso(yml: string): string[] {
     ['npx', 'playwright', 'test'],
     ['bash', 'scripts/auditar-secretos.sh'], // gate de secretos
     ['node', 'scripts/verificar-mirror.mjs'], // gate del espejo
+    ['node', 'scripts/verificar-aliases.mjs'], // gate del alias→herramienta (P88)
     ['bash', 'scripts/reportar-flaky.sh'], // informa, no bloquea
     // 🔴 P77 · LA PUBLICACIÓN NO VA EN ESTA LISTA. Tenía su propia tupla acá, en
     // paralelo a `esInvocacionPublicador`. Hoy las dos coincidían, **y ésa es la
     // trampa**: dos fuentes que coinciden hoy son una casualidad fechada, no una
     // propiedad. Ahora el censo delega en el MISMO predicado.
   ];
-  /** `uses:` no es un comando: se adjudica por la acción exacta y su versión. */
-  const USES_ADJUDICADOS = /^actions\/(checkout|setup-node)@[A-Za-z0-9._-]+$/;
 
   const adjudicaComando = (cmd: string): boolean => {
     if (esInvocacionPublicador(cmd)) return true;
@@ -1351,10 +1401,8 @@ function fallasDelCenso(yml: string): string[] {
 
   for (const p of pasos) {
     const donde = `${p.job}.steps[${p.indice}]`;
-    if (p.uses !== null) {
-      if (!USES_ADJUDICADOS.test(p.uses)) fallas.push(`${donde}: uses \`${p.uses}\``);
-      continue;
-    }
+    // Los `uses:` se adjudican aparte, sobre el modelo, que conserva su `with`.
+    if (p.uses !== null) continue;
     const trozos = comandosDe(p.run ?? '');
     if (!trozos.length) { fallas.push(`${donde}: paso sin \`run\` ni \`uses\``); continue; }
     for (const t of trozos) {
@@ -1435,7 +1483,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
   const previos = publicadores.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub));
   for (const pub of publicadores) {
     const suyos = new Set(pasosGarantizadosAntesDe(jobs, pub).map((p) => rolDePaso(p.claves)));
-    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner'] as const) {
+    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases'] as const) {
       if (!suyos.has(g)) {
         fallasPorPublicador.push(
           `${pub.job}.steps[${pub.indice}]: publica sin el gate «${g}» garantizado antes`,
@@ -1485,7 +1533,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
    * estuviera bien.
    */
   const rolesVistos = new Set(previos.map((p) => rolDePaso(p.claves)));
-  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner'] as const) {
+  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases'] as const) {
     if (!rolesVistos.has(g)) fallas.push(`el gate «${g}» no está entre los pasos previos`);
   }
   return fallas;
@@ -1924,6 +1972,70 @@ describe('🔴 P65 · los caminos que quedaban fuera del modelo', () => {
  * desde `src/` para meter un parser YAML en el bundle que baja un teléfono en
  * la mesa de un restaurante.
  */
+/**
+ * 🔴 P88 · LA DEUDA DEL P85, CERRADA COMO GUARDA VIVA.
+ *
+ * El P85 cerró que cada política sea una función única y que los casos
+ * adversariales la atraviesen. Al declararlo quedó dicho —por mí, en el paquete—
+ * que **nada en el repo impedía que mañana apareciera un `it` llamando al helper
+ * directo**, y que hasta entonces la propiedad la sostenía la medición a mano de
+ * dos sesiones.
+ *
+ * 🔴 **Una propiedad sostenida por la memoria de dos sesiones no es una
+ * propiedad.** Si alguien escribe un caso nuevo con el patrón viejo —llamar a
+ * `fallasDeContexto` directo, que es lo más natural de tipear— el arnés vuelve
+ * al estado exacto del P83 y **la suite no lo denuncia**.
+ *
+ * Esto lo convierte en test. Es la misma forma que la guarda de `js-yaml`: el
+ * límite VERIFICADO en vez de prometido.
+ */
+describe('🔴 el helper de contexto vive SÓLO dentro de las políticas', () => {
+  /**
+   * Allowlist positiva: las funciones que PUEDEN consumirlo. Una función nueva
+   * que lo necesite tiene que venir a declararse acá, y ahí se decide si de
+   * verdad es una política o es un atajo desde un test.
+   */
+  const POLITICAS = [
+    'fallasDelPublicador',
+    'fallasDelCenso',
+    'fallasDelCheckout',
+    'fallasDeGatesPrevios',
+  ] as const;
+
+  it('🔴 ninguna llamada a `fallasDeContexto` fuera de las cuatro políticas', () => {
+    const lineas = readFileSync(join(AQUI, 'despliegue.test.ts'), 'utf8').split('\n');
+    let dentroDe: string | null = null;
+    const intrusas: string[] = [];
+    let dentroDeAlguna = 0;
+
+    lineas.forEach((linea, i) => {
+      const abre = /^function ([A-Za-z0-9_]+)\(/.exec(linea);
+      if (abre) { dentroDe = abre[1]!; return; }
+      // Toda función de módulo se cierra con una llave en la columna 0.
+      if (dentroDe !== null && linea === '}') { dentroDe = null; return; }
+      // La definición del helper no es una llamada.
+      if (/^const fallasDeContexto/.test(linea)) return;
+      if (!/fallasDeContexto\(/.test(linea)) return;
+      if (dentroDe !== null && (POLITICAS as readonly string[]).includes(dentroDe)) {
+        dentroDeAlguna++;
+      } else {
+        intrusas.push(`${i + 1}: ${linea.trim().slice(0, 70)} — en «${dentroDe ?? 'ninguna función'}»`);
+      }
+    });
+
+    // 🔴 Control positivo: si el reconocedor de funciones se rompiera, no vería
+    // NINGUNA llamada y el `toEqual([])` de abajo pasaría en vacío, certificando
+    // exactamente lo contrario de lo que dice.
+    expect(dentroDeAlguna, 'no se vio ninguna llamada legítima: el barrido midió en vacío')
+      .toBeGreaterThanOrEqual(POLITICAS.length - 1);
+    expect(
+      intrusas,
+      'un test que llama al helper por su cuenta NO acredita que la política lo use — ' +
+        `es la recaída del P83:\n  ${intrusas.join('\n  ')}`,
+    ).toEqual([]);
+  });
+});
+
 describe('🔴 js-yaml vive SÓLO en el instrumento de tests', () => {
   const FUENTES_DEL_BUNDLE = ['src', 'landing'] as const;
 

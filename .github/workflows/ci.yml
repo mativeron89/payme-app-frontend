@@ -43,6 +43,18 @@ jobs:
       # de paridad; la paridad se corre en local, donde el repo hermano está.
       - name: Integridad local del contract-mirror (NO es paridad)
         run: node scripts/verificar-mirror.mjs --integridad
+      # 🔴 EL ALIAS NO ES SU HERRAMIENTA (P88). Los gates de abajo se escriben
+      # `npm test`, `npm run typecheck`, `npm run build`, pero lo que esos
+      # comandos EJECUTAN vive en `package.json` y en las configs de los
+      # runners. Con `scripts.test: "true"` el paso sale 0 sin lanzar Vitest;
+      # excluyendo `scripts/**` de la config sale verde recolectando 84 archivos
+      # en vez de 96. En los dos casos el texto del workflow queda intacto.
+      #
+      # 🔴 SE INVOCA CON `node` A PROPÓSITO, no con un alias npm: una guarda que
+      # corre BAJO `npm test` no puede detectar que `npm test` sea un no-op —si
+      # lo es, la guarda no corre y su silencio se lee como verde—.
+      - name: El alias ejecuta su herramienta, sobre la población real
+        run: node scripts/verificar-aliases.mjs --aliases
       - run: npm test
       - run: npm run typecheck
       # 🔴 `VITE_API_URL` va acá desde 0.100.0, y NO es configuración de
@@ -59,6 +71,11 @@ jobs:
       - run: npm run build
         env:
           VITE_API_URL: https://payme-app-backend-production.up.railway.app
+      # 🔴 Y EL BUILD SE ACREDITA POR SU ARTEFACTO, no por su exit code: un alias
+      # no-op sale 0 y no deja nada. Se mide lo que quedó en disco — medir con el
+      # instrumento que el ataque manipula es no medir.
+      - name: El build dejó artefacto, no sólo un exit 0
+        run: node scripts/verificar-aliases.mjs --artefacto dist
       # Los 78 recorridos de navegador también son gate: la auditoría del
       # 2026-08-06 encontró en ellos lo que ninguna suite sin navegador vio
       # (el Shell pisando la pantalla de rechazo, la coma ×100 en el input).

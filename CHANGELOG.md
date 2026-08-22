@@ -11,6 +11,79 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.123.0 — cierre del BLOCK P88: el alias no es su herramienta (2026-08-22)
+
+El arnés adjudicaba los **tokens del workflow** —que el paso diga `npm test`,
+`npm run typecheck`, `npm run build`— y eso **no acredita nada sobre lo que esos
+comandos ejecutan**. Codex reprodujo tres falsos verdes:
+
+```
+scripts.test: "true"          npm test sale 0 sin lanzar Vitest · focal 84/84
+excluir scripts/** de la      npm test VERDE con 84 archivos / 1084 tests,
+  config de Vitest              sin UN SOLO test de scripts/
+aliases no-op de              los comandos exactos del CI salen 0
+  typecheck y build             sin tsc ni Vite
+```
+
+🔴 **La clase, la más honda de la serie: el texto del comando SÍ se ejecuta, pero
+lo que ejecuta es reemplazable sin tocar el texto.** Y el volumen de verdes no
+acredita población — 1084 tests pasando puede ser una suite que dejó fuera un
+directorio entero.
+
+### La guarda no puede correr bajo el alias que valida
+
+Un test que corre **bajo** `npm test` no puede detectar que `npm test` sea un
+no-op: si lo es, el test no corre y **su silencio se lee como verde**. Por eso el
+gate nuevo es un ejecutable propio —`scripts/verificar-aliases.mjs`— que el
+workflow invoca **con `node` directo**, igual que el gate del espejo.
+
+Adjudica los aliases contra valores **exactos**, rechaza `.npmrc` versionado (la
+frontera del P88 · condición 3, decidida en «no existe») y acredita **colección
+real**: los archivos se derivan del filesystem y se comparan contra lo que Vitest
+y Playwright declaran recolectar. Una exclusión nueva aparece como falta **sin
+que nadie haya tenido que anticiparla**.
+
+### 🔴 Al enumerar la clase apareció un cuarto miembro que nadie nombró
+
+`npx playwright test` tenía el mismo hueco —su población la decide
+`playwright.config.ts`— y, sobre todo, **los proyectos de TypeScript**:
+
+```
+include: []                    exit 2   ← tsc falla cerrado, NO es vector
+include: ['src/main.tsx']      exit 0   compilando 1 archivo de 78
+sacar tsconfig.node del alias  exit 0   con 15 fuentes sin compilar
+```
+
+Los dos últimos son falsos verdes medidos en este repo. Se cierran con la misma
+invariante derivada: **la unión de los proyectos cubre todo el TypeScript que
+existe en disco.**
+
+⚠️ **Y ese gate nuevo casi me hace "arreglar" un `tsconfig` sano.** Reportó
+`scripts/yamlWorkflow.ts` como huérfano; es falso — lo importa su test y tsc sí
+lo chequea. El defecto era **mío**: medía con `showConfig.files`, que lista las
+RAÍCES, en vez de `--listFiles`, que lista lo **procesado**. Verificar el
+instrumento antes de creerle, otra vez.
+
+### `setup-node`, y el comentario que certificaba la guarda ausente
+
+La regex de acciones aceptaba **cualquier** ref bajo un comentario que decía «la
+acción exacta y su versión»: `actions/setup-node@main` con `node-version: 24`
+pasaba 84/84. Ahora cada acción declara su `with` completo, como el checkout.
+**El comentario era lo peor del defecto**, no un detalle: afirmaba la garantía
+que faltaba, justo donde alguien iría a verificarla.
+
+### La deuda del P85, cerrada en este lote
+
+Quedaba declarado que nada impedía que un `it` nuevo llamara al helper directo y
+reabriera el P83. Ahora hay guarda viva: `fallasDeContexto` sólo puede invocarse
+desde las cuatro políticas, verificado con su control positivo. **Una propiedad
+sostenida por la memoria de dos sesiones no es una propiedad.**
+
+**Sin push ni deploy.** Falta el visto bueno de Codex sobre esta ref, y acá el
+push **publica** los dos dominios: eso lo decide Mati, preguntado aparte.
+
+El intermitente E2E sigue **ABIERTO**, sin causa asignada.
+
 ## 0.122.0 — cierre del BLOCK P85: el centinela atraviesa el seam (2026-08-22)
 
 Las regresiones de `0.121.0` fijaban **el interior del helper `fallasDeContexto`,
