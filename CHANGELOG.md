@@ -11,6 +11,56 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.121.0 — cierre del BLOCK P83: las sondas pasan a regresiones versionadas (2026-08-22)
+
+El P81 no pedía correr dos sondas una vez: pedía **mutantes permanentes y
+discriminantes**. Leí «verificá» donde decía «versioná».
+
+🔴 **El dato que lo prueba es incontestable: el delta anterior tenía CERO
+declaraciones de test nuevas** —36 invocaciones `it(` antes y 36 después—. Las
+formas adversariales vivían en comentarios y en este mismo CHANGELOG, o sea en
+prosa, **que no se pone roja**.
+
+**Sin push ni deploy.** La conjuntiva no está cumplida.
+
+### Cada forma con dos mitades
+
+Un test que sólo diga «el arnés rechaza esto» prueba media cosa: podría estar
+rechazando algo inofensivo. Por eso cada una lleva **(a)** el rechazo sobre el
+workflow real mutado en memoria, y **(b)** un control ejecutable de que esa
+forma **de verdad neutraliza** la herramienta.
+
+🔴 **El control se mide por marca en disco, no por exit code**, y es deliberado:
+el `exit 0` es justo lo que estos mecanismos producen — usarlo como oráculo
+sería medir con el instrumento que el ataque manipula.
+
+### Y la clase era más grande que los dos casos
+
+Censé el archivo **sobre código, sin comentarios** —contar menciones en prosa
+fue el error de la vuelta pasada— y aparecieron cinco formas más viviendo sólo
+en replays ad-hoc: `strategy`, `working-directory`, `shell`,
+`continue-on-error`, el checkout con `ref` vieja y el swap de secretos.
+**Todas versionadas.**
+
+⚠️ **Se versionan en vez de anotarse porque la vuelta pasada se hizo lo
+contrario:** se enumeró una deuda, se presentó como método, y el BLOCK entró por
+el agujero ya dibujado.
+
+📌 **No entra `NODE_OPTIONS` ni ninguna otra variable, a propósito:** la
+allowlist positiva las cubre por construcción. Un mutante por nombre sería
+volver a la denylist que costó ocho vueltas abandonar.
+
+```
+(a) container.env → 1 fail · scanner BASH_ENV → 1 fail
+(b) controles ejecutables con control POSITIVO previo
+clase versionada: wd · shell · c-o-e · swap · checkout ref · strategy
+desconectar cada guarda del arnés → 1 fail cada una · sano → 76 (era 66)
+```
+
+⚠️ El control positivo del caso `BASH_ENV` **falló la primera vez y era el
+escenario**: el ejecutable se llamaba distinto de como lo invocaba el cuerpo.
+Sin ese control se habría leído «no dejó marca» como éxito del mecanismo.
+
 ## 0.120.0 — cierre del BLOCK P81: la allowlist alcanza su universo (2026-08-22)
 
 Décima vuelta, y **no es una forma nueva**: es completar la de la vuelta pasada
