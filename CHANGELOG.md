@@ -11,6 +11,72 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.110.0 — AF-DISENO-01 completa: entra el cambio 6 (2026-08-21)
+
+**La entrada de `0.109.0` decía «diez de once» y el 6 frenado. Era cierta cuando
+se escribió y no se reescribe** — Diseño adjudicó después, en `diseno@0206d44`.
+Mi freno pedía que alguien eligiera entre toast y punteado; la respuesta fue que
+no había nada que elegir: el «o» de §5 bis · E era una imprecisión al resumir, y
+`SPEC_APP.md` §1.4:774 y §1.5 bis:1094-1095 **ya ratificaban las tres juntas**
+—toast + scroll + pulso— desde antes. Verificado por mí en esas fuentes.
+
+**Sin push ni deploy.** Siete commits locales; la conjuntiva no está cumplida.
+
+### Alcance: dos superficies, y una tercera que NO entra
+
+```
+CreateMesaFlow  !ticketValid          falta un dato      → RETIRADO
+MesaDetailView  selected.size === 0   falta un dato      → RETIRADO
+MesaDetailView  availableSlots === 0  no quedan lugares  → SE CONSERVA
+MesaDetailView  busy                  en vuelo           → SE CONSERVA
+dinero: journalPendiente · frozen* · scanning            → INTACTAS (AF-04)
+```
+
+🔴 **Yo mismo había declarado esta fila como dos razones y eran TRES.**
+`availableSlots === 0` se parece a «falta un dato» y no lo es: no hay nada que la
+persona pueda completar, la mesa se llenó. Un círculo tocable que no puede
+avanzar nunca es el botón muerto que §E quiere evitar, no el que quiere
+habilitar.
+
+### H-14 · se reemplazó un centinela de auditoría, y se acreditó con un mutante
+
+`mesa-igual-continuar.spec.ts` afirmaba `toBeDisabled()` con esta advertencia
+escrita: *«si la segunda mitad cae, el fix se pasó de alcance»*. Este cambio la
+hacía caer.
+
+**La semántica que H-14 cuida no se movió** —en consumo la selección sigue
+siendo el monto y sigue sin poderse avanzar sin ella—; cambió cómo se comunica.
+El test ahora prueba la CONDUCTA en vez del mecanismo: ① no llega al pago, ② lo
+explica, ③ con un ítem elegido sí llega.
+
+**Probado rompiéndolo:** planté `if (false && faltaElegirConsumos)` —la
+regresión exacta que H-14 detectaba— y el test falló. Reemplazar un centinela
+sin demostrar que el nuevo vigila es cómo se pierde una guarda.
+
+### El acordeón se abre antes del scroll
+
+El ticket nace plegado; scrollear sin abrirlo deja a la persona mirando una barra
+cerrada que no dice cuál consumo está incompleto.
+
+### Re-espejado de tokens, rojo por progreso ajeno
+
+`tokensRatificados` cayó a mitad del trabajo porque la fuente avanzó. **No era el
+commit que me habían pasado**: el HEAD real de `diseno/` estaba DOS commits más
+adelante (`7bb13e3`), y son los que incorporan mis hallazgos ② y ③ de `0.109.0`.
+La población sin valor pasó de 21 a 22 —`--channel-whatsapp` quedó mencionado en
+prosa en §F corregida—; **ningún valor cambió**, verificado leyendo el diff antes
+de re-espejar.
+
+### Límite de medición declarado
+
+El apagado del pulso (`animationend`) **no se puede acreditar acá**: la pestaña
+corre con `visibilityState: hidden` y el evento no se entrega. **Lo dice el
+control positivo:** el stepper ratificado, con el mecanismo idéntico, queda
+igual de pegado. Sin ese control habría "arreglado" un defecto inexistente.
+
+Gate: typecheck 0 · **1259 unitarios / 95 archivos** · **110 e2e** · builds
+real/mock/landing · secretos · espejo · `diff --check` limpio.
+
 ## 0.109.0 — AF-DISENO-01: diez de los once cambios visuales (2026-08-21)
 
 Implementación visual sobre pantallas existentes. **Cero contrato nuevo, cero
