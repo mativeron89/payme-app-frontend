@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { load } from 'js-yaml';
 import { leerWorkflow, pasosDeWorkflow, pasosGarantizadosAntesDe } from './yamlWorkflow';
 
 /**
@@ -205,20 +206,72 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
 describe('EJECUTANDO el `run:` del workflow · con curl sustituido', () => {
   const ciTexto = readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');
 
-  /** El cuerpo literal del `run: |` del paso de publicación. */
-  const cuerpo = (() => {
-    const lineas = ciTexto.split('\n');
-    const i = lineas.findIndex((l) => l.includes('- name: Publicar en Vercel'));
-    const j = lineas.findIndex((l, k) => k > i && l.trim() === 'run: |');
-    const sangria = (lineas[j]!.match(/^\s*/)?.[0].length ?? 0) + 2;
-    const out: string[] = [];
-    for (let k = j + 1; k < lineas.length; k += 1) {
-      const l = lineas[k]!;
-      if (l.trim() && !l.startsWith(' '.repeat(sangria))) break;
-      out.push(l.slice(sangria));
-    }
-    return out.join('\n').trimEnd();
+  /**
+   * 🔴 P68 · EL CUERPO SALE DEL MODELO, NO DE UN `findIndex` SOBRE EL TEXTO.
+   *
+   * Acá había una segunda lectura del workflow —buscar la línea del `- name:`,
+   * contar sangrías a mano— que convivía con el parser real. Es exactamente lo
+   * que el dictamen llama «dos vistas del mismo workflow»: la representación
+   * mejoró y este consumidor seguía mirando la estructura vieja.
+   *
+   * 🔴 Y ADEMÁS SE ADJUDICA EL `shell`. La sonda invoca
+   * `bash --noprofile --norc -eo pipefail` porque es lo que usa Actions POR
+   * DEFECTO, y ese `-e` es parte de lo que se prueba: sin él, si el disparo de
+   * `app` falla, el de `landing` corre igual y el paso termina en 0.
+   *
+   * **Pero un paso puede declarar otro shell**, y entonces el test acreditaría
+   * una semántica distinta de la que el workflow declara. Codex lo midió: con
+   * `shell: bash {0}` y un doble de curl (App=500, Landing=200), el shell
+   * custom hizo DOS llamadas y terminó 0; el fijo cortó en la primera y terminó
+   * 1. **El instrumento decía que el paso corta y el paso no cortaba.**
+   *
+   * Se rechaza conservadoramente TODO override —de paso, de job o de workflow—
+   * en vez de intentar reproducir cada semántica posible: interpretar shells es
+   * la clase de intérprete a medias que este arnés viene cerrando hace trece
+   * vueltas.
+   */
+  const publicadorDelModelo = (() => {
+    const { jobs, problemas } = leerWorkflow(ciTexto);
+    const paso = jobs
+      .flatMap((j) => [...j.pasos])
+      .find((p) =>
+        comandosDe(texto(p.claves['run']) ?? '').some((c) =>
+          /^bash scripts\/publicar-vercel\.sh/.test(c),
+        ),
+      );
+    return { jobs, problemas, paso };
   })();
+
+  it('🔴 el workflow NO declara un `shell` propio · si lo hiciera, esta sonda mentiría', () => {
+    const { jobs, paso } = publicadorDelModelo;
+    expect(paso, 'no se encontró el paso de publicación en el modelo').toBeDefined();
+
+    // ① el paso
+    expect(
+      paso!.claves['shell'],
+      'el paso declara `shell:` — la sonda de abajo corre con OTRA semántica que la real',
+    ).toBeUndefined();
+
+    // ② su job, y ③ el workflow entero (`defaults.run.shell`)
+    const doc = load(ciTexto) as Record<string, unknown>;
+    const defaultsDe = (n: unknown): unknown => {
+      if (typeof n !== 'object' || n === null) return undefined;
+      const d = (n as Record<string, unknown>)['defaults'];
+      if (typeof d !== 'object' || d === null) return undefined;
+      const r = (d as Record<string, unknown>)['run'];
+      if (typeof r !== 'object' || r === null) return undefined;
+      return (r as Record<string, unknown>)['shell'];
+    };
+    expect(defaultsDe(doc), 'el workflow declara `defaults.run.shell`').toBeUndefined();
+    const jobDelPaso = (load(ciTexto) as { jobs?: Record<string, unknown> }).jobs?.[paso!.job];
+    expect(defaultsDe(jobDelPaso), 'el job declara `defaults.run.shell`').toBeUndefined();
+
+    // Control positivo: el modelo tiene que haber leído jobs de verdad.
+    expect(jobs.length, 'el modelo no leyó ningún job: mediría en vacío').toBeGreaterThan(0);
+  });
+
+  /** El cuerpo literal del `run:` del paso de publicación, leído del modelo. */
+  const cuerpo = (texto(publicadorDelModelo.paso?.claves['run']) ?? '').trimEnd();
 
   const URL_FALSA = 'https://api.vercel.com/v1/integrations/deploy/prj_FALSO/tokenSECRETO123';
 
@@ -845,7 +898,42 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
    * prohibido: un mecanismo nuevo no tiene forma de colarse por no parecerse a
    * nada conocido.
    */
-  it('🔴 TODO paso del workflow está adjudicado', () => {
+  it('🔴 TODO JOB y TODO paso del workflow están adjudicados', () => {
+    /**
+     * 🔴 P68 · EL CENSO MIRA JOBS, NO SÓLO PASOS — y ésta es la corrección que
+     * el dictamen llama «un único validador integrado».
+     *
+     * El parser YA representaba `jobs.<id>.uses` (un reusable workflow, que
+     * ejecuta con sus secretos y NO tiene `steps`), y hasta había un test del
+     * modelo puro que lo probaba. **Pero este censo —el que corre sobre el
+     * `ci.yml` real— volvía a aplanar sólo `jobs[].pasos`.** Codex agregó un
+     * reusable job real y quedó 61/61 focal y 96/96 la full.
+     *
+     * ⚠️ **La lección es del patrón, no del caso:** arreglar la REPRESENTACIÓN
+     * no arregla a los CONSUMIDORES, y un test del modelo puro puede estar
+     * verde mientras el gate integrado no usa lo que el modelo aprendió. Dos
+     * vistas del mismo workflow es exactamente lo que produjo esto.
+     */
+    const { jobs, problemas } = leerWorkflow(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    expect(problemas, 'hay jobs que el modelo no puede adjudicar').toEqual([]);
+    expect(jobs.length, 'no se leyó ningún job: el censo mediría en vacío').toBeGreaterThan(0);
+
+    /**
+     * Reusables ADJUDICADOS: hoy ninguno. No es una lista vacía por descuido —
+     * es la declaración de que este repo no delega su CI en un workflow ajeno.
+     * El día que se quiera, se agrega acá con su `owner/repo/.../wf.yml@ref`
+     * exacto y se decide qué secretos recibe.
+     */
+    const REUSABLES_ADJUDICADOS: readonly string[] = [];
+    const jobsSinAdjudicar = jobs
+      .filter((j) => j.usa !== null && !REUSABLES_ADJUDICADOS.includes(j.usa))
+      .map((j) => `job «${j.nombre}»: uses ${j.usa} (secrets: ${JSON.stringify(j.secretos)})`);
+    expect(
+      jobsSinAdjudicar,
+      'un job delega su ejecución en un workflow ajeno y nadie lo adjudicó:\n  ' +
+        jobsSinAdjudicar.join('\n  '),
+    ).toEqual([]);
+
     const pasos = pasosDe(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
     expect(pasos.length, 'no se parsearon pasos: el censo mediría en vacío').toBeGreaterThan(8);
 
@@ -937,16 +1025,26 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
     const { jobs, problemas } = leerWorkflow(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
     expect(problemas, 'el workflow tiene jobs que este modelo no puede adjudicar').toEqual([]);
     const pasos = jobs.flatMap((j) => [...j.pasos]);
-    const publicador = pasos.find((p) =>
+    /**
+     * 🔴 P68 · TODOS los publicadores, no el primero. El `.find(...)` de antes
+     * adjudicaba uno y dejaba libre a cualquier otro: Codex agregó un segundo
+     * job con un publicador válido y sin `needs`, y el focal quedó 61/61 aunque
+     * ese job puede correr en paralelo sin esperar los cinco gates.
+     */
+    const publicadores = pasos.filter((p) =>
       comandosDe(texto(p.claves['run']) ?? '').some((c) => /^bash scripts\/publicar-vercel\.sh/.test(c)),
     );
     // Control positivo: sin paso de publicación, «todos preceden» sería cierto
     // sobre un CI que no publica nada.
-    expect(publicador, 'no se encontró el paso de publicación: el test mediría en vacío').toBeDefined();
+    expect(publicadores.length, 'no se encontró el paso de publicación: el test mediría en vacío')
+      .toBeGreaterThan(0);
 
-    const antes = pasosGarantizadosAntesDe(jobs, publicador!).flatMap((p) =>
-      comandosDe(texto(p.claves['run']) ?? ''),
-    );
+    // Cada publicador responde por SUS antecesores garantizados. Se acumulan
+    // los faltantes de todos, no se mira sólo el primero.
+    const antesDeCadaUno = publicadores.map((pub) => ({
+      donde: `${pub.job}.steps[${pub.indice}]`,
+      cmds: pasosGarantizadosAntesDe(jobs, pub).flatMap((p) => comandosDe(texto(p.claves['run']) ?? '')),
+    }));
     const GATES: ReadonlyArray<readonly [string, RegExp]> = [
       ['espejo', /^node scripts\/verificar-mirror\.mjs\b/],
       ['test', /^npm test$/],
@@ -954,10 +1052,12 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
       ['build', /^npm run build$/],
       ['playwright', /^npx playwright test$/],
     ];
-    const faltan = GATES.filter(([, re]) => !antes.some((c) => re.test(c))).map(([n]) => n);
+    const faltan = antesDeCadaUno.flatMap(({ donde, cmds }) =>
+      GATES.filter(([, re]) => !cmds.some((c) => re.test(c))).map(([n]) => `${donde}: ${n}`),
+    );
     expect(
       faltan,
-      `gates que NO se EJECUTAN antes de publicar (mencionarlos no cuenta): ${faltan.join(' · ')}`,
+      `gates que NO se EJECUTAN antes de publicar (mencionarlos no cuenta):\n  ${faltan.join('\n  ')}`,
     ).toEqual([]);
   });
 
@@ -983,11 +1083,12 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
     // Mismo cambio de modelo que el test de arriba: «antes» es causalidad.
     const { jobs } = leerWorkflow(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
     const todos = jobs.flatMap((j) => [...j.pasos]);
-    const publicador = todos.find((p) =>
+    const publicadores2 = todos.filter((p) =>
       comandosDe(texto(p.claves['run']) ?? '').some((c) => /^bash scripts\/publicar-vercel\.sh/.test(c)),
     );
-    expect(publicador, 'no se encontró el paso de publicación').toBeDefined();
-    const previos = pasosGarantizadosAntesDe(jobs, publicador!).map((p) => ({
+    expect(publicadores2.length, 'no se encontró el paso de publicación').toBeGreaterThan(0);
+    // Mismo criterio que arriba: cada publicador responde por sus antecesores.
+    const previos = publicadores2.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub)).map((p) => ({
       job: p.job,
       indice: p.indice,
       run: texto(p.claves['run']),
@@ -1126,28 +1227,58 @@ describe('🔴 js-yaml vive SÓLO en el instrumento de tests', () => {
     ).toEqual([]);
   });
 
-  it('🔴 y no aparece en ningún bundle ya construido', () => {
-    // Si los `dist*` no existen todavía, este test NO puede afirmar nada y lo
-    // dice: un `if (!existe) return` disfrazaría de verde una medición ausente.
-    const dists = readdirSync(RAIZ, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && e.name.startsWith('dist'))
-      .map((e) => e.name);
-    expect(dists.length, 'no hay ningún `dist*`: correr los builds antes de afirmar esto')
-      .toBeGreaterThan(0);
+  it('🔴 y no aparece en un bundle CONSTRUIDO POR ESTE TEST', async () => {
+    /**
+     * 🔴 P68 · ESTE TEST CONSTRUYE SU PROPIO ARTEFACTO, y el motivo es un
+     * defecto REAL que encontró mi propio intermitente.
+     *
+     * Antes exigía que existiera algún `dist*` —a propósito: un
+     * `if (!existe) return` habría disfrazado de verde una medición ausente—.
+     * Pero `ci.yml` corre `npm test` ANTES del build, así que en un checkout
+     * limpio ese `dist*` no existe. Codex lo reprodujo en clon fresco: **60
+     * pass / 1 fail**.
+     *
+     * ⚠️ **Y la parte que más enseña: mi suite pasaba en verde por CASUALIDAD.**
+     * `apiUrlObligatoria.test.ts` crea un `dist/` para lo suyo, y el scheduling
+     * de Vitest lo ponía a correr antes. **La medición dependía de un
+     * side-effect de otro test**, no de un prerrequisito declarado — que es
+     * justo la clase de verde que este arnés existe para no producir.
+     *
+     * Los 3 e2e que fallaron en la primera corrida y pasaron en la segunda eran
+     * el mismo fenómeno mirado de lejos: orden, no ruido. **Declarar la roja en
+     * vez de esconderla es lo que convirtió un misterio en un hallazgo.**
+     *
+     * La salida hermética es construir acá, en un tmpdir propio: no depende del
+     * orden del CI, ni de otro test, ni de que alguien haya corrido un build.
+     */
+    const dir = mkdtempSync(join(tmpdir(), 'payme-bundle-'));
+    const build = await new Promise<{ code: number; out: string }>((ok) => {
+      execFile(
+        'npx',
+        ['vite', 'build', '--outDir', dir, '--emptyOutDir', '--logLevel', 'error'],
+        { cwd: RAIZ, encoding: 'utf8', env: { ...process.env, VITE_API_URL: 'https://ejemplo.invalid' } },
+        (err, out, errOut) => ok({ code: err ? 1 : 0, out: `${out}${errOut}` }),
+      );
+    });
+    expect(build.code, `el build de la sonda falló:\n${build.out}`).toBe(0);
 
-    const conYaml: string[] = [];
-    const barrer = (dir: string): void => {
-      for (const e of readdirSync(join(RAIZ, dir), { withFileTypes: true })) {
-        const ruta = join(dir, e.name);
+    const archivos: string[] = [];
+    const barrer = (d: string): void => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const ruta = join(d, e.name);
         if (e.isDirectory()) { barrer(ruta); continue; }
-        if (!/\.(js|mjs|css|html)$/.test(e.name)) continue;
-        // `js-yaml` deja rastros propios; se busca su firma, no su nombre, que
-        // podría no sobrevivir a la minificación.
-        const texto = readFileSync(join(RAIZ, ruta), 'utf8');
-        if (/YAMLException|js-yaml/.test(texto)) conYaml.push(ruta);
+        if (/\.(js|mjs|css|html)$/.test(e.name)) archivos.push(ruta);
       }
     };
-    for (const d of dists) barrer(d);
+    barrer(dir);
+    // Control positivo: sin archivos, el barrido de abajo pasaría en vacío.
+    expect(archivos.length, 'el build no produjo artefactos: la medición sería vacía')
+      .toBeGreaterThan(0);
+
+    // `js-yaml` deja rastros propios; se busca su firma además de su nombre,
+    // que podría no sobrevivir a la minificación.
+    const conYaml = archivos.filter((f) => /YAMLException|js-yaml/.test(readFileSync(f, 'utf8')));
+    rmSync(dir, { recursive: true, force: true });
     expect(conYaml, `js-yaml llegó a un artefacto servido:\n  ${conYaml.join('\n  ')}`).toEqual([]);
-  });
+  }, 120_000);
 });
