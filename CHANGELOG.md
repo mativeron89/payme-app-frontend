@@ -11,6 +11,91 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.109.0 — AF-DISENO-01: diez de los once cambios visuales (2026-08-21)
+
+Implementación visual sobre pantallas existentes. **Cero contrato nuevo, cero
+backend.** Fuente: `diseno/SISTEMA_DISENO.md` §5 bis · E/F y `SPEC_APP.md`
+§1.3-bis/§1.7, reconciliados el 2026-08-21.
+
+**Sin push ni deploy.** Cinco commits locales; la conjuntiva sigue vigente
+(verde + visto bueno de auditoría) y no está cumplida.
+
+| # | Qué | Estado |
+|---|---|---|
+| 1 | Rótulo «Volver» único | **sin trabajo** · ver abajo |
+| 2 | Sin contadores «Paso X de Y» | ✅ el prop se retiró entero |
+| 3 | Geometría de cabecera de subpantalla | ✅ `16px 20px 56px` · radio 26px |
+| 4 | Tarjeta de título | ✅ `-42px` · radio 22px · sombra chata |
+| 5 | Círculo de barra a 48px | ✅ las dos variantes · glifo 22px |
+| 6 | El círculo nunca se apaga | 🔴 **FRENADO** · ver abajo |
+| 7 | Rótulo del círculo de una palabra | **sin trabajo** · ver abajo |
+| 8 | Sin scrollbar visible | ✅ con límite de entorno declarado |
+| 9 | `--channel-whatsapp` como token | ✅ y su 7.67:1 verificado |
+| 10 | Credencial de Compartir | ✅ acotado · ver el censo |
+| 11 | «El ticket sube» | ✅ total arriba, barra navy abajo |
+
+### 🔴 Tres correcciones sobre la fuente de diseño
+
+**① La sombra de la tarjeta de título llevaba el navy SUPERSEDIDO.** §5 bis · E
+pide `rgba(15,31,61,0.08)` = `#0f1f3d`, migrado el 14/08. Esa sección se
+escribió el 21/08 con el navy que §5 bis · D ya había corregido el 19/08, y
+literal deja la suite en rojo contra `coloresMigrados.test.ts:53`. Va con el
+vigente `rgba(16,30,59,0.08)`.
+
+**② El 46px del círculo no era «una inconsistencia entre pantallas».** §E dice
+corregir 56 contra 48; medido en `7d5b920` había **uno solo, 46px**, y
+`.appbar-solo` no lo redefine. El 56px que Diseño vio es otro círculo —el de la
+salida del 403 y del canje— que no es la barra inferior y no se tocó.
+
+**③ §5 bis · F afirma algo que hoy es falso.** Dice que `--channel-whatsapp` es
+el único color de Compartir fuera de la paleta; `AVATAR_COLORS` son SEIS sin
+token, y uno se pintaba en esa pantalla. El cambio 10 lo cierra ahí.
+
+### Los cambios 1 y 7 no tenían trabajo, y es el mismo motivo
+
+Las cuatro pantallas del alcance ya usaban `'Volver'` a secas, y los rótulos del
+círculo ya eran de una palabra. **Todo el contenido real de esos dos cambios
+vive en pantallas que la propia orden prohíbe tocar** (3DS y pago). El caso que
+sí haría diferencia —`'Reintentar el pago sin confirmar'` en un círculo de
+48px— queda señalado a Diseño, sin tocar.
+
+**Compartir NO se alineó a «Volver» aunque la orden la nombre.** Dice «Ir a
+Inicio» porque ese control **no retrocede**: volver a División abriría una
+segunda mesa con un segundo hold (B-06). Ratificado el 04/08 y re-corregido el
+13/08 con Mati mirando la pantalla.
+
+### El cambio 6 está frenado, y no por alcance
+
+§E no dice sólo «no se apaga»: dice *«sigue tocable y responde con toast o con
+el estado punteado `--warning`»*. Quitar el atributo sin implementar esa
+respuesta deja un botón que se toca y no hace nada — textual, lo que AF-04
+llama *«peor que uno apagado»*. Cuál de las dos respuestas va en cada pantalla
+es diseño, no implementación.
+
+🔴 **Y en las cuatro superficies de dinero no se aplica ni con feedback.**
+`censoSuperficiesPago.test.ts:663` exige que el CTA lea `centro.disabled`, y
+`MesaScreen.tsx:2190` apaga por `journalPendiente`, `busy` y
+`frozenRequiresReconciliation`. §E se autolimita a *«cuando falta un dato para
+avanzar»*; «hay una operación de dinero en vuelo» no es eso. Confundir las dos
+poblaciones es exactamente cómo se produjo AF-04, y hay un test de la
+separación.
+
+### Un defecto preexistente corregido de paso
+
+`.hdr-step` llevaba el `margin-left:auto` de la fila 2. Al retirarlo, el ícono
+de link de Mis ítems quedaba pegado a «Volver» — **y ya lo estaba antes**: esa
+pantalla nunca pasó `step`. Se corrige con `.hdr-action` porque es la misma
+pieza, no porque lo rompiera este cambio.
+
+### Límite declarado del cambio 8
+
+Se acredita que la regla llega (`scrollbarWidth === 'none'`), **no el efecto
+visual**: un control positivo con `scrollbar-width:auto` forzado también dio
+gutter 0, porque macOS usa barras overlay. El testigo no discrimina.
+
+Gate: typecheck exit 0 · **1259 unitarios / 95 archivos** · **110 e2e** ·
+`diff --check` limpio.
+
 ## 0.108.0 — un paso se identifica por ser ítem de `steps:`, no por su primera clave (2026-08-21)
 
 Cierra un hallazgo **preliminar** de Codex —quedó bloqueado por el gate de su
