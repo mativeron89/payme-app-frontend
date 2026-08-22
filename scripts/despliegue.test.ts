@@ -1244,9 +1244,15 @@ describe('🔴 js-yaml vive SÓLO en el instrumento de tests', () => {
      * side-effect de otro test**, no de un prerrequisito declarado — que es
      * justo la clase de verde que este arnés existe para no producir.
      *
-     * Los 3 e2e que fallaron en la primera corrida y pasaron en la segunda eran
-     * el mismo fenómeno mirado de lejos: orden, no ruido. **Declarar la roja en
-     * vez de esconderla es lo que convirtió un misterio en un hallazgo.**
+     * 🔴 **ACÁ ESCRIBÍ QUE LOS 3 E2E INTERMITENTES ERAN «EL MISMO FENÓMENO», Y
+     * NO ESTÁ MEDIDO.** El dictamen dice textual *«No se repitieron los E2E»*:
+     * este race es de un test UNITARIO, y los e2e que fallaban eran de login,
+     * que no tocan `dist*`. La conexión la trajo el mensaje que me pasó el
+     * dictamen y yo la propagué sin ir a la fuente. **El intermitente e2e sigue
+     * sin causa asignada.**
+     *
+     * Lo que sí vale: declarar la roja en vez de esconderla detrás de dos
+     * verdes es lo que la puso a la vista del auditor.
      *
      * La salida hermética es construir acá, en un tmpdir propio: no depende del
      * orden del CI, ni de otro test, ni de que alguien haya corrido un build.

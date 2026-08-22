@@ -31,11 +31,29 @@ lo reprodujo en clon fresco: **60 pass / 1 fail**.
 suyo y el scheduling de Vitest lo ponía antes; **la medición dependía de un
 side-effect ajeno**, no de un prerrequisito declarado.
 
-🔴 **Y los 3 e2e que fallaron en la primera corrida de `0.113.0` y pasaron en la
-segunda eran el mismo fenómeno visto de lejos: orden, no ruido.** Declararlos
-como roja sin causa —en vez de esconderlos detrás de dos verdes— es lo que
-permitió que el auditor los convirtiera en un hallazgo con causa. **Es la mejor
-razón que tengo para no volver a maquillar un intermitente.**
+🔴 **CORRECCIÓN DENTRO DE ESTA MISMA ENTRADA — acá había escrito que los 3 e2e
+de `0.113.0` «eran el mismo fenómeno», y NO ESTÁ MEDIDO.**
+
+Lo que el dictamen dice es esto, textual: *«No se repitieron los E2E»*. El race
+que Codex encontró está en un test **unitario** (`despliegue.test.ts` contra
+`apiUrlObligatoria.test.ts`); los tres e2e que fallaron eran
+`home-mesas-multiples` e `idioma`, por `locator.fill` en el login, **que no
+toca `dist*` ni depende de él**.
+
+**La conexión entre los dos hechos la hizo el mensaje que me trajo el dictamen,
+y yo la repetí sin ir a la fuente.** Es la misma clase que ya me mordió con un
+valor de color transcripto y con un commit de `diseno/` que había envejecido:
+**una afirmación de un intermediario, propagada como medición propia.** La
+diferencia es que esta vez la escribí yo en un CHANGELOG.
+
+**El intermitente e2e sigue SIN CAUSA ASIGNADA.** Que hoy diera 111/111 dos
+veces seguidas no lo cierra: ya daba verde 2 de cada 3 antes. Queda como estaba,
+declarado y abierto.
+
+Lo que sí se sostiene, y es lo que vale: **declarar la roja en vez de
+esconderla detrás de dos verdes fue lo correcto**, y el auditor la usó como
+material. Pero el hallazgo que él encontró es otro, y merecía que yo lo leyera
+antes de darlo por resuelto.
 
 Ahora el test **construye su propio artefacto** en un tmpdir. Verificado en la
 condición exacta del dictamen —sin `dist*` previo—: focal 55/55, full
