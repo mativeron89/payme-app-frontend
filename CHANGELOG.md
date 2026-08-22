@@ -11,6 +11,62 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.118.0 — cierre del BLOCK P77: el contexto de ejecución, uno solo (2026-08-22)
+
+Octava vuelta, y el principio que la resume vale más que los cuatro puntos: **de
+nada sirve blindar al que publica si el que lo autoriza a publicar puede
+volverse un no-op.**
+
+**Sin push ni deploy.** La conjuntiva no está cumplida.
+
+### El patrón: cuatro dimensiones escritas sólo para el publicador
+
+`shell`, `working-directory`, `continue-on-error` tipado y `strategy` se fueron
+agregando vuelta a vuelta, **todas para el paso publicador**. Los cinco gates
+que lo habilitan quedaban sin gobierno:
+
+```
+npm test + working-directory: .audit-fake-gate  → 0 sin correr Vitest
+npm test + shell: bash -c 'true # {0}'          → 0 sin ejecutar nada
+```
+
+…y el arnés seguía contándolo como gate cumplido.
+
+🔴 **La corrección no fue repetir los chequeos del otro lado: fue que exista UNA
+definición de «contexto gobernado»**, aplicada al publicador y a cada gate. La
+dimensión que aparezca mañana entra en un lugar y cubre a los seis.
+
+### `BASH_ENV`: la dimensión que faltaba
+
+Bash no interactivo ejecuta el archivo de `BASH_ENV` **antes** del script, y
+`--noprofile --norc` no lo neutraliza. Con un prelude que redefine `bash`, las
+dos líneas del publicador terminaron 0 **sin ejecutar el script**. El arnés
+certificaba un cuerpo que no corrió.
+
+### La junta que yo había declarado cerrada
+
+🔴 En `0.117.0` escribí «una sola gramática» **y el censo se quedó con su tupla
+paralela**. Hoy coincidían, y ésa es la trampa: **dos fuentes que coinciden hoy
+son una casualidad fechada, no una propiedad.**
+
+### Y el oráculo que faltaba desde esa misma vuelta
+
+`esInvocacionPublicador` **no tenía prueba propia**: se la ejercitaba de refilón
+contra el `ci.yml` real, que sólo trae la forma canónica. Ahora hay nueve casos
+permanentes que no dependen del workflow.
+
+```
+BASH_ENV job/workflow → 2/2 · gate wd → 1 · gate shell → 1 · gate c-o-e → 1/1
+recaída del helper (sin tocar el YAML) → 5 · sano → 65 passed
+replays: dos espacios 5 · strategy 1 · wd publicador 1 · if permisivo 1 · swap 1 · tercera 2
+```
+
+⚠️ **Tres mutantes «sobrevivieron» en la primera pasada y era la mutación, no el
+código**: el gate se declara `- run: npm test` con guion y el patrón buscaba
+otra indentación. **Un mutante que no se planta da un falso «sobrevive»**, tan
+engañoso como un falso verde. La batería ahora verifica que el patrón esté en el
+archivo antes de correr.
+
 ## 0.117.0 — cierre del BLOCK P75: una sola gramática para el publicador (2026-08-22)
 
 Séptima vuelta, y el primer hallazgo no es una forma que faltara: es una
