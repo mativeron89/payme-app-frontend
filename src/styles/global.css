@@ -3075,14 +3075,18 @@ body {
    "sube 24px" de 2026-08-04 era el valor viejo—, radio 22px y una sombra mucho
    más chata que la de la tarjeta montada de primer nivel.
 
-   🔴 EL COLOR DE LA SOMBRA NO ES EL QUE DICE LA FUENTE, y es a propósito.
-   §5 bis · E pide `rgba(15,31,61,0.08)`, que es `#0f1f3d` — el navy SUPERSEDIDO
-   por la migración del 14/08. Esa sección se escribió el 21/08 con el navy que
-   §5 bis · D ya había corregido el 19/08. Escribirlo literal deja la suite en
-   rojo contra `coloresMigrados.test.ts:53`, que barre ese valor por VALOR y no
-   por nombre. Se implementa con el navy vigente `#101E3B` = rgb(16,30,59), que
-   además es el que usan las otras cuatro sombras de estructura de §D.
-   Declarado al Bibliotecario para que corrija la fuente. */
+   🔴 LA SOMBRA VA POR TOKEN, y llegar hasta acá costó dos vueltas.
+   §5 bis · E pedía `rgba(15,31,61,0.08)` = `#0f1f3d`, el navy SUPERSEDIDO por
+   la migración del 14/08 — esa sección se escribió el 21/08 con el navy que
+   §5 bis · D ya había corregido el 19/08, y literal dejaba la suite en rojo
+   contra `coloresMigrados.test.ts:53`.
+
+   ⚠️ **Lo corregí a mano y ahí estuvo mi error**: escribí el valor vigente
+   literal cuando `--sh-2` (línea 213 de este mismo archivo) YA lo contenía. Es
+   exactamente lo que argumenté en el cambio 9 para tokenizar
+   `--channel-whatsapp` —un valor hardcodeado es invisible al barrido de
+   tokens— hecho bien en un cambio y mal en el otro, el mismo día. La fuente
+   corregida (§5 bis · E) también pide `--sh-2` por nombre. */
 .title-card {
   position: relative;
   z-index: 1;
@@ -3090,7 +3094,7 @@ body {
   padding: var(--sp-4);
   border-radius: var(--r-lg); /* 22px — el token ya valía lo que §E pide */
   background: var(--teal-l);
-  box-shadow: 0 2px 8px rgba(16, 30, 59, 0.08);
+  box-shadow: var(--sh-2);
   text-align: center;
 }
 

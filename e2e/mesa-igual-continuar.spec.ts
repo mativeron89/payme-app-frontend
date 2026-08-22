@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
+import { espiarScroll, leerScrolls } from './_senales';
 
 /**
  * H-14 (auditoría 2026-08-06): EN PARTES IGUALES, MARCAR ES INFORMATIVO — Y EL
@@ -61,12 +62,32 @@ test.describe('Continuar en la mesa (H-14)', () => {
    *   ② y explica por qué, en vez de no hacer nada
    *   ③ con un ítem elegido, sí lleva
    *
-   * Si alguien "se pasa de alcance" y deja avanzar sin selección, ① cae — que
-   * es exactamente lo que el centinela original detectaba.
+   * 🔴 **CORREGIDO TRAS EL BLOCK DEL P62 — la descripción de arriba atribuía al
+   * mutante un alcance que NO tiene, y la corrección es el punto 3 del cierre
+   * mínimo de Codex.**
+   *
+   * El mutante `if (false && faltaElegirConsumos)` **no reproduce la pérdida
+   * del no-avance**: `MesaScreen.goToPay` conserva un corte duro propio
+   * —`selected.size === 0 → return`, `MesaScreen.tsx:569`— así que la vista
+   * puede llamar al owner y el owner igual frena. Este test queda rojo con ese
+   * mutante **porque desaparece el TOAST**, no porque se pierda la semántica.
+   *
+   * **Lo que el mutante acredita es la rama de FEEDBACK.** El no-avance está
+   * defendido por dos capas y la de abajo no depende de ésta — que es una buena
+   * noticia de diseño y una mala noticia para quien quiera usar este mutante
+   * como prueba de la semántica. Se dice acá para que nadie vuelva a leerlo
+   * como lo leí yo.
+   *
+   * ## Las TRES señales se afirman por separado
+   *
+   * §5 bis · E exige toast + scroll + pulso JUNTOS. Codex mató tres mutantes
+   * individuales contra la versión anterior de este test —borrar el scroll,
+   * borrar el pulso, borrar el `return`— y quedó **verde en los tres**: miraba
+   * sólo el toast. Ahora cada señal tiene su aserción, con los espías de
+   * `_senales.ts` (el scroll no deja rastro en el DOM y el pulso se apaga solo).
    */
-  test('consumo: sin elegir NO se avanza y se explica — ahí la selección ES el monto', async ({
-    page,
-  }) => {
+  test('consumo: sin elegir NO se avanza y se explica con las TRES señales', async ({ page }) => {
+    await espiarScroll(page);
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
 
@@ -78,11 +99,22 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(continuar).toBeEnabled();
     await continuar.click();
 
-    // ① no llegó al pago  ② lo dijo
+    // ① no llegó al pago
     await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toHaveCount(0);
+    // ② señal 1 de 3 · el toast
     await expect(page.getByText('Elige lo que consumiste para continuar')).toBeVisible();
 
-    // ③ con un consumo elegido, el mismo control sí avanza.
+    // ③ señal 2 de 3 · el pulso, leído de la clase que deja en el DOM
+    await expect(page.locator('.tk-fold--pending')).toHaveClass(/tk-fold--pulse/);
+
+    // ④ señal 3 de 3 · el scroll, que no deja rastro y por eso lleva espía
+    const vistas = await leerScrolls(page);
+    expect(
+      vistas.scrolls.some((c) => c.includes('tk-fold--pending')),
+      `no se scrolleó a la lista de consumos · scrolls vistos: ${vistas.scrolls.join(' · ')}`,
+    ).toBe(true);
+
+    // ⑤ con un consumo elegido, el mismo control sí avanza.
     await page.getByText('Tagliatelle Bolognese').click();
     await continuar.click();
     await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();

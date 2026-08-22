@@ -8,6 +8,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { ingresar } from './_app';
+import { espiarScroll, leerScrolls } from './_senales';
 
 async function hastaLaPantallaFusionada(page: import('@playwright/test').Page) {
   await ingresar(page);
@@ -200,4 +201,78 @@ test('🔴 «En partes iguales» no baja de 2, aunque el contrato lo admita', as
   await expect(grupo).toContainText('2');
   await page.getByRole('button', { name: 'Un comensal menos' }).click();
   await expect(grupo, 'partes iguales no puede bajar de 2: lo ratificó Mati').toContainText('2');
+});
+
+/**
+ * 🔴 CENTINELA DE LA RAMA «TICKET INCOMPLETO» — nace del BLOCK del P62.
+ *
+ * El cambio 6 retiró el `disabled` del círculo también acá, y puso la rama de
+ * feedback en `CreateMesaFlow.tsx:1539-1544`. **Ninguna prueba oficial la
+ * tocaba**: los ocho E2E de este archivo usan un ticket VÁLIDO, así que Codex
+ * plantó `if (false && !ticketValid)` —que borra la rama entera y deja llegar a
+ * Garantía con un ticket incompleto— y **los ocho quedaron verdes**.
+ *
+ * Un bypass invisible al gate es peor que un defecto: el defecto se encuentra,
+ * el bypass se hereda. Este test cubre las CINCO señales que §5 bis · E exige
+ * en esta pantalla, cada una por separado, más la que nadie declara y es la que
+ * de verdad importa: **que no se llegue a Garantía**.
+ *
+ * ⚠️ El acordeón se CIERRA antes de tocar Continuar a propósito: la rama lo
+ * abre, y si el test lo dejara abierto no podría distinguir «lo abrió el
+ * feedback» de «ya estaba abierto».
+ */
+test('🔴 ticket incompleto: el círculo NO se apaga, frena y explica con todas sus señales', async ({
+  page,
+}) => {
+  await espiarScroll(page);
+  await hastaLaPantallaFusionada(page);
+
+  // El stepper primero: si no, el CTA frena por ÉL y nunca llega a mirar el
+  // ticket. Dos gates en la misma pantalla, y este test es del segundo.
+  await page.getByRole('button', { name: 'Un comensal más' }).click();
+
+  // Se rompe el ticket por la UI, no por el estado: «Agregar consumo» crea una
+  // fila sin nombre ni precio, que es exactamente un ticket incompleto real.
+  await page.getByRole('button', { name: /Ver el ticket/ }).click();
+  await page.getByRole('button', { name: 'Modificar ítems' }).click();
+  await page.getByRole('button', { name: 'Agregar consumo' }).click();
+  await expect(page.getByText('Completa nombre y precio (mayor a cero) de cada consumo.')).toBeVisible();
+
+  // Se pliega para poder afirmar que la rama lo ABRE.
+  await page.getByRole('button', { name: 'Listo' }).click();
+  await page.getByRole('button', { name: /Ver el ticket/ }).click();
+  await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
+
+  // ① el círculo NO nace apagado (§5 bis · E)
+  const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
+  await expect(continuar).toBeEnabled();
+  await continuar.click();
+
+  // ② NO se llegó a Garantía — la afirmación que el bypass rompe
+  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toHaveCount(0);
+  /**
+   * ③ el toast · 🔴 SE AFIRMA DENTRO DEL `.toast`, NO POR EL TEXTO SUELTO.
+   *
+   * Ese mismo texto vive TAMBIÉN en el aviso permanente de la barra
+   * (`tk-invalid`, visible mientras el ticket sea inválido). Un
+   * `getByText(...)` lo matchea ahí y **pasa aunque el toast no exista**:
+   * borrar `toast(ticketInvalidReason)` dejaba este test VERDE. Lo cacé
+   * plantando ese mutante, no leyéndolo — es el mismo falso verde que el P62
+   * vino a corregir, cometido de nuevo dentro del test que lo corrige.
+   */
+  const toast = page.locator('.toast:not(.toast-hidden)');
+  await expect(toast).toBeVisible();
+  await expect(toast).toHaveText('Completa nombre y precio (mayor a cero) de cada consumo.');
+  // ④ el acordeón quedó abierto: el aviso lleva a donde se resuelve
+  await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
+
+  // ⑤ el pulso, leído de la clase que deja en el DOM
+  await expect(page.locator('.tk-fold')).toHaveClass(/tk-fold--pulse/);
+
+  // ⑥ el scroll, la única de las tres que no deja rastro
+  const vistas = await leerScrolls(page);
+  expect(
+    vistas.scrolls.some((c) => c.includes('tk-fold')),
+    `no se scrolleó al ticket · scrolls vistos: ${vistas.scrolls.join(' · ')}`,
+  ).toBe(true);
 });
