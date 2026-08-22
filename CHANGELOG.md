@@ -11,6 +11,54 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.120.0 — cierre del BLOCK P81: la allowlist alcanza su universo (2026-08-22)
+
+Décima vuelta, y **no es una forma nueva**: es completar la de la vuelta pasada
+a la población que le faltaba. La allowlist positiva era correcta; su universo
+estaba incompleto en dos direcciones.
+
+**Sin push ni deploy.** La conjuntiva no está cumplida.
+
+### ① `container` era una fuente de env que nadie miraba
+
+Su `env` llega a **todos** los pasos sin pasar por el `env` directo que la
+política adjudica. Un `npm_config_script_shell` heredado desde ahí vuelve no-op
+a `test`, `typecheck` y `build` mientras el arnés certifica los mismos comandos
+escritos. Se representa en el modelo **para poder rechazarlo**.
+
+### ② El auditor de secretos estaba fuera de la población
+
+🔴 **Y esto lo había anticipado yo, sin cerrarlo.** Al censar mi propia deuda
+escribí: *«la población de pasos-gate es una lista de nombres; uno no nombrado
+entra»*. **El scanner era ese uno.** Ver la clase y no cerrar la instancia es
+exactamente lo que este dictamen cobra.
+
+Ahora la población se deriva de **todos** los pasos previos al publicador, cada
+uno con rol declarado, y **un paso sin rol es rojo**.
+
+⚠️ Setup, instalación y reporter están clasificados **explícitamente**: decir
+«éste no bloquea» es una afirmación que alguien escribió y queda en el diff. El
+reporter es el único que no bloquea —lleva `if: always()` a propósito— y esa
+excepción está declarada, no inferida.
+
+### ③ Un falso rojo, el primero de la saga
+
+La igualdad de `env` era sensible al ORDEN de las claves: invertir dos
+variables con las mismas parejas ponía el gate en rojo. En YAML el orden de un
+mapping no significa nada.
+
+🔴 **Nueve vueltas fueron de guardas que dejaban pasar de más; ésta cerraba de
+más, y también es un defecto:** un gate con rojos falsos enseña a desconfiar, y
+de un gate del que se desconfía se termina aflojando.
+
+```
+orden invertido → 66 passed (ya no cae) · swap real de valores → 2 failed
+container con env → 3 · container pelado → 3 · scanner BASH_ENV → 1
+env en instalación → 1 · paso SIN ROL → 2
+CONTROL: reporter con su if: always() legítimo → 66 passed
+replays: checkout ref 1 · test BASH_ENV 1 · strategy 1 · dos espacios 5 · recaída helper 5
+```
+
 ## 0.119.0 — cierre del BLOCK P79: allowlist positiva y checkout adjudicado (2026-08-22)
 
 Novena vuelta, y la primera que ataca **la clase entera** en vez de una
