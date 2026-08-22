@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { pasosDeWorkflow } from './yamlWorkflow';
 
 /**
  * ⭐ LA COMPUERTA DE PUBLICACIÓN · que corte de verdad, no que lo diga.
@@ -364,6 +365,10 @@ interface Paso {
   nombre: string;
   uses: string | null;
   run: string | null;
+  /** Dónde vive, por ESTRUCTURA. Reemplaza al número de línea: sobrevive a que
+   *  alguien reordene el YAML, y nombra el job — que antes ni se miraba. */
+  job: string;
+  indice: number;
   /**
    * 🔴 P55 · LOS DOS METADATOS QUE DECIDEN SI UN PASO CORRE Y SI BLOQUEA.
    *
@@ -375,20 +380,8 @@ interface Paso {
    */
   condicion: string | null;
   toleraError: string | null;
-  linea: number;
 }
 
-/** Quita el comentario YAML de una línea respetando comillas. */
-function sinComentario(l: string): string {
-  let dentro: string | null = null;
-  for (let i = 0; i < l.length; i++) {
-    const c = l[i]!;
-    if (dentro) { if (c === dentro) dentro = null; continue; }
-    if (c === '"' || c === "'") { dentro = c; continue; }
-    if (c === '#') return l.slice(0, i);
-  }
-  return l;
-}
 
 /**
  * 🔴 P60 · UN PASO SE IDENTIFICA POR SER UN ÍTEM DE `steps:`, NO POR SU PRIMERA
@@ -419,67 +412,30 @@ function sinComentario(l: string): string {
  * venga la clave que venga y en el orden que venga.
  */
 function pasosDe(yml: string): Paso[] {
-  const lineas = yml.split('\n');
-  const pasos: Paso[] = [];
+  const { pasos, indecidibles } = pasosDeWorkflow(yml);
 
-  const iSteps = lineas.findIndex((l) => /^\s*steps:\s*$/.test(sinComentario(l)));
-  if (iSteps < 0) return pasos;
-
-  // La indentación de los ítems la fija el PRIMER ítem, no una constante.
-  let sangria = -1;
-  for (let i = iSteps + 1; i < lineas.length; i++) {
-    const m = sinComentario(lineas[i]!).match(/^(\s*)-\s/);
-    if (m) { sangria = m[1]!.length; break; }
-    if (sinComentario(lineas[i]!).trim() && !/^\s/.test(lineas[i]!)) break;
+  // 🔴 FAIL-CLOSED, y es el punto del rework entero. Antes, lo que el lector no
+  // entendía DESAPARECÍA del censo; ahora detiene la lectura. Se lanza en vez
+  // de devolver una lista corta porque TODOS los tests que leen el workflow
+  // dependen de esto: uno solo que lo afirme dejaría a los otros midiendo sobre
+  // un censo mutilado.
+  if (indecidibles.length) {
+    throw new Error(
+      'el workflow tiene construcciones que este arnés NO puede afirmar:\n  ' +
+        indecidibles.join('\n  '),
+    );
   }
-  if (sangria < 0) return pasos;
 
-  /** Los renglones de cada ítem, cortados por el `- ` siguiente a la misma sangría. */
-  const bloques: { desde: number; lineas: string[] }[] = [];
-  let actual: { desde: number; lineas: string[] } | null = null;
-  for (let i = iSteps + 1; i < lineas.length; i++) {
-    const cruda = lineas[i]!;
-    const l = sinComentario(cruda);
-    const indent = l.search(/\S/);
-    if (indent >= 0 && indent < sangria && l.trim()) break; // salió de `steps:`
-    if (indent === sangria && /^\s*-\s/.test(l)) {
-      if (actual) bloques.push(actual);
-      actual = { desde: i + 1, lineas: [l.replace(/^(\s*)-\s/, '$1  ')] };
-      continue;
-    }
-    if (actual) actual.lineas.push(l);
-  }
-  if (actual) bloques.push(actual);
-
-  for (const b of bloques) {
-    const paso: Paso = { nombre: '', uses: null, run: null, condicion: null, toleraError: null, linea: b.desde };
-    // Las claves propias del paso están a la sangría del primer renglón; lo más
-    // profundo es de un sub-mapping (`with:`, `env:`) y no se mira acá.
-    const propia = b.lineas[0]!.search(/\S/);
-    let bloqueRun: string[] | null = null;
-    for (const l of b.lineas) {
-      const indent = l.search(/\S/);
-      if (bloqueRun) {
-        if (!l.trim() || indent > propia) { bloqueRun.push(l); continue; }
-        paso.run = bloqueRun.join('\n'); bloqueRun = null;
-      }
-      if (indent !== propia) continue;
-      const m = l.trim().match(/^([A-Za-z-]+):\s*(.*)$/);
-      if (!m) continue;
-      const [, clave, valor] = m;
-      if (clave === 'name') paso.nombre = valor!.trim();
-      else if (clave === 'if') paso.condicion = valor!.trim();
-      else if (clave === 'continue-on-error') paso.toleraError = valor!.trim();
-      else if (clave === 'uses') paso.uses = valor!.trim();
-      else if (clave === 'run') {
-        if (valor!.trim() === '|' || valor!.trim() === '|-') bloqueRun = [];
-        else paso.run = valor!.trim();
-      }
-    }
-    if (bloqueRun) paso.run = bloqueRun.join('\n');
-    pasos.push(paso);
-  }
-  return pasos;
+  const texto = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+  return pasos.map((p) => ({
+    nombre: texto(p.claves['name']) ?? '',
+    uses: texto(p.claves['uses']),
+    run: texto(p.claves['run']),
+    condicion: texto(p.claves['if']),
+    toleraError: texto(p.claves['continue-on-error']),
+    job: p.job,
+    indice: p.indice,
+  }));
 }
 
 /**
@@ -519,8 +475,91 @@ function pasosDe(yml: string): Paso[] {
  * cualquier cosa adentro es otra vez algo que este arnés no puede afirmar.
  */
 const PALABRA = /^[A-Za-z0-9._/=:@,+-]+$/;
-const VARIABLE = /^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$/;
-const EXPR_GITHUB_SEGURA = /^[A-Za-z0-9_.\s|'^-]+$/;
+/** `$NOMBRE` o `${NOMBRE}` — sin operadores. Ver `EXPANSION_SIMPLE`. */
+const VARIABLE = /^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})$/;
+
+/**
+ * 🔴 P60 · UNA EXPANSIÓN CON OPERADOR ES INDECIDIBLE, no una variable más.
+ *
+ * La versión anterior sólo miraba **cómo empieza** cada `$`: le alcanzaba con
+ * `${` seguido de letra. Codex plantó esto y quedó verde:
+ *
+ * ```bash
+ * bash scripts/publicar-vercel.sh app "${HOOK_APP:-$HOOK_LANDING}"
+ * ```
+ *
+ * `${VAR:-otra}` es *usá VAR y si está vacía usá otra*. **Si faltara `HOOK_APP`,
+ * ese comando publica landing DOS veces y no publica app** — y el gate no tenía
+ * cómo verlo, porque nunca parseó el cierre ni el operador. Los tests del cuerpo
+ * tampoco: fijan los dos hooks a la misma URL de prueba, así que la confusión
+ * era invisible por construcción.
+ *
+ * La respuesta NO es enumerar operadores (`:-`, `:=`, `:?`, `##`, `%%`, `//`…):
+ * ésa es la lista de formas malas que ya me costó dos vueltas. Se afirma **la
+ * forma simple** y todo lo demás es «no sé» — que acá es rojo.
+ */
+const EXPANSION_SIMPLE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
+
+/**
+ * 🔴 P60 · `${{ … }}` SE ADJUDICA POR EL DOMINIO DEL VALOR, NO POR LA SINTAXIS
+ * DEL SELECTOR.
+ *
+ * La versión anterior validaba que el interior tuviera forma de selector, así
+ * que esto pasaba:
+ *
+ * ```bash
+ * bash scripts/reportar-flaky.sh resultados.json "${{ github.event.head_commit.message }}"
+ * ```
+ *
+ * El selector es sintácticamente impecable. **El VALOR es el mensaje de commit:
+ * texto libre que escribe cualquiera que pushee**, y GitHub lo interpola ANTES
+ * de que bash vea el script. Un mensaje con comillas y `;` reescribe el comando.
+ *
+ * Así que la pregunta correcta no es «¿tiene forma de selector?» sino **«¿de
+ * dónde sale ese valor?»**. Sólo se aceptan orígenes cuyo dominio es acotado y
+ * no lo escribe quien empuja el commit. Todo lo demás —`github.event.*`,
+ * `inputs.*`, `env.*`— es contenido libre y queda indecidible.
+ *
+ * ⚠️ `secrets.*` entra ACÁ, y no porque su valor sea inofensivo: entra porque el
+ * repo ya decidió que los hooks viajan por `secrets` y hay un test aparte que
+ * lo fija. Un secreto igual no debería interpolarse sin comillas — por eso esto
+ * sólo se consulta DENTRO de comillas dobles.
+ */
+const SELECTORES_DE_DOMINIO_ACOTADO: readonly RegExp[] = [
+  /^secrets\.[A-Za-z_][A-Za-z0-9_]*$/,
+  /^github\.(sha|ref|ref_name|repository|run_id|run_number|workflow|job|actor)$/,
+  // 🔴 `event.before`/`event.after` SÍ entran, y son la excepción que obliga a
+  // pensar el criterio en vez de escribir `github.event.*`: su valor es un SHA
+  // —40 hexadecimales que produce Git, no una persona—. `event.head_commit.message`
+  // queda AFUERA por lo mismo al revés: lo escribe quien pushea. **La familia
+  // `github.event` no se adjudica entera: se adjudica campo por campo.**
+  /^github\.event\.(before|after)$/,
+  /^github\.event\.pull_request\.(base|head)\.sha$/,
+  /^runner\.(os|arch|temp)$/,
+  /^job\.status$/,
+];
+
+/**
+ * Un literal `'…'` de una expresión de GitHub: dominio acotado por definición,
+ * lo escribió quien editó el workflow y está a la vista en el diff.
+ */
+const LITERAL_GITHUB = /^'[^']*'$/;
+
+/**
+ * ¿El interior de un `${{ … }}` tiene dominio acotado?
+ *
+ * Se admite una **disyunción** (`a || b || 'literal'`) porque el `ci.yml` real
+ * la usa —`github.event.before || 'HEAD^'`, el fallback del primer push de una
+ * rama— y **cada término se adjudica por separado**: la disyunción no es más
+ * confiable que su término más flojo.
+ */
+function expresionDeDominioAcotado(dentro: string): boolean {
+  const terminos = dentro.split('||').map((t) => t.trim());
+  if (terminos.some((t) => !t)) return false;
+  return terminos.every(
+    (t) => LITERAL_GITHUB.test(t) || SELECTORES_DE_DOMINIO_ACOTADO.some((re) => re.test(t)),
+  );
+}
 
 /** Parte un comando en tokens respetando comillas. `null` si las comillas no cierran. */
 function tokens(cmd: string): string[] | null {
@@ -541,17 +580,37 @@ function tokens(cmd: string): string[] | null {
 
 /** El contenido de unas comillas dobles, ¿es sólo texto, `$VAR` y `${{ … }}`? */
 function dobleComillaSegura(cuerpo: string): boolean {
-  let resto = cuerpo;
-  // Las expresiones de GitHub se sacan primero, verificando su interior.
+  // Las expresiones de GitHub se sacan primero, adjudicando su DOMINIO.
   const expr = /\$\{\{([^}]*)\}\}/g;
   let m: RegExpExecArray | null;
   while ((m = expr.exec(cuerpo)) !== null) {
-    if (!EXPR_GITHUB_SEGURA.test(m[1]!)) return false;
+    if (!expresionDeDominioAcotado(m[1]!.trim())) return false;
   }
-  resto = resto.replace(expr, '');
+  const resto = cuerpo.replace(expr, '');
   if (/[`\\]/.test(resto)) return false;
-  // Lo que quede con `$` tiene que ser una variable simple.
-  return !/\$(?!\{?[A-Za-z_])/.test(resto) && !/\$\(/.test(resto);
+  if (/\$\(/.test(resto)) return false;
+
+  /**
+   * 🔴 CADA `$` SE PARSEA ENTERO, no se mira sólo su comienzo. Es el punto 2
+   * del cierre mínimo: `${VAR:-otra}` empieza igual que `${VAR}` y significa
+   * otra cosa. Se recorre cada expansión hasta su cierre y se exige la forma
+   * simple; cualquier operador adentro cae como indecidible sin necesidad de
+   * que este arnés sepa qué hace ese operador.
+   */
+  for (let i = 0; i < resto.length; i++) {
+    if (resto[i] !== '$') continue;
+    if (resto[i + 1] === '{') {
+      const cierre = resto.indexOf('}', i);
+      if (cierre < 0) return false; // llave sin cerrar: no se puede afirmar
+      if (!EXPANSION_SIMPLE.test(resto.slice(i, cierre + 1))) return false;
+      i = cierre;
+      continue;
+    }
+    const simple = /^\$[A-Za-z_][A-Za-z0-9_]*/.exec(resto.slice(i));
+    if (!simple) return false; // `$` suelto, `$1`, `$?`, `$@`…
+    i += simple[0].length - 1;
+  }
+  return true;
 }
 
 /**
@@ -616,9 +675,22 @@ function comandosDe(run: string): string[] {
  * ORDEN DE RECORRIDO, acá del ORDEN DE LAS CLAVES. **Las dos veces la
  * implementación apoyaba una conclusión en algo que el formato no garantiza.**
  *
- * Los casos de abajo incluyen **dos claves que ningún comentario de este archivo
- * nombra** (`id`, `timeout-minutes`): si el parser se apoyara en una lista de
- * primeras claves conocidas, ésas volverían a pasar.
+ * 🔴 **ACÁ DECÍA QUE `id` Y `timeout-minutes` ERAN «claves que ningún comentario
+ * de este archivo nombra», Y ERA FALSO EN LA FRASE MISMA QUE LAS NOMBRABA.** Lo
+ * marcó Codex en el P60 (P3); sólo `working-directory` cumplía la descripción.
+ *
+ * **El criterio era además insostenible por construcción:** en un archivo que
+ * documenta su propio diseño, explicar por qué una clave importa la convierte en
+ * nombrada. Una propiedad que se destruye al escribirla no puede ser el
+ * fundamento de nada.
+ *
+ * **El fundamento correcto es otro y sí es verificable: el parser NO CONSULTA
+ * NINGUNA LISTA DE CLAVES.** Reconoce el ítem por su estructura y lee el mapping
+ * entero, así que la primera clave le da igual — se llame como se llame, esté
+ * nombrada acá o no. Lo que acredita eso no es la novedad de un nombre, sino los
+ * casos estructurales de `yamlWorkflow.test.ts`: el guion solo y el segundo job.
+ * Los de abajo son la cobertura de las formas que ya se vieron, no la prueba de
+ * la propiedad.
  */
 describe('🔴 el paso se reconoce por ser ítem de `steps:`', () => {
   const armar = (primerPaso: string) => `
@@ -636,7 +708,9 @@ ${primerPaso}
     ['continue-on-error — el contraejemplo de Codex', '      - continue-on-error: false\n        run: npx vercel --prod'],
     ['if', '      - if: always()\n        run: npx vercel --prod'],
     ['env', '      - env:\n          X: "1"\n        run: npx vercel --prod'],
-    // ── de acá abajo, claves que NINGÚN comentario de este archivo nombra.
+    // Las tres de abajo se agregaron para ampliar la cobertura de primeras
+    // claves. NO son «claves que nadie nombró» —este archivo las nombra acá
+    // mismo—: la propiedad la acreditan los casos estructurales del parser.
     ['id', '      - id: escondido\n        run: npx vercel --prod'],
     ['timeout-minutes', '      - timeout-minutes: 5\n        run: npx vercel --prod'],
     ['working-directory', '      - working-directory: .\n        run: npx vercel --prod'],
@@ -675,7 +749,12 @@ describe('🔴 la gramática afirma lo simple, no enumera lo complejo', () => {
     ['sustitución de proceso (escritura)', 'bash x.sh >(npx vercel --prod)'],
     ['sustitución de comando', 'bash x.sh $(npx vercel --prod)'],
     ['backticks', 'bash x.sh `npx vercel --prod`'],
-    // ── de acá para abajo, formas que NINGÚN comentario de este archivo nombra.
+    // ── Las de abajo NO se enumeran para que la gramática las rechace: la
+    // gramática no las conoce y no las necesita conocer. Están para MEDIR que
+    // «afirmo lo simple» cubre formas que nunca se pensaron una por una.
+    // 🔴 Acá decía «formas que NINGÚN comentario de este archivo nombra», y era
+    // falso por la misma razón que en el bloque de las claves: nombrarlas para
+    // explicarlas las nombra. Corregido tras el P3 del P60.
     ['expansión con separador', 'bash x.sh ${IFS}algo'],
     ['glob', 'bash x.sh archivo*.json'],
     ['segundo plano', 'bash x.sh a&b'],
@@ -737,30 +816,62 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
     const pasos = pasosDe(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
     expect(pasos.length, 'no se parsearon pasos: el censo mediría en vacío').toBeGreaterThan(8);
 
-    const ADJUDICADOS: RegExp[] = [
-      /^actions\/(checkout|setup-node)@/,          // traer el repo y node
-      /^bash scripts\/auditar-secretos\.sh\b/,      // gate de secretos
-      /^npm ci$/,                                   // dependencias
-      /^node scripts\/verificar-mirror\.mjs\b/,     // gate del espejo
-      /^npm test$/, /^npm run typecheck$/, /^npm run build$/,
-      /^npx playwright install\b/, /^npx playwright test$/,
-      /^bash scripts\/reportar-flaky\.sh\b/,        // informa, no bloquea
-      /^bash scripts\/publicar-vercel\.sh\b/,       // LA publicación
+    /**
+     * 🔴 P60 · SE ADJUDICA POR TOKENS EXACTOS, NO POR PREFIJO DE CADENA.
+     *
+     * La lista anterior usaba `/^bash scripts\/reportar-flaky\.sh\b/`, y `\b`
+     * **no delimita ante un guion**: entre `h` y `-` hay frontera de palabra,
+     * así que `bash scripts/reportar-flaky.sh-alternativo` quedaba adjudicado
+     * como si fuera el script conocido.
+     *
+     * ⚠️ Es la MISMA clase que ya cerré en la allowlist de dominios —comparar
+     * por prefijo de cadena en vez de por la unidad real, que allá era el
+     * origen y acá es el token—. Se repitió en otro archivo y con otra
+     * herramienta: la lección no había viajado.
+     *
+     * Cada entrada es la secuencia de tokens con la que el comando tiene que
+     * EMPEZAR, comparados uno a uno con `===`. Los argumentos posteriores
+     * quedan libres, y de su contenido responde `noAfirmable`.
+     */
+    const ADJUDICADOS: readonly (readonly string[])[] = [
+      ['npm', 'ci'], // dependencias
+      ['npm', 'test'],
+      ['npm', 'run', 'typecheck'],
+      ['npm', 'run', 'build'],
+      ['npx', 'playwright', 'install'],
+      ['npx', 'playwright', 'test'],
+      ['bash', 'scripts/auditar-secretos.sh'], // gate de secretos
+      ['node', 'scripts/verificar-mirror.mjs'], // gate del espejo
+      ['bash', 'scripts/reportar-flaky.sh'], // informa, no bloquea
+      ['bash', 'scripts/publicar-vercel.sh'], // LA publicación
     ];
+    /** `uses:` no es un comando: se adjudica por la acción exacta y su versión. */
+    const USES_ADJUDICADOS = /^actions\/(checkout|setup-node)@[A-Za-z0-9._-]+$/;
+
+    const adjudicaComando = (cmd: string): boolean => {
+      const ts = tokens(cmd);
+      if (ts === null) return false;
+      return ADJUDICADOS.some((patron) => patron.every((tok, k) => ts[k] === tok));
+    };
     const sinAdjudicar: string[] = [];
     for (const p of pasos) {
-      const trozos = p.uses ? [p.uses] : comandosDe(p.run ?? '');
-      if (!trozos.length) { sinAdjudicar.push(`línea ${p.linea}: paso sin \`run\` ni \`uses\``); continue; }
+      const donde = `${p.job}.steps[${p.indice}]`;
+      if (p.uses !== null) {
+        if (!USES_ADJUDICADOS.test(p.uses)) sinAdjudicar.push(`${donde}: uses \`${p.uses}\``);
+        continue;
+      }
+      const trozos = comandosDe(p.run ?? '');
+      if (!trozos.length) { sinAdjudicar.push(`${donde}: paso sin \`run\` ni \`uses\``); continue; }
       for (const t of trozos) {
         // 🔴 Primero lo indecidible: un prefijo permitido NO adjudica lo que el
         // comando evalúe adentro. El orden importa — si se mirara el allowlist
         // primero, `bash permitido.sh "$(peligroso)"` pasaría por el prefijo.
         const opaco = noAfirmable(t);
         if (opaco) {
-          sinAdjudicar.push(`línea ${p.linea}: ${opaco} → \`${t}\``);
+          sinAdjudicar.push(`${donde}: ${opaco} → \`${t}\``);
           continue;
         }
-        if (!ADJUDICADOS.some((re) => re.test(t))) sinAdjudicar.push(`línea ${p.linea}: \`${t}\``);
+        if (!adjudicaComando(t)) sinAdjudicar.push(`${donde}: \`${t}\``);
       }
     }
     expect(
@@ -831,10 +942,10 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
       const cmds = comandosDe(p.run ?? '');
       if (!GATES.some((re) => cmds.some((c) => re.test(c)))) continue;
       if (p.condicion !== null) {
-        problemas.push(`línea ${p.linea}: el gate lleva \`if: ${p.condicion}\` — puede no ejecutarse`);
+        problemas.push(`${p.job}.steps[${p.indice}]: el gate lleva \`if: ${p.condicion}\` — puede no ejecutarse`);
       }
       if (p.toleraError !== null && p.toleraError !== 'false') {
-        problemas.push(`línea ${p.linea}: \`continue-on-error: ${p.toleraError}\` — su fallo NO frena la publicación`);
+        problemas.push(`${p.job}.steps[${p.indice}]: \`continue-on-error: ${p.toleraError}\` — su fallo NO frena la publicación`);
       }
     }
     // Control positivo: si ningún paso matcheara como gate, el bucle no miraría
