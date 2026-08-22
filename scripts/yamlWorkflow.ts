@@ -55,6 +55,13 @@ export interface JobYaml {
   readonly pasos: readonly PasoYaml[];
   /** `needs`, normalizado a lista. Vacío = el job no espera a nadie. */
   readonly necesita: readonly string[];
+  /**
+   * El `if:` DEL JOB — P71. La condición efectiva de un paso es la suya Y la de
+   * su job: Actions no corre el job si la condición del job es falsa, y la
+   * corre igual si es `always()`. Mirar sólo `step.if` deja la mitad afuera, y
+   * fue por ahí que un publicador con `job.if: always()` pasó verde.
+   */
+  readonly condicion: string | null;
 }
 
 export interface Workflow {
@@ -103,7 +110,14 @@ export function leerWorkflow(texto: string): Workflow {
       // declara `uses` —y entonces se adjudica ese reusable como cualquier otro
       // camino ejecutable— o no hay contrato que lo explique y es rojo.
       if (typeof usa === 'string') {
-        jobs.push({ nombre, usa, secretos: job['secrets'], pasos: [], necesita });
+        jobs.push({
+          nombre,
+          usa,
+          secretos: job['secrets'],
+          pasos: [],
+          necesita,
+          condicion: typeof job['if'] === 'string' ? job['if'] : null,
+        });
       } else {
         problemas.push(
           `el job «${nombre}» no tiene \`steps\` ni \`uses\`: no se puede adjudicar qué ejecuta`,
@@ -123,7 +137,14 @@ export function leerWorkflow(texto: string): Workflow {
       }
       pasos.push({ job: nombre, indice, claves: paso });
     });
-    jobs.push({ nombre, usa: null, secretos: job['secrets'], pasos, necesita });
+    jobs.push({
+      nombre,
+      usa: null,
+      secretos: job['secrets'],
+      pasos,
+      necesita,
+      condicion: typeof job['if'] === 'string' ? job['if'] : null,
+    });
   }
   return { jobs, problemas };
 }

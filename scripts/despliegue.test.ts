@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -171,16 +171,128 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
     ).toContain('Publicar en Vercel');
   });
 
-  it('🔴 las tres condiciones están en el `if`', () => {
-    const linea = ci.split('\n').find((l) => l.trim().startsWith('if:') && l.includes('success()'));
-    expect(linea, 'el paso de publicar no condiciona por success()').toBeDefined();
-    expect(linea).toContain("github.event_name == 'push'");
-    expect(linea).toContain("github.ref == 'refs/heads/main'");
+  /**
+   * 🔴 P71 · LA CONDICIÓN SE CERTIFICA DESDE EL MODELO, NO POR SUBSTRINGS.
+   *
+   * Esto buscaba **una línea cualquiera** del archivo que empezara con `if:` y
+   * contuviera los tres textos. No la ligaba al publicador ni miraba el `if`
+   * del JOB. Codex lo rompió de dos formas, las dos con 55/55 verde:
+   *
+   *   ① `always() || (success() && … push … main)` — SIEMPRE verdadero, publica
+   *      tras un gate rojo o fuera de push-main, y **conserva los tres textos**;
+   *   ② el publicador movido a un job con `needs: build` + `if: always()`, con
+   *      condición permisiva en su paso, **y la línea buena dejada de SEÑUELO**
+   *      en otro paso del archivo.
+   *
+   * **El segundo es el que prueba que faltaba ASOCIACIÓN, no una variante
+   * sintáctica**: el texto correcto estaba ahí, en el paso equivocado.
+   *
+   * 🔴 **Se exige la expresión CANÓNICA EXACTA, y es una decisión, no pereza.**
+   * Validar «de forma cerrada» sin exigir literalidad requeriría un evaluador de
+   * expresiones de GitHub — la clase de intérprete a medias que este arnés viene
+   * cerrando hace catorce vueltas, y que fue justo lo que el mutante ① explotó:
+   * los tres textos presentes dentro de una expresión que significa lo opuesto.
+   *
+   * El costo está aceptado: cambiar la condición a algo equivalente pone esto
+   * rojo y hay que venir a decidirlo a mano. **En el gate que decide si se
+   * publica producción, esa fricción es la función, no el efecto secundario.**
+   */
+  const CONDICION_CANONICA =
+    "success() && github.event_name == 'push' && github.ref == 'refs/heads/main'";
+
+  it('🔴 CADA publicador lleva la condición canónica, y su JOB no la afloja', () => {
+    const { jobs, problemas } = leerWorkflow(ci);
+    expect(problemas, 'el modelo no pudo adjudicar el workflow').toEqual([]);
+
+    const publicadores = jobs.flatMap((j) =>
+      j.pasos
+        .filter((p) =>
+          comandosDe(texto(p.claves['run']) ?? '').some((c) =>
+            /^bash scripts\/publicar-vercel\.sh/.test(c),
+          ),
+        )
+        .map((p) => ({ paso: p, job: j })),
+    );
+    // Control positivo: sin publicadores esto pasaría en vacío.
+    expect(publicadores.length, 'no se encontró ningún publicador: mediría en vacío')
+      .toBeGreaterThan(0);
+
+    const fallas: string[] = [];
+    for (const { paso, job } of publicadores) {
+      const donde = `${paso.job}.steps[${paso.indice}]`;
+      const condicionDelPaso = texto(paso.claves['if']);
+      if (condicionDelPaso === null) {
+        fallas.push(`${donde}: publica SIN \`if:\` — se dispararía en cualquier evento`);
+      } else if (condicionDelPaso.trim() !== CONDICION_CANONICA) {
+        fallas.push(
+          `${donde}: la condición no es la canónica\n     esperada: ${CONDICION_CANONICA}\n     hallada:  ${condicionDelPaso.trim()}`,
+        );
+      }
+      // El `if` del JOB también decide si el paso corre. Cualquier condición a
+      // ese nivel es roja: no se interpreta, se rechaza.
+      if (job.condicion !== null) {
+        fallas.push(
+          `${donde}: su job «${job.nombre}» lleva \`if: ${job.condicion}\` — puede aflojar la compuerta`,
+        );
+      }
+    }
+    expect(fallas, `la compuerta del publicador no está cerrada:\n  ${fallas.join('\n  ')}`)
+      .toEqual([]);
   });
 
-  it('🔴 los hooks viajan por `secrets`, nunca escritos en el YAML', () => {
-    expect(ci).toContain('${{ secrets.VERCEL_HOOK_APP }}');
-    expect(ci).toContain('${{ secrets.VERCEL_HOOK_LANDING }}');
+  /**
+   * 🔴 P71 · QUÉ SE DISPARA, CUÁNTAS VECES Y CON QUÉ SECRETO — por multiconjunto.
+   *
+   * Esto sólo exigía que ambos selectores aparecieran **en algún lugar** del
+   * YAML. Codex lo rompió con un swap que deja las dos referencias presentes:
+   *
+   * ```yaml
+   * HOOK_APP: ${{ secrets.VERCEL_HOOK_LANDING }}     # App se dispara 2 veces
+   * HOOK_LANDING: ${{ secrets.VERCEL_HOOK_LANDING }} # Landing NINGUNA
+   * UNUSED_HOOK_APP: ${{ secrets.VERCEL_HOOK_APP }}  # la referencia «presente»
+   * ```
+   *
+   * Y con una TERCERA invocación en el mismo `run:`, que pasaba porque los
+   * censos cuentan pasos con `some` y no invocaciones.
+   *
+   * **La corrección es de tipo de dato: se deriva el MULTICONJUNTO exacto de
+   * invocaciones y de mappings, y se compara con el esperado sin extras.** Un
+   * `some` responde «¿existe alguno?»; acá la pregunta es «¿cuáles y cuántos?».
+   */
+  it('🔴 exactamente DOS disparos, cada uno con SU proyecto y SU secreto', () => {
+    const { jobs } = leerWorkflow(ci);
+    const publicadores = jobs.flatMap((j) =>
+      j.pasos.filter((p) =>
+        comandosDe(texto(p.claves['run']) ?? '').some((c) =>
+          /^bash scripts\/publicar-vercel\.sh/.test(c),
+        ),
+      ),
+    );
+    expect(publicadores.length, 'no hay publicador: mediría en vacío').toBe(1);
+    const paso = publicadores[0]!;
+
+    // ① el multiconjunto de invocaciones, en orden y sin extras
+    const invocaciones = comandosDe(texto(paso.claves['run']) ?? '')
+      .filter((c) => /^bash scripts\/publicar-vercel\.sh/.test(c))
+      .map((c) => tokens(c)?.slice(2).join(' ') ?? c);
+    expect(
+      invocaciones,
+      'los disparos no son exactamente los dos esperados (ni de más, ni cambiados)',
+    ).toEqual(['app "$HOOK_APP"', 'landing "$HOOK_LANDING"']);
+
+    // ② el `env` del MISMO paso, leído estructuralmente y exacto
+    const env = paso.claves['env'];
+    expect(env, 'el paso publicador no declara `env`').toBeDefined();
+    expect(
+      env,
+      'el mapeo de secretos no es exacto: un swap deja ambas referencias presentes y publica mal',
+    ).toEqual({
+      HOOK_APP: '${{ secrets.VERCEL_HOOK_APP }}',
+      HOOK_LANDING: '${{ secrets.VERCEL_HOOK_LANDING }}',
+    });
+  });
+
+  it('🔴 ningún hook escrito a mano en el YAML', () => {
     expect(ci, 'hay una URL de hook escrita a mano').not.toMatch(/api\/deploy\/prj_/);
     expect(ci, 'hay un hook de vercel hardcodeado').not.toMatch(/vercel\.com\/v1\/integrations/);
   });
@@ -273,17 +385,36 @@ describe('EJECUTANDO el `run:` del workflow · con curl sustituido', () => {
   /** El cuerpo literal del `run:` del paso de publicación, leído del modelo. */
   const cuerpo = (texto(publicadorDelModelo.paso?.claves['run']) ?? '').trimEnd();
 
-  const URL_FALSA = 'https://api.vercel.com/v1/integrations/deploy/prj_FALSO/tokenSECRETO123';
+  /**
+   * 🔴 P71 · DOS DESTINOS DISTINGUIBLES, y no es un detalle de prolijidad.
+   *
+   * Acá los dos hooks recibían **la MISMA url falsa**, así que la sonda no podía
+   * acreditar qué variable alimenta qué proyecto: un swap
+   * (`HOOK_APP: secrets.VERCEL_HOOK_LANDING`) disparaba App dos veces y Landing
+   * ninguna, y todo seguía verde.
+   *
+   * Con destinos distintos, el doble de `curl` **registra a dónde fue cada
+   * llamada** y el test afirma el multiconjunto exacto: una por proyecto, al
+   * destino que le corresponde.
+   */
+  const URL_APP = 'https://api.vercel.com/v1/integrations/deploy/prj_APP/tokenSECRETO_APP';
+  const URL_LANDING = 'https://api.vercel.com/v1/integrations/deploy/prj_LAND/tokenSECRETO_LAND';
 
   /**
    * Corre el cuerpo con un `curl` doble adelante en el PATH.
    * `codigo` es lo que el doble imprime; `salida` con qué exit code termina.
+   * `destinos` son las URLs que el doble recibió, en orden.
    */
-  function correrCuerpo(codigo: string, salida: number): Promise<{ code: number; out: string }> {
+  function correrCuerpo(
+    codigo: string,
+    salida: number,
+  ): Promise<{ code: number; out: string; destinos: string[] }> {
     const dir = mkdtempSync(join(tmpdir(), 'payme-hook-'));
+    const registro = join(dir, 'destinos.txt');
+    // El doble anota su ÚLTIMO argumento —la URL— antes de contestar.
     writeFileSync(
       join(dir, 'curl'),
-      `#!/usr/bin/env bash\nprintf '%s' "${codigo}"\nexit ${salida}\n`,
+      `#!/usr/bin/env bash\nfor a in "$@"; do :; done\nprintf '%s\\n' "$a" >> ${JSON.stringify(registro)}\nprintf '%s' "${codigo}"\nexit ${salida}\n`,
       { mode: 0o755 },
     );
     writeFileSync(join(dir, 'cuerpo.sh'), cuerpo);
@@ -297,14 +428,17 @@ describe('EJECUTANDO el `run:` del workflow · con curl sustituido', () => {
           env: {
             ...process.env,
             PATH: `${dir}:${process.env.PATH ?? ''}`,
-            HOOK_APP: URL_FALSA,
-            HOOK_LANDING: URL_FALSA,
+            HOOK_APP: URL_APP,
+            HOOK_LANDING: URL_LANDING,
           },
         },
         (err, out, errOut) => {
+          const destinos = existsSync(registro)
+            ? readFileSync(registro, 'utf8').split('\n').filter(Boolean)
+            : [];
           rmSync(dir, { recursive: true, force: true });
           const code = err && typeof err.code === 'number' ? err.code : err ? -1 : 0;
-          resolver({ code, out: `${out}${errOut}` });
+          resolver({ code, out: `${out}${errOut}`, destinos });
         },
       );
     });
@@ -317,12 +451,18 @@ describe('EJECUTANDO el `run:` del workflow · con curl sustituido', () => {
     expect(cuerpo, 'alguien le puso un escape que anula el corte').not.toMatch(/\|\|\s*true|;\s*exit 0/);
   });
 
-  it('✅ 200 · el paso termina en 0 y publica los DOS proyectos', async () => {
+  it('✅ 200 · UNA llamada por proyecto, cada una a SU destino', async () => {
     const r = await correrCuerpo('200', 0);
     expect(r.code, `el paso falló con dos hooks sanos:\n${r.out}`).toBe(0);
-    expect(r.out).toContain('app');
-    expect(r.out, 'no llegó a disparar landing: el `-e` cortó antes o falta la línea')
-      .toContain('landing');
+    /**
+     * 🔴 El multiconjunto EXACTO, no «aparecen las palabras app y landing».
+     * Un swap de secretos manda las dos llamadas al mismo destino y la versión
+     * anterior de este test no lo veía; una tercera invocación tampoco.
+     */
+    expect(
+      r.destinos,
+      `los disparos no fueron uno por proyecto a su destino:\n${r.destinos.join('\n')}`,
+    ).toEqual([URL_APP, URL_LANDING]);
   });
 
   for (const codigo of ['401', '500'] as const) {
@@ -1258,6 +1398,11 @@ describe('🔴 js-yaml vive SÓLO en el instrumento de tests', () => {
      * orden del CI, ni de otro test, ni de que alguien haya corrido un build.
      */
     const dir = mkdtempSync(join(tmpdir(), 'payme-bundle-'));
+    // 🔴 `try/finally` — residual de higiene del P71. Si algo falla ANTES del
+    // `rmSync`, el tmpdir quedaba tirado. No era un falso verde (la prueba
+    // queda roja igual), pero un test que ensucia el disco cuando falla es un
+    // test que la gente empieza a evitar correr.
+    try {
     const build = await new Promise<{ code: number; out: string }>((ok) => {
       execFile(
         'npx',
@@ -1284,7 +1429,9 @@ describe('🔴 js-yaml vive SÓLO en el instrumento de tests', () => {
     // `js-yaml` deja rastros propios; se busca su firma además de su nombre,
     // que podría no sobrevivir a la minificación.
     const conYaml = archivos.filter((f) => /YAMLException|js-yaml/.test(readFileSync(f, 'utf8')));
-    rmSync(dir, { recursive: true, force: true });
     expect(conYaml, `js-yaml llegó a un artefacto servido:\n  ${conYaml.join('\n  ')}`).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }, 120_000);
 });
