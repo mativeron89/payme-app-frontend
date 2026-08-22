@@ -11,6 +11,54 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.117.0 — cierre del BLOCK P75: una sola gramática para el publicador (2026-08-22)
+
+Séptima vuelta, y el primer hallazgo no es una forma que faltara: es una
+**contradicción interna** del arnés.
+
+**Sin push ni deploy.** La conjuntiva no está cumplida.
+
+### ① Dos vistas del mismo objeto, con gramáticas distintas
+
+El censo general tokeniza cualquier whitespace; las **cinco** guardas que
+identifican al publicador exigían un espacio ASCII exacto. La cuña entró justo
+en esa junta:
+
+```yaml
+- run: bash  scripts/publicar-vercel.sh app "$HOOK_APP"   ← DOS espacios
+```
+
+El censo lo daba por **permitido** y las cinco guardas **no lo veían como
+publicador**. Un publicador ejecutable, allowlisteado, sin gobierno, que además
+podía dispararse fuera de push-main.
+
+🔴 **Es la misma clase que atravesó toda la jornada** —la sombra que una sección
+pedía con un navy y la vecina con otro, el espejo que declaraba una población y
+el gate otra— **pero cometida dentro de un solo archivo, entre dos partes mías.**
+
+La respuesta no fue agregarle `\s+` al regex: fue que exista **una sola
+definición**, derivada del mismo tokenizado del censo, y que los seis lugares la
+llamen. Se nota en el mutante: el de dos espacios ahora mata **5 tests**, uno por
+consumidor. Antes no mataba ninguno.
+
+### ② `working-directory` cambia el ejecutable sin cambiar la evidencia
+
+Actions resolvería `landing/scripts/publicar-vercel.sh` mientras la sonda ejecuta
+el de la raíz. **Certificaría un script que el CI no corre.** Rechazado
+fail-closed en los tres niveles.
+
+### ③ `continue-on-error`: sólo ausencia o el booleano `false`
+
+La cadena `'false'` se aceptaba como si fuera el booleano. No lo es: el schema
+del runner lo tipa boolean, así que produce un workflow **inválido**. No es
+bypass, pero el arnés decía «válido y seguro» sobre algo que ni siquiera corre.
+
+```
+dos espacios → 5 failed · working-directory paso/job/workflow → 1/1/1
+continue-on-error 'false' → 1 · sano → 56 passed
+replays vivos: strategy 1 · c-o-e 1 · if:true 1 · if siempre 1 · swap 1 · tercera 2
+```
+
 ## 0.116.0 — cierre del BLOCK P73: la ejecución del publicador, no su declaración (2026-08-22)
 
 Sexta vuelta. El patrón es el mismo un nivel más adentro: **el modelo tenía las
