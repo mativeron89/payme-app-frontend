@@ -11,6 +11,77 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.113.0 — cierre del BLOCK P65: el instrumento sobre YAML real (2026-08-21)
+
+Tercera generación del centinela de despliegue, y la primera que no pelea contra
+el formato. **Los tres hallazgos del P65 no eran de parseo: eran de modelo** —qué
+población se recorre, qué acredita causalidad, dónde está la frontera de
+interpolación—, así que un parser propio mejor no los habría cerrado. Textual del
+dictamen: *«no recomiendo más búsquedas de substrings»*.
+
+**Sin push ni deploy.** La conjuntiva no está cumplida.
+
+### La dependencia, y su límite verificado
+
+`js-yaml@4.1.0` + `@types/js-yaml@4.0.9`, **versión exacta, devDependency**.
+Autorizada por Mati —etiqueta literal «Sí, librería real en tests
+(Recomendada)»— y **confirmada por él directamente a esta sesión antes de
+instalarla**: el `CLAUDE.md` prohíbe dependencias nuevas sin su OK previo, y un
+relay de otra sesión no es ese OK.
+
+`npm ls` limpio, sin UNMET ni duplicados. Y el «sólo en tests» **está verificado,
+no prometido**: dos tests barren `src/` y `landing/` por imports y los `dist*`
+por la firma del módulo. Una promesa así se rompe sin que nadie se entere.
+
+### ① Población · un reusable job es un camino ejecutable
+
+`jobs.<id>.uses` llama a un workflow ajeno con sus secretos y **no tiene
+`steps`**. El lector hacía `continue`: un publicador reusable quedaba fuera del
+censo con 61/61 verde. Ahora un job sin `steps` **falla cerrado** salvo que
+declare `uses`, y ese `uses` se adjudica.
+
+### ② Causalidad · `needs`, jamás la posición en el archivo
+
+**En Actions dos jobs sin `needs` corren en paralelo.** Codex movió el publicador
+a un segundo job posterior: quedó corriendo sin esperar test, build ni
+Playwright, con el focal verde. Un `if: success()` no crea la arista — evalúa el
+estado de sus dependencias, y sin `needs` no tiene ninguna.
+
+Ahora la pregunta la responde el modelo: mismo job con índice menor, o job del
+que se depende **transitivamente**.
+
+### ③ Frontera · un selector admitido no vuelve seguro a su valor
+
+`github.workflow` entraba por el nombre del selector; su valor es el `name:` del
+propio workflow, o sea texto editable:
+
+```yaml
+name: 'CI"; npx vercel --prod; echo "'
+```
+
+Actions interpola antes que bash y el `run` termina con un comando de más. **La
+lista se achicó a lo demostrable** —SHAs de Git—; `github.ref`, `ref_name`,
+`runner.*` y `secrets.*` salen de la interpolación directa y viajan por `env:` +
+`"$VAR"`, como el `ci.yml` ya pasa los hooks. **Sacar tres selectores es más
+chico que agregar una regex, y es lo que cierra la clase.**
+
+### Los tres caminos quedaron como tests permanentes
+
+Codex los plantó como sondas manuales y las retiró. Acá el mutante se construye
+**en memoria sobre el `ci.yml` real**: el archivo no se toca y la guarda queda
+viva.
+
+```
+saltear el reusable → 3 failed · causalidad falsa → 3 failed
+volver github.workflow → 3 failed · sano → 61 passed
+```
+
+### Un efecto que ningún punto del dictamen nombra
+
+Con YAML real los escalares **llegan tipados**: `continue-on-error: true` es el
+booleano `true`, no `'true'`. El adaptador lo devolvía como `null` y el gate que
+mira si un paso tolera errores lo leía como «no declarado». Apareció al correrlo.
+
 ## 0.112.0 — cierre del BLOCK P60: el workflow se lee por estructura (2026-08-21)
 
 Segundo dictamen de Codex sobre este repo, sobre el lote **ya publicado**
