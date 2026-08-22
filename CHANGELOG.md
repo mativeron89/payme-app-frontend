@@ -11,6 +11,66 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.114.0 — cierre del BLOCK P68: un solo validador integrado (2026-08-21)
+
+**El patrón, que es la lección del lote entero:** la vuelta 13 arregló la
+**representación** —el parser YAML real— y dejó a los **consumidores** mirando la
+estructura vieja o hardcodeando la semántica. Un test del modelo puro puede
+estar verde mientras el gate integrado no usa nada de lo que el modelo aprendió.
+
+**Sin push ni deploy.** La conjuntiva no está cumplida.
+
+### ① La medición de bundles era un RACE, y lo destapó mi propio intermitente
+
+El test exigía que existiera un `dist*` —a propósito: un salteo silencioso
+habría disfrazado de verde una medición ausente—. Pero `ci.yml` corre `npm test`
+**antes** del build, así que en un checkout limpio ese artefacto no existe. Codex
+lo reprodujo en clon fresco: **60 pass / 1 fail**.
+
+⚠️ **La suite pasaba en verde por casualidad.** Otro test crea un `dist/` para lo
+suyo y el scheduling de Vitest lo ponía antes; **la medición dependía de un
+side-effect ajeno**, no de un prerrequisito declarado.
+
+🔴 **Y los 3 e2e que fallaron en la primera corrida de `0.113.0` y pasaron en la
+segunda eran el mismo fenómeno visto de lejos: orden, no ruido.** Declararlos
+como roja sin causa —en vez de esconderlos detrás de dos verdes— es lo que
+permitió que el auditor los convirtiera en un hallazgo con causa. **Es la mejor
+razón que tengo para no volver a maquillar un intermitente.**
+
+Ahora el test **construye su propio artefacto** en un tmpdir. Verificado en la
+condición exacta del dictamen —sin `dist*` previo—: focal 55/55, full
+**1272/1272**.
+
+### ② El censo mira JOBS, no sólo pasos
+
+El parser ya representaba `jobs.<id>.uses` —un reusable workflow, que ejecuta
+con sus secretos y no tiene `steps`— y había un test del modelo puro que lo
+probaba. **El censo del `ci.yml` real volvía a aplanar `jobs[].pasos`.**
+
+### ③ Todos los publicadores, no el primero
+
+Un `.find(...)` adjudicaba uno y dejaba libre a cualquier otro. Ahora cada
+publicador responde por sus antecesores garantizados.
+
+### ④ El `shell` se adjudica, y cae la última vista textual
+
+Con `shell: bash {0}` y un doble de curl (App=500, Landing=200), el shell custom
+hizo **dos** llamadas y terminó 0 donde el shell fijo del test cortaba en 1: el
+instrumento acreditaba que el paso corta y el paso no cortaba. Se rechaza
+conservadoramente todo override.
+
+Y el cuerpo del `run:` dejó de extraerse con un `findIndex` sobre líneas: sale
+del modelo. **Era, literalmente, la segunda vista del workflow que el dictamen
+señalaba.**
+
+### Los cuatro mutantes
+
+```
+import de js-yaml en src/ → 3 failed · reusable job real → 3 failed
+segundo publicador sin needs → 3 failed · shell override → 3 failed
+sano → 55 passed
+```
+
 ## 0.113.0 — cierre del BLOCK P65: el instrumento sobre YAML real (2026-08-21)
 
 Tercera generación del centinela de despliegue, y la primera que no pelea contra
