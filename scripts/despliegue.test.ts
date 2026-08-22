@@ -397,8 +397,17 @@ describe('EJECUTANDO el `run:` del workflow · con curl sustituido', () => {
    * llamada** y el test afirma el multiconjunto exacto: una por proyecto, al
    * destino que le corresponde.
    */
-  const URL_APP = 'https://api.vercel.com/v1/integrations/deploy/prj_APP/tokenSECRETO_APP';
-  const URL_LANDING = 'https://api.vercel.com/v1/integrations/deploy/prj_LAND/tokenSECRETO_LAND';
+  /**
+   * ⚠️ NO imitan la forma de un hook real de Vercel, y es a propósito: la
+   * primera versión de estas constantes usaba `api.vercel.com/v1/integrations/
+   * deploy/…` y **el gate de secretos cortó el push** — con razón, este repo es
+   * público y esa forma es exactamente la que no puede aparecer en el árbol.
+   *
+   * La sonda no necesita URLs verosímiles: necesita **destinos DISTINGUIBLES**,
+   * que es lo único que acredita qué variable alimenta qué proyecto.
+   */
+  const URL_APP = 'https://ejemplo.invalid/destino-app';
+  const URL_LANDING = 'https://ejemplo.invalid/destino-landing';
 
   /**
    * Corre el cuerpo con un `curl` doble adelante en el PATH.
