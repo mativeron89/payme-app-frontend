@@ -287,7 +287,9 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
        * queda roja sin enumerarlas.
        */
       // Todo el contexto de ejecución, por la definición única.
-      fallas.push(...fallasDeContexto(ci, job.nombre, paso.claves, donde, 'el publicador'));
+      fallas.push(
+        ...fallasDeContexto(ci, job.nombre, paso.claves, donde, 'el publicador', 'publicador'),
+      );
     }
     expect(fallas, `la compuerta del publicador no está cerrada:\n  ${fallas.join('\n  ')}`)
       .toEqual([]);
@@ -899,11 +901,29 @@ const defaultRun = (n: unknown, clave: string): unknown => {
  * efectivo": eso es reimplementar la precedencia de env de Actions, la misma
  * familia de intérprete a medias que ya costó varias vueltas.
  */
-const bashEnvDe = (n: unknown): unknown => {
+const envDe = (n: unknown): unknown => {
   if (typeof n !== 'object' || n === null) return undefined;
-  const e = (n as Record<string, unknown>)['env'];
-  if (typeof e !== 'object' || e === null) return undefined;
-  return (e as Record<string, unknown>)['BASH_ENV'];
+  return (n as Record<string, unknown>)['env'];
+};
+
+/**
+ * 🔴 EL CONTEXTO MÍNIMO DE CADA ROL — la allowlist positiva.
+ *
+ * Un mapping vacío significa **«este paso no necesita NINGUNA variable»**, que
+ * es distinto de «no la miramos». Agregar una entrada acá es una decisión
+ * consciente y queda en el diff, que es exactamente lo que se busca.
+ */
+const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  checkout: {},
+  espejo: {},
+  test: {},
+  typecheck: {},
+  playwright: {},
+  build: { VITE_API_URL: 'https://payme-app-backend-production.up.railway.app' },
+  publicador: {
+    HOOK_APP: '${{ secrets.VERCEL_HOOK_APP }}',
+    HOOK_LANDING: '${{ secrets.VERCEL_HOOK_LANDING }}',
+  },
 };
 
 /**
@@ -917,6 +937,7 @@ const fallasDeContexto = (
   claves: { readonly [k: string]: unknown },
   donde: string,
   que: string,
+  rol: string,
 ): string[] => {
   const out: string[] = [];
   const crudoJob = jobCrudo(yml, nombreJob);
@@ -953,11 +974,52 @@ const fallasDeContexto = (
     out.push(`${donde}: su job «${nombreJob}» lleva \`continue-on-error\` inválido o verdadero`);
   }
 
-  if (bashEnvDe(crudoJob) !== undefined) {
-    out.push(`${donde}: el job «${nombreJob}» hereda \`BASH_ENV\` — se ejecutaría ANTES del cuerpo`);
+  /**
+   * 🔴 P79 · EL `env` SE ADJUDICA POR ALLOWLIST POSITIVA, NO POR NOMBRES MALOS.
+   * Éste es el giro que cierra la clase entera.
+   *
+   * Ocho vueltas fui agregando guardas que RECHAZAN formas conocidas —
+   * `strategy`, `BASH_ENV` de job, `working-directory`, `shell`,
+   * `continue-on-error` string— y cada vuelta apareció la siguiente. Acá la
+   * lista de lo malo no tiene fin: además de `BASH_ENV` sobrevivieron
+   * `npm_config_script_shell: /usr/bin/true` y
+   * `NODE_OPTIONS=--import=data:...process.exit(0)`, **cada uno terminando 0 sin
+   * ejecutar la verificación**. Enumerarlos es la carrera perdida.
+   *
+   * **Al revés sí cierra: cada rol declara el `env` que NECESITA y todo lo no
+   * declarado es rojo, sin importar cómo se llame.** No hay «una variable más»:
+   * la próxima que alguien invente ya está prohibida por no estar entre las
+   * buenas.
+   *
+   * ⚠️ Es la MISMA forma que ya había usado para la gramática de shell —afirmar
+   * lo simple en vez de enumerar lo complejo— **escrita en este mismo archivo,
+   * unas líneas más arriba**. Que hicieran falta ocho vueltas para aplicarla al
+   * ambiente, teniéndola delante, es lo que más vale registrar de esta vuelta.
+   *
+   * Los niveles heredados no aportan nada legítimo hoy: un `env` de job o de
+   * workflow llega a TODOS los pasos, así que se rechaza entero.
+   */
+  const envDelPaso = claves['env'];
+  const esperado = ENV_POR_ROL[rol];
+  if (esperado === undefined) {
+    out.push(`${donde}: rol «${rol}» sin política de env declarada`);
+  } else if (Object.keys(esperado).length === 0) {
+    if (envDelPaso !== undefined) {
+      out.push(
+        `${donde}: ${que} declara \`env\` y su rol no necesita ninguna: ${JSON.stringify(envDelPaso)}`,
+      );
+    }
+  } else if (JSON.stringify(envDelPaso) !== JSON.stringify(esperado)) {
+    out.push(
+      `${donde}: el \`env\` de ${que} no es EXACTAMENTE el de su rol\n` +
+        `     esperado: ${JSON.stringify(esperado)}\n     hallado:  ${JSON.stringify(envDelPaso)}`,
+    );
   }
-  if (bashEnvDe(doc) !== undefined) {
-    out.push(`${donde}: el WORKFLOW hereda \`BASH_ENV\` — se ejecutaría ANTES del cuerpo`);
+  if (envDe(crudoJob) !== undefined) {
+    out.push(`${donde}: el job «${nombreJob}» declara \`env\` — llegaría a TODOS sus pasos`);
+  }
+  if (envDe(doc) !== undefined) {
+    out.push(`${donde}: el WORKFLOW declara \`env\` — llegaría a todos los jobs`);
   }
   return out;
 };
@@ -1303,6 +1365,59 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
    * prohibido: un mecanismo nuevo no tiene forma de colarse por no parecerse a
    * nada conocido.
    */
+  /**
+   * 🔴 P79 · EL CHECKOUT SE ADJUDICA ENTERO, `with` INCLUIDO.
+   *
+   * El censo aceptaba el string `actions/checkout@v4` y **no miraba su `with`**.
+   * Codex agregó `ref: <un ancestro>` y quedó 72/72: ese input fija en el
+   * workspace **bytes VIEJOS**, los cinco gates miden esos bytes, y el paso
+   * final sólo llama dos hooks sin transmitir ningún SHA.
+   *
+   * 🔴 **El resultado es que se pierde la IDENTIDAD entre lo verificado y lo que
+   * se publica** — la suite da verde sobre un árbol y el push publica otro. Es
+   * el agujero más grande de las nueve vueltas, porque no rompe una guarda: las
+   * deja a todas midiendo el objeto equivocado.
+   *
+   * Se fija el `with` EXACTO. `ref`, `repository` y `path` desacoplan el
+   * workspace del evento; `fetch-depth: 0` es necesario y está explicado en el
+   * propio workflow (el scanner compara contra la base del push/PR).
+   */
+  it('🔴 UN checkout causal, con su `with` EXACTO', () => {
+    const { jobs, problemas } = leerWorkflow(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
+    expect(problemas).toEqual([]);
+
+    const checkouts = jobs.flatMap((j) =>
+      j.pasos
+        .filter((p) => typeof p.claves['uses'] === 'string' &&
+          /^actions\/checkout@/.test(p.claves['uses'] as string))
+        .map((p) => ({ paso: p, job: j.nombre })),
+    );
+    // Control positivo: sin checkout, el resto pasaría en vacío.
+    expect(checkouts.length, 'no hay checkout, o hay más de uno: el workspace no es único')
+      .toBe(1);
+
+    const { paso, job } = checkouts[0]!;
+    expect(paso.claves['uses'], 'la versión de la acción no es la adjudicada')
+      .toBe('actions/checkout@v4');
+    expect(
+      paso.claves['with'],
+      'el `with` del checkout no es el exacto: `ref`/`repository`/`path` desacoplan el ' +
+        'workspace del evento y los gates medirían OTROS bytes que los que se publican',
+    ).toEqual({ 'fetch-depth': 0 });
+
+    // Y su contexto pasa por la misma política que todos.
+    expect(
+      fallasDeContexto(
+        readFileSync(join(DIR, 'ci.yml'), 'utf8'),
+        job,
+        paso.claves,
+        `${job}.steps[${paso.indice}]`,
+        'el checkout',
+        'checkout',
+      ),
+    ).toEqual([]);
+  });
+
   it('🔴 TODO JOB y TODO paso del workflow están adjudicados', () => {
     /**
      * 🔴 P68 · EL CENSO MIRA JOBS, NO SÓLO PASOS — y ésta es la corrección que
@@ -1512,6 +1627,11 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
       /^node scripts\/verificar-mirror\.mjs\b/, /^npm test$/, /^npm run typecheck$/,
       /^npm run build$/, /^npx playwright test$/,
     ];
+    /** Cada gate con su ROL, que es lo que fija su `env` permitido. */
+    const ROL_DE_GATE = new Map<RegExp, string>([
+      [GATES[0]!, 'espejo'], [GATES[1]!, 'test'], [GATES[2]!, 'typecheck'],
+      [GATES[3]!, 'build'], [GATES[4]!, 'playwright'],
+    ]);
     const problemas: string[] = [];
     for (const p of previos) {
       const cmds = comandosDe(texto(p.claves['run']) ?? '');
@@ -1534,8 +1654,10 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
        * Es la misma llamada que hace el publicador — una definición, dos
        * poblaciones.
        */
+      // El ROL sale del gate que matcheó: es lo que decide qué `env` necesita.
+      const rol = ROL_DE_GATE.get(gate)!;
       problemas.push(
-        ...fallasDeContexto(yml, p.job, p.claves, donde, `el gate \`${cmds[0] ?? ''}\``),
+        ...fallasDeContexto(yml, p.job, p.claves, donde, `el gate \`${cmds[0] ?? ''}\``, rol),
       );
     }
     // Control positivo: si ningún paso matcheara como gate, el bucle no miraría
