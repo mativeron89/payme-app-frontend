@@ -11,6 +11,53 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.116.0 — cierre del BLOCK P73: la ejecución del publicador, no su declaración (2026-08-22)
+
+Sexta vuelta. El patrón es el mismo un nivel más adentro: **el modelo tenía las
+propiedades y la validación no las miraba en el paso publicador.** La quinta fue
+certificación textual contra modelo; ésta es **declaración contra ejecución
+efectiva**.
+
+**Sin push ni deploy.** La conjuntiva no está cumplida.
+
+### ① `strategy` en el job del publicador: rojo, sin interpretar
+
+Una matriz expande el job en varias ejecuciones, **cada una con su paso
+publicador completo**. Con `matrix: replica: [1,2]` se disparan cuatro hooks
+mientras el gate certificaba «exactamente dos invocaciones». **Contaba líneas y
+creía contar ejecuciones.**
+
+Se prohíbe en vez de modelar: la expansión pide reproducir `matrix`, `include`,
+`exclude` y `fail-fast` — otro intérprete a medias.
+
+### ② `continue-on-error` en el publicador y en su job
+
+La guarda ya rechazaba tolerancia de error, **pero sólo al recorrer los cinco
+gates anteriores**. Al paso que dispara los hooks nadie se lo miraba.
+
+🔴 Y la sonda ejecutable no puede taparlo: demuestra que el **cuerpo** termina
+≠0 mientras la **corrida** queda verde. Son dos capas distintas.
+
+### ③ `if` ausente ≠ `if` presente en forma no adjudicada
+
+Con `if: true` YAML produce un booleano; el modelo lo guardaba como `null`, o
+sea «ausente». **`null` mezclaba «no está» con «está en una forma que no supe
+leer»** — y la segunda es donde se esconde lo que no anticipé.
+
+### Los mutantes, con el método de conteo corregido
+
+```
+strategy: matrix → 1 failed · continue-on-error paso → 1 failed
+continue-on-error job → 1 failed · if: true → 1 failed · sano → 56 passed
+los cinco del P71 siguen muriendo: 1 / 1 / 1 / 2 / 1
+```
+
+🔴 **Esos números corrigen los que este CHANGELOG venía reportando.** Yo decía
+«3 failed» uniforme y el auditor no pudo reproducirlo: medía con un `grep` que
+captura **todas** las líneas del resumen —por archivo y total— y las concatena.
+Ahora se lee la línea `Tests` final, una sola. **Un instrumento mal leído dentro
+del arnés que existe para no confiar en instrumentos mal leídos.**
+
 ## 0.115.1 — el gate de secretos cortó sobre mi propio cambio (2026-08-22)
 
 Al dar destinos distinguibles a la sonda usé dos constantes con **la forma exacta
@@ -25,8 +72,14 @@ que es lo único que acredita qué variable alimenta qué proyecto. Pasan a
 están prohibidos y esa regla gana. El gobierno prevé exactamente este caso —
 remediar, declarar, enumerar la clase.
 
-**Clase enumerada** sobre el diff aislado de los 19 commits del rango: la forma
-aparece en **un solo commit** (`a3da315`, 2 líneas) y en ningún otro.
+**Clase enumerada** sobre el diff aislado del rango: la forma aparece en **un
+solo commit** (`a3da315`, 2 líneas) y en ningún otro. **El fix es `4bf17f2`.**
+
+🔴 **Acá decía «los 19 commits del rango» y el rango final tiene 21** — el número
+se escribió cuando eran 19 y no se re-midió tras agregar el fix y el release.
+**Tercera vez en el lote que arrastro un conteo en vez de medirlo**, y por eso
+el número ya no va: el rango `7d5b920..<ref>` es la única autoridad, como fijó
+la política del P62.
 
 ⚠️ Las cadenas eran inventadas y nunca fueron un secreto real. **Pero la forma es
 lo que el gate mira, y hace bien: distinguir «inventada» de «real» es
