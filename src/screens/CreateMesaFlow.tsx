@@ -1017,7 +1017,7 @@ export function CreateMesaFlow() {
   if (step === 'scan') {
     return (
       <div className="screen has-appbar">
-        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step={t('Paso 1 de 4')} />
+        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
         <div className="title-card">
           {/* <h1> y no <div>: es el único título de esta pantalla. */}
           <h1 className="title-card-title">{t('Escanea el ticket')}</h1>
@@ -1229,7 +1229,7 @@ export function CreateMesaFlow() {
     const ticketVisible = ticketAbierto || !!totalMismatch;
     return (
       <div className="screen has-appbar">
-        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step={t('Paso 2 de 4')} />
+        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
         <div className="title-card">
           <div className="title-card-title">{t('¿Cómo dividen?')}</div>
         </div>
@@ -1501,7 +1501,7 @@ export function CreateMesaFlow() {
             de §1.3, igual que Ticket/División y Mis ítems.
             **`Paso 3 de 4` y no 4 de 5:** la fusión de §1.3-bis dejó el flujo
             en cuatro pasos, y este número tiene que seguirla. */}
-        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} step={t('Paso 3 de 4')} />
+        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
         {/* 🔴 ORDEN 1-B · LONGHANDS, NO EL SHORTHAND — y no es prolijidad.
             Acá había `style={{ padding: 16 }}`, y el shorthand inline PISA el
             `padding-bottom: 110px` de `.has-cta .scroll`. Sin ese aire, la

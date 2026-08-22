@@ -2262,14 +2262,6 @@ body {
   white-space: nowrap;
 }
 
-.hdr-step {
-  margin-left: auto;
-  flex: none;
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  color: var(--on-dark-muted);
-}
-
 /* Sobre la banda navy el foco va en teal — 7.46:1. El navy sobre navy no se
    vería, y el teal sobre claro no llega a 3:1: por eso son dos reglas. */
 .hdr button:focus-visible,
@@ -2991,6 +2983,15 @@ body {
 .hdr-row-2 {
   margin-top: var(--sp-2);
   min-height: var(--tap-min);
+}
+
+/* Hereda el lugar que tenía `.hdr-step` antes de que §5 bis · E retirara los
+   contadores: pegado a la derecha de la fila 2. */
+.hdr-action {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* El ID del usuario, no su nombre: en el flujo identifica la cuenta con la que

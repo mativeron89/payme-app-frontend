@@ -146,14 +146,11 @@ export function AppHeader({
 export function AppHeaderBack({
   title,
   onBack,
-  step,
   tabs,
   compact,
 }: HeaderBase & {
   title?: string;
   onBack: () => void;
-  /** Ej.: "Paso 2 de 5". En Mis ítems no hay: no es un paso de flujo lineal. */
-  step?: ReactNode;
 }) {
   const { t } = useIdioma();
   return (
@@ -164,7 +161,6 @@ export function AppHeaderBack({
           {t('Volver')}
         </button>
         {title && <span className="hdr-title">{title}</span>}
-        {step && <span className="hdr-step">{step}</span>}
       </div>
       {tabs}
     </header>
@@ -176,21 +172,29 @@ export function AppHeaderBack({
  * ninguna de las dos de §5 bis · A. Dos filas dentro de la misma banda navy:
  *
  *     Pay Me                              payme_mx_mati
- *     ← Volver                                Paso 2 de 5
+ *     ← Volver
  *
  * Fila 1: logo en dos tonos + **ID del usuario** a la derecha. Sin campana —
  * en medio de armar una mesa, un aviso lleva afuera del flujo.
- * Fila 2: Volver (flecha Y texto, no sólo ícono) y el contador de paso.
+ * Fila 2: Volver (flecha Y texto, no sólo ícono).
  *
  * El spec la deja pendiente de confirmar como estándar de todos los pasos, y
  * manda aplicar el mismo criterio hasta que se diga lo contrario.
+ *
+ * 🔴 **EL CONTADOR DE PASO NO EXISTE MÁS, y no es que esta cabecera no lo
+ * pase: el prop se RETIRÓ.** SISTEMA_DISENO.md §5 bis · E (2026-08-21) los
+ * elimina de toda la app —*"no vale la pena mantenerlo sincronizado a mano
+ * cada vez que el flujo se mueve"*, que ya había pasado con la fusión Ticket +
+ * División—. Mientras el prop existiera, la próxima pantalla del flujo lo
+ * recibía de buena fe y el contador volvía sin que nadie lo decidiera.
+ * Si más adelante hace falta señal de avance, §E dice qué es: una barra de
+ * progreso SIN números. No este prop de vuelta.
  */
 export function AppHeaderFlow({
   paymeId,
   onBack,
   backLabel = 'Volver',
   backIcon = 'arrow-left',
-  step,
   action,
   compact,
 }: HeaderBase & {
@@ -212,13 +216,11 @@ export function AppHeaderFlow({
    */
   backLabel?: string;
   backIcon?: IconName;
-  /** Ej.: "Paso 3 de 5". */
-  step?: ReactNode;
   /**
-   * Reemplaza al contador de paso cuando la pantalla NO es un paso de un flujo
-   * lineal. Mis ítems (§1.5) usa esta misma cabecera pero pone acá el ícono de
-   * link: es la pantalla a la que el usuario vuelve una y otra vez mientras la
-   * mesa sigue abierta, y decirle "Paso 4 de 5" sería mentirle sobre dónde está.
+   * Lo que va a la derecha de la fila 2. Nació para REEMPLAZAR al contador en
+   * las pantallas que no eran un paso lineal —Mis ítems (§1.5) pone acá el
+   * ícono de link—; ahora que el contador no existe en ninguna, es lo único
+   * que ocupa ese lugar.
    */
   action?: ReactNode;
 }) {
@@ -234,8 +236,14 @@ export function AppHeaderFlow({
           <Icon name={backIcon} size={20} />
           {t(backLabel)}
         </button>
-        {step && <span className="hdr-step">{step}</span>}
-        {action}
+        {/* El `margin-left: auto` lo tenía el contador y se fue con él, dejando
+            el lugar de la derecha sin dueño. `action` lo REEMPLAZA (§1.5), así
+            que hereda su posición — si no, cae pegado a «Volver».
+            ⚠️ Ese defecto ya existía ANTES de retirar el contador: Mis ítems
+            nunca pasó `step`, así que su ícono de link vino pegado desde el
+            día uno. Se corrige acá porque es la misma pieza, no porque lo haya
+            roto este cambio. */}
+        {action && <span className="hdr-action">{action}</span>}
       </div>
     </header>
   );

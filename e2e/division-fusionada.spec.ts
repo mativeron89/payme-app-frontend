@@ -16,7 +16,7 @@ async function hastaLaPantallaFusionada(page: import('@playwright/test').Page) {
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 }
 
-test('las tres formas y el ticket viven en UNA pantalla, en el paso 2 de 4', async ({ page }) => {
+test('las tres formas y el ticket viven en UNA pantalla, SIN contador de paso', async ({ page }) => {
   await hastaLaPantallaFusionada(page);
 
   await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
@@ -25,9 +25,17 @@ test('las tres formas y el ticket viven en UNA pantalla, en el paso 2 de 4', asy
   }
   // El ticket está en la MISMA pantalla, y su total también.
   await expect(page.getByText('Total del ticket')).toBeVisible();
-  await expect(page.getByText('Paso 2 de 4')).toBeVisible();
-  // Y ya no existe el paso suelto que la fusión absorbió.
-  await expect(page.getByText('Paso 3 de 5')).toHaveCount(0);
+
+  /**
+   * 🔴 ESTE TEST EXIGÍA VER «Paso 2 de 4», Y AHORA EXIGE LO CONTRARIO.
+   * SISTEMA_DISENO.md §5 bis · E (2026-08-21) elimina los contadores de toda la
+   * app: el motivo escrito es que el conteo ya se había desincronizado a mano
+   * con la fusión que este mismo archivo prueba, y que mantenerlo no vale la
+   * pena. No se afloja la afirmación a `toHaveCount(0)` sobre un texto puntual:
+   * se barre CUALQUIER «Paso N de M», que es lo que impide que vuelva con otro
+   * número — que es exactamente cómo se rompió la primera vez.
+   */
+  await expect(page.getByText(/Paso \d+ de \d+/)).toHaveCount(0);
 });
 
 test('🔴 el ticket nace PLEGADO y se abre con sus consumos', async ({ page }) => {
