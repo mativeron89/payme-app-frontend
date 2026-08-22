@@ -213,11 +213,7 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
 
     const publicadores = jobs.flatMap((j) =>
       j.pasos
-        .filter((p) =>
-          comandosDe(texto(p.claves['run']) ?? '').some((c) =>
-            /^bash scripts\/publicar-vercel\.sh/.test(c),
-          ),
-        )
+        .filter((p) => pasoPublica(texto(p.claves['run'])))
         .map((p) => ({ paso: p, job: j })),
     );
     // Control positivo: sin publicadores esto pasaría en vacío.
@@ -287,17 +283,65 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
        * El estado del script no sustituye la semántica del paso que Actions
        * ejecuta.
        */
+      /**
+       * 🔴 P75 · SÓLO AUSENCIA O EL BOOLEANO `false`. La cadena `'false'` era
+       * aceptada como si fuera el booleano, y **no lo es**: el schema del runner
+       * tipa ese campo como boolean, así que `'false'` produce un workflow
+       * INVÁLIDO. No es un bypass de publicación —Actions falla cerrado antes de
+       * ejecutar— pero el arnés lo daba por bueno, que es un falso verde de
+       * gramática: decía «esto es válido y seguro» sobre algo que ni siquiera
+       * corre. Cualquier otra forma —expresión, número, `null`, objeto— también
+       * queda roja sin enumerarlas.
+       */
+      const toleranciaValida = (v: unknown): boolean => v === undefined || v === false;
       const toleraPaso = paso.claves['continue-on-error'];
-      if (toleraPaso !== undefined && toleraPaso !== false && toleraPaso !== 'false') {
+      if (!toleranciaValida(toleraPaso)) {
         fallas.push(
-          `${donde}: \`continue-on-error: ${JSON.stringify(toleraPaso)}\` — un hook rojo NO cortaría`,
+          `${donde}: \`continue-on-error: ${JSON.stringify(toleraPaso)}\` — un hook rojo NO cortaría (sólo se admite ausencia o el booleano false)`,
         );
       }
-      const toleraJob = jobCrudo(ci, job.nombre)?.['continue-on-error'];
-      if (toleraJob !== undefined && toleraJob !== false && toleraJob !== 'false') {
+      const crudo = jobCrudo(ci, job.nombre);
+      if (!toleranciaValida(crudo?.['continue-on-error'])) {
         fallas.push(
-          `${donde}: su job «${job.nombre}» lleva \`continue-on-error: ${JSON.stringify(toleraJob)}\``,
+          `${donde}: su job «${job.nombre}» lleva \`continue-on-error: ${JSON.stringify(crudo?.['continue-on-error'])}\``,
         );
+      }
+
+      /**
+       * 🔴 P75 · `working-directory` CAMBIA EL EJECUTABLE SIN CAMBIAR LA
+       * EVIDENCIA — y es la dimensión de ejecución que faltaba gobernar.
+       *
+       * Con `working-directory: landing`, Actions resuelve
+       * `landing/scripts/publicar-vercel.sh`: **otro archivo**. La sonda de este
+       * arnés ejecuta el cuerpo con `cwd` en la raíz, así que certificaría el
+       * script de la raíz mientras el CI corre otro. Codex lo montó y quedó
+       * 63/63.
+       *
+       * Se rechaza fail-closed en los TRES niveles —paso, `defaults.run` del job
+       * y `defaults.run` del workflow— en vez de resolver el directorio efectivo:
+       * resolverlo pide reimplementar la precedencia de defaults de Actions, que
+       * es la misma familia de intérprete a medias que ya costó varias vueltas.
+       * Un paso que publica no tiene por qué correr desde otro directorio.
+       */
+      const wdPaso = paso.claves['working-directory'];
+      if (wdPaso !== undefined) {
+        fallas.push(
+          `${donde}: \`working-directory: ${JSON.stringify(wdPaso)}\` — Actions resolvería OTRO script`,
+        );
+      }
+      const wdDefault = (n: unknown): unknown => {
+        if (typeof n !== 'object' || n === null) return undefined;
+        const d = (n as Record<string, unknown>)['defaults'];
+        if (typeof d !== 'object' || d === null) return undefined;
+        const r = (d as Record<string, unknown>)['run'];
+        if (typeof r !== 'object' || r === null) return undefined;
+        return (r as Record<string, unknown>)['working-directory'];
+      };
+      if (wdDefault(crudo) !== undefined) {
+        fallas.push(`${donde}: su job «${job.nombre}» declara \`defaults.run.working-directory\``);
+      }
+      if (wdDefault(load(ci)) !== undefined) {
+        fallas.push(`${donde}: el WORKFLOW declara \`defaults.run.working-directory\``);
       }
     }
     expect(fallas, `la compuerta del publicador no está cerrada:\n  ${fallas.join('\n  ')}`)
@@ -327,9 +371,7 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
     const { jobs } = leerWorkflow(ci);
     const publicadores = jobs.flatMap((j) =>
       j.pasos.filter((p) =>
-        comandosDe(texto(p.claves['run']) ?? '').some((c) =>
-          /^bash scripts\/publicar-vercel\.sh/.test(c),
-        ),
+        pasoPublica(texto(p.claves['run'])),
       ),
     );
     expect(publicadores.length, 'no hay publicador: mediría en vacío').toBe(1);
@@ -337,7 +379,7 @@ describe('POR LECTURA · el condicional del workflow (no ejecutado)', () => {
 
     // ① el multiconjunto de invocaciones, en orden y sin extras
     const invocaciones = comandosDe(texto(paso.claves['run']) ?? '')
-      .filter((c) => /^bash scripts\/publicar-vercel\.sh/.test(c))
+      .filter(esInvocacionPublicador)
       .map((c) => tokens(c)?.slice(2).join(' ') ?? c);
     expect(
       invocaciones,
@@ -411,9 +453,7 @@ describe('EJECUTANDO el `run:` del workflow · con curl sustituido', () => {
     const paso = jobs
       .flatMap((j) => [...j.pasos])
       .find((p) =>
-        comandosDe(texto(p.claves['run']) ?? '').some((c) =>
-          /^bash scripts\/publicar-vercel\.sh/.test(c),
-        ),
+        pasoPublica(texto(p.claves['run'])),
       );
     return { jobs, problemas, paso };
   })();
@@ -861,6 +901,43 @@ function expresionDeDominioAcotado(dentro: string): boolean {
 }
 
 /** Parte un comando en tokens respetando comillas. `null` si las comillas no cierran. */
+/**
+ * 🔴 P75 · LA ÚNICA FORMA DE RECONOCER UNA INVOCACIÓN DEL PUBLICADOR.
+ *
+ * Había SEIS lugares con `/^bash scripts\/publicar-vercel\.sh/`, que exige
+ * exactamente **un espacio ASCII**, conviviendo con un censo general que
+ * tokeniza cualquier whitespace. Dos vistas del mismo objeto con gramáticas
+ * distintas, y Codex metió la cuña justo ahí:
+ *
+ * ```yaml
+ * - run: bash  scripts/publicar-vercel.sh app "$HOOK_APP"   ← DOS espacios
+ * ```
+ *
+ * El censo general lo daba por **permitido** —`tokens()` normaliza el
+ * whitespace— y las cinco guardas específicas **no lo veían como publicador**:
+ * ni condición, ni cardinalidad, ni secretos, ni causalidad, ni tolerancia. Un
+ * publicador ejecutable, allowlisteado y sin gobierno, que además podía correr
+ * fuera de push-main. Focal 63/63.
+ *
+ * ⚠️ **Es una CONTRADICCIÓN INTERNA del arnés, no una forma que faltara.** Es la
+ * misma clase que atravesó toda la noche —la sombra que §E pedía con un navy y
+ * §D con otro— pero cometida acá adentro, entre dos partes del mismo archivo.
+ *
+ * Por eso la respuesta no es «agregarle `\s+` al regex»: es que **haya una sola
+ * definición**, derivada del mismo `tokens()` que usa el censo, y que todos los
+ * consumidores la llamen. Dos gramáticas para el mismo objeto vuelven a
+ * divergir apenas se toque una.
+ */
+function esInvocacionPublicador(cmd: string): boolean {
+  const ts = tokens(cmd);
+  return ts !== null && ts[0] === 'bash' && ts[1] === 'scripts/publicar-vercel.sh';
+}
+
+/** ¿El `run:` de este paso contiene al menos una invocación del publicador? */
+function pasoPublica(run: string | null): boolean {
+  return comandosDe(run ?? '').some(esInvocacionPublicador);
+}
+
 function tokens(cmd: string): string[] | null {
   const salida: string[] = [];
   let actual = '';
@@ -1245,7 +1322,7 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
      * ese job puede correr en paralelo sin esperar los cinco gates.
      */
     const publicadores = pasos.filter((p) =>
-      comandosDe(texto(p.claves['run']) ?? '').some((c) => /^bash scripts\/publicar-vercel\.sh/.test(c)),
+      pasoPublica(texto(p.claves['run'])),
     );
     // Control positivo: sin paso de publicación, «todos preceden» sería cierto
     // sobre un CI que no publica nada.
@@ -1297,7 +1374,7 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
     const { jobs } = leerWorkflow(readFileSync(join(DIR, 'ci.yml'), 'utf8'));
     const todos = jobs.flatMap((j) => [...j.pasos]);
     const publicadores2 = todos.filter((p) =>
-      comandosDe(texto(p.claves['run']) ?? '').some((c) => /^bash scripts\/publicar-vercel\.sh/.test(c)),
+      pasoPublica(texto(p.claves['run'])),
     );
     expect(publicadores2.length, 'no se encontró el paso de publicación').toBeGreaterThan(0);
     // Mismo criterio que arriba: cada publicador responde por sus antecesores.
