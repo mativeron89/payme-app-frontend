@@ -860,6 +860,8 @@ const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = 
   instalacion: {},
   espejo: {},
   aliases: {},
+  corrida: {},
+  sello: {},
   artefacto: {},
   test: {},
   typecheck: {},
@@ -903,7 +905,13 @@ const ROL_DE_PASO: ReadonlyArray<readonly [RegExp, string]> = [
   // banderas distintas; con un rol común, sacar uno del workflow dejaba al otro
   // satisfaciendo la exigencia y el mutante sobrevivía 85/85.
   [/^node scripts\/verificar-aliases\.mjs --aliases$/, 'aliases'],
-  [/^node scripts\/verificar-aliases\.mjs --artefacto$/, 'artefacto'],
+  [/^node scripts\/verificar-aliases\.mjs --corrida$/, 'corrida'],
+  [/^node scripts\/verificar-aliases\.mjs --sellar$/, 'sello'],
+  // 🔴 P90 · EL COMANDO COMPLETO, CON SU DESTINO. `rolDePaso` compara prefijos
+  // de hasta 3 tokens, así que el 4º —`dist`— quedaba fuera del rol y del censo:
+  // cambiarlo por `--artefacto .` daba exit 0 sobre el `index.html` de la raíz y
+  // un `.js` ajeno del contract-mirror. Cuatro tokens, adjudicados.
+  [/^node scripts\/verificar-aliases\.mjs --artefacto dist$/, 'artefacto'],
 
   [/^npm test$/, 'test'],
   [/^npm run typecheck$/, 'typecheck'],
@@ -941,8 +949,14 @@ function rolDePaso(claves: { readonly [k: string]: unknown }): string | null {
     if (ts === null) return null;
     // Se compara el PREFIJO ejecutable —intérprete + script, o los tokens del
     // comando npm— y no la línea entera: los argumentos son de cada paso.
+    //
+    // 🔴 P90 · HASTA 4 TOKENS, NO 3. Con tres, `node verificar-aliases.mjs
+    // --artefacto dist` perdía su destino: el rol matcheaba igual con
+    // `--artefacto .`, que sale 0 sobre el `index.html` de la raíz y un `.js`
+    // ajeno del contract-mirror. **Un argumento que cambia QUÉ se verifica no es
+    // un argumento del paso: es parte de la identidad del gate.**
     for (const [re, rol] of ROL_DE_PASO) {
-      for (const n of [1, 2, 3]) {
+      for (const n of [1, 2, 3, 4]) {
         if (ts.length >= n && re.test(ts.slice(0, n).join(' '))) return rol;
       }
     }
@@ -1489,7 +1503,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
   const previos = publicadores.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub));
   for (const pub of publicadores) {
     const suyos = new Set(pasosGarantizadosAntesDe(jobs, pub).map((p) => rolDePaso(p.claves)));
-    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'artefacto'] as const) {
+    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'corrida', 'sello', 'artefacto'] as const) {
       if (!suyos.has(g)) {
         fallasPorPublicador.push(
           `${pub.job}.steps[${pub.indice}]: publica sin el gate «${g}» garantizado antes`,
@@ -1539,7 +1553,7 @@ function fallasDeGatesPrevios(yml: string): string[] {
    * estuviera bien.
    */
   const rolesVistos = new Set(previos.map((p) => rolDePaso(p.claves)));
-  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'artefacto'] as const) {
+  for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright', 'scanner', 'aliases', 'corrida', 'sello', 'artefacto'] as const) {
     if (!rolesVistos.has(g)) fallas.push(`el gate «${g}» no está entre los pasos previos`);
   }
   return fallas;

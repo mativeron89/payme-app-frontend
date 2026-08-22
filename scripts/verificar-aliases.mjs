@@ -34,14 +34,25 @@
  *
  * ## Los modos
  *
- *   --aliases     (default) Los `scripts` de `package.json` son EXACTAMENTE los
- *                 adjudicados; no hay config versionada que cambie el ejecutor;
- *                 y la COLECCIÓN real de Vitest y Playwright cubre todos los
- *                 archivos que existen en disco.
- *   --artefacto   Corre DESPUÉS del build: acredita que quedó un artefacto con
- *                 sustancia, no que el comando haya salido 0.
+ *   --aliases     (default) El CONJUNTO COMPLETO de `scripts` es exactamente el
+ *                 adjudicado —así no puede existir un `pretest`—, no hay config
+ *                 versionada que cambie el ejecutor, y la colección declarada de
+ *                 Vitest y Playwright cubre todo lo que existe en disco.
+ *   --corrida     Corre DESPUÉS de la suite: lee el reporte que Vitest escribió y
+ *                 acredita QUÉ SE EJECUTÓ, no qué se iba a ejecutar.
+ *   --sellar      Marca el instante previo al build.
+ *   --artefacto   Corre DESPUÉS del build: el artefacto existe, tiene sustancia
+ *                 y es POSTERIOR al sello — o sea, lo escribió esta ejecución.
+ *
+ * ## 🔴 Por qué hay modos «antes» y modos «después» (P90)
+ *
+ * Mirar el mundo antes de que la herramienta corra es un TOCTOU por
+ * construcción: entre la aprobación y el uso pueden pasar hooks de npm, un
+ * cambio de config u otro paso del workflow. La allowlist del conjunto de
+ * scripts cierra la vía conocida; **los modos `--corrida` y `--artefacto`
+ * cierran la clase**, porque no preguntan qué VA A pasar sino qué PASÓ.
  */
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,12 +75,15 @@ const RAIZ = process.env.PAYME_RAIZ_VERIFICACION ?? join(AQUI, '..');
  * consciente que queda en el diff, que es exactamente lo que se busca.
  */
 const ALIAS_ADJUDICADOS = Object.freeze({
-  test: 'vitest run',
+  dev: 'vite',
+  test: 'vitest run --reporter=default --reporter=json --outputFile=.vitest-corrida.json',
   typecheck:
     'tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && ' +
     'tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.e2e.json',
   build: 'tsc --noEmit -p tsconfig.json && vite build',
   'build:landing': 'vite build --config vite.landing.config.ts',
+  preview: 'vite preview',
+  e2e: 'playwright test',
 });
 
 /**
@@ -82,6 +96,25 @@ const ALIAS_ADJUDICADOS = Object.freeze({
  * hace falta uno, se adjudica a mano y se escribe por qué.
  */
 const CONFIG_PROHIBIDA = ['.npmrc'];
+
+/**
+ * 🔴 P90 · LAS EXTENSIONES SE DECLARAN ANCHAS, NO SE ESCRIBEN UNA A UNA.
+ *
+ * Acá había `/\.test\.ts$/`, y `src/walletRouteGuard.test.tsx` **existe y
+ * Vitest lo recolecta**: el gate comparaba con igualdad exacta contra una
+ * población INCOMPLETA y prometía «todos los archivos en disco». Excluir los
+ * `tsx` de la config dejaba el gate en 0 mientras `npm test` bajaba de 1313 a
+ * 1253 tests.
+ *
+ * ⚠️ **El defecto no fue olvidarse del `tsx`: fue escribir la extensión a mano.**
+ * La forma que cierra es un patrón ANCHO —cualquier extensión de código con
+ * `.test.` adentro—: si algo así existe y el runner no lo recolecta, es rojo. Un
+ * universo más ancho que el real falla del lado seguro; uno más angosto miente.
+ */
+const ES_TEST = /\.test\.[cm]?[jt]sx?$/;
+
+/** Fuentes que un proyecto de TypeScript debería compilar, con sus variantes. */
+const ES_FUENTE_TS = /\.[cm]?tsx?$/;
 
 const fallas = [];
 const fallar = (m) => fallas.push(m);
@@ -100,6 +133,31 @@ export function fallasDeAliases(scripts, existeConfig, entorno = {}) {
     const hallado = scripts?.[nombre];
     if (hallado !== esperado) {
       out.push(`el alias «${nombre}» no es el adjudicado — hallado: ${hallado ?? '(ausente)'}`);
+    }
+  }
+  /**
+   * 🔴 P90 · EL CONJUNTO COMPLETO, NO SÓLO LOS NOMBRES ESPERADOS — la raíz del
+   * TOCTOU.
+   *
+   * Antes esto recorría **las cuatro claves que esperaba** y no miraba el resto,
+   * así que un script NUEVO entraba sin adjudicar. Y npm ejecuta hooks de ciclo
+   * de vida **entre la aprobación del gate y la herramienta**: un `pretest` que
+   * reescribe la config deja `npm test` en 0 con 84 archivos y 1084 tests, sin
+   * los 13 de `scripts/`; un `prebuild` con `build.write=false` transforma 110
+   * módulos, sale 0 y **no escribe nada**.
+   *
+   * 🔴 **Chequear y después dejar que el mundo cambie antes de usarlo es un
+   * TOCTOU, y no se cierra enumerando `pre*`/`post*`:** se cierra declarando el
+   * conjunto ENTERO de scripts. Cualquier clave que no esté arriba es roja, se
+   * llame como se llame — un `pretest` no puede existir sin venir acá primero.
+   */
+  const declarados = new Set(Object.keys(ALIAS_ADJUDICADOS));
+  for (const nombre of Object.keys(scripts ?? {})) {
+    if (!declarados.has(nombre)) {
+      out.push(
+        `el script «${nombre}» NO está adjudicado — npm corre los hooks de ciclo de vida ` +
+          'entre este gate y la herramienta, así que puede cambiar lo que la herramienta ve',
+      );
     }
   }
   for (const archivo of CONFIG_PROHIBIDA) {
@@ -143,6 +201,10 @@ export function fuentesSinProyecto(enDisco, cubiertos) {
 
 /** Archivos bajo `dir` que matcheen `re`, recursivo, ignorando `node_modules`. */
 function buscar(dir, re, acc = []) {
+  // Un directorio ausente NO explota con un stack: devuelve vacío, y el control
+  // de no-vacuidad de cada acreditación lo convierte en rojo con su motivo. Un
+  // gate que muere por ENOENT no dice qué faltaba.
+  if (!existsSync(dir)) return acc;
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
     const p = join(dir, e.name);
@@ -207,9 +269,9 @@ function acreditarColeccion(etiqueta, enDisco, listar) {
 
 function adjudicarPoblacion() {
   const unitarios = [
-    ...buscar(join(RAIZ, 'src'), /\.test\.ts$/),
-    ...buscar(join(RAIZ, 'scripts'), /\.test\.ts$/),
-    ...buscar(join(RAIZ, 'landing'), /\.test\.ts$/),
+    ...buscar(join(RAIZ, 'src'), ES_TEST),
+    ...buscar(join(RAIZ, 'scripts'), ES_TEST),
+    ...buscar(join(RAIZ, 'landing'), ES_TEST),
   ];
   acreditarColeccion('Vitest', unitarios, () =>
     execFileSync('npx', ['vitest', 'list', '--filesOnly'], {
@@ -244,6 +306,63 @@ function adjudicarPoblacion() {
 }
 
 /**
+ * 🔴 P90 · LA CORRIDA QUE DE VERDAD PASÓ — el efecto terminal, no la foto previa.
+ *
+ * El modo `--aliases` mira el mundo **antes** de que las herramientas corran, y
+ * eso es un TOCTOU por construcción: entre la aprobación y el uso pueden pasar
+ * hooks de npm, un cambio de config, otro paso del workflow. La allowlist del
+ * conjunto de scripts cierra la vía conocida; **esto cierra la clase**, porque no
+ * pregunta qué VA A correr sino qué **corrió**.
+ *
+ * Lee el reporte que la corrida real de Vitest escribió y compara sus archivos
+ * contra los que existen en disco. Si algo recortó la población entre medio, el
+ * reporte lo dice: no hay forma de recolectar menos y reportar más.
+ *
+ * ⚠️ Fail-closed en las dos puntas: sin reporte, o con un reporte que no nombre
+ * archivos, es ROJO. «No pude medir» nunca es «salió bien».
+ */
+function acreditarCorrida() {
+  const ruta = join(RAIZ, '.vitest-corrida.json');
+  if (!existsSync(ruta)) {
+    fallar(
+      'no existe `.vitest-corrida.json`: la suite no dejó constancia de qué recolectó ' +
+        '— sin ese registro, «pasó todo» y «no corrió nada» son indistinguibles',
+    );
+    return;
+  }
+  let reporte;
+  try {
+    reporte = JSON.parse(readFileSync(ruta, 'utf8'));
+  } catch (e) {
+    fallar(`el reporte de la corrida no es JSON legible — ${e.message.split('\n')[0]}`);
+    return;
+  }
+  const corridos = (reporte.testResults ?? [])
+    .map((r) => (typeof r.name === 'string' ? relative(RAIZ, r.name) : null))
+    .filter((f) => f !== null && !f.startsWith('..'));
+  const enDisco = [
+    ...buscar(join(RAIZ, 'src'), ES_TEST),
+    ...buscar(join(RAIZ, 'scripts'), ES_TEST),
+    ...buscar(join(RAIZ, 'landing'), ES_TEST),
+  ];
+  const ausentes = faltantesDeColeccion(enDisco, corridos);
+  if (ausentes[0] === '__VACIO__') {
+    fallar('no hay archivos de test en disco: la comprobación de la corrida mediría en vacío');
+  } else if (ausentes.length > 0) {
+    fallar(
+      `la corrida REAL de Vitest no ejecutó ${ausentes.length} de ${enDisco.length} archivos que ` +
+        `existen en disco — el verde cubre menos de lo que dice:\n     ` +
+        ausentes.slice(0, 8).join('\n     '),
+    );
+  }
+  // Control positivo: un reporte con cero resultados pasaría el filtro de arriba
+  // por vacuidad si el disco también estuviera vacío; acá se afirma que corrió.
+  if (corridos.length === 0) {
+    fallar('el reporte no nombra ningún archivo ejecutado: la suite no corrió');
+  }
+}
+
+/**
  * 🔴 EL ARTEFACTO, no el exit code.
  *
  * Un alias de build no-op sale 0 y no deja nada. Se mide lo que quedó en disco:
@@ -252,7 +371,36 @@ function adjudicarPoblacion() {
  * manipula es no medir**.
  */
 function acreditarArtefacto(dir) {
+  /**
+   * 🔴 P90 · EL DIRECTORIO ES FIJO, no un argumento libre.
+   *
+   * Con un `dir` cualquiera, `--artefacto .` salía **0**: encontraba el
+   * `index.html` de la raíz y un `.js` ajeno de `contract-mirror`. El gate
+   * certificaba «el build dejó artefacto» mirando archivos que no eran del build.
+   */
+  if (dir !== 'dist') {
+    fallar(`el destino «${dir}» no es el adjudicado: sólo se acredita \`dist\``);
+    return;
+  }
   const base = join(RAIZ, dir);
+  /**
+   * 🔴 Y LOS BYTES TIENEN QUE SER DE ESTA EJECUCIÓN — antes bastaba con que
+   * existieran. Un `dist` viejo, de otro build, pasaba: `prebuild` podía fijar
+   * `build.write=false` y Vite transformaba 110 módulos, salía 0 y no escribía
+   * nada, mientras el gate aprobaba el artefacto anterior.
+   *
+   * El sello se escribe ANTES del build y se compara contra las fechas de lo
+   * producido. Existencia y tamaño no acreditan procedencia.
+   */
+  const sello = join(RAIZ, '.artefacto-sello');
+  if (!existsSync(sello)) {
+    fallar(
+      'no hay sello previo: sin él, un `dist` de otra ejecución es indistinguible ' +
+        'del que este build tenía que escribir (correr `--sellar` antes del build)',
+    );
+    return;
+  }
+  const t0 = statSync(sello).mtimeMs;
   if (!existsSync(base)) {
     fallar(`el build no dejó «${dir}»: el comando salió 0 sin producir artefacto`);
     return;
@@ -262,11 +410,28 @@ function acreditarArtefacto(dir) {
     fallar(`«${dir}» existe pero no tiene index.html`);
     return;
   }
-  const bundles = buscar(base, /\.js$/);
-  const grandes = bundles.filter((f) => statSync(join(RAIZ, f)).size > 1024);
-  if (grandes.length === 0) {
-    fallar(`«${dir}» no tiene ningún bundle .js con sustancia (>1KB): el build fue no-op`);
+  if (statSync(html).mtimeMs < t0) {
+    fallar(
+      `«${dir}/index.html» es ANTERIOR al sello: es un artefacto viejo y este build no escribió`,
+    );
+    return;
   }
+  const bundles = buscar(base, /\.js$/);
+  const frescos = bundles.filter((f) => {
+    const s = statSync(join(RAIZ, f));
+    return s.size > 1024 && s.mtimeMs >= t0;
+  });
+  if (frescos.length === 0) {
+    fallar(
+      `«${dir}» no tiene ningún bundle .js con sustancia escrito por ESTA ejecución: ` +
+        'el build fue no-op y quedó el artefacto anterior',
+    );
+  }
+}
+
+/** Marca el instante previo al build, para poder exigir artefacto fresco. */
+function sellar() {
+  writeFileSync(join(RAIZ, '.artefacto-sello'), `sello ${process.pid}\n`);
 }
 
 /**
@@ -315,10 +480,10 @@ function adjudicarProyectosTs() {
     }
   }
   const enDisco = [
-    ...buscar(join(RAIZ, 'src'), /\.tsx?$/),
-    ...buscar(join(RAIZ, 'scripts'), /\.tsx?$/),
-    ...buscar(join(RAIZ, 'e2e'), /\.tsx?$/),
-    ...buscar(join(RAIZ, 'landing'), /\.tsx?$/),
+    ...buscar(join(RAIZ, 'src'), ES_FUENTE_TS),
+    ...buscar(join(RAIZ, 'scripts'), ES_FUENTE_TS),
+    ...buscar(join(RAIZ, 'e2e'), ES_FUENTE_TS),
+    ...buscar(join(RAIZ, 'landing'), ES_FUENTE_TS),
   ];
   const huerfanos = fuentesSinProyecto(enDisco, [...cubiertos]);
   if (huerfanos[0] === '__VACIO__') {
@@ -337,8 +502,12 @@ if (modo === '--aliases') {
   adjudicarAliases();
   adjudicarProyectosTs();
   adjudicarPoblacion();
+} else if (modo === '--corrida') {
+  acreditarCorrida();
+} else if (modo === '--sellar') {
+  sellar();
 } else if (modo === '--artefacto') {
-  acreditarArtefacto(process.argv[3] ?? 'dist');
+  acreditarArtefacto(process.argv[3] ?? '(sin destino)');
 } else {
   console.error(`modo desconocido: ${modo} (usar --aliases o --artefacto)`);
   process.exit(2);
@@ -354,8 +523,12 @@ if (fallas.length > 0) {
   process.exit(1);
 }
 console.log(
-  modo === '--aliases'
-    ? '── aliases OK: cada comando del CI ejecuta la herramienta adjudicada, y la colección ' +
-        'real cubre todos los archivos en disco.'
-    : '── artefacto OK: el build dejó un bundle con sustancia, no sólo un exit 0.',
+  {
+    '--aliases':
+      '── aliases OK: el conjunto de scripts es el adjudicado y la colección declarada cubre ' +
+      'todo lo que existe en disco.',
+    '--corrida': '── corrida OK: la suite EJECUTÓ todos los archivos de test que existen en disco.',
+    '--sellar': '── sello escrito: el artefacto de este build tendrá que ser posterior.',
+    '--artefacto': '── artefacto OK: `dist` lo escribió ESTA ejecución, no un build anterior.',
+  }[modo],
 );

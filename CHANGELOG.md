@@ -11,6 +11,66 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.124.0 — cierre del BLOCK P90: TOCTOU, y el gate mira el efecto terminal (2026-08-22)
+
+El gate del P88 miraba el mundo **antes** de que las herramientas corrieran, y eso
+es un TOCTOU por construcción: npm ejecuta los hooks de ciclo de vida **entre la
+aprobación y la herramienta**.
+
+```
+pretest        recorta la config  →  npm test 0 con 84 archivos y 1084 tests
+prebuild       build.write=false  →  Vite transforma 110 módulos, sale 0
+                                     y NO ESCRIBE · el dist viejo queda
+                                     y el gate de artefacto lo aceptaba
+```
+
+🔴 **Chequear y dejar que el mundo cambie antes de usarlo.** Es la clase nueva de
+la vuelta, y no se cierra enumerando `pre*`/`post*` —eso sería la denylist que
+costó ocho vueltas abandonar—.
+
+### Dos defensas, y la segunda es la que cierra la clase
+
+**Prevenir:** el gate adjudica ahora **el conjunto completo** de `scripts`, no
+sólo las claves que esperaba. Un `pretest` no puede existir sin venir a
+declararse primero.
+
+**Observar el efecto terminal:** dos modos nuevos que no preguntan qué VA a pasar
+sino **qué pasó**. `--corrida` lee el reporte que Vitest escribió y exige que
+haya ejecutado todo lo que existe en disco; `--artefacto` exige que `dist` sea
+**posterior a un sello** puesto antes del build. No hay forma de recolectar menos
+y reportar más, ni de no escribir y parecer que se escribió.
+
+### 🔴 Y el defecto que más me importa: escribí la extensión a mano
+
+El gate derivaba los tests con `/\.test\.ts$/` y **`src/walletRouteGuard.test.tsx`
+existe y Vitest lo recolecta**. La igualdad era exacta contra una población
+**incompleta**, mientras el mensaje prometía «todos los archivos en disco».
+Excluir los `tsx` dejaba el gate en 0 con la suite bajando de 1313 a 1253 tests.
+
+**No fue olvidarse del `tsx`: fue escribir la extensión a mano.** Ahora el patrón
+es ancho —cualquier extensión de código con `.test.` adentro— y lo mismo para el
+universo TS, que suma `.mts`/`.cts`. Un universo más ancho que el real falla del
+lado seguro; uno más angosto miente.
+
+### El artefacto y el rol, con su comando completo
+
+`--artefacto .` salía **0**: encontraba el `index.html` de la raíz y un `.js`
+ajeno del contract-mirror. El destino queda fijo, y el rol pasa a comparar **4
+tokens** en vez de 3 — un argumento que cambia *qué* se verifica no es un
+argumento del paso, es parte de la identidad del gate.
+
+### El callsite del dispatcher
+
+Retirar `adjudicarAliases()` dejaba los tests de helpers **18/18 verdes**:
+probaban que las funciones deciden bien, no que el ejecutable las llame — la
+misma clase que el P85. Ahora hay un caso conductual que invoca el **ejecutable**
+sobre un árbol de prueba con un alias roto.
+
+**Sin push ni deploy.** Falta el visto bueno de Codex, y acá el push **publica**
+los dos dominios: eso lo decide Mati, preguntado aparte.
+
+El intermitente E2E sigue **ABIERTO**, sin causa asignada.
+
 ## 0.123.0 — cierre del BLOCK P88: el alias no es su herramienta (2026-08-22)
 
 El arnés adjudicaba los **tokens del workflow** —que el paso diga `npm test`,

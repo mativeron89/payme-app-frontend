@@ -56,6 +56,14 @@ jobs:
       - name: El alias ejecuta su herramienta, sobre la población real
         run: node scripts/verificar-aliases.mjs --aliases
       - run: npm test
+      # 🔴 Y DESPUÉS SE MIRA QUÉ CORRIÓ DE VERDAD (P90). El paso de arriba mira
+      # el mundo ANTES de que las herramientas corran, y eso es un TOCTOU por
+      # construcción: npm ejecuta los hooks `pre*` ENTRE la aprobación y la
+      # herramienta. Un `pretest` que recorta la config deja `npm test` en 0 con
+      # 84 archivos y 1084 tests. Esto lee el reporte que la corrida escribió y
+      # exige que haya ejecutado todo lo que existe en disco.
+      - name: La suite ejecutó la población entera, medido sobre su reporte
+        run: node scripts/verificar-aliases.mjs --corrida
       - run: npm run typecheck
       # 🔴 `VITE_API_URL` va acá desde 0.100.0, y NO es configuración de
       # despliegue: este `build` es una COMPUERTA DE COMPILACIÓN, no el
@@ -68,12 +76,17 @@ jobs:
       # el retirado `deploy-demo.yml`—. Y lo que se compila acá NO llega a
       # producción: si alguien lee esta línea buscando "a qué backend apunta la
       # app publicada", la respuesta está en Vercel, no en este archivo.
+      # El sello marca el instante previo: sin él, un `dist` de otra ejecución
+      # es indistinguible del que este build tenía que escribir.
+      - name: Sellar el instante previo al build
+        run: node scripts/verificar-aliases.mjs --sellar
       - run: npm run build
         env:
           VITE_API_URL: https://payme-app-backend-production.up.railway.app
       # 🔴 Y EL BUILD SE ACREDITA POR SU ARTEFACTO, no por su exit code: un alias
-      # no-op sale 0 y no deja nada. Se mide lo que quedó en disco — medir con el
-      # instrumento que el ataque manipula es no medir.
+      # no-op sale 0 y no deja nada. Se mide lo que quedó en disco, y se exige que
+      # sea POSTERIOR al sello: `prebuild` podía fijar `build.write=false` y dejar
+      # que el gate aprobara el `dist` del build anterior.
       - name: El build dejó artefacto, no sólo un exit 0
         run: node scripts/verificar-aliases.mjs --artefacto dist
       # Los 78 recorridos de navegador también son gate: la auditoría del
