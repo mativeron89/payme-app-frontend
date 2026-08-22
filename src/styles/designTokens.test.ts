@@ -143,6 +143,26 @@ describe('sistema de diseño · §1 color', () => {
   })
 
   /**
+   * §5 bis · F · El ÚNICO color de la app que no sale de la paleta de marca.
+   *
+   * El token existe por una razón que es exactamente la de este archivo: §F lo
+   * declara *"para que una auditoría de contraste no lo cuente como color
+   * suelto"*. Mientras el hex vivía hardcodeado dentro de la regla `.share-wa`,
+   * `token()` no podía verlo y el barrido pasaba por encima sin medirlo. Ahora
+   * el valor está donde el instrumento lo alcanza, y ésta es la medición.
+   *
+   * El verde moderno de WhatsApp (`#25D366`) da 1.98:1 con blanco y reprueba AA
+   * de punta a punta; por eso el sistema eligió el teal oscuro histórico. Ese
+   * número NO se puede fijar acá: sería un token que la app no tiene. Queda
+   * dicho en prosa, que es lo honesto — este test mide lo que la app pinta.
+   */
+  it('el canal externo pasa AA con el blanco que lleva encima', () => {
+    expect(token('channel-whatsapp')).toBe('#075e54')
+    expect(contrast('on-dark', 'channel-whatsapp')).toBeCloseTo(7.67, 1)
+    expect(contrast('on-dark', 'channel-whatsapp')).toBeGreaterThanOrEqual(4.5)
+  })
+
+  /**
    * SPEC_APP.md §1.3 · la observación del total vive DENTRO de la tarjeta de
    * título, así que cuando pasa a advertencia el par no es el que el sistema
    * midió (`--warning` sobre `--warning-tint`, 5.10:1) sino `--warning` sobre

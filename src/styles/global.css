@@ -69,6 +69,24 @@
   padding: 0;
 }
 
+/* §5 bis · E · SIN BARRA DE SCROLL VISIBLE en ningún contenedor scrolleable.
+   El contenido se sigue desplazando igual: se oculta el indicador, no el
+   overflow. Es higiene de web —en nativo la barra ya no se dibuja— y por eso
+   va sobre el universal y no pantalla por pantalla: una regla por contenedor
+   deja afuera al próximo que alguien agregue. */
+*,
+*::before,
+*::after {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 :root {
   /* ══════════════════════════════════════════════════════════════════════
      SISTEMA DE DISEÑO · tokens de ../diseno/SISTEMA_DISENO.md §1–§3
@@ -198,6 +216,13 @@
   /* §3 · Área táctil mínima en la app, sin excepción. Se usa parada, con una
      mano, apurada. */
   --tap-min: 44px;
+
+  /* §5 bis · F · Token de canal EXTERNO. Es el único color de las pantallas de
+     compartir que no sale de la paleta de marca, y se declara justamente para
+     que una auditoría de contraste no lo cuente como «color suelto»: un hex
+     hardcodeado en una regla es invisible para el barrido de tokens. Blanco
+     encima da 7.67:1 — medido en `designTokens.test.ts`, no copiado de acá. */
+  --channel-whatsapp: #075e54;
 
   /* ══════════ fin de los tokens del sistema · abajo, lo preexistente ══════════ */
 
@@ -2646,7 +2671,7 @@ body {
 }
 
 .share-wa {
-  background: #075e54;
+  background: var(--channel-whatsapp);
   color: var(--on-dark);
   text-decoration: none;
 }
