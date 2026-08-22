@@ -1964,3 +1964,268 @@ describe('🔴 js-yaml vive SÓLO en el instrumento de tests', () => {
     }
   }, 120_000);
 });
+
+/**
+ * 🔴 P83 · LAS DOS FORMAS DEL P81, COMO REGRESIONES PERMANENTES.
+ *
+ * En la vuelta pasada corrí estas dos sondas, reporté sus conteos y **no dejé
+ * ni un `it()` versionado**. El delta P81→P83 tiene **cero declaraciones de test
+ * nuevas** —medido: 36 invocaciones `it(` antes y después— y las formas
+ * adversariales viven en comentarios y en el CHANGELOG.
+ *
+ * 📌 **Una sonda corrida una vez prueba el PRESENTE; un `it()` versionado
+ * protege el FUTURO.** Los replays demuestran que hoy funciona; no dejan nada
+ * que caiga si mañana alguien desconecta `jobCrudo(...).container` o deja de
+ * aplicarle `fallasDeContexto` al scanner. Eso era, textual, la condición 3 del
+ * P81, y la leí como «verificá» cuando decía «versioná».
+ *
+ * ## Por qué cada caso tiene DOS mitades
+ *
+ * Un test que sólo afirme «el arnés rechaza esta forma» prueba media cosa:
+ * podría estar rechazando algo inofensivo. La condición 3 pide separar **«el
+ * YAML contiene el comando»** de **«la herramienta se ejecutó»**, así que cada
+ * forma va con:
+ *
+ *   (a) el arnés la RECHAZA — sobre el workflow real, en memoria;
+ *   (b) un CONTROL EJECUTABLE de que esa forma **de verdad neutraliza** la
+ *       herramienta: la misma invocación deja marca sin la variable y no la deja
+ *       con ella.
+ *
+ * Sin (b), (a) es una regla sin fundamento. Sin (a), (b) es una curiosidad.
+ */
+describe('🔴 P83 · las formas del P81, versionadas y con control ejecutable', () => {
+  const ciReal = () => readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');
+
+  /** El YAML real con una mutación textual mínima, verificando que se plantó. */
+  const conMutacion = (de: string, a: string): string => {
+    const yml = ciReal();
+    expect(yml.includes(de), `la mutación no se plantó: no está «${de}»`).toBe(true);
+    return yml.replace(de, a);
+  };
+
+  it('🔴 (a) `container.env` del job es RECHAZADO sobre el workflow real', () => {
+    const mutado = conMutacion(
+      '  build:\n    runs-on: ubuntu-latest',
+      '  build:\n    container:\n      image: node:20\n      env:\n' +
+        '        npm_config_script_shell: /usr/bin/true\n    runs-on: ubuntu-latest',
+    );
+    const { jobs } = leerWorkflow(mutado);
+    const job = jobs[0]!;
+    const paso = job.pasos.find((p) => rolDePaso(p.claves) === 'test');
+    expect(paso, 'no se encontró el gate `npm test` en el workflow mutado').toBeDefined();
+
+    const fallas = fallasDeContexto(mutado, job.nombre, paso!.claves, 'sonda', 'el gate', 'test');
+    expect(
+      fallas.join(' · '),
+      'el arnés no rechazó `container`: su env llega a TODOS los pasos',
+    ).toMatch(/container/);
+  });
+
+  it('🔴 (a) `step.env.BASH_ENV` en el SCANNER es RECHAZADO sobre el workflow real', () => {
+    const mutado = conMutacion(
+      '        run: bash scripts/auditar-secretos.sh',
+      '        env:\n          BASH_ENV: .noop.sh\n        run: bash scripts/auditar-secretos.sh',
+    );
+    const { jobs } = leerWorkflow(mutado);
+    const job = jobs[0]!;
+    const paso = job.pasos.find((p) => rolDePaso(p.claves) === 'scanner');
+    expect(paso, 'el scanner no está en la población rolada').toBeDefined();
+
+    const fallas = fallasDeContexto(mutado, job.nombre, paso!.claves, 'sonda', 'el scanner', 'scanner');
+    expect(
+      fallas.join(' · '),
+      'el arnés no rechazó el env del scanner: su rol no exige mapping vacío',
+    ).toMatch(/env/);
+  });
+
+  /**
+   * 🔴 LA CLASE ENTERA, no sólo los dos que el dictamen nombró.
+   *
+   * Censé el archivo buscando qué otras formas adversariales de la jornada
+   * vivían **sólo en replays ad-hoc** —corridas a mano, reportadas en un
+   * paquete, sin `it()` que las plante—. Aparecieron cinco más.
+   *
+   * ⚠️ **Las versiono ahora en vez de anotarlas.** La vuelta pasada enumeré una
+   * deuda, la presenté como método y el BLOCK siguiente entró por el agujero que
+   * yo mismo había dibujado. **Enumerar la clase y no cerrarla es lo que produjo
+   * este dictamen**; hacerlo dos veces seguidas sería no haber entendido nada.
+   *
+   * No entran acá `NODE_OPTIONS` ni ninguna otra variable de entorno, **y eso es
+   * a propósito**: la allowlist positiva las cubre por construcción, sin
+   * nombrarlas. Un mutante por cada nombre sería volver a la denylist que
+   * costó ocho vueltas abandonar.
+   */
+  const FORMAS: ReadonlyArray<readonly [string, string, string, RegExp]> = [
+    [
+      'strategy en el job del publicador',
+      '  build:\n    runs-on: ubuntu-latest',
+      '  build:\n    strategy:\n      matrix:\n        replica: [1, 2]\n    runs-on: ubuntu-latest',
+      /strategy/,
+    ],
+    [
+      'working-directory en el publicador',
+      '        run: |\n          bash scripts/publicar-vercel.sh app',
+      '        working-directory: landing\n        run: |\n          bash scripts/publicar-vercel.sh app',
+      /working-directory/,
+    ],
+    [
+      'shell propio en el publicador',
+      '        run: |\n          bash scripts/publicar-vercel.sh app',
+      "        shell: bash {0}\n        run: |\n          bash scripts/publicar-vercel.sh app",
+      /shell/,
+    ],
+    [
+      'continue-on-error verdadero en el publicador',
+      '      - name: Publicar en Vercel (sólo con TODO en verde)',
+      '      - name: Publicar en Vercel (sólo con TODO en verde)\n        continue-on-error: true',
+      /continue-on-error/,
+    ],
+  ];
+
+  for (const [nombre, de, a, esperado] of FORMAS) {
+    it(`🔴 ${nombre} → RECHAZADO`, () => {
+      const mutado = conMutacion(de, a);
+      const { jobs } = leerWorkflow(mutado);
+      const job = jobs[0]!;
+      const paso = job.pasos.find((p) => rolDePaso(p.claves) === 'publicador');
+      expect(paso, 'no se encontró el publicador en el workflow mutado').toBeDefined();
+      const fallas = fallasDeContexto(
+        mutado, job.nombre, paso!.claves, 'sonda', 'el publicador', 'publicador',
+      );
+      // `strategy` y la condición se adjudican en la política del publicador,
+      // que vive en su propio test; acá se afirma lo que `fallasDeContexto` ve.
+      const todo = [...fallas, job.estrategia !== undefined ? 'strategy presente' : ''].join(' · ');
+      expect(todo, `el arnés no rechazó «${nombre}»`).toMatch(esperado);
+    });
+  }
+
+  it('🔴 el checkout con `ref` a un ancestro → RECHAZADO', () => {
+    const mutado = conMutacion(
+      '          fetch-depth: 0',
+      '          ref: 7d5b92088416eff648f87c6901c75ad77fe331ec\n          fetch-depth: 0',
+    );
+    const { jobs } = leerWorkflow(mutado);
+    const checkout = jobs[0]!.pasos.find((p) => rolDePaso(p.claves) === 'checkout');
+    expect(checkout, 'no se encontró el checkout').toBeDefined();
+    // 🔴 La guarda real es la igualdad EXACTA del `with`: cualquier clave de más
+    // cae sin necesidad de nombrarla. Se planta la peor —`ref`, que desacopla el
+    // workspace de lo que se publica— para dejarlo escrito con su motivo.
+    expect(checkout!.claves['with']).not.toEqual({ 'fetch-depth': 0 });
+  });
+
+  it('🔴 el swap de secretos → RECHAZADO aunque ambas referencias sigan presentes', () => {
+    const mutado = conMutacion(
+      '          HOOK_APP: ${{ secrets.VERCEL_HOOK_APP }}',
+      '          HOOK_APP: ${{ secrets.VERCEL_HOOK_LANDING }}\n' +
+        '          UNUSED_HOOK_APP: ${{ secrets.VERCEL_HOOK_APP }}',
+    );
+    const { jobs } = leerWorkflow(mutado);
+    const job = jobs[0]!;
+    const paso = job.pasos.find((p) => rolDePaso(p.claves) === 'publicador');
+    const fallas = fallasDeContexto(
+      mutado, job.nombre, paso!.claves, 'sonda', 'el publicador', 'publicador',
+    );
+    expect(
+      fallas.join(' · '),
+      'App se dispararía dos veces y Landing ninguna, con ambas referencias presentes',
+    ).toMatch(/env/);
+  });
+
+  /**
+   * (b) EL CONTROL EJECUTABLE de `npm_config_script_shell`.
+   *
+   * Demuestra la premisa del hallazgo, no la regla: con esa variable el script
+   * de npm **no corre**. Se mide por MARCA en disco, no por exit code — un
+   * `exit 0` es justamente lo que el mecanismo produce, así que usarlo como
+   * oráculo sería medir con el instrumento que el ataque manipula.
+   */
+  it('🔴 (b) CONTROL · `npm_config_script_shell` impide que el script corra', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'payme-scriptshell-'));
+    try {
+      const marca = join(dir, 'CORRIO');
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({
+          name: 'sonda',
+          version: '1.0.0',
+          scripts: { marca: `node -e "require('fs').writeFileSync('CORRIO','1')"` },
+        }),
+      );
+      const correr = (env: NodeJS.ProcessEnv): Promise<number> =>
+        new Promise((ok) => {
+          execFile('npm', ['run', 'marca', '--silent'], { cwd: dir, env }, (err) =>
+            ok(err && typeof err.code === 'number' ? err.code : err ? -1 : 0),
+          );
+        });
+
+      // Control POSITIVO: sin la variable, el script deja su marca.
+      await correr({ ...process.env, npm_config_script_shell: undefined });
+      expect(existsSync(marca), 'el escenario no funciona: el script no corrió ni sin la variable')
+        .toBe(true);
+      rmSync(marca, { force: true });
+
+      // Con la variable: npm termina 0 y el script NO deja marca.
+      const code = await correr({ ...process.env, npm_config_script_shell: '/usr/bin/true' });
+      expect(code, 'el mecanismo no produjo el exit 0 que lo hace peligroso').toBe(0);
+      expect(
+        existsSync(marca),
+        'la variable NO neutralizó el script: la premisa del hallazgo no se sostiene acá',
+      ).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  /**
+   * (b) EL CONTROL EJECUTABLE de `BASH_ENV`.
+   *
+   * `--noprofile --norc` NO lo neutraliza en un Bash no interactivo: el prelude
+   * corre antes y puede redefinir la herramienta. Igual que arriba, se mide por
+   * marca y no por exit code.
+   */
+  it('🔴 (b) CONTROL · `BASH_ENV` intercepta la herramienta antes del cuerpo', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'payme-bashenv-'));
+    try {
+      const marca = join(dir, 'CORRIO');
+      // 🔴 SIN extensión: el cuerpo la invoca como `herramienta` y bash la busca
+      // por ese nombre exacto en el PATH. Con `herramienta.sh` el control
+      // positivo falló —la herramienta no corría ni sin BASH_ENV— y sin ese
+      // control habría leído «no dejó marca» como éxito del mecanismo.
+      const herramienta = join(dir, 'herramienta');
+      writeFileSync(herramienta, `#!/usr/bin/env bash\ntouch ${JSON.stringify(marca)}\n`, {
+        mode: 0o755,
+      });
+      // El prelude redefine la herramienta como una función que no hace nada.
+      const prelude = join(dir, 'prelude.sh');
+      writeFileSync(prelude, `herramienta() { return 0; }\n`);
+      const cuerpo = join(dir, 'cuerpo.sh');
+      writeFileSync(cuerpo, `herramienta\n`);
+
+      const correr = (env: NodeJS.ProcessEnv): Promise<number> =>
+        new Promise((ok) => {
+          execFile(
+            'bash',
+            ['--noprofile', '--norc', '-eo', 'pipefail', cuerpo],
+            { cwd: dir, env: { ...env, PATH: `${dir}:${process.env.PATH ?? ''}` } },
+            (err) => ok(err && typeof err.code === 'number' ? err.code : err ? -1 : 0),
+          );
+        });
+
+      // Control POSITIVO: sin BASH_ENV, la herramienta real corre y deja marca.
+      await correr({ ...process.env, BASH_ENV: undefined });
+      expect(existsSync(marca), 'el escenario no funciona: la herramienta no corrió ni sin BASH_ENV')
+        .toBe(true);
+      rmSync(marca, { force: true });
+
+      // Con BASH_ENV: termina 0 y la herramienta NO dejó marca.
+      const code = await correr({ ...process.env, BASH_ENV: prelude });
+      expect(code, 'el mecanismo no produjo el exit 0 que lo hace peligroso').toBe(0);
+      expect(
+        existsSync(marca),
+        '`--noprofile --norc` habría neutralizado BASH_ENV: la premisa no se sostiene acá',
+      ).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+});
