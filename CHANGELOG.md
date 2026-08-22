@@ -11,6 +11,91 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.112.0 — cierre del BLOCK P60: el workflow se lee por estructura (2026-08-21)
+
+Segundo dictamen de Codex sobre este repo, sobre el lote **ya publicado**
+`7d5b920`. **No hay regresión activa** —el dictamen lo dice textual: son falsos
+verdes del gate preventivo, no bytes malos en producción— y la publicación
+consumada no se deshace. Lo que falla es el instrumento.
+
+**Sin push ni deploy.** Este cierre se pliega al mismo lote que el del P62: una
+sola ref, un solo paquete de reauditoría.
+
+### ① El lector de workflows pasa a ser un parser estructural
+
+Cuatro contraejemplos dejaban **49/49 verde**. Los dos peores:
+
+```yaml
+steps:
+  -                          ← el guion SOLO, y era el PRIMER paso
+    run: npx vercel --prod
+```
+y un **segundo job** con su propio `steps:`, que el `findIndex` de un único
+bloque nunca miraba.
+
+🔴 **La decisión que rompe el ciclo de tres vueltas: el parser FALLA CERRADO.**
+No intenta entender todo YAML —eso es una carrera perdida contra un estándar
+enorme— sino que declara el subconjunto que entiende y marca **INDECIDIBLE**
+todo lo demás. Antes, lo que el lector no reconocía **desaparecía del censo**;
+ahora **detiene la lectura**. Un lector incompleto que calla es un falso verde;
+uno que grita es una limitación honesta.
+
+`scripts/yamlWorkflow.test.ts` prueba **el instrumento**, que es lo que nunca
+tuvo pruebas propias: se lo probaba de refilón contra el `ci.yml` real, que por
+definición sólo contiene las formas que ya usamos.
+
+### ② y ③ · la gramática de shell y las expresiones de GitHub
+
+`${HOOK_APP:-$HOOK_LANDING}` pasaba porque sólo se miraba **cómo empieza** cada
+`$`; si faltara `HOOK_APP` ese comando publica landing dos veces y no publica
+app. Ahora cada expansión se recorre hasta su cierre.
+
+`${{ github.event.head_commit.message }}` pasaba porque se validaba la
+**sintaxis del selector**; su **valor** lo escribe quien pushea. Ahora se
+adjudica por dominio: `before`/`after` y los SHA de PR entran —son SHAs que
+produce Git—, `head_commit.message` no. **La familia `github.event` no se
+adjudica entera: campo por campo.**
+
+### ④ Tokens exactos, y dos comentarios que se contradecían
+
+`\b` **sí** hace frontera entre `h` y `-`, así que
+`reportar-flaky.sh-alternativo` quedaba adjudicado como el script conocido.
+**Misma clase que la allowlist de dominios que ya cerré una vez comparando por
+prefijo de cadena en vez de por la unidad real** — se repitió en otro archivo:
+la lección no había viajado.
+
+🔴 Y dos comentarios decían que ciertas claves «ningún comentario de este
+archivo nombra» **en la frase misma que las nombraba**. El criterio era
+insostenible por construcción: en un archivo que documenta su diseño, explicar
+una clave la vuelve nombrada. **Una propiedad que se destruye al escribirla no
+puede ser el fundamento de nada.**
+
+### Los cinco mutantes, contra el `ci.yml` real
+
+```
+guion solo → 3 failed · segundo job → 5 failed · ${VAR:-…} → 3 failed
+head_commit.message → 3 failed · reportar-flaky.sh-alternativo → 3 failed
+```
+`ci.yml` restaurado y verificado por sha después de cada sonda.
+
+### Dos usos reales que el dictamen no nombra
+
+Aparecieron al correr el parser contra el workflow verdadero: `branches: [main]`
+y `github.event.pull_request.base.sha`. El flow de escalares se acepta —el flow
+con mapping, que es la forma capaz de esconder un paso, sigue indecidible— y el
+SHA de PR entra al dominio acotado. **Un gate que no se puede correr se termina
+aflojando.**
+
+### El drift del espejo que el dictamen reporta ya estaba cerrado
+
+Codex midió 1257+1 fail por las 22-vs-21 menciones contra la fuente de Diseño
+vigente. Su target era `7d5b920`; **el espejo de este lote ya está en 22**
+(`--channel-whatsapp`, anclado a `diseno@7bb13e3`), re-espejado durante el
+rework del P62. Confirmado al pasar: `tokensRatificados` 10/10.
+
+Gate: typecheck 0 · **1271 unitarios / 96 archivos** (+12) · **111 e2e** ·
+builds real/mock/landing · secretos · espejo · `diff --check` limpio.
+
 ## 0.111.0 — cierre del BLOCK P62: las tres señales, cada una con su testigo (2026-08-21)
 
 Codex dictaminó **BLOCK sobre `abd2faa`**, y conviene decir de qué tipo: **de
