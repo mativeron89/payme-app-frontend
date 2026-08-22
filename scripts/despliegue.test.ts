@@ -901,6 +901,28 @@ const defaultRun = (n: unknown, clave: string): unknown => {
  * efectivo": eso es reimplementar la precedencia de env de Actions, la misma
  * familia de intérprete a medias que ya costó varias vueltas.
  */
+/**
+ * 🔴 P81 · IGUALDAD DE MAPPINGS POR PAREJAS, NO POR ORDEN.
+ *
+ * La comparación usaba `JSON.stringify`, que es sensible al orden de las claves:
+ * invertir `HOOK_APP`/`HOOK_LANDING` **con las mismas parejas** ponía el gate en
+ * rojo. **En YAML el orden de un mapping no cambia su significado**, así que era
+ * un FALSO ROJO — el primero de toda la saga en esa dirección.
+ *
+ * ⚠️ Vale anotarlo porque nueve vueltas fueron de guardas que dejaban pasar de
+ * más, y **una guarda que cierra de más también es un defecto**: enseña a
+ * desconfiar del gate, y un gate del que se desconfía se termina aflojando.
+ */
+function mismoMapping(a: unknown, b: Readonly<Record<string, string>>): boolean {
+  if (typeof a !== 'object' || a === null || Array.isArray(a)) return false;
+  const m = a as Record<string, unknown>;
+  const claves = Object.keys(m).sort();
+  const esperadas = Object.keys(b).sort();
+  if (claves.length !== esperadas.length) return false;
+  if (claves.some((k, i) => k !== esperadas[i])) return false;
+  return claves.every((k) => m[k] === b[k]);
+}
+
 const envDe = (n: unknown): unknown => {
   if (typeof n !== 'object' || n === null) return undefined;
   return (n as Record<string, unknown>)['env'];
@@ -915,16 +937,92 @@ const envDe = (n: unknown): unknown => {
  */
 const ENV_POR_ROL: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   checkout: {},
+  scanner: {},
+  setup: {},
+  instalacion: {},
   espejo: {},
   test: {},
   typecheck: {},
-  playwright: {},
   build: { VITE_API_URL: 'https://payme-app-backend-production.up.railway.app' },
+  'playwright-install': {},
+  playwright: {},
+  reporter: {},
   publicador: {
     HOOK_APP: '${{ secrets.VERCEL_HOOK_APP }}',
     HOOK_LANDING: '${{ secrets.VERCEL_HOOK_LANDING }}',
   },
 };
+
+/**
+ * 🔴 P81 · LA POBLACIÓN COMPLETA, CON ROL PARA CADA PASO.
+ *
+ * Los dos arrays `GATES` enumeraban CINCO pasos —espejo, test, typecheck, build,
+ * Playwright— y todo lo demás quedaba fuera de la política. **El auditor de
+ * secretos estaba entre lo que quedaba fuera**: el censo lo admitía como
+ * comando permitido, pero nadie miraba su contexto, así que un
+ * `env.BASH_ENV` lo volvía no-op y la suite seguía verde con el scanner
+ * terminando 0 sin ejecutarse.
+ *
+ * ⚠️ **Es exactamente el hueco que yo mismo había mapeado al censar mi deuda:**
+ * *«la población de pasos-gate es una lista de nombres; uno no nombrado
+ * entra»*. El scanner era ese uno. Que lo hubiera anticipado y no lo hubiera
+ * cerrado es la diferencia entre ver la clase y ver la instancia.
+ *
+ * Ahora la población se deriva de TODOS los pasos del job, y **un paso sin rol
+ * es rojo**. Setup, instalación y reporter están clasificados explícitamente —
+ * no porque sean inofensivos, sino porque **decir «éste no bloquea» es una
+ * afirmación que alguien tuvo que escribir**, y queda en el diff.
+ */
+const ROL_DE_PASO: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^actions\/checkout@/, 'checkout'],
+  [/^actions\/setup-node@/, 'setup'],
+  [/^bash scripts\/auditar-secretos\.sh$/, 'scanner'],
+  [/^npm ci$/, 'instalacion'],
+  [/^node scripts\/verificar-mirror\.mjs$/, 'espejo'],
+  [/^npm test$/, 'test'],
+  [/^npm run typecheck$/, 'typecheck'],
+  [/^npm run build$/, 'build'],
+  [/^npx playwright install$/, 'playwright-install'],
+  [/^npx playwright test$/, 'playwright'],
+  [/^bash scripts\/reportar-flaky\.sh$/, 'reporter'],
+  [/^bash scripts\/publicar-vercel\.sh$/, 'publicador'],
+];
+
+/**
+ * 🔴 QUÉ ROLES BLOQUEAN LA PUBLICACIÓN — y por qué esto se declara y no se
+ * infiere.
+ *
+ * Un paso que bloquea no puede llevar `if:` ni tolerar su propio error: si
+ * falla, la publicación no sale. El **reporter** es el único que NO bloquea —
+ * informa flakies y lleva `if: always()` a propósito, porque tiene que correr
+ * aunque Playwright haya fallado.
+ *
+ * ⚠️ **«Éste no bloquea» es una afirmación, no una omisión.** Está escrita acá y
+ * queda en el diff: el día que alguien agregue un paso informativo más, tiene
+ * que venir a declararlo, y ahí se decide si de verdad no bloquea.
+ */
+const ROLES_QUE_NO_BLOQUEAN: ReadonlySet<string> = new Set(['reporter']);
+
+/** El rol de un paso, por el PREFIJO DE TOKENS de su comando o su `uses`. */
+function rolDePaso(claves: { readonly [k: string]: unknown }): string | null {
+  const uses = typeof claves['uses'] === 'string' ? (claves['uses'] as string) : null;
+  if (uses !== null) {
+    return ROL_DE_PASO.find(([re]) => re.test(uses))?.[1] ?? null;
+  }
+  const run = typeof claves['run'] === 'string' ? (claves['run'] as string) : '';
+  for (const cmd of comandosDe(run)) {
+    const ts = tokens(cmd);
+    if (ts === null) return null;
+    // Se compara el PREFIJO ejecutable —intérprete + script, o los tokens del
+    // comando npm— y no la línea entera: los argumentos son de cada paso.
+    for (const [re, rol] of ROL_DE_PASO) {
+      for (const n of [1, 2, 3]) {
+        if (ts.length >= n && re.test(ts.slice(0, n).join(' '))) return rol;
+      }
+    }
+  }
+  return null;
+}
 
 /**
  * Las fallas del contexto de ejecución de UN paso, mirando sus tres niveles.
@@ -965,7 +1063,7 @@ const fallasDeContexto = (
     out.push(`${donde}: el WORKFLOW declara \`defaults.run.working-directory\``);
   }
 
-  if (!TOLERANCIA_VALIDA(claves['continue-on-error'])) {
+  if (!ROLES_QUE_NO_BLOQUEAN.has(rol) && !TOLERANCIA_VALIDA(claves['continue-on-error'])) {
     out.push(
       `${donde}: ${que} lleva \`continue-on-error: ${JSON.stringify(claves['continue-on-error'])}\` — sólo se admite ausencia o el booleano false`,
     );
@@ -1009,7 +1107,7 @@ const fallasDeContexto = (
         `${donde}: ${que} declara \`env\` y su rol no necesita ninguna: ${JSON.stringify(envDelPaso)}`,
       );
     }
-  } else if (JSON.stringify(envDelPaso) !== JSON.stringify(esperado)) {
+  } else if (!mismoMapping(envDelPaso, esperado)) {
     out.push(
       `${donde}: el \`env\` de ${que} no es EXACTAMENTE el de su rol\n` +
         `     esperado: ${JSON.stringify(esperado)}\n     hallado:  ${JSON.stringify(envDelPaso)}`,
@@ -1020,6 +1118,18 @@ const fallasDeContexto = (
   }
   if (envDe(doc) !== undefined) {
     out.push(`${donde}: el WORKFLOW declara \`env\` — llegaría a todos los jobs`);
+  }
+  /**
+   * 🔴 P81 · CUALQUIER `container` ES ROJO. Su `env` —y su `options --env`—
+   * llega a TODOS los pasos sin pasar por el `env` directo que se adjudica
+   * arriba: es una FUENTE de ambiente que la allowlist no miraba, no una
+   * dimensión más. Hoy ningún job lo necesita; el día que haga falta se fija su
+   * imagen, su `env` y sus `options` completos, y se decide a la vista.
+   */
+  if (crudoJob?.['container'] !== undefined) {
+    out.push(
+      `${donde}: su job «${nombreJob}» declara \`container\` — su env llegaría a TODOS los pasos`,
+    );
   }
   return out;
 };
@@ -1623,24 +1733,31 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
     // Mismo criterio que arriba: cada publicador responde por sus antecesores.
     const previos = publicadores2.flatMap((pub) => pasosGarantizadosAntesDe(jobs, pub));
 
-    const GATES = [
-      /^node scripts\/verificar-mirror\.mjs\b/, /^npm test$/, /^npm run typecheck$/,
-      /^npm run build$/, /^npx playwright test$/,
-    ];
-    /** Cada gate con su ROL, que es lo que fija su `env` permitido. */
-    const ROL_DE_GATE = new Map<RegExp, string>([
-      [GATES[0]!, 'espejo'], [GATES[1]!, 'test'], [GATES[2]!, 'typecheck'],
-      [GATES[3]!, 'build'], [GATES[4]!, 'playwright'],
-    ]);
+    /**
+     * 🔴 P81 · LA POBLACIÓN ES **TODO** LO QUE PRECEDE AL PUBLICADOR, con rol.
+     *
+     * Antes acá había una lista de cinco gates y **el resto de los pasos no
+     * pasaba por ninguna política**. El auditor de secretos quedaba fuera: su
+     * `env.BASH_ENV` lo volvía no-op y la suite seguía verde con el scanner
+     * terminando 0 sin ejecutarse.
+     *
+     * Ahora **cada paso previo tiene que tener un rol declarado** —incluidos
+     * setup, instalación y reporter— y todos pasan por el mismo contexto. Un
+     * paso sin rol es rojo: es la forma de que un paso NUEVO no entre callado.
+     */
     const problemas: string[] = [];
     for (const p of previos) {
-      const cmds = comandosDe(texto(p.claves['run']) ?? '');
-      const gate = GATES.find((re) => cmds.some((c) => re.test(c)));
-      if (!gate) continue;
       const donde = `${p.job}.steps[${p.indice}]`;
+      const rolP = rolDePaso(p.claves);
+      if (rolP === null) {
+        problemas.push(`${donde}: paso SIN ROL declarado — no se puede adjudicar su contexto`);
+        continue;
+      }
       const condicion = p.claves['if'];
-      if (condicion !== undefined) {
-        problemas.push(`${donde}: el gate lleva \`if: ${JSON.stringify(condicion)}\` — puede no ejecutarse`);
+      if (condicion !== undefined && !ROLES_QUE_NO_BLOQUEAN.has(rolP)) {
+        problemas.push(
+          `${donde}: el paso «${rolP}» BLOQUEA y lleva \`if: ${JSON.stringify(condicion)}\` — puede no ejecutarse`,
+        );
       }
       /**
        * 🔴 P77 · EL GATE PASA POR EL MISMO CONTEXTO QUE EL PUBLICADOR.
@@ -1654,18 +1771,19 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
        * Es la misma llamada que hace el publicador — una definición, dos
        * poblaciones.
        */
-      // El ROL sale del gate que matcheó: es lo que decide qué `env` necesita.
-      const rol = ROL_DE_GATE.get(gate)!;
-      problemas.push(
-        ...fallasDeContexto(yml, p.job, p.claves, donde, `el gate \`${cmds[0] ?? ''}\``, rol),
-      );
+      problemas.push(...fallasDeContexto(yml, p.job, p.claves, donde, `el paso «${rolP}»`, rolP));
     }
     // Control positivo: si ningún paso matcheara como gate, el bucle no miraría
     // nada y esto pasaría en vacío sobre un CI sin gates.
-    const cuantos = previos.filter((p) =>
-      GATES.some((re) => comandosDe(texto(p.claves['run']) ?? '').some((c) => re.test(c))),
-    ).length;
-    expect(cuantos, 'no se reconoció ningún gate: el test mediría en vacío').toBe(5);
+    // Control positivo: los cinco gates de verificación TIENEN que estar entre
+    // los roles vistos; si no, este bucle habría medido sobre una población
+    // vacía o incompleta.
+    const rolesVistos = new Set(previos.map((p) => rolDePaso(p.claves)));
+    for (const g of ['espejo', 'test', 'typecheck', 'build', 'playwright'] as const) {
+      expect(rolesVistos.has(g), `el gate «${g}» no está entre los pasos previos`).toBe(true);
+    }
+    // Y el scanner, que es el que se había quedado afuera de la población.
+    expect(rolesVistos.has('scanner'), 'el auditor de secretos no entró a la población').toBe(true);
     expect(problemas, `gates que están escritos pero no gatean:\n  ${problemas.join('\n  ')}`).toEqual([]);
   });
 

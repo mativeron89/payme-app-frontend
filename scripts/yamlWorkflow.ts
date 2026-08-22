@@ -77,6 +77,18 @@ export interface JobYaml {
    * —cuatro hooks— mientras el gate certificaba «exactamente dos».
    */
   readonly estrategia: unknown;
+  /**
+   * `container` — P81. Un job puede correr dentro de un contenedor, y **su
+   * `env` (y su `options --env`) llega a TODOS los pasos** sin pasar por el
+   * `env` directo que la política ya adjudica. Un
+   * `npm_config_script_shell: /usr/bin/true` heredado desde ahí vuelve no-op a
+   * `test`, `typecheck` y `build` mientras el arnés certifica los mismos
+   * comandos escritos.
+   *
+   * Se representa para poder RECHAZARLO: no es una dimensión más que gobernar,
+   * es una FUENTE de ambiente que la allowlist positiva no estaba mirando.
+   */
+  readonly contenedor: unknown;
 }
 
 export interface Workflow {
@@ -133,6 +145,7 @@ export function leerWorkflow(texto: string): Workflow {
           necesita,
           condicion: job['if'],
           estrategia: job['strategy'],
+          contenedor: job['container'],
         });
       } else {
         problemas.push(
@@ -161,6 +174,7 @@ export function leerWorkflow(texto: string): Workflow {
       necesita,
       condicion: job['if'],
       estrategia: job['strategy'],
+      contenedor: job['container'],
     });
   }
   return { jobs, problemas };
