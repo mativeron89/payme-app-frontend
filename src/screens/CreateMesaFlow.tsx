@@ -1230,8 +1230,23 @@ export function CreateMesaFlow() {
     return (
       <div className="screen has-appbar">
         <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
+        {/* «EL TICKET SUBE» — SPEC_APP.md §1.3-bis, refinamiento 2026-08-21.
+            El total viaja a la tarjeta de título porque al pie, debajo del
+            stepper, había que scrollear para saber QUÉ se está dividiendo.
+
+            No se duplica: el bloque de abajo DEJA de mostrar el monto y pasa a
+            ser la barra «Ver el ticket». §5 bis · F lo exige — *un dato, un
+            lugar*: ningún monto se repite en dos bloques de la misma pantalla.
+
+            Las tres piezas (`title-card-div`, `-total`, `-lbl`, `-amt`) ya
+            existían en el sistema y no las usaba ninguna pantalla. */}
         <div className="title-card">
           <div className="title-card-title">{t('¿Cómo dividen?')}</div>
+          <div className="title-card-div" />
+          <div className="title-card-total">
+            <span className="title-card-total-lbl">{t('Total del ticket')}</span>
+            <span className="title-card-total-amt">{formatMXN(total)}</span>
+          </div>
         </div>
         <div className="scroll flow-scroll">
           {avisoApertura()}
@@ -1326,8 +1341,29 @@ export function CreateMesaFlow() {
               // §1.3 exige en pantalla no puede quedar detrás de un toque.
               disabled={!!totalMismatch}
             >
-              <span className="tk-fold-lbl">{t('Total del ticket')}</span>
-              <span className="tk-fold-amt">{formatMXN(total)}</span>
+              {/* Barra NAVY de ancho completo (§1.3-bis, 2026-08-21). Es el
+                  único bloque oscuro de la pantalla, y ése es el motivo escrito:
+                  un chevron suelto o una píldora clara se saltean por error.
+                  El ícono va en `--action-2`, que acá NO contradice §5 bis · F
+                  —«`--action-2` significa exclusivamente seleccionado»—: F habla
+                  del BORDE de un bloque elegible, y esto es un glifo sobre navy,
+                  que es el uso que el propio §1.3-bis manda.
+
+                  El monto ya no vive acá: subió a la tarjeta de título. */}
+              <Icon name="receipt" size={22} className="tk-fold-ico" aria-hidden="true" />
+              <span className="tk-fold-txt">
+                <span className="tk-fold-lbl">{t('Ver el ticket')}</span>
+                {/* Cuenta LÍNEAS del ticket, que es lo que se ve al desplegar.
+                    No cuenta unidades: un consumo con cantidad 3 es una línea
+                    acá y tres ítems para el backend (`editItems.flatMap`). El
+                    número tiene que coincidir con lo que la persona va a ver,
+                    no con lo que se manda. */}
+                <span className="tk-fold-sub">
+                  {editItems.length === 1
+                    ? t('1 consumo, uno por uno')
+                    : t('{0} consumos, uno por uno', editItems.length)}
+                </span>
+              </span>
               <Icon
                 name="chevron-down"
                 size={18}

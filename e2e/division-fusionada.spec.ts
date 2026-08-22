@@ -41,11 +41,23 @@ test('las tres formas y el ticket viven en UNA pantalla, SIN contador de paso', 
 test('🔴 el ticket nace PLEGADO y se abre con sus consumos', async ({ page }) => {
   await hastaLaPantallaFusionada(page);
 
-  // Plegado: el total se ve, el detalle no.
+  /**
+   * 🔴 «EL TICKET SUBE» (§1.3-bis, 2026-08-21) partió esto en dos lugares, y el
+   * test tiene que mirar los dos o deja de probar lo que dice el título.
+   *
+   * El TOTAL ya no vive en el bloque plegado: subió a la tarjeta de título. El
+   * bloque de abajo es ahora el ACCESO —«Ver el ticket»— con el conteo de
+   * consumos como subtítulo. §5 bis · F lo pide así: *un dato, un lugar*.
+   */
+  // Plegado: el total se ve ARRIBA, el acceso abajo, el detalle no.
   await expect(page.getByText('Total del ticket')).toBeVisible();
+  await expect(page.getByText(/\d+ consumos, uno por uno/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: /Total del ticket/ }).click();
+  // Y el monto NO se repite: aparece una sola vez en toda la pantalla.
+  await expect(page.getByText('$840.00')).toHaveCount(1);
+
+  await page.getByRole('button', { name: /Ver el ticket/ }).click();
   // Abierto: vuelve el contenido íntegro de §1.3, no una versión reducida.
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
   // Y la verificación que §1.3 exige EN PANTALLA vuelve con él: plegado, esa
@@ -91,7 +103,8 @@ test('🔴 «Pagar el total» reparte el total entre los que cubren, como igual'
 
 test('🔴 P3-01 · reescanear no hereda el acordeón abierto del ticket anterior', async ({ page }) => {
   await hastaLaPantallaFusionada(page);
-  await page.getByRole('button', { name: /Total del ticket/ }).click();
+  // El acceso al ticket dejó de llamarse por su total (§1.3-bis, 2026-08-21).
+  await page.getByRole('button', { name: /Ver el ticket/ }).click();
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
 
   // Volver y escanear OTRO ticket: el acordeón no puede recordar el anterior.

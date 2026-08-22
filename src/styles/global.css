@@ -4669,18 +4669,44 @@ body {
   margin-bottom: 12px;
   overflow: hidden;
 }
+/* BARRA NAVY de ancho completo — SPEC_APP.md §1.3-bis (2026-08-21). Antes era
+   una fila clara con «Total del ticket $840.00»; el monto subió a la tarjeta de
+   título y este bloque pasó a ser el ACCESO al ticket.
+
+   Es el único bloque oscuro de la pantalla, y ése es el motivo escrito en el
+   spec: un chevron suelto o una píldora clara se saltean por error. El cuerpo
+   desplegado sigue blanco — sólo la cabecera es navy. */
 .tk-fold-head {
   width: 100%;
   display: flex;
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-4);
-  background: none;
+  background: var(--action);
   border: 0;
   text-align: left;
   font: inherit;
-  color: inherit;
+  color: var(--on-dark);
   min-height: var(--tap-min);
+}
+.tk-fold-ico {
+  flex: none;
+  /* §5 bis · F reserva `--action-2` para «seleccionado», y esto NO lo
+     contradice: F habla del BORDE de un bloque elegible. Acá es un glifo sobre
+     navy, que es el uso que §1.3-bis manda explícitamente. */
+  color: var(--action-2);
+}
+.tk-fold-txt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tk-fold-sub {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--on-dark-muted);
 }
 /* Deshabilitada NO se atenúa: sigue siendo información que hay que leer. El
    `disabled` acá sólo impide volver a esconder un total que no cierra. */
@@ -4689,21 +4715,12 @@ body {
   opacity: 1;
 }
 .tk-fold-lbl {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  color: var(--text-muted);
-}
-.tk-fold-amt {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: var(--fs-h2);
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
+  font-weight: 600;
+  color: var(--on-dark);
 }
 .tk-fold-chev {
   flex: none;
-  color: var(--text-muted);
+  color: var(--on-dark-muted);
   transition: transform 160ms ease;
 }
 .tk-fold-chev.open {
