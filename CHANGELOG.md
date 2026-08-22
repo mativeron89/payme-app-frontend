@@ -11,6 +11,64 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.115.0 — cierre del BLOCK P71: la certificación pasa del texto al modelo (2026-08-22)
+
+Al cerrar el P68 aposté que una quinta vuelta estaría «en algo que doy por
+sentado sin haberlo mirado». **Era esto**: el parseo es del modelo desde la
+vuelta 13, pero la **certificación** de dos propiedades seguía siendo textual.
+Daba por sentado que si el texto está, la propiedad se cumple.
+
+**Sin push ni deploy.** La conjuntiva no está cumplida.
+
+### ① La condición del publicador, ligada a ÉL
+
+Antes se buscaba *una línea cualquiera* con `if:` y los tres textos. Los dos
+mutantes que sobrevivieron:
+
+```
+always() || (success() && … push … main)   ← SIEMPRE verdadero, 3 textos presentes
+job con if: always() + paso permisivo      ← y la línea buena como SEÑUELO aparte
+```
+
+🔴 **El segundo prueba que faltaba asociación, no una variante sintáctica: el
+texto correcto estaba ahí, en el paso equivocado.** Un `find` sobre líneas no
+puede distinguir eso; sólo el modelo sabe qué condición gobierna a qué paso.
+
+Ahora cada publicador debe llevar la expresión **canónica exacta**, y el `if` de
+su **job** debe estar ausente — Actions no corre el paso si el job no corre, y lo
+corre igual si el job dice `always()`.
+
+**Se exige literalidad a propósito.** Validar «cerrado» sin literalidad pide un
+evaluador de expresiones de GitHub, que es la clase de intérprete a medias que
+este arnés viene cerrando hace catorce vueltas — y es justo lo que el primer
+mutante explotó. Cambiar la condición ahora pone el gate rojo y obliga a
+decidirlo a mano: **en la compuerta que decide si sale producción, esa fricción
+es la función.**
+
+### ② Qué se dispara, cuántas veces y con qué secreto
+
+El swap deja ambas referencias presentes y publica App dos veces y Landing
+ninguna. Una tercera invocación tampoco se veía: los censos contaban **pasos**
+con `some`, no invocaciones.
+
+🔴 **La corrección es de tipo de dato.** `some` responde «¿existe alguno?»; la
+pregunta era «¿cuáles y cuántos?». Ahora se deriva el multiconjunto exacto de
+invocaciones y el `env` del mismo paso se compara estructuralmente.
+
+Y la sonda usa **dos destinos distinguibles**: el doble de `curl` registra a
+dónde fue cada llamada. Antes los dos hooks recibían la misma URL falsa, así que
+no podía acreditar qué variable alimenta qué proyecto.
+
+### Los cinco mutantes
+
+```
+if siempre verdadero → 3 failed · job.if: always() → 3 failed
+swap de secretos → 3 failed · tercera invocación → 3 failed
+sin `if` en el paso → 3 failed · sano → 56 passed
+```
+
+Más el `try/finally` del build temporal, que el dictamen pedía plegar.
+
 ## 0.114.0 — cierre del BLOCK P68: un solo validador integrado (2026-08-21)
 
 **El patrón, que es la lección del lote entero:** la vuelta 13 arregló la
