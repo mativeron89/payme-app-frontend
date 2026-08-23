@@ -70,7 +70,7 @@ test.describe('el camino de pago completo', () => {
     await expect(filaMiParte).toContainText('$210.00');
 
     await page.getByRole('button', { name: 'Continuar' }).click();
-    await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toBeVisible();
 
     // 🔴 §1.5 bis · ANTES DE ELEGIR NO HAY PROPINA. Acá la pantalla mostraba
     // $241.50 —base + 15 % que nadie eligió— y ése era el defecto: un número

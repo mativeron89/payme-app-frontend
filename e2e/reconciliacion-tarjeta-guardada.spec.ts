@@ -51,7 +51,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await masUno.click();
   await masUno.click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
 
   // El seed trae dos guardadas. Se elige EXPLÍCITAMENTE la que NO es la
   // principal: ahí es donde la default puede mentir después.
@@ -61,7 +61,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await expect(page.getByRole('radio').filter({ hasText: DEFAULT_SEED }))
     .toHaveAttribute('aria-checked', 'false');
 
-  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
+  await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
 
   // ⚡ Muere la pestaña con el hold ya puesto sobre la NO-default.
@@ -78,7 +78,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await otroMas.click();
   await otroMas.click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
 
   // 🔴 LA AFIRMACIÓN CENTRAL: NINGUNA tarjeta aparece elegida — y menos la
   // default. Antes de este arreglo, Santander ···· 4532 estaba marcada.
@@ -99,7 +99,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await expect(cta).toBeEnabled();
   await cta.click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
-  await page.getByRole('button', { name: 'Confirmar autorización' }).click();
+  await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 
   const despues = await mesasDelMock(page);

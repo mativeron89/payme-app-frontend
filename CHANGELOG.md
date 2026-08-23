@@ -11,6 +11,29 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.136.1 — las seis pantallas siguen la maqueta medida (2026-08-23)
+
+AF-DISENO-02 alinea, sobre el HTML y los PNG aportados por Mati, los seis
+momentos completos de la mesa: Ticket + División, Garantía, confirmación 3DS,
+Compartir, Pagar y Comprobante. Ubicación, montos, tarjetas solapadas, radios,
+chips, jerarquía de acciones, comprobante y barra inferior usan la composición
+y las medidas de esa referencia.
+
+La maqueta final manda sobre las diferencias menores del encargo textual: en
+Compartir, código y acciones permanecen dentro de una pieza y el CTA sigue
+centrado. Las dos exclusiones vinculantes sí se preservan: P4.1 continúa
+saliendo a Inicio para no reabrir una mesa/hold y P5.3 conserva el desglose de
+consumos + propina. No cambian handlers, journals, idempotencia, la máquina,
+transiciones o persistencia 3DS, ni los predicados `busy`, `frozen` o
+`frozenRequiresReconciliation`.
+
+Un E2E nuevo recorre y mide las seis pantallas a 414 × 868, fija el estado de
+referencia ($255.00 + $10.50 = $265.50) y puede producir seis PNG reproducibles
+de 828 × 1736. También cubre la transición accesible del estado 3DS y el scroll
+al detalle reparable del ticket después de montarlo.
+
+**Sin push ni deploy.** La ref queda local para revisión visual de Mati.
+
 ## 0.136.0 — higiene: el callsite se lee con el parser, no con un regex (2026-08-23)
 
 **Primera entrada posterior a la publicación.** `c83ea4e3` está en producción: el

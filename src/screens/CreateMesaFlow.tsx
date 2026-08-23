@@ -6,7 +6,6 @@ import {
   participantesTrasCambio,
   pisoDe,
   reparteElTotal,
-  tituloStepper,
 } from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -173,6 +172,12 @@ export function CreateMesaFlow() {
    */
   const [ticketPulse, setTicketPulse] = useState(false);
   const ticketRef = useRef<HTMLDivElement | null>(null);
+  // El detalle se monta después de abrir el acordeón. El scroll tiene que
+  // esperar ese commit; leer el ref en el mismo click todavía devuelve null.
+  useEffect(() => {
+    if (!ticketAbierto || !ticketPulse) return;
+    ticketRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [ticketAbierto, ticketPulse]);
   // Piso del CONTRATO, no inventado: `schemas/index.js` exige >= 2 en partes
   // iguales (refine sobre division_mode) y >= 1 en el resto.
   const pisoComensales = pisoDe(division);
@@ -1235,7 +1240,7 @@ export function CreateMesaFlow() {
     const perSlot = participants !== null && participants > 0 ? splitEqual(total, participants)[0] : total;
     const ticketVisible = ticketAbierto || !!totalMismatch;
     return (
-      <div className="screen has-appbar">
+      <div className="screen has-appbar af-diseno-flow">
         <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
         {/* «EL TICKET SUBE» — SPEC_APP.md §1.3-bis, refinamiento 2026-08-21.
             El total viaja a la tarjeta de título porque al pie, debajo del
@@ -1245,17 +1250,51 @@ export function CreateMesaFlow() {
             ser la barra «Ver el ticket». §5 bis · F lo exige — *un dato, un
             lugar*: ningún monto se repite en dos bloques de la misma pantalla.
 
-            Las tres piezas (`title-card-div`, `-total`, `-lbl`, `-amt`) ya
-            existían en el sistema y no las usaba ninguna pantalla. */}
-        <div className="title-card">
-          <div className="title-card-title">{t('¿Cómo dividen?')}</div>
-          <div className="title-card-div" />
-          <div className="title-card-total">
-            <span className="title-card-total-lbl">{t('Total del ticket')}</span>
-            <span className="title-card-total-amt">{formatMXN(total)}</span>
+            AF-DISENO-02 reúne ubicación, total y acceso al detalle en la pieza
+            única que fijan la maqueta y su HTML medido. */}
+        <div className="title-card ticket-title-card">
+          <h1 className="title-card-title">{t('¿Cómo dividen?')}</h1>
+          {restaurant && (
+            <div className="title-card-sub ticket-title-place">
+              <Icon name="pin" size={13} aria-hidden="true" />
+              <span>
+                {restaurant.name}
+                {restaurant.address ? ` · ${restaurant.address}` : ''}
+              </span>
+            </div>
+          )}
+          <div className="ticket-title-amount">{formatMXN(total)}</div>
+          <div
+            className={`tk-fold ticket-title-fold${!ticketValid ? ' tk-fold--pending' : ''}${ticketPulse ? ' tk-fold--pulse' : ''}`}
+            onAnimationEnd={() => setTicketPulse(false)}
+          >
+            <button
+              className="tk-fold-head"
+              onClick={() => setTicketAbierto((o) => !o)}
+              aria-expanded={ticketVisible}
+              disabled={!!totalMismatch}
+            >
+              <span className="tk-fold-ico-box" aria-hidden="true">
+                <Icon name="receipt" size={20} className="tk-fold-ico" />
+              </span>
+              <span className="tk-fold-txt">
+                <span className="tk-fold-lbl">{t('Ver el ticket')}</span>
+                <span className="tk-fold-sub">
+                  {editItems.length === 1
+                    ? t('1 consumo, uno por uno')
+                    : t('{0} consumos, uno por uno', editItems.length)}
+                </span>
+              </span>
+              <Icon
+                name="chevron-down"
+                size={18}
+                className={`tk-fold-chev ${ticketVisible ? 'open' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
           </div>
         </div>
-        <div className="scroll flow-scroll">
+        <div className="scroll flow-scroll ticket-flow-scroll">
           {avisoApertura()}
           {/* Las tres formas salen de UNA lista, no de tres bloques copiados:
               con tres copias, agregar un estado visual a una y olvidarse de
@@ -1264,11 +1303,13 @@ export function CreateMesaFlow() {
               vivía en la clase `sel`, así que un lector de pantalla no podía
               decir cuál estaba elegido ni que fueran alternativas de una misma
               pregunta. `radiogroup` + `aria-checked` lo dicen. */}
-          <div role="radiogroup" aria-label={t('¿Cómo dividen?')}>
+          <div className="division-options" role="radiogroup" aria-label={t('¿Cómo dividen?')}>
           {([
             { modo: 'consumo', ico: <Icon name="users" size={22} />, title: 'Por lo que pidió cada uno', sub: 'Cada uno elige sus platos' },
             { modo: 'igual', ico: '÷', title: 'En partes iguales', sub: 'El total dividido entre todos' },
-            { modo: 'total', ico: '$', title: 'Pagar el total', sub: 'Uno o varios cubren toda la cuenta' },
+            // La referencia dibuja una billetera, pero el MVP prohíbe cualquier
+            // affordance wallet: acá mandan P1.5 y el riel card-only ratificado.
+            { modo: 'total', ico: <Icon name="card" size={22} className="div-total-icon" />, title: 'Pagar el total', sub: 'Uno o varios cubren toda la cuenta' },
           ] as const).map((op) => (
             <button
               key={op.modo}
@@ -1296,19 +1337,16 @@ export function CreateMesaFlow() {
               toast + scroll + pulso si tocan sin elegir. */}
           <div
             ref={stepperRef}
-            className={`card card-p${participants === null ? ' tip-block tip-block--pending' : ''}${stepperPulse ? ' tip-block--pulse' : ''}`}
+            className={`card card-p division-stepper${participants === null ? ' division-stepper--pending' : ''}${stepperPulse ? ' tip-block--pulse' : ''}`}
             style={{ marginBottom: 12 }}
             onAnimationEnd={() => setStepperPulse(false)}
           >
-            <div className="sectlabel tip-block-title">
-              {participants === null && <Icon name="warning" size={14} aria-hidden="true" />}
-              {t(tituloStepper(division))}
+            <div className="sectlabel division-stepper-title">
+              {t('¿Cuántos pagan?')}
             </div>
-            {/* 🔴 P3-02: el nombre accesible SIGUE a `tituloStepper`. Antes
-                decía siempre «Cantidad de comensales» aunque la pantalla
-                preguntara «¿Cuántos pagan?»: quien no ve la pantalla recibía
-                otra pregunta que quien la ve. */}
-            <div className="stepper" role="group" aria-label={t(tituloStepper(division))}>
+            {/* AF-DISENO-02: el nombre accesible y el rótulo visible usan la
+                misma pregunta fija de la maqueta. */}
+            <div className="stepper" role="group" aria-label={t('¿Cuántos pagan?')}>
               <button
                 onClick={() => setParticipants(participants === null ? pisoComensales : Math.max(pisoComensales, participants - 1))}
                 aria-label={t('Un comensal menos')}
@@ -1338,51 +1376,10 @@ export function CreateMesaFlow() {
               </>
             )}
           </div>
-          {/* EL TICKET, plegado por default. Mismo contenido de §1.3. */}
-          <div
-            ref={ticketRef}
-            className={`card tk-fold${!ticketValid ? ' tk-fold--pending' : ''}${ticketPulse ? ' tk-fold--pulse' : ''}`}
-            onAnimationEnd={() => setTicketPulse(false)}
-          >
-            <button
-              className="tk-fold-head"
-              onClick={() => setTicketAbierto((o) => !o)}
-              aria-expanded={ticketVisible}
-              // Con el total sin cerrar no se puede plegar: la verificación que
-              // §1.3 exige en pantalla no puede quedar detrás de un toque.
-              disabled={!!totalMismatch}
-            >
-              {/* Barra NAVY de ancho completo (§1.3-bis, 2026-08-21). Es el
-                  único bloque oscuro de la pantalla, y ése es el motivo escrito:
-                  un chevron suelto o una píldora clara se saltean por error.
-                  El ícono va en `--action-2`, que acá NO contradice §5 bis · F
-                  —«`--action-2` significa exclusivamente seleccionado»—: F habla
-                  del BORDE de un bloque elegible, y esto es un glifo sobre navy,
-                  que es el uso que el propio §1.3-bis manda.
-
-                  El monto ya no vive acá: subió a la tarjeta de título. */}
-              <Icon name="receipt" size={22} className="tk-fold-ico" aria-hidden="true" />
-              <span className="tk-fold-txt">
-                <span className="tk-fold-lbl">{t('Ver el ticket')}</span>
-                {/* Cuenta LÍNEAS del ticket, que es lo que se ve al desplegar.
-                    No cuenta unidades: un consumo con cantidad 3 es una línea
-                    acá y tres ítems para el backend (`editItems.flatMap`). El
-                    número tiene que coincidir con lo que la persona va a ver,
-                    no con lo que se manda. */}
-                <span className="tk-fold-sub">
-                  {editItems.length === 1
-                    ? t('1 consumo, uno por uno')
-                    : t('{0} consumos, uno por uno', editItems.length)}
-                </span>
-              </span>
-              <Icon
-                name="chevron-down"
-                size={18}
-                className={`tk-fold-chev ${ticketVisible ? 'open' : ''}`}
-                aria-hidden="true"
-              />
-            </button>
-            {ticketVisible && (
+          {/* El acceso plegado vive dentro de la tarjeta de título. Al abrirlo,
+              el contenido íntegro del ticket sigue en el flujo scrolleable. */}
+          {ticketVisible && (
+            <div ref={ticketRef} className="card tk-fold tk-fold-detail">
               <div className="tk-fold-body">
                 <div className="tk-fold-restaurant">
                   <div className="tk-fold-name">{restaurant?.name ?? t('Restaurante')}</div>
@@ -1508,8 +1505,8 @@ export function CreateMesaFlow() {
                 )}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
         <AppBottomBar
           active={null}
@@ -1539,7 +1536,6 @@ export function CreateMesaFlow() {
               if (!ticketValid) {
                 toast(ticketInvalidReason);
                 setTicketAbierto(true);
-                ticketRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
                 setTicketPulse(true);
                 return;
               }
@@ -1556,7 +1552,7 @@ export function CreateMesaFlow() {
   // ─── Paso 4: GARANTÍA (A-1, pantalla nueva) ──────────────
   if (step === 'garantia') {
     return (
-      <div className="screen has-cta">
+      <div className="screen has-appbar af-diseno-flow">
         {/* 🔴 FIDELIDAD VISUAL (2026-08-20, `diseno/referencias/
             FIDELIDAD_VISUAL_APP_2026-08-20.md` @ f4fefc0 · defecto 1). Acá
             había un `TopBar` blanco de una fila, que dejaba a Garantía como la
@@ -1565,30 +1561,11 @@ export function CreateMesaFlow() {
             **`Paso 3 de 4` y no 4 de 5:** la fusión de §1.3-bis dejó el flujo
             en cuatro pasos, y este número tiene que seguirla. */}
         <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
-        {/* 🔴 ORDEN 1-B · LONGHANDS, NO EL SHORTHAND — y no es prolijidad.
-            Acá había `style={{ padding: 16 }}`, y el shorthand inline PISA el
-            `padding-bottom: 110px` de `.has-cta .scroll`. Sin ese aire, la
-            píldora flotante se le monta al final de la lista: medido con
-            Playwright, que reportó `<button disabled class="cta-float">
-            intercepts pointer events` sobre la opción "Usar otra tarjeta".
-            **No era un problema del test: en un teléfono esa opción no se
-            puede tocar.** Y con el estado nuevo de la ORDEN 1-B —que exige
-            elegir tarjeta— la persona quedaba trabada: el CTA le pide elegir y
-            la opción está debajo del CTA.
-            El aviso ya existía en `global.css:1909-1911` y esta pantalla fue
-            la que quedó afuera del barrido que arregló Ticket y División. */}
-        <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
-          {/* 🔴 Defecto 2: la tarjeta estaba con el color INVERTIDO —navy con
-              texto claro— cuando el resto del flujo usa `--teal-l` con texto
-              navy (`SISTEMA_DISENO.md §5 bis · A`). Se pasa a las clases del
-              sistema en vez de otro bloque de estilos inline. */}
-          <div className="gar-amount">
-            <h1 className="gar-amount-lbl">{t('Garantía de la mesa')}</h1>
-            <div className="gar-amount-amt">{formatMXN(total)}</div>
-            <div className="gar-amount-sub">
-              {t('Se retiene, no se cobra. Si todos pagan, se libera completa.')}
-            </div>
-          </div>
+        <div className="title-card gar-title">
+          <h1 className="title-card-title">{t('Garantiza la mesa')}</h1>
+          <div className="gar-title-amount">{formatMXN(total)}</div>
+        </div>
+        <div className="scroll flow-scroll gar-flow-scroll">
           {error && (
           <div className="form-error" role="alert">
             {error}
@@ -1622,7 +1599,7 @@ export function CreateMesaFlow() {
           {cards.map((c) => (
               <button
                 key={c.id}
-                className={`method-card ${method === 'card' && cardChoice === c.id ? 'sel' : ''}`}
+                className={`method-card gar-method-card ${method === 'card' && cardChoice === c.id ? 'sel' : ''}`}
                 onClick={() => {
                   setMethod('card');
                   setCardChoice(c.id);
@@ -1635,26 +1612,22 @@ export function CreateMesaFlow() {
                 role="radio"
                 aria-checked={method === 'card' && cardChoice === c.id}
               >
-                <CardBrandChip brand={c.brand} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>
+                <div className="radio gar-radio" aria-hidden="true" />
+                <div className="gar-brand-chip"><CardBrandChip brand={c.brand} /></div>
+                <div className="gar-card-copy">
+                  <div className="gar-card-name">
                     {c.bank_name ?? c.brand} ···· {c.last_four}
-                    {c.is_default && (
-                      <span className="caption" style={{ marginLeft: 8 }}>
-                        {t('Principal')}
-                      </span>
-                    )}
                   </div>
-                  <div className="caption">
-                    {t('Vence')} {String(c.exp_month).padStart(2, '0')}/{String(c.exp_year % 100).padStart(2, '0')}
+                  <div className="gar-card-meta">
+                    {c.is_default && <span className="gar-card-principal">{t('Principal')}</span>}
+                    <span>{t('Vence')} {String(c.exp_month).padStart(2, '0')}/{String(c.exp_year % 100).padStart(2, '0')}</span>
                   </div>
                 </div>
-                <div className="radio" aria-hidden="true" />
               </button>
             ))}
           {(
             <button
-              className={`method-card ${method === 'card' && cardChoice === 'new' ? 'sel' : ''}`}
+              className={`method-card gar-other-card ${method === 'card' && cardChoice === 'new' ? 'sel' : ''}`}
               onClick={() => {
                 setMethod('card');
                 setCardChoice('new');
@@ -1663,16 +1636,15 @@ export function CreateMesaFlow() {
               role="radio"
               aria-checked={method === 'card' && cardChoice === 'new'}
             >
-              <div className="method-icon" style={{ background: 'var(--gray-l)' }} aria-hidden="true">
+              <div className="gar-other-icon" aria-hidden="true">
                 <Icon name="plus" size={22} />
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 'var(--fs-legacy-base)' }}>
+              <div className="gar-other-copy">
+                <div className="gar-other-title">
                   {cards.length > 0 ? t('Usar otra tarjeta') : t('Tarjeta')}
                 </div>
-                <div className="caption">{t('Retención en la tarjeta (puede pedir confirmación del banco)')}</div>
+                <div className="caption">{t('Puede pedir confirmación del banco')}</div>
               </div>
-              <div className="radio" aria-hidden="true" />
             </button>
           )}
           {/* Tarjeta nueva: Elements en real; en mock no se pide número. */}
@@ -1739,43 +1711,37 @@ export function CreateMesaFlow() {
               Connect (v2.24): la retención puede vivir en la cuenta del
               restaurante o en la de PayMe según el restaurante. El texto no
               nombra al dueño de la retención: es verdadero en los dos rieles. */}
-          <div className="note note-teal" style={{ marginTop: 16 }}>
-            {t('Para abrir la mesa se retiene el total como garantía: el restaurante cobra sí o sí. Cuando todos pagan su parte, la retención se libera. Si alguien no paga, tu garantía cubre solo ese faltante.')}
+          <div className="note note-teal gar-note" style={{ marginTop: 16 }}>
+            <Icon name="info" size={16} aria-hidden="true" />
+            <span>{t('Para abrir la mesa se retiene el total como garantía: el restaurante cobra sí o sí. Cuando todos pagan su parte, la retención se libera. Si alguien no paga, tu garantía cubre solo ese faltante.')}</span>
           </div>
         </div>
-        <button
-          className="cta-float"
-          onClick={createMesa}
-          disabled={
-            busy ||
-            !priorAttemptChecked ||
-            priorAttemptCheckFailed ||
-            (frozenRequiresReconciliation && !replayHabilitado) ||
-            (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) ||
-            (!frozen && method === 'card' && !cardRailAvailable) ||
-            (!frozen &&
-              !IS_MOCK &&
-              method === 'card' &&
-              (cards.length === 0 || cardChoice === 'new') &&
-              !cardState.complete)
-          }
-        >
-          {busy ? (
-            t('Autorizando…')
-          ) : frozenRequiresReconciliation && !replayHabilitado ? (
-            <>
-              <Icon name="lock" size={16} className="ico-inline" /> {t('Reconciliación necesaria')}
-            </>
-          ) : frozen ? (
-            <>
-              <Icon name="lock" size={16} className="ico-inline" /> {t('Reintentar esta apertura')}
-            </>
-          ) : (
-            <>
-              <Icon name="lock" size={16} className="ico-inline" /> {t('Garantizar')} {formatMXN(total)} {t('y abrir mesa')}
-            </>
-          )}
-        </button>
+        <AppBottomBar
+          active={null}
+          center={{
+            label: busy
+              ? t('Autorizando…')
+              : frozenRequiresReconciliation && !replayHabilitado
+                ? t('Reconciliación necesaria')
+                : frozen
+                  ? t('Reintentar esta apertura')
+                  : t('Garantizar'),
+            icon: 'lock',
+            onClick: createMesa,
+            disabled:
+              busy ||
+              !priorAttemptChecked ||
+              priorAttemptCheckFailed ||
+              (frozenRequiresReconciliation && !replayHabilitado) ||
+              (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) ||
+              (!frozen && method === 'card' && !cardRailAvailable) ||
+              (!frozen &&
+                !IS_MOCK &&
+                method === 'card' &&
+                (cards.length === 0 || cardChoice === 'new') &&
+                !cardState.complete),
+          }}
+        />
       </div>
     );
   }
@@ -1783,55 +1749,45 @@ export function CreateMesaFlow() {
   // ─── Paso 4b: 3DS (requires_action) ──────────────────────
   if (step === 'threeds') {
     return (
-      <div className="screen has-appbar">
-        {/* 🔴 FIDELIDAD VISUAL (2026-08-20 @ 8183295 · defectos 1, 2, 4 y 5).
-            Los 3 y 6 quedaron FRENADOS y declarados al Bibliotecario: no se
-            resuelven por inferencia sobre el corazón del pago.
+      <div className="screen has-appbar af-diseno-flow">
+        {/* 🔴 FIDELIDAD VISUAL (2026-08-20 @ 8183295, completada por
+            AF-DISENO-02). Los cambios 3 y 6 quedan habilitados sólo en su
+            composición visual; la máquina 3DS y sus gates no se alteran.
 
             Antes este paso no tenía ninguna salida: la mesa quedaba sin
             garantizar y el usuario atrapado en la pantalla. El `backLabel`
-            propio se conserva — la salida dice adónde lleva. **Sin contador
-            de paso**, como Compartir: 3DS no es un paso más del armado, es
-            una interrupción del banco dentro de la garantía. */}
+            vuelve a la garantía. **Sin contador de paso**, como Compartir:
+            3DS no es un paso más del armado, es una interrupción del banco
+            dentro de la garantía. */}
         <AppHeaderFlow
           paymeId={session?.user?.payme_id}
           onBack={() => setStep('garantia')}
-          backLabel={t('Volver a elegir la garantía')}
         />
         {/* Defecto 2: el título y el subtítulo estaban sueltos en el cuerpo;
             van en la tarjeta `--teal-l`, como todo el flujo. */}
-        <div className="title-card">
+        <div className="title-card tds-title">
           <h1 className="title-card-title">{t('Tu banco pide confirmar')}</h1>
           <div className="title-card-sub">
             {t('La retención de')} {formatMXN(total)} {t('necesita que la confirmes con tu banco.')}
           </div>
         </div>
-        <div className="scroll" style={{ paddingTop: 16, paddingLeft: 20, paddingRight: 20 }}>
-          {/* 🔴 «ESPERANDO A TU BANCO» · SÓLO DURANTE `busy` (defecto ③ de la
-              tanda de 3DS, resuelto por Diseño a favor de este criterio).
-
-              Lo frené cuando llegó pedido como tarjeta permanente: **la
-              pantalla no está esperando nada hasta que la persona toca
-              Confirmar**, y pintar «esperando… no cierres la app» antes de eso
-              afirma algo falso. No era preferencia: `SISTEMA_DISENO.md §5`
-              manda estados honestos, y un cartel de espera sin espera es
-              exactamente lo que esa regla prohíbe.
-
-              Diseño lo cerró señalando que su propio texto —*«la confirmación
-              se abre EN UN MOMENTO»*— ya describía algo transitorio. Así que
-              el cartel existe, y existe **cuando la espera existe**.
-
-              `role="status"` + `aria-live` para que el cambio se anuncie:
-              quien no ve la pantalla necesita saber que empezó a esperar. */}
-          {busy && (
-            <div className="tds-espera" role="status" aria-live="polite">
-              <div className="spinner" aria-hidden="true" />
-              <div className="tds-espera-tit">{t('Esperando a tu banco')}</div>
-              <div className="tds-espera-sub">
-                {t('No cierres la app: estamos confirmando la autorización.')}
-              </div>
+        <div className="scroll flow-scroll tds-flow-scroll">
+          {/* AF-DISENO-02 · la maqueta final manda que esta tarjeta explique
+              la transición antes de abrir el banco. `aria-busy` diferencia
+              el instante en que la confirmación ya está en curso, sin usar la
+              composición visual como fuente de verdad monetaria. */}
+          <div
+            className="tds-espera"
+            role={busy ? 'status' : undefined}
+            aria-live={busy ? 'polite' : 'off'}
+            aria-busy={busy}
+          >
+            <div className="spinner" aria-hidden="true" />
+            <div className="tds-espera-tit">{t('Esperando a tu banco')}</div>
+            <div className="tds-espera-sub">
+              {t('No cierres la app: la confirmación se abre en un momento.')}
             </div>
-          )}
+          </div>
           {/* 🔴 Defecto 4 · QUÉ TARJETA SE ESTÁ AUTORIZANDO. Sólo se muestra
               cuando de verdad se sabe: con tarjeta tipeada, Stripe Elements no
               publica marca ni últimos cuatro antes de confirmar, y **una fila
@@ -1842,9 +1798,10 @@ export function CreateMesaFlow() {
             if (!elegida) return null;
             return (
               <div className="tds-card" role="group" aria-label={t('Tarjeta que se autoriza')}>
-                <Icon name="card" size={18} className="ico-inline" />
+                <div className="gar-brand-chip"><CardBrandChip brand={elegida.brand} /></div>
                 <span className="tds-card-txt">
-                  {elegida.brand} {elegida.bank_name ?? ''} ···· {elegida.last_four}
+                  <span className="tds-card-name">{elegida.bank_name ?? elegida.brand} ···· {elegida.last_four}</span>
+                  <span className="tds-card-sub">{t('La tarjeta que elegiste para garantizar')}</span>
                 </span>
               </div>
             );
@@ -1886,7 +1843,7 @@ export function CreateMesaFlow() {
         <AppBottomBar
           active={null}
           center={{
-            label: busy ? t('Confirmando…') : t('Confirmar autorización'),
+            label: busy ? t('Confirmando…') : t('Confirmar'),
             icon: 'check',
             onClick: confirm3ds,
             disabled: busy,
@@ -1979,14 +1936,14 @@ export function CreateMesaFlow() {
       );
     };
     return (
-      <div className="screen has-appbar">
+      <div className="screen has-appbar af-diseno-flow">
         <AppHeaderFlow
           paymeId={session?.user?.payme_id}
           onBack={() => navigate('home')}
           backLabel={t('Ir a Inicio')}
           backIcon="home"
         />
-        <div className="title-card">
+        <div className="title-card share-title">
           <h1 className="title-card-title">{t('¡Mesa garantizada!')}</h1>
           {/* Nombra las DOS cosas: compartir y lo que al organizador todavía le
               falta. El círculo del pie no puede decirlo —§1.7 lo dejó sin
@@ -1994,26 +1951,19 @@ export function CreateMesaFlow() {
               quien mira la pantalla no lo dice nada. */}
           <div className="title-card-sub">{t('Comparte el código y después elige lo que consumiste')}</div>
         </div>
-        <div className="scroll flow-scroll">
+        <div className="scroll flow-scroll share-flow-scroll">
           <div className="share-card">
-            {/* Tocar el código copia EL LINK, no el código: el código solo no
-                sirve para entrar —las tres rutas de mesa exigen sesión y
-                participación desde v2.32.0—, y la credencial es el `?t=`. Por
-                eso el aviso dice "link" y no "código". */}
-            <button
-              type="button"
-              className="share-code"
-              onClick={copiarLink}
-              disabled={!link}
-              aria-label={t('Copiar el link de invitación de la mesa {0}', code)}
-            >
+            {/* La maqueta final separa credencial y acción: el código se dicta;
+                el botón «Copiar link» de abajo conserva la credencial `?t=`. */}
+            <div className="share-code">
+              <span className="share-code-label">{t('Código de la mesa')}</span>
               <span className="share-code-txt">{code}</span>
-              <Icon name="copy" size={20} />
-            </button>
+              <span className="share-code-help">{t('Para dictarlo en la mesa')}</span>
+            </div>
             {/* 🔴 A1 · el BOTÓN reemplaza al link impreso (Diseño, ratificado
                 2026-08-16, etiqueta «Confirmo sacarlo»). Antes el link viajaba
-                también como texto en pantalla y el código era el único control
-                de copia; ahora la acción se nombra.
+                también como texto en pantalla; ahora «Copiar link» concentra la
+                única acción de copia y el código queda como credencial para dictar.
                 ⚠️ El riesgo va aceptado a sabiendas y está en el acta: si el
                 portapapeles falla, NO queda de dónde copiar a mano. Por eso el
                 botón se apaga sin link en vez de fingir que copió. */}
@@ -2022,23 +1972,25 @@ export function CreateMesaFlow() {
                 así que es la acción principal; «Copiar link» es la salida
                 secundaria. Estaban al revés. El orden del DOM es también el
                 orden del foco por teclado, así que esto no es sólo visual. */}
-            <a
-              className={`btn share-wa ${link ? '' : 'off'}`}
-              href={link ? `https://wa.me/?text=${encodeURIComponent(t('Súmate a la mesa {0} en PayMe: {1}', code, link))}` : undefined}
-              target="_blank"
-              rel="noreferrer"
-              aria-disabled={link ? undefined : true}
-            >
-              <Icon name="message" size={18} className="ico-inline" /> {t('Compartir por WhatsApp')}
-            </a>
-            <button
-              type="button"
-              className="btn btn-ghost share-copy"
-              onClick={copiarLink}
-              disabled={!link}
-            >
-              <Icon name="copy" size={18} className="ico-inline" /> {t('Copiar link')}
-            </button>
+            <div className="share-actions">
+              <a
+                className={`btn share-wa ${link ? '' : 'off'}`}
+                href={link ? `https://wa.me/?text=${encodeURIComponent(t('Súmate a la mesa {0} en PayMe: {1}', code, link))}` : undefined}
+                target="_blank"
+                rel="noreferrer"
+                aria-disabled={link ? undefined : true}
+              >
+                <Icon name="message" size={18} className="ico-inline" /> {t('Compartir por WhatsApp')}
+              </a>
+              <button
+                type="button"
+                className="btn btn-ghost share-copy"
+                onClick={copiarLink}
+                disabled={!link}
+              >
+                <Icon name="copy" size={18} className="ico-inline" /> {t('Copiar link')}
+              </button>
+            </div>
           </div>
           {/* 🔴 A1 · ACÁ SE IMPRIMÍA EL LINK Y SU AVISO, y se retiraron.
               El comentario viejo defendía lo contrario —«esconderla detrás del

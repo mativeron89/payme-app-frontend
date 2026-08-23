@@ -100,12 +100,12 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('4');
 
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
 
-  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
+  await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Confirmar autorización' }).click();
+  await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   // §1.7 le puso el título del spec: la pantalla es el momento de triunfo del
   // organizador, no un formulario de invitación.
   await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();

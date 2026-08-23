@@ -48,7 +48,7 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
   await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toBeVisible();
 
   /**
    * 🔴 ORÁCULO DE CLASE (P23-AF-02). La versión anterior miraba **sólo el radio

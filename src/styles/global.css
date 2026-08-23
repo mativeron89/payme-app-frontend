@@ -1880,14 +1880,15 @@ body {
 
 /* ─── Banda de demo (persistente, solo en modo mock) ─── */
 .demo-strip {
-  background: #fef3c7;
-  color: #78350f;
+  background: var(--warning-tint);
+  color: var(--warning);
   font-family: var(--font-body);
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 700;
   text-align: center;
-  padding: 5px 12px;
-  border-bottom: 1px solid #fbbf24;
+  padding: 7px var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.01em;
   flex-shrink: 0;
 }
 
@@ -2631,8 +2632,7 @@ body {
   box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
 }
 
-/* Tocar el código copia. Es un botón de ancho completo y no un ícono suelto:
-   el área táctil es todo el renglón, que es como se toca esto con una mano. */
+/* La credencial se lee y se dicta; copiar el link tiene su botón separado. */
 .share-code {
   display: flex;
   align-items: center;
@@ -2644,18 +2644,8 @@ body {
   padding: var(--sp-2);
   background: none;
   border: none;
-  cursor: pointer;
-  color: var(--text);
-}
-
-.share-code:disabled {
-  opacity: 0.5;
   cursor: default;
-}
-
-.share-code:focus-visible {
-  outline: 2px solid var(--action);
-  outline-offset: 2px;
+  color: var(--text);
 }
 
 /* Mono: es un código de mesa, el único uso de la familia mono del sistema.
@@ -2664,7 +2654,7 @@ body {
    §1.7 pide `--fs-lg` y **ese token no existe**: la escala del sistema declara
    SEIS tamaños y dice que no hay un séptimo. Se mapea al más cercano hacia
    arriba, `--fs-h1`, porque el código es el protagonista de la pantalla — lo
-   que la persona lee en voz alta y copia. Inventar el token sería agregar el
+   que la persona lee en voz alta y dicta. Inventar el token sería agregar el
    séptimo tamaño de contrabando. */
 .share-code-txt {
   font-family: var(--font-mono);
@@ -4887,7 +4877,7 @@ h1.pay-title-lbl {
   margin: 0;
 }
 
-/* Espera real del 3DS (defecto ③). Sólo existe mientras `busy`. */
+/* Tarjeta de transición del 3DS; `aria-busy` distingue la espera efectiva. */
 .tds-espera {
   display: flex;
   flex-direction: column;
@@ -4977,4 +4967,803 @@ h1.pay-title-lbl {
   justify-content: center;
   width: 100%;
   margin-top: var(--sp-4);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   AF-DISENO-02 · composición medida contra las seis maquetas de Mati
+   La geometría vive scopeada por pantalla: no mueve superficies ajenas al
+   encargo ni crea una segunda paleta. Todos los colores salen de los tokens.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* P1 · Ticket + División: el contexto, el monto y el acceso al ticket son una
+   sola tarjeta solapada. El detalle expandido conserva su cuerpo completo. */
+.ticket-title-card {
+  padding: var(--sp-4) 20px 18px;
+  overflow: hidden;
+}
+
+/* El HTML de referencia usa una fila visual de 19px para «Volver», pero el
+   botón productivo conserva 44px de área táctil y desborda esa fila en ambos
+   sentidos. El alto visual no paga el costo de accesibilidad. Se scopea a las
+   seis pantallas de este encargo para no mover Scan ni Mis ítems. */
+.af-diseno-flow .hdr-flow .hdr-row-2 {
+  height: 19px;
+  min-height: 19px;
+  margin-top: 14px;
+  overflow: visible;
+}
+
+.af-diseno-flow .hdr-flow .hdr-back {
+  height: var(--tap-min);
+  min-height: var(--tap-min);
+  margin-block: -12.5px;
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+
+.ticket-title-card .title-card-title {
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.ticket-title-place {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  margin-top: var(--sp-1);
+  font-size: 13.5px;
+}
+
+.ticket-title-amount {
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1.05;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.ticket-title-fold {
+  margin: 14px 0 0;
+  border-radius: var(--r-md);
+  background: var(--action);
+  box-shadow: var(--sh-2);
+  overflow: hidden;
+}
+
+.ticket-title-fold .tk-fold-head {
+  padding: 13px var(--sp-4);
+}
+
+.tk-fold-ico-box {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--action-2);
+}
+
+.tk-fold-ico-box .tk-fold-ico {
+  color: var(--action-2-fg);
+}
+
+.ticket-title-fold .tk-fold-lbl {
+  font-size: var(--fs-body);
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.ticket-title-fold .tk-fold-chev {
+  color: var(--action-2);
+}
+
+/* P4 · Compartir: la credencial es una sola tarjeta con dos zonas inequívocas
+   (código y acciones). La salida segura a Inicio y el CTA centrado no cambian. */
+.share-title {
+  padding: 18px 20px;
+}
+
+.share-title .title-card-title {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.share-title .title-card-sub {
+  margin-top: 5px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.share-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.share-code {
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  margin: 0;
+  padding: var(--sp-4) var(--sp-4) 14px;
+  cursor: default;
+}
+
+.share-code-label {
+  font-size: 11.5px;
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.share-code-txt {
+  margin-top: 6px;
+  font-size: 32px;
+  letter-spacing: 0.06em;
+}
+
+.share-code-help {
+  margin-top: 2px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.share-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+.share-actions .share-wa,
+.share-actions .share-copy {
+  height: 50px;
+  min-height: 50px;
+  margin: 0;
+  border-radius: 14px;
+  font-size: var(--fs-body);
+}
+
+.share-actions .share-copy {
+  border: 1.5px solid var(--link);
+  background: var(--surface);
+  color: var(--link);
+}
+
+.share-flow-scroll .inv-panel {
+  margin-top: var(--sp-4);
+}
+
+.share-flow-scroll .inv-panel > .sectlabel:first-child {
+  margin-bottom: var(--sp-2);
+}
+
+.share-flow-scroll .inv-panel > .input {
+  min-height: 48px;
+  border-radius: var(--r-md);
+}
+
+.share-flow-scroll .inv-panel > .inv-list {
+  margin-top: 10px;
+  border-radius: var(--r-lg);
+}
+
+.share-flow-scroll .inv-panel > .inv-list .inv-row {
+  padding: var(--sp-3) 14px;
+}
+
+.share-flow-scroll {
+  padding-top: var(--sp-4);
+}
+
+/* P5 · Pagar: el resumen de esta intención se solapa al header y queda
+   centrado; la procedencia de propina y los gates monetarios no se alteran. */
+.pay-title {
+  margin: -42px var(--sp-4) 0;
+  padding: 18px 20px;
+  border-radius: var(--r-lg);
+  text-align: center;
+}
+
+.pay-title-lbl,
+h1.pay-title-lbl {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.pay-title-place {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.pay-title-amount {
+  margin-top: var(--sp-2);
+  font-family: var(--font-display);
+  font-size: 36px;
+  line-height: 1.05;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.pay-title-breakdown {
+  margin-top: 4px;
+  font-family: var(--font-body);
+  font-size: var(--fs-legacy-xs);
+  color: var(--action);
+  opacity: 0.75;
+}
+
+.pay-flow-scroll {
+  padding-top: var(--sp-4);
+}
+
+.pay-flow-scroll .tip-block {
+  padding: var(--sp-4);
+  border-width: 2px;
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.pay-flow-scroll .tip-choices {
+  margin-top: var(--sp-3);
+  gap: 7px;
+}
+
+.pay-flow-scroll .tip-choices .tip-pill {
+  height: var(--tap-min);
+  padding: 0;
+  border-width: 1px;
+  border-radius: var(--r-full);
+  font-size: 14.5px;
+}
+
+.pay-method-card,
+.pay-method-card.sel {
+  min-height: 0;
+  padding: 14px var(--sp-4);
+  gap: 13px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+}
+
+.pay-method-brand {
+  flex: none;
+  display: flex;
+}
+
+.pay-method-brand .cc {
+  width: 46px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.pay-method-brand .cc.mc::before {
+  content: 'MC';
+  position: static;
+  display: block;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  transform: none;
+}
+
+.pay-method-brand .cc.mc::after {
+  display: none;
+}
+
+.tip-recipient-card {
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.tip-recipient-card .sectlabel {
+  margin-bottom: var(--sp-2);
+}
+
+.tip-recipient-card .tip-row {
+  gap: var(--sp-2);
+  margin-bottom: 0;
+}
+
+.tip-recipient-card .tip-pill {
+  min-height: var(--tap-min);
+  padding: 0 18px;
+  border-width: 2px;
+}
+
+/* P6 · Comprobante: el cierre forma la tarjeta solapada y el documento queda
+   como una segunda pieza con acciones integradas, sin reabrir el pago. */
+.receipt-screen > .hdr {
+  min-height: calc(137.36px + env(safe-area-inset-top));
+  border-radius: 0 0 26px 26px;
+  padding: calc(16px + env(safe-area-inset-top)) 20px 56px;
+}
+
+.receipt-screen .recibo-cierre {
+  margin: -42px var(--sp-4) 0;
+  padding: 20px;
+  border-radius: var(--r-lg);
+}
+
+.receipt-screen .success-circle {
+  width: 56px;
+  height: 56px;
+  border-width: 2px;
+  border-color: var(--success);
+  background: var(--surface);
+  color: var(--success);
+  font-size: 28px;
+}
+
+.receipt-screen .recibo-cierre-tit {
+  margin: var(--sp-3) 0 var(--sp-1);
+  font-size: 26px;
+}
+
+.receipt-screen .recibo-cierre .body-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.recibo-flow-scroll {
+  padding-top: var(--sp-4);
+}
+
+.recibo-card {
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.recibo-card-body {
+  padding: var(--sp-4) var(--sp-4) var(--sp-1);
+}
+
+.recibo-label {
+  margin-bottom: var(--sp-1);
+  font-size: 11.5px;
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.recibo-card .receipt-row {
+  padding: var(--sp-3) 0;
+  font-size: 14px;
+}
+
+.recibo-card .receipt-row .val {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.recibo-card-body > .receipt-row:last-child {
+  padding: 14px 0 var(--sp-4);
+}
+
+.recibo-card .val.recibo-total {
+  font-size: 26px;
+}
+
+.recibo-card .recibo-acciones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.recibo-card .recibo-acciones .linkbtn {
+  justify-content: center;
+  min-height: 52px;
+  font-size: 15px;
+}
+
+.recibo-card .recibo-acciones .linkbtn + .linkbtn {
+  border-left: 1px solid var(--border);
+}
+
+.ticket-title-fold .tk-fold-sub {
+  font-size: 13px;
+}
+
+.ticket-flow-scroll {
+  padding-top: var(--sp-4);
+}
+
+.division-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.division-options .div-card {
+  min-height: 0;
+  margin-bottom: 0;
+  padding: 15px var(--sp-4);
+  border-width: 2px;
+  border-color: var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.division-options .div-card.sel {
+  border-color: var(--action-2);
+}
+
+.division-options .div-radio {
+  width: 26px;
+  height: 26px;
+  border-width: 2px;
+}
+
+.division-options .div-radio::after {
+  width: 11px;
+  height: 11px;
+}
+
+.division-options .div-ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+}
+
+.division-options .div-title {
+  font-size: 16.5px;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.division-options .div-sub {
+  font-size: 13.5px;
+  line-height: 1.2;
+}
+
+.division-stepper {
+  margin-top: 4px;
+  padding: var(--sp-4);
+  border: 2px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+}
+
+.division-stepper--pending {
+  border-style: dashed;
+  border-color: var(--warning);
+  background: var(--surface);
+}
+
+.division-stepper-title {
+  margin-bottom: var(--sp-3);
+  color: var(--warning);
+  text-align: center;
+}
+
+.division-stepper .stepper {
+  gap: 18px;
+}
+
+.division-stepper .stepper .val {
+  font-size: 26px;
+}
+
+.division-stepper .stepper button {
+  width: 46px;
+  height: 46px;
+  border-width: 1px;
+}
+
+.tk-fold-detail {
+  margin-bottom: var(--sp-3);
+}
+
+.tk-fold-detail .tk-fold-body {
+  padding-top: var(--sp-4);
+}
+
+/* P2 · Garantía: la decisión de tarjeta se lee antes que la explicación y el
+   CTA usa la misma barra estable del resto del flujo. */
+.gar-title {
+  padding: 18px 20px;
+}
+
+.gar-title .title-card-title {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.gar-title-amount {
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: 36px;
+  line-height: 1.05;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.gar-flow-scroll {
+  padding-top: 18px;
+}
+
+.gar-flow-scroll > .sectlabel {
+  margin-bottom: 6px;
+  padding-left: 4px;
+}
+
+.gar-method-card {
+  min-height: 70px;
+  margin-bottom: 10px;
+  padding: 14px var(--sp-4);
+  gap: var(--sp-3);
+  border-width: 2px;
+  border-color: var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.gar-method-card.sel {
+  border-width: 2px;
+  background: var(--surface);
+}
+
+.gar-method-card .gar-radio {
+  width: 26px;
+  height: 26px;
+  margin-left: 0;
+  border-width: 2px;
+}
+
+.gar-method-card.sel .gar-radio {
+  border-color: var(--action-2);
+  background: var(--surface);
+}
+
+.gar-method-card.sel .gar-radio::after {
+  width: 11px;
+  height: 11px;
+  background: var(--action-2);
+}
+
+.gar-brand-chip {
+  flex: none;
+  display: flex;
+}
+
+.gar-brand-chip .cc {
+  width: 48px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.gar-brand-chip .cc.mc::before {
+  content: 'MC';
+  position: static;
+  display: block;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  transform: none;
+}
+
+.gar-brand-chip .cc.mc::after {
+  display: none;
+}
+
+.gar-card-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.gar-card-name {
+  overflow: hidden;
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gar-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.gar-card-principal {
+  font-size: 11.5px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.gar-card-principal::after {
+  content: '·';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3px;
+  height: 3px;
+  margin-left: 7px;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--border);
+  color: transparent;
+}
+
+.gar-other-card,
+.gar-other-card.sel {
+  min-height: 60px;
+  margin-bottom: 10px;
+  padding: 14px var(--sp-4);
+  gap: var(--sp-3);
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+}
+
+.gar-other-icon {
+  flex: none;
+  display: flex;
+  color: var(--link);
+}
+
+.gar-other-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.gar-other-title {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--link);
+}
+
+.gar-flow-scroll > .note-teal {
+  margin-top: 18px !important;
+  padding: 14px var(--sp-4);
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--info-tint);
+  color: var(--info);
+  font-size: 13.5px;
+}
+
+.gar-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.gar-note > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--info);
+}
+
+/* P3 · La confirmación bancaria conserva una jerarquía estable: contexto,
+   estado de espera, tarjeta de origen y una acción de una sola palabra. */
+.tds-title {
+  padding: 18px 20px;
+}
+
+.tds-title .title-card-title {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.tds-title .title-card-sub {
+  margin-top: 5px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.tds-flow-scroll {
+  padding-top: var(--sp-4);
+}
+
+.tds-espera {
+  gap: 14px;
+  padding: 24px 20px;
+  border: 0;
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+}
+
+.tds-espera .spinner {
+  width: 44px;
+  height: 44px;
+  border-width: 3px;
+}
+
+.tds-espera-tit {
+  font-size: 16.5px;
+}
+
+.tds-espera-sub {
+  max-width: 280px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.tds-card {
+  gap: var(--sp-3);
+  margin-top: 14px;
+  padding: 14px var(--sp-4);
+  border-radius: var(--r-lg);
+}
+
+.tds-card-txt {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.tds-card-name {
+  overflow: hidden;
+  font-size: 15.5px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tds-card-sub {
+  margin-top: 2px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.tds-cancelar {
+  margin-top: 18px;
+  font-size: 15px;
+  font-weight: 700;
 }

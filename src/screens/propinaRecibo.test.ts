@@ -4,7 +4,7 @@ import { filaPropina, rotuloPropina } from './propinaRecibo';
 describe('rótulo de propina del comprobante · lo que no se sabe no se nombra', () => {
   it('con las dos cosas, trae porcentaje y nombre', () => {
     expect(rotuloPropina({ pct: 10, nombre: 'Ana' })).toEqual({
-      clave: 'Propina ({0}% · para {1})',
+      clave: 'Propina ({0}% · {1})',
       args: [10, 'Ana'],
     });
   });

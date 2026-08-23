@@ -835,6 +835,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     const guardada = cards.find((c) => c.id === cardChoice);
     return guardada ? t('{0} ···· {1}', guardada.bank_name ?? guardada.brand, guardada.last_four) : null;
   })();
+  const tarjetaElegida = cardChoice === 'new' ? null : (cards.find((c) => c.id === cardChoice) ?? null);
   const cardRailAvailable = canUseCardRail(moneyRail, !!frozenScope);
   // La decisión vive en `freezeMachine.ts`, que sí tiene cobertura: acá sólo
   // se consume. Antes era lógica inline sin un solo test.
@@ -1059,7 +1060,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           ? t('Apple Pay')
           : payKind === 'google_pay'
             ? t('Ⓖ Google Pay')
-            : `${savedCard ? t('{0} ··{1}', savedCard.brand === 'visa' ? t('Visa') : savedCard.brand, savedCard.last_four) : t('Tarjeta')}`;
+            : `${savedCard ? t('{0} ···· {1}', savedCard.bank_name ?? savedCard.brand, savedCard.last_four) : t('Tarjeta')}`;
     setResult({
       // Exacto del server: la fracción completadora puede ajustar ±1¢.
       itemsAmount: r.attempt.gross_amount_cents - (r.attempt.tip_cents ?? body.tip_cents ?? tipCents),
@@ -1529,18 +1530,19 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // ─── Comprobante ─────────────────────────────────────────
   if (view === 'confirm' && result) {
     return (
-      <div className="screen has-appbar">
+      <div className="screen has-appbar receipt-screen af-diseno-flow">
         {/* 🔴 FIDELIDAD tanda 4 (`724d6fe`) · ① la pantalla arrancaba en el
             vacío, sin cabecera. Va la navy de una fila, como Avisos (§1.8), y
             **sin «Volver»: acá no hay paso atrás al que volver, el pago ya
             pasó.** Un botón de volver sobre un pago hecho promete deshacerlo. */}
         <AppHeader paymeId={session?.user?.payme_id} />
-        <div className="scroll" style={{ padding: '24px 20px' }}>
           {/* ② el tilde vivía SUELTO sobre el fondo, arriba de la tarjeta: era
               un cierre partido en dos. Entra a la tarjeta, con el título y el
               subtítulo — un solo bloque. */}
-          <div className="recibo-cierre">
-            <div className="success-circle">✓</div>
+          <div className="title-card recibo-cierre">
+            <div className="success-circle" aria-hidden="true">
+              <Icon name="check" size={28} />
+            </div>
             <h1 className="recibo-cierre-tit">
               {t('¡Listo!')}
             </h1>
@@ -1555,8 +1557,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               )}
             </div>
           </div>
-          <div className="card card-p">
-            <div className="h2" style={{ fontSize: 'var(--fs-legacy-md)', marginBottom: 12 }}>
+        <div className="scroll flow-scroll recibo-flow-scroll">
+          <div className="card recibo-card">
+            <div className="recibo-card-body">
+            <div className="recibo-label">
               {t('Comprobante')}
             </div>
             <div className="receipt-row">
@@ -1619,6 +1623,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   más grande. */}
               <span className="val recibo-total">{formatMXN(result.gross)}</span>
             </div>
+            </div>
             <div className="recibo-acciones">
               <button type="button" className="linkbtn" onClick={() => void shareReceipt()}>
                 <Icon name="share" size={16} className="ico-inline" /> {t('Enviar')}
@@ -1670,9 +1675,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   // ─── Pago (s-payment) ────────────────────────────────────
   if (view === 'pay') {
     return (
-      <div className="screen has-appbar">
-        {/* 🔴 FIDELIDAD VISUAL (2026-08-20 @ 1b99639 · defectos 1 a 5; el 6
-            quedó FRENADO y declarado). Era la misma cabecera blanca de una
+      <div className="screen has-appbar af-diseno-flow">
+        {/* 🔴 FIDELIDAD VISUAL (2026-08-20 @ 1b99639, completada por
+            AF-DISENO-02). Era la misma cabecera blanca de una
             fila que ya se corrigió en Garantía y 3DS. **Sin contador de
             paso:** esta pantalla no es un paso del armado, se vuelve a ella
             mientras la mesa siga abierta.
@@ -1682,20 +1687,18 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         <AppHeaderFlow
           paymeId={session?.user?.payme_id}
           onBack={() => setView('detail')}
-          backLabel={t('Volver a la mesa')}
         />
         {guestHeader}
-        <div className="scroll" style={{ padding: 16 }}>
           {/* 🔴 Defecto 2: era la MISMA tarjeta navy inventada que ya se sacó
               de Garantía. Pasa a `--teal-l` con texto navy, como todo el
               flujo. Los estilos inline se van a clases: mientras vivían
               inline, ninguna guarda de color los veía. */}
-          <div className="pay-title">
+          <div className="title-card pay-title">
             {/* <h1> y no <div>: con la cabecera navy la pantalla se quedaba
                 SIN encabezado accesible, que es peor que el defecto de color
                 que vino a arreglarse. Mismo patrón que scan, Garantía y 3DS. */}
             <h1 className="pay-title-lbl">
-              {frozenRequiresReconciliation ? t('Reconciliación necesaria') : frozenScope ? t('Pendiente de confirmar') : t('Pagas SOLO tu parte')}
+              {frozenRequiresReconciliation ? t('Reconciliación necesaria') : frozenScope ? t('Pendiente de confirmar') : t('Pagas solo tu parte')}
             </h1>
             {/* Defecto 3: el contexto del restaurante vive acá, no en la fila
                 de método. Es el dato que dice DÓNDE se está pagando. */}
@@ -1752,21 +1755,22 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 {/* §1.5 bis · antes de elegir se muestra LA BASE SOLA. Acá
                     salía base + 15 % adivinado: un número en pantalla que la
                     persona no eligió, que es el bug que esto cierra. */}
-                <div style={{ fontSize: 'var(--fs-legacy-3xl)', fontWeight: 800, color: 'var(--action)' }}>
+                <div className="pay-title-amount">
                   {formatMXN(tipPending ? itemsAmount : gross)}
                 </div>
-                <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'var(--action)', opacity: 0.75, marginTop: 4, fontFamily: 'var(--font-body)' }}>
+                <div className="pay-title-breakdown">
                   {mesa.division_mode === 'igual' ? t('Tu parte') : t('Tus consumos')} {formatMXN(itemsAmount)}
                   {tipPending ? '' : ` + propina ${formatMXN(tipCents)}`}
                 </div>
                 {tipPending && (
-                  <div style={{ fontSize: 'var(--fs-legacy-xs)', color: 'var(--action)', opacity: 0.75, fontFamily: 'var(--font-body)' }}>
+                  <div className="pay-title-breakdown">
                     {t('+ propina (elige abajo)')}
                   </div>
                 )}
               </>
             )}
           </div>
+        <div className="scroll flow-scroll pay-flow-scroll">
           {/* N-08: este dispositivo ya pagó una parte de esta mesa, por esta
               identidad o por la otra puerta (invitado/autenticado). No se
               bloquea —pagar varias partes es legítimo— pero se confirma. */}
@@ -1877,7 +1881,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             />
           </TipSelectorBoundary>
           {tipCents > 0 && mesa.active_staff.length > 0 && (
-            <>
+            <div className="card tip-recipient-card">
               <div className="sectlabel" id="lbl-mesero">
                 {t('¿Para quién?')}
               </div>
@@ -1895,21 +1899,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   </button>
                 ))}
               </div>
-            </>
+            </div>
           )}
           <div className="sectlabel" id="lbl-metodo">
             {t('Método')}
           </div>
-          {/* Connect: quién cobra depende del riel, y el front NO lo sabe
-              antes de pagar (G-11). Este texto es verdadero en los dos: el
-              cobro es de la cuenta del restaurante y PayMe divide. El
-              "Cobrado por" del comprobante sí lo afirma, ya con la respuesta. */}
-          {payType !== 'wallet' && (
-            <div className="caption" style={{ marginTop: -6, marginBottom: 10 }}>
-              {t('Estás pagando tu parte en')}{' '}
-              <b style={{ color: 'var(--navy)' }}>{mesa.restaurant.name}</b> {t('— PayMe divide la cuenta.')}
-            </div>
-          )}
+          {/* Connect: quién cobra depende del riel, y el front NO lo afirma
+              antes de pagar (G-11). El comprobante sólo muestra «Cobrado por»
+              cuando la respuesta ya acredita ese dato. */}
           {payType === 'card' && !cardRailAvailable && <CardRailUnavailable />}
           <div role="radiogroup" aria-labelledby="lbl-metodo">
             {!isGuest && walletRailEnabled && (
@@ -1950,7 +1947,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 hermanos vuelvan: sacarla es fácil, reponerla bien no. */}
             <button
               ref={metodoSectionRef}
-              className={`method-card ${payType === 'card' ? 'sel' : ''}${metodoPendiente ? ' method-card--pending' : ''}${metodoPulse ? ' method-card--pulse' : ''}`}
+              className={`method-card pay-method-card ${payType === 'card' ? 'sel' : ''}${metodoPendiente ? ' method-card--pending' : ''}${metodoPulse ? ' method-card--pulse' : ''}`}
               onAnimationEnd={() => setMetodoPulse(false)}
               onClick={() => {
                 setPayType('card');
@@ -1961,13 +1958,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               aria-checked={payType === 'card'}
               aria-expanded={cards.length > 0 ? cardsOpen : undefined}
             >
-              <div
-                className="method-icon"
-                style={{ background: metodoPendiente ? 'var(--warning-tint)' : 'var(--gray-l)' }}
-                aria-hidden="true"
-              >
-                <Icon name={metodoPendiente ? 'warning' : 'card'} size={22} />
-              </div>
+              {tarjetaElegida && !metodoPendiente ? (
+                <div className="pay-method-brand"><CardBrandChip brand={tarjetaElegida.brand} /></div>
+              ) : (
+                <div
+                  className="method-icon"
+                  style={{ background: metodoPendiente ? 'var(--warning-tint)' : 'var(--gray-l)' }}
+                  aria-hidden="true"
+                >
+                  <Icon name={metodoPendiente ? 'warning' : 'card'} size={22} />
+                </div>
+              )}
               <div style={{ flex: 1 }}>
                 {/* Los dos renglones SE INVIERTEN entre estados, como pide la
                     spec: elegido, manda la tarjeta; sin elegir, manda la
@@ -2158,7 +2159,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             «A+B»): salir queda declarado seguro **y con retome**.
 
             Acá, además, la salida **ya existía** —la cabecera siempre tuvo
-            «Volver a la mesa»—, así que esta barra nunca habilitó un camino
+            una acción Volver—, así que esta barra nunca habilitó un camino
             nuevo: cambia dónde vive el mismo botón. **Las dos razones apuntan
             igual, pero la que manda ahora es el acta, no mi comparación.**
 
@@ -2176,7 +2177,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   : refundedNotice
                     ? t('Pagar de nuevo')
                     : t('Pagar'),
-            icon: 'arrow-right',
+            icon: 'card',
             onClick: () => { void (async () => {
             // Reembolsado: volver a pagar es una decisión explícita del
             // usuario, nunca automática (rotar solo = re-cobrar un reembolso).

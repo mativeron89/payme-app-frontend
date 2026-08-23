@@ -35,7 +35,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(continuar).toBeEnabled();
     await continuar.click();
 
-    await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toBeVisible();
     const propinas = page.getByRole('radiogroup', { name: /propina/i });
     await propinas.getByRole('radio', { name: '0%', exact: true }).click();
     await page.getByRole('button', { name: 'Pagar', exact: true }).click();
@@ -99,13 +99,14 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(continuar).toBeEnabled();
     await continuar.click();
 
-    // ① no llegó al pago
-    await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toHaveCount(0);
-    // ② señal 1 de 3 · el toast
-    await expect(page.getByText('Elige lo que consumiste para continuar')).toBeVisible();
-
-    // ③ señal 2 de 3 · el pulso, leído de la clase que deja en el DOM
+    // ① señal 2 de 3 · se mide en cuanto responde el click, antes de que
+    // `animationend` retire deliberadamente esta clase transitoria.
     await expect(page.locator('.tk-fold--pending')).toHaveClass(/tk-fold--pulse/);
+
+    // ② no llegó al pago
+    await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toHaveCount(0);
+    // ③ señal 1 de 3 · el toast
+    await expect(page.getByText('Elige lo que consumiste para continuar')).toBeVisible();
 
     // ④ señal 3 de 3 · el scroll, que no deja rastro y por eso lleva espía
     const vistas = await leerScrolls(page);
@@ -117,6 +118,6 @@ test.describe('Continuar en la mesa (H-14)', () => {
     // ⑤ con un consumo elegido, el mismo control sí avanza.
     await page.getByText('Tagliatelle Bolognese').click();
     await continuar.click();
-    await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toBeVisible();
   });
 });

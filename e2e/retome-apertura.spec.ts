@@ -28,7 +28,7 @@ test('🔴 abandonar el 3DS y volver a Inicio: la app ofrece retomar', async ({ 
   await page.getByRole('radio', { name: /En partes iguales/ }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
+  await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
 
   // Y acá la persona se va: cierra la app en pleno 3DS, sin confirmar.

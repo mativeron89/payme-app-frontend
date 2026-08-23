@@ -41,19 +41,19 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
 
   // SUPERFICIE 1 · garantía: el checkbox existe y NACE DESMARCADO.
-  await expect(page.getByText('Garantía de la mesa')).toBeVisible();
+  await expect(page.getByText('Garantiza la mesa')).toBeVisible();
   const checkGarantia = page.getByRole('checkbox');
   await expect(checkGarantia).toBeVisible();
   await expect(checkGarantia).not.toBeChecked();
 
-  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
-  await page.getByRole('button', { name: 'Confirmar autorización', exact: true }).click();
+  await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
 
   // Tomar un ítem y llegar al pago.
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toBeVisible();
 
   // SUPERFICIE 2 · pago: también nace desmarcado.
   const checkPago = page.getByRole('checkbox');
@@ -90,13 +90,13 @@ test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una dec
   await page.getByRole('button', { name: 'Un comensal más' }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
-  await page.getByRole('button', { name: 'Confirmar autorización', exact: true }).click();
+  await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
 
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pagas SOLO tu parte' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toBeVisible();
 
   // Sin tocar el checkbox: paga y listo.
   const propinas = page.getByRole('radiogroup', { name: /propina/i });

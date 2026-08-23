@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { tituloStepper } from '../screens/divisionModo';
 import { rotuloPropina } from '../screens/propinaRecibo';
 import { EN } from './en';
 import { traducir } from './idioma';
@@ -91,14 +90,10 @@ function envueltos(): { ruta: string; texto: string }[] {
  * de los dos ve el texto visible que nadie envolvió en `t()`: ése es el límite
  * ya declarado arriba y sigue abierto.
  */
-// 🔴 SUBIÓ A 17 EL 2026-08-20, con intención: la pantalla fusionada (§1.3-bis)
-// agrega `t(op.title)`, `t(op.sub)` —las tres formas de dividir salen de UNA
-// lista, no de tres bloques copiados— y `t(tituloStepper(division))`. Los tres
-// están cubiertos por familia acá abajo, que es lo que este número exige.
-// 🔴 SUBIÓ A 18 el mismo día, por P3-02 (Codex): el `aria-label` del stepper
-// dejó de ser el literal «Cantidad de comensales» y pasa a seguir a
-// `tituloStepper`, para que quien no ve la pantalla reciba LA MISMA pregunta
-// que quien la ve. Ya está cubierto por la familia `tituloStepper`.
+// 🔴 SUBIÓ A 17/18 EL 2026-08-20, con intención: la pantalla fusionada
+// (§1.3-bis) agregó la familia de opciones de división y vinculó la pregunta
+// visible con su nombre accesible. AF-DISENO-02 conserva esa equivalencia, pero
+// la maqueta final fija un único literal para ambos sitios (ver ajuste de abajo).
 // 🔴 SUBIÓ A 19 el 2026-08-20 (tanda 4, ítem 4): el rótulo de la propina del
 // comprobante sale de `rotuloPropina()`, que elige entre CUATRO claves según
 // qué se sepa —porcentaje y/o destinatario—. Cubierto por familia acá abajo.
@@ -107,7 +102,12 @@ function envueltos(): { ruta: string; texto: string }[] {
 // vez de emitir «Propina (al mesero)» fijo. Es un `t(VARIABLE)` más, y es
 // justamente el que hace que las tres superficies digan lo mismo. La familia
 // `rotuloPropina` de abajo ya lo cubre.
-const T_SIN_LITERAL = 20;
+// 🔴 BAJÓ A 18 el 2026-08-23 (AF-DISENO-02): los dos sitios que usaban
+// `t(tituloStepper(division))` ahora dicen literalmente «¿Cuántos pagan?»,
+// tanto en pantalla como en el nombre accesible. La maqueta fija una única
+// pregunta para las tres divisiones; se retiró esa familia dinámica, no una
+// cobertura de traducción.
+const T_SIN_LITERAL = 18;
 
 function sitiosSinLiteral(): string[] {
   const out: string[] = [];
@@ -184,10 +184,6 @@ describe('🔴 los `t()` que NO reciben literal · el extractor no los ve', () =
         'En partes iguales', 'El total dividido entre todos',
         'Pagar el total', 'Uno o varios cubren toda la cuenta',
       ],
-      // §1.3-bis · `t(tituloStepper(division))`: DOS títulos para TRES formas.
-      // Se derivan de la función real, no se copian — si alguien agrega un
-      // título nuevo allá, este test lo exige acá sin que nadie se acuerde.
-      'tituloStepper': [...new Set((['consumo', 'igual', 'total'] as const).map(tituloStepper))],
       // Tanda 4 · `t(r.clave, ...r.args)` en el comprobante. Las CUATRO claves
       // se derivan de la función real recorriendo sus cuatro combinaciones: si
       // alguien agrega una quinta forma allá, este test la exige acá sin que

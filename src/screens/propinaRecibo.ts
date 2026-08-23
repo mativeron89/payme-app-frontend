@@ -29,10 +29,10 @@ export type RotuloPropina =
   | { readonly clave: 'Propina'; readonly args: readonly [] }
   | { readonly clave: 'Propina ({0}%)'; readonly args: readonly [number] }
   | { readonly clave: 'Propina (para {0})'; readonly args: readonly [string] }
-  | { readonly clave: 'Propina ({0}% · para {1})'; readonly args: readonly [number, string] };
+  | { readonly clave: 'Propina ({0}% · {1})'; readonly args: readonly [number, string] };
 
 export function rotuloPropina({ pct, nombre }: PropinaRecibo): RotuloPropina {
-  if (pct !== null && nombre !== null) return { clave: 'Propina ({0}% · para {1})', args: [pct, nombre] };
+  if (pct !== null && nombre !== null) return { clave: 'Propina ({0}% · {1})', args: [pct, nombre] };
   if (pct !== null) return { clave: 'Propina ({0}%)', args: [pct] };
   if (nombre !== null) return { clave: 'Propina (para {0})', args: [nombre] };
   return { clave: 'Propina', args: [] };

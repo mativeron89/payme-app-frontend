@@ -25,7 +25,7 @@ test('las tres formas y el ticket viven en UNA pantalla, SIN contador de paso', 
     await expect(page.getByRole('radio', { name: new RegExp(forma) })).toBeVisible();
   }
   // El ticket está en la MISMA pantalla, y su total también.
-  await expect(page.getByText('Total del ticket')).toBeVisible();
+  await expect(page.getByText('La Parolaccia · Roma Norte, CDMX')).toBeVisible();
 
   /**
    * 🔴 ESTE TEST EXIGÍA VER «Paso 2 de 4», Y AHORA EXIGE LO CONTRARIO.
@@ -51,7 +51,7 @@ test('🔴 el ticket nace PLEGADO y se abre con sus consumos', async ({ page }) 
    * consumos como subtítulo. §5 bis · F lo pide así: *un dato, un lugar*.
    */
   // Plegado: el total se ve ARRIBA, el acceso abajo, el detalle no.
-  await expect(page.getByText('Total del ticket')).toBeVisible();
+  await expect(page.getByText('La Parolaccia · Roma Norte, CDMX')).toBeVisible();
   await expect(page.getByText(/\d+ consumos, uno por uno/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
 
@@ -90,10 +90,10 @@ test('🔴 «Pagar el total» reparte el total entre los que cubren, como igual'
   await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('2');
 
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
-  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
+  await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
-  await page.getByRole('button', { name: 'Confirmar autorización' }).click();
+  await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 
   await page.getByRole('button', { name: /Elegir mis ítems/ }).click();
@@ -133,30 +133,23 @@ test('🔴 P3-02 · la selección tiene semántica, no sólo una clase CSS', asy
 });
 
 /**
- * ③ · «Esperando a tu banco» SÓLO durante la espera real.
+ * ③ · La maqueta final fija la tarjeta que explica la transición al banco.
  *
- * Este test existe por el freno: el cartel llegó pedido como elemento
- * permanente y la pantalla **no espera nada** hasta que se toca Confirmar.
- * Afirmar una espera inexistente es lo que `SISTEMA_DISENO.md §5` prohíbe, y
- * sin esta guarda nada impide que alguien lo vuelva a poner fijo «porque en
- * el diseño se ve así».
- *
- * Se afirma la AUSENCIA además de la presencia: lo que el spec saca a
- * propósito se rompe con la mejor intención.
+ * La composición se ve antes de abrirlo; `aria-busy` sigue siendo la señal
+ * semántica de que la confirmación ya está en curso. El copy no acredita un
+ * resultado monetario ni altera la máquina 3DS.
  */
-test('🔴 el cartel de espera del 3DS no existe antes de la espera', async ({ page }) => {
+test('la tarjeta de estado del 3DS explica la transición antes de abrir el banco', async ({ page }) => {
   await hastaLaPantallaFusionada(page);
   await page.getByRole('radio', { name: /En partes iguales/ }).click();
   await page.getByRole('button', { name: 'Un comensal más' }).click();
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
-  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
+  await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
 
-  // Llegamos al 3DS y NO se está esperando nada: el banco todavía no fue
-  // consultado. El cartel no puede estar.
-  await expect(page.getByText('Esperando a tu banco')).toHaveCount(0);
-  await expect(page.getByText(/No cierres la app/)).toHaveCount(0);
+  await expect(page.getByText('Esperando a tu banco')).toBeVisible();
+  await expect(page.getByText('No cierres la app: la confirmación se abre en un momento.')).toBeVisible();
 });
 
 /**
@@ -179,10 +172,10 @@ test('🔴 UNA persona puede pagar el total: el stepper llega a 1 y la mesa se a
 
   // El caso llega hasta el final: si el backend rechazara el 1, la mesa no abriría.
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
-  await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
+  await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
-  await page.getByRole('button', { name: 'Confirmar autorización' }).click();
+  await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 });
 
@@ -248,10 +241,14 @@ test('🔴 ticket incompleto: el círculo NO se apaga, frena y explica con todas
   await expect(continuar).toBeEnabled();
   await continuar.click();
 
-  // ② NO se llegó a Garantía — la afirmación que el bypass rompe
-  await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toHaveCount(0);
+  // ② el pulso se mide antes de que `animationend` retire su clase
+  // transitoria; esperar al resto del feedback vuelve la aserción flakey.
+  await expect(page.locator('.ticket-title-fold')).toHaveClass(/tk-fold--pulse/);
+
+  // ③ NO se llegó a Garantía — la afirmación que el bypass rompe
+  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toHaveCount(0);
   /**
-   * ③ el toast · 🔴 SE AFIRMA DENTRO DEL `.toast`, NO POR EL TEXTO SUELTO.
+   * ④ el toast · 🔴 SE AFIRMA DENTRO DEL `.toast`, NO POR EL TEXTO SUELTO.
    *
    * Ese mismo texto vive TAMBIÉN en el aviso permanente de la barra
    * (`tk-invalid`, visible mientras el ticket sea inválido). Un
@@ -263,11 +260,8 @@ test('🔴 ticket incompleto: el círculo NO se apaga, frena y explica con todas
   const toast = page.locator('.toast:not(.toast-hidden)');
   await expect(toast).toBeVisible();
   await expect(toast).toHaveText('Completa nombre y precio (mayor a cero) de cada consumo.');
-  // ④ el acordeón quedó abierto: el aviso lleva a donde se resuelve
+  // ⑤ el acordeón quedó abierto: el aviso lleva a donde se resuelve
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
-
-  // ⑤ el pulso, leído de la clase que deja en el DOM
-  await expect(page.locator('.tk-fold')).toHaveClass(/tk-fold--pulse/);
 
   // ⑥ el scroll, la única de las tres que no deja rastro
   const vistas = await leerScrolls(page);

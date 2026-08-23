@@ -23,9 +23,9 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
 
-    // Nace sin elegir: sin número, y la pregunta del modo consumo.
-    await expect(page.getByText('¿Cuántos son en la mesa?')).toBeVisible();
-    await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('—');
+    // Nace sin elegir: sin número, y la pregunta única de la maqueta final.
+    await expect(page.getByText('¿Cuántos pagan?')).toBeVisible();
+    await expect(page.getByRole('group', { name: '¿Cuántos pagan?' })).toContainText('—');
 
     // Continuar NUNCA está deshabilitado: frena explicando, como la propina.
     const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
@@ -44,9 +44,9 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByText('base de propina · c/u')).toBeVisible();
 
     await continuar.click();
-    await expect(page.getByRole('heading', { name: 'Garantía de la mesa' })).toBeVisible();
-    await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
-    await page.getByRole('button', { name: 'Confirmar autorización' }).click();
+    await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
+    await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
     await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 
     // LA CONDICIÓN: el N que viajó es el elegido — ni 4, ni 1, ni un default.
@@ -90,8 +90,8 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByText('$280.00')).toBeVisible();
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-    await page.getByRole('button', { name: /Garantizar .* y abrir mesa/ }).click();
-    await page.getByRole('button', { name: 'Confirmar autorización' }).click();
+    await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
     await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
 
     // 🔴 Se lee del CÓDIGO en pantalla, no del link impreso: A1 (2026-08-16)
