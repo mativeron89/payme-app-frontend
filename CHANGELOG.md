@@ -11,6 +11,49 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.128.0 — cierre del BLOCK P97: silencio no es inacción (2026-08-22)
+
+Quedaba **una sola cosa**, y era la clase de la noche un click más fino.
+
+El centinela del guard de `main` observaba **exit, señal y salida**: las tres son
+silencio *terminal*. Una llamada silenciosa a `adjudicarPoblacion()` en la rama
+importada —que corre `vitest list` y `playwright test --list`— dejaba el centinela
+**2/2 verde**: el CLI hacía su trabajo entero dentro de un import y ninguna de las
+tres señales se movía.
+
+🔴 **El oráculo miraba justamente lo que el efecto no toca.**
+
+### Se mide el efecto, no la salida
+
+Un `npx` **de mentira** al frente del `PATH`, que sólo escribe una marca. Todo el
+trabajo pesado del CLI pasa por ahí:
+
+```
+importar el módulo   →  CERO marcas    ← el control target
+correr el CLI        →  marca presente ← el control positivo
+```
+
+Es la misma técnica de marca-en-disco que el arnés ya usa para sus mutantes, y
+por el mismo motivo: **el `exit 0` y el silencio son justo lo que el mecanismo
+produce; medir con ellos sería medir con el instrumento que el ataque mueve.**
+
+Los tres mutantes mueren: el efecto silencioso (**1/2**), el guard forzado con
+`if(false)` (**1/2**), y el escenario sin test en disco (**2/1**).
+
+### ⚠️ Y el control positivo volvió a salvar una medición hueca
+
+La primera versión del escenario **no tenía un test en disco**, así que
+`acreditarColeccion` cortaba por «no hay archivos, mediría en vacío» y **el CLI
+nunca llegaba a invocar `npx`**. El espía no registraba nada, y el caso target
+habría pasado sobre un escenario que no ejercita el camino que dice ejercitar.
+
+**El control positivo se puso rojo primero.** Sin él, «no ejecuta el CLI al
+importarse» y «el escenario no llega a ejecutar nada» son indistinguibles — y la
+segunda se lee como éxito.
+
+**Sin push ni deploy.** El intermitente E2E sigue **ABIERTO** (esta corrida:
+111/111).
+
 ## 0.127.0 — cierre del BLOCK P96: un centinela por cable (2026-08-22)
 
 Cuatro regresiones, **todas la misma clase, un eslabón más adentro**: los
