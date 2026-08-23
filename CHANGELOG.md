@@ -11,6 +11,59 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.129.0 — CIERRE DEL ARNÉS en nominal-bueno, con su límite escrito (2026-08-22)
+
+**No cierra por estar terminado: cierra por decisión de producto, y la diferencia
+va escrita.** Mati decidió «una vuelta más, probable última»; el dictamen P98 vino
+BLOCK y por esa regla el arnés se cierra acá. Este release es **documental**: no
+toca una línea de lógica.
+
+### 🔴 EL LÍMITE DECLARADO DEL CERTIFICADO
+
+> **El guard de importabilidad se acredita contra la frontera `npx` + las señales
+> terminales, NO contra la ausencia total de efectos.**
+
+El espía observa un único ejecutable literal, así que un efecto que no pase por
+`npx` no lo ve. Medido por Codex: desde la rama importada, `invalidar('corrida')`
+—que borra `.vitest-corrida.json`—, `invalidar('build')` —que borra `dist/`— y
+`adjudicarAliases()` dejan el centinela **3/3 verde**, con el import en exit 0 y
+silencioso. **Dos de esos sinks son los que el workflow usa** (`ci.yml:63-64,89-90`).
+
+Y el fixture positivo **alcanza a Vitest; no acredita Playwright ni `tsc`** — que
+el CLI también los invoque por `npx` es cierto por lectura, no por esta medición.
+
+**El camino que cerraría la clase está identificado y no implementado:** separar
+el módulo de exports puros del entrypoint con efectos, para que no exista una rama
+importada capaz de ejecutar nada. Queda **disponible, no ordenado**.
+
+⚠️ **Esto se escribe porque un límite tácito se lee como resuelto.** El certificado
+vale lo que dice cubrir, ni más ni menos.
+
+### Dos correcciones de números míos
+
+Están arriba, en sus entradas: el `1 failed / 32` que se venció al crecer el
+archivo, y la sonda publicada **por descripción y no por receta** —«el escenario
+sin test en disco»— que admitía dos ediciones con resultados distintos, y la que
+yo había corrido mataba por `ENOENT` del andamiaje en vez de por la propiedad
+vigilada.
+
+📌 **La clase nueva: un mutante se publica con su receta reproducible, no con su
+descripción.** Una descripción en prosa admite varias ediciones; sólo una es la
+que se midió.
+
+### El saldo de la serie
+
+**Diecisiete dictámenes BLOCK, ninguno por un defecto en producción.** Los
+diecisiete fueron falsos verdes del instrumento que decide si se puede publicar, y
+cada uno fue **un eslabón más fino, no un retroceso**: el texto del comando no es
+la herramienta, el agregado no es la cobertura individual, «existe alguno» no es
+«existe éste», un universo escrito a mano miente por lo que no enumera, un
+certificado emitido antes no dice nada del después, y **el silencio no es
+inacción**.
+
+**Nada pusheado. AF-DISENO-01 queda local.** El E2E intermitente sigue **ABIERTO**
+y separado.
+
 ## 0.128.0 — cierre del BLOCK P97: silencio no es inacción (2026-08-22)
 
 Quedaba **una sola cosa**, y era la clase de la noche un click más fino.
@@ -37,8 +90,23 @@ Es la misma técnica de marca-en-disco que el arnés ya usa para sus mutantes, y
 por el mismo motivo: **el `exit 0` y el silencio son justo lo que el mecanismo
 produce; medir con ellos sería medir con el instrumento que el ataque mueve.**
 
-Los tres mutantes mueren: el efecto silencioso (**1/2**), el guard forzado con
-`if(false)` (**1/2**), y el escenario sin test en disco (**2/1**).
+Los mutantes mueren:
+
+| receta exacta | resultado |
+|---|---|
+| `adjudicarPoblacion(); fallas.length = 0;` en la rama importada | **1 f / 2** |
+| el guard forzado a `if (false)` | **1 f / 2** |
+| retirar `writeFileSync(…'sonda.test.ts'…)`, **dejando** el `mkdirSync` | **1 f / 2** |
+
+> 🔴 **Corregido en `0.129.0`: acá decía «el escenario sin test en disco (2/1)».**
+> Esa descripción admite **dos recetas con resultados distintos**, y la que yo
+> había corrido —retirar el `mkdirSync`— da **2 f / 1 pero por `ENOENT`**: mata
+> por excepción del andamiaje, no por la propiedad que dice vigilar. **Es un
+> mutante peor y estaba publicado como si fuera el bueno.**
+>
+> **La clase, que vale más que el número: un mutante se publica con su RECETA
+> reproducible, no con su descripción.** Una descripción en prosa admite varias
+> ediciones; sólo una de ellas es la que se midió.
 
 ### ⚠️ Y el control positivo volvió a salvar una medición hueca
 
@@ -71,7 +139,13 @@ dispatcher. Tres capas, el mismo error.
 
 Cada cable tiene un fixture que lo hace fallar **a él** y se afirma su
 diagnóstico propio. **Retirar un caller mata exactamente su fila** — medido, los
-cinco: `1 failed / 32` cada uno.
+cinco: `1 failed / 43 passed (44)` cada uno, sobre `verificarAliases.test.ts`
+(la tabla vive en `scripts/verificarAliases.test.ts:325-397`).
+
+> 🔴 **Corregido en `0.129.0`: acá decía `1 failed / 32`.** Ese par era del
+> archivo cuando tenía 33 casos y quedó viejo al crecer, **sin que nada lo
+> avisara**. Es la cuarta vez en la jornada que un conteo mío se vence por su
+> forma: un conteo lleva su población, su granularidad **y su fecha**.
 
 Es tabla y no casos sueltos a propósito: un cable nuevo se agrega ahí, y si
 alguien lo olvida no hay fila que lo cubra por accidente.

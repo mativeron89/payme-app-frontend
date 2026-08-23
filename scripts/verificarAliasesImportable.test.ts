@@ -37,8 +37,8 @@ const MODULO = join(AQUI, 'verificar-aliases.mjs');
  * ## Cómo se mide el efecto
  *
  * Se pone un `npx` **de mentira** al frente del `PATH`, que lo único que hace es
- * escribir una marca. Todo el trabajo pesado del CLI pasa por ahí —`vitest list`,
- * `playwright test --list`, `tsc --listFiles`—, así que:
+ * escribir una marca. El CLI llega a `npx` para sus herramientas pesadas, así
+ * que:
  *
  * ```
  * importar el módulo   →  CERO marcas    ← el control target
@@ -48,6 +48,26 @@ const MODULO = join(AQUI, 'verificar-aliases.mjs');
  * Es la misma técnica de marca-en-disco que el arnés usa para sus mutantes, y por
  * el mismo motivo: **el `exit 0` y el silencio son justo lo que el mecanismo
  * produce; medir con ellos sería medir con el instrumento que el ataque mueve.**
+ *
+ * ## 🔴 LÍMITE DECLARADO DE ESTE CENTINELA — leer antes de confiar en él
+ *
+ * **Acredita contra la frontera `npx` + las señales terminales, NO contra la
+ * ausencia total de efectos.** El espía observa un único ejecutable literal, así
+ * que un efecto que no pase por `npx` **no lo ve**. Codex lo midió: desde la rama
+ * importada, `invalidar('corrida')` —que borra `.vitest-corrida.json`—,
+ * `invalidar('build')` —que borra `dist/`— y `adjudicarAliases()` dejan este
+ * archivo **3/3 verde**, con el import en exit 0 y silencioso. Dos de esos sinks
+ * son los que el workflow usa en `ci.yml:63-64,89-90`.
+ *
+ * ⚠️ **El fixture positivo alcanza a Vitest; no acredita Playwright ni `tsc`.**
+ * Que el CLI también los invoque por `npx` es cierto por lectura, no por esta
+ * medición.
+ *
+ * **El camino que cerraría la clase está identificado y NO implementado:**
+ * separar el módulo de exports puros del entrypoint con efectos, de modo que no
+ * exista una rama importada capaz de ejecutar nada. Queda **disponible, no
+ * ordenado** — el arnés cierra acá en nominal-bueno por decisión de producto, y
+ * este límite es parte del certificado, no una omisión.
  */
 describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () => {
   /**
