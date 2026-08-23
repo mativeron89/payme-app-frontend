@@ -11,6 +11,22 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.136.2 — tocar el código vuelve a copiar el link completo (2026-08-23)
+
+Corrige el único block de la reauditoría de AF-DISENO-02: el refinamiento
+visual había convertido la credencial `.share-code` en un bloque inerte, aunque
+el spec vigente conserva de forma aditiva la interacción de tocar el código.
+La credencial vuelve a ser un botón que copia el link de invitación completo y
+muestra el mismo resultado que el botón separado «Copiar link».
+
+El rótulo «CÓDIGO DE LA MESA», el código, la ayuda «Para dictarlo en la mesa»,
+WhatsApp y la acción separada mantienen su composición aprobada. Sólo se
+restauran cursor y estados `disabled`/`focus-visible`; el estado visual normal
+no cambia. El E2E ahora acredita las dos superficies y, sobre la credencial,
+verifica el valor exacto del portapapeles y el toast de confirmación.
+
+**Sin push ni deploy.**
+
 ## 0.136.1 — las seis pantallas siguen la maqueta medida (2026-08-23)
 
 AF-DISENO-02 alinea, sobre el HTML y los PNG aportados por Mati, los seis

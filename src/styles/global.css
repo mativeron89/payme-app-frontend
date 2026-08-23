@@ -2632,7 +2632,8 @@ body {
   box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
 }
 
-/* La credencial se lee y se dicta; copiar el link tiene su botón separado. */
+/* La credencial se lee y se dicta, y toda el área también copia el link. El
+   botón separado conserva una segunda superficie explícita para la misma acción. */
 .share-code {
   display: flex;
   align-items: center;
@@ -2644,8 +2645,19 @@ body {
   padding: var(--sp-2);
   background: none;
   border: none;
-  cursor: default;
+  cursor: pointer;
   color: var(--text);
+  font-family: inherit;
+}
+
+.share-code:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.share-code:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
 }
 
 /* Mono: es un código de mesa, el único uso de la familia mono del sistema.
@@ -5091,7 +5103,7 @@ h1.pay-title-lbl {
   min-height: 0;
   margin: 0;
   padding: var(--sp-4) var(--sp-4) 14px;
-  cursor: default;
+  cursor: pointer;
 }
 
 .share-code-label {

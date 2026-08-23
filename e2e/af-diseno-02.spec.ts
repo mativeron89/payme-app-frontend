@@ -196,7 +196,8 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(espera).toHaveAttribute('role', 'status');
   });
 
-  test('Compartir rotula el código y conserva la salida segura a Inicio', async ({ page }) => {
+  test('Compartir rotula el código, copia el link completo y conserva la salida segura a Inicio', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await abrirCompartir(page);
 
     await expect(page.getByRole('button', { name: 'Ir a Inicio', exact: true })).toBeVisible();
@@ -204,14 +205,28 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(credencial).toContainText('Código de la mesa');
     await expect(credencial.locator('.share-code-label')).toHaveCSS('text-transform', 'uppercase');
     await expect(credencial).toContainText('Para dictarlo en la mesa');
-    await expect(credencial.locator('.share-code')).not.toHaveAttribute('role', 'button');
+    const codigo = credencial.locator('.share-code');
+    await expect(codigo).toHaveAttribute('type', 'button');
+    await expect(codigo).toBeEnabled();
     const copiar = page.getByRole('button', { name: 'Copiar link', exact: true });
-    await expect(page.locator('.share-wa')).toHaveAttribute('href', /wa\.me/);
+    const whatsapp = page.locator('.share-wa');
+    await expect(whatsapp).toHaveAttribute('href', /wa\.me/);
+    const href = await whatsapp.getAttribute('href');
+    expect(href, 'WhatsApp no transporta el link de invitación').not.toBeNull();
+    const textoCompartido = decodeURIComponent(new URL(href!).searchParams.get('text') ?? '');
+    const link = textoCompartido.match(/https?:\/\/\S+/)?.[0] ?? '';
+    expect(link).toContain('#/mesa/PA-');
+    expect(link).toContain('?t=');
+
     await expect(page.getByText('Sofía Fernández', { exact: true })).toBeVisible();
     await expect(copiar).toHaveCSS('color', 'rgb(10, 123, 128)');
     await expect(copiar).toHaveCSS('border-top-style', 'solid');
     await expect(page.locator('.appbar-solo .appbar-center')).toBeVisible();
     await capturarSiCorresponde(page, '04-compartir.png');
+
+    await codigo.click();
+    await expect(page.getByRole('status')).toHaveText('Link de invitación copiado ✓');
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(link);
   });
 
   test('Pagar centra el título, contiene destinatario y usa tarjeta en el CTA', async ({ page }) => {

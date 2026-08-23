@@ -66,7 +66,8 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
    * 🔴 A1 · LA QUINTA AUSENCIA (Diseño, ratificado 2026-08-16).
    *
    * El link con token **dejó de imprimirse en pantalla** y con él el aviso «se
-   * muestra una sola vez». La copia pasa a un botón que la nombra.
+   * muestra una sola vez». La copia queda en dos botones: el código táctil y
+   * «Copiar link», que la nombra de forma explícita.
    *
    * ⚠️ **Se afirma como AUSENCIA porque esto revierte una decisión del 04/08 que
    * tenía tres razones escritas** —el portapapeles puede fallar, es como se
@@ -75,10 +76,10 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
    * **Un argumento que sigue en pie es exactamente lo que hace que alguien lo
    * reponga de buena fe dentro de un mes.**
    *
-   * Se afirman las dos mitades: que el link NO está impreso **y** que la vía de
-   * copia SÍ existe. Sólo la primera dejaría pasar que se perdieran las dos.
+   * Se afirman las dos mitades: que el link NO está impreso **y** que las dos
+   * vías de copia SÍ existen. Sólo la primera dejaría pasar que se perdieran.
    */
-  test('el link con token no se imprime, y la copia se nombra en un botón', async ({ page }) => {
+  test('el link con token no se imprime, y sus dos superficies de copia permanecen', async ({ page }) => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
 
@@ -87,8 +88,12 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
     await expect(page.getByText(/se muestra/i)).toHaveCount(0);
     await expect(page.getByText(/una sola vez/i)).toHaveCount(0);
 
-    // Y la salida de copia existe y está habilitada.
+    // Y las dos salidas de copia existen y están habilitadas: tocar el código
+    // conserva la interacción ratificada; el botón separado nombra la acción.
+    const codigo = page.getByRole('button', { name: `Copiar el link de invitación de la mesa ${mesa.code}` });
     const copiar = page.getByRole('button', { name: 'Copiar link', exact: true });
+    await expect(codigo).toBeVisible();
+    await expect(codigo).toBeEnabled();
     await expect(copiar).toBeVisible();
     await expect(copiar).toBeEnabled();
   });

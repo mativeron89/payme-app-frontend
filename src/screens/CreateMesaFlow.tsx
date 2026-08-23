@@ -1953,20 +1953,29 @@ export function CreateMesaFlow() {
         </div>
         <div className="scroll flow-scroll share-flow-scroll">
           <div className="share-card">
-            {/* La maqueta final separa credencial y acción: el código se dicta;
-                el botón «Copiar link» de abajo conserva la credencial `?t=`. */}
-            <div className="share-code">
+            {/* La maqueta final separa la credencial de las acciones visuales,
+                pero el refinamiento es aditivo: tocar el código y el botón
+                «Copiar link» copian la misma credencial completa con `?t=`. */}
+            <button
+              type="button"
+              className="share-code"
+              onClick={copiarLink}
+              disabled={!link}
+              aria-label={t('Copiar el link de invitación de la mesa {0}', code)}
+            >
               <span className="share-code-label">{t('Código de la mesa')}</span>
               <span className="share-code-txt">{code}</span>
               <span className="share-code-help">{t('Para dictarlo en la mesa')}</span>
-            </div>
+            </button>
             {/* 🔴 A1 · el BOTÓN reemplaza al link impreso (Diseño, ratificado
                 2026-08-16, etiqueta «Confirmo sacarlo»). Antes el link viajaba
-                también como texto en pantalla; ahora «Copiar link» concentra la
-                única acción de copia y el código queda como credencial para dictar.
+                también como texto en pantalla; ahora el código táctil y «Copiar
+                link» son dos superficies para la misma copia completa, mientras
+                el texto visible del código sigue siendo la credencial para dictar.
                 ⚠️ El riesgo va aceptado a sabiendas y está en el acta: si el
                 portapapeles falla, NO queda de dónde copiar a mano. Por eso el
-                botón se apaga sin link en vez de fingir que copió. */}
+                código táctil y el botón se apagan sin link en vez de fingir que
+                copiaron. */}
             {/* 🔴 FIDELIDAD VISUAL (2026-08-20, defecto 4): WhatsApp va
                 PRIMERO. Es el canal por el que la gente manda esto de verdad,
                 así que es la acción principal; «Copiar link» es la salida
