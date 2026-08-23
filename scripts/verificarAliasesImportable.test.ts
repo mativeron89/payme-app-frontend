@@ -12,7 +12,6 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import ts from 'typescript';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 /** La superficie IMPORTABLE: es esto lo que no puede tener efectos. */
@@ -70,9 +69,14 @@ const CLI = join(AQUI, 'verificar-aliases.mjs');
  * ② **efecto observable** — importar la lib no invoca herramientas (espía de
  *    `npx`) y **no borra el reporte ni el artefacto** (los dos sinks no-`npx`
  *    que Codex midió verdes, y que el workflow usa);
- * ③ **forma** — la superficie importable **sólo declara**: ninguna invocación en
- *    su nivel superior, ni siquiera inofensiva. Esto cubre lo que ② no puede
- *    ver: una llamada de sólo lectura no deja rastro, y medido daba 4/4 verde.
+ * ③ 🔴 **RETIRADA en el P101.** Acá había una tercera defensa que afirmaba que la
+ *    superficie importable «sólo declara, ninguna invocación ni siquiera
+ *    inofensiva». **Ese claim era falso sobre el objeto sano** —la lib evalúa
+ *    `dirname`, `join`, `fileURLToPath` y `Object.freeze` en sus
+ *    inicializadores— y sus dos implementaciones sucesivas fallaron en las dos
+ *    direcciones. Lo que la reemplaza es el fixture ROTO de ①: con él, una
+ *    llamada de sólo lectura **sí** deja rastro (`fallas > 0`), que era
+ *    exactamente el hueco que la tercera defensa venía a tapar.
  *
  * ⚠️ **El fixture positivo ejercita los tres flujos** —Vitest, Playwright y
  * `tsc`— y cada uno se afirma por separado. Antes llegaba sólo a Vitest y el
@@ -88,6 +92,14 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
   function montarEspia(): { readonly marca: string; readonly env: NodeJS.ProcessEnv } {
     const raiz = mkdtempSync(join(tmpdir(), 'payme-espia-'));
     const marca = join(raiz, 'invocaciones.txt');
+    /**
+     * 🔴 P101 · EL FIXTURE ES ROTO A PROPÓSITO — es lo que hace visible el efecto.
+     *
+     * Con un `package.json` sano, `adjudicarAliases()` corre y **no deja nada**:
+     * cero fallas, cero disco, cero procesos. Con los aliases rotos, cualquier
+     * adjudicación que se ejecute deja `fallas.length > 0`, **sin importar en qué
+     * forma sintáctica se la haya escrito.**
+     */
     writeFileSync(
       join(raiz, 'package.json'),
       JSON.stringify({ scripts: { typecheck: 'tsc --noEmit -p tsconfig.json' } }),
@@ -142,12 +154,101 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
       expect(registro, 'el espía no registró nada: el escenario no está midiendo lo que dice')
         .not.toBe('');
       // 🔴 Los TRES flujos que el docblock declara cubiertos, cada uno afirmado.
+      /**
+       * 🔴 P101 · POR EJECUTABLE EXACTO, no por substring de la línea entera.
+       *
+       * Acá había `toMatch(new RegExp(herramienta))` sobre el registro completo,
+       * y `/tsc/` matcheaba **el `tsconfig.json` del argumento de al lado**: el
+       * flujo de `tsc` figuraba acreditado sin haberse invocado nunca. Vitest y
+       * Playwright sí discriminaban, así que el defecto pasaba en dos de tres.
+       *
+       * El espía escribe una línea por invocación con sus argv; el ejecutable es
+       * el PRIMER token de esa línea, y se compara por igualdad.
+       */
+      const invocados = registro
+        .split('\n')
+        .map((l) => l.trim().split(/\s+/)[0])
+        .filter(Boolean);
       for (const herramienta of ['vitest', 'playwright', 'tsc']) {
-        expect(registro, `el fixture no llega a «${herramienta}»: el claim lo incluye sin acreditarlo`)
-          .toMatch(new RegExp(herramienta));
+        expect(
+          invocados,
+          `el fixture no invoca «${herramienta}»: el claim lo incluye sin acreditarlo ` +
+            `(invocados: ${invocados.join(', ') || 'ninguno'})`,
+        ).toContain(herramienta);
       }
     } finally {
       rmSync(dirname(marca), { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * 🔴 P101 · EL ORÁCULO PRIMARIO ES CONDUCTUAL — y por qué se invirtió.
+   *
+   * Cinco vueltas de esta serie fueron **enumeraciones que fallan**, cada una más
+   * fina y todas rotas por la misma razón: describen la FORMA de lo prohibido.
+   *
+   * ```
+   * P97   prefijos de comando        → cayó con `void`
+   * P99   líneas por regex           → cayó con `await` y el operador coma
+   * P100  categorías de nodo (AST)   → cayó con `static {}` y `new f()`
+   * P100  nombres en una allowlist   → cayó con un homónimo `join`
+   * ```
+   *
+   * **El terreno que no hereda enumeración es la ejecución observada.** Un efecto
+   * es un efecto se escriba como se escriba: `void f()`, `await f()`, `new f()` y
+   * un `static {}` dejan **exactamente el mismo rastro**, y por eso este caso los
+   * caza a los cuatro sin nombrar ninguno.
+   *
+   * ## Los tres sensores, y por qué cubren el espacio
+   *
+   * Toda función de la lib hace una de tres cosas observables:
+   *
+   * ```
+   * adjudicar / acreditar  →  empuja a `fallas`     ← sensor ①
+   * invalidar              →  BORRA del disco       ← sensor ②
+   * listar poblaciones     →  lanza `npx`           ← sensor ③
+   * ```
+   *
+   * No es una enumeración de formas prohibidas: es el inventario de **lo que la
+   * lib puede hacer**, que es finito y está en su propia superficie exportada.
+   *
+   * ⚠️ El fixture es **roto a propósito**: con aliases sanos, `adjudicarAliases()`
+   * corre y no deja rastro, y el sensor ① no distinguiría «no se ejecutó» de «se
+   * ejecutó y no encontró nada» — el falso verde de siempre.
+   */
+  it('🔴 IMPORTADO · cero EFECTOS · el oráculo que no enumera formas', () => {
+    const { marca, env } = montarEspia();
+    const raiz = dirname(marca);
+    try {
+      const reporte = join(raiz, '.vitest-corrida.json');
+      const dist = join(raiz, 'dist');
+      writeFileSync(reporte, '{"testResults":[]}');
+      mkdirSync(dist, { recursive: true });
+      expect(existsSync(reporte) && existsSync(dist), 'el escenario no se plantó').toBe(true);
+
+      const r = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `import(${JSON.stringify(pathToFileURL(LIB).href)})` +
+            `.then((m) => console.log('FALLAS=' + m.fallas.length));`,
+        ],
+        { env, encoding: 'utf8' },
+      );
+
+      // ① nadie adjudicó: sobre un fixture ROTO, ejecutar deja fallas
+      expect(
+        `${r.stdout}`.trim(),
+        'importar la lib EJECUTÓ una adjudicación: el fixture roto la delató',
+      ).toBe('FALLAS=0');
+      // ② nadie invalidó
+      expect(existsSync(reporte), 'importar la lib BORRÓ el reporte de la corrida').toBe(true);
+      expect(existsSync(dist), 'importar la lib BORRÓ el artefacto del build').toBe(true);
+      // ③ nadie lanzó herramientas
+      expect(invocaciones(marca), 'importar la lib EJECUTÓ herramientas del CLI').toBe('');
+    } finally {
+      rmSync(raiz, { recursive: true, force: true });
     }
   });
 
@@ -225,131 +326,114 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
 });
 
 /**
- * 🔴 P100 · QUÉ EVALÚA LA LIB AL IMPORTARSE — criterio SEMÁNTICO, por AST.
+ * 🔴 P101 · POR QUÉ SE RETIRÓ EL CRITERIO POR AST — falla en LAS DOS direcciones.
  *
- * La versión anterior filtraba líneas con un regex —`/^[A-Za-z_$][\w$]*\s*\(/`—
- * y Codex la atravesó con tres formas que **ejecutan igual** en
- * `ModuleEvaluation`, con control externo de que el sink corrió:
+ * Acá vivía un reconocedor que parseaba la lib y adjudicaba sus llamadas contra
+ * una allowlist. Era más fino que el regex al que reemplazó, y aun así:
  *
  * ```
- * void adjudicarAliases();                        →  6/6 verde   (fallas 0→8)
- * await adjudicarAliases();                       →  6/6 verde   (fallas 0→7)
- * const x = (adjudicarAliases(), fallas.length=0) →  6/6 verde   (exit 0→1)
+ * SUB-aproxima   class __X { static { adjudicarAliases(); } }  12/12 verde · fallas 0→7
+ *                new adjudicarAliases();                       12/12 verde · fallas 0→7
+ * SOBRE-aproxima const o = { get v() { adjudicarAliases(); } }  1 f / 11  · fallas = 0
  * ```
  *
- * 🔴 **Y lo peor no fue el bypass: mi claim era FALSO SOBRE EL OBJETO SANO.**
- * Decía «ninguna invocación, ni siquiera inofensiva» y la lib **ya evalúa**
- * `dirname()`, `fileURLToPath()`, `join()` y `Object.freeze()` en sus
- * inicializadores (`aliasesLib.mjs:32,39,49,174`). El regex no las veía por
- * dónde caían, no porque no existieran: **el comentario afirmaba una garantía
- * que el archivo nunca cumplió.**
+ * Lo primero era un hueco; **lo segundo es peor**: un rojo sobre código que no
+ * ejecuta nada. Una guarda que se pone roja sin defecto es una guarda que alguien
+ * termina apagando, y con ella se va la que sí servía.
  *
- * ⚠️ **Y mi control positivo era CIRCULAR**: alimentaba al filtro con líneas
- * escritas en su misma gramática, así que sólo probaba que **el filtro se
- * reconoce a sí mismo**. Un control positivo tiene que venir de afuera del
- * mecanismo que valida — si lo escribe la misma cabeza que escribió el patrón,
- * comparte sus puntos ciegos.
+ * Y su allowlist comparaba **spelling**: un `join` homónimo que delegaba heredó
+ * el permiso del `join` legítimo. Comparar nombres no es comparar bindings.
  *
- * ## Lo que se afirma ahora
+ * 📌 **La serie entera fue enumerar la FORMA de lo prohibido, cada vez más fino:**
+ * prefijos → líneas → categorías de nodo → nombres. Las cuatro cayeron, y la
+ * última además empezó a dar falsos rojos. **La ejecución observada no hereda esa
+ * clase de error**, y por eso quedó como único oráculo: un efecto es un efecto se
+ * escriba como se escriba.
  *
- * Se parsea el módulo y se recorren **los statements de nivel superior y sus
- * inicializadores**, sin entrar a cuerpos de función —eso no corre al importar—.
- * Cada llamada que SÍ se evalúa tiene que estar en una **allowlist semántica**:
- * resolución de rutas y congelado de constantes, nada más. `void`, `await`, el
- * operador coma o cualquier envoltorio nuevo caen igual, porque el criterio no
- * mira la forma del texto sino **qué se ejecuta**.
+ * ⚠️ **Lo que se pierde, declarado:** ya no hay diagnóstico estático que diga EN
+ * QUÉ LÍNEA está la llamada intrusa. El conductual dice **que** algo se ejecutó,
+ * no dónde. Es un peor mensaje de error a cambio de una garantía real — y el
+ * sensor que se pone rojo ya acota dónde buscar.
  */
-describe('🔴 la superficie importable sólo evalúa lo adjudicado', () => {
-  /**
-   * Las únicas llamadas que la lib puede evaluar al cargarse. Son inocuas por
-   * construcción —no leen el repo, no escriben, no lanzan procesos— y están acá
-   * una por una: agregar la quinta es una decisión que queda en el diff.
-   */
-  const EVALUACION_PERMITIDA: ReadonlySet<string> = new Set([
-    'dirname',
-    'fileURLToPath',
-    'join',
-    'Object.freeze',
-  ]);
 
-  /** Nombre imprimible del callee: `f`, `A.b`, o su texto si es otra cosa. */
-  function nombreDe(expr: ts.Expression): string {
-    if (ts.isIdentifier(expr)) return expr.text;
-    if (ts.isPropertyAccessExpression(expr)) return `${nombreDe(expr.expression)}.${expr.name.text}`;
-    return expr.getText();
+/**
+ * 🔴 P101 · LAS FORMAS QUE ATRAVESARON A CADA CRITERIO, VERSIONADAS.
+ *
+ * Cada una rompió el reconocedor de su vuelta. Se plantan sobre una **copia** de
+ * la lib —el archivo real no se toca— y se importa esa copia: si el oráculo
+ * conductual volviera a depender de la forma, estos casos lo dirían.
+ *
+ * El getter va como **control NEGATIVO** y es la mitad que más importa: su cuerpo
+ * **no se ejecuta** al importar, así que ponerlo rojo sería un falso positivo. El
+ * criterio por AST lo marcaba, y una guarda que se pone roja sin defecto es una
+ * guarda que alguien termina apagando.
+ */
+describe('🔴 el oráculo conductual no depende de la FORMA', () => {
+  /** Importa una copia de la lib con `extra` agregado y devuelve qué pasó. */
+  function importarCon(extra: string): { fallas: number; borro: boolean } {
+    const raiz = mkdtempSync(join(tmpdir(), 'payme-forma-'));
+    try {
+      const copia = join(raiz, 'lib.mjs');
+      writeFileSync(copia, `${readFileSync(LIB, 'utf8')}\n${extra}\n`);
+      const reporte = join(raiz, '.vitest-corrida.json');
+      writeFileSync(reporte, '{}');
+      writeFileSync(join(raiz, 'package.json'), JSON.stringify({ scripts: { test: 'true' } }));
+      const r = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `import(${JSON.stringify(pathToFileURL(copia).href)})` +
+            `.then((m) => console.log('F=' + m.fallas.length)).catch(() => console.log('F=-1'));`,
+        ],
+        { env: { ...process.env, PAYME_RAIZ_VERIFICACION: raiz }, encoding: 'utf8' },
+      );
+      const m = /F=(-?\d+)/.exec(r.stdout);
+      return { fallas: m ? Number(m[1]) : -1, borro: !existsSync(reporte) };
+    } finally {
+      rmSync(raiz, { recursive: true, force: true });
+    }
   }
 
-  /**
-   * Llamadas que se evalúan al importar el módulo.
-   *
-   * 🔴 No desciende a cuerpos de función ni de clase: **ahí el código no corre
-   * al importar**, y contarlo daría rojos sobre código sano. La distinción es
-   * justamente la que un regex no puede hacer.
-   */
-  function evaluadasAlImportar(codigo: string): string[] {
-    const sf = ts.createSourceFile('lib.mjs', codigo, ts.ScriptTarget.ESNext, true);
-    const halladas: string[] = [];
-    const visitar = (n: ts.Node): void => {
-      if (
-        ts.isFunctionDeclaration(n) ||
-        ts.isFunctionExpression(n) ||
-        ts.isArrowFunction(n) ||
-        ts.isMethodDeclaration(n) ||
-        ts.isClassDeclaration(n)
-      ) {
-        return;
-      }
-      if (ts.isCallExpression(n)) halladas.push(nombreDe(n.expression));
-      ts.forEachChild(n, visitar);
-    };
-    for (const stmt of sf.statements) visitar(stmt);
-    return halladas;
-  }
-
-  it('🔴 la lib no evalúa nada fuera de la allowlist', () => {
-    const evaluadas = evaluadasAlImportar(readFileSync(LIB, 'utf8'));
-    // Control de no-vacuidad: la lib SÍ evalúa cosas —resolución de rutas y
-    // `Object.freeze`—, así que un cero acá significaría que el recorrido no
-    // está mirando, no que el archivo esté limpio.
-    expect(evaluadas.length, 'no se vio ninguna evaluación: el recorrido midió en vacío')
-      .toBeGreaterThan(0);
-    const intrusas = evaluadas.filter((f) => !EVALUACION_PERMITIDA.has(f));
-    expect(
-      intrusas,
-      `la superficie importable EJECUTA algo no adjudicado al cargarse: ${intrusas.join(', ')}`,
-    ).toEqual([]);
-  });
-
-  /**
-   * 🔴 CONTROL POSITIVO NO CIRCULAR — las formas que el regex viejo no veía.
-   *
-   * El control anterior le daba al filtro líneas de su misma gramática y por eso
-   * pasaba siempre. Éstas son las tres que Codex usó para atravesarlo, más la
-   * desnuda: si el reconocedor nuevo fuera lexical otra vez, tres de las cuatro
-   * se le escaparían acá y este caso lo diría.
-   */
-  const FORMAS_QUE_EJECUTAN: ReadonlyArray<readonly [string, string]> = [
-    ['desnuda', 'adjudicarAliases();'],
-    ['con void', 'void adjudicarAliases();'],
-    ['con await', 'await adjudicarAliases();'],
-    ['en operador coma', 'const x = (adjudicarAliases(), 0);'],
-    ['en inicializador', 'const y = adjudicarAliases();'],
-    ['anidada en un objeto', 'const z = { a: adjudicarAliases() };'],
+  const EJECUTAN: ReadonlyArray<readonly [string, string]> = [
+    ['static block · rompió al AST', 'class __X { static { adjudicarAliases(); } }'],
+    ['new f() · rompió al AST', 'new adjudicarAliases();'],
+    ['void · rompió al regex', 'void adjudicarAliases();'],
+    ['await · rompió al regex', 'await adjudicarAliases();'],
+    ['operador coma · rompió al regex', 'const __c = (adjudicarAliases(), 0);'],
+    [
+      'homónimo · rompió a la allowlist textual',
+      "const __h = ((join) => join('x'))((s) => { adjudicarAliases(); return s; });",
+    ],
   ];
 
-  for (const [nombre, codigo] of FORMAS_QUE_EJECUTAN) {
-    it(`🔴 se reconoce la forma «${nombre}»`, () => {
+  for (const [nombre, forma] of EJECUTAN) {
+    it(`🔴 ${nombre} → el sensor lo ve`, () => {
       expect(
-        evaluadasAlImportar(codigo),
-        `la forma «${nombre}» ejecuta al importar y el reconocedor no la ve`,
-      ).toContain('adjudicarAliases');
+        importarCon(forma).fallas,
+        `«${nombre}» ejecutó al importar y ningún sensor lo registró`,
+      ).toBeGreaterThan(0);
     });
   }
 
-  it('✅ y NO cuenta lo que vive dentro de una función · no corre al importar', () => {
-    // La otra mitad del control: un reconocedor que marcara todo daría rojo
-    // sobre código sano y habría que apagarlo, que es como mueren las guardas.
-    expect(evaluadasAlImportar('function f() { adjudicarAliases(); }')).toEqual([]);
-    expect(evaluadasAlImportar('const g = () => invalidar("build");')).toEqual([]);
+  it('🔴 y una invalidación se ve en el DISCO, no en las fallas', () => {
+    // El segundo sensor: `invalidar` no toca `fallas`, borra. Sin este caso, el
+    // oráculo quedaría acreditado sólo para la mitad de los efectos posibles.
+    expect(importarCon("invalidar('corrida');").borro, 'la invalidación no dejó rastro')
+      .toBe(true);
+  });
+
+  it('✅ CONTROL NEGATIVO · un getter diferido NO se cuenta · su cuerpo no corre', () => {
+    const r = importarCon('const __lazy = { get v() { adjudicarAliases(); return 1; } };');
+    expect(r.fallas, 'un cuerpo diferido se contó como ejecutado: falso positivo').toBe(0);
+    expect(r.borro, 'un cuerpo diferido borró algo: imposible').toBe(false);
+  });
+
+  it('✅ CONTROL NEGATIVO · la lib SIN agregados no dispara ningún sensor', () => {
+    // Ancla el escenario al objeto sano: si esto fuera rojo, todos los casos de
+    // arriba estarían pasando por una razón que no es la que dicen.
+    const r = importarCon('');
+    expect(r.fallas, 'la lib sana ejecuta algo al importarse').toBe(0);
+    expect(r.borro).toBe(false);
   });
 });

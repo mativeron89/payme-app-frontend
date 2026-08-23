@@ -11,6 +11,76 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.132.0 — el oráculo pasa a ser conductual: un efecto es un efecto (2026-08-23)
+
+**El AST tampoco era la ejecución.** Codex lo atravesó por abajo y lo hizo fallar
+por arriba, las dos cosas medidas:
+
+```
+SUB-aproxima    class __X { static { adjudicarAliases(); } }   12/12 verde · fallas 0→7
+                new adjudicarAliases();                        12/12 verde · fallas 0→7
+SOBRE-aproxima  const o = { get v() { adjudicarAliases(); } }   1 f / 11  · fallas = 0
+```
+
+Lo primero era un hueco. 🔴 **Lo segundo es peor: un rojo sobre código que no
+ejecuta nada.** Una guarda que se pone roja sin defecto es una guarda que alguien
+termina apagando, y con ella se va la que sí servía.
+
+Y su allowlist comparaba **spelling**: un `join` homónimo que delegaba heredó el
+permiso del legítimo. **Comparar nombres no es comparar bindings.**
+
+### 📌 La serie entera fue enumerar la forma de lo prohibido
+
+```
+P97   prefijos de comando       → cayó con `void`
+P99   líneas por regex          → cayó con `await` y el operador coma
+P100  categorías de nodo (AST)  → cayó con `static {}` y `new f()`
+P100  nombres en una allowlist  → cayó con un homónimo
+```
+
+Cuatro criterios, cada uno más fino, **y todos rotos por la misma razón**: describen
+cómo se escribe lo prohibido. **La ejecución observada no hereda esa clase de
+error** — un efecto es un efecto se escriba como se escriba.
+
+### El oráculo nuevo: tres sensores sobre la superficie exportada
+
+```
+adjudicar / acreditar  →  empuja a `fallas`   ← sensor ①
+invalidar              →  BORRA del disco     ← sensor ②
+listar poblaciones     →  lanza `npx`         ← sensor ③
+```
+
+**No es una enumeración de formas prohibidas: es el inventario de lo que la lib
+puede hacer**, que es finito y vive en su propia superficie exportada.
+
+⚠️ **La pieza que lo hace funcionar es que el fixture sea ROTO a propósito.** Con
+aliases sanos, `adjudicarAliases()` corre y no deja nada, y el sensor ① no
+distinguiría «no se ejecutó» de «se ejecutó y no encontró nada».
+
+**Las seis formas mueren, y los controles negativos no dan falso rojo:**
+
+| forma | criterio que rompía | ahora |
+|---|---|---|
+| `static {}` · `new f()` | AST | **1 f / 4 (5)** |
+| `void` · `await` · coma | regex | **1 f / 4 (5)** |
+| homónimo `join` | allowlist textual | **1 f / 4 (5)** |
+| `invalidar` en objeto | — | **2 f / 3 (5)** |
+| **getter diferido** *(no ejecuta)* | *falso rojo del AST* | **5/5 · sin fallar** ✅ |
+
+### Lo que se pierde, declarado
+
+Ya no hay diagnóstico estático que diga **en qué línea** está la llamada intrusa.
+El conductual dice **que** algo se ejecutó, no dónde. Es un peor mensaje de error a
+cambio de una garantía real — y el sensor que se pone rojo ya acota dónde buscar.
+
+### Y el triple-flow no era causal
+
+`toMatch(/tsc/)` matcheaba **el `tsconfig.json` del argumento de al lado**: el
+flujo de `tsc` figuraba acreditado sin haberse invocado nunca. Ahora se compara el
+**ejecutable exacto** —primer token de cada invocación—, no un substring de línea.
+
+**Sin push ni deploy.** E2E **ABIERTO** (esta corrida: 111/111).
+
 ## 0.131.0 — el criterio pasa a ser semántico, por AST (2026-08-23)
 
 La tercera defensa del P99 era **lexical**: filtraba líneas con
@@ -41,7 +111,9 @@ patrón, comparte sus puntos ciegos.
 
 El control nuevo usa **las tres formas que atravesaron al viejo**, más un
 inicializador y una llamada anidada en un objeto. Si el reconocedor volviera a ser
-lexical, cuatro de las seis se le escaparían **y este caso lo diría**.
+lexical, **cinco** de las seis se le escaparían **y este caso lo diría**.
+(Decía «cuatro» — corregido en `0.132.0`: sólo la desnuda pasa un filtro por
+prefijo de línea.)
 
 ### El criterio nuevo
 
