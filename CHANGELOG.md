@@ -11,6 +11,58 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.133.0 — la señal deja de ser borrable (2026-08-23)
+
+El oráculo conductual leía **estado del propio módulo**: `fallas`, un array
+mutable exportado. Codex mostró que el módulo puede limpiarlo antes de que el
+observador lo lea:
+
+```
+const __p101 = (adjudicarAliases(), fallas.length = 0);   →  14/14 verde
+```
+
+🔴 **El trabajo se ejecutó y el sensor quedó en cero.** El código agregado
+**comparte scope con el sensor**. Es la misma clase que ya cerré dos veces —no
+medir con el instrumento que el ataque manipula— y esta vez el instrumento era
+un contador dentro del objeto vigilado.
+
+### La señal pasa a ser una que el módulo no puede tocar
+
+El fixture usa un `package.json` **sintácticamente inválido**. Entonces
+`adjudicarAliases()` **lanza en `JSON.parse`**, y la excepción ocurre **antes** de
+cualquier limpieza: no hay `length = 0` que llegue a correr.
+
+```
+lib sana        →  importa limpio            F=0
+lib que ejecuta →  crashea en JSON.parse     F=-1   ← no hay nada que borrar
+```
+
+**La ejecución se prueba por la excepción, no por un contador.** Versionado con
+su **rival desnudo** —la misma llamada sin reset— porque los dos juntos son los
+que dicen qué está midiendo el caso.
+
+### La deuda del anexo P101B, cerrada — y nuestra receta estaba mal
+
+El fail-closed «una lib que no importa pone ROJO» quedó acreditado **por
+accidente** y ningún caso lo afirmaba. Ahora sí.
+
+⚠️ **Y la receta que declaramos era inexacta**, lo midió Codex: el fail-closed
+tiene **dos canales redundantes** —el `catch` del import y el fallback del
+parser—, así que retirar sólo el `catch` **no lo voltea**. La única mutación
+letal es `-1 → 0`, y mata **10 de 18**. Lo habíamos escrito sin medir la matriz
+completa.
+
+### El overclaim del inventario, retirado
+
+Decía que los tres sensores son «el inventario de lo que la lib puede hacer». Es
+falso: cubren **los efectos del call graph exportado**, y Codex lo midió con un
+`rmSync` a un path privado que **pasa verde**.
+
+Lo que se afirma ahora, que es lo que el certificado necesita: **ninguna función
+exportada se ejecuta al importar la lib.**
+
+**Sin push ni deploy.** E2E **ABIERTO** (esta corrida: 111/111).
+
 ## 0.132.0 — el oráculo pasa a ser conductual: un efecto es un efecto (2026-08-23)
 
 **El AST tampoco era la ejecución.** Codex lo atravesó por abajo y lo hizo fallar
@@ -50,8 +102,10 @@ invalidar              →  BORRA del disco     ← sensor ②
 listar poblaciones     →  lanza `npx`         ← sensor ③
 ```
 
-**No es una enumeración de formas prohibidas: es el inventario de lo que la lib
-puede hacer**, que es finito y vive en su propia superficie exportada.
+**No es una enumeración de formas prohibidas: son los efectos del call graph
+EXPORTADO.** 🔴 Corregido en `0.133.0`: acá decía «el inventario de lo que la lib
+puede hacer», y eso era un overclaim — un `rmSync` a un path privado pasa verde.
+Lo que se afirma es que **ninguna función exportada se ejecuta al importar**.
 
 ⚠️ **La pieza que lo hace funcionar es que el fixture sea ROTO a propósito.** Con
 aliases sanos, `adjudicarAliases()` corre y no deja nada, y el sensor ① no
@@ -64,7 +118,7 @@ distinguiría «no se ejecutó» de «se ejecutó y no encontró nada».
 | `static {}` · `new f()` | AST | **1 f / 4 (5)** |
 | `void` · `await` · coma | regex | **1 f / 4 (5)** |
 | homónimo `join` | allowlist textual | **1 f / 4 (5)** |
-| `invalidar` en objeto | — | **2 f / 3 (5)** |
+| `invalidar('corrida')` *(sensor del disco)* | — | **2 f / 3 (5)** |
 | **getter diferido** *(no ejecuta)* | *falso rojo del AST* | **5/5 · sin fallar** ✅ |
 
 ### Lo que se pierde, declarado

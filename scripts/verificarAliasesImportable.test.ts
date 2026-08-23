@@ -184,7 +184,7 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
   /**
    * 🔴 P101 · EL ORÁCULO PRIMARIO ES CONDUCTUAL — y por qué se invirtió.
    *
-   * Cinco vueltas de esta serie fueron **enumeraciones que fallan**, cada una más
+   * Cuatro criterios de esta serie fueron **enumeraciones que fallan**, cada una más
    * fina y todas rotas por la misma razón: describen la FORMA de lo prohibido.
    *
    * ```
@@ -209,8 +209,17 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * listar poblaciones     →  lanza `npx`           ← sensor ③
    * ```
    *
-   * No es una enumeración de formas prohibidas: es el inventario de **lo que la
-   * lib puede hacer**, que es finito y está en su propia superficie exportada.
+   * 🔴 **ALCANCE DECLARADO, y acá había un overclaim.** Esto decía «el inventario
+   * de lo que la lib PUEDE HACER». Es falso: los tres sensores cubren **los
+   * efectos del call graph EXPORTADO** —las funciones que la lib expone y lo que
+   * ellas tocan—, no cualquier efecto imaginable. Codex lo midió con un
+   * `rmSync` a un path privado: **pasa verde**.
+   *
+   * Lo que sí se afirma, y es lo que el certificado necesita: **ninguna función
+   * exportada de la lib se ejecuta al importarla**, medido por sus tres efectos
+   * observables. Un efecto inventado con código nuevo que no pase por ninguna de
+   * ellas queda fuera — y eso es un cambio deliberado y visible en el diff, no
+   * una rama preexistente que alguien pueda activar.
    *
    * ⚠️ El fixture es **roto a propósito**: con aliases sanos, `adjudicarAliases()`
    * corre y no deja rastro, y el sensor ① no distinguiría «no se ejecutó» de «se
@@ -377,7 +386,23 @@ describe('🔴 el oráculo conductual no depende de la FORMA', () => {
       writeFileSync(copia, `${readFileSync(LIB, 'utf8')}\n${extra}\n`);
       const reporte = join(raiz, '.vitest-corrida.json');
       writeFileSync(reporte, '{}');
-      writeFileSync(join(raiz, 'package.json'), JSON.stringify({ scripts: { test: 'true' } }));
+      /**
+       * 🔴 P102 · EL `package.json` ES SINTÁCTICAMENTE INVÁLIDO — y ésa es la
+       * pieza que hace al sensor NO BORRABLE.
+       *
+       * Antes el fixture estaba roto pero era JSON válido, así que la ejecución
+       * se detectaba por `fallas.length > 0` — **estado del propio módulo, que el
+       * módulo puede limpiar**. Codex lo mostró:
+       * `const x = (adjudicarAliases(), fallas.length = 0);` → **14/14 verde**
+       * con el trabajo hecho: el código agregado comparte scope con el sensor y
+       * lo resetea antes de que el observador lo lea.
+       *
+       * Con el archivo inválido, `adjudicarAliases()` **lanza en `JSON.parse`**.
+       * La excepción ocurre ANTES de cualquier limpieza —no hay `length = 0` que
+       * llegue a correr—, así que la señal deja de estar en manos del módulo: la
+       * ejecución se prueba **por la excepción, no por un contador**.
+       */
+      writeFileSync(join(raiz, 'package.json'), '{ esto no es json');
       const r = spawnSync(
         process.execPath,
         [
@@ -409,10 +434,41 @@ describe('🔴 el oráculo conductual no depende de la FORMA', () => {
 
   for (const [nombre, forma] of EJECUTAN) {
     it(`🔴 ${nombre} → el sensor lo ve`, () => {
+      /**
+       * 🔴 Ejecutar es `F !== 0`, por contador O por excepción. Con el fixture
+       * inválido casi siempre es lo segundo, **y eso es lo bueno**: la excepción
+       * no la puede limpiar el módulo, el contador sí.
+       */
       expect(
         importarCon(forma).fallas,
         `«${nombre}» ejecutó al importar y ningún sensor lo registró`,
-      ).toBeGreaterThan(0);
+      ).not.toBe(0);
+    });
+  }
+
+  /**
+   * 🔴 P102 · EL MUTANTE QUE BORRA LA SEÑAL, y su rival sin reset.
+   *
+   * Éste es el que rompió la vuelta anterior: el código agregado **comparte
+   * scope con el sensor** y lo limpia antes de que el observador lo lea. Con el
+   * contador como única señal daba **14/14 verde** con el trabajo hecho.
+   *
+   * Va con su **rival desnudo** —la misma llamada sin el reset— porque los dos
+   * juntos son los que prueban qué está midiendo el caso: si alguna vez sólo el
+   * rival cayera, volveríamos a tener un sensor borrable sin enterarnos.
+   */
+  const CON_Y_SIN_RESET: ReadonlyArray<readonly [string, string]> = [
+    ['rival desnudo · sin reset', 'adjudicarAliases();'],
+    ['ejecuta Y BORRA la señal', 'const __p = (adjudicarAliases(), fallas.length = 0);'],
+    ['ejecuta y vacía por asignación', 'adjudicarAliases(); fallas.splice(0);'],
+  ];
+
+  for (const [nombre, forma] of CON_Y_SIN_RESET) {
+    it(`🔴 ${nombre} → el sensor NO se puede limpiar`, () => {
+      expect(
+        importarCon(forma).fallas,
+        `«${nombre}» ejecutó y el observador no lo vio: la señal era borrable`,
+      ).not.toBe(0);
     });
   }
 
@@ -427,6 +483,28 @@ describe('🔴 el oráculo conductual no depende de la FORMA', () => {
     const r = importarCon('const __lazy = { get v() { adjudicarAliases(); return 1; } };');
     expect(r.fallas, 'un cuerpo diferido se contó como ejecutado: falso positivo').toBe(0);
     expect(r.borro, 'un cuerpo diferido borró algo: imposible').toBe(false);
+  });
+
+  /**
+   * 🔴 P102 · LA DEUDA DEL ANEXO P101B, VERSIONADA — y con la corrección.
+   *
+   * El fail-closed «una lib que no importa pone ROJO, nunca verde» quedó
+   * acreditado **por accidente** —una colisión de identificadores en una sonda
+   * ajena— y **ningún caso lo afirmaba**. Se declaró como deuda antes del
+   * dictamen; acá se cierra.
+   *
+   * ⚠️ **Y la receta que declaramos era inexacta**, lo midió Codex: el
+   * fail-closed tiene **dos canales redundantes** —el `catch` del import y el
+   * fallback del parser de `F=`—, así que **retirar sólo el `catch` NO lo
+   * voltea**. La única mutación letal es cambiar el valor de fallo efectivo
+   * (`-1 → 0`). Lo escribimos sin medir la matriz completa; queda corregido acá.
+   */
+  it('🔴 una lib que NO IMPORTA pone rojo, nunca verde', () => {
+    // Sintácticamente inválida: no hay módulo que cargar. Si esto devolviera 0,
+    // los controles negativos de abajo estarían certificando un archivo que ni
+    // siquiera parsea.
+    expect(importarCon('const = ;').fallas, 'una lib que no carga se leyó como sana')
+      .toBe(-1);
   });
 
   it('✅ CONTROL NEGATIVO · la lib SIN agregados no dispara ningún sensor', () => {
