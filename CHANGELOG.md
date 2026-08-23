@@ -11,6 +11,69 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.131.0 — el criterio pasa a ser semántico, por AST (2026-08-23)
+
+La tercera defensa del P99 era **lexical**: filtraba líneas con
+`/^[A-Za-z_$][\w$]*\s*\(/`. Codex la atravesó con tres formas que **ejecutan
+igual** en `ModuleEvaluation`:
+
+```
+void adjudicarAliases();                          →  6/6 verde
+await adjudicarAliases();                         →  6/6 verde
+const x = (adjudicarAliases(), fallas.length=0);  →  6/6 verde
+```
+
+### 🔴 Y lo peor no fue el bypass: el claim era falso sobre el objeto SANO
+
+Decía «ninguna invocación en su nivel superior, ni siquiera inofensiva» y la lib
+**ya evalúa** `dirname()`, `fileURLToPath()`, `join()` y `Object.freeze()` en sus
+inicializadores (`aliasesLib.mjs:32,39,49,174`). El regex no las veía por dónde
+caían, no porque no existieran: **el comentario afirmaba una garantía que el
+archivo nunca cumplió.** Misma clase que la regex de `setup-node` bajo su
+comentario mentiroso — tercera aparición de esa forma en la serie.
+
+### ⚠️ Y mi control positivo era CIRCULAR
+
+Le daba al filtro líneas escritas **en su misma gramática**, así que sólo probaba
+que **el filtro se reconoce a sí mismo**. Un control positivo tiene que venir de
+afuera del mecanismo que valida: si lo escribe la misma cabeza que escribió el
+patrón, comparte sus puntos ciegos.
+
+El control nuevo usa **las tres formas que atravesaron al viejo**, más un
+inicializador y una llamada anidada en un objeto. Si el reconocedor volviera a ser
+lexical, cuatro de las seis se le escaparían **y este caso lo diría**.
+
+### El criterio nuevo
+
+Se parsea el módulo con `typescript` —ya estaba en el árbol, sin dependencia
+nueva— y se recorren los statements de nivel superior **y sus inicializadores**,
+sin entrar a cuerpos de función: eso no corre al importar, y esa distinción es
+justo la que un regex no puede hacer.
+
+Cada llamada que sí se evalúa tiene que estar en una **allowlist semántica** de
+cuatro entradas. `void`, `await`, el operador coma o cualquier envoltorio futuro
+caen igual, **porque el criterio no mira la forma del texto sino qué se ejecuta**.
+
+**Las cuatro formas mueren, con prueba EXTERNA de que el sink ejecutó:**
+
+| forma inyectada en la lib | test | control externo |
+|---|---|---|
+| `void adjudicarAliases();` | **1 f / 11** | `fallas 0 → 7` |
+| `await adjudicarAliases();` | **1 f / 11** | `fallas 0 → 7` |
+| `const x = (adjudicarAliases(), 0);` | **1 f / 11** | `fallas 0 → 7` |
+| `const q = { a: invalidar('build') };` | **2 f / 10** | — |
+
+Con la lib sana sobre el mismo fixture: `fallas = 0`.
+
+### Documental
+
+El docblock del centinela **seguía describiendo la arquitectura vieja** —«CLI y
+módulo a la vez» con «un guard que separa esos dos usos»—, que es exactamente lo
+que el P99 retiró. Corregido, no borrado.
+
+**Sin push ni deploy.** El intermitente E2E sigue **ABIERTO** (esta corrida:
+111/111); la mitigación de dos proyectos queda en cola detrás del certificado.
+
 ## 0.130.0 — reapertura: el entrypoint separado de la superficie importable (2026-08-22)
 
 Mati reabrió la auditoría con objetivo PASS. Alcance: las condiciones 1–5 del

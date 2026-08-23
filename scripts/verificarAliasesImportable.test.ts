@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 /** La superficie IMPORTABLE: es esto lo que no puede tener efectos. */
@@ -22,9 +23,16 @@ const CLI = join(AQUI, 'verificar-aliases.mjs');
 /**
  * 🔴 P97 · EL MÓDULO ES IMPORTABLE SIN EJECUTAR SU CLI — medido por EFECTO.
  *
- * `verificar-aliases.mjs` es a la vez CLI y módulo: el workflow lo invoca con
- * `node`, y los centinelas le importan sus patrones productivos. El guard que
- * separa esos dos usos existe desde el P94.
+ * 🔴 **Este párrafo describía la arquitectura VIEJA hasta el P100**, y por eso
+ * se corrige en vez de borrarse: decía que `verificar-aliases.mjs` es «a la vez
+ * CLI y módulo» con «un guard que separa esos dos usos», **que es exactamente lo
+ * que el P99 retiró**. Un docblock que sobrevive al refactor que lo invalida es
+ * la misma clase que el comentario de `setup-node` prometiendo versión exacta:
+ * afirma una garantía donde alguien iría a verificarla.
+ *
+ * **Lo vigente:** la lógica vive en `aliasesLib.mjs` —importable, sin
+ * dispatcher— y `verificar-aliases.mjs` es sólo el entrypoint, que nadie
+ * importa. No hay guard de `main`: la estructura lo volvió innecesario.
  *
  * ## Por qué no alcanzaba mirar exit, señal y salida
  *
@@ -217,44 +225,131 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
 });
 
 /**
- * 🔴 P99 · LA LIB NO INVOCA NADA EN SU NIVEL SUPERIOR — guarda ESTRUCTURAL.
+ * 🔴 P100 · QUÉ EVALÚA LA LIB AL IMPORTARSE — criterio SEMÁNTICO, por AST.
  *
- * Los casos de arriba observan **efectos**: procesos que pasan por `npx` y
- * borrados en disco. Eso deja un flanco que medí y declaro: **una llamada de
- * sólo lectura no deja rastro observable.** Con `adjudicarAliases()` inyectado en
- * la lib —que sólo lee `package.json` y acumula fallas— los cuatro casos de
- * arriba quedan **4/4 verdes**, porque no hay nada que ver.
+ * La versión anterior filtraba líneas con un regex —`/^[A-Za-z_$][\w$]*\s*\(/`—
+ * y Codex la atravesó con tres formas que **ejecutan igual** en
+ * `ModuleEvaluation`, con control externo de que el sink corrió:
  *
- * No se cierra observando mejor: se cierra **mirando la forma del archivo**. La
- * superficie importable puede declarar cuanto quiera, pero **no puede invocar en
- * su nivel superior** — ni siquiera algo inofensivo. Es la misma forma que el
- * resto del arnés: declarar lo bueno (sólo declaraciones) en vez de enumerar lo
- * malo (qué llamadas están prohibidas).
+ * ```
+ * void adjudicarAliases();                        →  6/6 verde   (fallas 0→8)
+ * await adjudicarAliases();                       →  6/6 verde   (fallas 0→7)
+ * const x = (adjudicarAliases(), fallas.length=0) →  6/6 verde   (exit 0→1)
+ * ```
+ *
+ * 🔴 **Y lo peor no fue el bypass: mi claim era FALSO SOBRE EL OBJETO SANO.**
+ * Decía «ninguna invocación, ni siquiera inofensiva» y la lib **ya evalúa**
+ * `dirname()`, `fileURLToPath()`, `join()` y `Object.freeze()` en sus
+ * inicializadores (`aliasesLib.mjs:32,39,49,174`). El regex no las veía por
+ * dónde caían, no porque no existieran: **el comentario afirmaba una garantía
+ * que el archivo nunca cumplió.**
+ *
+ * ⚠️ **Y mi control positivo era CIRCULAR**: alimentaba al filtro con líneas
+ * escritas en su misma gramática, así que sólo probaba que **el filtro se
+ * reconoce a sí mismo**. Un control positivo tiene que venir de afuera del
+ * mecanismo que valida — si lo escribe la misma cabeza que escribió el patrón,
+ * comparte sus puntos ciegos.
+ *
+ * ## Lo que se afirma ahora
+ *
+ * Se parsea el módulo y se recorren **los statements de nivel superior y sus
+ * inicializadores**, sin entrar a cuerpos de función —eso no corre al importar—.
+ * Cada llamada que SÍ se evalúa tiene que estar en una **allowlist semántica**:
+ * resolución de rutas y congelado de constantes, nada más. `void`, `await`, el
+ * operador coma o cualquier envoltorio nuevo caen igual, porque el criterio no
+ * mira la forma del texto sino **qué se ejecuta**.
  */
-describe('🔴 la superficie importable sólo DECLARA', () => {
-  it('🔴 ninguna invocación en el nivel superior de `aliasesLib.mjs`', () => {
-    const lineas = readFileSync(LIB, 'utf8').split('\n');
-    /**
-     * Una invocación de nivel superior empieza en la columna 0 y tiene forma de
-     * llamada. Las declaraciones (`function`, `const`, `export`, `import`) y todo
-     * lo indentado —o sea, lo que vive DENTRO de una función— no cuentan.
-     */
-    const invocaciones = lineas
-      .map((l, i) => ({ l, n: i + 1 }))
-      .filter(({ l }) => /^[A-Za-z_$][\w$]*\s*\(/.test(l))
-      .map(({ l, n }) => `${n}: ${l.trim().slice(0, 60)}`);
+describe('🔴 la superficie importable sólo evalúa lo adjudicado', () => {
+  /**
+   * Las únicas llamadas que la lib puede evaluar al cargarse. Son inocuas por
+   * construcción —no leen el repo, no escriben, no lanzan procesos— y están acá
+   * una por una: agregar la quinta es una decisión que queda en el diff.
+   */
+  const EVALUACION_PERMITIDA: ReadonlySet<string> = new Set([
+    'dirname',
+    'fileURLToPath',
+    'join',
+    'Object.freeze',
+  ]);
+
+  /** Nombre imprimible del callee: `f`, `A.b`, o su texto si es otra cosa. */
+  function nombreDe(expr: ts.Expression): string {
+    if (ts.isIdentifier(expr)) return expr.text;
+    if (ts.isPropertyAccessExpression(expr)) return `${nombreDe(expr.expression)}.${expr.name.text}`;
+    return expr.getText();
+  }
+
+  /**
+   * Llamadas que se evalúan al importar el módulo.
+   *
+   * 🔴 No desciende a cuerpos de función ni de clase: **ahí el código no corre
+   * al importar**, y contarlo daría rojos sobre código sano. La distinción es
+   * justamente la que un regex no puede hacer.
+   */
+  function evaluadasAlImportar(codigo: string): string[] {
+    const sf = ts.createSourceFile('lib.mjs', codigo, ts.ScriptTarget.ESNext, true);
+    const halladas: string[] = [];
+    const visitar = (n: ts.Node): void => {
+      if (
+        ts.isFunctionDeclaration(n) ||
+        ts.isFunctionExpression(n) ||
+        ts.isArrowFunction(n) ||
+        ts.isMethodDeclaration(n) ||
+        ts.isClassDeclaration(n)
+      ) {
+        return;
+      }
+      if (ts.isCallExpression(n)) halladas.push(nombreDe(n.expression));
+      ts.forEachChild(n, visitar);
+    };
+    for (const stmt of sf.statements) visitar(stmt);
+    return halladas;
+  }
+
+  it('🔴 la lib no evalúa nada fuera de la allowlist', () => {
+    const evaluadas = evaluadasAlImportar(readFileSync(LIB, 'utf8'));
+    // Control de no-vacuidad: la lib SÍ evalúa cosas —resolución de rutas y
+    // `Object.freeze`—, así que un cero acá significaría que el recorrido no
+    // está mirando, no que el archivo esté limpio.
+    expect(evaluadas.length, 'no se vio ninguna evaluación: el recorrido midió en vacío')
+      .toBeGreaterThan(0);
+    const intrusas = evaluadas.filter((f) => !EVALUACION_PERMITIDA.has(f));
     expect(
-      invocaciones,
-      'la superficie importable EJECUTA algo al cargarse:\n  ' + invocaciones.join('\n  '),
+      intrusas,
+      `la superficie importable EJECUTA algo no adjudicado al cargarse: ${intrusas.join(', ')}`,
     ).toEqual([]);
   });
 
-  it('✅ CONTROL POSITIVO · el reconocedor SÍ ve una invocación cuando la hay', () => {
-    // Sin esto, un regex roto daría «cero invocaciones» sobre cualquier archivo y
-    // el caso de arriba pasaría por vacuidad, que es el falso verde de siempre.
-    const muestra = ['const a = 1;', 'adjudicarAliases();', '  invalidar("build");'];
-    const halladas = muestra.filter((l) => /^[A-Za-z_$][\w$]*\s*\(/.test(l));
-    expect(halladas, 'el reconocedor no distingue una invocación top-level')
-      .toEqual(['adjudicarAliases();']);
+  /**
+   * 🔴 CONTROL POSITIVO NO CIRCULAR — las formas que el regex viejo no veía.
+   *
+   * El control anterior le daba al filtro líneas de su misma gramática y por eso
+   * pasaba siempre. Éstas son las tres que Codex usó para atravesarlo, más la
+   * desnuda: si el reconocedor nuevo fuera lexical otra vez, tres de las cuatro
+   * se le escaparían acá y este caso lo diría.
+   */
+  const FORMAS_QUE_EJECUTAN: ReadonlyArray<readonly [string, string]> = [
+    ['desnuda', 'adjudicarAliases();'],
+    ['con void', 'void adjudicarAliases();'],
+    ['con await', 'await adjudicarAliases();'],
+    ['en operador coma', 'const x = (adjudicarAliases(), 0);'],
+    ['en inicializador', 'const y = adjudicarAliases();'],
+    ['anidada en un objeto', 'const z = { a: adjudicarAliases() };'],
+  ];
+
+  for (const [nombre, codigo] of FORMAS_QUE_EJECUTAN) {
+    it(`🔴 se reconoce la forma «${nombre}»`, () => {
+      expect(
+        evaluadasAlImportar(codigo),
+        `la forma «${nombre}» ejecuta al importar y el reconocedor no la ve`,
+      ).toContain('adjudicarAliases');
+    });
+  }
+
+  it('✅ y NO cuenta lo que vive dentro de una función · no corre al importar', () => {
+    // La otra mitad del control: un reconocedor que marcara todo daría rojo
+    // sobre código sano y habría que apagarlo, que es como mueren las guardas.
+    expect(evaluadasAlImportar('function f() { adjudicarAliases(); }')).toEqual([]);
+    expect(evaluadasAlImportar('const g = () => invalidar("build");')).toEqual([]);
   });
 });
