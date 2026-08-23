@@ -447,10 +447,16 @@ function acreditarArtefacto(dir) {
    * `build.write=false` y Vite transformaba 110 módulos, salía 0 y no escribía
    * nada, mientras el gate aprobaba el artefacto anterior.
    *
-   * El sello se escribe ANTES del build y se compara contra las fechas de lo
-   * producido. Existencia y tamaño no acreditan procedencia.
+   * 🔴 P96 · ESTE PÁRRAFO DESCRIBÍA UN SELLO QUE YA NO EXISTE, y por eso se
+   * corrige en vez de borrarse: decía «el sello se escribe ANTES del build y se
+   * compara contra las fechas», o sea afirmaba un mecanismo retirado **justo
+   * donde alguien iría a verificarlo**. Es la misma clase que la regex de
+   * `setup-node` bajo un comentario que prometía versión exacta.
+   *
+   * Lo vigente: `dist` se BORRA antes del build (`--invalidar build`), así que
+   * su existencia después ES la acreditación. Sin fechas, sin nada que un
+   * `touch` pueda mover.
    */
-  // 🔴 P94 · `dist` se borra antes del build: que exista ES la acreditación.
   if (!existsSync(base)) {
     fallar(`el build no dejó «${dir}»: el comando salió 0 sin producir artefacto`);
     return;

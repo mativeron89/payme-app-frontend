@@ -92,9 +92,9 @@ jobs:
         env:
           VITE_API_URL: https://payme-app-backend-production.up.railway.app
       # 🔴 Y EL BUILD SE ACREDITA POR SU ARTEFACTO, no por su exit code: un alias
-      # no-op sale 0 y no deja nada. Se mide lo que quedó en disco, y se exige que
-      # sea POSTERIOR al sello: `prebuild` podía fijar `build.write=false` y dejar
-      # que el gate aprobara el `dist` del build anterior.
+      # no-op sale 0 y no deja nada. Como `dist` se borró en el paso de arriba,
+      # que exista acá significa que ESTE build lo escribió — sin comparar
+      # fechas, que es lo que un `touch` podía falsificar.
       - name: El build dejó artefacto, no sólo un exit 0
         run: node scripts/verificar-aliases.mjs --artefacto dist
       # Los 78 recorridos de navegador también son gate: la auditoría del

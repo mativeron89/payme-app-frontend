@@ -907,8 +907,8 @@ const ROL_DE_PASO: ReadonlyArray<readonly [RegExp, string]> = [
   // satisfaciendo la exigencia y el mutante sobrevivía 85/85.
   [/^node scripts\/verificar-aliases\.mjs --aliases$/, 'aliases'],
   [/^node scripts\/verificar-aliases\.mjs --corrida$/, 'corrida'],
-  // 🔴 P92 · CADA SELLO ES SU PROPIO ROL. Con un rol común, sacar uno del
-  // workflow dejaba al otro satisfaciendo la exigencia — el mismo defecto que
+  // 🔴 CADA INVALIDACIÓN ES SU PROPIO ROL. Con un rol común, sacar una del
+  // workflow dejaba a la otra satisfaciendo la exigencia — el mismo defecto que
   // ya se pagó con los dos modos del verificador.
   [/^node scripts\/verificar-aliases\.mjs --invalidar corrida$/, 'invalidar-corrida'],
   [/^node scripts\/verificar-aliases\.mjs --invalidar build$/, 'invalidar-build'],
@@ -2036,7 +2036,23 @@ describe('🔴 invalidar → herramienta → validar, en ese orden', () => {
       const yml = readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');
       const { jobs, problemas } = leerWorkflow(yml);
       expect(problemas).toEqual([]);
-      const pasos = jobs.flatMap((j) => [...j.pasos]);
+      /**
+       * 🔴 P96 · EL CLAIM SE ACOTA AL JOB ÚNICO, y se declara por qué.
+       *
+       * Comparar índices de pasos **aplanados de varios jobs** no dice nada del
+       * orden real: jobs distintos corren en paralelo salvo que haya `needs`, y
+       * un índice menor en otro job no significa «antes». Hoy el workflow tiene
+       * UN job, así que el índice sí es el orden — pero eso es una propiedad del
+       * target, no del método, y por eso se **afirma** en vez de suponerse.
+       *
+       * El día que aparezca un segundo job, este caso se pone rojo y hay que
+       * venir a decidir cómo se evalúa el orden entre jobs. Es la fricción
+       * correcta: la alternativa es un claim universal que se cumple por
+       * casualidad.
+       */
+      expect(jobs.length, 'hay más de un job: el orden por índice ya no es el orden real')
+        .toBe(1);
+      const pasos = [...jobs[0]!.pasos];
       const idx = (rol: string) => pasos.findIndex((p) => rolDePaso(p.claves) === rol);
       const [i, j, k] = [idx(antes), idx(herramienta), idx(despues)];
       // Control positivo: los tres tienen que EXISTIR, o el orden se cumpliría
@@ -2235,8 +2251,9 @@ describe('🔴 P83 · las formas del P81, versionadas y con control ejecutable',
    * `fallasDelCheckout` — las mismas funciones que corren los `it()` nominales
    * sobre el `ci.yml` sin mutar. **Desconectar el seam pone rojos a los dos.**
    *
-   * Los cinco casos son la clase entera, no los cuatro que el dictamen nombró:
-   * `container` compartía el defecto y se convierte con los otros.
+   * Los SEIS casos son la clase entera, no los cuatro que el dictamen nombró:
+   * `container` y el reusable ① compartían el defecto y se convierten con los
+   * otros. (Decía «cinco» y enumeraba seis — corregido en el P96.)
    */
   it('🔴 `container.env` del job → RECHAZADO por la política de gates', () => {
     const mutado = conMutacion(

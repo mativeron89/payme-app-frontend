@@ -11,6 +11,72 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.127.0 — cierre del BLOCK P96: un centinela por cable (2026-08-22)
+
+Cuatro regresiones, **todas la misma clase, un eslabón más adentro**: los
+centinelas probaban que cada **función** anda, pero no afirmaban que el
+dispatcher la **llame**. Retirar el caller de `acreditarArtefacto` dejaba 41/41 y
+el CLI aprobaba una raíz **sin `dist`**; retirar `adjudicarPoblacion()` o
+`adjudicarProyectosTs()` dejaba 41/41 con un test no recolectado y un `.mts`
+huérfano pasando.
+
+🔴 **Es la clase del P85 y del P90 una capa más abajo.** Allá el centinela
+apuntaba al helper en vez de a la política; acá, a la función en vez de al
+dispatcher. Tres capas, el mismo error.
+
+### La forma: una tabla, no cinco casos sueltos
+
+Cada cable tiene un fixture que lo hace fallar **a él** y se afirma su
+diagnóstico propio. **Retirar un caller mata exactamente su fila** — medido, los
+cinco: `1 failed / 32` cada uno.
+
+Es tabla y no casos sueltos a propósito: un cable nuevo se agrega ahí, y si
+alguien lo olvida no hay fila que lo cubra por accidente.
+
+⚠️ **El oráculo es el DIAGNÓSTICO, no el exit code**: en un árbol de prueba el
+gate falla por varias razones a la vez, así que un exit ≠0 no diría cuál cable
+actuó.
+
+### El guard de `main`, custodiado y en archivo propio
+
+Existía desde el P94 y **ningún test lo vigilaba**. Vive aparte por una razón
+medida: el otro archivo importa el módulo estáticamente, así que el mutante lo
+mata **al cargar** y Vitest reporta «no tests» en vez de una hoja causal. **Un
+rojo sin diagnóstico es peor evidencia que uno que dice qué se rompió.** Con
+control positivo: sin él, «no ejecuta el CLI al importarse» y «no tiene CLI» son
+indistinguibles.
+
+### Dos comentarios que afirmaban un mecanismo retirado
+
+`acreditarArtefacto` y el workflow **seguían diciendo que el sello se compara
+contra las fechas** — un mecanismo eliminado en el commit anterior, descrito justo
+donde alguien iría a verificarlo. Misma clase que la regex de `setup-node` bajo un
+comentario que prometía versión exacta. Corregidos, no borrados: el porqué del
+cambio se conserva.
+
+### El claim de orden, acotado
+
+Comparar índices de pasos **aplanados de varios jobs** no dice nada del orden
+real. Hoy hay un job, así que el índice sí es el orden — pero eso es propiedad del
+target, no del método, y ahora **se afirma**: el día que aparezca un segundo job
+esto se pone rojo y hay que decidir cómo se evalúa. Es la fricción correcta.
+
+Y el conteo `5 → 6` corregido.
+
+### 🔴 El intermitente E2E se manifestó, y se reporta como es
+
+```
+suite completa   1 failed / 110   ·   1 failed / 110   ·   111/111   ·   111/111
+el archivo solo  14/14 · 14/14 · 14/14
+```
+
+Falla en `_app.ts:46` —el `fill` del login—, la firma del intermitente **abierto**.
+Aislado no falla nunca. El delta **no toca `src/` ni `e2e/`**. Se declara así, con
+las cuatro corridas: **decir «111/111» a secas sería el falso verde que este arnés
+existe para evitar.**
+
+**Sin push ni deploy.**
+
 ## 0.126.0 — cierre del BLOCK P94: invalidar por ausencia, no sellar por fecha (2026-08-22)
 
 Tres falsos verdes, **los tres míos y los tres reproducidos antes del dictamen**.

@@ -165,44 +165,20 @@ describe('🔴 los proyectos de typecheck cubren todo el TypeScript', () => {
 });
 
 /**
- * 🔴 P90 · EL CALLSITE DEL DISPATCHER, no sólo los helpers.
+ * 🔴 P94 · LA INVALIDACIÓN EFECTIVA, probada por CONDUCTA.
  *
- * Codex midió que retirar `adjudicarAliases()` del branch `--aliases` dejaba
- * estos tests **18/18 verdes**: probaban que las funciones puras deciden bien,
- * no que el ejecutable las llame. Es la misma clase que el P85 cerró en el arnés
- * YAML —un centinela apuntado al helper y no al seam— y por eso no alcanza con
- * un test más de `fallasDeAliases`.
+ * El sello por `mtime` que había acá tapaba el exploit del reporte viejo **y su
+ * instrumento era manipulable**: `touch` a un `dist` viejo lo hacía pasar como
+ * recién escrito, sin correr el build. Se arregló una instancia de «no midas con
+ * un instrumento que el atacante mueve» **con otro instrumento que el atacante
+ * mueve**.
  *
- * Esto invoca el EJECUTABLE sobre un árbol de prueba con un alias roto. Si el
- * dispatcher deja de llamar al helper, el mensaje no aparece y el caso cae.
+ * Ahora el resultado se BORRA antes de la herramienta, y su existencia después
+ * es la prueba: no hay fecha que falsificar. Estos casos invocan el EJECUTABLE,
+ * no una función pura, porque lo que hay que acreditar es que el borrado ocurre
+ * de verdad — un test que llamara a `invalidar()` directo probaría la función y
+ * no el cable, que es el defecto que este mismo commit corrige en otro lado.
  */
-describe('🔴 el ejecutable LLAMA a la adjudicación, no sólo la exporta', () => {
-  it('🔴 un alias roto en un árbol de prueba sale por el gate REAL', () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'payme-aliases-'));
-    try {
-      writeFileSync(
-        join(tmp, 'package.json'),
-        JSON.stringify({ name: 'prueba', scripts: { test: 'true' } }),
-      );
-      const r = spawnSync(
-        process.execPath,
-        [join(AQUI, 'verificar-aliases.mjs'), '--aliases'],
-        { env: { ...process.env, PAYME_RAIZ_VERIFICACION: tmp }, encoding: 'utf8' },
-      );
-      // 🔴 El oráculo es el MENSAJE del helper, no el exit code: en un árbol de
-      // prueba el gate falla por varias razones a la vez, y un exit ≠0 no diría
-      // cuál. Lo que acredita el cableado es que aparezca ESTA falla.
-      expect(
-        `${r.stdout}${r.stderr}`,
-        'el dispatcher no pasó por `fallasDeAliases`: el alias roto no fue denunciado',
-      ).toMatch(/alias «test» no es el adjudicado/);
-      expect(r.status, 'el gate aprobó un árbol con el alias roto').not.toBe(0);
-    } finally {
-      rmSync(tmp, { recursive: true, force: true });
-    }
-  });
-});
-
 /**
  * 🔴 P90 · EL UNIVERSO DE EXTENSIONES, que es donde estuvo el defecto.
  *
@@ -274,21 +250,6 @@ describe('🔴 el universo cubre todas las extensiones efectivas', () => {
   }
 });
 
-/**
- * 🔴 P94 · LA INVALIDACIÓN EFECTIVA, probada por CONDUCTA.
- *
- * El sello por `mtime` que había acá tapaba el exploit del reporte viejo **y su
- * instrumento era manipulable**: `touch` a un `dist` viejo lo hacía pasar como
- * recién escrito, sin correr el build. Se arregló una instancia de «no midas con
- * un instrumento que el atacante mueve» **con otro instrumento que el atacante
- * mueve**.
- *
- * Ahora el resultado se BORRA antes de la herramienta, y su existencia después
- * es la prueba: no hay fecha que falsificar. Estos casos invocan el EJECUTABLE,
- * no una función pura, porque lo que hay que acreditar es que el borrado ocurre
- * de verdad — un test que llamara a `invalidar()` directo probaría la función y
- * no el cable, que es el defecto que este mismo commit corrige en otro lado.
- */
 describe('🔴 la invalidación borra de verdad', () => {
   const correr = (args: readonly string[], raiz: string) =>
     spawnSync(process.execPath, [join(AQUI, 'verificar-aliases.mjs'), ...args], {
@@ -339,26 +300,99 @@ describe('🔴 la invalidación borra de verdad', () => {
 });
 
 /**
- * 🔴 P94 · EL CALLSITE DE `--corrida`, no sólo su lógica.
+ * 🔴 P96 · UN CENTINELA DE CAJA NEGRA POR CABLE — el eslabón que faltaba.
  *
- * Es la condición 5 del dictamen y la misma clase del P85: retirar
- * `acreditarCorrida()` del dispatcher tiene que dejar hoja causal roja. Se
- * invoca el EJECUTABLE sobre un árbol sin reporte; si el modo dejara de llamar
- * al validador, saldría 0 y este caso cae.
+ * Los casos de arriba prueban que cada FUNCIÓN decide bien. Codex midió que eso
+ * **no afirma que el `main` la LLAME**: retirar el caller de `acreditarArtefacto`
+ * dejaba 41/41 y el CLI aprobaba una raíz **sin `dist`**; retirar
+ * `adjudicarPoblacion()` o `adjudicarProyectosTs()` del modo `--aliases` dejaba
+ * 41/41 con un test no recolectado y un `.mts` huérfano pasando.
+ *
+ * Es la misma clase del P85 y del P90 **un eslabón más adentro**: allá el
+ * centinela apuntaba al helper en vez de a la política; acá apunta a la función
+ * en vez de al dispatcher que la invoca. Tres capas, el mismo error.
+ *
+ * 🔴 **Se cierra igual para todos, y por eso es una TABLA y no cinco casos
+ * sueltos:** cada cable tiene un fixture que lo hace fallar **a él**, y se afirma
+ * su diagnóstico propio. Retirar un caller mata **exactamente** su fila. Un cable
+ * nuevo se agrega acá, y si alguien lo olvida, no hay fila que lo cubra por
+ * accidente.
+ *
+ * ⚠️ **El oráculo es el DIAGNÓSTICO, no el exit code.** En un árbol de prueba el
+ * gate falla por varias razones a la vez —no hay `node_modules`, faltan
+ * aliases—, así que un exit ≠0 no diría cuál cable actuó. La firma sí.
  */
-describe('🔴 el modo `--corrida` LLAMA a su validador', () => {
-  it('🔴 sin reporte, el ejecutable sale ≠0 y lo dice', () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'payme-corrida-'));
-    try {
-      const r = spawnSync(process.execPath, [join(AQUI, 'verificar-aliases.mjs'), '--corrida'], {
-        env: { ...process.env, PAYME_RAIZ_VERIFICACION: tmp },
-        encoding: 'utf8',
-      });
-      expect(`${r.stdout}${r.stderr}`, 'el dispatcher no pasó por `acreditarCorrida`')
-        .toMatch(/no existe `\.vitest-corrida\.json`/);
-      expect(r.status, 'certificó una corrida sin reporte').not.toBe(0);
-    } finally {
-      rmSync(tmp, { recursive: true, force: true });
-    }
-  });
+describe('🔴 el `main` LLAMA a cada validador · uno por cable', () => {
+  const SANO = {
+    dev: 'vite',
+    test: 'vitest run --reporter=default --reporter=json --outputFile=.vitest-corrida.json',
+    typecheck:
+      'tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && ' +
+      'tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.e2e.json',
+    build: 'tsc --noEmit -p tsconfig.json && vite build',
+    'build:landing': 'vite build --config vite.landing.config.ts',
+    preview: 'vite preview',
+    e2e: 'playwright test',
+  };
+
+  const CABLES: ReadonlyArray<{
+    readonly cable: string;
+    readonly args: readonly string[];
+    readonly montar: (raiz: string) => void;
+    readonly firma: RegExp;
+  }> = [
+    {
+      cable: '--aliases → adjudicarAliases',
+      args: ['--aliases'],
+      montar: (r) =>
+        writeFileSync(join(r, 'package.json'), JSON.stringify({ scripts: { ...SANO, test: 'true' } })),
+      firma: /alias «test» no es el adjudicado/,
+    },
+    {
+      cable: '--aliases → adjudicarProyectosTs',
+      args: ['--aliases'],
+      montar: (r) => {
+        writeFileSync(join(r, 'package.json'), JSON.stringify({ scripts: { ...SANO, typecheck: 'tsc --noEmit' } }));
+      },
+      // Sin ningún `-p`, el alias no nombra proyectos: sólo lo dice esta función.
+      firma: /no nombra ningún proyecto/,
+    },
+    {
+      cable: '--aliases → adjudicarPoblacion',
+      args: ['--aliases'],
+      montar: (r) => writeFileSync(join(r, 'package.json'), JSON.stringify({ scripts: SANO })),
+      // Sin archivos e2e en disco, sólo la acreditación de colección se queja.
+      firma: /Playwright: no se encontró NINGÚN archivo/,
+    },
+    {
+      cable: '--corrida → acreditarCorrida',
+      args: ['--corrida'],
+      montar: () => {},
+      firma: /no existe `\.vitest-corrida\.json`/,
+    },
+    {
+      cable: '--artefacto → acreditarArtefacto',
+      args: ['--artefacto', 'dist'],
+      montar: () => {},
+      firma: /el build no dejó «dist»/,
+    },
+  ];
+
+  for (const { cable, args, montar, firma } of CABLES) {
+    it(`🔴 ${cable} · retirar el caller deja este caso rojo`, () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'payme-cable-'));
+      try {
+        montar(tmp);
+        const r = spawnSync(process.execPath, [join(AQUI, 'verificar-aliases.mjs'), ...args], {
+          env: { ...process.env, PAYME_RAIZ_VERIFICACION: tmp },
+          encoding: 'utf8',
+        });
+        expect(`${r.stdout}${r.stderr}`, `el \`main\` no pasó por «${cable}»`).toMatch(firma);
+        expect(r.status, `«${cable}» no puso el gate en rojo`).not.toBe(0);
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    });
+  }
+
 });
