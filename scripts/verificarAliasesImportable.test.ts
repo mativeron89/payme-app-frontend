@@ -20,6 +20,55 @@ const LIB = join(AQUI, 'aliasesLib.mjs');
 const CLI = join(AQUI, 'verificar-aliases.mjs');
 
 /**
+ * 🔴 P103 · A NIVEL DE MÓDULO: la usan DOS describes.
+ *
+ * Estaba dentro de uno solo y el segundo no la veía. Se sube en vez de
+ * copiarse: dos implementaciones de «importar una copia y mirar qué pasó»
+ * es exactamente el defecto que el P85 cerró en este mismo arnés.
+ */
+/** Importa una copia de la lib con `extra` agregado y devuelve qué pasó. */
+function importarCon(extra: string): { fallas: number; borro: boolean } {
+  const raiz = mkdtempSync(join(tmpdir(), 'payme-forma-'));
+  try {
+    const copia = join(raiz, 'lib.mjs');
+    writeFileSync(copia, `${readFileSync(LIB, 'utf8')}\n${extra}\n`);
+    const reporte = join(raiz, '.vitest-corrida.json');
+    writeFileSync(reporte, '{}');
+    /**
+     * 🔴 P102 · EL `package.json` ES SINTÁCTICAMENTE INVÁLIDO — y ésa es la
+     * pieza que hace al sensor NO BORRABLE.
+     *
+     * Antes el fixture estaba roto pero era JSON válido, así que la ejecución
+     * se detectaba por `fallas.length > 0` — **estado del propio módulo, que el
+     * módulo puede limpiar**. Codex lo mostró:
+     * `const x = (adjudicarAliases(), fallas.length = 0);` → **14/14 verde**
+     * con el trabajo hecho: el código agregado comparte scope con el sensor y
+     * lo resetea antes de que el observador lo lea.
+     *
+     * Con el archivo inválido, `adjudicarAliases()` **lanza en `JSON.parse`**.
+     * La excepción ocurre ANTES de cualquier limpieza —no hay `length = 0` que
+     * llegue a correr—, así que la señal deja de estar en manos del módulo: la
+     * ejecución se prueba **por la excepción, no por un contador**.
+     */
+    writeFileSync(join(raiz, 'package.json'), '{ esto no es json');
+    const r = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `import(${JSON.stringify(pathToFileURL(copia).href)})` +
+          `.then((m) => console.log('F=' + m.fallas.length)).catch(() => console.log('F=-1'));`,
+      ],
+      { env: { ...process.env, PAYME_RAIZ_VERIFICACION: raiz }, encoding: 'utf8' },
+    );
+    const m = /F=(-?\d+)/.exec(r.stdout);
+    return { fallas: m ? Number(m[1]) : -1, borro: !existsSync(reporte) };
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
+}
+
+/**
  * 🔴 P97 · EL MÓDULO ES IMPORTABLE SIN EJECUTAR SU CLI — medido por EFECTO.
  *
  * 🔴 **Este párrafo describía la arquitectura VIEJA hasta el P100**, y por eso
@@ -209,21 +258,39 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * listar poblaciones     →  lanza `npx`           ← sensor ③
    * ```
    *
-   * 🔴 **ALCANCE DECLARADO, y acá había un overclaim.** Esto decía «el inventario
-   * de lo que la lib PUEDE HACER». Es falso: los tres sensores cubren **los
-   * efectos del call graph EXPORTADO** —las funciones que la lib expone y lo que
-   * ellas tocan—, no cualquier efecto imaginable. Codex lo midió con un
-   * `rmSync` a un path privado: **pasa verde**.
+   * 🔴 P103 · ALCANCE DECLARADO — LO QUE ESTE OBSERVER PUEDE Y NO PUEDE.
    *
-   * Lo que sí se afirma, y es lo que el certificado necesita: **ninguna función
-   * exportada de la lib se ejecuta al importarla**, medido por sus tres efectos
-   * observables. Un efecto inventado con código nuevo que no pase por ninguna de
-   * ellas queda fuera — y eso es un cambio deliberado y visible en el diff, no
-   * una rama preexistente que alguien pueda activar.
+   * **Puede:** detectar que una función exportada se ejecutó al importar, cuando
+   * esa ejecución deja uno de tres rastros —fallas acumuladas, borrado en disco,
+   * o un proceso lanzado por `npx`—.
    *
-   * ⚠️ El fixture es **roto a propósito**: con aliases sanos, `adjudicarAliases()`
-   * corre y no deja rastro, y el sensor ① no distinguiría «no se ejecutó» de «se
-   * ejecutó y no encontró nada» — el falso verde de siempre.
+   * 🔴 **NO puede, y está medido:** ver una ejecución que el propio módulo
+   * **capture, compense o limpie**. Los tres bypasses conocidos:
+   *
+   * ```
+   * (adjudicarAliases(), fallas.length = 0)            limpia el contador
+   * try { adjudicarAliases(); } catch {} fallas.length = 0   traga la excepción
+   * acreditarCorrida(); fallas.length = 0              no parsea, no borra, no lanza
+   * ```
+   *
+   * **La razón es estructural y vale la pena escribirla entera:** el observer y
+   * el código auditado **corren en el mismo proceso**, así que toda señal que el
+   * observer lee es alcanzable por el código que vigila. Un `catch` traga la
+   * excepción; un `length = 0` limpia el contador. **No hay sensor in-process que
+   * cierre esto** — la salida sería instrumentar desde afuera (un preload que
+   * envuelva `fs`/`child_process` y escriba a un canal que el módulo no conoce).
+   *
+   * ⚠️ **Ese camino está identificado y NO implementado, por proporción:** el
+   * arnés ya excede el riesgo que cubre —veinte vueltas, cero defectos en el
+   * objeto— y este límite requiere que alguien **escriba** el bypass a propósito,
+   * no que se le escape. **Un límite declarado es honesto; uno tácito se lee como
+   * resuelto.**
+   *
+   * 🔴 **Y el claim se acota a lo que el observer deriva de verdad:** cubre las
+   * funciones exportadas **que dejan uno de los tres rastros**. `fallasDeAliases`,
+   * `faltantesDeColeccion` y `fuentesSinProyecto` son exports **puros** —calculan
+   * y devuelven, sin tocar nada— y por construcción **ningún sensor los ve**. No
+   * es un hueco del observer: es que no hay efecto que observar.
    */
   it('🔴 IMPORTADO · cero EFECTOS · el oráculo que no enumera formas', () => {
     const { marca, env } = montarEspia();
@@ -378,47 +445,6 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
  * guarda que alguien termina apagando.
  */
 describe('🔴 el oráculo conductual no depende de la FORMA', () => {
-  /** Importa una copia de la lib con `extra` agregado y devuelve qué pasó. */
-  function importarCon(extra: string): { fallas: number; borro: boolean } {
-    const raiz = mkdtempSync(join(tmpdir(), 'payme-forma-'));
-    try {
-      const copia = join(raiz, 'lib.mjs');
-      writeFileSync(copia, `${readFileSync(LIB, 'utf8')}\n${extra}\n`);
-      const reporte = join(raiz, '.vitest-corrida.json');
-      writeFileSync(reporte, '{}');
-      /**
-       * 🔴 P102 · EL `package.json` ES SINTÁCTICAMENTE INVÁLIDO — y ésa es la
-       * pieza que hace al sensor NO BORRABLE.
-       *
-       * Antes el fixture estaba roto pero era JSON válido, así que la ejecución
-       * se detectaba por `fallas.length > 0` — **estado del propio módulo, que el
-       * módulo puede limpiar**. Codex lo mostró:
-       * `const x = (adjudicarAliases(), fallas.length = 0);` → **14/14 verde**
-       * con el trabajo hecho: el código agregado comparte scope con el sensor y
-       * lo resetea antes de que el observador lo lea.
-       *
-       * Con el archivo inválido, `adjudicarAliases()` **lanza en `JSON.parse`**.
-       * La excepción ocurre ANTES de cualquier limpieza —no hay `length = 0` que
-       * llegue a correr—, así que la señal deja de estar en manos del módulo: la
-       * ejecución se prueba **por la excepción, no por un contador**.
-       */
-      writeFileSync(join(raiz, 'package.json'), '{ esto no es json');
-      const r = spawnSync(
-        process.execPath,
-        [
-          '--input-type=module',
-          '-e',
-          `import(${JSON.stringify(pathToFileURL(copia).href)})` +
-            `.then((m) => console.log('F=' + m.fallas.length)).catch(() => console.log('F=-1'));`,
-        ],
-        { env: { ...process.env, PAYME_RAIZ_VERIFICACION: raiz }, encoding: 'utf8' },
-      );
-      const m = /F=(-?\d+)/.exec(r.stdout);
-      return { fallas: m ? Number(m[1]) : -1, borro: !existsSync(reporte) };
-    } finally {
-      rmSync(raiz, { recursive: true, force: true });
-    }
-  }
 
   const EJECUTAN: ReadonlyArray<readonly [string, string]> = [
     ['static block · rompió al AST', 'class __X { static { adjudicarAliases(); } }'],
@@ -514,4 +540,56 @@ describe('🔴 el oráculo conductual no depende de la FORMA', () => {
     expect(r.fallas, 'la lib sana ejecuta algo al importarse').toBe(0);
     expect(r.borro).toBe(false);
   });
+});
+
+/**
+ * 🔴 P103 · LOS LÍMITES CONOCIDOS DEL OBSERVER, VERSIONADOS COMO TALES.
+ *
+ * Estos casos **no afirman que el arnés detecte los bypasses: afirman que NO los
+ * detecta**, y por eso son tests y no un comentario. Un límite escrito en prosa
+ * se lee y se olvida; uno versionado **se pone rojo el día que alguien lo cierre**
+ * —y ahí hay que venir a borrar el caso, que es exactamente la conversación que
+ * se quiere forzar—.
+ *
+ * ⚠️ **Es un test que documenta una debilidad, y eso incomoda a propósito.** La
+ * alternativa —dejarlos sin registrar— es la que produce que en tres semanas
+ * alguien lea el certificado y crea que cubre lo que no cubre.
+ *
+ * Cada uno va con su **control opuesto**: la misma llamada SIN el mecanismo que
+ * la esconde, que sí se detecta. Los dos juntos dicen qué está midiendo el caso.
+ */
+describe('🔴 lo que el observer NO ve · límites medidos, no supuestos', () => {
+  const LIMITES: ReadonlyArray<readonly [string, string, string]> = [
+    [
+      'un `catch` traga la excepción del fixture',
+      'try { adjudicarAliases(); } catch {} fallas.length = 0;',
+      'adjudicarAliases();',
+    ],
+    [
+      'una ejecución sin rastro observable',
+      'acreditarCorrida(); fallas.length = 0;',
+      'acreditarCorrida();',
+    ],
+  ];
+
+  for (const [nombre, escondido, visible] of LIMITES) {
+    it(`⚠️ LÍMITE · ${nombre} — el observer NO lo ve`, () => {
+      // Si esto se pone ROJO, el límite se cerró: hay que borrar el caso y
+      // actualizar el alcance declarado del docblock. Es la señal de que el
+      // certificado puede afirmar más de lo que afirmaba.
+      expect(
+        importarCon(escondido).fallas,
+        'el límite se cerró: actualizá el alcance declarado y retirá este caso',
+      ).toBe(0);
+    });
+
+    it(`✅ CONTROL OPUESTO · «${nombre}» sin su mecanismo SÍ se ve`, () => {
+      // Sin esto, el caso de arriba pasaría igual con un observer que no mira
+      // nada: «no lo detecta» y «no detecta nada» son indistinguibles.
+      expect(
+        importarCon(visible).fallas,
+        'el control opuesto tampoco se detecta: el observer no está midiendo',
+      ).not.toBe(0);
+    });
+  }
 });

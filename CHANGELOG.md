@@ -11,6 +11,65 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.134.0 — el límite del observer, medido y versionado como límite (2026-08-23)
+
+### 🔴 Primero, un error de premisa que firmamos los dos
+
+Escribí que «el fixture tiene un `package.json` sintácticamente inválido», y el
+Bibliotecario lo transcribió al paquete. **Es el fixture del helper SECUNDARIO**
+(`importarCon`); el caso primario usa `montarEspia`, que escribe **JSON válido**
+con aliases rotos. Ninguno de los dos verificó a qué caso pertenecía.
+
+📌 **Un diseño se describe señalando archivo y línea del caso exacto, no desde la
+memoria de qué se construyó.** Yo lo construí y me equivoqué igual — la memoria
+de haber escrito algo se siente como conocimiento y no lo es.
+
+### La generalización final de la serie
+
+```
+(adjudicarAliases(), fallas.length = 0)                  limpia el contador
+try { adjudicarAliases(); } catch {} fallas.length = 0   traga la excepción
+acreditarCorrida(); fallas.length = 0                    no parsea, no borra, no lanza
+```
+
+Los tres pasan. **Y la razón es estructural: el observer y el código auditado
+corren en el mismo proceso, así que toda señal que el observer lee es alcanzable
+por el código que vigila.** Un `catch` traga la excepción; un `length = 0` limpia
+el contador. **No hay sensor in-process que cierre esto.**
+
+### La salida existe, y no se tomó — por proporción
+
+Instrumentar desde afuera: un preload que envuelva `fs`/`child_process` y escriba
+a un canal que el módulo no conoce. **Lo probé y no llegué a hacerlo discriminar
+en tres intentos** (el preload capturaba al loader leyendo el propio archivo, no
+a la lib).
+
+🔴 **Paré ahí a propósito.** El arnés ya excede el riesgo que cubre —veintiuna
+vueltas, cero defectos en el objeto— y este límite requiere que alguien **escriba
+el bypass a propósito**, no que se le escape. Habría sido incoherente seguir
+invirtiendo justo después de decir que el instrumento está sobredimensionado.
+
+### Los límites, versionados COMO límites
+
+No afirman que el arnés detecte los bypasses: **afirman que NO los detecta**, con
+su control opuesto —la misma llamada sin el mecanismo que la esconde, que sí se
+ve—. Un límite en prosa se lee y se olvida; **uno versionado se pone rojo el día
+que alguien lo cierre**, y ahí hay que venir a borrar el caso. Esa es la
+conversación que se quiere forzar.
+
+⚠️ Es un test que documenta una debilidad, y eso incomoda a propósito. La
+alternativa es que en tres semanas alguien lea el certificado y crea que cubre lo
+que no cubre.
+
+### El claim, acotado a lo que el observer deriva de verdad
+
+Cubre las funciones exportadas **que dejan uno de los tres rastros**.
+`fallasDeAliases`, `faltantesDeColeccion` y `fuentesSinProyecto` son exports
+**puros** —calculan y devuelven— y **ningún sensor los ve**: no es un hueco, es
+que no hay efecto que observar.
+
+**Sin push ni deploy.** E2E **ABIERTO** (esta corrida: 111/111).
+
 ## 0.133.0 — la señal deja de ser borrable (2026-08-23)
 
 El oráculo conductual leía **estado del propio módulo**: `fallas`, un array
