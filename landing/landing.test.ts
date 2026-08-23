@@ -4,8 +4,11 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runInNewContext } from 'node:vm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  evaluarPoliticaScriptLanding,
+  leerObjetoLiteralConstante,
+} from '../scripts/landingScriptPolicy';
 
 /**
  * ⭐ LA LANDING, PROBADA SOBRE EL BUILD.
@@ -304,14 +307,17 @@ describe('PROPIEDAD 1 · el JavaScript no puede arrastrar el shell', () => {
     }
   });
 
-  it('🔴 MUTANTE · el script no importa, no pide red, no evalúa', () => {
-    const s = build.scripts.join('\n');
-    for (const prohibido of [
-      'import', 'require(', 'fetch(', 'XMLHttpRequest', 'WebSocket',
-      'eval(', 'new Function', 'sessionStorage', 'document.cookie',
-    ]) {
-      expect(s, `el script hace \`${prohibido}\``).not.toContain(prohibido);
-    }
+  it('🔴 POLÍTICA AST · el script emitido usa sólo capacidades adjudicadas', () => {
+    const fallas = build.scripts.flatMap((codigo, indice) =>
+      evaluarPoliticaScriptLanding({
+        artefacto: `dist-landing/index.html#script[${indice}]`,
+        codigo,
+      }));
+    expect(
+      fallas,
+      'el JavaScript emitido salió de la allowlist o no parsea:\n' +
+        fallas.map((f) => `${f.artefacto}:${f.linea}:${f.columna} [${f.regla}] ${f.mensaje}`).join('\n'),
+    ).toEqual([]);
   });
 
   it('🔴 STORAGE ACOTADO · sólo persiste el idioma en `payme-landing-lang`', () => {
@@ -348,10 +354,18 @@ describe('PROPIEDAD 1 · el JavaScript no puede arrastrar el shell', () => {
 describe('PROPIEDAD 1 bis · el selector bilingüe es completo y falla seguro', () => {
   function leerDiccionario(): Record<'es' | 'en', Record<string, string>> {
     const s = build.scripts.join('\n');
-    const literal = s.match(/var I18N\s*=\s*(\{[\s\S]*?\n\});\s*\n\s*var langToggle/)?.[1];
-    expect(literal, 'no se encontró el diccionario embebido').toBeTruthy();
-    const value = runInNewContext(`(${literal})`, Object.create(null), { timeout: 100 });
-    return JSON.parse(JSON.stringify(value)) as Record<'es' | 'en', Record<string, string>>;
+    const value = leerObjetoLiteralConstante(s, 'I18N', 'dist-landing/index.html#script[0]');
+    const esRegistroStrings = (v: unknown): v is Record<string, string> =>
+      typeof v === 'object' && v !== null && !Array.isArray(v) &&
+      Object.values(v).every((item) => typeof item === 'string');
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error('I18N no es un objeto literal');
+    }
+    const registro = value as Record<string, unknown>;
+    if (!esRegistroStrings(registro['es']) || !esRegistroStrings(registro['en'])) {
+      throw new Error('I18N no contiene diccionarios ES/EN de strings');
+    }
+    return { es: registro['es'], en: registro['en'] };
   }
 
   it('🔴 las 42 claves del DOM coinciden exactamente con ES y EN', () => {

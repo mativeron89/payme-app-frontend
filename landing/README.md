@@ -9,24 +9,32 @@ paymemx.com          ← esta página
   └── Restaurante →  https://panel.paymemx.com
 ```
 
-🔴 **PUBLICADA, y por dos caminos distintos. Corregido el 2026-08-10.**
+🔴 **PUBLICADA. El camino vigente es el CI gateado → dos Deploy Hooks de
+Vercel. Actualizado el 2026-08-23.**
 
 Acá decía **«Cero publicación. Desarrollo local únicamente»**. Era verdad
 cuando se escribió (`dbf2b2e`, 2026-08-07) y hoy es falsa dos veces:
 
-| Desde | Dónde | Quién la publica |
+| Estado | Dónde | Quién la publica |
 |---|---|---|
-| 2026-08-09 | `…github.io/payme-app-frontend/landing/` | el CI de este repo (`deploy-demo.yml`, **retirado el 2026-08-21** — ver `docs/DESPLIEGUE_GATEADO.md`) |
-| 2026-08-10 | `paymemx.com` y `www.paymemx.com` | **Vercel, desde fuera de este repo** |
+| vigente | `paymemx.com` y `www.paymemx.com` | el paso final de `.github/workflows/ci.yml` dispara el hook de Vercel |
+| histórico, congelado | `…github.io/payme-app-frontend/landing/` | `deploy-demo.yml`, **retirado el 2026-08-21** — ver `docs/DESPLIEGUE_GATEADO.md` |
 
-**Un cambio acá sale a producción, no a un sandbox.**
+**Un cambio acá, una vez pusheado a `main` y con el CI verde, entra al camino
+de publicación productiva; no a un sandbox.** El 2xx del hook todavía no
+acredita que el build remoto terminara ni qué bytes quedaron servidos.
 
-⚠️ **Qué NO acredita eso.** Que el ápice sirva los mismos bytes **no prueba que
-salgan de este CI** — el ápice responde `server: Vercel` y en el repo no hay
-`vercel.json`, ni `CNAME`, ni una línea que mencione ese despliegue. El cotejo
-—CSS del ápice byte-idéntico a `dist-landing/`, sha256 `1d224ad7…`— fue
-**manual y una sola vez**. No hay gate que lo repita: este párrafo se pudre
-igual que el anterior si nadie lo mira.
+⚠️ **Qué NO acredita eso.** El repo sí contiene `vercel.json` y el workflow sí
+dispara los hooks, pero ninguno de los dos prueba Root Directory, comandos,
+output ni bytes efectivos de los proyectos remotos. El hook acredita que se
+aceptó un disparo; no qué terminó sirviendo.
+
+La medición del push `b71776c` lo volvió concreto: CI run `32662494432`, paso de
+publicación y ambos dominios quedaron verdes/HTTP 200, pero el bundle App
+declaró literalmente
+`b71776c81d90021aae58879ceb1669d8ef0949c5+sucio(M vercel.json)`. Por eso esa
+cadena **no acredita un árbol servido limpio y exacto**. No se excluye
+`vercel.json` del sentinel para esconder la evidencia.
 
 🔴 **Y la frase vieja ya era falsa desde ayer, no desde hoy.** `b012a30` agregó
 el tercer build a Pages y la falsificó; el hecho de hoy la falsifica por segunda
@@ -34,8 +42,10 @@ vez. Peor: `6a90bd2` editó **este mismo archivo** para arreglar el «cero
 JavaScript» —la misma clase de defecto— y pasó tres renglones por encima de
 ésta. **Corregir una afirmación vieja no hace mirar a las vecinas.**
 
-`npm run build:landing` sigue emitiendo a `dist-landing/`. Lo que dejó de ser
-cierto es que ahí se termine: el CI hace `cp -R dist-landing dist/landing`.
+`npm run build:landing` emite localmente a `dist-landing/`. El CI vigente no lo
+copia a `dist/landing`: ejecuta los gates y luego dispara el proyecto remoto,
+cuyo build/output siguen siendo configuración externa no acreditada por este
+repo.
 
 ---
 

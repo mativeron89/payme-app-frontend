@@ -11,6 +11,34 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.136.3 — hardening local de Landing y publicación (2026-08-23)
+
+Endurece el único workflow con permisos mínimos de lectura, checkout sin
+credenciales persistidas y guardas estructurales que confinan los dos secretos
+al paso publicador bajo `success()` + `push` + `main`. Los tags mutables de las
+Actions no se sustituyen por SHAs inventados: su verificación oficial queda
+registrada como deuda externa.
+
+La Landing deja de ejecutar snippets dentro de sus tests. Una política AST
+compartida analiza el JavaScript emitido, falla cerrado ante parseo inválido y
+adjudica por allowlist sus globals, miembros, funciones, eventos, storage y
+escrituras. Mutantes cubren DOM HTML, red/workers, navegación y recursos
+dinámicos junto a controles cercanos permitidos; el lookup bilingüe exige
+además claves propias y no hereda `constructor` desde el prototipo.
+
+Fixtures locales reproducen por qué cualquier modificación trackeada de
+`vercel.json` aparece como suciedad y prueban un prototipo desacoplado de marker
+App/Landing + verificador black-box con timeout, backoff y dos rondas conjuntas.
+No está conectado al workflow: detectaría después del side effect y no resuelve
+publicación parcial ni rollback. Los headers quedan sólo inventariados; el
+`vercel.json` compartido no recibe políticas globales.
+
+Se conserva explícitamente la evidencia incómoda del release anterior: CI y
+publicación de `b71776c` verdes y dominios en 200, pero sentinel servido
+`b71776c…+sucio(M vercel.json)`. Por eso no se afirma identidad de árbol limpio.
+
+**Sin push, deploy, hooks ni consultas a producción.**
+
 ## 0.136.2 — tocar el código vuelve a copiar el link completo (2026-08-23)
 
 Corrige el único block de la reauditoría de AF-DISENO-02: el refinamiento

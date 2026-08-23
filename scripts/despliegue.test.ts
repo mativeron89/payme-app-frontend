@@ -1358,7 +1358,7 @@ function fallasDelCenso(yml: string): string[] {
    * `env` por rol.
    */
   const ACCIONES_ADJUDICADAS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
-    'actions/checkout@v4': { 'fetch-depth': 0 },
+    'actions/checkout@v4': { 'fetch-depth': 0, 'persist-credentials': false },
     'actions/setup-node@v4': { 'node-version': 20, cache: 'npm' },
   };
 
@@ -1471,10 +1471,14 @@ function fallasDelCheckout(yml: string): string[] {
    * guarda debilitada a «`with` presente» el caso seguía verde. Ahora la
    * desigualdad la evalúa esta función, que es la misma que corre el nominal.
    */
-  if (!mismoMapping(paso.claves['with'], { 'fetch-depth': 0 })) {
+  if (!mismoMapping(paso.claves['with'], {
+    'fetch-depth': 0,
+    'persist-credentials': false,
+  })) {
     fallas.push(
       'el `with` del checkout no es el exacto: `ref`/`repository`/`path` desacoplan el ' +
-        `workspace del evento y los gates medirían OTROS bytes que los que se publican — ${JSON.stringify(paso.claves['with'])}`,
+        'workspace del evento, y `persist-credentials` distinto de false deja credenciales ' +
+        `Git disponibles para pasos posteriores — ${JSON.stringify(paso.claves['with'])}`,
     );
   }
   fallas.push(
@@ -1482,6 +1486,168 @@ function fallasDelCheckout(yml: string): string[] {
   );
   return fallas;
 }
+
+type MapaDesconocido = { readonly [clave: string]: unknown };
+
+const esMapaDesconocido = (valor: unknown): valor is MapaDesconocido =>
+  typeof valor === 'object' && valor !== null && !Array.isArray(valor);
+
+interface ReferenciaSecreto {
+  readonly ruta: string;
+  readonly referencia: string;
+}
+
+/**
+ * Censa `secrets.*` sobre el YAML PARSEADO, no por grep del archivo.
+ *
+ * La frontera es deliberadamente angosta: dos referencias, como valores
+ * completos de `env`, en el único paso que invoca al publicador. Una referencia
+ * en `run`, otro paso, otro job o una clave extra es roja aunque conserve las
+ * dos referencias legítimas en algún rincón del documento.
+ */
+function referenciasDeSecretos(valor: unknown, ruta = '$'): ReferenciaSecreto[] {
+  if (typeof valor === 'string') {
+    return [...valor.matchAll(/\$\{\{[\s\S]*?\}\}/g)]
+      .filter((m) => /\bsecrets\b/.test(m[0]))
+      .map((m) => ({ ruta, referencia: m[0] }));
+  }
+  if (Array.isArray(valor)) {
+    return valor.flatMap((item, indice) => referenciasDeSecretos(item, `${ruta}[${indice}]`));
+  }
+  if (esMapaDesconocido(valor)) {
+    return Object.entries(valor)
+      .flatMap(([clave, item]) => referenciasDeSecretos(item, `${ruta}.${clave}`));
+  }
+  return [];
+}
+
+/** Permisos mínimos + custodia exclusiva de los dos secretos del publicador. */
+function fallasDeMinimoPrivilegio(yml: string): string[] {
+  let doc: unknown;
+  try {
+    doc = load(yml);
+  } catch (error) {
+    return [`el YAML no parsea: ${(error as Error).message}`];
+  }
+  if (!esMapaDesconocido(doc)) return ['la raíz del workflow no es un mapping'];
+
+  const fallas: string[] = [];
+  if (!mismoMapping(doc['permissions'], { contents: 'read' })) {
+    fallas.push(
+      '`permissions` debe ser exactamente `{ contents: read }`: cualquier ausencia o permiso extra amplía el token',
+    );
+  }
+
+  const jobsCrudos = doc['jobs'];
+  if (!esMapaDesconocido(jobsCrudos)) {
+    fallas.push('`jobs` no es un mapping adjudicable');
+  } else {
+    for (const [nombre, job] of Object.entries(jobsCrudos)) {
+      if (esMapaDesconocido(job) && job['permissions'] !== undefined) {
+        fallas.push(
+          `jobs.${nombre}.permissions no está permitido: un override de job reemplaza el mínimo global`,
+        );
+      }
+    }
+  }
+
+  const { jobs, problemas } = leerWorkflow(yml);
+  if (problemas.length > 0) {
+    fallas.push(...problemas.map((p) => `el modelo no pudo adjudicar: ${p}`));
+    return fallas;
+  }
+  const publicadores = jobs.flatMap((job) => job.pasos
+    .filter((paso) => pasoPublica(texto(paso.claves['run'])))
+    .map((paso) => ({ job, paso })));
+  if (publicadores.length !== 1) {
+    fallas.push(`hay ${publicadores.length} publicadores; se esperaba exactamente uno`);
+    return fallas;
+  }
+  const [{ job, paso }] = publicadores;
+  const prefijo = `$.jobs.${job.nombre}.steps[${paso.indice}].env`;
+  const esperadas = [
+    `${prefijo}.HOOK_APP|\${{ secrets.VERCEL_HOOK_APP }}`,
+    `${prefijo}.HOOK_LANDING|\${{ secrets.VERCEL_HOOK_LANDING }}`,
+  ].sort();
+  const halladas = referenciasDeSecretos(doc)
+    .map(({ ruta, referencia }) => `${ruta}|${referencia}`)
+    .sort();
+  if (JSON.stringify(halladas) !== JSON.stringify(esperadas)) {
+    fallas.push(
+      'las referencias `secrets.*` no están exclusivamente en el `env` correspondiente del publicador: ' +
+        JSON.stringify(halladas),
+    );
+  }
+  return fallas;
+}
+
+describe('hardening mínimo del token y los secretos de CI', () => {
+  const ci = () => readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');
+
+  const conMutacion = (de: string, a: string): string => {
+    const original = ci();
+    expect(original.includes(de), `la mutación no se plantó: falta «${de}»`).toBe(true);
+    return original.replace(de, a);
+  };
+
+  it('🔴 nominal · permisos, checkout y referencias de secretos son mínimos', () => {
+    expect(fallasDeMinimoPrivilegio(ci())).toEqual([]);
+    expect(fallasDelCheckout(ci())).toEqual([]);
+    expect(fallasDelPublicador(ci())).toEqual([]);
+  });
+
+  it('🔴 MUTANTE · permiso de escritura en raíz muere', () => {
+    const mutado = conMutacion('permissions:\n  contents: read', 'permissions:\n  contents: write');
+    expect(fallasDeMinimoPrivilegio(mutado).join(' · ')).toMatch(/permissions/);
+  });
+
+  it('🔴 MUTANTE · un override de permisos en el job muere', () => {
+    const mutado = conMutacion(
+      '  build:\n    runs-on: ubuntu-latest',
+      '  build:\n    permissions:\n      contents: write\n    runs-on: ubuntu-latest',
+    );
+    expect(fallasDeMinimoPrivilegio(mutado).join(' · ')).toMatch(/override|permissions/);
+  });
+
+  it('🔴 MUTANTE · credenciales persistidas o valor ausente mueren', () => {
+    const verdadero = conMutacion('          persist-credentials: false', '          persist-credentials: true');
+    const ausente = conMutacion('          persist-credentials: false\n', '');
+    expect(fallasDelCheckout(verdadero).join(' · ')).toMatch(/persist-credentials|with/);
+    expect(fallasDelCheckout(ausente).join(' · ')).toMatch(/persist-credentials|with/);
+  });
+
+  it('🔴 MUTANTE · el publicador sin `push/main` canónico muere', () => {
+    const mutado = conMutacion(
+      `        if: ${CONDICION_CANONICA}`,
+      '        if: success()',
+    );
+    expect(fallasDelPublicador(mutado).join(' · ')).toMatch(/condición no es la canónica/);
+  });
+
+  it('🔴 MUTANTE · una copia de `secrets.*` fuera del publicador muere', () => {
+    const mutado = conMutacion(
+      '      - run: npm ci',
+      '      - run: npm ci\n        env:\n          COLADO: ${{ secrets.VERCEL_HOOK_APP }}',
+    );
+    expect(fallasDeMinimoPrivilegio(mutado).join(' · ')).toMatch(/exclusivamente/);
+  });
+
+  it('🔴 MUTANTE · la sintaxis indexada de `secrets` también entra al censo', () => {
+    const mutado = conMutacion(
+      '      - run: npm ci',
+      "      - run: npm ci\n        env:\n          COLADO: ${{ secrets['VERCEL_HOOK_APP'] }}",
+    );
+    expect(fallasDeMinimoPrivilegio(mutado).join(' · ')).toMatch(/exclusivamente/);
+  });
+
+  it('🔴 MUTANTE · serializar el contexto `secrets` completo también muere', () => {
+    const mutado = conMutacion(
+      '      - run: npm ci',
+      '      - run: npm ci\n        env:\n          COLADO: ${{ toJSON(secrets) }}',
+    );
+    expect(fallasDeMinimoPrivilegio(mutado).join(' · ')).toMatch(/exclusivamente/);
+  });
+});
 
 /** Todo paso que precede al publicador: rol declarado, sin `if:` y contexto gobernado. */
 function fallasDeGatesPrevios(yml: string): string[] {

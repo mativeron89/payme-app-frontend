@@ -279,7 +279,7 @@ function applyLang(requestedLang) {
   var dict = I18N[lang];
   i18nNodes.forEach(function (el) {
     var key = el.getAttribute('data-i18n');
-    if (dict[key]) el.textContent = dict[key];
+    if (Object.hasOwn(dict, key)) el.textContent = dict[key];
   });
   document.documentElement.setAttribute('lang', lang);
   langToggle.textContent = lang === 'es' ? 'EN' : 'ES';

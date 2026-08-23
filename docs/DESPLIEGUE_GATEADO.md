@@ -69,6 +69,19 @@ no acreditado**.
 4. **La URL del hook no se imprime.** GitHub la enmascara por ser secreto, pero
    no se escribe igual.
 
+## Mínimo privilegio local del workflow · 2026-08-23
+
+El workflow declara `permissions: contents: read` y el checkout usa
+`persist-credentials: false`: los gates necesitan leer el árbol, no conservar
+una credencial Git ni escribir contenidos. Una guarda estructural censa además
+que las dos referencias `secrets.*` vivan únicamente en el `env` del paso
+publicador correspondiente.
+
+⚠️ `actions/checkout@v4` y `actions/setup-node@v4` siguen siendo tags mutables.
+No se inventó un pin offline: elegir el commit exige verificar la referencia
+oficial en una fuente externa autorizada. Esa deuda queda abierta; el
+hardening local no la disfraza de resuelta.
+
 ## 🔴 Lo que este gate NO cubre · corregido el 2026-08-10
 
 Acá decía que `deploy-demo.yml` publica «sin gate» y que su copia «puede quedar
@@ -122,9 +135,32 @@ los pasos anteriores. 🔴 **Con dos jobs sin `needs:`, habría cubierto sólo e
 suyo y el candado sería decorativo.** Queda acreditado por configuración, sin
 tener que provocar un CI rojo.
 
-⚠️ **Lo que sigue sin acreditarse en el pipeline real: qué pasa con el CI en
-rojo.** Está probado en local contra un `curl` sustituido —200 pasa, 401/500 y
-caída cortan— pero nunca se observó en vivo, y no se va a provocar.
+El caso `82a833e` de arriba sí observó un CI rojo real y el paso publicador
+omitido. Lo que esa observación **no** acredita es identidad del artefacto
+servido: demuestra que el hook no se llamó desde ese run, no que un run verde
+produzca bytes limpios ligados al commit.
+
+## Identidad servida · evidencia nueva del 2026-08-23
+
+El push autorizado de `b71776c81d90021aae58879ceb1669d8ef0949c5` tuvo CI run
+`32662494432` verde, paso publicador verde y HTTP 200 en App/Landing. El bundle
+servido declaró, sin embargo:
+
+```
+b71776c81d90021aae58879ceb1669d8ef0949c5+sucio(M vercel.json)
+```
+
+Eso acredita el HEAD nominal y, al mismo tiempo, refuta que el árbol servido
+quede probado como limpio/exacto. La causa externa de la modificación no se
+determinó en este carril y no se corrige excluyendo `vercel.json` del sentinel.
+
+`scripts/releaseIdentity.ts` materializa sólo un prototipo local: markers
+canónicos para App/Landing y verificación black-box con timeout, backoff y dos
+rondas conjuntas byte-idénticas. **No está cableado al workflow.** Una comprobación
+post-deploy detecta después del side effect; no previene, no vuelve atómicas
+las dos publicaciones y no hace rollback. El modelo de prevención/promoción y
+la respuesta ante release parcial siguen pendientes de evidencia y decisión
+de plataforma.
 
 ---
 
