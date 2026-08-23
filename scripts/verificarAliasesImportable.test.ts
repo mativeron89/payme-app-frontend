@@ -14,7 +14,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
-const MODULO = join(AQUI, 'verificar-aliases.mjs');
+/** La superficie IMPORTABLE: es esto lo que no puede tener efectos. */
+const LIB = join(AQUI, 'aliasesLib.mjs');
+/** El entrypoint, que sí ejecuta — nadie lo importa. */
+const CLI = join(AQUI, 'verificar-aliases.mjs');
 
 /**
  * 🔴 P97 · EL MÓDULO ES IMPORTABLE SIN EJECUTAR SU CLI — medido por EFECTO.
@@ -49,25 +52,23 @@ const MODULO = join(AQUI, 'verificar-aliases.mjs');
  * el mismo motivo: **el `exit 0` y el silencio son justo lo que el mecanismo
  * produce; medir con ellos sería medir con el instrumento que el ataque mueve.**
  *
- * ## 🔴 LÍMITE DECLARADO DE ESTE CENTINELA — leer antes de confiar en él
+ * ## 🔴 QUÉ ACREDITA ESTE CENTINELA, después del P99
  *
- * **Acredita contra la frontera `npx` + las señales terminales, NO contra la
- * ausencia total de efectos.** El espía observa un único ejecutable literal, así
- * que un efecto que no pase por `npx` **no lo ve**. Codex lo midió: desde la rama
- * importada, `invalidar('corrida')` —que borra `.vitest-corrida.json`—,
- * `invalidar('build')` —que borra `dist/`— y `adjudicarAliases()` dejan este
- * archivo **3/3 verde**, con el import en exit 0 y silencioso. Dos de esos sinks
- * son los que el workflow usa en `ci.yml:63-64,89-90`.
+ * Tres defensas, y la primera es la que cierra la clase:
  *
- * ⚠️ **El fixture positivo alcanza a Vitest; no acredita Playwright ni `tsc`.**
- * Que el CLI también los invoque por `npx` es cierto por lectura, no por esta
- * medición.
+ * ① **estructura** — la lógica vive en `aliasesLib.mjs`, que **no contiene
+ *    dispatcher**. No hay rama importada capaz de ejecutar nada, no porque una
+ *    condición lo impida sino porque el código no está ahí;
+ * ② **efecto observable** — importar la lib no invoca herramientas (espía de
+ *    `npx`) y **no borra el reporte ni el artefacto** (los dos sinks no-`npx`
+ *    que Codex midió verdes, y que el workflow usa);
+ * ③ **forma** — la superficie importable **sólo declara**: ninguna invocación en
+ *    su nivel superior, ni siquiera inofensiva. Esto cubre lo que ② no puede
+ *    ver: una llamada de sólo lectura no deja rastro, y medido daba 4/4 verde.
  *
- * **El camino que cerraría la clase está identificado y NO implementado:**
- * separar el módulo de exports puros del entrypoint con efectos, de modo que no
- * exista una rama importada capaz de ejecutar nada. Queda **disponible, no
- * ordenado** — el arnés cierra acá en nominal-bueno por decisión de producto, y
- * este límite es parte del certificado, no una omisión.
+ * ⚠️ **El fixture positivo ejercita los tres flujos** —Vitest, Playwright y
+ * `tsc`— y cada uno se afirma por separado. Antes llegaba sólo a Vitest y el
+ * claim los nombraba a los tres: acreditado en un tercio.
  */
 describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () => {
   /**
@@ -79,7 +80,10 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
   function montarEspia(): { readonly marca: string; readonly env: NodeJS.ProcessEnv } {
     const raiz = mkdtempSync(join(tmpdir(), 'payme-espia-'));
     const marca = join(raiz, 'invocaciones.txt');
-    writeFileSync(join(raiz, 'package.json'), JSON.stringify({ scripts: {} }));
+    writeFileSync(
+      join(raiz, 'package.json'),
+      JSON.stringify({ scripts: { typecheck: 'tsc --noEmit -p tsconfig.json' } }),
+    );
     writeFileSync(marca, '');
     /**
      * 🔴 Hace falta un test EN DISCO, y lo descubrió el control positivo.
@@ -92,6 +96,18 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
      */
     mkdirSync(join(raiz, 'src'), { recursive: true });
     writeFileSync(join(raiz, 'src', 'sonda.test.ts'), 'export const a = 1;\n');
+    /**
+     * 🔴 P99 · Y el fixture ejercita LOS TRES flujos, no sólo Vitest.
+     *
+     * Medido: con el escenario mínimo el espía sólo registraba `vitest list` —el
+     * gate cortaba antes de llegar a `tsc` y a Playwright—, así que el claim
+     * «llega a `npx` para sus herramientas pesadas» estaba acreditado en un
+     * tercio. Con un `e2e/` poblado y un alias `typecheck` que nombre un
+     * proyecto, los tres caminos se recorren de verdad.
+     */
+    mkdirSync(join(raiz, 'e2e'), { recursive: true });
+    writeFileSync(join(raiz, 'e2e', 'sonda.spec.ts'), 'export const b = 1;\n');
+    writeFileSync(join(raiz, 'tsconfig.json'), JSON.stringify({ include: ['src'] }));
     writeFileSync(join(raiz, 'npx'), `#!/bin/sh\necho "$@" >> ${JSON.stringify(marca)}\nexit 1\n`);
     chmodSync(join(raiz, 'npx'), 0o755);
     return {
@@ -113,11 +129,15 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
     // nunca» son indistinguibles, y el caso de abajo mediría en vacío.
     const { marca, env } = montarEspia();
     try {
-      spawnSync(process.execPath, [MODULO, '--aliases'], { env, encoding: 'utf8' });
-      expect(
-        invocaciones(marca),
-        'el espía no registró nada: el escenario no está midiendo lo que dice',
-      ).not.toBe('');
+      spawnSync(process.execPath, [CLI, '--aliases'], { env, encoding: 'utf8' });
+      const registro = invocaciones(marca);
+      expect(registro, 'el espía no registró nada: el escenario no está midiendo lo que dice')
+        .not.toBe('');
+      // 🔴 Los TRES flujos que el docblock declara cubiertos, cada uno afirmado.
+      for (const herramienta of ['vitest', 'playwright', 'tsc']) {
+        expect(registro, `el fixture no llega a «${herramienta}»: el claim lo incluye sin acreditarlo`)
+          .toMatch(new RegExp(herramienta));
+      }
     } finally {
       rmSync(dirname(marca), { recursive: true, force: true });
     }
@@ -128,7 +148,7 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
     try {
       const r = spawnSync(
         process.execPath,
-        ['--input-type=module', '-e', `import ${JSON.stringify(pathToFileURL(MODULO).href)};`],
+        ['--input-type=module', '-e', `import ${JSON.stringify(pathToFileURL(LIB).href)};`],
         { env, encoding: 'utf8' },
       );
       // 🔴 LA AFIRMACIÓN NUEVA: el EFECTO, no la salida. Un `adjudicarPoblacion()`
@@ -149,10 +169,92 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
     }
   });
 
+  /**
+   * 🔴 P99 · UN EFECTO QUE NO PASA POR `npx` — la frontera que el espía no ve.
+   *
+   * El centinela anterior observaba el ejecutable literal `npx`, y Codex midió
+   * que `invalidar('corrida')` y `invalidar('build')` —que **borran** el reporte
+   * y `dist/`— lo dejaban 3/3 verde desde la rama importada. **Dos de esos sinks
+   * son los que usa el workflow.**
+   *
+   * El espía no puede cubrirlos: no son procesos, son llamadas a `rm`. Se cubren
+   * observando **el disco**, que es donde el efecto se ve. Junto con la
+   * separación lib/entrypoint —que quita la rama importada entera— esto cierra
+   * el flanco por los dos lados: estructura y observación.
+   */
+  it('🔴 IMPORTADO · no borra el reporte ni el artefacto · efectos NO-npx', () => {
+    const { marca, env } = montarEspia();
+    const raiz = dirname(marca);
+    try {
+      const reporte = join(raiz, '.vitest-corrida.json');
+      const dist = join(raiz, 'dist');
+      writeFileSync(reporte, '{"testResults":[]}');
+      mkdirSync(dist, { recursive: true });
+      writeFileSync(join(dist, 'index.html'), '<html></html>');
+      // Control de plantado: si el escenario no existiera, «no se borró» sería
+      // cierto por vacuidad y este caso mediría la nada.
+      expect(existsSync(reporte) && existsSync(dist), 'el escenario no se plantó').toBe(true);
+
+      spawnSync(
+        process.execPath,
+        ['--input-type=module', '-e', `import ${JSON.stringify(pathToFileURL(LIB).href)};`],
+        { env, encoding: 'utf8' },
+      );
+
+      expect(existsSync(reporte), 'importar la lib BORRÓ el reporte de la corrida').toBe(true);
+      expect(existsSync(dist), 'importar la lib BORRÓ el artefacto del build').toBe(true);
+    } finally {
+      rmSync(raiz, { recursive: true, force: true });
+    }
+  });
+
   it('🔴 y el CLI real sigue respondiendo a una invocación directa', () => {
     // El guard podría «arreglarse» apagando el CLI entero. Esto lo impide.
-    const r = spawnSync(process.execPath, [MODULO, '--modo-inexistente'], { encoding: 'utf8' });
+    const r = spawnSync(process.execPath, [CLI, '--modo-inexistente'], { encoding: 'utf8' });
     expect(r.status, 'el CLI no respondió a una invocación directa').not.toBe(0);
     expect(`${r.stdout}${r.stderr}`).toMatch(/modo desconocido/);
+  });
+});
+
+/**
+ * 🔴 P99 · LA LIB NO INVOCA NADA EN SU NIVEL SUPERIOR — guarda ESTRUCTURAL.
+ *
+ * Los casos de arriba observan **efectos**: procesos que pasan por `npx` y
+ * borrados en disco. Eso deja un flanco que medí y declaro: **una llamada de
+ * sólo lectura no deja rastro observable.** Con `adjudicarAliases()` inyectado en
+ * la lib —que sólo lee `package.json` y acumula fallas— los cuatro casos de
+ * arriba quedan **4/4 verdes**, porque no hay nada que ver.
+ *
+ * No se cierra observando mejor: se cierra **mirando la forma del archivo**. La
+ * superficie importable puede declarar cuanto quiera, pero **no puede invocar en
+ * su nivel superior** — ni siquiera algo inofensivo. Es la misma forma que el
+ * resto del arnés: declarar lo bueno (sólo declaraciones) en vez de enumerar lo
+ * malo (qué llamadas están prohibidas).
+ */
+describe('🔴 la superficie importable sólo DECLARA', () => {
+  it('🔴 ninguna invocación en el nivel superior de `aliasesLib.mjs`', () => {
+    const lineas = readFileSync(LIB, 'utf8').split('\n');
+    /**
+     * Una invocación de nivel superior empieza en la columna 0 y tiene forma de
+     * llamada. Las declaraciones (`function`, `const`, `export`, `import`) y todo
+     * lo indentado —o sea, lo que vive DENTRO de una función— no cuentan.
+     */
+    const invocaciones = lineas
+      .map((l, i) => ({ l, n: i + 1 }))
+      .filter(({ l }) => /^[A-Za-z_$][\w$]*\s*\(/.test(l))
+      .map(({ l, n }) => `${n}: ${l.trim().slice(0, 60)}`);
+    expect(
+      invocaciones,
+      'la superficie importable EJECUTA algo al cargarse:\n  ' + invocaciones.join('\n  '),
+    ).toEqual([]);
+  });
+
+  it('✅ CONTROL POSITIVO · el reconocedor SÍ ve una invocación cuando la hay', () => {
+    // Sin esto, un regex roto daría «cero invocaciones» sobre cualquier archivo y
+    // el caso de arriba pasaría por vacuidad, que es el falso verde de siempre.
+    const muestra = ['const a = 1;', 'adjudicarAliases();', '  invalidar("build");'];
+    const halladas = muestra.filter((l) => /^[A-Za-z_$][\w$]*\s*\(/.test(l));
+    expect(halladas, 'el reconocedor no distingue una invocación top-level')
+      .toEqual(['adjudicarAliases();']);
   });
 });

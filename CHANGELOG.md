@@ -11,6 +11,58 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.130.0 — reapertura: el entrypoint separado de la superficie importable (2026-08-22)
+
+Mati reabrió la auditoría con objetivo PASS. Alcance: las condiciones 1–5 del
+dictamen P98. **La central es un refactor del módulo productivo del gate**, no un
+fix de test.
+
+### ① La separación no mejora el guard: lo vuelve innecesario
+
+Hasta acá el gate era **un solo archivo** —CLI y módulo a la vez— con un guard de
+`main` que decidía en runtime cuál de los dos era. El guard funcionaba y sus
+mutantes morían, pero **la superficie importable seguía conteniendo el
+dispatcher**: la garantía dependía de una condición, no de la estructura.
+
+```
+antes   verificar-aliases.mjs   lógica + dispatcher + guard de main
+ahora   aliasesLib.mjs          SÓLO lógica · importable sin que pase nada
+        verificar-aliases.mjs   SÓLO dispatcher · nadie lo importa
+```
+
+**No hay rama importada capaz de ejecutar nada porque el código que ejecuta no
+está en el archivo que se importa.** Es la misma forma que cerró la frescura: la
+mejor guarda no es la que mide mejor, es la que **no deja nada que falsificar**.
+
+### ② Los tres carriles que Codex midió verdes, ahora mueren
+
+| efecto inyectado en la superficie importable | resultado |
+|---|---|
+| `invalidar('corrida')` — borra el reporte | **1 f / 3** |
+| `invalidar('build')` — borra `dist/` | **1 f / 3** |
+| `adjudicarAliases()` — sólo lectura | **1 f / 5** |
+
+Los dos primeros los caza el **efecto en disco**. El tercero **no dejaba rastro
+observable** —medido: 4/4 verde— y por eso hizo falta una tercera defensa: la
+superficie importable **sólo declara**, sin una sola invocación en su nivel
+superior, ni siquiera inofensiva. Declarar lo bueno en vez de enumerar lo malo,
+otra vez.
+
+**Y los cinco cables de la tabla siguen matando su fila tras el refactor**
+(`1 f / 43 sobre 44` cada uno), que era el riesgo que el refactor traía.
+
+### ③ El claim estaba acreditado en un tercio
+
+El fixture positivo **llegaba sólo a Vitest**: el gate cortaba antes de invocar
+`tsc` y Playwright, mientras el docblock nombraba los tres. Ahora el fixture
+puebla `e2e/` y declara un proyecto TS, **y cada flujo se afirma por separado**.
+
+En vez de estrechar el claim, se agrandó el fixture hasta que el claim fuera
+cierto.
+
+**Sin push ni deploy.** El intermitente E2E sigue **ABIERTO** (esta corrida:
+111/111) y se investiga aparte.
+
 ## 0.129.0 — CIERRE DEL ARNÉS en nominal-bueno, con su límite escrito (2026-08-22)
 
 **No cierra por estar terminado: cierra por decisión de producto, y la diferencia

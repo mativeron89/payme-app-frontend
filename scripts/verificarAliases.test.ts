@@ -10,7 +10,7 @@ import {
   fuentesSinProyecto,
   ES_TEST,
   ES_FUENTE_TS,
-} from './verificar-aliases.mjs';
+} from './aliasesLib.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(AQUI, '..');

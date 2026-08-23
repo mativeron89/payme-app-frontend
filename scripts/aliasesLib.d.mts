@@ -1,9 +1,9 @@
 /**
- * Tipos del gate `verificar-aliases.mjs` (P88).
+ * Tipos de `aliasesLib.mjs` — la lógica del gate, sin efectos al importarse (P99).
  *
- * El gate es un `.mjs` a propósito —se invoca con `node` desde el workflow, sin
- * pasar por un alias npm—, así que sus tipos se declaran acá en vez de usar
- * `as any` en el test, que el gobierno del repo prohíbe.
+ * El gate es un `.mjs` a propósito —el entrypoint se invoca con `node` desde el
+ * workflow, sin pasar por un alias npm—, así que sus tipos se declaran acá en vez
+ * de usar `as any` en el test, que el gobierno del repo prohíbe.
  */
 
 /**
