@@ -7,7 +7,6 @@ import { navigate } from '../router';
 import { readUnconfirmed, scopeForActor, useMoneyActor } from '../api/idempotency';
 import { useWalletRail } from '../api/walletRail';
 import { countdownLong, formatMXN } from '../utils/format';
-import { fullName } from '../utils/identity';
 import { mesaStatusLabel, walletTxIcon, walletTxLabel } from '../utils/labels';
 import { etiquetaMasMesas, ordenarPorUrgencia } from './homeMesasView';
 import { demoSeedIrrecuperable, resetDemo } from '../api/mock/store';
@@ -166,9 +165,6 @@ export function HomeScreen() {
     };
   }, [walletRailEnabled]);
 
-  // §5 bis · A pide el nombre COMPLETO, no el saludo. Si falta, va sin nombre:
-  // "Hola, undefined" es peor que el logo solo.
-  const nombre = fullName(session);
   // §1.1 (2026-08-05): la protagonista es la de vencimiento MÁS PRÓXIMO, no
   // la primera del payload; las demás viven en la hoja de "+N más".
   const porUrgencia = openMesas ? ordenarPorUrgencia(openMesas.mesas) : [];
@@ -184,7 +180,7 @@ export function HomeScreen() {
   return (
     <div className="screen has-appbar">
       <AppHeader
-        userName={nombre ?? undefined}
+        paymeId={session?.user?.payme_id}
         unread={unread}
         onBell={() => navigate('avisos')}
         tabs={<BubbleTabs tabs={TABS.map((x) => ({ ...x, label: t(x.label) }))} active={tab} onSelect={(id) => setTab(id as TabId)} />}

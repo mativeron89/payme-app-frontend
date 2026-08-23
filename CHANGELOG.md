@@ -11,6 +11,21 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.136.4 — Home identifica la sesión por payme_id (2026-08-23)
+
+Por decisión visual directa de Mati, el encabezado de Inicio reemplaza el
+nombre visible por el `payme_id` de la sesión en la misma ranura. El lockup
+PayMe, la campana con su badge, las pestañas Cuenta/Estadísticas/Asociadas,
+la banda y la navegación no cambian; tampoco se modifica el componente
+compartido `AppHeader` ni su CSS.
+
+Una regresión de navegador acredita el dato correcto y el no-solape de marca,
+identidad y campana en 320, 390 y 480 px. Esta decisión supersede para Home la
+regla documental anterior de nombre completo; la reconciliación de los specs
+de raíz queda para el Bibliotecario.
+
+**Sin push, deploy, hooks ni consultas a producción.**
+
 ## 0.136.3 — hardening local de Landing y publicación (2026-08-23)
 
 Endurece el único workflow con permisos mínimos de lectura, checkout sin
