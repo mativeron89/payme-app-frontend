@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fallasDeAliases } from './aliasesLib.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 /** La superficie IMPORTABLE: es esto lo que no puede tener efectos. */
@@ -253,9 +254,10 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * Toda función de la lib hace una de tres cosas observables:
    *
    * ```
-   * adjudicar / acreditar  →  empuja a `fallas`     ← sensor ①
-   * invalidar              →  BORRA del disco       ← sensor ②
-   * listar poblaciones     →  lanza `npx`           ← sensor ③
+   * adjudicar / acreditar  →  empuja a `fallas`         ← sensor ①
+   * invalidar              →  BORRA del disco           ← sensor ②
+   * listar poblaciones     →  lanza `npx`               ← sensor ③
+   * cualquiera que LANCE   →  rechaza el import (F=-1) ← sensor ④
    * ```
    *
    * 🔴 P103 · ALCANCE DECLARADO — LO QUE ESTE OBSERVER PUEDE Y NO PUEDE.
@@ -543,6 +545,30 @@ describe('🔴 el oráculo conductual no depende de la FORMA', () => {
 });
 
 /**
+ * 🔴 P104 · LOS LÍMITES, REFORMULADOS COMO INDISTINGUIBILIDAD.
+ *
+ * La versión anterior afirmaba «el observer NO ve esto que ejecuta» con un
+ * `toBe(0)`, y Codex mostró que **no era causal**: retirar el callee del snippet
+ * escondido deja **22/22**, porque `F=0` es también lo que da un snippet vacío.
+ * El caso no distinguía «ejecutó y se escondió» de «no ejecutó nada» — que es,
+ * literalmente, lo mismo que no distingue el observer.
+ *
+ * 🔴 **Así que el límite se dice como lo que es: una INDISTINGUIBILIDAD.** Se
+ * comparan las dos lecturas y se afirma que **coinciden**. Eso sí es causal: el
+ * día que el observer aprenda a separarlas, dejan de coincidir y el caso cae.
+ *
+ * ⚠️ **Lo que este caso NO prueba, y se declara:** que el snippet escondido
+ * ejecute. Probarlo exige una señal fuera del proceso, que es justo lo que no
+ * hay. Codex lo verificó por su lado con trazas externas —hoy ejecutan— y **esa
+ * evidencia es suya, no de este archivo**. Acá se afirma la propiedad
+ * verificable: el observer no las separa.
+ *
+ * 📌 Y la lección de la vuelta, que vale más que el caso: **una acotación sin
+ * medir sus bordes es el overclaim con mejor prosa.** Acotar era la salida
+ * correcta, pero la frontera acotada es una afirmación más y necesita la misma
+ * evidencia que el claim ancho.
+ */
+/**
  * 🔴 P103 · LOS LÍMITES CONOCIDOS DEL OBSERVER, VERSIONADOS COMO TALES.
  *
  * Estos casos **no afirman que el arnés detecte los bypasses: afirman que NO los
@@ -559,28 +585,31 @@ describe('🔴 el oráculo conductual no depende de la FORMA', () => {
  * la esconde, que sí se detecta. Los dos juntos dicen qué está midiendo el caso.
  */
 describe('🔴 lo que el observer NO ve · límites medidos, no supuestos', () => {
-  const LIMITES: ReadonlyArray<readonly [string, string, string]> = [
+  /** [nombre, forma escondida, forma visible, la escondida SIN su callee] */
+  const LIMITES: ReadonlyArray<readonly [string, string, string, string]> = [
     [
       'un `catch` traga la excepción del fixture',
       'try { adjudicarAliases(); } catch {} fallas.length = 0;',
       'adjudicarAliases();',
+      'try { } catch {} fallas.length = 0;',
     ],
     [
       'una ejecución sin rastro observable',
       'acreditarCorrida(); fallas.length = 0;',
       'acreditarCorrida();',
+      'fallas.length = 0;',
     ],
   ];
 
-  for (const [nombre, escondido, visible] of LIMITES) {
-    it(`⚠️ LÍMITE · ${nombre} — el observer NO lo ve`, () => {
+  for (const [nombre, escondido, visible, sinCallee] of LIMITES) {
+    it(`⚠️ LÍMITE · ${nombre} — indistinguible de no ejecutar`, () => {
       // Si esto se pone ROJO, el límite se cerró: hay que borrar el caso y
-      // actualizar el alcance declarado del docblock. Es la señal de que el
-      // certificado puede afirmar más de lo que afirmaba.
+      // actualizar el alcance declarado del docblock.
       expect(
-        importarCon(escondido).fallas,
-        'el límite se cerró: actualizá el alcance declarado y retirá este caso',
-      ).toBe(0);
+        importarCon(escondido),
+        'el límite se cerró: el observer ya separa «ejecutó y se escondió» de ' +
+          '«no ejecutó» — actualizá el alcance y retirá este caso',
+      ).toEqual(importarCon(sinCallee));
     });
 
     it(`✅ CONTROL OPUESTO · «${nombre}» sin su mecanismo SÍ se ve`, () => {
@@ -592,4 +621,50 @@ describe('🔴 lo que el observer NO ve · límites medidos, no supuestos', () =
       ).not.toBe(0);
     });
   }
+});
+
+/**
+ * 🔴 P104 · «PURO» CON CALLBACK ES PUREZA CONDICIONAL — y la condición se versiona.
+ *
+ * El alcance declarado excluía tres exports por ser puros: «calculan y devuelven,
+ * sin tocar nada». **Para `fallasDeAliases` eso era falso sin una precondición**:
+ * recibe `existeConfig` y **lo invoca** (`aliasesLib.mjs:136-139`), así que hace
+ * exactamente lo que su callback haga. Codex lo midió plantando una llamada
+ * top-level cuyo callback borraba una marca privada: **22/22 con los tres
+ * sensores en cero y el efecto real ocurrido.**
+ *
+ * 🔴 **La exclusión no era incorrecta: estaba incompleta.** «Es pura» y «es pura
+ * si sus callbacks lo son» son afirmaciones distintas, y la segunda **necesita
+ * que alguien verifique el callsite**. Acá se fija esa precondición.
+ */
+describe('🔴 la pureza de un export con callback es CONDICIONAL', () => {
+  it('🔴 el callback SE INVOCA · un efecto adentro ocurre de verdad', () => {
+    // Sin esto, «`fallasDeAliases` es pura» se lee como incondicional, y el
+    // alcance declarado excluye del observer una función que puede hacer
+    // cualquier cosa que su callsite le pase.
+    let invocado = 0;
+    fallasDeAliases({ test: 'x' }, () => { invocado++; return false; }, {});
+    expect(invocado, 'el callback no se invocó: la precondición no aplica y hay que revisarla')
+      .toBeGreaterThan(0);
+  });
+
+  it('🔴 y el ÚNICO callsite productivo le pasa un predicado sin efectos', () => {
+    /**
+     * La precondición que sostiene la exclusión, verificada donde vive: el
+     * entrypoint le pasa `(archivo) => existsSync(...)`, que **lee y devuelve**.
+     * Si alguien le pasara algo que escribe o borra, este caso se pone rojo y
+     * hay que decidir —no descubrirlo tres semanas después—.
+     */
+    const lib = readFileSync(LIB, 'utf8');
+    const callsites = [...lib.matchAll(/fallasDeAliases\(([\s\S]{0,200}?)\)/g)]
+      .map((m) => m[1] ?? '');
+    expect(callsites.length, 'no se encontró ningún callsite: el caso mediría en vacío')
+      .toBeGreaterThan(0);
+    for (const args of callsites) {
+      expect(
+        args,
+        `un callsite de \`fallasDeAliases\` pasa un callback con efectos: ${args.trim().slice(0, 80)}`,
+      ).not.toMatch(/writeFileSync|rmSync|execFileSync|spawnSync|appendFileSync/);
+    }
+  });
 });

@@ -11,6 +11,53 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.135.0 — la frontera acotada también hay que medirla (2026-08-23)
+
+**Acotar era la salida correcta y la acoté mal.** La lección de la vuelta, que va
+primero porque es lo que se lleva:
+
+> **Una acotación sin medir sus bordes es el overclaim con mejor prosa.**
+
+La frontera acotada **es una afirmación más** y necesita la misma evidencia que el
+claim ancho: cada exclusión con su precondición, cada límite con su causalidad.
+
+### ① Los límites no eran causales
+
+Afirmaban «el observer NO ve esto que ejecuta» con `toBe(0)`. Codex mostró que
+retirar el callee del snippet escondido deja **22/22**: `F=0` es también lo que da
+un snippet vacío. **El caso no distinguía «ejecutó y se escondió» de «no ejecutó
+nada»** — que es, literalmente, lo que no distingue el observer.
+
+🔴 **Así que el límite se dice como lo que es: una INDISTINGUIBILIDAD.** Se
+comparan las dos lecturas y se afirma que **coinciden**. Eso sí es causal:
+invertir la aserción da **2 f / 20 (22)**.
+
+⚠️ Y lo que el caso **no** prueba, declarado: que el snippet escondido ejecute.
+Eso exige señal fuera del proceso. Codex lo verificó con trazas externas — **esa
+evidencia es suya, no de este archivo.**
+
+### ② «Puro» con callback es pureza condicional
+
+El alcance excluía tres exports por puros. Para `fallasDeAliases` era falso sin
+precondición: **recibe `existeConfig` y lo invoca** (`aliasesLib.mjs:136-139`), así
+que hace lo que su callback haga. Codex plantó uno que borraba una marca privada:
+**22/22 con los tres sensores en cero y el efecto ocurrido.**
+
+**La exclusión no era incorrecta: estaba incompleta.** «Es pura» y «es pura si sus
+callbacks lo son» son afirmaciones distintas. Ahora la precondición está
+versionada: que el callback se invoca, y que el único callsite productivo le pasa
+un predicado sin efectos.
+
+### ③ El inventario omitía un rastro, y un docblock lo venció mi propio caso
+
+Suma el **sensor ④**: una excepción **rechaza el import** (`F=-1`), y eso es
+observable. Y donde decía que la señal por excepción es «NO BORRABLE», ahora dice
+lo exacto: **un reset del contador no la alcanza, pero un `try/catch` en el mismo
+scope sí la traga** — la excepción vive fuera del array, no fuera del módulo. Lo
+venció el caso que yo mismo versioné dos vueltas antes.
+
+**Sin push ni deploy.** E2E **ABIERTO** (esta corrida: 111/111).
+
 ## 0.134.0 — el límite del observer, medido y versionado como límite (2026-08-23)
 
 ### 🔴 Primero, un error de premisa que firmamos los dos
@@ -44,8 +91,8 @@ a un canal que el módulo no conoce. **Lo probé y no llegué a hacerlo discrimi
 en tres intentos** (el preload capturaba al loader leyendo el propio archivo, no
 a la lib).
 
-🔴 **Paré ahí a propósito.** El arnés ya excede el riesgo que cubre —veintiuna
-vueltas, cero defectos en el objeto— y este límite requiere que alguien **escriba
+🔴 **Paré ahí a propósito.** El arnés ya excede el riesgo que cubre —veintiuna vueltas
+al escribirlo, cero defectos en el objeto— y este límite requiere que alguien **escriba
 el bypass a propósito**, no que se le escape. Habría sido incoherente seguir
 invirtiendo justo después de decir que el instrumento está sobredimensionado.
 
