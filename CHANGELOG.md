@@ -11,6 +11,40 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.136.0 — higiene: el callsite se lee con el parser, no con un regex (2026-08-23)
+
+**Primera entrada posterior a la publicación.** `c83ea4e3` está en producción: el
+CI corrió entero, publicó, y el bundle sirve esa ref exacta.
+
+Esto cierra la única deuda del dictamen final —archivado sin rework— como
+**higiene local**, no como vuelta de auditoría.
+
+### El test decía verificar el callback y nunca lo miraba
+
+```
+/fallasDeAliases\(([\s\S]{0,200}?)\)/  capturaba:
+  :103  la DECLARACIÓN de la función        ← no es un callsite
+  :249  la invocación CORTADA en el `)` de `(archivo`
+nunca vio  (archivo) => existsSync(...)     ← el callback que decía verificar
+```
+
+Sobrevivía quitando la invocación productiva **y** con un callback effectful.
+Ahora se lee con el parser: **los dos mutantes mueren, `1 f / 23 (24)` cada uno.**
+
+### 📌 Lo que me llevo, que es de método y no de test
+
+Escribí ese regex **en la misma vuelta en que retiré el AST por lexical**.
+Descartar un enfoque no lo saca de la cabeza: **lo saca del archivo**. El reflejo
+de «parsear con regex» sobrevivió a la decisión de no parsear con regex.
+
+⚠️ **Y el matiz que casi me hace evitar la herramienta correcta:** el AST se
+retiró como **oráculo** de «¿esto ejecuta?» —pregunta semántica que no puede
+decidir—. **Como parser para leer qué argumento recibe una llamada es exacto.**
+Retirar una herramienta de una pregunta no la retira de todas; al retirarla,
+conviene anotar **de qué pregunta**.
+
+**Sin push.** Queda como commit local sobre lo publicado.
+
 ## 0.135.0 — la frontera acotada también hay que medirla (2026-08-23)
 
 **Acotar era la salida correcta y la acoté mal.** La lección de la vuelta, que va

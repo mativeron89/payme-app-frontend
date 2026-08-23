@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 import { fallasDeAliases } from './aliasesLib.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
@@ -655,15 +656,45 @@ describe('🔴 la pureza de un export con callback es CONDICIONAL', () => {
      * Si alguien le pasara algo que escribe o borra, este caso se pone rojo y
      * hay que decidir —no descubrirlo tres semanas después—.
      */
-    const lib = readFileSync(LIB, 'utf8');
-    const callsites = [...lib.matchAll(/fallasDeAliases\(([\s\S]{0,200}?)\)/g)]
-      .map((m) => m[1] ?? '');
-    expect(callsites.length, 'no se encontró ningún callsite: el caso mediría en vacío')
+    /**
+     * 🔴 P105 · SE LEE CON EL PARSER, NO CON UN REGEX — y acá estuvo el defecto.
+     *
+     * Esto usaba `/fallasDeAliases\(([\s\S]{0,200}?)\)/`, y Codex midió que
+     * **no era causal**: capturaba la DECLARACIÓN de la función como si fuera un
+     * callsite, y en la invocación real **cortaba en el `)` de `(archivo`** —
+     * antes de la flecha—. **Nunca miró el callback que decía verificar.**
+     * Sobrevivía quitando la invocación productiva y con un callback effectful.
+     *
+     * ⚠️ **Y lo escribí en la misma vuelta en que retiré el AST por lexical.**
+     * Descartar un enfoque no lo saca de la cabeza: lo saca del archivo.
+     *
+     * 📌 **El matiz que casi me hace evitar la herramienta correcta:** el AST se
+     * retiró como ORÁCULO de «¿esto ejecuta?» —pregunta semántica que no puede
+     * decidir, sub y sobre-aproximaba—. **Como PARSER para leer qué argumento
+     * recibe una llamada es exacto**, que es justo lo que hace falta acá.
+     * Retirar una herramienta de una pregunta no la retira de todas.
+     */
+    const sf = ts.createSourceFile('lib.mjs', readFileSync(LIB, 'utf8'), ts.ScriptTarget.ESNext, true);
+    const callbacks: string[] = [];
+    const visitar = (n: ts.Node): void => {
+      if (
+        ts.isCallExpression(n) &&
+        ts.isIdentifier(n.expression) &&
+        n.expression.text === 'fallasDeAliases'
+      ) {
+        // El segundo argumento es `existeConfig`, el que la función invoca.
+        const cb = n.arguments[1];
+        callbacks.push(cb ? cb.getText() : '(sin segundo argumento)');
+      }
+      ts.forEachChild(n, visitar);
+    };
+    visitar(sf);
+    expect(callbacks.length, 'no se encontró ningún callsite: el caso mediría en vacío')
       .toBeGreaterThan(0);
-    for (const args of callsites) {
+    for (const cb of callbacks) {
       expect(
-        args,
-        `un callsite de \`fallasDeAliases\` pasa un callback con efectos: ${args.trim().slice(0, 80)}`,
+        cb,
+        `un callsite de \`fallasDeAliases\` pasa un callback con efectos: ${cb.replace(/\s+/g, ' ').slice(0, 80)}`,
       ).not.toMatch(/writeFileSync|rmSync|execFileSync|spawnSync|appendFileSync/);
     }
   });
