@@ -48,11 +48,22 @@ async function capturarSiCorresponde(page: Page, nombre: string): Promise<void> 
   await marco.evaluate((style) => style.parentNode?.removeChild(style));
 }
 
-async function abrirTicket(page: Page): Promise<void> {
+async function abrirTicket(page: Page, conTotalDetectado = false): Promise<void> {
   await page.addInitScript(() => {
     Math.random = () => 0.8088;
   });
   await ingresar(page);
+  if (conTotalDetectado) {
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const modulo = await import(/* @vite-ignore */ ruta);
+      const scanOriginal = modulo.api.scanTicket.bind(modulo.api);
+      modulo.api.scanTicket = async (image?: Blob) => ({
+        ...await scanOriginal(image),
+        total_detected_cents: 84000,
+      });
+    });
+  }
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   await page.getByRole('button', { name: 'Capturar', exact: true }).click();
   await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?' })).toBeVisible();
@@ -107,7 +118,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(titulo).toContainText('Roma Norte, CDMX');
     await expect(titulo.getByText('$840.00', { exact: true })).toBeVisible();
     await expect(titulo.getByRole('button', { name: /Ver el ticket/ })).toBeVisible();
-    await expect(titulo.getByText('$840.00', { exact: true })).toHaveCSS('font-size', '34px');
+    await expect(titulo.getByText('$840.00', { exact: true })).toHaveCSS('font-size', '26px');
     await expect(titulo).toHaveCSS('text-align', 'center');
 
     const stepper = page.locator('.division-stepper');
@@ -119,7 +130,60 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
 
     const total = page.getByRole('radio', { name: /Pagar el total/ });
     await expect(total.locator('.div-total-icon')).toHaveCount(1);
+
+    const abrir = titulo.getByRole('button', { name: /Ver el ticket/ });
+    await abrir.click();
+    const dialogo = page.getByRole('dialog', { name: /Ticket ·/ });
+    await expect(dialogo).toBeVisible();
+    const [dialogBox, layerBox] = await Promise.all([
+      dialogo.boundingBox(),
+      page.locator('.ticket-sheet-layer').boundingBox(),
+    ]);
+    expect((dialogBox?.height ?? Infinity) / (layerBox?.height ?? 1)).toBeLessThanOrEqual(0.581);
+    await expect(dialogo.getByText('$840.00', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.ticket-flow-scroll')).toHaveCSS('overflow-y', 'hidden');
+    await expect(page.getByRole('button', { name: 'Cerrar hoja del ticket' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toHaveCount(0);
+    await expect(abrir).toBeFocused();
+
+    await abrir.click();
+    await dialogo.evaluate((node) => {
+      const start = new Touch({ identifier: 1, target: node, clientY: 100 });
+      node.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, touches: [start] }));
+      const end = new Touch({ identifier: 1, target: node, clientY: 180 });
+      node.dispatchEvent(new TouchEvent('touchend', { bubbles: true, changedTouches: [end] }));
+    });
+    await expect(dialogo).toHaveCount(0);
+
+    await abrir.click();
+    await page.getByRole('button', { name: 'Cerrar ticket tocando fuera' }).click({ position: { x: 4, y: 4 } });
+    await expect(dialogo).toHaveCount(0);
     await capturarSiCorresponde(page, '01-ticket-division.png');
+
+  });
+
+  test('un total impreso distinto fuerza la hoja abierta sin cierres falsos', async ({ page }) => {
+    await abrirTicket(page, true);
+    const abrir = page.getByRole('button', { name: /Ver el ticket/ });
+    await abrir.click();
+    const dialogo = page.getByRole('dialog', { name: /Ticket ·/ });
+    await dialogo.getByRole('button', { name: 'Modificar ítems', exact: true }).click();
+    await dialogo.getByRole('button', { name: 'Modificar Tagliatelle Bolognese' }).click();
+    await dialogo.getByLabel('Precio por unidad').fill('196');
+
+    await expect(dialogo.getByText(/Checa que el total coincida/)).toContainText('$840.00');
+    expect(await dialogo.evaluate((node) => node.contains(document.activeElement))).toBe(true);
+    await expect(page.getByRole('button', { name: 'Cerrar hoja del ticket' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cerrar ticket tocando fuera' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeVisible();
+    await dialogo.focus();
+    await page.keyboard.press('Shift+Tab');
+    expect(await dialogo.evaluate((node) => node.contains(document.activeElement) && document.activeElement !== node)).toBe(true);
+    await dialogo.focus();
+    await page.keyboard.press('Tab');
+    expect(await dialogo.evaluate((node) => node.contains(document.activeElement) && document.activeElement !== node)).toBe(true);
   });
 
   test('Garantía usa title-card, opciones compactas y CTA circular sin tocar su gate', async ({ page }) => {

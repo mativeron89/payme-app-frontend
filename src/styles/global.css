@@ -1569,10 +1569,13 @@ body {
    (§5 bis · D). Es el único elemento oscuro de la pantalla.
    ══════════════════════════════════════════════════════════════════════════ */
 .scan-frame {
-  height: 300px;
+  width: 100%;
+  height: 400px;
+  flex: none;
   border-radius: var(--r-lg);
-  background: linear-gradient(135deg, #1a2942, #0d1829);
-  box-shadow: 0 6px 20px rgba(16, 30, 59, 0.12);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--sh-2);
   position: relative;
   display: flex;
   align-items: center;
@@ -1583,13 +1586,12 @@ body {
 /* El ícono del centro es decorativo: la instrucción la da el texto de abajo. */
 .scan-glyph {
   display: flex;
-  color: var(--white);
-  opacity: 0.3;
+  color: var(--gray-b);
 }
 .scan-corner {
   position: absolute;
-  width: 28px;
-  height: 28px;
+  width: 38px;
+  height: 38px;
   border: 3px solid var(--teal);
 }
 .scan-corner.tl {
@@ -1661,6 +1663,23 @@ body {
   line-height: var(--lh-sm);
   color: var(--text-muted);
   text-align: center;
+}
+
+.scan-title-card {
+  margin-bottom: 20px;
+}
+
+.scan-flow-scroll {
+  display: flex;
+  flex-direction: column;
+  padding-top: 0;
+}
+
+.scan-frame-slot {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
 }
 
 /* ─── Voucher OXXO / CLABE ─── */
@@ -4962,7 +4981,7 @@ h1.pay-title-lbl {
 /* P1 · Ticket + División: el contexto, el monto y el acceso al ticket son una
    sola tarjeta solapada. El detalle expandido conserva su cuerpo completo. */
 .ticket-title-card {
-  padding: var(--sp-4) 20px 18px;
+  padding: 12px 18px 14px;
   overflow: hidden;
 }
 
@@ -4986,7 +5005,7 @@ h1.pay-title-lbl {
 }
 
 .ticket-title-card .title-card-title {
-  font-size: 22px;
+  font-size: 19px;
   line-height: 1.25;
   font-weight: 800;
 }
@@ -5003,7 +5022,7 @@ h1.pay-title-lbl {
 .ticket-title-amount {
   margin-top: 6px;
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: 26px;
   line-height: 1.05;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -5380,6 +5399,16 @@ h1.pay-title-lbl {
   font-size: 13px;
 }
 
+.ticket-title-fold {
+  width: fit-content;
+  margin: 8px auto 0;
+}
+
+.ticket-title-fold .tk-fold-head {
+  min-height: 38px;
+  padding: 0 14px;
+}
+
 .ticket-flow-scroll {
   padding-top: var(--sp-4);
 }
@@ -5393,7 +5422,7 @@ h1.pay-title-lbl {
 .division-options .div-card {
   min-height: 0;
   margin-bottom: 0;
-  padding: 15px var(--sp-4);
+  padding: 12px 14px;
   border-width: 2px;
   border-color: var(--border);
   border-radius: var(--r-lg);
@@ -5405,8 +5434,8 @@ h1.pay-title-lbl {
 }
 
 .division-options .div-radio {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border-width: 2px;
 }
 
@@ -5416,19 +5445,19 @@ h1.pay-title-lbl {
 }
 
 .division-options .div-ico {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   border-radius: 14px;
 }
 
 .division-options .div-title {
-  font-size: 16.5px;
+  font-size: 15.5px;
   line-height: 1.2;
   margin-bottom: 2px;
 }
 
 .division-options .div-sub {
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.2;
 }
 
@@ -5467,12 +5496,71 @@ h1.pay-title-lbl {
   border-width: 1px;
 }
 
-.tk-fold-detail {
-  margin-bottom: var(--sp-3);
+.ticket-sheet-open > .scroll {
+  overflow: hidden;
 }
 
-.tk-fold-detail .tk-fold-body {
+.ticket-sheet-layer {
+  position: absolute;
+  inset: 0 0 calc(64px + env(safe-area-inset-bottom));
+  z-index: 18;
+}
+
+.ticket-sheet-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: rgba(16, 30, 59, 0.45);
+}
+
+.ticket-sheet {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  max-height: 58%;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-3);
+}
+
+.ticket-sheet-head {
+  flex: none;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding-left: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.ticket-sheet-head button {
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 28px;
+}
+
+.ticket-sheet-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ticket-sheet .tk-fold-body {
   padding-top: var(--sp-4);
+}
+
+.ticket-sheet .tk-foot {
+  justify-content: flex-end;
 }
 
 /* P2 · Garantía: la decisión de tarjeta se lee antes que la explicación y el

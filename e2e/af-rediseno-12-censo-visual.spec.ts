@@ -57,6 +57,11 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
   await page.getByRole('button', { name: 'Capturar', exact: true }).click();
   await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?' })).toBeVisible();
   await acreditar(page, '04-division');
+  const divisionScroll = await page.locator('.ticket-flow-scroll').evaluate((node) => ({
+    clientHeight: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+  }));
+  expect(divisionScroll.scrollHeight).toBe(divisionScroll.clientHeight);
 
   await page.getByRole('radio', { name: /Por lo que pidió cada uno/ }).click();
   const sumar = page.getByRole('button', { name: 'Un comensal más' });

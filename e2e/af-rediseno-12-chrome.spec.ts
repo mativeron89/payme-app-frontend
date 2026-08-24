@@ -44,6 +44,10 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     await expect(titulo).toHaveCSS('justify-content', 'center');
     await expect(barra.locator('..')).toHaveCSS('position', 'absolute');
     await expect(barra.locator('..')).toHaveCSS('border-top-left-radius', '24px');
+    await expect(titulo).toContainText('Encuadra el ticket dentro del marco');
+    await expect(page.locator('.scan-frame')).toHaveCSS('height', '400px');
+    await expect(page.locator('.scan-frame')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(page.locator('.scan-frame-slot')).toHaveCSS('align-items', 'center');
 
     const shell = await page.locator('.app').evaluate((node) => ({
       clientHeight: node.clientHeight,

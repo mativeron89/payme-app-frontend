@@ -172,12 +172,9 @@ export function CreateMesaFlow() {
    */
   const [ticketPulse, setTicketPulse] = useState(false);
   const ticketRef = useRef<HTMLDivElement | null>(null);
-  // El detalle se monta después de abrir el acordeón. El scroll tiene que
-  // esperar ese commit; leer el ref en el mismo click todavía devuelve null.
-  useEffect(() => {
-    if (!ticketAbierto || !ticketPulse) return;
-    ticketRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [ticketAbierto, ticketPulse]);
+  const ticketTouchStartY = useRef<number | null>(null);
+  const ticketTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const ticketCloseRef = useRef<HTMLButtonElement | null>(null);
   // Piso del CONTRATO, no inventado: `schemas/index.js` exige >= 2 en partes
   // iguales (refine sobre division_mode) y >= 1 en el resto.
   const pisoComensales = pisoDe(division);
@@ -519,6 +516,46 @@ export function CreateMesaFlow() {
     scannedTotalCents !== null && ticketValid && total !== scannedTotalCents
       ? { printed: scannedTotalCents, diff: total - scannedTotalCents }
       : null;
+  const ticketForcedOpen = totalMismatch !== null;
+
+  useEffect(() => {
+    if (!ticketAbierto && !ticketForcedOpen) return;
+    const dialog = ticketRef.current;
+    (ticketForcedOpen ? dialog : ticketCloseRef.current)?.focus();
+    const keepFocusInside = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !ticketForcedOpen) {
+        event.preventDefault();
+        setTicketAbierto(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !dialog) return;
+      const focusables = [...dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )];
+      if (focusables.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      if (document.activeElement === dialog) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', keepFocusInside);
+    return () => {
+      document.removeEventListener('keydown', keepFocusInside);
+      ticketTriggerRef.current?.focus();
+    };
+  }, [ticketAbierto, ticketForcedOpen]);
 
   function updateItem(idx: number, patch: Partial<EditItem>) {
     setEditItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -1030,26 +1067,26 @@ export function CreateMesaFlow() {
     return (
       <div className="screen has-appbar">
         <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
-        <div className="title-card">
+        <div className="title-card scan-title-card">
           {/* <h1> y no <div>: es el único título de esta pantalla. */}
           <h1 className="title-card-title">{t('Escanea el ticket')}</h1>
+          <div className="title-card-sub" aria-live="polite">
+            {scanning ? t('Subiendo la foto…') : t('Encuadra el ticket dentro del marco')}
+          </div>
         </div>
-        <div className="scroll flow-scroll">
-          <div className="scan-frame" aria-busy={scanning || undefined}>
-            <div className="scan-corner tl" />
-            <div className="scan-corner tr" />
-            <div className="scan-corner bl" />
-            <div className="scan-corner br" />
-            {scanning && <div className="scan-line" />}
-            <div className="scan-glyph" aria-hidden="true">
-              <Icon name="receipt" size={40} />
+        <div className="scroll flow-scroll scan-flow-scroll">
+          <div className="scan-frame-slot">
+            <div className="scan-frame" aria-busy={scanning || undefined}>
+              <div className="scan-corner tl" />
+              <div className="scan-corner tr" />
+              <div className="scan-corner bl" />
+              <div className="scan-corner br" />
+              {scanning && <div className="scan-line" />}
+              <div className="scan-glyph" aria-hidden="true">
+                <Icon name="receipt" size={44} />
+              </div>
             </div>
           </div>
-          {/* Un solo renglón para instrucción y estado, con `aria-live`: quien
-              no ve la pantalla también necesita enterarse de que arrancó. */}
-          <p className="scan-hint" aria-live="polite">
-            {scanning ? t('Subiendo la foto…') : t('Encuadra el ticket dentro del marco')}
-          </p>
           {error && (
             <div className="form-error" role="alert">
               {error}
@@ -1227,7 +1264,7 @@ export function CreateMesaFlow() {
     const perSlot = participants !== null && participants > 0 ? splitEqual(total, participants)[0] : total;
     const ticketVisible = ticketAbierto || !!totalMismatch;
     return (
-      <div className="screen has-appbar af-diseno-flow">
+      <div className={`screen has-appbar af-diseno-flow${ticketVisible ? ' ticket-sheet-open' : ''}`}>
         <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
         {/* «EL TICKET SUBE» — SPEC_APP.md §1.3-bis, refinamiento 2026-08-21.
             El total viaja a la tarjeta de título porque al pie, debajo del
@@ -1256,6 +1293,7 @@ export function CreateMesaFlow() {
             onAnimationEnd={() => setTicketPulse(false)}
           >
             <button
+              ref={ticketTriggerRef}
               className="tk-fold-head"
               onClick={() => setTicketAbierto((o) => !o)}
               aria-expanded={ticketVisible}
@@ -1363,11 +1401,49 @@ export function CreateMesaFlow() {
               </>
             )}
           </div>
-          {/* El acceso plegado vive dentro de la tarjeta de título. Al abrirlo,
-              el contenido íntegro del ticket sigue en el flujo scrolleable. */}
-          {ticketVisible && (
-            <div ref={ticketRef} className="card tk-fold tk-fold-detail">
-              <div className="tk-fold-body">
+        </div>
+        {ticketVisible && (
+          <div className="ticket-sheet-layer">
+            {totalMismatch ? (
+              <div className="ticket-sheet-overlay" aria-hidden="true" />
+            ) : (
+              <button
+                type="button"
+                className="ticket-sheet-overlay"
+                aria-label={t('Cerrar ticket tocando fuera')}
+                onClick={() => setTicketAbierto(false)}
+              />
+            )}
+            <div
+              ref={ticketRef}
+              className="ticket-sheet"
+              role="dialog"
+              tabIndex={-1}
+              aria-modal="true"
+              aria-labelledby="ticket-sheet-title"
+              onTouchStart={(event) => { ticketTouchStartY.current = event.touches[0]?.clientY ?? null; }}
+              onTouchEnd={(event) => {
+                const start = ticketTouchStartY.current;
+                const end = event.changedTouches[0]?.clientY;
+                ticketTouchStartY.current = null;
+                if (!totalMismatch && start !== null && end !== undefined && end - start > 50) setTicketAbierto(false);
+              }}
+            >
+              <div className="ticket-sheet-head">
+                <span id="ticket-sheet-title">{t('Ticket')} · {t('{0} consumos', editItems.length)}</span>
+                {!totalMismatch && (
+                  <button
+                    ref={ticketCloseRef}
+                    type="button"
+                    onClick={() => setTicketAbierto(false)}
+                    aria-label={t('Cerrar hoja del ticket')}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <div className="ticket-sheet-scroll">
+                <div className="tk-fold-body">
                 <div className="tk-fold-restaurant">
                   <div className="tk-fold-name">{restaurant?.name ?? t('Restaurante')}</div>
                   {restaurant?.address && (
@@ -1493,8 +1569,9 @@ export function CreateMesaFlow() {
                 </div>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+          </div>
+        )}
         <AppBottomBar
           active={null}
           above={!ticketValid ? <div className="tk-invalid">{ticketInvalidReason}</div> : undefined}
