@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "6ec93ce41506db382d48dc154e1c28d27a27b174",
+  "commit": "3d05a5af8f5f60ba9c4e93ab691cd3b36a70c931",
   "total": 79,
   "archivos": [
     {
@@ -343,8 +343,8 @@
     {
       "origen": "routes/webhooks.js",
       "destino": "routes/webhooks.js",
-      "sha256": "2266da41f03ed462f2e01e291b856259ed73658200f0f127865c2f36c982c6db",
-      "bytes": 81572
+      "sha256": "24ee5460ca8c8495e1d05e3a24880b789631471af8e24294a8808e2c041ed63f",
+      "bytes": 84695
     },
     {
       "origen": "schemas/index.js",

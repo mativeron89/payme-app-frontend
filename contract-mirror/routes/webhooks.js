@@ -24,6 +24,7 @@ const paymentProcessor = require('../services/paymentProcessor');
 const settlement = require('../services/settlement');
 const topupProcessor = require('../services/topupProcessor');
 const connectRefundProcessor = require('../services/connectRefundProcessor');
+const connectDisputeProcessor = require('../services/connectDisputeProcessor');
 const {
   assertPaymentIntentContract,
   guaranteeIntentMismatches,
@@ -48,6 +49,7 @@ const CONNECT_REPLAY_REQUIRED_EVENT_TYPES = new Set([
   'refund.created',
   'refund.updated',
   'refund.failed',
+  ...connectDisputeProcessor.DISPUTE_EVENT_TYPES,
 ]);
 
 function eventRequiresDurableReplay(event) {
@@ -107,6 +109,19 @@ function normalizedInboxObject(event) {
       pending_reason: object.pending_reason || null,
       created: object.created || null,
       metadata: paymeMetadata(object.metadata),
+    };
+  }
+  if (connectDisputeProcessor.DISPUTE_EVENT_TYPES.has(event.type)) {
+    return {
+      id: object.id || null,
+      object: object.object || null,
+      amount: object.amount ?? null,
+      charge: stripeObjectId(object.charge),
+      payment_intent: stripeObjectId(object.payment_intent),
+      currency: object.currency || null,
+      status: object.status || null,
+      created: object.created || null,
+      livemode: object.livemode,
     };
   }
   return {
@@ -1462,6 +1477,23 @@ async function processConnectRefundEvent(event, restaurant) {
   return refund.ignored ? { ignored: refund.ignored, refund } : { refund };
 }
 
+async function processConnectDisputeEvent(event, restaurant) {
+  if (!event.account || !restaurant?.id || !event.data?.object) {
+    const err = new Error('connect_dispute_identity_missing');
+    err.code = 'connect_dispute_identity_missing';
+    throw err;
+  }
+  return connectDisputeProcessor.processConnectDisputeEvent({
+    dispute: event.data.object,
+    eventId: event.id,
+    eventType: event.type,
+    eventCreated: event.created,
+    eventLivemode: event.livemode,
+    stripeAccountId: event.account,
+    restaurantId: restaurant.id,
+  });
+}
+
 async function replayConnectInboxEvent(event, restaurant) {
   const acctId = event.account;
   const piGar = event.type.startsWith('payment_intent.') ? event.data?.object : null;
@@ -1525,6 +1557,11 @@ async function replayConnectInboxEvent(event, restaurant) {
       });
     }
     return { handled: true, ...result };
+  }
+
+  if (connectDisputeProcessor.DISPUTE_EVENT_TYPES.has(event.type)) {
+    const dispute = await processConnectDisputeEvent(event, restaurant);
+    return { handled: true, dispute };
   }
 
   return { handled: true, ignored: 'event_type' };
@@ -1716,6 +1753,11 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
   // endpoint de plataforma — un pago sin procesar.
   if (!acctId) {
     logger.warn('connect_webhook_without_account', { event_id: event.id, type: event.type });
+    if (connectDisputeProcessor.DISPUTE_EVENT_TYPES.has(event.type)) {
+      return res.status(400).json({
+        received: false, error: 'connect_dispute_account_missing',
+      });
+    }
     return res.json({ received: true, ignored: 'no_account' });
   }
 
@@ -1740,10 +1782,23 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
   let connectLeaseId = null;
   try {
     const slot = await acquireConnectSlot(event);
-    if (slot.state === 'duplicate_processed') return res.json({ received: true, duplicate: true });
-    if (slot.state === 'in_progress') return res.status(503).json({ received: false, in_progress: true });
+    if (slot.state === 'duplicate_processed') {
+      if (connectDisputeProcessor.DISPUTE_EVENT_TYPES.has(event.type)) {
+        await eventLock.release();
+      }
+      return res.json({ received: true, duplicate: true });
+    }
+    if (slot.state === 'in_progress') {
+      if (connectDisputeProcessor.DISPUTE_EVENT_TYPES.has(event.type)) {
+        await eventLock.release();
+      }
+      return res.status(503).json({ received: false, in_progress: true });
+    }
     if (slot.state === 'failed_terminal') {
       logger.error('connect_webhook_failed_terminal', { event_id: event.id, type: event.type });
+      if (connectDisputeProcessor.DISPUTE_EVENT_TYPES.has(event.type)) {
+        await eventLock.release();
+      }
       return res.json({ received: true, terminal: true });
     }
     connectLeaseId = slot.leaseId;
@@ -1752,6 +1807,13 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
     if (!restaurant) {
       // Cuenta que no conocemos (huérfana de una carrera, o de otro entorno).
       logger.warn('connect_webhook_unknown_account', { event_id: event.id, account: acctId });
+      if (connectDisputeProcessor.DISPUTE_EVENT_TYPES.has(event.type)) {
+        await finishConnectSlot(
+          event.id, connectLeaseId, false, 'connect_dispute_account_unbound'
+        );
+        await eventLock.release();
+        return res.status(500).json({ received: false, retry: true });
+      }
       await finishConnectSlot(event.id, connectLeaseId, true, 'unknown_account');
       return res.json({ received: true, ignored: 'unknown_account' });
     }
@@ -1885,11 +1947,30 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
         }
         break;
       }
+      case 'charge.dispute.created':
+      case 'charge.dispute.updated':
+      case 'charge.dispute.funds_withdrawn':
+      case 'charge.dispute.funds_reinstated':
+      case 'charge.dispute.closed': {
+        const dispute = await processConnectDisputeEvent(event, restaurant);
+        logger.audit('connect_dispute_observed', {
+          event_id: event.id,
+          stripe_dispute_id: dispute.stripeDisputeId,
+          reconciliation_status: dispute.reconciliationStatus,
+          monetary_action: false,
+        });
+        break;
+      }
       default:
         logger.debug('connect_webhook_unhandled', { type: event.type, account: acctId });
     }
 
     await finishConnectSlot(event.id, connectLeaseId, true, null);
+    if (connectDisputeProcessor.DISPUTE_EVENT_TYPES.has(event.type)) {
+      // D1-E: el 2xx acredita tanto el commit de evidencia como la liberación
+      // del lock de sesión. Los hooks quedan como red de seguridad idempotente.
+      await eventLock.release();
+    }
     return res.json({ received: true });
   } catch (err) {
     logger.error('connect_webhook_failed', {
@@ -1903,6 +1984,9 @@ router.post('/stripe/connect', express.raw({ type: 'application/json' }), async 
           event_id: event.id, error: finishErr.message,
         });
       }
+    }
+    if (connectDisputeProcessor.DISPUTE_EVENT_TYPES.has(event.type)) {
+      await eventLock.release();
     }
     const status = err.code === 'webhook_event_binding_conflict' ? 400 : 500;
     return res.status(status).json({

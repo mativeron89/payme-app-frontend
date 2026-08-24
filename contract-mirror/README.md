@@ -6,27 +6,36 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-20** (bloqueante 1 de la auditoría del P12: el
-  espejo mantenía el piso 2 de `expected_participants` que el dueño ya había
-  retirado, y **la UI prometía «uno o varios» impidiendo uno**).
+- Fecha del refresh: **2026-08-24**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`6ec93ce41506db382d48dc154e1c28d27a27b174`**
-  (`feat(garantía): la garantía abandonada se muere, y sólo si de verdad murió · v2.53.0`).
+  **`3d05a5af8f5f60ba9c4e93ab691cd3b36a70c931`**
+  (`feat(disputas): persiste evidencia Connect sin mover dinero` · v2.61.0).
 - Commit que publicó el inventario autoritativo:
-  **`168066f9be6381dec93a1a21a73e9d3dae8a37e4`**
-  (`chore(garantía): declarar el barrido nuevo en la guarda del timer y republicar`). Como siempre, el
-  inventario declara el commit del contenido, no su propio commit.
+  **`22f5a5bf32990f18c25621f13cc47eede023fd5f`**
+  (`chore(contrato): republicar mirror tras D1-E`). Como siempre, el inventario
+  declara el commit del contenido, no su propio commit.
 
-⚠️ **El HEAD del dueño estaba MÁS ADELANTE (`168066f`) y NO se espejó ese:** se
-espeja **el commit que su inventario declara**, que es quien define la
-población. Medido antes de copiar: entre `6ec93ce` y su HEAD **ninguno de los
-79 archivos cambia**, así que espejar uno u otro da el mismo contenido — pero
-anclar al inventario es lo que mantiene verificable la paridad.
+⚠️ **El HEAD del dueño está un commit más adelante (`22f5a5b`) y no se espeja
+ese commit como contenido:** sólo publica el inventario. El árbol contractual
+declarado es `3d05a5a`; anclarse a él mantiene verificable la paridad.
 
 🆕 **79 archivos espejados** más este README.
 
-Este refresh agrega cinco fuentes que el consumidor necesita para el carril
-F&F y actualiza seis ya espejadas:
+Este refresh modifica una sola fuente declarada:
+
+- `routes/webhooks.js`: incorpora la ingesta durable y fail-closed de evidencia
+  de disputas Connect. El espejo sigue siendo evidencia de contrato y no se
+  importa desde `src/`; no agrega UI ni mueve dinero desde el frontend.
+
+La adopción se verificó contra la fuente antes de editar runtime del
+consumidor: **paridad 79/79** y **vigencia verde** contra App Backend HEAD
+`22f5a5bf32990f18c25621f13cc47eede023fd5f`. Eso acredita el árbol local y el
+commit publicado del dueño; no afirma deploy ni producción.
+
+### Refresh anterior · 2026-08-20 (P12 · v2.53.0)
+
+El refresh anterior agregó cinco fuentes que el consumidor necesitaba para el
+carril F&F y actualizó seis ya espejadas:
 
 - `services/signupInvitations.js` y las dos migraciones de alta/rate limit:
   `POST /auth/register` exige `invitation_token`, ligado al email, vigente y de
