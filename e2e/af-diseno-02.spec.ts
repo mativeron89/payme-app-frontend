@@ -102,9 +102,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await abrirTicket(page);
 
     const titulo = page.locator('.title-card').first();
-    const demo = page.locator('.demo-strip');
-    await expect(demo).toHaveCSS('padding-top', '7px');
-    await expect(demo).toHaveCSS('font-weight', '700');
+    await expect(page.locator('.demo-strip')).toHaveCount(0);
     await expect(titulo).toContainText('La Parolaccia');
     await expect(titulo).toContainText('Roma Norte, CDMX');
     await expect(titulo.getByText('$840.00', { exact: true })).toBeVisible();
@@ -155,8 +153,8 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
 
     const cta = page.getByRole('button', { name: 'Garantizar', exact: true });
     await expect(cta).toHaveClass(/appbar-fab/);
-    await expect(cta).toHaveCSS('width', '48px');
-    await expect(cta).toHaveCSS('height', '48px');
+    await expect(cta).toHaveCSS('width', '56px');
+    await expect(cta).toHaveCSS('height', '56px');
     await elegirSantander(page);
     await expect(cta).toBeEnabled();
     await capturarSiCorresponde(page, '02-garantia.png');
@@ -221,7 +219,10 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(page.getByText('Sofía Fernández', { exact: true })).toBeVisible();
     await expect(copiar).toHaveCSS('color', 'rgb(10, 123, 128)');
     await expect(copiar).toHaveCSS('border-top-style', 'solid');
-    await expect(page.locator('.appbar-solo .appbar-center')).toBeVisible();
+    const barra = page.getByRole('navigation', { name: 'Navegación principal' });
+    await expect(barra).toBeVisible();
+    await expect(barra.locator('[aria-current="page"]')).toHaveCount(0);
+    await expect(barra.getByRole('button', { name: 'Elegir mis ítems', exact: true })).toBeVisible();
     await capturarSiCorresponde(page, '04-compartir.png');
 
     await codigo.click();
@@ -279,7 +280,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(comprobante).toContainText('$265.50');
     await expect(comprobante.getByRole('button', { name: 'Enviar', exact: true })).toBeVisible();
     await expect(comprobante.getByRole('button', { name: 'Descargar', exact: true })).toBeVisible();
-    await expect(page.locator('.demo-strip')).toBeVisible();
+    await expect(page.locator('.demo-strip')).toHaveCount(0);
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     const [headerBox, closeBox] = await Promise.all([
       page.locator('.receipt-screen > .hdr').boundingBox(),

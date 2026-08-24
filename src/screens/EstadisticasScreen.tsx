@@ -4,6 +4,7 @@ import { api } from '../api';
 import type { StatsResponse } from '../api/types';
 import { accountRailView } from '../api/releaseGates';
 import { useWalletRail } from '../api/walletRail';
+import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
@@ -43,6 +44,7 @@ function entero(n: number | null | undefined): string {
 
 export function EstadisticasScreen() {
   const { t } = useIdioma();
+  const { session } = useAuth();
   const { walletRailEnabled, accountActivity } = useWalletRail();
   const vista = accountRailView(walletRailEnabled, accountActivity);
 
@@ -76,7 +78,10 @@ export function EstadisticasScreen() {
 
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack title={t('Mis estadísticas')} onBack={() => goBack('home')} />
+      <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => goBack('home')} />
+      <div className="title-card">
+        <h1 className="title-card-title">{t('Mis estadísticas')}</h1>
+      </div>
 
       <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>
         {!vista.showAccountActivity ? (

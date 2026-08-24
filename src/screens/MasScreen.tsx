@@ -4,13 +4,14 @@ import { useIdioma } from '../i18n/idioma';
 import { resetDemo } from '../api/mock/store';
 import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
+import { AppHeader } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
-import { Avatar, TopBar } from '../components/ui';
+import { Avatar } from '../components/ui';
 import { navigate } from '../router';
 import { useWalletRail } from '../api/walletRail';
 
 /**
- * **`Más`** — la quinta posición de la barra. `s-perfil` del spec.
+ * **`Configuración`** — la quinta posición de la barra.
  *
  * §1.9, resuelto por Diseño el 2026-08-05: **`Más` ES Perfil, no la contiene.**
  * Se evaluó que fuera un menú con una fila "Perfil" y se descartó — *un menú de
@@ -19,8 +20,9 @@ import { useWalletRail } from '../api/walletRail';
  * a ningún lado es el tratamiento que el spec ya le negó al QR de Compartir y a
  * Cuentas Asociadas.
  *
- * Identidad + email + **Mis tarjetas** + cerrar sesión. Nada de saldo, cargar,
- * transferir ni CLABE.
+ * La identidad y la foto son deliberadamente de solo lectura: el contrato
+ * vigente no permite editar nombre ni subir avatar. No se dibujan controles
+ * que prometan mutaciones inexistentes.
  */
 export function MasScreen() {
   const { t } = useIdioma();
@@ -31,7 +33,10 @@ export function MasScreen() {
 
   return (
     <div className="screen has-appbar">
-      <TopBar title={t('Más')} />
+      <AppHeader paymeId={user?.payme_id} />
+      <div className="title-card">
+        <h1 className="title-card-title">{t('Configuración')}</h1>
+      </div>
       {/* Longhands y no `padding: 16`: el shorthand inline PISA el
           `padding-bottom: 140px` de `.has-appbar .scroll`, y la última fila
           —"Cerrar sesión"— queda debajo de la barra. Está advertido en el CSS y
@@ -47,6 +52,9 @@ export function MasScreen() {
               {user.payme_id}
             </div>
           )}
+          <div className="caption" style={{ marginTop: 8 }}>
+            {t('La identidad y la foto se muestran tal como están registradas en tu cuenta.')}
+          </div>
         </div>
         {!user && (
           <div className="note note-orange" style={{ marginBottom: 12 }}>
@@ -87,8 +95,7 @@ export function MasScreen() {
               inalcanzable —el riel falla cerrado y su reactivación exige orden
               nueva— pero queda dicho, no descubierto después. */}
           {/* IDIOMA · pedido de Mati el 2026-08-10: *«necesita el mismo toggle
-              en "Más"»*. La app no tiene Configuración, así que `Más` ES el
-              equivalente del `ConfigPage` del panel.
+              en "Más"»*. Configuración conserva ese mismo control local.
 
               🔴 El segmentado va donde las otras filas ponen la flecha `→`, y es
               MÁS ANCHO que ella. En el panel, un control así en una fila llena

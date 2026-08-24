@@ -1,6 +1,4 @@
 import { useEffect, useMemo } from 'react';
-import { useIdioma } from './i18n/idioma';
-import { IS_MOCK } from './api';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ToastProvider } from './components/ui';
 import { allowsWalletRoute } from './api/releaseGates';
@@ -226,16 +224,10 @@ function Shell() {
 }
 
 export default function App() {
-  const { t } = useIdioma();
   return (
     <AuthProvider>
       <ToastProvider>
         <div className="app">
-          {IS_MOCK && (
-            <div className="demo-strip">
-              {t('Demo · datos de ejemplo, no se cobra dinero real')}
-            </div>
-          )}
           <Shell />
         </div>
       </ToastProvider>

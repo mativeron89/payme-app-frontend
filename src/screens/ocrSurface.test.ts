@@ -29,8 +29,9 @@ describe('superficie OCR consume las señales publicadas', () => {
     expect(source).not.toMatch(/ticketValid[\s\S]{0,240}lowConfidence/);
   });
 
-  it('la promesa de ticket de ejemplo sólo aparece cuando el modo es mock', () => {
-    expect(source).toContain("ocrMode === 'mock'");
-    expect(source).not.toContain('todavía no leemos la foto de verdad');
+  it('el scan no muestra promesas contextuales de demo', () => {
+    expect(source).not.toContain("ocrMode === 'mock'");
+    expect(source).not.toContain("t('todavía no leemos la foto. Usamos un ticket de ejemplo");
+    expect(source).not.toContain('scan-note');
   });
 });

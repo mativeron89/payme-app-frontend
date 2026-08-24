@@ -634,9 +634,24 @@ describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
         // persona en el estado del que más necesita poder salir.
         tag: 'AppHeaderFlow > button',
         clase: 'raw-sin-guarda',
+        identifica: (s) => expresionDe(atributo(s, 'onClick'), s.sf) === 'onBack',
         afirmar: (s) => {
           expect(expresionDe(atributo(s, 'onClick'), s.sf), 'dejó de llamar al `onBack` del llamador').toBe('onBack');
           expect(atributo(s, 'disabled'), 'la salida NO puede llevar guarda').toBeNull();
+        },
+      },
+      {
+        // La campana del chrome común permanece nombrada y táctil durante el
+        // pago, pero NO navega ni muta: el handler se limita a feedback live.
+        // La identidad exacta evita convertir esto en una excepción genérica.
+        tag: 'AppHeaderFlow > button',
+        clase: 'raw-sin-guarda',
+        identifica: (s) => expresionDe(atributo(s, 'onClick'), s.sf)
+          === "() => toast(t('Termina este paso para abrir tus avisos.'))",
+        afirmar: (s) => {
+          expect(atributoLiteral(s, 'aria-label')).toBeNull();
+          expect(expresionDe(atributo(s, 'aria-label'), s.sf)).toBe("t('Avisos')");
+          expect(atributo(s, 'disabled'), 'la campana debe responder con feedback').toBeNull();
         },
       },
       {

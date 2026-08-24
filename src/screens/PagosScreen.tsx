@@ -4,6 +4,7 @@ import { api } from '../api';
 import type { HistoryEntry } from '../api/types';
 import { useWalletRail } from '../api/walletRail';
 import { accountRailView } from '../api/releaseGates';
+import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
@@ -30,6 +31,7 @@ const PAGINA = 20;
 
 export function PagosScreen() {
   const { t } = useIdioma();
+  const { session } = useAuth();
   const { walletRailEnabled, accountActivity } = useWalletRail();
   const vista = accountRailView(walletRailEnabled, accountActivity);
 
@@ -84,7 +86,10 @@ export function PagosScreen() {
 
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack title={t('Mis pagos')} onBack={() => goBack('home')} />
+      <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => goBack('home')} />
+      <div className="title-card">
+        <h1 className="title-card-title">{t('Mis pagos')}</h1>
+      </div>
 
       <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>
         {!vista.showAccountActivity ? (

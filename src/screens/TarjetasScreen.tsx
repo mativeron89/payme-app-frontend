@@ -3,6 +3,7 @@ import { useIdioma } from '../i18n/idioma';
 import { AppHeaderBack } from '../components/AppHeader';
 import { CardsPanel } from '../components/CardsPanel';
 import { goBack } from '../router';
+import { useAuth } from '../auth/AuthContext';
 
 /**
  * **Tarjetas** — la pantalla real que lanza el acceso "Ver tarjetas" de la
@@ -19,9 +20,13 @@ import { goBack } from '../router';
  */
 export function TarjetasScreen() {
   const { t } = useIdioma();
+  const { session } = useAuth();
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack title={t('Mis tarjetas')} onBack={() => goBack('home')} />
+      <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => goBack('home')} />
+      <div className="title-card">
+        <h1 className="title-card-title">{t('Mis tarjetas')}</h1>
+      </div>
       <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>
         <CardsPanel />
       </div>

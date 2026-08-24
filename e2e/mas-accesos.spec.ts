@@ -92,7 +92,7 @@ test.describe('los accesos de Más', () => {
     await barra.getByRole('button', { name: 'Más', exact: true }).click();
 
     await expect(page).toHaveURL(/#\/mas$/);
-    await expect(page.getByRole('heading', { name: 'Más', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
     await expect(barra.getByRole('button', { name: 'Más', exact: true })).toHaveAttribute(
       'aria-current',
       'page',

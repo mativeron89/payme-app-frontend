@@ -726,4 +726,7 @@ export const EN: Record<string, string> = {
   "— PayMe divide la cuenta.": "— PayMe splits the bill.",
   "← Volver a mi cuenta": "← Back to my account",
   "Ⓖ Google Pay": "Ⓖ Google Pay",
+  "Configuración": "Settings",
+  "La identidad y la foto se muestran tal como están registradas en tu cuenta.": "Your identity and photo appear as registered on your account.",
+  "Termina este paso para abrir tus avisos.": "Finish this step to open your notifications.",
 };

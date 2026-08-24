@@ -131,6 +131,9 @@ export function AvisosScreen() {
   return (
     <div className="screen has-appbar">
       <AppHeader paymeId={session?.user?.payme_id} bellHere />
+      <div className="title-card">
+        <h1 className="title-card-title">{t('Avisos')}</h1>
+      </div>
       {/* Fuera del encabezado: es una acción sobre la lista, no identidad de la
           pantalla. Ocupa su propia fila para no empujar nada de la banda. */}
       <div className="avisos-actions">

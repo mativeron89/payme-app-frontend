@@ -46,7 +46,7 @@ import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
-import { AppBottomBar, AppBottomCta } from '../components/AppBottomBar';
+import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderFlow } from '../components/AppHeader';
 import {
   CARD_RAIL_UNAVAILABLE_COPY,
@@ -103,7 +103,7 @@ function lineTotalCents(it: EditItem): number | null {
 
 export function CreateMesaFlow() {
   const { t } = useIdioma();
-  const { accept: acceptOcr, mode: ocrMode } = useOcrRail();
+  const { accept: acceptOcr } = useOcrRail();
   const moneyRail = useMoneyRail();
   // OLA 5D · el método "Saldo PayMe" de la garantía lo habilita el BACKEND.
   const { walletRailEnabled } = useWalletRail();
@@ -1158,19 +1158,6 @@ export function CreateMesaFlow() {
               </div>
             </div>
           )}
-          {/* Este aviso era `note-amber`, y con el cartel de "foto muy grande"
-              al lado se leían como UN SOLO bloque amarillo: mismo tinte, mismo
-              borde, dos cosas distintas. Encontrado mirando la pantalla, no el
-              diff. Pasa a teal —el color informativo del sistema, el mismo de
-              la nota de la mesa garantizada— para que en Escanear el amarillo
-              signifique exactamente una cosa: algo que la persona tiene que
-              resolver ahora. */}
-          {(IS_MOCK || ocrMode === 'mock') && (
-            <div className="note note-teal scan-note">
-              <b>{t('Modo demo:')}</b>{' '}
-              {t('todavía no leemos la foto. Usamos un ticket de ejemplo para que puedas probar el resto del flujo.')}
-            </div>
-          )}
           {/* Real: abre la cámara del teléfono. POST /api/ocr es multipart y
               valida los magic bytes, así que necesita una imagen de verdad. */}
             {/* 🔴 El `accept` sale del DUEÑO del contrato, no de una lista acá.
@@ -1869,8 +1856,8 @@ export function CreateMesaFlow() {
    *    real. Fondo `#075E54`, el teal oscuro histórico de la marca y **no** el
    *    verde moderno `#25D366` que tenía — blanco sobre ese verde da 1.98:1;
    *    sobre este teal da 7.67:1.
-   *  - CTA: **variante reducida de la barra**, sólo el círculo con casa. No es
-   *    "avanzar un paso": es el cierre del flujo de armar mesa.
+   *  - CTA: barra completa sin posición activa. El centro continúa a Mis ítems
+   *    y la salida segura a Inicio permanece en la cabecera.
    *
    * **El QR queda AFUERA**, resuelto en el spec el 2026-08-04: no hay generador
    * de QR en el repo y Stripe.js es la única dependencia pre-autorizada. No se
@@ -2033,7 +2020,7 @@ export function CreateMesaFlow() {
           )}
           <InviteFriends code={code} />
         </div>
-        {/* Variante REDUCIDA de la barra. Hasta el 2026-08-13 el círculo NO
+        {/* Barra completa sin posición activa. Hasta el 2026-08-13 el círculo NO
             llevaba flecha, y el motivo estaba escrito: "no significa avanzar un
             paso, cierra el flujo". **Eso dejó de ser cierto cuando el destino
             pasó a ser Mis ítems**: ahí el organizador sí avanza, a lo único que
@@ -2049,10 +2036,9 @@ export function CreateMesaFlow() {
 
             El nombre accesible sigue siendo "Elegir mis ítems": la flecha
             resuelve a quien MIRA, y el `aria-label` a quien no. */}
-        <AppBottomCta
-          label={t('Elegir mis ítems')}
-          icon="arrow-right"
-          onClick={() => navigate('mesa', code)}
+        <AppBottomBar
+          active={null}
+          center={{ label: t('Elegir mis ítems'), icon: 'arrow-right', onClick: () => navigate('mesa', code) }}
         />
       </div>
     );

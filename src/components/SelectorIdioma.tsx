@@ -9,8 +9,8 @@ import { useIdioma } from '../i18n/idioma';
  * > "Más"»*
  *
  * Coincide con el spec de Diseño («Idioma — NUEVA 2026-08-10»): fila directa con
- * segmentado inline. **La app no tiene pantalla de Configuración, así que `Más`
- * ES el equivalente** del `ConfigPage` del panel.
+ * segmentado inline. Configuración vive en la posición `Más` y usa el mismo
+ * control sin inventar persistencia de perfil.
  *
  * ── Por qué dos botones y no un `<select>` ──
  * Son dos valores y el cambio es instantáneo; un desplegable agrega un toque sin

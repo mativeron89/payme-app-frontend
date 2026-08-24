@@ -34,7 +34,7 @@ import {
 import { AppHeader, AppHeaderFlow } from '../components/AppHeader';
 import { metadatosDelBody } from './comprobanteDelBody';
 import { filaPropina } from './propinaRecibo';
-import { AppBottomBar, AppBottomCta } from '../components/AppBottomBar';
+import { AppBottomBar } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
 import type {
   FractionRequest,
@@ -1644,7 +1644,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             defecto que el paquete señala como el que existía ANTES del
             rediseño. «Enviar» y «Descargar» bajan a acciones `--link` al pie
             de la tarjeta del comprobante, **donde está el comprobante que
-            accionan**, y el cierre queda en la barra reducida.
+            accionan**, y el cierre queda en la barra completa sin posición activa.
             ⚠️ La rama de invitado NO se toca: está durmiente desde v2.32.0 y
             mezclar su retiro con un cambio visual es cómo se cuelan errores. */}
         {isGuest ? (
@@ -1666,7 +1666,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         ) : (
           /* El círculo de casa CIERRA el flujo, no lo avanza: es el único
              lugar del paquete donde ese glifo significa terminar. */
-          <AppBottomCta label={t('Ir a Inicio')} icon="home" onClick={() => navigate('home')} />
+          <AppBottomBar
+            active={null}
+            center={{ label: t('Ir a Inicio'), icon: 'home', onClick: () => navigate('home') }}
+          />
         )}
       </div>
     );

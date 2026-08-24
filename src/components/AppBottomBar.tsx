@@ -25,9 +25,9 @@ import { navigate, type PageId } from '../router';
  * (§1.6). Textual del spec: *"El texto del nav item no es fijo en toda la app;
  * lo fijo es el componente y su posición."*
  *
- * Compartir (§1.7) no usa la barra de cinco: lleva la variante reducida de
- * abajo, `AppBottomCta` — un círculo solo con ícono de casa, porque cierra el
- * flujo en vez de avanzarlo.
+ * Compartir usa la barra completa sin posición activa. El control de salida
+ * segura a Inicio vive en la cabecera y el centro conserva la continuidad del
+ * flujo hacia Mis ítems.
  */
 
 /** Ítem activo. `null` = ninguno, que es lo correcto en los pasos de flujo. */
@@ -136,66 +136,13 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
             disabled={centro.disabled}
             aria-label={t(centro.label)}
           >
-            {/* 22px — §5 bis · E. El círculo pasó a 48px y el glifo BAJA de 24
-                a 22: la proporción del disco es la que Diseño midió, no la que
-                sale de agrandar las dos cosas juntas. */}
+            {/* 22px dentro del círculo de 56px medido por Diseño. */}
             <Icon name={centro.icon} size={22} />
           </button>
           <span className="appbar-label">{t(centro.label)}</span>
         </div>
         {RIGHT.map(item)}
       </nav>
-    </div>
-  );
-}
-
-/**
- * **Variante REDUCIDA** — hoy sólo Compartir (SPEC_APP.md §1.7, confirmada en
- * §5 el 2026-08-04: *"Compartir mantiene su variante propia y reducida (círculo
- * con casa, sin las otras cuatro posiciones)"*).
- *
- * Es el mismo bloque, la misma sombra y el mismo círculo que la barra de cinco
- * —por eso vive acá y no en la pantalla—, pero sin las cuatro posiciones y
- * **sin etiqueta**: no es navegación, es el cierre del flujo de armar mesa.
- *
- * El glifo va en BLANCO sobre `--brand` desde la enmienda del 2026-08-08
- * (antes navy, 5.77:1): son 2.84:1, por debajo del 3:1 que pide un ícono de
- * control, y es decisión de Mati con el número a la vista. El nombre accesible
- * lo lleva el `aria-label`, que es lo único que tiene: sin etiqueta visible,
- * un botón sin nombre sería un círculo mudo para quien no ve la pantalla.
- *
- * 🔴 CORRECCIÓN de lo que decía acá antes. El texto anterior presentaba el
- * `aria-label` como si compensara el contraste bajo: *"es lo único que no
- * depende de distinguir el glifo"*. **Eso es engañoso y lo escribí yo.**
- *
- * Un `aria-label` sirve a quien usa lector de pantalla. **No hace nada por
- * quien MIRA la pantalla y no distingue el glifo**, que es exactamente la
- * persona a la que afecta un contraste de 2.84:1. Son dos poblaciones
- * distintas y la etiqueta sólo alcanza a una.
- *
- * El riesgo del contraste queda ACEPTADO y sin mitigar. Escribirlo como si
- * estuviera mitigado es peor que el riesgo, porque cierra la discusión.
- */
-export function AppBottomCta({
-  label,
-  icon,
-  onClick,
-}: {
-  label: string;
-  icon: IconName;
-  onClick: () => void;
-}) {
-  return (
-    <div className="appbar-block">
-      <div className="appbar appbar-solo">
-        <div className="appbar-center">
-          <button type="button" className="appbar-fab" onClick={onClick} aria-label={label}>
-            {/* 22px, igual que la barra de cinco: §5 bis · E unifica LAS DOS
-                variantes, y ésta comparte el mismo `.appbar-fab`. */}
-            <Icon name={icon} size={22} />
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
