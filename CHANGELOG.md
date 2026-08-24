@@ -11,6 +11,27 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.137.0 — Chrome uniforme en las doce pantallas (2026-08-24)
+
+AF-REDISENO-12 adopta la geometría compartida aprobada: cabecera de 154 px,
+lockup único de 34 px con Plus Jakarta Sans y DM Sans, burbuja de título de al
+menos 83 px montada en y=112, barra de 64 px y círculo central de 56 px a
+−26 px. Conserva los tokens vigentes y no incorpora Poppins ni otra paleta.
+
+La campana aparece en el flujo sin abrir una salida durante dinero: el toque
+mantiene la URL y anuncia que primero hay que terminar el paso. Compartir y el
+comprobante usan la barra completa sin posición activa. Configuración muestra
+identidad y foto de solo lectura, mantiene allí el aviso contextual de demo y
+no promete edición de nombre o imagen que el contrato no publica.
+
+Se retiran la franja global y el aviso del scan. Los grupos continúan desde
+`GET /groups`; no se inventan impagos individuales. El selector de propina y
+sus guards conservan 0/5/10/15/20/Otro. Una regresión de navegador mide el
+chrome y los hitboxes a 375×667, prueba el feedback de la campana y limita la
+igualdad `scrollHeight === clientHeight` al shell exterior.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.136.4 — Home identifica la sesión por payme_id (2026-08-23)
 
 Por decisión visual directa de Mati, el encabezado de Inicio reemplaza el
