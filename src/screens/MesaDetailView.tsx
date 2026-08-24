@@ -139,19 +139,6 @@ export function MesaDetailView({
   const nothingLeft = nothingLeftFor(mesa);
   const esConsumo = mesa.division_mode === 'consumo';
 
-  // §1.5 · ícono de link EN VEZ del contador de paso: esta pantalla no es un
-  // paso de un flujo lineal, es donde el usuario vuelve mientras la mesa vive.
-  const shareButton = !isGuest && mesa.my_role === 'opener' && (
-    <button
-      type="button"
-      className="hdr-back"
-      aria-label={t('Copiar link de invitación')}
-      onClick={onCopyInvitationLink}
-    >
-      <Icon name="link" size={20} />
-    </button>
-  );
-
   const avisoPagoCongelado = frozenScope && (
     <div className="note note-orange" role="status" style={{ marginBottom: 12 }}>
       <b>{t('Tienes un pago sin confirmar.')}</b> {t('Puede que ya se haya cobrado. Reinténtalo tal cual antes de cambiar tu selección.')}
@@ -221,7 +208,7 @@ export function MesaDetailView({
 
   return (
     <div className="screen has-appbar">
-      <AppHeaderFlow paymeId={paymeId} onBack={onBack} action={shareButton} />
+      <AppHeaderFlow paymeId={paymeId} onBack={onBack} />
       <div className="title-card">
         <div className="title-card-title">{mesa.restaurant.name}</div>
         <div className="title-card-sub">
@@ -252,8 +239,8 @@ export function MesaDetailView({
         {avisoPagoCongelado}
         {esConsumo ? (
           <>
-            <div className="caption" style={{ marginBottom: 8 }}>
-              {t('Toca lo que consumiste. Al elegirlo queda')} <b>{t('reservado')}</b> {t('para ti.')}
+            <div className="mi-selection-copy">
+              {t('Selecciona lo que consumiste')}
             </div>
             {nothingLeft && (
               <div className="note note-amber" style={{ marginBottom: 12 }}>
@@ -372,7 +359,10 @@ export function MesaDetailView({
         {/* T-F1: el organizador puede invitar amigos in-app también acá —
             la pantalla de compartir post-crear se ve UNA sola vez. */}
         {!isGuest && mesa.my_role === 'opener' && (mesa.status === 'open' || mesa.status === 'partially_paid') && (
-          <div style={{ marginTop: 12 }}>
+          <div className="mesa-secondary-actions">
+            <button className="btn btn-ghost btn-sm btn-fit" onClick={onCopyInvitationLink}>
+              <Icon name="link" size={16} className="ico-inline" /> {t('Copiar link de invitación')}
+            </button>
             {inviteOpen ? (
               <InviteFriends code={code} />
             ) : (

@@ -310,9 +310,25 @@ body {
 
 .screen {
   flex: 1;
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.mi-selection-copy {
+  margin-bottom: var(--sp-2);
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mesa-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
 }
 
 .scroll {
@@ -5574,18 +5590,9 @@ h1.pay-title-lbl {
   font-weight: 800;
 }
 
-.gar-title-amount {
-  margin-top: 6px;
-  font-family: var(--font-display);
-  font-size: 36px;
-  line-height: 1.05;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
-
-.gar-flow-scroll {
+.has-appbar .gar-flow-scroll {
   padding-top: 18px;
+  padding-bottom: 120px;
 }
 
 .gar-flow-scroll > .sectlabel {
@@ -5735,26 +5742,20 @@ h1.pay-title-lbl {
   color: var(--link);
 }
 
-.gar-flow-scroll > .note-teal {
-  margin-top: 18px !important;
+.gar-note-fixed {
+  position: absolute;
+  right: var(--sp-4);
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  left: var(--sp-4);
+  z-index: 17;
   padding: 14px var(--sp-4);
-  border: 0;
-  border-radius: var(--r-md);
-  background: var(--info-tint);
-  color: var(--info);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 8px 22px rgba(16, 30, 59, 0.16);
+  color: var(--text);
   font-size: 13.5px;
-}
-
-.gar-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-}
-
-.gar-note > svg {
-  flex: none;
-  margin-top: 2px;
-  color: var(--info);
+  font-weight: 700;
+  text-align: center;
 }
 
 /* P3 · La confirmación bancaria conserva una jerarquía estable: contexto,

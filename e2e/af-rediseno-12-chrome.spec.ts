@@ -70,4 +70,22 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     await expect(page.locator('input[type="file"]')).toHaveCount(0);
     await expect(page.getByText('Modo demo:', { exact: true })).toBeVisible();
   });
+
+  test('Garantía deja la nota fija separada del círculo a 375 × 667', async ({ page }) => {
+    await ingresar(page);
+    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await page.getByRole('button', { name: 'Capturar', exact: true }).click();
+    await page.getByRole('radio', { name: /En partes iguales/ }).click();
+    const sumar = page.getByRole('button', { name: 'Un comensal más' });
+    for (let i = 0; i < 3; i += 1) await sumar.click();
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Garantiza la mesa', exact: true })).toBeVisible();
+
+    const [noteBox, fabBox] = await Promise.all([
+      page.locator('.gar-note-fixed').boundingBox(),
+      page.locator('.appbar-fab').boundingBox(),
+    ]);
+    expect((noteBox?.y ?? Infinity) + (noteBox?.height ?? 0)).toBeLessThan(fabBox?.y ?? 0);
+    await expect(page.locator('.gar-flow-scroll')).toHaveCSS('padding-bottom', '120px');
+  });
 });

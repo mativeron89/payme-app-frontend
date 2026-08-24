@@ -69,6 +69,12 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa', exact: true })).toBeVisible();
   await acreditar(page, '05-garantia');
+  const [noteBox, guaranteeFabBox] = await Promise.all([
+    page.locator('.gar-note-fixed').boundingBox(),
+    page.locator('.appbar-fab').boundingBox(),
+  ]);
+  expect((noteBox?.y ?? Infinity) + (noteBox?.height ?? 0)).toBeLessThan(guaranteeFabBox?.y ?? 0);
+  await expect(page.locator('.gar-flow-scroll')).toHaveCSS('padding-bottom', '120px');
   await page.getByRole('radio', { name: /Santander.*4532/ }).click();
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
@@ -77,6 +83,15 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
 
   await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
   await expect(page.getByText('Elige lo que consumiste', { exact: true })).toBeVisible();
+  await expect(page.getByText(/queda reservado/)).toHaveCount(0);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async () => undefined },
+    });
+  });
+  await page.getByRole('button', { name: 'Copiar link de invitación', exact: true }).click();
+  await expect(page.locator('.toast')).toHaveText('Link de invitación copiado ✓');
   await acreditar(page, '07-mis-items');
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();

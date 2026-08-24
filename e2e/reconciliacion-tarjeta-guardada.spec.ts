@@ -89,8 +89,18 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   // Y dice la verdad completa: la original es la que respalda el hold.
   await expect(page.getByText(/sigue respaldada por la tarjeta original/)).toBeVisible();
 
-  // Sin elección, no se reenvía: el silencio no se resuelve con la default.
-  await expect(page.getByRole('button', { name: /Reintentar esta apertura/ })).toBeDisabled();
+  // Sin elección, el círculo sigue tocable pero frena explicando: no reenvía,
+  // no navega y señala el radiogroup. Los guards de reconciliación ya pasaron;
+  // acá falta sólo un dato que la persona sí puede completar.
+  const reintentarSinTarjeta = page.getByRole('button', { name: /Reintentar esta apertura/ });
+  await expect(reintentarSinTarjeta).toBeEnabled();
+  const urlAntes = page.url();
+  const antesSinTarjeta = await mesasDelMock(page);
+  await reintentarSinTarjeta.click();
+  await expect(page.locator('.toast')).toHaveText('Elige con qué tarjeta garantizar');
+  expect(page.url()).toBe(urlAntes);
+  await expect(page.getByRole('radiogroup', { name: '¿Con qué garantizas?' })).toHaveClass(/tip-block--pulse/);
+  expect((await mesasDelMock(page)).total).toBe(antesSinTarjeta.total);
 
   // Con elección explícita sí, y sigue sin haber una segunda mesa.
   const antes = await mesasDelMock(page);

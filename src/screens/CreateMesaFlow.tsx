@@ -183,6 +183,8 @@ export function CreateMesaFlow() {
   // tarjeta); `saveCard` = checkbox "guardar" — nace DESMARCADO (Mati,
   // 2026-08-06; el porqué vive en `saveCardView.ts`).
   const [cards, setCards] = useState<PaymentMethod[]>([]);
+  const [cardChoicePulse, setCardChoicePulse] = useState(false);
+  const cardChoicesRef = useRef<HTMLDivElement | null>(null);
   /**
    * 🔴 ORDEN 1-B · `cardChoice` también puede estar SIN ELEGIR (`''`), y ese
    * estado no existía. Sus dos valores previos —el uuid de una guardada o
@@ -739,6 +741,9 @@ export function CreateMesaFlow() {
     // TERMINA respaldando la garantía.
     if (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) {
       setError(t('Elige con qué tarjeta reenviar esta apertura.'));
+      toast(t('Elige con qué tarjeta garantizar'));
+      cardChoicesRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      setCardChoicePulse(true);
       createInFlightRef.current.leave();
       return;
     }
@@ -1631,7 +1636,9 @@ export function CreateMesaFlow() {
         />
         <div className="title-card gar-title">
           <h1 className="title-card-title">{t('Garantiza la mesa')}</h1>
-          <div className="gar-title-amount">{formatMXN(total)}</div>
+          <div className="title-card-sub">
+            {t('Se retiene {0} hasta que todos paguen', formatMXN(total))}
+          </div>
         </div>
         <div className="scroll flow-scroll gar-flow-scroll">
           {error && (
@@ -1660,7 +1667,13 @@ export function CreateMesaFlow() {
                 : t('Elige con cuál reenviar.')}
             </div>
           )}
-          <div role="radiogroup" aria-labelledby="lbl-garantia">
+          <div
+            ref={cardChoicesRef}
+            role="radiogroup"
+            aria-labelledby="lbl-garantia"
+            className={cardChoicePulse ? 'tip-block--pulse' : undefined}
+            onAnimationEnd={() => setCardChoicePulse(false)}
+          >
           {/* Sin opción "Tarjeta" padre (redundante — feedback de Mati): las
               tarjetas guardadas SON las opciones. Elegir una = garantizar con
               esa (D4, sin Elements; 3DS igual). */}
@@ -1709,7 +1722,7 @@ export function CreateMesaFlow() {
               </div>
               <div className="gar-other-copy">
                 <div className="gar-other-title">
-                  {cards.length > 0 ? t('Usar otra tarjeta') : t('Tarjeta')}
+                  {t('Agregar nueva tarjeta')}
                 </div>
                 <div className="caption">{t('Puede pedir confirmación del banco')}</div>
               </div>
@@ -1779,10 +1792,9 @@ export function CreateMesaFlow() {
               Connect (v2.24): la retención puede vivir en la cuenta del
               restaurante o en la de PayMe según el restaurante. El texto no
               nombra al dueño de la retención: es verdadero en los dos rieles. */}
-          <div className="note note-teal gar-note" style={{ marginTop: 16 }}>
-            <Icon name="info" size={16} aria-hidden="true" />
-            <span>{t('Para abrir la mesa se retiene el total como garantía: el restaurante cobra sí o sí. Cuando todos pagan su parte, la retención se libera. Si alguien no paga, tu garantía cubre solo ese faltante.')}</span>
-          </div>
+        </div>
+        <div className="gar-note-fixed">
+          {t('La retención no es un cobro: si todos pagan lo suyo, se libera sola al cerrar la mesa.')}
         </div>
         <AppBottomBar
           active={null}
@@ -1801,7 +1813,6 @@ export function CreateMesaFlow() {
               !priorAttemptChecked ||
               priorAttemptCheckFailed ||
               (frozenRequiresReconciliation && !replayHabilitado) ||
-              (method === 'card' && cardChoice === SIN_TARJETA_ELEGIDA) ||
               (!frozen && method === 'card' && !cardRailAvailable) ||
               (!frozen &&
                 !IS_MOCK &&

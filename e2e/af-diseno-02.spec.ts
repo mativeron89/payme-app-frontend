@@ -190,7 +190,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await abrirGarantia(page);
 
     const titulo = page.locator('.title-card.gar-title');
-    await expect(titulo).toContainText('$840.00');
+    await expect(titulo).toContainText('Se retiene $840.00 hasta que todos paguen');
     const header = page.locator('.hdr-flow');
     const [headerBox, titleBox] = await Promise.all([header.boundingBox(), titulo.boundingBox()]);
     expect(headerBox).not.toBeNull();
@@ -202,7 +202,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(santander.locator('.gar-brand-chip')).toContainText('VISA');
     await expect(santander.locator('.gar-card-principal')).toHaveCSS('text-transform', 'uppercase');
 
-    const otra = page.getByRole('radio', { name: /Usar otra tarjeta/ });
+    const otra = page.getByRole('radio', { name: /Agregar nueva tarjeta/ });
     await expect(otra).toHaveClass(/gar-other-card/);
     await expect(otra.locator('.radio')).toHaveCount(0);
     await expect(otra.locator('.gar-other-icon')).toHaveCSS('color', 'rgb(10, 123, 128)');
@@ -219,6 +219,10 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(cta).toHaveClass(/appbar-fab/);
     await expect(cta).toHaveCSS('width', '56px');
     await expect(cta).toHaveCSS('height', '56px');
+    const nota = page.locator('.gar-note-fixed');
+    await expect(nota).toHaveText('La retención no es un cobro: si todos pagan lo suyo, se libera sola al cerrar la mesa.');
+    const [notaBox, appBox] = await Promise.all([nota.boundingBox(), page.locator('.app').boundingBox()]);
+    expect(Math.round((appBox?.y ?? 0) + (appBox?.height ?? 0) - (notaBox?.y ?? 0) - (notaBox?.height ?? 0))).toBe(104);
     await elegirSantander(page);
     await expect(cta).toBeEnabled();
     await capturarSiCorresponde(page, '02-garantia.png');
