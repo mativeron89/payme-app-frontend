@@ -4,10 +4,10 @@ import { useIdioma } from '../i18n/idioma';
 import { resetDemo } from '../api/mock/store';
 import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
-import { AppHeader } from '../components/AppHeader';
+import { AppHeaderBack } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
 import { Avatar } from '../components/ui';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
 import { useWalletRail } from '../api/walletRail';
 
 /**
@@ -33,7 +33,7 @@ export function MasScreen() {
 
   return (
     <div className="screen has-appbar">
-      <AppHeader paymeId={user?.payme_id} />
+      <AppHeaderBack paymeId={user?.payme_id} onBack={() => goBack('home')} />
       <div className="title-card">
         <h1 className="title-card-title">{t('Configuración')}</h1>
       </div>

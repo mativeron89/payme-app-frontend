@@ -109,8 +109,7 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
     await page.goto('/#/cuenta');
 
     await expect(page).toHaveURL(/#\/cuenta$/);
-    const cuerpo = await page.locator('body').innerText();
-    expect(cuerpo.length).toBeGreaterThan(100);
+    await expect(page.getByRole('heading', { name: 'Mis tarjetas', exact: true })).toBeVisible();
   });
 
   /**

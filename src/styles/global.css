@@ -298,11 +298,14 @@ body {
   /* La altura de viewport vive acá, no en .screen: si ambas la tuvieran, la
      banda de demo empujaría la página y se perdería al hacer scroll. */
   min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
   max-width: 480px; /* en desktop se ve como columna de teléfono */
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   background: var(--gray-l);
+  position: relative;
 }
 
 .screen {
@@ -1953,13 +1956,14 @@ body {
 
 /* ─── §5 bis · C · Barra inferior de cinco posiciones ─── */
 .appbar-block {
-  position: fixed;
+  position: absolute;
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
   max-width: 480px; /* mismo ancho que .app */
   background: var(--surface);
+  border-radius: 24px 24px 0 0;
   /* Sombra hacia arriba, SIN línea divisoria: la difuminada la reemplaza. */
   box-shadow: 0 -8px 22px rgba(16, 30, 59, 0.1);
   z-index: 19;
@@ -2133,7 +2137,7 @@ body {
   /* NO es rectangular: es el gesto que se toma de la referencia. */
   height: calc(154px + env(safe-area-inset-top));
   border-radius: 0 0 26px 26px;
-  padding: calc(16px + env(safe-area-inset-top)) 20px 42px;
+  padding: calc(14px + env(safe-area-inset-top)) 16px 56px;
 }
 
 /* Variante COMPACTA — solo la entrada por link (SPEC_APP.md §1.2). Menos
@@ -2271,7 +2275,7 @@ body {
   color: var(--on-dark);
   font-family: var(--font-display);
   font-size: var(--fs-sm);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .hdr-title {
@@ -2998,7 +3002,7 @@ body {
 .hdr-flow {
   border-radius: 0 0 26px 26px;
   height: calc(154px + env(safe-area-inset-top));
-  padding: calc(16px + env(safe-area-inset-top)) 20px 42px;
+  padding: calc(14px + env(safe-area-inset-top)) 16px 56px;
 }
 
 .hdr-flow .hdr-row {
@@ -3006,8 +3010,9 @@ body {
 }
 
 .hdr-row-2 {
-  margin-top: var(--sp-2);
-  min-height: var(--tap-min);
+  margin-top: 10px;
+  height: 40px;
+  min-height: 40px;
 }
 
 /* Hereda el lugar que tenía `.hdr-step` antes de que §5 bis · E retirara los
@@ -3055,12 +3060,15 @@ body {
 .title-card {
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   margin: -42px var(--sp-4) 0;
-  padding: var(--sp-4);
+  padding: 16px 18px;
   min-height: 83px;
   border-radius: var(--r-lg); /* 22px — el token ya valía lo que §E pide */
   background: var(--teal-l);
-  box-shadow: var(--sh-2);
+  box-shadow: 0 4px 16px rgba(16, 30, 59, 0.08);
   text-align: center;
 }
 

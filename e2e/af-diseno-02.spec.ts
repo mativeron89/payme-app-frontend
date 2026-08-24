@@ -163,6 +163,11 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
   test('3DS usa Volver, espera visible, tarjeta elegida y rótulo Confirmar', async ({ page }) => {
     await abrirTresDs(page);
 
+    const urlAntesDeAvisos = page.url();
+    await page.getByRole('button', { name: 'Avisos', exact: true }).click();
+    await expect(page.getByRole('status')).toHaveText('Termina este paso para abrir tus avisos.');
+    expect(page.url()).toBe(urlAntesDeAvisos);
+
     await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
     const espera = page.locator('.tds-espera');
     await expect(espera).toContainText('Esperando a tu banco');

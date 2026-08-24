@@ -31,6 +31,7 @@ test.describe('los accesos de Más', () => {
   test('la fila de tarjetas abre Mis tarjetas, no la Cuenta vieja', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mas');
+    await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
 
     // El rótulo lo decide el backend (OLA 5C · c): con el riel saldo apagado
     // —que es el único estado posible hoy— dice "Mis tarjetas".

@@ -1690,6 +1690,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         <AppHeaderFlow
           paymeId={session?.user?.payme_id}
           onBack={() => setView('detail')}
+          bellBlocked={journalPendiente || busy || !!frozenScope || frozenRequiresReconciliation}
         />
         {guestHeader}
           {/* 🔴 Defecto 2: era la MISMA tarjeta navy inventada que ya se sacó

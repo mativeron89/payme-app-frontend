@@ -26,6 +26,8 @@ test.describe('Historial (§1.10)', () => {
     // El título de la PANTALLA es "Historial"; "Mesas" es la etiqueta de la
     // barra, por espacio. El heading viejo "Mesas" murió con la TopBar.
     await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
+    await expect(page.getByText('Atajo de demo:', { exact: true })).toHaveCount(0);
 
     // El seed trae tres mesas completadas: hace 3, 9 y 16 días. Siempre caen
     // en el mes corriente y/o el anterior, así que hay AL MENOS un encabezado

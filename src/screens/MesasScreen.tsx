@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
-import { api, IS_MOCK } from '../api';
+import { api } from '../api';
 import type { HistoryEntry } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
-import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
-import { AppHeader } from '../components/AppHeader';
+import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
 import {
   agruparPorMes,
@@ -102,20 +101,17 @@ export function MesasScreen() {
 
   return (
     <div className="screen has-appbar">
-      <AppHeader
-        userName={fullName(session) ?? undefined}
+      <AppHeaderBack
+        paymeId={session?.user?.payme_id}
+        onBack={() => goBack('home')}
         unread={unread}
         onBell={() => navigate('avisos')}
       />
+      <div className="title-card">
+        <h1 className="title-card-title">{t('Historial')}</h1>
+      </div>
 
       <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16 }}>
-        {/* Píldora angosta, no la tarjeta de ancho completo: un título sin
-            total ni progreso debajo quedaba desproporcionado a todo lo ancho
-            (se probó, §1.10). --fs-h2 es el tamaño más cercano de la escala
-            de seis, no un séptimo de contrabando. */}
-        <div className="hist-pill-wrap">
-          <h1 className="hist-pill">{t('Historial')}</h1>
-        </div>
 
         {fallo && !pagos ? (
           <div className="state-error">
@@ -210,18 +206,6 @@ export function MesasScreen() {
           </>
         )}
 
-        {IS_MOCK && (
-          <div className="note note-amber" style={{ marginTop: 14 }}>
-            <b>{t('Atajo de demo:')}</b> {t('mira cómo queda una mesa que venció sin que todos pagaran y la garantía cubrió el faltante.')}
-            <button
-              className="btn btn-ghost btn-sm"
-              style={{ marginTop: 10 }}
-              onClick={() => navigate('mesa', 'PA-1099')}
-            >
-              {t('Ver mesa vencida (ejemplo) →')}
-            </button>
-          </div>
-        )}
       </div>
 
       <AppBottomBar active="mesas" />

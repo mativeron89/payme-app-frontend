@@ -4,7 +4,7 @@ import { api } from '../api';
 import type { AppNotification } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
-import { AppHeader } from '../components/AppHeader';
+import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
 import { useToast } from '../components/ui';
 import { extractApiError } from '../api/errors';
@@ -14,7 +14,7 @@ import {
   metaInvitacion,
   type InvitacionMostrable,
 } from './invitacionAdmision';
-import { navigate } from '../router';
+import { goBack, navigate } from '../router';
 import { relTime } from '../utils/format';
 
 /**
@@ -130,7 +130,7 @@ export function AvisosScreen() {
 
   return (
     <div className="screen has-appbar">
-      <AppHeader paymeId={session?.user?.payme_id} bellHere />
+      <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => goBack('home')} bellHere />
       <div className="title-card">
         <h1 className="title-card-title">{t('Avisos')}</h1>
       </div>

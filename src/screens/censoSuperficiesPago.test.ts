@@ -641,17 +641,20 @@ describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
         },
       },
       {
-        // La campana del chrome común permanece nombrada y táctil durante el
-        // pago, pero NO navega ni muta: el handler se limita a feedback live.
-        // La identidad exacta evita convertir esto en una excepción genérica.
+        // La campana del chrome común permanece nombrada y táctil. El caller
+        // acredita `bellBlocked` para la pantalla de pago: el componente da
+        // feedback en ese estado y sólo navega fuera de la guarda.
         tag: 'AppHeaderFlow > button',
         clase: 'raw-sin-guarda',
-        identifica: (s) => expresionDe(atributo(s, 'onClick'), s.sf)
-          === "() => toast(t('Termina este paso para abrir tus avisos.'))",
+        identifica: (s) => expresionDe(atributo(s, 'aria-label'), s.sf) === "t('Avisos')"
+          && (expresionDe(atributo(s, 'onClick'), s.sf)?.includes('bellBlocked') ?? false),
         afirmar: (s) => {
           expect(atributoLiteral(s, 'aria-label')).toBeNull();
           expect(expresionDe(atributo(s, 'aria-label'), s.sf)).toBe("t('Avisos')");
           expect(atributo(s, 'disabled'), 'la campana debe responder con feedback').toBeNull();
+          const handler = expresionDe(atributo(s, 'onClick'), s.sf);
+          expect(handler).toContain("toast(t('Termina este paso para abrir tus avisos.'))");
+          expect(handler).toContain("navigate('avisos')");
         },
       },
       {

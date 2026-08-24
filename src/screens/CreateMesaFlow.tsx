@@ -1547,7 +1547,11 @@ export function CreateMesaFlow() {
             de §1.3, igual que Ticket/División y Mis ítems.
             **`Paso 3 de 4` y no 4 de 5:** la fusión de §1.3-bis dejó el flujo
             en cuatro pasos, y este número tiene que seguirla. */}
-        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
+        <AppHeaderFlow
+          paymeId={session?.user?.payme_id}
+          onBack={back}
+          bellBlocked={busy || !!frozen || frozenRequiresReconciliation}
+        />
         <div className="title-card gar-title">
           <h1 className="title-card-title">{t('Garantiza la mesa')}</h1>
           <div className="gar-title-amount">{formatMXN(total)}</div>
@@ -1749,6 +1753,7 @@ export function CreateMesaFlow() {
         <AppHeaderFlow
           paymeId={session?.user?.payme_id}
           onBack={() => setStep('garantia')}
+          bellBlocked
         />
         {/* Defecto 2: el título y el subtítulo estaban sueltos en el cuerpo;
             van en la tarjeta `--teal-l`, como todo el flujo. */}

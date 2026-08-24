@@ -4,7 +4,7 @@ import { ingresar } from './_app';
 test.use({ viewport: { width: 375, height: 667 } });
 
 test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
-  test('el shell exterior no scrollea y el flujo conserva geometría y campana guardada', async ({ page }) => {
+  test('el shell exterior no scrollea y el flujo conserva geometría y campana navegable', async ({ page }) => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
 
@@ -35,6 +35,15 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     expect(backBox?.height).toBeGreaterThanOrEqual(44);
     expect(bellBox?.width).toBeGreaterThanOrEqual(44);
     expect(bellBox?.height).toBeGreaterThanOrEqual(44);
+    await expect(header).toHaveCSS('padding-left', '16px');
+    await expect(header).toHaveCSS('padding-right', '16px');
+    await expect(header.locator('.hdr-row-2')).toHaveCSS('margin-top', '10px');
+    await expect(header.locator('.hdr-back')).toHaveCSS('font-weight', '700');
+    await expect(titulo).toHaveCSS('padding-left', '18px');
+    await expect(titulo).toHaveCSS('padding-top', '16px');
+    await expect(titulo).toHaveCSS('justify-content', 'center');
+    await expect(barra.locator('..')).toHaveCSS('position', 'absolute');
+    await expect(barra.locator('..')).toHaveCSS('border-top-left-radius', '24px');
 
     const shell = await page.locator('.app').evaluate((node) => ({
       clientHeight: node.clientHeight,
@@ -42,10 +51,8 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     }));
     expect(shell.scrollHeight).toBe(shell.clientHeight);
 
-    const url = page.url();
     await header.getByRole('button', { name: 'Avisos', exact: true }).click();
-    await expect(page.getByRole('status')).toHaveText('Termina este paso para abrir tus avisos.');
-    expect(page.url()).toBe(url);
+    await expect(page).toHaveURL(/#\/avisos$/);
   });
 
   test('Configuración muestra identidad y foto sin controles de edición inventados', async ({ page }) => {

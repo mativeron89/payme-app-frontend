@@ -152,12 +152,14 @@ export function AppHeaderBack({
   onBell,
   tabs,
   compact,
+  bellHere = false,
 }: HeaderBase & {
   title?: string;
   onBack: () => void;
   paymeId?: string;
   unread?: number;
   onBell?: () => void;
+  bellHere?: boolean;
 }) {
   const { t } = useIdioma();
   const openAvisos = onBell ?? (() => navigate('avisos'));
@@ -166,10 +168,16 @@ export function AppHeaderBack({
       <div className="hdr-row">
         <PayMeLogo />
         {paymeId && <span className="hdr-id">{paymeId}</span>}
-        <button type="button" className="hdr-bell" onClick={openAvisos} aria-label={t('Avisos')}>
-          <Icon name="bell" size={22} />
-          {unread > 0 && <span className="hdr-badge" aria-label={t('{0} sin leer', unread)}>{unread}</span>}
-        </button>
+        {bellHere ? (
+          <span className="hdr-bell hdr-bell-here" role="img" aria-label={t('Estás en Avisos')}>
+            <Icon name="bell" size={22} />
+          </span>
+        ) : (
+          <button type="button" className="hdr-bell" onClick={openAvisos} aria-label={t('Avisos')}>
+            <Icon name="bell" size={22} />
+            {unread > 0 && <span className="hdr-badge" aria-label={t('{0} sin leer', unread)}>{unread}</span>}
+          </button>
+        )}
       </div>
       <div className="hdr-row hdr-row-2">
         <button type="button" className="hdr-back" onClick={onBack}>
@@ -190,9 +198,10 @@ export function AppHeaderBack({
  *     Pay Me                              payme_mx_mati
  *     ← Volver
  *
- * Fila 1: lockup + **ID del usuario** + campana. Durante el flujo la campana
- * no navega: conserva el affordance común, pero responde con feedback
- * accesible para no sacar a la persona de un paso monetario.
+ * Fila 1: lockup + **ID del usuario** + campana. La campana navega a Avisos
+ * por defecto. Sólo cuando el caller acredita un estado monetario inseguro
+ * (`bellBlocked`) conserva el toque y responde con feedback accesible sin
+ * abandonar el paso.
  * Fila 2: Volver (flecha Y texto, no sólo ícono).
  *
  * El spec la deja pendiente de confirmar como estándar de todos los pasos, y
@@ -214,6 +223,7 @@ export function AppHeaderFlow({
   backIcon = 'arrow-left',
   action,
   compact,
+  bellBlocked = false,
 }: HeaderBase & {
   /** `payme_id` de la sesión. Si falta, la fila 1 va sólo con el logo. */
   paymeId?: string;
@@ -240,6 +250,8 @@ export function AppHeaderFlow({
    * que ocupa ese lugar.
    */
   action?: ReactNode;
+  /** Bloquea la salida sólo mientras un estado monetario no puede abandonarse. */
+  bellBlocked?: boolean;
 }) {
   const { t } = useIdioma();
   const toast = useToast();
@@ -251,7 +263,10 @@ export function AppHeaderFlow({
         <button
           type="button"
           className="hdr-bell"
-          onClick={() => toast(t('Termina este paso para abrir tus avisos.'))}
+          onClick={() => {
+            if (bellBlocked) toast(t('Termina este paso para abrir tus avisos.'));
+            else navigate('avisos');
+          }}
           aria-label={t('Avisos')}
         >
           <Icon name="bell" size={22} />

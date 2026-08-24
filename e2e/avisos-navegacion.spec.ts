@@ -21,8 +21,8 @@ import { ingresar } from './_app';
  * el Atrás del navegador —que no es nuestro— sigue funcionando igual.
  */
 
-test.describe('Avisos es de primer nivel y se sale por la barra', () => {
-  test('se entra por la campana, y no queda ninguna flecha de volver', async ({ page }) => {
+test.describe('Avisos conserva salida explícita', () => {
+  test('se entra por la campana y Volver regresa a Inicio sin duplicar la campana', async ({ page }) => {
     await ingresar(page);
 
     await page.getByRole('button', { name: 'Avisos', exact: true }).click();
@@ -33,9 +33,9 @@ test.describe('Avisos es de primer nivel y se sale por la barra', () => {
     // además es lo único que dice de qué pantalla se trata — no hay título.
     await expect(page.getByRole('img', { name: 'Estás en Avisos' })).toBeVisible();
 
-    // Lo que el rediseño saca. Si alguien devuelve la cabecera de subpantalla,
-    // este recorrido lo dice con nombre y apellido.
-    await expect(page.getByRole('button', { name: 'Volver', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Volver', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page).not.toHaveURL(/#\/avisos$/);
   });
 
   test('la barra inferior es la salida, y funciona', async ({ page }) => {
