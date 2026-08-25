@@ -178,6 +178,7 @@ export interface MockState {
 let seq = 0;
 const MAX_MOCK_ID_SUFFIX = 999_999_999_999;
 const MOCK_CANONICAL_ID = /^[0-9a-f]0000000-0000-4000-8000-(\d{12})$/i;
+const MOCK_SETUP_INTENT_ID = /^seti_mock_([0-9a-f]0000000-0000-4000-8000-\d{12})$/i;
 const RESERVED_MOCK_IDS = new Set<string>();
 
 function canonicalMockId(prefix: string, suffix: number): string {
@@ -192,6 +193,14 @@ function reserveCanonicalMockId(value: unknown): void {
   if (!Number.isSafeInteger(suffix) || suffix < 1 || suffix > MAX_MOCK_ID_SUFFIX) return;
   RESERVED_MOCK_IDS.add(value.toLowerCase());
   seq = Math.max(seq, suffix);
+}
+
+/** Sólo wrappers emitidos por este mock, anclados al campo contractual exacto. */
+function reserveSemanticMockId(field: string, value: unknown): void {
+  reserveCanonicalMockId(value);
+  if (field !== 'setup_intent_id' || typeof value !== 'string') return;
+  const wrapped = MOCK_SETUP_INTENT_ID.exec(value);
+  if (wrapped) reserveCanonicalMockId(wrapped[1]);
 }
 
 export function mockId(prefix: string): string {
@@ -231,27 +240,48 @@ function syncSequenceFromPersisted(value: unknown): void {
         for (const key of Object.keys(movementDetails)) reserveCanonicalMockId(key);
       }
     }
+  } catch {
+    // Un mapa roto no impide censar las demás colecciones.
+  }
 
-    const pending: unknown[] = [value];
-    const seen = new Set<object>();
-    while (pending.length > 0) {
-      const current = pending.pop();
-      if (!current || typeof current !== 'object' || seen.has(current)) continue;
-      seen.add(current);
-      if (Array.isArray(current)) pending.push(...current);
-      else {
-        for (const [key, child] of Object.entries(current as Record<string, unknown>)) {
-          const isSemanticId = key === 'id' || (key.endsWith('_id') && key !== 'payme_id');
-          if (isSemanticId) reserveCanonicalMockId(child);
-          if (key.endsWith('Ids') && Array.isArray(child)) {
-            for (const id of child) reserveCanonicalMockId(id);
-          }
+  const pending: unknown[] = [value];
+  const seen = new Set<object>();
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current || typeof current !== 'object' || seen.has(current)) continue;
+    seen.add(current);
+    if (Array.isArray(current)) {
+      // Uno por uno: `push(...array)` supera el límite de argumentos con JSON
+      // grande y el catch anterior abandonaba todo el censo durable.
+      for (let index = current.length - 1; index >= 0; index -= 1) {
+        try {
+          const child = current[index];
           if (child && typeof child === 'object') pending.push(child);
+        } catch {
+          // Tolerancia por nodo: se conserva todo lo ya censado y se sigue.
         }
       }
+      continue;
     }
-  } catch {
-    // Conservador: se retiene el máximo ya observado y la carga continúa.
+
+    let entries: Array<[string, unknown]>;
+    try {
+      entries = Object.entries(current as Record<string, unknown>);
+    } catch {
+      continue;
+    }
+    for (const [key, child] of entries) {
+      try {
+        const isSemanticId = key === 'id' || (key.endsWith('_id') && key !== 'payme_id');
+        if (isSemanticId) reserveSemanticMockId(key, child);
+        if (key.endsWith('Ids') && Array.isArray(child)) {
+          for (const id of child) reserveSemanticMockId(key, id);
+        }
+        if (child && typeof child === 'object') pending.push(child);
+      } catch {
+        // Un campo corrupto no aborta los hermanos ni vacía el estado.
+      }
+    }
   }
 }
 

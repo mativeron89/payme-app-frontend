@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const STORAGE_KEY = 'payme_mock_state_v1';
@@ -7,6 +8,8 @@ const ORPHAN_DETAIL_KEY_ID = 'f0000000-0000-4000-8000-000000000901';
 const MAX_ID = 'f0000000-0000-4000-8000-999999999999';
 const OCCUPIED_ID = 'f0000000-0000-4000-8000-000000000004';
 const LEGACY_ID = 'h0000000-0000-4000-8000-000000000004';
+const SETUP_ID = /^seti_mock_([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12})$/i;
+const STORE_SOURCE = readFileSync(new URL('./store.ts', import.meta.url), 'utf8');
 
 function setupStorage() {
   const values = new Map<string, string>();
@@ -58,6 +61,17 @@ async function payOneEqualPart() {
     tip_cents: 0,
   }, 'user');
   return { response, state };
+}
+
+async function createSetupIntentAndPersist(idempotencyKey: string) {
+  const [{ mockCreateSetupIntent }, { persist }] = await Promise.all([
+    import('./mockApi'),
+    import('./store'),
+  ]);
+  const response = await mockCreateSetupIntent(idempotencyKey);
+  persist();
+  await Promise.resolve();
+  return response;
 }
 
 describe('allocator mock durable tras reload', () => {
@@ -141,5 +155,56 @@ describe('allocator mock durable tras reload', () => {
     expect(new Set(state.history.map((movement) => movement.id)).size).toBe(state.history.length);
     expect(state.movementDetails[MAX_ID]).toEqual(maxDetail);
     expect(state.movementDetails[response.attempt.id]?.id).toBe(response.attempt.id);
+  });
+
+  it('reserva el UUID envuelto de setup_intent_id entre dos procesos', async () => {
+    const first = await createSetupIntentAndPersist('setup-reload-first');
+    vi.resetModules();
+    const second = await createSetupIntentAndPersist('setup-reload-second');
+
+    const firstInternal = SETUP_ID.exec(first.setup_intent_id)?.[1];
+    const secondInternal = SETUP_ID.exec(second.setup_intent_id)?.[1];
+    expect(firstInternal).toMatch(UUID);
+    expect(secondInternal).toMatch(UUID);
+    expect(secondInternal).not.toBe(firstInternal);
+    expect(second.setup_intent_id).not.toBe(first.setup_intent_id);
+    expect(second.client_secret).not.toBe(first.client_secret);
+    expect(first.client_secret).toBe(`${first.setup_intent_id}_secret_mock`);
+    expect(second.client_secret).toBe(`${second.setup_intent_id}_secret_mock`);
+  });
+
+  it('el mismo wrapper en un nombre sigue siendo texto y no mueve la secuencia', async () => {
+    const persisted = await seedPersisted();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    vi.resetModules();
+    const baseline = await payOneEqualPart();
+
+    const withWrappedName = structuredClone(persisted);
+    withWrappedName.user.first_name = `seti_mock_${MAX_ID}`;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(withWrappedName));
+    vi.resetModules();
+    const named = await payOneEqualPart();
+
+    expect(named.response.attempt.id).toBe(baseline.response.attempt.id);
+    expect(named.state.user.first_name).toBe(`seti_mock_${MAX_ID}`);
+  });
+
+  it('un array enorme no aborta el censo ni reabre una colisión posterior', async () => {
+    expect(STORE_SOURCE).not.toMatch(/pending\.push\s*\(\s*\.\.\.current\s*\)/);
+    const persisted = await seedPersisted();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    vi.resetModules();
+    const baseline = await payOneEqualPart();
+
+    const withHugeArray = structuredClone(persisted);
+    withHugeArray.history[0]!.id = baseline.response.attempt.id;
+    (withHugeArray as unknown as Record<string, unknown>).nodo_corrupto = new Array(1_000_000).fill(null);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(withHugeArray));
+    vi.resetModules();
+
+    const { response, state } = await payOneEqualPart();
+    expect(response.attempt.id).toMatch(UUID);
+    expect(response.attempt.id).not.toBe(baseline.response.attempt.id);
+    expect(new Set(state.history.map((movement) => movement.id)).size).toBe(state.history.length);
   });
 });

@@ -11,6 +11,21 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.144.4 — Wrappers semánticos y censo mock sin límite de argumentos (2026-08-25)
+
+El censo reconoce, únicamente en `setup_intent_id`, el wrapper anclado
+`seti_mock_<UUID>` que emite el propio mock. Así dos procesos separados no
+repiten el UUID interno ni el `client_secret`; el mismo texto en un nombre
+sigue siendo texto libre y no altera la secuencia. No existen otros wrappers
+persistidos construidos desde `mockId` en el árbol vigente.
+
+Los arrays se recorren por índice y cada nodo falla de manera aislada. Un JSON
+grande o parcialmente corrupto ya no puede superar el límite de argumentos de
+`push(...array)` y abortar el resto del censo durable.
+
+No cambia UI, contrato, backend ni dinero real. **Sin push, deploy, red ni
+consultas a producción.**
+
 ## 0.144.3 — Censo semántico y límite seguro del allocator mock (2026-08-25)
 
 El censo durable deja de interpretar nombres, copy u otro texto libre como si
