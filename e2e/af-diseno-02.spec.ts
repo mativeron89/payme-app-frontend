@@ -143,6 +143,17 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(dialogo.getByText('$840.00', { exact: true })).toHaveCount(0);
     await expect(page.locator('.ticket-flow-scroll')).toHaveCSS('overflow-y', 'hidden');
     await expect(page.getByRole('button', { name: 'Cerrar hoja del ticket' })).toBeFocused();
+
+    // La sheet cubre también la barra (z19). Un toque físico en el centro del
+    // FAB cierra por overlay, pero jamás ejecuta Capturar/Continuar ni navega.
+    const fabBox = await page.locator('.appbar-fab').boundingBox();
+    expect(fabBox).not.toBeNull();
+    const urlAntesFab = page.url();
+    await page.mouse.click(fabBox!.x + fabBox!.width / 2, fabBox!.y + fabBox!.height / 2);
+    await expect(dialogo).toBeVisible();
+    expect(page.url()).toBe(urlAntesFab);
+    await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?' })).toBeVisible();
+
     await page.keyboard.press('Escape');
     await expect(dialogo).toHaveCount(0);
     await expect(abrir).toBeFocused();

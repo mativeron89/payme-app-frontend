@@ -5526,8 +5526,8 @@ h1.pay-title-lbl {
 
 .ticket-sheet-layer {
   position: absolute;
-  inset: 0 0 calc(64px + env(safe-area-inset-bottom));
-  z-index: 18;
+  inset: 0;
+  z-index: 20;
 }
 
 .ticket-sheet-overlay {

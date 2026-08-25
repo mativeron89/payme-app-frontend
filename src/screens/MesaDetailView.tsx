@@ -208,7 +208,7 @@ export function MesaDetailView({
 
   return (
     <div className="screen has-appbar">
-      <AppHeaderFlow paymeId={paymeId} onBack={onBack} />
+      <AppHeaderFlow paymeId={paymeId} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card">
         <div className="title-card-title">{mesa.restaurant.name}</div>
         <div className="title-card-sub">

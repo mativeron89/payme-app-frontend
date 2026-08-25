@@ -18,6 +18,13 @@ async function mesasDelMock(page: Page): Promise<{ total: number; ultimoCodigo: 
   return datos!;
 }
 
+async function expectCampanaBloqueada(page: Page): Promise<void> {
+  const url = page.url();
+  await page.getByRole('button', { name: 'Avisos', exact: true }).click();
+  await expect(page.locator('.toast')).toHaveText('Termina este paso para abrir tus avisos.');
+  expect(page.url()).toBe(url);
+}
+
 /**
  * ORDEN 2A · LA APERTURA QUE QUEDÓ COLGADA, RECORRIDA COMO LA VIVE UNA PERSONA.
  *
@@ -57,7 +64,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   // `pm_` cambia en cada invocación y por lo tanto el único que necesitaba la
   // identidad económica alineada. (Lo declaré cubierto antes de que lo
   // estuviera; ver el mensaje del commit de esta corrección.)
-  await page.getByRole('radio').filter({ hasText: 'Usar otra tarjeta' }).click();
+  await page.getByRole('radio').filter({ hasText: 'Agregar nueva tarjeta' }).click();
 
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   // Acá la mesa YA existe en `pending_auth` y el hold está puesto: el backend
@@ -73,6 +80,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   // escanear y dividir para encontrar la salida. Ahora viajan juntos.
   await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();
   await expect(page.getByText('Hay una apertura de una sesión anterior.')).toBeVisible();
+  await expectCampanaBloqueada(page);
 
   // El diagnóstico: se pregunta por la clave, no se adivina por el listado.
   await page.getByRole('button', { name: 'Revisar cómo quedó esa apertura' }).click();
@@ -91,6 +99,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   // clave, que es lo único que no puede duplicar la garantía—.
   await page.getByRole('button', { name: 'Capturar' }).click();
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
+  await expectCampanaBloqueada(page);
   await page.getByRole('radio', { name: /En partes iguales/ }).click();
   const otroMas = page.getByRole('button', { name: 'Un comensal más' });
   await otroMas.click();
@@ -105,10 +114,15 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   // materializa otro, exactamente como Stripe.js. Con el fingerprint viejo
   // —que cubría el request ENTERO— este click moría con
   // `monetary_payload_ambiguous` y el organizador quedaba sin salida.
-  // ORDEN 1-B · ninguna tarjeta viene elegida —la app ya no se la atribuye a la
-  // default— así que hay que elegir, y el CTA está muerto hasta entonces.
-  await expect(page.getByRole('button', { name: /Reintentar esta apertura/ })).toBeDisabled();
-  await page.getByRole('radio').filter({ hasText: 'Usar otra tarjeta' }).click();
+  // Ninguna tarjeta viene elegida. El CTA permanece táctil por la precisión
+  // visual vigente, pero frena antes de mutar y explica qué falta.
+  const reintentarSinTarjeta = page.getByRole('button', { name: /Reintentar esta apertura/ });
+  await expect(reintentarSinTarjeta).toBeEnabled();
+  const antesSinTarjeta = await mesasDelMock(page);
+  await reintentarSinTarjeta.click();
+  await expect(page.locator('.toast')).toHaveText('Elige con qué tarjeta garantizar');
+  expect((await mesasDelMock(page)).total).toBe(antesSinTarjeta.total);
+  await page.getByRole('radio').filter({ hasText: 'Agregar nueva tarjeta' }).click();
 
   const antes = await mesasDelMock(page);
   await page.getByRole('button', { name: /Reintentar esta apertura/ }).click();

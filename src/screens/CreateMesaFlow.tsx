@@ -1071,7 +1071,11 @@ export function CreateMesaFlow() {
   if (step === 'scan') {
     return (
       <div className="screen has-appbar">
-        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
+        <AppHeaderFlow
+          paymeId={session?.user?.payme_id}
+          onBack={back}
+          bellBlocked={!!frozen || reconciling || frozenRequiresReconciliation}
+        />
         <div className="title-card scan-title-card">
           {/* <h1> y no <div>: es el único título de esta pantalla. */}
           <h1 className="title-card-title">{t('Escanea el ticket')}</h1>
@@ -1270,7 +1274,11 @@ export function CreateMesaFlow() {
     const ticketVisible = ticketAbierto || !!totalMismatch;
     return (
       <div className={`screen has-appbar af-diseno-flow${ticketVisible ? ' ticket-sheet-open' : ''}`}>
-        <AppHeaderFlow paymeId={session?.user?.payme_id} onBack={back} />
+        <AppHeaderFlow
+          paymeId={session?.user?.payme_id}
+          onBack={back}
+          bellBlocked={!!frozen || reconciling || frozenRequiresReconciliation}
+        />
         {/* «EL TICKET SUBE» — SPEC_APP.md §1.3-bis, refinamiento 2026-08-21.
             El total viaja a la tarjeta de título porque al pie, debajo del
             stepper, había que scrollear para saber QUÉ se está dividiendo.

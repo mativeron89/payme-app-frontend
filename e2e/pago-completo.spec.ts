@@ -75,7 +75,7 @@ test.describe('el camino de pago completo', () => {
     // 🔴 §1.5 bis · ANTES DE ELEGIR NO HAY PROPINA. Acá la pantalla mostraba
     // $241.50 —base + 15 % que nadie eligió— y ése era el defecto: un número
     // en pantalla, y después en el cable, que la persona nunca decidió.
-    await expect(page.getByText('Consumos propios · $210.00', { exact: true })).toBeVisible();
+    await expect(page.getByText('Tu parte · $210.00', { exact: true })).toBeVisible();
     await expect(page.getByText('+ propina (elige abajo)')).toBeVisible();
     await expect(page.getByText('$210.00', { exact: true }).first()).toBeVisible();
 
@@ -94,7 +94,7 @@ test.describe('el camino de pago completo', () => {
 
     // Recién con la elección hecha el total incluye la propina.
     await propinas.getByRole('radio', { name: '15%', exact: true }).click();
-    await expect(page.getByText('Consumos propios · $210.00', { exact: true })).toBeVisible();
+    await expect(page.getByText('Tu parte · $210.00', { exact: true })).toBeVisible();
     await expect(page.getByText('Propina $31.50', { exact: true })).toBeVisible();
     await expect(page.getByText('$241.50', { exact: true }).first()).toBeVisible();
 

@@ -36,6 +36,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await continuar.click();
 
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+    await expect(page.locator('.title-card.pay-title')).toContainText('Tu parte · $155.00');
     const propinas = page.getByRole('radiogroup', { name: /propina/i });
     await propinas.getByRole('radio', { name: '0%', exact: true }).click();
     await page.getByRole('button', { name: 'Pagar', exact: true }).click();

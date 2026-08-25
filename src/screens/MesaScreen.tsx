@@ -1753,7 +1753,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   {formatMXN(tipPending ? itemsAmount : gross)}
                 </div>
                 <div className="pay-title-breakdown">
-                  {t('Consumos propios')} · {formatMXN(itemsAmount)}
+                  {mesa.division_mode === 'igual' ? t('Tu parte') : t('Consumos propios')} · {formatMXN(itemsAmount)}
                 </div>
                 {!tipPending && (
                   <div className="pay-title-breakdown">
