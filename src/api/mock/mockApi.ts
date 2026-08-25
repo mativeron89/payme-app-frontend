@@ -472,7 +472,8 @@ export async function mockLogin(email: string, _password: string): Promise<Store
      *    Que sea la de otra persona contradice el modelo que la demo enseña;
      *  · en un link público, cada desconocido veía el nombre propio del dueño
      *    de la demo como si fuera su identificador;
-     *  · está en el encabezado de Avisos: no hay que buscarlo.
+     *  · históricamente también aparecía en cabeceras; hoy permanece sólo en
+     *    superficies propias de sólo lectura, como Configuración.
      *
      * El comentario de `paymeIdFromName` ya prometía esta conducta —"sale de SU
      * nombre, no del usuario de ejemplo"— y `mockRegister` la cumplía. El que

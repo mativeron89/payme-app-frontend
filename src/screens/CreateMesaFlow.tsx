@@ -46,6 +46,7 @@ import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
 import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderFlow } from '../components/AppHeader';
 import {
@@ -108,7 +109,7 @@ export function CreateMesaFlow() {
   // OLA 5D · el método "Saldo PayMe" de la garantía lo habilita el BACKEND.
   const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
-  // Sólo para el ID que muestra la cabecera de flujo (SPEC_APP.md §1.3).
+  // Nombre propio visible en la cabecera; nunca cae al `payme_id`.
   const { session } = useAuth();
   const { actor, error: actorError } = useMoneyActor();
   const [step, setStep] = useState<Step>('scan');
@@ -1072,7 +1073,7 @@ export function CreateMesaFlow() {
     return (
       <div className="screen has-appbar">
         <AppHeaderFlow
-          paymeId={session?.user?.payme_id}
+          userName={fullName(session) ?? undefined}
           onBack={back}
           bellBlocked={!!frozen || reconciling || frozenRequiresReconciliation}
         />
@@ -1275,7 +1276,7 @@ export function CreateMesaFlow() {
     return (
       <div className={`screen has-appbar af-diseno-flow${ticketVisible ? ' ticket-sheet-open' : ''}`}>
         <AppHeaderFlow
-          paymeId={session?.user?.payme_id}
+          userName={fullName(session) ?? undefined}
           onBack={back}
           bellBlocked={!!frozen || reconciling || frozenRequiresReconciliation}
         />
@@ -1633,7 +1634,7 @@ export function CreateMesaFlow() {
             **`Paso 3 de 4` y no 4 de 5:** la fusión de §1.3-bis dejó el flujo
             en cuatro pasos, y este número tiene que seguirla. */}
         <AppHeaderFlow
-          paymeId={session?.user?.payme_id}
+          userName={fullName(session) ?? undefined}
           onBack={back}
           bellBlocked={busy || !!frozen || frozenRequiresReconciliation}
         />
@@ -1839,7 +1840,7 @@ export function CreateMesaFlow() {
             3DS no es un paso más del armado, es una interrupción del banco
             dentro de la garantía. */}
         <AppHeaderFlow
-          paymeId={session?.user?.payme_id}
+          userName={fullName(session) ?? undefined}
           onBack={() => setStep('garantia')}
           bellBlocked
         />
@@ -2018,7 +2019,7 @@ export function CreateMesaFlow() {
     return (
       <div className="screen has-appbar af-diseno-flow">
         <AppHeaderFlow
-          paymeId={session?.user?.payme_id}
+          userName={fullName(session) ?? undefined}
           onBack={() => navigate('home')}
           backLabel={t('Ir a Inicio')}
           backIcon="home"

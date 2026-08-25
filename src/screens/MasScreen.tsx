@@ -9,6 +9,7 @@ import { Icon } from '../components/Icon';
 import { ProfileIdentityEditor } from '../components/ProfileIdentityEditor';
 import { goBack, navigate } from '../router';
 import { useWalletRail } from '../api/walletRail';
+import { fullName } from '../utils/identity';
 import { useProfileIdentityCapability } from '../api/privateFeatures';
 
 /**
@@ -32,7 +33,7 @@ export function MasScreen() {
 
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack paymeId={user?.payme_id} onBack={() => goBack('home')} />
+      <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
       <div className="title-card">
         <h1 className="title-card-title">{t('Configuración')}</h1>
       </div>

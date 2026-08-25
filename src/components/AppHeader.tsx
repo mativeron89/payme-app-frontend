@@ -78,21 +78,14 @@ interface HeaderBase {
  */
 export function AppHeader({
   userName,
-  paymeId,
   unread = 0,
   onBell,
   bellHere = false,
   tabs,
   compact,
 }: HeaderBase & {
-  /** Nombre COMPLETO (§1.1). Trunca con elipsis; nunca empuja la campana. */
+  /** Nombre COMPLETO editable de la sesión. Trunca; nunca empuja la campana. */
   userName?: string;
-  /**
-   * `payme_id`, para las pantallas que piden la identidad corta en vez del
-   * nombre: §1.8 Avisos. Va en el MISMO slot y con el mismo tratamiento — es la
-   * misma ranura de identidad, no una fila nueva.
-   */
-  paymeId?: string;
   unread?: number;
   onBell?: () => void;
   /**
@@ -107,7 +100,7 @@ export function AppHeader({
   bellHere?: boolean;
 }) {
   const { t } = useIdioma();
-  const identidad = userName ?? paymeId;
+  const identidad = userName?.trim() || undefined;
   const openAvisos = onBell ?? (() => navigate('avisos'));
   return (
     <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
@@ -147,7 +140,7 @@ export function AppHeader({
 export function AppHeaderBack({
   title,
   onBack,
-  paymeId,
+  userName,
   unread = 0,
   onBell,
   tabs,
@@ -156,18 +149,20 @@ export function AppHeaderBack({
 }: HeaderBase & {
   title?: string;
   onBack: () => void;
-  paymeId?: string;
+  /** Nombre COMPLETO editable de la sesión; sin fallback a `payme_id`. */
+  userName?: string;
   unread?: number;
   onBell?: () => void;
   bellHere?: boolean;
 }) {
   const { t } = useIdioma();
+  const identidad = userName?.trim() || undefined;
   const openAvisos = onBell ?? (() => navigate('avisos'));
   return (
     <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
       <div className="hdr-row">
         <PayMeLogo />
-        {paymeId && <span className="hdr-id">{paymeId}</span>}
+        {identidad && <span className="hdr-user">{identidad}</span>}
         {bellHere ? (
           <span className="hdr-bell hdr-bell-here" role="img" aria-label={t('Estás en Avisos')}>
             <Icon name="bell" size={22} />
@@ -195,11 +190,11 @@ export function AppHeaderBack({
  * Variante de FLUJO — la tercera, que introduce SPEC_APP.md §1.3 y que no es
  * ninguna de las dos de §5 bis · A. Dos filas dentro de la misma banda navy:
  *
- *     Pay Me                              payme_mx_mati
+ *     Pay Me                              Mati Verón
  *     ← Volver
  *
- * Fila 1: lockup + **ID del usuario** + campana. La campana navega a Avisos
- * por defecto. Sólo cuando el caller acredita un estado monetario inseguro
+ * Fila 1: lockup + **nombre completo editable** + campana. La campana navega
+ * a Avisos por defecto. Sólo cuando el caller acredita un estado monetario inseguro
  * (`bellBlocked`) conserva el toque y responde con feedback accesible sin
  * abandonar el paso.
  * Fila 2: Volver (flecha Y texto, no sólo ícono).
@@ -217,7 +212,7 @@ export function AppHeaderBack({
  * progreso SIN números. No este prop de vuelta.
  */
 export function AppHeaderFlow({
-  paymeId,
+  userName,
   onBack,
   backLabel = 'Volver',
   backIcon = 'arrow-left',
@@ -225,8 +220,8 @@ export function AppHeaderFlow({
   compact,
   bellBlocked = false,
 }: HeaderBase & {
-  /** `payme_id` de la sesión. Si falta, la fila 1 va sólo con el logo. */
-  paymeId?: string;
+  /** Nombre COMPLETO editable. Si falta, la fila 1 va sólo con el logo. */
+  userName?: string;
   onBack: () => void;
   /**
    * Qué dice y qué ícono lleva el control de la fila 2. Por defecto retrocede.
@@ -255,11 +250,12 @@ export function AppHeaderFlow({
 }) {
   const { t } = useIdioma();
   const toast = useToast();
+  const identidad = userName?.trim() || undefined;
   return (
     <header className={`hdr hdr-flow ${compact ? 'hdr-compact' : ''}`}>
       <div className="hdr-row">
         <PayMeLogo />
-        {paymeId && <span className="hdr-id">{paymeId}</span>}
+        {identidad && <span className="hdr-user">{identidad}</span>}
         <button
           type="button"
           className="hdr-bell"

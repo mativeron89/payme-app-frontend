@@ -45,6 +45,7 @@ import type {
   PaymentType,
 } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { fullName } from '../utils/identity';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
 import {
   atribucionInicial,
@@ -1534,7 +1535,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       <div className="screen has-appbar receipt-screen af-diseno-flow">
         {/* AF-REDISENO-12 · comprobante usa la cabecera común de dos filas.
             Volver cierra el flujo hacia Inicio: nunca reabre ni deshace el pago. */}
-        <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => navigate('home')} />
+        <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => navigate('home')} />
           {/* La burbuja cierra el flujo con título y subtítulo. El tilde y el
               importe viven una sola vez, dentro del comprobante. */}
           <div className="title-card recibo-cierre">
@@ -1679,7 +1680,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             del sistema»* — un ícono que no hace nada en la pantalla donde se
             paga sugiere una garantía que nadie prometió. */}
         <AppHeaderFlow
-          paymeId={session?.user?.payme_id}
+          userName={fullName(session) ?? undefined}
           onBack={() => setView('detail')}
           bellBlocked={journalPendiente || busy || !!frozenScope || frozenRequiresReconciliation}
         />
@@ -2206,7 +2207,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     <MesaDetailView
       mesa={mesa}
       code={code}
-      paymeId={session?.user?.payme_id}
+      userName={fullName(session) ?? undefined}
       isGuest={isGuest}
       guestHeader={guestHeader}
       selected={selected}

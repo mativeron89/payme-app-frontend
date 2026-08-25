@@ -11,6 +11,7 @@ import { Icon } from '../components/Icon';
 import { goBack } from '../router';
 import { formatMXN } from '../utils/format';
 import { agruparPorMes } from './pagosView';
+import { fullName } from '../utils/identity';
 
 /**
  * **Pagos** — la pantalla real que lanza el acceso "Ver pagos" de la pestaña
@@ -86,7 +87,7 @@ export function PagosScreen() {
 
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => goBack('home')} />
+      <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
       <div className="title-card">
         <h1 className="title-card-title">{t('Mis pagos')}</h1>
       </div>

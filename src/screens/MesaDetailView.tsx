@@ -46,8 +46,8 @@ import {
 export interface MesaDetailViewProps {
   mesa: MesaDetail;
   code: string;
-  /** `payme_id` de la sesión, para la fila 1 de la cabecera. */
-  paymeId?: string;
+  /** Nombre completo editable de la sesión, para la fila 1 de la cabecera. */
+  userName?: string;
   /** Siempre `false` desde el cierre del pago sin cuenta — ver `MesaScreen`. */
   isGuest: boolean;
   guestHeader: ReactNode;
@@ -110,7 +110,7 @@ function rowTag(state: RowState, item: MesaItem, t: (s: string, ...a: unknown[])
 export function MesaDetailView({
   mesa,
   code,
-  paymeId,
+  userName,
   isGuest,
   guestHeader,
   selected,
@@ -208,7 +208,7 @@ export function MesaDetailView({
 
   return (
     <div className="screen has-appbar">
-      <AppHeaderFlow paymeId={paymeId} onBack={onBack} bellBlocked={busy || !!frozenScope} />
+      <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card">
         <div className="title-card-title">{mesa.restaurant.name}</div>
         <div className="title-card-sub">

@@ -11,6 +11,24 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.141.2 — Nombre completo en cabeceras autenticadas (2026-08-25)
+
+Las tres variantes compartidas de cabecera muestran ahora el nombre y apellido
+editables de la sesión, sin usar `payme_id` como fuente ni como fallback. Los
+17 montajes autenticados consumen la misma proyección `fullName(session)`; si
+el nombre no está presentable, la banda conserva sólo el logo. Los tres
+montajes previos a tener sesión siguen anónimos y los handles de otras personas
+no cambian.
+
+La regresión causal cubre las tres variantes, el censo completo de call sites,
+la propagación observable de un cambio de perfil en la misma pestaña,
+persistencia para reload y actualización cross-tab. Home verifica además
+320/390/480 px, elipsis, campana, badge y pestañas sin solape ni exposición del
+`payme_id` propio. No se activa `profile_identity`, no cambia el contrato y no
+se toca dinero.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.141.1 — Mirror de cierre cross-worker (2026-08-25)
 
 Adopta el inventario owner-first de App Backend v2.63.5: 85 archivos desde el

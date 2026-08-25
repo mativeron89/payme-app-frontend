@@ -3,6 +3,7 @@ import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import type { AppNotification } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
@@ -26,7 +27,7 @@ import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
  *
  * SPEC_APP.md §1.8, aplicado. Lo que cambia respecto de lo construido y por qué:
  *
- *  - **Cabecera de dos filas con Volver.** Logo + `payme_id` + campana en la
+ *  - **Cabecera de dos filas con Volver.** Logo + nombre completo + campana en la
  *    primera fila y la navegación explícita en la segunda. La campana queda
  *    presente pero no es interactiva dentro de su propio destino (`bellHere`).
  *  - **"Marcar leídos" baja del encabezado**: es una acción sobre la lista, no
@@ -130,7 +131,7 @@ export function AvisosScreen() {
 
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => goBack('home')} bellHere />
+      <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} bellHere />
       <div className="title-card">
         <h1 className="title-card-title">{t('Notificaciones')}</h1>
       </div>

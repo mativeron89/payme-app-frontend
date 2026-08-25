@@ -3190,20 +3190,6 @@ body {
   align-items: center;
 }
 
-/* El ID del usuario, no su nombre: en el flujo identifica la cuenta con la que
-   se está armando la mesa. Trunca antes de empujar nada. */
-.hdr-id {
-  margin-left: 0;
-  min-width: 0;
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--on-dark-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* La tarjeta de título, montada sobre la banda. Lleva SIEMPRE el título
    centrado; lo que va debajo depende de cada pantalla y puede no haber nada
    (§1.4). En División va en --teal-l, no blanca. */

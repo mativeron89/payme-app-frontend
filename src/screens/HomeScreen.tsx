@@ -7,6 +7,7 @@ import { navigate } from '../router';
 import { readUnconfirmed, scopeForActor, useMoneyActor } from '../api/idempotency';
 import { useWalletRail } from '../api/walletRail';
 import { countdownLong, formatMXN } from '../utils/format';
+import { fullName } from '../utils/identity';
 import { mesaStatusLabel, walletTxIcon, walletTxLabel } from '../utils/labels';
 import { etiquetaMasMesas, ordenarPorUrgencia } from './homeMesasView';
 import { Icon } from '../components/Icon';
@@ -175,7 +176,7 @@ export function HomeScreen() {
   return (
     <div className="screen has-appbar">
       <AppHeader
-        paymeId={session?.user?.payme_id}
+        userName={fullName(session) ?? undefined}
         unread={unread}
         onBell={() => navigate('avisos')}
         tabs={<BubbleTabs tabs={TABS.map((x) => ({ ...x, label: t(x.label) }))} active={tab} onSelect={(id) => setTab(id as TabId)} />}

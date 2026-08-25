@@ -234,6 +234,7 @@ export function SocialScreen() {
     return (
       <div className="screen has-appbar">
         <AppHeaderBack
+          userName={fullName(session) ?? undefined}
           title={t('{0} {1}', detail.group.icon, detail.group.name)}
           onBack={() => setDetail(null)}
         />

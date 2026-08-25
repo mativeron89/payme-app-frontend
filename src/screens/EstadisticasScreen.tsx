@@ -11,6 +11,7 @@ import { Icon } from '../components/Icon';
 import { goBack } from '../router';
 import { formatMXN } from '../utils/format';
 import { categoryLabel } from '../utils/labels';
+import { fullName } from '../utils/identity';
 
 /**
  * **Estadísticas** — la pantalla real que lanza la pestaña del mismo nombre
@@ -78,7 +79,7 @@ export function EstadisticasScreen() {
 
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => goBack('home')} />
+      <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
       <div className="title-card">
         <h1 className="title-card-title">{t('Mis estadísticas')}</h1>
       </div>

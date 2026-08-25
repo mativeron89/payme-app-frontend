@@ -5,6 +5,7 @@ import type { HistoryEntry } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
+import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
@@ -102,7 +103,7 @@ export function MesasScreen() {
   return (
     <div className="screen has-appbar">
       <AppHeaderBack
-        paymeId={session?.user?.payme_id}
+        userName={fullName(session) ?? undefined}
         onBack={() => goBack('home')}
         unread={unread}
         onBell={() => navigate('avisos')}

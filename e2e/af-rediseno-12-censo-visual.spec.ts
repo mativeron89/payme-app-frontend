@@ -19,7 +19,7 @@ async function acreditar(
   const nav = page.getByRole('navigation', { name: 'Navegación principal' });
   const fab = nav.locator('.appbar-fab');
   const mark = header.locator('.hdr-mark');
-  const identity = header.locator('.hdr-user, .hdr-id').first();
+  const identity = header.locator('.hdr-user').first();
   const bell = header.locator('.hdr-bell');
   const [box, headerBox, navBox, fabBox, markBox, identityBox, bellBox] = await Promise.all([
     app.boundingBox(), header.boundingBox(), nav.boundingBox(), fab.boundingBox(),

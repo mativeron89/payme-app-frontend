@@ -4,6 +4,7 @@ import { AppHeaderBack } from '../components/AppHeader';
 import { CardsPanel } from '../components/CardsPanel';
 import { goBack } from '../router';
 import { useAuth } from '../auth/AuthContext';
+import { fullName } from '../utils/identity';
 
 /**
  * **Tarjetas** — la pantalla real que lanza el acceso "Ver tarjetas" de la
@@ -23,7 +24,7 @@ export function TarjetasScreen() {
   const { session } = useAuth();
   return (
     <div className="screen has-appbar">
-      <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => goBack('home')} />
+      <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
       <div className="title-card">
         <h1 className="title-card-title">{t('Mis tarjetas')}</h1>
       </div>

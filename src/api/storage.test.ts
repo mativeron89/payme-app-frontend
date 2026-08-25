@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { fullName } from '../utils/identity';
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -93,6 +94,32 @@ describe('sesión observable y CAS', () => {
 
     expect(observed).toEqual(['family-1', 'family-2']);
     expect(api.isCurrentSession(first)).toBe(false);
+    unsubscribe();
+  });
+
+  it('la CAS usada por adoptUser publica el nombre y persiste para reload/cross-tab', () => {
+    const original = {
+      ...stored('a'),
+      user: { ...stored('a').user, first_name: 'Mati', last_name: 'Verón' },
+    };
+    const renamed = {
+      ...original,
+      user: { ...original.user, first_name: 'Renata', last_name: 'Nueva' },
+    };
+    const observed: Array<string | null> = [];
+    const unsubscribe = api.subscribeSession(() => observed.push(fullName(api.loadSession())));
+
+    api.saveSession(original);
+    expect(api.replaceCurrentSession(original, renamed)).toBe(true);
+    expect(observed).toEqual(['Mati Verón', 'Renata Nueva']);
+    expect(fullName(api.loadSession())).toBe('Renata Nueva');
+
+    storage.setItem('payme_app_session', JSON.stringify({
+      ...renamed,
+      user: { ...renamed.user, first_name: 'Sofía', last_name: 'Fernández' },
+    }));
+    fakeWindow.emitStorage('payme_app_session');
+    expect(observed.at(-1)).toBe('Sofía Fernández');
     unsubscribe();
   });
 
