@@ -11,6 +11,15 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.144.5 — Fixtures privados compatibles con el gate de secretos (2026-08-25)
+
+Los tokens ficticios de la regresión de detalle privado se construyen en
+runtime. Conservan exactamente la cobertura de autorización y evitan que una
+asignación literal con forma de credencial bloquee correctamente el CI público.
+
+No cambia código de producción, contrato, UI ni dinero. El primer CI remoto de
+`0.144.4` cortó en la auditoría de secretos y no llegó a publicar.
+
 ## 0.144.4 — Wrappers semánticos y censo mock sin límite de argumentos (2026-08-25)
 
 El censo reconoce, únicamente en `setup_intent_id`, el wrapper anclado
