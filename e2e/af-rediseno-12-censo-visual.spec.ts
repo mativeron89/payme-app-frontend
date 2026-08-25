@@ -45,9 +45,20 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
   await page.addInitScript(() => { Math.random = () => 0.8088; });
   await ingresar(page);
   await acreditar(page, '01-inicio', false);
+  const cuentaTab = page.getByRole('tab', { name: 'Cuenta', exact: true });
+  await expect(cuentaTab).toHaveCSS('height', '40px');
+  await expect(cuentaTab).toHaveCSS('padding-left', '18px');
+  await expect(cuentaTab).toHaveCSS('border-top-left-radius', '12px');
+  await expect(page.getByRole('tab', { name: 'Estadísticas', exact: true })).toHaveCSS('margin-left', '46px');
+  await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toHaveCSS('margin-right', '18px');
+  await expect(page.locator('.mounted-card')).toHaveCSS('border-top-left-radius', '0px');
 
   await page.getByRole('button', { name: 'Avisos', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Avisos', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Notificaciones', exact: true })).toBeVisible();
+  const garantiaAgregada = page.locator('.aviso-row--guarantee');
+  await expect(garantiaAgregada).toHaveCount(1);
+  await expect(garantiaAgregada).toHaveCSS('background-color', 'rgb(254, 242, 242)');
+  await expect(garantiaAgregada).not.toContainText(/Luis|Valeria|Quién no pagó/);
   await acreditar(page, '02-notificaciones');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
 
@@ -96,7 +107,8 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pagas solo tu parte', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagar mi parte', exact: true })).toBeVisible();
+  await expect(page.locator('.title-card.pay-title')).toContainText('Consumos propios · $255.00');
   await acreditar(page, '08-pago');
   await page.getByRole('radio', { name: '5%', exact: true }).click();
   await page.getByRole('button', { name: 'Lupita', exact: true }).click();
@@ -106,6 +118,8 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
 
   await page.goto('/#/mas');
   await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
+  await expect(page.locator('.config-card .list-row').first()).toHaveCSS('height', '60px');
+  await expect(page.locator('.config-card').getByText('Idioma', { exact: true }).locator('..').locator('svg')).toHaveCount(1);
   await acreditar(page, '10-configuracion');
   await page.goto('/#/mesas');
   await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();

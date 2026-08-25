@@ -13,12 +13,9 @@ import { useWalletRail } from '../api/walletRail';
 /**
  * **`Configuración`** — la quinta posición de la barra.
  *
- * §1.9, resuelto por Diseño el 2026-08-05: **`Más` ES Perfil, no la contiene.**
- * Se evaluó que fuera un menú con una fila "Perfil" y se descartó — *un menú de
- * una sola fila útil agrega fricción sin agregar nada* — y **"configuración" no
- * entra**: cero spec, cero pantalla, cero contrato detrás. Una fila que no lleva
- * a ningún lado es el tratamiento que el spec ya le negó al QR de Compartir y a
- * Cuentas Asociadas.
+ * La revisión AF-REDISENO-12 la define como **Configuración** con identidad,
+ * idioma, tarjetas y cierre de sesión. No incorpora controles de perfil que el
+ * contrato vigente no pueda cumplir.
  *
  * La identidad y la foto son deliberadamente de solo lectura: el contrato
  * vigente no permite editar nombre ni subir avatar. No se dibujan controles
@@ -61,7 +58,7 @@ export function MasScreen() {
             {t('Tus datos van a aparecer aquí en cuanto termines de crear tu cuenta.')}
           </div>
         )}
-        <div className="card" style={{ marginBottom: 12 }}>
+        <div className="card config-card" style={{ marginBottom: 12 }}>
           {user && (
             <div className="list-row" style={{ cursor: 'default' }}>
               <span><Icon name="mail" size={16} /></span>
@@ -104,10 +101,10 @@ export function MasScreen() {
               elemento nuevo. Acá se verificó con CAPTURA a 375 px, en los dos
               idiomas.
 
-              Ícono `settings` y no `globe`: `globe` no existe en `Icon.tsx`, y
-              inventarlo era trabajo de diseño que nadie pidió. */}
+              El globo es parte del set SVG propio: no agrega dependencias ni
+              cambia el control segmentado vigente. */}
           <div className="list-row" style={{ cursor: 'default' }}>
-            <span><Icon name="settings" size={16} /></span>
+            <span><Icon name="globe" size={16} /></span>
             <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
               {t('Idioma')}
             </div>

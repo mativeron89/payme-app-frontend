@@ -23,17 +23,13 @@ import { relTime } from '../utils/format';
  *
  * SPEC_APP.md §1.8, aplicado. Lo que cambia respecto de lo construido y por qué:
  *
- *  - **Cabecera de PRIMER NIVEL, y eso NO es cosmética: es navegación.** Se
- *    llega por la campana, no por la barra, así que la pantalla deja de tener
- *    flecha de volver. Logo + `payme_id` + campana en `--brand` sin badge —
- *    naranja porque ya estás adentro; el badge cuenta lo que no viste, y acá lo
- *    estás viendo. La salida es cualquiera de los cinco ítems de la barra, que
- *    §1.8 nombra explícitamente como la forma de salir. El botón Atrás del
- *    navegador sigue funcionando igual: el router es de hash y no se tocó.
+ *  - **Cabecera de dos filas con Volver.** Logo + `payme_id` + campana en la
+ *    primera fila y la navegación explícita en la segunda. La campana queda
+ *    presente pero no es interactiva dentro de su propio destino (`bellHere`).
  *  - **"Marcar leídos" baja del encabezado**: es una acción sobre la lista, no
  *    parte de la identidad de la pantalla.
- *  - **Sin tarjeta de título**, textual del spec: se probó una que decía
- *    "Avisos" y se sacó.
+ *  - **Tarjeta de título `Notificaciones`**, separada de la sección homónima
+ *    que agrupa el inbox debajo de las invitaciones.
  *  - **La tarjeta de invitación deja de ser `card` blanca**: fondo `--teal-l` y
  *    borde `--action-2`, que es lo que la separa del resto de la lista. El
  *    texto va en **dos líneas** —"{Nombre} te invitó a" / "{Restaurante}"— y
@@ -132,7 +128,7 @@ export function AvisosScreen() {
     <div className="screen has-appbar">
       <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => goBack('home')} bellHere />
       <div className="title-card">
-        <h1 className="title-card-title">{t('Avisos')}</h1>
+        <h1 className="title-card-title">{t('Notificaciones')}</h1>
       </div>
       {/* Fuera del encabezado: es una acción sobre la lista, no identidad de la
           pantalla. Ocupa su propia fila para no empujar nada de la banda. */}
@@ -227,7 +223,10 @@ export function AvisosScreen() {
           {notifs?.map((n) => {
             const sinLeer = !n.read_at;
             return (
-              <div key={n.id} className="card card-p aviso-row">
+              <div
+                key={n.id}
+                className={`card card-p aviso-row${n.type === 'mesa_shortfall_charged' || n.type === 'mesa_garantia_impagos' ? ' aviso-row--guarantee' : ''}`}
+              >
                 <span
                   className={`aviso-dot ${sinLeer ? '' : 'off'}`}
                   aria-hidden={sinLeer ? undefined : 'true'}

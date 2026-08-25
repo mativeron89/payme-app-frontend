@@ -23,7 +23,7 @@ test('la propina desmedida pide reconfirmar: editar conserva el valor, y "Sí, p
 
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
 
   // Propina a mano: $700 > 3 × $210 = $630.
   const propinas = page.getByRole('radiogroup', { name: /propina/i });

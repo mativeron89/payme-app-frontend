@@ -241,7 +241,7 @@ export function InviteFriends({ code }: { code: string }) {
 
       {groups.length > 0 && (
         <>
-          <h2 className="sectlabel inv-groups-label">{t('O invita a un grupo')}</h2>
+          <h2 className="inv-groups-label">{t('Grupos')}</h2>
           {/* Lista VERTICAL, no burbujas lado a lado: con más de dos grupos no
               entran en una fila. */}
           <div className="inv-list">

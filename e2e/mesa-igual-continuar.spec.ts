@@ -35,7 +35,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(continuar).toBeEnabled();
     await continuar.click();
 
-    await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
     const propinas = page.getByRole('radiogroup', { name: /propina/i });
     await propinas.getByRole('radio', { name: '0%', exact: true }).click();
     await page.getByRole('button', { name: 'Pagar', exact: true }).click();
@@ -104,7 +104,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.locator('.tk-fold--pending')).toHaveClass(/tk-fold--pulse/);
 
     // ② no llegó al pago
-    await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
     // ③ señal 1 de 3 · el toast
     await expect(page.getByText('Elige lo que consumiste para continuar')).toBeVisible();
 
@@ -118,6 +118,6 @@ test.describe('Continuar en la mesa (H-14)', () => {
     // ⑤ con un consumo elegido, el mismo control sí avanza.
     await page.getByText('Tagliatelle Bolognese').click();
     await continuar.click();
-    await expect(page.getByRole('heading', { name: 'Pagas solo tu parte' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
   });
 });

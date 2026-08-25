@@ -105,7 +105,7 @@ async function abrirPago(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pagas solo tu parte', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagar mi parte', exact: true })).toBeVisible();
 }
 
 test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', () => {
@@ -290,6 +290,9 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     expect(link).toContain('?t=');
 
     await expect(page.getByText('Sofía Fernández', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Grupos', exact: true })).toBeVisible();
+    await expect(credencial.locator('.share-code-txt')).toHaveCSS('font-size', '30px');
+    await expect(credencial.locator('.share-code-txt')).toHaveCSS('letter-spacing', '4.8px');
     await expect(copiar).toHaveCSS('color', 'rgb(10, 123, 128)');
     await expect(copiar).toHaveCSS('border-top-style', 'solid');
     const barra = page.getByRole('navigation', { name: 'Navegación principal' });
@@ -309,10 +312,11 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
     const titulo = page.locator('.title-card.pay-title');
     await page.getByRole('radio', { name: '5%', exact: true }).click();
-    await expect(titulo).toContainText('Pagas solo tu parte');
+    await expect(titulo).toContainText('Pagar mi parte');
+    await expect(titulo).toContainText('Consumos propios · $255.00');
     await expect(titulo).toContainText('La Parolaccia');
     await expect(titulo).toContainText('$265.50');
-    await expect(titulo).toContainText('Tus consumos $255.00 + propina $10.50');
+    await expect(titulo).toContainText('Propina $10.50');
 
     const [headerBox, titleBox] = await Promise.all([
       page.locator('.hdr-flow').boundingBox(),
@@ -340,17 +344,20 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
 
     const cierre = page.locator('.title-card.recibo-cierre');
     await expect(cierre).toContainText('¡Listo!');
-    await expect(cierre).toContainText('Pagaste tu parte.');
+    await expect(cierre).toContainText('Pagaste tu parte de la mesa');
+    await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
     const comprobante = page.locator('.recibo-card');
+    await expect(comprobante.locator('.success-circle')).toHaveCount(1);
     await expect(comprobante).toContainText('Comprobante');
     await expect(comprobante.locator('.recibo-label')).toHaveCSS('text-transform', 'uppercase');
-    await expect(comprobante).toContainText('Total pagado');
+    await expect(comprobante.getByText('Total pagado', { exact: true })).toHaveCount(1);
     await expect(comprobante).toContainText('PA-8279');
     await expect(comprobante).toContainText('Santander ···· 4532');
     await expect(comprobante).toContainText('$255.00');
     await expect(comprobante).toContainText('Propina (5% · Lupita)');
     await expect(comprobante).toContainText('$10.50');
     await expect(comprobante).toContainText('$265.50');
+    await expect(page.getByText('$265.50', { exact: true })).toHaveCount(1);
     await expect(comprobante.getByRole('button', { name: 'Enviar', exact: true })).toBeVisible();
     await expect(comprobante.getByRole('button', { name: 'Descargar', exact: true })).toBeVisible();
     await expect(page.locator('.demo-strip')).toHaveCount(0);

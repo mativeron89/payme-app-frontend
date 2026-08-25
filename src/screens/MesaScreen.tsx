@@ -31,7 +31,7 @@ import {
   CardRailUnavailable,
   type CardFieldState,
 } from '../components/CardField';
-import { AppHeader, AppHeaderFlow } from '../components/AppHeader';
+import { AppHeaderBack, AppHeaderFlow } from '../components/AppHeader';
 import { metadatosDelBody } from './comprobanteDelBody';
 import { filaPropina } from './propinaRecibo';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -1531,35 +1531,34 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   if (view === 'confirm' && result) {
     return (
       <div className="screen has-appbar receipt-screen af-diseno-flow">
-        {/* 🔴 FIDELIDAD tanda 4 (`724d6fe`) · ① la pantalla arrancaba en el
-            vacío, sin cabecera. Va la navy de una fila, como Avisos (§1.8), y
-            **sin «Volver»: acá no hay paso atrás al que volver, el pago ya
-            pasó.** Un botón de volver sobre un pago hecho promete deshacerlo. */}
-        <AppHeader paymeId={session?.user?.payme_id} />
-          {/* ② el tilde vivía SUELTO sobre el fondo, arriba de la tarjeta: era
-              un cierre partido en dos. Entra a la tarjeta, con el título y el
-              subtítulo — un solo bloque. */}
+        {/* AF-REDISENO-12 · comprobante usa la cabecera común de dos filas.
+            Volver cierra el flujo hacia Inicio: nunca reabre ni deshace el pago. */}
+        <AppHeaderBack paymeId={session?.user?.payme_id} onBack={() => navigate('home')} />
+          {/* La burbuja cierra el flujo con título y subtítulo. El tilde y el
+              importe viven una sola vez, dentro del comprobante. */}
           <div className="title-card recibo-cierre">
-            <div className="success-circle" aria-hidden="true">
-              <Icon name="check" size={28} />
-            </div>
             <h1 className="recibo-cierre-tit">
               {t('¡Listo!')}
             </h1>
             <div className="body-text">
-              {t('Pagaste tu parte.')}{' '}
-              {mesa.paid_amount_cents < mesa.total_cents ? (
-                t('La mesa sigue abierta para los demás.')
-              ) : (
-                <>
-                  {t('La mesa quedó completa.')} <Icon name="party" size={16} className="ico-inline" />
-                </>
-              )}
+              {t('Pagaste tu parte de la mesa')}
             </div>
           </div>
         <div className="scroll flow-scroll recibo-flow-scroll">
           <div className="card recibo-card">
             <div className="recibo-card-body">
+            <div className="recibo-summary">
+              <div className="success-circle" aria-hidden="true"><Icon name="check" size={28} /></div>
+              <div className="recibo-summary-label">{t('Total pagado')}</div>
+              <div className="recibo-summary-total">{formatMXN(result.gross)}</div>
+            </div>
+            <div className="recibo-status">
+              {mesa.paid_amount_cents < mesa.total_cents ? (
+                t('La mesa sigue abierta para los demás.')
+              ) : (
+                <>{t('La mesa quedó completa.')} <Icon name="party" size={16} className="ico-inline" /></>
+              )}
+            </div>
             <div className="recibo-label">
               {t('Comprobante')}
             </div>
@@ -1614,15 +1613,6 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 </div>
               );
             })()}
-            <div className="receipt-row">
-              <span className="lbl" style={{ fontWeight: 700, color: 'var(--navy)' }}>
-                Total pagado
-              </span>
-              {/* ③ estaba en `--action-2` sobre blanco: **2.6:1, ilegible**
-                  para el número más importante de la pantalla. Va en navy y
-                  más grande. */}
-              <span className="val recibo-total">{formatMXN(result.gross)}</span>
-            </div>
             </div>
             <div className="recibo-acciones">
               <button type="button" className="linkbtn" onClick={() => void shareReceipt()}>
@@ -1702,7 +1692,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 SIN encabezado accesible, que es peor que el defecto de color
                 que vino a arreglarse. Mismo patrón que scan, Garantía y 3DS. */}
             <h1 className="pay-title-lbl">
-              {frozenRequiresReconciliation ? t('Reconciliación necesaria') : frozenScope ? t('Pendiente de confirmar') : t('Pagas solo tu parte')}
+              {frozenRequiresReconciliation ? t('Reconciliación necesaria') : frozenScope ? t('Pendiente de confirmar') : t('Pagar mi parte')}
             </h1>
             {/* Defecto 3: el contexto del restaurante vive acá, no en la fila
                 de método. Es el dato que dice DÓNDE se está pagando. */}
@@ -1763,9 +1753,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                   {formatMXN(tipPending ? itemsAmount : gross)}
                 </div>
                 <div className="pay-title-breakdown">
-                  {mesa.division_mode === 'igual' ? t('Tu parte') : t('Tus consumos')} {formatMXN(itemsAmount)}
-                  {tipPending ? '' : ` + propina ${formatMXN(tipCents)}`}
+                  {t('Consumos propios')} · {formatMXN(itemsAmount)}
                 </div>
+                {!tipPending && (
+                  <div className="pay-title-breakdown">
+                    {t('Propina')} {formatMXN(tipCents)}
+                  </div>
+                )}
                 {tipPending && (
                   <div className="pay-title-breakdown">
                     {t('+ propina (elige abajo)')}

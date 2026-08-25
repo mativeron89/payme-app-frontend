@@ -2335,10 +2335,13 @@ body {
 
 /* ─── §5 bis · B · Pestañas en burbuja ─── */
 .btabs {
+  position: relative;
+  top: 15px;
   display: flex;
   align-items: flex-end;
-  gap: var(--sp-1);
-  margin: var(--sp-4) calc(var(--sp-4) * -1) calc(var(--sp-6) * -1);
+  height: 40px;
+  gap: 0;
+  margin: 10px calc(var(--sp-4) * -1) 0;
   padding: 0 var(--sp-4);
 }
 
@@ -2347,27 +2350,31 @@ body {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  min-height: var(--tap-min);
-  padding: var(--sp-2) var(--sp-4);
+  height: 40px;
+  min-height: 40px;
+  padding: 0 18px;
   border: none;
   cursor: pointer;
   font-family: var(--font-display);
-  font-size: var(--fs-sm);
+  font-size: 15px;
   line-height: var(--lh-sm);
   /* Inactiva: texto plano sobre el navy, SIN fondo. El fondo translúcido que
      se probó casi no se veía — es un bug corregido, no una opción. */
   background: none;
   color: var(--on-dark-muted);
-  font-weight: 400;
-  border-radius: 14px 14px 0 0;
+  font-weight: 500;
+  border-radius: 12px 12px 0 0;
 }
+
+.btab:nth-child(2) { margin-left: 46px; }
+.btab:nth-child(3) { margin-right: 18px; margin-left: auto; }
 
 /* Activa: burbuja blanca enganchada a la tarjeta — una sola pieza continua. */
 .btab.on {
   background: var(--surface);
   color: var(--text);
   font-weight: 500;
-  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.28);
+  box-shadow: none;
 }
 
 /* Badge de conteo de la pestaña: mismo tratamiento que el de la campana, así
@@ -2419,7 +2426,7 @@ body {
    negativo la recorta por arriba en vez de montarla. Se marca desde el header,
    que es quien sabe si tiene pestañas o no. */
 .hdr-tabbed + .scroll > .mounted-card:first-child {
-  margin-top: 0;
+  margin-top: -42px;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2838,6 +2845,11 @@ body {
 
 .inv-groups-label {
   margin-top: var(--sp-6);
+  margin-bottom: var(--sp-2);
+  padding-left: var(--sp-4);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2972,7 +2984,16 @@ body {
   gap: var(--sp-3);
 }
 
-/* §1.8 lo pone en `--action` navy, no en `--action-2` teal. El punto ACOMPAÑA:
+.aviso-row--guarantee {
+  border-color: rgba(180, 70, 47, 0.24);
+  background: var(--danger-tint);
+}
+
+.aviso-row--guarantee > svg {
+  color: var(--danger);
+}
+
+/* El punto de no leído va en `--action` navy, no en `--action-2` teal. ACOMPAÑA:
    la señal principal es el peso 700 del título, y por eso el punto no necesita
    competir por atención con nada. Naranja está descartado explícitamente — esta
    pantalla ya muestra la barra con su círculo naranja. */
@@ -5124,8 +5145,15 @@ h1.pay-title-lbl {
 
 .share-code-txt {
   margin-top: 6px;
-  font-size: 32px;
-  letter-spacing: 0.06em;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.config-card .list-row {
+  min-height: 60px;
+  height: 60px;
+  padding: 0 var(--sp-4);
 }
 
 .share-code-help {
@@ -5319,12 +5347,6 @@ h1.pay-title-lbl {
 
 /* P6 · Comprobante: el cierre forma la tarjeta solapada y el documento queda
    como una segunda pieza con acciones integradas, sin reabrir el pago. */
-.receipt-screen > .hdr {
-  min-height: calc(137.36px + env(safe-area-inset-top));
-  border-radius: 0 0 26px 26px;
-  padding: calc(16px + env(safe-area-inset-top)) 20px 56px;
-}
-
 .receipt-screen .recibo-cierre {
   margin: -42px var(--sp-4) 0;
   padding: 20px;
@@ -5336,9 +5358,39 @@ h1.pay-title-lbl {
   height: 56px;
   border-width: 2px;
   border-color: var(--success);
-  background: var(--surface);
+  background: var(--success-tint);
   color: var(--success);
   font-size: 28px;
+}
+
+.recibo-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.recibo-summary-total {
+  color: var(--text);
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.recibo-summary-label {
+  color: var(--text-muted);
+  font-size: var(--fs-legacy-sm);
+  font-weight: 700;
+}
+
+.recibo-status {
+  padding: var(--sp-3) 0;
+  color: var(--text-muted);
+  font-size: var(--fs-legacy-sm);
+  text-align: center;
 }
 
 .receipt-screen .recibo-cierre-tit {
