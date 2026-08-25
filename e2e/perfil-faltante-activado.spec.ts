@@ -2,8 +2,9 @@ import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
 
-const CONFIG_CAPTURE = '/private/tmp/payme-app-fe-configuracion-390x844.png';
-const NOTIFICATIONS_CAPTURE = '/private/tmp/payme-app-fe-notificaciones-390x844.png';
+const CAPTURE_DIR = process.env.RUNNER_TEMP || '/private/tmp';
+const CONFIG_CAPTURE = resolve(CAPTURE_DIR, 'payme-app-fe-configuracion-390x844.png');
+const NOTIFICATIONS_CAPTURE = resolve(CAPTURE_DIR, 'payme-app-fe-notificaciones-390x844.png');
 
 test.use({ viewport: { width: 390, height: 844 } });
 
