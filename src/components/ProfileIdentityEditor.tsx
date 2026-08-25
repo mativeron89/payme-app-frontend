@@ -41,8 +41,6 @@ export function ProfileIdentityEditor({
   const profileEpoch = useRef(new RequestEpoch());
   const mutationEpoch = useRef(new RequestEpoch());
   const fileInput = useRef<HTMLInputElement | null>(null);
-  const sessionRef = useRef(session);
-  sessionRef.current = session;
   if (!avatarLease.current) avatarLease.current = new AvatarObjectUrlLease();
 
   const familyId = session.family_id;
@@ -73,7 +71,9 @@ export function ProfileIdentityEditor({
 
   useEffect(() => {
     if (!enabled) return;
-    const expected = sessionRef.current;
+    // Tokens no forman parte de la identidad del recurso: esta closure queda
+    // viva durante un refresh y la adopción usa la sesión corriente vía CAS.
+    const expected = session;
     const epoch = profileEpoch.current.next();
     api.getProfileIdentity(expected).then(({ user: fresh }) => {
       if (!profileEpoch.current.isCurrent(epoch)) return;
@@ -93,7 +93,7 @@ export function ProfileIdentityEditor({
     lease.clear();
     setAvatarUrl(null);
     if (!enabled || !avatarRevision) return;
-    const expected = sessionRef.current;
+    const expected = session;
     api.getProfileAvatar(expected).then(({ blob }) => {
       const current = currentSamePrincipalSession(expected, loadSession());
       if (!avatarEpoch.current.isCurrent(epoch) || !current || !isCurrentSession(current)) return;
