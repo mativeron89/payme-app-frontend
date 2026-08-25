@@ -1508,7 +1508,61 @@ async function reconcileGuaranteeReplay({
 // ═══════════════════════════════════════════════════════════════════════════
 // 2) SETTLEMENT (cierre)  — fasado para no llamar a Stripe dentro de una tx
 // ═══════════════════════════════════════════════════════════════════════════
+async function withSettlementLock(mesaId, run) {
+  const client = await pool.settlementLockPool.connect();
+  const key = `mesa_settlement:${mesaId}`;
+  let acquired = false;
+  let releaseError;
+  let workError;
+  let unlockError;
+  let result;
+  let busy = false;
+  try {
+    const { rows: [lock] } = await client.query(
+      `SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS locked`,
+      [key]
+    );
+    acquired = lock?.locked === true;
+    if (!acquired) busy = true;
+    else result = await run();
+  } catch (err) {
+    workError = err;
+  } finally {
+    if (acquired) {
+      try {
+        const { rows: [unlock] } = await client.query(
+          `SELECT pg_advisory_unlock(hashtextextended($1,0)) AS unlocked`,
+          [key]
+        );
+        if (unlock?.unlocked !== true) {
+          unlockError = new Error('settlement_advisory_unlock_not_confirmed');
+          unlockError.code = 'settlement_advisory_unlock_not_confirmed';
+          releaseError = unlockError;
+          logger.error('settlement_advisory_unlock_failed', {
+            mesa_id: mesaId, error: unlockError.message,
+          });
+        }
+      } catch (err) {
+        releaseError = err;
+        unlockError = err;
+        logger.error('settlement_advisory_unlock_failed', {
+          mesa_id: mesaId, error: err.message,
+        });
+      }
+    }
+    client.release(releaseError);
+  }
+  if (workError) throw workError;
+  if (unlockError) throw unlockError;
+  if (busy) return { skip: 'settlement_in_progress' };
+  return result;
+}
+
 async function settleMesa(mesaId) {
+  return withSettlementLock(mesaId, () => settleMesaLocked(mesaId));
+}
+
+async function settleMesaLocked(mesaId) {
   // ── Fase 1 (tx): lock + validar + calcular faltante + marcar 'settling' ──
   const phase1 = await pool.tx(async (client) => {
     const { rows } = await client.query(

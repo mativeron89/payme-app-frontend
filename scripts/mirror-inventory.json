@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "1bf665fec9bec3cbfe3b6c77b03f00c647858e4e",
+  "commit": "c3ae41cfae0c9f3b8d12923271533d4b9c78d0d3",
   "total": 85,
   "archivos": [
     {
@@ -235,8 +235,8 @@
     {
       "origen": "services/settlement.js",
       "destino": "docs/settlement.js.ref",
-      "sha256": "4c5a2d226a67e38d20d3a2682af54300ac7761d8c923844bf9472f7d0d0e4cb0",
-      "bytes": 154350
+      "sha256": "d7995f7f0468b7e982f34b2d2ce42f446293e977704a263c2d60454e17a1e963",
+      "bytes": 155987
     },
     {
       "origen": "legal/README.md",

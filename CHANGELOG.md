@@ -11,6 +11,20 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.141.1 — Mirror de cierre cross-worker (2026-08-25)
+
+Adopta el inventario owner-first de App Backend v2.63.5: 85 archivos desde el
+publicador `5b6ad6a`, con contenido contractual exacto en `c3ae41c`. El único
+archivo espejado que cambia es `services/settlement.js`: el cierre de una mesa
+toma ahora un advisory lock no bloqueante en un pool dedicado, de modo que dos
+workers no cruzan localmente la misma captura. La idempotency key de Stripe
+sigue siendo la defensa remota independiente.
+
+El cambio nace de una regresión real detectada por el CI remoto del dueño y no
+modifica el runtime de este consumidor. Las capabilities `profile_identity` y
+`settlement_shortfall_detail` permanecen apagadas; este refresh no autoriza su
+activación ni afirma producción.
+
 ## 0.141.0 — Detalle privado de faltante, preparado y apagado (2026-08-25)
 
 Notificaciones conserva siempre el aviso agregado de la garantía. Sólo una

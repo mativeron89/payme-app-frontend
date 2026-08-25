@@ -8,22 +8,19 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-08-25**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`1bf665fec9bec3cbfe3b6c77b03f00c647858e4e`**
-  (`fix(perfil): bloquear formatos Unicode invisibles` · v2.63.4).
+  **`c3ae41cfae0c9f3b8d12923271533d4b9c78d0d3`**
+  (`fix(settlement): serializar cierre entre workers` · v2.63.5).
 - Commit que publicó el inventario autoritativo:
-  **`fdecf9e9a3cb38e097fa9a3de83bbe3a6ff43fd8`**
-  (`chore(contrato): publicar mirror v2.63.4`). Como siempre, el inventario
+  **`5b6ad6ae29677986b6a0219f69f2319d48f42c45`**
+  (`chore(contrato): publicar mirror v2.63.5`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `fdecf9e` está un commit más adelante que el contenido y no
-se espeja como contenido:** sólo publica el inventario. El HEAD local vigente
-del App Backend, `e8c9899f0120fa2d1b6832ecf3da7ef7d4308cf7`, avanza un commit
-adicional de test (`test(version): alinear guard v2.63.4`) que tampoco integra
-la población contractual. El árbol
-contractual declarado es `1bf665f`; anclarse a él mantiene verificable la
-paridad. Ese commit permite únicamente ZWJ/ZWNJ entre los formatos Unicode
-invisibles; `If-Match` quedó cerrado en su ancestro `28b0875` y el cambio
-material de las fuentes privadas entró antes, en `b63fba0`.
+⚠️ **El publicador `5b6ad6a` está un commit más adelante que el contenido y no
+se espeja como contenido:** sólo publica el inventario. El árbol contractual
+declarado es `c3ae41c`; anclarse a él mantiene verificable la paridad. El corte
+conserva el normalizador privado de v2.63.4 y agrega exclusión cross-worker al
+cierre de mesa después de que el CI remoto expusiera dos llamadas locales a la
+misma captura.
 
 🆕 **85 archivos espejados** más este README.
 
@@ -38,6 +35,9 @@ su cierre preventivo:
 - `settlement_shortfall_detail`: `routes/mesas.js`, settlement, servicio, schema
   y sus dos migraciones fijan el detalle owner-only, reconciliado y fail-closed;
   la segunda migración preserva upgrades donde v2.63.0 ya figuraba aplicada.
+- `settleMesa` toma ahora un advisory lock no bloqueante, namespaced por mesa y
+  servido por un pool dedicado. Dos workers ya no cruzan localmente la misma
+  captura; la idempotency key de Stripe continúa como defensa remota separada.
 - `GET /account/me` queda sellado `private, no-store`, y los nombres legacy que
   no cumplen el normalizador vigente permanecen dentro del residual no
   atribuible: no se publican ni se corrigen silenciosamente durante el cierre.
@@ -47,9 +47,8 @@ su cierre preventivo:
 
 La adopción se verificó contra la fuente antes de cerrar runtime del
 consumidor: **paridad 85/85** y **vigencia verde** contra App Backend HEAD
-`e8c9899f0120fa2d1b6832ecf3da7ef7d4308cf7`, cuya última publicación
-contractual sigue siendo `fdecf9e9a3cb38e097fa9a3de83bbe3a6ff43fd8` para el
-contenido `1bf665fec9bec3cbfe3b6c77b03f00c647858e4e`. Eso acredita el árbol local
+`5b6ad6ae29677986b6a0219f69f2319d48f42c45`, cuya publicación contractual
+declara `c3ae41cfae0c9f3b8d12923271533d4b9c78d0d3`. Eso acredita el árbol local
 y la ref contractual publicada; no afirma deploy ni producción.
 
 ### Refresh intermedio supersedido · 2026-08-25 (v2.63.3)
