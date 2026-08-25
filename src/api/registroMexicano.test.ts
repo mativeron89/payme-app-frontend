@@ -66,10 +66,10 @@ import { describe, expect, it } from 'vitest';
  * patrón morfológico: es el límite del método, no un defecto que se pula.
  *
  * **La política es evitar la palabra ambigua en el copy, no exentarla.** Ya se
- * aplicó dos veces el 2026-08-13: el CTA de Compartir quedó «Elegir mis ítems»
- * en vez de «Elegir lo que consumí» —el infinitivo no es ambiguo y dice lo
- * mismo—, y Diseño dejó «Todavía no elegí» fuera de su corrección de 16 voseos
- * por ser legítima.
+ * aplicó el 2026-08-13: el CTA de Compartir quedó «Elegir mis ítems» en vez de
+ * «Elegir lo que consumí» —el infinitivo no es ambiguo y dice lo mismo—. Ese
+ * CTA luego pasó a «Continuar» por la corrección visual del 2026-08-24; Diseño
+ * dejó «Todavía no elegí» fuera de su corrección de 16 voseos por ser legítima.
  *
  * ⚠️ **La colisión que todavía no ocurrió y va a ocurrir: `pagué`.** Esto es
  * una app de pagos y «Ya pagué» / «Pagué mi parte» son frases que el producto

@@ -108,7 +108,7 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   // §1.7 le puso el título del spec: la pantalla es el momento de triunfo del
   // organizador, no un formulario de invitación.
-  await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
 
   // 🔴 CAMBIÓ CON A1 (2026-08-16): el link YA NO se imprime en pantalla, así
   // que dejó de haber texto de dónde leerlo. Se lee del `href` de WhatsApp, que
@@ -118,7 +118,7 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   // el criterio del helper y no cambió. Lo que cambió es por dónde sale: antes
   // era texto copiable, ahora es el destino del botón. Leerlo de un endpoint
   // haría que el test pasara aunque la pantalla no ofreciera ninguna vía.
-  const wa = page.getByRole('link', { name: /Compartir por WhatsApp/ });
+  const wa = page.getByRole('link', { name: 'WhatsApp', exact: true });
   const href = await wa.getAttribute('href');
   expect(href, 'la pantalla no ofrece ninguna vía para compartir el link').not.toBeNull();
   const link = decodeURIComponent(new URL(href!).searchParams.get('text') ?? '')

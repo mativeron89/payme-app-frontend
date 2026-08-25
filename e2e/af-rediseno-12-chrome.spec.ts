@@ -59,16 +59,16 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     await expect(page).toHaveURL(/#\/avisos$/);
   });
 
-  test('Configuración muestra identidad y foto sin controles de edición inventados', async ({ page }) => {
+  test('Configuración muestra identidad sin prometer edición y sin cartel demo redundante', async ({ page }) => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Más', exact: true }).click();
 
     await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
     await expect(page.getByText('payme_mx_mati', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText(/La identidad y la foto se muestran/)).toBeVisible();
     await expect(page.getByRole('button', { name: /Editar|Cambiar foto/i })).toHaveCount(0);
     await expect(page.locator('input[type="file"]')).toHaveCount(0);
-    await expect(page.getByText('Modo demo:', { exact: true })).toBeVisible();
+    await expect(page.getByText('Modo demo:', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Reiniciar la demo', exact: true })).toBeVisible();
   });
 
   test('Garantía deja la nota fija separada del círculo a 375 × 667', async ({ page }) => {

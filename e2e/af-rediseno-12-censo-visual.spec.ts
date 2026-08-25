@@ -101,7 +101,7 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
   await expect(page.getByRole('heading', { level: 1, name: 'Notificaciones', exact: true })).toBeVisible();
   const garantiaAgregada = page.locator('.aviso-row--guarantee');
   await expect(garantiaAgregada).toHaveCount(1);
-  await expect(garantiaAgregada).toHaveCSS('background-color', 'rgb(254, 242, 242)');
+  await expect(garantiaAgregada).toHaveCSS('background-color', 'rgb(251, 231, 227)');
   await expect(garantiaAgregada).not.toContainText(/Luis|Valeria|Quién no pagó/);
   await acreditar(page, '02-notificaciones');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
@@ -135,10 +135,10 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
   await page.getByRole('radio', { name: /Santander.*4532/ }).click();
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '¡Mesa garantizada!', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compartir la mesa', exact: true })).toBeVisible();
   await acreditar(page, '06-compartir');
 
-  await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByText('Elige lo que consumiste', { exact: true })).toBeVisible();
   await expect(page.getByText(/queda reservado/)).toHaveCount(0);
   await page.evaluate(() => {

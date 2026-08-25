@@ -96,12 +96,12 @@ async function abrirTresDs(page: Page, modo: 'igual' | 'consumo' = 'igual'): Pro
 async function abrirCompartir(page: Page, modo: 'igual' | 'consumo' = 'igual'): Promise<void> {
   await abrirTresDs(page, modo);
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '¡Mesa garantizada!', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compartir la mesa', exact: true })).toBeVisible();
 }
 
 async function abrirPago(page: Page): Promise<void> {
   await abrirCompartir(page, 'consumo');
-  await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
@@ -284,9 +284,8 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
 
     await expect(page.getByRole('button', { name: 'Ir a Inicio', exact: true })).toBeVisible();
     const credencial = page.locator('.share-card');
-    await expect(credencial).toContainText('Código de la mesa');
-    await expect(credencial.locator('.share-code-label')).toHaveCSS('text-transform', 'uppercase');
-    await expect(credencial).toContainText('Para dictarlo en la mesa');
+    await expect(credencial.locator('.share-code-label')).toHaveCSS('display', 'none');
+    await expect(credencial.locator('.share-code-help')).toHaveCSS('display', 'none');
     const codigo = credencial.locator('.share-code');
     await expect(codigo).toHaveAttribute('type', 'button');
     await expect(codigo).toBeEnabled();
@@ -302,14 +301,14 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
 
     await expect(page.getByText('Sofía Fernández', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Grupos', exact: true })).toBeVisible();
-    await expect(credencial.locator('.share-code-txt')).toHaveCSS('font-size', '30px');
-    await expect(credencial.locator('.share-code-txt')).toHaveCSS('letter-spacing', '4.8px');
+    await expect(credencial.locator('.share-code-txt')).toHaveCSS('font-size', '26px');
+    await expect(credencial.locator('.share-code-txt')).toHaveCSS('letter-spacing', '4.16px');
     await expect(copiar).toHaveCSS('color', 'rgb(10, 123, 128)');
     await expect(copiar).toHaveCSS('border-top-style', 'solid');
     const barra = page.getByRole('navigation', { name: 'Navegación principal' });
     await expect(barra).toBeVisible();
     await expect(barra.locator('[aria-current="page"]')).toHaveCount(0);
-    await expect(barra.getByRole('button', { name: 'Elegir mis ítems', exact: true })).toBeVisible();
+    await expect(barra.getByRole('button', { name: 'Continuar', exact: true })).toBeVisible();
     await capturarSiCorresponde(page, '04-compartir.png');
 
     await codigo.click();
@@ -325,9 +324,9 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await page.getByRole('radio', { name: '5%', exact: true }).click();
     await expect(titulo).toContainText('Pagar mi parte');
     await expect(titulo).toContainText('Consumos propios · $255.00');
-    await expect(titulo).toContainText('La Parolaccia');
-    await expect(titulo).toContainText('$265.50');
-    await expect(titulo).toContainText('Propina $10.50');
+    await expect(titulo).not.toContainText('La Parolaccia');
+    await expect(titulo.locator('.pay-title-amount')).toHaveCount(0);
+    await expect(page.locator('.pay-total-card')).toContainText('$265.50');
 
     const [headerBox, titleBox] = await Promise.all([
       page.locator('.hdr-flow').boundingBox(),

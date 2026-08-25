@@ -128,7 +128,7 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await page.getByRole('button', { name: /Reintentar esta apertura/ }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
 
   // 🔴 LA AFIRMACIÓN QUE IMPORTA: se reanudó LA MISMA apertura. Si el reenvío
   // hubiera rotado la clave, acá habría DOS mesas y dos holds por el total.

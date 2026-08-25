@@ -130,15 +130,6 @@ export function AvisosScreen() {
       <div className="title-card">
         <h1 className="title-card-title">{t('Notificaciones')}</h1>
       </div>
-      {/* Fuera del encabezado: es una acción sobre la lista, no identidad de la
-          pantalla. Ocupa su propia fila para no empujar nada de la banda. */}
-      <div className="avisos-actions">
-        {hasUnread && (
-          <button type="button" className="linkbtn" onClick={markAll}>
-            {t('Marcar leídos')}
-          </button>
-        )}
-      </div>
       <div className="scroll flow-scroll">
         {invitations.length > 0 && (
           <>
@@ -211,7 +202,6 @@ export function AvisosScreen() {
           </>
         )}
 
-        <h2 className="sectlabel">{t('Notificaciones')}</h2>
         {notifs === null && <div className="loading">{t('Cargando avisos…')}</div>}
         {notifs?.length === 0 && invitations.length === 0 && (
           <div className="empty aviso-empty">
@@ -222,6 +212,12 @@ export function AvisosScreen() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {notifs?.map((n) => {
             const sinLeer = !n.read_at;
+            const inviterName = n.type === 'invitation_received' && typeof n.payload?.inviter_name === 'string'
+              ? n.payload.inviter_name.trim()
+              : '';
+            const invitationSuffix = inviterName && n.body.startsWith(`${inviterName} `)
+              ? n.body.slice(inviterName.length)
+              : null;
             return (
               <div
                 key={n.id}
@@ -235,13 +231,24 @@ export function AvisosScreen() {
                 />
                 <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className={`aviso-title ${sinLeer ? 'unread' : ''}`}>{n.body}</div>
+                  <div className={`aviso-title ${sinLeer ? 'unread' : ''}`}>
+                    {invitationSuffix !== null ? (
+                      <><strong>{inviterName}</strong>{invitationSuffix}</>
+                    ) : n.body}
+                  </div>
                   <div className="aviso-time">{relTime(n.created_at, undefined, t)}</div>
                 </div>
               </div>
             );
           })}
         </div>
+        {hasUnread && (
+          <div className="avisos-actions">
+            <button type="button" className="linkbtn" onClick={markAll}>
+              {t('Marcar leídos')}
+            </button>
+          </div>
+        )}
       </div>
       {/* Ningún ítem activo: ninguna de las cinco posiciones es "Avisos". */}
       <AppBottomBar active={null} />

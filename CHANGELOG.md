@@ -11,6 +11,34 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.139.0 — Corrección visual de ocho superficies (2026-08-24)
+
+Corrige contra las comparaciones reales de Mati el solape de pestañas y tarjetas
+en Inicio y Amigos, el tamaño del acceso «Ver el ticket» y el espacio entre la
+burbuja y el marco de Escaneo. Compartir adopta la composición compacta, mantiene
+las dos superficies de copia y rotula el CTA central como «Continuar» sin cambiar
+su destino.
+
+Garantía agrupa las tarjetas, retira el rótulo visual redundante y usa flecha en
+el CTA. Pagar separa resumen, selector de propina, método y total; conserva el
+cálculo en centavos, los presets ratificados 0/5/10/15/20 más monto propio y los
+guards de journal, reconciliación y 3DS. Los nombres de meseros sólo aparecen
+cuando la respuesta vigente publica `active_staff`; no se inventan datos.
+
+Configuración retira el cartel explicativo de demo y conserva el reinicio como
+fila compacta. No simula edición de nombre o foto: la API vigente no ofrece una
+operación durable para hacerlo. Notificaciones elimina el título duplicado,
+compacta el espaciado, aplica el rojo pastel aprobado y enfatiza sólo el nombre
+estructurado del invitador. Mantiene el faltante agregado: el backend todavía no
+publica una definición segura de personas e importes individuales para «Quién no
+pagó».
+
+Una regresión causal cubre las ocho superficies y las suites existentes se
+reconcilian con la nueva composición sin aflojar dinero, contratos, accesibilidad
+ni navegación.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.138.0 — Rediseño completo de las doce superficies (2026-08-24)
 
 Completa AF-REDISENO-12 sobre el chrome de `0.137.0`: las doce superficies se

@@ -99,7 +99,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await reintentarSinTarjeta.click();
   await expect(page.locator('.toast')).toHaveText('Elige con qué tarjeta garantizar');
   expect(page.url()).toBe(urlAntes);
-  await expect(page.getByRole('radiogroup', { name: '¿Con qué garantizas?' })).toHaveClass(/tip-block--pulse/);
+  await expect(page.getByRole('radiogroup', { name: 'Tarjeta para garantizar' })).toHaveClass(/tip-block--pulse/);
   expect((await mesasDelMock(page)).total).toBe(antesSinTarjeta.total);
 
   // Con elección explícita sí, y sigue sin haber una segunda mesa.
@@ -110,7 +110,7 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await cta.click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
 
   const despues = await mesasDelMock(page);
   expect(despues.total, 'el reenvío creó una segunda mesa').toBe(antes.total);

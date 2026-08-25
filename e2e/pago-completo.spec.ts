@@ -47,7 +47,7 @@ test.describe('el camino de pago completo', () => {
     // mesa —donde el organizador elige lo suyo— es **"Ver mesa"**, no "Volver":
     // la mesa YA existe y está garantizada, así que retroceder a División está
     // prohibido (B-06), y un control que dice "Volver" y no retrocede miente.
-    await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByText(new RegExp(`Mesa ${mesa.code}`))).toBeVisible();
     await expect(page.getByText('$840.00')).toBeVisible();
 
@@ -76,8 +76,9 @@ test.describe('el camino de pago completo', () => {
     // $241.50 —base + 15 % que nadie eligió— y ése era el defecto: un número
     // en pantalla, y después en el cable, que la persona nunca decidió.
     await expect(page.getByText('Tu parte · $210.00', { exact: true })).toBeVisible();
-    await expect(page.getByText('+ propina (elige abajo)')).toBeVisible();
-    await expect(page.getByText('$210.00', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Elige tu propina', { exact: true })).toBeVisible();
+    await expect(page.getByText('Base $210.00', { exact: true })).toBeVisible();
+    await expect(page.getByText('Total a pagar', { exact: true }).locator('..')).toContainText('—');
 
     // Ninguna píldora rellena, **ni la de 0 %**: que el 0 % se vea elegido sólo
     // cuando se elige es lo que lo distingue de "todavía no elegí".
@@ -95,7 +96,7 @@ test.describe('el camino de pago completo', () => {
     // Recién con la elección hecha el total incluye la propina.
     await propinas.getByRole('radio', { name: '15%', exact: true }).click();
     await expect(page.getByText('Tu parte · $210.00', { exact: true })).toBeVisible();
-    await expect(page.getByText('Propina $31.50', { exact: true })).toBeVisible();
+    await expect(page.getByText('Base $210.00 · propina $31.50', { exact: true })).toBeVisible();
     await expect(page.getByText('$241.50', { exact: true }).first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Pagar', exact: true }).click();
@@ -118,7 +119,7 @@ test.describe('el camino de pago completo', () => {
   test('la propina se recalcula: 0% deja el total en la parte exacta', async ({ page }) => {
     await ingresar(page);
     await abrirMesaConLink(page);
-    await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('button', { name: 'Continuar' }).click();
 
@@ -144,7 +145,7 @@ test.describe('el camino de pago completo', () => {
   test('elegir 0% es una elección: se marca, y paga', async ({ page }) => {
     await ingresar(page);
     await abrirMesaConLink(page);
-    await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('button', { name: 'Continuar' }).click();
 
@@ -157,7 +158,7 @@ test.describe('el camino de pago completo', () => {
     // marcada. Es el mismo estado que dejaría cualquier otro preset.
     await expect(propinas.getByRole('radio', { name: '0%', exact: true })).toBeChecked();
     await expect(propinas.getByRole('radio', { checked: true })).toHaveCount(1);
-    await expect(page.getByText('+ propina (elige abajo)')).toHaveCount(0);
+    await expect(page.getByText('Elige tu propina', { exact: true })).toHaveCount(0);
 
     // Y paga, sin pedir nada más.
     await page.getByRole('button', { name: 'Pagar', exact: true }).click();

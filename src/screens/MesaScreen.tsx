@@ -135,7 +135,7 @@ function TipSelector({
   customTipStr,
   onCustomChange,
   baseCents,
-  participants,
+  selectedTipCents,
   disabled,
   pending,
   pulse,
@@ -147,7 +147,7 @@ function TipSelector({
   customTipStr: string;
   onCustomChange: (value: string) => void;
   baseCents: number;
-  participants: number;
+  selectedTipCents: number;
   disabled: boolean;
   pending: boolean;
   pulse: boolean;
@@ -165,10 +165,11 @@ function TipSelector({
     >
       <div className="sectlabel tip-block-title" id="lbl-propina">
         {pending && <Icon name="warning" size={14} aria-hidden="true" />}
-        {pending ? t('Elige tu propina') : t('Tu propina')}
+        {pending ? t('Elige tu propina') : t('Propina')}
       </div>
       <div className="caption" style={{ margin: '0 2px 8px' }}>
-        {t('Tu base:')} {formatMXN(baseCents)} {t('(la cuenta ÷')} {participants})
+        {t('Base')} {formatMXN(baseCents)}
+        {!pending && <> · {t('propina')} {formatMXN(selectedTipCents)}</>}
       </div>
       <div className="tip-row tip-choices" role="radiogroup" aria-labelledby="lbl-propina">
         {TIP_OPTIONS.map((pct) => {
@@ -1696,7 +1697,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </h1>
             {/* Defecto 3: el contexto del restaurante vive acá, no en la fila
                 de método. Es el dato que dice DÓNDE se está pagando. */}
-            {mesa?.restaurant?.name && (
+            {frozenScope && mesa?.restaurant?.name && (
               <div className="pay-title-place">
                 {mesa.restaurant.name}
                 {mesa.restaurant.address ? ` · ${mesa.restaurant.address}` : ''}
@@ -1749,22 +1750,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 {/* §1.5 bis · antes de elegir se muestra LA BASE SOLA. Acá
                     salía base + 15 % adivinado: un número en pantalla que la
                     persona no eligió, que es el bug que esto cierra. */}
-                <div className="pay-title-amount">
-                  {formatMXN(tipPending ? itemsAmount : gross)}
-                </div>
                 <div className="pay-title-breakdown">
                   {mesa.division_mode === 'igual' ? t('Tu parte') : t('Consumos propios')} · {formatMXN(itemsAmount)}
                 </div>
-                {!tipPending && (
-                  <div className="pay-title-breakdown">
-                    {t('Propina')} {formatMXN(tipCents)}
-                  </div>
-                )}
-                {tipPending && (
-                  <div className="pay-title-breakdown">
-                    {t('+ propina (elige abajo)')}
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -1871,7 +1859,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               customTipStr={customTipStr}
               onCustomChange={setCustomTipStr}
               baseCents={mesa.tip_base_cents}
-              participants={mesa.expected_participants || 1}
+              selectedTipCents={tipCents}
               disabled={seleccionBloqueada}
               pending={tipPending}
               pulse={tipPulse}
@@ -1899,14 +1887,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               </div>
             </div>
           )}
-          <div className="sectlabel" id="lbl-metodo">
-            {t('Método')}
-          </div>
           {/* Connect: quién cobra depende del riel, y el front NO lo afirma
               antes de pagar (G-11). El comprobante sólo muestra «Cobrado por»
               cuando la respuesta ya acredita ese dato. */}
           {payType === 'card' && !cardRailAvailable && <CardRailUnavailable />}
-          <div role="radiogroup" aria-labelledby="lbl-metodo">
+          <div role="radiogroup" aria-label={t('Método de pago')}>
             {!isGuest && walletRailEnabled && (
               <button
                 className={`method-card ${payType === 'wallet' ? 'sel' : ''}`}
@@ -2127,6 +2112,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             </button>
             )}
           </div>
+          {!frozenScope && (
+            <div className="card pay-total-card" aria-live="polite">
+              <span>{t('Total a pagar')}</span>
+              <strong>{tipPending ? '—' : formatMXN(gross)}</strong>
+            </div>
+          )}
           {/* 🔴 Defecto 4: acá había un segundo aviso de demo, en amarillo,
               que repetía la banda que ya está fija arriba de la app. Textual
               del paquete: *«El cuadro amarillo repetía la banda de arriba»*.

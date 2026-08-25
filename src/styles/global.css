@@ -2194,6 +2194,14 @@ body {
   min-height: var(--tap-min);
 }
 
+/* En las dos pantallas con pestañas, la aritmética del header reserva 34px
+   para la primera fila. La campana conserva sus 44px de área táctil y puede
+   desbordar verticalmente sin agrandar la fila. */
+.hdr-tabbed > .hdr-row:first-child {
+  height: 34px;
+  min-height: 34px;
+}
+
 /* Marca compuesta según la REGLA DE COMPOSICIÓN DEL LOCKUP (diseno 283d88d,
    SISTEMA_DISENO §1) — elegida por Mati el 2026-08-19 viendo D contra C3,
    etiqueta «D · la regla nueva de Diseño»; SUPERSEDE su elección C3 de esa
@@ -2425,8 +2433,12 @@ body {
    tarjeta adentro de un `.scroll` (que es `overflow-y: auto`) el margen
    negativo la recorta por arriba en vez de montarla. Se marca desde el header,
    que es quien sabe si tiene pestañas o no. */
-.hdr-tabbed + .scroll > .mounted-card:first-child {
+.hdr-tabbed + .scroll {
   margin-top: -42px;
+}
+
+.hdr-tabbed + .scroll > .mounted-card {
+  margin-top: 0;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2986,11 +2998,11 @@ body {
 
 .aviso-row--guarantee {
   border-color: rgba(180, 70, 47, 0.24);
-  background: var(--danger-tint);
+  background: #fbe7e3;
 }
 
 .aviso-row--guarantee > svg {
-  color: var(--danger);
+  color: #b4462f;
 }
 
 /* El punto de no leído va en `--action` navy, no en `--action-2` teal. ACOMPAÑA:
@@ -3021,6 +3033,10 @@ body {
 }
 
 .aviso-title.unread {
+  font-weight: 500;
+}
+
+.aviso-title strong {
   font-weight: 700;
 }
 
@@ -5079,8 +5095,11 @@ h1.pay-title-lbl {
 }
 
 .share-card {
-  padding: 0;
+  padding: 12px;
   overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
 }
 
 .share-code {
@@ -5088,12 +5107,12 @@ h1.pay-title-lbl {
   gap: 0;
   min-height: 0;
   margin: 0;
-  padding: var(--sp-4) var(--sp-4) 14px;
+  padding: 0 0 12px;
   cursor: pointer;
 }
 
 .share-code-label {
-  font-size: 11.5px;
+  display: none;
   line-height: 1.3;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -5102,8 +5121,8 @@ h1.pay-title-lbl {
 }
 
 .share-code-txt {
-  margin-top: 6px;
-  font-size: 30px;
+  margin-top: 0;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: 0.16em;
 }
@@ -5114,8 +5133,22 @@ h1.pay-title-lbl {
   padding: 0 var(--sp-4);
 }
 
+.config-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 0 18px;
+  text-align: center;
+}
+
+.config-reset {
+  height: 44px;
+  min-height: 44px;
+  margin-bottom: 12px;
+}
+
 .share-code-help {
-  margin-top: 2px;
+  display: none;
   font-family: var(--font-body);
   font-size: 12.5px;
   line-height: 1.4;
@@ -5123,24 +5156,24 @@ h1.pay-title-lbl {
 }
 
 .share-actions {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--sp-2);
-  padding: var(--sp-4);
-  border-top: 1px solid var(--border);
+  padding: 0;
+  border-top: 0;
 }
 
 .share-actions .share-wa,
 .share-actions .share-copy {
-  height: 50px;
-  min-height: 50px;
+  height: 44px;
+  min-height: 44px;
   margin: 0;
   border-radius: 14px;
   font-size: var(--fs-body);
 }
 
 .share-actions .share-copy {
-  border: 1.5px solid var(--link);
+  border: 1px solid var(--border);
   background: var(--surface);
   color: var(--link);
 }
@@ -5168,7 +5201,7 @@ h1.pay-title-lbl {
 }
 
 .share-flow-scroll {
-  padding-top: var(--sp-4);
+  padding-top: 12px;
 }
 
 /* P5 · Pagar: el resumen de esta intención se solapa al header y queda
@@ -5208,9 +5241,9 @@ h1.pay-title-lbl {
 .pay-title-breakdown {
   margin-top: 4px;
   font-family: var(--font-body);
-  font-size: var(--fs-legacy-xs);
+  font-size: 13.5px;
   color: var(--action);
-  opacity: 0.75;
+  opacity: 0.72;
 }
 
 .pay-flow-scroll {
@@ -5246,6 +5279,26 @@ h1.pay-title-lbl {
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: var(--sh-1);
+}
+
+.pay-total-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: 58px;
+  margin-top: 10px;
+  padding: 14px var(--sp-4);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pay-total-card strong {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
 }
 
 .pay-method-brand {
@@ -5429,8 +5482,27 @@ h1.pay-title-lbl {
 }
 
 .ticket-title-fold .tk-fold-head {
+  width: auto;
+  gap: 8px;
   min-height: 38px;
-  padding: 0 14px;
+  padding: 0 12px;
+}
+
+.ticket-title-fold .tk-fold-txt {
+  flex: none;
+}
+
+.ticket-title-fold .tk-fold-ico-box {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+/* La regla base de `.title-card` aparece después de la definición original
+   de Escaneo y su shorthand anulaba el hueco. Esta forma más específica deja
+   la distancia en la pieza que la necesita. */
+.title-card.scan-title-card {
+  margin-bottom: 20px;
 }
 
 .ticket-flow-scroll {
@@ -5604,19 +5676,26 @@ h1.pay-title-lbl {
   padding-left: 4px;
 }
 
-.gar-method-card {
-  min-height: 70px;
-  margin-bottom: 10px;
-  padding: 14px var(--sp-4);
-  gap: var(--sp-3);
-  border-width: 2px;
-  border-color: var(--border);
+.gar-cards-group {
+  overflow: hidden;
   border-radius: var(--r-lg);
+  background: var(--surface);
   box-shadow: var(--sh-1);
 }
 
+.gar-method-card {
+  min-height: 70px;
+  margin-bottom: 0;
+  padding: 10px 14px;
+  gap: var(--sp-3);
+  border-width: 0 0 1px;
+  border-color: var(--border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .gar-method-card.sel {
-  border-width: 2px;
+  border-width: 0 0 1px;
   background: var(--surface);
 }
 
@@ -5720,13 +5799,13 @@ h1.pay-title-lbl {
 .gar-other-card,
 .gar-other-card.sel {
   min-height: 60px;
-  margin-bottom: 10px;
-  padding: 14px var(--sp-4);
+  margin-bottom: 0;
+  padding: 10px 14px;
   gap: var(--sp-3);
   border: 0;
-  border-radius: var(--r-lg);
+  border-radius: 0;
   background: var(--surface);
-  box-shadow: var(--sh-1);
+  box-shadow: none;
 }
 
 .gar-other-icon {

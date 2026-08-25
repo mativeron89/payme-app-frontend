@@ -108,7 +108,7 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
      * Si alguien "simplifica" el mensaje al código, el link deja de llegar y el
      * invitado no tiene con qué canjear.
      */
-    const wa = page.getByRole('link', { name: /Compartir por WhatsApp/ });
+    const wa = page.getByRole('link', { name: 'WhatsApp', exact: true });
     const href = await wa.getAttribute('href');
     expect(href, 'el botón de WhatsApp no tiene href').not.toBeNull();
     const texto = decodeURIComponent(new URL(href!).searchParams.get('text') ?? '');
@@ -182,11 +182,11 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
    * ignorar el rojo. La cobertura no se pierde: la salida a Inicio se afirma
    * arriba, sobre la pantalla recién montada.
    */
-  test('el CTA principal lleva a Mis ítems', async ({ page }) => {
+  test('el CTA Continuar lleva a Mis ítems', async ({ page }) => {
     await ingresar(page);
     await abrirMesaConLink(page);
 
-    const principal = page.getByRole('button', { name: 'Elegir mis ítems', exact: true });
+    const principal = page.getByRole('button', { name: 'Continuar', exact: true });
     await expect(principal).toBeVisible();
     await principal.click();
     await expect(page).toHaveURL(/#\/mesa\/PA-/);

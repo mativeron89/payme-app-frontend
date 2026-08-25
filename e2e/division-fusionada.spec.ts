@@ -51,7 +51,8 @@ test('🔴 el ticket nace PLEGADO y se abre con sus consumos', async ({ page }) 
    */
   // Plegado: el total se ve ARRIBA, el acceso abajo, el detalle no.
   await expect(page.getByText('La Parolaccia · Roma Norte, CDMX')).toBeVisible();
-  await expect(page.getByText(/\d+ consumos, uno por uno/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ver el ticket', exact: true })).toBeVisible();
+  await expect(page.getByText(/\d+ consumos, uno por uno/)).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
 
   // Y el monto NO se repite: aparece una sola vez en toda la pantalla.
@@ -93,9 +94,9 @@ test('🔴 «Pagar el total» reparte el total entre los que cubren, como igual'
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
 
-  await page.getByRole('button', { name: /Elegir mis ítems/ }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   // 840 ÷ 2 = 420: el total repartido entre los DOS que cubren. Con `consumo`
   // no existiría este casillero, existiría la lista de platos.
   await expect(page.getByText('$420.00').first()).toBeVisible();
@@ -179,7 +180,7 @@ test('🔴 UNA persona puede pagar el total: el stepper llega a 1 y la mesa se a
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
 });
 
 /**

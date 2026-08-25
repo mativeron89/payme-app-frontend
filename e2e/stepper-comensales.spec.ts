@@ -47,7 +47,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
     await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
     await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
 
     // LA CONDICIÓN: el N que viajó es el elegido — ni 4, ni 1, ni un default.
     // La mesa se busca POR EL CÓDIGO que muestra la pantalla: el mock
@@ -64,10 +64,10 @@ test.describe('el stepper de comensales (§1.4)', () => {
     expect(enviado).toBe(3);
 
     // Y la base de §1.5 bis dice la misma división que la vista del stepper.
-    await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-    await expect(page.getByText('(la cuenta ÷ 3)')).toBeVisible();
+    await expect(page.getByText('Base $280.00', { exact: true })).toBeVisible();
   });
 
   test('partes iguales con N=3: viaja el 3 elegido y la parte es $280.00 — no el 4 fantasma (2-A.3)', async ({ page }) => {
@@ -92,7 +92,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
     await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '¡Mesa garantizada!' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
 
     // 🔴 Se lee del CÓDIGO en pantalla, no del link impreso: A1 (2026-08-16)
     // retiró el link como texto. Este test nunca necesitó el link —sólo el

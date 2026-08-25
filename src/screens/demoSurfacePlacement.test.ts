@@ -10,10 +10,10 @@ const source = (name: string): string => {
   return hit;
 };
 
-describe('AF-REDISENO-12 · el aviso de demo vive sólo en Configuración', () => {
-  it('Configuración conserva aviso y reset; Inicio y Scan no los duplican', () => {
+describe('AF-CORRECCIONES-VISUALES-01 · la demo no agrega un segundo aviso', () => {
+  it('Configuración conserva sólo el reset; Inicio y Scan no lo duplican', () => {
     const config = source('MasScreen');
-    expect(config).toContain("t('Modo demo:')");
+    expect(config).not.toContain("t('Modo demo:')");
     expect(config).toContain("t('Reiniciar la demo')");
 
     for (const name of ['HomeScreen', 'CreateMesaFlow']) {

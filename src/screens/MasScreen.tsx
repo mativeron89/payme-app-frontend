@@ -39,8 +39,8 @@ export function MasScreen() {
           —"Cerrar sesión"— queda debajo de la barra. Está advertido en el CSS y
           es exactamente el modo en que se cuela. */}
       <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
-        <div style={{ textAlign: 'center', padding: '6px 0 18px' }}>
-          <Avatar name={user ? t('{0} {1}', user.first_name, user.last_name) : t('PayMe')} size={80} />
+        <div className="config-profile">
+          <Avatar name={user ? t('{0} {1}', user.first_name, user.last_name) : t('PayMe')} size={84} variant="marca" />
           <div className="h2" style={{ marginTop: 10 }}>
             {user ? t('{0} {1}', user.first_name, user.last_name) : t('Tu cuenta')}
           </div>
@@ -49,9 +49,6 @@ export function MasScreen() {
               {user.payme_id}
             </div>
           )}
-          <div className="caption" style={{ marginTop: 8 }}>
-            {t('La identidad y la foto se muestran tal como están registradas en tu cuenta.')}
-          </div>
         </div>
         {!user && (
           <div className="note note-orange" style={{ marginBottom: 12 }}>
@@ -133,22 +130,16 @@ export function MasScreen() {
               tiene posición para ella. */}
         </div>
         {IS_MOCK && (
-          <>
-            <div className="note note-teal" style={{ marginBottom: 12 }}>
-              <b>{t('Modo demo:')}</b> {t('los datos son de ejemplo y se guardan solo en este teléfono. Nada de lo que hagas aquí mueve dinero de verdad.')}
-            </div>
-            <button
-              className="btn btn-ghost"
-              style={{ marginBottom: 12 }}
-              onClick={() => {
-                if (!window.confirm(t('¿Volver la demo a su estado inicial?'))) return;
-                resetDemo();
-                window.location.reload();
-              }}
-            >
-              <Icon name="refresh" size={16} className="ico-inline" /> {t('Reiniciar la demo')}
-            </button>
-          </>
+          <button
+            className="btn btn-ghost config-reset"
+            onClick={() => {
+              if (!window.confirm(t('¿Volver la demo a su estado inicial?'))) return;
+              resetDemo();
+              window.location.reload();
+            }}
+          >
+            <Icon name="refresh" size={16} className="ico-inline" /> {t('Reiniciar la demo')}
+          </button>
         )}
         <button
           className="btn btn-ghost"

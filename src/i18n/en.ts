@@ -740,4 +740,11 @@ export const EN: Record<string, string> = {
   "Configuración": "Settings",
   "La identidad y la foto se muestran tal como están registradas en tu cuenta.": "Your identity and photo appear as registered on your account.",
   "Termina este paso para abrir tus avisos.": "Finish this step to open your notifications.",
+  "Base": "Base",
+  "propina": "tip",
+  "Método de pago": "Payment method",
+  "Total a pagar": "Total to pay",
+  "Compartir la mesa": "Share the table",
+  "Tarjeta para garantizar": "Card to guarantee with",
+  "WhatsApp": "WhatsApp",
 };

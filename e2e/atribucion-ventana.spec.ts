@@ -39,13 +39,13 @@ async function frenarJournal(page: import('@playwright/test').Page, ms: number) 
 test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se cierra', async ({ page }) => {
   await ingresar(page);
   await abrirMesaConLink(page);
-  // 🔴 El freno entra ANTES de «Elegir mis ítems», y ese detalle es el
+  // 🔴 El freno entra ANTES de «Continuar», y ese detalle es el
   // hallazgo del arnés: `MesaScreen` **monta una sola vez** y después cambia
   // de vista, así que el journal se lee al ENTRAR A LA MESA, no al entrar a
   // Pagar. Poniéndolo más tarde la carrera ya había terminado y el test medía
   // una ventana cerrada — verde por la razón equivocada.
   await frenarJournal(page, 1_500);
-  await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar' }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
@@ -154,7 +154,7 @@ test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo',
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await ingresar(page);
   const mesa = await abrirMesaConLink(page);
-  await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
   await page.getByRole('button', { name: 'Continuar' }).click();
 

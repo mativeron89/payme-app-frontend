@@ -1317,11 +1317,6 @@ export function CreateMesaFlow() {
               </span>
               <span className="tk-fold-txt">
                 <span className="tk-fold-lbl">{t('Ver el ticket')}</span>
-                <span className="tk-fold-sub">
-                  {editItems.length === 1
-                    ? t('1 consumo, uno por uno')
-                    : t('{0} consumos, uno por uno', editItems.length)}
-                </span>
               </span>
               <Icon
                 name="chevron-down"
@@ -1655,9 +1650,6 @@ export function CreateMesaFlow() {
           </div>
         )}
           {avisoApertura()}
-          <div className="sectlabel" id="lbl-garantia">
-            {t('¿Con qué garantizas?')}
-          </div>
           {method === 'card' && !cardRailAvailable && <CardRailUnavailable />}
           {/* 🔴 ORDEN 1-B · EL ESTADO HONESTO CUANDO NO SABEMOS CON QUÉ SE
               GARANTIZÓ. Antes acá no había nada y la lista de abajo mostraba
@@ -1678,8 +1670,8 @@ export function CreateMesaFlow() {
           <div
             ref={cardChoicesRef}
             role="radiogroup"
-            aria-labelledby="lbl-garantia"
-            className={cardChoicePulse ? 'tip-block--pulse' : undefined}
+            aria-label={t('Tarjeta para garantizar')}
+            className={`gar-cards-group${cardChoicePulse ? ' tip-block--pulse' : ''}`}
             onAnimationEnd={() => setCardChoicePulse(false)}
           >
           {/* Sin opción "Tarjeta" padre (redundante — feedback de Mati): las
@@ -1814,7 +1806,7 @@ export function CreateMesaFlow() {
                 : frozen
                   ? t('Reintentar esta apertura')
                   : t('Garantizar'),
-            icon: 'lock',
+            icon: 'arrow-right',
             onClick: createMesa,
             disabled:
               busy ||
@@ -1948,13 +1940,13 @@ export function CreateMesaFlow() {
    * suelto en un recuadro punteado.
    *
    *  - Cabecera de flujo de dos filas —**sin contador de paso**, ver abajo— y
-   *    tarjeta de título `--teal-l`: *"¡Mesa garantizada!"* + *"Compartí el
-   *    código para que se sumen"*. Con eso se cae la nota que repetía lo mismo
+   *    tarjeta de título `--teal-l`: *"Compartir la mesa"* + restaurante y
+   *    código. Con eso se cae la nota que repetía lo mismo
    *    en un párrafo — y que además todavía nombraba el saldo como método de
    *    garantía.
    *  - **El código es el protagonista**: mono, grande, y tocarlo copia.
-   *  - **"Compartir por WhatsApp"**, no "Compartir link" genérico: es el canal
-   *    real. Fondo `#075E54`, el teal oscuro histórico de la marca y **no** el
+   *  - **"WhatsApp"**, no "Compartir link" genérico: es el canal real. Fondo
+   *    `#075E54`, el teal oscuro histórico de la marca y **no** el
    *    verde moderno `#25D366` que tenía — blanco sobre ese verde da 1.98:1;
    *    sobre este teal da 7.67:1.
    *  - CTA: barra completa sin posición activa. El centro continúa a Mis ítems
@@ -2032,12 +2024,10 @@ export function CreateMesaFlow() {
           backIcon="home"
         />
         <div className="title-card share-title">
-          <h1 className="title-card-title">{t('¡Mesa garantizada!')}</h1>
-          {/* Nombra las DOS cosas: compartir y lo que al organizador todavía le
-              falta. El círculo del pie no puede decirlo —§1.7 lo dejó sin
-              etiqueta visible a propósito—, así que si esto no lo dice, para
-              quien mira la pantalla no lo dice nada. */}
-          <div className="title-card-sub">{t('Comparte el código y después elige lo que consumiste')}</div>
+          <h1 className="title-card-title">{t('Compartir la mesa')}</h1>
+          <div className="title-card-sub">
+            {restaurant?.name ? `${restaurant.name} · ` : ''}{t('Mesa {0}', code)}
+          </div>
         </div>
         <div className="scroll flow-scroll share-flow-scroll">
           <div className="share-card">
@@ -2070,15 +2060,6 @@ export function CreateMesaFlow() {
                 secundaria. Estaban al revés. El orden del DOM es también el
                 orden del foco por teclado, así que esto no es sólo visual. */}
             <div className="share-actions">
-              <a
-                className={`btn share-wa ${link ? '' : 'off'}`}
-                href={link ? `https://wa.me/?text=${encodeURIComponent(t('Súmate a la mesa {0} en PayMe: {1}', code, link))}` : undefined}
-                target="_blank"
-                rel="noreferrer"
-                aria-disabled={link ? undefined : true}
-              >
-                <Icon name="message" size={18} className="ico-inline" /> {t('Compartir por WhatsApp')}
-              </a>
               <button
                 type="button"
                 className="btn btn-ghost share-copy"
@@ -2087,6 +2068,15 @@ export function CreateMesaFlow() {
               >
                 <Icon name="copy" size={18} className="ico-inline" /> {t('Copiar link')}
               </button>
+              <a
+                className={`btn share-wa ${link ? '' : 'off'}`}
+                href={link ? `https://wa.me/?text=${encodeURIComponent(t('Súmate a la mesa {0} en PayMe: {1}', code, link))}` : undefined}
+                target="_blank"
+                rel="noreferrer"
+                aria-disabled={link ? undefined : true}
+              >
+                <Icon name="message" size={18} className="ico-inline" /> {t('WhatsApp')}
+              </a>
             </div>
           </div>
           {/* 🔴 A1 · ACÁ SE IMPRIMÍA EL LINK Y SU AVISO, y se retiraron.
@@ -2135,11 +2125,11 @@ export function CreateMesaFlow() {
             etiqueta que este control puede tener sin romper §1.7**, que lo dejó
             sin texto visible a propósito.
 
-            El nombre accesible sigue siendo "Elegir mis ítems": la flecha
-            resuelve a quien MIRA, y el `aria-label` a quien no. */}
+            El nombre accesible es "Continuar": la flecha resuelve a quien
+            MIRA, y el `aria-label` a quien no. */}
         <AppBottomBar
           active={null}
-          center={{ label: t('Elegir mis ítems'), icon: 'arrow-right', onClick: () => navigate('mesa', code) }}
+          center={{ label: t('Continuar'), icon: 'arrow-right', onClick: () => navigate('mesa', code) }}
         />
       </div>
     );

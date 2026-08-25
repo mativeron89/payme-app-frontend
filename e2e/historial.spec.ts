@@ -78,7 +78,7 @@ test.describe('Historial (§1.10)', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
 
-    await page.getByRole('button', { name: 'Elegir mis ítems', exact: true }).click();
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByText('$840.00')).toBeVisible();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('button', { name: 'Continuar' }).click();
