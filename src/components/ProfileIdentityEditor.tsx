@@ -41,12 +41,12 @@ export function ProfileIdentityEditor({
   const profileEpoch = useRef(new RequestEpoch());
   const mutationEpoch = useRef(new RequestEpoch());
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   if (!avatarLease.current) avatarLease.current = new AvatarObjectUrlLease();
 
   const familyId = session.family_id;
   const principalId = session.principal_id;
-  const accessToken = session.access_token;
-  const refreshToken = session.refresh_token;
   const avatarRevision = user?.avatar?.revision ?? null;
   const fullName = user ? `${user.first_name} ${user.last_name}` : t('PayMe');
 
@@ -57,7 +57,7 @@ export function ProfileIdentityEditor({
     const current = currentSamePrincipalSession(origin, loadSession());
     if (!current || !mutationEpoch.current.isCurrent(mutation) || !isCurrentSession(current)) return false;
     const response = await api.getProfileIdentity(current);
-    if (!mutationEpoch.current.isCurrent(mutation) || !isCurrentSession(current)) return false;
+    if (!mutationEpoch.current.isCurrent(mutation)) return false;
     return adoptProfileMutationUser(
       origin,
       (latest) => mergeProfileIdentityIntoCurrentUser(latest, response.user),
@@ -73,7 +73,7 @@ export function ProfileIdentityEditor({
 
   useEffect(() => {
     if (!enabled) return;
-    const expected = session;
+    const expected = sessionRef.current;
     const epoch = profileEpoch.current.next();
     api.getProfileIdentity(expected).then(({ user: fresh }) => {
       if (!profileEpoch.current.isCurrent(epoch)) return;
@@ -84,7 +84,7 @@ export function ProfileIdentityEditor({
       );
     }).catch(() => undefined);
     return () => { profileEpoch.current.next(); };
-  }, [enabled, familyId, principalId, accessToken, refreshToken, adoptUser]);
+  }, [enabled, familyId, principalId, adoptUser]);
 
   useEffect(() => {
     const lease = avatarLease.current;
@@ -93,13 +93,14 @@ export function ProfileIdentityEditor({
     lease.clear();
     setAvatarUrl(null);
     if (!enabled || !avatarRevision) return;
-    const expected = session;
+    const expected = sessionRef.current;
     api.getProfileAvatar(expected).then(({ blob }) => {
-      if (!avatarEpoch.current.isCurrent(epoch) || !isCurrentSession(expected)) return;
+      const current = currentSamePrincipalSession(expected, loadSession());
+      if (!avatarEpoch.current.isCurrent(epoch) || !current || !isCurrentSession(current)) return;
       setAvatarUrl(lease.replace(blob));
     }).catch(() => undefined);
     return () => { avatarEpoch.current.next(); };
-  }, [enabled, avatarRevision, familyId, principalId, accessToken, refreshToken]);
+  }, [enabled, avatarRevision, familyId, principalId]);
 
   useEffect(() => () => {
     profileEpoch.current.next();

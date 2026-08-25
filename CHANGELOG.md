@@ -61,6 +61,13 @@ adoptan aun si hubo refresh de tokens durante la request. `If-Match` queda
 cerrado a UUID desnudo o íntegramente entrecomillado; en nombres, ZWJ y ZWNJ
 son los únicos formatos `Cf` admitidos por el dueño y el consumidor.
 
+La rotación de tokens de la misma familia tampoco reinicia las lecturas de
+perfil/avatar: sólo un cambio de familia, principal o revisión abre otra
+lectura. Así un GET viejo no puede terminar después de PATCH/PUT/DELETE y
+reponer nombre o revisión anteriores. Una regresión montada en navegador
+fuerza el refresh dentro del PATCH, resuelve tarde el GET previo y acredita una
+sola mutación, sin refetch por tokens y con el estado autoritativo final.
+
 La capability permanece **DARK** en real y mock. Antes de activarla siguen
 faltando un aviso presentable y el inventario/remediación de identidades legacy;
 no se normalizan ni se exponen por inferencia. No cambia dinero, Stripe,
