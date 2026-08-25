@@ -531,6 +531,7 @@ function seedNotifications(mesas: MockMesa[]): {
   pendingInvitations: PendingInvitation[];
 } {
   const invitedMesa = mesas.find((m) => m.code === 'PA-4520');
+  const shortfallMesa = mesas.find((m) => m.code === 'PA-1099');
   const notifications: AppNotification[] = [
     {
       id: mockId('f'),
@@ -551,9 +552,14 @@ function seedNotifications(mesas: MockMesa[]): {
       type: 'mesa_shortfall_charged',
       title: null,
       body: 'Se cobró el faltante de la mesa ($210.00) a tu garantía.',
-      payload: { shortfall_cents: 21000 },
+      payload: shortfallMesa ? {
+        mesa_id: shortfallMesa.id,
+        mesa_code: shortfallMesa.code,
+        shortfall_cents: 21000,
+        detail_available: true,
+      } : { shortfall_cents: 21000 },
       related_entity_type: 'mesa',
-      related_entity_id: null,
+      related_entity_id: shortfallMesa?.id ?? null,
       read_at: iso(-20 * 60 * 60_000),
       created_at: iso(-22 * 60 * 60_000),
     },
@@ -1045,6 +1051,33 @@ function loadPersisted(): MockState | null {
     if (Array.isArray(parsed.notifications)) {
       const durmientes: readonly string[] = WALLET_NOTIFICATION_TYPES;
       parsed.notifications = parsed.notifications.filter((n) => !durmientes.includes(n.type));
+      // v0.142.0 · el aviso histórico del seed traía sólo el monto. Ese
+      // shape sigue mostrándose agregado, pero no puede abrir la ruta privada.
+      // Se migra exclusivamente la fila demo acreditada contra su mesa cerrada;
+      // ningún aviso ajeno se completa por inferencia.
+      const shortfallMesa = Array.isArray(parsed.mesas)
+        ? parsed.mesas.find((mesa) => mesa?.code === 'PA-1099'
+          && mesa?.captured_shortfall_cents === 21000)
+        : null;
+      if (shortfallMesa) {
+        parsed.notifications = parsed.notifications.map((notification) => (
+          notification?.type === 'mesa_shortfall_charged'
+          && notification?.body === 'Se cobró el faltante de la mesa ($210.00) a tu garantía.'
+          && notification?.payload?.shortfall_cents === 21000
+            ? {
+                ...notification,
+                payload: {
+                  mesa_id: shortfallMesa.id,
+                  mesa_code: shortfallMesa.code,
+                  shortfall_cents: 21000,
+                  detail_available: true,
+                },
+                related_entity_type: 'mesa',
+                related_entity_id: shortfallMesa.id,
+              }
+            : notification
+        ));
+      }
     }
     if (!Array.isArray(parsed.pendingInvitations)) parsed.pendingInvitations = [];
     /**

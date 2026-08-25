@@ -10,10 +10,10 @@ export interface PrivateFeatureState {
 }
 
 const PENDING: PrivateFeatureState = { enabled: false, status: 'pending', noticeVersion: null };
-// Producción queda deliberadamente vacía: el owner sigue OFF y todavía faltan
-// tanto un aviso presentable como el inventario/remediación de identidades
-// históricas. Un flip remoto no puede inventar ninguna de esas dos garantías.
-const PRESENTABLE_NOTICE_VERSIONS = new Set<string>();
+// Mati ratificó literalmente el 2026-08-25: «OK aviso 2.2.0 y legacy
+// “Sin asignar”». La allowlist sigue cerrada: una versión nueva no hereda esa
+// decisión y apaga ambas superficies hasta ser presentada explícitamente.
+const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.2.0']);
 
 /** Seam nominal: sólo Vitest puede declarar presentable `test-only`. */
 export const TEST_PRESENTABLE_NOTICES = Symbol('private-feature-test-notice-seam');

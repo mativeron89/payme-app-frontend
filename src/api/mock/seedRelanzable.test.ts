@@ -78,6 +78,42 @@ describe('G-36 · relanzamiento del seed vencido, con reloj controlado', () => {
     expect(renacido.mesas.find((m) => m.code === 'PA-1099')!.status).toBe('completed');
   });
 
+  it('el aviso del faltante acredita PA-1099 antes de habilitar el detalle privado', async () => {
+    const { state } = await import('./store');
+    const { readShortfallNotificationDisclosure } = await import('../shortfallDetail');
+    const mesa = state.mesas.find((m) => m.code === 'PA-1099')!;
+    const notification = state.notifications.find((n) => n.type === 'mesa_shortfall_charged')!;
+
+    expect(notification.related_entity_id).toBe(mesa.id);
+    expect(readShortfallNotificationDisclosure(notification)).toEqual({
+      mesaCode: 'PA-1099',
+      shortfallCents: 21000,
+    });
+  });
+
+  it('migra sólo el aviso legacy inequívoco; no inventa mesa para otra notificación', async () => {
+    const { state } = await import('./store');
+    const legacy = state.notifications.find((n) => n.type === 'mesa_shortfall_charged')!;
+    legacy.payload = { shortfall_cents: 21000 };
+    legacy.related_entity_id = null;
+    state.notifications.push({
+      ...legacy,
+      id: 'aviso-ajeno',
+      body: 'Otro faltante sin vínculo acreditado.',
+    });
+
+    const { state: rehidratado } = await persistirYRehidratar();
+    const { readShortfallNotificationDisclosure } = await import('../shortfallDetail');
+    const migrado = rehidratado.notifications.find((n) => n.id === legacy.id)!;
+    const ajeno = rehidratado.notifications.find((n) => n.id === 'aviso-ajeno')!;
+
+    expect(readShortfallNotificationDisclosure(migrado)).toEqual({
+      mesaCode: 'PA-1099',
+      shortfallCents: 21000,
+    });
+    expect(readShortfallNotificationDisclosure(ajeno)).toBeNull();
+  });
+
   it('la mesa TOCADA por el usuario no se reescribe: su pago es historia, no seed', async () => {
     const { state } = await import('./store');
     // El usuario pagó su parte en PA-3121 antes de irse a dormir.

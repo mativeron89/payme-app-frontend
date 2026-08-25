@@ -286,8 +286,45 @@ interface PrivateFeatureMockFixture {
 }
 
 let privateFeatureFixture: PrivateFeatureMockFixture | null = null;
+let mockAvatar: Blob | null = null;
 
-/** Seam exclusivo de Vitest. El build mock distribuible siempre queda OFF. */
+const MOCK_PROFILE_CREATED_AT = '2026-08-25T00:00:00.000Z';
+const MOCK_SHORTFALL_CLOSED_AT = '2026-08-25T00:00:00.000Z';
+const MOCK_SHORTFALL_CODE = 'PA-1099';
+
+function defaultPrivateFeatureFixture(): PrivateFeatureMockFixture {
+  const user = state.user;
+  return {
+    profile: {
+      user: {
+        ...user,
+        phone: user.phone ?? null,
+        birth_date: user.birth_date ?? null,
+        created_at: user.created_at ?? MOCK_PROFILE_CREATED_AT,
+        birth_date_set: user.birth_date_set ?? user.birth_date != null,
+        is_adult: user.is_adult ?? null,
+        avatar: user.avatar ?? null,
+      },
+    },
+    avatar: mockAvatar,
+    shortfallByMesa: {
+      [MOCK_SHORTFALL_CODE]: {
+        version: 1,
+        detail_available: true,
+        closed_at: MOCK_SHORTFALL_CLOSED_AT,
+        shortfall_cents: 21000,
+        unassigned_cents: 8000,
+        rows: [{ display_name: 'Luis Cárdenas', due_cents: 13000 }],
+      },
+    },
+  };
+}
+
+function activePrivateFeatureFixture(): PrivateFeatureMockFixture {
+  return privateFeatureFixture ?? defaultPrivateFeatureFixture();
+}
+
+/** Seam exclusivo de Vitest para sustituir datos, no para habilitar el gate. */
 export function installPrivateFeatureMockFixtureForTests(
   fixture: PrivateFeatureMockFixture,
 ): () => void {
@@ -295,11 +332,6 @@ export function installPrivateFeatureMockFixtureForTests(
   const previous = privateFeatureFixture;
   privateFeatureFixture = fixture;
   return () => { privateFeatureFixture = previous; };
-}
-
-function requirePrivateFeatureFixture(): PrivateFeatureMockFixture {
-  if (!privateFeatureFixture) throw new MockApiError(503, 'private_feature_mock_disabled');
-  return privateFeatureFixture;
 }
 
 export async function mockGetConfig(): Promise<AppConfig> {
@@ -332,54 +364,37 @@ export async function mockGetConfig(): Promise<AppConfig> {
         accepted_mime_types: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic'],
         provider_mime_types: ['image/jpeg', 'image/png'],
       },
-      profile_identity: privateFeatureFixture ? {
+      profile_identity: {
         supported: true,
         enabled: true,
-        notice_version: 'test-only',
+        notice_version: '2.2.0',
         notice_required: true,
         activation_blocker: null,
-        payme_id_mutable: false,
-        avatar_public_url: false,
-      } : {
-        supported: true,
-        enabled: false,
-        notice_version: null,
-        notice_required: true,
-        activation_blocker: 'privacy_notice_and_legacy_identity_inventory_pending',
         payme_id_mutable: false,
         avatar_public_url: false,
       },
-      settlement_shortfall_detail: privateFeatureFixture ? {
+      settlement_shortfall_detail: {
         supported: true,
         enabled: true,
         version: 1,
         owner_only: true,
         includes_tip: false,
-        notice_version: 'test-only',
+        notice_version: '2.2.0',
         notice_required: true,
         activation_blocker: null,
-      } : {
-        supported: true,
-        enabled: false,
-        version: 1,
-        owner_only: true,
-        includes_tip: false,
-        notice_version: null,
-        notice_required: true,
-        activation_blocker: 'privacy_notice_and_legacy_identity_inventory_pending',
       },
     },
   });
 }
 
 export async function mockProfileIdentity(): Promise<ProfileIdentityResponse> {
-  return delay(requirePrivateFeatureFixture().profile);
+  return delay(activePrivateFeatureFixture().profile);
 }
 
 export async function mockUpdateProfileIdentity(
   name: { first_name: string; last_name: string },
 ): Promise<ProfileIdentityResponse> {
-  const fixture = requirePrivateFeatureFixture();
+  const fixture = activePrivateFeatureFixture();
   const profile = {
     ...fixture.profile,
     user: {
@@ -388,12 +403,21 @@ export async function mockUpdateProfileIdentity(
       last_name: profileNameInput(name.last_name),
     },
   };
-  privateFeatureFixture = { ...fixture, profile };
+  if (privateFeatureFixture) {
+    privateFeatureFixture = { ...fixture, profile };
+  } else {
+    state.user = {
+      ...state.user,
+      first_name: profile.user.first_name,
+      last_name: profile.user.last_name,
+    };
+    persist();
+  }
   return delay(profile);
 }
 
 export async function mockProfileAvatar(): Promise<PrivateAvatarBlob> {
-  const avatar = requirePrivateFeatureFixture().avatar;
+  const avatar = activePrivateFeatureFixture().avatar;
   if (!avatar) throw new MockApiError(404, 'avatar_not_found');
   return delay(validatePrivateAvatarBlob(avatar));
 }
@@ -403,7 +427,7 @@ export async function mockPutProfileAvatar(
   expectedRevision: string | null,
 ): Promise<ProfileAvatarResponse> {
   validateAvatarInput(image);
-  const fixture = requirePrivateFeatureFixture();
+  const fixture = activePrivateFeatureFixture();
   if ((fixture.profile.user.avatar?.revision ?? null) !== expectedRevision) {
     throw new MockApiError(409, 'avatar_revision_conflict');
   }
@@ -415,29 +439,41 @@ export async function mockPutProfileAvatar(
     height: 128,
     updated_at: new Date().toISOString(),
   };
-  privateFeatureFixture = {
-    ...fixture,
-    avatar,
-    profile: { user: { ...fixture.profile.user, avatar: metadata } },
-  };
+  if (privateFeatureFixture) {
+    privateFeatureFixture = {
+      ...fixture,
+      avatar,
+      profile: { user: { ...fixture.profile.user, avatar: metadata } },
+    };
+  } else {
+    mockAvatar = avatar;
+    state.user = { ...state.user, avatar: metadata };
+    persist();
+  }
   return delay({ avatar: metadata });
 }
 
 export async function mockDeleteProfileAvatar(expectedRevision: string): Promise<void> {
-  const fixture = requirePrivateFeatureFixture();
+  const fixture = activePrivateFeatureFixture();
   if (fixture.profile.user.avatar?.revision !== expectedRevision) {
     throw new MockApiError(409, 'avatar_revision_conflict');
   }
-  privateFeatureFixture = {
-    ...fixture,
-    avatar: null,
-    profile: { user: { ...fixture.profile.user, avatar: null } },
-  };
+  if (privateFeatureFixture) {
+    privateFeatureFixture = {
+      ...fixture,
+      avatar: null,
+      profile: { user: { ...fixture.profile.user, avatar: null } },
+    };
+  } else {
+    mockAvatar = null;
+    state.user = { ...state.user, avatar: null };
+    persist();
+  }
   return delay(undefined);
 }
 
 export async function mockShortfallDetail(mesaCode: string): Promise<ShortfallDetail> {
-  const detail = requirePrivateFeatureFixture().shortfallByMesa[mesaCode];
+  const detail = activePrivateFeatureFixture().shortfallByMesa[mesaCode];
   if (!detail) throw new MockApiError(404, 'shortfall_detail_not_found');
   return delay(detail);
 }

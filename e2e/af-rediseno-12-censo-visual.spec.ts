@@ -104,7 +104,11 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
   const garantiaAgregada = page.locator('.aviso-row--guarantee');
   await expect(garantiaAgregada).toHaveCount(1);
   await expect(garantiaAgregada).toHaveCSS('background-color', 'rgb(251, 231, 227)');
-  await expect(garantiaAgregada).not.toContainText(/Luis|Valeria|Quién no pagó/);
+  // v0.142.0 · el CTA privado ya está ratificado, pero el censo captura la
+  // pantalla ANTES del toque: lazy significa que ningún nombre ni residual se
+  // materializa por renderizar el aviso agregado.
+  await expect(garantiaAgregada.getByRole('button', { name: 'Quién no pagó' })).toBeVisible();
+  await expect(garantiaAgregada).not.toContainText(/Luis|Valeria|Sin asignar/);
   await acreditar(page, '02-notificaciones');
   await page.getByRole('button', { name: 'Volver', exact: true }).click();
 

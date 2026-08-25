@@ -35,8 +35,13 @@ const PROFILE_OFF = {
 const PROFILE_ON = {
   ...PROFILE_OFF,
   enabled: true,
-  notice_version: 'test-only',
+  notice_version: '2.2.0',
   activation_blocker: null,
+};
+
+const PROFILE_TEST_ONLY = {
+  ...PROFILE_ON,
+  notice_version: 'test-only',
 };
 
 const SHORTFALL_ON = {
@@ -45,7 +50,7 @@ const SHORTFALL_ON = {
   version: 1,
   owner_only: true,
   includes_tip: false,
-  notice_version: 'test-only',
+  notice_version: '2.2.0',
   notice_required: true,
   activation_blocker: null,
 };
@@ -86,10 +91,13 @@ afterEach(() => resetPrivateFeaturesForTests());
 describe('capabilities privadas · forma y lógica cerradas', () => {
   it('acepta OFF autoritativo y ON sólo con aviso vigente y sin blocker', () => {
     expect(readProfileIdentityCapability(config(PROFILE_OFF))).toEqual({ enabled: false, status: 'authoritative', noticeVersion: null });
-    expect(readProfileIdentityCapability(config(PROFILE_ON))).toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: 'test-only' });
-    expect(readProfileIdentityCapability(config(PROFILE_ON), TEST_PRESENTABLE_NOTICES))
-      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: 'test-only' });
-    expect(readShortfallDetailCapability(config(PROFILE_ON, SHORTFALL_ON), TEST_PRESENTABLE_NOTICES))
+    expect(readProfileIdentityCapability(config(PROFILE_ON)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.2.0' });
+    expect(readShortfallDetailCapability(config(PROFILE_ON, SHORTFALL_ON)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.2.0' });
+    expect(readProfileIdentityCapability(config(PROFILE_TEST_ONLY)))
+      .toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: 'test-only' });
+    expect(readProfileIdentityCapability(config(PROFILE_TEST_ONLY), TEST_PRESENTABLE_NOTICES))
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: 'test-only' });
   });
 
@@ -124,7 +132,7 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
       .toEqual({ enabled: false, status: 'malformed', noticeVersion: null });
   });
 
-  it('rutas directas real y mock permanecen OFF por defecto', async () => {
+  it('OFF/ausente sigue cerrando la fachada aunque el mock distribuible ya soporte 2.2.0', async () => {
     applyPrivateFeatureConfig(config(PROFILE_OFF, {
       ...SHORTFALL_ON,
       enabled: false,
@@ -136,8 +144,21 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
     await expect(api.getProfileIdentity(SESSION)).rejects.toThrow('profile_identity_unavailable');
     await expect(api.getShortfallDetail('PA-12345', 21000, SESSION))
       .rejects.toThrow('settlement_shortfall_detail_unavailable');
-    await expect(mock.mockProfileIdentity()).rejects.toMatchObject({ status: 503 });
-    await expect(mock.mockShortfallDetail('PA-12345')).rejects.toMatchObject({ status: 503 });
+    await expect(mock.mockProfileIdentity()).resolves.toMatchObject({
+      user: { first_name: expect.any(String), last_name: expect.any(String) },
+    });
+    await expect(mock.mockShortfallDetail('PA-1099')).resolves.toMatchObject({
+      detail_available: true,
+      shortfall_cents: 21000,
+    });
+  });
+
+  it('el config mock publicado replica ON 2.2.0 y conserva payme_id/avatar privados', async () => {
+    const mockConfig = await mock.mockGetConfig();
+    expect(readProfileIdentityCapability(mockConfig))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.2.0' });
+    expect(readShortfallDetailCapability(mockConfig))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.2.0' });
   });
 });
 

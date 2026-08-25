@@ -11,6 +11,29 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.142.0 — Perfil propio y faltante privado activados (2026-08-25)
+
+Presenta explícitamente el aviso 2.2.0 ratificado por Mati y activa, sólo cuando
+el backend publica la forma estricta esperada, las dos superficies preparadas:
+Configuración permite editar nombre y apellido visibles y una foto privada,
+mientras `payme_id` permanece de sólo lectura; Notificaciones consulta de forma
+lazy el detalle owner-only de quién no pagó, sin propina, ids ni persistencia de
+nombres. El residual legacy se presenta literalmente como «Sin asignar» sólo
+cuando el DTO acredita un monto positivo; ausencia o `null` nunca se convierten
+en cero.
+
+La sesión adopta el nombre y la revisión de avatar mediante CAS y los 17
+encabezados autenticados se actualizan sin recargar. Reload y otras pestañas
+reciben la misma identidad persistida. El mock distribuible replica el contrato
+2.2.0 y una notificación final ligada a PA-1099; la migración completa sólo ese
+aviso demo inequívoco y no inventa vínculos para otros avisos históricos.
+
+Capabilities ausentes, OFF, con claves desconocidas, formas malformadas o una
+versión de aviso futura continúan fail-closed. `detail_available=false` conserva
+el aviso agregado y no ofrece ni fabrica el desplegable privado.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.141.3 — Mirror de activaciones privadas ratificadas (2026-08-25)
 
 Adopta byte a byte el inventario owner-first de App Backend v2.65.0: 85
