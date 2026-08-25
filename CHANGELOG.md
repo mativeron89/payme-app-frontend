@@ -11,6 +11,39 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.138.0 — Rediseño completo de las doce superficies (2026-08-24)
+
+Completa AF-REDISENO-12 sobre el chrome de `0.137.0`: las doce superficies se
+miden a 390×844 con cabecera 154px, marca de 34px, identidad a 12px, controles
+de 44px, burbuja en y=112, barra de 64px y círculo de 56px. Un segundo censo a
+375×667 conserva el shell exterior inmóvil y la nota fija de Garantía separada
+del CTA.
+
+Scan usa marco blanco de 400px; División abre el ticket en una hoja modal con
+scroll y foco propios, cierres accesibles y sin repetir el total. La hoja cubre
+la barra para impedir acciones de fondo. Conserva composición de bottom sheet
+en vez de fijar un `top` al disparador: el alto depende del ticket y del viewport,
+y un anclaje rígido sacrificaría el límite de 58% o el scroll interno.
+
+Mis ítems deja una única instrucción y mantiene Copiar link fuera de la fila de
+cabecera. Garantía muestra la retención, tarjetas reales, `Agregar nueva tarjeta`
+y la explicación fija; si sólo falta tarjeta, el CTA explica y enfoca sin enviar.
+Pagar distingue `Consumos propios` de `Tu parte`, conserva 0/5/10/15/20/Otro y
+muestra el total una sola vez. Comprobante integra tilde y monto en la tarjeta,
+mantiene desglose, Enviar/Descargar y la salida a Inicio.
+
+Notificaciones representa el faltante agregado en rojo pastel sin inventar
+deudores; Compartir usa `GET /groups`; Configuración mantiene identidad y foto
+de solo lectura, filas de 60px y el único aviso de demo. Historial y Estadísticas
+usan la cabecera común; Inicio adopta la geometría aprobada de pestañas.
+
+La campana navega normalmente y permanece táctil con feedback, sin abandonar
+`busy`, journal, frozen, reconciliación o 3DS. Esos estados se prueban en Scan,
+División, Mis ítems, Garantía, Pagar y confirmación bancaria. No cambian APIs,
+contratos, cálculo monetario, Stripe, dependencias ni rieles dormidos.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.137.0 — Chrome uniforme en las doce pantallas (2026-08-24)
 
 AF-REDISENO-12 adopta la geometría compartida aprobada: cabecera de 154 px,
