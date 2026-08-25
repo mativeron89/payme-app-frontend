@@ -176,12 +176,71 @@ export interface MockState {
 }
 
 let seq = 0;
+const MOCK_CANONICAL_ID = /^[0-9a-f]0000000-0000-4000-8000-(\d{12})$/i;
 export function mockId(prefix: string): string {
   seq += 1;
   return `${prefix}0000000-0000-4000-8000-${String(seq).padStart(12, '0')}`;
 }
 
 const LEGACY_HISTORY_ID = /^h0000000-0000-4000-8000-\d{12}$/;
+
+/**
+ * `seq` es memoria de módulo, pero los ids sobreviven en localStorage. Tras un
+ * reload hay que continuar desde la evidencia durable ANTES de que cualquier
+ * migración emita otro id. El recorrido es tolerante: un nodo raro se ignora;
+ * nunca se descarta todo el estado por no poder censar una rama.
+ */
+function syncSequenceFromPersisted(value: unknown): void {
+  try {
+    const pending: unknown[] = [value];
+    const seen = new Set<object>();
+    while (pending.length > 0) {
+      const current = pending.pop();
+      if (typeof current === 'string') {
+        const match = MOCK_CANONICAL_ID.exec(current);
+        if (match) {
+          const suffix = Number(match[1]);
+          if (Number.isSafeInteger(suffix)) seq = Math.max(seq, suffix);
+        }
+        continue;
+      }
+      if (!current || typeof current !== 'object' || seen.has(current)) continue;
+      seen.add(current);
+      if (Array.isArray(current)) pending.push(...current);
+      else pending.push(...Object.values(current as Record<string, unknown>));
+    }
+  } catch {
+    // Conservador: se retiene el máximo ya observado y la carga continúa.
+  }
+}
+
+function occupiedMovementIds(st: MockState): Set<string> {
+  const occupied = new Set<string>();
+  if (Array.isArray(st.history)) {
+    for (const movement of st.history) {
+      if (movement && typeof movement.id === 'string') occupied.add(movement.id.toLowerCase());
+    }
+  }
+  if (st.movementDetails && typeof st.movementDetails === 'object' && !Array.isArray(st.movementDetails)) {
+    for (const [key, detail] of Object.entries(st.movementDetails)) {
+      occupied.add(key.toLowerCase());
+      if (detail && typeof detail.id === 'string') occupied.add(detail.id.toLowerCase());
+    }
+  }
+  return occupied;
+}
+
+function nextMovementId(occupied: Set<string>): string | null {
+  // La sincronización deja el primer candidato por encima del máximo. El loop
+  // conserva defensa propia si un estado parcialmente corrupto repite claves.
+  for (let attempt = 0; attempt < 10_000; attempt += 1) {
+    const candidate = mockId('f');
+    if (!MOCK_CANONICAL_ID.test(candidate) || occupied.has(candidate.toLowerCase())) continue;
+    occupied.add(candidate.toLowerCase());
+    return candidate;
+  }
+  return null;
+}
 
 function iso(offsetMs: number): string {
   return new Date(Date.now() + offsetMs).toISOString();
@@ -1015,6 +1074,7 @@ function loadPersisted(): MockState | null {
     if (!parsed || !Array.isArray(parsed.mesas) || typeof parsed.balance_cents !== 'number') {
       return null;
     }
+    syncSequenceFromPersisted(parsed);
     // Migración 0.21 (fracciones): items persistidos sin `claims` — backfill
     // desde el estado legacy (paid entero = claim 10000 pagado).
     for (const mesa of parsed.mesas) {
@@ -1061,10 +1121,12 @@ function loadPersisted(): MockState | null {
     // v0.144.1 · el seed v0.144.0 usó el prefijo `h`, que no es hexadecimal
     // y por eso no puede ser el UUID que el owner exige. Se migra únicamente
     // esa firma legacy, reusando el mismo id en historial y detalle.
+    const occupiedIds = occupiedMovementIds(parsed);
     for (const movement of parsed.history) {
       if (!movement || typeof movement.id !== 'string' || !LEGACY_HISTORY_ID.test(movement.id)) continue;
       const legacyId = movement.id;
-      const attemptId = mockId('f');
+      const attemptId = nextMovementId(occupiedIds);
+      if (!attemptId) continue;
       movement.id = attemptId;
       const detail = parsed.movementDetails[legacyId];
       if (detail) {

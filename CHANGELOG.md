@@ -11,6 +11,21 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.144.2 — IDs mock durables y sin colisiones tras reload (2026-08-25)
+
+El allocator mock sincroniza su secuencia con el mayor sufijo UUID persistido
+antes de que cualquier migración emita IDs. La conversión acotada del prefijo
+legacy `h` reserva tanto IDs del historial como claves e IDs de sus detalles,
+y elige otro candidato ante cualquier colisión sin descartar el estado.
+
+Una regresión reproduce el defecto real: después de recargar, el contador de
+módulo volvía a cuatro, duplicaba una fila y sobrescribía su detalle. El pago
+nuevo ahora continúa por encima del máximo durable y conserva una sola UUID
+compartida por respuesta, historial y detalle.
+
+No cambia UI, contrato, backend ni dinero real. **Sin push, deploy, red ni
+consultas a producción.**
+
 ## 0.144.1 — Historial privado reconciliado contra el owner (2026-08-25)
 
 Adopta byte a byte el contrato App Backend v2.68.1: el detalle owner-only fija
