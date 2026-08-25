@@ -29,8 +29,6 @@ export function ShortfallDisclosure({ session, disclosure }: ShortfallDisclosure
   const gate = useRef(new LazyShortfallGate());
   const familyId = session.family_id;
   const principalId = session.principal_id;
-  const accessToken = session.access_token;
-  const refreshToken = session.refresh_token;
   const mesaCode = disclosure.mesaCode;
   const shortfallCents = disclosure.shortfallCents;
 
@@ -38,7 +36,7 @@ export function ShortfallDisclosure({ session, disclosure }: ShortfallDisclosure
     gate.current.reset();
     setState({ kind: 'idle' });
     return () => { gate.current.reset(); };
-  }, [familyId, principalId, accessToken, refreshToken, mesaCode, shortfallCents]);
+  }, [familyId, principalId, mesaCode, shortfallCents]);
 
   const load = useCallback(async () => {
     if (state.kind === 'available') {

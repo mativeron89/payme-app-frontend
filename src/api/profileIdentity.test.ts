@@ -167,13 +167,16 @@ describe('DTO de identidad propio · exacto y owner-first', () => {
   it('cuenta code points como el owner y conserva ZWJ/ZWNJ', () => {
     const astral100 = '🫀'.repeat(100);
     const devanagari = 'नाम‍देव';
+    const persian = 'می‌خواهم';
     expect(profileNameInput(astral100)).toBe(astral100);
     expect(profileNameInput(devanagari)).toBe(devanagari);
+    expect(profileNameInput(persian)).toBe(persian);
     expect(decodeProfileIdentityResponse({ user: { ...VALID_USER, first_name: astral100, last_name: devanagari } }).user.first_name)
       .toBe(astral100);
     expect(() => profileNameInput('🫀'.repeat(101))).toThrow('profile_name_invalid');
     expect(() => profileNameInput('Ana\u202Eadmin')).toThrow('profile_name_invalid');
     expect(() => profileNameInput('Ana\u200BMaría')).toThrow('profile_name_invalid');
+    expect(() => profileNameInput('Ana\u00ADMaría')).toThrow('profile_name_invalid');
   });
 });
 

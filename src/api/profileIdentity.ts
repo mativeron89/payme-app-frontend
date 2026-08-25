@@ -37,7 +37,7 @@ function validProfileName(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   const length = [...value].length;
   return length >= 1 && length <= 100
-    && !/\p{Cc}|[\u200B\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/u.test(value);
+    && !/\p{Cc}|\p{Cf}/u.test(value.replace(/[\u200C\u200D]/gu, ''));
 }
 
 function isoDateTime(value: unknown): value is string {
@@ -121,7 +121,7 @@ export function profileNameInput(value: string): string {
   const normalized = value.normalize('NFC').trim().replace(/\s+/gu, ' ');
   const length = [...normalized].length;
   if (length < 1 || length > 100
-      || /\p{Cc}|[\u200B\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/u.test(normalized)) {
+      || /\p{Cc}|\p{Cf}/u.test(normalized.replace(/[\u200C\u200D]/gu, ''))) {
     throw new Error('profile_name_invalid');
   }
   return normalized;

@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "28b087522314285b65d09c9d21736ee06f838c7f",
+  "commit": "1bf665fec9bec3cbfe3b6c77b03f00c647858e4e",
   "total": 85,
   "archivos": [
     {
@@ -499,8 +499,8 @@
     {
       "origen": "utils/profileNames.js",
       "destino": "utils/profileNames.js",
-      "sha256": "abf2e36e746f35a44f62d8a32d00a6f894b1796f14e3c61bb6f60d1315b75822",
-      "bytes": 824
+      "sha256": "4aaaaf25cd1b2b72e6ff6d99926c7872d67676851522f880081c4b6011bf17ba",
+      "bytes": 906
     },
     {
       "origen": "utils/stateMachine.js",

@@ -98,12 +98,22 @@ describe('detalle v1 · reconciliación exacta y sin identidades inventadas', ()
     expect(detail.unassigned_cents).toBe(2000);
   });
 
+  it('conserva ZWJ/ZWNJ presentables en nombres sellados', () => {
+    const detail = decode(available({
+      rows: [{ display_name: 'नाम‍देव می‌خواهم', due_cents: 21000 }],
+    }));
+    expect(detail.detail_available).toBe(true);
+    if (!detail.detail_available) throw new Error('control');
+    expect(detail.rows[0]?.display_name).toBe('नाम‍देव می‌خواهم');
+  });
+
   it.each([
     ['suma menor', available({ rows: [{ display_name: 'Luis', due_cents: 100 }] })],
     ['monto aviso distinto', available({ shortfall_cents: 20999 })],
     ['row cero', available({ rows: [{ display_name: 'Luis', due_cents: 0 }], unassigned_cents: 21000 })],
     ['nombre en blanco', available({ rows: [{ display_name: '   ', due_cents: 21000 }] })],
     ['control bidi', available({ rows: [{ display_name: 'Luis\u202Eadmin', due_cents: 21000 }] })],
+    ['formato invisible', available({ rows: [{ display_name: 'Luis\u00ADadmin', due_cents: 21000 }] })],
     ['campo ID extra', available({ rows: [{ display_name: 'Luis', due_cents: 21000, user_id: UUID }] })],
     ['campo top extra', { ...available(), payer_count: 2 }],
     ['closed_at RFC', available({ closed_at: 'Tue, 25 Aug 2026 01:02:03 GMT' })],

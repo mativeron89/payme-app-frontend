@@ -25,7 +25,9 @@ positivas y nombres presentables. La suma de filas más residual debe coincidir
 tanto con el snapshot como con el aviso agregado; el residual no se cuenta como
 persona y `null` jamás se muestra como cero ni como «Sin asignar». La consulta
 usa bearer y `private, no-store`, no persiste nombres y descarta respuestas de
-otra familia/principal aun si hubo un relogin durante la red.
+otra familia/principal aun si hubo un relogin durante la red. Un refresh de
+tokens de la misma familia no reinicia el gate lazy ni exige un segundo toque;
+una regresión montada en navegador reproduce esa carrera con una sola request.
 
 La capability permanece **DARK** en real y mock: la lista local de avisos
 presentables sigue vacía. El código queda probado mediante el seam Vitest
@@ -37,8 +39,8 @@ no está disponible o falla.
 
 ## 0.140.0 — Perfil propio privado, preparado y apagado (2026-08-25)
 
-Sincroniza el contrato owner-first de App Backend v2.63.3: 85 archivos del
-inventario publicado en `0d4cfdb`, cuyo corte exacto es `28b0875` y conserva el
+Sincroniza el contrato owner-first de App Backend v2.63.4: 85 archivos del
+inventario publicado en `fdecf9e`, cuyo corte exacto es `1bf665f` y conserva el
 cambio material de `b63fba0`. La lectura estricta de perfil y el avatar pasan
 por transportes autenticados con `no-store`; la hidratación baseline conserva
 compatibilidad con backends anteriores al header. Los bytes del avatar nunca
@@ -56,7 +58,8 @@ las mutaciones usan familia/principal, epoch y CAS para no escribir sobre un
 relogin. Un 409 de avatar refresca la revisión y exige reintento explícito. El
 nombre normalizado de la respuesta y la metadata autoritativa de PUT/DELETE se
 adoptan aun si hubo refresh de tokens durante la request. `If-Match` queda
-cerrado a UUID desnudo o íntegramente entrecomillado.
+cerrado a UUID desnudo o íntegramente entrecomillado; en nombres, ZWJ y ZWNJ
+son los únicos formatos `Cf` admitidos por el dueño y el consumidor.
 
 La capability permanece **DARK** en real y mock. Antes de activarla siguen
 faltando un aviso presentable y el inventario/remediación de identidades legacy;

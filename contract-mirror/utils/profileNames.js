@@ -9,10 +9,11 @@ function normalizarNombre(value) {
   const normalized = value.normalize('NFC').trim().replace(/\s+/gu, ' ');
   const length = [...normalized].length;
   if (length < 1 || length > 100) throw profileNameError('profile_name_length');
-  // Cc no tiene lugar en un nombre. De Cf se bloquean únicamente invisibles
-  // y controles bidi de suplantación; ZWJ/ZWNJ permanecen válidos para
-  // escrituras que los necesitan.
-  if (/\p{Cc}|[\u200B\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/u.test(normalized)) {
+  // Cc no tiene lugar en un nombre. De Cf se permiten únicamente ZWNJ/ZWJ,
+  // necesarios en algunas escrituras; el resto incluye invisibles y controles
+  // bidi capaces de hacer que el texto renderizado difiera del almacenado.
+  const controlCandidate = normalized.replace(/[\u200C\u200D]/gu, '');
+  if (/\p{Cc}|\p{Cf}/u.test(controlCandidate)) {
     throw profileNameError('profile_name_control_character');
   }
   return normalized;

@@ -36,7 +36,7 @@ function displayName(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   const length = [...value].length;
   return value.trim().length > 0 && length >= 1 && length <= 201
-    && !/\p{Cc}|[\u200B\u2060\uFEFF\u202A-\u202E\u2066-\u2069]/u.test(value);
+    && !/\p{Cc}|\p{Cf}/u.test(value.replace(/[\u200C\u200D]/gu, ''));
 }
 
 export interface ShortfallNotificationDisclosure {

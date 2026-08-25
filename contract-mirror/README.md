@@ -8,20 +8,19 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-08-25**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`28b087522314285b65d09c9d21736ee06f838c7f`**
-  (`fix(profile): exigir If-Match de avatar exacto` · v2.63.3).
+  **`1bf665fec9bec3cbfe3b6c77b03f00c647858e4e`**
+  (`fix(perfil): bloquear formatos Unicode invisibles` · v2.63.4).
 - Commit que publicó el inventario autoritativo:
-  **`0d4cfdb32fcdb2e3a4ced5b66e31163b7c65cbfb`**
-  (`chore(contrato): publicar If-Match estricto`). Como siempre, el inventario
+  **`fdecf9e9a3cb38e097fa9a3de83bbe3a6ff43fd8`**
+  (`chore(contrato): publicar mirror v2.63.4`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `0d4cfdb` está un commit más adelante que el contenido y no
-se espeja como contenido:** sólo publica el inventario. El HEAD actual del
-dueño, `902b736`, avanza una corrección documental adicional que tampoco toca
-la población. El árbol contractual declarado es `28b0875`; anclarse a él
-mantiene verificable la paridad. Ese commit cierra la sintaxis de `If-Match`;
-el cambio material de las fuentes privadas entró en su ancestro `b63fba0` y
-permanece en el corte vigente.
+⚠️ **El HEAD/publicador `fdecf9e` está un commit más adelante que el contenido
+y no se espeja como contenido:** sólo publica el inventario. El árbol
+contractual declarado es `1bf665f`; anclarse a él mantiene verificable la
+paridad. Ese commit permite únicamente ZWJ/ZWNJ entre los formatos Unicode
+invisibles; `If-Match` quedó cerrado en su ancestro `28b0875` y el cambio
+material de las fuentes privadas entró antes, en `b63fba0`.
 
 🆕 **85 archivos espejados** más este README.
 
@@ -31,7 +30,8 @@ su cierre preventivo:
 - `profile_identity`: `routes/account.js`, `routes/config.js`, schema, servicio,
   normalizador y migración fijan nombre propio editable y avatar autenticado,
   privado y sin URL pública; `If-Match` acepta sólo UUID desnudo o íntegramente
-  entrecomillado, y la capability permanece autoritativamente OFF.
+  entrecomillado, el nombre sólo permite ZWJ/ZWNJ dentro de la categoría `Cf`,
+  y la capability permanece autoritativamente OFF.
 - `settlement_shortfall_detail`: `routes/mesas.js`, settlement, servicio, schema
   y sus dos migraciones fijan el detalle owner-only, reconciliado y fail-closed;
   la segunda migración preserva upgrades donde v2.63.0 ya figuraba aplicada.
@@ -44,8 +44,15 @@ su cierre preventivo:
 
 La adopción se verificó contra la fuente antes de cerrar runtime del
 consumidor: **paridad 85/85** y **vigencia verde** contra App Backend HEAD
-`902b73655255ae473fc3eb05e8afd1ea4e82ed2b`. Eso acredita el árbol local y la
-ref contractual publicada `0d4cfdb`; no afirma deploy ni producción.
+`fdecf9e9a3cb38e097fa9a3de83bbe3a6ff43fd8`. Eso acredita el árbol local y la
+ref contractual publicada; no afirma deploy ni producción.
+
+### Refresh intermedio supersedido · 2026-08-25 (v2.63.3)
+
+El corte intermedio `28b087522314285b65d09c9d21736ee06f838c7f`,
+publicado por `0d4cfdb32fcdb2e3a4ced5b66e31163b7c65cbfb`, cerró
+`If-Match` a UUID desnudo o entre comillas parejas. Fue supersedido antes del
+cierre por el normalizador Unicode exhaustivo de v2.63.4.
 
 ### Refresh intermedio supersedido · 2026-08-25 (v2.63.2)
 
