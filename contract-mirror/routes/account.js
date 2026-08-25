@@ -49,6 +49,13 @@ function responderPerfilPrivado(res, user) {
   return res.json({ user });
 }
 
+function marcarRespuestaPrivada(_req, res, next) {
+  // Se instala antes de los validadores de la ruta: el detalle individual no
+  // debe ser cacheable tampoco cuando el resultado sea 400 o 404.
+  res.setHeader('Cache-Control', 'private, no-store');
+  next();
+}
+
 router.get('/me', async (req, res, next) => {
   try {
     const user = await perfilPropio(req.user.id);
@@ -301,7 +308,8 @@ router.get('/movements', validateQuery(movementsQuery), async (req, res, next) =
   } catch (err) { next(err); }
 });
 
-router.get('/movements/:id', validateParams(uuidIdParam), async (req, res, next) => {
+router.get('/movements/:id', marcarRespuestaPrivada,
+  validateParams(uuidIdParam), async (req, res, next) => {
   try {
     const { rows: aRows } = await pool.query(
       `SELECT pa.*, m.code AS mesa_code, r.name AS restaurant_name, r.category,

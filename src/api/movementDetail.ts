@@ -77,12 +77,29 @@ export function decodeMovementDetailResponse(value: unknown): MovementDetailResp
       || !Array.isArray(raw.items)
       || !cents(raw.items_amount_cents) || !cents(raw.tip_amount_cents)
       || !cents(raw.gross_amount_cents) || !cents(raw.fee_amount_cents)
-      || raw.items_amount_cents + raw.tip_amount_cents !== raw.gross_amount_cents
+      || BigInt(raw.items_amount_cents) + BigInt(raw.tip_amount_cents)
+        !== BigInt(raw.gross_amount_cents)
       || !text(raw.status, 80)) {
     throw new Error('movement_detail_response_malformed');
   }
   const items = raw.items.map(item);
   if (items.some((entry) => entry === null)) throw new Error('movement_detail_response_malformed');
+  const decodedItems = items as MovementDetailItem[];
+  const monetaryLines = decodedItems.filter((entry) => entry.amount_cents !== null);
+  // Un intento representa consumo cobrado O declaraciones de igualdad. Mezclar
+  // ambos modelos en un mismo 2xx volvería ambiguo qué subtotal se acredita.
+  if (monetaryLines.length > 0 && monetaryLines.length !== decodedItems.length) {
+    throw new Error('movement_detail_response_malformed');
+  }
+  if (monetaryLines.length > 0) {
+    const itemSubtotal = monetaryLines.reduce(
+      (sum, entry) => sum + BigInt(entry.amount_cents!),
+      0n,
+    );
+    if (itemSubtotal !== BigInt(raw.items_amount_cents)) {
+      throw new Error('movement_detail_response_malformed');
+    }
+  }
   let method: MovementDetailResponse['method'] = null;
   if (raw.method !== null) {
     const candidate = record(raw.method);
@@ -101,7 +118,7 @@ export function decodeMovementDetailResponse(value: unknown): MovementDetailResp
     date: raw.date,
     payment_type: raw.payment_type as MovementDetailResponse['payment_type'],
     method,
-    items: items as MovementDetailItem[],
+    items: decodedItems,
     items_amount_cents: raw.items_amount_cents,
     tip_amount_cents: raw.tip_amount_cents,
     gross_amount_cents: raw.gross_amount_cents,

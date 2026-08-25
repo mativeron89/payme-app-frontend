@@ -1236,10 +1236,11 @@ export async function mockPayMesa(
   }
   mesa.tip_amount_cents += tipCents;
   markMesaPaid(mesa, itemsAmount);
+  const attemptId = mockId('f');
 
   // Pantalla Mesas: cada pago propio suma una entrada al historial.
   if (identity !== 'guest') {
-    const movementId = mockId('h');
+    const movementId = attemptId;
     const movementDate = new Date().toISOString();
     state.history.push({
       id: movementId,
@@ -1314,7 +1315,7 @@ export async function mockPayMesa(
 
   const respuesta: PayMesaResponse = {
     attempt: {
-      id: mockId('f'),
+      id: attemptId,
       gross_amount_cents: gross,
       tip_cents: tipCents,
       ...(pricedItems.length > 0 && { items: pricedItems }),

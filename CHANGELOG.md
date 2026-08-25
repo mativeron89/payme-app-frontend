@@ -11,6 +11,29 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.144.1 — Historial privado reconciliado contra el owner (2026-08-25)
+
+Adopta byte a byte el contrato App Backend v2.68.1: el detalle owner-only fija
+`Cache-Control: private, no-store` incluso antes de validar el UUID. La fachada
+real envía `cache: no-store` y exige respuesta JSON con ambos tokens de caché
+antes de decodificar consumos individuales.
+
+El decoder rechaza intentos que mezclen claims monetarios y declarativos, y en
+consumo exige que la suma segura de todas las líneas coincida exactamente con
+`items_amount_cents`. En igualdad conserva `price_cents` como metadata del
+ticket, pero `amount_cents` y `fraction_bps` permanecen null: el monto sigue
+siendo el casillero fijo y no se inventa un precio consumido.
+
+El mock usa UUID v4 hexadecimales y una sola identidad de intento para la
+respuesta, el historial y su detalle; estados v0.144.0 con el prefijo legacy
+`h` se migran en forma acotada. La fachada mock atraviesa el mismo decoder
+estricto que real. La documentación del mirror distingue el `CHECK` de la
+declaración del rango efectivo de claims, sin atribuir a la base una regla que
+vive en Zod/servicio.
+
+No cambia ningún pixel, flujo de pago, Stripe, 3DS, holds, idempotencia ni
+semántica monetaria. **Sin push, deploy, red ni consultas a producción.**
+
 ## 0.144.0 — Landing, selección fraccional e historial propio verificable (2026-08-25)
 
 La landing usa el símbolo SVG oficial junto al wordmark, conserva un solo CTA

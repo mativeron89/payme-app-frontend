@@ -274,6 +274,11 @@ describe('mock: paridad idempotente de pago de mesa', () => {
       expect(response.attempt.gross_amount_cents).toBe(15500);
       const newDetailKey = Object.keys(state.movementDetails).find((id) => !detailKeysBefore.has(id));
       expect(newDetailKey).toBeDefined();
+      expect(newDetailKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/i);
+      expect(response.attempt.id).toBe(newDetailKey);
+      expect(state.history.slice(historyBefore.length)).toEqual([
+        expect.objectContaining({ id: response.attempt.id }),
+      ]);
       expect(state.movementDetails[newDetailKey!]).toMatchObject({
         items_amount_cents: 15500,
         items: [{

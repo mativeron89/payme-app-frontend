@@ -392,7 +392,7 @@ const realApi: Api = {
     return httpRequest<HistoryResponse>('GET', `/account/history${s ? `?${s}` : ''}`);
   },
   getMovement: async (id) => decodeMovementDetailResponse(
-    await httpRequest<unknown>('GET', `/account/movements/${encodeURIComponent(id)}`),
+    await httpPrivateJsonRequest<unknown>(`/account/movements/${encodeURIComponent(id)}`),
   ),
   getWalletTransactions: () =>
     httpRequest<WalletTransactionsResponse>('GET', '/account/wallet-transactions'),
@@ -693,7 +693,7 @@ const mockApi: Api = {
   getBalance: () => mock.mockBalance(),
   getWalletTransactions: () => mock.mockWalletTransactions(),
   getHistory: (params) => mock.mockHistory(params),
-  getMovement: (id) => mock.mockMovement(id),
+  getMovement: async (id) => decodeMovementDetailResponse(await mock.mockMovement(id)),
 
   getOpenMesas: () => mock.mockOpenMesas(),
   getMesa: (code, guestToken) => mock.mockGetMesa(code, guestToken ? 'guest' : 'user'),

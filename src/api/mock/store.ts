@@ -181,6 +181,8 @@ export function mockId(prefix: string): string {
   return `${prefix}0000000-0000-4000-8000-${String(seq).padStart(12, '0')}`;
 }
 
+const LEGACY_HISTORY_ID = /^h0000000-0000-4000-8000-\d{12}$/;
+
 function iso(offsetMs: number): string {
   return new Date(Date.now() + offsetMs).toISOString();
 }
@@ -632,17 +634,17 @@ function seedState(): MockState {
   const { notifications, pendingInvitations } = seedNotifications(mesas);
   const history: HistoryEntry[] = [
     {
-      id: mockId('h'), amount_cents: 22425, date: iso(-3 * 24 * 60 * 60_000),
+      id: mockId('f'), amount_cents: 22425, date: iso(-3 * 24 * 60 * 60_000),
       mesa_code: 'PA-8712', mesa_status: 'completed',
       restaurant: MOCK_RESTAURANTS[0].name, category: MOCK_RESTAURANTS[0].category,
     },
     {
-      id: mockId('h'), amount_cents: 41800, date: iso(-9 * 24 * 60 * 60_000),
+      id: mockId('f'), amount_cents: 41800, date: iso(-9 * 24 * 60 * 60_000),
       mesa_code: 'PA-6603', mesa_status: 'completed',
       restaurant: MOCK_RESTAURANTS[1].name, category: MOCK_RESTAURANTS[1].category,
     },
     {
-      id: mockId('h'), amount_cents: 15650, date: iso(-16 * 24 * 60 * 60_000),
+      id: mockId('f'), amount_cents: 15650, date: iso(-16 * 24 * 60 * 60_000),
       mesa_code: 'PA-5218', mesa_status: 'completed',
       restaurant: MOCK_RESTAURANTS[0].name, category: MOCK_RESTAURANTS[0].category,
     },
@@ -1054,6 +1056,21 @@ function loadPersisted(): MockState | null {
             item.declared_fraction_bps = null;
           }
         }
+      }
+    }
+    // v0.144.1 · el seed v0.144.0 usó el prefijo `h`, que no es hexadecimal
+    // y por eso no puede ser el UUID que el owner exige. Se migra únicamente
+    // esa firma legacy, reusando el mismo id en historial y detalle.
+    for (const movement of parsed.history) {
+      if (!movement || typeof movement.id !== 'string' || !LEGACY_HISTORY_ID.test(movement.id)) continue;
+      const legacyId = movement.id;
+      const attemptId = mockId('f');
+      movement.id = attemptId;
+      const detail = parsed.movementDetails[legacyId];
+      if (detail) {
+        detail.id = attemptId;
+        parsed.movementDetails[attemptId] = detail;
+        delete parsed.movementDetails[legacyId];
       }
     }
     // Migración 0.25: el seed viejo traía 'payme_mx_leo' (3 chars), que viola

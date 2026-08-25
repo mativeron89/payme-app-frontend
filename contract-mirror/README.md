@@ -8,28 +8,33 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-08-25**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`51907982689c19d21bc91184c7a7129a9d812350`**
-  (`feat(pagos): completar fracciones naturales` · v2.68.0).
+  **`f91bfda37bc00a45576cd067edc508f415c1810b`**
+  (`fix(cuenta): impedir cache del detalle privado` · v2.68.1).
 - Commit que publicó el inventario autoritativo:
-  **`9ba9bd3f21686101302a0229aef38078b1626009`**
-  (`chore(contract): publicar fracciones naturales v2.68.0`). Como siempre, el inventario
+  **`7703e9d7f88c3cfc0d9dfc926feb8225e78b0dd7`**
+  (`chore(contract): publicar no-cache v2.68.1`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `9ba9bd3` está un commit más adelante que el contenido y no
+⚠️ **El publicador `7703e9d` está un commit más adelante que el contenido y no
 se espeja como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `5190798`; anclarse a él mantiene verificable la paridad.
+declarado es `f91bfda`; anclarse a él mantiene verificable la paridad.
 
 🆕 **87 archivos espejados** más este README.
 
-Este refresh incorpora un campo separado y aditivo para la declaración de
-consumo en partes iguales:
+Este refresh sella la frontera privada de historial y conserva las fracciones
+naturales incorporadas en v2.68.0:
+
+- `GET /account/movements/:id` fija `Cache-Control: private, no-store` antes de
+  validar el UUID; tanto un 200 como sus rechazos 400/404 quedan no cacheables.
 
 - `payment_attempt_items.declared_fraction_bps` conserva el conjunto natural
   cerrado `2500`, `3333`, `5000`, `6667`, `7500` o `10000` cuando el
   comensal marca una porción en modo `igual`.
-- El mismo conjunto cerrado rige los reclamos monetarios de `consumo`; la
-  migración v2.68.0 actualiza los `CHECK` de ambas tablas sin aceptar bps
-  arbitrarios ni floats.
+- El mismo conjunto cerrado rige las solicitudes de reclamos monetarios de
+  `consumo`, impuesto por Zod y el servicio. La migración v2.68.0 cambia sólo
+  el `CHECK` de `declared_fraction_bps`: el `CHECK` de `mesa_item_claims`
+  conserva el rango `1..10000` porque debe persistir el `3334` efectivo que
+  completa tercios.
 - La declaración **no altera dinero**: `fraction_bps` y `amount_cents` siguen
   en `null` para esos ítems y el monto continúa siendo el casillero fijo.
 - `POST /mesas/:code/pay` acepta `items` en igualdad; el camino legacy de
@@ -39,9 +44,17 @@ consumo en partes iguales:
 
 La adopción se verificó contra la fuente antes de cerrar runtime del
 consumidor: **paridad 87/87** y **vigencia verde** contra App Backend HEAD
-`9ba9bd3f21686101302a0229aef38078b1626009`, cuya publicación contractual
-declara `51907982689c19d21bc91184c7a7129a9d812350`. Eso acredita el árbol local
+`7703e9d7f88c3cfc0d9dfc926feb8225e78b0dd7`, cuya publicación contractual
+declara `f91bfda37bc00a45576cd067edc508f415c1810b`. Eso acredita el árbol local
 y la ref contractual publicada; no afirma deploy ni producción.
+
+### Refresh anterior · 2026-08-25 (fracciones naturales · v2.68.0)
+
+El corte anterior completó el conjunto natural de seis fracciones y publicó
+el detalle owner-only. Declaró **87/87** contra contenido
+`51907982689c19d21bc91184c7a7129a9d812350`, publicado por
+`9ba9bd3f21686101302a0229aef38078b1626009`. v2.68.1 conserva ese contrato y
+agrega la política de caché privada que faltaba.
 
 ### Refresh anterior · 2026-08-25 (declaración igualitaria · v2.67.0)
 

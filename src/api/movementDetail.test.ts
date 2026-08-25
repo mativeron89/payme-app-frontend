@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodeMovementDetailResponse } from './movementDetail';
 import { mockMovement } from './mock/mockApi';
+import { state } from './mock/store';
 
 const valid = () => ({
   id: '11111111-1111-4111-8111-111111111111',
@@ -25,6 +26,33 @@ describe('decodeMovementDetailResponse', () => {
     expect(decodeMovementDetailResponse(valid()).items[0]).toMatchObject({
       amount_cents: 9750, fraction_bps: 5000,
     });
+  });
+
+  it('acepta varias líneas monetarias sólo cuando su suma reconcilia el subtotal', () => {
+    const input = valid();
+    input.items = [
+      { ...input.items[0], amount_cents: 4000 },
+      { ...input.items[0], name: 'Risotto', amount_cents: 5750 },
+    ];
+    expect(decodeMovementDetailResponse(input).items).toHaveLength(2);
+  });
+
+  it('rechaza que las líneas monetarias sumen distinto de items_amount_cents', () => {
+    const input = valid();
+    input.items[0] = { ...input.items[0], amount_cents: 1 };
+    expect(() => decodeMovementDetailResponse(input)).toThrow('movement_detail_response_malformed');
+  });
+
+  it('rechaza mezclar líneas monetarias y declarativas en un mismo intento', () => {
+    const input = valid();
+    input.items.push({
+      ...input.items[0],
+      name: 'Risotto',
+      amount_cents: null as never,
+      fraction_bps: null as never,
+      declared_fraction_bps: 5000,
+    });
+    expect(() => decodeMovementDetailResponse(input)).toThrow('movement_detail_response_malformed');
   });
 
   it.each([
@@ -59,6 +87,31 @@ describe('decodeMovementDetailResponse', () => {
     expect(decodeMovementDetailResponse(input).items[0]?.declared_fraction_bps).toBeNull();
   });
 
+  it('acepta igualdad con precio de catálogo, claims null y monto fijo de slot', () => {
+    const input = valid();
+    input.items[0] = {
+      ...input.items[0],
+      price_cents: 19500,
+      amount_cents: null as never,
+      fraction_bps: null as never,
+      declared_fraction_bps: 6667,
+    };
+    input.items_amount_cents = 40000;
+    input.gross_amount_cents = 40975;
+    expect(decodeMovementDetailResponse(input).items[0]).toMatchObject({
+      price_cents: 19500,
+      amount_cents: null,
+      fraction_bps: null,
+      declared_fraction_bps: 6667,
+    });
+  });
+
+  it('acepta igualdad histórica sin filas y conserva el monto del slot', () => {
+    const input = valid();
+    input.items = [];
+    expect(decodeMovementDetailResponse(input).items).toEqual([]);
+  });
+
   it('rechaza importe sin fracción o fracción sin importe', () => {
     const input = valid();
     input.items[0] = { ...input.items[0], fraction_bps: null as never };
@@ -83,5 +136,12 @@ describe('decodeMovementDetailResponse', () => {
   it('el mock falla igual para un id ajeno o inexistente: nunca filtra otro detalle', async () => {
     await expect(mockMovement('99999999-9999-4999-8999-999999999999'))
       .rejects.toMatchObject({ status: 404, message: 'movement_not_found' });
+  });
+
+  it('un detalle conocido del mock atraviesa el mismo decoder estricto que real', async () => {
+    const knownId = state.history[0]?.id;
+    expect(knownId).toBeDefined();
+    const raw = await mockMovement(knownId!);
+    expect(decodeMovementDetailResponse(raw).id).toBe(knownId);
   });
 });
