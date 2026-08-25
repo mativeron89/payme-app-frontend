@@ -11,10 +11,34 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.141.0 — Detalle privado de faltante, preparado y apagado (2026-08-25)
+
+Notificaciones conserva siempre el aviso agregado de la garantía. Sólo una
+notificación final `mesa_shortfall_charged`, ligada a la misma mesa y con monto
+positivo exacto, ofrece una consulta lazy de «Quién no pagó» cuando la
+capability estricta `settlement_shortfall_detail` está efectivamente activa.
+El evento temprano `mesa_garantia_impagos`, payloads históricos, formas nuevas
+y referencias incoherentes nunca disparan la ruta privada.
+
+El decoder v1 exige campos cerrados, centavos seguros, deudas individuales
+positivas y nombres presentables. La suma de filas más residual debe coincidir
+tanto con el snapshot como con el aviso agregado; el residual no se cuenta como
+persona y `null` jamás se muestra como cero ni como «Sin asignar». La consulta
+usa bearer y `private, no-store`, no persiste nombres y descarta respuestas de
+otra familia/principal aun si hubo un relogin durante la red.
+
+La capability permanece **DARK** en real y mock: la lista local de avisos
+presentables sigue vacía. El código queda probado mediante el seam Vitest
+explícito, sin inventar texto legal ni habilitar un flip remoto. El diseño
+aprobado de Avisos permanece agregado cuando el detalle falta, es malformado,
+no está disponible o falla.
+
+**Sin push, deploy, red productiva ni consultas a producción.**
+
 ## 0.140.0 — Perfil propio privado, preparado y apagado (2026-08-25)
 
-Sincroniza el contrato owner-first de App Backend v2.63.2: 85 archivos del
-inventario publicado en `6f1b87a`, cuyo corte exacto es `63987fa` y conserva el
+Sincroniza el contrato owner-first de App Backend v2.63.3: 85 archivos del
+inventario publicado en `0d4cfdb`, cuyo corte exacto es `28b0875` y conserva el
 cambio material de `b63fba0`. La lectura estricta de perfil y el avatar pasan
 por transportes autenticados con `no-store`; la hidratación baseline conserva
 compatibilidad con backends anteriores al header. Los bytes del avatar nunca
@@ -31,7 +55,8 @@ Los decoders espejan nombres por code points, `payme_id`, timestamps y metadata;
 las mutaciones usan familia/principal, epoch y CAS para no escribir sobre un
 relogin. Un 409 de avatar refresca la revisión y exige reintento explícito. El
 nombre normalizado de la respuesta y la metadata autoritativa de PUT/DELETE se
-adoptan aun si hubo refresh de tokens durante la request.
+adoptan aun si hubo refresh de tokens durante la request. `If-Match` queda
+cerrado a UUID desnudo o íntegramente entrecomillado.
 
 La capability permanece **DARK** en real y mock. Antes de activarla siguen
 faltando un aviso presentable y el inventario/remediación de identidades legacy;

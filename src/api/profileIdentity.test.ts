@@ -3,6 +3,7 @@ import { api } from './index';
 import {
   applyPrivateFeatureConfig,
   assertProfileIdentityEnabled,
+  assertShortfallDetailEnabled,
   readProfileIdentityCapability,
   readShortfallDetailCapability,
   resetPrivateFeaturesForTests,
@@ -14,6 +15,7 @@ import {
   currentSamePrincipalSession,
   decodeProfileAvatarResponse,
   decodeProfileIdentityResponse,
+  mergeProfileIdentityIntoCurrentUser,
   profileNameInput,
   validatePrivateAvatarBlob,
 } from './profileIdentity';
@@ -130,8 +132,12 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
       activation_blocker: 'privacy_notice_and_legacy_identity_inventory_pending',
     }));
     expect(() => assertProfileIdentityEnabled()).toThrow('profile_identity_unavailable');
+    expect(() => assertShortfallDetailEnabled()).toThrow('settlement_shortfall_detail_unavailable');
     await expect(api.getProfileIdentity(SESSION)).rejects.toThrow('profile_identity_unavailable');
+    await expect(api.getShortfallDetail('PA-12345', 21000, SESSION))
+      .rejects.toThrow('settlement_shortfall_detail_unavailable');
     await expect(mock.mockProfileIdentity()).rejects.toMatchObject({ status: 503 });
+    await expect(mock.mockShortfallDetail('PA-12345')).rejects.toMatchObject({ status: 503 });
   });
 });
 
@@ -193,7 +199,7 @@ describe('avatar privado · bytes y ObjectURL efímeros', () => {
   });
 
   it('acepta refresh de tokens de la misma familia y rechaza relogin/principal stale', () => {
-    const rotated = { ...SESSION, access_token: 'rotated-a', refresh_token: 'rotated-r' };
+    const rotated = { ...SESSION, access_token: 'a2', refresh_token: 'r2' };
     expect(currentSamePrincipalSession(SESSION, rotated)).toBe(rotated);
     expect(currentSamePrincipalSession(SESSION, { ...rotated, family_id: 'otra-familia' })).toBeNull();
     expect(currentSamePrincipalSession(SESSION, { ...rotated, principal_id: 'otro-principal' })).toBeNull();
@@ -203,8 +209,8 @@ describe('avatar privado · bytes y ObjectURL efímeros', () => {
   it('CAS de mutación adopta con tokens rotados y nunca cruza familia/principal', () => {
     const rotated = {
       ...SESSION,
-      access_token: 'rotated-a',
-      refresh_token: 'rotated-r',
+      access_token: 'a2',
+      refresh_token: 'r2',
     };
     const adopted: Array<{ session: StoredSession; user: typeof VALID_USER }> = [];
     expect(adoptProfileMutationUser(SESSION, () => VALID_USER, {
@@ -230,12 +236,48 @@ describe('avatar privado · bytes y ObjectURL efímeros', () => {
     })).toBe(false);
   });
 
+  it('adopta sólo nombre/avatar sin incorporar PII adicional del DTO privado', () => {
+    const currentUser = {
+      ...VALID_USER,
+      payme_id: 'payme_mx_z9y8',
+      email: 'baseline@example.test',
+      phone: null,
+      birth_date: null,
+      birth_date_set: false,
+      is_adult: null,
+    };
+    const current = { ...SESSION, user: currentUser };
+    const remote = {
+      ...VALID_USER,
+      first_name: 'Nombre servidor',
+      last_name: 'Normalizado',
+      payme_id: 'payme_mx_a1b2',
+      email: 'private@example.test',
+      phone: '+525500000000',
+      birth_date: '1988-03-14',
+      birth_date_set: true,
+      is_adult: true,
+    };
+
+    expect(mergeProfileIdentityIntoCurrentUser(current, remote)).toEqual({
+      ...currentUser,
+      first_name: 'Nombre servidor',
+      last_name: 'Normalizado',
+      avatar: remote.avatar,
+    });
+    expect(mergeProfileIdentityIntoCurrentUser(
+      current,
+      { ...remote, id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+    )).toBeNull();
+    expect(mergeProfileIdentityIntoCurrentUser({ ...current, user: undefined }, remote)).toBeNull();
+  });
+
   it('avatar PUT/DELETE no reconstruyen perfil si la sesión actual no tiene usuario', () => {
     const rotatedWithoutUser = {
       ...SESSION,
       user: undefined,
-      access_token: 'rotated-a',
-      refresh_token: 'rotated-r',
+      access_token: 'a2',
+      refresh_token: 'r2',
     };
     expect(adoptProfileMutationUser(
       SESSION,

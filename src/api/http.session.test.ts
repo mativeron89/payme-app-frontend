@@ -366,8 +366,8 @@ describe('timeout cubre headers y body', () => {
 describe('avatar privado: bearer, no-store y bytes acotados', () => {
   function loggedSession() {
     saveSession({
-      access_token: 'avatar-access',
-      refresh_token: 'avatar-refresh',
+      access_token: 'a1',
+      refresh_token: 'r1',
       family_id: 'avatar-family',
       principal_id: user.id,
       user,
@@ -377,7 +377,7 @@ describe('avatar privado: bearer, no-store y bytes acotados', () => {
 
   it('lee con bearer/no-store y valida el Content-Length observable', async () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
-      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer avatar-access');
+      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer a1');
       expect((init?.headers as Record<string, string>).Accept).toBe('image/jpeg');
       expect(init?.cache).toBe('no-store');
       return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), {
@@ -432,7 +432,7 @@ describe('avatar privado: bearer, no-store y bytes acotados', () => {
 
   it('detalle JSON privado exige bearer y Cache-Control antes de decodificar', async () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
-      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer avatar-access');
+      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer a1');
       expect(init?.cache).toBe('no-store');
       return new Response(JSON.stringify({ shortfall_detail: { version: 1 } }), {
         status: 200,
@@ -453,15 +453,15 @@ describe('avatar privado: bearer, no-store y bytes acotados', () => {
     let protectedCalls = 0;
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith('/auth/refresh')) {
-        return response({ access_token: 'avatar-access-new', refresh_token: 'avatar-refresh-new', expires_in: 900 });
+        return response({ access_token: 'a2', refresh_token: 'r2', expires_in: 900 });
       }
       protectedCalls += 1;
       const authorization = (init?.headers as Record<string, string>).Authorization;
       if (protectedCalls === 1) {
-        expect(authorization).toBe('Bearer avatar-access');
+        expect(authorization).toBe('Bearer a1');
         return response({ error: 'expired' }, 401);
       }
-      expect(authorization).toBe('Bearer avatar-access-new');
+      expect(authorization).toBe('Bearer a2');
       return new Response(JSON.stringify({ user: { id: user.id } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' },
@@ -470,8 +470,8 @@ describe('avatar privado: bearer, no-store y bytes acotados', () => {
     await expect(httpPrivateJsonRequest('/account/me', origin)).resolves.toEqual({ user: { id: user.id } });
     expect(loadSession()).toMatchObject({
       family_id: origin.family_id,
-      access_token: 'avatar-access-new',
-      refresh_token: 'avatar-refresh-new',
+      access_token: 'a2',
+      refresh_token: 'r2',
     });
     expect(protectedCalls).toBe(2);
   });

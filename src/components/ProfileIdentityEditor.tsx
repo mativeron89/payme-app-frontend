@@ -5,6 +5,7 @@ import {
   PROFILE_AVATAR_INPUT_MIMES,
   adoptProfileMutationUser,
   currentSamePrincipalSession,
+  mergeProfileIdentityIntoCurrentUser,
   profileNameInput,
   validateAvatarInput,
 } from '../api/profileIdentity';
@@ -57,7 +58,11 @@ export function ProfileIdentityEditor({
     if (!current || !mutationEpoch.current.isCurrent(mutation) || !isCurrentSession(current)) return false;
     const response = await api.getProfileIdentity(current);
     if (!mutationEpoch.current.isCurrent(mutation) || !isCurrentSession(current)) return false;
-    return adoptUser(current, response.user);
+    return adoptProfileMutationUser(
+      origin,
+      (latest) => mergeProfileIdentityIntoCurrentUser(latest, response.user),
+      { loadCurrent: loadSession, isCurrent: isCurrentSession, adoptUser },
+    );
   }, [adoptUser]);
 
   useEffect(() => {
@@ -71,8 +76,12 @@ export function ProfileIdentityEditor({
     const expected = session;
     const epoch = profileEpoch.current.next();
     api.getProfileIdentity(expected).then(({ user: fresh }) => {
-      if (!profileEpoch.current.isCurrent(epoch) || !isCurrentSession(expected)) return;
-      adoptUser(expected, fresh);
+      if (!profileEpoch.current.isCurrent(epoch)) return;
+      adoptProfileMutationUser(
+        expected,
+        (current) => mergeProfileIdentityIntoCurrentUser(current, fresh),
+        { loadCurrent: loadSession, isCurrent: isCurrentSession, adoptUser },
+      );
     }).catch(() => undefined);
     return () => { profileEpoch.current.next(); };
   }, [enabled, familyId, principalId, accessToken, refreshToken, adoptUser]);
@@ -118,7 +127,7 @@ export function ProfileIdentityEditor({
       const response = await api.updateProfileIdentity({ first_name: first, last_name: last }, expected);
       if (!mutationEpoch.current.isCurrent(epoch) || !adoptProfileMutationUser(
         expected,
-        () => response.user,
+        (current) => mergeProfileIdentityIntoCurrentUser(current, response.user),
         { loadCurrent: loadSession, isCurrent: isCurrentSession, adoptUser },
       )) return;
       setEditingName(false);

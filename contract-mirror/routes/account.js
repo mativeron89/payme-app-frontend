@@ -180,12 +180,15 @@ function singleAvatar(req, res, next) {
 function revisionFromIfMatch(req) {
   const raw = req.headers['if-match'];
   if (raw === undefined) return null;
-  const revision = String(raw).replace(/^"|"$/g, '');
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(revision)) {
+  const match = String(raw).match(
+    /^(?:([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})|"([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})")$/i
+  );
+  if (!match) {
     throw Object.assign(new Error('avatar_revision_invalid'), {
       code: 'avatar_revision_invalid', status: 400,
     });
   }
+  const revision = match[1] || match[2];
   return revision.toLowerCase();
 }
 

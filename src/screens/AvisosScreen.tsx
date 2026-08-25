@@ -16,6 +16,9 @@ import {
 } from './invitacionAdmision';
 import { goBack, navigate } from '../router';
 import { relTime } from '../utils/format';
+import { useShortfallDetailCapability } from '../api/privateFeatures';
+import { readShortfallNotificationDisclosure } from '../api/shortfallDetail';
+import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
 
 /**
  * Avisos: invitaciones in-app pendientes (GET /invitations + accept) arriba,
@@ -76,6 +79,7 @@ export function AvisosScreen() {
   const { t } = useIdioma();
   const toast = useToast();
   const { session } = useAuth();
+  const shortfallCapability = useShortfallDetailCapability();
   const [notifs, setNotifs] = useState<AppNotification[] | null>(null);
   // C-01: la lista se guarda YA DECODIFICADA. El tipo del contrato promete
   // campos que la red puede no traer, y confiar en esa promesa era lo que
@@ -212,6 +216,7 @@ export function AvisosScreen() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {notifs?.map((n) => {
             const sinLeer = !n.read_at;
+            const shortfallDisclosure = readShortfallNotificationDisclosure(n);
             const inviterName = n.type === 'invitation_received' && typeof n.payload?.inviter_name === 'string'
               ? n.payload.inviter_name.trim()
               : '';
@@ -223,21 +228,26 @@ export function AvisosScreen() {
                 key={n.id}
                 className={`card card-p aviso-row${n.type === 'mesa_shortfall_charged' || n.type === 'mesa_garantia_impagos' ? ' aviso-row--guarantee' : ''}`}
               >
-                <span
-                  className={`aviso-dot ${sinLeer ? '' : 'off'}`}
-                  aria-hidden={sinLeer ? undefined : 'true'}
-                  aria-label={sinLeer ? t('Sin leer') : undefined}
-                  role={sinLeer ? 'img' : undefined}
-                />
-                <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className={`aviso-title ${sinLeer ? 'unread' : ''}`}>
-                    {invitationSuffix !== null ? (
-                      <><strong>{inviterName}</strong>{invitationSuffix}</>
-                    ) : n.body}
+                <div className="aviso-row-main">
+                  <span
+                    className={`aviso-dot ${sinLeer ? '' : 'off'}`}
+                    aria-hidden={sinLeer ? undefined : 'true'}
+                    aria-label={sinLeer ? t('Sin leer') : undefined}
+                    role={sinLeer ? 'img' : undefined}
+                  />
+                  <Icon name={NOTIF_ICON[n.type] ?? 'bell'} size={18} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className={`aviso-title ${sinLeer ? 'unread' : ''}`}>
+                      {invitationSuffix !== null ? (
+                        <><strong>{inviterName}</strong>{invitationSuffix}</>
+                      ) : n.body}
+                    </div>
+                    <div className="aviso-time">{relTime(n.created_at, undefined, t)}</div>
                   </div>
-                  <div className="aviso-time">{relTime(n.created_at, undefined, t)}</div>
                 </div>
+                {shortfallCapability.enabled && session && shortfallDisclosure && (
+                  <ShortfallDisclosure session={session} disclosure={shortfallDisclosure} />
+                )}
               </div>
             );
           })}

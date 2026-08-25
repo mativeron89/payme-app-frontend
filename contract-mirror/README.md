@@ -8,18 +8,20 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-08-25**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`63987fa5dd45d23f9a62eb8ff0c8d5afe9f89540`**
-  (`test(release): alinear preflight con v2.63.2` · v2.63.2).
+  **`28b087522314285b65d09c9d21736ee06f838c7f`**
+  (`fix(profile): exigir If-Match de avatar exacto` · v2.63.3).
 - Commit que publicó el inventario autoritativo:
-  **`6f1b87ab98d4d21eb4265b2ba37a0f38e0cd2819`**
-  (`chore(contrato): publicar v2.63.2 final`). Como siempre, el inventario
+  **`0d4cfdb32fcdb2e3a4ced5b66e31163b7c65cbfb`**
+  (`chore(contrato): publicar If-Match estricto`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El HEAD del dueño está un commit más adelante (`6f1b87a`) y no se espeja
-ese commit como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `63987fa`; anclarse a él mantiene verificable la paridad. Ese
-commit sólo ajusta el preflight de release; el cambio material de las fuentes
-privadas entró en su ancestro `b63fba0` y permanece byte-idéntico en `63987fa`.
+⚠️ **El publicador `0d4cfdb` está un commit más adelante que el contenido y no
+se espeja como contenido:** sólo publica el inventario. El HEAD actual del
+dueño, `902b736`, avanza una corrección documental adicional que tampoco toca
+la población. El árbol contractual declarado es `28b0875`; anclarse a él
+mantiene verificable la paridad. Ese commit cierra la sintaxis de `If-Match`;
+el cambio material de las fuentes privadas entró en su ancestro `b63fba0` y
+permanece en el corte vigente.
 
 🆕 **85 archivos espejados** más este README.
 
@@ -28,7 +30,8 @@ su cierre preventivo:
 
 - `profile_identity`: `routes/account.js`, `routes/config.js`, schema, servicio,
   normalizador y migración fijan nombre propio editable y avatar autenticado,
-  privado y sin URL pública; la capability permanece autoritativamente OFF.
+  privado y sin URL pública; `If-Match` acepta sólo UUID desnudo o íntegramente
+  entrecomillado, y la capability permanece autoritativamente OFF.
 - `settlement_shortfall_detail`: `routes/mesas.js`, settlement, servicio, schema
   y sus dos migraciones fijan el detalle owner-only, reconciliado y fail-closed;
   la segunda migración preserva upgrades donde v2.63.0 ya figuraba aplicada.
@@ -39,10 +42,17 @@ su cierre preventivo:
   además, inventario/remediación explícita de identidad histórica; este espejo
   no convierte ese prerequisito en una decisión de rollout.
 
-La adopción se verificó contra la fuente antes de editar runtime del
+La adopción se verificó contra la fuente antes de cerrar runtime del
 consumidor: **paridad 85/85** y **vigencia verde** contra App Backend HEAD
-`6f1b87ab98d4d21eb4265b2ba37a0f38e0cd2819`. Eso acredita el árbol local y el
-commit publicado del dueño; no afirma deploy ni producción.
+`902b73655255ae473fc3eb05e8afd1ea4e82ed2b`. Eso acredita el árbol local y la
+ref contractual publicada `0d4cfdb`; no afirma deploy ni producción.
+
+### Refresh intermedio supersedido · 2026-08-25 (v2.63.2)
+
+El corte intermedio `63987fa5dd45d23f9a62eb8ff0c8d5afe9f89540`,
+publicado por `6f1b87ab98d4d21eb4265b2ba37a0f38e0cd2819`, incorporó el
+sellado `private, no-store` y la aislación de identidades legacy. Fue
+supersedido antes del cierre por el `If-Match` estricto de v2.63.3.
 
 ### Refresh anterior · 2026-08-25 (contrato privado · v2.63.1)
 

@@ -151,6 +151,26 @@ export function currentSamePrincipalSession(
     : null;
 }
 
+/**
+ * Minimiza la adopción de GET/PATCH privados: esta superficie sólo es dueña
+ * de nombre y avatar. Email, payme_id y datos personales baseline permanecen
+ * en la sesión corriente; nunca se amplía localStorage con el DTO privado.
+ */
+export function mergeProfileIdentityIntoCurrentUser(
+  current: StoredSession,
+  remote: ProfileIdentityUser,
+): User | null {
+  if (!current.user
+      || current.principal_id !== remote.id
+      || current.user.id !== remote.id) return null;
+  return {
+    ...current.user,
+    first_name: remote.first_name,
+    last_name: remote.last_name,
+    avatar: remote.avatar,
+  };
+}
+
 interface ProfileMutationAdoptionDependencies {
   readonly loadCurrent: () => StoredSession | null;
   readonly isCurrent: (session: StoredSession) => boolean;
