@@ -1,10 +1,10 @@
 /**
  * Identidad propia editable y avatar privado.
  *
- * El núcleo queda listo detrás de una capability autoritativa apagada. No hay
- * flag de entorno: activarlo exige una orden coordinada después de aprobar el
- * aviso y de que el cliente sepa presentarlo. Los bytes nunca salen en URLs ni
- * viajan a Stripe, outbox o Dashboard.
+ * Capability autoritativa activada por la ratificación literal de Mati del
+ * 2026-08-25: «OK aviso 2.2.0 y legacy “Sin asignar”». No hay flag de entorno:
+ * una decisión nueva, no una variable, gobierna cualquier cambio posterior.
+ * Los bytes nunca salen en URLs ni viajan a Stripe, outbox o Dashboard.
  */
 'use strict';
 
@@ -23,10 +23,10 @@ const SUPPORTED_INPUT_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 const PROFILE_IDENTITY_CAPABILITY = Object.freeze({
   supported: true,
-  enabled: false,
-  notice_version: null,
+  enabled: true,
+  notice_version: '2.2.0',
   notice_required: true,
-  activation_blocker: 'privacy_notice_and_legacy_identity_inventory_pending',
+  activation_blocker: null,
   payme_id_mutable: false,
   avatar_public_url: false,
 });

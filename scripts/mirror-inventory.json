@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "c3ae41cfae0c9f3b8d12923271533d4b9c78d0d3",
+  "commit": "a27d029574b550c662e8b7e35b2d283abe88a26c",
   "total": 85,
   "archivos": [
     {
@@ -253,8 +253,8 @@
     {
       "origen": "routes/account.js",
       "destino": "routes/account.js",
-      "sha256": "de57ac84a471f0ef2d407f2f12ec2228f8a376326d8172a6bf67c2a0ed557917",
-      "bytes": 20405
+      "sha256": "c31a6d90d8e70d8ff986fe610c400d0167c5374b9e2f6adb1621e3574fa5e007",
+      "bytes": 20399
     },
     {
       "origen": "routes/auth.js",
@@ -265,7 +265,7 @@
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "ec26eab69bd5f1f3744539f61168842444211584fddd1d89aca49f274a05797f",
+      "sha256": "a5251e83339b9ceb08d53591074c6bd8557c80e56f782690af71b23fef2e8654",
       "bytes": 6830
     },
     {
@@ -445,8 +445,8 @@
     {
       "origen": "services/profileIdentity.js",
       "destino": "services/profileIdentity.js",
-      "sha256": "41184f9978f00848beb78e20e56898188860ae644f7800fd345b3e8b77d6031c",
-      "bytes": 10362
+      "sha256": "4ce26ce84ff329b0a53ae0f73e1d456b74a1f05f1fa00b9f1c35ae3687f67b9d",
+      "bytes": 10347
     },
     {
       "origen": "services/savedCards.js",
@@ -457,8 +457,8 @@
     {
       "origen": "services/shortfallDetails.js",
       "destino": "services/shortfallDetails.js",
-      "sha256": "6f47fa0ab0b0ec14fba0ecd6dd27b4014cd6cce072a83e08a7c4bfbd5c6c2534",
-      "bytes": 13871
+      "sha256": "c5173ff0f947ffc98277333a103c29431ca26243961842b40a7842d2d984fd09",
+      "bytes": 13887
     },
     {
       "origen": "services/signupInvitations.js",

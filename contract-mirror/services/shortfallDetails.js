@@ -1,8 +1,9 @@
 /**
  * Snapshot privado e inmutable del principal pendiente al fence de settlement.
  *
- * La notificación es sólo un aviso: esta tabla/servicio es la autoridad. La
- * exposición queda apagada hasta aprobar el aviso de privacidad coordinado.
+ * La notificación es sólo un aviso: esta tabla/servicio es la autoridad.
+ * La exposición owner-only fue activada por la ratificación literal de Mati
+ * del 2026-08-25: «OK aviso 2.2.0 y legacy “Sin asignar”».
  */
 'use strict';
 
@@ -13,13 +14,13 @@ const TOMBSTONE_USER_ID = '00000000-0000-0000-0000-0000000dead0';
 
 const SETTLEMENT_SHORTFALL_DETAIL_CAPABILITY = Object.freeze({
   supported: true,
-  enabled: false,
+  enabled: true,
   version: 1,
   owner_only: true,
   includes_tip: false,
-  notice_version: null,
+  notice_version: '2.2.0',
   notice_required: true,
-  activation_blocker: 'privacy_notice_and_legacy_identity_inventory_pending',
+  activation_blocker: null,
 });
 let testRolloutEnabled = false;
 

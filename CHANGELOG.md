@@ -11,6 +11,22 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.141.3 — Mirror de activaciones privadas ratificadas (2026-08-25)
+
+Adopta byte a byte el inventario owner-first de App Backend v2.65.0: 85
+archivos desde el publicador `df32fda`, con contenido contractual exacto en
+`a27d029`. Cambian cuatro fuentes: las capabilities `profile_identity` y
+`settlement_shortfall_detail` quedan autoritativamente activas bajo el aviso
+2.2.0 ratificado por Mati; `payme_id` continúa inmutable, el avatar privado no
+tiene URL pública y el detalle permanece owner-only sin propina.
+
+La adopción acredita paridad y vigencia locales contra el HEAD `39cf15b` del
+dueño. Todavía no habilita por sí sola la presentación del consumidor: el
+runtime del front continúa fail-closed hasta incorporar explícitamente 2.2.0 a
+su allowlist.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.141.2 — Nombre completo en cabeceras autenticadas (2026-08-25)
 
 Las tres variantes compartidas de cabecera muestran ahora el nombre y apellido
