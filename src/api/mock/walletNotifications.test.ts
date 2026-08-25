@@ -62,14 +62,51 @@ describe('avisos del riel saldo · apagados en el mock', () => {
     expect(state.notifications.filter((n) => TIPOS_WALLET.includes(n.type))).toEqual([]);
   });
 
-  it('pero conserva los avisos card-only, que son superficie ratificada', async () => {
+  it('conserva el faltante card-only y no duplica la invitación pendiente', async () => {
     setupStorage();
     const { state } = await import('./store');
 
     // El faltante cobrado a la GARANTÍA es card-only y se queda: apagar wallet
     // no puede llevarse puesto el aviso de que se te cobró algo de verdad.
     expect(state.notifications.some((n) => n.type === 'mesa_shortfall_charged')).toBe(true);
-    expect(state.notifications.some((n) => n.type === 'invitation_received')).toBe(true);
+    expect(state.notifications.some((n) => n.type === 'invitation_received')).toBe(false);
+    expect(state.pendingInvitations.some((i) => i.mesa_code === 'PA-4520')).toBe(true);
+  });
+
+  it('retira la fila duplicada también de una demo ya persistida', async () => {
+    setupStorage();
+    const { state: vigente } = await import('./store');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      ...vigente,
+      notifications: [
+        {
+          id: 'duplicada',
+          type: 'invitation_received',
+          title: null,
+          body: 'Sofía Fernández te invitó a una mesa',
+          payload: { mesa_code: 'PA-4520', inviter_name: 'Sofía Fernández' },
+          related_entity_type: 'invitation',
+          related_entity_id: null,
+          read_at: null,
+          created_at: '2026-08-25T00:00:00.000Z',
+        },
+        {
+          id: 'otra-invitacion',
+          type: 'invitation_received',
+          title: null,
+          body: 'Luis te invitó a una mesa',
+          payload: { mesa_code: 'PA-7777', inviter_name: 'Luis' },
+          related_entity_type: 'invitation',
+          related_entity_id: null,
+          read_at: null,
+          created_at: '2026-08-25T00:00:00.000Z',
+        },
+      ],
+    }));
+    vi.resetModules();
+    const { state } = await import('./store');
+
+    expect(state.notifications.map((n) => n.id)).toEqual(['otra-invitacion']);
   });
 
   /**

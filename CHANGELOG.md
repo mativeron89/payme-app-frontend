@@ -23,6 +23,10 @@ El backend y su contrato privado no cambian: continúan normalizando con Sharp,
 eliminando metadata y sirviendo sólo JPEG privado acotado. Una regresión cubre
 el caso causal con un PNG de 300 KiB.
 
+Notificaciones deja de repetir `invitation_received` dentro del inbox: la
+invitación pendiente se presenta una sola vez mediante la tarjeta superior
+accionable con “Sumarme”. El aviso de faltante y su detalle no cambian.
+
 **Sin push, deploy ni cambios remotos.**
 
 ## 0.143.0 — Aviso 2.3.0 exclusivo en superficies privadas (2026-08-25)

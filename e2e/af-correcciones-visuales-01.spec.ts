@@ -94,15 +94,13 @@ test('Configuración retira el cartel demo y conserva reinicio como fila compact
   await expect(reset).toHaveCSS('height', '44px');
 });
 
-test('Notificaciones usa un solo título y enfatiza sólo el nombre acreditado', async ({ page }) => {
+test('Notificaciones conserva la invitación sólo en su tarjeta accionable', async ({ page }) => {
   await ingresar(page);
   await page.goto('/#/avisos');
   await expect(page.getByText('Notificaciones', { exact: true })).toHaveCount(1);
-  const invitation = page.locator('.aviso-row').filter({ hasText: 'Sofía Fernández te invitó a una mesa' });
-  const name = invitation.locator('strong');
-  await expect(name).toHaveText('Sofía Fernández');
-  await expect(name).toHaveCSS('font-weight', '700');
-  await expect(invitation.locator('.aviso-title')).toHaveCSS('font-weight', '500');
+  await expect(page.getByRole('button', { name: 'Sumarme', exact: true })).toBeVisible();
+  await expect(page.locator('.aviso-row').filter({ hasText: 'Sofía Fernández te invitó a una mesa' }))
+    .toHaveCount(0);
 });
 
 async function hastaGarantia(page: Page) {

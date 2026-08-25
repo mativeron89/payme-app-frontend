@@ -38,7 +38,9 @@ for (const width of [320, 390, 480]) {
     await expect(identidad).not.toContainText('payme_mx_mati');
     await expect(header.locator('.hdr-id')).toHaveCount(0);
     await expect(avisos).toBeVisible();
-    await expect(header.locator('.hdr-badge')).toHaveText('1');
+    // La única fila no leída del seed era la invitación duplicada. La tarjeta
+    // pendiente sigue en Avisos, pero ya no infla el contador del inbox.
+    await expect(header.locator('.hdr-badge')).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Cuenta', exact: true })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Estadísticas', exact: true })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toBeVisible();

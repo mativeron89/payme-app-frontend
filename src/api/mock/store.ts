@@ -533,17 +533,6 @@ function seedNotifications(mesas: MockMesa[]): {
   const invitedMesa = mesas.find((m) => m.code === 'PA-4520');
   const shortfallMesa = mesas.find((m) => m.code === 'PA-1099');
   const notifications: AppNotification[] = [
-    {
-      id: mockId('f'),
-      type: 'invitation_received',
-      title: null,
-      body: 'Sofía Fernández te invitó a una mesa',
-      payload: { mesa_code: 'PA-4520', inviter_name: 'Sofía Fernández' },
-      related_entity_type: 'invitation',
-      related_entity_id: null,
-      read_at: null,
-      created_at: iso(-8 * 60_000),
-    },
     // Acá vivían `transfer_received` y `topup_succeeded`. Se mudaron a
     // `seedWalletNotifications()`, durmiente: el riel saldo está apagado y el
     // inbox no es una excepción al apagado.
@@ -1051,6 +1040,17 @@ function loadPersisted(): MockState | null {
     if (Array.isArray(parsed.notifications)) {
       const durmientes: readonly string[] = WALLET_NOTIFICATION_TYPES;
       parsed.notifications = parsed.notifications.filter((n) => !durmientes.includes(n.type));
+      // v0.143.1 · el seed mostraba la misma invitación dos veces: como
+      // tarjeta pendiente accionable y como fila histórica del inbox. Se
+      // retira únicamente la firma exacta de esa fila demo, también de los
+      // estados ya persistidos; las notificaciones reales no se filtran en la
+      // pantalla ni se cambia el contrato.
+      parsed.notifications = parsed.notifications.filter((notification) => !(
+        notification?.type === 'invitation_received'
+        && notification?.body === 'Sofía Fernández te invitó a una mesa'
+        && notification?.payload?.mesa_code === 'PA-4520'
+        && notification?.payload?.inviter_name === 'Sofía Fernández'
+      ));
       // v0.142.0 · el aviso histórico del seed traía sólo el monto. Ese
       // shape sigue mostrándose agregado, pero no puede abrir la ruta privada.
       // Se migra exclusivamente la fila demo acreditada contra su mesa cerrada;
