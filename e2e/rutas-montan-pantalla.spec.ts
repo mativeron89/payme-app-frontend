@@ -47,6 +47,8 @@ interface Marcador {
   /** `heading` para los `<h1>` de `TopBar`; `texto` para los que no son heading. */
   readonly rol: 'heading' | 'tab' | 'texto';
   readonly nombre: string;
+  /** Distingue un título de pantalla de un subtítulo con la misma copy. */
+  readonly nivel?: 1 | 2;
   /**
    * Por defecto el nombre se matchea EXACTO, que es lo que evita que un
    * marcador flojo pase por cualquier cosa.
@@ -139,7 +141,7 @@ const ESPERADO: Record<PageId, Esperado> = {
   mesas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Historial' } },
   scan: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Escanea el ticket' } },
   mas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Configuración' } },
-  avisos: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Notificaciones' } },
+  avisos: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Notificaciones', nivel: 1 } },
 
   /**
    * 🔴 `#/mesa` **sin** código monta `MesasScreen` —lo dice su propio `case`— y
@@ -170,7 +172,7 @@ const ESPERADO: Record<PageId, Esperado> = {
 
 function ubicar(page: Page, m: Marcador) {
   const exact = m.exacto ?? true;
-  if (m.rol === 'heading') return page.getByRole('heading', { name: m.nombre, exact });
+  if (m.rol === 'heading') return page.getByRole('heading', { name: m.nombre, exact, level: m.nivel });
   if (m.rol === 'tab') return page.getByRole('tab', { name: m.nombre, exact });
   return page.getByText(m.nombre, { exact: false });
 }

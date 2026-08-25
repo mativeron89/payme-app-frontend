@@ -8,7 +8,6 @@
  */
 import { test, expect } from '@playwright/test';
 import { ingresar } from './_app';
-import { espiarScroll, leerScrolls } from './_senales';
 
 async function hastaLaPantallaFusionada(page: import('@playwright/test').Page) {
   await ingresar(page);
@@ -108,7 +107,11 @@ test('🔴 P3-01 · reescanear no hereda el acordeón abierto del ticket anterio
   await page.getByRole('button', { name: /Ver el ticket/ }).click();
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
 
-  // Volver y escanear OTRO ticket: el acordeón no puede recordar el anterior.
+  // El ticket ahora es un diálogo modal: primero se cierra por su control
+  // accesible y recién entonces se vuelve al fondo.
+  await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
+
+  // Volver y escanear OTRO ticket: la hoja no puede recordar el anterior.
   await page.getByRole('button', { name: /Volver/ }).click();
   await page.getByRole('button', { name: 'Capturar' }).click();
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
@@ -206,18 +209,17 @@ test('🔴 «En partes iguales» no baja de 2, aunque el contrato lo admita', as
  * Garantía con un ticket incompleto— y **los ocho quedaron verdes**.
  *
  * Un bypass invisible al gate es peor que un defecto: el defecto se encuentra,
- * el bypass se hereda. Este test cubre las CINCO señales que §5 bis · E exige
+ * el bypass se hereda. Este test cubre las señales que §5 bis · E exige
  * en esta pantalla, cada una por separado, más la que nadie declara y es la que
  * de verdad importa: **que no se llegue a Garantía**.
  *
- * ⚠️ El acordeón se CIERRA antes de tocar Continuar a propósito: la rama lo
- * abre, y si el test lo dejara abierto no podría distinguir «lo abrió el
- * feedback» de «ya estaba abierto».
+ * ⚠️ La hoja modal se CIERRA antes de tocar Continuar a propósito: la rama la
+ * abre y lleva allí el foco. Si el test la dejara abierta, no podría distinguir
+ * «la abrió el feedback» de «ya estaba abierta».
  */
 test('🔴 ticket incompleto: el círculo NO se apaga, frena y explica con todas sus señales', async ({
   page,
 }) => {
-  await espiarScroll(page);
   await hastaLaPantallaFusionada(page);
 
   // El stepper primero: si no, el CTA frena por ÉL y nunca llega a mirar el
@@ -231,9 +233,10 @@ test('🔴 ticket incompleto: el círculo NO se apaga, frena y explica con todas
   await page.getByRole('button', { name: 'Agregar consumo' }).click();
   await expect(page.getByText('Completa nombre y precio (mayor a cero) de cada consumo.')).toBeVisible();
 
-  // Se pliega para poder afirmar que la rama lo ABRE.
+  // Se cierra la edición y luego la hoja por su control modal para poder
+  // afirmar que la rama de Continuar la ABRE de nuevo.
   await page.getByRole('button', { name: 'Listo' }).click();
-  await page.getByRole('button', { name: /Ver el ticket/ }).click();
+  await page.getByRole('button', { name: 'Cerrar hoja del ticket' }).click();
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
 
   // ① el círculo NO nace apagado (§5 bis · E)
@@ -260,13 +263,11 @@ test('🔴 ticket incompleto: el círculo NO se apaga, frena y explica con todas
   const toast = page.locator('.toast:not(.toast-hidden)');
   await expect(toast).toBeVisible();
   await expect(toast).toHaveText('Completa nombre y precio (mayor a cero) de cada consumo.');
-  // ⑤ el acordeón quedó abierto: el aviso lleva a donde se resuelve
+  // ⑤ la hoja quedó abierta: el aviso lleva a donde se resuelve
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
 
-  // ⑥ el scroll, la única de las tres que no deja rastro
-  const vistas = await leerScrolls(page);
-  expect(
-    vistas.scrolls.some((c) => c.includes('tk-fold')),
-    `no se scrolleó al ticket · scrolls vistos: ${vistas.scrolls.join(' · ')}`,
-  ).toBe(true);
+  // ⑥ el foco entra a la hoja modal que acaba de abrirse. Antes el acordeón
+  // hacía scroll en el documento; con un diálogo, mover el fondo sería un bug.
+  await expect(page.getByRole('dialog', { name: /Ticket/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cerrar hoja del ticket' })).toBeFocused();
 });
