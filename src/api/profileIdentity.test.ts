@@ -343,4 +343,27 @@ describe('avatar privado · bytes y ObjectURL efímeros', () => {
       restore();
     }
   });
+
+  it('el mock acepta una foto de teléfono mayor al límite JPEG de salida del backend', async () => {
+    const userWithoutAvatar = { ...VALID_USER, avatar: null };
+    const restore = mock.installPrivateFeatureMockFixtureForTests({
+      profile: { user: userWithoutAvatar },
+      avatar: null,
+      shortfallByMesa: {},
+    });
+    const phonePhoto = new Blob(
+      [new Uint8Array(300 * 1024)],
+      { type: 'image/png' },
+    );
+    try {
+      await expect(mock.mockPutProfileAvatar(phonePhoto, null)).resolves.toMatchObject({
+        avatar: { revision: expect.any(String) },
+      });
+      await expect(mock.mockProfileAvatar()).resolves.toMatchObject({
+        blob: expect.objectContaining({ size: phonePhoto.size, type: 'image/png' }),
+      });
+    } finally {
+      restore();
+    }
+  });
 });

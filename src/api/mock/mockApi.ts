@@ -44,7 +44,7 @@ import type {
   RegisterRequest,
 } from '../types';
 import type { PrivateAvatarBlob } from '../profileIdentity';
-import { profileNameInput, validateAvatarInput, validatePrivateAvatarBlob } from '../profileIdentity';
+import { profileNameInput, validateAvatarInput } from '../profileIdentity';
 import type { ShortfallDetail } from '../shortfallDetail';
 import { MESA_CREATION_OUTCOME_BY_STATUS } from '../types';
 import { MOCK_CONNECTED_ACCOUNTS, MOCK_RESTAURANTS, MOCK_USER } from './seedData';
@@ -419,7 +419,11 @@ export async function mockUpdateProfileIdentity(
 export async function mockProfileAvatar(): Promise<PrivateAvatarBlob> {
   const avatar = activePrivateFeatureFixture().avatar;
   if (!avatar) throw new MockApiError(404, 'avatar_not_found');
-  return delay(validatePrivateAvatarBlob(avatar));
+  // El artefacto mock no tiene Sharp: conserva los bytes privados que el
+  // navegador ya validó como JPG/PNG/WebP de hasta 5 MB. Aplicar acá el
+  // límite de SALIDA del backend (JPEG normalizado <= 256 KiB) rechazaba una
+  // foto normal de teléfono antes de que pudiera mostrarse.
+  return delay({ blob: avatar });
 }
 
 export async function mockPutProfileAvatar(
@@ -431,8 +435,10 @@ export async function mockPutProfileAvatar(
   if ((fixture.profile.user.avatar?.revision ?? null) !== expectedRevision) {
     throw new MockApiError(409, 'avatar_revision_conflict');
   }
-  const avatar = new Blob([await image.arrayBuffer()], { type: 'image/jpeg' });
-  validatePrivateAvatarBlob(avatar);
+  // No declarar JPEG sin transcodificar: cambiar sólo el MIME dejaba bytes
+  // PNG/WebP etiquetados incorrectamente. El backend real sí normaliza con
+  // Sharp; el mock guarda una copia fiel y privada durante esta sesión.
+  const avatar = new Blob([await image.arrayBuffer()], { type: image.type });
   const metadata = {
     revision: crypto.randomUUID(),
     width: 128,

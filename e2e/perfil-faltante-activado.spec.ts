@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
@@ -89,7 +90,16 @@ test('Configuración edita nombre/foto y propaga el nombre a reload y otra pesta
   await expect(page.locator('.hdr')).not.toContainText('payme_mx_mati');
   await expect(sibling.locator('.hdr-user')).toHaveText('Renata Nueva');
 
-  await page.locator('input[type="file"]').setInputFiles(resolve('landing/img/mesa-comida.jpg'));
+  const phonePhoto = Buffer.concat([
+    readFileSync(resolve('landing/img/mesa-comida.jpg')),
+    Buffer.alloc(100 * 1024),
+  ]);
+  expect(phonePhoto.byteLength).toBeGreaterThan(256 * 1024);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'foto-de-telefono.jpg',
+    mimeType: 'image/jpeg',
+    buffer: phonePhoto,
+  });
   const photoToast = page.getByText('Foto actualizada ✓');
   await expect(photoToast).toBeVisible();
   await expect(page.getByRole('img', { name: 'Foto de perfil' })).toBeVisible();

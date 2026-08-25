@@ -11,6 +11,20 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.143.1 — Foto de perfil funcional en el artefacto mock (2026-08-25)
+
+El adaptador mock conserva los bytes y el MIME real de una foto JPG, PNG o
+WebP validada de hasta 5 MB. Deja de etiquetar el archivo como JPEG sin
+transcodificar y de aplicarle el límite de 256 KiB que corresponde únicamente
+al JPEG normalizado que devuelve el backend real. Ese cruce rechazaba las
+fotos habituales de un teléfono antes de poder mostrarlas.
+
+El backend y su contrato privado no cambian: continúan normalizando con Sharp,
+eliminando metadata y sirviendo sólo JPEG privado acotado. Una regresión cubre
+el caso causal con un PNG de 300 KiB.
+
+**Sin push, deploy ni cambios remotos.**
+
 ## 0.143.0 — Aviso 2.3.0 exclusivo en superficies privadas (2026-08-25)
 
 Reemplaza la allowlist legal exclusiva del consumidor: 2.3.0 de producto real
