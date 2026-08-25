@@ -301,9 +301,9 @@ export interface BubbleTab {
  * §5 bis · B — Pestañas en burbuja.
  *
  * La activa es una burbuja blanca ENGANCHADA a la tarjeta de contenido: forman
- * una sola pieza continua del mismo color. La tarjeta lleva la esquina superior
- * izquierda cuadrada solo cuando la activa es la primera; si está al medio o al
- * final, va con las cuatro redondeadas y el enganche se da por contacto.
+ * una sola pieza continua del mismo color. La tarjeta lleva cuadrada la esquina
+ * superior que coincide con una pestaña extrema; si la activa está al medio,
+ * conserva ambas esquinas redondeadas.
  *
  * Las INACTIVAS son texto plano al 72% de blanco sobre el navy, **sin ningún
  * fondo**. Se probó un fondo blanco al 16% para que "pareciera burbuja" y casi
@@ -387,17 +387,17 @@ export function Launcher({
  * La tarjeta blanca montada sobre la banda. Sube 24px, con --sp-4 de margen
  * lateral, y el navy asoma a los costados.
  *
- * `flush` = la pestaña activa es la PRIMERA, así que la esquina superior
- * izquierda va cuadrada para que burbuja y tarjeta lean como una sola pieza.
+ * `seam` indica qué extremo ocupa la pestaña activa. Esa esquina va cuadrada
+ * para que pestaña y tarjeta lean como una sola pieza continua.
  */
 export function MountedCard({
   children,
-  flush = false,
+  seam,
   className = '',
 }: {
   children: ReactNode;
-  flush?: boolean;
+  seam?: 'left' | 'right';
   className?: string;
 }) {
-  return <div className={`mounted-card ${flush ? 'flush' : ''} ${className}`}>{children}</div>;
+  return <div className={`mounted-card ${seam ? `seam-${seam}` : ''} ${className}`}>{children}</div>;
 }

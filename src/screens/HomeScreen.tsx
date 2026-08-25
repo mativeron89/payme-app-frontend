@@ -188,11 +188,9 @@ export function HomeScreen() {
             {t('Sigue con esa garantía: no abras otra mesa.')}
           </button>
         )}
-        {/* La tarjeta va CUADRADA arriba a la izquierda sólo cuando la pestaña
-            activa es la primera: así burbuja y tarjeta leen como una sola
-            pieza. Si la activa está al medio o al final, las cuatro esquinas
-            van redondeadas y el enganche se da por contacto (§5 bis · B). */}
-        <MountedCard flush={tab === TABS[0]!.id}>
+        {/* La tarjeta cuadra la esquina que coincide con una pestaña extrema;
+            la pestaña central conserva ambos radios (§5 bis · B). */}
+        <MountedCard seam={tab === TABS[0]!.id ? 'left' : tab === TABS.at(-1)!.id ? 'right' : undefined}>
           {tab === 'cuenta' && (
             <div className="launch-pair">
               <Launcher icon="card" label={t('Ver tarjetas')} onClick={() => navigate('tarjetas')} />

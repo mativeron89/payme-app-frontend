@@ -11,6 +11,17 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.139.2 — Empalme de pestañas extremas con su tarjeta (2026-08-24)
+
+Cuadra la esquina superior de la tarjeta que coincide con la pestaña activa:
+izquierda para `Cuenta`/`Amigos`, derecha para `Asociadas`/`Solicitudes` y
+ninguna para las pestañas centrales. Así se elimina el gajo que dejaba
+`Asociadas` visualmente separada aunque su borde ya estuviera alineado.
+
+La regresión mide posición, contacto vertical y radios de ambos extremos.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.139.1 — Alineación simétrica de pestañas en Inicio (2026-08-24)
 
 Reemplaza los márgenes manuales de las tres pestañas por una grilla simétrica:

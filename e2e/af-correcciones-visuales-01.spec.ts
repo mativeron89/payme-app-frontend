@@ -18,6 +18,9 @@ test('Inicio y Amigos fusionan la pestaña activa con su tarjeta sin franja navy
   await page.goto('/#/amigos');
   await expect(page.locator('.hdr-tabbed > .hdr-row').first()).toHaveCSS('height', '34px');
   await acreditarPestanaMontada(page, 'Amigos');
+  await page.getByRole('tab', { name: /^Solicitudes/ }).click();
+  await expect(page.locator('.mounted-card')).toHaveCSS('border-top-left-radius', '22px');
+  await expect(page.locator('.mounted-card')).toHaveCSS('border-top-right-radius', '0px');
 });
 
 test('Inicio alinea las tres pestañas con los extremos y el centro de la tarjeta', async ({ page }) => {
@@ -33,6 +36,8 @@ test('Inicio alinea las tres pestañas con los extremos y el centro de la tarjet
   await cuenta.click();
   const cuentaBox = await cuenta.boundingBox();
   expect(Math.abs((cuentaBox?.x ?? 0) - cardBox!.x)).toBeLessThanOrEqual(1);
+  await expect(card).toHaveCSS('border-top-left-radius', '0px');
+  await expect(card).toHaveCSS('border-top-right-radius', '22px');
 
   await estadisticas.click();
   const estadisticasBox = await estadisticas.boundingBox();
@@ -40,6 +45,8 @@ test('Inicio alinea las tres pestañas con los extremos y el centro de la tarjet
     (estadisticasBox!.x + estadisticasBox!.width / 2)
       - (cardBox!.x + cardBox!.width / 2),
   )).toBeLessThanOrEqual(1);
+  await expect(card).toHaveCSS('border-top-left-radius', '22px');
+  await expect(card).toHaveCSS('border-top-right-radius', '22px');
 
   await asociadas.click();
   const asociadasBox = await asociadas.boundingBox();
@@ -47,6 +54,9 @@ test('Inicio alinea las tres pestañas con los extremos y el centro de la tarjet
     (asociadasBox!.x + asociadasBox!.width)
       - (cardBox!.x + cardBox!.width),
   )).toBeLessThanOrEqual(1);
+  await expect(card).toHaveCSS('border-top-left-radius', '22px');
+  await expect(card).toHaveCSS('border-top-right-radius', '0px');
+  await acreditarPestanaMontada(page, 'Asociadas');
 });
 
 test('Escaneo conserva 20 px entre la burbuja y el marco', async ({ page }) => {

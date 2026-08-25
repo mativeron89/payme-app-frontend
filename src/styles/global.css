@@ -2418,12 +2418,14 @@ body {
   box-shadow: 0 6px 20px rgba(16, 30, 59, 0.12);
 }
 
-/* Esquina superior izquierda cuadrada SOLO cuando la pestaña activa es la
-   primera: así burbuja y tarjeta leen como una sola pieza. Si la activa está
-   al medio o al final, las cuatro esquinas van redondeadas y el enganche se
-   da por contacto. */
-.mounted-card.flush {
+/* Una pestaña extrema comparte su esquina con la tarjeta. Cuadrar sólo ese
+   radio elimina el gajo que cortaría la pieza blanca continua. */
+.mounted-card.seam-left {
   border-top-left-radius: 0;
+}
+
+.mounted-card.seam-right {
+  border-top-right-radius: 0;
 }
 
 /* Con pestañas, la tarjeta NO sube: ya está pegada a la burbuja activa, que

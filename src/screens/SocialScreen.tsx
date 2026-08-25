@@ -336,9 +336,9 @@ export function SocialScreen() {
       />
 
       <div className="scroll">
-        {/* La tarjeta va cuadrada arriba a la izquierda sólo cuando la activa es
-            la primera, para que burbuja y tarjeta lean como una sola pieza. */}
-        <MountedCard flush={tab === TABS[0]!.id}>
+        {/* La tarjeta cuadra la esquina que coincide con una pestaña extrema,
+            para que burbuja y tarjeta lean como una sola pieza. */}
+        <MountedCard seam={tab === TABS[0]!.id ? 'left' : tab === TABS.at(-1)!.id ? 'right' : undefined}>
           {tab === 'amigos' && (
             /* Tile ÚNICO y sin dividir (§1.9). Se probó con un segundo tile
                "Buscar amigo" al lado y se sacó: la búsqueda vive siempre
