@@ -37,7 +37,7 @@ router.get('/:id', async (req, res, next) => {
     const { rows: members } = await pool.query(
       // El correo NO sale de acá. Era un SELECT de más —la UI nunca lo usó— y
       // le entregaba al dueño del grupo el correo de cada integrante. El aviso
-      // de privacidad de la prueba entre amigos afirma «tus amigos no ven tu
+      // de privacidad vigente afirma «tus amigos no ven tu
       // correo»: mientras esta línea lo devolviera, esa frase era falsa.
       // El identificador que se comparte a propósito es `payme_id`.
       `SELECT u.id, u.payme_id, u.first_name, u.last_name

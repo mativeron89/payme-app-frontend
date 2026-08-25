@@ -8,17 +8,17 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-08-25**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`a27d029574b550c662e8b7e35b2d283abe88a26c`**
-  (`feat(mesas): activar detalle privado de faltantes` · v2.65.0).
+  **`25eb6a293c526c75b54f6351373c6a36ef92b4c5`**
+  (`feat(legal): publicar aviso 2.3.0 de producto real` · v2.66.0).
 - Commit que publicó el inventario autoritativo:
-  **`df32fda4182b1aa2273b03ae70c149cd25a1a197`**
-  (`chore(contrato): publicar activaciones privadas`). Como siempre, el inventario
+  **`c3c38cdc2685624cc968f1be31a5b1c302f93c52`**
+  (`chore(contrato): publicar aviso 2.3.0`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `df32fda` está un commit más adelante que el contenido y no
+⚠️ **El publicador `c3c38cd` está un commit más adelante que el contenido y no
 se espeja como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `a27d029`; anclarse a él mantiene verificable la paridad. El corte
-activa las dos superficies privadas bajo el aviso 2.2.0 ratificado y conserva la
+declarado es `25eb6a2`; anclarse a él mantiene verificable la paridad. El corte
+mantiene las dos superficies privadas bajo el aviso 2.3.0 ratificado y conserva la
 exclusión cross-worker del cierre de mesa.
 
 🆕 **85 archivos espejados** más este README.
@@ -30,7 +30,7 @@ su cierre preventivo:
   normalizador y migración fijan nombre propio editable y avatar autenticado,
   privado y sin URL pública; `If-Match` acepta sólo UUID desnudo o íntegramente
   entrecomillado, el nombre sólo permite ZWJ/ZWNJ dentro de la categoría `Cf`,
-  y la capability queda autoritativamente ON con `notice_version: 2.2.0`.
+  y la capability queda autoritativamente ON con `notice_version: 2.3.0`.
 - `settlement_shortfall_detail`: `routes/mesas.js`, settlement, servicio, schema
   y sus dos migraciones fijan el detalle owner-only, reconciliado y fail-closed;
   la segunda migración preserva upgrades donde v2.63.0 ya figuraba aplicada y
@@ -42,13 +42,14 @@ su cierre preventivo:
   no cumplen el normalizador vigente permanecen dentro del residual no
   atribuible: no se publican ni se corrigen silenciosamente durante el cierre.
 - La activación se apoya en la ratificación literal de Mati del 2026-08-25:
-  «OK aviso 2.2.0 y legacy “Sin asignar”». Las identidades históricas no
-  canónicas permanecen en el residual; no se normalizan por inferencia.
+  el aviso 2.3.0 de producto real supersede al 2.2.0 de prueba cerrada. La
+  ratificación previa de legacy «Sin asignar» permanece vigente: identidades
+  históricas no canónicas quedan en el residual y no se normalizan por inferencia.
 
 La adopción se verificó contra la fuente antes de cerrar runtime del
 consumidor: **paridad 85/85** y **vigencia verde** contra App Backend HEAD
-`39cf15b7b82a69758fb59d7c52e81e66c8976627`, cuya publicación contractual
-declara `a27d029574b550c662e8b7e35b2d283abe88a26c`. Eso acredita el árbol local
+`c3c38cdc2685624cc968f1be31a5b1c302f93c52`, cuya publicación contractual
+declara `25eb6a293c526c75b54f6351373c6a36ef92b4c5`. Eso acredita el árbol local
 y la ref contractual publicada; no afirma deploy ni producción.
 
 ### Refresh intermedio supersedido · 2026-08-25 (v2.63.3)

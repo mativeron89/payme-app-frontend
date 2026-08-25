@@ -196,7 +196,7 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
         && rechazaPorRielApagado(req, res, 'guarantee_method')) return;
     // D-FF-2 · gate no-money. Va DESPUÉS del rechazo wallet y por eso NO es
     // middleware: un request de wallet tiene que seguir viendo 410 gone —
-    // wallet está REMOVIDO (IFPE, 1–2 años), no apagado por la prueba cerrada.
+    // wallet está REMOVIDO (IFPE, 1–2 años), no apagado por un entorno temporal.
     // Contestarle 409 payments_disabled invitaría a inferir que vuelve cuando
     // vuelvan los pagos, que es exactamente la inferencia que el gobierno
     // prohíbe. Y va ANTES del hash de idempotencia (:208), del hold y del

@@ -156,7 +156,7 @@ function requireDineroHabilitado(req, res, next) {
   return res.status(409).json({
     error: 'payments_disabled',
     mode: MODO_MONETARIO,
-    message: 'Los pagos están deshabilitados durante la prueba cerrada.',
+    message: 'Los pagos están deshabilitados por la configuración vigente.',
   });
 }
 
@@ -173,7 +173,7 @@ function rechazaPorDineroApagado(req, res, motivo) {
     error: 'payments_disabled',
     mode: MODO_MONETARIO,
     ...(motivo && { field: motivo }),
-    message: 'Los pagos están deshabilitados durante la prueba cerrada.',
+    message: 'Los pagos están deshabilitados por la configuración vigente.',
   });
   return true;
 }

@@ -11,6 +11,21 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.142.1 — Mirror del aviso 2.3.0 de producto real (2026-08-25)
+
+Adopta byte a byte el inventario owner-first de App Backend v2.66.0: 85
+archivos desde el publicador `c3c38cd`, con contenido contractual exacto en
+`25eb6a2`. Cambian siete fuentes espejadas sólo para reemplazar la referencia
+legal 2.2.0 por 2.3.0; perfil, avatar, detalle de faltante, dinero y contratos
+de datos conservan su conducta.
+
+La adopción acredita paridad y vigencia locales contra el HEAD `c3c38cd` del
+dueño. Todavía no habilita por sí sola la presentación del consumidor: el
+runtime del front continúa fail-closed hasta incorporar explícitamente 2.3.0 a
+su allowlist y retirar 2.2.0.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.142.0 — Perfil propio y faltante privado activados (2026-08-25)
 
 Presenta explícitamente el aviso 2.2.0 ratificado por Mati y activa, sólo cuando

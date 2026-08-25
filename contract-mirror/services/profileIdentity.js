@@ -2,7 +2,8 @@
  * Identidad propia editable y avatar privado.
  *
  * Capability autoritativa activada por la ratificación literal de Mati del
- * 2026-08-25: «OK aviso 2.2.0 y legacy “Sin asignar”». No hay flag de entorno:
+ * 2026-08-25: aviso 2.3.0 de producto real, con foto privada y legacy
+ * “Sin asignar”. No hay flag de entorno:
  * una decisión nueva, no una variable, gobierna cualquier cambio posterior.
  * Los bytes nunca salen en URLs ni viajan a Stripe, outbox o Dashboard.
  */
@@ -24,7 +25,7 @@ const SUPPORTED_INPUT_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const PROFILE_IDENTITY_CAPABILITY = Object.freeze({
   supported: true,
   enabled: true,
-  notice_version: '2.2.0',
+  notice_version: '2.3.0',
   notice_required: true,
   activation_blocker: null,
   payme_id_mutable: false,

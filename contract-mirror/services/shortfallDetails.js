@@ -3,7 +3,7 @@
  *
  * La notificación es sólo un aviso: esta tabla/servicio es la autoridad.
  * La exposición owner-only fue activada por la ratificación literal de Mati
- * del 2026-08-25: «OK aviso 2.2.0 y legacy “Sin asignar”».
+ * del 2026-08-25: aviso 2.3.0 de producto real y legacy “Sin asignar”.
  */
 'use strict';
 
@@ -18,7 +18,7 @@ const SETTLEMENT_SHORTFALL_DETAIL_CAPABILITY = Object.freeze({
   version: 1,
   owner_only: true,
   includes_tip: false,
-  notice_version: '2.2.0',
+  notice_version: '2.3.0',
   notice_required: true,
   activation_blocker: null,
 });

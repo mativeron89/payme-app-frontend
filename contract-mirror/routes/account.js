@@ -116,7 +116,7 @@ function requireProfileIdentityRollout(_req, res, next) {
 }
 
 // Separado del PATCH write-once de birth_date: ni payme_id ni fecha entran en
-// este contrato. La capability se activó con el aviso 2.2.0 ratificado.
+// este contrato. La capability se activó con el aviso 2.3.0 ratificado.
 router.patch('/me/profile', requireProfileIdentityRollout,
   validateBody(updateProfileName), async (req, res, next) => {
     try {

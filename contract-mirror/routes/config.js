@@ -115,10 +115,10 @@ router.get('/', (req, res) => {
         write_once: true,
         adulthood_server_authoritative: true,
       },
-      // Implementación owner-first activada con aviso 2.2.0 ratificado.
+      // Implementación owner-first activada con aviso 2.3.0 ratificado.
       // El payme_id sigue inmutable y el avatar nunca tiene URL pública.
       profile_identity: PROFILE_IDENTITY_CAPABILITY,
-      // Activo y owner-only bajo aviso 2.2.0. Las identidades no canónicas se
+      // Activo y owner-only bajo aviso 2.3.0. Las identidades no canónicas se
       // mantienen en el residual sin asignar; nunca se infieren nombres.
       settlement_shortfall_detail: SETTLEMENT_SHORTFALL_DETAIL_CAPABILITY,
     },
