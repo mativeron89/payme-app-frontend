@@ -20,6 +20,35 @@ test('Inicio y Amigos fusionan la pestaña activa con su tarjeta sin franja navy
   await acreditarPestanaMontada(page, 'Amigos');
 });
 
+test('Inicio alinea las tres pestañas con los extremos y el centro de la tarjeta', async ({ page }) => {
+  await ingresar(page);
+  const card = page.locator('.mounted-card');
+  const cuenta = page.getByRole('tab', { name: 'Cuenta', exact: true });
+  const estadisticas = page.getByRole('tab', { name: 'Estadísticas', exact: true });
+  const asociadas = page.getByRole('tab', { name: 'Asociadas', exact: true });
+
+  const cardBox = await card.boundingBox();
+  expect(cardBox).not.toBeNull();
+
+  await cuenta.click();
+  const cuentaBox = await cuenta.boundingBox();
+  expect(Math.abs((cuentaBox?.x ?? 0) - cardBox!.x)).toBeLessThanOrEqual(1);
+
+  await estadisticas.click();
+  const estadisticasBox = await estadisticas.boundingBox();
+  expect(Math.abs(
+    (estadisticasBox!.x + estadisticasBox!.width / 2)
+      - (cardBox!.x + cardBox!.width / 2),
+  )).toBeLessThanOrEqual(1);
+
+  await asociadas.click();
+  const asociadasBox = await asociadas.boundingBox();
+  expect(Math.abs(
+    (asociadasBox!.x + asociadasBox!.width)
+      - (cardBox!.x + cardBox!.width),
+  )).toBeLessThanOrEqual(1);
+});
+
 test('Escaneo conserva 20 px entre la burbuja y el marco', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();

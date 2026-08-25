@@ -11,6 +11,16 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.139.1 — Alineación simétrica de pestañas en Inicio (2026-08-24)
+
+Reemplaza los márgenes manuales de las tres pestañas por una grilla simétrica:
+`Cuenta` coincide con el borde izquierdo de la tarjeta montada,
+`Estadísticas` queda centrada y `Asociadas` coincide con el borde derecho.
+Una regresión de navegador mide las tres posiciones, incluida cada pestaña
+activa, con tolerancia máxima de un píxel.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.139.0 — Corrección visual de ocho superficies (2026-08-24)
 
 Corrige contra las comparaciones reales de Mati el solape de pestañas y tarjetas
