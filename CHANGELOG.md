@@ -11,6 +11,21 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.144.3 — Censo semántico y límite seguro del allocator mock (2026-08-25)
+
+El censo durable deja de interpretar nombres, copy u otro texto libre como si
+fueran IDs. Sólo reserva campos semánticos de identidad y las claves/IDs de
+`movementDetails`; una clave huérfana también evita una colisión futura.
+
+El allocator conserva UUIDs canónicos aun si el mayor sufijo persistido ya es
+`999999999999`: vuelve al comienzo del espacio y elige un ID no reservado, sin
+emitir trece dígitos ni pisar historial o detalle. Regresiones causales cubren
+nombre UUID-like, key huérfana, límite máximo y los casos previos de reload y
+migración `h`→`f`.
+
+No cambia UI, contrato, backend ni dinero real. **Sin push, deploy, red ni
+consultas a producción.**
+
 ## 0.144.2 — IDs mock durables y sin colisiones tras reload (2026-08-25)
 
 El allocator mock sincroniza su secuencia con el mayor sufijo UUID persistido

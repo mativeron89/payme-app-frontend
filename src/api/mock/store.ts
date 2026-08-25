@@ -176,10 +176,41 @@ export interface MockState {
 }
 
 let seq = 0;
+const MAX_MOCK_ID_SUFFIX = 999_999_999_999;
 const MOCK_CANONICAL_ID = /^[0-9a-f]0000000-0000-4000-8000-(\d{12})$/i;
+const RESERVED_MOCK_IDS = new Set<string>();
+
+function canonicalMockId(prefix: string, suffix: number): string {
+  return `${prefix}0000000-0000-4000-8000-${String(suffix).padStart(12, '0')}`;
+}
+
+function reserveCanonicalMockId(value: unknown): void {
+  if (typeof value !== 'string') return;
+  const match = MOCK_CANONICAL_ID.exec(value);
+  if (!match) return;
+  const suffix = Number(match[1]);
+  if (!Number.isSafeInteger(suffix) || suffix < 1 || suffix > MAX_MOCK_ID_SUFFIX) return;
+  RESERVED_MOCK_IDS.add(value.toLowerCase());
+  seq = Math.max(seq, suffix);
+}
+
 export function mockId(prefix: string): string {
-  seq += 1;
-  return `${prefix}0000000-0000-4000-8000-${String(seq).padStart(12, '0')}`;
+  const normalizedPrefix = prefix.toLowerCase();
+  if (!/^[0-9a-f]$/.test(normalizedPrefix)) throw new Error('mock_id_prefix_invalid');
+
+  // Al agotar el sufijo de doce dígitos se vuelve al inicio, pero nunca a
+  // ciegas: el censo durable y los ids ya emitidos forman la reserva. Con N
+  // reservados, N+1 candidatos alcanzan para encontrar uno libre.
+  const attempts = RESERVED_MOCK_IDS.size + 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    seq = seq >= MAX_MOCK_ID_SUFFIX ? 1 : seq + 1;
+    const candidate = canonicalMockId(normalizedPrefix, seq);
+    const normalizedCandidate = candidate.toLowerCase();
+    if (RESERVED_MOCK_IDS.has(normalizedCandidate)) continue;
+    RESERVED_MOCK_IDS.add(normalizedCandidate);
+    return candidate;
+  }
+  throw new Error('mock_id_space_exhausted');
 }
 
 const LEGACY_HISTORY_ID = /^h0000000-0000-4000-8000-\d{12}$/;
@@ -187,27 +218,37 @@ const LEGACY_HISTORY_ID = /^h0000000-0000-4000-8000-\d{12}$/;
 /**
  * `seq` es memoria de módulo, pero los ids sobreviven en localStorage. Tras un
  * reload hay que continuar desde la evidencia durable ANTES de que cualquier
- * migración emita otro id. El recorrido es tolerante: un nodo raro se ignora;
- * nunca se descarta todo el estado por no poder censar una rama.
+ * migración emita otro id. Sólo se leen campos semánticos de identidad —nunca
+ * nombres, copy ni otro texto libre— y las keys del mapa movementDetails.
+ * El recorrido es tolerante: un nodo raro se ignora; nunca se descarta todo el
+ * estado por no poder censar una rama.
  */
 function syncSequenceFromPersisted(value: unknown): void {
   try {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const movementDetails = (value as Record<string, unknown>).movementDetails;
+      if (movementDetails && typeof movementDetails === 'object' && !Array.isArray(movementDetails)) {
+        for (const key of Object.keys(movementDetails)) reserveCanonicalMockId(key);
+      }
+    }
+
     const pending: unknown[] = [value];
     const seen = new Set<object>();
     while (pending.length > 0) {
       const current = pending.pop();
-      if (typeof current === 'string') {
-        const match = MOCK_CANONICAL_ID.exec(current);
-        if (match) {
-          const suffix = Number(match[1]);
-          if (Number.isSafeInteger(suffix)) seq = Math.max(seq, suffix);
-        }
-        continue;
-      }
       if (!current || typeof current !== 'object' || seen.has(current)) continue;
       seen.add(current);
       if (Array.isArray(current)) pending.push(...current);
-      else pending.push(...Object.values(current as Record<string, unknown>));
+      else {
+        for (const [key, child] of Object.entries(current as Record<string, unknown>)) {
+          const isSemanticId = key === 'id' || (key.endsWith('_id') && key !== 'payme_id');
+          if (isSemanticId) reserveCanonicalMockId(child);
+          if (key.endsWith('Ids') && Array.isArray(child)) {
+            for (const id of child) reserveCanonicalMockId(id);
+          }
+          if (child && typeof child === 'object') pending.push(child);
+        }
+      }
     }
   } catch {
     // Conservador: se retiene el máximo ya observado y la carga continúa.

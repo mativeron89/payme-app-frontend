@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const STORAGE_KEY = 'payme_mock_state_v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HIGH_ID = 'f0000000-0000-4000-8000-000000000900';
+const ORPHAN_DETAIL_KEY_ID = 'f0000000-0000-4000-8000-000000000901';
+const MAX_ID = 'f0000000-0000-4000-8000-999999999999';
 const OCCUPIED_ID = 'f0000000-0000-4000-8000-000000000004';
 const LEGACY_ID = 'h0000000-0000-4000-8000-000000000004';
 
@@ -97,5 +99,47 @@ describe('allocator mock durable tras reload', () => {
     expect(state.movementDetails[OCCUPIED_ID]).toEqual(occupiedDetail);
     expect(state.movementDetails[migrated]?.id).toBe(migrated);
     expect(state.movementDetails[LEGACY_ID]).toBeUndefined();
+  });
+
+  it('un nombre con forma de UUID no altera la secuencia durable', async () => {
+    const persisted = await seedPersisted();
+    persisted.user.first_name = MAX_ID;
+    persisted.user.last_name = 'Nombre visible';
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    vi.resetModules();
+
+    const { response, state } = await payOneEqualPart();
+    expect(response.attempt.id).toMatch(UUID);
+    expect(response.attempt.id).not.toBe(MAX_ID);
+    expect(state.user.first_name).toBe(MAX_ID);
+  });
+
+  it('una key huérfana alta de movementDetails sí sincroniza el allocator', async () => {
+    const persisted = await seedPersisted();
+    const sourceDetail = structuredClone(persisted.movementDetails[persisted.history[0]!.id]);
+    expect(sourceDetail).toBeDefined();
+    persisted.movementDetails[ORPHAN_DETAIL_KEY_ID] = sourceDetail!;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    vi.resetModules();
+
+    const { response, state } = await payOneEqualPart();
+    expect(response.attempt.id).toMatch(UUID);
+    expect(Number(response.attempt.id.slice(-12))).toBeGreaterThan(901);
+    expect(state.movementDetails[ORPHAN_DETAIL_KEY_ID]).toEqual(sourceDetail);
+  });
+
+  it('el máximo sufijo canónico no produce UUIDs de trece dígitos ni pisa estado', async () => {
+    const persisted = await seedPersisted();
+    rekeyMovement(persisted, 0, MAX_ID);
+    const maxDetail = structuredClone(persisted.movementDetails[MAX_ID]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    vi.resetModules();
+
+    const { response, state } = await payOneEqualPart();
+    expect(response.attempt.id).toMatch(UUID);
+    expect(response.attempt.id).not.toBe(MAX_ID);
+    expect(new Set(state.history.map((movement) => movement.id)).size).toBe(state.history.length);
+    expect(state.movementDetails[MAX_ID]).toEqual(maxDetail);
+    expect(state.movementDetails[response.attempt.id]?.id).toBe(response.attempt.id);
   });
 });
