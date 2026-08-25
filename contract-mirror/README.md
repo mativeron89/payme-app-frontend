@@ -15,8 +15,11 @@ desde `src/` y nunca se corrige a mano.
   (`chore(contrato): publicar mirror v2.63.4`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El HEAD/publicador `fdecf9e` está un commit más adelante que el contenido
-y no se espeja como contenido:** sólo publica el inventario. El árbol
+⚠️ **El publicador `fdecf9e` está un commit más adelante que el contenido y no
+se espeja como contenido:** sólo publica el inventario. El HEAD local vigente
+del App Backend, `e8c9899f0120fa2d1b6832ecf3da7ef7d4308cf7`, avanza un commit
+adicional de test (`test(version): alinear guard v2.63.4`) que tampoco integra
+la población contractual. El árbol
 contractual declarado es `1bf665f`; anclarse a él mantiene verificable la
 paridad. Ese commit permite únicamente ZWJ/ZWNJ entre los formatos Unicode
 invisibles; `If-Match` quedó cerrado en su ancestro `28b0875` y el cambio
@@ -44,8 +47,10 @@ su cierre preventivo:
 
 La adopción se verificó contra la fuente antes de cerrar runtime del
 consumidor: **paridad 85/85** y **vigencia verde** contra App Backend HEAD
-`fdecf9e9a3cb38e097fa9a3de83bbe3a6ff43fd8`. Eso acredita el árbol local y la
-ref contractual publicada; no afirma deploy ni producción.
+`e8c9899f0120fa2d1b6832ecf3da7ef7d4308cf7`, cuya última publicación
+contractual sigue siendo `fdecf9e9a3cb38e097fa9a3de83bbe3a6ff43fd8` para el
+contenido `1bf665fec9bec3cbfe3b6c77b03f00c647858e4e`. Eso acredita el árbol local
+y la ref contractual publicada; no afirma deploy ni producción.
 
 ### Refresh intermedio supersedido · 2026-08-25 (v2.63.3)
 
