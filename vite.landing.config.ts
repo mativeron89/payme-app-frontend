@@ -68,5 +68,8 @@ export default defineConfig({
   build: {
     outDir: '../dist-landing',
     emptyOutDir: true,
+    // La política estática prohíbe `data:`: incluso el símbolo oficial chico
+    // debe viajar como archivo propio y relativo, no inlineado por Vite.
+    assetsInlineLimit: 0,
   },
 });

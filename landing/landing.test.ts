@@ -105,6 +105,8 @@ interface Artefacto {
   readonly todo: string;
   readonly porArchivo: Readonly<Record<string, string>>;
   readonly binarios: Readonly<Record<string, string>>;
+  /** SVG activo: se valida por identidad Y estructura, nunca como binario opaco. */
+  readonly svgs: Readonly<Record<string, string>>;
   readonly inertes: readonly string[];
 }
 
@@ -115,6 +117,7 @@ interface Artefacto {
  * navegador siga. **Buscarles URLs adentro es el instrumento equivocado.**
  */
 const BINARIO_AUTORIZADO = /\.(?:ttf|png|jpe?g)$/i;
+const SVG_ACTIVO = /\.svg$/i;
 
 /**
  * 🔴 La licencia OFL es INERTE y por eso no entra al barrido.
@@ -169,11 +172,13 @@ beforeAll(() => {
   })(salida);
 
   const binarios: Record<string, string> = {};
+  const svgs: Record<string, string> = {};
   const inertes: string[] = [];
   const texto: string[] = [];
   for (const a of archivos) {
     const nombre = basename(a);
     if (BINARIO_AUTORIZADO.test(nombre)) binarios[relative(salida, a)] = sha256(readFileSync(a));
+    else if (SVG_ACTIVO.test(nombre)) svgs[relative(salida, a)] = readFileSync(a, 'utf8');
     else if (INERTE_AUTORIZADO.test(nombre)) inertes.push(relative(salida, a));
     else texto.push(a);
   }
@@ -193,6 +198,7 @@ beforeAll(() => {
     todo,
     porArchivo,
     binarios,
+    svgs,
     inertes,
   };
 }, 60_000);
@@ -368,9 +374,10 @@ describe('PROPIEDAD 1 bis · el selector bilingüe es completo y falla seguro', 
     return { es: registro['es'], en: registro['en'] };
   }
 
-  it('🔴 las 42 claves del DOM coinciden exactamente con ES y EN', () => {
-    // 41 → 42 el 2026-08-13: `step2.p` se partió en `p_before`/`p_after` para
-    // que el glifo de WhatsApp quede FIJO en el HTML entre las dos mitades.
+  it('🔴 las 40 claves del DOM coinciden exactamente con ES y EN', () => {
+    // `step2.p` se partió en `p_before`/`p_after` para que el glifo de WhatsApp
+    // quede FIJO en el HTML entre las dos mitades. El censo vigente baja a 40
+    // al retirar el CTA de restaurante y el caption del panel.
     // 🔴 El motivo es medido, no estético: `applyLang` asigna con `textContent`,
     // así que un `<svg>` dentro del string del diccionario se escaparía y se
     // vería como texto crudo. La alternativa era pasar esa inserción a
@@ -380,7 +387,7 @@ describe('PROPIEDAD 1 bis · el selector bilingüe es completo y falla seguro', 
     const dict = leerDiccionario();
     const esperadas = [...new Set(dom)].sort();
     expect(dom, 'hay claves data-i18n duplicadas').toHaveLength(esperadas.length);
-    expect(esperadas).toHaveLength(42);
+    expect(esperadas).toHaveLength(40);
     expect(Object.keys(dict.es).sort()).toEqual(esperadas);
     expect(Object.keys(dict.en).sort()).toEqual(esperadas);
     expect(Object.values(dict.es).every((v) => typeof v === 'string' && v.length > 0)).toBe(true);
@@ -440,7 +447,7 @@ describe('PROPIEDAD 2 · destinos honestos', () => {
    * Hasta hoy exigía que los dos accesos al panel estuvieran APAGADOS
    * —`<span>` sin `href`, con pastilla «Muy pronto»—, porque
    * `panel.paymemx.com` no existía. **Existe.** El tratamiento se retiró y el
-   * test se da vuelta: ahora exige que los CUATRO accesos sean enlaces vivos.
+   * test se da vuelta: ahora exige que los accesos vigentes sean enlaces vivos.
    *
    * No se borró: se invirtió, y queda escrito por qué. Un test que desaparece
    * en silencio no deja rastro de que la condición existió.
@@ -456,7 +463,7 @@ describe('PROPIEDAD 2 · destinos honestos', () => {
   // es que el nombre diga lo que mide. Un verde que promete de más apaga la
   // sospecha del que lo lee. Que los destinos respondan 200 se verificó a mano
   // el 2026-08-09 y quedó fechado arriba, que es todo lo que se puede afirmar.
-  it('🔴 los CUATRO accesos son ENLACES y no `<span>` apagados · nada apagado', () => {
+  it('🔴 los accesos vigentes son ENLACES y el hero ofrece sólo Comensal', () => {
     expect(build.html, 'quedó un resto del tratamiento apagado').not.toContain('pronto');
     expect(build.html, 'quedó la pastilla «Muy pronto»').not.toContain('Muy pronto');
 
@@ -465,11 +472,14 @@ describe('PROPIEDAD 2 · destinos honestos', () => {
       const h = atributos(t.crudo).find((a) => a.nombre === 'href')?.valor ?? '';
       if (h.startsWith('http')) porDestino.set(h, (porDestino.get(h) ?? 0) + 1);
     }
-    // Dos por destino: el CTA del hero y la fila del desplegable.
+    // App conserva CTA + fila; Panel queda sólo en la fila del desplegable.
     expect(Object.fromEntries([...porDestino].sort())).toEqual({
       'https://app.paymemx.com': 2,
-      'https://panel.paymemx.com': 2,
+      'https://panel.paymemx.com': 1,
     });
+    const hero = build.htmlSinScript.match(/<section class="hero"[\s\S]*?<\/section>/)?.[0] ?? '';
+    expect(hero).not.toContain('panel.paymemx.com');
+    expect(hero.match(/class="cta /g)).toHaveLength(1);
   });
 });
 
@@ -900,10 +910,10 @@ describe('PROPIEDAD 6 · las imágenes', () => {
     expect(cred, 'no declara los cambios sobre el original').toMatch(/1400x1050|redimensionada/);
   });
 
-  it('🔴 los binarios emitidos son EXACTAMENTE los esperados', () => {
+  it('🔴 los assets opacos y el SVG activo emitidos son EXACTAMENTE los esperados', () => {
     // `.map(basename)` NO: `map` le pasa el índice como segundo argumento y
     // `basename(x, 0)` explota con «suffix must be a string». Lo aprendí acá.
-    const emitidos = Object.keys(build.binarios)
+    const emitidos = [...Object.keys(build.binarios), ...Object.keys(build.svgs)]
       .map((a) => basename(a).replace(/-[A-Za-z0-9_-]{8}\./, '.'));
     expect(emitidos.sort()).toEqual([
       'DMSans-variable.ttf',
@@ -911,15 +921,63 @@ describe('PROPIEDAD 6 · las imágenes', () => {
       'app-dividir-cuenta.png',
       'mesa-comida.jpg',
       'panel-propinas.png',
+      'payme-symbol-cyan.svg',
     ]);
+  });
+
+  it('🔴 el símbolo emitido es el SVG oficial, no un SVG opaco intercambiable', () => {
+    const entrada = readFileSync(join(RAIZ, 'landing/img/payme-symbol-cyan.svg'), 'utf8').trimEnd();
+    expect(sha256(Buffer.from(entrada))).toBe(
+      'e5b0f18fcd31f02298c3e8c79f9cee86f3c340bf87bcbe1e475ac05b4c4595e2',
+    );
+    const rutas = Object.keys(build.svgs);
+    expect(rutas, 'sólo se autoriza el SVG oficial esperado').toHaveLength(1);
+    const ruta = rutas[0]!;
+    expect(basename(ruta)).toMatch(/^payme-symbol-cyan(?:-[A-Za-z0-9_-]{8})?\.svg$/);
+    const emitido = build.svgs[ruta]!.trimEnd();
+    expect(sha256(Buffer.from(emitido))).toBe(sha256(Buffer.from(entrada)));
+
+    // Un SVG es XML activo, no un PNG con otra extensión. Aunque la identidad
+    // exacta ya evita sustituciones hoy, esta guarda obliga a revisar cualquier
+    // cambio futuro antes de que pueda introducir red, script o sinks activos.
+    expect(emitido).not.toMatch(
+      /<\/?(?:script|foreignObject|image|use|a|style|iframe|object|embed)\b|\b(?:href|src)\s*=|\bon[a-z]+\s*=|url\s*\(|@import/i,
+    );
+
+    const tagsSvg = tags(emitido);
+    expect(tagsSvg.map((t) => t.nombre)).toEqual(['svg', 'rect', 'path', 'path']);
+    const attrsPermitidos: Readonly<Record<string, ReadonlySet<string>>> = {
+      svg: new Set(['xmlns', 'viewbox', 'width', 'height', 'role', 'aria-label']),
+      rect: new Set(['width', 'height', 'rx', 'fill']),
+      path: new Set(['d', 'fill']),
+    };
+    for (const tag of tagsSvg) {
+      const attrs = atributos(tag.crudo);
+      expect(new Set(attrs.map((a) => a.nombre)).size, `atributo duplicado en <${tag.nombre}>`).toBe(attrs.length);
+      for (const attr of attrs) {
+        expect(attrsPermitidos[tag.nombre]?.has(attr.nombre), `${tag.nombre}.${attr.nombre} no está permitido`).toBe(true);
+      }
+
+      // Falla cerrado también ante atributos sin comillas o sintaxis que el
+      // parser reducido no entienda: no alcanza con ignorar lo desconocido.
+      let resto = tag.crudo;
+      for (const match of tag.crudo.matchAll(/([a-zA-Z_:][a-zA-Z0-9_:.-]*)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+)/g)) {
+        resto = resto.replace(match[0], '');
+      }
+      expect(resto.replace(/\s|\//g, ''), `sintaxis SVG no reconocida en <${tag.nombre}>`).toBe('');
+    }
+    const svgAttrs = atributos(tagsSvg[0]!.crudo);
+    expect(svgAttrs.find((a) => a.nombre === 'xmlns')?.valor).toBe('http://www.w3.org/2000/svg');
+    expect(svgAttrs.find((a) => a.nombre === 'role')?.valor).toBe('img');
+    expect(svgAttrs.find((a) => a.nombre === 'aria-label')?.valor).toBe('PayMe');
   });
 
   it('🔴 las tres imágenes se USAN: nada de peso muerto', () => {
     // 785 KB que nadie referencia se descargan igual y no se ven.
     const referenciadas = [...build.html.matchAll(/src="\.\/assets\/([^"]+)"/g)].map((m) => m[1]!);
-    const emitidas = Object.keys(build.binarios)
+    const emitidas = [...Object.keys(build.binarios), ...Object.keys(build.svgs)]
       .map((a) => basename(a))
-      .filter((n) => /\.(png|jpe?g)$/i.test(n));
+      .filter((n) => /\.(png|jpe?g|svg)$/i.test(n));
     for (const e of emitidas) {
       expect(referenciadas, `${e} está emitida pero nadie la referencia`).toContain(e);
     }
@@ -927,35 +985,19 @@ describe('PROPIEDAD 6 · las imágenes', () => {
 
   it('🔴 cada imagen tiene `alt` de verdad', () => {
     const imgs = tags(build.htmlSinScript).filter((t) => t.nombre === 'img');
-    expect(imgs.length, 'no se emitió ninguna imagen').toBe(3);
+    expect(imgs.length, 'no se emitió ninguna imagen').toBe(4);
     for (const i of imgs) {
       const alt = atributos(i.crudo).find((a) => a.nombre === 'alt')?.valor ?? '';
-      expect(alt.length, `un <img> sin alt útil: ${i.crudo.slice(0, 60)}`).toBeGreaterThan(20);
+      const decorativa = atributos(i.crudo).some((a) => a.nombre === 'aria-hidden' && a.valor === 'true');
+      if (decorativa) expect(alt, 'una imagen decorativa debe tener alt vacío').toBe('');
+      else expect(alt.length, `un <img> sin alt útil: ${i.crudo.slice(0, 60)}`).toBeGreaterThan(20);
     }
   });
 
-  it('🔴 la captura del panel dice que sus datos son de ejemplo', () => {
-    // Muestra $2.560 de propinas y dos personas con su rendimiento. Sin esta
-    // línea se lee como el desempeño real de un restaurante real. Es el seed.
-    expect(build.html, 'la captura del panel no avisa que es una demo')
-      .toMatch(/panel-propinas[\s\S]{0,400}Datos de ejemplo/);
-  });
-
-  it('🔴 y la de la app NO lleva caption — lleva su leyenda dentro del producto', () => {
-    // Decisión declarada, no omisión: quien toque «Comensal» ve la leyenda del
-    // modo demo en dos segundos.
-    //
-    // 🔴 CORREGIDO el 2026-08-10. Acá decía «El panel no tiene esa salida: su
-    // link no existe. Si algún día se publica, esto se revisa.» Se publicó: la
-    // landing enlaza `panel.paymemx.com` DOS veces —lo afirma el test de los
-    // cuatro accesos, unas líneas más arriba—. El comentario quedó atrás
-    // cuando ese test se invirtió el 2026-08-09.
-    //
-    // La revisión que él mismo pedía queda ABIERTA y es de Diseño, no mía: si
-    // ahora se puede entrar al panel, ¿el caption «Datos de ejemplo» sigue
-    // haciendo falta? La aserción de abajo no se toca hasta que contesten.
+  it('🔴 las capturas de producto no llevan captions redundantes', () => {
     const captions = [...build.html.matchAll(/class="audience-caption"[^>]*>([^<]*)</g)].map((m) => m[1]!.trim());
-    expect(captions).toEqual(['Datos de ejemplo — panel en modo demo']);
+    expect(captions).toEqual([]);
+    expect(build.html).not.toContain('Datos de ejemplo — panel en modo demo');
   });
 });
 
@@ -1062,9 +1104,12 @@ describe('PROPIEDAD 7 bis · tratamiento visual ratificado', () => {
     expect(card).not.toContain('backdrop-filter');
     expect(css).toMatch(/\.audience-visual\.restaurante \.audience-copy-card\{[^}]*margin-left:-28px[^}]*margin-right:16px/);
     expect(css).toMatch(/\.audience-visual\.comensal \.audience-copy-card\{[^}]*margin-right:-28px[^}]*margin-left:16px/);
-    expect(css).toMatch(/\.audience-art\.dashboard\{[^}]*min-height:460px[^}]*padding:10px/);
-    expect(css).toMatch(/\.audience-art\.app\{[^}]*min-height:560px[^}]*padding:14px/);
+    expect(css).toMatch(/\.audience-art\{[^}]*background:transparent/);
+    expect(css).toMatch(/\.audience-art\.dashboard\{[^}]*min-height:520px[^}]*padding:0/);
+    expect(css).toMatch(/\.audience-art\.dashboard img\{[^}]*width:min\(112%,920px\)[^}]*max-width:none/);
+    expect(css).toMatch(/\.audience-art\.app\{[^}]*min-height:560px[^}]*padding:0/);
     expect(css).toMatch(/\.audience-art\.app img\{[^}]*max-height:640px/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*640px\)[\s\S]*\.audience-art\.dashboard img\{[^}]*width:100%[^}]*max-width:100%/);
   });
 
   it('⭐ los íconos de perks conservan el relieve pedido', () => {
