@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "25eb6a293c526c75b54f6351373c6a36ef92b4c5",
-  "total": 85,
+  "commit": "51907982689c19d21bc91184c7a7129a9d812350",
+  "total": 87,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -65,10 +65,22 @@
       "bytes": 6459
     },
     {
+      "origen": "db/migrate_declared_item_fractions_v2.67.0.sql",
+      "destino": "db/migrate_declared_item_fractions_v2.67.0.sql",
+      "sha256": "e6f7cde5e986910537fa630e879e9c8bf32c77213a68e1d1574da8ba0c686157",
+      "bytes": 935
+    },
+    {
       "origen": "db/migrate_fracciones_v2.18.sql",
       "destino": "db/migrate_fracciones_v2.18.sql",
       "sha256": "7a6db999c59fb6a2915f6a977dd860c27a5769e0ae10549d8a3c008298601f7e",
       "bytes": 3320
+    },
+    {
+      "origen": "db/migrate_fraction_complements_v2.68.0.sql",
+      "destino": "db/migrate_fraction_complements_v2.68.0.sql",
+      "sha256": "08cc38b557f662b71763ca6a4025dc0735ce5bed8d97582e035173e047de47bd",
+      "bytes": 730
     },
     {
       "origen": "db/migrate_garantia_v2.9_hardened.sql",
@@ -193,8 +205,8 @@
     {
       "origen": "db/schema.sql",
       "destino": "db/schema.sql",
-      "sha256": "767dc32c30d46c8c16beb3c6713547d7b59d5a7f001e1cfb2401470685734eaa",
-      "bytes": 57147
+      "sha256": "ffb30af8833d873b11292a18b753909de6a5e5955b5f091d72c7ae63da147e42",
+      "bytes": 57348
     },
     {
       "origen": "docs/history/CHANGELOG_v2.11.md",
@@ -253,8 +265,8 @@
     {
       "origen": "routes/account.js",
       "destino": "routes/account.js",
-      "sha256": "ecef2507b141b4b549de7d305c7a823a80a922379624dc7a4e1f40fbc33fa275",
-      "bytes": 20399
+      "sha256": "6e5ee00c7e5a7ef71474901cc5db791773f02dc84244588447a1192393b1c06a",
+      "bytes": 20623
     },
     {
       "origen": "routes/auth.js",
@@ -301,8 +313,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "ccd9084c63dad0d14b6fe6e3e967f9eb01fafcfa01671b169027a24a21b88966",
-      "bytes": 142447
+      "sha256": "670a2c22c6e7251a54e742fd6cbb518e1831781f15124fb6786fdb5d65f5abb5",
+      "bytes": 143867
     },
     {
       "origen": "routes/notifications.js",
@@ -367,8 +379,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "aab36877df51af78cc22b0d14e010b323c22a6adae87b9be946ffd420aa6f248",
-      "bytes": 20078
+      "sha256": "41639527c524c8298158a38f3e8c6964af964c2596719e4bee938984f79a801b",
+      "bytes": 20131
     },
     {
       "origen": "services/cardEligibility.js",
@@ -397,8 +409,8 @@
     {
       "origen": "services/itemClaims.js",
       "destino": "services/itemClaims.js",
-      "sha256": "feae2003b6c9dc7ba634202966c393aade23bac50f2e0b88c40f47c67e0f3cea",
-      "bytes": 17609
+      "sha256": "de47d0b835a78f7192c00f4207310444d2ab0f996979bc669b70d8997a8ab171",
+      "bytes": 17897
     },
     {
       "origen": "services/moneyRail.js",

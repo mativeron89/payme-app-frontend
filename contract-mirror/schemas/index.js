@@ -261,8 +261,9 @@ const createMesa = z.object({
 // `req.body` con este resultado, así que la ruta sigue recibiendo el número.
 }).transform(d => ({ ...d, expected_participants: d.expected_participants ?? 1 }));
 
-// v2.18 (fracciones): reclamo de una fracción de un ítem. Valores ratificados:
-// ¼ | ⅓ | ½ | entero. El server valida contra lo disponible y computa montos.
+// v2.18/v2.68 (fracciones): conjunto natural ratificado:
+// ¼ | ⅓ | ½ | ⅔ | ¾ | entero. El server valida contra lo disponible y computa
+// montos sólo con bps/centavos; el mismo shape sirve a consumo e igual.
 const { FRACTION_VALUES } = require('../services/itemClaims');
 const fractionItem = z.object({
   item_id: uuid,

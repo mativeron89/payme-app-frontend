@@ -11,7 +11,11 @@
  * de la fila de mesa_items (el caller lo garantiza vía withItemsLocked) — el
  * mismo punto de serialización que el modelo viejo.
  *
- * Fracciones admitidas (UX ratificada): 2500 | 3333 | 5000 | 10000.
+ * Fracciones solicitables (UX ratificada):
+ * 2500 | 3333 | 5000 | 6667 | 7500 | 10000.
+ * `mesa_item_claims.fraction_bps` conserva rango 1..10000 porque almacena el
+ * bps EFECTIVO: el tercer ⅓ solicitado como 3333 puede absorber el remanente y
+ * persistirse como 3334. El set cerrado aplica a la solicitud, no a ese ajuste.
  *
  * POLÍTICA DE REDONDEO (definida en el acta):
  *   - Fracción no-completadora: nominal = round(price × bps / 10000).
@@ -43,7 +47,7 @@
 const { fractionAmount } = require('../utils/money');
 const stateMachine = require('../utils/stateMachine');
 
-const FRACTION_VALUES = [2500, 3333, 5000, 10000];
+const FRACTION_VALUES = Object.freeze([2500, 3333, 5000, 6667, 7500, 10000]);
 const COMPLETING_TOLERANCE_BPS = 100;
 
 // ─── puros (exportados para tests) ──────────────────────────────────────────

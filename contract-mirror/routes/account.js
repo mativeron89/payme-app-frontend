@@ -318,7 +318,7 @@ router.get('/movements/:id', validateParams(uuidIdParam), async (req, res, next)
 
     const { rows: items } = await pool.query(
       `SELECT mi.name, mi.price_cents, mi.quantity, mi.category,
-              pai.amount_cents, pai.fraction_bps
+              pai.amount_cents, pai.fraction_bps, pai.declared_fraction_bps
          FROM payment_attempt_items pai
          JOIN mesa_items mi ON mi.id = pai.mesa_item_id
         WHERE pai.payment_attempt_id = $1`, [a.id]
@@ -336,9 +336,12 @@ router.get('/movements/:id', validateParams(uuidIdParam), async (req, res, next)
         quantity: i.quantity, category: i.category,
         // En consumo estos dos campos son el importe/fracción realmente
         // cobrados. En partes iguales quedan null a propósito: el item fue
-        // declarado como consumo, pero el cobro correspondió al slot.
+        // declarado como consumo, pero el cobro correspondió al slot. La
+        // declaración viaja separada para no convertirla en dinero/tenencia.
         amount_cents: i.amount_cents == null ? null : Number(i.amount_cents),
         fraction_bps: i.fraction_bps == null ? null : Number(i.fraction_bps),
+        declared_fraction_bps: i.declared_fraction_bps == null
+          ? null : Number(i.declared_fraction_bps),
       })),
       items_amount_cents: Number(a.items_amount_cents),
       tip_amount_cents: Number(a.tip_amount_cents),

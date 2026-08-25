@@ -8,22 +8,52 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-08-25**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`25eb6a293c526c75b54f6351373c6a36ef92b4c5`**
-  (`feat(legal): publicar aviso 2.3.0 de producto real` · v2.66.0).
+  **`51907982689c19d21bc91184c7a7129a9d812350`**
+  (`feat(pagos): completar fracciones naturales` · v2.68.0).
 - Commit que publicó el inventario autoritativo:
-  **`c3c38cdc2685624cc968f1be31a5b1c302f93c52`**
-  (`chore(contrato): publicar aviso 2.3.0`). Como siempre, el inventario
+  **`9ba9bd3f21686101302a0229aef38078b1626009`**
+  (`chore(contract): publicar fracciones naturales v2.68.0`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `c3c38cd` está un commit más adelante que el contenido y no
+⚠️ **El publicador `9ba9bd3` está un commit más adelante que el contenido y no
 se espeja como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `25eb6a2`; anclarse a él mantiene verificable la paridad. El corte
-mantiene las dos superficies privadas bajo el aviso 2.3.0 ratificado y conserva la
-exclusión cross-worker del cierre de mesa.
+declarado es `5190798`; anclarse a él mantiene verificable la paridad.
 
-🆕 **85 archivos espejados** más este README.
+🆕 **87 archivos espejados** más este README.
 
-Este refresh incorpora el contrato owner-first de dos superficies privadas y
+Este refresh incorpora un campo separado y aditivo para la declaración de
+consumo en partes iguales:
+
+- `payment_attempt_items.declared_fraction_bps` conserva el conjunto natural
+  cerrado `2500`, `3333`, `5000`, `6667`, `7500` o `10000` cuando el
+  comensal marca una porción en modo `igual`.
+- El mismo conjunto cerrado rige los reclamos monetarios de `consumo`; la
+  migración v2.68.0 actualiza los `CHECK` de ambas tablas sin aceptar bps
+  arbitrarios ni floats.
+- La declaración **no altera dinero**: `fraction_bps` y `amount_cents` siguen
+  en `null` para esos ítems y el monto continúa siendo el casillero fijo.
+- `POST /mesas/:code/pay` acepta `items` en igualdad; el camino legacy de
+  `item_ids` registra declaración entera, sin reinterpretar filas históricas.
+- `GET /account/movements/:id` publica el nuevo campo owner-only. Un registro
+  histórico sin declaración permanece `null`; el consumidor no inventa una.
+
+La adopción se verificó contra la fuente antes de cerrar runtime del
+consumidor: **paridad 87/87** y **vigencia verde** contra App Backend HEAD
+`9ba9bd3f21686101302a0229aef38078b1626009`, cuya publicación contractual
+declara `51907982689c19d21bc91184c7a7129a9d812350`. Eso acredita el árbol local
+y la ref contractual publicada; no afirma deploy ni producción.
+
+### Refresh anterior · 2026-08-25 (declaración igualitaria · v2.67.0)
+
+El corte anterior incorporó `declared_fraction_bps` separado del dinero con
+cuatro valores iniciales. Declaró **86/86** contra contenido
+`8ed55b90f8502cda4885b843ae34880e0a2de374`, publicado por
+`276230f4c79f7bdbad906496371c080d5e4378f6`. v2.68.0 lo supersede con el
+conjunto natural completo de seis fracciones.
+
+### Refresh anterior · 2026-08-25 (perfil/faltante · v2.66.0)
+
+El refresh anterior incorporó el contrato owner-first de dos superficies privadas y
 su cierre preventivo:
 
 - `profile_identity`: `routes/account.js`, `routes/config.js`, schema, servicio,
@@ -46,11 +76,9 @@ su cierre preventivo:
   ratificación previa de legacy «Sin asignar» permanece vigente: identidades
   históricas no canónicas quedan en el residual y no se normalizan por inferencia.
 
-La adopción se verificó contra la fuente antes de cerrar runtime del
-consumidor: **paridad 85/85** y **vigencia verde** contra App Backend HEAD
-`c3c38cdc2685624cc968f1be31a5b1c302f93c52`, cuya publicación contractual
-declara `25eb6a293c526c75b54f6351373c6a36ef92b4c5`. Eso acredita el árbol local
-y la ref contractual publicada; no afirma deploy ni producción.
+Ese corte declaró **85/85** contra contenido
+`25eb6a293c526c75b54f6351373c6a36ef92b4c5`, publicado por
+`c3c38cdc2685624cc968f1be31a5b1c302f93c52`.
 
 ### Refresh intermedio supersedido · 2026-08-25 (v2.63.3)
 

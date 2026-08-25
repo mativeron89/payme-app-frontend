@@ -768,6 +768,10 @@ ALTER TABLE mesa_items
 CREATE TABLE IF NOT EXISTS payment_attempt_items (
   payment_attempt_id UUID NOT NULL REFERENCES payment_attempts(id) ON DELETE CASCADE,
   mesa_item_id    UUID NOT NULL REFERENCES mesa_items(id),
+  declared_fraction_bps INT,
+  CONSTRAINT chk_payment_attempt_items_declared_fraction
+    CHECK (declared_fraction_bps IS NULL
+           OR declared_fraction_bps IN (2500,3333,5000,6667,7500,10000)),
   PRIMARY KEY (payment_attempt_id, mesa_item_id)
 );
 

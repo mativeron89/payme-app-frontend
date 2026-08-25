@@ -1343,6 +1343,7 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
         let validatedItemsAmount = 0;
         const pricedClaims = [];   // v2.18: [{claimId, itemId, fractionBps, amountCents}]
         let claimedSlotIndex = null;
+        let declaredEqualItems = [];
 
         if (mesa.division_mode === 'consumo') {
           // v2.18 (fracciones): legacy item_ids = fracciones enteras (10000)
@@ -1403,6 +1404,39 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
             }
           }
         } else {
+          // Validar la declaración ANTES de tocar el slot o emitir su
+          // telemetría. Aunque cualquier error posterior haga rollback, un log
+          // ya emitido no se puede desemitir y atribuiría un segundo casillero
+          // a un request que nunca fue válido.
+          const declared = items && items.length
+            ? items.map((i) => ({
+                item_id: i.item_id, declared_fraction_bps: i.fraction_bps,
+              }))
+            : (item_ids || []).map((itemId) => ({
+                item_id: itemId, declared_fraction_bps: 10000,
+              }));
+          if (declared.length > 0) {
+            const seen = new Set();
+            for (const row of declared) {
+              if (seen.has(row.item_id)) {
+                throw Object.assign(new Error('duplicate_item'), {
+                  status: 400, item_id: row.item_id,
+                });
+              }
+              seen.add(row.item_id);
+            }
+            const { rows: validItems } = await client.query(
+              `SELECT id FROM mesa_items WHERE id = ANY($1::uuid[]) AND mesa_id = $2`,
+              [declared.map((row) => row.item_id), mesa.id]
+            );
+            if (validItems.length !== declared.length) {
+              throw Object.assign(new Error('invalid_item_ids'), { status: 400 });
+            }
+            const byId = new Map(declared.map((row) => [row.item_id, row]));
+            declaredEqualItems = validItems
+              .sort((a, b) => a.id.localeCompare(b.id))
+              .map((row) => byId.get(row.id));
+          }
           const { rows: slotRows } = await client.query(
             `SELECT slot_index, amount_cents FROM mesa_division_slots
               WHERE mesa_id = $1 AND status = 'available'
@@ -1521,22 +1555,18 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
             logger.warn('telemetria_segundo_casillero_fallo', { error: telemetry.error.message });
           }
 
-          // G-07 (v2.18): en "partes iguales" el front ya declara QUÉ consumió
-          // cada uno (item_ids/items) — antes se descartaba. Se persiste como
-          // consumo DECLARADO (fraction_bps y amount_cents NULL: se cobró por
-          // slot, no por ítem). Nunca toca la tenencia ni los estados: es dato.
-          const declared = (items && items.length ? items.map((i) => i.item_id) : item_ids) || [];
-          if (declared.length > 0) {
-            const { rows: validItems } = await client.query(
-              `SELECT id FROM mesa_items WHERE id = ANY($1::uuid[]) AND mesa_id = $2`,
-              [declared, mesa.id]
-            );
-            for (const vi of validItems) {
+          // G-07 + v2.67: en "partes iguales" el front declara QUÉ consumió y
+          // qué FRACCIÓN eligió. El dinero sigue saliendo sólo del slot:
+          // fraction_bps/amount_cents quedan NULL y declared_fraction_bps es
+          // dato separado, sin tenencia ni efecto monetario. Legacy item_ids
+          // declara enteros para requests nuevos; no existe backfill histórico.
+          if (declaredEqualItems.length > 0) {
+            for (const declared of declaredEqualItems) {
               await client.query(
-                `INSERT INTO payment_attempt_items (payment_attempt_id, mesa_item_id)
-                 VALUES ($1, $2)
-                 ON CONFLICT (payment_attempt_id, mesa_item_id) DO NOTHING`,
-                [a.id, vi.id]
+                `INSERT INTO payment_attempt_items
+                   (payment_attempt_id, mesa_item_id, declared_fraction_bps)
+                 VALUES ($1, $2, $3)`,
+                [a.id, declared.item_id, declared.declared_fraction_bps]
               );
             }
           }
