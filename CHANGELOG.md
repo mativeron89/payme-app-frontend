@@ -11,6 +11,42 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.144.0 — Landing, selección fraccional e historial propio verificable (2026-08-25)
+
+La landing usa el símbolo SVG oficial junto al wordmark, conserva un solo CTA
+de comensal en el hero y presenta las capturas de restaurante y comensal sin
+fondos cyan ni captions redundantes. El SVG activo no entra a la allowlist de
+binarios opacos: un guard específico exige hash, estructura, tags y atributos
+cerrados y prohíbe script, red y sinks activos.
+
+Home y Social alinean su fila de logo, nombre y campana sin mover sus pestañas.
+El badge de Solicitudes queda anclado arriba a la derecha y no desplaza el
+texto. Compartir separa Amigos y Grupos en dos tarjetas accesibles y usa un
+único panel progresivo con búsqueda y lista según la pestaña elegida. La
+burbuja de división conserva total y ticket, mientras restaurante y dirección
+siguen disponibles dentro de la hoja del ticket.
+
+Historial carga en forma lazy el detalle owner-only de todos los pagos propios
+agrupados por mesa, con cache, retry real y decoder fail-closed. Consumo muestra
+importe y fracción cobrados; igualdad muestra sólo la fracción declarada y no
+inventa precio por plato. El mock causal preserva por separado base y propina:
+una declaración igualitaria nunca convierte el total del casillero en propina.
+
+La selección pasa a «¿Qué consumiste?», muestra sólo el código real de mesa y
+rotula honestamente cada uno lo suyo, partes iguales o pagar el total. El
+contrato owner-first v2.68.0 queda espejado 87/87 y habilita el conjunto natural
+cerrado Entero·¾·⅔·½·⅓·¼. En consumo los bps determinan centavos; en
+igualdad son una declaración separada y el casillero monetario no cambia. Una
+regresión acredita ⅔+⅓ sobre un monto impar sin doble claim ni centavos
+perdidos.
+
+La descarga de comprobante continúa siendo TXT: una descarga PDF real exigiría
+un motor o una implementación casera de alcance y seguridad desproporcionados.
+No se renombra imprimir como descargar ni se promete un PDF que el producto no
+genera.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.143.1 — Foto de perfil funcional en el artefacto mock (2026-08-25)
 
 El adaptador mock conserva los bytes y el MIME real de una foto JPG, PNG o

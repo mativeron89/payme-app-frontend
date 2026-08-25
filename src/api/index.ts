@@ -35,6 +35,7 @@ import {
   type PrivateAvatarBlob,
 } from './profileIdentity';
 import { decodeShortfallDetailResponse, type ShortfallDetail } from './shortfallDetail';
+import { decodeMovementDetailResponse } from './movementDetail';
 import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
 import { invalidateSession, loadSession, type StoredSession } from './storage';
@@ -82,6 +83,7 @@ import type {
   TransfersResponse,
   WalletTransactionsResponse,
   HistoryResponse,
+  MovementDetailResponse,
 } from './types';
 
 /**
@@ -196,6 +198,8 @@ export interface Api {
    * pedir `from` + `limit`, no la primera página pelada.
    */
   getHistory(params?: { from?: string; to?: string; limit?: number; offset?: number }): Promise<HistoryResponse>;
+  /** Detalle de UN pago propio; el backend vuelve a validar `user_id`. */
+  getMovement(id: string): Promise<MovementDetailResponse>;
   // mesas
   getOpenMesas(): Promise<OpenMesasResponse>;
   getMesa(code: string, guestToken?: string): Promise<MesaDetailResponse>;
@@ -387,6 +391,9 @@ const realApi: Api = {
     const s = qs.toString();
     return httpRequest<HistoryResponse>('GET', `/account/history${s ? `?${s}` : ''}`);
   },
+  getMovement: async (id) => decodeMovementDetailResponse(
+    await httpRequest<unknown>('GET', `/account/movements/${encodeURIComponent(id)}`),
+  ),
   getWalletTransactions: () =>
     httpRequest<WalletTransactionsResponse>('GET', '/account/wallet-transactions'),
 
@@ -686,6 +693,7 @@ const mockApi: Api = {
   getBalance: () => mock.mockBalance(),
   getWalletTransactions: () => mock.mockWalletTransactions(),
   getHistory: (params) => mock.mockHistory(params),
+  getMovement: (id) => mock.mockMovement(id),
 
   getOpenMesas: () => mock.mockOpenMesas(),
   getMesa: (code, guestToken) => mock.mockGetMesa(code, guestToken ? 'guest' : 'user'),

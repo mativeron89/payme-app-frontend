@@ -83,6 +83,7 @@ export function AppHeader({
   bellHere = false,
   tabs,
   compact,
+  alignChrome = false,
 }: HeaderBase & {
   /** Nombre COMPLETO editable de la sesión. Trunca; nunca empuja la campana. */
   userName?: string;
@@ -98,12 +99,14 @@ export function AppHeader({
    * con el círculo de la barra en toda pantalla de primer nivel.
    */
   bellHere?: boolean;
+  /** Ajuste óptico exclusivo de las cabeceras con pestañas de Inicio/Social. */
+  alignChrome?: boolean;
 }) {
   const { t } = useIdioma();
   const identidad = userName?.trim() || undefined;
   const openAvisos = onBell ?? (() => navigate('avisos'));
   return (
-    <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
+    <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''} ${alignChrome ? 'hdr-chrome-aligned' : ''}`}>
       <div className="hdr-row">
         <PayMeLogo />
         {identidad && <span className="hdr-user">{identidad}</span>}

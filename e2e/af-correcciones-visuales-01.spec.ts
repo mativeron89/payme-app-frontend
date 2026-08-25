@@ -23,6 +23,46 @@ test('Inicio y Amigos fusionan la pestaña activa con su tarjeta sin franja navy
   await expect(page.locator('.mounted-card')).toHaveCSS('border-top-right-radius', '0px');
 });
 
+test('Inicio y Social alinean su chrome sin mover pestañas ni burbujas', async ({ page }) => {
+  await ingresar(page);
+  const centroMarca = async () => {
+    const box = await page.locator('.hdr-mark').boundingBox();
+    expect(box).not.toBeNull();
+    return box!.y + box!.height / 2;
+  };
+
+  const centroHome = await centroMarca();
+  await page.goto('/#/avisos');
+  const centroComun = await centroMarca();
+  await page.goto('/#/amigos');
+  const centroSocial = await centroMarca();
+
+  expect(Math.abs(centroHome - centroComun)).toBeLessThanOrEqual(1);
+  expect(Math.abs(centroSocial - centroComun)).toBeLessThanOrEqual(1);
+  await acreditarPestanaMontada(page, 'Amigos');
+});
+
+test('el badge de Solicitudes no desplaza la etiqueta y queda anclado arriba-derecha', async ({ page }) => {
+  await ingresar(page);
+  await page.goto('/#/amigos');
+  const tabConBadge = page.getByRole('tab', { name: /^Solicitudes/ });
+  const badge = tabConBadge.locator('.btab-badge');
+  const [antes, badgeBox] = await Promise.all([tabConBadge.boundingBox(), badge.boundingBox()]);
+  expect(antes).not.toBeNull();
+  expect(badgeBox).not.toBeNull();
+  expect(badgeBox!.y).toBeLessThan(antes!.y + antes!.height / 2);
+  expect(badgeBox!.x + badgeBox!.width).toBeLessThanOrEqual(antes!.x + antes!.width);
+
+  await tabConBadge.click();
+  await page.getByRole('button', { name: 'Aceptar', exact: true }).click();
+  const tabSinBadge = page.getByRole('tab', { name: 'Solicitudes', exact: true });
+  await expect(tabSinBadge.locator('.btab-badge')).toHaveCount(0);
+  const despues = await tabSinBadge.boundingBox();
+  expect(despues).not.toBeNull();
+  expect(Math.abs(despues!.x - antes!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(despues!.width - antes!.width)).toBeLessThanOrEqual(1);
+});
+
 test('Inicio alinea las tres pestañas con los extremos y el centro de la tarjeta', async ({ page }) => {
   await ingresar(page);
   const card = page.locator('.mounted-card');
@@ -78,6 +118,8 @@ test('División muestra un acceso al ticket compacto, centrado y sin subtítulo'
   const trigger = page.getByRole('button', { name: 'Ver el ticket', exact: true });
   await expect(trigger.locator('.tk-fold-sub')).toHaveCount(0);
   const [cardBox, triggerBox] = await Promise.all([card.boundingBox(), trigger.boundingBox()]);
+  await expect(card).not.toContainText('La Parolaccia');
+  expect(cardBox?.height).toBeLessThan(150);
   expect(triggerBox?.width).toBeLessThan(180);
   expect(Math.abs(
     ((cardBox?.x ?? 0) + (cardBox?.width ?? 0) / 2)

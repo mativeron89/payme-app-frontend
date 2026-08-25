@@ -16,6 +16,8 @@ import { fractionAmount } from '../utils/money';
 /** Valores del contrato (`schemas.lockItems` del espejo). No inventar otros. */
 export const FRACTIONS: ReadonlyArray<{ bps: number; label: string }> = [
   { bps: 10000, label: '1' },
+  { bps: 7500, label: '¾' },
+  { bps: 6667, label: '⅔' },
   { bps: 5000, label: '½' },
   { bps: 3333, label: '⅓' },
   { bps: 2500, label: '¼' },
@@ -61,7 +63,9 @@ export function fraccionInicial(remainingBps: unknown): number | null {
 export function bpsLabel(bps: number): string {
   if (bps >= 10000) return 'entero';
   if (bps === 5000) return '½';
+  if (bps === 6667 || bps === 6666) return '⅔';
   if (bps === 3333 || bps === 3334) return '⅓';
+  if (bps === 7500) return '¾';
   if (bps === 2500) return '¼';
   return `${Math.round(bps / 100)}%`;
 }

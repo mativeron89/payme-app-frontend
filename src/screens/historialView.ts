@@ -25,6 +25,8 @@ export function esMesaAbierta(status: MesaStatus): boolean {
 /** Una mesa del historial: MIS pagos agrupados por `mesa_code`. */
 export interface HistorialMesa {
   mesa_code: string;
+  /** IDs de MIS pagos; cada uno abre su detalle owner-only. */
+  payment_ids: string[];
   restaurant: string;
   category: string;
   /** Suma de MIS pagos en esa mesa (centavos enteros). */
@@ -49,6 +51,7 @@ export function agruparPorMesa(entries: readonly HistoryEntry[]): HistorialMesa[
     const prev = byCode.get(e.mesa_code);
     if (prev) {
       prev.amount_cents += e.amount_cents;
+      prev.payment_ids.push(e.id);
       if (e.date > prev.date) {
         prev.date = e.date;
         prev.mesa_status = e.mesa_status;
@@ -56,6 +59,7 @@ export function agruparPorMesa(entries: readonly HistoryEntry[]): HistorialMesa[
     } else {
       byCode.set(e.mesa_code, {
         mesa_code: e.mesa_code,
+        payment_ids: [e.id],
         restaurant: e.restaurant,
         category: e.category,
         amount_cents: e.amount_cents,
@@ -70,6 +74,18 @@ export function agruparPorMesa(entries: readonly HistoryEntry[]): HistorialMesa[
 /** Sólo las cerradas: se filtra la MESA agrupada, no el pago suelto. */
 export function mesasCerradas(entries: readonly HistoryEntry[]): HistorialMesa[] {
   return agruparPorMesa(entries).filter((m) => !esMesaAbierta(m.mesa_status));
+}
+
+/**
+ * Resuelve todos los pagos propios agrupados en una mesa. Queda pura para
+ * acreditar dos cosas que el render por sí solo esconde: no perder un segundo
+ * pago y que un reintento vuelva a invocar al owner en vez de sólo cerrar UI.
+ */
+export function traerDetallesMovimientos<T>(
+  paymentIds: readonly string[],
+  traer: (id: string) => Promise<T>,
+): Promise<T[]> {
+  return Promise.all(paymentIds.map((id) => traer(id)));
 }
 
 // ─── Franja horaria (§1.10) ────────────────────────────────

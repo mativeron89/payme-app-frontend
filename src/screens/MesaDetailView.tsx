@@ -138,6 +138,11 @@ export function MesaDetailView({
   const availableSlots = availableSlotsOf(mesa);
   const nothingLeft = nothingLeftFor(mesa);
   const esConsumo = mesa.division_mode === 'consumo';
+  const divisionLabel = esConsumo
+    ? t('cada uno lo suyo')
+    : mesa.expected_participants === 1
+      ? t('pagar el total')
+      : t('partes iguales');
 
   const avisoPagoCongelado = frozenScope && (
     <div className="note note-orange" role="status" style={{ marginBottom: 12 }}>
@@ -209,10 +214,10 @@ export function MesaDetailView({
   return (
     <div className="screen has-appbar">
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
-      <div className="title-card">
-        <div className="title-card-title">{mesa.restaurant.name}</div>
+      <div className="title-card mesa-selection-title">
+        <h1 className="title-card-title">{t('¿Qué consumiste?')}</h1>
         <div className="title-card-sub">
-          {t('Mesa')} {code} · {esConsumo ? t('cada uno lo suyo') : t('partes iguales')}
+          {code} · <strong>{divisionLabel}</strong>
         </div>
         <div className="title-card-div" />
         <div
@@ -237,24 +242,10 @@ export function MesaDetailView({
       {guestHeader}
       <div className="scroll flow-scroll">
         {avisoPagoCongelado}
-        {esConsumo ? (
-          <>
-            <div className="mi-selection-copy">
-              {t('Selecciona lo que consumiste')}
-            </div>
-            {nothingLeft && (
-              <div className="note note-amber" style={{ marginBottom: 12 }}>
-                {t('Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.')}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="sectlabel">{t('¿Qué consumiste?')}</div>
-            <div className="caption" style={{ margin: '0 2px 8px' }}>
-              {t('Márcalo para el restaurante — no cambia lo que pagas.')}
-            </div>
-          </>
+        {esConsumo && nothingLeft && (
+          <div className="note note-amber" style={{ marginBottom: 12 }}>
+            {t('Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.')}
+          </div>
         )}
         <div
           ref={itemsRef}
@@ -264,7 +255,11 @@ export function MesaDetailView({
         >
           {mesa.items.map((i) => {
             const fullPrice = i.price_cents * i.quantity;
-            const state = rowStateOf(i, selected);
+            // En igualdad la selección sólo declara consumo y no reclama el
+            // ítem: otras tenencias/remaining_bps no deben bloquearla.
+            const state = esConsumo
+              ? rowStateOf(i, selected)
+              : selected.has(i.id) ? 'seleccionado' : 'disponible';
             const sel = state === 'seleccionado';
             // 1A.3 · 'indeterminado' bloquea igual que 'tomado': sin dato
             // válido no se ofrece tomar nada.
@@ -307,16 +302,16 @@ export function MesaDetailView({
                   </span>
                   <span className={`mi-price ${bloqueado ? 'dim' : ''}`}>{formatMXN(precio)}</span>
                 </button>
-                {/* Selector de porción: en TODO ítem, con "1" ya marcada
-                    (resuelto con Mati el 2026-08-04). Tildar y listo sigue
-                    siendo el flujo de siempre; esto sólo pesa si se cambia. */}
-                {sel && esConsumo && (
+                {/* Selector de porción en LOS DOS MODOS. En consumo expresa
+                    tenencia/cobro y se limita por lo restante; en igualdad es
+                    sólo `declared_fraction_bps`, sin alterar el casillero. */}
+                {sel && (
                   <div className="mi-frac">
                     <div className="mi-frac-lbl" id={`frac-${i.id}`}>
                       {t('¿Cuánto tomas tú?')}
                     </div>
                     <div className="seg" role="radiogroup" aria-labelledby={`frac-${i.id}`}>
-                      {FRACTIONS.filter((f) => f.bps <= i.remaining_bps).map((f) => (
+                      {FRACTIONS.filter((f) => !esConsumo || f.bps <= i.remaining_bps).map((f) => (
                         <button
                           key={f.bps}
                           type="button"
@@ -330,21 +325,17 @@ export function MesaDetailView({
                         </button>
                       ))}
                     </div>
-                    <div className="mi-frac-amt" aria-live="polite">
-                      {t('Tu parte:')} {formatMXN(fractionPreview(fullPrice, myBpsSel, i.remaining_bps))}
-                    </div>
+                    {esConsumo && (
+                      <div className="mi-frac-amt" aria-live="polite">
+                        {t('Tu parte:')} {formatMXN(fractionPreview(fullPrice, myBpsSel, i.remaining_bps))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             );
           })}
         </div>
-        {!esConsumo && (
-          <div className="note note-teal">
-            {t('La cuenta se dividió en')} {mesa.expected_participants} {t('partes iguales de')}{' '}
-            <b>{formatMXN(itemsAmount)}</b>{t('. Quedan')} <b>{availableSlots}</b> {t('por pagar.')}
-          </div>
-        )}
         {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al
             comensal ver que su parte YA está tomada. Sin esto volvía, veía
             casilleros libres y pagaba de nuevo — llevándose el de otro.

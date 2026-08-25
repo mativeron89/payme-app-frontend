@@ -6,6 +6,7 @@ import {
   esMesaAbierta,
   franjaDe,
   mesasCerradas,
+  traerDetallesMovimientos,
   traerHistorialCompleto,
 } from './historialView';
 
@@ -47,6 +48,7 @@ describe('agruparPorMesa', () => {
     ]);
     expect(g).toHaveLength(1);
     expect(g[0]!.amount_cents).toBe(7500);
+    expect(g[0]!.payment_ids).toEqual(['1', '2']);
   });
 
   it('ordena las mesas por último pago, más nueva primero', () => {
@@ -74,6 +76,24 @@ describe('agruparPorMesa', () => {
       pago('2', { date: '2026-08-03T20:00:00.000Z', mesa_status: 'completed' }),
     ]);
     expect(alReves[0]!.mesa_status).toBe('completed');
+  });
+});
+
+describe('traerDetallesMovimientos', () => {
+  it('consulta todos los pagos agrupados y un retry vuelve a pedirlos de verdad', async () => {
+    const llamadas: string[] = [];
+    let falla = true;
+    const traer = async (id: string) => {
+      llamadas.push(id);
+      if (falla && id === '2') throw new Error('red');
+      return `detalle-${id}`;
+    };
+
+    await expect(traerDetallesMovimientos(['1', '2'], traer)).rejects.toThrow('red');
+    falla = false;
+    await expect(traerDetallesMovimientos(['1', '2'], traer))
+      .resolves.toEqual(['detalle-1', 'detalle-2']);
+    expect(llamadas).toEqual(['1', '2', '1', '2']);
   });
 });
 

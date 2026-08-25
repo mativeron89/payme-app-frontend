@@ -10,9 +10,9 @@ import { abrirMesaConLink, ingresar } from './_app';
  *    cosmética: el organizador que pagaba su parte veía su mesa dos veces —en
  *    Inicio como abierta y acá abajo de un encabezado de mes, como si hubiera
  *    terminado—. Recién se pudo arreglar con `mesa_status` (v2.42.0).
- * 2. **El acordeón despliega el estado DESCONOCIDO, no un detalle.** G-33
- *    sigue abierta: el contrato no tiene detalle de mesa cerrada, y el spec
- *    prohíbe un mock que aparente funcionar.
+ * 2. **El acordeón carga el detalle owner-only de MIS pagos.** G-33 cerró con
+ *    `GET /account/movements/:id`; no se reconstruye desde el total ni desde
+ *    la mesa compartida.
  * 3. **"Abiertas ahora" ya no existe.** Afirmar la ausencia a propósito: lo
  *    rompe alguien "completando" la pantalla de buena fe con la sección que
  *    siempre estuvo ahí.
@@ -46,7 +46,7 @@ test.describe('Historial (§1.10)', () => {
     await expect(page.getByText('Abiertas ahora')).toHaveCount(0);
   });
 
-  test('el acordeón despliega el estado desconocido, nunca un detalle aparente (G-33)', async ({ page }) => {
+  test('el acordeón despliega los consumos propios reales del pago (G-33)', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mesas');
 
@@ -55,13 +55,31 @@ test.describe('Historial (§1.10)', () => {
     await fila.click();
     await expect(fila).toHaveAttribute('aria-expanded', 'true');
 
-    // Estado desconocido (SISTEMA_DISENO §5): copy honesta, cero ítems.
-    await expect(page.getByText('No podemos confirmar que sea seguro de mostrar', { exact: false })).toBeVisible();
+    await expect(page.getByText('Tagliatelle Bolognese', { exact: true })).toBeVisible();
+    await expect(page.getByText('$195.00', { exact: true })).toBeVisible();
+    await expect(page.getByText('Propina', { exact: true })).toBeVisible();
+    await expect(page.getByText('$29.25', { exact: true })).toBeVisible();
+    await expect(page.getByText('No podemos confirmar que sea seguro de mostrar', { exact: false })).toHaveCount(0);
 
     // Cerrarlo lo repliega de verdad.
     await fila.click();
     await expect(fila).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.getByText('No podemos confirmar que sea seguro de mostrar', { exact: false })).toHaveCount(0);
+    await expect(page.getByText('Tagliatelle Bolognese', { exact: true })).toHaveCount(0);
+  });
+
+  test('partes iguales muestra la fracción declarada sin inventar importe por plato', async ({ page }) => {
+    await ingresar(page);
+    await page.goto('/#/mesas');
+
+    const fila = page.getByRole('button', { name: /\$418\.00/ });
+    await fila.click();
+    await expect(page.getByText('Omakase', { exact: true })).toBeVisible();
+    await expect(page.getByText('Declaraste ⅔', { exact: true })).toBeVisible();
+    const detalle = page.locator('.hist-detail').filter({ hasText: 'Omakase' });
+    await expect(detalle.locator('.hist-detail-row:not(.hist-detail-tip) .hist-detail-amount')).toHaveCount(0);
+    await expect(detalle.getByText('Propina', { exact: true })).toBeVisible();
+    await expect(detalle.getByText('$18.00', { exact: true })).toBeVisible();
+    await expect(detalle.getByText('$418.00', { exact: true })).toHaveCount(0);
   });
 
   /**

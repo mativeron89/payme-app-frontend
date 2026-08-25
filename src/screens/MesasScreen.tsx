@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
-import type { HistoryEntry } from '../api/types';
+import type { HistoryEntry, MovementDetailResponse } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
@@ -9,11 +9,13 @@ import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
+import { bpsLabel } from './mesaItemsView';
 import {
   agruparPorMes,
   FRANJA_LABEL,
   franjaDe,
   mesasCerradas,
+  traerDetallesMovimientos,
   traerHistorialCompleto,
   type Franja,
 } from './historialView';
@@ -56,10 +58,10 @@ function fechaDeFila(iso: string, locale: string, t: (s: string, ...a: unknown[]
  * "Abiertas ahora" que vivía arriba se retiró con G-28 cerrado: el invitado ya
  * ve su mesa en Inicio, donde corresponde, no acá.
  *
- * El acordeón de detalle NO muestra ítems: G-33 sigue abierta —el contrato no
- * tiene un detalle de mesa cerrada, y el que hoy funciona lo hace por
- * coincidencia—, así que despliega el estado DESCONOCIDO de
- * `SISTEMA_DISENO.md` §5. Nunca un mock que aparente funcionar.
+ * El acordeón carga cada uno de MIS pagos con el endpoint owner-only
+ * `GET /account/movements/:id`. Una mesa puede contener varios intentos
+ * propios —pagar varias partes está ratificado—, por eso se consultan TODOS
+ * los IDs agrupados y nunca se inventa un detalle a partir del total visible.
  */
 export function MesasScreen() {
   const { t, locale } = useIdioma();
@@ -68,6 +70,24 @@ export function MesasScreen() {
   const [fallo, setFallo] = useState(false);
   const [unread, setUnread] = useState(0);
   const [abierta, setAbierta] = useState<string | null>(null);
+  const [detalles, setDetalles] = useState<Record<string, MovementDetailResponse[] | 'loading' | 'error'>>({});
+
+  const cargarDetalle = useCallback((mesaCode: string, paymentIds: readonly string[]) => {
+    setDetalles((actual) => ({ ...actual, [mesaCode]: 'loading' }));
+    traerDetallesMovimientos(paymentIds, (id) => api.getMovement(id))
+      .then((movements) => setDetalles((actual) => ({ ...actual, [mesaCode]: movements })))
+      .catch(() => setDetalles((actual) => ({ ...actual, [mesaCode]: 'error' })));
+  }, []);
+
+  const abrirDetalle = useCallback((mesaCode: string, paymentIds: readonly string[]) => {
+    if (abierta === mesaCode) {
+      setAbierta(null);
+      return;
+    }
+    setAbierta(mesaCode);
+    if (detalles[mesaCode]) return;
+    cargarDetalle(mesaCode, paymentIds);
+  }, [abierta, cargarDetalle, detalles]);
 
   /**
    * TODO el historial antes de agrupar, sin "Cargar más": una página parcial
@@ -149,13 +169,14 @@ export function MesasScreen() {
                 {g.mesas.map((m) => {
                   const franja = franjaDe(m.date);
                   const on = abierta === m.mesa_code;
+                  const detalle = detalles[m.mesa_code];
                   return (
                     <div key={m.mesa_code} className={`hist-item ${on ? 'on' : ''}`}>
                       <button
                         type="button"
                         className="hist-row"
                         aria-expanded={on}
-                        onClick={() => setAbierta(on ? null : m.mesa_code)}
+                        onClick={() => abrirDetalle(m.mesa_code, m.payment_ids)}
                       >
                         <span aria-hidden="true">
                           <Icon name={CATEGORY_EMOJI[m.category] ?? 'dining'} size={22} />
@@ -183,19 +204,49 @@ export function MesasScreen() {
                         </span>
                       </button>
                       {on && (
-                        /* G-33: el detalle de consumo no tiene contrato
-                           confirmado. Estado desconocido, con borde punteado —
-                           si hay borde, hay algo que no estás viendo. */
-                        <div className="state-unknown hist-unknown">
-                          <Icon name="help" size={20} />
-                          <div>
-                            <div className="state-unknown-title">
-                              {t('El detalle de esta mesa todavía no está disponible')}
+                        <div className="hist-detail" aria-live="polite">
+                          {detalle === 'loading' && (
+                            <div className="loading">{t('Cargando detalle…')}</div>
+                          )}
+                          {detalle === 'error' && (
+                            <div className="state-error hist-detail-error" role="alert">
+                              <div className="state-error-title">{t('No pudimos cargar el detalle')}</div>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => cargarDetalle(m.mesa_code, m.payment_ids)}
+                              >
+                                {t('Reintentar')}
+                              </button>
                             </div>
-                            <p className="state-unknown-body">
-                              {t('No podemos confirmar que sea seguro de mostrar. Lo que pagaste tú es el monto de esta fila.')}
-                            </p>
-                          </div>
+                          )}
+                          {Array.isArray(detalle) && detalle.map((movement, paymentIndex) => (
+                            <section key={movement.id} className="hist-payment" aria-label={t('Pago {0}', paymentIndex + 1)}>
+                              {movement.items.length > 0 ? movement.items.map((item, itemIndex) => (
+                                <div key={`${movement.id}:${itemIndex}`} className="hist-detail-row">
+                                  <span className="hist-detail-name">
+                                    <span>{item.name}{item.quantity > 1 ? ` × ${item.quantity}` : ''}</span>
+                                    {item.declared_fraction_bps != null && (
+                                      <span className="hist-detail-declared">
+                                        {t('Declaraste {0}', bpsLabel(item.declared_fraction_bps))}
+                                      </span>
+                                    )}
+                                  </span>
+                                  {item.amount_cents != null && (
+                                    <span className="hist-detail-amount">{formatMXN(item.amount_cents)}</span>
+                                  )}
+                                </div>
+                              )) : (
+                                <p className="hist-detail-empty">{t('Este pago no declaró consumos.')}</p>
+                              )}
+                              {movement.tip_amount_cents > 0 && (
+                                <div className="hist-detail-row hist-detail-tip">
+                                  <span>{t('Propina')}</span>
+                                  <span className="hist-detail-amount">{formatMXN(movement.tip_amount_cents)}</span>
+                                </div>
+                              )}
+                            </section>
+                          ))}
                         </div>
                       )}
                     </div>

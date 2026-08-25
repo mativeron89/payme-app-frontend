@@ -40,6 +40,7 @@ import type {
   TransfersResponse,
   WalletTransactionsResponse,
   HistoryResponse,
+  MovementDetailResponse,
   FractionRequest,
   RegisterRequest,
 } from '../types';
@@ -656,9 +657,15 @@ export async function mockHistory(params?: {
   return delay({ history: proyectado, limit, offset });
 }
 
+export async function mockMovement(id: string): Promise<MovementDetailResponse> {
+  const detail = state.movementDetails[id];
+  if (!detail) return fail(404, 'movement_not_found');
+  return delay(structuredClone(detail));
+}
+
 // ─── v2.18 · Fracciones (réplica de services/itemClaims.js del espejo) ─────
 
-const FRACTION_VALUES = [2500, 3333, 5000, 10000];
+const FRACTION_VALUES = [2500, 3333, 5000, 6667, 7500, 10000];
 const COMPLETING_TOLERANCE_BPS = 100;
 
 /** bps efectivos contra lo que queda; 409 si no entra; absorbe restos <100. */
@@ -1096,7 +1103,8 @@ export async function mockPayMesa(
   if (!validIdempotencyKey(req.idempotency_key) ||
       (req.tip_cents !== undefined && !validNonNegativeCents(req.tip_cents)) ||
       (req.tip_bps !== undefined && (!Number.isSafeInteger(req.tip_bps) || req.tip_bps < 0 || req.tip_bps > 10_000)) ||
-      (req.items !== undefined && (!Array.isArray(req.items) || req.items.length === 0 || req.items.some((item) => !FRACTION_VALUES.includes(item.fraction_bps))))) {
+      (req.items !== undefined && (!Array.isArray(req.items) || req.items.length === 0 || req.items.some((item) => !FRACTION_VALUES.includes(item.fraction_bps)))) ||
+      (req.items !== undefined && (req.item_ids?.length ?? 0) > 0)) {
     return fail(400, 'validation_error');
   }
   // B-06: misma clave → replay, sin volver a cobrar (igual que el backend).
@@ -1135,6 +1143,13 @@ export async function mockPayMesa(
   if (req.payment_type === 'wallet' && identity === 'guest') {
     return fail(401, 'wallet_requires_auth');
   }
+  const requestedItems: FractionRequest[] = req.items
+    ?? (req.item_ids ?? []).map((item_id) => ({ item_id, fraction_bps: 10000 }));
+  const requestedIds = requestedItems.map((item) => item.item_id);
+  if (new Set(requestedIds).size !== requestedIds.length) return fail(400, 'duplicate_item');
+  if (requestedItems.some((requested) => !mesa.items.some((item) => item.id === requested.item_id))) {
+    return fail(400, 'invalid_item_ids');
+  }
   // D7 (v2.17): tip_bps (el server hace la cuenta sobre total ÷ N) excluyente
   // con tip_cents (monto a mano). Misma regla y mismo redondeo que el backend.
   if (req.tip_bps !== undefined && req.tip_cents) {
@@ -1152,12 +1167,9 @@ export async function mockPayMesa(
   // v2.18: recibo de fracciones cobradas (solo consumo).
   const pricedItems: Array<{ item_id: string; fraction_bps: number; amount_cents: number }> = [];
   if (mesa.division_mode === 'consumo') {
-    const requests: FractionRequest[] =
-      req.items ??
-      (req.item_ids ?? []).map((id) => ({ item_id: id, fraction_bps: 10000 }));
-    if (requests.length === 0) return fail(400, 'no_items_selected');
+    if (requestedItems.length === 0) return fail(400, 'no_items_selected');
     try {
-      for (const rq of requests) {
+      for (const rq of requestedItems) {
         const item = mesa.items.find((i) => i.id === rq.item_id);
         if (!item) return fail(400, 'invalid_item_ids');
         // Mi claim locked del ítem se consume/reemplaza; los demás quedan.
@@ -1227,15 +1239,56 @@ export async function mockPayMesa(
 
   // Pantalla Mesas: cada pago propio suma una entrada al historial.
   if (identity !== 'guest') {
+    const movementId = mockId('h');
+    const movementDate = new Date().toISOString();
     state.history.push({
-      id: mockId('h'),
+      id: movementId,
       amount_cents: gross,
-      date: new Date().toISOString(),
+      date: movementDate,
       mesa_code: mesa.code,
       mesa_status: mesa.status,
       restaurant: mesa.restaurant.name,
       category: mesa.restaurant.category,
     });
+    const detailItems = mesa.division_mode === 'consumo'
+      ? pricedItems.flatMap((claim) => {
+          const item = mesa.items.find((candidate) => candidate.id === claim.item_id);
+          return item ? [{
+            name: item.name,
+            price_cents: item.price_cents,
+            quantity: item.quantity,
+            category: item.category,
+            amount_cents: claim.amount_cents,
+            fraction_bps: claim.fraction_bps,
+            declared_fraction_bps: null,
+          }] : [];
+        })
+      : requestedItems.flatMap((declared) => {
+          const item = mesa.items.find((candidate) => candidate.id === declared.item_id);
+          return item ? [{
+            name: item.name,
+            price_cents: item.price_cents,
+            quantity: item.quantity,
+            category: item.category,
+            amount_cents: null,
+            fraction_bps: null,
+            declared_fraction_bps: declared.fraction_bps as 2500 | 3333 | 5000 | 6667 | 7500 | 10000,
+          }] : [];
+        });
+    state.movementDetails[movementId] = {
+      id: movementId,
+      restaurant: { name: mesa.restaurant.name, category: mesa.restaurant.category },
+      mesa: { code: mesa.code },
+      date: movementDate,
+      payment_type: req.payment_type,
+      method: null,
+      items: detailItems,
+      items_amount_cents: itemsAmount,
+      tip_amount_cents: tipCents,
+      gross_amount_cents: gross,
+      fee_amount_cents: 0,
+      status: 'succeeded',
+    };
   }
 
   // v2.24 (Connect): el riel es DIRECTO si el restaurante tiene cuenta

@@ -6,6 +6,7 @@ import type {
   Friend,
   Group,
   HistoryEntry,
+  MovementDetailResponse,
   ItemStatus,
   MesaDetail,
   MesaStatus,
@@ -140,6 +141,8 @@ export interface MockState {
   mesas: MockMesa[];
   /** GET /account/history: pagos propios en mesas (pantalla Mesas). */
   history: HistoryEntry[];
+  /** GET /account/movements/:id, separado para no filtrar detalle en history. */
+  movementDetails: Record<string, MovementDetailResponse>;
   walletTx: WalletTransaction[];
   transfers: TransferListItem[];
   notifications: AppNotification[];
@@ -583,11 +586,67 @@ function seedNotifications(mesas: MockMesa[]): {
   return { notifications, pendingInvitations };
 }
 
+function seedMovementDetails(history: readonly HistoryEntry[]): Record<string, MovementDetailResponse> {
+  const itemsByCode: Record<string, MovementDetailResponse['items']> = {
+    'PA-8712': [
+      { name: 'Tagliatelle Bolognese', price_cents: 19500, quantity: 1, category: 'plato', amount_cents: 19500, fraction_bps: 10000, declared_fraction_bps: null },
+    ],
+    'PA-6603': [
+      { name: 'Omakase', price_cents: 40000, quantity: 1, category: 'plato', amount_cents: null, fraction_bps: null, declared_fraction_bps: 6667 },
+    ],
+    'PA-5218': [
+      { name: 'Pizza Margherita', price_cents: 15000, quantity: 1, category: 'plato', amount_cents: 15000, fraction_bps: 10000, declared_fraction_bps: null },
+    ],
+  };
+  const itemsAmountByCode: Record<string, number> = {
+    // En igualdad el monto viene del slot, no de `amount_cents` por ítem.
+    // Este seed pagó $400.00 de parte + $18.00 de propina.
+    'PA-6603': 40000,
+  };
+  return Object.fromEntries(history.flatMap((entry) => {
+    const items = itemsByCode[entry.mesa_code];
+    if (!items) return [];
+    const itemsAmount = itemsAmountByCode[entry.mesa_code]
+      ?? items.reduce((sum, item) => sum + (item.amount_cents ?? 0), 0);
+    return [[entry.id, {
+      id: entry.id,
+      restaurant: { name: entry.restaurant, category: entry.category },
+      mesa: { code: entry.mesa_code },
+      date: entry.date,
+      payment_type: 'card' as const,
+      method: { brand: 'visa', bank: 'Santander', last_four: '4532' },
+      items,
+      items_amount_cents: itemsAmount,
+      tip_amount_cents: entry.amount_cents - itemsAmount,
+      gross_amount_cents: entry.amount_cents,
+      fee_amount_cents: 0,
+      status: 'succeeded',
+    } satisfies MovementDetailResponse]];
+  }));
+}
+
 function seedState(): MockState {
   const friends = seedFriends();
   const directory = seedDirectory();
   const mesas = seedMesas();
   const { notifications, pendingInvitations } = seedNotifications(mesas);
+  const history: HistoryEntry[] = [
+    {
+      id: mockId('h'), amount_cents: 22425, date: iso(-3 * 24 * 60 * 60_000),
+      mesa_code: 'PA-8712', mesa_status: 'completed',
+      restaurant: MOCK_RESTAURANTS[0].name, category: MOCK_RESTAURANTS[0].category,
+    },
+    {
+      id: mockId('h'), amount_cents: 41800, date: iso(-9 * 24 * 60 * 60_000),
+      mesa_code: 'PA-6603', mesa_status: 'completed',
+      restaurant: MOCK_RESTAURANTS[1].name, category: MOCK_RESTAURANTS[1].category,
+    },
+    {
+      id: mockId('h'), amount_cents: 15650, date: iso(-16 * 24 * 60 * 60_000),
+      mesa_code: 'PA-5218', mesa_status: 'completed',
+      restaurant: MOCK_RESTAURANTS[0].name, category: MOCK_RESTAURANTS[0].category,
+    },
+  ];
   return {
     user: MOCK_USER,
     // Riel saldo apagado: el mock no siembra saldo. Los campos quedan en el
@@ -659,35 +718,8 @@ function seedState(): MockState {
     mesas,
     // Historial de mesas pagadas (shape de GET /account/history): alimenta la
     // pantalla Mesas. mockPayMesa agrega una entrada por cada pago propio.
-    history: [
-      {
-        id: mockId('h'),
-        amount_cents: 22425,
-        date: iso(-3 * 24 * 60 * 60_000),
-        mesa_code: 'PA-8712',
-        mesa_status: 'completed',
-        restaurant: MOCK_RESTAURANTS[0].name,
-        category: MOCK_RESTAURANTS[0].category,
-      },
-      {
-        id: mockId('h'),
-        amount_cents: 41800,
-        date: iso(-9 * 24 * 60 * 60_000),
-        mesa_code: 'PA-6603',
-        mesa_status: 'completed',
-        restaurant: MOCK_RESTAURANTS[1].name,
-        category: MOCK_RESTAURANTS[1].category,
-      },
-      {
-        id: mockId('h'),
-        amount_cents: 15650,
-        date: iso(-16 * 24 * 60 * 60_000),
-        mesa_code: 'PA-5218',
-        mesa_status: 'completed',
-        restaurant: MOCK_RESTAURANTS[0].name,
-        category: MOCK_RESTAURANTS[0].category,
-      },
-    ],
+    history,
+    movementDetails: seedMovementDetails(history),
     // Sin riel saldo no hay movimientos de saldo que mostrar. El seed queda
     // en el árbol (durmiente); lo que se apaga es la siembra.
     walletTx: [],
@@ -1008,6 +1040,21 @@ function loadPersisted(): MockState | null {
     // un historial vacío a quien ya venía usando la demo.
     if (!Array.isArray(parsed.history)) {
       parsed.history = seedState().history;
+    }
+    if (!parsed.movementDetails || typeof parsed.movementDetails !== 'object' || Array.isArray(parsed.movementDetails)) {
+      parsed.movementDetails = seedMovementDetails(parsed.history);
+    } else {
+      // Migración local v0.144: el contrato agregó un campo ADITIVO. Los
+      // detalles persistidos antes de v2.67 son históricos y por definición
+      // no permiten reconstruir la declaración: se conserva null.
+      for (const detail of Object.values(parsed.movementDetails)) {
+        if (!detail || !Array.isArray(detail.items)) continue;
+        for (const item of detail.items) {
+          if (item && !Object.hasOwn(item, 'declared_fraction_bps')) {
+            item.declared_fraction_bps = null;
+          }
+        }
+      }
     }
     // Migración 0.25: el seed viejo traía 'payme_mx_leo' (3 chars), que viola
     // el formato del contrato — se renombra en estados persistidos.

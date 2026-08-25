@@ -6,9 +6,9 @@ import { espiarScroll, leerScrolls } from './_senales';
  * H-14 (auditoría 2026-08-06): EN PARTES IGUALES, MARCAR ES INFORMATIVO — Y EL
  * GATE LO DECÍA OBLIGATORIO.
  *
- * La pantalla de la mesa igual dice "Marcalo para el restaurante — no cambia
- * lo que pagás", y el gate viejo exigía seleccionar igual: copy y gate se
- * contradecían. El seed agravaba: PA-3121 tenía `items: []` —un estado
+ * Marcar en la mesa igual es una declaración separada y no cambia el slot;
+ * el gate viejo exigía seleccionar igual y contradecía esa semántica. El seed
+ * agravaba: PA-3121 tenía `items: []` —un estado
  * IMPOSIBLE en producción, `POST /mesas` exige `.min(1)`— y el Continuar
  * quedaba apagado PARA SIEMPRE: la persona no podía pagar su parte de $155.
  *
@@ -22,6 +22,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
   test('partes iguales: sin marcar nada se llega al pago y se paga la parte', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-3121');
+    await expect(page.locator('.mesa-selection-title')).toContainText('partes iguales');
 
     // La mesa igual del seed ahora tiene ítems reales (el contrato los exige).
     await expect(page.getByText('Omakase para dos')).toBeVisible();
@@ -41,6 +42,23 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await propinas.getByRole('radio', { name: '0%', exact: true }).click();
     await page.getByRole('button', { name: 'Pagar', exact: true }).click();
     await expect(page.getByText('¡Listo!')).toBeVisible();
+  });
+
+  test('partes iguales: permite declarar una fracción sin alterar el casillero', async ({ page }) => {
+    await ingresar(page);
+    await page.goto('/#/mesa/PA-3121');
+
+    await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
+    const fracciones = page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' });
+    await expect(fracciones.getByRole('radio')).toHaveCount(6);
+    await expect(fracciones.getByRole('radio', { name: '⅔', exact: true })).toBeVisible();
+    await fracciones.getByRole('radio', { name: '½', exact: true }).click();
+
+    // No hay preview monetario por plato en igualdad: la fracción es una
+    // declaración separada y el monto sigue siendo el slot fijo.
+    await expect(page.locator('.mi-frac-amt')).toHaveCount(0);
+    const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
+    await expect(filaMiParte).toContainText('$155.00');
   });
 
   /**
@@ -91,6 +109,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await espiarScroll(page);
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
+    await expect(page.locator('.mesa-selection-title')).toContainText('cada uno lo suyo');
 
     await expect(page.getByText('Tagliatelle Bolognese')).toBeVisible();
     await expect(page.getByText('Elige lo que consumiste').first()).toBeVisible();
@@ -118,7 +137,66 @@ test.describe('Continuar en la mesa (H-14)', () => {
 
     // ⑤ con un consumo elegido, el mismo control sí avanza.
     await page.getByText('Tagliatelle Bolognese').click();
+    const fracciones = page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' });
+    await expect(fracciones.getByRole('radio')).toHaveCount(6);
+    await fracciones.getByRole('radio', { name: '⅔', exact: true }).click();
+    await expect(page.locator('.mi-frac-amt')).toContainText('$130.01');
     await continuar.click();
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+    await page.getByRole('radio', { name: '0%', exact: true }).click();
+    await expect(page.getByText('$130.01', { exact: true }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+    await expect(page.getByText('¡Listo!')).toBeVisible();
   });
 });
+
+for (const width of [320, 390]) {
+  test(`Mis ítems conserva scroll propio y deja el final sobre la barra · ${width}×844`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await ingresar(page);
+    await page.goto('/#/mesa/PA-2847');
+
+    // Dos filas expandidas reproducen el caso que desbordaba la pantalla: cada
+    // selector agrega seis fracciones y su preview, sin cambiar el shell.
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await expect(page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' })).toHaveCount(2);
+
+    const scroll = page.locator('.screen > .scroll.flow-scroll');
+    const shell = page.locator('.app');
+    const initial = await scroll.evaluate((node) => ({
+      clientHeight: node.clientHeight,
+      scrollHeight: node.scrollHeight,
+      overflowY: getComputedStyle(node).overflowY,
+    }));
+    expect(initial.scrollHeight).toBeGreaterThan(initial.clientHeight);
+    expect(initial.overflowY).toBe('auto');
+
+    const outer = await shell.evaluate((node) => ({
+      clientHeight: node.clientHeight,
+      scrollHeight: node.scrollHeight,
+      overflow: getComputedStyle(node).overflow,
+    }));
+    expect(outer.scrollHeight).toBe(outer.clientHeight);
+    expect(outer.overflow).toBe('hidden');
+
+    const atEnd = await scroll.evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+      return {
+        max: node.scrollHeight - node.clientHeight,
+        scrollTop: node.scrollTop,
+      };
+    });
+    expect(atEnd.scrollTop).toBeGreaterThanOrEqual(atEnd.max - 1);
+
+    const lastItem = await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).boundingBox();
+    const lastAction = await page.getByRole('button', { name: 'Invitar amigos de PayMe', exact: true }).boundingBox();
+    const appbar = await page.locator('.screen > .appbar-block .appbar').boundingBox();
+    expect(lastItem).not.toBeNull();
+    expect(lastAction).not.toBeNull();
+    expect(appbar).not.toBeNull();
+    expect(lastItem!.y).toBeGreaterThanOrEqual(0);
+    expect(lastAction!.y).toBeGreaterThanOrEqual(0);
+    expect(lastAction!.y + lastAction!.height).toBeLessThanOrEqual(appbar!.y + 1);
+  });
+}

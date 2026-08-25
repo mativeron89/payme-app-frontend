@@ -331,6 +331,7 @@ export function SocialScreen() {
     <div className="screen has-appbar">
       <AppHeader
         userName={fullName(session) ?? undefined}
+        alignChrome
         tabs={
           <BubbleTabs tabs={TABS} active={tab} onSelect={(id) => setTab(id as SocialTabId)} />
         }

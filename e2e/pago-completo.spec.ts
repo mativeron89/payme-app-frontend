@@ -48,24 +48,27 @@ test.describe('el camino de pago completo', () => {
     // la mesa YA existe y está garantizada, así que retroceder a División está
     // prohibido (B-06), y un control que dice "Volver" y no retrocede miente.
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-    await expect(page.getByText(new RegExp(`Mesa ${mesa.code}`))).toBeVisible();
+    const seleccion = page.locator('.mesa-selection-title');
+    await expect(seleccion).toContainText(mesa.code);
+    await expect(seleccion).toContainText('partes iguales');
     await expect(page.getByText('$840.00')).toBeVisible();
 
-    // Marcar lo consumido: en partes iguales es informativo para el
-    // restaurante y NO cambia lo que se paga. Esa promesa está en pantalla.
-    await expect(page.getByText('no cambia lo que pagas')).toBeVisible();
+    // Marcar lo consumido en igualdad es informativo. El helper duplicado se
+    // retiró: lo acredita que el monto de Mi parte no se mueve.
+    await expect(page.getByText('no cambia lo que pagas')).toHaveCount(0);
     // H-14 (2026-08-06): la fila muestra "Mi parte" ANTES de marcar nada — el
     // monto es el del casillero y no depende de la selección, y el gate que
     // exigía marcar contradecía la promesa de arriba. Acá vivía la afirmación
     // vieja ("Marcá lo que consumiste" sin monto), que anclaba el gate
     // contradictorio. Marcar sigue siendo posible, y sigue sin mover un peso:
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
+    await page.getByRole('radio', { name: '½', exact: true }).click();
+    await expect(page.locator('.mi-frac-amt')).toHaveCount(0);
 
     // §1.5 · el monto vive en su fila propia ARRIBA de la barra, no en la
     // etiqueta del nav item — que dice "Continuar" y no cambia según el estado.
-    // Se ancla en el texto "Mi parte" y se mira SU fila: `$210.00` suelto
-    // aparece dos veces en la pantalla (acá y en la nota de partes iguales), y
-    // afirmarlo suelto pasaría aunque esta fila no existiera.
+    // Se ancla en el texto "Mi parte" y se mira SU fila: afirmar `$210.00`
+    // suelto no probaría que el énfasis y la división visual viven acá.
     const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
     await expect(filaMiParte).toContainText('$210.00');
 

@@ -244,6 +244,120 @@ describe('mock: paridad idempotente de pago de mesa', () => {
     }
   });
 
+  it('igualdad conserva la fracción declarada sin mover el importe fijo del slot', async () => {
+    const template = state.mesas.find((mesa) => mesa.division_mode === 'igual' && mesa.items.length > 0);
+    expect(template).toBeDefined();
+    const mesa = structuredClone(template!);
+    const code = 'TEST-EQUAL-DECLARED-1';
+    const key = 'mock-equal-declared-idem-1';
+    mesa.id = 'mock-mesa-equal-declared-id';
+    mesa.code = code;
+    mesa.status = 'open';
+    mesa.paid_amount_cents = 0;
+    mesa.tip_amount_cents = 0;
+    mesa.expires_at = new Date(Date.now() + 60_000).toISOString();
+    mesa.slots = [{ slot_index: 0, amount_cents: 15500, status: 'available', claimedBy: null }];
+    const historyBefore = [...state.history];
+    const detailKeysBefore = new Set(Object.keys(state.movementDetails));
+    state.mesas.push(mesa);
+
+    try {
+      const selected = mesa.items[0];
+      const response = await mockPayMesa(code, {
+        idempotency_key: key,
+        payment_type: 'card',
+        payment_method_id: state.paymentMethods[0].id,
+        items: [{ item_id: selected.id, fraction_bps: 6667 }],
+        tip_cents: 0,
+      }, 'user');
+
+      expect(response.attempt.gross_amount_cents).toBe(15500);
+      const newDetailKey = Object.keys(state.movementDetails).find((id) => !detailKeysBefore.has(id));
+      expect(newDetailKey).toBeDefined();
+      expect(state.movementDetails[newDetailKey!]).toMatchObject({
+        items_amount_cents: 15500,
+        items: [{
+          name: selected.name,
+          amount_cents: null,
+          fraction_bps: null,
+          declared_fraction_bps: 6667,
+        }],
+      });
+    } finally {
+      state.mesas.splice(state.mesas.indexOf(mesa), 1);
+      state.history.splice(0, state.history.length, ...historyBefore);
+      for (const id of Object.keys(state.movementDetails)) {
+        if (!detailKeysBefore.has(id)) delete state.movementDetails[id];
+      }
+      delete state.idempotency[`pay:${code}:${key}`];
+      persist();
+      await Promise.resolve();
+    }
+  });
+
+  it('consumo cobra ⅔ y el ⅓ complementario completa el ítem sin overclaim', async () => {
+    const template = state.mesas.find((mesa) => mesa.division_mode === 'consumo' && mesa.items.length > 0);
+    expect(template).toBeDefined();
+    const mesa = structuredClone(template!);
+    const code = 'TEST-CONSUMPTION-THIRDS-1';
+    const firstKey = 'mock-thirds-first-idem-1';
+    const secondKey = 'mock-thirds-second-idem-1';
+    mesa.id = 'mock-mesa-consumption-thirds-id';
+    mesa.code = code;
+    mesa.status = 'open';
+    mesa.total_cents = 10001;
+    mesa.paid_amount_cents = 0;
+    mesa.tip_amount_cents = 0;
+    mesa.expires_at = new Date(Date.now() + 60_000).toISOString();
+    mesa.items = [{
+      ...mesa.items[0],
+      price_cents: 10001,
+      quantity: 1,
+      status: 'available',
+      lockedBy: null,
+      lock_expires_at: null,
+      claims: [],
+    }];
+    const historyBefore = [...state.history];
+    const detailKeysBefore = new Set(Object.keys(state.movementDetails));
+    state.mesas.push(mesa);
+
+    try {
+      const item = mesa.items[0];
+      const first = await mockPayMesa(code, {
+        idempotency_key: firstKey,
+        payment_type: 'card',
+        payment_method_id: state.paymentMethods[0].id,
+        items: [{ item_id: item.id, fraction_bps: 6667 }],
+        tip_cents: 0,
+      }, 'user');
+      const second = await mockPayMesa(code, {
+        idempotency_key: secondKey,
+        payment_type: 'card',
+        stripe_payment_method_id: 'pm_second_comensal',
+        items: [{ item_id: item.id, fraction_bps: 3333 }],
+        tip_cents: 0,
+      }, 'user');
+
+      expect(first.attempt.items?.[0]?.fraction_bps).toBe(6667);
+      expect(second.attempt.items?.[0]?.fraction_bps).toBe(3333);
+      expect(first.attempt.gross_amount_cents + second.attempt.gross_amount_cents).toBe(10001);
+      expect(item.claims.reduce((sum, claim) => sum + claim.fraction_bps, 0)).toBe(10000);
+      expect(item.claims.reduce((sum, claim) => sum + (claim.amount_cents ?? 0), 0)).toBe(10001);
+      expect(item.status).toBe('paid');
+    } finally {
+      state.mesas.splice(state.mesas.indexOf(mesa), 1);
+      state.history.splice(0, state.history.length, ...historyBefore);
+      for (const id of Object.keys(state.movementDetails)) {
+        if (!detailKeysBefore.has(id)) delete state.movementDetails[id];
+      }
+      delete state.idempotency[`pay:${code}:${firstKey}`];
+      delete state.idempotency[`pay:${code}:${secondKey}`];
+      persist();
+      await Promise.resolve();
+    }
+  });
+
   it('rechaza centavos fraccionales o inseguros antes de mutar mock', async () => {
     const balanceBefore = state.balance_cents;
     const transfersBefore = state.transfers.length;

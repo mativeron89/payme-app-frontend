@@ -68,8 +68,10 @@ const slot = (over: Partial<DivisionSlot> = {}): DivisionSlot => ({
 });
 
 describe('bpsLabel', () => {
-  it('nombra las cuatro fracciones del contrato', () => {
+  it('nombra las seis fracciones naturales del contrato', () => {
     expect(bpsLabel(10000)).toBe('entero');
+    expect(bpsLabel(7500)).toBe('¾');
+    expect(bpsLabel(6667)).toBe('⅔');
     expect(bpsLabel(5000)).toBe('½');
     expect(bpsLabel(3333)).toBe('⅓');
     expect(bpsLabel(2500)).toBe('¼');
@@ -85,12 +87,12 @@ describe('bpsLabel', () => {
   });
 
   it('cualquier otro valor cae a porcentaje', () => {
-    expect(bpsLabel(7500)).toBe('75%');
+    expect(bpsLabel(8750)).toBe('88%');
     expect(bpsLabel(0)).toBe('0%');
   });
 
   it('todas las fracciones ofrecidas son valores que el contrato acepta', () => {
-    expect(FRACTIONS.map((f) => f.bps)).toEqual([10000, 5000, 3333, 2500]);
+    expect(FRACTIONS.map((f) => f.bps)).toEqual([10000, 7500, 6667, 5000, 3333, 2500]);
   });
 });
 

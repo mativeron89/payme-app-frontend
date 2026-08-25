@@ -52,6 +52,7 @@ export function InviteFriends({ code }: { code: string }) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
+  const [mode, setMode] = useState<'friends' | 'groups'>('friends');
   const [q, setQ] = useState('');
   const [invited, setInvited] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<Set<string>>(new Set());
@@ -96,6 +97,11 @@ export function InviteFriends({ code }: { code: string }) {
       : friends;
     return pool.slice(0, 6);
   }, [friends, q]);
+
+  const shownGroups = useMemo(() => {
+    const needle = fold(q.trim());
+    return (needle ? groups.filter((g) => fold(g.name).includes(needle)) : groups).slice(0, 6);
+  }, [groups, q]);
 
   async function invite(f: Invitable) {
     if (sentRef.current.has(f.payme_id)) return;
@@ -147,7 +153,8 @@ export function InviteFriends({ code }: { code: string }) {
    * estado de la pantalla, alguien lo va a pintar; se descarta en el borde.
    */
   async function toggleGroup(g: Group) {
-    if (openGroup === g.id) {
+    const retrying = openGroup === g.id && groupError === g.id;
+    if (openGroup === g.id && !retrying) {
       setOpenGroup(null);
       return;
     }
@@ -222,30 +229,73 @@ export function InviteFriends({ code }: { code: string }) {
     );
   }
 
-  if (friends.length === 0 && groups.length === 0) return null;
-
   return (
     <div className="inv-panel">
-      <h2 className="sectlabel">{t('Invitar')}</h2>
-      <input
-        className="input"
-        placeholder={t('Buscar por nombre o ID')}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        aria-label={t('Buscar contactos para invitar')}
-      />
-      {shown.length > 0 && <div className="inv-list">{shown.map((f) => fila(f, f.id))}</div>}
-      {q.trim() && shown.length === 0 && (
-        <p className="inv-none">Ningún contacto coincide con “{q.trim()}”.</p>
-      )}
+      <div className="inv-kind-tabs" role="tablist" aria-label={t('Elegir a quién invitar')}>
+        {([
+          ['friends', t('Amigos')],
+          ['groups', t('Grupos')],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            id={`invite-${id}-tab`}
+            type="button"
+            role="tab"
+            aria-selected={mode === id}
+            aria-controls="invite-progressive-panel"
+            className={`inv-kind-tab${mode === id ? ' on' : ''}`}
+            onClick={() => {
+              setMode(id);
+              setQ('');
+              setOpenGroup(null);
+            }}
+          >
+            <Icon name={id === 'friends' ? 'users' : 'users-group'} size={20} aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+      </div>
+      <div
+        id="invite-progressive-panel"
+        className="inv-progressive-panel"
+        role="tabpanel"
+        aria-labelledby={`invite-${mode}-tab`}
+      >
+        <div className="social-search">
+          <Icon name="search" size={18} aria-hidden="true" />
+          <input
+            className="social-search-input"
+            placeholder={mode === 'friends' ? t('Buscar por nombre o ID') : t('Buscar grupo por nombre')}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label={mode === 'friends' ? t('Buscar contactos para invitar') : t('Buscar grupo por nombre')}
+          />
+        </div>
 
-      {groups.length > 0 && (
-        <>
-          <h2 className="inv-groups-label">{t('Grupos')}</h2>
-          {/* Lista VERTICAL, no burbujas lado a lado: con más de dos grupos no
-              entran en una fila. */}
-          <div className="inv-list">
-            {groups.map((g) => {
+        {mode === 'friends' && (
+          <>
+            {shown.length > 0 && <div className="inv-list">{shown.map((f) => fila(f, f.id))}</div>}
+            {shown.length === 0 && (
+              <p className="inv-none">
+                {q.trim()
+                  ? t('Ningún contacto coincide con “{0}”.', q.trim())
+                  : t('Todavía no agregaste amigos.')}
+              </p>
+            )}
+          </>
+        )}
+
+        {mode === 'groups' && (
+          <>
+          {shownGroups.length === 0 && (
+            <p className="inv-none">
+              {q.trim()
+                ? t('Ningún grupo coincide con “{0}”.', q.trim())
+                : t('Todavía no creaste grupos.')}
+            </p>
+          )}
+          {shownGroups.length > 0 && <div className="inv-list">
+            {shownGroups.map((g) => {
               const abierto = openGroup === g.id;
               const gente = members[g.id];
               return (
@@ -289,9 +339,10 @@ export function InviteFriends({ code }: { code: string }) {
                 </div>
               );
             })}
-          </div>
-        </>
-      )}
+          </div>}
+          </>
+        )}
+      </div>
     </div>
   );
 }

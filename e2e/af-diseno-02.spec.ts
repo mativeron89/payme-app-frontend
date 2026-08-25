@@ -109,13 +109,13 @@ async function abrirPago(page: Page): Promise<void> {
 }
 
 test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', () => {
-  test('Ticket + División integra ubicación, monto y ticket dentro de la tarjeta solapada', async ({ page }) => {
+  test('Ticket + División compacta la tarjeta y conserva ubicación dentro de la hoja', async ({ page }) => {
     await abrirTicket(page);
 
     const titulo = page.locator('.title-card').first();
     await expect(page.locator('.demo-strip')).toHaveCount(0);
-    await expect(titulo).toContainText('La Parolaccia');
-    await expect(titulo).toContainText('Roma Norte, CDMX');
+    await expect(titulo).not.toContainText('La Parolaccia');
+    await expect(titulo).not.toContainText('Roma Norte, CDMX');
     await expect(titulo.getByText('$840.00', { exact: true })).toBeVisible();
     await expect(titulo.getByRole('button', { name: /Ver el ticket/ })).toBeVisible();
     await expect(titulo.getByText('$840.00', { exact: true })).toHaveCSS('font-size', '26px');
@@ -135,6 +135,8 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await abrir.click();
     const dialogo = page.getByRole('dialog', { name: /Ticket ·/ });
     await expect(dialogo).toBeVisible();
+    await expect(dialogo.getByText('La Parolaccia', { exact: true })).toBeVisible();
+    await expect(dialogo.getByText('Roma Norte, CDMX', { exact: true })).toBeVisible();
     const [dialogBox, layerBox] = await Promise.all([
       dialogo.boundingBox(),
       page.locator('.ticket-sheet-layer').boundingBox(),
@@ -300,7 +302,16 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     expect(link).toContain('?t=');
 
     await expect(page.getByText('Sofía Fernández', { exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Grupos', exact: true })).toBeVisible();
+    const amigosTab = page.getByRole('tab', { name: 'Amigos', exact: true });
+    const gruposTab = page.getByRole('tab', { name: 'Grupos', exact: true });
+    await expect(amigosTab).toHaveAttribute('aria-selected', 'true');
+    await expect(gruposTab).toHaveAttribute('aria-selected', 'false');
+    await expect(page.getByRole('tabpanel')).toHaveCount(1);
+    await expect(page.getByPlaceholder('Buscar por nombre o ID')).toBeVisible();
+    await gruposTab.click();
+    await expect(gruposTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByPlaceholder('Buscar grupo por nombre')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Familia/ })).toBeVisible();
     await expect(credencial.locator('.share-code-txt')).toHaveCSS('font-size', '26px');
     await expect(credencial.locator('.share-code-txt')).toHaveCSS('letter-spacing', '4.16px');
     await expect(copiar).toHaveCSS('color', 'rgb(10, 123, 128)');

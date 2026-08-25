@@ -23,8 +23,10 @@ test('las tres formas y el ticket viven en UNA pantalla, SIN contador de paso', 
   for (const forma of ['Por lo que pidió cada uno', 'En partes iguales', 'Pagar el total']) {
     await expect(page.getByRole('radio', { name: new RegExp(forma) })).toBeVisible();
   }
-  // El ticket está en la MISMA pantalla, y su total también.
-  await expect(page.getByText('La Parolaccia · Roma Norte, CDMX')).toBeVisible();
+  // El acceso y el total viven en la MISMA burbuja compacta. Restaurante y
+  // ubicación se retiraron de esta superficie para no repetir contexto.
+  await expect(page.getByText('La Parolaccia · Roma Norte, CDMX')).toHaveCount(0);
+  await expect(page.getByText('$840.00')).toBeVisible();
 
   /**
    * 🔴 ESTE TEST EXIGÍA VER «Paso 2 de 4», Y AHORA EXIGE LO CONTRARIO.
@@ -50,7 +52,7 @@ test('🔴 el ticket nace PLEGADO y se abre con sus consumos', async ({ page }) 
    * consumos como subtítulo. §5 bis · F lo pide así: *un dato, un lugar*.
    */
   // Plegado: el total se ve ARRIBA, el acceso abajo, el detalle no.
-  await expect(page.getByText('La Parolaccia · Roma Norte, CDMX')).toBeVisible();
+  await expect(page.getByText('La Parolaccia · Roma Norte, CDMX')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Ver el ticket', exact: true })).toBeVisible();
   await expect(page.getByText(/\d+ consumos, uno por uno/)).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toHaveCount(0);
@@ -60,6 +62,9 @@ test('🔴 el ticket nace PLEGADO y se abre con sus consumos', async ({ page }) 
 
   await page.getByRole('button', { name: /Ver el ticket/ }).click();
   // Abierto: vuelve el contenido íntegro de §1.3, no una versión reducida.
+  const hoja = page.getByRole('dialog', { name: /Ticket/ });
+  await expect(hoja.getByText('La Parolaccia', { exact: true })).toBeVisible();
+  await expect(hoja.getByText('Roma Norte, CDMX', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Modificar ítems' })).toBeVisible();
   // Y la verificación que §1.3 exige EN PANTALLA vuelve con él: plegado, esa
   // observación no estaba a la vista.
@@ -181,6 +186,9 @@ test('🔴 UNA persona puede pagar el total: el stepper llega a 1 y la mesa se a
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
+  await expect(page.locator('.mesa-selection-title')).toContainText('pagar el total');
 });
 
 /**

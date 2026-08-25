@@ -544,7 +544,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // veces— que ante la ausencia del dato preseleccionaban EL PLATO
       // ENTERO: la opción más cara. Ahora, sin `remaining_bps` válido no se
       // selecciona nada; la fila ya se muestra bloqueada por `rowStateOf`.
-      const def = fraccionInicial(item?.remaining_bps);
+      // En igualdad esta fracción es una DECLARACIÓN sin efecto monetario:
+      // no compite por `remaining_bps` y empieza en entero. En consumo sigue
+      // siendo una tenencia real y sólo se ofrece lo que queda.
+      const def = mesa?.division_mode === 'igual'
+        ? 10000
+        : fraccionInicial(item?.remaining_bps);
       if (def === null) {
         toast(t('No pudimos leer cuánto queda de ese ítem. Actualiza la mesa.'));
         return;
@@ -612,7 +617,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // lo que pagás" — y por eso NO condiciona el pago. El guard viejo
       // (`selected.size === 0 → return`) era el mismo gate contradictorio que
       // el `disabled` de la barra, en su segundo lugar. El contrato acompaña:
-      // `payMesa` acepta `item_ids: []` (schemas/index.js:233, default []).
+      // `payMesa` acepta una declaración vacía vía `item_ids: []`.
       setView('pay');
     }
   }
@@ -678,10 +683,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }
 
   /**
-   * B-06: el scope se DERIVA DEL CONTENIDO del pago, con los mismos campos que
-   * el backend hashea (`PAYLOAD_KEYS.mesa_pay`). Mismo payload = misma clave =
-   * el reintento cae en el replay, aunque el usuario haya recargado o salido
-   * de la mesa y vuelto. Payload distinto = clave distinta, sin rotar nada.
+   * B-06: el scope crudo conserva el CONTENIDO completo para direccionar los
+   * artefactos en memoria. El índice durable NO sale de este raw: serializa por
+   * actor + `mesa_pay:<code>` y el fingerprint del journal detecta un payload
+   * distinto bajo la misma intención para fallar cerrado. Mismo payload = mismo
+   * replay, aunque el usuario haya recargado o salido y vuelto.
    *
    * Va `cardChoice` y NO el `pm_`: el pm_ de una tarjeta tipeada se genera
    * dentro de doPay y se cachea BAJO este scope, así que el reintento recupera
@@ -690,15 +696,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * `lock_tokens` queda afuera a propósito: el backend lo excluye del hash.
    */
   const rawContentScope = useMemo(() => {
-    const sel =
-      mesa?.division_mode === 'consumo'
-        ? [...selected.entries()].map(([id, bps]) => `${id}:${bps}`).sort().join(',')
-        : [...selected.keys()].sort().join(',');
+    // v2.68: los dos modos transportan `items`. En consumo los bps son dinero;
+    // en igualdad son una declaración separada, pero en ambos casos forman
+    // parte del request y por eso deben entrar al fingerprint sin pérdida.
+    const sel = [...selected.entries()].map(([id, bps]) => `${id}:${bps}`).sort().join(',');
     // §1.5 bis: el token sale del MISMO payload que se manda, no del estado de
     // la UI. Las formas `b<bps>` y `c<centavos>` no se mueven.
     const tipToken = tipScopeToken(tipPayloadFor(tip, tipCents));
     return `pay:${code}|${payType}|${cardChoice}|${sel}|${tipToken}|${staffId ?? '-'}`;
-  }, [code, mesa?.division_mode, selected, tip, tipCents, payType, cardChoice, staffId]);
+  }, [code, selected, tip, tipCents, payType, cardChoice, staffId]);
   const contentScope = actor ? scopeForActor(actor, rawContentScope) : '';
 
   /**
@@ -1286,17 +1292,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       const body: PayMesaRequest = {
           payment_type: payType,
           // IMPORTANTÍSIMO (Mati): también en partes iguales viaja QUÉ consumió
-          // cada uno (v2.18.1 ya lo persiste — G-07 resuelto). En consumo van
-          // las FRACCIONES (v2.18).
+          // cada uno y, desde v2.68, la FRACCIÓN DECLARADA. Es dato separado:
+          // el dinero de igualdad sigue saliendo exclusivamente del slot.
           // Ordenados por item_id: el backend v2.25 ya no rompe por orden,
           // pero mandarlos estables nos deja a salvo de una versión vieja.
-          ...(mesa.division_mode === 'consumo'
+          ...(selected.size > 0
             ? {
                 items: [...selected.entries()]
                   .map(([item_id, fraction_bps]) => ({ item_id, fraction_bps }))
                   .sort((a, b) => a.item_id.localeCompare(b.item_id)),
               }
-            : { item_ids: [...selected.keys()].sort() }),
+            : { item_ids: [] }),
           ...(lockTokens.length > 0 && { lock_tokens: lockTokens }),
           // §1.5 bis: el mismo payload del que sale el token del scope. Sin
           // elección sólo se llega acá por el fallback, y ahí va `tip_bps: 0`.

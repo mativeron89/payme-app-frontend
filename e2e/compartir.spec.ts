@@ -22,14 +22,27 @@ import { abrirMesaConLink, ingresar } from './_app';
  * exactamente lo que nadie revisa antes de tocar.
  */
 
-test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
-  test('no hay pestañas: una sola sección no es un selector', async ({ page }) => {
+test.describe('Compartir · selector progresivo y ausencias deliberadas', () => {
+  test('Amigos y Grupos son dos cards separadas y comparten un solo panel', async ({ page }) => {
     await ingresar(page);
     await abrirMesaConLink(page);
 
-    // §5 bis · B no aplica acá. Con "Ya se sumaron" afuera quedaría una burbuja
-    // sola, que no selecciona nada.
-    await expect(page.getByRole('tab')).toHaveCount(0);
+    const amigos = page.getByRole('tab', { name: 'Amigos', exact: true });
+    const grupos = page.getByRole('tab', { name: 'Grupos', exact: true });
+    await expect(amigos).toHaveAttribute('aria-selected', 'true');
+    await expect(grupos).toHaveAttribute('aria-selected', 'false');
+    await expect(page.getByRole('tabpanel')).toHaveCount(1);
+    await expect(page.getByPlaceholder('Buscar por nombre o ID')).toBeVisible();
+
+    const [amigosBox, gruposBox] = await Promise.all([amigos.boundingBox(), grupos.boundingBox()]);
+    expect(amigosBox).not.toBeNull();
+    expect(gruposBox).not.toBeNull();
+    expect(gruposBox!.x - (amigosBox!.x + amigosBox!.width)).toBeGreaterThan(0);
+
+    await grupos.click();
+    await expect(grupos).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByPlaceholder('Buscar grupo por nombre')).toBeVisible();
+    await expect(page.getByRole('tabpanel')).toHaveCount(1);
     await expect(page.getByRole('button', { name: /Ya se sumaron/ })).toHaveCount(0);
   });
 
@@ -48,6 +61,8 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
 
     await expect(page.getByRole('button', { name: /Invitar a todos/ })).toHaveCount(0);
 
+    await page.getByRole('tab', { name: 'Grupos', exact: true }).click();
+
     // Tocar el grupo lo EXPANDE y muestra a sus integrantes, cada uno con su
     // propio botón. Antes de abrirlo, sus integrantes no están en pantalla.
     const grupo = page.getByRole('button', { name: /Familia/ });
@@ -55,9 +70,8 @@ test.describe('Compartir · lo que la pantalla NO tiene, a propósito', () => {
     await grupo.click();
     await expect(grupo).toHaveAttribute('aria-expanded', 'true');
 
-    // Sofía aparece dos veces con el grupo abierto —en contactos y adentro de
-    // Familia— y las dos filas tienen su propio Invitar. Eso es lo que se
-    // afirma: que el grupo trajo filas propias, no un botón único.
+    // Cada integrante tiene su propia acción: el grupo es un atajo de búsqueda,
+    // no un envío masivo.
     await expect(page.getByRole('button', { name: 'Invitar', exact: true })).not.toHaveCount(0);
     await expect(page.getByText('Leo Paz')).not.toHaveCount(0);
   });

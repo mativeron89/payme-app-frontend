@@ -2202,6 +2202,14 @@ body {
   min-height: 34px;
 }
 
+/* Inicio y Social son las únicas cabeceras tabuladas. Su fila de chrome usa
+   una caja de 34px para no mover la geometría aprobada de las pestañas; este
+   ajuste óptico la centra igual que las filas de 44px del resto de la app sin
+   tocar ni el `top` de `.btabs` ni la unión con `.mounted-card`. */
+.hdr-chrome-aligned > .hdr-row:first-child {
+  transform: translateY(5px);
+}
+
 /* Marca compuesta según la REGLA DE COMPOSICIÓN DEL LOCKUP (diseno 283d88d,
    SISTEMA_DISENO §1) — elegida por Mati el 2026-08-19 viendo D contra C3,
    etiqueta «D · la regla nueva de Diseño»; SUPERSEDE su elección C3 de esa
@@ -2394,6 +2402,9 @@ body {
    deriva —la tabla nombraba el badge de la campana y éste vive dentro de una
    PESTAÑA— y Mati ratificó los CINCO usos. Deja de ser deriva. */
 .btab-badge {
+  position: absolute;
+  top: -7px;
+  right: 4px;
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
@@ -2761,9 +2772,59 @@ body {
   color: var(--text-muted);
 }
 
-/* ─── El panel de invitar: sin pestañas, una sola sección ─── */
+/* ─── El panel progresivo de invitar ─── */
 .inv-panel {
-  margin-top: var(--sp-6);
+  margin-top: var(--sp-4);
+}
+
+/* Dos cards separadas: no es una pastilla partida. Cada opción conserva su
+   sombra y área táctil completa; debajo hay un único panel que cambia de
+   contenido sin duplicar buscadores ni listas. */
+.inv-kind-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+
+.inv-kind-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: var(--sp-3) var(--sp-4);
+  border: 2px solid transparent;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.inv-kind-tab.on {
+  border-color: var(--action-2);
+  color: var(--text);
+}
+
+.inv-kind-tab:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.inv-progressive-panel {
+  margin-top: var(--sp-3);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+}
+
+.inv-progressive-panel > .inv-list {
+  margin-top: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .inv-list {
@@ -3756,6 +3817,9 @@ body {
 
 /* Mismo componente .seg del sistema, con el área táctil de la app. */
 .mi-frac .seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
   margin-bottom: var(--sp-2);
   background: var(--surface);
 }
@@ -3799,12 +3863,19 @@ body {
 }
 
 .mi-parte-amt {
+  padding-left: var(--sp-4);
+  border-left: 1px solid var(--border);
   font-family: var(--font-display);
   font-size: var(--fs-h2);
   line-height: var(--lh-h2);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  color: var(--link);
+}
+
+.mesa-selection-title .title-card-sub strong {
   color: var(--text);
+  font-weight: 700;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -4536,10 +4607,65 @@ body {
   }
 }
 
-/* El desconocido va DENTRO de la tarjeta de la fila: hereda .state-unknown
-   (punteado + --surface-2) y sólo ajusta el margen exterior. */
-.hist-unknown {
+/* Detalle owner-only de cada pago propio. Una mesa puede tener más de uno:
+   cada bloque conserva su frontera sin repetir una tarjeta entera. */
+.hist-detail {
   margin: 0 var(--sp-3) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.hist-payment + .hist-payment {
+  margin-top: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border);
+}
+
+.hist-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-1) 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+.hist-detail-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hist-detail-declared {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+}
+
+.hist-detail-amount {
+  flex: none;
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hist-detail-tip {
+  margin-top: var(--sp-1);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.hist-detail-empty {
+  margin: 0;
+  padding: var(--sp-2) 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.hist-detail-error {
+  margin: 0;
 }
 
 /* La página siguiente falló, pero lo ya mostrado sigue siendo correcto. Se
@@ -5097,7 +5223,8 @@ h1.pay-title-lbl {
 /* P1 · Ticket + División: el contexto, el monto y el acceso al ticket son una
    sola tarjeta solapada. El detalle expandido conserva su cuerpo completo. */
 .ticket-title-card {
-  padding: 12px 18px 14px;
+  min-height: 0;
+  padding: 10px 18px 12px;
   overflow: hidden;
 }
 
@@ -5107,17 +5234,8 @@ h1.pay-title-lbl {
   font-weight: 800;
 }
 
-.ticket-title-place {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-1);
-  margin-top: var(--sp-1);
-  font-size: 13.5px;
-}
-
 .ticket-title-amount {
-  margin-top: 6px;
+  margin-top: 4px;
   font-family: var(--font-display);
   font-size: 26px;
   line-height: 1.05;
@@ -5388,21 +5506,7 @@ h1.pay-title-lbl {
   margin-top: var(--sp-4);
 }
 
-.share-flow-scroll .inv-panel > .sectlabel:first-child {
-  margin-bottom: var(--sp-2);
-}
-
-.share-flow-scroll .inv-panel > .input {
-  min-height: 48px;
-  border-radius: var(--r-md);
-}
-
-.share-flow-scroll .inv-panel > .inv-list {
-  margin-top: 10px;
-  border-radius: var(--r-lg);
-}
-
-.share-flow-scroll .inv-panel > .inv-list .inv-row {
+.share-flow-scroll .inv-progressive-panel .inv-row {
   padding: var(--sp-3) 14px;
 }
 

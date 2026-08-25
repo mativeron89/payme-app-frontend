@@ -276,6 +276,37 @@ export interface HistoryResponse {
   offset: number;
 }
 
+/** Detalle owner-only de un pago propio (`GET /account/movements/:id`). */
+export interface MovementDetailItem {
+  name: string;
+  price_cents: number;
+  quantity: number;
+  category: string;
+  /** En consumo: importe/fracción realmente cobrados. En igual: null. */
+  amount_cents: number | null;
+  fraction_bps: number | null;
+  /**
+   * v2.68: porción que la persona DECLARÓ en partes iguales. Es informativa,
+   * nunca un importe ni una tenencia; consumo e históricos anteriores usan null.
+   */
+  declared_fraction_bps: 2500 | 3333 | 5000 | 6667 | 7500 | 10000 | null;
+}
+
+export interface MovementDetailResponse {
+  id: string;
+  restaurant: { name: string; category: string };
+  mesa: { code: string };
+  date: string;
+  payment_type: PaymentType;
+  method: { brand: string; bank: string | null; last_four: string } | null;
+  items: MovementDetailItem[];
+  items_amount_cents: number;
+  tip_amount_cents: number;
+  gross_amount_cents: number;
+  fee_amount_cents: number;
+  status: string;
+}
+
 // ─── Mesas (routes/mesas.js) ───────────────────────────────
 
 /**
@@ -435,7 +466,7 @@ export interface MesaItem {
   lock_expires_at: string | null;
 }
 
-/** v2.18: pedido de fracción (valores válidos: 2500|3333|5000|10000). */
+/** v2.68: pedido de fracción natural (2500|3333|5000|6667|7500|10000). */
 export interface FractionRequest {
   item_id: string;
   fraction_bps: number;
@@ -556,9 +587,9 @@ export interface PayMesaRequest {
   /** D4 (v2.16): guardar la tarjeta nueva tipeada (default false). */
   save_payment_method?: boolean;
   payment_type: PaymentType;
-  /** Legacy (enteros) — en "partes iguales" viaja esto (ahora se persiste, G-07). */
+  /** Legacy (enteros). En igualdad nueva se prefiere `items` para conservar la declaración. */
   item_ids?: string[];
-  /** v2.18 (consumo): fracciones por ítem. EXCLUYENTE con item_ids. */
+  /** v2.18/v2.68: fracción cobrada en consumo o declarada en igualdad. EXCLUYENTE con item_ids. */
   items?: FractionRequest[];
   lock_tokens?: string[];
   /** D7 (v2.17): monto a mano. EXCLUYENTE con tip_bps (ambos → 400). */

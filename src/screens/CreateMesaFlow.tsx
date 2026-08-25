@@ -1292,15 +1292,6 @@ export function CreateMesaFlow() {
             única que fijan la maqueta y su HTML medido. */}
         <div className="title-card ticket-title-card">
           <h1 className="title-card-title">{t('¿Cómo dividen?')}</h1>
-          {restaurant && (
-            <div className="title-card-sub ticket-title-place">
-              <Icon name="pin" size={13} aria-hidden="true" />
-              <span>
-                {restaurant.name}
-                {restaurant.address ? ` · ${restaurant.address}` : ''}
-              </span>
-            </div>
-          )}
           <div className="ticket-title-amount">{formatMXN(total)}</div>
           <div
             className={`tk-fold ticket-title-fold${!ticketValid ? ' tk-fold--pending' : ''}${ticketPulse ? ' tk-fold--pulse' : ''}`}

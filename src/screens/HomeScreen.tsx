@@ -177,6 +177,7 @@ export function HomeScreen() {
     <div className="screen has-appbar">
       <AppHeader
         userName={fullName(session) ?? undefined}
+        alignChrome
         unread={unread}
         onBell={() => navigate('avisos')}
         tabs={<BubbleTabs tabs={TABS.map((x) => ({ ...x, label: t(x.label) }))} active={tab} onSelect={(id) => setTab(id as TabId)} />}
