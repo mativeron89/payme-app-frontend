@@ -4,7 +4,7 @@ import { legalTextResponse, ocrResponse } from './contractResponses';
 const notice = {
   legal_text: {
     kind: 'aviso_privacidad',
-    version: '2.2.0',
+    version: '2.3.0',
     hash: 'a'.repeat(64),
     effective_from: '2026-08-12T00:00:00.000Z',
     body: 'Aviso de privacidad de la prueba cerrada.',

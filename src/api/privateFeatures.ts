@@ -10,10 +10,10 @@ export interface PrivateFeatureState {
 }
 
 const PENDING: PrivateFeatureState = { enabled: false, status: 'pending', noticeVersion: null };
-// Mati ratificó literalmente el 2026-08-25: «OK aviso 2.2.0 y legacy
-// “Sin asignar”». La allowlist sigue cerrada: una versión nueva no hereda esa
-// decisión y apaga ambas superficies hasta ser presentada explícitamente.
-const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.2.0']);
+// Mati ratificó el 2026-08-25 el aviso 2.3.0 de producto real. La allowlist es
+// exclusiva: 2.2.0 queda supersedido y una versión futura no hereda la
+// decisión; ambas apagan las superficies hasta ser presentadas explícitamente.
+const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0']);
 
 /** Seam nominal: sólo Vitest puede declarar presentable `test-only`. */
 export const TEST_PRESENTABLE_NOTICES = Symbol('private-feature-test-notice-seam');

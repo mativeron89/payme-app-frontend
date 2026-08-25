@@ -367,7 +367,7 @@ export async function mockGetConfig(): Promise<AppConfig> {
       profile_identity: {
         supported: true,
         enabled: true,
-        notice_version: '2.2.0',
+        notice_version: '2.3.0',
         notice_required: true,
         activation_blocker: null,
         payme_id_mutable: false,
@@ -379,7 +379,7 @@ export async function mockGetConfig(): Promise<AppConfig> {
         version: 1,
         owner_only: true,
         includes_tip: false,
-        notice_version: '2.2.0',
+        notice_version: '2.3.0',
         notice_required: true,
         activation_blocker: null,
       },

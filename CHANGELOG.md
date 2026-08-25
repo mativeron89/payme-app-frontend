@@ -11,6 +11,20 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.143.0 — Aviso 2.3.0 exclusivo en superficies privadas (2026-08-25)
+
+Reemplaza la allowlist legal exclusiva del consumidor: 2.3.0 de producto real
+habilita perfil propio y detalle privado de faltante cuando el backend publica
+la forma estricta esperada; 2.2.0 queda supersedido y cae en
+`notice_unavailable`, igual que una versión futura o desconocida.
+
+El mock publica el mismo 2.3.0. Las pruebas causales recorren ambos lados del
+cambio —2.3.0 ON y 2.2.0 OFF— además de conservar los negativos para capability
+ausente, OFF o malformada. No cambian UI, sesión, datos demo, perfil, faltantes,
+dinero ni estilos.
+
+**Sin push, deploy, red ni consultas a producción.**
+
 ## 0.142.1 — Mirror del aviso 2.3.0 de producto real (2026-08-25)
 
 Adopta byte a byte el inventario owner-first de App Backend v2.66.0: 85

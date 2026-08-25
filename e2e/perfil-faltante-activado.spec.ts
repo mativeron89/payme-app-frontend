@@ -9,7 +9,7 @@ test.use({ viewport: { width: 390, height: 844 } });
 
 async function applyPrivateVariant(
   page: import('@playwright/test').Page,
-  variant: 'off' | 'absent' | 'malformed' | 'unknown_notice',
+  variant: 'off' | 'absent' | 'malformed' | 'superseded_notice' | 'unknown_notice',
 ): Promise<void> {
   await page.evaluate(async (selected) => {
     const apiPath = '/src/api/index.ts';
@@ -54,14 +54,15 @@ async function applyPrivateVariant(
       });
       return;
     }
+    const noticeVersion = selected === 'superseded_notice' ? '2.2.0' : '9.9.9';
     feature.applyPrivateFeatureConfig({
       ...config,
       features: {
         ...features,
-        profile_identity: { ...features.profile_identity, notice_version: '9.9.9' },
+        profile_identity: { ...features.profile_identity, notice_version: noticeVersion },
         settlement_shortfall_detail: {
           ...features.settlement_shortfall_detail,
-          notice_version: '9.9.9',
+          notice_version: noticeVersion,
         },
       },
     });
@@ -120,12 +121,12 @@ test('Notificaciones abre sólo el detalle acreditado y presenta el residual leg
   await page.screenshot({ path: NOTIFICATIONS_CAPTURE, animations: 'disabled' });
 });
 
-test('OFF, ausente, malformado y aviso desconocido apagan ambas superficies', async ({ page }) => {
+test('OFF, ausente, malformado, 2.2.0 supersedido y aviso desconocido apagan ambas superficies', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Más', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
 
-  for (const variant of ['off', 'absent', 'malformed', 'unknown_notice'] as const) {
+  for (const variant of ['off', 'absent', 'malformed', 'superseded_notice', 'unknown_notice'] as const) {
     await applyPrivateVariant(page, variant);
     await expect(page.getByRole('button', { name: 'Editar nombre' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Cambiar foto de perfil' })).toHaveCount(0);
