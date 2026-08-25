@@ -46,6 +46,7 @@ const connectGate = require('./connectGate');
 const legacyQuarantine = require('./legacyPlatformQuarantine');
 const stateMachine = require('../utils/stateMachine');
 const notifs = require('./notifications');
+const shortfallDetails = require('./shortfallDetails');
 const { centsToDisplay, calculateFee, prorateCents, sumCents } = require('../utils/money');
 const logger = require('../utils/logger');
 
@@ -1511,7 +1512,7 @@ async function settleMesa(mesaId) {
   // ── Fase 1 (tx): lock + validar + calcular faltante + marcar 'settling' ──
   const phase1 = await pool.tx(async (client) => {
     const { rows } = await client.query(
-      `SELECT m.id, m.restaurant_id, m.total_cents, m.status, m.guarantee_mode, m.auth_method,
+      `SELECT m.id, m.code, m.restaurant_id, m.total_cents, m.status, m.guarantee_mode, m.auth_method,
               m.auth_payment_intent_id, m.auth_amount_cents, m.auth_held_balance_cents,
               m.auth_stripe_account_id, m.auth_application_fee_cents,
               m.auth_source_payment_method_id, m.auth_charge_payment_method_id,
@@ -1724,6 +1725,14 @@ async function settleMesa(mesaId) {
           },
         };
       }
+      let shortfallDetailSealed = false;
+      if (shortfallDetails.shortfallDetailRolloutEnabled()) {
+        const existingDetail = await pool.withSavepoint(client, () => shortfallDetails.readSeal(
+          client,
+          { mesaId, fencedAt: fresh.settlement_fenced_at, shortfall: fencedShortfall }
+        ));
+        shortfallDetailSealed = existingDetail.ok && existingDetail.value.sealed === true;
+      }
       return {
         raced: false,
         total: fencedTotal,
@@ -1732,6 +1741,7 @@ async function settleMesa(mesaId) {
         shortfall: fencedShortfall,
         fencedAt: fresh.settlement_fenced_at,
         reusedFence: true,
+        shortfallDetailSealed,
       };
     }
     const shortfall = sumCents(total, -collected);
@@ -1752,11 +1762,40 @@ async function settleMesa(mesaId) {
         details: { reason: 'fence_compare_and_set_lost' },
       };
     }
+    let shortfallDetailSealed = false;
+    if (shortfallDetails.shortfallDetailRolloutEnabled()) {
+      const detail = await pool.withSavepoint(client, () => shortfallDetails.sealAtFence(client, {
+        mesaId,
+        fencedAt: fenced.settlement_fenced_at,
+        shortfall,
+      }));
+      shortfallDetailSealed = detail.ok && detail.value.sealed === true;
+      if (!detail.ok) {
+        logger.warn('shortfall_detail_seal_unavailable', {
+          mesa_id: mesaId,
+          error_code: detail.error?.code || 'shortfall_detail_seal_failed',
+        });
+        const unavailable = await pool.withSavepoint(client, () => (
+          shortfallDetails.markUnavailableAtFence(client, {
+            mesaId,
+            fencedAt: fenced.settlement_fenced_at,
+            shortfall,
+          })
+        ));
+        if (!unavailable.ok) {
+          logger.warn('shortfall_detail_unavailable_marker_failed', {
+            mesa_id: mesaId,
+            error_code: unavailable.error?.code || 'shortfall_detail_marker_failed',
+          });
+        }
+      }
+    }
     return {
       raced: false, total, collected, tips,
       shortfall,
       fencedAt: fenced.settlement_fenced_at,
       reusedFence: false,
+      shortfallDetailSealed,
     };
   });
   if (moneySnapshot.raced) {
@@ -1772,7 +1811,9 @@ async function settleMesa(mesaId) {
     err.details = moneySnapshot.details;
     throw err;
   }
-  const { total, collected, tips, shortfall } = moneySnapshot;
+  const {
+    total, collected, tips, shortfall, shortfallDetailSealed,
+  } = moneySnapshot;
 
   // ── Fase 2 (sin tx): captura/liberación de tarjeta — idempotente ──
   if (m.guarantee_mode && m.auth_method === 'card' && m.auth_payment_intent_id) {
@@ -2002,10 +2043,11 @@ async function settleMesa(mesaId) {
     if (m.guarantee_mode && m.auth_method === 'wallet') {
       await settleWalletHold(client, m, shortfall);
     }
-    await client.query(
+    const { rows: [settled] } = await client.query(
       `UPDATE mesas
           SET status='settled', captured_shortfall_cents=$2, settled_at=NOW()
-        WHERE id=$1 AND status='settling'`,
+        WHERE id=$1 AND status='settling'
+      RETURNING settled_at`,
       [mesaId, shortfall]
     );
     await stateMachine.transition({
@@ -2028,7 +2070,20 @@ async function settleMesa(mesaId) {
     // rechazado sigue sin salir —lo revierte el SAVEPOINT—; lo que se le quitó
     // a la analítica es el poder de veto sobre el dinero, no el rigor.
     await aggregateEmitter.enqueueSettledMesaAggregates(client, mesaId);
-    return { raced: false };
+    let shortfallDetailClosed = false;
+    if (shortfallDetailSealed && settled?.settled_at) {
+      const detailClose = await pool.withSavepoint(client, () => (
+        shortfallDetails.markClosed(client, mesaId, settled.settled_at)
+      ));
+      shortfallDetailClosed = detailClose.ok && detailClose.value === true;
+      if (!detailClose.ok) {
+        logger.warn('shortfall_detail_close_failed', {
+          mesa_id: mesaId,
+          error_code: detailClose.error?.code || 'shortfall_detail_close_failed',
+        });
+      }
+    }
+    return { raced: false, shortfallDetailClosed };
   });
   if (phase3.raced) {
     logger.warn('settle_phase3_lost_race', { mesa_id: mesaId, status: phase3.status });
@@ -2049,7 +2104,12 @@ async function settleMesa(mesaId) {
         user_id: m.opener_user_id,
         type: 'mesa_shortfall_charged',
         body: `Se cobró el faltante de la mesa (${centsToDisplay(Number(shortfall))}) a tu garantía.`,
-        payload: { mesa_id: mesaId, shortfall_cents: shortfall },
+        payload: {
+          mesa_id: mesaId,
+          mesa_code: m.code,
+          shortfall_cents: shortfall,
+          detail_available: phase3.shortfallDetailClosed === true,
+        },
         related_entity_type: 'mesa',
         related_entity_id: mesaId,
       });
@@ -2905,7 +2965,7 @@ async function cancelInFlightAttempts(m, mesaId) {
     try {
       await notifs.create({
         user_id: m.opener_user_id, type: 'mesa_garantia_impagos',
-        body: `Se cancelaron ${cancelledCount} pago(s) en curso al cerrar la mesa; tu garantía cubre el faltante.`,
+        body: `Se cancelaron ${cancelledCount} pago(s) en curso al cerrar la mesa. El cierre sigue en proceso.`,
         payload: { mesa_id: mesaId, cancelled_attempts: cancelledCount },
         related_entity_type: 'mesa', related_entity_id: mesaId,
       });

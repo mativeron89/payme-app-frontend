@@ -7,15 +7,17 @@
 'use strict';
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
+const multer = require('multer');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const {
-  movementsQuery, historyQuery, walletTxQuery, updateMe, uuidIdParam,
+  movementsQuery, historyQuery, walletTxQuery, updateMe, updateProfileName, uuidIdParam,
   validateQuery, validateBody, validateParams,
 } = require('../schemas');
 const { centsToDisplay } = require('../utils/money');
 const logger = require('../utils/logger');
-const consent = require('../services/consent');
+const profileIdentity = require('../services/profileIdentity');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -37,32 +39,21 @@ router.use(requireAuth);
  *
  * Devuelve null si el usuario no existe.
  */
-async function perfilPropio(userId) {
-  const { rows } = await pool.query(
-    `SELECT id, payme_id, email, first_name, last_name, phone,
-            to_char(birth_date, 'YYYY-MM-DD') AS birth_date, created_at
-       FROM users WHERE id = $1`,
-    [userId]
-  );
-  if (!rows[0]) return null;
-  return {
-    ...rows[0],
-    // Pedido explícito del front (GAPS.md G-13): saber SI hay fecha sin tener
-    // que leer la fecha. Es el campo que debería alcanzarle para decidir si
-    // pregunta o no; `birth_date` crudo se mantiene por compatibilidad.
-    birth_date_set: rows[0].birth_date !== null,
-    // D-11: el veredicto de mayoría de edad lo da el BACKEND. Si el front
-    // calculara la edad desde la fecha cruda repetiría el bug de husos que ya
-    // nos pasó una vez (con TZ al este de México, un menor pasaba por mayor).
-    is_adult: await consent.edadConocida(userId),
-  };
+async function perfilPropio(userId) { return profileIdentity.obtenerPerfil(userId); }
+
+function responderPerfilPrivado(res, user) {
+  // El perfil incluye PII y `avatar.revision` participa del CAS de reemplazo.
+  // Ninguna de esas dos cosas puede sobrevivir en caches intermediarios o del
+  // navegador después de una edición, un conflicto 409 o un borrado.
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.json({ user });
 }
 
 router.get('/me', async (req, res, next) => {
   try {
     const user = await perfilPropio(req.user.id);
     if (!user) return res.status(404).json({ error: 'user_not_found' });
-    res.json({ user });
+    responderPerfilPrivado(res, user);
   } catch (err) { next(err); }
 });
 
@@ -110,7 +101,136 @@ router.patch('/me', validateBody(updateMe), async (req, res, next) => {
     // así el front no necesita un GET extra para saber si quedó habilitado.
     const user = await perfilPropio(req.user.id);
     if (!user) return res.status(404).json({ error: 'user_not_found' });
-    res.json({ user });
+    responderPerfilPrivado(res, user);
+  } catch (err) { next(err); }
+});
+
+function requireProfileIdentityRollout(_req, res, next) {
+  if (!profileIdentity.profileIdentityRolloutEnabled()) {
+    return res.status(503).json({
+      error: 'profile_identity_rollout_not_ready',
+      capability: profileIdentity.PROFILE_IDENTITY_CAPABILITY,
+    });
+  }
+  next();
+}
+
+// Separado del PATCH write-once de birth_date: ni payme_id ni fecha entran en
+// este contrato. La capability permanece OFF hasta aprobar/presentar el aviso.
+router.patch('/me/profile', requireProfileIdentityRollout,
+  validateBody(updateProfileName), async (req, res, next) => {
+    try {
+      const user = await profileIdentity.actualizarNombre(req.user.id, req.body);
+      logger.audit('profile_name_updated', { user_id: req.user.id });
+      responderPerfilPrivado(res, user);
+    } catch (err) { next(err); }
+  });
+
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: profileIdentity.MAX_INPUT_BYTES, files: 1, fields: 0 },
+});
+
+// Defensa específica antes de bufferizar/decodificar. Se clavea por principal
+// autenticado; el budget de CPU del servicio añade un techo concurrente por
+// proceso. Ninguno de los dos pretende ser un lock distribuido.
+const avatarUploadLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `avatar:${req.user.id}`,
+  handler: (_req, res) => res.status(429).json({ error: 'avatar_rate_limited' }),
+});
+
+function reserveAvatarProcessingBudget(req, res, next) {
+  let release;
+  try {
+    release = profileIdentity.acquireAvatarProcessingBudget(req.user.id);
+  } catch (error) {
+    return next(error);
+  }
+  let released = false;
+  const releaseOnce = () => {
+    if (released) return;
+    released = true;
+    res.off('finish', releaseOnce);
+    res.off('close', releaseOnce);
+    req.off('aborted', releaseOnce);
+    release();
+  };
+  // El cupo se toma ANTES de memoryStorage y cubre bytes + decode + escritura.
+  // `finish`, `close` y `aborted` compiten; el guard garantiza una sola salida.
+  res.once('finish', releaseOnce);
+  res.once('close', releaseOnce);
+  req.once('aborted', releaseOnce);
+  next();
+}
+
+function singleAvatar(req, res, next) {
+  avatarUpload.single('avatar')(req, res, (error) => {
+    if (!error) return next();
+    const tooLarge = error.code === 'LIMIT_FILE_SIZE';
+    return res.status(tooLarge ? 413 : 400).json({
+      error: tooLarge ? 'avatar_input_too_large' : 'avatar_multipart_invalid',
+    });
+  });
+}
+
+function revisionFromIfMatch(req) {
+  const raw = req.headers['if-match'];
+  if (raw === undefined) return null;
+  const revision = String(raw).replace(/^"|"$/g, '');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(revision)) {
+    throw Object.assign(new Error('avatar_revision_invalid'), {
+      code: 'avatar_revision_invalid', status: 400,
+    });
+  }
+  return revision.toLowerCase();
+}
+
+router.get('/me/avatar', requireProfileIdentityRollout, async (req, res, next) => {
+  try {
+    const avatar = await profileIdentity.obtenerAvatar(req.user.id);
+    if (!avatar) return res.status(404).json({ error: 'avatar_not_found' });
+    // Bytes privados y borrables: nunca quedan en cache ni se revalidan con
+    // una revisión. `res.end` evita el ETag automático que Express agrega a
+    // `res.send` aun cuando la respuesta sea privada.
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.type(avatar.mimeType);
+    res.setHeader('Content-Length', String(avatar.bytes.length));
+    res.end(avatar.bytes);
+  } catch (err) { next(err); }
+});
+
+router.put('/me/avatar', requireProfileIdentityRollout, avatarUploadLimiter,
+  reserveAvatarProcessingBudget, singleAvatar,
+  async (req, res, next) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: 'avatar_file_required' });
+      const expectedRevision = revisionFromIfMatch(req);
+      const image = await profileIdentity.procesarAvatar(req.file.buffer, req.file.mimetype);
+      const avatar = await profileIdentity.guardarAvatar(req.user.id, image, { expectedRevision });
+      logger.audit('profile_avatar_saved', { user_id: req.user.id });
+      res.status(avatar.created ? 201 : 200).json({
+        avatar: {
+          revision: avatar.revision, width: avatar.width, height: avatar.height,
+          updated_at: avatar.updated_at,
+        },
+      });
+    } catch (err) { next(err); }
+  });
+
+router.delete('/me/avatar', requireProfileIdentityRollout, async (req, res, next) => {
+  try {
+    if (req.headers['if-match'] === undefined) {
+      return res.status(428).json({ error: 'avatar_revision_required' });
+    }
+    const expectedRevision = revisionFromIfMatch(req);
+    const deleted = await profileIdentity.borrarAvatar(req.user.id, expectedRevision);
+    if (!deleted) return res.status(409).json({ error: 'avatar_revision_conflict' });
+    logger.audit('profile_avatar_deleted', { user_id: req.user.id });
+    res.status(204).end();
   } catch (err) { next(err); }
 });
 

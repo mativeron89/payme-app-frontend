@@ -57,14 +57,14 @@ function isPurpose(key) {
  * desplegado antes que su migración) o sin fecha declarada por el titular.
  * El gate de grantConsent trata ese null como BLOQUEO.
  */
-async function edadConocida(userId) {
-  const { rows } = await pool.query(
+async function edadConocida(userId, db = pool) {
+  const { rows } = await db.query(
     `SELECT column_name FROM information_schema.columns
       WHERE table_schema = current_schema()
         AND table_name = 'users' AND column_name = 'birth_date'`
   );
   if (rows.length === 0) return null;      // el código subió antes que la migración
-  const { rows: u } = await pool.query(
+  const { rows: u } = await db.query(
     `SELECT to_char(birth_date, 'YYYY-MM-DD') AS bd FROM users WHERE id = $1`,
     [userId]
   );

@@ -6,31 +6,56 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-24**.
+- Fecha del refresh: **2026-08-25**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`3d05a5af8f5f60ba9c4e93ab691cd3b36a70c931`**
-  (`feat(disputas): persiste evidencia Connect sin mover dinero` · v2.61.0).
+  **`63987fa5dd45d23f9a62eb8ff0c8d5afe9f89540`**
+  (`test(release): alinear preflight con v2.63.2` · v2.63.2).
 - Commit que publicó el inventario autoritativo:
-  **`22f5a5bf32990f18c25621f13cc47eede023fd5f`**
-  (`chore(contrato): republicar mirror tras D1-E`). Como siempre, el inventario
+  **`6f1b87ab98d4d21eb4265b2ba37a0f38e0cd2819`**
+  (`chore(contrato): publicar v2.63.2 final`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El HEAD del dueño está un commit más adelante (`22f5a5b`) y no se espeja
+⚠️ **El HEAD del dueño está un commit más adelante (`6f1b87a`) y no se espeja
 ese commit como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `3d05a5a`; anclarse a él mantiene verificable la paridad.
+declarado es `63987fa`; anclarse a él mantiene verificable la paridad. Ese
+commit sólo ajusta el preflight de release; el cambio material de las fuentes
+privadas entró en su ancestro `b63fba0` y permanece byte-idéntico en `63987fa`.
 
-🆕 **79 archivos espejados** más este README.
+🆕 **85 archivos espejados** más este README.
 
-Este refresh modifica una sola fuente declarada:
+Este refresh incorpora el contrato owner-first de dos superficies privadas y
+su cierre preventivo:
 
-- `routes/webhooks.js`: incorpora la ingesta durable y fail-closed de evidencia
-  de disputas Connect. El espejo sigue siendo evidencia de contrato y no se
-  importa desde `src/`; no agrega UI ni mueve dinero desde el frontend.
+- `profile_identity`: `routes/account.js`, `routes/config.js`, schema, servicio,
+  normalizador y migración fijan nombre propio editable y avatar autenticado,
+  privado y sin URL pública; la capability permanece autoritativamente OFF.
+- `settlement_shortfall_detail`: `routes/mesas.js`, settlement, servicio, schema
+  y sus dos migraciones fijan el detalle owner-only, reconciliado y fail-closed;
+  la segunda migración preserva upgrades donde v2.63.0 ya figuraba aplicada.
+- `GET /account/me` queda sellado `private, no-store`, y los nombres legacy que
+  no cumplen el normalizador vigente permanecen dentro del residual no
+  atribuible: no se publican ni se corrigen silenciosamente durante el cierre.
+- Las dos capabilities siguen OFF. Su activación requiere aviso presentable y,
+  además, inventario/remediación explícita de identidad histórica; este espejo
+  no convierte ese prerequisito en una decisión de rollout.
 
 La adopción se verificó contra la fuente antes de editar runtime del
-consumidor: **paridad 79/79** y **vigencia verde** contra App Backend HEAD
-`22f5a5bf32990f18c25621f13cc47eede023fd5f`. Eso acredita el árbol local y el
+consumidor: **paridad 85/85** y **vigencia verde** contra App Backend HEAD
+`6f1b87ab98d4d21eb4265b2ba37a0f38e0cd2819`. Eso acredita el árbol local y el
 commit publicado del dueño; no afirma deploy ni producción.
+
+### Refresh anterior · 2026-08-25 (contrato privado · v2.63.1)
+
+El refresh anterior incorporó perfil privado, detalle de faltante y el guard
+incremental de filas desde `d027965dc748a0002652055cd978255018d0a943`,
+publicado por `e2554c88c43d3ba23d92638909559d93f431a13e`.
+
+### Refresh anterior · 2026-08-24 (D1-E · v2.61.0)
+
+El refresh anterior sincronizó `routes/webhooks.js` con la ingesta durable y
+fail-closed de evidencia de disputas Connect. Declaró 79 archivos en el commit
+de contenido `3d05a5af8f5f60ba9c4e93ab691cd3b36a70c931`, publicado por
+`22f5a5bf32990f18c25621f13cc47eede023fd5f`.
 
 ### Refresh anterior · 2026-08-20 (P12 · v2.53.0)
 

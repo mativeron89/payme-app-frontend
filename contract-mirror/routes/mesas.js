@@ -47,6 +47,7 @@ const { payloadHash, hashesMatch, PAYLOAD_KEYS } = require('../utils/idempotency
 const { tokenHash } = require('../utils/tokens');
 const logger = require('../utils/logger');
 const invitationAuthority = require('../services/invitationAuthority');
+const shortfallDetails = require('../services/shortfallDetails');
 
 const router = express.Router();
 const { validateBody } = schemas;
@@ -821,6 +822,30 @@ function cuerpoCreacionEncontrada(mesa, hashCoincide = null) {
       },
   };
 }
+
+function requireShortfallDetailRollout(_req, res, next) {
+  if (!shortfallDetails.shortfallDetailRolloutEnabled()) {
+    return res.status(503).json({
+      error: 'settlement_shortfall_detail_rollout_not_ready',
+      capability: shortfallDetails.SETTLEMENT_SHORTFALL_DETAIL_CAPABILITY,
+    });
+  }
+  next();
+}
+
+// Contrato dueño y privado: sólo quien abrió/garantizó la mesa puede leer el
+// snapshot post-settlement. El servicio usa un 404 uniforme para toda ausencia.
+router.get('/:code/shortfall-detail', requireAuth, requireShortfallDetailRollout,
+  async (req, res, next) => {
+    try {
+      const detail = await shortfallDetails.getOwnerDetail({
+        userId: req.user.id,
+        mesaCode: req.params.code,
+      });
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.json({ shortfall_detail: detail });
+    } catch (err) { next(err); }
+  });
 
 // CIERRE DEL PAGO SIN CUENTA · C1. Ver el bloque de C3 en `/:code/pay`.
 router.get('/:code', requireAuth, requireMesaParticipant, async (req, res, next) => {

@@ -2,9 +2,13 @@ import {
   httpGuestRequest,
   httpLogin,
   httpLogout,
+  httpNoContentRequest,
+  httpPrivateAvatarRequest,
+  httpPrivateJsonRequest,
   httpPublicRequest,
   httpRegister,
   httpRequest,
+  httpRequestWithHeaders,
   OCR_TIMEOUT_MS,
   setOnSessionExpired,
 } from './http';
@@ -20,6 +24,17 @@ import {
   setupIntentResponse,
 } from './contractResponses';
 import { extractApiError } from './errors';
+import {
+  assertProfileIdentityEnabled,
+  assertShortfallDetailEnabled,
+} from './privateFeatures';
+import {
+  decodeProfileAvatarResponse,
+  decodeProfileIdentityResponse,
+  validateAvatarInput,
+  type PrivateAvatarBlob,
+} from './profileIdentity';
+import { decodeShortfallDetailResponse, type ShortfallDetail } from './shortfallDetail';
 import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
 import { invalidateSession, loadSession, type StoredSession } from './storage';
@@ -56,6 +71,8 @@ import type {
   PayMesaRequest,
   PayMesaResponse,
   PaymentMethodsResponse,
+  ProfileAvatarResponse,
+  ProfileIdentityResponse,
   PendingInvitationsResponse,
   RegisterRequest,
   StatsResponse,
@@ -155,6 +172,19 @@ export interface Api {
   onSessionExpired(cb: (() => void) | null): void;
   /** Perfil propio (G-02, v2.20) — hidrata sesiones persistidas sin `user`. */
   getMe(): Promise<MeResponse>;
+  /** GET propio estricto, sólo detrás de `profile_identity`. */
+  getProfileIdentity(expectedSession: StoredSession): Promise<ProfileIdentityResponse>;
+  updateProfileIdentity(
+    name: { first_name: string; last_name: string },
+    expectedSession: StoredSession,
+  ): Promise<ProfileIdentityResponse>;
+  getProfileAvatar(expectedSession: StoredSession): Promise<PrivateAvatarBlob>;
+  putProfileAvatar(
+    image: Blob,
+    expectedRevision: string | null,
+    expectedSession: StoredSession,
+  ): Promise<ProfileAvatarResponse>;
+  deleteProfileAvatar(expectedRevision: string, expectedSession: StoredSession): Promise<void>;
   /** Resolver el uuid del QR de la mesa (G-01, v2.21). Público, 404 si no está activo. */
   getRestaurant(id: string): Promise<RestaurantResponse>;
   // cuenta
@@ -211,6 +241,11 @@ export interface Api {
   attachPaymentMethod(stripePaymentMethodId: string, setAsDefault?: boolean, expectedSession?: StoredSession): Promise<AttachPaymentMethodResponse>;
   // notificaciones e invitaciones in-app
   getNotifications(): Promise<NotificationsResponse>;
+  getShortfallDetail(
+    mesaCode: string,
+    expectedShortfallCents: number,
+    expectedSession: StoredSession,
+  ): Promise<ShortfallDetail>;
   getUnreadCount(): Promise<{ unread_count: number }>;
   markAllNotificationsRead(): Promise<void>;
   getPendingInvitations(): Promise<PendingInvitationsResponse>;
@@ -297,7 +332,44 @@ const realApi: Api = {
   logout: () => httpLogout(),
   restoreSession: () => loadSession(),
   onSessionExpired: (cb) => setOnSessionExpired(cb),
+  // Compatibilidad de rollout: sesiones históricas pueden hidratarse contra
+  // un backend previo al header privado. El lector estricto vive únicamente
+  // detrás de la capability nueva, en `getProfileIdentity`.
   getMe: () => httpRequest<MeResponse>('GET', '/account/me'),
+  getProfileIdentity: async (expectedSession) => {
+    assertProfileIdentityEnabled();
+    return decodeProfileIdentityResponse(
+      await httpPrivateJsonRequest<unknown>('/account/me', expectedSession),
+    );
+  },
+  updateProfileIdentity: async (name, expectedSession) => {
+    assertProfileIdentityEnabled();
+    return decodeProfileIdentityResponse(
+      await httpRequest<unknown>('PATCH', '/account/me/profile', name, expectedSession),
+    );
+  },
+  getProfileAvatar: async (expectedSession) => {
+    assertProfileIdentityEnabled();
+    return httpPrivateAvatarRequest('/account/me/avatar', expectedSession);
+  },
+  putProfileAvatar: async (image, expectedRevision, expectedSession) => {
+    assertProfileIdentityEnabled();
+    validateAvatarInput(image);
+    const body = new FormData();
+    body.append('avatar', image, 'avatar');
+    const headers: Record<string, string> = expectedRevision === null
+      ? {}
+      : { 'If-Match': `"${expectedRevision}"` };
+    return decodeProfileAvatarResponse(await httpRequestWithHeaders<unknown>(
+      'PUT', '/account/me/avatar', body, headers, expectedSession,
+    ));
+  },
+  deleteProfileAvatar: async (expectedRevision, expectedSession) => {
+    assertProfileIdentityEnabled();
+    await httpNoContentRequest(
+      'DELETE', '/account/me/avatar', { 'If-Match': `"${expectedRevision}"` }, expectedSession,
+    );
+  },
   getRestaurant: (id) =>
     httpPublicRequest<RestaurantResponse>('GET', `/restaurants/${encodeURIComponent(id)}`),
 
@@ -506,6 +578,15 @@ const realApi: Api = {
     }, expectedSession), stripePaymentMethodId),
 
   getNotifications: () => httpRequest<NotificationsResponse>('GET', '/notifications'),
+  getShortfallDetail: async (mesaCode, expectedShortfallCents, expectedSession) => {
+    assertShortfallDetailEnabled();
+    return decodeShortfallDetailResponse(
+      await httpPrivateJsonRequest<unknown>(
+        `/mesas/${encodeURIComponent(mesaCode)}/shortfall-detail`, expectedSession,
+      ),
+      expectedShortfallCents,
+    );
+  },
   getUnreadCount: () => httpRequest<{ unread_count: number }>('GET', '/notifications/unread-count'),
   markAllNotificationsRead: async () => {
     await httpRequest('PATCH', '/notifications/read-all');
@@ -580,6 +661,26 @@ const mockApi: Api = {
   restoreSession: () => loadSession(),
   onSessionExpired: () => undefined,
   getMe: () => mock.mockGetMe(),
+  getProfileIdentity: async () => {
+    assertProfileIdentityEnabled();
+    return mock.mockProfileIdentity();
+  },
+  updateProfileIdentity: async (name) => {
+    assertProfileIdentityEnabled();
+    return mock.mockUpdateProfileIdentity(name);
+  },
+  getProfileAvatar: async () => {
+    assertProfileIdentityEnabled();
+    return mock.mockProfileAvatar();
+  },
+  putProfileAvatar: async (image, expectedRevision) => {
+    assertProfileIdentityEnabled();
+    return mock.mockPutProfileAvatar(image, expectedRevision);
+  },
+  deleteProfileAvatar: async (expectedRevision) => {
+    assertProfileIdentityEnabled();
+    await mock.mockDeleteProfileAvatar(expectedRevision);
+  },
   getRestaurant: (id) => mock.mockGetRestaurant(id),
 
   getBalance: () => mock.mockBalance(),
@@ -650,6 +751,11 @@ const mockApi: Api = {
   attachPaymentMethod: async (pmId, setAsDefault) => attachPaymentMethodResponse(await mock.mockAttachPaymentMethod(pmId, setAsDefault), pmId),
 
   getNotifications: () => mock.mockNotifications(),
+  getShortfallDetail: async (mesaCode, expectedShortfallCents) => {
+    assertShortfallDetailEnabled();
+    const detail = await mock.mockShortfallDetail(mesaCode);
+    return decodeShortfallDetailResponse({ shortfall_detail: detail }, expectedShortfallCents);
+  },
   getUnreadCount: () => mock.mockUnreadCount(),
   markAllNotificationsRead: () => mock.mockMarkAllNotificationsRead(),
   getPendingInvitations: () => mock.mockPendingInvitations(),

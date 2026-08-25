@@ -11,6 +11,7 @@
 const { z } = require('zod');
 const { esFechaCalendario, hoyEnMexico } = require('../utils/fechas');
 const { banderaEstricta } = require('../utils/flags');
+const { normalizarNombre } = require('../utils/profileNames');
 
 // v2.5.2 P1 #4: preprocess trim + lowercase antes de validar formato.
 const email = z.preprocess(
@@ -141,6 +142,21 @@ const login = z.object({ email, password: passwordLegacy });
 const refreshToken = z.object({
   refresh_token: z.string().min(20).max(500),
 });
+
+// Identidad propia: representación completa y exacta. No es el PATCH write-once
+// de birth_date y no admite payme_id ni campos futuros por descarte silencioso.
+const profileName = z.string().transform((value, ctx) => {
+  try {
+    return normalizarNombre(value);
+  } catch (error) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: error.code || 'profile_name_invalid' });
+    return z.NEVER;
+  }
+});
+const updateProfileName = z.object({
+  first_name: profileName,
+  last_name: profileName,
+}).strict();
 
 // PAYMENT METHODS
 const attachPaymentMethod = z.object({
@@ -436,7 +452,7 @@ function validateParams(schema) {
 module.exports = {
   normalizarEmailDeContrato,
   register, registerCompat, registerSchema, birthDateRequeridaEnRegistro,
-  login, refreshToken, updateMe,
+  login, refreshToken, updateMe, updateProfileName,
   attachPaymentMethod, setupIntent, setDefaultPaymentMethod, uuidIdParam,
   addFriend, searchFriends, friendRequestsQuery,
   createGroup, updateGroup, addGroupMember,

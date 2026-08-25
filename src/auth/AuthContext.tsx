@@ -10,13 +10,15 @@ import {
 } from 'react';
 import { api } from '../api';
 import { loadSession, replaceCurrentSession, subscribeSession, type StoredSession } from '../api/storage';
-import type { RegisterRequest } from '../api/types';
+import type { RegisterRequest, User } from '../api/types';
 
 interface AuthState {
   session: StoredSession | null;
   login(email: string, password: string): Promise<void>;
   register(data: RegisterRequest): Promise<void>;
   logout(): Promise<void>;
+  /** Adopta una respuesta propia sólo si familia, principal y tokens siguen iguales. */
+  adoptUser(expectedSession: StoredSession, user: User): boolean;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -80,9 +82,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const adoptUser = useCallback((expectedSession: StoredSession, user: User): boolean => {
+    if (user.id !== expectedSession.principal_id) return false;
+    return replaceCurrentSession(expectedSession, { ...expectedSession, user });
+  }, []);
+
   const value = useMemo(
-    () => ({ session, login, register, logout }),
-    [session, login, register, logout],
+    () => ({ session, login, register, logout, adoptUser }),
+    [session, login, register, logout, adoptUser],
   );
   // Una familia nueva, incluso del mismo principal, invalida estados derivados
   // de la UI anterior antes de que puedan firmar requests con credenciales viejas.

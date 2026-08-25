@@ -17,6 +17,38 @@ export interface User {
   phone?: string | null;
   /** Solo en GET /account/me (G-02, v2.20). */
   created_at?: string;
+  /** Fecha propia; `null` cuando todavía no fue declarada. */
+  birth_date?: string | null;
+  /** Veredicto autoritativo del servidor; `null` significa desconocido. */
+  is_adult?: boolean | null;
+  birth_date_set?: boolean;
+  /** Metadata privada. Los bytes se leen autenticados y nunca por URL. */
+  avatar?: ProfileAvatarMetadata | null;
+}
+
+export interface ProfileAvatarMetadata {
+  revision: string;
+  width: number;
+  height: number;
+  updated_at: string;
+}
+
+/** Shape exacto de GET /account/me y PATCH /account/me/profile. */
+export interface ProfileIdentityUser extends User {
+  phone: string | null;
+  created_at: string;
+  birth_date: string | null;
+  is_adult: boolean | null;
+  birth_date_set: boolean;
+  avatar: ProfileAvatarMetadata | null;
+}
+
+export interface ProfileIdentityResponse {
+  user: ProfileIdentityUser;
+}
+
+export interface ProfileAvatarResponse {
+  avatar: ProfileAvatarMetadata;
 }
 
 /** Tokens comunes de auth. El refresh devuelve SOLO esto (sin `user`). */
@@ -127,6 +159,10 @@ export interface AppConfig {
      * vez y por eso el emisor publicó esto.
      */
     ocr?: unknown;
+    /** Identidad propia editable; siempre se valida en runtime y falla cerrada. */
+    profile_identity?: unknown;
+    /** Detalle privado de faltante; siempre se valida en runtime y falla cerrado. */
+    settlement_shortfall_detail?: unknown;
   };
 }
 

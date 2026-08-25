@@ -11,6 +11,35 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.140.0 — Perfil propio privado, preparado y apagado (2026-08-25)
+
+Sincroniza el contrato owner-first de App Backend v2.63.2: 85 archivos del
+inventario publicado en `6f1b87a`, cuyo corte exacto es `63987fa` y conserva el
+cambio material de `b63fba0`. La lectura estricta de perfil y el avatar pasan
+por transportes autenticados con `no-store`; la hidratación baseline conserva
+compatibilidad con backends anteriores al header. Los bytes del avatar nunca
+usan una URL pública ni se persisten, y
+cada Object URL se revoca al reemplazar, borrar, fallar o desmontar.
+
+Configuración incorpora edición de nombre y foto detrás de la capability
+estricta `profile_identity`. Ausencia, forma nueva, blocker, aviso desconocido
+o estado OFF no dibujan controles y tampoco permiten llamar las rutas. La lista
+local de avisos presentables queda vacía: el seam `test-only` existe únicamente
+en Vitest y no puede convertir un flip remoto en una finalidad aprobada.
+
+Los decoders espejan nombres por code points, `payme_id`, timestamps y metadata;
+las mutaciones usan familia/principal, epoch y CAS para no escribir sobre un
+relogin. Un 409 de avatar refresca la revisión y exige reintento explícito. El
+nombre normalizado de la respuesta y la metadata autoritativa de PUT/DELETE se
+adoptan aun si hubo refresh de tokens durante la request.
+
+La capability permanece **DARK** en real y mock. Antes de activarla siguen
+faltando un aviso presentable y el inventario/remediación de identidades legacy;
+no se normalizan ni se exponen por inferencia. No cambia dinero, Stripe,
+dependencias ni producción.
+
+**Sin push, deploy, red productiva ni consultas a producción.**
+
 ## 0.139.2 — Empalme de pestañas extremas con su tarjeta (2026-08-24)
 
 Cuadra la esquina superior de la tarjeta que coincide con la pestaña activa:

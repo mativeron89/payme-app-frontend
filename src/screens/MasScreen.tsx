@@ -6,9 +6,10 @@ import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
-import { Avatar } from '../components/ui';
+import { ProfileIdentityEditor } from '../components/ProfileIdentityEditor';
 import { goBack, navigate } from '../router';
 import { useWalletRail } from '../api/walletRail';
+import { useProfileIdentityCapability } from '../api/privateFeatures';
 
 /**
  * **`Configuración`** — la quinta posición de la barra.
@@ -17,15 +18,16 @@ import { useWalletRail } from '../api/walletRail';
  * idioma, tarjetas y cierre de sesión. No incorpora controles de perfil que el
  * contrato vigente no pueda cumplir.
  *
- * La identidad y la foto son deliberadamente de solo lectura: el contrato
- * vigente no permite editar nombre ni subir avatar. No se dibujan controles
- * que prometan mutaciones inexistentes.
+ * Nombre y foto siguen la capability owner-first `profile_identity`. Mientras
+ * esté ausente, malformada u OFF, la composición aprobada permanece de solo
+ * lectura y las operaciones tampoco existen en la fachada.
  */
 export function MasScreen() {
   const { t } = useIdioma();
-  const { session, logout } = useAuth();
+  const { session, logout, adoptUser } = useAuth();
   // OLA 5D · el rótulo de la fila lo decide el BACKEND, no este repo.
   const { walletRailEnabled } = useWalletRail();
+  const profileIdentity = useProfileIdentityCapability();
   const user = session?.user;
 
   return (
@@ -39,17 +41,17 @@ export function MasScreen() {
           —"Cerrar sesión"— queda debajo de la barra. Está advertido en el CSS y
           es exactamente el modo en que se cuela. */}
       <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
-        <div className="config-profile">
-          <Avatar name={user ? t('{0} {1}', user.first_name, user.last_name) : t('PayMe')} size={84} variant="marca" />
-          <div className="h2" style={{ marginTop: 10 }}>
-            {user ? t('{0} {1}', user.first_name, user.last_name) : t('Tu cuenta')}
+        {session ? (
+          <ProfileIdentityEditor
+            session={session}
+            enabled={profileIdentity.enabled}
+            adoptUser={adoptUser}
+          />
+        ) : (
+          <div className="config-profile">
+            <div className="h2">{t('Tu cuenta')}</div>
           </div>
-          {user && (
-            <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 'var(--fs-legacy-sm)', color: 'var(--gray-txt)' }}>
-              {user.payme_id}
-            </div>
-          )}
-        </div>
+        )}
         {!user && (
           <div className="note note-orange" style={{ marginBottom: 12 }}>
             {t('Tus datos van a aparecer aquí en cuanto termines de crear tu cuenta.')}

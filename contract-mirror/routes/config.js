@@ -16,6 +16,10 @@ const { stpRestaurantDispersalReady } = require('../middleware/envValidation');
 const { walletRailCapability } = require('../services/walletRail');
 const { modoMonetarioCapability } = require('../services/moneyRail');
 const { ocrCapability } = require('../services/ocrRail');
+const { PROFILE_IDENTITY_CAPABILITY } = require('../services/profileIdentity');
+const {
+  SETTLEMENT_SHORTFALL_DETAIL_CAPABILITY,
+} = require('../services/shortfallDetails');
 const { version } = require('../package.json');
 const router = express.Router();
 
@@ -111,6 +115,12 @@ router.get('/', (req, res) => {
         write_once: true,
         adulthood_server_authoritative: true,
       },
+      // Implementación owner-first lista, exposición cerrada hasta que el
+      // borrador de aviso sea aprobado y el consumidor pueda presentarlo.
+      profile_identity: PROFILE_IDENTITY_CAPABILITY,
+      // Sólo declara soporte owner-first. Sigue apagado hasta que el aviso y
+      // el consumidor puedan presentar la nueva finalidad al comensal.
+      settlement_shortfall_detail: SETTLEMENT_SHORTFALL_DETAIL_CAPABILITY,
     },
   });
 });

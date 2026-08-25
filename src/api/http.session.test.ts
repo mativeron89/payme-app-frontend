@@ -38,7 +38,15 @@ const locks = {
 };
 Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks } });
 
-const { httpGuestRequest, httpLogin, httpLogout, httpRegister, httpRequest } = await import('./http');
+const {
+  httpGuestRequest,
+  httpLogin,
+  httpLogout,
+  httpPrivateAvatarRequest,
+  httpPrivateJsonRequest,
+  httpRegister,
+  httpRequest,
+} = await import('./http');
 const { loadSession, saveSession } = await import('./storage');
 const { mockLogin, mockRegister } = await import('./mock/mockApi');
 
@@ -352,5 +360,119 @@ describe('timeout cubre headers y body', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     await rejected;
     vi.useRealTimers();
+  });
+});
+
+describe('avatar privado: bearer, no-store y bytes acotados', () => {
+  function loggedSession() {
+    saveSession({
+      access_token: 'avatar-access',
+      refresh_token: 'avatar-refresh',
+      family_id: 'avatar-family',
+      principal_id: user.id,
+      user,
+    });
+    return loadSession()!;
+  }
+
+  it('lee con bearer/no-store y valida el Content-Length observable', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer avatar-access');
+      expect((init?.headers as Record<string, string>).Accept).toBe('image/jpeg');
+      expect(init?.cache).toBe('no-store');
+      return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'Cache-Control': 'private, no-store',
+          'Content-Length': '4',
+        },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await httpPrivateAvatarRequest('/account/me/avatar', loggedSession());
+    expect(result.blob).toMatchObject({ type: 'image/jpeg', size: 4 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['sin private', { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' }, new Uint8Array([1])],
+    ['sin no-store', { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private' }, new Uint8Array([1])],
+    ['tipo distinto', { 'Content-Type': 'image/png', 'Cache-Control': 'private, no-store' }, new Uint8Array([1])],
+    ['vacío', { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store' }, new Uint8Array([])],
+    ['sin largo', { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store' }, new Uint8Array([1])],
+    ['largo no numérico', { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'Content-Length': 'uno' }, new Uint8Array([1])],
+    ['largo distinto del body', { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'Content-Length': '2' }, new Uint8Array([1])],
+    ['largo mayor a 256 KiB', { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'Content-Length': String(256 * 1024 + 1) }, new Uint8Array([1])],
+  ])('rechaza %s', async (_label, headers, bytes) => {
+    const completeHeaders = _label === 'sin largo'
+      ? headers
+      : { 'Content-Length': String(bytes.length), ...headers };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(bytes, { status: 200, headers: completeHeaders })));
+    await expect(httpPrivateAvatarRequest('/account/me/avatar', loggedSession()))
+      .rejects.toThrow(/avatar_response_/);
+  });
+
+  it('el timeout también cubre el body Blob', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'Content-Length': '4' }),
+      blob: () => new Promise((_, reject) => {
+        (init?.signal as AbortSignal).addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      }),
+    } as Response)));
+    const pending = httpPrivateAvatarRequest('/account/me/avatar', loggedSession(), 25);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.advanceTimersByTimeAsync(25);
+    await rejected;
+    vi.useRealTimers();
+  });
+
+  it('detalle JSON privado exige bearer y Cache-Control antes de decodificar', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer avatar-access');
+      expect(init?.cache).toBe('no-store');
+      return new Response(JSON.stringify({ shortfall_detail: { version: 1 } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(httpPrivateJsonRequest('/mesas/PA-12345/shortfall-detail', loggedSession()))
+      .resolves.toEqual({ shortfall_detail: { version: 1 } });
+
+    vi.stubGlobal('fetch', vi.fn(async () => response({ shortfall_detail: {} })));
+    await expect(httpPrivateJsonRequest('/mesas/PA-12345/shortfall-detail', loggedSession()))
+      .rejects.toThrow('private_json_cache_policy_invalid');
+  });
+
+  it('JSON privado conserva refresh único y reintenta con el bearer rotado', async () => {
+    const origin = loggedSession();
+    let protectedCalls = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/auth/refresh')) {
+        return response({ access_token: 'avatar-access-new', refresh_token: 'avatar-refresh-new', expires_in: 900 });
+      }
+      protectedCalls += 1;
+      const authorization = (init?.headers as Record<string, string>).Authorization;
+      if (protectedCalls === 1) {
+        expect(authorization).toBe('Bearer avatar-access');
+        return response({ error: 'expired' }, 401);
+      }
+      expect(authorization).toBe('Bearer avatar-access-new');
+      return new Response(JSON.stringify({ user: { id: user.id } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' },
+      });
+    }));
+    await expect(httpPrivateJsonRequest('/account/me', origin)).resolves.toEqual({ user: { id: user.id } });
+    expect(loadSession()).toMatchObject({
+      family_id: origin.family_id,
+      access_token: 'avatar-access-new',
+      refresh_token: 'avatar-refresh-new',
+    });
+    expect(protectedCalls).toBe(2);
   });
 });

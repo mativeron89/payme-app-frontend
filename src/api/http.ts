@@ -1,5 +1,6 @@
 import { createSession, invalidateSession, isCurrentSession, loadSession, persistSessionTombstone, replaceCurrentSession, saveSession, SessionStorageInvalidationError, type StoredSession } from './storage';
 import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenPair } from './types';
+import { MAX_AVATAR_OUTPUT_BYTES, validatePrivateAvatarBlob, type PrivateAvatarBlob } from './profileIdentity';
 
 /**
  * Cliente HTTP real contra el app backend (contract-mirror/).
@@ -71,14 +72,19 @@ async function parseBody(res: Response): Promise<ApiError | null> {
 const REQUEST_TIMEOUT_MS = 30_000;
 export const OCR_TIMEOUT_MS = 60_000;
 
-async function rawRequest<T>(
+type SuccessReader<T> = (response: Response) => Promise<T>;
+
+async function rawRequestAs<T>(
   method: string,
   path: string,
   body?: unknown,
   token?: string,
   timeoutMs = REQUEST_TIMEOUT_MS,
+  readSuccess: SuccessReader<T> = async (response) => (await response.json()) as T,
+  extraHeaders: Readonly<Record<string, string>> = {},
+  cache?: RequestCache,
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...extraHeaders };
   if (body !== undefined && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -90,14 +96,25 @@ async function rawRequest<T>(
       headers,
       body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
       signal: ctrl.signal,
+      ...(cache && { cache }),
     });
     // El body puede colgar después de recibir headers: conservar el timer
     // hasta json() evita dejar un journal monetario en sending eterno.
     if (!res.ok) throw new HttpError(res.status, await parseBody(res));
-    return (await res.json()) as T;
+    return await readSuccess(res);
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function rawRequest<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  token?: string,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  return rawRequestAs<T>(method, path, body, token, timeoutMs);
 }
 
 /** Refresh con rotación: guarda el par nuevo de tokens antes de devolver. */
@@ -146,23 +163,19 @@ export async function httpPublicRequest<T>(method: string, path: string): Promis
   return rawRequest<T>(method, path);
 }
 
-/** Request autenticada con retry-tras-refresh (una sola vez). */
-export async function httpRequest<T>(
-  method: string,
-  path: string,
-  body?: unknown,
-  expectedSession?: StoredSession,
-  timeoutMs = REQUEST_TIMEOUT_MS,
+async function authenticatedRequest<T>(
+  expectedSession: StoredSession | undefined,
+  run: (session: StoredSession) => Promise<T>,
 ): Promise<T> {
   const session = expectedSession ?? loadSession();
   if (!session || !isCurrentSession(session)) throw new HttpError(401, { error: 'auth_required' });
   try {
-    return await rawRequest<T>(method, path, body, session.access_token, timeoutMs);
+    return await run(session);
   } catch (err) {
     if (err instanceof HttpError && err.status === 401) {
       const refreshed = await tryRefresh(session);
       if (refreshed && refreshed.family_id === session.family_id && refreshed.principal_id === session.principal_id && isCurrentSession(refreshed)) {
-        return rawRequest<T>(method, path, body, refreshed.access_token, timeoutMs);
+        return run(refreshed);
       }
       // El tombstone se escribe antes de esperar el lock. Así un refresh de
       // otra pestaña que ya está en red no puede restaurar esta familia.
@@ -176,6 +189,109 @@ export async function httpRequest<T>(
     }
     throw err;
   }
+}
+
+/** Request autenticada con retry-tras-refresh (una sola vez). */
+export async function httpRequest<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  expectedSession?: StoredSession,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  return authenticatedRequest(expectedSession, (session) => (
+    rawRequest<T>(method, path, body, session.access_token, timeoutMs)
+  ));
+}
+
+/** JSON autenticado con headers contractuales extra (p. ej. If-Match). */
+export async function httpRequestWithHeaders<T>(
+  method: string,
+  path: string,
+  body: unknown,
+  headers: Readonly<Record<string, string>>,
+  expectedSession: StoredSession,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  return authenticatedRequest(expectedSession, (session) => rawRequestAs<T>(
+    method, path, body, session.access_token, timeoutMs,
+    async (response) => (await response.json()) as T,
+    headers,
+  ));
+}
+
+/** DELETE privado cuyo contrato exitoso es exactamente 204 sin body. */
+export async function httpNoContentRequest(
+  method: 'DELETE',
+  path: string,
+  headers: Readonly<Record<string, string>>,
+  expectedSession: StoredSession,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<void> {
+  return authenticatedRequest(expectedSession, (session) => rawRequestAs<void>(
+    method, path, undefined, session.access_token, timeoutMs,
+    async (response) => {
+      if (response.status !== 204) throw new Error('no_content_response_malformed');
+    },
+    headers,
+  ));
+}
+
+/**
+ * Bytes privados del avatar. El bearer viaja por el mismo transporte que el
+ * JSON, con refresh único; `cache:no-store` se exige en request y response.
+ */
+export async function httpPrivateAvatarRequest(
+  path: string,
+  expectedSession: StoredSession,
+  timeoutMs = 15_000,
+): Promise<PrivateAvatarBlob> {
+  return authenticatedRequest(expectedSession, (session) => rawRequestAs<PrivateAvatarBlob>(
+    'GET', path, undefined, session.access_token, timeoutMs,
+    async (response) => {
+      const cacheControl = response.headers.get('cache-control')?.toLowerCase() ?? '';
+      if (!cacheControl.split(',').map((part) => part.trim()).includes('private')
+          || !cacheControl.split(',').map((part) => part.trim()).includes('no-store')) {
+        throw new Error('avatar_response_cache_policy_invalid');
+      }
+      const contentLength = response.headers.get('content-length');
+      if (contentLength === null || !/^\d+$/.test(contentLength)
+          || Number(contentLength) < 1 || Number(contentLength) > MAX_AVATAR_OUTPUT_BYTES) {
+        throw new Error('avatar_response_size_invalid');
+      }
+      const blob = response.headers.get('content-type')?.toLowerCase() === 'image/jpeg'
+        ? await response.blob()
+        : (() => { throw new Error('avatar_response_media_type_invalid'); })();
+      if (blob.size !== Number(contentLength)) throw new Error('avatar_response_size_invalid');
+      return validatePrivateAvatarBlob(blob);
+    },
+    { Accept: 'image/jpeg' },
+    'no-store',
+  ));
+}
+
+/** JSON privado: no se admite que navegador/CDN lo cachee como respuesta común. */
+export async function httpPrivateJsonRequest<T>(
+  path: string,
+  expectedSession?: StoredSession,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  return authenticatedRequest(expectedSession, (session) => rawRequestAs<T>(
+    'GET', path, undefined, session.access_token, timeoutMs,
+    async (response) => {
+      const cacheControl = response.headers.get('cache-control')?.toLowerCase() ?? '';
+      const tokens = cacheControl.split(',').map((part) => part.trim());
+      if (!tokens.includes('private') || !tokens.includes('no-store')) {
+        throw new Error('private_json_cache_policy_invalid');
+      }
+      if (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
+        throw new Error('private_json_media_type_invalid');
+      }
+      return (await response.json()) as T;
+    },
+    { Accept: 'application/json' },
+    'no-store',
+  ));
 }
 
 /**
