@@ -2054,11 +2054,9 @@ export function CreateMesaFlow() {
                 portapapeles falla, NO queda de dónde copiar a mano. Por eso el
                 código táctil y el botón se apagan sin link en vez de fingir que
                 copiaron. */}
-            {/* 🔴 FIDELIDAD VISUAL (2026-08-20, defecto 4): WhatsApp va
-                PRIMERO. Es el canal por el que la gente manda esto de verdad,
-                así que es la acción principal; «Copiar link» es la salida
-                secundaria. Estaban al revés. El orden del DOM es también el
-                orden del foco por teclado, así que esto no es sólo visual. */}
+            {/* La corrección visual del 2026-08-24 fija «Copiar link» primero y
+                WhatsApp segundo. El orden del DOM conserva ese mismo orden de
+                foco por teclado; ambas superficies transportan el link completo. */}
             <div className="share-actions">
               <button
                 type="button"
