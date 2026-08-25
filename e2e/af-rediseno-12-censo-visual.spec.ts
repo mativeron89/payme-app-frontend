@@ -7,14 +7,23 @@ const CAPTURES_DIR = process.env.AF_CAPTURES_DIR;
 
 test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 
-async function acreditar(page: Page, nombre: string, titleCard = true): Promise<void> {
+async function acreditar(
+  page: Page,
+  nombre: string,
+  titleCard = true,
+  titlePadding = { top: '16px', right: '18px', bottom: '16px', left: '18px' },
+): Promise<void> {
   const app = page.locator('.app');
   await expect(app).toBeVisible();
   const header = page.locator('.screen > .hdr').first();
   const nav = page.getByRole('navigation', { name: 'Navegación principal' });
   const fab = nav.locator('.appbar-fab');
-  const [box, headerBox, navBox, fabBox] = await Promise.all([
+  const mark = header.locator('.hdr-mark');
+  const identity = header.locator('.hdr-user, .hdr-id').first();
+  const bell = header.locator('.hdr-bell');
+  const [box, headerBox, navBox, fabBox, markBox, identityBox, bellBox] = await Promise.all([
     app.boundingBox(), header.boundingBox(), nav.boundingBox(), fab.boundingBox(),
+    mark.boundingBox(), identity.boundingBox(), bell.boundingBox(),
   ]);
   expect(box?.width).toBe(390);
   expect(box?.height).toBe(844);
@@ -23,13 +32,48 @@ async function acreditar(page: Page, nombre: string, titleCard = true): Promise<
   expect(fabBox?.width).toBe(56);
   expect(fabBox?.height).toBe(56);
   expect((navBox?.y ?? 0) - (fabBox?.y ?? 0)).toBe(26);
+  expect(markBox?.x).toBe(16);
+  expect(markBox?.height).toBe(34);
+  expect((identityBox?.x ?? 0) - ((markBox?.x ?? 0) + (markBox?.width ?? 0))).toBe(12);
+  expect(bellBox?.width).toBeGreaterThanOrEqual(44);
+  expect(bellBox?.height).toBeGreaterThanOrEqual(44);
+  await expect(header).toHaveCSS('padding-top', '14px');
+  await expect(header).toHaveCSS('padding-right', '16px');
+  await expect(header).toHaveCSS('padding-bottom', '56px');
+  await expect(header).toHaveCSS('padding-left', '16px');
+  const row2 = header.locator('.hdr-row-2');
+  if (await row2.count()) {
+    await expect(row2).toHaveCSS('margin-top', '10px');
+    await expect(row2).toHaveCSS('height', '40px');
+    const back = row2.locator('.hdr-back');
+    await expect(back).toHaveCSS('font-weight', '700');
+    const backBox = await back.boundingBox();
+    expect(backBox?.width).toBeGreaterThanOrEqual(44);
+    expect(backBox?.height).toBeGreaterThanOrEqual(44);
+  }
   if (titleCard) {
-    const titleBox = await page.locator('.screen > .title-card').first().boundingBox();
+    const title = page.locator('.screen > .title-card').first();
+    const titleBox = await title.boundingBox();
     expect(titleBox?.y).toBe(112);
     expect(titleBox?.height).toBeGreaterThanOrEqual(83);
+    await expect(title).toHaveCSS('box-sizing', 'border-box');
+    await expect(title).toHaveCSS('padding-top', titlePadding.top);
+    await expect(title).toHaveCSS('padding-right', titlePadding.right);
+    await expect(title).toHaveCSS('padding-bottom', titlePadding.bottom);
+    await expect(title).toHaveCSS('padding-left', titlePadding.left);
+    await expect(title).toHaveCSS('justify-content', 'center');
   }
   await expect(page.locator('.screen > .scroll')).toHaveCount(1);
   await expect(page.locator('.screen > .appbar-block')).toHaveCount(1);
+  const appbarBlock = nav.locator('..');
+  await expect(appbarBlock).toHaveCSS('position', 'absolute');
+  await expect(appbarBlock).toHaveCSS('border-top-left-radius', '24px');
+  await expect(appbarBlock).toHaveCSS('border-top-right-radius', '24px');
+  expect(await page.locator('.screen').evaluate((screen) => {
+    const scroll = screen.querySelector(':scope > .scroll');
+    const bar = screen.querySelector(':scope > .appbar-block');
+    return Boolean(scroll && bar && scroll.parentElement === bar.parentElement);
+  })).toBe(true);
   const shell = await app.evaluate((node) => ({
     clientHeight: node.clientHeight,
     scrollHeight: node.scrollHeight,
@@ -67,7 +111,9 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
   await acreditar(page, '03-scan');
   await page.getByRole('button', { name: 'Capturar', exact: true }).click();
   await expect(page.getByRole('radiogroup', { name: '¿Cómo dividen?' })).toBeVisible();
-  await acreditar(page, '04-division');
+  await acreditar(page, '04-division', true, {
+    top: '12px', right: '18px', bottom: '14px', left: '18px',
+  });
   const divisionScroll = await page.locator('.ticket-flow-scroll').evaluate((node) => ({
     clientHeight: node.clientHeight,
     scrollHeight: node.scrollHeight,

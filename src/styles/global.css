@@ -2000,7 +2000,7 @@ body {
   background: var(--surface);
   border-radius: 24px 24px 0 0;
   /* Sombra hacia arriba, SIN línea divisoria: la difuminada la reemplaza. */
-  box-shadow: 0 -8px 22px rgba(16, 30, 59, 0.1);
+  box-shadow: 0 -2px 8px rgba(16, 30, 59, 0.08);
   z-index: 19;
 }
 
@@ -3083,7 +3083,7 @@ body {
 /* El ID del usuario, no su nombre: en el flujo identifica la cuenta con la que
    se está armando la mesa. Trunca antes de empujar nada. */
 .hdr-id {
-  margin-left: auto;
+  margin-left: 0;
   min-width: 0;
   font-family: var(--font-body);
   font-size: var(--fs-sm);
@@ -4123,19 +4123,6 @@ body {
   margin-top: var(--sp-2);
 }
 
-/* G-36 · la salida honesta cuando la demo del seed venció y no se pudo
-   rescatar. Separada del vacío real por una línea: el vacío dice "no tenés
-   mesas", esto dice "los datos de ejemplo vencieron" — dos cosas distintas. */
-.demo-reset {
-  margin-top: var(--sp-4);
-  padding-top: var(--sp-4);
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-2);
-}
-
 /* Vacío REAL: el único estado del sistema SIN borde. Y sin botón propio — la
    acción ya está en el círculo naranja de la barra, a un centímetro. */
 .mesa-empty {
@@ -4892,8 +4879,6 @@ h1.gar-amount-lbl {
    restaurante debajo del rótulo. */
 .pay-title {
   background: var(--teal-l);
-  border-radius: 16px;
-  padding: 18px 20px;
   margin-bottom: 16px;
 }
 .pay-title-lbl {
@@ -4945,8 +4930,6 @@ h1.pay-title-lbl {
    El tilde vivía suelto sobre el fondo: el cierre estaba partido en dos. */
 .recibo-cierre {
   background: var(--teal-l);
-  border-radius: 16px;
-  padding: 22px 20px;
   margin-bottom: 14px;
   text-align: center;
 }
@@ -5022,25 +5005,6 @@ h1.pay-title-lbl {
   overflow: hidden;
 }
 
-/* El HTML de referencia usa una fila visual de 19px para «Volver», pero el
-   botón productivo conserva 44px de área táctil y desborda esa fila en ambos
-   sentidos. El alto visual no paga el costo de accesibilidad. Se scopea a las
-   seis pantallas de este encargo para no mover Scan ni Mis ítems. */
-.af-diseno-flow .hdr-flow .hdr-row-2 {
-  height: 19px;
-  min-height: 19px;
-  margin-top: 14px;
-  overflow: visible;
-}
-
-.af-diseno-flow .hdr-flow .hdr-back {
-  height: var(--tap-min);
-  min-height: var(--tap-min);
-  margin-block: -12.5px;
-  font-size: var(--fs-body);
-  font-weight: 700;
-}
-
 .ticket-title-card .title-card-title {
   font-size: 19px;
   line-height: 1.25;
@@ -5101,12 +5065,6 @@ h1.pay-title-lbl {
 
 .ticket-title-fold .tk-fold-chev {
   color: var(--action-2);
-}
-
-/* P4 · Compartir: la credencial es una sola tarjeta con dos zonas inequívocas
-   (código y acciones). La salida segura a Inicio y el CTA centrado no cambian. */
-.share-title {
-  padding: 18px 20px;
 }
 
 .share-title .title-card-title {
@@ -5217,7 +5175,6 @@ h1.pay-title-lbl {
    centrado; la procedencia de propina y los gates monetarios no se alteran. */
 .pay-title {
   margin: -42px var(--sp-4) 0;
-  padding: 18px 20px;
   border-radius: var(--r-lg);
   text-align: center;
 }
@@ -5349,7 +5306,6 @@ h1.pay-title-lbl {
    como una segunda pieza con acciones integradas, sin reabrir el pago. */
 .receipt-screen .recibo-cierre {
   margin: -42px var(--sp-4) 0;
-  padding: 20px;
   border-radius: var(--r-lg);
 }
 
@@ -5633,10 +5589,6 @@ h1.pay-title-lbl {
 
 /* P2 · Garantía: la decisión de tarjeta se lee antes que la explicación y el
    CTA usa la misma barra estable del resto del flujo. */
-.gar-title {
-  padding: 18px 20px;
-}
-
 .gar-title .title-card-title {
   font-size: 22px;
   font-weight: 800;
@@ -5812,10 +5764,6 @@ h1.pay-title-lbl {
 
 /* P3 · La confirmación bancaria conserva una jerarquía estable: contexto,
    estado de espera, tarjeta de origen y una acción de una sola palabra. */
-.tds-title {
-  padding: 18px 20px;
-}
-
 .tds-title .title-card-title {
   font-size: 22px;
   font-weight: 800;
