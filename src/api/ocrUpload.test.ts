@@ -90,7 +90,7 @@ const user = {
   last_name: 'User',
 };
 
-function loggedIn(accessToken = 'access-ocr', refreshToken = 'refresh-ocr') {
+function loggedIn(accessToken = 'a-ocr', refreshToken = 'r-ocr') {
   saveSession({
     access_token: accessToken,
     refresh_token: refreshToken,
@@ -137,7 +137,7 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     expect(xhr.body).toBe(form);
     expect(xhr.timeout).toBe(OCR_TIMEOUT_MS);
     expect(xhr.responseType).toBe('json');
-    expect(xhr.headers.get('Authorization')).toBe('Bearer access-ocr');
+    expect(xhr.headers.get('Authorization')).toBe('Bearer a-ocr');
     expect(xhr.headers.has('Content-Type')).toBe(false);
 
     xhr.progress(512, 2048, true);
@@ -188,8 +188,8 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     const fetchMock = vi.fn(async (url: string) => {
       expect(url).toMatch(/\/api\/auth\/refresh$/);
       return new Response(JSON.stringify({
-        access_token: 'access-rotated',
-        refresh_token: 'refresh-rotated',
+        access_token: 'a-next',
+        refresh_token: 'r-next',
         expires_in: 900,
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
@@ -206,15 +206,15 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     const retry = FakeXmlHttpRequest.instances[1];
     expect(progress).toHaveBeenLastCalledWith({ loadedBytes: 0, totalBytes: null });
     expect(retry.body).toBeInstanceOf(FormData);
-    expect(retry.headers.get('Authorization')).toBe('Bearer access-rotated');
+    expect(retry.headers.get('Authorization')).toBe('Bearer a-next');
     retry.finish(200, ticket());
 
     await expect(pending).resolves.toEqual(ticket());
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(loadSession()).toMatchObject({
       family_id: 'family-ocr',
-      access_token: 'access-rotated',
-      refresh_token: 'refresh-rotated',
+      access_token: 'a-next',
+      refresh_token: 'r-next',
     });
   });
 
@@ -232,8 +232,8 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
       email: 'ocr-b@example.com',
     };
     saveSession({
-      access_token: 'access-relogin',
-      refresh_token: 'refresh-relogin',
+      access_token: 'a-login',
+      refresh_token: 'r-login',
       family_id: familyId,
       principal_id: principalId,
       user: replacementUser,
@@ -245,7 +245,7 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     expect(FakeXmlHttpRequest.instances).toHaveLength(1);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(loadSession()).toMatchObject({
-      access_token: 'access-relogin',
+      access_token: 'a-login',
       family_id: familyId,
       principal_id: principalId,
     });

@@ -11,6 +11,15 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.145.3 — Fixtures OCR compatibles con el gate de secretos (2026-08-25)
+
+Las credenciales sintéticas del test de upload OCR usan valores cortos que no
+imitan la forma de un secreto. La semántica comprobada no cambia: conserva la
+rotación, el retry único y la familia/principal. Es una corrección exclusiva de
+tests y metadatos motivada por el primer CI remoto de `01b4e8d`, que se detuvo
+en el auditor fail-closed antes de instalar dependencias o publicar en Vercel.
+**Sin cambios de producto, contrato, dinero ni secretos reales.**
+
 ## 0.145.2 — Gates de OCR y router cerrados en navegador (2026-08-25)
 
 La prueba de varias mesas deja de exigir el restaurante en el encabezado que
