@@ -16,11 +16,13 @@ import type {
   CreateTransferRequest,
   CreateTransferResponse,
   FriendRequestCreatedResponse,
+  FriendRequestCancelledResponse,
   FriendRequestDirection,
   FriendRequestsResponse,
   FriendsResponse,
   GroupDetailResponse,
   GroupsResponse,
+  IncomingFriendRequestsResponse,
   LockItemsResponse,
   LegalTextResponse,
   MesaCreationOutcome,
@@ -29,6 +31,7 @@ import type {
   NotificationsResponse,
   OcrResponse,
   OpenMesasResponse,
+  OutgoingFriendRequestsResponse,
   PayMesaRequest,
   PayMesaResponse,
   PaymentMethod,
@@ -1862,16 +1865,14 @@ export async function mockFriends(): Promise<FriendsResponse> {
 /**
  * C1/C2 · una solicitud es una INTENCIÓN, no un vínculo.
  *
- * Responde 202 `{ requested: true }` SIEMPRE: exista o no la persona, sea o no
- * ya tu amigo, te haya bloqueado o no. El mock replica esa ceguera a propósito
- * — si acá devolviera 404 cuando no encuentra a nadie, la demo enseñaría un
- * comportamiento que el backend eliminó justamente por ser un oráculo.
+ * Responde 202 `{ requested: true, request_id }` SIEMPRE: exista o no la
+ * persona, sea o no ya tu amigo, te haya bloqueado o no. El receipt es nuevo y
+ * opaco en todos los caminos. El mock replica esa ceguera a propósito: si acá
+ * devolviera 404 o variara la cantidad, la demo reabriría el oráculo.
  */
 export async function mockAddFriend(query: { email?: string; payme_id?: string }): Promise<FriendRequestCreatedResponse> {
-  // El backend BUSCA primero, y si no encuentra a nadie activo no inserta nada
-  // (`routes/friends.js:136-151`). El mock hacía lo contrario: inventaba una
-  // persona para cualquier texto, así que la solicitud saliente aparecía
-  // siempre y la demo no podía mostrar —ni delatar— el comportamiento real.
+  const requestedAt = new Date().toISOString();
+  const receiptId = mockId('f');
   const email = query.email?.trim().toLowerCase();
   const destino = [...state.friends, ...state.directory].find(
     (p) => (email !== undefined && p.email.toLowerCase() === email)
@@ -1881,49 +1882,48 @@ export async function mockAddFriend(query: { email?: string; payme_id?: string }
   if (destino) {
     const bloqueado = state.blockedUserIds.includes(destino.id);
     const yaEsAmigo = state.friends.some((f) => f.id === destino.id);
-    const yaPedida = state.friendRequests.some(
-      (r) => r.direction === 'outgoing' && r.person.id === destino.id,
-    );
     // Si el otro YA me pidió, pedirle yo equivale a aceptar: el contrato evita
     // así dos pendientes cruzadas que nadie resuelve.
     const reciproca = state.friendRequests.findIndex(
       (r) => r.direction === 'incoming' && r.person.id === destino.id,
     );
-    if (!bloqueado && !yaEsAmigo && !yaPedida) {
-      if (reciproca !== -1) {
-        const [req] = state.friendRequests.splice(reciproca, 1);
-        state.friends.push({ ...req.person, added_at: new Date().toISOString() });
-      } else {
-        state.friendRequests.push({
-          id: mockId('f'),
-          direction: 'outgoing',
-          person: destino,
-          requested_at: new Date().toISOString(),
-        });
-      }
+    if (!bloqueado && !yaEsAmigo && reciproca !== -1) {
+      const [req] = state.friendRequests.splice(reciproca, 1);
+      state.friends.push({ ...req.person, added_at: new Date().toISOString() });
     }
   }
-  // Misma respuesta en TODOS los casos: no existe, existe, ya es amigo, ya hay
-  // pendiente, o me bloqueó. Es la ceguera que el endpoint tiene a propósito.
-  return delay({ requested: true as const });
+  state.friendRequestReceipts.push({
+    id: receiptId,
+    requested_at: requestedAt,
+  });
+  // Misma forma y un recibo nuevo en TODOS los casos: no existe, existe, ya es
+  // amigo, ya hay pendiente, o me bloqueó. Nunca incluye identidad.
+  return delay({ requested: true as const, request_id: receiptId });
 }
 
-export async function mockFriendRequests(direction: FriendRequestDirection): Promise<FriendRequestsResponse> {
+export function mockFriendRequests(direction: 'incoming'): Promise<IncomingFriendRequestsResponse>;
+export function mockFriendRequests(direction: 'outgoing'): Promise<OutgoingFriendRequestsResponse>;
+export function mockFriendRequests(direction: FriendRequestDirection): Promise<FriendRequestsResponse> {
+  if (direction === 'outgoing') {
+    return delay({
+      direction,
+      requests: state.friendRequestReceipts.map(({ id, requested_at }) => ({ id, requested_at })),
+    });
+  }
   return delay({
     direction,
     requests: state.friendRequests
-      .filter((r) => r.direction === direction)
-      .map((r) => ({
-        id: r.id,
-        // La persona va ANIDADA: `id` es el de la solicitud, no el suyo.
+      .filter((request) => request.direction === 'incoming')
+      .map((request) => ({
+        id: request.id,
         user: {
-          id: r.person.id,
-          payme_id: r.person.payme_id,
-          first_name: r.person.first_name,
-          last_name: r.person.last_name,
-          full_name: r.person.full_name,
+          id: request.person.id,
+          payme_id: request.person.payme_id,
+          first_name: request.person.first_name,
+          last_name: request.person.last_name,
+          full_name: request.person.full_name,
         },
-        requested_at: r.requested_at,
+        requested_at: request.requested_at,
       })),
   });
 }
@@ -1945,11 +1945,11 @@ export async function mockRejectFriendRequest(requestId: string): Promise<void> 
 }
 
 /** Cancelar: sólo una PROPIA todavía pendiente. */
-export async function mockCancelFriendRequest(requestId: string): Promise<void> {
-  const i = state.friendRequests.findIndex((r) => r.id === requestId && r.direction === 'outgoing');
+export async function mockCancelFriendRequest(requestId: string): Promise<FriendRequestCancelledResponse> {
+  const i = state.friendRequestReceipts.findIndex((receipt) => receipt.id === requestId);
   if (i === -1) return fail(404, 'request_not_found');
-  state.friendRequests.splice(i, 1);
-  return delay(undefined);
+  state.friendRequestReceipts.splice(i, 1);
+  return delay({ cancelled: true as const });
 }
 
 /**

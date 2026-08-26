@@ -14,7 +14,8 @@ import { useWalletRail } from '../api/walletRail';
 import { fold, relTime } from '../utils/format';
 import { fullName } from '../utils/identity';
 import {
-  incomingRowView, outgoingRowView, type IncomingRowView, type OutgoingRowView,
+  cancelOutgoingReceipt, incomingRowView, outgoingRowView,
+  type IncomingRowView, type OutgoingRowView,
 } from './friendRequestsView';
 
 /**
@@ -87,19 +88,19 @@ export function SocialScreen() {
   // ─── Solicitudes ───
   const [incoming, setIncoming] = useState<IncomingRowView[]>([]);
   /**
-   * ⚠️ `OutgoingRowView`, NO `FriendRequest`: la identidad del destinatario se
-   * descarta en el borde de red y nunca entra al componente. Guardar el
-   * `FriendRequest` crudo y "acordarse de no pintarlo" es lo que falló en su
-   * momento (`fabddfe`).
+   * ⚠️ `OutgoingRowView`, nunca el DTO legacy crudo: la identidad del
+   * destinatario se descarta en el borde de red y nunca entra al componente.
+   * Guardar la respuesta anterior y "acordarse de no pintarla" es lo que
+   * falló en su momento (`fabddfe`).
    */
   const [outgoing, setOutgoing] = useState<OutgoingRowView[]>([]);
   const [reqBusy, setReqBusy] = useState<string | null>(null);
 
   function loadRequests() {
-    void api.getFriendRequests('incoming')
-      .then((r) => setIncoming(r.requests.map(incomingRowView))).catch(() => setIncoming([]));
-    void api.getFriendRequests('outgoing')
-      .then((r) => setOutgoing(r.requests.map(outgoingRowView))).catch(() => setOutgoing([]));
+    void api.getIncomingFriendRequests()
+      .then((r) => setIncoming(r.requests.map(incomingRowView))).catch(() => undefined);
+    void api.getOutgoingFriendRequests()
+      .then((r) => setOutgoing(r.requests.map(outgoingRowView))).catch(() => undefined);
   }
 
   function loadFriends() {
@@ -116,7 +117,7 @@ export function SocialScreen() {
     loadRequests();
   }, []);
 
-  /** El `id` que viaja es el de la SOLICITUD, nunca el de la persona. */
+  /** Entrante: solicitud. Saliente: receipt. Nunca viaja el id de persona. */
   async function resolveRequest(
     requestId: string,
     action: 'accept' | 'reject' | 'cancel',
@@ -127,7 +128,7 @@ export function SocialScreen() {
     try {
       if (action === 'accept') await api.acceptFriendRequest(requestId);
       else if (action === 'reject') await api.rejectFriendRequest(requestId);
-      else await api.cancelFriendRequest(requestId);
+      else setOutgoing(await cancelOutgoingReceipt(outgoing, requestId, api.cancelFriendRequest));
       toast(
         action === 'accept' ? t('Ahora son amigos con {0} ✓', quien)
           : action === 'reject' ? t('Solicitud rechazada')
@@ -168,10 +169,10 @@ export function SocialScreen() {
       toast(t('Si tiene PayMe, le va a llegar tu solicitud'));
       setNewQuery('');
       setAdding(false);
-      // ⚠️ A propósito NO se recarga la lista acá. Recargar contestaba, medio
-      // segundo después, la misma pregunta que el 202 ciego se acababa de negar
-      // a contestar: aparecía una fila nueva si la cuenta existía y ninguna si
-      // no. La solicitud se ve al volver a entrar.
+      // Compatibilidad de publicación: no se recarga acá mientras el frontend
+      // aún puede convivir con Backend anterior a v2.71. El owner nuevo crea un
+      // recibo opaco por intento, pero el viejo sólo listaba destinos reales y
+      // una recarga inmediata reabriría el oráculo durante esa ventana.
     } catch {
       toast(t('No pudimos enviar la solicitud. Prueba de nuevo.'));
     } finally {

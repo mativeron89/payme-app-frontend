@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "87a9a741bfc4e1b0335472a671e03a5fae6325f1",
-  "total": 88,
+  "commit": "064c51aadd2266f8f47ed36461dd60f7b9f39b88",
+  "total": 90,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -87,6 +87,12 @@
       "destino": "db/migrate_fraction_complements_v2.68.0.sql",
       "sha256": "08cc38b557f662b71763ca6a4025dc0735ce5bed8d97582e035173e047de47bd",
       "bytes": 730
+    },
+    {
+      "origen": "db/migrate_friend_request_receipts_v2.71.0.sql",
+      "destino": "db/migrate_friend_request_receipts_v2.71.0.sql",
+      "sha256": "fe310463525d8279507734d82740cf8c9575a490a4b87a632300e19d6b739f12",
+      "bytes": 2108
     },
     {
       "origen": "db/migrate_garantia_v2.9_hardened.sql",
@@ -211,8 +217,8 @@
     {
       "origen": "db/schema.sql",
       "destino": "db/schema.sql",
-      "sha256": "ffb30af8833d873b11292a18b753909de6a5e5955b5f091d72c7ae63da147e42",
-      "bytes": 57348
+      "sha256": "856875a98f671d492198ab3040353d843c365b0cfae2211b6adafc9644649b60",
+      "bytes": 58114
     },
     {
       "origen": "docs/history/CHANGELOG_v2.11.md",
@@ -237,6 +243,12 @@
       "destino": "docs/CHANGELOG_v2.28.8.md",
       "sha256": "5e4e8432f7896e737759fdeb64eecf618bfe3b09c87f09ba94118f9f9aa2ede2",
       "bytes": 6240
+    },
+    {
+      "origen": "docs/HANDOFF_G25_SOLICITUDES_SALIENTES_V2.71.0.md",
+      "destino": "docs/HANDOFF_G25_SOLICITUDES_SALIENTES_V2.71.0.md",
+      "sha256": "f95188f349ee59dbdf5bde054603046e311b1c25a6f27ab00c800c90f372f29f",
+      "bytes": 2340
     },
     {
       "origen": "docs/history/README_v2.10_CONSOLIDADO.md",
@@ -301,8 +313,8 @@
     {
       "origen": "routes/friends.js",
       "destino": "routes/friends.js",
-      "sha256": "31112a017ff933b717dbb2756a2ce96ddda3461fc38563ed79bb7ee8b6e933cd",
-      "bytes": 15969
+      "sha256": "c6f76e66a89e6450029821924f371bf35b5d7f4a260f533751e6079e630c3fa9",
+      "bytes": 19646
     },
     {
       "origen": "routes/groups.js",

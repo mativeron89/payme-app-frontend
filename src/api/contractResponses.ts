@@ -5,12 +5,18 @@ import type {
   CreateInvitationResponse,
   CreateSetupIntentResponse,
   LegalTextResponse,
+  FriendRequestCancelledResponse,
+  FriendRequestCreatedResponse,
+  IncomingFriendRequest,
+  IncomingFriendRequestsResponse,
   MesaCreationLookup,
   MesaCreationOutcome,
   MesaStatus,
   OcrCategory,
   OcrResponse,
   OcrWarning,
+  OutgoingFriendRequest,
+  OutgoingFriendRequestsResponse,
 } from './types';
 import { MESA_CREATION_OUTCOME_BY_STATUS } from './types';
 
@@ -44,6 +50,103 @@ function optionalBoolean(value: unknown): boolean {
 function exactKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
   const keys = Object.keys(value);
   return keys.length === allowed.length && keys.every((key) => allowed.includes(key));
+}
+
+// ─── G-25 · recibos salientes opacos ─────────────────────────────────────
+
+function isoTimestamp(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(value)
+    && Number.isFinite(Date.parse(value));
+}
+
+function friendIdentity(value: unknown): IncomingFriendRequest['user'] | null {
+  const user = record(value);
+  if (!user
+      || !exactKeys(user, ['id', 'payme_id', 'first_name', 'last_name', 'full_name'])
+      || !uuid(user.id)
+      || !nonEmpty(user.payme_id)
+      || !nonEmpty(user.first_name)
+      || !nonEmpty(user.last_name)
+      || !nonEmpty(user.full_name)) return null;
+  return {
+    id: user.id,
+    payme_id: user.payme_id,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    full_name: user.full_name,
+  };
+}
+
+/** POST nuevo con receipt UUID, o shape viejo exacto durante la publicación. */
+export function friendRequestCreatedResponse(value: unknown): FriendRequestCreatedResponse {
+  const body = record(value);
+  if (!body || body.requested !== true) throw new ContractResponseError('friends');
+  if (exactKeys(body, ['requested'])) return { requested: true };
+  if (!exactKeys(body, ['requested', 'request_id']) || !uuid(body.request_id)) {
+    throw new ContractResponseError('friends');
+  }
+  return { requested: true, request_id: body.request_id };
+}
+
+export function friendRequestsResponse(
+  value: unknown,
+  expectedDirection: 'incoming',
+): IncomingFriendRequestsResponse;
+export function friendRequestsResponse(
+  value: unknown,
+  expectedDirection: 'outgoing',
+): OutgoingFriendRequestsResponse;
+export function friendRequestsResponse(
+  value: unknown,
+  expectedDirection: 'incoming' | 'outgoing',
+): IncomingFriendRequestsResponse | OutgoingFriendRequestsResponse {
+  const body = record(value);
+  if (!body
+      || !exactKeys(body, ['direction', 'requests'])
+      || body.direction !== expectedDirection
+      || !Array.isArray(body.requests)) {
+    throw new ContractResponseError('friends/requests');
+  }
+
+  if (expectedDirection === 'incoming') {
+    const requests: IncomingFriendRequest[] = body.requests.map((value) => {
+      const request = record(value);
+      const user = friendIdentity(request?.user);
+      if (!request
+          || !exactKeys(request, ['id', 'user', 'requested_at'])
+          || !uuid(request.id)
+          || !isoTimestamp(request.requested_at)
+          || !user) throw new ContractResponseError('friends/requests');
+      return { id: request.id, user, requested_at: request.requested_at };
+    });
+    return { direction: 'incoming', requests };
+  }
+
+  const requests: OutgoingFriendRequest[] = body.requests.map((value) => {
+    const request = record(value);
+    if (!request || !uuid(request.id) || !isoTimestamp(request.requested_at)) {
+      throw new ContractResponseError('friends/requests');
+    }
+    if (exactKeys(request, ['id', 'requested_at'])) {
+      return { id: request.id, requested_at: request.requested_at };
+    }
+    // Compatibilidad acotada con Backend anterior: acredita el shape viejo,
+    // pero proyecta un DTO nuevo. La identidad nunca sale de este decoder.
+    if (!exactKeys(request, ['id', 'user', 'requested_at']) || !friendIdentity(request.user)) {
+      throw new ContractResponseError('friends/requests');
+    }
+    return { id: request.id, requested_at: request.requested_at };
+  });
+  return { direction: 'outgoing', requests };
+}
+
+export function friendRequestCancelledResponse(value: unknown): FriendRequestCancelledResponse {
+  const body = record(value);
+  if (!body || !exactKeys(body, ['cancelled']) || body.cancelled !== true) {
+    throw new ContractResponseError('friends/requests/:id');
+  }
+  return { cancelled: true };
 }
 
 // ─── D-FF · aviso público y OCR ───────────────────────────────────────────

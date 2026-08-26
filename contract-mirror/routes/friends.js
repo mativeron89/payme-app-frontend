@@ -21,6 +21,10 @@
  * 4. Ningún endpoint devuelve `email` ni `phone`. No hacen falta para nada de
  *    lo que la app hace con amigos.
  *
+ * 5. La lista saliente tampoco puede confirmar que el destino exista. Cada
+ *    intento crea un recibo opaco propio, exista o no una cuenta detrás. El
+ *    recibo permite listar/cancelar la intención sin proyectar identidad.
+ *
  * Contact discovery NO se implementa acá: es MUST posterior, en su propia orden.
  */
 'use strict';
@@ -124,11 +128,10 @@ router.get('/search', validateQuery(searchFriends), async (req, res, next) => {
 /**
  * Crear una solicitud.
  *
- * ⚠️ RESPUESTA DELIBERADAMENTE CIEGA. Devuelve `202 { requested: true }` en
+ * ⚠️ RESPUESTA DELIBERADAMENTE CIEGA. Devuelve un recibo opaco por intento en
  * TODOS los casos: la persona no existe, existe, ya es amiga, ya tiene una
- * solicitud tuya, o te bloqueó. El emisor no puede distinguir ninguno de esos
- * estados, que es justo lo que convertía a este endpoint en un oráculo.
- * El estado real de TUS solicitudes se ve en `GET /friends/requests`.
+ * solicitud tuya, o te bloqueó. El recibo sólo prueba que PayMe registró TU
+ * intención; nunca prueba que exista una persona detrás.
  */
 router.post('/', solicitudLimiter, validateBody(addFriend), async (req, res, next) => {
   try {
@@ -146,13 +149,28 @@ router.post('/', solicitudLimiter, validateBody(addFriend), async (req, res, nex
     // la duración del trabajo que sigue. Mismo criterio que el bcrypt.compare
     // contra hash señuelo de /auth/login.
     if (!destino || destino.id === req.user.id) {
-      await pool.query('SELECT pg_sleep(0.01)');
+      const requestId = await pool.tx(async (client) => {
+        await client.query('SELECT pg_sleep(0.01)');
+        const { rows: [receipt] } = await client.query(
+          `INSERT INTO friend_request_receipts (requester_user_id)
+           VALUES ($1) RETURNING id`,
+          [req.user.id]
+        );
+        return receipt.id;
+      });
       logger.audit('friend_request_noop', { user_id: req.user.id });
-      return res.status(202).json({ requested: true });
+      return res.status(202).json({ requested: true, request_id: requestId });
     }
 
     const resultado = await pool.tx(async (client) => {
-      if (await hayBloqueo(client, req.user.id, destino.id)) return 'blocked';
+      const { rows: [receipt] } = await client.query(
+        `INSERT INTO friend_request_receipts (requester_user_id)
+         VALUES ($1) RETURNING id`,
+        [req.user.id]
+      );
+      if (await hayBloqueo(client, req.user.id, destino.id)) {
+        return { outcome: 'blocked', requestId: receipt.id };
+      }
       // Si el otro YA me pidió, pedirle yo equivale a aceptar. Evita dos
       // pendientes cruzadas que nadie resuelve.
       const { rowCount: reciproca } = await client.query(
@@ -169,18 +187,33 @@ router.post('/', solicitudLimiter, validateBody(addFriend), async (req, res, nex
              WHERE friendships.status <> 'blocked'`,
           [req.user.id, destino.id]
         );
-        return 'accepted_reciprocal';
+        return { outcome: 'accepted_reciprocal', requestId: receipt.id };
       }
-      const { rowCount } = await client.query(
+      const creada = await client.query(
         `INSERT INTO friendships (user_id, friend_user_id, status)
          VALUES ($1, $2, 'pending')
-         ON CONFLICT (user_id, friend_user_id) DO NOTHING`,
+         ON CONFLICT (user_id, friend_user_id) DO NOTHING
+         RETURNING id`,
         [req.user.id, destino.id]
       );
-      return rowCount === 1 ? 'created' : 'noop';
+      const friendshipId = creada.rows[0]?.id || (await client.query(
+        `SELECT id FROM friendships
+          WHERE user_id=$1 AND friend_user_id=$2 AND status='pending'`,
+        [req.user.id, destino.id]
+      )).rows[0]?.id || null;
+      if (friendshipId) {
+        await client.query(
+          `UPDATE friend_request_receipts SET friendship_id=$1 WHERE id=$2`,
+          [friendshipId, receipt.id]
+        );
+      }
+      return {
+        outcome: creada.rowCount === 1 ? 'created' : 'noop',
+        requestId: receipt.id,
+      };
     });
 
-    if (resultado === 'created') {
+    if (resultado.outcome === 'created') {
       // El aviso que el código viejo nunca mandaba: la plantilla existía y
       // ninguna ruta la usaba.
       await notifs.create({
@@ -189,17 +222,17 @@ router.post('/', solicitudLimiter, validateBody(addFriend), async (req, res, nex
         body: `${req.user.first_name || 'Alguien'} te quiere agregar en PayMe`,
         related_entity_type: 'user', related_entity_id: req.user.id,
       }).catch(() => { /* el aviso no puede voltear la solicitud */ });
-    } else if (resultado === 'accepted_reciprocal') {
+    } else if (resultado.outcome === 'accepted_reciprocal') {
       await notifs.create({
         user_id: destino.id, type: 'friend_added',
         body: 'Ahora son amigos en PayMe',
         related_entity_type: 'user', related_entity_id: req.user.id,
       }).catch(() => {});
     }
-    logger.audit('friend_request', { user_id: req.user.id, outcome: resultado });
+    logger.audit('friend_request', { user_id: req.user.id, outcome: resultado.outcome });
 
     // Misma respuesta para created / noop / blocked / accepted_reciprocal.
-    res.status(202).json({ requested: true });
+    res.status(202).json({ requested: true, request_id: resultado.requestId });
   } catch (err) { next(err); }
 });
 
@@ -207,15 +240,29 @@ router.get('/requests', validateQuery(friendRequestsQuery), async (req, res, nex
   try {
     const { direction } = req.validatedQuery;
     const entrantes = direction === 'incoming';
+    if (!entrantes) {
+      const { rows } = await pool.query(
+        `SELECT id, created_at
+           FROM friend_request_receipts
+          WHERE requester_user_id=$1
+          ORDER BY created_at DESC, id DESC
+          LIMIT 100`,
+        [req.user.id]
+      );
+      return res.json({
+        direction,
+        requests: rows.map((r) => ({ id: r.id, requested_at: r.created_at })),
+      });
+    }
+
     // ⚠️ `f.id AS request_id` a propósito: seleccionar `f.id` junto a `u.id`
     // devuelve DOS columnas llamadas `id` y el driver conserva la última, así
-    // que el id de la solicitud quedaba pisado por el del usuario. La persona y
-    // la solicitud van en campos separados para que no se puedan confundir.
+    // que el id de la solicitud quedaba pisado por el del usuario.
     const { rows } = await pool.query(
       `SELECT f.id AS request_id, ${PERSONA_SQL}, f.created_at
          FROM friendships f
-         JOIN users u ON u.id = ${entrantes ? 'f.user_id' : 'f.friend_user_id'}
-        WHERE ${entrantes ? 'f.friend_user_id' : 'f.user_id'} = $1
+         JOIN users u ON u.id = f.user_id
+        WHERE f.friend_user_id = $1
           AND f.status = 'pending' AND u.status = 'active'
         ORDER BY f.created_at DESC
         LIMIT 100`,
@@ -291,15 +338,62 @@ router.post('/requests/:requestId/reject', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/** Cancelar una solicitud propia todavía pendiente. */
+/** Cancelar un recibo propio y, si era la última intención, su solicitud real. */
 router.delete('/requests/:requestId', async (req, res, next) => {
   try {
-    const { rowCount } = await pool.query(
-      `DELETE FROM friendships
-        WHERE id = $1 AND user_id = $2 AND status = 'pending'`,
-      [req.params.requestId, req.user.id]
-    );
-    if (rowCount === 0) return res.status(404).json({ error: 'request_not_found' });
+    const cancelled = await pool.tx(async (client) => {
+      // Lectura de routing SIN lock. El orden global de filas es siempre
+      // friendship → receipt, igual que DELETE/reject y las FK ON DELETE.
+      const { rows: [initial] } = await client.query(
+        `SELECT id, friendship_id FROM friend_request_receipts
+          WHERE id=$1 AND requester_user_id=$2`,
+        [req.params.requestId, req.user.id]
+      );
+      if (!initial) return false;
+
+      // Misma secuencia SQL con o sin destino real. Cuando no hay binding se
+      // usa el propio UUID opaco como lookup imposible: evita convertir el
+      // tiempo de cancelación en el nuevo oráculo.
+      const friendshipLockId = initial.friendship_id || initial.id;
+      const { rows: [friendship] } = await client.query(
+        `SELECT id, user_id, status FROM friendships WHERE id=$1 FOR UPDATE`,
+        [friendshipLockId]
+      );
+      const lockedFriendship = friendship || null;
+
+      const { rows: [receipt] } = await client.query(
+        `SELECT id, friendship_id FROM friend_request_receipts
+          WHERE id=$1 AND requester_user_id=$2
+          FOR UPDATE`,
+        [initial.id, req.user.id]
+      );
+      if (!receipt) return false;
+      // La única transición legítima durante la espera es que reject/baja haya
+      // borrado la friendship y la FK haya puesto el binding en NULL.
+      const bindingIntacto = receipt.friendship_id === initial.friendship_id;
+      const bindingRemovido = !lockedFriendship && receipt.friendship_id === null;
+      if (!bindingIntacto && !bindingRemovido) {
+        throw Object.assign(new Error('friend_request_receipt_binding_changed'), {
+          code: 'friend_request_receipt_binding_changed',
+        });
+      }
+      await client.query(
+        `DELETE FROM friend_request_receipts
+          WHERE id=$1 AND requester_user_id=$2`,
+        [receipt.id, req.user.id]
+      );
+      await client.query(
+        `DELETE FROM friendships f
+          WHERE f.id=$1 AND f.user_id=$2 AND f.status='pending'
+            AND NOT EXISTS (
+              SELECT 1 FROM friend_request_receipts r
+               WHERE r.friendship_id=f.id AND r.requester_user_id=$2
+            )`,
+        [friendshipLockId, req.user.id]
+      );
+      return true;
+    });
+    if (!cancelled) return res.status(404).json({ error: 'request_not_found' });
     res.json({ cancelled: true });
   } catch (err) { next(err); }
 });

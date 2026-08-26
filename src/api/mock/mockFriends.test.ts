@@ -1,19 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * EL MOCK OCULTÓ EL DEFECTO.
- *
- * `mockAddFriend` inventaba una persona ("Handle Demo") y empujaba la solicitud
- * saliente para CUALQUIER texto que se tipeara. Entonces en la demo "Enviadas"
- * aparecía siempre, y el comportamiento real —el backend sólo inserta la fila
- * si el destino existe y está activo— era invisible. Con él quedaba invisible
- * el oráculo de existencia que ese comportamiento produce.
- *
- * La verificación manual del commit `1913b1d` decía "verificado en navegador
- * (mock)". No podía ver esto: **un mock que diverge del contrato hacia el lado
- * permisivo convierte mirar la pantalla en teatro.**
- *
- * Estos tests fijan la fidelidad, no la comodidad.
+ * G-25 · el mock replica recibos opacos por intento. Ni el POST ni la lista
+ * saliente cambian de cardinalidad según exista el destino. Las solicitudes
+ * reales quedan como detalle interno para aceptar/bloquear, nunca como DTO de
+ * salida.
  */
 
 function setupStorage() {
@@ -34,81 +25,185 @@ async function cargar() {
   return { mock, state };
 }
 
-const salientes = (state: { friendRequests: Array<{ direction: string }> }) =>
-  state.friendRequests.filter((r) => r.direction === 'outgoing');
+const solicitudesSalientes = (
+  state: { friendRequests: Array<{ id: string; direction: string }> },
+) => state.friendRequests.filter((request) => request.direction === 'outgoing');
 
-describe('mockAddFriend · replica la ceguera del contrato, no la conveniencia', () => {
+describe('mockAddFriend · ceguera y recibo owner-first', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
     setupStorage();
   });
 
-  it('a alguien que NO existe: 202 y NINGUNA fila (era una persona inventada)', async () => {
+  it('destino inexistente: crea recibo opaco pero ninguna identidad/solicitud real', async () => {
     const { mock, state } = await cargar();
 
-    const r = await mock.mockAddFriend({ email: 'nadie-con-este-correo@mail.com' });
+    const response = await mock.mockAddFriend({ email: 'nadie-con-este-correo@mail.com' });
 
-    expect(r).toEqual({ requested: true });
-    // Antes acá aparecía "Nadie-con-este-correo Demo". La fila fantasma es lo
-    // que hacía que el oráculo no se pudiera ver en la demo.
-    expect(salientes(state)).toHaveLength(0);
+    expect(response).toEqual({ requested: true, request_id: state.friendRequestReceipts[0]!.id });
+    expect(response.request_id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(state.friendRequestReceipts).toHaveLength(1);
+    expect(solicitudesSalientes(state)).toHaveLength(0);
   });
 
-  it('a alguien que SÍ existe: crea la solicitud con la persona REAL del directorio', async () => {
+  it('destino existente: mismo recibo opaco y ninguna persona saliente persistida', async () => {
     const { mock, state } = await cargar();
 
-    const r = await mock.mockAddFriend({ email: 'nico@mail.com' });
+    const response = await mock.mockAddFriend({ email: 'nico@mail.com' });
 
-    expect(r).toEqual({ requested: true });
-    expect(salientes(state)).toHaveLength(1);
-    expect(salientes(state)[0]).toMatchObject({ person: { full_name: 'Nicolás Salas' } });
+    expect(response).toEqual({ requested: true, request_id: state.friendRequestReceipts[0]!.id });
+    expect(JSON.stringify(response)).not.toContain('Nicolás');
+    expect(solicitudesSalientes(state)).toHaveLength(0);
+    expect(state.friendRequestReceipts[0]).toEqual({
+      id: response.request_id,
+      requested_at: expect.any(String),
+    });
   });
 
-  it('la respuesta es IDÉNTICA exista o no: es todo lo que el emisor puede ver', async () => {
+  it('POST y GET conservan la misma forma no-oracular exista o no', async () => {
     const { mock } = await cargar();
 
-    expect(await mock.mockAddFriend({ email: 'nico@mail.com' }))
-      .toEqual(await mock.mockAddFriend({ email: 'fantasma@mail.com' }));
+    const existente = await mock.mockAddFriend({ email: 'nico@mail.com' });
+    const inexistente = await mock.mockAddFriend({ email: 'fantasma@mail.com' });
+    const outgoing = await mock.mockFriendRequests('outgoing');
+
+    expect(Object.keys(existente).sort()).toEqual(['request_id', 'requested']);
+    expect(Object.keys(inexistente).sort()).toEqual(['request_id', 'requested']);
+    expect(outgoing.requests).toHaveLength(2);
+    for (const receipt of outgoing.requests) {
+      expect(Object.keys(receipt).sort()).toEqual(['id', 'requested_at']);
+    }
+    expect(JSON.stringify(outgoing)).not.toContain('Nicolás');
+    expect(JSON.stringify(outgoing)).not.toContain('nico@mail.com');
   });
 
-  it('a quien YA es amigo: 202 y ninguna solicitud nueva', async () => {
+  it('ya amigo, bloqueado y destino inexistente también producen un recibo', async () => {
     const { mock, state } = await cargar();
+    const nico = state.directory.find((person) => person.email === 'nico@mail.com')!;
+    state.blockedUserIds.push(nico.id);
 
     await mock.mockAddFriend({ email: 'sofi@mail.com' });
+    await mock.mockAddFriend({ email: 'nico@mail.com' });
+    await mock.mockAddFriend({ email: 'fantasma@mail.com' });
 
-    expect(salientes(state)).toHaveLength(0);
-    expect(state.friends.filter((f) => f.email === 'sofi@mail.com')).toHaveLength(1);
+    expect(state.friendRequestReceipts).toHaveLength(3);
+    expect(solicitudesSalientes(state)).toHaveLength(0);
   });
 
-  it('a quien YA me pidió: equivale a aceptar, y no deja pendientes cruzadas', async () => {
+  it('solicitud recíproca se acepta pero el intento conserva su recibo opaco', async () => {
     const { mock, state } = await cargar();
-    expect(state.friendRequests.filter((r) => r.direction === 'incoming')).toHaveLength(1);
+    expect(state.friendRequests.filter((request) => request.direction === 'incoming')).toHaveLength(1);
 
-    // Valentina ya me mandó una solicitud; pedirle yo la resuelve.
     await mock.mockAddFriend({ email: 'vale@mail.com' });
 
     expect(state.friendRequests).toHaveLength(0);
-    expect(state.friends.some((f) => f.full_name === 'Valentina Ríos')).toBe(true);
+    expect(state.friendRequestReceipts).toHaveLength(1);
+    expect(state.friends.some((friend) => friend.full_name === 'Valentina Ríos')).toBe(true);
   });
 
-  it('a quien bloqueé: 202 y ninguna fila', async () => {
-    const { mock, state } = await cargar();
-    const nico = state.directory.find((p) => p.email === 'nico@mail.com')!;
-    state.blockedUserIds.push(nico.id);
-
-    const r = await mock.mockAddFriend({ email: 'nico@mail.com' });
-
-    expect(r).toEqual({ requested: true });
-    expect(salientes(state)).toHaveLength(0);
-  });
-
-  it('dos veces a la misma persona no duplica la solicitud', async () => {
+  it('dos intentos a la misma persona crean dos recibos sin identidad lateral', async () => {
     const { mock, state } = await cargar();
 
     await mock.mockAddFriend({ payme_id: 'payme_mx_nico' });
     await mock.mockAddFriend({ payme_id: 'payme_mx_nico' });
 
-    expect(salientes(state)).toHaveLength(1);
+    expect(state.friendRequestReceipts).toHaveLength(2);
+    expect(solicitudesSalientes(state)).toHaveLength(0);
+  });
+
+  it('reload conserva recibos opacos sin recuperar identidad del destino', async () => {
+    const first = await cargar();
+    await first.mock.mockAddFriend({ email: 'nico@mail.com' });
+    await first.mock.mockAddFriend({ email: 'fantasma@mail.com' });
+
+    vi.resetModules();
+    const reloaded = await cargar();
+    const outgoing = await reloaded.mock.mockFriendRequests('outgoing');
+
+    expect(outgoing.requests).toHaveLength(2);
+    expect(outgoing.requests.every((receipt) =>
+      Object.keys(receipt).sort().join(',') === 'id,requested_at')).toBe(true);
+    expect(JSON.stringify(outgoing)).not.toContain('Nicolás');
+    expect(JSON.stringify(outgoing)).not.toContain('fantasma');
+  });
+
+  it('migra storage legacy outgoing a recibo y descarta la persona saliente', async () => {
+    const first = await cargar();
+    const legacyId = 'f0000000-0000-4000-8000-000000009999';
+    const legacyState = structuredClone(first.state) as Omit<
+      typeof first.state,
+      'friendRequestReceipts'
+    > & {
+      friendRequestReceipts?: typeof first.state.friendRequestReceipts;
+    };
+    legacyState.friendRequests.push({
+      id: legacyId,
+      direction: 'outgoing',
+      person: legacyState.directory.find((person) => person.email === 'nico@mail.com')!,
+      requested_at: '2026-08-25T12:00:00.000Z',
+    });
+    delete legacyState.friendRequestReceipts;
+    localStorage.setItem('payme_mock_state_v1', JSON.stringify(legacyState));
+
+    vi.resetModules();
+    const reloaded = await cargar();
+    const outgoing = await reloaded.mock.mockFriendRequests('outgoing');
+
+    expect(outgoing.requests).toEqual([{
+      id: legacyId,
+      requested_at: '2026-08-25T12:00:00.000Z',
+    }]);
+    expect(reloaded.state.friendRequests.some((request) => request.direction === 'outgoing'))
+      .toBe(false);
+    expect(JSON.stringify(outgoing)).not.toContain('Nicolás');
+  });
+});
+
+describe('mockCancelFriendRequest · usa receipt id, no person/request id', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    setupStorage();
+  });
+
+  it('cancela exactamente un recibo y conserva los demás', async () => {
+    const { mock, state } = await cargar();
+    const first = await mock.mockAddFriend({ email: 'nico@mail.com' });
+    const second = await mock.mockAddFriend({ email: 'nico@mail.com' });
+
+    await expect(mock.mockCancelFriendRequest(first.request_id!)).resolves.toEqual({ cancelled: true });
+    expect(state.friendRequestReceipts.map((receipt) => receipt.id)).toEqual([second.request_id]);
+    expect(solicitudesSalientes(state)).toHaveLength(0);
+
+    await expect(mock.mockCancelFriendRequest(second.request_id!)).resolves.toEqual({ cancelled: true });
+    expect(state.friendRequestReceipts).toHaveLength(0);
+    expect(solicitudesSalientes(state)).toHaveLength(0);
+  });
+
+  it('rechaza id de persona: no lo mezcla con receipt id', async () => {
+    const { mock, state } = await cargar();
+    await mock.mockAddFriend({ email: 'nico@mail.com' });
+    const personId = state.directory.find((person) => person.email === 'nico@mail.com')!.id;
+
+    await expect(mock.mockCancelFriendRequest(personId)).rejects.toMatchObject({ status: 404 });
+    expect(state.friendRequestReceipts).toHaveLength(1);
+  });
+});
+
+describe('incoming permanece identificable y accionable', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    setupStorage();
+  });
+
+  it('GET incoming conserva persona y aceptar la convierte en amiga', async () => {
+    const { mock, state } = await cargar();
+    const incoming = await mock.mockFriendRequests('incoming');
+    expect(incoming.requests[0]!.user.full_name).toBe('Valentina Ríos');
+
+    await mock.mockAcceptFriendRequest(incoming.requests[0]!.id);
+    expect(state.friends.some((friend) => friend.full_name === 'Valentina Ríos')).toBe(true);
   });
 });

@@ -18,6 +18,9 @@ import {
   acceptInvitationLinkResponse,
   acceptInvitationResponse,
   attachPaymentMethodResponse,
+  friendRequestCancelledResponse,
+  friendRequestCreatedResponse,
+  friendRequestsResponse,
   invitationResponse,
   legalTextResponse,
   mesaCreationResponse,
@@ -60,16 +63,16 @@ import type {
   CreateTransferRequest,
   CreateTransferResponse,
   FriendRequestCreatedResponse,
-  FriendRequestDirection,
-  FriendRequestsResponse,
   FriendsResponse,
   GroupDetailResponse,
   GroupsResponse,
+  IncomingFriendRequestsResponse,
   LockItemsResponse,
   MesaDetailResponse,
   NotificationsResponse,
   OcrResponse,
   OpenMesasResponse,
+  OutgoingFriendRequestsResponse,
   PayMesaRequest,
   PayMesaResponse,
   PaymentMethodsResponse,
@@ -283,7 +286,8 @@ export interface Api {
    * sobre el destinatario.
    */
   addFriend(query: { email?: string; payme_id?: string }): Promise<FriendRequestCreatedResponse>;
-  getFriendRequests(direction: FriendRequestDirection): Promise<FriendRequestsResponse>;
+  getIncomingFriendRequests(): Promise<IncomingFriendRequestsResponse>;
+  getOutgoingFriendRequests(): Promise<OutgoingFriendRequestsResponse>;
   acceptFriendRequest(requestId: string): Promise<void>;
   rejectFriendRequest(requestId: string): Promise<void>;
   cancelFriendRequest(requestId: string): Promise<void>;
@@ -617,9 +621,17 @@ const realApi: Api = {
   getStats: () => httpRequest<StatsResponse>('GET', '/account/stats'),
 
   getFriends: () => httpRequest<FriendsResponse>('GET', '/friends'),
-  addFriend: (query) => httpRequest<FriendRequestCreatedResponse>('POST', '/friends', query),
-  getFriendRequests: (direction) =>
-    httpRequest<FriendRequestsResponse>('GET', `/friends/requests?direction=${direction}`),
+  addFriend: async (query) => friendRequestCreatedResponse(
+    await httpRequest<unknown>('POST', '/friends', query),
+  ),
+  getIncomingFriendRequests: async () => friendRequestsResponse(
+    await httpRequest<unknown>('GET', '/friends/requests?direction=incoming'),
+    'incoming',
+  ),
+  getOutgoingFriendRequests: async () => friendRequestsResponse(
+    await httpRequest<unknown>('GET', '/friends/requests?direction=outgoing'),
+    'outgoing',
+  ),
   acceptFriendRequest: async (requestId) => {
     await httpRequest('POST', `/friends/requests/${encodeURIComponent(requestId)}/accept`);
   },
@@ -627,7 +639,9 @@ const realApi: Api = {
     await httpRequest('POST', `/friends/requests/${encodeURIComponent(requestId)}/reject`);
   },
   cancelFriendRequest: async (requestId) => {
-    await httpRequest('DELETE', `/friends/requests/${encodeURIComponent(requestId)}`);
+    friendRequestCancelledResponse(
+      await httpRequest<unknown>('DELETE', `/friends/requests/${encodeURIComponent(requestId)}`),
+    );
   },
   blockUser: async (userId) => {
     await httpRequest('POST', `/friends/${encodeURIComponent(userId)}/block`);
@@ -778,11 +792,20 @@ const mockApi: Api = {
   getStats: () => mock.mockStats(),
 
   getFriends: () => mock.mockFriends(),
-  addFriend: (query) => mock.mockAddFriend(query),
-  getFriendRequests: (direction) => mock.mockFriendRequests(direction),
+  addFriend: async (query) => friendRequestCreatedResponse(await mock.mockAddFriend(query)),
+  getIncomingFriendRequests: async () => friendRequestsResponse(
+    await mock.mockFriendRequests('incoming'),
+    'incoming',
+  ),
+  getOutgoingFriendRequests: async () => friendRequestsResponse(
+    await mock.mockFriendRequests('outgoing'),
+    'outgoing',
+  ),
   acceptFriendRequest: (requestId) => mock.mockAcceptFriendRequest(requestId),
   rejectFriendRequest: (requestId) => mock.mockRejectFriendRequest(requestId),
-  cancelFriendRequest: (requestId) => mock.mockCancelFriendRequest(requestId),
+  cancelFriendRequest: async (requestId) => {
+    friendRequestCancelledResponse(await mock.mockCancelFriendRequest(requestId));
+  },
   blockUser: (userId) => mock.mockBlockUser(userId),
   unblockUser: (userId) => mock.mockUnblockUser(userId),
   removeFriend: (friendId) => mock.mockRemoveFriend(friendId),

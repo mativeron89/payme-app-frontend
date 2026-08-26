@@ -869,9 +869,12 @@ export interface FriendSearchResponse {
 /**
  * C1/C2 · `POST /api/friends` ya no crea una amistad: crea una INTENCIÓN.
  *
- * Responde **202 `{ requested: true }` SIEMPRE** — la persona no existe,
+ * Desde App Backend v2.71 responde **202 `{ requested: true, request_id }`**
+ * SIEMPRE con un recibo UUID opaco — la persona no existe,
  * existe, ya es amiga, ya tiene tu solicitud, o te bloqueó. El emisor no puede
- * distinguir ninguno de esos casos. Esa ceguera es el punto: antes un 404
+ * distinguir ninguno de esos casos. Durante la publicación Frontend→Backend
+ * se tolera la respuesta anterior `{ requested: true }`, sin inventar el id ni
+ * derivar identidad. Esa ceguera es el punto: antes un 404
  * `user_not_found` convertía al endpoint en un oráculo para descubrir quién
  * tiene cuenta probando correos.
  *
@@ -881,28 +884,45 @@ export interface FriendSearchResponse {
  */
 export interface FriendRequestCreatedResponse {
   requested: true;
+  /** Ausente únicamente durante la ventana compatible con Backend < v2.71. */
+  request_id?: string;
 }
 
 export type FriendRequestDirection = 'incoming' | 'outgoing';
 
 /**
- * Elemento de `GET /api/friends/requests`.
+ * Elemento ENTRANTE de `GET /api/friends/requests`.
  *
  * ⚠️ `id` es el de la SOLICITUD y la persona va anidada en `user`. Están
  * separados a propósito: en el backend, seleccionar `f.id` junto a `u.id`
  * devolvía dos columnas `id` y el driver conservaba la última, así que aceptar
  * fallaba con 404 siempre. No volver a mezclarlos de este lado.
  */
-export interface FriendRequest {
+export interface IncomingFriendRequest {
   id: string;
   user: Friend;
   requested_at: string;
 }
 
-export interface FriendRequestsResponse {
-  direction: FriendRequestDirection;
-  requests: FriendRequest[];
+/** Recibo opaco de salida: deliberadamente no puede transportar identidad. */
+export interface OutgoingFriendRequest {
+  id: string;
+  requested_at: string;
 }
+
+export interface IncomingFriendRequestsResponse {
+  direction: 'incoming';
+  requests: IncomingFriendRequest[];
+}
+
+export interface OutgoingFriendRequestsResponse {
+  direction: 'outgoing';
+  requests: OutgoingFriendRequest[];
+}
+
+export type FriendRequestsResponse =
+  | IncomingFriendRequestsResponse
+  | OutgoingFriendRequestsResponse;
 
 export interface FriendRequestAcceptedResponse { accepted: true }
 export interface FriendRequestRejectedResponse { rejected: true }

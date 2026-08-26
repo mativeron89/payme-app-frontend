@@ -11,6 +11,20 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.147.0 — G-25 owner-first: recibos salientes opacos (2026-08-26)
+
+El mirror adopta App Backend v2.71.0 con 90/90 archivos: cada intento de
+amistad recibe un UUID opaco, la lista saliente publica sólo recibo y fecha, y
+la lista entrante conserva identidad para aceptar o rechazar. La frontera de
+red acepta temporalmente el DTO anterior para publicar el Frontend primero,
+pero elimina `user` antes de devolver una saliente y nunca inventa un recibo.
+
+Cancelar usa el receipt id y la UI retira la fila sólo después de acreditar el
+200 exacto; un error conserva el estado y reconcilia sin revelar si el destino
+existía. El mock replica la cardinalidad no-oracular y persiste recibos entre
+recargas. **Sin cambios de política social, dinero, dependencias, push, deploy,
+red externa ni consultas a producción.**
+
 ## 0.146.0 — G-37/G-38 owner-first: identidad y garantía exactas (2026-08-26)
 
 El mirror adopta Backend v2.70.0 con 88/88 archivos. `mesa_pay` publica y

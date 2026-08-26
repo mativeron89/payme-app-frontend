@@ -126,15 +126,23 @@ export interface MockState {
    */
   directory: MockPerson[];
   /**
-   * OLA 3C: solicitudes de amistad pendientes. `direction` es desde MI punto de
-   * vista — `incoming` me la mandaron, `outgoing` la mandé yo. El `id` es el de
-   * la SOLICITUD, nunca el de la persona: en el backend confundirlos hacía que
-   * aceptar diera 404 siempre.
+   * Solicitudes entrantes pendientes, con persona porque el contrato la
+   * publica para aceptar/rechazar. El union conserva `outgoing` únicamente
+   * para migrar estados demo anteriores a G-25; al hidratar se transforma en
+   * receipt y se elimina la persona saliente.
    */
   friendRequests: Array<{
     id: string;
     direction: 'incoming' | 'outgoing';
     person: MockPerson;
+    requested_at: string;
+  }>;
+  /**
+   * G-25 · recibo opaco por CADA intento saliente, exista o no el destino.
+   * No conserva persona ni vínculo: el mock tampoco tiene una vía lateral.
+   */
+  friendRequestReceipts: Array<{
+    id: string;
     requested_at: string;
   }>;
   /** Ids de usuario que YO bloqueé. */
@@ -830,6 +838,7 @@ function seedState(): MockState {
         requested_at: iso(-2 * 60 * 60_000),
       },
     ],
+    friendRequestReceipts: [],
     blockedUserIds: [],
     groups: [
       {
@@ -1230,6 +1239,18 @@ function loadPersisted(): MockState | null {
     }
     if (!Array.isArray(parsed.joinedMesaCodes)) parsed.joinedMesaCodes = [];
     if (!Array.isArray(parsed.friendRequests)) parsed.friendRequests = [];
+    if (!Array.isArray(parsed.friendRequestReceipts)) {
+      // Estados mock anteriores a G-25 sólo tenían la solicitud real. Se
+      // conserva como recibo legacy cancelable, sin copiar identidad.
+      parsed.friendRequestReceipts = parsed.friendRequests
+        .filter((request) => request.direction === 'outgoing')
+        .map((request) => ({
+          id: request.id,
+          requested_at: request.requested_at,
+        }));
+      parsed.friendRequests = parsed.friendRequests
+        .filter((request) => request.direction === 'incoming');
+    }
     if (!Array.isArray(parsed.blockedUserIds)) parsed.blockedUserIds = [];
     // El directorio de personas que existen sin ser amigas.
     if (!Array.isArray(parsed.directory)) parsed.directory = seedDirectory();

@@ -8,20 +8,39 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-08-26**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`87a9a741bfc4e1b0335472a671e03a5fae6325f1`**
-  (`feat(contract): publica identidad y garantía exactas` · v2.70.0).
+  **`064c51aadd2266f8f47ed36461dd60f7b9f39b88`**
+  (`feat(privacidad): publica recibos opacos salientes G-25` · v2.71.0).
 - Commit que publicó el inventario autoritativo:
-  **`d1a22c97dca60d4bc680197a90baadf3dbaef14a`**
-  (`chore(contract): republica mirror v2.70.0`). Como siempre, el inventario
+  **`5b1e1f21cfe7f8d1504c5c8b8d9a87982c93f42e`**
+  (`chore(contract): completa mirror G-25 v2.71.0`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `d1a22c9` está un commit más adelante que el contenido y no
+⚠️ **El publicador `5b1e1f2` está un commit más adelante que el contenido y no
 se espeja como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `87a9a74`; anclarse a él mantiene verificable la paridad.
+declarado es `064c51a`; anclarse a él mantiene verificable la paridad.
 
-🆕 **88 archivos espejados** más este README.
+🆕 **90 archivos espejados** más este README.
 
-Este refresh cierra owner-first G-37/G-38 sin cambiar semántica monetaria:
+Este refresh cierra owner-first G-25 sin cambiar la UX de entrantes:
+
+- cada `POST /api/friends` responde un `request_id` UUID opaco y crea un recibo
+  con cardinalidad idéntica exista o no el destino;
+- `GET ...direction=outgoing` publica exclusivamente `{id, requested_at}` y
+  nunca identidad; `direction=incoming` conserva `user` para aceptar/rechazar;
+- `DELETE /friends/requests/:receipt_id` cancela por recibo propio, con 404
+  indistinguible para faltante o ajeno;
+- la migración v2.71.0 puebla recibos para salientes históricas y el handoff
+  fija la secuencia Frontend compatible primero, Backend después.
+
+La adopción se verificó contra la fuente antes de implementar el consumidor:
+**integridad 90/90**, **paridad 90/90** y **vigencia verde** contra App Backend
+HEAD `5b1e1f21cfe7f8d1504c5c8b8d9a87982c93f42e`, cuya publicación contractual
+declara `064c51aadd2266f8f47ed36461dd60f7b9f39b88`. Eso acredita el árbol local
+y la ref contractual publicada; no afirma deploy ni producción.
+
+### Refresh anterior · 2026-08-26 (identidad y garantía exactas · v2.70.0)
+
+El corte anterior cerró owner-first G-37/G-38 sin cambiar semántica monetaria:
 
 - `mesa-pay-identity-vectors.json` publica selector, keysets legacy/vigente y
   ocho vectores sintéticos de identidad. El consumidor ejecuta esos hashes y

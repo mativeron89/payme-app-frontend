@@ -838,6 +838,20 @@ CREATE TABLE IF NOT EXISTS friendships (
 );
 CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id, status);
 
+-- G-25: recibo opaco por intento saliente. No guarda el target crudo; la FK
+-- opcional sólo permite cancelar la solicitud real asociada del lado servidor.
+CREATE TABLE IF NOT EXISTS friend_request_receipts (
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  requester_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  friendship_id     UUID REFERENCES friendships(id) ON DELETE SET NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_friend_request_receipts_requester
+  ON friend_request_receipts(requester_user_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_friend_request_receipts_friendship
+  ON friend_request_receipts(friendship_id)
+  WHERE friendship_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS friend_groups (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -1,4 +1,4 @@
-import type { FriendRequest } from '../api/types';
+import type { IncomingFriendRequest, OutgoingFriendRequest } from '../api/types';
 
 /**
  * OLA 3C · CORRECCIÓN · qué se puede mostrar de una solicitud, y qué no.
@@ -8,13 +8,10 @@ import type { FriendRequest } from '../api/types';
  * está puesto para una sola cosa: **que mandar una solicitud no confirme si una
  * cuenta existe.**
  *
- * Pero el backend sólo inserta la fila cuando el destino existe y está activo
- * (`contract-mirror/routes/friends.js:136-151`), y `GET /friends/requests`
- * proyecta `payme_id, first_name, last_name` (`:206-232`). Con eso, pintar la
- * lista de SALIENTES devolvía en la pantalla siguiente exactamente lo que el
- * POST se había negado a decir — y encima con nombre y apellido reales de
- * alguien que nunca aceptó nada. **La ceguera del POST no sirve de nada si la
- * pantalla siguiente publica el resultado.**
+ * App Backend v2.71 cierra también la señal de cardinalidad: cada intento crea
+ * un recibo opaco y `GET ...direction=outgoing` devuelve sólo `{id,
+ * requested_at}`. Durante la secuencia Frontend→Backend, el decoder acepta el
+ * DTO anterior con `user`, pero lo destruye antes de que alcance esta vista.
  *
  * La asimetría entrante/saliente NO es un descuido, es la regla:
  *
@@ -27,16 +24,12 @@ import type { FriendRequest } from '../api/types';
  *   ocurrió.
  *
  * El tipo `OutgoingRowView` es la única puerta: la pantalla guarda ESTO en su
- * estado, no el `FriendRequest`. La identidad se descarta en el borde de red y
- * nunca entra al componente, así que no alcanza con acordarse de no pintarla —
+ * estado, no el DTO legacy. La identidad se descarta en el borde de red y
+ * nunca entra al componente, así que no alcanza con acordarse de no pintarla:
  * no está.
  *
- * ⚠️ Esto es MITIGACIÓN, no cierre. La señal presencia/ausencia sobrevive: una
- *    solicitud a alguien que no existe no crea fila y una a alguien que sí
- *    existe la crea, así que el contador todavía distingue los dos casos. Eso
- *    sólo se cierra en el emisor —`GET /friends/requests` es de App Backend— y
- *    está pedido en `GAPS.md` (G-25). No declarar cerrado el oráculo por este
- *    archivo.
+ * El cierre owner-first está documentado como G-25. Este archivo conserva la
+ * asimetría deliberada: entrantes con identidad; salientes sólo con recibo.
  */
 
 /** Solicitud ENTRANTE: lleva identidad, y debe llevarla. */
@@ -61,7 +54,7 @@ export interface OutgoingRowView {
   requestedAt: string;
 }
 
-export function incomingRowView(r: FriendRequest): IncomingRowView {
+export function incomingRowView(r: IncomingFriendRequest): IncomingRowView {
   return {
     requestId: r.id,
     userId: r.user.id,
@@ -71,7 +64,19 @@ export function incomingRowView(r: FriendRequest): IncomingRowView {
   };
 }
 
-export function outgoingRowView(r: FriendRequest): OutgoingRowView {
-  // Deliberadamente NO se propaga `r.user`. Ver el docblock de arriba.
+export function outgoingRowView(r: OutgoingFriendRequest): OutgoingRowView {
   return { requestId: r.id, requestedAt: r.requested_at };
+}
+
+/**
+ * La UI obtiene una lista nueva sólo después del 200 contractual de DELETE.
+ * Rechazo/red/2xx malformado propagan error y dejan intacta la lista original.
+ */
+export async function cancelOutgoingReceipt(
+  rows: readonly OutgoingRowView[],
+  receiptId: string,
+  cancel: (receiptId: string) => Promise<void>,
+): Promise<OutgoingRowView[]> {
+  await cancel(receiptId);
+  return rows.filter((row) => row.requestId !== receiptId);
 }
