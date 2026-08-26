@@ -45,7 +45,9 @@ test.describe('Inicio · varias mesas abiertas (§1.1 variante B)', () => {
     // Tocar la fila entra a ESA mesa.
     await filaOtra.click();
     await expect(page).toHaveURL(/#\/mesa\/PA-2847/);
-    await expect(page.getByText('La Parolaccia')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+    await expect(page.getByText(/^PA-2847 ·/)).toBeVisible();
+    await expect(page.getByText('cada uno lo suyo', { exact: true })).toBeVisible();
   });
 
   test('con UNA sola abierta la fila no existe y la tarjeta queda como siempre', async ({ page }) => {

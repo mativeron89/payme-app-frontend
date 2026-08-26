@@ -11,6 +11,21 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.145.2 — Gates de OCR y router cerrados en navegador (2026-08-25)
+
+La prueba de varias mesas deja de exigir el restaurante en el encabezado que
+Diseño ya había compactado: ahora acredita la pantalla vigente, el código
+`PA-2847` y el modo de división de esa mesa. El grep de la clase encontró una
+sola expectativa positiva obsoleta dentro de la pantalla; tarjetas, hojas y
+ausencias ratificadas conservan sus assertions.
+
+La matriz del transporte OCR suma error de red, abort, reset de progreso ante
+401 y el no-retry cuando cambia familia o principal. Playwright ejercita además
+la normalización G-35 al montar y por `hashchange`, verifica que `?t=secret` se
+descarta y que Atrás no recupera el hash desconocido. Son cambios sólo de
+pruebas y metadatos: producto, contratos y dinero no cambian. **Sin push,
+deploy, red externa ni consultas a producción.**
+
 ## 0.145.1 — Hashes desconocidos normalizados sin ensuciar Atrás (2026-08-25)
 
 El router distingue una ruta reconocida de su fallback a Inicio. Un hash

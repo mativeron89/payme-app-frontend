@@ -57,6 +57,14 @@ class FakeXmlHttpRequest {
   timeOut() {
     this.ontimeout?.(new Event('timeout'));
   }
+
+  failNetwork() {
+    this.onerror?.(new Event('error'));
+  }
+
+  abortUpload() {
+    this.onabort?.(new Event('abort'));
+  }
 }
 
 const storage = new MemoryStorage();
@@ -163,9 +171,20 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     );
   });
 
-  it('un 401 rota tokens una sola vez y reintenta el mismo FormData con el bearer nuevo', async () => {
+  it.each([
+    ['error de red', (xhr: FakeXmlHttpRequest) => xhr.failNetwork(), { name: 'TypeError', message: 'network_error' }],
+    ['abort del navegador', (xhr: FakeXmlHttpRequest) => xhr.abortUpload(), { name: 'AbortError', message: 'aborted' }],
+  ])('preserva la clase observable ante %s', async (_case, fail, expected) => {
+    const pending = httpOcrUploadRequest<unknown>(new FormData());
+    fail(FakeXmlHttpRequest.instances[0]);
+
+    await expect(pending).rejects.toMatchObject(expected);
+  });
+
+  it('un 401 limpia el progreso viejo, rota tokens una vez y reintenta el mismo FormData', async () => {
     const form = new FormData();
     form.append('image', new Blob(['foto']), 'ticket.jpg');
+    const progress = vi.fn();
     const fetchMock = vi.fn(async (url: string) => {
       expect(url).toMatch(/\/api\/auth\/refresh$/);
       return new Response(JSON.stringify({
@@ -176,11 +195,16 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const pending = api.scanTicket(new Blob(['foto']));
-    FakeXmlHttpRequest.instances[0].finish(401, { error: 'expired' });
+    const pending = api.scanTicket(new Blob(['foto']), progress);
+    const first = FakeXmlHttpRequest.instances[0];
+    expect(progress).toHaveBeenLastCalledWith({ loadedBytes: 0, totalBytes: null });
+    first.progress(1024, 2048, true);
+    expect(progress).toHaveBeenLastCalledWith({ loadedBytes: 1024, totalBytes: 2048 });
+    first.finish(401, { error: 'expired' });
     await vi.waitFor(() => expect(FakeXmlHttpRequest.instances).toHaveLength(2));
 
     const retry = FakeXmlHttpRequest.instances[1];
+    expect(progress).toHaveBeenLastCalledWith({ loadedBytes: 0, totalBytes: null });
     expect(retry.body).toBeInstanceOf(FormData);
     expect(retry.headers.get('Authorization')).toBe('Bearer access-rotated');
     retry.finish(200, ticket());
@@ -191,6 +215,39 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
       family_id: 'family-ocr',
       access_token: 'access-rotated',
       refresh_token: 'refresh-rotated',
+    });
+  });
+
+  it.each([
+    ['familia', 'family-relogin', user.id],
+    ['principal', 'family-other-user', 'ocr-user-b'],
+  ])('un 401 no refresca ni reintenta si cambió la %s', async (_case, familyId, principalId) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const pending = httpOcrUploadRequest<unknown>(new FormData());
+    const replacementUser = principalId === user.id ? user : {
+      ...user,
+      id: principalId,
+      payme_id: 'payme_mx_ocr_b',
+      email: 'ocr-b@example.com',
+    };
+    saveSession({
+      access_token: 'access-relogin',
+      refresh_token: 'refresh-relogin',
+      family_id: familyId,
+      principal_id: principalId,
+      user: replacementUser,
+    });
+
+    FakeXmlHttpRequest.instances[0].finish(401, { error: 'expired' });
+
+    await expect(pending).rejects.toMatchObject({ status: 401 });
+    expect(FakeXmlHttpRequest.instances).toHaveLength(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(loadSession()).toMatchObject({
+      access_token: 'access-relogin',
+      family_id: familyId,
+      principal_id: principalId,
     });
   });
 
