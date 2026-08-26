@@ -72,6 +72,15 @@ async function parseBody(res: Response): Promise<ApiError | null> {
 const REQUEST_TIMEOUT_MS = 30_000;
 export const OCR_TIMEOUT_MS = 60_000;
 
+/** Bytes observados por el navegador durante el multipart exclusivo del OCR. */
+export interface UploadProgress {
+  loadedBytes: number;
+  /** `null` significa que el navegador no pudo computar el largo total. */
+  totalBytes: number | null;
+}
+
+export type UploadProgressListener = (progress: UploadProgress) => void;
+
 type SuccessReader<T> = (response: Response) => Promise<T>;
 
 async function rawRequestAs<T>(
@@ -115,6 +124,59 @@ async function rawRequest<T>(
   timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   return rawRequestAs<T>(method, path, body, token, timeoutMs);
+}
+
+/**
+ * Transporte multipart exclusivo de `POST /api/ocr`.
+ *
+ * No amplía ni reemplaza `rawRequestAs`: creación de mesa, pagos, refunds y
+ * toda otra mutación conservan `fetch`. XHR existe acá únicamente porque el
+ * navegador no publica progreso de subida mediante fetch.
+ */
+function rawOcrUploadRequest<T>(
+  body: FormData,
+  token: string,
+  onProgress?: UploadProgressListener,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BASE_URL}/api/ocr`);
+    xhr.responseType = 'json';
+    xhr.timeout = OCR_TIMEOUT_MS;
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    // Cada retry por refresh empieza sin total conocido. Así un 401 después de
+    // haber subido parte del body no deja pintado el porcentaje del intento viejo.
+    onProgress?.({ loadedBytes: 0, totalBytes: null });
+    xhr.upload.onprogress = (event) => {
+      const loaded = Number.isFinite(event.loaded) && event.loaded >= 0 ? event.loaded : 0;
+      const total = event.lengthComputable && Number.isFinite(event.total) && event.total > 0
+        ? event.total
+        : null;
+      onProgress?.({
+        loadedBytes: total === null ? loaded : Math.min(loaded, total),
+        totalBytes: total,
+      });
+    };
+
+    xhr.onload = () => {
+      const ok = xhr.status >= 200 && xhr.status < 300;
+      if (!ok) {
+        // Igual que `parseBody(fetch)`: JSON válido se conserva para que
+        // HttpError/extractApiError vean el código; JSON inválido queda null.
+        const bodyError = xhr.response === null ? null : xhr.response as ApiError;
+        reject(new HttpError(xhr.status, bodyError));
+        return;
+      }
+      resolve(xhr.response as T);
+    };
+    xhr.onerror = () => reject(new TypeError('network_error'));
+    const abort = () => reject(new DOMException('aborted', 'AbortError'));
+    xhr.onabort = abort;
+    // Conserva la misma clase observable que el AbortController del riel fetch.
+    xhr.ontimeout = abort;
+    xhr.send(body);
+  });
 }
 
 /** Refresh con rotación: guarda el par nuevo de tokens antes de devolver. */
@@ -201,6 +263,19 @@ export async function httpRequest<T>(
 ): Promise<T> {
   return authenticatedRequest(expectedSession, (session) => (
     rawRequest<T>(method, path, body, session.access_token, timeoutMs)
+  ));
+}
+
+/**
+ * Upload autenticado del ticket, con el mismo refresh rotativo y la misma
+ * invalidación de sesión que `httpRequest`, pero sin tocar su transporte.
+ */
+export async function httpOcrUploadRequest<T>(
+  body: FormData,
+  onProgress?: UploadProgressListener,
+): Promise<T> {
+  return authenticatedRequest(undefined, (session) => (
+    rawOcrUploadRequest<T>(body, session.access_token, onProgress)
   ));
 }
 

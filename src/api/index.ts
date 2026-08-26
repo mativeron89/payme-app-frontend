@@ -3,14 +3,15 @@ import {
   httpLogin,
   httpLogout,
   httpNoContentRequest,
+  httpOcrUploadRequest,
   httpPrivateAvatarRequest,
   httpPrivateJsonRequest,
   httpPublicRequest,
   httpRegister,
   httpRequest,
   httpRequestWithHeaders,
-  OCR_TIMEOUT_MS,
   setOnSessionExpired,
+  type UploadProgress,
 } from './http';
 import * as mock from './mock/mockApi';
 import {
@@ -85,6 +86,8 @@ import type {
   HistoryResponse,
   MovementDetailResponse,
 } from './types';
+
+export type { UploadProgress } from './http';
 
 /**
  * Fachada única de datos (mismo patrón que el dashboard frontend): las
@@ -203,7 +206,7 @@ export interface Api {
   // mesas
   getOpenMesas(): Promise<OpenMesasResponse>;
   getMesa(code: string, guestToken?: string): Promise<MesaDetailResponse>;
-  scanTicket(image?: Blob): Promise<OcrResponse>;
+  scanTicket(image?: Blob, onUploadProgress?: (progress: UploadProgress) => void): Promise<OcrResponse>;
   createMesa(req: CreateMesaRequest, intent: MonetaryIntentHandle): Promise<CreateMesaResponse>;
   /**
    * ORDEN 2A · `GET /mesas/creations/:idempotency_key` (backend v2.47.0).
@@ -402,13 +405,14 @@ const realApi: Api = {
     guestToken
       ? httpGuestRequest<MesaDetailResponse>('GET', `/mesas/${encodeURIComponent(code)}`, guestToken)
       : httpRequest<MesaDetailResponse>('GET', `/mesas/${encodeURIComponent(code)}`),
-  async scanTicket(image) {
-    // POST /api/ocr es multipart (campo `image`). Pasa por httpRequest para
-    // compartir timeout, refresh rotativo y errores normalizados con el resto.
+  async scanTicket(image, onUploadProgress) {
+    // POST /api/ocr es multipart (campo `image`). Usa XHR sólo acá para medir
+    // el upload; auth/refresh/timeout/HttpError siguen compartiendo la misma
+    // maquinaria que el resto, sin cambiar el fetch del riel monetario.
     if (!image || image.size <= 0 || image.size > MAX_TICKET_IMAGE_BYTES) throw new Error('scanTicket requiere una imagen de hasta 8 MiB');
     const form = new FormData();
     form.append('image', image, 'ticket.jpg');
-    return ocrResponse(await httpRequest<unknown>('POST', '/ocr', form, undefined, OCR_TIMEOUT_MS));
+    return ocrResponse(await httpOcrUploadRequest<unknown>(form, onUploadProgress));
   },
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(

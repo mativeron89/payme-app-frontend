@@ -11,6 +11,19 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.145.0 — Progreso real y accesible al subir el ticket (2026-08-25)
+
+El multipart del OCR usa un `XMLHttpRequest` dedicado a `POST /api/ocr` para
+publicar bytes subidos y total observable. La pantalla muestra una barra nativa
+accesible y porcentaje sólo cuando el navegador conoce el largo; si
+`lengthComputable=false`, conserva el texto honesto sin fabricar una cifra.
+
+El camino sigue usando la misma sesión, refresh rotativo, timeout de 60 s,
+`HttpError` y decoder estricto. El `fetch` compartido por creación de mesa,
+pagos, refunds y demás mutaciones no cambia; el upload de avatar tampoco se
+migra. **Sin contrato nuevo, cambios de dinero, push, deploy, red externa ni
+consultas a producción.**
+
 ## 0.144.6 — Artefactos Vercel prebuilt sellados y staging sin promoción (2026-08-25)
 
 App y Landing pueden empaquetarse como Build Output API v3 desde los mismos

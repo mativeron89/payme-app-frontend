@@ -9,7 +9,7 @@ import {
 } from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, MAX_TICKET_IMAGE_BYTES, QR_RESTAURANT_ID, newIdempotencyKey, type UploadProgress } from '../api';
 import { useWalletRail } from '../api/walletRail';
 import { extractApiError } from '../api/errors';
 import { canUseCardRail, useMoneyRail } from '../api/moneyRail';
@@ -114,6 +114,7 @@ export function CreateMesaFlow() {
   const { actor, error: actorError } = useMoneyActor();
   const [step, setStep] = useState<Step>('scan');
   const [scanning, setScanning] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [editItems, setEditItems] = useState<EditItem[]>([]);
   /**
    * §1.6 · qué salió mal en la captura. Son estados distintos porque tamaño,
@@ -614,13 +615,14 @@ export function CreateMesaFlow() {
 
   async function runScan(image?: Blob) {
     setScanning(true);
+    setUploadProgress(null);
     setError(null);
     // El cartel del intento anterior se va cuando este intento EMPIEZA, no
     // cuando se toca el botón: si la persona abre la cámara y la cancela, el
     // motivo por el que falló la vez pasada tiene que seguir en pantalla.
     setScanIssue(null);
     try {
-      const r = await api.scanTicket(image);
+      const r = await api.scanTicket(image, setUploadProgress);
       const decision = decideOcrScan(r);
       if (decision.kind === 'provider_unavailable') {
         setScannedTotalCents(null);
@@ -672,6 +674,7 @@ export function CreateMesaFlow() {
       // encima era el segundo aviso del mismo hecho, y tapaba justo la barra.
     } finally {
       setScanning(false);
+      setUploadProgress(null);
     }
   }
 
@@ -1059,17 +1062,15 @@ export function CreateMesaFlow() {
    *    subiendo · **no se pudo leer** (`--danger`, Reintentar + Cargarlo a
    *    mano) · **foto muy grande** (`--warning`, con el límite en castellano).
    *
-   * **El "progreso real" que pide el spec NO se puede implementar, y no se
-   * simula.** `scanTicket` arma un `FormData` y lo manda por `httpRequest`, que
-   * es `fetch` (`src/api/http.ts:76`): `fetch` no expone evento de progreso de
-   * subida. La única API del navegador que lo tiene es `XMLHttpRequest`, y
-   * cambiar el riel de red toca el mismo `httpRequest` por el que pasan las
-   * rutas de dinero — eso no se hace de paso. Queda **G-29**, y es gap del riel
-   * de red de este front, no del contrato. Mientras tanto el estado honesto es
-   * "Subiendo la foto…" sin porcentaje: una barra que avanza sin medir nada es
-   * peor que no tenerla, porque la persona la cree.
+   * **G-29 cerrado:** el multipart del OCR tiene un transporte XHR dedicado,
+   * aislado del `fetch` de creación de mesa/pagos/refunds. Cuando el navegador
+   * conoce el largo se muestra progreso real; con `lengthComputable=false` se
+   * conserva el texto honesto sin fabricar porcentaje ni barra.
    */
   if (step === 'scan') {
+    const uploadPercentage = uploadProgress && uploadProgress.totalBytes !== null
+      ? Math.min(100, Math.floor((uploadProgress.loadedBytes * 100) / uploadProgress.totalBytes))
+      : null;
     return (
       <div className="screen has-appbar">
         <AppHeaderFlow
@@ -1080,8 +1081,10 @@ export function CreateMesaFlow() {
         <div className="title-card scan-title-card">
           {/* <h1> y no <div>: es el único título de esta pantalla. */}
           <h1 className="title-card-title">{t('Escanea el ticket')}</h1>
-          <div className="title-card-sub" aria-live="polite">
-            {scanning ? t('Subiendo la foto…') : t('Encuadra el ticket dentro del marco')}
+          <div className="title-card-sub" aria-live="polite" aria-atomic="true">
+            {scanning
+              ? `${t('Subiendo la foto…')}${uploadPercentage === null ? '' : ` ${uploadPercentage}%`}`
+              : t('Encuadra el ticket dentro del marco')}
           </div>
         </div>
         <div className="scroll flow-scroll scan-flow-scroll">
@@ -1097,6 +1100,16 @@ export function CreateMesaFlow() {
               </div>
             </div>
           </div>
+          {scanning && uploadProgress && uploadProgress.totalBytes !== null && (
+            <div className="scan-upload-progress">
+              <progress
+                max={uploadProgress.totalBytes}
+                value={uploadProgress.loadedBytes}
+                aria-label={t('Progreso de subida')}
+              />
+              <span aria-hidden="true">{uploadPercentage}%</span>
+            </div>
+          )}
           {error && (
             <div className="form-error" role="alert">
               {error}

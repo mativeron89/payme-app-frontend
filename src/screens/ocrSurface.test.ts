@@ -34,4 +34,12 @@ describe('superficie OCR consume las señales publicadas', () => {
     expect(source).not.toContain("t('todavía no leemos la foto. Usamos un ticket de ejemplo");
     expect(source).not.toContain('scan-note');
   });
+
+  it('muestra progreso real accesible y cae a texto sin porcentaje cuando no hay total', () => {
+    expect(source).toContain('api.scanTicket(image, setUploadProgress)');
+    expect(source).toContain('<progress');
+    expect(source).toContain("aria-label={t('Progreso de subida')}");
+    expect(source).toContain('uploadProgress.totalBytes !== null');
+    expect(source).toContain("t('Subiendo la foto…')");
+  });
 });

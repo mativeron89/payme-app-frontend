@@ -563,6 +563,7 @@ export const EN: Record<string, string> = {
   "Solicitud rechazada": "Request declined",
   "Solicitudes": "Requests",
   "Subiendo la foto…": "Uploading the photo…",
+  "Progreso de subida": "Upload progress",
   "Sumarme": "Join",
   "Sumándote a la mesa…": "Joining the table…",
   "Sumándote…": "Joining…",

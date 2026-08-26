@@ -425,25 +425,25 @@ de este front, y se resuelve adentro de este repo con orden propia.
 **Qué pide el spec.** `SPEC_APP.md` §1.6 enumera el estado *subiendo* como
 "progreso real, no spinner infinito".
 
-**Por qué hoy no se puede.** `api.scanTicket()` arma un `FormData` y lo manda
-por `httpRequest` (`src/api/index.ts`), que es **`fetch`**
-(`src/api/http.ts:76`). **`fetch` no expone evento de progreso de subida.** La
-única API del navegador que lo tiene es `XMLHttpRequest`.
+**Estado: CERRADO LOCALMENTE en v0.145.0 (2026-08-25).** `scanTicket()` usa
+`httpOcrUploadRequest`, un transporte `XMLHttpRequest` cerrado a
+`POST /api/ocr`, y consume `upload.onprogress`. `httpRequest` y su `fetch` no
+cambiaron: creación de mesa, pagos, refunds y las demás mutaciones siguen por
+el riel anterior.
 
-**Por qué no se cambió de paso.** `httpRequest` es el mismo por el que pasan
-`POST /mesas`, `POST /mesas/:code/pay` y los refunds. Cambiarle el transporte
-—o abrirle una segunda implementación— por una barra de progreso es tocar el
-riel del dinero para arreglar una animación. Eso necesita su propia orden, con
-su propia verificación de idempotencia, timeout y refresh rotativo.
+**La clase fue enumerada, no sólo la instancia.** En producción hay dos
+constructores `FormData`: OCR y avatar propio. Sólo OCR cambió de transporte;
+avatar conserva su contrato privado sobre `fetch`. Hay un único call site de
+`api.scanTicket`, `CreateMesaFlow`, y es la única superficie que pinta el
+progreso.
 
-**Qué hace la pantalla mientras tanto.** Dice **"Subiendo la foto…"**, sin
-porcentaje y sin barra, con `aria-busy` en el marco y `aria-live` en el texto.
-**No se simula progreso**: una barra que avanza sin medir nada es peor que no
-tenerla, porque la persona la cree y espera con un número que es mentira.
-
-**Cómo se cerraría.** Una ruta de subida propia sobre `XMLHttpRequest`, aislada
-del `httpRequest` monetario y usada **sólo** por el OCR, con su
-`upload.onprogress`. Anotado 2026-08-05 desde §1.6.
+**Lo compartido que sí se preserva:** la misma máquina de sesión autentica el
+XHR, rota refresh una sola vez y reintenta el mismo multipart; el timeout sigue
+siendo 60 s, los rechazos siguen siendo `HttpError` y `ocrResponse` decodifica
+después del transporte. Cuando `lengthComputable=false`, la pantalla conserva
+**"Subiendo la foto…"**, `aria-busy` y `aria-live`, pero no inventa porcentaje
+ni barra. Tests causales: `src/api/ocrUpload.test.ts` y
+`src/screens/ocrSurface.test.ts`.
 
 ---
 
