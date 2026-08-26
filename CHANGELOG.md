@@ -11,6 +11,25 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.144.6 — Artefactos Vercel prebuilt sellados y staging sin promoción (2026-08-25)
+
+App y Landing pueden empaquetarse como Build Output API v3 desde los mismos
+`dist` que atravesaron el gate local. Cada paquete lleva identidad pública del
+commit/tree y un manifiesto externo que cubre `config.json` y todos los bytes
+estáticos; una segunda herramienta independiente vuelve a censarlos después
+del transporte y falla ante cambios, extras, symlinks, hardlinks, objetos
+especiales, rutas sensibles o una identidad distinta.
+
+Se agrega un workflow exclusivamente manual para crear deployments productivos
+sin dominio (`--prebuilt --prod --skip-domain`) y verificarlos sin promoverlos.
+El camino automático vigente por Deploy Hooks se conserva intacto durante esta
+fase: no existe doble publicación ni fallback silencioso. La migración de
+producción requiere primero medir este staging y una autorización posterior de
+Mati para retirar los hooks y habilitar promoción/rollback.
+
+No cambia UI, contrato, dinero ni runtime de la App. **Sin push, deploy, red
+externa ni cambios de configuración remota.**
+
 ## 0.144.5 — Fixtures privados compatibles con el gate de secretos (2026-08-25)
 
 Los tokens ficticios de la regresión de detalle privado se construyen en

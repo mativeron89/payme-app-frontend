@@ -1,0 +1,572 @@
+# Ensayo manual del camino prebuilt. Publica URLs productivas aisladas de los
+# dominios, las verifica byte a byte y se detiene: no cambia aliases.
+name: Release prebuilt staged
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      commit_sha: ${{ steps.identity.outputs.commit_sha }}
+      tree_sha: ${{ steps.identity.outputs.tree_sha }}
+      app_manifest_sha256: ${{ steps.seal.outputs.app_manifest_sha256 }}
+      app_root_sha256: ${{ steps.seal.outputs.app_root_sha256 }}
+      landing_manifest_sha256: ${{ steps.seal.outputs.landing_manifest_sha256 }}
+      landing_root_sha256: ${{ steps.seal.outputs.landing_root_sha256 }}
+      verify_local_sha256: ${{ steps.seal.outputs.verify_local_sha256 }}
+      verify_url_sha256: ${{ steps.seal.outputs.verify_url_sha256 }}
+    steps:
+      - name: Checkout exacto sin credencial persistente
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fijar identidad Git de la orden manual
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          commit_sha="$(git rev-parse --verify 'HEAD^{commit}')"
+          tree_sha="$(git rev-parse --verify 'HEAD^{tree}')"
+          test "$commit_sha" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          printf 'commit_sha=%s\ntree_sha=%s\n' "$commit_sha" "$tree_sha" >> "$GITHUB_OUTPUT"
+      - name: Auditar secretos del cambio
+        run: bash scripts/auditar-secretos.sh "${{ github.event.before || 'HEAD^' }}"
+      - name: Preparar Node lockeado
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+      - name: Censar ambiente de build inicial
+        run: node scripts/verificar-entorno-build.mjs --repo .
+      - name: Instalar dependencias exactas
+        run: npm ci
+      - name: Integridad local del contract-mirror
+        run: node scripts/verificar-mirror.mjs --integridad
+      - name: El alias ejecuta la herramienta real
+        run: node scripts/verificar-aliases.mjs --aliases
+      - name: Invalidar reporte anterior de suite
+        run: node scripts/verificar-aliases.mjs --invalidar corrida
+      - name: Suite completa
+        run: npm test
+      - name: Verificar población ejecutada
+        run: node scripts/verificar-aliases.mjs --corrida
+      - name: Typecheck de los cuatro proyectos
+        run: npm run typecheck
+      - name: Invalidar builds anteriores
+        run: |
+          node scripts/verificar-aliases.mjs --invalidar build
+          node --input-type=module <<'NODE'
+          import { rmSync } from 'node:fs';
+          rmSync('dist-landing', { recursive: true, force: true });
+          NODE
+      - name: Recensar ambiente inmediatamente antes de App
+        run: node scripts/verificar-entorno-build.mjs --repo .
+      - name: Build App con única variable pública
+        env:
+          VITE_API_URL: https://payme-app-backend-production.up.railway.app
+        run: |
+          node --input-type=module <<'NODE'
+          const variables = Object.keys(process.env).filter((nombre) => nombre.startsWith('VITE_')).sort();
+          if (variables.join(',') !== 'VITE_API_URL') {
+            throw new Error(`ambiente Vite no permitido: ${variables.join(',')}`);
+          }
+          NODE
+          npm run build
+      - name: Acreditar artefacto App
+        run: node scripts/verificar-aliases.mjs --artefacto dist
+      - name: Recensar ambiente inmediatamente antes de Landing
+        run: node scripts/verificar-entorno-build.mjs --repo .
+      - name: Build Landing sin ambiente Vite
+        run: |
+          node --input-type=module <<'NODE'
+          const variables = Object.keys(process.env).filter((nombre) => nombre.startsWith('VITE_'));
+          if (variables.length !== 0) throw new Error(`la Landing recibió ambiente Vite: ${variables.join(',')}`);
+          NODE
+          npm run build:landing
+      - name: Acreditar artefacto Landing
+        run: node scripts/verificar-aliases.mjs --artefacto dist-landing
+      - name: Instalar Chromium del runner fijado
+        run: npx playwright install --with-deps chromium
+      - name: Playwright completo
+        run: npx playwright test
+      - name: Sellar ambos BOSA fuera del repo
+        id: seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_root="$RUNNER_TEMP/payme-prebuilt"
+          app_stage="$release_root/app"
+          landing_stage="$release_root/landing"
+          tools_stage="$release_root/tools"
+          mkdir -p "$app_stage" "$landing_stage" "$tools_stage"
+          repo="$(pwd -P)"
+          commit_sha="${{ steps.identity.outputs.commit_sha }}"
+          tree_sha="${{ steps.identity.outputs.tree_sha }}"
+
+          node scripts/release-artifact.mjs \
+            --artifact app --repo "$repo" --stage "$app_stage" \
+            --commit "$commit_sha" --tree "$tree_sha" \
+            > "$RUNNER_TEMP/app-seal.json"
+          node scripts/release-artifact.mjs \
+            --artifact landing --repo "$repo" --stage "$landing_stage" \
+            --commit "$commit_sha" --tree "$tree_sha" \
+            > "$RUNNER_TEMP/landing-seal.json"
+
+          cp scripts/verify-release-artifact.mjs "$tools_stage/verify-release-artifact.mjs"
+          cp scripts/verify-release-url.mjs "$tools_stage/verify-release-url.mjs"
+
+          APP_RESULT="$RUNNER_TEMP/app-seal.json" \
+          LANDING_RESULT="$RUNNER_TEMP/landing-seal.json" \
+          VERIFY_LOCAL="$tools_stage/verify-release-artifact.mjs" \
+          VERIFY_URL="$tools_stage/verify-release-url.mjs" \
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
+          const readResult = (path, artifact) => {
+            const value = JSON.parse(readFileSync(path, 'utf8'));
+            const keys = Object.keys(value).sort().join(',');
+            if (keys !== 'artifact,commit_sha,files,manifest_sha256,root_sha256,tree_sha' ||
+                value.artifact !== artifact || !/^[0-9a-f]{64}$/.test(value.manifest_sha256) ||
+                !/^[0-9a-f]{64}$/.test(value.root_sha256)) {
+              throw new Error(`resultado de sellado ${artifact} inválido`);
+            }
+            return value;
+          };
+          const app = readResult(process.env.APP_RESULT, 'app');
+          const landing = readResult(process.env.LANDING_RESULT, 'landing');
+          appendFileSync(process.env.GITHUB_OUTPUT,
+            `app_manifest_sha256=${app.manifest_sha256}\n` +
+            `app_root_sha256=${app.root_sha256}\n` +
+            `landing_manifest_sha256=${landing.manifest_sha256}\n` +
+            `landing_root_sha256=${landing.root_sha256}\n` +
+            `verify_local_sha256=${sha256(process.env.VERIFY_LOCAL)}\n` +
+            `verify_url_sha256=${sha256(process.env.VERIFY_URL)}\n`);
+          NODE
+      - name: Transportar paquete inmutable
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: payme-prebuilt-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/payme-prebuilt
+          if-no-files-found: error
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 3
+
+  verify_transport:
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preparar Node del verificador aislado
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+      - name: Descargar por artifact-id exacto
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.gate.outputs.artifact_id }}
+          path: ${{ runner.temp }}/payme-prebuilt
+          merge-multiple: true
+      - name: Ejecutar verificadores sin environment ni secretos
+        shell: bash
+        env:
+          COMMIT_SHA: ${{ needs.gate.outputs.commit_sha }}
+          TREE_SHA: ${{ needs.gate.outputs.tree_sha }}
+          APP_MANIFEST_SHA256: ${{ needs.gate.outputs.app_manifest_sha256 }}
+          APP_ROOT_SHA256: ${{ needs.gate.outputs.app_root_sha256 }}
+          LANDING_MANIFEST_SHA256: ${{ needs.gate.outputs.landing_manifest_sha256 }}
+          LANDING_ROOT_SHA256: ${{ needs.gate.outputs.landing_root_sha256 }}
+          VERIFY_LOCAL_SHA256: ${{ needs.gate.outputs.verify_local_sha256 }}
+          VERIFY_URL_SHA256: ${{ needs.gate.outputs.verify_url_sha256 }}
+        run: |
+          set -euo pipefail
+          release_root="$RUNNER_TEMP/payme-prebuilt"
+          test ! -L "$release_root" && test -d "$release_root"
+          test "$(find "$release_root" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort | tr '\n' ',')" = "app,landing,tools,"
+          test "$(find "$release_root/tools" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort | tr '\n' ',')" = "verify-release-artifact.mjs,verify-release-url.mjs,"
+          for tool in verify-release-artifact.mjs verify-release-url.mjs; do
+            tool_path="$release_root/tools/$tool"
+            test -f "$tool_path" && test ! -L "$tool_path"
+            test "$(stat -c '%h' "$tool_path")" = "1"
+          done
+          test "$(sha256sum "$release_root/tools/verify-release-artifact.mjs" | cut -d' ' -f1)" = "$VERIFY_LOCAL_SHA256"
+          test "$(sha256sum "$release_root/tools/verify-release-url.mjs" | cut -d' ' -f1)" = "$VERIFY_URL_SHA256"
+          node "$release_root/tools/verify-release-artifact.mjs" \
+            --stage "$release_root/app" --artifact app \
+            --commit "$COMMIT_SHA" --tree "$TREE_SHA" \
+            --manifest-sha256 "$APP_MANIFEST_SHA256" --root-sha256 "$APP_ROOT_SHA256"
+          node "$release_root/tools/verify-release-artifact.mjs" \
+            --stage "$release_root/landing" --artifact landing \
+            --commit "$COMMIT_SHA" --tree "$TREE_SHA" \
+            --manifest-sha256 "$LANDING_MANIFEST_SHA256" --root-sha256 "$LANDING_ROOT_SHA256"
+
+  stage:
+    needs: [gate, verify_transport]
+    runs-on: ubuntu-latest
+    environment: production-staging
+    concurrency:
+      group: payme-prebuilt-production-staging
+      cancel-in-progress: false
+    outputs:
+      artifact_id: ${{ needs.gate.outputs.artifact_id }}
+      artifact_digest: ${{ needs.gate.outputs.artifact_digest }}
+      app_url: ${{ steps.deploy_app.outputs.url }}
+      landing_url: ${{ steps.deploy_landing.outputs.url }}
+    steps:
+      - name: Preparar Node sin checkout
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+      - name: Descargar por artifact-id exacto
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.gate.outputs.artifact_id }}
+          path: ${{ runner.temp }}/payme-prebuilt
+          merge-multiple: true
+      - name: Tratar BOSA sólo como datos con verificador inline
+        env:
+          COMMIT_SHA: ${{ needs.gate.outputs.commit_sha }}
+          TREE_SHA: ${{ needs.gate.outputs.tree_sha }}
+          APP_MANIFEST_SHA256: ${{ needs.gate.outputs.app_manifest_sha256 }}
+          APP_ROOT_SHA256: ${{ needs.gate.outputs.app_root_sha256 }}
+          LANDING_MANIFEST_SHA256: ${{ needs.gate.outputs.landing_manifest_sha256 }}
+          LANDING_ROOT_SHA256: ${{ needs.gate.outputs.landing_root_sha256 }}
+          VERIFY_LOCAL_SHA256: ${{ needs.gate.outputs.verify_local_sha256 }}
+          VERIFY_URL_SHA256: ${{ needs.gate.outputs.verify_url_sha256 }}
+        run: |
+          set -euo pipefail
+          release_root="$RUNNER_TEMP/payme-prebuilt"
+          RELEASE_ROOT="$release_root" node --input-type=module <<'NODE'
+          // INLINE_BOSA_VERIFIER_V1: este código pertenece al workflow revisado;
+          // no importa ni ejecuta ningún byte del repo o del artifact.
+          import { createHash } from 'node:crypto';
+          import {
+            closeSync, constants, fstatSync, lstatSync, openSync, readSync,
+            readdirSync, realpathSync, rmSync,
+          } from 'node:fs';
+          import { isAbsolute, join, relative, sep } from 'node:path';
+
+          const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+          const canonical = (value) => {
+            if (value === null || typeof value === 'boolean' || typeof value === 'number') {
+              if (typeof value === 'number' && !Number.isSafeInteger(value)) throw new Error('JSON no canónico');
+              return JSON.stringify(value);
+            }
+            if (typeof value === 'string') return JSON.stringify(value);
+            if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+            if (!value || typeof value !== 'object') throw new Error('JSON no canónico');
+            return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+          };
+          const exactEntries = (dir, expected) => {
+            const actual = readdirSync(dir).sort();
+            if (canonical(actual) !== canonical([...expected].sort())) throw new Error(`censo inesperado en ${dir}`);
+          };
+          const safeDir = (path) => {
+            const stat = lstatSync(path);
+            if (!stat.isDirectory() || stat.isSymbolicLink() || realpathSync(path) !== path) {
+              throw new Error(`directorio no canónico: ${path}`);
+            }
+          };
+          const safeRead = (path) => {
+            let fd;
+            try {
+              fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+              const before = fstatSync(fd, { bigint: true });
+              if (!before.isFile() || before.nlink !== 1n || before.size > 67108864n) {
+                throw new Error(`archivo no regular: ${path}`);
+              }
+              const chunks = [];
+              let total = 0;
+              while (true) {
+                const chunk = Buffer.allocUnsafe(65536);
+                const count = readSync(fd, chunk, 0, chunk.length, null);
+                if (count === 0) break;
+                chunks.push(chunk.subarray(0, count));
+                total += count;
+                if (total > 67108864) throw new Error(`archivo demasiado grande: ${path}`);
+              }
+              const after = fstatSync(fd, { bigint: true });
+              if (before.dev !== after.dev || before.ino !== after.ino || before.mode !== after.mode ||
+                  before.nlink !== after.nlink || before.size !== after.size ||
+                  before.mtimeNs !== after.mtimeNs || before.ctimeNs !== after.ctimeNs ||
+                  BigInt(total) !== before.size) throw new Error(`archivo cambió: ${path}`);
+              return Buffer.concat(chunks, total);
+            } finally {
+              if (fd !== undefined) closeSync(fd);
+            }
+          };
+          const inside = (root, path) => {
+            const rel = relative(root, path);
+            return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+          };
+          const snapshot = (root) => {
+            const files = [];
+            const visit = (dir, prefix) => {
+              for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name, 'en'))) {
+                if (!entry.name || entry.name === '.' || entry.name === '..' || entry.name !== entry.name.normalize('NFC') ||
+                    /[\\/\u0000-\u001f\u007f]/u.test(entry.name)) throw new Error('ruta no canónica');
+                const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+                const path = join(dir, entry.name);
+                const stat = lstatSync(path);
+                if (stat.isSymbolicLink() || !inside(root, realpathSync(path))) throw new Error('ruta fuera de BOSA');
+                if (stat.isDirectory() && entry.isDirectory()) {
+                  visit(path, rel);
+                } else if (stat.isFile() && entry.isFile() && stat.nlink === 1) {
+                  const bytes = safeRead(path);
+                  files.push({ path: rel, size: bytes.length, sha256: sha256(bytes) });
+                } else {
+                  throw new Error('objeto no regular en BOSA');
+                }
+              }
+            };
+            visit(root, '');
+            return files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+          };
+
+          const releaseRoot = realpathSync(process.env.RELEASE_ROOT);
+          safeDir(releaseRoot);
+          exactEntries(releaseRoot, ['app', 'landing', 'tools']);
+          const orders = [
+            ['app', process.env.APP_MANIFEST_SHA256, process.env.APP_ROOT_SHA256],
+            ['landing', process.env.LANDING_MANIFEST_SHA256, process.env.LANDING_ROOT_SHA256],
+          ];
+          for (const [artifact, expectedManifest, expectedRoot] of orders) {
+            const stage = join(releaseRoot, artifact);
+            safeDir(stage);
+            exactEntries(stage, ['.vercel', 'release-manifest.json']);
+            const vercel = join(stage, '.vercel');
+            safeDir(vercel);
+            exactEntries(vercel, ['output']);
+            const output = join(vercel, 'output');
+            safeDir(output);
+            exactEntries(output, ['config.json', 'static']);
+            safeDir(join(output, 'static'));
+            if (safeRead(join(output, 'config.json')).toString('utf8') !== '{"version":3}\n') {
+              throw new Error('config BOSA no es v3 exacta');
+            }
+            const manifestBytes = safeRead(join(stage, 'release-manifest.json'));
+            if (sha256(manifestBytes) !== expectedManifest) throw new Error('manifest SHA no coincide');
+            const manifest = JSON.parse(manifestBytes.toString('utf8'));
+            if (`${canonical(manifest)}\n` !== manifestBytes.toString('utf8') ||
+                manifest.schema !== 1 || manifest.artifact !== artifact || manifest.clean !== true ||
+                manifest.commit_sha !== process.env.COMMIT_SHA || manifest.tree_sha !== process.env.TREE_SHA ||
+                manifest.hash_algorithm !== 'sha256' || manifest.manifest_scope !== '.vercel/output' ||
+                manifest.root_sha256 !== expectedRoot || !Array.isArray(manifest.files)) {
+              throw new Error('identidad del manifest no coincide');
+            }
+            const files = snapshot(output);
+            if (canonical(files) !== canonical(manifest.files) || sha256(canonical(files)) !== expectedRoot) {
+              throw new Error('bytes BOSA no coinciden con el manifest');
+            }
+          }
+          const tools = join(releaseRoot, 'tools');
+          safeDir(tools);
+          exactEntries(tools, ['verify-release-artifact.mjs', 'verify-release-url.mjs']);
+          const local = safeRead(join(tools, 'verify-release-artifact.mjs'));
+          const remote = safeRead(join(tools, 'verify-release-url.mjs'));
+          if (sha256(local) !== process.env.VERIFY_LOCAL_SHA256 ||
+              sha256(remote) !== process.env.VERIFY_URL_SHA256) throw new Error('tools transportados no coinciden');
+          rmSync(tools, { recursive: true });
+          exactEntries(releaseRoot, ['app', 'landing']);
+          NODE
+      - name: Validar IDs públicos de destino
+        env:
+          ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          APP_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_APP }}
+          LANDING_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_LANDING }}
+        run: |
+          set -euo pipefail
+          [[ "$ORG_ID" =~ ^team_[A-Za-z0-9]+$ ]]
+          [[ "$APP_PROJECT_ID" =~ ^prj_[A-Za-z0-9]+$ ]]
+          [[ "$LANDING_PROJECT_ID" =~ ^prj_[A-Za-z0-9]+$ ]]
+          test "$APP_PROJECT_ID" != "$LANDING_PROJECT_ID"
+      - name: Instalar Vercel CLI exacta sin token
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts --no-audit --no-fund vercel@59.5.0
+          vercel --version | grep -Eq '(^| )59\.5\.0$'
+      - name: Desplegar App staged sin dominio
+        id: deploy_app
+        shell: bash
+        env:
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_APP }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          EXPECTED_PROJECT="payme-app" node --input-type=module <<'NODE'
+          const endpoint = new URL(`https://api.vercel.com/v9/projects/${process.env.VERCEL_PROJECT_ID}`);
+          endpoint.searchParams.set('teamId', process.env.VERCEL_ORG_ID);
+          const response = await fetch(endpoint, {
+            headers: { authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
+            redirect: 'error',
+          });
+          if (!response.ok) throw new Error(`no se pudo adjudicar App: HTTP ${response.status}`);
+          const project = await response.json();
+          if (project.id !== process.env.VERCEL_PROJECT_ID ||
+              project.name !== process.env.EXPECTED_PROJECT) {
+            throw new Error('el ID de App no pertenece al proyecto payme-app');
+          }
+          NODE
+          cd "$RUNNER_TEMP/payme-prebuilt/app"
+          deploy_json="$(vercel deploy --prebuilt --prod --skip-domain --yes --json)"
+          EXPECTED_PROJECT="payme-app" DEPLOY_JSON="$deploy_json" node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          const result = JSON.parse(process.env.DEPLOY_JSON);
+          if (typeof result.id !== 'string' || !/^dpl_[A-Za-z0-9]+$/.test(result.id)) {
+            throw new Error('respuesta staged de App sin deployment ID canónico');
+          }
+          const raw = typeof result.url === 'string' ? result.url : '';
+          const url = new URL(raw.startsWith('https://') ? raw : `https://${raw}`);
+          if (url.protocol !== 'https:' || !url.hostname.endsWith('.vercel.app') ||
+              url.port || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+            throw new Error('URL staged de App inválida');
+          }
+          const endpoint = new URL(`https://api.vercel.com/v13/deployments/${encodeURIComponent(result.id)}`);
+          endpoint.searchParams.set('teamId', process.env.VERCEL_ORG_ID);
+          const response = await fetch(endpoint, {
+            headers: { authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
+            redirect: 'error',
+          });
+          if (!response.ok) throw new Error(`no se pudo readjudicar App: HTTP ${response.status}`);
+          const deployment = await response.json();
+          const remoteRaw = typeof deployment.url === 'string' ? deployment.url : '';
+          const remoteUrl = new URL(remoteRaw.startsWith('https://') ? remoteRaw : `https://${remoteRaw}`);
+          if (deployment.id !== result.id || deployment.projectId !== process.env.VERCEL_PROJECT_ID ||
+              deployment.name !== process.env.EXPECTED_PROJECT || deployment.readyState !== 'READY' ||
+              deployment.target !== 'production' || remoteUrl.origin !== url.origin || remoteUrl.port) {
+            throw new Error('App staged no quedó READY en el proyecto y target esperados');
+          }
+          process.stdout.write(`url=${url.origin}\n`);
+          NODE
+      - name: Desplegar Landing staged sin dominio
+        id: deploy_landing
+        shell: bash
+        env:
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_LANDING }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          EXPECTED_PROJECT="payme-landing" node --input-type=module <<'NODE'
+          const endpoint = new URL(`https://api.vercel.com/v9/projects/${process.env.VERCEL_PROJECT_ID}`);
+          endpoint.searchParams.set('teamId', process.env.VERCEL_ORG_ID);
+          const response = await fetch(endpoint, {
+            headers: { authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
+            redirect: 'error',
+          });
+          if (!response.ok) throw new Error(`no se pudo adjudicar Landing: HTTP ${response.status}`);
+          const project = await response.json();
+          if (project.id !== process.env.VERCEL_PROJECT_ID ||
+              project.name !== process.env.EXPECTED_PROJECT) {
+            throw new Error('el ID de Landing no pertenece al proyecto payme-landing');
+          }
+          NODE
+          cd "$RUNNER_TEMP/payme-prebuilt/landing"
+          deploy_json="$(vercel deploy --prebuilt --prod --skip-domain --yes --json)"
+          EXPECTED_PROJECT="payme-landing" DEPLOY_JSON="$deploy_json" node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          const result = JSON.parse(process.env.DEPLOY_JSON);
+          if (typeof result.id !== 'string' || !/^dpl_[A-Za-z0-9]+$/.test(result.id)) {
+            throw new Error('respuesta staged de Landing sin deployment ID canónico');
+          }
+          const raw = typeof result.url === 'string' ? result.url : '';
+          const url = new URL(raw.startsWith('https://') ? raw : `https://${raw}`);
+          if (url.protocol !== 'https:' || !url.hostname.endsWith('.vercel.app') ||
+              url.port || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+            throw new Error('URL staged de Landing inválida');
+          }
+          const endpoint = new URL(`https://api.vercel.com/v13/deployments/${encodeURIComponent(result.id)}`);
+          endpoint.searchParams.set('teamId', process.env.VERCEL_ORG_ID);
+          const response = await fetch(endpoint, {
+            headers: { authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
+            redirect: 'error',
+          });
+          if (!response.ok) throw new Error(`no se pudo readjudicar Landing: HTTP ${response.status}`);
+          const deployment = await response.json();
+          const remoteRaw = typeof deployment.url === 'string' ? deployment.url : '';
+          const remoteUrl = new URL(remoteRaw.startsWith('https://') ? remoteRaw : `https://${remoteRaw}`);
+          if (deployment.id !== result.id || deployment.projectId !== process.env.VERCEL_PROJECT_ID ||
+              deployment.name !== process.env.EXPECTED_PROJECT || deployment.readyState !== 'READY' ||
+              deployment.target !== 'production' || remoteUrl.origin !== url.origin || remoteUrl.port) {
+            throw new Error('Landing staged no quedó READY en el proyecto y target esperados');
+          }
+          process.stdout.write(`url=${url.origin}\n`);
+          NODE
+  verify_remote:
+    needs: [gate, stage]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preparar Node del verificador remoto aislado
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+      - name: Descargar por artifact-id exacto
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.gate.outputs.artifact_id }}
+          path: ${{ runner.temp }}/payme-prebuilt
+          merge-multiple: true
+      - name: Verificar bytes servidos en dos rondas sin secretos
+        env:
+          COMMIT_SHA: ${{ needs.gate.outputs.commit_sha }}
+          TREE_SHA: ${{ needs.gate.outputs.tree_sha }}
+          APP_URL: ${{ needs.stage.outputs.app_url }}
+          LANDING_URL: ${{ needs.stage.outputs.landing_url }}
+          APP_MANIFEST_SHA256: ${{ needs.gate.outputs.app_manifest_sha256 }}
+          APP_ROOT_SHA256: ${{ needs.gate.outputs.app_root_sha256 }}
+          LANDING_MANIFEST_SHA256: ${{ needs.gate.outputs.landing_manifest_sha256 }}
+          LANDING_ROOT_SHA256: ${{ needs.gate.outputs.landing_root_sha256 }}
+          VERIFY_LOCAL_SHA256: ${{ needs.gate.outputs.verify_local_sha256 }}
+          VERIFY_URL_SHA256: ${{ needs.gate.outputs.verify_url_sha256 }}
+        run: |
+          set -euo pipefail
+          release_root="$RUNNER_TEMP/payme-prebuilt"
+          test ! -L "$release_root" && test -d "$release_root"
+          test "$(find "$release_root" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort | tr '\n' ',')" = "app,landing,tools,"
+          test "$(find "$release_root/tools" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort | tr '\n' ',')" = "verify-release-artifact.mjs,verify-release-url.mjs,"
+          for tool in verify-release-artifact.mjs verify-release-url.mjs; do
+            tool_path="$release_root/tools/$tool"
+            test -f "$tool_path" && test ! -L "$tool_path"
+            test "$(stat -c '%h' "$tool_path")" = "1"
+          done
+          test "$(sha256sum "$release_root/tools/verify-release-artifact.mjs" | cut -d' ' -f1)" = "$VERIFY_LOCAL_SHA256"
+          test "$(sha256sum "$release_root/tools/verify-release-url.mjs" | cut -d' ' -f1)" = "$VERIFY_URL_SHA256"
+          node "$release_root/tools/verify-release-url.mjs" \
+            --stage "$release_root/app" --url "$APP_URL" --artifact app \
+            --commit "$COMMIT_SHA" --tree "$TREE_SHA" \
+            --manifest-sha256 "$APP_MANIFEST_SHA256" --root-sha256 "$APP_ROOT_SHA256"
+          node "$release_root/tools/verify-release-url.mjs" \
+            --stage "$release_root/landing" --url "$LANDING_URL" --artifact landing \
+            --commit "$COMMIT_SHA" --tree "$TREE_SHA" \
+            --manifest-sha256 "$LANDING_MANIFEST_SHA256" --root-sha256 "$LANDING_ROOT_SHA256"
+      - name: Reportar evidencia staged sin cambiar dominios
+        env:
+          APP_URL: ${{ needs.stage.outputs.app_url }}
+          LANDING_URL: ${{ needs.stage.outputs.landing_url }}
+          ARTIFACT_ID: ${{ needs.gate.outputs.artifact_id }}
+          ARTIFACT_DIGEST: ${{ needs.gate.outputs.artifact_digest }}
+          APP_MANIFEST_SHA256: ${{ needs.gate.outputs.app_manifest_sha256 }}
+          APP_ROOT_SHA256: ${{ needs.gate.outputs.app_root_sha256 }}
+          LANDING_MANIFEST_SHA256: ${{ needs.gate.outputs.landing_manifest_sha256 }}
+          LANDING_ROOT_SHA256: ${{ needs.gate.outputs.landing_root_sha256 }}
+        run: |
+          set -euo pipefail
+          {
+            echo '## Prebuilt staged verificado'
+            printf -- '- App: `%s`\n- Landing: `%s`\n' "$APP_URL" "$LANDING_URL"
+            printf -- '- Artifact ID: `%s`\n- Artifact digest: `%s`\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST"
+            printf -- '- App manifest/root: `%s` / `%s`\n' "$APP_MANIFEST_SHA256" "$APP_ROOT_SHA256"
+            printf -- '- Landing manifest/root: `%s` / `%s`\n' "$LANDING_MANIFEST_SHA256" "$LANDING_ROOT_SHA256"
+          } >> "$GITHUB_STEP_SUMMARY"

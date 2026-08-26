@@ -71,6 +71,31 @@ pero no la vuelven atómica. No existe en este repo evidencia suficiente para
 elegir promoción de artefacto, deduplicación de hooks ni rollback. Esos tres
 puntos necesitan primero contrato y medición de la plataforma remota.
 
+### Preparación local posterior · 2026-08-25
+
+Ya existe una fase manual, sin promoción, para reemplazar la reconstrucción
+remota por dos artefactos Build Output API v3 sellados. El manifiesto externo
+cubre `config.json` y todos los estáticos; el verificador post-transporte
+recalcula cada SHA-256 antes de invocar Vercel. El despliegue experimental usa
+`--prebuilt --prod --skip-domain`, de modo que permite medir URLs inmutables sin
+mover los dominios públicos.
+
+El pipeline separa cuatro runners: `gate` construye sin secretos;
+`verify_transport` ejecuta los verificadores transportados sin Environment;
+`stage` es el único que puede recibir `VERCEL_TOKEN` y vuelve a tratar el BOSA
+como datos con un verificador inline, retirando las herramientas antes de
+inyectar el token; `verify_remote` comprueba las URLs desde otro runner sin
+secretos. `stage` no hace checkout, `npm ci`, tests ni builds. Los bindings
+públicos se contrastan por ID y nombre antes de cada deploy y después se
+readjudica cada deployment por ID, proyecto, target y estado `READY`.
+
+Esto reduce la deuda local, pero no cambia su clasificación externa: todavía
+faltan ejecutar el stage autorizado, observar ambos proyectos, medir la
+identidad servida y probar rollback antes de sustituir los Deploy Hooks. No se
+declara una promoción atómica entre App y Landing porque Vercel no ofrece esa
+transacción cross-project; la fase productiva deberá compensar explícitamente
+una promoción parcial.
+
 ## Inventario de headers · propuesta, no configuración servida
 
 `vercel.json` es compartido por dos proyectos cuya separación remota no puede
@@ -91,11 +116,12 @@ headers estén servidos.
 
 ## Deudas que requieren evidencia externa
 
-- commits oficiales a los que pinnear `actions/checkout` y `actions/setup-node`;
+- primer run manual del pipeline prebuilt, con artifact ID/digest y hashes de
+  ambos manifiestos;
 - Root Directory, build/output y auto-deploy efectivos de ambos proyectos;
-- causa de `M vercel.json` en el build servido;
+- causa histórica de `M vercel.json` en el build servido por el camino Hook;
 - binding/deduplicación del hook respecto del commit;
-- prevención, promoción y rollback de una publicación parcial;
+- promoción y rollback compensatorio de una publicación parcial;
 - compatibilidad y medición de headers por origen.
 
 La cita vencida de `AGENTS.md` raíz y el drift de `diseno/SPEC_LANDING.md` se

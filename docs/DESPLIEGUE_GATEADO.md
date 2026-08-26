@@ -162,6 +162,65 @@ las dos publicaciones y no hace rollback. El modelo de prevención/promoción y
 la respuesta ante release parcial siguen pendientes de evidencia y decisión
 de plataforma.
 
+## Fase 1 de la corrección estructural · prebuilt staged, sin promoción
+
+La deuda no se cierra haciendo que el sentinel ignore `vercel.json`. La cadena
+por Deploy Hook vuelve a construir el repo dentro de Vercel; por eso el build
+servido puede declarar el commit correcto y, a la vez, un worktree distinto al
+que pasó las pruebas. La corrección es que Vercel **no reconstruya**: debe
+recibir exactamente el Build Output API v3 producido desde los `dist` gateados.
+
+La primera fase queda deliberadamente separada del release automático:
+
+1. `scripts/releaseArtifact.ts` exige commit, tree y worktree limpios antes y
+   después, copia App o Landing a `.vercel/output/static`, escribe un
+   `config.json` v3 mínimo y agrega `release.json` al contenido público.
+2. `release-manifest.json` queda fuera del contenido servido y sella con
+   SHA-256 `config.json`, el marker y todos los archivos estáticos.
+3. `scripts/verify-release-artifact.mjs` vuelve a censar el paquete descargado,
+   sin Git ni dependencias, y exige identidad, manifiesto, digest raíz y bytes
+   exactos antes de que exista un token de Vercel en el paso ejecutable.
+4. `.github/workflows/release-prebuilt-stage.yml` es manual y crea dos
+   deployments de producción **sin dominio** con
+   `--prebuilt --prod --skip-domain`: App y Landing quedan medibles, pero no
+   reemplazan `app.paymemx.com` ni `paymemx.com`.
+5. Sus cuatro jobs aíslan responsabilidades: build; verificación ejecutable
+   sin secretos; deploy que sólo lee BOSA ya censado como datos; y verificación
+   remota en otro runner sin secretos. El deployment se readjudica por ID y
+   exige proyecto, nombre, target `production`, estado `READY` y URL exactos.
+6. El workflow normal conserva por ahora los dos Deploy Hooks. El manual no
+   llama hooks ni promueve; por lo tanto un mismo evento no tiene dos caminos
+   de publicación.
+
+El run manual se habilita desde el Environment de GitHub
+`production-staging`. Requiere un único secreto, `VERCEL_TOKEN`, y tres
+variables públicas: `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_APP` y
+`VERCEL_PROJECT_ID_LANDING`. Antes de desplegar, consulta los IDs y exige que
+pertenezcan respectivamente a `payme-app` y `payme-landing`; IDs iguales o
+invertidos fallan cerrados. El token sólo existe en los dos pasos de deploy del
+único job con Environment. Los jobs que hacen checkout, construyen o ejecutan
+código transportado nunca lo reciben; antes del token se eliminan las
+herramientas descargadas.
+
+La CLI queda fijada a `vercel@59.5.0` y se instala sin scripts antes de inyectar
+el token. Las Actions usadas por este workflow están fijadas a SHAs completos.
+Esto no cambia todavía los tags mutables del workflow histórico `ci.yml`, que
+sigue siendo la ruta productiva durante la prueba.
+
+Esta fase prepara el instrumento; **no acredita todavía a Vercel**. Para pasar
+a fase 2 hacen falta, en un run expresamente autorizado:
+
+- artifact ID/digest de GitHub y hashes de ambos manifiestos;
+- dos deployments staged `READY`, ligados a proyectos distintos;
+- marker y todos los cuerpos del manifiesto idénticos en las URLs inmutables;
+- captura de los deployments productivos anteriores y ensayo de rollback;
+- luego, en otro cambio atómico autorizado, retirar hooks del `push` y agregar
+  promoción serializada con compensación ante release parcial.
+
+Hasta medir eso, el sentinel `8a96baa…+sucio(M vercel.json)` sigue siendo una
+deuda real del camino productivo actual. El tooling local no la reetiqueta como
+cerrada.
+
 ---
 
 ## 🔴 El camino de Pages se RETIRÓ · 2026-08-21
@@ -206,7 +265,8 @@ apagarlo no es una decisión de este repo.**
 ### Qué lo guarda ahora
 
 `scripts/despliegue.test.ts` dejó de medir la divergencia entre dos caminos y
-pasa a afirmar que hay **UNO SOLO**, derivándolo del árbol: un workflow «publica»
-si despliega Pages o llama a `publicar-vercel.sh`, y el censo escanea
-`.github/workflows/`. **Un camino nuevo aparece solo** en vez de necesitar que
-alguien se acuerde de anotarlo — una lista de lo conocido falla abierta.
+pasó a afirmar que había **UNO SOLO**, derivándolo del árbol. Desde 0.144.6 el
+censo admite exactamente dos archivos, con autoridad distinta: `ci.yml` es el
+único que puede mover los dominios y `release-prebuilt-stage.yml` sólo puede
+crear y verificar URLs staged sin promoción. **Un tercer camino sigue poniendo
+la suite en rojo**: una lista abierta de lo conocido fallaría abierta.

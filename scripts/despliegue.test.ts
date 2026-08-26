@@ -501,7 +501,11 @@ describe('vercel.json · el despliegue automático sigue apagado', () => {
  *
  * Esa guarda hizo su trabajo: midió la divergencia hasta que se decidió
  * retirarla. **Lo que la reemplaza no es menos, es otra afirmación**: que hay
- * **UN SOLO** camino de publicación, y que es el gateado.
+ * **UN SOLO** camino automático que mueve los dominios, y que es el gateado.
+ * Desde 0.144.6 existe además un workflow manual de staging prebuilt: crea
+ * URLs productivas aisladas con `--skip-domain`, las verifica y termina sin
+ * promover. No compite con el camino de dominios, pero sí es un workflow con
+ * side effect y por eso su archivo entra explícitamente al censo.
  *
  * ⚠️ **Y se deriva del árbol, no de una lista.** Un workflow «publica» si
  * despliega Pages o llama al script de Vercel; se detecta escaneando
@@ -1931,9 +1935,9 @@ describe('el camino de publicación · leído de los PASOS, no del texto', () =>
     const archivos = readdirSync(DIR).filter((f) => /\.ya?ml$/.test(f)).sort();
     expect(
       archivos,
-      'apareció o desapareció un workflow. Cualquiera que no sea ci.yml es rojo hasta ' +
+      'apareció o desapareció un workflow. Cualquiera que no esté adjudicado es rojo hasta ' +
         'adjudicarlo: hay que decidir si publica, si se gatea o si se retira.',
-    ).toEqual(['ci.yml']);
+    ).toEqual(['ci.yml', 'release-prebuilt-stage.yml']);
   });
 
   /**
