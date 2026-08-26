@@ -11,6 +11,17 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.145.1 — Hashes desconocidos normalizados sin ensuciar Atrás (2026-08-25)
+
+El router distingue una ruta reconocida de su fallback a Inicio. Un hash
+desconocido o un parámetro mal codificado se reemplaza por `#/home` tanto al
+montar la app como en cambios posteriores, sin agregar una entrada al historial;
+si History API está bloqueada, conserva un fallback explícito por hash.
+
+La población completa de páginas válidas, hashes default, deep links y queries
+conocidas queda byte por byte intacta. No cambia contrato, datos, UI de una ruta
+válida ni dinero. **Sin push, deploy, red externa ni consultas a producción.**
+
 ## 0.145.0 — Progreso real y accesible al subir el ticket (2026-08-25)
 
 El multipart del OCR usa un `XMLHttpRequest` dedicado a `POST /api/ocr` para

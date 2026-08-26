@@ -87,21 +87,38 @@ const DEFAULT_ROUTE: Route = { page: 'home', param: null, query: new URLSearchPa
  */
 const VALID_PAGES: ReadonlySet<string> = new Set(PAGES);
 
-export function parseHash(hash: string): Route {
+interface HashResolution {
+  route: Route;
+  /** `false` sólo cuando parsear exigió degradar a Inicio. */
+  recognized: boolean;
+}
+
+function resolveHash(hash: string): HashResolution {
   const clean = hash.replace(/^#\/?/, '');
-  if (!clean) return DEFAULT_ROUTE;
+  // Sin hash, `#` y `#/` ya representan el default; no son links sucios.
+  if (!clean) return { route: DEFAULT_ROUTE, recognized: true };
   const [pathPart, queryPart] = clean.split('?');
   const query = new URLSearchParams(queryPart ?? '');
   const [pageRaw, paramRaw] = (pathPart ?? '').split('/');
   const page = (pageRaw ?? '').toLowerCase();
-  if (!VALID_PAGES.has(page)) return DEFAULT_ROUTE;
-  if (!paramRaw) return { page: page as PageId, param: null, query };
+  if (!VALID_PAGES.has(page)) return { route: DEFAULT_ROUTE, recognized: false };
+  if (!paramRaw) return {
+    route: { page: page as PageId, param: null, query },
+    recognized: true,
+  };
   try {
-    return { page: page as PageId, param: decodeURIComponent(paramRaw), query };
+    return {
+      route: { page: page as PageId, param: decodeURIComponent(paramRaw), query },
+      recognized: true,
+    };
   } catch {
     // Un deep link mal codificado no puede dejar la app en blanco.
-    return DEFAULT_ROUTE;
+    return { route: DEFAULT_ROUTE, recognized: false };
   }
+}
+
+export function parseHash(hash: string): Route {
+  return resolveHash(hash).route;
 }
 
 // Navegaciones hechas DENTRO de la app: goBack() vuelve por el historial real
@@ -143,6 +160,19 @@ export function replaceRoute(page: PageId, param?: string): void {
 }
 
 /**
+ * G-35 · si el parser tuvo que degradar a Inicio, la barra también dice Inicio.
+ *
+ * Se reemplaza la entrada actual: con una asignación normal el hash inválido
+ * quedaría detrás del botón Atrás y reaparecería en cada retroceso. Rutas
+ * conocidas, sus queries y los hashes vacíos quedan byte por byte intactos.
+ */
+export function normalizeUnknownHash(hash: string): boolean {
+  if (resolveHash(hash).recognized) return false;
+  replaceRoute('home');
+  return true;
+}
+
+/**
  * Volver RESPETANDO de dónde viniste (R-08: los back hardcodeados mandaban a
  * un hub fijo aunque hubieras entrado desde otra pantalla). `fallback` es la
  * pantalla "contenedora" natural si no hay historial propio.
@@ -159,8 +189,13 @@ export function goBack(fallback: PageId, fallbackParam?: string): void {
 export function useRoute(): Route {
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   useEffect(() => {
-    const onChange = () => setRoute(parseHash(window.location.hash));
+    const onChange = () => {
+      if (normalizeUnknownHash(window.location.hash)) return;
+      setRoute(parseHash(window.location.hash));
+    };
     window.addEventListener('hashchange', onChange);
+    // `hashchange` no corre por la URL con la que se montó la app.
+    onChange();
     return () => window.removeEventListener('hashchange', onChange);
   }, []);
   return route;
