@@ -429,6 +429,8 @@ export interface MesaCreationLookup {
   readonly guarantee: {
     readonly method: string | null;
     readonly authorized: boolean;
+    /** UUID interno owner-only; nunca el `pm_` de Stripe. */
+    readonly savedPaymentMethodId: string | null;
   } | null;
 }
 

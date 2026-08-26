@@ -39,7 +39,7 @@ import {
   type DecisionReconciliacion,
 } from './reconciliacionMesaView';
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
-import { SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
+import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import { decideOcrScan } from './ocrScanView';
 
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
@@ -185,6 +185,7 @@ export function CreateMesaFlow() {
   // tarjeta); `saveCard` = checkbox "guardar" — nace DESMARCADO (Mati,
   // 2026-08-06; el porqué vive en `saveCardView.ts`).
   const [cards, setCards] = useState<PaymentMethod[]>([]);
+  const [cardsLoaded, setCardsLoaded] = useState(false);
   const [cardChoicePulse, setCardChoicePulse] = useState(false);
   const cardChoicesRef = useRef<HTMLDivElement | null>(null);
   /**
@@ -211,10 +212,23 @@ export function CreateMesaFlow() {
    * fuente que mandamos ES la que respalda la garantía. Autoseleccionar la
    * default ahí garantizaría una mesa con una tarjeta que la persona no eligió.
    *
-   * El backend NO publica cuál fue la fuente original (auditado en la orden;
-   * G-38), así que no se puede restaurar: lo honesto es no afirmar nada.
+   * G-38 quedó cerrado owner-first: el backend publica sólo el UUID interno
+   * guardado. Se restaura exclusivamente si sigue en la lista activa; null,
+   * ausencia o una tarjeta eliminada conservan el estado sin elección.
    */
   const sinAutoseleccionRef = useRef(false);
+  const [reconciledSavedPaymentMethodId, setReconciledSavedPaymentMethodId] =
+    useState<string | null | undefined>(undefined);
+  const reconciledSourceAppliedRef = useRef(false);
+  const fuenteGarantiaExacta = fuenteGuardadaVigente(reconciledSavedPaymentMethodId, cards);
+  const fuenteGarantiaRestaurada = fuenteGarantiaExacta !== SIN_TARJETA_ELEGIDA;
+  useEffect(() => {
+    if (reconciledSavedPaymentMethodId === undefined || reconciledSourceAppliedRef.current) return;
+    if (reconciledSavedPaymentMethodId !== null && !cardsLoaded) return;
+    reconciledSourceAppliedRef.current = true;
+    sinAutoseleccionRef.current = true;
+    setCardChoice(fuenteGarantiaExacta);
+  }, [cardsLoaded, fuenteGarantiaExacta, reconciledSavedPaymentMethodId]);
   const [busy, setBusy] = useState(false);
   const createInFlightRef = useRef(createInFlightMutex());
   const confirm3dsInFlightRef = useRef(createInFlightMutex());
@@ -317,6 +331,8 @@ export function CreateMesaFlow() {
     // estaba mirando: cambiar de principal los invalida a los dos.
     setDecision(null);
     setReplayAutorizado(null);
+    reconciledSourceAppliedRef.current = false;
+    setReconciledSavedPaymentMethodId(undefined);
     sinAutoseleccionRef.current = false;
     if (!mesaScopeBase) return;
     let alive = true;
@@ -419,6 +435,7 @@ export function CreateMesaFlow() {
       // viene `null` y la consulta va sin hash, que el contrato permite.
       const sello = await readEconomicFingerprint(frozen.scope, 'create_mesa').catch(() => null);
       const lookup = await api.getMesaCreation(frozen.handle.key, sello ?? undefined);
+      setReconciledSavedPaymentMethodId(lookup.guarantee?.savedPaymentMethodId ?? null);
       const referencia = await readMonetaryReference(frozen.scope, 'create_mesa').catch(() => null);
       const resultado = decisionReconciliacion(lookup, referencia?.reference);
       if (resultado.liberaJournal) {
@@ -679,7 +696,10 @@ export function CreateMesaFlow() {
   }
 
   async function loadCards() {
-    if (cards.length > 0) return;
+    if (cards.length > 0) {
+      setCardsLoaded(true);
+      return;
+    }
     try {
       const r = await api.getPaymentMethods();
       // D4 (v2.16): las guardadas se reusan con su uuid (payment_method_id).
@@ -694,6 +714,8 @@ export function CreateMesaFlow() {
       if (def && cardStateRef.current.empty && !sinAutoseleccionRef.current) setCardChoice(def.id);
     } catch {
       setCards([]);
+    } finally {
+      setCardsLoaded(true);
     }
   }
 
@@ -1656,15 +1678,10 @@ export function CreateMesaFlow() {
         )}
           {avisoApertura()}
           {method === 'card' && !cardRailAvailable && <CardRailUnavailable />}
-          {/* 🔴 ORDEN 1-B · EL ESTADO HONESTO CUANDO NO SABEMOS CON QUÉ SE
-              GARANTIZÓ. Antes acá no había nada y la lista de abajo mostraba
-              la tarjeta DEFAULT seleccionada — una afirmación que nadie hizo.
-              El backend guarda la fuente original (`auth_source_payment_method_id`)
-              pero NO la publica en ninguna respuesta: ni el 201 de `POST /mesas`
-              ni `GET /mesas/creations/:key` traen más que `method` y
-              `authorized`. Está anotado como G-38; hasta entonces lo único
-              honesto es decir que no lo sabemos. */}
-          {frozenRequiresReconciliation && (
+          {/* G-38 · sólo mostramos incertidumbre cuando el owner no publicó
+              una guardada vigente. Si publicó su UUID y sigue activa, el radio
+              exacto se restaura y queda sellado durante el reenvío. */}
+          {frozenRequiresReconciliation && !fuenteGarantiaRestaurada && (
             <div className="note" role="status">
               <b>{t('No podemos mostrarte con qué tarjeta se garantizó esta mesa.')}</b>{' '}
               {decision?.veredicto === 'a_medias'
@@ -1694,7 +1711,7 @@ export function CreateMesaFlow() {
                 // estar viva: si el diagnóstico dijo `not_found`, la fuente que
                 // se mande es la que va a respaldar la garantía, y tiene que
                 // elegirla la persona.
-                disabled={!cardRailAvailable || (!!frozen && !replayHabilitado)}
+                disabled={!cardRailAvailable || (!!frozen && !replayHabilitado) || fuenteGarantiaRestaurada}
                 role="radio"
                 aria-checked={method === 'card' && cardChoice === c.id}
               >
@@ -1718,7 +1735,7 @@ export function CreateMesaFlow() {
                 setMethod('card');
                 setCardChoice('new');
               }}
-              disabled={!cardRailAvailable || (!!frozen && !replayHabilitado)}
+              disabled={!cardRailAvailable || (!!frozen && !replayHabilitado) || fuenteGarantiaRestaurada}
               role="radio"
               aria-checked={method === 'card' && cardChoice === 'new'}
             >

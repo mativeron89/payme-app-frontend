@@ -176,14 +176,20 @@ describe('mesaCreationResponse', () => {
       status: 'open',
       expires_at: new Date().toISOString(),
     },
-    guarantee: { method: 'card', authorized: true },
+    guarantee: {
+      method: 'card', authorized: true,
+      saved_payment_method_id: '11111111-1111-4111-8111-111111111111',
+    },
   };
 
   it('el 200 completo decodifica, y `total_cents` STRING sale como ENTERO', () => {
     const r = mesaCreationResponse(ok);
     expect(r.outcome).toBe('open');
     expect(r.mesa).toEqual({ code: 'PA-2847', status: 'open', totalCents: 84000 });
-    expect(r.guarantee).toEqual({ method: 'card', authorized: true });
+    expect(r.guarantee).toEqual({
+      method: 'card', authorized: true,
+      savedPaymentMethodId: '11111111-1111-4111-8111-111111111111',
+    });
     expect(r.retryWithSameKey).toBe(false);
   });
 
@@ -248,10 +254,16 @@ describe('mesaCreationResponse', () => {
     expect(r.guarantee).toBeNull();
   });
 
-  it('`guarantee` se lee blando: informa el copy y no gobierna ninguna transición', () => {
+  it('`guarantee` ausente sigue siendo informativo, pero su fuente exacta es fail-closed', () => {
     expect(mesaCreationResponse({ ...ok, guarantee: undefined }).guarantee).toBeNull();
-    expect(mesaCreationResponse({ ...ok, guarantee: { method: 7, authorized: 'si' } }).guarantee)
-      .toEqual({ method: null, authorized: false });
+    expect(mesaCreationResponse({
+      ...ok, guarantee: { method: 7, authorized: 'si', saved_payment_method_id: null },
+    }).guarantee).toEqual({ method: null, authorized: false, savedPaymentMethodId: null });
+    for (const invalid of [undefined, 'pm_stripe', 'no-es-uuid', 7]) {
+      expect(() => mesaCreationResponse({
+        ...ok, guarantee: { method: 'card', authorized: true, saved_payment_method_id: invalid },
+      })).toThrow('contract_response_invalid');
+    }
   });
 
   it('un cuerpo que no es objeto no es una respuesta', () => {
@@ -279,7 +291,7 @@ describe('mesaCreationResponse · v2.48.0', () => {
       mesa: {
         code: 'PA-2847', status: 'open', total_cents: '84000', ...mesaOver,
       },
-      guarantee: { method: 'card', authorized: true },
+      guarantee: { method: 'card', authorized: true, saved_payment_method_id: null },
       ...over,
     };
   }

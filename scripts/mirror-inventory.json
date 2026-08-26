@@ -1,14 +1,20 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "f91bfda37bc00a45576cd067edc508f415c1810b",
-  "total": 87,
+  "commit": "87a9a741bfc4e1b0335472a671e03a5fae6325f1",
+  "total": 88,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
       "destino": "contract/create-mesa-identity-vectors.json",
       "sha256": "3a300b5c26abb38b5187fe1818f8bcfddf9b84f4645a6e56e4d791814daac96b",
       "bytes": 6785
+    },
+    {
+      "origen": "contract/mesa-pay-identity-vectors.json",
+      "destino": "contract/mesa-pay-identity-vectors.json",
+      "sha256": "a1b5c6a34b6ac045cf3969bfdda122ee72a791711cd4320f69450c2e56ccebef",
+      "bytes": 5731
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -313,8 +319,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "670a2c22c6e7251a54e742fd6cbb518e1831781f15124fb6786fdb5d65f5abb5",
-      "bytes": 143867
+      "sha256": "b9a7f56a6e6749022c28821f0ad844dc2a6403a34aa0a9dd2f5195b8bc6cacf6",
+      "bytes": 144534
     },
     {
       "origen": "routes/notifications.js",
@@ -499,8 +505,8 @@
     {
       "origen": "utils/idempotency.js",
       "destino": "utils/idempotency.js",
-      "sha256": "952592514bf54922565943c80418db26ccae491399844924d7233450d13ba5d8",
-      "bytes": 5408
+      "sha256": "19984b86497f629a2d349020ed8ae2dc5da1e1f9fdf8a35521832a65b1ea72bd",
+      "bytes": 6659
     },
     {
       "origen": "utils/money.js",

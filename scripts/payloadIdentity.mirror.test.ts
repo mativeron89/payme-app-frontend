@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  IDEMPOTENCY_IDENTITY_CONTRACT,
   PAYLOAD_KEYS,
   canonicalizeForHash,
   payloadCanonical,
@@ -89,6 +90,8 @@ function cargarEspejo() {
   return createRequire(import.meta.url)(destino) as {
     payloadHash: (payload: unknown, opts?: { keep?: readonly string[] }) => string;
     PAYLOAD_KEYS: Record<string, readonly string[]>;
+    IDEMPOTENCY_IDENTITY_CONTRACT: typeof IDEMPOTENCY_IDENTITY_CONTRACT;
+    payloadKeysForHashVersion: (operation: string, version?: number | null) => readonly string[] | null;
   };
 }
 
@@ -251,5 +254,28 @@ describe('las tres declaraciones de PAYLOAD_KEYS coinciden', () => {
     for (const prohibida of ['stripe_payment_method_id', 'payment_method_id', 'save_payment_method']) {
       expect(PAYLOAD_KEYS.create_mesa as readonly string[]).not.toContain(prohibida);
     }
+  });
+});
+
+describe('G-37 · selector mesa_pay ejecutado contra el owner espejado', () => {
+  const artifact = JSON.parse(
+    readFileSync(join(RAIZ, 'contract-mirror', 'contract', 'mesa-pay-identity-vectors.json'), 'utf8'),
+  ) as {
+    contract: typeof IDEMPOTENCY_IDENTITY_CONTRACT.mesa_pay;
+    payload_keys: { v1: string[]; v2: string[] };
+  };
+
+  it('contrato local = JS owner = artefacto owner', () => {
+    expect(IDEMPOTENCY_IDENTITY_CONTRACT).toEqual(espejo.IDEMPOTENCY_IDENTITY_CONTRACT);
+    expect(IDEMPOTENCY_IDENTITY_CONTRACT.mesa_pay).toEqual(artifact.contract);
+    expect([...PAYLOAD_KEYS.mesa_pay]).toEqual(artifact.payload_keys.v2);
+    expect([...PAYLOAD_KEYS.mesa_pay]).toEqual([...espejo.PAYLOAD_KEYS.mesa_pay]);
+  });
+
+  it('ausente/v1 conserva legacy; v2 y futuras seleccionan current', () => {
+    expect(espejo.payloadKeysForHashVersion('mesa_pay')).toEqual(artifact.payload_keys.v1);
+    expect(espejo.payloadKeysForHashVersion('mesa_pay', 1)).toEqual(artifact.payload_keys.v1);
+    expect(espejo.payloadKeysForHashVersion('mesa_pay', 2)).toEqual(artifact.payload_keys.v2);
+    expect(espejo.payloadKeysForHashVersion('mesa_pay', 99)).toEqual(artifact.payload_keys.v2);
   });
 });

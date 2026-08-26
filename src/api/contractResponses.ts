@@ -32,6 +32,11 @@ function nonEmpty(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
+function uuid(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function optionalBoolean(value: unknown): boolean {
   return value === undefined || typeof value === 'boolean';
 }
@@ -389,10 +394,13 @@ export function mesaCreationResponse(value: unknown): MesaCreationLookup {
     if (body.payload_hash_matches !== true) throw new ContractResponseError(endpoint);
   }
 
-  // `guarantee` sí se lee blando: es informativo para el copy y no gobierna
-  // ninguna transición del journal. Endurecerlo trabaría al organizador por
-  // un campo que no decide nada.
+  // G-38 · la referencia guardada sí gobierna qué radio se restaura. El owner
+  // publica UUID interno o null; un `pm_`/campo ausente no se interpreta.
   const guarantee = record(body.guarantee);
+  const savedPaymentMethodId = guarantee?.saved_payment_method_id;
+  if (guarantee && savedPaymentMethodId !== null && !uuid(savedPaymentMethodId)) {
+    throw new ContractResponseError(endpoint);
+  }
   return {
     ...base,
     mesa: { code: mesa.code, status: estado as MesaStatus, totalCents },
@@ -400,6 +408,7 @@ export function mesaCreationResponse(value: unknown): MesaCreationLookup {
       ? {
           method: typeof guarantee.method === 'string' ? guarantee.method : null,
           authorized: guarantee.authorized === true,
+          savedPaymentMethodId: savedPaymentMethodId as string | null,
         }
       : null,
   };

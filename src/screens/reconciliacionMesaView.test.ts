@@ -34,7 +34,9 @@ function lookup(
     mesa: conMesa && code
       ? { code, status: opciones.status ?? 'open', totalCents: 84000 }
       : null,
-    guarantee: conMesa ? { method: 'card', authorized: outcome !== 'requires_action' } : null,
+    guarantee: conMesa
+      ? { method: 'card', authorized: outcome !== 'requires_action', savedPaymentMethodId: null }
+      : null,
   };
 }
 

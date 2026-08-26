@@ -854,6 +854,10 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
     openedByUser: true,
     captured_shortfall_cents: 0,
     guarantee_method: req.guarantee_method,
+    guarantee_saved_payment_method_id:
+      req.guarantee_method === 'card' && typeof req.payment_method_id === 'string'
+        ? req.payment_method_id
+        : null,
   };
   state.mesas.unshift(mesa);
 
@@ -1010,6 +1014,7 @@ export async function mockGetMesaCreation(
     guarantee: {
       method: mesa.guarantee_method,
       authorized: mesa.guarantee_method !== null && mesa.status !== 'pending_auth',
+      saved_payment_method_id: mesa.guarantee_saved_payment_method_id ?? null,
     },
   });
 }

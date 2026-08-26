@@ -151,6 +151,20 @@ describe('la garantía congelada no se le atribuye a la default', () => {
     expect(texto).toContain('setCardChoice(SIN_TARJETA_ELEGIDA);');
   });
 
+  it('G-38 · restaura sólo el UUID owner si todavía existe entre las guardadas', () => {
+    const texto = pantalla();
+    expect(texto).toContain('lookup.guarantee?.savedPaymentMethodId ?? null');
+    expect(texto).toContain('fuenteGuardadaVigente(reconciledSavedPaymentMethodId, cards)');
+    expect(texto).toContain('setCardChoice(fuenteGarantiaExacta);');
+    expect(texto).toContain('reconciledSourceAppliedRef.current = true;');
+    expect(texto).not.toContain('stripe_payment_method_id === reconciledSavedPaymentMethodId');
+  });
+
+  it('G-38 · una fuente sellada no puede cambiarse durante el reenvío', () => {
+    const texto = pantalla();
+    expect((texto.match(/\|\| fuenteGarantiaRestaurada\}/g) ?? [])).toHaveLength(2);
+  });
+
   it('🔴 MUTANTE · sin elección explícita el envío se corta', () => {
     // La guarda dura, no sólo el `disabled` del botón: el silencio no puede
     // resolverse con la default.
@@ -171,7 +185,7 @@ describe('la garantía congelada no se le atribuye a la default', () => {
   });
 
   it('🔴 la pantalla lo IMPORTA: no puede volver a declararlo por su cuenta', () => {
-    expect(pantalla()).toContain("import { SIN_TARJETA_ELEGIDA } from './tarjetaElegida';");
+    expect(pantalla()).toContain("import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';");
     expect(pantalla()).not.toMatch(/const\s+SIN_TARJETA_ELEGIDA\s*=/);
   });
 
@@ -181,7 +195,7 @@ describe('la garantía congelada no se le atribuye a la default', () => {
     // guardadas y "usar otra"— y los dos tienen que aflojar.
     const texto = pantalla();
     expect(texto).toContain('canUseCardRail(moneyRail, !!frozen)');
-    expect((texto.match(/disabled=\{!cardRailAvailable \|\| \(!!frozen && !replayHabilitado\)\}/g) ?? [])).toHaveLength(2);
+    expect((texto.match(/disabled=\{!cardRailAvailable \|\| \(!!frozen && !replayHabilitado\) \|\| fuenteGarantiaRestaurada\}/g) ?? [])).toHaveLength(2);
   });
 
   it('🔴 pero el radio de SALDO sigue duro: cambiar de riel SÍ cambia la identidad', () => {
@@ -195,7 +209,7 @@ describe('la garantía congelada no se le atribuye a la default', () => {
     expect(texto.slice(wallet, wallet + 300)).toContain('disabled={!!frozen}');
   });
 
-  it('🔴 y la pantalla DICE que no sabe, en vez de mostrar una cualquiera', () => {
+  it('🔴 sin UUID exacto la pantalla DICE que no sabe, en vez de mostrar una cualquiera', () => {
     expect(pantalla()).toContain('No podemos mostrarte con qué tarjeta se garantizó esta mesa.');
   });
 });

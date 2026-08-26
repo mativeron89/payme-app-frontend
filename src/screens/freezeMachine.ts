@@ -109,12 +109,13 @@ export function payGate(input: {
  *
  * Es la misma familia que la ORDEN 1-B, con un matiz más fino: allá el defecto
  * era afirmar una tarjeta que **nadie** eligió; acá es afirmar una cuando
- * **se eligió otra vez, antes, y no sabemos cuál** — el backend guarda la
- * fuente original y no la publica (G-38).
+ * **se eligió otra vez, antes, y no sabemos cuál**. G-38 cerró la garantía de
+ * apertura con UUID interno; este helper protege el replay de un PAGO y no
+ * inventa que ambos contratos publican lo mismo.
  *
  * Tiene nombre propio en vez de resolverse con un `canReplayFrozen` suelto
  * porque **es una regla de producto y se decide una vez**: si mañana el
- * contrato publica la fuente, cambia acá y en ningún otro lado.
+ * contrato de pago publica una referencia exacta, cambia acá y en ningún otro lado.
  */
 export function puedeAtribuirTarjeta(frozen: UnconfirmedAttempt | null | undefined): boolean {
   return !canReplayFrozen(frozen);

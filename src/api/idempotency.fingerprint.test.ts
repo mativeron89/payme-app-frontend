@@ -189,20 +189,22 @@ describe('el sello de `create_mesa` es la identidad económica del dueño', () =
     }
   });
 
-  it('🔴 los rieles SIN llaves declaradas conservan el sello grueso', async () => {
-    // `mesa_pay` tiene el mismo defecto pero DOS tablas del lado del dueño
-    // (`mesa_pay` y `mesa_pay_legacy`) y no se puede saber cuál aplica: elegir
-    // mal daría un hash incorrecto y un hash incorrecto traba a la persona.
-    // Queda más estricto: traba de más, nunca de menos.
+  it('G-37 · `mesa_pay` nuevo usa v2: otra fuente conserva identidad, otro monto no', async () => {
     signIn();
     const actor = await money.resolveMoneyActor();
     const scope = money.scopeForActor(actor, 'pay:PA-1|card');
     const handle = await money.acquireMonetaryIntent(scope, 'mesa_pay:PA-1');
-    const base = { idempotency_key: handle.key, payment_type: 'card', item_ids: ['i1'], payment_method_id: 'pm_a' };
+    const base = {
+      idempotency_key: handle.key, payment_type: 'card', item_ids: ['i1'],
+      payment_method_id: '11111111-1111-4111-8111-111111111111', tip_cents: 100,
+    };
     await money.prepareMonetaryRequest(scope, 'mesa_pay:PA-1', handle, base);
-    expect(entradaDelJournal().fpv).toBeUndefined();
+    expect(entradaDelJournal().fpv).toBe(2);
     await expect(money.prepareMonetaryRequest(scope, 'mesa_pay:PA-1', handle, {
-      ...base, payment_method_id: 'pm_b',
+      ...base, payment_method_id: '22222222-2222-4222-8222-222222222222',
+    })).resolves.toBeUndefined();
+    await expect(money.prepareMonetaryRequest(scope, 'mesa_pay:PA-1', handle, {
+      ...base, tip_cents: 200,
     })).rejects.toThrow('monetary_payload_ambiguous');
   });
 });

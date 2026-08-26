@@ -17,6 +17,21 @@
 export const SIN_TARJETA_ELEGIDA = '';
 
 /**
+ * G-38 · traduce la referencia owner a una elección mostrable sin inventar.
+ * Sólo devuelve el UUID si todavía pertenece al listado autenticado actual;
+ * `null`, ausencia o una guardada eliminada conservan el sentinela honesto.
+ */
+export function fuenteGuardadaVigente(
+  savedPaymentMethodId: string | null | undefined,
+  cards: ReadonlyArray<{ readonly id: string }>,
+): string {
+  return typeof savedPaymentMethodId === 'string'
+    && cards.some((card) => card.id === savedPaymentMethodId)
+    ? savedPaymentMethodId
+    : SIN_TARJETA_ELEGIDA;
+}
+
+/**
  * «Hay entre qué elegir y nadie eligió» — el estado que la spec dibuja con
  * borde punteado `--warning` y SIN nombrar ninguna tarjeta.
  *

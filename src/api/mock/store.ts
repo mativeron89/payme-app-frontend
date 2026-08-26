@@ -93,6 +93,8 @@ export interface MockMesa {
   /** A-2: faltante capturado a la garantía al liquidar. */
   captured_shortfall_cents: number;
   guarantee_method: 'card' | 'wallet' | null;
+  /** G-38 · sólo UUID interno de una guardada; nunca `pm_`. */
+  guarantee_saved_payment_method_id?: string | null;
   /**
    * G-36 (2026-08-06) · SÓLO en mesas del seed que cuentan la parte VIVA de
    * la demo: cómo relanzarlas cuando el reloj las dejó atrás. Los vencimientos

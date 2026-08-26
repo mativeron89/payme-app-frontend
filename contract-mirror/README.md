@@ -6,20 +6,29 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-25**.
+- Fecha del refresh: **2026-08-26**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`f91bfda37bc00a45576cd067edc508f415c1810b`**
-  (`fix(cuenta): impedir cache del detalle privado` · v2.68.1).
+  **`87a9a741bfc4e1b0335472a671e03a5fae6325f1`**
+  (`feat(contract): publica identidad y garantía exactas` · v2.70.0).
 - Commit que publicó el inventario autoritativo:
-  **`7703e9d7f88c3cfc0d9dfc926feb8225e78b0dd7`**
-  (`chore(contract): publicar no-cache v2.68.1`). Como siempre, el inventario
+  **`d1a22c97dca60d4bc680197a90baadf3dbaef14a`**
+  (`chore(contract): republica mirror v2.70.0`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `7703e9d` está un commit más adelante que el contenido y no
+⚠️ **El publicador `d1a22c9` está un commit más adelante que el contenido y no
 se espeja como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `f91bfda`; anclarse a él mantiene verificable la paridad.
+declarado es `87a9a74`; anclarse a él mantiene verificable la paridad.
 
-🆕 **87 archivos espejados** más este README.
+🆕 **88 archivos espejados** más este README.
+
+Este refresh cierra owner-first G-37/G-38 sin cambiar semántica monetaria:
+
+- `mesa-pay-identity-vectors.json` publica selector, keysets legacy/vigente y
+  ocho vectores sintéticos de identidad. El consumidor ejecuta esos hashes y
+  el JS espejado; los intentos nuevos son v2 y las filas históricas preservan v1.
+- `GET /mesas/creations/:key` publica sólo `saved_payment_method_id`, UUID
+  interno owner-only o `null`. Nunca filtra el `pm_` de Stripe. El front sólo
+  restaura ese UUID si continúa en su lista autenticada de tarjetas guardadas.
 
 Este refresh sella la frontera privada de historial y conserva las fracciones
 naturales incorporadas en v2.68.0:
@@ -43,10 +52,15 @@ naturales incorporadas en v2.68.0:
   histórico sin declaración permanece `null`; el consumidor no inventa una.
 
 La adopción se verificó contra la fuente antes de cerrar runtime del
-consumidor: **paridad 87/87** y **vigencia verde** contra App Backend HEAD
-`7703e9d7f88c3cfc0d9dfc926feb8225e78b0dd7`, cuya publicación contractual
-declara `f91bfda37bc00a45576cd067edc508f415c1810b`. Eso acredita el árbol local
+consumidor: **paridad 88/88** y **vigencia verde** contra App Backend HEAD
+`d1a22c97dca60d4bc680197a90baadf3dbaef14a`, cuya publicación contractual
+declara `87a9a741bfc4e1b0335472a671e03a5fae6325f1`. Eso acredita el árbol local
 y la ref contractual publicada; no afirma deploy ni producción.
+
+### Refresh anterior · 2026-08-25 (no-cache owner-only · v2.68.1)
+
+El corte anterior declaró 87/87 contra contenido `f91bfda37bc00a45576cd067edc508f415c1810b`,
+publicado por `7703e9d7f88c3cfc0d9dfc926feb8225e78b0dd7`.
 
 ### Refresh anterior · 2026-08-25 (fracciones naturales · v2.68.0)
 

@@ -11,6 +11,19 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.146.0 — G-37/G-38 owner-first: identidad y garantía exactas (2026-08-26)
+
+El mirror adopta Backend v2.70.0 con 88/88 archivos. `mesa_pay` publica y
+ejecuta su selector de versión: journals nuevos usan el keyset v2, mientras
+intentos históricos conservan el camino legacy. Ocho vectores canónicos fijan
+que fuente y locks no cambian identidad y que consumos, propina y destinatario sí.
+
+La reconciliación de una apertura restaura una tarjeta guardada únicamente por
+el UUID interno que publica el owner y sólo si aún aparece en el listado
+autenticado. Nunca usa ni expone un `pm_`; sin referencia exacta conserva el
+estado sin elección. La fuente sellada no puede cambiarse durante el replay.
+**Sin dependencias nuevas ni cambios a holds, Stripe, montos o settlement.**
+
 ## 0.145.3 — Fixtures OCR compatibles con el gate de secretos (2026-08-25)
 
 Las credenciales sintéticas del test de upload OCR usan valores cortos que no

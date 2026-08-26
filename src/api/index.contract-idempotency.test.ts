@@ -191,7 +191,10 @@ describe('fachada real: reconciliación de una creación', () => {
         outcome: 'requires_action',
         retry_with_same_idempotency_key: true,
         mesa: { code: 'PA-2847', status: 'pending_auth', total_cents: '84000' },
-        guarantee: { method: 'card', authorized: false },
+        guarantee: {
+          method: 'card', authorized: false,
+          saved_payment_method_id: '11111111-1111-4111-8111-111111111111',
+        },
       }, 200);
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -199,6 +202,7 @@ describe('fachada real: reconciliación de una creación', () => {
     const r = await api.getMesaCreation(CLAVE);
     expect(r.outcome).toBe('requires_action');
     expect(r.mesa).toEqual({ code: 'PA-2847', status: 'pending_auth', totalCents: 84000 });
+    expect(r.guarantee?.savedPaymentMethodId).toBe('11111111-1111-4111-8111-111111111111');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

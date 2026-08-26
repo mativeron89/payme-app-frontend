@@ -21,9 +21,9 @@ import { ingresar } from './_app';
  * `not_found` —la creación nunca ocurrió— el reenvío CREA por primera vez y la
  * fuente que se manda ES la que respalda la garantía.
  *
- * El backend guarda la fuente original (`auth_source_payment_method_id`) pero
- * **no la publica en ninguna respuesta** (auditado; G-38), así que no se puede
- * restaurar. Lo honesto es no afirmar nada — que es lo que esto verifica.
+ * G-38 cerró owner-first: el backend publica sólo el UUID interno de la
+ * guardada. La UI debe restaurar exactamente BBVA si sigue activa, sin
+ * comparar ni exhibir el `pm_`, y bloquear el cambio durante ese replay.
  */
 
 const DEFAULT_SEED = /Santander ···· 4532/;
@@ -80,31 +80,17 @@ test('garantía con guardada NO-default: tras el reload la UI no se la atribuye 
   await page.getByRole('button', { name: 'Continuar' }).click();
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
 
-  // 🔴 LA AFIRMACIÓN CENTRAL: NINGUNA tarjeta aparece elegida — y menos la
-  // default. Antes de este arreglo, Santander ···· 4532 estaba marcada.
-  for (const radio of await page.getByRole('radio').all()) {
-    await expect(radio).toHaveAttribute('aria-checked', 'false');
-  }
-  await expect(page.getByText('No podemos mostrarte con qué tarjeta se garantizó esta mesa.')).toBeVisible();
-  // Y dice la verdad completa: la original es la que respalda el hold.
-  await expect(page.getByText(/sigue respaldada por la tarjeta original/)).toBeVisible();
+  // 🔴 LA AFIRMACIÓN CENTRAL: se restaura EXACTAMENTE la no-default.
+  await expect(noDefault).toHaveAttribute('aria-checked', 'true');
+  await expect(noDefault).toBeDisabled();
+  await expect(page.getByRole('radio').filter({ hasText: DEFAULT_SEED }))
+    .toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByRole('radio').filter({ hasText: DEFAULT_SEED })).toBeDisabled();
+  await expect(page.getByText('No podemos mostrarte con qué tarjeta se garantizó esta mesa.'))
+    .toHaveCount(0);
 
-  // Sin elección, el círculo sigue tocable pero frena explicando: no reenvía,
-  // no navega y señala el radiogroup. Los guards de reconciliación ya pasaron;
-  // acá falta sólo un dato que la persona sí puede completar.
-  const reintentarSinTarjeta = page.getByRole('button', { name: /Reintentar esta apertura/ });
-  await expect(reintentarSinTarjeta).toBeEnabled();
-  const urlAntes = page.url();
-  const antesSinTarjeta = await mesasDelMock(page);
-  await reintentarSinTarjeta.click();
-  await expect(page.locator('.toast')).toHaveText('Elige con qué tarjeta garantizar');
-  expect(page.url()).toBe(urlAntes);
-  await expect(page.getByRole('radiogroup', { name: 'Tarjeta para garantizar' })).toHaveClass(/tip-block--pulse/);
-  expect((await mesasDelMock(page)).total).toBe(antesSinTarjeta.total);
-
-  // Con elección explícita sí, y sigue sin haber una segunda mesa.
+  // El reenvío usa la fuente sellada y sigue sin crear una segunda mesa.
   const antes = await mesasDelMock(page);
-  await page.getByRole('radio').filter({ hasText: NO_DEFAULT_SEED }).click();
   const cta = page.getByRole('button', { name: /Reintentar esta apertura/ });
   await expect(cta).toBeEnabled();
   await cta.click();

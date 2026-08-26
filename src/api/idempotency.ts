@@ -322,9 +322,8 @@ export function recallPaymentMethod(scope: string, handle: MonetaryIntentHandle)
  * cerrado —cortaba, no duplicaba— pero trababa por una diferencia que no es
  * económica.
  *
- * 🔴 **Sólo se alinea donde hay llaves declaradas** (`economicKeysFor`, hoy
- * `create_mesa`). Para el resto se conserva el digest grueso, que es MÁS
- * estricto: traba de más, nunca de menos.
+ * Sólo se alinea donde hay llaves owner publicadas. G-37 agregó `mesa_pay`
+ * v2 además de `create_mesa`; el resto conserva el digest grueso.
  *
  * @returns el fingerprint sellado y su versión.
  */

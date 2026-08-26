@@ -1,7 +1,7 @@
 /**
  * IDENTIDAD ECONÓMICA DE UN REQUEST — réplica EXACTA de
  * `payme-app-backend/utils/idempotency.js` (espejado en
- * `contract-mirror/utils/idempotency.js`, commit `ea31324`, v2.48.0).
+ * `contract-mirror/utils/idempotency.js`, contenido `87a9a74`, v2.70.0).
  *
  * ## Por qué este archivo existe
  *
@@ -50,6 +50,19 @@ const UNORDERED_ARRAY_KEYS = new Set(['item_ids', 'slot_ids', 'items']);
  */
 export const PAYLOAD_KEYS = {
   /**
+   * G-37 · identidad económica vigente de un pago nuevo (hash_version >= 2).
+   * La fuente de pago se sella durablemente fuera del hash; los intentos
+   * históricos v1 conservan `mesa_pay_legacy` del lado del dueño.
+   */
+  mesa_pay: [
+    'payment_type',
+    'item_ids',
+    'items',
+    'tip_cents',
+    'tip_bps',
+    'tip_to_staff_id',
+  ],
+  /**
    * v2.25 (B-06 §4.1) · identidad económica de la MESA. A propósito **NO**
    * incluye la fuente de pago (`stripe_payment_method_id` /
    * `payment_method_id`) ni `save_payment_method`: fuente, off_session y
@@ -64,6 +77,21 @@ export const PAYLOAD_KEYS = {
     'guarantee_method',
     'items',
   ],
+} as const;
+
+/** Selector publicado por el dueño para `payment_attempts.idempotency_hash_version`. */
+export const IDEMPOTENCY_IDENTITY_CONTRACT = {
+  mesa_pay: {
+    selector_field: 'payment_attempts.idempotency_hash_version',
+    legacy_default_if_missing: 1,
+    default_for_new: 2,
+    keysets: {
+      legacy_before_version: 2,
+      legacy: 'mesa_pay_legacy',
+      current_from_version: 2,
+      current: 'mesa_pay',
+    },
+  },
 } as const;
 
 function isObjectLike(value: unknown): value is Record<string, unknown> {
@@ -143,20 +171,13 @@ export async function payloadHash(payload: unknown, keep: readonly string[]): Pr
  * tiene identidad económica alineada** y debe seguir con el fingerprint del
  * request entero.
  *
- * 🔴 **Sólo `create_mesa`, y la ausencia del riel de PAGO es deliberada.** El
- * mismo defecto existe en `mesa_pay` —el comentario del dueño lo dice con
- * todas las letras: *"NO incluir: fuente de pago. Stripe.js puede materializar
- * otro pm_ al reintentar una respuesta perdida"*—, pero **el dueño mantiene
- * DOS tablas para ese riel, `mesa_pay` y `mesa_pay_legacy`, y desde acá no se
- * puede saber cuál aplica a un request dado.** Elegir mal produce un hash
- * incorrecto, y un hash incorrecto en este camino **falla cerrado sobre la
- * persona**: exactamente el costo que esta alineación viene a eliminar.
- *
- * Queda registrado como G-37 en `GAPS.md`: para alinear el pago hace falta que
- * el dueño declare cuál tabla aplica y publique sus vectores. Mientras tanto
- * el riel de pago conserva su fingerprint grueso, que es MÁS estricto — traba
- * de más, nunca de menos.
+ * G-37 cerrado owner-first: el dueño publicó selector y vectores canónicos.
+ * Los intentos NUEVOS del front se sellan como v2 y por eso usan `mesa_pay`;
+ * los journals locales viejos siguen distinguidos por `fpv` y las filas v1
+ * históricas siguen seleccionando `mesa_pay_legacy` dentro del backend.
  */
 export function economicKeysFor(operation: string): readonly string[] | null {
-  return operation === 'create_mesa' ? PAYLOAD_KEYS.create_mesa : null;
+  if (operation === 'create_mesa') return PAYLOAD_KEYS.create_mesa;
+  if (operation.startsWith('mesa_pay:')) return PAYLOAD_KEYS.mesa_pay;
+  return null;
 }

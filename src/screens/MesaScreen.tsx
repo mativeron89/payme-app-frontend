@@ -693,7 +693,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * dentro de doPay y se cachea BAJO este scope, así que el reintento recupera
    * el mismo y el hash del backend no se mueve. Meterlo acá sería circular.
    *
-   * `lock_tokens` queda afuera a propósito: el backend lo excluye del hash.
+   * `lock_tokens` y la fuente quedan afuera a propósito: el contrato G-37
+   * publica que los intentos nuevos usan `mesa_pay` v2; la fuente ganadora se
+   * sella durablemente fuera del hash. El raw de UI sigue incluyéndola sólo
+   * para direccionar artefactos efímeros, no para definir identidad durable.
    */
   const rawContentScope = useMemo(() => {
     // v2.68: los dos modos transportan `items`. En consumo los bps son dinero;
@@ -1269,9 +1272,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             setBusy(false);
             return;
           }
-          // B-06: en el REINTENTO se reusa el pm_ ya tokenizado. Stripe.js
-          // devuelve uno distinto por invocación y el backend lo hashea: sin
-          // esto, la clave estable daría 409 idempotency_conflict en bucle.
+          // En un reintento se reusa el pm_ ya tokenizado para no fabricar
+          // PaymentMethods huérfanos. G-37 confirma que v2 NO lo hashea; la
+          // fuente ganadora queda sellada durablemente fuera del fingerprint.
           const cached = recallPaymentMethod(scope, intent);
           if (cached) {
             stripePmId = cached;

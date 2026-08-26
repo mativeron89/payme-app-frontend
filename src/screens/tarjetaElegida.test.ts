@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { frenoPorMetodo, metodoSinElegir, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
+import {
+  frenoPorMetodo,
+  fuenteGuardadaVigente,
+  metodoSinElegir,
+  SIN_TARJETA_ELEGIDA,
+} from './tarjetaElegida';
+
+describe('G-38 · referencia guardada exacta', () => {
+  const cards = [{ id: 'guardada-a' }, { id: 'guardada-b' }];
+
+  it('restaura únicamente una guardada que sigue vigente', () => {
+    expect(fuenteGuardadaVigente('guardada-b', cards)).toBe('guardada-b');
+  });
+
+  it.each([null, undefined, 'guardada-eliminada'])(
+    'con %s conserva el sentinela sin atribuir otra tarjeta',
+    (source) => {
+      expect(fuenteGuardadaVigente(source, cards)).toBe(SIN_TARJETA_ELEGIDA);
+    },
+  );
+});
 
 /**
  * §1.5 bis · «El selector de método de pago» (`diseno/SPEC_APP.md`), y la

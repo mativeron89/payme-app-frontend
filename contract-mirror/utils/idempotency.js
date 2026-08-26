@@ -137,6 +137,37 @@ const PAYLOAD_KEYS = {
   transfer: ['amount_cents', 'to_payme_id', 'to_email', 'to_user_id', 'concept'],
 };
 
+/**
+ * G-37 · contrato ejecutable del selector de identidad de `mesa_pay`.
+ *
+ * No inventa una migración ni cambia la semántica productiva: documenta la
+ * selección que `routes/mesas.js` ya aplica sobre la versión sellada en cada
+ * `payment_attempt`. Las filas históricas sin versión son v1; los intentos
+ * nuevos se insertan con v2; cualquier versión >=2 conserva el keyset actual.
+ */
+const IDEMPOTENCY_IDENTITY_CONTRACT = Object.freeze({
+  mesa_pay: Object.freeze({
+    selector_field: 'payment_attempts.idempotency_hash_version',
+    legacy_default_if_missing: 1,
+    default_for_new: 2,
+    keysets: Object.freeze({
+      legacy_before_version: 2,
+      legacy: 'mesa_pay_legacy',
+      current_from_version: 2,
+      current: 'mesa_pay',
+    }),
+  }),
+});
+
+function payloadKeysForHashVersion(operation, version) {
+  if (operation !== 'mesa_pay') return PAYLOAD_KEYS[operation] || null;
+  const contract = IDEMPOTENCY_IDENTITY_CONTRACT.mesa_pay;
+  const resolved = Number(version || contract.legacy_default_if_missing);
+  return resolved >= contract.keysets.current_from_version
+    ? PAYLOAD_KEYS[contract.keysets.current]
+    : PAYLOAD_KEYS[contract.keysets.legacy];
+}
+
 module.exports = {
   canonicalize,
   normalizeForHash,
@@ -144,5 +175,7 @@ module.exports = {
   hashesMatch,
   pick,
   PAYLOAD_KEYS,
+  IDEMPOTENCY_IDENTITY_CONTRACT,
+  payloadKeysForHashVersion,
   UNORDERED_ARRAY_KEYS,
 };

@@ -48,7 +48,19 @@ describe('mock · la creación se consulta POR SU CLAVE', () => {
     expect(r.mesa?.code).toBe(creada.mesa.code);
     expect(r.mesa?.status).toBe('pending_auth');
     expect(r.retryWithSameKey).toBe(true);
-    expect(r.guarantee).toEqual({ method: 'card', authorized: false });
+    expect(r.guarantee).toEqual({ method: 'card', authorized: false, savedPaymentMethodId: null });
+  });
+
+  it('G-38 · publica el UUID interno exacto de una guardada y nunca su `pm_`', async () => {
+    const k = key();
+    const saved = state.paymentMethods[1]!;
+    await mockCreateMesa({ ...requestDeMesa(k), payment_method_id: saved.id });
+    const crudo = await mockGetMesaCreation(k) as {
+      guarantee: { saved_payment_method_id: unknown };
+    };
+    expect(crudo.guarantee.saved_payment_method_id).toBe(saved.id);
+    expect(crudo.guarantee.saved_payment_method_id).not.toBe(saved.stripe_payment_method_id);
+    expect(mesaCreationResponse(crudo).guarantee?.savedPaymentMethodId).toBe(saved.id);
   });
 
   it('⭐ después del 3DS la MISMA clave contesta `open`: el estado sale de la mesa viva', async () => {

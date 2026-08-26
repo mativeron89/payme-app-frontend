@@ -43,7 +43,9 @@ const {
   loadPaymentAttemptContract,
 } = require('../services/paymentIntentContract');
 const { centsToDisplay, sumCents, calculateFee, splitEqual, tipFromBps } = require('../utils/money');
-const { payloadHash, hashesMatch, PAYLOAD_KEYS } = require('../utils/idempotency');
+const {
+  payloadHash, hashesMatch, PAYLOAD_KEYS, payloadKeysForHashVersion,
+} = require('../utils/idempotency');
 const { tokenHash } = require('../utils/tokens');
 const logger = require('../utils/logger');
 const invitationAuthority = require('../services/invitationAuthority');
@@ -817,6 +819,10 @@ function cuerpoCreacionEncontrada(mesa, hashCoincide = null) {
       guarantee: {
         method: mesa.auth_method || null,
         authorized: !!mesa.auth_payment_intent_id && mesa.status !== 'pending_auth',
+        // G-38 · referencia interna no sensible y exacta. El source `pm_` de
+        // Stripe nunca sale; `null` significa que la garantía no resuelve a
+        // una tarjeta guardada del opener en el estado durable actual.
+        saved_payment_method_id: mesa.auth_saved_payment_method_id || null,
         ...(mesa.auth_stripe_account_id
           && { connected_account_id: mesa.auth_stripe_account_id }),
       },
@@ -2289,7 +2295,12 @@ async function findExistingMesa(openerId, idempotencyKey) {
             auth_card_policy_version,auth_card_brand,auth_card_funding,
             auth_card_verified_at,auth_charge_card_verified_at,
             auth_stripe_customer_id, auth_off_session,
-            auth_save_payment_method
+            auth_save_payment_method,
+            (SELECT pm.id
+               FROM payment_methods pm
+              WHERE pm.user_id = mesas.opener_user_id
+                AND pm.stripe_payment_method_id = mesas.auth_source_payment_method_id
+              LIMIT 1) AS auth_saved_payment_method_id
        FROM mesas
       WHERE opener_user_id = $1 AND idempotency_key = $2`,
     [openerId, idempotencyKey]
@@ -3120,9 +3131,9 @@ async function findExistingAttempt(
 }
 
 function attemptHashesMatch(row, currentHash, legacyHash) {
-  return Number(row?.idempotency_hash_version || 1) >= 2
-    ? hashesMatch(row.idempotency_payload_hash, currentHash)
-    : hashesMatch(row.idempotency_payload_hash, legacyHash);
+  const selectedKeys = payloadKeysForHashVersion('mesa_pay', row?.idempotency_hash_version);
+  const selectedHash = selectedKeys === PAYLOAD_KEYS.mesa_pay ? currentHash : legacyHash;
+  return hashesMatch(row?.idempotency_payload_hash, selectedHash);
 }
 
 async function releaseAttemptItems(attemptId, reason) {
