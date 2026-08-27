@@ -64,6 +64,8 @@ export const PAGES = [
    */
   'mas',
   'avisos',
+  /** Completion público; el token vive sólo en memoria y nunca en PageId/query. */
+  'recovery',
   'mesa',
 ] as const;
 

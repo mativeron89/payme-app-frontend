@@ -104,8 +104,20 @@ describe('gate IFPE de release', () => {
    * tiene su guarda propia y más estricta sobre el artefacto construido.
    */
   const DESTINOS_PERMITIDOS = [
+    {
+      host: 'accounts.google.com',
+      porque: 'Google Identity Services se carga sólo al montar una acción social habilitada por capability exacta',
+    },
+    {
+      host: 'app.paymemx.com',
+      porque: 'redirect URI exacto de Facebook publicado y validado; no es un recurso que la app cargue sola',
+    },
     { host: 'localhost', porque: 'default de desarrollo de la API y de Stripe; no es destino de producción' },
     { host: 'wa.me', porque: 'DESTINO DE NAVEGACIÓN al compartir el link, no un recurso que se cargue solo' },
+    {
+      host: 'www.facebook.com',
+      porque: 'DESTINO DE NAVEGACIÓN del diálogo OAuth iniciado por el usuario; no es una carga automática',
+    },
   ] as const;
 
   /** Todo host absoluto que aparezca en un texto, sin juzgar todavía. */
@@ -153,11 +165,14 @@ describe('gate IFPE de release', () => {
     expect(ofensores, `destinos que nadie autorizó: ${ofensores.join(' · ')}`).toEqual([]);
   });
 
-  it('🔴 CASO LEGÍTIMO · los dos destinos autorizados SÍ pasan', () => {
+  it('🔴 CASO LEGÍTIMO · cada destino autorizado SÍ pasa', () => {
     // Sin esto, una guarda que rechazara absolutamente todo dejaría el mutante
     // en rojo igual, y nadie notaría que rompió el compartir por WhatsApp.
     expect(noPermitidos('https://wa.me/?text=hola')).toEqual([]);
     expect(noPermitidos('http://localhost:3000/api')).toEqual([]);
+    expect(noPermitidos('https://accounts.google.com/gsi/client')).toEqual([]);
+    expect(noPermitidos('https://www.facebook.com/v20.0/dialog/oauth')).toEqual([]);
+    expect(noPermitidos('https://app.paymemx.com/#/auth/facebook/callback')).toEqual([]);
     // Y la contracara: un CDN cualquiera no pasa.
     expect(noPermitidos('https://cdn-que-nadie-nombro.example.net/x.js')).toEqual([
       'cdn-que-nadie-nombro.example.net',

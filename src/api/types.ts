@@ -80,6 +80,49 @@ export interface RegisterRequest {
   invitation_token: string;
 }
 
+// ─── Identidad social v1 (routes/social-auth.js) ───────────
+
+/** Shape estricto que comparten las cuatro respuestas sociales exitosas. */
+export interface SocialSessionResponse extends TokenPair {
+  user: Pick<User, 'id' | 'payme_id' | 'email' | 'first_name' | 'last_name'>;
+}
+
+export interface GoogleLoginRequest {
+  id_token: string;
+}
+
+export interface GoogleRegisterRequest extends GoogleLoginRequest {
+  invitation_token: string;
+  first_name: string;
+  last_name: string;
+}
+
+export type FacebookPurpose = 'login' | 'register';
+
+export interface FacebookRegisterStartRequest {
+  invitation_token: string;
+  first_name: string;
+  last_name: string;
+}
+
+export interface FacebookStartResponse {
+  authorization_url: string;
+  expires_at: string;
+}
+
+export interface FacebookCompleteRequest {
+  state: string;
+  code: string;
+}
+
+export interface RecoveryRequestResponse {
+  accepted: true;
+}
+
+export interface RecoveryCompleteResponse {
+  completed: true;
+}
+
 /** GET /api/legal/aviso_privacidad → texto vigente verificado por el owner. */
 export interface LegalTextResponse {
   legal_text: {
@@ -107,6 +150,10 @@ export interface AppConfig {
     google_pay: boolean;
     stp_dispersal: boolean;
     ocr_real: boolean;
+    /** Runtime-only: el decoder cerrado vive en `socialAuth.ts`. */
+    social_auth?: unknown;
+    /** Runtime-only: sólo `registration_required:false` habilita alta social. */
+    account_birth_date?: unknown;
     /**
      * OLA 5 (v2.31.0) · capability del riel saldo. **Sin tipar a propósito.**
      *

@@ -17,6 +17,7 @@ describe('D-FF-1 · cableado owner→formulario', () => {
   const main = source('main.tsx');
   const api = source('api/index.ts');
   const mock = source('api/mock/mockApi.ts');
+  const auth = source('auth/AuthContext.tsx');
 
   it('la custodia corre antes de React y ambas superficies leen el mismo snapshot', () => {
     expect(main).toContain('bootstrapSignupInvitationCustody();');
@@ -36,14 +37,27 @@ describe('D-FF-1 · cableado owner→formulario', () => {
     expect(modeAfterSignupSnapshot('register', true, false)).toBe('login');
   });
 
-  it('manda la autoridad y la limpia sólo después de que register confirmó sesión', () => {
-    const send = login.indexOf('await register({');
-    const token = login.indexOf('invitation_token: signup.token', send);
-    const clear = login.indexOf('clearSignupInvitation()', token);
-    expect(send).toBeGreaterThan(-1);
-    expect(token).toBeGreaterThan(send);
-    expect(clear).toBeGreaterThan(token);
-    expect(login.match(/clearSignupInvitation\(\)/g)).toHaveLength(1);
+  it('manda la autoridad y la limpia sólo después de que cada alta confirmó sesión', () => {
+    const passwordSend = login.indexOf('await register({');
+    const passwordToken = login.indexOf('invitation_token: signup.token', passwordSend);
+    const passwordClear = login.indexOf('clearSignupInvitation()', passwordToken);
+    expect(passwordSend).toBeGreaterThan(-1);
+    expect(passwordToken).toBeGreaterThan(passwordSend);
+    expect(passwordClear).toBeGreaterThan(passwordToken);
+
+    const googleSend = login.indexOf('await googleRegister({');
+    const googleToken = login.indexOf('invitation_token: signup.token', googleSend);
+    const googleClear = login.indexOf('clearSignupInvitation()', googleToken);
+    expect(googleSend).toBeGreaterThan(-1);
+    expect(googleToken).toBeGreaterThan(googleSend);
+    expect(googleClear).toBeGreaterThan(googleToken);
+    expect(login.match(/clearSignupInvitation\(\)/g)).toHaveLength(2);
+
+    const facebookSend = auth.indexOf('await api.facebookRegisterComplete(');
+    const facebookClear = auth.indexOf("if (purpose === 'register') clearSignupInvitation();", facebookSend);
+    expect(facebookSend).toBeGreaterThan(-1);
+    expect(facebookClear).toBeGreaterThan(facebookSend);
+    expect(auth.match(/clearSignupInvitation\(\)/g)).toHaveLength(1);
   });
 
   it('un 403 opaco no se interpreta ni suelta la credencial', () => {

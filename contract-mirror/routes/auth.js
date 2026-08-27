@@ -20,7 +20,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
 const schemas = require('../schemas');
 // `hashIp` ya no se importa: nadie hashea IPs acá desde que user_sessions dejó
@@ -33,15 +32,13 @@ const { loadActiveSession } = require('../middleware/auth');
 const { walletRailEnabled } = require('../services/walletRail');
 const signupInvitations = require('../services/signupInvitations');
 const legal = require('../services/legal');
+const paymeSessions = require('../services/paymeSessions');
 
 const router = express.Router();
 const { validateBody } = schemas;
 
-const JWT_TTL_SECONDS = Number(process.env.JWT_TTL_SECONDS) || (7 * 24 * 60 * 60);   // 7d
-const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS) || (30 * 24 * 60 * 60); // 30d
+const { JWT_TTL_SECONDS, JWT_ISS, JWT_AUD } = paymeSessions;
 const REFRESH_CONCURRENT_GRACE_SECONDS = 5;
-const JWT_ISS = process.env.JWT_ISSUER || 'payme.mx';
-const JWT_AUD = process.env.JWT_AUDIENCE || 'payme-app';
 // Hash bcrypt válido de costo 10 para normalizar el trabajo del login cuando
 // el email no existe. No representa una cuenta ni una credencial utilizable.
 const DUMMY_PASSWORD_HASH = '$2b$10$/ydJ9mGw8xoJfSyW9XQUP.BweuZ9D/ddrClj4M1ST.StKd.AyaqJW';
@@ -55,30 +52,7 @@ const DUMMY_PASSWORD_HASH = '$2b$10$/ydJ9mGw8xoJfSyW9XQUP.BweuZ9D/ddrClj4M1ST.St
 // Mismo tratamiento que `phone`: LAS COLUMNAS SE CONSERVAN, con sus filas
 // históricas, y lo que se apaga es la escritura nueva. Quedan en NULL por
 // omisión en el INSERT. Volver a llenarlas exige declarar antes quién las lee.
-async function createSession({ userId, client = pool }) {
-  const jti = randomUUID();
-  const rawRefresh = generateToken(32);
-  const refreshHash = tokenHash(rawRefresh);
-  const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000);
-
-  await client.query(
-    `INSERT INTO user_sessions
-       (user_id, jti, refresh_token_hash, expires_at)
-     VALUES ($1, $2, $3, $4)`,
-    [userId, jti, refreshHash, expiresAt]
-  );
-
-  return { jti, rawRefresh, expiresAt };
-}
-
-function issueAccessToken({ userId, jti }) {
-  const now = Math.floor(Date.now() / 1000);
-  return jwt.sign(
-    { sub: userId, jti, iss: JWT_ISS, aud: JWT_AUD, nbf: now, iat: now },
-    process.env.JWT_SECRET,
-    { expiresIn: JWT_TTL_SECONDS, algorithm: 'HS256' }
-  );
-}
+const { createSession, issueAccessToken } = paymeSessions;
 
 // ─── POST /register ────────────────────────────────────────
 // El schema se elige EN CADA REQUEST (gate de rollout de PQ-2, v2.28): en modo
@@ -218,12 +192,22 @@ router.post('/login', validateBody(schemas.login), async (req, res, next) => {
     if (!user || !ok) return res.status(401).json({ error: 'invalid_credentials' });
     if (user.status !== 'active') return res.status(403).json({ error: 'user_suspended' });
 
-    await pool.query(
-      `UPDATE users SET email_normalized = $1 WHERE id = $2 AND email_normalized IS NULL`,
-      [normalized, user.id]
-    );
-
-    const session = await createSession({ userId: user.id });
+    const login = await pool.tx(async (client) => {
+      const { rows: [locked] } = await client.query(
+        `SELECT password_hash,status FROM users WHERE id=$1 FOR UPDATE`,
+        [user.id]
+      );
+      if (!locked || locked.password_hash !== user.password_hash) return { kind: 'invalid' };
+      if (locked.status !== 'active') return { kind: 'suspended' };
+      await client.query(
+        `UPDATE users SET email_normalized = $1 WHERE id = $2 AND email_normalized IS NULL`,
+        [normalized, user.id]
+      );
+      return { kind: 'ok', session: await createSession({ userId: user.id, client }) };
+    });
+    if (login.kind === 'invalid') return res.status(401).json({ error: 'invalid_credentials' });
+    if (login.kind === 'suspended') return res.status(403).json({ error: 'user_suspended' });
+    const session = login.session;
     const accessToken = issueAccessToken({ userId: user.id, jti: session.jti });
 
     logger.audit('user_login', { user_id: user.id });

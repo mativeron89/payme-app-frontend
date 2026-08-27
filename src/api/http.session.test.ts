@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const TEST_PASSWORD = ['pass', 'word'].join('');
@@ -46,8 +47,12 @@ const {
   httpPrivateJsonRequest,
   httpRegister,
   httpRequest,
+  httpSocialSession,
+  invalidateSessionSerialized,
+  persistSocialSessionResponse,
+  runWithSessionStateLock,
 } = await import('./http');
-const { loadSession, saveSession } = await import('./storage');
+const { captureSessionStateWitness, loadSession, saveSession } = await import('./storage');
 const { mockLogin, mockRegister } = await import('./mock/mockApi');
 
 function response(body: unknown, status = 200): Response {
@@ -321,6 +326,167 @@ describe('sesión real: persistencia antes de uso HTTP', () => {
     });
     await expect(httpRequest('POST', '/payment-methods', {}, rotated!))
       .resolves.toEqual({ ok: true });
+  });
+});
+
+describe('recovery: invalidación serializada preserva un relogin B', () => {
+  async function exerciseInterleaving(
+    produceB: (userB: typeof user) => Promise<{ family_id: string; principal_id: string }>,
+  ) {
+    const origin = {
+      access_token: 'access-origin-a',
+      refresh_token: 'refresh-origin-a',
+      family_id: 'family-origin-a',
+      principal_id: user.id,
+      user,
+    };
+    saveSession(origin);
+
+    let releaseBlock: (() => void) | undefined;
+    let enteredBlock: (() => void) | undefined;
+    const entered = new Promise<void>((resolve) => { enteredBlock = resolve; });
+    const blocker = locks.request('payme-session-state', { mode: 'exclusive' } as LockOptions, async () => {
+      enteredBlock?.();
+      await new Promise<void>((resolve) => { releaseBlock = resolve; });
+    });
+    await entered;
+
+    const userB = { ...user, id: 'u-relogin-b', payme_id: 'u_relogin_b', email: 'b@payme.local' };
+    // Recovery ya capturó A y encola su invalidación. B se inicia después:
+    // captura el estado lógico tombstoneado (ausente) y sólo persiste cuando
+    // la limpieza física de A liberó el mismo lock.
+    let invalidationSettled = false;
+    const pendingInvalidation = invalidateSessionSerialized(origin).then((removed) => {
+      invalidationSettled = true;
+      return removed;
+    });
+    const pendingB = produceB(userB);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(invalidationSettled, 'recovery invalidó fuera del Web Lock compartido').toBe(false);
+    expect(storage.values.get('payme_app_session')).toContain('family-origin-a');
+
+    releaseBlock?.();
+    await blocker;
+    const [sessionB, removedA] = await Promise.all([pendingB, pendingInvalidation]);
+    expect(removedA).toBe(true);
+    expect(loadSession()).toMatchObject({
+      family_id: sessionB.family_id,
+      principal_id: userB.id,
+      access_token: expect.stringContaining('b'),
+    });
+    expect(new Set(lockNames)).toEqual(new Set(['payme-session-state']));
+  }
+
+  it('preserva B cuando el productor usa la frontera real/social', async () => {
+    await exerciseInterleaving((userB) => persistSocialSessionResponse({
+      access_token: 'access-social-b',
+      refresh_token: 'refresh-social-b',
+      expires_in: 900,
+      user: userB,
+    }, loadSession()));
+  });
+
+  it('preserva B cuando el productor mock persiste dentro del mismo lock', async () => {
+    await exerciseInterleaving(async (userB) => runWithSessionStateLock(() => {
+      const sessionB = {
+        access_token: 'access-mock-b',
+        refresh_token: 'refresh-mock-b',
+        family_id: 'family-mock-b',
+        principal_id: userB.id,
+        user: userB,
+      };
+      saveSession(sessionB);
+      return sessionB;
+    }));
+  });
+
+  it('las fachadas real y mock de recovery esperan la frontera serializada', () => {
+    const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
+    expect(source.match(/if \(origin\) await invalidateSessionSerialized\(origin\);/g)).toHaveLength(3);
+    expect(source).toContain(
+      'login: (email, password) => runWithSessionStateLock(() => mock.mockLogin(email, password))',
+    );
+    expect(source).not.toContain('if (origin) invalidateSession(origin)');
+  });
+});
+
+describe('sesión social: la respuesta tardía no reemplaza una sesión nueva', () => {
+  function socialResponse(selected: typeof user, suffix: string): Response {
+    return response({
+      access_token: `access-${suffix}`,
+      refresh_token: `refresh-${suffix}`,
+      expires_in: 900,
+      user: selected,
+    });
+  }
+
+  it('A inicia primero, B persiste primero y A termina stale sin tocar B', async () => {
+    const userA = { ...user, id: 'u-social-a', payme_id: 'social_a', email: 'a@payme.local' };
+    const userB = { ...user, id: 'u-social-b', payme_id: 'social_b', email: 'b@payme.local' };
+    let resolveA: ((value: Response) => void) | undefined;
+    let resolveB: ((value: Response) => void) | undefined;
+    vi.stubGlobal('fetch', vi.fn((url: string) => new Promise<Response>((resolve) => {
+      if (url.endsWith('/auth/google/a')) resolveA = resolve;
+      else resolveB = resolve;
+    })));
+
+    const pendingA = httpSocialSession('/auth/google/a', { id_token: 'credential-a' });
+    const pendingB = httpSocialSession('/auth/google/b', { id_token: 'credential-b' });
+    resolveB?.(socialResponse(userB, 'social-b'));
+    const sessionB = await pendingB;
+    expect(loadSession()).toMatchObject({
+      family_id: sessionB.family_id,
+      principal_id: userB.id,
+      access_token: 'access-social-b',
+    });
+
+    resolveA?.(socialResponse(userA, 'social-a'));
+    await expect(pendingA).rejects.toThrow('session_state_changed');
+    expect(loadSession()).toMatchObject({
+      family_id: sessionB.family_id,
+      principal_id: userB.id,
+      access_token: 'access-social-b',
+    });
+    expect(storage.values.get('payme_app_session')).not.toContain('access-social-a');
+  });
+
+  it('sin Web Locks falla cerrado y no persiste social', async () => {
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
+    vi.stubGlobal('fetch', vi.fn(async () => socialResponse(user, 'no-lock')));
+
+    await expect(httpSocialSession('/auth/google/login', { id_token: 'credential' }))
+      .rejects.toThrow('session_lock_unavailable');
+    expect(loadSession()).toBeNull();
+    expect(storage.values.has('payme_app_session')).toBe(false);
+  });
+
+  it('el testigo previo al redirect sigue mandando durante el canje tardío', async () => {
+    const witness = captureSessionStateWitness();
+    let releaseA: ((value: Response) => void) | undefined;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { releaseA = resolve; })));
+
+    const pendingA = httpSocialSession(
+      '/auth/facebook/login/complete',
+      { state: 'state', code: 'code' },
+      witness,
+    );
+    const userB = { ...user, id: 'u-after-redirect', payme_id: 'after_redirect' };
+    const sessionB = await persistSocialSessionResponse({
+      access_token: 'access-b-after-redirect',
+      refresh_token: 'refresh-b-after-redirect',
+      expires_in: 900,
+      user: userB,
+    }, null);
+    releaseA?.(socialResponse(user, 'facebook-a'));
+
+    await expect(pendingA).rejects.toThrow('session_state_changed');
+    expect(loadSession()).toMatchObject({
+      family_id: sessionB.family_id,
+      principal_id: userB.id,
+      access_token: 'access-b-after-redirect',
+    });
   });
 });
 

@@ -55,6 +55,9 @@ const WALLET_RAIL = Object.freeze({
   enabled: walletRailCapability(),
   account_activity: true,
 });
+const googleIdentity = require('../services/googleIdentity');
+const facebookIdentity = require('../services/facebookIdentity');
+const authRecovery = require('../services/authRecovery');
 
 router.get('/stripe-key', (req, res) => {
   res.json({ publishable_key: process.env.STRIPE_PUBLISHABLE_KEY });
@@ -96,6 +99,15 @@ router.get('/', (req, res) => {
       // bandera de entorno: el front LEE esto, no lo decide ni lo hardcodea.
       // Cubre TODO el dinero (tarjeta incluida), no sólo wallet.
       money_rail: modoMonetarioCapability(),
+      social_auth: {
+        google_sign_in: googleIdentity.capability(),
+        facebook_sign_in: facebookIdentity.capability(),
+        recovery_email: {
+          ...authRecovery.capability(),
+          completion_route: authRecovery.capability().enabled ? '#/recovery' : null,
+        },
+        password_login: { enabled: true },
+      },
       // PQ-2 (v2.28). Cuatro booleanos, cada uno con una decisión del front detrás:
       //   supported  → ¿existe el campo? Un backend ≤ v2.27 no manda esta clave.
       //                Es explícito y no por presencia para que el front pueda

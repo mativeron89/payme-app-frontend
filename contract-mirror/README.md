@@ -6,37 +6,40 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-26**.
+- Fecha del refresh: **2026-08-27**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`064c51aadd2266f8f47ed36461dd60f7b9f39b88`**
-  (`feat(privacidad): publica recibos opacos salientes G-25` · v2.71.0).
+  **`84a71f869925de3313b0fb8e6f372a93308d35da`**
+  (`feat(auth): Google, Facebook dark y recovery PayMe` · v2.72.0).
 - Commit que publicó el inventario autoritativo:
-  **`5b1e1f21cfe7f8d1504c5c8b8d9a87982c93f42e`**
-  (`chore(contract): completa mirror G-25 v2.71.0`). Como siempre, el inventario
+  **`124bdc2f5f2ed5f25eb2078b08cfc1faa9929516`**
+  (`chore(contract): publica mirror social auth v2.72.0`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `5b1e1f2` está un commit más adelante que el contenido y no
+⚠️ **El publicador `124bdc2` está un commit más adelante que el contenido y no
 se espeja como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `064c51a`; anclarse a él mantiene verificable la paridad.
+declarado es `84a71f8`; anclarse a él mantiene verificable la paridad.
 
-🆕 **90 archivos espejados** más este README.
+🆕 **101 archivos espejados** más este README.
 
-Este refresh cierra owner-first G-25 sin cambiar la UX de entrantes:
+Este refresh agrega el contrato owner-first local y oscuro de identidad social:
 
-- cada `POST /api/friends` responde un `request_id` UUID opaco y crea un recibo
-  con cardinalidad idéntica exista o no el destino;
-- `GET ...direction=outgoing` publica exclusivamente `{id, requested_at}` y
-  nunca identidad; `direction=incoming` conserva `user` para aceptar/rechazar;
-- `DELETE /friends/requests/:receipt_id` cancela por recibo propio, con 404
-  indistinguible para faltante o ajeno;
-- la migración v2.71.0 puebla recibos para salientes históricas y el handoff
-  fija la secuencia Frontend compatible primero, Backend después.
+- Google GIS manual consume ID token efímero sin auto-link por email;
+- Facebook usa BFF redirect con state/purpose one-use ligado en navegador;
+- recovery PayMe usa un token opaco de fragmento que nunca llega al hosting;
+- `features.social_auth` falla cerrada para las superficies nuevas y conserva
+  el ingreso por contraseña ante ausencia o payload malformado.
 
 La adopción se verificó contra la fuente antes de implementar el consumidor:
-**integridad 90/90**, **paridad 90/90** y **vigencia verde** contra App Backend
-HEAD `5b1e1f21cfe7f8d1504c5c8b8d9a87982c93f42e`, cuya publicación contractual
-declara `064c51aadd2266f8f47ed36461dd60f7b9f39b88`. Eso acredita el árbol local
+**integridad 101/101**, **paridad 101/101** y **vigencia verde** contra App Backend
+HEAD `124bdc2f5f2ed5f25eb2078b08cfc1faa9929516`, cuya publicación contractual
+declara `84a71f869925de3313b0fb8e6f372a93308d35da`. Eso acredita el árbol local
 y la ref contractual publicada; no afirma deploy ni producción.
+
+### Refresh anterior · 2026-08-26 (recibos salientes G-25 · v2.71.0)
+
+El corte anterior declaró 90/90 contra contenido
+`064c51aadd2266f8f47ed36461dd60f7b9f39b88`, publicado por
+`5b1e1f21cfe7f8d1504c5c8b8d9a87982c93f42e`.
 
 ### Refresh anterior · 2026-08-26 (identidad y garantía exactas · v2.70.0)
 

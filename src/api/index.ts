@@ -10,6 +10,9 @@ import {
   httpRegister,
   httpRequest,
   httpRequestWithHeaders,
+  httpSocialSession,
+  invalidateSessionSerialized,
+  runWithSessionStateLock,
   setOnSessionExpired,
   type UploadProgress,
 } from './http';
@@ -42,7 +45,12 @@ import { decodeShortfallDetailResponse, type ShortfallDetail } from './shortfall
 import { decodeMovementDetailResponse } from './movementDetail';
 import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
-import { invalidateSession, loadSession, type StoredSession } from './storage';
+import { loadSession, type SessionStateWitness, type StoredSession } from './storage';
+import { decodeFacebookStartResponse } from './facebookAuthFlow';
+import {
+  decodeRecoveryCompleteResponse,
+  decodeRecoveryRequestResponse,
+} from './recoveryFlow';
 import { confirmCardPayment } from './stripe';
 import { createMesaResponse, payMesaResponse, topupCardResponse, topupOxxoResponse, topupStatusResponse, transferResponse, type PayMesaExpectation, type TransferExpectation } from './moneyGuards';
 import type {
@@ -63,8 +71,12 @@ import type {
   CreateTransferRequest,
   CreateTransferResponse,
   FriendRequestCreatedResponse,
+  FacebookCompleteRequest,
+  FacebookRegisterStartRequest,
+  FacebookStartResponse,
   FriendsResponse,
   GroupDetailResponse,
+  GoogleRegisterRequest,
   GroupsResponse,
   IncomingFriendRequestsResponse,
   LockItemsResponse,
@@ -78,6 +90,8 @@ import type {
   PaymentMethodsResponse,
   ProfileAvatarResponse,
   ProfileIdentityResponse,
+  RecoveryCompleteResponse,
+  RecoveryRequestResponse,
   PendingInvitationsResponse,
   RegisterRequest,
   StatsResponse,
@@ -175,6 +189,20 @@ export interface Api {
   // auth
   login(email: string, password: string): Promise<StoredSession>;
   register(data: RegisterRequest): Promise<StoredSession>;
+  googleLogin(idToken: string): Promise<StoredSession>;
+  googleRegister(data: GoogleRegisterRequest): Promise<StoredSession>;
+  facebookLoginStart(): Promise<FacebookStartResponse>;
+  facebookRegisterStart(data: FacebookRegisterStartRequest): Promise<FacebookStartResponse>;
+  facebookLoginComplete(
+    data: FacebookCompleteRequest,
+    expectedStateWitness: SessionStateWitness,
+  ): Promise<StoredSession>;
+  facebookRegisterComplete(
+    data: FacebookCompleteRequest,
+    expectedStateWitness: SessionStateWitness,
+  ): Promise<StoredSession>;
+  requestRecovery(email: string): Promise<RecoveryRequestResponse>;
+  completeRecovery(token: string, newPassword: string): Promise<RecoveryCompleteResponse>;
   logout(): Promise<void>;
   restoreSession(): StoredSession | null;
   onSessionExpired(cb: (() => void) | null): void;
@@ -340,6 +368,38 @@ const realApi: Api = {
   ),
   login: (email, password) => httpLogin(email, password),
   register: (data) => httpRegister(data),
+  googleLogin: (idToken) => httpSocialSession('/auth/google/login', { id_token: idToken }),
+  googleRegister: (data) => httpSocialSession('/auth/google/register', data),
+  facebookLoginStart: async () => decodeFacebookStartResponse(
+    await httpPublicRequest<unknown>('POST', '/auth/facebook/login/start', {}),
+  ),
+  facebookRegisterStart: async (data) => decodeFacebookStartResponse(
+    await httpPublicRequest<unknown>('POST', '/auth/facebook/register/start', data),
+  ),
+  facebookLoginComplete: (data, expectedStateWitness) => httpSocialSession(
+    '/auth/facebook/login/complete',
+    data,
+    expectedStateWitness,
+  ),
+  facebookRegisterComplete: (data, expectedStateWitness) => httpSocialSession(
+    '/auth/facebook/register/complete',
+    data,
+    expectedStateWitness,
+  ),
+  requestRecovery: async (email) => decodeRecoveryRequestResponse(
+    await httpPublicRequest<unknown>('POST', '/auth/recovery/request', { email }),
+  ),
+  completeRecovery: async (token, newPassword) => {
+    const origin = loadSession();
+    const response = decodeRecoveryCompleteResponse(
+      await httpPublicRequest<unknown>('POST', '/auth/recovery/complete', {
+        token,
+        new_password: newPassword,
+      }),
+    );
+    if (origin) await invalidateSessionSerialized(origin);
+    return response;
+  },
   logout: () => httpLogout(),
   restoreSession: () => loadSession(),
   onSessionExpired: (cb) => setOnSessionExpired(cb),
@@ -676,12 +736,31 @@ const realApi: Api = {
 const mockApi: Api = {
   getConfig: () => mock.mockGetConfig(),
   getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
-  login: (email, password) => mock.mockLogin(email, password),
-  register: (data) => mock.mockRegister(data),
+  login: (email, password) => runWithSessionStateLock(() => mock.mockLogin(email, password)),
+  register: (data) => runWithSessionStateLock(() => mock.mockRegister(data)),
+  googleLogin: (idToken) => mock.mockGoogleLogin(idToken),
+  googleRegister: (data) => mock.mockGoogleRegister(data),
+  facebookLoginStart: () => mock.mockFacebookLoginStart(),
+  facebookRegisterStart: (data) => mock.mockFacebookRegisterStart(data),
+  facebookLoginComplete: (data, expectedStateWitness) => mock.mockFacebookLoginComplete(
+    data,
+    expectedStateWitness,
+  ),
+  facebookRegisterComplete: (data, expectedStateWitness) => mock.mockFacebookRegisterComplete(
+    data,
+    expectedStateWitness,
+  ),
+  requestRecovery: (email) => mock.mockRequestRecovery(email),
+  completeRecovery: async (token, newPassword) => {
+    const origin = loadSession();
+    const response = await mock.mockCompleteRecovery(token, newPassword);
+    if (origin) await invalidateSessionSerialized(origin);
+    return response;
+  },
   async logout() {
     const origin = loadSession();
     await mock.mockLogout();
-    if (origin) invalidateSession(origin);
+    if (origin) await invalidateSessionSerialized(origin);
   },
   restoreSession: () => loadSession(),
   onSessionExpired: () => undefined,

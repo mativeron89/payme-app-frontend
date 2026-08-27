@@ -1,6 +1,13 @@
 import { centsToDisplay, fractionAmount, splitEqual, sumCents, tipFromBps } from '../../utils/money';
 import { payloadCanonical, sha256Hex } from '../../utils/payloadIdentity';
-import { createSession, loadSession, saveSession, type StoredSession } from '../storage';
+import {
+  createSession,
+  loadSession,
+  saveSession,
+  type SessionStateWitness,
+  type StoredSession,
+} from '../storage';
+import { persistSocialSessionResponse } from '../http';
 import type {
   AcceptInvitationLinkResponse,
   AppConfig,
@@ -45,13 +52,24 @@ import type {
   HistoryResponse,
   MovementDetailResponse,
   FractionRequest,
+  FacebookCompleteRequest,
+  FacebookRegisterStartRequest,
+  FacebookStartResponse,
+  GoogleRegisterRequest,
+  RecoveryCompleteResponse,
+  RecoveryRequestResponse,
   RegisterRequest,
 } from '../types';
 import type { PrivateAvatarBlob } from '../profileIdentity';
 import { profileNameInput, validateAvatarInput } from '../profileIdentity';
 import type { ShortfallDetail } from '../shortfallDetail';
 import { MESA_CREATION_OUTCOME_BY_STATUS } from '../types';
-import { MOCK_CONNECTED_ACCOUNTS, MOCK_RESTAURANTS, MOCK_USER } from './seedData';
+import {
+  MOCK_CONNECTED_ACCOUNTS,
+  MOCK_RECOVERY_TOKEN,
+  MOCK_RESTAURANTS,
+  MOCK_USER,
+} from './seedData';
 import {
   availableBalance,
   findMesa,
@@ -352,6 +370,30 @@ export async function mockGetConfig(): Promise<AppConfig> {
       google_pay: false,
       stp_dispersal: false,
       ocr_real: false,
+      social_auth: {
+        google_sign_in: {
+          enabled: true,
+          registration: true,
+          login: true,
+          linking: true,
+          web_client_id: 'mock-google-client-id',
+        },
+        facebook_sign_in: {
+          enabled: true,
+          registration: true,
+          login: true,
+          app_id: '1234567890',
+          redirect_uri: 'https://app.paymemx.com/',
+        },
+        recovery_email: { enabled: true, completion_route: '#/recovery' },
+        password_login: { enabled: true },
+      },
+      account_birth_date: {
+        supported: true,
+        registration_required: false,
+        write_once: true,
+        adulthood_server_authoritative: true,
+      },
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
       /**
@@ -582,6 +624,184 @@ export async function mockRegister(data: RegisterRequest): Promise<StoredSession
   });
   saveSession(session);
   return delay(session);
+}
+
+interface MockFacebookIntent {
+  readonly purpose: 'login' | 'register';
+  readonly expiresAt: number;
+  readonly registration: FacebookRegisterStartRequest | null;
+}
+
+const mockFacebookIntents = new Map<string, MockFacebookIntent>();
+let mockRecoveryIssued = false;
+
+function validSocialCredential(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 20 && value.length <= 8192;
+}
+
+function waitSocialLatency(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
+}
+
+async function persistMockSocialUser(
+  user: typeof MOCK_USER,
+  suffix: string,
+  origin: StoredSession | null,
+  onAccepted: () => void,
+  expectedStateWitness?: SessionStateWitness,
+): Promise<StoredSession> {
+  return persistSocialSessionResponse({
+    user: {
+      id: user.id,
+      payme_id: user.payme_id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+    },
+    access_token: `mock-social-access-${suffix}-${crypto.randomUUID()}`,
+    refresh_token: `mock-social-refresh-${suffix}-${crypto.randomUUID()}`,
+    expires_in: 900,
+  }, origin, onAccepted, expectedStateWitness);
+}
+
+function socialRegistrationUser(data: Pick<GoogleRegisterRequest, 'first_name' | 'last_name'>) {
+  return {
+    ...MOCK_USER,
+    email: 'registro.social@payme.local',
+    first_name: data.first_name.trim(),
+    last_name: data.last_name.trim(),
+    payme_id: paymeIdFromName(data.first_name),
+  };
+}
+
+export async function mockGoogleLogin(idToken: string): Promise<StoredSession> {
+  if (!validSocialCredential(idToken)) throw new MockApiError(400, 'validation_error');
+  const origin = loadSession();
+  await waitSocialLatency();
+  return persistMockSocialUser(MOCK_USER, 'google-login', origin, () => {
+    state.user = { ...MOCK_USER };
+    persist();
+  });
+}
+
+export async function mockGoogleRegister(data: GoogleRegisterRequest): Promise<StoredSession> {
+  if (!validSocialCredential(data.id_token)
+      || typeof data.invitation_token !== 'string'
+      || data.invitation_token.length < 20 || data.invitation_token.length > 200
+      || !data.first_name.trim() || data.first_name.length > 100
+      || !data.last_name.trim() || data.last_name.length > 100) {
+    throw new MockApiError(403, 'registration_not_available');
+  }
+  const origin = loadSession();
+  await waitSocialLatency();
+  const user = socialRegistrationUser(data);
+  return persistMockSocialUser(user, 'google-register', origin, () => {
+    state.user = user;
+    state.paymentMethods = [];
+    persist();
+  });
+}
+
+async function mockFacebookStart(
+  purpose: 'login' | 'register',
+  registration: FacebookRegisterStartRequest | null,
+): Promise<FacebookStartResponse> {
+  const stateValue = `mock-facebook-state-${crypto.randomUUID()}`;
+  const expiresAt = Date.now() + 10 * 60 * 1000;
+  mockFacebookIntents.set(stateValue, { purpose, registration, expiresAt });
+  const authorization = new URL('https://www.facebook.com/v99.0/dialog/oauth');
+  authorization.searchParams.set('client_id', '1234567890');
+  authorization.searchParams.set('redirect_uri', 'https://app.paymemx.com/');
+  authorization.searchParams.set('response_type', 'code');
+  authorization.searchParams.set('state', stateValue);
+  return delay({
+    authorization_url: authorization.toString(),
+    expires_at: new Date(expiresAt).toISOString(),
+  });
+}
+
+export function mockFacebookLoginStart(): Promise<FacebookStartResponse> {
+  return mockFacebookStart('login', null);
+}
+
+export function mockFacebookRegisterStart(
+  data: FacebookRegisterStartRequest,
+): Promise<FacebookStartResponse> {
+  if (typeof data.invitation_token !== 'string'
+      || data.invitation_token.length < 20 || data.invitation_token.length > 200
+      || !data.first_name.trim() || data.first_name.length > 100
+      || !data.last_name.trim() || data.last_name.length > 100) {
+    throw new MockApiError(403, 'registration_not_available');
+  }
+  return mockFacebookStart('register', { ...data });
+}
+
+async function mockFacebookComplete(
+  purpose: 'login' | 'register',
+  data: FacebookCompleteRequest,
+  expectedStateWitness: SessionStateWitness,
+): Promise<StoredSession> {
+  const origin = loadSession();
+  if (typeof data.state !== 'string' || data.state.length < 20 || data.state.length > 200
+      || typeof data.code !== 'string' || data.code.length < 1 || data.code.length > 4096) {
+    throw new MockApiError(400, 'validation_error');
+  }
+  const intent = mockFacebookIntents.get(data.state);
+  // One-use incluso ante un purpose cruzado o expirado.
+  mockFacebookIntents.delete(data.state);
+  if (!intent || intent.purpose !== purpose || intent.expiresAt <= Date.now()) {
+    throw new MockApiError(401, 'social_auth_failed');
+  }
+  await waitSocialLatency();
+  if (purpose === 'register') {
+    if (!intent.registration) throw new MockApiError(403, 'registration_not_available');
+    const user = socialRegistrationUser(intent.registration);
+    return persistMockSocialUser(user, 'facebook-register', origin, () => {
+      state.user = user;
+      state.paymentMethods = [];
+      persist();
+    }, expectedStateWitness);
+  }
+  return persistMockSocialUser(MOCK_USER, 'facebook-login', origin, () => {
+    state.user = { ...MOCK_USER };
+    persist();
+  }, expectedStateWitness);
+}
+
+export function mockFacebookLoginComplete(
+  data: FacebookCompleteRequest,
+  expectedStateWitness: SessionStateWitness,
+): Promise<StoredSession> {
+  return mockFacebookComplete('login', data, expectedStateWitness);
+}
+
+export function mockFacebookRegisterComplete(
+  data: FacebookCompleteRequest,
+  expectedStateWitness: SessionStateWitness,
+): Promise<StoredSession> {
+  return mockFacebookComplete('register', data, expectedStateWitness);
+}
+
+export async function mockRequestRecovery(email: string): Promise<RecoveryRequestResponse> {
+  if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new MockApiError(400, 'validation_error');
+  }
+  mockRecoveryIssued = true;
+  return delay({ accepted: true });
+}
+
+export async function mockCompleteRecovery(
+  token: string,
+  newPassword: string,
+): Promise<RecoveryCompleteResponse> {
+  const passwordBytes = new TextEncoder().encode(newPassword).byteLength;
+  if (!mockRecoveryIssued || token !== MOCK_RECOVERY_TOKEN
+      || typeof newPassword !== 'string' || newPassword.length < 8
+      || newPassword.length > 128 || passwordBytes > 72) {
+    throw new MockApiError(403, 'recovery_not_available');
+  }
+  mockRecoveryIssued = false;
+  return delay({ completed: true });
 }
 
 /** Fixture de UI, no copia del aviso legal productivo ni aprobación jurídica. */

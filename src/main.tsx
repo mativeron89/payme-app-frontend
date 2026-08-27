@@ -1,6 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { bootstrapFacebookCallbackCapture } from './api/facebookAuthFlow';
+import { bootstrapRecoveryTokenCapture } from './api/recoveryFlow';
 import { IdiomaProvider } from './i18n/idioma';
 import { bootstrapSignupInvitationCustody } from './api/signupInvitation';
 import { retirarSplash } from './splash';
@@ -16,6 +18,12 @@ import './styles/global.css';
 declare const __ARBOL_SERVIDO__: string;
 (window as unknown as { __ARBOL_SERVIDO__?: string }).__ARBOL_SERVIDO__ =
   typeof __ARBOL_SERVIDO__ === 'string' ? __ARBOL_SERVIDO__ : 'desconocido';
+
+// El recovery token se captura en memoria y se retira de query/fragmento
+// antes de que React pueda renderizar o iniciar cualquier request. Si el
+// navegador no acredita la limpieza física, este bootstrap aborta fail-closed.
+bootstrapRecoveryTokenCapture();
+bootstrapFacebookCallbackCapture();
 
 const el = document.getElementById('root');
 if (!el) throw new Error('No existe #root');

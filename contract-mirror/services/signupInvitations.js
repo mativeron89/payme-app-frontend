@@ -73,7 +73,7 @@ async function emitirInvitacion(client, {
  * No actualiza: si luego falla el INSERT de user, el rollback deja la
  * invitación utilizable, en vez de consumirla sin crear la cuenta.
  */
-async function bloquearInvitacion(client, { token, email }) {
+async function bloquearInvitacionPorToken(client, { token }) {
   const hash = typeof token === 'string' && token.length >= 20 && token.length <= 200
     ? tokenHash(token)
     : null;
@@ -87,8 +87,28 @@ async function bloquearInvitacion(client, { token, email }) {
       FOR UPDATE`,
     [searchedHash]
   );
-  if (!row || row.consumed_at || new Date(row.expires_at) <= new Date()
-      || row.email_normalized !== normalizeEmail(email)) return null;
+  if (!row || row.consumed_at || new Date(row.expires_at) <= new Date()) return null;
+  return row;
+}
+
+async function bloquearInvitacionPorHash(client, { tokenHashValue }) {
+  const searchedHash = typeof tokenHashValue === 'string'
+    && /^[0-9a-f]{64}$/.test(tokenHashValue)
+    ? tokenHashValue : '0'.repeat(64);
+  const { rows: [row] } = await client.query(
+    `SELECT id,email_normalized,expires_at,consumed_at
+       FROM signup_invitations
+      WHERE token_hash=$1
+      FOR UPDATE`,
+    [searchedHash]
+  );
+  if (!row || row.consumed_at || new Date(row.expires_at) <= new Date()) return null;
+  return row;
+}
+
+async function bloquearInvitacion(client, { token, email }) {
+  const row = await bloquearInvitacionPorToken(client, { token });
+  if (!row || row.email_normalized !== normalizeEmail(email)) return null;
   return row;
 }
 
@@ -131,6 +151,8 @@ function habilitarAltaSinInvitacionParaTests() {
 module.exports = {
   emitirInvitacion,
   bloquearInvitacion,
+  bloquearInvitacionPorHash,
+  bloquearInvitacionPorToken,
   marcarConsumida,
   invitacionRequerida,
   exigirInvitacionEnTests,

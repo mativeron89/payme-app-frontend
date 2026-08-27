@@ -11,6 +11,28 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.148.0 — Google, Facebook y recovery PayMe owner-first (2026-08-27)
+
+El mirror adopta App Backend v2.72.0 con 101/101 archivos y el Frontend consume
+el contrato social sin inventar campos. “Continuar con Google” es manual,
+fija popup y ambos auto-select en OFF, y carga Google Identity Services
+únicamente cuando la capability y el client id exactos están presentes;
+Facebook usa el redirect BFF con custodia estricta de state, purpose y
+vencimiento. El login por contraseña permanece disponible.
+
+Login, alta con invitación y recovery pasan por la misma frontera estricta de
+sesión. Un testigo opaco y monotónico evita que una respuesta social tardía
+pise una sesión más nueva, incluso ante ABA entre pestañas. Los tokens de
+recovery viven sólo en memoria, se retiran del fragmento antes de React y el
+estado de completado sobrevive al remount que provoca invalidar una sesión
+anterior. Mock y navegador ejercitan Google, Facebook y recovery sin contactar
+proveedores externos.
+
+El código queda listo detrás de capabilities fail-closed. **No acredita ni
+habilita credenciales, consolas Google/Meta, App Review, modo Live, proveedor
+real, push, deploy ni producción.** Sin dependencias nuevas ni cambios de
+dinero, Stripe, wallet o POS.
+
 ## 0.147.0 — G-25 owner-first: recibos salientes opacos (2026-08-26)
 
 El mirror adopta App Backend v2.71.0 con 90/90 archivos: cada intento de

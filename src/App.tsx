@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
+import { useIdioma } from './i18n/idioma';
 import { ToastProvider } from './components/ui';
 import { allowsWalletRoute } from './api/releaseGates';
 import { tokenForMesa } from './api/invitationLink';
@@ -16,13 +17,15 @@ import { LoginScreen } from './screens/LoginScreen';
 import { MesaScreen } from './screens/MesaScreen';
 import { MesasScreen } from './screens/MesasScreen';
 import { PagosScreen } from './screens/PagosScreen';
+import { RecoveryScreen } from './screens/RecoveryScreen';
 import { MasScreen } from './screens/MasScreen';
 import { TarjetasScreen } from './screens/TarjetasScreen';
 import { TopupScreen } from './screens/TopupScreen';
 import { TransferScreen } from './screens/TransferScreen';
 
 function Shell() {
-  const { session } = useAuth();
+  const { session, facebookCallbackPhase } = useAuth();
+  const { t } = useIdioma();
   const route = useRoute();
   // OLA 5D · quién puede alcanzar el riel saldo lo declara el BACKEND. Se pide
   // antes de cualquier return temprano (regla de hooks) y arranca APAGADO, así
@@ -101,6 +104,22 @@ function Shell() {
     () => tokenForMesa(route.param ?? '', route.query.get('t')),
     [route],
   );
+  // El callback ya fue limpiado antes de React, pero su canje sigue siendo
+  // asíncrono. No se monta ningún control de login mientras esa autoridad está
+  // en vuelo: un segundo ingreso no puede competir por la sesión visible.
+  if (facebookCallbackPhase === 'processing') {
+    return (
+      <div className="login-screen">
+        <div className="login-card" role="status" aria-live="polite">
+          {t('Un segundo…')}
+        </div>
+      </div>
+    );
+  }
+  // Recovery es público y una operación ya emitida puede completarse aunque
+  // la capability haya caído. Vive antes del guard de sesión y no recibe el
+  // token: RecoveryScreen sólo observa el snapshot saneado en memoria.
+  if (route.page === 'recovery') return <RecoveryScreen />;
   if (route.page === 'mesa' && route.param && linkToken) {
     return <JoinMesaScreen key={route.param} code={route.param} token={linkToken} />;
   }

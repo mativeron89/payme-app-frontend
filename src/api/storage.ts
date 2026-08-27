@@ -33,6 +33,17 @@ const MAX_TOMBSTONES = 64;
 const listeners = new Set<() => void>();
 const volatileInvalidated = new Map<string, string>();
 
+declare const SESSION_STATE_WITNESS_BRAND: unique symbol;
+
+/**
+ * Testigo opaco y no secreto del estado lógico de sesión. Facebook lo liga al
+ * redirect para que un login/logout ocurrido durante la ida a Meta invalide el
+ * callback viejo, incluso en el ABA `sin sesión → B → sin sesión`.
+ */
+export type SessionStateWitness = string & {
+  readonly [SESSION_STATE_WITNESS_BRAND]: 'payme-session-state-witness-v1';
+};
+
 function notify(): void {
   listeners.forEach((listener) => listener());
 }
@@ -95,6 +106,49 @@ function readTombstones(): SessionTombstone[] {
     !entry || typeof entry !== 'object' || typeof entry.family_id !== 'string' || !entry.family_id || typeof entry.principal_id !== 'string' || !entry.principal_id || !Number.isSafeInteger(entry.at) || entry.at < 0
   )) throw new Error('session_tombstone_ambiguous');
   return journal.entries;
+}
+
+/**
+ * Captura canónica sin bearers ni datos de perfil. La familia actual detecta
+ * un login/relogin; el journal detecta un logout aunque el estado vuelva a
+ * `null`. Una sesión/tombstone ambiguo no puede autorizar un callback social.
+ */
+export function captureSessionStateWitness(): SessionStateWitness {
+  try {
+    const raw = localStorage.getItem(KEY);
+    let session: StoredSession | null = null;
+    if (raw !== null) {
+      const parsed: unknown = JSON.parse(raw);
+      if (!validSession(parsed)) throw new Error('session_state_ambiguous');
+      session = parsed;
+    }
+    const tombstones = readTombstones();
+    const durableInvalidated = tombstones.some((entry) => (
+      !!session && sameFamily(entry, session)
+    ));
+    const volatileInvalidation = !!session
+      && volatileInvalidated.get(session.family_id) === session.principal_id;
+    const currentFamilyId = durableInvalidated || volatileInvalidation
+      ? null
+      : session?.family_id ?? null;
+    const durable = tombstones.map((entry) => ({ family_id: entry.family_id, at: entry.at }));
+    const volatile = [...volatileInvalidated.keys()].sort();
+    return JSON.stringify({
+      v: 1,
+      current_family_id: currentFamilyId,
+      durable_invalidations: durable,
+      volatile_invalidations: volatile,
+    }) as SessionStateWitness;
+  } catch {
+    throw new Error('session_state_unavailable');
+  }
+}
+
+export function assertSessionStateWitness(expected: SessionStateWitness): void {
+  if (typeof expected !== 'string' || expected.length === 0 || expected.length > 65_536
+      || captureSessionStateWitness() !== expected) {
+    throw new Error('session_state_changed');
+  }
 }
 
 function tombstoned(session: Pick<StoredSession, 'family_id' | 'principal_id'>): boolean {

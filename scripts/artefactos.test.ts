@@ -55,9 +55,24 @@ const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).dig
  * una lista donde no se puede saber qué se está permitiendo.
  */
 const HOSTS_PERMITIDOS = [
-  { host: 'js.stripe.com', egress: true, porque: 'SDK de Stripe · única dependencia externa ratificada' },
+  {
+    host: 'accounts.google.com',
+    egress: true,
+    porque: 'Google Identity Services · script diferido y condicionado por la capability social exacta',
+  },
+  {
+    host: 'app.paymemx.com',
+    egress: false,
+    porque: 'redirect URI exacto de Facebook validado; aparece como dato y no se carga automáticamente',
+  },
+  { host: 'js.stripe.com', egress: true, porque: 'SDK de Stripe · dependencia externa ratificada del cobro' },
   { host: 'localhost', egress: false, porque: 'default de desarrollo; no es un destino de producción' },
   { host: 'wa.me', egress: false, porque: 'DESTINO DE NAVEGACIÓN al tocar compartir, no un recurso que se cargue solo' },
+  {
+    host: 'www.facebook.com',
+    egress: false,
+    porque: 'DESTINO DE NAVEGACIÓN del diálogo OAuth iniciado por el usuario; no es una carga automática',
+  },
   { host: 'www.w3.org', egress: false, porque: 'namespace XML de los SVG (`xmlns`). El navegador no lo pide nunca' },
   { host: 'reactjs.org', egress: false, porque: 'texto de un mensaje de error de React' },
   { host: 'docs.stripe.com', egress: false, porque: 'texto de un mensaje de error del SDK' },
@@ -291,20 +306,24 @@ describe.each([0, 1])('artefacto distribuible #%i', (i) => {
     expect(ajenos, `hosts que nadie autorizó: ${ajenos.join(' · ')}`).toEqual([]);
   });
 
-  it('🔴 CASO LEGÍTIMO · el único egress real es Stripe, y sólo donde corresponde', () => {
+  it('🔴 CASO LEGÍTIMO · cada egress real aparece sólo donde corresponde', () => {
     // La contracara del mutante: rechazar todo también deja los mutantes en
     // rojo. Esto afirma que lo autorizado se acepta.
     const reales = HOSTS_PERMITIDOS.filter((h) => h.egress);
-    expect(reales.map((h) => h.host)).toEqual(['js.stripe.com']);
+    expect(reales.map((h) => h.host)).toEqual(['accounts.google.com', 'js.stripe.com']);
 
     if (art().esperaStripe) {
       expect(art().texto, 'el SDK de Stripe no está en el build real').toContain('js.stripe.com');
+      expect(art().texto, 'Google Identity Services no está en el build real')
+        .toContain('accounts.google.com');
     } else {
       // 🔴 Y acá la afirmación es la INVERSA, que vale más que la directa: el
       // artefacto de demo no puede llegar a Stripe ni queriendo. `stripe.ts`
       // corta en `if (IS_MOCK) return null` antes del `import()` dinámico, así
       // que la librería queda en un chunk que este build no emite.
       expect(art().texto, 'la demo NO debe poder alcanzar Stripe').not.toContain('js.stripe.com');
+      expect(art().texto, 'la demo NO debe poder alcanzar Google Identity Services')
+        .not.toContain('accounts.google.com');
     }
   });
 

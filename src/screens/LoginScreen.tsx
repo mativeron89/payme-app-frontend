@@ -4,6 +4,16 @@ import { IS_MOCK } from '../api';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import {
+  prepareFacebookRedirect,
+  simulateFacebookCallbackForMock,
+} from '../api/facebookAuthFlow';
+import {
+  renderGoogleIdentityButton,
+  type GoogleButtonHandle,
+} from '../api/googleIdentity';
+import { useSocialAuthCapability } from '../api/socialAuth';
+import { captureSessionStateWitness } from '../api/storage';
+import {
   clearSignupInvitation,
   signupInvitationSnapshot,
   subscribeSignupInvitation,
@@ -29,6 +39,25 @@ const ERROR_TEXT: Record<string, string> = {
   too_many_signup_attempts: 'Prueba de nuevo más tarde.',
   rate_limit_unavailable: 'Prueba de nuevo más tarde.',
 };
+
+export interface SocialActionEligibility {
+  readonly mode: 'login' | 'register';
+  readonly providerActionEnabled: boolean;
+  readonly signupAvailable: boolean;
+  readonly legalReady: boolean;
+  readonly firstName: string;
+  readonly lastName: string;
+}
+
+/** La alta social hereda invitación, legal y nombres; nunca email/password. */
+export function socialActionEligible(input: SocialActionEligibility): boolean {
+  if (!input.providerActionEnabled) return false;
+  if (input.mode === 'login') return true;
+  return input.signupAvailable
+    && input.legalReady
+    && input.firstName.trim().length > 0
+    && input.lastName.trim().length > 0;
+}
 
 function errorMessage(err: unknown, t: (s: string, ...a: unknown[]) => string): string {
   const { code } = extractApiError(err);
@@ -60,7 +89,16 @@ export function modeAfterSignupSnapshot(
  */
 export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register' } = {}) {
   const { t, idioma } = useIdioma();
-  const { login, register } = useAuth();
+  const {
+    login,
+    register,
+    googleLogin,
+    googleRegister,
+    facebookCallbackPhase,
+    completeFacebookCallback,
+    clearFacebookCallbackError,
+  } = useAuth();
+  const social = useSocialAuthCapability();
   const signup = useSyncExternalStore(
     subscribeSignupInvitation,
     signupInvitationSnapshot,
@@ -75,10 +113,143 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [socialBusy, setSocialBusy] = useState(false);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [recoveryAccepted, setRecoveryAccepted] = useState(false);
+  const [googleGeneration, setGoogleGeneration] = useState(0);
+  const [googleLoadFailed, setGoogleLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [legal, setLegal] = useState<LegalState>({ status: 'idle' });
   const [legalAttempt, setLegalAttempt] = useState(0);
   const previousSignup = useRef(signup);
+  const googleContainer = useRef<HTMLDivElement | null>(null);
+  const googleHandle = useRef<GoogleButtonHandle | null>(null);
+  const googleAction = useRef<(credential: string) => Promise<void>>(async () => undefined);
+
+  const signupAvailable = signup.status === 'available';
+  const legalReady = legal.status === 'ready';
+  const googleEligible = socialActionEligible({
+    mode,
+    providerActionEnabled: social.google.enabled
+      && (mode === 'login' ? social.google.login : social.google.registration),
+    signupAvailable,
+    legalReady,
+    firstName,
+    lastName,
+  }) && social.google.webClientId !== null;
+  const facebookEligible = socialActionEligible({
+    mode,
+    providerActionEnabled: social.facebook.enabled
+      && (mode === 'login' ? social.facebook.login : social.facebook.registration),
+    signupAvailable,
+    legalReady,
+    firstName,
+    lastName,
+  });
+
+  googleAction.current = async (credential: string) => {
+    if (!googleEligible || socialBusy) return;
+    setSocialBusy(true);
+    setError(null);
+    try {
+      if (mode === 'login') {
+        await googleLogin(credential);
+      } else {
+        if (signup.status !== 'available' || legal.status !== 'ready') {
+          throw new Error('social_registration_prerequisite_changed');
+        }
+        await googleRegister({
+          id_token: credential,
+          invitation_token: signup.token,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+        });
+        clearSignupInvitation();
+      }
+    } catch {
+      setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
+      // El handle es one-use: un fallo requiere una generación nueva.
+      setGoogleGeneration((value) => value + 1);
+    } finally {
+      setSocialBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    googleHandle.current?.dispose();
+    googleHandle.current = null;
+    const container = googleContainer.current;
+    const clientId = social.google.webClientId;
+    if (!googleEligible || !container || !clientId || googleLoadFailed) return;
+    let active = true;
+    const handle = renderGoogleIdentityButton({
+      container,
+      clientId,
+      mockLabel: t('Continuar con Google'),
+      onCredential: (credential) => { void googleAction.current(credential); },
+    });
+    googleHandle.current = handle;
+    void handle.ready.catch(() => {
+      if (!active) return;
+      setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
+      setGoogleLoadFailed(true);
+    });
+    return () => {
+      active = false;
+      handle.dispose();
+      if (googleHandle.current === handle) googleHandle.current = null;
+    };
+  }, [googleEligible, googleGeneration, googleLoadFailed, social.google.webClientId, t]);
+
+  async function onFacebook() {
+    if (!facebookEligible || socialBusy) return;
+    setSocialBusy(true);
+    setError(null);
+    clearFacebookCallbackError();
+    try {
+      const sessionStateWitness = captureSessionStateWitness();
+      const response = mode === 'login'
+        ? await api.facebookLoginStart()
+        : signup.status === 'available' && legal.status === 'ready'
+          ? await api.facebookRegisterStart({
+              invitation_token: signup.token,
+              first_name: firstName.trim(),
+              last_name: lastName.trim(),
+            })
+          : (() => { throw new Error('social_registration_prerequisite_changed'); })();
+      const authorizationUrl = prepareFacebookRedirect(
+        response,
+        mode,
+        social.facebook,
+        sessionStateWitness,
+      );
+      if (IS_MOCK) {
+        simulateFacebookCallbackForMock(response);
+        await completeFacebookCallback();
+      } else {
+        window.location.assign(authorizationUrl);
+      }
+    } catch {
+      setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
+    } finally {
+      setSocialBusy(false);
+    }
+  }
+
+  async function onRecoveryRequest() {
+    if (mode !== 'login' || !social.recovery.enabled || recoveryBusy) return;
+    setRecoveryBusy(true);
+    setRecoveryAccepted(false);
+    setError(null);
+    try {
+      await api.requestRecovery(email.trim());
+      setRecoveryAccepted(true);
+    } catch (err) {
+      setError(errorMessage(err, t));
+    } finally {
+      setRecoveryBusy(false);
+    }
+  }
 
   // Un segundo link abierto en la misma pestaña cambia sólo el hash: React no
   // remonta el componente. La custodia debe reaccionar a esa navegación y no
@@ -162,8 +333,20 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
           {mode === 'login' ? t('Entra a tu cuenta') : t('Crea tu cuenta')}
         </div>
         {error && (
-          <div className="form-error" role="alert">
+          <div id="login-error" className="form-error" role="alert">
             {error}
+          </div>
+        )}
+        {!error && facebookCallbackPhase === 'error' && (
+          <div id="login-error" className="form-error social-callback-error" role="alert">
+            <div>{t('No pudimos completar el ingreso. Prueba de nuevo.')}</div>
+            <button
+              type="button"
+              className="login-toggle"
+              onClick={clearFacebookCallbackError}
+            >
+              {t('Continuar')}
+            </button>
           </div>
         )}
         {mode === 'register' && (
@@ -171,40 +354,29 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             <input
               className="input"
               placeholder={t('Nombre')}
+              aria-label={t('Nombre')}
+              aria-invalid={!!error}
+              aria-describedby={error ? 'login-error' : undefined}
               autoComplete="given-name"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
+              disabled={busy || socialBusy}
               required
             />
             <input
               className="input"
               placeholder={t('Apellido')}
+              aria-label={t('Apellido')}
+              aria-invalid={!!error}
+              aria-describedby={error ? 'login-error' : undefined}
               autoComplete="family-name"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
+              disabled={busy || socialBusy}
               required
             />
           </>
         )}
-        <input
-          className="input"
-          type="email"
-          placeholder={t('Email')}
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          className="input"
-          type="password"
-          placeholder={t('Contraseña')}
-          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
         {mode === 'register' && legal.status === 'loading' && (
           <div className="legal-notice-state" role="status">{t('Cargando…')}</div>
         )}
@@ -233,10 +405,97 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             </div>
           </section>
         )}
+        {(googleEligible || facebookEligible) && (
+          <section className="social-auth-options" aria-busy={socialBusy}>
+            {googleEligible && (
+              <div className="social-provider-slot">
+                <div
+                  ref={googleContainer}
+                  className="social-google-container"
+                  role="group"
+                  aria-label={t('Continuar con Google')}
+                />
+                {googleLoadFailed && (
+                  <button
+                    type="button"
+                    className="login-toggle social-provider-retry"
+                    onClick={() => {
+                      setGoogleLoadFailed(false);
+                      setGoogleGeneration((value) => value + 1);
+                    }}
+                  >
+                    {t('Reintentar')}
+                  </button>
+                )}
+              </div>
+            )}
+            {facebookEligible && (
+              <button
+                type="button"
+                className="social-provider-button social-provider-facebook"
+                onClick={() => { void onFacebook(); }}
+                disabled={socialBusy}
+              >
+                {socialBusy ? t('Un segundo…') : t('Continuar con Facebook')}
+              </button>
+            )}
+            <div className="social-auth-divider" aria-hidden="true">
+              <span>{t('O usa tu correo y contraseña')}</span>
+            </div>
+          </section>
+        )}
+        <input
+          className="input"
+          type="email"
+          placeholder={t('Email')}
+          aria-label={t('Email')}
+          aria-invalid={!!error}
+          aria-describedby={error ? 'login-error' : undefined}
+          autoComplete="email"
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setRecoveryAccepted(false);
+          }}
+          disabled={busy || socialBusy || recoveryBusy}
+          required
+        />
+        <input
+          className="input"
+          type="password"
+          placeholder={t('Contraseña')}
+          aria-label={t('Contraseña')}
+          aria-invalid={!!error}
+          aria-describedby={error ? 'login-error' : undefined}
+          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+          minLength={8}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={busy || socialBusy || recoveryBusy}
+          required
+        />
+        {mode === 'login' && social.recovery.enabled && (
+          <div className="recovery-request">
+            <button
+              type="button"
+              className="login-toggle recovery-request-button"
+              onClick={() => { void onRecoveryRequest(); }}
+              disabled={busy || socialBusy || recoveryBusy || email.trim().length === 0}
+            >
+              {recoveryBusy ? t('Un segundo…') : t('¿Olvidaste tu contraseña?')}
+            </button>
+            {recoveryAccepted && (
+              <div className="recovery-request-success" role="status">
+                {t('Si existe una cuenta con ese correo, te enviaremos instrucciones.')}
+              </div>
+            )}
+          </div>
+        )}
         <button
           className="btn btn-primary"
           type="submit"
-          disabled={busy || (mode === 'register' && legal.status !== 'ready')}
+          disabled={busy || socialBusy || recoveryBusy
+            || (mode === 'register' && legal.status !== 'ready')}
         >
           {busy ? t('Un segundo…') : mode === 'login' ? t('Entrar') : t('Registrarme')}
         </button>
@@ -248,6 +507,8 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             onClick={() => {
               setMode(mode === 'login' ? 'register' : 'login');
               setError(null);
+              setRecoveryAccepted(false);
+              clearFacebookCallbackError();
             }}
           >
             {mode === 'login' ? t('¿No tienes cuenta? Regístrate') : t('Ya tengo cuenta → entrar')}

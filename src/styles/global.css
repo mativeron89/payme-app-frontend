@@ -978,6 +978,113 @@ body {
   font-family: var(--font-body);
   padding: 8px;
 }
+.login-toggle:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.login-toggle:focus-visible,
+.social-provider-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--teal) 65%, white);
+  outline-offset: 2px;
+}
+.social-auth-options {
+  display: grid;
+  gap: 10px;
+  margin: 2px 0 12px;
+}
+.social-provider-slot {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+/* El SDK de Google es dueño de su botón; PayMe sólo dimensiona el host. */
+.social-google-container {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.social-provider-button {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: 10px;
+  padding: 11px 14px;
+  cursor: pointer;
+  font: 700 14px/1.2 var(--font-body);
+}
+.social-provider-button:active {
+  transform: scale(0.99);
+}
+.social-provider-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.social-provider-facebook {
+  color: #fff;
+  background: #1877f2;
+}
+.social-provider-retry {
+  min-height: 44px;
+}
+.social-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--gray-txt);
+  font: 12px/1.4 var(--font-body);
+  text-align: center;
+}
+.social-auth-divider::before,
+.social-auth-divider::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--gray-b);
+}
+.social-auth-divider span {
+  max-width: 70%;
+}
+.social-callback-error .login-toggle {
+  min-height: 38px;
+  margin-top: 2px;
+}
+.recovery-request {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin: -4px 0 8px;
+}
+.recovery-request-button {
+  min-height: 44px;
+}
+.recovery-request-success,
+.recovery-success {
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--teal) 45%, white);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--teal) 12%, white);
+  color: var(--navy);
+  padding: 10px 12px;
+  font: 13px/1.45 var(--font-body);
+}
+.recovery-card .h2 {
+  margin: 0 0 16px;
+}
+.recovery-field {
+  display: grid;
+  gap: 6px;
+  color: var(--navy);
+  font: 700 13px/1.4 var(--font-body);
+}
+.recovery-field .input {
+  margin-bottom: 12px;
+}
+.recovery-success {
+  margin-bottom: 12px;
+  text-align: center;
+}
 .legal-notice-state {
   color: var(--navy);
   font-size: 13px;

@@ -109,6 +109,10 @@ const ESPERADO: Record<PageId, Esperado> = {
   tarjetas: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis tarjetas' } },
   pagos: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis pagos' } },
   estadisticas: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis estadísticas' } },
+  recovery: {
+    tipo: 'pantalla',
+    marcador: { rol: 'heading', nombre: 'Crear una contraseña nueva' },
+  },
 
   /**
    * Las dos del riel saldo **no montan pantalla: redirigen**, y eso es lo

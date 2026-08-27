@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "064c51aadd2266f8f47ed36461dd60f7b9f39b88",
-  "total": 90,
+  "commit": "84a71f869925de3313b0fb8e6f372a93308d35da",
+  "total": 101,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -15,6 +15,12 @@
       "destino": "contract/mesa-pay-identity-vectors.json",
       "sha256": "a1b5c6a34b6ac045cf3969bfdda122ee72a791711cd4320f69450c2e56ccebef",
       "bytes": 5731
+    },
+    {
+      "origen": "contract/social-auth-v1.json",
+      "destino": "contract/social-auth-v1.json",
+      "sha256": "8af351dd01195e326dbdb5d57363f11aefce77ade78a5830321e18df744813fb",
+      "bytes": 7830
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -191,6 +197,12 @@
       "bytes": 744
     },
     {
+      "origen": "db/migrate_social_auth_v2.72.0.sql",
+      "destino": "db/migrate_social_auth_v2.72.0.sql",
+      "sha256": "a3a5a05860c6466075101be1584aada15210528eefdbb210557920daf227838a",
+      "bytes": 11937
+    },
+    {
       "origen": "db/migrate_topup_stripe_contract_v2.28.4.sql",
       "destino": "db/migrate_topup_stripe_contract_v2.28.4.sql",
       "sha256": "6567d33603c0ecc871054ddad56152bcf4069e07736b0b174b3ca0476353a3ac",
@@ -217,8 +229,8 @@
     {
       "origen": "db/schema.sql",
       "destino": "db/schema.sql",
-      "sha256": "856875a98f671d492198ab3040353d843c365b0cfae2211b6adafc9644649b60",
-      "bytes": 58114
+      "sha256": "66875e5c90193496101ca9af04c536d3ae40784edb13edcfbc4469e11ab0d5b3",
+      "bytes": 67981
     },
     {
       "origen": "docs/history/CHANGELOG_v2.11.md",
@@ -249,6 +261,12 @@
       "destino": "docs/HANDOFF_G25_SOLICITUDES_SALIENTES_V2.71.0.md",
       "sha256": "f95188f349ee59dbdf5bde054603046e311b1c25a6f27ab00c800c90f372f29f",
       "bytes": 2340
+    },
+    {
+      "origen": "docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md",
+      "destino": "docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md",
+      "sha256": "ca4f0ec10841d0d52c51971ba526bc5c1cd745d104cef8674291d4b8a6731936",
+      "bytes": 5649
     },
     {
       "origen": "docs/history/README_v2.10_CONSOLIDADO.md",
@@ -289,14 +307,14 @@
     {
       "origen": "routes/auth.js",
       "destino": "routes/auth.js",
-      "sha256": "bf62d25b25faa1a18a8acc9897b56d9079dcdaa9156cb78a8bb85e2bb31922cf",
-      "bytes": 16674
+      "sha256": "b57749e71a0f4109ec836c60fc599f2f0e949c96841bea83b95a609dd87f762d",
+      "bytes": 16401
     },
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "cb09ac921e1e07787fc1ba8e4ee2484b270a5f9989ee86e2bf6497e30d438164",
-      "bytes": 6830
+      "sha256": "7aa87a71fd360a4b2bab2217ea9996f6367d117e87c3fd3239d2b2357e87ba1f",
+      "bytes": 7361
     },
     {
       "origen": "routes/connect.js",
@@ -359,6 +377,12 @@
       "bytes": 2475
     },
     {
+      "origen": "routes/social-auth.js",
+      "destino": "routes/social-auth.js",
+      "sha256": "a0aed81ba273beef44c29fad1f0acdb3a50146eecec435a322c0efa79874538b",
+      "bytes": 9532
+    },
+    {
       "origen": "routes/spei-funding.js",
       "destino": "routes/spei-funding.js",
       "sha256": "186de10fe30cffa581a84a0c5ffe42e907a87ad88b07e345c926d9c46d71f000",
@@ -397,8 +421,14 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "41639527c524c8298158a38f3e8c6964af964c2596719e4bee938984f79a801b",
-      "bytes": 20131
+      "sha256": "24e819b704692a2c875f8f36de56325d15102cee7432be7d32c7e86cc8b387b4",
+      "bytes": 21739
+    },
+    {
+      "origen": "services/authRecovery.js",
+      "destino": "services/authRecovery.js",
+      "sha256": "e8240f5f6fcf722bd283f4e5af351cc9e23d5116cf60fcd1b43181a7bcc90265",
+      "bytes": 8324
     },
     {
       "origen": "services/cardEligibility.js",
@@ -417,6 +447,30 @@
       "destino": "services/consent.js",
       "sha256": "2834a92a7deccee8accfeba402c15d217ddc260ebe92686985f5fa505f389afa",
       "bytes": 9198
+    },
+    {
+      "origen": "services/externalIdentities.js",
+      "destino": "services/externalIdentities.js",
+      "sha256": "1a0e38409333797df9602dd4bd94631e8ebbeafd42697dc9c67e80d61ba254fa",
+      "bytes": 6967
+    },
+    {
+      "origen": "services/facebookDataRights.js",
+      "destino": "services/facebookDataRights.js",
+      "sha256": "a2a19d85cebc0458fb2fa4e215fe5e9b19873fe7f9ac3adb3ff16990da050c4f",
+      "bytes": 8960
+    },
+    {
+      "origen": "services/facebookIdentity.js",
+      "destino": "services/facebookIdentity.js",
+      "sha256": "b668b0a1f00b686d4aab4dd011c541784cc88e828a2b3dd9e4d4868e9dcb55d4",
+      "bytes": 7128
+    },
+    {
+      "origen": "services/googleIdentity.js",
+      "destino": "services/googleIdentity.js",
+      "sha256": "4a9cd8ef62f5c1e9aef95a190fc7045087578ae04c0ea469aeed609f9352c950",
+      "bytes": 3984
     },
     {
       "origen": "services/invitationAuthority.js",
@@ -473,6 +527,12 @@
       "bytes": 3944
     },
     {
+      "origen": "services/paymeSessions.js",
+      "destino": "services/paymeSessions.js",
+      "sha256": "fbe2c0005596d410bec06e92394d0c240936aa28b96853d475cb16c9bda5e696",
+      "bytes": 1647
+    },
+    {
       "origen": "services/profileIdentity.js",
       "destino": "services/profileIdentity.js",
       "sha256": "c23d39271575583f77ec265340bc562c7e2b9781c940387c4ce7486d0db2971a",
@@ -493,14 +553,20 @@
     {
       "origen": "services/signupInvitations.js",
       "destino": "services/signupInvitations.js",
-      "sha256": "c111f01a4123580ab56f92ae6d5da8d222e6b6fe9891f43da4984695fddbfc0d",
-      "bytes": 5348
+      "sha256": "ea668af69100f0c7c8167eea9f1968831e2806e6b25c5a8b46812686dd8cfd94",
+      "bytes": 6090
     },
     {
       "origen": "services/signupRateLimit.js",
       "destino": "services/signupRateLimit.js",
       "sha256": "8633e72df914c073d9017f739e6ae1ac42fa02bba36f37aae2286da24166f0d1",
       "bytes": 6205
+    },
+    {
+      "origen": "services/socialAuthIntents.js",
+      "destino": "services/socialAuthIntents.js",
+      "sha256": "bb92567600151ba5469a5d5f88a77574fa4b467c4f103e070ba2905aca8411fd",
+      "bytes": 4154
     },
     {
       "origen": "services/topupProcessor.js",

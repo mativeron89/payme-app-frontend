@@ -1,0 +1,233 @@
+{
+  "version": 1,
+  "owner": "payme-app-backend",
+  "activation": "local_dark",
+  "external_prerequisites": [
+    "google_verifier_and_client_ids",
+    "payme_recovery_transport",
+    "meta_app_review_and_live_mode",
+    "meta_exact_redirect_and_callbacks",
+    "meta_data_deletion_legal_retention",
+    "physical_browser_validation"
+  ],
+  "capability": {
+    "path": "features.social_auth",
+    "absent_means": "google_facebook_recovery_off_password_login_enabled",
+    "unknown_or_malformed_means": "google_facebook_recovery_off_password_login_enabled",
+    "shape": {
+      "google_sign_in": ["enabled", "registration", "login", "linking", "web_client_id"],
+      "facebook_sign_in": ["enabled", "registration", "login", "app_id", "redirect_uri"],
+      "recovery_email": ["enabled", "completion_route"],
+      "password_login": ["enabled"]
+    }
+  },
+  "endpoints": {
+    "google_register": {
+      "method": "POST",
+      "path": "/api/auth/google/register",
+      "request": ["invitation_token", "id_token", "first_name", "last_name", "birth_date?"],
+      "success_status": 201,
+      "success_shape": "session_success_shape",
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "registration_not_available": [403, 503],
+        "registration_unavailable": [503],
+        "too_many_auth_attempts": [429],
+        "too_many_signup_attempts": [429],
+        "rate_limit_unavailable": [503]
+      }
+    },
+    "google_login": {
+      "method": "POST",
+      "path": "/api/auth/google/login",
+      "request": ["id_token"],
+      "success_status": 200,
+      "success_shape": "session_success_shape",
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "social_auth_failed": [401, 503],
+        "too_many_auth_attempts": [429]
+      }
+    },
+    "google_link": {
+      "method": "POST",
+      "path": "/api/auth/google/link",
+      "auth": "payme_bearer",
+      "request": ["id_token", "current_password"],
+      "success": { "linked": true, "provider": "google" },
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "auth_required": [401],
+        "reauthentication_failed": [403],
+        "social_auth_failed": [401, 503],
+        "too_many_auth_attempts": [429]
+      }
+    },
+    "facebook_register_start": {
+      "method": "POST",
+      "path": "/api/auth/facebook/register/start",
+      "request": ["invitation_token", "first_name", "last_name", "birth_date?"],
+      "success": ["authorization_url", "expires_at"],
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "registration_not_available": [403, 503],
+        "registration_unavailable": [503],
+        "too_many_auth_attempts": [429],
+        "too_many_signup_attempts": [429],
+        "rate_limit_unavailable": [503]
+      }
+    },
+    "facebook_register_complete": {
+      "method": "POST",
+      "path": "/api/auth/facebook/register/complete",
+      "request": ["state", "code"],
+      "success_status": 201,
+      "success_shape": "session_success_shape",
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "registration_not_available": [403, 503],
+        "registration_unavailable": [503],
+        "too_many_auth_attempts": [429]
+      }
+    },
+    "facebook_login_start": {
+      "method": "POST",
+      "path": "/api/auth/facebook/login/start",
+      "request": [],
+      "success": ["authorization_url", "expires_at"],
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "social_auth_failed": [401, 503],
+        "too_many_auth_attempts": [429]
+      }
+    },
+    "facebook_login_complete": {
+      "method": "POST",
+      "path": "/api/auth/facebook/login/complete",
+      "request": ["state", "code"],
+      "success_status": 200,
+      "success_shape": "session_success_shape",
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "social_auth_failed": [401, 503],
+        "too_many_auth_attempts": [429]
+      }
+    },
+    "facebook_deauthorize": {
+      "method": "POST",
+      "path": "/api/auth/facebook/deauthorize",
+      "content_type": "application/x-www-form-urlencoded",
+      "request": ["signed_request"],
+      "success": { "accepted": true },
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "facebook_callback_invalid": [400]
+      }
+    },
+    "facebook_data_deletion": {
+      "method": "POST",
+      "path": "/api/auth/facebook/data-deletion",
+      "content_type": "application/x-www-form-urlencoded",
+      "request": ["signed_request"],
+      "success": ["url", "confirmation_code"],
+      "status_semantics": "pending_until_quiescence_is_proven",
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "facebook_callback_invalid": [400]
+      }
+    },
+    "facebook_data_deletion_status": {
+      "method": "GET",
+      "path": "/api/auth/facebook/data-deletion/status/:confirmation_code",
+      "success": { "status": ["pending", "completed"] },
+      "errors": { "not_found": [404] },
+      "durable_without_current_meta_configuration": true
+    },
+    "recovery_request": {
+      "method": "POST",
+      "path": "/api/auth/recovery/request",
+      "request": ["email"],
+      "success_status": 202,
+      "success": { "accepted": true },
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "too_many_auth_attempts": [429]
+      }
+    },
+    "recovery_complete": {
+      "method": "POST",
+      "path": "/api/auth/recovery/complete",
+      "request": ["token", "new_password"],
+      "success": { "completed": true },
+      "errors": {
+        "validation_error": [400],
+        "recovery_not_available": [403],
+        "too_many_auth_attempts": [429]
+      }
+    }
+  },
+  "facebook_redirect_flow": {
+    "browser_binding": "store_exact_start_state_and_purpose_in_session_storage",
+    "callback_check": "compare_url_state_exactly_before_complete",
+    "callback_cleanup": "remove_code_and_state_from_url_immediately",
+    "state_storage": "session_storage_only_until_callback",
+    "state_forbidden_in": ["database_raw", "logs", "local_storage"],
+    "payme_session_tokens_in_url": false,
+    "facebook_linking_in_v1": false,
+    "reauthorization_after_deauthorization_in_v1": false
+  },
+  "recovery_delivery_flow": {
+    "link_template": "{app_origin}/#/recovery?token={percent_encoded_raw_token}",
+    "token_location": "fragment_query_only",
+    "token_parameter": "token",
+    "missing_or_duplicate_token": "invalid",
+    "capture": "read_once_then_remove_from_url_immediately_before_any_network_request",
+    "temporary_storage": "memory_only",
+    "http_request_target_contains_token": false,
+    "forbidden_storage": ["local_storage", "session_storage", "indexed_db", "logs", "analytics"],
+    "completion_request": "post_token_and_new_password_in_https_body"
+  },
+  "session_success_shape": {
+    "user": ["id", "payme_id", "email", "first_name", "last_name"],
+    "access_token": "string",
+    "refresh_token": "string",
+    "expires_in": "integer_seconds"
+  },
+  "forbidden_client_fields": [
+    "provider_email",
+    "provider_name",
+    "provider_photo",
+    "provider_subject",
+    "provider_access_token",
+    "provider_refresh_token",
+    "app_secret",
+    "subject_control_secret"
+  ],
+  "forbidden_persistence": {
+    "scope": "backend_database_logs_and_artifacts",
+    "values": [
+      "id_token",
+      "facebook_authorization_code",
+      "facebook_state_raw",
+      "facebook_signed_request",
+      "facebook_confirmation_code_raw",
+      "provider_access_token",
+      "provider_refresh_token",
+      "provider_email",
+      "provider_name",
+      "provider_photo",
+      "app_secret",
+      "subject_control_secret"
+    ]
+  }
+}

@@ -1,6 +1,7 @@
-import { createSession, invalidateSession, isCurrentSession, loadSession, persistSessionTombstone, replaceCurrentSession, saveSession, SessionStorageInvalidationError, type StoredSession } from './storage';
+import { assertSessionStateWitness, createSession, invalidateSession, isCurrentSession, loadSession, persistSessionTombstone, replaceCurrentSession, saveSession, SessionStorageInvalidationError, type SessionStateWitness, type StoredSession } from './storage';
 import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenPair } from './types';
 import { MAX_AVATAR_OUTPUT_BYTES, validatePrivateAvatarBlob, type PrivateAvatarBlob } from './profileIdentity';
+import { decodeSocialSessionResponse } from './socialAuth';
 
 /**
  * Cliente HTTP real contra el app backend (contract-mirror/).
@@ -40,11 +41,22 @@ async function withSessionLock<T>(action: () => Promise<T> | T): Promise<T | nul
 }
 
 /**
+ * Participación pública en la misma exclusión de sesión. Se usa sólo para
+ * productores mock que persisten dentro de su adapter; los productores reales
+ * ya entran por `persistNewSession`.
+ */
+export async function runWithSessionStateLock<T>(action: () => Promise<T> | T): Promise<T> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) return action();
+  return locks.request(SESSION_LOCK, { mode: 'exclusive' }, action);
+}
+
+/**
  * Marca la familia antes de esperar el lock y después ejecuta el CAS físico.
  * Si el primer journal falla, `invalidateSession` conserva el marcador volátil,
  * intenta la limpieza física y recién entonces propaga el fallo de storage.
  */
-async function invalidateSessionSerialized(session: StoredSession): Promise<boolean> {
+export async function invalidateSessionSerialized(session: StoredSession): Promise<boolean> {
   try {
     persistSessionTombstone(session);
   } catch {
@@ -220,9 +232,9 @@ async function tryRefresh(session: StoredSession): Promise<StoredSession | null>
   return pending;
 }
 
-/** Request PÚBLICA (sin sesión): hoy solo restaurantes (G-01, v2.21). */
-export async function httpPublicRequest<T>(method: string, path: string): Promise<T> {
-  return rawRequest<T>(method, path);
+/** Request PÚBLICA (sin sesión). Los POST sociales pasan el body sólo por acá. */
+export async function httpPublicRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return rawRequest<T>(method, path, body);
 }
 
 async function authenticatedRequest<T>(
@@ -399,33 +411,90 @@ export async function httpGuestRequest<T>(
   }
 }
 
-export async function httpLogin(email: string, password: string): Promise<StoredSession> {
-  const r = await rawRequest<LoginResponse>('POST', '/auth/login', { email, password });
+function sameSessionSnapshot(origin: StoredSession | null, current: StoredSession | null): boolean {
+  if (origin === null || current === null) return origin === current;
+  return origin.access_token === current.access_token
+    && origin.refresh_token === current.refresh_token
+    && origin.family_id === current.family_id
+    && origin.principal_id === current.principal_id
+    && JSON.stringify(origin.user ?? null) === JSON.stringify(current.user ?? null);
+}
+
+function assertSessionOrigin(origin: StoredSession | null): void {
+  if (!sameSessionSnapshot(origin, loadSession())) throw new Error('session_state_changed');
+}
+
+async function persistNewSession(
+  r: LoginResponse,
+  origin: StoredSession | null,
+  onAccepted?: () => void,
+  requireWebLock = false,
+  expectedStateWitness?: SessionStateWitness,
+): Promise<StoredSession> {
   const session = createSession({
     access_token: r.access_token,
     refresh_token: r.refresh_token,
     user: r.user,
   });
+  const commit = () => {
+    // A y B pueden salir de la misma pantalla: sólo la respuesta cuyo origin
+    // sigue exacto puede reemplazarlo. El check y el save comparten el lock.
+    if (expectedStateWitness === undefined) assertSessionOrigin(origin);
+    else assertSessionStateWitness(expectedStateWitness);
+    saveSession(session);
+    // El mock muta su store únicamente después de que la autoridad quedó
+    // adjudicada; una respuesta stale nunca toca user/paymentMethods.
+    onAccepted?.();
+  };
   // La UI y httpRequest leen la misma fuente. No se publica una sesión que
   // localStorage no pudo confirmar con round-trip.
-  const saved = await withSessionLock(() => saveSession(session));
-  // En un navegador sin Web Locks no existe refresh concurrente (tryRefresh
-  // falla cerrado) y logout deja el tombstone sin borrar a ciegas. Persistir
-  // el login explícito sigue siendo seguro y evita bloquear navegadores viejos.
-  if (saved === null) saveSession(session);
+  const saved = await withSessionLock(commit);
+  // El social auth puede responder desde otra pestaña: sin Web Locks no existe
+  // un CAS cross-tab honesto y falla cerrado. Password conserva el fallback
+  // histórico, acotado al tramo sincrónico de esta pestaña.
+  if (saved === null) {
+    if (requireWebLock) throw new Error('session_lock_unavailable');
+    commit();
+  }
   return session;
 }
 
+/** Frontera única social: decode estricto → sesión → lock/round-trip. */
+export async function persistSocialSessionResponse(
+  value: unknown,
+  origin: StoredSession | null,
+  onAccepted?: () => void,
+  expectedStateWitness?: SessionStateWitness,
+): Promise<StoredSession> {
+  return persistNewSession(
+    decodeSocialSessionResponse(value),
+    origin,
+    onAccepted,
+    true,
+    expectedStateWitness,
+  );
+}
+
+export async function httpSocialSession(
+  path: string,
+  body: unknown,
+  expectedStateWitness?: SessionStateWitness,
+): Promise<StoredSession> {
+  const origin = loadSession();
+  const response = await rawRequest<unknown>('POST', path, body);
+  return persistSocialSessionResponse(response, origin, undefined, expectedStateWitness);
+}
+
+export async function httpLogin(email: string, password: string): Promise<StoredSession> {
+  const origin = loadSession();
+  const r = await rawRequest<LoginResponse>('POST', '/auth/login', { email, password });
+  return persistNewSession(r, origin);
+}
+
 export async function httpRegister(data: RegisterRequest): Promise<StoredSession> {
+  const origin = loadSession();
   const r = await rawRequest<RegisterResponse>('POST', '/auth/register', data);
-  const session = createSession({
-    access_token: r.access_token,
-    refresh_token: r.refresh_token,
-    user: r.user,
-  });
-  const saved = await withSessionLock(() => saveSession(session));
-  if (saved === null) saveSession(session);
-  return session;
+  return persistNewSession(r, origin);
 }
 
 export async function httpLogout(): Promise<void> {

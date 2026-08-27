@@ -142,9 +142,6 @@ const login = z.object({ email, password: passwordLegacy });
 const refreshToken = z.object({
   refresh_token: z.string().min(20).max(500),
 });
-
-// Identidad propia: representación completa y exacta. No es el PATCH write-once
-// de birth_date y no admite payme_id ni campos futuros por descarte silencioso.
 const profileName = z.string().transform((value, ctx) => {
   try {
     return normalizarNombre(value);
@@ -153,6 +150,51 @@ const profileName = z.string().transform((value, ctx) => {
     return z.NEVER;
   }
 });
+const externalIdToken = z.string().min(20).max(8192);
+const socialRegisterBase = z.object({
+  invitation_token: z.unknown().optional(),
+  id_token: externalIdToken,
+  first_name: profileName,
+  last_name: profileName,
+  birth_date: birthDate.optional(),
+}).strict();
+function socialRegisterSchema() {
+  return birthDateRequeridaEnRegistro()
+    ? socialRegisterBase.extend({ birth_date: birthDate })
+    : socialRegisterBase;
+}
+const socialLogin = z.object({ id_token: externalIdToken }).strict();
+const socialLink = z.object({
+  id_token: externalIdToken,
+  current_password: passwordLegacy,
+}).strict();
+const facebookRegisterStartBase = z.object({
+  invitation_token: z.string().min(20).max(200),
+  first_name: profileName,
+  last_name: profileName,
+  birth_date: birthDate.optional(),
+}).strict();
+function facebookRegisterStartSchema() {
+  return birthDateRequeridaEnRegistro()
+    ? facebookRegisterStartBase.extend({ birth_date: birthDate })
+    : facebookRegisterStartBase;
+}
+const facebookLoginStart = z.object({}).strict();
+const facebookComplete = z.object({
+  state: z.string().min(20).max(200),
+  code: z.string().min(1).max(4096),
+}).strict();
+const facebookSignedRequest = z.object({
+  signed_request: z.string().min(20).max(8192),
+}).strict();
+const recoveryRequest = z.object({ email }).strict();
+const recoveryComplete = z.object({
+  token: z.string().min(20).max(200),
+  new_password: passwordNew,
+}).strict();
+
+// Identidad propia: representación completa y exacta. No es el PATCH write-once
+// de birth_date y no admite payme_id ni campos futuros por descarte silencioso.
 const updateProfileName = z.object({
   first_name: profileName,
   last_name: profileName,
@@ -453,7 +495,10 @@ function validateParams(schema) {
 module.exports = {
   normalizarEmailDeContrato,
   register, registerCompat, registerSchema, birthDateRequeridaEnRegistro,
-  login, refreshToken, updateMe, updateProfileName,
+  login, refreshToken, socialRegisterSchema, socialLogin, socialLink,
+  facebookRegisterStartSchema, facebookLoginStart, facebookComplete,
+  facebookSignedRequest,
+  recoveryRequest, recoveryComplete, updateMe, updateProfileName,
   attachPaymentMethod, setupIntent, setDefaultPaymentMethod, uuidIdParam,
   addFriend, searchFriends, friendRequestsQuery,
   createGroup, updateGroup, addGroupMember,
