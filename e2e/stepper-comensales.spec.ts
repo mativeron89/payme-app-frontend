@@ -23,9 +23,10 @@ test.describe('el stepper de comensales (§1.4)', () => {
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
     await expect(page.getByText('¿Cómo dividen?')).toBeVisible();
 
-    // Nace sin elegir: sin número, y la pregunta única de la maqueta final.
-    await expect(page.getByText('¿Cuántos pagan?')).toBeVisible();
-    await expect(page.getByRole('group', { name: '¿Cuántos pagan?' })).toContainText('—');
+    // Nace sin elegir: sin número. En consumo N cuenta personas en la mesa,
+    // no pagadores; visible y nombre accesible dicen lo mismo.
+    await expect(page.getByText('¿Cuántos son en la mesa?')).toBeVisible();
+    await expect(page.getByRole('group', { name: '¿Cuántos son en la mesa?' })).toContainText('—');
 
     // Continuar NUNCA está deshabilitado: frena explicando, como la propina.
     const continuar = page.getByRole('button', { name: 'Continuar', exact: true });

@@ -75,7 +75,8 @@ async function abrirGarantia(page: Page, modo: 'igual' | 'consumo' = 'igual'): P
   const sumar = page.getByRole('button', { name: 'Un comensal más' });
   const toques = modo === 'igual' ? 3 : 4;
   for (let i = 0; i < toques; i += 1) await sumar.click();
-  await expect(page.getByRole('group', { name: '¿Cuántos pagan?' })).toContainText('4');
+  const pregunta = modo === 'igual' ? '¿Cuántos pagan?' : '¿Cuántos son en la mesa?';
+  await expect(page.getByRole('group', { name: pregunta })).toContainText('4');
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa', exact: true })).toBeVisible();
 }
@@ -122,7 +123,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(titulo).toHaveCSS('text-align', 'center');
 
     const stepper = page.locator('.division-stepper');
-    await expect(stepper).toContainText('¿Cuántos pagan?');
+    await expect(stepper).toContainText('¿Cuántos son en la mesa?');
     await expect(stepper.locator('.division-stepper-title')).toHaveCSS('text-transform', 'uppercase');
     await expect(stepper.locator('svg')).toHaveCount(0);
     await expect(stepper).toHaveCSS('background-color', 'rgb(255, 255, 255)');

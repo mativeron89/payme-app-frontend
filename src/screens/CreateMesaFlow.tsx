@@ -6,6 +6,7 @@ import {
   participantesTrasCambio,
   pisoDe,
   reparteElTotal,
+  tituloStepper,
 } from './divisionModo';
 import { useIdioma } from '../i18n/idioma';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -180,6 +181,11 @@ export function CreateMesaFlow() {
   // Piso del CONTRATO, no inventado: `schemas/index.js` exige >= 2 en partes
   // iguales (refine sobre division_mode) y >= 1 en el resto.
   const pisoComensales = pisoDe(division);
+  // La pregunta describe qué significa N en cada modo. Visible y accesible
+  // salen de la misma clave para que no puedan divergir.
+  const preguntaStepper = tituloStepper(division) === '¿Cuántos pagan?'
+    ? t('¿Cuántos pagan?')
+    : t('¿Cuántos son en la mesa?');
   const [method, setMethod] = useState<'card' | 'wallet'>('card');
   // D4: tarjetas guardadas. `cardChoice` es el pm_… elegido o 'new' (otra
   // tarjeta); `saveCard` = checkbox "guardar" — nace DESMARCADO (Mati,
@@ -1402,11 +1408,11 @@ export function CreateMesaFlow() {
             onAnimationEnd={() => setStepperPulse(false)}
           >
             <div className="sectlabel division-stepper-title">
-              {t('¿Cuántos pagan?')}
+              {preguntaStepper}
             </div>
-            {/* AF-DISENO-02: el nombre accesible y el rótulo visible usan la
-                misma pregunta fija de la maqueta. */}
-            <div className="stepper" role="group" aria-label={t('¿Cuántos pagan?')}>
+            {/* El nombre accesible y el rótulo visible comparten la misma
+                pregunta; consumo cuenta mesa, igual/total cuentan pagadores. */}
+            <div className="stepper" role="group" aria-label={preguntaStepper}>
               <button
                 onClick={() => setParticipants(participants === null ? pisoComensales : Math.max(pisoComensales, participants - 1))}
                 aria-label={t('Un comensal menos')}

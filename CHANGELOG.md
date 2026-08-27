@@ -11,6 +11,18 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.148.2 — El stepper pregunta por la magnitud correcta (2026-08-27)
+
+La pantalla de apertura deja de hardcodear «¿Cuántos pagan?» para los tres
+modos y consume la decisión ya existente en `divisionModo`: consumo pregunta
+«¿Cuántos son en la mesa?», mientras partes iguales y pagar el total preguntan
+«¿Cuántos pagan?». El texto visible y el nombre accesible salen de una única
+variable.
+
+No cambia N, sus pisos, el payload `expected_participants`, la base de propina,
+el split ni ningún contrato o monto. Cero dependencias, proveedor, secreto,
+push, deploy o producción.
+
 ## 0.148.1 — Google Account listo para pre-staging local (2026-08-27)
 
 El consumidor adopta el owner Backend v2.73.0 con **102/102** archivos y su
