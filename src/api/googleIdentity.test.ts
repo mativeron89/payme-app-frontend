@@ -96,9 +96,9 @@ type InstalledApi = {
 
 let browser: FakeDocument;
 
-function installGoogleApi(): InstalledApi {
+function installGoogleApi(initialize = vi.fn()): InstalledApi {
   const api = {
-    initialize: vi.fn(),
+    initialize,
     renderButton: vi.fn((container: FakeContainer) => container.append({ gis: true })),
     prompt: vi.fn(),
   };
@@ -106,10 +106,15 @@ function installGoogleApi(): InstalledApi {
   return api;
 }
 
-function options(container = new FakeContainer(), onCredential = vi.fn()) {
+function options(
+  container = new FakeContainer(),
+  onCredential = vi.fn(),
+  overrides: { clientId?: string; locale?: 'es' | 'en' } = {},
+) {
   return {
     container: container as unknown as HTMLElement,
-    clientId: 'payme-google-web-client-id',
+    clientId: overrides.clientId ?? 'payme-google-web-client-id',
+    locale: overrides.locale ?? 'es' as const,
     mockLabel: 'Continuar con Google',
     onCredential,
   };
@@ -118,6 +123,16 @@ function options(container = new FakeContainer(), onCredential = vi.fn()) {
 function onlyScript(): FakeScriptElement {
   expect(browser.scripts()).toHaveLength(1);
   return browser.scripts()[0];
+}
+
+function callbackOf(api: InstalledApi) {
+  return api.initialize.mock.calls[0][0].callback as (
+    value: { credential?: unknown; state?: unknown },
+  ) => void;
+}
+
+function stateOf(api: InstalledApi, index = 0): string {
+  return api.renderButton.mock.calls[index][1].state as string;
 }
 
 beforeEach(() => {
@@ -136,57 +151,117 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('Google GIS · cancelación y ownership', () => {
-  it('dispose antes de load resuelve inmediatamente y bloquea initialize/render/callback', async () => {
-    const onCredential = vi.fn();
-    const handle = renderGoogleIdentityButton(options(new FakeContainer(), onCredential));
+describe('Google GIS · ownership, reserva e inicialización global', () => {
+  it('dispose pre-load libera la reserva y permite otro client id', async () => {
+    const first = renderGoogleIdentityButton(options(
+      new FakeContainer(),
+      vi.fn(),
+      { clientId: 'google-client-a' },
+    ));
     const script = onlyScript();
+    first.dispose();
+    await expect(first.ready).resolves.toBeUndefined();
 
-    handle.dispose();
-    await expect(handle.ready).resolves.toBeUndefined();
+    const second = renderGoogleIdentityButton(options(
+      new FakeContainer(),
+      vi.fn(),
+      { clientId: 'google-client-b' },
+    ));
     const api = installGoogleApi();
     script.dispatch('load');
-    await Promise.resolve();
-
-    expect(api.initialize).not.toHaveBeenCalled();
-    expect(api.renderButton).not.toHaveBeenCalled();
-    expect(onCredential).not.toHaveBeenCalled();
+    await second.ready;
+    expect(api.initialize).toHaveBeenCalledTimes(1);
+    expect(api.initialize.mock.calls[0][0].client_id).toBe('google-client-b');
   });
 
-  it('una generación vieja no renderiza ni puede borrar el montaje nuevo del container', async () => {
+  it('dos montajes del mismo client comparten script e initialize y rutean por state', async () => {
+    const firstCredential = vi.fn();
+    const secondCredential = vi.fn();
+    const first = renderGoogleIdentityButton(options(new FakeContainer(), firstCredential));
+    const second = renderGoogleIdentityButton(options(new FakeContainer(), secondCredential));
+    expect(browser.scripts()).toHaveLength(1);
+
+    const api = installGoogleApi();
+    onlyScript().dispatch('load');
+    await Promise.all([first.ready, second.ready]);
+    expect(api.initialize).toHaveBeenCalledTimes(1);
+    expect(api.renderButton).toHaveBeenCalledTimes(2);
+    expect(stateOf(api, 0)).not.toBe(stateOf(api, 1));
+
+    const callback = callbackOf(api);
+    callback({ state: stateOf(api, 1), credential: 'credential-second-owner-12345' });
+    callback({ state: stateOf(api, 0), credential: 'credential-first-owner-123456' });
+    expect(firstCredential).toHaveBeenCalledWith('credential-first-owner-123456');
+    expect(secondCredential).toHaveBeenCalledWith('credential-second-owner-12345');
+  });
+
+  it('client ids distintos fallan cerrado antes y después de inicializar', async () => {
+    const first = renderGoogleIdentityButton(options(
+      new FakeContainer(),
+      vi.fn(),
+      { clientId: 'google-client-first' },
+    ));
+    expect(() => renderGoogleIdentityButton(options(
+      new FakeContainer(),
+      vi.fn(),
+      { clientId: 'google-client-second' },
+    ))).toThrow('google_client_id_conflict');
+
+    installGoogleApi();
+    onlyScript().dispatch('load');
+    await first.ready;
+    expect(() => renderGoogleIdentityButton(options(
+      new FakeContainer(),
+      vi.fn(),
+      { clientId: 'google-client-second' },
+    ))).toThrow('google_client_id_conflict');
+  });
+
+  it('si initialize arroja, libera la reserva y un montaje sano reintenta', async () => {
+    const initialize = vi.fn()
+      .mockImplementationOnce(() => { throw new Error('gis_init_failed'); })
+      .mockImplementationOnce(() => undefined);
+    const first = renderGoogleIdentityButton(options());
+    const api = installGoogleApi(initialize);
+    onlyScript().dispatch('load');
+    await expect(first.ready).rejects.toThrow('gis_init_failed');
+
+    const second = renderGoogleIdentityButton(options());
+    await expect(second.ready).resolves.toBeUndefined();
+    expect(api.initialize).toHaveBeenCalledTimes(2);
+    expect(api.renderButton).toHaveBeenCalledTimes(1);
+  });
+
+  it('reemplazar el mismo container invalida ya la ruta vieja y dispose viejo no borra el nuevo', async () => {
     const container = new FakeContainer(280);
-    const oldHandle = renderGoogleIdentityButton(options(container, vi.fn()));
+    const oldCredential = vi.fn();
+    const oldHandle = renderGoogleIdentityButton(options(container, oldCredential));
     const newCredential = vi.fn();
     const currentHandle = renderGoogleIdentityButton(options(container, newCredential));
     const api = installGoogleApi();
     onlyScript().dispatch('load');
     await Promise.all([oldHandle.ready, currentHandle.ready]);
 
-    expect(api.initialize).toHaveBeenCalledTimes(1);
     expect(api.renderButton).toHaveBeenCalledTimes(1);
-    expect(container.children).toEqual([{ gis: true }]);
+    const currentState = stateOf(api);
     oldHandle.dispose();
     expect(container.children).toEqual([{ gis: true }]);
-
-    const callback = api.initialize.mock.calls[0][0].callback as (value: { credential?: unknown }) => void;
-    callback({ credential: 'credential-current-generation-123' });
+    callbackOf(api)({ state: currentState, credential: 'credential-current-generation-123' });
+    expect(oldCredential).not.toHaveBeenCalled();
     expect(newCredential).toHaveBeenCalledWith('credential-current-generation-123');
+  });
+
+  it('dispose libera el state inmediatamente para que una UUID futura pueda reutilizarlo', () => {
+    const state = '22222222-2222-4222-8222-222222222222';
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(state);
+    const first = renderGoogleIdentityButton(options());
+    first.dispose();
+    const second = renderGoogleIdentityButton(options());
+    second.dispose();
   });
 });
 
-describe('Google GIS · loader único y retry sano', () => {
-  it('montajes concurrentes comparten exactamente un script/loader', async () => {
-    const first = renderGoogleIdentityButton(options(new FakeContainer()));
-    const second = renderGoogleIdentityButton(options(new FakeContainer()));
-    expect(browser.scripts()).toHaveLength(1);
-
-    const api = installGoogleApi();
-    onlyScript().dispatch('load');
-    await Promise.all([first.ready, second.ready]);
-    expect(api.initialize).toHaveBeenCalledTimes(2);
-    expect(api.renderButton).toHaveBeenCalledTimes(2);
-  });
-
+describe('Google GIS · loader y retry fail-closed', () => {
   it.each(['error', 'load'] as const)('%s sin API retira nodo propio y retry crea uno nuevo', async (event) => {
     const first = renderGoogleIdentityButton(options());
     const failedScript = onlyScript();
@@ -215,44 +290,69 @@ describe('Google GIS · loader único y retry sano', () => {
   });
 });
 
-describe('Google GIS · inicialización manual y callback one-use', () => {
-  it('fija popup sin auto-select, nunca prompt y entrega sólo la primera credential válida', async () => {
-    const onCredential = vi.fn();
-    const handle = renderGoogleIdentityButton(options(new FakeContainer(), onCredential));
+describe('Google GIS · state, replay y configuración manual', () => {
+  it('fija popup/locale/copy, nunca prompt y consume state antes del callback', async () => {
+    const onCredential = vi.fn(() => { throw new Error('consumer_failed'); });
+    const handle = renderGoogleIdentityButton(options(
+      new FakeContainer(),
+      onCredential,
+      { locale: 'en' },
+    ));
     const api = installGoogleApi();
     onlyScript().dispatch('load');
     await handle.ready;
 
-    expect(api.initialize).toHaveBeenCalledTimes(1);
-    const initialization = api.initialize.mock.calls[0][0] as {
-      auto_select: boolean;
-      button_auto_select: boolean;
-      ux_mode: string;
-      callback: (value: { credential?: unknown }) => void;
-    };
-    expect(initialization.auto_select).toBe(false);
-    expect(initialization.button_auto_select).toBe(false);
-    expect(initialization.ux_mode).toBe('popup');
-    initialization.callback({});
-    initialization.callback({ credential: 'short' });
-    initialization.callback({ credential: 'credential-valid-first-123456' });
-    initialization.callback({ credential: 'credential-valid-second-12345' });
-    expect(onCredential).toHaveBeenCalledTimes(1);
-    expect(onCredential).toHaveBeenCalledWith('credential-valid-first-123456');
+    const initialization = api.initialize.mock.calls[0][0];
+    expect(initialization).toMatchObject({
+      auto_select: false,
+      button_auto_select: false,
+      ux_mode: 'popup',
+    });
+    expect(api.renderButton.mock.calls[0][1]).toMatchObject({
+      text: 'continue_with',
+      locale: 'en',
+    });
     expect(api.prompt).not.toHaveBeenCalled();
     expect(readFileSync(new URL('./googleIdentity.ts', import.meta.url), 'utf8')).not.toContain('.prompt(');
+
+    const state = stateOf(api);
+    const callback = callbackOf(api);
+    callback({ state });
+    callback({ state, credential: 'short' });
+    expect(() => callback({ state, credential: 'credential-valid-first-123456' }))
+      .toThrow('consumer_failed');
+    expect(() => callback({ state, credential: 'credential-valid-replay-12345' })).not.toThrow();
+    expect(onCredential).toHaveBeenCalledTimes(1);
   });
 
-  it('dispose invalida también un callback ya instalado', async () => {
+  it('missing/unknown/disposed state nunca entrega', async () => {
     const onCredential = vi.fn();
     const handle = renderGoogleIdentityButton(options(new FakeContainer(), onCredential));
     const api = installGoogleApi();
     onlyScript().dispatch('load');
     await handle.ready;
-    const callback = api.initialize.mock.calls[0][0].callback as (value: { credential: string }) => void;
+    const callback = callbackOf(api);
+    callback({ credential: 'credential-without-state-12345' });
+    callback({ state: 1, credential: 'credential-nonstring-state-123' });
+    callback({ state: 'unknown', credential: 'credential-unknown-state-12345' });
     handle.dispose();
-    callback({ credential: 'credential-after-dispose-123456' });
+    callback({ state: stateOf(api), credential: 'credential-after-dispose-12345' });
     expect(onCredential).not.toHaveBeenCalled();
+  });
+
+  it('una colisión UUID no pisa otra ruta y falla tras cuatro intentos', async () => {
+    const collision = '11111111-1111-4111-8111-111111111111';
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(collision);
+    const firstCredential = vi.fn();
+    const first = renderGoogleIdentityButton(options(new FakeContainer(), firstCredential));
+    expect(() => renderGoogleIdentityButton(options(new FakeContainer(), vi.fn())))
+      .toThrow('google_state_collision');
+
+    const api = installGoogleApi();
+    onlyScript().dispatch('load');
+    await first.ready;
+    callbackOf(api)({ state: collision, credential: 'credential-first-route-survives-123' });
+    expect(firstCredential).toHaveBeenCalledTimes(1);
   });
 
   it('mock crea botón local, cero script y callback one-use', async () => {
@@ -263,7 +363,6 @@ describe('Google GIS · inicialización manual y callback one-use', () => {
     await handle.ready;
 
     expect(browser.scripts()).toHaveLength(0);
-    expect(container.children).toHaveLength(1);
     const button = container.children[0] as FakeButtonElement;
     expect(button.textContent).toBe('Continuar con Google');
     button.dispatch('click');

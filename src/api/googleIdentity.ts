@@ -3,6 +3,7 @@ const GOOGLE_SCRIPT_ID = 'payme-google-identity-services';
 
 interface GoogleCredentialResponse {
   credential?: unknown;
+  state?: unknown;
 }
 
 interface GoogleIdentityApi {
@@ -15,7 +16,15 @@ interface GoogleIdentityApi {
   }): void;
   renderButton(
     parent: HTMLElement,
-    options: { type: 'standard'; theme: 'outline'; size: 'large'; width: number },
+    options: {
+      type: 'standard';
+      theme: 'outline';
+      size: 'large';
+      text: 'continue_with';
+      locale: 'es' | 'en';
+      state: string;
+      width: number;
+    },
   ): void;
 }
 
@@ -25,7 +34,28 @@ interface GoogleNamespace {
 
 let loaderInFlight: Promise<GoogleIdentityApi> | null = null;
 let ownedScript: HTMLScriptElement | null = null;
-const containerOwners = new WeakMap<HTMLElement, symbol>();
+let initializedClientId: string | null = null;
+let pendingClientId: string | null = null;
+let pendingClientOwners = new Set<symbol>();
+
+interface GoogleMount {
+  readonly owner: symbol;
+  readonly container: HTMLElement;
+  readonly clientId: string;
+  readonly onCredential: (credential: string) => void;
+  active: boolean;
+  reserved: boolean;
+  routeState: string | null;
+  resolveDisposed: (() => void) | null;
+}
+
+let containerMounts = new WeakMap<HTMLElement, GoogleMount>();
+
+interface CredentialRoute {
+  readonly mount: GoogleMount;
+}
+
+const credentialRoutes = new Map<string, CredentialRoute>();
 
 function googleApi(): GoogleIdentityApi | null {
   const candidate = (globalThis as unknown as { google?: GoogleNamespace }).google?.accounts?.id;
@@ -42,6 +72,109 @@ function validClientId(value: string): boolean {
 
 function validCredential(value: unknown): value is string {
   return typeof value === 'string' && value.length >= 20 && value.length <= 8192;
+}
+
+/**
+ * GIS comparte un único callback por página. `state` pertenece al botón que
+ * originó la respuesta, así que rutea sin guardar tokens ni datos de perfil.
+ * La ruta se consume antes de entregar: replay y reentrancia quedan cerrados.
+ */
+function routeCredential(response: GoogleCredentialResponse): void {
+  if (typeof response.state !== 'string') return;
+  const route = credentialRoutes.get(response.state);
+  if (!route) return;
+  const { mount } = route;
+  if (!mount.active || containerMounts.get(mount.container) !== mount) {
+    credentialRoutes.delete(response.state);
+    return;
+  }
+  if (!validCredential(response.credential)) return;
+  credentialRoutes.delete(response.state);
+  mount.routeState = null;
+  mount.onCredential(response.credential);
+}
+
+function assertClientIdCompatible(clientId: string): void {
+  if (initializedClientId !== null) {
+    if (initializedClientId !== clientId) throw new Error('google_client_id_conflict');
+    return;
+  }
+  if (pendingClientId !== null && pendingClientId !== clientId) {
+    throw new Error('google_client_id_conflict');
+  }
+}
+
+function reserveClientId(mount: GoogleMount): void {
+  assertClientIdCompatible(mount.clientId);
+  if (initializedClientId !== null) return;
+  pendingClientId = mount.clientId;
+  pendingClientOwners.add(mount.owner);
+  mount.reserved = true;
+}
+
+function releaseClientId(mount: GoogleMount): void {
+  if (!mount.reserved) return;
+  mount.reserved = false;
+  pendingClientOwners.delete(mount.owner);
+  if (initializedClientId === null && pendingClientOwners.size === 0) {
+    pendingClientId = null;
+  }
+}
+
+function clearRoute(mount: GoogleMount): void {
+  if (mount.routeState === null) return;
+  const route = credentialRoutes.get(mount.routeState);
+  if (route?.mount === mount) credentialRoutes.delete(mount.routeState);
+  mount.routeState = null;
+}
+
+function deactivateMount(
+  mount: GoogleMount,
+  clearContainer: boolean,
+  resolveAsDisposed = true,
+): void {
+  if (!mount.active) return;
+  mount.active = false;
+  clearRoute(mount);
+  releaseClientId(mount);
+  if (resolveAsDisposed) mount.resolveDisposed?.();
+  mount.resolveDisposed = null;
+  if (containerMounts.get(mount.container) !== mount) return;
+  containerMounts.delete(mount.container);
+  if (clearContainer) mount.container.replaceChildren();
+}
+
+function allocateRouteState(): string {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const candidate = crypto.randomUUID();
+    if (!credentialRoutes.has(candidate)) return candidate;
+  }
+  throw new Error('google_state_collision');
+}
+
+/** GIS documenta una sola inicialización por página; una segunda pisa config. */
+function initializeGoogleIdentity(api: GoogleIdentityApi, mount: GoogleMount): void {
+  if (initializedClientId !== null) {
+    if (initializedClientId !== mount.clientId) throw new Error('google_client_id_conflict');
+    releaseClientId(mount);
+    return;
+  }
+  if (!mount.reserved
+      || pendingClientId !== mount.clientId
+      || !pendingClientOwners.has(mount.owner)) {
+    throw new Error('google_client_id_reservation_lost');
+  }
+  api.initialize({
+    client_id: mount.clientId,
+    callback: routeCredential,
+    auto_select: false,
+    button_auto_select: false,
+    ux_mode: 'popup',
+  });
+  initializedClientId = mount.clientId;
+  pendingClientId = null;
+  pendingClientOwners.clear();
+  mount.reserved = false;
 }
 
 function loadGoogleIdentityScript(): Promise<GoogleIdentityApi> {
@@ -111,6 +244,7 @@ function loadGoogleIdentityScript(): Promise<GoogleIdentityApi> {
 export interface GoogleButtonOptions {
   readonly container: HTMLElement;
   readonly clientId: string;
+  readonly locale: 'es' | 'en';
   readonly mockLabel: string;
   readonly onCredential: (credential: string) => void;
 }
@@ -125,64 +259,73 @@ export interface GoogleButtonHandle {
 /** Monta sólo por acción explícita; el callback queda one-use y memory-only. */
 export function renderGoogleIdentityButton(options: GoogleButtonOptions): GoogleButtonHandle {
   if (!validClientId(options.clientId)) throw new Error('google_client_id_invalid');
-  let active = true;
-  let delivered = false;
-  let resolveDisposed: (() => void) | null = null;
-  const owner = Symbol('google-identity-mount');
-  containerOwners.set(options.container, owner);
-  const deliver = (credential: unknown) => {
-    if (!active
-        || containerOwners.get(options.container) !== owner
-        || delivered
+  if (options.locale !== 'es' && options.locale !== 'en') {
+    throw new Error('google_locale_invalid');
+  }
+  const mock = import.meta.env.VITE_MOCK === '1';
+  if (!mock) assertClientIdCompatible(options.clientId);
+  const routeState = mock ? null : allocateRouteState();
+  const previous = containerMounts.get(options.container);
+  if (previous) deactivateMount(previous, false);
+
+  let mockDelivered = false;
+  const mountRecord: GoogleMount = {
+    owner: Symbol('google-identity-mount'),
+    container: options.container,
+    clientId: options.clientId,
+    onCredential: options.onCredential,
+    active: true,
+    reserved: false,
+    routeState,
+    resolveDisposed: null,
+  };
+  containerMounts.set(options.container, mountRecord);
+  const deliverMock = (credential: unknown) => {
+    if (!mountRecord.active
+        || containerMounts.get(options.container) !== mountRecord
+        || mockDelivered
         || !validCredential(credential)) return;
-    delivered = true;
+    mockDelivered = true;
     options.onCredential(credential);
   };
 
   options.container.replaceChildren();
-  let mount: Promise<void>;
-  if (import.meta.env.VITE_MOCK === '1') {
+  let mountPromise: Promise<void>;
+  if (mock) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'social-provider-button social-provider-google';
     button.textContent = options.mockLabel;
     button.addEventListener('click', () => {
-      deliver(`mock-google-credential-${crypto.randomUUID()}`);
+      deliverMock(`mock-google-credential-${crypto.randomUUID()}`);
     });
     options.container.append(button);
-    mount = Promise.resolve();
+    mountPromise = Promise.resolve();
   } else {
-    mount = loadGoogleIdentityScript().then((api) => {
-      if (!active || containerOwners.get(options.container) !== owner) return;
-      api.initialize({
-        client_id: options.clientId,
-        callback: (response) => deliver(response.credential),
-        auto_select: false,
-        button_auto_select: false,
-        ux_mode: 'popup',
-      });
-      if (!active || containerOwners.get(options.container) !== owner) return;
+    reserveClientId(mountRecord);
+    credentialRoutes.set(routeState as string, { mount: mountRecord });
+    mountPromise = loadGoogleIdentityScript().then((api) => {
+      if (!mountRecord.active || containerMounts.get(options.container) !== mountRecord) return;
+      initializeGoogleIdentity(api, mountRecord);
+      if (!mountRecord.active || containerMounts.get(options.container) !== mountRecord) return;
       api.renderButton(options.container, {
         type: 'standard',
         theme: 'outline',
         size: 'large',
+        text: 'continue_with',
+        locale: options.locale,
+        state: routeState as string,
         width: Math.max(200, Math.min(360, Math.floor(options.container.clientWidth || 320))),
       });
+    }).catch((error) => {
+      deactivateMount(mountRecord, true, false);
+      throw error;
     });
   }
 
-  const disposed = new Promise<void>((resolve) => { resolveDisposed = resolve; });
-  const ready = Promise.race([mount, disposed]);
-  const dispose = () => {
-    if (!active) return;
-    active = false;
-    resolveDisposed?.();
-    resolveDisposed = null;
-    if (containerOwners.get(options.container) === owner) {
-      containerOwners.delete(options.container);
-      options.container.replaceChildren();
-    }
-  };
+  const disposed = new Promise<void>((resolve) => { mountRecord.resolveDisposed = resolve; });
+  const ready = Promise.race([mountPromise, disposed]);
+  const dispose = () => deactivateMount(mountRecord, true);
   return { ready, dispose };
 }
 
@@ -190,6 +333,11 @@ export function resetGoogleIdentityForTests(): void {
   loaderInFlight = null;
   ownedScript?.remove();
   ownedScript = null;
+  initializedClientId = null;
+  pendingClientId = null;
+  pendingClientOwners = new Set<symbol>();
+  credentialRoutes.clear();
+  containerMounts = new WeakMap<HTMLElement, GoogleMount>();
 }
 
 export const GOOGLE_IDENTITY_SCRIPT_URL = GOOGLE_IDENTITY_SCRIPT;

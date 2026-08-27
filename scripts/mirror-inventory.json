@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "84a71f869925de3313b0fb8e6f372a93308d35da",
-  "total": 101,
+  "commit": "ac97ae2fe49980d499b00ab38d16c7e55657f090",
+  "total": 102,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -469,8 +469,14 @@
     {
       "origen": "services/googleIdentity.js",
       "destino": "services/googleIdentity.js",
-      "sha256": "4a9cd8ef62f5c1e9aef95a190fc7045087578ae04c0ea469aeed609f9352c950",
-      "bytes": 3984
+      "sha256": "b3416ff80a7605c38cef27d942087006e692387c8484a44a27444da091876927",
+      "bytes": 4153
+    },
+    {
+      "origen": "services/googleIdentityVerifier.js",
+      "destino": "services/googleIdentityVerifier.js",
+      "sha256": "393188b0e142dd5fef901e5045fb0e827cbab6bb0264c06456e1f63464261a50",
+      "bytes": 2632
     },
     {
       "origen": "services/invitationAuthority.js",

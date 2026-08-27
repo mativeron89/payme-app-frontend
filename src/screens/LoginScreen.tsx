@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { IS_MOCK } from '../api';
 import { api } from '../api';
@@ -71,6 +79,21 @@ type LegalState =
   | { status: 'idle' | 'loading' | 'error' }
   | { status: 'ready'; value: LegalTextResponse['legal_text'] };
 
+type GoogleActionAuthority =
+  | {
+      readonly purpose: 'login';
+      readonly clientId: string;
+      readonly locale: 'es' | 'en';
+    }
+  | {
+      readonly purpose: 'register';
+      readonly clientId: string;
+      readonly locale: 'es' | 'en';
+      readonly invitationToken: string;
+      readonly firstName: string;
+      readonly lastName: string;
+    };
+
 export function modeAfterSignupSnapshot(
   current: 'login' | 'register',
   changed: boolean,
@@ -124,7 +147,10 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   const previousSignup = useRef(signup);
   const googleContainer = useRef<HTMLDivElement | null>(null);
   const googleHandle = useRef<GoogleButtonHandle | null>(null);
-  const googleAction = useRef<(credential: string) => Promise<void>>(async () => undefined);
+  const googleAuthorityRef = useRef<GoogleActionAuthority | null>(null);
+  // React state no arbitra dos eventos en el mismo tick. Este lease sincrónico
+  // cubre contraseña, Google y Facebook antes del primer await.
+  const authActionActive = useRef(false);
 
   const signupAvailable = signup.status === 'available';
   const legalReady = legal.status === 'ready';
@@ -147,47 +173,105 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     lastName,
   });
 
-  googleAction.current = async (credential: string) => {
-    if (!googleEligible || socialBusy) return;
-    setSocialBusy(true);
-    setError(null);
-    try {
-      if (mode === 'login') {
-        await googleLogin(credential);
-      } else {
-        if (signup.status !== 'available' || legal.status !== 'ready') {
-          throw new Error('social_registration_prerequisite_changed');
-        }
-        await googleRegister({
-          id_token: credential,
-          invitation_token: signup.token,
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-        });
-        clearSignupInvitation();
-      }
-    } catch {
-      setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
-      // El handle es one-use: un fallo requiere una generación nueva.
-      setGoogleGeneration((value) => value + 1);
-    } finally {
-      setSocialBusy(false);
-    }
+  const googleAuthority = useMemo<GoogleActionAuthority | null>(() => {
+    const clientId = social.google.webClientId;
+    if (!googleEligible || clientId === null) return null;
+    const locale = idioma === 'en' ? 'en' : 'es';
+    if (mode === 'login') return { purpose: 'login', clientId, locale };
+    if (signup.status !== 'available' || legal.status !== 'ready') return null;
+    return {
+      purpose: 'register',
+      clientId,
+      locale,
+      invitationToken: signup.token,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+    };
+  }, [
+    firstName,
+    googleEligible,
+    idioma,
+    lastName,
+    legal.status,
+    mode,
+    signup,
+    social.google.webClientId,
+  ]);
+  // Sólo un render COMMITTEADO puede mover autoridad. `useLayoutEffect` corre
+  // antes de que el navegador entregue otro evento; un render concurrente
+  // abortado no envenena el ref ni mata el botón que sigue visible.
+  useLayoutEffect(() => {
+    googleAuthorityRef.current = googleAuthority;
+    return () => {
+      if (googleAuthorityRef.current === googleAuthority) googleAuthorityRef.current = null;
+    };
+  }, [googleAuthority]);
+
+  const tryAcquireAuthAction = () => {
+    if (authActionActive.current) return false;
+    authActionActive.current = true;
+    return true;
   };
+  const releaseAuthAction = () => { authActionActive.current = false; };
 
   useEffect(() => {
     googleHandle.current?.dispose();
     googleHandle.current = null;
     const container = googleContainer.current;
-    const clientId = social.google.webClientId;
-    if (!googleEligible || !container || !clientId || googleLoadFailed) return;
+    const authority = googleAuthority;
+    if (!authority || !container || googleLoadFailed) return;
     let active = true;
-    const handle = renderGoogleIdentityButton({
-      container,
-      clientId,
-      mockLabel: t('Continuar con Google'),
-      onCredential: (credential) => { void googleAction.current(credential); },
-    });
+    let handle: GoogleButtonHandle;
+    try {
+      handle = renderGoogleIdentityButton({
+        container,
+        clientId: authority.clientId,
+        locale: authority.locale,
+        mockLabel: t('Continuar con Google'),
+        onCredential: (credential) => {
+          if (googleAuthorityRef.current !== authority) return;
+          if (authority.purpose === 'register') {
+            const currentInvitation = signupInvitationSnapshot();
+            if (currentInvitation.status !== 'available'
+                || currentInvitation.token !== authority.invitationToken) return;
+          }
+          if (!tryAcquireAuthAction()) {
+            // El router global ya consumió el state antes del callback. Montar
+            // una generación nueva evita dejar un iframe visible pero muerto.
+            setGoogleGeneration((value) => value + 1);
+            return;
+          }
+          setSocialBusy(true);
+          setError(null);
+          void (async () => {
+            try {
+              if (authority.purpose === 'login') {
+                await googleLogin(credential);
+              } else {
+                await googleRegister({
+                  id_token: credential,
+                  invitation_token: authority.invitationToken,
+                  first_name: authority.firstName,
+                  last_name: authority.lastName,
+                });
+                clearSignupInvitation();
+              }
+            } catch {
+              setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
+              // El handle es one-use: un fallo requiere una generación nueva.
+              setGoogleGeneration((value) => value + 1);
+            } finally {
+              setSocialBusy(false);
+              releaseAuthAction();
+            }
+          })();
+        },
+      });
+    } catch {
+      setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
+      setGoogleLoadFailed(true);
+      return;
+    }
     googleHandle.current = handle;
     void handle.ready.catch(() => {
       if (!active) return;
@@ -199,10 +283,11 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       handle.dispose();
       if (googleHandle.current === handle) googleHandle.current = null;
     };
-  }, [googleEligible, googleGeneration, googleLoadFailed, social.google.webClientId, t]);
+  }, [googleAuthority, googleGeneration, googleLoadFailed, googleLogin, googleRegister, t]);
 
   async function onFacebook() {
-    if (!facebookEligible || socialBusy) return;
+    if (!facebookEligible || !tryAcquireAuthAction()) return;
+    let redirecting = false;
     setSocialBusy(true);
     setError(null);
     clearFacebookCallbackError();
@@ -228,11 +313,17 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         await completeFacebookCallback();
       } else {
         window.location.assign(authorizationUrl);
+        // `assign` ya fue aceptado. El unload libera toda la página; hacerlo
+        // acá reabriría una ventana para otra auth antes de abandonar PayMe.
+        redirecting = true;
       }
     } catch {
       setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
     } finally {
-      setSocialBusy(false);
+      if (!redirecting) {
+        setSocialBusy(false);
+        releaseAuthAction();
+      }
     }
   }
 
@@ -285,6 +376,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!tryAcquireAuthAction()) return;
     setBusy(true);
     setError(null);
     try {
@@ -314,6 +406,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       setError(errorMessage(err, t));
     } finally {
       setBusy(false);
+      releaseAuthAction();
     }
   }
 

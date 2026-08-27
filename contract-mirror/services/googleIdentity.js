@@ -1,15 +1,16 @@
 /**
  * APP-BE-SOCIAL-AUTH-01 · wrapper estrecho para Google Identity.
  *
- * La biblioteca oficial futura vive detrás de `verifier`. Este release no
- * instala credenciales ni hace red: sin adapter test/configurado, la capability
- * queda OFF. Aun cuando el adapter valida firma, PayMe vuelve a validar las
- * claims de autoridad y descarta todo salvo namespace+subject.
+ * La biblioteca oficial vive detrás de `verifier`. El adapter runtime sólo usa
+ * claves públicas mediante `verifyIdToken`; en tests no se instala por default
+ * para impedir red accidental. Aun cuando el adapter valida firma, PayMe vuelve
+ * a validar las claims de autoridad y descarta todo salvo namespace+subject.
  */
 'use strict';
 
 const { tokenHash } = require('../utils/tokens');
 const authRecovery = require('./authRecovery');
+const { runtimeGoogleIdentityVerifier } = require('./googleIdentityVerifier');
 
 const PROVIDER = 'google';
 const NAMESPACE = 'https://accounts.google.com';
@@ -17,7 +18,7 @@ const VALID_ISSUERS = new Set([NAMESPACE, 'accounts.google.com']);
 const TRANSIENT_CODES = new Set([
   'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'google_keys_unavailable',
 ]);
-let verifier = null;
+let verifier = process.env.NODE_ENV === 'test' ? null : runtimeGoogleIdentityVerifier;
 
 function codedError(code) {
   return Object.assign(new Error(code), { code });

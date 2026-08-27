@@ -8,31 +8,36 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-08-27**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`84a71f869925de3313b0fb8e6f372a93308d35da`**
-  (`feat(auth): Google, Facebook dark y recovery PayMe` · v2.72.0).
+  **`ac97ae2fe49980d499b00ab38d16c7e55657f090`**
+  (`fix(auth): tratar HTTP 408 como indisponibilidad` · v2.73.0).
 - Commit que publicó el inventario autoritativo:
-  **`124bdc2f5f2ed5f25eb2078b08cfc1faa9929516`**
-  (`chore(contract): publica mirror social auth v2.72.0`). Como siempre, el inventario
+  **`7c547456a4db97c794462e703c9d1f325baee72f`**
+  (`chore(contract): sellar owner Google HTTP 408`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `124bdc2` está un commit más adelante que el contenido y no
+⚠️ **El publicador `7c54745` está un commit más adelante que el contenido y no
 se espeja como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `84a71f8`; anclarse a él mantiene verificable la paridad.
+declarado es `ac97ae2`; anclarse a él mantiene verificable la paridad.
 
-🆕 **101 archivos espejados** más este README.
+🆕 **102 archivos espejados** más este README.
 
-Este refresh agrega el contrato owner-first local y oscuro de identidad social:
+Este refresh adopta el runtime owner-first de Google Account y conserva el
+contrato social local y oscuro:
 
-- Google GIS manual consume ID token efímero sin auto-link por email;
+- `googleIdentityVerifier.js` aísla `google-auth-library@10.9.1`, limita a cinco
+  segundos cada intento de certificados y clasifica red/TLS/408/429/5xx como
+  indisponibilidad transitoria opaca;
+- Google GIS manual consume ID token efímero sin auto-link por email, y PayMe
+  vuelve a validar issuer, audience, expiración y subject;
 - Facebook usa BFF redirect con state/purpose one-use ligado en navegador;
 - recovery PayMe usa un token opaco de fragmento que nunca llega al hosting;
 - `features.social_auth` falla cerrada para las superficies nuevas y conserva
   el ingreso por contraseña ante ausencia o payload malformado.
 
 La adopción se verificó contra la fuente antes de implementar el consumidor:
-**integridad 101/101**, **paridad 101/101** y **vigencia verde** contra App Backend
-HEAD `124bdc2f5f2ed5f25eb2078b08cfc1faa9929516`, cuya publicación contractual
-declara `84a71f869925de3313b0fb8e6f372a93308d35da`. Eso acredita el árbol local
+**integridad 102/102**, **paridad 102/102** y **vigencia verde** contra App Backend
+HEAD `7c547456a4db97c794462e703c9d1f325baee72f`, cuya publicación contractual
+declara `ac97ae2fe49980d499b00ab38d16c7e55657f090`. Eso acredita el árbol local
 y la ref contractual publicada; no afirma deploy ni producción.
 
 ### Refresh anterior · 2026-08-26 (recibos salientes G-25 · v2.71.0)

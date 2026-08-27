@@ -11,6 +11,24 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.148.1 — Google Account listo para pre-staging local (2026-08-27)
+
+El consumidor adopta el owner Backend v2.73.0 con **102/102** archivos y su
+adapter oficial `google-auth-library@10.9.1`; la dependencia permanece sólo en
+Backend. Google Identity Services se inicializa exactamente una vez por página,
+usa un `state` opaco y collision-safe por botón, consume la ruta antes del
+callback y cierra replay, montaje reemplazado y conflicto de client ID.
+
+Modo, invitación, nombres e idioma quedan congelados por montaje. Contraseña,
+Google y Facebook comparten un lease sincrónico previo al primer `await`, por lo
+que dos acciones del mismo tick no compiten por una sesión. El botón fija
+`continue_with`, locale `es`/`en`, popup y ambos auto-select en OFF; no existe
+One Tap. Mock conserva botón local one-use y cero carga de terceros.
+
+El cierre es exclusivamente local y sin secretos: **no invoca Google/Meta,
+consolas, push, deploy, producción ni gasto**. El smoke real queda detrás de una
+compuerta expresa de Mati.
+
 ## 0.148.0 — Google, Facebook y recovery PayMe owner-first (2026-08-27)
 
 El mirror adopta App Backend v2.72.0 con 101/101 archivos y el Frontend consume

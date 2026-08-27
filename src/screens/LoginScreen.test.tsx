@@ -59,6 +59,57 @@ describe('LoginScreen · gates sociales owner-first', () => {
     expect(clear).toBeGreaterThan(register);
   });
 
+  it('Google captura propósito, invitación, nombres e idioma sin leer autoridad live', () => {
+    expect(source).not.toContain('googleAction.current');
+    expect(source).toContain("readonly purpose: 'login';");
+    expect(source).toContain("readonly purpose: 'register';");
+    expect(source).toContain("const locale = idioma === 'en' ? 'en' : 'es';");
+    expect(source).toContain('invitationToken: signup.token');
+    expect(source).toContain('firstName: firstName.trim()');
+    expect(source).toContain('lastName: lastName.trim()');
+    expect(source).toContain('locale: authority.locale');
+    expect(source).toContain('googleAuthorityRef.current !== authority');
+    expect(source).toContain('currentInvitation.token !== authority.invitationToken');
+    expect(source).toContain('useLayoutEffect(() => {');
+    expect(source).toContain('googleAuthorityRef.current = googleAuthority;');
+    expect(source).not.toContain('Se invalida durante render');
+    expect(source).toContain('let handle: GoogleButtonHandle;');
+    expect(source).toContain('setGoogleLoadFailed(true);');
+    expect(source).toContain('El router global ya consumió el state antes del callback.');
+  });
+
+  it('contraseña, Google y Facebook toman el lease sincrónico antes del primer await', () => {
+    expect(source).toContain('const authActionActive = useRef(false);');
+    expect(source).toContain('if (authActionActive.current) return false;');
+
+    const googleLease = source.indexOf('if (!tryAcquireAuthAction()) {', source.indexOf('onCredential:'));
+    const googleAwait = source.indexOf('await googleLogin(credential);', googleLease);
+    const facebookLease = source.indexOf('if (!facebookEligible || !tryAcquireAuthAction()) return;');
+    const facebookAwait = source.indexOf('await api.facebookLoginStart()', facebookLease);
+    const passwordLease = source.indexOf('if (!tryAcquireAuthAction()) return;', source.indexOf('async function onSubmit'));
+    const passwordAwait = source.indexOf('await login(email, password);', passwordLease);
+
+    expect(googleLease).toBeGreaterThan(-1);
+    expect(googleLease).toBeLessThan(googleAwait);
+    expect(facebookLease).toBeGreaterThan(-1);
+    expect(facebookLease).toBeLessThan(facebookAwait);
+    expect(passwordLease).toBeGreaterThan(-1);
+    expect(passwordLease).toBeLessThan(passwordAwait);
+  });
+
+  it('el redirect real conserva el lease hasta unload y un assign fallido sí lo libera', () => {
+    const redirecting = source.indexOf('let redirecting = false;');
+    const assign = source.indexOf('window.location.assign(authorizationUrl);', redirecting);
+    const retain = source.indexOf('redirecting = true;', assign);
+    const conditionalRelease = source.indexOf('if (!redirecting) {', retain);
+    const release = source.indexOf('releaseAuthAction();', conditionalRelease);
+    expect(redirecting).toBeGreaterThan(-1);
+    expect(redirecting).toBeLessThan(assign);
+    expect(assign).toBeLessThan(retain);
+    expect(retain).toBeLessThan(conditionalRelease);
+    expect(conditionalRelease).toBeLessThan(release);
+  });
+
   it('conserva el copy ES-MX exacto de la orden y el aviso recovery no-oracular', () => {
     for (const text of [
       'Continuar con Google',
