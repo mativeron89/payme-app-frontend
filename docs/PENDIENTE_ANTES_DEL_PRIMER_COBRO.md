@@ -37,17 +37,18 @@ autorizó Mati» y no la condición que lo hacía correcto.
 
 | | |
 |---|---|
-| **Dónde** | `contract-mirror/services/connect.js:224` → `process.env.CONNECT_DIRECT_CHARGES === 'true'` |
-| **Qué pasa hoy** | es una BANDERA, y App Backend conserva un fallback Connect→plataforma |
+| **Dónde se cerró** | App Backend `cc5356c6164cd8fadc3088dedd627fe7728a2dbc` + `11af0a658e9e258e7d9d3dd2368f49c07005c8b4` |
+| **Qué pasa hoy en local** | garantía y pago nuevos exigen una cuenta Connect apta y fallan cerrados; los bindings históricos `NULL` quedan en cuarentena |
 | **Qué dice la política** | el acta card-only manda que una cuenta Connect no apta **falle cerrada y JAMÁS degrade a cargo de plataforma** |
 
-🔴 **La política ratificada dice lo que la landing promete. Es el CÓDIGO el que
-todavía no la cumple.** La promesa no es falsa: es **anticipada**.
+✅ **HECHO_LOCAL, medido sobre App Backend `7c547456`.** Los dos commits citados
+cierran el camino nuevo en la causa; no se infiere de una bandera encendida.
 
-**Antes del primer cobro real hay que acreditar que el fallback no existe más**
-—no que la bandera esté encendida: que el camino a plataforma no esté—. Si el
-fallback sigue vivo ese día, **la frase se corrige o se retira**, no se
-reinterpreta.
+**Antes del primer cobro real todavía hay que acreditar staging, producción y
+Stripe real.** Este cierre local no prueba configuración externa ni bytes
+desplegados. Si esa verificación externa contradice el comportamiento local, la
+frase se corrige o se retira; no se reinterpreta. D1-D, D1-E y los demás
+bloqueos no refutados siguen siendo condiciones independientes.
 
 ## Quién lo levanta
 

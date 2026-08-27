@@ -59,11 +59,10 @@ Workspace local `PayMe/` con carpetas hermanas:
    comensales para abrir mesa, dividir y pagar. Acá sí trabajás.
 5. `ops/` — actas y kits del proyecto.
 
-**Convivencia del ecosistema**: la prioridad #1 de PayMe hasta nuevo aviso
-es que el dashboard quede navegable (desbloquea demos con restaurantes).
-Esta misión avanza en paralelo sin competir: no le pidas a Mati
-ratificaciones urgentes que choquen con el dashboard; ante conflicto de
-agenda, el dashboard gana.
+**Convivencia del ecosistema**: Mati ratificó el 2026-08-27 este orden de
+prioridad: **APP, POS, OPS, AWS y Dashboard**. Esta sesión trabaja sólo en App
+Frontend y no amplía su alcance a los otros dominios; cualquier conflicto de
+agenda o reasignación cruza por `CEO`.
 
 ## El contrato — única fuente de verdad
 
@@ -139,9 +138,13 @@ archivo, la maqueta, el mock o `GAPS.md`.
   (Mati, 2026-08-06) — una promesa por defecto es una promesa que nadie pidió,
   cumplible o no. Lo que cambió es que elegirla ahora se cumple.
 - **El candidato sigue NO-GO de release/piloto** aunque sus checks locales
-  cierren: App Backend conserva el fallback Connect→plataforma,
-  D1-D/E incompletas, agregados con cohorte insuficiente y skips sin replay
-  cuando falta el mapping de branch. El inventario vigente está en `GAPS.md`.
+  cierren. El bloqueo Connect que figuraba acá está **HECHO_LOCAL** en App
+  Backend: `cc5356c6164cd8fadc3088dedd627fe7728a2dbc` creó el gate tipado y
+  `11af0a658e9e258e7d9d3dd2368f49c07005c8b4` lo hizo gobernar garantía y pago;
+  las operaciones nuevas fallan cerradas y los bindings históricos `NULL`
+  quedan en cuarentena. Esto no acredita staging, producción ni Stripe real.
+  Siguen independientes y vigentes D1-D, D1-E y los demás bloqueos no
+  refutados del inventario en `GAPS.md`.
 - **PQ-2 sigue en STOP de producto:** el checkpoint técnico y el espejo ya
   contienen fecha de nacimiento/capability, pero D-03 contradice el modelo de
   alta vigente. No interpretar `registration_required` ni modificar el registro
