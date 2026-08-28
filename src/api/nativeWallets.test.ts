@@ -275,18 +275,17 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
     return null;
   }
 
-  function isFeaturesAccess(node: ts.Expression): boolean {
-    return memberName(node) === 'features';
-  }
-
-  function bindingReadsWallet(pattern: ts.BindingName): boolean {
-    if (!ts.isObjectBindingPattern(pattern)) return false;
-    return pattern.elements.some((element) => {
-      const property = element.propertyName?.getText().replace(/^['"]|['"]$/g, '')
-        ?? (ts.isIdentifier(element.name) ? element.name.text : null);
-      if (property === 'apple_pay' || property === 'google_pay') return true;
-      return property === 'features' && bindingReadsWallet(element.name);
-    });
+  function bindingMemberName(element: ts.BindingElement): string | null {
+    if (!element.propertyName) return ts.isIdentifier(element.name) ? element.name.text : null;
+    if (ts.isComputedPropertyName(element.propertyName)) {
+      const expression = unwrap(element.propertyName.expression);
+      return ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)
+        ? expression.text
+        : null;
+    }
+    return ts.isIdentifier(element.propertyName) || ts.isStringLiteral(element.propertyName)
+      ? element.propertyName.text
+      : null;
   }
 
   function rawWalletReads(source: string, path = 'synthetic.ts'): ts.Node[] {
@@ -294,20 +293,12 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
       path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
     return descendants(ast).filter((node) => {
       if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
-        const expression = unwrap(node as ts.Expression);
-        if (!ts.isPropertyAccessExpression(expression) && !ts.isElementAccessExpression(expression)) {
-          return false;
-        }
-        const name = memberName(expression);
-        return (name === 'apple_pay' || name === 'google_pay')
-          && isFeaturesAccess(expression.expression);
+        const name = memberName(node);
+        return name === 'apple_pay' || name === 'google_pay';
       }
-      if (!ts.isVariableDeclaration(node) || !node.initializer) return false;
-      if (isFeaturesAccess(node.initializer) && bindingReadsWallet(node.name)) return true;
-      return bindingReadsWallet(node.name)
-        && !isFeaturesAccess(node.initializer)
-        && ts.isObjectBindingPattern(node.name)
-        && node.name.elements.some((element) => element.propertyName?.getText() === 'features');
+      if (!ts.isBindingElement(node)) return false;
+      const name = bindingMemberName(node);
+      return name === 'apple_pay' || name === 'google_pay';
     });
   }
 
@@ -416,6 +407,9 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
     "const { apple_pay } = config.features",
     "const { google_pay: wallet } = config['features']",
     "const { features: { apple_pay: wallet } } = config",
+    "const { ['apple_pay']: raw } = config.features",
+    'const features = config.features; const raw = features.apple_pay',
+    'const { features } = config; const { google_pay } = features',
   ])('el detector propio reconoce lectura raw: %s', (source) => {
     expect(rawWalletReads(source)).not.toHaveLength(0);
   });
@@ -429,6 +423,8 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
     'config.features.apple_sign_in',
     "config['features']['ios_app']",
     'const { google_sign_in } = config.features',
+    'source.payment_type',
+    "source['payment_type']",
   ])('el detector propio no acusa feature ajena: %s', (source) => {
     expect(rawWalletReads(source)).toHaveLength(0);
   });
