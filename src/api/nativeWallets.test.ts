@@ -263,18 +263,6 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
     return current;
   }
 
-  function memberName(node: ts.Expression): string | null {
-    const current = unwrap(node);
-    if (ts.isPropertyAccessExpression(current)) return current.name.text;
-    if (ts.isElementAccessExpression(current)
-      && current.argumentExpression
-      && (ts.isStringLiteral(current.argumentExpression)
-        || ts.isNoSubstitutionTemplateLiteral(current.argumentExpression))) {
-      return current.argumentExpression.text;
-    }
-    return null;
-  }
-
   function bindingMemberName(element: ts.BindingElement): string | null {
     if (!element.propertyName) return ts.isIdentifier(element.name) ? element.name.text : null;
     if (ts.isComputedPropertyName(element.propertyName)) {
@@ -291,14 +279,57 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
   function rawWalletReads(source: string, path = 'synthetic.ts'): ts.Node[] {
     const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true,
       path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    // Censo deliberadamente sintáctico de formas normales: constantes locales,
+    // tuplas y for..of simples. No pretende interpretar flujo arbitrario,
+    // Reflect ni código ofuscado.
+    const literalValues = new Map<string, readonly string[]>();
+    const readLiteralValues = (expression: ts.Expression): readonly string[] => {
+      const value = unwrap(expression);
+      if (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)) return [value.text];
+      if (ts.isIdentifier(value)) return literalValues.get(value.text) ?? [];
+      if (!ts.isArrayLiteralExpression(value)) return [];
+      return value.elements.flatMap((element) => {
+        if (ts.isSpreadElement(element)) return [];
+        const item = unwrap(element);
+        return ts.isStringLiteral(item) || ts.isNoSubstitutionTemplateLiteral(item)
+          ? [item.text]
+          : [];
+      });
+    };
+    for (const declaration of descendants(ast).filter(ts.isVariableDeclaration)) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+      const declarationList = declaration.parent;
+      if (!ts.isVariableDeclarationList(declarationList)
+        || !(declarationList.flags & ts.NodeFlags.Const)) continue;
+      const values = readLiteralValues(declaration.initializer);
+      if (values.length > 0) literalValues.set(declaration.name.text, values);
+    }
+    const loopValues = new Map<string, readonly string[]>();
+    for (const loop of descendants(ast).filter(ts.isForOfStatement)) {
+      if (!ts.isVariableDeclarationList(loop.initializer)
+        || loop.initializer.declarations.length !== 1) continue;
+      const declaration = loop.initializer.declarations[0];
+      if (!ts.isIdentifier(declaration.name)) continue;
+      const values = readLiteralValues(loop.expression);
+      if (values.length > 0) loopValues.set(declaration.name.text, values);
+    }
+    const isWallet = (value: string) => value === 'apple_pay' || value === 'google_pay';
     return descendants(ast).filter((node) => {
-      if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
-        const name = memberName(node);
-        return name === 'apple_pay' || name === 'google_pay';
+      if (ts.isPropertyAccessExpression(node)) return isWallet(node.name.text);
+      if (ts.isElementAccessExpression(node) && node.argumentExpression) {
+        const argument = unwrap(node.argumentExpression);
+        if (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)) {
+          return isWallet(argument.text);
+        }
+        if (ts.isIdentifier(argument)) {
+          return [...(literalValues.get(argument.text) ?? []), ...(loopValues.get(argument.text) ?? [])]
+            .some(isWallet);
+        }
+        return false;
       }
       if (!ts.isBindingElement(node)) return false;
       const name = bindingMemberName(node);
-      return name === 'apple_pay' || name === 'google_pay';
+      return name !== null && isWallet(name);
     });
   }
 
@@ -410,6 +441,9 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
     "const { ['apple_pay']: raw } = config.features",
     'const features = config.features; const raw = features.apple_pay',
     'const { features } = config; const { google_pay } = features',
+    "const key = 'apple_pay' as const; config.features[key]",
+    "for (const key of ['apple_pay','google_pay'] as const) config.features[key]",
+    "const keys = ['apple_pay','google_pay'] as const; for (const key of keys) config.features[key]",
   ])('el detector propio reconoce lectura raw: %s', (source) => {
     expect(rawWalletReads(source)).not.toHaveLength(0);
   });
@@ -425,6 +459,8 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
     'const { google_sign_in } = config.features',
     'source.payment_type',
     "source['payment_type']",
+    "const key = 'payment_type' as const; source[key]",
+    'declare const dynamicKey: string; source[dynamicKey]',
   ])('el detector propio no acusa feature ajena: %s', (source) => {
     expect(rawWalletReads(source)).toHaveLength(0);
   });
