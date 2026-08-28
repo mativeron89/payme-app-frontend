@@ -122,6 +122,24 @@ describe('capabilities nativas · independientes y fail-closed', () => {
     expect(state[provider].capabilityStatus).toBe(status);
     expect(state[provider].capabilityEnabled).toBe(false);
   });
+
+  it.each([
+    'user', 'account', 'role', 'restaurant', 'branch', 'sucursal',
+    'principal', 'customer', 'merchant', 'tenant', 'per', 'for',
+  ])('todos los tokens principal-scoped quedan fijados: %s', (principal) => {
+    for (const [provider, alias] of [
+      ['apple', `applepay_${principal}`],
+      ['google', `googlepay_${principal}`],
+      ['google', `gpay_${principal}`],
+    ] as const) {
+      const payload = config(true, true);
+      Object.assign(payload.features, { [alias]: true });
+      const state = readNativeWallets(payload);
+      expect(state[provider].capabilityStatus).toBe('principal_scoped');
+      expect(state[provider].capabilityEnabled).toBe(false);
+      expect(state[provider === 'apple' ? 'google' : 'apple'].capabilityEnabled).toBe(true);
+    }
+  });
 });
 
 describe('composición capability AND discovery', () => {
@@ -228,6 +246,71 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
     return descendants(root).some(predicate);
   }
 
+  function ancestors(node: ts.Node, stop?: ts.Node): ts.Node[] {
+    const found: ts.Node[] = [];
+    for (let current = node.parent; current && current !== stop; current = current.parent) {
+      found.push(current);
+    }
+    return found;
+  }
+
+  function unwrap(node: ts.Expression): ts.Expression {
+    let current = node;
+    while (ts.isParenthesizedExpression(current)
+      || ts.isAsExpression(current)
+      || ts.isTypeAssertionExpression(current)
+      || ts.isNonNullExpression(current)) current = current.expression;
+    return current;
+  }
+
+  function memberName(node: ts.Expression): string | null {
+    const current = unwrap(node);
+    if (ts.isPropertyAccessExpression(current)) return current.name.text;
+    if (ts.isElementAccessExpression(current)
+      && current.argumentExpression
+      && (ts.isStringLiteral(current.argumentExpression)
+        || ts.isNoSubstitutionTemplateLiteral(current.argumentExpression))) {
+      return current.argumentExpression.text;
+    }
+    return null;
+  }
+
+  function isFeaturesAccess(node: ts.Expression): boolean {
+    return memberName(node) === 'features';
+  }
+
+  function bindingReadsWallet(pattern: ts.BindingName): boolean {
+    if (!ts.isObjectBindingPattern(pattern)) return false;
+    return pattern.elements.some((element) => {
+      const property = element.propertyName?.getText().replace(/^['"]|['"]$/g, '')
+        ?? (ts.isIdentifier(element.name) ? element.name.text : null);
+      if (property === 'apple_pay' || property === 'google_pay') return true;
+      return property === 'features' && bindingReadsWallet(element.name);
+    });
+  }
+
+  function rawWalletReads(source: string, path = 'synthetic.ts'): ts.Node[] {
+    const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true,
+      path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    return descendants(ast).filter((node) => {
+      if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+        const expression = unwrap(node as ts.Expression);
+        if (!ts.isPropertyAccessExpression(expression) && !ts.isElementAccessExpression(expression)) {
+          return false;
+        }
+        const name = memberName(expression);
+        return (name === 'apple_pay' || name === 'google_pay')
+          && isFeaturesAccess(expression.expression);
+      }
+      if (!ts.isVariableDeclaration(node) || !node.initializer) return false;
+      if (isFeaturesAccess(node.initializer) && bindingReadsWallet(node.name)) return true;
+      return bindingReadsWallet(node.name)
+        && !isFeaturesAccess(node.initializer)
+        && ts.isObjectBindingPattern(node.name)
+        && node.name.elements.some((element) => element.propertyName?.getText() === 'features');
+    });
+  }
+
   function productionSources(): Array<{ path: string; source: string }> {
     const apiDir = dirname(fileURLToPath(import.meta.url));
     const srcDir = join(apiDir, '..');
@@ -278,7 +361,12 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
       .filter((call) => call.arguments[1].getText(mesaAst) === '[guestToken, code]')
       .filter((call) => call.arguments[0].getText(mesaAst).includes('identityEpochRef.current.next()'));
     expect(identityEffects).toHaveLength(1);
-    expect(contains(identityEffects[0].arguments[0], (node) => isSetter(node, 'card'))).toBe(true);
+    const resetSetters = descendants(identityEffects[0].arguments[0])
+      .filter((node): node is ts.CallExpression => ts.isCallExpression(node)
+        && ts.isIdentifier(node.expression)
+        && node.expression.text === 'setPayType');
+    expect(resetSetters).toHaveLength(1);
+    expect(isSetter(resetSetters[0], 'card')).toBe(true);
   });
 
   it.each([
@@ -287,42 +375,68 @@ describe('censo de fuente · no hay bypass de Dark A', () => {
   ] as const)('el único setter %s vive bajo su available', (provider, setter) => {
     expect(mesa.split(setter)).toHaveLength(2);
     const value = `${provider}_pay`;
-    const gates = descendants(mesaAst)
+    const allSetters = descendants(mesaAst).filter((node) => isSetter(node, value));
+    expect(allSetters).toHaveLength(1);
+    const button = ancestors(allSetters[0]).find(ts.isJsxElement);
+    expect(button?.openingElement.tagName.getText(mesaAst)).toBe('button');
+    const externalGates = ancestors(button as ts.JsxElement)
       .filter(ts.isBinaryExpression)
       .filter((node) => node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken)
       .filter((node) => node.left.getText(mesaAst) === `nativeWallets.${provider}.available`)
-      .filter((node) => contains(node.right, (child) => isSetter(child, value)));
-    expect(gates).toHaveLength(1);
-    const allSetters = descendants(mesaAst).filter((node) => isSetter(node, value));
-    expect(allSetters).toHaveLength(1);
+      .filter((node) => contains(node.right, (child) => child === button));
+    expect(externalGates).toHaveLength(1);
   });
 
   it.each([
     ['apple', 'Apple Pay'],
     ['google', 'Google Pay'],
   ] as const)('el copy guest de %s depende sólo de available', (provider, label) => {
-    const copies = descendants(mesaAst)
-      .filter(ts.isConditionalExpression)
-      .filter((node) => node.condition.getText(mesaAst) === `nativeWallets.${provider}.available`)
-      .filter((node) => node.whenTrue.getText(mesaAst).includes(label));
-    expect(copies).toHaveLength(1);
+    const guestNotes = descendants(mesaAst)
+      .filter(ts.isJsxElement)
+      .filter((node) => node.openingElement.attributes.getText(mesaAst).includes('note note-orange'))
+      .filter((node) => node.getText(mesaAst).includes('Sin iniciar sesión pagas con tarjeta'));
+    expect(guestNotes).toHaveLength(1);
+    const occurrences = descendants(guestNotes[0]).filter((node) =>
+      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node))
+      && node.text.includes(label));
+    expect(occurrences).toHaveLength(1);
+    for (const occurrence of occurrences) {
+      const governingConditionals = ancestors(occurrence, guestNotes[0])
+        .filter(ts.isConditionalExpression)
+        .filter((node) => node.condition.getText(mesaAst) === `nativeWallets.${provider}.available`)
+        .filter((node) => contains(node.whenTrue, (child) => child === occurrence));
+      expect(governingConditionals).toHaveLength(1);
+    }
+  });
+
+  it.each([
+    "config.features.apple_pay",
+    "config['features']['apple_pay']",
+    "(config.features)['google_pay']",
+    "const { apple_pay } = config.features",
+    "const { google_pay: wallet } = config['features']",
+    "const { features: { apple_pay: wallet } } = config",
+  ])('el detector propio reconoce lectura raw: %s', (source) => {
+    expect(rawWalletReads(source)).not.toHaveLength(0);
+  });
+
+  it('el detector conserva lecturas posteriores a JSX en TSX', () => {
+    const source = "const view = <div />; const raw = config['features']['google_pay'];";
+    expect(rawWalletReads(source, 'synthetic.tsx')).not.toHaveLength(0);
+  });
+
+  it.each([
+    'config.features.apple_sign_in',
+    "config['features']['ios_app']",
+    'const { google_sign_in } = config.features',
+  ])('el detector propio no acusa feature ajena: %s', (source) => {
+    expect(rawWalletReads(source)).toHaveLength(0);
   });
 
   it('ningún consumidor productivo lee flags crudos fuera del decoder', () => {
     const offenders = productionSources()
       .filter((file) => {
-        const ast = ts.createSourceFile(file.path, file.source, ts.ScriptTarget.Latest, true,
-          file.path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-        return descendants(ast).some((node) => {
-          if (ts.isPropertyAccessExpression(node)) {
-            return ['apple_pay', 'google_pay'].includes(node.name.text)
-              && node.expression.getText(ast).endsWith('features');
-          }
-          return ts.isElementAccessExpression(node)
-            && node.expression.getText(ast).endsWith('features')
-            && ts.isStringLiteral(node.argumentExpression)
-            && ['apple_pay', 'google_pay'].includes(node.argumentExpression.text);
-        });
+        return rawWalletReads(file.source, file.path).length > 0;
       })
       .map((file) => file.path);
     expect(offenders).toEqual([]);
