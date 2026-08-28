@@ -11,6 +11,24 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.149.0 — Wallets nativas owner-first, todavía dark (2026-08-27)
+
+El mirror adopta App Backend v2.74.1: Apple Pay y Google Pay llegan como
+PaymentMethods efímeros, nunca guardados, ligados a su `payment_type`, a la
+cuenta Connect y al journal/replay existente. Son 102/102 archivos contra
+contenido `a718f029431dff6d8a51e88418fd2d2a7f6bb520`, publicado por
+`08f27079e423ad729b1631bbac3c39af863a4c4e`.
+
+La constante local desaparece. Un decoder independiente por proveedor compone
+capability owner **AND** discovery autoritativa. Dark A no implementa discovery,
+así que ningún botón aparece en real o mock aun si una capability llega en
+`true`. Una caída de red queda segura y reintentable; aliases relacionados o
+por principal apagan sólo su proveedor y dejan evidencia reportable.
+
+No se eligió API Stripe: esa decisión exige documentación oficial vigente.
+Sin hoja nativa, tokenización, proveedor, red externa, dominio, enrollment,
+dispositivo, garantía, secretos, push, deploy ni producción.
+
 ## 0.148.2 — El stepper pregunta por la magnitud correcta (2026-08-27)
 
 La pantalla de apertura deja de hardcodear «¿Cuántos pagan?» para los tres

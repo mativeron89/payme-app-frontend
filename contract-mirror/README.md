@@ -8,37 +8,43 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-08-27**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`ac97ae2fe49980d499b00ab38d16c7e55657f090`**
-  (`fix(auth): tratar HTTP 408 como indisponibilidad` · v2.73.0).
+  **`a718f029431dff6d8a51e88418fd2d2a7f6bb520`**
+  (`fix(pagos): endurecer preflight de wallets nativas` · v2.74.1).
 - Commit que publicó el inventario autoritativo:
-  **`7c547456a4db97c794462e703c9d1f325baee72f`**
-  (`chore(contract): sellar owner Google HTTP 408`). Como siempre, el inventario
+  **`08f27079e423ad729b1631bbac3c39af863a4c4e`**
+  (`chore(contrato): regenerar inventario mirror 2.74.1`). Como siempre, el inventario
   declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `7c54745` está un commit más adelante que el contenido y no
+⚠️ **El publicador `08f2707` está un commit más adelante que el contenido y no
 se espeja como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `ac97ae2`; anclarse a él mantiene verificable la paridad.
+declarado es `a718f02`; anclarse a él mantiene verificable la paridad.
 
 🆕 **102 archivos espejados** más este README.
 
-Este refresh adopta el runtime owner-first de Google Account y conserva el
-contrato social local y oscuro:
+Este refresh adopta el runtime owner-first y dark de Apple Pay/Google Pay:
 
-- `googleIdentityVerifier.js` aísla `google-auth-library@10.9.1`, limita a cinco
-  segundos cada intento de certificados y clasifica red/TLS/408/429/5xx como
-  indisponibilidad transitoria opaca;
-- Google GIS manual consume ID token efímero sin auto-link por email, y PayMe
-  vuelve a validar issuer, audience, expiración y subject;
-- Facebook usa BFF redirect con state/purpose one-use ligado en navegador;
-- recovery PayMe usa un token opaco de fragmento que nunca llega al hosting;
-- `features.social_auth` falla cerrada para las superficies nuevas y conserva
-  el ingreso por contraseña ante ausencia o payload malformado.
+- `apple_pay` y `google_pay` usan un `stripe_payment_method_id` efímero y jamás
+  `payment_method_id`, Customer ni `save_payment_method`;
+- el tipo de wallet se valida contra `card.wallet.type` y queda sellado en el
+  snapshot, el PaymentIntent y los replays;
+- los intentos nativos exigen cuenta Connect y preservan las mismas defensas de
+  idempotencia, reconciliación y webhook que tarjeta.
+
+**Límite Dark A:** este mirror acredita únicamente contrato local. El Frontend
+todavía no implementa discovery, hoja nativa ni tokenización; no afirma soporte,
+Stripe real, dominio, enrollment, staging, deploy ni producción.
 
 La adopción se verificó contra la fuente antes de implementar el consumidor:
 **integridad 102/102**, **paridad 102/102** y **vigencia verde** contra App Backend
-HEAD `7c547456a4db97c794462e703c9d1f325baee72f`, cuya publicación contractual
-declara `ac97ae2fe49980d499b00ab38d16c7e55657f090`. Eso acredita el árbol local
+HEAD `08f27079e423ad729b1631bbac3c39af863a4c4e`, cuya publicación contractual
+declara `a718f029431dff6d8a51e88418fd2d2a7f6bb520`. Eso acredita el árbol local
 y la ref contractual publicada; no afirma deploy ni producción.
+
+### Refresh anterior · 2026-08-27 (Google Account · v2.73.0)
+
+El corte anterior declaró 102/102 contra contenido
+`ac97ae2fe49980d499b00ab38d16c7e55657f090`, publicado por
+`7c547456a4db97c794462e703c9d1f325baee72f`.
 
 ### Refresh anterior · 2026-08-26 (recibos salientes G-25 · v2.71.0)
 
@@ -788,13 +794,14 @@ tarjeta guardada del padre; Apple/Google Pay no la reemplaza.
 
 ## Bloqueos que el front debe respetar
 
-1. **P0 — Connect no falla cerrado.** `resolveChargeTarget()` puede retornar
-   `null` cuando faltan flag/secreto/cuenta apta y el backend conserva el cargo
-   de plataforma/STP. El MVP card-only no ratificó ese fallback.
-2. **P0 contractual / P1 de implementación backend — `save_payment_method`
-   bajo direct charges.** La intención se acepta y queda sellada, pero el direct
-   charge omite `setup_future_usage`, customer y espejo de bóveda. Es P0 como
-   gate de la promesa de UI y P1 como defecto técnico inventariado del backend.
+1. **CERRADO localmente — Connect falla cerrado.** Garantías y pagos nuevos ya
+   no degradan a plataforma/STP cuando falta una cuenta apta; los bindings
+   históricos `NULL` quedan cuarentenados (`cc5356c6164cd8fadc3088dedd627fe7728a2dbc`
+   + `11af0a658e9e258e7d9d3dd2368f49c07005c8b4`). Esto es `HECHO_LOCAL`:
+   staging, producción y Stripe no fueron medidos.
+2. **CERRADO localmente — `save_payment_method` bajo direct charges.** El owner
+   implementó la persistencia contractual (`aa28e84`). Es `HECHO_LOCAL`;
+   staging, producción, proveedor y prueba física siguen sin medirse.
 3. **P1 — D1-E.** Falta el flujo de disputas con devolución explícita de la
    comisión PayMe.
 4. **P1 — D1-D.** Faltan avisos y el auto-refund ratificado para pagos tardíos

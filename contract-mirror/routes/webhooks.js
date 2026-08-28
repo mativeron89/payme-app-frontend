@@ -1320,7 +1320,7 @@ async function ackOrRetryUnbound(event, pi, acctId) {
   }
 
   const recoverable = candidate.operation_type === 'mesa_pay'
-    && candidate.payment_type === 'card'
+    && ['card', 'apple_pay', 'google_pay'].includes(candidate.payment_type)
     && !!candidate.stripe_contract_prepared_at
     && ['pending', 'cancelling'].includes(candidate.status);
   if (!recoverable) {

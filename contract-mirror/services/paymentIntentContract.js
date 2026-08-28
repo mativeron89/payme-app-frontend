@@ -66,7 +66,9 @@ function assertPaymentIntentContract(attempt, intent, {
       || typeof attempt?.stripe_save_payment_method !== 'boolean') {
     mismatches.push('durable_snapshot');
   }
-  const hasV1CardEvidence = Number(attempt?.card_policy_version) === 1
+  const policyVersion = Number(attempt?.card_policy_version);
+  const nativeWallet = ['apple_pay', 'google_pay'].includes(attempt?.payment_type);
+  const hasCurrentCardEvidence = policyVersion === 1
     && ['visa', 'mastercard', 'amex'].includes(attempt?.card_brand_snapshot)
     && ['credit', 'debit'].includes(attempt?.card_funding_snapshot)
     && Number.isFinite(Date.parse(attempt?.card_verified_at))
@@ -81,10 +83,11 @@ function assertPaymentIntentContract(attempt, intent, {
     && Number(attempt.card_policy_version) === 0
     && !!attempt?.stripe_payment_intent_id
     && attempt.stripe_payment_intent_id === intentId;
-  if (!hasV1CardEvidence && !isAlreadyBoundLegacy) {
+  if (!hasCurrentCardEvidence && !isAlreadyBoundLegacy) {
     mismatches.push('card_policy_snapshot');
   }
-  if (hasV1CardEvidence && attempt?.payment_type !== 'card') {
+  if (hasCurrentCardEvidence
+      && policyVersion !== 1) {
     mismatches.push('attempt_kind');
   }
   const hasExactDurableIntent = !!intentId
@@ -95,7 +98,7 @@ function assertPaymentIntentContract(attempt, intent, {
     // fabricar PIs y metadata. Sólo plataforma admite recovery por metadata.
     && expectedAccount === null
     && attempt?.stripe_payment_intent_id == null
-    && hasV1CardEvidence;
+    && hasCurrentCardEvidence;
   if (!hasExactDurableIntent && !canBindCurrentPolicyIntent) mismatches.push('id');
   if (localAccount !== expectedAccount
       || (attempt?.stripe_account_id != null && !localAccount)) {
@@ -119,7 +122,7 @@ function assertPaymentIntentContract(attempt, intent, {
       || !Number.isSafeInteger(remoteFee) || remoteFee !== expectedFee) {
     mismatches.push('application_fee_amount');
   }
-  if (hasV1CardEvidence && (
+  if (hasCurrentCardEvidence && (
     expectedAmount <= 0
     || expectedFee >= expectedAmount
     || (!expectedAccount && expectedFee !== 0)
@@ -134,6 +137,12 @@ function assertPaymentIntentContract(attempt, intent, {
       && !normalized(attempt.stripe_customer_id_snapshot))
   )) {
     mismatches.push('card_payment_snapshot');
+  }
+  if (nativeWallet && (attempt?.stripe_used_saved_card
+      || attempt?.stripe_save_payment_method
+      || attempt?.stripe_customer_id_snapshot
+      || (policyVersion === 1 && !expectedAccount))) {
+    mismatches.push('native_wallet_snapshot');
   }
   if (String(intent?.currency || '').toLowerCase() !== 'mxn') mismatches.push('currency');
   if (intent?.capture_method !== 'automatic') mismatches.push('capture_method');

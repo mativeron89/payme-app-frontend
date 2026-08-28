@@ -156,14 +156,6 @@ export const QR_RESTAURANT_ID: string | null = readQrRestaurant();
 
 
 /**
- * Apple Pay / Google Pay siguen apagados también en mock. Son un MUST
- * ratificado del MVP, pero la hoja nativa y sus pruebas físicas todavía no
- * están implementadas; un botón que manda un `pm_` de utilería no acredita
- * soporte.
- */
-export const WALLET_PAY_ENABLED = false;
-
-/**
  * Techo del multipart del OCR, espejado de `routes/ocr.js:49`
  * (`limits: { fileSize: 8 * 1024 * 1024 }` → 413 `image_too_large`).
  *

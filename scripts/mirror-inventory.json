@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "ac97ae2fe49980d499b00ab38d16c7e55657f090",
+  "commit": "a718f029431dff6d8a51e88418fd2d2a7f6bb520",
   "total": 102,
   "archivos": [
     {
@@ -283,8 +283,8 @@
     {
       "origen": "services/settlement.js",
       "destino": "docs/settlement.js.ref",
-      "sha256": "d7995f7f0468b7e982f34b2d2ce42f446293e977704a263c2d60454e17a1e963",
-      "bytes": 155987
+      "sha256": "d486e16e6135e69ccd49836801888787e9176b69d34a98c0b979277802b8e635",
+      "bytes": 157324
     },
     {
       "origen": "legal/README.md",
@@ -349,8 +349,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "b9a7f56a6e6749022c28821f0ad844dc2a6403a34aa0a9dd2f5195b8bc6cacf6",
-      "bytes": 144534
+      "sha256": "3179c33cd7233f9a657f101513f569de2b720983c01796745c9f5d55c307d223",
+      "bytes": 144953
     },
     {
       "origen": "routes/notifications.js",
@@ -415,14 +415,14 @@
     {
       "origen": "routes/webhooks.js",
       "destino": "routes/webhooks.js",
-      "sha256": "24ee5460ca8c8495e1d05e3a24880b789631471af8e24294a8808e2c041ed63f",
-      "bytes": 84695
+      "sha256": "8a21754f2f1bb0680edb6d6ab417a612105e74ff93258d8639e31afba688e2a4",
+      "bytes": 84730
     },
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "24e819b704692a2c875f8f36de56325d15102cee7432be7d32c7e86cc8b387b4",
-      "bytes": 21739
+      "sha256": "a36825d02569fc920652da8f79555bb52bf94f08123b5c68bdabd9abbbd5ae5b",
+      "bytes": 21916
     },
     {
       "origen": "services/authRecovery.js",
@@ -433,8 +433,8 @@
     {
       "origen": "services/cardEligibility.js",
       "destino": "services/cardEligibility.js",
-      "sha256": "135d7b004d2a6391e4b4228aee032cfa608fc3bad8855f25102e2275ce86cf19",
-      "bytes": 6024
+      "sha256": "247a40f28a067bc1e3c40fefd62164ac40bbac0f4127eae485569e7757788ac9",
+      "bytes": 6358
     },
     {
       "origen": "services/connect.js",
@@ -523,8 +523,8 @@
     {
       "origen": "services/paymentIntentContract.js",
       "destino": "services/paymentIntentContract.js",
-      "sha256": "4dc24ed192b0c226c155ac3430f6938f42f4ec2e9e97c6b38a48ed51c53a38da",
-      "bytes": 13001
+      "sha256": "7f7a8be21a47432d8f708dfb282ad78df33c1cc3d046afd033df401768bc1a20",
+      "bytes": 13394
     },
     {
       "origen": "services/paymentMethodLifecycle.js",

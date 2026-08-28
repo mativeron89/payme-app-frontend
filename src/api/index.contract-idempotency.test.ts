@@ -11,8 +11,9 @@ const storage = new MemoryStorage();
 Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
 
 const { saveSession } = await import('./storage');
-const { api, IS_MOCK, WALLET_PAY_ENABLED } = await import('./index');
+const { api, IS_MOCK } = await import('./index');
 const { getWalletRailState, resetWalletRailForTests } = await import('./walletRail');
+const { nativeWalletsSnapshot, resetNativeWalletsForTests } = await import('./nativeWallets');
 
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -62,7 +63,9 @@ describe('fachada real: contrato idempotente aditivo', () => {
     expect(inicial.status).toBe('pending');
     // Y la superficie card-only ratificada NO se esconde por no tener respuesta.
     expect(inicial.accountActivity).toBe(true);
-    expect(WALLET_PAY_ENABLED).toBe(false);
+    resetNativeWalletsForTests();
+    expect(nativeWalletsSnapshot().apple.available).toBe(false);
+    expect(nativeWalletsSnapshot().google.available).toBe(false);
   });
 
   it('rechaza OCR por encima de los 8 MiB que acepta el backend antes de red', async () => {

@@ -1,7 +1,8 @@
 import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
-import { api, IS_MOCK, WALLET_PAY_ENABLED, newIdempotencyKey } from '../api';
+import { api, IS_MOCK, newIdempotencyKey } from '../api';
 import { useWalletRail } from '../api/walletRail';
+import { useNativeWallets } from '../api/nativeWallets';
 import type { MonetaryIntentHandle, UnconfirmedAttempt } from '../api/idempotency';
 import {
   acquireMonetaryIntent,
@@ -267,6 +268,7 @@ function payExpectationFor(mesa: MesaDetail, body: PayMesaRequest): PayMesaExpec
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
   const { t } = useIdioma();
   const moneyRail = useMoneyRail();
+  const nativeWallets = useNativeWallets();
   // OLA 5D · método de pago con saldo y copy asociada: los declara el BACKEND.
   const { walletRailEnabled } = useWalletRail();
   const { session } = useAuth();
@@ -1020,7 +1022,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     if (needsAction && clientSecret) {
       // v2.24 (Connect · direct charge): si el intent vive en la cuenta del
       // restaurante, Stripe.js DEBE inicializarse con esa cuenta o el 3DS es
-      // inconfirmable. Ausente = cargo de plataforma, como siempre.
+      // inconfirmable. Ausente es contrato incompleto: el owner falla cerrado.
       const confirmed = await confirmCardPayment(clientSecret, at.connected_account_id);
       if (!confirmed.ok) {
         if (confirmed.definitive) {
@@ -1935,7 +1937,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
                 ⚠️ **La semántica `role="radio"` se CONSERVA aunque hoy el grupo
                 tenga un solo miembro** (saldo apagado por capability, Apple y
-                Google por `WALLET_PAY_ENABLED`). Es lo que hace que la fila se
+                Google por disponibilidad runtime independiente). Es lo que hace que la fila se
                 lea redundante hoy, y lo que va a hacer falta el día que los
                 hermanos vuelvan: sacarla es fácil, reponerla bien no. */}
             <button
@@ -2078,10 +2080,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 )}
               </div>
             )}
-            {/* Apple/Google Pay: apagados hasta que exista la integración con
-                la Payment Request API y su prueba física. No se borran: se
-                apagan por dato (`WALLET_PAY_ENABLED` en api/index.ts). */}
-            {WALLET_PAY_ENABLED && (
+            {/* Dark A separa capability owner de discovery local. Sin discovery
+                autoritativa ambas opciones permanecen invisibles. */}
+            {nativeWallets.apple.available && (
             <button
               className={`method-card ${payType === 'apple_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('apple_pay')}
@@ -2099,7 +2100,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <div className="radio" aria-hidden="true" />
             </button>
             )}
-            {WALLET_PAY_ENABLED && (
+            {nativeWallets.google.available && (
             <button
               className={`method-card ${payType === 'google_pay' ? 'sel' : ''}`}
               onClick={() => setPayType('google_pay')}
@@ -2139,7 +2140,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               {/* OLA 5C (c): esta nota se lee SIN sesión, por URL pública — es
                   la ruta de más tráfico. Con el riel apagado le anunciaba al
                   comensal un saldo PayMe que no existe. */}
-              {t('Sin iniciar sesión pagas con tarjeta')}{WALLET_PAY_ENABLED ? ' o Apple Pay' : ''}
+              {t('Sin iniciar sesión pagas con tarjeta')}{nativeWallets.apple.available ? ' o Apple Pay' : ''}{nativeWallets.google.available ? ' o Google Pay' : ''}
               {walletRailEnabled ? ' (el saldo PayMe pide cuenta)' : ''}.
             </div>
           )}

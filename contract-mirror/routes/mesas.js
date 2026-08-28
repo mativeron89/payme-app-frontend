@@ -54,6 +54,8 @@ const shortfallDetails = require('../services/shortfallDetails');
 const router = express.Router();
 const { validateBody } = schemas;
 const ITEM_LOCK_SECONDS = Number(process.env.ITEM_LOCK_SECONDS) || 600;
+const CARD_PAYMENT_TYPES = new Set(['card', 'apple_pay', 'google_pay']);
+const NATIVE_WALLET_TYPES = new Set(['apple_pay', 'google_pay']);
 
 function generateMesaCode() {
   // El contrato ya admite 3–5 dígitos. Cinco amplía el espacio global de
@@ -126,7 +128,7 @@ function storedAttemptCardSnapshot(row) {
     policyVersion: Number(row?.card_policy_version),
     brand: row?.card_brand_snapshot,
     funding: row?.card_funding_snapshot,
-    walletType: null,
+    walletType: NATIVE_WALLET_TYPES.has(row?.payment_type) ? row.payment_type : null,
     verifiedAt: row?.card_verified_at,
   };
   return cardEligibility.isTrustedSnapshot(snapshot) ? snapshot : null;
@@ -1169,34 +1171,26 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
       });
     }
 
-    if (payment_type === 'apple_pay' || payment_type === 'google_pay') {
-      // Las wallets son requisito ratificado, pero su plan técnico todavía no.
-      // Los replays con un PI ya bindeado se resolvieron arriba: no se rompen
-      // obligaciones históricas. Una operación nueva no puede re-etiquetar una
-      // tarjeta manual como wallet ni crear claims/attempts mientras el plan no
-      // esté ratificado. Un attempt unbound previo queda en reconciliación, no
-      // se transforma retrospectivamente en un rechazo de producto.
-      if (recoveringUnboundAttempt) {
-        return res.status(503).json({
-          error: 'payment_reconciliation_pending',
-          retry_with_same_idempotency_key: true,
-        });
-      }
-      return res.status(422).json({ error: 'payment_method_not_enabled' });
-    }
-
     // La elegibilidad y el ownership remoto se prueban ANTES de reclamar un
     // ítem/casillero o crear el attempt. El source + snapshot ganador se sella
     // luego en el mismo INSERT que esos artefactos. Un replay unbound usa sólo
     // esa evidencia durable y jamás vuelve a decidir desde el body o una fila
     // viva de payment_methods.
     let requestCardEvidence = null;
-    if (payment_type === 'card') {
+    if (CARD_PAYMENT_TYPES.has(payment_type)) {
       if (recoveringUnboundAttempt) {
         const durableSnapshot = storedAttemptCardSnapshot(recoveringUnboundAttempt);
+        const nativeWallet = NATIVE_WALLET_TYPES.has(payment_type);
         if (!recoveringUnboundAttempt.stripe_source_payment_method_id
+            || recoveringUnboundAttempt.payment_type !== payment_type
             || typeof recoveringUnboundAttempt.stripe_used_saved_card !== 'boolean'
             || typeof recoveringUnboundAttempt.stripe_save_payment_method !== 'boolean'
+            || (nativeWallet && (
+              recoveringUnboundAttempt.stripe_used_saved_card
+              || recoveringUnboundAttempt.stripe_save_payment_method
+              || recoveringUnboundAttempt.stripe_customer_id_snapshot
+              || !recoveringUnboundAttempt.stripe_account_id
+            ))
             || !durableSnapshot) {
           return res.status(503).json({
             error: 'payment_reconciliation_pending',
@@ -1212,8 +1206,12 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
           snapshot: durableSnapshot,
         };
       } else {
+        const nativeWallet = NATIVE_WALLET_TYPES.has(payment_type);
         const usedSavedCard = !!payment_method_id;
         const wantsSave = !!save_payment_method && !!userId && !usedSavedCard;
+        if (nativeWallet && (usedSavedCard || wantsSave)) {
+          return res.status(422).json({ error: 'native_wallet_payment_method_ephemeral' });
+        }
         let customerId = req.user?.stripe_customer_id || null;
         let savedRow = null;
         let sourcePaymentMethodId = stripe_payment_method_id || null;
@@ -1242,11 +1240,12 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
         try {
           verified = await cardEligibility.retrieveEligibleCard({
             paymentMethodId: sourcePaymentMethodId,
-            expectedCustomerId: customerId,
-            ownership: usedSavedCard
+            expectedCustomerId: nativeWallet ? null : customerId,
+            ownership: nativeWallet ? 'typed_guest' : (usedSavedCard
               ? 'saved'
-              : (customerId ? 'typed_user' : 'typed_guest'),
+              : (customerId ? 'typed_user' : 'typed_guest')),
             expectedSnapshot: storedPaymentMethodCardSnapshot(savedRow),
+            expectedPaymentType: payment_type,
             reconciliationCode: 'payment_method_verification_unavailable',
           });
         } catch (error) {
@@ -1264,7 +1263,7 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
         if (!usedSavedCard && cardEligibility.remoteId(verified.remote.customer)) {
           return res.status(409).json({ error: 'payment_method_requires_saved_reference' });
         }
-        if (userId && !customerId) {
+        if (!nativeWallet && userId && !customerId) {
           // Primero se probó que el PM tipeado es elegible y está desadjunto;
           // sólo entonces se crea el Customer necesario para sellar ownership.
           try {
@@ -1287,7 +1286,7 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
         requestCardEvidence = {
           paymentMethodId: sourcePaymentMethodId,
           savedPaymentMethodId: savedRow?.id || null,
-          customerId,
+          customerId: nativeWallet ? null : customerId,
           usedSavedCard,
           wantsSave,
           snapshot: verified.snapshot,
@@ -1476,6 +1475,7 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
                    $16,$17,$18,$19,$20,$21,2,'mesa_pay','pending',$22)
            RETURNING id, gross_amount_cents, fee_amount_cents, payment_method_id,
+                     payment_type,
                      stripe_source_payment_method_id,stripe_customer_id_snapshot,
                      stripe_used_saved_card,stripe_save_payment_method,
                      card_policy_version,card_brand_snapshot,card_funding_snapshot,
@@ -1484,14 +1484,14 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
            validatedItemsAmount, tipCents, grossAmount,
            feeAmount, grossAmount - feeAmount,
            claimedSlotIndex,
-           payment_type === 'card' ? requestCardEvidence.usedSavedCard : false,
-           payment_type === 'card' ? requestCardEvidence.wantsSave : false,
-           payment_type === 'card' ? requestCardEvidence.paymentMethodId : null,
-           payment_type === 'card' ? requestCardEvidence.customerId : null,
-           payment_type === 'card' ? requestCardEvidence.snapshot.policyVersion : 0,
-           payment_type === 'card' ? requestCardEvidence.snapshot.brand : null,
-           payment_type === 'card' ? requestCardEvidence.snapshot.funding : null,
-           payment_type === 'card' ? requestCardEvidence.snapshot.verifiedAt : null,
+           CARD_PAYMENT_TYPES.has(payment_type) ? requestCardEvidence.usedSavedCard : false,
+           CARD_PAYMENT_TYPES.has(payment_type) ? requestCardEvidence.wantsSave : false,
+           CARD_PAYMENT_TYPES.has(payment_type) ? requestCardEvidence.paymentMethodId : null,
+           CARD_PAYMENT_TYPES.has(payment_type) ? requestCardEvidence.customerId : null,
+           CARD_PAYMENT_TYPES.has(payment_type) ? requestCardEvidence.snapshot.policyVersion : 0,
+           CARD_PAYMENT_TYPES.has(payment_type) ? requestCardEvidence.snapshot.brand : null,
+           CARD_PAYMENT_TYPES.has(payment_type) ? requestCardEvidence.snapshot.funding : null,
+           CARD_PAYMENT_TYPES.has(payment_type) ? requestCardEvidence.snapshot.verifiedAt : null,
            idempotency_key, reqHash, payment_type]
         );
         const a = aRows[0];
@@ -1907,6 +1907,7 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
           stripeAccount: connectTarget.accountId,
           ownership: 'clone',
           expectedSnapshot: sourceCardSnapshot,
+          expectedPaymentType: payment_type,
           reconciliationCode: 'connect_payment_method_reconciliation_pending',
         });
         const persisted = await persistAttemptChargePaymentMethod(
@@ -2456,7 +2457,7 @@ async function prepareAttemptStripeContract({
 }) {
   return pool.tx(async (client) => {
     const { rows: [current] } = await client.query(
-      `SELECT status, stripe_payment_intent_id, stripe_contract_prepared_at,
+      `SELECT status, payment_type, stripe_payment_intent_id, stripe_contract_prepared_at,
               stripe_account_id, application_fee_cents,
               stripe_source_payment_method_id, stripe_customer_id_snapshot,
               stripe_used_saved_card, stripe_save_payment_method,

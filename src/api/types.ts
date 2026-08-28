@@ -146,8 +146,10 @@ export interface AppConfig {
   invitation_expiry_seconds: number;
   item_lock_seconds: number;
   features: {
-    apple_pay: boolean;
-    google_pay: boolean;
+    /** Runtime-only: el decoder fail-closed vive en `nativeWallets.ts`. */
+    apple_pay?: unknown;
+    /** Runtime-only: el decoder fail-closed vive en `nativeWallets.ts`. */
+    google_pay?: unknown;
     stp_dispersal: boolean;
     ocr_real: boolean;
     /** Runtime-only: el decoder cerrado vive en `socialAuth.ts`. */
@@ -680,7 +682,8 @@ export interface PayMesaResponse {
      * v2.24 (Stripe Connect · direct charge): el PaymentIntent vive en la
      * cuenta del restaurante, así que el 3DS se confirma con Stripe.js
      * inicializado con `{ stripeAccount: connected_account_id }`. Viene
-     * también en el replay idempotente. Ausente = cargo de plataforma.
+     * también en el replay idempotente. Ausente es contrato incompleto: el
+     * owner card-only actual falla cerrado y no degrada a plataforma.
      *
      * OJO (contrato v2.24): en este riel el backend IGNORA
      * `save_payment_method` — guardar la tarjeta ahí la dejaría en la bóveda

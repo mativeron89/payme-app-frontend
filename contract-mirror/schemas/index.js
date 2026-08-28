@@ -348,6 +348,9 @@ const payMesa = z.object({
   }
   return sources === 1;
 }, { message: 'exactly one payment source is required for card; wallet requires none' })
+.refine(d => !['apple_pay', 'google_pay'].includes(d.payment_type) || !d.save_payment_method, {
+  message: 'native wallet payment methods are ephemeral and cannot be saved',
+})
 .refine(d => d.tip_bps === undefined || !d.tip_cents, {
   message: 'tip_bps and tip_cents are mutually exclusive',
 }).refine(d => !(d.items && d.item_ids.length > 0), {

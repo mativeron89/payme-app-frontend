@@ -314,7 +314,8 @@ function storedAttemptCardSnapshot(row) {
     policyVersion: Number(row?.card_policy_version),
     brand: row?.card_brand_snapshot,
     funding: row?.card_funding_snapshot,
-    walletType: null,
+    walletType: ['apple_pay', 'google_pay'].includes(row?.payment_type)
+      ? row.payment_type : null,
     verifiedAt: row?.card_verified_at,
   };
   return cardEligibility.isTrustedSnapshot(snapshot) ? snapshot : null;
@@ -3177,7 +3178,9 @@ async function recoverPreparedAttemptBinding(attemptId) {
     };
   }
   const sourceCardSnapshot = storedAttemptCardSnapshot(attempt);
-  if (attempt.status !== 'cancelling' || attempt.payment_type !== 'card'
+  const nativeWallet = ['apple_pay', 'google_pay'].includes(attempt.payment_type);
+  if (attempt.status !== 'cancelling'
+      || !['card', 'apple_pay', 'google_pay'].includes(attempt.payment_type)
       || attempt.operation_type !== 'mesa_pay'
       || !attempt.stripe_contract_prepared_at
       || !attempt.stripe_source_payment_method_id
@@ -3185,7 +3188,13 @@ async function recoverPreparedAttemptBinding(attemptId) {
       || (attempt.stripe_charge_payment_method_id
           && !attempt.charge_card_verified_at)
       || typeof attempt.stripe_used_saved_card !== 'boolean'
-      || typeof attempt.stripe_save_payment_method !== 'boolean') {
+      || typeof attempt.stripe_save_payment_method !== 'boolean'
+      || (nativeWallet && (
+        attempt.stripe_used_saved_card
+        || attempt.stripe_save_payment_method
+        || attempt.stripe_customer_id_snapshot
+        || !attempt.stripe_account_id
+      ))) {
     return { resolved: false, reason: 'attempt_snapshot_incomplete' };
   }
 
@@ -3230,6 +3239,7 @@ async function recoverPreparedAttemptBinding(attemptId) {
       stripeAccount: accountId,
       ownership: 'clone',
       expectedSnapshot: sourceCardSnapshot,
+      expectedPaymentType: attempt.payment_type,
       reconciliationCode: 'connect_payment_method_reconciliation_pending',
     });
     chargePaymentMethodId = cloneId;
@@ -3248,6 +3258,8 @@ async function recoverPreparedAttemptBinding(attemptId) {
     await client.query(`SELECT id FROM mesas WHERE id=$1 FOR UPDATE`, [attempt.mesa_id]);
     const { rows: [current] } = await client.query(
       `SELECT status, stripe_payment_intent_id, stripe_contract_prepared_at,
+              payment_type,stripe_account_id,stripe_customer_id_snapshot,
+              stripe_used_saved_card,stripe_save_payment_method,
               stripe_charge_payment_method_id,charge_card_verified_at,
               card_policy_version,card_verified_at
          FROM payment_attempts WHERE id=$1 FOR UPDATE`,
@@ -3258,9 +3270,17 @@ async function recoverPreparedAttemptBinding(attemptId) {
       return;
     }
     if (!current || current.status !== 'cancelling'
+        || current.payment_type !== attempt.payment_type
+        || (current.stripe_account_id || null) !== accountId
         || !current.stripe_contract_prepared_at
         || Number(current.card_policy_version) !== 1
         || !current.card_verified_at
+        || (nativeWallet && (
+          current.stripe_used_saved_card
+          || current.stripe_save_payment_method
+          || current.stripe_customer_id_snapshot
+          || !current.stripe_account_id
+        ))
         || (current.stripe_charge_payment_method_id
             && current.stripe_charge_payment_method_id !== chargePaymentMethodId)) {
       throw guaranteeInvariantError('attempt_binding_recovery_race');
@@ -3330,19 +3350,28 @@ async function recoverPreparedAttemptBinding(attemptId) {
     await client.query(`SELECT id FROM mesas WHERE id=$1 FOR UPDATE`, [attempt.mesa_id]);
     const { rows: [current] } = await client.query(
       `SELECT status, stripe_payment_intent_id, stripe_account_id,
+              payment_type,stripe_customer_id_snapshot,
+              stripe_used_saved_card,stripe_save_payment_method,
               stripe_charge_payment_method_id,charge_card_verified_at,
               card_policy_version,card_verified_at
          FROM payment_attempts WHERE id=$1 FOR UPDATE`,
       [attempt.id]
     );
     if (!current || current.status !== 'cancelling'
+        || current.payment_type !== attempt.payment_type
         || (current.stripe_payment_intent_id
             && current.stripe_payment_intent_id !== intent.id)
         || (current.stripe_account_id || null) !== accountId
         || current.stripe_charge_payment_method_id !== chargePaymentMethodId
         || !current.charge_card_verified_at
         || Number(current.card_policy_version) !== 1
-        || !current.card_verified_at) {
+        || !current.card_verified_at
+        || (nativeWallet && (
+          current.stripe_used_saved_card
+          || current.stripe_save_payment_method
+          || current.stripe_customer_id_snapshot
+          || !current.stripe_account_id
+        ))) {
       throw guaranteeInvariantError('attempt_binding_recovery_race');
     }
     await client.query(

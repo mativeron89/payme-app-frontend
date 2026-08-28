@@ -13,6 +13,7 @@ const stripeService = require('./stripe');
 const CARD_POLICY_VERSION = 1;
 const ALLOWED_BRANDS = new Set(['visa', 'mastercard', 'amex']);
 const ALLOWED_FUNDING = new Set(['credit', 'debit']);
+const ALLOWED_NATIVE_WALLETS = new Set(['apple_pay', 'google_pay']);
 const OWNERSHIP_MODES = new Set(['saved', 'typed_user', 'typed_guest', 'clone']);
 
 function remoteId(value) {
@@ -46,6 +47,7 @@ function assertEligibleCard(remote, {
   ownership,
   stripeAccount = null,
   expectedSnapshot = null,
+  expectedPaymentType = 'card',
   reconciliationCode = 'payment_method_verification_unavailable',
 } = {}) {
   if (!OWNERSHIP_MODES.has(ownership)) {
@@ -98,12 +100,10 @@ function assertEligibleCard(remote, {
   const walletType = walletPresent
     ? (normalized(remote.card.wallet?.type) || 'unknown')
     : null;
+  const nativeWallet = ALLOWED_NATIVE_WALLETS.has(expectedPaymentType);
   if (!ALLOWED_BRANDS.has(brand)
       || !ALLOWED_FUNDING.has(funding)
-      // Apple/Google son requisitos del MVP, pero su implementación permanece
-      // detrás de un plan no ratificado. Hasta entonces CUALQUIER wallet
-      // tokenizado falla cerrado, incluso si la tarjeta subyacente es válida.
-      || walletPresent) {
+      || (nativeWallet ? walletType !== expectedPaymentType : walletPresent)) {
     throw cardError('payment_method_card_not_supported', 422, {
       type: remote.type || null,
       brand,
@@ -113,10 +113,12 @@ function assertEligibleCard(remote, {
   }
 
   const snapshot = {
+    // La identidad de wallet queda sellada en `payment_type`; el CHECK físico
+    // vigente admite policy 1 y no se relaja ni migra para esta rebanada.
     policyVersion: CARD_POLICY_VERSION,
     brand,
     funding,
-    walletType: null,
+    walletType: nativeWallet ? walletType : null,
     verifiedAt: new Date(),
   };
 
@@ -124,14 +126,14 @@ function assertEligibleCard(remote, {
     throw cardError(reconciliationCode, 503, { field: 'expected_snapshot' });
   }
   if (expectedSnapshot
-      && (Number(expectedSnapshot.policyVersion) !== CARD_POLICY_VERSION
+      && (Number(expectedSnapshot.policyVersion) !== snapshot.policyVersion
         || expectedSnapshot.brand !== brand
         || expectedSnapshot.funding !== funding
-        || (expectedSnapshot.walletType ?? null) !== null)) {
+        || (expectedSnapshot.walletType ?? null) !== snapshot.walletType)) {
     throw cardError(reconciliationCode, 503, {
       field: 'snapshot',
       expected: expectedSnapshot,
-      observed: { policyVersion: CARD_POLICY_VERSION, brand, funding },
+      observed: snapshot,
     });
   }
   return snapshot;
@@ -143,6 +145,7 @@ async function retrieveEligibleCard({
   expectedCustomerId = null,
   ownership,
   expectedSnapshot = null,
+  expectedPaymentType = 'card',
   reconciliationCode = 'payment_method_verification_unavailable',
 }) {
   let remote;
@@ -163,6 +166,7 @@ async function retrieveEligibleCard({
       ownership,
       stripeAccount,
       expectedSnapshot,
+      expectedPaymentType,
       reconciliationCode,
     }),
   };
@@ -172,10 +176,12 @@ function isTrustedSnapshot(snapshot) {
   const timestamp = snapshot?.verifiedAt instanceof Date
     ? snapshot.verifiedAt.getTime()
     : Date.parse(snapshot?.verifiedAt);
-  return Number(snapshot?.policyVersion) === CARD_POLICY_VERSION
+  const version = Number(snapshot?.policyVersion);
+  const walletType = snapshot?.walletType ?? null;
+  return version === CARD_POLICY_VERSION
     && ALLOWED_BRANDS.has(snapshot?.brand)
     && ALLOWED_FUNDING.has(snapshot?.funding)
-    && (snapshot?.walletType ?? null) === null
+    && (walletType === null || ALLOWED_NATIVE_WALLETS.has(walletType))
     && Number.isFinite(timestamp);
 }
 
@@ -183,6 +189,7 @@ module.exports = {
   CARD_POLICY_VERSION,
   ALLOWED_BRANDS,
   ALLOWED_FUNDING,
+  ALLOWED_NATIVE_WALLETS,
   OWNERSHIP_MODES,
   assertEligibleCard,
   retrieveEligibleCard,
