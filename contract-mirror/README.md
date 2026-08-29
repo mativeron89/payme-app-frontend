@@ -6,22 +6,27 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-08-27**.
+- Fecha del refresh: **2026-08-29**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`a718f029431dff6d8a51e88418fd2d2a7f6bb520`**
-  (`fix(pagos): endurecer preflight de wallets nativas` · v2.74.1).
+  **`7fefdbedb6689c44fe75bf759f7135b4b9bb8733`**
+  (`fix(pagos): cerrar reconciliación de wallets nativas apagadas` · v2.76.2).
 - Commit que publicó el inventario autoritativo:
-  **`08f27079e423ad729b1631bbac3c39af863a4c4e`**
-  (`chore(contrato): regenerar inventario mirror 2.74.1`). Como siempre, el inventario
-  declara el commit del contenido, no su propio commit.
+  **`6a812ac9dca1f34507445676e8b6a72f92296e8b`**
+  (`chore(contrato): republicar mirror del reconciliador native`).
+  Como siempre, el inventario declara el commit del contenido, no su propio commit.
 
-⚠️ **El publicador `08f2707` está un commit más adelante que el contenido y no
+⚠️ **El publicador `6a812ac` está un commit más adelante que el contenido y no
 se espeja como contenido:** sólo publica el inventario. El árbol contractual
-declarado es `a718f02`; anclarse a él mantiene verificable la paridad.
+declarado es `7fefdbe`; anclarse a él mantiene verificable la paridad.
 
-🆕 **102 archivos espejados** más este README.
+🆕 **106 archivos espejados** más este README.
 
-Este refresh adopta el runtime owner-first y dark de Apple Pay/Google Pay:
+Este refresh adopta el contrato owner-first vigente del Backend desplegado en
+`ed9c79e` y conserva Social Auth y wallets nativas fail-closed. Incorpora la
+migración y los servicios de entrega durable de recovery/Resend, además del
+decoder central de capability de wallets; no cambia runtime del Frontend.
+
+El refresh anterior adoptó el runtime owner-first y dark de Apple Pay/Google Pay:
 
 - `apple_pay` y `google_pay` usan un `stripe_payment_method_id` efímero y jamás
   `payment_method_id`, Customer ni `save_payment_method`;
@@ -35,9 +40,9 @@ todavía no implementa discovery, hoja nativa ni tokenización; no afirma soport
 Stripe real, dominio, enrollment, staging, deploy ni producción.
 
 La adopción se verificó contra la fuente antes de implementar el consumidor:
-**integridad 102/102**, **paridad 102/102** y **vigencia verde** contra App Backend
-HEAD `08f27079e423ad729b1631bbac3c39af863a4c4e`, cuya publicación contractual
-declara `a718f029431dff6d8a51e88418fd2d2a7f6bb520`. Eso acredita el árbol local
+**integridad 106/106**, **paridad 106/106** y **vigencia verde** contra App Backend
+HEAD `ed9c79e0069692db2021ce526a69da924ba811e4`, cuya publicación contractual
+declara `7fefdbedb6689c44fe75bf759f7135b4b9bb8733`. Eso acredita el árbol local
 y la ref contractual publicada; no afirma deploy ni producción.
 
 ### Refresh anterior · 2026-08-27 (Google Account · v2.73.0)

@@ -50,12 +50,12 @@ const { tokenHash } = require('../utils/tokens');
 const logger = require('../utils/logger');
 const invitationAuthority = require('../services/invitationAuthority');
 const shortfallDetails = require('../services/shortfallDetails');
+const nativeWalletCapability = require('../services/nativeWalletCapability');
 
 const router = express.Router();
 const { validateBody } = schemas;
 const ITEM_LOCK_SECONDS = Number(process.env.ITEM_LOCK_SECONDS) || 600;
 const CARD_PAYMENT_TYPES = new Set(['card', 'apple_pay', 'google_pay']);
-const NATIVE_WALLET_TYPES = new Set(['apple_pay', 'google_pay']);
 
 function generateMesaCode() {
   // El contrato ya admite 3–5 dígitos. Cinco amplía el espacio global de
@@ -128,7 +128,9 @@ function storedAttemptCardSnapshot(row) {
     policyVersion: Number(row?.card_policy_version),
     brand: row?.card_brand_snapshot,
     funding: row?.card_funding_snapshot,
-    walletType: NATIVE_WALLET_TYPES.has(row?.payment_type) ? row.payment_type : null,
+    walletType: nativeWalletCapability.isNativeWalletType(row?.payment_type)
+      ? row.payment_type
+      : null,
     verifiedAt: row?.card_verified_at,
   };
   return cardEligibility.isTrustedSnapshot(snapshot) ? snapshot : null;
@@ -1171,6 +1173,15 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
       });
     }
 
+    // v2.76.1: /api/config publica ambos wallets nativos apagados y el runtime
+    // debe imponer la misma capability. El lookup idempotente queda antes para
+    // que una obligación ya bindeada conserve su replay; toda operación nueva
+    // (incluido un attempt todavía unbound) termina acá, antes de consultar
+    // Stripe, reclamar ítems/casilleros o crear una obligación monetaria.
+    if (!nativeWalletCapability.acceptsNewPayment(payment_type)) {
+      return res.status(422).json({ error: 'payment_method_not_enabled' });
+    }
+
     // La elegibilidad y el ownership remoto se prueban ANTES de reclamar un
     // ítem/casillero o crear el attempt. El source + snapshot ganador se sella
     // luego en el mismo INSERT que esos artefactos. Un replay unbound usa sólo
@@ -1180,7 +1191,7 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
     if (CARD_PAYMENT_TYPES.has(payment_type)) {
       if (recoveringUnboundAttempt) {
         const durableSnapshot = storedAttemptCardSnapshot(recoveringUnboundAttempt);
-        const nativeWallet = NATIVE_WALLET_TYPES.has(payment_type);
+        const nativeWallet = nativeWalletCapability.isNativeWalletType(payment_type);
         if (!recoveringUnboundAttempt.stripe_source_payment_method_id
             || recoveringUnboundAttempt.payment_type !== payment_type
             || typeof recoveringUnboundAttempt.stripe_used_saved_card !== 'boolean'
@@ -1206,7 +1217,7 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
           snapshot: durableSnapshot,
         };
       } else {
-        const nativeWallet = NATIVE_WALLET_TYPES.has(payment_type);
+        const nativeWallet = nativeWalletCapability.isNativeWalletType(payment_type);
         const usedSavedCard = !!payment_method_id;
         const wantsSave = !!save_payment_method && !!userId && !usedSavedCard;
         if (nativeWallet && (usedSavedCard || wantsSave)) {

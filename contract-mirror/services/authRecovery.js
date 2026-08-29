@@ -1,25 +1,26 @@
 /**
  * APP-BE-SOCIAL-AUTH-01 · recuperación PayMe independiente del proveedor.
  *
- * El transporte es una frontera inyectable. En este release no existe un
- * transporte real: sin uno instalado la capability permanece OFF. El raw token
- * se entrega una sola vez a esa frontera; PostgreSQL sólo recibe SHA-256.
+ * El transporte es una frontera inyectable. Existe un adapter Resend runtime
+ * preparado sólo en local/dark: sin configuración completa e instalación la
+ * capability permanece OFF, y proveedor/producción no están acreditados. El
+ * raw token se entrega una sola vez a esa frontera; PostgreSQL sólo recibe SHA-256.
  */
 'use strict';
 
 const bcrypt = require('bcrypt');
 const pool = require('../db/pool');
 const logger = require('../utils/logger');
-const { generateToken, tokenHash, normalizeEmail } = require('../utils/tokens');
+const { tokenHash, normalizeEmail } = require('../utils/tokens');
+const delivery = require('./authRecoveryDelivery');
 
 const FLAG = 'AUTH_RECOVERY_EMAIL_ENABLED';
 const TTL_SECONDS = 15 * 60;
 const RATE_WINDOW_SECONDS = 15 * 60;
 const RATE_LIMITS = Object.freeze({ global: 500, shard: 50, user: 3 });
-let transport = null;
 
 function capability(env = process.env) {
-  return { enabled: env[FLAG] === 'true' && typeof transport === 'function' };
+  return { enabled: env[FLAG] === 'true' && delivery.capability(env) };
 }
 
 function codedError(code, status) {
@@ -30,12 +31,18 @@ function installTransportForTests(candidate) {
   if (process.env.NODE_ENV !== 'test' || typeof candidate !== 'function') {
     throw new Error('auth_recovery_test_transport_forbidden');
   }
-  transport = candidate;
+  delivery.installTransportForTests(candidate);
+}
+
+function installRuntimeTransport(candidate, { env = process.env } = {}) {
+  if (env.NODE_ENV === 'test' || typeof candidate !== 'function'
+      ) throw new Error('auth_recovery_runtime_transport_forbidden');
+  delivery.installRuntimeTransport(candidate, { env });
 }
 
 function resetTransportForTests() {
   if (process.env.NODE_ENV !== 'test') throw new Error('auth_recovery_test_transport_forbidden');
-  transport = null;
+  delivery.resetTransportForTests();
 }
 
 function digestFor(scope, value) {
@@ -106,42 +113,34 @@ async function requestRecovery(email, { env = process.env } = {}) {
     }
     if (!user || !globalAllowed || !shardAllowed || !userAllowed) return null;
 
-    const rawToken = generateToken(32);
-    const hash = tokenHash(rawToken);
-    const expiresAt = new Date(Date.now() + TTL_SECONDS * 1000);
+    await client.query(
+      `WITH terminal AS (
+         UPDATE auth_recovery_deliveries
+            SET state='superseded',user_id=NULL,lease_token=NULL,lease_expires_at=NULL,
+                superseded_at=NOW(),updated_at=NOW()
+          WHERE user_id=$1 AND state IN ('queued','leased') RETURNING id
+       )
+       UPDATE auth_recovery_tokens SET delivery_id=NULL,delivery_attempt=NULL
+        WHERE delivery_id IN (SELECT id FROM terminal)`, [user.id]
+    );
     await client.query(
       `UPDATE auth_recovery_tokens
           SET status='cancelled', cancelled_at=NOW()
         WHERE user_id=$1 AND status='issued'`,
       [user.id]
     );
-    await client.query(
-      `INSERT INTO auth_recovery_tokens
-         (user_id,token_hash,status,expires_at)
-       VALUES ($1,$2,'issued',$3)`,
-      [user.id, hash, expiresAt]
+    const { rows: [counter] } = await client.query(
+      `UPDATE users SET auth_recovery_generation=auth_recovery_generation+1
+        WHERE id=$1 RETURNING auth_recovery_generation`, [user.id]
     );
-    return { userId: user.id, email: user.email, rawToken, hash, expiresAt };
+    const { rows: [created] } = await client.query(
+      `INSERT INTO auth_recovery_deliveries (user_id,generation,state,next_attempt_at)
+       VALUES ($1,$2,'queued',NOW()) RETURNING id,generation`,
+      [user.id, counter.auth_recovery_generation]
+    );
+    return created;
   });
-
-  if (issuance) {
-    try {
-      // Único punto al que llega el raw token. Nunca se serializa ni se loguea.
-      await transport({
-        email: issuance.email,
-        token: issuance.rawToken,
-        expires_at: issuance.expiresAt,
-      });
-    } catch (_) {
-      await pool.query(
-        `UPDATE auth_recovery_tokens
-            SET status='cancelled', cancelled_at=NOW()
-          WHERE token_hash=$1 AND status='issued'`,
-        [issuance.hash]
-      );
-      logger.warn('auth_recovery_delivery_failed', { user_id: issuance.userId });
-    }
-  }
+  void issuance;
   return { accepted: true };
 }
 
@@ -222,6 +221,7 @@ module.exports = {
   requestRecovery,
   completeRecovery,
   installTransportForTests,
+  installRuntimeTransport,
   resetTransportForTests,
   TTL_SECONDS,
   RATE_LIMITS,

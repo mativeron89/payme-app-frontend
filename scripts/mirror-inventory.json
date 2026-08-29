@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "a718f029431dff6d8a51e88418fd2d2a7f6bb520",
-  "total": 102,
+  "commit": "7fefdbedb6689c44fe75bf759f7135b4b9bb8733",
+  "total": 106,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -33,6 +33,12 @@
       "destino": "db/migrate_auth_hardening_v2.28.2.sql",
       "sha256": "c65e383c22dc750f7ec42e771b563a987e368d7493d53f0dad2c3f87b7317e3a",
       "bytes": 218
+    },
+    {
+      "origen": "db/migrate_auth_recovery_delivery_v2.76.0.sql",
+      "destino": "db/migrate_auth_recovery_delivery_v2.76.0.sql",
+      "sha256": "74b35e8979dc99a7a6060846135e7b5550a4a0805100885e05fa897ecc4a313b",
+      "bytes": 2831
     },
     {
       "origen": "db/migrate_card_eligibility_v2.28.6.sql",
@@ -229,8 +235,8 @@
     {
       "origen": "db/schema.sql",
       "destino": "db/schema.sql",
-      "sha256": "66875e5c90193496101ca9af04c536d3ae40784edb13edcfbc4469e11ab0d5b3",
-      "bytes": 67981
+      "sha256": "dc57b982d6a43a148231564e7e0d066cc34f34763361f67ddbe692fcf8b08a0f",
+      "bytes": 70661
     },
     {
       "origen": "docs/history/CHANGELOG_v2.11.md",
@@ -283,8 +289,8 @@
     {
       "origen": "services/settlement.js",
       "destino": "docs/settlement.js.ref",
-      "sha256": "d486e16e6135e69ccd49836801888787e9176b69d34a98c0b979277802b8e635",
-      "bytes": 157324
+      "sha256": "e94a59fe453e3a2e665c806940d0cd5aa372b140ed5058dd5ea387dfacce0130",
+      "bytes": 157543
     },
     {
       "origen": "legal/README.md",
@@ -349,8 +355,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "3179c33cd7233f9a657f101513f569de2b720983c01796745c9f5d55c307d223",
-      "bytes": 144953
+      "sha256": "bd60055dbeb8dde68d8e505af35fd8409a960f91c40089910a24b2c7e339f28a",
+      "bytes": 145578
     },
     {
       "origen": "routes/notifications.js",
@@ -427,8 +433,20 @@
     {
       "origen": "services/authRecovery.js",
       "destino": "services/authRecovery.js",
-      "sha256": "e8240f5f6fcf722bd283f4e5af351cc9e23d5116cf60fcd1b43181a7bcc90265",
-      "bytes": 8324
+      "sha256": "3107975d2a91502b8669f4dbd2b5c287b368188df0fc2740b7ff121d061a13c2",
+      "bytes": 8754
+    },
+    {
+      "origen": "services/authRecoveryDelivery.js",
+      "destino": "services/authRecoveryDelivery.js",
+      "sha256": "0228e9cca0a3614d1ef4d7c0e85b502d40c27aeb87396ce5bb79f556ac18f47f",
+      "bytes": 10188
+    },
+    {
+      "origen": "services/authRecoveryTransport.resend.js",
+      "destino": "services/authRecoveryTransport.resend.js",
+      "sha256": "efa1fd1d7e6e6a628512d89e4c66b4d2df55c3ed379b8236fd9eccc607659d98",
+      "bytes": 5141
     },
     {
       "origen": "services/cardEligibility.js",
@@ -495,6 +513,12 @@
       "destino": "services/moneyRail.js",
       "sha256": "0d8ccae71385040373c52bce8547faefb05116886ff87bba23f20316ad8e9546",
       "bytes": 9002
+    },
+    {
+      "origen": "services/nativeWalletCapability.js",
+      "destino": "services/nativeWalletCapability.js",
+      "sha256": "f719fc8a7fc35fa4ae8b260000d506706462cfacbeac085c4e91de1749f21f9e",
+      "bytes": 439
     },
     {
       "origen": "services/notifications.js",

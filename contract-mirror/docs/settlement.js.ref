@@ -34,6 +34,7 @@ const savedCards = require('./savedCards');   // D4 (v2.16)
 const itemClaims = require('./itemClaims');   // v2.18 (fracciones)
 const paymentProcessor = require('./paymentProcessor');
 const paymentAttemptReconciler = require('./paymentAttemptReconciler');
+const nativeWalletCapability = require('./nativeWalletCapability');
 const {
   assertPaymentIntentContract,
   loadPaymentAttemptContract,
@@ -3177,8 +3178,11 @@ async function recoverPreparedAttemptBinding(attemptId) {
       mesaId: attempt.mesa_id, remoteIntent: null, alreadyBound: true,
     };
   }
+  if (!nativeWalletCapability.acceptsNewPayment(attempt.payment_type)) {
+    return { resolved: false, reason: 'native_wallet_not_enabled' };
+  }
   const sourceCardSnapshot = storedAttemptCardSnapshot(attempt);
-  const nativeWallet = ['apple_pay', 'google_pay'].includes(attempt.payment_type);
+  const nativeWallet = nativeWalletCapability.isNativeWalletType(attempt.payment_type);
   if (attempt.status !== 'cancelling'
       || !['card', 'apple_pay', 'google_pay'].includes(attempt.payment_type)
       || attempt.operation_type !== 'mesa_pay'

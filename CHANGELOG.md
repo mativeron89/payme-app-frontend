@@ -11,6 +11,17 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.151.0 — Adopción contractual Backend 106/106 (2026-08-29)
+
+Orden `APP-FE-MIRROR-106-ADOPTION-01-CODEX`. El consumidor adopta mecánicamente
+el inventario autoritativo de App Backend: **106/106** archivos contra contenido
+`7fefdbedb6689c44fe75bf759f7135b4b9bb8733`, vigente en el owner desplegado
+`ed9c79e0069692db2021ce526a69da924ba811e4`. El delta incorpora la migración y
+los servicios owner de entrega durable de recovery/Resend y el decoder central
+de wallets nativas; no modifica `src/`, UI, API, configuración ni dependencias
+del Frontend. Social Auth y wallets permanecen gobernados por capabilities
+fail-closed.
+
 ## 0.150.0 — Metadata de instalación PWA, Dark A (2026-08-28)
 
 Orden `AF-PWA-INSTALLABILITY-DARK-A-01`. La webapp publica un manifest
