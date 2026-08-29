@@ -35,11 +35,89 @@ function repoConCambio(lineaAgregada: string): { dir: string; base: string } {
   return { dir, base };
 }
 
+function repoConArchivos(archivos: Record<string, string>): { dir: string; base: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'payme-secret-fixtures-'));
+  temporales.push(dir);
+  mkdirSync(join(dir, 'scripts'), { recursive: true });
+  copyFileSync(SCRIPT, join(dir, 'scripts', 'auditar-secretos.sh'));
+  writeFileSync(join(dir, '.keep'), 'baseline\n');
+  git(dir, 'init', '-q');
+  git(dir, 'config', 'user.email', 'probe@payme.invalid');
+  git(dir, 'config', 'user.name', 'PayMe probe');
+  git(dir, 'add', '--', '.keep', 'scripts/auditar-secretos.sh');
+  git(dir, 'commit', '-qm', 'baseline');
+  const base = git(dir, 'rev-parse', 'HEAD');
+  for (const [ruta, contenido] of Object.entries(archivos)) {
+    const destino = join(dir, ruta);
+    mkdirSync(dirname(destino), { recursive: true });
+    writeFileSync(destino, contenido);
+  }
+  git(dir, 'add', '--', ...Object.keys(archivos));
+  git(dir, 'commit', '-qm', 'fixtures');
+  return { dir, base };
+}
+
 afterEach(() => {
   for (const dir of temporales.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 describe('auditoría de secretos', () => {
+  const fixturePaths = [
+    'src/api/mock/seedData.ts',
+    'e2e/social-auth.spec.ts',
+    'src/api/http.session.test.ts',
+  ] as const;
+
+  function lineasSinteticas(ruta: typeof fixturePaths[number]): string {
+    const lineas = readFileSync(join(RAIZ, ruta), 'utf8').split('\n').filter((linea) =>
+      linea.includes("['payme', 'mock', 'recovery', 'token'")
+      || linea.includes("access_token: ['access', 'origin', 'a']")
+      || linea.includes("refresh_token: ['refresh', 'origin', 'a']"));
+    expect(lineas.length, `no se encontró el fixture sintético en ${ruta}`).toBeGreaterThan(0);
+    return `${lineas.join('\n')}\n`;
+  }
+
+  it('los tres fixtures reales usan composición sintética y el gate los acepta juntos', () => {
+    const archivos = Object.fromEntries(
+      fixturePaths.map((ruta) => [ruta, lineasSinteticas(ruta)]),
+    );
+    const { dir, base } = repoConArchivos(archivos);
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('cero valores con forma de secreto');
+    expect(result.status, `${result.stdout}${result.stderr}`).toBe(0);
+  });
+
+  it.each(fixturePaths)('un secreto real vecino sigue rojo dentro de %s', (ruta) => {
+    const key = ['api', 'key'].join('_');
+    const value = ['valor', 'plausible', 'que', 'no', 'es', 'fixture'].join('_');
+    const contenido = `${lineasSinteticas(ruta)}const ${key} = '${value}';\n`;
+    const { dir, base } = repoConArchivos({ [ruta]: contenido });
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+    expect(result.status, `el fixture eximió un secreto vecino en ${ruta}`).toBe(1);
+  });
+
+  it('reconvertir por un carácter la composición a asignación literal no queda autorizado', () => {
+    const key = ['recovery', 'token'].join('_');
+    const value = ['payme', 'mock', 'recovery', 'token', '0000000000000002'].join('-');
+    const { dir, base } = repoConCambio(`const ${key} = '${value}';`);
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+    expect(result.status, 'el valor vecino quedó permitido como familia genérica').toBe(1);
+  });
+
   it('un password real no se vuelve benigno por usar el mismo texto que autocomplete', () => {
     // Se construye para que el instrumento pueda auditar este mismo commit sin
     // confundir el fixture del test con una credencial agregada al producto.

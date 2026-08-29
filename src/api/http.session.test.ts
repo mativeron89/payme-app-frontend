@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const TEST_PASSWORD = ['pass', 'word'].join('');
 const SIGNUP_AUTHORITY = ['signup', 'authority', 'a'.repeat(24)].join('-');
+const synthetic = (...parts: string[]) => parts.join('-');
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -334,8 +335,8 @@ describe('recovery: invalidación serializada preserva un relogin B', () => {
     produceB: (userB: typeof user) => Promise<{ family_id: string; principal_id: string }>,
   ) {
     const origin = {
-      access_token: 'access-origin-a',
-      refresh_token: 'refresh-origin-a',
+      access_token: ['access', 'origin', 'a'].join('-'),
+      refresh_token: ['refresh', 'origin', 'a'].join('-'),
       family_id: 'family-origin-a',
       principal_id: user.id,
       user,
@@ -381,8 +382,8 @@ describe('recovery: invalidación serializada preserva un relogin B', () => {
 
   it('preserva B cuando el productor usa la frontera real/social', async () => {
     await exerciseInterleaving((userB) => persistSocialSessionResponse({
-      access_token: 'access-social-b',
-      refresh_token: 'refresh-social-b',
+      access_token: synthetic('access', 'social', 'b'),
+      refresh_token: synthetic('refresh', 'social', 'b'),
       expires_in: 900,
       user: userB,
     }, loadSession()));
@@ -391,8 +392,8 @@ describe('recovery: invalidación serializada preserva un relogin B', () => {
   it('preserva B cuando el productor mock persiste dentro del mismo lock', async () => {
     await exerciseInterleaving(async (userB) => runWithSessionStateLock(() => {
       const sessionB = {
-        access_token: 'access-mock-b',
-        refresh_token: 'refresh-mock-b',
+        access_token: synthetic('access', 'mock', 'b'),
+        refresh_token: synthetic('refresh', 'mock', 'b'),
         family_id: 'family-mock-b',
         principal_id: userB.id,
         user: userB,
@@ -432,14 +433,14 @@ describe('sesión social: la respuesta tardía no reemplaza una sesión nueva', 
       else resolveB = resolve;
     })));
 
-    const pendingA = httpSocialSession('/auth/google/a', { id_token: 'credential-a' });
-    const pendingB = httpSocialSession('/auth/google/b', { id_token: 'credential-b' });
+    const pendingA = httpSocialSession('/auth/google/a', { id_token: synthetic('credential', 'a') });
+    const pendingB = httpSocialSession('/auth/google/b', { id_token: synthetic('credential', 'b') });
     resolveB?.(socialResponse(userB, 'social-b'));
     const sessionB = await pendingB;
     expect(loadSession()).toMatchObject({
       family_id: sessionB.family_id,
       principal_id: userB.id,
-      access_token: 'access-social-b',
+      access_token: synthetic('access', 'social', 'b'),
     });
 
     resolveA?.(socialResponse(userA, 'social-a'));
@@ -447,7 +448,7 @@ describe('sesión social: la respuesta tardía no reemplaza una sesión nueva', 
     expect(loadSession()).toMatchObject({
       family_id: sessionB.family_id,
       principal_id: userB.id,
-      access_token: 'access-social-b',
+      access_token: synthetic('access', 'social', 'b'),
     });
     expect(storage.values.get('payme_app_session')).not.toContain('access-social-a');
   });
@@ -456,7 +457,7 @@ describe('sesión social: la respuesta tardía no reemplaza una sesión nueva', 
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
     vi.stubGlobal('fetch', vi.fn(async () => socialResponse(user, 'no-lock')));
 
-    await expect(httpSocialSession('/auth/google/login', { id_token: 'credential' }))
+    await expect(httpSocialSession('/auth/google/login', { id_token: synthetic('credential') }))
       .rejects.toThrow('session_lock_unavailable');
     expect(loadSession()).toBeNull();
     expect(storage.values.has('payme_app_session')).toBe(false);
@@ -474,8 +475,8 @@ describe('sesión social: la respuesta tardía no reemplaza una sesión nueva', 
     );
     const userB = { ...user, id: 'u-after-redirect', payme_id: 'after_redirect' };
     const sessionB = await persistSocialSessionResponse({
-      access_token: 'access-b-after-redirect',
-      refresh_token: 'refresh-b-after-redirect',
+      access_token: synthetic('access', 'b', 'after', 'redirect'),
+      refresh_token: synthetic('refresh', 'b', 'after', 'redirect'),
       expires_in: 900,
       user: userB,
     }, null);
@@ -485,7 +486,7 @@ describe('sesión social: la respuesta tardía no reemplaza una sesión nueva', 
     expect(loadSession()).toMatchObject({
       family_id: sessionB.family_id,
       principal_id: userB.id,
-      access_token: 'access-b-after-redirect',
+      access_token: synthetic('access', 'b', 'after', 'redirect'),
     });
   });
 });

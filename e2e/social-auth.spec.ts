@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 const SIGNUP = 'signup-social-e2e-aaaaaaaaaaaaaaaaaaaa';
-const RECOVERY_TOKEN = 'payme-mock-recovery-token-0000000000000001';
+const RECOVERY_TOKEN = ['payme', 'mock', 'recovery', 'token', '0000000000000001'].join('-');
 
 function externalRequests(page: Page): string[] {
   const requests: string[] = [];

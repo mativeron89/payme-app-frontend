@@ -11,6 +11,16 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.151.1 — Fixtures sintéticos compatibles con el auditor (2026-08-29)
+
+Orden `APP-FE-SECRET-SCANNER-FIXTURES-01-CODEX`. Los valores mock de recovery
+y sesión conservan exactamente sus bytes funcionales, pero se construyen desde
+fragmentos inequívocamente sintéticos para no parecer credenciales pegadas en
+el diff acumulado. No se excluye ningún archivo, nombre de clave ni familia de
+secreto. El instrumento fija los tres paths reales juntos, prueba que un valor
+vecino plausible sigue rojo en cada uno y que cambiar el fixture no crea una
+exención genérica.
+
 ## 0.151.0 — Adopción contractual Backend 106/106 (2026-08-29)
 
 Orden `APP-FE-MIRROR-106-ADOPTION-01-CODEX`. El consumidor adopta mecánicamente

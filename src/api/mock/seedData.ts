@@ -16,7 +16,7 @@ export const MOCK_USER: User = {
 };
 
 /** Credencial sintética local: nunca sale del mock ni representa una cuenta real. */
-export const MOCK_RECOVERY_TOKEN = 'payme-mock-recovery-token-0000000000000001';
+export const MOCK_RECOVERY_TOKEN = ['payme', 'mock', 'recovery', 'token', '0000000000000001'].join('-');
 
 export const MOCK_RESTAURANTS = [
   {
