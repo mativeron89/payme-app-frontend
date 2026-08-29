@@ -12,6 +12,14 @@
          tres etiquetas a Google y no vuelven). Sin `<text>`, así que no depende
          de ninguna tipografía. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Dark A de instalación PWA (AF-PWA-INSTALLABILITY-DARK-A-01): manifest
+         same-origin e iconos locales, nada más. NO hay service worker ni caché
+         — las respuestas privadas siguen `no-store` y esto NO habilita offline.
+         El apple-touch-icon es full-bleed opaco porque iOS aplica su propia
+         máscara; el maskable del manifest lleva el tile dentro de la safe zone.
+         La guarda estructural vive en `scripts/pwaInstallability.test.ts`. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/pwa/icon-180.png" />
     <!-- Las tipografías se sirven desde este repo. Acá había tres etiquetas a
          Google (dos preconnect y una hoja de estilos): se retiraron en
          `D-FUENTES-1` y NO se vuelven a poner. El `@font-face` vive en

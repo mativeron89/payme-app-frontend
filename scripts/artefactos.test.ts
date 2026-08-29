@@ -78,10 +78,24 @@ const HOSTS_PERMITIDOS = [
   { host: 'docs.stripe.com', egress: false, porque: 'texto de un mensaje de error del SDK' },
 ] as const;
 
-/** Binarios que cada artefacto tiene derecho a emitir, y su hash upstream. */
+/**
+ * Binarios que cada artefacto tiene derecho a emitir, y su hash.
+ *
+ * Las tipografías se autorizan contra su hash UPSTREAM (google/fonts). Los
+ * iconos PWA (orden AF-PWA-INSTALLABILITY-DARK-A-01, ampliación R1 del
+ * 2026-08-29) se autorizan por NOMBRE EXACTO —anclado, sin comodines— contra
+ * el SHA-256 MEDIDO en su entrega: se rasterizaron localmente del
+ * `favicon.svg` del repo, así que el repo es su upstream. Un quinto PNG, o
+ * uno de estos cuatro con un byte distinto, no matchea o no coincide y cae
+ * en «binario no autorizado» — la clase sigue fail-closed.
+ */
 const BINARIOS_AUTORIZADOS = [
   { patron: /^PlusJakartaSans-variable-[A-Za-z0-9_-]+\.ttf$/, sha: '89b3fb38aa0d275d7a731d0d817a4f1622b316b4d7fbdedcf02ee9099ff68bc8' },
   { patron: /^DMSans-variable-[A-Za-z0-9_-]+\.ttf$/, sha: '8cd08d97e89c24d0aa92edd2f0f4c8ee6195eee9b7c9f154865a58b02f0c1c0d' },
+  { patron: /^icon-180\.png$/, sha: '548dc97ae80a89c8093b08c549fe2409596b1f2c339d1779c43f4a0193a865c5' },
+  { patron: /^icon-192\.png$/, sha: '2bbda5a2b1c9b1785cff8fe96bbf8cc7c6e34be5648c1bb645fbdf70564f59d1' },
+  { patron: /^icon-512\.png$/, sha: '6c128e4bb487ee0392378aaf65a79ae66e0fb81889151bb26f2acabac4d1df6e' },
+  { patron: /^icon-maskable-512\.png$/, sha: '20b93e43d43659843653d5d25eca5c29cb4333786fb58edea3c06a8c2ac3d203' },
 ] as const;
 
 /**
@@ -90,11 +104,13 @@ const BINARIOS_AUTORIZADOS = [
  * Cada archivo del artefacto cae en UNA de tres clases, y lo que no cae en
  * ninguna es rojo:
  *
- *   BINARIO   `.ttf`  → se verifica por HASH. No se le buscan URLs adentro.
+ *   BINARIO   `.ttf` `.png` → se verifica por HASH. No se le buscan URLs
+ *                       adentro: un PNG no hace requests, y grepearle texto a
+ *                       datos comprimidos daría ruido, no seguridad.
  *   INERTE    `.txt`  → texto que el navegador NUNCA parsea como markup, CSS
  *                       ni JS. Se sirve como archivo y nada más. Se verifica
  *                       por hash contra el repo.
- *   PARSEADO  el resto (html/css/js) → entra al barrido de egress.
+ *   PARSEADO  el resto (html/css/js/webmanifest) → entra al barrido de egress.
  *
  * 🔴 Por qué INERTE existe como clase y no como excepción: la licencia OFL
  * contiene `http://scripts.sil.org/OFL` y `github.com` en su aviso de
@@ -116,7 +132,7 @@ const BINARIOS_AUTORIZADOS = [
  * regla y no una lista. Un archivo nuevo de tipo inesperado no pasa por
  * default — tiene que clasificarlo alguien, a mano, y eso es una decisión.
  */
-const esBinario = (nombre: string) => nombre.endsWith('.ttf');
+const esBinario = (nombre: string) => nombre.endsWith('.ttf') || nombre.endsWith('.png');
 const esInerte = (nombre: string) => nombre.endsWith('.txt');
 
 interface Artefacto {
@@ -364,10 +380,54 @@ describe.each([0, 1])('artefacto distribuible #%i', (i) => {
     // un SVG puede traer `<image href>`, un `@font-face` o un `xlink:href` a
     // otro dominio, y sería un origen externo entrando por un archivo que
     // "es sólo un ícono".** El del handoff no tiene ninguno: son tres paths.
-    const CONOCIDAS = ['.html', '.css', '.js', '.ttf', '.txt', '.svg'];
+    //
+    // 🔴 `.webmanifest` y `.png` entran el 2026-08-29 con la metadata de
+    // instalación PWA (orden AF-PWA-INSTALLABILITY-DARK-A-01, ampliación R1),
+    // y entran a lados DISTINTOS a propósito:
+    //
+    // · `.webmanifest` es TEXTO PARSEABLE y **permanece dentro del barrido de
+    //   egress**. No es una formalidad: un manifest puede traer `start_url`,
+    //   `scope`, `screenshots`, `shortcuts` o `related_applications` apuntando
+    //   a otro origen, y sería egress entrando por «un archivo de metadata».
+    // · los `.png` van del lado BINARIO, verificados por hash contra
+    //   `BINARIOS_AUTORIZADOS` (nombre exacto + SHA-256). Barrerles URLs a
+    //   bytes comprimidos no mide nada; la identidad sí.
+    //
+    // Agregar la extensión acá NO alcanzaba por sí solo: sin la entrada en
+    // `BINARIOS_AUTORIZADOS`, un PNG emitido caía en «binario no autorizado».
+    // Las dos mitades son la decisión, y ninguna relaja a la otra.
+    const CONOCIDAS = ['.html', '.css', '.js', '.ttf', '.txt', '.svg', '.webmanifest', '.png'];
     const raras = art()
       .archivos.filter((a) => !CONOCIDAS.some((e) => a.endsWith(e)));
     expect(raras, `archivos de tipo no clasificado: ${raras.join(' · ')}`).toEqual([]);
+  });
+
+  /**
+   * 🔴 La clasificación nueva se AFIRMA, no se deduce del verde de arriba.
+   *
+   * «Toda extensión está clasificada» sigue pasando si mañana alguien mueve el
+   * `.webmanifest` al lado binario —dejándolo fuera del barrido de egress— o
+   * saca los PNG de `BINARIOS_AUTORIZADOS`. Esto fija de qué LADO cayó cada
+   * uno, que es lo que la orden adjudicó.
+   */
+  it('🔴 el manifest se barre como texto y los iconos se verifican por hash', () => {
+    const manifest = art().archivos.filter((a) => a.endsWith('.webmanifest'));
+    expect(manifest, 'el artefacto dejó de emitir el manifest').toEqual(['manifest.webmanifest']);
+    // Está en `porArchivo` (texto leído) y NO en `binarios`: eso es estar
+    // dentro del barrido de egress, no una promesa sobre ello.
+    expect(Object.keys(art().porArchivo)).toContain('manifest.webmanifest');
+    expect(Object.keys(art().binarios)).not.toContain('manifest.webmanifest');
+    expect(art().inertes, 'el manifest no puede ser INERTE: se parsea').not.toContain('manifest.webmanifest');
+    // Y su contenido está DENTRO del texto barrido, no sólo guardado al lado.
+    expect(art().texto, 'el manifest quedó fuera del barrido de egress').toContain('"scope"');
+
+    const iconos = Object.keys(art().binarios).filter((r) => r.endsWith('.png')).sort();
+    expect(iconos, 'los cuatro iconos tienen que estar clasificados como binarios').toEqual([
+      'pwa/icon-180.png',
+      'pwa/icon-192.png',
+      'pwa/icon-512.png',
+      'pwa/icon-maskable-512.png',
+    ]);
   });
 
   it('🔴 cada entrada de la allowlist dice por qué está', () => {

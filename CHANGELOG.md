@@ -11,6 +11,47 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.150.0 — Metadata de instalación PWA, Dark A (2026-08-28)
+
+Orden `AF-PWA-INSTALLABILITY-DARK-A-01`. La webapp publica un manifest
+same-origin (`public/manifest.webmanifest`) con `id`/`start_url`/`scope` en la
+raíz, `display: standalone`, idioma `es-MX` y los colores ratificados
+`#101E3B`/`#0FB5C9`; cuatro iconos PNG locales en `public/pwa/` (180 full-bleed
+opaco para el touch icon de iOS, 192 y 512 con esquinas transparentes como
+`any`, y un maskable de 512 con fondo opaco y el tile dentro de la safe zone),
+todos rasterizados del `favicon.svg` existente, sin texto ni tipografías; y los
+dos enlaces en `index.html`. Nada más.
+
+**Esto NO declara una PWA completa ni habilita offline.** Cero service worker,
+cero Cache API, cero precache: las respuestas privadas siguen `no-store`. La
+guarda estructural `scripts/pwaInstallability.test.ts` censa los `<link>` de
+`index.html`, el contenido exacto de `public/pwa/`, las claves del manifest y
+la ausencia del mecanismo de offline en `src/`, `public/` y el HTML efectivo —
+cada detector con su caso positivo, y las dimensiones y esquinas leídas del
+binario, no declaradas. La adopción suma una medición causal del maskable:
+decodifica todos sus píxeles, exige que el contenido quede dentro del círculo
+central de diámetro 80 % y demuestra que un píxel mutado en la esquina falla.
+Seis mutantes de la entrega y esa sonda geométrica quedaron rojos antes de
+afirmar el cierre.
+
+La guarda fail-closed de `scripts/artefactos.test.ts` clasifica las dos clases
+nuevas, y a lados distintos: `.webmanifest` es TEXTO PARSEABLE y permanece
+dentro del barrido de egress —un manifest puede apuntar a otro origen desde
+`start_url`, `scope`, `shortcuts` o `screenshots`, y sería egress entrando por
+«un archivo de metadata»—, mientras los cuatro PNG van del lado binario,
+autorizados por nombre exacto contra su SHA-256 medido. Agregar la extensión no
+alcanzaba: sin su entrada en `BINARIOS_AUTORIZADOS` un icono cae en «binario no
+autorizado». Ninguna otra extensión se relajó, y un `.json` emitido sigue
+poniendo la guarda en rojo. Cinco mutantes lo acreditan, incluido un host
+externo escondido en el manifest que el barrido caza.
+
+`package.json` y `package-lock.json` (raíz y paquete raíz del lock) pasan a
+`0.150.0`, sin dependencia nueva ni cambio de árbol.
+
+Claude entregó la fuente como diff sin commit; Codex la revisó y adoptó sin
+heredar confianza. Sin dependencias, red, proveedores, secretos, push, deploy
+ni producción.
+
 ## 0.149.0 — Wallets nativas owner-first, todavía dark (2026-08-27)
 
 El mirror adopta App Backend v2.74.1: Apple Pay y Google Pay llegan como
