@@ -26,6 +26,48 @@ const RELEASE_MANIFEST = 'release-manifest.json';
 
 export type ArtefactoRelease = 'app' | 'landing';
 
+/**
+ * Cabeceras Meta de las dos rutas públicas de cumplimiento. Los nombres viajan
+ * con el casing exacto que el edge debe emitir: el juez compara bytes, no
+ * claves normalizadas, así que un `cache-control` en minúsculas es otro config.
+ */
+const HEADERS_META_BOSA: Readonly<Record<string, string>> = {
+  'Cache-Control': 'no-store',
+  'Referrer-Policy': 'no-referrer',
+};
+
+/**
+ * Las DOS únicas rutas BOSA del artefacto App, en su orden de serialización.
+ * Cada `src` es PCRE anclado en ambos extremos: sin `^`/`$` la regla dejaría de
+ * ser una ruta y pasaría a ser un prefijo, que es un catch-all encubierto.
+ * `[^/]+` mantiene el código en un único segmento.
+ */
+const RUTAS_META_BOSA: readonly string[] = [
+  '^/privacy$',
+  '^/facebook-data-deletion/[^/]+$',
+];
+
+/**
+ * Config Build Output API v3 derivada ÚNICAMENTE del enum cerrado del artefacto.
+ * No lee env, hostname ni proyecto: si el artefacto no es `app` ni `landing`
+ * falla cerrado en vez de elegir un default. Landing NO declara `routes`, así
+ * que esas dos rutas no nacen en ese origen.
+ */
+export function configBosaCanonico(artifact: ArtefactoRelease): string {
+  if (artifact === 'landing') return serializarJsonCanonico({ version: 3 });
+  if (artifact === 'app') {
+    return serializarJsonCanonico({
+      version: 3,
+      routes: RUTAS_META_BOSA.map((src) => ({
+        src,
+        dest: '/index.html',
+        headers: { ...HEADERS_META_BOSA },
+      })),
+    });
+  }
+  throw new Error('artifact debe ser app o landing');
+}
+
 export interface ArchivoRelease {
   readonly path: string;
   readonly size: number;
@@ -440,7 +482,7 @@ export function sellarArtefactoRelease(entrada: SellarArtefactoRelease): Resulta
   const markerPath = join(staticDir, RELEASE_MARKER);
   writeFileSync(markerPath, marker, { encoding: 'utf8', flag: 'wx', mode: 0o644 });
   const configPath = join(outputDir, 'config.json');
-  const configEsperada = serializarJsonCanonico({ version: 3 });
+  const configEsperada = configBosaCanonico(entrada.artifact);
   const markerBytes = Buffer.from(marker, 'utf8');
   const configBytes = Buffer.from(configEsperada, 'utf8');
   const archivosBosaEsperados: ArchivoRelease[] = [

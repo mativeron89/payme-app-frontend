@@ -1,7 +1,19 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import {
+  copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { load } from 'js-yaml';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  calcularDigestRaiz,
+  configBosaCanonico,
+  serializarJsonCanonico,
+  type ArchivoRelease,
+  type ManifiestoArtefactoRelease,
+} from './releaseArtifact';
 
 type Mapa = Record<string, unknown>;
 
@@ -225,6 +237,19 @@ function validar(texto: string): string[] {
       !stageRun.includes("exactEntries(releaseRoot, ['app', 'landing'])")) {
     errores.push('stage no trata BOSA como datos con censo inline fail-closed');
   }
+  // El juez inline debe DISTINGUIR App de Landing por config. Se exige que
+  // reescriba los mismos bytes que deriva el sellador —no una copia tipeada
+  // acá— y que compare contra el artifact, no contra una constante.
+  for (const artifact of ['app', 'landing'] as const) {
+    if (!stageRun.includes(`${configBosaCanonico(artifact).trimEnd()}\\n`)) {
+      errores.push(`el juez inline no reescribe la config de ${artifact}`);
+    }
+  }
+  if (!stageRun.includes('expectedConfig(artifact)') ||
+      !stageRun.includes('CONFIG_BOSA = new Map([') ||
+      !stageRun.includes("throw new Error('artifact sin config BOSA adjudicada')")) {
+    errores.push('el juez inline no adjudica la config por artifact de forma cerrada');
+  }
 
   const deploys = stageSteps.filter((step) => comando(step).includes('vercel deploy'));
   if (deploys.length !== 2) errores.push('no hay exactamente dos deploys');
@@ -306,7 +331,240 @@ describe('release prebuilt staged manual', () => {
     ['sin binding Landing', (s: string) => s.replaceAll('EXPECTED_PROJECT="payme-landing"', 'EXPECTED_PROJECT="payme-app"')],
     ['sin readjudicar deployment', (s: string) => s.replaceAll('api.vercel.com/v13/deployments/', 'api.vercel.com/v13/omitido/')],
     ['READY condicional', (s: string) => s.replaceAll("deployment.readyState !== 'READY'", "'readyState' in deployment && deployment.readyState !== 'READY'")],
+    ['inline sólo exige version:3', (s: string) => s.replace('expectedConfig(artifact)', "'{\"version\":3}\\n'")],
+    ['inline pierde la config de App', (s: string) => s.replace(`${configBosaCanonico('app').trimEnd()}\\n`, '{"version":3}\\n')],
+    ['inline sin adjudicación cerrada', (s: string) => s.replace("throw new Error('artifact sin config BOSA adjudicada')", 'void 0')],
   ])('rechaza mutante: %s', (_nombre, mutar) => {
     expect(validar(mutar(textoReal))).not.toEqual([]);
+  });
+});
+
+// --- El juez inline, EJECUTADO ------------------------------------------
+// Las aserciones de arriba son textuales: prueban qué DICE el YAML. Acá se
+// extrae el heredoc y se corre contra paquetes BOSA reales, que es lo único
+// que prueba qué HACE. Un test que sólo grepeara el workflow no distinguiría
+// un Map declarado y nunca usado de uno que gobierna la comparación.
+const temporales: string[] = [];
+const AQUI = dirname(new URL(import.meta.url).pathname);
+const COMMIT = 'a'.repeat(40);
+const TREE = 'b'.repeat(40);
+
+afterEach(() => {
+  while (temporales.length > 0) rmSync(temporales.pop()!, { recursive: true, force: true });
+});
+
+function sha256(bytes: string | Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+/** Extrae el cuerpo del heredoc `NODE` del paso que lleva el centinela inline. */
+function codigoInline(texto: string): string {
+  const root = mapa(load(texto), 'workflow');
+  const jobs = mapa(root.jobs, 'jobs');
+  const candidatos = pasos(mapa(jobs.stage, 'stage'))
+    .filter((step) => comando(step).includes('INLINE_BOSA_VERIFIER_V1'));
+  if (candidatos.length !== 1) {
+    throw new Error(`se esperaba un único paso del verificador inline; encontrados: ${candidatos.length}`);
+  }
+  const [paso] = candidatos;
+  const run = comando(paso);
+  const abre = run.indexOf("node --input-type=module <<'NODE'\n");
+  if (abre < 0) throw new Error('el verificador inline no viaja en un heredoc NODE');
+  const desde = run.indexOf('\n', abre) + 1;
+  const cierra = run.indexOf('\nNODE\n', desde);
+  if (cierra < 0) throw new Error('el heredoc del verificador inline no cierra');
+  return run.slice(desde, cierra);
+}
+
+it('🔴 exige exactamente un paso con el centinela del juez inline', () => {
+  const sinCentinela = textoReal.replace('INLINE_BOSA_VERIFIER_V1', 'INLINE_BOSA_VERIFIER_AUSENTE');
+  expect(() => codigoInline(sinCentinela)).toThrow(/encontrados: 0/);
+
+  const conSeñuelo = textoReal.replace(
+    '      - name: Tratar BOSA sólo como datos con verificador inline',
+    [
+      '      - name: Señuelo con centinela duplicado',
+      '        run: |',
+      '          // INLINE_BOSA_VERIFIER_V1',
+      '      - name: Tratar BOSA sólo como datos con verificador inline',
+    ].join('\n'),
+  );
+  expect(() => codigoInline(conSeñuelo)).toThrow(/encontrados: 2/);
+});
+
+function escribir(ruta: string, contenido: string | Buffer): void {
+  mkdirSync(dirname(ruta), { recursive: true });
+  writeFileSync(ruta, contenido);
+}
+
+interface StageInline {
+  readonly manifestSha256: string;
+  readonly rootSha256: string;
+}
+
+/** Fabrica un stage BOSA completo y devuelve sus dos hashes sellados. */
+function stageBosa(raiz: string, artifact: 'app' | 'landing', config: string): StageInline {
+  const stage = join(raiz, artifact);
+  const output = join(stage, '.vercel', 'output');
+  const index = Buffer.from('<!doctype html><title>PayMe</title>\n');
+  const marker = serializarJsonCanonico({
+    artifact, clean: true, commit_sha: COMMIT, schema: 1, tree_sha: TREE,
+  });
+  escribir(join(output, 'config.json'), config);
+  escribir(join(output, 'static', 'index.html'), index);
+  escribir(join(output, 'static', 'release.json'), marker);
+  const files: ArchivoRelease[] = [
+    { path: 'config.json', size: Buffer.byteLength(config), sha256: sha256(config) },
+    { path: 'static/index.html', size: index.byteLength, sha256: sha256(index) },
+    { path: 'static/release.json', size: Buffer.byteLength(marker), sha256: sha256(marker) },
+  ];
+  const manifiesto: ManifiestoArtefactoRelease = {
+    schema: 1,
+    artifact,
+    clean: true,
+    commit_sha: COMMIT,
+    tree_sha: TREE,
+    hash_algorithm: 'sha256',
+    manifest_scope: '.vercel/output',
+    files,
+    root_sha256: calcularDigestRaiz(files),
+  };
+  const texto = serializarJsonCanonico(
+    manifiesto as unknown as Parameters<typeof serializarJsonCanonico>[0],
+  );
+  escribir(join(stage, 'release-manifest.json'), texto);
+  return { manifestSha256: sha256(texto), rootSha256: manifiesto.root_sha256 };
+}
+
+interface PaqueteInline {
+  /** Fuera del release root: el juez censa su raíz y un archivo extra lo vuelve rojo. */
+  readonly base: string;
+  readonly raiz: string;
+  readonly env: Record<string, string>;
+}
+
+/**
+ * `configApp`/`configLanding` se inyectan para poder plantar el config cruzado
+ * SIN tocar los manifiestos: el juez debe cazarlo por artifact, no por digest.
+ */
+function paqueteInline(
+  configApp = configBosaCanonico('app'),
+  configLanding = configBosaCanonico('landing'),
+): PaqueteInline {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'payme-inline-bosa-')));
+  temporales.push(base);
+  const raiz = join(base, 'payme-prebuilt');
+  mkdirSync(raiz);
+  const app = stageBosa(raiz, 'app', configApp);
+  const landing = stageBosa(raiz, 'landing', configLanding);
+  const tools = join(raiz, 'tools');
+  mkdirSync(tools);
+  const local = join(tools, 'verify-release-artifact.mjs');
+  const remoto = join(tools, 'verify-release-url.mjs');
+  copyFileSync(join(AQUI, 'verify-release-artifact.mjs'), local);
+  copyFileSync(join(AQUI, 'verify-release-url.mjs'), remoto);
+  return {
+    base,
+    raiz,
+    env: {
+      RELEASE_ROOT: raiz,
+      COMMIT_SHA: COMMIT,
+      TREE_SHA: TREE,
+      APP_MANIFEST_SHA256: app.manifestSha256,
+      APP_ROOT_SHA256: app.rootSha256,
+      LANDING_MANIFEST_SHA256: landing.manifestSha256,
+      LANDING_ROOT_SHA256: landing.rootSha256,
+      VERIFY_LOCAL_SHA256: sha256(readFileSync(local)),
+      VERIFY_URL_SHA256: sha256(readFileSync(remoto)),
+    },
+  };
+}
+
+function correrInline(paquete: PaqueteInline, codigo = codigoInline(textoReal)) {
+  const guion = join(paquete.base, 'juez-inline.mjs');
+  writeFileSync(guion, codigo);
+  const resultado = spawnSync(process.execPath, [guion], {
+    encoding: 'utf8',
+    env: { ...process.env, ...paquete.env },
+  });
+  rmSync(guion, { force: true });
+  return resultado;
+}
+
+describe('el verificador inline del workflow, ejecutado contra paquetes reales', () => {
+  it('acredita App y Landing con la config que a cada uno le toca', () => {
+    const paquete = paqueteInline();
+    const resultado = correrInline(paquete);
+    expect(resultado.stderr).toBe('');
+    expect(resultado.status).toBe(0);
+  });
+
+  it.each([
+    ['App con la config de Landing', configBosaCanonico('landing'), configBosaCanonico('landing')],
+    ['Landing con la config de App', configBosaCanonico('app'), configBosaCanonico('app')],
+    ['ambos con la MISMA config compartida', configBosaCanonico('app'), configBosaCanonico('app')],
+  ])('🔴 rechaza config cruzado: %s', (_nombre, configApp, configLanding) => {
+    const resultado = correrInline(paqueteInline(configApp, configLanding));
+    expect(resultado.status).not.toBe(0);
+    expect(resultado.stderr).toMatch(/config BOSA no es la del artifact/);
+  });
+
+  it('🔴 rechaza routes plantadas en Landing', () => {
+    const conRoutes = serializarJsonCanonico({
+      version: 3,
+      routes: [{ src: '^/privacy$', dest: '/index.html' }],
+    });
+    const resultado = correrInline(paqueteInline(configBosaCanonico('app'), conRoutes));
+    expect(resultado.status).not.toBe(0);
+    expect(resultado.stderr).toMatch(/config BOSA no es la del artifact/);
+  });
+
+  it.each([
+    ['una ruta de menos en App', serializarJsonCanonico({
+      version: 3,
+      routes: [{
+        src: '^/privacy$',
+        dest: '/index.html',
+        headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
+      }],
+    })],
+    ['una regla catch-all de más', configBosaCanonico('app').trimEnd()
+      .replace('],"version":3}', ',{"dest":"/index.html","src":"^/(.*)$"}],"version":3}') + '\n'],
+    ['un src sin anclar', configBosaCanonico('app').replace('^/privacy$', '/privacy')],
+    ['un path equivocado', configBosaCanonico('app').replace('^/privacy$', '^/privacidad$')],
+    ['un dest distinto', configBosaCanonico('app').replace('/index.html', '/privacy.html')],
+    ['un header ausente', configBosaCanonico('app')
+      .replaceAll('"Referrer-Policy":"no-referrer"', '"X-Nada":"nada"')],
+    ['un header con otro valor', configBosaCanonico('app')
+      .replaceAll('"no-store"', '"max-age=0"')],
+    ['un header con otro casing', configBosaCanonico('app')
+      .replaceAll('"Cache-Control"', '"cache-control"')],
+  ])('🔴 rechaza config de App con %s', (_nombre, configApp) => {
+    const resultado = correrInline(paqueteInline(configApp));
+    expect(resultado.status).not.toBe(0);
+    expect(resultado.stderr).toMatch(/config BOSA no es la del artifact/);
+  });
+
+  it('🔴 mutante: si el juez sólo exige version:3, el cruzado pasa', () => {
+    // Control del control. Sin esto, los tests de arriba podrían estar rojos
+    // por cualquier otra guarda del inline y no por la distinción de config.
+    const mutado = codigoInline(textoReal)
+      .replace('expectedConfig(artifact)', "'{\"version\":3}\\n'");
+    expect(mutado).not.toBe(codigoInline(textoReal));
+    const cruzado = paqueteInline(configBosaCanonico('landing'), configBosaCanonico('landing'));
+    expect(correrInline(cruzado, mutado).status).toBe(0);
+    // Y el mismo paquete cruzado contra el juez REAL sigue rojo.
+    expect(correrInline(cruzado).status).not.toBe(0);
+  });
+
+  it('🔴 mutante: un juez sin comparación de config acepta cualquier cosa', () => {
+    const mutado = codigoInline(textoReal).replace(
+      "!== expectedConfig(artifact)",
+      "!== safeRead(join(output, 'config.json')).toString('utf8')",
+    );
+    expect(mutado).not.toBe(codigoInline(textoReal));
+    const cruzado = paqueteInline(configBosaCanonico('app'), configBosaCanonico('app'));
+    expect(correrInline(cruzado, mutado).status).toBe(0);
+    expect(correrInline(cruzado).status).not.toBe(0);
   });
 });

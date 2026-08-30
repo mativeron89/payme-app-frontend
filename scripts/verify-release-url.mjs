@@ -11,6 +11,35 @@ const MAX_ARCHIVO_BYTES = 64 * 1024 * 1024;
 const TIMEOUT_MS = 15_000;
 const ESPERA_ENTRE_RONDAS_MS = process.env.NODE_ENV === 'test' ? 25 : 5_000;
 
+// --- Compuerta remota de las dos rutas Meta -------------------------------
+// PREPARADA, NO ARMADA. `--bosa-routes` es opcional y su default es `skip`:
+// esta orden deja el codigo listo y prohibe ejecutar la sonda contra un
+// deployment real. Una orden posterior la enciende pasando `probe`.
+const BOSA_ROUTES_MODOS = new Set(['skip', 'probe']);
+
+// Codigo sintetico de sonda: Base64URL canonico de 24 caracteres (24 % 4 === 0,
+// sin bits de relleno que validar). No identifica a nadie y no existe.
+const SONDA_CODE_META = 'PAYMESONDABOSA0000000000';
+
+const RUTAS_META_BOSA = ['/privacy', `/facebook-data-deletion/${SONDA_CODE_META}`];
+
+// Claves en minuscula: Headers.get() es case-insensitive por spec, asi que la
+// sonda no puede exigir casing. El casing exacto lo custodia el config sellado.
+const HEADERS_META_BOSA = [
+  ['cache-control', 'no-store'],
+  ['referrer-policy', 'no-referrer'],
+];
+
+/**
+ * Contrato remoto cerrado por artifact. App sirve las dos rutas; Landing NO las
+ * tiene y debe contestar 404 SIN las cabeceras Meta. Un Map: un artifact sin
+ * entrada no hereda default y la sonda no corre.
+ */
+const CONTRATO_RUTAS_META = new Map([
+  ['app', { status: 200, cabeceras: 'exigidas' }],
+  ['landing', { status: 404, cabeceras: 'ausentes' }],
+]);
+
 function serializarValorCanonico(valor) {
   if (valor === null || typeof valor === 'boolean' || typeof valor === 'number') {
     if (typeof valor === 'number' && !Number.isSafeInteger(valor)) {
@@ -61,19 +90,25 @@ function leerArchivoSeguro(ruta) {
 }
 
 function parsearCli(argv) {
-  const permitidas = new Set([
+  const obligatorias = new Set([
     '--stage', '--url', '--artifact', '--commit', '--tree', '--manifest-sha256', '--root-sha256',
   ]);
+  const opcionales = new Set(['--bosa-routes']);
   const valores = new Map();
   for (let i = 0; i < argv.length; i += 2) {
     const clave = argv[i];
     const valor = argv[i + 1];
-    if (!clave || !permitidas.has(clave) || valores.has(clave) || !valor || valor.startsWith('--')) {
+    if (!clave || (!obligatorias.has(clave) && !opcionales.has(clave)) || valores.has(clave) ||
+        !valor || valor.startsWith('--')) {
       throw new Error('argumentos CLI invalidos');
     }
     valores.set(clave, valor);
   }
-  if (valores.size !== permitidas.size) throw new Error('faltan argumentos CLI obligatorios');
+  for (const clave of obligatorias) {
+    if (!valores.has(clave)) throw new Error('faltan argumentos CLI obligatorios');
+  }
+  const bosaRoutes = valores.get('--bosa-routes') ?? 'skip';
+  if (!BOSA_ROUTES_MODOS.has(bosaRoutes)) throw new Error('modo de sonda BOSA invalido');
   const artifact = valores.get('--artifact');
   const commit = valores.get('--commit');
   const tree = valores.get('--tree');
@@ -91,6 +126,7 @@ function parsearCli(argv) {
     tree,
     manifestSha256,
     rootSha256,
+    bosaRoutes,
   };
 }
 
@@ -176,6 +212,70 @@ async function verificarArchivo(base, archivo) {
   await verificarUrl(urlDeArchivo(base, archivo.path), archivo);
 }
 
+/**
+ * Sonda UNA ruta Meta contra el contrato de su artifact. Nunca deja escapar la
+ * URL ni el error crudo del runtime: todo mensaje que sale de aca es literal.
+ * `index` es el archivo sellado que App debe servir en ambas rutas; en Landing
+ * no se lee cuerpo porque un 404 no tiene tamano sellado que acotarlo.
+ */
+async function sondearRutaMeta(base, ruta, contrato, index) {
+  const url = new URL(ruta.slice(1), base);
+  if (url.origin !== base.origin || url.pathname !== ruta || url.search !== '' || url.hash !== '') {
+    throw new Error('una ruta Meta escapa del deployment');
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(url, {
+      redirect: 'manual',
+      signal: controller.signal,
+      headers: { 'user-agent': 'PayMe-Release-Verifier/1' },
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('timeout sondeando una ruta Meta');
+    }
+    throw new Error('no se pudo sondear una ruta Meta');
+  }
+  try {
+    if (response.status !== contrato.status) {
+      throw new Error(`una ruta Meta no respondio ${contrato.status}`);
+    }
+    for (const [clave, valor] of HEADERS_META_BOSA) {
+      const servido = response.headers.get(clave);
+      if (contrato.cabeceras === 'exigidas' && servido !== valor) {
+        throw new Error('una ruta Meta no sirvio las cabeceras exactas');
+      }
+      if (contrato.cabeceras === 'ausentes' && servido !== null) {
+        throw new Error('una ruta Meta sirvio una cabecera que no le corresponde');
+      }
+    }
+    if (contrato.cabeceras === 'exigidas') {
+      const bytes = await leerRespuestaExacta(response, index.size);
+      if (createHash('sha256').update(bytes).digest('hex') !== index.sha256) {
+        throw new Error('una ruta Meta no sirvio el index sellado');
+      }
+    } else {
+      await response.body?.cancel();
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Compuerta remota completa. Se llama DESPUES de adjudicar artifact, manifiesto
+ * e identidad: si el contrato del artifact no existe, no se emite una sola
+ * request.
+ */
+async function sondearRutasMeta(base, artifact, index) {
+  const contrato = CONTRATO_RUTAS_META.get(artifact);
+  if (!contrato) throw new Error('artifact sin contrato de rutas Meta');
+  for (const ruta of RUTAS_META_BOSA) await sondearRutaMeta(base, ruta, contrato, index);
+}
+
 async function main() {
   const entrada = parsearCli(process.argv.slice(2));
   const aqui = dirname(fileURLToPath(import.meta.url));
@@ -199,6 +299,11 @@ async function main() {
       archivos.length !== manifiesto.files.length - 1) {
     throw new Error('el manifiesto no separa config y static de forma exacta');
   }
+  // Adjudicacion ANTES de cualquier sonda: el manifiesto debe declarar el mismo
+  // artifact que la orden, y ese artifact debe tener contrato remoto cerrado.
+  if (manifiesto.artifact !== entrada.artifact || !CONTRATO_RUTAS_META.has(entrada.artifact)) {
+    throw new Error('el manifiesto no adjudica el artifact de la orden');
+  }
   const base = validarUrlBase(entrada.url);
   const index = archivos.find((archivo) => archivo.path === 'static/index.html');
   if (!index) throw new Error('el manifiesto no contiene el index publico');
@@ -209,8 +314,10 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, ESPERA_ENTRE_RONDAS_MS));
     }
   }
+  if (entrada.bosaRoutes === 'probe') await sondearRutasMeta(base, entrada.artifact, index);
   process.stdout.write(serializarJsonCanonico({
     artifact: entrada.artifact,
+    bosa_routes: entrada.bosaRoutes === 'probe' ? 'probed' : 'skipped',
     commit_sha: entrada.commit,
     files: archivos.length,
     rounds: 2,

@@ -89,6 +89,25 @@ secretos. `stage` no hace checkout, `npm ci`, tests ni builds. Los bindings
 públicos se contrastan por ID y nombre antes de cada deploy y después se
 readjudica cada deployment por ID, proyecto, target y estado `READY`.
 
+#### El aislamiento por proyecto también rige en el carril `--prebuilt` · 2026-08-30
+
+La excepción path-scoped de más abajo describe `vercel.json`/`vercel.mjs`, que
+gobiernan el carril Git. **El carril `--prebuilt` no los lee**: ahí manda
+`.vercel/output/config.json`. Desde `0.153.0` ese config **se deriva del
+artefacto** — App lleva las dos rutas Meta con sus dos cabeceras; Landing
+conserva `{"version":3}` sin `routes`, de modo que esas rutas no nacen en su
+origen. El detalle y sus mutantes están en `DESPLIEGUE_GATEADO.md`.
+
+Lo que esto **sí** cierra: los dos artefactos dejaron de ser intercambiables, y
+el `config.json` entra al manifiesto y al digest raíz con sus bytes reales, así
+que un paquete al que se le plante el config del otro no verifica.
+
+Lo que **no** cierra, y no se declara por inferencia: que el edge emita esas
+cabeceras. Los tests acreditan la **configuración sellada**, no la respuesta
+servida. La sonda remota que lo mediría existe pero está **preparada y no
+armada** (`--bosa-routes`, default `skip`), y esta orden tiene prohibido
+ejecutarla. Es gate externo previo a producción.
+
 Esto reduce la deuda local, pero no cambia su clasificación externa: todavía
 faltan ejecutar el stage autorizado, observar ambos proyectos, medir la
 identidad servida y probar rollback antes de sustituir los Deploy Hooks. No se

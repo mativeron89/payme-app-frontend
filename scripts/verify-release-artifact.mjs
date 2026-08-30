@@ -16,7 +16,26 @@ const SHA_256 = /^[0-9a-f]{64}$/;
 const MAX_ARCHIVOS = 20_000;
 const MAX_ARCHIVO_BYTES = 64 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
-const CONFIG_V3 = '{"version":3}\n';
+// El verificador viaja SOLO dentro del artifact: no puede importar el sellador,
+// asi que reescribe los bytes esperados. Esa duplicacion es la deriva que la
+// orden manda matar, y la matan los tests que comparan estas dos constantes
+// contra las que deriva scripts/releaseArtifact.ts.
+const CONFIG_BOSA = new Map([
+  ['app', '{"routes":[{"dest":"/index.html","headers":{"Cache-Control":"no-store","Referrer-Policy":"no-referrer"},"src":"^/privacy$"},{"dest":"/index.html","headers":{"Cache-Control":"no-store","Referrer-Policy":"no-referrer"},"src":"^/facebook-data-deletion/[^/]+$"}],"version":3}\n'],
+  ['landing', '{"version":3}\n'],
+]);
+
+/**
+ * Adjudica la config por artifact. Un Map cerrado y no un objeto: `__proto__` y
+ * `constructor` no devuelven nada, y un artifact desconocido no hereda un
+ * default. Aceptar cualquiera de las dos para cualquiera de los dos artefactos
+ * seria exactamente el fallo que la orden prohibe.
+ */
+function configEsperadaDe(artifact) {
+  const esperada = CONFIG_BOSA.get(artifact);
+  if (typeof esperada !== 'string') throw new Error('artifact sin config BOSA adjudicada');
+  return esperada;
+}
 
 function serializarValorCanonico(valor) {
   if (valor === null || typeof valor === 'boolean' || typeof valor === 'number') {
@@ -249,7 +268,9 @@ function verificar(entrada) {
   exigirDirectorioReal(staticDir, 'static BOSA');
 
   const config = leerArchivoSeguro(join(outputDir, 'config.json'));
-  if (config.toString('utf8') !== CONFIG_V3) throw new Error('config.json BOSA no es v3 exacto');
+  if (config.toString('utf8') !== configEsperadaDe(entrada.artifact)) {
+    throw new Error('config.json BOSA no es el del artifact adjudicado');
+  }
   const archivos = snapshotDirectorio(outputDir);
   if (!archivos.some((archivo) => archivo.path === 'static/index.html') ||
       !archivos.some((archivo) => archivo.path === 'static/release.json')) {

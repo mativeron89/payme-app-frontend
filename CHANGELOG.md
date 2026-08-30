@@ -11,6 +11,110 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.153.0 — El artefacto BOSA distingue App de Landing (2026-08-30)
+
+Orden `APP-FE-META-PUBLIC-BOSA-ISOLATION-04-CLAUDE`, baseline `75ef23d`. **Sin
+commit, sin push, sin deploy, sin provider y sin secreto.** No se configura
+Vercel, no se usa token, no se llama Deploy Hook, no se crea preview y no se
+ejecuta ninguna sonda remota.
+
+### El agujero que cierra
+
+`0.152.0` aisló las dos rutas públicas Meta en el carril Git, vía `vercel.mjs`.
+**Ese aislamiento no alcanzaba al carril `--prebuilt`**, y la razón es concreta:
+cuando Vercel recibe un Build Output API v3 ya construido **no lee `vercel.json`
+ni `vercel.mjs`** — manda `.vercel/output/config.json`, y hasta ayer los dos
+artefactos escribían el mismo `{"version":3}`. Un config compartido no puede
+expresar «App sí, Landing no»: o las rutas no existían en ninguno de los dos
+orígenes, o existían en ambos.
+
+| Artefacto | `config.json` v3 sellado |
+|---|---|
+| **App** | `routes` con exactamente `^/privacy$` y `^/facebook-data-deletion/[^/]+$`, ambas `dest: /index.html` con `Cache-Control: no-store` y `Referrer-Policy: no-referrer` |
+| **Landing** | `{"version":3}` — **sin** propiedad `routes` |
+
+Sin catch-all, sin `has`/`missing`, sin status, redirect, `continue`, métodos,
+query, cookie, function ni middleware. Los assets, `/`, `static/release.json`,
+la identidad App/Landing y todos los bytes de build quedan invariantes.
+
+### Cómo se sostiene, y por qué así
+
+- **Derivado del enum cerrado, no del ambiente.** `configBosaCanonico()` es
+  función de `app|landing` y nada más: no lee env, hostname ni proyecto. Un
+  artefacto fuera del enum **no hereda un default**, tira. Se prueba con
+  `'App'`, `'APP'`, `'landing '`, `''`, `'preview'`, `'__proto__'` y
+  `'constructor'` — los dos últimos porque la adjudicación usa `Map` y no un
+  objeto, justamente para que esas claves no devuelvan nada.
+- **Los `src` están anclados en ambos extremos.** Sin `^`/`$` una ruta deja de
+  ser ruta y pasa a ser prefijo, que es un catch-all encubierto; `[^/]+`
+  mantiene el código en un único segmento. Un test compila los dos `src` y
+  exige que **diez** rutas vecinas —`/`, `/index.html`, `/privacy/extra`,
+  `/xprivacy`, `/privacyx`, `/facebook-data-deletion/a/b`, …— **no** casen.
+- **El config entra al manifiesto y al digest raíz con sus bytes reales**, y eso
+  se prueba **aislando la variable**: comparar el `root_sha256` de App contra el
+  de Landing no serviría —su `release.json` también difiere y el verde vendría
+  de ahí—, así que se recalcula el manifiesto de App sustituyendo **sólo** el
+  config y se exige que el digest se mueva. Lo mismo omitiéndolo.
+
+### Los tres jueces, y la deriva entre ellos
+
+El sellador **deriva** la config. Los otros dos —`verify-release-artifact.mjs`,
+que viaja solo dentro del artifact, y el verificador inline del workflow, que no
+puede importar un byte del repo— **reescriben** los bytes. Esa duplicación es
+deriva potencial, y es lo que la orden manda matar:
+
+1. Cada juez se compara contra **la derivación de producción**, no contra una
+   copia tipeada en el test. Si el sellador cambia, los tres se ponen rojos.
+2. Un par de constantes transcritas a mano desde la §Configuración de la orden
+   ancla la derivación contra el documento. Es el único lugar donde los bytes se
+   escriben a mano, y es a propósito: sin ese ancla, la derivación se estaría
+   midiendo a sí misma.
+3. **Un juez que aceptara ambos configs para ambos artefactos es fallo**, y hay
+   mutantes que lo prueban en los tres.
+
+🔴 **El juez inline se EJECUTA, no se grepea.** Su test extrae el heredoc del
+YAML y lo corre contra paquetes BOSA fabricados. Hacía falta: una aserción
+textual no distingue un `Map` declarado de uno que gobierna la comparación. Los
+dos mutantes que lo acreditan neutralizan la comparación —uno la reemplaza por
+`{"version":3}`, otro por una tautología— y verifican que el config cruzado
+**pasa a aceptarse**; el mismo paquete contra el juez real sigue rojo.
+
+⚠️ **Y el fixture de ese test se puso rojo primero por una razón que vale
+registrar:** escribía el script del juez **dentro** del release root, y el censo
+cerrado del propio juez lo cazó como entrada extra. La guarda funcionó contra
+quien la estaba probando.
+
+### Compuerta remota: preparada, no armada
+
+`verify-release-url.mjs` ya sabe sondear las dos rutas: **App** debe contestar
+200 con las dos cabeceras exactas y servir el `index.html` sellado; **Landing**
+debe contestar 404 **sin** esas cabeceras. Adjudica artifact y manifiesto
+**antes** de emitir una sola request, y ningún mensaje suyo revela la URL.
+
+🔴 **Está inerte.** La sonda sólo corre con `--bosa-routes probe`; el default es
+`skip`, y el workflow **no** pasa el flag. Esta orden tiene prohibido ejecutarla
+contra un deployment: la enciende una orden posterior. Que el default sea inerte
+es en sí una propiedad testeada —se verifica que **cero** requests llegan a las
+rutas Meta sin el flag— y un modo desconocido falla cerrado en vez de caer al
+default.
+
+### Límites declarados · qué NO acredita esta entrega
+
+1. **Cabeceras servidas.** Todo esto acredita la **configuración sellada**, no
+   lo que el edge emite. Es gate externo previo a producción.
+2. **La sonda remota nunca corrió contra un deployment real.** Se ejercita
+   contra un servidor local en `NODE_ENV=test`. Que el código esté probado no
+   acredita el comportamiento del origen remoto.
+3. **`ausencia de esos headers` en Landing se implementó literal.** Un 404 real
+   de Vercel podría traer su propio `cache-control` y poner la futura compuerta
+   en rojo. Se eligió fail-closed a sabiendas: un falso rojo se adjudica, un
+   falso verde en una guarda de privacidad no se despublica. Si ocurre, es una
+   decisión, no una relajación silenciosa.
+4. **El código de sonda es sintético** (`PAYMESONDABOSA0000000000`, 24 chars
+   Base64URL canónicos): no identifica a nadie y no existe.
+5. **`vercel.mjs` y `scripts/headersLandingScope.test.ts` no se tocaron**: son
+   canon/gate read-only de esta orden. Se corrieron como gates.
+
 ## 0.152.0 — Superficies públicas de cumplimiento para Meta (2026-08-29)
 
 Orden `APP-FE-META-PUBLIC-COMPLIANCE-01-CLAUDE`, baseline `d343e60`. **Facebook

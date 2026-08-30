@@ -173,8 +173,9 @@ recibir exactamente el Build Output API v3 producido desde los `dist` gateados.
 La primera fase queda deliberadamente separada del release automático:
 
 1. `scripts/releaseArtifact.ts` exige commit, tree y worktree limpios antes y
-   después, copia App o Landing a `.vercel/output/static`, escribe un
-   `config.json` v3 mínimo y agrega `release.json` al contenido público.
+   después, copia App o Landing a `.vercel/output/static`, escribe el
+   `config.json` v3 **que le corresponde a ese artefacto** y agrega
+   `release.json` al contenido público.
 2. `release-manifest.json` queda fuera del contenido servido y sella con
    SHA-256 `config.json`, el marker y todos los archivos estáticos.
 3. `scripts/verify-release-artifact.mjs` vuelve a censar el paquete descargado,
@@ -191,6 +192,48 @@ La primera fase queda deliberadamente separada del release automático:
 6. El workflow normal conserva por ahora los dos Deploy Hooks. El manual no
    llama hooks ni promueve; por lo tanto un mismo evento no tiene dos caminos
    de publicación.
+
+### El `config.json` distingue App de Landing · 2026-08-30
+
+Hasta `0.152.0` los dos artefactos escribían el mismo `{"version":3}`. Eso
+alcanzaba mientras ningún origen tuviera rutas propias, y dejó de alcanzar con
+las dos superficies públicas Meta: en el carril `--prebuilt` Vercel **no lee
+`vercel.json` ni `vercel.mjs`**, así que un config compartido publicaba las
+rutas en ningún lado o en los dos, según qué se escribiera.
+
+| Artefacto | `config.json` v3 | Consecuencia |
+|---|---|---|
+| **App** | dos `routes` BOSA — `^/privacy$` y `^/facebook-data-deletion/[^/]+$` — con `dest: /index.html`, `Cache-Control: no-store` y `Referrer-Policy: no-referrer` | las dos rutas existen y sirven el index con sus cabeceras |
+| **Landing** | `{"version":3}`, **sin** propiedad `routes` | esas rutas **no nacen** en ese origen |
+
+Tres propiedades sostienen la distinción, y ninguna es una convención:
+
+1. **Se deriva del enum cerrado `app|landing`, no del ambiente.**
+   `configBosaCanonico()` no lee env, hostname ni proyecto, y un artefacto
+   fuera del enum **falla cerrado** en vez de heredar un default.
+2. **Los `src` están anclados en ambos extremos.** Sin `^`/`$` una ruta se
+   vuelve prefijo, que es un catch-all encubierto; `[^/]+` mantiene el código
+   en un solo segmento. Hay un test que ejercita diez rutas vecinas —`/privacy/extra`,
+   `/xprivacy`, `/facebook-data-deletion/a/b`— y exige que **ninguna** case.
+3. **Los tres jueces distinguen.** El sellador deriva; el verificador
+   transportado y el verificador inline del workflow **reescriben** los bytes
+   porque no pueden importar el repo. Esa duplicación es deriva potencial, y la
+   matan tests que comparan los tres contra la derivación de producción —no
+   contra una copia tipeada en el test—. **Un juez que aceptara ambos configs
+   para ambos artefactos es fallo**, y hay mutantes que lo demuestran: se
+   neutraliza la comparación de cada juez y se verifica que el config cruzado
+   pasa a aceptarse.
+
+El verificador inline del workflow no se puede correr en CI local desde el YAML,
+así que su test **extrae el heredoc y lo ejecuta** contra paquetes BOSA
+fabricados. Grepear el YAML no distinguiría un `Map` declarado de uno que
+gobierna la comparación.
+
+`scripts/verify-release-url.mjs` queda **preparado y no armado** para la
+compuerta remota: sabe exigir 200 + cabeceras exactas en App y 404 + ausencia de
+esas cabeceras en Landing, pero sólo sondea con `--bosa-routes probe`, cuyo
+default es `skip`. Esta orden no ejecuta esas sondas contra ningún deployment;
+las enciende una orden posterior.
 
 El run manual se habilita desde el Environment de GitHub
 `production-staging`. Requiere un único secreto, `VERCEL_TOKEN`, y tres
