@@ -6354,3 +6354,236 @@ h1.pay-title-lbl {
   font-size: 15px;
   font-weight: 700;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SUPERFICIES PÚBLICAS DE CUMPLIMIENTO · `/privacy` y
+   `/facebook-data-deletion/<code>` (APP-FE-META-PUBLIC-COMPLIANCE-01)
+
+   Prefijo `pub-` y nada más: estas dos páginas no comparten ninguna clase con
+   la app autenticada. Es a propósito — se sirven sin sesión y las mira un
+   tercero, así que un retoque del shell autenticado no puede moverlas ni al
+   revés.
+
+   Todo sale de los tokens del sistema (§1–§3). Cero hex sueltos: un color
+   hardcodeado acá sería invisible para el barrido de `coloresMigrados`.
+
+   Reflow: una sola columna con `max-width` en `ch`, así que 320, 390, 768 y
+   1180 son el mismo layout con más aire. No hay media queries porque no hay
+   nada que reacomodar — y una media query que no cambia nada es una que
+   alguien mantiene sin motivo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.pub {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+  font-family: var(--font-body);
+  color: var(--text);
+}
+
+.pub-top {
+  padding: var(--sp-4);
+  background: var(--action);
+}
+
+.pub-marca {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 800;
+  color: var(--on-dark);
+  text-decoration: none;
+}
+
+.pub-main {
+  flex: 1;
+  width: 100%;
+  max-width: 72ch;
+  padding: var(--sp-6) var(--sp-4);
+  margin: 0 auto;
+}
+
+/* `overflow-wrap: break-word` para TODO el documento público, no sólo para el
+   cuerpo del aviso.
+
+   🔴 Lo obligó una medición, no una precaución: al 200 % de zoom sobre 320px
+   —o sea 160 CSS px de viewport— el `<h1>` «Aviso de privacidad» mide 147px de
+   contenido en una caja de 129 y **empujaba 20px de scroll horizontal a toda la
+   página**. Con `break-word` la palabra larga se parte sólo cuando no entra;
+   en los anchos normales no cambia nada, porque nunca se activa. */
+.pub-doc {
+  padding: var(--sp-6) var(--sp-4);
+  overflow-wrap: break-word;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-1);
+}
+
+.pub-h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: 800;
+  color: var(--text);
+}
+
+.pub-meta {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.pub-nota {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+}
+
+/* El cuerpo llega como TEXTO del backend, con sus saltos de línea: se respeta
+   el blanco en vez de interpretarlo. `overflow-wrap` evita que una URL larga
+   del propio aviso desborde a 320px. */
+.pub-cuerpo {
+  margin-top: var(--sp-4);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pub-estado {
+  margin-top: var(--sp-4);
+}
+
+.pub-aviso {
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.pub-aviso-ok {
+  background: var(--success-tint);
+  border-color: var(--success);
+}
+
+.pub-aviso-espera {
+  background: var(--info-tint);
+  border-color: var(--info);
+}
+
+.pub-aviso-alerta {
+  background: var(--warning-tint);
+  border-color: var(--warning);
+}
+
+/* El estado va con TEXTO, nunca sólo con color (§5). El badge es la palabra. */
+.pub-badge {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pub-badge + .pub-nota {
+  margin-top: var(--sp-2);
+}
+
+.pub-boton {
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-6);
+  margin-top: var(--sp-4);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--action-fg);
+  cursor: pointer;
+  background: var(--action);
+  border: 0;
+  border-radius: var(--r-full);
+}
+
+.pub-pie {
+  padding: var(--sp-6) var(--sp-4);
+  text-align: center;
+}
+
+.pub-volver {
+  display: inline-block;
+  min-height: var(--tap-min);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--link);
+}
+
+/* Foco visible propio: el `outline` del navegador desaparece sobre el navy de
+   la cabecera.
+
+   🔴 DOS COLORES, Y NO ES DECORACIÓN. El indicador de foco necesita ≥3:1
+   contra el fondo EFECTIVO sobre el que se dibuja, y `outline-offset` lo pone
+   fuera del control: el fondo que cuenta es el de atrás, no el del botón.
+
+   · la marca vive sobre `--action` (navy): el cian da 6.67:1 y el navy sería
+     invisible;
+   · el botón y el link viven sobre superficies claras —el tinte del aviso y
+     `--bg`—: ahí **el cian da 2.39:1 y REPRUEBA**, medido sobre
+     `--warning-tint`. El navy da 15.93:1.
+
+   Una sola regla para los tres, que es lo que había, dejaba el foco del botón
+   por debajo del mínimo. Lo mide `e2e/meta-public-pages.spec.ts` contra el
+   fondo efectivo real, no contra el que uno supone. */
+.pub-marca:focus-visible {
+  outline: 3px solid var(--action-2);
+  outline-offset: 2px;
+}
+
+.pub-boton:focus-visible,
+.pub-volver:focus-visible {
+  outline: 3px solid var(--action);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pub * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REDUCED-MOTION DEL SPLASH · contenido desde acá, sin tocar `index.html`
+
+   El splash vive en un `<style>` inline de `index.html` porque tiene que
+   pintar antes de que exista ningún módulo, y ese archivo NO está autorizado
+   por la orden APP-FE-META-PUBLIC-COMPLIANCE-01. Su animación se contiene
+   desde esta hoja, que Vite enlaza DESPUÉS de ese `<style>` (medido en
+   `dist/index.html`: `<style>` línea 27, `<link>` línea 72). Misma
+   especificidad, gana la última: por eso alcanza con `#splash` y no hace
+   falta `!important`.
+
+   🔴 **Qué se hace y qué NO.** No se apaga el splash: se le sacan las
+   TRANSICIONES conservando sus tiempos. La aparición sigue a los 300 ms —el
+   «B sólo cuando tarda» que eligió Mati, para que una carga rápida no
+   parpadee— y la rendición a los 12 s sigue existiendo, que es la que evita
+   un splash eterno tapando una app muerta. Lo único que desaparece es el
+   fundido, que es la parte que `prefers-reduced-motion` pide sacar.
+
+   ⚠️ **Límite honesto:** en el build de producción esta hoja es un `<link>` y
+   aplica temprano; en `npm run dev` la inyecta el módulo, así que llega
+   después. En dev, con reduced-motion y una carga lenta, el fundido puede
+   verse durante ese intervalo. Se declara en vez de afirmar una cobertura que
+   el riel de desarrollo no tiene.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  #splash {
+    animation:
+      splash-aparecer 1ms linear 300ms forwards,
+      splash-rendirse 1ms linear 12s forwards;
+  }
+}

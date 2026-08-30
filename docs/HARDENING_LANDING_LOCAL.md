@@ -98,8 +98,9 @@ una promoción parcial.
 
 ## Inventario de headers · propuesta, no configuración servida
 
-`vercel.json` es compartido por dos proyectos cuya separación remota no puede
-probarse desde el repo. Por eso **no se agregan headers globales**.
+La configuración de Vercel nace del módulo programático raíz `vercel.mjs`, pero
+falla cerrada por identidad de proyecto. Por eso **no se agregan headers
+globales** ni reglas compartidas entre artefactos.
 
 | Header | Estado local | Evidencia pendiente |
 |---|---|---|
@@ -114,12 +115,41 @@ Una política de Landing aplicada a `/(.*)` en el config compartido podría romp
 el riel ratificado de tarjeta. Ningún test local autoriza afirmar que estos
 headers estén servidos.
 
+### Excepción aislada por proyecto · las dos rutas Meta (2026-08-29)
+
+Orden `APP-FE-META-PUBLIC-ROUTING-ISOLATION-03-CODEX`. `vercel.mjs` exige
+`PAYME_VERCEL_ARTIFACT` con valor exacto y sin default. `app` recibe las dos
+rutas; `landing` recibe listas vacías. Una variable ausente, vacía o distinta
+aborta la configuración antes de exportarla.
+
+| Header | Estado local | Alcance |
+|---|---|---|
+| `Cache-Control: no-store` | aplicado, path-scoped | `/privacy` y `/facebook-data-deletion/:code`, y nada más |
+| `Referrer-Policy: no-referrer` | aplicado, path-scoped | `/privacy` y `/facebook-data-deletion/:code`, y nada más |
+
+**La excepción es exactamente esa y se verifica como censo cerrado**, no como
+permiso. Los tests ejecutan el módulo en procesos aislados para `app`, `landing`
+y valores adversariales; fijan rutas, headers y `deploymentEnabled.main=false`.
+Ninguna regla alcanza `/`, assets, la App privada ni Landing.
+
+Antes de preview o release, el proveedor debe acreditar bindings project-scoped
+en Production y Preview: `payme-app=app` y `payme-landing=landing`. Hasta medir
+ambos proyectos y sus rutas reales, el estado es
+`NO_VERIFICABLE_BLOQUEANTE_DE_RELEASE`.
+
+🔴 **Lo que estos tests acreditan es la CONFIGURACIÓN del repo, no las cabeceras
+servidas.** Que Vercel las emita —y que las emita en el proyecto correcto, con
+el Root Directory correcto— sigue siendo **gate externo previo a producción**,
+igual que el resto de esta tabla. La distinción no es formal: el mismo archivo
+gobierna dos proyectos cuya separación remota este repo no puede observar.
+
 ## Deudas que requieren evidencia externa
 
 - primer run manual del pipeline prebuilt, con artifact ID/digest y hashes de
   ambos manifiestos;
 - Root Directory, build/output y auto-deploy efectivos de ambos proyectos;
 - causa histórica de `M vercel.json` en el build servido por el camino Hook;
+- bindings `PAYME_VERCEL_ARTIFACT` Production+Preview y rutas/headers servidos;
 - binding/deduplicación del hook respecto del commit;
 - promoción y rollback compensatorio de una publicación parcial;
 - compatibilidad y medición de headers por origen.

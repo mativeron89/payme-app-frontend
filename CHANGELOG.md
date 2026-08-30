@@ -11,6 +11,149 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.152.0 — Superficies públicas de cumplimiento para Meta (2026-08-29)
+
+Orden `APP-FE-META-PUBLIC-COMPLIANCE-01-CLAUDE`, baseline `d343e60`. **Facebook
+sigue OFF**: no se habilita, no se crea app Meta, no se configura secreto y no
+se toca Backend ni el espejo. Lo que entra son las dos superficies públicas que
+Meta exige para una integración responsable.
+
+**`/privacy`.** El aviso de privacidad vigente, obtenido únicamente de
+`GET /api/legal/aviso_privacidad` y decodificado con `legalTextResponse`, el
+decoder contractual que ya vive en el repo. **El texto legal no se inventa ni se
+copia**, y por eso no hay copia de respaldo ni riel mock: cuando no se puede
+leer, la página lo dice y ofrece reintentar a mano. Un aviso equivocado es peor
+que un aviso ausente. El cuerpo se pinta como texto, nunca como HTML.
+
+**`/facebook-data-deletion/<confirmation_code>`.** Estado humano de la solicitud,
+consultando sólo el endpoint de status del contrato. La respuesta aceptada es
+cerrada —`pending` | `completed`—; un 404 es *No encontrada* y **todo lo demás
+—timeout, red, 5xx, MIME, JSON o shape inválidos— es *No verificable*, jamás
+«éxito» por un 200 con forma equivocada**. El código puede vivir en la URL
+porque ése es el contrato Meta, pero no aparece en DOM, título, aria, consola,
+error, storage, referrer ni en el cuerpo de otra request: la unión de estados
+no lo transporta, así que la vista no tiene por dónde pintarlo, y el censo de
+`e2e/meta-public-pages.spec.ts` lo verifica desde afuera sobre la página
+servida. Un código que no es Base64URL canónico de 20 a 200 caracteres **no
+produce request** — se corta en el parser y otra vez en el cliente.
+
+**Arquitectura.** Son rutas limpias, fuera del router hash y de `AuthProvider`.
+`main.tsx` decide la superficie por `window.location.pathname` y **el grafo
+privado entra por `import()`**: `App`, `IdiomaProvider` y los tres módulos de
+bootstrap se cargan sólo dentro de la rama privada. Los `import` estáticos de
+arriba son React, el cliente de DOM, los módulos públicos, el splash y los
+estilos, y el censo que lo fija es cerrado. La rama pública tampoco lleva
+`StrictMode`, para que sea exactamente una request por carga. El cliente
+público es propio y no reusa `src/api/http.ts`, que importa `storage` en su
+primera línea: usa `VITE_API_URL`, paths fijos, `credentials:'omit'`,
+`cache:'no-store'`, `redirect:'error'`, un único intento, un deadline único que
+cubre también la lectura del cuerpo, y un tope de 256 KB medido **mientras** se
+lee. Se agrega `referrerPolicy:'no-referrer'` en el propio fetch, que no está en
+la lista de la orden: la request sale desde la página cuyo pathname lleva el
+código, y sin eso viajaría como `Referer`.
+
+**`vercel.mjs`** conserva `git.deploymentEnabled.main = false` y, sólo cuando
+`PAYME_VERCEL_ARTIFACT=app`, agrega
+únicamente los dos rewrites de ruta limpia y las dos reglas de cabeceras
+—`Cache-Control: no-store` y `Referrer-Policy: no-referrer`—, todas acotadas por
+path exacto. Con
+`PAYME_VERCEL_ARTIFACT=landing`, ambos inventarios quedan vacíos: esas rutas no
+existen en el origen Landing. No se usa `has: host`: la separación depende de
+la identidad project-scoped y cubre también los hosts preview generados.
+
+**La guarda de headers se reconcilió, no se aflojó.** La primera entrega dejó
+las cabeceras afuera y lo reportó: `scripts/headersLandingScope.test.ts`
+prohibía la clave `headers` de forma total y estaba fuera de la allowlist, así
+que se cedió ante la guarda viva. La adenda de corrección amplió la allowlist a
+ese archivo y a `docs/HARDENING_LANDING_LOCAL.md`, y la prohibición total pasó a
+ser un **censo cerrado**: sólo esas dos reglas, esos dos pares clave/valor, esos
+dos paths. Un tercer path, un wildcard, `/(.*)`, `/:path*`, `/`, un header extra,
+un valor distinto o un bloque duplicado quedan rojos, cada forma con su mutante.
+El motivo original de la prohibición sigue en pie —el config gobierna App y
+Landing— y ninguna regla alcanza `/`, los assets, el resto de la App ni la
+Landing. Los dos enlaces de regreso llevan además `rel="noreferrer"`, que viaja
+en el documento aunque la cabecera no llegue.
+
+**Tres guardas ajenas corrigieron este trabajo antes de que saliera**, y las
+tres apuntaban a algo real: el copy nacía en voseo rioplatense y el producto
+habla español mexicano (`registroMexicano`); una primera versión montaba la rama
+pública con su propia raíz arriba y desordenaba los literales que
+`facebookAuthFlow`, `recoveryFlow` y `signupSurface` miden por posición; y la
+prohibición de cabeceras. En los tres casos cedió el sujeto, no la guarda.
+
+🔴 **Y un mutante propio SOBREVIVIÓ.** Cambiar `if (!rutaPublica)` por
+`if (true)` en `main.tsx` —los tres bootstraps de sesión corriendo también en las
+rutas públicas, que es el STOP material de la orden— dejaba **26/26 verde** en el
+navegador. El censo de storage no lo veía porque en un `/privacy` pelado no hay
+token que capturar: el bootstrap corría y no escribía nada. **Un verde sobre el
+camino sano no dice nada del degradado.** Lo matan dos guardas nuevas: una
+conductual —abrir la ruta pública con un fragmento de recovery puesto y exigir
+que nadie lo capture, con su control positivo sobre la app normal— y una
+estructural sobre el texto de `main.tsx`.
+
+Mutantes plantados y muertos, cada uno verificado rojo sobre base verde y
+restaurado: host/path controlable, reintento automático, `credentials:'include'`,
+quitar `no-store` (aislado, porque compartía aserción con el anterior), eco del
+código en el DOM, 200 inválido como éxito, rewrites retirados, código inválido
+cayendo al shell autenticado, el `if (true)`, y los seis de la corrección —regla
+global en la configuración Vercel, `import` estático de `App`, canonicidad sólo por
+longitud, `StrictMode` en la rama pública, MIME por prefijo, cuerpo legal dentro
+del `aria-live`, contención de reduced-motion retirada y `overflow-wrap`
+retirado—.
+
+🔴 **La auditoría diferencial de Codex devolvió seis correcciones, y las seis
+apuntaban a defectos reales.** Se anotan porque cada una explica un modo de
+fallar que la primera entrega no veía:
+
+- **C-1 · headers.** Resuelto arriba con la allowlist ampliada.
+- **C-2 · el grafo privado se evaluaba igual.** Los `import` estáticos están
+  izados: abrir `/privacy` evaluaba `App` y llegaba a un
+  `localStorage.getItem()` de inicialización, **aunque ninguna línea de la rama
+  pública lo llamara**. Mi censo de storage no lo veía porque miraba
+  `localStorage.length` al final, y **una lectura no cambia el largo**. Ahora la
+  rama privada entra por `import()` y el navegador instrumenta
+  `Storage.prototype` antes de cargar el documento: cero lecturas y cero
+  escrituras. Con el mutante puesto, el test nombra al culpable exacto —
+  `getItem(payme_mock_state_v1)`—, y en el build el `getItem` vive sólo en el
+  chunk `App-*.js`, que la ruta pública no baja.
+- **C-3 · la canonicidad era falsa.** `length % 4 !== 1` descarta el grupo final
+  imposible, pero **no mira los bits de relleno**: `…AA` y `…AB` decodifican a
+  los mismos bytes y sólo uno es canónico. Ahora se exigen esos bits en cero, y
+  los tests se producen codificando bytes reales y alterando el relleno sin
+  cambiar los bytes ni el largo.
+- **C-4 · «hasta dos requests» no era un límite del instrumento.** Era tolerar
+  el doble montaje de `StrictMode` y, con él, cualquier reintento escondido. La
+  rama pública salió de `StrictMode` y el navegador ahora exige exactamente una
+  request por carga, ninguna repetición en una ventana medida y exactamente una
+  más al pulsar Reintentar.
+- **C-5 · el MIME se comparaba por prefijo**, así que `application/jsonp` y
+  `application/json-evil` entraban. Ahora se normaliza antes del `;` y se compara
+  por igualdad, con los near-miss como casos.
+- **C-6 · a11y medida.** Aparecieron dos defectos que ningún comentario
+  declaraba: el indicador de foco daba **2.39:1** sobre el tinte claro (un solo
+  color para los tres controles) y al 200 % de zoom sobre 320px el `<h1>`
+  empujaba **20px de scroll horizontal**. Corregidos con dos colores de foco
+  según el fondo efectivo y `overflow-wrap: break-word`. Además el `aria-live`
+  envolvía el aviso legal completo —un lector de pantalla lo leía entero al
+  llegar la respuesta—: el cuerpo salió de la región viva sin moverse del orden
+  de lectura. El splash pierde el fundido con `prefers-reduced-motion` **y
+  conserva sus tiempos**, contenido desde `global.css` sin tocar `index.html`.
+
+⚠️ **Límites declarados.** ① Estos tests acreditan la **configuración** de
+`vercel.mjs`, no las cabeceras servidas: que el edge las emita, y en cuál de
+los dos proyectos, es gate externo previo a producción. ② El zoom al 200 % se
+mide halvando el viewport —es la equivalencia de reflow; Playwright no expone el
+zoom del navegador—. ③ La contención de reduced-motion del splash aplica desde
+el primer pintado en el build de producción, donde `global.css` es un `<link>`
+posterior al `<style>` inline; en `npm run dev` la hoja la inyecta el módulo, así
+que la ventana anterior al montaje no queda cubierta en ese riel. ④ El deadline
+de 8 s se acredita en la unidad, que puede moverlo; en navegador se prueba el
+otro camino al mismo veredicto, la red cortada. ⑤ Dentro del repo «sin eco»
+significa cero código en DOM, título, aria, consola, errores propios, storage,
+cuerpo de otra request y `Referer`; la URL inicial lleva el código por contrato
+Meta, y los access logs de edge y su retención quedan como gate externo. Sin
+push, sin deploy, sin commit.
+
 ## 0.151.1 — Fixtures sintéticos compatibles con el auditor (2026-08-29)
 
 Orden `APP-FE-SECRET-SCANNER-FIXTURES-01-CODEX`. Los valores mock de recovery

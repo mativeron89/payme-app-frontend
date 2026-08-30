@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -464,21 +464,15 @@ describe('EJECUTANDO el `run:` del workflow · con curl sustituido', () => {
   });
 });
 
-describe('vercel.json · el despliegue automático sigue apagado', () => {
+describe('vercel.mjs · el despliegue automático sigue apagado', () => {
   it('🔴 `main` NO despliega solo · si alguien lo enciende, esto cae', () => {
-    const v = JSON.parse(readFileSync(join(RAIZ, 'vercel.json'), 'utf8')) as {
-      git?: { deploymentEnabled?: Record<string, boolean> };
-    };
-    expect(
-      v.git?.deploymentEnabled?.main,
-      'volvió el despliegue automático: producción publicaría antes que el CI',
-    ).toBe(false);
+    const fuente = readFileSync(join(RAIZ, 'vercel.mjs'), 'utf8');
+    expect(fuente).toContain('main: false');
+    expect(fuente).not.toContain('main: true');
   });
 
   /**
-   * `vercel.json` no puede llevar el motivo adentro —es JSON estricto y una
-   * clave desconocida puede invalidar la configuración de despliegue entera—,
-   * así que el motivo vive en un documento. **Esto exige que ese documento
+   * El motivo vive en un documento. **Esto exige que ese documento
    * exista y siga explicando lo que hay que saber**: sin él, el `false` de
    * arriba es un número sin historia que alguien flipea en seis meses.
    */
@@ -489,6 +483,153 @@ describe('vercel.json · el despliegue automático sigue apagado', () => {
     expect(doc, 'no advierte sobre los dos proyectos').toContain('Root Directory');
     expect(doc, 'no declara el retiro del camino de Pages').toContain('deploy-demo.yml');
   });
+});
+
+/**
+ * 🔴 LAS DOS RUTAS LIMPIAS PÚBLICAS · APP-FE-META-PUBLIC-COMPLIANCE-01.
+ *
+ * `/privacy` y `/facebook-data-deletion/<code>` son rutas limpias: sin un
+ * rewrite, un acceso directo o un F5 sobre ellas da 404 en Vercel, porque el
+ * router de esta app es hash y nunca necesitó fallback. Meta abre esas URLs en
+ * frío, así que el rewrite **es** la funcionalidad, no una comodidad.
+ *
+ * ## Por qué el censo es de LO PERMITIDO y no de lo prohibido
+ *
+ * ⚠️ **`payme-app` y `payme-landing` ejecutan ESTE MISMO módulo**, pero con
+ * identidad project-scoped distinta. Una regla fuera de la rama `app` volvería
+ * a aplicarse a los dos artefactos.
+ *
+ * Por eso no se enumera lo peligroso —`/(.*)`,`/:path*`, `/`, un `redirects`
+ * nuevo, un `cleanUrls`— sino que **se declara lo permitido y todo lo demás
+ * cae**: las claves de primer nivel son exactamente estas tres, y los `source`
+ * son exactamente los dos paths públicos. Una lista de lo conocido falla
+ * abierta; es la lección que este mismo archivo pagó cuatro veces en el censo
+ * de pasos.
+ *
+ * 🔴 **Aislamiento causal:** `PAYME_VERCEL_ARTIFACT=landing` produce cero
+ * rewrites y cero headers. No se usa `has: host`; la identidad del proyecto
+ * cubre producción y previews sin enumerar dominios.
+ *
+ * ─── LAS CABECERAS, Y POR QUÉ SU GUARDA VIVE EN DOS ARCHIVOS ────────────────
+ *
+ * Las dos rutas llevan `Cache-Control: no-store` y `Referrer-Policy:
+ * no-referrer`, acotadas a esos dos `source`. La entrega anterior las dejó
+ * FUERA: `scripts/headersLandingScope.test.ts` prohibía la clave `headers` de
+ * forma total y estaba fuera de la allowlist, así que se cedió ante la guarda
+ * viva y se reportó el conflicto. La adenda de corrección amplió la allowlist a
+ * ese archivo y a `docs/HARDENING_LANDING_LOCAL.md`, y la prohibición total
+ * pasó a ser un **censo cerrado**: sólo esas dos reglas, esos dos pares, esos
+ * dos paths.
+ *
+ * El censo fino —mutantes de tercer path, wildcard, header extra, valor
+ * distinto, duplicado— vive en `headersLandingScope.test.ts`, que es su dueño
+ * histórico. Acá se afirma lo que le toca a este archivo: que existan, con su
+ * valor, sobre los dos paths, y que no aparezca un tercer `source`.
+ *
+ * 🔴 **Y lo que ninguno de los dos acredita:** que el edge las SIRVA. Esto es
+ * configuración del repo. Las cabeceras efectivamente servidas, y en cuál de
+ * los dos proyectos, son gate externo previo a producción.
+ */
+describe('vercel.mjs · las dos rutas limpias públicas', () => {
+  interface Cabecera { readonly key: string; readonly value: string }
+  interface Regla { readonly source: string; readonly headers?: readonly Cabecera[] }
+
+  const proceso = spawnSync(
+    process.execPath,
+    ['--input-type=module', '--eval', "import('./vercel.mjs').then(m=>process.stdout.write(JSON.stringify(m.config)))"],
+    { cwd: RAIZ, encoding: 'utf8', env: { ...process.env, PAYME_VERCEL_ARTIFACT: 'app' } },
+  );
+  if (proceso.status !== 0) throw new Error(proceso.stderr);
+  const V = JSON.parse(proceso.stdout) as {
+    rewrites?: ReadonlyArray<{ source: string; destination: string }>;
+    headers?: readonly Regla[];
+  };
+
+  /** Los dos únicos `source` que este archivo puede nombrar. */
+  const PATHS_PUBLICOS = ['/privacy', '/facebook-data-deletion/:code'] as const;
+
+  it('🔴 las claves de primer nivel son EXACTAMENTE tres', () => {
+    // `redirects`, `cleanUrls`, `trailingSlash`, `routes` o `functions` nuevos
+    // caen acá: no hace falta nombrarlos, alcanza con no estar en la lista.
+    expect(Object.keys(V).sort()).toEqual(
+      ['git', 'headers', 'rewrites'],
+    );
+  });
+
+  it('🔴 los rewrites son los dos exactos · ni de más, ni cambiados', () => {
+    expect(
+      V.rewrites,
+      'si esto cambia, un acceso directo a las páginas de Meta vuelve a dar 404',
+    ).toEqual([
+      { source: '/privacy', destination: '/index.html' },
+      { source: '/facebook-data-deletion/:code', destination: '/index.html' },
+    ]);
+  });
+
+  it('🔴 cada `source` es un path público exacto · NADA global', () => {
+    const fuentes = (V.rewrites ?? []).map((r) => r.source);
+    expect(fuentes, 'los rewrites dejaron de cubrir las dos rutas, o cubren de más')
+      .toEqual([...PATHS_PUBLICOS]);
+  });
+
+  it('🔴 las cabeceras existen, con su valor, sobre los dos paths y ninguno más', () => {
+    expect(
+      (V.headers ?? []).map((h) => h.source),
+      'los bloques de headers dejaron de cubrir las dos rutas, o cubren de más',
+    ).toEqual([...PATHS_PUBLICOS]);
+
+    for (const bloque of V.headers ?? []) {
+      expect(
+        bloque.headers,
+        `las cabeceras de \`${bloque.source}\` no son las ratificadas`,
+      ).toEqual([
+        { key: 'Cache-Control', value: 'no-store' },
+        { key: 'Referrer-Policy', value: 'no-referrer' },
+      ]);
+    }
+  });
+
+  /**
+   * 🔴 EL LÍMITE, ESCRITO DONDE ALGUIEN LO VA A BUSCAR. Este archivo prueba la
+   * configuración; que el edge sirva esas cabeceras es otra medición y vive
+   * afuera. Si el doc deja de decirlo, esto cae.
+   */
+  it('🔴 el doc declara que configurar no es servir', () => {
+    const doc = readFileSync(join(RAIZ, 'docs', 'HARDENING_LANDING_LOCAL.md'), 'utf8');
+    expect(doc, 'el doc no registra la excepción aislada')
+      .toContain('Excepción aislada por proyecto');
+    expect(doc, 'el doc no separa configuración de cabecera servida')
+      .toContain('gate externo previo a producción');
+  });
+
+  /**
+   * 🔴 CONTROL POSITIVO. Sin esto, un config sin `rewrites` ni `headers`
+   * dejaría en verde los censos de arriba comparando listas vacías y recorriendo
+   * cero bloques.
+   */
+  it('🔴 el archivo tiene las reglas de verdad · nada mide en vacío', () => {
+    expect(V.rewrites, 'no hay rewrites: el gate mediría sobre nada').toHaveLength(2);
+    expect(V.headers, 'no hay bloques de headers').toHaveLength(2);
+    expect((V.headers ?? []).flatMap((h) => h.headers ?? [])).toHaveLength(4);
+    expect(PATHS_PUBLICOS).toHaveLength(2);
+  });
+
+  /**
+   * 🔴 MUTANTE · UNA REGLA GLOBAL. Se planta sobre una COPIA del JSON real y se
+   * exige que la política la rechace. Sin esto, «los source son los dos
+   * públicos» sería una igualdad que nadie probó que discrimine.
+   */
+  it.each(['/(.*)', '/:path*', '/', '/assets/(.*)'])(
+    '🔴 un `source: "%s"` NO pasa la política',
+    (global) => {
+      const mutado = structuredClone(V) as unknown as { rewrites: Array<{ source: string }> };
+      mutado.rewrites.push({ source: global });
+      expect(
+        mutado.rewrites.map((r) => r.source),
+        `una regla global sobre \`${global}\` alcanzaría también a la landing`,
+      ).not.toEqual([...PATHS_PUBLICOS]);
+    },
+  );
 });
 
 /**

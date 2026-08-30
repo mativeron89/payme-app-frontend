@@ -1,5 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { esperaA, leerWorkflow, pasosDeWorkflow } from './yamlWorkflow';
+
+it('PAYME_VERCEL_ARTIFACT queda en el proyecto Vercel y no entra al CI ni al bundle', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  expect(workflow).not.toContain('PAYME_VERCEL_ARTIFACT');
+  expect(readFileSync('vercel.mjs', 'utf8')).toContain('process.env.PAYME_VERCEL_ARTIFACT');
+});
 
 /**
  * 🔴 QUÉ PRUEBA ESTE ARCHIVO AHORA, Y QUÉ DEJÓ DE PROBAR.
