@@ -407,6 +407,45 @@ const updateStaff = z.object({
 });
 const setStaffShift = z.object({ shift_status: z.enum(['on','off','break']) });
 
+// Canal S2S Panel → App · contrato cerrado y versionado. Los roles del actor
+// pertenecen al RBAC del Dashboard (mayúsculas); `input.role` conserva el
+// dominio canónico existente de restaurant_staff (minúsculas).
+const panelActorRole = z.enum(['OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'READ_ONLY']);
+const panelActor = z.object({
+  dashboard_user_id: uuid,
+  roles: z.array(panelActorRole).min(1).superRefine((roles, ctx) => {
+    if (new Set(roles).size !== roles.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'actor roles must be unique' });
+    }
+  }),
+}).strict();
+const panelStaffRole = z.enum(['waiter','bartender','manager','host','runner']);
+const panelCreateInput = z.object({
+  payme_id: paymeId,
+  display_name: z.string().min(1).max(100),
+  role: panelStaffRole,
+}).strict();
+const panelUpdateInput = z.object({
+  display_name: z.string().min(1).max(100).optional(),
+  role: panelStaffRole.optional(),
+}).strict().refine((input) => input.display_name !== undefined || input.role !== undefined, {
+  message: 'update input requires display_name or role',
+});
+const panelRequestBase = {
+  restaurant_id: uuid,
+  actor: panelActor,
+};
+const panelStaffRequest = z.discriminatedUnion('operation', [
+  z.object({ operation: z.literal('list'), ...panelRequestBase }).strict(),
+  z.object({
+    operation: z.literal('create'), ...panelRequestBase, input: panelCreateInput,
+  }).strict(),
+  z.object({
+    operation: z.literal('update'), ...panelRequestBase, staff_id: uuid, input: panelUpdateInput,
+  }).strict(),
+  z.object({ operation: z.literal('remove'), ...panelRequestBase, staff_id: uuid }).strict(),
+]);
+
 // PUSH
 const registerPushDevice = z.object({
   token: z.string().min(10).max(500),
@@ -509,7 +548,7 @@ module.exports = {
   createMesa, payMesa, lockItems,
   topupOxxo, topupCard,
   createTransfer,
-  addStaff, updateStaff, setStaffShift,
+  addStaff, updateStaff, setStaffShift, panelStaffRequest,
   registerPushDevice,
   movementsQuery, historyQuery, walletTxQuery, notificationsQuery,
   restaurantSearchQuery,

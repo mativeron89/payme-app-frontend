@@ -11,6 +11,32 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.154.0 — Refresh contractual Backend 107/107 (2026-08-31)
+
+Orden `APP-FE-CONTRACT-MIRROR-107-REFRESH-01-CLAUDE-MANUAL-P183`, baseline
+`bc4e9ac561f3db122e919bd73854e5126b07662f`. **Sin commit, sin push, sin deploy,
+sin provider, sin DB y sin secreto.** No se verificó CI remoto ni producción, y
+nada de esto lo afirma.
+
+Refresh **mecánico** del espejo: el consumidor adopta el inventario autoritativo
+que publica App Backend y pasa de **106 a 107** archivos contra contenido
+`ca5251eef6eebce092c1f5cb1d2177a9d76a3879` (v2.79.0), publicado por
+`d72b66aa90078cf15287e0d07a61e86d6a1ccfad`, que es la publicación vigente del
+owner y cuyo diff toca un solo archivo fuera de la población.
+
+El delta son **tres** archivos ya espejados que cambiaron —`routes/staff.js`,
+`schemas/index.js` y `services/facebookIdentity.js`— más **uno nuevo**,
+`services/staffCatalog.js`, la autoridad de dominio del roster de personal del
+owner. Los otros 103 archivos espejados quedan byte-idénticos.
+
+Los bytes se copiaron desde el commit del dueño, sin reconstrucción manual, y el
+inventario se adoptó con `scripts/verificar-mirror.mjs --adoptar-inventario`, que
+verifica contra el espejo y la fuente **antes** de escribir. No se modifica
+`src/`, `e2e/`, el verificador, UI, API, configuración ni dependencias del
+Frontend: **espejar bytes no habilita ninguna superficie.** El Frontend no
+implementa consumidor de personal ni de identidad Facebook, y wallet, Apple/Google
+Pay y Social Auth siguen gobernados por sus capabilities fail-closed.
+
 ## 0.153.0 — El artefacto BOSA distingue App de Landing (2026-08-30)
 
 Orden `APP-FE-META-PUBLIC-BOSA-ISOLATION-04-CLAUDE`, baseline `75ef23d`. **Sin

@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "7fefdbedb6689c44fe75bf759f7135b4b9bb8733",
-  "total": 106,
+  "commit": "ca5251eef6eebce092c1f5cb1d2177a9d76a3879",
+  "total": 107,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -397,8 +397,8 @@
     {
       "origen": "routes/staff.js",
       "destino": "routes/staff.js",
-      "sha256": "faa7bd45feac8f8ab38ebbe4ad16f76433f6f6fcc6d4f29c15def62a5c76ec59",
-      "bytes": 7843
+      "sha256": "e6f8e2f0d45c63e223ae3299fb0051f7ef26040898f7390af1b5e31bf8b7b383",
+      "bytes": 6926
     },
     {
       "origen": "routes/stp-webhook.js",
@@ -427,8 +427,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "a36825d02569fc920652da8f79555bb52bf94f08123b5c68bdabd9abbbd5ae5b",
-      "bytes": 21916
+      "sha256": "d0721e222c63ce53797c913956e4a4fdef2ed19e32ffd59b9b0067e37fdacf71",
+      "bytes": 23584
     },
     {
       "origen": "services/authRecovery.js",
@@ -481,8 +481,8 @@
     {
       "origen": "services/facebookIdentity.js",
       "destino": "services/facebookIdentity.js",
-      "sha256": "b668b0a1f00b686d4aab4dd011c541784cc88e828a2b3dd9e4d4868e9dcb55d4",
-      "bytes": 7128
+      "sha256": "b5daa1302d56863db5923596da9313958ca2aea0d6cca511028d661139c9eab5",
+      "bytes": 6970
     },
     {
       "origen": "services/googleIdentity.js",
@@ -597,6 +597,12 @@
       "destino": "services/socialAuthIntents.js",
       "sha256": "bb92567600151ba5469a5d5f88a77574fa4b467c4f103e070ba2905aca8411fd",
       "bytes": 4154
+    },
+    {
+      "origen": "services/staffCatalog.js",
+      "destino": "services/staffCatalog.js",
+      "sha256": "93122723e8a165866b920d1626eced8e1406418f7861815db45d887db0284f30",
+      "bytes": 3885
     },
     {
       "origen": "services/topupProcessor.js",

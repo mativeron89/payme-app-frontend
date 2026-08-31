@@ -5,62 +5,50 @@ const authRecovery = require('./authRecovery');
 const intents = require('./socialAuthIntents');
 const { tokenHash } = require('../utils/tokens');
 const { createHmac } = require('crypto');
+const {
+  runtimeFacebookIdentityAdapter,
+  parseMetaConfig,
+  graphVersion,
+} = require('./facebookIdentityAdapter');
 
 const PROVIDER = 'facebook';
 const TRANSIENT_CODES = new Set([
   'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'facebook_temporarily_unavailable',
 ]);
-let adapter = null;
+/**
+ * APP-BE-FACEBOOK-RUNTIME-ADAPTER-01 · acá estaba el hueco.
+ *
+ * Hasta esta versión era `let adapter = null` y el ÚNICO instalador era
+ * `installAdapterForTests`, que lanza fuera de `NODE_ENV=test`. O sea que
+ * `capability().enabled` —que exige `typeof adapter === 'function'`— no podía
+ * ser `true` en producción con NINGUNA combinación de variables: la superficie
+ * era oscura por construcción, no por configuración. Google no tenía ese hueco
+ * (`googleIdentity.js:21`), y la asimetría entre los dos proveedores era el gap.
+ *
+ * Se cierra espejando exactamente aquella línea: instancia runtime al cargar,
+ * `null` bajo test para que ninguna suite alcance la red por accidente.
+ *
+ * ⚠️ Cerrar el hueco NO prende nada. `runtimeReady` sigue exigiendo
+ * `SOCIAL_FACEBOOK_ENABLED='true'`, config exacta y recovery operativo; sin las
+ * tres, la capability queda OFF igual que antes.
+ */
+let adapter = process.env.NODE_ENV === 'test' ? null : runtimeFacebookIdentityAdapter;
 
 function codedError(code, status = 401) {
   return Object.assign(new Error(code), { code, status });
 }
 
-function exactHttpsUrl(value, predicate = () => true) {
-  if (typeof value !== 'string' || value.length < 10 || value.length > 2048) return null;
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.hash
-        || parsed.search || parsed.port
-        || !predicate(parsed)) return null;
-    return parsed.toString();
-  } catch (_) {
-    return null;
-  }
-}
-
+/**
+ * ÚNICA puerta de validación de la config de Meta.
+ *
+ * El parser vive en `services/facebookIdentityAdapter.js` y NO acá: lo
+ * necesita también `middleware/envValidation.js`, que corre antes de que se
+ * cargue nada más y no puede arrastrar `db/pool` importando este archivo.
+ * Duplicarlo eran dos verdades que con el tiempo se separan, y la que se
+ * separara decidiría si una superficie de AUTENTICACIÓN queda prendida.
+ */
 function parseConfig(env = process.env) {
-  const appId = typeof env.SOCIAL_FACEBOOK_APP_ID === 'string'
-    && /^[0-9]{5,32}$/.test(env.SOCIAL_FACEBOOK_APP_ID)
-    ? env.SOCIAL_FACEBOOK_APP_ID : null;
-  const appSecret = typeof env.SOCIAL_FACEBOOK_APP_SECRET === 'string'
-    && Buffer.byteLength(env.SOCIAL_FACEBOOK_APP_SECRET, 'utf8') >= 32
-    && Buffer.byteLength(env.SOCIAL_FACEBOOK_APP_SECRET, 'utf8') <= 256
-    ? env.SOCIAL_FACEBOOK_APP_SECRET : null;
-  const controlSecret = typeof env.SOCIAL_IDENTITY_CONTROL_HMAC_SECRET === 'string'
-    && Buffer.byteLength(env.SOCIAL_IDENTITY_CONTROL_HMAC_SECRET, 'utf8') >= 32
-    && Buffer.byteLength(env.SOCIAL_IDENTITY_CONTROL_HMAC_SECRET, 'utf8') <= 256
-    ? env.SOCIAL_IDENTITY_CONTROL_HMAC_SECRET : null;
-  const authorizationUrl = exactHttpsUrl(
-    env.SOCIAL_FACEBOOK_AUTHORIZATION_URL,
-    (url) => url.hostname === 'www.facebook.com'
-      && /^\/v[0-9]+\.[0-9]+\/dialog\/oauth\/?$/.test(url.pathname)
-  );
-  const redirectUri = exactHttpsUrl(
-    env.SOCIAL_FACEBOOK_REDIRECT_URI,
-    (url) => url.hostname === 'app.paymemx.com'
-  );
-  const deletionStatusBaseUrl = exactHttpsUrl(
-    env.SOCIAL_FACEBOOK_DATA_DELETION_STATUS_BASE_URL,
-    (url) => url.hostname === 'app.paymemx.com' && url.pathname.endsWith('/')
-  );
-  if (!appId || !appSecret || !controlSecret
-      || !authorizationUrl || !redirectUri || !deletionStatusBaseUrl) {
-    return null;
-  }
-  return {
-    appId, appSecret, controlSecret, authorizationUrl, redirectUri, deletionStatusBaseUrl,
-  };
+  return parseMetaConfig(env);
 }
 
 function capability(env = process.env) {
@@ -142,6 +130,9 @@ async function completeAuthorization(purpose, { state, code }, {
       appId: config.appId,
       appSecret: config.appSecret,
       redirectUri: config.redirectUri,
+      // Derivada de `authorizationUrl`, que ya está validada contra
+      // www.facebook.com: una sola fuente para la versión de la API.
+      apiVersion: graphVersion(config),
     });
   } catch (error) {
     if (TRANSIENT_CODES.has(error?.code)) {
