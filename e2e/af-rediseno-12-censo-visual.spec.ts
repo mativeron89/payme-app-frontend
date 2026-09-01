@@ -85,7 +85,7 @@ async function acreditar(
   await app.screenshot({ path: join(CAPTURES_DIR, `${nombre}.png`), animations: 'disabled' });
 }
 
-test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page }) => {
+test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja fuera pago y comprobante)', async ({ page }) => {
   await page.addInitScript(() => { Math.random = () => 0.8088; });
   await ingresar(page);
   await acreditar(page, '01-inicio', false);
@@ -158,15 +158,13 @@ test('las doce superficies aprobadas quedan medidas a 390 × 844', async ({ page
   await acreditar(page, '07-mis-items');
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Pagar mi parte', exact: true })).toBeVisible();
-  await expect(page.locator('.title-card.pay-title')).toContainText('Consumos propios · $255.00');
-  await acreditar(page, '08-pago');
-  await page.getByRole('radio', { name: '5%', exact: true }).click();
-  await page.getByRole('button', { name: 'Lupita', exact: true }).click();
-  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
-  await expect(page.getByText('¡Listo!', { exact: true })).toBeVisible();
-  await acreditar(page, '09-comprobante');
+  // CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · el censo se detiene en
+  // Mis ítems: 08-pago y 09-comprobante quedan fuera mientras el checkout esté
+  // cerrado. El círculo dice «Listo», no hay «Continuar» y no hay pantalla de
+  // pago que alcanzar.
+  await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Pagar mi parte', exact: true })).toHaveCount(0);
 
   await page.goto('/#/mas');
   await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();

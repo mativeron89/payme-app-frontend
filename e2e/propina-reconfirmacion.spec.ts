@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
 
+const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+
 /**
  * §1.5 bis (2026-08-06) · PROPINA > 3× LA BASE: SE RECONFIRMA, NUNCA SE BLOQUEA.
  *
@@ -18,6 +20,7 @@ import { ingresar } from './_app';
  */
 
 test('la propina desmedida pide reconfirmar: editar conserva el valor, y "Sí, pagar" paga', async ({ page }) => {
+  test.skip(true, CORTE);
   await ingresar(page);
   await page.goto('/#/mesa/PA-2847');
 

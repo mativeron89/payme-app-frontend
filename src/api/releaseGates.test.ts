@@ -1,5 +1,41 @@
 import { describe, expect, it } from 'vitest';
-import { accountRailView, allowsWalletRoute } from './releaseGates';
+import { PAGES } from '../router';
+import { RUTAS_DEL_CORTE, accountRailView, allowsCorteRoute, allowsWalletRoute, corteDePagosView } from './releaseGates';
+
+/**
+ * 🔴 CORTE DEL VIERNES · orden `APP-FE-FRIDAY-NO-PAY-GUARD-02-CLAUDE`.
+ *
+ * El predicado es una constante del front —temporal y declarado en
+ * `releaseGates.ts`—, y por eso este archivo lo FIJA: cambiarlo reabre el
+ * checkout público y tiene que poner rojo, no pasar en silencio. La cadena
+ * completa (guard → historial → árbol → vista) vive en `corteGuard.test.ts`.
+ */
+describe('corte del viernes · producción pública sin pagos', () => {
+  it('🔴 PIN · el corte está activo', () => {
+    expect(corteDePagosView()).toEqual({ pagosCortados: true, showCards: false, allowsPay: false });
+  });
+
+  it('corta EXACTAMENTE tarjetas y cuenta; toda otra página del router pasa', () => {
+    expect([...RUTAS_DEL_CORTE].sort()).toEqual(['cuenta', 'tarjetas']);
+    for (const page of PAGES) {
+      expect(`${page} → ${allowsCorteRoute(page)}`).toBe(`${page} → ${!RUTAS_DEL_CORTE.includes(page)}`);
+    }
+    // Lo que el corte CONSERVA, nombrado: el histórico propio.
+    expect(allowsCorteRoute('pagos')).toBe(true);
+  });
+
+  /**
+   * Dos gates, dos razones. `accountRailView(...).showCards` sigue en `true`
+   * —apagar el riel saldo NO apaga tarjetas, y `walletRouteGuard.test.tsx` lo
+   * exige—; lo que las esconde es el corte. Un consumidor tiene que leer los
+   * dos, y ninguno puede sustituir al otro.
+   */
+  it('el corte NO se cuela en accountRailView: son predicados distintos', () => {
+    expect(accountRailView(false, true).showCards).toBe(true);
+    expect(accountRailView(true, true).showCards).toBe(true);
+    expect(corteDePagosView().showCards).toBe(false);
+  });
+});
 
 describe('gate IFPE de release', () => {
   it('riel apagado conserva tarjetas y elimina todo affordance wallet', () => {

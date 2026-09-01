@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+
 interface CardApiProbe {
   uuid: number;
   setup: string[];
@@ -50,6 +52,7 @@ async function instalarEspiasDeAlta(page: Page): Promise<void> {
 }
 
 test('AF-02 · una key fallida no fabrica continuidad ni atraviesa un rail luego cerrado', async ({ page }) => {
+  test.skip(true, CORTE);
   await loginDelSeed(page);
   await instalarEspiasDeAlta(page);
 
@@ -108,6 +111,7 @@ test('AF-02 · una key fallida no fabrica continuidad ni atraviesa un rail luego
 
 for (const stage of ['setup', 'attach'] as const) {
   test(`AF-02 · continuidad ${stage} durable sobrevive con el rail cerrado`, async ({ page }) => {
+  test.skip(true, CORTE);
     await loginDelSeed(page);
 
     await page.evaluate(async (durableStage) => {

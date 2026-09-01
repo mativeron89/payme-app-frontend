@@ -26,6 +26,10 @@ test('Mis ítems conserva la campana táctil pero no abandona un pago congelado'
 
   await page.goto('/#/mesa/PA-3121');
   await expect(page.getByText('Tienes un pago sin confirmar.')).toBeVisible();
+  // CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · el estado real se
+  // avisa igual, pero sin prometer un reintento que la app ya no ofrece.
+  await expect(page.getByRole('button', { name: 'Reintentar ese pago', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Puedes revisarlo en Mis pagos.')).toBeVisible();
 
   const url = page.url();
   const bell = page.getByRole('button', { name: 'Avisos', exact: true });

@@ -57,6 +57,15 @@ export interface MesaDetailViewProps {
   mySlotsTaken: number;
   /** Hay un pago sin confirmar: se avisa y se ofrece volver a ÉL, no a otro. */
   frozenScope: string | null;
+  /**
+   * CORTE DEL VIERNES (`releaseGates.ts`) · con el corte activo la pantalla
+   * TERMINA acá: no hay `Continuar` hacia el pago ni reintento de un pago
+   * congelado. El aviso del pago congelado se conserva, sin su botón y con un
+   * texto que no promete una acción que la app no ofrece.
+   */
+  pagosCortados: boolean;
+  /** La salida del flujo cuando no hay pago al que continuar. */
+  onLeave: () => void;
   busy: boolean;
   inviteOpen: boolean;
   onToggleItem: (id: string) => void;
@@ -117,6 +126,8 @@ export function MesaDetailView({
   itemsAmount,
   mySlotsTaken,
   frozenScope,
+  pagosCortados,
+  onLeave,
   busy,
   inviteOpen,
   onToggleItem,
@@ -144,16 +155,26 @@ export function MesaDetailView({
       ? t('pagar el total')
       : t('partes iguales');
 
+  /**
+   * El aviso NO se oculta con el corte: el estado real de la persona es que
+   * hay un pago sin confirmar. Lo que se retira es el botón, y con él la
+   * promesa de reintentar. `#/pagos` se conserva y es donde puede verificarlo.
+   */
   const avisoPagoCongelado = frozenScope && (
     <div className="note note-orange" role="status" style={{ marginBottom: 12 }}>
-      <b>{t('Tienes un pago sin confirmar.')}</b> {t('Puede que ya se haya cobrado. Reinténtalo tal cual antes de cambiar tu selección.')}
-      <button
-        className="btn btn-ghost btn-sm btn-fit"
-        style={{ marginTop: 8 }}
-        onClick={onRetryFrozenPay}
-      >
-        {t('Reintentar ese pago')}
-      </button>
+      <b>{t('Tienes un pago sin confirmar.')}</b>{' '}
+      {pagosCortados
+        ? t('Puede que ya se haya cobrado. Puedes revisarlo en Mis pagos.')
+        : t('Puede que ya se haya cobrado. Reinténtalo tal cual antes de cambiar tu selección.')}
+      {!pagosCortados && (
+        <button
+          className="btn btn-ghost btn-sm btn-fit"
+          style={{ marginTop: 8 }}
+          onClick={onRetryFrozenPay}
+        >
+          {t('Reintentar ese pago')}
+        </button>
+      )}
     </div>
   );
 
@@ -364,10 +385,18 @@ export function MesaDetailView({
           </div>
         )}
       </div>
+      {/* CORTE DEL VIERNES · el círculo no puede ser un botón muerto (§5 bis ·
+          E): sin pago al que continuar, cierra el flujo y vuelve a Inicio. El
+          camino a `pay` queda abajo, dormido, para cuando el corte se levante. */}
       <AppBottomBar
         active={null}
         above={miParte}
-        center={{
+        center={pagosCortados ? {
+          label: t('Listo'),
+          icon: 'check',
+          onClick: onLeave,
+          disabled: false,
+        } : {
           label: t('Continuar'),
           icon: 'arrow-right',
           onClick: () => {

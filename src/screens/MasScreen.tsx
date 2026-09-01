@@ -9,6 +9,7 @@ import { Icon } from '../components/Icon';
 import { ProfileIdentityEditor } from '../components/ProfileIdentityEditor';
 import { goBack, navigate } from '../router';
 import { useWalletRail } from '../api/walletRail';
+import { accountRailView, corteDePagosView } from '../api/releaseGates';
 import { fullName } from '../utils/identity';
 import { useProfileIdentityCapability } from '../api/privateFeatures';
 
@@ -27,7 +28,12 @@ export function MasScreen() {
   const { t } = useIdioma();
   const { session, logout, adoptUser } = useAuth();
   // OLA 5D · el rótulo de la fila lo decide el BACKEND, no este repo.
-  const { walletRailEnabled } = useWalletRail();
+  const { walletRailEnabled, accountActivity } = useWalletRail();
+  // La fila de tarjetas lee DOS gates: el riel saldo no la apaga (`showCards`
+  // de `accountRailView`, cableado acá por primera vez) y el corte del viernes
+  // sí (`corteDePagosView`). Ver `releaseGates.ts`.
+  const rail = accountRailView(walletRailEnabled, accountActivity);
+  const corte = corteDePagosView();
   const profileIdentity = useProfileIdentityCapability();
   const user = session?.user;
 
@@ -110,17 +116,19 @@ export function MasScreen() {
             </div>
             <SelectorIdioma />
           </div>
-          <button className="list-row" onClick={() => navigate('tarjetas')}>
-            <span><Icon name="card" size={16} /></span>
-            {/* OLA 5C (c): con el riel saldo apagado, "Saldo y tarjetas" nombraba
-                algo que no existe en el build real. NO se oculta la fila: es el
-                ÚNICO acceso a gestión de tarjetas, que es card-only ratificado.
-                Se renombra. */}
-            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
-              {walletRailEnabled ? 'Saldo y tarjetas' : t('Mis tarjetas')}
-            </div>
-            <span style={{ color: 'var(--gray-b)' }}>→</span>
-          </button>
+          {rail.showCards && corte.showCards && (
+            <button className="list-row" onClick={() => navigate('tarjetas')}>
+              <span><Icon name="card" size={16} /></span>
+              {/* OLA 5C (c): con el riel saldo apagado, "Saldo y tarjetas" nombraba
+                  algo que no existe en el build real. NO se oculta la fila: es el
+                  ÚNICO acceso a gestión de tarjetas, que es card-only ratificado.
+                  Se renombra. */}
+              <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
+                {walletRailEnabled ? 'Saldo y tarjetas' : t('Mis tarjetas')}
+              </div>
+              <span style={{ color: 'var(--gray-b)' }}>→</span>
+            </button>
+          )}
           {/* §1.9 · **Amigos y Grupos salieron de acá.** No es recorte: las dos
               son POSICIONES de la barra inferior desde §1.9 · paso 3 —Grupos
               como pestaña dentro de Amigos—, así que estas filas eran un segundo

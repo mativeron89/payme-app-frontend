@@ -2,11 +2,12 @@ import { useEffect, useMemo } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { useIdioma } from './i18n/idioma';
 import { ToastProvider } from './components/ui';
-import { allowsWalletRoute } from './api/releaseGates';
+import { allowsCorteRoute, allowsWalletRoute } from './api/releaseGates';
 import { tokenForMesa } from './api/invitationLink';
 import { useWalletRail } from './api/walletRail';
 import { useRoute } from './router';
 import { enforceWalletRouteGuard } from './walletRouteGuard';
+import { enforceCorteRouteGuard } from './corteGuard';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
 import { EstadisticasScreen } from './screens/EstadisticasScreen';
@@ -64,6 +65,21 @@ function Shell() {
   useEffect(() => {
     enforceWalletRouteGuard(walletRailEnabled, route.page);
   }, [walletRailEnabled, route.page]);
+
+  /**
+   * CORTE DEL VIERNES · `#/tarjetas` y `#/cuenta` NO MUESTRAN NADA: redirigen.
+   *
+   * Mismo mecanismo que el riel saldo y por las mismas razones de arriba —sin
+   * copy que anuncie la superficie, sin entrada en el historial, en real y en
+   * mock por igual—. La redirección vive en `corteGuard.ts` para que un test
+   * pueda verla ejecutarse; el porqué del corte está en `releaseGates.ts`.
+   * `case 'cuenta'` y `case 'tarjetas'` siguen abajo, durmientes: con esto
+   * delante ninguno de los diez call sites de `cuenta` llega a montarlos.
+   */
+  const rutaCortada = !allowsCorteRoute(route.page);
+  useEffect(() => {
+    enforceCorteRouteGuard(route.page);
+  }, [route.page]);
 
   /**
    * CIERRE DEL PAGO SIN CUENTA (backend v2.32.0) · acá estaba el defecto.
@@ -128,6 +144,7 @@ function Shell() {
 
   // Sin copy y sin pantalla: el efecto de arriba ya está redirigiendo.
   if (rutaDelRielSaldo) return null;
+  if (rutaCortada) return null;
 
   const screen = (() => {
     switch (route.page) {

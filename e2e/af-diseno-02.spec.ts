@@ -3,6 +3,8 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ingresar } from './_app';
 
+const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+
 const CAPTURES_DIR = process.env.AF_CAPTURES_DIR;
 
 test.use({ viewport: { width: 414, height: 868 }, deviceScaleFactor: 2 });
@@ -329,6 +331,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
   });
 
   test('Pagar centra el título, contiene destinatario y usa tarjeta en el CTA', async ({ page }) => {
+    test.skip(true, CORTE);
     await abrirPago(page);
 
     await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
@@ -359,6 +362,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
   });
 
   test('Comprobante solapa el cierre, rotula la tarjeta y conserva sus acciones', async ({ page }) => {
+    test.skip(true, CORTE);
     await abrirPago(page);
     await page.getByRole('radio', { name: '5%', exact: true }).click();
     await page.getByRole('button', { name: 'Lupita', exact: true }).click();

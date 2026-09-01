@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 
+const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+
 test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 
 async function acreditarPestanaMontada(page: Page, nombre: string) {
@@ -176,6 +178,7 @@ test('Compartir muestra la composición compacta y el CTA Continuar', async ({ p
 });
 
 test('Pagar separa resumen, propina, método y total sin duplicar el monto', async ({ page }) => {
+  test.skip(true, CORTE);
   await hastaGarantia(page);
   await page.getByRole('radio', { name: /Santander.*4532/ }).click();
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();

@@ -83,37 +83,31 @@ test.describe('Historial (§1.10)', () => {
   });
 
   /**
-   * El defecto que `mesa_status` vino a matar, reproducido entero: pagar la
-   * parte propia deja la mesa VIVA (`partially_paid`, quedan tres partes) y
-   * genera un pago propio de $241.50 — que con el filtro viejo aparecía como
-   * mesa terminada bajo el mes corriente.
+   * El defecto que `mesa_status` vino a matar: una mesa VIVA no puede aparecer
+   * abajo de un encabezado de mes como si hubiera terminado.
    *
-   * El ancla es el MONTO, no el código: la fila de §1.10 ya no muestra
-   * "Mesa PA-XXXX", y $241.50 ($210.00 + 15 %) no colisiona con ningún monto
-   * del seed. Sin el filtro, este número aparece; con él, no.
+   * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · la variante original
+   * pagaba la parte propia ($241.50) para dejar la mesa `partially_paid` y
+   * afirmar que ni el pago ni el código aparecían. Con el checkout cerrado no
+   * hay pago que hacer: se recorre hasta la selección —que es donde el flujo
+   * termina— y se afirma que la mesa viva sigue sin estar en el historial. La
+   * variante con pago vuelve cuando el corte se levante.
    */
-  test('la mesa viva con mi parte pagada NO aparece en el historial', async ({ page }) => {
+  test('la mesa viva (con consumo elegido, sin pago posible) NO aparece en el historial', async ({ page }) => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByText('$840.00')).toBeVisible();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-    await page.getByRole('button', { name: 'Continuar' }).click();
-    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
-
-    const propinas = page.getByRole('radiogroup', { name: /propina/i });
-    await propinas.getByRole('radio', { name: '15%', exact: true }).click();
-    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
-    await expect(page.getByText('¡Listo!')).toBeVisible();
-    await expect(page.getByText('La mesa sigue abierta para los demás')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
 
     await page.goto('/#/mesas');
     await expect(page.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
     // La pantalla no está vacía ni rota: el seed sigue ahí…
     await expect(page.getByText('$224.25')).toBeVisible();
-    // …y MI mesa viva no está. Ni el pago ni el código.
-    await expect(page.getByText('$241.50')).toHaveCount(0);
+    // …y MI mesa viva no está.
     await expect(page.getByText(mesa.code)).toHaveCount(0);
   });
 });

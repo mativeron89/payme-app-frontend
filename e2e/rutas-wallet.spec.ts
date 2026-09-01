@@ -97,19 +97,19 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
    * "no aparece CLABE" no distingue *"el gate funciona"* de *"la app no
    * renderiza nada en este entorno"*. Una ruta legítima tiene que renderizar.
    *
-   * Sigue usando `#/cuenta` **a propósito, aunque §1.9 haya retirado esa
-   * pantalla**: ahora esa ruta monta `TarjetasScreen` por el `case` compartido,
-   * y que renderice contenido es justamente lo que protege a los ocho
-   * `navigate('cuenta')` durmientes de dejar la app en blanco. El control
-   * positivo y ese guard son la misma afirmación.
+   * Usaba `#/cuenta` a propósito —la ruta que §1.9 dejó viva para los diez
+   * call sites durmientes—. Desde el CORTE DEL VIERNES
+   * (APP-FE-FRIDAY-NO-PAY-GUARD-02) esa ruta redirige a Inicio y ya no puede
+   * acreditar que la app renderice: el control positivo pasa a `#/pagos`, la
+   * superficie card-only que el corte CONSERVA.
    */
   test('control positivo · una ruta card-only sí se alcanza y muestra contenido', async ({ page }) => {
     await ingresar(page);
 
-    await page.goto('/#/cuenta');
+    await page.goto('/#/pagos');
 
-    await expect(page).toHaveURL(/#\/cuenta$/);
-    await expect(page.getByRole('heading', { name: 'Mis tarjetas', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/#\/pagos$/);
+    await expect(page.getByRole('heading', { name: 'Mis pagos', exact: true })).toBeVisible();
   });
 
   /**
@@ -128,6 +128,13 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
    * montara; ahora cada superficie tiene que estar en su propia pantalla, y el
    * barrido de vocabulario corre sobre las dos por separado.
    */
+  /**
+   * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · `tarjetas` salió de
+   * esta lista: el alta de tarjeta está cerrada en producción pública sin pagos
+   * y `#/tarjetas` redirige a Inicio (ver el describe de abajo). Lo que este
+   * bloque sigue defendiendo es lo mismo —apagar el riel saldo no apaga la
+   * actividad de cuenta—, sobre la única superficie card-only que hoy se ve.
+   */
   const CARD_ONLY = [
     {
       ruta: 'pagos',
@@ -135,12 +142,6 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
       // `GET /account/history` + `stats`, que leen `payment_attempts` y NO
       // tablas de wallet. Es exactamente lo que `07f0ba2` escondió.
       ver: (page: Page) => page.getByText('Mis pagos', { exact: true }),
-    },
-    {
-      ruta: 'tarjetas',
-      que: 'las tarjetas guardadas',
-      // Los puntos del enmascarado: si hay una tarjeta pintada, hay superficie.
-      ver: (page: Page) => page.getByText(/····/).first(),
     },
   ] as const;
 
@@ -157,6 +158,48 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
       for (const palabra of VOCABULARIO_WALLET) {
         expect(cuerpo, `apareció "${palabra}" en #/${ruta}`).not.toContain(palabra);
       }
+    });
+  }
+});
+
+/**
+ * CORTE DEL VIERNES · orden `APP-FE-FRIDAY-NO-PAY-GUARD-02-CLAUDE` (2026-09-01).
+ *
+ * El alta de tarjeta está cerrada en producción pública sin pagos: `#/tarjetas`
+ * y su alias `#/cuenta` redirigen a Inicio con el MISMO mecanismo que el riel
+ * saldo (`corteGuard.ts`, molde de `walletRouteGuard.ts`), y por eso se prueba
+ * acá, al lado, con las mismas tres afirmaciones: termina en Inicio, Atrás no
+ * la recupera, y no se montó nada de tarjetas en el camino.
+ *
+ * `#/pagos` se conserva: es el control positivo de arriba.
+ */
+const RUTAS_DEL_CORTE = ['tarjetas', 'cuenta'] as const;
+const VOCABULARIO_TARJETAS = ['Mis tarjetas', 'Agregar tarjeta', 'Guardar tarjeta'];
+
+test.describe('corte del viernes · las rutas de tarjetas no son alcanzables', () => {
+  for (const ruta of RUTAS_DEL_CORTE) {
+    test(`#/${ruta} escrita a mano termina en Inicio`, async ({ page }) => {
+      await ingresar(page);
+
+      await page.goto(`/#/${ruta}`);
+
+      await expect(page).toHaveURL(/#\/home$/);
+      await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+
+      const cuerpo = await page.locator('body').innerText();
+      for (const palabra of VOCABULARIO_TARJETAS) {
+        expect(cuerpo, `apareció "${palabra}" en #/${ruta}`).not.toContain(palabra);
+      }
+    });
+
+    test(`Atrás no recupera #/${ruta}`, async ({ page }) => {
+      await ingresar(page);
+      await page.goto(`/#/${ruta}`);
+      await expect(page).toHaveURL(/#\/home$/);
+
+      await page.goBack();
+
+      expect(page.url()).not.toContain(ruta);
     });
   }
 });

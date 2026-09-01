@@ -64,11 +64,13 @@ test.describe('el stepper de comensales (§1.4)', () => {
     }, codigo);
     expect(enviado).toBe(3);
 
-    // Y la base de §1.5 bis dice la misma división que la vista del stepper.
+    // CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · la base de §1.5 bis
+    // vivía en la pantalla de pago, que está cerrada: el recorrido termina en
+    // Mis ítems, con la selección viva y sin «Continuar» hacia el pago.
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-    await expect(page.getByText('Base $280.00', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
   });
 
   test('partes iguales con N=3: viaja el 3 elegido y la parte es $280.00 — no el 4 fantasma (2-A.3)', async ({ page }) => {

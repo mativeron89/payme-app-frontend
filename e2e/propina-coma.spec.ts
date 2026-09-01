@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
 
+const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+
 /**
  * LA COMA ×100, EN EL INPUT REAL (ORDEN 2-A.3).
  *
@@ -13,6 +15,7 @@ import { ingresar } from './_app';
  * cobra $1,429.00 y cae.
  */
 test('tipear "12,34" en el input real deja 1234 centavos, no 123400', async ({ page }) => {
+  test.skip(true, CORTE);
   await ingresar(page);
   await page.goto('/#/mesa/PA-2847');
 

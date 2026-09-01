@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+
 const SIGNUP_GUARDADA = 'signup-token-guardar-tarjeta-aaaa';
 const SIGNUP_SIN_GUARDAR = 'signup-token-no-guardar-bbbbbbb';
 
@@ -21,6 +23,7 @@ const SIGNUP_SIN_GUARDAR = 'signup-token-no-guardar-bbbbbbb';
  */
 
 test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async ({ page }) => {
+  test.skip(true, CORTE);
   // Cuenta nueva invitada: nace sin tarjetas (el camino primerizo F&F real).
   await page.goto(`/#/home?signup_invitation=${SIGNUP_GUARDADA}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
@@ -74,6 +77,7 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
 });
 
 test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una decoración', async ({ page }) => {
+  test.skip(true, CORTE);
   // Mismo recorrido primerizo invitado, checkbox intacto en las dos superficies.
   await page.goto(`/#/home?signup_invitation=${SIGNUP_SIN_GUARDAR}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();

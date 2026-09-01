@@ -28,25 +28,20 @@ import { ingresar } from './_app';
  */
 
 test.describe('los accesos de Más', () => {
-  test('la fila de tarjetas abre Mis tarjetas, no la Cuenta vieja', async ({ page }) => {
+  /**
+   * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · la fila de tarjetas
+   * NO existe: el alta de tarjeta está cerrada en producción pública sin pagos,
+   * y `#/tarjetas` redirige a Inicio (`rutas-wallet.spec.ts`). Se afirma la
+   * ausencia con control positivo —la pantalla cargó: su fila de idioma está—.
+   * El recorrido que abría «Mis tarjetas» vuelve cuando el corte se levante.
+   */
+  test('la fila de tarjetas NO existe bajo el corte del viernes', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mas');
     await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
+    await expect(page.getByText('Idioma', { exact: true })).toBeVisible();
 
-    // El rótulo lo decide el backend (OLA 5C · c): con el riel saldo apagado
-    // —que es el único estado posible hoy— dice "Mis tarjetas".
-    //
-    // Va anclado al principio y no `exact`: el nombre accesible de la fila es
-    // "Mis tarjetas →", porque el chevron es texto y entra en el nombre. Con
-    // `exact: true` no matchea nada y el test se cae por timeout, que es lo que
-    // pasó al escribirlo.
-    await page.getByRole('button', { name: /^Mis tarjetas/ }).click();
-
-    await expect(page).toHaveURL(/#\/tarjetas$/);
-    await expect(page.getByText('Mis tarjetas', { exact: true })).toBeVisible();
-
-    // ⭐ Y NO pasó por la Cuenta vieja en el camino. Sin esta línea, un destino
-    // que fuera a `cuenta` y de ahí rebotara pasaría igual.
+    await expect(page.getByRole('button', { name: /^Mis tarjetas/ })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Mi Cuenta', exact: true })).toHaveCount(0);
   });
 
@@ -112,15 +107,16 @@ test.describe('los accesos de Más', () => {
    * pantalla de buena fe** — "a Más le falta Amigos"— dentro de seis meses. Por
    * eso se afirma y no se deja implícita.
    *
-   * Y con control positivo: se exige que "Mis tarjetas" SÍ esté. Sin eso, "no
-   * hay fila Amigos" no distingue *"se sacó"* de *"la pantalla no cargó"*.
+   * Y con control positivo: se exige que la fila «Idioma» SÍ esté. Sin eso, "no
+   * hay fila Amigos" no distingue *"se sacó"* de *"la pantalla no cargó"*. (Era
+   * «Mis tarjetas», que salió con el corte del viernes.)
    */
-  test('Amigos y Grupos ya no son filas de Más; Mis tarjetas sí', async ({ page }) => {
+  test('Amigos y Grupos ya no son filas de Más; Idioma sí', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mas');
 
-    // Control positivo primero: la pantalla cargó y su fila card-only está.
-    await expect(page.getByRole('button', { name: /^Mis tarjetas/ })).toBeVisible();
+    // Control positivo primero: la pantalla cargó y su fila de idioma está.
+    await expect(page.getByText('Idioma', { exact: true })).toBeVisible();
 
     /**
      * ⚠️ La primera versión de este test buscaba **cero** botones "Amigos" en la

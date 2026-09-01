@@ -17,6 +17,8 @@
 import { test, expect } from '@playwright/test';
 import { ingresar, abrirMesaConLink } from './_app';
 
+const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+
 /**
  * Demora todo digest: el journal se vuelve lento, las tarjetas no.
  *
@@ -37,6 +39,7 @@ async function frenarJournal(page: import('@playwright/test').Page, ms: number) 
 }
 
 test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se cierra', async ({ page }) => {
+  test.skip(true, CORTE);
   await ingresar(page);
   await abrirMesaConLink(page);
   // 🔴 El freno entra ANTES de «Continuar», y ese detalle es el
@@ -151,6 +154,7 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
  * las tres digan **lo mismo**: porcentaje, destinatario e importe.
  */
 test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo', async ({ page, context }) => {
+  test.skip(true, CORTE);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await ingresar(page);
   const mesa = await abrirMesaConLink(page);

@@ -101,12 +101,16 @@ const ESPERADO: Record<PageId, Esperado> = {
    * `case`: `goBack(fallback)` llama a `navigate(fallback)` sin historial
    * propio, así que un `grep` de `navigate('cuenta')` no los ve.
    */
-  cuenta: {
-    tipo: 'alias',
-    de: 'tarjetas',
-    porque: 'la pantalla se retiró en §1.9 y la ruta vive para los diez call sites durmientes',
-  },
-  tarjetas: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis tarjetas' } },
+  /**
+   * 🔴 CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · el alta de tarjeta
+   * está cerrada en producción pública sin pagos: `#/tarjetas` y su alias
+   * `#/cuenta` **no montan pantalla: redirigen**, igual que las del riel saldo.
+   * Los `case` siguen en `App.tsx`, durmientes y con sus diez call sites; el
+   * guard de `corteGuard.ts` los deja atrás. Cuando el corte se levante, estas
+   * dos filas vuelven a ser `alias`/`pantalla`.
+   */
+  cuenta: { tipo: 'redirige', a: /#\/home$/ },
+  tarjetas: { tipo: 'redirige', a: /#\/home$/ },
   pagos: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis pagos' } },
   estadisticas: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis estadísticas' } },
   recovery: {

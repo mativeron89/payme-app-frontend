@@ -22,7 +22,6 @@ import { ingresar } from './_app';
 
 /** El acceso tal cual lo toca la persona → la pantalla a la que tiene que caer. */
 const ACCESOS = [
-  { pestana: 'Cuenta', acceso: 'Ver tarjetas', hash: '#/tarjetas', titulo: 'Mis tarjetas' },
   { pestana: 'Cuenta', acceso: 'Ver pagos', hash: '#/pagos', titulo: 'Mis pagos' },
   {
     pestana: 'Estadísticas',
@@ -57,6 +56,20 @@ test.describe('los accesos de las pestañas de Inicio llegan a su pantalla', () 
       await expect(page.getByRole('tab', { name: 'Cuenta', exact: true })).toBeVisible();
     });
   }
+
+  /**
+   * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · la pestaña Cuenta ya no
+   * ofrece «Ver tarjetas»: el alta de tarjeta está cerrada en producción pública
+   * sin pagos. Se afirma la AUSENCIA con el control positivo al lado —«Ver
+   * pagos» sigue, y sigue llegando—, porque una ausencia la rompe alguien
+   * «completando» la pestaña de buena fe.
+   */
+  test('Cuenta ofrece Ver pagos y NO Ver tarjetas (corte del viernes)', async ({ page }) => {
+    await ingresar(page);
+    await page.getByRole('tab', { name: 'Cuenta', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Ver pagos', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ver tarjetas', exact: true })).toHaveCount(0);
+  });
 
   /**
    * La pestaña Asociadas **existe y no tiene interior**, a propósito: hijos es

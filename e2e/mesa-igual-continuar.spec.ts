@@ -1,8 +1,16 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
-import { espiarScroll, leerScrolls } from './_senales';
 
 /**
+ * 🔴 CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02, 2026-09-01) · el
+ * checkout del participante está cerrado en producción pública sin pagos. En
+ * esta pantalla eso significa: el círculo ya no es «Continuar» hacia el pago,
+ * es «Listo» y cierra el flujo hacia Inicio; la pantalla de pago no se alcanza
+ * desde ningún control; y elegir NO reserva nada —el corte va ANTES del lock—.
+ * Los dos recorridos que pagaban se reescribieron para acreditar eso; el
+ * feedback de «Continuar sin elegir» (toast + scroll + pulso) queda dormido con
+ * el control, en la rama sin corte de `MesaDetailView`.
+ *
  * H-14 (auditoría 2026-08-06): EN PARTES IGUALES, MARCAR ES INFORMATIVO — Y EL
  * GATE LO DECÍA OBLIGATORIO.
  *
@@ -19,7 +27,7 @@ import { espiarScroll, leerScrolls } from './_senales';
  */
 
 test.describe('Continuar en la mesa (H-14)', () => {
-  test('partes iguales: sin marcar nada se llega al pago y se paga la parte', async ({ page }) => {
+  test('partes iguales: la fila dice Mi parte, y el círculo cierra el flujo SIN pago (corte)', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-3121');
     await expect(page.locator('.mesa-selection-title')).toContainText('partes iguales');
@@ -31,17 +39,14 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.getByText('Mi parte')).toBeVisible();
     await expect(page.getByText('$155.00').first()).toBeVisible();
 
-    // Continuar habilitado SIN selección — el gate viejo lo apagaba.
-    const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
-    await expect(continuar).toBeEnabled();
-    await continuar.click();
-
-    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
-    await expect(page.locator('.title-card.pay-title')).toContainText('Tu parte · $155.00');
-    const propinas = page.getByRole('radiogroup', { name: /propina/i });
-    await propinas.getByRole('radio', { name: '0%', exact: true }).click();
-    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
-    await expect(page.getByText('¡Listo!')).toBeVisible();
+    // 🔴 CORTE · no hay «Continuar»; el círculo es «Listo», habilitado, y
+    // cierra hacia Inicio. La pantalla de pago no aparece nunca.
+    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
+    const listo = page.getByRole('button', { name: 'Listo', exact: true });
+    await expect(listo).toBeEnabled();
+    await listo.click();
+    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
   });
 
   test('partes iguales: permite declarar una fracción sin alterar el casillero', async ({ page }) => {
@@ -62,51 +67,18 @@ test.describe('Continuar en la mesa (H-14)', () => {
   });
 
   /**
-   * 🔴 ESTE TEST AFIRMABA `toBeDisabled()` Y AHORA AFIRMA ALGO MÁS FUERTE.
-   * Se cambia el MECANISMO, no la semántica que H-14 vino a proteger.
+   * 🔴 CORTE · lo que H-14 cuida en `consumo` —la selección determina el
+   * monto— sigue vivo y se afirma igual (`.mi-frac-amt`, fila «Mi parte»). Lo
+   * que cambia es el final: no hay «Continuar», no hay pantalla de pago, y
+   * elegir NO reserva el ítem —el corte va ANTES de `api.lockItems`, así que
+   * los `claims` del mock quedan como estaban—. Sin esa última afirmación, un
+   * corte puesto DESPUÉS del lock pasaría igual y dejaría ítems reservados diez
+   * minutos para nadie.
    *
-   * `SISTEMA_DISENO.md` §5 bis · E (2026-08-21, adjudicado en `diseno@0206d44`)
-   * retira el apagado del círculo **cuando lo que falta es un dato**, y lo
-   * reemplaza por toast + scroll + pulso. Es el patrón que §1.4 (stepper) y
-   * §1.5 bis (propina) ya ratificaban: *"no se envía nada"* con el botón
-   * visualmente activo.
-   *
-   * ⚠️ LA MITAD QUE H-14 CUIDA NO SE MOVIÓ, y por eso este test se refuerza en
-   * vez de aflojarse: en `consumo` la selección SIGUE determinando el monto y
-   * SIGUE sin poderse avanzar sin ella. Lo que cambió es cómo se comunica.
-   * `toBeDisabled()` probaba el mecanismo viejo; estas tres afirmaciones
-   * prueban la CONDUCTA, que es lo que la auditoría quería fijar:
-   *
-   *   ① tocar sin elegir NO lleva al pago
-   *   ② y explica por qué, en vez de no hacer nada
-   *   ③ con un ítem elegido, sí lleva
-   *
-   * 🔴 **CORREGIDO TRAS EL BLOCK DEL P62 — la descripción de arriba atribuía al
-   * mutante un alcance que NO tiene, y la corrección es el punto 3 del cierre
-   * mínimo de Codex.**
-   *
-   * El mutante `if (false && faltaElegirConsumos)` **no reproduce la pérdida
-   * del no-avance**: `MesaScreen.goToPay` conserva un corte duro propio
-   * —`selected.size === 0 → return`, `MesaScreen.tsx:569`— así que la vista
-   * puede llamar al owner y el owner igual frena. Este test queda rojo con ese
-   * mutante **porque desaparece el TOAST**, no porque se pierda la semántica.
-   *
-   * **Lo que el mutante acredita es la rama de FEEDBACK.** El no-avance está
-   * defendido por dos capas y la de abajo no depende de ésta — que es una buena
-   * noticia de diseño y una mala noticia para quien quiera usar este mutante
-   * como prueba de la semántica. Se dice acá para que nadie vuelva a leerlo
-   * como lo leí yo.
-   *
-   * ## Las TRES señales se afirman por separado
-   *
-   * §5 bis · E exige toast + scroll + pulso JUNTOS. Codex mató tres mutantes
-   * individuales contra la versión anterior de este test —borrar el scroll,
-   * borrar el pulso, borrar el `return`— y quedó **verde en los tres**: miraba
-   * sólo el toast. Ahora cada señal tiene su aserción, con los espías de
-   * `_senales.ts` (el scroll no deja rastro en el DOM y el pulso se apaga solo).
+   * El feedback «toast + scroll + pulso» del Continuar sin elegir (§5 bis · E,
+   * P62) queda dormido con el control; vuelve con él.
    */
-  test('consumo: sin elegir NO se avanza y se explica con las TRES señales', async ({ page }) => {
-    await espiarScroll(page);
+  test('consumo: elegir sigue vivo, NINGÚN control lleva al pago y NADA se reserva (corte)', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
     await expect(page.locator('.mesa-selection-title')).toContainText('cada uno lo suyo');
@@ -114,39 +86,34 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.getByText('Tagliatelle Bolognese')).toBeVisible();
     await expect(page.getByText('Elige lo que consumiste').first()).toBeVisible();
 
-    const continuar = page.getByRole('button', { name: 'Continuar', exact: true });
-    // El círculo ya no nace apagado: §5 bis · E.
-    await expect(continuar).toBeEnabled();
-    await continuar.click();
+    // No hay «Continuar»: la única salida del círculo es «Listo».
+    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
 
-    // ① señal 2 de 3 · se mide en cuanto responde el click, antes de que
-    // `animationend` retire deliberadamente esta clase transitoria.
-    await expect(page.locator('.tk-fold--pending')).toHaveClass(/tk-fold--pulse/);
+    const claimsDe = () => page.evaluate(() => {
+      const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
+      const mesa = st.mesas.find((m: { code: string }) => m.code === 'PA-2847');
+      const item = mesa.items.find((i: { name: string }) => i.name === 'Tagliatelle Bolognese');
+      return (item.claims ?? []).length as number;
+    });
+    const antes = await claimsDe();
 
-    // ② no llegó al pago
-    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
-    // ③ señal 1 de 3 · el toast
-    await expect(page.getByText('Elige lo que consumiste para continuar')).toBeVisible();
-
-    // ④ señal 3 de 3 · el scroll, que no deja rastro y por eso lleva espía
-    const vistas = await leerScrolls(page);
-    expect(
-      vistas.scrolls.some((c) => c.includes('tk-fold--pending')),
-      `no se scrolleó a la lista de consumos · scrolls vistos: ${vistas.scrolls.join(' · ')}`,
-    ).toBe(true);
-
-    // ⑤ con un consumo elegido, el mismo control sí avanza.
+    // La selección y su aritmética siguen: es lo que la pantalla ofrece.
     await page.getByText('Tagliatelle Bolognese').click();
     const fracciones = page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' });
     await expect(fracciones.getByRole('radio')).toHaveCount(6);
     await fracciones.getByRole('radio', { name: '⅔', exact: true }).click();
     await expect(page.locator('.mi-frac-amt')).toContainText('$130.01');
-    await continuar.click();
-    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
-    await page.getByRole('radio', { name: '0%', exact: true }).click();
-    await expect(page.getByText('$130.01', { exact: true }).first()).toBeVisible();
-    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
-    await expect(page.getByText('¡Listo!')).toBeVisible();
+    const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
+    await expect(filaMiParte).toContainText('$130.01');
+
+    // Con la selección hecha sigue sin haber pago, y el círculo cierra.
+    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect(page).toHaveURL(/#\/home$/);
+
+    // ⭐ Y nada se reservó: el corte fue ANTES del lock.
+    expect(await claimsDe(), 'elegir reservó el ítem: hubo lock sin pago detrás').toBe(antes);
   });
 });
 

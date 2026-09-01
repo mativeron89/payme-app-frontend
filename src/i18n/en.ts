@@ -515,6 +515,7 @@ export const EN: Record<string, string> = {
   "Puede haberse cortado al copiarlo. Pide que te lo manden de nuevo y ábrelo entero.": "It may have gotten cut off when copied. Ask them to send it again and open it in full.",
   "Puede que la garantía ya exista.": "The guarantee may already exist.",
   "Puede que la mesa ya se haya creado con su garantía. Reinténtala tal cual: si ya existe, te devolvemos esa misma mesa en vez de retener el total otra vez.": "The table may already have been created with its guarantee. Retry it as-is: if it already exists, we'll return that same table instead of placing another hold for the full amount.",
+  "Puede que ya se haya cobrado. Puedes revisarlo en Mis pagos.": "It may have already been charged. You can check it under My payments.",
   "Puede que ya se haya cobrado. Reinténtalo tal cual antes de cambiar tu selección.": "It may have already been charged. Retry it as-is before changing your selection.",
   "Puede que ya se haya cobrado. Reinténtalo tal cual está: si ya salió, no te cobramos de nuevo. Hasta resolverlo no puedes cambiar propina, método ni consumos.": "It may have already been charged. Retry it exactly as it is: if it already went through, we won't charge you again. Until it's resolved, you can't change the tip, method, or items.",
   "Puede ser la conexión. Prueba de nuevo.": "It might be your connection. Try again.",

@@ -2,6 +2,7 @@ import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, use
 import { useIdioma } from '../i18n/idioma';
 import { api, IS_MOCK, newIdempotencyKey } from '../api';
 import { useWalletRail } from '../api/walletRail';
+import { corteDePagosView } from '../api/releaseGates';
 import { useNativeWallets } from '../api/nativeWallets';
 import type { MonetaryIntentHandle, UnconfirmedAttempt } from '../api/idempotency';
 import {
@@ -75,6 +76,12 @@ import {
 import { createInFlightMutex } from '../utils/inFlight';
 import { RequestEpoch } from '../utils/requestEpoch';
 import { writeClipboardText } from '../utils/clipboard';
+
+/**
+ * CORTE DEL VIERNES · `releaseGates.ts`. Se lee una vez: es una constante del
+ * front, no una capability que viaje por la red.
+ */
+const CORTE = corteDePagosView();
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -572,6 +579,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }
 
   async function goToPay() {
+    // 🔴 CORTE DEL VIERNES · ANTES de `api.lockItems`, y no después: un lock sin
+    // pago detrás es un ítem reservado diez minutos para nadie. Con el corte
+    // activo `MesaDetailView` ya no ofrece el control que llega acá; ésta es la
+    // segunda capa, la del dueño de la transición (`releaseGates.ts`).
+    if (!CORTE.allowsPay) return;
     if (!mesa) return;
     setError(null);
     if (mesa.division_mode === 'consumo') {
@@ -2229,7 +2241,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       onToggleItem={toggleItem}
       onSetFraction={setFraction}
       onGoToPay={goToPay}
-      onRetryFrozenPay={() => setView('pay')}
+      onRetryFrozenPay={() => { if (CORTE.allowsPay) setView('pay'); }}
+      pagosCortados={CORTE.pagosCortados}
+      onLeave={() => navigate('home')}
       onOpenInvite={() => setInviteOpen(true)}
       onCopyInvitationLink={() => void copyInvitationLink()}
       onBack={() => goBack('mesas')}

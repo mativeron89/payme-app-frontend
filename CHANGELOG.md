@@ -11,6 +11,95 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.155.0 — Corte del viernes · producción pública sin pagos (2026-09-01)
+
+Orden `APP-FE-FRIDAY-NO-PAY-GUARD-02-CLAUDE`, baseline
+`8e3f320c1c1dfd180c9b6db1a99011626275c55e`. **Sin push, sin deploy, sin provider,
+sin DB y sin secreto.** No se verificó CI remoto ni producción, y nada de esto
+lo afirma. Decisión ratificada por Mati el 2026-09-01: *«Producción Pública sin
+pago»* — la app pública no incluye checkout, garantía ni cobro; el flujo termina
+tras la selección del consumo.
+
+### Qué cierra
+
+- **La vista `pay` de la mesa**, sus tres transiciones y sus dos controles.
+  `MesaScreen.goToPay` frena en su primera sentencia, **antes de
+  `api.lockItems`** —un lock sin pago detrás es un ítem reservado diez minutos
+  para nadie—, y el reintento de un pago congelado queda bajo el mismo
+  predicado. `MesaDetailView` deja de ofrecer «Continuar»: el círculo pasa a
+  **«Listo»** y cierra el flujo hacia Inicio, porque un círculo tocable que no
+  puede avanzar es el botón muerto que §5 bis · E prohíbe. La rama
+  `if (view === 'pay')` **se conserva dormida** —el censo P36 la sigue
+  ubicando por AST— y todo el camino al pago vuelve tal cual cuando el corte
+  se levante: desactivar no es borrar.
+- **El alta de tarjeta.** `#/tarjetas` y su alias `#/cuenta` redirigen a Inicio
+  con `replaceRoute` (Atrás no las recupera), por el mismo molde que el riel
+  saldo: predicado en `releaseGates.ts`, acto en `corteGuard.ts`, una llamada
+  en `App.tsx`. `case 'cuenta'` y `case 'tarjetas'` siguen en el switch con sus
+  diez call sites durmientes; el guard los deja atrás. El launcher «Ver
+  tarjetas» de Inicio y la fila «Mis tarjetas» de Configuración se gatean —
+  **`accountRailView(...).showCards` queda cableado por primera vez**, y sigue
+  en `true`: apagar el riel saldo no apaga tarjetas; lo que las esconde es OTRO
+  predicado, `corteDePagosView()`, y los consumidores leen los dos.
+- **El aviso de un pago congelado se conserva, sin su botón.** Decidido por
+  Codex: no se oculta el estado real de la persona; se retira la promesa de
+  reintentar. Copy nuevo: *«Puede que ya se haya cobrado. Puedes revisarlo en
+  Mis pagos.»* — apunta a la superficie que el corte conserva. Su entrada EN se
+  agregó a mano en `src/i18n/en.ts`; queda pendiente de regenerar desde el
+  inventario de Diseño.
+
+### Qué conserva, y qué NO cierra
+
+- `#/pagos` (histórico propio) se conserva tal cual.
+- **La garantía del organizador en `#/scan` sigue alcanzable.** Depende de
+  A-1, ratificado y sin enmienda; `CreateMesaFlow.tsx` está fuera de esta
+  orden. **Esta versión no declara que el corte sistémico esté completo.**
+- **El backend sigue aceptando el pago, el lock y el setup-intent.** Este corte
+  es de superficie; que «sin pagos» sea una propiedad del sistema es trabajo
+  del dueño y está elevado como scope de App Backend.
+- La selección es local y no persiste (decidido por CEO): nada se reserva.
+- Los toasts de `toggleItem`/`setFraction` ante un pago congelado (*«resuélvelo
+  antes de cambiar tu selección»*) no cambian: sólo alcanzan a quien traiga un
+  pago en vuelo de antes del corte, y no prometen el reintento que se retiró.
+
+### 🔴 Una constante del front, temporal y declarada
+
+`PAGOS_CORTADOS` vive en `releaseGates.ts` y **la fija un test** (`corteGuard.test.ts`,
+`releaseGates.test.ts`): cambiarla reabre el checkout público y tiene que
+poner rojo, no pasar en silencio. Tiene el riesgo espejo del que el riel saldo
+resolvió con capability —un deploy del front podría reabrir pagos sin que el
+backend se entere—. Se acepta porque la capability la nombra el DUEÑO y hoy no
+existe; este repo no inventa campos. La forma durable es owner-first.
+
+### E2E · 18 specs de la allowlist, con método declarado
+
+Universo cerrado por lectura de los 41 specs (no por grep): 15 de 22 con señal
+léxica entraban por lo que AFIRMAN, más 3 de afuera. Recorridos cuyo objeto es
+el corte mismo se **reescribieron** para acreditarlo (`pago-completo` 1,
+`mesa-igual-continuar` 1 y 3, `rutas-wallet`, `rutas-montan-pantalla`,
+`inicio-accesos`, `mas-accesos`, `hash-desconocido`, `historial` 4,
+`stepper-comensales` 1, `af-rediseno-12-censo-visual`, `bell-guards`).
+Recorridos cuyo objeto es la pantalla de pago o el alta de tarjeta —propina,
+reconfirmación, tarjeta guardada por defecto, AF-02, ventana de atribución,
+composición de Pagar/Comprobante— quedan **salteados con motivo** (`test.skip(true, …)`,
+14 tests), no borrados: vuelven con el corte. Límite del método, dicho: es
+estático; un spec no listado que cayera al correr es STOP y sucesión, no
+expansión.
+
+### STOP parcial, declarado
+
+`src/walletRouteGuard.test.tsx:338` usa `#/cuenta` como «ruta card-only de
+referencia» para acreditar que `App` renderiza; con el corte esa ruta devuelve
+`null` y el test se pone rojo. **Está fuera de la allowlist y no se tocó.**
+Arreglo de una línea (`#/pagos`), pedido como sucesión durable. Hasta entonces
+la suite unitaria cierra con ese único rojo, y este candidato no es pushable.
+
+### Punto visual para Mati
+
+La pestaña Cuenta de Inicio queda con un solo launcher («Ver pagos») dentro
+del contenedor pensado para dos. No se rediseñó: es el alcance de la orden y
+Mati es el juez visual.
+
 ## 0.154.0 — Refresh contractual Backend 107/107 (2026-08-31)
 
 Orden `APP-FE-CONTRACT-MIRROR-107-REFRESH-01-CLAUDE-MANUAL-P183`, baseline

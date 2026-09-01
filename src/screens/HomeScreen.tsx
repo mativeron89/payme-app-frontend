@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { navigate } from '../router';
 import { readUnconfirmed, scopeForActor, useMoneyActor } from '../api/idempotency';
 import { useWalletRail } from '../api/walletRail';
+import { accountRailView, corteDePagosView } from '../api/releaseGates';
 import { countdownLong, formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { mesaStatusLabel, walletTxIcon, walletTxLabel } from '../utils/labels';
@@ -100,7 +101,12 @@ export function HomeScreen() {
   }, [actor]);
   // OLA 5D · saldo y movimientos son riel saldo: los habilita el BACKEND.
   // Arranca apagado, así que ni siquiera se PIDEN mientras la capability viaja.
-  const { walletRailEnabled } = useWalletRail();
+  const { walletRailEnabled, accountActivity } = useWalletRail();
+  // Los accesos de la pestaña Cuenta leen DOS gates distintos: el riel saldo NO
+  // apaga tarjetas (`showCards` de `accountRailView`, cableado acá por primera
+  // vez) y el corte del viernes SÍ (`corteDePagosView`). Ver `releaseGates.ts`.
+  const rail = accountRailView(walletRailEnabled, accountActivity);
+  const corte = corteDePagosView();
   const [tab, setTab] = useState<TabId>('cuenta');
   const [hojaAbierta, setHojaAbierta] = useState(false);
   const [balance, setBalance] = useState<BalanceResponse | null>(null);
@@ -195,7 +201,9 @@ export function HomeScreen() {
         <MountedCard seam={tab === TABS[0]!.id ? 'left' : tab === TABS.at(-1)!.id ? 'right' : undefined}>
           {tab === 'cuenta' && (
             <div className="launch-pair">
-              <Launcher icon="card" label={t('Ver tarjetas')} onClick={() => navigate('tarjetas')} />
+              {rail.showCards && corte.showCards && (
+                <Launcher icon="card" label={t('Ver tarjetas')} onClick={() => navigate('tarjetas')} />
+              )}
               <Launcher icon="receipt" label={t('Ver pagos')} onClick={() => navigate('pagos')} />
             </div>
           )}

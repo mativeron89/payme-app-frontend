@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { abrirMesaConLink, ingresar, tokenDeLaUrl } from './_app';
 
+const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+
 /**
  * ORDEN 5 · recorrido 3 · EL CAMINO DE PAGO, DE PUNTA A PUNTA.
  *
@@ -33,86 +35,49 @@ test.describe('el camino de pago completo', () => {
    * Ticket $840.00 ÷ 4 partes iguales = $210.00. Propina 15% = $31.50.
    * Total $241.50. Son centavos enteros: ningún redondeo raro en el medio.
    */
-  test('escanear → dividir → garantizar → elegir → pagar, con la plata cuadrando', async ({ page }) => {
+  /**
+   * 🔴 CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · el recorrido llegaba
+   * hasta el comprobante; ahora TERMINA EN LA SELECCIÓN, y eso es lo que se
+   * acredita: que ningún control lleve al pago, que el círculo cierre el flujo
+   * hacia Inicio, y que nada se haya cobrado. La versión que pagaba vuelve tal
+   * cual cuando el corte se levante; sus dos hermanas de abajo quedan salteadas
+   * con ese motivo, no borradas.
+   */
+  test('escanear → dividir → garantizar → elegir: el flujo termina en la selección, SIN pago', async ({ page }) => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
 
-    // La mesa nació garantizada (A-1): sin hold autorizado no hay mesa abierta.
-    // §1.7 movió ese hecho del badge "Garantizada ✓" al título de la pantalla,
-    // y le sumó el código de mesa como protagonista: si el hold no se hubiera
-    // autorizado, no habría ni pantalla ni código que copiar.
+    // La mesa nació garantizada (A-1): la garantía del organizador NO es parte
+    // de este corte y sigue en el camino.
     await expect(page.getByText(mesa.code, { exact: true })).toBeVisible();
 
-    // §1.7 · el CTA es el círculo con casa, que cierra el flujo. El atajo a la
-    // mesa —donde el organizador elige lo suyo— es **"Ver mesa"**, no "Volver":
-    // la mesa YA existe y está garantizada, así que retroceder a División está
-    // prohibido (B-06), y un control que dice "Volver" y no retrocede miente.
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     const seleccion = page.locator('.mesa-selection-title');
     await expect(seleccion).toContainText(mesa.code);
     await expect(seleccion).toContainText('partes iguales');
     await expect(page.getByText('$840.00')).toBeVisible();
 
-    // Marcar lo consumido en igualdad es informativo. El helper duplicado se
-    // retiró: lo acredita que el monto de Mi parte no se mueve.
-    await expect(page.getByText('no cambia lo que pagas')).toHaveCount(0);
-    // H-14 (2026-08-06): la fila muestra "Mi parte" ANTES de marcar nada — el
-    // monto es el del casillero y no depende de la selección, y el gate que
-    // exigía marcar contradecía la promesa de arriba. Acá vivía la afirmación
-    // vieja ("Marcá lo que consumiste" sin monto), que anclaba el gate
-    // contradictorio. Marcar sigue siendo posible, y sigue sin mover un peso:
+    // Marcar lo consumido sigue vivo y sigue sin mover un peso (H-14).
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await page.getByRole('radio', { name: '½', exact: true }).click();
     await expect(page.locator('.mi-frac-amt')).toHaveCount(0);
-
-    // §1.5 · el monto vive en su fila propia ARRIBA de la barra, no en la
-    // etiqueta del nav item — que dice "Continuar" y no cambia según el estado.
-    // Se ancla en el texto "Mi parte" y se mira SU fila: afirmar `$210.00`
-    // suelto no probaría que el énfasis y la división visual viven acá.
     const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
     await expect(filaMiParte).toContainText('$210.00');
 
-    await page.getByRole('button', { name: 'Continuar' }).click();
-    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+    // 🔴 EL CORTE · acá había un «Continuar» → «Pagar mi parte». No existe: ni
+    // el control, ni la pantalla, ni el selector de propina.
+    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
+    await expect(page.getByRole('radiogroup', { name: /propina/i })).toHaveCount(0);
 
-    // 🔴 §1.5 bis · ANTES DE ELEGIR NO HAY PROPINA. Acá la pantalla mostraba
-    // $241.50 —base + 15 % que nadie eligió— y ése era el defecto: un número
-    // en pantalla, y después en el cable, que la persona nunca decidió.
-    await expect(page.getByText('Tu parte · $210.00', { exact: true })).toBeVisible();
-    await expect(page.getByText('Elige tu propina', { exact: true })).toBeVisible();
-    await expect(page.getByText('Base $210.00', { exact: true })).toBeVisible();
-    await expect(page.getByText('Total a pagar', { exact: true }).locator('..')).toContainText('—');
+    // El círculo cierra el flujo hacia Inicio.
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
-    // Ninguna píldora rellena, **ni la de 0 %**: que el 0 % se vea elegido sólo
-    // cuando se elige es lo que lo distingue de "todavía no elegí".
-    const propinas = page.getByRole('radiogroup', { name: /propina/i });
-    await expect(propinas.getByRole('radio', { checked: true })).toHaveCount(0);
-    // El preset de 5 % entró con este cambio, no antes.
-    await expect(propinas.getByRole('radio', { name: '5%', exact: true })).toBeVisible();
-
-    // Tocar "Pagar" sin elegir NO envía nada, y tampoco deja a nadie encerrado:
-    // el botón sigue activo y lo que aparece es el pedido de elegir.
-    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
-    await expect(page.getByText('Elige tu propina para pagar')).toBeVisible();
-    await expect(page.getByText('¡Listo!')).toHaveCount(0);
-
-    // Recién con la elección hecha el total incluye la propina.
-    await propinas.getByRole('radio', { name: '15%', exact: true }).click();
-    await expect(page.getByText('Tu parte · $210.00', { exact: true })).toBeVisible();
-    await expect(page.getByText('Base $210.00 · propina $31.50', { exact: true })).toBeVisible();
-    await expect(page.getByText('$241.50', { exact: true }).first()).toBeVisible();
-
-    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
-
-    // El comprobante, que es lo último que ve la persona y lo que le queda.
-    await expect(page.getByText('¡Listo!')).toBeVisible();
-    const comprobante = await page.locator('body').innerText();
-    expect(comprobante).toContain(mesa.code);
-    expect(comprobante).toContain('$210.00');
-    expect(comprobante).toContain('$31.50');
-    expect(comprobante).toContain('$241.50');
-    // Y la mesa sigue abierta para el resto: pagar tu parte no la cierra.
-    expect(comprobante).toContain('La mesa sigue abierta para los demás');
+    // Y nada se cobró: la mesa sigue en $0.00 de $840.00.
+    await page.goto(`/#/mesa/${mesa.code}`);
+    await expect(page.getByText(/\$0\.00 de \$840\.00/)).toBeVisible();
   });
 
   /**
@@ -120,6 +85,7 @@ test.describe('el camino de pago completo', () => {
    * la parte exacta, alguien estaría pagando una propina que decidió no dejar.
    */
   test('la propina se recalcula: 0% deja el total en la parte exacta', async ({ page }) => {
+    test.skip(true, CORTE);
     await ingresar(page);
     await abrirMesaConLink(page);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
@@ -146,6 +112,7 @@ test.describe('el camino de pago completo', () => {
    * exactamente lo que el acta prohíbe.
    */
   test('elegir 0% es una elección: se marca, y paga', async ({ page }) => {
+    test.skip(true, CORTE);
     await ingresar(page);
     await abrirMesaConLink(page);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
