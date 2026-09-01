@@ -333,9 +333,13 @@ describe('ORDEN 4C · el árbol REAL no monta nada del riel saldo', () => {
   /**
    * El otro control: que el árbol renderice ALGO en las rutas legítimas. Si
    * `App` devolviera vacío siempre, los tests de ausencia serían humo.
+   *
+   * La ruta es `#/pagos` —la superficie card-only que el corte del viernes
+   * (APP-FE-FRIDAY-NO-PAY-GUARD-03) CONSERVA—. Era `#/cuenta`, que desde ese
+   * corte redirige a Inicio y ya no acredita que `App` renderice.
    */
   it('control positivo · una ruta card-only sí renderiza contenido', () => {
-    const { markup } = render('#/cuenta');
+    const { markup } = render('#/pagos');
     applyWalletRailConfig({ features: { wallet_rail: { enabled: false, account_activity: true } } });
     const salida = renderToStaticMarkup(<App />);
     expect(markup.length).toBeGreaterThan(200);
