@@ -1,7 +1,17 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
+import { corteDePagosView } from '../src/api/releaseGates';
 
-const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+/**
+ * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
+ * necesitan el checkout o el alta de tarjeta DUERMEN mientras el gate esté
+ * activo, y leen el MISMO gate que la app: cuando `pagosCortados` pase a
+ * `false`, vuelven solos, sin editar este archivo. Nunca un skip con `true`
+ * fijo: eso es evidencia que no vuelve. `src/corteGuard.test.ts` censa cada
+ * uno de estos skips y pone la suite roja ante uno nuevo o permanente.
+ */
+const CORTE = corteDePagosView();
+const MOTIVO = 'CORTE DEL VIERNES: el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve solo cuando corteDePagosView().pagosCortados sea false.';
 
 /**
  * LA COMA ×100, EN EL INPUT REAL (ORDEN 2-A.3).
@@ -15,7 +25,7 @@ const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout de
  * cobra $1,429.00 y cae.
  */
 test('tipear "12,34" en el input real deja 1234 centavos, no 123400', async ({ page }) => {
-  test.skip(true, CORTE);
+  test.skip(CORTE.pagosCortados, MOTIVO);
   await ingresar(page);
   await page.goto('/#/mesa/PA-2847');
 

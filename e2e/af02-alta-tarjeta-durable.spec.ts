@@ -1,6 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
+import { corteDePagosView } from '../src/api/releaseGates';
 
-const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+/**
+ * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
+ * necesitan el checkout o el alta de tarjeta DUERMEN mientras el gate esté
+ * activo, y leen el MISMO gate que la app: cuando `pagosCortados` pase a
+ * `false`, vuelven solos, sin editar este archivo. Nunca un skip con `true`
+ * fijo: eso es evidencia que no vuelve. `src/corteGuard.test.ts` censa cada
+ * uno de estos skips y pone la suite roja ante uno nuevo o permanente.
+ */
+const CORTE = corteDePagosView();
+const MOTIVO = 'CORTE DEL VIERNES: el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve solo cuando corteDePagosView().pagosCortados sea false.';
 
 interface CardApiProbe {
   uuid: number;
@@ -52,7 +62,7 @@ async function instalarEspiasDeAlta(page: Page): Promise<void> {
 }
 
 test('AF-02 · una key fallida no fabrica continuidad ni atraviesa un rail luego cerrado', async ({ page }) => {
-  test.skip(true, CORTE);
+  test.skip(CORTE.pagosCortados, MOTIVO);
   await loginDelSeed(page);
   await instalarEspiasDeAlta(page);
 
@@ -111,7 +121,7 @@ test('AF-02 · una key fallida no fabrica continuidad ni atraviesa un rail luego
 
 for (const stage of ['setup', 'attach'] as const) {
   test(`AF-02 · continuidad ${stage} durable sobrevive con el rail cerrado`, async ({ page }) => {
-  test.skip(true, CORTE);
+    test.skip(CORTE.pagosCortados, MOTIVO);
     await loginDelSeed(page);
 
     await page.evaluate(async (durableStage) => {

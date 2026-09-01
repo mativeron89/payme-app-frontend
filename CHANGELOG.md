@@ -11,15 +11,23 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
-## 0.155.0 — Corte del viernes · producción pública sin pagos (2026-09-01)
+## 0.155.0 — Corte del viernes · tramo frontend PARCIAL del corte de pagos (2026-09-01)
 
-Orden `APP-FE-FRIDAY-NO-PAY-GUARD-02-CLAUDE`, sucedida por
-`APP-FE-FRIDAY-NO-PAY-GUARD-03-CLAUDE` (un path más y la secuencia de commits),
+Orden `APP-FE-FRIDAY-NO-PAY-GUARD-02-CLAUDE`, sucedida por la `03` (un path más
+y la secuencia de commits) y por la `04` (evidencia dormida y garantía viva),
 baseline `8e3f320c1c1dfd180c9b6db1a99011626275c55e`. **Sin push, sin deploy, sin provider,
 sin DB y sin secreto.** No se verificó CI remoto ni producción, y nada de esto
-lo afirma. Decisión ratificada por Mati el 2026-09-01: *«Producción Pública sin
-pago»* — la app pública no incluye checkout, garantía ni cobro; el flujo termina
-tras la selección del consumo.
+lo afirma.
+
+🔴 **Este SHA es un TRAMO FRONTEND PARCIAL del corte, y NO es publicable por sí
+solo.** La decisión ratificada por Mati el 2026-09-01 —*«Producción Pública sin
+pago»*: la app pública sin checkout, garantía ni cobro— es el objetivo. Lo que
+este tramo hace es cerrar, en la superficie de este front, el checkout del
+participante y el alta de tarjeta. Lo que NO hace: retirar la garantía del
+organizador en `#/scan` (A-1 sigue ratificado y sin enmienda) ni el cobro del
+lado del backend, que sigue aceptando pago, lock y setup-intent. Publicar este
+SHA solo no produce «producción sin pagos»: el cierre sistémico es owner-first y
+sigue abierto.
 
 ### Qué cierra
 
@@ -82,10 +90,18 @@ el corte mismo se **reescribieron** para acreditarlo (`pago-completo` 1,
 `stepper-comensales` 1, `af-rediseno-12-censo-visual`, `bell-guards`).
 Recorridos cuyo objeto es la pantalla de pago o el alta de tarjeta —propina,
 reconfirmación, tarjeta guardada por defecto, AF-02, ventana de atribución,
-composición de Pagar/Comprobante— quedan **salteados con motivo** (`test.skip(true, …)`,
-14 tests), no borrados: vuelven con el corte. Límite del método, dicho: es
-estático; un spec no listado que cayera al correr es STOP y sucesión, no
-expansión.
+composición de Pagar/Comprobante— quedan **dormidos detrás del MISMO gate que
+la app**: `test.skip(CORTE.pagosCortados, MOTIVO)` con `CORTE =
+corteDePagosView()` importado de `releaseGates.ts` (13 call sites → 14 casos;
+el de AF-02 vive en un `for` de dos). No se borran y no dependen de nadie:
+cuando `pagosCortados` pase a `false` vuelven solos, sin editar los specs.
+`corteGuard.test.ts` los censa fail-closed sobre TODO `e2e/`: conjunto exacto
+de dormidos en las dos direcciones, cero skips permanentes ni formas
+prohibidas, casos derivados del árbol. La garantía de `#/scan` —que el corte
+NO retira— tiene su recorrido ACTIVO en `guardar-tarjeta-default`: llega a
+«Garantiza la mesa» y afirma el checkbox desmarcado, sin garantizar ni pagar.
+Límite del método del censo de specs, dicho: es estático; un spec no listado
+que cayera al correr es STOP y sucesión, no expansión.
 
 ### STOP parcial, resuelto por sucesión
 
@@ -94,7 +110,8 @@ allowlist— se puso rojo: usaba `#/cuenta` como «ruta card-only de referencia�
 para acreditar que `App` renderiza, y con el corte esa ruta devuelve `null`.
 No se tocó bajo ese lease: se declaró como STOP parcial y se pidió sucesión.
 La sucesión `APP-FE-FRIDAY-NO-PAY-GUARD-03-CLAUDE` agregó ese único path (33)
-y ordenó la secuencia: primero el commit atómico con los 32 paths del lease 02,
+y ordenó la secuencia: primero el commit atómico con los 31 paths que el lease 02
+cambió (su allowlist era de 32; `censoSuperficiesPago.test.ts` no necesitó cambios),
 después un commit sucesor sólo con la corrección —el fixture pasa a `#/pagos`,
 la superficie card-only que el corte conserva; el objeto del test y
 `showCards === true` no cambian—. Ese commit sucesor es
@@ -102,6 +119,18 @@ la superficie card-only que el corte conserva; el objeto del test y
 entera. Este párrafo se corrigió en un tercer commit, sólo de este archivo,
 porque la redacción anterior describía el estado intermedio como si fuera el
 final.
+
+### Commit 4 · evidencia dormida, no salteada (sucesión 04)
+
+Codex rechazó el candidato `aba191dc8dcac984525556349f643f77e07647ee` —con
+todos los gates verdes reproducidos en clon aislado y sin bypass hacia el
+checkout— por un motivo de EVIDENCIA, no de comportamiento: los 14 casos de
+Playwright dormían con un `true` fijo y no volverían solos al levantar el gate;
+uno de ellos dormía además la afirmación de la garantía, que el corte conserva;
+y esta entrada afirmaba el retiro de garantía/cobro que este tramo no hace, y
+confundía los 31 paths del commit 1 con los 32 de la allowlist. El commit 4
+corrige sólo eso —ocho specs, el censo en `corteGuard.test.ts` y esta entrada—
+sin tocar producción: el comportamiento del candidato es el mismo.
 
 ### Punto visual para Mati
 

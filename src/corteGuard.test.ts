@@ -463,3 +463,294 @@ describe('🔴 corte · App.tsx delega en el guard', () => {
     expect(texto).not.toContain("replaceRoute('home')");
   });
 });
+
+// ─── Evidencia dormida, censada ──────────────────────────────────────────────
+
+/**
+ * 🔴 ORDEN 04 · LOS SKIPS DE PLAYWRIGHT LEEN EL GATE, Y ESTÁN CENSADOS.
+ *
+ * El candidato anterior dormía 14 casos con un `true` fijo, y tres auditorías
+ * ciegas dijeron lo mismo: esa evidencia no vuelve sola al levantar el gate.
+ * Ahora cada skip es `test.skip(CORTE.pagosCortados, MOTIVO)` con
+ * `CORTE = corteDePagosView()` importado de `releaseGates.ts` — el MISMO objeto
+ * que lee la app—, y este censo lo fija fail-closed:
+ *
+ *   · la población es TODO `e2e/*.spec.ts`, no una lista de los que duermen;
+ *   · un skip sólo es válido como PRIMERA sentencia de un `test(...)`, con el
+ *     predicado EXACTO; cualquier otra forma —`true`, `fixme`, `describe.skip`,
+ *     `only`, la forma declarativa `test.skip('título', fn)`— es rojo;
+ *   · el conjunto (archivo, título) de los dormidos es EXACTO en las dos
+ *     direcciones: uno de más o uno de menos es rojo;
+ *   · los casos se DERIVAN: un `test` dentro de un `for … of [a, b]` cuenta
+ *     por la longitud del array (af02: un call site, dos casos);
+ *   · la garantía de `#/scan` —que el corte NO retira— tiene su recorrido
+ *     ACTIVO, sin skip, afirmado por título y por contenido.
+ *
+ * Y con controles positivos sobre fuentes sintéticas: el clasificador ve el
+ * `true` fijo, la forma declarativa y el `fixme`, o este censo no prueba nada.
+ */
+describe('🔴 corte · los skips de Playwright leen el gate y están censados', () => {
+  const E2E = import.meta.glob('/e2e/*.spec.ts', {
+    query: '?raw', import: 'default', eager: true,
+  }) as Record<string, string>;
+
+  const PREDICADO = 'CORTE.pagosCortados';
+  const IMPORT_DEL_GATE = "from '../src/api/releaseGates'";
+
+  /** Los que duermen MIENTRAS el gate esté activo. Título = texto fuente del primer argumento. */
+  const DORMIDOS: Record<string, readonly string[]> = {
+    '/e2e/af-correcciones-visuales-01.spec.ts': [
+      "'Pagar separa resumen, propina, método y total sin duplicar el monto'",
+    ],
+    '/e2e/af-diseno-02.spec.ts': [
+      "'Pagar centra el título, contiene destinatario y usa tarjeta en el CTA'",
+      "'Comprobante solapa el cierre, rotula la tarjeta y conserva sus acciones'",
+    ],
+    '/e2e/af02-alta-tarjeta-durable.spec.ts': [
+      "'AF-02 · una key fallida no fabrica continuidad ni atraviesa un rail luego cerrado'",
+      '`AF-02 · continuidad ${stage} durable sobrevive con el rail cerrado`',
+    ],
+    '/e2e/atribucion-ventana.spec.ts': [
+      "'🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se cierra'",
+      "'🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo'",
+    ],
+    '/e2e/guardar-tarjeta-default.spec.ts': [
+      "'nace desmarcado en garantía y en pago, y marcarlo sigue guardando'",
+      "'sin marcar, la tarjeta NO aparece: el default es una decisión, no una decoración'",
+    ],
+    '/e2e/pago-completo.spec.ts': [
+      "'la propina se recalcula: 0% deja el total en la parte exacta'",
+      "'elegir 0% es una elección: se marca, y paga'",
+    ],
+    '/e2e/propina-coma.spec.ts': [
+      '\'tipear "12,34" en el input real deja 1234 centavos, no 123400\'',
+    ],
+    '/e2e/propina-reconfirmacion.spec.ts': [
+      '\'la propina desmedida pide reconfirmar: editar conserva el valor, y "Sí, pagar" paga\'',
+    ],
+  };
+  const GARANTIA_ACTIVA = {
+    archivo: '/e2e/guardar-tarjeta-default.spec.ts',
+    titulo: "'la garantía de #/scan sigue viva bajo el corte: el checkbox existe y nace desmarcado'",
+  };
+
+  interface Hallazgo {
+    archivo: string;
+    titulo: string;
+    /** `gate` = primera sentencia `test.skip(CORTE.pagosCortados, …)`; `ninguno` = sin skip. */
+    skip: 'gate' | 'ninguno';
+    /** Cuántos casos genera este call site: 1, o la longitud del array del `for … of` que lo envuelve. */
+    casos: number;
+    /** Algo dentro del test que no es la forma permitida. */
+    ilegales: string[];
+  }
+
+  function* recorrer(n: ts.Node): Generator<ts.Node> {
+    yield n;
+    for (const h of n.getChildren()) yield* recorrer(h);
+  }
+
+  /** Desenvuelve `as const` y paréntesis; resuelve un identificador a su `const X = [...]` de nivel superior. */
+  function arrayEnumerable(expr: ts.Expression, sf: ts.SourceFile): ts.ArrayLiteralExpression | null {
+    let e: ts.Expression = expr;
+    while (ts.isAsExpression(e) || ts.isParenthesizedExpression(e) || ts.isSatisfiesExpression(e)) e = e.expression;
+    if (ts.isArrayLiteralExpression(e)) return e;
+    if (ts.isIdentifier(e)) {
+      for (const st of sf.statements) {
+        if (!ts.isVariableStatement(st)) continue;
+        for (const d of st.declarationList.declarations) {
+          if (ts.isIdentifier(d.name) && d.name.text === e.text && d.initializer) return arrayEnumerable(d.initializer, sf);
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Sólo se DERIVA para los dormidos: un test activo dentro de un `for` sobre
+   * algo no enumerable es legítimo (ej. `inicio-accesos`) y no es asunto de
+   * este censo. Un DORMIDO dentro de un bucle no derivable sí es rojo: sus
+   * casos no se podrían contar.
+   */
+  function casosDe(test: ts.Node, sf: ts.SourceFile): number {
+    let p: ts.Node | undefined = test.parent;
+    while (p) {
+      if (ts.isForOfStatement(p)) {
+        const arr = arrayEnumerable(p.expression, sf);
+        if (arr) return arr.elements.length;
+        throw new Error(`for…of no enumerable en ${sf.fileName}: ${p.expression.getText(sf)}`);
+      }
+      if (ts.isForStatement(p) || ts.isForInStatement(p) || ts.isWhileStatement(p)) {
+        throw new Error(`bucle no derivable alrededor de un test en ${sf.fileName}`);
+      }
+      p = p.parent;
+    }
+    return 1;
+  }
+
+  /** Censa un spec: cada `test(...)`, su skip (o no), y todo lo que no sea la forma permitida. */
+  function censarSkips(nombre: string, crudo: string): { tests: Hallazgo[]; ilegalesSueltos: string[] } {
+    const sf = ts.createSourceFile(nombre, crudo, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const tests: Hallazgo[] = [];
+    const ilegalesSueltos: string[] = [];
+    const cuerposDeTests = new Set<ts.Node>();
+
+    for (const n of recorrer(sf)) {
+      if (!ts.isCallExpression(n)) continue;
+      const callee = n.expression.getText(sf);
+      // Formas que nunca pueden existir en la suite, estén donde estén.
+      if (/^test\.(fixme|only)$/.test(callee) || /\.describe\.(skip|only|fixme)$/.test(callee) || callee === 'test.describe.skip') {
+        ilegalesSueltos.push(`${nombre}: ${callee}(…)`);
+        continue;
+      }
+      if (callee === 'test' && n.arguments.length >= 2) {
+        const [tituloArg, fn] = n.arguments;
+        if (!tituloArg || !fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) || !fn.body || !ts.isBlock(fn.body)) continue;
+        cuerposDeTests.add(fn.body);
+        const h: Hallazgo = { archivo: nombre, titulo: tituloArg.getText(sf), skip: 'ninguno', casos: 1, ilegales: [] };
+        fn.body.statements.forEach((st, i) => {
+          if (!ts.isExpressionStatement(st) || !ts.isCallExpression(st.expression)) return;
+          const c = st.expression;
+          if (c.expression.getText(sf) !== 'test.skip') return;
+          const args = c.arguments.map((a) => a.getText(sf));
+          if (i === 0 && args.length === 2 && args[0] === PREDICADO) { h.skip = 'gate'; return; }
+          h.ilegales.push(`test.skip(${args.join(', ')}) en la sentencia ${i}`);
+        });
+        if (h.skip === 'gate') h.casos = casosDe(n, sf);
+        tests.push(h);
+      }
+      if (callee === 'test.skip') {
+        // Un skip que NO sea la primera sentencia de un test ya quedó anotado arriba;
+        // acá se caza la forma DECLARATIVA (`test.skip('título', fn)`) y cualquier
+        // skip fuera de un cuerpo de test.
+        let dentro = false;
+        let p: ts.Node | undefined = n.parent;
+        while (p) { if (cuerposDeTests.has(p)) { dentro = true; break; } p = p.parent; }
+        const primer = n.arguments[0];
+        if (!dentro || (primer && ts.isStringLiteralLike(primer))) {
+          ilegalesSueltos.push(`${nombre}: test.skip(${n.arguments.map((a) => a.getText(sf)).join(', ')})`);
+        }
+      }
+    }
+    return { tests, ilegalesSueltos };
+  }
+
+  it('la población es TODO e2e/*.spec.ts, y no está vacía', () => {
+    expect(Object.keys(E2E).length, 'el glob no encontró los specs').toBeGreaterThan(30);
+    for (const archivo of Object.keys(DORMIDOS)) expect(E2E[archivo], `no existe ${archivo}`).toBeTruthy();
+    expect(E2E[GARANTIA_ACTIVA.archivo]).toBeTruthy();
+  });
+
+  it('🔴 ningún skip permanente ni forma prohibida en TODA la suite de navegador', () => {
+    const ilegales: string[] = [];
+    for (const [archivo, crudo] of Object.entries(E2E)) {
+      const { tests, ilegalesSueltos } = censarSkips(archivo, crudo);
+      ilegales.push(...ilegalesSueltos);
+      for (const t of tests) ilegales.push(...t.ilegales.map((x) => `${archivo} › ${t.titulo}: ${x}`));
+      // Y a nivel texto, sin parser: el `true` fijo no puede existir ni escondido.
+      const codigo = crudo.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      if (codigo.includes('test.skip(true')) ilegales.push(`${archivo}: test.skip(true…)`);
+    }
+    expect(ilegales, `skips permanentes o formas prohibidas:\n  ${ilegales.join('\n  ')}`).toEqual([]);
+  });
+
+  it('🔴 el conjunto (archivo, título) de los dormidos es EXACTO, en las dos direcciones', () => {
+    const hallados: Record<string, string[]> = {};
+    for (const [archivo, crudo] of Object.entries(E2E)) {
+      for (const t of censarSkips(archivo, crudo).tests) {
+        if (t.skip === 'gate') (hallados[archivo] ??= []).push(t.titulo);
+      }
+    }
+    const esperado = Object.fromEntries(Object.entries(DORMIDOS).map(([k, v]) => [k, [...v].sort()]));
+    const medido = Object.fromEntries(Object.entries(hallados).map(([k, v]) => [k, [...v].sort()]));
+    expect(medido).toEqual(esperado);
+  });
+
+  it('🔴 13 call sites → 14 casos, derivados del árbol; y todos leen el MISMO gate', () => {
+    let callSites = 0;
+    let casos = 0;
+    for (const [archivo, crudo] of Object.entries(E2E)) {
+      const dormidos = censarSkips(archivo, crudo).tests.filter((t) => t.skip === 'gate');
+      if (dormidos.length === 0) continue;
+      callSites += dormidos.length;
+      casos += dormidos.reduce((s, t) => s + t.casos, 0);
+      // El gate no se copia ni se redeclara: se IMPORTA del módulo de producción.
+      expect(crudo, `${archivo} no importa el gate de releaseGates`).toContain(IMPORT_DEL_GATE);
+      expect(crudo, `${archivo} no instancia CORTE desde corteDePagosView()`).toContain('const CORTE = corteDePagosView();');
+    }
+    expect(callSites).toBe(13);
+    expect(casos).toBe(14);
+    // Lo que Playwright tiene que reportar como `skipped`, DERIVADO del gate real.
+    const dormidosEsperados = corteDePagosView().pagosCortados ? 14 : 0;
+    expect(dormidosEsperados, 'con el gate activo, Playwright debe reportar 14 skipped').toBe(14);
+  });
+
+  it('🔴 la garantía de #/scan tiene un recorrido ACTIVO, sin skip, que afirma el checkbox desmarcado', () => {
+    const crudo = E2E[GARANTIA_ACTIVA.archivo] as string;
+    const activo = censarSkips(GARANTIA_ACTIVA.archivo, crudo).tests.find((t) => t.titulo === GARANTIA_ACTIVA.titulo);
+    expect(activo, 'no existe el recorrido activo de la garantía').toBeDefined();
+    expect(activo!.skip).toBe('ninguno');
+    expect(activo!.ilegales).toEqual([]);
+    // Contenido, no sólo título: llega a la garantía y afirma el checkbox.
+    const sf = ts.createSourceFile('g', crudo, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const cuerpo = [...recorrer(sf)].find((n) => ts.isCallExpression(n) && n.expression.getText(sf) === 'test' && n.arguments[0]?.getText(sf) === GARANTIA_ACTIVA.titulo)!.getText(sf);
+    expect(cuerpo).toContain("'Garantiza la mesa'");
+    expect(cuerpo).toContain('not.toBeChecked()');
+    expect(cuerpo).not.toContain("'Garantizar'");
+    expect(cuerpo).not.toContain("'Pagar'");
+  });
+
+  /**
+   * ⭐ CONTROLES POSITIVOS · el clasificador VE lo que promete cazar. Sin esto,
+   * «cero ilegales» no distingue *no hay* de *no los veo*.
+   */
+  it('⭐ SONDA · el clasificador caza el true fijo, la forma declarativa, el fixme y el skip tardío', () => {
+    const sonda = `
+      import { test } from '@playwright/test';
+      test('fijo', async () => { test.skip(true, 'x'); });
+      test.skip('declarativo', async () => {});
+      test.fixme('arreglar', async () => {});
+      test('tardío', async () => { const a = 1; test.skip(CORTE.pagosCortados, MOTIVO); void a; });
+      test('bien', async () => { test.skip(CORTE.pagosCortados, MOTIVO); });
+      test('sin skip', async () => {});
+    `;
+    const { tests, ilegalesSueltos } = censarSkips('/sonda.spec.ts', sonda);
+    expect(tests.find((t) => t.titulo === "'fijo'")!.ilegales).toEqual(["test.skip(true, 'x') en la sentencia 0"]);
+    expect(tests.find((t) => t.titulo === "'tardío'")!.ilegales).toEqual(['test.skip(CORTE.pagosCortados, MOTIVO) en la sentencia 1']);
+    expect(tests.find((t) => t.titulo === "'bien'")!.skip).toBe('gate');
+    expect(tests.find((t) => t.titulo === "'sin skip'")!.skip).toBe('ninguno');
+    expect(ilegalesSueltos).toEqual([
+      "/sonda.spec.ts: test.skip('declarativo', async () => {})",
+      '/sonda.spec.ts: test.fixme(…)',
+    ]);
+  });
+
+  it('⭐ SONDA · los casos se derivan del for…of, y un bucle no enumerable es rojo', () => {
+    const conLoop = `
+      import { test } from '@playwright/test';
+      for (const s of ['a', 'b', 'c'] as const) {
+        test(\`t \${s}\`, async () => { test.skip(CORTE.pagosCortados, MOTIVO); });
+      }
+    `;
+    expect(censarSkips('/loop.spec.ts', conLoop).tests[0]!.casos).toBe(3);
+    // Un dormido dentro de un bucle que no se puede enumerar es rojo…
+    const opaco = `
+      import { test } from '@playwright/test';
+      for (const s of casos()) { test(\`t \${s}\`, async () => { test.skip(CORTE.pagosCortados, MOTIVO); }); }
+    `;
+    expect(() => censarSkips('/opaco.spec.ts', opaco)).toThrow(/no enumerable/);
+    // …pero un test ACTIVO en ese mismo bucle no es asunto del censo.
+    const activoOpaco = `
+      import { test } from '@playwright/test';
+      for (const s of casos()) { test(\`t \${s}\`, async () => {}); }
+    `;
+    expect(censarSkips('/activo.spec.ts', activoOpaco).tests[0]!.skip).toBe('ninguno');
+    // Y un identificador que apunta a un array de nivel superior SÍ se enumera.
+    const porIdentificador = `
+      import { test } from '@playwright/test';
+      const CASOS = ['x', 'y'] as const;
+      for (const s of CASOS) { test(\`t \${s}\`, async () => { test.skip(CORTE.pagosCortados, MOTIVO); }); }
+    `;
+    expect(censarSkips('/ident.spec.ts', porIdentificador).tests[0]!.casos).toBe(2);
+  });
+});

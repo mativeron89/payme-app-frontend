@@ -1,7 +1,17 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
+import { corteDePagosView } from '../src/api/releaseGates';
 
-const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+/**
+ * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
+ * necesitan el checkout o el alta de tarjeta DUERMEN mientras el gate esté
+ * activo, y leen el MISMO gate que la app: cuando `pagosCortados` pase a
+ * `false`, vuelven solos, sin editar este archivo. Nunca un skip con `true`
+ * fijo: eso es evidencia que no vuelve. `src/corteGuard.test.ts` censa cada
+ * uno de estos skips y pone la suite roja ante uno nuevo o permanente.
+ */
+const CORTE = corteDePagosView();
+const MOTIVO = 'CORTE DEL VIERNES: el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve solo cuando corteDePagosView().pagosCortados sea false.';
 
 /**
  * §1.5 bis (2026-08-06) · PROPINA > 3× LA BASE: SE RECONFIRMA, NUNCA SE BLOQUEA.
@@ -20,7 +30,7 @@ const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout de
  */
 
 test('la propina desmedida pide reconfirmar: editar conserva el valor, y "Sí, pagar" paga', async ({ page }) => {
-  test.skip(true, CORTE);
+  test.skip(CORTE.pagosCortados, MOTIVO);
   await ingresar(page);
   await page.goto('/#/mesa/PA-2847');
 

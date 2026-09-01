@@ -16,8 +16,18 @@
  */
 import { test, expect } from '@playwright/test';
 import { ingresar, abrirMesaConLink } from './_app';
+import { corteDePagosView } from '../src/api/releaseGates';
 
-const CORTE = 'CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02): el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve cuando el corte se levante.';
+/**
+ * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
+ * necesitan el checkout o el alta de tarjeta DUERMEN mientras el gate esté
+ * activo, y leen el MISMO gate que la app: cuando `pagosCortados` pase a
+ * `false`, vuelven solos, sin editar este archivo. Nunca un skip con `true`
+ * fijo: eso es evidencia que no vuelve. `src/corteGuard.test.ts` censa cada
+ * uno de estos skips y pone la suite roja ante uno nuevo o permanente.
+ */
+const CORTE = corteDePagosView();
+const MOTIVO = 'CORTE DEL VIERNES: el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve solo cuando corteDePagosView().pagosCortados sea false.';
 
 /**
  * Demora todo digest: el journal se vuelve lento, las tarjetas no.
@@ -39,7 +49,7 @@ async function frenarJournal(page: import('@playwright/test').Page, ms: number) 
 }
 
 test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se cierra', async ({ page }) => {
-  test.skip(true, CORTE);
+  test.skip(CORTE.pagosCortados, MOTIVO);
   await ingresar(page);
   await abrirMesaConLink(page);
   // 🔴 El freno entra ANTES de «Continuar», y ese detalle es el
@@ -154,7 +164,7 @@ test('🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se ci
  * las tres digan **lo mismo**: porcentaje, destinatario e importe.
  */
 test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo', async ({ page, context }) => {
-  test.skip(true, CORTE);
+  test.skip(CORTE.pagosCortados, MOTIVO);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await ingresar(page);
   const mesa = await abrirMesaConLink(page);
