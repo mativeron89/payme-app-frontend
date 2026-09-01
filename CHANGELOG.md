@@ -13,8 +13,9 @@
 
 ## 0.155.0 — Corte del viernes · producción pública sin pagos (2026-09-01)
 
-Orden `APP-FE-FRIDAY-NO-PAY-GUARD-02-CLAUDE`, baseline
-`8e3f320c1c1dfd180c9b6db1a99011626275c55e`. **Sin push, sin deploy, sin provider,
+Orden `APP-FE-FRIDAY-NO-PAY-GUARD-02-CLAUDE`, sucedida por
+`APP-FE-FRIDAY-NO-PAY-GUARD-03-CLAUDE` (un path más y la secuencia de commits),
+baseline `8e3f320c1c1dfd180c9b6db1a99011626275c55e`. **Sin push, sin deploy, sin provider,
 sin DB y sin secreto.** No se verificó CI remoto ni producción, y nada de esto
 lo afirma. Decisión ratificada por Mati el 2026-09-01: *«Producción Pública sin
 pago»* — la app pública no incluye checkout, garantía ni cobro; el flujo termina
@@ -86,13 +87,21 @@ composición de Pagar/Comprobante— quedan **salteados con motivo** (`test.skip
 estático; un spec no listado que cayera al correr es STOP y sucesión, no
 expansión.
 
-### STOP parcial, declarado
+### STOP parcial, resuelto por sucesión
 
-`src/walletRouteGuard.test.tsx:338` usa `#/cuenta` como «ruta card-only de
-referencia» para acreditar que `App` renderiza; con el corte esa ruta devuelve
-`null` y el test se pone rojo. **Está fuera de la allowlist y no se tocó.**
-Arreglo de una línea (`#/pagos`), pedido como sucesión durable. Hasta entonces
-la suite unitaria cierra con ese único rojo, y este candidato no es pushable.
+Durante el lease 02, `src/walletRouteGuard.test.tsx:338` —fuera de la
+allowlist— se puso rojo: usaba `#/cuenta` como «ruta card-only de referencia»
+para acreditar que `App` renderiza, y con el corte esa ruta devuelve `null`.
+No se tocó bajo ese lease: se declaró como STOP parcial y se pidió sucesión.
+La sucesión `APP-FE-FRIDAY-NO-PAY-GUARD-03-CLAUDE` agregó ese único path (33)
+y ordenó la secuencia: primero el commit atómico con los 32 paths del lease 02,
+después un commit sucesor sólo con la corrección —el fixture pasa a `#/pagos`,
+la superficie card-only que el corte conserva; el objeto del test y
+`showCards === true` no cambian—. Ese commit sucesor es
+`3ce47c8a2496ddce662c1ee3f8a47cdc3e81631d`, y con él la suite unitaria cierra
+entera. Este párrafo se corrigió en un tercer commit, sólo de este archivo,
+porque la redacción anterior describía el estado intermedio como si fuera el
+final.
 
 ### Punto visual para Mati
 
