@@ -6,6 +6,64 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-02**.
+- Commit exacto y procedencia del CONTENIDO:
+  **`1851acbb993b935f7a89c3c0fdc6e0b1163bc2a9`**
+  (`C4 - A` · App Backend v2.85.0 · `GET /api/mesas/mine`).
+- Commit que republicó el inventario autoritativo:
+  **`65c13a521e28145238bd4c3824720bad88552f8a`** (`C4 - B`).
+  Como siempre, el inventario declara el commit del contenido, no su propio commit.
+
+🔴 **ESTE PIN ES PROVISIONAL Y EL SHA DEL DUEÑO NO ESTÁ ADOPTADO NI AUDITADO.**
+No es la situación normal de este archivo y por eso se escribe primero. Los cuatro
+commits del dueño (C1–C4) están **entregados y encolados a Codex sin GREEN**. La
+autoridad para espejar igual es el dictamen de Codex del 2026-09-02 09:48
+(SHA-256 `098d61fa8c5ee8d0ea9d44c756c974a6b1ef12fac8437644bffd8ef219ad454a`), §2
+**opción (b): pin provisional con assert de drift y re-pin obligatorio**. Si el SHA
+que Codex audite finalmente difiere de `1851acbb…`, **este espejo se regenera y sus
+gates se repiten**; adoptarlo hoy no lo convierte en adoptado.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior de 107
+cambian **once** —`contract/social-auth-v1.json`, `db/schema.sql`, `routes/auth.js`,
+`routes/config.js`, `routes/mesas.js`, `routes/social-auth.js`, `schemas/index.js`,
+`services/externalIdentities.js`, `services/moneyRail.js`,
+`services/signupInvitations.js` y `services/signupRateLimit.js`—; **cero nuevos, cero
+que salgan y cero renombrados**. Los otros 96 quedan byte-idénticos y se declaran sin
+cambio por inventario, no por inspección.
+
+Este refresh es **mecánico**: adopta el inventario owner-first que publica App Backend
+y no toca `src/`, `e2e/`, el verificador ni el runtime del Frontend.
+
+**Límite del refresh, explícito: espejar bytes no habilita nada.** Traer el contrato de
+alta pública, del modo monetario `disabled` o del histórico propio **no enciende ninguna
+de esas superficies acá**: cada una es un tramo con su propia orden. El mirror acredita
+únicamente contrato local: no afirma soporte, Stripe real, dominio, staging, CI remoto,
+deploy ni producción.
+
+### Verificación de esta adopción, con su resultado literal
+
+| gate | resultado |
+|---|---|
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `1851acb`** · exit 0 |
+| `--vigencia` | **exit 1 · DECLARADO, no es condición de este tramo** |
+
+**`--paridad` es el assert de drift que exige el dictamen**: compara contra el commit
+que el inventario declara, o sea contra el pin exacto.
+
+⚠️ **Por qué `--vigencia` sale en rojo, y por qué su propio mensaje no describe este
+caso.** El script compara contra el `HEAD` del repo hermano y, al fallar, dice
+*«la fuente avanzó»*. **Acá pasa lo contrario**: el `HEAD` de `main` del dueño es
+`4b6a9f55cc30126d36bbc66bd88b9ba890146fd5` (2026-08-31), medido, y es **ANCESTRO** del
+pin — los commits C1–C4 viven en su worktree y todavía no están en `main`. El rojo
+significa **«el contenido pineado aún no llegó a `main` del dueño»**, no un desvío del
+espejo ni una fuente más nueva. Es exactamente la distinción que este verificador separa
+a propósito en dos modos, y la razón por la que el PASS de este tramo es
+integridad + paridad.
+
+### Refresh anterior · 2026-08-31 (mirror 107 owner-first · v2.79.0)
+
+
 - Fecha del refresh: **2026-08-31**.
 - Commit exacto y procedencia del CONTENIDO:
   **`ca5251eef6eebce092c1f5cb1d2177a9d76a3879`**

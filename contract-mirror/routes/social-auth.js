@@ -16,6 +16,17 @@ const { signupRateLimitMiddleware } = require('../services/signupRateLimit');
 
 const router = express.Router();
 const { validateBody } = schemas;
+
+/**
+ * C2b · los schemas que dependen de una capability se eligen EN CADA REQUEST.
+ * Montados como `validateBody(schemas.xSchema())` se evaluaban al cargar el
+ * router, así que el DTO quedaba congelado con el valor que la bandera tenía al
+ * arrancar el proceso: prenderla en caliente no abría nada y apagarla no
+ * cerraba nada, mientras el contrato prometía `read_at: every_request`. La
+ * indirección es la misma que usa `routes/auth.js` para el alta directa.
+ */
+const validarPorRequest = (elegirSchema) => (req, res, next) =>
+  validateBody(elegirSchema())(req, res, next);
 const socialSignupRateLimit = signupRateLimitMiddleware({ db: pool });
 
 function googleDark(action) {
@@ -83,7 +94,7 @@ function socialError(res, error, registration = false) {
 }
 
 router.post('/google/register', googleDark('registration'), socialSignupRateLimit, requirePrivacyNotice,
-  validateBody(schemas.socialRegisterSchema()), async (req, res, next) => {
+  validarPorRequest(schemas.socialRegisterSchema), async (req, res, next) => {
     try {
       const evidence = await google.verifyIdToken(req.body.id_token);
       const response = await identities.registerWithExternalIdentity({
@@ -92,6 +103,11 @@ router.post('/google/register', googleDark('registration'), socialSignupRateLimi
         firstName: req.body.first_name,
         lastName: req.body.last_name,
         birthDate: req.body.birth_date,
+        // C2b · el email DECLARADO por el usuario. Sólo llega acá con el alta
+        // pública abierta (con ella cerrada el DTO lo rechaza), no es autoridad
+        // —no enlaza, no fusiona, no recupera— y con invitación pierde: uno
+        // distinto es el mismo 403 opaco. Nunca el email del proveedor.
+        email: req.body.email,
       });
       logger.audit('user_registered_external', { user_id: response.user.id, provider: 'google' });
       return res.status(201).json(response);
@@ -129,7 +145,7 @@ router.post('/google/link', googleDark('linking'), requireAuth,
 
 router.post('/facebook/register/start', facebookDark('register'), socialSignupRateLimit,
   requirePrivacyNotice,
-  validateBody(schemas.facebookRegisterStartSchema()), async (req, res, next) => {
+  validarPorRequest(schemas.facebookRegisterStartSchema), async (req, res, next) => {
     try {
       const response = await facebook.startAuthorization('register', {
         registration: {

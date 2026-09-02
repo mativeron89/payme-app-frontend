@@ -95,18 +95,21 @@ router.post('/register', requirePrivacyNotice, validateRegister, async (req, res
       const paymeId = await generatePaymeId(first_name, last_name);
       try {
         created = await pool.tx(async (client) => {
-        let signupInvitation = null;
-        if (signupInvitations.invitacionRequerida()) {
-          signupInvitation = await signupInvitations.bloquearInvitacion(client, {
-            token: invitation_token,
-            email: normalized,
-          });
-          if (!signupInvitation) throw signupInvitations.registroNoDisponible();
-        }
+        // C2 · puerta ÚNICA de autoridad: con invitación requerida exige token
+        // válido; con el alta pública abierta, un token presente se valida y
+        // consume igual (inválido → mismo 403 opaco) y uno ausente permite el
+        // alta directa. `null` = alta sin invitación.
+        const signupInvitation = await signupInvitations.autoridadDeAlta(client, {
+          token: invitation_token,
+          email: normalized,
+        });
         const { rows } = await client.query(
+          // v2.82.0 · `signup_method` se ESCRIBE acá, como literal del alta
+          // directa: la cuenta nace por email + contraseña. No se deja al
+          // DEFAULT (que existe para fixtures) ni se deriva después.
           `INSERT INTO users (payme_id, email, email_normalized, phone, password_hash,
-                             first_name, last_name, birth_date)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                             first_name, last_name, birth_date, signup_method)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'email_password')
            RETURNING id, payme_id, email, first_name, last_name`,
           // `?? null` explícito: en modo de compatibilidad birth_date llega undefined.
           // pg ya lo mapearía a NULL, pero acá el NULL es la conducta ratificada
@@ -136,12 +139,14 @@ router.post('/register', requirePrivacyNotice, validateRegister, async (req, res
             err.constraint === 'users_email_key')) {
           // D-FF-1: email ya registrado NO se distingue de token inexistente,
           // usado, vencido o ligado a otro email. Una sola forma pública.
-          if (signupInvitations.invitacionRequerida()) {
+          // C2 · con el alta PÚBLICA abierta la antienumeración no se debilita:
+          // el mismo 403 opaco, no un 409 que confirme que la cuenta existe.
+          if (!signupInvitations.altaAbiertaPorSeamDeTests()) {
             const opaque = signupInvitations.registroNoDisponible();
             return res.status(opaque.status).json({ error: opaque.code });
           }
-          // Compatibilidad exclusiva del seam de tests históricos. Producción
-          // no puede abrir el alta y jamás alcanza esta rama.
+          // Compatibilidad EXCLUSIVA del seam de tests históricos (NODE_ENV=test
+          // + tests/setup.js). Producción jamás alcanza esta rama.
           return res.status(409).json({ error: 'email_already_registered' });
         }
         // generatePaymeId reduce la colisión, pero la UNIQUE constraint cierra

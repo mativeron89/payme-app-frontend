@@ -3,9 +3,50 @@
  *
  * Privacidad y cardinalidad por construcción:
  *   - NO guarda IP, email, user-agent ni token crudo/digest individual;
- *   - cada autoridad cae por HMAC en uno de 64 shards FIJOS;
+ *   - cada autoridad CON clave cae por HMAC en uno de 64 shards FIJOS;
  *   - una segunda clave es el contador global sin identidad;
- *   - la tabla puede contener como máximo 65 claves del runtime v1.
+ *   - una tercera, reservada, es el bucket de los requests SIN clave;
+ *   - la tabla puede contener como máximo 66 claves del runtime v1.
+ *
+ * 🔴 C2b · QUÉ LLAVEA CADA COSA, Y QUÉ PROTEGE.
+ * Hasta C2 la única autoridad era la invitación, y todo lo que no fuera un
+ * token bien formado caía en UNA constante compartida. Con el alta pública
+ * abierta (`PUBLIC_SIGNUP_ENABLED`) eso dejó de ser inocuo: TODAS las altas sin
+ * invitación compartían bucket, así que el alta pública quedaba capada en
+ * `shardMax` por ventana para toda la plataforma y cualquiera podía saturarla
+ * mandando basura en `invitation_token`. Ahora:
+ *
+ *   token válido (20..200)  → shard de la INVITACIÓN. Protege que un token no
+ *                             se martille ni se reintente en masa.
+ *   sin token (o malformado)→ shard del EMAIL normalizado. Protege que una
+ *                             identidad no se martille, y separa a las altas
+ *                             públicas entre sí.
+ *   sin ninguno de los dos  → clave RESERVADA propia, FUERA de los 64 shards.
+ *                             Sólo la alcanzan requests que no pueden crear
+ *                             cuenta (el DTO las rechaza después).
+ *
+ * 🔴 Por qué la reservada no puede ser «una constante hasheada como las demás»:
+ * si se la mete por el mismo `% 64`, cae EN uno de los 64 shards y comparte
+ * bucket con ~1/64 de las altas legítimas —emails públicos e invitaciones—, así
+ * que diez requests con el cuerpo vacío dejan en 429 a esa fracción durante la
+ * ventana. Lo midió la revisión diferencial de C2b sobre la primera versión de
+ * este archivo, que decía «bucket propio» y no lo era.
+ *
+ * ⚠️ Lo que esto NO hace, dicho sin adornos: el email lo elige quien llama, así
+ * que la clave sigue siendo elegible —sin IP ni señal del cliente no existe una
+ * que no lo sea—. Lo que cambia es que ya NO hay una clave compartida por toda
+ * la puerta pública. El radio que queda:
+ *   · saturar la clave de una VÍCTIMA cuyo email se conozca la deja en 429
+ *     durante la ventana (10 intentos / 60 s por defecto), y de paso a los
+ *     emails que caen en su mismo shard: es daño a un tercero elegido, no
+ *     autolesión;
+ *   · el contador GLOBAL (`globalMax`, 120/min) sigue siendo el techo de
+ *     plataforma y esta orden no lo relaja. Lo alcanza incluso un atacante de
+ *     UNA sola fuente con emails al azar: la clave durable no tiene dimensión
+ *     de IP, y el limiter por IP de server.js es en memoria y por réplica.
+ *   · la capa de shards no protege por sí sola: si alguien sube `globalMax`,
+ *     640 requests/min de basura saturan los 64.
+ * Todo eso está declarado como riesgo aceptado en CHANGELOG_v2.83.0.md.
  *
  * El MemoryStore por IP de server.js sigue como barrera barata. Éste cierra el
  * reinicio/múltiples réplicas y falla 503 si PostgreSQL no puede acreditar el
@@ -24,7 +65,8 @@ const SCOPES = Object.freeze({
   SHARD: 'signup-shard-v1',
 });
 const GLOBAL_DIGEST = tokenHash('payme/signup-rate-limit/global/v1');
-const MALFORMED = 'payme/signup-rate-limit/malformed/v1';
+const SIN_CLAVE = 'payme/signup-rate-limit/sin-clave/v1';
+const SIN_CLAVE_DIGEST = tokenHash(SIN_CLAVE);
 
 function positivePgInt(name, fallback, env) {
   const raw = env[name];
@@ -47,21 +89,66 @@ function signupRateLimitConfig(env = process.env) {
   });
 }
 
-function canonicalToken(raw) {
-  return typeof raw === 'string' && raw.length >= 20 && raw.length <= 200
-    ? raw
-    : MALFORMED;
+/**
+ * Email en forma canónica para llavear. Deliberadamente NO valida formato: el
+ * limiter corre antes del DTO y su trabajo es contar, no decidir si el alta es
+ * válida. Exceder el largo NO se recorta —un techo que recorta acepta una clave
+ * que nadie mandó—: se descarta y cae a la clave reservada.
+ *
+ * 🔴 El techo es el MISMO que acepta el DTO (`z.string().email().max(255)` en
+ * schemas/index.js) y el mismo que admite `users.email VARCHAR(255)`. No es
+ * cosmético: con 254 acá, un email de exactamente 255 caracteres —que el alta
+ * ACEPTA y crea— caía en la clave reservada, y esa clase de altas volvía a
+ * compartir un solo bucket. Lo encontró la revisión diferencial de C2b. Si
+ * alguien baja el DTO a los 254 de RFC 5321, este número baja con él.
+ */
+const LARGO_MAXIMO_EMAIL = 255;
+
+function emailParaShard(raw) {
+  if (typeof raw !== 'string') return null;
+  const canonico = raw.trim().toLowerCase();
+  if (!canonico || canonico.length > LARGO_MAXIMO_EMAIL) return null;
+  return canonico;
 }
 
-function tokenShardForSignup(raw, secret) {
+/**
+ * La clave de la que sale el shard. Los dos espacios llevan dominio propio, de
+ * forma que un email con forma de token no puede fabricar la clave de una
+ * invitación ajena ni al revés.
+ */
+function claveDeAlta({ token, email } = {}) {
+  const invitacion = typeof token === 'string' && token.length >= 20 && token.length <= 200
+    ? token
+    : null;
+  if (invitacion) return `invitacion\0${invitacion}`;
+  const correo = emailParaShard(email);
+  if (correo) return `alta\0${correo}`;
+  return SIN_CLAVE;
+}
+
+/** Shard de una autoridad CON clave; `null` cuando no hay ninguna. */
+function shardParaAlta(autoridad, secret) {
   if (typeof secret !== 'string' || Buffer.byteLength(secret, 'utf8') < 32) {
     throw new Error('signup_rate_limit_secret_invalid');
   }
+  const clave = claveDeAlta(autoridad);
+  if (clave === SIN_CLAVE) return null;
   const mac = createHmac('sha256', secret)
     .update('payme/signup-rate-limit/shard/v1\0')
-    .update(canonicalToken(raw))
+    .update(clave)
     .digest();
   return mac.readUInt16BE(0) % SHARD_COUNT;
+}
+
+/** Bucket que consume una autoridad: uno de los 64, o la clave reservada. */
+function digestDeAlta(autoridad, secret) {
+  const shard = shardParaAlta(autoridad, secret);
+  return shard === null ? SIN_CLAVE_DIGEST : shardDigest(shard);
+}
+
+/** Compatibilidad: el shard de una invitación suelta. */
+function tokenShardForSignup(raw, secret) {
+  return shardParaAlta({ token: raw }, secret);
 }
 
 function shardDigest(shard) {
@@ -77,13 +164,17 @@ function shardDigest(shard) {
 async function consumeSignupRateLimit({
   db,
   token,
+  email,
   config = signupRateLimitConfig(),
   secret = process.env.JWT_SECRET,
 }) {
-  const shard = tokenShardForSignup(token, secret);
   const buckets = [
     { scope: SCOPES.GLOBAL, digest: GLOBAL_DIGEST, maximum: config.globalMax },
-    { scope: SCOPES.SHARD, digest: shardDigest(shard), maximum: config.shardMax },
+    {
+      scope: SCOPES.SHARD,
+      digest: digestDeAlta({ token, email }, secret),
+      maximum: config.shardMax,
+    },
   ].sort((a, b) => `${a.scope}:${a.digest}`.localeCompare(`${b.scope}:${b.digest}`));
 
   const { rows } = await db.query(
@@ -147,6 +238,10 @@ function signupRateLimitMiddleware({ db, env = process.env } = {}) {
       const outcome = await consumeSignupRateLimit({
         db,
         token: req.body?.invitation_token,
+        // C2b · sin invitación, la identidad que se limita es el email
+        // declarado. El cuerpo ya está parseado acá: el limiter se monta
+        // después de express.json y antes del handler, en los dos caminos.
+        email: req.body?.email,
         config,
         secret,
       });
@@ -172,6 +267,11 @@ module.exports = {
   SCOPES,
   signupRateLimitConfig,
   tokenShardForSignup,
+  shardParaAlta,
+  digestDeAlta,
+  claveDeAlta,
+  SIN_CLAVE_DIGEST,
+  LARGO_MAXIMO_EMAIL,
   shardDigest,
   consumeSignupRateLimit,
   signupRateLimitMiddleware,

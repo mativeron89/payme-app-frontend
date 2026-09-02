@@ -33,6 +33,13 @@ CREATE TABLE IF NOT EXISTS users (
   first_name      VARCHAR(100) NOT NULL,
   last_name       VARCHAR(100) NOT NULL,
   password_hash   VARCHAR(255),
+  -- v2.82.0 · método con el que la cuenta NACIÓ. Lo escribe cada alta en su
+  -- INSERT; el DEFAULT existe para fixtures históricos, no para el producto
+  -- (tests/ops-individual-users.test.js cierra esa clase por artefacto).
+  -- Nunca se deriva de bindings: ver db/migrate_signup_method_v2.82.0.sql.
+  signup_method   VARCHAR(16) NOT NULL DEFAULT 'email_password'
+                  CONSTRAINT chk_users_signup_method
+                  CHECK (signup_method IN ('email_password','google','facebook')),
   status          VARCHAR(20) NOT NULL DEFAULT 'active'
                   CHECK (status IN ('active','suspended','deleted')),
   kyc_status      VARCHAR(20) NOT NULL DEFAULT 'pending'

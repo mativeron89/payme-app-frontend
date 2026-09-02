@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "ca5251eef6eebce092c1f5cb1d2177a9d76a3879",
+  "commit": "1851acbb993b935f7a89c3c0fdc6e0b1163bc2a9",
   "total": 107,
   "archivos": [
     {
@@ -19,8 +19,8 @@
     {
       "origen": "contract/social-auth-v1.json",
       "destino": "contract/social-auth-v1.json",
-      "sha256": "8af351dd01195e326dbdb5d57363f11aefce77ade78a5830321e18df744813fb",
-      "bytes": 7830
+      "sha256": "88eb713a047d7fd84b6698bf16093441032fcddfceeaf06280d927e834bfd42b",
+      "bytes": 11196
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -235,8 +235,8 @@
     {
       "origen": "db/schema.sql",
       "destino": "db/schema.sql",
-      "sha256": "dc57b982d6a43a148231564e7e0d066cc34f34763361f67ddbe692fcf8b08a0f",
-      "bytes": 70661
+      "sha256": "37c5cd7339861dadc469d78c973fd186bed80d134859322c007f7687cc76169b",
+      "bytes": 71169
     },
     {
       "origen": "docs/history/CHANGELOG_v2.11.md",
@@ -313,14 +313,14 @@
     {
       "origen": "routes/auth.js",
       "destino": "routes/auth.js",
-      "sha256": "b57749e71a0f4109ec836c60fc599f2f0e949c96841bea83b95a609dd87f762d",
-      "bytes": 16401
+      "sha256": "c9051b231c2604957737dbb1626819f362f658cd7414beea6db6061e250644fa",
+      "bytes": 16950
     },
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "7aa87a71fd360a4b2bab2217ea9996f6367d117e87c3fd3239d2b2357e87ba1f",
-      "bytes": 7361
+      "sha256": "206fb6aa244ebcdad972793e5259226e25a9de598a01cb323a18f8aff9074425",
+      "bytes": 8608
     },
     {
       "origen": "routes/connect.js",
@@ -355,8 +355,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "bd60055dbeb8dde68d8e505af35fd8409a960f91c40089910a24b2c7e339f28a",
-      "bytes": 145578
+      "sha256": "0d1b5cb262921c1f6f53c002d47c53faf37bf4935de007803278177735125268",
+      "bytes": 167584
     },
     {
       "origen": "routes/notifications.js",
@@ -385,8 +385,8 @@
     {
       "origen": "routes/social-auth.js",
       "destino": "routes/social-auth.js",
-      "sha256": "a0aed81ba273beef44c29fad1f0acdb3a50146eecec435a322c0efa79874538b",
-      "bytes": 9532
+      "sha256": "41c983ba7e3ba08ede8cdc305a219d3f03ddf53f1dd5b3b581a5f60be62277b2",
+      "bytes": 10476
     },
     {
       "origen": "routes/spei-funding.js",
@@ -427,8 +427,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "d0721e222c63ce53797c913956e4a4fdef2ed19e32ffd59b9b0067e37fdacf71",
-      "bytes": 23584
+      "sha256": "745d582146399324c500373565d36b3aa0b426a34fec2ca6233acb6135fd64b0",
+      "bytes": 26290
     },
     {
       "origen": "services/authRecovery.js",
@@ -469,8 +469,8 @@
     {
       "origen": "services/externalIdentities.js",
       "destino": "services/externalIdentities.js",
-      "sha256": "1a0e38409333797df9602dd4bd94631e8ebbeafd42697dc9c67e80d61ba254fa",
-      "bytes": 6967
+      "sha256": "73822307cfbe6c9649026c291a40ee88edff6f8f2961706b527366ade3cc9aac",
+      "bytes": 8473
     },
     {
       "origen": "services/facebookDataRights.js",
@@ -511,8 +511,8 @@
     {
       "origen": "services/moneyRail.js",
       "destino": "services/moneyRail.js",
-      "sha256": "0d8ccae71385040373c52bce8547faefb05116886ff87bba23f20316ad8e9546",
-      "bytes": 9002
+      "sha256": "ed3677328dabdf488058d0e0bfef14b95273a8e5304f330279b1f6f5040c8917",
+      "bytes": 10669
     },
     {
       "origen": "services/nativeWalletCapability.js",
@@ -583,14 +583,14 @@
     {
       "origen": "services/signupInvitations.js",
       "destino": "services/signupInvitations.js",
-      "sha256": "ea668af69100f0c7c8167eea9f1968831e2806e6b25c5a8b46812686dd8cfd94",
-      "bytes": 6090
+      "sha256": "251e54f0523cf451337c7cdec8dace5cda7c66170e41e1334b8fe2730e0b84b4",
+      "bytes": 8367
     },
     {
       "origen": "services/signupRateLimit.js",
       "destino": "services/signupRateLimit.js",
-      "sha256": "8633e72df914c073d9017f739e6ae1ac42fa02bba36f37aae2286da24166f0d1",
-      "bytes": 6205
+      "sha256": "123756353890d94ecabd4c55ca9b0604de78e7a7b2002b23f91b6795510d429c",
+      "bytes": 11265
     },
     {
       "origen": "services/socialAuthIntents.js",

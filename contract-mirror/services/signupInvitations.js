@@ -15,7 +15,7 @@
 'use strict';
 
 const { generateToken, tokenHash, normalizeEmail } = require('../utils/tokens');
-const { normalizarEmailDeContrato } = require('../schemas');
+const { normalizarEmailDeContrato, altaPublicaHabilitada } = require('../schemas');
 
 const ERROR_PUBLICO = 'registration_not_available';
 
@@ -122,13 +122,55 @@ async function marcarConsumida(client, { invitationId, userId }) {
   if (rowCount !== 1) throw registroNoDisponible();
 }
 
-// El código de producción NO tiene bandera para abrir el alta. Este seam evita
-// reescribir cientos de fixtures históricos y sólo existe bajo NODE_ENV=test.
-// Las pruebas D-FF-1 lo cierran explícitamente para ejercitar el camino real.
+// Hasta C2 (2026-09-01) el código de producción NO tenía bandera para abrir el
+// alta: la única puerta era este seam, que evita reescribir cientos de fixtures
+// históricos y sólo existe bajo NODE_ENV=test. Las pruebas D-FF-1 lo cierran
+// explícitamente para ejercitar el camino real. Desde C2 hay una segunda
+// puerta, de PRODUCTO y de ENTORNO, que este archivo consulta con
+// `altaPublicaHabilitada()` en CADA llamada. El nombre de la variable y su
+// valor de apertura viven en schemas/index.js (`FLAG_ALTA_PUBLICA`), única
+// lectura del entorno: acá no se copia ni se cachea.
 let permitirSinInvitacionEnTests = false;
 
+/** ¿El alta abierta lo está SÓLO por el seam de tests (no por el entorno)? */
+function altaAbiertaPorSeamDeTests() {
+  return permitirSinInvitacionEnTests && !altaPublicaHabilitada();
+}
+
 function invitacionRequerida() {
-  return !permitirSinInvitacionEnTests;
+  return !permitirSinInvitacionEnTests && !altaPublicaHabilitada();
+}
+
+/**
+ * 🔴 PUERTA ÚNICA de autoridad de alta. La usan el alta directa y la social.
+ *
+ *   invitación REQUERIDA          → token válido, o `registration_not_available`
+ *   no requerida y token PRESENTE  → se valida y consume con la semántica vigente;
+ *                                    uno inválido es el mismo 403 opaco, no se
+ *                                    ignora en silencio (la orden C2 es literal)
+ *   no requerida y token AUSENTE   → alta SIN invitación —directa o social—:
+ *                                    devuelve null
+ *
+ * «Presente» es cualquier valor distinto de undefined/null/'' — un número o un
+ * objeto son un token malformado, no un token ausente, y recorren la misma
+ * sentencia que uno inexistente. Con `email` se exige además que la invitación
+ * esté ligada a ese email (alta directa); por hash (intents de Facebook) o por
+ * token sin email (Google) se busca la invitación tal cual.
+ */
+async function autoridadDeAlta(client, { token, email, tokenHashValue } = {}) {
+  const hashPresente = tokenHashValue !== undefined && tokenHashValue !== null && tokenHashValue !== '';
+  const tokenPresente = token !== undefined && token !== null && token !== '';
+  if (!invitacionRequerida() && !hashPresente && !tokenPresente) return null;
+  let row;
+  if (hashPresente) {
+    row = await bloquearInvitacionPorHash(client, { tokenHashValue });
+  } else if (email !== undefined) {
+    row = await bloquearInvitacion(client, { token, email });
+  } else {
+    row = await bloquearInvitacionPorToken(client, { token });
+  }
+  if (!row) throw registroNoDisponible();
+  return row;
 }
 
 function exigirInvitacionEnTests() {
@@ -155,6 +197,8 @@ module.exports = {
   bloquearInvitacionPorToken,
   marcarConsumida,
   invitacionRequerida,
+  autoridadDeAlta,
+  altaAbiertaPorSeamDeTests,
   exigirInvitacionEnTests,
   habilitarAltaSinInvitacionParaTests,
   registroNoDisponible,

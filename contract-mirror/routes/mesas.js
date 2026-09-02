@@ -31,7 +31,7 @@ const schemas = require('../schemas');
 const stateMachine = require('../utils/stateMachine');
 const stripeService = require('../services/stripe');
 const { rechazaPorRielApagado } = require('../services/walletRail');
-const { rechazaPorDineroApagado } = require('../services/moneyRail');
+const { rechazaPorDineroApagado, dineroHabilitado } = require('../services/moneyRail');
 const cardEligibility = require('../services/cardEligibility');
 const savedCards = require('../services/savedCards');   // D4 (v2.16)
 const paymentMethodLifecycle = require('../services/paymentMethodLifecycle');
@@ -185,6 +185,35 @@ async function promoteSavedCardSnapshot({ row, userId, snapshot }) {
   );
 }
 
+/**
+ * C3 · lee de la mesa lo que el consumidor necesita para no confundir un cierre
+ * SIN COBROS con el vencimiento de una garantía.
+ */
+async function cerrojoDeGarantia(mesa) {
+  // `status` sale de ESTA lectura y no del snapshot del middleware: si la mesa
+  // cierra por selección entre las dos, la respuesta saldría con `open` y un
+  // motivo de cierre al lado, que es una contradicción publicada.
+  const { rows: [fila] } = await pool.query(
+    `SELECT guarantee_mode, status, metadata FROM mesas WHERE id = $1`, [mesa.id]
+  );
+  const guaranteeMode = fila ? fila.guarantee_mode : true;
+  const status = fila ? fila.status : mesa.status;
+  const escrito = fila?.metadata?.closure_reason || null;
+  if (escrito) {
+    return { guarantee_mode: guaranteeMode, status, closure_reason: escrito };
+  }
+  // Sólo las mesas de C3 derivan «cerró por tiempo»: una mesa legacy sin
+  // garantía en `expired` venció por el camino monetario de siempre.
+  const cerradaSinGarantia = guaranteeMode === false
+    && fila?.metadata?.sin_garantia === true
+    && status === 'expired';
+  return {
+    guarantee_mode: guaranteeMode,
+    status,
+    closure_reason: cerradaSinGarantia ? 'time' : null,
+  };
+}
+
 // ─── POST / (crear mesa) ───────────────────────────────────
 router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res, next) => {
   try {
@@ -207,7 +236,21 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
     // vuelvan los pagos, que es exactamente la inferencia que el gobierno
     // prohíbe. Y va ANTES del hash de idempotencia (:208), del hold y del
     // INSERT (:398), por el mismo motivo que el bloque de arriba.
-    if (rechazaPorDineroApagado(req, res, 'guarantee_method')) return;
+    // C3 · la mesa SIN garantía del corte del viernes. Su única vía es el riel
+    // monetario apagado: con el dinero vivo se conserva la garantía ratificada
+    // el 2026-08-10 —«la garantía es lo que hace que el restaurante cobre»— y
+    // pedir `none` se rechaza acá, antes del hash de idempotencia y del INSERT.
+    const sinGarantia = guarantee_method === 'none';
+    if (sinGarantia && dineroHabilitado()) {
+      logger.warn('mesa_sin_garantia_rechazada_riel_vivo', {
+        user_id: req.user.id, restaurant_id,
+      });
+      return res.status(409).json({ error: 'guarantee_required' });
+    }
+    // Para `card` y `wallet` el gate no cambia: con el dinero apagado siguen
+    // fail-closed. `none` NO pasa por acá, porque su premisa es justamente que
+    // el dinero esté apagado.
+    if (!sinGarantia && rechazaPorDineroApagado(req, res, 'guarantee_method')) return;
     // ── B-06 §4.1 (v2.25): idempotencia de la CREACIÓN ──
     // Sin esto, perder la respuesta después del hold hacía que el reintento
     // creara una SEGUNDA mesa con un SEGUNDO hold por el total — y la mesa
@@ -443,7 +486,13 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
       return res.status(400).json({ error: 'total_mismatch', expected: sum, received: total_cents });
     }
 
-    const expiresAt = new Date(Date.now() + (Number(process.env.MESA_HOLD_SECONDS) || 1800) * 1000);
+    // C3 · la mesa sin garantía vive CINCO HORAS (decisión de Mati del
+    // 2026-09-01): no hay hold que expirar, así que la ventana no es la del
+    // riel monetario. Con garantía, `MESA_HOLD_SECONDS` intacto.
+    const VENTANA_SIN_GARANTIA_S = 5 * 60 * 60;
+    const expiresAt = new Date(Date.now() + (sinGarantia
+      ? VENTANA_SIN_GARANTIA_S
+      : (Number(process.env.MESA_HOLD_SECONDS) || 1800)) * 1000);
 
     const insertNewMesa = async () => {
       for (let codeAttempt = 0; codeAttempt < 25; codeAttempt++) {
@@ -462,15 +511,22 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
             // v2.11 (parche §1 · garantía Modelo B): la mesa nace
             // 'pending_auth' y solo pasa a 'open' cuando el hold quedó autorizado.
             const { rows } = await client.query(
+              // C3 · sin garantía la mesa nace 'open' y con `guarantee_mode`
+              // en false. Ese booleano no es cosmético: `sweepSettlements`
+              // selecciona `WHERE guarantee_mode = true`
+              // (services/settlement.js:3453-3454), así que una mesa sin
+              // garantía queda FUERA del barrido de liquidación por
+              // construcción — ni Stripe, ni settlement, ni STP, ni E3/E4.
               `INSERT INTO mesas (code, restaurant_id, opener_user_id, total_cents,
                                   division_mode, expected_participants, expires_at, status,
+                                  guarantee_mode, metadata,
                                   idempotency_key, idempotency_payload_hash,
                                   auth_source_payment_method_id,
                                   auth_stripe_customer_id,auth_off_session,
                                   auth_save_payment_method,
                                   auth_card_policy_version,auth_card_brand,
                                   auth_card_funding,auth_card_verified_at)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,'pending_auth',$8,$9,
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$18,$19,$20,$8,$9,
                        $10,$11,$12,$13,$14,$15,$16,$17)
                RETURNING id, code, total_cents, division_mode, expected_participants,
                          status, expires_at, created_at,
@@ -487,14 +543,24 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
                guarantee_method === 'card' ? guaranteeCardSnapshot.policyVersion : 0,
                guarantee_method === 'card' ? guaranteeCardSnapshot.brand : null,
                guarantee_method === 'card' ? guaranteeCardSnapshot.funding : null,
-               guarantee_method === 'card' ? guaranteeCardSnapshot.verifiedAt : null]
+               guarantee_method === 'card' ? guaranteeCardSnapshot.verifiedAt : null,
+               sinGarantia ? 'open' : 'pending_auth',
+               !sinGarantia,
+               // 🔴 La marca que distingue a ESTA mesa de las `guarantee_mode
+               // = false` LEGACY, que existen y SÍ se pagan (el flujo viejo sin
+               // garantía; ver tests/g11-guardado-tarjeta-direct.test.js:199).
+               // Sin la marca, la guarda del pago rompía ese flujo: lo encontró
+               // el integral, no el focal.
+               sinGarantia ? JSON.stringify({ sin_garantia: true }) : '{}']
             );
             const m = rows[0];
             await client.query(
               `INSERT INTO state_transitions
                  (entity_type, entity_id, from_state, to_state, reason, triggered_by)
-               VALUES ('mesa', $1, NULL, 'pending_auth', 'mesa_created_guarantee', 'user')`,
-              [m.id]
+               VALUES ('mesa', $1, NULL, $2, $3, 'user')`,
+              [m.id,
+               sinGarantia ? 'open' : 'pending_auth',
+               sinGarantia ? 'mesa_created_sin_garantia' : 'mesa_created_guarantee']
             );
             for (const it of items) {
               await client.query(
@@ -590,6 +656,21 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
       usedSavedCard = mesa.auth_off_session;
       guaranteeCardSnapshot = durableSnapshot;
     }
+    // C3 · sin garantía no hay hold que colocar: se responde acá, ANTES de
+    // `settlement.placeGuaranteeHold`, que es el punto donde nacen E1 y E6. Por
+    // eso esta mesa no emite un solo evento al dashboard (decisión de Mati:
+    // cero E1/E6 para la mesa sin garantía).
+    if (sinGarantia) {
+      logger.audit('mesa_created', {
+        mesa_id: mesa.id, code: mesa.code, opener: req.user.id,
+        guarantee_method: 'none', guarantee_status: 'none',
+      });
+      return res.status(201).json({
+        mesa: publicCreatedMesa(mesa, 'open'),
+        guarantee: { method: 'none', status: 'none' },
+      });
+    }
+
     const durableWantsSaveGuarantee = guarantee_method === 'card'
       ? mesa.auth_save_payment_method
       : false;
@@ -691,6 +772,213 @@ router.get('/open', requireAuth, async (req, res, next) => {
           ? Math.round((Number(m.paid_amount_cents) / Number(m.total_cents)) * 100) : 0,
         status: m.status, expires_at: m.expires_at,
       })),
+    });
+  } catch (err) { next(err); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// C4 · GET /mesas/mine — el histórico PROPIO del comensal
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Para «Mis ítems» y para el histórico del corte del viernes. Devuelve
+// ÚNICAMENTE mesas de la cuenta autenticada, y de cada una lo mínimo para
+// reconocerla y saber cuánto eligió ESA cuenta.
+//
+// 🔴 QUÉ NO SALE DE ACÁ, y es la razón de que el shape sea cerrado: ningún
+// nombre, email ni monto de otro pagador; ni cuántos son. Los claims ajenos se
+// LEEN —hacen falta para precisar el monto propio cuando la fracción completa
+// el ítem— pero no se publican ni se cuentan hacia afuera.
+//
+// Va ANTES de `/:code`: Express resuelve por orden y `/:code` se comería
+// «mine» como si fuera un código de mesa.
+const MINE_LIMIT_DEFAULT = 20;
+const MINE_LIMIT_MAX = 50;
+
+/** Techo declarado. Exceder se RECHAZA; no se recorta en silencio. */
+function limiteDeMine(raw) {
+  if (raw === undefined) return MINE_LIMIT_DEFAULT;
+  if (typeof raw !== 'string' || !/^[1-9][0-9]{0,2}$/.test(raw)) return null;
+  const n = Number(raw);
+  return n >= 1 && n <= MINE_LIMIT_MAX ? n : null;
+}
+
+/**
+ * Cursor keyset opaco sobre `(created_at, id)`. El instante viaja como el TEXTO
+ * que produjo Postgres, con microsegundos: convertirlo a Date lo truncaría a
+ * milisegundos y dos mesas del mismo milisegundo se repetirían o se saltearían.
+ */
+function cursorDeMine(raw) {
+  if (raw === undefined) return { ok: true, valor: null };
+  if (typeof raw !== 'string' || raw.length > 200 || !/^[A-Za-z0-9_-]+$/.test(raw)) {
+    return { ok: false };
+  }
+  try {
+    const json = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+    if (!json || typeof json !== 'object' || Array.isArray(json)) return { ok: false };
+    const claves = Object.keys(json).sort();
+    if (claves.length !== 2 || claves[0] !== 'id' || claves[1] !== 't') return { ok: false };
+    if (typeof json.t !== 'string' || typeof json.id !== 'string') return { ok: false };
+    // 🔴 UUID de verdad, no «36 caracteres del alfabeto». Con el regex laxo, un
+    // `id` de 36 letras hexadecimales sin guiones llegaba a `::uuid` y el error
+    // de PostgreSQL salía como 500 con su SQLSTATE al cliente: además de feo,
+    // es un oráculo de que el valor entra a SQL sin validar.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(json.id)) {
+      return { ok: false };
+    }
+    // Y el instante, con la forma EXACTA que emite este mismo endpoint. Sin
+    // esto, `t:"hola"` daba 500 y `t:"infinity"` era un cast válido que hacía
+    // que el cursor devolviera la primera página para siempre.
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+00$/.test(json.t)) return { ok: false };
+    return { ok: true, valor: json };
+  } catch (_) { return { ok: false }; }
+}
+
+const emitirCursorDeMine = (t, id) =>
+  Buffer.from(JSON.stringify({ t, id }), 'utf8').toString('base64url');
+
+router.get('/mine', requireAuth, async (req, res, next) => {
+  try {
+    const limit = limiteDeMine(req.query.limit);
+    if (limit === null) return res.status(400).json({ error: 'invalid_limit' });
+    const cursor = cursorDeMine(req.query.cursor);
+    if (!cursor.ok) return res.status(400).json({ error: 'invalid_cursor' });
+
+    // Organizador, o participante CON selección propia: alguien que entró y no
+    // eligió nada no tiene histórico que mostrar.
+    const { rows } = await pool.query(
+      `SELECT m.id, m.code, m.status, m.guarantee_mode, m.metadata, m.created_at,
+              m.division_mode,
+              to_char(m.created_at AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.USOF') AS created_at_cursor,
+              r.name AS restaurant_name, r.category
+         FROM mesas m
+         JOIN restaurants r ON r.id = m.restaurant_id
+        WHERE (
+                m.opener_user_id = $1
+                OR EXISTS (
+                  SELECT 1 FROM mesa_item_claims c
+                   WHERE c.mesa_id = m.id
+                     AND c.locked_by_user_id = $1
+                     -- MISMO predicado de «vivo» que GET /:code: un lock
+                     -- vencido no es selección, y contarlo metía en el
+                     -- histórico una mesa que la persona ya soltó.
+                     AND (c.status = 'paid'
+                          OR (c.status = 'locked'
+                              AND (c.lock_expires_at IS NULL
+                                   OR c.lock_expires_at >= NOW())))
+                )
+              )
+          AND ($2::timestamptz IS NULL
+               OR (m.created_at, m.id) < ($2::timestamptz, $3::uuid))
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT $4`,
+      [req.user.id, cursor.valor?.t ?? null, cursor.valor?.id ?? null, limit + 1]
+    );
+
+    const pagina = rows.slice(0, limit);
+    const hayMas = rows.length > limit;
+
+    // Selección propia por mesa. Los claims ajenos del MISMO ítem se cargan
+    // sólo para precisar el monto cuando la fracción propia completa el ítem
+    // —misma aritmética que el cobro, `itemClaims.priceFraction`, no una copia—
+    // y no se publican.
+    const mios = new Map();
+    // 🔴 EN DIVISIÓN `igual` EL DINERO NO VIVE EN LOS CLAIMS. La división son
+    // casilleros (`mesa_division_slots`), el cobro sale de ahí y el camino de
+    // pago ni siquiera precia claims. Derivar el monto propio de los ítems
+    // declarados daba dos mentiras: cero para quien pagó su casillero sin
+    // declarar nada, y el precio del corte para quien declaró de más. Se lee de
+    // donde está la plata, y `division_mode` viaja para que el consumidor sepa
+    // qué está mirando.
+    const igualIds = pagina.filter((m) => m.division_mode === 'igual').map((m) => m.id);
+    if (igualIds.length > 0) {
+      const { rows: slots } = await pool.query(
+        `SELECT mesa_id, amount_cents FROM mesa_division_slots
+          WHERE mesa_id = ANY($1::uuid[]) AND claimed_by_user_id = $2`,
+        [igualIds, req.user.id]
+      );
+      for (const s of slots) {
+        const acc = mios.get(s.mesa_id) || { items_count: 0, amount_cents: 0 };
+        acc.items_count += 1;
+        acc.amount_cents += Number(s.amount_cents);
+        mios.set(s.mesa_id, acc);
+      }
+    }
+    const idsConsumo = pagina.filter((m) => m.division_mode === 'consumo').map((m) => m.id);
+    if (idsConsumo.length > 0) {
+      const { rows: claims } = await pool.query(
+        `SELECT c.mesa_id, c.mesa_item_id, c.fraction_bps, c.amount_cents,
+                c.locked_by_user_id,
+                i.price_cents, i.quantity
+           FROM mesa_item_claims c
+           JOIN mesa_items i ON i.id = c.mesa_item_id
+          WHERE c.mesa_id = ANY($1::uuid[])
+            AND (c.status = 'paid'
+                 OR (c.status = 'locked'
+                     AND (c.lock_expires_at IS NULL OR c.lock_expires_at >= NOW())))
+          ORDER BY c.created_at ASC, c.id ASC`,
+        [idsConsumo]
+      );
+      const porItem = new Map();
+      for (const c of claims) {
+        if (!porItem.has(c.mesa_item_id)) porItem.set(c.mesa_item_id, []);
+        porItem.get(c.mesa_item_id).push(c);
+      }
+      const itemsPorMesa = new Map();
+      for (const [itemId, delItem] of porItem) {
+        // 🔴 EL ORDEN IMPORTA, y es la diferencia entre el número que se muestra
+        // y el que se cobra. `priceFraction` responde «cuánto sale ESTE claim
+        // dados los que ya estaban»: aplicarla con TODOS los vivos de ahora
+        // convierte a cada fracción en la completadora y el residuo de centavos
+        // cae en la persona equivocada. Se reconstruye la historia: los claims
+        // vienen ordenados por creación y cada uno se preció contra los
+        // anteriores. Sobre 3500 en tercios da 1167/1167/1166, igual que el
+        // riel; aplicarla «todos contra todos» daba 1166/1166/1166.
+        const anteriores = [];
+        for (const c of delItem) {
+          const linea = itemClaims.lineTotalCents(Number(c.price_cents), Number(c.quantity));
+          const monto = c.amount_cents != null
+            ? Number(c.amount_cents)
+            : itemClaims.priceFraction(linea, Number(c.fraction_bps), anteriores);
+          anteriores.push({ fraction_bps: c.fraction_bps, amount_cents: monto });
+          if (c.locked_by_user_id !== req.user.id) continue;
+          const acc = mios.get(c.mesa_id)
+            || { items_count: 0, amount_cents: 0, _items: new Set() };
+          // `items_count` cuenta ÍTEMS, no claims: media porción es un ítem, y
+          // dos claims propios sobre el mismo ítem tampoco son dos.
+          acc._items.add(itemId);
+          acc.items_count = acc._items.size;
+          acc.amount_cents += monto;
+          mios.set(c.mesa_id, acc);
+          itemsPorMesa.set(c.mesa_id, acc._items);
+        }
+      }
+      for (const acc of mios.values()) delete acc._items;
+    }
+
+    const ultima = pagina[pagina.length - 1];
+    res.json({
+      mesas: pagina.map((m) => ({
+        id: m.id,
+        code: m.code,
+        restaurant: { name: m.restaurant_name, category: m.category },
+        status: m.status,
+        division_mode: m.division_mode,
+        // C3 · lo que distingue un cierre SIN COBROS de un vencimiento
+        // monetario. Mismo par que publica `GET /mesas/:code`.
+        guarantee_mode: m.guarantee_mode,
+        closure_reason: m.metadata?.closure_reason
+          || (m.guarantee_mode === false && m.metadata?.sin_garantia === true
+              && m.status === 'expired' ? 'time' : null),
+        created_at: m.created_at,
+        mine: mios.get(m.id) || { items_count: 0, amount_cents: 0 },
+      })),
+      page: {
+        limit,
+        next_cursor: hayMas && ultima
+          ? emitirCursorDeMine(ultima.created_at_cursor, ultima.id)
+          : null,
+      },
     });
   } catch (err) { next(err); }
 });
@@ -861,6 +1149,14 @@ router.get('/:code/shortfall-detail', requireAuth, requireShortfallDetailRollout
 router.get('/:code', requireAuth, requireMesaParticipant, async (req, res, next) => {
   try {
     const mesa = req.mesa;
+    // `req.mesa` no trae `guarantee_mode` y su middleware está fuera del
+    // alcance de esta orden, así que se consulta acá. El MOTIVO del cierre se
+    // DERIVA: la selección completa lo escribe en metadata al cerrar, y el
+    // cierre por tiempo lo hace el timer, que no escribe metadata —una mesa sin
+    // garantía en `expired` sin motivo escrito cerró porque se le acabaron las
+    // cinco horas—. Derivarlo evita tocar `services/timer.js`, que no está en
+    // scope, y deja una sola verdad para el consumidor.
+    const garantiaMesa = await cerrojoDeGarantia(mesa);
     const { rows: items } = await pool.query(
       `SELECT id, name, category, price_cents, quantity, status,
               locked_at, lock_expires_at, locked_by_user_id,
@@ -956,7 +1252,18 @@ router.get('/:code', requireAuth, requireMesaParticipant, async (req, res, next)
         tip_base_cents: Math.round(Number(mesa.total_cents) / (Number(mesa.expected_participants) || 1)),
         division_mode: mesa.division_mode,
         expected_participants: mesa.expected_participants,
-        status: mesa.status, expires_at: mesa.expires_at,
+        status: garantiaMesa.status, expires_at: mesa.expires_at,
+        // 🔴 C3 · SIN ESTOS DOS CAMPOS, `expired` MIENTE SOBRE DINERO.
+        // La pantalla de mesa del comensal, ante `status='expired'`, calcula
+        // `total - pagado` y muestra «Cubrió tu garantía $X» (medido por App
+        // Frontend en `MesaScreen.tsx:1473-1509`). Para una mesa sin garantía
+        // eso sería una afirmación falsa por el total de la mesa. `expired` es
+        // el MISMO valor que usa el vencimiento monetario —renuncia declarada
+        // en CHANGELOG_v2.84.0.md—, así que la distinción viaja acá:
+        //   guarantee_mode=false + closure_reason  ⇒ cerró SIN COBROS.
+        // Un consumidor que no lea estos campos mostrará el cierre monetario.
+        guarantee_mode: garantiaMesa.guarantee_mode,
+        closure_reason: garantiaMesa.closure_reason,
         items: items.map(i => {
           const cl = claimsByItem.get(i.id);
           const takenBps = cl ? Number(cl.taken_bps) : 0;
@@ -988,7 +1295,31 @@ router.post('/:code/items/lock', requireAuth, requireMesaParticipant,
       return res.status(409).json({ error: 'mesa_not_active' });
     }
     const lockToken = generateLockToken();
-    const lockExpiresAt = new Date(Date.now() + ITEM_LOCK_SECONDS * 1000);
+    // C3 · en la mesa SIN garantía la selección NO vence (decisión de Mati del
+    // 2026-09-01): sin hold que proteger, el lock de diez minutos sólo serviría
+    // para perder lo que alguien ya eligió. `null` no es un número grande: es la
+    // ausencia de vencimiento, y los lectores ya la entienden así —toda consulta
+    // de ítems vivos usa `lock_expires_at IS NULL OR lock_expires_at >= NOW()`—.
+    // `guarantee_mode` se consulta acá porque `req.mesa` no lo trae y su
+    // middleware (middleware/auth.js) está fuera del alcance de esta orden.
+    const { rows: [garantia] } = await pool.query(
+      `SELECT guarantee_mode, metadata FROM mesas WHERE id = $1`, [mesa.id]
+    );
+    // Igual que en el pago: `guarantee_mode=false` solo no alcanza —las mesas
+    // legacy también lo tienen—; la mesa de C3 se reconoce por su marca.
+    const mesaSinGarantia = !!garantia
+      && garantia.guarantee_mode === false
+      && garantia.metadata?.sin_garantia === true;
+    // Con el riel apagado tampoco vence la selección de una mesa CON garantía:
+    // nada puede pagarse en ese modo, así que la reserva de diez minutos sólo
+    // serviría para perder lo que alguien ya eligió — y `/api/config` publica
+    // `item_lock_seconds: null` para todo el modo, así que si acá venciera, el
+    // contrato estaría mintiendo justo con las mesas que sobreviven al flip.
+    const sinVencimiento = mesaSinGarantia || !dineroHabilitado();
+    const lockExpiresAt = sinVencimiento
+      ? null
+      : new Date(Date.now() + ITEM_LOCK_SECONDS * 1000);
+    let cerradaPorSeleccion = false;
     const userId = req.user?.id || null;
     const guestTokHash = guestHashOf(req);  // v2.5.2 P1 #2
 
@@ -1006,6 +1337,21 @@ router.post('/:code/items/lock', requireAuth, requireMesaParticipant,
     }
 
     const claims = await pool.tx(async (client) => {
+      // 🔴 ORDEN DE LOCKS: mesa PRIMERO, ítems después. No es cosmético y no es
+      // sólo por el write skew del cierre: insertar un claim toma un
+      // `FOR KEY SHARE` sobre la fila de la mesa por la foreign key, así que
+      // pedir el `FOR UPDATE` DESPUÉS de haber insertado es una escalada de
+      // lock — y dos comensales que terminan a la vez se deadlockean (40P01,
+      // reproducido). Tomándolo al abrir la transacción, la segunda espera
+      // desde el principio y su conteo ve el claim de la primera.
+      const cerrarPorSeleccion = mesaSinGarantia && mesa.division_mode === 'consumo';
+      let estadoDeMesa = null;
+      if (cerrarPorSeleccion) {
+        const { rows: [fijada] } = await client.query(
+          `SELECT status FROM mesas WHERE id = $1 FOR UPDATE`, [mesa.id]
+        );
+        estadoDeMesa = fijada ? fijada.status : null;
+      }
       const result = [];
       // orden estable por id: dos locks concurrentes con sets solapados no se
       // cruzan en orden inverso (anti-deadlock)
@@ -1038,6 +1384,48 @@ router.post('/:code/items/lock', requireAuth, requireMesaParticipant,
           throw e;
         }
       }
+      // C3 · CIERRE POR SELECCIÓN COMPLETA (decisión de Mati del 2026-09-01).
+      // Sólo para la mesa SIN garantía, y en la MISMA transacción que registró
+      // la última selección: si se hiciera después, dos comensales que terminan
+      // a la vez podrían cerrarla dos veces o ninguna.
+      //
+      // 🔴 Cero dinero: `expired` en una mesa con `guarantee_mode=false` queda
+      // FUERA de `sweepSettlements`, que filtra `WHERE guarantee_mode = true`
+      // (services/settlement.js:3453-3454). No se captura nada, no se emite E3
+      // ni E4, no se llama a Stripe.
+      if (cerrarPorSeleccion) {
+        const { rows: [pendientes] } = await client.query(
+          `SELECT COUNT(*)::int AS faltan
+             FROM mesa_items i
+            WHERE i.mesa_id = $1
+              AND COALESCE((
+                SELECT SUM(c.fraction_bps)
+                  FROM mesa_item_claims c
+                 WHERE c.mesa_item_id = i.id AND c.status IN ('locked','paid')
+              ), 0) < 10000`,
+          [mesa.id]
+        );
+        if (pendientes.faltan === 0) {
+          if (estadoDeMesa && ['open', 'partially_paid'].includes(estadoDeMesa)) {
+            await client.query(
+              `UPDATE mesas
+                  SET status = 'expired',
+                      metadata = jsonb_set(
+                        COALESCE(metadata, '{}'::jsonb),
+                        '{closure_reason}', '"all_items_selected"'::jsonb, true
+                      )
+                WHERE id = $1`,
+              [mesa.id]
+            );
+            await stateMachine.transition({
+              client, entityType: 'mesa', entityId: mesa.id,
+              fromState: estadoDeMesa, toState: 'expired',
+              reason: 'mesa_cerrada_seleccion_completa', triggeredBy: 'system',
+            });
+            cerradaPorSeleccion = true;
+          }
+        }
+      }
       return result;
     });
 
@@ -1046,6 +1434,14 @@ router.post('/:code/items/lock', requireAuth, requireMesaParticipant,
       claims,                                  // v2.18: [{item_id, fraction_bps}]
       lock_token: lockToken,
       lock_expires_at: lockExpiresAt,
+      // C3 · el front necesita saber que la mesa cerró SIN COBROS en la misma
+      // respuesta que registró la última selección; inferirlo de un reloj sería
+      // exactamente lo que la decisión prohíbe.
+      ...(cerradaPorSeleccion && {
+        mesa_status: 'expired',
+        closure_reason: 'all_items_selected',
+        guarantee_mode: false,
+      }),
     });
   } catch (err) {
     if (err.status) {
@@ -1090,6 +1486,23 @@ router.post('/:code/pay', requireAuth, requireMesaParticipant,
   validateBody(schemas.payMesa), async (req, res, next) => {
   try {
     const mesa = req.mesa;
+    // 🔴 C3 · UNA MESA SIN GARANTÍA NO SE COBRA NUNCA, EN NINGÚN MODO.
+    // El gate de dinero de abajo mira el MODO del proceso, no la mesa, y eso
+    // deja un hueco de dinero real: si el modo se flipea a vivo mientras hay
+    // mesas sin garantía abiertas —que es exactamente el orden del corte del
+    // viernes: se abren con el dinero apagado y el flip llega después—, esas
+    // mesas aceptarían pago. Y no podrían liquidarse: `sweepSettlements`
+    // filtra `WHERE guarantee_mode = true` (services/settlement.js:3454), así
+    // que la plata cobrada quedaría huérfana, sin E3/E4 ni dispersión, y con
+    // E2 ya emitido. Se cierra por la propiedad de la MESA, no del proceso.
+    const { rows: [garantiaDeMesa] } = await pool.query(
+      `SELECT guarantee_mode, metadata FROM mesas WHERE id = $1`, [mesa.id]
+    );
+    if (garantiaDeMesa && garantiaDeMesa.guarantee_mode === false
+        && garantiaDeMesa.metadata?.sin_garantia === true) {
+      logger.warn('mesa_sin_garantia_no_cobra', { mesa_id: mesa.id });
+      return res.status(409).json({ error: 'guarantee_required' });
+    }
     const {
       payment_method_id, stripe_payment_method_id, payment_type,
       save_payment_method,                       // D4 (v2.16)
@@ -2301,6 +2714,7 @@ async function findExistingMesa(openerId, idempotencyKey) {
   const { rows } = await pool.query(
     `SELECT id, code, opener_user_id, total_cents, division_mode, expected_participants,
             status, expires_at, created_at, metadata, idempotency_payload_hash,
+            guarantee_mode,
             auth_method, auth_stripe_account_id, auth_payment_intent_id,
             auth_amount_cents, auth_application_fee_cents,
             auth_source_payment_method_id, auth_charge_payment_method_id,
@@ -2341,13 +2755,19 @@ async function mesaReplayResponse(m) {
     auth_amount_cents, auth_application_fee_cents,
     auth_off_session, auth_save_payment_method } = m;
   const mesa = publicCreatedMesa(m);
-  const guarantee = {
-    method: auth_method || null,
-    status: m.status === 'open' ? 'open'
-      : m.status === 'pending_auth' ? 'requires_action'
-        : m.status,
-    ...(auth_stripe_account_id && { connected_account_id: auth_stripe_account_id }),
-  };
+  const guarantee = m.guarantee_mode === false
+    // C3 · el replay de una mesa SIN garantía tiene que decir lo mismo que el
+    // 201 original. Con `auth_method` NULL, la forma vieja publicaba
+    // `{method: null, status: 'open'}`, que el front lee como una garantía
+    // colocada — justo la confusión que C3 existe para evitar.
+    ? { method: 'none', status: 'none' }
+    : {
+      method: auth_method || null,
+      status: m.status === 'open' ? 'open'
+        : m.status === 'pending_auth' ? 'requires_action'
+          : m.status,
+      ...(auth_stripe_account_id && { connected_account_id: auth_stripe_account_id }),
+    };
   if (m.status === 'pending_auth') {
     if (auth_method !== 'card' || !auth_payment_intent_id) {
       return {

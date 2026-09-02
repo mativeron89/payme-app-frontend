@@ -2,6 +2,27 @@
   "version": 1,
   "owner": "payme-app-backend",
   "activation": "local_dark",
+  "signup_gate": {
+    "env": "PUBLIC_SIGNUP_ENABLED",
+    "open_value": "true",
+    "otherwise": "invitation_required",
+    "read_at": "every_request. Lo leen por request tanto la AUTORIDAD (services/signupInvitations.autoridadDeAlta) como los DTO: routes/auth.js y routes/social-auth.js eligen schema en cada llamada (C2b). Cambiar el valor no exige un release del código; sí exige lo que la plataforma pida para cambiar una variable de entorno, y eso no está verificado contra el hosting.",
+    "applies_to": ["POST /api/auth/register", "POST /api/auth/google/register"],
+    "applies_to_nota": "POST /api/auth/register no está descripto en este documento —es el alta directa, del mismo dueño— y se lista porque la puerta es la misma.",
+    "capability_publicada": {
+      "ruta": "GET /api/config",
+      "path": "features.signup.public_registration",
+      "forma": "booleano vivo, acompañado de features.signup.supported",
+      "absent_means": "backend anterior a C2b: se asume alta CERRADA (hay que pedir invitación)",
+      "unknown_or_malformed_means": "alta CERRADA",
+      "por_que": "es la forma soportada de saber si hay que pedir invitación; NO se infiere probando el alta y leyendo el 403 opaco"
+    },
+    "facebook": "register/start conserva invitation_token obligatorio; sigue dark hasta Meta",
+    "anti_enumeration": "con el alta abierta, un email ya registrado responde el MISMO registration_not_available opaco, nunca un 409 que lo confirme. Lo que sí cambia, y es inevitable al abrir el registro: un 201 frente a un 403 distingue un email libre de uno tomado. No es una regresión del guard, es la consecuencia de abrir el alta; el consumidor no debe afirmar existencia en su copy (D-R15).",
+    "anti_enumeration_residual": "quedan declarados otros dos oráculos, los dos consecuencia de reglas ratificadas y no defectos: (a) quien tiene una invitación puede confirmar a qué email está ligada, porque un email distinto da 403 y el intento fallido no consume ni la invitación ni la credencial del proveedor; (b) publicar features.signup.public_registration desambigua un 403 entre alta cerrada y email tomado. Ambos se limitan por rate limit, no por opacidad.",
+    "email_verification": "ninguna en este corte; no se publica email_verified por inferencia",
+    "owner_decision": "2026-09-01 · cierre del corte del viernes §2.2 · materializa el «cuando estemos listos» de D-FF-1 sin borrar la invitación"
+  },
   "external_prerequisites": [
     "google_verifier_and_client_ids",
     "payme_recovery_transport",
@@ -25,7 +46,11 @@
     "google_register": {
       "method": "POST",
       "path": "/api/auth/google/register",
-      "request": ["invitation_token", "id_token", "first_name", "last_name", "birth_date?"],
+      "request": ["invitation_token?", "email?", "id_token", "first_name", "last_name", "birth_date?"],
+      "request_notes": {
+        "invitation_token": "Obligatorio con el alta cerrada (default). Con PUBLIC_SIGNUP_ENABLED=true es opcional: si llega se valida y consume; inválido = registration_not_available.",
+        "email": "Declarado por el usuario, NO verificado y NO autoridad: no enlaza, no fusiona ni recupera una cuenta existente, y un email ya registrado devuelve el mismo registration_not_available opaco. SÓLO se acepta con PUBLIC_SIGNUP_ENABLED=true (con el alta cerrada el DTO es strict y lo rechaza con validation_error). Sin invitación es la ÚNICA fuente del email de la cuenta, con el mismo parser que el alta directa; con invitación manda la invitación y un email distinto es registration_not_available. Nunca el email del proveedor: en esta versión lo escribe la persona, y prellenarlo desde la credencial del proveedor sería un cambio de contrato posterior."
+      },
       "success_status": 201,
       "success_shape": "session_success_shape",
       "errors": {

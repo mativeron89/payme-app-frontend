@@ -91,17 +91,49 @@ const MODO_MONETARIO = 'sandbox';
 
 const MODOS_CONOCIDOS = Object.freeze(['disabled', 'sandbox', 'live']);
 
-// ⚠️ ACÁ VIVÍA UN SEAM DE TEST, y se retiró con `D-FF-2-BIS` (2026-08-10).
+// ⚠️ ACÁ VIVÍA UN SEAM DE TEST que se retiró con `D-FF-2-BIS` (2026-08-10)
+// porque, con el modo en `sandbox`, abría una puerta que ya estaba abierta: era
+// un seam INERTE, y uno inerte es peor que uno ausente. Aquel comentario decía
+// que si volvía `disabled` se reescribiría CON SU RAZÓN, y no se resucitaría el
+// viejo. Esto es eso.
 //
-// Existía para que las suites históricas del riel de dinero pudieran operar
-// mientras el modo era `disabled`. Con `sandbox` el dinero está habilitado para
-// todos, así que el seam quedó INERTE: abría una puerta que ya estaba abierta.
+// ─── C3 · SEAM DE TEST, EN LA DIRECCIÓN CONTRARIA ─────────────────────────
 //
-// 🔴 Se retira en vez de dejarlo. Un seam inerte es peor que uno ausente: sigue
-// pareciendo que protege algo, y el día que alguien vuelva a cerrar el modo va
-// a confiar en llamadas que no hacen nada. Además era, por definición, un
-// abridor de dinero vivo en seis archivos de test. Si algún día vuelve
-// `disabled`, se reescribe con su razón; no se resucita este.
+// El de v2.x ABRÍA el dinero para que las suites históricas operaran con el
+// modo cerrado. Éste lo CIERRA: la mesa sin garantía sólo existe con
+// `dineroHabilitado() === false`, y el valor entregado hoy es `sandbox`. Sin
+// seam, esa conducta no se podría ejercitar sin flipear la constante en el
+// árbol, que es una decisión de producto y no de un test.
+//
+// 🔴 Por qué el override vive ACÁ y no en un stub del export: los consumidores
+// destructuran en el `require` (`routes/mesas.js:34`, `routes/config.js:17`,
+// `routes/payment-methods.js:15`, `routes/connect.js:25`,
+// `middleware/envValidation.js:13`, `services/ffEnvironmentPreflight.js:27`),
+// así que reemplazar `module.exports.dineroHabilitado` no alcanzaría a ninguno.
+// Un módulo que lee su propio estado interno en cada llamada, sí.
+//
+// Se cierra por construcción: exige `NODE_ENV=test` y sólo admite modos
+// CONOCIDOS. Fuera de test lanza; nunca puede habilitar dinero que la constante
+// no habilite —sólo puede cerrarlo o dejarlo igual—, así que un seam olvidado
+// no mueve plata.
+let modoForzadoEnTests = null;
+
+function modoVigente() {
+  return modoForzadoEnTests === null ? MODO_MONETARIO : modoForzadoEnTests;
+}
+
+/** Fuerza el modo dentro de una prueba. Devuelve la función que restaura. */
+function forzarModoParaTests(modo) {
+  if (process.env.NODE_ENV !== 'test') throw new Error('money_rail_test_seam_forbidden');
+  if (!MODOS_CONOCIDOS.includes(modo)) throw new Error('money_rail_test_seam_modo_invalido');
+  if (modo === 'live' || (modo === 'sandbox' && MODO_MONETARIO === 'disabled')) {
+    // El seam NUNCA abre más de lo que la constante ya abre.
+    throw new Error('money_rail_test_seam_no_habilita');
+  }
+  const anterior = modoForzadoEnTests;
+  modoForzadoEnTests = modo;
+  return () => { modoForzadoEnTests = anterior; };
+}
 
 /**
  * Fail-closed: habilitan `live` y `sandbox`, y NADA MÁS.
@@ -118,7 +150,8 @@ const MODOS_CONOCIDOS = Object.freeze(['disabled', 'sandbox', 'live']);
  * prohíbe.
  */
 function dineroHabilitado() {
-  return MODO_MONETARIO === 'live' || MODO_MONETARIO === 'sandbox';
+  const modo = modoVigente();
+  return modo === 'live' || modo === 'sandbox';
 }
 
 /**
@@ -136,10 +169,11 @@ function dineroHabilitado() {
  * conozca un modo futuro ve `false` en ambos, que es el lado seguro.
  */
 function modoMonetarioCapability() {
+  const modo = modoVigente();
   return {
-    mode: MODO_MONETARIO,
-    payments_enabled: MODO_MONETARIO === 'sandbox' || MODO_MONETARIO === 'live',
-    real_money: MODO_MONETARIO === 'live',
+    mode: modo,
+    payments_enabled: modo === 'sandbox' || modo === 'live',
+    real_money: modo === 'live',
   };
 }
 
@@ -151,11 +185,11 @@ function modoMonetarioCapability() {
 function requireDineroHabilitado(req, res, next) {
   if (dineroHabilitado()) return next();
   logger.warn('money_rail_disabled_reject', {
-    path: req.originalUrl, method: req.method, mode: MODO_MONETARIO,
+    path: req.originalUrl, method: req.method, mode: modoVigente(),
   });
   return res.status(409).json({
     error: 'payments_disabled',
-    mode: MODO_MONETARIO,
+    mode: modoVigente(),
     message: 'Los pagos están deshabilitados por la configuración vigente.',
   });
 }
@@ -167,11 +201,11 @@ function requireDineroHabilitado(req, res, next) {
 function rechazaPorDineroApagado(req, res, motivo) {
   if (dineroHabilitado()) return false;
   logger.warn('money_rail_disabled_reject', {
-    path: req.originalUrl, method: req.method, mode: MODO_MONETARIO, motivo,
+    path: req.originalUrl, method: req.method, mode: modoVigente(), motivo,
   });
   res.status(409).json({
     error: 'payments_disabled',
-    mode: MODO_MONETARIO,
+    mode: modoVigente(),
     ...(motivo && { field: motivo }),
     message: 'Los pagos están deshabilitados por la configuración vigente.',
   });
@@ -181,6 +215,8 @@ function rechazaPorDineroApagado(req, res, motivo) {
 module.exports = {
   MODO_MONETARIO,
   MODOS_CONOCIDOS,
+  modoVigente,
+  forzarModoParaTests,
   dineroHabilitado,
   modoMonetarioCapability,
   requireDineroHabilitado,

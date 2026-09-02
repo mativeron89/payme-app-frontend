@@ -11,10 +11,10 @@
  */
 'use strict';
 const express = require('express');
-const { birthDateRequeridaEnRegistro } = require('../schemas');
+const { birthDateRequeridaEnRegistro, altaPublicaHabilitada } = require('../schemas');
 const { stpRestaurantDispersalReady } = require('../middleware/envValidation');
 const { walletRailCapability } = require('../services/walletRail');
-const { modoMonetarioCapability } = require('../services/moneyRail');
+const { modoMonetarioCapability, dineroHabilitado } = require('../services/moneyRail');
 const { ocrCapability } = require('../services/ocrRail');
 const { PROFILE_IDENTITY_CAPABILITY } = require('../services/profileIdentity');
 const {
@@ -71,7 +71,14 @@ router.get('/', (req, res) => {
     mesa_hold_seconds: Number(process.env.MESA_HOLD_SECONDS) || 1800,
     payment_hold_seconds: Number(process.env.PAYMENT_HOLD_SECONDS) || 420,
     invitation_expiry_seconds: Number(process.env.INVITATION_EXPIRY_SECONDS) || 86400,
-    item_lock_seconds: Number(process.env.ITEM_LOCK_SECONDS) || 600,
+    // C3 · con el riel monetario apagado la mesa nace SIN garantía y su
+    // selección de consumos no vence: se publica `null`, que es la ausencia
+    // explícita de vencimiento. Un número grande sería una mentira redonda —el
+    // front mostraría una cuenta regresiva que no existe— y ésta es la
+    // diferencia que la decisión de Mati pide declarar en el contrato.
+    item_lock_seconds: dineroHabilitado()
+      ? (Number(process.env.ITEM_LOCK_SECONDS) || 600)
+      : null,
     features: {
       // Los enums existen, pero hoy no hay Express Checkout/Payment Request
       // real ni prueba de dispositivo. Publicar true hacía que un consumidor
@@ -126,6 +133,19 @@ router.get('/', (req, res) => {
         registration_required: birthDateRequeridaEnRegistro(),
         write_once: true,
         adulthood_server_authoritative: true,
+      },
+      // C2b · alta pública. Se publica el valor VIVO de la capability de
+      // entorno, no una constante: el front necesita saber si tiene que pedir
+      // invitación, y la única alternativa era probar contra el alta y leer un
+      // 403 opaco — justo el oráculo que la antienumeración evita. Un solo
+      // booleano y nada más: el nombre de la variable no se publica.
+      signup: {
+        // `supported` explícito y no por presencia, igual que
+        // account_birth_date: un backend anterior a C2b no manda esta clave, y
+        // el front chequea un booleano en vez de un `undefined`. Ausencia =
+        // backend viejo = alta cerrada, que es el lado seguro.
+        supported: true,
+        public_registration: altaPublicaHabilitada(),
       },
       // Implementación owner-first activada con aviso 2.3.0 ratificado.
       // El payme_id sigue inmutable y el avatar nunca tiene URL pública.

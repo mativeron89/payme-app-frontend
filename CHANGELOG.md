@@ -11,6 +11,69 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.156.0 — Espejo del contrato al pin owner-first del corte (2026-09-02)
+
+Orden `APP-FE-FRIDAY-PUBLIC-NO-PAYMENTS-01-CLAUDE-F0`, baseline
+`e7dd015303e363ab9806a3d3af3aff720d841948`. **Sin push, sin deploy, sin provider, sin
+DB y sin secreto.** No se verificó CI remoto ni producción, y nada de esto lo afirma.
+
+Refresh **mecánico** del espejo: adopta el inventario owner-first de App Backend y no
+toca `src/`, `e2e/`, el verificador ni el runtime. **Cero comportamiento nuevo.**
+
+### 🔴 El pin es PROVISIONAL y el SHA del dueño NO está adoptado ni auditado
+
+Se escribe primero porque no es la situación normal de un refresh. Los cuatro commits
+del dueño (C1–C4) están entregados y **encolados a Codex sin GREEN**. La autoridad para
+espejar igual es el dictamen de Codex del 2026-09-02 09:48 (SHA-256
+`098d61fa8c5ee8d0ea9d44c756c974a6b1ef12fac8437644bffd8ef219ad454a`), §2 **opción (b):
+pin provisional con assert de drift y re-pin obligatorio**. Si el SHA que Codex audite
+finalmente difiere de `1851acbb…`, **este espejo se regenera y sus gates se repiten**.
+Adoptar el inventario hoy **no** convierte al SHA del dueño en adoptado.
+
+### Qué cambia, medido contra el inventario y no contra un diff
+
+- Contenido pineado: **`1851acbb993b935f7a89c3c0fdc6e0b1163bc2a9`** (C4-A, App Backend
+  v2.85.0); inventario republicado por **`65c13a521e28145238bd4c3824720bad88552f8a`**
+  (C4-B). El inventario declara el commit del contenido, no el suyo.
+- **107 archivos**, igual que el corte anterior. **Cambian once**:
+  `contract/social-auth-v1.json`, `db/schema.sql`, `routes/auth.js`, `routes/config.js`,
+  `routes/mesas.js`, `routes/social-auth.js`, `schemas/index.js`,
+  `services/externalIdentities.js`, `services/moneyRail.js`,
+  `services/signupInvitations.js`, `services/signupRateLimit.js`.
+- **Cero nuevos, cero que salgan, cero renombrados.** Los otros 96 quedan byte-idénticos
+  y se declaran sin cambio **por inventario**, no por inspección: el `sha256` de cada uno
+  coincide en las dos poblaciones.
+
+### Gates, con su resultado literal
+
+| gate | resultado |
+|---|---|
+| `verificar-mirror --integridad` | OK **107/107** contra el inventario · exit 0 |
+| `verificar-mirror --paridad` | OK **107/107**: espejo = inventario = fuente **en `1851acb`** · exit 0 |
+| `verificar-mirror --vigencia` | **exit 1 · declarado, NO es condición de este tramo** |
+
+**`--paridad` es el assert de drift que exige el dictamen**: compara contra el commit que
+el inventario declara, o sea contra el pin exacto.
+
+⚠️ **Por qué `--vigencia` sale en rojo, y por qué su propio mensaje no describe este
+caso.** El script compara contra el `HEAD` del repo hermano y, al fallar, dice *«la fuente
+avanzó»*. **Acá pasa lo contrario:** el `HEAD` de `main` del dueño es
+`4b6a9f55cc30126d36bbc66bd88b9ba890146fd5` (2026-08-31) y es **ANCESTRO** del pin — los
+commits C1–C4 viven en su worktree y todavía no están en `main`. El rojo significa **«el
+contenido pineado aún no llegó a `main` del dueño»**, no un desvío del espejo. Es la
+distinción que el verificador separa en dos modos a propósito, y por eso el PASS de este
+tramo es integridad + paridad.
+
+### Lo que este commit NO hace
+
+Espejar bytes **no habilita nada**. Entran al espejo el contrato del alta pública
+(`PUBLIC_SIGNUP_ENABLED`, `features.signup`), el del modo monetario `disabled` con
+`guarantee_method:'none'`, el par `guarantee_mode`/`closure_reason` y `GET /mesas/mine`.
+**Ninguna de esas superficies se enciende acá**: cada una es un tramo con su propia orden
+(F1, F2 y F3), y este commit no toca `src/` ni `e2e/`. El candidato queda encolado sin
+PASS, sin GREEN, sin push y sin deploy hasta que Codex audite primero al dueño y después
+al consumidor.
+
 ## 0.155.0 — Corte del viernes · tramo frontend PARCIAL del corte de pagos (2026-09-01)
 
 Orden `APP-FE-FRIDAY-NO-PAY-GUARD-02-CLAUDE`, sucedida por la `03` (un path más

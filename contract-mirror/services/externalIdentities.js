@@ -4,12 +4,16 @@
 const bcrypt = require('bcrypt');
 const pool = require('../db/pool');
 const { generatePaymeId } = require('../utils/userId');
+const { normalizarEmailDeContrato } = require('../schemas');
 const signupInvitations = require('./signupInvitations');
 const paymeSessions = require('./paymeSessions');
 
 function codedError(code, status) {
   return Object.assign(new Error(code), { code, status });
 }
+
+/** Proveedores que pueden dar de alta una cuenta; espejan el CHECK de users.signup_method. */
+const METODOS_DE_ALTA_SOCIAL = new Set(['google', 'facebook']);
 
 function registrationUnavailable() {
   return codedError('registration_not_available', 403);
@@ -54,37 +58,62 @@ async function insertBinding(client, { userId, evidence }) {
   );
 }
 
+/**
+ * C2 · el email de la cuenta social tiene UNA autoridad por modo, nunca el
+ * proveedor: con invitación manda la invitación (y un `email` del cuerpo que
+ * no coincida es el mismo 403 opaco); sin invitación —sólo posible con el alta
+ * pública abierta— manda el `email` del cuerpo, con el mismo parser que el alta
+ * directa y el mismo estatus: sin verificar, que es lo ratificado. Sin ninguna
+ * de las dos fuentes no hay de dónde sacarlo, y se falla cerrado.
+ */
+function emailDeLaCuenta(invitation, email) {
+  if (invitation) {
+    if (email !== undefined && normalizarEmailDeContrato(email) !== invitation.email_normalized) {
+      throw registrationUnavailable();
+    }
+    return invitation.email_normalized;
+  }
+  const normalized = normalizarEmailDeContrato(email);
+  if (!normalized) throw registrationUnavailable();
+  return normalized;
+}
+
 async function registerWithExternalIdentity({
-  invitationToken, invitationTokenHash, evidence, firstName, lastName, birthDate,
+  invitationToken, invitationTokenHash, evidence, firstName, lastName, birthDate, email,
 }) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const paymeId = await generatePaymeId(firstName, lastName);
     try {
       return await pool.tx(async (client) => {
-        const invitation = invitationTokenHash
-          ? await signupInvitations.bloquearInvitacionPorHash(client, {
-            tokenHashValue: invitationTokenHash,
-          })
-          : await signupInvitations.bloquearInvitacionPorToken(client, {
-            token: invitationToken,
-          });
-        if (!invitation) throw registrationUnavailable();
+        // C2 · misma puerta única que el alta directa (Google usa el mismo gate).
+        const invitation = await signupInvitations.autoridadDeAlta(client, {
+          token: invitationToken, tokenHashValue: invitationTokenHash,
+        });
+        const accountEmail = emailDeLaCuenta(invitation, email);
         await assertSubjectAllowed(client, evidence);
         await consumeCredential(client, evidence, 'register');
+        // v2.82.0 · `signup_method` = el proveedor con el que la cuenta NACE.
+        // Se escribe en el INSERT y falla cerrado si el proveedor no es uno de
+        // los métodos de alta social conocidos: la base lo rechaza por CHECK y
+        // acá se rechaza antes, sin crear la fila.
+        if (!METODOS_DE_ALTA_SOCIAL.has(evidence.provider)) throw registrationUnavailable();
         const { rows: [user] } = await client.query(
           `INSERT INTO users
              (payme_id,email,email_normalized,phone,password_hash,
-              first_name,last_name,birth_date)
-           VALUES ($1,$2,$2,NULL,NULL,$3,$4,$5)
+              first_name,last_name,birth_date,signup_method)
+           VALUES ($1,$2,$2,NULL,NULL,$3,$4,$5,$6)
            RETURNING id,payme_id,email,first_name,last_name`,
-          [paymeId, invitation.email_normalized, firstName, lastName, birthDate ?? null]
+          [paymeId, accountEmail, firstName, lastName, birthDate ?? null,
+            evidence.provider]
         );
         await insertBinding(client, { userId: user.id, evidence });
         const session = await paymeSessions.createSession({ userId: user.id, client });
-        await signupInvitations.marcarConsumida(client, {
-          invitationId: invitation.id,
-          userId: user.id,
-        });
+        if (invitation) {
+          await signupInvitations.marcarConsumida(client, {
+            invitationId: invitation.id,
+            userId: user.id,
+          });
+        }
         // Firma antes del COMMIT: una configuración JWT inválida no deja una
         // cuenta creada sin la respuesta que acredita su sesión.
         return paymeSessions.sessionResponse(user, session);

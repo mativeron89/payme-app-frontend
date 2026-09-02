@@ -138,6 +138,36 @@ function birthDateRequeridaEnRegistro() {
 function registerSchema() {
   return birthDateRequeridaEnRegistro() ? register : registerCompat;
 }
+
+/**
+ * C2 · v2.83.0 · alta directa PÚBLICA, decisión del 2026-09-01 (§2.2 del cierre
+ * del corte del viernes): materializa el «luego lo abrimos cuando estemos
+ * listos» de D-FF-1 (2026-08-10) SIN borrar el mecanismo de invitación.
+ *
+ * Es una capability de ENTORNO —la decisión eligió variable leída, no la
+ * constante que había propuesto el ejecutor— y esta función se lee EN CADA
+ * LLAMADA. Desde C2b eso alcanza a TODA la superficie: la autoridad de alta
+ * (`autoridadDeAlta`), el schema del alta directa y también el DTO social, que
+ * `routes/social-auth.js` elige por request en vez de al montar el router. El
+ * contrato lo declara igual (`signup_gate.read_at`), con la misma salvedad que
+ * PQ-2: cambiar el valor no exige un release del código, pero sí lo que la
+ * plataforma exija para cambiar una variable de entorno, y eso NO está
+ * verificado contra Railway. Sólo `true` exacto abre; ausente, vacío, `TRUE`, `1`,
+ * `yes` o cualquier otra cosa dejan la invitación obligatoria (fail-closed por
+ * la literalidad de la orden: «ausente, vacío o distinto de `true` mantiene
+ * invitación obligatoria»). No usa `banderaEstricta` a propósito: el texto
+ * ratificado pide que un valor mal escrito CIERRE, no que impida el arranque.
+ *
+ * Vive acá, y no en `signupInvitations.js`, por dos razones: este archivo ya
+ * aloja la otra política de registro leída del entorno (`PQ2_BIRTH_DATE_REQUIRED`)
+ * y elige schemas por modo; y `signupInvitations` importa `../schemas`, así que
+ * ponerla del otro lado creaba un ciclo o una segunda copia de la lectura.
+ */
+const FLAG_ALTA_PUBLICA = 'PUBLIC_SIGNUP_ENABLED';
+
+function altaPublicaHabilitada(env = process.env) {
+  return env[FLAG_ALTA_PUBLICA] === 'true';
+}
 const login = z.object({ email, password: passwordLegacy });
 const refreshToken = z.object({
   refresh_token: z.string().min(20).max(500),
@@ -158,10 +188,23 @@ const socialRegisterBase = z.object({
   last_name: profileName,
   birth_date: birthDate.optional(),
 }).strict();
+/**
+ * C2 · con el alta pública abierta, el DTO social admite `email` OPCIONAL del
+ * cliente, con el MISMO parser que el alta directa. Es la única fuente lícita
+ * del email de una cuenta social sin invitación: el del proveedor está
+ * PROHIBIDO por el contrato (`forbidden_client_fields.provider_email`). Con el
+ * alta cerrada el DTO sigue `strict` sin `email`, como fija
+ * `tests/social-auth-http.test.js` («DTO social rechaza email del cliente»).
+ * La autoridad sobre ese email la decide el servicio: con invitación manda la
+ * invitación; sin invitación, el cuerpo.
+ */
 function socialRegisterSchema() {
-  return birthDateRequeridaEnRegistro()
-    ? socialRegisterBase.extend({ birth_date: birthDate })
+  const base = altaPublicaHabilitada()
+    ? socialRegisterBase.extend({ email: email.optional() })
     : socialRegisterBase;
+  return birthDateRequeridaEnRegistro()
+    ? base.extend({ birth_date: birthDate })
+    : base;
 }
 const socialLogin = z.object({ id_token: externalIdToken }).strict();
 const socialLink = z.object({
@@ -260,7 +303,10 @@ const createMesa = z.object({
   // "no lo mandaron" de "mandaron 1".
   expected_participants: safeInt.min(1).max(20).optional(),
   // v2.11 (parche §2 · garantía): el organizador garantiza el total al crear
-  guarantee_method: z.enum(['card', 'wallet']),
+  // C3 · `none` es la mesa SIN garantía del corte del viernes. El DTO la
+  // admite, pero la ruta la rechaza si el riel monetario está vivo: el schema
+  // dice qué se puede pedir, no qué se puede hacer.
+  guarantee_method: z.enum(['card', 'wallet', 'none']),
   stripe_payment_method_id: stripePmId.optional(),
   // D4 (v2.16): garantía con tarjeta GUARDADA (uuid de payment_methods) y
   // opt-in para guardar la tarjeta tipeada (default false: el consentimiento
@@ -537,6 +583,7 @@ function validateParams(schema) {
 module.exports = {
   normalizarEmailDeContrato,
   register, registerCompat, registerSchema, birthDateRequeridaEnRegistro,
+  altaPublicaHabilitada, FLAG_ALTA_PUBLICA,
   login, refreshToken, socialRegisterSchema, socialLogin, socialLink,
   facebookRegisterStartSchema, facebookLoginStart, facebookComplete,
   facebookSignedRequest,
