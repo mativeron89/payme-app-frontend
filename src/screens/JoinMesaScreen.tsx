@@ -3,6 +3,8 @@ import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import { signupInvitationSnapshot, subscribeSignupInvitation } from '../api/signupInvitation';
+import { useSocialAuthCapability } from '../api/socialAuth';
+import { autoridadDeAlta } from './LoginScreen';
 import { useAuth } from '../auth/AuthContext';
 import { AppHeader } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
@@ -118,7 +120,17 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
     signupInvitationSnapshot,
     signupInvitationSnapshot,
   );
-  const signupAvailable = signup.status === 'available';
+  const social = useSocialAuthCapability();
+  /**
+   * 🔴 C2b · esta pantalla gateaba «Crear cuenta gratis» con la invitación de
+   * ALTA, y ése es un objeto distinto del `?t=` que trajo a la persona hasta
+   * acá: el token de la mesa no crea autoridad de alta. Con el alta pública
+   * abierta y sin invitación, el botón desaparecía y quien llegó por WhatsApp
+   * quedaba sin forma de registrarse **aunque el dueño hubiera abierto la
+   * puerta** — el 401 le dice «necesitás cuenta» y la pantalla no le ofrecía
+   * crearla. Ahora lee la misma autoridad que el formulario.
+   */
+  const signupAvailable = autoridadDeAlta(signup, social.publicRegistration) !== null;
 
   /**
    * ⭐ LA SECUENCIA DE CUSTODIA, Y EL ORDEN NO ES NEGOCIABLE.

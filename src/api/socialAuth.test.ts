@@ -174,3 +174,92 @@ describe('loader de capability · caída de red reintentable', () => {
     expect(socialAuthSnapshot().status).toBe('authoritative');
   });
 });
+
+/**
+ * C2b · alta pública. `GET /api/config` publica `features.signup` como bloque
+ * HERMANO de `social_auth`, con dos claves exactas (`contract-mirror/routes/config.js:142-149`).
+ *
+ * 🔴 **Se decodifica aparte y NO degrada al resto del social, a propósito.** Un
+ * backend anterior a C2b no manda `signup`; fundirlo con `social_auth` haría que
+ * su ausencia apagara Google y el login, que es una regresión y no lo que el
+ * contrato pide. `signup_gate.capability_publicada` dice exactamente qué
+ * significa cada caso: `absent_means` y `unknown_or_malformed_means` = **alta
+ * CERRADA**, o sea «pedir invitación», no «apagar todo».
+ *
+ * Y la dirección del fail-closed acá es una sola: **cerrada**. Abrir el alta por
+ * un contrato que no se entendió sería crear cuentas sin la autoridad que el
+ * dueño exige.
+ */
+describe('C2b · capability de alta pública · fail-closed a CERRADA, sin degradar el resto', () => {
+  function conSignup(signup: unknown) {
+    return { features: { social_auth: OFF, account_birth_date: BIRTH_READY, signup } };
+  }
+
+  it('la forma exacta del dueño con true habilita el alta pública', () => {
+    const estado = readSocialAuthCapability(conSignup({ supported: true, public_registration: true }));
+    expect(estado.status).toBe('authoritative');
+    expect(estado.publicRegistration).toBe(true);
+  });
+
+  it('con public_registration false queda cerrada', () => {
+    expect(readSocialAuthCapability(conSignup({ supported: true, public_registration: false })).publicRegistration).toBe(false);
+  });
+
+  it('AUSENTE = backend anterior a C2b = cerrada, y el resto del social NO se degrada', () => {
+    // `googleEnabled(false)` = login y linking ON, registration OFF: el shape
+    // válido sin recovery que el bloque de arriba ya acredita.
+    const sinSignup = readSocialAuthCapability(config(googleEnabled(false)));
+    expect(sinSignup.publicRegistration).toBe(false);
+    // La prueba de que no degrada: el bloque social sigue siendo autoritativo.
+    expect(sinSignup.status).toBe('authoritative');
+    expect(sinSignup.google.enabled).toBe(true);
+  });
+
+  it('una clave de más deja el alta cerrada y tampoco degrada el resto', () => {
+    const extra = readSocialAuthCapability({
+      features: {
+        social_auth: googleEnabled(false),
+        account_birth_date: BIRTH_READY,
+        signup: { supported: true, public_registration: true, enabled_for_restaurant: true },
+      },
+    });
+    expect(extra.publicRegistration).toBe(false);
+    expect(extra.google.enabled).toBe(true);
+  });
+
+  it('un booleano que llega como string no abre el alta', () => {
+    expect(readSocialAuthCapability(conSignup({ supported: true, public_registration: 'true' })).publicRegistration).toBe(false);
+  });
+
+  it('supported false cierra el alta aunque public_registration venga true', () => {
+    expect(readSocialAuthCapability(conSignup({ supported: false, public_registration: true })).publicRegistration).toBe(false);
+  });
+
+  it('el estado cerrado inicial y el malformado global también dejan el alta cerrada', () => {
+    expect(socialAuthSnapshot().publicRegistration).toBe(false);
+    expect(readSocialAuthCapability(null).publicRegistration).toBe(false);
+  });
+});
+
+/**
+ * La decisión que este bloque FIJA, porque no es obvia: si `social_auth` viene
+ * inválido, el alta pública queda cerrada aunque `signup` esté impecable.
+ *
+ * Es coherente con el módulo, que ya distingue dos direcciones: `password_login`
+ * se conserva ante cualquier basura —apagar un ingreso existente es regresión—
+ * y toda superficie NUEVA se apaga. El alta sin invitación es superficie nueva.
+ */
+describe('C2b · un config que no se entiende no abre el alta, y sí conserva el login', () => {
+  it('social_auth malformado cierra el alta pública aunque signup sea válido', () => {
+    const estado = readSocialAuthCapability({
+      features: {
+        social_auth: { google_sign_in: 'basura' },
+        account_birth_date: BIRTH_READY,
+        signup: { supported: true, public_registration: true },
+      },
+    });
+    expect(estado.status).toBe('malformed');
+    expect(estado.publicRegistration).toBe(false);
+    expect(estado.passwordLoginEnabled).toBe(true);
+  });
+});

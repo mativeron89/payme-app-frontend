@@ -33,6 +33,27 @@ export interface SocialAuthState {
   readonly passwordLoginEnabled: true;
   /** El slice no captura birth_date; sólo false autoritativo permite alta social. */
   readonly socialRegistrationBirthDateReady: boolean;
+  /**
+   * C2b · ¿el dueño abrió el alta sin invitación? **Fail-closed a `false`.**
+   *
+   * Se decodifica del bloque HERMANO `features.signup`, no de `social_auth`, y
+   * por eso su ausencia no degrada a Google ni al login: un backend anterior a
+   * C2b simplemente no manda la clave. El contrato lo fija con esas palabras
+   * (`contract-mirror/contract/social-auth-v1.json` → `signup_gate.capability_publicada`):
+   * `absent_means` y `unknown_or_malformed_means` = **alta CERRADA**, o sea
+   * «pedir invitación», nunca «apagar el resto».
+   *
+   * 🔴 **Y la dirección del fail-closed acá es una sola.** En este módulo hay
+   * campos que fallan hacia «no ocultar» —`passwordLoginEnabled`, porque apagar
+   * un ingreso que ya existe es una regresión—. Éste es al revés: abrir el alta
+   * por un contrato que no se entendió crearía cuentas sin la autoridad que el
+   * dueño exige. Ante cualquier duda, cerrada.
+   *
+   * ⚠️ **No se infiere probando el alta y leyendo el 403**, que es justo el
+   * oráculo que la antienumeración evita; el contrato lo dice explícito en
+   * `signup_gate.capability_publicada.por_que`.
+   */
+  readonly publicRegistration: boolean;
 }
 
 const GOOGLE_OFF: GoogleSocialCapability = {
@@ -61,6 +82,7 @@ function closed(status: SocialAuthStatus): SocialAuthState {
     recovery: RECOVERY_OFF,
     passwordLoginEnabled: true,
     socialRegistrationBirthDateReady: false,
+    publicRegistration: false,
   };
 }
 
@@ -165,6 +187,19 @@ function decodeRecovery(raw: unknown): RecoverySocialCapability | null {
     : null;
 }
 
+/** Las DOS claves exactas que publica el dueño. Cerrado como sus vecinos. */
+const SIGNUP_KEYS = ['public_registration', 'supported'] as const;
+
+/**
+ * `features.signup` → ¿alta sin invitación? Una clave de más, un tipo que no es
+ * booleano o `supported !== true` dejan el alta CERRADA. `supported` se exige
+ * explícito y no por presencia, igual que en `account_birth_date`.
+ */
+function decodeSignup(raw: unknown): boolean {
+  if (!plainObject(raw) || !exactKeys(raw, SIGNUP_KEYS)) return false;
+  return raw.supported === true && raw.public_registration === true;
+}
+
 function birthDateAllowsSocialRegistration(raw: unknown): boolean {
   return plainObject(raw)
     && exactKeys(raw, BIRTH_KEYS)
@@ -216,6 +251,7 @@ export function readSocialAuthCapability(config: unknown): SocialAuthState {
     recovery,
     passwordLoginEnabled: true,
     socialRegistrationBirthDateReady: birthReady,
+    publicRegistration: decodeSignup(features.signup),
   };
 }
 

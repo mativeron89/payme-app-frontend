@@ -11,6 +11,101 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.157.0 — Alta pública y Google sin invitación, bajo la capability del dueño (2026-09-02)
+
+Orden `APP-FE-FRIDAY-PUBLIC-NO-PAYMENTS-01-CLAUDE-F1`, baseline
+`80e7c27d3dc1c965aee1018cf8abf6a8fb1ae6e6`. Pin del dueño: C2
+`d315fdcc9b05f6c0f45b0b66d137aad07bf4b349` y C2b `64174095fcf456f2a4c21d0d72234f235e3646d6`,
+ambos **ancestros medidos** del contenido `1851acbb…` que espeja `0.156.0`, así que el
+contrato se consume del espejo sin tocarlo. **Sin push, sin deploy, sin proveedor, sin DB
+y sin secreto.**
+
+### Qué habilita, y quién lo decide
+
+El dueño publica `features.signup.public_registration` en `GET /api/config`
+(`contract-mirror/routes/config.js:142-149`) y **este front lo LEE**: no hay constante
+propia, no se infiere del 403 —que es justo el oráculo que la antienumeración evita— y
+**falla cerrado**. Ausente, malformada, con una clave de más, con un booleano serializado
+o con `supported:false` ⇒ **sólo invitación**, byte por byte la conducta de siempre.
+
+`features.signup` es un bloque **hermano** de `social_auth` y se decodifica aparte a
+propósito: fundirlos haría que un backend anterior a C2b —que no manda la clave— apagara
+Google y el login, que es una regresión y no lo que el contrato pide.
+
+### Dos autoridades para crear una cuenta, y la invitación gana
+
+`autoridadDeAlta()` resuelve entre la invitación de D-FF-1 y la puerta pública. La
+invitación tiene precedencia **porque el dueño la valida y la consume**: preferir el alta
+pública desperdiciaría una autoridad de un solo uso y cambiaría a qué email queda ligada
+la cuenta. Una invitación rota no bloquea: cae a la puerta abierta si está abierta.
+
+- **Alta directa**: `invitation_token` pasa a opcional en el tipo. **No hay body
+  condicional acá**, y el motivo no es que el alta se abrió: el DTO del dueño ya la tenía
+  opcional en los dos modos, para que ausente, inválida, usada o vencida caigan en la
+  **misma respuesta opaca**. El tipo dejó de mentir, nada más.
+- **Google sin invitación**: `POST /auth/google/register` acepta `email?` **declarado por
+  la persona**, y es el **único** body condicional a la capability de todo el alta: el DTO
+  social del dueño es `strict` con el alta cerrada y lo rechaza con `validation_error`. El
+  tipo hace imposible mandar las dos fuentes juntas o ninguna. **Nunca sale del `id_token`**:
+  `provider_email` está en `forbidden_client_fields` y este front no decodifica esa
+  credencial en ningún punto (D-R16, interina: lo escribe la persona).
+- **Facebook NO entra al alta pública**, y es contrato y no configuración: su
+  `register/start` conserva `invitation_token` obligatorio. Sigue dark, pero la puerta se
+  cierra igual.
+
+### Superficie
+
+- El modo inicial distingue **autoridad** de **intención**: una invitación en la URL es
+  intención explícita y abre en registro; la puerta pública **no** —quien entra puede tener
+  cuenta hace meses—, así que arranca en ingreso con el toggle a la vista.
+- **D-R16**: el botón de Google vive arriba del campo de correo y con el alta pública ese
+  correo es requisito. Un aviso lo dice **donde se necesita**, en vez de que el botón
+  desaparezca sin explicación.
+- **D-R15**: `registration_not_available` deja de nombrar «esta invitación» —con alta
+  abierta no hay ninguna— y pasa a un copy opaco. **`email_already_registered` se retira
+  del mapa de errores del alta**: el dueño no lo emite, y mantenerlo era una entrada
+  dormida que el día que llegara convertía la pantalla en un oráculo de existencia de
+  cuentas. Hay test de recaída.
+- **La entrada por link se corrigió**: gateaba «Crear cuenta gratis» con la invitación de
+  ALTA, que es otro objeto que el `?t=` de la mesa. Con el alta abierta y sin invitación,
+  el 401 decía «necesitás cuenta» y la pantalla no ofrecía crearla. Ahora lee la misma
+  autoridad, con centinela que impide que vuelvan a divergir.
+
+### Mock
+
+Seam propio `payme.app.mock.public_signup.v1`, molde de `modoMonetarioMock()`, **default
+cerrado** — el del contrato, no el estado deseado del viernes. Ausente, valor inválido o
+storage que tira excepción dejan la invitación obligatoria. **Lo lee sólo el mock**: el
+lector real sale de `GET /api/config` y no consulta `localStorage` en ningún punto; como
+`mockApi` viaja en el bundle real por su import estático, la garantía es de **camino** y
+hay un test que la fija.
+
+### Gates y mutantes
+
+`typecheck` 0 · `npm test` **132 archivos / 2184 passed / 1 skipped** (el ambiental de
+`tokensRatificados`) · builds real, mock y landing 0 · Playwright en solitario **188 passed,
+14 skipped, 0 failed** · `verificar-mirror --integridad`/`--paridad` 0 contra `1851acb` ·
+`git diff --check` 0.
+
+Cinco mutantes causales, todos restaurados byte-exactos:
+
+1. fail-closed del decoder invertido (malformada ⇒ abre) → 2 rojos.
+2. el email deja de exigirse con alta pública → 1 rojo.
+3. precedencia invertida (pública gana sobre invitación) → 2 rojos.
+4. la guarda de Facebook retirada → 1 rojo.
+5. el mock publica el alta siempre abierta → **sobrevivió la primera vez**, y ese fallo
+   valió el hallazgo: el recorrido del caso CERRADO afirmaba `toHaveCount(0)` **antes de
+   que `GET /api/config` contestara**, así que se cumplía trivialmente y habría pasado
+   igual con el alta abierta. Se agregó un **testigo positivo** —esperar el botón de
+   Google, que sólo existe con el config aplicado— y con eso el mutante muere.
+
+### Lo que este commit NO hace
+
+No toca `contract-mirror/` ni el verificador. No enciende el corte de pagos, la mesa sin
+garantía ni el histórico propio: son F2 y F3. No configura Google en el proveedor —eso es
+de Mati— ni verifica nada contra un backend real: el camino se ejercita contra el mock.
+El candidato queda encolado sin PASS ni GREEN.
+
 ## 0.156.0 — Espejo del contrato al pin owner-first del corte (2026-09-02)
 
 Orden `APP-FE-FRIDAY-PUBLIC-NO-PAYMENTS-01-CLAUDE-F0`, baseline

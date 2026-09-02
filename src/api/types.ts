@@ -76,8 +76,23 @@ export interface RegisterRequest {
   password: string;
   first_name: string;
   last_name: string;
-  /** D-FF-1 · autoridad one-use, ligada por el owner al email normalizado. */
-  invitation_token: string;
+  /**
+   * D-FF-1 · autoridad one-use, ligada por el owner al email normalizado.
+   *
+   * 🔴 **C2b: pasa a OPCIONAL, y el motivo no es que el alta se abrió.** En el
+   * alta directa el DTO del dueño **ya la tenía opcional en los dos modos** —
+   * `registerBase` la declara `z.unknown().optional()` (`contract-mirror/schemas/index.js`)—
+   * y su comentario explica por qué: así ausente, inválida, usada, vencida y
+   * «email distinto» llegan todas a **la misma respuesta opaca** de la autoridad;
+   * exigirla como campo requerido revelaría otra forma de error antes de
+   * consultar la compuerta. La obligación la aplica la ruta, no el DTO.
+   *
+   * Lo que cambia acá es sólo que el tipo deja de mentir: este front la mandaba
+   * siempre porque sin invitación no ofrecía alta, no porque el contrato la
+   * exigiera. **El alta directa NO tiene body condicional a la capability**: se
+   * manda lo mismo en los dos modos, con o sin token.
+   */
+  invitation_token?: string;
 }
 
 // ─── Identidad social v1 (routes/social-auth.js) ───────────
@@ -92,7 +107,26 @@ export interface GoogleLoginRequest {
 }
 
 export interface GoogleRegisterRequest extends GoogleLoginRequest {
-  invitation_token: string;
+  /** Opcional desde C2b: con el alta abierta puede no haberla. */
+  invitation_token?: string;
+  /**
+   * 🔴 **El ÚNICO body condicional a la capability de todo el alta.**
+   *
+   * `email` lo escribe la persona y **el dueño sólo lo acepta con el alta
+   * abierta**: con el alta cerrada su DTO social es `strict` y lo rechaza con
+   * `validation_error` (`contract-mirror/contract/social-auth-v1.json` →
+   * `endpoints.google_register.request_notes.email`). Por eso este campo se
+   * manda **sólo** cuando la capability leída es `true` y no hay invitación; con
+   * invitación manda la invitación y un email distinto es
+   * `registration_not_available`.
+   *
+   * ⚠️ **Declarado, NO verificado y NO autoridad**: no enlaza, no fusiona ni
+   * recupera una cuenta existente. Y **nunca sale de la credencial de Google**:
+   * `provider_email` está en `forbidden_client_fields` del contrato, y este
+   * front no decodifica el `id_token` en ningún punto. Prellenarlo desde el
+   * proveedor sería un cambio de contrato posterior (D-R16, opción 2).
+   */
+  email?: string;
   first_name: string;
   last_name: string;
 }
@@ -156,6 +190,17 @@ export interface AppConfig {
     social_auth?: unknown;
     /** Runtime-only: sólo `registration_required:false` habilita alta social. */
     account_birth_date?: unknown;
+    /**
+     * C2b · `{ supported, public_registration }`. **`unknown` por el mismo
+     * motivo que sus vecinos:** el espejo declara lo que la FUENTE tiene, no lo
+     * que el DESPLEGADO devuelve, y este bloque puede faltar entero (backend
+     * anterior a C2b). Se lee con `decodeSignup` en `./socialAuth.ts`, que exige
+     * las dos claves exactas y falla a **alta cerrada**.
+     *
+     * Opcional porque su ausencia ES contrato: `signup_gate.capability_publicada.absent_means`
+     * dice «backend anterior a C2b: se asume alta CERRADA».
+     */
+    signup?: unknown;
     /**
      * OLA 5 (v2.31.0) · capability del riel saldo. **Sin tipar a propósito.**
      *

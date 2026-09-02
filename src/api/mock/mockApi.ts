@@ -296,6 +296,43 @@ export function modoMonetarioMock(): unknown {
   }
 }
 
+/**
+ * C2b · seam del alta pública **del mock**, con el mismo molde que el modo
+ * monetario y por los mismos motivos.
+ *
+ * 🔴 **Default CERRADA, y no es una preferencia: es el contrato.** El dueño abre
+ * el alta sólo con `PUBLIC_SIGNUP_ENABLED === 'true'`; ausente o cualquier otro
+ * valor mantiene la invitación obligatoria. El mock reproduce ese default, no el
+ * estado que se quiere el viernes — si reprodujera el estado deseado, la demo
+ * dejaría de mostrar lo que un backend recién levantado devuelve.
+ *
+ * ⚠️ **Esta clave la lee SÓLO el mock.** El camino real de la capability
+ * (`socialAuth.ts`) sale de `GET /api/config` del backend y no consulta
+ * `localStorage` en ningún punto: `mockApi` viaja en el bundle real porque el
+ * import es estático, así que la garantía es de CAMINO, no de bundle, y hay un
+ * test que la fija con `IS_MOCK=false`.
+ *
+ * Va namespaceada como manda `storage.ts:10-28`: mock y real compartieron origen
+ * una vez y el namespacing es lo único que impidió que se cruzaran.
+ */
+const CLAVE_ALTA_PUBLICA = 'payme.app.mock.public_signup.v1';
+
+export function altaPublicaMock(): boolean {
+  try {
+    // Sólo el `true` exacto abre, igual que la bandera del dueño. Un valor
+    // inválido, ausente o un storage que tira excepción dejan la invitación
+    // obligatoria, que es el lado seguro.
+    return localStorage.getItem(CLAVE_ALTA_PUBLICA) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/** Para tests y consola. No hay UI: esto no es una preferencia del usuario. */
+export function setAltaPublicaMock(abierta: boolean): void {
+  try { localStorage.setItem(CLAVE_ALTA_PUBLICA, abierta ? 'true' : 'false'); } catch { /* ver altaPublicaMock */ }
+}
+
 /** Para tests y consola. No hay UI: esto no es una preferencia del usuario. */
 export function setModoMonetarioMock(m: ModoMonetarioMock): void {
   try { localStorage.setItem(CLAVE_MODO, m); } catch { /* ver modoMonetarioMock */ }
@@ -393,6 +430,13 @@ export async function mockGetConfig(): Promise<AppConfig> {
         registration_required: false,
         write_once: true,
         adulthood_server_authoritative: true,
+      },
+      // C2b · forma exacta del dueño (`contract-mirror/routes/config.js:142-149`):
+      // dos claves y nada más. `supported` es constante; el booleano vivo sale
+      // del seam de arriba, que nace cerrado.
+      signup: {
+        supported: true,
+        public_registration: altaPublicaMock(),
       },
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
@@ -603,9 +647,15 @@ export async function mockRegister(data: RegisterRequest): Promise<StoredSession
   // El mock recorre la misma compuerta de superficie: sin una autoridad con
   // forma válida no hay alta. No pretende validar email/TTL/one-use —eso sólo
   // lo acredita el owner y PostgreSQL—, pero tampoco enseña un registro abierto.
-  if (typeof data.invitation_token !== 'string'
-      || data.invitation_token.length < 20
-      || data.invitation_token.length > 200) {
+  // C2b · con el alta abierta la invitación deja de ser obligatoria; si llega,
+  // se sigue exigiendo que tenga forma de autoridad. Con el alta cerrada, todo
+  // igual que antes. El 403 es el MISMO en los dos casos: el mock no puede
+  // enseñar a distinguir motivos que el dueño publica como opacos.
+  const tokenPresente = data.invitation_token !== undefined;
+  const tokenValido = typeof data.invitation_token === 'string'
+    && data.invitation_token.length >= 20
+    && data.invitation_token.length <= 200;
+  if (tokenPresente ? !tokenValido : !altaPublicaMock()) {
     throw new MockApiError(403, 'registration_not_available');
   }
   // Una cuenta NUEVA nace como en el backend real: sin métodos de pago y con
@@ -685,9 +735,18 @@ export async function mockGoogleLogin(idToken: string): Promise<StoredSession> {
 }
 
 export async function mockGoogleRegister(data: GoogleRegisterRequest): Promise<StoredSession> {
+  // C2b · el DTO social del dueño es strict POR MODO: `email` sólo se acepta
+  // con el alta abierta, y con el alta cerrada lo rechaza con `validation_error`.
+  // El mock reproduce esa distinción porque es la única del alta que existe.
+  const traeToken = data.invitation_token !== undefined;
+  const tokenSocialValido = typeof data.invitation_token === 'string'
+    && data.invitation_token.length >= 20 && data.invitation_token.length <= 200;
+  if (data.email !== undefined && !altaPublicaMock()) {
+    throw new MockApiError(400, 'validation_error');
+  }
   if (!validSocialCredential(data.id_token)
-      || typeof data.invitation_token !== 'string'
-      || data.invitation_token.length < 20 || data.invitation_token.length > 200
+      || (traeToken ? !tokenSocialValido : !altaPublicaMock())
+      || (!traeToken && (typeof data.email !== 'string' || !data.email.includes('@')))
       || !data.first_name.trim() || data.first_name.length > 100
       || !data.last_name.trim() || data.last_name.length > 100) {
     throw new MockApiError(403, 'registration_not_available');

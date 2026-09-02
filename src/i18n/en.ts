@@ -412,6 +412,12 @@ export const EN: Record<string, string> = {
   "No pudimos verificar cómo quedó esa apertura. Prueba de nuevo en un momento; no vamos a abrir otra mesa mientras tanto.": "We couldn't verify how that opening turned out. Try again in a moment; we won't open another table in the meantime.",
   "No pudimos verificar el link": "We couldn't verify the link",
   "No pudimos verificar esta invitación. Actualiza en un momento.": "We couldn't verify this invitation. Refresh in a moment.",
+  // C2b · alta pública. El copy ES es opaco a propósito (D-R15) y el EN
+  // conserva esa opacidad: no afirma que la cuenta exista ni nombra la
+  // invitación, porque con el alta abierta puede no haber ninguna.
+  "No pudimos crear la cuenta. Prueba de nuevo en un momento.": "We couldn't create the account. Try again in a moment.",
+  "No pudimos crear la cuenta. Si ya tienes una, inicia sesión o recupera tu contraseña.": "We couldn't create the account. If you already have one, sign in or reset your password.",
+  "Escribe tu correo aquí abajo para continuar con Google.": "Enter your email below to continue with Google.",
   "No pudimos verificar la garantía. Reintenta esta misma confirmación; no abras otra mesa.": "We couldn't verify the guarantee. Retry this same confirmation; don't open another table.",
   "No pudimos verificar una identidad segura para esta garantía.": "We couldn't verify a secure identity for this guarantee.",
   "No pudimos verificar una identidad segura para este pago.": "We couldn't verify a secure identity for this payment.",

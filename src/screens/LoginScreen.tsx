@@ -19,12 +19,13 @@ import {
   renderGoogleIdentityButton,
   type GoogleButtonHandle,
 } from '../api/googleIdentity';
-import { useSocialAuthCapability } from '../api/socialAuth';
+import { socialAuthSnapshot, useSocialAuthCapability } from '../api/socialAuth';
 import { captureSessionStateWitness } from '../api/storage';
 import {
   clearSignupInvitation,
   signupInvitationSnapshot,
   subscribeSignupInvitation,
+  type SignupInvitationCapture,
 } from '../api/signupInvitation';
 import type { LegalTextResponse } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -36,35 +37,99 @@ import { useAuth } from '../auth/AuthContext';
  * compuerta de superficie, aunque sólo PostgreSQL acredita one-use/email/TTL.
  */
 
+/**
+ * 🔴 **D-R15 · el copy del alta no puede afirmar que un email exista.**
+ *
+ * Con el alta abierta, un email ya registrado devuelve el MISMO
+ * `registration_not_available` opaco que una invitación inválida —el dueño lo
+ * declara en `signup_gate.anti_enumeration`—, así que el consumidor no tiene con
+ * qué distinguirlos **y no debe intentarlo**.
+ *
+ * Dos cambios, los dos por ese motivo:
+ * - `registration_not_available` deja de nombrar «esta invitación»: con alta
+ *   pública la persona no usó ninguna, y el texto viejo describía un objeto
+ *   inexistente.
+ * - **`email_already_registered` se retira de este mapa.** El dueño no lo emite
+ *   en el alta; mantenerlo era una entrada dormida que, el día que llegara,
+ *   convertiría la pantalla en un oráculo de existencia de cuentas. Si algún
+ *   backend lo mandara, cae en el genérico y no afirma nada.
+ */
 const ERROR_TEXT: Record<string, string> = {
   invalid_credentials: 'Email o contraseña incorrectos.',
-  email_already_registered: 'Ese email ya está registrado.',
   user_suspended: 'Tu cuenta está suspendida. Escríbenos.',
   too_many_auth_attempts: 'Demasiados intentos. Espera un minuto.',
   validation_error: 'Revisa los datos: email válido y contraseña de al menos 8 caracteres.',
-  registration_not_available: 'No pudimos verificar esta invitación. Actualiza en un momento.',
+  registration_not_available: 'No pudimos crear la cuenta. Si ya tienes una, inicia sesión o recupera tu contraseña.',
   registration_unavailable: 'Prueba de nuevo más tarde.',
   too_many_signup_attempts: 'Prueba de nuevo más tarde.',
   rate_limit_unavailable: 'Prueba de nuevo más tarde.',
 };
 
+/**
+ * C2b · **hay dos autoridades para crear una cuenta, y son excluyentes.**
+ *
+ * - `invitacion`: el token one-use de D-FF-1, ligado por el dueño a un email.
+ * - `publica`: el dueño abrió el alta (`features.signup.public_registration`).
+ *
+ * `null` = no se puede crear cuenta, que es el estado por defecto y el de
+ * siempre hasta C2b.
+ */
+export type AutoridadDeAlta =
+  | { readonly tipo: 'invitacion'; readonly token: string }
+  | { readonly tipo: 'publica' }
+  | null;
+
+/**
+ * 🔴 **La invitación GANA, y no por preferencia estética.** Si alguien llega con
+ * un token, el dueño lo **valida y consume** —`signup_gate` del contrato: *«si
+ * llega se valida y consume; inválido = registration_not_available»*—. Preferir
+ * el alta pública desperdiciaría una autoridad de un solo uso y, peor, cambiaría
+ * a qué email queda ligada la cuenta: con invitación el email lo pone la
+ * invitación, sin ella lo escribe la persona.
+ *
+ * Una invitación `invalid` o `absent` no bloquea: cae al alta pública si está
+ * abierta. Un token roto no puede dejar a alguien sin poder registrarse cuando
+ * el dueño abrió la puerta.
+ */
+export function autoridadDeAlta(
+  invitacion: SignupInvitationCapture,
+  publicRegistration: boolean,
+): AutoridadDeAlta {
+  if (invitacion.status === 'available') return { tipo: 'invitacion', token: invitacion.token };
+  return publicRegistration ? { tipo: 'publica' } : null;
+}
+
 export interface SocialActionEligibility {
   readonly mode: 'login' | 'register';
   readonly providerActionEnabled: boolean;
-  readonly signupAvailable: boolean;
+  readonly autoridad: AutoridadDeAlta;
   readonly legalReady: boolean;
   readonly firstName: string;
   readonly lastName: string;
+  /** D-R16 · sin invitación es la única fuente del email de la cuenta. */
+  readonly email: string;
+  /**
+   * 🔴 El proveedor exige invitación por CONTRATO, no por configuración.
+   * Facebook es el caso: su `register/start` conserva `invitation_token`
+   * obligatorio (`endpoints.facebook_register_start.request` y
+   * `signup_gate.facebook` del contrato espejado). Sin esto, abrir el alta
+   * pública habilitaría un botón cuyo body el dueño rechaza.
+   */
+  readonly requiereInvitacion: boolean;
 }
 
-/** La alta social hereda invitación, legal y nombres; nunca email/password. */
+/** La alta social hereda autoridad, legal y nombres; nunca password. */
 export function socialActionEligible(input: SocialActionEligibility): boolean {
   if (!input.providerActionEnabled) return false;
   if (input.mode === 'login') return true;
-  return input.signupAvailable
-    && input.legalReady
-    && input.firstName.trim().length > 0
-    && input.lastName.trim().length > 0;
+  if (!input.autoridad) return false;
+  if (input.requiereInvitacion && input.autoridad.tipo !== 'invitacion') return false;
+  if (!input.legalReady) return false;
+  if (input.firstName.trim().length === 0 || input.lastName.trim().length === 0) return false;
+  // Con alta pública el email lo escribe la persona y es la única fuente
+  // (D-R16); con invitación lo aporta la autoridad y no se pide acá.
+  if (input.autoridad.tipo === 'publica' && input.email.trim().length === 0) return false;
+  return true;
 }
 
 function errorMessage(err: unknown, t: (s: string, ...a: unknown[]) => string): string {
@@ -89,7 +154,15 @@ type GoogleActionAuthority =
       readonly purpose: 'register';
       readonly clientId: string;
       readonly locale: 'es' | 'en';
-      readonly invitationToken: string;
+      /**
+       * Exactamente UNA de las dos, nunca las dos ni ninguna: es el tipo el que
+       * hace imposible mandar `email` junto a una invitación —que el dueño
+       * resolvería como `registration_not_available`— y mandar un alta pública
+       * sin email, que es su única fuente.
+       */
+      readonly alta:
+        | { readonly tipo: 'invitacion'; readonly invitationToken: string }
+        | { readonly tipo: 'publica'; readonly email: string };
       readonly firstName: string;
       readonly lastName: string;
     };
@@ -127,8 +200,26 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     signupInvitationSnapshot,
     signupInvitationSnapshot,
   );
+  /**
+   * 🔴 **El modo inicial distingue AUTORIDAD de INTENCIÓN, y no son lo mismo.**
+   *
+   * - Una **invitación** en la URL es intención explícita: esa persona vino a
+   *   registrarse, y la pantalla abre en registro como hasta hoy.
+   * - El **alta pública** es sólo una puerta abierta. Quien entra a la app
+   *   puede tener cuenta desde hace meses; abrirle el formulario de registro
+   *   sería adivinarle la intención y empeorar el caso más común. Arranca en
+   *   `login`, con el toggle a la vista —que sí se habilita con la autoridad
+   *   pública— y a un toque del registro.
+   * - `initialMode` (la entrada por link, §1.2-A) sí es intención explícita, y
+   *   por eso se respeta con CUALQUIERA de las dos autoridades: ahí alguien tocó
+   *   «Crear cuenta gratis».
+   *
+   * ⚠️ El estado inicial se calcula una sola vez y `social` puede estar todavía
+   * `pending`; por eso el default no puede depender de la capability, que llega
+   * después. Ésa es la otra razón por la que la puerta abierta no mueve el modo.
+   */
   const [mode, setMode] = useState<'login' | 'register'>(() =>
-    initialMode === 'register' && signup.status !== 'available'
+    initialMode === 'register' && !autoridadDeAlta(signup, social.publicRegistration)
       ? 'login'
       : initialMode ?? (signup.status === 'available' ? 'register' : 'login'));
   const [email, setEmail] = useState('');
@@ -152,49 +243,87 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   // cubre contraseña, Google y Facebook antes del primer await.
   const authActionActive = useRef(false);
 
-  const signupAvailable = signup.status === 'available';
+  const autoridad = autoridadDeAlta(signup, social.publicRegistration);
+  const signupAvailable = autoridad !== null;
+  const altaPublica = autoridad?.tipo === 'publica';
   const legalReady = legal.status === 'ready';
   const googleEligible = socialActionEligible({
     mode,
     providerActionEnabled: social.google.enabled
       && (mode === 'login' ? social.google.login : social.google.registration),
-    signupAvailable,
+    autoridad,
     legalReady,
     firstName,
     lastName,
+    email,
+    requiereInvitacion: false,
   }) && social.google.webClientId !== null;
   const facebookEligible = socialActionEligible({
     mode,
     providerActionEnabled: social.facebook.enabled
       && (mode === 'login' ? social.facebook.login : social.facebook.registration),
-    signupAvailable,
+    autoridad,
     legalReady,
     firstName,
     lastName,
+    email,
+    // Facebook conserva `invitation_token` OBLIGATORIO en su register/start:
+    // no entra al alta pública aunque el dueño la abra.
+    requiereInvitacion: true,
   });
+
+  /**
+   * 🔴 D-R16 · el botón de Google vive ARRIBA del campo de correo, y con el alta
+   * pública ese correo es requisito. Sin este aviso la persona ve desaparecer el
+   * botón y no tiene forma de saber por qué: es el callejón sin salida clásico
+   * —un requisito que no se explica donde se necesita—.
+   *
+   * Se calcula preguntando por lo mismo que gatea el botón, con el email como
+   * única diferencia: si con un correo cualquiera sería elegible, entonces lo
+   * único que falta es el correo y eso es exactamente lo que se dice.
+   */
+  const faltaCorreoParaAltaSocial = mode === 'register'
+    && altaPublica
+    && email.trim().length === 0
+    && social.google.webClientId !== null
+    && socialActionEligible({
+      mode,
+      providerActionEnabled: social.google.enabled && social.google.registration,
+      autoridad,
+      legalReady,
+      firstName,
+      lastName,
+      email: 'x@x.x',
+      requiereInvitacion: false,
+    });
 
   const googleAuthority = useMemo<GoogleActionAuthority | null>(() => {
     const clientId = social.google.webClientId;
     if (!googleEligible || clientId === null) return null;
     const locale = idioma === 'en' ? 'en' : 'es';
     if (mode === 'login') return { purpose: 'login', clientId, locale };
-    if (signup.status !== 'available' || legal.status !== 'ready') return null;
+    if (!autoridad || legal.status !== 'ready') return null;
+    const alta = autoridad.tipo === 'invitacion'
+      ? { tipo: 'invitacion' as const, invitationToken: autoridad.token }
+      : { tipo: 'publica' as const, email: email.trim() };
+    if (alta.tipo === 'publica' && alta.email.length === 0) return null;
     return {
       purpose: 'register',
       clientId,
       locale,
-      invitationToken: signup.token,
+      alta,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
     };
   }, [
+    autoridad,
+    email,
     firstName,
     googleEligible,
     idioma,
     lastName,
     legal.status,
     mode,
-    signup,
     social.google.webClientId,
   ]);
   // Sólo un render COMMITTEADO puede mover autoridad. `useLayoutEffect` corre
@@ -231,9 +360,18 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         onCredential: (credential) => {
           if (googleAuthorityRef.current !== authority) return;
           if (authority.purpose === 'register') {
-            const currentInvitation = signupInvitationSnapshot();
-            if (currentInvitation.status !== 'available'
-                || currentInvitation.token !== authority.invitationToken) return;
+            // La autoridad que se usa tiene que seguir siendo la del render que
+            // montó este botón. Con invitación eso es el mismo token; con alta
+            // pública, que el dueño la siga declarando abierta —su bandera se
+            // lee por request, así que puede haberse cerrado entre el render y
+            // el click—. Si cambió, no se manda nada.
+            if (authority.alta.tipo === 'invitacion') {
+              const currentInvitation = signupInvitationSnapshot();
+              if (currentInvitation.status !== 'available'
+                  || currentInvitation.token !== authority.alta.invitationToken) return;
+            } else if (!socialAuthSnapshot().publicRegistration) {
+              return;
+            }
           }
           if (!tryAcquireAuthAction()) {
             // El router global ya consumió el state antes del callback. Montar
@@ -248,13 +386,19 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
               if (authority.purpose === 'login') {
                 await googleLogin(credential);
               } else {
+                // 🔴 El body es condicional a la autoridad, y es el ÚNICO de
+                // todo el alta que lo es: el DTO social del dueño acepta `email`
+                // SÓLO con el alta abierta y es `strict` con el alta cerrada.
                 await googleRegister({
                   id_token: credential,
-                  invitation_token: authority.invitationToken,
                   first_name: authority.firstName,
                   last_name: authority.lastName,
+                  ...(authority.alta.tipo === 'invitacion'
+                    ? { invitation_token: authority.alta.invitationToken }
+                    : { email: authority.alta.email }),
                 });
-                clearSignupInvitation();
+                // Sólo hay algo que soltar si se usó una invitación.
+                if (authority.alta.tipo === 'invitacion') clearSignupInvitation();
               }
             } catch {
               setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
@@ -295,9 +439,12 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       const sessionStateWitness = captureSessionStateWitness();
       const response = mode === 'login'
         ? await api.facebookLoginStart()
-        : signup.status === 'available' && legal.status === 'ready'
+        // Facebook conserva `invitation_token` obligatorio: el alta pública no
+        // lo habilita, y `facebookEligible` ya lo cierra arriba. Acá se vuelve a
+        // exigir el tipo exacto para que el body no pueda salir sin token.
+        : autoridad?.tipo === 'invitacion' && legal.status === 'ready'
           ? await api.facebookRegisterStart({
-              invitation_token: signup.token,
+              invitation_token: autoridad.token,
               first_name: firstName.trim(),
               last_name: lastName.trim(),
             })
@@ -351,14 +498,16 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     // En el primer efecto ambos son el mismo snapshot: respetar initialMode y
     // el botón explícito “Ya tengo cuenta”. Sólo una NAVEGACIÓN posterior
     // cambia el modo por autoridad nueva/retirada.
-    const next = modeAfterSignupSnapshot(mode, previous !== signup, signup.status === 'available');
+    const next = modeAfterSignupSnapshot(mode, previous !== signup, signupAvailable);
     if (next !== mode) setMode(next);
     if (previous === signup) return;
     setError(null);
   }, [signup, mode]);
 
   useEffect(() => {
-    if (mode !== 'register' || signup.status !== 'available') {
+    // El aviso se pide para CUALQUIER autoridad de alta: el consentimiento no
+    // depende de cómo se acredite el derecho a crear la cuenta.
+    if (mode !== 'register' || !signupAvailable) {
       setLegal({ status: 'idle' });
       return;
     }
@@ -383,20 +532,24 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       if (mode === 'login') {
         await login(email, password);
       } else {
-        if (signup.status !== 'available' || legal.status !== 'ready') {
-          setError(t('No pudimos verificar esta invitación. Actualiza en un momento.'));
+        if (!autoridad || legal.status !== 'ready') {
+          setError(t('No pudimos crear la cuenta. Prueba de nuevo en un momento.'));
           return;
         }
+        // 🔴 El alta directa NO tiene body condicional: el DTO del dueño ya
+        // tenía `invitation_token` opcional en los DOS modos, para que ausente,
+        // inválida, usada o vencida caigan en la MISMA respuesta opaca. Acá se
+        // manda si existe y no se manda si no, sin mirar la capability.
         await register({
           email,
           password,
           first_name: firstName,
           last_name: lastName,
-          invitation_token: signup.token,
+          ...(autoridad.tipo === 'invitacion' ? { invitation_token: autoridad.token } : {}),
         });
         // `register` retorna sólo después de que la sesión quedó persistida.
         // Un 403 opaco conserva el token: puede ser sólo un email mal escrito.
-        clearSignupInvitation();
+        if (autoridad.tipo === 'invitacion') clearSignupInvitation();
       }
     } catch (err) {
       const { code } = extractApiError(err);
@@ -498,8 +651,13 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             </div>
           </section>
         )}
-        {(googleEligible || facebookEligible) && (
+        {(googleEligible || facebookEligible || faltaCorreoParaAltaSocial) && (
           <section className="social-auth-options" aria-busy={socialBusy}>
+            {faltaCorreoParaAltaSocial && (
+              <p className="note note-orange" role="status">
+                {t('Escribe tu correo aquí abajo para continuar con Google.')}
+              </p>
+            )}
             {googleEligible && (
               <div className="social-provider-slot">
                 <div
@@ -592,7 +750,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         >
           {busy ? t('Un segundo…') : mode === 'login' ? t('Entrar') : t('Registrarme')}
         </button>
-        {(mode === 'register' || signup.status === 'available') && (
+        {(mode === 'register' || signupAvailable) && (
         <div style={{ textAlign: 'center', marginTop: 6 }}>
           <button
             type="button"
