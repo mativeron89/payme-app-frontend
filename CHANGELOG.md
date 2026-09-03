@@ -11,6 +11,66 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.0 — El aviso 2.4.1 queda presentado, y las dos capabilities no van a la par (2026-09-03)
+
+Orden `AF-STAGE1-PRESENT-NOTICE-2.4.1-ADD-NOT-REPLACE-01-CLAUDE`, base `6d702b87…`.
+**Sin push, sin deploy, sin proveedor, sin DB y sin secreto.**
+
+### El dato que gobierna todo el commit
+
+Medido en el dueño (`9c5a7b14`, contenido `940cc49e`):
+
+```
+services/profileIdentity.js:33   notice_version: '2.4.1'
+services/shortfallDetails.js:21  notice_version: '2.3.0'
+```
+
+**Las dos capabilities llevan versiones distintas, y este front tiene UNA sola
+allowlist que leen las dos** (`privateFeatures.ts:96` y `:138`). Por eso la Set
+pasa a `['2.3.0', '2.4.1']`: **reemplazar apagaría `settlement_shortfall_detail`**
+—el detalle de faltante en Avisos y sus dos métodos de fachada— sin que nadie lo
+pidiera. Conservar 2.3.0 protege además del rollback del emisor.
+
+📌 **El «agrega, no reemplaza» dejó de ser una precaución y pasó a ser una
+descripción.** Cuando se escribió, en `0.160.0`, era un argumento sobre un
+rollback hipotético. Hoy la asimetría existe en producción.
+
+**El mock reproduce la asimetría, no la unifica:** `mockApi.ts:487` → `2.4.1`,
+`:499` **se queda** en `2.3.0`. Unificarlas dejaría la suite verde sobre un
+estado que no existe, y hay un test que se pone rojo si alguien lo hace.
+
+### 🔴 El `it` propio del lector de shortfall, escrito por SEGUNDA vez
+
+Los dos lectores comparten predicado, así que un solo mutante los rompe a los
+dos —pero con sus aserciones en el mismo `it`, vitest corta en la primera, que
+era siempre la de perfil, **y el lector de `settlement_shortfall_detail` no se
+observaba nunca**. Medido con el mutante plantado.
+
+⚠️ **Ya se había corregido en el candidato del aviso 2.4.0, y ese objeto se
+descartó por owner-first: el hueco volvió con él.** Un arreglo que vive en un
+commit rechazado no protege nada, y no queda registro de que existió salvo que
+alguien lo vuelva a encontrar. Esta vez está en un commit que sí va a la cadena.
+
+Se suma el caso que describe la producción de hoy: **las dos capabilities
+habilitadas a la vez, con versiones distintas**. Ninguno de los casos por
+separado prueba esa combinación, y es la única que existe.
+
+### Fuera de alcance, medido y nombrado
+
+- **`e2e/perfil-faltante-activado.spec.ts` no se toca.** Usa `'2.2.0'` y
+  `'9.9.9'` (`:59`) como negativos, y **siguen sin ser presentables** con la Set
+  nueva; su camino positivo toma la versión del propio mock, así que la sigue
+  solo. 🔴 **Y el `9.9.9` no se «actualiza»**: es la versión futura desconocida
+  que ese spec existe para vigilar.
+- **`src/api/ffContracts.test.ts:7`** conserva `'2.3.0'`: es fixture del decoder
+  de `legal_text`, no del gate de capabilities.
+- **El texto del aviso no toca nada acá**: sale de `/api/legal/aviso_privacidad`
+  y `aviso_privacidad` no está en la población del espejo. D1, D2 y la casilla
+  de contacto llegan solos.
+
+Cero UI nueva, cero rutas.
+
+
 ## 0.160.0 — El candado de despliegue sale de detrás del `throw` (2026-09-03)
 
 Orden `AF-STAGE1-DEPLOY-LOCK-VERCEL-TS-01-CLAUDE`, base F2 `8d161acd…`.

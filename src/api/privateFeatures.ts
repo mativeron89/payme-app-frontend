@@ -13,7 +13,20 @@ const PENDING: PrivateFeatureState = { enabled: false, status: 'pending', notice
 // Mati ratificó el 2026-08-25 el aviso 2.3.0 de producto real. La allowlist es
 // exclusiva: 2.2.0 queda supersedido y una versión futura no hereda la
 // decisión; ambas apagan las superficies hasta ser presentadas explícitamente.
-const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0']);
+//
+// 2026-09-03: se PRESENTA 2.4.1 (etapa pública sin pagos). Se AGREGA, y acá
+// agregar no es una preferencia de estilo: es lo único correcto, porque el
+// dueño publica HOY versiones DISTINTAS en las dos capabilities que leen esta
+// misma allowlist —medido en `9c5a7b14`, contenido `940cc49e`:
+//
+//     services/profileIdentity.js:33   notice_version: '2.4.1'
+//     services/shortfallDetails.js:21  notice_version: '2.3.0'
+//
+// Reemplazar `'2.3.0'` por `'2.4.1'` apagaría `settlement_shortfall_detail`
+// —el detalle de faltante en Avisos y sus dos métodos de fachada— sin que nadie
+// lo pidiera. Y conservar 2.3.0 protege además del rollback: si el dueño
+// volviera atrás, las superficies no se apagan por un retroceso del emisor.
+const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1']);
 
 /** Seam nominal: sólo Vitest puede declarar presentable `test-only`. */
 export const TEST_PRESENTABLE_NOTICES = Symbol('private-feature-test-notice-seam');

@@ -35,8 +35,25 @@ const PROFILE_OFF = {
 const PROFILE_ON = {
   ...PROFILE_OFF,
   enabled: true,
-  notice_version: '2.3.0',
+  notice_version: '2.4.1',
   activation_blocker: null,
+};
+
+/**
+ * 🔴 **2.3.0 sigue presentada y tiene fixture propio, porque el dueño la sigue
+ * publicando.** No es un caso histórico: `services/shortfallDetails.js` está en
+ * 2.3.0 HOY, mientras `profileIdentity.js` está en 2.4.1. Y sirve además de
+ * guarda de rollback: si el dueño volviera atrás, el perfil no se apaga.
+ */
+const PROFILE_ANTERIOR = {
+  ...PROFILE_ON,
+  notice_version: '2.3.0',
+};
+
+/** Una versión FUTURA no hereda la decisión: se presenta o apaga. */
+const PROFILE_FUTURA = {
+  ...PROFILE_ON,
+  notice_version: '2.5.0',
 };
 
 const PROFILE_SUPERSEDED = {
@@ -55,6 +72,8 @@ const SHORTFALL_ON = {
   version: 1,
   owner_only: true,
   includes_tip: false,
+  // Se queda en 2.3.0 A PROPÓSITO: es lo que el dueño publica para esta
+  // capability. El mock reproduce la asimetría en vez de unificarla.
   notice_version: '2.3.0',
   notice_required: true,
   activation_blocker: null,
@@ -97,15 +116,15 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
   it('acepta OFF autoritativo y ON sólo con aviso vigente y sin blocker', () => {
     expect(readProfileIdentityCapability(config(PROFILE_OFF))).toEqual({ enabled: false, status: 'authoritative', noticeVersion: null });
     expect(readProfileIdentityCapability(config(PROFILE_ON)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.4.1' });
+    // 2.3.0 NO se apagó al presentarse 2.4.1: las dos conviven.
+    expect(readProfileIdentityCapability(config(PROFILE_ANTERIOR)))
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.3.0' });
-    expect(readShortfallDetailCapability(config(PROFILE_ON, SHORTFALL_ON)))
-      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.3.0' });
+    // …y una versión FUTURA sigue apagando.
+    expect(readProfileIdentityCapability(config(PROFILE_FUTURA)))
+      .toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.5.0' });
     expect(readProfileIdentityCapability(config(PROFILE_SUPERSEDED)))
       .toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.2.0' });
-    expect(readShortfallDetailCapability(config(PROFILE_ON, {
-      ...SHORTFALL_ON,
-      notice_version: '2.2.0',
-    }))).toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.2.0' });
     expect(readProfileIdentityCapability(config(PROFILE_TEST_ONLY)))
       .toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: 'test-only' });
     expect(readProfileIdentityCapability(config(PROFILE_TEST_ONLY), TEST_PRESENTABLE_NOTICES))
@@ -137,13 +156,60 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
     expect(readShortfallDetailCapability(config(PROFILE_ON, value))).toEqual({ enabled: false, status: 'malformed', noticeVersion: null });
   });
 
+  /**
+   * 🔴 **El lector de shortfall tiene `it` propio, y sin esto NO estaba
+   * vigilado — es la SEGUNDA vez que hace falta escribirlo.**
+   *
+   * Los dos lectores consultan el MISMO `presentableVersions`
+   * (`privateFeatures.ts:96` y `:138`), así que un solo mutante —sacar una
+   * versión de la Set— los rompe a los dos. Pero mientras sus aserciones vivían
+   * en el mismo `it`, vitest cortaba en la PRIMERA, y la primera era siempre la
+   * de perfil: **el lector de `settlement_shortfall_detail` no se observaba
+   * nunca.** Se midió con el mutante plantado.
+   *
+   * ⚠️ Ya se había corregido, en el candidato del aviso 2.4.0 — **y ese objeto
+   * se descartó por owner-first, así que el hueco volvió con él.** Un arreglo
+   * que vive en un commit rechazado no protege nada.
+   */
+  it('el detalle de faltante lee la MISMA allowlist, y se rompe por su cuenta', () => {
+    expect(readShortfallDetailCapability(config(PROFILE_ON, SHORTFALL_ON)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.3.0' });
+    expect(readShortfallDetailCapability(config(PROFILE_ON, {
+      ...SHORTFALL_ON, notice_version: '2.4.1',
+    }))).toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.4.1' });
+    expect(readShortfallDetailCapability(config(PROFILE_ON, {
+      ...SHORTFALL_ON, notice_version: '2.2.0',
+    }))).toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.2.0' });
+    expect(readShortfallDetailCapability(config(PROFILE_ON, {
+      ...SHORTFALL_ON, notice_version: '2.5.0',
+    }))).toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.5.0' });
+  });
+
+  /**
+   * 🔴 **El caso que describe la producción de HOY: las dos capabilities
+   * habilitadas AL MISMO TIEMPO con versiones distintas.**
+   *
+   * Medido en el dueño (`9c5a7b14`, contenido `940cc49e`): `profileIdentity.js`
+   * publica `'2.4.1'` y `shortfallDetails.js` `'2.3.0'`. Ninguno de los dos
+   * casos de arriba, por separado, prueba que ESA combinación funcione — y es
+   * la única que existe en producción. Un mutante que reemplace en vez de
+   * agregar apaga exactamente una de las dos, y este caso lo ve.
+   */
+  it('🔴 las dos capabilities habilitadas a la vez, con versiones distintas', () => {
+    const cfg = config(PROFILE_ON, SHORTFALL_ON);
+    expect(readProfileIdentityCapability(cfg))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.4.1' });
+    expect(readShortfallDetailCapability(cfg))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.3.0' });
+  });
+
   it('ausencia y forma inesperada nunca habilitan', () => {
     expect(readProfileIdentityCapability({ features: {} })).toEqual({ enabled: false, status: 'absent', noticeVersion: null });
     expect(readShortfallDetailCapability({ features: { settlement_shortfall_detail: 'on' } }))
       .toEqual({ enabled: false, status: 'malformed', noticeVersion: null });
   });
 
-  it('OFF/ausente sigue cerrando la fachada aunque el mock distribuible ya soporte 2.3.0', async () => {
+  it('OFF/ausente sigue cerrando la fachada aunque el mock distribuible ya soporte 2.4.1', async () => {
     applyPrivateFeatureConfig(config(PROFILE_OFF, {
       ...SHORTFALL_ON,
       enabled: false,
@@ -164,11 +230,18 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
     });
   });
 
-  it('el config mock publicado replica ON 2.3.0 y conserva payme_id/avatar privados', async () => {
-    const mockConfig = await mock.mockGetConfig();
-    expect(readProfileIdentityCapability(mockConfig))
-      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.3.0' });
-    expect(readShortfallDetailCapability(mockConfig))
+  it('el config mock publicado replica ON 2.4.1 y conserva payme_id/avatar privados', async () => {
+    expect(readProfileIdentityCapability(await mock.mockGetConfig()))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.4.1' });
+  });
+
+  /**
+   * Mismo motivo que el `it` de arriba: por lector, nunca de a dos. Y acredita
+   * que el mock **reproduce la asimetría del dueño** en vez de unificarla: si
+   * alguien pusiera 2.4.1 en las dos, esto se pone rojo.
+   */
+  it('el mock publica 2.3.0 para el detalle de faltante · la asimetría del dueño', async () => {
+    expect(readShortfallDetailCapability(await mock.mockGetConfig()))
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.3.0' });
   });
 });

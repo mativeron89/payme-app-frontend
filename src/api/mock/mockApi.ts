@@ -481,7 +481,10 @@ export async function mockGetConfig(): Promise<AppConfig> {
       profile_identity: {
         supported: true,
         enabled: true,
-        notice_version: '2.3.0',
+        // 🔴 2.4.1 acá y 2.3.0 en `settlement_shortfall_detail`, abajo: la
+        // asimetría es DATO del dueño, no un descuido. Unificarlas dejaría la
+        // suite verde sobre un estado que en producción no existe.
+        notice_version: '2.4.1',
         notice_required: true,
         activation_blocker: null,
         payme_id_mutable: false,
