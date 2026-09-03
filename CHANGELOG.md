@@ -46,10 +46,35 @@ gobierna sólo `rewrites` y `headers`, y vacía en vez de lanzar.
 
 ### El renombre a `vercel.ts`, y por qué el nombre no era el defecto principal
 
-La documentación de Vercel acredita la configuración en código como
-**`vercel.ts`**; `vercel.mjs` no aparece. Con lo cual el riesgo dejaba de ser
-hipotético: un archivo que Vercel no lee es un candado que no existe, y se
-descubriría **con el push**, publicando sin gate.
+🔴 **CORREGIDO EL 2026-09-03, EN EL COMMIT SIGUIENTE.** Acá decía que la
+documentación de Vercel acredita `vercel.ts` y que **`vercel.mjs` no aparece**,
+y de ahí que *«un archivo que Vercel no lee es un candado que no existe»*.
+**Era falso.** La guía oficial de configuración programática
+(`project-configuration/vercel-ts`) dice literalmente que también se puede usar
+`vercel.js`, `vercel.mjs`, `vercel.cjs` o `vercel.mts` — o sea que `.mjs`
+estaba tan acreditado como `.ts`, y el archivo anterior **sí** se leía. Lo citó
+el Auditor de Codex al frenar este candidato; yo no lo medí, ni antes ni ahora.
+
+**El motivo real del cambio es el otro, y no se movió: el `throw` antes del
+`export`.** Un binding ausente en el panel de Vercel se llevaba puesta la
+configuración entera, candado incluido — fail-open donde tenía que ser cerrado.
+Eso está confirmado y es lo que este commit arregla. **El renombre a `vercel.ts`
+fue una ELECCIÓN, no la corrección de un defecto**, y por eso no se revierte:
+las dos extensiones son válidas.
+
+⚠️ **De dónde salió la afirmación falsa, porque el mecanismo importa más que el
+dato.** Vino de una medición ajena —el Bibliotecario buscó en la documentación,
+no encontró `vercel.mjs` en los fragmentos que devolvió el buscador y concluyó
+que no figuraba— y **yo la publiqué acá como hecho medido**. Lo que la hace
+mía: en el mensaje donde discutimos el diseño yo había escrito literalmente
+*«`NO_ACREDITADO` de mi lado; vos leíste la doc»*. **Tenía la duda etiquetada y
+la etiqueta se cayó justo al cruzar al CHANGELOG**, que es el único lugar donde
+iba a sobrevivir.
+
+📌 **La regla que queda:** si una afirmación viaja con `NO_ACREDITADO` en un
+mensaje entre sesiones, **esa etiqueta viaja al CHANGELOG o la afirmación no
+viaja.** En el chat la incertidumbre es barata de recordar; en un artefacto
+durable es lo único que queda.
 
 Se renombró, y hay dos costos que conviene que estén escritos:
 
