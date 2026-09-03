@@ -3,6 +3,17 @@ import { ingresar } from './_app';
 import { PAGES, type PageId } from '../src/router';
 
 /**
+ * 🔴 **Este recorrido prueba el CORTE, así que lo declara** (Q6). El default del
+ * mock es `sandbox` —describe el flujo completo—, y cada spec que ejercita el
+ * corte fija su modo antes del render.
+ */
+async function conRielApagado(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+  });
+}
+
+/**
  * **Toda ruta declarada monta SU pantalla.** El segundo de los dos guards del
  * ruteo; el primero es el `never` del `default` de `src/App.tsx`.
  *
@@ -195,6 +206,13 @@ test.describe('cada ruta declarada monta su propia pantalla', () => {
           `Agregala: una página que nadie ejercita es una ruta declarada, no una ruta que funciona.`,
       ).toBeDefined();
 
+      /**
+       * 🔴 El corte se declara acá porque **este censo lo incluye en su
+       * expectativa**: `#/tarjetas` y `#/cuenta` figuran como `redirige`. Sin
+       * declararlo, con el default `sandbox` esas dos rutas montarían pantalla
+       * y el censo mediría un árbol distinto del que describe.
+       */
+      await conRielApagado(page);
       await ingresar(page);
 
       const sufijo = esperado!.tipo === 'pantalla' && esperado!.param ? `/${esperado!.param}` : '';

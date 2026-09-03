@@ -1,4 +1,6 @@
 import { expect, type Page } from '@playwright/test';
+import { corteDePagosView } from '../src/api/releaseGates';
+import { MODO_MONETARIO_MOCK_POR_DEFECTO } from '../src/api/mock/store';
 
 /**
  * ORDEN 5 · lo que toda corrida de navegador necesita saber de la app.
@@ -71,7 +73,10 @@ export interface MesaAbierta {
  * `open` cuando el hold se autoriza. Por eso el 3DS está en el camino y no es
  * un paso opcional que se pueda saltear.
  */
-export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
+export async function abrirMesaConLink(
+  page: Page,
+  opciones: { readonly sinGarantia?: boolean } = {},
+): Promise<MesaAbierta> {
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   // §1.6 renombró el título al aplicar el rediseño: la cabecera navy de dos
   // filas no lleva título, y el <h1> pasó a la tarjeta de título `--teal-l`.
@@ -100,12 +105,35 @@ export async function abrirMesaConLink(page: Page): Promise<MesaAbierta> {
   await expect(page.getByRole('group', { name: /¿Cuántos (pagan|son en la mesa)\?/ })).toContainText('4');
 
   await page.getByRole('button', { name: 'Continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
-
-  await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
+  /**
+   * 🔴 **C3 · con el dinero apagado el organizador NO pasa por la garantía.**
+   *
+   * El dueño admite `guarantee_method:'none'` sólo en ese modo y la mesa nace
+   * `open` sin hold, sin 3DS y sin Stripe; pedir una tarjeta ahí sería pedirla
+   * para nada, y el propio dueño rechazaría una garantía con el riel apagado.
+   *
+   * El helper sigue el mismo camino que la persona, y por eso RAMIFICA en vez de
+   * forzar: con el corte va derecho a Compartir; con los pagos vivos conserva
+   * garantía y 3DS tal cual. Forzar una de las dos ramas dejaría la otra sin
+   * recorrer, que es justamente lo que este helper existe para evitar.
+   */
+  /**
+   * 🔴 **El modo lo declara el SPEC, no `CORTE`, y la diferencia me costó dos
+   * recorridos rojos.**
+   *
+   * `CORTE` se deriva del DEFAULT del mock, en Node. Un spec que fija `disabled`
+   * con el seam cambia lo que ve el NAVEGADOR, no ese default: los dos valores
+   * divergen, y el helper terminaba esperando la pantalla de garantía en una
+   * corrida que no la tenía. Por eso la rama es un parámetro explícito: quien
+   * fijó el modo es quien lo sabe.
+   */
+  if (!opciones.sinGarantia) {
+    await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
+    await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
+    await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
+  }
   // §1.7 le puso el título del spec: la pantalla es el momento de triunfo del
   // organizador, no un formulario de invitación.
   await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
@@ -136,3 +164,66 @@ export function tokenDeLaUrl(url: string): string | null {
   if (q < 0) return null;
   return new URLSearchParams(url.slice(i + q + 1)).get('t');
 }
+
+/**
+ * 🔴 **F2 · de dónde sacan los recorridos el estado del corte.**
+ *
+ * Hasta acá cada spec dormido hacía `const CORTE = corteDePagosView()` sobre una
+ * constante del front. Con el corte derivado de la capability eso ya no existe:
+ * el predicado necesita el riel, y **en Node no hay navegador, ni store, ni
+ * `GET /api/config`**.
+ *
+ * La salida no es una constante paralela —eso reintroduciría la segunda
+ * autoridad que F2 vino a eliminar— sino usar **el predicado de producción**
+ * (`corteDePagosView`) sobre **la misma fuente que el mock le sirve al
+ * navegador** (`MODO_MONETARIO_MOCK_POR_DEFECTO`). Si el default del mock
+ * cambia, esto cambia con él, sin que nadie edite un spec.
+ *
+ * ⚠️ **Por qué la fuente sale de `mock/store` y no de `mock/mockApi`, que sería
+ * lo natural:** `mockApi` arrastra `storage.ts`, que usa `import.meta.env` —una
+ * forma de Vite que Playwright no resuelve—, y con ese import **ningún spec
+ * carga**. Lo descubrí corriendo el navegador, no la suite: el typecheck y los
+ * 2191 unitarios pasaban igual.
+ *
+ * ⚠️ **Qué acredita y qué no.** Acredita *«en el entorno con el que corre este
+ * recorrido, los pagos están cortados»*. No acredita nada sobre producción: eso
+ * lo decide el dueño con su capability, y es justo el punto del cambio.
+ */
+export const CORTE = corteDePagosView({
+  // El mock siempre contesta con la forma exacta del contrato, así que su
+  // respuesta es autoritativa por construcción; lo único variable es si los
+  // pagos están habilitados.
+  status: 'authoritative',
+  puedeCargarTarjeta: MODO_MONETARIO_MOCK_POR_DEFECTO.payments_enabled,
+});
+
+/**
+ * 🔴 **El testigo estricto NO es construible en Inicio ni en Más, y queda
+ * declarado en vez de simulado.**
+ *
+ * El requisito es que toda aserción de ausencia sobre superficie gateada lleve
+ * antes un testigo positivo **de la misma capability**. Donde esa superficie
+ * existe, se usa: `mesa-sin-garantia` espera el aviso «Los pagos llegan pronto»,
+ * que sólo aparece con el riel AUTORITATIVO.
+ *
+ * En Inicio y en Más no existe, y lo medí en dos direcciones:
+ *
+ * 1. **No hay superficie afirmativa.** Con el riel apagado el corte esconde lo
+ *    suyo; `pending` y `authoritative + disabled` producen exactamente la misma
+ *    pantalla. Y los testigos que hay a mano —«Ver pagos», «Volver», «Idioma»—
+ *    cuelgan de otras capabilities, una de ellas fail-OPEN, así que aparecen sin
+ *    config y no acreditan nada.
+ * 2. **Tampoco sirve esperar la respuesta HTTP.** Lo intenté con
+ *    `waitForResponse('/api/config')` y da timeout: en modo mock **no hay red**
+ *    —`api.getConfig()` resuelve en JS—, así que no existe respuesta que
+ *    observar. Se retiró en vez de dejarlo con un `catch` que lo volvía
+ *    decorativo.
+ *
+ * **Lo que hoy acredita la vigilancia de esas aserciones es el mutante**: con
+ * `money_rail` abierto, las cinco se ponen en rojo. Es una acreditación por
+ * consecuencia, más débil que un testigo, y se dice así.
+ *
+ * **Cerrarlo de verdad exige superficie afirmativa del corte en esas pantallas**
+ * —algo que diga que los pagos vuelven, en vez de un espacio vacío—, y eso es
+ * una decisión de producto, no un ajuste de test. Queda elevado.
+ */

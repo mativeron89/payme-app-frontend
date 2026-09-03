@@ -32,7 +32,22 @@ const MESA_CODE = /^[A-Z]{2}-\d{3,5}$/;
 const PAYME_ID = /^payme_[a-z]{2}_[a-z0-9]{4}$/;
 const DECIMAL_INTEGER = /^(?:0|[1-9]\d*)$/;
 const PAYMENT_TYPES = new Set<PaymentType>(['card', 'apple_pay', 'google_pay', 'wallet']);
-const GUARANTEE_METHODS = new Set<'card' | 'wallet'>(['card', 'wallet']);
+/**
+ * 🔴 **C3 · `none` es la mesa SIN garantía, y sólo existe con el dinero apagado.**
+ *
+ * El dueño la admite únicamente en ese modo —con el riel vivo la rechaza con
+ * `409 guarantee_required`— y responde `{method:'none', status:'none'}` con la
+ * mesa ya `open`, antes de tocar Stripe.
+ *
+ * Se agrega acá porque este decoder la declaraba malformada, y el efecto era el
+ * peor de los tres posibles: **la mesa se creaba de verdad y el front la trataba
+ * como apertura fallida**, mostrando «apertura sin confirmar» sobre una mesa que
+ * existía. Fallar habría sido mejor que eso.
+ *
+ * ⚠️ **Aceptarla no relaja NADA de lo demás**: su combinación es tan cerrada
+ * como las otras dos, y las de `card`/`wallet` quedan intactas.
+ */
+const GUARANTEE_METHODS = new Set<'card' | 'wallet' | 'none'>(['card', 'wallet', 'none']);
 const PAYMENT_STATUSES = new Set(['pending', 'requires_action', 'processing', 'authorized', 'succeeded', 'processed', 'failed', 'cancelled', 'cancelling', 'refunded']);
 const TOPUP_STATUSES = new Set<TopupStatus>(['pending', 'processing', 'succeeded', 'failed', 'expired', 'cancelled']);
 const TRANSFER_STATUSES = new Set<TransferStatus>(['pending', 'completed', 'failed', 'reversed']);
@@ -112,15 +127,30 @@ export function createMesaResponse(value: unknown, expected: CreateMesaRequest):
   const mesaStatus = mesa.status;
   if ((division !== 'consumo' && division !== 'igual') || typeof participants !== 'number' || !Number.isSafeInteger(participants) || participants < 1 || participants > 20 || (mesaStatus !== 'open' && mesaStatus !== 'pending_auth')) fail();
   const method = enumValue(guarantee.method, GUARANTEE_METHODS);
-  const status = enumValue(guarantee.status, new Set(['open', 'requires_action']));
+  const status = enumValue(guarantee.status, new Set(['open', 'requires_action', 'none']));
   if (total !== positiveExpectation(expected.total_cents) || division !== expected.division_mode || participants !== expected.expected_participants || method !== expected.guarantee_method) fail();
-  if ((status === 'open' && mesaStatus !== 'open') || (status === 'requires_action' && mesaStatus !== 'pending_auth')) fail();
+  if ((status === 'open' && mesaStatus !== 'open')
+      || (status === 'requires_action' && mesaStatus !== 'pending_auth')
+      // C3 · sin garantía la mesa nace ABIERTA. Sin esta coherencia, `none`
+      // habría sido más laxo que sus vecinos: aceptaría cualquier estado.
+      || (status === 'none' && mesaStatus !== 'open')) fail();
   const clientSecret = optionalText(guarantee.client_secret);
   if (status === 'requires_action' && !clientSecret) fail();
   const connectedAccount = optionalText(guarantee.connected_account_id);
   // Wallet nunca produce 3DS ni vive en una cuenta Connect. Aceptar ese
   // híbrido mandaría a la UI a confirmar con Stripe una garantía de saldo.
   if (method === 'wallet' && (status !== 'open' || clientSecret !== undefined || connectedAccount !== undefined)) fail();
+  /**
+   * C3 · `none` y `'none'` van SIEMPRE juntos, en las dos direcciones: ni una
+   * garantía `none` con otro estado, ni un `card`/`wallet` con estado `none`.
+   *
+   * Y sin garantía **no puede venir nada de dinero**: un `client_secret` es un
+   * 3DS por confirmar y un `connected_account_id` es un hold en la cuenta del
+   * restaurante. Cualquiera de los dos significaría que el dueño hizo algo con
+   * dinero, y este camino promete exactamente que no.
+   */
+  if ((method === 'none') !== (status === 'none')) fail();
+  if (method === 'none' && (clientSecret !== undefined || connectedAccount !== undefined)) fail();
   // Una garantía ya abierta no conserva un secreto accionable. Si ambos
   // aparecen juntos, la respuesta es contradictoria y no acredita el hold.
   if (status === 'open' && clientSecret !== undefined) fail();

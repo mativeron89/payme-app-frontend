@@ -2,6 +2,37 @@ import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
 
 /**
+ * 🔴 **Método adjudicado por Codex (ACK R98) para las aserciones negativas que
+ * NO tienen testigo UI en esta pantalla.**
+ *
+ * El requisito general es que toda ausencia sobre superficie gateada lleve antes
+ * un testigo positivo de la misma capability. **En Inicio y en Más no existe**,
+ * y está medido: con el riel apagado el corte esconde lo suyo, así que `pending`
+ * y `authoritative + disabled` producen exactamente la misma pantalla; y los
+ * testigos a mano —«Ver pagos», «Volver», «Idioma»— cuelgan de otras
+ * capabilities, una de ellas fail-OPEN.
+ *
+ * Tampoco vale esperar la respuesta HTTP: **en modo mock no hay red**, el mock
+ * resuelve `getConfig()` en JS. Se probó y da timeout.
+ *
+ * Lo que sí se hace, y es lo adjudicado: **fijar el seam del mock en `disabled`
+ * antes del render**, para que la ausencia se afirme sobre un estado declarado y
+ * no sobre uno que todavía viaja. La app y el censo leen el MISMO origen
+ * (`MODO_MONETARIO_MOCK_POR_DEFECTO` en `src/api/mock/store.ts`), así que fijar
+ * la clave no crea una segunda autoridad: reafirma la que ya rige.
+ *
+ * ⚠️ **Esta evidencia es más débil que la de Mesa Detail**, donde el aviso «Los
+ * pagos llegan pronto» sólo existe con el riel autoritativo y sirve de testigo
+ * de verdad. Acá lo que acredita la vigilancia es el **mutante**: con el riel
+ * abierto, esta aserción se pone roja.
+ */
+async function conRielApagado(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+  });
+}
+
+/**
  * §1.11 · **la pestaña lanza, no muestra** — y esto prueba que llega.
  *
  * ## Por qué existe este recorrido
@@ -65,6 +96,7 @@ test.describe('los accesos de las pestañas de Inicio llegan a su pantalla', () 
    * «completando» la pestaña de buena fe.
    */
   test('Cuenta ofrece Ver pagos y NO Ver tarjetas (corte del viernes)', async ({ page }) => {
+    await conRielApagado(page);
     await ingresar(page);
     await page.getByRole('tab', { name: 'Cuenta', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Ver pagos', exact: true })).toBeVisible();

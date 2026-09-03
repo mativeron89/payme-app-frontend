@@ -31,6 +31,34 @@ export type MockPerson = Friend & { email: string };
 import { MOCK_RESTAURANTS, MOCK_USER } from './seedData';
 
 /**
+ * 🔴 **F2 · el modo monetario que el mock sirve por defecto, y por qué vive ACÁ.**
+ *
+ * El valor es del mock, pero **los recorridos de Playwright tienen que poder
+ * leerlo desde Node**, antes de que exista un navegador, para saber si el corte
+ * está activo en el entorno con el que corren. `mockApi.ts` no sirve para eso:
+ * arrastra `storage.ts`, que usa `import.meta.env` — una forma de Vite que
+ * Playwright no resuelve y que hace explotar la carga del spec. Este módulo no
+ * depende de nada de Vite, así que es el lugar correcto.
+ *
+ * 🔴 **El default es `sandbox`, y volvió a serlo por medición.**
+ *
+ * Ponerlo en `disabled` parecía lo honesto —es lo desplegado durante el corte—,
+ * pero **define qué flujo ejercita toda la suite de navegador**: sin pagos el
+ * organizador nunca pasa por la garantía, y **18 recorridos en 12 specs
+ * murieron**, siete de ellos ajenos a este trabajo. El default del mock no
+ * describe el corte: describe el flujo completo que la app sabe hacer.
+ *
+ * Así que el corte **se declara donde se prueba**: cada recorrido que lo
+ * ejercita fija `disabled` con el seam explícito antes del render. Cuando los
+ * pagos vuelvan no hay que revertir siete archivos ajenos — no se tocaron.
+ */
+export const MODO_MONETARIO_MOCK_POR_DEFECTO = Object.freeze({
+  mode: 'sandbox',
+  payments_enabled: true,
+  real_money: false,
+});
+
+/**
  * Store persistido del mock: hace de "backend" con las MISMAS reglas del
  * contrato (garantía A-1, saldo retenido, locks, slots, expiración A-2).
  * El estado económico y su ledger idempotente se restauran juntos al recargar.
@@ -92,7 +120,11 @@ export interface MockMesa {
   openedByUser: boolean;
   /** A-2: faltante capturado a la garantía al liquidar. */
   captured_shortfall_cents: number;
-  guarantee_method: 'card' | 'wallet' | null;
+  guarantee_method: 'card' | 'wallet' | 'none' | null;
+  /** C3 · `false` sólo en la mesa sin garantía. */
+  guarantee_mode?: boolean;
+  /** C3 · el discriminador del cierre sin cobros; `null` = cierre monetario. */
+  closure_reason?: 'all_items_selected' | 'time' | null;
   /** G-38 · sólo UUID interno de una guardada; nunca `pm_`. */
   guarantee_saved_payment_method_id?: string | null;
   /**
@@ -957,7 +989,7 @@ const SEED_LEGACY_RELANZABLE: Record<
     readonly restaurante: string;
     readonly openedByUser: boolean;
     /** El de HOY. Un legacy con `wallet` NO se migra: ver `migrarSeedLegacy`. */
-    readonly guarantee_method: 'card' | 'wallet' | null;
+    readonly guarantee_method: 'card' | 'wallet' | 'none' | null;
     /** Lo que pagaron OTROS en el seed. Si subió, pagó el usuario. */
     readonly paid_amount_cents: number;
   }
@@ -1426,6 +1458,17 @@ export function settleIfExpired(mesa: MockMesa): void {
   // pantalla A-2 rica ("Tu garantía cubrió $X") quedaba inalcanzable por el
   // camino vivo. En el riel real 'settled' es correcto y significa algo.
   mesa.status = 'completed';
+  /**
+   * C3 · la mesa SIN garantía cierra por tiempo y **no captura nada**: no hay
+   * garantía que cobrar. El motivo viaja en `closure_reason` porque es lo único
+   * con lo que el consumidor puede distinguirla de un vencimiento monetario —
+   * `guarantee_mode:false` también lo tienen mesas legacy que sí cobraron.
+   */
+  if (mesa.guarantee_mode === false) {
+    mesa.closure_reason = 'time';
+    mesa.captured_shortfall_cents = 0;
+    return;
+  }
   mesa.captured_shortfall_cents = Math.max(0, mesa.total_cents - mesa.paid_amount_cents);
   if (mesa.openedByUser && mesa.captured_shortfall_cents > 0) {
     if (mesa.guarantee_method === 'wallet') {
@@ -1477,6 +1520,11 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
     tip_amount_cents: m.tip_amount_cents,
     division_mode: m.division_mode,
     expected_participants: m.expected_participants,
+    // C3 · el par que distingue un cierre SIN COBROS de un vencimiento
+    // monetario. Se publican los dos porque el dueño publica los dos, aunque el
+    // discriminador sea sólo `closure_reason`.
+    guarantee_mode: m.guarantee_mode ?? true,
+    closure_reason: m.closure_reason ?? null,
     status: m.status,
     expires_at: m.expires_at,
     items: m.items.map((i) => {

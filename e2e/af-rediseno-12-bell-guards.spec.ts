@@ -1,7 +1,25 @@
 import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
 
+/**
+ * F2-03 (R105) · **el corte se declara donde se prueba, no se hereda.**
+ *
+ * Con Q6 resuelta el default del mock es `sandbox`: los pagos están vivos y la
+ * superficie que este recorrido afirma ausente vuelve a existir. Por eso el modo
+ * se fija ANTES del render, con el mismo seam que usa el resto de la suite.
+ *
+ * 🔴 **Es el ÚNICO cambio que la adenda F2-03 autoriza en este archivo.** No se
+ * toca producto, ruta, copy, contrato ni la intención del spec: las aserciones
+ * son exactamente las que ya estaban.
+ */
+async function conRielApagado(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+  });
+}
+
 test('Mis ítems conserva la campana táctil pero no abandona un pago congelado', async ({ page }) => {
+  await conRielApagado(page);
   await ingresar(page);
 
   await page.evaluate(async (code) => {

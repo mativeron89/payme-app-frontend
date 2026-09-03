@@ -1,17 +1,27 @@
 import { expect, test } from '@playwright/test';
-import { abrirMesaConLink, ingresar, tokenDeLaUrl } from './_app';
-import { corteDePagosView } from '../src/api/releaseGates';
+import { abrirMesaConLink, ingresar, tokenDeLaUrl, CORTE } from './_app';
+
+/**
+ * 🔴 **Este recorrido prueba el CORTE, así que lo declara** (Q6, resuelta por
+ * medición). El default del mock es `sandbox` —describe el flujo completo—, y
+ * cada spec que ejercita el corte fija su modo antes del render.
+ */
+async function conRielApagado(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+  });
+}
 
 /**
  * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
  * necesitan el checkout o el alta de tarjeta DUERMEN mientras el gate esté
- * activo, y leen el MISMO gate que la app: cuando `pagosCortados` pase a
- * `false`, vuelven solos, sin editar este archivo. Nunca un skip con `true`
+ * activo, y leen el MISMO gate que la app: el `CORTE` de `_app.ts` sale del
+ * decoder de produccion sobre la fuente que el mock sirve, asi que cuando el
+ * dueno habilite los pagos vuelven solos, sin editar este archivo. Nunca un skip con `true`
  * fijo: eso es evidencia que no vuelve. `src/corteGuard.test.ts` censa cada
  * uno de estos skips y pone la suite roja ante uno nuevo o permanente.
  */
-const CORTE = corteDePagosView();
-const MOTIVO = 'CORTE DEL VIERNES: el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve solo cuando corteDePagosView().pagosCortados sea false.';
+const MOTIVO = 'CORTE DEL VIERNES: el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve solo cuando el dueño publique los pagos habilitados en money_rail.';
 
 /**
  * ORDEN 5 · recorrido 3 · EL CAMINO DE PAGO, DE PUNTA A PUNTA.
@@ -53,12 +63,22 @@ test.describe('el camino de pago completo', () => {
    * cual cuando el corte se levante; sus dos hermanas de abajo quedan salteadas
    * con ese motivo, no borradas.
    */
-  test('escanear → dividir → garantizar → elegir: el flujo termina en la selección, SIN pago', async ({ page }) => {
+  test('escanear → dividir → elegir: el flujo termina en la selección, SIN garantía y SIN pago', async ({ page }) => {
+    // Este recorrido prueba el CORTE, así que lo declara; los de propina y pago
+    // de más abajo NO, porque prueban el cobro y necesitan el riel vivo.
+    await conRielApagado(page);
     await ingresar(page);
-    const mesa = await abrirMesaConLink(page);
+    const mesa = await abrirMesaConLink(page, { sinGarantia: true });
 
-    // La mesa nació garantizada (A-1): la garantía del organizador NO es parte
-    // de este corte y sigue en el camino.
+    /**
+     * 🔴 **C3 corrigió lo que este test afirmaba.** Decía: *«la mesa nació
+     * garantizada (A-1): la garantía del organizador NO es parte de este
+     * corte»*. Era cierto cuando el corte era una constante del front y sólo
+     * tapaba el checkout del participante. **Con C3 ya no**: con el dinero
+     * apagado el dueño admite `guarantee_method:'none'` y la mesa nace SIN
+     * garantía, `open`, sin hold ni 3DS. Por eso el título perdió el paso de
+     * garantizar: ese paso ya no ocurre en este modo.
+     */
     await expect(page.getByText(mesa.code, { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
@@ -80,10 +100,17 @@ test.describe('el camino de pago completo', () => {
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
     await expect(page.getByRole('radiogroup', { name: /propina/i })).toHaveCount(0);
 
-    // El círculo cierra el flujo hacia Inicio.
+    /**
+     * 🔴 **D-R8 cambió a dónde lleva el círculo, y el motivo viejo caducó.**
+     *
+     * Antes «Listo» salía a Inicio sin registrar nada, porque un lock sin pago
+     * detrás era un ítem retenido diez minutos para nadie. **Con C3 la reserva
+     * no vence** —el dueño publica `item_lock_seconds: null`—, así que ahora
+     * registra la selección y el recorrido termina donde está, con el aviso
+     * que lo dice. Salir sin registrar dejaría ese aviso mintiendo.
+     */
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect(page).toHaveURL(/#\/home$/);
-    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
 
     // Y nada se cobró: la mesa sigue en $0.00 de $840.00.
     await page.goto(`/#/mesa/${mesa.code}`);

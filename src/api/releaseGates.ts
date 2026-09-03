@@ -1,4 +1,5 @@
 /** Capabilities de release: no sustituye ni inventa contrato backend. */
+import type { MoneyRailState } from './moneyRail';
 
 /**
  * OLA 2-B · N-10: el historial de pagos PROPIO y sus estadísticas son
@@ -82,13 +83,54 @@ export function allowsWalletRoute(walletRailEnabled: boolean, page: string): boo
  * este corte es de SUPERFICIE. Que «sin pagos» sea una propiedad del sistema
  * es trabajo del dueño, y está elevado como tal.
  */
-const PAGOS_CORTADOS: boolean = true;
+/**
+ * 🔴 **F2 · el corte ya NO es una constante de este repo: lo declara el dueño.**
+ *
+ * Hasta acá esto era `const PAGOS_CORTADOS = true`, escrito a mano. Funcionaba,
+ * estaba probado y era honesto sobre lo que hacía — pero su autoridad estaba en
+ * el lugar equivocado, que es **exactamente** el defecto que `walletRail.ts:9-18`
+ * documenta para el riel saldo: *«wallet estaba apagado porque el front decidió
+ * apagarlo, no porque el sistema lo declarara apagado»*. Con una constante, un
+ * deploy de este front reencendía el checkout sin que el backend se enterara, y
+ * al revés: el dueño podía apagar el dinero y la app seguía ofreciendo cobrar.
+ *
+ * Ahora sale de `money_rail`, la MISMA capability que ya decide si se puede
+ * pedir una tarjeta. No hay dos autoridades: hay una, y este módulo la
+ * interpreta para las superficies del corte.
+ *
+ * ## Fail-closed, y hacia dónde
+ *
+ * ```
+ * status 'authoritative' + payments_enabled true  →  hay superficie de pago
+ * cualquier otra cosa                             →  NO hay
+ * ```
+ *
+ * `pending`, `absent` y `malformed` cortan. **No se adivina**: ofrecer un cobro
+ * sin saber si el dinero está vivo es la única salida que puede terminar en un
+ * cargo que nadie esperaba, y por eso el lado seguro acá es no ofrecer nada.
+ *
+ * Y se exige el `status` además del booleano a propósito: un `puedeCargarTarjeta`
+ * verdadero sobre un estado no autoritativo sería media respuesta, y media
+ * respuesta no acredita la otra mitad.
+ *
+ * ⚠️ **Sigue siendo un corte de SUPERFICIE.** Que «sin pagos» sea una propiedad
+ * del sistema es del dueño —su C3/C5 lo hacen— y este módulo no lo afirma.
+ *
+ * 🔴 **Ninguna excepción por principal**: estas funciones reciben el riel y nada
+ * más. No hay parámetro de usuario, cuenta ni restaurante donde inyectar un
+ * permiso, igual que `allowsWalletRoute`.
+ */
+export type RielDelCorte = Pick<MoneyRailState, 'status' | 'puedeCargarTarjeta'>;
+
+function hayPagos(rail: RielDelCorte): boolean {
+  return rail.status === 'authoritative' && rail.puedeCargarTarjeta;
+}
 
 /** Rutas que sólo existen para el alta de tarjeta. `cuenta` es alias de `tarjetas`. */
 export const RUTAS_DEL_CORTE: readonly string[] = ['tarjetas', 'cuenta'];
 
-export function allowsCorteRoute(page: string): boolean {
-  return !PAGOS_CORTADOS || !RUTAS_DEL_CORTE.includes(page);
+export function allowsCorteRoute(page: string, rail: RielDelCorte): boolean {
+  return hayPagos(rail) || !RUTAS_DEL_CORTE.includes(page);
 }
 
 /**
@@ -100,10 +142,11 @@ export function allowsCorteRoute(page: string): boolean {
  * el riel saldo no apaga tarjetas, y eso sigue siendo cierto. El corte es OTRA
  * razón con OTRO predicado, y los consumidores leen los dos.
  */
-export function corteDePagosView() {
+export function corteDePagosView(rail: RielDelCorte) {
+  const vivos = hayPagos(rail);
   return {
-    pagosCortados: PAGOS_CORTADOS,
-    showCards: !PAGOS_CORTADOS,
-    allowsPay: !PAGOS_CORTADOS,
+    pagosCortados: !vivos,
+    showCards: vivos,
+    allowsPay: vivos,
   };
 }

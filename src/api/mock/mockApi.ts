@@ -70,6 +70,7 @@ import {
   MOCK_RESTAURANTS,
   MOCK_USER,
 } from './seedData';
+import { MODO_MONETARIO_MOCK_POR_DEFECTO } from './store';
 import {
   availableBalance,
   findMesa,
@@ -285,14 +286,35 @@ const MODOS: Record<ModoMonetarioMock, { mode: string; payments_enabled: boolean
   live: { mode: 'live', payments_enabled: true, real_money: true },
 };
 
+/**
+ * 🔴 **F2 · el default se queda en `sandbox`, y el corte se declara donde se
+ * prueba.**
+ *
+ * Lo intenté en `disabled` —es lo desplegado durante el corte— y la medición lo
+ * refutó: ese default decide qué flujo ejercita la suite entera, y sin pagos el
+ * organizador nunca pasa por la garantía. `disabled` y `live` siguen alcanzables
+ * por la clave de `localStorage`, sin rebuild, y es por ahí que cada recorrido
+ * del corte declara su modo. El porqué completo, en `./store.ts`.
+ */
+const MODO_POR_DEFECTO: ModoMonetarioMock = MODO_MONETARIO_MOCK_POR_DEFECTO.mode as ModoMonetarioMock;
+
+/**
+ * El modo que el mock sirve cuando nadie tocó la clave. **Sin `localStorage`, a
+ * propósito**: los recorridos de Playwright necesitan derivar el corte desde
+ * Node, antes de que exista un navegador, y una lectura de storage ahí sólo
+ * podría caer en su `catch`. Que sea una función y no la constante suelta evita
+ * que alguien exporte el objeto mutable de `MODOS`.
+ */
+export function modoMonetarioMockPorDefecto(): unknown {
+  return MODOS[MODO_POR_DEFECTO];
+}
+
 export function modoMonetarioMock(): unknown {
   try {
     const v = localStorage.getItem(CLAVE_MODO);
-    // Default `sandbox`: es lo que hay desplegado hoy. Un default distinto del
-    // real haría que la demo no muestre lo que la gente se va a encontrar.
-    return MODOS[(v as ModoMonetarioMock) in MODOS ? (v as ModoMonetarioMock) : 'sandbox'];
+    return MODOS[(v as ModoMonetarioMock) in MODOS ? (v as ModoMonetarioMock) : MODO_POR_DEFECTO];
   } catch {
-    return MODOS.sandbox;
+    return MODOS[MODO_POR_DEFECTO];
   }
 }
 
@@ -401,7 +423,9 @@ export async function mockGetConfig(): Promise<AppConfig> {
     mesa_hold_seconds: 1800,
     payment_hold_seconds: 420,
     invitation_expiry_seconds: 86400,
-    item_lock_seconds: 600,
+    // C3 · con el dinero apagado la selección NO vence: el dueño publica `null`,
+    // que es la ausencia explícita. Un número grande sería una mentira redonda.
+    item_lock_seconds: (modoMonetarioMock() as { payments_enabled?: unknown })?.payments_enabled === true ? 600 : null,
     features: {
       apple_pay: false,
       google_pay: false,
@@ -1085,6 +1109,31 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   const restaurant = MOCK_RESTAURANTS.find((r) => r.id === req.restaurant_id);
   if (!restaurant) return fail(404, 'restaurant_not_found');
 
+  /**
+   * C3 · la mesa SIN garantía, con la puerta exacta del dueño
+   * (`contract-mirror/routes/mesas.js:243-250`): `none` sólo existe con el
+   * dinero apagado. Con el riel vivo se rechaza **antes** de tocar nada, con el
+   * mismo `409 guarantee_required` — «la garantía es lo que hace que el
+   * restaurante cobre», y eso no se negocia porque el front pida otra cosa.
+   */
+  const modo = modoMonetarioMock() as { payments_enabled?: unknown };
+  const dineroVivo = modo?.payments_enabled === true;
+  if (req.guarantee_method === 'none' && dineroVivo) {
+    return fail(409, 'guarantee_required');
+  }
+  /**
+   * ⚠️ **Límite declarado del mock, y por qué no se cierra acá.** El dueño
+   * también rechaza `card` y `wallet` con el dinero apagado
+   * (`rechazaPorDineroApagado`). El mock **no** modela esa mitad: hacerlo
+   * obligaría a que cada test que abre una mesa con tarjeta declarara primero el
+   * modo, y esos tests están fuera de esta orden.
+   *
+   * No abre un hueco de producto: el front nunca manda `card` con el riel
+   * apagado —`sinGarantia` en `CreateMesaFlow` lo desvía antes—, y quien lo
+   * mandara igual chocaría con el gate del dueño, que sí existe. Lo que falta es
+   * la simulación, no la defensa.
+   */
+
   // A-1: hold de garantía. Wallet = congelar saldo (D2); card = hold con 3DS.
   if (req.guarantee_method === 'wallet') {
     const available = availableBalance();
@@ -1109,7 +1158,11 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
     division_mode: req.division_mode,
     expected_participants: req.expected_participants,
     status: req.guarantee_method === 'card' ? 'pending_auth' : 'open',
-    expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+    // C3 · la mesa sin garantía vive CINCO HORAS (decisión de Mati); con
+    // garantía conserva su ventana de siempre.
+    expires_at: new Date(Date.now() + (req.guarantee_method === 'none' ? 5 * 60 * 60_000 : 30 * 60_000)).toISOString(),
+    guarantee_mode: req.guarantee_method !== 'none',
+    closure_reason: null,
     items: req.items.map((i) => ({
       id: mockId('d'),
       name: i.name,
@@ -1142,6 +1195,29 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
         : null,
   };
   state.mesas.unshift(mesa);
+
+  /**
+   * C3 · la mesa SIN garantía responde acá, **antes** de tocar cualquier riel:
+   * nace `open`, sin hold, sin 3DS y sin Stripe. El par `{method:'none',
+   * status:'none'}` es el del dueño (`contract-mirror/routes/mesas.js:663-671`).
+   */
+  if (req.guarantee_method === 'none') {
+    const respuestaSinGarantia: CreateMesaResponse = {
+      mesa: {
+        id: mesa.id,
+        code: mesa.code,
+        total_cents: mesa.total_cents,
+        division_mode: mesa.division_mode,
+        expected_participants: mesa.expected_participants,
+        status: 'open',
+        expires_at: mesa.expires_at,
+        created_at: now,
+      },
+      guarantee: { method: 'none', status: 'none' },
+    };
+    writeMockIdempotency(idemKey, { hash: idemHash, response: respuestaSinGarantia });
+    return delay(respuestaSinGarantia);
+  }
 
   if (req.guarantee_method === 'wallet') {
     state.held_balance_cents += req.total_cents;

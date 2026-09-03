@@ -2,6 +2,21 @@ import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
 
 /**
+ * 🔴 **El corte se declara donde se prueba** (Q6, resuelta por medición).
+ *
+ * El default del mock es `sandbox` —describe el flujo completo que la app sabe
+ * hacer, no el corte—, así que un recorrido que ejercita el corte fija su modo
+ * antes del render. Es también lo que hace significativa cualquier ausencia que
+ * se afirme después: se afirma sobre un estado declarado, no sobre uno que
+ * todavía viaja.
+ */
+async function conRielApagado(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+  });
+}
+
+/**
  * 🔴 CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02, 2026-09-01) · el
  * checkout del participante está cerrado en producción pública sin pagos. En
  * esta pantalla eso significa: el círculo ya no es «Continuar» hacia el pago,
@@ -28,9 +43,14 @@ import { ingresar } from './_app';
 
 test.describe('Continuar en la mesa (H-14)', () => {
   test('partes iguales: la fila dice Mi parte, y el círculo cierra el flujo SIN pago (corte)', async ({ page }) => {
+    await conRielApagado(page);
     await ingresar(page);
     await page.goto('/#/mesa/PA-3121');
     await expect(page.locator('.mesa-selection-title')).toContainText('partes iguales');
+    // 🔴 TESTIGO POSITIVO de la MISMA capability: este aviso sólo existe con el
+    // riel AUTORITATIVO declarando los pagos apagados. Sin esperarlo, las
+    // ausencias de abajo se cumplirían mientras el config todavía viaja.
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
 
     // La mesa igual del seed ahora tiene ítems reales (el contrato los exige).
     await expect(page.getByText('Omakase para dos')).toBeVisible();
@@ -78,10 +98,13 @@ test.describe('Continuar en la mesa (H-14)', () => {
    * El feedback «toast + scroll + pulso» del Continuar sin elegir (§5 bis · E,
    * P62) queda dormido con el control; vuelve con él.
    */
-  test('consumo: elegir sigue vivo, NINGÚN control lleva al pago y NADA se reserva (corte)', async ({ page }) => {
+  test('consumo: elegir sigue vivo, NINGÚN control lleva al pago y la selección SÍ queda registrada (corte)', async ({ page }) => {
+    await conRielApagado(page);
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
     await expect(page.locator('.mesa-selection-title')).toContainText('cada uno lo suyo');
+    // Mismo testigo positivo que arriba, y por el mismo motivo.
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
 
     await expect(page.getByText('Tagliatelle Bolognese')).toBeVisible();
     await expect(page.getByText('Elige lo que consumiste').first()).toBeVisible();
@@ -107,13 +130,22 @@ test.describe('Continuar en la mesa (H-14)', () => {
     const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
     await expect(filaMiParte).toContainText('$130.01');
 
-    // Con la selección hecha sigue sin haber pago, y el círculo cierra.
+    // Con la selección hecha sigue sin haber pago.
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect(page).toHaveURL(/#\/home$/);
 
-    // ⭐ Y nada se reservó: el corte fue ANTES del lock.
-    expect(await claimsDe(), 'elegir reservó el ítem: hubo lock sin pago detrás').toBe(antes);
+    /**
+     * 🔴 **D-R8 invirtió esta aserción, y el motivo viejo era correcto.**
+     *
+     * Decía: *«nada se reservó: el corte fue ANTES del lock»*, porque un lock
+     * sin pago detrás era un ítem retenido diez minutos para nadie. **Con C3 ese
+     * motivo desaparece**: el dueño publica `item_lock_seconds: null` con el
+     * dinero apagado, o sea que la reserva NO vence. Sin vencimiento, reservar
+     * es lo único que hace verdadera la promesa que la persona acaba de leer —
+     * «tu selección queda registrada»—, y no hacerlo dejaba ese aviso mintiendo.
+     */
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+    expect(await claimsDe(), 'la selección no quedó registrada: el aviso promete algo que no ocurre').toBeGreaterThan(antes);
   });
 });
 

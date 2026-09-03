@@ -7,6 +7,7 @@ import { navigate } from '../router';
 import { readUnconfirmed, scopeForActor, useMoneyActor } from '../api/idempotency';
 import { useWalletRail } from '../api/walletRail';
 import { accountRailView, corteDePagosView } from '../api/releaseGates';
+import { useMoneyRail } from '../api/moneyRail';
 import { countdownLong, formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { mesaStatusLabel, walletTxIcon, walletTxLabel } from '../utils/labels';
@@ -106,7 +107,7 @@ export function HomeScreen() {
   // apaga tarjetas (`showCards` de `accountRailView`, cableado acá por primera
   // vez) y el corte del viernes SÍ (`corteDePagosView`). Ver `releaseGates.ts`.
   const rail = accountRailView(walletRailEnabled, accountActivity);
-  const corte = corteDePagosView();
+  const corte = corteDePagosView(useMoneyRail());
   const [tab, setTab] = useState<TabId>('cuenta');
   const [hojaAbierta, setHojaAbierta] = useState(false);
   const [balance, setBalance] = useState<BalanceResponse | null>(null);

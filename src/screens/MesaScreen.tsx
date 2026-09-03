@@ -78,12 +78,6 @@ import { RequestEpoch } from '../utils/requestEpoch';
 import { writeClipboardText } from '../utils/clipboard';
 
 /**
- * CORTE DEL VIERNES · `releaseGates.ts`. Se lee una vez: es una constante del
- * front, no una capability que viaje por la red.
- */
-const CORTE = corteDePagosView();
-
-/**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
  * propina al mesero, procesando → comprobante, y cierre con semántica A-2
  * ("tu garantía cubrió $X"). Sirve para organizador, participante e
@@ -91,6 +85,33 @@ const CORTE = corteDePagosView();
  */
 
 type View = 'detail' | 'pay' | 'confirm';
+
+/**
+ * 🔴 **C3 · el discriminador del cierre SIN COBROS, y por qué NO es
+ * `guarantee_mode`.**
+ *
+ * El dueño publica los dos campos, y el que parece resolver la pregunta es el
+ * equivocado. Su derivación exige TRES condiciones —`guarantee_mode:false`, su
+ * marca interna `sin_garantia` y `status:'expired'`— y **la del medio no se
+ * publica** (`contract-mirror/routes/mesas.js:193-216`). Su propio comentario
+ * dice por qué existe: *una mesa legacy sin garantía en `expired` venció por el
+ * camino monetario de siempre*.
+ *
+ * Entonces **hay mesas con `guarantee_mode:false` que SÍ cobraron**. Decidir con
+ * ese booleano les taparía la fila de la garantía a todas: el mismo error de
+ * afirmar de más, en espejo. El único dato que acredita el cierre sin cobros es
+ * `closure_reason`, y su conjunto es CERRADO —`CHANGELOG_v2.85.0.md` del dueño—:
+ * cualquier otro valor, o su ausencia, es cierre monetario.
+ *
+ * ⚠️ Y tampoco se deduce de `paid_amount_cents === 0`: eso taparía también una
+ * mesa con garantía real donde nadie pagó, que es un caso distinto y verdadero.
+ */
+const CIERRES_SIN_COBROS: readonly string[] = ['all_items_selected', 'time'];
+
+export function cerroSinCobros(mesa: Pick<MesaDetail, 'closure_reason'>): boolean {
+  return typeof mesa.closure_reason === 'string'
+    && CIERRES_SIN_COBROS.includes(mesa.closure_reason);
+}
 
 /**
  * §1.5 bis · fallback: el selector de propina no se pudo MOSTRAR.
@@ -275,6 +296,14 @@ function payExpectationFor(mesa: MesaDetail, body: PayMesaRequest): PayMesaExpec
 export function MesaScreen({ code, guestToken }: { code: string; guestToken?: string }) {
   const { t } = useIdioma();
   const moneyRail = useMoneyRail();
+  /**
+   * F2 · el corte lo declara el dueño. Antes era una constante de módulo leída
+   * una vez; ahora sale del MISMO riel que ya gobierna la superficie de tarjeta,
+   * así que no hay dos autoridades ni una constante que alguien pueda leer en su
+   * lugar. Fail-closed: mientras el riel no sea autoritativo con pagos vivos, la
+   * vista `pay` no se abre.
+   */
+  const CORTE = corteDePagosView(moneyRail);
   const nativeWallets = useNativeWallets();
   // OLA 5D · método de pago con saldo y copy asociada: los declara el BACKEND.
   const { walletRailEnabled } = useWalletRail();
@@ -579,12 +608,23 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }
 
   async function goToPay() {
-    // 🔴 CORTE DEL VIERNES · ANTES de `api.lockItems`, y no después: un lock sin
-    // pago detrás es un ítem reservado diez minutos para nadie. Con el corte
-    // activo `MesaDetailView` ya no ofrece el control que llega acá; ésta es la
-    // segunda capa, la del dueño de la transición (`releaseGates.ts`).
-    if (!CORTE.allowsPay) return;
     if (!mesa) return;
+    /**
+     * 🔴 **D-R8 · dónde termina el recorrido con el corte, y por qué el lock
+     * ahora SÍ ocurre.**
+     *
+     * El tramo anterior cortaba ANTES de `lockItems`, con un motivo que era
+     * correcto entonces: *un lock sin pago detrás es un ítem reservado diez
+     * minutos para nadie*. **Ese motivo ya no aplica**: el dueño publica
+     * `item_lock_seconds: null` con el dinero apagado, o sea que en este modo la
+     * reserva NO vence. Sin vencimiento, el lock deja de ser un ítem secuestrado
+     * y pasa a ser lo único que hace verdadera la promesa que ve la persona —
+     * «tu selección queda registrada».
+     *
+     * Así que con el corte se reserva y se vuelve al detalle; sin él, se
+     * reserva y se sigue al pago, como siempre. Lo que **nunca** ocurre es
+     * llegar a `pay` con el corte activo: eso lo cierra `allowsPay` abajo.
+     */
     setError(null);
     if (mesa.division_mode === 'consumo') {
       if (selected.size === 0) return;
@@ -597,6 +637,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         }));
         const r = await api.lockItems(code, requests, guestToken);
         setLockTokens([r.lock_token]);
+        // Con el corte la selección queda registrada y el recorrido termina acá:
+        // se recarga para que «Mis ítems» muestre lo tomado, y no se abre `pay`.
+        if (!CORTE.allowsPay) { reload(); return; }
         setView('pay');
       } catch (err) {
         const { code: ec, extra } = extractApiError(err);
@@ -632,6 +675,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // (`selected.size === 0 → return`) era el mismo gate contradictorio que
       // el `disabled` de la barra, en su segundo lugar. El contrato acompaña:
       // `payMesa` acepta una declaración vacía vía `item_ids: []`.
+      //
+      // Con el corte no hay pago al que ir y en igualdad no hay lock que
+      // registrar —la declaración es informativa—: el recorrido termina donde
+      // está, sin abrir una pantalla de cobro que no puede cobrar.
+      if (!CORTE.allowsPay) return;
       setView('pay');
     }
   }
@@ -1484,6 +1532,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     }
     const shortfall = Math.max(0, mesa.total_cents - mesa.paid_amount_cents);
     const isOpener = mesa.my_role === 'opener';
+    /**
+     * 🔴 Sin cobros, la diferencia entre el total y lo pagado **no es un
+     * faltante que alguien cubrió**: es lo que nunca se cobró. Mostrar la fila
+     * de la garantía acá afirmaría un movimiento de dinero inexistente, y por el
+     * monto máximo posible — con nadie pagando, `shortfall` ES el total.
+     */
+    const sinCobros = cerroSinCobros(mesa);
     return (
       <div className="screen">
         <TopBar
@@ -1497,7 +1552,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <Icon name={shortfall > 0 ? 'clock' : 'check-circle'} size={40} />
             </div>
             <div className="h2" style={{ marginTop: 8 }}>
-              {shortfall > 0 ? t('Se cerró por tiempo') : t('Quedó todo pago')}
+              {sinCobros
+                ? t('Esta mesa cerró sin cobros')
+                : shortfall > 0 ? t('Se cerró por tiempo') : t('Quedó todo pago')}
             </div>
             <div className="body-text" style={{ marginTop: 6 }}>
               {mesa.restaurant.name} {t('· Mesa')} {code}
@@ -1514,7 +1571,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 {formatMXN(mesa.paid_amount_cents)}
               </span>
             </div>
-            {shortfall > 0 && (
+            {!sinCobros && shortfall > 0 && (
               <div className="receipt-row">
                 <span className="lbl">{isOpener ? t('Cubrió tu garantía') : t('Cubrió la garantía')}</span>
                 <span className="val" style={{ color: 'var(--orange-txt)' }}>
@@ -1529,7 +1586,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               <span className="val hl">{formatMXN(mesa.total_cents)}</span>
             </div>
           </div>
-          {shortfall > 0 && isOpener && (
+          {/* La segunda afirmación de garantía, y por eso lleva el MISMO gate:
+              una mesa sin cobros no capturó nada y nadie quedó debiendo por una
+              garantía que no existió. */}
+          {!sinCobros && shortfall > 0 && isOpener && (
             <div className="note note-teal">
               <b>{t('Tu garantía cubrió')} {formatMXN(shortfall)}.</b> {t('El restaurante cobró el total y nadie quedó debiendo en la mesa. Pronto vas a poder pedirle ese monto a quien no llegó a pagar.')}
             </div>
@@ -2243,6 +2303,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       onGoToPay={goToPay}
       onRetryFrozenPay={() => { if (CORTE.allowsPay) setView('pay'); }}
       pagosCortados={CORTE.pagosCortados}
+      // El corte DECLARADO por el dueño: sólo con el riel autoritativo. Ver el
+      // porqué en la prop de `MesaDetailView`.
+      corteDeclarado={moneyRail.status === 'authoritative' && !moneyRail.puedeCargarTarjeta}
       onLeave={() => navigate('home')}
       onOpenInvite={() => setInviteOpen(true)}
       onCopyInvitationLink={() => void copyInvitationLink()}

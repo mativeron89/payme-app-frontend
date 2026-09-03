@@ -2,6 +2,17 @@ import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 
 /**
+ * 🔴 **Este recorrido prueba el CORTE, así que lo declara** (Q6). El default del
+ * mock es `sandbox` —describe el flujo completo—, y cada spec que ejercita el
+ * corte fija su modo antes del render.
+ */
+async function conRielApagado(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+  });
+}
+
+/**
  * ORDEN 5 · recorrido 2 · CIERRA EL ANCLA DE 4C.
  *
  * ## Qué quedó sin probar en 4C
@@ -37,6 +48,8 @@ const VOCABULARIO_WALLET = ['CLABE', 'Saldo PayMe', 'OXXO', 'Cargar saldo'];
 test.describe('las rutas del riel saldo no son alcanzables', () => {
   for (const ruta of RUTAS_DEL_RIEL) {
     test(`#/${ruta} escrita a mano termina en Inicio`, async ({ page }) => {
+      // El corte lo declara este recorrido, que es el que lo prueba.
+      await conRielApagado(page);
       await ingresar(page);
 
       await page.goto(`/#/${ruta}`);
@@ -60,6 +73,7 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
      * sin navegador podía comprobar.
      */
     test(`Atrás no recupera #/${ruta}`, async ({ page }) => {
+      await conRielApagado(page);
       await ingresar(page);
       await page.goto(`/#/${ruta}`);
       await expect(page).toHaveURL(/#\/home$/);
@@ -179,6 +193,8 @@ const VOCABULARIO_TARJETAS = ['Mis tarjetas', 'Agregar tarjeta', 'Guardar tarjet
 test.describe('corte del viernes · las rutas de tarjetas no son alcanzables', () => {
   for (const ruta of RUTAS_DEL_CORTE) {
     test(`#/${ruta} escrita a mano termina en Inicio`, async ({ page }) => {
+      // El corte lo declara este recorrido, que es el que lo prueba.
+      await conRielApagado(page);
       await ingresar(page);
 
       await page.goto(`/#/${ruta}`);
@@ -193,6 +209,7 @@ test.describe('corte del viernes · las rutas de tarjetas no son alcanzables', (
     });
 
     test(`Atrás no recupera #/${ruta}`, async ({ page }) => {
+      await conRielApagado(page);
       await ingresar(page);
       await page.goto(`/#/${ruta}`);
       await expect(page).toHaveURL(/#\/home$/);

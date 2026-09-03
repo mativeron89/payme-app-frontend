@@ -20,7 +20,7 @@ class MemoryStorage {
 const local = new MemoryStorage();
 Object.assign(globalThis, { localStorage: local, sessionStorage: new MemoryStorage() });
 
-const { modoMonetarioMock, setModoMonetarioMock, mockGetConfig } = await import('./mockApi');
+const { modoMonetarioMock, modoMonetarioMockPorDefecto, setModoMonetarioMock, mockGetConfig, mockCreateMesa } = await import('./mockApi');
 
 /**
  * LOS TRES MODOS MONETARIOS DEL MOCK · `D-FF-2-BIS`.
@@ -74,10 +74,38 @@ describe('los tres modos del mock · `payments_enabled` y `real_money` son INDEP
     expect(s.payments_enabled).not.toBe(s.real_money);
   });
 
-  it('el default es `sandbox` · es lo que hay desplegado hoy', () => {
-    // Un default distinto del real haría que la demo no muestre lo que la gente
-    // se va a encontrar.
-    expect(modoMonetarioMock()).toMatchObject({ mode: 'sandbox' });
+  /**
+   * 🔴 **F2 · el default se queda en `sandbox`, y lo decidió una medición.**
+   *
+   * Ponerlo en `disabled` parecía más honesto —es lo desplegado durante el
+   * corte— pero ese valor **decide qué flujo ejercita la suite de navegador
+   * entera**: sin pagos el organizador nunca pasa por la garantía, y 18
+   * recorridos en 12 specs murieron. El default describe el flujo completo que
+   * la app sabe hacer; **el corte se declara donde se prueba**.
+   */
+  it('el default es `sandbox` · el mock describe el flujo completo, no el corte', () => {
+    expect(modoMonetarioMock()).toMatchObject({ mode: 'sandbox', payments_enabled: true, real_money: false });
+  });
+
+  /**
+   * 🔴 Los otros dos modos existen y son alcanzables **sólo por el seam
+   * explícito**. Es lo que permite que cada recorrido del corte declare su modo
+   * sin que el default afirme algo que sólo vale mientras dure el corte.
+   */
+  it('`disabled` y `live` son alcanzables sólo por la clave explícita', () => {
+    setModoMonetarioMock('disabled');
+    expect(modoMonetarioMock()).toMatchObject({ mode: 'disabled', payments_enabled: false, real_money: false });
+    setModoMonetarioMock('live');
+    expect(modoMonetarioMock()).toMatchObject({ mode: 'live', payments_enabled: true, real_money: true });
+  });
+
+  /**
+   * La fuente que leen los recorridos desde Node, donde no hay `localStorage`.
+   * Tiene que coincidir con el default de arriba: si divergen, un spec dormiría
+   * (o despertaría) por un motivo distinto del que ve la app en el navegador.
+   */
+  it('🔴 la fuente sin storage devuelve EXACTAMENTE el mismo default', () => {
+    expect(modoMonetarioMockPorDefecto()).toEqual(modoMonetarioMock());
   });
 
   it('🔴 un valor basura cae al default y NO rompe · nadie tipea a mano sin equivocarse', () => {
@@ -114,5 +142,42 @@ describe('los tres modos del mock · `payments_enabled` y `real_money` son INDEP
     // pegado en `mockGetConfig` pasaría todo lo de arriba.
     setModoMonetarioMock('disabled');
     expect((await mockGetConfig()).features.money_rail).toMatchObject({ mode: 'disabled' });
+  });
+});
+
+/**
+ * 🔴 **La puerta del dueño para la mesa sin garantía, con su rojo.**
+ *
+ * `guarantee_method:'none'` **sólo existe con el dinero apagado**: con el riel
+ * vivo el dueño responde `409 guarantee_required`, porque «la garantía es lo que
+ * hace que el restaurante cobre» sigue ratificado para el riel monetario.
+ *
+ * ⚠️ **Este bloque existe porque un mutante sobrevivió**: quitar esa puerta del
+ * mock no ponía nada en rojo — el recorrido de la mesa sin garantía fija
+ * `disabled`, así que nunca ejercitaba el caso prohibido.
+ */
+describe('C3 · la mesa sin garantía sólo existe con el dinero apagado', () => {
+  const pedido = {
+    restaurant_id: 'b0000000-0000-4000-8000-000000000001',
+    total_cents: 1000,
+    division_mode: 'igual' as const,
+    expected_participants: 2,
+    guarantee_method: 'none' as const,
+    idempotency_key: 'mesa-idem-c3-none',
+    items: [{ name: 'Sopa', price_cents: 1000, quantity: 1 }],
+  };
+
+  it('con el riel VIVO, pedir `none` se rechaza con 409 guarantee_required', async () => {
+    setModoMonetarioMock('sandbox');
+    await expect(mockCreateMesa(pedido as never)).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
+  it('con el dinero APAGADO, la misma mesa nace `open` y sin garantía', async () => {
+    setModoMonetarioMock('disabled');
+    const r = await mockCreateMesa({ ...pedido, idempotency_key: 'mesa-idem-c3-none-ok' } as never);
+    expect(r.mesa.status).toBe('open');
+    expect(r.guarantee).toEqual({ method: 'none', status: 'none' });
   });
 });

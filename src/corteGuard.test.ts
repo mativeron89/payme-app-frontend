@@ -4,6 +4,28 @@ import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { RUTAS_DEL_CORTE, allowsCorteRoute, corteDePagosView } from './api/releaseGates';
+import { cerroSinCobros } from './screens/MesaScreen';
+import { MONEY_RAIL_CERRADO, readMoneyRail } from './api/moneyRail';
+import { modoMonetarioMockPorDefecto } from './api/mock/mockApi';
+
+/**
+ * El corte tal como lo ven los RECORRIDOS: mismo decoder que la app, misma
+ * fuente que el mock le sirve al navegador. Es el mismo cálculo que hace
+ * `e2e/_app.ts`; acá se rehace en vez de importarse para que este censo no
+ * dependa del archivo que está censando.
+ */
+/**
+ * El riel tal como lo declara el dueño con el dinero apagado: **autoritativo**.
+ * Es el único estado en que la expulsión de `#/tarjetas` corresponde — con
+ * `pending` la vista se oculta, pero no se expulsa.
+ */
+const RIEL_CORTADO_AUTORITATIVO = readMoneyRail({
+  features: { money_rail: { mode: 'disabled', payments_enabled: false, real_money: false } },
+});
+
+const CORTE_DE_LOS_RECORRIDOS = corteDePagosView(
+  readMoneyRail({ features: { money_rail: modoMonetarioMockPorDefecto() } }),
+);
 import type { MesaDetail } from './api/types';
 import { resetWalletRailForTests } from './api/walletRail';
 import { enforceCorteRouteGuard } from './corteGuard';
@@ -139,8 +161,8 @@ afterEach(() => {
 describe('🔴 corte · el predicado está FIJADO y es coherente consigo mismo', () => {
   it('🔴 PIN · el corte está activo; cambiarlo es una decisión de producto, no un ajuste', () => {
     expect(
-      corteDePagosView(),
-      'PAGOS_CORTADOS cambió: eso reabre el checkout público y exige orden nueva, no un commit',
+      corteDePagosView(MONEY_RAIL_CERRADO),
+      'el corte se levantó con el riel en su estado inicial: eso reabre el checkout público antes de que el dueño conteste',
     ).toEqual({ pagosCortados: true, showCards: false, allowsPay: false });
   });
 
@@ -151,11 +173,11 @@ describe('🔴 corte · el predicado está FIJADO y es coherente consigo mismo',
 
   it('la lista se deriva del router: toda página está cortada o permitida, ninguna las dos', () => {
     for (const page of PAGES) {
-      expect(allowsCorteRoute(page)).toBe(!CORTADAS.includes(page));
+      expect(allowsCorteRoute(page, MONEY_RAIL_CERRADO)).toBe(!CORTADAS.includes(page));
     }
     // `#/pagos` es la superficie card-only que el corte CONSERVA, y se nombra
     // sola: es lo que vuelve significativos los negativos de abajo.
-    expect(allowsCorteRoute('pagos')).toBe(true);
+    expect(allowsCorteRoute('pagos', MONEY_RAIL_CERRADO)).toBe(true);
   });
 });
 
@@ -166,7 +188,7 @@ describe('🔴 corte · ruta cortada → replace de historial → home', () => {
     it(`#/${page} termina en #/home sin dejar rastro`, () => {
       const b = browserStub(`#/${page}`);
 
-      expect(enforceCorteRouteGuard(page)).toBe(true);
+      expect(enforceCorteRouteGuard(page, RIEL_CORTADO_AUTORITATIVO)).toBe(true);
 
       expect(b.hash()).toBe('#/home');
       expect(parseHash(b.hash()).page).toBe('home');
@@ -180,9 +202,35 @@ describe('🔴 corte · ruta cortada → replace de historial → home', () => {
     });
   }
 
+  /**
+   * 🔴 **El defecto de producto que 2198 unitarios no cazaron, ahora con su
+   * guarda EJECUTADA.**
+   *
+   * La primera versión de F2 redirigía también con el riel en `pending`.
+   * Consecuencia: entrar directo a `#/tarjetas` —o recargar ahí— **expulsaba a
+   * Inicio antes de que el dueño dijera si hay pagos**, aunque los hubiera. Se
+   * perdía la ruta por una carrera, no por una decisión. Lo cazó el navegador.
+   *
+   * ⚠️ **Ocultar y expulsar son decisiones distintas, y sólo una espera.** La
+   * vista sigue fail-closed en `pending` —`allowsCorteRoute` lo afirma abajo—
+   * así que la superficie de tarjetas **no se muestra** mientras no se sepa. Lo
+   * que espera es la EXPULSIÓN.
+   */
+  it.each(CORTADAS)('#/%s NO expulsa mientras el dueño no contestó, y la vista sigue oculta', (page) => {
+    for (const rail of [MONEY_RAIL_CERRADO, readMoneyRail(null), readMoneyRail({ features: {} })]) {
+      const b = browserStub(`#/${page}`);
+      expect(enforceCorteRouteGuard(page, rail), `expulsó con status ${rail.status}`).toBe(false);
+      expect(b.replaceState, `redirigió con status ${rail.status}`).not.toHaveBeenCalled();
+      expect(b.hash(), `movió el hash con status ${rail.status}`).toBe(`#/${page}`);
+      // Y lo que NO cambia: la vista sigue cortada, así que la superficie de
+      // tarjetas no se ve mientras el estado no sea autoritativo.
+      expect(allowsCorteRoute(page, rail), `mostró la vista con status ${rail.status}`).toBe(false);
+    }
+  });
+
   it.each(NO_CORTADAS)('ninguna otra ruta del router se toca · #/%s', (page) => {
     const b = browserStub(`#/${page}`);
-    expect(enforceCorteRouteGuard(page)).toBe(false);
+    expect(enforceCorteRouteGuard(page, RIEL_CORTADO_AUTORITATIVO)).toBe(false);
     expect(b.replaceState).not.toHaveBeenCalled();
     expect(b.hash()).toBe(`#/${page}`);
   });
@@ -201,7 +249,7 @@ describe('🔴 corte · ruta cortada → replace de historial → home', () => {
   ])('%s sigue cortada', (hash) => {
     const b = browserStub(hash);
     const route = parseHash(hash);
-    expect(enforceCorteRouteGuard(route.page)).toBe(true);
+    expect(enforceCorteRouteGuard(route.page, RIEL_CORTADO_AUTORITATIVO)).toBe(true);
     expect(b.hash()).toBe('#/home');
   });
 
@@ -219,7 +267,7 @@ describe('🔴 corte · ruta cortada → replace de historial → home', () => {
       dispatchEvent: () => true,
     });
 
-    expect(() => enforceCorteRouteGuard('tarjetas')).not.toThrow();
+    expect(() => enforceCorteRouteGuard('tarjetas', RIEL_CORTADO_AUTORITATIVO)).not.toThrow();
     expect(actual).toBe('#/home');
     expect(hashWrites).toEqual(['#/home']);
   });
@@ -306,6 +354,9 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles y conserva el av
       mySlotsTaken: 0,
       frozenScope: null,
       pagosCortados: true,
+      // D-R8 · el corte DECLARADO por el dueño: distinto de `pagosCortados`, que
+      // también es true mientras el riel está `pending`.
+      corteDeclarado: true,
       busy: false,
       inviteOpen: false,
       onToggleItem: () => undefined,
@@ -387,23 +438,50 @@ describe('🔴 corte · MesaScreen frena ANTES de api.lockItems', () => {
    * predicado. Es un guardarraíl de fuente por AST —más débil que ejecutar,
    * y queda dicho—; el e2e `mesa-igual-continuar` es el que lo ejecuta.
    */
-  it('la primera sentencia de goToPay es el corte, y el lock viene después', () => {
+  /**
+   * 🔴 **D-R8 cambió esta forma a propósito, y el test cambia con ella.**
+   *
+   * Antes el corte era la PRIMERA sentencia de `goToPay` y el lock quedaba
+   * detrás, con un motivo que era correcto: *un lock sin pago detrás es un ítem
+   * reservado diez minutos para nadie*. Ese motivo **caducó con C3**: el dueño
+   * publica `item_lock_seconds: null` con el dinero apagado, o sea que la
+   * reserva no vence. Sin vencimiento, el lock es lo único que hace verdadera la
+   * promesa que la persona lee —«tu selección queda registrada»—, y retenerlo
+   * dejaría un copy mintiendo.
+   *
+   * Lo que este censo protege NO cambió: **con el corte activo nunca se llega a
+   * `pay`**. Ahora se verifica donde de verdad ocurre — cada transición a `pay`
+   * queda detrás de un `return` gobernado por `CORTE.allowsPay` —, en vez de por
+   * la posición de una sentencia.
+   */
+  it('con el corte activo ninguna transición a `pay` es alcanzable, y el lock sigue existiendo', () => {
     const sf = arbol();
     const goToPay = [...recorrer(sf)].find(
       (n): n is ts.FunctionDeclaration => ts.isFunctionDeclaration(n) && n.name?.text === 'goToPay',
     );
     expect(goToPay, 'no se encontró goToPay').toBeDefined();
-    const primera = goToPay!.body!.statements[0]!;
-    expect(ts.isIfStatement(primera), 'goToPay no empieza con un if').toBe(true);
-    const si = primera as ts.IfStatement;
-    expect(si.expression.getText(sf)).toBe('!CORTE.allowsPay');
-    expect(ts.isReturnStatement(si.thenStatement), 'el corte no retorna').toBe(true);
+
+    // Cada `setView('pay')` de goToPay tiene que estar precedido, dentro de la
+    // función, por una salida gobernada por el predicado del corte.
+    const guardas = [...recorrer(goToPay!)].filter(
+      (n): n is ts.IfStatement => ts.isIfStatement(n) && n.expression.getText(sf) === '!CORTE.allowsPay',
+    );
+    expect(guardas.length, 'goToPay dejó de gobernar sus salidas con el corte').toBeGreaterThanOrEqual(2);
+    for (const g of guardas) {
+      expect(g.thenStatement.getText(sf), 'una guarda del corte no retorna').toContain('return');
+    }
+    const transicionesEnGoToPay = [...recorrer(goToPay!)].filter(
+      (n) => ts.isCallExpression(n) && n.getText(sf) === "setView('pay')",
+    );
+    for (const tr of transicionesEnGoToPay) {
+      const protegida = guardas.some((g) => g.getEnd() < tr.getStart(sf));
+      expect(protegida, `una transición a pay quedó sin guarda del corte: ${tr.getText(sf)}`).toBe(true);
+    }
 
     const lock = [...recorrer(goToPay!)].find(
       (n) => ts.isCallExpression(n) && n.expression.getText(sf) === 'api.lockItems',
     );
     expect(lock, 'goToPay dejó de llamar a api.lockItems: se borró en vez de cerrar').toBeDefined();
-    expect(lock!.getStart(sf)).toBeGreaterThan(si.getEnd());
   });
 
   it('las TRES transiciones a `pay` quedan bajo el predicado, y son tres', () => {
@@ -411,7 +489,10 @@ describe('🔴 corte · MesaScreen frena ANTES de api.lockItems', () => {
     const goToPay = [...recorrer(sf)].find(
       (n): n is ts.FunctionDeclaration => ts.isFunctionDeclaration(n) && n.name?.text === 'goToPay',
     )!;
-    const guarda = goToPay.body!.statements[0]!;
+    // D-R8 · la guarda ya no es la primera sentencia: se busca por su predicado.
+    const guarda = [...recorrer(goToPay)].find(
+      (n): n is ts.IfStatement => ts.isIfStatement(n) && n.expression.getText(sf) === '!CORTE.allowsPay',
+    )!;
     const retry = [...recorrer(sf)].find(
       (n): n is ts.JsxAttribute => ts.isJsxAttribute(n) && n.name.getText(sf) === 'onRetryFrozenPay',
     );
@@ -450,17 +531,89 @@ describe('🔴 corte · el gate no lee el modo, la URL ni ningún principal', ()
 });
 
 describe('🔴 corte · App.tsx delega en el guard', () => {
-  const FUENTE = import.meta.glob('/src/App.tsx', {
-    query: '?raw', import: 'default', eager: true,
-  }) as Record<string, string>;
+  const FUENTE = import.meta.glob(
+    // D-R23 suma dos pantallas: la que muestra la línea y la que NO debe
+    // mostrarla. Enumeradas, no por patrón: el censo tiene que romperse si
+    // alguien agrega una tercera superficie sin declararla acá.
+    ['/src/App.tsx', '/src/screens/MasScreen.tsx', '/src/screens/HomeScreen.tsx'],
+    { query: '?raw', import: 'default', eager: true },
+  ) as Record<string, string>;
+
+  /**
+   * 🔴 **D-R23 · la línea de «Más» promete algo, y sólo puede prometerlo cuando
+   * el dueño lo declaró.**
+   *
+   * «Los pagos llegan pronto» es una afirmación sobre dinero. Mostrarla con el
+   * riel en `pending` sería prometer sin saber si los pagos están vivos — y el
+   * estado `pending` es indistinguible de `disabled` en todo lo demás, así que
+   * nada más lo cazaría.
+   *
+   * ⚠️ **Este centinela existe porque un mutante sobrevivió.** Al quitar
+   * `status === 'authoritative'` de la condición, toda la suite seguía verde: la
+   * guarda estaba escrita y no la vigilaba nadie. Es un guardarraíl de fuente
+   * —más débil que ejecutar, y queda dicho—, pero es lo que este repo puede
+   * afirmar sin librería de render.
+   */
+  it('la línea de «Más» exige el riel AUTORITATIVO, no sólo la ausencia de pagos', () => {
+    const texto = FUENTE['/src/screens/MasScreen.tsx'];
+    expect(texto, 'no se pudo leer MasScreen.tsx').toBeTruthy();
+    expect(texto).toContain("moneyRail.status === 'authoritative' && !moneyRail.puedeCargarTarjeta");
+    expect(texto).toContain("{t('Los pagos llegan pronto')}");
+    // Y no se cuela en Inicio: Mati descartó explícitamente «Inicio y Más».
+    const home = FUENTE['/src/screens/HomeScreen.tsx'];
+    expect(home, 'no se pudo leer HomeScreen.tsx').toBeTruthy();
+    expect(home).not.toContain('Los pagos llegan pronto');
+  });
 
   it('llama al guard, devuelve null en la ruta cortada, y no reimplementa la redirección', () => {
     const texto = FUENTE['/src/App.tsx'];
     expect(texto).toBeDefined();
     expect((texto as string).length).toBeGreaterThan(1000);
-    expect(texto).toContain('enforceCorteRouteGuard(route.page)');
+    expect(texto).toContain('enforceCorteRouteGuard(route.page, moneyRail)');
     expect(texto).toContain('if (rutaCortada) return null;');
     expect(texto).not.toContain("replaceRoute('home')");
+  });
+});
+
+/**
+ * 🔴 **El discriminador del cierre sin cobros, con su propio rojo.**
+ *
+ * Esta función es la que impide que la pantalla afirme «Cubrió tu garantía $X»
+ * sobre una mesa que nunca tuvo garantía —la mentira sobre dinero que motivó
+ * A-6—. **Y hasta este bloque no la vigilaba nadie**: un mutante que la hacía
+ * decidir por `guarantee_mode` sobrevivía con los 47 tests en verde.
+ *
+ * El punto fino es contraintuitivo y por eso se fija con casos: el campo que
+ * NOMBRA el problema (`guarantee_mode`) es el equivocado. El dueño deriva
+ * `closure_reason` con tres condiciones y **una de ellas no se publica**, así
+ * que existen mesas legacy con `guarantee_mode:false` que **sí cobraron**.
+ * Decidir con ese booleano les taparía la fila de la garantía a todas.
+ */
+describe('🔴 corte · cerroSinCobros decide por `closure_reason`, nunca por `guarantee_mode`', () => {
+  it('acepta los dos motivos del conjunto cerrado del dueño', () => {
+    expect(cerroSinCobros({ closure_reason: 'time' })).toBe(true);
+    expect(cerroSinCobros({ closure_reason: 'all_items_selected' })).toBe(true);
+  });
+
+  it('🔴 una mesa LEGACY sin garantía que SÍ cobró no se trata como cierre sin cobros', () => {
+    // `guarantee_mode:false` y sin motivo: venció por el camino monetario de
+    // siempre. Si esto diera `true`, se le ocultaría una garantía real.
+    expect(cerroSinCobros({ guarantee_mode: false, closure_reason: null } as never)).toBe(false);
+    expect(cerroSinCobros({ guarantee_mode: false } as never)).toBe(false);
+  });
+
+  it('ausencia, null y cualquier valor fuera del conjunto = cierre monetario', () => {
+    expect(cerroSinCobros({ closure_reason: null })).toBe(false);
+    expect(cerroSinCobros({})).toBe(false);
+    expect(cerroSinCobros({ closure_reason: 'expired' })).toBe(false);
+    expect(cerroSinCobros({ closure_reason: 'sin_garantia' })).toBe(false);
+    expect(cerroSinCobros({ closure_reason: '' })).toBe(false);
+  });
+
+  it('un valor no-string tampoco abre la puerta', () => {
+    for (const raro of [1, true, {}, [], undefined]) {
+      expect(cerroSinCobros({ closure_reason: raro } as never), String(raro)).toBe(false);
+    }
   });
 });
 
@@ -482,7 +635,8 @@ describe('🔴 corte · App.tsx delega en el guard', () => {
  *   · el conjunto (archivo, título) de los dormidos es EXACTO en las dos
  *     direcciones: uno de más o uno de menos es rojo;
  *   · los casos se DERIVAN: un `test` dentro de un `for … of [a, b]` cuenta
- *     por la longitud del array (af02: un call site, dos casos);
+ *     por la longitud del array (`guardar-tarjeta-default`: dos call sites,
+ *     dos casos; un `for` sobre N etapas contaría N);
  *   · la garantía de `#/scan` —que el corte NO retira— tiene su recorrido
  *     ACTIVO, sin skip, afirmado por título y por contenido.
  *
@@ -495,7 +649,31 @@ describe('🔴 corte · los skips de Playwright leen el gate y están censados',
   }) as Record<string, string>;
 
   const PREDICADO = 'CORTE.pagosCortados';
-  const IMPORT_DEL_GATE = "from '../src/api/releaseGates'";
+  /**
+   * 🔴 **F2 · el gate INVERSO, y por qué el censo tiene que distinguirlo en vez
+   * de prohibirlo.**
+   *
+   * Casi todos los recorridos dormidos duermen **con el corte activo**: prueban
+   * checkout o alta de tarjeta. Pero la mesa sin garantía es al revés — **sólo
+   * existe con el dinero apagado**, porque con el riel vivo el dueño la rechaza
+   * con `409 guarantee_required`—, así que su recorrido tiene que dormir cuando
+   * los pagos están VIVOS.
+   *
+   * Las dos formas leen el MISMO objeto y ninguna es un `true` fijo, que es lo
+   * que este censo existe para impedir. Lo que cambia es la dirección, y por eso
+   * se clasifican aparte: el conteo de 11 call sites y 11 casos sigue contando
+   * sólo los del corte, y un inverso nuevo no puede colarse ahí.
+   */
+  const PREDICADO_INVERSO = '!CORTE.pagosCortados';
+  /**
+   * 🔴 F2 · el origen del gate para los recorridos cambió de módulo, no de
+   * naturaleza: antes cada spec importaba el predicado de producción y lo
+   * instanciaba; ahora importa el objeto ya derivado de `_app.ts`, que lo
+   * calcula con el MISMO decoder de producción sobre la fuente del mock. Lo que
+   * este censo vigila es lo mismo de siempre: que ningún spec fabrique su propio
+   * gate.
+   */
+  const IMPORT_DEL_GATE = "from './_app'";
 
   /** Los que duermen MIENTRAS el gate esté activo. Título = texto fuente del primer argumento. */
   const DORMIDOS: Record<string, readonly string[]> = {
@@ -505,10 +683,6 @@ describe('🔴 corte · los skips de Playwright leen el gate y están censados',
     '/e2e/af-diseno-02.spec.ts': [
       "'Pagar centra el título, contiene destinatario y usa tarjeta en el CTA'",
       "'Comprobante solapa el cierre, rotula la tarjeta y conserva sus acciones'",
-    ],
-    '/e2e/af02-alta-tarjeta-durable.spec.ts': [
-      "'AF-02 · una key fallida no fabrica continuidad ni atraviesa un rail luego cerrado'",
-      '`AF-02 · continuidad ${stage} durable sobrevive con el rail cerrado`',
     ],
     '/e2e/atribucion-ventana.spec.ts': [
       "'🔴 con el journal pendiente NO se puede elegir tarjeta: la ventana se cierra'",
@@ -537,8 +711,13 @@ describe('🔴 corte · los skips de Playwright leen el gate y están censados',
   interface Hallazgo {
     archivo: string;
     titulo: string;
-    /** `gate` = primera sentencia `test.skip(CORTE.pagosCortados, …)`; `ninguno` = sin skip. */
-    skip: 'gate' | 'ninguno';
+    /**
+     * `gate` = primera sentencia `test.skip(CORTE.pagosCortados, …)`;
+     * `gate_inverso` = lo mismo con `!CORTE.pagosCortados` (duerme con los pagos
+     * VIVOS: el recorrido de la mesa sin garantía);
+     * `ninguno` = sin skip.
+     */
+    skip: 'gate' | 'gate_inverso' | 'ninguno';
     /** Cuántos casos genera este call site: 1, o la longitud del array del `for … of` que lo envuelve. */
     casos: number;
     /** Algo dentro del test que no es la forma permitida. */
@@ -614,6 +793,7 @@ describe('🔴 corte · los skips de Playwright leen el gate y están censados',
           if (c.expression.getText(sf) !== 'test.skip') return;
           const args = c.arguments.map((a) => a.getText(sf));
           if (i === 0 && args.length === 2 && args[0] === PREDICADO) { h.skip = 'gate'; return; }
+          if (i === 0 && args.length === 2 && args[0] === PREDICADO_INVERSO) { h.skip = 'gate_inverso'; return; }
           h.ilegales.push(`test.skip(${args.join(', ')}) en la sentencia ${i}`);
         });
         if (h.skip === 'gate') h.casos = casosDe(n, sf);
@@ -666,7 +846,7 @@ describe('🔴 corte · los skips de Playwright leen el gate y están censados',
     expect(medido).toEqual(esperado);
   });
 
-  it('🔴 13 call sites → 14 casos, derivados del árbol; y todos leen el MISMO gate', () => {
+  it('🔴 11 call sites → 11 casos, derivados del árbol; y todos leen el MISMO gate', () => {
     let callSites = 0;
     let casos = 0;
     for (const [archivo, crudo] of Object.entries(E2E)) {
@@ -676,13 +856,78 @@ describe('🔴 corte · los skips de Playwright leen el gate y están censados',
       casos += dormidos.reduce((s, t) => s + t.casos, 0);
       // El gate no se copia ni se redeclara: se IMPORTA del módulo de producción.
       expect(crudo, `${archivo} no importa el gate de releaseGates`).toContain(IMPORT_DEL_GATE);
-      expect(crudo, `${archivo} no instancia CORTE desde corteDePagosView()`).toContain('const CORTE = corteDePagosView();');
+      // 🔴 F2 · el gate ya no se instancia en cada spec: se IMPORTA del origen
+      // único de `_app.ts`, que lo deriva con el MISMO decoder que la app sobre
+      // la MISMA fuente que el mock le sirve al navegador. Instanciarlo acá
+      // exigiría un riel que en Node no existe, y una constante paralela sería
+      // la segunda autoridad que F2 vino a eliminar.
+      expect(crudo, `${archivo} no importa CORTE del origen único de _app`).toMatch(/import \{[^}]*\bCORTE\b[^}]*\} from '\.\/_app';/);
+      // Se veta la DECLARACION ejecutable, no la mencion: el docblock de cada
+      // spec explica de donde sale el gate y tiene que poder nombrarlo.
+      expect(crudo, `${archivo} no puede instanciar su propio gate`).not.toMatch(/^\s*const\s+\w+\s*=\s*corteDePagosView\(/m);
     }
-    expect(callSites).toBe(13);
-    expect(casos).toBe(14);
-    // Lo que Playwright tiene que reportar como `skipped`, DERIVADO del gate real.
-    const dormidosEsperados = corteDePagosView().pagosCortados ? 14 : 0;
-    expect(dormidosEsperados, 'con el gate activo, Playwright debe reportar 14 skipped').toBe(14);
+    expect(callSites).toBe(11);
+    expect(casos).toBe(11);
+    /**
+     * 🔴 **Cuántos skips reporta Playwright, DERIVADO del gate real — y con Q6
+     * resuelta ese número es CERO.**
+     *
+     * El default del mock volvió a `sandbox`, así que `CORTE.pagosCortados` es
+     * `false` y **ninguno de los 11 duerme**: sus recorridos de pago corren
+     * contra un mock que sí puede cobrar, que es lo correcto. Los 11 call sites
+     * siguen existiendo y siguen leyendo el mismo objeto — vuelven a dormir
+     * solos el día que el default cambie, sin editar un solo spec.
+     *
+     * La aserción se deriva, no se fija: si alguien pusiera el default en
+     * `disabled`, esto exigiría 11 sin que nadie toque este archivo.
+     *
+     * 🔴 **Bajaron de 13/14 a 11/11 en este commit, y no por relajar el censo:**
+     * los dos call sites de `af02-alta-tarjeta-durable.spec.ts` se RETIRARON
+     * porque ese archivo dejó de dormir. R105 lo adjudicó al revés de como
+     * estaba: es el recorrido que prueba «riel cerrado sin pérdida de
+     * continuidad», así que dormirlo con el riel cerrado lo dejaba sin vigilar
+     * justo su caso. Ahora corre siempre y declara su propio modo.
+     */
+    const dormidosEsperados = CORTE_DE_LOS_RECORRIDOS.pagosCortados ? 11 : 0;
+    expect(dormidosEsperados, 'el número de skips no coincide con lo que el gate declara').toBe(0);
+  });
+
+  /**
+   * 🔴 **El gate INVERSO, censado con la misma exigencia que el directo.**
+   *
+   * Casi todos los recorridos dormidos duermen con el corte ACTIVO: prueban
+   * checkout o alta de tarjeta. La mesa sin garantía es al revés — sólo existe
+   * con el dinero apagado, porque con el riel vivo el dueño la rechaza con
+   * `409 guarantee_required` —, así que su recorrido duerme con los pagos VIVOS.
+   *
+   * Las dos formas leen el MISMO objeto y ninguna es un `true` fijo, que es lo
+   * que este censo existe para impedir. Se clasifican aparte para que el conteo
+   * de 11 call sites siga contando sólo los del corte y un inverso nuevo no
+   * pueda colarse ahí sin que esto se ponga rojo.
+   */
+  /**
+   * 🔴 **El gate inverso quedó SIN POBLACIÓN, y el clasificador se conserva.**
+   *
+   * `mesa-sin-garantia` dormía con los pagos vivos. Con Q6 resuelta ya no
+   * duerme: **declara `disabled` con el seam**, como el resto de los recorridos
+   * del corte, así que corre siempre y no depende de un default.
+   *
+   * El clasificador de `gate_inverso` **no se borra**. Si mañana alguien vuelve
+   * a escribir un skip invertido, este censo lo va a ver y lo va a contar acá —
+   * en vez de dejarlo pasar como forma desconocida o, peor, cazarlo como
+   * ilegal y empujar a alguien a escribirlo con un `true` fijo.
+   */
+  it('hoy NADIE duerme con los pagos vivos: el gate inverso quedó sin población', () => {
+    const conInverso: string[] = [];
+    for (const [archivo, crudo] of Object.entries(E2E)) {
+      const inversos = censarSkips(archivo, crudo).tests.filter((t) => t.skip === 'gate_inverso');
+      if (inversos.length === 0) continue;
+      conInverso.push(archivo);
+      // Si alguno vuelve, se le exige lo mismo que a los directos.
+      expect(crudo, `${archivo} no importa CORTE del origen único`).toMatch(/import \{[^}]*\bCORTE\b[^}]*\} from '\.\/_app';/);
+      for (const t of inversos) expect(t.ilegales, `${archivo} · ${t.titulo}`).toEqual([]);
+    }
+    expect(conInverso, 'apareció un recorrido con gate inverso sin declararlo').toEqual([]);
   });
 
   it('🔴 la garantía de #/scan tiene un recorrido ACTIVO, sin skip, que afirma el checkbox desmarcado', () => {
@@ -754,3 +999,8 @@ describe('🔴 corte · los skips de Playwright leen el gate y están censados',
     expect(censarSkips('/ident.spec.ts', porIdentificador).tests[0]!.casos).toBe(2);
   });
 });
+
+/**
+ * El gate inverso, censado con la misma exigencia que el directo: existe, está
+ * acotado a su archivo, y **no puede ser un `true` fijo disfrazado**.
+ */

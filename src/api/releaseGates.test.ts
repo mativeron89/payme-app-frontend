@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PAGES } from '../router';
 import { RUTAS_DEL_CORTE, accountRailView, allowsCorteRoute, allowsWalletRoute, corteDePagosView } from './releaseGates';
+import { MONEY_RAIL_CERRADO } from './moneyRail';
 
 /**
  * 🔴 CORTE DEL VIERNES · orden `APP-FE-FRIDAY-NO-PAY-GUARD-02-CLAUDE`.
@@ -11,17 +13,24 @@ import { RUTAS_DEL_CORTE, accountRailView, allowsCorteRoute, allowsWalletRoute, 
  * completa (guard → historial → árbol → vista) vive en `corteGuard.test.ts`.
  */
 describe('corte del viernes · producción pública sin pagos', () => {
-  it('🔴 PIN · el corte está activo', () => {
-    expect(corteDePagosView()).toEqual({ pagosCortados: true, showCards: false, allowsPay: false });
+  /**
+   * 🔴 F2 · el «PIN» ya no fija una constante: fija el ESTADO INICIAL del riel,
+   * que es el que ve cualquier pantalla antes de que conteste el dueño. Ése es
+   * el momento en que el corte tiene que estar activo sí o sí.
+   */
+  it('🔴 PIN · con el riel en su estado inicial el corte está activo', () => {
+    expect(corteDePagosView(MONEY_RAIL_CERRADO))
+      .toEqual({ pagosCortados: true, showCards: false, allowsPay: false });
   });
 
   it('corta EXACTAMENTE tarjetas y cuenta; toda otra página del router pasa', () => {
     expect([...RUTAS_DEL_CORTE].sort()).toEqual(['cuenta', 'tarjetas']);
     for (const page of PAGES) {
-      expect(`${page} → ${allowsCorteRoute(page)}`).toBe(`${page} → ${!RUTAS_DEL_CORTE.includes(page)}`);
+      expect(`${page} → ${allowsCorteRoute(page, MONEY_RAIL_CERRADO)}`)
+        .toBe(`${page} → ${!RUTAS_DEL_CORTE.includes(page)}`);
     }
     // Lo que el corte CONSERVA, nombrado: el histórico propio.
-    expect(allowsCorteRoute('pagos')).toBe(true);
+    expect(allowsCorteRoute('pagos', MONEY_RAIL_CERRADO)).toBe(true);
   });
 
   /**
@@ -33,7 +42,7 @@ describe('corte del viernes · producción pública sin pagos', () => {
   it('el corte NO se cuela en accountRailView: son predicados distintos', () => {
     expect(accountRailView(false, true).showCards).toBe(true);
     expect(accountRailView(true, true).showCards).toBe(true);
-    expect(corteDePagosView().showCards).toBe(false);
+    expect(corteDePagosView(MONEY_RAIL_CERRADO).showCards).toBe(false);
   });
 });
 
@@ -356,5 +365,91 @@ describe('gate IFPE de release', () => {
     expect(fuentes['/src/api/releaseGates.ts']).toContain('showWalletMovements');
 
     expect(consumidores).toEqual([]);
+  });
+});
+
+/**
+ * F2 · **el corte deja de ser una constante de este repo y lo declara el dueño.**
+ *
+ * Hasta acá `PAGOS_CORTADOS` era `true` escrito a mano. Funcionaba y estaba
+ * probado, pero su autoridad estaba en el lugar equivocado —exactamente el
+ * defecto que `walletRail.ts:9-18` documenta para el riel saldo—: un deploy de
+ * este front con otro valor reencendía el checkout sin que el backend se
+ * enterara, y al revés, el dueño podía apagar el dinero sin que la app lo
+ * supiera.
+ *
+ * Ahora sale de `money_rail`, la MISMA capability que ya gobierna si se puede
+ * pedir una tarjeta. Y falla hacia el mismo lado que ella: **si no se puede
+ * determinar el estado, no hay superficie de pago.**
+ */
+describe('F2 · el corte lo declara el owner, y falla cerrado', () => {
+  const VIVO = { status: 'authoritative', puedeCargarTarjeta: true } as const;
+
+  it('sólo un riel autoritativo con pagos habilitados levanta el corte', () => {
+    const vista = corteDePagosView(VIVO);
+    expect(vista.pagosCortados).toBe(false);
+    expect(vista.showCards).toBe(true);
+    expect(vista.allowsPay).toBe(true);
+  });
+
+  it('pending, absent y malformed cortan: no se adivina', () => {
+    for (const status of ['pending', 'absent', 'malformed'] as const) {
+      const vista = corteDePagosView({ status, puedeCargarTarjeta: false });
+      expect(vista.pagosCortados, status).toBe(true);
+      expect(vista.showCards, status).toBe(false);
+      expect(vista.allowsPay, status).toBe(false);
+    }
+  });
+
+  it('un riel autoritativo con los pagos apagados corta', () => {
+    const vista = corteDePagosView({ status: 'authoritative', puedeCargarTarjeta: false });
+    expect(vista.pagosCortados).toBe(true);
+  });
+
+  /**
+   * 🔴 El caso que parece imposible y es el que importa: un estado NO
+   * autoritativo que igual dice que se puede cobrar. No debería existir —el
+   * decoder de `moneyRail` no lo produce—, pero si algún día lo produjera, el
+   * corte no puede levantarse por la mitad de la respuesta.
+   */
+  it('«puede cargar tarjeta» sin autoridad NO levanta el corte', () => {
+    expect(corteDePagosView({ status: 'pending', puedeCargarTarjeta: true }).pagosCortados).toBe(true);
+    expect(corteDePagosView({ status: 'malformed', puedeCargarTarjeta: true }).pagosCortados).toBe(true);
+  });
+
+  it('las rutas del corte se abren y se cierran con el mismo riel', () => {
+    for (const ruta of RUTAS_DEL_CORTE) {
+      expect(allowsCorteRoute(ruta, { status: 'pending', puedeCargarTarjeta: false })).toBe(false);
+      expect(allowsCorteRoute(ruta, VIVO)).toBe(true);
+    }
+    // Una ruta que no es del corte nunca se bloquea, con cualquier riel.
+    expect(allowsCorteRoute('pagos', { status: 'pending', puedeCargarTarjeta: false })).toBe(true);
+    expect(allowsCorteRoute('home', { status: 'malformed', puedeCargarTarjeta: false })).toBe(true);
+  });
+
+  /**
+   * 🔴 **Ninguna excepción por principal.** `corteDePagosView` y
+   * `allowsCorteRoute` reciben el riel y NADA más: no hay parámetro de usuario,
+   * cuenta ni restaurante donde inyectar un permiso. Es la misma regla que
+   * `allowsWalletRoute`, y se verifica sobre la fuente para que agregar uno
+   * ponga la suite en rojo.
+   */
+  it('no hay por dónde inyectar una excepción por cuenta', () => {
+    const fuente = readFileSync(new URL('./releaseGates.ts', import.meta.url), 'utf8');
+    // Las firmas exactas: riel y nada más. Un parámetro nuevo rompe esto.
+    expect(fuente).toContain('export function allowsCorteRoute(page: string, rail: RielDelCorte): boolean {');
+    expect(fuente).toContain('export function corteDePagosView(rail: RielDelCorte) {');
+    expect(fuente).toContain('function hayPagos(rail: RielDelCorte): boolean {');
+    /**
+     * Y la constante ya no EJECUTA: si vuelve, alguien puede leerla en vez de la
+     * capability, que es el defecto que este cambio corrige.
+     *
+     * ⚠️ Se veta la DECLARACIÓN, no la mención. La primera versión de esta línea
+     * usaba `not.toContain` y se puso roja contra el comentario de arriba, que
+     * cuenta la historia del cambio y **debe** poder nombrar lo que se retiró.
+     * Una guarda que prohíbe hablar de algo en vez de prohibir que corra empuja
+     * a borrar justo la explicación que hace falta en tres semanas.
+     */
+    expect(fuente).not.toMatch(/^\s*(export\s+)?const PAGOS_CORTADOS/m);
   });
 });

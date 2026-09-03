@@ -178,7 +178,15 @@ export interface AppConfig {
   mesa_hold_seconds: number;
   payment_hold_seconds: number;
   invitation_expiry_seconds: number;
-  item_lock_seconds: number;
+  /**
+   * C3 · **`null` es la ausencia EXPLÍCITA de vencimiento**, no un dato que
+   * falta: con el dinero apagado la selección de consumos no vence y el dueño lo
+   * declara así (`contract-mirror/routes/config.js:79-81`). Un número grande
+   * sería una mentira redonda —el front mostraría una cuenta regresiva que no
+   * existe— y ésa es la diferencia que la decisión de Mati pide declarar en el
+   * contrato.
+   */
+  item_lock_seconds: number | null;
   features: {
     /** Runtime-only: el decoder fail-closed vive en `nativeWallets.ts`. */
     apple_pay?: unknown;
@@ -605,6 +613,28 @@ export interface MesaDetail {
   expected_participants: number;
   status: MesaStatus;
   expires_at: string;
+  /**
+   * C3 · ¿esta mesa tiene garantía? El dueño lo publica junto a `status`
+   * (`contract-mirror/routes/mesas.js:193-216`).
+   *
+   * ⚠️ **NO es el discriminador del cierre sin cobros.** Existen mesas legacy
+   * con `guarantee_mode:false` que vencieron por el camino monetario de siempre;
+   * el propio dueño exige tres condiciones para derivar el motivo, y una de
+   * ellas —su marca interna— no se publica. Para saber si una mesa cerró sin
+   * cobros se lee `closure_reason`, nunca esto. Ver `mesaCierreView`.
+   *
+   * Opcional porque un backend anterior a C3 no lo manda.
+   */
+  guarantee_mode?: boolean;
+  /**
+   * C3 · **el discriminador**: por qué cerró una mesa sin cobros.
+   *
+   * `'all_items_selected'` (se seleccionaron todos los consumos) o `'time'` (las
+   * cinco horas). Ausente o `null` ⇒ cierre monetario de siempre. Conjunto
+   * cerrado declarado en `CHANGELOG_v2.85.0.md` del dueño: cualquier otro valor
+   * se trata como cierre monetario.
+   */
+  closure_reason?: string | null;
   items: MesaItem[];
   division_slots?: DivisionSlot[];
   active_staff: ActiveStaff[];
@@ -621,7 +651,13 @@ export interface CreateMesaRequest {
   total_cents: number;
   division_mode: 'consumo' | 'igual';
   expected_participants: number;
-  guarantee_method: 'card' | 'wallet';
+  /**
+   * C3 · `'none'` es la mesa sin garantía, y **sólo existe con el dinero
+   * apagado**: con el riel vivo el dueño la rechaza con `409 guarantee_required`
+   * (`contract-mirror/routes/mesas.js:243-250`). Su refine exige además CERO
+   * fuentes de pago y no pide `idempotency_key`.
+   */
+  guarantee_method: 'card' | 'wallet' | 'none';
   /** Tarjeta NUEVA: pm_… creado por Stripe Elements. */
   stripe_payment_method_id?: string;
   /** D4 (v2.16): tarjeta GUARDADA — uuid de payment_methods. */
@@ -651,8 +687,14 @@ export interface CreateMesaResponse {
     created_at: string;
   };
   guarantee: {
-    method: 'card' | 'wallet';
-    status: 'open' | 'requires_action';
+    /**
+     * C3 · `'none'` acompaña a la mesa sin garantía y **siempre viene con
+     * `status:'none'`**: el dueño responde ese par junto (`contract-mirror/routes/mesas.js:663-671`),
+     * antes de tocar Stripe. No es una garantía a medio autorizar: es la
+     * ausencia declarada de garantía.
+     */
+    method: 'card' | 'wallet' | 'none';
+    status: 'open' | 'requires_action' | 'none';
     client_secret?: string;
     /**
      * v2.24 (Stripe Connect): si el hold vive en la cuenta del restaurante,

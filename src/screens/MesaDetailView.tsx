@@ -64,6 +64,24 @@ export interface MesaDetailViewProps {
    * texto que no promete una acción que la app no ofrece.
    */
   pagosCortados: boolean;
+  /**
+   * 🔴 **D-R8 · el corte DECLARADO por el dueño, que no es lo mismo que
+   * `pagosCortados`.**
+   *
+   * `pagosCortados` es fail-closed: también es `true` mientras el riel está
+   * `pending`, o sea antes de que el backend conteste. Este otro sólo es `true`
+   * cuando el dueño **declaró** que no hay pagos.
+   *
+   * La diferencia importa por dos razones. Una de producto: prometer «los pagos
+   * llegan pronto» mientras no sabemos si están vivos sería inventar una
+   * promesa. Y una de verificación, que era un hueco medido: `pending` y
+   * `authoritative + disabled` producían señales IDÉNTICAS en toda la UI, así
+   * que ningún recorrido podía distinguir «no llegó el config» de «llegó y dice
+   * que no hay pagos» — y por eso una aserción de ausencia pasaba trivialmente.
+   * Este aviso es la primera superficie que sólo existe con el estado
+   * autoritativo: es el **testigo positivo** de esta capability.
+   */
+  corteDeclarado: boolean;
   /** La salida del flujo cuando no hay pago al que continuar. */
   onLeave: () => void;
   busy: boolean;
@@ -127,6 +145,7 @@ export function MesaDetailView({
   mySlotsTaken,
   frozenScope,
   pagosCortados,
+  corteDeclarado,
   onLeave,
   busy,
   inviteOpen,
@@ -142,6 +161,7 @@ export function MesaDetailView({
   const toast = useToast();
   /** El par «scroll + pulso» de §1.4/§1.5 bis, acá para la lista de consumos. */
   const [itemsPulse, setItemsPulse] = useState(false);
+  const [confirmandoCierre, setConfirmandoCierre] = useState(false);
   const itemsRef = useRef<HTMLDivElement | null>(null);
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
@@ -196,6 +216,87 @@ export function MesaDetailView({
    * (`schemas/index.js:233`, default []).
    */
   const faltaElegir = esConsumo && selected.size === 0;
+
+  /**
+   * 🔴 **D-R20 · «Aviso sin nombres», etiqueta literal de Mati.**
+   *
+   * En división por consumo la selección es IRREVERSIBLE —no hay «soltar
+   * ítem»— y quien reclama el último cierra la mesa **para todos, en el acto**.
+   * Confirmarlo antes no es cortesía: es la única oportunidad de enterarse.
+   *
+   * ⚠️ **Y el aviso NO dice quién tomó qué.** El contrato publica por ítem
+   * sólo mío/no-mío —`locked_by_me`, y su comentario lo declara: *«jamás expone
+   * de quién es el ajeno»*—, así que la atribución no existe de este lado. La
+   * primera redacción de esta decisión pedía mostrarla; se corrigió al medir el
+   * contrato, y Mati eligió esta variante sabiendo la diferencia. Cada consumo
+   * se muestra **tomado o libre**, sin persona.
+   */
+  const librosTrasMiSeleccion = esConsumo
+    ? mesa.items.filter((i) => {
+        if (i.status === 'paid') return false;
+        if (i.locked_by_me) return false;
+        if (i.status === 'locked') return false;
+        return !selected.has(i.id);
+      })
+    : [];
+  const cierraLaMesa = esConsumo && selected.size > 0 && librosTrasMiSeleccion.length === 0;
+  /**
+   * D-R8 · el final del recorrido del comensal durante el corte: eligió lo suyo
+   * y no hay checkout. En vez de dejarlo sin salida, se le dice qué pasó con su
+   * selección. **La selección no vence** —el dueño publica `item_lock_seconds:
+   * null` en este modo—, así que la promesa es literal.
+   */
+  const avisoCorte = corteDeclarado && (
+    <div className="note note-orange" role="status" style={{ marginBottom: 12 }}>
+      {t('Los pagos llegan pronto; tu selección queda registrada.')}
+    </div>
+  );
+
+  /**
+   * D-R20 · el resumen que acompaña al aviso: **lo que queda y lo mío**, con
+   * cada consumo como tomado o libre. Ninguna persona aparece.
+   */
+  const hojaCierre = confirmandoCierre && (
+    <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-label={t('Con esto se cierra la mesa')}>
+      <div className="sheet">
+        <div className="sheet-title">{t('Con esto se cierra la mesa para todos')}</div>
+        <p className="sheet-copy">
+          {t('Estás por tomar el último consumo disponible. Cuando lo hagas, la mesa se cierra para todos los comensales.')}
+        </p>
+        <div className="receipt-row">
+          <span className="lbl">{t('Lo que tomas')}</span>
+          <span className="val">{selected.size}</span>
+        </div>
+        <div className="receipt-row">
+          <span className="lbl">{t('Lo que queda libre')}</span>
+          <span className="val">{librosTrasMiSeleccion.length}</span>
+        </div>
+        <ul className="sheet-list">
+          {mesa.items.map((i) => (
+            <li key={i.id}>
+              {/* Tomado o libre. NUNCA por quién: el contrato no lo publica y
+                  la decisión de Mati es explícita en no mostrarlo. */}
+              {i.status === 'paid' || i.status === 'locked' || selected.has(i.id)
+                ? t('Tomado')
+                : t('Libre')}
+            </li>
+          ))}
+        </ul>
+        <div className="sheet-actions">
+          <button className="btn btn-ghost" onClick={() => setConfirmandoCierre(false)}>
+            {t('Volver a elegir')}
+          </button>
+          <button
+            className="btn btn-navy"
+            onClick={() => { setConfirmandoCierre(false); onGoToPay(); }}
+          >
+            {t('Sí, cerrar la mesa')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const miParte = (
     <div className="mi-parte">
       {nothingLeft ? (
@@ -262,6 +363,8 @@ export function MesaDetailView({
       </div>
       {guestHeader}
       <div className="scroll flow-scroll">
+        {hojaCierre}
+        {avisoCorte}
         {avisoPagoCongelado}
         {esConsumo && nothingLeft && (
           <div className="note note-amber" style={{ marginBottom: 12 }}>
@@ -394,7 +497,18 @@ export function MesaDetailView({
         center={pagosCortados ? {
           label: t('Listo'),
           icon: 'check',
-          onClick: onLeave,
+          /**
+           * D-R8 · con el corte el círculo **registra la selección** y termina
+           * el recorrido; antes salía sin registrar nada, y el aviso que la
+           * persona lee —«tu selección queda registrada»— habría sido falso.
+           * Sin selección no hay nada que registrar y se sale, como antes.
+           * D-R20 se interpone cuando este toque cerraría la mesa.
+           */
+          onClick: () => {
+            if (selected.size === 0) { onLeave(); return; }
+            if (cierraLaMesa) { setConfirmandoCierre(true); return; }
+            onGoToPay();
+          },
           disabled: false,
         } : {
           label: t('Continuar'),

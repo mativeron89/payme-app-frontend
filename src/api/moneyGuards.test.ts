@@ -186,3 +186,68 @@ describe('frontera contractual monetaria', () => {
     expect(() => normalizeNonNegativeCents(Number.MAX_SAFE_INTEGER + 1)).toThrow('money_response_malformed');
   });
 });
+
+/**
+ * 🔴 **C3 · la mesa SIN garantía en el decoder de dinero, con su combinación
+ * cerrada.**
+ *
+ * El dueño responde `{ method:'none', status:'none' }` con la mesa ya `open`
+ * (`contract-mirror/routes/mesas.js:663-671`), antes de tocar Stripe. Hasta acá
+ * este decoder lo declaraba malformado, y el efecto era el peor de los tres
+ * posibles: **la mesa se creaba de verdad y el front la trataba como apertura
+ * fallida**, mostrando «apertura sin confirmar» sobre una mesa que existía.
+ *
+ * Aceptar `none` **no relaja nada de lo demás**. Cada combinación que no sea la
+ * exacta del dueño sigue fallando, y las de `card`/`wallet` no cambian.
+ */
+describe('C3 · garantía `none`, y sólo en su combinación exacta', () => {
+  // Mismo molde que `mesaRequest`, con el método de C3: el decoder compara el
+  // request COMPLETO contra la respuesta, así que un objeto parcial no sirve.
+  const base = { ...mesaRequest, total_cents: 84000, expected_participants: 4, guarantee_method: 'none' as const };
+  function respuesta(guarantee: Record<string, unknown>, mesaStatus = 'open') {
+    return {
+      mesa: {
+        id: UUID_A,
+        code: 'PA-1234',
+        total_cents: 84000,
+        division_mode: 'igual',
+        expected_participants: 4,
+        status: mesaStatus,
+        expires_at: '2026-09-03T00:00:00.000Z',
+        created_at: '2026-09-02T19:00:00.000Z',
+      },
+      guarantee,
+    };
+  }
+
+  it('acepta `none/none` con la mesa `open`', () => {
+    const r = createMesaResponse(respuesta({ method: 'none', status: 'none' }), base);
+    expect(r.guarantee.method).toBe('none');
+    expect(r.guarantee.status).toBe('none');
+    expect(r.mesa.status).toBe('open');
+  });
+
+  it('rechaza `none/none` con la mesa en `pending_auth`', () => {
+    // Sin esta coherencia, `none` habría aceptado la mesa en cualquier estado —
+    // más laxo que `open` y `requires_action`, que sí la exigen.
+    expect(() => createMesaResponse(respuesta({ method: 'none', status: 'none' }, 'pending_auth'), base)).toThrow();
+  });
+
+  it('rechaza los cruces: `none/open`, `none/requires_action`, `card/none` y `wallet/none`', () => {
+    expect(() => createMesaResponse(respuesta({ method: 'none', status: 'open' }), base)).toThrow();
+    expect(() => createMesaResponse(respuesta({ method: 'none', status: 'requires_action' }), base)).toThrow();
+    expect(() => createMesaResponse(respuesta({ method: 'card', status: 'none' }), { ...base, guarantee_method: 'card' })).toThrow();
+    expect(() => createMesaResponse(respuesta({ method: 'wallet', status: 'none' }), { ...base, guarantee_method: 'wallet' })).toThrow();
+  });
+
+  it('rechaza `none/none` que traiga `client_secret` o `connected_account_id`', () => {
+    // Sin garantía no hay hold: un secreto de 3DS o una cuenta conectada ahí
+    // significan que el dueño hizo algo con dinero, y este camino promete que no.
+    expect(() => createMesaResponse(
+      respuesta({ method: 'none', status: 'none', client_secret: 'pi_x_secret_y' }), base,
+    )).toThrow();
+    expect(() => createMesaResponse(
+      respuesta({ method: 'none', status: 'none', connected_account_id: 'acct_123' }), base,
+    )).toThrow();
+  });
+});

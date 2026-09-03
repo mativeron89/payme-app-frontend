@@ -85,6 +85,27 @@ async function acreditar(
   await app.screenshot({ path: join(CAPTURES_DIR, `${nombre}.png`), animations: 'disabled' });
 }
 
+/**
+ * F2-03 (R105) · **el corte se declara ANTES del tramo que lo prueba.**
+ *
+ * Este censo necesita las dos mitades: el riel VIVO para capturar la pantalla de
+ * garantía, y el riel CERRADO para el tramo que afirma que el checkout no está.
+ * Desde F2 las dos salen de la misma capability, así que no coexisten en un
+ * render y el modo se declara en el medio, con recarga.
+ *
+ * ⚠️ **Se hace así para NO recortar el censo.** Declarar `disabled` desde el
+ * arranque habría borrado `05-garantia` —el dueño no admite garantía con el
+ * dinero apagado— y las diez superficies aprobadas habrían pasado a nueve. La
+ * adenda autoriza declarar el modo; cambiar la población del censo sería cambiar
+ * la intención del spec.
+ */
+async function declararCorteYRecargar(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+  });
+  await page.reload();
+}
+
 test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja fuera pago y comprobante)', async ({ page }) => {
   await page.addInitScript(() => { Math.random = () => 0.8088; });
   await ingresar(page);
@@ -145,6 +166,13 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await acreditar(page, '06-compartir');
 
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByText('Elige lo que consumiste', { exact: true })).toBeVisible();
+
+  // F2-03 · de acá en adelante el recorrido prueba el CORTE, así que el modo
+  // se declara y se recarga. Las seis superficies ya capturadas quedaron con el
+  // riel vivo —incluida la garantía, que con el dinero apagado no existe—; la
+  // divergencia se declara en la entrega, no se tapa cambiando el censo.
+  await declararCorteYRecargar(page);
   await expect(page.getByText('Elige lo que consumiste', { exact: true })).toBeVisible();
   await expect(page.getByText(/queda reservado/)).toHaveCount(0);
   await page.evaluate(() => {

@@ -7,6 +7,7 @@ import { tokenForMesa } from './api/invitationLink';
 import { useWalletRail } from './api/walletRail';
 import { useRoute } from './router';
 import { enforceWalletRouteGuard } from './walletRouteGuard';
+import { useMoneyRail } from './api/moneyRail';
 import { enforceCorteRouteGuard } from './corteGuard';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
@@ -26,6 +27,12 @@ import { TransferScreen } from './screens/TransferScreen';
 
 function Shell() {
   const { session, facebookCallbackPhase } = useAuth();
+  /**
+   * F2 · el corte de pagos lo declara el dueño (`money_rail`), igual que el riel
+   * saldo. Se pide acá, en el shell, para que la decisión sea una sola por carga
+   * y todas las pantallas lean el mismo estado.
+   */
+  const moneyRail = useMoneyRail();
   const { t } = useIdioma();
   const route = useRoute();
   // OLA 5D · quién puede alcanzar el riel saldo lo declara el BACKEND. Se pide
@@ -76,10 +83,33 @@ function Shell() {
    * `case 'cuenta'` y `case 'tarjetas'` siguen abajo, durmientes: con esto
    * delante ninguno de los diez call sites de `cuenta` llega a montarlos.
    */
-  const rutaCortada = !allowsCorteRoute(route.page);
+  /**
+   * 🔴 **Cortar la VISTA y REDIRIGIR son dos decisiones distintas, y el primer
+   * render las necesita separadas.**
+   *
+   * `rutaCortada` sigue siendo fail-closed en `pending`: mientras no sabemos si
+   * hay pagos, la pantalla de tarjetas **no se muestra**. Eso está bien y no
+   * cambia.
+   *
+   * La redirección **espera al estado autoritativo**, y esto lo corrige un
+   * defecto medido: al entrar directo a `#/tarjetas` —o al recargar ahí— el
+   * efecto corría con el riel todavía `pending` y **expulsaba a Inicio antes de
+   * que el dueño contestara**, aunque los pagos estuvieran vivos. La persona
+   * perdía su ruta por una carrera, no por una decisión. Lo cazó el navegador:
+   * los unitarios pasaban.
+   *
+   * Con esto, `pending` deja la pantalla en blanco un instante y después decide:
+   * si el dueño cortó, redirige; si no, monta. Nunca se ve la superficie de
+   * tarjetas sin saber, y nunca se pierde la ruta por no saber todavía.
+   *
+   * La espera vive **dentro de `enforceCorteRouteGuard`**, no acá: en este
+   * efecto no se ejecuta en la suite, y una guarda de dinero necesita poder
+   * morir en un test.
+   */
+  const rutaCortada = !allowsCorteRoute(route.page, moneyRail);
   useEffect(() => {
-    enforceCorteRouteGuard(route.page);
-  }, [route.page]);
+    enforceCorteRouteGuard(route.page, moneyRail);
+  }, [moneyRail, route.page]);
 
   /**
    * CIERRE DEL PAGO SIN CUENTA (backend v2.32.0) · acá estaba el defecto.

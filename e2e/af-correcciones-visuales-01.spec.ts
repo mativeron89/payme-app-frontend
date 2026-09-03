@@ -1,17 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar } from './_app';
-import { corteDePagosView } from '../src/api/releaseGates';
+import { ingresar, CORTE } from './_app';
 
 /**
  * CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-04) · los recorridos que
  * necesitan el checkout o el alta de tarjeta DUERMEN mientras el gate esté
- * activo, y leen el MISMO gate que la app: cuando `pagosCortados` pase a
- * `false`, vuelven solos, sin editar este archivo. Nunca un skip con `true`
+ * activo, y leen el MISMO gate que la app: el `CORTE` de `_app.ts` sale del
+ * decoder de produccion sobre la fuente que el mock sirve, asi que cuando el
+ * dueno habilite los pagos vuelven solos, sin editar este archivo. Nunca un skip con `true`
  * fijo: eso es evidencia que no vuelve. `src/corteGuard.test.ts` censa cada
  * uno de estos skips y pone la suite roja ante uno nuevo o permanente.
  */
-const CORTE = corteDePagosView();
-const MOTIVO = 'CORTE DEL VIERNES: el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve solo cuando corteDePagosView().pagosCortados sea false.';
+const MOTIVO = 'CORTE DEL VIERNES: el checkout del participante y el alta de tarjeta están cerrados en producción pública sin pagos; este recorrido vuelve solo cuando el dueño publique los pagos habilitados en money_rail.';
 
 test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 
@@ -169,8 +168,20 @@ async function hastaGarantia(page: Page) {
 
 test('Garantía agrupa tarjetas, omite el rótulo redundante y usa flecha', async ({ page }) => {
   await hastaGarantia(page);
-  await expect(page.getByText('¿Con qué garantizas?', { exact: true })).toHaveCount(0);
+  /**
+   * 🔴 **El testigo va PRIMERO, y el orden no es estilo.**
+   *
+   * `.gar-cards-group` sólo se renderiza con la superficie de garantía viva, o
+   * sea con `money_rail` **ya aplicado** y los pagos habilitados: es un testigo
+   * positivo **de la misma capability** que gatea la ausencia de abajo.
+   *
+   * Estaba al revés, y así la ausencia se afirmaba sobre una pantalla que podía
+   * no haber recibido el config todavía: `toHaveCount(0)` se cumple de
+   * inmediato, así que pasaba por llegar temprano, no por ser cierta. Es el
+   * mismo falso verde que un mutante destapó en `alta-publica` durante F1.
+   */
   await expect(page.locator('.gar-cards-group')).toBeVisible();
+  await expect(page.getByText('¿Con qué garantizas?', { exact: true })).toHaveCount(0);
   await expect(page.locator('.gar-cards-group .gar-method-card')).toHaveCount(2);
   await expect(page.locator('.gar-cards-group .gar-other-card')).toHaveCount(1);
   const fab = page.getByRole('button', { name: 'Garantizar', exact: true });

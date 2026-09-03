@@ -15,6 +15,24 @@ import { ingresar } from './_app';
  * lee el estado del mock y afirma el N exacto que viajó en POST /mesas.
  */
 
+/**
+ * F2-03 (R105) · **el corte se declara ANTES del tramo que lo prueba.**
+ *
+ * El recorrido abre una mesa con garantía —riel VIVO— y recién después afirma el
+ * corte. Desde F2 las dos mitades salen de la misma capability, así que el modo
+ * se declara en el medio, con recarga, en vez de recortar el recorrido.
+ *
+ * ⚠️ **Es lo que evita borrar aserciones.** Con `disabled` desde el arranque no
+ * habría paso de garantía y las aserciones que ya existían se caerían con él. La
+ * adenda autoriza declarar el modo, no achicar lo que el spec prueba.
+ */
+async function declararCorteYRecargar(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+  });
+  await page.reload();
+}
+
 test.describe('el stepper de comensales (§1.4)', () => {
   test('consumo: sin elegir frena con toast; elegido, viaja EXACTAMENTE ese N', async ({ page }) => {
     await ingresar(page);
@@ -67,7 +85,27 @@ test.describe('el stepper de comensales (§1.4)', () => {
     // CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · la base de §1.5 bis
     // vivía en la pantalla de pago, que está cerrada: el recorrido termina en
     // Mis ítems, con la selección viva y sin «Continuar» hacia el pago.
+    //
+    // El stepper y el N que viajó se midieron arriba con el riel VIVO, que es
+    // donde el organizador pasa por la garantía; ninguna de esas aserciones se
+    // tocó.
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByText('Elige lo que consumiste', { exact: true })).toBeVisible();
+
+    // 🔴 **F2-03 · el modo se declara sobre la MESA YA ABIERTA, y la primera
+    // versión de esto estaba mal.**
+    //
+    // Lo puse antes, apenas volvía `abrirMesaConLink`, y el recorrido moría con
+    // timeout en el `click` de «Continuar». La causa es que ahí todavía se está
+    // DENTRO del alta, que es un flujo efímero: la recarga que el seam necesita
+    // lo devuelve a «Escanea el ticket» y la pantalla que este test necesita
+    // deja de existir. La mesa ya creada sí sobrevive a la recarga.
+    //
+    // ⚠️ Lo cazó el navegador, no la suite: `typecheck` y los unitarios pasaban
+    // con la versión rota adentro.
+    await declararCorteYRecargar(page);
+    await expect(page.getByText('Elige lo que consumiste', { exact: true })).toBeVisible();
+
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);

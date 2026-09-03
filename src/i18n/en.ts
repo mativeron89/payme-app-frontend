@@ -553,6 +553,26 @@ export const EN: Record<string, string> = {
   "Revisar si se cobró": "Check if it was charged",
   "Sacar otra foto": "Take another photo",
   "Se cerró por tiempo": "Closed due to time",
+  // C3 · cierre de una mesa SIN garantía. El EN conserva la precisión del ES:
+  // dice que no hubo cobros, no que algo se cubrió — afirmar una garantía que no
+  // existió es justo lo que este copy viene a impedir.
+  "Esta mesa cerró sin cobros": "This table closed without any charges",
+  // D-R23 · la línea discreta de «Más». Copy EN cerrado por Codex; dice lo mismo
+  // que el ES y no promete una fecha que nadie ratificó.
+  "Los pagos llegan pronto": "Payments are coming soon",
+  // D-R20 · «Aviso sin nombres»: el EN tampoco atribuye consumos a personas.
+  "Con esto se cierra la mesa": "This closes the table",
+  "Con esto se cierra la mesa para todos": "This closes the table for everyone",
+  "Estás por tomar el último consumo disponible. Cuando lo hagas, la mesa se cierra para todos los comensales.": "You're about to take the last available item. Once you do, the table closes for everyone.",
+  "Lo que tomas": "What you're taking",
+  "Lo que queda libre": "Still available",
+  "Tomado": "Taken",
+  "Libre": "Available",
+  "Volver a elegir": "Go back",
+  "Sí, cerrar la mesa": "Yes, close the table",
+  // D-R8 · final del recorrido durante el corte. «Queda registrada» es literal:
+  // la selección no vence, porque el dueño publica `item_lock_seconds: null`.
+  "Los pagos llegan pronto; tu selección queda registrada.": "Payments are coming soon; your selection is saved.",
   "Se cortó la conexión mientras el banco confirmaba. No reintentes con otro método: toca \"Reintentar el pago sin confirmar\".": "The connection dropped while your bank was confirming. Don't retry with another method: tap \"Retry the unconfirmed payment.\"",
   "Se retiene, no se cobra. Si todos pagan, se libera completa.": "It's held, not charged. If everyone pays, it's fully released.",
   "Si continúas vas a pagar una parte": "If you continue, you'll pay an",

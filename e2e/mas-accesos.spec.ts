@@ -2,6 +2,37 @@ import { expect, test } from '@playwright/test';
 import { ingresar } from './_app';
 
 /**
+ * 🔴 **Método adjudicado por Codex (ACK R98) para las aserciones negativas que
+ * NO tienen testigo UI en esta pantalla.**
+ *
+ * El requisito general es que toda ausencia sobre superficie gateada lleve antes
+ * un testigo positivo de la misma capability. **En Inicio y en Más no existe**,
+ * y está medido: con el riel apagado el corte esconde lo suyo, así que `pending`
+ * y `authoritative + disabled` producen exactamente la misma pantalla; y los
+ * testigos a mano —«Ver pagos», «Volver», «Idioma»— cuelgan de otras
+ * capabilities, una de ellas fail-OPEN.
+ *
+ * Tampoco vale esperar la respuesta HTTP: **en modo mock no hay red**, el mock
+ * resuelve `getConfig()` en JS. Se probó y da timeout.
+ *
+ * Lo que sí se hace, y es lo adjudicado: **fijar el seam del mock en `disabled`
+ * antes del render**, para que la ausencia se afirme sobre un estado declarado y
+ * no sobre uno que todavía viaja. La app y el censo leen el MISMO origen
+ * (`MODO_MONETARIO_MOCK_POR_DEFECTO` en `src/api/mock/store.ts`), así que fijar
+ * la clave no crea una segunda autoridad: reafirma la que ya rige.
+ *
+ * ⚠️ **Esta evidencia es más débil que la de Mesa Detail**, donde el aviso «Los
+ * pagos llegan pronto» sólo existe con el riel autoritativo y sirve de testigo
+ * de verdad. Acá lo que acredita la vigilancia es el **mutante**: con el riel
+ * abierto, esta aserción se pone roja.
+ */
+async function conRielApagado(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+  });
+}
+
+/**
  * **`Más`** — la quinta posición de la barra, ya no "provisoriamente".
  *
  * ## Qué cambió, y por qué el archivo se llama distinto
@@ -35,11 +66,48 @@ test.describe('los accesos de Más', () => {
    * ausencia con control positivo —la pantalla cargó: su fila de idioma está—.
    * El recorrido que abría «Mis tarjetas» vuelve cuando el corte se levante.
    */
+  /**
+   * 🔴 **La otra mitad de D-R23, y faltaba: con los pagos VIVOS la línea no va.**
+   *
+   * Un mutante lo destapó — quitar `!puedeCargarTarjeta` de la condición dejaba
+   * la línea visible siempre y **ningún test se ponía rojo**, porque el
+   * recorrido de arriba fija `disabled`, donde los dos términos dan lo mismo.
+   * Prometer «los pagos llegan pronto» mientras el cobro funciona sería
+   * exactamente al revés.
+   */
+  test('con los pagos VIVOS no hay línea de corte, y la fila de tarjetas vuelve', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('payme.app.mock.money_rail.v1', 'sandbox');
+    });
+    await ingresar(page);
+    await page.goto('/#/mas');
+
+    // Testigo positivo de la MISMA capability, en su otra dirección: la fila de
+    // tarjetas sólo existe con el riel vivo.
+    await expect(page.getByRole('button', { name: /^Mis tarjetas/ })).toBeVisible();
+    await expect(page.getByText('Los pagos llegan pronto', { exact: true })).toHaveCount(0);
+  });
+
   test('la fila de tarjetas NO existe bajo el corte del viernes', async ({ page }) => {
+    await conRielApagado(page);
     await ingresar(page);
     await page.goto('/#/mas');
     await expect(page.getByRole('button', { name: 'Volver', exact: true })).toBeVisible();
-    await expect(page.getByText('Idioma', { exact: true })).toBeVisible();
+
+    /**
+     * 🔴 **D-R23 · EL TESTIGO POSITIVO, y ahora sí es de la misma capability.**
+     *
+     * Esta línea existe **sólo** cuando `money_rail` es autoritativo y declara
+     * los pagos apagados: con `pending` no aparece, con `sandbox` tampoco. Por
+     * eso esperarla acredita que el config se aplicó, y recién entonces la
+     * ausencia de abajo significa algo.
+     *
+     * Antes acá no había testigo posible —«Idioma» y «Volver» aparecen sin
+     * config— y la evidencia era sólo el mutante. Con la línea que Mati ratificó
+     * («Sí, una línea discreta en «Más»»), este recorrido queda al mismo nivel
+     * que los de Mesa Detail.
+     */
+    await expect(page.getByText('Los pagos llegan pronto', { exact: true })).toBeVisible();
 
     await expect(page.getByRole('button', { name: /^Mis tarjetas/ })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Mi Cuenta', exact: true })).toHaveCount(0);

@@ -107,6 +107,20 @@ export function CreateMesaFlow() {
   const { t } = useIdioma();
   const { accept: acceptOcr } = useOcrRail();
   const moneyRail = useMoneyRail();
+  /**
+   * 🔴 C3 · **la mesa sin garantía, y cuándo existe.**
+   *
+   * El dueño la admite SÓLO con el dinero apagado: con el riel vivo, pedir
+   * `guarantee_method:'none'` devuelve `409 guarantee_required`
+   * (`contract-mirror/routes/mesas.js:243-250`), porque «la garantía es lo que
+   * hace que el restaurante cobre» sigue ratificado para el riel monetario.
+   *
+   * Por eso el front no elige: **lee**. Y exige el estado AUTORITATIVO, no la
+   * simple ausencia de pagos: con el riel en `pending` no se sabe qué modo rige,
+   * y abrir una mesa sin garantía contra un backend que sí cobra sería crear una
+   * mesa que el restaurante no puede cobrar. Mientras no se sepa, no se abre.
+   */
+  const sinGarantia = moneyRail.status === 'authoritative' && !moneyRail.puedeCargarTarjeta;
   // OLA 5D · el método "Saldo PayMe" de la garantía lo habilita el BACKEND.
   const { walletRailEnabled } = useWalletRail();
   const toast = useToast();
@@ -779,10 +793,23 @@ export function CreateMesaFlow() {
       createInFlightRef.current.leave();
       return;
     }
-    if (method === 'card' && !cardRailAvailable) {
-      setError(t(CARD_RAIL_UNAVAILABLE_COPY));
-      createInFlightRef.current.leave();
-      return;
+    /**
+     * C3 · sin garantía no hay riel de tarjeta que exigir: `method` conserva su
+     * valor de UI pero no viaja, y pedir una tarjeta acá sería pedirla para nada.
+     *
+     * ⚠️ Va ANIDADO y no como una condición más, a propósito: el gate de AF-02
+     * lo vigila `src/components/cardRailSurfaces.test.ts` por su texto exacto
+     * —`if (method === 'card' && !cardRailAvailable)`— y agregarle un término
+     * habría roto una guarda ajena y viva. Cuando el sujeto puede adaptarse, se
+     * adapta el sujeto: la guarda sigue mirando lo mismo y este camino queda
+     * fuera por envoltura, no por dilución del predicado.
+     */
+    if (!sinGarantia) {
+      if (method === 'card' && !cardRailAvailable) {
+        setError(t(CARD_RAIL_UNAVAILABLE_COPY));
+        createInFlightRef.current.leave();
+        return;
+      }
     }
     setBusy(true);
     setError(null);
@@ -798,7 +825,19 @@ export function CreateMesaFlow() {
       let savedPmId: string | null = null;
       let savingNewCard = false;
       const savedCard = cards.find((c) => c.id === cardChoice) ?? null;
-      if (method === 'card') {
+      /**
+       * 🔴 C3 · **sin garantía no se tokeniza NADA**, y por eso la condición
+       * incluye `!sinGarantia` en vez de confiar en `method`.
+       *
+       * `method` es estado de UI y conserva su default `'card'` aunque el body
+       * viaje con `'none'`: la pantalla de garantía nunca se montó, así que no
+       * hay tarjeta elegida ni Card Element. Sin este corte el flujo pedía un
+       * `pm_` que no existe —en mock inventaba uno inútil, en real fallaba— y
+       * dejaba la apertura congelada con un aviso de «apertura sin confirmar»
+       * sobre una mesa que jamás se intentó crear. **Lo cazó el navegador, no la
+       * suite**: los 2191 unitarios pasaban.
+       */
+      if (!sinGarantia && method === 'card') {
         if (savedCard) {
           savedPmId = savedCard.id;
         } else if (IS_MOCK) {
@@ -851,7 +890,10 @@ export function CreateMesaFlow() {
         // El N que la persona ELIGIÓ, en los dos modos. El ternario viejo era
         // inerte (las dos ramas mandaban el mismo default invisible).
         expected_participants: participants,
-        guarantee_method: method,
+        // C3 · `none` cuando el dueño declara el dinero apagado. Su refine exige
+        // CERO fuentes de pago, y los spreads de abajo no las agregan porque en
+        // ese modo no hay tarjeta elegida ni tipeada.
+        guarantee_method: sinGarantia ? ('none' as const) : method,
         // B-06 (v2.25): clave estable del intento de ABRIR la mesa. Sin esto,
         // perder la respuesta y reintentar creaba una segunda mesa con una
         // segunda garantía por el total, que termina capturándose sola.
@@ -898,7 +940,12 @@ export function CreateMesaFlow() {
         // Un 2xx con una mesa que no quedó abierta no acredita una garantía.
         // La respuesta ya se recibió, pero sin estado contractual de éxito se
         // conserva journal/clave y se obliga a reconciliar la misma operación.
-        if (r.guarantee.status !== 'open' || r.mesa.status !== 'open') {
+        // C3 · la mesa sin garantía llega con `guarantee.status:'none'` y la
+        // mesa ya `open`: eso ES el éxito, no una garantía a medio autorizar.
+        const abiertaSinGarantia = r.guarantee.method === 'none'
+          && r.guarantee.status === 'none'
+          && r.mesa.status === 'open';
+        if (!abiertaSinGarantia && (r.guarantee.status !== 'open' || r.mesa.status !== 'open')) {
           freezeMesa(mesaScope, intent);
           setError(t('La garantía sigue en verificación. No abras otra mesa ni cambies el método todavía.'));
           return;
@@ -1644,6 +1691,11 @@ export function CreateMesaFlow() {
                 setTicketPulse(true);
                 return;
               }
+              // C3 · sin garantía no hay tarjeta que elegir ni paso que
+              // mostrar: se crea la mesa y se va al link. Pedirle a alguien que
+              // "garantice" en un modo donde el dueño rechaza la garantía sería
+              // un callejón con cartel.
+              if (sinGarantia) { void createMesa(); return; }
               void loadCards();
               setStep('garantia');
             },

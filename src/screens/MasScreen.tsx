@@ -10,6 +10,7 @@ import { ProfileIdentityEditor } from '../components/ProfileIdentityEditor';
 import { goBack, navigate } from '../router';
 import { useWalletRail } from '../api/walletRail';
 import { accountRailView, corteDePagosView } from '../api/releaseGates';
+import { useMoneyRail } from '../api/moneyRail';
 import { fullName } from '../utils/identity';
 import { useProfileIdentityCapability } from '../api/privateFeatures';
 
@@ -33,7 +34,34 @@ export function MasScreen() {
   // de `accountRailView`, cableado acá por primera vez) y el corte del viernes
   // sí (`corteDePagosView`). Ver `releaseGates.ts`.
   const rail = accountRailView(walletRailEnabled, accountActivity);
-  const corte = corteDePagosView();
+  const moneyRail = useMoneyRail();
+  const corte = corteDePagosView(moneyRail);
+  /**
+   * 🔴 **D-R23 · «Sí, una línea discreta en «Más»», etiqueta literal de Mati.**
+   *
+   * Con el corte, la fila de tarjetas simplemente **desaparece**, y un espacio
+   * vacío no explica nada: quien la buscaba no sabe si se fue para siempre. Esta
+   * línea lo dice, y nada más — Mati descartó explícitamente ponerla también en
+   * Inicio.
+   *
+   * ⚠️ **Sólo con el riel AUTORITATIVO y `disabled`.** Con `pending` no aparece,
+   * y la diferencia no es cosmética: prometer que los pagos llegan **sin saber
+   * si están vivos** sería inventar una promesa sobre dinero. Con `sandbox` o
+   * `live` tampoco aparece, porque ahí no hay nada que prometer.
+   *
+   * Y por ser la única superficie de esta pantalla que existe **sólo** con la
+   * capability aplicada, es además el **testigo positivo** que `mas-accesos`
+   * usa antes de afirmar que la fila de tarjetas no está.
+   *
+   * 🔴 **Divergencia declarada del texto adjudicado.** La adjudicación decía
+   * «autoritativo y `disabled`». Acá se lee `puedeCargarTarjeta`, que es
+   * `payments_enabled` LEÍDO (`../api/moneyRail.ts:167-168`), y no `mode`, que
+   * el propio módulo declara *«para diagnóstico. Nunca para decidir»* (`:97`).
+   * Un modo futuro con los pagos apagados también mostraría esta línea, y eso
+   * es lo correcto: decidir por el nombre del modo es la deducción que ese
+   * módulo existe para no hacer.
+   */
+  const corteDeclarado = moneyRail.status === 'authoritative' && !moneyRail.puedeCargarTarjeta;
   const profileIdentity = useProfileIdentityCapability();
   const user = session?.user;
 
@@ -116,6 +144,14 @@ export function MasScreen() {
             </div>
             <SelectorIdioma />
           </div>
+          {corteDeclarado && (
+            <div className="list-row list-row--nota" style={{ cursor: 'default' }} role="status">
+              <span><Icon name="card" size={16} /></span>
+              <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', color: 'var(--gray-b)' }}>
+                {t('Los pagos llegan pronto')}
+              </div>
+            </div>
+          )}
           {rail.showCards && corte.showCards && (
             <button className="list-row" onClick={() => navigate('tarjetas')}>
               <span><Icon name="card" size={16} /></span>
