@@ -6,6 +6,65 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-03**.
+- Commit exacto y procedencia del CONTENIDO:
+  **`940cc49e5bb6f59138a6d0649e8143b5069d8fd0`**
+  (App Backend · aviso de privacidad **2.4.1** y cuota diaria del OCR).
+- Commit del que se tomó el inventario autoritativo:
+  **`9c5a7b1409ccbac65cdb757c91c3daff5d100fac`**.
+  Como siempre, el inventario declara el commit del CONTENIDO, no su propio commit.
+
+🔴 **Y acá esos dos no son el mismo, así que la distinción deja de ser teórica.**
+`--paridad` compara contra el commit que el inventario DECLARA —`940cc49e…`—, no
+contra aquel donde el inventario vive. Pinear `9c5a7b14…` daría `NO CERTIFICADO`
+con los bytes correctos, que es la forma más confusa de fallar.
+
+✅ **El pin ya NO es provisional en el sentido que tenía el refresh anterior.**
+Medido acá: **los dos commits están publicados** —`git branch -r --contains` los
+ubica en `origin/main`— y **`9c5a7b14…` ES el `main` remoto del dueño**, leído con
+`git ls-remote`. Que además tenga GREEN de auditoría lo declara el Auditor de
+Codex; **eso no lo medí yo** y se dice así.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior de 107
+cambian **siete** —`db/schema.sql`, `routes/ocr.js`, `routes/stp-webhook.js`,
+`routes/webhooks.js`, `services/moneyRail.js`, `services/ocrResponseContract.js`
+y `services/profileIdentity.js`—; **cero nuevos, cero que salgan y cero
+renombrados**. Los otros 100 quedan byte-idénticos y se declaran sin cambio por
+inventario, no por inspección.
+
+Este refresh es **mecánico**: adopta el inventario owner-first que publica App
+Backend y no toca `src/`, `e2e/`, el verificador ni el runtime del Frontend.
+
+**Límite del refresh, explícito: espejar bytes no habilita nada.** El aviso 2.4.1
+llega al espejo, pero **presentarlo** es una decisión de producto con su propia
+orden: la allowlist de versiones presentadas de `src/api/privateFeatures.ts` no
+se toca acá. Y una que conviene tener a mano cuando esa orden llegue:
+`services/profileIdentity.js` publica **`2.4.1`** mientras
+`services/shortfallDetails.js` sigue en **`2.3.0`** — las dos capabilities llevan
+versiones **distintas**, así que esa allowlist tiene que AGREGAR, no reemplazar.
+
+### Verificación de esta adopción, con su resultado literal
+
+| gate | resultado |
+|---|---|
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `940cc49`** · exit 0 |
+| `--vigencia` | **exit 1 · DECLARADO, no es condición de este tramo** |
+
+**`--paridad` es el assert de drift**: compara contra el commit que el inventario
+declara, o sea contra el pin exacto.
+
+⚠️ **`--vigencia` sale en rojo, y esta vez su mensaje SÍ describe el caso — que es
+lo contrario del refresh anterior.** Antes el rojo significaba que el pin iba
+*adelante* de `main` del dueño; ahora significa lo que el script dice: **la fuente
+avanzó**. El `HEAD` de `main` del dueño es `9c5a7b14…` y difiere del contenido
+pineado `940cc49e…` en **16 archivos**, medido. Es esperable y no es un desvío del
+espejo: el dueño publicó un inventario que declara contenido anterior a su propio
+`HEAD`. Por eso el PASS de este tramo es **integridad + paridad**, y `--vigencia`
+se declara sin condicionar.
+
+### Refresh anterior · 2026-09-02 (mirror 107 owner-first · C4-A v2.85.0)
+
 - Fecha del refresh: **2026-09-02**.
 - Commit exacto y procedencia del CONTENIDO:
   **`1851acbb993b935f7a89c3c0fdc6e0b1163bc2a9`**

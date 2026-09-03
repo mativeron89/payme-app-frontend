@@ -21,8 +21,31 @@ const express = require('express');
 const stpAbono = require('../services/stpAbono');
 const walletFunding = require('../services/walletFunding');
 const logger = require('../utils/logger');
+const { dineroHabilitado, modoVigente } = require('../services/moneyRail');
 
 const router = express.Router();
+
+// ═══ C5B · GUARDA PROPIA DEL RIEL STP/WALLET BAJO EL MODO APAGADO ═════════════
+//
+// Hasta C5 este router quedaba en 409 bajo `MODO_MONETARIO='disabled'` sólo
+// porque `server.js` monta `/webhooks` ANTES que `/webhooks/stp` y el
+// `router.use` del webhook general alcanza el prefijo. Era protección por
+// orden de montaje, no del riel: invertir dos líneas en `server.js` la retiraba
+// sin que ningún test lo viera. Esta guarda es de ESTE router y no depende de
+// ningún vecino. Va antes del `express.json` de abajo: el cuerpo ni se lee.
+//
+// 409 y no 2xx por la misma razón que en `routes/webhooks.js`: un 2xx le dice
+// a STP «recibido» y el hecho se descarta; un no-2xx lo deja reintentar. Bajo
+// el harness explícito de test (`NODE_ENV=test` + opt-in del preámbulo) el modo
+// es `sandbox` y esta guarda deja pasar: `abonoLegacyHabilitado` sigue
+// decidiendo lo suyo después.
+router.use((req, res, next) => {
+  if (dineroHabilitado()) return next();
+  logger.warn('money_rail_disabled_stp_abono_reject', {
+    path: req.originalUrl, method: req.method, mode: modoVigente(),
+  });
+  return res.status(409).json({ received: false, error: 'payments_disabled', mode: modoVigente() });
+});
 
 // STP envía JSON; el express.json global se monta DESPUÉS de los webhooks,
 // así que parseamos a nivel de ruta.

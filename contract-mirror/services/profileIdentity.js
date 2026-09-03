@@ -5,6 +5,11 @@
  * 2026-08-25: aviso 2.3.0 de producto real, con foto privada y legacy
  * “Sin asignar”. No hay flag de entorno:
  * una decisión nueva, no una variable, gobierna cualquier cambio posterior.
+ * v2.89.0 · `notice_version` sigue al aviso VIGENTE (etapa sin pagos; 2.4.0 en
+ * v2.89.0, 2.4.1 en v2.90.0 — sólo cambió la casilla de contacto):
+ * la foto privada se describe igual y la conducta no cambia;
+ * tests/profile-identity.test.js ata esta constante al archivo
+ * legal/aviso_privacidad.md, así que un aviso nuevo pasa por acá a propósito.
  * Los bytes nunca salen en URLs ni viajan a Stripe, outbox o Dashboard.
  */
 'use strict';
@@ -25,7 +30,7 @@ const SUPPORTED_INPUT_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const PROFILE_IDENTITY_CAPABILITY = Object.freeze({
   supported: true,
   enabled: true,
-  notice_version: '2.3.0',
+  notice_version: '2.4.1',
   notice_required: true,
   activation_blocker: null,
   payme_id_mutable: false,

@@ -1418,4 +1418,20 @@ CREATE TRIGGER trg_dispersal_stp_request_immutable
   BEFORE UPDATE ON dispersals
   FOR EACH ROW EXECUTE FUNCTION guard_dispersal_stp_request_immutable();
 
+-- ─── OCR · CUOTA DIARIA (C6, v2.88.0) ──────────────────────────────────────
+-- Techo técnico de documentos ACEPTADOS por día calendario de México
+-- (`D-R21`: «Tope técnico alto, 2000 por día»). Cero columnas de identidad: un
+-- contador de cuota necesita saber CUÁNTOS, no QUIÉN. El mismo nombre de
+-- constraint que `db/migrate_ocr_daily_quota_v2.88.0.sql`, para que la
+-- migración sobre una base nacida de este archivo reemplace por su equivalente
+-- exacta en vez de dejar dos CHECK duplicados.
+CREATE TABLE IF NOT EXISTS ocr_daily_quota (
+  day             DATE PRIMARY KEY,
+  accepted_count  INTEGER NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_ocr_daily_quota_techo
+    CHECK (accepted_count >= 0 AND accepted_count <= 2000)
+);
+
 COMMIT;

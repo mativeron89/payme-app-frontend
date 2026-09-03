@@ -8,6 +8,30 @@
  * como "modo monetario fail-closed: disabled | sandbox". No hay decisión
  * pendiente acá: esto ejecuta lo ya decidido.
  *
+ * ─── C5 · 2026-09-02 · EL MODO VUELVE A `disabled`, Y EL HARNESS SE SEPARA ──
+ *
+ * El corte del viernes es producción pública SIN PAGOS: el cierre de CEO del
+ * 01/09 ata la mesa sin garantía a esta constante, y Mati cerró el momento con
+ * `D-R19` = «Commit propio ya».
+ *
+ * 🔴 PERO EL FLIP A SECAS NO ERA VIABLE, y esto se midió antes de escribirlo.
+ * Con la constante en `disabled` y un seam que sólo podía CERRAR, ninguna suite
+ * podía volver a abrir el riel: 7 archivos y 158 tests en rojo, y —peor— la
+ * corrida QUEDABA COLGADA. `tests/http.test.js` sincroniza contra un stub de
+ * `stripeService.attachPaymentMethod`; con el dinero apagado la ruta corta en
+ * 409 antes del handler, el stub no se llama nunca y el `await` no resuelve.
+ * `npm run test:ci` no producía veredicto: ni verde ni lista de rojos.
+ *
+ * Codex adjudicó la salida A: la autoridad productiva es `disabled` y el
+ * HARNESS puede abrir `sandbox`, sólo bajo `NODE_ENV==='test'` y nunca `live`.
+ * Producción y pruebas dejan de compartir el mismo interruptor.
+ *
+ * ⚠️ LO QUE ESO CUESTA, dicho acá y no en una nota al pie: la suite integral
+ * corre mayormente en `sandbox`, así que «integral verde» NO significa
+ * «producción anda». Lo que acredita el modo productivo son los casos que
+ * FUERZAN `disabled` y lo prueban contra la entrada real —rutas de dinero,
+ * webhooks de Stripe, arranque y preflight—, no el verde general.
+ *
  * ─── POR QUÉ ES UNA CONSTANTE Y NO UNA BANDERA DE ENTORNO ─────────────────
  *
  * 🔴 Una bandera es exactamente el permiso que el gobierno raíz prohíbe: con
@@ -41,18 +65,27 @@
  * `/api/groups`, `/api/invitations`, `/api/ocr`, `/api/restaurants` (lectura),
  * `/api/me` (earnings, sólo lectura), `/api/notifications`.
  *
- * Los webhooks de Stripe (`/webhooks/…`) **no se gatean acá**: son ENTRADA de
- * hechos ya ocurridos afuera. Rechazarlos perdería la reconciliación de algo
- * que ya pasó. Con este gate no puede nacer ningún cobro nuevo, así que en
- * modo `disabled` no debería llegar ninguno; si llega, se procesa y queda
- * trazado — que es lo correcto para un hecho consumado.
+ * Los webhooks de Stripe (`/webhooks/stripe`, `/webhooks/stripe/connect`)
+ * **SÍ se gatean desde C5** (condición 3), en `routes/webhooks.js` como
+ * `router.use` antes del parser y de la verificación de firma. Este párrafo
+ * decía lo contrario —«son ENTRADA de hechos ya ocurridos; rechazarlos perdería
+ * la reconciliación»— y ese cuidado sigue siendo válido: por eso la guarda
+ * contesta 409 y NO 2xx. Un 2xx le diría a Stripe «lo manejé» y el evento se
+ * descartaría; un 409 lo deja en su cola con reintentos. Se rechaza el
+ * PROCESAMIENTO bajo el modo apagado, no el hecho.
  *
  * ─── FAIL-CLOSED ──────────────────────────────────────────────────────────
  *
- * `dineroHabilitado()` devuelve `true` ÚNICAMENTE si el modo es exactamente
- * `'live'`. Cualquier otro valor —`disabled`, `sandbox`, un typo, `undefined`,
- * o un modo futuro que nadie enseñó a esta función— responde `false`. Si no se
- * puede determinar el modo, no se mueve plata.
+ * `dineroHabilitado()` devuelve `true` ÚNICAMENTE si el modo VIGENTE es
+ * exactamente `'live'` o `'sandbox'`. Cualquier otro valor —`disabled`, un
+ * typo, `undefined`, o un modo futuro que nadie enseñó a esta función— responde
+ * `false`. Si no se puede determinar el modo, no se mueve plata.
+ *
+ * ⚠️ Este párrafo decía «únicamente si el modo es exactamente `live`», y era
+ * FALSO desde `D-FF-2-BIS`: el código habilita `live` **y** `sandbox` desde el
+ * 2026-08-10. Se corrige acá porque el archivo ya se estaba tocando y porque
+ * mentía sobre el fail-closed de un archivo que decide si se mueve plata. Es
+ * corrección de comentario: cero conducta.
  */
 'use strict';
 
@@ -61,73 +94,128 @@ const logger = require('../utils/logger');
 /**
  * 🔴 ÚNICA FUENTE AUTORITATIVA. Constante, no bandera.
  *
- *   'disabled' — cero pagos, ni simulados. SUPERSEDIDO por `D-FF-2-BIS`.
- *   'sandbox'  — pagos SIMULADOS con tarjetas de prueba. VIGENTE (2026-08-10).
- *   'live'     — dinero real. Requiere ratificación PROPIA de Mati; que
- *                `sandbox` habilite NO lo acerca ni un paso.
+ *   'disabled' — cero pagos, ni simulados. VIGENTE en producción (`C5`).
+ *   'sandbox'  — pagos SIMULADOS con tarjetas de prueba. Rigió en producción
+ *                entre el 2026-08-10 (`D-FF-2-BIS`) y el `C5`; desde `C5` es
+ *                el modo del HARNESS y no sale de `NODE_ENV==='test'`.
+ *   'live'     — dinero real. Requiere ratificación PROPIA de Mati. El harness
+ *                no puede forzarlo mientras la constante no sea `live`: el
+ *                seam admite sólo la constante y `MODO_HARNESS`, así que la
+ *                exclusión de `live` deriva de la ratificación, no de un
+ *                `!== 'live'` escrito aparte.
  *
- * ─── `D-FF-2-BIS` · qué cambió y qué NO ───────────────────────────────────
+ * ─── `D-FF-2-BIS` · historia, para no releerla como vigente ───────────────
  *
- * `D-FF-2` decía «cero pagos, ni siquiera simulados; registro y social, nada
- * más». Quedó supersedido: los amigos abren mesa, confirman ítems, eligen
- * tarjeta de garantía, reparten y «pagan», todo con tarjetas de prueba.
+ * Entre el 2026-08-10 y el `C5` el modo productivo fue `sandbox`: los amigos
+ * abrían mesa, confirmaban ítems, elegían tarjeta de garantía, repartían y
+ * «pagaban», todo con tarjetas de prueba. Eso terminó en producción.
  *
- * ⚠️ El obstáculo NUNCA fue la garantía. Se propuso un acta de «mesa sin
- * garantía» y Mati la rechazó desde el producto: **la garantía es lo que hace
- * que el restaurante cobre; sacarla rompe el invariante.** Lo que bloqueaba era
- * que `D-FF-2` prohibía los pagos simulados. Por eso esto se resuelve moviendo
- * el modo, y NO tocando `guarantee_method`.
+ * ⚠️ Lo que aquel texto decía de la garantía sigue siendo cierto: el obstáculo
+ * de la prueba cerrada NUNCA fue la garantía, y la mesa sin garantía de hoy no
+ * la contradice — no es «sacarle la garantía a una mesa que cobra», es una mesa
+ * que **no cobra nada**. Con el riel vivo, pedir `none` sigue devolviendo 409
+ * `guarantee_required`.
  *
- * 🔴 LO QUE HACE SEGURO A `sandbox` NO ES EL MODO: es que la clave de Stripe
- * sea de PRUEBA. `sandbox` + `sk_live_…` cobraría de verdad. Ese acoplamiento
- * es un INVARIANTE y vive en `middleware/envValidation.js`, donde impide el
- * ARRANQUE — no acá, porque este archivo tiene prohibido leer `process.env` (el
- * modo no puede salir del entorno) y el chequeo es la dirección contraria: el
- * entorno tiene que MERECER el modo. Ver el comentario largo allá.
+ * 🔴 EL ACOPLAMIENTO MODO↔CLAVE de `middleware/envValidation.js` estaba escrito
+ * sobre `sandbox`, así que con `disabled` habría dejado de dispararse y una
+ * `sk_live_…` ya no impediría el arranque. NO se lo dejó caer: la condición 4
+ * de la adjudicación agrega la guarda simétrica —bajo `disabled`, el arranque
+ * PRODUCTIVO falla cerrado si conserva credenciales live o un webhook secret
+ * operativo—. Sigue viviendo allá y no acá, porque este archivo tiene prohibido
+ * que el modo salga del entorno y aquel chequeo es la dirección contraria: el
+ * entorno tiene que MERECER el modo.
  *
- * El wallet sigue MUERTO: `sandbox` no lo revive, sigue 410 feature_removed.
+ * El wallet sigue MUERTO, y el apagado no lo toca: sigue 410 feature_removed,
+ * NO 409. Son dos muertes distintas, y el orden de las guardas las mantiene
+ * separadas (`routes/mesas.js:230` corre antes que `:253`).
  */
-const MODO_MONETARIO = 'sandbox';
+const MODO_MONETARIO = 'disabled';
 
 const MODOS_CONOCIDOS = Object.freeze(['disabled', 'sandbox', 'live']);
 
-// ⚠️ ACÁ VIVÍA UN SEAM DE TEST que se retiró con `D-FF-2-BIS` (2026-08-10)
-// porque, con el modo en `sandbox`, abría una puerta que ya estaba abierta: era
-// un seam INERTE, y uno inerte es peor que uno ausente. Aquel comentario decía
-// que si volvía `disabled` se reescribiría CON SU RAZÓN, y no se resucitaría el
-// viejo. Esto es eso.
+/**
+ * 🔴 EL ÚNICO MODO QUE EL HARNESS PUEDE ABRIR. No es `MODOS_CONOCIDOS` menos
+ * `live`: es una constante propia, para que agregar un modo futuro a la lista
+ * de conocidos NO lo vuelva forzable por un test sin que alguien lo escriba acá.
+ */
+const MODO_HARNESS = 'sandbox';
+
+/**
+ * ÚNICA lectura de entorno de este archivo, y existe para una sola cosa:
+ * decidir si el harness tiene permiso. El MODO no sale nunca del entorno —esa
+ * es la regla que el gobierno raíz protege— y ninguna variable puede moverlo.
+ */
+function enTest() {
+  return process.env.NODE_ENV === 'test';
+}
+
+// ─── C5 · POR QUÉ PRODUCCIÓN Y PRUEBAS DEJAN DE COMPARTIR EL INTERRUPTOR ───
 //
-// ─── C3 · SEAM DE TEST, EN LA DIRECCIÓN CONTRARIA ─────────────────────────
+// Hasta C4 el seam sólo podía CERRAR: «nunca abre más de lo que la constante
+// abre». Con la constante en `sandbox` eso alcanzaba, porque lo que había que
+// ejercitar era el modo cerrado. Con la constante en `disabled` se dio vuelta y
+// se midió el costo: 7 archivos y 158 tests en rojo, y `tests/http.test.js`
+// COLGADO —un `await` sobre un stub que el 409 ya no deja llamar—, o sea una
+// corrida sin veredicto. Y entre esos rojos estaban los CONTROLES con riel vivo
+// de la mesa sin garantía: los que prueban que con dinero encendido la garantía
+// ratificada el 2026-08-10 se conserva. Perderlos habría dejado la mesa sin
+// garantía indistinguible de una relajación de la garantía.
 //
-// El de v2.x ABRÍA el dinero para que las suites históricas operaran con el
-// modo cerrado. Éste lo CIERRA: la mesa sin garantía sólo existe con
-// `dineroHabilitado() === false`, y el valor entregado hoy es `sandbox`. Sin
-// seam, esa conducta no se podría ejercitar sin flipear la constante en el
-// árbol, que es una decisión de producto y no de un test.
+// Salida adjudicada: el harness abre `sandbox`, y `live` queda excluido en
+// términos absolutos. Las propiedades que sostienen que esto no mueva plata:
+//
+//   · fuera de `NODE_ENV==='test'` TODO intento lanza, incluido consultar;
+//   · `live` no es forzable por ninguna vía, ni siquiera desde un test;
+//   · el override es proceso-local y se restaura con la función que devuelve
+//     `forzarModoParaTests`, así que un caso no contamina al siguiente;
+//   · el modo productivo lo sigue diciendo la constante, no el entorno.
 //
 // 🔴 Por qué el override vive ACÁ y no en un stub del export: los consumidores
 // destructuran en el `require` (`routes/mesas.js:34`, `routes/config.js:17`,
-// `routes/payment-methods.js:15`, `routes/connect.js:25`,
+// `routes/payment-methods.js:15`, `routes/connect.js:25`, `routes/webhooks.js`,
 // `middleware/envValidation.js:13`, `services/ffEnvironmentPreflight.js:27`),
 // así que reemplazar `module.exports.dineroHabilitado` no alcanzaría a ninguno.
 // Un módulo que lee su propio estado interno en cada llamada, sí.
 //
-// Se cierra por construcción: exige `NODE_ENV=test` y sólo admite modos
-// CONOCIDOS. Fuera de test lanza; nunca puede habilitar dinero que la constante
-// no habilite —sólo puede cerrarlo o dejarlo igual—, así que un seam olvidado
-// no mueve plata.
+// 🔴 EL DEFAULT DEL HARNESS ES UN OPT-IN EXPLÍCITO, NO UNA CONSECUENCIA DE
+// `NODE_ENV`. Codex lo exigió al adjudicar: sin `habilitarHarnessSandboxParaTests()`
+// —que sólo llama el preámbulo canónico `tests/setup.js`— el proceso corre en el
+// modo productivo AUNQUE `NODE_ENV` valga `test`. Es el mismo idioma con el que
+// el repo abre el alta sin invitación para las suites: nada se abre por estar
+// en test; se abre porque alguien lo pidió por su nombre, en un lugar conocido.
+// Un proceso de test que no cargue el preámbulo queda cerrado, no abierto.
+let harnessSandboxHabilitado = false;
 let modoForzadoEnTests = null;
 
-function modoVigente() {
-  return modoForzadoEnTests === null ? MODO_MONETARIO : modoForzadoEnTests;
+/**
+ * Opt-in del preámbulo canónico. Exige `NODE_ENV==='test'` y devuelve la
+ * función que lo revierte, para que un test pueda acreditar la conducta SIN el
+ * opt-in y dejar el proceso como estaba.
+ */
+function habilitarHarnessSandboxParaTests() {
+  if (!enTest()) throw new Error('money_rail_harness_forbidden');
+  const anterior = harnessSandboxHabilitado;
+  harnessSandboxHabilitado = true;
+  return () => { harnessSandboxHabilitado = anterior; };
 }
 
-/** Fuerza el modo dentro de una prueba. Devuelve la función que restaura. */
+function modoVigente() {
+  if (modoForzadoEnTests !== null) return modoForzadoEnTests;
+  return (enTest() && harnessSandboxHabilitado) ? MODO_HARNESS : MODO_MONETARIO;
+}
+
+/**
+ * Fuerza el modo dentro de una prueba. Devuelve la función que restaura.
+ *
+ * Se usa para las DOS direcciones: cerrar (`disabled`, la conducta productiva
+ * del corte) y dejar explícito el modo del harness (`sandbox`). `live` no.
+ */
 function forzarModoParaTests(modo) {
-  if (process.env.NODE_ENV !== 'test') throw new Error('money_rail_test_seam_forbidden');
+  if (!enTest()) throw new Error('money_rail_test_seam_forbidden');
   if (!MODOS_CONOCIDOS.includes(modo)) throw new Error('money_rail_test_seam_modo_invalido');
-  if (modo === 'live' || (modo === 'sandbox' && MODO_MONETARIO === 'disabled')) {
-    // El seam NUNCA abre más de lo que la constante ya abre.
+  if (modo !== MODO_MONETARIO && modo !== MODO_HARNESS) {
+    // Se afirma por PERTENENCIA y no por `!== 'live'`: un modo nuevo en
+    // `MODOS_CONOCIDOS` queda fuera hasta que alguien lo autorice acá.
     throw new Error('money_rail_test_seam_no_habilita');
   }
   const anterior = modoForzadoEnTests;
@@ -142,12 +230,15 @@ function forzarModoParaTests(modo) {
  * esta función siguen dando `false`. La lista es explícita a propósito: un
  * `!== 'disabled'` habilitaría cualquier basura.
  *
- * ⚠️ Acá NO se comprueba la clave de Stripe. No es un olvido: con `sandbox` el
- * proceso no llega a arrancar si la clave no es de prueba
- * (`middleware/envValidation.js`), así que cualquier request que alcance esta
- * función ya corre bajo una clave verificada. Repetir el chequeo acá exigiría
- * leer `process.env` en este archivo, que es justamente lo que su guard textual
- * prohíbe.
+ * ⚠️ Acá NO se comprueba la clave de Stripe. No es un olvido: repetir el
+ * chequeo exigiría leer `process.env` en este archivo, que es justamente lo que
+ * su guard textual prohíbe. El acoplamiento vive en `middleware/envValidation.js`
+ * y desde C5 se evalúa sobre el modo EFECTIVO: si el que corre es `sandbox` —el
+ * harness—, el proceso no arranca con una clave que no sea de prueba, así que
+ * todo request que llega acá con dinero habilitado corre bajo clave verificada.
+ * Si el que corre es `disabled`, esta función devuelve `false`, ninguna ruta ni
+ * webhook opera, y además producción no arranca con claves live ni webhook
+ * secrets (condición 4).
  */
 function dineroHabilitado() {
   const modo = modoVigente();
@@ -216,6 +307,7 @@ module.exports = {
   MODO_MONETARIO,
   MODOS_CONOCIDOS,
   modoVigente,
+  habilitarHarnessSandboxParaTests,
   forzarModoParaTests,
   dineroHabilitado,
   modoMonetarioCapability,

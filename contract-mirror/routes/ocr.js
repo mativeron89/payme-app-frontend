@@ -93,11 +93,41 @@ function parseImageUpload(req, res, next) {
   });
 }
 
+// 🔴 C6/R111 · DOS dimensiones, no una. La ventana y el techo son los MISMOS
+// para los dos limitadores y por eso viven en una constante cada uno: escritos
+// dos veces se desincronizarían al primer ajuste, y un techo por usuario más
+// alto que el de IP haría que el segundo carril no rechazara nunca.
+const OCR_WINDOW_MS = 60_000;
+const OCR_MAX = Number(process.env.RATE_LIMIT_OCR_MAX) || 10;
+
+// Carril 1 · por IP (clave por default de express-rate-limit). Es el que ya
+// estaba y NO se reemplaza: sin él, un atacante con muchas cuentas —crear una
+// es barato— tendría techo `OCR_MAX × cuentas` desde una sola máquina.
 const ocrLimiter = rateLimit({
-  windowMs: 60_000,
-  max: Number(process.env.RATE_LIMIT_OCR_MAX) || 10,
+  windowMs: OCR_WINDOW_MS,
+  max: OCR_MAX,
   standardHeaders: true,
   legacyHeaders: false,
+});
+
+// Carril 2 · por USUARIO autenticado. Desde C6 el recurso que hay detrás es
+// GLOBAL y agotable —`services/ocrDailyQuota.js`, 2000 documentos por día para
+// todo PayMe—, y contra un recurso global un techo sólo por IP no alcanza:
+// rotar IPs es barato, así que unas pocas manos podían drenar el día entero.
+// Ninguno de los dos es suficiente solo; juntos acotan las dos formas de rotar.
+//
+// La clave se deriva EXCLUSIVAMENTE de `req.user.id`, con prefijo estable, tal
+// como `routes/friends.js:69` y `routes/account.js:149`. Que dependa de una
+// sola cosa es el punto: mezclarle la IP la volvería a hacer eludible rotando.
+//
+// ⚠️ Va montado DESPUÉS de `requireAuth` —igual que el carril de IP— porque
+// `req.user` no existe antes.
+const ocrUserLimiter = rateLimit({
+  windowMs: OCR_WINDOW_MS,
+  max: OCR_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `ocr:u:${req.user.id}`,
 });
 
 // ─── Magic bytes ───────────────────────────────────────────
@@ -155,6 +185,7 @@ function magicMatchesMime(magic, mimetype) {
 
 router.use(requireAuth);
 router.use(ocrLimiter);
+router.use(ocrUserLimiter);
 
 router.post('/', parseImageUpload, async (req, res, next) => {
   try {
@@ -215,6 +246,22 @@ router.post('/', parseImageUpload, async (req, res, next) => {
         const result = await ocrTextract.analyzeExpense(req.file.buffer);
         return res.json(respuestaOcr(result, { mock: false }));
       } catch (e) {
+        // 🔴 C6 · la cuota agotada es un RECHAZO deliberado, no una caída del
+        // proveedor. Degradarla a 200 `provider_error` le diría a la persona
+        // «no pudimos leer el ticket, editá a mano» cuando la verdad es «hoy ya
+        // no leemos más» — y dejaría al front sin forma de distinguir un
+        // problema pasajero de un techo alcanzado. Va por el mapa contractual
+        // cerrado, como todos los demás errores de esta ruta.
+        if (e && e.code === 'ocr_daily_quota_exhausted') {
+          // Sin `user_id`: el rechazo por cuota no necesita saber quién lo pidió.
+          logger.warn('ocr_daily_quota_rejected', {});
+          const out = errorOcr('ocr_daily_quota_exhausted');
+          return res.status(out.status).json(out.body);
+        }
+        // Todo lo demás —incluida una base que no responde— conserva la política
+        // ratificada en D5: el flujo de dividir la cuenta NUNCA se rompe por
+        // OCR. Lo que C6 garantiza en ese caso es que NO hubo llamada a AWS,
+        // porque la reserva lanza antes de cargar el SDK.
         logger.error('ocr_provider_error', { user_id: req.user.id, error: e.message });
         return res.json(respuestaProveedorNoDisponible());
       }

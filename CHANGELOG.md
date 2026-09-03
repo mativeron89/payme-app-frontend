@@ -116,6 +116,58 @@ en el panel de Vercel.** Hasta entonces el gate está *implementado, no
 acreditado*, y el primer push sigue siendo la primera observación.
 
 
+### Espejo del contrato al pin owner-first del aviso 2.4.1 (2026-09-03)
+
+Orden `AF-STAGE1-MIRROR-REFRESH-OWNER-9C5A7B14-CONTENT-940CC49E-01-CLAUDE`.
+**Mecánico y derivado del dueño: no decide producto.** Presentar 2.4.1 en las
+capabilities es una decisión aparte, con su propia orden.
+
+📌 **Va como subsección de 0.160.0 y NO abre versión nueva**, porque el lease
+excluye `package.json`/lock a propósito y un encabezado `## 0.161.0` declararía
+una versión que el paquete no tiene. Verificado que ningún gate ata el
+encabezado del CHANGELOG a `package.json`.
+
+🔴 **El pin no es el commit donde vive el inventario, y la distinción importa.**
+El inventario del dueño se tomó de `9c5a7b1409ccbac65cdb757c91c3daff5d100fac`,
+pero **ese archivo declara el contenido en
+`940cc49e5bb6f59138a6d0649e8143b5069d8fd0`**, y es contra ése que compara el
+gate de paridad. Confundirlos daría un `NO CERTIFICADO` con los bytes correctos.
+
+**Delta medido, no supuesto:** población idéntica —107 = 107, cero altas y cero
+bajas— y **7 archivos con hash nuevo**: `db/schema.sql`, `routes/ocr.js`,
+`routes/stp-webhook.js`, `routes/webhooks.js`, `services/moneyRail.js`,
+`services/ocrResponseContract.js` y `services/profileIdentity.js`. Los bytes se
+tomaron con `git show` del repo del dueño y se verificaron **sha256 y tamaño
+contra el inventario, antes y después de escribir**; ninguno se editó a mano.
+
+#### Qué significan, para los tres que este front decodifica
+
+- **`services/moneyRail.js` — la confirmación más fuerte del tramo.** El dueño
+  pasó `MODO_MONETARIO` de `'sandbox'` a **`'disabled'`**, y separó un seam de
+  harness bajo `NODE_ENV === 'test'`. O sea: **producción sirve el corte**, que
+  es exactamente lo que este front consume desde `0.158.0`. **La forma publicada
+  —`mode`, `payments_enabled`, `real_money`— no cambió**, así que los juegos de
+  claves cerrados del decoder siguen valiendo. Nada que adaptar acá.
+- **`services/profileIdentity.js` — sólo `notice_version` y comentarios**, de
+  `2.3.0` a `2.4.1`. La forma no cambió.
+  ⚠️ **Y `services/shortfallDetails.js` NO está entre los siete: sigue en
+  `2.3.0`.** Las dos capabilities llevan hoy versiones **distintas**, y eso es
+  lo que la orden siguiente tiene que respetar: la allowlist de versiones
+  presentadas **agrega**, no reemplaza. Reemplazar apagaría el detalle de
+  faltante.
+- **`services/ocrResponseContract.js` — agrega `ocr_daily_quota_exhausted: 429`.**
+  No rompe nada de este lado: se midió que el front **no tiene ningún juego
+  cerrado de códigos OCR**, así que no hay fail-closed que se dispare por un
+  código nuevo.
+
+Los otros cuatro —`db/schema.sql`, `routes/ocr.js`, `routes/stp-webhook.js`,
+`routes/webhooks.js`— se espejan por población; este front no los decodifica.
+
+**El texto del aviso no toca nada acá**, y ahora con doble evidencia: sale de
+`/api/legal/aviso_privacidad` y **`aviso_privacidad` no está en la población del
+espejo**. D1, D2 y la casilla de contacto llegan solos.
+
+
 ## 0.158.0 — El corte lo declara el dueño, y la mesa puede nacer sin garantía (2026-09-02)
 
 Orden `APP-FE-FRIDAY-PUBLIC-NO-PAYMENTS-01-CLAUDE-F2`, baseline

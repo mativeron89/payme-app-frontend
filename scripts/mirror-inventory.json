@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "1851acbb993b935f7a89c3c0fdc6e0b1163bc2a9",
+  "commit": "940cc49e5bb6f59138a6d0649e8143b5069d8fd0",
   "total": 107,
   "archivos": [
     {
@@ -235,8 +235,8 @@
     {
       "origen": "db/schema.sql",
       "destino": "db/schema.sql",
-      "sha256": "37c5cd7339861dadc469d78c973fd186bed80d134859322c007f7687cc76169b",
-      "bytes": 71169
+      "sha256": "50b128a67ee0db81c8fb24cfe09eb793fc1a4b429abac6d69711ad827f117825",
+      "bytes": 72102
     },
     {
       "origen": "docs/history/CHANGELOG_v2.11.md",
@@ -367,8 +367,8 @@
     {
       "origen": "routes/ocr.js",
       "destino": "routes/ocr.js",
-      "sha256": "0195dfa12e238f3baee31326315001705613a11bd621a9e5b2b757cc730852e4",
-      "bytes": 10110
+      "sha256": "596a9ae46da9eebae987e1ff0f5bf4f26a1843c427cef339992a273407c5e305",
+      "bytes": 12792
     },
     {
       "origen": "routes/payment-methods.js",
@@ -403,8 +403,8 @@
     {
       "origen": "routes/stp-webhook.js",
       "destino": "routes/stp-webhook.js",
-      "sha256": "cb3d55d71728a134c873e9943dc33f48aaa0d622337f7d74a8aeba97e0cafff4",
-      "bytes": 2844
+      "sha256": "d35e7b2071cb849e79ae58dedc20a62bdd49c5c79274db3c5c69065667fc7648",
+      "bytes": 4164
     },
     {
       "origen": "routes/topup.js",
@@ -421,8 +421,8 @@
     {
       "origen": "routes/webhooks.js",
       "destino": "routes/webhooks.js",
-      "sha256": "8a21754f2f1bb0680edb6d6ab417a612105e74ff93258d8639e31afba688e2a4",
-      "bytes": 84730
+      "sha256": "a592c9587ad8e20954f2679bf8f2dbb726469f99c13b41a3c1cc8d79460c5d85",
+      "bytes": 86536
     },
     {
       "origen": "schemas/index.js",
@@ -511,8 +511,8 @@
     {
       "origen": "services/moneyRail.js",
       "destino": "services/moneyRail.js",
-      "sha256": "ed3677328dabdf488058d0e0bfef14b95273a8e5304f330279b1f6f5040c8917",
-      "bytes": 10669
+      "sha256": "8b32ec3520ab1f71c8d7862df534d55b6a23905b416f3e35a9b02d4438adc982",
+      "bytes": 15838
     },
     {
       "origen": "services/nativeWalletCapability.js",
@@ -535,8 +535,8 @@
     {
       "origen": "services/ocrResponseContract.js",
       "destino": "services/ocrResponseContract.js",
-      "sha256": "2b0d6068d2e704d4fa178e708d8384d0b059ed6c7b4c3e735a60b79fc64cd25f",
-      "bytes": 3603
+      "sha256": "90b2177c514bb909efb6e10f3e858a9bb83d6d4c9b48a903e3fb7bfaa1acfa44",
+      "bytes": 3875
     },
     {
       "origen": "services/paymentAttemptReconciler.js",
@@ -565,8 +565,8 @@
     {
       "origen": "services/profileIdentity.js",
       "destino": "services/profileIdentity.js",
-      "sha256": "c23d39271575583f77ec265340bc562c7e2b9781c940387c4ce7486d0db2971a",
-      "bytes": 10378
+      "sha256": "ecc498a281a3014f78d8c26b51f9222025c3c26fe844ed3301a5d55a19679c41",
+      "bytes": 10739
     },
     {
       "origen": "services/savedCards.js",

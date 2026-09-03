@@ -32,8 +32,42 @@ const {
 const connectService = require('../services/connect');   // v2.22 (Connect)
 const logger = require('../utils/logger');
 const { stripeEventModeMatches } = require('../middleware/envValidation');
+const { dineroHabilitado, modoVigente } = require('../services/moneyRail');
 
 const router = express.Router();
+
+// ═══ C5 · condición 3 · CON EL RIEL APAGADO, NINGÚN WEBHOOK LLEGA AL HANDLER ══
+//
+// Va como `router.use` y no repetido en cada handler por dos razones que no son
+// de estilo: corre ANTES del `express.raw` de cada ruta —así el cuerpo ni se
+// lee— y ANTES de `stripeService.verifyWebhookSignature`, que ya es una llamada
+// al SDK. Y cubre las DOS rutas montadas (`/stripe`, `/stripe/connect`) y
+// cualquiera que se agregue después: una ruta nueva nace gateada en vez de
+// nacer olvidada.
+//
+// 🔴 POR QUÉ 409 Y NO 200, que es donde estaba el riesgo real. El comentario
+// histórico de `services/moneyRail.js` argumentaba en contra de gatear los
+// webhooks: «son ENTRADA de hechos ya ocurridos afuera; rechazarlos perdería la
+// reconciliación de algo que ya pasó». Ese cuidado sigue siendo correcto, y por
+// eso NO se contesta 2xx: un 2xx le dice a Stripe «lo manejé» y el evento se
+// descarta. Un 409 es un no-2xx: Stripe lo reintenta según SU política —acotada
+// en el tiempo y no verificable desde este repo— en vez de darlo por manejado.
+// Se rechaza el procesamiento, no el hecho; qué hacer con un evento que insiste
+// bajo el modo apagado es decisión operativa, no de este archivo.
+//
+// Bajo el harness (`NODE_ENV=test` sin forzar nada) el modo es `sandbox` y esta
+// guarda deja pasar: las suites de webhooks siguen ejercitando su conducta real.
+router.use((req, res, next) => {
+  if (dineroHabilitado()) return next();
+  logger.warn('money_rail_disabled_webhook_reject', {
+    path: req.originalUrl, method: req.method, mode: modoVigente(),
+  });
+  return res.status(409).json({
+    received: false,
+    error: 'payments_disabled',
+    mode: modoVigente(),
+  });
+});
 
 const MAX_WEBHOOK_RETRIES = Number(process.env.WEBHOOK_MAX_RETRIES) || 10;
 const REPLAY_REQUIRED_EVENT_TYPES = new Set([

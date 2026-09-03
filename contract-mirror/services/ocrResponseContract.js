@@ -15,6 +15,10 @@ const OCR_ERROR_STATUS = Object.freeze({
   invalid_multipart: 400,
   image_too_large: 413,
   unsupported_image_type_for_provider: 415,
+  // C6 · cuota diaria del OCR real agotada. 429 y no 503: el servicio está
+  // sano, lo que se acabó es el techo del día. El body no lleva contador,
+  // restante, fecha ni identificador — sólo el código, como todos los demás.
+  ocr_daily_quota_exhausted: 429,
 });
 
 const OCR_ITEM_FIELDS = Object.freeze([
