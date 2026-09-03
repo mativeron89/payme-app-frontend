@@ -13,11 +13,37 @@ desde `src/` y nunca se corrige a mano.
 - Commit del que se tomó el inventario autoritativo:
   **`9c5a7b1409ccbac65cdb757c91c3daff5d100fac`**.
   Como siempre, el inventario declara el commit del CONTENIDO, no su propio commit.
+  ⚠️ **Este segundo hash es una MEDICIÓN FECHADA**, no una constante: era el
+  `origin/main` del dueño el **2026-09-03**, y avanza cuando el dueño publica.
+  **Ningún gate lo asevera, a propósito.** `contractMirror.test.ts` exige que el
+  PRIMER hash de esta sección sea el `commit` del inventario y que haya al menos
+  dos; el valor del segundo queda sin afirmar. Atarlo a una lectura viva pondría
+  el test en rojo cada vez que el dueño pushee —el gate que grita siempre, que es
+  justo lo que este script evita separando vigencia de paridad—, y atarlo a una
+  constante escrita a mano no aseveraría nada. Lo que necesita es fecha.
 
 🔴 **Y acá esos dos no son el mismo, así que la distinción deja de ser teórica.**
 `--paridad` compara contra el commit que el inventario DECLARA —`940cc49e…`—, no
-contra aquel donde el inventario vive. Pinear `9c5a7b14…` daría `NO CERTIFICADO`
-con los bytes correctos, que es la forma más confusa de fallar.
+contra aquel donde el inventario vive: por eso el campo `commit` se copia del
+inventario del dueño y no se reemplaza por el commit donde vino.
+
+⚠️ **Corrección de una afirmación anterior, que estaba mal dos veces.** Este
+párrafo decía que pinear `9c5a7b14…` daría `NO CERTIFICADO` con los bytes
+correctos. Falso:
+
+- **No daría `NO CERTIFICADO`.** Ese es `EXIT_NO_CERTIFICADO` = 2 y el script lo
+  reserva para inventario ausente, ilegible o mal formado, repo sin git, commit
+  inexistente y modo desconocido. Un sha256 que no coincide no sale por ahí: se
+  acumula en `problemas` y sale por `EXIT_DESVIO` = 1. Son estados distintos con
+  nombres distintos, y confundirlos es justo lo que el script separa.
+- **Ni siquiera fallaría.** Los 107 blobs son **idénticos** en `940cc49e…` y en
+  `9c5a7b14…` —medido, ver la deriva de más abajo—, así que un inventario que
+  declarara `9c5a7b14…` encontraría cada `origen` con el sha256 declarado y daría
+  **OK 107, exit 0**.
+
+Lo que sí es cierto y motiva la regla: el inventario declara el commit del
+CONTENIDO, y esa disciplina vale **aunque en este corte particular las dos
+elecciones den verde**. Se sostiene por procedencia, no porque el gate la castigue.
 
 ✅ **El pin ya NO es provisional en el sentido que tenía el refresh anterior.**
 Medido acá: **los dos commits están publicados** —`git branch -r --contains` los
@@ -54,14 +80,44 @@ versiones **distintas**, así que esa allowlist tiene que AGREGAR, no reemplazar
 **`--paridad` es el assert de drift**: compara contra el commit que el inventario
 declara, o sea contra el pin exacto.
 
-⚠️ **`--vigencia` sale en rojo, y esta vez su mensaje SÍ describe el caso — que es
-lo contrario del refresh anterior.** Antes el rojo significaba que el pin iba
-*adelante* de `main` del dueño; ahora significa lo que el script dice: **la fuente
-avanzó**. El `HEAD` de `main` del dueño es `9c5a7b14…` y difiere del contenido
-pineado `940cc49e…` en **16 archivos**, medido. Es esperable y no es un desvío del
-espejo: el dueño publicó un inventario que declara contenido anterior a su propio
-`HEAD`. Por eso el PASS de este tramo es **integridad + paridad**, y `--vigencia`
-se declara sin condicionar.
+⚠️ **`--vigencia` sale en rojo por el MISMO motivo que el refresh anterior: el pin
+va ADELANTE del checkout local del hermano.**
+
+🔴 **CORRECCIÓN.** Una versión anterior de este párrafo decía que esta vez era «lo
+contrario» y que **la fuente avanzó**, afirmando que el `HEAD` de `main` del dueño
+—`9c5a7b14…`— difería del pin en **16 archivos**. El 16 estaba bien medido, pero
+**no era una medición contra `9c5a7b14…`**, y la conclusión quedó invertida.
+
+**Qué compara `--vigencia`, exactamente.** `verificarVigencia` lee
+`blobEn('HEAD', …)`: el `HEAD` **checked-out** del directorio al que apunte
+`PAYME_APP_BACKEND_DIR` —la copia de trabajo del hermano en esta máquina—, **no**
+su `origin/main`. Hoy ese checkout está en
+`4b6a9f55cc30126d36bbc66bd88b9ba890146fd5`, que es **ancestro** del pin y está
+22 commits detrás de él.
+
+**Las dos derivas, sobre los 107 orígenes del inventario, cada una con su comando:**
+
+```
+git -C <app-backend> diff --name-only 940cc49e…5069d8fd0 9c5a7b14…3daff5d100fac -- <los 107>   →   0
+git -C <app-backend> diff --name-only 940cc49e…5069d8fd0 4b6a9f55…b9ba890146fd5 -- <los 107>   →  16
+```
+
+**Contra lo que el dueño publicó, la deriva del espejo es CERO.** Los tres commits
+que separan el pin de `origin/main` —`0537e83`, `3028b24` y `9c5a7b14`— tocan
+`CHANGELOG_v2.90.0.md`, `contract/mirror-inventory.json` y
+`tests/legal-bootstrap.test.js`: **ninguno de los 107**. Los 16 del segundo
+comando son la distancia contra el checkout viejo, no contra la fuente publicada.
+
+📌 **Por eso la deriva se declara con dos sha explícitos y nunca con `HEAD`.** Un
+número contra `HEAD` depende de en qué commit tenga parada su copia el que mide, y
+este repo hermano tiene worktrees de varias sesiones que se mueven sin aviso. Con
+los dos sha escritos, cualquiera lo re-corre y obtiene lo mismo. **Y por la misma
+razón no se mide apuntando `PAYME_APP_BACKEND_DIR` al worktree de otra sesión**
+aunque esté parado en el commit conveniente: un punto de referencia que un tercero
+puede mover no es evidencia.
+
+Por eso el PASS de este tramo es **integridad + paridad**, y `--vigencia` se
+declara con su rojo, sin condicionar.
 
 ### Refresh anterior · 2026-09-02 (mirror 107 owner-first · C4-A v2.85.0)
 

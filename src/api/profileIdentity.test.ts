@@ -66,6 +66,32 @@ const PROFILE_TEST_ONLY = {
   notice_version: 'test-only',
 };
 
+/**
+ * 🔴 **NEAR-MISS: comparten prefijo con una versión presentable y aun así NO se
+ * presentan.** Son los únicos negativos que distinguen la FORMA de la
+ * comparación, y por eso existen.
+ *
+ * Todos los demás negativos —`2.2.0`, `2.5.0`, `test-only`, `''`— están LEJOS de
+ * la allowlist: con ellos, `presentableVersions(testSeam).has(noticeVersion)` y
+ * un `some(v => noticeVersion.startsWith(v))` dan **exactamente el mismo
+ * resultado** en todos los casos, y el segundo habilitaría estas dos versiones
+ * que nadie aprobó. Se midió: sin estos fixtures el mutante de prefijo sobrevive
+ * con la suite entera en verde.
+ *
+ * ⚠️ Elegí los negativos pensando en el DOMINIO —qué versiones publica el dueño—
+ * cuando la pregunta era sobre el MECANISMO: qué strings rompen esta manera de
+ * comparar.
+ */
+const PROFILE_NEAR_MISS_LARGA = {
+  ...PROFILE_ON,
+  notice_version: '2.4.10',
+};
+
+const PROFILE_NEAR_MISS_SUFIJO = {
+  ...PROFILE_ON,
+  notice_version: '2.4.1-rc',
+};
+
 const SHORTFALL_ON = {
   supported: true,
   enabled: true,
@@ -160,8 +186,10 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
    * 🔴 **El lector de shortfall tiene `it` propio, y sin esto NO estaba
    * vigilado — es la SEGUNDA vez que hace falta escribirlo.**
    *
-   * Los dos lectores consultan el MISMO `presentableVersions`
-   * (`privateFeatures.ts:96` y `:138`), así que un solo mutante —sacar una
+   * Los dos lectores consultan el MISMO `presentableVersions` —los dos hacen
+   * `presentableVersions(testSeam).has(noticeVersion)`, y se citan por ese
+   * símbolo y no por número de línea, que se corre con cada edición de este
+   * archivo—, así que un solo mutante —sacar una
    * versión de la Set— los rompe a los dos. Pero mientras sus aserciones vivían
    * en el mismo `it`, vitest cortaba en la PRIMERA, y la primera era siempre la
    * de perfil: **el lector de `settlement_shortfall_detail` no se observaba
@@ -183,6 +211,33 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
     expect(readShortfallDetailCapability(config(PROFILE_ON, {
       ...SHORTFALL_ON, notice_version: '2.5.0',
     }))).toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.5.0' });
+  });
+
+  /**
+   * 🔴 **Los near-miss van en UN `it` POR LECTOR, y esa separación es la
+   * lección de la vuelta anterior.**
+   *
+   * Vitest corta el `it` en la PRIMERA aserción que falla. Con los dos lectores
+   * en el mismo `it`, el mutante de prefijo moriría en la aserción de perfil y
+   * **el lector de `settlement_shortfall_detail` no se observaría nunca** — que
+   * es exactamente el hueco que hubo que escribir dos veces más arriba. Separados,
+   * el mutante pone **dos** tests en rojo, uno por lector, y la atribución es
+   * directa.
+   */
+  it('🔴 perfil: una versión que sólo comparte PREFIJO con la presentable no se presenta', () => {
+    expect(readProfileIdentityCapability(config(PROFILE_NEAR_MISS_LARGA)))
+      .toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.4.10' });
+    expect(readProfileIdentityCapability(config(PROFILE_NEAR_MISS_SUFIJO)))
+      .toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.4.1-rc' });
+  });
+
+  it('🔴 faltante: una versión que sólo comparte PREFIJO con la presentable no se presenta', () => {
+    expect(readShortfallDetailCapability(config(PROFILE_ON, {
+      ...SHORTFALL_ON, notice_version: '2.4.10',
+    }))).toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.4.10' });
+    expect(readShortfallDetailCapability(config(PROFILE_ON, {
+      ...SHORTFALL_ON, notice_version: '2.3.0-rc',
+    }))).toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.3.0-rc' });
   });
 
   /**

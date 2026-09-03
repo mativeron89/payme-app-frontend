@@ -11,6 +11,98 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.1 — La procedencia decía lo contrario de lo que medía, y un mutante de prefijo seguía vivo (2026-09-03)
+
+Orden `AF-STAGE1-PROVENANCE-PROSE-AND-NEAR-MISS-FIXTURES-01-CLAUDE`, base `27582708…`.
+**Sin push, sin deploy, sin proveedor, sin DB y sin secreto.** Sucesor único de dos
+hallazgos: uno sobre `6d702b87` y uno sobre `27582708`. Van juntos en un commit para no
+sumar dos SHAs más a una cadena que ya tiene 15 sin publicar.
+
+### 🔴 El README de procedencia afirmaba una deriva contra una ref que el gate no lee
+
+`6d702b87` publicó, en `contract-mirror/README.md` y en su mensaje de commit:
+
+> «El `HEAD` de `main` del dueño es `9c5a7b14…` y difiere del contenido pineado
+> `940cc49e…` en **16 archivos**, medido.»
+
+**El 16 estaba bien medido y no era una medición de eso.** `verificarVigencia`
+(`scripts/verificar-mirror.mjs`) lee `blobEn('HEAD', …)`: el `HEAD` **checked-out** del
+hermano, no su `origin/main`.
+
+```
+checkout del hermano   4b6a9f55cc30126d36bbc66bd88b9ba890146fd5   ← lo que lee --vigencia
+origin/main            9c5a7b1409ccbac65cdb757c91c3daff5d100fac
+topología              4b6a9f55 --22 commits--> 940cc49e --3 commits--> 9c5a7b14
+
+deriva sobre los 107 orígenes del inventario:
+  940cc49e vs 9c5a7b14   →   0 archivos     ← contra lo PUBLICADO: cero
+  940cc49e vs 4b6a9f55   →  16 archivos     ← el número que se publicó
+```
+
+Los tres commits entre el pin y `origin/main` tocan `CHANGELOG_v2.90.0.md`,
+`contract/mirror-inventory.json` y `tests/legal-bootstrap.test.js` — **ninguno de los
+107**. O sea que el rojo de `--vigencia` es **el mismo caso que el refresh anterior**
+—el pin va adelante del checkout local—, y el README decía que era «lo contrario».
+
+**La deriva pasa a declararse con dos sha explícitos, nunca contra `HEAD`.** Un número
+contra `HEAD` depende de dónde tenga parada su copia el que mide, y este hermano tiene
+worktrees de varias sesiones. Por lo mismo **no se mide apuntando `PAYME_APP_BACKEND_DIR`
+al worktree de otra sesión** aunque esté en el commit conveniente: un punto de
+referencia que un tercero puede mover no es evidencia.
+
+**Segunda corrección en el mismo archivo:** decía que pinear `9c5a7b14…` daría
+`NO CERTIFICADO` con los bytes correctos. Mal dos veces. `NO CERTIFICADO` es
+`EXIT_NO_CERTIFICADO` = 2 y está reservado a inventario ausente/ilegible/mal formado,
+repo sin git, commit inexistente y modo desconocido; un sha256 que no coincide sale por
+`EXIT_DESVIO` = 1. Y ni siquiera fallaría: los 107 blobs son idénticos en ambos commits,
+así que daría **OK 107, exit 0**.
+
+⚠️ **El mensaje de commit de `6d702b87` NO se toca: queda como historia.** No se
+reescribe historia en este repo, y un mensaje corregido a posteriori falsifica lo que
+dijo en su momento. **Este CHANGELOG es donde queda declarado**, que es lo que lee el
+que llegue en tres semanas.
+
+📌 **Anotado para una orden futura, fuera de este scope:** el mensaje literal de
+`scripts/verificar-mirror.mjs` (y el test que lo fija) afirma una dirección de deriva
+que el script no mide — dice que la fuente avanzó cuando sólo comprobó que el blob
+difiere del checkout. Es preexistente y no se toca acá.
+
+### 🔴 Un mutante de prefijo sobrevivía a los 39 tests
+
+Sobre `27582708`, reemplazar el predicado de los dos lectores por
+`some(v => noticeVersion.startsWith(v))` deja la suite **entera en verde**.
+
+**La causa no era una guarda faltante: era el conjunto de negativos.** Los que había
+—`null`, `''`, `'2.5.0'`, `'2.2.0'`, `'test-only'`— están todos LEJOS de la allowlist.
+Ninguno es near-miss, y **un negativo lejano no distingue igualdad de prefijo**. Se
+agregan `2.4.10`, `2.4.1-rc` y `2.3.0-rc`, que sí lo hacen: con la comparación por
+prefijo quedarían presentadas dos versiones que nadie aprobó.
+
+**Van en un `it` por lector, y la separación es la lección de la vuelta anterior:**
+vitest corta en la primera aserción que falla, así que con los dos lectores en un mismo
+`it` el mutante moriría en el de perfil y el de `settlement_shortfall_detail` no se
+observaría nunca — el mismo hueco que ya hubo que escribir dos veces. Separados, el
+mutante pone **dos** tests en rojo, uno por lector.
+
+⚠️ **El código de `privateFeatures.ts` no se toca: el `.has()` ya era correcto.** El
+defecto era del fixture, y el archivo queda **fuera del scope de esta orden** a pedido
+propio: no se edita un gating de capabilities sin necesidad.
+
+### Citas por símbolo, no por línea
+
+`0.161.0` y el docblock del test citaban `privateFeatures.ts:96` y `:138`; las líneas
+reales en el SHA entregado eran `:109` y `:151` — **el propio bloque de ese commit las
+había corrido**. Renumerarlas hoy garantizaba que volvieran a quedar mal al agregar los
+fixtures de esta entrada, así que pasan a citarse por el símbolo
+`presentableVersions(testSeam).has(noticeVersion)`.
+
+### Lo que se auditó y NO se tocó
+
+El resto del README de procedencia reproduce: los **siete** archivos que cambian contra
+el corte anterior, **cero** nuevos, **cero** que salen y **cero** renombrados. Medido por
+dos vías independientes que coinciden exacto — `git diff --name-only 1851acbb 940cc49e`
+sobre los 107, y comparación de sha del inventario anterior contra el actual.
+
 ## 0.161.0 — El aviso 2.4.1 queda presentado, y las dos capabilities no van a la par (2026-09-03)
 
 Orden `AF-STAGE1-PRESENT-NOTICE-2.4.1-ADD-NOT-REPLACE-01-CLAUDE`, base `6d702b87…`.
@@ -26,7 +118,11 @@ services/shortfallDetails.js:21  notice_version: '2.3.0'
 ```
 
 **Las dos capabilities llevan versiones distintas, y este front tiene UNA sola
-allowlist que leen las dos** (`privateFeatures.ts:96` y `:138`). Por eso la Set
+allowlist que leen las dos** —las dos hacen
+`presentableVersions(testSeam).has(noticeVersion)`; **acá decía `privateFeatures.ts:96`
+y `:138`, que ya era falso al escribirse**: el propio bloque de este commit las había
+corrido a `:109` y `:151`. Corregido en `0.161.1` citando el símbolo, que no se
+mueve. Por eso la Set
 pasa a `['2.3.0', '2.4.1']`: **reemplazar apagaría `settlement_shortfall_detail`**
 —el detalle de faltante en Avisos y sus dos métodos de fachada— sin que nadie lo
 pidiera. Conservar 2.3.0 protege además del rollback del emisor.
