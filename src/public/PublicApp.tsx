@@ -31,7 +31,7 @@ import type { RutaPublica } from './publicRoute';
  *
  * 🔴 `rel="noreferrer"` es defensa en profundidad sobre el pathname que lleva
  * el `confirmation_code`. La cabecera `Referrer-Policy: no-referrer` de
- * `vercel.json` ya debería cubrirlo, **pero esa cabecera la sirve el edge y
+ * `vercel.ts` ya debería cubrirlo, **pero esa cabecera la sirve el edge y
  * este repo sólo puede probar que está configurada**. El atributo viaja en el
  * documento: si la cabecera no llegara —otro proyecto, otro Root Directory, un
  * proxy—, el enlace sigue sin filtrar la URL de origen.

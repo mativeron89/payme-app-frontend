@@ -134,7 +134,7 @@ jobs:
       # Pages se plantaba y Vercel publicaba igual: el único gate que había
       # protegía la copia que nadie visita.
       #
-      # Ahora `vercel.json` apaga el despliegue automático de `main` y la
+      # Ahora `vercel.ts` apaga el despliegue automático de `main` y la
       # publicación pasa por acá. El porqué completo, y qué NO cubre, en
       # `docs/DESPLIEGUE_GATEADO.md`.
       #

@@ -24,8 +24,9 @@ cuando se escribió (`dbf2b2e`, 2026-08-07) y hoy es falsa dos veces:
 de publicación productiva; no a un sandbox.** El 2xx del hook todavía no
 acredita que el build remoto terminara ni qué bytes quedaron servidos.
 
-⚠️ **Qué NO acredita eso.** El repo sí contiene `vercel.json` y el workflow sí
-dispara los hooks, pero ninguno de los dos prueba Root Directory, comandos,
+⚠️ **Qué NO acredita eso.** El repo sí contiene su config de Vercel —hoy
+`vercel.ts`— y el workflow sí dispara los hooks, pero ninguno de los dos prueba
+Root Directory, comandos,
 output ni bytes efectivos de los proyectos remotos. El hook acredita que se
 aceptó un disparo; no qué terminó sirviendo.
 

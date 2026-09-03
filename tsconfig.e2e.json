@@ -30,6 +30,6 @@
     "e2e/**/*.ts",
     "playwright.config.ts",
     "vite.config.ts",
-    "vite.landing.config.ts"
+    "vite.landing.config.ts", "vercel.ts"
   ]
 }

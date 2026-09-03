@@ -1,11 +1,19 @@
-# Por qué `vercel.json` apaga el despliegue automático
+# Por qué `vercel.ts` apaga el despliegue automático
 
-**No lo enciendas de vuelta sin leer esto.** El archivo dice
-`"deploymentEnabled": { "main": false }` y no lleva explicación adentro porque
-`vercel.json` es JSON estricto: una clave que Vercel no reconozca puede
-invalidar la configuración de despliegue entera. **El porqué vive acá, y hay una
-guarda que se pone roja si alguien lo flipea** —`scripts/despliegue.test.ts`—,
-que es más fuerte que un comentario: un comentario no se pone rojo.
+**No lo enciendas de vuelta sin leer esto.** El archivo declara
+`git: { deploymentEnabled: { main: false } }` como **primera propiedad y fuera
+de toda condición**. Hay una guarda que se pone roja si alguien lo flipea
+—`scripts/despliegue.test.ts`—, que es más fuerte que un comentario: un
+comentario no se pone rojo.
+
+🔴 **Antes esto vivía en `vercel.json` y después en `vercel.mjs`, y las dos
+etapas dejaron lecciones.** El JSON no admitía explicación adentro (una clave
+desconocida puede invalidar la configuración entera) ni podía distinguir App de
+Landing. El `.mjs` sí distinguía, pero **hacía `throw` antes de exportar** si
+`PAYME_VERCEL_ARTIFACT` no estaba, así que un binding ausente en el panel de
+Vercel se llevaba puesto el candado: fallaba **abierto** justo donde no debía.
+Hoy el artefacto gobierna **sólo** rutas y cabeceras, y un valor desconocido da
+listas vacías —lo mismo que Landing— sin tocar el candado.
 
 ## El defecto que lo motivó · medido el 2026-08-10
 
@@ -31,7 +39,7 @@ O sea: el dominio de Mati no tenía ninguna compuerta de calidad.
 ## Cómo queda
 
 ```
-1 · vercel.json apaga el despliegue automático de `main`
+1 · vercel.ts apaga el despliegue automático de `main`
 2 · ci.yml, al final y sólo si TODO pasó, llama al Deploy Hook de cada proyecto
 ```
 
@@ -41,14 +49,14 @@ estaba publicada sin abrir el panel de Vercel.
 
 ## 🔴 Dos proyectos, un solo archivo
 
-`payme-app` y `payme-landing` leen **este mismo repo**. Un único `vercel.json`
+`payme-app` y `payme-landing` leen **este mismo repo**. Un único `vercel.ts`
 en la raíz los apaga a los dos **si los dos tienen la raíz del repo como Root
 Directory** — que es lo esperable, porque los dos corren `npm run build …` desde
 acá.
 
 ⚠️ **Eso NO está verificado desde el repo y no se puede verificar desde acá.**
-Si algún proyecto tuviera otro Root Directory, buscaría su `vercel.json` en esa
-subcarpeta, no encontraría éste, y **seguiría publicando solo**.
+Si algún proyecto tuviera otro Root Directory, buscaría su config en esa
+subcarpeta, no encontraría ésta, y **seguiría publicando solo**.
 
 **Se verifica observando el primer push con el gate puesto:** ninguno de los dos
 proyectos debe desplegar por su cuenta, y los dos deben desplegar recién cuando
@@ -198,7 +206,7 @@ La primera fase queda deliberadamente separada del release automático:
 Hasta `0.152.0` los dos artefactos escribían el mismo `{"version":3}`. Eso
 alcanzaba mientras ningún origen tuviera rutas propias, y dejó de alcanzar con
 las dos superficies públicas Meta: en el carril `--prebuilt` Vercel **no lee
-`vercel.json` ni `vercel.mjs`**, así que un config compartido publicaba las
+`vercel.json` ni el config programático de la raíz**, así que un config compartido publicaba las
 rutas en ningún lado o en los dos, según qué se escribiera.
 
 | Artefacto | `config.json` v3 | Consecuencia |

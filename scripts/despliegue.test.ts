@@ -44,6 +44,39 @@ import { leerWorkflow, pasosDeWorkflow, pasosGarantizadosAntesDe } from './yamlW
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(AQUI, '..');
+
+/**
+ * Evalúa `vercel.ts` como ESM real, con el entorno que se le pase.
+ *
+ * 🔴 **Copia los bytes a un temporal `.mjs` a propósito, y no es un rodeo.**
+ * `node` no importa un `.ts` sin loader, y meter uno traería una dependencia
+ * que esta orden no autoriza. Copiar los bytes exactos evalúa **el archivo
+ * real** bajo semántica ESM y, de paso, deja acreditado que `vercel.ts` sigue
+ * siendo TypeScript válido **y** ESM plano: si alguien le mete sintaxis
+ * sólo-TS, esto se cae. Como no sabemos si Vercel lo compila o lo evalúa, esa
+ * doble validez es una propiedad que conviene tener vigilada.
+ */
+function evaluarConfig(env: NodeJS.ProcessEnv): {
+  readonly status: number | null;
+  readonly config: Record<string, unknown> | null;
+  readonly salida: string;
+} {
+  const temporal = mkdtempSync(join(tmpdir(), 'payme-vercel-cfg-'));
+  const modulo = join(temporal, 'vercel.mjs');
+  writeFileSync(modulo, readFileSync(join(RAIZ, 'vercel.ts'), 'utf8'));
+  const script = `import(${JSON.stringify(`file://${modulo}`)})`
+    + '.then(m=>process.stdout.write(JSON.stringify(m.config)))'
+    + '.catch(e=>{process.stderr.write(String(e.message));process.exitCode=1})';
+  const r = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+    encoding: 'utf8', env,
+  });
+  rmSync(temporal, { recursive: true, force: true });
+  return {
+    status: r.status,
+    config: r.status === 0 ? (JSON.parse(r.stdout) as Record<string, unknown>) : null,
+    salida: `${r.stdout}${r.stderr}`,
+  };
+}
 const SCRIPT = join(AQUI, 'publicar-vercel.sh');
 
 /**
@@ -464,11 +497,34 @@ describe('EJECUTANDO el `run:` del workflow · con curl sustituido', () => {
   });
 });
 
-describe('vercel.mjs · el despliegue automático sigue apagado', () => {
+describe('vercel.ts · el despliegue automático sigue apagado', () => {
   it('🔴 `main` NO despliega solo · si alguien lo enciende, esto cae', () => {
-    const fuente = readFileSync(join(RAIZ, 'vercel.mjs'), 'utf8');
+    const fuente = readFileSync(join(RAIZ, 'vercel.ts'), 'utf8');
     expect(fuente).toContain('main: false');
     expect(fuente).not.toContain('main: true');
+  });
+
+  /**
+   * 🔴 **El candado se afirma EJECUTADO y sin la variable de entorno, no sólo
+   * por su texto.**
+   *
+   * El `toContain` de arriba no distingue un candado vivo de uno que quedó
+   * detrás de una condición que nunca se cumple — que es exactamente el defecto
+   * que este commit corrige: en `vercel.mjs` el `throw` por
+   * `PAYME_VERCEL_ARTIFACT` corría ANTES del `export`, así que un binding
+   * ausente en el panel de Vercel se llevaba puesto el candado entero, en
+   * silencio y del lado peligroso.
+   *
+   * Acá se evalúa el módulo **con la variable borrada del entorno** y se exige
+   * que el candado salga igual.
+   */
+  it('🔴 con la variable AUSENTE, el candado igual se emite', () => {
+    const env = { ...process.env };
+    delete env['PAYME_VERCEL_ARTIFACT'];
+    const r = evaluarConfig(env);
+    expect(r.status, r.salida).toBe(0);
+    expect(r.config!['git']).toEqual({ deploymentEnabled: { main: false } });
+    expect(r.config!['rewrites'], 'un artefacto ausente recibió rutas').toEqual([]);
   });
 
   /**
@@ -530,17 +586,13 @@ describe('vercel.mjs · el despliegue automático sigue apagado', () => {
  * configuración del repo. Las cabeceras efectivamente servidas, y en cuál de
  * los dos proyectos, son gate externo previo a producción.
  */
-describe('vercel.mjs · las dos rutas limpias públicas', () => {
+describe('vercel.ts · las dos rutas limpias públicas', () => {
   interface Cabecera { readonly key: string; readonly value: string }
   interface Regla { readonly source: string; readonly headers?: readonly Cabecera[] }
 
-  const proceso = spawnSync(
-    process.execPath,
-    ['--input-type=module', '--eval', "import('./vercel.mjs').then(m=>process.stdout.write(JSON.stringify(m.config)))"],
-    { cwd: RAIZ, encoding: 'utf8', env: { ...process.env, PAYME_VERCEL_ARTIFACT: 'app' } },
-  );
-  if (proceso.status !== 0) throw new Error(proceso.stderr);
-  const V = JSON.parse(proceso.stdout) as {
+  const proceso = evaluarConfig({ ...process.env, PAYME_VERCEL_ARTIFACT: 'app' });
+  if (proceso.status !== 0) throw new Error(proceso.salida);
+  const V = proceso.config! as {
     rewrites?: ReadonlyArray<{ source: string; destination: string }>;
     headers?: readonly Regla[];
   };

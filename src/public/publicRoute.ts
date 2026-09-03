@@ -18,7 +18,7 @@
  * dejar que montara el shell autenticado. **Sería el peor destino posible**: el
  * código sigue en la URL, y el shell autenticado sí hace requests —config,
  * sesión— cuyo `Referer` arrastraría ese pathname a otro origen. Las cabeceras
- * `Referrer-Policy: no-referrer` de `vercel.json` están puestas sobre estas dos
+ * `Referrer-Policy: no-referrer` de `vercel.ts` están puestas sobre estas dos
  * rutas, no sobre la app entera.
  *
  * Por eso **todo** `/facebook-data-deletion/…` es superficie pública, y la

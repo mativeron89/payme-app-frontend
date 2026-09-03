@@ -11,6 +11,77 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.160.0 — El candado de despliegue sale de detrás del `throw` (2026-09-03)
+
+Orden `AF-STAGE1-DEPLOY-LOCK-VERCEL-TS-01-CLAUDE`, base F2 `8d161acd…`.
+**Sin push, sin deploy, sin proveedor, sin DB y sin secreto.**
+
+📌 **`0.159.0` no está libre: quedó consumida por un objeto descartado.** Fue el
+commit del aviso 2.4.0, rechazado por owner-first —el lease nació antes de que
+el emisor acreditara—. El objeto existe, sin rama, y puede rehacerse; por eso la
+versión no se reutiliza.
+
+### 🔴 El defecto: el candado vivía detrás del gate del artefacto, y eso es fail-OPEN
+
+`vercel.mjs` hacía `throw` cuando `PAYME_VERCEL_ARTIFACT` no era exactamente
+`app` o `landing`, **antes** del `export const config`. O sea que una variable
+ausente en el panel de Vercel no vaciaba las rutas: **se llevaba puesta la
+configuración entera, candado incluido.**
+
+Las dos cosas que compartían ese gate fallan en direcciones opuestas:
+
+| si la config no se emite | consecuencia | dirección |
+|---|---|---|
+| rutas y cabeceras por artefacto | las dos rutas Meta no nacen ⇒ 404 | **visible, seguro** |
+| `deploymentEnabled.main = false` | el candado no llega ⇒ **`main` despliega solo** | **silencioso, peligroso** |
+
+El `throw` fue diseñado para el aislamiento y para **ese** objetivo falla
+cerrado. Para el candado falla abierto. **Y el aislamiento no lo necesitaba:**
+un artefacto desconocido con listas vacías da exactamente lo mismo que
+`landing`. Contra el único caso que de verdad filtra —`landing` bindeado en el
+proyecto App, un valor válido pero equivocado— el `throw` nunca protegió.
+
+Ahora el candado es la **primera propiedad y no depende de nada**; el artefacto
+gobierna sólo `rewrites` y `headers`, y vacía en vez de lanzar.
+
+### El renombre a `vercel.ts`, y por qué el nombre no era el defecto principal
+
+La documentación de Vercel acredita la configuración en código como
+**`vercel.ts`**; `vercel.mjs` no aparece. Con lo cual el riesgo dejaba de ser
+hipotético: un archivo que Vercel no lee es un candado que no existe, y se
+descubriría **con el push**, publicando sin gate.
+
+Se renombró, y hay dos costos que conviene que estén escritos:
+
+1. **Ningún `tsconfig` incluía un `vercel.ts` raíz.** `tsconfig.json` toma
+   `src`; `node`, los tests de `scripts` y `landing`; `e2e` lista los configs
+   raíz uno por uno. Sin agregarlo a `tsconfig.e2e.json`, el archivo quedaba
+   **typechequeado por nadie**, que es peor que dejarlo `.mjs`.
+2. **El archivo NO lleva anotaciones de tipo, a propósito.** Es TypeScript
+   válido y también ESM plano, así que evalúa lo compile Vercel o no. Los tests
+   copian sus bytes exactos a un temporal `.mjs` y lo corren con `node` crudo:
+   si alguien introduce sintaxis sólo-TS, esa evaluación se cae. Evita además
+   traer un loader o una dependencia que esta orden no autorizaba.
+
+**No entró ninguna dependencia:** el archivo no importa `@vercel/config` ni
+nada. Que el tipado sea obligatorio del lado de Vercel queda `NO_ACREDITADO`.
+
+### Lo que este commit NO acredita, y sigue siendo acción humana
+
+Tres deudas externas, ya listadas en `docs/HARDENING_LANDING_LOCAL.md`, que
+ningún test local puede cerrar porque viven en el panel del proveedor:
+
+1. **Root Directory** de `payme-app` y `payme-landing` — si no es la raíz, la
+   config no se encuentra y el candado no se aplica;
+2. **binding `PAYME_VERCEL_ARTIFACT`** en Production y Preview, **en los dos**;
+3. **auto-deploy efectivo** de cada proyecto.
+
+Con el candado ya incondicional, (2) dejó de poder apagarlo — que era lo grave—,
+pero (1) y (3) siguen abiertas. **Se cierran mirando tres pantallas por proyecto
+en el panel de Vercel.** Hasta entonces el gate está *implementado, no
+acreditado*, y el primer push sigue siendo la primera observación.
+
+
 ## 0.158.0 — El corte lo declara el dueño, y la mesa puede nacer sin garantía (2026-09-02)
 
 Orden `APP-FE-FRIDAY-PUBLIC-NO-PAYMENTS-01-CLAUDE-F2`, baseline

@@ -91,7 +91,8 @@ readjudica cada deployment por ID, proyecto, target y estado `READY`.
 
 #### El aislamiento por proyecto también rige en el carril `--prebuilt` · 2026-08-30
 
-La excepción path-scoped de más abajo describe `vercel.json`/`vercel.mjs`, que
+La excepción path-scoped de más abajo describe `vercel.ts` (antes `vercel.json`
+y después `vercel.mjs`), que
 gobiernan el carril Git. **El carril `--prebuilt` no los lee**: ahí manda
 `.vercel/output/config.json`. Desde `0.153.0` ese config **se deriva del
 artefacto** — App lleva las dos rutas Meta con sus dos cabeceras; Landing
@@ -117,8 +118,9 @@ una promoción parcial.
 
 ## Inventario de headers · propuesta, no configuración servida
 
-La configuración de Vercel nace del módulo programático raíz `vercel.mjs`, pero
-falla cerrada por identidad de proyecto. Por eso **no se agregan headers
+La configuración de Vercel nace del módulo programático raíz `vercel.ts`, pero
+falla cerrada por identidad de proyecto **para las rutas**; el candado de
+despliegue NO depende de esa identidad. Por eso **no se agregan headers
 globales** ni reglas compartidas entre artefactos.
 
 | Header | Estado local | Evidencia pendiente |
@@ -136,10 +138,15 @@ headers estén servidos.
 
 ### Excepción aislada por proyecto · las dos rutas Meta (2026-08-29)
 
-Orden `APP-FE-META-PUBLIC-ROUTING-ISOLATION-03-CODEX`. `vercel.mjs` exige
+Orden `APP-FE-META-PUBLIC-ROUTING-ISOLATION-03-CODEX`. `vercel.ts` lee
 `PAYME_VERCEL_ARTIFACT` con valor exacto y sin default. `app` recibe las dos
-rutas; `landing` recibe listas vacías. Una variable ausente, vacía o distinta
-aborta la configuración antes de exportarla.
+rutas; `landing` recibe listas vacías.
+
+🔴 **Enmendado el 2026-09-03:** una variable ausente, vacía o distinta ya **no
+aborta la configuración**. Da listas vacías —lo mismo que `landing`, así que el
+aislamiento se conserva— y **emite el candado igual**. Abortar protegía las
+rutas y dejaba desprotegido el despliegue: sin config emitida,
+`deploymentEnabled` no llegaba y `main` volvía a publicarse solo.
 
 | Header | Estado local | Alcance |
 |---|---|---|
