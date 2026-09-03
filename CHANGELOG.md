@@ -51,9 +51,18 @@ documentación de Vercel acredita `vercel.ts` y que **`vercel.mjs` no aparece**,
 y de ahí que *«un archivo que Vercel no lee es un candado que no existe»*.
 **Era falso.** La guía oficial de configuración programática
 (`project-configuration/vercel-ts`) dice literalmente que también se puede usar
-`vercel.js`, `vercel.mjs`, `vercel.cjs` o `vercel.mts` — o sea que `.mjs`
-estaba tan acreditado como `.ts`, y el archivo anterior **sí** se leía. Lo citó
-el Auditor de Codex al frenar este candidato; yo no lo medí, ni antes ni ahora.
+`vercel.js`, `vercel.mjs`, `vercel.cjs` o `vercel.mts` — o sea que `.mjs` era
+un **nombre soportado**, tanto como `.ts`. Lo citó el Auditor de Codex al frenar
+este candidato; yo no lo medí, ni antes ni ahora.
+
+⚠️ **Y hasta ahí llega: soporte de formato NO es lectura efectiva.** Que cada
+uno de los dos proyectos haya **encontrado y leído** ese archivo sigue
+`NO_ACREDITADO` hasta observar su configuración remota — Root Directory y
+bindings, las deudas de más abajo—: con otro Root Directory, un nombre
+perfectamente soportado no se encuentra igual. Acá decía *«el archivo anterior
+**sí** se leía»*, que afirmaba justo eso y **contradecía este mismo documento**;
+lo frenó Codex. Es la misma clase que el párrafo de arriba: publicar como medido
+algo que no medí — esta vez sin ni siquiera un tercero de por medio.
 
 **El motivo real del cambio es el otro, y no se movió: el `throw` antes del
 `export`.** Un binding ausente en el panel de Vercel se llevaba puesta la
