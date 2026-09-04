@@ -11,6 +11,76 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.2 — Un fixture con forma de secreto puso el CI en rojo, y el deploy no salió (2026-09-03)
+
+Orden `AF-STAGE1-SECRET-AUDIT-SHAPE-FIXTURES-01-CLAUDE`, base `04e3f672…`.
+**Sin push, sin deploy, sin proveedor, sin DB y sin secreto.**
+
+### Qué pasó
+
+`04e3f672…` se pusheó a `main` el 2026-09-03 18:17 con autorización viva de Mati. El CI
+—run **33821180702**— falló a los 7 segundos en el job `build`, paso **«Auditar secretos del
+cambio»**, y por eso **el deploy nunca se disparó**: los Deploy Hooks del CI están condicionados a
+`success()`, así que producción se quedó en `d343e607…`. Medido: cero deployments nuevos en los dos
+proyectos de Vercel, y `app.paymemx.com/privacy` seguía en 404, que es la versión anterior.
+
+📌 **La compuerta funcionó, y conviene decirlo con precisión: lo que frenó la publicación fue el
+gate del CI, no el candado de Vercel.** El candado —`git.deploymentEnabled.main=false`— quedó
+acreditado sólo en su mitad negativa: **ningún proyecto desplegó por su cuenta al recibir el push**.
+Que los hooks publiquen cuando el CI pase **sigue sin acreditarse en vivo**.
+
+### Por qué falló · forma de secreto ≠ secreto
+
+`scripts/auditar-secretos.sh` audita **las líneas AGREGADAS** del diff `base..HEAD`, y el CI le pasa
+como base el `github.event.before` — esta vez `d343e607…`, o sea **los 16 commits juntos**. Marca
+toda línea donde un identificador terminado en `password`, `passwd`, `secret`, `token` o `api_key`
+va seguido de `:` o `=` y de un literal entrecomillado de **8 o más** caracteres. Es una regla de
+**forma**: no distingue —ni puede— un fixture inventado de una credencial real, y como el repo es
+público, falla del lado correcto. **Nada de lo marcado era un secreto.**
+
+Tres coincidencias de clave desnuda y una de clave citada:
+
+1. `src/api/moneyGuards.test.ts:247`, nacida en `8d161ac`. El literal pasa a uno de **menos de 8
+   caracteres**. La conducta probada no cambia: `moneyGuards.ts:153` decide por **presencia**
+   (`clientSecret !== undefined`), nunca por el valor.
+2. `src/screens/LoginScreen.test.tsx`, nacidas en `85bdab5`. El literal se **hoistea** a una
+   constante cuyo nombre no contiene ninguna de las palabras del patrón, y se usa en las **cuatro**
+   ocurrencias — sólo dos estaban en el diff; las otras dos no dispararon por casualidad y se
+   corrigen igual, porque entrarían en el diff siguiente.
+3. `contract-mirror/contract/social-auth-v1.json:51` — **NO SE TOCA.** Es espejo byte a byte del
+   dueño App Backend; lo verifiqué contra `9c5a7b14:contract/social-auth-v1.json` y es idéntico.
+   Corregirlo acá rompería el espejo, que es justo lo que el gate de contrato prohíbe. Corresponde
+   una orden al dueño. En el próximo push la base será `04e3f672…` y esa línea ya no estará en el
+   diff, así que no vuelve a disparar.
+
+### 🔴 El comentario que explicaba el arreglo reproducía el defecto
+
+La primera versión del docblock de `LoginScreen.test.tsx` **escribía el par clave-literal como
+ejemplo**, y con eso volvía a calzar el patrón por su cuenta: es una línea agregada como cualquier
+otra, y habría puesto el CI en rojo otra vez. **Lo cazó la medición de la clase, no la lectura.**
+El comentario ahora describe la forma sin instanciarla, y esta entrada también.
+
+### La clase, enumerada y no arreglada
+
+Esta orden corrige **sólo** (1) y (2) —las que están en el diff que el CI audita—. El resto queda
+declarado como **deuda enumerada**, con su comando:
+
+```
+git grep -inE '(^|[^A-Za-z0-9_'"'"'"-])[A-Za-z0-9_-]*(password|passwd|secret|token|api_?key)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{8,}' -- ':!scripts/auditar-secretos.sh'
+```
+
+En la base `04e3f672…` daba **52 líneas en 12 archivos**; con esta corrección quedan **47 en 11**:
+`http.session.test.ts` 15 · `moneyGuards.test.ts` 9 · `mockApi.ts` 6 · `storage.test.ts` 4 ·
+`invitationLink.test.ts` 4 · `index.contract-idempotency.test.ts` 3 · `walletVocabularyGuards.test.ts` 2 ·
+`invitationCustody.test.ts` 1 · `contractResponses.test.ts` 1 · `cardSetupAttempt.test.ts` 1 ·
+`scripts/auditarSecretos.test.ts` 1 — este último es el test **del propio gate** y su coincidencia
+es deliberada.
+
+⚠️ **Ninguna de esas 47 es un secreto**, y ninguna rompe el CI hoy porque no está en el diff. Pero
+**cualquier commit futuro que toque una de esas líneas vuelve a poner el CI en rojo**, y va a
+parecer un problema nuevo. Por eso se enumeran acá con el comando: la próxima vez que aparezca, esto
+es lo que hay que leer.
+
 ## 0.161.1 — La procedencia decía lo contrario de lo que medía, y un mutante de prefijo seguía vivo (2026-09-03)
 
 Orden `AF-STAGE1-PROVENANCE-PROSE-AND-NEAR-MISS-FIXTURES-01-CLAUDE`, base `27582708…`.

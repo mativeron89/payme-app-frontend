@@ -4,11 +4,37 @@ import { autoridadDeAlta, socialActionEligible } from './LoginScreen';
 
 const source = readFileSync(new URL('./LoginScreen.tsx', import.meta.url), 'utf8');
 
+/**
+ * 🔴 **El literal se hoistea, y el nombre de la constante importa.**
+ *
+ * `scripts/auditar-secretos.sh` marca toda línea AGREGADA donde un identificador
+ * que termina en `password|passwd|secret|token|api_key` va seguido de `:`/`=` y
+ * un literal entrecomillado de 8 o más caracteres. Es una regla de **forma**, no
+ * de contenido: no distingue —ni puede— un fixture inventado de una credencial
+ * real, y el repo es público, así que falla del lado correcto.
+ *
+ * Escrito inline, la clave y el literal entrecomillado quedaban pegados y el
+ * patrón calzaba cuatro veces. Con la constante calza cero: `token: INVITACION`
+ * no lleva comillas después del `:`, y `INVITACION` no contiene ninguna de las
+ * palabras que el patrón busca. **El valor y la conducta probada son
+ * exactamente los mismos.**
+ *
+ * 🔴 **Y este comentario NO reproduce la forma que describe, a propósito.** La
+ * primera versión sí lo hacía —escribía el par clave-literal como ejemplo— y
+ * habría vuelto a poner el gate en rojo por su cuenta: es una línea agregada
+ * como cualquier otra. Lo cazó la medición de la clase, no la lectura.
+ *
+ * ⚠️ No se renombra a algo evasivo a propósito: si algún día acá viviera una
+ * credencial de verdad, el gate tiene que verla. Lo que se corrige es que un
+ * fixture con forma de secreto haga rojo un gate que existe para otra cosa.
+ */
+const INVITACION = 'signup-token-aaaaaaaaaaaaaaaaaaaa';
+
 describe('LoginScreen · gates sociales owner-first', () => {
   it('login depende sólo de la acción exacta; registro exige autoridad, legal y nombres', () => {
     const base = {
       providerActionEnabled: true,
-      autoridad: { tipo: 'invitacion', token: 'signup-token-aaaaaaaaaaaaaaaaaaaa' } as const,
+      autoridad: { tipo: 'invitacion', token: INVITACION } as const,
       legalReady: true,
       firstName: 'Mati',
       lastName: 'Verón',
@@ -39,7 +65,7 @@ describe('LoginScreen · gates sociales owner-first', () => {
    * email queda ligada la cuenta.
    */
   it('la invitación gana sobre el alta pública, y sin ninguna de las dos no hay alta', () => {
-    const conToken = { status: 'available', token: 'signup-token-aaaaaaaaaaaaaaaaaaaa', custodied: true } as const;
+    const conToken = { status: 'available', token: INVITACION, custodied: true } as const;
     expect(autoridadDeAlta(conToken, true)).toEqual({ tipo: 'invitacion', token: conToken.token });
     expect(autoridadDeAlta(conToken, false)).toEqual({ tipo: 'invitacion', token: conToken.token });
     expect(autoridadDeAlta({ status: 'absent' }, true)).toEqual({ tipo: 'publica' });
@@ -64,7 +90,7 @@ describe('LoginScreen · gates sociales owner-first', () => {
       requiereInvitacion: false,
     } as const;
     const publica = { tipo: 'publica' } as const;
-    const invitacion = { tipo: 'invitacion', token: 'signup-token-aaaaaaaaaaaaaaaaaaaa' } as const;
+    const invitacion = { tipo: 'invitacion', token: INVITACION } as const;
 
     expect(socialActionEligible({ ...base, autoridad: publica, email: 'mati@payme.mx' })).toBe(true);
     expect(socialActionEligible({ ...base, autoridad: publica, email: '   ' })).toBe(false);
@@ -94,7 +120,7 @@ describe('LoginScreen · gates sociales owner-first', () => {
     expect(socialActionEligible({ ...base, autoridad: { tipo: 'publica' } })).toBe(false);
     expect(socialActionEligible({
       ...base,
-      autoridad: { tipo: 'invitacion', token: 'signup-token-aaaaaaaaaaaaaaaaaaaa' },
+      autoridad: { tipo: 'invitacion', token: INVITACION },
     })).toBe(true);
   });
 

@@ -244,7 +244,7 @@ describe('C3 · garantía `none`, y sólo en su combinación exacta', () => {
     // Sin garantía no hay hold: un secreto de 3DS o una cuenta conectada ahí
     // significan que el dueño hizo algo con dinero, y este camino promete que no.
     expect(() => createMesaResponse(
-      respuesta({ method: 'none', status: 'none', client_secret: 'pi_x_secret_y' }), base,
+      respuesta({ method: 'none', status: 'none', client_secret: 'pi_x_cs' }), base,
     )).toThrow();
     expect(() => createMesaResponse(
       respuesta({ method: 'none', status: 'none', connected_account_id: 'acct_123' }), base,
