@@ -11,6 +11,87 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.5 — La guarda anterior cerró la instancia, no la clase (2026-09-04)
+
+Orden `AF-STAGE1-ALIASES-VIGENCIA-HERMETIC-05-CLAUDE`, base `ca8fb983…`.
+**Sin push, sin deploy, sin proveedor, sin DB, sin secreto y sin red.** `0.161.4` queda intacta;
+acá se dice qué de ella afirmaba de más.
+
+### 🔴 Qué afirmaba de más `0.161.4`
+
+Aquella entrada presentó la comprobación del proyecto en disco como si cerrara el problema. **No lo
+cerraba.** La reauditoría independiente lo negó, y tiene razón en los dos puntos:
+
+1. **Un proyecto que SÍ existe, en una raíz sin dependencias, seguía saliendo afuera.** La guarda
+   miraba el `-p`, no la herramienta. El agujero no era «el tsconfig no existe» sino «el compilador
+   no está acá»; se arregló el síntoma que se había observado.
+2. **Vitest y Playwright quedaron declarados «guardados» por `enDisco.length === 0`, y eso era
+   confundir dos cosas.** Esa condición protege de *medir en vacío*; **no** protege la *frontera de
+   resolución*. Son dos afirmaciones distintas y `0.161.4` las trató como una.
+
+📌 **La forma del error es conocida en este repo y volvió a pasar: enumerar las formas prohibidas en
+vez de declarar la única permitida.** Una lista de lo prohibido falla abierta — alcanza con una forma
+que nadie nombró.
+
+### Lo que ahora cierra la clase
+
+Se declara **la única forma admitida** de llegar a una herramienta: un entrypoint dentro del
+`node_modules` de la raíz verificada, invocado por ruta absoluta con el Node que ya está corriendo.
+Si no está, **el gate falla antes de crear un solo proceso hijo**. No hay lista de formas prohibidas.
+
+```
+'npx' como string de código en aliasesLib.mjs   →  ninguno
+creadores de procesos en el archivo             →  3, los tres con process.execPath
+                                                   + entrypoint resuelto en node_modules
+```
+
+`process.execPath` y no el shim de `.bin`: ese shim es un script que **vuelve a resolver por su
+cuenta**, y dejaría dos resoluciones donde tiene que haber una.
+
+**La comprobación del proyecto se conserva** —un `-p` que apunta a un tsconfig inexistente es un
+error de configuración que conviene nombrar, y tiene su caso—, pero deja de presentarse como la
+guarda de hermeticidad, que es lo que `0.161.4` hacía.
+
+### Cómo se acredita, y por qué los negativos solos no alcanzaban
+
+Tres casos adversariales **separados**, uno por herramienta, cada uno con un `PATH` propio donde
+`npx`, `npm`, `yarn`, `pnpm` y `corepack` son scripts que registran su invocación. **Cero líneas en
+ese registro es la acreditación**, y no depende de tener red. El caso decisivo de TypeScript monta
+`package.json` y los cuatro `tsconfig` **reales** y **cero** `node_modules`: es el árbol exacto que
+la guarda anterior dejaba pasar.
+
+Más un **control positivo** que enlaza el `node_modules` real: sin él, los tres negativos los pasaría
+igual una guarda que dijera «no está» siempre. Medido con dos mutantes opuestos:
+
+| mutante | qué se pone rojo |
+|---|---|
+| resolver sin comprobar (a ciegas) | **los tres** adversariales, uno por herramienta |
+| resolver siempre a `null` | **sólo** el control positivo |
+
+Van en `it` separados porque en uno solo la primera aserción que falla esconde a las demás — hueco
+que este repo ya tuvo que escribir dos veces.
+
+### 🔴 `--vigencia` dejaba de medir y afirmaba una causa
+
+El mensaje decía **«es que la fuente avanzó»** ante cualquier desigualdad de bytes. Es falso en dos
+de los tres casos posibles, y no es teórico: en un refresh el `HEAD` inspeccionado estaba **22
+commits detrás** del pin —el pin iba adelante— y el gate anunciaba lo contrario. Esa causalidad se
+copió a un README de procedencia y hubo que corregirla en un commit aparte. **El gate afirmaba una
+dirección que nunca midió.**
+
+Ahora se mide con `merge-base --is-ancestor` y hay cuatro respuestas: HEAD desciende del pin, HEAD es
+ancestro del pin, divergen, o **indeterminada** —sin git, sin uno de los commits, o error—, y en ese
+último caso el diagnóstico sale **neutral, sin atribuir dirección**. Tres casos nuevos, uno por
+relación, y un mutante que repone el mensaje constante los pone rojos a los tres.
+
+Sobre el árbol real de hoy el gate dice lo que corresponde: *«el HEAD inspeccionado es ANCESTRO del
+commit pineado: el checkout está detrás del pin, no es que la fuente haya avanzado»*.
+
+### Fuera de esta orden
+
+La copy visible de `ocr_daily_quota_exhausted` espera ratificación, y las desviaciones históricas de
+scope ya tienen decisión tomada. Ninguna se toca acá.
+
 ## 0.161.4 — El gate de aliases salía a la red desde un directorio vacío (2026-09-03)
 
 Orden `AF-STAGE1-ALIASES-GATE-HERMETIC-TSCONFIG-GUARD-03-CLAUDE`, base `679525b5…`.

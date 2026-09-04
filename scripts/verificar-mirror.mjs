@@ -147,6 +147,67 @@ function gitDisponible() {
   return existsSync(join(FUENTE, '.git'));
 }
 
+/**
+ * 🔴 **RELACIÓN MEDIDA entre el pin y el `HEAD` inspeccionado, en vez de una
+ * causalidad inventada.**
+ *
+ * El mensaje anterior decía «es que la fuente avanzó» ante **cualquier**
+ * desigualdad de blobs. Eso es falso en dos de los tres casos posibles, y el
+ * repo ya se comió uno: durante un refresh el `HEAD` inspeccionado estaba 22
+ * commits DETRÁS del pin —el pin iba adelante— y el gate igual anunciaba que la
+ * fuente había avanzado. Un README de procedencia repitió esa causalidad y hubo
+ * que corregirlo en un commit aparte.
+ *
+ * Acá se mide con `merge-base --is-ancestor`, que es una pregunta que git sabe
+ * contestar, y se devuelve una de cuatro respuestas. `'indeterminada'` es una
+ * respuesta legítima —sin git, sin uno de los dos commits, o error— y en ese
+ * caso el diagnóstico sale **neutral**: no se afirma dirección.
+ */
+function relacionConHead(commitPin) {
+  if (!gitDisponible()) return 'indeterminada';
+  const esAncestro = (a, b) => {
+    try {
+      execFileSync('git', ['-C', FUENTE, 'merge-base', '--is-ancestor', a, b], { stdio: 'pipe' });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  let head;
+  try {
+    head = execFileSync('git', ['-C', FUENTE, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  } catch {
+    return 'indeterminada';
+  }
+  try {
+    execFileSync('git', ['-C', FUENTE, 'cat-file', '-e', `${commitPin}^{commit}`], { stdio: 'pipe' });
+  } catch {
+    return 'indeterminada';
+  }
+  if (head === commitPin) return 'mismo';
+  if (esAncestro(commitPin, head)) return 'head_adelante';
+  if (esAncestro(head, commitPin)) return 'head_atras';
+  return 'divergentes';
+}
+
+/** El diagnóstico que acompaña al rojo. Ninguna variante afirma una causa que no se midió. */
+function diagnosticoVigencia(relacion) {
+  switch (relacion) {
+    case 'head_adelante':
+      return 'el HEAD inspeccionado DESCIENDE del commit pineado: la fuente avanzó sobre lo espejado';
+    case 'head_atras':
+      return 'el HEAD inspeccionado es ANCESTRO del commit pineado: el checkout está detrás del pin, '
+        + 'no es que la fuente haya avanzado';
+    case 'divergentes':
+      return 'el HEAD inspeccionado y el commit pineado DIVERGEN: ninguno desciende del otro';
+    case 'mismo':
+      return 'el HEAD inspeccionado ES el commit pineado: la diferencia no viene de la historia';
+    default:
+      return 'no se pudo medir la relación entre el HEAD inspeccionado y el commit pineado: '
+        + 'se informa la diferencia sin atribuirle dirección';
+  }
+}
+
 function blobEn(commit, ruta) {
   try {
     return execFileSync('git', ['-C', FUENTE, 'show', `${commit}:${ruta}`], {
@@ -252,7 +313,8 @@ console.log(`── paridad OK: ${inv.total} archivos · espejo = inventario = f
 if (modo === '--vigencia') {
   const cambiados = verificarVigencia(inv);
   if (cambiados.length > 0) {
-    console.error('── DESACTUALIZADO (no es un desvío del espejo, es que la fuente avanzó):');
+    console.error(`── DESACTUALIZADO · ${diagnosticoVigencia(relacionConHead(inv.commit))}`);
+    console.error('   No es un desvío del espejo: son bytes distintos entre el pin y el HEAD inspeccionado.');
     for (const c of cambiados) console.error(`   ${c}`);
     process.exit(EXIT_DESVIO);
   }

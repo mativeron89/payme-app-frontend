@@ -39,6 +39,59 @@ const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = process.env.PAYME_RAIZ_VERIFICACION ?? join(AQUI, '..');
 
 /**
+ * 🔴 **HERMETICIDAD: las herramientas se resuelven SÓLO desde el `node_modules`
+ * de la RAIZ adjudicada, y si no están, el gate falla ANTES de crear un
+ * proceso hijo.**
+ *
+ * Esta tabla declara **la única forma admitida**: un path dentro de
+ * `node_modules`, invocado por ruta absoluta. No hay lista de formas
+ * prohibidas —`npx`, `npm exec`, PATH, registry— porque enumerar lo prohibido
+ * falla abierto: alcanza con una forma que nadie nombró.
+ *
+ * ## Por qué, y me costó dos vueltas
+ *
+ * La versión anterior comprobaba que el **proyecto** existiera en disco, y con
+ * eso creyó cerrar el problema. **Cerraba la instancia, no la clase:** un
+ * proyecto que SÍ existe en una raíz sin dependencias seguía llegando a `npx`,
+ * y `npx` desde ahí no resuelve la herramienta local — sale al registro y baja
+ * un paquete de terceros con ese nombre, que se ejecuta dentro del gate. En CI
+ * con caché fría eso costaba ~35 s por invocación y, sobre todo, ejecutaba
+ * código que nadie auditó.
+ *
+ * Lo mismo valía para Vitest y Playwright: sus llamadas estaban detrás de
+ * `acreditarColeccion`, que corta cuando **no hay archivos en disco**. Eso
+ * protege de medir en vacío; **no** protege la frontera de resolución. Son dos
+ * afirmaciones distintas y tratarlas como una fue el defecto.
+ *
+ * `process.execPath` y no el binario del `.bin`: el shim de `.bin` es un script
+ * que vuelve a resolver por su cuenta. Invocar el entrypoint con el Node que ya
+ * está corriendo deja una sola resolución, la de acá.
+ */
+const ENTRYPOINTS = Object.freeze({
+  TypeScript: join('typescript', 'bin', 'tsc'),
+  Vitest: join('vitest', 'vitest.mjs'),
+  Playwright: join('@playwright', 'test', 'cli.js'),
+});
+
+/**
+ * Devuelve el path absoluto del entrypoint local, o `null` si no está
+ * instalado. `null` significa **no se ejecuta nada**: es responsabilidad del
+ * llamador convertirlo en `fallar()`.
+ */
+function entrypointLocal(herramienta) {
+  const rel = ENTRYPOINTS[herramienta];
+  if (rel === undefined) return null;
+  const abs = join(RAIZ, 'node_modules', rel);
+  return existsSync(abs) ? abs : null;
+}
+
+/** El mensaje es uno solo para las tres herramientas: la causa es la misma. */
+function faltaHerramienta(herramienta) {
+  return `${herramienta} no está instalado en «node_modules» de la raíz verificada: `
+    + 'el gate NO sale a buscarlo afuera y falla cerrado.';
+}
+
+/**
  * 🔴 ALLOWLIST POSITIVA, valores EXACTOS.
  *
  * Un alias que no esté acá es rojo, se llame como se llame. Es la misma forma
@@ -262,11 +315,19 @@ export function adjudicarAliases() {
  * archivos, el `every` de abajo pasaría en vacío y esto certificaría una
  * población inexistente.
  */
+/**
+ * `listar === null` significa **«la herramienta no está y ya se denunció»**: se
+ * comprueba la colección en disco igual —es una lectura pura— y se sale sin
+ * crear ningún proceso. Así las dos fallas distintas —colección vacía y
+ * herramienta ausente— aparecen las dos en la misma corrida, en vez de que la
+ * primera tape a la segunda.
+ */
 function acreditarColeccion(etiqueta, enDisco, listar) {
   if (enDisco.length === 0) {
     fallar(`${etiqueta}: no se encontró NINGÚN archivo en disco — se mediría en vacío`);
     return;
   }
+  if (listar === null) return;
   let recolectados;
   try {
     recolectados = listar();
@@ -297,8 +358,10 @@ export function adjudicarPoblacion() {
     ...buscar(join(RAIZ, 'landing'), ES_TEST),
     ...buscarEnRaiz(ES_TEST),
   ];
-  acreditarColeccion('Vitest', unitarios, () =>
-    execFileSync('npx', ['vitest', 'list', '--filesOnly'], {
+  const binVitest = entrypointLocal('Vitest');
+  if (binVitest === null) fallar(faltaHerramienta('Vitest'));
+  acreditarColeccion('Vitest', unitarios, binVitest === null ? null : () =>
+    execFileSync(process.execPath, [binVitest, 'list', '--filesOnly'], {
       cwd: RAIZ,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -315,9 +378,11 @@ export function adjudicarPoblacion() {
    * reconstruye con el `rootDir` que el propio runner declara, en vez de asumir
    * el prefijo: si alguien mueve `testDir`, esto sigue midiendo bien.
    */
-  acreditarColeccion('Playwright', e2e, () => {
+  const binPlaywright = entrypointLocal('Playwright');
+  if (binPlaywright === null) fallar(faltaHerramienta('Playwright'));
+  acreditarColeccion('Playwright', e2e, binPlaywright === null ? null : () => {
     const json = JSON.parse(
-      execFileSync('npx', ['playwright', 'test', '--list', '--reporter=json'], {
+      execFileSync(process.execPath, [binPlaywright, 'test', '--list', '--reporter=json'], {
         cwd: RAIZ,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
@@ -461,11 +526,24 @@ export function adjudicarProyectosTs() {
     fallar('el alias `typecheck` no nombra ningún proyecto: se mediría en vacío');
     return;
   }
+  /**
+   * 🔴 El compilador se resuelve **antes del bucle y antes de cualquier
+   * proceso hijo**. Si no está instalado en la raíz verificada, el gate falla
+   * acá y no se crea ni un solo hijo — que es la diferencia con la versión
+   * anterior, donde la falta se descubría recién al intentar ejecutarlo y
+   * `npx` ya había salido a buscarlo afuera.
+   */
+  const binTsc = entrypointLocal('TypeScript');
+  if (binTsc === null) fallar(faltaHerramienta('TypeScript'));
   const cubiertos = new Set();
   for (const proy of proyectos) {
     /**
-     * 🔴 **EL PROYECTO SE COMPRUEBA EN DISCO ANTES DE LLAMAR A `npx`, y esto
-     * frenó dos releases.**
+     * 🔴 **Esto comprueba que el PROYECTO exista, y NO es la guarda de
+     * hermeticidad.** Se conserva porque un `-p` que apunta a un tsconfig
+     * inexistente es un error de configuración que conviene nombrar, y tiene su
+     * caso en la suite. Pero **no cierra la clase**: un proyecto que sí existe
+     * en una raíz sin dependencias pasaba igual, y ése era el agujero. Quien
+     * cierra la clase es `entrypointLocal`, arriba.
      *
      * Sin esta guarda, una `RAIZ` sin dependencias —la que montan los casos
      * sintéticos de `verificarAliases.test.ts`— igual llegaba al `execFileSync`
@@ -494,6 +572,14 @@ export function adjudicarProyectosTs() {
       continue;
     }
     /**
+     * 🔴 Sin compilador local no se crea NINGÚN hijo, y el bucle sigue igual:
+     * la falta ya se denunció una sola vez arriba, y acá se corta antes del
+     * `execFileSync`. Recorrer el resto permite que **todos** los proyectos mal
+     * configurados salgan nombrados en la misma corrida, en vez de que el
+     * primer problema tape a los demás.
+     */
+    if (binTsc === null) continue;
+    /**
      * 🔴 `--listFiles`, NO `showConfig.files`, y la diferencia me mordió.
      *
      * `showConfig` lista las RAÍCES que el `include` resuelve; `--listFiles`
@@ -505,7 +591,7 @@ export function adjudicarProyectosTs() {
      */
     let salida;
     try {
-      salida = execFileSync('npx', ['tsc', '-p', proy, '--noEmit', '--listFiles'], {
+      salida = execFileSync(process.execPath, [binTsc, '-p', proy, '--noEmit', '--listFiles'], {
         cwd: RAIZ,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
