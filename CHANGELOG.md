@@ -11,6 +11,72 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.6 — El centinela vigilaba una puerta que ya no existe (2026-09-04)
+
+Orden `AF-STAGE1-ALIASES-IMPORTABLE-HERMETIC-06-CLAUDE`, base `fd0e9bda…`.
+**Sin push, sin deploy, sin proveedor, sin DB, sin secreto, sin red y sin instalación.**
+`0.161.5` queda intacta y sus siete paths se preservan byte a byte.
+
+### Por qué hacía falta este commit
+
+`0.161.5` cerró la clase: el gate resuelve sus herramientas **sólo** desde el `node_modules` de la
+raíz verificada y las invoca por ruta absoluta con `process.execPath`. Al hacerlo, un test que ese
+commit **no podía tocar** —estaba fuera de su allowlist— se puso rojo, y **tenía razón**:
+
+```
+✅ CONTROL POSITIVO · corrido como script, el CLI SÍ invoca sus herramientas
+→ «el espía no registró nada: el escenario no está midiendo lo que dice»
+```
+
+Ese control acreditaba el uso de herramientas **espiando `npx` a través del `PATH`**. El CLI ya no
+pasa por el `PATH` en ningún caso, así que el espía no quedó menos exacto: quedó **ciego**. Su rojo
+fue información, no daño colateral, y el archivo lo dijo con su propio mensaje.
+
+📌 **Un centinela que observa un mecanismo caduca cuando el mecanismo cambia.** Lo que no se puede
+hacer es adaptarlo para que calle: se lo mueve a la superficie nueva **y se le acredita un control
+propio**, o no vale nada. Por eso el remedio fue orden aparte y no un arreglo al pasar.
+
+### El sensor se mueve a la única superficie que el CLI toca
+
+El espía deja de vivir en el `PATH` y pasa a ser **el entrypoint mismo**: tres archivos que este test
+escribe bajo `node_modules` de la raíz sintética y que registran su `process.argv` completo. Cero
+`npx`, cero gestor de paquetes, cero red, cero instalación — no hay fallback posible porque no hay
+nada que resolver afuera.
+
+**Se afirma el `argv` por igualdad, no por nombre:** `argv[0] === process.execPath` y
+`argv[1] === <ruta absoluta del entrypoint>`. Eso prueba tres cosas de una: que se invocó, con qué
+ejecutable, y que el script es el local y no un homónimo. La comparación por substring era
+precisamente el defecto P101 de este mismo archivo —`/tsc/` matcheaba el `tsconfig.json` de al
+lado—, y con paths el riesgo vuelve con otra ropa.
+
+### El control rojo, que es la mitad que faltaba
+
+Se agrega un caso con **el mismo árbol y sin `node_modules`**. Esa igualdad es lo que hace atribuible
+el contraste. Acredita tres cosas distintas:
+
+| aserción | qué prueba |
+|---|---|
+| marca vacía | no se creó **ningún** proceso |
+| las tres firmas de ausencia | el diagnóstico es **estable** y nombra la causa |
+| sin «Cannot find module» | el CLI **ni siquiera intentó** invocar un entrypoint inexistente |
+
+La última distingue *fallar cerrado* de *fallar al chocarse*, que desde afuera se parecen.
+
+### Campaña adversarial
+
+Tres mutantes, cada uno muerto por el control que le corresponde:
+
+| mutante | qué se pone rojo |
+|---|---|
+| volver a `npx`/`PATH` | control positivo |
+| no invocar la herramienta local aunque exista | control positivo |
+| invocarla cuando falta | **control rojo**, por diagnóstico inestable |
+
+Se midieron sobre una **copia del worktree en un directorio temporal**, nunca en el árbol: el archivo
+mutado —`scripts/aliasesLib.mjs`— está fuera de esta allowlist y quedó byte a byte idéntico. El
+mutante que reintroduce `npx` corrió además con un `npx` inerte al frente del `PATH` para garantizar
+cero red; lo que se mide —que la marca quede vacía— no depende de qué haría el `npx` real.
+
 ## 0.161.5 — La guarda anterior cerró la instancia, no la clase (2026-09-04)
 
 Orden `AF-STAGE1-ALIASES-VIGENCIA-HERMETIC-05-CLAUDE`, base `ca8fb983…`.

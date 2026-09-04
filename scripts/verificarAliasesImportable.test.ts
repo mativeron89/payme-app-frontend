@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -135,12 +134,70 @@ function importarCon(extra: string): { fallas: number; borro: boolean } {
  */
 describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () => {
   /**
-   * Monta un árbol de prueba con un `npx` de mentira al frente del `PATH`.
+   * 🔴 **EL ESPÍA OBSERVA LOS ENTRYPOINTS, NO EL `PATH`. Y el cambio no es de
+   * estilo: el observable viejo dejó de existir.**
    *
-   * El espía sale ≠0 a propósito: lo que se mide es la MARCA, no su éxito, y así
-   * no finge resultados que no ocurrieron.
+   * Hasta `0.161.4` el CLI resolvía sus herramientas por nombre y las ejecutaba
+   * a través del `PATH`, así que un ejecutable de mentira al frente del `PATH`
+   * era un espía correcto. Desde `0.161.5` el CLI **sólo** admite entrypoints
+   * dentro del `node_modules` de la raíz verificada, invocados por ruta
+   * absoluta con `process.execPath`: **no pasa por el `PATH` en ningún caso**.
+   *
+   * Un espía sobre el `PATH` no se volvió menos exacto — se volvió **ciego**, y
+   * este archivo lo dijo solo al ponerse rojo: *«el espía no registró nada: el
+   * escenario no está midiendo lo que dice»*. Ese rojo fue correcto y por eso el
+   * arreglo no es adaptarlo para que calle, sino **mover el sensor a la única
+   * superficie que el CLI toca hoy**.
+   *
+   * Cada entrypoint falso registra su `process.argv` COMPLETO, así que la marca
+   * acredita las tres cosas a la vez: que se invocó, que se invocó con
+   * `process.execPath`, y que el segundo argumento es la ruta ABSOLUTA del
+   * entrypoint dentro de `node_modules` — no un nombre que el sistema pudiera
+   * resolver en otro lado.
+   *
+   * ⚠️ **Cero red, cero instalación, cero gestor de paquetes.** Los entrypoints
+   * son archivos que este mismo test escribe; no hay `npx` ni fallback posible.
    */
-  function montarEspia(): { readonly marca: string; readonly env: NodeJS.ProcessEnv } {
+  function montarEntrypoints(raiz: string, marca: string): void {
+    /** `.js` bajo `node_modules` se carga como CommonJS; `.mjs`, como ESM. */
+    const registrar = (rel: string, salida: string, esm: boolean) => {
+      const abs = join(raiz, 'node_modules', rel);
+      mkdirSync(dirname(abs), { recursive: true });
+      const req = esm
+        ? "import { appendFileSync } from 'node:fs';"
+        : "const { appendFileSync } = require('node:fs');";
+      writeFileSync(
+        abs,
+        `${req}\n`
+          + `appendFileSync(${JSON.stringify(marca)}, JSON.stringify(process.argv) + '\\n');\n`
+          + `process.stdout.write(${JSON.stringify(salida)});\n`,
+      );
+    };
+    // Salidas mínimas y plausibles: el objetivo es que el CLI recorra los TRES
+    // caminos, no fingir un resultado verde que nadie midió.
+    registrar(join('typescript', 'bin', 'tsc'), `${join(raiz, 'src', 'sonda.test.ts')}\n`, false);
+    registrar(join('vitest', 'vitest.mjs'), `${join(raiz, 'src', 'sonda.test.ts')}\n`, true);
+    registrar(
+      join('@playwright', 'test', 'cli.js'),
+      JSON.stringify({ config: { rootDir: join(raiz, 'e2e') }, suites: [{ file: 'sonda.spec.ts' }] }),
+      false,
+    );
+  }
+
+  /** Los tres entrypoints que el CLI puede tocar, en el orden en que se afirman. */
+  const ENTRYPOINTS_ESPERADOS: ReadonlyArray<readonly [string, string]> = [
+    ['tsc', join('typescript', 'bin', 'tsc')],
+    ['vitest', join('vitest', 'vitest.mjs')],
+    ['playwright', join('@playwright', 'test', 'cli.js')],
+  ];
+
+  /**
+   * `conEntrypoints: false` monta el MISMO árbol sin `node_modules`: es el
+   * control rojo, y su valor está en ser idéntico salvo por esa ausencia.
+   */
+  function montarEspia(
+    conEntrypoints = true,
+  ): { readonly marca: string; readonly env: NodeJS.ProcessEnv } {
     const raiz = mkdtempSync(join(tmpdir(), 'payme-espia-'));
     const marca = join(raiz, 'invocaciones.txt');
     /**
@@ -179,15 +236,15 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
     mkdirSync(join(raiz, 'e2e'), { recursive: true });
     writeFileSync(join(raiz, 'e2e', 'sonda.spec.ts'), 'export const b = 1;\n');
     writeFileSync(join(raiz, 'tsconfig.json'), JSON.stringify({ include: ['src'] }));
-    writeFileSync(join(raiz, 'npx'), `#!/bin/sh\necho "$@" >> ${JSON.stringify(marca)}\nexit 1\n`);
-    chmodSync(join(raiz, 'npx'), 0o755);
+    if (conEntrypoints) montarEntrypoints(raiz, marca);
+    /**
+     * 🔴 El `PATH` se deja **tal cual**, sin agregarle nada. Que el escenario no
+     * lo toque es parte de lo que se afirma: si el CLI volviera a resolver por
+     * `PATH`, no encontraría ningún entrypoint falso y la marca quedaría vacía.
+     */
     return {
       marca,
-      env: {
-        ...process.env,
-        PATH: `${raiz}:${process.env['PATH'] ?? ''}`,
-        PAYME_RAIZ_VERIFICACION: raiz,
-      },
+      env: { ...process.env, PAYME_RAIZ_VERIFICACION: raiz },
     };
   }
 
@@ -216,17 +273,86 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
        * El espía escribe una línea por invocación con sus argv; el ejecutable es
        * el PRIMER token de esa línea, y se compara por igualdad.
        */
-      const invocados = registro
+      /**
+       * 🔴 Se afirma el `argv` COMPLETO de cada invocación, no el nombre del
+       * comando. El defecto P101 de este mismo archivo fue comparar por
+       * substring —`/tsc/` matcheaba el `tsconfig.json` del argumento de al
+       * lado— y acá el riesgo es el mismo con otra ropa: un path que CONTENGA
+       * «vitest» no acredita que se haya invocado el entrypoint de Vitest.
+       *
+       * `argv[0]` es el ejecutable y `argv[1]` el script: afirmarlos por
+       * IGUALDAD prueba las tres cosas juntas —que se invocó, que fue con
+       * `process.execPath`, y que el script es la ruta absoluta dentro de
+       * `node_modules`—.
+       */
+      const raiz = dirname(marca);
+      const argvs: string[][] = registro
         .split('\n')
-        .map((l) => l.trim().split(/\s+/)[0])
-        .filter(Boolean);
-      for (const herramienta of ['vitest', 'playwright', 'tsc']) {
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as string[]);
+
+      for (const [herramienta, rel] of ENTRYPOINTS_ESPERADOS) {
+        const esperado = join(raiz, 'node_modules', rel);
+        const invocacion = argvs.find((a) => a[1] === esperado);
         expect(
-          invocados,
-          `el fixture no invoca «${herramienta}»: el claim lo incluye sin acreditarlo ` +
-            `(invocados: ${invocados.join(', ') || 'ninguno'})`,
-        ).toContain(herramienta);
+          invocacion,
+          `el fixture no invoca «${herramienta}» por su entrypoint local ` +
+            `(esperaba argv[1] === ${esperado}; hubo ${argvs.length} invocación(es))`,
+        ).toBeDefined();
+        expect(
+          invocacion![0],
+          `«${herramienta}» no se invocó con process.execPath`,
+        ).toBe(process.execPath);
       }
+    } finally {
+      rmSync(dirname(marca), { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * 🔴 **CONTROL ROJO · el complemento sin el cual el positivo no dice nada.**
+   *
+   * El árbol es el MISMO —mismo `package.json` roto, mismo `src/`, mismo `e2e/`,
+   * mismo `tsconfig.json`— y la única diferencia es que no hay `node_modules`.
+   * Esa igualdad es lo que hace que el contraste signifique algo: si cambiaran
+   * dos cosas a la vez, el resultado no sería atribuible a la ausencia de los
+   * entrypoints.
+   *
+   * Los dos juntos son lo que este archivo existe para distinguir: **«no ejecuta
+   * al importarse» y «no ejecuta nunca» son indistinguibles con un solo lado.**
+   *
+   * ## Qué acredita cada aserción
+   *
+   * - marca vacía ⇒ **no se creó ningún proceso**;
+   * - las tres firmas ⇒ el diagnóstico es **estable y nombra la causa real**
+   *   («no está instalado en node_modules»), no un accidente del intento;
+   * - la ausencia de un error de módulo no encontrado ⇒ el CLI **ni siquiera
+   *   intentó** invocar un entrypoint inexistente. Si lo intentara, Node
+   *   fallaría con «Cannot find module» y ese texto llegaría a la salida por el
+   *   `catch` del gate. Es la diferencia observable entre *fallar cerrado* y
+   *   *fallar al chocarse*.
+   */
+  it('🔴 CONTROL ROJO · sin entrypoints locales: cero invocaciones y falla cerrada estable', () => {
+    const { marca, env } = montarEspia(false);
+    try {
+      const r = spawnSync(process.execPath, [CLI, '--aliases'], { env, encoding: 'utf8' });
+      const salida = `${r.stdout}${r.stderr}`;
+
+      expect(
+        invocaciones(marca),
+        'sin entrypoints locales el CLI igual creó un proceso',
+      ).toBe('');
+      expect(r.status, 'el gate no falló cerrado').not.toBe(0);
+      for (const herramienta of ['TypeScript', 'Vitest', 'Playwright']) {
+        expect(
+          salida,
+          `no nombró a «${herramienta}» como ausente: el diagnóstico no es estable`,
+        ).toContain(`${herramienta} no está instalado en «node_modules»`);
+      }
+      expect(
+        salida,
+        'hubo un error de resolución de módulo: el CLI intentó invocar un entrypoint inexistente',
+      ).not.toMatch(/Cannot find module|MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND/);
     } finally {
       rmSync(dirname(marca), { recursive: true, force: true });
     }
