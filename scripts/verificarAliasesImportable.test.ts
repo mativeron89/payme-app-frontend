@@ -203,10 +203,42 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * ```
    * ① entrypoints  argv de los tres entrypoints locales    ⇒ «se invocó la herramienta local»
    * ② gestores     npx/npm/yarn/pnpm/corepack en el PATH   ⇒ «se buscó afuera»
-   * ③ procesos     TODO hijo, censado en child_process     ⇒ «se creó algún proceso»
+   * ③ procesos     los 7 exports envueltos de child_process ⇒ «se creó uno de esos procesos»
    * ```
    *
-   * ③ es el único que puede sostener «cero procesos»: parchea `child_process`
+   * 🔴 **ALCANCE EXACTO DE ③, porque decir «todo proceso» era otra
+   * sobredeclaración.** El preload envuelve una **población enumerada de siete
+   * exports** de `node:child_process`:
+   *
+   * ```
+   * execFileSync · spawnSync · execSync · exec · execFile · spawn · fork
+   * ```
+   *
+   * **Qué cubre eso, medido:** `aliasesLib.mjs` usa hoy únicamente `execFileSync`
+   * —import en su cabecera y tres call sites, para TypeScript, Vitest y
+   * Playwright—, y las campañas versionadas de este archivo usan `execFileSync`
+   * y `spawnSync`. O sea que la población instrumentada **cubre las puertas que
+   * el objeto auditado y las campañas ejercitan hoy**.
+   *
+   * ⚠️ **Y qué NO cubre, sin extrapolar:** `ChildProcess.prototype.spawn` como
+   * superficie independiente, las APIs internas de Node y cualquier API futura.
+   * Una enumeración de siete métodos **no acredita un universo**, y un hijo
+   * creado por una puerta que no está en esa lista no dejaría rastro en ③.
+   *
+   * 📌 **Genealogía del error, medida commit por commit** —porque documentar de
+   * memoria es cómo se propaga—:
+   *
+   * ```
+   * 85b21d5d   «TODO hijo» 0 · «de ninguna forma» 0 · «de la forma que sea» 0
+   * 8e83ff53   «TODO hijo» 1 · «de ninguna forma» 2 · «de la forma que sea» 0
+   * faf219e3   «TODO hijo» 1 · «de ninguna forma» 2 · «de la forma que sea» 1
+   * ```
+   *
+   * Las tres primeras nacieron con los sensores, en `8e83ff53`. La cuarta se
+   * agregó en `faf219e3` — **el commit que venía a corregir sobredeclaraciones**.
+   *
+   * ③ es el único de los tres que puede hablar de procesos, y lo hace **sobre esa
+   * población**: parchea `child_process`
    * mediante `--require`, que corre **antes** que el módulo principal, así que la
    * vista queda tomada antes de que cualquier `import` ESM fije su binding.
    * Verificado con una sonda propia antes de usarlo — un sensor que no se prueba
@@ -492,7 +524,10 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    *
    * - sensor ① vacío ⇒ **no se invocó ningún entrypoint local**;
    * - sensor ② vacío ⇒ **no se alcanzó ningún gestor de paquetes**;
-   * - sensor ③ vacío ⇒ **no se creó NINGÚN proceso hijo**, de ninguna forma.
+   * - sensor ③ vacío ⇒ **no se creó ningún proceso por los siete exports
+   *   instrumentados** de `node:child_process`. **No es «ningún proceso» a
+   *   secas:** el preload envuelve una población enumerada, no el universo — ver
+   *   la nota de alcance del sensor ③.
    *   Las tres se afirman por separado: `0.161.6` decía la tercera midiendo sólo
    *   la primera, y ése fue el falso oráculo que Codex tumbó;
    * - las tres firmas ⇒ el diagnóstico es **estable y nombra la causa real**
@@ -512,8 +547,8 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
       /**
        * 🔴 Las tres afirmaciones, **una por sensor**, y ninguna deducida de otra:
        * ① no se invocó ningún entrypoint local · ② no se buscó afuera · ③ no se
-       * creó NINGÚN proceso hijo, de ninguna forma. La versión anterior decía ③
-       * midiendo sólo ①, y ése fue el falso oráculo.
+       * creó ningún proceso **por los siete exports instrumentados**. La versión
+       * anterior decía ③ midiendo sólo ①, y ése fue el falso oráculo.
        */
       expect(leer(marcas.entrypoints), 'se invocó un entrypoint local').toBe('');
       expect(leer(marcas.gestores), 'se invocó un gestor de paquetes').toBe('');
@@ -701,22 +736,33 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * ```
    * adjudicar / acreditar  →  empuja a `fallas`              ← observable A
    * invalidar              →  BORRA del disco                ← observable B
-   * listar poblaciones     →  CREA UN PROCESO HIJO           ← observables ①②③
+   * listar poblaciones     →  CREA UN PROCESO HIJO           ← observables ① y ③
    * cualquiera que LANCE   →  rechaza el import (F=-1)       ← observable D
    * ```
    *
    * ⚠️ **La tercera fila decía «lanza `npx`», y desde `0.161.5` eso es historia:**
    * la lib resuelve sus herramientas dentro de `node_modules` y las invoca con
-   * `process.execPath`. Lo que se observa hoy es **la creación del proceso**, con
-   * los tres sensores de esta suite —entrypoints, gestores y censo de
-   * `child_process`—, no el nombre del ejecutable.
+   * `process.execPath`. Lo que se observa hoy es **la creación del proceso**, no
+   * el nombre del ejecutable.
+   *
+   * 🔴 **Y la atribuye ① y ③, NO ②.** En la ruta sana el proceso es un entrypoint
+   * local invocado con `process.execPath`: lo registra ① —por su `argv`— y lo
+   * cuenta ③ —por el censo de `child_process`—. **② queda VACÍO**, porque sólo
+   * registra gestores de paquetes alcanzados por el `PATH`, y esa ruta no pasa
+   * por el `PATH`.
+   *
+   * Esto no es una interpretación: **la campaña aditiva de `npx` lo afirma como
+   * aserción**, exigiendo ② vacío en el camino sano y ② no vacío sólo cuando el
+   * mutante agrega la salida al gestor. Este párrafo decía «los tres sensores» y
+   * con eso **contradecía a su propio test**, unas líneas más arriba.
    *
    * 🔴 P103 · ALCANCE DECLARADO — LO QUE ESTE OBSERVER PUEDE Y NO PUEDE.
    *
    * **Puede:** detectar que una función exportada se ejecutó al importar, cuando
    * esa ejecución deja uno de tres rastros —fallas acumuladas, borrado en disco,
-   * o **la creación de un proceso hijo**, de la forma que sea: el censo de
-   * `child_process` no depende del ejecutable ni del `PATH`—.
+   * o **la creación de un proceso por alguno de los siete exports instrumentados
+   * de `node:child_process`**: ese censo no depende del ejecutable ni del `PATH`,
+   * pero **sí depende de la puerta usada**, y la población está enumerada—.
    *
    * 🔴 **NO puede, y está medido:** ver una ejecución que el propio módulo
    * **capture, compense o limpie**. Los tres bypasses conocidos:
@@ -730,15 +776,26 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * **La razón es estructural y vale la pena escribirla entera:** el observer y
    * el código auditado **corren en el mismo proceso**, así que toda señal que el
    * observer lee es alcanzable por el código que vigila. Un `catch` traga la
-   * excepción; un `length = 0` limpia el contador. **No hay sensor in-process que
-   * cierre esto** — la salida sería instrumentar desde afuera (un preload que
-   * envuelva `fs`/`child_process` y escriba a un canal que el módulo no conoce).
+   * excepción; un `length = 0` limpia el contador. **Ningún sensor in-process
+   * cierra esto** — la salida es instrumentar desde afuera, con un preload que
+   * envuelva el módulo y escriba a un canal que el auditado no conoce.
    *
-   * ⚠️ **Ese camino está identificado y NO implementado, por proporción:** el
-   * arnés ya excede el riesgo que cubre —veinte vueltas, cero defectos en el
-   * objeto— y este límite requiere que alguien **escriba** el bypass a propósito,
-   * no que se le escape. **Un límite declarado es honesto; uno tácito se lee como
-   * resuelto.**
+   * 🔴 **Y ese camino ya NO está sin implementar del todo: la mitad existe.**
+   * `montarSensores()` instala un preload externo sobre **`child_process`** —el
+   * sensor ③— que escribe a un archivo cuyo path el módulo auditado no recibe.
+   * Fue la corrección de `0.161.8`, y es la razón por la que un hijo silencioso
+   * creado al importar queda capturado aunque el módulo no imprima nada.
+   *
+   * ⚠️ **Lo que sigue SIN implementar es la instrumentación externa de `fs`**, y
+   * por eso los bypasses que **compensan o limpian sin pasar por los siete
+   * exports instrumentados**
+   * —tragar una excepción, vaciar el contador, reescribir lo que borró— siguen
+   * fuera del alcance de este observer. Se declaran, no se cierran.
+   *
+   * 📌 La distinción importa y por eso va escrita: **«ahora vemos procesos» no es
+   * «ahora vemos todo».** Un límite declarado es honesto; uno tácito se lee como
+   * resuelto, y una versión anterior de este párrafo decía que el preload externo
+   * no estaba implementado cuando ya lo estaba — el error simétrico.
    *
    * 🔴 **Y el claim se acota a lo que el observer deriva de verdad:** cubre las
    * funciones exportadas **que dejan uno de los tres rastros**. `fallasDeAliases`,
@@ -809,8 +866,10 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
       ).toBe('');
       /**
        * 🔴 Ésta es la que ningún sensor anterior podía sostener: **cero procesos
-       * de cualquier clase**, no sólo cero entrypoints conocidos. Un hijo
-       * silencioso y ajeno a las dos primeras marcas queda registrado acá.
+       * creados por los siete exports instrumentados**, no sólo cero entrypoints
+       * conocidos. Un hijo silencioso y ajeno a las dos primeras marcas queda
+       * registrado acá **si nace por una de esas siete puertas** — que son las
+       * que usan hoy la lib y las campañas.
        */
       expect(
         leer(marcas.procesos),

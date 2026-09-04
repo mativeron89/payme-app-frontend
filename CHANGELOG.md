@@ -11,6 +11,83 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.9 — Documentación: cuatro sobredeclaraciones y una tabla que prometía un universo (2026-09-04)
+
+Orden `AF-STAGE1-ALIASES-IMPORTABLE-ORACLE-09-CLAUDE` más su adenda acumulativa
+(sha256 `0945220915ade74fba91c7010a04768c2a0e8e8c50eb0951850da033b9c0cf48`), base `faf219e3…`.
+**Sin push, sin deploy, sin proveedor, sin DB, sin secreto y sin red.** Entrada **documental**: en el
+archivo de test **sólo cambian comentarios y docblocks**, cero tokens ejecutables. Las entradas
+anteriores no se reescriben.
+
+### 🔴 Lo que `0.161.8` afirmó de más
+
+**1 · Un docblock atribuía a ①②③ el proceso de los entrypoints locales.** En esa ruta **② queda
+vacío**: sólo registra gestores de paquetes alcanzados por el `PATH`, y un entrypoint local invocado
+con `process.execPath` no pasa por ahí. Lo observan **① y ③**.
+
+📌 **Y la evidencia de que el texto estaba mal la escribí yo mismo, unas líneas más arriba:** la
+campaña aditiva de `npx` **afirma como aserción** que ② queda vacío en el camino sano y sólo se llena
+cuando el mutante agrega la salida al gestor. El docblock contradecía a su propio test.
+
+**2 · Otro presentaba como NO implementado el preload externo**, que es exactamente la corrección de
+`0.161.8`. Está implementado para **`child_process`** y escribe a un archivo cuyo path el módulo
+auditado no recibe. **Lo que sigue sin implementarse es la instrumentación externa de `fs`**, y por
+eso los bypasses que compensan o limpian **sin pasar por los exports instrumentados** siguen fuera
+del alcance: se declaran, no se cierran. «Ahora vemos procesos» no es «ahora vemos todo».
+
+**3 · Y el propio `0.161.8` afirmaba que los docblocks presentes quedaban corregidos**, lo cual esos
+dos pasajes desmienten.
+
+### 🔴 El censo de procesos no ve un universo: ve siete puertas
+
+Una auditoría independiente encontró la tercera capa del mismo error. El archivo decía «TODO hijo» y
+procesos creados «de la forma que sea», pero el preload envuelve **una población enumerada**:
+
+```
+execFileSync · spawnSync · execSync · exec · execFile · spawn · fork
+```
+
+**Qué cubre, medido:** `aliasesLib.mjs` usa hoy únicamente `execFileSync` —import en su cabecera y
+tres call sites: TypeScript, Vitest y Playwright—, y las campañas versionadas usan `execFileSync` y
+`spawnSync`. La población instrumentada **cubre las puertas que el objeto auditado y las campañas
+ejercitan hoy**, y eso es todo lo afirmable.
+
+⚠️ **Qué NO cubre:** `ChildProcess.prototype.spawn` como superficie independiente, las APIs internas
+de Node y cualquier API futura. **Una enumeración de siete métodos no acredita un universo.**
+
+🔴 **Y el propio `0.161.8` derivaba universalidad en DOS lugares**, que se corrigen acá de forma
+aditiva porque las entradas no se reescriben:
+
+- su tabla decía «③ procesos | **todo** hijo, censando `child_process`» ⇒ lo correcto es **③ observa
+  los siete exports instrumentados**, no todo hijo;
+- y el párrafo siguiente decía «③ es el único que puede sostener **«cero procesos»**» ⇒ lo correcto
+  es que **③ es el único que puede hablar de procesos, y sólo sobre esa población de siete**. «Cero
+  procesos» a secas sigue siendo una afirmación que ningún sensor de esta suite sostiene.
+
+### Genealogía del error, medida commit por commit
+
+Documentar de memoria es cómo se propaga, así que va medido:
+
+| commit | «TODO hijo» | «de ninguna forma» | «de la forma que sea» |
+|---|---|---|---|
+| `85b21d5d` | 0 | 0 | 0 |
+| `8e83ff53` | 1 | 2 | 0 |
+| `faf219e3` | 1 | 2 | **1** |
+
+Las tres primeras nacieron con los sensores, en `8e83ff53`. **La cuarta se agregó en `faf219e3`, el
+commit que venía a corregir sobredeclaraciones.**
+
+📌 **El censo se declara separado por archivo, para que el número no baile:**
+
+```
+en el TEST        4   :206 · :495 · :515 · :718
+en el CHANGELOG   2   :118 (tabla) · :120 («cero procesos»)
+```
+
+Un censo anterior informó cinco en el test. Eran cuatro: se corrió **sobre el árbol ya editado** y
+contó una frase escrita en esa misma sesión, no un defecto preexistente. **El censo va contra la
+base**, y el número se publica diciendo sobre qué archivo y qué commit se midió.
+
 ## 0.161.8 — El instrumento disparaba la guarda que venía a auditar (2026-09-04)
 
 Orden `AF-STAGE1-ALIASES-IMPORTABLE-ORACLE-08-CLAUDE`, base `8e83ff53…`.
