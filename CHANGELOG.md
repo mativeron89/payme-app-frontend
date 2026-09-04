@@ -11,6 +11,76 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.8 — El instrumento disparaba la guarda que venía a auditar (2026-09-04)
+
+Orden `AF-STAGE1-ALIASES-IMPORTABLE-ORACLE-08-CLAUDE`, base `8e83ff53…`.
+**Sin push, sin deploy, sin proveedor, sin DB, sin secreto, sin red y sin instalación.**
+Las entradas anteriores no se reescriben.
+
+### 🔴 El efecto observador, en su forma más literal
+
+`aliasesLib.mjs:194` denuncia `NODE_OPTIONS` definida, porque un preload puede volver no-op a los
+gates. **El sensor de procesos de `0.161.7` se instalaba justamente con
+`NODE_OPTIONS=--require …`**, así que disparaba esa guarda. Medido acá:
+
+```
+CLI sobre raíz sintética, SIN NODE_OPTIONS   →  0 menciones
+CLI con NODE_OPTIONS=--require <censo>       →  «la variable NODE_OPTIONS está definida
+                                                 y puede volver no-op a los gates»
+```
+
+**Y ningún caso afirmaba que ese rojo no apareciera**, así que la suite quedaba verde tapando un
+diagnóstico real. El instrumento cambiaba el objeto auditado y después se reportaba una medición
+limpia.
+
+**El aislamiento:** el preload **retira `NODE_OPTIONS` después de parchear**. El parche vive en el
+proceso, no en la variable, así que sacarla no lo desarma y el módulo auditado ve `undefined`.
+Verificado con una sonda mínima antes de construir sobre eso.
+
+**Y la causalidad se prueba en los dos sentidos**, que es lo que faltaba: el control positivo exige
+que el diagnóstico **no** aparezca; una sonda nueva corre el mismo montaje **sin** el retiro y exige
+que **sí** aparezca. Con retiro no está, sin retiro está — el aislamiento es la causa, no una
+casualidad del escenario.
+
+### Las otras dos sobredeclaraciones de `0.161.7`
+
+**Los dos casos `IMPORTADO` montaban tres sensores y leían uno.** El docblock decía que los tres
+quedaban acreditados. Ahora cada uno afirma **por separado** entrypoints vacío, gestores vacío y
+procesos vacío, sin inferir ninguno de otro. Es la misma operación que ya había costado un STOP:
+medir un subconjunto y afirmar el total.
+
+**Quedaban docblocks en presente prometiendo `npx`** —«listar poblaciones → lanza npx», «un proceso
+lanzado por npx»—. La lib no invoca `npx` desde `0.161.5`. Corregidos: lo que se observa hoy es **la
+creación del proceso**, con los tres sensores, y no el nombre del ejecutable. Las menciones que se
+conservan quedan marcadas como historia.
+
+### Campaña nueva · el hijo silencioso al importar
+
+Se agrega el caso que ningún sensor anterior podía ver: un proceso hijo creado **en el cuerpo del
+módulo** —al importarlo, sin CLI— y **ajeno a los entrypoints y al `PATH`**.
+
+| sensor | esperado | qué prueba |
+|---|---|---|
+| ① entrypoints | vacío | el hijo no es una herramienta conocida |
+| ② gestores | vacío | ni pasa por el `PATH` |
+| ③ procesos | **no vacío** | y aun así se creó: sólo este sensor lo sostiene |
+
+Las tres aserciones son necesarias: si ① o ② registraran algo, el mutante no sería ajeno y no
+reproduciría el caso.
+
+### Campaña adversarial · cuatro mutantes con causas diferenciadas
+
+| mutante | muere por |
+|---|---|
+| `npx` **aditivo** en `entrypointLocal` | ② y ③ |
+| ausencia de herramienta local | ① |
+| invocarla cuando falta | ③ |
+| **proceso silencioso al importar** | ③ **en exclusiva**, con ① y ② vacíos |
+
+La campaña aditiva de `npx` se conserva sin degradarla a reemplazo: tiene una aserción que se pone
+roja si el mutante deja de ser aditivo, que es lo que impide volver al defecto que causó el STOP
+anterior.
+
 ## 0.161.7 — El sensor medía una cosa y yo afirmaba tres (2026-09-04)
 
 Orden `AF-STAGE1-ALIASES-IMPORTABLE-ORACLE-07-CLAUDE`, base `85b21d5d…`.

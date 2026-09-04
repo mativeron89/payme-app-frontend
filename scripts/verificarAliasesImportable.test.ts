@@ -225,7 +225,30 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
     procesos: join(raiz, 'procesos.txt'),
   });
 
-  function montarSensores(raiz: string): { readonly env: NodeJS.ProcessEnv } {
+  /**
+   * 🔴 **EL SENSOR ③ NO PUEDE CAMBIAR EL OBJETO QUE AUDITA, y en `0.161.7` lo
+   * cambiaba.**
+   *
+   * `aliasesLib.mjs:194` tiene una guarda que denuncia `NODE_OPTIONS` definida,
+   * porque un preload puede volver no-op a los gates. El sensor de procesos se
+   * instalaba justamente con `NODE_OPTIONS=--require …`, así que **disparaba la
+   * guarda que venía a auditar** —medido: «la variable NODE_OPTIONS está
+   * definida y puede volver no-op a los gates»— y ningún caso afirmaba que ese
+   * rojo no apareciera. El efecto observador, en su forma más literal.
+   *
+   * El aislamiento es que el preload **retira la variable después de parchear**:
+   * el parche vive en el proceso, no en la variable, así que sacarla no lo
+   * desarma y el programa auditado ve `NODE_OPTIONS === undefined`. Verificado
+   * con una sonda mínima antes de construir sobre esto.
+   *
+   * `aislado: false` deja la variable puesta **a propósito**: es la sonda de
+   * causalidad, y sirve para probar que el aislamiento es lo que evita el rojo y
+   * no una casualidad del escenario.
+   */
+  function montarSensores(
+    raiz: string,
+    { aislado = true }: { aislado?: boolean } = {},
+  ): { readonly env: NodeJS.ProcessEnv } {
     const m = marcasDe(raiz);
     for (const archivo of Object.values(m)) writeFileSync(archivo, '');
 
@@ -250,7 +273,13 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
         + "    appendFileSync(LOG, nombre + ' ' + JSON.stringify(args[0]) + '\\n');\n"
         + "    return orig.apply(this, args);\n"
         + "  };\n"
-        + "}\n",
+        + "}\n"
+        + (aislado
+          ? "// Aislamiento: el parche ya está puesto; la variable se retira ANTES de que\n"
+            + "// el módulo auditado evalúe sus guardas de entorno.\n"
+            + "delete process.env.NODE_OPTIONS;\n"
+          : "// SONDA DE CAUSALIDAD: sin este retiro, la guarda de aliasesLib denuncia\n"
+            + "// NODE_OPTIONS y el instrumental contamina la medición.\n"),
     );
 
     return {
@@ -277,10 +306,11 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * `conEntrypoints: false` monta el MISMO árbol sin `node_modules`: es el
    * control rojo, y su valor está en ser idéntico salvo por esa ausencia.
    */
-  function montarEspia(conEntrypoints = true): {
+  function montarEspia(conEntrypoints = true, opciones: { aislado?: boolean } = {}): {
     readonly marca: string;
     readonly marcas: { entrypoints: string; gestores: string; procesos: string };
     readonly env: NodeJS.ProcessEnv;
+    readonly raiz: string;
   } {
     const raiz = mkdtempSync(join(tmpdir(), 'payme-espia-'));
     const marca = join(raiz, 'invocaciones.txt');
@@ -322,8 +352,8 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
     writeFileSync(join(raiz, 'e2e', 'sonda.spec.ts'), 'export const b = 1;\n');
     writeFileSync(join(raiz, 'tsconfig.json'), JSON.stringify({ include: ['src'] }));
     if (conEntrypoints) montarEntrypoints(raiz, marca);
-    const { env } = montarSensores(raiz);
-    return { marca, marcas: marcasDe(raiz), env: { ...env, PAYME_RAIZ_VERIFICACION: raiz } };
+    const { env } = montarSensores(raiz, opciones);
+    return { marca, marcas: marcasDe(raiz), env: { ...env, PAYME_RAIZ_VERIFICACION: raiz }, raiz };
   }
 
   const invocaciones = (marca: string): string =>
@@ -335,7 +365,20 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
     // nunca» son indistinguibles, y el caso de abajo mediría en vacío.
     const { marca, marcas, env } = montarEspia();
     try {
-      spawnSync(process.execPath, [CLI, '--aliases'], { env, encoding: 'utf8' });
+      const r = spawnSync(process.execPath, [CLI, '--aliases'], { env, encoding: 'utf8' });
+      /**
+       * 🔴 **EL INSTRUMENTAL NO CONTAMINA AL AUDITADO, y se afirma acá.**
+       *
+       * `0.161.7` instalaba el sensor ③ con `NODE_OPTIONS` y con eso disparaba
+       * la guarda de `aliasesLib` que denuncia esa variable. El rojo estaba en
+       * la salida y ningún caso lo miraba. Ahora se mira: si el aislamiento del
+       * preload se rompe, este `expect` cae, y la sonda de causalidad de más
+       * abajo prueba que es el aislamiento —y no el escenario— lo que lo evita.
+       */
+      expect(
+        `${r.stdout}${r.stderr}`,
+        'el instrumental contaminó al auditado: apareció el diagnóstico de NODE_OPTIONS',
+      ).not.toMatch(/NODE_OPTIONS/);
       const registro = invocaciones(marca);
       expect(registro, 'el espía no registró nada: el escenario no está midiendo lo que dice')
         .not.toBe('');
@@ -401,6 +444,33 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
         expect(linea, `un proceso no salió por process.execPath: ${linea}`)
           .toContain(JSON.stringify(process.execPath));
       }
+    } finally {
+      rmSync(dirname(marca), { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * 🔴 **SONDA DE CAUSALIDAD · prueba que el aislamiento es la causa.**
+   *
+   * El caso de arriba afirma que el diagnóstico de `NODE_OPTIONS` **no** aparece.
+   * Por sí sola, esa afirmación no distingue «el aislamiento funciona» de «el
+   * escenario nunca lo habría disparado». Acá se corre el MISMO montaje con el
+   * aislamiento retirado —el preload no borra la variable— y se exige que el
+   * diagnóstico **sí** aparezca.
+   *
+   * Los dos juntos cierran la causalidad: con retiro no está, sin retiro está.
+   * Es el control positivo del instrumento, no del código auditado — y es
+   * exactamente lo que faltó en `0.161.7`, donde el rojo existía y nadie lo
+   * miraba.
+   */
+  it('🔴 SONDA · sin el aislamiento del preload, la política SÍ denuncia NODE_OPTIONS', () => {
+    const { marca, env } = montarEspia(true, { aislado: false });
+    try {
+      const r = spawnSync(process.execPath, [CLI, '--aliases'], { env, encoding: 'utf8' });
+      expect(
+        `${r.stdout}${r.stderr}`,
+        'sin aislamiento la política NO denunció NODE_OPTIONS: la sonda no está midiendo lo que dice',
+      ).toMatch(/la variable NODE_OPTIONS está definida/);
     } finally {
       rmSync(dirname(marca), { recursive: true, force: true });
     }
@@ -541,6 +611,72 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
   });
 
   /**
+   * 🔴 **CAMPAÑA · UN HIJO SILENCIOSO AL IMPORTAR, que sólo ③ puede ver.**
+   *
+   * Las dos campañas anteriores mutan cosas que ① o ② alcanzan a registrar. Esta
+   * introduce, **en el cuerpo del módulo** —o sea al importarlo, sin CLI de por
+   * medio—, un proceso hijo que no es ninguno de los tres entrypoints ni ningún
+   * gestor de paquetes. Es el caso que ningún sensor de `0.161.6` podía ver y que
+   * ② tampoco ve: **la única red que lo atrapa es el censo de `child_process`.**
+   *
+   * Por eso las tres aserciones importan y ninguna sobra:
+   *
+   * ```
+   * ① entrypoints   VACÍO   ← el hijo no es una herramienta conocida
+   * ② gestores      VACÍO   ← ni pasa por el PATH
+   * ③ procesos      ≠ VACÍO ← y aun así se creó: sólo este sensor lo sostiene
+   * ```
+   *
+   * El binario elegido es `/bin/echo` con la salida descartada: inerte, local,
+   * sin red y sin efectos. Lo que se prueba es **que se creó un proceso**, no qué
+   * hizo.
+   */
+  it('🔴 CAMPAÑA · un hijo silencioso al importar muere SÓLO por el sensor de procesos', () => {
+    const base = mkdtempSync(join(tmpdir(), 'payme-silencioso-'));
+    const { marca, marcas, env } = montarEspia();
+    try {
+      const libCopia = join(base, 'aliasesLib.mjs');
+      copyFileSync(LIB, libCopia);
+      const original = readFileSync(libCopia, 'utf8');
+      /**
+       * La mutación va al final del módulo: se ejecuta con el `import`, que es
+       * exactamente la conducta que este archivo existe para prohibir.
+       */
+      writeFileSync(
+        libCopia,
+        `${original}\n`
+          + "import { spawnSync as __sp } from 'node:child_process';\n"
+          + "__sp('/bin/echo', ['efecto-al-importar'], { stdio: 'ignore' });\n",
+      );
+
+      const r = spawnSync(
+        process.execPath,
+        ['--input-type=module', '-e', `import ${JSON.stringify(pathToFileURL(libCopia).href)};`],
+        { env, encoding: 'utf8' },
+      );
+      expect(r.signal, 'el import mutado murió por señal').toBeNull();
+
+      expect(
+        leer(marcas.entrypoints),
+        '① registró algo: el mutante no es ajeno a los entrypoints y no reproduce el caso',
+      ).toBe('');
+      expect(
+        leer(marcas.gestores),
+        '② registró algo: el mutante pasó por el PATH y no reproduce el caso',
+      ).toBe('');
+      const procesos = leer(marcas.procesos);
+      expect(
+        procesos,
+        '③ no vio el hijo silencioso: el camino mutado NO fue alcanzado o el censo no cubre esta forma',
+      ).not.toBe('');
+      expect(procesos, `③: ${procesos}`).toMatch(/\/bin\/echo/);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+      rmSync(dirname(marca), { recursive: true, force: true });
+    }
+  });
+
+  /**
    * 🔴 P101 · EL ORÁCULO PRIMARIO ES CONDUCTUAL — y por qué se invirtió.
    *
    * Cuatro criterios de esta serie fueron **enumeraciones que fallan**, cada una más
@@ -563,17 +699,24 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * Toda función de la lib hace una de tres cosas observables:
    *
    * ```
-   * adjudicar / acreditar  →  empuja a `fallas`         ← sensor ①
-   * invalidar              →  BORRA del disco           ← sensor ②
-   * listar poblaciones     →  lanza `npx`               ← sensor ③
-   * cualquiera que LANCE   →  rechaza el import (F=-1) ← sensor ④
+   * adjudicar / acreditar  →  empuja a `fallas`              ← observable A
+   * invalidar              →  BORRA del disco                ← observable B
+   * listar poblaciones     →  CREA UN PROCESO HIJO           ← observables ①②③
+   * cualquiera que LANCE   →  rechaza el import (F=-1)       ← observable D
    * ```
+   *
+   * ⚠️ **La tercera fila decía «lanza `npx`», y desde `0.161.5` eso es historia:**
+   * la lib resuelve sus herramientas dentro de `node_modules` y las invoca con
+   * `process.execPath`. Lo que se observa hoy es **la creación del proceso**, con
+   * los tres sensores de esta suite —entrypoints, gestores y censo de
+   * `child_process`—, no el nombre del ejecutable.
    *
    * 🔴 P103 · ALCANCE DECLARADO — LO QUE ESTE OBSERVER PUEDE Y NO PUEDE.
    *
    * **Puede:** detectar que una función exportada se ejecutó al importar, cuando
    * esa ejecución deja uno de tres rastros —fallas acumuladas, borrado en disco,
-   * o un proceso lanzado por `npx`—.
+   * o **la creación de un proceso hijo**, de la forma que sea: el censo de
+   * `child_process` no depende del ejecutable ni del `PATH`—.
    *
    * 🔴 **NO puede, y está medido:** ver una ejecución que el propio módulo
    * **capture, compense o limpie**. Los tres bypasses conocidos:
@@ -604,7 +747,7 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * es un hueco del observer: es que no hay efecto que observar.
    */
   it('🔴 IMPORTADO · cero EFECTOS · el oráculo que no enumera formas', () => {
-    const { marca, env } = montarEspia();
+    const { marca, marcas, env } = montarEspia();
     const raiz = dirname(marca);
     try {
       const reporte = join(raiz, '.vitest-corrida.json');
@@ -632,15 +775,22 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
       // ② nadie invalidó
       expect(existsSync(reporte), 'importar la lib BORRÓ el reporte de la corrida').toBe(true);
       expect(existsSync(dist), 'importar la lib BORRÓ el artefacto del build').toBe(true);
-      // ③ nadie lanzó herramientas
-      expect(invocaciones(marca), 'importar la lib EJECUTÓ herramientas del CLI').toBe('');
+      /**
+       * ③ nadie ejecutó nada — y se afirma **sensor por sensor**. `0.161.7`
+       * montaba los tres y leía sólo el primero mientras el docblock decía que
+       * los tres quedaban acreditados: la misma operación de medir un
+       * subconjunto y afirmar el total.
+       */
+      expect(leer(marcas.entrypoints), 'importar la lib invocó un entrypoint local').toBe('');
+      expect(leer(marcas.gestores), 'importar la lib alcanzó un gestor de paquetes').toBe('');
+      expect(leer(marcas.procesos), 'importar la lib creó un proceso hijo').toBe('');
     } finally {
       rmSync(raiz, { recursive: true, force: true });
     }
   });
 
   it('🔴 IMPORTADO · cero invocaciones del CLI, no sólo cero salida', () => {
-    const { marca, env } = montarEspia();
+    const { marca, marcas, env } = montarEspia();
     try {
       const r = spawnSync(
         process.execPath,
@@ -650,8 +800,21 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
       // 🔴 LA AFIRMACIÓN NUEVA: el EFECTO, no la salida. Un `adjudicarPoblacion()`
       // silencioso en la rama importada deja esto ≠ '' aunque no imprima nada.
       expect(
-        invocaciones(marca),
-        'importar el módulo EJECUTÓ herramientas del CLI: silencio no es inacción',
+        leer(marcas.entrypoints),
+        'importar el módulo invocó un entrypoint local: silencio no es inacción',
+      ).toBe('');
+      expect(
+        leer(marcas.gestores),
+        'importar el módulo alcanzó un gestor de paquetes',
+      ).toBe('');
+      /**
+       * 🔴 Ésta es la que ningún sensor anterior podía sostener: **cero procesos
+       * de cualquier clase**, no sólo cero entrypoints conocidos. Un hijo
+       * silencioso y ajeno a las dos primeras marcas queda registrado acá.
+       */
+      expect(
+        leer(marcas.procesos),
+        'importar el módulo creó un proceso hijo',
       ).toBe('');
       // Y las tres señales terminales se conservan: cubren el caso ruidoso, que
       // es distinto y también hay que cerrarlo.
