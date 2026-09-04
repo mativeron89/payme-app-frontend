@@ -100,7 +100,9 @@ function importarCon(extra: string): { fallas: number; borro: boolean } {
  *
  * Se montan **tres sensores ortogonales** y cada uno mide una sola cosa: los
  * entrypoints locales invocados (①), los gestores de paquetes alcanzados por el
- * `PATH` (②) y **todo** proceso hijo creado (③, censando `child_process`).
+ * `PATH` (②) y los procesos creados **por los siete exports instrumentados de
+ * `node:child_process`** (③). Ese tercero observa una población enumerada, no el
+ * universo de procesos: el alcance exacto está declarado en su docblock.
  * Ninguno habla por los otros — tratarlos como equivalentes fue el falso oráculo
  * de `0.161.6`. Con eso:
  *
@@ -120,9 +122,12 @@ function importarCon(extra: string): { fallas: number; borro: boolean } {
  * ① **estructura** — la lógica vive en `aliasesLib.mjs`, que **no contiene
  *    dispatcher**. No hay rama importada capaz de ejecutar nada, no porque una
  *    condición lo impida sino porque el código no está ahí;
- * ② **efecto observable** — importar la lib no invoca herramientas ni crea
- *    procesos (sensores ①②③) y **no borra el reporte ni el artefacto** (los dos
- *    sinks de disco que Codex midió verdes, y que el workflow usa);
+ * ② **efecto observable** — importar la lib no invoca herramientas locales (①),
+ *    no alcanza gestores por el `PATH` (②), no crea procesos **por los siete
+ *    exports instrumentados** (③), y **no borra el reporte ni el artefacto** (los
+ *    dos sinks de disco que Codex midió verdes, y que el workflow usa). Cada
+ *    ausencia va con el sensor que la acredita: en el camino local ② queda vacío
+ *    por construcción, así que atribuirle a ①②③ un mismo efecto sería falso;
  * ③ 🔴 **RETIRADA en el P101.** Acá había una tercera defensa que afirmaba que la
  *    superficie importable «sólo declara, ninguna invocación ni siquiera
  *    inofensiva». **Ese claim era falso sobre el objeto sano** —la lib evalúa
@@ -350,7 +355,8 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
      * 🔴 P101 · EL FIXTURE ES ROTO A PROPÓSITO — es lo que hace visible el efecto.
      *
      * Con un `package.json` sano, `adjudicarAliases()` corre y **no deja nada**:
-     * cero fallas, cero disco, cero procesos. Con los aliases rotos, cualquier
+     * cero fallas, cero disco y cero procesos **de los siete exports
+     * instrumentados**. Con los aliases rotos, cualquier
      * adjudicación que se ejecute deja `fallas.length > 0`, **sin importar en qué
      * forma sintáctica se la haya escrito.**
      */

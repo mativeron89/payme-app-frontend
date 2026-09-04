@@ -11,6 +11,59 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.10 — El censo no vio lo que el énfasis partía (2026-09-04)
+
+Orden `AF-STAGE1-ALIASES-IMPORTABLE-ORACLE-10-CLAUDE`, base `25ec8172…`.
+**Sin push, sin deploy, sin proveedor, sin DB, sin secreto y sin red.** Entrada **documental**: en el
+test sólo cambian comentarios y docblocks. Las entradas anteriores no se reescriben.
+
+### 🔴 `0.161.9` declaró un censo en cero que no lo estaba
+
+Sobrevivían **tres** afirmaciones universales en presente, y la entrada anterior afirmó lo
+contrario. Esa evidencia era falsa:
+
+| línea | decía | corregido a |
+|---|---|---|
+| `:103` | «**todo** proceso hijo creado (③)» | los procesos creados **por los siete exports instrumentados** |
+| `:123-125` | «no invoca herramientas ni crea procesos (sensores ①②③)» | cada ausencia con **el sensor que la acredita**; en el camino local **② queda vacío** |
+| `:352-353` | «cero fallas, cero disco, cero procesos» | «…y cero procesos **de los siete exports instrumentados**» |
+
+### Por qué el censo anterior no las vio: cuatro asteriscos
+
+El recenso de `0.161.9` buscó **literales** —`todo proceso`, `TODO hijo`— sobre un archivo lleno de
+énfasis Markdown. **`**todo** proceso` no contiene la subcadena `todo proceso`.** El mismo censo,
+quitando `*`, `_` y backticks antes de buscar, devuelve `:103` además de las históricas.
+
+📌 **Y la clase es la del día, con una vuelta de tuerca: el subconjunto lo produjo la SINTAXIS DEL
+TEXTO, no el alcance del sensor.** Un censo por literales enumera formas, y las formas siempre tienen
+una más; normalizar antes de buscar ataca la clase, agregar el sexto deletreo compra la instancia.
+
+⚠️ **Y dos censos independientes que coinciden en un «cero» no se corroboran si comparten el
+instrumento.** Acá coincidieron dos, y era la misma falla contada dos veces.
+
+### El gate de equivalencia, ahora por efecto
+
+La prueba de que el cambio es documental deja de contar prefijos de línea y pasa a **transpilar
+ambos blobs con `removeComments: true` y exigir salida byte-idéntica**:
+
+```
+BASE 25ec8172   22498 bytes   sha256 6400a8f882c1fb743c4a582bd4e1c8447d0f5690d4d26b9c53f415e460f2003e
+CANDIDATO       22498 bytes   sha256 6400a8f882c1fb743c4a582bd4e1c8447d0f5690d4d26b9c53f415e460f2003e
+TypeScript local 5.6.3
+```
+
+Contar prefijos era otra enumeración de formas; esto observa el efecto y no depende de cómo se
+escribieron las líneas.
+
+### Lo que NO se tocó
+
+Las correcciones verdaderas de `0.161.9` se conservan: el camino local lo observan **① y ③** con ②
+vacío; el preload externo de `child_process` **está** implementado; la instrumentación externa de
+`fs` **no**, así que los bypasses que compensan o limpian sin pasar por los exports instrumentados
+siguen declarados y no cerrados. Los pasajes ya acotados —`:199`, `:527-530`, `:550`, `:868-872`— se
+dejaron como estaban: **un censo bien hecho puede marcar texto correcto, y para eso está el rótulo,
+no la edición.**
+
 ## 0.161.9 — Documentación: cuatro sobredeclaraciones y una tabla que prometía un universo (2026-09-04)
 
 Orden `AF-STAGE1-ALIASES-IMPORTABLE-ORACLE-09-CLAUDE` más su adenda acumulativa
