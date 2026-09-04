@@ -358,6 +358,28 @@ describe('🔴 el `main` LLAMA a cada validador · uno por cable', () => {
       firma: /no nombra ningún proyecto/,
     },
     {
+      /**
+       * 🔴 **La guarda que impide salir a la red desde una RAIZ sintética.**
+       *
+       * Sin ella, un `-p` que apunta a un tsconfig inexistente igual llegaba a
+       * `npx tsc`, y desde un directorio sin `node_modules` eso no resuelve
+       * TypeScript: baja del registro el paquete homónimo que no es el
+       * compilador. En CI, con caché fría, ~35 s por proyecto — cuatro
+       * proyectos, 142 s, y un caso con límite de 5 s reportando 142 306 ms.
+       *
+       * Este caso fija la conducta nueva: el proyecto se comprueba en disco y
+       * la falla se nombra, sin ejecutar nada.
+       */
+      cable: '--aliases → adjudicarProyectosTs (proyecto inexistente)',
+      args: ['--aliases'],
+      montar: (r) => {
+        writeFileSync(join(r, 'package.json'), JSON.stringify({
+          scripts: { ...SANO, typecheck: 'tsc --noEmit -p tsconfig.inexistente.json' },
+        }));
+      },
+      firma: /el proyecto «tsconfig\.inexistente\.json» del alias `typecheck` no existe en disco/,
+    },
+    {
       cable: '--aliases → adjudicarPoblacion',
       args: ['--aliases'],
       montar: (r) => writeFileSync(join(r, 'package.json'), JSON.stringify({ scripts: SANO })),

@@ -464,6 +464,36 @@ export function adjudicarProyectosTs() {
   const cubiertos = new Set();
   for (const proy of proyectos) {
     /**
+     * 🔴 **EL PROYECTO SE COMPRUEBA EN DISCO ANTES DE LLAMAR A `npx`, y esto
+     * frenó dos releases.**
+     *
+     * Sin esta guarda, una `RAIZ` sin dependencias —la que montan los casos
+     * sintéticos de `verificarAliases.test.ts`— igual llegaba al `execFileSync`
+     * de abajo. Y `npx tsc` desde un directorio sin `node_modules` **no
+     * resuelve TypeScript**: sale al registro público y baja el paquete OKUPA
+     * llamado `tsc`, que no es el compilador. Medido acá con
+     * `npx --no-install tsc --version`, que imprime su cartel:
+     * «This is not the tsc command you are looking for».
+     *
+     * En CI eso ocurría **una vez por proyecto** —cuatro— y con la caché de npm
+     * fría son ~35 s cada una. Es la causa exacta de que un caso con
+     * `testTimeout` de 5 s reportara 142 306 ms y 142 531 ms en dos intentos
+     * distintos: la diferencia de 0,16 % entre los dos era la señal de que no
+     * había ninguna contención, sino un trabajo determinista.
+     *
+     * ⚠️ **Y lo que importa más que el tiempo: eso significaba descargar y
+     * ejecutar un paquete ajeno dentro del build, en cada corrida con caché
+     * fría.** La guarda lo corta de raíz.
+     *
+     * El gate real no se debilita: los cuatro `tsconfig` del alias `typecheck`
+     * existen en el repo, así que en la RAIZ verdadera esta condición nunca se
+     * cumple y el camino de medición es el mismo de siempre.
+     */
+    if (!existsSync(join(RAIZ, proy))) {
+      fallar(`el proyecto «${proy}» del alias \`typecheck\` no existe en disco`);
+      continue;
+    }
+    /**
      * 🔴 `--listFiles`, NO `showConfig.files`, y la diferencia me mordió.
      *
      * `showConfig` lista las RAÍCES que el `include` resuelve; `--listFiles`

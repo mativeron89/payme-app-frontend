@@ -11,6 +11,82 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.4 — El gate de aliases salía a la red desde un directorio vacío (2026-09-03)
+
+Orden `AF-STAGE1-ALIASES-GATE-HERMETIC-TSCONFIG-GUARD-03-CLAUDE`, base `679525b5…`.
+**Sin push, sin deploy, sin proveedor, sin DB y sin secreto.** `0.161.3` queda intacta.
+
+### El síntoma, y por qué no era lo que parecía
+
+Los dos intentos del CI sobre `679525b5…` fallaron en el mismo caso de
+`scripts/verificarAliases.test.ts`, con `Test timed out in 5000ms`:
+
+```
+intento 1   --aliases → adjudicarAliases   142306 ms
+intento 2   --aliases → adjudicarAliases   142531 ms      ← 50 min después
+                                           ────────
+                        diferencia:           225 ms  (0,16 %)
+```
+
+🔴 **Ese 0,16 % es lo que refuta la explicación por contención**, que es la que esta sesión había
+publicado con un solo punto. Un recurso disputado da tiempos dispersos; dos corridas que coinciden
+al 0,16 % son trabajo determinista. El primer número ya estaba disponible en el intento 1 y con una
+sola medición no distinguía nada.
+
+📌 **Y `spawnSync` bloquea el event loop**, así que vitest no puede interrumpir el caso: registra el
+vencimiento recién cuando el control vuelve. El hecho medido no es «vitest esperó 142 s», sino que
+**el subproceso tardó 142 s**. Por eso subir el `testTimeout` habría comprado el verde enterrando el
+hecho.
+
+### La causa, reproducida acá
+
+El caso monta un `package.json` sintético en un directorio vacío. `--aliases` llega a
+`adjudicarProyectosTs`, que leía los cuatro `-p` del alias `typecheck` y llamaba
+`npx tsc -p <proyecto> --noEmit --listFiles` **sin comprobar que el proyecto existiera**, con `cwd`
+en esa raíz sin `node_modules`.
+
+Medido con un shim de `npx` en el `PATH` que registra cada llamada:
+
+```
+antes del fix, archivo completo   8 llamadas   (4 del cable adjudicarAliases + 4 del cable adjudicarPoblacion)
+después del fix                   0 llamadas
+con la guarda retirada (mutante)  9 llamadas   y el caso nuevo en rojo
+el gate sobre la raíz sintética   0,04 s       (antes, en CI: 142 s)
+```
+
+🔴 **Y lo que pesa más que el tiempo:** `npx tsc` desde un directorio sin dependencias **no resuelve
+TypeScript**. Sale al registro público y trae el paquete homónimo, que no es el compilador —
+verificado acá con `npx --no-install tsc --version`, que imprime su cartel: *«This is not the tsc
+command you are looking for»*. O sea que cada corrida de CI con caché fría **descargaba y ejecutaba
+un paquete ajeno dentro del build**, cuatro veces. La guarda lo corta antes de llamar.
+
+### Por qué recién hoy, y por qué el cable vecino era rápido
+
+`actions/setup-node` cachea `~/.npm` —donde vive `_npx`— con clave derivada del hash de
+`package-lock.json`. **Cada push de hoy tocó el lock** (bump de versión), así que la caché quedó
+fría y `npx` volvió a resolver desde el registro. El 2026-08-29, con caché caliente, el archivo
+entero tardó **4957 ms** y pasó.
+
+Eso explica también por qué en el mismo intento el cable `adjudicarPoblacion` marcó **1853 ms**
+haciendo los mismos cuatro `npx`: **el primer cable paga la descarga y deja el paquete en caché; los
+siguientes ya lo encuentran.** Los tres números —142 s, 1,8 s y 4957 ms— salen de la misma causa.
+
+### Qué se corrige y qué no
+
+Se agrega en `adjudicarProyectosTs` la comprobación en disco antes del `execFileSync`, con su
+mensaje propio, y un caso nuevo en `CABLES` que lo fija. **El gate real no se debilita**: los cuatro
+`tsconfig` del alias existen en el repo, así que sobre la raíz verdadera esa condición nunca se
+cumple.
+
+**Los otros dos `execFileSync('npx', …)` del archivo no se tocan y no hacen falta:** los de
+`vitest list` y `playwright test --list` viven dentro de `acreditarColeccion`, que corta con
+`fallar()` cuando `enDisco.length === 0` **antes** de invocar el listador — verificado en
+`aliasesLib.mjs`. Por eso sobre una raíz sintética nunca llegan a ejecutarse, y por eso el conteo
+con shim da cero después del fix.
+
+**No se toca el `testTimeout`.** Con la causa corregida, el caso vuelve a durar milisegundos; subir
+el umbral habría dejado vivo el hecho que el umbral estaba denunciando.
+
 ## 0.161.3 — Poner el gate en verde no era lo mismo que dejarlo mirando (2026-09-03)
 
 Orden `AF-STAGE1-SECRET-AUDIT-SHAPE-FIXTURES-02-CLAUDE`, base `10a06bdc…`.
