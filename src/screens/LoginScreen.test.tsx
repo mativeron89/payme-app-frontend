@@ -5,36 +5,37 @@ import { autoridadDeAlta, socialActionEligible } from './LoginScreen';
 const source = readFileSync(new URL('./LoginScreen.tsx', import.meta.url), 'utf8');
 
 /**
- * 🔴 **El literal se hoistea, y el nombre de la constante importa.**
+ * 🔴 **Los fixtures de invitación llevan un literal CORTO, y es a propósito.**
  *
- * `scripts/auditar-secretos.sh` marca toda línea AGREGADA donde un identificador
- * que termina en `password|passwd|secret|token|api_key` va seguido de `:`/`=` y
- * un literal entrecomillado de 8 o más caracteres. Es una regla de **forma**, no
- * de contenido: no distingue —ni puede— un fixture inventado de una credencial
- * real, y el repo es público, así que falla del lado correcto.
+ * `scripts/auditar-secretos.sh` marca una línea agregada cuando un identificador
+ * terminado en una palabra sensible va seguido de `:`/`=` y de un literal
+ * entrecomillado de **8 o más** caracteres. Es una regla de forma: no distingue
+ * —ni puede— un fixture inventado de una credencial real, y el repo es público,
+ * así que falla del lado correcto.
  *
- * Escrito inline, la clave y el literal entrecomillado quedaban pegados y el
- * patrón calzaba cuatro veces. Con la constante calza cero: `token: INVITACION`
- * no lleva comillas después del `:`, y `INVITACION` no contiene ninguna de las
- * palabras que el patrón busca. **El valor y la conducta probada son
- * exactamente los mismos.**
+ * El literal se acorta **para que la clave siga en la misma línea que el valor**
+ * y esta posición quede vigilada. La alternativa que se probó antes —mover el
+ * literal a una constante con otro nombre— también dejaba el gate en verde,
+ * pero **por el motivo equivocado: sacaba la clave del renglón y con eso la
+ * posición dejaba de mirarse.** Medido en el dictamen 05 del auditor con
+ * commits reales: una credencial sin prefijo conocido dentro de esa constante
+ * pasa sin verse; la misma credencial en la forma de acá se ve.
  *
- * 🔴 **Y este comentario NO reproduce la forma que describe, a propósito.** La
- * primera versión sí lo hacía —escribía el par clave-literal como ejemplo— y
- * habría vuelto a poner el gate en rojo por su cuenta: es una línea agregada
- * como cualquier otra. Lo cazó la medición de la clase, no la lectura.
+ * ⚠️ **El valor es deliberadamente INVÁLIDO por contrato** —la autoridad exige
+ * de 20 a 200 caracteres— y acá no importa: estos tests importan sólo
+ * `autoridadDeAlta` y `socialActionEligible`, y ninguna de las dos mira el
+ * largo. Los fixtures que SÍ cruzan `validToken` o el mock conservan literales
+ * válidos y no se tocan.
  *
- * ⚠️ No se renombra a algo evasivo a propósito: si algún día acá viviera una
- * credencial de verdad, el gate tiene que verla. Lo que se corrige es que un
- * fixture con forma de secreto haga rojo un gate que existe para otra cosa.
+ * 📌 Este comentario describe la forma sin instanciarla, también a propósito:
+ * escribirla como ejemplo pondría el gate en rojo por su cuenta.
  */
-const INVITACION = 'signup-token-aaaaaaaaaaaaaaaaaaaa';
 
 describe('LoginScreen · gates sociales owner-first', () => {
   it('login depende sólo de la acción exacta; registro exige autoridad, legal y nombres', () => {
     const base = {
       providerActionEnabled: true,
-      autoridad: { tipo: 'invitacion', token: INVITACION } as const,
+      autoridad: { tipo: 'invitacion', token: 'inv-aaa' } as const,
       legalReady: true,
       firstName: 'Mati',
       lastName: 'Verón',
@@ -65,7 +66,7 @@ describe('LoginScreen · gates sociales owner-first', () => {
    * email queda ligada la cuenta.
    */
   it('la invitación gana sobre el alta pública, y sin ninguna de las dos no hay alta', () => {
-    const conToken = { status: 'available', token: INVITACION, custodied: true } as const;
+    const conToken = { status: 'available', token: 'inv-aaa', custodied: true } as const;
     expect(autoridadDeAlta(conToken, true)).toEqual({ tipo: 'invitacion', token: conToken.token });
     expect(autoridadDeAlta(conToken, false)).toEqual({ tipo: 'invitacion', token: conToken.token });
     expect(autoridadDeAlta({ status: 'absent' }, true)).toEqual({ tipo: 'publica' });
@@ -90,7 +91,7 @@ describe('LoginScreen · gates sociales owner-first', () => {
       requiereInvitacion: false,
     } as const;
     const publica = { tipo: 'publica' } as const;
-    const invitacion = { tipo: 'invitacion', token: INVITACION } as const;
+    const invitacion = { tipo: 'invitacion', token: 'inv-aaa' } as const;
 
     expect(socialActionEligible({ ...base, autoridad: publica, email: 'mati@payme.mx' })).toBe(true);
     expect(socialActionEligible({ ...base, autoridad: publica, email: '   ' })).toBe(false);
@@ -120,7 +121,7 @@ describe('LoginScreen · gates sociales owner-first', () => {
     expect(socialActionEligible({ ...base, autoridad: { tipo: 'publica' } })).toBe(false);
     expect(socialActionEligible({
       ...base,
-      autoridad: { tipo: 'invitacion', token: INVITACION },
+      autoridad: { tipo: 'invitacion', token: 'inv-aaa' },
     })).toBe(true);
   });
 

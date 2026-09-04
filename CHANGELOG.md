@@ -11,6 +11,74 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.3 — Poner el gate en verde no era lo mismo que dejarlo mirando (2026-09-03)
+
+Orden `AF-STAGE1-SECRET-AUDIT-SHAPE-FIXTURES-02-CLAUDE`, base `10a06bdc…`.
+**Sin push, sin deploy, sin proveedor, sin DB y sin secreto.**
+
+Sucesor de `10a06bdc…`, que el auditor independiente frenó con **`STOP_NO_OK`** —dictamen 05,
+sha256 `35dbeaa61d5223be4aade1cd5f7922bc1fa30a5403ae560284f41b1b735e335f`: 0 BLOCKER, 1 MAJOR,
+3 NOTE—. **La entrada `0.161.2` no se reescribe**; acá se dice qué de ella era falso.
+
+### 🔴 Qué era falso en `0.161.2`
+
+Aquella entrada presentó dos correcciones como equivalentes. **No lo eran.**
+
+- En `moneyGuards.test.ts` se acortó el literal y **la clave quedó en la línea del valor**: esa
+  posición sigue vigilada. Correcto, y se conserva —este commit no toca ese archivo—.
+- En `LoginScreen.test.tsx` se movió el literal a una constante con otro nombre. El gate quedó en
+  verde **por el motivo equivocado: la clave salió del renglón, y con eso esas cuatro posiciones
+  dejaron de mirarse.** Medido por el auditor con commits reales y reproducido acá: una credencial
+  sin prefijo conocido, puesta dentro de esa constante, **pasa sin verse**; la misma credencial en
+  la forma inline **se ve**.
+
+⚠️ **Y el docblock de aquel commit afirmaba lo contrario** — que si algún día viviera ahí una
+credencial de verdad el gate tendría que verla. **Era falso**, en un repo público, y escrito
+exactamente donde el próximo editor va a buscar si puede confiar. Una guarda ausente con la
+tranquilidad ya redactada es peor que no tener guarda.
+
+📌 **La señal estaba a la vista: las dos correcciones del mismo commit hacían cosas opuestas.**
+Cuando un mismo hallazgo se arregla de dos formas distintas, **compararlas es el control**.
+
+### El arreglo, y el trade-off que no tiene salida gratis
+
+La regla del gate es: identificador terminado en palabra sensible, `:` o `=`, y literal
+entrecomillado de **8 o más** caracteres. De ahí que **no se puedan tener las tres cosas a la vez**
+—clave en la línea, literal de largo realista, y gate en verde—. Toda forma que apague el gate
+(constante, concatenación, template literal) apaga la vigilancia por la misma razón. Las salidas
+son tres:
+
+| | vigilancia | fixture válido por contrato | costo |
+|---|---|---|---|
+| **(a) literal corto inline** | ✅ conservada | ❌ inválido (20–200) | ninguno acá |
+| (b) hoisting | ❌ perdida | ✅ | **es el MAJOR; descartada** |
+| (c) exención auditable en el script | ✅ | ✅ | le agrega una puerta al gate |
+
+Se toma **(a)**. El valor es deliberadamente inválido por contrato **donde el contrato no se
+ejercita**: estos tests importan sólo `autoridadDeAlta` y `socialActionEligible`, y ninguna mira el
+largo —`LoginScreen.tsx:98` devuelve el token tal cual—. `validToken` (`signupInvitation.ts`, 20–200)
+y los validadores del mock no participan. **Los fixtures que sí los cruzan conservan sus literales
+válidos y no se tocan.**
+
+**(c) queda como orden futura**, junto con la orden al dueño App Backend por la línea del espejo
+—`contract-mirror/contract/social-auth-v1.json:51`, byte-idéntica a `9c5a7b14`, que no se corrige
+acá porque rompería el espejo—.
+
+### Números corregidos y medidos
+
+🔴 **El «109 líneas agregadas» de `0.161.2` estaba mal.** El conteo del script incluye las
+cabeceras `+++` del diff: agregadas reales **104**, cabeceras **5**. Es del instrumento, pero el
+número salió publicado acá y se corrige acá.
+
+**La clase enumerada NO cambia: sigue en 47 líneas / 11 archivos**, medido en la base y en el
+candidato con el mismo comando. Reponer las cuatro líneas inline **no las devuelve a la clase**,
+porque su literal corto no alcanza el umbral del patrón. (La previsión era que subiera a 51/12; se
+midió y no sube.)
+
+```
+git grep -inE '(^|[^A-Za-z0-9_'"'"'"-])[A-Za-z0-9_-]*(password|passwd|secret|token|api_?key)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{8,}' -- ':!scripts/auditar-secretos.sh'
+```
+
 ## 0.161.2 — Un fixture con forma de secreto puso el CI en rojo, y el deploy no salió (2026-09-03)
 
 Orden `AF-STAGE1-SECRET-AUDIT-SHAPE-FIXTURES-01-CLAUDE`, base `04e3f672…`.
