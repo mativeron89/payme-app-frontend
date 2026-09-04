@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import {
+  chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -96,9 +98,11 @@ function importarCon(extra: string): { fallas: number; borro: boolean } {
  *
  * ## Cómo se mide el efecto
  *
- * Se pone un `npx` **de mentira** al frente del `PATH`, que lo único que hace es
- * escribir una marca. El CLI llega a `npx` para sus herramientas pesadas, así
- * que:
+ * Se montan **tres sensores ortogonales** y cada uno mide una sola cosa: los
+ * entrypoints locales invocados (①), los gestores de paquetes alcanzados por el
+ * `PATH` (②) y **todo** proceso hijo creado (③, censando `child_process`).
+ * Ninguno habla por los otros — tratarlos como equivalentes fue el falso oráculo
+ * de `0.161.6`. Con eso:
  *
  * ```
  * importar el módulo   →  CERO marcas    ← el control target
@@ -116,9 +120,9 @@ function importarCon(extra: string): { fallas: number; borro: boolean } {
  * ① **estructura** — la lógica vive en `aliasesLib.mjs`, que **no contiene
  *    dispatcher**. No hay rama importada capaz de ejecutar nada, no porque una
  *    condición lo impida sino porque el código no está ahí;
- * ② **efecto observable** — importar la lib no invoca herramientas (espía de
- *    `npx`) y **no borra el reporte ni el artefacto** (los dos sinks no-`npx`
- *    que Codex midió verdes, y que el workflow usa);
+ * ② **efecto observable** — importar la lib no invoca herramientas ni crea
+ *    procesos (sensores ①②③) y **no borra el reporte ni el artefacto** (los dos
+ *    sinks de disco que Codex midió verdes, y que el workflow usa);
  * ③ 🔴 **RETIRADA en el P101.** Acá había una tercera defensa que afirmaba que la
  *    superficie importable «sólo declara, ninguna invocación ni siquiera
  *    inofensiva». **Ese claim era falso sobre el objeto sano** —la lib evalúa
@@ -184,6 +188,84 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
     );
   }
 
+  /**
+   * 🔴 **TRES SENSORES ORTOGONALES, y ninguno habla por los otros.**
+   *
+   * El candidato anterior tenía UNO —los entrypoints locales— y con él afirmó
+   * tres cosas distintas. Codex lo tumbó con el contraejemplo exacto: agregó una
+   * llamada **ADITIVA** a `npx` dentro de `entrypointLocal`, conservando la
+   * invocación local. Los entrypoints quedaron registrados, el test siguió
+   * verde, y el gestor corrió seis veces. **«Marca de entrypoints vacía» nunca
+   * significó «cero gestores» ni «cero procesos».**
+   *
+   * Lo que cada sensor mide, y **sólo** eso:
+   *
+   * ```
+   * ① entrypoints  argv de los tres entrypoints locales    ⇒ «se invocó la herramienta local»
+   * ② gestores     npx/npm/yarn/pnpm/corepack en el PATH   ⇒ «se buscó afuera»
+   * ③ procesos     TODO hijo, censado en child_process     ⇒ «se creó algún proceso»
+   * ```
+   *
+   * ③ es el único que puede sostener «cero procesos»: parchea `child_process`
+   * mediante `--require`, que corre **antes** que el módulo principal, así que la
+   * vista queda tomada antes de que cualquier `import` ESM fije su binding.
+   * Verificado con una sonda propia antes de usarlo — un sensor que no se prueba
+   * es una suposición con nombre técnico.
+   *
+   * ⚠️ Los shims de ② son **inertes**: registran y salen ≠0. No ejecutan el
+   * gestor real, no instalan y no abren red. Y están al frente del `PATH` a
+   * propósito: si el CLI vuelve a resolver por ahí, el sensor lo ve en vez de
+   * que la llamada se vaya a la red de verdad.
+   */
+  const GESTORES = ['npx', 'npm', 'yarn', 'pnpm', 'corepack'] as const;
+
+  const marcasDe = (raiz: string) => ({
+    entrypoints: join(raiz, 'invocaciones.txt'),
+    gestores: join(raiz, 'gestores.txt'),
+    procesos: join(raiz, 'procesos.txt'),
+  });
+
+  function montarSensores(raiz: string): { readonly env: NodeJS.ProcessEnv } {
+    const m = marcasDe(raiz);
+    for (const archivo of Object.values(m)) writeFileSync(archivo, '');
+
+    const dirShim = join(raiz, 'shim');
+    mkdirSync(dirShim, { recursive: true });
+    for (const g of GESTORES) {
+      const ruta = join(dirShim, g);
+      writeFileSync(ruta, `#!/bin/sh\necho "${g} $*" >> ${JSON.stringify(m.gestores)}\nexit 1\n`);
+      chmodSync(ruta, 0o755);
+    }
+
+    const censo = join(raiz, 'censo-procesos.cjs');
+    writeFileSync(
+      censo,
+      "const cp = require('node:child_process');\n"
+        + "const { appendFileSync } = require('node:fs');\n"
+        + `const LOG = ${JSON.stringify(m.procesos)};\n`
+        + "for (const nombre of ['execFileSync','spawnSync','execSync','exec','execFile','spawn','fork']) {\n"
+        + "  const orig = cp[nombre];\n"
+        + "  if (typeof orig !== 'function') continue;\n"
+        + "  cp[nombre] = function (...args) {\n"
+        + "    appendFileSync(LOG, nombre + ' ' + JSON.stringify(args[0]) + '\\n');\n"
+        + "    return orig.apply(this, args);\n"
+        + "  };\n"
+        + "}\n",
+    );
+
+    return {
+      env: {
+        ...process.env,
+        PATH: `${dirShim}:${process.env['PATH'] ?? ''}`,
+        NODE_OPTIONS: `--require ${censo}`,
+      },
+    };
+  }
+
+  /** Lee un sensor. Devuelve '' cuando no registró nada. */
+  const leer = (archivo: string): string =>
+    existsSync(archivo) ? readFileSync(archivo, 'utf8').trim() : '';
+
   /** Los tres entrypoints que el CLI puede tocar, en el orden en que se afirman. */
   const ENTRYPOINTS_ESPERADOS: ReadonlyArray<readonly [string, string]> = [
     ['tsc', join('typescript', 'bin', 'tsc')],
@@ -195,9 +277,11 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * `conEntrypoints: false` monta el MISMO árbol sin `node_modules`: es el
    * control rojo, y su valor está en ser idéntico salvo por esa ausencia.
    */
-  function montarEspia(
-    conEntrypoints = true,
-  ): { readonly marca: string; readonly env: NodeJS.ProcessEnv } {
+  function montarEspia(conEntrypoints = true): {
+    readonly marca: string;
+    readonly marcas: { entrypoints: string; gestores: string; procesos: string };
+    readonly env: NodeJS.ProcessEnv;
+  } {
     const raiz = mkdtempSync(join(tmpdir(), 'payme-espia-'));
     const marca = join(raiz, 'invocaciones.txt');
     /**
@@ -217,35 +301,29 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
      * 🔴 Hace falta un test EN DISCO, y lo descubrió el control positivo.
      *
      * Sin él, `acreditarColeccion` corta por «no hay archivos, mediría en vacío»
-     * y **nunca llega a invocar `npx`**: el espía no registraba nada, y el caso
-     * target habría pasado sobre un escenario que no ejercita el camino. El
+     * y **nunca llega a invocar la herramienta**: los sensores no registran nada
+     * y el caso target pasaría sobre un escenario que no ejercita el camino. El
      * control positivo se puso rojo primero, así que no se publicó una medición
-     * hueca.
+     * hueca. (Cuando esto se escribió el camino terminaba en `npx`; hoy termina
+     * en el entrypoint local, y la razón del fixture no cambió.)
      */
     mkdirSync(join(raiz, 'src'), { recursive: true });
     writeFileSync(join(raiz, 'src', 'sonda.test.ts'), 'export const a = 1;\n');
     /**
      * 🔴 P99 · Y el fixture ejercita LOS TRES flujos, no sólo Vitest.
      *
-     * Medido: con el escenario mínimo el espía sólo registraba `vitest list` —el
-     * gate cortaba antes de llegar a `tsc` y a Playwright—, así que el claim
-     * «llega a `npx` para sus herramientas pesadas» estaba acreditado en un
-     * tercio. Con un `e2e/` poblado y un alias `typecheck` que nombre un
-     * proyecto, los tres caminos se recorren de verdad.
+     * Medido: con el escenario mínimo sólo se registraba el listado de Vitest
+     * —el gate cortaba antes de llegar a TypeScript y a Playwright—, así que el
+     * claim «invoca sus tres herramientas» estaba acreditado en un tercio. Con
+     * un `e2e/` poblado y un alias `typecheck` que nombre un proyecto, los tres
+     * caminos se recorren de verdad.
      */
     mkdirSync(join(raiz, 'e2e'), { recursive: true });
     writeFileSync(join(raiz, 'e2e', 'sonda.spec.ts'), 'export const b = 1;\n');
     writeFileSync(join(raiz, 'tsconfig.json'), JSON.stringify({ include: ['src'] }));
     if (conEntrypoints) montarEntrypoints(raiz, marca);
-    /**
-     * 🔴 El `PATH` se deja **tal cual**, sin agregarle nada. Que el escenario no
-     * lo toque es parte de lo que se afirma: si el CLI volviera a resolver por
-     * `PATH`, no encontraría ningún entrypoint falso y la marca quedaría vacía.
-     */
-    return {
-      marca,
-      env: { ...process.env, PAYME_RAIZ_VERIFICACION: raiz },
-    };
+    const { env } = montarSensores(raiz);
+    return { marca, marcas: marcasDe(raiz), env: { ...env, PAYME_RAIZ_VERIFICACION: raiz } };
   }
 
   const invocaciones = (marca: string): string =>
@@ -255,7 +333,7 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
     // Sin esto, «cero invocaciones al importar» pasaría igual con un espía roto o
     // con un CLI que no llama a nada: «no ejecuta al importarse» y «no ejecuta
     // nunca» son indistinguibles, y el caso de abajo mediría en vacío.
-    const { marca, env } = montarEspia();
+    const { marca, marcas, env } = montarEspia();
     try {
       spawnSync(process.execPath, [CLI, '--aliases'], { env, encoding: 'utf8' });
       const registro = invocaciones(marca);
@@ -304,6 +382,25 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
           `«${herramienta}» no se invocó con process.execPath`,
         ).toBe(process.execPath);
       }
+
+      /**
+       * 🔴 Los otros dos sensores, afirmados por separado y con su propio
+       * significado. Ninguno se deduce del primero: el contraejemplo de Codex
+       * fue exactamente una llamada ADITIVA a `npx` que dejaba ① intacto.
+       */
+      expect(
+        leer(marcas.gestores),
+        'el CLI invocó un gestor de paquetes teniendo los entrypoints locales',
+      ).toBe('');
+      const procesos = leer(marcas.procesos).split('\n').filter(Boolean);
+      expect(
+        procesos.length,
+        `se crearon ${procesos.length} procesos y sólo se esperaban los 3 entrypoints:\n${procesos.join('\n')}`,
+      ).toBe(3);
+      for (const linea of procesos) {
+        expect(linea, `un proceso no salió por process.execPath: ${linea}`)
+          .toContain(JSON.stringify(process.execPath));
+      }
     } finally {
       rmSync(dirname(marca), { recursive: true, force: true });
     }
@@ -323,7 +420,11 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    *
    * ## Qué acredita cada aserción
    *
-   * - marca vacía ⇒ **no se creó ningún proceso**;
+   * - sensor ① vacío ⇒ **no se invocó ningún entrypoint local**;
+   * - sensor ② vacío ⇒ **no se alcanzó ningún gestor de paquetes**;
+   * - sensor ③ vacío ⇒ **no se creó NINGÚN proceso hijo**, de ninguna forma.
+   *   Las tres se afirman por separado: `0.161.6` decía la tercera midiendo sólo
+   *   la primera, y ése fue el falso oráculo que Codex tumbó;
    * - las tres firmas ⇒ el diagnóstico es **estable y nombra la causa real**
    *   («no está instalado en node_modules»), no un accidente del intento;
    * - la ausencia de un error de módulo no encontrado ⇒ el CLI **ni siquiera
@@ -333,15 +434,20 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    *   *fallar al chocarse*.
    */
   it('🔴 CONTROL ROJO · sin entrypoints locales: cero invocaciones y falla cerrada estable', () => {
-    const { marca, env } = montarEspia(false);
+    const { marca, marcas, env } = montarEspia(false);
     try {
       const r = spawnSync(process.execPath, [CLI, '--aliases'], { env, encoding: 'utf8' });
       const salida = `${r.stdout}${r.stderr}`;
 
-      expect(
-        invocaciones(marca),
-        'sin entrypoints locales el CLI igual creó un proceso',
-      ).toBe('');
+      /**
+       * 🔴 Las tres afirmaciones, **una por sensor**, y ninguna deducida de otra:
+       * ① no se invocó ningún entrypoint local · ② no se buscó afuera · ③ no se
+       * creó NINGÚN proceso hijo, de ninguna forma. La versión anterior decía ③
+       * midiendo sólo ①, y ése fue el falso oráculo.
+       */
+      expect(leer(marcas.entrypoints), 'se invocó un entrypoint local').toBe('');
+      expect(leer(marcas.gestores), 'se invocó un gestor de paquetes').toBe('');
+      expect(leer(marcas.procesos), 'se creó al menos un proceso hijo').toBe('');
       expect(r.status, 'el gate no falló cerrado').not.toBe(0);
       for (const herramienta of ['TypeScript', 'Vitest', 'Playwright']) {
         expect(
@@ -354,6 +460,82 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
         'hubo un error de resolución de módulo: el CLI intentó invocar un entrypoint inexistente',
       ).not.toMatch(/Cannot find module|MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND/);
     } finally {
+      rmSync(dirname(marca), { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * 🔴 **CAMPAÑA MUTANTE AUTOMATIZADA · el contraejemplo de Codex, versionado.**
+   *
+   * El candidato anterior afirmó que su test mataba «el retorno a npx». No lo
+   * mataba: aquel mutante **reemplazaba** la invocación local por `npx`, así que
+   * lo que se ponía rojo era el sensor ① por ausencia de entrypoints — moría por
+   * el motivo equivocado. Codex agregó una llamada **ADITIVA**, que conserva la
+   * local, y el test siguió verde con el gestor corriendo seis veces.
+   *
+   * Este caso deja ese contraejemplo adentro de la suite, así que la próxima vez
+   * no depende de que a alguien se le ocurra. Y afirma **las tres cosas que lo
+   * vuelven concluyente**:
+   *
+   * 1. el sensor ① **no ve nada raro** —los entrypoints se invocan igual—, que
+   *    es exactamente por qué el oráculo viejo era falso;
+   * 2. el sensor ② **sí registra** el gestor: el camino mutado fue alcanzado, y
+   *    el shim inerte lo prueba sin ejecutar nada real ni abrir red;
+   * 3. el sensor ③ cuenta **más procesos que entrypoints**, que es la forma
+   *    independiente de ver lo mismo.
+   *
+   * Se muta una COPIA en un temporal: `aliasesLib.mjs` está fuera de la allowlist
+   * de esta orden y el árbol de trabajo no se toca. La copia es autosuficiente
+   * porque el CLI sólo importa de la lib y la lib sólo importa builtins.
+   */
+  it('🔴 CAMPAÑA · una llamada ADITIVA a npx dentro de entrypointLocal la ven ② y ③, no ①', () => {
+    const base = mkdtempSync(join(tmpdir(), 'payme-campana-'));
+    const { marca, marcas, env } = montarEspia();
+    try {
+      copyFileSync(join(AQUI, 'aliasesLib.mjs'), join(base, 'aliasesLib.mjs'));
+      copyFileSync(CLI, join(base, 'verificar-aliases.mjs'));
+
+      const libCopia = join(base, 'aliasesLib.mjs');
+      const original = readFileSync(libCopia, 'utf8');
+      const ancla = '  const abs = join(RAIZ, \'node_modules\', rel);';
+      expect(original, 'la copia no contiene el ancla a mutar').toContain(ancla);
+      /**
+       * La mutación es ADITIVA a propósito: conserva la resolución local y le
+       * agrega la salida al gestor. Es el caso que el oráculo viejo no veía.
+       */
+      writeFileSync(
+        libCopia,
+        original.replace(
+          ancla,
+          `${ancla}\n  try { execFileSync('npx', ['--version'], { stdio: 'ignore' }); } catch { /* inerte */ }`,
+        ),
+      );
+
+      const r = spawnSync(process.execPath, [join(base, 'verificar-aliases.mjs'), '--aliases'], {
+        env,
+        encoding: 'utf8',
+      });
+      expect(r.signal, 'el CLI mutado murió por señal').toBeNull();
+
+      const entrypoints = leer(marcas.entrypoints).split('\n').filter(Boolean);
+      const gestores = leer(marcas.gestores).split('\n').filter(Boolean);
+      const procesos = leer(marcas.procesos).split('\n').filter(Boolean);
+
+      expect(
+        entrypoints.length,
+        'el sensor ① dejó de ver los entrypoints: el mutante no es aditivo y no reproduce el caso',
+      ).toBe(3);
+      expect(
+        gestores.length,
+        'el sensor ② no registró ningún gestor: el camino mutado NO fue alcanzado',
+      ).toBeGreaterThan(0);
+      expect(gestores.every((l) => l.startsWith('npx ')), `②: ${gestores.join(' · ')}`).toBe(true);
+      expect(
+        procesos.length,
+        'el sensor ③ no vio procesos de más: no es independiente de ①',
+      ).toBeGreaterThan(entrypoints.length);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
       rmSync(dirname(marca), { recursive: true, force: true });
     }
   });

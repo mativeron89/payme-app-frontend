@@ -11,6 +11,75 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.7 — El sensor medía una cosa y yo afirmaba tres (2026-09-04)
+
+Orden `AF-STAGE1-ALIASES-IMPORTABLE-ORACLE-07-CLAUDE`, base `85b21d5d…`.
+**Sin push, sin deploy, sin proveedor, sin DB, sin secreto, sin red y sin instalación.**
+`0.161.5` y `0.161.6` no se reescriben; acá se corrige lo que `0.161.6` afirmó de más.
+
+### 🔴 Tres afirmaciones falsas de `0.161.6`, corregidas
+
+**1 · «La mutación `npx` está muerta.» Era falso.** El mutante de aquella campaña **reemplazaba**
+la invocación local por `npx`, así que lo que se ponía rojo era el sensor de entrypoints **por
+ausencia** — moría por el motivo equivocado. Codex construyó el contraejemplo correcto: una llamada
+**ADITIVA** dentro de `entrypointLocal`, que conserva la invocación local y agrega la externa. Con
+ella el test seguía **25/25 verde** mientras el gestor corría **seis veces**.
+
+**2 · «Marca vacía ⇒ ningún proceso.» No se seguía.** La marca observaba **sólo** los tres
+entrypoints locales falsos. Que esté vacía acredita que no se invocó ninguno de esos tres; no dice
+nada sobre gestores de paquetes ni sobre procesos de otra clase. Eran tres afirmaciones distintas
+tratadas como una sola.
+
+**3 · «Los siete paths se preservan byte a byte.» Eran cuatro.** Sólo quedaron idénticos los cuatro
+blobs técnicos —`aliasesLib.mjs`, `verificarAliases.test.ts`, `verificar-mirror.mjs`,
+`verificar-mirror.test.ts`—; `CHANGELOG.md`, `package.json` y `package-lock.json` **cambiaron
+legítimamente** por versión y documentación. El comando que se pegó como evidencia nombraba cuatro
+paths y el texto decía siete: la contradicción estaba a la vista en el mismo párrafo.
+
+📌 **La forma común a las tres: medir un subconjunto y afirmar el total.** No es un descuido de
+redacción — es la misma operación en un test, en una marca y en un `git diff`.
+
+### Tres sensores ortogonales, y ninguno habla por los otros
+
+| sensor | qué observa | qué acredita, y sólo eso |
+|---|---|---|
+| ① entrypoints | `argv` de los tres entrypoints locales | se invocó (o no) la herramienta local |
+| ② gestores | `npx`, `npm`, `yarn`, `pnpm`, `corepack` al frente del `PATH` | se buscó (o no) afuera |
+| ③ procesos | **todo** hijo, censando `child_process` | se creó (o no) algún proceso |
+
+③ es el único que puede sostener «cero procesos»: parchea `child_process` vía `--require`, que corre
+**antes** del módulo principal, así que la vista se toma antes de que un `import` ESM fije su
+binding. **Se verificó con una sonda propia antes de usarlo** — un sensor sin probar es una
+suposición con nombre técnico.
+
+② es **inerte**: registra y sale ≠0. No ejecuta el gestor real, no instala y no abre red. Está al
+frente del `PATH` a propósito: si el gate volviera a resolver por ahí, el sensor lo ve **en vez de**
+que la llamada salga a la red de verdad.
+
+### La campaña queda versionada, no depende de que alguien la piense
+
+Se agrega al test el contraejemplo de Codex como caso permanente: muta una copia en un temporal
+—`aliasesLib.mjs` está fuera de esta allowlist y el árbol no se toca— y afirma las tres cosas que lo
+vuelven concluyente: ① **no ve nada raro**, que es por qué el oráculo viejo era falso; ② registra el
+gestor, probando que el camino mutado fue alcanzado; ③ cuenta más procesos que entrypoints.
+
+**Campaña adversarial, con la atribución medida:**
+
+| mutante | muere por |
+|---|---|
+| `npx` **aditivo** dentro de `entrypointLocal` | ② y ③ · control positivo **y** control rojo |
+| `npx` por **reemplazo** | ① · control positivo |
+| no invocar la local existente | ① · control positivo |
+| invocarla cuando falta | ③ · control rojo: *«se creó al menos un proceso hijo»* |
+
+Los cuatro se midieron sobre una copia del worktree; `aliasesLib.mjs` quedó byte a byte idéntico.
+
+### Docblocks
+
+Se corrigen todos los que describían el sensor obsoleto en presente: el encabezado del archivo, la
+enumeración de defensas, dos notas del fixture y la lista de lo que acredita el control rojo. Las
+observaciones históricas que se conservan quedan marcadas como historia, no como conducta actual.
+
 ## 0.161.6 — El centinela vigilaba una puerta que ya no existe (2026-09-04)
 
 Orden `AF-STAGE1-ALIASES-IMPORTABLE-HERMETIC-06-CLAUDE`, base `fd0e9bda…`.
