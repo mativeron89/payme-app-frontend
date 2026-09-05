@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_TICKET_IMAGE_BYTES } from './index';
+import { isOcrQuotaExhausted } from '../screens/ocrScanView';
 
 /**
  * §1.6 · el techo de la foto del ticket, atado al contrato y no a un número
@@ -48,6 +49,11 @@ const contratoRespuesta = espejoRespuesta['/contract-mirror/services/ocrResponse
 const LIMITE = /limits:\s*\{\s*fileSize:\s*(\d+)\s*\*\s*(\d+)\s*\*\s*(\d+)\s*\}/;
 
 describe('el techo de la imagen del OCR sale del contrato', () => {
+  it('el rechazo diario conserva el par code/status del owner espejado', () => {
+    expect(contratoRespuesta).toMatch(/ocr_daily_quota_exhausted:\s*429/);
+    expect(ocr).toContain("errorOcr('ocr_daily_quota_exhausted')");
+    expect(isOcrQuotaExhausted({ status: 429, code: 'ocr_daily_quota_exhausted' })).toBe(true);
+  });
   it('el espejo de routes/ocr.js está y se puede leer', () => {
     // Sin esto, un glob que no matchea dejaría pasar todo lo de abajo en vacío.
     expect(ocr, 'no se pudo leer contract-mirror/routes/ocr.js').toBeTypeOf('string');

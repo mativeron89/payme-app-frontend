@@ -41,7 +41,7 @@ import {
 } from './reconciliacionMesaView';
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
-import { decideOcrScan } from './ocrScanView';
+import { decideOcrScan, isOcrQuotaExhausted } from './ocrScanView';
 
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
@@ -129,6 +129,10 @@ export function CreateMesaFlow() {
   const { actor, error: actorError } = useMoneyActor();
   const [step, setStep] = useState<Step>('scan');
   const [scanning, setScanning] = useState(false);
+  const scanInFlight = useRef(false);
+  // Memoria de esta instancia: ir al ticket manual y volver no habilita otra foto.
+  const ocrQuotaBlocked = useRef(false);
+  const [ocrQuotaExhausted, setOcrQuotaExhausted] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [editItems, setEditItems] = useState<EditItem[]>([]);
   /**
@@ -622,6 +626,7 @@ export function CreateMesaFlow() {
    * así que hay que mandar una foto de verdad → se abre la cámara del teléfono.
    */
   function doScan() {
+    if (ocrQuotaBlocked.current || scanInFlight.current || scanning) return;
     if (IS_MOCK) {
       void runScan();
       return;
@@ -651,6 +656,8 @@ export function CreateMesaFlow() {
   }
 
   async function runScan(image?: Blob) {
+    if (ocrQuotaBlocked.current || scanInFlight.current || scanning) return;
+    scanInFlight.current = true;
     setScanning(true);
     setUploadProgress(null);
     setError(null);
@@ -701,6 +708,12 @@ export function CreateMesaFlow() {
       // clasifica tamaño, formato y multipart; red/timeout/2xx malformado quedan
       // neutrales porque no prueban que haya faltado luz.
       const apiError = extractApiError(err);
+      if (isOcrQuotaExhausted(apiError)) {
+        ocrQuotaBlocked.current = true;
+        setOcrQuotaExhausted(true);
+        setScannedTotalCents(null);
+        return;
+      }
       const tooLarge = apiError.status === 413 || apiError.code === 'image_too_large';
       const imageType = apiError.status === 415
         || apiError.code === 'unsupported_image_type_for_provider'
@@ -710,6 +723,7 @@ export function CreateMesaFlow() {
       // El cartel de §1.6 dice lo mismo con sus dos salidas al lado. El toast
       // encima era el segundo aviso del mismo hecho, y tapaba justo la barra.
     } finally {
+      scanInFlight.current = false;
       setScanning(false);
       setUploadProgress(null);
     }
@@ -1195,6 +1209,17 @@ export function CreateMesaFlow() {
           {avisoApertura()}
           {/* G-01: un QR roto/suspendido se avisa acá, antes de armar nada. */}
           {restaurantError && <div className="note note-orange">{restaurantError}</div>}
+          {ocrQuotaExhausted && (
+            <div className="state-warn" role="alert">
+              <div className="state-error-title">{t('Alcanzamos el límite de lecturas de hoy')}</div>
+              <p className="state-error-body">{t('Puedes cargar los consumos a mano.')}</p>
+              <div className="state-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                  {t('Cargarlo a mano')}
+                </button>
+              </div>
+            </div>
+          )}
           {scanIssue === 'ocr' && (
             <div className="state-error" role="alert">
               <div className="state-error-row">
@@ -1308,10 +1333,12 @@ export function CreateMesaFlow() {
             type="file"
             accept={acceptOcr}
             capture="environment"
+            disabled={scanning || ocrQuotaExhausted}
             hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
               e.target.value = '';
+              if (ocrQuotaBlocked.current || scanInFlight.current || scanning) return;
               if (!file) return;
               // El techo se mira ACÁ y no después de subir: con mala señal,
               // mandar 12 MB para que el backend conteste 413 es un minuto
@@ -1326,7 +1353,7 @@ export function CreateMesaFlow() {
         </div>
         <AppBottomBar
           active={null}
-          center={{ label: t('Capturar'), icon: 'camera', onClick: doScan, disabled: scanning }}
+          center={{ label: t('Capturar'), icon: 'camera', onClick: doScan, disabled: scanning || ocrQuotaExhausted }}
         />
       </div>
     );

@@ -11,6 +11,34 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.12 — Cupo OCR agotado y aviso legal legible (2026-09-04)
+
+Orden `AF12-POSTUPDATE-02-CEO-XI`, sucesora de `AF12-RESUME-01-CEO-XI` y
+`AF-OCR-QUOTA-LEGAL-MARKDOWN-12-CODEX-WINDOW`,
+base `75841a230546305144004416f6dd6ddc103ce1ec`. Ejecuta sólo las tarjetas 1 y 2 ratificadas el 4/9.
+
+- Sólo `429` junto con `ocr_daily_quota_exhausted` muestra «Alcanzamos el límite de lecturas de hoy»,
+  «Puedes cargar los consumos a mano.» y la salida existente «Cargarlo a mano». La captura queda
+  bloqueada en memoria durante esa instancia, incluso al regresar desde el ticket manual; sin
+  reintento, persistencia de cuota, reloj ni deducción de reinicio diario. Los otros errores OCR
+  conservan su clasificación y salidas.
+- El body del aviso se presenta en alta y `/privacy` mediante componentes React seguros: títulos,
+  listas y énfasis, incluidas continuaciones multilínea. No interpreta HTML, imágenes ni enlaces;
+  el contenido desconocido queda como texto. No cambia body, versión, hash, consentimiento,
+  autoridad de alta ni metadatos. El aviso público sigue fuera de `aria-live` y sin storage.
+- El corpus de prueba 2.4.1 procede del owner pin `940cc49e5bb6f59138a6d0649e8143b5069d8fd0`;
+  su body de 4536 bytes tiene SHA-256 `48425f2baabb23857c8bacbf643a08bf28410a85cff930fa0f74ba11b79ef35f`.
+  Sólo vive en tests: no es fallback productivo ni copia offline. Se conserva el mirror 107 sin cambios.
+- Los recorridos de navegador usan fixtures y red cerrada: OCR ejercita el transporte real del
+  frontend; alta conserva el adaptador mock. Esa evidencia local no acredita Textract, cuota
+  productiva, revisión jurídica, Safari real ni aprobación visual de Mati.
+- La adenda de CEO XI autoriza un vigésimo path: el censo de idioma reconoce el futuro mexicano
+  «reemplazará» del corpus inmutable, con controles que siguen detectando las formas voseantes
+  cercanas. Sin cambiar el patrón, excluir el corpus ni alterar su texto.
+
+Sin nuevas dependencias, backend real, proveedor, push ni deploy. Gates y hashes finales se
+entregan con el candidato local; el cierre técnico no autoriza publicación.
+
 ## 0.161.11 — Rectificación documental medible de `0.161.10` (2026-09-04)
 
 Orden `AF-DOCUMENTACION-SUCESORA-11-CODEX-WINDOW`, base `d9bd2c5d…`.

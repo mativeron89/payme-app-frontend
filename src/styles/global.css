@@ -1099,13 +1099,31 @@ body {
   margin: 2px 0 12px;
   padding: 12px;
 }
-.legal-notice pre {
-  white-space: pre-wrap;
+.legal-notice .legal-markdown {
   overflow-wrap: anywhere;
   margin: 0;
   color: var(--navy);
   font: 12px/1.5 var(--font-body);
 }
+.legal-markdown {
+  overflow-wrap: anywhere;
+}
+.legal-markdown h2,
+.legal-markdown h3 {
+  margin: 1em 0 0.5em;
+  color: inherit;
+  line-height: 1.4;
+}
+.legal-markdown h2 { font-size: 1.2em; }
+.legal-markdown h3 { font-size: 1.1em; }
+.legal-markdown p,
+.legal-markdown ul {
+  margin: 0 0 0.85em;
+}
+.legal-markdown ul { padding-left: 1.4em; }
+.legal-markdown li { margin: 0.35em 0; }
+.legal-markdown > :first-child { margin-top: 0; }
+.legal-markdown > :last-child { margin-bottom: 0; }
 .legal-notice-language,
 .legal-notice-meta {
   margin: 0 0 9px;
@@ -6442,15 +6460,13 @@ h1.pay-title-lbl {
   color: var(--text);
 }
 
-/* El cuerpo llega como TEXTO del backend, con sus saltos de línea: se respeta
-   el blanco en vez de interpretarlo. `overflow-wrap` evita que una URL larga
-   del propio aviso desborde a 320px. */
+/* El helper sólo interpreta el dialecto Markdown del aviso como componentes
+   seguros. `overflow-wrap` evita desbordes a 320px incluso en texto desconocido. */
 .pub-cuerpo {
   margin-top: var(--sp-4);
   font-size: var(--fs-body);
   line-height: var(--lh-body);
   color: var(--text);
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 

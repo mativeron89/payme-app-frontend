@@ -171,6 +171,19 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     );
   });
 
+  it('conserva cuota 429 y código exacto sin refresh ni segunda subida', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const pending = api.scanTicket(new Blob(['foto'], { type: 'image/jpeg' }));
+    FakeXmlHttpRequest.instances[0].finish(429, { error: 'ocr_daily_quota_exhausted' });
+    await expect(pending).rejects.toMatchObject({
+      status: 429, message: 'ocr_daily_quota_exhausted',
+      body: { error: 'ocr_daily_quota_exhausted' },
+    });
+    expect(FakeXmlHttpRequest.instances).toHaveLength(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['error de red', (xhr: FakeXmlHttpRequest) => xhr.failNetwork(), { name: 'TypeError', message: 'network_error' }],
     ['abort del navegador', (xhr: FakeXmlHttpRequest) => xhr.abortUpload(), { name: 'AbortError', message: 'aborted' }],

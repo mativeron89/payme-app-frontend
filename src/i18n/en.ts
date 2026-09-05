@@ -122,6 +122,8 @@ export const EN: Record<string, string> = {
   "Cargando…": "Loading…",
   "Cargar más": "Load more",
   "Cargarlo a mano": "Enter it by hand",
+  "Alcanzamos el límite de lecturas de hoy": "We reached today's receipt reading limit",
+  "Puedes cargar los consumos a mano.": "You can enter the items by hand.",
   "Cerrada": "Closed",
   "Cerrando": "Closing",
   "Cerrando…": "Closing…",

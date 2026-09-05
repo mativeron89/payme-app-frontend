@@ -37,6 +37,7 @@ const FUENTES: Record<string, string> = Object.fromEntries(
   ['PublicApp.tsx', 'PrivacyNoticePage.tsx', 'FacebookDataDeletionPage.tsx', 'publicRoute.ts']
     .map((n) => [n, readFileSync(new URL(`./${n}`, import.meta.url), 'utf8')]),
 );
+FUENTES['LegalMarkdown.tsx'] = readFileSync(new URL('../components/LegalMarkdown.tsx', import.meta.url), 'utf8');
 
 /**
  * 🔴 EL BARRIDO MIRA CÓDIGO, NO PROSA — y esto lo escribo después de que mi
@@ -96,6 +97,21 @@ describe('/privacy · los tres estados', () => {
     });
     expect(html, 'el cuerpo llegó al DOM como marcado vivo').not.toContain('<img');
     expect(html, 'debe verse escapado, como texto').toContain('&lt;img');
+  });
+
+  it('presenta Markdown seguro sin mutar body ni metadatos del owner', () => {
+    const aviso = Object.freeze({ ...AVISO, body: '# Documento\n\n## Finalidades\n\n- **Primera\n  finalidad** completa.\n- Segunda finalidad.\n\n*Texto final.*' });
+    const antes = JSON.stringify(aviso);
+    const html = render({ fase: 'ok', aviso });
+    expect(html).toContain('<h2>Documento</h2>');
+    expect(html).toContain('<h3>Finalidades</h3>');
+    expect(html).toMatch(/<ul><li><strong>Primera\s+finalidad<\/strong> completa\.<\/li><li>Segunda finalidad\.<\/li><\/ul>/);
+    expect(html).toContain('<em>Texto final.</em>');
+    expect(html).toContain('lang="es"');
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    expect(html).toContain('Versión 1.4.0');
+    expect(html).toContain('2026-08-01');
+    expect(JSON.stringify(aviso)).toBe(antes);
   });
 });
 
@@ -363,7 +379,7 @@ describe('🔴 la carpeta pública entera · sin HTML vivo y sin storage', () =>
    * que los detectores no detecten.
    */
   it('🔴 el barrido leyó código de verdad, y sus detectores ven', () => {
-    expect(Object.keys(FUENTES)).toHaveLength(4);
+    expect(Object.keys(FUENTES)).toHaveLength(5);
     for (const [nombre, fuente] of Object.entries(FUENTES)) {
       const limpio = codigo(fuente);
       expect(fuente.length, `${nombre} llegó vacío`).toBeGreaterThan(500);
