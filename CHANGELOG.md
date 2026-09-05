@@ -11,6 +11,50 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.13 — Cierre documental: el aviso 2.4.1 frente al 2.4.0 que nunca se presentó (2026-09-05)
+
+Orden `AF39-CIERRE-DOCUMENTAL-0.161.13-CLAUDE-CEOXX-01`, base `e5719536…`.
+**Sin push, sin deploy, sin proveedor, sin DB, sin secreto y sin red.** Entrada documental: ninguna
+línea ejecutable cambia; las entradas anteriores no se reescriben. Deja tildable la fila 39 de
+`Prioridades` («AF · presentar el aviso 2.4.0») con evidencia `archivo:línea`.
+
+### (a) 2.4.0: candidato descartado, nunca presentado
+
+El aviso 2.4.0 existió sólo como candidato `063b254b8f5389aeb12ed0dee7ba31514ee6dbab` (lease
+`AF-STAGE1-LEGAL-AVISO-2-4-0-PRESENTABLE-01-CLAUDE`, 2026-09-02 20:36→20:45, resultado
+`ENTREGADO_CANDIDATO_SIN_GREEN`), descartado por owner-first: el lease nació antes de que el emisor
+acreditara. `0.159.0` quedó consumida por ese objeto y no se reutiliza. **2.4.0 nunca se presentó a
+nadie.**
+
+### (b) 2.4.1: vigente del dueño, presentado y renderizado
+
+2.4.1 es la versión que publica App Backend en el pin espejado `940cc49e…`
+(`services/profileIdentity.js:33` → `'2.4.1'`; `services/shortfallDetails.js:21` sigue en `'2.3.0'`,
+y por eso la allowlist de versiones presentables **agrega y no reemplaza**). Se **presenta** desde
+`0.161.0` (`2758270850ea9b664a62e6c21ea2badfef7164e4`, Set `['2.3.0', '2.4.1']`) y se **renderiza**
+con componentes seguros desde `0.161.12` (`e5719536c5751cc860d08e744ec80c11a7efd348`,
+`LegalMarkdown`; corpus de 4536 bytes con sha256
+`48425f2baabb23857c8bacbf643a08bf28410a85cff930fa0f74ba11b79ef35f`, autoverificado en
+`src/components/LegalMarkdown.test.tsx:163-164`).
+
+### (c) Residuos, con fecha y con qué los sostiene
+
+Medido el 2026-09-04 23:39 -06:00: cinco worktrees desaparecieron durante el congelamiento de
+limpiezas (cuatro ya faltaban a las 16:35; `secret-shape-01` cayó a las 19:19:56). Tres de sus
+commits quedaron a salvo por la foto local de `origin/main` (`8d161acd`, `04e3f672`, `10a06bdc`).
+Dos quedaron sin ancla y CEO XII los ancló el 2026-09-05 con refs de custodia locales:
+`063b254b` (`refs/candidates/custody-aviso-2-4-0-063b254b`) y `5d5703ec`
+(`refs/candidates/custody-mirror-stop-scope-5d5703ec`); también `e5719536`
+(`refs/candidates/custody-af12-e5719536`). La frase histórica «el objeto existe, sin rama, y puede
+rehacerse» vuelve a ser verdadera **porque hay ref**, no por sí sola. **No se afirma nada sobre el
+estado remoto**: el tip real de `origin/main` no se midió para esta entrada.
+
+### (d) Ancestría de la cadena
+
+`d9bd2c5d` (0.161.10) → `8e9cbef` (0.161.11) → `75841a2` (atestación AF11) → `e5719536`
+(0.161.12) → esta entrada. `main` local (`8e3f320`, 2026-08-31) va detrás de la foto de
+`origin/main` (`ca8fb983`, fetch del 2026-09-03) y no es baseline de nada.
+
 ## 0.161.12 — Cupo OCR agotado y aviso legal legible (2026-09-04)
 
 Orden `AF12-POSTUPDATE-02-CEO-XI`, sucesora de `AF12-RESUME-01-CEO-XI` y
