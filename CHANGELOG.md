@@ -11,6 +11,29 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.11 — Rectificación documental medible de `0.161.10` (2026-09-04)
+
+Orden `AF-DOCUMENTACION-SUCESORA-11-CODEX-WINDOW`, base `d9bd2c5d…`.
+**Sin push, deploy, proveedor, DB, secreto ni red.** El cambio del test vuelve a ser exclusivamente
+documental: sólo corrige comentarios y conserva byte-idéntica la salida ejecutable al transpilar
+con `removeComments: true`.
+
+### 🔴 Rectificación aditiva: unidades UTF-16 no son bytes UTF-8
+
+La entrada histórica `0.161.10` llamó «22498 bytes» a `outputText.length`. Esa cifra mide
+**22498 unidades de código UTF-16**; el mismo output ocupa **22745 bytes UTF-8**. La historia no se
+reescribe: esta entrada deja la unidad correcta. Medido nuevamente sobre `d9bd2c5d…` con TypeScript
+local `5.6.3`, el output tiene SHA-256
+`6400a8f882c1fb743c4a582bd4e1c8447d0f5690d4d26b9c53f415e460f2003e`.
+
+### Dos precisiones de alcance en el test
+
+- El camino sano y la campaña aditiva de `npx` son pruebas separadas: el control positivo acredita
+  ② vacío en el objeto sano; la campaña ejecuta la copia mutada y acredita ② no vacío allí.
+- Tres registros vacíos no prueban que «nadie ejecutó nada». Prueban sólo ausencia de efectos en
+  los canales instrumentados: entrypoints locales, gestores por `PATH` y los siete exports censados
+  de `node:child_process`.
+
 ## 0.161.10 — El censo no vio lo que el énfasis partía (2026-09-04)
 
 Orden `AF-STAGE1-ALIASES-IMPORTABLE-ORACLE-10-CLAUDE`, base `25ec8172…`.

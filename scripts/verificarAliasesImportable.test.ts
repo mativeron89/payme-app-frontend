@@ -757,10 +757,11 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
    * registra gestores de paquetes alcanzados por el `PATH`, y esa ruta no pasa
    * por el `PATH`.
    *
-   * Esto no es una interpretación: **la campaña aditiva de `npx` lo afirma como
-   * aserción**, exigiendo ② vacío en el camino sano y ② no vacío sólo cuando el
-   * mutante agrega la salida al gestor. Este párrafo decía «los tres sensores» y
-   * con eso **contradecía a su propio test**, unas líneas más arriba.
+   * Esto no es una interpretación: el **control positivo del camino sano** exige
+   * ② vacío; por separado, la campaña aditiva ejecuta únicamente la copia mutada
+   * y exige ② no vacío cuando esa copia agrega la salida a `npx`. Este párrafo
+   * decía «los tres sensores» y con eso **contradecía a esas dos pruebas**, unas
+   * líneas más arriba.
    *
    * 🔴 P103 · ALCANCE DECLARADO — LO QUE ESTE OBSERVER PUEDE Y NO PUEDE.
    *
@@ -839,10 +840,13 @@ describe('🔴 importar el módulo no ejecuta el CLI · medido por efecto', () =
       expect(existsSync(reporte), 'importar la lib BORRÓ el reporte de la corrida').toBe(true);
       expect(existsSync(dist), 'importar la lib BORRÓ el artefacto del build').toBe(true);
       /**
-       * ③ nadie ejecutó nada — y se afirma **sensor por sensor**. `0.161.7`
-       * montaba los tres y leía sólo el primero mientras el docblock decía que
-       * los tres quedaban acreditados: la misma operación de medir un
-       * subconjunto y afirmar el total.
+       * ③ ningún canal instrumentado registró efectos — y se afirma **sensor por
+       * sensor**. Esto no demuestra ausencia universal de ejecución: acredita
+       * únicamente que no hubo entrypoints locales, gestores por `PATH` ni
+       * procesos a través de los siete exports censados. `0.161.7` montaba los
+       * tres y leía sólo el primero mientras el docblock decía que los tres
+       * quedaban acreditados: la misma operación de medir un subconjunto y
+       * afirmar el total.
        */
       expect(leer(marcas.entrypoints), 'importar la lib invocó un entrypoint local').toBe('');
       expect(leer(marcas.gestores), 'importar la lib alcanzó un gestor de paquetes').toBe('');
