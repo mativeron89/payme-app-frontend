@@ -1,4 +1,37 @@
-import { expect, test, type Page, type Request, type Route } from '@playwright/test';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { expect, test, type BrowserContext, type Page, type Request, type Route } from '@playwright/test';
+
+// Cierre de red AF12: sólo assets del servidor propio o fixtures page.route.
+// Las rutas de página tienen precedencia sobre esta guarda del contexto.
+const redes = new WeakMap<BrowserContext, { blocked: string[]; requests: string[] }>();
+test.beforeEach(async ({ context }) => {
+  const censo = { blocked: [] as string[], requests: [] as string[] };
+  redes.set(context, censo);
+  context.on('request', (r) => censo.requests.push(`${r.method()} ${new URL(r.url()).origin}${new URL(r.url()).pathname}`));
+  await context.routeWebSocket('**', async (socket) => {
+    const u = new URL(socket.url());
+    if (u.protocol === 'ws:' && u.host === 'localhost:5176' && u.pathname === '/') { socket.connectToServer(); return; }
+    censo.blocked.push(`WS ${u.origin}${u.pathname}`);
+    await socket.close();
+  });
+  await context.route('**/*', async (route) => {
+    const r = route.request();
+    const u = new URL(r.url());
+    if (u.origin === 'http://localhost:5176' && r.method() === 'GET' && !u.pathname.startsWith('/api/')
+      && ['document', 'script', 'stylesheet', 'image', 'font', 'manifest'].includes(r.resourceType())) {
+      await route.continue();
+    } else {
+      censo.blocked.push(`${r.method()} ${u.origin}${u.pathname}`);
+      await route.abort('blockedbyclient');
+    }
+  });
+});
+test.afterEach(async ({ context }, info) => {
+  const censo = redes.get(context);
+  await info.attach('red-cerrada-meta', { body: Buffer.from(JSON.stringify(censo)), contentType: 'application/json' });
+  expect(censo?.blocked).toEqual([]);
+});
 
 /**
  * APP-FE-META-PUBLIC-COMPLIANCE-01 · las dos superficies públicas, en navegador.
@@ -52,6 +85,45 @@ const AVISO = {
     body: 'Responsable del tratamiento: PayMe.\n\nFinalidades del tratamiento.',
   },
 };
+
+test('AF12 · corpus owner 2.4.1 legible, íntegro y fuera de aria-live en móvil', async ({ page, context }, info) => {
+  // Lee sólo el literal fixture; NO importa el módulo Vitest ni el repo owner.
+  const fixture = readFileSync(new URL('../src/components/LegalMarkdown.test.tsx', import.meta.url), 'utf8');
+  const body = fixture.match(/const OWNER_BODY = `([\s\S]*?)`;/)?.[1];
+  const expected = [...fixture.matchAll(/^  \['(h2|h3|p|li)', '([^']*)'\],$/gm)].map((m) => [m[1], m[2]]);
+  expect(expected).toHaveLength(36);
+  expect(body).toBeTruthy();
+  const hash = createHash('sha256').update(body!).digest('hex');
+  expect(hash).toBe('48425f2baabb23857c8bacbf643a08bf28410a85cff930fa0f74ba11b79ef35f');
+  const legal = { ...AVISO.legal_text, body: body!, version: '2.4.1', hash };
+  let reads = 0;
+  await page.route(PATRON_AVISO, async (route) => { reads += 1; await json({ legal_text: legal })(route); });
+  await page.goto('/privacy');
+  const doc = page.locator('.pub-cuerpo .legal-markdown');
+  await expect(doc.locator('h2')).toHaveText(['Aviso de privacidad']);
+  await expect(doc.locator('h3')).toHaveCount(8);
+  await expect(doc.locator('ul')).toHaveCount(4);
+  await expect(doc.locator('li')).toHaveCount(16);
+  await expect(doc.locator('strong')).toHaveCount(25);
+  await expect(doc.locator('em')).toHaveCount(1);
+  expect(await doc.locator('h2,h3,p,li').evaluateAll((nodes) => nodes.map((el) => [
+    el.tagName.toLowerCase(), el.textContent!.replace(/\s+/g, ' ').trim(),
+  ]))).toEqual(expected);
+  await expect(doc).toHaveAttribute('lang', 'es');
+  await expect(page.locator('.pub-meta')).toContainText('Versión 2.4.1');
+  await expect(doc.getByText('matiasveron@paymemx.com', { exact: true })).toBeVisible();
+  await expect(doc.locator('a, img, script, iframe')).toHaveCount(0);
+  expect(await doc.evaluate((el) => el.closest('[aria-live]'))).toBeNull();
+  expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
+  expect(await context.cookies()).toEqual([]);
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    await expect(page.locator('#splash')).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath(`legal-owner-${width}.png`), fullPage: true });
+  }
+  expect(reads).toBe(1);
+});
 
 const CORS = { 'access-control-allow-origin': '*' } as const;
 
@@ -518,14 +590,14 @@ test.describe('accesibilidad y reflow', () => {
       expect(desborde, `la página desborda ${desborde}px a lo ancho`).toBeLessThanOrEqual(0);
 
       await page.screenshot({
-        path: `test-results/meta-public/privacy-${ancho}.png`,
+        path: info.outputPath(`privacy-${ancho}.png`),
         fullPage: true,
       });
       info.annotations.push({ type: 'captura', description: `privacy-${ancho}.png` });
     });
   }
 
-  test(`✅ ${ANCHOS.join('/')} · la página de eliminación también, con captura`, async ({ page }) => {
+  test(`✅ ${ANCHOS.join('/')} · la página de eliminación también, con captura`, async ({ page }, info) => {
     await page.route(PATRON_STATUS, json({ status: 'pending' }));
     for (const ancho of ANCHOS) {
       await page.setViewportSize({ width: ancho, height: 900 });
@@ -537,7 +609,7 @@ test.describe('accesibilidad y reflow', () => {
       );
       expect(desborde, `desborda a ${ancho}px`).toBeLessThanOrEqual(0);
       await page.screenshot({
-        path: `test-results/meta-public/eliminacion-${ancho}.png`,
+        path: info.outputPath(`eliminacion-${ancho}.png`),
         fullPage: true,
       });
     }

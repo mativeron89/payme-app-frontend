@@ -144,6 +144,8 @@ const ESPANOL_LEGITIMO = new Set([
   'nicolás', 'josé', 'maría',
   // Pretéritos de primera persona (aparecen en prosa de tests).
   'sumé', 'bloqueé', 'tomé', 'encontré', 'entré', 'pagué',
+  // Futuro legítimo del aviso owner 2.4.1; no es el imperativo voseante.
+  'reemplazará',
 ]);
 
 /**
@@ -260,6 +262,12 @@ describe('el producto habla español mexicano', () => {
     const bueno = 'Toca lo que consumiste. Ya está más que listo; después revisa la sección y continúa aquí. '
       + 'Tienes 3 días, el número es válido y el código también. Nicolás pagó $80 en el café.';
     expect(vosesEn(bueno), 'marcó español correcto').toEqual([]);
+  });
+
+  it('el futuro del aviso no exenta las formas voseantes cercanas', () => {
+    expect(vosesEn('se reemplazará por una versión revisada')).toEqual([]);
+    expect(vosesEn('reemplazá')).toEqual(['reemplazá']);
+    expect(vosesEn('reemplazás')).toEqual(['reemplazás']);
   });
 
   it('🔴 el copy convertido de verdad pasa la guarda', () => {

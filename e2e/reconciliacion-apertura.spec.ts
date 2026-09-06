@@ -7,12 +7,34 @@ import { ingresar } from './_app';
  * está en ninguna pantalla: la de compartir muestra la mesa recién abierta y
  * se vería idéntica si hubiera dos.
  */
-async function mesasDelMock(page: Page): Promise<{ total: number; ultimoCodigo: string | null }> {
+/**
+ * Fila del store mock tal como la persiste `payme_mock_state_v1`. Los campos de
+ * garantía se tipan `unknown` A PROPÓSITO: el test afirma su presencia con
+ * `toHaveProperty` y su valor exacto después; un `?? null` los taparía.
+ */
+interface FilaMesaMock {
+  readonly code: string;
+  readonly status?: unknown;
+  readonly guarantee_method?: unknown;
+  readonly guarantee_saved_payment_method_id?: unknown;
+}
+
+async function mesasDelMock(page: Page): Promise<{
+  total: number;
+  ultimoCodigo: string | null;
+  codigos: string[];
+  mesas: FilaMesaMock[];
+}> {
   const datos = await page.evaluate(() => {
     const crudo = localStorage.getItem('payme_mock_state_v1');
     if (!crudo) return null;
     const mesas = (JSON.parse(crudo) as { mesas?: Array<{ code: string }> }).mesas ?? [];
-    return { total: mesas.length, ultimoCodigo: mesas[0]?.code ?? null };
+    return {
+      total: mesas.length,
+      ultimoCodigo: mesas[0]?.code ?? null,
+      codigos: mesas.map((m) => m.code),
+      mesas,
+    };
   });
   expect(datos, 'no se pudo leer el estado del mock').not.toBeNull();
   return datos!;
@@ -64,12 +86,55 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   // `pm_` cambia en cada invocación y por lo tanto el único que necesitaba la
   // identidad económica alineada. (Lo declaré cubierto antes de que lo
   // estuviera; ver el mensaje del commit de esta corrección.)
-  await page.getByRole('radio').filter({ hasText: 'Agregar nueva tarjeta' }).click();
+  // 🔴 RECON-SETUP-02 · LA PRECONDICIÓN SE OBSERVA, NO SE SUPONE. La traza de
+  // la corrida del 2026-09-05 mostró a Santander marcada pese al click en
+  // "nueva": el click llegaba antes de que `loadCards()` terminara y su
+  // autoselección de la default pisaba la elección. Exigir el grupo COMPLETO
+  // con la default marcada acredita que esa carga ya pasó; recién entonces
+  // elegir "nueva" es una elección y no una carrera. Esto fija el escenario
+  // del test; NO declara corregida la autoselección tardía del componente.
+  const grupo = page.getByRole('radiogroup', { name: 'Tarjeta para garantizar' });
+  const radios = grupo.getByRole('radio');
+  const santander = grupo.getByRole('radio', { name: /Santander ···· 4532/ });
+  const bbva = grupo.getByRole('radio', { name: /BBVA ···· 8821/ });
+  const nueva = grupo.getByRole('radio').filter({ hasText: 'Agregar nueva tarjeta' });
+  await expect(radios).toHaveCount(3);
+  await expect(santander).toBeVisible();
+  await expect(santander).toBeEnabled();
+  await expect(bbva).toBeVisible();
+  await expect(bbva).toBeEnabled();
+  await expect(santander).toBeChecked();
+  await expect(bbva).not.toBeChecked();
+  await expect(nueva).not.toBeChecked();
 
+  await nueva.click();
+  await expect(nueva).toBeChecked();
+  await expect(grupo.getByRole('radio', { checked: true })).toHaveCount(1);
+  await expect(santander).not.toBeChecked();
+  await expect(bbva).not.toBeChecked();
+
+  // Antes del primer Garantizar: qué mesas existen, para exigir UNA nueva después.
+  const antesDelPrimerGarantizar = await mesasDelMock(page);
   await page.getByRole('button', { name: 'Garantizar', exact: true }).click();
   // Acá la mesa YA existe en `pending_auth` y el hold está puesto: el backend
   // contestó `requires_action` y el journal quedó congelado a propósito.
   await expect(page.getByRole('heading', { name: 'Tu banco pide confirmar' })).toBeVisible();
+
+  // 🔴 La fila nueva, por DIFERENCIA de códigos y no "la primera": con tarjeta
+  // tipeada la fuente guardada es NULL en el payload real. Si la propiedad
+  // faltara, el test falla en vez de leer `undefined` como "sin fuente".
+  const trasElPrimerGarantizar = await mesasDelMock(page);
+  const filasNuevas = trasElPrimerGarantizar.mesas.filter(
+    (m) => !antesDelPrimerGarantizar.codigos.includes(m.code),
+  );
+  expect(filasNuevas, 'el primer Garantizar debe crear exactamente UNA mesa').toHaveLength(1);
+  const filaCongelada = filasNuevas[0];
+  const codigoCongelado = filaCongelada.code;
+  expect(filaCongelada.guarantee_method).toBe('card');
+  expect(filaCongelada.status).toBe('pending_auth');
+  expect(filaCongelada, 'la fila debe declarar guarantee_saved_payment_method_id')
+    .toHaveProperty('guarantee_saved_payment_method_id');
+  expect(filaCongelada.guarantee_saved_payment_method_id).toBeNull();
 
   // ⚡ La pestaña muere en el peor momento posible.
   await page.reload();
@@ -108,6 +173,26 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Reconciliación necesaria/ })).toHaveCount(0);
 
+  // 🔴 RECON-SETUP-02 · antes del replay, el grupo está COMPLETO y sin ninguna
+  // tarjeta marcada: tras el reload no hay autoselección que respalde la
+  // garantía, y la fila congelada sigue siendo la misma, con fuente NULL.
+  await expect(radios).toHaveCount(3);
+  await expect(santander).toBeVisible();
+  await expect(santander).toBeEnabled();
+  await expect(bbva).toBeVisible();
+  await expect(bbva).toBeEnabled();
+  await expect(nueva).toBeVisible();
+  await expect(nueva).toBeEnabled();
+  await expect(grupo.getByRole('radio', { checked: true })).toHaveCount(0);
+  const enReconstruccion = await mesasDelMock(page);
+  const mismaFila = enReconstruccion.mesas.find((m) => m.code === codigoCongelado);
+  expect(mismaFila, 'la mesa congelada debe seguir en el mock').toBeDefined();
+  expect(mismaFila!.guarantee_method).toBe('card');
+  expect(mismaFila!.status).toBe('pending_auth');
+  expect(mismaFila!, 'la fila debe declarar guarantee_saved_payment_method_id')
+    .toHaveProperty('guarantee_saved_payment_method_id');
+  expect(mismaFila!.guarantee_saved_payment_method_id).toBeNull();
+
   // ⭐ ORDEN 2-A · EL REENVÍO SE COMPLETA DE VERDAD, no se verifica que el
   // botón esté habilitado y listo. Acá es donde vivía la divergencia: tras el
   // reload el `pm_` de la tarjeta tipeada ya no está en memoria y el mock
@@ -122,7 +207,24 @@ test('la apertura congelada por una recarga se diagnostica y ofrece retomar, no 
   await reintentarSinTarjeta.click();
   await expect(page.locator('.toast')).toHaveText('Elige con qué tarjeta garantizar');
   expect((await mesasDelMock(page)).total).toBe(antesSinTarjeta.total);
+  // 🔴 GAR-NOTE-03 · la nota al pie ocupa su altura real en el flujo: el
+  // scroller termina por encima de ella y ella queda por encima del CTA
+  // circular. Así ningún radio del grupo puede quedar debajo de una capa.
+  // Geometría MEDIDA; sin scroll programático ni `force`.
+  const [scrollerBox, notaBox, fabBox] = await Promise.all([
+    page.locator('.gar-flow-scroll').boundingBox(),
+    page.locator('.gar-note-fixed').boundingBox(),
+    page.locator('.appbar-fab').boundingBox(),
+  ]);
+  expect(scrollerBox, 'el scroller de Garantía debe estar en pantalla').not.toBeNull();
+  expect(notaBox, 'la nota al pie debe estar en pantalla').not.toBeNull();
+  expect(fabBox, 'el CTA circular debe estar en pantalla').not.toBeNull();
+  expect(scrollerBox!.height).toBeGreaterThan(0);
+  expect(scrollerBox!.y + scrollerBox!.height).toBeLessThanOrEqual(notaBox!.y);
+  expect(notaBox!.y + notaBox!.height).toBeLessThan(fabBox!.y);
   await page.getByRole('radio').filter({ hasText: 'Agregar nueva tarjeta' }).click();
+  await expect(nueva).toBeChecked();
+  await expect(grupo.getByRole('radio', { checked: true })).toHaveCount(1);
 
   const antes = await mesasDelMock(page);
   await page.getByRole('button', { name: /Reintentar esta apertura/ }).click();

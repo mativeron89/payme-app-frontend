@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -41,6 +41,15 @@ function correr(...args: string[]): number {
 }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
+
+/** Como `correr`, pero devuelve además la salida: los casos de dirección afirman el TEXTO. */
+function correrConSalida(...args: string[]): { status: number; salida: string } {
+  const r = spawnSync('node', [join(scripts, 'verificar-mirror.mjs'), ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, PAYME_APP_BACKEND_DIR: fuente },
+  });
+  return { status: r.status ?? -1, salida: `${r.stdout ?? ''}${r.stderr ?? ''}` };
+}
 
 /** Contenido de los archivos del contrato de mentira: origen → cuerpo. */
 const CONTRATO: Record<string, string> = {
@@ -245,5 +254,76 @@ describe('adoptar inventario · nunca bendice sin verificar', () => {
     expect(correr('--adoptar-inventario', delDuenio)).toBe(1);
     // Y no lo escribió: un gate que falla no puede dejar rastro de éxito.
     expect(readFileSync(join(scripts, 'mirror-inventory.json'), 'utf8')).toBe(antes);
+  });
+});
+
+describe('🔴 vigencia · la DIRECCIÓN se mide, no se inventa', () => {
+  /**
+   * 🔴 **El mensaje viejo decía «es que la fuente avanzó» ante CUALQUIER
+   * desigualdad**, y eso es falso en dos de los tres casos posibles. No es
+   * teórico: durante un refresh el `HEAD` inspeccionado estaba 22 commits
+   * DETRÁS del pin y el gate igual anunciaba que la fuente había avanzado; esa
+   * causalidad se copió a un README de procedencia y hubo que corregirla en un
+   * commit aparte. El gate afirmaba una dirección que nunca midió.
+   *
+   * Los tres casos van separados a propósito: en un solo `it`, la primera
+   * aserción que falle esconde a las otras dos.
+   */
+  it('🔴 HEAD DESCIENDE del pin → dice que la fuente avanzó', () => {
+    escribir(fuente, 'routes/mesas.js', 'module.exports = "v2";\n');
+    git('add', '-A');
+    git('commit', '-qm', 'la fuente avanza sobre lo espejado');
+    const { status, salida } = correrConSalida('--vigencia');
+    expect(status).toBe(1);
+    expect(salida).toMatch(/DESCIENDE del commit pineado: la fuente avanzó/);
+  });
+
+  it('🔴 HEAD es ANCESTRO del pin → NO dice que la fuente avanzó', () => {
+    // El pin declara un commit POSTERIOR al HEAD inspeccionado: es el caso que
+    // el mensaje viejo describía al revés.
+    const antes = git('rev-parse', 'HEAD');
+    escribir(fuente, 'routes/mesas.js', 'module.exports = "v2";\n');
+    git('add', '-A');
+    git('commit', '-qm', 'contenido nuevo que el inventario va a declarar');
+    const inv = JSON.parse(readFileSync(join(scripts, 'mirror-inventory.json'), 'utf8'));
+    inv.commit = git('rev-parse', 'HEAD');
+    for (const a of inv.archivos) {
+      if (a.origen === 'routes/mesas.js') a.sha256 = sha('module.exports = "v2";\n');
+    }
+    writeFileSync(join(scripts, 'mirror-inventory.json'), JSON.stringify(inv));
+    escribir(espejo, 'routes/mesas.js', 'module.exports = "v2";\n');
+    git('checkout', '-q', antes); // el checkout queda DETRÁS del pin
+
+    const { status, salida } = correrConSalida('--vigencia');
+    expect(status).toBe(1);
+    expect(salida).toMatch(/es ANCESTRO del commit pineado: el checkout está detrás del pin/);
+    expect(salida, 'inventó que la fuente avanzó').not.toMatch(/la fuente avanzó sobre lo espejado/);
+  });
+
+  it('🔴 HEAD y pin DIVERGEN → no se afirma ninguna de las dos direcciones', () => {
+    const base = git('rev-parse', 'HEAD');
+    // Rama A: el commit que el inventario va a declarar.
+    escribir(fuente, 'routes/mesas.js', 'module.exports = "rama-a";\n');
+    git('add', '-A');
+    git('commit', '-qm', 'rama A');
+    const ramaA = git('rev-parse', 'HEAD');
+    const inv = JSON.parse(readFileSync(join(scripts, 'mirror-inventory.json'), 'utf8'));
+    inv.commit = ramaA;
+    for (const a of inv.archivos) {
+      if (a.origen === 'routes/mesas.js') a.sha256 = sha('module.exports = "rama-a";\n');
+    }
+    writeFileSync(join(scripts, 'mirror-inventory.json'), JSON.stringify(inv));
+    escribir(espejo, 'routes/mesas.js', 'module.exports = "rama-a";\n');
+    // Rama B: el HEAD inspeccionado, hermano de A y no su ancestro.
+    git('checkout', '-q', base);
+    escribir(fuente, 'routes/mesas.js', 'module.exports = "rama-b";\n');
+    git('add', '-A');
+    git('commit', '-qm', 'rama B');
+
+    const { status, salida } = correrConSalida('--vigencia');
+    expect(status).toBe(1);
+    expect(salida).toMatch(/DIVERGEN: ninguno desciende del otro/);
+    expect(salida).not.toMatch(/la fuente avanzó sobre lo espejado/);
+    expect(salida).not.toMatch(/el checkout está detrás del pin/);
   });
 });

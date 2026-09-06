@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, existsSync, chmodSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
@@ -417,4 +417,119 @@ describe('🔴 el `main` LLAMA a cada validador · uno por cable', () => {
     });
   }
 
+});
+
+/**
+ * 🔴 **HERMETICIDAD · el gate no sale a buscar herramientas afuera.**
+ *
+ * Codex negó GREEN al remedio anterior porque comprobaba que el **proyecto**
+ * existiera y con eso creía cerrar el problema: **cerraba la instancia, no la
+ * clase.** Un proyecto que SÍ existe, en una raíz sin dependencias, seguía
+ * llegando a un resolutor que sale al registro público y ejecuta lo que baje.
+ *
+ * Estos casos fijan la conducta por herramienta y **por separado**: si estuvieran
+ * en un solo `it`, la primera aserción que falle esconde a las otras dos, que es
+ * un hueco que ya hubo que escribir dos veces en este repo.
+ *
+ * ## El instrumento: un PATH con gestores de paquetes falsos
+ *
+ * Cada caso corre con un directorio propio al frente del `PATH` que contiene
+ * `npx`, `npm`, `yarn`, `pnpm` y `corepack`, todos scripts que **registran su
+ * invocación** y salen 0. Si el gate intentara resolver por afuera, el registro
+ * queda escrito. **Cero líneas es la acreditación**, y no depende de tener o no
+ * red: un `npx` real también quedaría interceptado.
+ */
+describe('🔴 hermeticidad · resolución sólo desde node_modules de la raíz', () => {
+  /** Escribe los gestores falsos y devuelve {dirShim, log}. */
+  function montarShims(base: string): { dirShim: string; log: string } {
+    const dirShim = join(base, 'shim');
+    mkdirSync(dirShim, { recursive: true });
+    const log = join(base, 'invocaciones.log');
+    for (const nombre of ['npx', 'npm', 'yarn', 'pnpm', 'corepack']) {
+      const ruta = join(dirShim, nombre);
+      writeFileSync(ruta, `#!/bin/sh\necho "${nombre} $*" >> "${log}"\nexit 0\n`);
+      chmodSync(ruta, 0o755);
+    }
+    writeFileSync(log, '');
+    return { dirShim, log };
+  }
+
+  function correrAliases(raiz: string, dirShim: string) {
+    return spawnSync(process.execPath, [join(AQUI, 'verificar-aliases.mjs'), '--aliases'], {
+      env: {
+        ...process.env,
+        PATH: `${dirShim}:${process.env.PATH ?? ''}`,
+        PAYME_RAIZ_VERIFICACION: raiz,
+      },
+      encoding: 'utf8',
+    });
+  }
+
+  const SANOS_REALES = JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8')).scripts;
+
+  it.each([
+    ['TypeScript', /TypeScript no está instalado en «node_modules»/],
+    ['Vitest', /Vitest no está instalado en «node_modules»/],
+    ['Playwright', /Playwright no está instalado en «node_modules»/],
+  ])('🔴 %s ausente: falla cerrada y CERO invocaciones a un gestor de paquetes', (_h, firma) => {
+    const base = mkdtempSync(join(tmpdir(), 'payme-hermetico-'));
+    try {
+      const raiz = join(base, 'raiz');
+      mkdirSync(raiz);
+      /**
+       * 🔴 El caso decisivo: `package.json` y `tsconfig.json` **reales**, y CERO
+       * `node_modules`. Con la guarda vieja —que sólo miraba que el proyecto
+       * existiera— este árbol pasaba derecho al resolutor externo.
+       */
+      writeFileSync(join(raiz, 'package.json'), JSON.stringify({ scripts: SANOS_REALES }));
+      for (const proy of ['tsconfig.json', 'tsconfig.test.json', 'tsconfig.node.json', 'tsconfig.e2e.json']) {
+        writeFileSync(join(raiz, proy), readFileSync(join(RAIZ, proy), 'utf8'));
+      }
+      mkdirSync(join(raiz, 'src'));
+      writeFileSync(join(raiz, 'src', 'algo.test.ts'), 'export {};\n');
+      mkdirSync(join(raiz, 'e2e'));
+      writeFileSync(join(raiz, 'e2e', 'algo.spec.ts'), 'export {};\n');
+
+      const { dirShim, log } = montarShims(base);
+      const inicio = Date.now();
+      const r = correrAliases(raiz, dirShim);
+      const ms = Date.now() - inicio;
+      const salida = `${r.stdout}${r.stderr}`;
+
+      expect(salida, 'no nombró la herramienta ausente').toMatch(firma);
+      expect(r.status, 'el gate no falló').not.toBe(0);
+      expect(readFileSync(log, 'utf8'), 'el gate invocó un gestor de paquetes').toBe('');
+      // Falla rápido: sin red ni instalación, esto es trabajo de disco.
+      expect(ms, `tardó ${ms} ms: eso no es una falla cerrada`).toBeLessThan(15_000);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * 🔴 **CONTROL POSITIVO, y sin él los tres casos de arriba no valen nada:**
+   * un `entrypointLocal` que devolviera `null` siempre los pasaría a los tres.
+   * Acá el `node_modules` del árbol real se enlaza en la raíz sintética, y
+   * entonces **ninguna** de las tres firmas de ausencia debe aparecer.
+   */
+  it('🔴 CONTROL POSITIVO · con node_modules presente no reporta ninguna ausencia', () => {
+    const base = mkdtempSync(join(tmpdir(), 'payme-hermetico-ok-'));
+    try {
+      const raiz = join(base, 'raiz');
+      mkdirSync(raiz);
+      writeFileSync(join(raiz, 'package.json'), JSON.stringify({ scripts: SANOS_REALES }));
+      symlinkSync(join(RAIZ, 'node_modules'), join(raiz, 'node_modules'), 'dir');
+      const { dirShim, log } = montarShims(base);
+      const r = correrAliases(raiz, dirShim);
+      const salida = `${r.stdout}${r.stderr}`;
+
+      expect(salida).not.toMatch(/TypeScript no está instalado/);
+      expect(salida).not.toMatch(/Vitest no está instalado/);
+      expect(salida).not.toMatch(/Playwright no está instalado/);
+      // Y sigue sin salir afuera: resolver localmente no invoca a nadie.
+      expect(readFileSync(log, 'utf8')).toBe('');
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
 });

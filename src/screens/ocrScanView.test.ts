@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OcrResponse } from '../api/types';
-import { decideOcrScan } from './ocrScanView';
+import { decideOcrScan, isOcrQuotaExhausted } from './ocrScanView';
 
 function response(patch: Partial<OcrResponse> = {}): OcrResponse {
   return {
@@ -15,6 +15,24 @@ function response(patch: Partial<OcrResponse> = {}): OcrResponse {
 }
 
 describe('decisión visible del OCR', () => {
+  it('reconoce cuota diaria sólo por 429 y código exacto conjuntamente', () => {
+    expect(isOcrQuotaExhausted({ status: 429, code: 'ocr_daily_quota_exhausted' })).toBe(true);
+  });
+
+  it.each([
+    { status: 429, code: '' },
+    { status: 429, code: 'rate_limited' },
+    { status: 429, code: 'unknown' },
+    { status: 200, code: 'ocr_daily_quota_exhausted' },
+    { status: 503, code: 'ocr_daily_quota_exhausted' },
+    { status: null, code: 'ocr_daily_quota_exhausted' },
+    { status: 413, code: 'image_too_large' },
+    { status: 415, code: 'unsupported_image_type_for_provider' },
+    { status: null, code: 'unknown' },
+    { status: 200, code: 'provider_error' },
+  ])('no inventa cuota agotada para %j', (error) => {
+    expect(isOcrQuotaExhausted(error)).toBe(false);
+  });
   it('usa total_detected_cents como impreso y no la suma calculada', () => {
     expect(decideOcrScan(response({
       total_cents: 10000,

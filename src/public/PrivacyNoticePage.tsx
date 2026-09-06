@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { leerAvisoPrivacidad, type LecturaAviso } from '../api/publicLegal';
+import { LegalMarkdown } from '../components/LegalMarkdown';
 
 /**
  * `/privacy` · el aviso de privacidad vigente, tal cual lo publica su dueño.
@@ -12,11 +13,12 @@ import { leerAvisoPrivacidad, type LecturaAviso } from '../api/publicLegal';
  * puede leer, la página **lo dice** y ofrece reintentar. Un aviso legal
  * equivocado es peor que un aviso ausente.
  *
- * ## Se pinta como TEXTO, nunca como HTML
+ * ## Markdown limitado a componentes seguros, nunca HTML recibido
  *
- * El cuerpo va en un nodo de texto con `white-space: pre-wrap`. No hay
- * `dangerouslySetInnerHTML` en ningún camino: el cuerpo es una respuesta de red
- * y esta página se sirve sin sesión a cualquiera que abra el link.
+ * El helper puro presenta títulos, listas y énfasis del cuerpo sin cambiarlo.
+ * Todo texto, incluido HTML o sintaxis desconocida, queda escapado por React;
+ * no se crean links ni imágenes desde la respuesta de red. La página sigue
+ * siendo pública y no tiene copia de respaldo del documento.
  *
  * ## La vista es pura, y no es un detalle de estilo
  *
@@ -82,7 +84,7 @@ export function PrivacyNoticeView(
             Versión {estado.aviso.version} · vigente desde{' '}
             {soloFecha(estado.aviso.effective_from)}
           </p>
-          <div className="pub-cuerpo">{estado.aviso.body}</div>
+          <div className="pub-cuerpo"><LegalMarkdown body={estado.aviso.body} /></div>
         </>
       )}
     </section>

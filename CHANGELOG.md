@@ -11,6 +11,165 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.14 — Release mínimo: cupo OCR agotado, aviso legal legible y gates herméticos, reconstruido sobre la foto publicada (2026-09-05)
+
+Orden `APP-FE-MINIMAL-AF12-AF39-HARDENED-01-CLAUDE-CTOIV`, parent exacto `ca8fb983…` (tree
+`e3f92f79…`), que es la foto local de `origin/main` del 2026-09-03. **Sin push, sin deploy, sin
+proveedor, sin DB, sin secreto, sin red y sin instalación.** `0.161.4` queda intacta.
+
+### Qué es este commit y qué no es
+
+- **Un solo commit, hijo directo de `ca8fb983`.** Reúne en 25 paths —la allowlist exacta de la
+  orden— el contenido que dos candidatos locales custodiados acreditaron con GREEN local:
+  `e5719536` (0.161.12, `refs/candidates/custody-af12-e5719536`, fuente funcional y de hardening) y
+  `9781bf5d` (0.161.13, `refs/candidates/custody-af39-9781bf5d`, fuente documental). **Esos commits
+  no son ancestros de éste**: se reconstruye desde la base, no se cherry-pickea la cadena local
+  `0.161.5` → `0.161.13`, y sus entradas de CHANGELOG no se copian. Esos números de versión quedan
+  consumidos por objetos locales que no descienden de la foto publicada y no se reutilizan.
+- **22 archivos byte-idénticos** al tree `643918d2…` de `e5719536`, verificados uno por uno con
+  `git hash-object` contra `git rev-parse <sha>:<path>`. `package.json` y `package-lock.json`
+  cambian únicamente ambas ocurrencias de `version` (`0.161.4` → `0.161.14`): cero dependencias,
+  scripts, `resolved` o `integrity` tocados; el lock sigue siendo el de la base. El vigésimo quinto
+  path es esta entrada.
+
+### Contenido funcional (AF12)
+
+- **Cupo OCR agotado.** Sólo `429` junto con `ocr_daily_quota_exhausted` muestra «Alcanzamos el
+  límite de lecturas de hoy», «Puedes cargar los consumos a mano.» y la salida existente «Cargarlo a
+  mano». La captura queda bloqueada en memoria durante esa instancia, también al volver desde el
+  ticket manual; sin reintento, sin persistencia de cuota, sin reloj ni deducción de reinicio
+  diario. Los demás errores OCR conservan clasificación y salidas
+  (`src/screens/ocrScanView.ts`, `src/screens/CreateMesaFlow.tsx`, `e2e/ocr-quota.spec.ts`).
+- **Aviso legal legible.** El body del aviso se presenta en el alta (`src/screens/LoginScreen.tsx`)
+  y en `/privacy` (`src/public/PrivacyNoticePage.tsx`) mediante `src/components/LegalMarkdown.tsx`:
+  dialecto cerrado de títulos, listas y énfasis con continuaciones multilínea; no interpreta HTML,
+  imágenes ni enlaces, todo lo desconocido queda como texto y no hay `innerHTML`. No cambia body,
+  versión, hash, consentimiento, autoridad de alta ni metadatos; el aviso público sigue fuera de
+  `aria-live` y sin storage. El corpus de prueba 2.4.1 —4536 bytes, sha256
+  `48425f2baabb23857c8bacbf643a08bf28410a85cff930fa0f74ba11b79ef35f`, autoverificado en
+  `src/components/LegalMarkdown.test.tsx:163-164`— procede del owner pin `940cc49e…` y vive sólo en
+  tests: no es fallback productivo ni copia offline.
+- **Censo de idioma.** Un vigésimo path reconoce el futuro mexicano «reemplazará» del corpus
+  inmutable, con controles que siguen detectando las formas voseantes cercanas
+  (`src/api/registroMexicano.test.ts`).
+
+### Hardening de los gates (contenido de `0.161.5`–`0.161.11` locales, sin su ascendencia)
+
+- `scripts/aliasesLib.mjs` declara **la única forma admitida** de llegar a una herramienta: un
+  entrypoint dentro del `node_modules` de la raíz verificada, invocado por ruta absoluta con
+  `process.execPath`. Si falta, el gate falla **antes** de crear un proceso hijo o resolver red; no
+  hay lista de formas prohibidas. `--vigencia` (`scripts/verificar-mirror.mjs`) mide la dirección
+  del drift con `merge-base --is-ancestor` y, cuando no puede medirla, no atribuye causa.
+- `scripts/verificarAliasesImportable.test.ts` acredita eso con tres sensores ortogonales —entrypoints
+  falsos que registran `process.argv`, shims inertes de `npx`/`npm`/`yarn`/`pnpm`/`corepack` al
+  frente del `PATH`, y un preload sobre los siete exports instrumentados de `node:child_process`
+  con aislamiento de `NODE_OPTIONS`—, control positivo, control rojo y campañas de mutantes. Sus
+  docblocks describen sólo lo que cada sensor ve; `scripts/verificarAliases.test.ts` y
+  `scripts/verificar-mirror.test.ts` cubren los casos por herramienta y por relación.
+
+### El aviso 2.4.0 y el 2.4.1 (AF39)
+
+- **2.4.0 fue un candidato descartado y nunca se presentó a nadie.** Existió sólo como commit local
+  `063b254b` (lease `AF-STAGE1-LEGAL-AVISO-2-4-0-PRESENTABLE-01-CLAUDE`, 2026-09-02), descartado
+  por owner-first porque el lease nació antes de que el emisor acreditara; hoy está anclado en
+  `refs/candidates/custody-aviso-2-4-0-063b254b`, fuera de esta historia. `0.159.0` quedó consumida
+  por ese objeto.
+- **2.4.1 es la vigente del dueño** en el pin espejado `940cc49e…` (`services/profileIdentity.js:33`;
+  `services/shortfallDetails.js:21` sigue en `2.3.0`, y por eso la allowlist de versiones
+  presentables **agrega y no reemplaza**). Se presenta desde `0.161.0` y, con este commit, se
+  renderiza con componentes seguros.
+
+### El escenario e2e de la apertura congelada, fijado (orden `APP-FE-MINIMAL-RECON-SETUP-02-CLAUDE-CTOIV`)
+
+La primera corrida integral de navegador de este candidato (2026-09-05, 4 workers, `retries: 0`) dio
+**210 passed / 1 failed**: `e2e/reconciliacion-apertura.spec.ts` esperaba el toast «Elige con qué
+tarjeta garantizar» al reintentar sin tarjeta y la app siguió al 3DS con la guardada principal. La
+traza (nodos literales de `input`/`before`) muestra a **Santander ···· 4532 ya marcada antes del
+primer «Garantizar»**, pese al click en «Agregar nueva tarjeta»: el click llegaba antes de que
+`loadCards()` terminara y su autoselección de la default (`src/screens/CreateMesaFlow.tsx:748`)
+pisaba la elección. El test **no esperaba** que esa carga terminara.
+
+- **Corrección test-only, sólo en `e2e/reconciliacion-apertura.spec.ts`:** antes de elegir «nueva» se
+  exige el radiogroup «Tarjeta para garantizar» completo —3 radios, Santander ···· 4532 y BBVA ····
+  8821 visibles y habilitadas, la default marcada, las otras no—; un solo click en «nueva» y
+  exactamente una marcada; antes del primer «Garantizar» se capturan los códigos del store mock y
+  después se exige **una** fila nueva por diferencia de códigos con `guarantee_method === 'card'`,
+  `status === 'pending_auth'` y `guarantee_saved_payment_method_id` **estrictamente `null`**,
+  fallando si la propiedad falta; antes del replay, el grupo completo con **cero** marcadas y la
+  misma fila con fuente `null`. El replay original queda intacto y gana una aserción («nueva»
+  marcada única). Sin `sleep`, sin timeouts ampliados, sin retries, sin skips, sin cambiar workers,
+  sin tocar helpers globales, mock ni producto. El helper local `mesasDelMock` devuelve además las
+  filas y sus códigos, sin `??` sobre los campos de garantía.
+- **Deuda que esta entrada NO cierra:** la autoselección tardía de la tarjeta principal en
+  `CreateMesaFlow.tsx:748` (`loadCards()` puede marcar la default después de una elección explícita)
+  es un posible defecto de producto **preexistente** —el mismo código está en la base publicada
+  `ca8fb983…`— y queda separado, sin corregir, para una orden propia. Este test ahora lo observaría
+  si vuelve a ocurrir en el escenario fijado; no lo previene.
+- **Incidente declarado de la corrida anterior (sin autorización retroactiva):** durante la suite
+  Vitest integral, `scripts/tsProjectIsolation.test.ts:63` creó y retiró un temporal
+  (`payme-tsprobe-*` con `sonda.ts` y `tsconfig.json`) dentro de `node_modules/.cache`, que por el
+  symlink de dependencias resolvía a un origen declarado read-only; cero cambios de contenido,
+  listado y lock. La corrida de esta orden adjudica esa excepción exacta y controla el origen tras
+  cada gate.
+
+### La nota al pie de Garantía deja de tapar el grupo de tarjetas (orden `APP-FE-GAR-NOTE-LAYOUT-03-CLAUDE-CTOIV`)
+
+Con el escenario fijado, el focal volvió a fallar en la línea ORIGINAL del replay: el click en
+«Agregar nueva tarjeta» nunca llegaba porque `<div class="gar-note-fixed">` —una capa
+`position: absolute` con `z-index: 17`, anclada a `104px + safe-area` del fondo— **interceptaba el
+puntero** después del `scrollIntoView` centrado que dispara la guarda de «Elige con qué tarjeta
+garantizar». Un dedo a 390×844 tampoco llega. El bloque era byte-idéntico a la base publicada:
+defecto de capa preexistente, no del candidato.
+
+- **Cambio de CSS, sólo `.gar-note-fixed` y `.has-appbar .gar-flow-scroll`
+  (`src/styles/global.css`):** la nota pasa a `position: static` con `flex-shrink: 0` y márgenes
+  laterales `var(--sp-4)` e inferior `calc(104px + env(safe-area-inset-bottom))`, sin offsets ni
+  `z-index` de overlay; ocupa su altura real al pie del flex de `.screen` y el scroller hermano
+  —ahora con `flex: 1; min-height: 0` explícitos y su `padding-top: 18px` / `padding-bottom: 120px`
+  de siempre— termina por encima de ella. Copy, tipografía 13.5/700, padding 14px, fondo, sombra y
+  radio 18 no cambian. Sin `pointer-events: none`, sin ocultar ni acortar el texto, sin JSX.
+- **El test lo mide antes del click** (`e2e/reconciliacion-apertura.spec.ts`): `scroller.bottom <=
+  nota.top`, altura del scroller positiva y `nota.bottom < FAB.top`; el click sigue siendo normal
+  (sin `force` ni scroll programático) y el recorrido original continúa intacto. Los tres specs de
+  diseño existentes (`af-diseno-02`, `af-rediseno-12-chrome`, `af-rediseno-12-censo-visual`) no se
+  tocan: sus oráculos de offset 104, nota sobre el FAB y `padding-bottom: 120px` son el criterio de
+  aceptación, no algo que se ajusta para conseguir verde.
+- **Límite:** lo medido es 390×844 (y 375×667 en el spec de chrome). No se afirma validación a
+  320×568, con zoom 200 % ni con safe-area física. Reduce el alto visible inicial de Garantía en el
+  alto real de la nota; es el costo declarado de que nada quede debajo de ella.
+
+### Gates medidos de esta entrega (2026-09-05/06)
+
+Todo lo de abajo se midió sobre este árbol, con Node v24.18.0, TypeScript 5.6.3, Vite 5.4.21 y
+Playwright 1.62.1 resueltos desde una instalación compartida verificada entrada por entrada
+(3445 archivos y enlaces, `npm ls --all --offline` en exit 0 desde su directorio dueño, y las cuatro
+clases de dependencias declaradas idénticas a las del árbol).
+
+- **Suite unitaria: 133 archivos, 2283 tests en verde, 1 skip histórico** (`tokensRatificados`).
+  Corrió en serie —un archivo por vez— tras una corrida previa con cuatro procesos en paralelo en la
+  que dos casos de `scripts/` excedieron el límite de 5000 ms. **Los tests, sus oráculos y ese límite
+  no se tocaron**; sólo cambió el paralelismo. El tiempo acumulado de test bajó de 343,52 s a
+  151,51 s. Esa corrida en rojo se conserva como evidencia y **no se reinterpreta como verde**; la
+  causa del enlentecimiento no está acreditada.
+- **Censo de la corrida**: la suite ejecutó todos los archivos de test que existen en disco.
+- **Cuatro typechecks** en verde. **Tres builds**: real con `VITE_API_URL` de fixture (19 archivos),
+  mock (18) y landing (11), con el artefacto acreditado como escrito por esa ejecución.
+- **Navegador, 390×844**: los dos recorridos de reconciliación (2/2), los tres specs de diseño
+  (11/11) —cuyos oráculos de offset, nota sobre el CTA y `padding-bottom` no se modificaron—, el
+  humo del alta (5/5) y **la suite completa: 211 de 211**. Capturas del flujo guardadas como
+  evidencia. Una corrida anterior de esa misma suite quedó en 210/211 con un caso que no llegó a
+  montar la aplicación, registrando `net::ERR_NETWORK_CHANGED` y un import dinámico fallido; **se
+  conserva en rojo y su causa no se atribuye a nada**.
+
+Estos gates acreditan comportamiento local sobre este árbol. **No acreditan CI remoto, despliegue ni
+producción**, y no son el GREEN final, que no pertenece a esta entrega.
+
+### Lo que esta entrada no afirma
+
+Nada sobre CI remoto, el tip real de `origin/main` (el fetch local es del 2026-09-03), producción,
+Textract, cuota productiva, Safari/WKWebView, revisión jurídica ni aprobación visual de Mati. El
+espejo se conserva en 107 entradas contra el pin `940cc49e…` sin cambios.
+
 ## 0.161.4 — El gate de aliases salía a la red desde un directorio vacío (2026-09-03)
 
 Orden `AF-STAGE1-ALIASES-GATE-HERMETIC-TSCONFIG-GUARD-03-CLAUDE`, base `679525b5…`.

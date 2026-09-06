@@ -29,6 +29,7 @@ import {
 } from '../api/signupInvitation';
 import type { LegalTextResponse } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { LegalMarkdown } from '../components/LegalMarkdown';
 
 /**
  * Login / registro según el contrato (routes/auth.js):
@@ -645,7 +646,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
                 This document is only available in Spanish for now.
               </p>
             )}
-            <pre lang="es">{legal.value.body}</pre>
+            <LegalMarkdown body={legal.value.body} />
             <div className="legal-notice-meta" lang="es">
               Versión {legal.value.version} · {legal.value.effective_from.slice(0, 10)}
             </div>

@@ -1,5 +1,10 @@
 import type { OcrResponse } from '../api/types';
 
+/** Sólo este rechazo del owner acredita que terminó el cupo diario. */
+export function isOcrQuotaExhausted(error: { status: number | null; code: string }): boolean {
+  return error.status === 429 && error.code === 'ocr_daily_quota_exhausted';
+}
+
 export type OcrScanDecision =
   | { kind: 'provider_unavailable' }
   | { kind: 'no_items' }

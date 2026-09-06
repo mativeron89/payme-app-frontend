@@ -1099,13 +1099,31 @@ body {
   margin: 2px 0 12px;
   padding: 12px;
 }
-.legal-notice pre {
-  white-space: pre-wrap;
+.legal-notice .legal-markdown {
   overflow-wrap: anywhere;
   margin: 0;
   color: var(--navy);
   font: 12px/1.5 var(--font-body);
 }
+.legal-markdown {
+  overflow-wrap: anywhere;
+}
+.legal-markdown h2,
+.legal-markdown h3 {
+  margin: 1em 0 0.5em;
+  color: inherit;
+  line-height: 1.4;
+}
+.legal-markdown h2 { font-size: 1.2em; }
+.legal-markdown h3 { font-size: 1.1em; }
+.legal-markdown p,
+.legal-markdown ul {
+  margin: 0 0 0.85em;
+}
+.legal-markdown ul { padding-left: 1.4em; }
+.legal-markdown li { margin: 0.35em 0; }
+.legal-markdown > :first-child { margin-top: 0; }
+.legal-markdown > :last-child { margin-bottom: 0; }
 .legal-notice-language,
 .legal-notice-meta {
   margin: 0 0 9px;
@@ -6102,6 +6120,11 @@ h1.pay-title-lbl {
 }
 
 .has-appbar .gar-flow-scroll {
+  /* GAR-NOTE-03 · explícito para que el scroller ceda altura a la nota al pie
+     en el flex de `.screen`; `padding-top`/`padding-bottom` quedan como los
+     fijan los tests de diseño. */
+  flex: 1;
+  min-height: 0;
   padding-top: 18px;
   padding-bottom: 120px;
 }
@@ -6260,12 +6283,19 @@ h1.pay-title-lbl {
   color: var(--link);
 }
 
+/* GAR-NOTE-03 · La nota deja de flotar como capa (`position: absolute` + `z-index`)
+   y pasa a ocupar su altura real al pie del flex de `.screen`: el scroller
+   hermano termina POR ENCIMA de ella, así que ningún control del grupo de
+   tarjetas puede quedar debajo. Medido el 2026-09-05: con la capa, tras el
+   `scrollIntoView` centrado de la guarda, «Agregar nueva tarjeta» quedaba
+   tapado y no recibía el click. El margen inferior conserva la geometría
+   fijada por los tests de diseño (104px + safe-area sobre la barra: la nota
+   queda encima del CTA circular). Copy, tipografía, padding, fondo, sombra
+   y radio no cambian. */
 .gar-note-fixed {
-  position: absolute;
-  right: var(--sp-4);
-  bottom: calc(104px + env(safe-area-inset-bottom));
-  left: var(--sp-4);
-  z-index: 17;
+  position: static;
+  flex-shrink: 0;
+  margin: 0 var(--sp-4) calc(104px + env(safe-area-inset-bottom));
   padding: 14px var(--sp-4);
   border-radius: 18px;
   background: var(--surface);
@@ -6442,15 +6472,13 @@ h1.pay-title-lbl {
   color: var(--text);
 }
 
-/* El cuerpo llega como TEXTO del backend, con sus saltos de línea: se respeta
-   el blanco en vez de interpretarlo. `overflow-wrap` evita que una URL larga
-   del propio aviso desborde a 320px. */
+/* El helper sólo interpreta el dialecto Markdown del aviso como componentes
+   seguros. `overflow-wrap` evita desbordes a 320px incluso en texto desconocido. */
 .pub-cuerpo {
   margin-top: var(--sp-4);
   font-size: var(--fs-body);
   line-height: var(--lh-body);
   color: var(--text);
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
