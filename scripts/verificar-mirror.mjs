@@ -50,7 +50,7 @@
  * Exit: 0 verificado · 1 desvío real · 2 NO CERTIFICADO (no se pudo verificar).
  */
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -165,13 +165,29 @@ function gitDisponible() {
  */
 function relacionConHead(commitPin) {
   if (!gitDisponible()) return 'indeterminada';
+  /**
+   * 🔴 P2 · UN ERROR DE GIT NO ES UNA RESPUESTA. `merge-base --is-ancestor`
+   * contesta con el código de salida, y **sólo el 1 significa «no es
+   * ancestro»**. Cualquier otro fallo —grafo incompleto, objeto ilegible, git
+   * que muere por señal— es que la caminata NO concluyó: no dice nada sobre la
+   * relación. La versión anterior devolvía `false` en los dos casos, así que
+   * dos errores seguidos se publicaban como `divergentes`, que es afirmar que
+   * ninguno desciende del otro. **Eso es una causalidad no medida**, la misma
+   * clase que este gate corrigió en su mensaje y volvía a cometer en su
+   * cálculo. `cat-file` acredita que los dos tips existen, no que ambas
+   * caminatas hayan terminado.
+   *
+   * Tres resultados, y el error viaja como error:
+   *   true   → es ancestro (exit 0)
+   *   false  → NO es ancestro (exit 1 exacto, sin señal)
+   *   null   → indeterminado (cualquier otro status, señal o fallo al lanzar)
+   */
   const esAncestro = (a, b) => {
-    try {
-      execFileSync('git', ['-C', FUENTE, 'merge-base', '--is-ancestor', a, b], { stdio: 'pipe' });
-      return true;
-    } catch {
-      return false;
-    }
+    const r = spawnSync('git', ['-C', FUENTE, 'merge-base', '--is-ancestor', a, b], { stdio: 'pipe' });
+    if (r.error || r.signal !== null) return null;
+    if (r.status === 0) return true;
+    if (r.status === 1) return false;
+    return null;
   };
   let head;
   try {
@@ -185,8 +201,16 @@ function relacionConHead(commitPin) {
     return 'indeterminada';
   }
   if (head === commitPin) return 'mismo';
-  if (esAncestro(commitPin, head)) return 'head_adelante';
-  if (esAncestro(head, commitPin)) return 'head_atras';
+  // 🔴 El `null` se propaga y CORTA: no se hace la segunda consulta para
+  // «completar» lo que la primera no pudo medir, ni se deja que un valor
+  // falsy se lea como «no es ancestro». Sólo dos respuestas legítimas y
+  // negativas —las dos con exit 1— autorizan a decir `divergentes`.
+  const pinEnHead = esAncestro(commitPin, head);
+  if (pinEnHead === null) return 'indeterminada';
+  if (pinEnHead === true) return 'head_adelante';
+  const headEnPin = esAncestro(head, commitPin);
+  if (headEnPin === null) return 'indeterminada';
+  if (headEnPin === true) return 'head_atras';
   return 'divergentes';
 }
 

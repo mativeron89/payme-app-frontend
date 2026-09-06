@@ -11,6 +11,66 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.15 — Un error de Git dejó de publicarse como divergencia (2026-09-06)
+
+Orden `APP-FE-MIRROR-GIT-ERROR-06-CLAUDE-CTOIV`, base `5eb48309…`. PATCH de instrumento: cambia el
+diagnóstico de `--vigencia` y su prueba. **No toca el espejo, el inventario, el contrato, la UI ni
+ninguna superficie de producto**, y no reespeja los 107 archivos.
+
+### Qué afirmaba de más
+
+`relacionConHead()` preguntaba dos veces `git merge-base --is-ancestor` y leía el resultado con un
+`try/catch`: **cualquier fallo devolvía `false`, igual que la respuesta legítima «no es ancestro»**.
+Con las dos consultas fallando —un grafo incompleto, un objeto ilegible, git muerto por señal— la
+función terminaba en `divergentes` y el gate anunciaba que ninguno de los dos commits desciende del
+otro. Eso es afirmar una relación que **nunca se pudo medir**, y es la misma clase de causalidad
+inventada que este gate corrigió en su mensaje en `0.161.5` y seguía cometiendo en su cálculo. El
+`cat-file` previo acredita que los dos commits existen, no que las dos caminatas de historia hayan
+concluido.
+
+🔴 **Y lo que lo vuelve un defecto y no un olvido: el docblock de la propia función ya reservaba
+`indeterminada` para ese caso.** Su texto decía, literal, que es «una respuesta legítima —sin git,
+sin uno de los dos commits, o **error**— y en ese caso el diagnóstico sale **neutral**: no se afirma
+dirección». **El código contradecía el contrato que su propio comentario documentaba.** Un comentario
+correcto al lado de un código que hace otra cosa es peor que no tener comentario: promete una
+garantía que nadie verifica.
+
+⚠️ **El alcance, dicho sin exagerarlo:** las tres comprobaciones previas **sí** devolvían
+`indeterminada` —git ausente, `rev-parse HEAD` fallido y commit pineado inexistente—. El agujero
+estaba acotado a los errores ocurridos **durante las dos consultas de ancestro**, que eran las únicas
+cuyo fallo se leía como respuesta.
+
+### Qué se mide ahora
+
+`merge-base --is-ancestor` contesta por código de salida y ahora se leen **tres** resultados: `0` es
+ancestro, **`1` exacto y sin señal** es no-ancestro, y **cualquier otro status, una señal o un fallo
+al lanzar el proceso es indeterminado**. El indeterminado **corta**: no se hace la segunda consulta
+para completar lo que la primera no pudo medir, ni un valor falsy se lee como negativa. Sólo dos
+respuestas legítimas y negativas autorizan `divergentes`. `mismo`, `head_adelante`, `head_atras` y el
+texto neutral quedan como estaban, y **los códigos de salida del gate no cambian**: una diferencia de
+contenido ya medida sigue saliendo 1 aunque su dirección quede indeterminada.
+
+### Cómo se acredita
+
+Tres casos nuevos en `scripts/verificar-mirror.test.ts`, caja negra sobre el script real. El error se
+fuerza con un **git envuelto** que se antepone al `PATH` **del proceso hijo de prueba**: delega
+`rev-parse`, `cat-file` y `show` al git real y sólo intercepta `merge-base`. No hay flag de producto
+que permita al gate fallarse a sí mismo, no se tocan repos reales y las fixtures viven en directorios
+temporales del propio test. El envoltorio **registra sus invocaciones**, y los casos afirman sobre
+ese registro que la rama se alcanzó, en vez de deducirlo del resultado.
+
+- Falla la **primera** consulta: diagnóstico neutral, sin `DIVERGEN` ni ninguna de las dos
+  direcciones, y el rojo por diferencia de contenido se conserva.
+- Falla la **segunda** tras un `1` legítimo en la primera: mismo resultado, con el registro
+  mostrando dos invocaciones.
+- **Control positivo**: el mismo envoltorio delegando de verdad vuelve a medir la dirección real, así
+  que los tres casos de dirección existentes no pasan por accidente.
+
+**El arreglo no ablanda el gate, y eso también se prueba:** los dos casos de error afirman
+`exit 1`, de modo que una diferencia de contenido ya medida sigue siendo roja aunque su dirección
+quede indeterminada. Si alguien convirtiera el indeterminado en una salida tolerante, esos dos casos
+se ponen rojos.
+
 ## 0.161.14 — Release mínimo: cupo OCR agotado, aviso legal legible y gates herméticos, reconstruido sobre la foto publicada (2026-09-05)
 
 Orden `APP-FE-MINIMAL-AF12-AF39-HARDENED-01-CLAUDE-CTOIV`, parent exacto `ca8fb983…` (tree

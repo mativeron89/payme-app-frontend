@@ -51,6 +51,74 @@ function correrConSalida(...args: string[]): { status: number; salida: string } 
   return { status: r.status ?? -1, salida: `${r.stdout ?? ''}${r.stderr ?? ''}` };
 }
 
+/**
+ * 🔴 P2 · GIT ENVUELTO PARA FORZAR UN ERROR OPERATIVO **SÓLO** EN `merge-base`.
+ *
+ * El script llama a `git` por nombre, así que alcanza con anteponer un
+ * directorio al `PATH` **del proceso hijo de prueba**: nada toca al git real,
+ * a los repos de producto ni al entorno de esta sesión, y el producto no gana
+ * ningún flag para hacerse fallar a sí mismo —que sería un interruptor que
+ * alguien puede accionar en producción—.
+ *
+ * El envoltorio DELEGA todo (`rev-parse`, `cat-file`, `show`, …) al git real y
+ * sólo intercepta `merge-base`, con el `status` que se le pida. Registra cada
+ * invocación en un archivo: así el test acredita que **se llegó a esa rama**,
+ * en vez de suponerlo por el resultado.
+ */
+function gitEnvuelto(
+  dir: string,
+  opciones: { status?: number; senal?: string; soloTrasPrimera?: boolean },
+): string {
+  const bin = join(dir, 'bin');
+  mkdirSync(bin, { recursive: true });
+  const registro = join(dir, 'invocaciones.txt');
+  // 🔴 El git real se resuelve con `which` bajo un PATH CONTROLADO y sin shell
+  // de login: un `bash -lc` cargaría perfiles del usuario y metería en el
+  // experimento un entorno que nadie declaró. El envoltorio delega a esa ruta
+  // ABSOLUTA medida, así que no puede invocarse a sí mismo aunque quede al
+  // frente del PATH del hijo.
+  const gitReal = execFileSync('/usr/bin/which', ['git'], {
+    encoding: 'utf8',
+    env: { PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin' },
+  }).trim();
+  // Terminación por SEÑAL: el fixture se la manda A SÍ MISMO. Nunca sale de
+  // este proceso, y hace determinista la rama `signal !== null` del arreglo.
+  const fallo = opciones.senal
+    ? `kill -${opciones.senal} $$`
+    : `exit ${String(opciones.status ?? 128)}`;
+  const cuerpo = [
+    '#!/bin/bash',
+    `REG=${JSON.stringify(registro)}`,
+    'printf "%s\n" "$*" >> "$REG"',
+    'for a in "$@"; do',
+    '  if [ "$a" = "merge-base" ]; then',
+    opciones.soloTrasPrimera
+      ? `    n=$(grep -c "merge-base" "$REG"); if [ "$n" -ge 2 ]; then ${fallo}; else exec ${JSON.stringify(gitReal)} "$@"; fi`
+      : `    ${fallo}`,
+    '  fi',
+    'done',
+    `exec ${JSON.stringify(gitReal)} "$@"`,
+  ].join('\n');
+  writeFileSync(join(bin, 'git'), `${cuerpo}\n`, { mode: 0o755 });
+  return bin;
+}
+
+/** Cuántas veces el envoltorio vio `merge-base`. El corte se acredita con el NÚMERO, no con su presencia. */
+function consultasMergeBase(dir: string): number {
+  return readFileSync(join(dir, 'invocaciones.txt'), 'utf8')
+    .split('\n')
+    .filter((l) => l.includes('merge-base')).length;
+}
+
+/** Igual que `correrConSalida`, pero con el `PATH` del hijo apuntando al git envuelto. */
+function correrConGitEnvuelto(bin: string, ...args: string[]): { status: number; salida: string } {
+  const r = spawnSync('node', [join(scripts, 'verificar-mirror.mjs'), ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, PAYME_APP_BACKEND_DIR: fuente, PATH: `${bin}:${process.env.PATH ?? ''}` },
+  });
+  return { status: r.status ?? -1, salida: `${r.stdout ?? ''}${r.stderr ?? ''}` };
+}
+
 /** Contenido de los archivos del contrato de mentira: origen → cuerpo. */
 const CONTRATO: Record<string, string> = {
   'routes/auth.js': 'module.exports = "auth";\n',
@@ -325,5 +393,94 @@ describe('🔴 vigencia · la DIRECCIÓN se mide, no se inventa', () => {
     expect(salida).toMatch(/DIVERGEN: ninguno desciende del otro/);
     expect(salida).not.toMatch(/la fuente avanzó sobre lo espejado/);
     expect(salida).not.toMatch(/el checkout está detrás del pin/);
+  });
+
+  /**
+   * 🔴 P2 · UN ERROR DE GIT NO ES UNA DIRECCIÓN.
+   *
+   * `merge-base --is-ancestor` contesta con su código de salida y **sólo el 1
+   * significa «no es ancestro»**. La versión anterior atrapaba todo en un
+   * `catch` y devolvía `false`, así que dos errores seguidos salían publicados
+   * como `divergentes`: el gate afirmaba que ninguno desciende del otro sin
+   * haber podido recorrer la historia. Estos casos fuerzan el error real —git
+   * envuelto, sólo en `merge-base`— y exigen que el diagnóstico salga
+   * **neutral**, conservando el rojo por diferencia de contenido.
+   *
+   * Van separados por posición del fallo porque son ramas distintas del
+   * arreglo: la primera consulta que falla, y la segunda que falla después de
+   * un `1` legítimo. En un solo `it`, la primera aserción en caer taparía la otra.
+   */
+  it('🔴 `merge-base` falla en la PRIMERA consulta → indeterminada, nunca divergentes', () => {
+    escribir(fuente, 'routes/mesas.js', 'module.exports = "v2";\n');
+    git('add', '-A');
+    git('commit', '-qm', 'la fuente avanza sobre lo espejado');
+    const bin = gitEnvuelto(raiz, { status: 128 });
+
+    const { status, salida } = correrConGitEnvuelto(bin, '--vigencia');
+    expect(status, 'una diferencia de contenido ya medida sigue siendo roja').toBe(1);
+    expect(salida).toMatch(/no se pudo medir la relación entre el HEAD inspeccionado y el commit pineado: se informa la diferencia sin atribuirle dirección/);
+    expect(salida, 'inventó divergencia sobre un error').not.toMatch(/DIVERGEN/);
+    expect(salida).not.toMatch(/la fuente avanzó sobre lo espejado/);
+    expect(salida).not.toMatch(/el checkout está detrás del pin/);
+    // 🔴 EXACTAMENTE UNA. El arreglo promete CORTAR ante el error: si alguien
+    // consultara igual la segunda vez «para completar», este número lo delata.
+    // Exigir sólo presencia, o «al menos una», no distingue el corte de su vecino.
+    expect(consultasMergeBase(raiz), 'no cortó tras el error: consultó de más').toBe(1);
+  });
+
+  it('🔴 `merge-base` falla en la SEGUNDA consulta, tras un 1 legítimo → indeterminada', () => {
+    // HEAD queda DETRÁS del pin: la primera consulta contesta 1 de verdad y la
+    // segunda —la que decidiría `head_atras`— es la que falla.
+    const antes = git('rev-parse', 'HEAD');
+    escribir(fuente, 'routes/mesas.js', 'module.exports = "v2";\n');
+    git('add', '-A');
+    git('commit', '-qm', 'contenido nuevo que el inventario va a declarar');
+    const inv = JSON.parse(readFileSync(join(scripts, 'mirror-inventory.json'), 'utf8'));
+    inv.commit = git('rev-parse', 'HEAD');
+    for (const a of inv.archivos) {
+      if (a.origen === 'routes/mesas.js') a.sha256 = sha('module.exports = "v2";\n');
+    }
+    writeFileSync(join(scripts, 'mirror-inventory.json'), JSON.stringify(inv));
+    escribir(espejo, 'routes/mesas.js', 'module.exports = "v2";\n');
+    git('checkout', '-q', antes);
+    const bin = gitEnvuelto(raiz, { status: 128, soloTrasPrimera: true });
+
+    const { status, salida } = correrConGitEnvuelto(bin, '--vigencia');
+    expect(status).toBe(1);
+    expect(salida).toMatch(/no se pudo medir la relación entre el HEAD inspeccionado y el commit pineado: se informa la diferencia sin atribuirle dirección/);
+    expect(salida, 'un error después de un 1 legítimo no es divergencia').not.toMatch(/DIVERGEN/);
+    expect(salida).not.toMatch(/el checkout está detrás del pin/);
+    // 🔴 EXACTAMENTE DOS: la primera contestó 1 legítimo y la segunda falló.
+    // Con «≥ 2» pasaría una implementación que consultara tres veces.
+    expect(consultasMergeBase(raiz), 'debía consultar exactamente dos veces').toBe(2);
+  });
+
+  it('🔴 `merge-base` MUERE POR SEÑAL → indeterminada, no una dirección', () => {
+    // La rama `signal !== null` del arreglo, ejercitada de forma determinista:
+    // el fixture se manda SIGKILL a sí mismo al ver `merge-base`. La señal no
+    // sale de ese proceso y no toca nada externo.
+    escribir(fuente, 'routes/mesas.js', 'module.exports = "v2";\n');
+    git('add', '-A');
+    git('commit', '-qm', 'la fuente avanza sobre lo espejado');
+    const bin = gitEnvuelto(raiz, { senal: 'KILL' });
+
+    const { status, salida } = correrConGitEnvuelto(bin, '--vigencia');
+    expect(status, 'la diferencia de contenido sigue siendo roja').toBe(1);
+    expect(salida).toMatch(/no se pudo medir la relación entre el HEAD inspeccionado y el commit pineado: se informa la diferencia sin atribuirle dirección/);
+    expect(salida, 'una muerte por señal no es divergencia').not.toMatch(/DIVERGEN/);
+    expect(salida).not.toMatch(/la fuente avanzó sobre lo espejado/);
+    expect(consultasMergeBase(raiz), 'no cortó tras la señal').toBe(1);
+  });
+
+  it('🔴 el git envuelto NO se cuela en los casos legítimos: delegando, la dirección se sigue midiendo', () => {
+    escribir(fuente, 'routes/mesas.js', 'module.exports = "v2";\n');
+    git('add', '-A');
+    git('commit', '-qm', 'la fuente avanza sobre lo espejado');
+    // Mismo envoltorio, pero con el status legítimo: delega y deja pasar todo.
+    const bin = gitEnvuelto(raiz, { status: 1, soloTrasPrimera: true });
+
+    const { status, salida } = correrConGitEnvuelto(bin, '--vigencia');
+    expect(status).toBe(1);
+    expect(salida).toMatch(/DESCIENDE del commit pineado: la fuente avanzó/);
   });
 });
