@@ -56,9 +56,28 @@ export default defineConfig({
    * publicación, y meterle un pipe le comería el exit code — el shell por
    * defecto de un `run:` es `bash -e`, sin `pipefail`.
    */
+  /**
+   * 🔴 `_reporter-origen.ts` va en LAS DOS ramas, y es barato a propósito.
+   *
+   * Registra el `baseURL` que el runner RESOLVIÓ en corrida — el valor después de los
+   * overrides de CLI y entorno, no el literal de este archivo. Hasta que existió, la
+   * evidencia de una corrida E2E no tenía una sola URL adentro: el reporter `list` no
+   * imprime ninguna, y el `json` tampoco alcanza porque su
+   * `JSONReport.config.projects[]` no incluye `use`. Así, «corre sólo contra el mock
+   * loopback» se sostenía leyendo este archivo a mano, que es configuración declarada.
+   *
+   * ⚠️ Y sigue siendo configuración: NO dice contra qué habló el navegador. Eso lo mide
+   * `scripts/extraer-origenes.mjs` sobre la entrada de red del trace, y vive en otro
+   * archivo con otro rótulo justamente para que no se lean como uno solo.
+   */
   reporter: process.env.CI
-    ? [['line'], ['html', { open: 'never' }], ['json', { outputFile: 'test-results/resultados.json' }]]
-    : [['list']],
+    ? [
+        ['line'],
+        ['html', { open: 'never' }],
+        ['json', { outputFile: 'test-results/resultados.json' }],
+        ['./e2e/_reporter-origen.ts'],
+      ]
+    : [['list'], ['./e2e/_reporter-origen.ts']],
 
   use: {
     baseURL: 'http://localhost:5176',
