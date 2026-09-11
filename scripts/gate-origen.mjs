@@ -40,6 +40,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -344,7 +345,36 @@ process.stdout.write(`gate-origen · node ${process.version} · @playwright/test
 // si el cwd coincide con la raiz, que es lo unico que el auditor necesita saber.
 process.stdout.write(`gate-origen · cwd === raiz: ${process.cwd() === RAIZ}\n`);
 
-process.stdout.write(`gate-origen · deny de egress: ${SANDBOX_EXEC} -f ${rutaPublicable(PERFIL_DENY, RAIZ).publicado}\n`);
+/**
+ * 🔴 EL PERFIL SE PASA POR VALOR (`-p`), NO POR RUTA (`-f`).
+ *
+ * Con `-f <ruta>`, entre que el gate comprueba que el perfil existe y que `sandbox-exec` lo
+ * abre hay una ventana: son **dos aperturas distintas del mismo path**, y nada garantiza que
+ * entre una y otra sea el mismo archivo. Un gate que valida una cosa y lanza con otra no está
+ * validando nada — es el TOCTOU de siempre, en el punto exacto donde más caro sale.
+ *
+ * Acá los bytes se leen UNA vez, se hashean **esos** bytes, y se pasan **esos** bytes. Lo
+ * hasheado y lo consumido son el mismo objeto, no dos lecturas que se parecen.
+ *
+ * La idea es de APP Backend, relayeada como observación técnica; la adopto porque cierra una
+ * ventana real, no por simetría entre carriles.
+ */
+let PERFIL_TEXTO;
+let PERFIL_SHA;
+try {
+  const bytes = readFileSync(PERFIL_DENY);
+  PERFIL_TEXTO = bytes.toString('utf8');
+  PERFIL_SHA = createHash('sha256').update(bytes).digest('hex');
+} catch (e) {
+  process.stderr.write(`gate-origen: no pude leer el perfil de deny — ${e.message}. Sin contención no se lanza.\n`);
+  process.exit(11);
+}
+if (PERFIL_TEXTO.trim() === '') {
+  process.stderr.write('gate-origen: el perfil de deny está vacío. Un perfil vacío no contiene nada.\n');
+  process.exit(11);
+}
+
+process.stdout.write(`gate-origen · deny de egress: ${SANDBOX_EXEC} -p <perfil por valor> sha256 ${PERFIL_SHA}\n`);
 process.stdout.write(
   'gate-origen · deny verificado 2026-09-11: loopback permitido; IP cruda, nombre e IPv6 externos EPERM; ' +
     'el mismo destino SIN sandbox conecta. No se enumeraron protocolos fuera de TCP.\n',
@@ -356,7 +386,7 @@ process.stdout.write('gate-origen · corriendo E2E con trace encendido\n');
 // afuera, que es exactamente quien habla con la red.
 const corrida = spawnSync(
   SANDBOX_EXEC,
-  ['-f', PERFIL_DENY, process.execPath, CLI_PLAYWRIGHT, 'test', '--trace', 'on', ...extra],
+  ['-p', PERFIL_TEXTO, process.execPath, CLI_PLAYWRIGHT, 'test', '--trace', 'on', ...extra],
   {
     stdio: 'inherit',
     // 🔴 `cwd` explicito en RAIZ: sin el, el runner resuelve su config contra el cwd de quien
