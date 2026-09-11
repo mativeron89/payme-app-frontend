@@ -11,6 +11,192 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+### Corrección de FASE W · el gate de origen queda MEDIDO y en verde (2026-09-11)
+
+FASE W fue rechazada en auditoría con trece bloqueos. Esta entrada los cierra, y **lo que
+sigue sí corrió**:
+
+```
+suite unitaria completa   140 archivos · 2473 passed | 2 skipped · RC 0
+typecheck (4 proyectos)   RC 0
+build real · mock · landing                              RC 0 · 0 · 0
+E2E COMPLETO bajo deny de egress   211 passed · 1.9 min · RC 0
+  22 558 URLs medidas · 5 orígenes · TODOS loopback · CERO externos
+  veredicto  MEDIDO_SOLO_LOOPBACK_CERO_ORIGENES_EXTERNOS
+```
+
+🔴 **Y lo que hace que ese verde signifique algo: el deny de egress está VERIFICADO, no
+declarado.** El E2E corrió dentro de `sandbox-exec` con un perfil que niega todo el egress IP
+salvo loopback, y la contención se probó con sus controles:
+
+| control | resultado |
+|---|---|
+| loopback permitido (positivo) | conecta |
+| IP externa cruda | `EPERM` |
+| por nombre, con DNS y TLS | `EPERM` |
+| IPv6 externo | `EPERM` |
+| **el mismo destino SIN sandbox** | **conecta** |
+
+El último es el que sostiene a los otros cuatro: sin él, «bloqueado» podía ser simplemente que
+la máquina no tenía red.
+
+⚠️ **C2-2 queda explicado.** Aquel abort de Chromium en `dyld`/`CacheFinder` antes de `main()`
+venía de un perfil que **restringía archivos** sin incluir el nodo raíz de lectura. Este perfil
+no restringe archivos: hereda `(allow default)` y toca únicamente la red. Por eso el navegador
+arranca — y lo que lo cierra no es el argumento, es que el E2E corrió adentro.
+
+⚠️ **Lo que sigue SIN acreditar, y no se presenta de otro modo:** que no exista *ningún* camino
+de egress. Se probaron IP cruda, nombre e IPv6; no se enumeraron protocolos fuera de TCP ni
+rutas por servicios del sistema. Cuatro controles que pasan no son la clase entera.
+
+**Sin bump.** `0.161.16` nunca se publicó: esta corrección es del mismo candidato, y un número
+nuevo diría que hubo una entrega intermedia que no existió.
+
+📌 Y el historial que no se borra, porque explica el estado de los archivos: durante la fase
+anterior esto se escribió **sin poder ejecutar nada**, y los encabezados decían
+`ESCRITOS_SIN_EJECUTAR` y `NO_ACREDITADO_POR_EJECUCION`. Eran ciertos entonces. El primer
+`sandbox-exec` real devolvió `host must be * or localhost in network address`: el perfil no
+compilaba y el archivo era **inerte**. Enumerar `127.0.0.1` y `::1` «por las dudas» era
+exactamente lo que lo rompía.
+
+**Anclaje (`scripts/anclar-local.mjs`, nuevo).** Dos ítems que parecían distintos eran la misma
+máquina: resolver el binario por `realpath` dentro del worktree, y containment de rutas. Se escribe
+una vez y la importan el gate y la config. El containment usa `path.relative`, no `startsWith`, que
+aprobaría `/repo-malicioso` bajo `/repo`; y hace `realpath` de **los dos lados**, porque en macOS
+`tmpdir()` cuelga de `/var` —symlink a `/private/var`— y resolver un solo lado declara «afuera» un
+árbol legítimo. Ambos defectos tienen su mutante y los dos se vieron en rojo. Además exige que la
+versión instalada de Vite y de `@playwright/test` sea **exactamente la del lock**; eso acredita que
+el árbol no derivó del lock, y **no** acredita integridad de contenido, que es otra comprobación.
+
+**Entorno saneado.** El gate lanza el runner sin `NODE_OPTIONS`, `BASH_ENV`, `ENV`,
+`NODE_EXTRA_CA_CERTS`, el transform de fuentes de Playwright ni ningún proxy: cada una inyecta código
+en el proceso o redirige su tráfico, justo lo que el gate viene a medir. Se publica **qué nombres**
+se retiraron, nunca sus valores — un `HTTPS_PROXY` trae credenciales en el userinfo con naturalidad.
+⚠️ `PLAYWRIGHT_BROWSERS_PATH` y otras cuatro **se declaran y no se retiran**: retirarlas cambiaría
+qué navegador usa la corrida y ese cambio **no se puede probar** mientras el E2E esté prohibido.
+Limitación declarada, no excepción de conveniencia.
+
+**Censo y preflight antes de borrar — se ataca la clase de INC-08.** Aquel incidente se llevó 211
+traces y se «arregló» moviendo la limpieza al final. El orden estaba bien y no alcanzaba: aun en el
+lugar correcto, `rmSync` seguía borrando **sin mirar**. Ahora el gate censa `test-results/` y corre
+un preflight completo —config, Vite anclado, puerto, perfil de deny— **antes** de cualquier
+limpieza; si hay artefactos que nadie inventarió se detiene y los lista.
+
+✅ **Acreditado por ejecución.** El censo se observó con su sonda —con la guarda `RC=9` y los bytes
+sobreviven, sin la guarda el archivo desaparece— y el preflight quedó cubierto por casos de caja
+negra que ahora corren en verde. El propio preflight destapó una duplicación mía: `playwright.config.ts`
+se comprobaba dos veces, y la segunda rama era inalcanzable. Se sacó la duplicada en vez de alinear el
+número esperado: una rama que nadie puede ejecutar es codigo que el proximo lector cree que corre.
+
+**Biyección y cardinalidad registro ↔ ZIP.** El gate sabía denunciar la traza huérfana y le faltaba
+la dirección contraria: un test que declaró su traza y la traza no está. Sin eso, medir *las trazas
+que encontré* se leía igual que medir *todas las que la corrida produjo*, y medio directorio salía
+idéntico a uno completo. Se cubren vacío, todo-null, duplicados, faltantes, huérfanas y skips.
+`NO_SOLICITADA` y `NO_BIYECTIVA` quedan como estados **distintos**: confundirlos inventa un defecto
+cuando no se pidió la unión, y regala un permiso cuando sí.
+
+**UTF-8 estricto.** `Buffer.toString('utf8')` no falla nunca: reemplaza los bytes inválidos por
+U+FFFD. Sobre una traza corrupta eso es leer basura como si fuera texto, y si la línea mutilada era
+la del origen externo, el gate salía limpio sobre datos que nadie pudo leer. El decodificador ahora
+lanza y la traza queda contaminada.
+
+**Redacción del censo.** El loopback se publica literal —`127.0.0.1` y `localhost` son constantes, no
+datos—; un tercero de la allowlist declarada se nombra sin su subdominio; cualquier otro host queda
+como `EXTERNO_NO_ALLOWLISTADO` con esquema y largo. Un subdominio puede llevar tenant o token. 🔴 Al
+introducir el seudónimo, **los 31 tests siguieron verdes** porque ninguno afirmaba la AUSENCIA del
+host crudo: la redacción se ve, la NO redacción hay que ir a buscarla. El campo crudo ahora se
+**retira**, no se acompaña, y hay un mutante que lo vigila.
+
+**ZIP.** Se escribieron casos para multivolumen, método no soportado, topes, cierre en el camino de
+error, cardinalidad de la lista de nombres y excepción del filtro. Armar el fixture del tope enseñó
+algo del propio lector: `validateEntrySizes` rechazaba antes, así que **mi tope estaba tapado por una
+guarda anterior** y lo habría dado por probado sin que corriera una vez.
+
+**ZIP64 deja de ser un `it.skip`.** El motivo que había —«un fixture honesto exige >4 GB»— era una
+limitación de mi escritor de fixtures, no del formato: ZIP64 es una codificación, el campo de 32 bits
+lleva el centinela y el valor real va en el extra field `0x0001`. Un zip de ocho bytes escrito así es
+ZIP64 legítimo, y el lector lo lee: **verde en la primera corrida**, con las cabeceras binarias
+escritas a mano y sin poder probarlas mientras se escribían.
+
+**Una sola implementación de cada decisión.** `playwright.config.ts` tenía su propia resolución de
+Vite y `e2e/_reporter-origen.ts` su propia política de redacción, gemelas de las que ya existían en
+`scripts/`. Ahora Vite se resuelve por `anclar-local.mjs` —realpath dentro del árbol y versión exacta
+contra el lock—, yauzl pasa por el mismo anclaje antes de importarse, y reporter y extractor importan
+`scripts/redactar.mjs`. El motivo no es estética: **dos implementaciones de la misma decisión se
+desalinean calladas**, y acá ya pasó en su forma más cara — la regla «no se hashea el valor crudo»
+quedó escrita en un archivo y sin aplicar en el de al lado la misma noche, con un test que fijaba la
+violación.
+
+**El contexto de la traza se empareja por ordinal.** Antes bastaba UNA entrada `N-trace.trace` válida
+para que TODAS las `.network` del zip contaran como tráfico de navegador: un contexto legítimo
+acreditaba una entrada de red fabricada al lado. Ahora cada `M-trace.network` exige **su**
+`M-trace.trace`. Y una `.network` sin ordinal deja de aceptarse: había un caso mío que la toleraba
+«para no romper trazas viejas», escrito cuando el hallazgo era el inverso. Aquella tolerancia era
+compatibilidad y era la puerta que el CTO señaló.
+
+**Un `trace_path_relativo` nulo ahora exige justificación.** Un test que corrió y no dejó traza y uno
+que se salteó no son lo mismo, y sólo el segundo es benigno: el primero significa que el instrumento
+perdió un artefacto que debería existir. El nulo sólo vale con un `estado` de salteo declarado por el
+reporter; `SIN_NAVEGADOR` no se infiere del slug ni del stack.
+
+**Containment canónico.** El límite es `'..'` exacto o `'..' + separador`, nunca `startsWith('..')`,
+que declaraba afuera un directorio llamado `..foo`. Fallaba del lado cerrado, así que no era un
+agujero: era **incorrecto**, y un gate que rechaza rutas válidas por una razón inventada gasta la
+confianza que va a necesitar la próxima vez que rechace algo de verdad.
+
+**La lista `SIN_NAVEGADOR_DECLARADAS` se llenó, y lo que cambió fue la evidencia, no el permiso.**
+Estuvo vacía toda la fase anterior con un motivo explícito: el que escribe el gate no se declara sus
+propias excepciones. La corrida de 211 trazas midió exactamente **dos** sin contexto de navegador, y
+abrir sus fuentes muestra que ninguna toma el fixture `page` —una lee `playwright.config.ts` como
+texto, la otra compara dos arreglos en memoria—. Se declaran por **identidad `spec:linea`**, nunca por
+el slug del directorio: el slug viene truncado y hasheado, y un `includes` sobre él haría que un test
+nuevo herede por accidente una declaración escrita para otro.
+
+⚠️ **Lo que sigue sin acreditar.** Que no exista *ningún* camino de egress: se probaron IP cruda,
+nombre e IPv6, no protocolos fuera de TCP. Y el camino de aceptación de `--descartar-salida-previa`
+sigue sin caso propio, porque vive después del `spawn` y el archivo de caja negra declara que ninguno
+de sus casos llega ahí.
+
+## 0.161.16 — El origen del E2E se mide, ya no se declara (2026-09-11)
+
+Orden `APP-OPS-NIGHT-AUTONOMY-V2-20260910`, base `6fd48406…`. PATCH de instrumento: agrega el gate de
+origen y endurece su instrumento. **No toca `src/`, el espejo, el contrato ni ninguna superficie de
+producto.**
+
+La afirmación «el E2E corre sólo contra el mock loopback, cero red externa» salía de leer
+`playwright.config.ts` a mano. La evidencia de una corrida no tenía una sola URL adentro: el reporter
+`list` no imprime ninguna, y el `json` tampoco alcanza porque su `JSONReport.config.projects[]` **no
+incluye `use`**. Entran dos mitades con rótulos distintos y en archivos distintos, para que nadie las
+lea como una sola: `e2e/_reporter-origen.ts` registra la CONFIGURACIÓN que el runner resolvió en
+corrida, y `scripts/extraer-origenes.mjs` lee la entrada de red del trace y enumera el TRÁFICO que el
+navegador hizo de verdad. `scripts/gate-origen.mjs` los une y **deriva** el origen esperado del
+informe del reporter en vez de copiarlo: una segunda copia del puerto se desalinea callada.
+
+🔴 **Tres fail-open propios, encontrados y cerrados antes de que este gate valiera algo.** Un
+instrumento roto devuelve el mismo cero que una corrida limpia, así que los tres terminaban en verde:
+
+- El parser buscaba la entrada literal `trace.network`, tomada del código de `playwright-core`,
+  mientras el artefacto real la nombra **`0-trace.network`**. Devolvió 0 URLs sobre 6 trazas sanas con
+  660 requests. Lo cazó el control positivo, no una relectura.
+- Una línea JSON ilegible se salteaba en silencio y el veredicto podía salir LIMPIO igual: un trace
+  truncado podía esconder el origen externo. Ahora una sola línea ilegible produce `NO_VERIFICABLE`.
+- El veredicto agregaba todas las trazas en una bolsa, así que una traza **sin** entrada de red
+  aportaba cero y quedaba invisible detrás del control positivo de otra. Medido: en una corrida
+  presentada como limpia, **2 de 211 trazas** no tenían red y la afirmación cubría 209, no 211. El
+  veredicto ahora es por traza y una traza muda es un hallazgo.
+
+Cada uno queda versionado como test con su mutante en `scripts/extraer-origenes.test.ts`. El
+orquestador además rechaza fail-closed las opciones que lo desacoplarían de lo que mide —`--output`,
+`--trace`, `--config`, `--reporter`— y redacta las URLs ilegibles a esquema, largo y hash en vez de
+persistirlas crudas, porque pueden traer query o token.
+
+⚠️ **El gate es MANUAL y no es compuerta por defecto.** `npm run e2e` sigue siendo `playwright test`
+con `trace: retain-on-failure`, así que una corrida verde normal no deja trazas ni ejecuta el
+extractor. Cablearlo para que gobierne el cierre exige adjudicar un alias npm nuevo —la allowlist de
+`scripts/aliasesLib.mjs` es cerrada a propósito— y eso no se hace por inferencia.
+
+Sin push ni deploy.
+
 ## 0.161.15 — Un error de Git dejó de publicarse como divergencia (2026-09-06)
 
 Orden `APP-FE-MIRROR-GIT-ERROR-06-CLAUDE-CTOIV`, base `5eb48309…`. PATCH de instrumento: cambia el

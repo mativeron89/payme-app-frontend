@@ -1,4 +1,81 @@
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { defineConfig, devices } from '@playwright/test';
+
+import { entrypointLocal } from './scripts/anclar-local.mjs';
+
+/**
+ * 🔴 EL SERVIDOR DE PRUEBA SE LANZA CON EL NODE QUE CORRE ESTO Y CON EL VITE DE ESTE ÁRBOL.
+ *
+ * Acá decía `npx --no-install vite …`. Parecía inofensivo por el `--no-install`, y **medí
+ * que no lo es**: `npx --no-install <paquete inexistente>` emite igual una solicitud a
+ * `registry.npmjs.org`. O sea que el propio arranque del gate tenía un **fail-open de red**,
+ * justo en el instrumento que pretende acreditar que la corrida no habla con afuera.
+ *
+ * Y el riesgo no es teórico en este repo: está documentado en `scripts/aliasesLib.mjs` que
+ * `npx tsc` desde una raíz sin dependencias **descarga y ejecuta un paquete okupa** llamado
+ * `tsc` que no es el compilador.
+ *
+ * Lo vigente resuelve el entrypoint dentro de `node_modules` de ESTE árbol y lo invoca con
+ * `process.execPath`. Sin PATH, sin `npx`, sin red. Si el binario local no está, esto
+ * **lanza al cargar la config**: el runner no arranca en vez de salir a buscarlo afuera.
+ *
+ * 🔴 El quoting va con COMILLAS SIMPLES POSIX, no con `JSON.stringify`. `webServer.command`
+ * es una línea de shell: dentro de comillas DOBLES el shell sigue expandiendo `$(...)`, los
+ * backticks y `\`, así que una ruta con `$(...)` adentro se ejecutaría. Entre comillas
+ * simples nada se expande, y la única comilla simple se escapa cerrando, insertando `\'` y
+ * volviendo a abrir. Es la diferencia entre citar para JSON y citar para un shell.
+ */
+const AQUI = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * 🔴 LA RESOLUCIÓN DE VITE YA NO VIVE ACÁ · ítem 2 de la reauditoría del CTO.
+ *
+ * Este archivo tenía su propia `entrypointLocalDeVite` con `createRequire` + `existsSync`.
+ * Hacía lo correcto en lo esencial —miraba el `node_modules` de este árbol— pero era una
+ * **segunda implementación** del mismo anclaje que `scripts/anclar-local.mjs` ya hacía para
+ * el CLI de Playwright, y le faltaban dos cosas que aquélla sí tiene: `realpath` de los dos
+ * lados y **versión exacta contra el lock**.
+ *
+ * Dos implementaciones de la misma comprobación se desalinean calladas: la de al lado se
+ * endurece y ésta se queda vieja, sin que nada se ponga rojo. Se retira y se llama a la
+ * única.
+ *
+ * Lo que la única agrega, y por qué importa acá: `realpath` contenido en el worktree impide
+ * que un symlink saque la resolución del árbol, y el pin contra `package-lock.json` impide
+ * medir con un Vite que derivó del lock. Sigue sin PATH, sin `npx` y sin red.
+ */
+const VITE_LOCAL = entrypointLocal({
+  raiz: AQUI,
+  desde: import.meta.url,
+  paquete: 'vite',
+  subruta: 'bin/vite.js',
+});
+
+/** Cita para POSIX sh: comillas simples, con `'` escapado como `'\\''`. Nada se expande. */
+function comillasPosix(valor: string): string {
+  return `'${valor.split("'").join(`'\\''`)}'`;
+}
+
+/**
+ * Se exporta para que el test focal pruebe la función REAL y no una copia suya. Un centinela
+ * que reimplementa lo que vigila prueba su propia reimplementación: si la de producción
+ * cambiara, el test seguiría verde. Es la misma regla que el arnés de este repo aplica en
+ * todos lados — el test IMPORTA el objeto de producción, jamás una copia.
+ */
+export const _paraPruebas = { comillasPosix, VITE_LOCAL };
+
+/**
+ * 🔴 El servidor se lanza con el Node que corre esto (`process.execPath`) y con el Vite
+ * anclado arriba. Ni `npx`, ni PATH, ni registry: las tres son formas de que el entorno
+ * elija qué corre, y un gate cuya herramienta la elige el entorno no es un gate.
+ */
+const COMANDO_DEL_SERVIDOR = [
+  comillasPosix(process.execPath),
+  comillasPosix(VITE_LOCAL.ruta),
+  '--port', '5176', '--strictPort', '--mode', 'mock',
+].join(' ');
 
 /**
  * ORDEN 5 · el runner de navegador que cierra las anclas de 4B y 4C.
@@ -162,7 +239,7 @@ export default defineConfig({
    * conducta que `runner-servidor.spec.ts` acredita.
    */
   webServer: {
-    command: 'npx --no-install vite --port 5176 --strictPort --mode mock',
+    command: COMANDO_DEL_SERVIDOR,
     url: 'http://localhost:5176',
     reuseExistingServer: false,
     timeout: 60_000,

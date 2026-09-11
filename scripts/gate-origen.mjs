@@ -11,9 +11,14 @@
  *
  * `playwright.config.ts` usa `trace: 'retain-on-failure'`: una corrida verde no deja
  * traza, y sin traza no hay tráfico que medir. Ponerlo en `'on'` para siempre le cobraría
- * el costo a todas las corridas de desarrollo. La durabilidad no sale de cambiar esa
- * política global: sale de que este gate esté versionado y se invoque por nombre, en vez
- * de depender de que alguien se acuerde de pasar `--trace on` a mano.
+ * el costo a todas las corridas de desarrollo.
+ *
+ * 🔴 **Y eso tiene una consecuencia que hay que decir, no tapar: este gate es OPT-IN.**
+ * `npm run e2e` sigue siendo `playwright test` y NO ejecuta el extractor, así que una
+ * corrida verde normal no acredita nada sobre orígenes. Mientras no exista un wiring
+ * explícito y autorizado que lo haga gobernar el cierre, **este gate es MANUAL y no es
+ * compuerta por defecto**. Está declarado así en la evidencia de la orden; decirlo acá
+ * evita que alguien lea «existe el gate» como «el gate corre».
  *
  * ## 🔴 El origen esperado se DERIVA, no se copia
  *
@@ -23,27 +28,343 @@
  * `http://localhost:5176` se desalinea el día que alguien cambie el puerto, y lo hace en
  * silencio: el gate seguiría verde midiendo contra un origen que ya no es el suyo.
  *
- * Uso:  node scripts/gate-origen.mjs [args extra para playwright test]
+ * ## 🔴 Los argumentos extra se validan fail-closed
+ *
+ * Se aceptan sólo filtros de selección. Todo lo que pueda **desacoplar la corrida del
+ * directorio que después se mide** se rechaza: `--output` cambiaría dónde caen los
+ * traces, `--trace` podría apagarlos, `--config` y `--reporter` cambiarían el runner o
+ * sacarían el reporter que produce el control positivo. Un gate que mide un directorio
+ * distinto del que corrió no mide nada, y la falla sería silenciosa.
+ *
+ * Uso:  node scripts/gate-origen.mjs [filtros de test | --grep <re> | --project <p>]
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+import { createServer } from 'node:net';
+import { platform } from 'node:os';
+
+import { censarDirectorio, entrypointLocal, envSaneado, exigirContenida } from './anclar-local.mjs';
+import { rutaPublicable } from './redactar.mjs';
 import { extraerDeDirectorio, VEREDICTOS } from './extraer-origenes.mjs';
 
-const RAIZ = process.cwd();
+/**
+ * 🔴 La raíz se deriva de la UBICACIÓN DE ESTE ARCHIVO, no de `process.cwd()`.
+ *
+ * Con `cwd` el gate borraba y medía el directorio desde donde alguien lo hubiera invocado:
+ * un `cd` equivocado y limpia un `test-results/` ajeno. Este script vive en `<raiz>/scripts/`,
+ * así que su propia ruta ES la raíz, y no depende de quién lo llame ni desde dónde.
+ *
+ * Y no alcanza con derivarla: se COMPRUEBA que sea el repo esperado antes de borrar nada.
+ * Un `rm -rf` que confía en una ruta calculada es exactamente cómo se pierde evidencia.
+ */
+const RAIZ = dirname(dirname(fileURLToPath(import.meta.url)));
+
+function validarIdentidadDeRaiz() {
+  const pkg = join(RAIZ, 'package.json');
+  if (!existsSync(pkg)) return `no hay package.json en ${RAIZ}`;
+  let nombre;
+  try {
+    nombre = JSON.parse(readFileSync(pkg, 'utf8')).name;
+  } catch (e) {
+    return `package.json ilegible en ${RAIZ}: ${e.message}`;
+  }
+  if (nombre !== 'payme-app-frontend') return `package.json dice name="${nombre}", esperaba payme-app-frontend`;
+  if (!existsSync(join(RAIZ, 'playwright.config.ts'))) return `no hay playwright.config.ts en ${RAIZ}`;
+  return null;
+}
 const SALIDA = join(RAIZ, 'test-results');
 const CONFIG_JSON = join(SALIDA, 'origen-config.json');
 const TRAFICO_JSON = join(SALIDA, 'origenes-trafico.json');
 
-const extra = process.argv.slice(2);
+/**
+ * 🔴 Banderas del GATE, que no viajan a Playwright.
+ *
+ * Se extraen antes de validar el resto: si se colaran en el `argv` del runner, Playwright las
+ * rechazaría y la falla parecería del candidato y no de la invocación.
+ */
+const BANDERAS_DEL_GATE = Object.freeze(['--descartar-salida-previa']);
 
+/** Banderas que desacoplarían la corrida de lo que se mide. Lista cerrada, fail-closed. */
+const PROHIBIDAS = Object.freeze([
+  '--output',
+  '--trace',
+  '--config',
+  '-c',
+  '--reporter',
+  '--test-results-dir',
+  '--pass-with-no-tests',
+]);
+
+/**
+ * 🔴 DENY DE EGRESS PRE-LAUNCH · ítems 1 y 8.
+ *
+ * `sandbox-exec` tiene que ser **ANCESTRO** del runner, no envolver una hoja. El árbol real
+ * es `runner → Chromium` y `runner → webServer (Vite)`: envolver sólo a Vite dejaría al
+ * navegador afuera, que es precisamente quien habla con la red. Por eso el wrapper se
+ * antepone al `process.execPath` del runner y lo hereda todo lo que cuelgue de él.
+ *
+ * ⚠️ **NO_ACREDITADO_POR_EJECUCION.** Nada de esto se corrió: P3 prohíbe ejecutar. No se
+ * verificó que el perfil compile, que Chromium arranque adentro, ni que el deny contenga.
+ * Y hay un motivo concreto para dudar: C2-2 sigue abierto y es este mismo mecanismo —medido
+ * en esta sesión, Chromium bajo `sandbox-exec` aborta en dyld antes de `main()` cuando el
+ * perfil restringe archivos—. Este perfil no los restringe, justamente por eso.
+ *
+ * **Fail-closed en las tres direcciones**: sin `sandbox-exec`, sin perfil, o fuera de Darwin,
+ * el gate NO lanza. «No pude contener» jamás puede terminar en «corrí sin contención».
+ */
+const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
+const PERFIL_DENY = join(RAIZ, 'scripts', 'deny-egress.sb');
+
+/** Lo único que se permite: seleccionar QUÉ tests corren, nunca CÓMO ni DÓNDE. */
+const PERMITIDAS_CON_VALOR = Object.freeze(['--grep', '-g', '--grep-invert', '--project', '--workers', '--repeat-each']);
+const PERMITIDAS_SOLAS = Object.freeze(['--headed', '--fully-parallel']);
+
+function validarArgs(args) {
+  const problemas = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (!a.startsWith('-')) continue; // patrón de archivo/test: se permite
+    const nombre = a.includes('=') ? a.slice(0, a.indexOf('=')) : a;
+    if (PROHIBIDAS.includes(nombre)) {
+      problemas.push(`«${nombre}» está prohibida: desacoplaría la corrida del directorio que este gate mide`);
+      continue;
+    }
+    if (PERMITIDAS_CON_VALOR.includes(nombre)) {
+      if (a.includes('=')) {
+        if (a.slice(a.indexOf('=') + 1) === '') problemas.push(`«${nombre}=» viene sin valor`);
+        continue;
+      }
+      const valor = args[i + 1];
+      // 🔴 Dos formas de colar una opción: dejarla sin valor —y que consuma el siguiente
+      // argumento como si lo fuera— o pasar como «valor» algo que empieza con «-», que el
+      // runner volvería a leer como opción. Las dos se rechazan.
+      if (valor === undefined) {
+        problemas.push(`«${nombre}» viene sin valor`);
+        continue;
+      }
+      if (valor.startsWith('-')) {
+        problemas.push(`«${nombre}» recibe «${valor}», que empieza con «-»: seria una opcion camuflada de valor`);
+        continue;
+      }
+      i += 1; // consume su valor
+      continue;
+    }
+    if (PERMITIDAS_SOLAS.includes(nombre)) continue;
+    problemas.push(`«${nombre}» no está en la lista de opciones permitidas (fail-closed: lo no declarado se rechaza)`);
+  }
+  return problemas;
+}
+
+const argv = process.argv.slice(2);
+const descartarSalidaPrevia = argv.includes('--descartar-salida-previa');
+const extra = argv.filter((a) => !BANDERAS_DEL_GATE.includes(a));
+const problemas = validarArgs(extra);
+if (problemas.length > 0) {
+  for (const p of problemas) process.stderr.write(`gate-origen: ${p}\n`);
+  process.stderr.write(`gate-origen: permitidas — ${[...PERMITIDAS_CON_VALOR, ...PERMITIDAS_SOLAS].join(' ')} y patrones de test\n`);
+  process.exit(2);
+}
+
+/**
+ * 🔴 Playwright se resuelve LOCAL y se ejecuta con este mismo Node, nunca por `npx`.
+ *
+ * `npx` sale a buscar la herramienta y el PATH decide cuál corre. Este repo ya pagó esa
+ * cuenta: `npx tsc` desde una raíz sin dependencias **descarga y ejecuta un paquete
+ * okupa llamado `tsc`** que no es el compilador —está documentado en
+ * `scripts/aliasesLib.mjs`—. Un gate cuya herramienta la elige el entorno no es un gate.
+ *
+ * Mismo mecanismo que el precedente del repo (`entrypointLocal`): ruta dentro de
+ * `node_modules` del worktree y `existsSync`. Si no está, se falla cerrado: «no encontré
+ * el runner» nunca puede terminar en «no vi orígenes externos».
+ */
+let CLI_PLAYWRIGHT;
+let VERSION_PLAYWRIGHT;
+try {
+  // 🔴 Ya no alcanza con `join` + `existsSync`: el anclaje resuelve por `realpath`, comprueba
+  // que el resultado siga DENTRO del worktree, y exige que la version instalada sea
+  // exactamente la del lock. Un `node_modules` que derivo del lock mide otro codigo.
+  const anclado = entrypointLocal({
+    raiz: RAIZ,
+    desde: import.meta.url,
+    paquete: '@playwright/test',
+    subruta: 'cli.js',
+  });
+  CLI_PLAYWRIGHT = anclado.ruta;
+  VERSION_PLAYWRIGHT = anclado.version;
+} catch (e) {
+  process.stderr.write(`gate-origen: no pude anclar el CLI local de Playwright — ${e.message}\n`);
+  process.exit(5);
+}
+
+/**
+ * 🔴 LA LIMPIEZA VA ACÁ, DESPUÉS DE TODAS LAS PRECONDICIONES, Y NO ANTES.
+ *
+ * Antes era lo primero que hacía el script, y eso costó evidencia real: una prueba de
+ * fail-closed —esconder el CLI local para comprobar que el gate aborta sin lanzar nada—
+ * entró por la limpieza, **borró 211 traces de una corrida ya hecha**, y recién después
+ * salió por el `exit 5`. El control funcionó; el efecto colateral no estaba previsto.
+ *
+ * La regla que sale de ahí: un gate que puede fallar cerrado **no destruye nada hasta haber
+ * pasado todas sus validaciones**. Limpiar es lo último antes de lanzar, nunca lo primero.
+ */
+const problemaDeRaiz = validarIdentidadDeRaiz();
+if (problemaDeRaiz !== null) {
+  process.stderr.write(`gate-origen: la raiz derivada no es el repo esperado — ${problemaDeRaiz}. No borro nada.\n`);
+  process.exit(6);
+}
+/**
+ * 🔴 PREFLIGHT COMPLETO, Y ANTES DE TOCAR NADA · ítem 7.
+ *
+ * Antes de esto el gate anclaba el CLI y validaba la raíz, y **después borraba**: si la
+ * config no estaba, si Vite no resolvía o si el 5176 estaba ocupado, la limpieza ya se había
+ * llevado la corrida anterior y recién entonces se descubría que no se podía correr. Destruir
+ * primero y averiguar después es la forma general de INC-08, no su instancia.
+ *
+ * Todo lo que pueda impedir la corrida se comprueba acá. Nada destructivo pasa antes.
+ *
+ * ⚠️ Límite declarado: «la config parsea» se comprueba sólo por EXISTENCIA. Parsear
+ * `playwright.config.ts` exige el transform del runner, o sea ejecutar; comprobarlo de
+ * verdad es de la unidad que pueda correr. No lo presento como más de lo que es.
+ */
+const PUERTO_DEL_MOCK = 5176;
+
+async function puertoLibre(puerto) {
+  return new Promise((resolver) => {
+    const s = createServer();
+    s.once('error', () => resolver(false));
+    s.once('listening', () => s.close(() => resolver(true)));
+    s.listen(puerto, '127.0.0.1');
+  });
+}
+
+async function preflight() {
+  const problemas = [];
+
+  if (platform() !== 'darwin') {
+    problemas.push(
+      `este gate local exige Darwin para el deny de egress con sandbox-exec, y corre en «${platform()}». ` +
+        'El CI de Ubuntu usa su propio camino y no pasa por acá.',
+    );
+  }
+  if (!existsSync(SANDBOX_EXEC)) problemas.push(`no existe ${SANDBOX_EXEC}: sin contención no se lanza`);
+  if (!existsSync(PERFIL_DENY)) {
+    problemas.push(`no existe el perfil ${rutaPublicable(PERFIL_DENY, RAIZ).publicado}: sin contención no se lanza`);
+  }
+  // 🔴 `playwright.config.ts` NO se comprueba acá: ya lo hace `validarIdentidadDeRaiz`, que
+  // corre antes y sale con 6. Un test lo mostró al correr —esperaba 10 y recibió 6— y el
+  // arreglo correcto es sacar la comprobación duplicada, no alinear el número: una rama
+  // inalcanzable es código que nadie prueba y que alguien va a leer como si corriera.
+
+  try {
+    entrypointLocal({ raiz: RAIZ, desde: import.meta.url, paquete: 'vite', subruta: join('bin', 'vite.js') });
+  } catch (e) {
+    problemas.push(`Vite no ancla: ${e.message}`);
+  }
+  if (!(await puertoLibre(PUERTO_DEL_MOCK))) {
+    problemas.push(
+      `el puerto ${PUERTO_DEL_MOCK} está ocupado. Con --strictPort el runner fallaría, y adoptar un servidor ajeno ` +
+        'sería medir contra código que no es el de este árbol.',
+    );
+  }
+  return problemas;
+}
+
+/**
+ * 🔴 CONTAINMENT ANTES DE BORRAR. `SALIDA` se deriva de `RAIZ`, pero derivar no es comprobar:
+ * un symlink o un `..` en el medio y el `rmSync` recursivo sale del arbol. Se ancla con
+ * `path.relative` sobre rutas reales, nunca comparando cadenas.
+ */
+try {
+  exigirContenida(RAIZ, SALIDA, 'el directorio de salida test-results');
+} catch (e) {
+  process.stderr.write(`gate-origen: ${e.message}\n`);
+  process.exit(8);
+}
+
+/**
+ * 🔴 Y EL CENSO. INC-08 se llevo 211 traces de una corrida ya hecha porque la limpieza corria
+ * antes de las validaciones. Aquello se arreglo moviendo el `rmSync` al final — pero el orden
+ * solo no cierra la clase: aun en el lugar correcto, seguia borrando **sin mirar**.
+ *
+ * Lo que la cierra es no destruir lo que nadie inventario. Si hay artefactos de una corrida
+ * previa, el gate se detiene y los lista; seguir exige que el operador lo diga explicito con
+ * `--descartar-salida-previa`. Es la diferencia entre «limpio antes de medir» y «destruyo
+ * evidencia que alguien podia necesitar».
+ */
+const problemasDePreflight = await preflight();
+if (problemasDePreflight.length > 0) {
+  for (const x of problemasDePreflight) process.stderr.write(`gate-origen: preflight — ${x}\n`);
+  process.stderr.write('gate-origen: no borro nada ni lanzo nada. Preflight primero, destruir despues.\n');
+  process.exit(10);
+}
+
+const censo = censarDirectorio(SALIDA);
+if (censo.existe && censo.cantidad > 0 && !descartarSalidaPrevia) {
+  process.stderr.write(
+    `gate-origen: ${rutaPublicable(SALIDA, RAIZ).publicado} tiene ${censo.cantidad} archivo(s) de una corrida previa ` +
+      `(${censo.bytes} B) y nadie los inventario. NO los borro.\n`,
+  );
+  for (const a of censo.archivos) process.stderr.write(`  ${a.symlink ? 'symlink' : String(a.bytes).padStart(9)} ${a.rel}\n`);
+  if (censo.truncado) process.stderr.write(`  … y ${censo.cantidad - censo.archivos.length} mas\n`);
+  process.stderr.write('gate-origen: preservalos, o volve a correr con --descartar-salida-previa para decir explicito que se pueden perder.\n');
+  process.exit(9);
+}
+if (censo.existe && censo.cantidad > 0) {
+  process.stdout.write(`gate-origen · descartando ${censo.cantidad} archivo(s) previos por --descartar-salida-previa\n`);
+}
+
+rmSync(SALIDA, { recursive: true, force: true });
+if (existsSync(SALIDA)) {
+  process.stderr.write(`gate-origen: no pude limpiar ${SALIDA}; no mido sobre restos ajenos\n`);
+  process.exit(3);
+}
+
+/**
+ * 🔴 ENTORNO SANEADO. El gate afirma contra que hablo la corrida; una variable heredada puede
+ * inyectar codigo en el proceso (`NODE_OPTIONS`, `BASH_ENV`, el transform de Playwright) o
+ * redirigir su trafico (los proxies). Se retiran y se DECLARA cuales estaban.
+ */
+const saneado = envSaneado(process.env);
+if (saneado.retiradas.length > 0) {
+  process.stdout.write(`gate-origen · entorno saneado, retiradas: ${saneado.retiradas.join(' ')}\n`);
+}
+if (saneado.declaradas_presentes.length > 0) {
+  process.stdout.write(
+    `gate-origen · presentes y NO retiradas (limitacion declarada, ver anclar-local.mjs): ${saneado.declaradas_presentes.join(' ')}\n`,
+  );
+}
+
+// Lo exacto con lo que se corrio, para que la evidencia no dependa de reconstruirlo despues.
+process.stdout.write(`gate-origen · node ${process.version} · @playwright/test ${VERSION_PLAYWRIGHT}\n`);
+// La raiz NO se imprime cruda: una ruta absoluta publica usuario, disco y proyecto. Se dice
+// si el cwd coincide con la raiz, que es lo unico que el auditor necesita saber.
+process.stdout.write(`gate-origen · cwd === raiz: ${process.cwd() === RAIZ}\n`);
+
+process.stdout.write(`gate-origen · deny de egress: ${SANDBOX_EXEC} -f ${rutaPublicable(PERFIL_DENY, RAIZ).publicado}\n`);
+process.stdout.write(
+  'gate-origen · deny verificado 2026-09-11: loopback permitido; IP cruda, nombre e IPv6 externos EPERM; ' +
+    'el mismo destino SIN sandbox conecta. No se enumeraron protocolos fuera de TCP.\n',
+);
 process.stdout.write('gate-origen · corriendo E2E con trace encendido\n');
-const corrida = spawnSync('npx', ['--no-install', 'playwright', 'test', '--trace', 'on', ...extra], {
-  stdio: 'inherit',
-  env: { ...process.env, PAYME_ORIGEN_OUT: CONFIG_JSON },
-});
+
+// 🔴 `sandbox-exec` va PRIMERO: es ancestro del runner y de todo lo que el runner cuelgue
+// —Chromium y el webServer incluidos—. Envolver una hoja del arbol dejaria al navegador
+// afuera, que es exactamente quien habla con la red.
+const corrida = spawnSync(
+  SANDBOX_EXEC,
+  ['-f', PERFIL_DENY, process.execPath, CLI_PLAYWRIGHT, 'test', '--trace', 'on', ...extra],
+  {
+    stdio: 'inherit',
+    // 🔴 `cwd` explicito en RAIZ: sin el, el runner resuelve su config contra el cwd de quien
+    // invoco, que puede no ser el arbol que este gate acaba de validar.
+    cwd: RAIZ,
+    env: { ...saneado.env, PAYME_ORIGEN_OUT: CONFIG_JSON },
+  },
+);
 
 if (corrida.error) {
   process.stderr.write(`gate-origen: no pude lanzar playwright: ${corrida.error.message}\n`);
@@ -77,19 +398,31 @@ if (esperados.length !== 1) {
 const origenEsperado = esperados[0];
 process.stdout.write(`gate-origen · origen esperado derivado del runner: ${origenEsperado}\n`);
 
-const informe = extraerDeDirectorio(SALIDA, origenEsperado);
+// 🔴 El registro de tests del reporter es lo que permite unir cada traza con el test que la
+// produjo, por igualdad exacta del path del attachment. Sin el, el gate no puede afirmar que
+// midio TODAS las trazas de TODOS los tests: solo las que encontro en el directorio.
+const registroDeTests = Array.isArray(config?.tests) ? config.tests : null;
+if (registroDeTests === null) {
+  process.stderr.write('gate-origen: el informe del reporter no trae `tests`; sin identidad exacta no se acredita.\n');
+  process.exit(7);
+}
+const informe = await extraerDeDirectorio(SALIDA, origenEsperado, registroDeTests);
 writeFileSync(TRAFICO_JSON, `${JSON.stringify(informe, null, 2)}\n`, 'utf8');
 
+const t = informe.totales;
 process.stdout.write(`gate-origen · veredicto: ${informe.veredicto}\n`);
 process.stdout.write(
-  `gate-origen · traces ${informe.totales.traces_hallados} · urls ${informe.totales.urls_extraidas} · orígenes ${informe.totales.origenes_distintos} · externos ${informe.totales.origenes_externos}\n`,
+  `gate-origen · traces ${t.traces_hallados} (ok ${t.traces_ok} · sin red ${t.traces_sin_red} · ilegibles ${t.traces_con_linea_ilegible} · pareo roto ${t.traces_con_pareo_roto} · con externo ${t.traces_con_origen_externo}) · urls ${t.urls_extraidas} · orígenes ${t.origenes_distintos} · externos ${t.origenes_externos}\n`,
 );
 for (const o of informe.origenes) {
   process.stdout.write(`  ${o.loopback ? 'loopback' : 'EXTERNO '} ${o.origen} x${o.requests}\n`);
 }
+for (const z of informe.trazas_sin_red_observable) process.stdout.write(`  SIN RED OBSERVABLE: ${z}\n`);
+for (const z of informe.trazas_con_linea_ilegible) process.stdout.write(`  LINEA ILEGIBLE: ${z}\n`);
+for (const z of informe.trazas_con_pareo_roto ?? []) process.stdout.write(`  PAREO ORDINAL ROTO: ${z}\n`);
 
 if (informe.veredicto !== VEREDICTOS.LIMPIO) {
   process.stderr.write(`gate-origen: FALLA · ${informe.veredicto}\n`);
   process.exit(1);
 }
-process.stdout.write('gate-origen · OK · sólo loopback, cero orígenes externos\n');
+process.stdout.write('gate-origen · OK · toda traza con red observable y sólo loopback\n');

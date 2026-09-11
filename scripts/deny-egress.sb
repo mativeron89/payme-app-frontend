@@ -1,0 +1,92 @@
+;; ─────────────────────────────────────────────────────────────────────────────────────────
+;; DENY DE EGRESS PRE-LAUNCH · perfil SBPL para el gate de origen local (Darwin)
+;;
+;; ✅ RÓTULO ACTUALIZADO POR MEDICIÓN · 2026-09-11T17:11-17:12Z. Antes decía
+;; `NO_ACREDITADO_POR_EJECUCION`, y era correcto mientras no se podía correr. Ya se corrió.
+;;
+;; Lo medido, con sus controles:
+;;
+;;   escalón 1  el perfil COMPILA                                    `sandbox-exec -f … /bin/echo`
+;;   escalón 2  `node` arranca adentro                               v24.18.0 vivo
+;;   escalón 3a CONTROL POSITIVO · loopback PERMITIDO                conecta a 127.0.0.1:5199
+;;   escalón 3b CONTROL NEGATIVO · IP externa cruda                  EPERM
+;;   escalón 3c CONTROL NEGATIVO · por NOMBRE (DNS + TLS)            EPERM
+;;   escalón 3d CONTROL NEGATIVO · IPv6 externo                      EPERM
+;;   escalón 3e CONTROL DEL CONTROL · el MISMO destino SIN sandbox   CONECTA
+;;   escalón 4  Chromium arranca y el E2E corre adentro              2 tests verdes, 220 URLs
+;;
+;; 🔴 El 3e es el que hace que los demás signifiquen algo. Sin él, «bloqueado» podía ser
+;; simplemente que la máquina no tenía red — un falso verde con forma de contención.
+;;
+;; ⚠️ **C2-2 QUEDA EXPLICADO.** Aquel abort de Chromium en `dyld`/`CacheFinder` antes de
+;; `main()` venía de un perfil que **restringía archivos** y no incluía el nodo raíz de lectura
+;; `(literal "/")`. Este perfil no restringe archivos: hereda `(allow default)` y toca
+;; únicamente la red. Por eso el navegador arranca. La hipótesis y su refutación están en el
+;; expediente; lo que la cierra es que el E2E corrió adentro.
+;;
+;; ⚠️ Lo que sigue SIN acreditar: que no exista NINGÚN camino de egress. Se probaron IP cruda,
+;; nombre e IPv6; no se probaron protocolos fuera de TCP ni rutas por servicios del sistema.
+;; «Cuatro controles pasaron» no es «enumeré la clase entera», y se dice acá.
+;;
+;; ## Por qué el deny se filtra por `remote ip` y no es un `(deny network-outbound)` pelado
+;;
+;; En SBPL, `network-outbound` cubre **también los sockets unix**. Chromium usa sockets unix
+;; para su IPC entre procesos; un deny pelado le corta la comunicación interna y el fallo
+;; aparecería como «el navegador no arranca», que se confundiría con el de C2-2 y mandaría a
+;; buscar la causa al lugar equivocado. El filtro `(remote ip ...)` acota el deny al tráfico
+;; IP, que es lo que este gate tiene que contener.
+;;
+;; ## Qué pretende garantizar, si funciona
+;;
+;;   · TODO egress IP denegado por defecto.
+;;   · Únicamente loopback permitido — que es contra lo que el mock sirve.
+;;   · El deny vale para el proceso y **todo su árbol**: runner → Chromium → webServer.
+;;     Ésa es la razón de que `sandbox-exec` tenga que ser ANCESTRO y no envolver sólo a Vite:
+;;     envolver una hoja del árbol deja al navegador afuera, que es justo quien habla.
+;;
+;; ## Qué NO garantiza, aun funcionando
+;;
+;;   · No registra los bloqueos en un archivo propio. SBPL los manda al log del sistema, y
+;;     leerlos exige ejecutar. La orden pedía «registre bloqueos»: **eso queda sin cubrir** y
+;;     no lo presento como cubierto.
+;;   · No sustituye la medición posterior del tráfico. Contener y medir son dos cosas: este
+;;     perfil es lo primero, `scripts/extraer-origenes.mjs` es lo segundo, y ninguna reemplaza
+;;     a la otra.
+;; ─────────────────────────────────────────────────────────────────────────────────────────
+
+(version 1)
+
+;; Se hereda todo lo demás: archivos, procesos, mach. Ver arriba — restringir de más es lo
+;; que rompe a Chromium en dyld, y este perfil tiene un solo trabajo.
+(allow default)
+
+;; ① Todo el egress IP, denegado.
+(deny network-outbound (remote ip))
+
+;; ② Única excepción: loopback.
+;;
+;; 🔴 MEDIDO el 2026-09-11, y refuta lo que este archivo decía antes. La primera versión
+;; enumeraba las tres formas —`localhost:*`, `127.0.0.1:*`, `::1:*`— razonando que omitir una
+;; daría un falso «no arranca». **El perfil no compilaba:**
+;;
+;;     sandbox-exec: host must be * or localhost in network address
+;;     deny-egress.sb:56:26: (remote ip "127.0.0.1:*")
+;;
+;; SBPL no acepta literales IP en `remote ip`: sólo `*` o el keyword `localhost`, que NO es un
+;; nombre DNS sino el predicado «la máquina local» y cubre las direcciones de loopback. Mi
+;; enumeración «por las dudas» era la que rompía, y el archivo entero era inerte: `sandbox-exec`
+;; salía con 65 antes de ejecutar nada.
+;;
+;; Esto es exactamente lo que el rótulo NO_ACREDITADO_POR_EJECUCION anticipaba. Un perfil de
+;; seguridad que nunca se corrió no es una contención: es un texto con forma de contención.
+(allow network-outbound (remote ip "localhost:*"))
+
+;; ③ Sockets unix: permitidos explícitamente. El IPC de Chromium y el del runner viven ahí, y
+;;    no son egress. Redundante con `(allow default)`, y se escribe igual: si alguien endurece
+;;    este perfil más adelante, esta línea le dice qué NO puede sacar sin romper el navegador.
+(allow network-outbound (remote unix-socket))
+
+;; ④ Escuchar en loopback: lo necesita el propio webServer de Vite en el 5176.
+;;    Misma restricción de sintaxis que ②: `localhost`, nunca un literal IP.
+(allow network-bind (local ip "localhost:*"))
+(allow network-inbound (local ip "localhost:*"))
