@@ -11,6 +11,49 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+### C2-4b · composición contra el backend real, en local (2026-09-11)
+
+Lo que C2-4 declaró como `NO_ACREDITADO_SIN_BACKEND_REAL` se midió: el candidato del backend
+—`48c1173`— levantado en esta máquina, con **base propia** en un puerto propio, datos
+sintéticos y **cero proveedores**. El repo de App Backend **no se tocó**: el árbol se exportó
+con `git archive`, que sólo lee.
+
+**Lo que ahora SÍ está acreditado, y el riel mock no podía dar:**
+
+| medición | resultado |
+|---|---|
+| el `/api/config` **real** contra el decoder estricto del front | las 4 listas de claves **coinciden exacto** |
+| Google y Facebook en el backend real | `enabled: false` — dark de verdad |
+| rutas protegidas sin sesión | **401 `auth_required`**, nunca 403 |
+| alta con correo nuevo | **201**, usuario creado en la base |
+| alta con el **mismo** correo | **403 `registration_not_available`** |
+| límite de intentos de alta | **429 desde el octavo**, contando también los inválidos |
+| alta sin textos legales cargados | **503 `registration_unavailable`** |
+
+🔴 **El 403 opaco es la parte que importa.** Un duplicado no devuelve un 409 que diga «ese
+correo existe»: devuelve el **mismo** código que una invitación inválida. Es la opacidad de
+D-FF-1 funcionando —no le confirma a un desconocido si alguien tiene cuenta— y el front ya la
+trata así: `LoginScreen.tsx:63` responde *«No pudimos crear la cuenta. Si ya tienes una, inicia
+sesión o recupera tu contraseña»*, sin nombrar el motivo.
+
+**Dos cosas que sólo aparecen contra el backend real:**
+
+- **Sin textos legales no se registra a nadie.** `npm start` encadena `legal:bootstrap` antes
+  de `server.js`; arrancando el server a mano, `legal_texts` queda vacío y el alta responde
+  **503**, no un éxito silencioso. Fail-closed que el mock no puede mostrar.
+- **El límite de alta cuenta INTENTOS, no altas.** Catorce envíos con el cuerpo mal formado
+  —400 de validación— igual consumieron la ventana y dispararon el 429. Es coherente con un
+  techo que protege el recurso y no el resultado, y conviene saberlo antes de leer un 429 como
+  «alguien creó diez cuentas».
+
+⚠️ **Y un desajuste mío, no del producto:** mi primera sonda mandó `name` en vez de
+`first_name`/`last_name`. La suposición venía del mock; el backend real la rechazó con un 400
+que nombra los campos. **El front manda los dos campos correctos** (`src/api/index.ts:206`),
+así que el desajuste era de mi sonda.
+
+**Sigue sin acreditar:** validación de tokens de Google y Facebook —requiere proveedor live, y
+están en dark— y la entrega real del mail de Recovery.
+
 ### C2-5 · páginas públicas Meta, espejos, OCR y flujos ratificados (2026-09-11)
 
 **C2-5 no cambió una sola línea de producto.** Es una unidad de verificación, y lo único que
