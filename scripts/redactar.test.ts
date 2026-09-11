@@ -32,7 +32,25 @@ import {
  */
 
 const SECRETO = 'clave-que-no-debe-quedar-escrita';
-const TOKEN = 'tok-abc123-no-publicar';
+/**
+ * 🔴 EL LITERAL VA CORTO Y LA CLAVE SE QUEDA EN SU RENGLÓN. Adjudicado en `679525b`.
+ *
+ * Una clave que termina en `token` seguida de un literal de 8 o más caracteres es
+ * EXACTAMENTE la forma que `scripts/auditar-secretos.sh` marca, y este repo es público: con
+ * el literal largo, `auditar-secretos.sh` contra `origin/main` salía 1 — o sea que este
+ * archivo, tal como nació, no podía pasar el primer paso del CI.
+ *
+ * Las dos salidas que NO se toman, y por qué:
+ *   · renombrar la constante pone el gate verde por el motivo equivocado — la clave sale
+ *     del renglón y esa posición deja de mirarse, que es donde podría vivir una credencial
+ *     de verdad. Medido y revertido en `679525b`.
+ *   · eximir el archivo en el script es superficie regalada en la guarda de mayor
+ *     consecuencia del repo; su propio comentario deja la exención como orden futura.
+ *
+ * Queda el literal corto: la posición sigue vigilada y ningún caso de acá mira el largo —
+ * lo único que se le pide a este valor es no aparecer en la salida.
+ */
+const TOKEN = 'tok-abc';
 const TENANT = 'tenant-7f3a9c-privado';
 
 let base: string;

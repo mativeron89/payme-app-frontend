@@ -11,6 +11,83 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+### C2-6 · la receta del CI corrida en local, y el rojo que encontró (2026-09-11)
+
+Se corrieron **los pasos `run:` de `.github/workflows/ci.yml`, uno por uno y en el orden del
+archivo**, en esta máquina. No es una corrida del CI: es la misma receta contra el mismo árbol,
+con el entorno declarado abajo.
+
+**Primero, el conteo.** La orden decía «9 pasos run». Medido sobre el archivo —
+`grep -c -E '^[[:space:]]+(- )?run:'` — son **15**. Hay 16 líneas que contienen `run:`, y una
+es un comentario que habla del paso de abajo: 16 menciones, 15 pasos. Correr 9 y llamarlo «la
+receta completa» habría dejado seis afuera bajo un rótulo que afirma lo contrario.
+
+| paso | comando | resultado |
+|---|---|---|
+| 1 | `auditar-secretos.sh` con el fallback `HEAD^` | ✅ 44 líneas, cero |
+| 2 | `npm ci` | ⛔ **NO_EJECUTABLE_EN_LOCAL** |
+| 3 | `verificar-mirror.mjs --integridad` | ✅ |
+| 4 | `verificar-aliases.mjs --aliases` | ✅ |
+| 5 | `verificar-aliases.mjs --invalidar corrida` | ✅ |
+| 6 | `npm test` | ✅ 140 archivos · 2473 pass · 2 skip |
+| 7 | `verificar-aliases.mjs --corrida` | ✅ |
+| 8 | `npm run typecheck` | ✅ |
+| 9 | `verificar-aliases.mjs --invalidar build` | ✅ |
+| 10 | `npm run build` con su `VITE_API_URL` | ✅ artefacto escrito |
+| 11 | `verificar-aliases.mjs --artefacto dist` | ✅ |
+| 12 | `playwright install --with-deps chromium` | ⛔ **NO_EJECUTABLE_EN_LOCAL** |
+| 13 | `playwright test` | ✅ **211 passed** en 6.7 min |
+| 14 | `reportar-flaky.sh` | ✅ flaky 0 |
+| 15 | publicar en Vercel | ⛔ **NO_EJECUTABLE_EN_LOCAL** |
+
+Los tres ⛔ **no se simularon**. El 2 exige el registro y además **empieza borrando
+`node_modules`**: sin red, una instalación fallida deja el árbol sin dependencias y ningún paso
+posterior puede correr. El 12 baja el navegador de un CDN y su `--with-deps` corre el gestor de
+paquetes de Linux. El 15 **publica**: sale de `secrets.*` y dispara los Deploy Hooks de los
+dominios que este repo sirve.
+
+#### 🔴 El rojo, que es lo que esta corrida existe para encontrar
+
+El paso 1 en su forma literal compara contra `HEAD^` — **un commit**. Corrido contra la base
+que un push usaría de verdad (`origin/main`, el default del propio script), sale **1**:
+
+```
+🔴 VALOR con forma de secreto
+     const TOKEN = '…';     ← scripts/redactar.test.ts
+     const TOKEN = '…';     ← scripts/reporter-origen-redaccion.test.ts
+```
+
+Dos archivos de test que este candidato estrenó declaraban su fixture como **una clave que
+termina en la palabra vigilada, seguida de un literal largo**: la forma exacta que el gate
+marca. **La suite entera estaba verde y el candidato no pasaba el PRIMER paso del CI.**
+
+El arreglo no se inventó: `679525b` ya lo había adjudicado. **Literal corto, clave en su
+renglón.** Las dos salidas que parecen equivalentes y no lo son quedan descartadas por su
+propia historia — renombrar la constante pone el gate verde sacando la clave del campo de
+visión, y eximir el archivo en el script regala superficie en la guarda de mayor consecuencia
+de un repo público.
+
+El caso nuevo en `auditarSecretos.test.ts` tiene **dos mitades**: la declaración real (leída del
+archivo, no copiada) sale 0, **y el mismo renglón con un literal de largo realista sale 1**. Sin
+la segunda, un verde también lo daría el arreglo equivocado.
+
+#### Lo que esta corrida deja declarado y NO cierra
+
+- **La población de la guarda era `*.md`.** Derivarla de git cerró la puerta de los archivos
+  que nadie agrega a una lista; no la de los que nacen con **otra extensión**, que es por donde
+  entró este rojo. Ensancharla a todo lo trackeado **no es la salida y está medido**: el árbol
+  publicado ya tiene varias líneas con esa forma —fixtures de sesión y de SetupIntent— y la
+  guarda nacería roja sobre bytes que ya están en `origin/main`.
+- **Node.** La receta fija `node-version: 20`; acá corrió sobre **v24.18.0**, en Darwin y no en
+  `ubuntu-latest`. Un verde local no acredita el verde de allá.
+- **`CI=true` se puso a propósito**, porque `playwright.config.ts` sólo agrega el reporter
+  `json` cuando está, y el paso 14 lee ese archivo: sin la variable, el paso 14 sale 0 **sin
+  medir nada** — justo el modo de falla que ese script existe para no tener.
+- El paso 13 corrió dentro del perfil de deny de egress ya verificado. Un sandbox sólo **resta**
+  capacidades: si el paso necesitara red, saldría rojo.
+
+**Sin bump.** `0.161.16` nunca se publicó: esta corrección es del mismo candidato.
+
 ### C2-4b · composición contra el backend real, en local (2026-09-11)
 
 Lo que C2-4 declaró como `NO_ACREDITADO_SIN_BACKEND_REAL` se midió: el candidato del backend

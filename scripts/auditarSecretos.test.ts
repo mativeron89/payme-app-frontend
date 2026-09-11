@@ -305,6 +305,20 @@ describe('auditoría de secretos', () => {
     // `contract-mirror/` porque es del dueño del contrato y este repo no puede
     // editarlo — una guarda que se pone roja sobre algo que no podés tocar no
     // es una guarda, es un bloqueo.
+    //
+    // 🔴 LÍMITE MEDIDO EL 2026-09-11, y queda escrito acá porque es fácil leer
+    // este caso como si cubriera más de lo que cubre: **la población es `*.md` y
+    // eso deja TODO el código afuera.** Derivar de git cierra la puerta de los
+    // archivos que nadie se acuerda de agregar a una lista; no cierra la de los
+    // que nacen con otra extensión. Corriendo la receta entera del CI en local
+    // aparecieron dos `.test.ts` nuevos que estrenaban una constante con forma de
+    // secreto: esta suite verde, y `auditar-secretos.sh origin/main` en 1.
+    // Ensanchar la población a todo lo trackeado NO es la salida: medido, el
+    // árbol publicado ya tiene varias líneas con esa forma —fixtures de sesión y
+    // de SetupIntent— y la guarda nacería roja sobre bytes que ya están en
+    // `origin/main`. Hacerla verde exigiría una lista de exenciones larga dentro
+    // de la guarda de mayor consecuencia del repo, que es justo lo que su propia
+    // historia deja como orden aparte. Queda declarado, no tapado.
     const listado = spawnSync(
       'git',
       ['ls-files', '--', '*.md', ':(exclude)contract-mirror/*'],
@@ -345,6 +359,55 @@ describe('auditoría de secretos', () => {
       `la documentación real dispara el gate:\n${result.stdout}${result.stderr}`,
     ).toBe(0);
   });
+
+  /**
+   * 🔴 LOS DOS ARCHIVOS QUE NACIERON ROJOS · medido el 2026-09-11 corriendo la receta
+   * entera de `.github/workflows/ci.yml` en local.
+   *
+   * `scripts/redactar.test.ts` y `scripts/reporter-origen-redaccion.test.ts` estrenaron su
+   * fixture como una constante cuyo nombre termina en la palabra vigilada seguida de un
+   * literal largo — la forma exacta que el gate marca. La suite entera estaba verde y
+   * `auditar-secretos.sh origin/main` salía 1: el candidato no pasaba el PRIMER paso del CI.
+   *
+   * El arreglo es el que `679525b` ya había adjudicado: literal corto, clave en su renglón.
+   * Y por eso este caso tiene DOS mitades. La primera sola sería un verde barato —también
+   * pasa si alguien "arregla" el archivo renombrando la constante, que es justo lo que
+   * `679525b` revirtió porque apaga la vigilancia—. La segunda planta el mutante: el mismo
+   * renglón con un literal de largo realista TIENE que salir rojo. Si no sale, lo que
+   * mantiene verde al archivo no es el literal corto sino que nadie lo está mirando.
+   *
+   * La declaración no se copia acá: se LEE del archivo real. Una copia seguiría verde el
+   * día que el archivo cambie.
+   */
+  it.each(['scripts/redactar.test.ts', 'scripts/reporter-origen-redaccion.test.ts'])(
+    'el fixture de %s no dispara el gate, y su posición sigue vigilada',
+    (ruta) => {
+      // Compuesto, como los demás fixtures de este archivo: escribir el nombre pegado a su
+      // `=` y a un literal es la forma que el gate marca, y un caso que se trabe consigo
+      // mismo obligaría a eximir el archivo que audita las exenciones.
+      const clave = ['TO', 'KEN'].join('');
+      const declaraciones = readFileSync(join(RAIZ, ruta), 'utf8')
+        .split('\n')
+        .filter((linea) => linea.startsWith(`const ${clave} = `));
+      expect(declaraciones.length, `no se encontró la declaración de fixture en ${ruta}`).toBe(1);
+
+      const corto = repoConArchivos({ [ruta]: `${declaraciones[0]}\n` });
+      const verde = spawnSync('bash', ['scripts/auditar-secretos.sh', corto.base], {
+        cwd: corto.dir,
+        encoding: 'utf8',
+      });
+      expect(verde.status, `${verde.stdout}${verde.stderr}`).toBe(0);
+
+      const mutante = declaraciones[0]!.replace(/'[^']*'/, `'${'x'.repeat(24)}'`);
+      expect(mutante, 'el mutante no cambió nada').not.toBe(declaraciones[0]);
+      const mutado = repoConArchivos({ [ruta]: `${mutante}\n` });
+      const rojo = spawnSync('bash', ['scripts/auditar-secretos.sh', mutado.base], {
+        cwd: mutado.dir,
+        encoding: 'utf8',
+      });
+      expect(rojo.status, `el literal largo NO se marcó en ${ruta}: la posición dejó de mirarse`).toBe(1);
+    },
+  );
 
   it('CI entrega una base alcanzable y no vacía tanto en push como en PR', () => {
     const ci = readFileSync(join(RAIZ, '.github', 'workflows', 'ci.yml'), 'utf8');

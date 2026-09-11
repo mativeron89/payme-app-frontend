@@ -35,7 +35,11 @@ const { urlSegura, proxySeguro, comandoSeguro } = _paraPruebas;
  */
 
 const SECRETO = 'clave-que-no-debe-quedar-escrita';
-const TOKEN = 'tok-abc123-no-publicar';
+/** Literal corto y clave en su renglón, por el mismo motivo que `redactar.test.ts`: ver el
+ *  bloque de allá. Resumen: con el literal largo esta línea tiene la forma que
+ *  `auditar-secretos.sh` marca, y renombrar la constante apagaría la vigilancia en vez de
+ *  arreglarla. */
+const TOKEN = 'tok-abc';
 
 describe('urlSegura', () => {
   /**
