@@ -11,6 +11,45 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+### C2-5 · páginas públicas Meta, espejos, OCR y flujos ratificados (2026-09-11)
+
+**C2-5 no cambió una sola línea de producto.** Es una unidad de verificación, y lo único que
+toca el repo es esta entrada. Se dice así en vez de dejar que el commit sugiera trabajo que no
+hubo.
+
+**Páginas públicas de Meta · las dos del contrato existen y están verdes.** `publicRoute.ts`
+lo fija textual —*«El contrato Meta fija estos dos paths; no hay variantes ni alias»*—:
+`/privacy` y `/facebook-data-deletion/<code>`. Cubiertas por **40 casos E2E** en navegador,
+34 unitarios de `publicPages` y 38 de `LegalMarkdown`.
+
+**Términos: sin texto ratificado; decisión pendiente DP-01.** No se creó página, ni ruta, ni
+placeholder. El redactado legal es de Mati y del abogado: `legal/README.md` del backend
+—fuente de verdad de esos textos— declara que los vigentes son PLACEHOLDER y que *«el
+redactado legal está esperando al abogado»*. Inventarlo acá sería escribir política.
+
+**Espejos: se decidió NO regenerar, y la medición es la razón.** Mi copia del inventario **es
+la que el dueño declara** en `5b7ae89`, `48c1173` y `348859f` —misma población, mismos
+sha256—. Regenerar sólo cambiaría el campo `commit` por una ref **no publicada**, y el pin
+actual `940cc49` está en `origin/main`: se perdería procedencia sin ganar contenido, porque el
+contenido ya es idéntico. El permiso para regenerar existe; la medición dice que no
+corresponde usarlo.
+
+⚠️ Y una medición propia **descartada antes de publicarse**: contar los archivos del backend
+en los directorios que el espejo cubre da 201 contra 107, y parecía un hueco de 94. Es la
+pregunta equivocada — **la población la declara el dueño** en `contract/mirror-inventory.json`,
+no la enumera un listado del directorio. Los otros 94 son docs, migraciones y contratos de OPS
+que el dueño deliberadamente no espeja.
+
+**OCR y flujos ratificados: 204 tests en verde.** OCR contra mock —53 tests en cinco
+archivos—; Textract real no se toca, su canary tiene presupuesto y es otra orden. Las banderas
+ratificadas se **leen del backend**, no están hardcodeadas: `public_registration` en cuatro
+archivos, `wallet_rail` en cinco, `account_activity` en cuatro, `facebook_sign_in` y
+`google_sign_in` en dos cada una, `MODO_MONETARIO` en dos.
+
+📌 Los gates E2E de esta unidad son los de la corrida bajo LOCK de las 17:52–17:53Z, y eso es
+legítimo por una razón medida, no por conveniencia: desde ese commit hasta acá **el único
+archivo que cambió es `CHANGELOG.md`**, que el E2E no ejercita.
+
 ### C2-4 · composición local con el candidato de App Backend (2026-09-11)
 
 Alcance decidido: **la superficie de este front**. Contrato espejado, flujos de alta/login,
