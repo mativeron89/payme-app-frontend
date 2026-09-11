@@ -11,6 +11,53 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+### C2-4 · composición local con el candidato de App Backend (2026-09-11)
+
+Alcance decidido: **la superficie de este front**. Contrato espejado, flujos de alta/login,
+invitaciones, Recovery y Google/Facebook en dark, y E2E sobre el **riel mock** con deny de
+egress. **No se levanta el candidato del backend ni se corre contra un backend real**: eso
+exige base de datos, puertos y credenciales de proveedores, y Google/Facebook están en dark
+por decisión ratificada — sería superficie nueva y roza el stopper de proveedor live.
+
+**Contrato: 107/107 idénticos.** Los 107 archivos del espejo se compararon blob a blob contra
+dos candidatos del backend —`night-v2-app-backend-5b7ae89`, el objetivo de C2-4, y
+`night-v2-app-backend-348859f`, el más reciente— y son **byte a byte iguales al pin en los
+dos**. Cero distintos, cero ausentes. La superficie de contrato no se movió.
+
+**Flujos:** 14 archivos focales, **236 tests**. Y sobre el riel mock con deny de egress,
+**87 casos E2E** repartidos en los specs de estos flujos: alta pública, social-auth, perfil
+faltante, refresh de perfil, invitación y su vuelta atrás, link rechazado, hash desconocido,
+compartir, mesa cerrada, avisos de alta y navegación, y las 40 páginas públicas de Meta.
+
+🔴 **El rojo de `verificar-mirror.mjs --vigencia` NO es un espejo desactualizado**, y conviene
+leerlo bien antes de que alguien lo interprete al revés: el gate inspecciona el **checkout
+principal** del backend, que está **22 commits detrás** del pin. El pin `940cc49` **está en
+`origin/main`**: es publicado. El propio mensaje del gate lo distingue —«el HEAD inspeccionado
+es ANCESTRO del commit pineado»—. Es la inversión exacta de una nota vieja de `CLAUDE.md`, que
+advertía que el pin era local y sin publicar; la lección aguanta las dos formas: espejar no
+implica publicado, y el checkout que uno mira no implica al día.
+
+#### Lo que C2-4 NO acredita · `NO_ACREDITADO_SIN_BACKEND_REAL`
+
+El riel mock corre **en proceso**: no hay backend, no hay base, no hay proveedor. Por
+construcción, estos flujos quedan sin acreditar en su mitad de servidor:
+
+- **Validación real del token de Google y de Facebook.** El front decodifica la capability y
+  falla cerrado, y eso sí está probado; que el backend valide un token emitido por el
+  proveedor, no. Además Meta está en dark y el proveedor live es stopper.
+- **Entrega real del mail de Recovery.** Se prueba el flujo del front y el shape del contrato;
+  que salga un correo, no.
+- **Unicidad y constraints de base en el alta**, y el comportamiento real de
+  `services/signupRateLimit.js` bajo carga.
+- **Semántica 401 / 403 / 503 emitida por el backend real.** El mock la sintetiza; que el
+  backend la emita con esos códigos exactos en esos casos exactos, no se mide acá.
+
+⚠️ **Y un límite de método, declarado porque me equivoqué al medirlo:** intenté derivar una
+correspondencia ruta por ruta entre el mock y el contrato con una heurística de texto, y
+**producía falsos positivos** — daba por implementadas rutas cuyo path no aparece ni una vez
+en el adaptador. **No establecí ese mapeo**, y prefiero decirlo a publicar una tercera
+conjetura con forma de tabla. Lo que sí está medido es lo de arriba.
+
 ### Corrección de FASE W · el gate de origen queda MEDIDO y en verde (2026-09-11)
 
 FASE W fue rechazada en auditoría con trece bloqueos. Esta entrada los cierra, y **lo que
