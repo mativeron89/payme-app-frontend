@@ -11,6 +11,57 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.22 — El tipo decía menos de lo que el módulo emite (OBS-AF-01) (2026-09-12)
+
+`ClaseDeOrigen` vivía escrita **a mano en dos `.d.mts`** y las dos habían divergido de la
+implementación:
+
+| declaración | tenía | le faltaba |
+|---|---|---|
+| `scripts/redactar.d.mts` | 5 miembros | `NO_ESPECIFICADA` |
+| `scripts/extraer-origenes.d.mts` | 3 miembros | `NO_ESPECIFICADA`, `NO_PARSEABLE`, `AUSENTE` |
+
+`NO_ESPECIFICADA` la emite `origenPublicable` desde que `0.0.0.0` dejó de contar como loopback
+(AF-1), y la declaración se quedó en la versión anterior. **Nada se puso rojo**: ningún test tipa
+contra la unión, así que el typecheck no la ejercita. Un tipo que nadie usa no falla el día que
+se rompe — falla el día que alguien lo usa. Lo encontró la auditoría independiente de Qwen
+leyendo el archivo (P2-04 → OBS-AF-01).
+
+### La clase, enumerada antes de tocar
+
+`redactar.mjs` emite **nueve** literales `clase:`, y son **dos taxonomías distintas que comparten
+el nombre del campo**:
+
+- **orígenes** (`ClaseDeOrigen`): `LOOPBACK`, `EXTERNO_ALLOWLISTADO`, `EXTERNO_NO_ALLOWLISTADO`,
+  `NO_ESPECIFICADA`, `NO_PARSEABLE`, `AUSENTE`;
+- **rutas** (`RutaPublicable.clase`): `RELATIVA_AL_ARBOL`, `FUERA_DEL_ARBOL`, `SIN_RAIZ`, `AUSENTE`.
+
+Meter las de ruta en `ClaseDeOrigen` habría «arreglado» el hallazgo ampliando el tipo equivocado.
+Los otros tres campos de clasificación se verificaron y **están completos**: `UrlPublicable.estado`
+(3/3), `ComandoPublicable.motivo_de_la_redaccion` (3/3), `RutaPublicable.clase` (4/4).
+
+### Qué se hizo
+
+`redactar.d.mts` queda como **fuente de verdad** con los seis miembros, y `extraer-origenes.d.mts`
+**re-exporta** en vez de redefinir. La razón no es prolijidad: ese módulo **no emite ninguna clase
+propia** — republica lo que `origenPublicable` devuelve—, así que su copia describía valores
+ajenos. Es la misma forma del defecto que este repo ya pagó con dos números de versión y con cinco
+fechas: **una segunda copia a mano que se desalinea callada.**
+
+Y una guarda nueva, `scripts/clase-de-origen-union.test.ts`, que **deriva la invariante en vez de
+patrullarla**: no lleva lista de literales —sería una tercera copia—, compara dos conjuntos
+extraídos del propio código, y trae su propio mutante (le saca un miembro a la unión en memoria y
+exige que la comparación lo detecte).
+
+🔴 **Y la guarda encontró un defecto en sí misma antes de encontrar ninguno ajeno.** Su primera
+versión borraba los comentarios desde cualquier `//` hasta el fin de línea, y se comía
+`` `${u.protocol}//${u.host}` `` —código, no comentario— junto con el `clase:` que seguía. Extraía
+6 de 9 literales y **la contención daba verde igual**, porque un conjunto más chico también está
+contenido. Lo cazó el control positivo que exige que los extractores encuentren algo. Sin ese
+caso, esta entrada estaría anunciando una guarda que no mide lo que dice.
+
+**Sin push**: este sucesor tiene su propia vuelta de auditoría.
+
 ## 0.161.21 — Las fechas que AF-2 agregó a los rótulos eran falsas (2026-09-12)
 
 Una auditoría independiente —Qwen, sobre `e022c874`— devolvió `AUDIT_BLOCK`. **Cero defectos de

@@ -84,7 +84,18 @@ export type VeredictoDeTraza = (typeof VEREDICTOS_DE_TRAZA)[keyof typeof VEREDIC
  * se retira, no se acompaña — un campo bien redactado no sirve si el valor original quedó en
  * el de al lado.
  */
-export type ClaseDeOrigen = 'LOOPBACK' | 'EXTERNO_ALLOWLISTADO' | 'EXTERNO_NO_ALLOWLISTADO';
+/**
+ * 🔴 **SE RE-EXPORTA, NO SE REDEFINE.** Acá vivía una copia escrita a mano —`'LOOPBACK' |
+ * 'EXTERNO_ALLOWLISTADO' | 'EXTERNO_NO_ALLOWLISTADO'`— que ya había **divergido**: le faltaban
+ * `NO_ESPECIFICADA`, `NO_PARSEABLE` y `AUSENTE`.
+ *
+ * Y la razón por la que la definición única no es sólo prolijidad: **este módulo no emite
+ * ninguna clase propia.** `extraer-origenes.mjs` republica lo que `origenPublicable` de
+ * `redactar.mjs` devuelve, así que la unión describe valores que produce OTRO módulo. Escribirla
+ * de nuevo acá era mantener a mano una copia de algo ajeno — la misma forma del defecto que este
+ * repo ya pagó con dos números de versión y con cinco fechas.
+ */
+export type { ClaseDeOrigen } from './redactar.mjs';
 
 export interface OrigenObservado {
   /** Loopback: el origen literal. Externo: el tercero declarado, o `EXTERNO_NO_ALLOWLISTADO`. */

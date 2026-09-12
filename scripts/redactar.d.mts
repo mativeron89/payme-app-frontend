@@ -27,10 +27,26 @@ export function terceroDeclarado(host: string): string | undefined;
 /** Re-exportado de `anclar-local.mjs`: el límite canónico `'..'` / `'..' + sep` / absoluta. */
 export function relativoEscapa(rel: string): boolean;
 
+/**
+ * 🔴 **FUENTE DE VERDAD DE ESTA UNIÓN.** `extraer-origenes.d.mts` la re-exporta desde acá en
+ * vez de escribirla de nuevo: la tuvo duplicada y **divergió** —quedó en tres miembros contra
+ * cinco— sin que nada se pusiera rojo, porque ningún test tipa contra ella.
+ *
+ * ⚠️ `NO_ESPECIFICADA` faltaba. La emite `origenPublicable` desde que `0.0.0.0` dejó de contar
+ * como loopback (AF-1), y esta declaración se quedó en la versión anterior. Lo encontró la
+ * auditoría independiente de Qwen (P2-04 → OBS-AF-01), no el typecheck: un tipo que nadie
+ * ejercita no falla el día que se rompe, falla el día que alguien lo usa.
+ *
+ * 📌 **Y la otra taxonomía NO entra acá**: `RutaPublicable.clase` —`RELATIVA_AL_ARBOL`,
+ * `FUERA_DEL_ARBOL`, `SIN_RAIZ`— clasifica RUTAS, no orígenes. Comparten el nombre del campo y
+ * no el significado; meterlas en esta unión habría «arreglado» el hallazgo ampliando el tipo
+ * equivocado. `scripts/clase-de-origen-union.test.ts` fija la correspondencia contra el módulo.
+ */
 export type ClaseDeOrigen =
   | 'LOOPBACK'
   | 'EXTERNO_ALLOWLISTADO'
   | 'EXTERNO_NO_ALLOWLISTADO'
+  | 'NO_ESPECIFICADA'
   | 'NO_PARSEABLE'
   | 'AUSENTE';
 
