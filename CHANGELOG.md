@@ -11,6 +11,38 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.18 — Los rótulos dicen qué se midió, cuándo y sobre qué (AF-2) (2026-09-12)
+
+Tres rótulos afirmaban que algo **no se había ejecutado** mientras, a veces en el mismo archivo,
+otra línea decía que sí. Un rótulo contradictorio es peor que cualquiera de sus dos mitades:
+quien lo lea no tiene forma de saber cuál manda.
+
+| dónde | decía | qué pasaba |
+|---|---|---|
+| `scripts/gate-origen.mjs` | `NO_ACREDITADO_POR_EJECUCION` y «C2-2 sigue abierto» | el mismo archivo **imprime** «deny verificado» en `:379`, y `deny-egress.sb` documenta los ocho escalones medidos |
+| `scripts/leer-zip.test.ts` | «**este caso no corrió**» en ZIP64 | veinte líneas más arriba, el encabezado del **mismo archivo** declaraba 22/22 verde |
+| `scripts/anclar-local.test.ts` | `ESCRITO_SIN_EJECUTAR` | el caso lleva corriendo verde desde el 2026-09-11 |
+
+Ahora cada rótulo lleva **fecha, sha y alcance**, o queda marcado como histórico **con su
+condición**. Los tres eran ciertos cuando se escribieron: la fase P3 prohibía ejecutar. Lo que los
+volvió falsos fue que la fase cambió, no un error de quien los escribió — y eso se dice, porque la
+alternativa es que el próximo lector crea que alguien mintió.
+
+**No se repitió ninguna ejecución para retitular.** Las mediciones citadas ya existían: los
+escalones 1–3e del perfil (2026-09-11T17:11–17:12Z), el E2E completo bajo deny sobre `0071671b`
+(211 passed) y el censo de tráfico con veredicto `MEDIDO_SOLO_LOOPBACK_CERO_ORIGENES_EXTERNOS`.
+
+🔴 **Y el alcance, que es la mitad que se pierde cuando un rótulo se acorta:** lo medido es egress
+**TCP**. No se enumeraron protocolos fuera de TCP, y nada de esto prueba que no exista ningún
+camino de salida — prueba que los probados están cerrados, y que el control del control (el mismo
+destino **sin** sandbox conecta) descarta que «bloqueado» fuera simplemente «no había red».
+
+Lo que **no** se retiró, porque no era contradictorio sino correcto: `INFERENCIA_ESTRUCTURAL_NO_MEDIDA`
+en `leer-zip.test.ts` sigue donde estaba — es una inferencia declarada como tal, no una medición
+disfrazada. Y el aviso de que un rojo futuro en ZIP64 apunta primero al fixture y no al lector
+también sobrevive: que haya pasado a la primera no vuelve incuestionable a un fixture de cabeceras
+binarias escritas a mano.
+
 ## 0.161.17 — `0.0.0.0` deja de contar como loopback (AF-1) (2026-09-12)
 
 El gate de origen certifica «sólo loopback». Hasta hoy `HOSTS_LOOPBACK` incluía `0.0.0.0`, y la

@@ -108,11 +108,30 @@ const PROHIBIDAS = Object.freeze([
  * navegador afuera, que es precisamente quien habla con la red. Por eso el wrapper se
  * antepone al `process.execPath` del runner y lo hereda todo lo que cuelgue de él.
  *
- * ⚠️ **NO_ACREDITADO_POR_EJECUCION.** Nada de esto se corrió: P3 prohíbe ejecutar. No se
- * verificó que el perfil compile, que Chromium arranque adentro, ni que el deny contenga.
- * Y hay un motivo concreto para dudar: C2-2 sigue abierto y es este mismo mecanismo —medido
- * en esta sesión, Chromium bajo `sandbox-exec` aborta en dyld antes de `main()` cuando el
- * perfil restringe archivos—. Este perfil no los restringe, justamente por eso.
+ * ✅ **ACREDITADO POR EJECUCIÓN · perfil sha256 `ddd1a83c79b15ab2253f909e7c7eecf8502647d5b57252c1bf9ab712b18818f2`.**
+ *
+ * | medición | cuándo | sobre qué | dónde quedó |
+ * |---|---|---|---|
+ * | el perfil compila; `node` arranca adentro; loopback permitido; IP cruda, nombre (DNS+TLS) e IPv6 externos `EPERM`; **el mismo destino SIN sandbox conecta** | 2026-09-11T17:11–17:12Z | escalones 1–3e | cabecera de `scripts/deny-egress.sb` |
+ * | Chromium arranca adentro y el E2E completo corre: **211 passed** | 2026-09-12T00:15–00:21Z | `0071671b` | `c26/paso-13-p2.log` |
+ * | veredicto del censo de tráfico: `MEDIDO_SOLO_LOOPBACK_CERO_ORIGENES_EXTERNOS`, 22 557 URLs, 5 orígenes, 0 externos | 2026-09-12T00:29–00:35Z | `0071671b` | `c26/gate-origen-0071671.log` |
+ *
+ * 🔴 **ALCANCE, que es la mitad que se pierde cuando un rótulo se acorta.** Lo medido es
+ * egress **TCP**: no se enumeraron protocolos fuera de TCP, y nada de esto prueba que NO
+ * exista ningún camino de salida — prueba que los que se probaron están cerrados y que el
+ * control del control (3e) descarta que «bloqueado» fuera simplemente «no había red».
+ *
+ * 📌 **Histórico, con su condición:** hasta el 2026-09-11 este bloque decía
+ * `NO_ACREDITADO_POR_EJECUCION` y **era cierto bajo su condición** — la fase P3 prohibía
+ * ejecutar—. Lo que lo volvió falso fue que la fase cambió y se ejecutó, no un error de quien
+ * lo escribió. Se reemplaza en vez de conservarse porque un rótulo que dice «no se corrió» al
+ * lado de una impresión que dice «deny verificado» no es historia: es una contradicción viva
+ * en el mismo archivo, y quien la lea no tiene forma de saber cuál de las dos manda.
+ *
+ * ⚠️ **C2-2 quedó EXPLICADO, no abierto.** Aquel abort de Chromium en `dyld`/`CacheFinder`
+ * antes de `main()` venía de un perfil que **restringía archivos** sin el nodo raíz de lectura.
+ * Éste no restringe archivos: hereda `(allow default)` y toca sólo la red. Lo que lo cierra no
+ * es el argumento sino que el E2E corrió adentro.
  *
  * **Fail-closed en las tres direcciones**: sin `sandbox-exec`, sin perfil, o fuera de Darwin,
  * el gate NO lanza. «No pude contener» jamás puede terminar en «corrí sin contención».

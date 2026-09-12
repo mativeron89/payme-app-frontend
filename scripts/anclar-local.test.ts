@@ -74,7 +74,14 @@ describe('rutaContenida · el mutante que importa', () => {
   });
 
   /**
-   * 🔴 EL MUTANTE DEL ÍTEM 12 (ESCRITO_SIN_EJECUTAR). Con `startsWith('..')` —lo que había
+   * 🔴 EL MUTANTE DEL ÍTEM 12. ✅ **Corrido: 34/34 verde**, última medición sobre `0071671b`
+   * dentro de la suite completa del 2026-09-12T00:14Z (140 archivos · 2475 passed · 2 skipped,
+   * `c26/paso-06-p2.log`). El rótulo `ESCRITO_SIN_EJECUTAR` que estaba acá era cierto bajo su
+   * condición —la fase prohibía ejecutar— y dejó de serlo cuando la fase cambió; se reemplaza
+   * por la medición en vez de conservarse, porque un «no se ejecutó» junto a un caso que lleva
+   * corriendo verde desde hace horas se lee como una advertencia vigente y no lo es.
+   *
+   * Con `startsWith('..')` —lo que había
    * hasta P3— un directorio llamado `..foo` se declaraba AFUERA, y es un hijo legítimo.
    *
    * Fallaba del lado cerrado, así que no era un agujero de seguridad: era **incorrecto**. Y
@@ -188,7 +195,8 @@ describe('resolverPaqueteLocal · contra el árbol REAL', () => {
   });
 
   /**
-   * 🔴 MUTANTE: el árbol instalado derivó del lock. Se arma un árbol sintético porque
+   * 🔴 MUTANTE: la versión declarada del paquete instalado no es la que el lock fija. Se arma un
+   * árbol sintético porque
    * desalinear el real sería romper el repo para probar una comprobación.
    */
   it('si la versión instalada difiere del lock, LANZA', () => {

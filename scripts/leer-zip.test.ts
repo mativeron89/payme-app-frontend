@@ -378,17 +378,24 @@ describe('leerEntradas · formas de ZIP no soportadas', () => {
   });
 
   /**
-   * 🔴 ZIP64 · ítem 9 (ESCRITO_SIN_EJECUTAR).
+   * 🔴 ZIP64 · ítem 9.
    *
    * Acá había un `it.skip` que decía «un fixture honesto exige >4 GB». **Era una limitación
    * de mi escritor de fixtures, no del formato.** ZIP64 es una codificación: los campos de 32
    * bits llevan el centinela `0xFFFFFFFF` y el valor real viaja en el extra field `0x0001`,
    * más un EOCD64 y su localizador. El valor real puede ser 8 bytes.
    *
-   * ⚠️ **Y este caso no corrió.** El fixture arma cabeceras binarias a mano bajo prohibición
-   * de ejecución: si el layout tiene un byte corrido, el test fallará la primera vez que
-   * alguien lo corra. Eso sería un defecto del fixture, no del lector — y lo digo ahora para
-   * que quien lo vea en rojo no salga a arreglar `leer-zip.mjs`.
+   * ✅ **Y ESTE CASO CORRIÓ.** Acá decía «este caso no corrió» mientras el encabezado del
+   * archivo, veinte líneas más arriba, ya declaraba 22/22 verde: **el mismo archivo afirmaba y
+   * negaba la misma cosa**, que es peor que cualquiera de las dos por separado — quien lo lea
+   * no tiene forma de saber cuál manda. Medido: verde el 2026-09-11T17:17Z y otra vez sobre
+   * `0071671b` dentro de la suite completa del 2026-09-12T00:14Z (140 archivos · 2475 passed ·
+   * 2 skipped, `c26/paso-06-p2.log`).
+   *
+   * El aviso que SÍ sobrevive, porque no era sobre la ejecución sino sobre la atribución: si
+   * alguna vez este caso se pone rojo, lo primero a sospechar es el layout binario del fixture
+   * —28 y 20 bytes de extra field escritos a mano—, no `leer-zip.mjs`. Que haya pasado a la
+   * primera no convierte al fixture en un instrumento incuestionable.
    */
   it('un ZIP64 legítimo se lee: el tamaño real vive en el extra field 0x0001', async () => {
     const z = zipEn('zip64.zip', [{ nombre: '0-trace.network', contenido: '{"a":1}\n' }], { zip64: true });
