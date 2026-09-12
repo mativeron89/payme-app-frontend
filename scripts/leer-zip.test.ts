@@ -388,9 +388,14 @@ describe('leerEntradas · formas de ZIP no soportadas', () => {
    * ✅ **Y ESTE CASO CORRIÓ.** Acá decía «este caso no corrió» mientras el encabezado del
    * archivo, veinte líneas más arriba, ya declaraba 22/22 verde: **el mismo archivo afirmaba y
    * negaba la misma cosa**, que es peor que cualquiera de las dos por separado — quien lo lea
-   * no tiene forma de saber cuál manda. Medido: verde el 2026-09-11T17:17Z y otra vez sobre
-   * `0071671b` dentro de la suite completa del 2026-09-12T00:14Z (140 archivos · 2475 passed ·
-   * 2 skipped, `c26/paso-06-p2.log`).
+   * no tiene forma de saber cuál manda. Medido en la suite del CANDIDATO:
+   * `logs/B2-npm-test.log:167` (sha256 `956708f7818e5f215345009423203f0d5ea2e35c6713c220bf80cec0af5738b6`),
+   * encabezado `payme-app-frontend@0.161.21`, 140 archivos · 2481 passed · 2 skipped.
+   *
+   * ⚠️ Acá decía «la suite completa del 2026-09-12T00:14Z … `c26/paso-06-p2.log`», y era falso
+   * por partida doble: el `mtime` de ese artefacto es `2026-09-11T20:14:42Z` —la fecha salió de
+   * correr la hora local `-0600` a UTC del día siguiente— y ese log **es de la BASE** (`0.161.16`,
+   * 2475 tests), no del candidato. Corregido tras la auditoría independiente de Qwen.
    *
    * El aviso que SÍ sobrevive, porque no era sobre la ejecución sino sobre la atribución: si
    * alguna vez este caso se pone rojo, lo primero a sospechar es el layout binario del fixture

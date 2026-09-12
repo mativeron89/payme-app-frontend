@@ -7,8 +7,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { clasificarOrigenes, extraerDeDirectorio, VEREDICTOS, VEREDICTOS_DE_TRAZA } from './extraer-origenes.mjs';
 
 /**
- * ✅ **Corrido: 47/47 verde el 2026-09-11T17:17Z.** El encabezado decía `ESCRITOS_SIN_EJECUTAR`
- * mientras la fase prohibía ejecutar.
+ * ✅ **Corrido: 49/49 verde**, leído del log del CANDIDATO `logs/B2-npm-test.log:74`
+ * (sha256 `956708f7818e5f215345009423203f0d5ea2e35c6713c220bf80cec0af5738b6`,
+ * encabezado `payme-app-frontend@0.161.21`).
+ *
+ * ⚠️ El encabezado decía **Corrido: 47/47**, que era la cuenta ANTES de que AF-1
+ * agregara dos casos: el archivo cambió y el número no. Lo cazó la auditoría independiente de
+ * Qwen. Ahora la cuenta sale del log del candidato y no de la memoria de quien edita.
+ *
+ * Antes de eso decía `ESCRITOS_SIN_EJECUTAR`, mientras la fase prohibía ejecutar.
  *
  * 🔴 Y al correr, dos casos se pusieron rojos y los dos enseñaron algo: el pareo ordinal
  * reportaba `LINEA ILEGIBLE` cuando las líneas se leían perfectamente —bloqueaba por la razón

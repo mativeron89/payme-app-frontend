@@ -74,12 +74,22 @@ describe('rutaContenida · el mutante que importa', () => {
   });
 
   /**
-   * 🔴 EL MUTANTE DEL ÍTEM 12. ✅ **Corrido: 34/34 verde**, última medición sobre `0071671b`
-   * dentro de la suite completa del 2026-09-12T00:14Z (140 archivos · 2475 passed · 2 skipped,
-   * `c26/paso-06-p2.log`). El rótulo `ESCRITO_SIN_EJECUTAR` que estaba acá era cierto bajo su
-   * condición —la fase prohibía ejecutar— y dejó de serlo cuando la fase cambió; se reemplaza
-   * por la medición en vez de conservarse, porque un «no se ejecutó» junto a un caso que lleva
-   * corriendo verde desde hace horas se lee como una advertencia vigente y no lo es.
+   * 🔴 EL MUTANTE DEL ÍTEM 12. ✅ **Corrido: 34/34 verde** en la suite del CANDIDATO —
+   * `logs/B2-npm-test.log:207` (sha256 `956708f7818e5f215345009423203f0d5ea2e35c6713c220bf80cec0af5738b6`),
+   * encabezado `payme-app-frontend@0.161.21`, 140 archivos · 2481 passed · 2 skipped.
+   *
+   * ⚠️ **Acá decía otra cosa y era falsa de dos maneras a la vez.** Citaba
+   * `c26/paso-06-p2.log` «del 2026-09-12T00:14Z»: ① esa fecha no existe —el `mtime` real del
+   * artefacto es `2026-09-11T20:14:42Z`, y la escribí corriendo la hora local `-0600` como si
+   * fuera UTC del día siguiente—; y ② ese log **es de la BASE**, no del candidato: su
+   * encabezado dice `0.161.16` y cuenta 2475 tests, los que había antes de que AF-1 agregara
+   * seis. Citar la corrida de la base para acreditar el archivo que el candidato cambió es
+   * acreditar con el árbol equivocado. Ambas las encontró la auditoría independiente de Qwen.
+   *
+   * El rótulo `ESCRITO_SIN_EJECUTAR` que estaba acá antes era cierto bajo su condición —la fase
+   * prohibía ejecutar— y dejó de serlo cuando la fase cambió; se reemplaza por la medición en
+   * vez de conservarse, porque un «no se ejecutó» junto a un caso verde se lee como advertencia
+   * vigente y no lo es.
    *
    * Con `startsWith('..')` —lo que había
    * hasta P3— un directorio llamado `..foo` se declaraba AFUERA, y es un hijo legítimo.

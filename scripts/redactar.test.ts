@@ -16,9 +16,16 @@ import {
 } from './redactar.mjs';
 
 /**
- * ✅ **Corrido: 29/29 verde el 2026-09-11T17:17Z.** El encabezado decía ESCRITO_SIN_EJECUTAR
- * mientras la fase prohibía ejecutar; el rótulo viajaba con el artefacto justamente para que
- * esta línea pudiera reemplazarlo con una medición en vez de con una afirmación.
+ * ✅ **Corrido: 32/32 verde**, leído del log del CANDIDATO `logs/B2-npm-test.log:227`
+ * (sha256 `956708f7818e5f215345009423203f0d5ea2e35c6713c220bf80cec0af5738b6`,
+ * encabezado `payme-app-frontend@0.161.21`).
+ *
+ * ⚠️ El encabezado decía **Corrido: 29/29**, que era la cuenta ANTES de que AF-1
+ * agregara tres casos: el archivo cambió y el número no. Lo cazó la auditoría independiente de
+ * Qwen. Ahora la cuenta sale del log del candidato y no de la memoria de quien edita.
+ *
+ * Antes decía ESCRITO_SIN_EJECUTAR mientras la fase prohibía ejecutar; el rótulo viajaba con
+ * el artefacto justamente para que esta línea lo reemplazara con una medición.
  *
  * ## Qué fija este archivo
  *

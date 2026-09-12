@@ -113,8 +113,27 @@ const PROHIBIDAS = Object.freeze([
  * | medición | cuándo | sobre qué | dónde quedó |
  * |---|---|---|---|
  * | el perfil compila; `node` arranca adentro; loopback permitido; IP cruda, nombre (DNS+TLS) e IPv6 externos `EPERM`; **el mismo destino SIN sandbox conecta** | 2026-09-11T17:11–17:12Z | escalones 1–3e | cabecera de `scripts/deny-egress.sb` |
- * | Chromium arranca adentro y el E2E completo corre: **211 passed** | 2026-09-12T00:15–00:21Z | `0071671b` | `c26/paso-13-p2.log` |
- * | veredicto del censo de tráfico: `MEDIDO_SOLO_LOOPBACK_CERO_ORIGENES_EXTERNOS`, 22 557 URLs, 5 orígenes, 0 externos | 2026-09-12T00:29–00:35Z | `0071671b` | `c26/gate-origen-0071671.log` |
+ * | Chromium arranca adentro y el E2E completo corre: **211 passed** | fin `2026-09-11T20:21:39Z` (mtime del log) | `0071671b` | `c26/paso-13-p2.log` |
+ * | veredicto del censo de tráfico: `MEDIDO_SOLO_LOOPBACK_CERO_ORIGENES_EXTERNOS`, 22 557 URLs, 5 orígenes, 0 externos | fin `2026-09-11T20:31:43Z` (mtime del log) | `0071671b` | `c26/gate-origen-0071671.log` |
+ *
+ * 🔴 **DÓNDE VIVEN ESOS TRES ARTEFACTOS, y por qué importa:** en el **corpus CONGELADO** del
+ * programa anterior, `~/.codex/runs/payme-app-ops-autonomy-20260910-v2/app-frontend/c26/` —
+ * **no** en la evidencia de la orden que escribió este rótulo. Son mediciones **reutilizadas**,
+ * lo cual está autorizado («no se repite ejecución sólo para retitular»); lo que no se puede es
+ * fecharlas como si se hubieran corrido acá.
+ *
+ * ⚠️ **La fecha es la del ARTEFACTO, leída de su `mtime` en UTC, y no se deriva de nada.** El
+ * `Start at` que imprime Vitest adentro del log viene en hora **local sin zona**: convertirlo
+ * sería exactamente el defecto que esta corrección repara. El inicio, cuando hace falta, sale de
+ * `gates-fase-w.jsonl` del mismo corpus, que lo registró en UTC directo (`C26-13-P2` inicio
+ * `2026-09-11T20:15:00Z`; `C26-GATE-ORIGEN` inicio `2026-09-11T20:29:41Z`).
+ *
+ * 📌 **Estas dos celdas decían `2026-09-12T00:15–00:21Z` y `00:29–00:35Z`, y eran falsas.** Las
+ * escribí corriendo la hora local `-0600` y publicándola como UTC del día siguiente — con los
+ * minutos intactos, que es la firma del error. Lo cazó la auditoría independiente de Qwen sobre
+ * `e022c874`, y el agravante queda escrito: el sidecar de esas mismas corridas ya tenía los
+ * valores correctos en UTC y no los consulté. **Derivé en vez de leer, en el rótulo cuyo objeto
+ * era que las fechas se leyeran.**
  *
  * 🔴 **ALCANCE, que es la mitad que se pierde cuando un rótulo se acorta.** Lo medido es
  * egress **TCP**: no se enumeraron protocolos fuera de TCP, y nada de esto prueba que NO

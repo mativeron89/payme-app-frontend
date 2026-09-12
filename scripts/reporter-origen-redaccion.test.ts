@@ -5,7 +5,15 @@ import { _paraPruebas } from '../e2e/_reporter-origen.js';
 const { urlSegura, proxySeguro, comandoSeguro } = _paraPruebas;
 
 /**
- * ✅ **Corrido: 16/16 verde el 2026-09-11T17:17Z.** Este archivo es la prueba de INTEGRACIÓN
+ * ✅ **Corrido: 17/17 verde**, leído del log del CANDIDATO `logs/B2-npm-test.log:255`
+ * (sha256 `956708f7818e5f215345009423203f0d5ea2e35c6713c220bf80cec0af5738b6`,
+ * encabezado `payme-app-frontend@0.161.21`).
+ *
+ * ⚠️ El encabezado decía **Corrido: 16/16**, que era la cuenta ANTES de que AF-1
+ * agregara un caso: el archivo cambió y el número no. Lo cazó la auditoría independiente de
+ * Qwen. Ahora la cuenta sale del log del candidato y no de la memoria de quien edita.
+ *
+ * Este archivo es la prueba de INTEGRACIÓN
  * —que el reporter USE la política de `scripts/redactar.mjs`—, mientras `redactar.test.ts`
  * fija el contrato unitario. Son dos preguntas distintas: acá «¿el que publica usa la
  * política?», allá «¿la política es la correcta?».

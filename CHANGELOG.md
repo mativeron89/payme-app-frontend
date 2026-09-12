@@ -11,6 +11,71 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.21 — Las fechas que AF-2 agregó a los rótulos eran falsas (2026-09-12)
+
+Una auditoría independiente —Qwen, sobre `e022c874`— devolvió `AUDIT_BLOCK`. **Cero defectos de
+código; el bloqueo es íntegramente metadata de acreditación**, y toda la metadata mala es mía, del
+commit `0.161.18`, cuyo objeto literal era *«cada rótulo lleva fecha, SHA y alcance»*.
+
+### Lo que estaba mal, y cómo pasó
+
+**Cinco fechas inventadas.** Los rótulos afirmaban `2026-09-12T00:14Z`, `00:15–00:21Z` y
+`00:29–00:35Z`. Los `mtime` reales de esos artefactos son `2026-09-11T20:14:42Z`, `20:21:39Z` y
+`20:31:43Z`.
+
+El mecanismo lo nombró el auditor con precisión: **los minutos coinciden y las horas están
+corridas; es la firma de un corrimiento de zona horaria.** Tomé horas locales `-0600` de la
+salida de la terminal y las publiqué como UTC del día siguiente.
+
+🔴 **Y el agravante, que es la parte que enseña algo:** el sidecar de esas mismas corridas ya
+tenía los valores correctos **en UTC** — `gates-fase-w.jsonl` registra `C26-13-P2` de
+`20:15:00Z` a `20:21:39Z`, y coincide con el `mtime`. **No lo consulté: derivé en vez de leer, en
+el rótulo que existía para que las fechas se leyeran.** Peor, las fechas afirmadas eran
+*anteriores* a la propia suborden que las escribió, lo que las volvía inverificables por
+construcción.
+
+**Un artefacto mal atribuido.** Dos rótulos citaban `c26/paso-06-p2.log` como «la suite
+completa». Ese log dice `payme-app-frontend@0.161.16` y cuenta 2475 tests: **es la corrida de la
+BASE**, de antes de que AF-1 agregara seis. Acreditar un archivo que el candidato cambió con la
+corrida del árbol anterior es acreditar con el árbol equivocado.
+
+**Tres cuentas que se quedaron viejas.** `47/47`, `29/29` y `16/16` en los tres archivos donde
+AF-1 agregó `+2`, `+3` y `+1`. La misma entrega eliminó tres contradicciones de ejecución y creó
+tres de conteo. Y el agravante otra vez: en el cuarto archivo sí actualicé el rótulo, o sea que
+conocía la práctica y no la apliqué parejo.
+
+**Una cifra apuntada al log equivocado.** La tabla de erratas atribuía `22 559` a una «segunda
+línea `urls`» de `c23-gate-e2e-completo-02.log`. Ese log tiene **una sola** línea `urls`
+(`:226` = `22 558`); `22 559` vive en `c24-e2e-bajo-lock.log:226`. En su momento corrí dos greps
+y leí su salida concatenada como si fuera de un archivo. Irónico en la tabla cuyo propósito era
+darle dueño a cada cifra.
+
+### Lo que se corrige
+
+Cada fecha pasa a ser **la del artefacto, leída de su `mtime` en UTC**, con la aclaración de que
+esos tres logs viven en el **corpus congelado** del programa anterior y no en la evidencia de esta
+orden: son mediciones **reutilizadas**, lo cual está autorizado — lo que no se puede es fecharlas
+como si se hubieran corrido acá. El `Start at` que Vitest imprime adentro del log **no se
+convierte**: viene en hora local sin zona, y convertirlo es exactamente el defecto que se repara.
+
+Cada cuenta pasa a leerse del log del **candidato** (`logs/A3-npm-test.log`, `0.161.20`,
+140 archivos · 2481 passed · 2 skipped), citado por ruta y sha256. Y la celda de `22 559` apunta
+al archivo donde la cifra está.
+
+Y una precisión sobre **qué log citan** los cinco rótulos, porque acá hay una circularidad que no
+se puede eliminar y sí se puede declarar: citan `logs/B2-npm-test.log`, la corrida de **este mismo
+árbol**. Toda corrida es anterior al comentario que la cita — si no, no habría nada que citar. Lo
+único que difiere entre el árbol que produjo `B2` y el que se commitea es **el texto de estos
+propios rótulos**, que no agrega ni saca un solo test; se verificó corriendo la suite otra vez
+después de escribirlos y comparando los cinco conteos, que no se movieron. La alternativa —citar
+`A3`, del `0.161.20`— habría sido otra vez acreditar con el árbol de al lado, que es justo lo que
+esta entrada corrige.
+
+📌 **La regla que queda, y que no es nueva sino la que no apliqué:** cada fecha y cada número se
+escribe **después de leerlo del artefacto**, con la ruta y el sha al lado. Un número tipeado de
+memoria parece una medición y no lo es — y ésa es justamente la clase que este repo viene
+persiguiendo desde hace días, cometida en el commit escrito para cerrarla.
+
 ## 0.161.20 — El lock vuelve a decir la misma versión que `package.json` (2026-09-12)
 
 `package-lock.json` lleva la versión del proyecto **dos veces** —`version` raíz y
@@ -50,9 +115,9 @@ mal.**
 
 | cifra | corrida | dónde queda |
 |---|---|---|
-| 22 558 | la que describe esa entrada del CHANGELOG | primera línea `urls` de `c23-gate-e2e-completo-02.log` |
-| 22 559 | el rerun **bajo LOCK** del 2026-09-11T17:52–17:54Z | segunda línea `urls` del mismo log; es la que citan los paquetes v1 y v2 |
-| 22 557 | el gate de origen sobre `0071671b`, 2026-09-12 | `c26/gate-origen-0071671.log` |
+| 22 558 | la que describe esa entrada del CHANGELOG | `c23-gate-e2e-completo-02.log:226`, **única** línea `urls` de ese log |
+| 22 559 | el rerun **bajo LOCK**, log con `mtime` `2026-09-11T17:53:59Z` | `c24-e2e-bajo-lock.log:226` — **otro archivo**; también en `gate-08-origen-e2e-completo.log:221` |
+| 22 557 | el gate de origen sobre `0071671b` | `c26/gate-origen-0071671.log:226`, `mtime` `2026-09-11T20:31:43Z` |
 
 Reemplazar 22 558 por 22 557 habría puesto la medición de una corrida dentro del relato de otra
 —falsificar el registro, no corregirlo—. Lo que sí hacía falta es lo que se hizo: **que cada cifra
@@ -370,9 +435,9 @@ contradicción:
 
 | cifra | de qué corrida | dónde queda |
 |---|---|---|
-| **22 558** | la de esta entrada | primera línea `urls` de `c23-gate-e2e-completo-02.log` |
-| 22 559 | el **rerun bajo LOCK** del 2026-09-11T17:52–17:54Z | segunda línea `urls` del mismo log; es la que citan los paquetes terminales v1 y v2 |
-| 22 557 | el gate de origen sobre `0071671b`, 2026-09-12T00:29–00:35Z | `c26/gate-origen-0071671.log` y la adenda del paquete v3 |
+| **22 558** | la de esta entrada | `c23-gate-e2e-completo-02.log:226`, **única** línea `urls` de ese log |
+| 22 559 | el **rerun bajo LOCK**, log con `mtime` `2026-09-11T17:53:59Z` | `c24-e2e-bajo-lock.log:226` — **otro archivo, no éste**; la citan los paquetes terminales v1 y v2, y también aparece en `gate-08-origen-e2e-completo.log:221` |
+| 22 557 | el gate de origen sobre `0071671b` | `c26/gate-origen-0071671.log:226`, `mtime` `2026-09-11T20:31:43Z` |
 
 Y un cuarto número que tampoco es una discrepancia: la **suma de `requests` por origen** de esos
 mismos artefactos da 22 556 y 22 554. Es menor a propósito — el conteo de URLs incluye las que no
