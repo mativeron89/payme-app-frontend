@@ -11,6 +11,28 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.20 — El lock vuelve a decir la misma versión que `package.json` (2026-09-12)
+
+`package-lock.json` lleva la versión del proyecto **dos veces** —`version` raíz y
+`packages[""].version`— y había quedado en `0.161.16` mientras `package.json` avanzaba a
+`0.161.19`. No era un descuido: el archivo **no estaba en la allowlist** de la suborden, y la
+regla es que un path fuera de la allowlist se declara, no se edita. El desfase quedó escrito en
+los tres commits y en el paquete.
+
+Medido en su momento, sobre una copia exportada y bajo deny de egress: **`npm ci` sale rc 0 con
+el desfase**, así que no rompía nada hoy. Lo que rompe es mañana — son **dos copias a mano del
+mismo número**, se desalinean calladas, y el próximo `npm install` reescribe el lock sin que
+nadie sepa de dónde salió el cambio.
+
+Con la allowlist ampliada, este commit los vuelve a alinear: **sólo esos dos campos**, sin
+`npm install`, sin red, sin tocar ningún otro byte del lock — el diff son dos líneas.
+
+📌 **Va como commit SUCESOR y no dentro de los bumps, porque la historia no se reescribe.** La
+ampliación llegó después de que los tres commits existieran, y `amend`/`rebase`/`squash` están
+prohibidos. El repo ya tiene resuelto este caso: un commit ya creado no se reescribe, se remedia
+con un sucesor y se declara. Los commits `0.161.17`, `.18` y `.19` conservan su desfase, y cada
+uno lo dice en su mensaje.
+
 ## 0.161.19 — La garantía del anclaje, enunciada entera (AF-4c) y la fe de erratas que NO se hizo (AF-4d) (2026-09-12)
 
 **AF-4c.** Cinco lugares decían que comparar la versión instalada contra el lock «acredita que el
