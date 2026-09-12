@@ -39,7 +39,17 @@ import { clasificarOrigenes, extraerDeDirectorio, VEREDICTOS, VEREDICTOS_DE_TRAZ
  * Cada uno tiene acá su caso y su mutante. Los zips de fixture se arman en Node puro,
  * con entradas STORED y su CRC32 real: invocar el binario `zip` haría que el test
  * dependiera de una herramienta MÁS que el script bajo prueba, y su ausencia en CI se
- * leería como falla del gate. `unzip` sí es dependencia legítima: el script la necesita.
+ * leería como falla del gate.
+ *
+ * 🔴 Acá decía «`unzip` sí es dependencia legítima: el script la necesita», y **ya no era
+ * cierto**: el lector vigente es `yauzl` resuelto dentro del árbol (`scripts/leer-zip.mjs:4`),
+ * justamente para no depender de un binario del PATH. La frase quedó de cuando el script
+ * shelleaba a `unzip`; se corrige porque una prosa que nombra una dependencia que no existe
+ * manda a buscar el problema al lugar equivocado el día que algo falle.
+ *
+ * Por el mismo motivo, los subprocesos de este archivo se lanzan con `process.execPath` y no
+ * con `'node'`: el Node que corre la suite es el que tiene que correr el script, no el primero
+ * que aparezca en el PATH.
  */
 
 // ── fixture: un zip STORED escrito a mano ────────────────────────────────────────
@@ -60,7 +70,7 @@ function crc32(datos: Buffer): number {
   return (c ^ 0xffffffff) >>> 0;
 }
 
-/** Zip mínimo sin compresión: suficiente para que `unzip -Z1` y `unzip -p` lo lean. */
+/** Zip mínimo sin compresión: suficiente para que el lector `yauzl` de `leer-zip.mjs` lo lea. */
 function crearZip(entradas: Readonly<Record<string, string>>): Buffer {
   const locales: Buffer[] = [];
   const centrales: Buffer[] = [];
@@ -139,7 +149,7 @@ let base: string;
 
 function correr(dir: string, origenEsperado = ESPERADO) {
   const salida = join(base, `informe-${Math.random().toString(36).slice(2)}.json`);
-  const r = spawnSync('node', [SCRIPT, dir, origenEsperado, salida], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [SCRIPT, dir, origenEsperado, salida], { encoding: 'utf8' });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr, salida };
 }
 
@@ -170,6 +180,43 @@ describe('clasificarOrigenes', () => {
     expect(r.veredicto).toBe(VEREDICTOS.LIMPIO);
     expect(r.control_positivo_ok).toBe(true);
     expect(r.origenes_no_loopback).toHaveLength(0);
+  });
+
+  /**
+   * 🔴 AF-1 · `0.0.0.0` YA NO ACREDITA LIMPIO, y éste es el testigo del veredicto.
+   *
+   * Hasta el 2026-09-12 la dirección no especificada estaba en `HOSTS_LOOPBACK`, así que este
+   * mismo arreglo de URLs devolvía `LIMPIO`: el gate certificaba «sólo loopback» sobre un
+   * comodín que nunca midió.
+   */
+  it('un origen no especificado conviviendo con loopback rompe el limpio y queda atribuible', () => {
+    const r = clasificarOrigenes([`${ESPERADO}/`, 'http://0.0.0.0:5176/x', `${ESPERADO}/y`], ESPERADO);
+    expect(r.veredicto).toBe(VEREDICTOS.EXTERNOS);
+    expect(r.veredicto).not.toBe(VEREDICTOS.LIMPIO);
+    expect(r.origenes_no_loopback).toHaveLength(1);
+    expect(r.origenes_no_loopback[0]!.clase).toBe('NO_ESPECIFICADA');
+    // El literal SÍ se publica: es una constante del protocolo, no el dato de nadie, y sin él
+    // el hallazgo quedaría sin sujeto. Es la misma razón por la que un tercero declarado se
+    // nombra y un host desconocido no.
+    expect(r.origenes_no_loopback[0]!.origen).toBe('http://0.0.0.0:5176');
+  });
+
+  /**
+   * 🔴 Y ACÁ EL CONTROL POSITIVO ES EL PROPIO `0.0.0.0`, a propósito.
+   *
+   * Con `ESPERADO` como origen esperado, un arreglo que sólo tenga `0.0.0.0` sale
+   * `SIN_CONTROL` — no limpio, sí, pero **por el motivo equivocado**: el caso pasaría aunque la
+   * clasificación siguiera rota. Haciendo que el origen esperado SEA el no especificado, el
+   * control positivo se cumple y lo único que puede decidir el veredicto es la clasificación.
+   * Es la pregunta de siempre: ¿qué OTRA cosa satisface este predicado?
+   */
+  it('sólo no especificado, con su propio control positivo, tampoco acredita limpio', () => {
+    const soloNoEspecificado = 'http://0.0.0.0:5176';
+    const r = clasificarOrigenes([`${soloNoEspecificado}/`], soloNoEspecificado);
+    expect(r.control_positivo_ok).toBe(true);
+    expect(r.veredicto).not.toBe(VEREDICTOS.LIMPIO);
+    expect(r.veredicto).toBe(VEREDICTOS.EXTERNOS);
+    expect(r.origenes_no_loopback).toHaveLength(1);
   });
 
   /**
@@ -551,7 +598,7 @@ describe('unión traza ↔ test por path exacto del attachment', () => {
     const reg = join(base, `reg-${Math.random().toString(36).slice(2)}.json`);
     writeFileSync(reg, JSON.stringify({ tests: registro }));
     const salida = join(base, `inf-${Math.random().toString(36).slice(2)}.json`);
-    const r = spawnSync('node', [SCRIPT, dir, ESPERADO, salida, reg], { encoding: 'utf8' });
+    const r = spawnSync(process.execPath, [SCRIPT, dir, ESPERADO, salida, reg], { encoding: 'utf8' });
     return { status: r.status, stdout: r.stdout, salida };
   }
 
@@ -593,7 +640,7 @@ describe('unión traza ↔ test por path exacto del attachment', () => {
 
 describe('gate-origen.mjs · validación de argumentos', () => {
   const correrGate = (...args: readonly string[]) =>
-    spawnSync('node', [GATE, ...args], { encoding: 'utf8', cwd: join(__dirname, '..') });
+    spawnSync(process.execPath, [GATE, ...args], { encoding: 'utf8', cwd: join(__dirname, '..') });
 
   /**
    * 🔴 `--output` mandaría los traces a otro directorio y el gate mediría el de siempre:

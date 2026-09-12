@@ -54,7 +54,42 @@ import { relativoEscapa, rutaContenida } from './anclar-local.mjs';
 export { relativoEscapa };
 
 /** Hosts que son constantes del protocolo, no datos. */
-export const HOSTS_LOOPBACK = Object.freeze(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
+export const HOSTS_LOOPBACK = Object.freeze(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/**
+ * 🔴 `0.0.0.0` ESTABA ACÁ ARRIBA Y SALIÓ · hallazgo P2 de la auditoría, medido el 2026-09-12.
+ *
+ * La cadena completa era: esta lista → `esLoopback` → `extraer-origenes.mjs` marca
+ * `loopback: true` → ese origen no entra en `origenes_no_loopback` → **el veredicto puede
+ * salir `LIMPIO` con tráfico a `0.0.0.0` adentro.** El instrumento existe para acreditar que
+ * la corrida no habló con afuera, y estaba dando por acreditado un host que nunca midió.
+ *
+ * ⚠️ El contraargumento, que es real y por eso va escrito: en la práctica, `connect()` a
+ * `0.0.0.0` termina en la máquina local en casi todos los stacks, así que sacarlo de loopback
+ * parece un falso positivo. **No lo es, y la diferencia está en qué afirma el instrumento.**
+ * `0.0.0.0` es la dirección NO ESPECIFICADA —el comodín de «todas las interfaces»—, no una de
+ * loopback: cuando aparece como destino, lo que se sabe es que no se sabe. Un gate que
+ * certifica «sólo loopback» y mete el comodín en esa bolsa afirma más de lo que midió, y ése
+ * es exactamente el defecto que este archivo persigue en todos lados.
+ *
+ * **Se le da clase propia en vez de retirarlo a secas**, porque los dos consumidores necesitan
+ * cosas distintas y hay que preguntarles por separado:
+ *   · el VEREDICTO necesita que NO cuente como loopback  → `esLoopback` ya no lo incluye;
+ *   · la REDACCIÓN necesita seguir publicando el literal → es una constante del protocolo, no
+ *     el dato de nadie. Mandarlo a `EXTERNO_NO_ALLOWLISTADO` escondería CUÁL fue el origen
+ *     no-loopback justo en el caso en que alguien va a querer saberlo.
+ *
+ * La CLASE, no sólo la instancia: en IPv6 la dirección no especificada es `::` (y `[::]` con
+ * la forma entre corchetes que usa una URL). Medido: ninguna de las dos estaba en
+ * `HOSTS_LOOPBACK`, así que por el lado del veredicto no había hueco que cerrar; entran acá
+ * por el lado de la redacción, para que se publiquen literales igual que `0.0.0.0` en vez de
+ * quedar seudonimizadas.
+ */
+const HOSTS_NO_ESPECIFICADOS = Object.freeze(['0.0.0.0', '::', '[::]']);
+
+function esNoEspecificado(host) {
+  return HOSTS_NO_ESPECIFICADOS.includes(host);
+}
 
 /**
  * Terceros que el repo integra, con el motivo de cada entrada. El match es por **sufijo con
@@ -111,6 +146,11 @@ export function origenPublicable(origen) {
   }
   const host = u.hostname;
   if (esLoopback(host)) return { publicado: `${u.protocol}//${u.host}`, clase: 'LOOPBACK' };
+  // El literal SE PUBLICA —constante del protocolo, no dato de nadie— pero la clase es otra, y
+  // `esLoopback` no lo incluye: quien decide el veredicto lo cuenta como NO loopback.
+  if (esNoEspecificado(host)) {
+    return { publicado: `${u.protocol}//${u.host}`, clase: 'NO_ESPECIFICADA' };
+  }
   const tercero = terceroDeclarado(host);
   if (tercero !== undefined) {
     return { publicado: `${u.protocol}//${tercero}`, clase: 'EXTERNO_ALLOWLISTADO', tercero };

@@ -11,6 +11,7 @@ import {
   rutaPublicable,
   urlPublicable,
   EJECUTABLES_PUBLICABLES,
+  HOSTS_LOOPBACK,
   TERCEROS_CONOCIDOS,
 } from './redactar.mjs';
 
@@ -70,6 +71,39 @@ describe('origenPublicable · una sola política para configuración y censo', (
       expect(r.publicado).toBe(origen);
     },
   );
+
+  /**
+   * 🔴 EL TESTIGO DE AF-1 · `0.0.0.0` NO ES LOOPBACK, y esto se pone rojo si vuelve a serlo.
+   *
+   * Hasta el 2026-09-12 `HOSTS_LOOPBACK` lo incluía, así que un origen a `0.0.0.0` entraba en
+   * la bolsa de loopback y **el veredicto del gate podía salir `LIMPIO` con ese tráfico
+   * adentro**. El caso tiene tres mitades a propósito:
+   *   ① la lista ya no lo contiene —el testigo directo sobre el dato que decide—;
+   *   ② la política le da clase propia `NO_ESPECIFICADA`, distinta de `LOOPBACK`;
+   *   ③ el literal SE SIGUE PUBLICANDO, porque es una constante del protocolo y no el dato de
+   *      nadie: si mañana alguien lo "arregla" mandándolo a `EXTERNO_NO_ALLOWLISTADO`, el gate
+   *      quedaría bien pero la evidencia dejaría de decir CUÁL fue el origen no-loopback.
+   */
+  it.each(['http://0.0.0.0:5176', 'http://[::]:5176'])(
+    'la dirección no especificada tiene clase propia y NO es loopback: %s',
+    (origen) => {
+      const r = origenPublicable(origen);
+      expect(r.clase).toBe('NO_ESPECIFICADA');
+      expect(r.clase).not.toBe('LOOPBACK');
+      expect(r.publicado).toBe(origen);
+    },
+  );
+
+  it('la lista de loopback ya no contiene la dirección no especificada', () => {
+    expect(HOSTS_LOOPBACK).not.toContain('0.0.0.0');
+    expect(HOSTS_LOOPBACK).not.toContain('::');
+    expect(HOSTS_LOOPBACK).not.toContain('[::]');
+    // Control positivo: la lista sigue teniendo lo que SÍ es loopback. Sin esto, vaciarla
+    // entera también pasaría este caso.
+    expect(HOSTS_LOOPBACK).toContain('localhost');
+    expect(HOSTS_LOOPBACK).toContain('127.0.0.1');
+    expect(HOSTS_LOOPBACK).toContain('[::1]');
+  });
 
   it('un tercero declarado se nombra sin su subdominio', () => {
     const r = origenPublicable('https://js.stripe.com');

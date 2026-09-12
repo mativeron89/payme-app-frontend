@@ -70,6 +70,23 @@ describe('urlSegura', () => {
   });
 
   /**
+   * 🔴 AF-1 EN EL REPORTER: un `baseURL` en la dirección NO ESPECIFICADA se publica literal
+   * —es constante del protocolo— pero con su clase propia, no como loopback.
+   *
+   * Éste es el lado de INTEGRACIÓN del arreglo: `redactar.test.ts` fija que la política le da
+   * clase propia, y acá se comprueba que el que publica la evidencia usa esa política y no una
+   * copia suya. Si el reporter tuviera su propia lista de hosts, este caso seguiría verde en
+   * `redactar.test.ts` y rojo en la realidad.
+   */
+  it('un baseURL en 0.0.0.0 se publica literal pero con clase propia, no como loopback', () => {
+    const r = urlSegura('http://0.0.0.0:5176/');
+    expect(r.origen).toBe('http://0.0.0.0:5176');
+    expect(r.clase).toBe('NO_ESPECIFICADA');
+    expect(r.clase).not.toBe('LOOPBACK');
+    expect(r.estado).toBe('OK');
+  });
+
+  /**
    * 🔴 INTEGRACIÓN DEL ÍTEM 6: el reporter usa la MISMA política que el censo. Un `baseURL`
    * con un host desconocido ya no se publica, ni siquiera como «origen».
    *

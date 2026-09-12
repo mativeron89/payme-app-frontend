@@ -11,6 +11,53 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.17 — `0.0.0.0` deja de contar como loopback (AF-1) (2026-09-12)
+
+El gate de origen certifica «sólo loopback». Hasta hoy `HOSTS_LOOPBACK` incluía `0.0.0.0`, y la
+cadena completa —medida, no supuesta— era:
+
+```
+redactar.mjs:57  →  esLoopback  →  extraer-origenes.mjs:285 marca loopback:true
+                 →  :294 lo saca de origenes_no_loopback  →  :299 veredicto LIMPIO
+```
+
+Es decir: **una corrida con tráfico a `0.0.0.0` podía salir acreditada como limpia.**
+
+⚠️ **El contraargumento es real y por eso está escrito en el código:** en la práctica
+`connect()` a `0.0.0.0` termina en la máquina local, así que sacarlo de loopback parece un falso
+positivo. No lo es, y la diferencia está en qué afirma el instrumento. `0.0.0.0` es la dirección
+**no especificada** —el comodín de «todas las interfaces»—: cuando aparece como destino, lo que se
+sabe es que no se sabe. Un gate que certifica «sólo loopback» y mete el comodín en esa bolsa
+**afirma más de lo que midió**.
+
+**No se retiró a secas: se le dio clase propia `NO_ESPECIFICADA`**, porque los dos consumidores
+necesitan cosas distintas y hay que preguntarles por separado:
+
+| consumidor | qué necesita | cómo queda |
+|---|---|---|
+| el **veredicto** | que NO cuente como loopback | `esLoopback` ya no lo incluye |
+| la **redacción** | seguir publicando el literal | es constante del protocolo, no dato de nadie |
+
+Retirarlo a secas arreglaba el gate y **degradaba la evidencia**: el origen no-loopback habría
+quedado como `EXTERNO_NO_ALLOWLISTADO`, escondiendo cuál fue justo cuando alguien va a querer
+saberlo.
+
+`extraer-origenes.mjs` **no se tocó** — medido: `esLoopback` es la única fuente, así que el
+veredicto se corrigió solo. Y la clase, no sólo la instancia: `::` y `[::]` entran a la clase
+nueva. Medido que no estaban en loopback, así que por el lado del veredicto no había hueco;
+entran por el lado de la redacción.
+
+**Testigos, en tres niveles:** la lista ya no lo contiene (con control positivo, para que vaciarla
+entera no pase el caso); la política le da clase propia; y el extractor lo cuenta como
+no-loopback —con un caso donde el **control positivo es el propio `0.0.0.0`**, porque con el
+control puesto en `localhost` el caso pasaría por `SIN_CONTROL` aunque la clasificación siguiera
+rota—.
+
+Viajan en este commit, por compartir archivo con los tests de arriba y porque no se reescribe
+historia: **AF-4a** (tres subprocesos pasan de `'node'` por PATH a `process.execPath`) y **AF-4b**
+(la prosa decía que `unzip` era dependencia legítima; el lector vigente es `yauzl` dentro del
+árbol desde `scripts/leer-zip.mjs:4`).
+
 ### C2-6 · la receta del CI corrida en local, y el rojo que encontró (2026-09-11)
 
 Se corrieron **los pasos `run:` de `.github/workflows/ci.yml`, uno por uno y en el orden del
@@ -231,6 +278,21 @@ E2E COMPLETO bajo deny de egress   211 passed · 1.9 min · RC 0
   veredicto  MEDIDO_SOLO_LOOPBACK_CERO_ORIGENES_EXTERNOS
 ```
 
+⚠️ **El 22 558 es de ESTA corrida, y por eso no coincide con otros números que andan dando
+vueltas. Ninguno es un error: son corridas distintas, y el conteo de URLs no es una constante
+del árbol.** Se aclara acá porque tres cifras parecidas sin dueño se leen como una
+contradicción:
+
+| cifra | de qué corrida | dónde queda |
+|---|---|---|
+| **22 558** | la de esta entrada | primera línea `urls` de `c23-gate-e2e-completo-02.log` |
+| 22 559 | el **rerun bajo LOCK** del 2026-09-11T17:52–17:54Z | segunda línea `urls` del mismo log; es la que citan los paquetes terminales v1 y v2 |
+| 22 557 | el gate de origen sobre `0071671b`, 2026-09-12T00:29–00:35Z | `c26/gate-origen-0071671.log` y la adenda del paquete v3 |
+
+Y un cuarto número que tampoco es una discrepancia: la **suma de `requests` por origen** de esos
+mismos artefactos da 22 556 y 22 554. Es menor a propósito — el conteo de URLs incluye las que no
+aterrizan en ningún origen de red (`data:`, `blob:`, las no parseables), y ésas no suman requests.
+
 🔴 **Y lo que hace que ese verde signifique algo: el deny de egress está VERIFICADO, no
 declarado.** El E2E corrió dentro de `sandbox-exec` con un perfil que niega todo el egress IP
 salvo loopback, y la contención se probó con sus controles:
@@ -272,7 +334,8 @@ aprobaría `/repo-malicioso` bajo `/repo`; y hace `realpath` de **los dos lados*
 `tmpdir()` cuelga de `/var` —symlink a `/private/var`— y resolver un solo lado declara «afuera» un
 árbol legítimo. Ambos defectos tienen su mutante y los dos se vieron en rojo. Además exige que la
 versión instalada de Vite y de `@playwright/test` sea **exactamente la del lock**; eso acredita que
-el árbol no derivó del lock, y **no** acredita integridad de contenido, que es otra comprobación.
+el campo `version` del paquete instalado es idéntico al que el lock fija para ese paquete — y **no**
+acredita que los archivos provengan de ese lock, ni integridad de contenido, ni nada del resto del árbol.
 
 **Entorno saneado.** El gate lanza el runner sin `NODE_OPTIONS`, `BASH_ENV`, `ENV`,
 `NODE_EXTRA_CA_CERTS`, el transform de fuentes de Playwright ni ningún proxy: cada una inyecta código
