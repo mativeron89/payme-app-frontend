@@ -11,6 +11,37 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.161.19 — La garantía del anclaje, enunciada entera (AF-4c) y la fe de erratas que NO se hizo (AF-4d) (2026-09-12)
+
+**AF-4c.** Cinco lugares decían que comparar la versión instalada contra el lock «acredita que el
+árbol instalado **no derivó del lock**». Es más de lo que mide: «no derivó» habla de los bytes, y
+lo único que se mira es una cadena de versión. La garantía exacta, ahora escrita en los cinco:
+acredita que el campo `version` del paquete instalado es idéntico al que el lock fija **para ese
+paquete**, y nada más. En particular **no** acredita que los archivos provengan de ese lock —editar
+un archivo in situ no mueve la versión, así que un árbol manipulado pasa la comprobación—, ni
+integridad de contenido —eso exige verificar el `integrity` sobre el tarball—, ni nada sobre el
+resto del árbol.
+
+**AF-4d · la fila que NO se ejecutó como venía escrita, y el porqué.** La orden pedía una fe de
+erratas `22.558 → 22.557`. Medido antes de tocar: **son corridas distintas y ninguna cifra está
+mal.**
+
+| cifra | corrida | dónde queda |
+|---|---|---|
+| 22 558 | la que describe esa entrada del CHANGELOG | primera línea `urls` de `c23-gate-e2e-completo-02.log` |
+| 22 559 | el rerun **bajo LOCK** del 2026-09-11T17:52–17:54Z | segunda línea `urls` del mismo log; es la que citan los paquetes v1 y v2 |
+| 22 557 | el gate de origen sobre `0071671b`, 2026-09-12 | `c26/gate-origen-0071671.log` |
+
+Reemplazar 22 558 por 22 557 habría puesto la medición de una corrida dentro del relato de otra
+—falsificar el registro, no corregirlo—. Lo que sí hacía falta es lo que se hizo: **que cada cifra
+diga de qué corrida es**, para que tres números parecidos sin dueño dejen de leerse como una
+contradicción. Se agrega además un cuarto que tampoco lo es: la suma de `requests` por origen da
+22 556 y 22 554, menor a propósito, porque el conteo de URLs incluye las que no aterrizan en
+ningún origen de red (`data:`, `blob:`, las no parseables).
+
+Las mitades de CHANGELOG de AF-4c y AF-4d viajaron en `0.161.17`: un commit lleva archivos
+enteros, no fragmentos, y no se reescribe historia para simular lo contrario.
+
 ## 0.161.18 — Los rótulos dicen qué se midió, cuándo y sobre qué (AF-2) (2026-09-12)
 
 Tres rótulos afirmaban que algo **no se había ejecutado** mientras, a veces en el mismo archivo,

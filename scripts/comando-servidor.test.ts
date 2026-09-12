@@ -138,9 +138,10 @@ describe('el servidor de prueba se lanza con el Node y el Vite de ESTE árbol', 
   });
 
   /**
-   * 🔴 Versión exacta contra el lock. Acredita que el árbol instalado **no derivó del lock**;
-   * NO acredita integridad de contenido —eso exigiría verificar el `integrity` sobre el
-   * tarball, que es otra comprobación y no se afirma acá—.
+   * 🔴 Versión exacta contra el lock. **Garantía exacta:** el campo `version` del Vite instalado
+   * es idéntico al que el lock fija. NO acredita que los archivos provengan de ese lock —editar un
+   * archivo in situ no mueve la versión—, ni integridad de contenido —eso exigiría verificar el
+   * `integrity` sobre el tarball—, ni nada sobre el resto del árbol.
    */
   it('la versión de Vite es exactamente la que declara package-lock.json', () => {
     expect(VITE_LOCAL.version).toBe(versionEnLock(RAIZ_DEL_REPO, 'vite'));

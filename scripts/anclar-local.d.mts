@@ -60,7 +60,7 @@ export interface PaqueteAnclado {
   readonly dir: string;
   /** Versión de su `package.json` instalado. */
   readonly version: string;
-  /** Versión que declara el lock. Iguales por construcción: si difieren, se lanzó. */
+  /** Versión que el lock fija para ese paquete. Igual a `version` por construcción: si difieren, se lanzó. */
   readonly versionEnLock: string;
   readonly packageJson: string;
 }
@@ -69,9 +69,10 @@ export interface PaqueteAnclado {
  * Resuelve un paquete dentro de ESTE árbol (`createRequire` contra `desde`) y exige que la
  * versión instalada sea exactamente la del lock.
  *
- * ⚠️ Acredita que el árbol instalado **no derivó del lock**. NO acredita integridad de
- * contenido: para eso haría falta verificar el `integrity` sobre el tarball, que es otra
- * comprobación y no se afirma acá.
+ * ⚠️ **Garantía exacta:** acredita que el campo `version` del paquete instalado es idéntico al
+ * que el lock fija para ese paquete. NO acredita que los archivos provengan de ese lock —editar
+ * un archivo in situ no mueve la versión—, ni integridad de contenido —eso exige verificar el
+ * `integrity` sobre el tarball—, ni nada sobre el resto del árbol.
  */
 export function resolverPaqueteLocal(opciones: {
   raiz: string;

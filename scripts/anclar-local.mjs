@@ -30,11 +30,19 @@
  *
  * ## 🔴 Versión exacta contra el lock, y qué acredita
  *
- * Que `node_modules/<paquete>/package.json` diga la misma versión que
- * `package-lock.json`. Acredita que el árbol instalado **no derivó del lock**; NO acredita
- * integridad de contenido —para eso haría falta el `integrity` del propio lock verificado
- * sobre el tarball, que es otra cosa y no se afirma acá—. Se dice para que nadie lea esta
- * comprobación como más fuerte de lo que es.
+ * Que `node_modules/<paquete>/package.json` diga la misma versión que `package-lock.json`.
+ *
+ * 🔴 **La garantía exacta, enunciada entera porque la versión corta decía de más.** Acredita
+ * que el campo `version` del paquete instalado es idéntico al que el lock fija para ese
+ * paquete. Nada más que eso. En particular **NO** acredita:
+ *   · que los archivos instalados provengan de ese lock — editar un archivo in situ no mueve
+ *     la versión, así que un árbol manipulado pasa esta comprobación;
+ *   · integridad de contenido — eso exigiría verificar el `integrity` del lock sobre el
+ *     tarball, que es otra comprobación y no se hace acá;
+ *   · nada sobre el RESTO del árbol: se comparó ese paquete, no todos.
+ *
+ * Antes acá decía «acredita que el árbol instalado no derivó del lock», y era más de lo que
+ * mide: «no derivó» habla de los bytes, y lo único que se miró fue una cadena de versión.
  *
  * Todo lo que no se entiende **lanza**. Un anclaje que no puede verificar dónde está parado
  * nunca debe contestar «está bien»: es exactamente el fail-open que el gate viene a cerrar.
@@ -163,7 +171,8 @@ export function resolverPaqueteLocal({ raiz, desde, paquete }) {
   if (instalada !== enLock) {
     throw new Error(
       `ANCLA_VERSION_DISTINTA_DEL_LOCK: ${paquete} instalado es ${instalada} y el lock declara ${enLock}. ` +
-        'El arbol instalado derivo del lock: se aborta en vez de medir con una version que nadie fijo.',
+        'La version declarada del paquete instalado no es la que el lock fija: se aborta en vez de medir '+
+        'con una version que nadie fijo.',
     );
   }
   return { dir, version: instalada, versionEnLock: enLock, packageJson: pjReal };
