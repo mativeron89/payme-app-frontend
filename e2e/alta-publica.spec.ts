@@ -32,8 +32,8 @@ test('con el alta CERRADA no hay registro sin invitación: la conducta de siempr
   await page.goto('/');
 
   // El formulario de ingreso está entero…
-  await expect(page.getByPlaceholder('Email')).toBeVisible();
-  await expect(page.getByPlaceholder('Contraseña')).toBeVisible();
+  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Contraseña', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
 
   /**
@@ -54,8 +54,8 @@ test('con el alta CERRADA no hay registro sin invitación: la conducta de siempr
   // …y ahora sí: con el config aplicado, la puerta al registro NO existe.
   // Rótulo vigente desde APP-LOGIN-REDESIGN-AF-02: «Crea tu cuenta» (§4).
   await expect(page.getByRole('button', { name: 'Crea tu cuenta', exact: true })).toHaveCount(0);
-  await expect(page.getByPlaceholder('Nombre')).toHaveCount(0);
-  await expect(page.getByPlaceholder('Apellido')).toHaveCount(0);
+  await expect(page.getByLabel('Nombre', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Apellido', { exact: true })).toHaveCount(0);
 });
 
 test('con el alta ABIERTA se puede crear cuenta sin invitación, y el formulario pide lo que el dueño exige', async ({ page }) => {
@@ -69,15 +69,15 @@ test('con el alta ABIERTA se puede crear cuenta sin invitación, y el formulario
   await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
 
   await expect(page.getByRole('button', { name: 'Registrarme', exact: true })).toBeVisible();
-  await expect(page.getByPlaceholder('Nombre')).toBeVisible();
-  await expect(page.getByPlaceholder('Apellido')).toBeVisible();
-  await expect(page.getByPlaceholder('Email')).toBeVisible();
-  await expect(page.getByPlaceholder('Contraseña')).toBeVisible();
+  await expect(page.getByLabel('Nombre', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Apellido', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Contraseña', { exact: true })).toBeVisible();
 
-  await page.getByPlaceholder('Nombre').fill('Mati');
-  await page.getByPlaceholder('Apellido').fill('Verón');
-  await page.getByPlaceholder('Email').fill('alta-publica@payme.mx');
-  await page.getByPlaceholder('Contraseña').fill('sin-invitacion-1');
+  await page.getByLabel('Nombre', { exact: true }).fill('Mati');
+  await page.getByLabel('Apellido', { exact: true }).fill('Verón');
+  await page.getByLabel('Email', { exact: true }).fill('alta-publica@payme.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('sin-invitacion-1');
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
 
   // Sesión creada: se ve la app, no un error de invitación.
@@ -94,8 +94,8 @@ test('el toggle vuelve al ingreso y el alta pública no rompe el camino de siemp
   await page.getByRole('button', { name: /Ya tengo cuenta/ }).click();
 
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
-  await page.getByPlaceholder('Email').fill('mati@payme.mx');
-  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 });

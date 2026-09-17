@@ -45,10 +45,10 @@ const SIGNUP_SIN_GUARDAR = 'signup-token-no-guardar-bbbbbbb';
 test('la garantía de #/scan sigue viva bajo el corte: el checkbox existe y nace desmarcado', async ({ page }) => {
   await page.goto(`/#/home?signup_invitation=${SIGNUP_GARANTIA}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
-  await page.getByPlaceholder('Nombre').fill('Primeriza');
-  await page.getByPlaceholder('Apellido').fill('Garantia');
-  await page.getByPlaceholder('Email').fill('primeriza-garantia@demo.mx');
-  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByLabel('Nombre', { exact: true }).fill('Primeriza');
+  await page.getByLabel('Apellido', { exact: true }).fill('Garantia');
+  await page.getByLabel('Email', { exact: true }).fill('primeriza-garantia@demo.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
@@ -70,10 +70,10 @@ test('nace desmarcado en garantía y en pago, y marcarlo sigue guardando', async
   // Cuenta nueva invitada: nace sin tarjetas (el camino primerizo F&F real).
   await page.goto(`/#/home?signup_invitation=${SIGNUP_GUARDADA}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
-  await page.getByPlaceholder('Nombre').fill('Primeriza');
-  await page.getByPlaceholder('Apellido').fill('SinTarjeta');
-  await page.getByPlaceholder('Email').fill('primeriza-e2e@demo.mx');
-  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByLabel('Nombre', { exact: true }).fill('Primeriza');
+  await page.getByLabel('Apellido', { exact: true }).fill('SinTarjeta');
+  await page.getByLabel('Email', { exact: true }).fill('primeriza-e2e@demo.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
@@ -124,10 +124,10 @@ test('sin marcar, la tarjeta NO aparece: el default es una decisión, no una dec
   // Mismo recorrido primerizo invitado, checkbox intacto en las dos superficies.
   await page.goto(`/#/home?signup_invitation=${SIGNUP_SIN_GUARDAR}`);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
-  await page.getByPlaceholder('Nombre').fill('Primeriza');
-  await page.getByPlaceholder('Apellido').fill('SinGuardar');
-  await page.getByPlaceholder('Email').fill('primeriza-negativa@demo.mx');
-  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByLabel('Nombre', { exact: true }).fill('Primeriza');
+  await page.getByLabel('Apellido', { exact: true }).fill('SinGuardar');
+  await page.getByLabel('Email', { exact: true }).fill('primeriza-negativa@demo.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 

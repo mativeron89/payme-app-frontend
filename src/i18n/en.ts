@@ -809,6 +809,8 @@ export const EN: Record<string, string> = {
   "Con tu cuenta guardamos tus tarjetas y tus pagos anteriores.": "With your account we keep your cards and your past payments.",
   "¿Primera vez?": "First time?",
   "Al entrar aceptas el": "By logging in you accept the",
+  "tu@email.com": "you@email.com",
+  "Tu contraseña": "Your password",
   "Aviso de privacidad": "Privacy notice",
   "Si existe una cuenta con ese correo, te enviaremos instrucciones.": "If an account exists for that email, we'll send instructions.",
   "Las contraseñas no coinciden.": "Passwords don't match.",

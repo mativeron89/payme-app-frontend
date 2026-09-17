@@ -654,20 +654,18 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             </>
           )}
 
-          {/* §2 · la etiqueta va arriba y FIJA. El `placeholder` conserva su
-              texto de hoy —«Email», «Contraseña»— y no toma el del artefacto
-              («tu@email.com», «Tu contraseña»): 31 selectores `getByPlaceholder`
-              repartidos en 9 archivos de `e2e/` lo usan para entrar, y `e2e/`
-              está autorizado en esta orden sólo para la vista previa. El
-              defecto que el rediseño venía a corregir —que el rótulo
-              desaparezca al escribir— queda corregido igual, que es lo que la
-              etiqueta fija resuelve. */}
+          {/* §2 · la etiqueta va arriba y FIJA, y el `placeholder` deja de
+              repetirla: pasa a ser la pista del artefacto. Los dos rótulos que
+              el paquete define son éstos; «Nombre» y «Apellido» conservan el
+              suyo porque el artefacto NO diseña el alta y no hay pista que
+              copiar — inventarla sería escribir copy de una pantalla que
+              todavía no se diseñó. */}
           <label className="ingreso-campo">
             <span className="ingreso-etiqueta">{t('Email')}</span>
             <input
               className="input ingreso-input"
               type="email"
-              placeholder={t('Email')}
+              placeholder={t('tu@email.com')}
               aria-invalid={!!error}
               aria-describedby={error ? 'login-error' : undefined}
               autoComplete="email"
@@ -686,7 +684,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             <input
               className="input ingreso-input"
               type="password"
-              placeholder={t('Contraseña')}
+              placeholder={t('Tu contraseña')}
               aria-invalid={!!error}
               aria-describedby={error ? 'login-error' : undefined}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}

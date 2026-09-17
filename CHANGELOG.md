@@ -11,6 +11,110 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.162.0 — El login entra en la anatomía del sistema, y tres cosas del paquete no entran (2026-09-17)
+
+Orden `APP-LOGIN-REDESIGN-AF-02-20260917`, base `ca8fb983…`, primer commit `359c6bd5…`.
+**Sin push, sin deploy, sin GREEN.** Mati eligió, literal: «Rediseñar el login ya».
+
+Fuente: `diseno/referencias/login-comensal-2026-09-10/`, secciones 1 a 5. Las medidas
+salen del HTML aprobado (`a4161bac…`), **no del PROMPT**: donde los dos difieren —la
+bajada del hero es 13.5px en el PROMPT y 14px en el artefacto— manda el artefacto, que
+es lo que Mati miró.
+
+### Qué se ve distinto
+
+Banda demo sólo en el riel mock, cabecera navy con radio inferior, burbuja `--teal-l`
+montada a −42px y tarjeta blanca radio 22. La tarjeta se **invierte**: Email →
+Contraseña → Entrar → ¿Olvidaste? → separador «O continúa con» → Google → Facebook.
+Antes los botones sociales estaban arriba y el correo abajo.
+
+Cada campo estrena **etiqueta fija arriba**. Es el defecto que §2 venía a corregir: hoy
+«Email» y «Contraseña» son placeholders y **desaparecen al escribir**, así que a mitad
+de un formulario nadie sabe qué campo está llenando. El placeholder pasa a ser la pista
+del artefacto (`tu@email.com`, `Tu contraseña`).
+
+Google y Facebook toman las guías de cada marca, con el radio adaptado a 12px y nada más.
+
+### Qué NO cambió, que es la mitad del trabajo
+
+Ninguna conducta de autenticación. Los botones sociales siguen gateados por
+`/api/config` —hoy apagados en producción, y por eso ahí no se ven—; el enlace al alta
+sigue atado a la misma autoridad de siempre; recovery sigue gateado por su capability.
+El único cambio en `src/api/` es pasarle a GIS su `shape` explícito.
+
+### Tres cosas del paquete no entraron, cada una por una medición
+
+- **Pago como invitado.** Viaja en el HTML aprobado detrás de un tweak apagado. Está
+  cerrado en contra y el backend contesta **401** desde v2.32.0. No entra ni apagado, y
+  una guarda nueva lo censa.
+- **«Términos».** El artefacto los enlaza y **no existen**: ni página pública
+  —`src/public/` tiene `/privacy` y la de eliminación de datos— ni `kind` del dueño
+  —`aviso_privacidad`, `aviso_campanas`—. Se enlaza el Aviso de privacidad, que sí
+  existe. Un link a un documento inexistente es un callejón sin salida, y redactar
+  Términos es decisión legal de Mati.
+- **«aceptás».** La guarda de español mexicano rechazó el voseo **del artefacto**. Gana
+  la guarda; queda pedido a Diseño corregirlo en la fuente.
+
+### D-LOGIN-1 · medida, no construida
+
+El contrato del dueño SÍ la cubre: `POST /api/auth/google/link`, bearer PayMe +
+`current_password`, cero auto-link — exactamente «pedir la contraseña una vez», que es
+lo que Mati ratificó el 10/09. **El front no la implementa**: `social.google.linking` se
+decodifica y ningún consumidor lo lee; cero ocurrencias de `google/link`, `googleLink` o
+`current_password` en `src/`. Construirla es petición nueva, re-auth por contraseña y
+sesión bearer: conducta de autenticación. Queda como orden propia, con el contrato ya
+del lado del dueño.
+
+### Contraste
+
+Los 19 pares de lo nuevo, medidos con WCAG 2.1 sobre los hex exactos. **Dos quedan bajo
+AA y ninguno es nuevo:** el blanco sobre `--brand` en «Entrar» (**2.84**, excepción ya
+ratificada por Mati el 2026-08-08, y el paquete usa `--brand` como FONDO, que es su uso
+permitido) y el blanco sobre el azul de Facebook (**4.23**, mandato de la guía de Meta,
+los mismos dos hex que este repo ya servía). Los dos quedan fijados en tests para que no
+se hundan en silencio.
+
+Los seis tokens de Google y Meta se declaran como tales —igual que `--channel-whatsapp`—
+porque un hex suelto dentro de una regla es invisible para un barrido de tokens. El de
+Facebook **no** entra al registro `EXCEPCIONES_AA`: ese registro exige decisor y frase
+literal de Mati, y un incumplimiento heredado de una guía ajena no es una decisión
+tomada. Van en bloque aparte.
+
+### Un verde que no vigilaba nada
+
+Al renombrar el rótulo del toggle a «Crea tu cuenta», tres tests se pusieron rojos y se
+arreglaron. Pero `e2e/ff-alta-aviso.spec.ts:10` —que afirmaba que «¿No tienes cuenta?
+Regístrate» no estaba— **siguió verde**: esa frase ya no existe en ninguna parte, así
+que el negativo pasaba **en vacío**. Un negativo que no puede fallar no es una guarda.
+Apareció por enumerar la clase del rótulo viejo, no por mirar los rojos. Reapuntado y
+verificado con mutante.
+
+Los 60 selectores `getByPlaceholder` de campos del login, repartidos en 10 archivos de
+`e2e/`, pasaron a `getByLabel(..., { exact: true })`. El `exact` no es decorativo: sin
+él, `Contraseña` matchea también `Confirmar contraseña` de recovery. También se verificó
+con mutante que la etiqueta es de verdad el mecanismo de enganche.
+
+### Clases nuevas, y por qué no se reusaron las de siempre
+
+El login estrena `ingreso-*` en vez de repintar `.login-screen` / `.login-card`: esas dos
+las comparten `App.tsx` y `RecoveryScreen.tsx`, y repintarlas habría rediseñado de rebote
+dos pantallas que esta orden no toca.
+
+### Desvíos que quedan declarados
+
+El campo va a **16px y no a los 15px del artefacto**: Safari iOS hace zoom al enfocar un
+input de menos de 16px y el sistema fija el cuerpo en 16 con la palabra «NUNCA». Y el
+botón **real** de Google no puede tener 12px de radio ni 48px de alto: `shape` de GIS es
+un enum (`rectangular|pill|circle|square`) y `size: large` son 40px. No se falsifica el
+botón — el contenedor toma los 48px del diseño y centra adentro el que entrega Google.
+
+### Gates
+
+`typecheck` 4 proyectos · **vitest 2223 pass + 1 skip / 2224** · **e2e 217/217** · builds
+real y mock · `diff --check` limpio. Vista previa en 10 PNG, móvil 390×844 y escritorio
+1280×900, con los estados degradados forzados reemplazando `api.login` en la página: lo
+que sale en la foto lo puso la pantalla, no el test.
+
 ## 0.161.4 — El gate de aliases salía a la red desde un directorio vacío (2026-09-03)
 
 Orden `AF-STAGE1-ALIASES-GATE-HERMETIC-TSCONFIG-GUARD-03-CLAUDE`, base `679525b5…`.

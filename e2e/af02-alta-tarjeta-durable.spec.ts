@@ -36,8 +36,8 @@ type BrowserWithCardProbe = typeof window & {
 
 async function loginDelSeed(page: Page): Promise<void> {
   await page.goto('/');
-  await page.getByPlaceholder('Email').fill('demo@payme.mx');
-  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByLabel('Email', { exact: true }).fill('demo@payme.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await page.goto('/#/tarjetas');
   await expect(page.getByText(/···· 4532/)).toBeVisible();

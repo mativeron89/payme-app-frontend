@@ -45,8 +45,8 @@ import { MODO_MONETARIO_MOCK_POR_DEFECTO } from '../src/api/mock/store';
 /** Cualquier email entra en el mock; la contraseña no se valida. */
 export async function ingresar(page: Page): Promise<void> {
   await page.goto('/');
-  await page.getByPlaceholder('Email').fill('mati@payme.mx');
-  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 }

@@ -62,10 +62,10 @@ test('pantalla D: el link a una mesa muerta lo dice, cierra el círculo y no ofr
   await page.goto(`/${hashLink}&signup_invitation=${SIGNUP_MESA_CERRADA}`);
   await expect(page.getByText('Te invitaron a una mesa')).toBeVisible();
   await page.getByRole('button', { name: 'Crear cuenta gratis' }).click();
-  await page.getByPlaceholder('Nombre').fill('Tardía');
-  await page.getByPlaceholder('Apellido').fill('AlLink');
-  await page.getByPlaceholder('Email').fill('tardia@demo.mx');
-  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByLabel('Nombre', { exact: true }).fill('Tardía');
+  await page.getByLabel('Apellido', { exact: true }).fill('AlLink');
+  await page.getByLabel('Email', { exact: true }).fill('tardia@demo.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
 
   // La D, textual de Diseño: qué pasó, sin restaurante, sin reintento.

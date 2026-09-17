@@ -74,8 +74,8 @@ async function loginColgado(page: Page): Promise<void> {
 }
 
 async function intentarEntrar(page: Page): Promise<void> {
-  await page.getByPlaceholder('Email').fill('mati@payme.mx');
-  await page.getByPlaceholder('Contraseña').fill('contrasena-de-prueba');
+  await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('contrasena-de-prueba');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
@@ -115,15 +115,15 @@ for (const [medida, viewport] of [['movil', MOVIL], ['escritorio', ESCRITORIO]] 
 
     test('credencial incorrecta · borde ámbar en los dos campos y mensaje obligatorio', async ({ page }) => {
       await page.goto('/');
-      await expect(page.getByPlaceholder('Email')).toBeVisible();
+      await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
       await loginRechaza(page, 'invalid_credentials');
       await intentarEntrar(page);
 
       const mensaje = page.getByText('Email o contraseña incorrectos.', { exact: true });
       await expect(mensaje).toBeVisible();
       // El color nunca viaja solo: el mensaje es la parte obligatoria.
-      await expect(page.getByPlaceholder('Email')).toHaveAttribute('aria-invalid', 'true');
-      await expect(page.getByPlaceholder('Contraseña')).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.getByLabel('Email', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.getByLabel('Contraseña', { exact: true })).toHaveAttribute('aria-invalid', 'true');
       // Y el mensaje va DEBAJO del botón, que es lo que pide §5.
       expect(await page.evaluate(() => {
         const boton = document.querySelector('.ingreso-entrar');
@@ -138,20 +138,20 @@ for (const [medida, viewport] of [['movil', MOVIL], ['escritorio', ESCRITORIO]] 
 
     test('entrando · el botón queda ocupado y la tarjeta bloqueada', async ({ page }) => {
       await page.goto('/');
-      await expect(page.getByPlaceholder('Email')).toBeVisible();
+      await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
       await loginColgado(page);
       await intentarEntrar(page);
 
       await expect(page.getByRole('button', { name: 'Un segundo…', exact: true })).toBeDisabled();
-      await expect(page.getByPlaceholder('Email')).toBeDisabled();
-      await expect(page.getByPlaceholder('Contraseña')).toBeDisabled();
+      await expect(page.getByLabel('Email', { exact: true })).toBeDisabled();
+      await expect(page.getByLabel('Contraseña', { exact: true })).toBeDisabled();
 
       await capturar(page, `login-03-entrando-${medida}.png`);
     });
 
     test('fallo de conexión · el mensaje genérico, sin afirmar que la cuenta no existe', async ({ page }) => {
       await page.goto('/');
-      await expect(page.getByPlaceholder('Email')).toBeVisible();
+      await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
       await loginRechaza(page, 'network_down');
       await intentarEntrar(page);
 
@@ -171,7 +171,7 @@ for (const [medida, viewport] of [['movil', MOVIL], ['escritorio', ESCRITORIO]] 
         localStorage.setItem('payme.app.mock.public_signup.v1', 'true');
       });
       await page.goto('/');
-      await expect(page.getByPlaceholder('Email')).toBeVisible();
+      await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
       await expect(page.getByText('¿Primera vez?', { exact: false })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Crea tu cuenta', exact: true })).toBeVisible();
       await capturar(page, `login-05-alta-abierta-${medida}.png`);

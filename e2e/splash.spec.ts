@@ -39,6 +39,6 @@ test('carga lenta: el splash asoma mientras tarda y se retira al montar', async 
   await expect(page.locator('#splash svg')).toBeVisible();
 
   // Llegó el módulo → monta la app → el splash cumple su mínimo y se va.
-  await expect(page.getByPlaceholder('Email')).toBeVisible();
+  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
   await expect(page.locator('#splash')).toHaveCount(0);
 });

@@ -481,7 +481,7 @@ test.describe('🔴 CENSO DE RASTRO · el código no existe fuera del pathname',
     });
 
     await page.goto('/');
-    await expect(page.getByPlaceholder('Email')).toBeVisible();
+    await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
     const ops = await page.evaluate(() => (window as unknown as { __ops: string[] }).__ops);
     expect(ops.length, 'el instrumento no vio nada: no sirve como censo').toBeGreaterThan(0);
   });

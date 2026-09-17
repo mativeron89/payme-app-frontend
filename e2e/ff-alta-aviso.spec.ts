@@ -24,10 +24,10 @@ test('D-FF-1 · fragmento→custodia→aviso→alta y limpieza', async ({ page }
   await expect(page.getByText('AVISO DE DEMOSTRACIÓN.')).toBeVisible();
   await expect(page.getByText('Versión 0.0.0-demo-local', { exact: false })).toBeVisible();
 
-  await page.getByPlaceholder('Nombre').fill('Sofía');
-  await page.getByPlaceholder('Apellido').fill('Prueba');
-  await page.getByPlaceholder('Email').fill('sofia.ff@example.com');
-  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByLabel('Nombre', { exact: true }).fill('Sofía');
+  await page.getByLabel('Apellido', { exact: true }).fill('Prueba');
+  await page.getByLabel('Email', { exact: true }).fill('sofia.ff@example.com');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
 
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
@@ -49,7 +49,7 @@ test('link combinado conserva autoridades separadas y respeta “Ya tengo cuenta
   // —que es justo este caso—. La pregunta no cambia; cambia con qué se
   // responde: lo que no puede estar es el FORMULARIO de registro.
   await expect(page.getByRole('button', { name: 'Registrarme', exact: true })).toHaveCount(0);
-  await expect(page.getByPlaceholder('Nombre')).toHaveCount(0);
+  await expect(page.getByLabel('Nombre', { exact: true })).toHaveCount(0);
 
   const custody = await page.evaluate(() => ({
     signup: sessionStorage.getItem('payme.app.mock.ff_signup_invitation.v1'),
@@ -61,8 +61,8 @@ test('link combinado conserva autoridades separadas y respeta “Ya tengo cuenta
 
 test('una sesión activa también retira el raw antes de mostrar la ruta', async ({ page }) => {
   await page.goto('/');
-  await page.getByPlaceholder('Email').fill('mati@payme.mx');
-  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 

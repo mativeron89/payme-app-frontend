@@ -16,16 +16,16 @@ async function openRegistration(page: Page): Promise<void> {
   await page.goto(`/#/home?signup_invitation=${SIGNUP}`);
   await expect(page).toHaveURL(/#\/home$/);
   await expect(page.getByText('AVISO DE DEMOSTRACIÓN.')).toBeVisible();
-  await page.getByPlaceholder('Nombre').fill('Sofía');
-  await page.getByPlaceholder('Apellido').fill('Social');
+  await page.getByLabel('Nombre', { exact: true }).fill('Sofía');
+  await page.getByLabel('Apellido', { exact: true }).fill('Social');
 }
 
 test('password sigue disponible y Google mock entra sin cargar terceros', async ({ page }) => {
   const external = externalRequests(page);
   await page.goto('/');
 
-  await expect(page.getByPlaceholder('Email')).toBeVisible();
-  await expect(page.getByPlaceholder('Contraseña')).toBeVisible();
+  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Contraseña', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar con Google', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
@@ -80,7 +80,7 @@ test('alta Facebook hereda datos y limpia su custodia sin abrir Meta', async ({ 
 test('recovery responde igual para cualquier correo y completa sin sesión previa', async ({ page }) => {
   const external = externalRequests(page);
   await page.goto('/');
-  await page.getByPlaceholder('Email').fill('no-existe@example.com');
+  await page.getByLabel('Email', { exact: true }).fill('no-existe@example.com');
   await page.getByRole('button', { name: '¿Olvidaste tu contraseña?', exact: true }).click();
   await expect(page.getByText(
     'Si existe una cuenta con ese correo, te enviaremos instrucciones.',
@@ -100,13 +100,13 @@ test('recovery responde igual para cualquier correo y completa sin sesión previ
 test('recovery invalida una sesión previa antes de volver al ingreso', async ({ page }) => {
   const external = externalRequests(page);
   await page.goto('/');
-  await page.getByPlaceholder('Email').fill('mati@payme.mx');
+  await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
   await page.getByRole('button', { name: '¿Olvidaste tu contraseña?', exact: true }).click();
   await expect(page.getByText(
     'Si existe una cuenta con ese correo, te enviaremos instrucciones.',
     { exact: true },
   )).toBeVisible();
-  await page.getByPlaceholder('Contraseña').fill('demo-e2e');
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
