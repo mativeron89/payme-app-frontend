@@ -267,7 +267,7 @@ describe('el producto habla español mexicano', () => {
     for (const frase of [
       '¿Cuánto tomas tú?',
       'Toca lo que consumiste. Al elegirlo queda reservado para ti.',
-      '¿No tienes cuenta? Regístrate',
+      '¿Primera vez? Crea tu cuenta',
       'Divide y paga la cuenta desde la mesa',
       'Elige una guardada o usa otra',
       'Súmate a la mesa PA-2847 en PayMe',

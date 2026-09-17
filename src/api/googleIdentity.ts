@@ -20,6 +20,15 @@ interface GoogleIdentityApi {
       type: 'standard';
       theme: 'outline';
       size: 'large';
+      /**
+       * 🔴 GIS acepta `rectangular | pill | circle | square` y NADA MÁS: su
+       * radio no es un número. El diseño del login pide 12px y esto entrega el
+       * rectangular de Google —unos 4px—, que es el desvío declarado en la
+       * entrega. Se pasa EXPLÍCITO aunque coincida con el default del SDK: un
+       * default que Google cambie mañana movería el botón sin que nadie toque
+       * este repo.
+       */
+      shape: 'rectangular';
       text: 'continue_with';
       locale: 'es' | 'en';
       state: string;
@@ -312,6 +321,7 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
         type: 'standard',
         theme: 'outline',
         size: 'large',
+        shape: 'rectangular',
         text: 'continue_with',
         locale: options.locale,
         state: routeState as string,

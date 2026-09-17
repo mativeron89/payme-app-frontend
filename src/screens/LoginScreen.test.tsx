@@ -216,9 +216,73 @@ describe('LoginScreen · gates sociales owner-first', () => {
     for (const text of [
       'Continuar con Google',
       'Continuar con Facebook',
-      'O usa tu correo y contraseña',
+      // 🔴 EDITADA el 2026-09-17 (APP-LOGIN-REDESIGN-AF-02). Antes pineaba
+      // 'O usa tu correo y contraseña', que describía el ORDEN VIEJO: social
+      // arriba y el email debajo. El paquete del 10/09 invierte la tarjeta
+      // —email primero, social debajo— y con eso el rótulo del separador pasa
+      // a anunciar lo que viene DESPUÉS. Es copy de presentación de un
+      // divisor decorativo (`aria-hidden`), no una conducta: no gatea, no
+      // autoriza y no promete nada. Las otras cuatro entradas de esta lista
+      // NO se tocan; la del aviso de recovery es anti-oráculo y es conducta.
+      'O continúa con',
       '¿Olvidaste tu contraseña?',
       'Si existe una cuenta con ese correo, te enviaremos instrucciones.',
     ]) expect(source).toContain(text);
+  });
+});
+
+/**
+ * APP-LOGIN-REDESIGN-AF-02-20260917 · lo que el rediseño NO puede traer.
+ *
+ * Estas cuatro no miran estética: miran las tres cosas que el paquete de
+ * diseño traía adentro y que no entran —el invitado, un botón de Google
+ * dibujado a mano y un link a un documento que no existe— más el orden de §2,
+ * que es lo único de la disposición que cambia una conducta observable: el
+ * campo de correo pasó a estar ARRIBA del botón social.
+ *
+ * Son aserciones sobre el TEXTO del archivo, como el resto de esta suite: acá
+ * no hay jsdom (ratificación de Mati) y la foto de la pantalla la saca el spec
+ * de vista previa, que corre en navegador.
+ */
+const CSS = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
+
+describe('LoginScreen · rediseño del 2026-09-17', () => {
+  it('🔴 cero superficie de pago como invitado, ni apagada', () => {
+    // El HTML aprobado la trae detrás de un tweak (`sc-if invitado`, apagado
+    // por defecto) y la reconciliación la elevó como STOP: el backend contesta
+    // 401 desde v2.32.0 y el CLAUDE.md de este repo dice «no volver a
+    // implementar el pago de invitado». Apagada tampoco.
+    expect(source.toLowerCase()).not.toContain('invitado');
+    expect(CSS.toLowerCase()).not.toContain('pagar como invitado');
+  });
+
+  it('🔴 Google lo sigue dibujando Google: no hay botón propio en el riel real', () => {
+    // El botón que entrega la credencial es el de GIS. Un botón de PayMe con
+    // la "G" pintada encima cumpliría la guía de marca de vista y no sería el
+    // de Google: la única superficie propia es el contenedor.
+    expect(source).toContain('renderGoogleIdentityButton');
+    expect(source).toContain('social-google-container');
+    expect(source).not.toMatch(/social-provider-button[^'"]*social-provider-google/);
+  });
+
+  it('🔴 §2 · el correo está ARRIBA del bloque social, no debajo', () => {
+    // No es preferencia visual: con el alta pública el correo es la única
+    // fuente del email de la cuenta (D-R16), y el botón de Google desaparece
+    // mientras esté vacío. Con el orden viejo el control se esfumaba encima
+    // del campo que lo habilita.
+    const correo = source.indexOf('type="email"');
+    const social = source.indexOf('social-auth-divider');
+    expect(correo).toBeGreaterThan(0);
+    expect(social).toBeGreaterThan(0);
+    expect(correo, 'el campo de correo quedó DEBAJO del separador social').toBeLessThan(social);
+  });
+
+  it('🔴 el aviso legal enlaza el documento que EXISTE y no nombra otro', () => {
+    // El artefacto dice «los Términos y el Aviso de privacidad». Los Términos
+    // no existen: ni página pública ni `kind` del dueño. Prometerlos en un
+    // link sería un callejón sin salida.
+    expect(source).toContain('PATH_PRIVACIDAD');
+    expect(source).toContain("t('Aviso de privacidad')");
+    expect(source).not.toMatch(/t\('[^']*Términos/);
   });
 });

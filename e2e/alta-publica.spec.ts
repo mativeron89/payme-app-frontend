@@ -52,7 +52,8 @@ test('con el alta CERRADA no hay registro sin invitación: la conducta de siempr
   await expect(page.getByRole('group', { name: 'Continuar con Google' })).toBeVisible();
 
   // …y ahora sí: con el config aplicado, la puerta al registro NO existe.
-  await expect(page.getByRole('button', { name: /No tienes cuenta/ })).toHaveCount(0);
+  // Rótulo vigente desde APP-LOGIN-REDESIGN-AF-02: «Crea tu cuenta» (§4).
+  await expect(page.getByRole('button', { name: 'Crea tu cuenta', exact: true })).toHaveCount(0);
   await expect(page.getByPlaceholder('Nombre')).toHaveCount(0);
   await expect(page.getByPlaceholder('Apellido')).toHaveCount(0);
 });
@@ -65,7 +66,7 @@ test('con el alta ABIERTA se puede crear cuenta sin invitación, y el formulario
   // puerta, no una intención. Quien entra puede tener cuenta hace meses. Lo que
   // sí aparece —y con el alta cerrada no— es la puerta al registro.
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: /No tienes cuenta/ }).click();
+  await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
 
   await expect(page.getByRole('button', { name: 'Registrarme', exact: true })).toBeVisible();
   await expect(page.getByPlaceholder('Nombre')).toBeVisible();
@@ -88,7 +89,7 @@ test('el toggle vuelve al ingreso y el alta pública no rompe el camino de siemp
   await page.goto('/');
 
   // Ida y vuelta por el toggle: la puerta abierta no rompe el ingreso de siempre.
-  await page.getByRole('button', { name: /No tienes cuenta/ }).click();
+  await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Registrarme', exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Ya tengo cuenta/ }).click();
 

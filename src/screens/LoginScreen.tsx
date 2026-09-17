@@ -27,6 +27,7 @@ import {
   subscribeSignupInvitation,
   type SignupInvitationCapture,
 } from '../api/signupInvitation';
+import { PATH_PRIVACIDAD } from '../public/publicRoute';
 import type { LegalTextResponse } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 
@@ -563,212 +564,314 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     }
   }
 
-  return (
-    <div className="login-screen">
-      <div style={{ textAlign: 'center', marginBottom: 22 }}>
-        <div className="logo" style={{ fontSize: 'var(--fs-legacy-3xl)' }}>
-          Pay<span className="t">Me</span>
-        </div>
-        <div className="hero-sub" style={{ fontSize: 'var(--fs-legacy-base)' }}>
-          {t('Divide y paga la cuenta desde la mesa')}
-        </div>
-      </div>
+  /**
+   * 🔴 EL SEPARADOR «O CONTINÚA CON» SÓLO EXISTE SI HAY ALGO DEBAJO.
+   *
+   * Es la misma condición que monta el bloque social, y por eso se calcula una
+   * sola vez: una línea que anuncia alternativas sobre el vacío es peor que no
+   * tener línea. Hoy, en producción, `/api/config` trae Google y Facebook
+   * apagados y esto es `false`: la tarjeta termina en «¿Olvidaste…?».
+   */
+  const haySocial = googleEligible || facebookEligible || faltaCorreoParaAltaSocial;
 
-      <form className="login-card" onSubmit={onSubmit}>
-        <div className="h2" style={{ marginBottom: 14 }}>
+  return (
+    <div className="ingreso">
+      {/* §1 · la banda vive SÓLO en el riel mock. En el build real este nodo
+          no se renderiza: no es un aviso escondido con CSS. */}
+      {IS_MOCK && (
+        <div className="ingreso-demo">
+          {t('Demo · datos de ejemplo, no se cobra dinero real')}
+        </div>
+      )}
+
+      <header className="ingreso-hero">
+        <div className="ingreso-lockup">
+          <svg
+            className="ingreso-simbolo"
+            viewBox="0 0 76 76"
+            width="38"
+            height="38"
+            role="img"
+            aria-label={t('Símbolo PayMe')}
+          >
+            <rect className="s-fondo" width="76" height="76" rx="21" />
+            <path className="s-navy" d="M18.5 21 L27.5 21 L36.5 38 L27.5 55 L18.5 55 L27.5 38 Z" />
+            <path className="s-blanco" d="M39.5 21 L48.5 21 L57.5 38 L48.5 55 L39.5 55 L48.5 38 Z" />
+          </svg>
+          <div className="ingreso-marca">
+            Pay<span className="t">Me</span>
+          </div>
+        </div>
+        <div className="ingreso-sub">{t('Divide y paga la cuenta desde la mesa')}</div>
+      </header>
+
+      <div className="ingreso-burbuja">
+        <div className="ingreso-burbuja-titulo">
           {mode === 'login' ? t('Entra a tu cuenta') : t('Crea tu cuenta')}
         </div>
-        {error && (
-          <div id="login-error" className="form-error" role="alert">
-            {error}
+        {/* El artefacto sólo diseña el login; el alta es la pantalla siguiente y
+            todavía no está diseñada. Por eso el subtítulo no se inventa para el
+            modo registro: se omite. */}
+        {mode === 'login' && (
+          <div className="ingreso-burbuja-sub">
+            {t('Con tu cuenta guardamos tus tarjetas y tus pagos anteriores.')}
           </div>
         )}
-        {!error && facebookCallbackPhase === 'error' && (
-          <div id="login-error" className="form-error social-callback-error" role="alert">
-            <div>{t('No pudimos completar el ingreso. Prueba de nuevo.')}</div>
-            <button
-              type="button"
-              className="login-toggle"
-              onClick={clearFacebookCallbackError}
-            >
-              {t('Continuar')}
-            </button>
-          </div>
-        )}
-        {mode === 'register' && (
-          <>
-            <input
-              className="input"
-              placeholder={t('Nombre')}
-              aria-label={t('Nombre')}
-              aria-invalid={!!error}
-              aria-describedby={error ? 'login-error' : undefined}
-              autoComplete="given-name"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              disabled={busy || socialBusy}
-              required
-            />
-            <input
-              className="input"
-              placeholder={t('Apellido')}
-              aria-label={t('Apellido')}
-              aria-invalid={!!error}
-              aria-describedby={error ? 'login-error' : undefined}
-              autoComplete="family-name"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              disabled={busy || socialBusy}
-              required
-            />
-          </>
-        )}
-        {mode === 'register' && legal.status === 'loading' && (
-          <div className="legal-notice-state" role="status">{t('Cargando…')}</div>
-        )}
-        {mode === 'register' && legal.status === 'error' && (
-          <div className="form-error" role="alert">
-            <div>{t('No pudimos conectar. Prueba de nuevo.')}</div>
-            <button
-              type="button"
-              className="login-toggle"
-              onClick={() => setLegalAttempt((value) => value + 1)}
-            >
-              {t('Reintentar')}
-            </button>
-          </div>
-        )}
-        {mode === 'register' && legal.status === 'ready' && (
-          <section className="legal-notice" aria-label="Aviso de privacidad">
-            {idioma === 'en' && (
-              <p className="legal-notice-language" lang="en">
-                This document is only available in Spanish for now.
-              </p>
-            )}
-            <pre lang="es">{legal.value.body}</pre>
-            <div className="legal-notice-meta" lang="es">
-              Versión {legal.value.version} · {legal.value.effective_from.slice(0, 10)}
-            </div>
-          </section>
-        )}
-        {(googleEligible || facebookEligible || faltaCorreoParaAltaSocial) && (
-          <section className="social-auth-options" aria-busy={socialBusy}>
-            {faltaCorreoParaAltaSocial && (
-              <p className="note note-orange" role="status">
-                {t('Escribe tu correo aquí abajo para continuar con Google.')}
-              </p>
-            )}
-            {googleEligible && (
-              <div className="social-provider-slot">
-                <div
-                  ref={googleContainer}
-                  className="social-google-container"
-                  role="group"
-                  aria-label={t('Continuar con Google')}
+      </div>
+
+      <div className="ingreso-cuerpo">
+        <form className="ingreso-tarjeta" onSubmit={onSubmit}>
+          {mode === 'register' && (
+            <>
+              <label className="ingreso-campo">
+                <span className="ingreso-etiqueta">{t('Nombre')}</span>
+                <input
+                  className="input ingreso-input"
+                  placeholder={t('Nombre')}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? 'login-error' : undefined}
+                  autoComplete="given-name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  disabled={busy || socialBusy}
+                  required
                 />
-                {googleLoadFailed && (
-                  <button
-                    type="button"
-                    className="login-toggle social-provider-retry"
-                    onClick={() => {
-                      setGoogleLoadFailed(false);
-                      setGoogleGeneration((value) => value + 1);
-                    }}
-                  >
-                    {t('Reintentar')}
-                  </button>
-                )}
-              </div>
-            )}
-            {facebookEligible && (
+              </label>
+              <label className="ingreso-campo">
+                <span className="ingreso-etiqueta">{t('Apellido')}</span>
+                <input
+                  className="input ingreso-input"
+                  placeholder={t('Apellido')}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? 'login-error' : undefined}
+                  autoComplete="family-name"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  disabled={busy || socialBusy}
+                  required
+                />
+              </label>
+            </>
+          )}
+
+          {/* §2 · la etiqueta va arriba y FIJA. El `placeholder` conserva su
+              texto de hoy —«Email», «Contraseña»— y no toma el del artefacto
+              («tu@email.com», «Tu contraseña»): 31 selectores `getByPlaceholder`
+              repartidos en 9 archivos de `e2e/` lo usan para entrar, y `e2e/`
+              está autorizado en esta orden sólo para la vista previa. El
+              defecto que el rediseño venía a corregir —que el rótulo
+              desaparezca al escribir— queda corregido igual, que es lo que la
+              etiqueta fija resuelve. */}
+          <label className="ingreso-campo">
+            <span className="ingreso-etiqueta">{t('Email')}</span>
+            <input
+              className="input ingreso-input"
+              type="email"
+              placeholder={t('Email')}
+              aria-invalid={!!error}
+              aria-describedby={error ? 'login-error' : undefined}
+              autoComplete="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setRecoveryAccepted(false);
+              }}
+              disabled={busy || socialBusy || recoveryBusy}
+              required
+            />
+          </label>
+
+          <label className="ingreso-campo">
+            <span className="ingreso-etiqueta">{t('Contraseña')}</span>
+            <input
+              className="input ingreso-input"
+              type="password"
+              placeholder={t('Contraseña')}
+              aria-invalid={!!error}
+              aria-describedby={error ? 'login-error' : undefined}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={busy || socialBusy || recoveryBusy}
+              required
+            />
+          </label>
+
+          {mode === 'register' && legal.status === 'loading' && (
+            <div className="legal-notice-state" role="status">{t('Cargando…')}</div>
+          )}
+          {mode === 'register' && legal.status === 'error' && (
+            <div className="ingreso-error" role="alert">
+              <div>{t('No pudimos conectar. Prueba de nuevo.')}</div>
               <button
                 type="button"
-                className="social-provider-button social-provider-facebook"
-                onClick={() => { void onFacebook(); }}
-                disabled={socialBusy}
+                className="login-toggle"
+                onClick={() => setLegalAttempt((value) => value + 1)}
               >
-                {socialBusy ? t('Un segundo…') : t('Continuar con Facebook')}
+                {t('Reintentar')}
               </button>
-            )}
-            <div className="social-auth-divider" aria-hidden="true">
-              <span>{t('O usa tu correo y contraseña')}</span>
             </div>
-          </section>
-        )}
-        <input
-          className="input"
-          type="email"
-          placeholder={t('Email')}
-          aria-label={t('Email')}
-          aria-invalid={!!error}
-          aria-describedby={error ? 'login-error' : undefined}
-          autoComplete="email"
-          value={email}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            setRecoveryAccepted(false);
-          }}
-          disabled={busy || socialBusy || recoveryBusy}
-          required
-        />
-        <input
-          className="input"
-          type="password"
-          placeholder={t('Contraseña')}
-          aria-label={t('Contraseña')}
-          aria-invalid={!!error}
-          aria-describedby={error ? 'login-error' : undefined}
-          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={busy || socialBusy || recoveryBusy}
-          required
-        />
-        {mode === 'login' && social.recovery.enabled && (
-          <div className="recovery-request">
+          )}
+          {mode === 'register' && legal.status === 'ready' && (
+            <section className="legal-notice" aria-label="Aviso de privacidad">
+              {idioma === 'en' && (
+                <p className="legal-notice-language" lang="en">
+                  This document is only available in Spanish for now.
+                </p>
+              )}
+              <pre lang="es">{legal.value.body}</pre>
+              <div className="legal-notice-meta" lang="es">
+                Versión {legal.value.version} · {legal.value.effective_from.slice(0, 10)}
+              </div>
+            </section>
+          )}
+
+          <button
+            className="ingreso-entrar"
+            type="submit"
+            disabled={busy || socialBusy || recoveryBusy
+              || (mode === 'register' && legal.status !== 'ready')}
+          >
+            {busy ? t('Un segundo…') : mode === 'login' ? t('Entrar') : t('Registrarme')}
+          </button>
+
+          {/* §5 · el mensaje va DEBAJO de «Entrar» y es obligatorio: el borde
+              ámbar de los campos nunca viaja solo. */}
+          {error && (
+            <div id="login-error" className="ingreso-error" role="alert">
+              {error}
+            </div>
+          )}
+          {!error && facebookCallbackPhase === 'error' && (
+            <div id="login-error" className="ingreso-error social-callback-error" role="alert">
+              <div>{t('No pudimos completar el ingreso. Prueba de nuevo.')}</div>
+              <button
+                type="button"
+                className="login-toggle"
+                onClick={clearFacebookCallbackError}
+              >
+                {t('Continuar')}
+              </button>
+            </div>
+          )}
+
+          {mode === 'login' && social.recovery.enabled && (
+            <div className="ingreso-olvido">
+              <button
+                type="button"
+                className="ingreso-olvido-boton"
+                onClick={() => { void onRecoveryRequest(); }}
+                disabled={busy || socialBusy || recoveryBusy || email.trim().length === 0}
+              >
+                {recoveryBusy ? t('Un segundo…') : t('¿Olvidaste tu contraseña?')}
+              </button>
+              {recoveryAccepted && (
+                <div className="recovery-request-success" role="status">
+                  {t('Si existe una cuenta con ese correo, te enviaremos instrucciones.')}
+                </div>
+              )}
+            </div>
+          )}
+
+          {haySocial && (
+            <>
+              <div className="social-auth-divider" aria-hidden="true">
+                <span>{t('O continúa con')}</span>
+              </div>
+              <section className="social-auth-options ingreso-social" aria-busy={socialBusy}>
+                {/* 🔴 D-R16 · el aviso sigue vivo y su motivo CAMBIÓ con el
+                    rediseño, así que se reescribe en vez de arrastrarse: antes
+                    el botón de Google vivía ARRIBA del campo de correo y la
+                    persona no tenía dónde mirar. Ahora el correo está justo
+                    encima, pero el botón sigue desapareciendo mientras el campo
+                    esté vacío, y un control que se esfuma sin decir por qué
+                    sigue siendo un callejón sin salida. El aviso ocupa el lugar
+                    del botón ausente. */}
+                {faltaCorreoParaAltaSocial && (
+                  <p className="note note-orange note-correo-social" role="status">
+                    {t('Escribe tu correo aquí abajo para continuar con Google.')}
+                  </p>
+                )}
+                {googleEligible && (
+                  <div className="social-provider-slot">
+                    <div
+                      ref={googleContainer}
+                      className="social-google-container"
+                      role="group"
+                      aria-label={t('Continuar con Google')}
+                    />
+                    {googleLoadFailed && (
+                      <button
+                        type="button"
+                        className="login-toggle social-provider-retry"
+                        onClick={() => {
+                          setGoogleLoadFailed(false);
+                          setGoogleGeneration((value) => value + 1);
+                        }}
+                      >
+                        {t('Reintentar')}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {facebookEligible && (
+                  <button
+                    type="button"
+                    className="social-provider-button social-provider-facebook"
+                    onClick={() => { void onFacebook(); }}
+                    disabled={socialBusy}
+                  >
+                    <span>{socialBusy ? t('Un segundo…') : t('Continuar con Facebook')}</span>
+                  </button>
+                )}
+              </section>
+            </>
+          )}
+        </form>
+
+        {/* §4 · fuera de la tarjeta. La disponibilidad del alta NO cambia: es
+            la misma `signupAvailable` de siempre —invitación o
+            `public_registration` del dueño—, así que con el alta cerrada este
+            enlace no existe, igual que hoy. */}
+        {(mode === 'register' || signupAvailable) && (
+          <div className="ingreso-pie">
+            {mode === 'login' ? `${t('¿Primera vez?')} ` : ''}
             <button
               type="button"
-              className="login-toggle recovery-request-button"
-              onClick={() => { void onRecoveryRequest(); }}
-              disabled={busy || socialBusy || recoveryBusy || email.trim().length === 0}
+              className="login-toggle"
+              onClick={() => {
+                setMode(mode === 'login' ? 'register' : 'login');
+                setError(null);
+                setRecoveryAccepted(false);
+                clearFacebookCallbackError();
+              }}
             >
-              {recoveryBusy ? t('Un segundo…') : t('¿Olvidaste tu contraseña?')}
+              {mode === 'login' ? t('Crea tu cuenta') : t('Ya tengo cuenta → entrar')}
             </button>
-            {recoveryAccepted && (
-              <div className="recovery-request-success" role="status">
-                {t('Si existe una cuenta con ese correo, te enviaremos instrucciones.')}
-              </div>
-            )}
           </div>
         )}
-        <button
-          className="btn btn-primary"
-          type="submit"
-          disabled={busy || socialBusy || recoveryBusy
-            || (mode === 'register' && legal.status !== 'ready')}
-        >
-          {busy ? t('Un segundo…') : mode === 'login' ? t('Entrar') : t('Registrarme')}
-        </button>
-        {(mode === 'register' || signupAvailable) && (
-        <div style={{ textAlign: 'center', marginTop: 6 }}>
-          <button
-            type="button"
-            className="login-toggle"
-            onClick={() => {
-              setMode(mode === 'login' ? 'register' : 'login');
-              setError(null);
-              setRecoveryAccepted(false);
-              clearFacebookCallbackError();
-            }}
-          >
-            {mode === 'login' ? t('¿No tienes cuenta? Regístrate') : t('Ya tengo cuenta → entrar')}
-          </button>
-        </div>
-        )}
-      </form>
 
-      {IS_MOCK && <div className="mock-hint">{t('Modo demo: entra con cualquier email y contraseña.')}</div>}
+        {/* 🔴 EL AVISO LEGAL NOMBRA UN SOLO DOCUMENTO, Y NO ES UN RECORTE
+            ESTÉTICO. El artefacto dice «los Términos y el Aviso de privacidad»,
+            con los dos como links. **Los Términos no existen**: no hay página
+            pública que los sirva —`src/public/` tiene `/privacy` y la de
+            eliminación de datos, nada más— y tampoco son un `kind` del dueño
+            —`contract-mirror/routes/consent.js` publica `aviso_privacidad` y
+            `aviso_campanas`—. Un link a un documento inexistente es un callejón
+            sin salida, y redactar Términos es una decisión legal de Mati, no
+            mía. Se enlaza lo que existe y se declara lo que falta. */}
+        <p className="ingreso-legal">
+          {t('Al entrar aceptas el')}{' '}
+          <a href={PATH_PRIVACIDAD}>{t('Aviso de privacidad')}</a>.
+        </p>
+
+        {IS_MOCK && (
+          <div className="ingreso-mock">
+            {t('Modo demo: entra con cualquier email y contraseña.')}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

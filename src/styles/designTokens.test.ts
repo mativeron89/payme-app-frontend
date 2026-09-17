@@ -422,3 +422,55 @@ describe('entrada por link · SPEC_APP.md §1.2', () => {
     expect(rule('.link-round')).toContain('width: 56px')
   })
 })
+
+/**
+ * APP-LOGIN-REDESIGN-AF-02-20260917 · LOS COLORES QUE PAYME NO DECIDE.
+ *
+ * Los seis tokens de Google y de Meta entran por la guía de cada marca, que el
+ * paquete de diseño del 10/09 manda respetar sin monocromatizar ni recolorear.
+ * Se miden igual que los propios: un color que no decidimos tampoco se deja
+ * sin medir.
+ *
+ * 🔴 POR QUÉ NO VAN AL REGISTRO `EXCEPCIONES_AA` DE ARRIBA, Y LA DIFERENCIA
+ * IMPORTA. Ese registro exige `decide`, `literal` y una `fuente` dentro de
+ * `SISTEMA_DISENO.md`: es para incumplimientos que **Mati ratificó** mirando el
+ * número. El par de Facebook no lo ratificó nadie — es un límite de una guía
+ * ajena—, y meterlo ahí obligaría a inventarle una frase y un decisor. Un
+ * incumplimiento heredado y una decisión tomada no se anotan en el mismo lugar.
+ */
+describe('§5 bis · F bis · tokens de marca de terceros del login social', () => {
+  it('🔴 Google pasa AA con holgura, y el borde llega al mínimo de no-texto', () => {
+    expect(contrast('google-text', 'google-bg')).toBeCloseTo(16.48, 1)
+    expect(contrast('google-text', 'google-bg')).toBeGreaterThanOrEqual(4.5)
+    expect(contrast('google-text', 'google-bg-hover')).toBeGreaterThanOrEqual(4.5)
+    // Un borde no es texto: su mínimo es 3:1 (WCAG 1.4.11), no 4.5.
+    expect(contrast('google-border', 'google-bg')).toBeCloseTo(4.53, 1)
+    expect(contrast('google-border', 'google-bg')).toBeGreaterThanOrEqual(3)
+  })
+
+  it('🔴 el blanco de Facebook sobre su azul NO llega a AA · medido, no estimado', () => {
+    const medido = contrast('facebook-text', 'facebook-bg')
+    // Fijado en 4.23 a propósito: si alguien retoca el azul, se entera acá en
+    // vez de arrastrar el incumplimiento un escalón más abajo.
+    expect(medido).toBeCloseTo(4.23, 1)
+    expect(medido, 'ya pasa AA: si Meta cambió su azul, actualiza este bloque')
+      .toBeLessThan(4.5)
+    // El texto va a 15px/700, que NO es «texto grande» —eso empieza en 18.66px
+    // negrita—, así que el mínimo que le corresponde es 4.5 y no 3.
+    expect(medido).toBeGreaterThanOrEqual(3)
+    // Y el dato que conviene no perder: el hover SÍ pasa. Si algún día se
+    // decide apartarse de la guía, ese valor ya está del lado bueno.
+    expect(contrast('facebook-text', 'facebook-bg-hover')).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('🔴 el incumplimiento no se derramó al resto de la pantalla nueva', () => {
+    // Los pares que la tarjeta estrena con tokens PROPIOS siguen pasando AA.
+    expect(contrast('text', 'surface')).toBeGreaterThanOrEqual(4.5)
+    expect(contrast('text', 'teal-l')).toBeGreaterThanOrEqual(4.5)
+    expect(contrast('text-muted', 'teal-l')).toBeGreaterThanOrEqual(4.5)
+    expect(contrast('text-muted', 'surface')).toBeGreaterThanOrEqual(4.5)
+    expect(contrast('link', 'bg')).toBeGreaterThanOrEqual(4.5)
+    expect(contrast('warning', 'warning-tint')).toBeGreaterThanOrEqual(4.5)
+    expect(contrast('warning', 'surface')).toBeGreaterThanOrEqual(4.5)
+  })
+})

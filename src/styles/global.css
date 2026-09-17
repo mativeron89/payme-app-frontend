@@ -224,6 +224,36 @@
      encima da 7.67:1 — medido en `designTokens.test.ts`, no copiado de acá. */
   --channel-whatsapp: #075e54;
 
+  /* §5 bis · F bis · TOKENS DE MARCA DE TERCEROS · login social.
+     Mismo motivo que `--channel-whatsapp`: son colores que PayMe no decide
+     —los fija la guía de Google y la de Meta— y se declaran para que un
+     barrido de tokens los VEA. Un hex suelto adentro de una regla es
+     invisible, y después nadie distingue un color de marca de un descuido.
+     Ratios MEDIDOS con la fórmula WCAG 2.1 sobre estos hex exactos, en esta
+     máquina; los fija `designTokens.test.ts`. */
+  --google-bg: #ffffff;
+  --google-bg-hover: #f7f8f8;
+  --google-border: #747775; /* borde sobre --google-bg · 4.53:1 · el mínimo de un borde es 3:1 */
+  --google-text: #1f1f1f; /* sobre --google-bg · 16.48:1 */
+  --facebook-bg: #1877f2;
+  --facebook-bg-hover: #166fe5;
+  /* 🔴 4.23:1 sobre --facebook-bg, a 15px/700. REPRUEBA AA (mínimo 4.5:1) y
+     tampoco llega a texto grande, que empieza en 18.66px negrita.
+
+     NO ES UN DESCUIDO Y NO ES NUEVO. El azul y el blanco los manda la guía de
+     Meta; oscurecer el fondo o aclarar el texto sería exactamente lo que el
+     paquete de diseño prohíbe («no monocromatizar, no recolorear»). El par ya
+     viaja hoy en este repo con los mismos dos hex —`.social-provider-facebook`
+     antes de esta orden— así que el rediseño no lo empeora ni lo estrena.
+
+     🔴 CÓMO SE NOMBRA: es un LÍMITE DE UNA GUÍA AJENA, declarado y medido. No
+     se escribe «cumple AA» ni «excepción aprobada»: no cumple, y nadie lo
+     ratificó todavía. Curiosidad medida que conviene conservar: el hover
+     (--facebook-bg-hover) da 4.73:1 y SÍ pasa, o sea que el estado de reposo
+     es el único que queda corto. Si alguna vez se decide apartarse de la guía,
+     ése es el número que ya está del lado bueno. */
+  --facebook-text: #ffffff;
+
   /* ══════════ fin de los tokens del sistema · abajo, lo preexistente ══════════ */
 
   /* 🔴 D-EJE-8 · migrados el 2026-08-19 con el resto del navy y el cian.
@@ -953,7 +983,401 @@ body {
   margin-bottom: 12px;
 }
 
-/* ─── Login ─── */
+/* ─── Login · rediseño APP-LOGIN-REDESIGN-AF-02-20260917 ───
+   Fuente: `diseno/referencias/login-comensal-2026-09-10/paquete-recibido/
+   App-Login-del-comensal.dc.html` (sha256 a4161bac…3375a3). Cada medida de
+   abajo está LEÍDA de ese archivo, no del PROMPT: donde los dos difieren
+   —la bajada del hero es 13.5px en el PROMPT y 14px en el artefacto— manda el
+   artefacto, que es lo que Mati aprobó.
+
+   🔴 LAS CLASES SON NUEVAS (`ingreso-*`) Y NO REUSAN `.login-screen` /
+   `.login-card`. No es preferencia de nombres: esas dos clases las comparten
+   `App.tsx` (el estado de carga) y `RecoveryScreen.tsx`. Repintarlas habría
+   rediseñado de rebote dos pantallas que esta orden no toca, y el cambio
+   habría sido invisible para cualquiera que leyera sólo el login. Las dos
+   conservan su aspecto de hoy, intacto. */
+.ingreso {
+  min-height: 100dvh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+/* Banda demo · SÓLO riel mock. Fuera del mock este nodo no se renderiza. */
+.ingreso-demo {
+  background: var(--warning-tint);
+  border-bottom: 1px solid var(--border);
+  padding: 7px 16px;
+  text-align: center;
+  font: 700 11.5px/1.35 var(--font-body);
+  color: var(--warning);
+  letter-spacing: 0.01em;
+}
+.ingreso-hero {
+  background: var(--navy);
+  padding: calc(30px + env(safe-area-inset-top)) 20px 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border-bottom-left-radius: 26px;
+  border-bottom-right-radius: 26px;
+}
+.ingreso-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ingreso-lockup svg {
+  display: block;
+  flex: none;
+}
+/* El símbolo pinta con tokens y no con hex sueltos: el mismo cian y el mismo
+   navy de marca que usa el resto de la app. */
+.ingreso-simbolo .s-fondo {
+  fill: var(--teal);
+}
+.ingreso-simbolo .s-navy {
+  fill: var(--navy);
+}
+.ingreso-simbolo .s-blanco {
+  fill: var(--on-dark);
+}
+.ingreso-marca {
+  font: 800 34px/1 var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--on-dark);
+}
+.ingreso-marca .t {
+  color: var(--teal);
+}
+.ingreso-sub {
+  font: 14px/1.4 var(--font-body);
+  color: var(--on-dark-muted);
+  text-align: center;
+}
+/* La burbuja se MONTA sobre la cabecera: -42px es el gesto del sistema. */
+.ingreso-burbuja {
+  margin: -42px 16px 0;
+  background: var(--teal-l);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+  padding: 20px;
+}
+.ingreso-burbuja-titulo {
+  font: 800 22px/1.2 var(--font-display);
+  color: var(--text);
+  text-align: center;
+  letter-spacing: -0.015em;
+}
+.ingreso-burbuja-sub {
+  margin-top: 4px;
+  font: 13.5px/1.45 var(--font-body);
+  color: var(--text-muted);
+  text-align: center;
+}
+.ingreso-cuerpo {
+  padding: 16px;
+}
+.ingreso-tarjeta {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ingreso-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* §2 · la etiqueta va FIJA arriba y no desaparece al escribir, que era el
+   defecto que el rediseño viene a corregir. */
+.ingreso-etiqueta {
+  font: 700 12.5px/1.3 var(--font-body);
+  color: var(--text);
+}
+.ingreso-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 48px;
+  margin-bottom: 0;
+  padding: 0 14px;
+  border: 1px solid var(--gray-b);
+  border-radius: 12px;
+  background: var(--surface);
+  /* 🔴 El artefacto dice 15px y acá van 16px, a propósito y declarado. Safari
+     iOS hace zoom automático al enfocar un input de menos de 16px, y el
+     sistema de diseño fija el cuerpo en 16px con la palabra «NUNCA» (§2).
+     Bajar a 15px cambiaría el encuadre de la pantalla en el teléfono, que es
+     donde esta app se usa. */
+  font: 16px/1.3 var(--font-body);
+  color: var(--text);
+}
+.ingreso-input::placeholder {
+  color: var(--gray-txt);
+}
+.ingreso-input:focus {
+  outline: none;
+  border-color: var(--link);
+  box-shadow: 0 0 0 3px rgba(10, 123, 128, 0.14);
+}
+/* §5 · credencial incorrecta. El color NUNCA viaja solo: el borde acompaña al
+   mensaje obligatorio de abajo, nunca lo reemplaza. */
+.ingreso-input[aria-invalid='true'] {
+  border-width: 2px;
+  border-color: var(--warning);
+}
+.ingreso-entrar {
+  box-sizing: border-box;
+  width: 100%;
+  height: 52px;
+  margin-top: 2px;
+  border: none;
+  border-radius: 14px;
+  background: var(--brand);
+  box-shadow: var(--sh-2);
+  cursor: pointer;
+  font: 800 16.5px/1 var(--font-display);
+  color: var(--brand-fg);
+  letter-spacing: -0.01em;
+}
+/* El hover del artefacto. `--brand` oscurecido: NO es un token del sistema y
+   por eso no se declara como tal; lleva encima el mismo blanco y la misma
+   excepción de contraste ya ratificada para `--brand-fg`. */
+.ingreso-entrar:hover:not(:disabled) {
+  background: #f25c25;
+}
+.ingreso-entrar:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.ingreso-error {
+  border-radius: 10px;
+  background: var(--warning-tint);
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  padding: 9px 12px;
+  font: 13px/1.45 var(--font-body);
+}
+.ingreso-error .login-toggle {
+  min-height: 38px;
+  margin-top: 2px;
+  color: var(--warning);
+}
+.ingreso-olvido {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.ingreso-olvido-boton {
+  align-self: center;
+  min-height: var(--tap-min);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: 500 13.5px/1.3 var(--font-body);
+  color: var(--link);
+}
+.ingreso-olvido-boton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.ingreso-social {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* ─── Botones de terceros ───
+   🔴 Estos SEIS valores son de Google y de Meta, no de PayMe: se declaran como
+   tokens por el mismo motivo que `--channel-whatsapp` —un hex suelto dentro de
+   una regla es invisible para un barrido de tokens y después nadie sabe si es
+   un color de marca o un descuido—. La única adaptación autorizada por el
+   paquete es el radio a 12px; el resto no se toca, no se monocromatiza y el
+   texto no se abrevia. */
+.social-provider-button,
+.social-google-container > button {
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  height: 48px;
+  padding: 0 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+/* 🔴 EL LOGO SE POSICIONA, NO SE ALINEA, Y ESTO SE CORRIGIÓ MIRANDO LA FOTO.
+   La primera versión ponía el logo como ítem flex y centraba el texto con
+   `flex: 1; text-align: center` sobre un `<span>`. Funciona para Facebook, que
+   tiene span, y NO para Google: el botón del mock recibe su rótulo por
+   `textContent`, así que el texto es un ítem flex ANÓNIMO —no hay elemento que
+   estilar— y quedaba pegado al logo mientras el de Facebook salía centrado.
+   Los dos botones desparejos, en la misma tarjeta.
+   Sacando el logo del flujo con `position: absolute` el texto se centra en el
+   ancho completo, que es donde lo deja la aritmética del artefacto (`flex: 1`
+   desde después del logo, con `margin-right: 20px` compensando). El `padding`
+   lateral de 46px reserva el lugar del logo para que un rótulo largo no se le
+   monte encima. */
+.social-provider-button::before,
+.social-google-container > button::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translateY(-50%);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 20px 20px;
+}
+.social-provider-button:active,
+.social-google-container > button:active {
+  transform: scale(0.99);
+}
+.social-provider-button:disabled,
+.social-google-container > button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+/* Google · guía de marca, tema claro. El logo es la "G" a cuatro colores. */
+.social-provider-google {
+  background: var(--google-bg);
+  border: 1px solid var(--google-border);
+  color: var(--google-text);
+  font-size: 15px;
+  font-weight: 500;
+}
+.social-provider-google:hover:not(:disabled) {
+  background: var(--google-bg-hover);
+}
+.social-provider-google::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill='%23EA4335' d='M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z'/%3E%3Cpath fill='%234285F4' d='M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z'/%3E%3Cpath fill='%23FBBC05' d='M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z'/%3E%3Cpath fill='%2334A853' d='M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z'/%3E%3C/svg%3E");
+}
+/* Facebook · guía de marca: la "f" blanca sobre el azul de Meta. */
+.social-provider-facebook {
+  background: var(--facebook-bg);
+  border: 1px solid var(--facebook-bg);
+  color: var(--facebook-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+.social-provider-facebook:hover:not(:disabled) {
+  background: var(--facebook-bg-hover);
+  border-color: var(--facebook-bg-hover);
+}
+.social-provider-facebook::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FFFFFF' d='M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.03 1.79-4.7 4.53-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.26h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z'/%3E%3C/svg%3E");
+}
+.login-toggle:focus-visible,
+.ingreso-olvido-boton:focus-visible,
+.ingreso-entrar:focus-visible,
+.social-provider-button:focus-visible,
+.social-google-container > button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--teal) 65%, white);
+  outline-offset: 2px;
+}
+/* 🔴 EL HOST DEL BOTÓN DE GOOGLE, y por qué mide 48px de alto.
+   En el riel REAL este contenedor no lleva un botón de PayMe: lo dibuja Google
+   Identity Services dentro de su propio iframe, y su alto (`size: large` = 40px)
+   y su radio no son configurables. El contenedor se lleva los 48px del diseño y
+   centra adentro el botón de Google TAL CUAL Google lo entrega: así el ritmo
+   vertical de la tarjeta es el del artefacto sin deformar ni falsificar un
+   botón que no es nuestro. En el riel mock, GIS no se carga y el botón de acá
+   adentro es el stand-in de PayMe, que sí toma las medidas del diseño. */
+.social-google-container {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.social-provider-slot {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+.social-provider-retry {
+  min-height: var(--tap-min);
+}
+.social-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  color: var(--text-muted);
+  font: 700 12px/1.3 var(--font-body);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+}
+.social-auth-divider::before,
+.social-auth-divider::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--border);
+}
+.ingreso-pie {
+  margin-top: 8px;
+  text-align: center;
+  font: 13.5px/1.45 var(--font-body);
+  color: var(--text-muted);
+}
+.ingreso-pie .login-toggle {
+  font-size: 13.5px;
+  color: var(--link);
+  padding: 8px 4px;
+}
+.ingreso-legal {
+  margin-top: 2px;
+  padding: 0 12px;
+  text-align: center;
+  font: 11.5px/1.5 var(--font-body);
+  color: var(--text-muted);
+}
+.ingreso-legal a {
+  color: var(--link);
+}
+.ingreso-mock {
+  margin-top: 10px;
+  text-align: center;
+  font: 12px/1.4 var(--font-body);
+  color: var(--text-muted);
+}
+.recovery-request-success,
+.recovery-success {
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--teal) 45%, white);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--teal) 12%, white);
+  color: var(--navy);
+  padding: 10px 12px;
+  font: 13px/1.45 var(--font-body);
+}
+.recovery-card .h2 {
+  margin: 0 0 16px;
+}
+.recovery-field {
+  display: grid;
+  gap: 6px;
+  color: var(--navy);
+  font: 700 13px/1.4 var(--font-body);
+}
+.recovery-field .input {
+  margin-bottom: 12px;
+}
+.recovery-success {
+  margin-bottom: 12px;
+  text-align: center;
+}
+/* 🔴 `.login-screen` y `.login-card` NO se tocan: son de `App.tsx` y de
+   `RecoveryScreen.tsx`, que esta orden no rediseña. */
 .login-screen {
   min-height: 100dvh;
   /* D-EJE-8: el primer stop es el navy de marca, hardcodeado acá. */
@@ -982,113 +1406,10 @@ body {
   cursor: default;
   opacity: 0.55;
 }
-.login-toggle:focus-visible,
-.social-provider-button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--teal) 65%, white);
-  outline-offset: 2px;
-}
-.social-auth-options {
-  display: grid;
-  gap: 10px;
-  margin: 2px 0 12px;
-}
-.social-provider-slot {
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-}
-/* El SDK de Google es dueño de su botón; PayMe sólo dimensiona el host. */
-.social-google-container {
-  width: 100%;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.social-provider-button {
-  width: 100%;
-  min-height: 46px;
-  border: 0;
-  border-radius: 10px;
-  padding: 11px 14px;
-  cursor: pointer;
-  font: 700 14px/1.2 var(--font-body);
-}
-.social-provider-button:active {
-  transform: scale(0.99);
-}
-.social-provider-button:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-.social-provider-facebook {
-  color: #fff;
-  background: #1877f2;
-}
-.social-provider-retry {
-  min-height: 44px;
-}
-.social-auth-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--gray-txt);
-  font: 12px/1.4 var(--font-body);
-  text-align: center;
-}
-.social-auth-divider::before,
-.social-auth-divider::after {
-  content: '';
-  height: 1px;
-  flex: 1;
-  background: var(--gray-b);
-}
-.social-auth-divider span {
-  max-width: 70%;
-}
-.social-callback-error .login-toggle {
-  min-height: 38px;
-  margin-top: 2px;
-}
-.recovery-request {
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  margin: -4px 0 8px;
-}
-.recovery-request-button {
-  min-height: 44px;
-}
-.recovery-request-success,
-.recovery-success {
-  width: 100%;
-  border: 1px solid color-mix(in srgb, var(--teal) 45%, white);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--teal) 12%, white);
-  color: var(--navy);
-  padding: 10px 12px;
-  font: 13px/1.45 var(--font-body);
-}
-.recovery-card .h2 {
-  margin: 0 0 16px;
-}
-.recovery-field {
-  display: grid;
-  gap: 6px;
-  color: var(--navy);
-  font: 700 13px/1.4 var(--font-body);
-}
-.recovery-field .input {
-  margin-bottom: 12px;
-}
-.recovery-success {
-  margin-bottom: 12px;
-  text-align: center;
-}
 .legal-notice-state {
   color: var(--navy);
   font-size: 13px;
-  margin: 4px 0 12px;
+  margin: 0;
 }
 .legal-notice {
   border: 1px solid var(--gray-b);
@@ -1096,7 +1417,7 @@ body {
   background: #fff;
   max-height: 260px;
   overflow-y: auto;
-  margin: 2px 0 12px;
+  margin: 0;
   padding: 12px;
 }
 .legal-notice pre {
@@ -1115,12 +1436,8 @@ body {
 .legal-notice-meta {
   margin: 9px 0 0;
 }
-.mock-hint {
-  margin-top: 14px;
-  text-align: center;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  font-family: var(--font-body);
+.note-correo-social {
+  margin: 0;
 }
 
 /* ─── Placeholder de tiers futuros ─── */
