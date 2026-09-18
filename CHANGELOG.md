@@ -89,6 +89,62 @@ palabra nueva, como prefijo y como sufijo; controles negativos (literal
 corto, `.repeat()`, nombre sin valor); regresión de que `password`/`token`
 en inglés y el ternario de `autoComplete` siguen exactamente igual.
 
+## 0.165.3 — «clave»/«llave» sólo marcan en compuestos de secreto (2026-09-18)
+
+Orden `APP-SECRETS-AUDITOR-CLAVE-AF-14-20260918`, base `489762b` (HEAD de AF-11).
+**Sin push, sin deploy, sin GREEN.** Sigue la recomendación que la propia
+entrada `0.165.2` dejó anotada: acotar `clave` a compuestos antes de que la
+guarda se volviera ruido.
+
+`clave` y `llave` salen de la familia de palabras que marcan solas
+(`contrasena|contraseña|contraseÑa|secreto|credencial` se quedan igual) y
+pasan a marcar sólo pegadas a un sufijo con intención de secreto —`secreta`,
+`privada`, `admin`, `maestra`, `acceso`, `cifrado` o `api`—, sin distinguir
+mayúsculas, guion/guion bajo ni camelCase. `api` es el único sufijo que
+también admite el orden invertido (`api` + clave), porque el compuesto de
+`api` y `key` es una convención de nombrado real en los dos sentidos y
+ningún otro sufijo se usa así en este repo. Dos entradas nuevas y separadas —una
+DESNUDA, una CITADA estilo JSON—, siguiendo la misma división que ya usan
+`CLAVE_CITADA`/`CLAVE_CITADA_ES`. No hizo falta repetir la lección de
+portabilidad de AF-11: los siete sufijos nuevos son ASCII puro, sin acento,
+así que no hay clase de corchetes UTF-8 que compilar mal bajo `/usr/bin/grep`
+en locale `C`.
+
+Medido contra el árbol completo (no sólo el diff de esta orden, la misma
+técnica que usó AF-11): las **18 coincidencias por «clave»** que AF-11 había
+enumerado —dos claves de `localStorage` en `mockApi.ts`, una en
+`idioma.tsx`, una en `landingScriptPolicy.ts`, un namespace en
+`contract-mirror/services/signupRateLimit.js` (fuera de alcance, no se tocó
+igual), un UUID de fixture en `index.contract-idempotency.test.ts` y las diez
+ocurrencias de la propiedad `clave` que elige el copy de propina en
+`propinaRecibo.ts`/`propinaRecibo.test.ts`— **desaparecen sin tocar ninguno
+de esos archivos**, exactamente como pedía la orden.
+
+Quedan seis coincidencias que no eran por «clave» y la orden no pedía
+resolver, fuera de los cinco paths de este alcance: dos por `secreto` en
+fixtures de OTRO gate (`scripts/releaseArtifact.test.ts:313`,
+`scripts/releaseUrl.test.ts:383` — el literal de prueba de
+`release-artifact.mjs`, no un secreto real), tres por `contraseña` en
+`src/i18n/en.ts` (líneas 144, 749 y 767 — claves de diccionario cuyo texto en
+español literalmente contiene la palabra, con su traducción como valor) y
+una por `credencial` en `contract-mirror/contract/social-auth-v1.json:89`
+(documentación del contrato, `contract-mirror/**` prohibido por diseño).
+
+11 tests nuevos en `auditarSecretos.test.ts`: sondas positivas por cada uno
+de los siete compuestos (incluidos los dos órdenes de `api`), y cuatro
+negativas — la clave sola como lookup key en sus dos formas reales
+(asignación desnuda y propiedad de objeto, los mismos dos ejemplos que la
+orden citó), el namespace `SIN_CLAVE` y el orden invertido no admitido
+(`admin` antes de `clave`, a propósito distinto del caso `api` que sí se
+admite). **Mutante manual, no permanente**: se repuso `clave`/`llave` como
+palabra suelta en las dos familias nuevas y las cuatro sondas negativas
+pasaron a rojo, confirmando que dependen del recorte y no de otra causa;
+revertido antes de seguir.
+
+`package.json`/`package-lock.json` a `0.165.3` (los dos campos `version` del
+lock, que había quedado en `0.165.1` desde antes de `0.165.2`); `npm ci` sin
+cambios de dependencias.
+
 ## 0.165.1 — G-25: se retira la compatibilidad con el DTO legacy (2026-09-18)
 
 Orden `APP-G25-LEGACY-RETIRE-AF-10-20260918`, base `1b78b6e5…` (HEAD de AF-09).

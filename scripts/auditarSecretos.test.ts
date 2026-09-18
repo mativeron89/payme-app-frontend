@@ -295,11 +295,7 @@ describe('auditoría de secretos', () => {
     ['contrasenaUsuario', 'contrasena sin ñ, como prefijo de un compuesto'],
     ['CONTRASENA', 'CONTRASENA, mayúsculas sin acento (el hallazgo original de AF-09)'],
     ['CONTRASEÑA', 'CONTRASEÑA, mayúsculas CON acento'],
-    ['claveSecreta', 'clave como PREFIJO de un compuesto'],
-    ['adminClave', 'clave como SUFIJO de un compuesto'],
-    ['clave', 'clave, palabra completa'],
     ['secreto', 'secreto, palabra completa'],
-    ['llaveMaestra', 'llave como prefijo'],
     ['credencialAdmin', 'credencial como prefijo'],
   ])('%s (%s) se marca como VALOR con forma de secreto', (identifier) => {
     const value = ['valor', 'sintetico', 'largo'].join('_');
@@ -324,6 +320,11 @@ describe('auditoría de secretos', () => {
     // cometió acá mismo, se midió auditando este commit contra su padre
     // (`bash scripts/auditar-secretos.sh <padre>`, no sólo el repo temporal
     // del propio test) y se corrigió con este molde, no con concatenación.
+    //
+    // AF-14 · `clave-secreta` es además, sin cambiarle una letra, el ejemplo
+    // exacto de compuesto que la orden pide seguir marcando: esta sonda queda
+    // acreditando las dos guardas (la vieja `clave` sin acotar y la nueva
+    // `clave` sólo-compuesto la marcan igual), y por eso no se duplica.
     const clave = ['clave', 'secreta'].join('-');
     const valor = ['valor', 'sintetico', 'largo'].join('_');
     const { dir, base } = repoConCambio(`  "${clave}": "${valor}",`);
@@ -335,6 +336,112 @@ describe('auditoría de secretos', () => {
 
     expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
     expect(result.status, 'la clave citada en español pasó sin marcar').toBe(1);
+  });
+
+  /**
+   * AF-14 · «clave»/«llave» dejan de marcar como palabra suelta y pasan a
+   * marcar SÓLO en compuestos con intención de secreto.
+   *
+   * Origen: AF-11 midió (`EVIDENCIA_AF_11.md`) que la palabra sola generaba
+   * ~20 coincidencias en 9 archivos del árbol completo sin relación con
+   * seguridad — claves de `localStorage`, la propiedad `clave` que elige el
+   * copy de propina, un UUID de fixture de test. Ninguna era un secreto real.
+   *
+   * Compuestos exigidos por la orden, sin distinguir mayúsculas, guiones ni
+   * camelCase: `clave_secreta`, `clave_privada`, `clave_api`/`api_clave`,
+   * `clave_admin`, `clave_maestra`, `clave_acceso`, `clave_cifrado`, y los
+   * mismos siete con `llave`. `api_clave`/`api_llave` es el ÚNICO par que
+   * admite el orden invertido — es la convención real de `api_key`, y
+   * ningún otro sufijo se nombra así en el código de este repo.
+   */
+  describe('«clave»/«llave» sólo en compuestos (AF-14)', () => {
+    it.each([
+      ['clave_secreta', 'clave + secreta, guion bajo'],
+      ['CLAVE-PRIVADA', 'clave + privada, guion y mayúsculas'],
+      ['claveAdmin', 'clave + admin, camelCase'],
+      ['clave_maestra', 'clave + maestra'],
+      ['clave_acceso', 'clave + acceso'],
+      ['clave_cifrado', 'clave + cifrado'],
+      ['clave_api', 'clave + api, orden clave-primero'],
+      ['api_clave', 'api + clave, orden invertido (como api_key)'],
+      ['llave_secreta', 'llave + secreta, equivalente de clave'],
+      ['llaveMaestra', 'llave + maestra, camelCase'],
+      ['api_llave', 'api + llave, orden invertido equivalente'],
+    ])('%s (%s) se marca como VALOR con forma de secreto', (identifier) => {
+      const value = ['valor', 'sintetico', 'largo'].join('_');
+      const { dir, base } = repoConCambio(`const ${identifier} = '${value}';`);
+
+      const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+
+      expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+      expect(result.status, `el compuesto ${identifier} no se marcó`).toBe(1);
+    });
+
+    describe('«clave»/«llave» sola, como lookup key genérico · no debe marcarse', () => {
+      // Los dos ejemplos exactos del hallazgo de AF-11: `idioma.tsx` guarda el
+      // idioma bajo una clave de `localStorage`, y `propinaRecibo.ts` elige el
+      // copy de propina por la propiedad `clave` de cada variante. Ninguno de
+      // los dos tiene relación con seguridad, y con un valor largo real (no
+      // uno corto, para no confundir esta guarda con la del literal CORTO de
+      // más abajo) siguen sin marcarse.
+      it('asignación desnuda: const clave = \'idioma_preferido_usuario\'', () => {
+        const { dir, base } = repoConCambio("const clave = 'idioma_preferido_usuario';");
+
+        const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+
+        expect(`${result.stdout}${result.stderr}`).toContain('cero valores con forma de secreto');
+        expect(result.status, 'clave sola como lookup key se marcó como secreto').toBe(0);
+      });
+
+      it('propiedad de objeto: { clave: \'propina_recibo_total\' }', () => {
+        const { dir, base } = repoConCambio("const x = { clave: 'propina_recibo_total' };");
+
+        const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+
+        expect(`${result.stdout}${result.stderr}`).toContain('cero valores con forma de secreto');
+        expect(result.status, 'clave sola como propiedad se marcó como secreto').toBe(0);
+      });
+
+      it('SIN_CLAVE: clave como sufijo de un prefijo, sin compuesto de secreto', () => {
+        const { dir, base } = repoConCambio(
+          "const SIN_CLAVE = 'payme/signup-rate-limit/sin-clave/v1';",
+        );
+
+        const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+
+        expect(`${result.stdout}${result.stderr}`).toContain('cero valores con forma de secreto');
+        expect(result.status, 'SIN_CLAVE se marcó sin ser un compuesto de secreto').toBe(0);
+      });
+
+      it('adminClave: el orden invertido NO listado por la orden no cuenta como compuesto', () => {
+        // A propósito, distinto de `api_clave`/`api_llave`: la orden sólo
+        // admite el orden invertido para `api`, nunca para los otros seis
+        // sufijos. `adminClave` (admin antes de clave) queda fuera aunque
+        // `clave_admin` (clave antes de admin) sí marque.
+        const value = ['valor', 'sintetico', 'largo'].join('_');
+        const { dir, base } = repoConCambio(`const adminClave = '${value}';`);
+
+        const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+          cwd: dir,
+          encoding: 'utf8',
+        });
+
+        expect(`${result.stdout}${result.stderr}`).toContain('cero valores con forma de secreto');
+        expect(result.status, 'adminClave se marcó sin ser un compuesto admitido').toBe(0);
+      });
+    });
   });
 
   describe('controles negativos en español · no deben marcarse', () => {

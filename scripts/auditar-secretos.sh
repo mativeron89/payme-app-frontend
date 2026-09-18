@@ -87,7 +87,8 @@ PATRONES=(
   'AKIA[0-9A-Z]{16}'
   '-----BEGIN [A-Z ]*PRIVATE KEY-----'
   'i:(^|[^A-Za-z0-9_'"'"'"-])[A-Za-z0-9_-]*(password|passwd|secret|token|api_?key)["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
-  'i:(^|[^A-Za-z0-9_'"'"'"-])[A-Za-z0-9_-]*(contrasena|contraseña|contraseÑa|clave|secreto|llave|credencial)[A-Za-z0-9_-]*["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+  'i:(^|[^A-Za-z0-9_'"'"'"-])[A-Za-z0-9_-]*(contrasena|contraseña|contraseÑa|secreto|credencial)[A-Za-z0-9_-]*["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+  'i:(^|[^A-Za-z0-9_'"'"'"-])[A-Za-z0-9_-]*((clave|llave)[_-]?(secreta|privada|admin|maestra|acceso|cifrado|api)|api[_-]?(clave|llave))[A-Za-z0-9_-]*["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
   'https://api\.vercel\.com/v[0-9]+/integrations/deploy/[A-Za-z0-9_/-]{16,}'
   'postgres(ql)?://[^\s"'"'"']+:[^\s"'"'"']+@'
 )
@@ -157,6 +158,45 @@ PATRONES=(
 # `secret`: `secret` ya vive en la entrada vieja sin prefijo/sufijo, así que
 # no hace falta —ni conviene— repetirla acá con el riesgo de prefijo que este
 # mismo párrafo acaba de descartar para el inglés.
+#
+# ─── `clave`/`llave` sólo en COMPUESTOS · 2026-09-18 (AF-14) ────────────────
+#
+# 🔴 **`clave` salió de la lista de arriba y no vuelve a entrar como palabra
+# suelta.** AF-11 dejó medido (no supuesto) que `clave` es una palabra
+# española tan común que también significa "lookup key" genérico, sin ninguna
+# relación con seguridad: correr este mismo auditor contra el ÁRBOL COMPLETO
+# (no sólo un diff) encontró **~20 coincidencias en 9 archivos** —claves de
+# `localStorage`, la propiedad `clave` que elige el copy de propina, un UUID
+# de fixture de test— y CERO eran un secreto real. Una guarda que marca eso
+# es la misma familia que el propio script ya documenta arriba: "grita de más
+# y se apaga sola". `llave` es sinónimo exacto de `clave` en este repo (ver
+# `GAPS.md` y varios comentarios) y comparte el mismo riesgo, así que sale con
+# ella.
+#
+# **Lo que NO se retira es la capacidad de detectar un secreto real nombrado
+# con `clave`/`llave`.** Se reemplaza "palabra sola con prefijo/sufijo libre"
+# por "compuesto con intención de secreto EXPLÍCITA": la palabra tiene que
+# aparecer pegada (con o sin `_`/`-`/camelCase) a uno de
+# `secreta|privada|admin|maestra|acceso|cifrado|api`, o al revés como
+# `api_clave`/`api_llave` —el único orden invertido que la orden pide, porque
+# `api_key`/`api_clave` es una convención de nombrado real en ambos sentidos
+# y ninguno de los otros sufijos se usa así—. `clave_secreta`, `CLAVE-ADMIN`,
+# `llaveMaestra` siguen marcando; `SIN_CLAVE`, `CLAVE_STORAGE`, `CLAVE_MODO`,
+# la `clave` bien sola de `propinaRecibo.ts` y de `idioma.tsx` — ninguno tiene
+# uno de esos sufijos pegado, así que ninguno marca.
+#
+# La lista de sufijos es la que pide la orden, ni más ni menos: no se agregan
+# variantes de género (`cifrada`, `secreto` de `secreta`) ni sufijos nuevos
+# "por si acaso" — es la misma regla que ya rige `VALOR_BENIGNO` más abajo,
+# una exención (acá, una NO-exención) sin caso real que la exija es
+# superficie regalada.
+#
+# 🔴 **Esta vez no hace falta la lección de portabilidad de AF-11.** Los ocho
+# sufijos nuevos son ASCII puro —sin `ñ`, sin acentos— así que no hay clase de
+# corchetes UTF-8 que compilar mal bajo `/usr/bin/grep` en locale `C`, y `-i`
+# sí pliega mayúsculas ASCII sin el hueco que tuvo `Ñ`. Se ejecuta igual el
+# script real (`bash scripts/…`, nunca `grep` suelto) para no dar nada por
+# sentado, pero el resultado no depende de ese defecto puntual.
 
 # ─── El límite izquierdo, y por qué mira la COMILLA y no el guion ───────────
 #
@@ -242,7 +282,10 @@ done
 # citada + valor citado de 8+ — y `CLAVE_CITADA_ES` (español) sí lo lleva,
 # porque ningún paquete de npm se llama `contrasena` o `credencial`.
 CLAVE_CITADA='["'"'"'][A-Za-z0-9_-]*(password|passwd|secret|token|api_?key)["'"'"']\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
-CLAVE_CITADA_ES='["'"'"'][A-Za-z0-9_-]*(contrasena|contraseña|contraseÑa|clave|secreto|llave|credencial)[A-Za-z0-9_-]*["'"'"']\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+CLAVE_CITADA_ES='["'"'"'][A-Za-z0-9_-]*(contrasena|contraseña|contraseÑa|secreto|credencial)[A-Za-z0-9_-]*["'"'"']\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+# AF-14 · mismo recorte que en PATRONES: `clave`/`llave` sólo cuentan citadas
+# si son un compuesto con intención de secreto, nunca la palabra sola.
+CLAVE_CITADA_COMPUESTA='["'"'"'][A-Za-z0-9_-]*((clave|llave)[_-]?(secreta|privada|admin|maestra|acceso|cifrado|api)|api[_-]?(clave|llave))[A-Za-z0-9_-]*["'"'"']\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
 
 # La lista de valores benignos se limita a los tokens de `autocomplete` que este
 # repo USA —los dos de `LoginScreen.tsx:202`—. No se agregan otros «por si
@@ -270,6 +313,14 @@ citadas_es=$(grep '^+' "$diff_file" | cut -c2- | grep -oEi -- "$CLAVE_CITADA_ES"
 if [ -n "$citadas_es" ]; then
   echo "🔴 VALOR con forma de secreto: clave en español entre comillas (JSON/YAML)" >&2
   printf '%s\n' "$citadas_es" | head -3 | sed 's/^/     /' >&2
+  hallazgos=$((hallazgos + 1))
+fi
+
+citadas_clave_compuesta=$(grep '^+' "$diff_file" | cut -c2- | grep -oEi -- "$CLAVE_CITADA_COMPUESTA" \
+  | grep -vEi -- "$VALOR_BENIGNO" || true)
+if [ -n "$citadas_clave_compuesta" ]; then
+  echo "🔴 VALOR con forma de secreto: clave/llave compuesta entre comillas (JSON/YAML)" >&2
+  printf '%s\n' "$citadas_clave_compuesta" | head -3 | sed 's/^/     /' >&2
   hallazgos=$((hallazgos + 1))
 fi
 
