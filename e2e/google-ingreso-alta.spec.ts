@@ -16,7 +16,7 @@ import { expect, test, type Page } from '@playwright/test';
  * en la CI no se escribe nada.
  */
 
-const CREDENCIAL_MOCK = 'mock-google-credential-';
+const PREFIJO_TOKEN_MOCK = 'mock-google-credential-';
 
 async function preparar(page: Page, { altaPublica, sinCuenta }: {
   altaPublica: boolean;
@@ -97,7 +97,7 @@ test('persona NUEVA: toca Google en el ingreso, completa sus datos y queda adent
   // búsqueda mira valores reales (la sesión sí está).
   const valores = await almacenado(page);
   expect(valores.some((v) => v.startsWith('payme_app_session__mock='))).toBe(true);
-  expect(valores.filter((v) => v.includes(CREDENCIAL_MOCK))).toEqual([]);
+  expect(valores.filter((v) => v.includes(PREFIJO_TOKEN_MOCK))).toEqual([]);
 });
 
 test('persona EXISTENTE: toca Google en el ingreso y entra directo, sin pasar por el alta', async ({ page }) => {
