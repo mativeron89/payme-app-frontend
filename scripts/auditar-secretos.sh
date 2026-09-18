@@ -40,6 +40,36 @@
 # que promete una conducta que el código no tiene, y que se lee como si la
 # tuviera. **Si algún día hace falta, se implementa; mientras tanto no se
 # nombra.**
+#
+# ─── Excepción (b′) · prosa del CONTRATO ESPEJADO · 2026-09-18 (AF-17) ───────
+#
+# Addendum 1 de `APP-GOOGLE-CONTINUE-AF-17-20260918` (Bibliotecario, sha256
+# `4e99730a…af00`). El contrato del dueño v2.92.0 documenta sus campos con
+# notas en prosa —`"password": "la contraseña actual de la cuenta…"`— y eso es
+# exactamente la forma «clave citada + literal de 8+». Este repo no puede
+# editar `contract-mirror/`, y el dueño es PRIVADO mientras éste es PÚBLICO:
+# eximir el espejo entero dejaría pasar acá un secreto real del dueño.
+#
+# Por eso la excepción es doblemente acotada y las dos condiciones son
+# CONJUNTIVAS, sólo para las tres familias «clave entre comillas»
+# (`CLAVE_CITADA`, `CLAVE_CITADA_ES`, `CLAVE_CITADA_COMPUESTA`):
+#   ① la línea agregada es de un archivo bajo `contract-mirror/`, y
+#   ② el VALOR es prosa: al menos cuatro tramos de espacio entre palabras
+#      (cinco palabras o más).
+# Un valor sin espacios —la forma de un token, un hash o una contraseña— sigue
+# rojo también dentro del espejo. Fuera del espejo no cambia nada, y las demás
+# familias (`PATRONES`, el archivo prohibido por nombre) no se tocan.
+#
+# 🔴 **COSTO DECLARADO:** una frase de cinco o más palabras usada como
+# contraseña real, escrita como valor de una clave citada DENTRO del espejo, no
+# se marcaría. Es lo que se paga por no bloquear la documentación del dueño.
+#
+# Cómo se sabe de qué archivo es cada línea: NO se parsea el diff aplanado.
+# Los encabezados `+++ b/…` se pueden falsificar desde el contenido —una línea
+# agregada que empieza con `++ b/` aparece en el diff como `+++ b/`—, así que
+# se le pregunta a git con DOS diffs por pathspec: el del espejo y el resto. Su
+# suma tiene que dar exactamente las líneas agregadas del diff completo; si no
+# da, el script falla cerrado (exit 2).
 set -uo pipefail
 
 BASE="${1:-origin/main}"
@@ -61,9 +91,17 @@ cd "$RAIZ" || exit 2
 # ahí igual que en cualquier otro lado, así que el ejemplo se reescribe para que
 # no tenga forma de valor.
 diff_file="$(mktemp)"
-trap 'rm -f "$diff_file"' EXIT
+espejo_file="$(mktemp)"
+resto_file="$(mktemp)"
+trap 'rm -f "$diff_file" "$espejo_file" "$resto_file"' EXIT
 git diff "$BASE"..HEAD -- . ':(exclude)scripts/auditar-secretos.sh' > "$diff_file" 2>/dev/null || {
   echo "🔴 no pude calcular el diff contra $BASE" >&2; exit 2;
+}
+# (b′) · el mismo diff, partido por pathspec: espejo y resto.
+git diff "$BASE"..HEAD -- 'contract-mirror/' > "$espejo_file" 2>/dev/null \
+  && git diff "$BASE"..HEAD -- . ':(exclude)scripts/auditar-secretos.sh' ':(exclude)contract-mirror/' \
+    > "$resto_file" 2>/dev/null || {
+  echo "🔴 no pude partir el diff contra $BASE entre espejo y resto" >&2; exit 2;
 }
 
 # Control positivo: si el diff está vacío, esto no auditó nada y hay que decirlo
@@ -73,6 +111,12 @@ lineas=$(grep -c '^+' "$diff_file" || true)
 if [ "${lineas:-0}" -eq 0 ]; then
   echo "⚠️  el diff contra $BASE no tiene líneas agregadas: NO se auditó nada."
   exit 0
+fi
+lineas_espejo=$(grep -c '^+' "$espejo_file" || true)
+lineas_resto=$(grep -c '^+' "$resto_file" || true)
+if [ $(( ${lineas_espejo:-0} + ${lineas_resto:-0} )) -ne "$lineas" ]; then
+  echo "🔴 la partición espejo/resto no suma el diff completo ($lineas_espejo + $lineas_resto ≠ $lineas): no audito a ciegas" >&2
+  exit 2
 fi
 
 # VALORES con forma de secreto. Cada patrón exige prefijo Y cuerpo, o
@@ -300,24 +344,38 @@ VALOR_BENIGNO='[:=][[:space:]]*["'"'"'](current-password|new-password)$'
 # sí se marca, porque ahí no hay exención; y usar literalmente `new-password`
 # como contraseña real es la hipótesis menos probable de la familia.
 
-citadas=$(grep '^+' "$diff_file" | cut -c2- | grep -oEi -- "$CLAVE_CITADA" \
-  | grep -vEi -- "$VALOR_BENIGNO" || true)
+# (b′) · un VALOR en prosa: desde su comilla de apertura hasta el final de la
+# coincidencia, cinco palabras o más. Anclado a `$`: el valor es lo último de
+# cada coincidencia (`[^"']{8,}` no cruza comillas), así que la regla nunca
+# puede empezar en la comilla de la CLAVE.
+VALOR_PROSA='["'"'"'][[:space:]]*([^"'"'"'[:space:]]+[[:space:]]+){4}[^"'"'"'[:space:]][^"'"'"']*$'
+
+# Coincidencias de una familia citada: todas las del resto, y del espejo sólo
+# las que NO son prosa. Las dos condiciones de la excepción son conjuntivas:
+# el archivo de la línea (①) lo decide la partición por pathspec, el valor (②)
+# este filtro, y sólo se aplica al espejo.
+citadas_de() {
+  local patron="$1"
+  { grep '^+' "$resto_file" | cut -c2- | grep -oEi -- "$patron" || true
+    grep '^+' "$espejo_file" | cut -c2- | grep -oEi -- "$patron" | grep -vE -- "$VALOR_PROSA" || true
+  } | grep -vEi -- "$VALOR_BENIGNO" || true
+}
+
+citadas=$(citadas_de "$CLAVE_CITADA")
 if [ -n "$citadas" ]; then
   echo "🔴 VALOR con forma de secreto: clave entre comillas (JSON/YAML)" >&2
   printf '%s\n' "$citadas" | head -3 | sed 's/^/     /' >&2
   hallazgos=$((hallazgos + 1))
 fi
 
-citadas_es=$(grep '^+' "$diff_file" | cut -c2- | grep -oEi -- "$CLAVE_CITADA_ES" \
-  | grep -vEi -- "$VALOR_BENIGNO" || true)
+citadas_es=$(citadas_de "$CLAVE_CITADA_ES")
 if [ -n "$citadas_es" ]; then
   echo "🔴 VALOR con forma de secreto: clave en español entre comillas (JSON/YAML)" >&2
   printf '%s\n' "$citadas_es" | head -3 | sed 's/^/     /' >&2
   hallazgos=$((hallazgos + 1))
 fi
 
-citadas_clave_compuesta=$(grep '^+' "$diff_file" | cut -c2- | grep -oEi -- "$CLAVE_CITADA_COMPUESTA" \
-  | grep -vEi -- "$VALOR_BENIGNO" || true)
+citadas_clave_compuesta=$(citadas_de "$CLAVE_CITADA_COMPUESTA")
 if [ -n "$citadas_clave_compuesta" ]; then
   echo "🔴 VALOR con forma de secreto: clave/llave compuesta entre comillas (JSON/YAML)" >&2
   printf '%s\n' "$citadas_clave_compuesta" | head -3 | sed 's/^/     /' >&2

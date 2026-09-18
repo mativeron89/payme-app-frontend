@@ -499,6 +499,90 @@ describe('auditoría de secretos', () => {
     expect(result.status, 'el token benigno eximió la línea completa').toBe(1);
   });
 
+  /**
+   * (b′) · AF-17 addendum 1 (Bibliotecario, sha256 `4e99730a…af00`). La prosa
+   * de una clave citada se exime SÓLO si la línea es de `contract-mirror/` Y el
+   * valor tiene cinco palabras o más. Las dos condiciones son conjuntivas, y
+   * cada test de abajo rompe exactamente una.
+   *
+   * 📌 Los fixtures se ARMAN en runtime —la clave con `join`— porque este
+   * archivo también pasa por el auditor: escritos literales, lo pondrían rojo.
+   */
+  describe('(b′) · prosa del contrato espejado', () => {
+    const CLAVE = ['pass', 'word'].join('');
+    const CLAVE_ES = ['creden', 'cial'].join('');
+    const PROSA = ['la', 'contraseña', 'actual', 'de', 'la', 'cuenta', 'destino'].join(' ');
+    const CUATRO_PALABRAS = ['uno', 'dos', 'tres', 'cuatro'].join(' ');
+    const SIN_ESPACIOS = ['Zq9', 'vT4', 'mW2', 'kP7'].join('');
+    const json = (clave: string, valor: string) => `{\n  "${clave}": "${valor}"\n}\n`;
+
+    function auditar(archivos: Record<string, string>) {
+      const { dir, base } = repoConArchivos(archivos);
+      const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], { cwd: dir, encoding: 'utf8' });
+      return { status: result.status, salida: `${result.stdout}${result.stderr}` };
+    }
+
+    it('prosa DENTRO del espejo ⇒ verde', () => {
+      const r = auditar({ 'contract-mirror/contract/x.json': json(CLAVE, PROSA) });
+      expect(r.salida).toContain('cero valores con forma de secreto');
+      expect(r.status).toBe(0);
+    });
+
+    it('🔴 condición ② · un valor SIN espacios dentro del espejo ⇒ rojo', () => {
+      const r = auditar({ 'contract-mirror/contract/x.json': json(CLAVE, SIN_ESPACIOS) });
+      expect(r.salida).toContain('clave entre comillas');
+      expect(r.status).toBe(1);
+    });
+
+    it('🔴 condición ② · cuatro palabras (tres espacios) no alcanzan: el umbral es cinco', () => {
+      const r = auditar({ 'contract-mirror/contract/x.json': json(CLAVE, CUATRO_PALABRAS) });
+      expect(r.status).toBe(1);
+    });
+
+    it('🔴 condición ① · la MISMA prosa fuera del espejo ⇒ rojo', () => {
+      const r = auditar({ 'src/config/x.json': json(CLAVE, PROSA) });
+      expect(r.salida).toContain('clave entre comillas');
+      expect(r.status).toBe(1);
+    });
+
+    it('🔴 condición ① · una ruta que sólo CONTIENE «contract-mirror» no es el espejo', () => {
+      const r = auditar({ 'src/contract-mirror/x.json': json(CLAVE, PROSA) });
+      expect(r.status).toBe(1);
+    });
+
+    it('🔴 un encabezado falsificado dentro del contenido no mueve la línea al espejo', () => {
+      // Una línea agregada `++ b/contract-mirror/…` aparece en el diff como
+      // `+++ b/contract-mirror/…`. Por eso la ruta la decide git por pathspec.
+      const r = auditar({ 'src/x.json': `++ b/contract-mirror/contract/x.json\n${json(CLAVE, PROSA)}` });
+      expect(r.status).toBe(1);
+    });
+
+    it('la excepción cubre también la familia en español, con las mismas dos condiciones', () => {
+      expect(auditar({ 'contract-mirror/contract/x.json': json(CLAVE_ES, PROSA) }).status).toBe(0);
+      expect(auditar({ 'contract-mirror/contract/x.json': json(CLAVE_ES, SIN_ESPACIOS) }).status).toBe(1);
+      expect(auditar({ 'src/x.json': json(CLAVE_ES, PROSA) }).status).toBe(1);
+    });
+
+    it('🔴 prosa y valor sin espacios en la MISMA línea del espejo: la excepción es por coincidencia', () => {
+      const linea = `{ "${CLAVE}": "${PROSA}", "${CLAVE_ES}": "${SIN_ESPACIOS}" }\n`;
+      expect(auditar({ 'contract-mirror/contract/x.json': linea }).status).toBe(1);
+    });
+
+    it('las TRES líneas reales del contrato del dueño (v2.92.0) ⇒ verde', () => {
+      const contrato = readFileSync(join(RAIZ, 'contract-mirror', 'contract', 'social-auth-v1.json'), 'utf8');
+      const reales = contrato.split('\n').filter((l) => (
+        l.includes(['"invitation', 'token": "opcional.'].join('_'))
+        || l.includes(['"pass', 'word": "la contraseña actual'].join(''))
+        || l.includes(['"creden', 'cial": "una verificación'].join(''))));
+      expect(reales, 'no se encontraron las tres notas del dueño en el espejo').toHaveLength(3);
+      const r = auditar({ 'contract-mirror/contract/social-auth-v1.json': `${reales.join('\n')}\n` });
+      expect(r.salida).toContain('cero valores con forma de secreto');
+      expect(r.status).toBe(0);
+      // Control positivo: las mismas tres líneas FUERA del espejo sí se marcan.
+      expect(auditar({ 'docs/notas.json': `${reales.join('\n')}\n` }).status).toBe(1);
+    });
+  });
+
   it('el instrumento corre limpio sobre la documentación REAL del repo', () => {
     // 🔴 ESTE ES EL HUECO QUE LA SUITE NO VEÍA, y costó un rojo real: 15/15 en
     // verde con fixtures sintéticos mientras `auditar-secretos.sh origin/main`
