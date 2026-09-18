@@ -81,7 +81,13 @@
       "path": "/api/auth/google/link",
       "auth": "payme_bearer",
       "request": ["id_token", "current_password"],
-      "success": { "linked": true, "provider": "google" },
+      "success": { "linked": true, "provider": "google", "already_linked": "boolean" },
+      "success_notes": {
+        "already_linked": "desde v2.91.0. false = se creó el binding en esta llamada; true = el subject de Google YA estaba vinculado, activo, a ESTA misma cuenta y no se escribió nada. Las dos respuestas son 200 con el mismo shape.",
+        "idempotencia": "sólo para la misma cuenta. Si el subject está vinculado a OTRA cuenta, revocado, o esta cuenta ya tiene otro subject de Google, la respuesta sigue siendo social_auth_failed 401 opaco, sin cambios y sin revelar cuál de los casos es.",
+        "reautenticacion": "current_password se exige también en el camino idempotente: contraseña incorrecta es reauthentication_failed 403 sin cambios.",
+        "credencial": "el id_token se consume también en el camino idempotente; reenviar el MISMO id_token es social_auth_failed 401."
+      },
       "errors": {
         "not_found": [404],
         "validation_error": [400],
@@ -200,6 +206,25 @@
         "too_many_auth_attempts": [429]
       }
     }
+  },
+  "linked_providers": {
+    "since": "v2.91.0",
+    "route": "GET /api/account/me/linked-providers",
+    "auth": "payme_bearer",
+    "response": { "linked_providers": "array" },
+    "response_exact_keys": ["linked_providers"],
+    "cache_control": "private, no-store",
+    "shape": "array ordenado alfabéticamente de strings, sin repetidos; [] si no hay",
+    "vocabulary": ["facebook", "google"],
+    "vocabulary_closed": true,
+    "semantics": "proveedores con binding ACTIVO de la cuenta autenticada. Un proveedor fuera del vocabulario no se publica aunque exista.",
+    "scope": "sólo la cuenta del bearer; nunca otra cuenta, nunca por parámetro",
+    "never_exposes": ["provider_subject", "subject_namespace", "provider_email", "linked_at", "revoked_at"],
+    "errors": { "auth_required": [401] },
+    "not_in_account_me": "GET /api/account/me NO cambia: el front publicado lo decodifica con claves exactas y una clave nueva le rompe el editor de perfil.",
+    "gated_by": "sólo la sesión; no depende de features.profile_identity",
+    "absent_means": "backend anterior a v2.91.0 (404 not_found): el consumidor no puede afirmar ni negar una vinculación; no debe mostrarla como desvinculada",
+    "owner_decision": "D-LOGIN-1 · Mati 2026-09-18 «Vincular desde la cuenta»"
   },
   "facebook_redirect_flow": {
     "browser_binding": "store_exact_start_state_and_purpose_in_session_storage",

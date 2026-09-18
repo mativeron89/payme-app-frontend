@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "940cc49e5bb6f59138a6d0649e8143b5069d8fd0",
+  "commit": "6368240e3546d3e50549439094b48b2551045147",
   "total": 107,
   "archivos": [
     {
@@ -19,8 +19,8 @@
     {
       "origen": "contract/social-auth-v1.json",
       "destino": "contract/social-auth-v1.json",
-      "sha256": "88eb713a047d7fd84b6698bf16093441032fcddfceeaf06280d927e834bfd42b",
-      "bytes": 11196
+      "sha256": "27891688d21b26d33ffa1875385800814894dfea96de54c14fae86f720dedc33",
+      "bytes": 13342
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -271,8 +271,8 @@
     {
       "origen": "docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md",
       "destino": "docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md",
-      "sha256": "ca4f0ec10841d0d52c51971ba526bc5c1cd745d104cef8674291d4b8a6731936",
-      "bytes": 5649
+      "sha256": "0ed22adc11b114f32f383787e5735db4ac395b1cc709c44e8a1a39fb07b433d3",
+      "bytes": 6526
     },
     {
       "origen": "docs/history/README_v2.10_CONSOLIDADO.md",
@@ -307,8 +307,8 @@
     {
       "origen": "routes/account.js",
       "destino": "routes/account.js",
-      "sha256": "a605e7b88222b6840005892f78e26e7ac1a5b78496636aaf5e329f32f14e7e20",
-      "bytes": 20913
+      "sha256": "b93f5b33384019f915b1d1d9d4bfaabc141fc3f28e74c5dd6594b8f44e4f087a",
+      "bytes": 21752
     },
     {
       "origen": "routes/auth.js",
@@ -385,8 +385,8 @@
     {
       "origen": "routes/social-auth.js",
       "destino": "routes/social-auth.js",
-      "sha256": "41c983ba7e3ba08ede8cdc305a219d3f03ddf53f1dd5b3b581a5f60be62277b2",
-      "bytes": 10476
+      "sha256": "1c1a01bfcf98219c0372e01177e7843c4e99233dd285d3cb55c4da6372a8998e",
+      "bytes": 10687
     },
     {
       "origen": "routes/spei-funding.js",
@@ -469,8 +469,8 @@
     {
       "origen": "services/externalIdentities.js",
       "destino": "services/externalIdentities.js",
-      "sha256": "73822307cfbe6c9649026c291a40ee88edff6f8f2961706b527366ade3cc9aac",
-      "bytes": 8473
+      "sha256": "ebca6a29a34b9ccc599926607ea8ed2765ff036dc3a24fea8747ea0650b136e9",
+      "bytes": 11186
     },
     {
       "origen": "services/facebookDataRights.js",

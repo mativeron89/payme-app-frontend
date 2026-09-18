@@ -18,6 +18,7 @@ const {
 const { centsToDisplay } = require('../utils/money');
 const logger = require('../utils/logger');
 const profileIdentity = require('../services/profileIdentity');
+const { proveedoresVinculados } = require('../services/externalIdentities');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -198,6 +199,23 @@ function revisionFromIfMatch(req) {
   const revision = match[1] || match[2];
   return revision.toLowerCase();
 }
+
+/**
+ * GET /me/linked-providers — v2.91.0 · APP-LINKED-PROVIDERS-AB-05 (addendum).
+ *
+ * Proveedores con binding ACTIVO de la cuenta del bearer: sólo el nombre, del
+ * vocabulario cerrado ["facebook","google"], ordenado, [] si no hay. Endpoint
+ * propio y NO una clave de GET /me: el front publicado decodifica /me con
+ * claves exactas y una clave nueva le rompe el editor de perfil. No depende
+ * del rollout de identidad de perfil: no hay foto ni nombre en juego.
+ */
+router.get('/me/linked-providers', async (req, res, next) => {
+  try {
+    const linkedProviders = await proveedoresVinculados(req.user.id);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ linked_providers: linkedProviders });
+  } catch (err) { next(err); }
+});
 
 router.get('/me/avatar', requireProfileIdentityRollout, async (req, res, next) => {
   try {

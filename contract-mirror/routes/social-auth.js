@@ -136,7 +136,11 @@ router.post('/google/link', googleDark('linking'), requireAuth,
         currentPassword: req.body.current_password,
         evidence,
       });
-      logger.audit('external_identity_linked', { user_id: req.user.id, provider: 'google' });
+      // v2.91.0 · el mismo usuario puede repetir la vinculación y recibe 200
+      // idempotente; la auditoría lo distingue sin registrar el subject.
+      logger.audit('external_identity_linked', {
+        user_id: req.user.id, provider: 'google', already_linked: response.already_linked,
+      });
       return res.json(response);
     } catch (error) {
       return socialError(res, error) || next(error);

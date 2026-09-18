@@ -6,6 +6,61 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-18**.
+- Commit exacto y procedencia del CONTENIDO:
+  **`6368240e3546d3e50549439094b48b2551045147`**
+  (App Backend **v2.91.0** · `GET /api/account/me/linked-providers` y `google/link`
+  idempotente para la misma cuenta — D-LOGIN-1 «Vincular desde la cuenta»).
+- Commit del que se tomó el inventario autoritativo:
+  **`24e8461a0b55cf5e214a385e6f956cffcf8977dd`**.
+  Como siempre, el inventario declara el commit del CONTENIDO (`6368240e…`), no el
+  suyo: `24e8461a…` sólo regenera el inventario sobre el anterior.
+
+🔴 **Por primera vez en este README, NINGUNO de los dos commits está publicado.**
+Medido el 2026-09-18 con `git branch -r --contains` en `payme-app-backend`: ninguna
+rama remota contiene `6368240e…` ni `24e8461a…`. Es una medición **sobre refs
+locales, sin red**, y esas refs se actualizaron por última vez el 2026-09-17 a las
+14:46 (hora local), así que dice «no estaba publicado entonces», no «no está
+publicado ahora». Coincide con lo que declaró el Bibliotecario al despachar:
+v2.91.0 NO publicada. **Espejar nunca implica publicar**, y acá no es teórico:
+lo que este front consume de este espejo no existe todavía en producción.
+
+🔴 **La cadena del dueño corrigió el diseño a mitad de camino, y se espejó el
+final.** El commit A (`00a3f1c5…`) todavía ponía `linked_providers` DENTRO de
+`GET /api/account/me`; el C (`6368240e…`) lo sacó a su propio endpoint porque el
+front publicado decodifica `/me` con claves exactas y una clave nueva le rompía el
+editor de perfil —`profile_identity` está encendida en producción, **medido por el
+Bibliotecario** en el `/api/config` vivo el 2026-09-18; yo no lo leí—. Este espejo
+toma C, y la procedencia lo nombra para que nadie espeje A por error.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior de 107
+cambian **cinco** —`contract/social-auth-v1.json`,
+`docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md`, `routes/account.js`,
+`routes/social-auth.js` y `services/externalIdentities.js`—; **cero nuevos, cero
+que salgan y cero renombrados**. Los otros 102 quedan byte-idénticos y se declaran
+sin cambio por inventario, no por inspección.
+
+⚠️ **Este refresh NO es mecánico, a diferencia de los anteriores.** Viaja en el
+mismo tramo que el consumidor —`APP-LINK-ACCOUNT-AF-09-20260918`—, que sí toca
+`src/`: la sección «Cuentas conectadas» lee lo que acá se espeja. Se adoptó
+primero y por separado, con los tres gates en verde, antes de escribir una línea
+del consumidor.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `24e8461a`, porque desde un
+worktree anidado la ruta relativa por defecto no existe —y el script lo detecta:
+sin fuente sale **exit 2 · NO CERTIFICADO**, medido aparte—.
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `6368240`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `6368240`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`24e8461a`) · exit 0 |
+
+### Refresh anterior · 2026-09-03 (mirror 107 · aviso 2.4.1 · `940cc49`)
+
 - Fecha del refresh: **2026-09-03**.
 - Commit exacto y procedencia del CONTENIDO:
   **`940cc49e5bb6f59138a6d0649e8143b5069d8fd0`**

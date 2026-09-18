@@ -163,6 +163,32 @@ async function loginWithExternalIdentity(evidence) {
   }
 }
 
+/**
+ * v2.91.0 · APP-LINKED-PROVIDERS-AB-05 · vocabulario CERRADO de proveedores
+ * que el dueño publica al cliente como "vinculados a tu cuenta". Un proveedor
+ * que no esté acá no se publica aunque exista una fila: el cliente espeja este
+ * conjunto y no tiene que interpretar nombres que no conoce.
+ */
+const PROVEEDORES_PUBLICABLES = Object.freeze(['facebook', 'google']);
+
+/**
+ * Proveedores con binding ACTIVO de la cuenta `userId`, y nada más.
+ *
+ * Sólo el NOMBRE del proveedor: ni `subject`, ni namespace, ni fechas, ni
+ * email del proveedor. El filtro por `user_id` es la única frontera entre "mis
+ * identidades" y "las de otro": sin él, esta lectura sería un oráculo de
+ * vinculaciones ajenas (lo fija un test con dos usuarios y su mutante).
+ */
+async function proveedoresVinculados(userId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT DISTINCT provider FROM external_identity_bindings
+      WHERE user_id=$1 AND status='active'`,
+    [userId]
+  );
+  const activos = new Set(rows.map((r) => r.provider));
+  return PROVEEDORES_PUBLICABLES.filter((p) => activos.has(p));
+}
+
 async function linkExternalIdentity({ userId, currentPassword, evidence }) {
   const { rows } = await pool.query(
     `SELECT password_hash,status FROM users WHERE id=$1`, [userId]
@@ -184,9 +210,36 @@ async function linkExternalIdentity({ userId, currentPassword, evidence }) {
         throw codedError('reauthentication_failed', 403);
       }
       await assertSubjectAllowed(client, evidence);
+      // La credencial se consume SIEMPRE, también en el camino idempotente: un
+      // id_token ya usado sigue siendo 401 aunque el binding sea propio.
       await consumeCredential(client, evidence, 'link');
-      await insertBinding(client, { userId, evidence });
-      return { linked: true, provider: evidence.provider };
+      // v2.91.0 · idempotencia sólo para el MISMO usuario. ON CONFLICT DO
+      // NOTHING cubre las dos unicidades (subject tomado; usuario que ya tiene
+      // otro subject de este proveedor) y, ante un INSERT concurrente, espera
+      // su COMMIT. Después se lee el binding de ESTE subject: si es activo y de
+      // este usuario, la respuesta es la misma vinculación ya hecha; cualquier
+      // otro caso —de otra cuenta, revocado, u otro subject propio— conserva
+      // el social_auth_failed opaco de siempre, sin escribir nada.
+      const { rowCount } = await client.query(
+        `INSERT INTO external_identity_bindings
+           (user_id,provider,subject_namespace,subject,status)
+         VALUES ($1,$2,$3,$4,'active')
+         ON CONFLICT DO NOTHING`,
+        [userId, evidence.provider, evidence.subject_namespace, evidence.subject]
+      );
+      if (rowCount === 1) {
+        return { linked: true, provider: evidence.provider, already_linked: false };
+      }
+      const { rows: existing } = await client.query(
+        `SELECT user_id,status FROM external_identity_bindings
+          WHERE provider=$1 AND subject_namespace=$2 AND subject=$3`,
+        [evidence.provider, evidence.subject_namespace, evidence.subject]
+      );
+      const propio = existing.length === 1
+        && existing[0].user_id === userId
+        && existing[0].status === 'active';
+      if (!propio) throw authFailed();
+      return { linked: true, provider: evidence.provider, already_linked: true };
     });
   } catch (error) {
     if (error.code === 'reauthentication_failed') throw error;
@@ -200,5 +253,7 @@ module.exports = {
   registerWithExternalIdentity,
   loginWithExternalIdentity,
   linkExternalIdentity,
+  proveedoresVinculados,
+  PROVEEDORES_PUBLICABLES,
   consumeCredential,
 };

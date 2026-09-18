@@ -33,6 +33,18 @@ aunque luego se retire esa configuración.
 - `POST /api/auth/google/login`: resuelve exclusivamente un binding activo.
 - `POST /api/auth/google/link`: bearer PayMe + password actual; cero auto-link
   por email.
+  - **v2.91.0 · idempotente para la misma cuenta.** Si el subject ya está
+    vinculado, activo, a esta cuenta: `200 {linked:true, provider:"google",
+    already_linked:true}` sin escribir nada. Una vinculación nueva responde lo
+    mismo con `already_linked:false`. Vinculado a otra cuenta, revocado, u otro
+    subject de Google en esta cuenta: el mismo `social_auth_failed` 401 opaco.
+    La contraseña se exige y el id_token se consume en los dos caminos.
+- **v2.91.0 · `GET /api/account/me/linked-providers`** responde
+  `{ "linked_providers": [...] }`: nombres de proveedor con binding activo de la
+  cuenta del bearer, vocabulario cerrado `["facebook","google"]`, ordenado, `[]`
+  si no hay. Nunca subject, namespace, email ni fechas del proveedor.
+  `GET /api/account/me` no cambia ni una clave. Detalle en
+  `contract/social-auth-v1.json` → `linked_providers`.
 
 El ID token sólo viaja en body HTTPS y nunca se guarda/loguea. Los errores son
 opacos y una caída temporal se comunica como `503` sin revelar cuenta/binding.
