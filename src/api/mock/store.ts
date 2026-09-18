@@ -186,6 +186,12 @@ export interface MockState {
   /** GET /account/movements/:id, separado para no filtrar detalle en history. */
   movementDetails: Record<string, MovementDetailResponse>;
   walletTx: WalletTransaction[];
+  /**
+   * AF-09 · proveedores con binding ACTIVO, por usuario. Es por usuario y no una
+   * lista suelta porque el mock cambia `state.user` en cada login: una lista
+   * global haría que la cuenta de una persona apareciera vinculada en la de otra.
+   */
+  linkedProvidersByUser: Record<string, string[]>;
   transfers: TransferListItem[];
   notifications: AppNotification[];
   pendingInvitations: PendingInvitation[];
@@ -898,6 +904,7 @@ function seedState(): MockState {
     // Sin riel saldo no hay movimientos de saldo que mostrar. El seed queda
     // en el árbol (durmiente); lo que se apaga es la siembra.
     walletTx: [],
+    linkedProvidersByUser: {},
     notifications,
     pendingInvitations,
     linkTokens: {},
@@ -1214,6 +1221,13 @@ function loadPersisted(): MockState | null {
     // Migración 0.14: los estados persistidos previos no tienen `history`
     // (pantalla Mesas). Se backfillea desde el seed para no romper ni mostrar
     // un historial vacío a quien ya venía usando la demo.
+    // Migración AF-09: estados guardados antes de la vinculación no traen el
+    // campo. Se backfillea VACÍO —ninguna cuenta vinculada—, que es lo que esas
+    // demos efectivamente tenían. Tolerante: un valor podrido no descarta todo.
+    if (!parsed.linkedProvidersByUser || typeof parsed.linkedProvidersByUser !== 'object'
+        || Array.isArray(parsed.linkedProvidersByUser)) {
+      parsed.linkedProvidersByUser = {};
+    }
     if (!Array.isArray(parsed.history)) {
       parsed.history = seedState().history;
     }

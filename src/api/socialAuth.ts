@@ -288,6 +288,81 @@ export function decodeSocialSessionResponse(value: unknown): SocialSessionRespon
   };
 }
 
+/**
+ * APP-LINK-ACCOUNT-AF-09 · D-LOGIN-1 «Vincular desde la cuenta» (Mati, 2026-09-18).
+ *
+ * Los dos decoders de abajo son el ÚNICO lugar donde el front interpreta las
+ * respuestas nuevas del dueño (v2.91.0). Fallan cerrados: una forma que el
+ * contrato no declara no se «arregla» acá, se rechaza.
+ */
+
+/** Vocabulario CERRADO del dueño (`social-auth-v1.json` · `linked_providers.vocabulary`). */
+export const LINKED_PROVIDER_VOCABULARY = ['facebook', 'google'] as const;
+export type LinkedProvider = (typeof LINKED_PROVIDER_VOCABULARY)[number];
+
+function isLinkedProvider(value: unknown): value is LinkedProvider {
+  return typeof value === 'string'
+    && (LINKED_PROVIDER_VOCABULARY as readonly string[]).includes(value);
+}
+
+/**
+ * `GET /api/account/me/linked-providers` → `{ linked_providers: [...] }`.
+ *
+ * El dueño promete un array ORDENADO alfabéticamente, SIN repetidos y dentro de
+ * un vocabulario CERRADO. Se exigen las tres cosas, y no por desconfianza
+ * gratuita: un proveedor desconocido o un repetido significan que el contrato
+ * cambió sin que este front lo sepa, y ahí lo único honesto es no afirmar nada.
+ * Quien llama trata ese throw como «estado desconocido» —igual que el 404 de un
+ * backend anterior— y NO muestra la cuenta como desvinculada.
+ */
+export function decodeLinkedProvidersResponse(value: unknown): readonly LinkedProvider[] {
+  if (!plainObject(value) || !exactKeys(value, ['linked_providers'])
+      || !Array.isArray(value.linked_providers)) {
+    throw new Error('linked_providers_response_malformed');
+  }
+  const list = value.linked_providers as unknown[];
+  if (!list.every(isLinkedProvider)) throw new Error('linked_providers_response_malformed');
+  for (let i = 1; i < list.length; i += 1) {
+    // Estrictamente creciente ⇒ ordenado Y sin repetidos, en una sola regla.
+    if (!((list[i - 1] as string) < (list[i] as string))) {
+      throw new Error('linked_providers_response_malformed');
+    }
+  }
+  return Object.freeze([...list]) as readonly LinkedProvider[];
+}
+
+/** Cuerpo exacto de `POST /api/auth/google/link` (`social-auth-v1.json`). */
+export interface GoogleLinkRequest {
+  readonly id_token: string;
+  readonly current_password: string;
+}
+
+export interface GoogleLinkResult {
+  /**
+   * `true` = esta cuenta de Google YA estaba vinculada a ESTA misma cuenta y el
+   * dueño no escribió nada (v2.91.0, idempotente). `false` = se vinculó ahora.
+   */
+  readonly alreadyLinked: boolean;
+}
+
+/**
+ * `POST /api/auth/google/link` → `{ linked: true, provider: "google", already_linked }`.
+ *
+ * `linked` y `provider` son CONSTANTES en el contrato. Se verifican igual: un
+ * 200 que dijera otro proveedor, o `linked:false`, no es una vinculación, y
+ * mostrar «Vinculada» sobre eso sería afirmar algo que el dueño no dijo.
+ */
+export function decodeGoogleLinkResponse(value: unknown): GoogleLinkResult {
+  if (!plainObject(value)
+      || !exactKeys(value, ['already_linked', 'linked', 'provider'])
+      || value.linked !== true
+      || value.provider !== 'google'
+      || typeof value.already_linked !== 'boolean') {
+    throw new Error('google_link_response_malformed');
+  }
+  return { alreadyLinked: value.already_linked };
+}
+
 let state: SocialAuthState = PENDING;
 let inFlight: Promise<void> | null = null;
 const listeners = new Set<() => void>();

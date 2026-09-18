@@ -1,3 +1,4 @@
+import type { GoogleLinkRequest } from '../socialAuth';
 import { centsToDisplay, fractionAmount, splitEqual, sumCents, tipFromBps } from '../../utils/money';
 import { payloadCanonical, sha256Hex } from '../../utils/payloadIdentity';
 import {
@@ -757,6 +758,11 @@ export async function mockGoogleLogin(idToken: string): Promise<StoredSession> {
   await waitSocialLatency();
   return persistMockSocialUser(MOCK_USER, 'google-login', origin, () => {
     state.user = { ...MOCK_USER };
+    // AF-09 · en el dueño, `google/login` resuelve SÓLO por binding activo: nadie
+    // entra con Google sin tenerlo vinculado. Sin esta línea el mock mostraría
+    // «No vinculada» a quien acaba de entrar con Google, que es un estado que el
+    // backend real no puede producir. No cambia qué devuelve este login.
+    marcarProveedorVinculado(MOCK_USER.id, 'google');
     persist();
   });
 }
@@ -784,8 +790,59 @@ export async function mockGoogleRegister(data: GoogleRegisterRequest): Promise<S
   return persistMockSocialUser(user, 'google-register', origin, () => {
     state.user = user;
     state.paymentMethods = [];
+    // AF-09 · el alta social del dueño deja el binding creado. Mismo motivo que
+    // en `mockGoogleLogin`: que el mock no invente una cuenta desvinculada.
+    marcarProveedorVinculado(user.id, 'google');
     persist();
   });
+}
+
+function marcarProveedorVinculado(userId: string, provider: 'google'): void {
+  const lista = state.linkedProvidersByUser[userId] ?? [];
+  if (!lista.includes(provider)) state.linkedProvidersByUser[userId] = [...lista, provider].sort();
+}
+
+/** `GET /api/account/me/linked-providers` · la forma cruda; decodifica la fachada. */
+export async function mockGetLinkedProviders(): Promise<unknown> {
+  return delay({ linked_providers: [...(state.linkedProvidersByUser[state.user.id] ?? [])].sort() });
+}
+
+/**
+ * `id_token` ya presentados a `google/link`. El dueño los consume también en el
+ * camino idempotente: reenviar el MISMO es `social_auth_failed` 401.
+ */
+const mockLinkCredentialsUsed = new Set<string>();
+
+/**
+ * `POST /api/auth/google/link` · réplica del contrato v2.91.0.
+ *
+ * Valida el DTO con los límites del dueño (`schemas/index.js:210-213`:
+ * `id_token` 20–8192, `current_password` 8–128, `.strict()`), y es idempotente
+ * SÓLO para la misma cuenta: `already_linked: true` si ya estaba.
+ *
+ * ⚠️ **Lo que el mock NO reproduce, dicho:** la contraseña incorrecta (403). El
+ * mock no guarda contraseñas —su login acepta cualquiera—, así que acá no existe
+ * un camino natural a `reauthentication_failed`. Inventar una «contraseña mala»
+ * de mentira le enseñaría a la demo una regla que el producto no tiene. La vista
+ * previa llega a ese estado reemplazando la fachada, no desde acá.
+ */
+export async function mockGoogleLink(data: GoogleLinkRequest): Promise<unknown> {
+  const keys = Object.keys(data).sort();
+  if (keys.length !== 2 || keys[0] !== 'current_password' || keys[1] !== 'id_token'
+      || !validSocialCredential(data.id_token)
+      || typeof data.current_password !== 'string'
+      || data.current_password.length < 8 || data.current_password.length > 128) {
+    throw new MockApiError(400, 'validation_error');
+  }
+  await waitSocialLatency();
+  if (mockLinkCredentialsUsed.has(data.id_token)) throw new MockApiError(401, 'social_auth_failed');
+  mockLinkCredentialsUsed.add(data.id_token);
+  const alreadyLinked = (state.linkedProvidersByUser[state.user.id] ?? []).includes('google');
+  if (!alreadyLinked) {
+    marcarProveedorVinculado(state.user.id, 'google');
+    persist();
+  }
+  return { linked: true, provider: 'google', already_linked: alreadyLinked };
 }
 
 async function mockFacebookStart(

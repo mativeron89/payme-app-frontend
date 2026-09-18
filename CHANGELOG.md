@@ -11,6 +11,75 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.165.0 — Vincular Google desde la cuenta, con la contraseña una vez (2026-09-18)
+
+Orden `APP-LINK-ACCOUNT-AF-09-20260918`, base `2399f330…` (HEAD de AF-07).
+**Sin push, sin deploy, sin GREEN.** Consume App Backend **v2.91.0, que NO está
+publicado**: en producción esta sección aparece recién cuando se publique el
+backend y se encienda Google. Hoy Google está apagado y no se renderiza.
+
+### De dónde sale
+
+`D-LOGIN-1`, en la forma que Mati eligió el 2026-09-18: **«Vincular desde la
+cuenta (Recomendada)»**. La primera versión de la decisión pedía la contraseña en
+el momento del login, y eso exigía decirle a un visitante no autenticado que su
+email ya tenía cuenta en PayMe —un oráculo de existencia de cuentas—. Acá pasa
+todo detrás de la sesión de la persona: nadie puede preguntar por una cuenta ajena.
+
+Llegó en dos STOP antes de una línea de código, y los dos se resolvieron del lado
+del dueño, no adivinando del nuestro: primero el login con Google no distinguía el
+caso (por diseño), después el perfil no exponía si la cuenta tenía Google.
+
+### Qué se ve
+
+En Configuración, una tarjeta **«Cuentas conectadas»** con Google:
+**«Vinculada» / «No vinculada»** según lo que diga el dueño → «Vincular Google» →
+el botón de Google → la contraseña de PayMe **una vez** → «Vinculada». El paso de
+contraseña reutiliza las piezas del ingreso rediseñado: etiqueta fija, campo de 48
+px, error debajo del botón. **Sin el naranja de marca**: sus cuatro usos están
+reservados y un botón de Configuración no es ninguno; las acciones van en navy.
+
+### Las reglas que vienen del dueño, y cómo se respetan
+
+- **El estado sale de `GET /api/account/me/linked-providers`.** Ante un 404 —backend
+  anterior— el contrato dice que el consumidor «no puede afirmar ni negar una
+  vinculación». La sección **desaparece**: jamás muestra «No vinculada» sin saberlo.
+- **`google/link` es idempotente sólo para la misma cuenta.** Por eso es seguro
+  reintentar después de un fallo de red: si ya había entrado, el reintento lo confirma.
+- **La contraseña se valida ANTES de consumir el `id_token`.** Con contraseña
+  incorrecta se reintenta sólo la contraseña; con un error del proveedor se vuelve
+  a elegir Google, con un botón nuevo.
+- **Los errores del proveedor son opacos a propósito.** «Vinculada a otra cuenta»,
+  «token vencido» y «token repetido» dicen lo mismo: separarlos le diría a alguien
+  que esa cuenta de Google ya está en PayMe con otro dueño.
+- La contraseña vive sólo en memoria del componente, `autocomplete="current-password"`,
+  y se suelta al cancelar, al vincular y al salir. No hay desvincular en v1.
+
+### El espejo
+
+Se regeneró **primero y por separado**, por su procedimiento
+(`--adoptar-inventario`), desde el commit C del dueño (`6368240e…`) y no desde el
+A: A todavía ponía `linked_providers` dentro de `/me`, lo que le rompía el editor
+de perfil al front publicado. Integridad, paridad y vigencia en verde. Cambian
+cinco archivos; ninguno nuevo ni retirado. Procedencia en `contract-mirror/README.md`.
+
+### Pruebas
+
+La lógica es una máquina de estados pura; la vista se prueba con
+`renderToStaticMarkup`, sin jsdom. **Ocho mutantes plantados, los ocho en rojo**:
+sección oculta que pintara «No vinculada», capability ignorada, cancelar que no
+limpia, 403 tratado como error del proveedor, acción en naranja, estado global en
+el mock, migración ausente y token repetido aceptado. Vista previa en el riel mock,
+móvil y escritorio, con la contraseña incorrecta forzada parcheando la fachada
+—el mock no guarda contraseñas y no se le inventó una regla—.
+
+### Dicho y no arreglado
+
+- **El `package-lock.json` quedó en `0.161.4`** mientras `package.json` avanza. La
+  deriva la empezó `0.162.0` —subí la versión sin el lock— y siguió desde ahí. No
+  rompe `npm ci`, pero es una segunda copia de la versión que se pudre sin avisar.
+  El lock no está en los paths de esta orden: queda declarado para una orden propia.
+
 ## 0.164.0 — PWA B1: los tres metadatos iOS de instalación (2026-09-18)
 
 Orden `APP-DOCS-PWA-AF-07-20260918`, base `898f72b3…`. **Sin push, sin deploy,

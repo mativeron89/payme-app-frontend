@@ -4,6 +4,8 @@ const getConfig = vi.fn<() => Promise<unknown>>();
 vi.mock('./index', () => ({ api: { getConfig } }));
 
 const {
+  decodeGoogleLinkResponse,
+  decodeLinkedProvidersResponse,
   ensureSocialAuthCapability,
   readSocialAuthCapability,
   resetSocialAuthForTests,
@@ -261,5 +263,62 @@ describe('C2b · un config que no se entiende no abre el alta, y sí conserva el
     expect(estado.status).toBe('malformed');
     expect(estado.publicRegistration).toBe(false);
     expect(estado.passwordLoginEnabled).toBe(true);
+  });
+});
+
+/**
+ * AF-09 · los dos decoders de v2.91.0. Cada caso de rechazo es una forma que el
+ * contrato NO declara; si pasara, la pantalla afirmaría algo que el dueño no dijo.
+ */
+describe('decodeLinkedProvidersResponse · GET /api/account/me/linked-providers', () => {
+  it('acepta la forma del contrato: vacío, uno y los dos, ordenados', () => {
+    expect(decodeLinkedProvidersResponse({ linked_providers: [] })).toEqual([]);
+    expect(decodeLinkedProvidersResponse({ linked_providers: ['google'] })).toEqual(['google']);
+    expect(decodeLinkedProvidersResponse({ linked_providers: ['facebook', 'google'] }))
+      .toEqual(['facebook', 'google']);
+  });
+
+  it('🔴 rechaza toda forma que el contrato no declara', () => {
+    const malas: unknown[] = [
+      null,
+      [],
+      'google',
+      {},
+      { linked_providers: 'google' },
+      { linked_providers: ['google'], extra: true },          // clave de más
+      { linked_providers: ['apple'] },                        // fuera del vocabulario CERRADO
+      { linked_providers: ['google', 'facebook'] },           // desordenado
+      { linked_providers: ['google', 'google'] },             // repetido
+      { linked_providers: [1] },
+      { linked_providers: ['Google'] },                       // el vocabulario es exacto
+    ];
+    for (const mala of malas) {
+      expect(() => decodeLinkedProvidersResponse(mala), JSON.stringify(mala))
+        .toThrow('linked_providers_response_malformed');
+    }
+  });
+});
+
+describe('decodeGoogleLinkResponse · POST /api/auth/google/link', () => {
+  it('devuelve si ya estaba vinculada, en los dos caminos del 200', () => {
+    expect(decodeGoogleLinkResponse({ linked: true, provider: 'google', already_linked: false }))
+      .toEqual({ alreadyLinked: false });
+    expect(decodeGoogleLinkResponse({ linked: true, provider: 'google', already_linked: true }))
+      .toEqual({ alreadyLinked: true });
+  });
+
+  it('🔴 un 200 que no es una vinculación de Google no se toma como una', () => {
+    const malas: unknown[] = [
+      { linked: false, provider: 'google', already_linked: false },
+      { linked: true, provider: 'facebook', already_linked: false },
+      { linked: true, provider: 'google' },                                 // backend anterior a v2.91.0
+      { linked: true, provider: 'google', already_linked: 'no' },
+      { linked: true, provider: 'google', already_linked: false, user: {} },
+      null,
+    ];
+    for (const mala of malas) {
+      expect(() => decodeGoogleLinkResponse(mala), JSON.stringify(mala))
+        .toThrow('google_link_response_malformed');
+    }
   });
 });

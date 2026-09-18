@@ -13,6 +13,8 @@ import { accountRailView, corteDePagosView } from '../api/releaseGates';
 import { useMoneyRail } from '../api/moneyRail';
 import { fullName } from '../utils/identity';
 import { useProfileIdentityCapability } from '../api/privateFeatures';
+import { useSocialAuthCapability } from '../api/socialAuth';
+import { CuentasConectadas } from './CuentasConectadas';
 
 /**
  * **`Configuración`** — la quinta posición de la barra.
@@ -63,6 +65,7 @@ export function MasScreen() {
    */
   const corteDeclarado = moneyRail.status === 'authoritative' && !moneyRail.puedeCargarTarjeta;
   const profileIdentity = useProfileIdentityCapability();
+  const social = useSocialAuthCapability();
   const user = session?.user;
 
   return (
@@ -176,6 +179,18 @@ export function MasScreen() {
               gestión de tarjetas, superficie card-only ratificada, y la barra no
               tiene posición para ella. */}
         </div>
+        {/* AF-09 · D-LOGIN-1 «Vincular desde la cuenta». La sección existe SÓLO
+            con `social.google.linking` del dueño: hoy, en producción, Google
+            está apagado y esto no se renderiza ni pide nada. Va DETRÁS de la
+            sesión a propósito: todo el valor del diseño elegido es que ningún
+            visitante pueda preguntar por una cuenta ajena. */}
+        {session && (
+          <CuentasConectadas
+            linking={social.google.linking}
+            webClientId={social.google.webClientId}
+            session={session}
+          />
+        )}
         {IS_MOCK && (
           <button
             className="btn btn-ghost config-reset"

@@ -48,6 +48,14 @@ import { guaranteeOutcome } from './paymentStatus';
 import { loadSession, type SessionStateWitness, type StoredSession } from './storage';
 import { decodeFacebookStartResponse } from './facebookAuthFlow';
 import {
+  decodeGoogleLinkResponse,
+  decodeLinkedProvidersResponse,
+  socialAuthSnapshot,
+  type GoogleLinkRequest,
+  type GoogleLinkResult,
+  type LinkedProvider,
+} from './socialAuth';
+import {
   decodeRecoveryCompleteResponse,
   decodeRecoveryRequestResponse,
 } from './recoveryFlow';
@@ -166,6 +174,17 @@ export const QR_RESTAURANT_ID: string | null = readQrRestaurant();
  */
 export const MAX_TICKET_IMAGE_BYTES = 8 * 1024 * 1024;
 
+/**
+ * La ESCRITURA de una vinculación no existe en la fachada con la capability
+ * apagada, igual que las operaciones de `profile_identity`: la pantalla la
+ * oculta, y esto es la segunda capa para que ningún otro camino la dispare.
+ * La lectura de `linked-providers` no se gatea: el dueño la sirve sólo por
+ * sesión y es un dato de la propia cuenta.
+ */
+function assertGoogleLinkingEnabled(): void {
+  if (!socialAuthSnapshot().google.linking) throw new Error('google_linking_not_available');
+}
+
 export interface Api {
   /**
    * `GET /api/config`. Público (sin sesión) y de solo lectura. Lo consume
@@ -183,6 +202,12 @@ export interface Api {
   register(data: RegisterRequest): Promise<StoredSession>;
   googleLogin(idToken: string): Promise<StoredSession>;
   googleRegister(data: GoogleRegisterRequest): Promise<StoredSession>;
+  /**
+   * AF-09 · D-LOGIN-1 «Vincular desde la cuenta». Las dos exigen la sesión de
+   * ESA cuenta: el dueño nunca responde por otra, ni por parámetro.
+   */
+  getLinkedProviders(expectedSession: StoredSession): Promise<readonly LinkedProvider[]>;
+  googleLink(data: GoogleLinkRequest, expectedSession: StoredSession): Promise<GoogleLinkResult>;
   facebookLoginStart(): Promise<FacebookStartResponse>;
   facebookRegisterStart(data: FacebookRegisterStartRequest): Promise<FacebookStartResponse>;
   facebookLoginComplete(
@@ -362,6 +387,17 @@ const realApi: Api = {
   register: (data) => httpRegister(data),
   googleLogin: (idToken) => httpSocialSession('/auth/google/login', { id_token: idToken }),
   googleRegister: (data) => httpSocialSession('/auth/google/register', data),
+  // `private, no-store` es contrato del dueño para esta ruta: el lector
+  // privado lo EXIGE, igual que para `/account/me`.
+  getLinkedProviders: async (expectedSession) => decodeLinkedProvidersResponse(
+    await httpPrivateJsonRequest<unknown>('/account/me/linked-providers', expectedSession),
+  ),
+  googleLink: async (data, expectedSession) => {
+    assertGoogleLinkingEnabled();
+    return decodeGoogleLinkResponse(
+      await httpRequest<unknown>('POST', '/auth/google/link', data, expectedSession),
+    );
+  },
   facebookLoginStart: async () => decodeFacebookStartResponse(
     await httpPublicRequest<unknown>('POST', '/auth/facebook/login/start', {}),
   ),
@@ -732,6 +768,11 @@ const mockApi: Api = {
   register: (data) => runWithSessionStateLock(() => mock.mockRegister(data)),
   googleLogin: (idToken) => mock.mockGoogleLogin(idToken),
   googleRegister: (data) => mock.mockGoogleRegister(data),
+  getLinkedProviders: async () => decodeLinkedProvidersResponse(await mock.mockGetLinkedProviders()),
+  googleLink: async (data) => {
+    assertGoogleLinkingEnabled();
+    return decodeGoogleLinkResponse(await mock.mockGoogleLink(data));
+  },
   facebookLoginStart: () => mock.mockFacebookLoginStart(),
   facebookRegisterStart: (data) => mock.mockFacebookRegisterStart(data),
   facebookLoginComplete: (data, expectedStateWitness) => mock.mockFacebookLoginComplete(
