@@ -13,8 +13,13 @@
          de ninguna tipografía. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- Dark A de instalación PWA (AF-PWA-INSTALLABILITY-DARK-A-01): manifest
-         same-origin e iconos locales, nada más. NO hay service worker ni caché
-         — las respuestas privadas siguen `no-store` y esto NO habilita offline.
+         same-origin e iconos locales. Desde B2 (0.166.0, AF-15) SÍ hay un
+         service worker, pero sólo cachea estáticos versionados: los archivos
+         de `/assets/` con hash en el nombre y los íconos de `/pwa/`. Este
+         `index.html`, toda navegación y la API van SIEMPRE por red; las
+         respuestas privadas siguen `no-store`, y sigue SIN haber modo offline.
+         No se registra desde este HTML sino desde `src/main.tsx`; qué hace y
+         cómo se retira: `docs/SERVICE_WORKER.md`.
          El apple-touch-icon es full-bleed opaco porque iOS aplica su propia
          máscara; el maskable del manifest lleva el tile dentro de la safe zone.
          La guarda estructural vive en `scripts/pwaInstallability.test.ts`. -->
@@ -23,8 +28,8 @@
     <!-- PWA B1 (AF-PWA-INSTALLABILITY-STAGE-B-01, sub-orden B1, 2026-09-18):
          tres metadatos que iOS lee para "Agregar a inicio" desde el Share
          sheet de Safari, que el manifest solo no le alcanza a cubrir de forma
-         confiable en todas las versiones. Sigue siendo SEAM, no PWA completa:
-         cero service worker, cero caché — igual que Dark A arriba.
+         confiable en todas las versiones. Son sólo metadatos: el service
+         worker de B2 no se registra desde acá (ver el comentario de arriba).
          `apple-mobile-web-app-title` repite el `short_name` del manifest
          ("PayMe"), nunca un nombre distinto. `status-bar-style` es
          `black-translucent` porque el viewport ya declara `viewport-fit=cover`

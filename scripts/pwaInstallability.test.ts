@@ -349,7 +349,8 @@ describe('index.html enlaza la instalación sin cambiar la superficie autenticad
 // ═══════════════════════════════════════════════════════════════════════════
 // PWA B1 (AF-PWA-INSTALLABILITY-STAGE-B-01, sub-orden B1, 2026-09-18): los
 // tres `<meta name="apple-mobile-web-app-*">` que iOS lee para "Agregar a
-// inicio". Sin service worker: eso sigue siendo B2, con decisión de Mati.
+// inicio". B1 es sólo metadata; el service worker llegó después con B2 y se
+// fija más abajo.
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('index.html declara los tres metadatos iOS de instalación (B1)', () => {
