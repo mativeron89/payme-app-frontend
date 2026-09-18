@@ -34,9 +34,22 @@ export class HttpError extends Error {
   }
 }
 
-async function withSessionLock<T>(action: () => Promise<T> | T): Promise<T | null> {
+/**
+ * AF-20 · n89 · cierra la costura C-02 de `docs/COSTURAS_CONOCIDAS.md`.
+ *
+ * «No hay Web Locks» se distingue de «la acción corrió» con un CENTINELA
+ * propio, y no con `null`. Antes era `null`: una acción que resolviera `null`
+ * legítimamente se leía como «no corrió», y los llamadores con fallback
+ * (`invalidateSessionSerialized`, `persistNewSession`) la ejecutaban DOS veces,
+ * una bajo el lock y otra fuera. Sobre la sesión, eso es una invalidación o un
+ * guardado duplicado. Un `symbol` no puede salir de ninguna acción por
+ * accidente.
+ */
+export const SIN_WEB_LOCKS: unique symbol = Symbol('sin-web-locks');
+
+export async function withSessionLock<T>(action: () => Promise<T> | T): Promise<T | typeof SIN_WEB_LOCKS> {
   const locks = globalThis.navigator?.locks;
-  if (!locks) return null;
+  if (!locks) return SIN_WEB_LOCKS;
   return locks.request(SESSION_LOCK, { mode: 'exclusive' }, action);
 }
 
@@ -63,7 +76,7 @@ export async function invalidateSessionSerialized(session: StoredSession): Promi
     // No se abandona la limpieza física por un fallo del journal.
   }
   const locked = await withSessionLock(() => invalidateSession(session));
-  return locked ?? invalidateSession(session);
+  return locked === SIN_WEB_LOCKS ? invalidateSession(session) : locked;
 }
 
 async function parseBody(res: Response): Promise<ApiError | null> {
@@ -205,7 +218,7 @@ async function tryRefresh(session: StoredSession): Promise<StoredSession | null>
   if (existing) return existing;
   const run = async () => {
     if (!isCurrentSession(session)) return null;
-    return withSessionLock(async () => {
+    const refrescada = await withSessionLock(async () => {
       const current = loadSession();
       if (!current || current.family_id !== session.family_id || current.principal_id !== session.principal_id) return null;
       if (current.refresh_token !== session.refresh_token) return current;
@@ -226,6 +239,9 @@ async function tryRefresh(session: StoredSession): Promise<StoredSession | null>
         return null;
       }
     });
+    // Sin Web Locks no hay refresh, como antes: sin exclusión cross-tab no se
+    // rota un refresh token a ciegas.
+    return refrescada === SIN_WEB_LOCKS ? null : refrescada;
   };
   const pending = run().finally(() => refreshInFlight.delete(session.family_id));
   refreshInFlight.set(session.family_id, pending);
@@ -452,7 +468,7 @@ async function persistNewSession(
   // El social auth puede responder desde otra pestaña: sin Web Locks no existe
   // un CAS cross-tab honesto y falla cerrado. Password conserva el fallback
   // histórico, acotado al tramo sincrónico de esta pestaña.
-  if (saved === null) {
+  if (saved === SIN_WEB_LOCKS) {
     if (requireWebLock) throw new Error('session_lock_unavailable');
     commit();
   }

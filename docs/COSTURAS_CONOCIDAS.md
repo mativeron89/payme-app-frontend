@@ -46,6 +46,15 @@ sesión.
 
 ## C-02 · `withSessionLock` distingue «no hay Web Locks» de «corrió bien» por `null` vs `undefined`
 
+✅ **CERRADA el 2026-09-18 (`APP-SESSION-LOCK-AND-SEAMS-AF-20`, ítem n89 del
+Roadmap), con el arreglo que proponía esta misma entrada.** `withSessionLock`
+devuelve un centinela propio, `SIN_WEB_LOCKS` (un `symbol`), cuando el navegador
+no expone `navigator.locks`, y las tres puertas de sesión comparan contra él:
+`invalidateSessionSerialized`, `tryRefresh` y `persistNewSession`. Una acción que
+resuelve `null` corre exactamente una vez. Lo fija `src/api/sessionLock.test.ts`:
+volver a `null` o a `??` pone rojo el test. El texto de abajo describe cómo era, y
+se conserva porque explica por qué importaba.
+
 `src/api/http.ts`. Cuando el navegador no expone `navigator.locks`, la función
 devuelve `null`; cuando corrió, devuelve lo que devolvió la acción. Los dos
 llamadores conviven bien con eso **hoy**:
