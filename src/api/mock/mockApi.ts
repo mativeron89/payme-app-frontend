@@ -356,6 +356,41 @@ export function setAltaPublicaMock(abierta: boolean): void {
   try { localStorage.setItem(CLAVE_ALTA_PUBLICA, abierta ? 'true' : 'false'); } catch { /* ver altaPublicaMock */ }
 }
 
+/**
+ * AF-16 · la identidad de Google del riel mock NO tiene cuenta PayMe.
+ *
+ * El dueño contesta `google/login` con un `401 social_auth_failed` opaco cuando
+ * no hay vínculo activo. El mock entraba siempre con `MOCK_USER`, así que ese
+ * camino —el de una persona nueva que toca Google en el ingreso— era
+ * inalcanzable en el riel donde corren los e2e. Mismo seam que el alta
+ * pública: `localStorage`, sólo el `true` exacto, fail-closed a «tiene cuenta»,
+ * que es la conducta de siempre.
+ */
+const CLAVE_GOOGLE_SIN_CUENTA = 'payme.app.mock.google_sin_cuenta.v1';
+
+export function googleSinCuentaMock(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_GOOGLE_SIN_CUENTA) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/** Para tests y consola. No hay UI: esto no es una preferencia del usuario. */
+export function setGoogleSinCuentaMock(sinCuenta: boolean): void {
+  try { localStorage.setItem(CLAVE_GOOGLE_SIN_CUENTA, sinCuenta ? 'true' : 'false'); } catch { /* ver googleSinCuentaMock */ }
+}
+
+/**
+ * `id_token` de Google ya presentados a `google/login` o `google/register`.
+ * El dueño los consume en los dos, también en un ingreso FALLIDO
+ * (`consumeCredential` escribe el digest aunque no haya vínculo) y con
+ * `UNIQUE (provider, credential_hash)` para cualquier propósito: reusar en el
+ * alta el token de un ingreso fallido es `registration_not_available`. El mock
+ * lo reproduce para que un consumidor que lo reutilizara se ponga rojo acá.
+ */
+const mockGoogleCredencialesConsumidas = new Set<string>();
+
 /** Para tests y consola. No hay UI: esto no es una preferencia del usuario. */
 export function setModoMonetarioMock(m: ModoMonetarioMock): void {
   try { localStorage.setItem(CLAVE_MODO, m); } catch { /* ver modoMonetarioMock */ }
@@ -756,6 +791,9 @@ export async function mockGoogleLogin(idToken: string): Promise<StoredSession> {
   if (!validSocialCredential(idToken)) throw new MockApiError(400, 'validation_error');
   const origin = loadSession();
   await waitSocialLatency();
+  if (mockGoogleCredencialesConsumidas.has(idToken)) throw new MockApiError(401, 'social_auth_failed');
+  mockGoogleCredencialesConsumidas.add(idToken);
+  if (googleSinCuentaMock()) throw new MockApiError(401, 'social_auth_failed');
   return persistMockSocialUser(MOCK_USER, 'google-login', origin, () => {
     state.user = { ...MOCK_USER };
     // AF-09 · en el dueño, `google/login` resuelve SÓLO por binding activo: nadie
@@ -784,12 +822,19 @@ export async function mockGoogleRegister(data: GoogleRegisterRequest): Promise<S
       || !data.last_name.trim() || data.last_name.length > 100) {
     throw new MockApiError(403, 'registration_not_available');
   }
+  if (mockGoogleCredencialesConsumidas.has(data.id_token)) {
+    throw new MockApiError(403, 'registration_not_available');
+  }
+  mockGoogleCredencialesConsumidas.add(data.id_token);
   const origin = loadSession();
   await waitSocialLatency();
   const user = socialRegistrationUser(data);
   return persistMockSocialUser(user, 'google-register', origin, () => {
     state.user = user;
     state.paymentMethods = [];
+    // AF-16 · la identidad ahora tiene cuenta: el próximo ingreso con Google
+    // entra directo, como en el dueño después del alta.
+    setGoogleSinCuentaMock(false);
     // AF-09 · el alta social del dueño deja el binding creado. Mismo motivo que
     // en `mockGoogleLogin`: que el mock no invente una cuenta desvinculada.
     marcarProveedorVinculado(user.id, 'google');

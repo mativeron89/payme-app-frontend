@@ -19,6 +19,7 @@ import {
   renderGoogleIdentityButton,
   type GoogleButtonHandle,
 } from '../api/googleIdentity';
+import { sugerenciaDesdeIdToken } from '../api/googleClaims';
 import { socialAuthSnapshot, useSocialAuthCapability } from '../api/socialAuth';
 import { captureSessionStateWitness } from '../api/storage';
 import {
@@ -98,6 +99,36 @@ export function autoridadDeAlta(
 ): AutoridadDeAlta {
   if (invitacion.status === 'available') return { tipo: 'invitacion', token: invitacion.token };
   return publicRegistration ? { tipo: 'publica' } : null;
+}
+
+/**
+ * 🔴 **AF-16 · tocar «Google» en el ingreso sirve también para registrarse.**
+ * Decisión de Mati, 2026-09-18: *«Yo quiero que se pueden registrar usando
+ * Google, es FUNDAMENTAL que se registren usando Google»*.
+ *
+ * Cuando `google/login` falla, el dueño devuelve un `401 social_auth_failed`
+ * **opaco**: es la misma respuesta si la persona no tiene cuenta, si su
+ * vínculo está dado de baja o si el token no sirvió. El consumidor no puede
+ * distinguirlos **y no debe intentarlo** (anti-enumeración). Por eso el alta se
+ * ofrece ante TODO 401 opaco, nunca como «no tienes cuenta», y sólo si hay con
+ * qué crearla: una autoridad de alta (invitación o alta pública) y la
+ * capability `google_sign_in.registration` del dueño.
+ *
+ * Fuera de ese caso no se ofrece nada:
+ * - un `503` es «no pudimos verificar ahora» y se reintenta, no se registra;
+ * - cualquier otro error no es la respuesta opaca del ingreso;
+ * - con el alta cerrada, ofrecerla sería prometer algo que el dueño rechaza.
+ */
+export function ofrecerAltaConGoogle(input: {
+  readonly status: number | null;
+  readonly code: string;
+  readonly autoridad: AutoridadDeAlta;
+  readonly googleRegistration: boolean;
+}): boolean {
+  return input.status === 401
+    && input.code === 'social_auth_failed'
+    && input.autoridad !== null
+    && input.googleRegistration;
 }
 
 export interface SocialActionEligibility {
@@ -233,6 +264,12 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   const [recoveryAccepted, setRecoveryAccepted] = useState(false);
   const [googleGeneration, setGoogleGeneration] = useState(0);
   const [googleLoadFailed, setGoogleLoadFailed] = useState(false);
+  /**
+   * AF-16 · la persona tocó Google en el ingreso, no se resolvió una cuenta y
+   * la app continuó hacia «Crea tu cuenta con Google». Sólo tiene sentido en
+   * modo registro: al volver a `login` se apaga (efecto de abajo).
+   */
+  const [altaConGoogle, setAltaConGoogle] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [legal, setLegal] = useState<LegalState>({ status: 'idle' });
   const [legalAttempt, setLegalAttempt] = useState(0);
@@ -247,6 +284,19 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   const autoridad = autoridadDeAlta(signup, social.publicRegistration);
   const signupAvailable = autoridad !== null;
   const altaPublica = autoridad?.tipo === 'publica';
+  /**
+   * El paso «Crea tu cuenta con Google» pide SÓLO lo que el dueño exige para
+   * `google_register`: sin contraseña ni «Registrarme». Se deriva —no se
+   * guarda— de la capability actual: si el dueño apaga el alta con Google
+   * mientras la persona está acá, vuelve el formulario de alta completo en vez
+   * de quedar una pantalla sin ningún botón.
+   */
+  const pasoGoogle = mode === 'register'
+    && altaConGoogle
+    && signupAvailable
+    && social.google.enabled
+    && social.google.registration
+    && social.google.webClientId !== null;
   const legalReady = legal.status === 'ready';
   const googleEligible = socialActionEligible({
     mode,
@@ -259,7 +309,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     email,
     requiereInvitacion: false,
   }) && social.google.webClientId !== null;
-  const facebookEligible = socialActionEligible({
+  const facebookEligible = !pasoGoogle && socialActionEligible({
     mode,
     providerActionEnabled: social.facebook.enabled
       && (mode === 'login' ? social.facebook.login : social.facebook.registration),
@@ -401,8 +451,49 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
                 // Sólo hay algo que soltar si se usó una invitación.
                 if (authority.alta.tipo === 'invitacion') clearSignupInvitation();
               }
-            } catch {
-              setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
+            } catch (err) {
+              const { status, code } = extractApiError(err);
+              if (authority.purpose === 'login') {
+                // AF-16 · la autoridad se lee AHORA, no la del render que montó
+                // el botón: el alta pudo cerrarse o la invitación retirarse.
+                const actual = socialAuthSnapshot();
+                if (ofrecerAltaConGoogle({
+                  status,
+                  code,
+                  autoridad: autoridadDeAlta(signupInvitationSnapshot(), actual.publicRegistration),
+                  googleRegistration: actual.google.enabled
+                    && actual.google.registration
+                    && actual.google.webClientId !== null,
+                })) {
+                  // 🔴 El `id_token` NO se reutiliza: el dueño lo consume también
+                  // en un ingreso fallido (`consumeCredential` escribe el digest
+                  // anti-replay aunque no haya vínculo, con `UNIQUE (provider,
+                  // credential_hash)` para cualquier propósito). Mandarlo al alta
+                  // sería un `registration_not_available` seguro. Por eso el
+                  // paso pide un toque más, y del token sólo quedan sugerencias
+                  // editables, en memoria: nunca se persiste.
+                  const sugerencia = sugerenciaDesdeIdToken(credential);
+                  setFirstName((value) => (value.trim() ? value : sugerencia.firstName));
+                  setLastName((value) => (value.trim() ? value : sugerencia.lastName));
+                  setEmail((value) => (value.trim() ? value : sugerencia.email));
+                  setPassword('');
+                  setRecoveryAccepted(false);
+                  setAltaConGoogle(true);
+                  setMode('register');
+                  setGoogleGeneration((value) => value + 1);
+                  return;
+                }
+                // Alta cerrada o fallo que no es el 401 opaco: un texto neutro
+                // que no promete un alta que no está disponible ni afirma nada
+                // sobre si la cuenta existe.
+                setError(t('No pudimos entrar con Google. Prueba de nuevo o entra con tu correo y contraseña.'));
+              } else {
+                // D-R15 · el texto vigente de `registration_not_available` ya
+                // orienta a iniciar sesión o recuperar sin afirmar que exista.
+                setError(code === 'registration_not_available'
+                  ? errorMessage(err, t)
+                  : t('No pudimos completar el ingreso. Prueba de nuevo.'));
+              }
               // El handle es one-use: un fallo requiere una generación nueva.
               setGoogleGeneration((value) => value + 1);
             } finally {
@@ -524,8 +615,16 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     return () => { alive = false; };
   }, [mode, signup, legalAttempt]);
 
+  // AF-16 · el paso de Google existe sólo en registro.
+  useEffect(() => {
+    if (mode === 'login') setAltaConGoogle(false);
+  }, [mode]);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    // En el paso de Google no hay contraseña: un Enter no puede disparar el
+    // alta con contraseña vacía.
+    if (pasoGoogle) return;
     if (!tryAcquireAuthAction()) return;
     setBusy(true);
     setError(null);
@@ -572,7 +671,17 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
    * tener línea. Hoy, en producción, `/api/config` trae Google y Facebook
    * apagados y esto es `false`: la tarjeta termina en «¿Olvidaste…?».
    */
-  const haySocial = googleEligible || facebookEligible || faltaCorreoParaAltaSocial;
+  /**
+   * AF-16 · en el paso de Google no hay «Registrarme»: si el botón de Google
+   * todavía no aparece —falta nombre o apellido; el correo tiene su propio
+   * aviso—, la pantalla quedaría sin ninguna acción. Se dice qué falta.
+   */
+  const faltanDatosParaGoogle = pasoGoogle
+    && legal.status === 'ready'
+    && !googleEligible
+    && !faltaCorreoParaAltaSocial;
+  const haySocial = googleEligible || facebookEligible || faltaCorreoParaAltaSocial
+    || faltanDatosParaGoogle;
 
   return (
     <div className="ingreso">
@@ -607,7 +716,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
 
       <div className="ingreso-burbuja">
         <div className="ingreso-burbuja-titulo">
-          {mode === 'login' ? t('Entra a tu cuenta') : t('Crea tu cuenta')}
+          {mode === 'login'
+            ? t('Entra a tu cuenta')
+            : pasoGoogle ? t('Crea tu cuenta con Google') : t('Crea tu cuenta')}
         </div>
         {/* El artefacto sólo diseña el login; el alta es la pantalla siguiente y
             todavía no está diseñada. Por eso el subtítulo no se inventa para el
@@ -615,6 +726,11 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         {mode === 'login' && (
           <div className="ingreso-burbuja-sub">
             {t('Con tu cuenta guardamos tus tarjetas y tus pagos anteriores.')}
+          </div>
+        )}
+        {pasoGoogle && (
+          <div className="ingreso-burbuja-sub" role="status">
+            {t('Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.')}
           </div>
         )}
       </div>
@@ -660,6 +776,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
               suyo porque el artefacto NO diseña el alta y no hay pista que
               copiar — inventarla sería escribir copy de una pantalla que
               todavía no se diseñó. */}
+          {/* Con invitación el email lo pone la invitación: en el paso de Google
+              no se pide, porque no viaja. */}
+          {!(pasoGoogle && autoridad?.tipo === 'invitacion') && (
           <label className="ingreso-campo">
             <span className="ingreso-etiqueta">{t('Email')}</span>
             <input
@@ -678,7 +797,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
               required
             />
           </label>
+          )}
 
+          {!pasoGoogle && (
           <label className="ingreso-campo">
             <span className="ingreso-etiqueta">{t('Contraseña')}</span>
             <input
@@ -695,6 +816,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
               required
             />
           </label>
+          )}
 
           {mode === 'register' && legal.status === 'loading' && (
             <div className="legal-notice-state" role="status">{t('Cargando…')}</div>
@@ -725,6 +847,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             </section>
           )}
 
+          {!pasoGoogle && (
           <button
             className="ingreso-entrar"
             type="submit"
@@ -733,6 +856,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
           >
             {busy ? t('Un segundo…') : mode === 'login' ? t('Entrar') : t('Registrarme')}
           </button>
+          )}
 
           {/* §5 · el mensaje va DEBAJO de «Entrar» y es obligatorio: el borde
               ámbar de los campos nunca viaja solo. */}
@@ -774,9 +898,13 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
 
           {haySocial && (
             <>
-              <div className="social-auth-divider" aria-hidden="true">
-                <span>{t('O continúa con')}</span>
-              </div>
+              {/* En el paso de Google no hay acción principal de la que Google
+                  sea la alternativa: el «O» no tiene a qué oponerse. */}
+              {!pasoGoogle && (
+                <div className="social-auth-divider" aria-hidden="true">
+                  <span>{t('O continúa con')}</span>
+                </div>
+              )}
               <section className="social-auth-options ingreso-social" aria-busy={socialBusy}>
                 {/* 🔴 D-R16 · el aviso sigue vivo y su motivo CAMBIÓ con el
                     rediseño, así que se reescribe en vez de arrastrarse: antes
@@ -786,6 +914,11 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
                     esté vacío, y un control que se esfuma sin decir por qué
                     sigue siendo un callejón sin salida. El aviso ocupa el lugar
                     del botón ausente. */}
+                {faltanDatosParaGoogle && (
+                  <p className="note note-orange note-datos-google" role="status">
+                    {t('Escribe tu nombre y apellido aquí arriba para continuar con Google.')}
+                  </p>
+                )}
                 {faltaCorreoParaAltaSocial && (
                   <p className="note note-orange note-correo-social" role="status">
                     {t('Escribe tu correo aquí abajo para continuar con Google.')}

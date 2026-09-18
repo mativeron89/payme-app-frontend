@@ -11,6 +11,88 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.167.0 — Tocar «Google» en el ingreso también sirve para registrarse (2026-09-18)
+
+Orden `APP-GOOGLE-SIGNUP-FLOW-AF-16-20260918`, base `90008dc2…` (= `origin/main`,
+0.166.0). **Sin push, sin deploy, sin GREEN.** Decisión de Mati, después de probarlo
+él mismo en producción y recibir el cartel genérico: *«Yo quiero que se pueden
+registrar usando Google, es FUNDAMENTAL que se registren usando Google»*.
+
+### El problema, medido
+
+En el ingreso, Google llamaba `google/login`. Para una identidad sin cuenta el dueño
+contesta `401 social_auth_failed` **opaco** (medido en producción: 17:47:11Z y
+17:47:19Z), y la pantalla terminaba en «No pudimos completar el ingreso. Prueba de
+nuevo». El alta con Google existía, pero sólo si la persona entraba antes a «Crea tu
+cuenta».
+
+### Qué cambia (sólo consumidor; el contrato del dueño no se tocó)
+
+- **Ante un 401 opaco del ingreso con Google**, si hay con qué crear la cuenta
+  (alta pública abierta o invitación capturada) **y** el dueño publica
+  `google_sign_in.registration`, la pantalla continúa a **«Crea tu cuenta con
+  Google»**. Las dos cosas se leen en el momento del fallo, no las del render.
+- **Ese paso pide sólo lo que el dueño exige para `google_register`**: nombre,
+  apellido, correo (sólo con alta pública; con invitación lo pone la invitación) y el
+  aviso de privacidad vigente. No pide contraseña ni muestra «Registrarme» ni Facebook.
+  Si falta el nombre, lo dice en el lugar del botón, para que la pantalla no quede
+  sin ninguna acción.
+- **🔴 El `id_token` NO se reutiliza: hace falta un toque más.** Medido en el espejo
+  (`services/externalIdentities.js`): `loginWithExternalIdentity` consume la
+  credencial también cuando no hay vínculo, y `external_auth_credentials` tiene
+  `UNIQUE (provider, credential_hash)` para cualquier propósito. Reusarla en el alta
+  sería `registration_not_available`. Por eso el paso pide tocar Google otra vez.
+- **Prellenado sólo como sugerencia editable** (`src/api/googleClaims.ts`): nombre,
+  apellido y correo salen del payload del token, decodificado localmente y sin
+  verificar la firma. Ante cualquier cosa rara la sugerencia es vacía. El token y
+  sus claims **no se persisten**: viven en la memoria del callback.
+- **Anti-enumeración intacta**: el paso se ofrece ante TODO 401 opaco y el texto
+  nunca afirma que la cuenta exista o no. Un `503` («no pudimos verificar») no lo
+  ofrece. Si el alta devuelve `registration_not_available`, se muestra el texto
+  vigente (D-R15), que orienta a iniciar sesión o recuperar.
+- **Alta cerrada y sin invitación**: el ingreso fallido conserva el cartel, ahora
+  con un texto neutro que no promete un alta: «No pudimos entrar con Google. Prueba
+  de nuevo o entra con tu correo y contraseña.».
+- El paso se deriva de la capability: si el dueño apaga el alta con Google, vuelve
+  el formulario de alta completo. «Ya tengo cuenta → entrar» vuelve al ingreso.
+
+### Riel mock
+
+- `payme.app.mock.google_sin_cuenta.v1` (`localStorage`, sólo el `true` exacto)
+  hace que `google/login` conteste el 401 opaco. Es el mismo tipo de seam que el
+  alta pública; el camino real no lo consulta.
+- El mock ahora consume los `id_token` de Google en el ingreso (también el fallido)
+  y en el alta, como el dueño. Tras el alta, la identidad «tiene cuenta».
+
+### Pruebas
+
+- `e2e/google-ingreso-alta.spec.ts`: una persona nueva toca Google → completa →
+  queda adentro, y el token no está en ningún storage (con control positivo); una
+  persona existente entra directo; con el alta cerrada, cartel neutro; volver al
+  ingreso desde el paso.
+- `src/screens/LoginScreen.altaGoogle.test.tsx` (la decisión, término por término,
+  y que ni la pantalla ni el decodificador nombren un almacenamiento),
+  `src/api/googleClaims.test.ts` y `src/api/mock/mockGoogleSinCuenta.test.ts`.
+- Mutantes rojos:
+  - (a) quitar la transición, en el e2e;
+  - (b) ofrecer el alta con `registration=false`, en el unitario;
+  - (c) persistir el token, en el unitario y en el e2e (en el e2e, rojo en el
+    barrido de storage);
+  - en el mock: aceptar un token consumido, no consumir en el ingreso fallido y
+    que «sin cuenta» igual entre.
+  - Un mutante que reusaba el token en la pantalla **sobrevivió al e2e**: la falla
+    del reuso se tragaba dentro del callback y no dejaba efecto observable. La
+    propiedad se fija en la prueba del mock, no en la pantalla.
+
+### Lo que no se acredita
+
+- En el riel mock la credencial no es un JWT: **el prellenado no se ve en el e2e**.
+  Sólo lo cubre el unitario. En producción depende de que el token de Google traiga
+  `given_name`, `family_name` y `email`.
+- La fecha de nacimiento no se agrega: el alta existente no la manda (PQ-2 sigue en
+  STOP) y este cambio no la toca.
+- Nada de esto se probó contra Google real ni en un teléfono.
+
 ## 0.166.0 — Service worker sólo para archivos estáticos (2026-09-18)
 
 Orden `APP-PWA-B2-SERVICE-WORKER-AF-15-20260918`, base `73b07b46…`. **Sin push, sin
