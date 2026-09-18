@@ -207,6 +207,26 @@ function socialRegisterSchema() {
     : base;
 }
 const socialLogin = z.object({ id_token: externalIdToken }).strict();
+/**
+ * v2.92.0 · «Continuar con Google» (raíz v2.43). `accepted_notice_version` es
+ * la versión del aviso que el cliente mostró enlazada junto al botón; el dueño
+ * la compara con la vigente. `first_name`/`last_name` sólo sirven en el
+ * reintento después de `profile_required`, cuando el proveedor no trajo un
+ * nombre utilizable: con nombre del proveedor, se ignoran. No hay `email`: el
+ * único correo lícito es el verificado del proveedor.
+ */
+const socialContinue = z.object({
+  id_token: externalIdToken,
+  invitation_token: z.unknown().optional(),
+  accepted_notice_version: z.string().regex(/^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$/),
+  first_name: profileName.optional(),
+  last_name: profileName.optional(),
+}).strict();
+/** Addendum 1 de AB-07 · completar la conexión con la contraseña de la cuenta. */
+const socialContinueLink = z.object({
+  link_intent: z.string().min(20).max(200),
+  password: passwordLegacy,
+}).strict();
 const socialLink = z.object({
   id_token: externalIdToken,
   current_password: passwordLegacy,
@@ -584,7 +604,7 @@ module.exports = {
   normalizarEmailDeContrato,
   register, registerCompat, registerSchema, birthDateRequeridaEnRegistro,
   altaPublicaHabilitada, FLAG_ALTA_PUBLICA,
-  login, refreshToken, socialRegisterSchema, socialLogin, socialLink,
+  login, refreshToken, socialRegisterSchema, socialLogin, socialContinue, socialContinueLink, socialLink,
   facebookRegisterStartSchema, facebookLoginStart, facebookComplete,
   facebookSignedRequest,
   recoveryRequest, recoveryComplete, updateMe, updateProfileName,

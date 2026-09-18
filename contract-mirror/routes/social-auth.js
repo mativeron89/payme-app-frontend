@@ -12,7 +12,7 @@ const identities = require('../services/externalIdentities');
 const legal = require('../services/legal');
 const logger = require('../utils/logger');
 const pool = require('../db/pool');
-const { signupRateLimitMiddleware } = require('../services/signupRateLimit');
+const { signupRateLimitMiddleware, consumeSignupRateLimit } = require('../services/signupRateLimit');
 
 const router = express.Router();
 const { validateBody } = schemas;
@@ -126,6 +126,92 @@ router.post('/google/login', googleDark('login'), validateBody(schemas.socialLog
     return socialError(res, error) || next(error);
   }
 });
+
+/**
+ * v2.92.0 · «Continuar con Google» en un toque (raíz v2.43). Entra si hay
+ * vínculo activo; si no lo hay y el alta está disponible, crea la cuenta con
+ * nombre y correo VERIFICADO del proveedor copiados una sola vez. Nunca vincula
+ * ni fusiona por email. `/google/login` y `/google/register` se conservan.
+ *
+ * El rate limit de alta NO se monta como middleware: se identifica por el email
+ * del cuerpo y acá no hay email en el cuerpo, así que todos los «continuar»,
+ * logins incluidos, caerían en un mismo balde. Se aplica dentro de la rama de
+ * alta con el correo verificado. El de login (`authLimiter`) ya cubre
+ * `/api/auth/google` en server.js.
+ */
+router.post('/google/continue', googleDark('login'),
+  validateBody(schemas.socialContinue), async (req, res, next) => {
+    try {
+      const { evidence, profile } = await google.verifyIdTokenWithProfile(req.body.id_token);
+      const result = await identities.continueWithExternalIdentity({
+        evidence,
+        profile,
+        invitationToken: req.body.invitation_token,
+        acceptedNoticeVersion: req.body.accepted_notice_version,
+        declaredFirstName: req.body.first_name,
+        declaredLastName: req.body.last_name,
+        // La cuenta nace sin fecha de nacimiento: si la fecha pasa a ser
+        // obligatoria en el alta, el alta en un toque se apaga con ella.
+        registrationAvailable: google.capability().registration
+          && !schemas.birthDateRequeridaEnRegistro(),
+        // Addendum 1 · el pedido de contraseña sólo existe con la vinculación viva.
+        linkingAvailable: google.capability().linking === true,
+        consumeSignupRateLimit: async (client, { token, email }) => {
+          try {
+            return await consumeSignupRateLimit({ db: client, token, email });
+          } catch (error) {
+            logger.error('signup_rate_limit_unavailable', {
+              code: error.code, correlation_id: req.correlationId,
+            });
+            throw Object.assign(new Error('rate_limit_unavailable'), { code: 'rate_limit_unavailable' });
+          }
+        },
+      });
+      if (result.outcome === 'login') {
+        logger.audit('user_login_external', { user_id: result.userId, provider: 'google' });
+      } else if (result.outcome === 'link_required') {
+        logger.audit('external_identity_link_required', { user_id: result.userId, provider: 'google' });
+      } else if (result.outcome === 'created') {
+        logger.audit('user_registered_external', {
+          user_id: result.userId, provider: 'google', channel: 'google_continue',
+        });
+      }
+      if (result.status === 429 && result.retryAt) {
+        res.setHeader('Retry-After', Math.max(1, Math.ceil((result.retryAt - Date.now()) / 1_000)));
+      }
+      return res.status(result.status).json(result.body);
+    } catch (error) {
+      if (error.code === 'rate_limit_unavailable') {
+        return res.status(503).json({ error: 'rate_limit_unavailable' });
+      }
+      return socialError(res, error) || next(error);
+    }
+  });
+
+/**
+ * Addendum 1 de AB-07 · decisión de Mati «Pedirle la contraseña una vez, ahí
+ * mismo, y conectar Google». Completa el `link_intent` que devolvió
+ * `/google/continue` con la contraseña de la cuenta PayMe. Nunca vincula sin
+ * ella. Limitado por `authLimiter` (server.js cubre `/api/auth/google`) y por el
+ * tope de errores propio del intento.
+ */
+router.post('/google/continue/link', googleDark('linking'),
+  validateBody(schemas.socialContinueLink), async (req, res, next) => {
+    try {
+      const result = await identities.linkFromContinueIntent({
+        linkIntent: req.body.link_intent,
+        password: req.body.password,
+      });
+      if (result.outcome === 'linked') {
+        logger.audit('external_identity_linked', {
+          user_id: result.userId, provider: 'google', via: 'continue',
+        });
+      }
+      return res.status(result.status).json(result.body);
+    } catch (error) {
+      return socialError(res, error) || next(error);
+    }
+  });
 
 router.post('/google/link', googleDark('linking'), requireAuth,
   validateBody(schemas.socialLink), async (req, res, next) => {

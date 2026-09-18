@@ -6,6 +6,52 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-18** (el segundo del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`5ce1b3cc857a7d9c6eb892afda8bf840b217eaa9`**
+  (App Backend **v2.92.0** · `POST /api/auth/google/continue` entra o crea la cuenta
+  en un toque, `POST /api/auth/google/continue/link` conecta Google a una cuenta con
+  contraseña, y la capability `features.google_continue`).
+- Commit del que se tomó el inventario autoritativo:
+  **`74416f88e48dc4a915e47b0a7c94924a506a494e`**.
+  Como siempre, el inventario declara el commit del CONTENIDO (`5ce1b3cc…`), no el
+  suyo: `74416f88…` sólo regenera el inventario sobre el anterior.
+
+🔴 **Publicación: medida, y contradice lo que traía la orden.** La orden
+(`APP-GOOGLE-CONTINUE-AF-17-20260918`) describe v2.92.0 como «todavía no
+publicado». Medido el 2026-09-18 ~18:51Z con `git ls-remote origin refs/heads/main`
+en `payme-app-backend`: **`main` remoto = `74416f88…`**, y `git branch -r --contains`
+ubica ahí a los dos commits. El dueño pushó después de que se escribiera la orden.
+⚠️ **Push no es deploy:** no medí qué versión sirve producción, y no se infiere de
+esto. El front sigue siendo compatible con el backend 2.91.0: sin
+`features.google_continue` se comporta como 0.167.0.
+
+🔴 **La capability NO vive dentro de `google_sign_in`.** El dueño la publicó en
+`features.google_continue {supported, one_tap_signup}` porque este front decodifica
+`google_sign_in` con claves exactas, y una clave nueva ahí apagaba el login con Google
+publicado. El Bibliotecario adjudicó ese desvío a favor.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior (`6368240`)
+cambian **siete**: `contract/social-auth-v1.json`,
+`docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md`, `routes/config.js`, `routes/social-auth.js`,
+`schemas/index.js`, `services/externalIdentities.js` y `services/googleIdentity.js`.
+Hay **cero nuevos, cero que salgan y cero renombrados**. Se adoptó en un commit propio,
+con los tres gates en verde, antes de escribir una línea del consumidor.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `74416f88`
+(`.claude/worktrees/google-continue-20260918`, porcelain vacío).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `5ce1b3c`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `5ce1b3c`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`74416f88`) · exit 0 |
+
+### Refresh anterior · 2026-09-18 (mirror 107 · linked-providers · `6368240`)
+
 - Fecha del refresh: **2026-09-18**.
 - Commit exacto y procedencia del CONTENIDO:
   **`6368240e3546d3e50549439094b48b2551045147`**

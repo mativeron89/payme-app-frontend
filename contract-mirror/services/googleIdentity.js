@@ -5,6 +5,8 @@
  * claves públicas mediante `verifyIdToken`; en tests no se instala por default
  * para impedir red accidental. Aun cuando el adapter valida firma, PayMe vuelve
  * a validar las claims de autoridad y descarta todo salvo namespace+subject.
+ * v2.92.0 · la única excepción es `verifyIdTokenWithProfile`, que usa sólo
+ * «Continuar con Google» para la copia única al crear la cuenta.
  */
 'use strict';
 
@@ -70,7 +72,11 @@ function credentialHash(idToken) {
   return tokenHash(idToken);
 }
 
-async function verifyIdToken(idToken, { env = process.env, nowSeconds } = {}) {
+/**
+ * Verifica firma y claims de autoridad. Devuelve las claims crudas SÓLO a las
+ * dos funciones de este módulo; nunca salen tal cual.
+ */
+async function verifyClaims(idToken, { env = process.env, nowSeconds } = {}) {
   const clientIds = parseClientIds(env);
   if (!capability(env).enabled || !clientIds) throw codedError('social_auth_not_available');
   if (typeof idToken !== 'string' || idToken.length < 20 || idToken.length > 8192) {
@@ -97,7 +103,10 @@ async function verifyIdToken(idToken, { env = process.env, nowSeconds } = {}) {
       || !/^[A-Za-z0-9._:-]{1,255}$/.test(claims.sub)) {
     throw codedError('social_auth_failed');
   }
+  return claims;
+}
 
+function neutralEvidence(idToken, claims) {
   return {
     provider: PROVIDER,
     subject_namespace: NAMESPACE,
@@ -107,9 +116,44 @@ async function verifyIdToken(idToken, { env = process.env, nowSeconds } = {}) {
   };
 }
 
+async function verifyIdToken(idToken, options = {}) {
+  return neutralEvidence(idToken, await verifyClaims(idToken, options));
+}
+
+/** Un claim de texto del proveedor: string acotado o null. Nunca otro tipo. */
+function claimDeTexto(value, maximo) {
+  return typeof value === 'string' && value.length > 0 && value.length <= maximo
+    ? value : null;
+}
+
+/**
+ * v2.92.0 · APP-GOOGLE-CONTINUE-AB-07 · raíz v2.43, enmienda acotada a la
+ * guarda 8 del acta de identidad social del 26/08.
+ *
+ * Igual que `verifyIdToken`, más un `profile` con lo ÚNICO que el alta en un
+ * toque puede copiar UNA vez: nombre, apellido y correo. `email_verified` se
+ * exige estrictamente booleano `true` (un string "true" no cuenta). No se toma
+ * foto, locale ni ninguna otra claim. Quien llama decide si usa el perfil; el
+ * login no lo mira nunca.
+ */
+async function verifyIdTokenWithProfile(idToken, options = {}) {
+  const claims = await verifyClaims(idToken, options);
+  return {
+    evidence: neutralEvidence(idToken, claims),
+    profile: {
+      given_name: claimDeTexto(claims.given_name, 400),
+      family_name: claimDeTexto(claims.family_name, 400),
+      name: claimDeTexto(claims.name, 800),
+      email: claimDeTexto(claims.email, 320),
+      email_verified: claims.email_verified === true,
+    },
+  };
+}
+
 module.exports = {
   capability,
   verifyIdToken,
+  verifyIdTokenWithProfile,
   credentialHash,
   installVerifierForTests,
   resetVerifierForTests,

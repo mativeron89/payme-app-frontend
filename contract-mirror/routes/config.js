@@ -147,6 +147,21 @@ router.get('/', (req, res) => {
         supported: true,
         public_registration: altaPublicaHabilitada(),
       },
+      // v2.92.0 · «Continuar con Google» en un toque (raíz v2.43). Clave de
+      // PRIMER NIVEL y no dentro de `social_auth.google_sign_in`: el front
+      // publicado (0.166.0) decodifica ese bloque con claves exactas y una
+      // clave nueva lo declara malformado y apaga el login con Google.
+      // `one_tap_signup` es true sólo cuando «continuar» puede CREAR la cuenta
+      // sin invitación: login y alta Google activos, alta pública abierta y la
+      // fecha de nacimiento no obligatoria (la cuenta nace sin ella). Con
+      // invitación el endpoint también crea, pero eso no es «un toque».
+      google_continue: {
+        supported: true,
+        one_tap_signup: googleIdentity.capability().login === true
+          && googleIdentity.capability().registration === true
+          && altaPublicaHabilitada()
+          && !birthDateRequeridaEnRegistro(),
+      },
       // Implementación owner-first activada con aviso 2.3.0 ratificado.
       // El payme_id sigue inmutable y el avatar nunca tiene URL pública.
       profile_identity: PROFILE_IDENTITY_CAPABILITY,

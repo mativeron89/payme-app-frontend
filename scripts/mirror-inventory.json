@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "6368240e3546d3e50549439094b48b2551045147",
+  "commit": "5ce1b3cc857a7d9c6eb892afda8bf840b217eaa9",
   "total": 107,
   "archivos": [
     {
@@ -19,8 +19,8 @@
     {
       "origen": "contract/social-auth-v1.json",
       "destino": "contract/social-auth-v1.json",
-      "sha256": "27891688d21b26d33ffa1875385800814894dfea96de54c14fae86f720dedc33",
-      "bytes": 13342
+      "sha256": "60cddbd56d398a09b51de51965c2efc4e9608040900a34888785e48027b05af7",
+      "bytes": 19974
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -271,8 +271,8 @@
     {
       "origen": "docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md",
       "destino": "docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md",
-      "sha256": "0ed22adc11b114f32f383787e5735db4ac395b1cc709c44e8a1a39fb07b433d3",
-      "bytes": 6526
+      "sha256": "ab9ebbd2176defc2773d9ed42d6d0397afd879f9e2f7c105ed38f135e0a3559c",
+      "bytes": 7982
     },
     {
       "origen": "docs/history/README_v2.10_CONSOLIDADO.md",
@@ -319,8 +319,8 @@
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "206fb6aa244ebcdad972793e5259226e25a9de598a01cb323a18f8aff9074425",
-      "bytes": 8608
+      "sha256": "c6b993fc9f7d0dba656d43f627fc1cf7f79f0b142300eb5a23165ae02449838f",
+      "bytes": 9502
     },
     {
       "origen": "routes/connect.js",
@@ -385,8 +385,8 @@
     {
       "origen": "routes/social-auth.js",
       "destino": "routes/social-auth.js",
-      "sha256": "1c1a01bfcf98219c0372e01177e7843c4e99233dd285d3cb55c4da6372a8998e",
-      "bytes": 10687
+      "sha256": "63b4ea54a8cde3eb61eb1c35294650b8192833da718a541d986811b0e00094f0",
+      "bytes": 14745
     },
     {
       "origen": "routes/spei-funding.js",
@@ -427,8 +427,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "745d582146399324c500373565d36b3aa0b426a34fec2ca6233acb6135fd64b0",
-      "bytes": 26290
+      "sha256": "8d802ef7ccdaa7f23effac389fbc04230733bfadced40f2da7d4e194e2b3fedd",
+      "bytes": 27277
     },
     {
       "origen": "services/authRecovery.js",
@@ -469,8 +469,8 @@
     {
       "origen": "services/externalIdentities.js",
       "destino": "services/externalIdentities.js",
-      "sha256": "ebca6a29a34b9ccc599926607ea8ed2765ff036dc3a24fea8747ea0650b136e9",
-      "bytes": 11186
+      "sha256": "da805e646927389300f328897deae9c907ddf51126aca9d8a111c2e5c7a2cf25",
+      "bytes": 26665
     },
     {
       "origen": "services/facebookDataRights.js",
@@ -487,8 +487,8 @@
     {
       "origen": "services/googleIdentity.js",
       "destino": "services/googleIdentity.js",
-      "sha256": "b3416ff80a7605c38cef27d942087006e692387c8484a44a27444da091876927",
-      "bytes": 4153
+      "sha256": "22c3d582e5990d94d0b723902d26e1717db3c2b93a9407cea69aa455b9880c51",
+      "bytes": 5841
     },
     {
       "origen": "services/googleIdentityVerifier.js",

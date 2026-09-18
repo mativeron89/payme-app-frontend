@@ -76,6 +76,68 @@
         "too_many_auth_attempts": [429]
       }
     },
+    "google_continue": {
+      "since": "v2.92.0",
+      "method": "POST",
+      "path": "/api/auth/google/continue",
+      "gated_by": "features.social_auth.google_sign_in.login; la rama de alta además exige google_sign_in.registration, autoridad de alta (alta pública abierta o invitation_token válido) y fecha de nacimiento no obligatoria",
+      "request": ["id_token", "accepted_notice_version", "invitation_token?", "first_name?", "last_name?"],
+      "request_notes": {
+        "enmienda": "Raíz v2.43 · enmienda ACOTADA a la guarda 8 del acta de identidad social del 26/08: en el alta, y sólo en el alta, se copian UNA vez nombre, apellido y correo VERIFICADO del proveedor como datos iniciales del perfil, editables después. Nada se sincroniza después y no se toma la foto ni otra claim.",
+        "accepted_notice_version": "la versión del aviso de privacidad que el cliente mostró enlazada junto al botón. Si no es la vigente publicada, no se crea la cuenta (registration_not_available). La cuenta creada deja registrada versión y hash del aviso aceptado.",
+        "email": "no se envía. El único correo lícito es el del proveedor y sólo con email_verified === true; sin correo verificado no se crea la cuenta.",
+        "first_name_last_name": "sólo para el reintento después de profile_required, cuando el proveedor no trajo nombre utilizable (given_name+family_name, o name partible en dos). Con nombre del proveedor se ignoran.",
+        "invitation_token": "opcional. Con alta cerrada es la única autoridad de alta; su correo debe coincidir con el verificado del proveedor.",
+        "anti_takeover": "NUNCA vincula ni fusiona por email. Addendum 1 (decisión de Mati del 2026-09-18, «Pedirle la contraseña una vez, ahí mismo, y conectar Google»): si el correo VERIFICADO ya es de una cuenta PayMe activa con contraseña y google_sign_in.linking está activo, responde 409 link_required con un link_intent opaco; no crea ni vincula nada. Recién POST /api/auth/google/continue/link con la contraseña de esa cuenta crea el vínculo. Correo no verificado, cuenta sin contraseña, inactiva, ambigua o vinculación apagada: registration_not_available opaco, sin intento.",
+        "credencial": "una verificación y un consumo por pedido. Todo rechazo posterior a la verificación deja el id_token consumido: para reintentar hace falta una credencial nueva."
+      },
+      "success": {
+        "login": { "status": 200, "shape": "session_success_shape + created:false" },
+        "created": { "status": 201, "shape": "session_success_shape + created:true" }
+      },
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "social_auth_failed": [401, 503],
+        "registration_not_available": [403],
+        "link_required": [409],
+        "profile_required": [422],
+        "registration_unavailable": [503],
+        "too_many_auth_attempts": [429],
+        "too_many_signup_attempts": [429],
+        "rate_limit_unavailable": [503]
+      },
+      "error_notes": {
+        "social_auth_failed": "sin vínculo activo y sin alta disponible para esta persona (capability apagada, alta cerrada sin invitación válida, fecha obligatoria), vínculo revocado, cuenta inactiva o credencial inválida/ya usada. La misma respuesta que /google/login.",
+        "registration_not_available": "había alta disponible pero no se creó: aviso distinto del vigente, correo no verificado o ausente, correo que no coincide con la invitación, o correo ya registrado en una cuenta sin contraseña utilizable. No distingue cuál.",
+        "link_required": "addendum 1: sólo tras un id_token válido con email_verified === true, cuando el correo ya es de una cuenta PayMe activa con contraseña. Cuerpo exacto {error, link_intent}: sin datos de la cuenta. El cliente pide la contraseña y llama a google_continue_link.",
+        "profile_required": "el proveedor no trajo nombre utilizable; el cliente pide SÓLO nombre y apellido y reintenta con credencial nueva."
+      },
+      "capability": "features.google_continue"
+    },
+    "google_continue_link": {
+      "since": "v2.92.0 (addendum 1 de AB-07)",
+      "method": "POST",
+      "path": "/api/auth/google/continue/link",
+      "gated_by": "features.social_auth.google_sign_in.linking",
+      "request": ["link_intent", "password"],
+      "request_notes": {
+        "link_intent": "el valor opaco del 409 link_required. Un solo uso, vence a los 10 minutos, se guarda sólo su sha256 y queda atado a provider+subject ya verificados y a la cuenta destino. El id_token no viaja de nuevo.",
+        "password": "la contraseña actual de la cuenta PayMe destino. Es la única autoridad para vincular."
+      },
+      "success": { "status": 200, "shape": "session_success_shape + created:false + linked:true" },
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "reauthentication_failed": [403],
+        "social_auth_failed": [401, 503],
+        "too_many_auth_attempts": [429]
+      },
+      "error_notes": {
+        "reauthentication_failed": "contraseña incorrecta, sin vínculo. El intento sigue vivo hasta 5 errores; al quinto se quema y desde ahí responde social_auth_failed.",
+        "social_auth_failed": "intento inexistente, vencido, usado o quemado; cuenta destino ya inactiva o sin contraseña; o el subject quedó vinculado a otra cuenta entre medio."
+      }
+    },
     "google_link": {
       "method": "POST",
       "path": "/api/auth/google/link",
@@ -207,6 +269,15 @@
       }
     }
   },
+  "google_continue_capability": {
+    "since": "v2.92.0",
+    "path": "features.google_continue",
+    "shape": { "supported": "boolean (true)", "one_tap_signup": "boolean" },
+    "one_tap_signup_true_when": "google_sign_in.login y google_sign_in.registration activos, features.signup.public_registration true y fecha de nacimiento no obligatoria en el alta",
+    "why_top_level": "NO vive dentro de social_auth.google_sign_in: el front publicado 0.166.0 decodifica ese bloque con claves exactas (src/api/socialAuth.ts GOOGLE_KEYS) y una clave nueva lo declararía malformado, apagando el login con Google.",
+    "link_step": "el paso de contraseña (google_continue_link) lo gobierna google_sign_in.linking, no one_tap_signup",
+    "absent_means": "backend anterior a v2.92.0: no existe /google/continue; usar /google/login y /google/register"
+  },
   "linked_providers": {
     "since": "v2.91.0",
     "route": "GET /api/account/me/linked-providers",
@@ -265,6 +336,7 @@
   ],
   "forbidden_persistence": {
     "scope": "backend_database_logs_and_artifacts",
+    "exception_v2_92": "Raíz v2.43: POST /api/auth/google/continue, SÓLO al crear la cuenta, copia UNA vez provider_name (como first_name/last_name) y provider_email verificado (como email) a users. No es sincronización: nada se vuelve a leer del proveedor después. provider_photo y todos los demás valores siguen prohibidos, y ninguno va a logs.",
     "values": [
       "id_token",
       "facebook_authorization_code",

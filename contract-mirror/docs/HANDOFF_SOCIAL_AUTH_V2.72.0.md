@@ -30,6 +30,24 @@ aunque luego se retire esa configuración.
 
 - `POST /api/auth/google/register`: F&F, aviso legal, perfil PayMe y
   `birth_date` según PQ-2; nunca acepta email del proveedor.
+- **v2.92.0 · `POST /api/auth/google/continue`** («Continuar con Google», raíz
+  v2.43, enmienda acotada a la guarda 8 del acta del 26/08). Una verificación y
+  un consumo: vínculo activo ⇒ sesión `200 {…, created:false}`; sin vínculo y
+  con alta disponible ⇒ cuenta nueva `201 {…, created:true}` con nombre y correo
+  **verificado** del proveedor copiados **una sola vez** (excepción acotada a
+  la regla de arriba: sólo en esta alta, sin sincronización posterior, sin
+  foto), versión y hash del aviso aceptado en `signup_notice_acceptances`.
+  Correo ya registrado ⇒ **nunca** vincula ni fusiona por email. Addendum 1
+  (decisión de Mati, «Pedirle la contraseña una vez, ahí mismo, y conectar
+  Google»): si el correo verificado es de una cuenta activa con contraseña,
+  `409 {error:"link_required", link_intent}`; `POST /api/auth/google/continue/link`
+  con `{link_intent, password}` crea el vínculo y da sesión (`linked:true`).
+  Intento de un solo uso, 10 minutos, quemado al quinto error. Correo no
+  verificado o cuenta sin contraseña ⇒ `registration_not_available` opaco. Sin alta disponible ⇒ el mismo `social_auth_failed` 401 que
+  login. Sin nombre utilizable ⇒ `422 profile_required` y reintento con nombre
+  declarado y credencial nueva. Capability: `features.google_continue`
+  (`supported`, `one_tap_signup`), de primer nivel porque el front publicado
+  decodifica `google_sign_in` con claves exactas.
 - `POST /api/auth/google/login`: resuelve exclusivamente un binding activo.
 - `POST /api/auth/google/link`: bearer PayMe + password actual; cero auto-link
   por email.
