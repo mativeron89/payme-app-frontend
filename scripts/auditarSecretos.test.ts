@@ -315,8 +315,14 @@ describe('auditoría de secretos', () => {
   });
 
   it('la clave citada en español, con forma de JSON, también se marca', () => {
+    // Armado por partes, no como un template literal contiguo: el propio
+    // `auditar-secretos.sh` audita este repo, y una línea fuente con la forma
+    // exacta `"clave-secreta": "valor_largo"` se marcaría a sí misma cuando
+    // este commit se audite contra su padre (el detector no distingue esta
+    // sonda de un secreto real, ni debe hacerlo).
     const valor = ['valor', 'sintetico', 'largo'].join('_');
-    const { dir, base } = repoConCambio(`  "clave-secreta": "${valor}",`);
+    const linea = ['  "clave-secreta": "', valor, '",'].join('');
+    const { dir, base } = repoConCambio(linea);
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
