@@ -10,7 +10,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const TOKEN_A = `google-credential-a-${'a'.repeat(24)}`;
 const TOKEN_B = `google-credential-b-${'b'.repeat(24)}`;
-const PASSWORD = 'contrasena-de-prueba';
+// Literal CORTO + `.repeat()` y la clave en el MISMO renglón: así lo pide el
+// auditor de secretos del repo (ver LoginScreen.test.tsx). Un nombre que no
+// dijera PASSWORD también lo pondría en verde, pero dejando de vigilar la posición.
+const PASSWORD = 'p'.repeat(20);
 const STORAGE_KEY = 'payme_mock_state_v1';
 
 let values: Map<string, string>;
@@ -100,7 +103,7 @@ describe('mock · google/link idempotente SÓLO para la misma cuenta', () => {
 
   it('los límites son inclusivos: 8 y 128 caracteres pasan', async () => {
     const { mockGoogleLink } = await cargar();
-    await expect(mockGoogleLink({ id_token: TOKEN_A, current_password: '12345678' }))
+    await expect(mockGoogleLink({ id_token: TOKEN_A, current_password: '1'.repeat(8) }))
       .resolves.toMatchObject({ linked: true });
     await expect(mockGoogleLink({ id_token: TOKEN_B, current_password: 'x'.repeat(128) }))
       .resolves.toMatchObject({ linked: true });

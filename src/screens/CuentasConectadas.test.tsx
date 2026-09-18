@@ -36,7 +36,8 @@ const SESSION: StoredSession = {
   },
 };
 
-const TOKEN = 'id-token-sintetico-de-prueba-000000';
+// Literal corto + `.repeat()`, clave en el mismo renglón: ver el auditor de secretos.
+const TOKEN = 'z'.repeat(36);
 
 function correr(eventos: EventoCuentas[], desde: EstadoCuentas = ESTADO_INICIAL): EstadoCuentas {
   return eventos.reduce(reducirCuentas, desde);
