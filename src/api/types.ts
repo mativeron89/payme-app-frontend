@@ -209,6 +209,8 @@ export interface AppConfig {
      * dice «backend anterior a C2b: se asume alta CERRADA».
      */
     signup?: unknown;
+    /** AF-17 · v2.92.0 · «Continuar con Google»; se decodifica en `socialAuth.ts`. */
+    google_continue?: unknown;
     /**
      * OLA 5 (v2.31.0) · capability del riel saldo. **Sin tipar a propósito.**
      *

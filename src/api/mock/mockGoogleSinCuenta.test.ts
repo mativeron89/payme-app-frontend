@@ -107,3 +107,75 @@ describe('AF-16 · Google sin cuenta en el riel mock', () => {
       .toEqual({ status: 401, code: 'social_auth_failed' });
   });
 });
+
+describe('AF-17 · google/continue en el riel mock (reglas del dueño v2.92.0)', () => {
+  const TOKEN_C = `google-credential-continue-${'c'.repeat(24)}`;
+  const TOKEN_D = `google-credential-continue-${'d'.repeat(24)}`;
+
+  async function conCorreoConCuenta() {
+    const mock = await cargar();
+    localStorage.setItem('payme.app.mock.google_sin_cuenta.v1', 'true');
+    localStorage.setItem('payme.app.mock.google_correo_con_cuenta.v1', 'true');
+    return mock;
+  }
+
+  async function intentoDeVinculo(mock: Awaited<ReturnType<typeof cargar>>, token: string): Promise<string> {
+    try {
+      await mock.mockGoogleContinue({ id_token: token, accepted_notice_version: mock.MOCK_AVISO_VERSION });
+    } catch (err) {
+      const e = err as { status: number; message: string; extra: Record<string, unknown> };
+      expect({ status: e.status, code: e.message }).toEqual({ status: 409, code: 'link_required' });
+      return e.extra.link_intent as string;
+    }
+    throw new Error('se esperaba link_required');
+  }
+
+  it('🔴 una versión de aviso fuera de la forma del dueño es validation_error', async () => {
+    const mock = await cargar();
+    expect(await rechazo(mock.mockGoogleContinue({ id_token: TOKEN_C, accepted_notice_version: '0.0.0-demo-local' })))
+      .toEqual({ status: 400, code: 'validation_error' });
+  });
+
+  it('el token de continue queda consumido para cualquier propósito', async () => {
+    const mock = await cargar();
+    await mock.mockGoogleContinue({ id_token: TOKEN_C, accepted_notice_version: mock.MOCK_AVISO_VERSION });
+    expect(await rechazo(mock.mockGoogleContinue({ id_token: TOKEN_C, accepted_notice_version: mock.MOCK_AVISO_VERSION })))
+      .toEqual({ status: 401, code: 'social_auth_failed' });
+  });
+
+  it('link: contraseña incorrecta ⇒ 403 con el intento vivo; la correcta ⇒ conecta, y el intento no se reusa', async () => {
+    const mock = await conCorreoConCuenta();
+    const intento = await intentoDeVinculo(mock, TOKEN_C);
+    expect(await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: 'incorrecta1' })))
+      .toEqual({ status: 403, code: 'reauthentication_failed' });
+    await expect(mock.mockGoogleContinueLink({ link_intent: intento, password: mock.MOCK_CLAVE_DEMO_VINCULAR }))
+      .resolves.toEqual({ created: false });
+    expect(await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: mock.MOCK_CLAVE_DEMO_VINCULAR })))
+      .toEqual({ status: 401, code: 'social_auth_failed' });
+  });
+
+  it('🔴 link: al quinto error el intento se quema', async () => {
+    const mock = await conCorreoConCuenta();
+    const intento = await intentoDeVinculo(mock, TOKEN_C);
+    for (let i = 0; i < 5; i += 1) {
+      expect((await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: `incorrecta${i}x` })))?.status)
+        .toBe(403);
+    }
+    expect(await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: mock.MOCK_CLAVE_DEMO_VINCULAR })))
+      .toEqual({ status: 401, code: 'social_auth_failed' });
+  });
+
+  it('🔴 link: el intento vence a los 10 minutos', async () => {
+    const mock = await conCorreoConCuenta();
+    const ahora = Date.now();
+    const reloj = vi.spyOn(Date, 'now').mockReturnValue(ahora);
+    const intento = await intentoDeVinculo(mock, TOKEN_D);
+    reloj.mockReturnValue(ahora + 10 * 60 * 1000 - 1);
+    expect((await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: 'incorrecta1' })))?.status)
+      .toBe(403);
+    reloj.mockReturnValue(ahora + 10 * 60 * 1000);
+    expect(await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: mock.MOCK_CLAVE_DEMO_VINCULAR })))
+      .toEqual({ status: 401, code: 'social_auth_failed' });
+    reloj.mockRestore();
+  });
+});

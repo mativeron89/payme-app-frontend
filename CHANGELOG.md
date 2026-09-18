@@ -11,6 +11,103 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.168.0 — «Continuar con Google» en un toque (2026-09-18)
+
+Orden `APP-GOOGLE-CONTINUE-AF-17-20260918`, base `82f9006` (= `origin/main`,
+0.167.0). **Sin push, sin deploy, sin GREEN.** Decisiones de Mati: *«no quiero que
+tengan que colocar manualmente el mail!»* y, para un correo que ya tiene cuenta,
+*«Pedirle la contraseña una vez, ahí mismo, y conectar Google»*. El dueño (App
+Backend v2.92.0) publicó `POST /api/auth/google/continue`,
+`POST /api/auth/google/continue/link` y `features.google_continue`.
+
+### Espejo, en un commit propio
+
+- Inventario del dueño en `74416f8`, contenido en `5ce1b3c`. Siguen siendo 107
+  archivos: cambian siete, ninguno nuevo, ninguno sale.
+- Integridad, paridad y vigencia verdes contra el worktree del dueño.
+- Medido ~18:51Z: el `main` remoto del dueño ya es `74416f8`, aunque la orden lo
+  daba por no publicado. **Push no es deploy**, y la versión que sirve producción
+  no se midió.
+
+### Qué cambia
+
+- **La capability se lee de `features.google_continue {supported,
+  one_tap_signup}`**, un bloque hermano con claves exactas. `GOOGLE_KEYS` no se
+  tocó: el dueño la sacó de `google_sign_in` justamente para no apagar el login
+  publicado. Si falta, está mal formada o el login con Google del dueño está
+  apagado, se usa la conducta 0.167.0.
+- **Todos los botones de Google llaman a `continue`** con
+  `accepted_notice_version`: el del ingreso y el de arriba de «Crea tu cuenta»,
+  éste sólo con `one_tap_signup`.
+  - **200/201** ⇒ la persona queda adentro. Si la cuenta nació (`created`), aparece
+    un aviso breve, «¡Listo! Creamos tu cuenta de PayMe.», sin pantalla intermedia.
+  - **409 `link_required`** ⇒ «Conecta tu cuenta con Google»: pide la contraseña
+    una vez y llama a `continue/link`. `403` significa contraseña incorrecta y se
+    reintenta con el mismo intento. `401` significa que el intento venció, se usó
+    o se quemó al quinto error: vuelve al ingreso con un texto neutro. El
+    `link_intent` vive **sólo en un `useRef`**.
+  - **422 `profile_required`** ⇒ el paso «Crea tu cuenta con Google» pide **sólo**
+    nombre y apellido (sin correo: lo pone Google) y reintenta con una credencial
+    nueva.
+  - **Ramas opacas** ⇒ uno de cuatro carteles, un conjunto cerrado
+    (`mensajeContinue`), y ninguno afirma ni niega una cuenta. Sin alta en un
+    toque, el `401` lleva al alta con formulario de 0.167.0.
+- **«Al continuar aceptas el Aviso de privacidad»**, con enlace a `/privacy`, bajo
+  cada botón en modo un toque. La versión que viaja es la del aviso cargado, y el
+  aviso ahora se carga también en el ingreso. **Fail-closed**: si no hay aviso, o
+  si su versión no tiene la forma `X.Y.Z` que el dueño acepta
+  (`versionAvisoParaContinue`), no hay un toque y se usa el camino 0.167.0.
+- La respuesta de `continue` pasa por un decoder propio
+  (`decodeGoogleContinueResponse`): exige `created`, y en el link también
+  `linked: true`; el resto va por el decoder de sesión de siempre, con claves
+  exactas. Sin esto, un `201` con `created` se habría rechazado como mal formado.
+- **El aviso de bienvenida lo dibuja `AuthProvider`, fuera del `Fragment` que se
+  remonta con cada familia de sesión.** El toast de la app vive adentro y moría
+  justo al crearse la sesión. Mover los providers en `App.tsx` estaba fuera del
+  lease.
+
+### Riel mock
+
+- Publica `features.google_continue` por defecto, como v2.92.0. El seam
+  `payme.app.mock.google_continue.v1 = 'false'` simula un backend 2.91.0.
+- Hay seams para `link_required` (`google_correo_con_cuenta`) y
+  `profile_required` (`google_sin_nombre`). El `link_intent` sigue las reglas del
+  dueño: un uso, 10 minutos, se quema al quinto error. `MOCK_CLAVE_DEMO_VINCULAR`
+  es la contraseña de la cuenta demo que «ya existe».
+- **La versión del aviso mock pasa de `0.0.0-demo-local` a `0.0.0`**: la anterior
+  no tenía la forma que `continue` acepta, y con ella el mock no podía ofrecer un
+  toque. Que es una demo lo sigue diciendo el cuerpo del aviso.
+  `e2e/ff-alta-aviso.spec.ts` se ajustó a la versión nueva.
+
+### Pruebas
+
+- `e2e/google-continuar.spec.ts` (8 casos): cuenta existente, persona nueva en el
+  ingreso, «Crea tu cuenta», contraseña correcta e incorrecta, intento quemado,
+  perfil requerido, alta cerrada, y la capability ausente (conducta 0.167.0).
+- `e2e/google-ingreso-alta.spec.ts` fija ahora la conducta 0.167.0 con la
+  capability apagada.
+- Unitarios: el desenlace rama por rama; que ningún cartel opaco revele una
+  cuenta; el gate de versión; el decoder de capability y el de respuesta; y las
+  reglas del `link_intent` en el mock, incluido el vencimiento a los 10 minutos.
+- El centinela D-FF-1 cubre el cuarto envío: la invitación se suelta sólo si la
+  cuenta nació.
+- Mutantes rojos:
+  - (a) persistir el `link_intent`: unitario y e2e;
+  - (b) ofrecer un toque sin una versión aceptable: unitario;
+  - (c′) dar la capability por publicada aunque falte: unitario y 3 e2e;
+  - (d) un cartel opaco que revela existencia: unitario.
+- **Sobreviviente declarado:** (c) quitar `supported` de `continueOn`. Lo tapan
+  dos guardas independientes: sin la capability, el aviso no se carga en el
+  ingreso y `oneTapSignup` es false en el alta. Es equivalente en los estados
+  alcanzables.
+
+### Lo que no se acredita
+
+- Nada de esto corrió contra el backend real ni contra Google real, ni en un
+  teléfono.
+- El prellenado y la creación con datos de Google dependen de que el token traiga
+  nombre y un correo verificado.
+
 ## 0.167.0 — Tocar «Google» en el ingreso también sirve para registrarse (2026-09-18)
 
 Orden `APP-GOOGLE-SIGNUP-FLOW-AF-16-20260918`, base `90008dc2…` (= `origin/main`,

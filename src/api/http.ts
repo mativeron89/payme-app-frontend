@@ -1,7 +1,7 @@
 import { assertSessionStateWitness, createSession, invalidateSession, isCurrentSession, loadSession, persistSessionTombstone, replaceCurrentSession, saveSession, SessionStorageInvalidationError, type SessionStateWitness, type StoredSession } from './storage';
 import type { ApiError, LoginResponse, RegisterRequest, RegisterResponse, TokenPair } from './types';
 import { MAX_AVATAR_OUTPUT_BYTES, validatePrivateAvatarBlob, type PrivateAvatarBlob } from './profileIdentity';
-import { decodeSocialSessionResponse } from './socialAuth';
+import { decodeGoogleContinueResponse, decodeSocialSessionResponse } from './socialAuth';
 
 /**
  * Cliente HTTP real contra el app backend (contract-mirror/).
@@ -472,6 +472,35 @@ export async function persistSocialSessionResponse(
     onAccepted,
     true,
     expectedStateWitness,
+  );
+}
+
+/**
+ * AF-17 · la frontera de `google/continue` y `continue/link`, para los DOS
+ * rieles: el mock arma el cuerpo con la forma del dueño y pasa por acá, así el
+ * decoder estricto también corre en los e2e.
+ */
+export async function persistGoogleContinueResponse(
+  value: unknown,
+  via: 'continue' | 'link',
+  origin: StoredSession | null,
+  onAccepted?: () => void,
+): Promise<{ readonly created: boolean }> {
+  const { session, created } = decodeGoogleContinueResponse(value, via);
+  await persistSocialSessionResponse(session, origin, onAccepted);
+  return { created };
+}
+
+export async function httpGoogleContinue(
+  path: '/auth/google/continue' | '/auth/google/continue/link',
+  body: unknown,
+): Promise<{ readonly created: boolean }> {
+  const origin = loadSession();
+  const response = await rawRequest<unknown>('POST', path, body);
+  return persistGoogleContinueResponse(
+    response,
+    path === '/auth/google/continue' ? 'continue' : 'link',
+    origin,
   );
 }
 

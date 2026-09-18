@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -16,6 +17,7 @@ import {
 import { clearSignupInvitation } from '../api/signupInvitation';
 import { loadSession, replaceCurrentSession, subscribeSession, type StoredSession } from '../api/storage';
 import type { GoogleRegisterRequest, RegisterRequest, User } from '../api/types';
+import type { GoogleContinueLinkRequest, GoogleContinueRequest } from '../api/socialAuth';
 
 export type FacebookCallbackPhase = 'idle' | 'processing' | 'error';
 
@@ -34,6 +36,18 @@ interface AuthState {
   register(data: RegisterRequest): Promise<void>;
   googleLogin(idToken: string): Promise<void>;
   googleRegister(data: GoogleRegisterRequest): Promise<void>;
+  /** AF-17 · entra o crea en un toque; `created` dice si la cuenta nació ahora. */
+  googleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean }>;
+  /** AF-17 · completa un `409 link_required` con la contraseña de la cuenta. */
+  googleContinueLink(data: GoogleContinueLinkRequest): Promise<void>;
+  /**
+   * AF-17 · un aviso breve que SOBREVIVE a la sesión nueva. El toast de la app
+   * vive dentro del `Fragment` que se remonta con cada familia de sesión —a
+   * propósito: invalida el estado de la UI anterior—, así que un «creamos tu
+   * cuenta» disparado desde el ingreso moría con él. Éste se dibuja afuera.
+   * Recibe el texto ya traducido.
+   */
+  anunciar(mensaje: string): void;
   facebookCallbackPhase: FacebookCallbackPhase;
   completeFacebookCallback(): Promise<void>;
   clearFacebookCallbackError(): void;
@@ -118,6 +132,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const [anuncio, setAnuncio] = useState<string | null>(null);
+  const anuncioTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const anunciar = useCallback((mensaje: string) => {
+    setAnuncio(mensaje);
+    if (anuncioTimer.current) clearTimeout(anuncioTimer.current);
+    anuncioTimer.current = setTimeout(() => setAnuncio(null), 2400);
+  }, []);
+  useEffect(() => () => {
+    if (anuncioTimer.current) clearTimeout(anuncioTimer.current);
+  }, []);
+
+  const googleContinue = useCallback(async (data: GoogleContinueRequest) => {
+    try {
+      const result = await api.googleContinue(data);
+      setFacebookCallbackPhase('idle');
+      return result;
+    } finally {
+      setSession(loadSession());
+    }
+  }, []);
+
+  const googleContinueLink = useCallback(async (data: GoogleContinueLinkRequest) => {
+    try {
+      await api.googleContinueLink(data);
+      setFacebookCallbackPhase('idle');
+    } finally {
+      setSession(loadSession());
+    }
+  }, []);
+
   const completeFacebookCallback = useCallback(async () => {
     setFacebookCallbackPhase('processing');
     try {
@@ -177,6 +221,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       googleLogin,
       googleRegister,
+      googleContinue,
+      googleContinueLink,
+      anunciar,
       facebookCallbackPhase,
       completeFacebookCallback,
       clearFacebookCallbackError,
@@ -189,6 +236,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       googleLogin,
       googleRegister,
+      googleContinue,
+      googleContinueLink,
+      anunciar,
       facebookCallbackPhase,
       completeFacebookCallback,
       clearFacebookCallbackError,
@@ -201,6 +251,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={value}>
       <Fragment key={session?.family_id ?? 'signed-out'}>{children}</Fragment>
+      {/* Fuera del Fragment: no se remonta con la sesión. Siempre montado, igual
+          que el toast de la app, para que la región live se anuncie. Vacío lleva
+          SÓLO `toast-hidden` (oculto y sin la caja flotante): así no es un
+          segundo `.toast` en la página mientras no anuncia nada. */}
+      <div className={anuncio ? 'toast' : 'toast-hidden'} role="status" aria-live="polite">
+        {anuncio}
+      </div>
     </AuthContext.Provider>
   );
 }

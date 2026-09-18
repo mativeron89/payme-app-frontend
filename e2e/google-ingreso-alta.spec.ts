@@ -18,10 +18,19 @@ import { expect, test, type Page } from '@playwright/test';
 
 const PREFIJO_TOKEN_MOCK = 'mock-google-credential-';
 
+/**
+ * AF-17 · este spec fija la conducta 0.167.0 (`/google/login` y
+ * `/google/register`), que es la que corre contra un backend 2.91.0: por eso
+ * apaga `features.google_continue` en el mock. El camino en un toque vive en
+ * `google-continuar.spec.ts`.
+ */
 async function preparar(page: Page, { altaPublica, sinCuenta }: {
   altaPublica: boolean;
   sinCuenta: boolean;
 }): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('payme.app.mock.google_continue.v1', 'false');
+  });
   await page.addInitScript(([alta, sin]) => {
     // Sólo en la PRIMERA carga: el alta tiene que poder apagar el «sin
     // cuenta», como en el dueño, y un init script corre en cada navegación.

@@ -282,8 +282,12 @@ describe('LoginScreen · rediseño del 2026-09-17', () => {
     // Mati, 2026-09-18: «no me permite crear la cuenta con GMAIL». El botón
     // vivía debajo del formulario y aparecía recién con los datos escritos.
     // El e2e prueba el recorrido; acá se fija el orden en el código.
-    const altaGoogle = source.indexOf('{capturaGoogle && (');
-    const primerCampo = source.indexOf('className="ingreso-campo"');
+    // AF-17 · el paso de contraseña (`409 link_required`) es OTRO formulario y
+    // va antes en el código: el orden se mide dentro del formulario principal.
+    const formulario = source.indexOf('<form className="ingreso-tarjeta" onSubmit={onSubmit}>');
+    const altaGoogle = source.indexOf('{capturaGoogle && (', formulario);
+    const primerCampo = source.indexOf('className="ingreso-campo"', formulario);
+    expect(formulario).toBeGreaterThan(0);
     expect(altaGoogle).toBeGreaterThan(0);
     expect(primerCampo).toBeGreaterThan(0);
     expect(altaGoogle, 'Google quedó debajo de un campo en «Crea tu cuenta»').toBeLessThan(primerCampo);

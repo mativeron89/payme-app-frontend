@@ -24,6 +24,25 @@ export interface RecoverySocialCapability {
   readonly completionRoute: '#/recovery' | null;
 }
 
+/**
+ * AF-17 · `features.google_continue` (App Backend v2.92.0): «Continuar con
+ * Google» entra o crea la cuenta en un toque.
+ *
+ * 🔴 **Vive FUERA de `social_auth.google_sign_in`, a propósito del dueño.** Este
+ * front decodifica `google_sign_in` con claves exactas (`GOOGLE_KEYS`): una
+ * clave nueva ahí lo declararía malformado y apagaría el login con Google
+ * publicado. Por eso `GOOGLE_KEYS` no se toca.
+ *
+ * Fail-closed a `supported: false`, que NO apaga nada: es la conducta 0.167.0
+ * (`/google/login` y `/google/register`) contra un backend 2.91.0. Ausente,
+ * mal formada o con una clave de más ⇒ ese camino.
+ */
+export interface GoogleContinueCapability {
+  readonly supported: boolean;
+  /** `continue` puede CREAR la cuenta sin invitación: alta pública abierta. */
+  readonly oneTapSignup: boolean;
+}
+
 export interface SocialAuthState {
   readonly status: SocialAuthStatus;
   readonly google: GoogleSocialCapability;
@@ -54,7 +73,11 @@ export interface SocialAuthState {
    * `signup_gate.capability_publicada.por_que`.
    */
   readonly publicRegistration: boolean;
+  /** AF-17 · decodificada del bloque hermano `features.google_continue`. */
+  readonly googleContinue: GoogleContinueCapability;
 }
+
+const GOOGLE_CONTINUE_OFF: GoogleContinueCapability = { supported: false, oneTapSignup: false };
 
 const GOOGLE_OFF: GoogleSocialCapability = {
   enabled: false,
@@ -83,6 +106,7 @@ function closed(status: SocialAuthStatus): SocialAuthState {
     passwordLoginEnabled: true,
     socialRegistrationBirthDateReady: false,
     publicRegistration: false,
+    googleContinue: GOOGLE_CONTINUE_OFF,
   };
 }
 
@@ -209,6 +233,17 @@ function birthDateAllowsSocialRegistration(raw: unknown): boolean {
     && raw.adulthood_server_authoritative === true;
 }
 
+/** Las DOS claves exactas de `features.google_continue` (v2.92.0). */
+const GOOGLE_CONTINUE_KEYS = ['one_tap_signup', 'supported'] as const;
+
+function decodeGoogleContinue(raw: unknown): GoogleContinueCapability {
+  if (!plainObject(raw) || !exactKeys(raw, GOOGLE_CONTINUE_KEYS)
+      || raw.supported !== true || typeof raw.one_tap_signup !== 'boolean') {
+    return GOOGLE_CONTINUE_OFF;
+  }
+  return { supported: true, oneTapSignup: raw.one_tap_signup };
+}
+
 /** Decodifica toda la capability como conjunto cerrado y conserva password. */
 export function readSocialAuthCapability(config: unknown): SocialAuthState {
   if (!plainObject(config)) return closed('malformed');
@@ -252,6 +287,9 @@ export function readSocialAuthCapability(config: unknown): SocialAuthState {
     passwordLoginEnabled: true,
     socialRegistrationBirthDateReady: birthReady,
     publicRegistration: decodeSignup(features.signup),
+    // `continue` exige además el login con Google del dueño: sin él, el
+    // endpoint está apagado (`googleDark('login')`) y no hay nada que llamar.
+    googleContinue: google.login ? decodeGoogleContinue(features.google_continue) : GOOGLE_CONTINUE_OFF,
   };
 }
 
@@ -286,6 +324,40 @@ export function decodeSocialSessionResponse(value: unknown): SocialSessionRespon
       last_name: user.last_name,
     },
   };
+}
+
+/**
+ * AF-17 · respuesta 2xx de `POST /api/auth/google/continue` (200 entra, 201
+ * creó) y de `/google/continue/link` (200 conectó). Es la forma de sesión de
+ * siempre MÁS `created` —y `linked: true` en el link—, con claves exactas: se
+ * separan esas dos y el resto pasa por `decodeSocialSessionResponse`, el mismo
+ * decoder estricto de toda sesión social. Nada más se acepta.
+ */
+export interface GoogleContinueResult {
+  readonly session: SocialSessionResponse;
+  readonly created: boolean;
+}
+
+export function decodeGoogleContinueResponse(
+  value: unknown,
+  via: 'continue' | 'link',
+): GoogleContinueResult {
+  if (!plainObject(value)) throw new Error('google_continue_response_malformed');
+  const { created, linked, ...session } = value;
+  if (typeof created !== 'boolean') throw new Error('google_continue_response_malformed');
+  if (via === 'link' ? (linked !== true || created !== false) : 'linked' in value) {
+    throw new Error('google_continue_response_malformed');
+  }
+  return { session: decodeSocialSessionResponse(session), created };
+}
+
+/**
+ * AF-17 · el `link_intent` del `409 link_required`: opaco, de un solo uso, 10
+ * minutos. El dueño lo publica con `z.string().min(20).max(200)`. Fuera de esa
+ * forma no se acepta, y la pantalla lo trata como un rechazo opaco.
+ */
+export function linkIntentValido(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 20 && value.length <= 200;
 }
 
 /**
@@ -332,6 +404,23 @@ export function decodeLinkedProvidersResponse(value: unknown): readonly LinkedPr
 }
 
 /** Cuerpo exacto de `POST /api/auth/google/link` (`social-auth-v1.json`). */
+/** AF-17 · body de `POST /api/auth/google/continue` (`schemas.socialContinue`, strict). */
+export interface GoogleContinueRequest {
+  readonly id_token: string;
+  /** La versión del aviso que la pantalla enlaza junto al botón. */
+  readonly accepted_notice_version: string;
+  readonly invitation_token?: string;
+  /** Sólo en el reintento después de `422 profile_required`. */
+  readonly first_name?: string;
+  readonly last_name?: string;
+}
+
+/** AF-17 · body de `POST /api/auth/google/continue/link` (`schemas.socialContinueLink`). */
+export interface GoogleContinueLinkRequest {
+  readonly link_intent: string;
+  readonly password: string;
+}
+
 export interface GoogleLinkRequest {
   readonly id_token: string;
   readonly current_password: string;

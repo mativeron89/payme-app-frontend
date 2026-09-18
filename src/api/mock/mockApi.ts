@@ -1,4 +1,9 @@
-import type { GoogleLinkRequest } from '../socialAuth';
+import type {
+  GoogleContinueLinkRequest,
+  GoogleContinueRequest,
+  GoogleLinkRequest,
+} from '../socialAuth';
+import { CLAIMS_GOOGLE_MOCK } from '../googleIdentity';
 import { centsToDisplay, fractionAmount, splitEqual, sumCents, tipFromBps } from '../../utils/money';
 import { payloadCanonical, sha256Hex } from '../../utils/payloadIdentity';
 import {
@@ -8,7 +13,7 @@ import {
   type SessionStateWitness,
   type StoredSession,
 } from '../storage';
-import { persistSocialSessionResponse } from '../http';
+import { persistGoogleContinueResponse, persistSocialSessionResponse } from '../http';
 import type {
   AcceptInvitationLinkResponse,
   AppConfig,
@@ -391,6 +396,55 @@ export function setGoogleSinCuentaMock(sinCuenta: boolean): void {
  */
 const mockGoogleCredencialesConsumidas = new Set<string>();
 
+/**
+ * AF-17 · los seams del riel mock para «Continuar con Google». Mismo patrón que
+ * los de arriba: `localStorage`, sólo el valor exacto, sin UI.
+ *
+ * - `google_continue`: la capability se publica salvo con `'false'` exacto, que
+ *   simula un backend 2.91.0 (sin `features.google_continue`).
+ * - `google_correo_con_cuenta`: la identidad de Google no tiene vínculo, pero su
+ *   correo verificado ya es de una cuenta PayMe con contraseña ⇒ `409
+ *   link_required`. Sólo pesa con `google_sin_cuenta`.
+ * - `google_sin_nombre`: Google no trajo un nombre utilizable ⇒ `422
+ *   profile_required` hasta que el reintento traiga nombre y apellido.
+ */
+const CLAVE_GOOGLE_CONTINUE = 'payme.app.mock.google_continue.v1';
+const CLAVE_GOOGLE_CORREO_CON_CUENTA = 'payme.app.mock.google_correo_con_cuenta.v1';
+const CLAVE_GOOGLE_SIN_NOMBRE = 'payme.app.mock.google_sin_nombre.v1';
+
+function leerSeam(clave: string): string | null {
+  try { return localStorage.getItem(clave); } catch { return null; }
+}
+
+export function googleContinueMock(): boolean {
+  return leerSeam(CLAVE_GOOGLE_CONTINUE) !== 'false';
+}
+function googleCorreoConCuentaMock(): boolean {
+  return leerSeam(CLAVE_GOOGLE_CORREO_CON_CUENTA) === 'true';
+}
+function googleSinNombreMock(): boolean {
+  return leerSeam(CLAVE_GOOGLE_SIN_NOMBRE) === 'true';
+}
+
+/** La versión del aviso que publica el mock; `continue` exige ésta. */
+export const MOCK_AVISO_VERSION = '0.0.0';
+
+/**
+ * La contraseña de la cuenta demo que «ya existe» en la rama `link_required`.
+ * El mock no guarda contraseñas: ésta existe sólo para que el paso de conectar
+ * tenga un caso correcto y uno incorrecto, que es lo que el dueño distingue.
+ */
+export const MOCK_CLAVE_DEMO_VINCULAR = 'demo'.repeat(3);
+
+/**
+ * `link_intent` vivos. Reglas del dueño (`social-auth-v1.json` ·
+ * `google_continue_link`): un solo uso, 10 minutos, y al quinto error se quema.
+ */
+interface IntentoDeVinculo { readonly vence: number; errores: number }
+const mockIntentosDeVinculo = new Map<string, IntentoDeVinculo>();
+const VIDA_DEL_INTENTO_MS = 10 * 60 * 1000;
+const ERRORES_HASTA_QUEMAR = 5;
+
 /** Para tests y consola. No hay UI: esto no es una preferencia del usuario. */
 export function setModoMonetarioMock(m: ModoMonetarioMock): void {
   try { localStorage.setItem(CLAVE_MODO, m); } catch { /* ver modoMonetarioMock */ }
@@ -498,6 +552,14 @@ export async function mockGetConfig(): Promise<AppConfig> {
         supported: true,
         public_registration: altaPublicaMock(),
       },
+      // AF-17 · forma exacta del dueño v2.92.0 (`contract-mirror/routes/config.js`):
+      // clave de PRIMER NIVEL, dos claves. `one_tap_signup` sigue la regla del
+      // dueño en lo que el mock modela: login y alta Google activos (fijos acá),
+      // alta pública abierta y fecha de nacimiento no obligatoria (fija acá).
+      // Con el seam en `false` la clave NO se publica: backend 2.91.0.
+      ...(googleContinueMock()
+        ? { google_continue: { supported: true, one_tap_signup: altaPublicaMock() } }
+        : {}),
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
       /**
@@ -842,6 +904,123 @@ export async function mockGoogleRegister(data: GoogleRegisterRequest): Promise<S
   });
 }
 
+/**
+ * AF-17 · `POST /api/auth/google/continue` · réplica del contrato v2.92.0 en lo
+ * que el mock puede modelar. El orden de las ramas sigue al dueño: la
+ * credencial se consume ANTES de cualquier rechazo posterior a la verificación.
+ */
+export async function mockGoogleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean }> {
+  if (!validSocialCredential(data.id_token)
+      || !/^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$/.test(data.accepted_notice_version)) {
+    throw new MockApiError(400, 'validation_error');
+  }
+  const origin = loadSession();
+  await waitSocialLatency();
+  if (mockGoogleCredencialesConsumidas.has(data.id_token)) throw new MockApiError(401, 'social_auth_failed');
+  mockGoogleCredencialesConsumidas.add(data.id_token);
+
+  if (!googleSinCuentaMock()) {
+    return persistGoogleContinueResponse(
+      cuerpoDeSesionMock(MOCK_USER, 'google-continue', { created: false }),
+      'continue',
+      origin,
+      () => {
+        state.user = { ...MOCK_USER };
+        marcarProveedorVinculado(MOCK_USER.id, 'google');
+        persist();
+      },
+    );
+  }
+
+  // Sin vínculo. El correo verificado ya es de una cuenta con contraseña: se
+  // pide conectarla; no se crea ni se vincula nada todavía.
+  if (googleCorreoConCuentaMock()) {
+    const linkIntent = `mock-link-intent-${crypto.randomUUID()}`;
+    mockIntentosDeVinculo.set(linkIntent, { vence: Date.now() + VIDA_DEL_INTENTO_MS, errores: 0 });
+    throw new MockApiError(409, 'link_required', { link_intent: linkIntent });
+  }
+
+  const traeInvitacion = typeof data.invitation_token === 'string'
+    && data.invitation_token.length >= 20 && data.invitation_token.length <= 200;
+  // Sin autoridad de alta: la misma respuesta opaca que `/google/login`.
+  if (!traeInvitacion && !altaPublicaMock()) throw new MockApiError(401, 'social_auth_failed');
+  if (data.accepted_notice_version !== MOCK_AVISO_VERSION) {
+    throw new MockApiError(403, 'registration_not_available');
+  }
+  const nombreDeclarado = typeof data.first_name === 'string' && data.first_name.trim().length > 0
+    && typeof data.last_name === 'string' && data.last_name.trim().length > 0;
+  if (googleSinNombreMock() && !nombreDeclarado) throw new MockApiError(422, 'profile_required');
+  const nombre = googleSinNombreMock()
+    ? { first_name: data.first_name!, last_name: data.last_name! }
+    : { first_name: CLAIMS_GOOGLE_MOCK.given_name, last_name: CLAIMS_GOOGLE_MOCK.family_name };
+  const user = { ...socialRegistrationUser(nombre), email: CLAIMS_GOOGLE_MOCK.email };
+  return persistGoogleContinueResponse(
+    cuerpoDeSesionMock(user, 'google-continue-alta', { created: true }),
+    'continue',
+    origin,
+    () => {
+      state.user = user;
+      state.paymentMethods = [];
+      marcarProveedorVinculado(user.id, 'google');
+      setGoogleSinCuentaMock(false);
+      persist();
+    },
+  );
+}
+
+/** AF-17 · `POST /api/auth/google/continue/link` · réplica del contrato v2.92.0. */
+export async function mockGoogleContinueLink(data: GoogleContinueLinkRequest): Promise<{ readonly created: boolean }> {
+  if (typeof data.link_intent !== 'string' || data.link_intent.length < 20 || data.link_intent.length > 200
+      || typeof data.password !== 'string' || data.password.length < 8 || data.password.length > 128) {
+    throw new MockApiError(400, 'validation_error');
+  }
+  const origin = loadSession();
+  await waitSocialLatency();
+  const intento = mockIntentosDeVinculo.get(data.link_intent);
+  if (!intento || intento.vence <= Date.now()) {
+    mockIntentosDeVinculo.delete(data.link_intent);
+    throw new MockApiError(401, 'social_auth_failed');
+  }
+  if (data.password !== MOCK_CLAVE_DEMO_VINCULAR) {
+    intento.errores += 1;
+    if (intento.errores >= ERRORES_HASTA_QUEMAR) mockIntentosDeVinculo.delete(data.link_intent);
+    throw new MockApiError(403, 'reauthentication_failed');
+  }
+  mockIntentosDeVinculo.delete(data.link_intent);
+  return persistGoogleContinueResponse(
+    cuerpoDeSesionMock(MOCK_USER, 'google-continue-link', { created: false, linked: true }),
+    'link',
+    origin,
+    () => {
+      state.user = { ...MOCK_USER };
+      marcarProveedorVinculado(MOCK_USER.id, 'google');
+      setGoogleSinCuentaMock(false);
+      persist();
+    },
+  );
+}
+
+/** El cuerpo con la forma del dueño: sesión + las claves de `continue`. */
+function cuerpoDeSesionMock(
+  user: typeof MOCK_USER,
+  suffix: string,
+  extra: { readonly created: boolean; readonly linked?: true },
+): Record<string, unknown> {
+  return {
+    user: {
+      id: user.id,
+      payme_id: user.payme_id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+    },
+    access_token: `mock-social-access-${suffix}-${crypto.randomUUID()}`,
+    refresh_token: `mock-social-refresh-${suffix}-${crypto.randomUUID()}`,
+    expires_in: 900,
+    ...extra,
+  };
+}
+
 function marcarProveedorVinculado(userId: string, provider: 'google'): void {
   const lista = state.linkedProvidersByUser[userId] ?? [];
   if (!lista.includes(provider)) state.linkedProvidersByUser[userId] = [...lista, provider].sort();
@@ -997,7 +1176,11 @@ export async function mockGetPrivacyNotice(): Promise<LegalTextResponse> {
   return delay({
     legal_text: {
       kind: 'aviso_privacidad',
-      version: '0.0.0-demo-local',
+      // AF-17 · era `0.0.0-demo-local`, una forma que el dueño NO acepta en
+      // `accepted_notice_version` (`^\d{1,4}\.\d{1,4}\.\d{1,4}$`): con ella el
+      // riel mock nunca podía ofrecer «Continuar con Google» en un toque. Que es
+      // una demo lo sigue diciendo el cuerpo del aviso.
+      version: MOCK_AVISO_VERSION,
       hash: '0'.repeat(64),
       effective_from: '2026-08-12T00:00:00.000Z',
       body: 'AVISO DE DEMOSTRACIÓN. Este texto sólo ejercita la puesta a disposición en el modo demo; no es el aviso productivo de PayMe.',

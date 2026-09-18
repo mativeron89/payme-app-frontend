@@ -22,7 +22,9 @@ test('D-FF-1 · fragmento→custodia→aviso→alta y limpieza', async ({ page }
   await expect(page).toHaveURL(/#\/home$/);
   await expect(page.getByText('Crea tu cuenta', { exact: true })).toBeVisible();
   await expect(page.getByText('AVISO DE DEMOSTRACIÓN.')).toBeVisible();
-  await expect(page.getByText('Versión 0.0.0-demo-local', { exact: false })).toBeVisible();
+  // AF-17 · la versión del aviso mock pasó a `0.0.0`: `0.0.0-demo-local` no
+  // tenía la forma que el dueño acepta en `accepted_notice_version`.
+  await expect(page.getByText('Versión 0.0.0 ·', { exact: false })).toBeVisible();
 
   await page.getByLabel('Nombre', { exact: true }).fill('Sofía');
   await page.getByLabel('Apellido', { exact: true }).fill('Prueba');

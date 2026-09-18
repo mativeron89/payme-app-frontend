@@ -1,4 +1,5 @@
 import {
+  httpGoogleContinue,
   httpGuestRequest,
   httpLogin,
   httpLogout,
@@ -51,6 +52,8 @@ import {
   decodeGoogleLinkResponse,
   decodeLinkedProvidersResponse,
   socialAuthSnapshot,
+  type GoogleContinueLinkRequest,
+  type GoogleContinueRequest,
   type GoogleLinkRequest,
   type GoogleLinkResult,
   type LinkedProvider,
@@ -202,6 +205,14 @@ export interface Api {
   register(data: RegisterRequest): Promise<StoredSession>;
   googleLogin(idToken: string): Promise<StoredSession>;
   googleRegister(data: GoogleRegisterRequest): Promise<StoredSession>;
+  /**
+   * AF-17 · v2.92.0 · «Continuar con Google» entra o crea la cuenta en un toque.
+   * Sólo con `features.google_continue.supported`; sin ella, `googleLogin` y
+   * `googleRegister` como en 0.167.0.
+   */
+  googleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean }>;
+  /** AF-17 · completa un `409 link_required` con la contraseña de la cuenta. */
+  googleContinueLink(data: GoogleContinueLinkRequest): Promise<{ readonly created: boolean }>;
   /**
    * AF-09 · D-LOGIN-1 «Vincular desde la cuenta». Las dos exigen la sesión de
    * ESA cuenta: el dueño nunca responde por otra, ni por parámetro.
@@ -387,6 +398,8 @@ const realApi: Api = {
   register: (data) => httpRegister(data),
   googleLogin: (idToken) => httpSocialSession('/auth/google/login', { id_token: idToken }),
   googleRegister: (data) => httpSocialSession('/auth/google/register', data),
+  googleContinue: (data) => httpGoogleContinue('/auth/google/continue', data),
+  googleContinueLink: (data) => httpGoogleContinue('/auth/google/continue/link', data),
   // `private, no-store` es contrato del dueño para esta ruta: el lector
   // privado lo EXIGE, igual que para `/account/me`.
   getLinkedProviders: async (expectedSession) => decodeLinkedProvidersResponse(
@@ -768,6 +781,8 @@ const mockApi: Api = {
   register: (data) => runWithSessionStateLock(() => mock.mockRegister(data)),
   googleLogin: (idToken) => mock.mockGoogleLogin(idToken),
   googleRegister: (data) => mock.mockGoogleRegister(data),
+  googleContinue: (data) => mock.mockGoogleContinue(data),
+  googleContinueLink: (data) => mock.mockGoogleContinueLink(data),
   getLinkedProviders: async () => decodeLinkedProvidersResponse(await mock.mockGetLinkedProviders()),
   googleLink: async (data) => {
     assertGoogleLinkingEnabled();

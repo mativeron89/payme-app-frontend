@@ -67,7 +67,20 @@ describe('D-FF-1 · cableado owner→formulario', () => {
     expect(googleCapturaToken).toBeGreaterThan(googleCapturaSend);
     expect(googleCapturaClear).toBeGreaterThan(googleCapturaToken);
     expect(login.match(/await googleRegister\(\{/g)).toHaveLength(2);
-    expect(login.match(/clearSignupInvitation\(\)/g)).toHaveLength(3);
+
+    // AF-17 · el cuarto: «Continuar con Google». La invitación viaja capturada
+    // y se suelta SÓLO si la cuenta nació (`created`), después de la sesión.
+    const continueSend = login.indexOf('await googleContinue({');
+    const continueToken = login.indexOf('invitation_token: authority.invitationToken', continueSend);
+    const continueClear = login.indexOf(
+      'if (created && authority.invitationToken !== null) clearSignupInvitation();',
+      continueToken,
+    );
+    expect(continueSend).toBeGreaterThan(-1);
+    expect(continueToken).toBeGreaterThan(continueSend);
+    expect(continueClear).toBeGreaterThan(continueToken);
+    expect(login.match(/await googleContinue\(\{/g)).toHaveLength(1);
+    expect(login.match(/clearSignupInvitation\(\)/g)).toHaveLength(4);
 
     const facebookSend = auth.indexOf('await api.facebookRegisterComplete(');
     const facebookClear = auth.indexOf("if (purpose === 'register') clearSignupInvitation();", facebookSend);

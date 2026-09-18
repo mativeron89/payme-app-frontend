@@ -20,7 +20,11 @@ import {
   type GoogleButtonHandle,
 } from '../api/googleIdentity';
 import { sugerenciaDesdeIdToken } from '../api/googleClaims';
-import { socialAuthSnapshot, useSocialAuthCapability } from '../api/socialAuth';
+import {
+  linkIntentValido,
+  socialAuthSnapshot,
+  useSocialAuthCapability,
+} from '../api/socialAuth';
 import { captureSessionStateWitness } from '../api/storage';
 import {
   clearSignupInvitation,
@@ -131,6 +135,91 @@ export function ofrecerAltaConGoogle(input: {
     && input.googleRegistration;
 }
 
+/**
+ * AF-17 · la forma de versión que el dueño acepta en `accepted_notice_version`
+ * (`schemas.socialContinue`). El decodificador del aviso admite además un
+ * sufijo de prerelease; esa versión NO sirve para «Continuar con Google», y
+ * con ella el botón vuelve al camino 0.167.0 (fail-closed).
+ */
+export const VERSION_AVISO_CONTINUE = /^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$/;
+
+/**
+ * La versión que puede viajar como `accepted_notice_version`, o `null`: sin
+ * aviso cargado, o con una versión que el dueño no acepta, NO hay un-toque.
+ */
+export function versionAvisoParaContinue(version: string | null): string | null {
+  return version !== null && VERSION_AVISO_CONTINUE.test(version) ? version : null;
+}
+
+/** Los carteles posibles de un fallo de `continue`. Conjunto CERRADO. */
+export type ClaveMensajeContinue =
+  | 'neutro'
+  | 'registration_not_available'
+  | 'too_many_auth_attempts'
+  | 'too_many_signup_attempts';
+
+export type DesenlaceContinue =
+  | { readonly tipo: 'vincular'; readonly linkIntent: string }
+  | { readonly tipo: 'perfil' }
+  | { readonly tipo: 'alta_formulario' }
+  | { readonly tipo: 'mensaje'; readonly clave: ClaveMensajeContinue };
+
+/**
+ * El texto de cada cartel, con un `t('…')` LITERAL por caso: así el extractor
+ * de traducciones los ve y no se suma un `t(variable)`. Ninguno afirma ni niega
+ * que exista una cuenta; `registration_not_available` es el texto D-R15 vigente.
+ */
+export function mensajeContinue(
+  clave: ClaveMensajeContinue,
+  t: (s: string, ...a: unknown[]) => string,
+): string {
+  switch (clave) {
+    case 'registration_not_available':
+      return t('No pudimos crear la cuenta. Si ya tienes una, inicia sesión o recupera tu contraseña.');
+    case 'too_many_auth_attempts':
+      return t('Demasiados intentos. Espera un minuto.');
+    case 'too_many_signup_attempts':
+      return t('Prueba de nuevo más tarde.');
+    case 'neutro':
+      return t('No pudimos entrar con Google. Prueba de nuevo o entra con tu correo y contraseña.');
+  }
+}
+
+/**
+ * 🔴 AF-17 · qué hace la pantalla con un fallo de `google/continue`.
+ *
+ * Sólo DOS respuestas del dueño llevan a otra cosa que un cartel, y las dos
+ * existen porque el dueño ya verificó a la persona con Google:
+ * - `409 link_required` con un `link_intent` bien formado ⇒ paso de contraseña.
+ * - `422 profile_required` ⇒ el paso «Crea tu cuenta con Google», sólo nombre.
+ *
+ * Todo lo demás es opaco y se queda opaco: ningún texto afirma ni niega que
+ * exista una cuenta. `401 social_auth_failed` sólo abre el alta con formulario
+ * (conducta 0.167.0) cuando el dueño NO ofrece alta en un toque —si la
+ * ofreciera, `continue` ya la habría creado— y hay con qué crear la cuenta.
+ */
+export function desenlaceContinue(input: {
+  readonly status: number | null;
+  readonly code: string;
+  readonly extra: Record<string, unknown>;
+  readonly oneTapSignup: boolean;
+  readonly autoridad: AutoridadDeAlta;
+  readonly googleRegistration: boolean;
+}): DesenlaceContinue {
+  if (input.status === 409 && input.code === 'link_required'
+      && linkIntentValido(input.extra.link_intent)) {
+    return { tipo: 'vincular', linkIntent: input.extra.link_intent };
+  }
+  if (input.status === 422 && input.code === 'profile_required') return { tipo: 'perfil' };
+  if (!input.oneTapSignup && ofrecerAltaConGoogle(input)) return { tipo: 'alta_formulario' };
+  if (input.code === 'registration_not_available'
+      || input.code === 'too_many_auth_attempts'
+      || input.code === 'too_many_signup_attempts') {
+    return { tipo: 'mensaje', clave: input.code };
+  }
+  return { tipo: 'mensaje', clave: 'neutro' };
+}
+
 export interface SocialActionEligibility {
   readonly mode: 'login' | 'register';
   readonly providerActionEnabled: boolean;
@@ -194,6 +283,20 @@ type GoogleActionAuthority =
       readonly clientId: string;
       readonly locale: 'es' | 'en';
     }
+  /**
+   * AF-17 · «Continuar con Google» (dueño v2.92.0): entra o crea en un toque.
+   * Todo lo que viaja se CAPTURA acá, en el render que montó el botón: la
+   * versión del aviso que la pantalla enlaza, la invitación y —sólo en el
+   * reintento de `422 profile_required`— el nombre declarado.
+   */
+  | {
+      readonly purpose: 'continue';
+      readonly clientId: string;
+      readonly locale: 'es' | 'en';
+      readonly noticeVersion: string;
+      readonly invitationToken: string | null;
+      readonly nombre: { readonly firstName: string; readonly lastName: string } | null;
+    }
   | {
       readonly purpose: 'register';
       readonly clientId: string;
@@ -234,9 +337,12 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     register,
     googleLogin,
     googleRegister,
+    googleContinue,
+    googleContinueLink,
     facebookCallbackPhase,
     completeFacebookCallback,
     clearFacebookCallbackError,
+    anunciar,
   } = useAuth();
   const social = useSocialAuthCapability();
   const signup = useSyncExternalStore(
@@ -292,6 +398,20 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
    */
   const credencialAlta = useRef<string | null>(null);
   const [tieneCredencial, setTieneCredencial] = useState(false);
+  /**
+   * AF-17 · `422 profile_required`: Google no trajo un nombre utilizable. El
+   * paso «Crea tu cuenta con Google» pide SÓLO nombre y apellido y reintenta
+   * `continue` con una credencial nueva (la anterior quedó consumida).
+   */
+  const [perfilGoogle, setPerfilGoogle] = useState(false);
+  /**
+   * AF-17 · `409 link_required`: el correo verificado de Google ya es de una
+   * cuenta PayMe con contraseña. 🔴 El `link_intent` vive SÓLO en este ref —un
+   * uso, 10 minutos, nunca en un almacenamiento— y `pasoVincular` es su sombra
+   * para el render.
+   */
+  const linkIntent = useRef<string | null>(null);
+  const [pasoVincular, setPasoVincular] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [legal, setLegal] = useState<LegalState>({ status: 'idle' });
   const [legalAttempt, setLegalAttempt] = useState(0);
@@ -321,6 +441,20 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     && social.google.webClientId !== null;
   const legalReady = legal.status === 'ready';
   /**
+   * 🔴 AF-17 · «Continuar con Google» se ofrece sólo si el dueño lo publica
+   * (`features.google_continue.supported`) Y la pantalla tiene cargado un aviso
+   * con una versión que el dueño acepta: esa versión es la que viaja como
+   * `accepted_notice_version` y la que enlaza la frase bajo el botón. Sin ella,
+   * fail-closed al camino 0.167.0 (`/google/login` y `/google/register`).
+   */
+  const versionAvisoContinue = versionAvisoParaContinue(
+    legal.status === 'ready' ? legal.value.version : null,
+  );
+  const continueOn = social.googleContinue.supported
+    && versionAvisoContinue !== null
+    && social.google.webClientId !== null;
+  const perfilActivo = pasoGoogle && perfilGoogle && continueOn;
+  /**
    * 🔴 AF-16 · addendum 1 · en «Crea tu cuenta» Google va PRIMERO y no depende
    * de nada escrito: sólo de que el dueño publique el alta con Google y de que
    * haya con qué crear la cuenta. Antes el botón aparecía recién con nombre,
@@ -334,10 +468,15 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     && social.google.enabled
     && social.google.registration
     && social.google.webClientId !== null;
+  /** AF-17 · el botón de arriba de «Crea tu cuenta» crea en un toque. */
+  const unToqueEnAlta = capturaGoogle && continueOn && social.googleContinue.oneTapSignup;
   // Con el token retenido el paso no muestra Google: el alta sale con «Crear mi
   // cuenta». Sin él (vino de un ingreso fallido, o el alta falló), el botón
-  // registra con los datos del formulario, como siempre.
-  const googleEligible = capturaGoogle || (!(pasoGoogle && tieneCredencial)
+  // registra con los datos del formulario, como siempre. En el reintento de
+  // `profile_required` alcanza con nombre y apellido: el correo lo pone Google.
+  const googleEligible = !pasoVincular && (capturaGoogle
+    || (perfilActivo && legalReady && firstName.trim().length > 0 && lastName.trim().length > 0)
+    || (!(pasoGoogle && tieneCredencial) && !perfilActivo
     && (mode === 'login' || pasoGoogle)
     && socialActionEligible({
       mode,
@@ -349,7 +488,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       lastName,
       email,
       requiereInvitacion: false,
-    }) && social.google.webClientId !== null);
+    }) && social.google.webClientId !== null));
   const facebookEligible = !pasoGoogle && socialActionEligible({
     mode,
     providerActionEnabled: social.facebook.enabled
@@ -376,6 +515,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
    */
   const faltaCorreoParaAltaSocial = pasoGoogle
     && !tieneCredencial
+    && !perfilActivo
     && altaPublica
     && email.trim().length === 0
     && social.google.webClientId !== null
@@ -394,8 +534,26 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     const clientId = social.google.webClientId;
     if (!googleEligible || clientId === null) return null;
     const locale = idioma === 'en' ? 'en' : 'es';
-    if (mode === 'login') return { purpose: 'login', clientId, locale };
-    if (capturaGoogle) return { purpose: 'captura', clientId, locale };
+    const continuar = (
+      nombre: { firstName: string; lastName: string } | null,
+    ): GoogleActionAuthority | null => (
+      versionAvisoContinue === null ? null : {
+        purpose: 'continue',
+        clientId,
+        locale,
+        noticeVersion: versionAvisoContinue,
+        invitationToken: autoridad?.tipo === 'invitacion' ? autoridad.token : null,
+        nombre,
+      });
+    if (mode === 'login') {
+      return continueOn ? continuar(null) : { purpose: 'login', clientId, locale };
+    }
+    if (capturaGoogle) {
+      return unToqueEnAlta ? continuar(null) : { purpose: 'captura', clientId, locale };
+    }
+    if (perfilActivo) {
+      return continuar({ firstName: firstName.trim(), lastName: lastName.trim() });
+    }
     if (!autoridad || legal.status !== 'ready') return null;
     const alta = autoridad.tipo === 'invitacion'
       ? { tipo: 'invitacion' as const, invitationToken: autoridad.token }
@@ -412,6 +570,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   }, [
     autoridad,
     capturaGoogle,
+    continueOn,
     email,
     firstName,
     googleEligible,
@@ -419,7 +578,10 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     lastName,
     legal.status,
     mode,
+    perfilActivo,
     social.google.webClientId,
+    unToqueEnAlta,
+    versionAvisoContinue,
   ]);
   // Sólo un render COMMITTEADO puede mover autoridad. `useLayoutEffect` corre
   // antes de que el navegador entregue otro evento; un render concurrente
@@ -476,6 +638,19 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             setAltaConGoogle(true);
             return;
           }
+          if (authority.purpose === 'continue') {
+            // Lo mismo que el alta: la capability y la invitación capturadas
+            // tienen que seguir vivas AHORA. Si cambiaron, no viaja nada.
+            if (!socialAuthSnapshot().googleContinue.supported) {
+              setGoogleGeneration((value) => value + 1);
+              return;
+            }
+            if (authority.invitationToken !== null) {
+              const currentInvitation = signupInvitationSnapshot();
+              if (currentInvitation.status !== 'available'
+                  || currentInvitation.token !== authority.invitationToken) return;
+            }
+          }
           if (authority.purpose === 'register') {
             // La autoridad que se usa tiene que seguir siendo la del render que
             // montó este botón. Con invitación eso es el mismo token; con alta
@@ -499,6 +674,15 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
           setSocialBusy(true);
           setError(null);
           void (async () => {
+            if (authority.purpose === 'continue') {
+              try {
+                await continuarConGoogle(authority, credential);
+              } finally {
+                setSocialBusy(false);
+                releaseAuthAction();
+              }
+              return;
+            }
             try {
               if (authority.purpose === 'login') {
                 await googleLogin(credential);
@@ -587,6 +771,119 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     };
   }, [googleAuthority, googleGeneration, googleLoadFailed, googleLogin, googleRegister, t]);
 
+  /**
+   * 🔴 AF-17 · un toque en «Continuar con Google». El dueño decide si entra o
+   * crea; la pantalla sólo resuelve qué sigue según `desenlaceContinue`.
+   */
+  async function continuarConGoogle(
+    authority: Extract<GoogleActionAuthority, { purpose: 'continue' }>,
+    credential: string,
+  ) {
+    try {
+      const { created } = await googleContinue({
+        id_token: credential,
+        accepted_notice_version: authority.noticeVersion,
+        ...(authority.invitationToken !== null ? { invitation_token: authority.invitationToken } : {}),
+        ...(authority.nombre !== null
+          ? { first_name: authority.nombre.firstName, last_name: authority.nombre.lastName }
+          : {}),
+      });
+      // La invitación se consume sólo si la cuenta NACIÓ con ella, y recién
+      // con la sesión persistida.
+      if (created && authority.invitationToken !== null) clearSignupInvitation();
+      if (created) anunciar(t('¡Listo! Creamos tu cuenta de PayMe.'));
+    } catch (err) {
+      const { status, code, extra } = extractApiError(err);
+      const actual = socialAuthSnapshot();
+      const desenlace = desenlaceContinue({
+        status,
+        code,
+        extra,
+        oneTapSignup: actual.googleContinue.oneTapSignup,
+        autoridad: autoridadDeAlta(signupInvitationSnapshot(), actual.publicRegistration),
+        googleRegistration: actual.google.enabled
+          && actual.google.registration
+          && actual.google.webClientId !== null,
+      });
+      const sugerencia = () => {
+        const s = sugerenciaDesdeIdToken(credential);
+        setFirstName((value) => (value.trim() ? value : s.firstName));
+        setLastName((value) => (value.trim() ? value : s.lastName));
+        return s;
+      };
+      if (desenlace.tipo === 'vincular') {
+        linkIntent.current = desenlace.linkIntent;
+        setPassword('');
+        setPasoVincular(true);
+      } else if (desenlace.tipo === 'perfil') {
+        sugerencia();
+        credencialAlta.current = null;
+        setTieneCredencial(false);
+        setPerfilGoogle(true);
+        setAltaConGoogle(true);
+        setMode('register');
+      } else if (desenlace.tipo === 'alta_formulario') {
+        // Conducta 0.167.0: el token ya se consumió, así que el paso pide un
+        // toque más con los datos del formulario.
+        const s = sugerencia();
+        setEmail((value) => (value.trim() ? value : s.email));
+        setPassword('');
+        setAltaConGoogle(true);
+        setMode('register');
+      } else {
+        setError(mensajeContinue(desenlace.clave, t));
+      }
+      // El handle es one-use: cualquier fallo requiere una generación nueva.
+      setGoogleGeneration((value) => value + 1);
+    }
+  }
+
+  /** AF-17 · volver del paso de contraseña: el intento se descarta. */
+  function salirDeVincular() {
+    linkIntent.current = null;
+    setPasoVincular(false);
+    setPassword('');
+    setError(null);
+    setGoogleGeneration((value) => value + 1);
+  }
+
+  /**
+   * AF-17 · `POST /google/continue/link`: la contraseña de la cuenta es la
+   * única autoridad para conectar Google. `403` = contraseña incorrecta, el
+   * intento sigue vivo (el dueño lo quema al quinto error); `401` = el intento
+   * venció, se usó o se quemó: se descarta y se vuelve a Google.
+   */
+  async function onVincular(e: FormEvent) {
+    e.preventDefault();
+    const intent = linkIntent.current;
+    if (!intent || password.length < 8 || !tryAcquireAuthAction()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await googleContinueLink({ link_intent: intent, password });
+      linkIntent.current = null;
+      anunciar(t('Listo: conectamos tu cuenta con Google.'));
+    } catch (err) {
+      const { status, code } = extractApiError(err);
+      if (status === 403 && code === 'reauthentication_failed') {
+        setPassword('');
+        setError(t('Contraseña incorrecta. Prueba de nuevo.'));
+      } else if (status === 401) {
+        linkIntent.current = null;
+        setPasoVincular(false);
+        setPassword('');
+        setMode('login');
+        setGoogleGeneration((value) => value + 1);
+        setError(t('No pudimos conectar tu cuenta. Toca «Continuar con Google» otra vez.'));
+      } else {
+        setError(errorMessage(err, t));
+      }
+    } finally {
+      setBusy(false);
+      releaseAuthAction();
+    }
+  }
+
   async function onFacebook() {
     if (!facebookEligible || !tryAcquireAuthAction()) return;
     let redirecting = false;
@@ -665,7 +962,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   useEffect(() => {
     // El aviso se pide para CUALQUIER autoridad de alta: el consentimiento no
     // depende de cómo se acredite el derecho a crear la cuenta.
-    if (mode !== 'register' || !signupAvailable) {
+    // AF-17 · con «Continuar con Google» publicado, el aviso se carga también
+    // en el ingreso: su versión es la que viaja y la que enlaza la frase.
+    if ((mode !== 'register' || !signupAvailable) && !social.googleContinue.supported) {
       setLegal({ status: 'idle' });
       return;
     }
@@ -679,12 +978,13 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         if (alive) setLegal({ status: 'error' });
       });
     return () => { alive = false; };
-  }, [mode, signup, legalAttempt]);
+  }, [mode, signup, legalAttempt, social.googleContinue.supported]);
 
   // AF-16 · el paso de Google existe sólo en registro.
   useEffect(() => {
     if (mode === 'login') {
       setAltaConGoogle(false);
+      setPerfilGoogle(false);
       credencialAlta.current = null;
       setTieneCredencial(false);
     }
@@ -819,6 +1119,15 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         role="group"
         aria-label={t('Continuar con Google')}
       />
+      {/* AF-17 · con «Continuar con Google» el toque puede CREAR la cuenta: la
+          aceptación del aviso se dice junto al botón y enlaza el mismo aviso
+          cuya versión viaja. Sin versión vigente no hay modo un-toque. */}
+      {googleAuthority?.purpose === 'continue' && (
+        <p className="ingreso-legal ingreso-aviso-google">
+          {t('Al continuar aceptas el')}{' '}
+          <a href={PATH_PRIVACIDAD}>{t('Aviso de privacidad')}</a>
+        </p>
+      )}
       {googleLoadFailed && (
         <button
           type="button"
@@ -867,28 +1176,70 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
 
       <div className="ingreso-burbuja">
         <div className="ingreso-burbuja-titulo">
-          {mode === 'login'
-            ? t('Entra a tu cuenta')
-            : pasoGoogle ? t('Crea tu cuenta con Google') : t('Crea tu cuenta')}
+          {pasoVincular
+            ? t('Conecta tu cuenta con Google')
+            : mode === 'login'
+              ? t('Entra a tu cuenta')
+              : pasoGoogle ? t('Crea tu cuenta con Google') : t('Crea tu cuenta')}
         </div>
         {/* El artefacto sólo diseña el login; el alta es la pantalla siguiente y
             todavía no está diseñada. Por eso el subtítulo no se inventa para el
             modo registro: se omite. */}
-        {mode === 'login' && (
+        {mode === 'login' && !pasoVincular && (
           <div className="ingreso-burbuja-sub">
             {t('Con tu cuenta guardamos tus tarjetas y tus pagos anteriores.')}
           </div>
         )}
-        {pasoGoogle && (
+        {pasoGoogle && !pasoVincular && (
           <div className="ingreso-burbuja-sub" role="status">
             {tieneCredencial
               ? t('Revisa tus datos y toca «Crear mi cuenta».')
-              : t('Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.')}
+              : perfilActivo
+                ? t('Google no nos dio tu nombre. Escríbelo y toca «Continuar con Google» otra vez.')
+                : t('Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.')}
+          </div>
+        )}
+        {pasoVincular && (
+          <div className="ingreso-burbuja-sub" role="status">
+            {t('Ya tienes una cuenta con este correo. Escribe tu contraseña para conectarla con Google.')}
           </div>
         )}
       </div>
 
       <div className="ingreso-cuerpo">
+        {pasoVincular ? (
+          <form className="ingreso-tarjeta" onSubmit={onVincular}>
+            <label className="ingreso-campo">
+              <span className="ingreso-etiqueta">{t('Contraseña')}</span>
+              <input
+                className="input ingreso-input"
+                type="password"
+                placeholder={t('Tu contraseña')}
+                aria-invalid={!!error}
+                aria-describedby={error ? 'login-error' : undefined}
+                autoComplete="current-password"
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={busy}
+                required
+              />
+            </label>
+            <button className="ingreso-entrar" type="submit" disabled={busy || password.length < 8}>
+              {busy ? t('Un segundo…') : t('Conectar con Google')}
+            </button>
+            {error && (
+              <div id="login-error" className="ingreso-error" role="alert">
+                {error}
+              </div>
+            )}
+            <div className="ingreso-pie">
+              <button type="button" className="login-toggle" onClick={salirDeVincular} disabled={busy}>
+                {t('Volver')}
+              </button>
+            </div>
+          </form>
+        ) : (
         <form className="ingreso-tarjeta" onSubmit={onSubmit}>
           {/* 🔴 AF-16 · addendum 1 · en «Crea tu cuenta», Google PRIMERO, antes
               de cualquier campo y sin depender de nada escrito. El formulario
@@ -942,7 +1293,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
               todavía no se diseñó. */}
           {/* Con invitación el email lo pone la invitación: en el paso de Google
               no se pide, porque no viaja. */}
-          {!(pasoGoogle && autoridad?.tipo === 'invitacion') && (
+          {/* AF-17 · en el reintento de `profile_required` tampoco: el correo
+              es el verificado de Google, `continue` no acepta otro. */}
+          {!(pasoGoogle && (autoridad?.tipo === 'invitacion' || perfilActivo)) && (
           <label className="ingreso-campo">
             <span className="ingreso-etiqueta">{t('Email')}</span>
             <input
@@ -1123,12 +1476,13 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             </>
           )}
         </form>
+        )}
 
         {/* §4 · fuera de la tarjeta. La disponibilidad del alta NO cambia: es
             la misma `signupAvailable` de siempre —invitación o
             `public_registration` del dueño—, así que con el alta cerrada este
             enlace no existe, igual que hoy. */}
-        {(mode === 'register' || signupAvailable) && (
+        {!pasoVincular && (mode === 'register' || signupAvailable) && (
           <div className="ingreso-pie">
             {mode === 'login' ? `${t('¿Primera vez?')} ` : ''}
             <button

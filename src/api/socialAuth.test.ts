@@ -8,6 +8,7 @@ const {
   decodeLinkedProvidersResponse,
   ensureSocialAuthCapability,
   readSocialAuthCapability,
+  decodeGoogleContinueResponse,
   resetSocialAuthForTests,
   socialAuthSnapshot,
 } = await import('./socialAuth');
@@ -319,6 +320,72 @@ describe('decodeGoogleLinkResponse · POST /api/auth/google/link', () => {
     for (const mala of malas) {
       expect(() => decodeGoogleLinkResponse(mala), JSON.stringify(mala))
         .toThrow('google_link_response_malformed');
+    }
+  });
+});
+
+describe('AF-17 · features.google_continue y la respuesta de continue', () => {
+  const baseConfig = () => ({
+    features: {
+      social_auth: {
+        google_sign_in: { enabled: true, registration: true, login: true, linking: true, web_client_id: 'cid-123' },
+        facebook_sign_in: { enabled: false, registration: false, login: false, app_id: null, redirect_uri: null },
+        recovery_email: { enabled: true, completion_route: '#/recovery' },
+        password_login: { enabled: true },
+      },
+    } as Record<string, unknown>,
+  });
+
+  it('forma exacta del dueño ⇒ supported con su one_tap_signup', () => {
+    const config = baseConfig();
+    config.features.google_continue = { supported: true, one_tap_signup: true };
+    expect(readSocialAuthCapability(config).googleContinue).toEqual({ supported: true, oneTapSignup: true });
+    config.features.google_continue = { supported: true, one_tap_signup: false };
+    expect(readSocialAuthCapability(config).googleContinue).toEqual({ supported: true, oneTapSignup: false });
+  });
+
+  it('🔴 ausente, con una clave de más o mal tipada ⇒ apagada, y el login con Google NO se apaga', () => {
+    for (const raro of [undefined, {}, { supported: true }, { supported: 'true', one_tap_signup: true },
+      { supported: true, one_tap_signup: true, extra: 1 }, { supported: false, one_tap_signup: true }]) {
+      const config = baseConfig();
+      if (raro !== undefined) config.features.google_continue = raro;
+      const estado = readSocialAuthCapability(config);
+      expect(estado.googleContinue).toEqual({ supported: false, oneTapSignup: false });
+      expect(estado.status).toBe('authoritative');
+      expect(estado.google.login).toBe(true);
+    }
+  });
+
+  it('sin login con Google del dueño, continue no existe aunque se publique', () => {
+    const config = baseConfig();
+    (config.features.social_auth as { google_sign_in: Record<string, unknown> }).google_sign_in = {
+      enabled: false, registration: false, login: false, linking: false, web_client_id: null,
+    };
+    config.features.google_continue = { supported: true, one_tap_signup: true };
+    expect(readSocialAuthCapability(config).googleContinue.supported).toBe(false);
+  });
+
+  const sesion = {
+    access_token: 'a'.repeat(30),
+    refresh_token: 'r'.repeat(30),
+    expires_in: 900,
+    user: { id: 'u1', payme_id: 'p1', email: 'x@y.mx', first_name: 'Ana', last_name: 'Demo' },
+  };
+
+  it('continue: la sesión MÁS created, y nada más', () => {
+    expect(decodeGoogleContinueResponse({ ...sesion, created: true }, 'continue').created).toBe(true);
+    expect(decodeGoogleContinueResponse({ ...sesion, created: false }, 'continue').session.user.first_name).toBe('Ana');
+    for (const malo of [sesion, { ...sesion, created: 'true' }, { ...sesion, created: false, linked: true },
+      { ...sesion, created: false, otra: 1 }]) {
+      expect(() => decodeGoogleContinueResponse(malo, 'continue')).toThrow();
+    }
+  });
+
+  it('link: la sesión MÁS created:false y linked:true, y nada más', () => {
+    expect(decodeGoogleContinueResponse({ ...sesion, created: false, linked: true }, 'link').created).toBe(false);
+    for (const malo of [{ ...sesion, created: false }, { ...sesion, created: true, linked: true },
+      { ...sesion, created: false, linked: false }]) {
+      expect(() => decodeGoogleContinueResponse(malo, 'link')).toThrow();
     }
   });
 });
