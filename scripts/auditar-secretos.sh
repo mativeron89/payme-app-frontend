@@ -87,9 +87,76 @@ PATRONES=(
   'AKIA[0-9A-Z]{16}'
   '-----BEGIN [A-Z ]*PRIVATE KEY-----'
   'i:(^|[^A-Za-z0-9_'"'"'"-])[A-Za-z0-9_-]*(password|passwd|secret|token|api_?key)["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+  'i:(^|[^A-Za-z0-9_'"'"'"-])[A-Za-z0-9_-]*(contrasena|contraseña|contraseÑa|clave|secreto|llave|credencial)[A-Za-z0-9_-]*["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
   'https://api\.vercel\.com/v[0-9]+/integrations/deploy/[A-Za-z0-9_/-]{16,}'
   'postgres(ql)?://[^\s"'"'"']+:[^\s"'"'"']+@'
 )
+
+# ─── Identificadores en ESPAÑOL · 2026-09-18 (AF-11), y por qué faltaban ────
+#
+# Hasta acá la familia de asignación sólo reconocía `password|passwd|secret|
+# token|api_?key` — puro inglés. El equipo que nombra este repo escribe en
+# español rioplatense, y `AF-09` midió con una sonda real que `contraseña`,
+# `CONTRASENA`, `clave` y `CLAVE_SECRETA` con un valor literal largo **no se
+# marcaban**. El repo es PÚBLICO: un secreto detrás de un nombre en español
+# pasaba exactamente igual que si el patrón no existiera.
+#
+# Se agrega una SEGUNDA entrada a `PATRONES`, no se amplía la primera, y es a
+# propósito: `contrasena|contraseña|contraseÑa|clave|secreto|llave|credencial`
+# lleva `[A-Za-z0-9_-]*` DESPUÉS del grupo (prefijo, sufijo o palabra completa,
+# como pide la orden), pero la entrada vieja en inglés queda BYTE A BYTE igual
+# —sufijo únicamente— y es una decisión medida, no un descuido:
+#
+# 🔴 **La primera versión unificaba las dos familias en una sola entrada con
+# prefijo para todos, inglés incluido, y se revirtió.** Correr el auditor
+# contra el árbol COMPLETO del repo (`git diff <empty-tree>..HEAD`, no sólo el
+# diff de esta orden) mostró el costo real: `"js-tokens": "^3.0.0 || ^4.0.0"`
+# en `package-lock.json` —el nombre de un paquete real de npm, no un secreto—
+# empezó a marcarse, porque `token` + el sufijo nuevo `[A-Za-z0-9_-]*` absorbe
+# la `s` de `tokens`. Un lockfile lista cientos de nombres de paquete; sumarle
+# prefijo/sufijo genérico a `token` (o a `password`/`secret`/`api_key`) es
+# multiplicar la superficie de falsos positivos por cada dependencia futura
+# que contenga esas letras en su nombre, no una vez: SIEMPRE. **Es la misma
+# familia que este archivo ya nombra arriba —"una guarda que grita de más se
+# apaga sola"— aplicada a un lockfile en vez de a un patrón de Stripe.**
+#
+# Las palabras en ESPAÑOL no tienen ese riesgo —ningún paquete de npm se llama
+# `contrasena` o `credencial`— así que ahí el prefijo/sufijo se queda. `token`
+# permanece con su cobertura vieja (sufijo y palabra completa, que ya lo
+# cazaba); no gana prefijo, y por eso NO es parte de la segunda entrada aunque
+# la orden lo liste junto a las palabras en español: pedía que las palabras
+# NUEVAS funcionaran como prefijo/sufijo/palabra completa, y `token` no es
+# nueva. Ampliarlo de todos modos habría sido cumplir la letra rompiendo el
+# motivo por el que la guarda existe.
+#
+# 🔴 **`contrase[nñ]a` —clase de corchetes con la `ñ` adentro— se probó primero
+# para la palabra en sí y se descartó.** Bajo `/usr/bin/grep` (BSD grep 2.6.0,
+# el que corre este script de verdad — NO el `grep` de la sesión donde se
+# desarrolló, que un shim del harness redirige a `ugrep` y que SÍ la
+# matcheaba, escondiendo el defecto) una clase de corchetes con un carácter
+# UTF-8 de 2 bytes (`ñ` = `0xC3 0xB1`) se compila como dos alternativas de UN
+# byte cada una bajo locale `C` (la que tiene este script como subproceso de
+# `bash`, sin `LANG` heredado): la clase consume sólo el primer byte de `ñ` y
+# la letra `a` que sigue en el patrón ya no encuentra el segundo byte, así que
+# `contraseña` real NUNCA matcheaba. Medido: `echo contraseña | grep -Ei
+# 'contrase[nñ]a'` → sale 1 con `/usr/bin/grep`. La alternancia
+# `contrasena|contraseña` compara cada alternativa como secuencia de bytes
+# completa y matchea con cualquier grep, en cualquier locale. **La lección:
+# cuando el patrón nuevo tiene un acento, hay que ejecutar el script real
+# (`bash scripts/…`), nunca sólo `grep` suelto en esta sesión.**
+#
+# 🔴 **Y todavía faltaba la mayúscula CON tilde.** `-i` sí pliega
+# `contrasena`↔`CONTRASENA` (ASCII puro), pero bajo `/usr/bin/grep` en locale
+# `C` NO pliega `ñ`↔`Ñ`: medido, `echo CONTRASEÑA | grep -Ei 'contraseña'` →
+# sale 1. Agregar sólo `contraseña` (minúscula) dejaba el mismo hueco que el
+# hallazgo original de AF-09, con la letra cambiada. Se agrega la tercera
+# alternativa literal `contraseÑa` (con la Ñ mayúscula exacta) en vez de
+# confiar en que `-i` la resuelva sola.
+#
+# `secreto` (sin `?`, a propósito) es una alternativa NUEVA y separada de
+# `secret`: `secret` ya vive en la entrada vieja sin prefijo/sufijo, así que
+# no hace falta —ni conviene— repetirla acá con el riesgo de prefijo que este
+# mismo párrafo acaba de descartar para el inglés.
 
 # ─── El límite izquierdo, y por qué mira la COMILLA y no el guion ───────────
 #
@@ -168,7 +235,14 @@ done
 # Clave ENTRE COMILLAS. `-o` extrae CADA coincidencia por separado para poder
 # descartarlas una por una: eximir la línea entera dejaría que un ternario de
 # `autoComplete` tape un JSON con la clave real escrito al lado.
+#
+# Misma división que en `PATRONES` y el mismo motivo: `CLAVE_CITADA` (inglés)
+# se queda sin prefijo/sufijo porque un lockfile cita nombres de paquete entre
+# comillas — `"js-tokens": "^3.0.0 || ^4.0.0"` es EXACTAMENTE esta forma, clave
+# citada + valor citado de 8+ — y `CLAVE_CITADA_ES` (español) sí lo lleva,
+# porque ningún paquete de npm se llama `contrasena` o `credencial`.
 CLAVE_CITADA='["'"'"'][A-Za-z0-9_-]*(password|passwd|secret|token|api_?key)["'"'"']\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+CLAVE_CITADA_ES='["'"'"'][A-Za-z0-9_-]*(contrasena|contraseña|contraseÑa|clave|secreto|llave|credencial)[A-Za-z0-9_-]*["'"'"']\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
 
 # La lista de valores benignos se limita a los tokens de `autocomplete` que este
 # repo USA —los dos de `LoginScreen.tsx:202`—. No se agregan otros «por si
@@ -188,6 +262,14 @@ citadas=$(grep '^+' "$diff_file" | cut -c2- | grep -oEi -- "$CLAVE_CITADA" \
 if [ -n "$citadas" ]; then
   echo "🔴 VALOR con forma de secreto: clave entre comillas (JSON/YAML)" >&2
   printf '%s\n' "$citadas" | head -3 | sed 's/^/     /' >&2
+  hallazgos=$((hallazgos + 1))
+fi
+
+citadas_es=$(grep '^+' "$diff_file" | cut -c2- | grep -oEi -- "$CLAVE_CITADA_ES" \
+  | grep -vEi -- "$VALOR_BENIGNO" || true)
+if [ -n "$citadas_es" ]; then
+  echo "🔴 VALOR con forma de secreto: clave en español entre comillas (JSON/YAML)" >&2
+  printf '%s\n' "$citadas_es" | head -3 | sed 's/^/     /' >&2
   hallazgos=$((hallazgos + 1))
 fi
 

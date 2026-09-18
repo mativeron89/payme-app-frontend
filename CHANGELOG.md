@@ -11,6 +11,58 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.165.2 — el auditor de secretos reconoce identificadores en español (2026-09-18)
+
+Orden `APP-SECRETS-AUDITOR-ES-AF-11-20260918`, base `1e3d3f5` (HEAD de AF-10).
+**Sin push, sin deploy, sin GREEN.** Hallazgo de AF-09: `scripts/auditar-secretos.sh`
+sólo reconocía `password|passwd|secret|token|api_?key` — puro inglés — y una
+sonda real midió que `contraseña`, `CONTRASENA`, `clave` y `CLAVE_SECRETA` con
+un valor literal largo no se marcaban. El repo es público; un secreto detrás
+de un nombre en español pasaba igual que si el patrón no existiera.
+
+Se agrega una familia nueva y separada —`contrasena|contraseña|contraseÑa|
+clave|secreto|llave|credencial`, sin distinguir mayúsculas ni acentos, como
+prefijo, sufijo o palabra completa— tanto en la forma DESNUDA
+(`clave: 'valor'`) como en la citada estilo JSON (`"clave": "valor"`).
+`token` se queda con su cobertura vieja (sufijo/palabra completa) y **no**
+gana prefijo, igual que el resto de las palabras en inglés: correr el
+auditor contra el árbol completo mostró que darle prefijo genérico a
+`token`/`password`/`secret`/`api_key` hace que `"js-tokens": "^3.0.0 ||
+^4.0.0"` de `package-lock.json` —un nombre de paquete real, no un secreto—
+empiece a marcarse, y esa superficie de falso positivo crece con cada
+dependencia futura. Las palabras en español no tienen ese riesgo: ningún
+paquete de npm se llama `contrasena` o `credencial`.
+
+Un `contrase[nñ]a` con clase de corchetes se probó primero para tolerar el
+acento y se descartó: bajo `/usr/bin/grep` real (BSD grep, locale `C`, sin
+`LANG`) una clase con un carácter UTF-8 de 2 bytes sólo consume el primer
+byte y rompe el match — pasaba en la sesión de desarrollo porque su `grep`
+es en realidad `ugrep` vía un shim del harness, que sí lo resolvía y
+escondía el defecto. El fix es alternancia de palabras completas
+(`contrasena|contraseña|contraseÑa`), que compara secuencias de bytes
+completas y funciona con cualquier grep.
+
+Corrida la auditoría contra el árbol entero (`git diff <empty-tree>..HEAD`,
+no sólo el diff incremental), aparecieron 5 hallazgos reales nuevos. Dos
+están en `contract-mirror/**` (fuera de alcance, no se tocan). Dos más —una
+constante de `scripts/landingScriptPolicy.ts` y una entrada de
+`src/i18n/en.ts`— son falsos positivos genuinos (una clave de `localStorage`
+y una traducción, ninguna es un secreto) en archivos que no son test/e2e y
+por lo tanto fuera de los paths de esta orden; quedan documentados para una
+orden aparte. El único corregible acá era exactamente el que anticipaba la
+orden: la constante `CONTRASENA` de
+`e2e/af-cuentas-conectadas-vista-previa.spec.ts` traía un valor sintético
+largo en el mismo renglón. Acortarlo bajo 8 caracteres rompía el
+`minLength={8}` real del campo (medido: 2 tests e2e rojos), así que se
+compone con `.repeat()` en vez de con un literal corto — la otra mitad de la
+misma convención, ya usada en los propios fixtures de
+`auditarSecretos.test.ts` — y el valor en runtime conserva sus 8 caracteres.
+
+35 tests en `auditarSecretos.test.ts` (18 nuevos): sondas positivas por cada
+palabra nueva, como prefijo y como sufijo; controles negativos (literal
+corto, `.repeat()`, nombre sin valor); regresión de que `password`/`token`
+en inglés y el ternario de `autoComplete` siguen exactamente igual.
+
 ## 0.165.1 — G-25: se retira la compatibilidad con el DTO legacy (2026-09-18)
 
 Orden `APP-G25-LEGACY-RETIRE-AF-10-20260918`, base `1b78b6e5…` (HEAD de AF-09).

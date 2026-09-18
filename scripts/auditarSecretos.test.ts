@@ -275,6 +275,96 @@ describe('auditoría de secretos', () => {
     },
   );
 
+  /**
+   * AF-11 · el auditor reconoce identificadores en ESPAÑOL, sin distinguir
+   * mayúsculas ni acentos, como prefijo, sufijo o palabra completa.
+   *
+   * 🔴 Hallazgo medido al construir esta guarda, no supuesto: una clase de
+   * corchetes `[nñ]` para tolerar `contraseña`/`contrasena` pasaba en la
+   * sesión de desarrollo (cuyo `grep` es en realidad `ugrep`, vía un shim del
+   * harness) y FALLABA bajo `/usr/bin/grep` real (BSD grep, locale `C`): una
+   * clase con un carácter UTF-8 de 2 bytes sólo consume el primero, y la
+   * letra siguiente del patrón nunca encuentra el segundo. `spawnSync('bash',
+   * …)` sí ejercita el binario real —por eso estos tests corren así y no con
+   * un `grep` suelto de la sesión— y por eso el fix final es alternancia de
+   * palabras completas (`contrasena|contraseña|contraseÑa`), no una clase de
+   * corchetes con acento adentro.
+   */
+  it.each([
+    ['contraseñaUsuario', 'contraseña con ñ, como prefijo de un compuesto'],
+    ['contrasenaUsuario', 'contrasena sin ñ, como prefijo de un compuesto'],
+    ['CONTRASENA', 'CONTRASENA, mayúsculas sin acento (el hallazgo original de AF-09)'],
+    ['CONTRASEÑA', 'CONTRASEÑA, mayúsculas CON acento'],
+    ['claveSecreta', 'clave como PREFIJO de un compuesto'],
+    ['adminClave', 'clave como SUFIJO de un compuesto'],
+    ['clave', 'clave, palabra completa'],
+    ['secreto', 'secreto, palabra completa'],
+    ['llaveMaestra', 'llave como prefijo'],
+    ['credencialAdmin', 'credencial como prefijo'],
+  ])('%s (%s) se marca como VALOR con forma de secreto', (identifier) => {
+    const value = ['valor', 'sintetico', 'largo'].join('_');
+    const { dir, base } = repoConCambio(`const ${identifier} = '${value}';`);
+
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+    expect(result.status, `el identificador en español ${identifier} no se marcó`).toBe(1);
+  });
+
+  it('la clave citada en español, con forma de JSON, también se marca', () => {
+    const valor = ['valor', 'sintetico', 'largo'].join('_');
+    const { dir, base } = repoConCambio(`  "clave-secreta": "${valor}",`);
+
+    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+    expect(result.status, 'la clave citada en español pasó sin marcar').toBe(1);
+  });
+
+  describe('controles negativos en español · no deben marcarse', () => {
+    it('literal CORTO en el mismo renglón, convención de LoginScreen.test.tsx', () => {
+      const { dir, base } = repoConCambio("const clave = 'corta';");
+
+      const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+
+      expect(`${result.stdout}${result.stderr}`).toContain('cero valores con forma de secreto');
+      expect(result.status, 'un literal corto se marcó como si fuera secreto').toBe(0);
+    });
+
+    it('valor compuesto con `.repeat()` no tiene un literal largo real', () => {
+      const { dir, base } = repoConCambio("const contraseña = 'ab'.repeat(10);");
+
+      const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+
+      expect(`${result.stdout}${result.stderr}`).toContain('cero valores con forma de secreto');
+      expect(result.status, 'el patrón `.repeat()` se marcó como si fuera secreto').toBe(0);
+    });
+
+    it('un nombre sin valor asignado no tiene forma de secreto', () => {
+      const { dir, base } = repoConCambio('const credencial = obtenerCredencial();');
+
+      const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+
+      expect(`${result.stdout}${result.stderr}`).toContain('cero valores con forma de secreto');
+      expect(result.status, 'un identificador sin literal se marcó como si fuera secreto').toBe(0);
+    });
+  });
+
   it('un token HTML benigno no puede ocultar un secreto real en la misma línea', () => {
     // Se arma en runtime para que el propio test no contenga un valor con forma
     // de clave y pueda ser auditado por el instrumento que está probando.

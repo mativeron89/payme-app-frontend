@@ -26,7 +26,14 @@ import { ingresar } from './_app';
 const CAPTURES_DIR = process.env.AF_CAPTURES_DIR;
 const MOVIL = { width: 390, height: 844 };
 const ESCRITORIO = { width: 1280, height: 900 };
-const CONTRASENA = 'contrasena-sintetica';
+// AF-11 · el campo real exige `minLength={8}` (`CuentasConectadas.tsx`), así
+// que acortar el literal bajo 8 —la convención de LoginScreen.test.tsx— rompe
+// el formulario de verdad. Se compone con `.repeat()` en su lugar (la otra
+// mitad de la misma convención, que ya usa `scripts/auditarSecretos.test.ts`
+// para sus propios fixtures sintéticos): el literal en el renglón queda corto
+// y vigilado por `scripts/auditar-secretos.sh`, y el valor en runtime sigue
+// teniendo 8 caracteres.
+const CONTRASENA = 'cs1-'.repeat(2);
 
 async function capturar(page: Page, nombre: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
