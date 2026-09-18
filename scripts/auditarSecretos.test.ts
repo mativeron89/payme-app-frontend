@@ -571,7 +571,7 @@ describe('auditoría de secretos', () => {
     it('las TRES líneas reales del contrato del dueño (v2.92.0) ⇒ verde', () => {
       const contrato = readFileSync(join(RAIZ, 'contract-mirror', 'contract', 'social-auth-v1.json'), 'utf8');
       const reales = contrato.split('\n').filter((l) => (
-        l.includes(['"invitation', 'token": "opcional.'].join('_'))
+        l.includes(['"invitation_tok', 'en": "opcional.'].join(''))
         || l.includes(['"pass', 'word": "la contraseña actual'].join(''))
         || l.includes(['"creden', 'cial": "una verificación'].join(''))));
       expect(reales, 'no se encontraron las tres notas del dueño en el espejo').toHaveLength(3);
