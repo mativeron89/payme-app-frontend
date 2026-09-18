@@ -46,8 +46,8 @@ sesión.
 
 ## C-02 · `withSessionLock` distingue «no hay Web Locks» de «corrió bien» por `null` vs `undefined`
 
-✅ **CERRADA el 2026-09-18 (`APP-SESSION-LOCK-AND-SEAMS-AF-20`, ítem n89 del
-Roadmap), con el arreglo que proponía esta misma entrada.** `withSessionLock`
+✅ **CERRADA el 2026-09-18 en `f08f3fc` (`APP-SESSION-LOCK-AND-SEAMS-AF-20`,
+ítem n89 del Roadmap), con el arreglo que proponía esta misma entrada.** `withSessionLock`
 devuelve un centinela propio, `SIN_WEB_LOCKS` (un `symbol`), cuando el navegador
 no expone `navigator.locks`, y las tres puertas de sesión comparan contra él:
 `invalidateSessionSerialized`, `tryRefresh` y `persistNewSession`. Una acción que
@@ -77,6 +77,22 @@ propia.
 ---
 
 ## C-03 · `getFriendRequests` es la única interpolación de la fachada sin `encodeURIComponent`
+
+✅ **CERRADA el 2026-09-18 (`APP-SESSION-LOCK-AND-SEAMS-AF-20`) con la guarda de
+CLASE que pedía esta entrada, y la instancia ya no existía.** Medido al cerrarla:
+`getFriendRequests(direction)` desapareció en `87c03ca`, que la partió en
+`getIncomingFriendRequests` y `getOutgoingFriendRequests` con URL literal. Esta
+costura estaba desactualizada desde entonces. Censo de la clase en `src/api`
+(sin tests ni mock):
+- 30 interpolaciones de path, todas con `encodeURIComponent`;
+- 3 ya codificadas por construcción, con motivo: dos `URLSearchParams#toString()`
+  y un `query` armado con `encodeURIComponent`;
+- 0 concatenaciones con `+`;
+- 0 por corregir.
+La guarda es `src/api/interpolacionesDeRuta.test.ts`: recorre los templates que
+empiezan con `/` o con `?` y exige `encodeURIComponent` o una excepción nombrada.
+Ampliarla a `?` destapó un miembro que la primera versión no veía
+(`recoveryFlow.ts`, correcto). El texto de abajo describe el estado anterior.
 
 `src/api/index.ts`. Todas las demás interpolaciones de path de la fachada usan
 `encodeURIComponent`; ésta no.
