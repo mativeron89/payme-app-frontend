@@ -35,6 +35,9 @@ router.get('/', async (req, res, next) => {
       `SELECT i.id, i.mesa_id, i.invitation_type, i.status, i.expires_at, i.created_at,
               m.code AS mesa_code, m.status AS mesa_status,
               r.name AS restaurant_name,
+              -- v2.93.0 · G-31 · categoría del restaurante para la tarjeta.
+              -- Enum cerrado de restaurants.category, NOT NULL en la base.
+              r.category AS restaurant_category,
               u.first_name AS inviter_first_name, u.last_name AS inviter_last_name,
               u.payme_id AS inviter_payme_id
          FROM invitations i

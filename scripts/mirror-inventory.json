@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "5ce1b3cc857a7d9c6eb892afda8bf840b217eaa9",
+  "commit": "7bb5b7b4e4e320121b02ea9aa9e94d692a763eaa",
   "total": 107,
   "archivos": [
     {
@@ -349,14 +349,14 @@
     {
       "origen": "routes/invitations.js",
       "destino": "routes/invitations.js",
-      "sha256": "898587b1b413ce572df4a8cd39f594284eefe7bd1196edbc8b1534fbba0cdc0d",
-      "bytes": 13814
+      "sha256": "35843b1080301b173000032793e26f8c5e4a77764effa796f9c4a15afe6945e8",
+      "bytes": 14019
     },
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "0d1b5cb262921c1f6f53c002d47c53faf37bf4935de007803278177735125268",
-      "bytes": 167584
+      "sha256": "7bba491ef1d2d0d6ef249ee2f9f2a08253941ae10675f97000fde8a75d2b0a25",
+      "bytes": 172216
     },
     {
       "origen": "routes/notifications.js",

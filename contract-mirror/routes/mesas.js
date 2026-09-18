@@ -743,11 +743,111 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
 // Se conserva la rama del opener aunque `POST /mesas` le inserte su propia fila
 // 'opener'/'active': un opener sin fila —de historia o de otro camino de alta—
 // seguiría viendo su mesa, que es exactamente el comportamiento de hoy.
+/**
+ * v2.93.0 · G-34 · «ya pagaste / te falta pagar», SÓLO del solicitante.
+ *
+ * Decisión de Mati del 2026-09-18, «Según lo que eligió cada uno»:
+ *   · `paid`           ⇒ tiene al menos una selección viva y todas pagadas;
+ *   · `pending`        ⇒ alguna selección propia sin pagar;
+ *   · `not_applicable` ⇒ no eligió nada, o la mesa no maneja dinero.
+ * `my_paid_cents` = lo pagado por el solicitante CON propina, menos reembolsos.
+ *
+ * Selección viva: en consumo, claims propios `paid` o `locked` con lock vigente
+ * (el mismo predicado que `/mine` y `GET /:code`); en igual, casilleros propios
+ * `claimed` o `paid`. Mesa sin dinero: `guarantee_mode=false` con la marca
+ * `sin_garantia`, el mismo predicado que bloquea el cobro.
+ *
+ * Pagado: intentos propios `succeeded`/`processed` (la convención del historial
+ * de cuenta); un intento `refunded` ya se devolvió entero y no suma. A los que
+ * suman se les resta lo reembolsado en `payment_refunds` procesados, sin bajar
+ * de cero por intento.
+ *
+ * 🔴 Las tres lecturas filtran por el usuario en el SQL: ningún dato de otro
+ * participante se lee acá, así que no hay nada que filtrar después ni nada con
+ * qué dividir la propina de la mesa entre sus pagadores.
+ */
+async function pagoPropioPorMesa(userId, mesas) {
+  const resultado = new Map();
+  for (const m of mesas) resultado.set(m.id, { selecciones: 0, impagas: 0, paid_cents: 0 });
+  if (mesas.length === 0) return resultado;
+  const consumo = mesas.filter((m) => m.division_mode === 'consumo').map((m) => m.id);
+  const igual = mesas.filter((m) => m.division_mode === 'igual').map((m) => m.id);
+  const todas = mesas.map((m) => m.id);
+
+  if (consumo.length > 0) {
+    const { rows } = await pool.query(
+      `SELECT mesa_id, COUNT(*)::int AS vivas,
+              COUNT(*) FILTER (WHERE status = 'locked')::int AS impagas
+         FROM mesa_item_claims
+        WHERE mesa_id = ANY($1::uuid[]) AND locked_by_user_id = $2
+          AND (status = 'paid'
+               OR (status = 'locked'
+                   AND (lock_expires_at IS NULL OR lock_expires_at >= NOW())))
+        GROUP BY mesa_id`,
+      [consumo, userId]
+    );
+    for (const r of rows) {
+      const acc = resultado.get(r.mesa_id);
+      acc.selecciones += r.vivas;
+      acc.impagas += r.impagas;
+    }
+  }
+  if (igual.length > 0) {
+    const { rows } = await pool.query(
+      `SELECT mesa_id, COUNT(*)::int AS vivas,
+              COUNT(*) FILTER (WHERE status = 'claimed')::int AS impagas
+         FROM mesa_division_slots
+        WHERE mesa_id = ANY($1::uuid[]) AND claimed_by_user_id = $2
+          AND status IN ('claimed','paid')
+        GROUP BY mesa_id`,
+      [igual, userId]
+    );
+    for (const r of rows) {
+      const acc = resultado.get(r.mesa_id);
+      acc.selecciones += r.vivas;
+      acc.impagas += r.impagas;
+    }
+  }
+  const { rows: pagos } = await pool.query(
+    `SELECT pa.mesa_id,
+            COALESCE(SUM(GREATEST(pa.gross_amount_cents - COALESCE(rf.reembolsado, 0), 0)), 0)
+              AS pagado
+       FROM payment_attempts pa
+       LEFT JOIN (
+         SELECT payment_attempt_id, SUM(amount_cents) AS reembolsado
+           FROM payment_refunds WHERE status = 'processed'
+          GROUP BY payment_attempt_id
+       ) rf ON rf.payment_attempt_id = pa.id
+      WHERE pa.mesa_id = ANY($1::uuid[]) AND pa.user_id = $2
+        AND pa.status IN ('succeeded','processed')
+      GROUP BY pa.mesa_id`,
+    [todas, userId]
+  );
+  for (const p of pagos) resultado.get(p.mesa_id).paid_cents = Number(p.pagado);
+
+  for (const m of mesas) {
+    const acc = resultado.get(m.id);
+    const sinDinero = m.guarantee_mode === false && m.metadata?.sin_garantia === true;
+    let status;
+    if (sinDinero || acc.selecciones === 0) status = 'not_applicable';
+    else if (acc.impagas > 0) status = 'pending';
+    else status = 'paid';
+    resultado.set(m.id, { status, paid_cents: acc.paid_cents });
+  }
+  return resultado;
+}
+
 router.get('/open', requireAuth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT m.id, m.code, m.total_cents, m.paid_amount_cents, m.status, m.expires_at,
-              r.name AS restaurant_name, r.category
+              m.division_mode, m.guarantee_mode, m.metadata,
+              r.name AS restaurant_name, r.category,
+              -- v2.93.0 · G-27 · cuánta gente hay: los que se SUMARON, no los
+              -- esperados. Conteo de filas activas (con cuenta o invitado sin
+              -- cuenta); un agregado de la mesa, sin identidades.
+              (SELECT COUNT(*)::int FROM mesa_participants pc
+                WHERE pc.mesa_id = m.id AND pc.status = 'active') AS participants_count
          FROM mesas m JOIN restaurants r ON r.id = m.restaurant_id
         WHERE (
                 m.opener_user_id = $1
@@ -761,6 +861,7 @@ router.get('/open', requireAuth, async (req, res, next) => {
           AND m.status IN ('open','partially_paid')
         ORDER BY m.created_at DESC`, [req.user.id]
     );
+    const pagoPropio = await pagoPropioPorMesa(req.user.id, rows);
     res.json({
       mesas: rows.map(m => ({
         id: m.id, code: m.code,
@@ -771,6 +872,9 @@ router.get('/open', requireAuth, async (req, res, next) => {
         pct_paid: Number(m.total_cents) > 0
           ? Math.round((Number(m.paid_amount_cents) / Number(m.total_cents)) * 100) : 0,
         status: m.status, expires_at: m.expires_at,
+        participants_count: Number(m.participants_count),
+        my_status: pagoPropio.get(m.id).status,
+        my_paid_cents: pagoPropio.get(m.id).paid_cents,
       })),
     });
   } catch (err) { next(err); }

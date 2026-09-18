@@ -6,6 +6,47 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-18** (el tercero del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`7bb5b7b4e4e320121b02ea9aa9e94d692a763eaa`**
+  (App Backend **v2.93.0** · campos aditivos en `GET /mesas/open` e invitaciones:
+  `participants_count`, `restaurant_category`, `my_status` y `my_paid_cents`).
+- Commit del que se tomó el inventario autoritativo:
+  **`96fd55757b4a6fdbccccc050027e4e300315aea9`**.
+  Como siempre, el inventario declara el commit del CONTENIDO (`7bb5b7b4…`), no el
+  suyo: `96fd5575…` sólo regenera el inventario sobre el anterior.
+
+✅ **Publicación medida, esta vez a favor.** `git ls-remote origin refs/heads/main`
+en `payme-app-backend`, 2026-09-18 entre 19:58Z y 20:03Z (no anoté la hora exacta): **`main` remoto = `96fd5575…`**. El
+Bibliotecario midió además `/health` 2.93.0 en producción (deployment
+`24ffe05d-2e8b-4fe6-a03d-8bc76bf59c55`); ese deploy **no lo medí yo**. El front
+sigue siendo compatible con 2.92.0: sin los campos se comporta como 0.168.0.
+
+📌 El handoff del dueño (`docs/HANDOFF_CAMPOS_ADITIVOS_V2.93.0.md`) queda FUERA de
+la población del espejo y se leyó con `git show`: sha256 medido `c9a0dc8f…d4`,
+igual al declarado por el dueño.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior (`5ce1b3c`)
+cambian **dos**: `routes/invitations.js` y `routes/mesas.js`. Hay **cero nuevos,
+cero que salgan y cero renombrados**. Se adoptó en un commit propio, antes del
+consumidor.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `96fd5575`
+(`.claude/worktrees/mesas-additive-20260918`, porcelain vacío). El checkout
+principal del dueño está en otro HEAD (`9c5a7b1`, ancestro) y con cambios, así que
+no sirve de fuente para la vigencia.
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `7bb5b7b`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `7bb5b7b`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`96fd5575`) · exit 0 |
+
+### Refresh anterior · 2026-09-18 (mirror 107 · google/continue · `5ce1b3c`)
+
 - Fecha del refresh: **2026-09-18** (el segundo del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`5ce1b3cc857a7d9c6eb892afda8bf840b217eaa9`**
