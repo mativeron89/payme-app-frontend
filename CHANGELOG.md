@@ -11,6 +11,25 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.164.0 — PWA B1: los tres metadatos iOS de instalación (2026-09-18)
+
+Orden `APP-DOCS-PWA-AF-07-20260918`, base `898f72b3…`. **Sin push, sin deploy,
+sin GREEN.** Sub-orden B1 del inventario propio (`INVENTARIO_PWA.md`,
+2026-09-18): "bajo riesgo, sin decisión de Mati".
+
+`index.html` suma `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`
+(`black-translucent`, consistente con el `viewport-fit=cover` que ya declaraba
+el viewport) y `apple-mobile-web-app-title` (`"PayMe"`, el mismo `short_name`
+del manifest — nunca un texto aparte). `scripts/pwaInstallability.test.ts` los
+censa exactos y prueba con un mutante que separar el título del `short_name`
+rompería el test.
+
+**Sigue siendo SEAM, no PWA completa**: cero service worker, cero Cache API,
+cero precache — eso es la sub-orden B2, pendiente de decisión de Mati (si vale
+la pena ahora, y qué estrategia de caché). No se verifica visualmente sin un
+iPhone real: la app ya lo declara para Apple/Google Pay (G-12) y acá aplica lo
+mismo. La landing no se toca.
+
 ## 0.163.0 — Se cierra el censo de entradas EN huérfanas (2026-09-18)
 
 Orden `APP-DOCS-PWA-AF-07-20260918`, base `898f72b3…`. **Sin push, sin deploy,

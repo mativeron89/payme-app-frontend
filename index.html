@@ -20,6 +20,21 @@
          La guarda estructural vive en `scripts/pwaInstallability.test.ts`. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/pwa/icon-180.png" />
+    <!-- PWA B1 (AF-PWA-INSTALLABILITY-STAGE-B-01, sub-orden B1, 2026-09-18):
+         tres metadatos que iOS lee para "Agregar a inicio" desde el Share
+         sheet de Safari, que el manifest solo no le alcanza a cubrir de forma
+         confiable en todas las versiones. Sigue siendo SEAM, no PWA completa:
+         cero service worker, cero caché — igual que Dark A arriba.
+         `apple-mobile-web-app-title` repite el `short_name` del manifest
+         ("PayMe"), nunca un nombre distinto. `status-bar-style` es
+         `black-translucent` porque el viewport ya declara `viewport-fit=cover`
+         arriba: la app ya está pensada para pintar bajo el notch/status bar,
+         así que el valor consistente con eso es dejar la barra translúcida,
+         no taparla con negro sólido. No se verifica visualmente sin un iPhone
+         real — ver INVENTARIO_PWA.md, riesgo #3. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PayMe" />
     <!-- Las tipografías se sirven desde este repo. Acá había tres etiquetas a
          Google (dos preconnect y una hoja de estilos): se retiraron en
          `D-FUENTES-1` y NO se vuelven a poner. El `@font-face` vive en

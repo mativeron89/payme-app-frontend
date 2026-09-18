@@ -347,6 +347,62 @@ describe('index.html enlaza la instalación sin cambiar la superficie autenticad
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PWA B1 (AF-PWA-INSTALLABILITY-STAGE-B-01, sub-orden B1, 2026-09-18): los
+// tres `<meta name="apple-mobile-web-app-*">` que iOS lee para "Agregar a
+// inicio". Sin service worker: eso sigue siendo B2, con decisión de Mati.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('index.html declara los tres metadatos iOS de instalación (B1)', () => {
+  const atributo = (tag: string, nombre: string): string | undefined =>
+    tag.match(new RegExp(`${nombre}="([^"]*)"`))?.[1];
+
+  it('🔴 censo de `<meta apple-mobile-web-app-*>`: capable, status-bar-style, title — exactamente', () => {
+    const metas = [...htmlEfectivo().matchAll(/<meta\b[^>]*name="apple-mobile-web-app-[^"]*"[^>]*>/g)]
+      .map((m) => m[0]);
+    expect(metas.map((m) => [atributo(m, 'name'), atributo(m, 'content')])).toEqual([
+      ['apple-mobile-web-app-capable', 'yes'],
+      ['apple-mobile-web-app-status-bar-style', 'black-translucent'],
+      ['apple-mobile-web-app-title', 'PayMe'],
+    ]);
+  });
+
+  it('🔴 el título iOS es EXACTAMENTE el `short_name` del manifest — no un texto aparte', () => {
+    const manifest: Record<string, unknown> = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+    const tituloTag = [...htmlEfectivo().matchAll(/<meta\b[^>]*>/g)]
+      .map((m) => m[0])
+      .find((m) => atributo(m, 'name') === 'apple-mobile-web-app-title');
+    expect(tituloTag, 'no se encontró el meta de título iOS').toBeDefined();
+    expect(atributo(tituloTag!, 'content')).toBe(manifest.short_name);
+  });
+
+  /**
+   * 🔴 MUTANTE: si el título iOS se separara del `short_name` del manifest
+   * —alguien tipea "Pay Me" o "PayMe App" a mano en vez de repetir el
+   * `short_name`—, el test de arriba tiene que cazarlo. Se prueba la MISMA
+   * comparación sobre un HTML mutado, no sólo se afirma que "debería" fallar.
+   */
+  it('🔴 MUTANTE: un título iOS que se aparta del `short_name` rompe el test anterior', () => {
+    const manifest: Record<string, unknown> = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+    const htmlMutado = htmlEfectivo().replace(
+      '<meta name="apple-mobile-web-app-title" content="PayMe" />',
+      '<meta name="apple-mobile-web-app-title" content="Pay Me App" />',
+    );
+    expect(htmlMutado, 'el reemplazo no encontró el tag original: el mutante no se plantó')
+      .not.toBe(htmlEfectivo());
+    const tituloMutado = [...htmlMutado.matchAll(/<meta\b[^>]*>/g)]
+      .map((m) => m[0])
+      .find((m) => atributo(m, 'name') === 'apple-mobile-web-app-title');
+    expect(atributo(tituloMutado!, 'content')).not.toBe(manifest.short_name);
+  });
+
+  it('🔴 sin service worker: B1 es sólo metadata, igual que Dark A', () => {
+    // Reutiliza la MISMA lista de prohibidos que ya vigila Dark A más abajo:
+    // agregar meta tags de iOS no es la puerta de entrada de un SW.
+    expect(PROHIBIDOS.some(([patron]) => patron.test(htmlEfectivo()))).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Lo que Dark A NO trae: service worker, Cache API, precache. Se busca el
 // MECANISMO en todo lo que se ejecuta o emite — `src/`, `index.html` efectivo
 // y `public/` — no una promesa en un comentario.
