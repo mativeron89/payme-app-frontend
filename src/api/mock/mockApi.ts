@@ -1768,7 +1768,21 @@ export async function mockLockItems(
     if (e instanceof MockApiError) return fail(e.status, e.message, e.extra);
     throw e;
   }
-  const expires = new Date(Date.now() + 10 * 60_000).toISOString();
+  /**
+   * AF-21 · n90 · espejo de `contract-mirror/routes/mesas.js:1414-1421`. La
+   * selección NO vence en una mesa sin garantía, ni en ninguna mesa con el
+   * dinero apagado: `lock_expires_at` es `null`, la ausencia explícita de
+   * vencimiento, igual que el `item_lock_seconds: null` que este mismo mock
+   * publica en `/api/config`. Antes vencía a los 10 minutos SIEMPRE, y el mock
+   * se contradecía a sí mismo en modo sin dinero.
+   *
+   * La mesa sin garantía del mock se reconoce por `guarantee_mode === false`:
+   * el dueño exige además `metadata.sin_garantia` porque tiene mesas legacy con
+   * `false`, y el mock no las tiene.
+   */
+  const dineroVivo = (modoMonetarioMock() as { payments_enabled?: unknown })?.payments_enabled === true;
+  const sinVencimiento = mesa.guarantee_mode === false || !dineroVivo;
+  const expires = sinVencimiento ? null : new Date(Date.now() + 10 * 60_000).toISOString();
   for (const c of claims) {
     const item = mesa.items.find((i) => i.id === c.item_id);
     if (!item) continue;

@@ -721,7 +721,13 @@ export interface LockItemsResponse {
   /** v2.18: lo efectivamente reclamado (la tolerancia puede ajustar bps). */
   claims: FractionRequest[];
   lock_token: string;
-  lock_expires_at: string;
+  /**
+   * `null` = la selección NO vence: mesa sin garantía o dinero apagado
+   * (`contract-mirror/routes/mesas.js:1414-1421`, desde C3). Decía `string` y
+   * era falso contra el dueño; nadie lo notó porque ninguna pantalla lee este
+   * campo (sólo `lock_token`). AF-21 lo corrige al alinear el mock.
+   */
+  lock_expires_at: string | null;
 }
 
 export type PaymentType = 'card' | 'apple_pay' | 'google_pay' | 'wallet';
