@@ -146,7 +146,7 @@ describe('AF-17 · google/continue en el riel mock (reglas del dueño v2.92.0)',
   it('link: contraseña incorrecta ⇒ 403 con el intento vivo; la correcta ⇒ conecta, y el intento no se reusa', async () => {
     const mock = await conCorreoConCuenta();
     const intento = await intentoDeVinculo(mock, TOKEN_C);
-    expect(await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: 'incorrecta1' })))
+    expect(await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: 'mal'.repeat(3) })))
       .toEqual({ status: 403, code: 'reauthentication_failed' });
     await expect(mock.mockGoogleContinueLink({ link_intent: intento, password: mock.MOCK_CLAVE_DEMO_VINCULAR }))
       .resolves.toEqual({ created: false });
@@ -171,7 +171,7 @@ describe('AF-17 · google/continue en el riel mock (reglas del dueño v2.92.0)',
     const reloj = vi.spyOn(Date, 'now').mockReturnValue(ahora);
     const intento = await intentoDeVinculo(mock, TOKEN_D);
     reloj.mockReturnValue(ahora + 10 * 60 * 1000 - 1);
-    expect((await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: 'incorrecta1' })))?.status)
+    expect((await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: 'mal'.repeat(3) })))?.status)
       .toBe(403);
     reloj.mockReturnValue(ahora + 10 * 60 * 1000);
     expect(await rechazo(mock.mockGoogleContinueLink({ link_intent: intento, password: mock.MOCK_CLAVE_DEMO_VINCULAR })))
