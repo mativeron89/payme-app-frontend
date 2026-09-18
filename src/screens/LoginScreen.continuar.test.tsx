@@ -94,6 +94,12 @@ describe('AF-17 · 🔴 sin una versión de aviso que el dueño acepte, no hay u
     expect(versionAvisoParaContinue('0.0.0')).toBe('0.0.0');
   });
 
+  it('AF-19 · el aviso 2.5.0 del dueño viaja como accepted_notice_version sin traducción', () => {
+    // El un-toque NO fija versiones: manda la del aviso que cargó del dueño
+    // (`legal.value.version`). Con el backend 2.95.0 esa versión es 2.5.0.
+    expect(versionAvisoParaContinue('2.5.0')).toBe('2.5.0');
+  });
+
   it('sin aviso, o con una forma que el dueño rechaza ⇒ null (camino 0.167.0)', () => {
     for (const v of [null, '', '0.0.0-demo-local', '2.4', '2.4.1.0', 'v2.4.1', '12345.1.1']) {
       expect(versionAvisoParaContinue(v), String(v)).toBeNull();

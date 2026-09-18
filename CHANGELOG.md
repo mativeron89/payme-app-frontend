@@ -11,6 +11,42 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.170.0 — El front reconoce el Aviso 2.5.0 antes de que el backend lo publique (2026-09-18)
+
+Orden `APP-NOTICE-2-5-0-AF-19-20260918`, base `8843d10` (= `origin/main`, servido
+0.169.0). **Sin push, sin deploy, sin GREEN.** Decisión de Mati: el texto del aviso
+2.5.0 está aprobado y va *«front primero y después backend»*.
+
+### Parte A · reconocer 2.5.0
+
+- **Espejo, en un commit propio (`9412197`):** inventario del dueño en `4356d96`
+  (rama local `claude/aviso-2.5.0-tramo1`, sin publicar), contenido en `1f42204`.
+  Cambia sólo `services/profileIdentity.js` (`notice_version: '2.5.0'`), con los
+  tres gates verdes. `4356d96` cambia además `legal/aviso_privacidad.md`, que está
+  fuera de la población del espejo.
+- **`PRESENTABLE_NOTICE_VERSIONS` suma `'2.5.0'` y conserva `'2.3.0'` y
+  `'2.4.1'`.** Sin esto, el backend nuevo apagaría la edición de nombre y foto
+  (`notice_unavailable`). Quitar cualquiera de las otras dos apagaría superficies
+  vivas —`2.4.1` es lo que sirve producción hoy y `2.3.0` lo de `shortfallDetails`—
+  o rompería un rollback.
+- **Censo de la clase:**
+  - *Versiones fijadas o comparadas:* la única allowlist es ésta. El un-toque de
+    Google no fija versiones: manda la del aviso que carga del dueño
+    (`legal.value.version`), y ahora un test fija que `'2.5.0'` viaja tal cual.
+  - *Las dos frases viejas* («únicamente un identificador», «no guarda un registro
+    individual»): no aparecen en ningún archivo del front, landing incluida. El
+    aviso se muestra tal como lo sirve el dueño (`/api/legal/aviso_privacidad`),
+    así que el texto aprobado aparece solo cuando el backend lo publique. No se
+    redactó nada.
+- `profileIdentity.test.ts` usaba `'2.5.0'` como «versión futura»: ese papel pasa a
+  `'2.6.0'`, 2.5.0 tiene su fixture presentado, y se suman sus dos near-miss
+  (`'2.5.00'`, `'2.5.0-rc'`), por la misma regla de prefijo del archivo.
+- Contra el backend actual (2.4.1) no cambia nada.
+- e2e: `perfil-faltante-activado` apaga la edición con un aviso desconocido y la
+  vuelve a encender con 2.5.0.
+- Mutantes rojos: quitar `'2.5.0'` (unitario y e2e) y quitar `'2.4.1'` (4 unitarios
+  y 3 e2e).
+
 ## 0.169.0 — Cuánta gente hay, qué cocina es y «ya pagaste / te falta pagar» (2026-09-18)
 
 Orden `APP-MESAS-ADDITIVE-CONSUMER-AF-18-20260918`, base `fc02fca` (= `origin/main`,

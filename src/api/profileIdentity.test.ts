@@ -50,10 +50,20 @@ const PROFILE_ANTERIOR = {
   notice_version: '2.3.0',
 };
 
+/**
+ * AF-19 · 2.5.0 es el aviso aprobado por Mati y SE PRESENTA: es lo que el
+ * dueño publica con v2.95.0. Hasta 0.169.0 este archivo lo usaba como «versión
+ * futura»; ese papel pasa a 2.6.0.
+ */
+const PROFILE_250 = {
+  ...PROFILE_ON,
+  notice_version: '2.5.0',
+};
+
 /** Una versión FUTURA no hereda la decisión: se presenta o apaga. */
 const PROFILE_FUTURA = {
   ...PROFILE_ON,
-  notice_version: '2.5.0',
+  notice_version: '2.6.0',
 };
 
 const PROFILE_SUPERSEDED = {
@@ -71,7 +81,7 @@ const PROFILE_TEST_ONLY = {
  * presentan.** Son los únicos negativos que distinguen la FORMA de la
  * comparación, y por eso existen.
  *
- * Todos los demás negativos —`2.2.0`, `2.5.0`, `test-only`, `''`— están LEJOS de
+ * Todos los demás negativos —`2.2.0`, `2.6.0`, `test-only`, `''`— están LEJOS de
  * la allowlist: con ellos, `presentableVersions(testSeam).has(noticeVersion)` y
  * un `some(v => noticeVersion.startsWith(v))` dan **exactamente el mismo
  * resultado** en todos los casos, y el segundo habilitaría estas dos versiones
@@ -91,6 +101,12 @@ const PROFILE_NEAR_MISS_SUFIJO = {
   ...PROFILE_ON,
   notice_version: '2.4.1-rc',
 };
+
+/** AF-19 · los mismos dos near-miss, contra la versión que se agrega. */
+const PROFILE_NEAR_MISS_250 = [
+  { ...PROFILE_ON, notice_version: '2.5.00' },
+  { ...PROFILE_ON, notice_version: '2.5.0-rc' },
+];
 
 const SHORTFALL_ON = {
   supported: true,
@@ -146,9 +162,17 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
     // 2.3.0 NO se apagó al presentarse 2.4.1: las dos conviven.
     expect(readProfileIdentityCapability(config(PROFILE_ANTERIOR)))
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.3.0' });
+    // AF-19 · 2.5.0 se presenta: la edición de nombre y foto sigue viva con el
+    // backend nuevo…
+    expect(readProfileIdentityCapability(config(PROFILE_250)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.0' });
+    // …sin sus near-miss…
+    for (const cerca of PROFILE_NEAR_MISS_250) {
+      expect(readProfileIdentityCapability(config(cerca)).status, cerca.notice_version).toBe('notice_unavailable');
+    }
     // …y una versión FUTURA sigue apagando.
     expect(readProfileIdentityCapability(config(PROFILE_FUTURA)))
-      .toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.5.0' });
+      .toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.6.0' });
     expect(readProfileIdentityCapability(config(PROFILE_SUPERSEDED)))
       .toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.2.0' });
     expect(readProfileIdentityCapability(config(PROFILE_TEST_ONLY)))
@@ -209,8 +233,8 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
       ...SHORTFALL_ON, notice_version: '2.2.0',
     }))).toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.2.0' });
     expect(readShortfallDetailCapability(config(PROFILE_ON, {
-      ...SHORTFALL_ON, notice_version: '2.5.0',
-    }))).toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.5.0' });
+      ...SHORTFALL_ON, notice_version: '2.6.0',
+    }))).toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.6.0' });
   });
 
   /**

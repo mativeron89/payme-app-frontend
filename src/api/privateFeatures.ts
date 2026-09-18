@@ -26,7 +26,15 @@ const PENDING: PrivateFeatureState = { enabled: false, status: 'pending', notice
 // —el detalle de faltante en Avisos y sus dos métodos de fachada— sin que nadie
 // lo pidiera. Y conservar 2.3.0 protege además del rollback: si el dueño
 // volviera atrás, las superficies no se apagan por un retroceso del emisor.
-const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1']);
+//
+// 2026-09-18 (AF-19): se PRESENTA 2.5.0, el aviso aprobado por Mati (decisión
+// `4b2e4f9b…`, «front primero y después backend»). El dueño lo publica en
+// `services/profileIdentity.js` (`1f42204b…`, rama local sin publicar): si este
+// front no lo reconociera ANTES, el backend nuevo apagaría la edición de nombre
+// y foto (`notice_unavailable`). Se AGREGA por los mismos dos motivos de arriba:
+// `2.4.1` es lo que sirve producción HOY y `2.3.0` lo de `shortfallDetails`, y
+// quitarlos apagaría superficies vivas o rompería un rollback.
+const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1', '2.5.0']);
 
 /** Seam nominal: sólo Vitest puede declarar presentable `test-only`. */
 export const TEST_PRESENTABLE_NOTICES = Symbol('private-feature-test-notice-seam');
