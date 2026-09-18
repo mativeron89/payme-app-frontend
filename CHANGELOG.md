@@ -42,21 +42,47 @@ escondía el defecto. El fix es alternancia de palabras completas
 (`contrasena|contraseña|contraseÑa`), que compara secuencias de bytes
 completas y funciona con cualquier grep.
 
-Corrida la auditoría contra el árbol entero (`git diff <empty-tree>..HEAD`,
-no sólo el diff incremental), aparecieron 5 hallazgos reales nuevos. Dos
-están en `contract-mirror/**` (fuera de alcance, no se tocan). Dos más —una
-constante de `scripts/landingScriptPolicy.ts` y una entrada de
-`src/i18n/en.ts`— son falsos positivos genuinos (una clave de `localStorage`
-y una traducción, ninguna es un secreto) en archivos que no son test/e2e y
-por lo tanto fuera de los paths de esta orden; quedan documentados para una
-orden aparte. El único corregible acá era exactamente el que anticipaba la
-orden: la constante `CONTRASENA` de
-`e2e/af-cuentas-conectadas-vista-previa.spec.ts` traía un valor sintético
+🔴 **Corrida la auditoría contra el árbol entero** (`git diff <empty-tree>..HEAD`,
+no sólo el diff incremental) para buscar hallazgos ya existentes que la
+palabra nueva `clave` recién ahora puede ver, aparecieron **~20 coincidencias
+en 9 archivos** — bastante más de lo que anticipaba el ejemplo de la orden.
+Ninguna es un secreto real; casi todas son la MISMA causa: `clave` es una
+palabra española tan común (además de "credencial", significa llanamente
+"lookup key") que aparece como nombre de constante o de propiedad en código
+de producto sin relación con seguridad —claves de `localStorage`
+(`idioma.tsx`, `landingScriptPolicy.ts`, `mockApi.ts`), la clave de
+selección de copy de `propinaRecibo.ts` (la propiedad `clave` de cada
+variante de rótulo de propina, siete ocurrencias), y dos entradas de `src/i18n/en.ts` cuya traducción literalmente
+es la palabra "password"/"contraseña". Quedan documentadas, no tocadas: son
+`contract-mirror/**` (dos, fuera de alcance por diseño) o archivos que no son
+test/e2e (el resto), fuera de los paths de esta orden. Se suman dos
+hallazgos más en `.test.ts` —`scripts/releaseArtifact.test.ts` y
+`scripts/releaseUrl.test.ts`— que sí están en paths alcanzables, pero se
+dejan sin tocar por prudencia: son fixtures de OTRO gate (el de
+`release-artifact.mjs`) y renombrar su literal sin entender qué prueban
+podría cambiar lo que ese test verifica. **Recomendado para una orden aparte:
+decidir si `clave` se acota (por ejemplo, exigir un compuesto como
+`clave_secreta`/`clave-admin` en vez de la palabra sola) antes de que esta
+guarda se vuelva ruido que alguien aprenda a ignorar** — la misma lección que
+el propio archivo ya documenta sobre las guardas que gritan de más.
+
+El único hallazgo con arreglo evidente y en el path exacto que anticipaba la
+orden era la constante `CONTRASENA` de
+`e2e/af-cuentas-conectadas-vista-previa.spec.ts`, con un valor sintético
 largo en el mismo renglón. Acortarlo bajo 8 caracteres rompía el
 `minLength={8}` real del campo (medido: 2 tests e2e rojos), así que se
 compone con `.repeat()` en vez de con un literal corto — la otra mitad de la
 misma convención, ya usada en los propios fixtures de
 `auditarSecretos.test.ts` — y el valor en runtime conserva sus 8 caracteres.
+
+Un segundo hallazgo, éste sí propio: el fixture nuevo de
+`auditarSecretos.test.ts` para la clave citada en español escribía
+`"clave-secreta": "…"` literal en su template, y ese mismo commit se
+auditaba a sí mismo al diffearlo contra su padre —exactamente como corre el
+gate real, no sólo el repo temporal que arma el propio test—. Se corrigió
+con el mismo molde que ya usa, sin problema, el test vecino en inglés: la
+palabra vive detrás de una variable interpolada (`${clave}`), nunca escrita
+literal junto a `":`.
 
 35 tests en `auditarSecretos.test.ts` (18 nuevos): sondas positivas por cada
 palabra nueva, como prefijo y como sufijo; controles negativos (literal
