@@ -51,6 +51,25 @@ Orden `APP-NOTICE-2-5-0-AF-19-20260918`, base `8843d10` (= `origin/main`, servid
 - Mutantes rojos: quitar `'2.5.0'` (unitario y e2e) y quitar `'2.4.1'` (4 unitarios
   y 3 e2e).
 
+### AF-21 · stats por categoría del servidor y el mock de locks (sin cambio visible)
+
+Orden `APP-STATS-CONSUMER-AND-MOCK-LOCKS-AF-21-20260918`, en la misma versión
+0.170.0 (declarado: nada visible cambia).
+
+- **Espejo, en un commit propio (`2bc57a0`):** dueño v2.98.0, inventario en `44dfab4`
+  y contenido en `f5ece62` (local, sin publicar). Cambia sólo `routes/account.js`.
+- **Ítem 1 · G-09 · DEVUELTO, sin inventar una pantalla.** La torta de gastos que
+  iba a consumir `category_breakdown` ya no existe: se fue con `CuentaScreen` en
+  `28bdfa1`. Consumir el campo sería dibujar una torta nueva, que es una decisión
+  de diseño. G-09 queda abierto con el estado medido. `EstadisticasScreen`
+  conserva su manejo de error de `/account/stats` (el dueño corrigió un 500 del
+  promedio con decimales, presente en producción).
+- **Ítem 2 · n90 · el mock de locks sigue al dueño (`00bbbb8`).** `mockLockItems`
+  devuelve `lock_expires_at: null` con la mesa sin garantía o con el dinero
+  apagado, y vence a los 10 minutos en el resto. `LockItemsResponse.lock_expires_at`
+  pasa a `string | null`: el tipo mentía contra el dueño desde C3, y ninguna
+  pantalla lo lee. Mutantes rojos: 4.
+
 ### AF-20 · candado de sesión, costura C-03 y n90 (sin cambio visible)
 
 - **n89 · `withSessionLock` ya no puede ejecutar dos veces** (`f08f3fc`). Usa un
