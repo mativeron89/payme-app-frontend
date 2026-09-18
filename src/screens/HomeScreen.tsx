@@ -10,7 +10,15 @@ import { accountRailView, corteDePagosView } from '../api/releaseGates';
 import { useMoneyRail } from '../api/moneyRail';
 import { countdownLong, formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
-import { mesaStatusLabel, walletTxIcon, walletTxLabel } from '../utils/labels';
+import {
+  estadoPersonalDeMesa,
+  mesaStatusLabel,
+  pagadoPropioCentavos,
+  personasEnMesa,
+  walletTxIcon,
+  walletTxLabel,
+} from '../utils/labels';
+import type { OpenMesa } from '../api/types';
 import { etiquetaMasMesas, ordenarPorUrgencia } from './homeMesasView';
 import { Icon } from '../components/Icon';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -61,6 +69,30 @@ function txDate(iso: string, locale: string, t: (s: string, ...a: unknown[]) => 
   if (diffDays === 0) return t('Hoy');
   if (diffDays === 1) return t('Ayer');
   return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+}
+
+/**
+ * AF-18 · «Mesa PA-2847 · 4 personas» (G-27). Sin `participants_count` válido
+ * la línea va sin el conteo, como hasta 0.168.0: un número inventado en la
+ * pantalla principal es peor que un dato de menos.
+ */
+function lineaDeMesa(m: OpenMesa, t: (s: string, ...a: unknown[]) => string): string {
+  const personas = personasEnMesa(m);
+  const base = `${t('Mesa')} ${m.code}`;
+  if (personas === null) return base;
+  return `${base} · ${personas === 1 ? t('1 persona') : t('{0} personas', personas)}`;
+}
+
+/**
+ * AF-18 · G-34 · la etiqueta PERSONAL, o `null` si no corresponde. Los textos
+ * van con `t('…')` literal; la DECISIÓN vive en `utils/labels.ts`
+ * (`estadoPersonalDeMesa`), la misma para la burbuja y la hoja de «+N mesas».
+ */
+function etiquetaPersonal(m: OpenMesa, t: (s: string, ...a: unknown[]) => string): string | null {
+  const estado = estadoPersonalDeMesa(m);
+  if (estado === 'paid') return t('Ya pagaste, faltan otros');
+  if (estado === 'pending') return t('Te falta pagar');
+  return null;
 }
 
 export function HomeScreen() {
@@ -290,12 +322,18 @@ export function HomeScreen() {
                     <span className="mesa-kicker">{t('Tu mesa abierta')}</span>
                     {/* Teal siempre: el naranja tiene una lista cerrada de cuatro
                         usos permitidos y un badge de estado no es ninguno. */}
-                    <span className="badge badge-teal">{t(mesaStatusLabel(mesa.status))}</span>
+                    <span className="badge badge-teal">
+                      {etiquetaPersonal(mesa, t) ?? t(mesaStatusLabel(mesa.status))}
+                    </span>
                   </div>
                   <div className="mesa-name">{mesa.restaurant.name}</div>
-                  {/* G-27: el spec pide "· 4 personas" y `GET /mesas/open` no trae
-                      el número de comensales. No se infiere ni se inventa. */}
-                  <div className="mesa-meta">{t('Mesa')} {mesa.code}</div>
+                  {/* G-27 · cerrado por el dueño v2.93.0 (`participants_count`). */}
+                  <div className="mesa-meta">{lineaDeMesa(mesa, t)}</div>
+                  {/* G-34 · lo que pagó ESTA cuenta, sólo junto a su etiqueta
+                      personal. Nunca lo de otro. */}
+                  {pagadoPropioCentavos(mesa) !== null && (
+                    <div className="mesa-meta">{t('Pagaste {0}', formatMXN(pagadoPropioCentavos(mesa)!))}</div>
+                  )}
 
                   {/* La jerarquía dice "cuánto falta", no "cuánto es": lo pagado en
                       --fs-h1 tabular, el total en --fs-body muted. */}
@@ -472,8 +510,14 @@ export function HomeScreen() {
                 >
                   <div className="sheet-mesa-top">
                     <span className="sheet-mesa-name">{m.restaurant.name}</span>
-                    <span className="mesa-meta">{t('Mesa')} {m.code}</span>
+                    <span className="mesa-meta">{lineaDeMesa(m, t)}</span>
                   </div>
+                  {etiquetaPersonal(m, t) !== null && (
+                    <div className="mesa-meta">
+                      {etiquetaPersonal(m, t)}
+                      {pagadoPropioCentavos(m) !== null && ` · ${t('Pagaste {0}', formatMXN(pagadoPropioCentavos(m)!))}`}
+                    </div>
+                  )}
                   <div className="mesa-bar" aria-hidden="true">
                     <span style={{ width: `${Math.min(100, Math.max(0, m.pct_paid))}%` }} />
                   </div>

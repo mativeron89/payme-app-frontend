@@ -43,6 +43,7 @@ import type {
   MesaStatus,
   NotificationsResponse,
   OcrResponse,
+  OpenMesa,
   OpenMesasResponse,
   OutgoingFriendRequestsResponse,
   PayMesaRequest,
@@ -1287,6 +1288,43 @@ function priceFraction(priceCents: number, effBps: number, otherLive: MockClaim[
 
 // ─── Mesas ─────────────────────────────────────────────────
 
+/**
+ * AF-18 · los campos aditivos del dueño v2.93.0 en el riel mock, con seams
+ * de `localStorage` (sin UI; el build real no los consulta):
+ *
+ * - `mesas_sin_campos_aditivos` = `'true'` ⇒ no se publica ninguno: backend
+ *   2.92.0, conducta 0.168.0.
+ * - `mesa_mi_estado` ⇒ el `my_status` que se publica, TAL CUAL (incluido un
+ *   valor desconocido, para probar que no se personaliza). Por defecto
+ *   `not_applicable`: la etiqueta genérica de siempre.
+ *
+ * ⚠️ Simplificaciones declaradas del mock: `participants_count` es
+ * `expected_participants` (el mock no modela quién se sumó; el dueño cuenta
+ * las filas activas de `mesa_participants`), y `my_paid_cents` es una parte
+ * igual de lo pagado con `paid` y 0 en otro caso. Son valores de demo.
+ */
+const CLAVE_SIN_CAMPOS_ADITIVOS = 'payme.app.mock.mesas_sin_campos_aditivos.v1';
+const CLAVE_MI_ESTADO = 'payme.app.mock.mesa_mi_estado.v1';
+
+function camposAditivosMock(): boolean {
+  return leerSeam(CLAVE_SIN_CAMPOS_ADITIVOS) !== 'true';
+}
+
+function conCamposAditivos(m: MockMesa): OpenMesa {
+  const base = toOpenMesa(m);
+  if (!camposAditivosMock()) return base;
+  const estado = leerSeam(CLAVE_MI_ESTADO) ?? 'not_applicable';
+  const parteIgual = m.expected_participants > 0
+    ? Math.floor(m.total_cents / m.expected_participants)
+    : 0;
+  return {
+    ...base,
+    participants_count: m.expected_participants,
+    my_status: estado,
+    my_paid_cents: estado === 'paid' ? Math.min(m.paid_amount_cents, parteIgual) : 0,
+  };
+}
+
 export async function mockOpenMesas(): Promise<OpenMesasResponse> {
   state.mesas.forEach(settleIfExpired);
   return delay({
@@ -1304,7 +1342,7 @@ export async function mockOpenMesas(): Promise<OpenMesasResponse> {
           (m.openedByUser || state.joinedMesaCodes.includes(m.code)) &&
           (m.status === 'open' || m.status === 'partially_paid'),
       )
-      .map(toOpenMesa),
+      .map(conCamposAditivos),
   });
 }
 
@@ -2391,7 +2429,9 @@ export async function mockPendingInvitations(): Promise<PendingInvitationsRespon
       .map((i) => {
         const mesa = findMesa(i.mesa_code);
         const status = mesa ? mesa.status : i.mesa_status;
-        return { ...i, mesa_status: status, mesa_joinable: mesaViva(status) };
+        // AF-18 · G-31 · v2.93.0: la categoría del restaurante de la mesa.
+        const categoria = camposAditivosMock() && mesa ? { restaurant_category: mesa.restaurant.category } : {};
+        return { ...i, ...categoria, mesa_status: status, mesa_joinable: mesaViva(status) };
       }),
   });
 }

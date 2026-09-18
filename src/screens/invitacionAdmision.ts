@@ -48,6 +48,11 @@ export interface InvitacionMostrable {
   readonly invitador: string | null;
   readonly creada: string | null;
   readonly admision: AdmisionEstado;
+  /**
+   * AF-18 · G-31 · `restaurant_category` tal como vino (v2.93.0), o `null`.
+   * El ícono lo decide `iconoDeCategoriaRestaurante`; acá no se interpreta.
+   */
+  readonly categoria: string | null;
 }
 
 function esObjeto(v: unknown): v is Record<string, unknown> {
@@ -93,6 +98,7 @@ export function invitacionesMostrables(raw: unknown): InvitacionMostrable[] {
       invitador: textoODesconocido(fila.inviter_first_name),
       creada: textoODesconocido(fila.created_at),
       admision: admisionDeInvitacion(fila),
+      categoria: textoODesconocido(fila.restaurant_category),
     });
   }
   return salida;

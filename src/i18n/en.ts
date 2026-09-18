@@ -434,6 +434,12 @@ export const EN: Record<string, string> = {
   "Pagaste tu parte de la mesa": "You paid your share of the table",
   "Pago de mesa": "Table payment",
   "Pago en curso": "Payment in progress",
+  // AF-18 · campos aditivos del dueño v2.93.0 (G-27 y G-34).
+  "1 persona": "1 person",
+  "{0} personas": "{0} people",
+  "Ya pagaste, faltan otros": "You paid, others still to go",
+  "Te falta pagar": "You still need to pay",
+  "Pagaste {0}": "You paid {0}",
   "Pago {0}": "Payment {0}",
   "Pago sin confirmar": "Unconfirmed payment",
   "Pagos registrados": "Payments recorded",

@@ -139,3 +139,12 @@ describe('metaInvitacion · la línea de datos se arma con lo que haya', () => {
     expect(metaInvitacion({ mesaCode: null, creada: null }, fecha)).toBeNull();
   });
 });
+
+describe('AF-18 · G-31 · la categoría de la invitación se lee sin interpretar', () => {
+  it('viene ⇒ se conserva; falta o no es texto ⇒ null', () => {
+    const base = { id: 'inv-1', mesa_joinable: true };
+    expect(invitacionesMostrables([{ ...base, restaurant_category: 'japanese' }])[0]?.categoria).toBe('japanese');
+    expect(invitacionesMostrables([base])[0]?.categoria).toBeNull();
+    expect(invitacionesMostrables([{ ...base, restaurant_category: 3 }])[0]?.categoria).toBeNull();
+  });
+});

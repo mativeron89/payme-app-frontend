@@ -14,9 +14,10 @@ const MESA_STATUS: Record<MesaStatus, string> = {
   open: 'Abierta',
   // §1.1 (corrección de honestidad, 2026-08-05): es el estado de la MESA, no
   // del que mira — quien ya pagó su parte leía "Falta pagar" como deuda
-  // propia. No se personaliza porque no hay con qué: `/mesas/open` no trae
-  // ningún campo por-participante (G-34). Genérico-y-honesto gana a
-  // personal-y-falso.
+  // propia. AF-18 (dueño v2.93.0, G-34 cerrado): cuando `/mesas/open` trae
+  // `my_status` `paid`/`pending`, la pantalla muestra la etiqueta PERSONAL
+  // (`estadoPersonalDeMesa`, abajo); ésta sigue siendo la genérica para
+  // `not_applicable`, un estado ausente o uno desconocido.
   partially_paid: 'Pago en curso',
   fully_paid: 'Completa',
   expired: 'Vencida',
@@ -119,4 +120,77 @@ const CATEGORIA: Record<string, string> = {
 export function categoryLabel(category: string | null | undefined): string | null {
   if (!category) return null;
   return CATEGORIA[category] ?? null;
+}
+
+// ─── AF-18 · campos aditivos del dueño v2.93.0 ─────────────────────────────
+//
+// Los tres llegan en `GET /mesas/open` e `/invitations` como claves NUEVAS y
+// sin decodificador de claves exactas: contra un backend 2.92.0 simplemente
+// no vienen. Por eso cada uno se lee acá, campo por campo, y cualquier forma
+// que no sea la del contrato cae en `null` ⇒ la conducta 0.168.0 de siempre.
+
+/** G-27 · `participants_count`: los que se SUMARON (no los esperados). */
+export function personasEnMesa(mesa: { readonly participants_count?: unknown }): number | null {
+  const n = mesa.participants_count;
+  return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0 ? n : null;
+}
+
+/** Estados de mesa en los que la persona todavía puede estar pagando. */
+const MESA_EN_CURSO = new Set<string>(['open', 'partially_paid']);
+
+export type EstadoPersonal = 'paid' | 'pending';
+
+/**
+ * 🔴 G-34 · decisión de Mati del 2026-09-18, «Según lo que eligió cada uno».
+ *
+ * `my_status` lo calcula el dueño SÓLO para quien mira. Se personaliza la
+ * etiqueta únicamente con `paid` o `pending` y en una mesa que sigue en curso:
+ * «Ya pagaste, faltan otros» con la mesa ya completa sería falso.
+ * `not_applicable`, ausente o cualquier valor desconocido ⇒ `null`, y la
+ * pantalla usa la etiqueta genérica de la MESA (`mesaStatusLabel`). No se
+ * infiere nada de `pct_paid` ni de montos: eso es de la mesa entera.
+ */
+export function estadoPersonalDeMesa(mesa: {
+  readonly status: string;
+  readonly my_status?: unknown;
+}): EstadoPersonal | null {
+  if (!MESA_EN_CURSO.has(mesa.status)) return null;
+  return mesa.my_status === 'paid' || mesa.my_status === 'pending' ? mesa.my_status : null;
+}
+
+/**
+ * `my_paid_cents`: lo que pagó ESTA cuenta, con propina y menos reembolsos.
+ * Sólo acompaña a una etiqueta personal, y sólo si es un entero de centavos
+ * ≥ 0. Nunca se muestra ni se deriva lo que pagó otro.
+ */
+export function pagadoPropioCentavos(mesa: {
+  readonly status: string;
+  readonly my_status?: unknown;
+  readonly my_paid_cents?: unknown;
+}): number | null {
+  if (estadoPersonalDeMesa(mesa) === null) return null;
+  const c = mesa.my_paid_cents;
+  return typeof c === 'number' && Number.isSafeInteger(c) && c >= 0 ? c : null;
+}
+
+/**
+ * G-31 · el ícono de la tarjeta de invitación sale de `restaurant_category`
+ * (enum cerrado del dueño). Ausente, desconocido u `other` ⇒ `store`, el
+ * genérico de siempre, que no afirma ninguna cocina. Nunca se infiere del
+ * nombre del restaurante.
+ *
+ * ⚠️ No es el mismo mapa que `MesasScreen` (`other → dining`) y es a
+ * propósito: a 26px, los círculos de `dining` se leen como una diana.
+ */
+const ICONO_CATEGORIA: Record<string, IconName> = {
+  italian: 'pasta',
+  japanese: 'sushi',
+  mexican: 'taco',
+  cafe: 'coffee',
+};
+
+export function iconoDeCategoriaRestaurante(category: unknown): IconName {
+  return typeof category === 'string' && Object.hasOwn(ICONO_CATEGORIA, category)
+    ? ICONO_CATEGORIA[category]!
+    : 'store';
 }

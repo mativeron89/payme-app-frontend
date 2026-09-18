@@ -17,6 +17,7 @@ import {
 } from './invitacionAdmision';
 import { goBack, navigate } from '../router';
 import { relTime } from '../utils/format';
+import { iconoDeCategoriaRestaurante } from '../utils/labels';
 import { useShortfallDetailCapability } from '../api/privateFeatures';
 import { readShortfallNotificationDisclosure } from '../api/shortfallDetail';
 import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
@@ -52,14 +53,29 @@ import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
  *  - Barra de cinco posiciones **sin ítem activo**: ninguna de las cinco
  *    representa "estoy en Avisos".
  *
- * **El ícono de la invitación NO puede ser el de la categoría del restaurante,
- * que es lo que pide el spec: G-31.** `GET /invitations` proyecta
- * `r.name AS restaurant_name` y nada más — no manda `category` ni el id del
- * restaurante con el que pedirla, y `GET /mesas/:code` exige ser participante,
- * que es justo lo que todavía no sos. Se usa `store` —un local—, que es
- * genérico y no afirma ninguna cocina. Antes había un `sushi` hardcodeado: eso
- * no era un ícono genérico, era decir que el restaurante es japonés sin saberlo.
+ * **El ícono de la invitación es el de la categoría del restaurante (G-31,
+ * cerrado por el dueño v2.93.0 con `restaurant_category`).** Hasta 2.92.0
+ * `GET /invitations` proyectaba sólo `r.name AS restaurant_name`, y la tarjeta
+ * usaba `store` —un local—, que no afirma ninguna cocina. Sigue siendo el
+ * ícono cuando el campo falta o no es del enum. Antes de eso había un `sushi`
+ * hardcodeado: decir que el restaurante es japonés sin saberlo.
  */
+
+/**
+ * AF-18 · G-31 · el ícono de la tarjeta de invitación, calculado UNA vez: el
+ * mismo valor dibuja el `Icon` y queda en `data-icono`. Si se calcularan por
+ * separado, el e2e podría afirmar el atributo mientras se dibuja otro ícono.
+ * `display: contents`: el span no dibuja caja, así que el layout de
+ * `.inv-head` es el mismo de antes.
+ */
+function IconoDeInvitacion({ categoria }: { readonly categoria: string | null }) {
+  const icono = iconoDeCategoriaRestaurante(categoria);
+  return (
+    <span data-icono={icono} style={{ display: 'contents' }}>
+      <Icon name={icono} size={26} />
+    </span>
+  );
+}
 
 const NOTIF_ICON: Record<string, IconName> = {
   invitation_received: 'dining',
@@ -154,14 +170,14 @@ export function AvisosScreen() {
                */
               <div key={inv.id} className={`inv-card${inv.admision !== 'admite' ? ' inv-card--cerrada' : ''}`}>
                 <div className="inv-head">
-                  {/* G-31: genérico a propósito. El contrato no manda la
-                      categoría del restaurante, y el `sushi` que había acá
-                      afirmaba una cocina que nadie nos dijo. `store` —un local—
-                      y no `dining`: a 26px los dos círculos concéntricos de
-                      `dining` se leen como una diana, no como un plato. El
-                      ícono de la fila de notificación sigue siendo `dining`
-                      porque ahí habla del EVENTO; acá habla del restaurante. */}
-                  <Icon name="store" size={26} />
+                  {/* G-31 · CERRADO por el dueño v2.93.0: el ícono sale de
+                      `restaurant_category`. Sin el campo, o con un valor que no
+                      es del enum, queda `store` —un local—, que no afirma
+                      ninguna cocina; nunca se infiere del nombre. `store` y no
+                      `dining`: a 26px los dos círculos de `dining` se leen como
+                      una diana. El ícono de la fila de notificación sigue
+                      siendo `dining` porque ahí habla del EVENTO. */}
+                  <IconoDeInvitacion categoria={inv.categoria} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {/* DOS líneas, nunca una sola larga: con nombres reales,
                         "Sofía te invitó a Hanzo Sushi" se parte donde cae.

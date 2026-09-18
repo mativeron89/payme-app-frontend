@@ -549,6 +549,14 @@ export interface OpenMesa {
   pct_paid: number;
   status: MesaStatus;
   expires_at: string;
+  /**
+   * AF-18 · aditivos del dueño v2.93.0. `unknown` A PROPÓSITO: contra un
+   * backend 2.92.0 no vienen, y cualquier forma rara se descarta en
+   * `utils/labels.ts` campo por campo. Nunca se leen directo.
+   */
+  participants_count?: unknown;
+  my_status?: unknown;
+  my_paid_cents?: unknown;
 }
 
 export interface OpenMesasResponse {
@@ -1129,6 +1137,8 @@ export interface PendingInvitation {
   inviter_first_name: string;
   inviter_last_name: string;
   inviter_payme_id: string;
+  /** AF-18 · v2.93.0 · enum del dueño; se lee en `invitacionesMostrables`. */
+  restaurant_category?: unknown;
   /**
    * v2.45.0 (gate de admisión) · el listado MARCA, no filtra: una invitación
    * cuya mesa murió sigue viniendo, con esto en false, para mostrarla apagada

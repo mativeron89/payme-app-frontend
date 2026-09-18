@@ -11,6 +11,74 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.169.0 — Cuánta gente hay, qué cocina es y «ya pagaste / te falta pagar» (2026-09-18)
+
+Orden `APP-MESAS-ADDITIVE-CONSUMER-AF-18-20260918`, base `fc02fca` (= `origin/main`,
+servido 0.168.0). **Sin push, sin deploy, sin GREEN.** El dueño (App Backend v2.93.0,
+`96fd5575` = `origin/main`) publicó cuatro campos aditivos de sólo lectura. Decisión
+de Mati para G-34: *«Según lo que eligió cada uno»*.
+
+### Espejo, en un commit propio (`fd5d301`)
+
+- Inventario del dueño en `96fd557`, contenido en `7bb5b7b`. Siguen siendo 107
+  archivos: cambian `routes/invitations.js` y `routes/mesas.js`.
+- Integridad, paridad y vigencia verdes contra el worktree del dueño.
+- El handoff `docs/HANDOFF_CAMPOS_ADITIVOS_V2.93.0.md` está fuera del espejo; se leyó
+  con `git show` y su sha256 coincide con el declarado.
+
+### Qué cambia
+
+- **G-27 · Inicio:** «Mesa PA-3121 · 4 personas» (`participants_count`, los que se
+  sumaron), en la burbuja y en la hoja de «+N mesas». Para 1 dice «1 persona». Sin un
+  entero ≥ 0, la línea va sin conteo, como hasta ahora.
+- **G-34 · Inicio:** con la mesa en curso (`open`/`partially_paid`), `my_status`
+  `paid` → «Ya pagaste, faltan otros» y `pending` → «Te falta pagar», más «Pagaste
+  $X» con `my_paid_cents` (sólo lo propio, centavos enteros ≥ 0, con `formatMXN`).
+  `not_applicable`, un valor ausente o uno desconocido mantienen la etiqueta genérica
+  de la MESA. La decisión vive en `utils/labels.ts` (`estadoPersonalDeMesa`,
+  `pagadoPropioCentavos`) y es la misma para la burbuja y la hoja. Los textos van con
+  `t('…')` literal: el censo de `t()` dinámicos no cambia.
+- **G-31 · Avisos:** el ícono de la tarjeta de invitación sale de
+  `restaurant_category` (`pasta`, `sushi`, `taco`, `coffee`). `other`, un valor
+  ausente o uno desconocido quedan en `store`, y el nombre nunca se usa para
+  adivinar. El ícono se calcula UNA vez (`IconoDeInvitacion`) y ese mismo valor queda
+  en `data-icono`, dentro de un `span` con `display: contents` que no cambia el
+  layout.
+- **Contra un backend 2.92.0** (sin los campos) todo se comporta como 0.168.0. Los
+  campos se tipan `unknown` y se leen campo por campo, sin claves exactas nuevas.
+- GAPS: **G-27, G-31 y G-34 cerrados** por el emisor, con la evidencia del dueño.
+
+### Riel mock
+
+- Publica los campos por defecto. Seams: `mesas_sin_campos_aditivos` simula un
+  backend 2.92.0, y `mesa_mi_estado` fija el `my_status`, incluido un valor
+  desconocido.
+- **Simplificaciones declaradas:** `participants_count` es `expected_participants`
+  (el mock no modela quién se sumó), y `my_paid_cents` es una parte igual con `paid`
+  y 0 en otro caso.
+
+### Pruebas
+
+- Unitarios de `labels` (cada condición con su control positivo) y de
+  `invitacionAdmision`.
+- `e2e/mesas-campos-aditivos.spec.ts`: el conteo; `paid` en la burbuja y en la hoja;
+  `pending`; `not_applicable` y un estado desconocido; un backend 2.92.0; el ícono
+  de categoría; y `store` sin el campo aunque el nombre diga «Sushi».
+- Mutantes rojos:
+  - (a) personalizar con `not_applicable`;
+  - (b) mostrar el conteo con el campo ausente;
+  - (c) inferir el ícono del nombre;
+  - (d) etiqueta personal con un estado desconocido.
+- La primera versión de (c) mostró que el atributo y el ícono se calculaban por
+  separado, así que el e2e podía mirar uno mientras se dibujaba otro. Se unificó en
+  un solo cálculo y (c′), plantado ahí, da rojo.
+
+### Lo que no se acredita
+
+- No corrió contra el backend real ni en un teléfono.
+- Con `pending` y `my_paid_cents = 0` se muestra «Pagaste $0.00», porque la orden
+  pide mostrar todo entero ≥ 0. Se puede ocultar el 0 si Mati lo prefiere.
+
 ## 0.168.0 — «Continuar con Google» en un toque (2026-09-18)
 
 Orden `APP-GOOGLE-CONTINUE-AF-17-20260918`, base `82f9006` (= `origin/main`,
