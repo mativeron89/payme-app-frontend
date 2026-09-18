@@ -6,6 +6,47 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-18** (el cuarto del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`1f42204bcf112a5aa76104c14c2cf8f5247bbf41`**
+  (App Backend **v2.95.0**, tramo 1 de AB-11 · Aviso de privacidad **2.5.0**:
+  `services/profileIdentity.js` publica `notice_version: '2.5.0'`).
+- Commit del que se tomó el inventario autoritativo:
+  **`4356d966ddd6e4e19e8e3b4c69a424dedd926e51`** (HEAD de la rama del dueño
+  `claude/aviso-2.5.0-tramo1`). Como siempre, el inventario declara el commit del
+  CONTENIDO (`1f42204b…`), no el suyo.
+
+🔴 **Nada de esto está publicado, y a propósito: owner-first con «front primero».**
+Decisión de Mati (sha256 `4b2e4f9b…d39`): *«Sí, front primero y después backend»*.
+Medido el 2026-09-18 a las 21:38Z: `git ls-remote` da el `main` remoto del dueño en
+`50d2d6aa…`, y `git branch -r --contains` no ubica en ninguna rama remota ni a
+`1f42204b…` ni a `4356d966…`. Este front tiene que reconocer 2.5.0 **antes** de que
+el backend lo publique: si no, la edición de nombre y foto se apaga
+(`notice_unavailable`).
+
+📌 `4356d966…` cambia además `legal/aviso_privacidad.md` (el texto aprobado, con las
+dos frases de Google corregidas), que **no** está en la población del espejo. Por
+eso el inventario sobre `1f42204b…` sigue vigente en el HEAD: medido, la
+diferencia `1f42204..4356d96` no toca ningún `origen` del inventario.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior (`7bb5b7b`)
+cambia **uno**: `services/profileIdentity.js`. Hay cero nuevos, cero que salgan y
+cero renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `4356d966`
+(`.claude/worktrees/aviso-tramo1`, porcelain vacío).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `1f42204`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `1f42204`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`4356d966`) · exit 0 |
+
+### Refresh anterior · 2026-09-18 (mirror 107 · campos aditivos · `7bb5b7b`)
+
 - Fecha del refresh: **2026-09-18** (el tercero del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`7bb5b7b4e4e320121b02ea9aa9e94d692a763eaa`**
