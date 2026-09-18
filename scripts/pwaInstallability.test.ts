@@ -395,20 +395,35 @@ describe('index.html declara los tres metadatos iOS de instalación (B1)', () =>
     expect(atributo(tituloMutado!, 'content')).not.toBe(manifest.short_name);
   });
 
-  it('🔴 sin service worker: B1 es sólo metadata, igual que Dark A', () => {
-    // Reutiliza la MISMA lista de prohibidos que ya vigila Dark A más abajo:
-    // agregar meta tags de iOS no es la puerta de entrada de un SW.
-    expect(PROHIBIDOS.some(([patron]) => patron.test(htmlEfectivo()))).toBe(false);
+  it('🔴 index.html no nombra el service worker: B1 es sólo metadata', () => {
+    // B2 registra el service worker desde `main.tsx`, no desde el HTML: los
+    // meta tags de iOS siguen sin ser una puerta de entrada al mecanismo.
+    expect(MECANISMO_SW.some(([patron]) => patron.test(htmlEfectivo()))).toBe(false);
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Lo que Dark A NO trae: service worker, Cache API, precache. Se busca el
-// MECANISMO en todo lo que se ejecuta o emite — `src/`, `index.html` efectivo
-// y `public/` — no una promesa en un comentario.
+// B2 · EXACTAMENTE ESTE service worker (APP-PWA-B2-SERVICE-WORKER-AF-15).
+//
+// Hasta 0.165.x este bloque prohibía el mecanismo entero: era la línea «Dark A,
+// metadata sí, offline no». Mati eligió el 2026-09-18 «Sí, sólo para archivos
+// estáticos (Recomendada)», y el bloque pasa de PROHIBIR a FIJAR la superficie:
+//
+//   · en qué archivos de `src/` puede vivir el mecanismo —censo de lo BUENO:
+//     cualquier archivo nuevo que lo nombre pone esto en rojo—;
+//   · que `/sw.js` nace del BUILD y no de una copia suelta en `public/`;
+//   · que el build real lo emite y el mock NO;
+//   · que `main.tsx` lo registra sólo desde la app privada;
+//   · que `index.html` y el manifest siguen sin nombrarlo.
+//
+// Lo que el service worker HACE —qué cachea, qué deja pasar, cómo se retira— lo
+// prueba `src/sw/serviceWorker.test.ts` contra el artefacto emitido.
+//
+// Se mira el CÓDIGO EFECTIVO, sin comentarios: un comentario que explica el
+// service worker no es el mecanismo.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const PROHIBIDOS: ReadonlyArray<readonly [RegExp, string]> = [
+const MECANISMO_SW: ReadonlyArray<readonly [RegExp, string]> = [
   [/service[\s_-]?worker/i, 'service worker (registro, archivo o clave de manifest)'],
   [/\bcaches\s*[.[]/, 'Cache API'],
   [/CacheStorage/i, 'Cache API (constructor)'],
@@ -417,14 +432,28 @@ const PROHIBIDOS: ReadonlyArray<readonly [RegExp, string]> = [
   [/importScripts/i, 'importScripts (cuerpo de un worker)'],
 ];
 
+/** Los ÚNICOS archivos de `src/` (sin tests) donde el mecanismo puede aparecer. */
+const DONDE_VIVE_EL_SW = [
+  'src/main.tsx', // lo registra, sólo desde la app privada
+  'src/sw/artefacto.ts', // de la plantilla al /sw.js servido
+  'src/sw/registrar.ts', // decide si corresponde registrar
+  'src/sw/serviceWorker.js', // el service worker mismo (plantilla)
+];
+
+function codigoEfectivo(texto: string): string {
+  return texto
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:'"\\])\/\/[^\n]*/gm, '$1');
+}
+
 function archivosBajo(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true, recursive: true })
     .filter((e) => e.isFile())
     .map((e) => join(e.parentPath, e.name));
 }
 
-describe('Dark A no habilita offline: cero service worker, cero caché', () => {
-  it('🔴 el detector detecta (sonda con las formas reales de registro)', () => {
+describe('B2 · el service worker vive en un lugar y en ningún otro', () => {
+  it('🔴 SONDA · el detector detecta las formas reales, y un comentario NO cuenta', () => {
     const casos = [
       'navigator.serviceWorker.register("/sw.js")',
       '"serviceworker": { "src": "sw.js" }',
@@ -432,41 +461,99 @@ describe('Dark A no habilita offline: cero service worker, cero caché', () => {
       'self.importScripts("precache-manifest.js")',
     ];
     for (const caso of casos) {
-      expect(
-        PROHIBIDOS.some(([patron]) => patron.test(caso)),
-        `ningún patrón cazó: ${caso}`,
-      ).toBe(true);
+      expect(MECANISMO_SW.some(([patron]) => patron.test(codigoEfectivo(caso))), `no cazó: ${caso}`).toBe(true);
     }
+    const soloComentario = '/* acá no hay service worker */\n// ni caches.open\nconst x = 1;';
+    expect(MECANISMO_SW.some(([patron]) => patron.test(codigoEfectivo(soloComentario)))).toBe(false);
   });
 
-  it('🔴 ni `src/`, ni el HTML efectivo, ni `public/` contienen el mecanismo', () => {
-    const EXTENSIONES_TEXTO = /\.(ts|tsx|css|html|webmanifest|svg|txt|json|md)$/;
+  it('🔴 censo: en `src/` el mecanismo aparece EXACTAMENTE en estos cuatro archivos', () => {
+    const fuentes = archivosBajo(join(RAIZ, 'src'))
+      .filter((r) => /\.(ts|tsx|js)$/.test(r) && !/\.test\.tsx?$/.test(r));
+    // Sonda de población: `src/` tiene que haberse leído de verdad.
+    expect(fuentes.length, 'el barrido no encontró casi nada: ¿se movió `src/`?').toBeGreaterThan(50);
+
+    const con = fuentes
+      .filter((r) => MECANISMO_SW.some(([patron]) => patron.test(codigoEfectivo(readFileSync(r, 'utf8')))))
+      .map((r) => r.slice(RAIZ.length + 1))
+      .sort();
+    expect(con, 'el mecanismo apareció fuera de su lugar, o dejó de estar donde debía').toEqual(DONDE_VIVE_EL_SW);
+  });
+
+  it('🔴 ni el HTML efectivo ni `public/` contienen el mecanismo', () => {
+    const EXTENSIONES_TEXTO = /\.(css|html|webmanifest|svg|txt|json|md)$/;
     const fuentes: Array<{ nombre: string; texto: string }> = [
       { nombre: 'index.html (efectivo)', texto: htmlEfectivo() },
-      ...archivosBajo(join(RAIZ, 'src'))
-        .filter((r) => EXTENSIONES_TEXTO.test(r))
-        .map((r) => ({ nombre: r.slice(RAIZ.length + 1), texto: readFileSync(r, 'utf8') })),
       ...archivosBajo(join(RAIZ, 'public'))
         .filter((r) => EXTENSIONES_TEXTO.test(r))
         .map((r) => ({ nombre: r.slice(RAIZ.length + 1), texto: readFileSync(r, 'utf8') })),
     ];
-    // Sonda de población: `src/` tiene que haberse leído de verdad.
-    expect(fuentes.length, 'el barrido no encontró casi nada: ¿se movió `src/`?').toBeGreaterThan(50);
-
-    const hallazgos: string[] = [];
-    for (const { nombre, texto } of fuentes) {
-      for (const [patron, etiqueta] of PROHIBIDOS) {
-        if (patron.test(texto)) hallazgos.push(`${nombre}: ${etiqueta}`);
-      }
-    }
-    expect(hallazgos, `apareció el mecanismo de offline: ${hallazgos.join(' · ')}`).toEqual([]);
+    expect(fuentes.length, 'no se leyó `public/`').toBeGreaterThan(3);
+    const hallazgos = fuentes.flatMap(({ nombre, texto }) =>
+      MECANISMO_SW.filter(([patron]) => patron.test(texto)).map(([, etiqueta]) => `${nombre}: ${etiqueta}`));
+    expect(hallazgos).toEqual([]);
   });
 
-  it('🔴 `public/` no emite NINGÚN script — un sw.js no tiene dónde nacer', () => {
-    // El registro clásico es `register("/sw.js")` apuntando a un archivo suelto
-    // en `public/`. Sin scripts emitidos, esa vía queda cerrada entera, sin
-    // enumerar nombres de archivo.
+  it('🔴 `public/` no emite NINGÚN script — el sw.js nace del build, no de una copia suelta', () => {
+    // Una copia en `public/` se sirve tal cual: la versión del caché tendría que
+    // escribirse a mano en un segundo lugar y se desincronizaría sin avisar.
     const scripts = archivosBajo(join(RAIZ, 'public')).filter((r) => /\.(js|mjs|cjs)$/.test(r));
     expect(scripts).toEqual([]);
+  });
+
+  it('🔴 main.tsx toca el service worker SÓLO desde la app privada, nunca desde las páginas públicas', () => {
+    // 🔴 No alcanza con ubicar la llamada a `registrarServiceWorker`: un
+    // `navigator.serviceWorker.register(...)` escrito directo en la superficie
+    // pública no la nombra, y `main.tsx` ya figura en el censo de arriba, así
+    // que ése tampoco lo vería. Se ubica CADA rastro del mecanismo —y el import
+    // de `./sw/`— y todos tienen que caer adentro de `arrancarPrivada`.
+    const main = codigoEfectivo(readFileSync(join(RAIZ, 'src/main.tsx'), 'utf8'));
+    const privada = main.indexOf('async function arrancarPrivada');
+    const publica = main.indexOf('function montarSuperficiePublica');
+    expect(privada, 'no se encontró arrancarPrivada').toBeGreaterThan(0);
+    expect(publica, 'no se encontró montarSuperficiePublica').toBeGreaterThan(privada);
+
+    const patrones = [...MECANISMO_SW.map(([p]) => p), /['"]\.\/sw\//];
+    const posiciones = patrones.flatMap((p) =>
+      [...main.matchAll(new RegExp(p.source, p.flags.includes('g') ? p.flags : `${p.flags}g`))].map((m) => m.index!));
+    // Control positivo: si no hubiera nada que ubicar, el filtro de abajo pasaría en vacío.
+    expect(posiciones.length, 'main.tsx no registra el service worker en ningún lado').toBeGreaterThan(0);
+    const fuera = posiciones.filter((pos) => !(pos > privada && pos < publica));
+    expect(fuera, 'hay rastros del service worker FUERA de arrancarPrivada').toEqual([]);
+    expect([...main.matchAll(/registrarServiceWorker\s*\(/g)].length, 'se esperaba UNA llamada').toBe(1);
+  });
+});
+
+describe('B2 · el build real emite /sw.js y el mock no', () => {
+  interface PluginSW {
+    name: string;
+    config: (c: unknown, e: { mode: string }) => void;
+    generateBundle: (this: { emitFile: (a: { type: string; fileName: string; source: string }) => void }) => void;
+  }
+
+  async function plugin(): Promise<PluginSW> {
+    const { default: config } = await import('../vite.config');
+    const plugins = (config as { plugins: unknown[] }).plugins.flat() as Array<{ name?: string }>;
+    const p = plugins.find((x) => x?.name === 'payme-service-worker');
+    expect(p, 'vite.config.ts no declara el plugin del service worker').toBeDefined();
+    return p as unknown as PluginSW;
+  }
+
+  function emitidos(p: PluginSW, mode: string) {
+    const out: Array<{ fileName: string; source: string }> = [];
+    p.config({}, { mode });
+    p.generateBundle.call({ emitFile: (a) => { out.push(a); } });
+    return out;
+  }
+
+  it('🔴 build real: emite exactamente `sw.js`, con la versión del package.json', async () => {
+    const { version } = JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8')) as { version: string };
+    const out = emitidos(await plugin(), 'production');
+    expect(out.map((a) => a.fileName)).toEqual(['sw.js']);
+    expect(out[0]!.source).toContain(`const VERSION = '${version}';`);
+  });
+
+  it('🔴 build mock: NO emite nada — el riel de desarrollo no tiene service worker', async () => {
+    expect(emitidos(await plugin(), 'mock')).toEqual([]);
   });
 });

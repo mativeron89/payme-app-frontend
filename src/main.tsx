@@ -101,6 +101,20 @@ async function arrancarPrivada(): Promise<void> {
   // `render` ENCOLA el commit, no lo ejecuta: retirar en la línea siguiente
   // podría destapar un frame de blanco. El rAF corre después del primer paint.
   requestAnimationFrame(() => retirarSplash());
+
+  // APP-PWA-B2 · el service worker se registra SÓLO desde la app privada, nunca
+  // desde las páginas públicas de cumplimiento: esas tienen prohibido dejar
+  // estado en el navegador. Entra por `import()` como el resto de este grafo, y
+  // `registrarServiceWorker` decide solo si corresponde (build real, no mock).
+  void import('./sw/registrar').then(({ registrarServiceWorker }) => {
+    registrarServiceWorker({
+      mock: import.meta.env.VITE_MOCK === '1',
+      produccion: import.meta.env.PROD,
+      serviceWorker: 'serviceWorker' in navigator ? navigator.serviceWorker : undefined,
+      readyState: document.readyState,
+      alCargar: (hacer) => window.addEventListener('load', hacer, { once: true }),
+    });
+  });
 }
 
 /**

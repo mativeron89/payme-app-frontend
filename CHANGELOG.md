@@ -11,6 +11,91 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.166.0 — Service worker sólo para archivos estáticos (2026-09-18)
+
+Orden `APP-PWA-B2-SERVICE-WORKER-AF-15-20260918`, base `73b07b46…`. **Sin push, sin
+deploy, sin GREEN.** Decisión de Mati: «Sí, sólo para archivos estáticos
+(Recomendada)» y «PayMe (Recomendada)».
+
+### Qué hace
+
+Un service worker escrito a mano, sin dependencias, que guarda en el teléfono
+**sólo** lo que no cambia nunca: los `/assets/*` que Vite emite con hash en el nombre
+(JS, CSS, fuentes) y los íconos de instalación. Cache-first para eso; **todo lo
+demás va por red sin que el service worker lo toque**: `index.html`, cualquier
+navegación, `/privacy`, eliminación de datos, el manifest, y todo lo de otro
+origen —la API de PayMe, Stripe, Google—. Ningún `POST`.
+
+`index.html` nunca entra al caché porque es el único archivo que nombra a los demás:
+si quedara guardado, alguien podría seguir usando JS viejo contra un backend nuevo.
+Es el riesgo 1 del inventario PWA, cerrado por construcción. Y una respuesta con
+`content-type: text/html` tampoco entra aunque venga con 200: cubre al servidor que
+contesta un asset inexistente con la app.
+
+Sin modo sin conexión, sin precache, sin CSP, sin cambios de marca.
+
+### Ciclo de vida y retiro
+
+Caché con la versión del paquete (`payme-estaticos-0.166.0`). `skipWaiting` y
+`clients.claim()`; en `activate` se borran las cachés de PayMe de otras versiones y
+las ajenas no se tocan. Se registra con `updateViaCache: 'none'`, así una versión
+nueva o un retiro llegan en la próxima visita sin depender de las cabeceras del
+hosting —y sin tocar `vercel.ts`, que no estaba en el alcance—.
+
+**Kill-switch:** `const RETIRAR = true` en un commit y un deploy normal; en la
+próxima visita borra todas sus cachés, se desregistra y deja de interceptar.
+Procedimiento en `docs/SERVICE_WORKER.md`.
+
+### Dónde vive, y por qué no en `public/`
+
+La plantilla es `src/sw/serviceWorker.js`; `vite.config.ts` la emite como `/sw.js`
+**sólo en el build real**, reemplazando la versión por la del `package.json` con la
+misma función que usan los tests. En `public/` habría sido una copia suelta con la
+versión escrita a mano en un segundo lugar. El mock no lo emite. Se registra sólo
+desde `arrancarPrivada` en `main.tsx`: las páginas públicas de cumplimiento tienen
+prohibido dejar estado en el navegador.
+
+### Pruebas
+
+`src/sw/serviceWorker.test.ts` prueba **el artefacto emitido**, no una copia de su
+lógica: la plantilla pasa por `construirServiceWorker` y corre en un contexto aislado
+de Node con `self`, `caches` y `fetch` falsos. 43 tests: 20 requests que tienen que
+pasar sin tocar —incluido un asset con forma de hash pero de otro origen, que es el
+que discrimina el chequeo de origen— y 6 que tienen que salir de caché, con nombres
+tomados de un build real.
+
+`scripts/pwaInstallability.test.ts` deja de PROHIBIR el service worker y pasa a FIJAR
+su superficie: el mecanismo vive exactamente en cuatro archivos de `src/`, `public/`
+no emite scripts, el build real emite `sw.js` y el mock no, y todo rastro del
+mecanismo en `main.tsx` cae dentro de la app privada.
+
+**Doce mutantes plantados, doce en rojo**, incluidos los tres de la orden: cachear
+`index.html`, interceptar la API y no borrar cachés viejas.
+
+🔴 **Un mutante sobrevivió primero, y valía la pena mirarlo.** Estaba mal armado —no
+era una llamada— y el test acertó al no marcarlo. Pero revisándolo apareció un hueco
+de verdad: el test de ubicación sólo contaba llamadas a `registrarServiceWorker`, y
+un `navigator.serviceWorker.register` escrito directo en la superficie pública habría
+pasado, porque `main.tsx` ya figuraba en el censo. Ahora se ubica cada rastro del
+mecanismo, y los tres mutantes bien armados se ponen rojos.
+
+### Lock
+
+`package-lock.json` alineado con `0.166.0` en sus dos campos, con
+`npm version --no-git-tag-version`. Del lock cambiaron sólo esas dos líneas.
+
+### Lo que no se pudo acreditar sin un dispositivo físico
+
+Nada de esto corrió en un navegador ni en un teléfono. Sin acreditar: que Chrome y
+Safari lo registren en `app.paymemx.com`, que la segunda carga use el caché, que
+una versión nueva reemplace a la vieja, que el kill-switch desregistre, las cabeceras
+reales de `/sw.js` en Vercel, y la PWA instalada en iOS.
+
+### GAPS
+
+No corresponde entrada: `GAPS.md` registra lo que el front necesita del contrato del
+dueño, y el service worker no necesita nada de él.
+
 ## 0.165.2 — el auditor de secretos reconoce identificadores en español (2026-09-18)
 
 Orden `APP-SECRETS-AUDITOR-ES-AF-11-20260918`, base `1e3d3f5` (HEAD de AF-10).

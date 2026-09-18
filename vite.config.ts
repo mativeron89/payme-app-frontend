@@ -7,8 +7,10 @@ import react from '@vitejs/plugin-react';
 // mal escrito o una opción inexistente pasaban en silencio.
 // `vitest` ya es devDependency; no se agrega nada.
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
 import { loadEnv, type Plugin } from 'vite';
+import { construirServiceWorker } from './src/sw/artefacto';
 
 /**
  * 🔴 SENTINELA DEL ÁRBOL SERVIDO (P2-02, hallazgo de Codex 2026-08-20).
@@ -84,8 +86,36 @@ function exigirApiUrl(): Plugin {
   };
 }
 
+/**
+ * APP-PWA-B2 · emite `/sw.js` en el build REAL, y sólo ahí.
+ *
+ * No vive en `public/` a propósito: `public/` se copia tal cual, y la versión
+ * del caché tendría que escribirse a mano en un segundo lugar. Acá sale del
+ * `package.json` en cada build, por la misma función que usan los tests.
+ *
+ * El mock NO lo emite —se decide con la misma regla que `exigirApiUrl`—, y la
+ * landing se construye con otra config, así que tampoco lo recibe.
+ */
+function emitirServiceWorker(): Plugin {
+  let esReal = false;
+  return {
+    name: 'payme-service-worker',
+    apply: 'build',
+    config(_config, { mode }) {
+      const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
+      esReal = env.VITE_MOCK !== '1';
+    },
+    generateBundle() {
+      if (!esReal) return;
+      const plantilla = readFileSync(new URL('./src/sw/serviceWorker.js', import.meta.url), 'utf8');
+      const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: construirServiceWorker(plantilla, version) });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), exigirApiUrl()],
+  plugins: [react(), exigirApiUrl(), emitirServiceWorker()],
   server: { port: 5174 },
   define: { __ARBOL_SERVIDO__: JSON.stringify(arbolServido()) },
   // Sin esto, vitest reemplaza todo módulo CSS por un stub vacío (`css: false`
