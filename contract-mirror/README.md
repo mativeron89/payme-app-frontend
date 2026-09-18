@@ -6,6 +6,43 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-18** (el quinto del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`f5ece626d084427d5b97666e329ae5f192172e10`**
+  (App Backend **v2.98.0**, tramo 2 de AB-12 · `GET /api/account/stats` gana
+  `category_breakdown` y deja de responder 500 por el promedio con decimales).
+- Commit del que se tomó el inventario autoritativo:
+  **`44dfab40a2cf8d6da5249602e7e844296d383a52`** (HEAD de la rama del dueño
+  `claude/notice-guard-stats-20260918`). La diferencia `f5ece62..44dfab4` toca
+  sólo `contract/mirror-inventory.json`.
+
+🔴 **No está publicado (owner-first, como AF-17 y AF-19).** Medido el 2026-09-18 a
+las 22:23Z: el `main` remoto del dueño es `50d2d6aa…`, y ninguna rama remota
+contiene `f5ece626…` ni `44dfab40…`. El front tiene que funcionar igual contra un
+backend sin `category_breakdown`, y lo hace: cae al cálculo de siempre.
+
+📌 El handoff `docs/HANDOFF_STATS_POR_CATEGORIA_V2.98.0.md` está fuera de la
+población. Se leyó con `git show`: sha256 `a3e25f73…e0b8`, igual al medido por el
+Bibliotecario.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior
+(`1f42204`) cambia **uno**: `routes/account.js`. Hay cero nuevos, cero que salgan y
+cero renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `44dfab40`
+(`.claude/worktrees/notice-guard-stats`, porcelain vacío).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `f5ece62`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `f5ece62`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`44dfab40`) · exit 0 |
+
+### Refresh anterior · 2026-09-18 (mirror 107 · aviso 2.5.0 · `1f42204`)
+
 - Fecha del refresh: **2026-09-18** (el cuarto del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`1f42204bcf112a5aa76104c14c2cf8f5247bbf41`**

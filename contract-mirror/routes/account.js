@@ -470,8 +470,12 @@ router.get('/stats', async (req, res, next) => {
     const { rows: month } = await pool.query(
       `SELECT COALESCE(SUM(gross_amount_cents), 0) AS spent,
               COUNT(*)::int AS visits,
+              -- v2.98.0 · SUM(bigint) es numeric: dividirlo daba decimales
+              -- (6500/3 = 2166.67) y centsToDisplay lanzaba ⇒ 500 en /stats.
+              -- Centavos enteros, truncando hacia abajo (los montos no son negativos).
               CASE WHEN COUNT(*) > 0
-                   THEN COALESCE(SUM(gross_amount_cents), 0) / COUNT(*) ELSE 0 END AS avg_per_visit
+                   THEN FLOOR(COALESCE(SUM(gross_amount_cents), 0)::numeric / COUNT(*))::bigint
+                   ELSE 0 END AS avg_per_visit
          FROM payment_attempts
         WHERE user_id = $1 AND status IN ('succeeded','processed')
           AND created_at >= date_trunc('month', NOW())`, [req.user.id]
@@ -496,7 +500,42 @@ router.get('/stats', async (req, res, next) => {
         WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
         GROUP BY r.category ORDER BY visits DESC LIMIT 1`, [req.user.id]
     );
+    // v2.98.0 · G-09 (Roadmap n77) · gasto del mes por categoría, calculado en
+    // el servidor: la torta del front lo arma hoy desde /account/history con
+    // limit=100 y trunca con más de 100 pagos. Sólo pagos de la cuenta del
+    // bearer. Mismo mes que `month` (date_trunc sobre la fecha del intento).
+    // «Pagado» con la convención de G-34 (/mesas/open): intentos succeeded o
+    // processed, menos lo reembolsado en payment_refunds procesados, sin bajar
+    // de cero por intento. OJO: `month.spent_cents` de arriba es BRUTO (no
+    // resta reembolsos) y no se cambia para no alterar lo que el front ya
+    // muestra; con reembolsos, la suma de categorías puede ser menor.
+    const { rows: porCategoria } = await pool.query(
+      `SELECT r.category,
+              COALESCE(SUM(GREATEST(pa.gross_amount_cents - COALESCE(rf.reembolsado, 0), 0)), 0)
+                AS spent,
+              COUNT(*)::int AS visits
+         FROM payment_attempts pa
+         JOIN mesas m ON m.id = pa.mesa_id
+         JOIN restaurants r ON r.id = m.restaurant_id
+         LEFT JOIN (
+           SELECT payment_attempt_id, SUM(amount_cents) AS reembolsado
+             FROM payment_refunds WHERE status = 'processed'
+            GROUP BY payment_attempt_id
+         ) rf ON rf.payment_attempt_id = pa.id
+        WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+          AND pa.created_at >= date_trunc('month', NOW())
+        GROUP BY r.category`, [req.user.id]
+    );
+    const categorias = porCategoria
+      .map((c) => ({ category: c.category, spent_cents: Number(c.spent), visits: c.visits }))
+      .filter((c) => c.spent_cents > 0)
+      .sort((a, b) => b.spent_cents - a.spent_cents || a.category.localeCompare(b.category));
     res.json({
+      category_breakdown: {
+        convention: 'net_of_processed_refunds',
+        total_cents: categorias.reduce((acc, c) => acc + c.spent_cents, 0),
+        categories: categorias,
+      },
       month: {
         spent_cents: Number(month[0].spent),
         spent_display: centsToDisplay(Number(month[0].spent)),
