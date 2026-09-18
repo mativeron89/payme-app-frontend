@@ -6,6 +6,40 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-18** (el sexto del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`1de34613f7ab49563a4edaa0127e25d1e9bcdfc4`**
+  (App Backend **v2.99.0**, AB-14 · Aviso de privacidad **2.5.1**:
+  `services/profileIdentity.js` publica `notice_version: '2.5.1'`).
+- Commit del que se tomó el inventario autoritativo:
+  **`b1c512120636351df3fc70e6ba7e7b71921e8cb0`** (HEAD de la rama del dueño
+  `claude/aviso-2.5.1-invitaciones`). La diferencia `1de3461..b1c5121` toca sólo
+  `contract/mirror-inventory.json`.
+
+🔴 **No está publicado, y es a propósito: el front va primero, como con 2.5.0.**
+Medido el 2026-09-18 a las 23:55Z: el `main` remoto del dueño es `44dfab40…` y
+ninguna rama remota contiene `1de34613…`. Este front tiene que presentar 2.5.1
+ANTES de que el backend lo publique, porque si no se apaga la edición de nombre
+y foto.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior
+(`f5ece62`) cambia **uno**: `services/profileIdentity.js`. Hay cero nuevos, cero
+que salgan y cero renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `b1c51212`
+(`.claude/worktrees/aviso-251`, porcelain vacío).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `1de3461`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `1de3461`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`b1c51212`) · exit 0 |
+
+### Refresh anterior · 2026-09-18 (mirror 107 · stats por categoría · `f5ece62`)
+
 - Fecha del refresh: **2026-09-18** (el quinto del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`f5ece626d084427d5b97666e329ae5f192172e10`**

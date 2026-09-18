@@ -7,7 +7,8 @@
  * una decisión nueva, no una variable, gobierna cualquier cambio posterior.
  * v2.89.0 · `notice_version` sigue al aviso VIGENTE (etapa sin pagos; 2.4.0 en
  * v2.89.0, 2.4.1 en v2.90.0 — sólo cambió la casilla de contacto; 2.5.0 en
- * v2.95.0 — sólo cambió la sección de eliminación):
+ * v2.95.0 — sólo cambió la sección de eliminación; 2.5.1 en v2.99.0 — sólo
+ * la frase de la invitación de alta):
  * la foto privada se describe igual y la conducta no cambia;
  * tests/profile-identity.test.js ata esta constante al archivo
  * legal/aviso_privacidad.md, así que un aviso nuevo pasa por acá a propósito.
@@ -31,7 +32,7 @@ const SUPPORTED_INPUT_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const PROFILE_IDENTITY_CAPABILITY = Object.freeze({
   supported: true,
   enabled: true,
-  notice_version: '2.5.0',
+  notice_version: '2.5.1',
   notice_required: true,
   activation_blocker: null,
   payme_id_mutable: false,
