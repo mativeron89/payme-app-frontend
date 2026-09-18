@@ -47,6 +47,46 @@ Orden `APP-NOTICE-2-5-0-AF-19-20260918`, base `8843d10` (= `origin/main`, servid
 - Mutantes rojos: quitar `'2.5.0'` (unitario y e2e) y quitar `'2.4.1'` (4 unitarios
   y 3 e2e).
 
+### Parte B · la causa del intermitente de `google-continuar` «Crea tu cuenta»
+
+Establecida con reproducción, medida antes y después (`parteB/` en la evidencia).
+Eran **dos defectos reales del producto, no del test**, y el primer arreglo destapó
+un tercero.
+
+1. **El botón de Google se remontaba en re-renders que no cambiaban nada.**
+   `autoridadDeAlta` crea un objeto por render, y el memo de la autoridad dependía
+   además de nombre y correo, que `login`, `captura` y `continue` no usan. Cada
+   identidad nueva remontaba el botón (con GIS real, recargaba su iframe). Un
+   re-render entre `mousedown` y `mouseup` mandaba el `click` al contenedor, y el
+   toque se perdía sin error: reproducido 3/3, y 3/3 bien sin el re-render.
+   **Arreglo:** la autoridad cambia de identidad sólo cuando cambia su contenido
+   (`useMemo` por su JSON).
+2. **El aviso se recargaba al pasar del ingreso a «Crea tu cuenta»**, aunque ya
+   estuviera cargado. Durante ~300 ms la frase desaparecía y el botón de arriba
+   era `captura`, así que un toque en esa ventana iba al camino 0.167.0. Es lo que
+   mostró la captura del fallo real. Medido: la frase aparecía dos veces en 36 de
+   40 corridas. **Arreglo:** el efecto del aviso depende de SI HACE FALTA
+   (`quiereAviso`), no del modo. Después: una sola vez en 40 de 40.
+3. **Destapado por los dos anteriores:** el contenedor de GIS es un elemento
+   distinto en el ingreso (abajo) y en el alta (arriba), y el efecto que dibuja el
+   botón sólo dependía de la autoridad. Con la autoridad idéntica en los dos
+   modos, el contenedor nuevo quedaba vacío: 76 de 80 rojos en la medición
+   intermedia. **Arreglo:** el contenedor vive en estado (callback ref) y es
+   dependencia del efecto.
+
+- **Medido con los tres arreglos** (6 workers): el test intermitente 80/80, y el
+  conjunto de specs de Google ×3 90/90.
+- `e2e/google-boton-estable.spec.ts` (nuevo, 4 casos): el toque con un re-render
+  entre down y up; escribir en un campo que la autoridad no usa no remonta;
+  control positivo (la autoridad SÍ cambia ⇒ remonta); y pasar a «Crea tu cuenta»
+  no apaga el un-toque y deja el botón dibujado arriba.
+- Mutantes rojos, cada uno contra su test: (B1) sin estabilizar la autoridad;
+  (B2) el aviso vuelve a recargarse por modo; (B3) el botón no se remonta nunca,
+  que valida el control; (B4) el efecto no depende del contenedor.
+- ⚠️ **Mi propio error, declarado:** la primera versión del test «pasar a Crea tu
+  cuenta» miraba sólo la frase y pasaba con el botón ausente. Ahora afirma el
+  botón.
+
 ## 0.169.0 — Cuánta gente hay, qué cocina es y «ya pagaste / te falta pagar» (2026-09-18)
 
 Orden `APP-MESAS-ADDITIVE-CONSUMER-AF-18-20260918`, base `fc02fca` (= `origin/main`,

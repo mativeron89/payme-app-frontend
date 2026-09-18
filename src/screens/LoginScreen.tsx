@@ -416,7 +416,15 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   const [legal, setLegal] = useState<LegalState>({ status: 'idle' });
   const [legalAttempt, setLegalAttempt] = useState(0);
   const previousSignup = useRef(signup);
-  const googleContainer = useRef<HTMLDivElement | null>(null);
+  /**
+   * AF-19 · el contenedor de GIS vive en ESTADO (callback ref), no en un ref:
+   * en el ingreso está abajo y en «Crea tu cuenta» arriba, y son dos elementos
+   * DISTINTOS. El efecto que dibuja el botón tiene que volver a correr cuando
+   * cambia el elemento, no sólo cuando cambia la autoridad. Antes esto andaba
+   * de casualidad: la autoridad cambiaba entre modos. Estabilizada su
+   * identidad, un contenedor nuevo quedaba vacío.
+   */
+  const [googleContainer, setGoogleContainer] = useState<HTMLDivElement | null>(null);
   const googleHandle = useRef<GoogleButtonHandle | null>(null);
   const googleAuthorityRef = useRef<GoogleActionAuthority | null>(null);
   // React state no arbitra dos eventos en el mismo tick. Este lease sincrónico
@@ -530,7 +538,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       requiereInvitacion: false,
     });
 
-  const googleAuthority = useMemo<GoogleActionAuthority | null>(() => {
+  const autoridadCandidata = useMemo<GoogleActionAuthority | null>(() => {
     const clientId = social.google.webClientId;
     if (!googleEligible || clientId === null) return null;
     const locale = idioma === 'en' ? 'en' : 'es';
@@ -583,6 +591,25 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     unToqueEnAlta,
     versionAvisoContinue,
   ]);
+  /**
+   * 🔴 AF-19 · la autoridad cambia de IDENTIDAD sólo cuando cambia su CONTENIDO.
+   *
+   * El memo de arriba devolvía un objeto nuevo en renders que no cambiaban nada:
+   * `autoridadDeAlta` crea un objeto por render, y además depende de nombre y
+   * correo, que `login`, `captura` y `continue` no llevan. Cada identidad nueva
+   * remontaba el botón de Google, y un re-render entre `mousedown` y `mouseup`
+   * mandaba el `click` al contenedor: el toque se perdía sin error. Era la causa
+   * del intermitente de `google-continuar` «Crea tu cuenta»
+   * (`e2e/google-boton-estable.spec.ts` lo reproduce). Con GIS real, además,
+   * cada remonte recarga su iframe.
+   *
+   * La autoridad es un objeto chico y serializable, así que su contenido es su
+   * JSON. Un `useMemo` por esa clave devuelve el MISMO objeto mientras el
+   * contenido no cambie, y es seguro con render concurrente (no escribe refs
+   * durante el render).
+   */
+  const claveAutoridad = JSON.stringify(autoridadCandidata);
+  const googleAuthority = useMemo(() => autoridadCandidata, [claveAutoridad]);
   // Sólo un render COMMITTEADO puede mover autoridad. `useLayoutEffect` corre
   // antes de que el navegador entregue otro evento; un render concurrente
   // abortado no envenena el ref ni mata el botón que sigue visible.
@@ -603,7 +630,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   useEffect(() => {
     googleHandle.current?.dispose();
     googleHandle.current = null;
-    const container = googleContainer.current;
+    const container = googleContainer;
     const authority = googleAuthority;
     if (!authority || !container || googleLoadFailed) return;
     let active = true;
@@ -769,7 +796,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       handle.dispose();
       if (googleHandle.current === handle) googleHandle.current = null;
     };
-  }, [googleAuthority, googleGeneration, googleLoadFailed, googleLogin, googleRegister, t]);
+  }, [googleAuthority, googleContainer, googleGeneration, googleLoadFailed, googleLogin, googleRegister, t]);
 
   /**
    * 🔴 AF-17 · un toque en «Continuar con Google». El dueño decide si entra o
@@ -959,12 +986,24 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     setError(null);
   }, [signup, mode]);
 
+  /**
+   * El aviso se pide para CUALQUIER autoridad de alta: el consentimiento no
+   * depende de cómo se acredite el derecho a crear la cuenta. AF-17: con
+   * «Continuar con Google» publicado se carga también en el ingreso, porque su
+   * versión es la que viaja y la que enlaza la frase.
+   *
+   * 🔴 AF-19 · el efecto depende de SI HACE FALTA el aviso, no del modo. Antes
+   * dependía de `mode`: con `continue` publicado, pasar del ingreso a «Crea tu
+   * cuenta» recargaba un aviso ya cargado. Durante ~300 ms la frase
+   * desaparecía y el botón de arriba era `captura`, y un toque en esa ventana
+   * iba al camino 0.167.0. Era la segunda causa del intermitente de
+   * `google-continuar` (medido en 36 de 40 corridas). Sin `continue`, el aviso
+   * sigue haciendo falta sólo en el alta, y se pide al entrar a ella, como
+   * antes.
+   */
+  const quiereAviso = (mode === 'register' && signupAvailable) || social.googleContinue.supported;
   useEffect(() => {
-    // El aviso se pide para CUALQUIER autoridad de alta: el consentimiento no
-    // depende de cómo se acredite el derecho a crear la cuenta.
-    // AF-17 · con «Continuar con Google» publicado, el aviso se carga también
-    // en el ingreso: su versión es la que viaja y la que enlaza la frase.
-    if ((mode !== 'register' || !signupAvailable) && !social.googleContinue.supported) {
+    if (!quiereAviso) {
       setLegal({ status: 'idle' });
       return;
     }
@@ -978,7 +1017,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         if (alive) setLegal({ status: 'error' });
       });
     return () => { alive = false; };
-  }, [mode, signup, legalAttempt, social.googleContinue.supported]);
+  }, [quiereAviso, signup, legalAttempt]);
 
   // AF-16 · el paso de Google existe sólo en registro.
   useEffect(() => {
@@ -1109,12 +1148,13 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   /**
    * El contenedor de GIS existe UNA sola vez en la pantalla: arriba en «Crea tu
    * cuenta» (captura) y abajo en el ingreso o en el paso sin token. El efecto
-   * que dibuja el botón lee `googleContainer` después de cada commit.
+   * que dibuja el botón depende de `googleContainer` (estado): cada elemento
+   * nuevo lo vuelve a dibujar.
    */
   const ranuraGoogle = (
     <div className="social-provider-slot">
       <div
-        ref={googleContainer}
+        ref={setGoogleContainer}
         className="social-google-container"
         role="group"
         aria-label={t('Continuar con Google')}
