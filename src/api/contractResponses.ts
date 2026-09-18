@@ -78,12 +78,17 @@ function friendIdentity(value: unknown): IncomingFriendRequest['user'] | null {
   };
 }
 
-/** POST nuevo con receipt UUID, o shape viejo exacto durante la publicación. */
+/**
+ * G-25 · Backend >= v2.71 en producción (owner-first cumplido, E0 PASS
+ * 2026-09-18): el `request_id` deja de ser opcional. `{requested:true}` sin
+ * id es el shape viejo — se rechaza en vez de inventar un recibo.
+ */
 export function friendRequestCreatedResponse(value: unknown): FriendRequestCreatedResponse {
   const body = record(value);
-  if (!body || body.requested !== true) throw new ContractResponseError('friends');
-  if (exactKeys(body, ['requested'])) return { requested: true };
-  if (!exactKeys(body, ['requested', 'request_id']) || !uuid(body.request_id)) {
+  if (!body
+      || !exactKeys(body, ['requested', 'request_id'])
+      || body.requested !== true
+      || !uuid(body.request_id)) {
     throw new ContractResponseError('friends');
   }
   return { requested: true, request_id: body.request_id };
@@ -125,15 +130,13 @@ export function friendRequestsResponse(
 
   const requests: OutgoingFriendRequest[] = body.requests.map((value) => {
     const request = record(value);
-    if (!request || !uuid(request.id) || !isoTimestamp(request.requested_at)) {
-      throw new ContractResponseError('friends/requests');
-    }
-    if (exactKeys(request, ['id', 'requested_at'])) {
-      return { id: request.id, requested_at: request.requested_at };
-    }
-    // Compatibilidad acotada con Backend anterior: acredita el shape viejo,
-    // pero proyecta un DTO nuevo. La identidad nunca sale de este decoder.
-    if (!exactKeys(request, ['id', 'user', 'requested_at']) || !friendIdentity(request.user)) {
+    // G-25 · Backend >= v2.71 en producción (owner-first cumplido, E0 PASS
+    // 2026-09-18): el recibo opaco es el ÚNICO shape válido. Un `user` acá
+    // sería el oráculo que el recibo existe justamente para no reabrir.
+    if (!request
+        || !exactKeys(request, ['id', 'requested_at'])
+        || !uuid(request.id)
+        || !isoTimestamp(request.requested_at)) {
       throw new ContractResponseError('friends/requests');
     }
     return { id: request.id, requested_at: request.requested_at };

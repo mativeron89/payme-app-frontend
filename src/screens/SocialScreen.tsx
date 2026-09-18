@@ -169,10 +169,14 @@ export function SocialScreen() {
       toast(t('Si tiene PayMe, le va a llegar tu solicitud'));
       setNewQuery('');
       setAdding(false);
-      // Compatibilidad de publicación: no se recarga acá mientras el frontend
-      // aún puede convivir con Backend anterior a v2.71. El owner nuevo crea un
-      // recibo opaco por intento, pero el viejo sólo listaba destinos reales y
-      // una recarga inmediata reabriría el oráculo durante esa ventana.
+      // 🔴 G-25 · retiro de compatibilidad legacy (2026-09-18, E0 PASS): la
+      // ventana de convivencia con Backend < v2.71 ya cerró (owner-first
+      // cumplido, `9c5a7b14` en producción), así que el riesgo original de
+      // reabrir el oráculo con una recarga inmediata ya no aplica — el owner
+      // crea un recibo opaco por intento, exista o no la persona. Esta línea
+      // sigue sin recargar la lista de todos modos: agregar `loadRequests()`
+      // acá es un cambio de comportamiento de UI, no de contrato, y queda
+      // fuera del alcance de esta orden (12 paths, sólo DTO).
     } catch {
       toast(t('No pudimos enviar la solicitud. Prueba de nuevo.'));
     } finally {

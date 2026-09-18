@@ -11,6 +11,36 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.165.1 — G-25: se retira la compatibilidad con el DTO legacy (2026-09-18)
+
+Orden `APP-G25-LEGACY-RETIRE-AF-10-20260918`, base `1b78b6e5…` (HEAD de AF-09).
+**Sin push, sin deploy, sin GREEN.** Compuerta `E0_G25_COMPUERTA_READONLY_20260918.md`
+(PASS): el único deployment activo de App Backend desciende de `064c51a`/`5b1e1f2`
+(producción real `9c5a7b14`, v2.90.0, 46/46 migraciones) y ambos Frontends del
+release apuntan sólo a ese backend. El bloqueo técnico del 2026-08-30 queda
+levantado y se ejecuta su orden sucesora de 12 paths.
+
+**Antes**, `contractResponses.ts` toleraba dos shapes durante la ventana de
+publicación Frontend→Backend: `POST /friends` aceptaba `{requested:true}` sin
+`request_id`, y `GET .../outgoing` aceptaba un saliente con `user` (que
+proyectaba a recibo opaco antes de llegar a React). **Ahora los dos son un
+error de contrato**: `request_id` deja de ser opcional en
+`FriendRequestCreatedResponse`, y un saliente con `user` — que el owner en
+producción nunca manda — se rechaza en vez de tolerarse.
+
+Dos mutantes fijan el retiro en `friendRequestContracts.test.ts`: reponer la
+tolerancia del POST viejo, o dejar pasar `user` en un saliente, ponen la
+suite en rojo. Incoming y DELETE quedan intactos — nunca tuvieron tolerancia
+legacy. `GAPS.md` (G-25) y `docs/G25_RECIBOS_OPACOS_SALIENTES.md` quedan
+remedidos con el estado vigente. `package-lock.json` corrige además la deriva
+que AF-09 midió (el lock decía `0.161.4` desde `0.162.0`): sus dos campos
+`version` quedan en `0.165.1`, sin tocar ninguna dependencia (`npm ci` da el
+mismo árbol).
+
+Fuera de esta orden: `contract-mirror/**`, `scripts/mirror-inventory.json`,
+`src/api/mock/store.ts` (el mock nunca emitió el shape viejo), App Backend,
+proveedores y configuración.
+
 ## 0.165.0 — Vincular Google desde la cuenta, con la contraseña una vez (2026-09-18)
 
 Orden `APP-LINK-ACCOUNT-AF-09-20260918`, base `2399f330…` (HEAD de AF-07).

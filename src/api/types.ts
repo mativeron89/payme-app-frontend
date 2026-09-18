@@ -1009,11 +1009,14 @@ export interface FriendSearchResponse {
  * Desde App Backend v2.71 responde **202 `{ requested: true, request_id }`**
  * SIEMPRE con un recibo UUID opaco — la persona no existe,
  * existe, ya es amiga, ya tiene tu solicitud, o te bloqueó. El emisor no puede
- * distinguir ninguno de esos casos. Durante la publicación Frontend→Backend
- * se tolera la respuesta anterior `{ requested: true }`, sin inventar el id ni
- * derivar identidad. Esa ceguera es el punto: antes un 404
+ * distinguir ninguno de esos casos. Esa ceguera es el punto: antes un 404
  * `user_not_found` convertía al endpoint en un oráculo para descubrir quién
  * tiene cuenta probando correos.
+ *
+ * 🔴 **G-25 · retiro de compatibilidad legacy (2026-09-18, E0 PASS).** El
+ * backend en producción desciende de v2.71 (owner-first cumplido, `9c5a7b14`,
+ * 46/46 migraciones); `request_id` deja de ser opcional. El shape viejo
+ * `{ requested: true }` sin id es ahora un error de contrato.
  *
  * Consecuencia para la UI: **no se puede decir "no encontramos a esa
  * persona"**, porque el front no lo sabe. El estado real de las solicitudes
@@ -1021,8 +1024,7 @@ export interface FriendSearchResponse {
  */
 export interface FriendRequestCreatedResponse {
   requested: true;
-  /** Ausente únicamente durante la ventana compatible con Backend < v2.71. */
-  request_id?: string;
+  request_id: string;
 }
 
 export type FriendRequestDirection = 'incoming' | 'outgoing';

@@ -10,8 +10,10 @@ import type { IncomingFriendRequest, OutgoingFriendRequest } from '../api/types'
  *
  * App Backend v2.71 cierra también la señal de cardinalidad: cada intento crea
  * un recibo opaco y `GET ...direction=outgoing` devuelve sólo `{id,
- * requested_at}`. Durante la secuencia Frontend→Backend, el decoder acepta el
- * DTO anterior con `user`, pero lo destruye antes de que alcance esta vista.
+ * requested_at}`. 🔴 **G-25 · retiro de compatibilidad legacy (2026-09-18,
+ * E0 PASS):** el backend en producción desciende de v2.71 (owner-first
+ * cumplido); el decoder ya NO tolera el DTO anterior con `user` — un saliente
+ * con identidad es ahora un error de contrato, no un caso a limpiar acá.
  *
  * La asimetría entrante/saliente NO es un descuido, es la regla:
  *

@@ -1,5 +1,16 @@
 # G-25 · consumidor de recibos opacos salientes
 
+🔴 **RETIRO DE COMPATIBILIDAD LEGACY · 2026-09-18 (`APP-G25-LEGACY-RETIRE-AF-10-20260918`).**
+La compuerta E0 (`ops/bibliotecario-claude-20260917/E0_G25_COMPUERTA_READONLY_20260918.md`,
+PASS) acreditó que el único deployment activo de App Backend desciende de
+`064c51a`/`5b1e1f2` (producción real en `9c5a7b1409ccbac65cdb757c91c3daff5d100fac`,
+v2.90.0, 46/46 migraciones) y que ambos Frontends del release apuntan sólo a
+ese backend. Desde entonces el consumidor **ya NO tolera el DTO viejo**: la
+matriz y los invariantes de abajo describen el shape ANTERIOR a esta fecha —
+se preservan como historia de por qué el contrato es como es, no como
+comportamiento vigente. El comportamiento vigente está en la sección
+**"Estado desde el retiro"**, al final.
+
 ## Contrato owner-first adoptado
 
 - App Backend contenido: `064c51aadd2266f8f47ed36461dd60f7b9f39b88`
@@ -34,12 +45,25 @@
 - Retirar antes de resolver DELETE rompe el test con promesa diferida.
 - Cancelar por person/request id en lugar de receipt id rompe el mock causal.
 
-## Publicación coordinada
+## Publicación coordinada (historia)
 
-1. Publicar y verificar este Frontend dual-compatible.
-2. Publicar App Backend v2.71.0 y ejecutar su migración.
-3. Verificar que POST y GET outgoing tienen cardinalidad no-oracular.
-4. En una orden posterior, retirar la compatibilidad del DTO viejo sólo cuando
-   producción acredite que ya no puede responderlo.
+1. ✅ Publicar y verificar este Frontend dual-compatible.
+2. ✅ Publicar App Backend v2.71.0 y ejecutar su migración.
+3. ✅ Verificar que POST y GET outgoing tienen cardinalidad no-oracular.
+4. ✅ **Cumplido 2026-09-18:** retirar la compatibilidad del DTO viejo, acreditado
+   por la compuerta E0 sobre el deployment real de producción.
 
-Esta implementación y este documento no acreditan publicación ni producción.
+## Estado desde el retiro (2026-09-18)
+
+| Operación | Único shape aceptado | Qué pasa con el shape viejo |
+|---|---|---|
+| POST `/friends` | `{requested:true, request_id:UUID}` | `{requested:true}` sin id → `ContractResponseError` |
+| GET incoming | `{id,user,requested_at}` | sin cambios — nunca tuvo tolerancia legacy |
+| GET outgoing | `{id,requested_at}` | cualquier `user` presente → `ContractResponseError` |
+| DELETE receipt | `{cancelled:true}` | sin cambios |
+
+`request_id` deja de ser opcional en `FriendRequestCreatedResponse` (`src/api/types.ts`).
+Los dos mutantes de la orden de retiro viven en `friendRequestContracts.test.ts`:
+reponer la tolerancia del POST viejo, o dejar pasar `user` en un saliente,
+ponen la suite en rojo. Esta implementación y este documento no acreditan
+publicación (push/deploy) del Frontend — sólo el estado local del consumidor.

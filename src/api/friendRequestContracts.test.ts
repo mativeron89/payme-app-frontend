@@ -16,17 +16,25 @@ const PERSON = {
   full_name: 'Valentina Ríos',
 };
 
-describe('G-25 · POST /friends dual-compatible y no-oracular', () => {
+describe('G-25 · POST /friends sólo el recibo opaco (retiro de compat legacy 2026-09-18)', () => {
   it('acepta el recibo opaco nuevo', () => {
     expect(friendRequestCreatedResponse({ requested: true, request_id: RECEIPT_ID }))
       .toEqual({ requested: true, request_id: RECEIPT_ID });
   });
 
-  it('acepta temporalmente la respuesta vieja sin inventar un id', () => {
-    expect(friendRequestCreatedResponse({ requested: true })).toEqual({ requested: true });
+  /**
+   * 🔴 MUTANTE (a) de la orden de retiro: si alguien repone la tolerancia del
+   * shape viejo `{requested:true}` sin id, este test tiene que ponerse rojo.
+   * Backend en producción desciende de v2.71 (owner-first, E0 PASS
+   * 2026-09-18): ya no hay ventana de convivencia que tolerar.
+   */
+  it('🔴 rechaza la respuesta vieja sin request_id — ya no hay ventana de compat', () => {
+    expect(() => friendRequestCreatedResponse({ requested: true }))
+      .toThrow('contract_response_invalid:friends');
   });
 
   it.each([
+    { requested: true },
     { requested: true, request_id: 'persona@ejemplo.mx' },
     { requested: true, request_id: PERSON_ID, user: PERSON },
     { requested: false, request_id: RECEIPT_ID },
@@ -48,18 +56,19 @@ describe('G-25 · GET outgoing proyecta sólo recibos opacos', () => {
     });
   });
 
-  it('tolera el DTO anterior pero elimina toda identidad antes de devolverlo', () => {
-    const decoded = friendRequestsResponse({
+  /**
+   * 🔴 MUTANTE (b) de la orden de retiro: si alguien vuelve a dejar pasar
+   * `user` en un saliente, este test tiene que ponerse rojo. Antes este
+   * mismo caso se toleraba y se proyectaba sin identidad; ahora es
+   * directamente un error de contrato — el owner en producción (>= v2.71)
+   * nunca manda `user` en un saliente, así que verlo es una violación, no un
+   * DTO viejo a limpiar.
+   */
+  it('🔴 rechaza un saliente con `user` — ya no hay DTO legacy que tolerar', () => {
+    expect(() => friendRequestsResponse({
       direction: 'outgoing',
       requests: [{ id: RECEIPT_ID, user: PERSON, requested_at: REQUESTED_AT }],
-    }, 'outgoing');
-
-    expect(Object.keys(decoded.requests[0]!).sort()).toEqual(['id', 'requested_at']);
-    expect(JSON.stringify(decoded)).not.toContain(PERSON_ID);
-    expect(JSON.stringify(decoded)).not.toContain(PERSON.payme_id);
-    expect(JSON.stringify(decoded)).not.toContain(PERSON.full_name);
-    expect(decoded.requests[0]!.id).toBe(RECEIPT_ID);
-    expect(decoded.requests[0]!.id).not.toBe(PERSON_ID);
+    }, 'outgoing')).toThrow('contract_response_invalid:friends/requests');
   });
 
   it('falla cerrado si direction no coincide o el recibo no es íntegro', () => {
