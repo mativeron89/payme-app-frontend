@@ -315,14 +315,18 @@ describe('auditoría de secretos', () => {
   });
 
   it('la clave citada en español, con forma de JSON, también se marca', () => {
-    // Armado por partes, no como un template literal contiguo: el propio
-    // `auditar-secretos.sh` audita este repo, y una línea fuente con la forma
-    // exacta `"clave-secreta": "valor_largo"` se marcaría a sí misma cuando
-    // este commit se audite contra su padre (el detector no distingue esta
-    // sonda de un secreto real, ni debe hacerlo).
+    // 🔴 Mismo molde que "la clave ENTRE COMILLAS con forma de JSON se marca"
+    // más arriba: la palabra va DETRÁS de una variable (`${clave}`), nunca
+    // escrita directo en el template literal. `auditar-secretos.sh` audita
+    // este mismo repo, y `${clave}` no matchea el patrón —el `{` que sigue no
+    // es un carácter de identificador—, mientras que escribir
+    // `"clave-secreta": "..."` literal en la fuente SÍ lo hace: ese error se
+    // cometió acá mismo, se midió auditando este commit contra su padre
+    // (`bash scripts/auditar-secretos.sh <padre>`, no sólo el repo temporal
+    // del propio test) y se corrigió con este molde, no con concatenación.
+    const clave = ['clave', 'secreta'].join('-');
     const valor = ['valor', 'sintetico', 'largo'].join('_');
-    const linea = ['  "clave-secreta": "', valor, '",'].join('');
-    const { dir, base } = repoConCambio(linea);
+    const { dir, base } = repoConCambio(`  "${clave}": "${valor}",`);
 
     const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
       cwd: dir,
