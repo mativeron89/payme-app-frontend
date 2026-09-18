@@ -56,6 +56,44 @@ cuenta».
 - El paso se deriva de la capability: si el dueño apaga el alta con Google, vuelve
   el formulario de alta completo. «Ya tengo cuenta → entrar» vuelve al ingreso.
 
+### Addendum 1 · «Crea tu cuenta» también empieza por Google
+
+Mati abrió «Crea tu cuenta» en producción: *«No, cuando pongo crear tu cuenta tengo
+que manualmente poner mis datos, no me permite crear la cuenta con GMAIL»*. El botón
+de Google vivía debajo del formulario y aparecía recién con aviso, nombres y correo
+escritos: para la persona, Google no existía en esa pantalla.
+
+- **Google va ARRIBA, antes de cualquier campo**, visible con sólo la capability de
+  alta con Google y una autoridad de alta. No depende de nada escrito. Debajo dice
+  «O regístrate con tu correo» y sigue el formulario con contraseña, como
+  alternativa.
+- Ese botón **no llama al dueño**: recibe el `id_token`, precarga nombre, apellido y
+  correo desde los claims (sugerencia editable) y lleva a «Crea tu cuenta con
+  Google». Como el dueño todavía no vio ese token, no está consumido: el alta sale
+  con **«Crear mi cuenta»**, sin un segundo toque en Google.
+- El token retenido vive **sólo en un `useRef`**, nunca en estado serializable ni en
+  un almacenamiento. Se suelta antes del primer `await` del alta y se descarta al
+  volver al ingreso. Si el alta falla, el paso vuelve a ofrecer el botón de Google.
+- **Censo de la nota D-R16** («Escribe tu correo aquí abajo…»): quedaba en un solo
+  lugar de la pantalla, y ahora aparece sólo en el paso sin token, donde el botón de
+  abajo sigue esperando el correo. El correo está encima, así que el texto pasa a
+  «aquí arriba» (clave `en.ts` reemplazada). El test «§2 el correo está ARRIBA del
+  bloque social» se reescribió para ubicar el separador de abajo por su marca exacta,
+  y se sumó un test de orden: en «Crea tu cuenta», Google va antes del primer campo.
+  `src/api/types.ts:127` sólo cita D-R16 como historia y no cambia.
+- `e2e/social-auth.spec.ts` (spec existente) cambia porque cambió el recorrido: el
+  alta con invitación ahora confirma con «Crear mi cuenta», y además se verifica
+  que la invitación no se suelta antes de tener sesión.
+- **La credencial del riel mock ahora tiene forma de `id_token`**
+  (`src/api/googleIdentity.ts`, `CLAIMS_GOOGLE_MOCK`): tres segmentos base64url
+  **sin firma**, y el tercero es el marcador `mock-google-credential-<uuid>`. Así el
+  e2e ve el prellenado. El camino real no cambia.
+- Mutantes: (g) volver a gatear el botón de arriba por el correo: e2e rojo.
+  (h) persistir el token retenido: unitario rojo, y e2e rojo en el barrido de
+  storage. **Sobreviviente declarado**: (i) no soltar el token al usarlo. Después
+  de un fallo el botón «Crear mi cuenta» desaparece, así que el token olvidado no
+  tiene camino para reusarse; el mutante es equivalente desde afuera.
+
 ### Riel mock
 
 - `payme.app.mock.google_sin_cuenta.v1` (`localStorage`, sólo el `true` exacto)
@@ -86,9 +124,9 @@ cuenta».
 
 ### Lo que no se acredita
 
-- En el riel mock la credencial no es un JWT: **el prellenado no se ve en el e2e**.
-  Sólo lo cubre el unitario. En producción depende de que el token de Google traiga
-  `given_name`, `family_name` y `email`.
+- El prellenado se ve en el e2e con claims **fijos del mock**. En producción depende
+  de que el token de Google traiga `given_name`, `family_name` y `email`, y eso no
+  se probó contra Google real.
 - La fecha de nacimiento no se agrega: el alta existente no la manda (PQ-2 sigue en
   STOP) y este cambio no la toca.
 - Nada de esto se probó contra Google real ni en un teléfono.

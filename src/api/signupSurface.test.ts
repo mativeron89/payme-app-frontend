@@ -56,7 +56,18 @@ describe('D-FF-1 · cableado owner→formulario', () => {
     expect(googleSend).toBeGreaterThan(-1);
     expect(googleToken).toBeGreaterThan(googleSend);
     expect(googleClear).toBeGreaterThan(googleToken);
-    expect(login.match(/clearSignupInvitation\(\)/g)).toHaveLength(2);
+
+    // AF-16 · addendum 1 · el tercer envío: «Crear mi cuenta», con el token que
+    // entregó el botón de Google de arriba. La misma invariante: se manda la
+    // autoridad y se limpia recién con la sesión confirmada.
+    const googleCapturaSend = login.indexOf('await googleRegister({', googleSend + 1);
+    const googleCapturaToken = login.indexOf('invitation_token: autoridad.token', googleCapturaSend);
+    const googleCapturaClear = login.indexOf('clearSignupInvitation()', googleCapturaToken);
+    expect(googleCapturaSend).toBeGreaterThan(googleSend);
+    expect(googleCapturaToken).toBeGreaterThan(googleCapturaSend);
+    expect(googleCapturaClear).toBeGreaterThan(googleCapturaToken);
+    expect(login.match(/await googleRegister\(\{/g)).toHaveLength(2);
+    expect(login.match(/clearSignupInvitation\(\)/g)).toHaveLength(3);
 
     const facebookSend = auth.indexOf('await api.facebookRegisterComplete(');
     const facebookClear = auth.indexOf("if (purpose === 'register') clearSignupInvitation();", facebookSend);

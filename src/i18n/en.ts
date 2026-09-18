@@ -394,7 +394,7 @@ export const EN: Record<string, string> = {
   // invitación, porque con el alta abierta puede no haber ninguna.
   "No pudimos crear la cuenta. Prueba de nuevo en un momento.": "We couldn't create the account. Try again in a moment.",
   "No pudimos crear la cuenta. Si ya tienes una, inicia sesión o recupera tu contraseña.": "We couldn't create the account. If you already have one, sign in or reset your password.",
-  "Escribe tu correo aquí abajo para continuar con Google.": "Enter your email below to continue with Google.",
+  "Escribe tu correo aquí arriba para continuar con Google.": "Enter your email above to continue with Google.",
   "No pudimos verificar la garantía. Reintenta esta misma confirmación; no abras otra mesa.": "We couldn't verify the guarantee. Retry this same confirmation; don't open another table.",
   "No pudimos verificar una identidad segura para esta garantía.": "We couldn't verify a secure identity for this guarantee.",
   "No pudimos verificar una identidad segura para este pago.": "We couldn't verify a secure identity for this payment.",
@@ -744,6 +744,8 @@ export const EN: Record<string, string> = {
   "Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.": "Check your details and tap “Continue with Google” again to create your account.",
   "Escribe tu nombre y apellido aquí arriba para continuar con Google.": "Enter your first and last name above to continue with Google.",
   "No pudimos entrar con Google. Prueba de nuevo o entra con tu correo y contraseña.": "We couldn't sign you in with Google. Try again or sign in with your email and password.",
+  "O regístrate con tu correo": "Or sign up with your email",
+  "Revisa tus datos y toca «Crear mi cuenta».": "Check your details and tap “Create my account”.",
   "¿Olvidaste tu contraseña?": "Forgot your password?",
   "O continúa con": "Or continue with",
   "Símbolo PayMe": "PayMe symbol",

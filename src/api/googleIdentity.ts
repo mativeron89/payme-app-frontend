@@ -79,6 +79,33 @@ function validClientId(value: string): boolean {
   return /^[A-Za-z0-9._:-]{3,200}$/.test(value);
 }
 
+/**
+ * AF-16 · la credencial del riel mock tiene FORMA de `id_token` (tres segmentos
+ * base64url), para que la pantalla pueda precargar nombre, apellido y correo
+ * igual que con Google real. **No está firmada ni lo pretende**: el tercer
+ * segmento es el marcador `mock-google-credential-<uuid>`, que también le sirve
+ * al e2e para buscar el token en el almacenamiento. Sólo existe en el riel
+ * mock; el camino real entrega lo que GIS entrega.
+ */
+export const CLAIMS_GOOGLE_MOCK = {
+  sub: 'mock-google-subject',
+  given_name: 'Ana',
+  family_name: 'Demo',
+  email: 'ana.demo@payme.local',
+} as const;
+
+function base64UrlJson(valor: unknown): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(valor));
+  let binario = '';
+  for (const b of bytes) binario += String.fromCharCode(b);
+  return btoa(binario).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function credencialMock(): string {
+  return `${base64UrlJson({ alg: 'none', typ: 'JWT' })}.${base64UrlJson(CLAIMS_GOOGLE_MOCK)}`
+    + `.mock-google-credential-${crypto.randomUUID()}`;
+}
+
 function validCredential(value: unknown): value is string {
   return typeof value === 'string' && value.length >= 20 && value.length <= 8192;
 }
@@ -306,7 +333,7 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
     button.className = 'social-provider-button social-provider-google';
     button.textContent = options.mockLabel;
     button.addEventListener('click', () => {
-      deliverMock(`mock-google-credential-${crypto.randomUUID()}`);
+      deliverMock(credencialMock());
     });
     options.container.append(button);
     mountPromise = Promise.resolve();

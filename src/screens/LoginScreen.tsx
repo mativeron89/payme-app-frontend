@@ -182,6 +182,18 @@ type GoogleActionAuthority =
       readonly clientId: string;
       readonly locale: 'es' | 'en';
     }
+  /**
+   * AF-16 · addendum 1 · Google PRIMERO en «Crea tu cuenta». Este botón no
+   * llama al dueño: sólo recibe el `id_token`, precarga los datos y lleva al
+   * paso «Crea tu cuenta con Google». El alta sale recién con «Crear mi
+   * cuenta», con los datos que la persona confirmó. Como el dueño todavía no
+   * vio ese token, no está consumido y sirve para el alta sin un segundo toque.
+   */
+  | {
+      readonly purpose: 'captura';
+      readonly clientId: string;
+      readonly locale: 'es' | 'en';
+    }
   | {
       readonly purpose: 'register';
       readonly clientId: string;
@@ -270,6 +282,16 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
    * modo registro: al volver a `login` se apaga (efecto de abajo).
    */
   const [altaConGoogle, setAltaConGoogle] = useState(false);
+  /**
+   * AF-16 · addendum 1 · el `id_token` que Google entregó al botón de ARRIBA de
+   * «Crea tu cuenta». 🔴 Vive SÓLO en este ref: nunca en estado serializable
+   * ni en un almacenamiento. Se usa una vez («Crear mi cuenta») y se descarta
+   * en cuanto se usa, falla o la persona sale del paso. `tieneCredencial` es
+   * su sombra booleana, para que el render sepa qué botón mostrar sin tocar
+   * el token.
+   */
+  const credencialAlta = useRef<string | null>(null);
+  const [tieneCredencial, setTieneCredencial] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [legal, setLegal] = useState<LegalState>({ status: 'idle' });
   const [legalAttempt, setLegalAttempt] = useState(0);
@@ -298,17 +320,36 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     && social.google.registration
     && social.google.webClientId !== null;
   const legalReady = legal.status === 'ready';
-  const googleEligible = socialActionEligible({
-    mode,
-    providerActionEnabled: social.google.enabled
-      && (mode === 'login' ? social.google.login : social.google.registration),
-    autoridad,
-    legalReady,
-    firstName,
-    lastName,
-    email,
-    requiereInvitacion: false,
-  }) && social.google.webClientId !== null;
+  /**
+   * 🔴 AF-16 · addendum 1 · en «Crea tu cuenta» Google va PRIMERO y no depende
+   * de nada escrito: sólo de que el dueño publique el alta con Google y de que
+   * haya con qué crear la cuenta. Antes el botón aparecía recién con nombre,
+   * apellido, aviso y correo, debajo del formulario: para la persona, Google no
+   * existía en esa pantalla (Mati, 2026-09-18: «no me permite crear la cuenta
+   * con GMAIL»).
+   */
+  const capturaGoogle = mode === 'register'
+    && !pasoGoogle
+    && signupAvailable
+    && social.google.enabled
+    && social.google.registration
+    && social.google.webClientId !== null;
+  // Con el token retenido el paso no muestra Google: el alta sale con «Crear mi
+  // cuenta». Sin él (vino de un ingreso fallido, o el alta falló), el botón
+  // registra con los datos del formulario, como siempre.
+  const googleEligible = capturaGoogle || (!(pasoGoogle && tieneCredencial)
+    && (mode === 'login' || pasoGoogle)
+    && socialActionEligible({
+      mode,
+      providerActionEnabled: social.google.enabled
+        && (mode === 'login' ? social.google.login : social.google.registration),
+      autoridad,
+      legalReady,
+      firstName,
+      lastName,
+      email,
+      requiereInvitacion: false,
+    }) && social.google.webClientId !== null);
   const facebookEligible = !pasoGoogle && socialActionEligible({
     mode,
     providerActionEnabled: social.facebook.enabled
@@ -333,7 +374,8 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
    * única diferencia: si con un correo cualquiera sería elegible, entonces lo
    * único que falta es el correo y eso es exactamente lo que se dice.
    */
-  const faltaCorreoParaAltaSocial = mode === 'register'
+  const faltaCorreoParaAltaSocial = pasoGoogle
+    && !tieneCredencial
     && altaPublica
     && email.trim().length === 0
     && social.google.webClientId !== null
@@ -353,6 +395,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     if (!googleEligible || clientId === null) return null;
     const locale = idioma === 'en' ? 'en' : 'es';
     if (mode === 'login') return { purpose: 'login', clientId, locale };
+    if (capturaGoogle) return { purpose: 'captura', clientId, locale };
     if (!autoridad || legal.status !== 'ready') return null;
     const alta = autoridad.tipo === 'invitacion'
       ? { tipo: 'invitacion' as const, invitationToken: autoridad.token }
@@ -368,6 +411,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     };
   }, [
     autoridad,
+    capturaGoogle,
     email,
     firstName,
     googleEligible,
@@ -410,6 +454,28 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         mockLabel: t('Continuar con Google'),
         onCredential: (credential) => {
           if (googleAuthorityRef.current !== authority) return;
+          if (authority.purpose === 'captura') {
+            // No viaja nada: el token queda retenido en memoria hasta «Crear mi
+            // cuenta». Igual se exige que la autoridad siga viva AHORA —el alta
+            // pudo cerrarse o la invitación retirarse entre el render y el
+            // toque—: sin ella, no se retiene nada.
+            const actual = socialAuthSnapshot();
+            if (!autoridadDeAlta(signupInvitationSnapshot(), actual.publicRegistration)
+                || !actual.google.enabled || !actual.google.registration) {
+              setGoogleGeneration((value) => value + 1);
+              return;
+            }
+            const sugerencia = sugerenciaDesdeIdToken(credential);
+            setFirstName((value) => (value.trim() ? value : sugerencia.firstName));
+            setLastName((value) => (value.trim() ? value : sugerencia.lastName));
+            setEmail((value) => (value.trim() ? value : sugerencia.email));
+            setPassword('');
+            setError(null);
+            credencialAlta.current = credential;
+            setTieneCredencial(true);
+            setAltaConGoogle(true);
+            return;
+          }
           if (authority.purpose === 'register') {
             // La autoridad que se usa tiene que seguir siendo la del render que
             // montó este botón. Con invitación eso es el mismo token; con alta
@@ -617,8 +683,62 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
 
   // AF-16 · el paso de Google existe sólo en registro.
   useEffect(() => {
-    if (mode === 'login') setAltaConGoogle(false);
+    if (mode === 'login') {
+      setAltaConGoogle(false);
+      credencialAlta.current = null;
+      setTieneCredencial(false);
+    }
   }, [mode]);
+
+  /**
+   * AF-16 · addendum 1 · «Crear mi cuenta»: el alta con el token que Google
+   * entregó al botón de arriba. Los datos son los CONFIRMADOS en el formulario
+   * —la sugerencia de los claims es sólo el valor inicial— y la autoridad se lee
+   * al momento del toque, igual que el alta con contraseña.
+   */
+  async function onCrearConGoogle() {
+    const credential = credencialAlta.current;
+    if (!credential || !pasoGoogle || !autoridad || legal.status !== 'ready') return;
+    if (!socialActionEligible({
+      mode: 'register',
+      providerActionEnabled: true,
+      autoridad,
+      legalReady: true,
+      firstName,
+      lastName,
+      email,
+      requiereInvitacion: false,
+    })) return;
+    if (!tryAcquireAuthAction()) return;
+    // One-use: se suelta ANTES del primer await, pase lo que pase después.
+    credencialAlta.current = null;
+    setBusy(true);
+    setError(null);
+    try {
+      await googleRegister({
+        id_token: credential,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        ...(autoridad.tipo === 'invitacion'
+          ? { invitation_token: autoridad.token }
+          : { email: email.trim() }),
+      });
+      if (autoridad.tipo === 'invitacion') clearSignupInvitation();
+    } catch (err) {
+      const { code } = extractApiError(err);
+      // D-R15 · el texto vigente orienta a iniciar sesión o recuperar sin
+      // afirmar que la cuenta exista. Sin token, el paso vuelve a ofrecer el
+      // botón de Google, que registra con estos mismos datos.
+      setError(code === 'registration_not_available'
+        ? errorMessage(err, t)
+        : t('No pudimos completar el ingreso. Prueba de nuevo.'));
+      setTieneCredencial(false);
+      setGoogleGeneration((value) => value + 1);
+    } finally {
+      setBusy(false);
+      releaseAuthAction();
+    }
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -676,12 +796,43 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
    * todavía no aparece —falta nombre o apellido; el correo tiene su propio
    * aviso—, la pantalla quedaría sin ninguna acción. Se dice qué falta.
    */
+  // Con el token retenido no hay botón de Google que esperar: el que se
+  // habilita con los datos es «Crear mi cuenta».
   const faltanDatosParaGoogle = pasoGoogle
+    && !tieneCredencial
     && legal.status === 'ready'
     && !googleEligible
     && !faltaCorreoParaAltaSocial;
-  const haySocial = googleEligible || facebookEligible || faltaCorreoParaAltaSocial
-    || faltanDatosParaGoogle;
+  const haySocial = (googleEligible && !capturaGoogle) || facebookEligible
+    || faltaCorreoParaAltaSocial || faltanDatosParaGoogle;
+
+  /**
+   * El contenedor de GIS existe UNA sola vez en la pantalla: arriba en «Crea tu
+   * cuenta» (captura) y abajo en el ingreso o en el paso sin token. El efecto
+   * que dibuja el botón lee `googleContainer` después de cada commit.
+   */
+  const ranuraGoogle = (
+    <div className="social-provider-slot">
+      <div
+        ref={googleContainer}
+        className="social-google-container"
+        role="group"
+        aria-label={t('Continuar con Google')}
+      />
+      {googleLoadFailed && (
+        <button
+          type="button"
+          className="login-toggle social-provider-retry"
+          onClick={() => {
+            setGoogleLoadFailed(false);
+            setGoogleGeneration((value) => value + 1);
+          }}
+        >
+          {t('Reintentar')}
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="ingreso">
@@ -730,13 +881,26 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         )}
         {pasoGoogle && (
           <div className="ingreso-burbuja-sub" role="status">
-            {t('Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.')}
+            {tieneCredencial
+              ? t('Revisa tus datos y toca «Crear mi cuenta».')
+              : t('Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.')}
           </div>
         )}
       </div>
 
       <div className="ingreso-cuerpo">
         <form className="ingreso-tarjeta" onSubmit={onSubmit}>
+          {/* 🔴 AF-16 · addendum 1 · en «Crea tu cuenta», Google PRIMERO, antes
+              de cualquier campo y sin depender de nada escrito. El formulario
+              con contraseña queda debajo, como alternativa. */}
+          {capturaGoogle && (
+            <section className="social-auth-options ingreso-alta-google" aria-busy={socialBusy}>
+              {ranuraGoogle}
+              <div className="social-auth-divider ingreso-alta-google-divisor" aria-hidden="true">
+                <span>{t('O regístrate con tu correo')}</span>
+              </div>
+            </section>
+          )}
           {mode === 'register' && (
             <>
               <label className="ingreso-campo">
@@ -847,6 +1011,26 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             </section>
           )}
 
+          {pasoGoogle && tieneCredencial && (
+            <button
+              className="ingreso-entrar"
+              type="button"
+              onClick={() => { void onCrearConGoogle(); }}
+              disabled={busy || socialBusy || legal.status !== 'ready'
+                || !socialActionEligible({
+                  mode: 'register',
+                  providerActionEnabled: true,
+                  autoridad,
+                  legalReady: true,
+                  firstName,
+                  lastName,
+                  email,
+                  requiereInvitacion: false,
+                })}
+            >
+              {busy ? t('Un segundo…') : t('Crear mi cuenta')}
+            </button>
+          )}
           {!pasoGoogle && (
           <button
             className="ingreso-entrar"
@@ -921,31 +1105,10 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
                 )}
                 {faltaCorreoParaAltaSocial && (
                   <p className="note note-orange note-correo-social" role="status">
-                    {t('Escribe tu correo aquí abajo para continuar con Google.')}
+                    {t('Escribe tu correo aquí arriba para continuar con Google.')}
                   </p>
                 )}
-                {googleEligible && (
-                  <div className="social-provider-slot">
-                    <div
-                      ref={googleContainer}
-                      className="social-google-container"
-                      role="group"
-                      aria-label={t('Continuar con Google')}
-                    />
-                    {googleLoadFailed && (
-                      <button
-                        type="button"
-                        className="login-toggle social-provider-retry"
-                        onClick={() => {
-                          setGoogleLoadFailed(false);
-                          setGoogleGeneration((value) => value + 1);
-                        }}
-                      >
-                        {t('Reintentar')}
-                      </button>
-                    )}
-                  </div>
-                )}
+                {googleEligible && !capturaGoogle && ranuraGoogle}
                 {facebookEligible && (
                   <button
                     type="button"

@@ -23,7 +23,7 @@ describe('AF-16 · sugerencia de datos desde el id_token de Google', () => {
   });
 
   const INVALIDOS: ReadonlyArray<readonly [string, string]> = [
-    ['la credencial del riel mock, que no es un JWT', 'mock-google-credential-0000'],
+    ['una credencial sin puntos, que no es un JWT', 'google-credential-sin-forma-0000'],
     ['dos segmentos', 'aaa.bbb'],
     ['payload con caracteres fuera de base64url', 'aaa.b+b/b.ccc'],
     ['payload que no es JSON', `aaa.${Buffer.from('no json').toString('base64url')}.ccc`],

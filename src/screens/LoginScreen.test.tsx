@@ -265,16 +265,28 @@ describe('LoginScreen · rediseño del 2026-09-17', () => {
     expect(source).not.toMatch(/social-provider-button[^'"]*social-provider-google/);
   });
 
-  it('🔴 §2 · el correo está ARRIBA del bloque social, no debajo', () => {
-    // No es preferencia visual: con el alta pública el correo es la única
-    // fuente del email de la cuenta (D-R16), y el botón de Google desaparece
-    // mientras esté vacío. Con el orden viejo el control se esfumaba encima
-    // del campo que lo habilita.
+  it('🔴 §2 · en el ingreso y en el paso de Google, el correo está ARRIBA del bloque social', () => {
+    // Con el alta pública el correo es la única fuente del email de la cuenta
+    // (D-R16). En el paso «Crea tu cuenta con Google» sin token, el botón de
+    // abajo sigue esperando ese correo: el campo tiene que estar encima del
+    // control que habilita. El bloque social de abajo se ubica por su
+    // separador exacto; el de arriba de «Crea tu cuenta» tiene otra clase.
     const correo = source.indexOf('type="email"');
-    const social = source.indexOf('social-auth-divider');
+    const social = source.indexOf('<div className="social-auth-divider" aria-hidden="true">');
     expect(correo).toBeGreaterThan(0);
     expect(social).toBeGreaterThan(0);
     expect(correo, 'el campo de correo quedó DEBAJO del separador social').toBeLessThan(social);
+  });
+
+  it('🔴 AF-16 · addendum 1 · en «Crea tu cuenta» Google va ANTES de cualquier campo', () => {
+    // Mati, 2026-09-18: «no me permite crear la cuenta con GMAIL». El botón
+    // vivía debajo del formulario y aparecía recién con los datos escritos.
+    // El e2e prueba el recorrido; acá se fija el orden en el código.
+    const altaGoogle = source.indexOf('{capturaGoogle && (');
+    const primerCampo = source.indexOf('className="ingreso-campo"');
+    expect(altaGoogle).toBeGreaterThan(0);
+    expect(primerCampo).toBeGreaterThan(0);
+    expect(altaGoogle, 'Google quedó debajo de un campo en «Crea tu cuenta»').toBeLessThan(primerCampo);
   });
 
   it('🔴 el aviso legal enlaza el documento que EXISTE y no nombra otro', () => {

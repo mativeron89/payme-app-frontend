@@ -36,7 +36,16 @@ test('alta Google hereda invitación/nombres y la limpia sólo al persistir', as
   const external = externalRequests(page);
   await openRegistration(page);
 
+  // AF-16 · addendum 1 · en «Crea tu cuenta» Google va primero y NO crea la
+  // cuenta de un toque: lleva al paso donde se confirman los datos. Los nombres
+  // ya escritos se conservan (la sugerencia de Google sólo llena lo vacío).
   await page.getByRole('button', { name: 'Continuar con Google', exact: true }).click();
+  await expect(page.getByText('Crea tu cuenta con Google', { exact: true })).toBeVisible();
+  // La invitación no se suelta por recibir el token: todavía no hay sesión.
+  expect(await page.evaluate(() => (
+    sessionStorage.getItem('payme.app.mock.ff_signup_invitation.v1')
+  ))).not.toBeNull();
+  await page.getByRole('button', { name: 'Crear mi cuenta', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => (
     sessionStorage.getItem('payme.app.mock.ff_signup_invitation.v1')
