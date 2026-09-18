@@ -13,6 +13,10 @@
 
 ## 0.170.0 — El front reconoce el Aviso 2.5.0 antes de que el backend lo publique (2026-09-18)
 
+> **AF-20 (`APP-SESSION-LOCK-AND-SEAMS-AF-20-20260918`) va en esta MISMA versión, y
+> es a propósito:** se apila sobre AF-19, se publica junto y no cambia nada visible
+> para el usuario. Sus ítems están abajo, en «AF-20».
+
 Orden `APP-NOTICE-2-5-0-AF-19-20260918`, base `8843d10` (= `origin/main`, servido
 0.169.0). **Sin push, sin deploy, sin GREEN.** Decisión de Mati: el texto del aviso
 2.5.0 está aprobado y va *«front primero y después backend»*.
@@ -46,6 +50,24 @@ Orden `APP-NOTICE-2-5-0-AF-19-20260918`, base `8843d10` (= `origin/main`, servid
   vuelve a encender con 2.5.0.
 - Mutantes rojos: quitar `'2.5.0'` (unitario y e2e) y quitar `'2.4.1'` (4 unitarios
   y 3 e2e).
+
+### AF-20 · candado de sesión, costura C-03 y n90 (sin cambio visible)
+
+- **n89 · `withSessionLock` ya no puede ejecutar dos veces** (`f08f3fc`). Usa un
+  centinela propio, `SIN_WEB_LOCKS`, en vez de `null`, y las tres puertas de sesión
+  comparan contra él. Cierra la costura C-02. Test: `src/api/sessionLock.test.ts`.
+  Mutantes rojos: volver a `null` y volver a `??`.
+- **C-03 · guarda de clase para las interpolaciones de URL** (`43d51a8`). La
+  instancia ya no existía (`87c03ca` partió `getFriendRequests`). Censo: 30
+  escapadas, 3 codificadas por construcción, 0 por corregir. La guarda
+  `src/api/interpolacionesDeRuta.test.ts` mira paths y query strings. Ampliarla a
+  `?` destapó `recoveryFlow.ts`, que es correcto. Mutantes rojos: 3.
+- **n90 · devuelto sin inventar.** `CONTRASTE_FLUJOS.md` no existe en el
+  workspace. La afirmación equivalente está en el contrato (`config.js:79`,
+  `mesas.js:1418`), pero el front no la consume en ninguna pantalla. Su test
+  natural vive en el mock, fuera del alcance de n90. Hallazgo: `mockLockItems`
+  pone 10 minutos de vencimiento SIEMPRE, y diverge del dueño en modo sin dinero o
+  con mesa sin garantía. Se propone una orden aparte.
 
 ### Parte B · la causa del intermitente de `google-continuar` «Crea tu cuenta»
 
