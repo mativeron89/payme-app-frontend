@@ -60,6 +60,8 @@ test('G-34 · pending ⇒ «Te falta pagar»', async ({ page }) => {
   await ingresar(page);
   await expect(tarjeta(page)).toContainText('Te falta pagar');
   await expect(tarjeta(page)).not.toContainText('Pago en curso');
+  // El mock publica my_paid_cents = 0 con pending: no se dibuja «Pagaste $0.00».
+  await expect(tarjeta(page)).not.toContainText('Pagaste');
   await capturar(page, '03-te-falta-pagar');
 });
 

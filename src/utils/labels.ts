@@ -161,7 +161,8 @@ export function estadoPersonalDeMesa(mesa: {
 /**
  * `my_paid_cents`: lo que pagó ESTA cuenta, con propina y menos reembolsos.
  * Sólo acompaña a una etiqueta personal, y sólo si es un entero de centavos
- * ≥ 0. Nunca se muestra ni se deriva lo que pagó otro.
+ * **> 0**: «Te falta pagar · Pagaste $0.00» no dice nada útil (corrección del
+ * Bibliotecario sobre d659c0f). Nunca se muestra ni se deriva lo que pagó otro.
  */
 export function pagadoPropioCentavos(mesa: {
   readonly status: string;
@@ -170,7 +171,7 @@ export function pagadoPropioCentavos(mesa: {
 }): number | null {
   if (estadoPersonalDeMesa(mesa) === null) return null;
   const c = mesa.my_paid_cents;
-  return typeof c === 'number' && Number.isSafeInteger(c) && c >= 0 ? c : null;
+  return typeof c === 'number' && Number.isSafeInteger(c) && c > 0 ? c : null;
 }
 
 /**

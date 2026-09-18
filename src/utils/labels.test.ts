@@ -52,9 +52,15 @@ describe('G-34 · estadoPersonalDeMesa («Según lo que eligió cada uno»)', ()
 });
 
 describe('G-34 · pagadoPropioCentavos', () => {
-  it('control positivo: centavos enteros ≥ 0 junto a paid o pending', () => {
+  it('control positivo: centavos enteros > 0 junto a paid o pending', () => {
     expect(pagadoPropioCentavos({ status: 'partially_paid', my_status: 'paid', my_paid_cents: 15500 })).toBe(15500);
-    expect(pagadoPropioCentavos({ status: 'open', my_status: 'pending', my_paid_cents: 0 })).toBe(0);
+    expect(pagadoPropioCentavos({ status: 'open', my_status: 'pending', my_paid_cents: 1 })).toBe(1);
+  });
+
+  it('🔴 con 0 no hay línea: «Pagaste $0.00» no se dibuja, la etiqueta personal sigue', () => {
+    expect(pagadoPropioCentavos({ status: 'open', my_status: 'pending', my_paid_cents: 0 })).toBeNull();
+    expect(pagadoPropioCentavos({ status: 'partially_paid', my_status: 'paid', my_paid_cents: 0 })).toBeNull();
+    expect(estadoPersonalDeMesa({ status: 'open', my_status: 'pending' })).toBe('pending');
   });
 
   it('🔴 sin etiqueta personal no se muestra, aunque el monto venga', () => {

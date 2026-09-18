@@ -33,7 +33,8 @@ de Mati para G-34: *«Según lo que eligió cada uno»*.
   entero ≥ 0, la línea va sin conteo, como hasta ahora.
 - **G-34 · Inicio:** con la mesa en curso (`open`/`partially_paid`), `my_status`
   `paid` → «Ya pagaste, faltan otros» y `pending` → «Te falta pagar», más «Pagaste
-  $X» con `my_paid_cents` (sólo lo propio, centavos enteros ≥ 0, con `formatMXN`).
+  $X» con `my_paid_cents` (sólo lo propio, centavos enteros **> 0**, con
+  `formatMXN`; con 0 la línea no se dibuja).
   `not_applicable`, un valor ausente o uno desconocido mantienen la etiqueta genérica
   de la MESA. La decisión vive en `utils/labels.ts` (`estadoPersonalDeMesa`,
   `pagadoPropioCentavos`) y es la misma para la burbuja y la hoja. Los textos van con
@@ -76,8 +77,8 @@ de Mati para G-34: *«Según lo que eligió cada uno»*.
 ### Lo que no se acredita
 
 - No corrió contra el backend real ni en un teléfono.
-- Con `pending` y `my_paid_cents = 0` se muestra «Pagaste $0.00», porque la orden
-  pide mostrar todo entero ≥ 0. Se puede ocultar el 0 si Mati lo prefiere.
+- Corrección del Bibliotecario sobre `d659c0f`: con `my_paid_cents = 0` ya no se
+  muestra «Pagaste $0.00». El umbral es > 0, y la etiqueta personal no cambia.
 
 ## 0.168.0 — «Continuar con Google» en un toque (2026-09-18)
 
