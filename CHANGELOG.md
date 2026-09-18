@@ -11,6 +11,35 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.163.0 — Se cierra el censo de entradas EN huérfanas (2026-09-18)
+
+Orden `APP-DOCS-PWA-AF-07-20260918`, base `898f72b3…`. **Sin push, sin deploy,
+sin GREEN.** `D-IDIOMA-1` sólo vigilaba lo que FALTA traducir; nunca lo que
+sobra. `traduccion.test.ts` suma la guarda inversa y con ella se hizo, por
+primera vez, el censo completo de las 751 claves de `en.ts` contra el árbol
+real de `src/` — no sólo contra los sitios que el propio extractor ya conocía.
+
+**64 estaban muertas de verdad** — el texto en español no aparece en ningún
+archivo de `src/`, ni en un test — y se borraron de `en.ts`, incluida
+`"O usa tu correo y contraseña"` (la nombrada por el Bibliotecario: describía
+el orden viejo de `LoginScreen` que `0.162.0` reemplazó). Verificado además
+contra el `dist/` del build real: la frase ya no viaja en el bundle.
+
+**72 siguen vivas pero sin `t()` que las envuelva** — la mayoría en
+`src/api/paymentStatus.ts` (`mesaClosureView`, el estado de cierre de mesa) y
+en las pantallas de link/reconciliación — y **no se tocan acá**: envolverlas
+exige editar `MesaScreen.tsx` y compañía, fuera de los paths de esta orden, y
+varias son copy de garantía/banco que no se toca sin una orden que lo pida
+expreso. El test las fija en una lista nombrada y fechada (mismo patrón que
+`T_SIN_LITERAL`, más arriba en el archivo): si el conteo sube sin que nadie lo
+haya revisado, el test se pone rojo con el nombre exacto de lo que cambió.
+
+De paso, corrigió un comentario propio que estaba mal: dos sitios de
+`t(VARIABLE)` (`LoginScreen.tsx` y `EstadisticasScreen.tsx`) decían recibir
+"texto del backend en runtime, sin constante que enumerar" — **era falso**, los
+dos indexan una constante de módulo local (`ERROR_TEXT` y `CATEGORIA`) y ya
+están cubiertos como una familia más.
+
 ## 0.162.0 — El login entra en la anatomía del sistema, y tres cosas del paquete no entran (2026-09-17)
 
 Orden `APP-LOGIN-REDESIGN-AF-02-20260917`, base `ca8fb983…`, primer commit `359c6bd5…`.
