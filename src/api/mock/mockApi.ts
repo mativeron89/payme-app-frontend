@@ -2714,7 +2714,78 @@ export async function mockAcceptInvitation(id: string): Promise<{ accepted: bool
 
 // ─── Stats (GET /account/stats) ────────────────────────────
 
+/**
+ * AF-26 · `consumption_month` del mock, coherente con el resto de `mockStats`:
+ * las mismas seis visitas del mes (La Parolaccia ×3, Hanzo ×2, Café Nube ×1)
+ * repartidas por cocina, sumando el mismo total. La base sigue al dinero del
+ * mock como el dueño sigue a `dineroHabilitado()`: con los pagos apagados es
+ * `consumption` («consumo»); con pagos, `payments` («gasto»).
+ *
+ * Costura `payme.app.mock.stats.v1`: `una` (una sola cocina), `cuatro`,
+ * `siete` (DOS cocinas que el contrato de hoy no manda —`vegan`, `grill`—, para
+ * ver el agrupado del anillo: con el contrato vigente nunca llegan más de cinco),
+ * `vacio` (total 0), `ausente` (backend anterior a v2.102.0) y `raro` (las
+ * categorías no suman el total).
+ */
+function consumoDelMesMock(): Record<string, unknown> | undefined {
+  const costura = (() => {
+    try { return localStorage.getItem('payme.app.mock.stats.v1'); } catch { return null; }
+  })();
+  if (costura === 'ausente') return undefined;
+  const basis = (modoMonetarioMock() as { payments_enabled?: unknown })?.payments_enabled === true
+    ? 'payments'
+    : 'consumption';
+  const categorias: Array<{ category: string; amount_cents: number; visits: number }> =
+    costura === 'vacio' ? []
+      : costura === 'una' ? [{ category: 'italian', amount_cents: 118000, visits: 3 }]
+        : costura === 'cuatro' ? [
+          { category: 'italian', amount_cents: 31000, visits: 3 },
+          { category: 'japanese', amount_cents: 24550, visits: 2 },
+          { category: 'cafe', amount_cents: 12800, visits: 4 },
+          { category: 'mexican', amount_cents: 8650, visits: 1 },
+        ]
+          : costura === 'siete' ? [
+            { category: 'italian', amount_cents: 31000, visits: 3 },
+            { category: 'japanese', amount_cents: 24550, visits: 2 },
+            { category: 'cafe', amount_cents: 12800, visits: 4 },
+            { category: 'mexican', amount_cents: 8650, visits: 1 },
+            { category: 'vegan', amount_cents: 6200, visits: 1 },
+            { category: 'grill', amount_cents: 4400, visits: 1 },
+            { category: 'other', amount_cents: 2100, visits: 1 },
+          ]
+            : [
+              { category: 'italian', amount_cents: 118000, visits: 3 },
+              { category: 'japanese', amount_cents: 83500, visits: 2 },
+              { category: 'cafe', amount_cents: 15000, visits: 1 },
+            ];
+  const total = categorias.reduce((a, c) => a + c.amount_cents, 0);
+  const visitas = categorias.reduce((a, c) => a + c.visits, 0);
+  return {
+    basis,
+    total_cents: costura === 'raro' ? total + 1 : total,
+    visits: visitas,
+    avg_per_visit_cents: visitas > 0 ? Math.floor(total / visitas) : 0,
+    categories: categorias,
+  };
+}
+
 export async function mockStats(): Promise<StatsResponse> {
+  const consumo = consumoDelMesMock();
+  // `vacio` vacía el mes ENTERO, como hoy con los pagos apagados y sin mesas:
+  // si sólo vaciara `consumption_month`, la pantalla de siempre mostraría los
+  // pagos del mock y el vacío real no se vería nunca.
+  const vacio = (() => {
+    try { return localStorage.getItem('payme.app.mock.stats.v1') === 'vacio'; } catch { return false; }
+  })();
+  if (vacio) {
+    return delay({
+      month: { spent_cents: 0, spent_display: centsToDisplay(0), visits: 0, avg_per_visit_cents: 0, avg_per_visit_display: centsToDisplay(0) },
+      top_restaurants: [],
+      top_dish: null,
+      favorite_category: null,
+      ...(consumo !== undefined && { consumption_month: consumo }),
+    });
+  }
   const spent = 216500;
   const visits = 6;
   const avg = Math.floor(spent / visits);
@@ -2733,6 +2804,7 @@ export async function mockStats(): Promise<StatsResponse> {
     ],
     top_dish: { name: 'Tagliatelle Bolognese', times: 3 },
     favorite_category: 'italian',
+    ...(consumo !== undefined && { consumption_month: consumo }),
   });
 }
 

@@ -11,6 +11,65 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.173.0 — «Mis estadísticas», etapa 1: inicio con anillo (2026-09-19)
+
+Orden `APP-STATS-HOME-RING-AF-26-20260919`, base `048b38d` (= `origin/main`,
+servido 0.172.0). **Sin push, sin deploy, sin GREEN.** Decisión de Mati: «Con lo
+que cada uno eligió en sus mesas» y «Por etapas: inicio con anillo primero»
+(diseño 2a de Claude Design, copia en
+`ops/bibliotecario-claude-20260917/diseno-mis-estadisticas-20260919/`).
+
+- **Espejo, en un commit propio (`7877122`):** dueño v2.102.0, inventario en
+  `acc96a5` y contenido en `98ee47b`, local y sin publicar. Cambian
+  `routes/account.js` (`consumption_month`) y `routes/mesas.js` (refactor a
+  `services/consumoPropio.js`); los tres gates verdes.
+- **`consumption_month` es OPCIONAL** (`src/api/consumoDelMes.ts`). Ausente (el
+  backend servido hoy), `basis` desconocido, montos o visitas no enteros, una
+  categoría repetida, vacía o en 0, o categorías que **no suman el total** ⇒ la
+  pantalla de siempre. La suma se exige porque el dueño calcula el total así en las
+  dos bases, y el anillo muestra el total al centro con las porciones alrededor.
+  Una cocina desconocida SÍ se acepta y se rotula «Otra cocina», porque el dueño
+  pasa la categoría del restaurante tal cual.
+- **Inicio según 2a**, sólo con `consumption_month` válido y total > 0:
+  - burbuja con «Este mes» **sin flecha ni selector**, el total a la derecha y
+    debajo «N visitas · $X promedio»;
+  - tarjeta con el anillo SVG (`<circle>` + `stroke-dasharray`, radio 54, grosor
+    17, corte de 3px, sin librería ni animación, los cinco colores del diseño) y el
+    total al centro;
+  - la lista con cocina, visitas, monto y porcentaje. Nunca el color solo: el
+    anillo lleva además un `aria-label` con cada cocina y su porcentaje.
+- **Rótulo por `basis`:** `consumption` → «Tu consumo del mes» / «Lo que elegiste
+  en tus mesas» / «de consumo»; `payments` → «Tu gasto del mes» / «Lo que pagaste,
+  descontando reembolsos» / «de gasto».
+- **Porcentajes enteros por resto mayor** (`src/utils/anillo.ts`): siempre suman
+  100; en un empate de restos gana el que viene antes, que es el de más monto
+  porque el dueño ordena. Con total 0, el vacío de siempre.
+- **De la quinta categoría en adelante, UNA porción del quinto color.** Con cinco
+  colores, «la última porción» es la quinta. La lista las sigue mostrando todas.
+  **Declarado:** con el contrato de hoy nunca llegan más de cinco; la captura con
+  siete usa dos cocinas que el contrato no manda (costura `siete`).
+- **Se conservan debajo** «Tus restaurantes», «Plato más pedido» y «Tipo de cocina
+  favorito» (salen de pagos y hoy vienen vacías). **Se retiró** el cartel «Todavía
+  no existe en el contrato», junto con sus dos entradas de `en.ts`, que quedaron
+  huérfanas.
+- **Declarado, y no se hizo:**
+  - **Los accesos de 2a no se dibujan:** ninguno (Tus restaurantes, Qué comés,
+    Evolución) tiene todavía una pantalla a la que llevar.
+  - **El nombre de la pantalla en la cabecera** —a la derecha de «Volver», 13px,
+    apagado— es el estilo de la cabecera COMPARTIDA (`.hdr-title`, hoy sin uso y
+    con otro tamaño) y queda fuera de esta orden. El `<h1>` «Mis estadísticas»
+    sigue existiendo para lectores de pantalla dentro de la burbuja.
+- **Mock:** `consumption_month` coherente con el resto de `mockStats` (las mismas
+  seis visitas repartidas por cocina); la base sigue al dinero del mock. Costura
+  `payme.app.mock.stats.v1`: `una`, `cuatro`, `siete`, `vacio` (vacía el mes
+  entero), `ausente` y `raro`.
+- **Guardas que se tocaron (declaradas):** `traduccion.test.ts` sólo en su
+  comentario de ubicación. El `t()` no literal de las cocinas sigue siendo UNO:
+  `nombreDeCocina()` lo comparte entre el chip y el anillo, y el contador queda en 18.
+- **Tests:** decodificador (9), anillo y porcentajes (11), e2e (7): consumo, gasto,
+  una, siete, vacío, ausente e inválido. Capturas móviles con 1, 4 y 7 cocinas y
+  del vacío. **Mutantes:** 11, todos mueren.
+
 ## 0.172.0 — Aviso 2.5.2, soltar un consumo y «quiénes se sumaron» (2026-09-19)
 
 Orden `APP-NOTICE-2-5-2-RELEASE-ROSTER-AF-25-20260919`, base `ad81f6b` (= `origin/main`,

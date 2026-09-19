@@ -5173,6 +5173,161 @@ body {
 /* ─── Estadísticas ─── */
 
 /* El ancla de la pantalla: el gasto del mes en display, tabular. */
+/* ── AF-26 · «Mis estadísticas» 2a: burbuja del mes y anillo por cocina ───
+   Medidas del diseño (ops/…/diseno-mis-estadisticas-20260919, pantalla 2a). */
+.stat-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.stat-burbuja {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+
+.stat-burbuja-periodo {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.stat-burbuja-dato {
+  text-align: right;
+}
+
+.stat-burbuja-total {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--navy);
+}
+
+.stat-burbuja-contexto {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--gray-d);
+}
+
+.stat-anillo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 16px;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 30, 59, 0.06);
+}
+
+.stat-anillo-titulo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+}
+
+.stat-anillo-sub {
+  font-size: 12.5px;
+  color: var(--gray-d);
+}
+
+.stat-anillo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-anillo svg {
+  display: block;
+}
+
+.stat-anillo-centro {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.stat-anillo-total {
+  font-family: var(--font-display);
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+}
+
+.stat-anillo-unidad {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--gray-d);
+}
+
+.stat-anillo-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stat-anillo-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stat-anillo-color {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.stat-anillo-nombre {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--navy);
+}
+
+.stat-anillo-visitas,
+.stat-anillo-pct {
+  font-size: 12.5px;
+  color: var(--gray-d);
+}
+
+.stat-anillo-monto {
+  min-width: 68px;
+  text-align: right;
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.stat-anillo-pct {
+  min-width: 34px;
+  text-align: right;
+}
+
 .stat-hero {
   padding: var(--sp-6) var(--sp-4);
   border-radius: var(--r-lg);

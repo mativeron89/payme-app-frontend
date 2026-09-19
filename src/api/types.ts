@@ -1175,6 +1175,12 @@ export interface StatsResponse {
   top_restaurants: Array<{ name: string; visits: number }>;
   top_dish: { name: string; times: number } | null;
   favorite_category: string | null;
+  /**
+   * AF-26 · v2.102.0 · aditivo y OPCIONAL: el backend servido hoy no lo manda.
+   * Se tipa `unknown` a propósito: sólo se lee a través de
+   * `decodeConsumoDelMes`, que falla cerrado a la pantalla de siempre.
+   */
+  consumption_month?: unknown;
 }
 
 // ─── Errores (shape del error handler de server.js y rutas) ─

@@ -12,6 +12,8 @@ import { goBack } from '../router';
 import { formatMXN } from '../utils/format';
 import { categoryLabel } from '../utils/labels';
 import { fullName } from '../utils/identity';
+import { decodeConsumoDelMes, type ConsumoDelMes } from '../api/consumoDelMes';
+import { colorDeFila, porcentajesEnteros, porcionesDelAnillo, RADIO_ANILLO, GROSOR_ANILLO } from '../utils/anillo';
 
 /**
  * **Estadísticas** — la pantalla real que lanza la pestaña del mismo nombre
@@ -26,10 +28,12 @@ import { fullName } from '../utils/identity';
  * actividad es **vacío real**, no cero pesos gastados: son cosas distintas y el
  * sistema las distingue.
  *
- * Lo que el contrato NO tiene se **declara al pie**, con el estado *desconocido*
- * del sistema (punteado + interrogación), en vez de omitirse. Se hace así para
- * que el faltante quede visible y nadie lo implemente creyendo que hay datos
- * detrás. El detalle de cada uno está en §5.1 del spec y en `GAPS.md`.
+ * AF-26 (2026-09-19) · etapa 1 del diseño 2a: con `consumption_month` válido,
+ * la burbuja del mes y el anillo por tipo de cocina encabezan la pantalla, y
+ * las secciones de siempre siguen debajo. Se retiró el cartel «Todavía no existe
+ * en el contrato»: por orden del Bibliotecario, lo que falta ahora va por
+ * etapas del diseño (2b–2f), no como aviso al pie. Los cuatro accesos de 2a no
+ * se dibujan: ninguno tiene todavía una pantalla a la que llevar.
  */
 
 /** Guion, no cero. Un `—` dice "no disponible"; un `0` afirma un valor. */
@@ -66,9 +70,7 @@ export function EstadisticasScreen() {
     cargar();
   }, [vista.showAccountActivity, cargar]);
 
-  // `labels.ts` es constante de MÓDULO: devuelve español y se traduce acá.
-  const crudoCocina = categoryLabel(stats?.favorite_category);
-  const cocina = crudoCocina === null ? null : t(crudoCocina);
+  const cocina = nombreDeCocina(stats?.favorite_category, t);
   // Actividad del mes: sin visitas Y sin gasto es vacío real. Se miran los dos
   // porque "0 visitas con gasto" sería un dato incoherente del emisor, y ante
   // incoherencia preferimos mostrar los números y no tragarlos.
@@ -76,13 +78,28 @@ export function EstadisticasScreen() {
   // La barra de proporción se normaliza contra el más visitado, no contra el
   // total: es una comparación entre restaurantes, no un porcentaje del gasto.
   const topVisitas = stats?.top_restaurants[0]?.visits ?? 0;
+  /**
+   * AF-26 · etapa 1 del diseño 2a. Sólo con `consumption_month` VÁLIDO y con
+   * algo en el mes: ausente (backend anterior), inválido o en cero ⇒ la
+   * pantalla de siempre, con su vacío real.
+   */
+  const consumo = stats ? decodeConsumoDelMes(stats.consumption_month) : null;
+  const conAnillo = consumo !== null && consumo.totalCents > 0;
 
   return (
     <div className="screen has-appbar">
+      {/* El diseño 2a pone el nombre de la pantalla a la derecha de «Volver», en
+          13px apagado. Eso es el estilo de la cabecera COMPARTIDA (`.hdr-title`,
+          hoy sin uso y con otro tamaño) y queda fuera de esta orden: se declara,
+          no se improvisa acá. El nombre sigue siendo el <h1> de la burbuja. */}
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
-      <div className="title-card">
-        <h1 className="title-card-title">{t('Mis estadísticas')}</h1>
-      </div>
+      {conAnillo ? (
+        <BurbujaDelMes consumo={consumo} />
+      ) : (
+        <div className="title-card">
+          <h1 className="title-card-title">{t('Mis estadísticas')}</h1>
+        </div>
+      )}
 
       <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16 }}>
         {!vista.showAccountActivity ? (
@@ -115,7 +132,8 @@ export function EstadisticasScreen() {
           </div>
         ) : (
           <>
-            {sinActividad ? (
+            {conAnillo && <AnilloPorCocina consumo={consumo} />}
+            {!conAnillo && sinActividad ? (
               /* Vacío REAL, sin borde. NO se pinta "$0.00 gastado": no gastar
                  nada y no tener datos son cosas distintas. */
               <div className="mesa-empty">
@@ -123,12 +141,16 @@ export function EstadisticasScreen() {
               </div>
             ) : (
               <>
-                {/* El ancla de la pantalla. */}
+                {/* El ancla de la pantalla. Con el anillo, el ancla es la burbuja. */}
+                {!conAnillo && (
                 <div className="stat-hero">
                   <div className="stat-hero-lbl">{t('Este mes')}</div>
                   <div className="stat-hero-amt">{pesos(stats.month.spent_cents)}</div>
                 </div>
 
+                )}
+
+                {!conAnillo && (
                 <div className="stat-pair">
                   <div className="stat-cell">
                     <div className="stat-num">{entero(stats.month.visits)}</div>
@@ -139,6 +161,7 @@ export function EstadisticasScreen() {
                     <div className="stat-lbl">{t('Promedio por visita')}</div>
                   </div>
                 </div>
+                )}
 
                 {stats.top_restaurants.length > 0 && (
                   <>
@@ -190,27 +213,117 @@ export function EstadisticasScreen() {
                 )}
               </>
             )}
-
-            {/**
-             * Lo que falta se DECLARA, no se omite. Punteado + interrogación es
-             * el estado *desconocido* del sistema: si hay borde, hay algo que
-             * no estás viendo. Omitirlo dejaría que alguien lo implemente
-             * creyendo que hay datos detrás.
-             */}
-            <div className="state-unknown" style={{ marginLeft: 0, marginRight: 0 }}>
-              <Icon name="info" size={20} />
-              <div>
-                <div className="state-unknown-title">{t('Todavía no existe en el contrato')}</div>
-                <p className="state-unknown-body">
-                  {t('Comparación con el mes anterior · propinas acumuladas · ranking por tipología de plato.')}
-                </p>
-              </div>
-            </div>
           </>
         )}
       </div>
 
       <AppBottomBar active={null} />
     </div>
+  );
+}
+
+/**
+ * El nombre de una cocina, traducido. `labels.ts` es constante de MÓDULO:
+ * devuelve español y se traduce acá, en UN solo `t()` no literal para las dos
+ * superficies que lo usan (el chip de favorita y el anillo).
+ */
+function nombreDeCocina(category: string | null | undefined, t: (s: string, ...a: unknown[]) => string): string | null {
+  const crudo = categoryLabel(category);
+  return crudo === null ? null : t(crudo);
+}
+
+/** Visitas con su palabra: «1 visita», «3 visitas». */
+function visitasTexto(n: number, t: (s: string, ...a: unknown[]) => string): string {
+  return `${n} ${n === 1 ? t('visita') : t('visitas')}`;
+}
+
+/**
+ * AF-26 · burbuja de 2a: el período a la izquierda —«Este mes», SIN flecha ni
+ * selector, porque todavía no hay otros períodos— y el total a la derecha con
+ * visitas y promedio debajo. El `<h1>` de la pantalla sigue siendo «Mis
+ * estadísticas», sólo para lectores de pantalla: a la vista va en la cabecera.
+ */
+function BurbujaDelMes({ consumo }: { consumo: ConsumoDelMes }) {
+  const { t } = useIdioma();
+  return (
+    <div className="title-card stat-burbuja">
+      <h1 className="stat-oculto">{t('Mis estadísticas')}</h1>
+      <div className="stat-burbuja-periodo">{t('Este mes')}</div>
+      <div className="stat-burbuja-dato">
+        <div className="stat-burbuja-total">{formatMXN(consumo.totalCents)}</div>
+        <div className="stat-burbuja-contexto">
+          {visitasTexto(consumo.visits, t)} · {t('{0} promedio', formatMXN(consumo.avgPerVisitCents))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * AF-26 · el anillo por tipo de cocina (2a) y su lista. El rótulo sale de
+ * `basis` —«consumo» con los pagos apagados, «gasto» con pagos—: el front no
+ * adivina. **Nunca el color solo**: cada porción está escrita abajo con nombre,
+ * visitas, monto y porcentaje, y el anillo lleva todo eso en su `aria-label`.
+ */
+function AnilloPorCocina({ consumo }: { consumo: ConsumoDelMes }) {
+  const { t } = useIdioma();
+  const esConsumo = consumo.basis === 'consumption';
+  const montos = consumo.categories.map((c) => c.amountCents);
+  const pcts = porcentajesEnteros(montos);
+  const porciones = porcionesDelAnillo(montos);
+  // Una cocina que el front no conoce se rotula igual: el dueño pasa la
+  // categoría del restaurante tal cual (ver `consumoDelMes.ts`).
+  const nombres = consumo.categories.map((c) => nombreDeCocina(c.category, t) ?? t('Otra cocina'));
+  const resumen = nombres.map((n, i) => `${n} ${pcts[i]}%`).join(', ');
+  const centro = 70;
+  return (
+    <section className="stat-anillo-card" aria-labelledby="stat-anillo-titulo">
+      <div>
+        <h2 id="stat-anillo-titulo" className="stat-anillo-titulo">
+          {esConsumo ? t('Tu consumo del mes') : t('Tu gasto del mes')}
+        </h2>
+        <div className="stat-anillo-sub">
+          {esConsumo ? t('Lo que elegiste en tus mesas') : t('Lo que pagaste, descontando reembolsos')}
+        </div>
+      </div>
+      <div className="stat-anillo">
+        <svg
+          width="188"
+          height="188"
+          viewBox="0 0 140 140"
+          role="img"
+          aria-label={esConsumo ? t('Consumo por tipo de cocina: {0}', resumen) : t('Gasto por tipo de cocina: {0}', resumen)}
+        >
+          <g transform={`rotate(-90 ${centro} ${centro})`} fill="none" strokeWidth={GROSOR_ANILLO} strokeLinecap="butt">
+            {porciones.map((p, i) => (
+              <circle
+                key={i}
+                cx={centro}
+                cy={centro}
+                r={RADIO_ANILLO}
+                stroke={p.color}
+                strokeDasharray={`${p.trazo.toFixed(1)} ${p.hueco.toFixed(1)}`}
+                strokeDashoffset={p.desde.toFixed(1)}
+              />
+            ))}
+          </g>
+        </svg>
+        <div className="stat-anillo-centro" aria-hidden="true">
+          <div className="stat-anillo-total">{formatMXN(consumo.totalCents)}</div>
+          <div className="stat-anillo-unidad">{esConsumo ? t('de consumo') : t('de gasto')}</div>
+        </div>
+      </div>
+      <ul className="stat-anillo-lista">
+        {consumo.categories.map((c, i) => (
+          <li key={c.category} className="stat-anillo-fila">
+            <span className="stat-anillo-color" style={{ background: colorDeFila(i) }} aria-hidden="true" />
+            <span className="stat-anillo-nombre">{nombres[i]}</span>
+            <span className="stat-anillo-visitas">{visitasTexto(c.visits, t)}</span>
+            <span className="stat-anillo-monto">{formatMXN(c.amountCents)}</span>
+            <span className="stat-anillo-pct">{pcts[i]}%</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
