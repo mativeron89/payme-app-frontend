@@ -55,7 +55,7 @@ import {
   paymentLanded,
   requiresReconciliation,
 } from './freezeMachine';
-import { MesaDetailView } from './MesaDetailView';
+import { MesaDetailView, type QuienesSeSumaron } from './MesaDetailView';
 import { bpsLabel, fraccionInicial, itemsAmountFor } from './mesaItemsView';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
@@ -510,6 +510,37 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     const tick = setInterval(() => forceTick((n) => n + 1), 1000);
     return () => clearInterval(tick);
   }, [reload]);
+
+  /**
+   * AF-25 · n72 · quiénes se sumaron, **sólo si soy el organizador**. A otro no
+   * se le pide nunca: el dueño le contestaría 403 `not_mesa_organizer`, y pedir
+   * algo que la persona no puede ver ya es mal diseño aunque falle cerrado.
+   *
+   * 404 = backend anterior a v2.101.0 (o mesa que ya no existe): la sección no
+   * aparece. 403 también la oculta. Cualquier otro error se muestra con
+   * reintento, sin tocar el resto de la mesa. Misma guarda de identidad que las
+   * otras lecturas de esta pantalla: una respuesta de otra sesión no se pinta.
+   */
+  const esOrganizador = !isGuest && mesa?.my_role === 'opener';
+  const [quienes, setQuienes] = useState<QuienesSeSumaron>({ estado: 'oculto' });
+  const cargarQuienes = useCallback(() => {
+    const identityEpoch = identityEpochRef.current.capture();
+    setQuienes({ estado: 'cargando' });
+    api
+      .getMesaParticipants(code)
+      .then((lista) => {
+        if (identityEpochRef.current.isCurrent(identityEpoch)) setQuienes({ estado: 'lista', lista });
+      })
+      .catch((err) => {
+        if (!identityEpochRef.current.isCurrent(identityEpoch)) return;
+        const { status } = extractApiError(err);
+        setQuienes(status === 404 || status === 403 ? { estado: 'oculto' } : { estado: 'error' });
+      });
+  }, [code]);
+  useEffect(() => {
+    if (esOrganizador) cargarQuienes();
+    else setQuienes({ estado: 'oculto' });
+  }, [esOrganizador, cargarQuienes]);
 
   useEffect(() => {
     if (!isGuest) {
@@ -2346,6 +2377,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       onToggleItem={toggleItem}
       onReleaseItem={releaseItem}
       soltando={soltando}
+      quienesSeSumaron={quienes}
+      onReintentarQuienes={cargarQuienes}
       onSetFraction={setFraction}
       onGoToPay={goToPay}
       onRetryFrozenPay={() => { if (CORTE.allowsPay) setView('pay'); }}

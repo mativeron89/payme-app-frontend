@@ -4244,6 +4244,44 @@ body {
 /* Desplegable debajo del ítem, INDENTADO para que se lea como suyo y no como
    otra fila de la lista. Arranca con "1" marcada: tildar y listo sigue siendo
    el flujo de siempre, y el selector sólo pesa si alguien lo cambia. */
+/* AF-25 · n72 · «quiénes se sumaron»: lista simple, nombre arriba e
+   identificador debajo, sin foto. */
+.quienes {
+  margin-top: var(--sp-4);
+}
+
+.quienes-lista {
+  list-style: none;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+}
+
+.quien {
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.quien-nombre {
+  font-weight: 700;
+}
+
+.quien-nombre.dim {
+  color: var(--gray-d);
+  font-weight: 600;
+}
+
+.quien-id {
+  font-size: 13px;
+  color: var(--gray-d);
+}
+
+.quienes-vacio {
+  margin: var(--sp-2) 0 0;
+  color: var(--gray-d);
+}
+
 /* AF-25 · n80 · «Soltar» un consumo propio no pagado: botón secundario bajo su
    fila, alineado con el texto (44px = check + separación, como .mi-frac). */
 .mi-soltar {

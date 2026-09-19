@@ -811,4 +811,11 @@ export const EN: Record<string, string> = {
   "No había nada para soltar.": "There was nothing to release.",
   "La mesa ya no acepta cambios.": "This table no longer accepts changes.",
   "No pudimos soltarlo. Intenta de nuevo.": "We couldn't release it. Try again.",
+  // AF-25 · n72 · quiénes se sumaron (sólo el organizador).
+  "Quiénes se sumaron": "Who joined",
+  "Cargando quiénes se sumaron…": "Loading who joined…",
+  "No pudimos cargar quiénes se sumaron.": "We couldn't load who joined.",
+  "Todavía no se sumó nadie.": "Nobody has joined yet.",
+  "Invitado": "Guest",
+  "Cuenta eliminada": "Deleted account",
 };

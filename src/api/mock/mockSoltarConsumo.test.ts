@@ -94,3 +94,24 @@ describe('n80 · soltar en el mock', () => {
       .toEqual({ status: 404, message: 'item_not_found' });
   });
 });
+
+describe('n72 · quiénes se sumaron en el mock', () => {
+  it('al organizador le responde la lista del seed', async () => {
+    const { mock } = await cargar();
+    const r = await mock.mockMesaParticipants('PA-2847', 'user');
+    expect(r.participants.map((p) => p.payme_id)).toEqual(['payme_mx_luis', 'payme_mx_renata']);
+  });
+
+  it('🔴 a quien no organiza: 403 not_mesa_organizer', async () => {
+    const { mock } = await cargar();
+    // PA-4520 no la abrió el usuario del mock.
+    expect(await error(mock.mockMesaParticipants('PA-4520', 'user')))
+      .toEqual({ status: 403, message: 'not_mesa_organizer' });
+  });
+
+  it('costura «antiguo»: 404 como un backend anterior a v2.101.0', async () => {
+    const { mock } = await cargar();
+    localStorage.setItem('payme.app.mock.participantes.v1', 'antiguo');
+    expect((await error(mock.mockMesaParticipants('PA-2847', 'user'))).status).toBe(404);
+  });
+});

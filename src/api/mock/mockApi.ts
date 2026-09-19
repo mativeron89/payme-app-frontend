@@ -1923,6 +1923,63 @@ export async function mockReleaseItems(
   return delay({ released });
 }
 
+/**
+ * AF-25 · n72 · espejo de `GET /:code/participants` (`contract-mirror/routes/mesas.js:1409-1431`).
+ *
+ * Sólo el organizador (403 `not_mesa_organizer` al resto). El mock no guarda
+ * quién se sumó a cada mesa, así que las mesas del seed traen dos personas
+ * fijas y las creadas en la sesión vuelven vacías, que es lo cierto: nadie se
+ * sumó todavía. Costura `payme.app.mock.participantes.v1`:
+ * `error` (500), `antiguo` (404: backend anterior a v2.101.0), `vacio` y
+ * `variedad` (suma un invitado sin cuenta y una cuenta eliminada, con la forma
+ * EXACTA que deja la anonimización del dueño).
+ */
+const CLAVE_PARTICIPANTES = 'payme.app.mock.participantes.v1';
+const PARTICIPANTES_SEED: Record<string, Array<{ first_name: string | null; last_name: string | null; payme_id: string | null }>> = {
+  'PA-2847': [
+    { first_name: 'Luis', last_name: 'Cárdenas', payme_id: 'payme_mx_luis' },
+    { first_name: 'Renata', last_name: 'Ortiz', payme_id: 'payme_mx_renata' },
+  ],
+  'PA-3121': [
+    { first_name: 'Sofía', last_name: 'Lozano', payme_id: 'payme_mx_sofia' },
+  ],
+};
+
+/**
+ * Cuántas veces se pidió la lista. Existe para el e2e de «a un no-organizador
+ * no se le pide»: el dueño le contestaría 403 y la sección quedaría oculta igual,
+ * así que la pantalla sola no distingue «no se pidió» de «se pidió y falló».
+ */
+let pedidosDeParticipantes = 0;
+export function contarPedidosDeParticipantes(): number {
+  return pedidosDeParticipantes;
+}
+
+export async function mockMesaParticipants(
+  code: string,
+  identity: MockIdentity,
+): Promise<{ participants: Array<{ first_name: string | null; last_name: string | null; payme_id: string | null }> }> {
+  pedidosDeParticipantes += 1;
+  const costura = (() => {
+    try { return localStorage.getItem(CLAVE_PARTICIPANTES); } catch { return null; }
+  })();
+  if (costura === 'antiguo') return fail(404, 'not_found');
+  const mesa = findMesa(code);
+  if (!mesa) return fail(404, 'mesa_not_found');
+  if (identity === 'guest' || !mesa.openedByUser) return fail(403, 'not_mesa_organizer');
+  if (costura === 'error') return fail(500, 'internal_error');
+  if (costura === 'vacio') return delay({ participants: [] });
+  const base = PARTICIPANTES_SEED[code] ?? [];
+  const participants = costura === 'variedad'
+    ? [
+        ...base,
+        { first_name: null, last_name: null, payme_id: null },
+        { first_name: 'Cuenta', last_name: 'eliminada', payme_id: null },
+      ]
+    : base;
+  return delay({ participants: participants.map((p) => ({ ...p })) });
+}
+
 export async function mockPayMesa(
   code: string,
   req: PayMesaRequest,

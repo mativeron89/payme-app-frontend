@@ -74,6 +74,41 @@ foto; la foto después» (n72).
   una por separado, a propósito, porque la otra la cubre; plantadas juntas, el test
   del doble toque muere.
 
+### Ítem 3 · «Quiénes se sumaron», sólo para el organizador (n72)
+
+- **Qué ve el organizador:** dentro de la mesa, debajo de los consumos, la sección
+  «Quiénes se sumaron» con cada persona: nombre y apellido, y su identificador
+  debajo. Si no tiene cuenta, «Invitado»; si la cuenta se eliminó, «Cuenta
+  eliminada». Si todavía no se sumó nadie: «Todavía no se sumó nadie.». **Sin
+  foto, sin montos y sin quién eligió o pagó qué.**
+- **A quien no organiza no se le ofrece ni se le pide**, porque el dueño contestaría
+  403 `not_mesa_organizer`. La decisión la toma `MesaScreen` con
+  `my_role === 'opener'`. Un e2e cuenta los pedidos al mock y exige cero, porque en
+  pantalla un 403 se vería igual que no haber pedido.
+- **Contrato:** `api.getMesaParticipants` → `GET /mesas/:code/participants`. El
+  decodificador (`src/api/participantes.ts`) exige **claves exactas**: un campo de
+  más (foto, monto, correo, selección) se rechaza en vez de mostrarse. **Declarado:**
+  cuando el dueño agregue la foto, la sección va a mostrar el error hasta que una
+  orden propia actualice el decodificador. Nunca una foto mostrada sin decidir.
+- **Estados:** backend anterior (404) o 403 → la sección no aparece y el resto de la
+  mesa sigue igual. Otro error → «No pudimos cargar quiénes se sumaron.» con
+  «Reintentar». Misma guarda de identidad que las otras lecturas de la pantalla.
+- **«Cuenta eliminada» se reconoce por la forma EXACTA** que deja la anonimización
+  del dueño («Cuenta» «eliminada», sin identificador). Una cuenta viva sin
+  identificador muestra su nombre.
+- **Mock:** las mesas del seed traen personas fijas (PA-2847: Luis Cárdenas y Renata
+  Ortiz) y las creadas en la sesión vuelven vacías, que es lo cierto. Costura
+  `payme.app.mock.participantes.v1`: `error`, `antiguo` (404), `vacio` y `variedad`
+  (suma un invitado y una cuenta eliminada). `contarPedidosDeParticipantes()` existe
+  sólo para el e2e del no-organizador.
+- **Tests:** decodificador y filas (7), mock (3) y e2e (6): lista, invitado y
+  eliminada, no-organizador sin pedido, 404, error con reintento y vacío. Capturas
+  móviles de la lista y de invitado/eliminada, con el scroll de `.flow-scroll`
+  llevado a la sección.
+- **Mutantes (8, todos mueren):** pedir siendo no-organizador, aceptar un campo de
+  más en la fila o en el sobre, que el 404 no oculte, «Cuenta eliminada» sólo por
+  el identificador nulo, mock sin 403, «Reintentar» muerto y «Invitado» sin texto.
+
 ## 0.171.0 — Aviso 2.5.1 y «Tus mesas» en Historial (2026-09-18)
 
 Orden `APP-NOTICE-2-5-1-AND-TUS-MESAS-AF-24-20260918`, base `4aede0c` (= `origin/main`,

@@ -33,6 +33,7 @@ import {
 } from './contractResponses';
 import { decodeMisMesas, type PaginaMisMesas } from './misMesas';
 import { decodeSoltarConsumo, type ConsumoSoltado } from './soltarConsumo';
+import { decodeParticipantes, type Participante } from './participantes';
 import { extractApiError } from './errors';
 import {
   assertProfileIdentityEnabled,
@@ -290,6 +291,11 @@ export interface Api {
   lockItems(code: string, items: FractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
   /** AF-25 · n80 · suelta lo propio no pagado; `[]` si no había nada que soltar. */
   releaseItems(code: string, itemIds: readonly string[]): Promise<readonly ConsumoSoltado[]>;
+  /**
+   * AF-25 · n72 · quiénes se sumaron. SÓLO el organizador: a un no-organizador
+   * la pantalla ni lo pide (403 `not_mesa_organizer`).
+   */
+  getMesaParticipants(code: string): Promise<readonly Participante[]>;
   payMesa(code: string, req: PayMesaRequest, guestToken: string | undefined, expectation: PayMesaExpectation, intent: MonetaryIntentHandle): Promise<PayMesaResponse>;
   createInvitation(code: string, idempotencyKey: string): Promise<CreateInvitationResponse>;
   /** Invitación in-app a un amigo por payme_id (solo el organizador; el backend resuelve el uuid). */
@@ -621,6 +627,8 @@ const realApi: Api = {
       : httpRequest<LockItemsResponse>('POST', `/mesas/${encodeURIComponent(code)}/items/lock`, {
           items,
         }),
+  getMesaParticipants: async (code) =>
+    decodeParticipantes(await httpRequest<unknown>('GET', `/mesas/${encodeURIComponent(code)}/participants`)),
   releaseItems: async (code, itemIds) =>
     decodeSoltarConsumo(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/items/release`, {
       item_ids: [...itemIds],
@@ -885,6 +893,7 @@ const mockApi: Api = {
   },
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
   releaseItems: async (code, itemIds) => decodeSoltarConsumo(await mock.mockReleaseItems(code, itemIds, 'user')),
+  getMesaParticipants: async (code) => decodeParticipantes(await mock.mockMesaParticipants(code, 'user')),
   payMesa: async (code, req, guestToken, expectation, intent) =>
     withPreparedMonetaryRequest(
       `mesa_pay:${code}`,

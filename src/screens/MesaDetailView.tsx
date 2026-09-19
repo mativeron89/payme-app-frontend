@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon';
 import { useToast } from '../components/ui';
 import { InviteFriends } from '../components/InviteFriends';
 import type { MesaDetail, MesaItem } from '../api/types';
+import { filaDeParticipante, type Participante } from '../api/participantes';
 import { countdownTo, formatMXN } from '../utils/format';
 import {
   FRACTIONS,
@@ -42,6 +43,13 @@ import {
  * —es identidad, no presentación—, `pagoSinCuenta.test.ts` fija que la
  * superficie de invitado siga viva EN `MesaScreen.tsx`.
  */
+
+/** AF-25 · n72 · el estado de «quiénes se sumaron», decidido por `MesaScreen`. */
+export type QuienesSeSumaron =
+  | { readonly estado: 'oculto' }
+  | { readonly estado: 'cargando' }
+  | { readonly estado: 'error' }
+  | { readonly estado: 'lista'; readonly lista: readonly Participante[] };
 
 export interface MesaDetailViewProps {
   mesa: MesaDetail;
@@ -91,6 +99,12 @@ export interface MesaDetailViewProps {
   onReleaseItem: (id: string) => void;
   /** AF-25 · el ítem que se está soltando, o `null`: apaga el botón mientras viaja. */
   soltando: string | null;
+  /**
+   * AF-25 · n72 · quiénes se sumaron. `oculto` para quien no organiza y para un
+   * backend anterior (404): la sección no aparece. La red la hace `MesaScreen`.
+   */
+  quienesSeSumaron: QuienesSeSumaron;
+  onReintentarQuienes: () => void;
   onSetFraction: (id: string, bps: number) => void;
   onGoToPay: () => void;
   onRetryFrozenPay: () => void;
@@ -183,6 +197,8 @@ export function MesaDetailView({
   onToggleItem,
   onReleaseItem,
   soltando,
+  quienesSeSumaron,
+  onReintentarQuienes,
   onSetFraction,
   onGoToPay,
   onRetryFrozenPay,
@@ -519,6 +535,50 @@ export function MesaDetailView({
             <b>{t('Ya pagaste')} {mySlotsTaken === 1 ? t('tu parte') : t('{0} partes', mySlotsTaken)} ✓</b>
             {availableSlots > 0 && ' Si tocas pagar de nuevo, cubres la parte de otro comensal.'}
           </div>
+        )}
+        {/* AF-25 · n72 · quiénes se sumaron: nombre, apellido e identificador,
+            SÓLO para el organizador (la decisión la toma `MesaScreen`, que ni
+            pide la lista si no lo sos). Sin foto, sin montos, sin quién eligió
+            ni pagó qué: el dueño no lo manda y el decodificador lo rechazaría. */}
+        {quienesSeSumaron.estado !== 'oculto' && (
+          <section className="quienes" aria-label={t('Quiénes se sumaron')}>
+            <h2 className="sectlabel">{t('Quiénes se sumaron')}</h2>
+            {quienesSeSumaron.estado === 'cargando' ? (
+              <p className="quienes-vacio" aria-busy="true">{t('Cargando quiénes se sumaron…')}</p>
+            ) : quienesSeSumaron.estado === 'error' ? (
+              <div className="quienes-vacio" role="alert">
+                {t('No pudimos cargar quiénes se sumaron.')}{' '}
+                <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={onReintentarQuienes}>
+                  {t('Reintentar')}
+                </button>
+              </div>
+            ) : quienesSeSumaron.lista.length === 0 ? (
+              <p className="quienes-vacio">{t('Todavía no se sumó nadie.')}</p>
+            ) : (
+              <ul className="quienes-lista">
+                {quienesSeSumaron.lista.map((p, idx) => {
+                  const fila = filaDeParticipante(p);
+                  return (
+                    // Sin id estable en el contrato: el orden de llegada es el del dueño.
+                    <li key={idx} className="quien">
+                      {fila.tipo === 'invitado' ? (
+                        <span className="quien-nombre">{t('Invitado')}</span>
+                      ) : fila.tipo === 'eliminada' ? (
+                        <span className="quien-nombre dim">{t('Cuenta eliminada')}</span>
+                      ) : (
+                        <>
+                          <span className="quien-nombre">{fila.nombre ?? fila.paymeId}</span>
+                          {fila.nombre !== null && fila.paymeId !== null && (
+                            <span className="quien-id">{fila.paymeId}</span>
+                          )}
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         )}
         {/* T-F1: el organizador puede invitar amigos in-app también acá —
             la pantalla de compartir post-crear se ve UNA sola vez. */}
