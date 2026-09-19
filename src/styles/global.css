@@ -491,6 +491,38 @@ body {
   opacity: 0.6;
   cursor: default;
 }
+/* AF-36 · los tres botones del organizador en la mesa (decisión de Mati).
+   El turquesa es el oscuro del diseño y del anillo (--teal-txt, #0A7B80): el
+   claro (--teal, #0FB5C9) con texto blanco da 2.4:1 y no llega a AA; el oscuro
+   da 5.1:1 con blanco y como borde/texto sobre blanco. El gris usa --gray-d
+   (7.6:1) y el borde de siempre: no compite ni invita a tocarlo por error. */
+.btn-turquesa {
+  background: var(--teal-txt);
+  color: #fff;
+  border: 1.5px solid var(--teal-txt);
+}
+.btn-borde-turquesa {
+  background: #fff;
+  color: var(--teal-txt);
+  border: 1.5px solid var(--teal-txt);
+}
+.btn-neutro {
+  background: #fff;
+  color: var(--gray-d);
+  border: 1.5px solid var(--gray-b);
+}
+@media (hover: hover) {
+  .btn-turquesa:not(:disabled):hover {
+    background: #086468;
+    border-color: #086468;
+  }
+  .btn-borde-turquesa:not(:disabled):hover {
+    background: var(--teal-l);
+  }
+  .btn-neutro:not(:disabled):hover {
+    background: var(--gray-l);
+  }
+}
 /* Botón que NO ocupa todo el ancho (el .btn base es width:100%): para
    botones inline en filas — chau overrides width/padding repetidos. */
 .btn-fit {

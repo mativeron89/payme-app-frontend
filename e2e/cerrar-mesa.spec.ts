@@ -80,6 +80,39 @@ test.describe('AF-34 · cerrar la mesa', () => {
     await capturar(page, 'cerrar-03-mesa-cerrada-por-el-organizador');
   });
 
+  test('AF-36 · los tres botones llevan color: invitar lleno, copiar con borde, cerrar en gris; todos AA', async ({ page }) => {
+    await mesaSinGarantia(page);
+    await page.evaluate(() => { document.querySelector('.flow-scroll')?.scrollTo(0, 1e6); });
+    const colores = await page.evaluate(() => {
+      const lum = (c: string) => {
+        const [r, g, b] = (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number).map((v) => {
+          const x = v / 255;
+          return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const contraste = (a: string, b: string) => {
+        const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
+        return (x + 0.05) / (y + 0.05);
+      };
+      const de = (nombre: string) => {
+        const b = [...document.querySelectorAll('.mesa-secondary-actions button')]
+          .find((e) => e.textContent?.includes(nombre)) as HTMLElement;
+        const cs = getComputedStyle(b);
+        return { fondo: cs.backgroundColor, texto: cs.color, borde: cs.borderTopColor, contraste: contraste(cs.color, cs.backgroundColor) };
+      };
+      return { invitar: de('Invitar amigos de PayMe'), copiar: de('Copiar link de invitación'), cerrar: de('Cerrar mesa') };
+    });
+    // Turquesa lleno con texto blanco (el turquesa oscuro del diseño: el claro no llega a AA con blanco).
+    expect(colores.invitar).toMatchObject({ fondo: 'rgb(10, 123, 128)', texto: 'rgb(255, 255, 255)' });
+    // Borde y texto turquesa sobre blanco.
+    expect(colores.copiar).toMatchObject({ fondo: 'rgb(255, 255, 255)', texto: 'rgb(10, 123, 128)', borde: 'rgb(10, 123, 128)' });
+    // Gris: ni turquesa ni lleno, para que no compita.
+    expect(colores.cerrar).toMatchObject({ fondo: 'rgb(255, 255, 255)', texto: 'rgb(71, 85, 105)', borde: 'rgb(203, 213, 225)' });
+    for (const [nombre, c] of Object.entries(colores)) expect(c.contraste, nombre).toBeGreaterThanOrEqual(4.5);
+    await capturar(page, 'botones-01-mesa-con-los-tres');
+  });
+
   test('🔴 un doble toque en «Sí, cerrar» manda UN pedido', async ({ page }) => {
     await mesaSinGarantia(page);
     await tocarCerrar(page);

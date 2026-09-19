@@ -696,13 +696,15 @@ export function MesaDetailView({
             la pantalla de compartir post-crear se ve UNA sola vez. */}
         {!isGuest && mesa.my_role === 'opener' && (mesa.status === 'open' || mesa.status === 'partially_paid') && (
           <div className="mesa-secondary-actions">
-            <button className="btn btn-ghost btn-sm btn-fit" onClick={onCopyInvitationLink}>
+            {/* AF-36 · colores elegidos por Mati: invitar en turquesa lleno, copiar
+                con borde turquesa y cerrar en gris, para que no compita. */}
+            <button className="btn btn-borde-turquesa btn-sm btn-fit" onClick={onCopyInvitationLink}>
               <Icon name="link" size={16} className="ico-inline" /> {t('Copiar link de invitación')}
             </button>
             {inviteOpen ? (
               <InviteFriends code={code} />
             ) : (
-              <button className="btn btn-ghost btn-sm btn-fit" onClick={onOpenInvite}>
+              <button className="btn btn-turquesa btn-sm btn-fit" onClick={onOpenInvite}>
                 <Icon name="users" size={16} className="ico-inline" /> {t('Invitar amigos de PayMe')}
               </button>
             )}
@@ -712,7 +714,7 @@ export function MesaDetailView({
             {onCerrarMesa && sePuedeCerrar(mesa) && (
               <button
                 type="button"
-                className="btn btn-ghost btn-sm btn-fit mesa-cerrar"
+                className="btn btn-neutro btn-sm btn-fit mesa-cerrar"
                 onClick={() => setConfirmandoCerrarMesa(true)}
                 disabled={cerrando}
               >

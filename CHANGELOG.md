@@ -43,6 +43,21 @@ tener algún color».
   confirmado, el backend anterior, el centrado y el alto, la hoja con el mes).
   Mutantes: 7, todos mueren.
 
+### Ítem 2 · los tres botones del organizador en la mesa
+
+- Elegido por Mati: **«Invitar amigos de PayMe» turquesa lleno** con texto blanco;
+  **«Copiar link de invitación» con borde y texto turquesa**; **«Cerrar mesa» gris**
+  (borde y texto neutros), para que no compita ni se toque por error. Sin cambiar
+  textos, orden ni conducta.
+- 🔴 **El turquesa es el oscuro del diseño y del anillo (`--teal-txt`, `#0A7B80`),
+  no el claro (`--teal`, `#0FB5C9`):** el claro con texto blanco da 2.4:1 y no llega
+  a AA. El oscuro da 5.1:1 con blanco y también como borde y texto sobre blanco
+  (declarado). El gris es `--gray-d` (7.6:1) con el borde `--gray-b` de siempre.
+- Hover sólo en dispositivos con puntero; activo y deshabilitado, los de `.btn`.
+- **Tests:** un e2e mide fondo, texto y borde de los tres y su contraste (≥ 4.5).
+  Mutantes: 4 (cada botón sin su color, cerrar en turquesa, el turquesa claro), todos
+  mueren.
+
 ## 0.177.0 — «Cerrar mesa» para el organizador y el aviso de mesa vencida (2026-09-19)
 
 Orden `APP-MESA-CLOSE-AND-EXPIRY-NOTICE-AF-34-20260919`, base `d683137` (AF-32, sin publicar:
