@@ -2661,7 +2661,46 @@ export async function mockAttachPaymentMethod(
 
 export async function mockNotifications(): Promise<NotificationsResponse> {
   const unread = state.notifications.filter((n) => !n.read_at).length;
-  return delay({ notifications: [...state.notifications], unread_count: unread, limit: 20, offset: 0 });
+  return delay({ notifications: [...avisosDeMesaVencidaMock(), ...state.notifications], unread_count: unread, limit: 20, offset: 0 });
+}
+
+/**
+ * AF-34 · v2.112.0 · el aviso `mesa_expired`, con la forma del dueño. El mock no
+ * lo emite solo (el estado no guarda quién eligió en cada mesa cerrada): la
+ * costura `payme.app.mock.avisos.v1 = mesa_vencida` suma dos al principio. Uno
+ * apunta a PA-1099, una mesa del seed ya cerrada; el otro no trae código y tiene
+ * un `closure_reason` desconocido, para ver que no rompe ni navega.
+ */
+function avisosDeMesaVencidaMock(): NotificationsResponse['notifications'] {
+  const costura = (() => {
+    try { return localStorage.getItem('payme.app.mock.avisos.v1'); } catch { return null; }
+  })();
+  if (costura !== 'mesa_vencida') return [];
+  const mesa = findMesa('PA-1099');
+  return [
+    {
+      id: 'aviso-mesa-vencida-1',
+      type: 'mesa_expired',
+      title: 'Mesa expirada',
+      body: 'La mesa PA-1099 en La Parolaccia se cerró por tiempo. Lo que elegiste quedó como tu consumo.',
+      payload: { mesa_code: 'PA-1099', closure_reason: 'time' },
+      related_entity_type: 'mesa',
+      related_entity_id: mesa?.id ?? null,
+      read_at: null,
+      created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
+    },
+    {
+      id: 'aviso-mesa-vencida-2',
+      type: 'mesa_expired',
+      title: 'Mesa expirada',
+      body: 'Una mesa en la que elegiste se cerró.',
+      payload: { closure_reason: 'algo_nuevo' },
+      related_entity_type: 'mesa',
+      related_entity_id: null,
+      read_at: '2026-09-18T10:00:00.000Z',
+      created_at: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    },
+  ];
 }
 
 export async function mockUnreadCount(): Promise<{ unread_count: number }> {

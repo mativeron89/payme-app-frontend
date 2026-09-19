@@ -235,3 +235,19 @@ export function estadoDeTuMesa(m: {
   if (m.status === 'cancelled' || m.status === 'auth_failed') return 'cancelada';
   return 'cerrada';
 }
+
+// ─── AF-34 · n98 · el aviso `mesa_expired` ─────────────────────────────────
+
+/**
+ * ¿A qué mesa lleva un aviso? Sólo `mesa_expired` con un `payload.mesa_code`
+ * de texto (dueño v2.112.0); para cualquier otro tipo, o sin código, `null` y
+ * el aviso no navega. No mira `closure_reason`: el texto lo escribe el dueño en
+ * `body`, así que un motivo nuevo nunca rompe la fila.
+ */
+export function mesaDelAviso(n: { readonly type: string; readonly payload: Record<string, unknown> | null }): string | null {
+  if (n.type !== 'mesa_expired') return null;
+  const code = n.payload?.mesa_code;
+  if (typeof code !== 'string') return null;
+  const limpio = code.trim();
+  return limpio.length > 0 && limpio.length <= 32 ? limpio : null;
+}

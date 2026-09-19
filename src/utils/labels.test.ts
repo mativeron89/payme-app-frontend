@@ -6,6 +6,7 @@ import {
   pagadoPropioCentavos,
   personasEnMesa,
   tuMesaEnCurso,
+  mesaDelAviso,
 } from './labels';
 
 /**
@@ -110,5 +111,23 @@ describe('AF-24 · «Tus mesas»', () => {
     expect(estadoDeTuMesa({ status: 'expired', guaranteeMode: true, closureReason: null })).toBe('vencio');
     expect(estadoDeTuMesa({ status: 'cancelled', guaranteeMode: true, closureReason: null })).toBe('cancelada');
     expect(estadoDeTuMesa({ status: 'raro', guaranteeMode: null, closureReason: null })).toBe('cerrada');
+  });
+});
+
+describe('AF-34 · mesaDelAviso · a qué mesa lleva el aviso', () => {
+  it('mesa_expired con código: esa mesa', () => {
+    expect(mesaDelAviso({ type: 'mesa_expired', payload: { mesa_code: 'PA-1099', closure_reason: 'time' } })).toBe('PA-1099');
+  });
+
+  it('sin código, código raro u otro tipo: no navega', () => {
+    expect(mesaDelAviso({ type: 'mesa_expired', payload: { closure_reason: 'time' } })).toBeNull();
+    expect(mesaDelAviso({ type: 'mesa_expired', payload: null })).toBeNull();
+    expect(mesaDelAviso({ type: 'mesa_expired', payload: { mesa_code: 42 } })).toBeNull();
+    expect(mesaDelAviso({ type: 'mesa_expired', payload: { mesa_code: '   ' } })).toBeNull();
+    expect(mesaDelAviso({ type: 'payment_failed', payload: { mesa_code: 'PA-1099' } })).toBeNull();
+  });
+
+  it('🔴 un closure_reason desconocido no cambia nada: el texto es el body del dueño', () => {
+    expect(mesaDelAviso({ type: 'mesa_expired', payload: { mesa_code: 'PA-1', closure_reason: 'algo_nuevo' } })).toBe('PA-1');
   });
 });

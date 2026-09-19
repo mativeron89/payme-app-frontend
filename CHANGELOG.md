@@ -11,6 +11,33 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.177.0 — «Cerrar mesa» para el organizador y el aviso de mesa vencida (2026-09-19)
+
+Orden `APP-MESA-CLOSE-AND-EXPIRY-NOTICE-AF-34-20260919`, base `d683137` (AF-32, sin publicar:
+se apila). **Sin push, sin deploy, sin GREEN.** Roadmap n98. Decisión de Mati
+(`b7dbbe5c…`): avisar al organizador y a quienes eligieron algo; el organizador puede
+cerrar «Sí, con confirmación»; y no hay reapertura. Sólo mesa sin garantía, con los
+pagos apagados.
+
+- **Espejo, en un commit propio (`06baebd`):** dueño v2.114.0, inventario en `82f5082`
+  y contenido en `ade827a`, local y sin publicar. El remoto del dueño está en `3dbaa64`
+  (v2.108.0). Cambia sólo `routes/mesas.js`; los tres gates verdes. El aviso lo emite
+  un servicio que está fuera de la población del espejo.
+
+### Ítem 1 · el aviso `mesa_expired` en Avisos (v2.112.0)
+
+- **Medido antes:** un tipo desconocido ya se mostraba con su `body` y la campana,
+  sin navegar. `mesa_expired` no rompía; le faltaban el ícono y el destino.
+- **Ícono propio** (`clock`). **El texto es el `body` del dueño tal cual**, como
+  todos los demás avisos: no se traduce por `closure_reason` (declarado). Así un
+  motivo nuevo no puede romper la fila.
+- **Tocarlo lleva a esa mesa** (`#/mesa/:code`, que muestra su cierre), si trae
+  `payload.mesa_code`. Sin código, la fila queda quieta, no es botón.
+  `mesaDelAviso()` en `utils/labels.ts` decide el destino.
+- **Mock:** la costura `payme.app.mock.avisos.v1 = mesa_vencida` suma uno a PA-1099
+  y otro sin código y con un motivo desconocido.
+- **Tests:** unitarios (3) y e2e (2, con captura). Mutantes: 4, todos mueren.
+
 ## 0.176.0 — Aviso 2.5.3, la foto en «Quiénes se sumaron» y «por momento del día» (2026-09-19)
 
 Orden `APP-ROSTER-PHOTO-2-5-3-AND-DAYPARTS-AF-32-20260919`, base `f587e36` (= `origin/main`,

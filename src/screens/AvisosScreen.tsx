@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import type { AppNotification } from '../api/types';
@@ -17,7 +17,7 @@ import {
 } from './invitacionAdmision';
 import { goBack, navigate } from '../router';
 import { relTime } from '../utils/format';
-import { iconoDeCategoriaRestaurante } from '../utils/labels';
+import { iconoDeCategoriaRestaurante, mesaDelAviso } from '../utils/labels';
 import { useShortfallDetailCapability } from '../api/privateFeatures';
 import { readShortfallNotificationDisclosure } from '../api/shortfallDetail';
 import { ShortfallDisclosure } from '../components/ShortfallDisclosure';
@@ -90,7 +90,20 @@ const NOTIF_ICON: Record<string, IconName> = {
   mesa_shortfall_charged: 'lock',
   mesa_garantia_impagos: 'warning',
   payment_failed: 'x-circle',
+  // AF-34 · v2.112.0 · la mesa sin garantía se cerró (por tiempo, por selección
+  // completa o por el organizador). Sin ícono propio caía en la campana.
+  mesa_expired: 'clock',
 };
+
+/** La fila principal de un aviso: un botón si lleva a una mesa, un div si no. */
+function AvisoPrincipal({ destino, children }: { destino: string | null; children: ReactNode }) {
+  if (destino === null) return <div className="aviso-row-main">{children}</div>;
+  return (
+    <button type="button" className="aviso-row-main aviso-row-link" onClick={() => navigate('mesa', destino)}>
+      {children}
+    </button>
+  );
+}
 
 export function AvisosScreen() {
   const { t } = useIdioma();
@@ -245,7 +258,10 @@ export function AvisosScreen() {
                 key={n.id}
                 className={`card card-p aviso-row${n.type === 'mesa_shortfall_charged' || n.type === 'mesa_garantia_impagos' ? ' aviso-row--guarantee' : ''}`}
               >
-                <div className="aviso-row-main">
+                {/* AF-34 · `mesa_expired` con código: tocarlo lleva a esa mesa, que
+                    muestra su cierre. Sin código, la fila queda quieta. El texto
+                    es el `body` del dueño tal cual, como el resto de los avisos. */}
+                <AvisoPrincipal destino={mesaDelAviso(n)}>
                   <span
                     className={`aviso-dot ${sinLeer ? '' : 'off'}`}
                     aria-hidden={sinLeer ? undefined : 'true'}
@@ -261,7 +277,7 @@ export function AvisosScreen() {
                     </div>
                     <div className="aviso-time">{relTime(n.created_at, undefined, t)}</div>
                   </div>
-                </div>
+                </AvisoPrincipal>
                 {shortfallCapability.enabled && session && shortfallDisclosure && (
                   <ShortfallDisclosure session={session} disclosure={shortfallDisclosure} />
                 )}

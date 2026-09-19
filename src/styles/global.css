@@ -3508,6 +3508,19 @@ body {
   gap: var(--sp-3);
 }
 
+/* AF-34 · el aviso `mesa_expired` con código es un botón que lleva a la mesa:
+   se ve igual que la fila quieta, sin el estilo de botón del navegador. */
+.aviso-row-link {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .aviso-row--guarantee {
   border-color: rgba(180, 70, 47, 0.24);
   background: #fbe7e3;
