@@ -366,6 +366,8 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles y conserva el av
       quienesSeSumaron: { estado: 'oculto' },
       onReintentarQuienes: () => undefined,
       fotoDe: () => null,
+      onCerrarMesa: null,
+      cerrando: false,
       onSetFraction: () => undefined,
       onGoToPay: () => undefined,
       onRetryFrozenPay: () => undefined,

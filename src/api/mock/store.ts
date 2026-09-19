@@ -124,7 +124,7 @@ export interface MockMesa {
   /** C3 · `false` sólo en la mesa sin garantía. */
   guarantee_mode?: boolean;
   /** C3 · el discriminador del cierre sin cobros; `null` = cierre monetario. */
-  closure_reason?: 'all_items_selected' | 'time' | null;
+  closure_reason?: 'all_items_selected' | 'time' | 'closed_by_organizer' | null;
   /** G-38 · sólo UUID interno de una guardada; nunca `pm_`. */
   guarantee_saved_payment_method_id?: string | null;
   /**

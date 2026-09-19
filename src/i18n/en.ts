@@ -912,4 +912,17 @@ export const EN: Record<string, string> = {
   "Por momento del día": "By time of day",
   "Visitas por momento del día: {0}": "Visits by time of day: {0}",
   "Cada visita incluye la propina.": "Each visit includes the tip.",
+  // AF-34 · n98 · cerrar la mesa y su motivo.
+  "Cerrar mesa": "Close table",
+  "¿Cerrar la mesa?": "Close the table?",
+  "La mesa se cierra para todos.": "The table closes for everyone.",
+  "Lo que cada quien eligió queda como su consumo.": "What each person chose stays as their consumption.",
+  "No se puede reabrir: para seguir, abre una mesa nueva.": "It can't be reopened: to continue, open a new table.",
+  "La mesa ya estaba cerrada.": "The table was already closed.",
+  "Cerrar la mesa todavía no está disponible.": "Closing the table isn't available yet.",
+  "No pudimos cerrar la mesa. Intenta de nuevo.": "We couldn't close the table. Try again.",
+  "Venció el tiempo de la mesa.": "The table's time ran out.",
+  "Se eligieron todos los consumos.": "Every item was chosen.",
+  "La cerraste tú.": "You closed it.",
+  "La cerró quien la organizó.": "The organizer closed it.",
 };

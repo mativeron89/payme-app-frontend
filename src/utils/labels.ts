@@ -227,7 +227,7 @@ export type EstadoTuMesa = 'sin_cobro' | 'pagada' | 'vencio' | 'cancelada' | 'ce
 export function estadoDeTuMesa(m: {
   readonly status: string;
   readonly guaranteeMode: boolean | null;
-  readonly closureReason: 'all_items_selected' | 'time' | null;
+  readonly closureReason: 'all_items_selected' | 'time' | 'closed_by_organizer' | null;
 }): EstadoTuMesa {
   if (m.guaranteeMode === false && m.closureReason !== null) return 'sin_cobro';
   if (['fully_paid', 'completed', 'settled', 'settling', 'dispersing', 'dispersed'].includes(m.status)) return 'pagada';

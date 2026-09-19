@@ -2,6 +2,7 @@ import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, use
 import { useIdioma } from '../i18n/idioma';
 import { api, IS_MOCK, newIdempotencyKey } from '../api';
 import { FotosDeParticipantes } from '../api/fotosDeParticipantes';
+import { resultadoDeCerrar } from '../api/cerrarMesa';
 import { useWalletRail } from '../api/walletRail';
 import { corteDePagosView } from '../api/releaseGates';
 import { useNativeWallets } from '../api/nativeWallets';
@@ -107,11 +108,31 @@ type View = 'detail' | 'pay' | 'confirm';
  * ⚠️ Y tampoco se deduce de `paid_amount_cents === 0`: eso taparía también una
  * mesa con garantía real donde nadie pagó, que es un caso distinto y verdadero.
  */
-const CIERRES_SIN_COBROS: readonly string[] = ['all_items_selected', 'time'];
+// AF-34 · `closed_by_organizer` (dueño v2.114.0) entra al conjunto: el cierre del
+// organizador tampoco cobra nada. Sin él, esta pantalla afirmaría «Tu garantía
+// cubrió $X» sobre una mesa que nunca tuvo garantía.
+const CIERRES_SIN_COBROS: readonly string[] = ['all_items_selected', 'time', 'closed_by_organizer'];
 
 export function cerroSinCobros(mesa: Pick<MesaDetail, 'closure_reason'>): boolean {
   return typeof mesa.closure_reason === 'string'
     && CIERRES_SIN_COBROS.includes(mesa.closure_reason);
+}
+
+/**
+ * AF-34 · por qué cerró una mesa sin cobros, en una línea. Se rotulan los tres
+ * motivos del mismo modo; cualquier otro valor no dibuja nada.
+ */
+export function motivoDelCierre(
+  closureReason: string | null | undefined,
+  esOrganizador: boolean,
+  t: (s: string) => string,
+): string | null {
+  if (closureReason === 'time') return t('Venció el tiempo de la mesa.');
+  if (closureReason === 'all_items_selected') return t('Se eligieron todos los consumos.');
+  if (closureReason === 'closed_by_organizer') {
+    return esOrganizador ? t('La cerraste tú.') : t('La cerró quien la organizó.');
+  }
+  return null;
 }
 
 /**
@@ -343,6 +364,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * cada toque con un «intenta de nuevo» que no es cierto.
    */
   const [soltarNoDisponible, setSoltarNoDisponible] = useState(false);
+  const [cerrando, setCerrando] = useState(false);
+  const cerrandoRef = useRef(false);
+  const [cerrarRetirado, setCerrarRetirado] = useState(false);
   const [lockTokens, setLockTokens] = useState<string[]>([]);
   /**
    * §1.5 bis · 🔴 LA PROPINA NACE SIN ELEGIR.
@@ -721,6 +745,35 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       soltandoRef.current = false;
       setSoltando(null);
       reload();
+    }
+  }
+
+  /**
+   * AF-34 · «Cerrar mesa». Un solo envío en vuelo (ref, no estado: dos toques en
+   * el mismo frame ven el mismo estado). El resultado lo decide `resultadoDeCerrar`.
+   */
+  async function cerrarMesa(): Promise<void> {
+    if (!mesa || cerrandoRef.current) return;
+    cerrandoRef.current = true;
+    setCerrando(true);
+    try {
+      await api.closeMesa(code);
+      reload();
+    } catch (err) {
+      const { status, code: ec } = extractApiError(err);
+      const r = resultadoDeCerrar(status, ec);
+      if (r.accion === 'recargar') {
+        toast(t('La mesa ya estaba cerrada.'));
+        reload();
+      } else if (r.accion === 'retirar') {
+        setCerrarRetirado(true);
+        if (r.aviso === 'no_disponible') toast(t('Cerrar la mesa todavía no está disponible.'));
+      } else {
+        toast(t('No pudimos cerrar la mesa. Intenta de nuevo.'));
+      }
+    } finally {
+      cerrandoRef.current = false;
+      setCerrando(false);
     }
   }
 
@@ -1639,7 +1692,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
 
   // ─── Mesa cerrada (A-2) ──────────────────────────────────
   if (!payable && view === 'detail') {
-    const closure = mesaClosureView(mesa.status);
+    // AF-34 · el dueño cierra la mesa sin cobros con `status:'expired'` en los
+    // tres motivos; el mock usa `completed` para el de tiempo. Sin este atajo, la
+    // mesa cerrada por el organizador caía en «Mesa vencida» con el backend real.
+    const closure = cerroSinCobros(mesa) && mesa.status === 'expired'
+      ? { title: '', detail: '', completed: true }
+      : mesaClosureView(mesa.status);
     // Solo `completed` acredita cierre/dispersión. fully_paid y settled son
     // avances reales, pero no prueban qué recibió el restaurante.
     if (!closure.completed) {
@@ -1681,6 +1739,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <div className="body-text" style={{ marginTop: 6 }}>
               {mesa.restaurant.name} {t('· Mesa')} {code}
             </div>
+            {sinCobros && motivoDelCierre(mesa.closure_reason, isOpener, t) && (
+              <div className="body-text cierre-motivo" style={{ marginTop: 4 }}>
+                {motivoDelCierre(mesa.closure_reason, isOpener, t)}
+              </div>
+            )}
           </div>
           <div className="card card-p" style={{ marginBottom: 14 }}>
             <div className="receipt-row">
@@ -1701,12 +1764,16 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 </span>
               </div>
             )}
-            <div className="receipt-row">
-              <span className="lbl" style={{ fontWeight: 700, color: 'var(--navy)' }}>
-                {t('Recibió el restaurante')}
-              </span>
-              <span className="val hl">{formatMXN(mesa.total_cents)}</span>
-            </div>
+            {/* AF-34 · sin cobros nada pasó por PayMe: afirmar que el restaurante
+                recibió el total sería otro movimiento de dinero inexistente. */}
+            {!sinCobros && (
+              <div className="receipt-row">
+                <span className="lbl" style={{ fontWeight: 700, color: 'var(--navy)' }}>
+                  {t('Recibió el restaurante')}
+                </span>
+                <span className="val hl">{formatMXN(mesa.total_cents)}</span>
+              </div>
+            )}
           </div>
           {/* La segunda afirmación de garantía, y por eso lleva el MISMO gate:
               una mesa sin cobros no capturó nada y nadie quedó debiendo por una
@@ -2424,6 +2491,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       onReleaseItem={releaseItem}
       soltando={soltando}
       soltarDisponible={!soltarNoDisponible}
+      onCerrarMesa={cerrarRetirado ? null : cerrarMesa}
+      cerrando={cerrando}
       quienesSeSumaron={quienes}
       fotoDe={(participantId) => fotosRef.current?.url(participantId) ?? null}
       onReintentarQuienes={cargarQuienes}

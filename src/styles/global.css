@@ -2580,6 +2580,17 @@ body {
   padding-bottom: 84px;
 }
 
+/* 🔴 AF-34 (2026-09-19) · el comentario de arriba habla de 140px, pero la regla
+   quedó en 84px desde `90ae05c` («unificar chrome»), que achicó la barra: 84
+   alcanza para la barra SOLA. Con su fila `above` la barra mide 113px (medido
+   en Mesa, 390×844), así que la última fila quedaba 30px debajo aunque se
+   bajara todo: «Invitar amigos de PayMe» ya estaba tapado y «Cerrar mesa» lo
+   heredaba. Este modificador lo corrige SÓLO en Mis ítems, que siempre lleva
+   la fila. `CreateMesaFlow` la lleva a veces y queda declarado aparte. */
+.has-appbar .scroll.con-fila-sobre-barra {
+  padding-bottom: 132px;
+}
+
 /* §1.9 · paso 3 · el gemelo de `.has-nav .action-bar`, y existe por la misma
    razón: el `.action-bar` NO es fijo, la barra SÍ, así que sin este aire la
    barra se le monta encima al CTA. Es literalmente el bug que reportó el
@@ -4275,6 +4286,24 @@ body {
   gap: 12px;
   padding: var(--sp-2) 0;
   border-bottom: 1px solid var(--border);
+}
+
+/* AF-34 · la hoja de «¿Cerrar la mesa?»: lo que pasa, en tres renglones, y
+   las dos acciones a lo ancho. */
+.cerrar-mesa-lista {
+  margin: 0 0 var(--sp-4);
+  padding-left: 18px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.cerrar-mesa-acciones {
+  display: flex;
+  gap: 10px;
+}
+
+.cerrar-mesa-acciones .btn {
+  flex: 1;
 }
 
 /* AF-32 · la foto usa el mismo círculo que `.avatar` (42px); el hueco de

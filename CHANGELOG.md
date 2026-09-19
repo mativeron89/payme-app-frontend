@@ -38,6 +38,50 @@ pagos apagados.
   y otro sin código y con un motivo desconocido.
 - **Tests:** unitarios (3) y e2e (2, con captura). Mutantes: 4, todos mueren.
 
+### Ítem 2 · «Cerrar mesa» para el organizador (v2.113.0, `POST /api/mesas/:code/close`)
+
+- **Cuándo se ofrece:** sólo a quien organiza, en una mesa sin garantía y en estado
+  `open` (`sePuedeCerrar`). **Sólo `open`**: el dueño responde `409 mesa_not_active`
+  a cualquier otro estado (`routes/mesas.js:1715`), también a `partially_paid`, y el
+  front diría «ya estaba cerrada» de una mesa que no lo estaba.
+- **Confirmación antes de cerrar:** una hoja (`.sheet-overlay` por portal; no se usó
+  la hoja de D-R20, que sigue sin CSS) dice que la mesa se cierra para todos, que lo
+  elegido queda como consumo de cada quien y que no se puede reabrir. «Volver» y la ✕
+  no mandan nada.
+- **Un solo envío:** ref en vuelo más el botón deshabilitado mientras cierra; la hoja
+  queda abierta hasta la respuesta, así un segundo toque no cae en otra cosa.
+- **Respuestas (`resultadoDeCerrar`):** 200 → recarga; 403 → se retira el botón;
+  `409 mesa_not_active` → «La mesa ya estaba cerrada.» y recarga; `409
+  close_not_applicable` o 404 (backend anterior) → «Cerrar la mesa todavía no está
+  disponible.» y se retira; cualquier otra → texto neutro y el botón sigue. La
+  respuesta 200 se decodifica con claves exactas (`mesa_status:'expired'`,
+  `closure_reason:'closed_by_organizer'`).
+- **El motivo del cierre, rotulado como los otros dos:** «Venció el tiempo de la
+  mesa.», «Se eligieron todos los consumos.», «La cerraste tú.» / «La cerró quien la
+  organizó.» (`motivoDelCierre`). `closed_by_organizer` entra al conjunto de cierres
+  sin cobros y a los tipos/decodificadores que lo nombran.
+- 🔴 **Dos defectos que el mock tapaba, corregidos (declarados):**
+  - el dueño cierra la mesa sin cobros con `status:'expired'` en los tres motivos, y
+    el mock usa `completed` para el de tiempo. Con el backend real la mesa caía en
+    «Mesa vencida»; ahora un cierre sin cobros `expired` muestra su cierre.
+  - la pantalla de cierre afirmaba **«Recibió el restaurante $X»** en una mesa sin
+    cobros: nada pasó por PayMe. Esa fila lleva ahora el mismo gate que la garantía,
+    y `mesa-sin-garantia.spec` suma su ausencia y su control positivo con garantía.
+- **La última fila quedaba bajo la barra inferior:** el relleno de 84 px (de
+  `90ae05c`) no alcanza para la barra con su franja superior (113 px); «Invitar
+  amigos» ya quedaba 30 px tapado. La vista de la mesa usa 132 px
+  (`.con-fila-sobre-barra`). `CreateMesaFlow` usa la misma franja y no se tocó
+  (declarado).
+- **Mock:** `mockCloseMesa` replica las respuestas del dueño; la costura
+  `payme.app.mock.cerrar.v1` = `antiguo` (404) | `error` (500).
+- **Guardas tocadas:** `corteGuard.test.ts` (props nuevas) y `mesa-sin-garantia.spec.ts`
+  (la ausencia de «Recibió el restaurante» y su contraste).
+- **Tests:** unitarios (6) y e2e (8, con tres capturas). Mutantes: 11 y un combinado; mueren todos menos uno. El
+  que sobrevive quita el rol sólo de `sePuedeCerrar`: es equivalente en pantalla,
+  porque el botón vive dentro del bloque del organizador; lo mata el unitario, y el
+  combinado (rol fuera de la función y del bloque) muere en el e2e que mira la misma
+  mesa desde quien no organiza.
+
 ## 0.176.0 — Aviso 2.5.3, la foto en «Quiénes se sumaron» y «por momento del día» (2026-09-19)
 
 Orden `APP-ROSTER-PHOTO-2-5-3-AND-DAYPARTS-AF-32-20260919`, base `f587e36` (= `origin/main`,

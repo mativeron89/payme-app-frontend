@@ -115,6 +115,8 @@ test.describe('C3 · la mesa cerrada no afirma una garantía que no existió', (
     await expect(page.getByText('Cubrió la garantía')).toHaveCount(0);
     await expect(page.getByText(/Tu garantía cubrió/)).toHaveCount(0);
     await expect(page.getByText('Se cerró por tiempo')).toHaveCount(0);
+    // AF-34 · sin cobros, PayMe no le entregó nada al restaurante.
+    await expect(page.getByText('Recibió el restaurante')).toHaveCount(0);
   });
 
   test('CON garantía: la misma pantalla SÍ la afirma — el contraste que da sentido a la ausencia', async ({ page }) => {
@@ -131,5 +133,7 @@ test.describe('C3 · la mesa cerrada no afirma una garantía que no existió', (
     await expect(page.getByText('Cubrió tu garantía')).toBeVisible();
     await expect(page.getByText(/Tu garantía cubrió/)).toBeVisible();
     await expect(page.getByText('Esta mesa cerró sin cobros')).toHaveCount(0);
+    // AF-34 · control positivo del gate nuevo: con garantía, la fila sigue.
+    await expect(page.getByText('Recibió el restaurante')).toBeVisible();
   });
 });

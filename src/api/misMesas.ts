@@ -21,7 +21,8 @@ export interface TuMesa {
   readonly status: string;
   readonly divisionMode: 'consumo' | 'igual' | null;
   readonly guaranteeMode: boolean | null;
-  readonly closureReason: 'all_items_selected' | 'time' | null;
+  /** AF-34 · desde v2.113.0 también `closed_by_organizer`. Otro valor ⇒ `null`. */
+  readonly closureReason: 'all_items_selected' | 'time' | 'closed_by_organizer' | null;
   readonly createdAt: string | null;
   /** `null` si el dueño no mandó un conteo/monto válido: la fila no lo muestra. */
   readonly itemsCount: number | null;
@@ -63,6 +64,7 @@ function fila(raw: unknown): TuMesa | null {
     divisionMode: raw.division_mode === 'consumo' || raw.division_mode === 'igual' ? raw.division_mode : null,
     guaranteeMode: typeof raw.guarantee_mode === 'boolean' ? raw.guarantee_mode : null,
     closureReason: raw.closure_reason === 'all_items_selected' || raw.closure_reason === 'time'
+      || raw.closure_reason === 'closed_by_organizer'
       ? raw.closure_reason
       : null,
     createdAt: texto(raw.created_at),

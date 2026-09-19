@@ -33,6 +33,7 @@ import {
 } from './contractResponses';
 import { decodeMisMesas, type PaginaMisMesas } from './misMesas';
 import { decodeSoltarConsumo, type ConsumoSoltado } from './soltarConsumo';
+import { decodeMesaCerrada, type MesaCerrada } from './cerrarMesa';
 import { decodeParticipantes, type Participante } from './participantes';
 import { decodeTusRestaurantes, type TusRestaurantes } from './tusRestaurantes';
 import { rutaConPeriodo, type ClavePeriodo } from './periodoEstadisticas';
@@ -296,6 +297,8 @@ export interface Api {
   lockItems(code: string, items: FractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
   /** AF-25 · n80 · suelta lo propio no pagado; `[]` si no había nada que soltar. */
   releaseItems(code: string, itemIds: readonly string[]): Promise<readonly ConsumoSoltado[]>;
+  /** AF-34 · n98 · el organizador cierra la mesa sin garantía. La confirmación la pide la pantalla. */
+  closeMesa(code: string): Promise<MesaCerrada>;
   /**
    * AF-25 · n72 · quiénes se sumaron. SÓLO el organizador: a un no-organizador
    * la pantalla ni lo pide (403 `not_mesa_organizer`).
@@ -654,6 +657,8 @@ const realApi: Api = {
       `/mesas/${encodeURIComponent(code)}/participants/${encodeURIComponent(participantId)}/avatar`,
       expectedSession,
     ),
+  closeMesa: async (code) =>
+    decodeMesaCerrada(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/close`)),
   releaseItems: async (code, itemIds) =>
     decodeSoltarConsumo(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/items/release`, {
       item_ids: [...itemIds],
@@ -927,6 +932,7 @@ const mockApi: Api = {
   },
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
   releaseItems: async (code, itemIds) => decodeSoltarConsumo(await mock.mockReleaseItems(code, itemIds, 'user')),
+  closeMesa: async (code) => decodeMesaCerrada(await mock.mockCloseMesa(code, 'user')),
   getMesaParticipants: async (code) => decodeParticipantes(await mock.mockMesaParticipants(code, 'user')),
   getParticipantAvatar: (code, participantId) => mock.mockParticipantAvatar(code, participantId, 'user'),
   payMesa: async (code, req, guestToken, expectation, intent) =>

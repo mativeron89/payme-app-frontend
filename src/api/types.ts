@@ -648,9 +648,9 @@ export interface MesaDetail {
    * C3 · **el discriminador**: por qué cerró una mesa sin cobros.
    *
    * `'all_items_selected'` (se seleccionaron todos los consumos) o `'time'` (las
-   * cinco horas). Ausente o `null` ⇒ cierre monetario de siempre. Conjunto
-   * cerrado declarado en `CHANGELOG_v2.85.0.md` del dueño: cualquier otro valor
-   * se trata como cierre monetario.
+   * cinco horas), y desde v2.113.0 `'closed_by_organizer'` (AF-34, n98). Ausente
+   * o `null` ⇒ cierre monetario de siempre. Conjunto cerrado declarado por el
+   * dueño: cualquier otro valor se trata como cierre monetario.
    */
   closure_reason?: string | null;
   items: MesaItem[];

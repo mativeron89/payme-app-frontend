@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderFlow } from '../components/AppHeader';
@@ -112,6 +113,12 @@ export interface MesaDetailViewProps {
    * libera `MesaScreen`; acá sólo se dibuja.
    */
   fotoDe: (participantId: string | null) => string | null;
+  /**
+   * AF-34 · n98 · cerrar la mesa. `null` ⇒ el botón no está (retirado tras un
+   * 403, un 409 `close_not_applicable` o un 404). La red la hace `MesaScreen`.
+   */
+  onCerrarMesa: (() => Promise<void>) | null;
+  cerrando: boolean;
   onSetFraction: (id: string, bps: number) => void;
   onGoToPay: () => void;
   onRetryFrozenPay: () => void;
@@ -209,6 +216,59 @@ export function etiquetaDeLoMio(item: MesaItem, t: (s: string, ...a: unknown[]) 
   return item.my_bps >= 10000 ? t('Lo elegiste') : t('Elegiste {0}', bpsLabel(item.my_bps));
 }
 
+/**
+ * AF-34 · ¿se ofrece «Cerrar mesa»? Organizador, mesa SIN garantía y `open`.
+ * Con pagos encendidos el dueño responde 409 `close_not_applicable` y el botón
+ * se retira.
+ */
+export function sePuedeCerrar(mesa: Pick<MesaDetail, 'my_role' | 'guarantee_mode' | 'status'>): boolean {
+  // Sólo `open`: el dueño responde 409 `mesa_not_active` a cualquier otro estado
+  // (`contract-mirror/routes/mesas.js:1715`), también a `partially_paid`, y el
+  // front diría «ya estaba cerrada» de una mesa que no lo estaba. Una mesa sin
+  // garantía no tiene pagos, así que `partially_paid` no debería darse: igual no
+  // se ofrece.
+  return mesa.my_role === 'opener'
+    && mesa.guarantee_mode === false
+    && mesa.status === 'open';
+}
+
+/**
+ * AF-34 · la confirmación de «Cerrar mesa»: dice qué pasa antes de pasar. Va por
+ * portal con `.sheet-overlay` (la hoja con estilos; la de D-R20 usa clases sin
+ * CSS y tiene su pendiente aparte). El botón de confirmar se apaga mientras viaja.
+ */
+function HojaCerrarMesa({ onConfirmar, onVolver, cerrando }: { onConfirmar: () => void; onVolver: () => void; cerrando: boolean }) {
+  const { t } = useIdioma();
+  return createPortal(
+    <div className="sheet-overlay" onClick={onVolver}>
+      <div
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('¿Cerrar la mesa?')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sheet-head">
+          <span className="sheet-title">{t('¿Cerrar la mesa?')}</span>
+          <button type="button" className="sheet-close" aria-label={t('Cerrar')} onClick={onVolver}>✕</button>
+        </div>
+        <ul className="cerrar-mesa-lista">
+          <li>{t('La mesa se cierra para todos.')}</li>
+          <li>{t('Lo que cada quien eligió queda como su consumo.')}</li>
+          <li>{t('No se puede reabrir: para seguir, abre una mesa nueva.')}</li>
+        </ul>
+        <div className="cerrar-mesa-acciones">
+          <button type="button" className="btn btn-ghost" onClick={onVolver}>{t('Volver')}</button>
+          <button type="button" className="btn btn-navy" onClick={onConfirmar} disabled={cerrando}>
+            {cerrando ? t('Cerrando…') : t('Sí, cerrar la mesa')}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export function MesaDetailView({
   mesa,
   code,
@@ -231,6 +291,8 @@ export function MesaDetailView({
   quienesSeSumaron,
   onReintentarQuienes,
   fotoDe,
+  onCerrarMesa,
+  cerrando,
   onSetFraction,
   onGoToPay,
   onRetryFrozenPay,
@@ -243,6 +305,8 @@ export function MesaDetailView({
   /** El par «scroll + pulso» de §1.4/§1.5 bis, acá para la lista de consumos. */
   const [itemsPulse, setItemsPulse] = useState(false);
   const [confirmandoCierre, setConfirmandoCierre] = useState(false);
+  /** AF-34 · la hoja de «¿Cerrar la mesa?», distinta de la de D-R20. */
+  const [confirmandoCerrarMesa, setConfirmandoCerrarMesa] = useState(false);
   const itemsRef = useRef<HTMLDivElement | null>(null);
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
@@ -444,7 +508,7 @@ export function MesaDetailView({
         </div>
       </div>
       {guestHeader}
-      <div className="scroll flow-scroll">
+      <div className="scroll flow-scroll con-fila-sobre-barra">
         {hojaCierre}
         {avisoCorte}
         {avisoPagoCongelado}
@@ -642,9 +706,32 @@ export function MesaDetailView({
                 <Icon name="users" size={16} className="ico-inline" /> {t('Invitar amigos de PayMe')}
               </button>
             )}
+            {/* AF-34 · n98 · sólo la mesa SIN garantía (el dueño responde 409
+                `close_not_applicable` a las otras): el organizador ya está
+                garantizado por el bloque que la contiene. */}
+            {onCerrarMesa && sePuedeCerrar(mesa) && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-fit mesa-cerrar"
+                onClick={() => setConfirmandoCerrarMesa(true)}
+                disabled={cerrando}
+              >
+                <Icon name="lock" size={16} className="ico-inline" /> {t('Cerrar mesa')}
+              </button>
+            )}
           </div>
         )}
       </div>
+      {confirmandoCerrarMesa && onCerrarMesa && (
+        <HojaCerrarMesa
+          cerrando={cerrando}
+          onVolver={() => setConfirmandoCerrarMesa(false)}
+          // La hoja queda abierta con «Cerrando…» apagado hasta que el dueño
+          // contesta: un segundo toque cae en el botón apagado, no en lo que
+          // hay debajo. Si se cerró, la pantalla pasa al cierre.
+          onConfirmar={() => { void onCerrarMesa().finally(() => setConfirmandoCerrarMesa(false)); }}
+        />
+      )}
       {/* CORTE DEL VIERNES · el círculo no puede ser un botón muerto (§5 bis ·
           E): sin pago al que continuar, cierra el flujo y vuelve a Inicio. El
           camino a `pay` queda abajo, dormido, para cuando el corte se levante. */}

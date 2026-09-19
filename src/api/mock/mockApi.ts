@@ -2059,6 +2059,49 @@ function jpegDeIniciales(letra: string): Promise<Blob> {
   });
 }
 
+/**
+ * AF-34 · v2.113.0 · espejo de `POST /:code/close`. Sólo el organizador de una
+ * mesa SIN garantía con el dinero apagado; si no, lo que responde el dueño:
+ * 403 `not_mesa_organizer`, 409 `close_not_applicable`, o 409 `mesa_not_active`
+ * con su estado y motivo si ya estaba cerrada por otra cosa. Idempotente para
+ * quien ya la cerró. Costura `payme.app.mock.cerrar.v1`: `antiguo` (404) y
+ * `error` (500).
+ */
+let pedidosDeCierre = 0;
+/** Cuántos `POST /close` llegaron: el dueño es idempotente, así que un doble envío no se ve en pantalla. */
+export function contarPedidosDeCierre(): number {
+  return pedidosDeCierre;
+}
+
+export async function mockCloseMesa(
+  code: string,
+  identity: MockIdentity,
+): Promise<{ mesa_status: string; closure_reason: string }> {
+  pedidosDeCierre += 1;
+  const costura = (() => {
+    try { return localStorage.getItem('payme.app.mock.cerrar.v1'); } catch { return null; }
+  })();
+  if (costura === 'antiguo') return fail(404, 'not_found');
+  if (costura === 'error') return fail(500, 'internal_error');
+  const mesa = findMesa(code);
+  if (!mesa) return fail(404, 'mesa_not_found');
+  if (identity === 'guest' || !mesa.openedByUser) return fail(403, 'not_mesa_organizer');
+  const dineroVivo = (modoMonetarioMock() as { payments_enabled?: unknown })?.payments_enabled === true;
+  if (mesa.guarantee_mode !== false || dineroVivo) return fail(409, 'close_not_applicable');
+  if (mesa.status === 'expired' && mesa.closure_reason === 'closed_by_organizer') {
+    return delay({ mesa_status: 'expired', closure_reason: 'closed_by_organizer' });
+  }
+  // Sólo `open`, como el dueño (`routes/mesas.js:1715`): cualquier otro estado
+  // es 409 `mesa_not_active` con su estado y motivo.
+  if (mesa.status !== 'open') {
+    return fail(409, 'mesa_not_active', { mesa_status: mesa.status, closure_reason: mesa.closure_reason ?? null });
+  }
+  // `expired`, como el dueño: NO `completed` como hace el vencimiento del mock.
+  mesa.status = 'expired';
+  mesa.closure_reason = 'closed_by_organizer';
+  return delay({ mesa_status: 'expired', closure_reason: 'closed_by_organizer' });
+}
+
 export async function mockPayMesa(
   code: string,
   req: PayMesaRequest,
