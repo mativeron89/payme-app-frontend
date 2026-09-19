@@ -46,6 +46,11 @@ export function vecesTexto(n: number, t: T): string {
   return `${n} ${n === 1 ? t('vez') : t('veces')}`;
 }
 
+/** AF-36 · «7 platos», con su singular: la cifra de la burbuja de 2c. */
+export function platosTexto(n: number, t: T): string {
+  return `${n} ${n === 1 ? t('plato') : t('platos')}`;
+}
+
 /** «15 platos distintos», con su singular. */
 export function platosDistintos(n: number, t: T): string {
   return `${n} ${n === 1 ? t('plato distinto') : t('platos distintos')}`;

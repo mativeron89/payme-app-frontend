@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { mesesDeMexico } from '../src/utils/meses';
+
+const MESES = mesesDeMexico(new Date(), 'es');
 
 /**
  * AF-26 · «Mis estadísticas» etapa 1 · inicio con anillo (diseño 2a).
@@ -34,15 +37,16 @@ test.describe('AF-26 · Mis estadísticas · inicio con anillo', () => {
     await expect(tarjeta(page)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Tu consumo del mes', exact: true })).toBeVisible();
     await expect(page.getByText('Lo que elegiste en tus mesas', { exact: true })).toBeVisible();
-    // Burbuja: «Este mes» sin selector, el total y debajo visitas y promedio.
+    // Burbuja: el MES (AF-36: «Septiembre», no «Este mes»), el total y debajo visitas y promedio.
     const burbuja = page.locator('.stat-burbuja');
-    await expect(burbuja).toContainText('Este mes');
+    await expect(burbuja).toContainText(MESES.actual);
+    await expect(burbuja).not.toContainText('Este mes');
     await expect(burbuja).toContainText('$770.00');
     await expect(burbuja).toContainText('10 visitas · $77.00 promedio');
     // AF-31: con el período confirmado por el dueño, «Este mes» lleva su flecha
     // y abre el selector (en AF-26 no había otros períodos y no la llevaba). Sin
     // `period` —backend anterior— sigue sin flecha: lo cubre periodo-estadisticas.
-    await expect(burbuja.getByRole('button', { name: /^Período: Este mes/ })).toBeVisible();
+    await expect(burbuja.getByRole('button', { name: new RegExp(`^Período: ${MESES.actual}`) })).toBeVisible();
     // Lista: nombre, visitas, monto y porcentaje — nunca el color solo.
     await expect(filas(page)).toHaveCount(4);
     await expect(filas(page).nth(0)).toHaveText(/Italiana.*3 visitas.*\$310\.00.*40%/);

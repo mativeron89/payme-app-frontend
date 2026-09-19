@@ -11,6 +11,38 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.178.0 — La burbuja dice el mes y los botones de la mesa llevan color (2026-09-19)
+
+Orden `APP-DESIGN-FIXES-MONTH-BUBBLE-AND-MESA-BUTTONS-AF-36-20260919`, base `509fec9`
+(= `origin/main`, 0.177.0). **Sin push, sin deploy, sin GREEN.** Decisión de Mati
+(`542f585c…`): «No está alineada "éste mes" que debería decir el mes (por ejemplo
+septiembre) con las visitas que no está centrado» y los botones de la mesa «deberían
+tener algún color».
+
+### Ítem 1 · la burbuja de 2a, 2b, 2c y 2e
+
+- **Dice el NOMBRE del período, como el diseño:** «Septiembre» (`this_month`),
+  «Agosto» (`last_month`), «Últimos 3 meses», «2026» (`this_year`). El mes sale de
+  `period.start` del dueño —sólo si confirmó el período pedido— leído en hora de
+  México; sin `period`, el mes en curso de México. Español e inglés por `Intl`
+  (`nombreDelPeriodo`, `mesesDeMexico` en `utils/meses.ts`).
+- **La hoja del selector** conserva «Este mes», «Mes pasado»… y suma el mes al lado,
+  en apagado.
+- **Centrado:** el rótulo y el dato quedan centrados entre sí (`align-items: center`;
+  el diseño alinea al final y Mati pidió centrarlo). Un e2e mide los centros (≤ 1 px)
+  y que las cuatro burbujas tengan el mismo alto.
+- 🔴 **2c tenía la burbuja más alta (87 px contra 83):** «7 platos distintos» en
+  26 px se partía en dos renglones. Como el diseño («15 platos» y el contexto
+  debajo), la cifra dice «7 platos» y «distintos» va en la línea de contexto
+  (declarado: es la única palabra que cambia de lugar).
+- 🔴 **El mock fechaba el inicio del mes a las 00:00Z;** el dueño, a la medianoche de
+  México (06:00Z). Leído en hora de México, el mock habría rotulado «Agosto» un
+  período de septiembre. Corregido en `inicioDeMes` y en `this_year` (declarado).
+- Los subtítulos («De 6 visitas este mes») ya seguían al período elegido.
+- **Tests:** unitarios (5, incluido el 31 a las 23:30 de México) y e2e (el período no
+  confirmado, el backend anterior, el centrado y el alto, la hoja con el mes).
+  Mutantes: 7, todos mueren.
+
 ## 0.177.0 — «Cerrar mesa» para el organizador y el aviso de mesa vencida (2026-09-19)
 
 Orden `APP-MESA-CLOSE-AND-EXPIRY-NOTICE-AF-34-20260919`, base `d683137` (AF-32, sin publicar:

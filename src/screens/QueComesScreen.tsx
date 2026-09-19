@@ -13,7 +13,7 @@ import { goBack } from '../router';
 import { colorDeFila, porcentajesEnteros, porcionesDelAnillo } from '../utils/anillo';
 import { formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
-import { platosDistintos, sufijoDePeriodo, vecesTexto, visitasTexto } from '../utils/textosDeEstadisticas';
+import { platosDistintos, platosTexto, sufijoDePeriodo, vecesTexto, visitasTexto } from '../utils/textosDeEstadisticas';
 import { AnilloSvg } from './AnilloSvg';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
 
@@ -89,14 +89,22 @@ export function QueComesScreen() {
       {conDatos || soportaPeriodo ? (
         <div className="title-card stat-burbuja">
           <h1 className="stat-oculto">{t('Qué comes')}</h1>
-          <SelectorDePeriodo clave={efectiva} disponible={soportaPeriodo} />
+          <SelectorDePeriodo clave={efectiva} disponible={soportaPeriodo} inicio={soportaPeriodo ? periodoDeLaVista?.start ?? null : null} />
           {conDatos && (
             <div className="stat-burbuja-dato">
+              {/* AF-36 · como el diseño 2c («15 platos» y el contexto debajo): en un
+                  solo renglón de 26px «7 platos distintos» se partía en dos y la
+                  burbuja quedaba más alta que las otras tres. */}
               <div className="stat-burbuja-total">
                 {verMomentos && datosMomentos
                   ? visitasTexto(datosMomentos.visits, t)
-                  : datos ? platosDistintos(datos.distinctDishes, t) : null}
+                  : datos ? platosTexto(datos.distinctDishes, t) : null}
               </div>
+              {!verMomentos && datos && (
+                <div className="stat-burbuja-contexto">
+                  {datos.distinctDishes === 1 ? t('distinto') : t('distintos')}
+                </div>
+              )}
             </div>
           )}
         </div>

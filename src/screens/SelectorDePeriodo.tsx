@@ -4,6 +4,7 @@ import { useIdioma } from '../i18n/idioma';
 import { Icon } from '../components/Icon';
 import { PERIODOS, elegirPeriodo, type ClavePeriodo } from '../api/periodoEstadisticas';
 import { etiquetaDePeriodo } from '../utils/textosDeEstadisticas';
+import { mesesDeMexico, nombreDelPeriodo } from '../utils/meses';
 
 /**
  * AF-31 · el período de la burbuja de 2a, 2b y 2c (diseño: «el período va solo
@@ -17,14 +18,31 @@ import { etiquetaDePeriodo } from '../utils/textosDeEstadisticas';
  * burbuja y debajo de la barra inferior (medido en la primera captura).
  *
  * `disponible` = el dueño CONFIRMÓ el período pedido. Si no (backend anterior a
- * v2.106.0), no hay flecha ni hoja: sólo «Este mes», que es lo que llegó.
+ * v2.106.0), no hay flecha ni hoja: sólo el mes en curso, que es lo que llegó.
+ *
+ * AF-36 · la burbuja dice el NOMBRE del período, como el diseño («Septiembre»,
+ * «Agosto», «2026»), leído de `inicio` (`period.start` confirmado) en hora de
+ * México. «Este mes», «Mes pasado»… quedan como opciones de la hoja, con el mes
+ * al lado en apagado.
  */
-export function SelectorDePeriodo({ clave, disponible }: { clave: ClavePeriodo; disponible: boolean }) {
-  const { t } = useIdioma();
+export function SelectorDePeriodo({
+  clave,
+  disponible,
+  inicio,
+}: {
+  clave: ClavePeriodo;
+  disponible: boolean;
+  /** `period.start` del dueño, sólo si confirmó `clave`; si no, `null`. */
+  inicio: string | null;
+}) {
+  const { t, idioma } = useIdioma();
   const [abierto, setAbierto] = useState(false);
+  const ahora = new Date();
   if (!disponible) {
-    return <div className="stat-burbuja-periodo">{t('Este mes')}</div>;
+    return <div className="stat-burbuja-periodo">{nombreDelPeriodo('this_month', null, idioma, ahora)}</div>;
   }
+  const rotulo = nombreDelPeriodo(clave, inicio, idioma, ahora) ?? etiquetaDePeriodo(clave, t);
+  const meses = mesesDeMexico(ahora, idioma);
   return (
     <>
       <button
@@ -32,10 +50,10 @@ export function SelectorDePeriodo({ clave, disponible }: { clave: ClavePeriodo; 
         className="stat-burbuja-periodo stat-periodo-boton"
         aria-haspopup="dialog"
         aria-expanded={abierto}
-        aria-label={t('Período: {0}. Cambiar', etiquetaDePeriodo(clave, t))}
+        aria-label={t('Período: {0}. Cambiar', rotulo)}
         onClick={() => setAbierto(true)}
       >
-        {etiquetaDePeriodo(clave, t)}
+        {rotulo}
         <Icon name="chevron-down" size={18} className="rest-chev" />
       </button>
       {abierto && createPortal(
@@ -63,7 +81,12 @@ export function SelectorDePeriodo({ clave, disponible }: { clave: ClavePeriodo; 
                   className={`stat-periodo-opcion ${p === clave ? 'on' : ''}`}
                   onClick={() => { elegirPeriodo(p); setAbierto(false); }}
                 >
-                  {etiquetaDePeriodo(p, t)}
+                  <span className="stat-periodo-nombre">
+                    {etiquetaDePeriodo(p, t)}
+                    {(p === 'this_month' || p === 'last_month') && (
+                      <span className="stat-periodo-mes">{p === 'this_month' ? meses.actual : meses.anterior}</span>
+                    )}
+                  </span>
                   {p === clave && <Icon name="check" size={18} />}
                 </button>
               ))}

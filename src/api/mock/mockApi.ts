@@ -2978,9 +2978,17 @@ interface VisitaMock {
   readonly items: ReadonlyArray<{ name: string; fraction_bps: number; amount_cents: number }>;
 }
 
-/** Inicio (UTC) del mes `mes` del modelo: 5 = el actual, 0 = hace cinco. */
+/**
+ * Inicio del mes `mes` del modelo (5 = el actual, 0 = hace cinco) como lo publica
+ * el dueño: la medianoche del día 1 en hora de México, que son las 06:00Z (México
+ * no tiene horario de verano desde 2022). AF-36: hasta acá era las 00:00Z, que en
+ * México es el mes ANTERIOR a las 18:00 — leído en hora de México, el mock habría
+ * rotulado «Agosto» un período de septiembre.
+ */
+const MEXICO_UTC_OFFSET_MS = 6 * 3_600_000;
 function inicioDeMes(mes: number, ahora: Date): Date {
-  return new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth() - (5 - mes), 1));
+  const mx = new Date(ahora.getTime() - MEXICO_UTC_OFFSET_MS);
+  return new Date(Date.UTC(mx.getUTCFullYear(), mx.getUTCMonth() - (5 - mes), 1) + MEXICO_UTC_OFFSET_MS);
 }
 
 function idDeRestaurante(category: string): string {
@@ -3046,9 +3054,9 @@ function periodoDelMock(clave: ClavePeriodoMock): { meses: number[]; period: { k
     return { meses: [3, 4, 5], period: { key: clave, start: inicioDeMes(3, ahora).toISOString(), end: null } };
   }
   if (clave === 'this_year') {
-    const anio = ahora.getUTCFullYear();
+    const anio = new Date(ahora.getTime() - MEXICO_UTC_OFFSET_MS).getUTCFullYear();
     const meses = [0, 1, 2, 3, 4, 5].filter((m) => inicioDeMes(m, ahora).getUTCFullYear() === anio);
-    return { meses, period: { key: clave, start: new Date(Date.UTC(anio, 0, 1)).toISOString(), end: null } };
+    return { meses, period: { key: clave, start: new Date(Date.UTC(anio, 0, 1) + MEXICO_UTC_OFFSET_MS).toISOString(), end: null } };
   }
   return { meses: [5], period: { key: 'this_month', start: actual.toISOString(), end: null } };
 }

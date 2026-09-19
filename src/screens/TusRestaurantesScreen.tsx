@@ -82,7 +82,7 @@ export function TusRestaurantesScreen() {
       {conDatos || soportaPeriodo ? (
         <div className="title-card stat-burbuja">
           <h1 className="stat-oculto">{t('Tus restaurantes')}</h1>
-          <SelectorDePeriodo clave={efectiva} disponible={soportaPeriodo} />
+          <SelectorDePeriodo clave={efectiva} disponible={soportaPeriodo} inicio={soportaPeriodo ? datos.period?.start ?? null : null} />
           {conDatos && (
             <div className="stat-burbuja-dato">
               <div className="stat-burbuja-total">{formatMXN(datos.totalCents)}</div>

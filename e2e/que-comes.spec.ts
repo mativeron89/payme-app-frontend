@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
+import { mesesDeMexico } from '../src/utils/meses';
+
+const MESES = mesesDeMexico(new Date(), 'es');
 
 /**
  * AF-31 · n166 · «Qué comes» por platos (2c), `GET /api/account/stats/dishes`.
@@ -40,7 +43,8 @@ test.describe('AF-31 · Qué comes (2c)', () => {
     await acceso(page).click();
     await expect(page).toHaveURL(/#\/platos$/);
     await expect(tarjeta(page)).toBeVisible();
-    await expect(page.locator('.stat-burbuja')).toContainText('7 platos distintos');
+    await expect(page.locator('.stat-burbuja-total')).toHaveText('7 platos');
+    await expect(page.locator('.stat-burbuja-contexto')).toHaveText('distintos');
     const filas = tarjeta(page).getByRole('listitem');
     await expect(filas).toHaveCount(5);
     await expect(filas.first()).toContainText('La Parolaccia');
@@ -69,12 +73,13 @@ test.describe('AF-31 · Qué comes (2c)', () => {
   test('el período elegido en 2a rige en 2c', async ({ page }) => {
     await preparar(page);
     await page.getByRole('button', { name: /^Período: / }).click();
-    await page.getByRole('radio', { name: 'Mes pasado', exact: true }).click();
+    await page.getByRole('radio', { name: /^Mes pasado/ }).click();
     await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
     await acceso(page).click();
     await expect(tarjeta(page)).toBeVisible();
-    await expect(page.locator('.stat-burbuja')).toContainText('Mes pasado');
-    await expect(page.locator('.stat-burbuja')).toContainText('7 platos distintos');
+    await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
+    await expect(page.locator('.stat-burbuja-total')).toHaveText('7 platos');
+    await expect(page.locator('.stat-burbuja-contexto')).toHaveText('distintos');
     await expect(tarjeta(page)).toContainText('el mes pasado');
   });
 
@@ -140,7 +145,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
     test('el período elegido rige también en los momentos', async ({ page }) => {
       await preparar(page);
       await page.getByRole('button', { name: /^Período: / }).click();
-      await page.getByRole('radio', { name: 'Mes pasado', exact: true }).click();
+      await page.getByRole('radio', { name: /^Mes pasado/ }).click();
       await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
       await acceso(page).click();
       await page.getByRole('tab', { name: 'Momento' }).click();

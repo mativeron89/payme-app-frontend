@@ -152,7 +152,12 @@ export function EstadisticasScreen() {
           no se improvisa acá. El nombre sigue siendo el <h1> de la burbuja. */}
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
       {conAnillo || soportaPeriodo ? (
-        <BurbujaDelMes consumo={conAnillo ? consumo : null} clave={efectiva} selector={soportaPeriodo} />
+        <BurbujaDelMes
+          consumo={conAnillo ? consumo : null}
+          clave={efectiva}
+          selector={soportaPeriodo}
+          inicio={soportaPeriodo ? confirmaPeriodo(clave, stats.period)?.start ?? null : null}
+        />
       ) : (
         <div className="title-card">
           <h1 className="title-card-title">{t('Mis estadísticas')}</h1>
@@ -290,8 +295,8 @@ export function EstadisticasScreen() {
 }
 
 /**
- * AF-26 · burbuja de 2a: el período a la izquierda —«Este mes», SIN flecha ni
- * selector, porque todavía no hay otros períodos— y el total a la derecha con
+ * AF-26 · burbuja de 2a: el período a la izquierda —su nombre, «Septiembre»,
+ * desde AF-36; la flecha y el selector llegaron con AF-31— y el total a la derecha con
  * visitas y promedio debajo. El `<h1>` de la pantalla sigue siendo «Mis
  * estadísticas», sólo para lectores de pantalla: a la vista va en la cabecera.
  */
@@ -299,10 +304,12 @@ function BurbujaDelMes({
   consumo,
   clave,
   selector,
+  inicio,
 }: {
   consumo: ConsumoDelMes | null;
   clave: ClavePeriodo;
   selector: boolean;
+  inicio: string | null;
 }) {
   const { t } = useIdioma();
   return (
@@ -311,7 +318,7 @@ function BurbujaDelMes({
       {/* AF-31 · el período con su flecha, sólo si el dueño lo confirmó. Un
           período sin consumo conserva la burbuja: si no, el selector se iría y
           no habría cómo volver. */}
-      <SelectorDePeriodo clave={clave} disponible={selector} />
+      <SelectorDePeriodo clave={clave} disponible={selector} inicio={inicio} />
       {consumo && (
         <div className="stat-burbuja-dato">
           <div className="stat-burbuja-total">{formatMXN(consumo.totalCents)}</div>

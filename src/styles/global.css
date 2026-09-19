@@ -5245,9 +5245,12 @@ body {
   white-space: nowrap;
 }
 
+/* AF-36 · centrado vertical: Mati vio el rótulo de la izquierda más abajo que
+   el dato de la derecha («no está centrado»). El diseño alinea al final; se
+   centra por su pedido, en las cuatro pantallas que comparten la burbuja. */
 .stat-burbuja {
   flex-direction: row;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   text-align: left;
@@ -5523,6 +5526,19 @@ body {
 .stat-periodo-opcion.on {
   font-weight: 700;
   color: var(--teal-txt);
+}
+
+/* AF-36 · la opción con su mes al lado, en apagado: «Este mes · Septiembre». */
+.stat-periodo-nombre {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.stat-periodo-mes {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--gray-d);
 }
 
 /* ── AF-29 · 2b «Tus restaurantes» y el acceso de 2a ─────────────────────
