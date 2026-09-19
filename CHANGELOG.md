@@ -11,6 +11,29 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.172.0 — Aviso 2.5.2, soltar un consumo y «quiénes se sumaron» (2026-09-19)
+
+Orden `APP-NOTICE-2-5-2-RELEASE-ROSTER-AF-25-20260919`, base `ad81f6b` (= `origin/main`,
+servido 0.171.0). **Sin push, sin deploy, sin GREEN.** Decisiones de Mati: soltar un
+consumo «Sí, mientras no esté pagado» (n80) y «quiénes se sumaron» «Publicar ya sin
+foto; la foto después» (n72).
+
+### Ítem 1 · reconocer el Aviso 2.5.2 (va primero en la historia y se publica solo)
+
+- **Espejo, en un commit propio (`3b1794b`):** dueño v2.101.0, inventario en `816a515`
+  (rama local `claude/mesa-roster-release-20260919`, sin publicar) y contenido en
+  `d073e17`. Cambian `routes/mesas.js` (las rutas de soltar y de participantes),
+  `services/itemClaims.js` y `services/profileIdentity.js` (`notice_version: '2.5.2'`),
+  con los tres gates verdes. El espejo trae las rutas de los ítems 2 y 3, pero el
+  código de este ítem no las usa.
+- `PRESENTABLE_NOTICE_VERSIONS` suma `'2.5.2'` y conserva `'2.3.0'`, `'2.4.1'`,
+  `'2.5.0'` y `'2.5.1'`. `2.5.1` es lo último que publicó el dueño, y el front va
+  ANTES que el backend.
+- Tests: 2.5.2 presentado; near-miss `'2.5.20'` y `'2.5.2-rc'`; el un-toque manda
+  `'2.5.2'` tal cual; e2e de perfil (aviso desconocido apaga, 2.5.2 enciende).
+  Mutantes rojos: quitar 2.5.2 y quitar 2.5.1, en unitario y e2e; cada uno mata su
+  propio test.
+
 ## 0.171.0 — Aviso 2.5.1 y «Tus mesas» en Historial (2026-09-18)
 
 Orden `APP-NOTICE-2-5-1-AND-TUS-MESAS-AF-24-20260918`, base `4aede0c` (= `origin/main`,
