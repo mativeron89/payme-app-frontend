@@ -6,6 +6,39 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-19**.
+- Commit exacto y procedencia del CONTENIDO:
+  **`d073e1776b8709438ea29073abcd2a4c4486260d`**
+  (App Backend **v2.101.0**, AB-16: aviso de privacidad **2.5.2**, soltar un
+  consumo no pagado (n80, `3d1bd26`, v2.100.0) y «quiénes se sumaron» para el
+  organizador (n72)).
+- Commit del que se tomó el inventario autoritativo:
+  **`816a515b4febd169b13f63f4e958fdb8af32e2fd`** (HEAD de la rama del dueño
+  `claude/mesa-roster-release-20260919`). La diferencia `d073e17..816a515` toca sólo
+  `contract/mirror-inventory.json`.
+
+🔴 **No está publicado, y es a propósito: el front va primero.** Medido el
+2026-09-19 a las 01:35Z: el `main` remoto del dueño es `b1c51212…` (2.5.1) y
+ninguna rama remota contiene `3d1bd26` ni `d073e17`.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior
+(`1de3461`) cambian **tres**: `routes/mesas.js`, `services/itemClaims.js` y
+`services/profileIdentity.js`. Hay cero nuevos, cero que salgan y cero renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `816a515b`
+(`.claude/worktrees/roster-release`, porcelain vacío).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `d073e17`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `d073e17`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`816a515b`) · exit 0 |
+
+### Refresh anterior · 2026-09-18 (aviso 2.5.1 · `1de3461`)
+
 - Fecha del refresh: **2026-09-18** (el sexto del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`1de34613f7ab49563a4edaa0127e25d1e9bcdfc4`**

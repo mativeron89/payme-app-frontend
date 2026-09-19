@@ -1390,6 +1390,46 @@ router.get('/:code', requireAuth, requireMesaParticipant, async (req, res, next)
   } catch (err) { next(err); }
 });
 
+// ═══════════════════════════════════════════════════════════
+// GET /:code/participants · n72 (decisión de Mati 2026-09-19: «Sí, nombre y
+// apellido», ampliada a foto e identificador —a5d9879d…6b95— y acotada por
+// «Publicar ya sin foto; la foto después» —06ba3f3a…0676—). SÓLO el organizador
+// de la mesa ve quiénes se sumaron: nombre, apellido e identificador de PayMe, y
+// NADA más: ni montos, ni selección, ni pagos, ni propina, ni correo, teléfono
+// ni foto. La foto es una segunda etapa con orden propia: hoy no existe canal que
+// sirva el avatar a otra persona (sólo GET /api/account/me/avatar) y el aviso
+// dice que la foto sólo se sirve a la propia sesión. Ruta propia y no un campo en
+// GET /:code, para que un no-organizador no pueda recibir la lista ni por
+// accidente. Lo dice el Aviso 2.5.2 («Quién ve qué»).
+// Los participantes sin cuenta (legacy por token) no tienen nombre guardado:
+// salen con todo en null. Una cuenta eliminada sale como la dejó la
+// anonimización («Cuenta» «eliminada») y SIN identificador: el que tiene ahora
+// es uno nuevo al azar, no el de la persona.
+// ═══════════════════════════════════════════════════════════
+router.get('/:code/participants', requireAuth, requireMesaParticipant, async (req, res, next) => {
+  try {
+    if (!req.user || req.mesa.opener_user_id !== req.user.id) {
+      return res.status(403).json({ error: 'not_mesa_organizer' });
+    }
+    const { rows } = await pool.query(
+      `SELECT u.first_name, u.last_name, u.payme_id, u.status
+         FROM mesa_participants p
+         LEFT JOIN users u ON u.id = p.user_id
+        WHERE p.mesa_id = $1 AND p.status = 'active'
+          AND (p.user_id IS NULL OR p.user_id <> $2)
+        ORDER BY p.joined_at ASC, p.id ASC`,
+      [req.mesa.id, req.user.id]
+    );
+    res.json({
+      participants: rows.map((r) => ({
+        first_name: r.first_name ?? null,
+        last_name: r.last_name ?? null,
+        payme_id: r.status === 'deleted' ? null : (r.payme_id ?? null),
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
 // CIERRE DEL PAGO SIN CUENTA · C2. Ver el bloque de C3 en `/:code/pay`.
 router.post('/:code/items/lock', requireAuth, requireMesaParticipant,
   validateBody(schemas.lockItems), async (req, res, next) => {
@@ -1553,6 +1593,75 @@ router.post('/:code/items/lock', requireAuth, requireMesaParticipant,
         error: err.message,
         ...(err.item_id && { item_id: err.item_id }),
         ...(err.remaining_bps !== undefined && { remaining_bps: err.remaining_bps }),
+      });
+    }
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /:code/items/release · n80 (decisión de Mati 2026-09-19: «Sí, mientras
+// no esté pagado»). El comensal suelta lo que eligió y otro lo puede tomar.
+// Sólo modo consumo: en modo «igual» un casillero pasa a `claimed` recién DENTRO
+// de /pay, atado a un intento (plata en vuelo) — no hay selección sin pago que
+// soltar, y un casillero en vuelo lo libera el propio pago fallido/cancelado.
+// Idempotente; nunca lo de otro, nunca lo pagado, nunca un claim atado a un
+// intento vivo (regla B-05 de itemClaims). Sin cobros.
+// El cuerpo se valida acá y no en `schemas/` porque ese archivo queda fuera del
+// alcance de la orden AB-16.
+// ═══════════════════════════════════════════════════════════
+const UUID_RELEASE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function cuerpoDeSoltar(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const claves = Object.keys(body);
+  if (claves.length !== 1 || claves[0] !== 'item_ids') return null;
+  const ids = body.item_ids;
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > 100) return null;
+  if (!ids.every((id) => typeof id === 'string' && UUID_RELEASE.test(id))) return null;
+  const minus = ids.map((id) => id.toLowerCase());
+  if (new Set(minus).size !== minus.length) return null;
+  return minus;
+}
+
+router.post('/:code/items/release', requireAuth, requireMesaParticipant, async (req, res, next) => {
+  try {
+    const itemIds = cuerpoDeSoltar(req.body);
+    if (!itemIds) return res.status(400).json({ error: 'validation_error' });
+    const mesa = req.mesa;
+    if (mesa.division_mode !== 'consumo') {
+      return res.status(409).json({ error: 'release_not_applicable' });
+    }
+    const { rows: [garantia] } = await pool.query(
+      `SELECT guarantee_mode, metadata FROM mesas WHERE id = $1`, [mesa.id]
+    );
+    const mesaSinGarantia = !!garantia
+      && garantia.guarantee_mode === false
+      && garantia.metadata?.sin_garantia === true;
+    const soltado = await pool.tx(async (client) => {
+      // Mismo orden de candados que items/lock: mesa primero. En la mesa sin
+      // garantía el lock cuenta la selección bajo este candado para CERRARLA;
+      // sin tomarlo acá, un soltar concurrente dejaría cerrada una mesa con un
+      // ítem que ya nadie tiene.
+      let estado = mesa.status;
+      if (mesaSinGarantia) {
+        const { rows: [fijada] } = await client.query(
+          `SELECT status FROM mesas WHERE id = $1 FOR UPDATE`, [mesa.id]
+        );
+        estado = fijada ? fijada.status : null;
+      }
+      if (!['open', 'partially_paid'].includes(estado)) {
+        throw Object.assign(new Error('mesa_not_active'), { status: 409 });
+      }
+      return itemClaims.releaseOwn(client, {
+        mesaId: mesa.id, itemIds, userId: req.user.id, triggeredBy: 'user',
+      });
+    });
+    res.json({ released: soltado });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({
+        error: err.message,
+        ...(err.item_id && { item_id: err.item_id }),
       });
     }
     next(err);

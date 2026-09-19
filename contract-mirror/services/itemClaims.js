@@ -420,6 +420,68 @@ async function restoreAttemptClaims(client, attemptId) {
   return { conflict: false, restored: released.length };
 }
 
+/**
+ * n80 · el comensal SUELTA lo que eligió y todavía no pagó (decisión de Mati
+ * del 2026-09-19: «Sí, mientras no esté pagado»). Sólo claims `locked` PROPIOS
+ * (por `user_id`) y LIBERABLES según la misma regla B-05 que usa `acquire`:
+ * sin intento de pago, o con intento `failed`/`cancelled`. Un claim atado a un
+ * intento vivo es plata en vuelo y NO se toca; uno `paid` tampoco. Nunca el de
+ * otra persona. Idempotente: soltar lo ya suelto no cambia nada.
+ *
+ * El caller garantiza el orden de candados (mesa primero cuando corresponde);
+ * acá se toma el `FOR UPDATE` de cada ítem en orden estable por id.
+ * Devuelve [{ item_id, fraction_bps }] de lo que efectivamente se soltó.
+ */
+async function releaseOwn(client, { mesaId, itemIds, userId, triggeredBy = 'user' }) {
+  if (!userId) throw Object.assign(new Error('release_requires_user'), { status: 401 });
+  const soltado = [];
+  const ordenados = [...new Set(itemIds)].sort((a, b) => a.localeCompare(b));
+  for (const itemId of ordenados) {
+    const { rows: [item] } = await client.query(
+      `SELECT id, status FROM mesa_items WHERE id = $1 AND mesa_id = $2 FOR UPDATE`,
+      [itemId, mesaId]
+    );
+    if (!item) throw Object.assign(new Error('item_not_found'), { status: 404, item_id: itemId });
+    const { rows: claims } = await client.query(
+      `UPDATE mesa_item_claims c SET status='released'
+        WHERE c.mesa_item_id = $1 AND c.status = 'locked' AND c.locked_by_user_id = $2
+          AND (c.payment_attempt_id IS NULL OR EXISTS (
+                SELECT 1 FROM payment_attempts pa
+                 WHERE pa.id = c.payment_attempt_id AND pa.status = ANY($3::text[])))
+        RETURNING c.fraction_bps`,
+      [itemId, userId, RELEASABLE_ATTEMPT_STATES]
+    );
+    if (claims.length === 0) continue;
+    soltado.push({
+      item_id: itemId,
+      fraction_bps: claims.reduce((s, c) => s + Number(c.fraction_bps), 0),
+    });
+    const { rows: [vivos] } = await client.query(
+      `SELECT COUNT(*)::int AS n FROM mesa_item_claims
+        WHERE mesa_item_id = $1 AND status IN ('locked','paid')`,
+      [itemId]
+    );
+    if (vivos.n === 0) {
+      const upd = await client.query(
+        `UPDATE mesa_items SET status='released',
+                locked_by_attempt=NULL, locked_by_user_id=NULL,
+                locked_by_guest_token=NULL, locked_by_guest_token_hash=NULL,
+                lock_token=NULL, lock_expires_at=NULL
+          WHERE id=$1 AND status='locked'
+          RETURNING id`,
+        [itemId]
+      );
+      if (upd.rowCount === 1) {
+        await stateMachine.transition({
+          client, entityType: 'mesa_item', entityId: itemId,
+          fromState: 'locked', toState: 'released', triggeredBy,
+        });
+      }
+    }
+  }
+  return soltado;
+}
+
 module.exports = {
   FRACTION_VALUES,
   COMPLETING_TOLERANCE_BPS,
@@ -430,6 +492,7 @@ module.exports = {
   bindToAttempt,
   markAttemptPaid,
   releaseAttemptClaims,
+  releaseOwn,
   refundAttemptClaims,
   restoreAttemptClaims,
 };
