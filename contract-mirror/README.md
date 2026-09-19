@@ -6,6 +6,39 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-19** (el séptimo del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`ca021dc80600e9cc3e71d4da92550feb21eeef1c`**
+  (App Backend **v2.115.0**, AB-30 · n168: `GET /api/account/stats/ingredients`,
+  «Qué comes · por ingrediente», clasificado por el nombre del plato.)
+- Commit del que se tomó el inventario autoritativo:
+  **`8aa0b73c6ab9df0289c72e09d8fe9735eb29d20b`** (HEAD de la rama del dueño
+  `claude/stats-ingredientes`). Entre `ca021dc` y `8aa0b73` hay sólo inventario
+  (`3e4ce0a`) y el pin de versión de un test (`8aa0b73`), fuera de la población.
+
+🔴 **No está publicado:** el `main` remoto del dueño es `3dbaa64e…` (v2.108.0);
+`ca021dc` es local del dueño (medido 2026-09-19). El Bibliotecario avisó que la
+integral final del dueño todavía corre.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior
+(`ade827a`) cambia **uno**: `routes/account.js`. Cero nuevos, cero que salgan,
+cero renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `8aa0b73c`
+(`.claude/worktrees/stats-ingredientes`; su porcelain sólo lista `node_modules`
+sin trackear).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `ca021dc`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `ca021dc`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`8aa0b73c`) · exit 0 |
+
+### Refresh anterior · 2026-09-19 (cerrar mesa y aviso de mesa vencida · `ade827a`)
+
 - Fecha del refresh: **2026-09-19** (el sexto del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`ade827abe7ae6678d58a457200a21ed44842832c`**

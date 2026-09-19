@@ -20,6 +20,7 @@ const logger = require('../utils/logger');
 const profileIdentity = require('../services/profileIdentity');
 const { proveedoresVinculados } = require('../services/externalIdentities');
 const consumoPropio = require('../services/consumoPropio');
+const clasificadorPlatos = require('../services/clasificadorPlatos');
 const {
   inicioDeMesMxSql, rangoDePeriodoMxSql, rangoDeMesAtrasMxSql, filtroDeRango,
 } = require('../services/inicioDeMes');
@@ -879,6 +880,63 @@ router.get('/stats/dayparts', validateQuery(statsPeriodQuery), async (req, res, 
     }
     res.setHeader('Cache-Control', 'private, no-store');
     res.json({ basis: cuerpo.basis, period, ...armarMomentos(cuerpo.restaurants) });
+  } catch (err) { next(err); }
+});
+
+/**
+ * AB-30 · «Qué comes · por ingrediente» (pantalla 2d). Decisión de Mati
+ * (6f29d44f…f016): el grupo sale del NOMBRE del plato, con la lista de palabras
+ * de services/clasificadorPlatos.js, calculado al vuelo (no se guarda nada; no
+ * se toca `mesa_items.category`, que es tipo de cocina y viaja al Dashboard).
+ * Misma estructura de visitas que `dishes`, en las dos bases, así
+ * `total_cents` es la suma de TODOS los platos del período (no sólo los 5).
+ * `times` = visitas con al menos un plato de ese grupo (como en `dishes`).
+ * Grupos con monto 0 no salen; orden monto desc, empate por clave; `other`
+ * siempre al final («Una fila «Otros» al final, con su monto»).
+ */
+function armarIngredientes(restaurants) {
+  const porGrupo = new Map();
+  let total = 0;
+  for (const r of restaurants) {
+    for (const v of r.visits) {
+      const enEstaVisita = new Set();
+      for (const it of v.items) {
+        const key = clasificadorPlatos.clasificar(it.name);
+        const g = porGrupo.get(key) || { key, times: 0, amount_cents: 0 };
+        g.amount_cents += it.amount_cents;
+        if (!enEstaVisita.has(key)) { g.times += 1; enEstaVisita.add(key); }
+        porGrupo.set(key, g);
+        total += it.amount_cents;
+      }
+    }
+  }
+  const groups = [...porGrupo.values()]
+    .filter((g) => g.amount_cents > 0)
+    .sort((a, b) => {
+      if ((a.key === 'other') !== (b.key === 'other')) return a.key === 'other' ? 1 : -1;
+      return b.amount_cents - a.amount_cents || a.key.localeCompare(b.key);
+    });
+  return {
+    classifier_version: clasificadorPlatos.VERSION,
+    estimated: true,
+    groups,
+    total_cents: total,
+  };
+}
+
+router.get('/stats/ingredients', validateQuery(statsPeriodQuery), async (req, res, next) => {
+  try {
+    const { key: periodo, rango } = periodoDe(req);
+    const period = await periodoPublicado(periodo, rango);
+    const cuerpo = dineroHabilitado()
+      ? await restaurantesDesdePagos(req.user.id, rango)
+      : await restaurantesDesdeSelecciones(req.user.id, rango);
+    const visitas = cuerpo.restaurants.reduce((s, r) => s + r.visits_count, 0);
+    if (visitas > maxVisitasDelRango) {
+      return res.status(413).json({ error: 'stats_range_too_large' });
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ basis: cuerpo.basis, period, ...armarIngredientes(cuerpo.restaurants) });
   } catch (err) { next(err); }
 });
 

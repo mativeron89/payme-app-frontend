@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "ade827abe7ae6678d58a457200a21ed44842832c",
+  "commit": "ca021dc80600e9cc3e71d4da92550feb21eeef1c",
   "total": 107,
   "archivos": [
     {
@@ -307,8 +307,8 @@
     {
       "origen": "routes/account.js",
       "destino": "routes/account.js",
-      "sha256": "257f721a9cbb31b2ba3b87b3c40dade89818cdfd6af21d15b1a0d509bf2e9f1c",
-      "bytes": 43222
+      "sha256": "06d497e9d4e75093096c7c67f773d32ca2e493336a5bbc7c80748618d8117273",
+      "bytes": 45706
     },
     {
       "origen": "routes/auth.js",
