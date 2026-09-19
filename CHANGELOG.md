@@ -11,6 +11,45 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.179.0 — «Qué comes · por ingrediente» (2d) (2026-09-19)
+
+Orden `APP-STATS-INGREDIENTS-TAB-AF-38-20260919`, base `e2eaf3c` (= `origin/main`,
+0.178.0). **Sin push, sin deploy, sin GREEN.** Roadmap n168. Decisión de Mati
+(`6f29d44f…`): PayMe clasifica los platos por su nombre con una lista propia;
+«Otros» al final con su monto; una línea chica que aclara que es una estimación;
+el alcohol como grupo propio, para todas las cuentas.
+
+- **Espejo, en un commit propio (`3526bf5`):** dueño v2.115.0, inventario en
+  `8aa0b73` y contenido en `ca021dc`, local y sin publicar (el remoto del dueño está
+  en `3dbaa64`, v2.108.0). Cambia sólo `routes/account.js`; los tres gates verdes.
+- **La pestaña «Ingrediente»** entre «Platos» y «Momento», como el diseño. Cada
+  pestaña aparece si su ruta existe: un 404 de `ingredients` la saca y quedan
+  «Platos» y «Momento». Error o 413: su cartel con «Reintentar».
+- **La tarjeta «Por ingrediente principal»**, con «Los mismos N platos, agrupados
+  por lo que llevan» (N es `distinct_dishes` de «Platos» del mismo período; sin ese
+  dato, «Tus platos, agrupados por lo que llevan»). Rótulos del handoff, en tuteo:
+  Carnes · Pescados y mariscos · Pastas y pizzas · Verduras y ensaladas · Postres ·
+  Bebidas · Bebidas con alcohol · Otros.
+- 🔴 **El diseño dice «5 platos» por grupo y el contrato no lo trae** (`times` son
+  visitas). No se inventa: el anillo reparte el DINERO sobre `total_cents` y lleva el
+  total al centro; cada fila dice visitas, monto y porcentaje (declarado; **G-41** en
+  `GAPS.md`). La burbuja es la de «Platos», como en el diseño 2d.
+- **«Otros» siempre al final**, aunque sea el mayor. Una clave que el front no
+  conoce se **suma** a «Otros» sin romper; si se suman dos, las visitas de «Otros»
+  no se muestran (una misma visita puede estar en los dos grupos).
+- **«Clasificado por el nombre del plato»** debajo del anillo cuando `estimated`.
+- El decodificador exige claves exactas, grupos con monto > 0 y al menos una visita,
+  claves sin repetir y `total_cents` = suma de los grupos.
+- **Mock:** del mismo modelo de visitas que `dishes`; el grupo de cada plato es el
+  que devuelve el clasificador del dueño v1 sobre esos nombres (medido, no
+  reimplementado). Costura `payme.app.mock.ingredientes.v1`: `antiguo` · `error` ·
+  `grande` · `otros` (Otros como el mayor) · `desconocida`.
+- **Tests:** unitarios (10) y e2e (9, con tres capturas): el total del centro es el
+  de 2a y la suma de las filas coincide. Mutantes: 8 (Otros no al final, en unitario y
+  e2e; clave desconocida que rompe, en los dos; sin la línea de estimación; pestaña
+  dibujada con 404; total sin verificar; clave desconocida descartada en vez de
+  sumada), todos mueren.
+
 ## 0.178.0 — La burbuja dice el mes y los botones de la mesa llevan color (2026-09-19)
 
 Orden `APP-DESIGN-FIXES-MONTH-BUBBLE-AND-MESA-BUTTONS-AF-36-20260919`, base `509fec9`

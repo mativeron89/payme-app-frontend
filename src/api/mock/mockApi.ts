@@ -3277,6 +3277,76 @@ export async function mockStatsDayparts(period?: string): Promise<unknown> {
   });
 }
 
+/**
+ * AF-38 · el grupo de cada plato del modelo, TAL CUAL lo devuelve el clasificador
+ * del dueño v1 (`services/clasificadorPlatos.js`, medido sobre estos nombres el
+ * 2026-09-19). El mock no reimplementa el clasificador: sólo sabe estos platos, y
+ * uno que no esté acá cae en `other`, como en el dueño.
+ */
+const GRUPO_DEL_PLATO_MOCK: Record<string, string> = {
+  'Tagliatelle Bolognese': 'meat',
+  'Tiramisú': 'dessert',
+  'Vino tinto (copa)': 'alcohol',
+  'Ramen tonkotsu': 'pasta',
+  'Gyozas de cerdo': 'meat',
+  'Tacos al pastor': 'meat',
+  'Agua de jamaica': 'drinks',
+  'Bowl de quinoa': 'veggie',
+  'Arrachera': 'meat',
+};
+
+/**
+ * AF-38 · `GET /account/stats/ingredients` (v2.115.0), del MISMO modelo de visitas
+ * que `dishes`: cada ítem de cada visita del período va a un grupo; `times` son
+ * visitas con al menos un plato del grupo; `total_cents` es la suma de los ítems.
+ *
+ * Costura `payme.app.mock.ingredientes.v1`: `antiguo` (404) · `error` (500) ·
+ * `grande` (413) · `otros` (lo que no es alcohol ni postre cae en «Otros», que
+ * queda como el grupo MAYOR) · `desconocida` (el postre llega con una clave que el
+ * front no conoce).
+ */
+export async function mockStatsIngredients(period?: string): Promise<unknown> {
+  const falla = fallaDeRuta('payme.app.mock.ingredientes.v1', 'stats_range_too_large');
+  if (falla) return falla;
+  const resuelto = resolverPeriodo(period);
+  if (resuelto === 'invalido') return fail(400, 'validation_error');
+  const costura = leerCostura('payme.app.mock.ingredientes.v1');
+  const { meses, period: periodo } = periodoDelMock(resuelto.clave);
+  const grupoDe = (nombre: string): string => {
+    const g = GRUPO_DEL_PLATO_MOCK[nombre] ?? 'other';
+    if (costura === 'otros' && g !== 'alcohol' && g !== 'dessert') return 'other';
+    if (costura === 'desconocida' && g === 'dessert') return 'grains';
+    return g;
+  };
+  const porGrupo = new Map<string, { key: string; times: number; amount_cents: number }>();
+  let total = 0;
+  for (const v of visitasDelModelo().filter((x) => meses.includes(x.mes))) {
+    const enEstaVisita = new Set<string>();
+    for (const it of v.items) {
+      const key = grupoDe(it.name);
+      const g = porGrupo.get(key) ?? { key, times: 0, amount_cents: 0 };
+      g.amount_cents += it.amount_cents;
+      if (!enEstaVisita.has(key)) { g.times += 1; enEstaVisita.add(key); }
+      porGrupo.set(key, g);
+      total += it.amount_cents;
+    }
+  }
+  const groups = [...porGrupo.values()]
+    .filter((g) => g.amount_cents > 0)
+    .sort((a, b) => {
+      if ((a.key === 'other') !== (b.key === 'other')) return a.key === 'other' ? 1 : -1;
+      return b.amount_cents - a.amount_cents || a.key.localeCompare(b.key);
+    });
+  return delay({
+    basis: baseDelMock(),
+    ...(resuelto.publicar && { period: periodo }),
+    classifier_version: '1',
+    estimated: true,
+    groups,
+    total_cents: total,
+  });
+}
+
 /** AF-31 · `GET /account/stats/evolution` (v2.108.0): siempre los últimos 6 meses. */
 export async function mockStatsEvolution(): Promise<unknown> {
   const falla = fallaDeRuta('payme.app.mock.evolucion.v1', 'stats_range_too_large');

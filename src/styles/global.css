@@ -5560,6 +5560,14 @@ body {
   color: var(--teal-txt);
 }
 
+/* AF-38 · 2d · la línea chica de estimación, debajo del anillo (decisión de Mati). */
+.stat-estimacion {
+  margin: -6px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--gray-d);
+}
+
 /* AF-36 · la opción con su mes al lado, en apagado: «Este mes · Septiembre». */
 .stat-periodo-nombre {
   display: flex;

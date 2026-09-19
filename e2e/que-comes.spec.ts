@@ -15,13 +15,14 @@ const MESES = mesesDeMexico(new Date(), 'es');
 
 async function preparar(
   page: Page,
-  o: { stats?: string; platos?: string; momentos?: string; conDinero?: boolean } = {},
+  o: { stats?: string; platos?: string; momentos?: string; ingredientes?: string; conDinero?: boolean } = {},
 ): Promise<void> {
   await page.addInitScript((op) => {
     if (!op.conDinero) localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
     if (op.stats) localStorage.setItem('payme.app.mock.stats.v1', op.stats);
     if (op.platos) localStorage.setItem('payme.app.mock.platos.v1', op.platos);
     if (op.momentos) localStorage.setItem('payme.app.mock.momentos.v1', op.momentos);
+    if (op.ingredientes) localStorage.setItem('payme.app.mock.ingredientes.v1', op.ingredientes);
   }, o);
   await ingresar(page);
   await page.goto('/#/estadisticas');
@@ -55,8 +56,8 @@ test.describe('AF-31 · Qué comes (2c)', () => {
     await expect(tarjeta(page).getByRole('img', { name: /^Platos más pedidos: / })).toBeVisible();
     // En base consumo no hay propina que aclarar.
     await expect(page.getByText('Lo cobrado por cada plato, sin la propina.')).toHaveCount(0);
-    // Sin las pestañas que no existen todavía.
-    await expect(page.getByText('Ingrediente', { exact: true })).toHaveCount(0);
+    // AF-38: las tres pestañas del diseño, en su orden.
+    await expect(page.getByRole('tablist', { name: 'Qué comes' }).getByRole('tab')).toHaveText(['Platos', 'Ingrediente', 'Momento']);
     // AF-32: «Momento» ya existe (2e, v2.109.0) y es pestaña; «Ingrediente» (2d) no.
     await expect(page.getByRole('tab', { name: 'Momento' })).toBeVisible();
     await capturar(page, 'platos-01-2c');
@@ -115,8 +116,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await preparar(page);
       await acceso(page).click();
       const pestanas = page.getByRole('tablist', { name: 'Qué comes' });
-      await expect(pestanas.getByRole('tab')).toHaveText(['Platos', 'Momento']);
-      await expect(page.getByText('Ingrediente', { exact: true })).toHaveCount(0);
+      await expect(pestanas.getByRole('tab')).toHaveText(['Platos', 'Ingrediente', 'Momento']);
       await pestanas.getByRole('tab', { name: 'Momento' }).click();
       await expect(momentos(page)).toBeVisible();
       const filas = momentos(page).getByRole('listitem');
@@ -159,8 +159,8 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await expect(page.getByText('Cada visita incluye la propina.')).toBeVisible();
     });
 
-    test('backend anterior (404): no hay pestañas y 2c queda como estaba', async ({ page }) => {
-      await preparar(page, { momentos: 'antiguo' });
+    test('backend anterior (404 en momentos e ingredientes): no hay pestañas y 2c queda como estaba', async ({ page }) => {
+      await preparar(page, { momentos: 'antiguo', ingredientes: 'antiguo' });
       await acceso(page).click();
       await expect(tarjeta(page)).toBeVisible();
       await expect(page.getByRole('tablist')).toHaveCount(0);
@@ -175,6 +175,106 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await page.evaluate(() => localStorage.removeItem('payme.app.mock.momentos.v1'));
       await page.getByRole('button', { name: 'Reintentar' }).click();
       await expect(momentos(page).getByRole('listitem')).toHaveCount(4);
+    });
+  });
+  test.describe('AF-38 · por ingrediente (2d)', () => {
+    const region = (page: Page) => page.getByRole('region', { name: 'Por ingrediente principal' });
+    const filas = (page: Page) => region(page).getByRole('listitem');
+    const pesos = (txt: string) => Number(txt.replace(/[^0-9.]/g, ''));
+
+    async function abrirIngrediente(page: Page): Promise<void> {
+      await acceso(page).click();
+      await page.getByRole('tablist', { name: 'Qué comes' }).getByRole('tab', { name: 'Ingrediente' }).click();
+    }
+
+    test('las tres pestañas; los grupos con visitas y monto, «Otros» al final, la línea de estimación y el total de 2a', async ({ page }) => {
+      await preparar(page);
+      // El total del mes de 2a: en base consumo, lo de cada plato suma lo de cada visita.
+      const total2a = (await page.locator('.stat-burbuja-total').textContent()) ?? '';
+      expect(total2a).toBe('$2,165.00');
+      await abrirIngrediente(page);
+      await expect(page.getByRole('tab', { name: 'Ingrediente' })).toHaveAttribute('aria-selected', 'true');
+      await expect(region(page)).toBeVisible();
+      await expect(region(page)).toContainText('Los mismos 7 platos, agrupados por lo que llevan');
+      // Este mes del mock: carnes, postres, alcohol, pastas y lo que no se reconoce.
+      await expect(filas(page)).toHaveCount(5);
+      await expect(filas(page).last()).toContainText('Otros');
+      await expect(region(page)).toContainText('Bebidas con alcohol');
+      await expect(filas(page).first()).toContainText(/\d+ visitas?/);
+      // 🔴 El centro es el total, y es el de 2a: la suma coincide.
+      await expect(region(page).locator('.stat-anillo-total')).toHaveText(total2a);
+      const montos = await region(page).locator('.stat-anillo-monto').allTextContents();
+      expect(Math.round(montos.reduce((a, m) => a + pesos(m) * 100, 0))).toBe(216500);
+      await expect(region(page).getByText('Clasificado por el nombre del plato')).toBeVisible();
+      await expect(region(page).getByRole('img', { name: /^Por ingrediente principal: Carnes \d+%/ })).toBeVisible();
+      // La burbuja es la de «Platos», como el diseño 2d.
+      await expect(page.locator('.stat-burbuja-total')).toHaveText('7 platos');
+      // Sin «N platos» por grupo: el dueño no lo trae.
+      for (const fila of await filas(page).allTextContents()) expect(fila).not.toMatch(/\d+ platos?/);
+      await capturar(page, 'ingrediente-01-con-datos');
+    });
+
+    test('🔴 «Otros» queda al final aunque sea el grupo MAYOR', async ({ page }) => {
+      await preparar(page, { ingredientes: 'otros' });
+      await abrirIngrediente(page);
+      await expect(filas(page).last()).toContainText('Otros');
+      const montos = (await region(page).locator('.stat-anillo-monto').allTextContents()).map(pesos);
+      expect(montos[montos.length - 1]).toBe(Math.max(...montos));
+      expect(montos[montos.length - 1]).toBeGreaterThan(montos[0]);
+      await capturar(page, 'ingrediente-02-otros-grande');
+    });
+
+    test('🔴 una clave desconocida no rompe: se suma a «Otros» y la suma sigue igual', async ({ page }) => {
+      await preparar(page, { ingredientes: 'desconocida' });
+      await abrirIngrediente(page);
+      await expect(filas(page).last()).toContainText('Otros');
+      await expect(region(page)).not.toContainText('Postres');
+      await expect(region(page)).not.toContainText('grains');
+      const montos = await region(page).locator('.stat-anillo-monto').allTextContents();
+      expect(Math.round(montos.reduce((a, m) => a + pesos(m) * 100, 0))).toBe(216500);
+    });
+
+    test('vacío: el período sin platos lo dice', async ({ page }) => {
+      await preparar(page, { stats: 'vacio' });
+      await abrirIngrediente(page);
+      await expect(page.getByText('Todavía no registramos platos este mes.')).toBeVisible();
+      await expect(region(page)).toHaveCount(0);
+      await capturar(page, 'ingrediente-03-vacia');
+    });
+
+    test('🔴 backend anterior (404): la pestaña no se dibuja y quedan «Platos» y «Momento»', async ({ page }) => {
+      await preparar(page, { ingredientes: 'antiguo' });
+      await acceso(page).click();
+      await expect(tarjeta(page)).toBeVisible();
+      await expect(page.getByRole('tablist', { name: 'Qué comes' }).getByRole('tab')).toHaveText(['Platos', 'Momento']);
+    });
+
+    for (const costura of ['error', 'grande'] as const) {
+      test(`${costura === 'error' ? 'error del servidor' : '413'}: su cartel con «Reintentar»`, async ({ page }) => {
+        await preparar(page, { ingredientes: costura });
+        await abrirIngrediente(page);
+        await expect(page.getByText('No pudimos cargar tus ingredientes')).toBeVisible();
+        await page.evaluate(() => localStorage.removeItem('payme.app.mock.ingredientes.v1'));
+        await page.getByRole('button', { name: 'Reintentar' }).click();
+        await expect(filas(page)).toHaveCount(5);
+      });
+    }
+
+    test('con pagos: «de gasto» y sin la propina', async ({ page }) => {
+      await preparar(page, { conDinero: true });
+      await abrirIngrediente(page);
+      await expect(region(page).locator('.stat-anillo-unidad')).toHaveText('de gasto');
+      await expect(page.getByText('Lo cobrado por cada plato, sin la propina.')).toBeVisible();
+    });
+
+    test('el período elegido rige también acá', async ({ page }) => {
+      await preparar(page);
+      await page.getByRole('button', { name: /^Período: / }).click();
+      await page.getByRole('radio', { name: /^Mes pasado/ }).click();
+      await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
+      await abrirIngrediente(page);
+      await expect(region(page).locator('.stat-anillo-total')).toHaveText('$1,320.00');
+      await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
     });
   });
 });
