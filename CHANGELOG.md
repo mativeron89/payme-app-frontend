@@ -11,6 +11,16 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.180.2 — Guarda de tipo del comercio OCR (2026-09-19)
+
+Orden `AF-N179-GUARDA-NULL-EXCEPCION-20260919`, base `82d0f95`. **Sin push,
+sin deploy, sin GREEN.** Roadmap n179.
+
+- `merchant.name` presente vuelve a exigir un string antes de comprobar NFC y
+  espacios canónicos; `null`, booleanos, números, arreglos y objetos se
+  rechazan. El nombre ausente y el string canónico siguen permitidos.
+- No cambia el owner, el espejo, el flujo, el contrato v1 ni las guardas RFC.
+
 ## 0.180.1 — Paridad canónica del comercio OCR (2026-09-19)
 
 Orden `AF-N179-RECEPCION-FIX1-20260919`, base `e92de07`. **Sin push,

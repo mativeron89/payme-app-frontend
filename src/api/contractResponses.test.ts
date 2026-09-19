@@ -31,6 +31,25 @@ describe('OCR v2 · merchant cerrado y v1 compatible', () => {
       merchant: { name: 'Café Norte' },
       ...base,
     }).merchant).toEqual({ name: 'Café Norte' });
+    expect(ocrResponse({
+      contract_version: 2,
+      merchant: { rfc: 'TEG010101AB1' },
+      ...base,
+    }).merchant).toEqual({ rfc: 'TEG010101AB1' });
+  });
+
+  it.each([
+    ['null', null],
+    ['boolean', true],
+    ['number', 7],
+    ['array', ['Fonda']],
+    ['object', { value: 'Fonda' }],
+  ])('rechaza merchant.name %s y conserva la guarda de tipo previa', (_kind, name) => {
+    expect(() => ocrResponse({
+      contract_version: 2,
+      merchant: { name },
+      ...base,
+    })).toThrow('contract_response_invalid:ocr');
   });
 
   it.each([

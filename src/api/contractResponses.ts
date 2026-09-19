@@ -232,7 +232,7 @@ export function ocrResponse(value: unknown): OcrResponse {
       : null;
     if (!raw || Object.keys(raw).length === 0
         || Object.keys(raw).some((key) => key !== 'name' && key !== 'rfc')
-        || (name !== undefined && normalizedMerchantName(name) !== name)
+        || (name !== undefined && (typeof name !== 'string' || normalizedMerchantName(name) !== name))
         || (rfc !== undefined && (typeof rfc !== 'string' || normalizedRfc !== rfc
           || !/^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/u.test(rfc)))) {
       throw new ContractResponseError('ocr');
