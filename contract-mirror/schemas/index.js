@@ -275,6 +275,12 @@ const setupIntent = z.object({
 }).default({});
 const setDefaultPaymentMethod = z.object({ payment_method_id: uuid });
 const uuidIdParam = z.object({ id: uuid });
+// AB-25 · foto del participante para el organizador. Sólo formato: cualquier
+// otra negativa es un único 404 no oracular en la ruta.
+const mesaParticipantAvatarParams = z.object({
+  code: z.string().min(1).max(40),
+  participant_id: uuid,
+});
 
 // FRIENDS / GROUPS
 const addFriend = z.object({
@@ -615,7 +621,7 @@ module.exports = {
   facebookRegisterStartSchema, facebookLoginStart, facebookComplete,
   facebookSignedRequest,
   recoveryRequest, recoveryComplete, updateMe, updateProfileName,
-  attachPaymentMethod, setupIntent, setDefaultPaymentMethod, uuidIdParam,
+  attachPaymentMethod, setupIntent, setDefaultPaymentMethod, uuidIdParam, mesaParticipantAvatarParams,
   addFriend, searchFriends, friendRequestsQuery,
   createGroup, updateGroup, addGroupMember,
   createInvitation,

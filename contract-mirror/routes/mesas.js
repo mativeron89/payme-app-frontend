@@ -37,6 +37,8 @@ const savedCards = require('../services/savedCards');   // D4 (v2.16)
 const paymentMethodLifecycle = require('../services/paymentMethodLifecycle');
 const itemClaims = require('../services/itemClaims');   // v2.18 (fracciones)
 const consumoPropio = require('../services/consumoPropio');   // AB-17: «lo que elegiste»
+const profileIdentity = require('../services/profileIdentity');   // AB-25: foto al organizador
+const { edadConocida } = require('../services/consent');          // AB-25: la ÚNICA mayoría de edad
 const settlement = require('../services/settlement');
 const paymentProcessor = require('../services/paymentProcessor');
 const {
@@ -54,7 +56,7 @@ const shortfallDetails = require('../services/shortfallDetails');
 const nativeWalletCapability = require('../services/nativeWalletCapability');
 
 const router = express.Router();
-const { validateBody } = schemas;
+const { validateBody, validateParams } = schemas;
 const ITEM_LOCK_SECONDS = Number(process.env.ITEM_LOCK_SECONDS) || 600;
 const CARD_PAYMENT_TYPES = new Set(['card', 'apple_pay', 'google_pay']);
 
@@ -1358,7 +1360,9 @@ router.get('/:code/participants', requireAuth, requireMesaParticipant, async (re
       return res.status(403).json({ error: 'not_mesa_organizer' });
     }
     const { rows } = await pool.query(
-      `SELECT u.first_name, u.last_name, u.payme_id, u.status
+      `SELECT p.id AS participant_id, p.user_id,
+              u.first_name, u.last_name, u.payme_id, u.status,
+              EXISTS (SELECT 1 FROM user_avatars a WHERE a.user_id = p.user_id) AS tiene_foto
          FROM mesa_participants p
          LEFT JOIN users u ON u.id = p.user_id
         WHERE p.mesa_id = $1 AND p.status = 'active'
@@ -1366,13 +1370,68 @@ router.get('/:code/participants', requireAuth, requireMesaParticipant, async (re
         ORDER BY p.joined_at ASC, p.id ASC`,
       [req.mesa.id, req.user.id]
     );
-    res.json({
-      participants: rows.map((r) => ({
+    const participants = [];
+    for (const r of rows) {
+      participants.push({
+        participant_id: r.participant_id,
         first_name: r.first_name ?? null,
         last_name: r.last_name ?? null,
         payme_id: r.status === 'deleted' ? null : (r.payme_id ?? null),
-      })),
-    });
+        has_avatar: await fotoVisibleAlOrganizador(r),
+      });
+    }
+    res.json({ participants });
+  } catch (err) { next(err); }
+});
+
+/**
+ * AB-25 · n164 (decisión de Mati 17d436dd…af78: «Aprobado tal cual»; menores:
+ * «No mostrarla si es menor o sin fecha»). ¿La foto de este participante se le
+ * puede mostrar al organizador? Sólo si: tiene cuenta, no está eliminada, tiene
+ * foto, y es MAYOR DE EDAD CONOCIDA — `consent.edadConocida`, la única
+ * definición del repo (calendario de México, 18 años); `null` (sin fecha) y
+ * `false` (menor) ⇒ no. La foto de Google nunca existe acá (guarda 8).
+ */
+async function fotoVisibleAlOrganizador(fila) {
+  if (!fila.user_id || fila.status === 'deleted' || !fila.tiene_foto) return false;
+  if (!profileIdentity.profileIdentityRolloutEnabled()) return false;
+  return (await edadConocida(fila.user_id)) === true;
+}
+
+// ═══════════════════════════════════════════════════════════
+// GET /:code/participants/:participant_id/avatar · AB-25, canal A del estudio
+// (docs/ESTUDIO_FOTO_PARA_EL_ORGANIZADOR.md). Proxy autenticado: los bytes de
+// la foto del participante, SÓLO al organizador de ESA mesa, sólo si el
+// participante está activo en ESA mesa y `has_avatar` sería true. Sin URL
+// pública (`avatar_public_url` sigue en false), `private, no-store`, sin ETag.
+// 🔴 No oracular: «la mesa no existe», «no la organizás», «ese participante no
+// es de esta mesa o se fue», «sin foto», «menor o sin fecha» y «cuenta
+// eliminada» responden EXACTAMENTE el mismo 404. Por eso no usa
+// requireMesaParticipant (que distingue 404 de 403).
+// ═══════════════════════════════════════════════════════════
+router.get('/:code/participants/:participant_id/avatar', requireAuth,
+  validateParams(schemas.mesaParticipantAvatarParams), async (req, res, next) => {
+  const noEsta = () => res.status(404).json({ error: 'avatar_not_found' });
+  try {
+    if (!req.user) return noEsta();
+    const { rows: [fila] } = await pool.query(
+      `SELECT p.user_id, u.status,
+              EXISTS (SELECT 1 FROM user_avatars a WHERE a.user_id = p.user_id) AS tiene_foto
+         FROM mesas m
+         JOIN mesa_participants p ON p.mesa_id = m.id
+         LEFT JOIN users u ON u.id = p.user_id
+        WHERE m.code = $1 AND m.opener_user_id = $2
+          AND p.id = $3 AND p.status = 'active'
+          AND (p.user_id IS NULL OR p.user_id <> $2)`,
+      [req.params.code, req.user.id, req.params.participant_id]
+    );
+    if (!fila || !(await fotoVisibleAlOrganizador(fila))) return noEsta();
+    const avatar = await profileIdentity.obtenerAvatar(fila.user_id);
+    if (!avatar) return noEsta();
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.type(avatar.mimeType);
+    res.setHeader('Content-Length', String(avatar.bytes.length));
+    res.end(avatar.bytes);
   } catch (err) { next(err); }
 });
 

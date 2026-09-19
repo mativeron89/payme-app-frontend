@@ -6,6 +6,42 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-19** (el quinto del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`293dae75c1e0008b1b03492f041d3933463c47f5`**
+  (App Backend **v2.111.0**, AB-24/AB-25. El recorrido incluye:
+  - v2.109.0: `/stats/dayparts`;
+  - v2.110.0: `participant_id` y `has_avatar` en `/participants`, más la ruta
+    de la foto;
+  - v2.111.0: Aviso de privacidad **2.5.3**.)
+- Commit del que se tomó el inventario autoritativo:
+  **`91d1e747ac0ab657131586bfa4affed3ff21786d`** (HEAD de la rama del dueño
+  `claude/foto-organizador-2-5-3`). La diferencia `293dae7..91d1e74` toca sólo
+  `contract/mirror-inventory.json`.
+
+🔴 **No está publicado:** el `main` remoto del dueño es `81003fe` (v2.105.0) y
+ninguna rama remota contiene `6afa639` ni `293dae7` (medido 2026-09-19). El
+front va primero: reconoce 2.5.3 y lee las dos formas de `/participants`.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior
+(`a8a75c1`) cambian **cuatro**: `routes/account.js`, `routes/mesas.js`,
+`schemas/index.js` y `services/profileIdentity.js` (`notice_version: '2.5.3'`).
+Hay cero nuevos, cero que salgan y cero renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `91d1e747`
+(`.claude/worktrees/foto-org`, porcelain vacío).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `293dae7`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `293dae7`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`91d1e747`) · exit 0 |
+
+### Refresh anterior · 2026-09-19 (período, platos y evolución · `a8a75c1`)
+
 - Fecha del refresh: **2026-09-19** (el cuarto del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`a8a75c12ab54896b4e522860ae3a81e692567ebb`**

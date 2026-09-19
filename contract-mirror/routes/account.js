@@ -825,6 +825,64 @@ router.get('/stats/dishes', validateQuery(statsPeriodQuery), async (req, res, ne
 });
 
 /**
+ * AB-24 · «Qué comes · por momento del día» (pantalla 2e). Cortes de Mati
+ * (decisión fab659b2…3660), en hora de America/Mexico_City:
+ *   breakfast [00:00,12:00) · lunch [12:00,17:00) · afternoon [17:00,19:00) ·
+ *   dinner [19:00,24:00). Los rótulos («Desayuno, Comida, Tarde, Cena») son del front.
+ * La hora es la de CREACIÓN DE LA MESA (la misma `created_at` que publica
+ * «Tus restaurantes»). Se arma desde esa misma estructura en las dos bases, así
+ * la suma de los cuatro momentos es `consumption_month` del mismo período.
+ * Los cuatro momentos salen SIEMPRE, en ese orden, aunque estén en cero.
+ */
+const MOMENTOS = Object.freeze([
+  { key: 'breakfast', desde: 0, hasta: 12 },
+  { key: 'lunch', desde: 12, hasta: 17 },
+  { key: 'afternoon', desde: 17, hasta: 19 },
+  { key: 'dinner', desde: 19, hasta: 24 },
+]);
+const HORA_MX = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Mexico_City', hour: 'numeric', hourCycle: 'h23',
+});
+
+function momentoDe(instanteIso) {
+  const hora = Number(HORA_MX.format(new Date(instanteIso)));
+  return MOMENTOS.find((m) => hora >= m.desde && hora < m.hasta).key;
+}
+
+function armarMomentos(restaurants) {
+  const porMomento = new Map(MOMENTOS.map((m) => [m.key, { key: m.key, visits: 0, amount_cents: 0 }]));
+  for (const r of restaurants) {
+    for (const v of r.visits) {
+      const acc = porMomento.get(momentoDe(v.created_at));
+      acc.visits += 1;
+      acc.amount_cents += v.amount_cents;
+    }
+  }
+  const dayparts = MOMENTOS.map((m) => porMomento.get(m.key));
+  return {
+    dayparts,
+    total_cents: dayparts.reduce((s, d) => s + d.amount_cents, 0),
+    visits: dayparts.reduce((s, d) => s + d.visits, 0),
+  };
+}
+
+router.get('/stats/dayparts', validateQuery(statsPeriodQuery), async (req, res, next) => {
+  try {
+    const { key: periodo, rango } = periodoDe(req);
+    const period = await periodoPublicado(periodo, rango);
+    const cuerpo = dineroHabilitado()
+      ? await restaurantesDesdePagos(req.user.id, rango)
+      : await restaurantesDesdeSelecciones(req.user.id, rango);
+    const visitas = cuerpo.restaurants.reduce((s, r) => s + r.visits_count, 0);
+    if (visitas > maxVisitasDelRango) {
+      return res.status(413).json({ error: 'stats_range_too_large' });
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ basis: cuerpo.basis, period, ...armarMomentos(cuerpo.restaurants) });
+  } catch (err) { next(err); }
+});
+
+/**
  * AB-22 · «Evolución» (pantalla 2f). Los últimos 6 meses calendario de México,
  * del más viejo al actual, meses vacíos incluidos. Cada mes se calcula con la
  * MISMA función que `consumption_month` sobre su propio rango, así el mes en
