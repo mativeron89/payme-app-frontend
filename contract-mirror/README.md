@@ -6,6 +6,38 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-19** (el tercero del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`ae1434d63929235dc8ecc3baa4aa8ed9dd73089c`**
+  (App Backend **v2.104.0**, AB-20: ítem A `my_paid_bps` y `my_releasable_bps`
+  por ítem, en `343e57b` (v2.103.0); ítem B `GET /api/account/stats/restaurants`).
+- Commit del que se tomó el inventario autoritativo:
+  **`8ed527fbf98813afd9183dca151c4e612fb75587`** (HEAD de la rama del dueño
+  `claude/stats-etapa2-parte-pagada`). La diferencia `ae1434d..8ed527f` toca sólo
+  `contract/mirror-inventory.json`.
+
+🔴 **No está publicado:** el `main` remoto del dueño es `acc96a51…` (v2.102.0) y
+ninguna rama remota contiene `343e57b` ni `ae1434d` (medido 2026-09-19). Por
+eso el front trata los tres datos nuevos como OPCIONALES.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior
+(`98ee47b`) cambian **tres**: `routes/account.js`, `routes/mesas.js` y
+`services/itemClaims.js`. Hay cero nuevos, cero que salgan y cero renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `8ed527fb`
+(`.claude/worktrees/stats-etapa2`, porcelain vacío).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `ae1434d`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `ae1434d`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`8ed527fb`) · exit 0 |
+
+### Refresh anterior · 2026-09-19 («Mis estadísticas» etapa 1 · `98ee47b`)
+
 - Fecha del refresh: **2026-09-19** (el segundo del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`98ee47b4a1c6c242b7e49f6e5cce17711bcea201`**

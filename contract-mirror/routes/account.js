@@ -501,9 +501,15 @@ function bloqueDeConsumo(basis, categorias, total, visitas) {
   };
 }
 
-async function consumoDesdeSelecciones(userId) {
-  const { rows: mesas } = await pool.query(
-    `SELECT m.id, m.division_mode, r.category
+/**
+ * Las mesas del mes con selección propia: la MISMA consulta para
+ * `consumption_month` y para «Tus restaurantes», así los dos totales salen del
+ * mismo conjunto.
+ */
+async function mesasDelMesConSeleccion(userId) {
+  const { rows } = await pool.query(
+    `SELECT m.id, m.code, m.division_mode, m.created_at,
+            r.id AS restaurant_id, r.name AS restaurant_name, r.category
        FROM mesas m
        JOIN restaurants r ON r.id = m.restaurant_id
       WHERE m.created_at >= date_trunc('month', NOW())
@@ -522,6 +528,11 @@ async function consumoDesdeSelecciones(userId) {
             )`,
     [userId]
   );
+  return rows;
+}
+
+async function consumoDesdeSelecciones(userId) {
+  const mesas = await mesasDelMesConSeleccion(userId);
   const mios = await consumoPropio.porMesa(userId, mesas);
   const porCategoria = new Map();
   let total = 0;
@@ -548,6 +559,136 @@ function consumoDesdePagos(categoriasPagadas) {
   const visitas = categorias.reduce((acc, c) => acc + c.visits, 0);
   return bloqueDeConsumo('payments', categorias, total, visitas);
 }
+
+/**
+ * AB-20 · «Tus restaurantes» (pantalla 2b). Ruta propia y no un bloque de
+ * /stats: el detalle por visita e ítem sólo lo necesita esta pantalla, y una
+ * mesa puede tener 100+ ítems. Acotada al mes (misma regla y mismo límite de
+ * zona horaria que /stats); sin paginar.
+ *
+ * `basis` igual que `consumption_month`: con el dinero apagado sale de lo
+ * elegido (services/consumoPropio.js, con detalle por ítem); encendido, de lo
+ * pagado con la convención de `category_breakdown` (intentos succeeded/
+ * processed del mes, neto de reembolsos procesados). En esa base el monto de
+ * la visita INCLUYE la propina (bruto del intento) y los ítems no; se declara.
+ * `total_cents` coincide con `consumption_month.total_cents` en las dos bases.
+ *
+ * Tope defensivo: más de MAX_VISITAS_DEL_MES visitas en el mes ⇒ 413
+ * `stats_month_too_large`, sin datos parciales (nunca una lista recortada que
+ * parezca completa).
+ * Nunca otros comensales, cuántos eran, el total ni la propina de la mesa.
+ */
+const MAX_VISITAS_DEL_MES = 1000;
+let maxVisitasDelMes = MAX_VISITAS_DEL_MES;
+function fijarMaxVisitasParaTests(n) {
+  if (process.env.NODE_ENV !== 'test') throw new Error('stats_test_seam_forbidden');
+  const previo = maxVisitasDelMes;
+  maxVisitasDelMes = n;
+  return () => { maxVisitasDelMes = previo; };
+}
+
+function armarRestaurantes(basis, visitas) {
+  const porResto = new Map();
+  let total = 0;
+  for (const v of visitas) {
+    if (v.amount_cents <= 0) continue;
+    total += v.amount_cents;
+    const r = porResto.get(v.restaurant_id) || {
+      id: v.restaurant_id, name: v.restaurant_name, category: v.category,
+      amount_cents: 0, visits_count: 0, visits: [],
+    };
+    r.amount_cents += v.amount_cents;
+    r.visits_count += 1;
+    r.visits.push({
+      code: v.code,
+      created_at: new Date(v.created_at).toISOString(),
+      division_mode: v.division_mode,
+      amount_cents: v.amount_cents,
+      items: v.items,
+    });
+    porResto.set(v.restaurant_id, r);
+  }
+  const restaurants = [...porResto.values()]
+    .sort((a, b) => b.amount_cents - a.amount_cents || a.name.localeCompare(b.name));
+  for (const r of restaurants) {
+    r.visits.sort((a, b) => b.created_at.localeCompare(a.created_at) || a.code.localeCompare(b.code));
+  }
+  return { basis, total_cents: total, restaurants };
+}
+
+async function restaurantesDesdeSelecciones(userId) {
+  const mesas = await mesasDelMesConSeleccion(userId);
+  const mios = await consumoPropio.porMesa(userId, mesas, pool, { detalle: true });
+  return armarRestaurantes('consumption', mesas.map((m) => ({
+    ...m,
+    amount_cents: mios.get(m.id)?.amount_cents || 0,
+    items: mios.get(m.id)?.items || [],
+  })));
+}
+
+async function restaurantesDesdePagos(userId) {
+  const { rows: mesas } = await pool.query(
+    `SELECT m.id, m.code, m.division_mode, m.created_at,
+            r.id AS restaurant_id, r.name AS restaurant_name, r.category,
+            COALESCE(SUM(GREATEST(pa.gross_amount_cents - COALESCE(rf.reembolsado, 0), 0)), 0)
+              AS amount
+       FROM payment_attempts pa
+       JOIN mesas m ON m.id = pa.mesa_id
+       JOIN restaurants r ON r.id = m.restaurant_id
+       LEFT JOIN (
+         SELECT payment_attempt_id, SUM(amount_cents) AS reembolsado
+           FROM payment_refunds WHERE status = 'processed'
+          GROUP BY payment_attempt_id
+       ) rf ON rf.payment_attempt_id = pa.id
+      WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+        AND pa.created_at >= date_trunc('month', NOW())
+      GROUP BY m.id, m.code, m.division_mode, m.created_at, r.id, r.name, r.category`,
+    [userId]
+  );
+  const { rows: items } = await pool.query(
+    `SELECT pa.mesa_id, pai.mesa_item_id, mi.name, mi.created_at,
+            COALESCE(SUM(pai.fraction_bps), 0)::int AS fraction_bps,
+            COALESCE(SUM(pai.amount_cents), 0) AS amount_cents
+       FROM payment_attempt_items pai
+       JOIN payment_attempts pa ON pa.id = pai.payment_attempt_id
+       JOIN mesa_items mi ON mi.id = pai.mesa_item_id
+      WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+        AND pa.created_at >= date_trunc('month', NOW())
+      GROUP BY pa.mesa_id, pai.mesa_item_id, mi.name, mi.created_at
+      ORDER BY mi.created_at ASC, pai.mesa_item_id ASC`,
+    [userId]
+  );
+  const itemsPorMesa = new Map();
+  for (const i of items) {
+    if (!itemsPorMesa.has(i.mesa_id)) itemsPorMesa.set(i.mesa_id, []);
+    itemsPorMesa.get(i.mesa_id).push({
+      name: i.name, fraction_bps: Number(i.fraction_bps), amount_cents: Number(i.amount_cents),
+    });
+  }
+  return armarRestaurantes('payments', mesas.map((m) => ({
+    ...m, amount_cents: Number(m.amount), items: itemsPorMesa.get(m.id) || [],
+  })));
+}
+
+router.get('/stats/restaurants', async (req, res, next) => {
+  try {
+    const { rows: [inicio] } = await pool.query(`SELECT date_trunc('month', NOW()) AS t`);
+    const cuerpo = dineroHabilitado()
+      ? await restaurantesDesdePagos(req.user.id)
+      : await restaurantesDesdeSelecciones(req.user.id);
+    const visitas = cuerpo.restaurants.reduce((s, r) => s + r.visits_count, 0);
+    if (visitas > maxVisitasDelMes) {
+      return res.status(413).json({ error: 'stats_month_too_large' });
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({
+      basis: cuerpo.basis,
+      month_start: new Date(inicio.t).toISOString(),
+      total_cents: cuerpo.total_cents,
+      restaurants: cuerpo.restaurants,
+    });
+  } catch (err) { next(err); }
+});
 
 router.get('/stats', async (req, res, next) => {
   try {
@@ -639,3 +780,5 @@ router.get('/stats', async (req, res, next) => {
 });
 
 module.exports = router;
+// Seam de test (NODE_ENV=test) para ejercitar el tope sin crear mil mesas.
+module.exports.fijarMaxVisitasParaTests = fijarMaxVisitasParaTests;

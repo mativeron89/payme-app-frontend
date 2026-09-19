@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "98ee47b4a1c6c242b7e49f6e5cce17711bcea201",
+  "commit": "ae1434d63929235dc8ecc3baa4aa8ed9dd73089c",
   "total": 107,
   "archivos": [
     {
@@ -307,8 +307,8 @@
     {
       "origen": "routes/account.js",
       "destino": "routes/account.js",
-      "sha256": "9f6a61e0821ff3bfb248a2beaef7144039eb3754d0dd742979bc2a1bf65bc1fe",
-      "bytes": 27582
+      "sha256": "6a20bb312babd0ba5a14f7608d168d565ab241253e9db3ba6f98f7a6fb6a8a53",
+      "bytes": 33599
     },
     {
       "origen": "routes/auth.js",
@@ -355,8 +355,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "21a0bef518108fe59124b63e8f5992b3f500b96c8bdb725a628bf604ab286e94",
-      "bytes": 174444
+      "sha256": "e0e1d7a72059208629e5dfa396a4aaa1907d45d9373834fc405ddcbc2e50363c",
+      "bytes": 175539
     },
     {
       "origen": "routes/notifications.js",
@@ -505,8 +505,8 @@
     {
       "origen": "services/itemClaims.js",
       "destino": "services/itemClaims.js",
-      "sha256": "fa8440647dbda0fe64b6f9d377042a18a7ef1105ac3809bcda55c68a5ee5a5cb",
-      "bytes": 20677
+      "sha256": "85d6f8575d4fdee16383f0e336751fabde17fde2f0412d0ec47219e01c558214",
+      "bytes": 21407
     },
     {
       "origen": "services/moneyRail.js",

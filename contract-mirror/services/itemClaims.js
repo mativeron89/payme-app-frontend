@@ -112,6 +112,23 @@ function ownsClaim(c, owner, lockTokens) {
 // Todo otro estado = plata en vuelo, intocable.
 const RELEASABLE_ATTEMPT_STATES = ['failed', 'cancelled'];
 
+/**
+ * «Se puede soltar» en SQL, UNA sola definición para releaseOwn y para
+ * `my_releasable_bps` de GET /mesas/:code (claim con alias `c`, sin el filtro
+ * de dueño): `locked`, VIVO —un lock vencido ya no es de nadie para ningún
+ * lector— y liberable por la regla B-05 (sin intento, o intento
+ * failed/cancelled). `param` es el placeholder de RELEASABLE_ATTEMPT_STATES.
+ * AB-20: la vigencia entró acá; antes releaseOwn soltaba también un lock
+ * propio vencido y lo informaba en `released`.
+ */
+function sqlClaimLiberable(param) {
+  return `(c.status = 'locked'
+          AND (c.lock_expires_at IS NULL OR c.lock_expires_at >= NOW())
+          AND (c.payment_attempt_id IS NULL OR EXISTS (
+                SELECT 1 FROM payment_attempts pa
+                 WHERE pa.id = c.payment_attempt_id AND pa.status = ANY(${param}::text[]))))`;
+}
+
 function isReleasable(c) {
   return c.payment_attempt_id == null
       || RELEASABLE_ATTEMPT_STATES.includes(c.attempt_status);
@@ -444,10 +461,8 @@ async function releaseOwn(client, { mesaId, itemIds, userId, triggeredBy = 'user
     if (!item) throw Object.assign(new Error('item_not_found'), { status: 404, item_id: itemId });
     const { rows: claims } = await client.query(
       `UPDATE mesa_item_claims c SET status='released'
-        WHERE c.mesa_item_id = $1 AND c.status = 'locked' AND c.locked_by_user_id = $2
-          AND (c.payment_attempt_id IS NULL OR EXISTS (
-                SELECT 1 FROM payment_attempts pa
-                 WHERE pa.id = c.payment_attempt_id AND pa.status = ANY($3::text[])))
+        WHERE c.mesa_item_id = $1 AND c.locked_by_user_id = $2
+          AND ${sqlClaimLiberable('$3')}
         RETURNING c.fraction_bps`,
       [itemId, userId, RELEASABLE_ATTEMPT_STATES]
     );
@@ -484,6 +499,8 @@ async function releaseOwn(client, { mesaId, itemIds, userId, triggeredBy = 'user
 
 module.exports = {
   FRACTION_VALUES,
+  RELEASABLE_ATTEMPT_STATES,
+  sqlClaimLiberable,
   COMPLETING_TOLERANCE_BPS,
   effectiveBps,
   lineTotalCents,

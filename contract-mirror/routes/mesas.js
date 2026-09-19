@@ -1201,20 +1201,31 @@ router.get('/:code', requireAuth, requireMesaParticipant, async (req, res, next)
     // pagados + locked no vencidos). Lectura pura: sin candados.
     const myUserId = req.user?.id || null;
     const myHashF = guestHashOf(req);
+    // AB-20 · G-40: además, qué parte de LO MÍO está pagada y qué parte se
+    // puede soltar ahora. `my_releasable_bps` usa la MISMA regla que
+    // POST /items/release (itemClaims.sqlClaimLiberable): si es > 0, soltar ese
+    // ítem suelta algo. Sólo por dueño `user_id` (releaseOwn no suelta por token).
     const { rows: claimAgg } = await pool.query(
-      `SELECT mesa_item_id,
-              COALESCE(SUM(fraction_bps) FILTER (
-                WHERE status='paid' OR (status='locked' AND (lock_expires_at IS NULL OR lock_expires_at >= NOW()))
+      `SELECT c.mesa_item_id,
+              COALESCE(SUM(c.fraction_bps) FILTER (
+                WHERE c.status='paid' OR (c.status='locked' AND (c.lock_expires_at IS NULL OR c.lock_expires_at >= NOW()))
               ), 0)::int AS taken_bps,
-              COALESCE(SUM(fraction_bps) FILTER (
-                WHERE (status='paid' OR (status='locked' AND (lock_expires_at IS NULL OR lock_expires_at >= NOW())))
-                  AND (($2::uuid IS NOT NULL AND locked_by_user_id = $2::uuid)
-                       OR ($3::text IS NOT NULL AND locked_by_guest_token_hash = $3::text))
-              ), 0)::int AS my_bps
-         FROM mesa_item_claims
-        WHERE mesa_id = $1
-        GROUP BY mesa_item_id`,
-      [mesa.id, myUserId, myHashF]
+              COALESCE(SUM(c.fraction_bps) FILTER (
+                WHERE (c.status='paid' OR (c.status='locked' AND (c.lock_expires_at IS NULL OR c.lock_expires_at >= NOW())))
+                  AND (($2::uuid IS NOT NULL AND c.locked_by_user_id = $2::uuid)
+                       OR ($3::text IS NOT NULL AND c.locked_by_guest_token_hash = $3::text))
+              ), 0)::int AS my_bps,
+              COALESCE(SUM(c.fraction_bps) FILTER (
+                WHERE c.status='paid' AND $2::uuid IS NOT NULL AND c.locked_by_user_id = $2::uuid
+              ), 0)::int AS my_paid_bps,
+              COALESCE(SUM(c.fraction_bps) FILTER (
+                WHERE $2::uuid IS NOT NULL AND c.locked_by_user_id = $2::uuid
+                  AND ${itemClaims.sqlClaimLiberable('$4')}
+              ), 0)::int AS my_releasable_bps
+         FROM mesa_item_claims c
+        WHERE c.mesa_id = $1
+        GROUP BY c.mesa_item_id`,
+      [mesa.id, myUserId, myHashF, itemClaims.RELEASABLE_ATTEMPT_STATES]
     );
     const claimsByItem = new Map(claimAgg.map((c) => [c.mesa_item_id, c]));
     const { rows: activeStaff } = await pool.query(
@@ -1302,12 +1313,17 @@ router.get('/:code', requireAuth, requireMesaParticipant, async (req, res, next)
           const cl = claimsByItem.get(i.id);
           const takenBps = cl ? Number(cl.taken_bps) : 0;
           const myBps = cl ? Number(cl.my_bps) : 0;
+          const myPaidBps = cl ? Number(cl.my_paid_bps) : 0;
+          const myReleasableBps = cl ? Number(cl.my_releasable_bps) : 0;
           return {
             id: i.id, name: i.name, category: i.category,
             price_cents: Number(i.price_cents), quantity: i.quantity, status: i.status,
             // v2.18 (fracciones): disponible y mi tenencia (0..10000 bps)
             remaining_bps: Math.max(0, 10000 - takenBps),
             my_bps: myBps,
+            // AB-20 · G-40 (aditivos, sólo del bearer).
+            my_paid_bps: myPaidBps,
+            my_releasable_bps: myReleasableBps,
             locked_by_me: myBps > 0 || lockedByMe(i),   // claims primero; columnas legacy p/ filas viejas
             lock_expires_at: i.lock_expires_at,
           };
