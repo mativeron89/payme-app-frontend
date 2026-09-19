@@ -129,6 +129,8 @@ const ESPERADO: Record<PageId, Esperado> = {
   restaurantes: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Tus restaurantes' } },
   // AF-31 · 2c. Mismo criterio: <h1> «Qué comes».
   platos: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Qué comes' } },
+  // AF-31 · 2f. <h1> «Evolución».
+  evolucion: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Evolución' } },
   recovery: {
     tipo: 'pantalla',
     marcador: { rol: 'heading', nombre: 'Crear una contraseña nueva' },

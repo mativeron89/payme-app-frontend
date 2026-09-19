@@ -90,6 +90,50 @@ decisión de Mati «por etapas».
   período en 2c, vacío, 404, y error y 413 con reintento. Capturas: 2c y 2c vacía.
 - **Mutantes (8, todos mueren).**
 
+### Pieza 3 · «Evolución» (2f, v2.108.0)
+
+- **Ruta nueva `#/evolucion`** con `GET /api/account/stats/evolution`: siempre los
+  últimos 6 meses de México, **sin selector**. Se abre desde el acceso «Evolución»
+  de 2a («$819.16 promedio en los últimos 6 meses»), que no aparece con 404.
+- **Burbuja:** «6 meses», el total y «$X promedio por mes». El promedio es total ÷
+  6 **con los meses vacíos adentro**, como el dueño.
+- **Barras por mes**, en CSS: monto y mes escritos en cada una, el mes vacío sin
+  alto. La comparación del mes actual con el anterior va arriba («Septiembre está
+  $845.00 arriba de agosto»).
+- **Columnas al 100 %** con la mezcla de cocinas. Cada cocina tiene un color fijo en
+  los seis meses (orden del dueño sobre los seis juntos). Cada columna lleva su
+  `aria-label` («Septiembre: Italiana 54%, …»), y el mes vacío va punteado y dice
+  «sin consumos». La leyenda escrita compara el primer mes con hoy. Nunca el color
+  solo.
+- 🔴 **El color del mes actual:** el diseño dice «septiembre en `--brand`», pero en
+  esta app `--brand` es el naranja (`#ff6b35`) y el archivo del diseño pinta la barra
+  en `#0FB5C9`. Se sigue al píxel del diseño (`--teal`) y se declara.
+- **Los nombres de mes salen de `Intl`** (`src/utils/meses.ts`) y no del diccionario:
+  «Mar» ya es la clave de «martes» en `en.ts`, y marzo no puede compartirla.
+- **Decodificador** (`src/api/evolucion.ts`): claves exactas; seis meses en orden
+  creciente; cada mes igual a sus cocinas; total igual a los meses; promedio =
+  total ÷ 6.
+- **Estados:** error con «Reintentar» (500, 413 `stats_range_too_large` o rechazo),
+  vacío de seis meses y datos.
+- **Guardas tocadas (declaradas):**
+  - `rutas-montan-pantalla.spec.ts`: la ruta `evolucion`.
+  - `AppHeader.identity.test.tsx`: 19 → 20 montajes autenticados.
+- **Tests:** decodificador (5), meses (3) y e2e (6): abrir con las seis barras, los
+  montos y el promedio con el vacío; el mes actual vacío; «gasto» con pagos; 404; y
+  error y 413 con reintento. Capturas: 2f y 2f con meses vacíos.
+- **Mutantes:** 9. Uno sobrevivió la primera vez: el caso de «no son seis meses»
+  también rompía el total, y ese control lo cazaba primero. Se corrigió el test y,
+  re-plantados, los 9 mueren.
+
+### Declarado para toda la orden
+
+- **Las tres pantallas nuevas y el período son opcionales**: con el backend servido
+  hoy (v2.105.0), los accesos a 2c y 2f no se dibujan (404) y no hay selector (no
+  vuelve `period`). La app se ve como en 0.174.0.
+- **El mock pasó a un solo modelo de visitas por mes** (pieza 1), del que salen 2a,
+  2b, 2c y 2f. Así un e2e puede exigir que los totales coincidan (2a = 2b en cada
+  período; el último mes de 2f = 2a).
+
 ## 0.174.0 — «Soltar» con el dato del dueño y «Tus restaurantes» (2026-09-19)
 
 Orden `APP-STATS-RESTAURANTS-AND-RELEASABLE-AF-29-20260919`, base `c03618f`

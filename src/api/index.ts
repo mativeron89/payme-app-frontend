@@ -37,6 +37,7 @@ import { decodeParticipantes, type Participante } from './participantes';
 import { decodeTusRestaurantes, type TusRestaurantes } from './tusRestaurantes';
 import { rutaConPeriodo, type ClavePeriodo } from './periodoEstadisticas';
 import { decodePlatos, type PlatosDelPeriodo } from './platos';
+import { decodeEvolucion, type Evolucion } from './evolucion';
 import { extractApiError } from './errors';
 import {
   assertProfileIdentityEnabled,
@@ -357,6 +358,8 @@ export interface Api {
   getStatsRestaurants(period?: ClavePeriodo): Promise<TusRestaurantes>;
   /** AF-31 · n166 · «Qué comes» por platos (2c). 404 = backend anterior. */
   getStatsDishes(period?: ClavePeriodo): Promise<PlatosDelPeriodo>;
+  /** AF-31 · n167 · «Evolución» (2f): los últimos 6 meses, sin parámetros. */
+  getStatsEvolution(): Promise<Evolucion>;
   // social
   getFriends(): Promise<FriendsResponse>;
   /**
@@ -758,6 +761,7 @@ const realApi: Api = {
   getStats: (period) => httpRequest<StatsResponse>('GET', rutaConPeriodo('/account/stats', period)),
   getStatsDishes: async (period) =>
     decodePlatos(await httpRequest<unknown>('GET', rutaConPeriodo('/account/stats/dishes', period))),
+  getStatsEvolution: async () => decodeEvolucion(await httpRequest<unknown>('GET', '/account/stats/evolution')),
   getStatsRestaurants: async (period) =>
     decodeTusRestaurantes(
       await httpRequest<unknown>('GET', rutaConPeriodo('/account/stats/restaurants', period)),
@@ -963,6 +967,7 @@ const mockApi: Api = {
 
   getStats: (period) => mock.mockStats(period),
   getStatsDishes: async (period) => decodePlatos(await mock.mockStatsDishes(period)),
+  getStatsEvolution: async () => decodeEvolucion(await mock.mockStatsEvolution()),
   getStatsRestaurants: async (period) => decodeTusRestaurantes(await mock.mockStatsRestaurants(period)),
 
   getFriends: () => mock.mockFriends(),

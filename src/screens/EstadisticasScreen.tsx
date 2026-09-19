@@ -15,6 +15,7 @@ import { decodeConsumoDelMes, type ConsumoDelMes } from '../api/consumoDelMes';
 import { extractApiError } from '../api/errors';
 import { visitasDelMes, type TusRestaurantes } from '../api/tusRestaurantes';
 import type { PlatosDelPeriodo } from '../api/platos';
+import type { Evolucion } from '../api/evolucion';
 import { lugaresYVisitas, nombreDeCocina, sufijoDePeriodo, vecesTexto, visitasTexto } from '../utils/textosDeEstadisticas';
 import { confirmaPeriodo, usePeriodoEstadisticas, type ClavePeriodo } from '../api/periodoEstadisticas';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
@@ -73,12 +74,15 @@ export function EstadisticasScreen() {
   const clave = usePeriodoEstadisticas();
   /** AF-31 · el acceso a «Qué comes» (2c), con la misma regla que el de 2b. */
   const [platos, setPlatos] = useState<Sondeo<PlatosDelPeriodo>>({ estado: 'cargando' });
+  /** AF-31 · el acceso a «Evolución» (2f). No depende del período: son 6 meses fijos. */
+  const [evolucion, setEvolucion] = useState<Sondeo<Evolucion>>({ estado: 'cargando' });
 
   const cargar = useCallback(() => {
     setFallo(false);
     setStats(null);
     setRestaurantes({ estado: 'cargando' });
     setPlatos({ estado: 'cargando' });
+    setEvolucion({ estado: 'cargando' });
     api
       .getStats(clave)
       .then(setStats)
@@ -94,6 +98,12 @@ export function EstadisticasScreen() {
       .then((datos) => setPlatos({ estado: 'listo', datos }))
       .catch((err) => {
         setPlatos(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
+      });
+    api
+      .getStatsEvolution()
+      .then((datos) => setEvolucion({ estado: 'listo', datos }))
+      .catch((err) => {
+        setEvolucion(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
       });
   }, [clave]);
 
@@ -182,6 +192,7 @@ export function EstadisticasScreen() {
           <>
             {accesoVisible && <AccesoTusRestaurantes acceso={restaurantes} clave={clave} />}
             {(platos.estado === 'listo' || platos.estado === 'sin_resumen') && <AccesoQueComes acceso={platos} />}
+            {(evolucion.estado === 'listo' || evolucion.estado === 'sin_resumen') && <AccesoEvolucion acceso={evolucion} />}
             {conAnillo && <AnilloPorCocina consumo={consumo} clave={efectiva} />}
             {!conAnillo && otroPeriodo ? (
               <div className="mesa-empty">
@@ -382,7 +393,7 @@ type AccesoRestaurantes = Sondeo<TusRestaurantes>;
  * AF-31 · la fila de acceso de 2a: título, un resumen si lo hay y la flecha.
  * Los accesos se dibujan sólo si su pantalla existe y responde.
  */
-function FilaDeAcceso({ titulo, sub, destino }: { titulo: string; sub: string | null; destino: 'restaurantes' | 'platos' }) {
+function FilaDeAcceso({ titulo, sub, destino }: { titulo: string; sub: string | null; destino: 'restaurantes' | 'platos' | 'evolucion' }) {
   return (
     <button type="button" className="stat-acceso" onClick={() => navigate(destino)}>
       <span className="stat-acceso-texto">
@@ -392,6 +403,16 @@ function FilaDeAcceso({ titulo, sub, destino }: { titulo: string; sub: string | 
       <Icon name="chevron-down" size={20} className="rest-chev derecha" />
     </button>
   );
+}
+
+/** AF-31 · «Evolución · $730.00 promedio en los últimos 6 meses». */
+function AccesoEvolucion({ acceso }: { acceso: Sondeo<Evolucion> }) {
+  const { t } = useIdioma();
+  const datos = acceso.estado === 'listo' ? acceso.datos : null;
+  const sub = datos && datos.totalCents > 0
+    ? t('{0} promedio en los últimos 6 meses', formatMXN(datos.avgPerMonthCents))
+    : null;
+  return <FilaDeAcceso titulo={t('Evolución')} sub={sub} destino="evolucion" />;
 }
 
 /** AF-31 · «Qué comes · Tiramisú · 3 veces · y 4 platos más». */

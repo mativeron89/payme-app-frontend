@@ -41,14 +41,15 @@ describe('cabeceras autenticadas · identidad propia por nombre', () => {
   });
 
   // AF-29 (2026-09-19): 17 → 18 por `TusRestaurantesScreen` (2b), y AF-31:
-  // 18 → 19 por `QueComesScreen` (2c). Montan `AppHeaderBack` con `userName`.
-  it('los 19 montajes autenticados pasan userName y los tres pre-sesión siguen anónimos', () => {
+  // 18 → 20 por `QueComesScreen` (2c) y `EvolucionScreen` (2f). Montan
+  // `AppHeaderBack` con `userName`.
+  it('los 20 montajes autenticados pasan userName y los tres pre-sesión siguen anónimos', () => {
     const authenticated = Object.entries(SCREEN_SOURCES)
       .filter(([path]) => !path.endsWith('/JoinMesaScreen.tsx'))
       .flatMap(([, source]) => headerCalls(source));
     const preSession = headerCalls(SCREEN_SOURCES['/src/screens/JoinMesaScreen.tsx']);
 
-    expect(authenticated).toHaveLength(19);
+    expect(authenticated).toHaveLength(20);
     expect(authenticated.every((call) => /\buserName=/.test(call))).toBe(true);
     expect(authenticated.some((call) => /\bpaymeId=/.test(call))).toBe(false);
     expect(preSession).toHaveLength(3);

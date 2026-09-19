@@ -5328,6 +5328,84 @@ body {
   text-align: right;
 }
 
+/* ── AF-31 · 2f «Evolución»: barras por mes y columnas al 100 % ───────── */
+.evo-card {
+  margin-bottom: 12px;
+}
+
+.evo-barras,
+.evo-columnas {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evo-barras {
+  height: 180px;
+}
+
+.evo-barra,
+.evo-columna {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.evo-barra-monto {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-d);
+}
+
+.evo-barra.actual .evo-barra-monto,
+.evo-barra.actual .evo-barra-mes {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.evo-barra-cuerpo {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 8px 8px 4px 4px;
+  background: #c9e3e8;
+}
+
+/* El actual en el cian del diseño (#0FB5C9 = --teal): el diseño lo llama
+   `--brand`, que en esta app es el naranja. Declarado en la entrega. */
+.evo-barra.actual .evo-barra-cuerpo {
+  background: var(--teal);
+}
+
+.evo-barra-mes {
+  font-size: 11.5px;
+  color: var(--gray-d);
+}
+
+.evo-columna-cuerpo {
+  display: flex;
+  flex-direction: column-reverse;
+  width: 100%;
+  max-width: 34px;
+  height: 110px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.evo-columna-cuerpo.vacia {
+  border: 1px dashed var(--border);
+}
+
+.evo-hoy {
+  min-width: 64px;
+}
+
 /* ── AF-31 · 2c «Qué comes»: la fila del plato lleva el restaurante debajo. */
 .plato-texto {
   display: flex;
