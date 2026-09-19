@@ -34,7 +34,12 @@ const PENDING: PrivateFeatureState = { enabled: false, status: 'pending', notice
 // y foto (`notice_unavailable`). Se AGREGA por los mismos dos motivos de arriba:
 // `2.4.1` es lo que sirve producción HOY y `2.3.0` lo de `shortfallDetails`, y
 // quitarlos apagaría superficies vivas o rompería un rollback.
-const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1', '2.5.0']);
+//
+// 2026-09-18 (AF-24): se PRESENTA 2.5.1 (la invitación de alta queda dicha en el
+// aviso), aprobado por Mati «tal cual» (decisión `3ab29eb1…`). Mismo orden que
+// con 2.5.0: el front va ANTES que el dueño (`1de34613…`, rama local sin
+// publicar). Se AGREGA: 2.5.0 es lo que sirve producción hoy.
+const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1', '2.5.0', '2.5.1']);
 
 /** Seam nominal: sólo Vitest puede declarar presentable `test-only`. */
 export const TEST_PRESENTABLE_NOTICES = Symbol('private-feature-test-notice-seam');

@@ -98,6 +98,8 @@ describe('AF-17 · 🔴 sin una versión de aviso que el dueño acepte, no hay u
     // El un-toque NO fija versiones: manda la del aviso que cargó del dueño
     // (`legal.value.version`). Con el backend 2.95.0 esa versión es 2.5.0.
     expect(versionAvisoParaContinue('2.5.0')).toBe('2.5.0');
+    // AF-24 · y el 2.5.1 del dueño v2.99.0.
+    expect(versionAvisoParaContinue('2.5.1')).toBe('2.5.1');
   });
 
   it('sin aviso, o con una forma que el dueño rechaza ⇒ null (camino 0.167.0)', () => {

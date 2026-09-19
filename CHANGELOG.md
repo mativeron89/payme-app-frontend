@@ -11,6 +11,25 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.171.0 — Aviso 2.5.1 y «Tus mesas» en Historial (2026-09-18)
+
+Orden `APP-NOTICE-2-5-1-AND-TUS-MESAS-AF-24-20260918`, base `4aede0c` (= `origin/main`,
+servido 0.170.0). **Sin push, sin deploy, sin GREEN.** Decisión de Mati: el texto 2.5.1
+va «Aprobado tal cual», y para «Tus mesas» eligió la variante A del plan AF-23.
+
+### Ítem 1 · reconocer el Aviso 2.5.1 (va primero en la historia y se publica solo)
+
+- **Espejo, en un commit propio (`a0d409a`):** dueño v2.99.0, inventario en `b1c5121`
+  (rama local `claude/aviso-2.5.1-invitaciones`, sin publicar) y contenido en
+  `1de3461`. Cambia sólo `services/profileIdentity.js` (`notice_version: '2.5.1'`),
+  con los tres gates verdes.
+- `PRESENTABLE_NOTICE_VERSIONS` suma `'2.5.1'` y conserva `'2.3.0'`, `'2.4.1'` y
+  `'2.5.0'`. `2.5.0` es lo que sirve producción hoy: el front va ANTES que el
+  backend, como con 2.5.0.
+- Tests: 2.5.1 presentado; near-miss `'2.5.10'` y `'2.5.1-rc'`; el un-toque manda
+  `'2.5.1'` tal cual; e2e de perfil (aviso desconocido apaga, 2.5.1 enciende).
+  Mutantes rojos: quitar 2.5.1 y quitar 2.5.0, en unitario y e2e.
+
 ## 0.170.0 — El front reconoce el Aviso 2.5.0 antes de que el backend lo publique (2026-09-18)
 
 > **AF-20 (`APP-SESSION-LOCK-AND-SEAMS-AF-20-20260918`) va en esta MISMA versión, y
