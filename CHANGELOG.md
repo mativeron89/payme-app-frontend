@@ -81,6 +81,40 @@ tal cual», con la foto de menores o sin fecha oculta (`17d436dd…`), y los mom
     sin la lista, que ya exige ser organizador, no hay ids que pedir. Quitando las
     dos, muere.
 
+### Ítem 3 · «Qué comes · por momento del día» (2e, v2.109.0)
+
+- **Pestañas «Platos · Momento» en «Qué comes»**, con el `.seg` del sistema y sin
+  ruta nueva. «Ingrediente» (2d) sigue sin dibujarse. Con un backend anterior
+  (404) no hay pestañas y 2c queda como estaba.
+- **La vista:** `GET /api/account/stats/dayparts?period=`, con el mismo selector de
+  período. Anillo con las visitas al centro. La lista lleva los cuatro momentos
+  siempre, también en cero: el rótulo de Mati con su horario debajo, visitas y
+  monto:
+  - Desayuno · hasta las 12
+  - Comida · 12 a 17
+  - Tarde · 17 a 19
+  - Cena · desde las 19
+
+  Con pagos, «Cada visita incluye la propina.». Nunca el color solo: el anillo
+  lleva `aria-label`.
+- **La burbuja** dice «N visitas» en esa pestaña, y los platos distintos en la otra.
+- **Decodificador** (`src/api/momentos.ts`): claves exactas; los cuatro momentos en
+  su orden; visitas y montos que sumen los totales; `period` opcional.
+- **Estados propios:** un error de momentos muestra su cartel con «Reintentar» y los
+  platos siguen. El vacío es por período.
+- **Mock:** del mismo modelo de visitas, con cada visita en su momento según la hora
+  de creación en hora de México. Los totales son los de 2a. Las visitas del mes en
+  curso se fechan «horas atrás desde ahora», así que casi todas caen de noche: es
+  del mock, no del producto.
+- **Guarda tocada (declarada):** `que-comes.spec.ts` (AF-31) afirmaba que
+  «Momento» no existía; ahora afirma la pestaña.
+- **Tests:** decodificador (6) y e2e (6): cuatro momentos con horarios y el mismo
+  total que 2a, vacío, período, pagos, 404 sin pestañas y error con reintento.
+  Capturas: 2e y 2e vacía.
+- **Mutantes:** 8. Uno (no exigir los cuatro) sobrevivió la primera vez: el caso de
+  tres momentos también rompía las sumas. Se sumó un caso de tres con totales
+  coherentes, y muere.
+
 ## 0.175.0 — Período, «Qué comes» (2c) y «Evolución» (2f) (2026-09-19)
 
 Orden `APP-STATS-DISHES-EVOLUTION-PERIOD-AF-31-20260919`, base `36d8fbe` (= `origin/main`,

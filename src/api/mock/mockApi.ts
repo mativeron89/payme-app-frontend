@@ -3155,6 +3155,38 @@ export async function mockStatsDishes(period?: string): Promise<unknown> {
   });
 }
 
+/**
+ * AF-32 · `GET /account/stats/dayparts` (v2.109.0), del mismo modelo de visitas:
+ * cada visita cae en su momento por la hora de creación en hora de México
+ * (UTC−6; el mock no maneja horario de verano, que México no usa desde 2022).
+ * Los cuatro momentos van siempre, en orden, aunque estén en cero; los totales
+ * son los de `consumption_month` del mismo período.
+ */
+export async function mockStatsDayparts(period?: string): Promise<unknown> {
+  const falla = fallaDeRuta('payme.app.mock.momentos.v1', 'stats_range_too_large');
+  if (falla) return falla;
+  const resuelto = resolverPeriodo(period);
+  if (resuelto === 'invalido') return fail(400, 'validation_error');
+  const { meses, period: periodo } = periodoDelMock(resuelto.clave);
+  const visitas = visitasDelModelo().filter((v) => meses.includes(v.mes));
+  const claves = ['breakfast', 'lunch', 'afternoon', 'dinner'] as const;
+  const momentoDe = (iso: string): (typeof claves)[number] => {
+    const hora = (new Date(iso).getUTCHours() + 18) % 24;
+    return hora < 12 ? 'breakfast' : hora < 17 ? 'lunch' : hora < 19 ? 'afternoon' : 'dinner';
+  };
+  const dayparts = claves.map((key) => {
+    const vs = visitas.filter((v) => momentoDe(v.created_at) === key);
+    return { key, visits: vs.length, amount_cents: vs.reduce((a, v) => a + v.amount_cents, 0) };
+  });
+  return delay({
+    basis: baseDelMock(),
+    ...(resuelto.publicar && { period: periodo }),
+    dayparts,
+    total_cents: dayparts.reduce((a, d) => a + d.amount_cents, 0),
+    visits: dayparts.reduce((a, d) => a + d.visits, 0),
+  });
+}
+
 /** AF-31 · `GET /account/stats/evolution` (v2.108.0): siempre los últimos 6 meses. */
 export async function mockStatsEvolution(): Promise<unknown> {
   const falla = fallaDeRuta('payme.app.mock.evolucion.v1', 'stats_range_too_large');

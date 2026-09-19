@@ -5425,6 +5425,12 @@ body {
   min-width: 64px;
 }
 
+/* ── AF-32 · las pestañas de «Qué comes» (Platos · Momento), con el `.seg` del
+   sistema. */
+.stat-pestanas {
+  margin-bottom: 12px;
+}
+
 /* ── AF-31 · 2c «Qué comes»: la fila del plato lleva el restaurante debajo. */
 .plato-texto {
   display: flex;

@@ -895,4 +895,21 @@ export const EN: Record<string, string> = {
   "{0} promedio en los últimos 6 meses": "{0} average over the last 6 months",
   // AF-32 · la foto de quienes se sumaron.
   "Foto de {0}": "Photo of {0}",
+  // AF-32 · 2e «por momento del día».
+  "Platos": "Dishes",
+  "Momento": "Time of day",
+  "Desayuno": "Breakfast",
+  "Comida": "Lunch",
+  "Cena": "Dinner",
+  "hasta las 12": "until 12",
+  "12 a 17": "12 to 5 pm",
+  "17 a 19": "5 to 7 pm",
+  "desde las 19": "from 7 pm",
+  "Cargando tus momentos": "Loading your times of day",
+  "No pudimos cargar tus momentos": "We couldn't load your times of day",
+  "Todavía no registramos visitas este mes.": "We have no visits this month yet.",
+  "No registramos visitas en este período.": "We have no visits in this period.",
+  "Por momento del día": "By time of day",
+  "Visitas por momento del día: {0}": "Visits by time of day: {0}",
+  "Cada visita incluye la propina.": "Each visit includes the tip.",
 };
