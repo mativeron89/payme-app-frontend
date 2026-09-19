@@ -1882,6 +1882,47 @@ export async function mockLockItems(
   });
 }
 
+/**
+ * AF-25 · n80 · espejo de `POST /:code/items/release` (`contract-mirror/routes/mesas.js:1603-1666`).
+ *
+ * Mismo orden de rechazos que el dueño: cuerpo, modo «igual» (409
+ * `release_not_applicable`, antes que el estado), mesa no activa (409
+ * `mesa_not_active`) e ítem ajeno a la mesa (404 `item_not_found`). Suelta
+ * SÓLO los claims `locked` de quien llama: nunca lo pagado ni lo de otro, y
+ * eso NO es error — el ítem simplemente no aparece en `released`.
+ */
+export async function mockReleaseItems(
+  code: string,
+  itemIds: readonly string[],
+  identity: MockIdentity,
+): Promise<{ released: Array<{ item_id: string; fraction_bps: number }> }> {
+  const mesa = findMesa(code);
+  if (!mesa) return fail(404, 'mesa_not_found');
+  const ids = [...itemIds];
+  if (ids.length < 1 || ids.length > 100 || new Set(ids).size !== ids.length) {
+    return fail(400, 'validation_error');
+  }
+  if (mesa.division_mode !== 'consumo') return fail(409, 'release_not_applicable');
+  if (!mesaPayable(mesa)) return fail(409, 'mesa_not_active');
+  for (const id of ids) {
+    if (!mesa.items.some((i) => i.id === id)) return fail(404, 'item_not_found', { item_id: id });
+  }
+  const released: Array<{ item_id: string; fraction_bps: number }> = [];
+  for (const id of ids) {
+    const item = mesa.items.find((i) => i.id === id);
+    if (!item) continue;
+    const mios = item.claims.filter((c) => c.who === identity && c.status === 'locked');
+    if (mios.length === 0) continue;
+    item.claims = item.claims.filter((c) => !(c.who === identity && c.status === 'locked'));
+    released.push({ item_id: id, fraction_bps: mios.reduce((sum, c) => sum + c.fraction_bps, 0) });
+    if (item.claims.length === 0) {
+      if (item.status === 'locked') item.status = 'released';
+      item.lock_expires_at = null;
+    }
+  }
+  return delay({ released });
+}
+
 export async function mockPayMesa(
   code: string,
   req: PayMesaRequest,

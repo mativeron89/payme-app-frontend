@@ -331,6 +331,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [view, setView] = useState<View>('detail');
   // v2.18 (fracciones): selección = ítem → fracción elegida en bps.
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
+  /** AF-25 · n80 · el ítem que se está soltando; `null` sin pedido en vuelo. */
+  const [soltando, setSoltando] = useState<string | null>(null);
+  const soltandoRef = useRef(false);
   const [lockTokens, setLockTokens] = useState<string[]>([]);
   /**
    * §1.5 bis · 🔴 LA PROPINA NACE SIN ELEGIR.
@@ -607,6 +610,43 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     setSelected(next);
   }
 
+  /**
+   * AF-25 · n80 · soltar un consumo propio no pagado (`POST items/release`).
+   *
+   * **Un envío por vez**: `soltandoRef` corta el doble toque antes del primer
+   * render, que es cuando `soltando` todavía no llegó al botón. Con un pago sin
+   * confirmar no se suelta nada, por la misma razón que no se cambia la
+   * selección (B-06). No toca cobros: el dueño nunca suelta lo pagado.
+   *
+   * Lo que se le dice a la persona sale de `released`, no de haber mandado el
+   * pedido: vacío es «no había nada para soltar» —ya estaba suelto, o se pagó—,
+   * y en los dos casos la mesa se recarga para mostrar lo que hay.
+   */
+  async function releaseItem(id: string) {
+    if (!mesa || soltandoRef.current) return;
+    if (frozenRef.current) {
+      toast(t('Tienes un pago sin confirmar: resuélvelo antes de cambiar tu selección'));
+      return;
+    }
+    soltandoRef.current = true;
+    setSoltando(id);
+    try {
+      const soltado = await api.releaseItems(code, [id]);
+      toast(soltado.some((r) => r.itemId === id)
+        ? t('Listo, lo soltaste. Ya lo puede elegir otra persona.')
+        : t('No había nada para soltar.'));
+    } catch (err) {
+      const { code: ec } = extractApiError(err);
+      toast(ec === 'mesa_not_active'
+        ? t('La mesa ya no acepta cambios.')
+        : t('No pudimos soltarlo. Intenta de nuevo.'));
+    } finally {
+      soltandoRef.current = false;
+      setSoltando(null);
+      reload();
+    }
+  }
+
   async function goToPay() {
     if (!mesa) return;
     /**
@@ -639,7 +679,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         setLockTokens([r.lock_token]);
         // Con el corte la selección queda registrada y el recorrido termina acá:
         // se recarga para que «Mis ítems» muestre lo tomado, y no se abre `pay`.
-        if (!CORTE.allowsPay) { reload(); return; }
+        //
+        // AF-25 · y la selección LOCAL se vacía: desde acá lo elegido vive en el
+        // dueño (`my_bps`) y la fila lo muestra como «Lo elegiste», con «Soltar».
+        // Antes quedaba marcada con un selector de porción vacío y «Tu parte:
+        // $0.00», porque lo que quedaba libre del ítem ya era 0 (medido).
+        if (!CORTE.allowsPay) { setSelected(new Map()); reload(); return; }
         setView('pay');
       } catch (err) {
         const { code: ec, extra } = extractApiError(err);
@@ -2299,6 +2344,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       busy={busy}
       inviteOpen={inviteOpen}
       onToggleItem={toggleItem}
+      onReleaseItem={releaseItem}
+      soltando={soltando}
       onSetFraction={setFraction}
       onGoToPay={goToPay}
       onRetryFrozenPay={() => { if (CORTE.allowsPay) setView('pay'); }}

@@ -75,7 +75,7 @@ export interface MesaAbierta {
  */
 export async function abrirMesaConLink(
   page: Page,
-  opciones: { readonly sinGarantia?: boolean } = {},
+  opciones: { readonly sinGarantia?: boolean; readonly modo?: 'igual' | 'consumo' } = {},
 ): Promise<MesaAbierta> {
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
   // §1.6 renombró el título al aplicar el rediseño: la cabecera navy de dos
@@ -91,7 +91,11 @@ export async function abrirMesaConLink(
   // El OCR mock tarda: se espera a la pantalla, no a un número de milisegundos.
   await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
 
-  await page.getByRole('radio', { name: /En partes iguales/ }).click();
+  // AF-25 · el modo es opcional y el default sigue siendo `igual`, que es lo que
+  // todos los specs existentes esperan. En consumo el stepper arranca en 0 y se
+  // cuentan los de la mesa (mismos toques que `af-diseno-02`).
+  const consumo = opciones.modo === 'consumo';
+  await page.getByRole('radio', { name: consumo ? /Por lo que pidió cada uno/ : /En partes iguales/ }).click();
   await expect(page.getByRole('button', { name: 'Un comensal más' })).toBeVisible();
 
   // §1.4 (2026-08-06): el stepper nace SIN ELEGIR y el N lo pone la persona —
@@ -99,6 +103,7 @@ export async function abrirMesaConLink(
   // porque toda la aritmética anclada de los specs ($210.00 la parte, $241.50
   // con 15 %) es 840 ÷ 4: si esto cambia, cambian esos números, no el criterio.
   const masUno = page.getByRole('button', { name: 'Un comensal más' });
+  if (consumo) await masUno.click();
   await masUno.click();
   await masUno.click();
   await masUno.click();

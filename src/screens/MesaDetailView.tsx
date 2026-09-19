@@ -87,6 +87,10 @@ export interface MesaDetailViewProps {
   busy: boolean;
   inviteOpen: boolean;
   onToggleItem: (id: string) => void;
+  /** AF-25 · n80 · soltar un consumo propio no pagado. La red la hace `MesaScreen`. */
+  onReleaseItem: (id: string) => void;
+  /** AF-25 · el ítem que se está soltando, o `null`: apaga el botón mientras viaja. */
+  soltando: string | null;
   onSetFraction: (id: string, bps: number) => void;
   onGoToPay: () => void;
   onRetryFrozenPay: () => void;
@@ -134,6 +138,33 @@ function rowTag(state: RowState, item: MesaItem, t: (s: string, ...a: unknown[])
   return null;
 }
 
+/**
+ * AF-25 · n80 · ¿el ítem es MÍO y lo elegí? Sólo en consumo, y nunca si ya está
+ * pagado entero. Da la etiqueta «Lo elegiste», que antes no existía: medido el
+ * 2026-09-19, un consumo ya reservado por la persona se veía «disponible» igual
+ * que uno libre.
+ */
+export function esMioElegido(item: MesaItem, esConsumo: boolean): boolean {
+  return esConsumo && item.status !== 'paid' && item.my_bps > 0;
+}
+
+/**
+ * AF-25 · n80 · ¿se OFRECE soltarlo? Más estricto que `esMioElegido`, y el
+ * porqué es de contrato: `my_bps` suma lo reservado Y lo pagado
+ * (`contract-mirror/routes/mesas.js:1274-1284`), así que en una mesa con algún
+ * pago el front no puede saber si MI parte de un ítem a medio pagar está
+ * pagada. Por eso sólo se ofrece mientras la mesa está `open` y SIN NINGÚN pago
+ * (`paid_amount_cents === 0`): ahí lo mío no puede estar pagado. El dueño
+ * igual nunca suelta lo pagado; esto es para no OFRECER algo que no pasaría.
+ * Hueco anotado en GAPS.md (G-40).
+ */
+export function sePuedeSoltar(item: MesaItem, mesa: MesaDetail, esConsumo: boolean): boolean {
+  return esMioElegido(item, esConsumo)
+    && item.locked_by_me
+    && mesa.status === 'open'
+    && mesa.paid_amount_cents === 0;
+}
+
 export function MesaDetailView({
   mesa,
   code,
@@ -150,6 +181,8 @@ export function MesaDetailView({
   busy,
   inviteOpen,
   onToggleItem,
+  onReleaseItem,
+  soltando,
   onSetFraction,
   onGoToPay,
   onRetryFrozenPay,
@@ -220,8 +253,9 @@ export function MesaDetailView({
   /**
    * 🔴 **D-R20 · «Aviso sin nombres», etiqueta literal de Mati.**
    *
-   * En división por consumo la selección es IRREVERSIBLE —no hay «soltar
-   * ítem»— y quien reclama el último cierra la mesa **para todos, en el acto**.
+   * En división por consumo quien reclama el último cierra la mesa **para
+   * todos, en el acto**, y una mesa cerrada ya no admite soltar nada (AF-25:
+   * «soltar» existe desde el dueño v2.100.0, pero sólo con la mesa activa).
    * Confirmarlo antes no es cortesía: es la única oportunidad de enterarse.
    *
    * ⚠️ **Y el aviso NO dice quién tomó qué.** El contrato publica por ítem
@@ -388,7 +422,11 @@ export function MesaDetailView({
             // 1A.3 · 'indeterminado' bloquea igual que 'tomado': sin dato
             // válido no se ofrece tomar nada.
             const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
-            const tag = rowTag(state, i, t);
+            const mio = !sel && esMioElegido(i, esConsumo);
+            const soltable = mio && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
+            const tag = mio
+              ? (i.my_bps >= 10000 ? t('Lo elegiste') : t('Elegiste {0}', bpsLabel(i.my_bps)))
+              : rowTag(state, i, t);
             const myBpsSel = selected.get(i.id) ?? 10000;
             // En partes iguales marcar es informativo y no reserva nada, así
             // que ahí NUNCA se bloquea una fila: el monto no depende de esto.
@@ -426,6 +464,17 @@ export function MesaDetailView({
                   </span>
                   <span className={`mi-price ${bloqueado ? 'dim' : ''}`}>{formatMXN(precio)}</span>
                 </button>
+                {soltable && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm btn-fit mi-soltar"
+                    onClick={() => onReleaseItem(i.id)}
+                    disabled={soltando !== null}
+                    aria-label={t('Soltar {0}', i.name)}
+                  >
+                    {soltando === i.id ? t('Soltando…') : t('Soltar')}
+                  </button>
+                )}
                 {/* Selector de porción en LOS DOS MODOS. En consumo expresa
                     tenencia/cobro y se limita por lo restante; en igualdad es
                     sólo `declared_fraction_bps`, sin alterar el casillero. */}

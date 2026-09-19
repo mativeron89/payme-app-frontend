@@ -34,6 +34,46 @@ foto; la foto después» (n72).
   Mutantes rojos: quitar 2.5.2 y quitar 2.5.1, en unitario y e2e; cada uno mata su
   propio test.
 
+### Ítem 2 · soltar un consumo propio no pagado (n80)
+
+- **Medido antes de diseñar (2026-09-19):** hoy se elige tocando la fila, y con los
+  pagos apagados «Listo» reserva lo elegido (`items/lock`). Después de eso, **un
+  consumo propio ya reservado no tenía estado visible**: la fila quedaba marcada con
+  un selector de porción vacío y «Tu parte: $0.00», y tras recargar se veía igual que
+  uno libre.
+- **Interacción mínima (declarada):** la fila de lo propio dice «Lo elegiste» (o
+  «Elegiste ½», etc.) y debajo aparece un botón secundario «Soltar», con el estilo de
+  «Reintentar ese pago». Al soltar: «Listo, lo soltaste. Ya lo puede elegir otra
+  persona.», la mesa se recarga y la fila vuelve a poder elegirse. Tras «Listo», la
+  selección local se vacía, porque desde ese momento lo elegido vive en el dueño.
+- **Cuándo se ofrece (`sePuedeSoltar`):** en consumo, ítem no pagado entero,
+  `locked_by_me`, mesa `open` y **`paid_amount_cents === 0`**. En «igual» no se
+  ofrece: el dueño responde 409 `release_not_applicable`. La condición de «cero pagos
+  en la mesa» sale del contrato: `my_bps` suma lo reservado **y** lo pagado, así que
+  con algún pago el front no puede saber si su parte está pagada. Queda anotado como
+  **G-40**, con el pedido de un campo aditivo. Hoy, con los pagos apagados, cubre todos
+  los casos reales.
+- **Lo que se le dice a la persona sale de `released`**, no de haber mandado el
+  pedido. Si vuelve vacío: «No había nada para soltar.». Los errores tienen texto
+  neutro: «La mesa ya no acepta cambios.» para 409 `mesa_not_active`, y «No pudimos
+  soltarlo. Intenta de nuevo.» para el resto. **Sin doble envío:** un `ref` corta
+  antes del primer render y el botón queda deshabilitado después. Con un pago sin
+  confirmar no se suelta nada (B-06). No toca cobros.
+- **Contrato y mock:** `api.releaseItems` → `POST /mesas/:code/items/release
+  {item_ids}` con un decodificador estricto (`src/api/soltarConsumo.ts`).
+  `mockReleaseItems` sigue al dueño: rechaza en su mismo orden, sólo suelta lo
+  `locked` propio, y lo pagado o ajeno no es error.
+- **Archivos fuera del núcleo, declarados:** `src/styles/global.css` (`.mi-soltar`,
+  un margen), `src/corteGuard.test.ts` (las dos props nuevas de `MesaDetailView`) y
+  `e2e/_app.ts` (`abrirMesaConLink` acepta `modo: 'consumo'`; el default sigue siendo
+  `igual`).
+- **Tests:** decodificador, `sePuedeSoltar`/`esMioElegido`, mock (6) y e2e (6):
+  soltar y volver a elegir, doble toque, con pago no se ofrece, mesa cerrada, ya
+  suelto e «igual». Capturas móviles de «Lo elegiste» y de «suelto».
+- **Mutantes:** 11 simples mueren. Las dos guardas del doble envío sobreviven cada
+  una por separado, a propósito, porque la otra la cubre; plantadas juntas, el test
+  del doble toque muere.
+
 ## 0.171.0 — Aviso 2.5.1 y «Tus mesas» en Historial (2026-09-18)
 
 Orden `APP-NOTICE-2-5-1-AND-TUS-MESAS-AF-24-20260918`, base `4aede0c` (= `origin/main`,

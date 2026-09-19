@@ -801,4 +801,14 @@ export const EN: Record<string, string> = {
   "Usa entre 8 y 128 caracteres y un máximo de 72 bytes.": "Use between 8 and 128 characters, with a maximum of 72 bytes.",
   "Crear una contraseña nueva": "Create a new password",
   "Confirmar contraseña": "Confirm password",
+  // AF-25 · n80 · soltar un consumo propio no pagado.
+  "Lo elegiste": "You chose this",
+  "Elegiste {0}": "You chose {0}",
+  "Soltar": "Release",
+  "Soltar {0}": "Release {0}",
+  "Soltando…": "Releasing…",
+  "Listo, lo soltaste. Ya lo puede elegir otra persona.": "Done, you released it. Someone else can choose it now.",
+  "No había nada para soltar.": "There was nothing to release.",
+  "La mesa ya no acepta cambios.": "This table no longer accepts changes.",
+  "No pudimos soltarlo. Intenta de nuevo.": "We couldn't release it. Try again.",
 };

@@ -32,6 +32,7 @@ import {
   setupIntentResponse,
 } from './contractResponses';
 import { decodeMisMesas, type PaginaMisMesas } from './misMesas';
+import { decodeSoltarConsumo, type ConsumoSoltado } from './soltarConsumo';
 import { extractApiError } from './errors';
 import {
   assertProfileIdentityEnabled,
@@ -287,6 +288,8 @@ export interface Api {
     connectedAccountId?: string,
   ): Promise<{ status: string; outcome: 'success' | 'definitive' | 'ambiguous'; error?: string }>;
   lockItems(code: string, items: FractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
+  /** AF-25 · n80 · suelta lo propio no pagado; `[]` si no había nada que soltar. */
+  releaseItems(code: string, itemIds: readonly string[]): Promise<readonly ConsumoSoltado[]>;
   payMesa(code: string, req: PayMesaRequest, guestToken: string | undefined, expectation: PayMesaExpectation, intent: MonetaryIntentHandle): Promise<PayMesaResponse>;
   createInvitation(code: string, idempotencyKey: string): Promise<CreateInvitationResponse>;
   /** Invitación in-app a un amigo por payme_id (solo el organizador; el backend resuelve el uuid). */
@@ -618,6 +621,10 @@ const realApi: Api = {
       : httpRequest<LockItemsResponse>('POST', `/mesas/${encodeURIComponent(code)}/items/lock`, {
           items,
         }),
+  releaseItems: async (code, itemIds) =>
+    decodeSoltarConsumo(await httpRequest<unknown>('POST', `/mesas/${encodeURIComponent(code)}/items/release`, {
+      item_ids: [...itemIds],
+    })),
   payMesa: async (code, req, guestToken, expectation, intent) =>
     withPreparedMonetaryRequest(
       `mesa_pay:${code}`,
@@ -877,6 +884,7 @@ const mockApi: Api = {
     return { ...result, outcome: result.status === 'open' ? 'success' as const : 'ambiguous' as const };
   },
   lockItems: (code, items, guestToken) => mock.mockLockItems(code, items, guestToken ? 'guest' : 'user'),
+  releaseItems: async (code, itemIds) => decodeSoltarConsumo(await mock.mockReleaseItems(code, itemIds, 'user')),
   payMesa: async (code, req, guestToken, expectation, intent) =>
     withPreparedMonetaryRequest(
       `mesa_pay:${code}`,

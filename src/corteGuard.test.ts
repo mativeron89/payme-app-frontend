@@ -360,6 +360,8 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles y conserva el av
       busy: false,
       inviteOpen: false,
       onToggleItem: () => undefined,
+      onReleaseItem: () => undefined,
+      soltando: null,
       onSetFraction: () => undefined,
       onGoToPay: () => undefined,
       onRetryFrozenPay: () => undefined,

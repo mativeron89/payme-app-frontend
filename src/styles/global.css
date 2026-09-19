@@ -4244,6 +4244,12 @@ body {
 /* Desplegable debajo del ítem, INDENTADO para que se lea como suyo y no como
    otra fila de la lista. Arranca con "1" marcada: tildar y listo sigue siendo
    el flujo de siempre, y el selector sólo pesa si alguien lo cambia. */
+/* AF-25 · n80 · «Soltar» un consumo propio no pagado: botón secundario bajo su
+   fila, alineado con el texto (44px = check + separación, como .mi-frac). */
+.mi-soltar {
+  margin: 0 0 var(--sp-2) 44px;
+}
+
 .mi-frac {
   padding: var(--sp-3) var(--sp-2) var(--sp-4) 44px;
   border-bottom: 1px solid var(--border);
