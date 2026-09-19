@@ -10,6 +10,8 @@ import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon, type IconName } from '../components/Icon';
 import { bpsLabel } from './mesaItemsView';
+import type { TuMesa } from '../api/misMesas';
+import { estadoDeTuMesa, tuMesaEnCurso, type EstadoTuMesa } from '../utils/labels';
 import {
   agruparPorMes,
   FRANJA_LABEL,
@@ -63,6 +65,32 @@ function fechaDeFila(iso: string, locale: string, t: (s: string, ...a: unknown[]
  * propios —pagar varias partes está ratificado—, por eso se consultan TODOS
  * los IDs agrupados y nunca se inventa un detalle a partir del total visible.
  */
+/** AF-24 · el texto de cómo terminó cada mesa, con un `t('…')` literal por caso. */
+function textoEstadoTuMesa(e: EstadoTuMesa, t: (s: string, ...a: unknown[]) => string): string {
+  switch (e) {
+    case 'sin_cobro': return t('Cerró sin cobro');
+    case 'pagada': return t('Pagada');
+    case 'vencio': return t('Venció');
+    case 'cancelada': return t('Cancelada');
+    case 'cerrada': return t('Cerrada');
+  }
+}
+
+/**
+ * AF-24 · «Elegiste N ítems · $X». Es lo que eligió ESTA cuenta, no lo que se
+ * cobró: por eso va en el texto y no en la columna de monto, que en los pagos de
+ * abajo es lo cobrado. En `igual` se eligen PARTES, y así se dice.
+ */
+function textoEleccion(m: TuMesa, t: (s: string, ...a: unknown[]) => string): string | null {
+  if (m.itemsCount === null) return null;
+  if (m.itemsCount === 0) return t('No elegiste ítems');
+  const partes = m.divisionMode === 'igual';
+  const que = m.itemsCount === 1
+    ? (partes ? t('Elegiste 1 parte') : t('Elegiste 1 ítem'))
+    : (partes ? t('Elegiste {0} partes', m.itemsCount) : t('Elegiste {0} ítems', m.itemsCount));
+  return m.amountCents === null ? que : `${que} · ${formatMXN(m.amountCents)}`;
+}
+
 export function MesasScreen() {
   const { t, locale } = useIdioma();
   const { session } = useAuth();
@@ -71,6 +99,40 @@ export function MesasScreen() {
   const [unread, setUnread] = useState(0);
   const [abierta, setAbierta] = useState<string | null>(null);
   const [detalles, setDetalles] = useState<Record<string, MovementDetailResponse[] | 'loading' | 'error'>>({});
+  /**
+   * AF-24 · «Tus mesas», de `GET /api/mesas/mine`. Con los pagos apagados, el
+   * historial de PAGOS de abajo queda vacío aunque la persona haya estado en
+   * varias mesas; esta lista es la única que las muestra. Se carga aparte y
+   * falla aparte: un error acá no tapa los pagos, ni al revés.
+   */
+  const [misMesas, setMisMesas] = useState<TuMesa[] | null>(null);
+  const [cursorMesas, setCursorMesas] = useState<string | null>(null);
+  const [falloMesas, setFalloMesas] = useState(false);
+  const [cargandoMasMesas, setCargandoMasMesas] = useState(false);
+
+  const cargarMisMesas = useCallback(() => {
+    setFalloMesas(false);
+    setMisMesas(null);
+    api.getMyMesas()
+      .then((r) => { setMisMesas([...r.mesas]); setCursorMesas(r.nextCursor); })
+      .catch(() => setFalloMesas(true));
+  }, []);
+
+  const cargarMasMesas = useCallback(() => {
+    if (!cursorMesas || cargandoMasMesas) return;
+    setCargandoMasMesas(true);
+    api.getMyMesas({ cursor: cursorMesas })
+      .then((r) => {
+        setMisMesas((actual) => [...(actual ?? []), ...r.mesas]);
+        setCursorMesas(r.nextCursor);
+      })
+      .catch(() => setFalloMesas(true))
+      .finally(() => setCargandoMasMesas(false));
+  }, [cursorMesas, cargandoMasMesas]);
+
+  useEffect(() => {
+    cargarMisMesas();
+  }, [cargarMisMesas]);
 
   const cargarDetalle = useCallback((mesaCode: string, paymentIds: readonly string[]) => {
     setDetalles((actual) => ({ ...actual, [mesaCode]: 'loading' }));
@@ -119,6 +181,60 @@ export function MesasScreen() {
 
   const cerradas = pagos ? mesasCerradas(pagos) : null;
   const grupos = cerradas ? agruparPorMes(cerradas, locale) : [];
+  const tusMesas = misMesas ? misMesas.filter((m) => !tuMesaEnCurso(m.status)) : null;
+  /** El vacío «Todavía no cerraste…» sólo si NINGUNA de las dos listas tiene nada. */
+  const sinTusMesas = tusMesas !== null && tusMesas.length === 0 && !falloMesas && cursorMesas === null;
+
+  const seccionTusMesas = falloMesas ? (
+    <div className="state-error" role="alert">
+      <div className="state-error-row">
+        <Icon name="x-circle" size={22} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="state-error-title">{t('No pudimos cargar tus mesas')}</div>
+          <p className="state-error-body">{t('Revisa la conexión y prueba de nuevo.')}</p>
+        </div>
+      </div>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={cargarMisMesas}>
+        {t('Reintentar')}
+      </button>
+    </div>
+  ) : tusMesas === null ? (
+    <div aria-busy="true" aria-label={t('Cargando tus mesas')}>
+      <div className="pago-row sk">
+        <span className="sk-line w55" />
+        <span className="sk-line w40" />
+      </div>
+    </div>
+  ) : tusMesas.length > 0 || cursorMesas ? (
+    <section className="tus-mesas" aria-label={t('Tus mesas')}>
+      <h2 className="sectlabel">{t('Tus mesas')}</h2>
+      {tusMesas.map((m) => {
+        const eleccion = textoEleccion(m, t);
+        return (
+          <div key={m.id} className="hist-item tu-mesa">
+            <div className="hist-row">
+              <span aria-hidden="true">
+                <Icon name={CATEGORY_EMOJI[m.categoria ?? ''] ?? 'dining'} size={22} />
+              </span>
+              <div className="hist-main">
+                <div className="hist-rest">{m.restaurante ?? t('Mesa {0}', m.code)}</div>
+                <div className="hist-meta">
+                  {m.createdAt && <>{fechaDeFila(m.createdAt, locale, t)}{' · '}</>}
+                  {textoEstadoTuMesa(estadoDeTuMesa(m), t)}
+                </div>
+                {eleccion && <div className="hist-meta">{eleccion}</div>}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {cursorMesas && (
+        <button type="button" className="btn btn-ghost btn-sm" onClick={cargarMasMesas} disabled={cargandoMasMesas}>
+          {cargandoMasMesas ? t('Cargando…') : t('Ver más mesas')}
+        </button>
+      )}
+    </section>
+  ) : null;
 
   return (
     <div className="screen has-appbar">
@@ -133,6 +249,8 @@ export function MesasScreen() {
       </div>
 
       <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16 }}>
+
+        {seccionTusMesas}
 
         {fallo && !pagos ? (
           <div className="state-error">
@@ -157,10 +275,14 @@ export function MesasScreen() {
             ))}
           </div>
         ) : cerradas.length === 0 ? (
-          /* Vacío REAL: sin borde, único estado del sistema que no lo lleva. */
-          <div className="mesa-empty">
-            <div className="mesa-empty-title">{t('Todavía no cerraste ninguna mesa.')}</div>
-          </div>
+          /* Vacío REAL: sin borde, único estado del sistema que no lo lleva.
+             AF-24 · y sólo si tampoco hay «Tus mesas»: con los pagos apagados,
+             no tener pagos no es no haber estado en ninguna mesa. */
+          sinTusMesas ? (
+            <div className="mesa-empty">
+              <div className="mesa-empty-title">{t('Todavía no cerraste ninguna mesa.')}</div>
+            </div>
+          ) : null
         ) : (
           <>
             {grupos.map((g) => (

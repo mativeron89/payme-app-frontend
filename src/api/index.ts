@@ -31,6 +31,7 @@ import {
   ocrResponse,
   setupIntentResponse,
 } from './contractResponses';
+import { decodeMisMesas, type PaginaMisMesas } from './misMesas';
 import { extractApiError } from './errors';
 import {
   assertProfileIdentityEnabled,
@@ -260,6 +261,11 @@ export interface Api {
    * pedir `from` + `limit`, no la primera página pelada.
    */
   getHistory(params?: { from?: string; to?: string; limit?: number; offset?: number }): Promise<HistoryResponse>;
+  /**
+   * AF-24 · «Tus mesas» · `GET /api/mesas/mine`. Sólo las mesas propias, de a
+   * `limit` (dueño: 20 por defecto, 50 máximo) con el cursor opaco del dueño.
+   */
+  getMyMesas(params?: { cursor?: string; limit?: number }): Promise<PaginaMisMesas>;
   /** Detalle de UN pago propio; el backend vuelve a validar `user_id`. */
   getMovement(id: string): Promise<MovementDetailResponse>;
   // mesas
@@ -498,6 +504,13 @@ const realApi: Api = {
     if (params?.offset != null) qs.set('offset', String(params.offset));
     const s = qs.toString();
     return httpRequest<HistoryResponse>('GET', `/account/history${s ? `?${s}` : ''}`);
+  },
+  getMyMesas: async (params) => {
+    const qs = new URLSearchParams();
+    if (params?.limit != null) qs.set('limit', String(params.limit));
+    if (params?.cursor) qs.set('cursor', params.cursor);
+    const s = qs.toString();
+    return decodeMisMesas(await httpRequest<unknown>('GET', `/mesas/mine${s ? `?${s}` : ''}`));
   },
   getMovement: async (id) => decodeMovementDetailResponse(
     await httpPrivateJsonRequest<unknown>(`/account/movements/${encodeURIComponent(id)}`),
@@ -838,6 +851,7 @@ const mockApi: Api = {
   getBalance: () => mock.mockBalance(),
   getWalletTransactions: () => mock.mockWalletTransactions(),
   getHistory: (params) => mock.mockHistory(params),
+  getMyMesas: async (params) => decodeMisMesas(await mock.mockMisMesas(params)),
   getMovement: async (id) => decodeMovementDetailResponse(await mock.mockMovement(id)),
 
   getOpenMesas: () => mock.mockOpenMesas(),

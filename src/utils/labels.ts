@@ -195,3 +195,43 @@ export function iconoDeCategoriaRestaurante(category: unknown): IconName {
     ? ICONO_CATEGORIA[category]!
     : 'store';
 }
+
+// ─── AF-24 · «Tus mesas» (Historial) ───────────────────────────────────────
+
+/**
+ * Estados en los que la mesa sigue en curso. Historial lista mesas CERRADAS
+ * (`SPEC_APP.md` §1.10); las que siguen en curso ya están en Inicio y no se
+ * repiten acá.
+ */
+const TU_MESA_EN_CURSO = new Set<string>(['pending_auth', 'open', 'partially_paid']);
+
+export function tuMesaEnCurso(status: string): boolean {
+  return TU_MESA_EN_CURSO.has(status);
+}
+
+export type EstadoTuMesa = 'sin_cobro' | 'pagada' | 'vencio' | 'cancelada' | 'cerrada';
+
+/**
+ * Cómo terminó una mesa de «Tus mesas», como clave CERRADA: el texto lo pone
+ * la pantalla con un `t('…')` literal por caso.
+ *
+ * - `sin_cobro`: mesa SIN garantía cerrada por selección completa o por tiempo.
+ *   Es el caso del corte con los pagos apagados, por el que existe esta lista.
+ *   Se decide con `guarantee_mode === false` Y `closure_reason`, el mismo par
+ *   que usa el dueño (`mesas.js:1072-1075`); `guarantee_mode` solo no alcanza,
+ *   porque hay mesas legacy con `false`.
+ * - `pagada`: se completó el cobro. `vencio`: venció una mesa con cobro.
+ *   `cancelada`: se canceló o no se pudo garantizar.
+ * - Cualquier otro estado cerrado ⇒ `cerrada`, que no afirma nada más.
+ */
+export function estadoDeTuMesa(m: {
+  readonly status: string;
+  readonly guaranteeMode: boolean | null;
+  readonly closureReason: 'all_items_selected' | 'time' | null;
+}): EstadoTuMesa {
+  if (m.guaranteeMode === false && m.closureReason !== null) return 'sin_cobro';
+  if (['fully_paid', 'completed', 'settled', 'settling', 'dispersing', 'dispersed'].includes(m.status)) return 'pagada';
+  if (m.status === 'expired') return 'vencio';
+  if (m.status === 'cancelled' || m.status === 'auth_failed') return 'cancelada';
+  return 'cerrada';
+}

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  estadoDeTuMesa,
   estadoPersonalDeMesa,
   iconoDeCategoriaRestaurante,
   pagadoPropioCentavos,
   personasEnMesa,
+  tuMesaEnCurso,
 } from './labels';
 
 /**
@@ -87,5 +89,26 @@ describe('G-31 · iconoDeCategoriaRestaurante', () => {
     for (const raro of ['other', undefined, null, '', 'Japanese', 'sushi', 'toString', '__proto__', 7]) {
       expect(iconoDeCategoriaRestaurante(raro), String(raro)).toBe('store');
     }
+  });
+});
+
+describe('AF-24 · «Tus mesas»', () => {
+  it('las mesas en curso no van a Historial (ya están en Inicio)', () => {
+    for (const s of ['pending_auth', 'open', 'partially_paid']) expect(tuMesaEnCurso(s), s).toBe(true);
+    for (const s of ['expired', 'completed', 'fully_paid', 'cancelled']) expect(tuMesaEnCurso(s), s).toBe(false);
+  });
+
+  it('🔴 «Cerró sin cobro» exige guarantee_mode false Y un motivo de cierre (una legacy con false no alcanza)', () => {
+    expect(estadoDeTuMesa({ status: 'expired', guaranteeMode: false, closureReason: 'time' })).toBe('sin_cobro');
+    expect(estadoDeTuMesa({ status: 'expired', guaranteeMode: false, closureReason: 'all_items_selected' })).toBe('sin_cobro');
+    expect(estadoDeTuMesa({ status: 'expired', guaranteeMode: false, closureReason: null })).toBe('vencio');
+    expect(estadoDeTuMesa({ status: 'completed', guaranteeMode: false, closureReason: null })).toBe('pagada');
+  });
+
+  it('el resto de los estados', () => {
+    expect(estadoDeTuMesa({ status: 'completed', guaranteeMode: true, closureReason: null })).toBe('pagada');
+    expect(estadoDeTuMesa({ status: 'expired', guaranteeMode: true, closureReason: null })).toBe('vencio');
+    expect(estadoDeTuMesa({ status: 'cancelled', guaranteeMode: true, closureReason: null })).toBe('cancelada');
+    expect(estadoDeTuMesa({ status: 'raro', guaranteeMode: null, closureReason: null })).toBe('cerrada');
   });
 });

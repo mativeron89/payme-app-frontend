@@ -1325,6 +1325,90 @@ function conCamposAditivos(m: MockMesa): OpenMesa {
   };
 }
 
+/**
+ * AF-24 · «Tus mesas» · `GET /api/mesas/mine` en el riel mock. Replica la forma
+ * del dueño (`contract-mirror/routes/mesas.js:1064-1082`): SÓLO mesas propias
+ * (abiertas por la cuenta o donde tiene una selección) y `mine` con lo que
+ * eligió ESA cuenta. En `igual` se cuenta por casilleros propios, como el
+ * dueño (`:995-1012`).
+ *
+ * Seam `payme.app.mock.mis_mesas.v1` (sin UI; el build real no lo consulta):
+ * - `sin_cobro`: agrega dos mesas cerradas SIN cobro, el caso del corte con los
+ *   pagos apagados, que es para lo que existe «Tus mesas». Son fixtures de
+ *   demo, declarados.
+ * - `vacio`: ninguna mesa. `error`: el dueño responde 500.
+ * - `muchas`: 23 mesas cerradas sin cobro, para ejercitar la paginación (el
+ *   límite por defecto del dueño es 20).
+ */
+const CLAVE_MIS_MESAS = 'payme.app.mock.mis_mesas.v1';
+
+function mineDeMockMesa(m: MockMesa): { items_count: number; amount_cents: number } {
+  if (m.division_mode === 'igual') {
+    const mios = (m.slots ?? []).filter((sl) => sl.claimedBy === 'user' && (sl.status === 'claimed' || sl.status === 'paid'));
+    return { items_count: mios.length, amount_cents: mios.reduce((acc, sl) => acc + sl.amount_cents, 0) };
+  }
+  let items = 0;
+  let monto = 0;
+  for (const it of m.items) {
+    const mios = it.claims.filter((c) => c.who === 'user');
+    if (mios.length === 0) continue;
+    items += 1;
+    for (const c of mios) {
+      monto += c.amount_cents ?? Math.floor((it.price_cents * it.quantity * c.fraction_bps) / 10000);
+    }
+  }
+  return { items_count: items, amount_cents: monto };
+}
+
+export async function mockMisMesas(params?: { cursor?: string; limit?: number }): Promise<unknown> {
+  const seam = leerSeam(CLAVE_MIS_MESAS);
+  if (seam === 'error') return fail(500, 'internal_error');
+  state.mesas.forEach(settleIfExpired);
+  const propias = seam === 'vacio' ? [] : state.mesas
+    .filter((m) => m.openedByUser || state.joinedMesaCodes.includes(m.code))
+    .map((m) => ({
+      id: m.id,
+      code: m.code,
+      restaurant: { name: m.restaurant.name, category: m.restaurant.category },
+      status: m.status,
+      division_mode: m.division_mode,
+      guarantee_mode: m.guarantee_mode ?? true,
+      closure_reason: m.closure_reason ?? null,
+      // El mock no guarda la creación: se aproxima desde el vencimiento.
+      created_at: new Date(Date.parse(m.expires_at) - 30 * 60_000).toISOString(),
+      mine: mineDeMockMesa(m),
+    }));
+  const fixtures = seam === 'sin_cobro' ? [
+    {
+      id: 'aaaaaaaa-0000-4000-8000-000000000001', code: 'PA-7310',
+      restaurant: { name: 'Tacos El Güero', category: 'mexican' }, status: 'expired',
+      division_mode: 'consumo', guarantee_mode: false, closure_reason: 'all_items_selected',
+      created_at: new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString(),
+      mine: { items_count: 3, amount_cents: 45000 },
+    },
+    {
+      id: 'aaaaaaaa-0000-4000-8000-000000000002', code: 'PA-6604',
+      restaurant: { name: 'Café Tacuba', category: 'cafe' }, status: 'expired',
+      division_mode: 'igual', guarantee_mode: false, closure_reason: 'time',
+      created_at: new Date(Date.now() - 6 * 24 * 60 * 60_000).toISOString(),
+      mine: { items_count: 1, amount_cents: 18000 },
+    },
+  ] : seam === 'muchas' ? Array.from({ length: 23 }, (_, i) => ({
+    id: `bbbbbbbb-0000-4000-8000-${String(i).padStart(12, '0')}`, code: `PA-${String(5000 + i)}`,
+    restaurant: { name: `Mesa de prueba ${i + 1}`, category: 'other' }, status: 'expired',
+    division_mode: 'consumo', guarantee_mode: false, closure_reason: 'time',
+    created_at: new Date(Date.now() - (i + 1) * 60 * 60_000).toISOString(),
+    mine: { items_count: 1, amount_cents: 10000 },
+  })) : [];
+  const todas = [...(seam === 'muchas' ? [] : propias), ...fixtures]
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const limit = Math.min(Math.max(params?.limit ?? 20, 1), 50);
+  const desde = params?.cursor ? Number(atob(params.cursor)) || 0 : 0;
+  const pagina = todas.slice(desde, desde + limit);
+  const siguiente = desde + limit < todas.length ? btoa(String(desde + limit)) : null;
+  return delay({ mesas: pagina, page: { limit, next_cursor: siguiente } });
+}
+
 export async function mockOpenMesas(): Promise<OpenMesasResponse> {
   state.mesas.forEach(settleIfExpired);
   return delay({

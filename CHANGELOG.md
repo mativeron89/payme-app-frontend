@@ -30,6 +30,48 @@ va «Aprobado tal cual», y para «Tus mesas» eligió la variante A del plan AF
   `'2.5.1'` tal cual; e2e de perfil (aviso desconocido apaga, 2.5.1 enciende).
   Mutantes rojos: quitar 2.5.1 y quitar 2.5.0, en unitario y e2e.
 
+### Ítem 2 · «Tus mesas» dentro de Historial (variante A)
+
+- **Qué ve la persona:** en Historial, arriba de los pagos, la sección «Tus mesas»:
+  restaurante (o «Mesa {código}»), fecha, cómo terminó («Cerró sin cobro», «Pagada»,
+  «Venció», «Cancelada», «Cerrada») y «Elegiste N ítems · $X». Paginada de a 20 con
+  «Ver más mesas». Arregla el hueco del plan AF-23: con los pagos apagados, quien
+  eligió en varias mesas veía «Todavía no cerraste ninguna mesa».
+- **Fuente:** `GET /api/mesas/mine` del dueño (`contract-mirror/routes/mesas.js:943`),
+  sin campos nuevos. `src/api/misMesas.ts` decodifica a la defensiva: un sobre que no
+  es `{mesas: [], page: {}}` o un `next_cursor` que no es texto/`null` es ERROR (se
+  muestra «No pudimos cargar tus mesas» + Reintentar, y los pagos siguen visibles);
+  una fila sin `id`/`code`/`status` se descarta sola; un conteo o monto no entero
+  queda `null` y la fila no lo muestra.
+- **Decisiones que se declaran:**
+  - **Nunca se suma lo elegido con lo cobrado.** «Elegiste … $X» es `mine.amount_cents`
+    y va en su propia línea; los pagos siguen en su bloque con su propio monto.
+  - **Sin detalle por mesa** (eso sería la variante B): la fila no se toca ni pide
+    `GET /mesas/:code`.
+  - **En `igual` dice «partes», no «ítems»:** ahí el dueño cuenta casilleros
+    (`:995-1012`), y «Elegiste 2 ítems» sería falso.
+  - **Las mesas en curso (`pending_auth`, `open`, `partially_paid`) no se listan:**
+    ya están en «Mesas abiertas», y el vacío dice «cerraste».
+  - **«Cerró sin cobro»** sólo con `guarantee_mode === false` y `closure_reason`
+    presente; sin motivo de cierre no se afirma.
+  - **El vacío «Todavía no cerraste ninguna mesa.»** sale sólo si no hay pagos, no hay
+    mesas, no hubo error y no quedan páginas.
+- **Mock:** deriva «Tus mesas» del estado mock (en `consumo` cuenta los ítems con
+  reclamo propio; en `igual`, los casilleros propios) y agrega fixtures. **Declarado:**
+  el mock no guarda `created_at` y lo aproxima como `expires_at − 30 min`. Costuras en
+  `localStorage` `payme.app.mock.mis_mesas.v1`: `error`, `vacio`, `sin_cobro` (suma
+  «Tacos El Güero» y «Café Tacuba») y `muchas` (23 mesas, para paginar).
+- **i18n:** doce cadenas nuevas en `en.ts`, todas por `t('…')` literal.
+- **Tests:** `misMesas.test.ts` (5), `labels.test.ts` (estado y «en curso»),
+  `e2e/tus-mesas.spec.ts` (5: con estados, sin pagos pero con mesas, vacío real,
+  error que conserva los pagos, paginación 20 → 23). Capturas móviles 390×844 de los
+  estados con mesas, sin pagos con mesas, vacío y error.
+- **Mutantes (9, todos mueren):** incluir las en curso, vacío que ignora las mesas,
+  `igual` como ítems, sobre sin `page`, cursor de cualquier tipo, fila incompleta,
+  conteo no entero, «sin cobro» sin motivo de cierre, error oculto. El del sobre
+  **sobrevivió la primera vez**: el test aceptaba cualquier excepción y el `TypeError`
+  de leer `page` ausente la satisfacía. Ahora fija el mensaje del decodificador.
+
 ## 0.170.0 — El front reconoce el Aviso 2.5.0 antes de que el backend lo publique (2026-09-18)
 
 > **AF-20 (`APP-SESSION-LOCK-AND-SEAMS-AF-20-20260918`) va en esta MISMA versión, y
