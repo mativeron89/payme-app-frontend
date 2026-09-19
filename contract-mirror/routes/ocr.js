@@ -187,7 +187,15 @@ router.use(requireAuth);
 router.use(ocrLimiter);
 router.use(ocrUserLimiter);
 
-router.post('/', parseImageUpload, async (req, res, next) => {
+router.post('/', (req, res, next) => {
+  const version = req.query.contract_version;
+  if (version !== undefined && version !== '1' && version !== '2') {
+    const out = errorOcr('invalid_ocr_contract_version');
+    return res.status(out.status).json(out.body);
+  }
+  req.ocrContractVersion = version === '2' ? 2 : 1;
+  next();
+}, parseImageUpload, async (req, res, next) => {
   try {
     if (!req.file) {
       const out = errorOcr('no_image');
@@ -244,8 +252,12 @@ router.post('/', parseImageUpload, async (req, res, next) => {
       // edite a mano — el flujo de dividir la cuenta NUNCA se rompe por OCR.
       try {
         const result = await ocrTextract.analyzeExpense(req.file.buffer);
-        return res.json(respuestaOcr(result, { mock: false }));
+        return res.json(respuestaOcr(result, { mock: false, contractVersion: req.ocrContractVersion }));
       } catch (e) {
+        if (e && ['ocr_monthly_budget_exhausted', 'ocr_budget_unavailable'].includes(e.code)) {
+          const out = errorOcr(e.code);
+          return res.status(out.status).json(out.body);
+        }
         // 🔴 C6 · la cuota agotada es un RECHAZO deliberado, no una caída del
         // proveedor. Degradarla a 200 `provider_error` le diría a la persona
         // «no pudimos leer el ticket, editá a mano» cuando la verdad es «hoy ya
@@ -263,7 +275,7 @@ router.post('/', parseImageUpload, async (req, res, next) => {
         // OCR. Lo que C6 garantiza en ese caso es que NO hubo llamada a AWS,
         // porque la reserva lanza antes de cargar el SDK.
         logger.error('ocr_provider_error', { user_id: req.user.id, error: e.message });
-        return res.json(respuestaProveedorNoDisponible());
+        return res.json(respuestaProveedorNoDisponible(req.ocrContractVersion));
       }
     }
 
@@ -272,7 +284,7 @@ router.post('/', parseImageUpload, async (req, res, next) => {
       items,
       total_cents: items.reduce((s, i) => s + i.price_cents * i.quantity, 0),
       warnings: [],
-    }, { mock: true }));
+    }, { mock: true, contractVersion: req.ocrContractVersion }));
   } catch (err) {
     if (err.message === 'invalid_image_type') {
       const out = errorOcr('invalid_image_type');

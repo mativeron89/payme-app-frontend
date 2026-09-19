@@ -17,14 +17,25 @@ const { validate: isUuid } = require('uuid');
 const pool = require('../db/pool');
 const { restaurantSearchQuery, validateQuery } = require('../schemas');
 
+const { requireAuth } = require('../middleware/auth');
+const { restaurantResolution, validateBody } = require('../schemas');
+const { resolveRestaurant } = require('../services/restaurantResolution');
 const router = express.Router();
+router.post('/resolve', requireAuth, validateBody(restaurantResolution), async (req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  try { res.json(await resolveRestaurant(req.user.id, req.body)); }
+  catch (err) {
+    if ([400,403,404].includes(err.status)) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
 
 // ─── GET / — búsqueda por nombre (picker manual / demo) ────────────────────
 router.get('/', validateQuery(restaurantSearchQuery), async (req, res, next) => {
   try {
     const { q } = req.validatedQuery;
     const params = [];
-    let where = `status = 'active'`;
+    let where = `status = 'active' AND created_by_user_id IS NULL`;
     if (q) {
       // wildcards escapados: q busca texto literal, no patrones ILIKE
       params.push(`%${q.replace(/[\\%_]/g, '\\$&')}%`);
@@ -49,7 +60,7 @@ router.get('/:id', async (req, res, next) => {
     }
     const { rows } = await pool.query(
       `SELECT id, name, category, address FROM restaurants
-        WHERE id = $1 AND status = 'active'`,
+        WHERE id = $1 AND status = 'active' AND created_by_user_id IS NULL`,
       [req.params.id]
     );
     // suspendido/borrado = mismo 404 que inexistente (no filtrar el motivo)

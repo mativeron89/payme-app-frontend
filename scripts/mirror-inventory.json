@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "ca021dc80600e9cc3e71d4da92550feb21eeef1c",
-  "total": 107,
+  "commit": "5c63bcfb109a747abce892ac1c512fe941db8747",
+  "total": 109,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -15,6 +15,18 @@
       "destino": "contract/mesa-pay-identity-vectors.json",
       "sha256": "a1b5c6a34b6ac045cf3969bfdda122ee72a791711cd4320f69450c2e56ccebef",
       "bytes": 5731
+    },
+    {
+      "origen": "contract/ocr-merchant-v2.json",
+      "destino": "contract/ocr-merchant-v2.json",
+      "sha256": "f54a3fbca4021d3668791d8f224dad85db1b98905cff5fb338653b59d7c71bc4",
+      "bytes": 643
+    },
+    {
+      "origen": "contract/restaurant-resolution-v1.json",
+      "destino": "contract/restaurant-resolution-v1.json",
+      "sha256": "da16ca9240098ce8019031a8cc2bf325b75f4a5a45d422ed2687aa36b5dafd59",
+      "bytes": 576
     },
     {
       "origen": "contract/social-auth-v1.json",
@@ -289,8 +301,8 @@
     {
       "origen": "services/settlement.js",
       "destino": "docs/settlement.js.ref",
-      "sha256": "e94a59fe453e3a2e665c806940d0cd5aa372b140ed5058dd5ea387dfacce0130",
-      "bytes": 157543
+      "sha256": "5705e0b325f434ac20d182dc24b8d7e6d00d0d1114fbe05066ca0cd6148a4dd0",
+      "bytes": 157662
     },
     {
       "origen": "legal/README.md",
@@ -355,8 +367,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "5043f5878281eb2d34f0ccac6be70c934fca0af8bd541b0c85df8c931c0b119f",
-      "bytes": 182924
+      "sha256": "d2cbd21a77bb7a29f3e3b7f0e44a754e2c65fb7e1b5bcd2bc3d1473584074d02",
+      "bytes": 184475
     },
     {
       "origen": "routes/notifications.js",
@@ -367,8 +379,8 @@
     {
       "origen": "routes/ocr.js",
       "destino": "routes/ocr.js",
-      "sha256": "596a9ae46da9eebae987e1ff0f5bf4f26a1843c427cef339992a273407c5e305",
-      "bytes": 12792
+      "sha256": "0e10f41dd94c0520fda3cc5a521bc7ca6557f44ef51e882f45e85105e4680216",
+      "bytes": 13412
     },
     {
       "origen": "routes/payment-methods.js",
@@ -379,8 +391,8 @@
     {
       "origen": "routes/restaurants.js",
       "destino": "routes/restaurants.js",
-      "sha256": "4ff66ae1bc2691a5ac679d30cbdbf2fc8ba1b2a8c2da0793968b907e86c9692a",
-      "bytes": 2475
+      "sha256": "9cfcad75d3195bc584dcda17dd9caac8b67218e05f0f1a995515ff87d74e0779",
+      "bytes": 3104
     },
     {
       "origen": "routes/social-auth.js",
@@ -427,8 +439,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "643642e7d5f8621b2e21e2b1f438458a8a7e3d108c86cf4645279c2d91bce49e",
-      "bytes": 27938
+      "sha256": "78384265a10bacdf9ccfa10b7e42166e444dd6eb4a4a8fb7720fc22410407758",
+      "bytes": 28139
     },
     {
       "origen": "services/authRecovery.js",
@@ -535,8 +547,8 @@
     {
       "origen": "services/ocrResponseContract.js",
       "destino": "services/ocrResponseContract.js",
-      "sha256": "90b2177c514bb909efb6e10f3e858a9bb83d6d4c9b48a903e3fb7bfaa1acfa44",
-      "bytes": 3875
+      "sha256": "9a78603dbe3287f61cc2e89e5b3a6ce52e8285f8d3a22deb29ebdd51a176c329",
+      "bytes": 5344
     },
     {
       "origen": "services/paymentAttemptReconciler.js",

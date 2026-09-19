@@ -104,6 +104,8 @@ describe('AF-17 · 🔴 sin una versión de aviso que el dueño acepte, no hay u
     expect(versionAvisoParaContinue('2.5.2')).toBe('2.5.2');
     // AF-32 · y el 2.5.3 del dueño v2.111.0.
     expect(versionAvisoParaContinue('2.5.3')).toBe('2.5.3');
+    // n179 · y el texto exacto 2.5.4 para tickets sin QR.
+    expect(versionAvisoParaContinue('2.5.4')).toBe('2.5.4');
   });
 
   it('sin aviso, o con una forma que el dueño rechaza ⇒ null (camino 0.167.0)', () => {

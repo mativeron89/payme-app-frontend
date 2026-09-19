@@ -12,6 +12,7 @@ import type {
   MesaStatus,
   OpenMesa,
   PaymentMethod,
+  Restaurant,
   PendingInvitation,
   TransferListItem,
   User,
@@ -219,6 +220,8 @@ export interface MockState {
    * commit del cierre. Lo que esto sí acredita es que el canje INSCRIBE.
    */
   joinedMesaCodes: string[];
+  /** Registros privados creados por /restaurants/resolve, aislados por usuario. */
+  restaurantResolutions: Record<string, Record<string, Restaurant>>;
   /** Debe persistir junto a las mutaciones económicas para que reload no cobre de nuevo. */
   idempotency: Record<string, MockIdemEntry>;
 }
@@ -909,6 +912,7 @@ function seedState(): MockState {
     pendingInvitations,
     linkTokens: {},
     joinedMesaCodes: [],
+    restaurantResolutions: {},
     idempotency: {},
     transfers: [
       {
@@ -1284,6 +1288,10 @@ function loadPersisted(): MockState | null {
       parsed.linkTokens = {};
     }
     if (!Array.isArray(parsed.joinedMesaCodes)) parsed.joinedMesaCodes = [];
+    if (!parsed.restaurantResolutions || typeof parsed.restaurantResolutions !== 'object'
+        || Array.isArray(parsed.restaurantResolutions)) {
+      parsed.restaurantResolutions = {};
+    }
     if (!Array.isArray(parsed.friendRequests)) parsed.friendRequests = [];
     if (!Array.isArray(parsed.friendRequestReceipts)) {
       // Estados mock anteriores a G-25 sólo tenían la solicitud real. Se

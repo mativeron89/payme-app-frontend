@@ -1,6 +1,17 @@
 /** Contrato autoritativo de `POST /api/ocr`. No llama al proveedor. */
 'use strict';
 
+function normalizeName(value) {
+  if (typeof value !== 'string') return null;
+  const name = value.normalize('NFC').trim().replace(/\s+/gu, ' ');
+  return name && name.length <= 200 && ![...name].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127) ? name : null;
+}
+function normalizeRfc(value) {
+  if (typeof value !== 'string') return null;
+  const rfc = value.normalize('NFC').toUpperCase().replace(/[\s-]/gu, '');
+  return /^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/u.test(rfc) ? rfc : null;
+}
+
 const OCR_WARNING_CODES = Object.freeze([
   'no_items_found',
   'low_confidence_items',
@@ -10,6 +21,7 @@ const OCR_WARNING_CODES = Object.freeze([
 ]);
 
 const OCR_ERROR_STATUS = Object.freeze({
+  invalid_ocr_contract_version: 400,
   no_image: 400,
   invalid_image_type: 400,
   invalid_multipart: 400,
@@ -19,6 +31,8 @@ const OCR_ERROR_STATUS = Object.freeze({
   // sano, lo que se acabó es el techo del día. El body no lleva contador,
   // restante, fecha ni identificador — sólo el código, como todos los demás.
   ocr_daily_quota_exhausted: 429,
+  ocr_monthly_budget_exhausted: 429,
+  ocr_budget_unavailable: 503,
 });
 
 const OCR_ITEM_FIELDS = Object.freeze([
@@ -60,7 +74,7 @@ function assertItem(item) {
  * cosa. `confidence`/`low_confidence` son opcionales porque el mock histórico
  * no los inventa; Textract sí los entrega por ítem.
  */
-function respuestaOcr(payload, { mock }) {
+function respuestaOcr(payload, { mock, contractVersion = 1 }) {
   if (!payload || !Array.isArray(payload.items)) throw new Error('ocr_response_items_invalid');
   payload.items.forEach(assertItem);
   if (!enteroSeguroNoNegativo(payload.total_cents)) {
@@ -75,7 +89,19 @@ function respuestaOcr(payload, { mock }) {
       || new Set(payload.warnings).size !== payload.warnings.length) {
     throw new Error('ocr_response_warnings_invalid');
   }
+  let merchant;
+  if (contractVersion === 2 && payload.merchant !== undefined) {
+    const input = payload.merchant;
+    if (!input || Array.isArray(input) || typeof input !== 'object'
+        || !Object.keys(input).length || Object.keys(input).some((k) => !['name','rfc'].includes(k))
+        || (input.name !== undefined && normalizeName(input.name) !== input.name)
+        || (input.rfc !== undefined && normalizeRfc(input.rfc) !== input.rfc)) {
+      throw new Error('ocr_response_merchant_invalid');
+    }
+    merchant = { ...input };
+  }
   return {
+    ...(contractVersion === 2 ? { contract_version: 2, ...(merchant && { merchant }) } : {}),
     items: payload.items,
     total_cents: payload.total_cents,
     ...(payload.total_detected_cents !== undefined
@@ -86,19 +112,24 @@ function respuestaOcr(payload, { mock }) {
   };
 }
 
-function respuestaProveedorNoDisponible() {
+function respuestaProveedorNoDisponible(contractVersion = 1) {
   return respuestaOcr({
     items: [], total_cents: 0, warnings: ['provider_error'],
-  }, { mock: false });
+  }, { mock: false, contractVersion });
 }
 
 function errorOcr(code, extra = {}) {
   const status = OCR_ERROR_STATUS[code];
   if (!status) throw new Error('ocr_error_code_unknown');
+  if (code === 'ocr_monthly_budget_exhausted' || code === 'ocr_budget_unavailable') {
+    return { status, body: { error: code } };
+  }
   return { status, body: { error: code, ...extra } };
 }
 
 module.exports = {
+  normalizeName,
+  normalizeRfc,
   OCR_WARNING_CODES,
   OCR_ERROR_STATUS,
   OCR_ITEM_FIELDS,

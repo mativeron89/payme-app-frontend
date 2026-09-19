@@ -245,12 +245,6 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
     // el 2026-08-10 —«la garantía es lo que hace que el restaurante cobre»— y
     // pedir `none` se rechaza acá, antes del hash de idempotencia y del INSERT.
     const sinGarantia = guarantee_method === 'none';
-    if (sinGarantia && dineroHabilitado()) {
-      logger.warn('mesa_sin_garantia_rechazada_riel_vivo', {
-        user_id: req.user.id, restaurant_id,
-      });
-      return res.status(409).json({ error: 'guarantee_required' });
-    }
     // Para `card` y `wallet` el gate no cambia: con el dinero apagado siguen
     // fail-closed. `none` NO pasa por acá, porque su premisa es justamente que
     // el dinero esté apagado.
@@ -311,10 +305,18 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
     // se haya suspendido, debe reconciliar esa obligación y recuperar el mismo
     // client_secret, no ocultarla detrás de un 404.
     if (!mesaPrevia) {
-      const { rowCount: rOk } = await pool.query(
-        `SELECT 1 FROM restaurants WHERE id = $1 AND status = 'active'`, [restaurant_id]
+      const { rows: [restaurant] } = await pool.query(
+        `SELECT created_by_user_id FROM restaurants WHERE id=$1 AND
+          ((created_by_user_id IS NULL AND status='active') OR
+           (created_by_user_id=$2 AND status='unverified'))`, [restaurant_id,req.user.id]
       );
-      if (rOk === 0) return res.status(404).json({ error: 'restaurant_not_found' });
+      if (!restaurant) return res.status(404).json({ error: 'restaurant_not_found' });
+      if (restaurant.created_by_user_id && !sinGarantia) {
+        return res.status(409).json({ error: 'restaurant_record_only' });
+      }
+      if (sinGarantia && !restaurant.created_by_user_id && dineroHabilitado()) {
+        return res.status(409).json({ error: 'guarantee_required' });
+      }
 
       // ORDEN OLA 4 · 4B — el gate manda ACÁ, antes de tocar Customer, mesa o
       // hold. Bajo el MVP card-only una cuenta Connect no apta no degrada a
@@ -503,6 +505,17 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
         const code = generateMesaCode();
         try {
           return await pool.tx(async (client) => {
+            if (sinGarantia) {
+              const { rows: [restaurant] } = await client.query(
+                `SELECT created_by_user_id FROM restaurants WHERE id=$1 AND
+                  ((created_by_user_id IS NULL AND status='active') OR
+                   (created_by_user_id=$2 AND status='unverified')) FOR SHARE`,
+                [restaurant_id, req.user.id]);
+              if (!restaurant) throw Object.assign(new Error('restaurant_not_found'), { status: 404 });
+              if (!restaurant.created_by_user_id && dineroHabilitado()) {
+                throw Object.assign(new Error('guarantee_required'), { status: 409 });
+              }
+            }
             if (guarantee_method === 'card') {
               await paymentMethodLifecycle.assertPaymentMethodUseCanSeal(client, {
                 stripePaymentMethodId: guaranteePmId,
@@ -1183,7 +1196,21 @@ router.get('/:code/shortfall-detail', requireAuth, requireShortfallDetailRollout
   });
 
 // CIERRE DEL PAGO SIN CUENTA · C1. Ver el bloque de C3 en `/:code/pay`.
-router.get('/:code', requireAuth, requireMesaParticipant, async (req, res, next) => {
+async function privateMesaVisibility(req, res, next) {
+  try {
+    const { rows: [access] } = await pool.query(
+      `SELECT r.created_by_user_id, m.opener_user_id,
+        EXISTS (SELECT 1 FROM mesa_participants p WHERE p.mesa_id=m.id
+                AND p.user_id=$2 AND p.status='active') AS active_participant
+       FROM mesas m JOIN restaurants r ON r.id=m.restaurant_id WHERE m.code=$1`,
+      [req.params.code, req.user.id]);
+    if (access?.created_by_user_id && access.opener_user_id !== req.user.id && !access.active_participant) {
+      return res.status(404).json({ error: 'mesa_not_found' });
+    }
+    next();
+  } catch (err) { next(err); }
+}
+router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant, async (req, res, next) => {
   try {
     const mesa = req.mesa;
     // `req.mesa` no trae `guarantee_mode` y su middleware está fuera del

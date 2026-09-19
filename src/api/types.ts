@@ -315,6 +315,19 @@ export interface RestaurantResponse {
   restaurant: Restaurant;
 }
 
+/** POST /api/restaurants/resolve · identidad privada derivada del ticket. */
+export interface RestaurantResolutionRequest {
+  name?: string;
+  rfc?: string;
+  fallback_key?: string;
+}
+
+export interface RestaurantResolutionResponse {
+  restaurant: Restaurant;
+  /** true: registro privado del usuario, sin pagos ni garantía. */
+  record_only: boolean;
+}
+
 /** Tipos de wallet_transactions (schemas walletTxQuery). */
 export type WalletTxType =
   | 'topup_oxxo'
@@ -840,8 +853,17 @@ export type OcrWarning =
   | 'total_mismatch'
   | 'provider_error';
 
+export interface OcrMerchant {
+  name?: string;
+  rfc?: string;
+}
+
 /** POST /api/ocr → 200; shape autoritativo de ocrResponseContract.js. */
 export interface OcrResponse {
+  /** Ausente en el contrato v1; exactamente 2 cuando se pidió v2. */
+  contract_version?: 2;
+  /** Sólo identidad del proveedor. Nunca domicilio, RFC receptor ni pago. */
+  merchant?: OcrMerchant;
   items: Array<{
     name: string;
     category: OcrCategory;

@@ -11,6 +11,26 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.180.0 — Ticket sin QR · mesa privada sin cobros (2026-09-19)
+
+Orden `AF-N179-TICKET-IMPLEMENTACION-20260919`, base `13800c9`. **Sin push,
+sin deploy, sin GREEN.** Roadmap n179.
+
+- OCR pide el contrato v2 y decodifica en forma cerrada sólo nombre/RFC del
+  proveedor; v1 sigue compatible. Nunca acepta domicilio, RFC receptor ni datos
+  de pago.
+- Sin QR, una sesión autenticada resuelve el comercio por
+  `POST /restaurants/resolve`; el fallback UUID se conserva en reintentos y se
+  aísla al cambiar sesión o ticket.
+- El registro privado es `record_only`: con dinero apagado abre una mesa sin
+  garantía; con dinero vivo se bloquea antes de ofrecer tarjeta.
+- El mock replica ownership, resolución idempotente y pérdida de respuesta
+  posterior a la creación: el retry conserva UUID y una sola mesa.
+- Aviso `2.5.4` presentable por coincidencia exacta; `2.5.40` y `2.5.4-rc`
+  permanecen cerrados.
+- Espejo owner C3 `5956ce5`, inventario C4 `09ef907`: 109 archivos, dos altas
+  y seis modificaciones.
+
 ## 0.179.0 — «Qué comes · por ingrediente» (2d) (2026-09-19)
 
 Orden `APP-STATS-INGREDIENTS-TAB-AF-38-20260919`, base `e2eaf3c` (= `origin/main`,

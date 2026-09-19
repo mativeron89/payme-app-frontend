@@ -102,6 +102,8 @@ function loggedIn(accessToken = 'a-ocr', refreshToken = 'r-ocr') {
 
 function ticket() {
   return {
+    contract_version: 2,
+    merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
     items: [{ name: 'Taco', category: 'mexican', price_cents: 1000, quantity: 1 }],
     total_cents: 1000,
     warnings: [],
@@ -133,7 +135,7 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
     const xhr = FakeXmlHttpRequest.instances[0];
     expect(xhr).toBeDefined();
     expect(xhr.method).toBe('POST');
-    expect(xhr.url).toMatch(/\/api\/ocr$/);
+    expect(xhr.url).toMatch(/\/api\/ocr\?contract_version=2$/);
     expect(xhr.body).toBe(form);
     expect(xhr.timeout).toBe(OCR_TIMEOUT_MS);
     expect(xhr.responseType).toBe('json');
@@ -169,6 +171,17 @@ describe('G-29 · transporte dedicado del upload OCR', () => {
         body: { error: 'invalid_image_type' },
       }),
     );
+  });
+
+  it.each([
+    [429, 'ocr_monthly_budget_exhausted'],
+    [503, 'ocr_budget_unavailable'],
+  ])('preserva el rechazo presupuestario %i y no reintenta el OCR', async (status, error) => {
+    const pending = httpOcrUploadRequest<unknown>(new FormData());
+    FakeXmlHttpRequest.instances[0].finish(status, { error });
+
+    await expect(pending).rejects.toMatchObject({ status, body: { error }, message: error });
+    expect(FakeXmlHttpRequest.instances).toHaveLength(1);
   });
 
   it.each([

@@ -165,7 +165,7 @@ function rawOcrUploadRequest<T>(
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${BASE_URL}/api/ocr`);
+    xhr.open('POST', `${BASE_URL}/api/ocr?contract_version=2`);
     xhr.responseType = 'json';
     xhr.timeout = OCR_TIMEOUT_MS;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);

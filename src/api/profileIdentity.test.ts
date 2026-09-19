@@ -126,6 +126,17 @@ const PROFILE_253 = {
   notice_version: '2.5.3',
 };
 
+/** n179 · aviso aprobado para ticket sin QR. */
+const PROFILE_254 = {
+  ...PROFILE_ON,
+  notice_version: '2.5.4',
+};
+
+const PROFILE_NEAR_MISS_254 = [
+  { ...PROFILE_ON, notice_version: '2.5.40' },
+  { ...PROFILE_ON, notice_version: '2.5.4-rc' },
+];
+
 /** AF-32 · y contra 2.5.3: un sufijo o un dígito de más NO se presentan. */
 const PROFILE_NEAR_MISS_253 = [
   { ...PROFILE_ON, notice_version: '2.5.30' },
@@ -211,8 +222,10 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
     // AF-32 · y 2.5.3…
     expect(readProfileIdentityCapability(config(PROFILE_253)))
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.3' });
+    expect(readProfileIdentityCapability(config(PROFILE_254)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.4' });
     // …sin sus near-miss…
-    for (const cerca of [...PROFILE_NEAR_MISS_250, ...PROFILE_NEAR_MISS_251, ...PROFILE_NEAR_MISS_252, ...PROFILE_NEAR_MISS_253]) {
+    for (const cerca of [...PROFILE_NEAR_MISS_250, ...PROFILE_NEAR_MISS_251, ...PROFILE_NEAR_MISS_252, ...PROFILE_NEAR_MISS_253, ...PROFILE_NEAR_MISS_254]) {
       expect(readProfileIdentityCapability(config(cerca)).status, cerca.notice_version).toBe('notice_unavailable');
     }
     // …y una versión FUTURA sigue apagando.

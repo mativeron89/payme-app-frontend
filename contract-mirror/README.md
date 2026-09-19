@@ -6,36 +6,45 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-09-19** (el séptimo del día).
+- Fecha del refresh: **2026-09-19** (el noveno del día).
 - Commit exacto y procedencia del CONTENIDO:
-  **`ca021dc80600e9cc3e71d4da92550feb21eeef1c`**
-  (App Backend **v2.115.0**, AB-30 · n168: `GET /api/account/stats/ingredients`,
-  «Qué comes · por ingrediente», clasificado por el nombre del plato.)
+  **`5c63bcfb109a747abce892ac1c512fe941db8747`**
+  (App Backend C1 · n179/O1: conserva OCR v2 y suma los rechazos cerrados
+  `ocr_monthly_budget_exhausted` y `ocr_budget_unavailable`.)
 - Commit del que se tomó el inventario autoritativo:
-  **`8aa0b73c6ab9df0289c72e09d8fe9735eb29d20b`** (HEAD de la rama del dueño
-  `claude/stats-ingredientes`). Entre `ca021dc` y `8aa0b73` hay sólo inventario
-  (`3e4ce0a`) y el pin de versión de un test (`8aa0b73`), fuera de la población.
+  **`9868821e9443a483c09764f316c4b802f12c447e`** (C2 fijado por el dueño,
+  tree `06a9f853fa530de8827aa45c6f8fb6dc630f6ba3`). El inventario declara el
+  contenido C1 exacto; C2 sólo actualiza metadatos y no se usa como HEAD mutable.
 
-🔴 **No está publicado:** el `main` remoto del dueño es `3dbaa64e…` (v2.108.0);
-`ca021dc` es local del dueño (medido 2026-09-19). El Bibliotecario avisó que la
-integral final del dueño todavía corre.
+🔴 **No acredita publicación:** este refresh consume objetos git locales fijados.
+No se consultó vigencia contra el HEAD del worktree del dueño, que trabaja en
+paralelo, ni se usa su estado mutable como fuente.
 
-🆕 **107 archivos espejados** más este README. Contra el corte anterior
-(`ade827a`) cambia **uno**: `routes/account.js`. Cero nuevos, cero que salgan,
-cero renombrados.
+🆕 **109 archivos espejados** más este README. Contra el corte anterior
+(`ca021dc`) hay **dos altas** (`contract/ocr-merchant-v2.json` y
+`contract/restaurant-resolution-v1.json`), **seis modificaciones**, cero bajas
+y cero renombrados. Frente al corte C4 de n179, O1 cambia exactamente
+`routes/ocr.js` y `services/ocrResponseContract.js`; la población sigue en 109.
 
 ### Verificación de esta adopción, con su resultado literal
 
-`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `8aa0b73c`
-(`.claude/worktrees/stats-ingredientes`; su porcelain sólo lista `node_modules`
-sin trackear).
+`PAYME_APP_BACKEND_DIR` apuntó al repositorio del dueño que contiene el objeto
+C1. Los gates leen `inventario.commit`; no leen semántica ni ejecutan
+`docs/settlement.js.ref`.
 
 | gate | resultado |
 |---|---|
-| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `ca021dc`** · exit 0 |
-| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
-| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `ca021dc`** · exit 0 |
-| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`8aa0b73c`) · exit 0 |
+| `--integridad` | **OK 109/109** contra el inventario · exit 0 |
+| `--paridad` | **OK 109/109**: espejo = inventario = fuente **en `5c63bcf`** · exit 0 |
+
+No se ejecuta `--vigencia`: por orden, el HEAD paralelo del dueño no es el
+oráculo de esta adopción; manda el objeto C3 fijado.
+
+### Refresh anterior · 2026-09-19 («Qué comes · por ingrediente» · `ca021dc`)
+
+- Población: 107 archivos.
+- Inventario: `8aa0b73c6ab9df0289c72e09d8fe9735eb29d20b`.
+- Cambio del corte: `routes/account.js`.
 
 ### Refresh anterior · 2026-09-19 (cerrar mesa y aviso de mesa vencida · `ade827a`)
 

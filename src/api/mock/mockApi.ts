@@ -20,6 +20,8 @@ import type {
   AttachPaymentMethodResponse,
   MeResponse,
   RestaurantResponse,
+  RestaurantResolutionRequest,
+  RestaurantResolutionResponse,
   BalanceResponse,
   ClabeResponse,
   CreateInvitationResponse,
@@ -1218,6 +1220,56 @@ export async function mockGetRestaurant(id: string): Promise<RestaurantResponse>
   return delay({ restaurant: { ...r } });
 }
 
+function normalizedMerchantName(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const name = value.normalize('NFC').trim().replace(/\s+/gu, ' ');
+  return name && name.length <= 200 ? name : null;
+}
+
+function normalizedMerchantRfc(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const rfc = value.normalize('NFC').toUpperCase().replace(/[\s-]/gu, '');
+  return /^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/u.test(rfc) ? rfc : null;
+}
+
+/** POST /restaurants/resolve · owner-scoped, privado y record-only. */
+export async function mockResolveRestaurant(
+  input: RestaurantResolutionRequest,
+): Promise<RestaurantResolutionResponse> {
+  const session = loadSession();
+  if (!session) return fail(401, 'unauthorized');
+  const name = normalizedMerchantName(input.name);
+  const rfc = normalizedMerchantRfc(input.rfc);
+  const usefulRfc = rfc && !['XAXX010101000', 'XEXX010101000'].includes(rfc) ? rfc : null;
+  const fallback = typeof input.fallback_key === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.fallback_key)
+    ? input.fallback_key.toLowerCase()
+    : null;
+  const identity = usefulRfc
+    ? `rfc:${usefulRfc}`
+    : name
+      ? `name:${name.toLowerCase()}`
+      : fallback
+        ? `unknown:${fallback}`
+        : null;
+  if (!identity) return fail(400, 'restaurant_identity_required');
+
+  const byUser = state.restaurantResolutions[session.principal_id] ?? {};
+  state.restaurantResolutions[session.principal_id] = byUser;
+  const existing = byUser[identity];
+  if (existing) return delay({ restaurant: { ...existing }, record_only: true });
+
+  const restaurant = {
+    id: mockId('e'),
+    name: name ?? 'Restaurante sin identificar',
+    category: 'other',
+    address: null,
+  };
+  byUser[identity] = restaurant;
+  persist();
+  return delay({ restaurant: { ...restaurant }, record_only: true });
+}
+
 export async function mockWalletTransactions(): Promise<WalletTransactionsResponse> {
   return delay({ transactions: [...state.walletTx], limit: 30, offset: 0 });
 }
@@ -1450,8 +1502,41 @@ export async function mockScanTicket(): Promise<OcrResponse> {
     { name: 'Vino tinto (copa)', category: 'other' as const, price_cents: 6000, quantity: 1 },
   ];
   const total = items.reduce((s, i) => s + i.price_cents * i.quantity, 0);
+  const mode = localStorage.getItem('payme.app.mock.n179.ocr.v1');
+  const attemptsKey = 'payme.app.mock.n179.ocr_attempts.v1';
+  localStorage.setItem(attemptsKey, String(Number(localStorage.getItem(attemptsKey) ?? '0') + 1));
+  if (mode === 'budget_exhausted') return fail(429, 'ocr_monthly_budget_exhausted');
+  if (mode === 'budget_unavailable') return fail(503, 'ocr_budget_unavailable');
+  if (mode === 'malformed') {
+    return delay({
+      contract_version: 2,
+      merchant: { name: 'Tacos El Güero', address: 'dato prohibido' },
+      items,
+      total_cents: total,
+      warnings: [],
+      mock: true,
+    } as unknown as OcrResponse);
+  }
+  if (mode === 'no_items') {
+    return delay({
+      contract_version: 2,
+      merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
+      items: [],
+      total_cents: 0,
+      total_detected_cents: total,
+      warnings: ['no_items_found', 'total_mismatch'],
+      mock: true,
+    });
+  }
   return new Promise((resolve) =>
-    setTimeout(() => resolve({ items, total_cents: total, warnings: [], mock: true }), 1200),
+    setTimeout(() => resolve({
+      contract_version: 2,
+      merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
+      items,
+      total_cents: total,
+      warnings: [],
+      mock: true,
+    }), 1200),
   );
 }
 
@@ -1516,7 +1601,12 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
     if (previoMesa.hash !== idemHash) return fail(409, 'idempotency_conflict');
     return delay({ ...(previoMesa.response as CreateMesaResponse), idempotent: true });
   }
-  const restaurant = MOCK_RESTAURANTS.find((r) => r.id === req.restaurant_id);
+  const session = loadSession();
+  const privateRestaurant = session
+    ? Object.values(state.restaurantResolutions[session.principal_id] ?? {})
+      .find((r) => r.id === req.restaurant_id)
+    : undefined;
+  const restaurant = MOCK_RESTAURANTS.find((r) => r.id === req.restaurant_id) ?? privateRestaurant;
   if (!restaurant) return fail(404, 'restaurant_not_found');
 
   /**
@@ -1530,6 +1620,9 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   const dineroVivo = modo?.payments_enabled === true;
   if (req.guarantee_method === 'none' && dineroVivo) {
     return fail(409, 'guarantee_required');
+  }
+  if (privateRestaurant && req.guarantee_method !== 'none') {
+    return fail(409, 'restaurant_record_only');
   }
   /**
    * ⚠️ **Límite declarado del mock, y por qué no se cierra acá.** El dueño
@@ -1626,6 +1719,13 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
       guarantee: { method: 'none', status: 'none' },
     };
     writeMockIdempotency(idemKey, { hash: idemHash, response: respuestaSinGarantia });
+    persist();
+    // Sonda n179: la mutación quedó durable y recién DESPUÉS se pierde la
+    // respuesta. El retry debe caer en el ledger, no crear otra mesa.
+    if (localStorage.getItem('payme.app.mock.n179.lost_response.v1') === 'armed') {
+      localStorage.setItem('payme.app.mock.n179.lost_response.v1', 'consumed');
+      throw new TypeError('network_error');
+    }
     return delay(respuestaSinGarantia);
   }
 

@@ -54,6 +54,7 @@ import {
 } from './profileIdentity';
 import { decodeShortfallDetailResponse, type ShortfallDetail } from './shortfallDetail';
 import { decodeMovementDetailResponse } from './movementDetail';
+import { decodeRestaurantResolution } from './restaurantResolution';
 import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempotency';
 import { guaranteeOutcome } from './paymentStatus';
 import { loadSession, type SessionStateWitness, type StoredSession } from './storage';
@@ -82,6 +83,8 @@ import type {
   MeResponse,
   LegalTextResponse,
   RestaurantResponse,
+  RestaurantResolutionRequest,
+  RestaurantResolutionResponse,
   FractionRequest,
   ClabeResponse,
   CreateInvitationResponse,
@@ -261,6 +264,8 @@ export interface Api {
   deleteProfileAvatar(expectedRevision: string, expectedSession: StoredSession): Promise<void>;
   /** Resolver el uuid del QR de la mesa (G-01, v2.21). Público, 404 si no está activo. */
   getRestaurant(id: string): Promise<RestaurantResponse>;
+  /** Identidad del ticket → restaurante público o registro privado record-only. */
+  resolveRestaurant(req: RestaurantResolutionRequest): Promise<RestaurantResolutionResponse>;
   // cuenta
   getBalance(): Promise<BalanceResponse>;
   getWalletTransactions(): Promise<WalletTransactionsResponse>;
@@ -525,6 +530,9 @@ const realApi: Api = {
   },
   getRestaurant: (id) =>
     httpPublicRequest<RestaurantResponse>('GET', `/restaurants/${encodeURIComponent(id)}`),
+  resolveRestaurant: async (req) => decodeRestaurantResolution(
+    await httpRequest<unknown>('POST', '/restaurants/resolve', req),
+  ),
 
   getBalance: () => httpRequest<BalanceResponse>('GET', '/account/balance'),
   getHistory: (params) => {
@@ -906,6 +914,7 @@ const mockApi: Api = {
     await mock.mockDeleteProfileAvatar(expectedRevision);
   },
   getRestaurant: (id) => mock.mockGetRestaurant(id),
+  resolveRestaurant: async (req) => decodeRestaurantResolution(await mock.mockResolveRestaurant(req)),
 
   getBalance: () => mock.mockBalance(),
   getWalletTransactions: () => mock.mockWalletTransactions(),

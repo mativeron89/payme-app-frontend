@@ -42,10 +42,11 @@ import {
 import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import { decideOcrScan } from './ocrScanView';
+import { resolutionRequest } from '../api/restaurantResolution';
 
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
-import type { CreateMesaResponse, PaymentMethod, Restaurant } from '../api/types';
+import type { CreateMesaResponse, OcrMerchant, PaymentMethod, Restaurant } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { fullName } from '../utils/identity';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -86,6 +87,31 @@ interface EditItem {
   confidence?: number;
   /** Señal del owner: se conserva incluso después de editar; no se finge certeza. */
   lowConfidence?: true;
+}
+
+export type TicketOpeningRoute = 'wait_for_user' | 'resolving_restaurant' | 'record_only_blocked' | 'create_without_money' | 'guarantee';
+
+/** Decisión pura usada por el CTA: resolver nunca equivale a crear. */
+export function ticketOpeningRoute(input: {
+  userAction: boolean;
+  restaurantReady: boolean;
+  recordOnly: boolean;
+  moneyEnabled: boolean;
+}): TicketOpeningRoute {
+  if (!input.userAction) return 'wait_for_user';
+  if (!input.restaurantReady) return 'resolving_restaurant';
+  if (input.recordOnly && input.moneyEnabled) return 'record_only_blocked';
+  return input.moneyEnabled ? 'guarantee' : 'create_without_money';
+}
+
+export function ocrFailureIssue(code: string, status: number | null):
+  'budget_exhausted' | 'budget_unavailable' | 'too_large' | 'image_type' | 'ocr' {
+  if (status === 429 && code === 'ocr_monthly_budget_exhausted') return 'budget_exhausted';
+  if (status === 503 && code === 'ocr_budget_unavailable') return 'budget_unavailable';
+  if (status === 413 || code === 'image_too_large') return 'too_large';
+  if (status === 415 || code === 'unsupported_image_type_for_provider'
+      || code === 'invalid_image_type' || code === 'invalid_multipart') return 'image_type';
+  return 'ocr';
 }
 
 function priceCentsOf(it: EditItem): number {
@@ -137,7 +163,8 @@ export function CreateMesaFlow() {
    * colapsarlos vuelve falsa al menos una explicación.
    */
   const [scanIssue, setScanIssue] = useState<
-    'ocr' | 'no_items' | 'provider' | 'image_type' | 'too_large' | null
+    'ocr' | 'no_items' | 'provider' | 'image_type' | 'too_large'
+    | 'budget_exhausted' | 'budget_unavailable' | null
   >(null);
   /**
    * §1.3 · el total que el OCR leyó del ticket IMPRESO, tal como vino. Existe
@@ -282,7 +309,7 @@ export function CreateMesaFlow() {
    */
   const restaurantId =
     QR_RESTAURANT_ID ??
-    (IS_MOCK
+    (IS_MOCK && moneyRail.status === 'authoritative' && moneyRail.puedeCargarTarjeta
       ? MOCK_RESTAURANTS[0].id
       : ((import.meta.env.VITE_RESTAURANT_ID as string | undefined) ?? ''));
   /**
@@ -294,20 +321,38 @@ export function CreateMesaFlow() {
    * El total entra porque es lo que se retiene: una garantía por otro monto
    * NUNCA puede replayar la anterior.
    */
-  const mesaScopeBase = actor
-    ? scopeForActor(actor, `mesa:${restaurantId || 'sin-restaurante'}`)
-    : '';
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [restaurantRecordOnly, setRestaurantRecordOnly] = useState(false);
   const [restaurantError, setRestaurantError] = useState<string | null>(null);
+  const [ocrMerchant, setOcrMerchant] = useState<OcrMerchant | undefined>();
+  const ticketFallbackRef = useRef<string | null>(null);
+  const resolutionRef = useRef<{
+    sessionId: string;
+    fingerprint: string;
+    promise: ReturnType<typeof api.resolveRestaurant>;
+  } | null>(null);
+  const effectiveRestaurantId = restaurant?.id ?? restaurantId;
+  const mesaScopeBase = actor
+    ? scopeForActor(actor, `mesa:${effectiveRestaurantId || 'sin-restaurante'}`)
+    : '';
   useEffect(() => {
     if (!restaurantId) {
-      setRestaurantError(t('No pudimos identificar el restaurante: entra desde el QR de la mesa.'));
+      // n179: sin QR, la identidad se obtiene del ticket y se resuelve por el
+      // endpoint autenticado. La ausencia ya no es un error previo al OCR.
+      setRestaurant(null);
+      setRestaurantRecordOnly(false);
+      setRestaurantError(null);
       return;
     }
     let alive = true;
+    setRestaurantError(null);
     api
       .getRestaurant(restaurantId)
-      .then((r) => alive && setRestaurant(r.restaurant))
+      .then((r) => {
+        if (!alive) return;
+        setRestaurant(r.restaurant);
+        setRestaurantRecordOnly(false);
+      })
       .catch(() =>
         alive && setRestaurantError(t('Este QR no corresponde a un restaurante disponible.')),
       );
@@ -315,6 +360,55 @@ export function CreateMesaFlow() {
       alive = false;
     };
   }, [restaurantId]);
+
+  useEffect(() => {
+    // Una sesión nueva nunca hereda el fallback ni el resultado privado de la
+    // anterior. El mock y el owner aíslan por usuario; el front también.
+    ticketFallbackRef.current = null;
+    resolutionRef.current = null;
+    setOcrMerchant(undefined);
+    if (!restaurantId) {
+      setRestaurant(null);
+      setRestaurantRecordOnly(false);
+    }
+  }, [session?.principal_id]);
+
+  async function resolveTicketRestaurant(merchant = ocrMerchant) {
+    if (restaurantId) {
+      return restaurant ? { restaurant, record_only: false as const } : null;
+    }
+    const sessionId = session?.principal_id;
+    if (!sessionId) {
+      setRestaurantError(t('No pudimos identificar el restaurante: entra desde el QR de la mesa.'));
+      return null;
+    }
+    ticketFallbackRef.current ??= crypto.randomUUID();
+    const request = resolutionRequest(merchant, ticketFallbackRef.current);
+    const fingerprint = JSON.stringify({
+      name: request.name ?? null,
+      rfc: request.rfc ?? null,
+      fallback: request.fallback_key,
+    });
+    const current = resolutionRef.current;
+    if (current && current.sessionId === sessionId && current.fingerprint === fingerprint) {
+      return current.promise;
+    }
+    setRestaurantError(null);
+    let promise: ReturnType<typeof api.resolveRestaurant>;
+    promise = api.resolveRestaurant(request)
+      .then((result) => {
+        setRestaurant(result.restaurant);
+        setRestaurantRecordOnly(result.record_only);
+        return result;
+      })
+      .catch((err) => {
+        if (resolutionRef.current?.promise === promise) resolutionRef.current = null;
+        setRestaurantError(t('Este QR no corresponde a un restaurante disponible.'));
+        throw err;
+      });
+    resolutionRef.current = { sessionId, fingerprint, promise };
+    return promise;
+  }
   // D5: el total SIEMPRE sale de lo que el usuario ve/editó — guardarraíl:
   // si el total está mal, la división está mal.
   const lineTotals = editItems.map(lineTotalCents);
@@ -331,7 +425,7 @@ export function CreateMesaFlow() {
   // tarjeta tipeada cambia en cada invocación de Stripe.js, y meterlo acá haría
   // que cambiar de tarjeta abriera una segunda mesa con un segundo hold.
   const contentScope = actor
-    ? scopeForActor(actor, `mesa:${restaurantId || 'sin-restaurante'}|${total}|${division}|${participants}|${method}`)
+    ? scopeForActor(actor, `mesa:${effectiveRestaurantId || 'sin-restaurante'}|${total}|${division}|${participants}|${method}`)
     : '';
   /**
    * Intento de apertura SIN CONFIRMAR (error ambiguo). La mesa puede existir
@@ -383,6 +477,7 @@ export function CreateMesaFlow() {
     return () => { alive = false; };
   }, [mesaScopeBase]);
   const mesaScope = frozen?.scope ?? contentScope;
+  const [createRequested, setCreateRequested] = useState(false);
   const frozenRequiresReconciliation = frozen?.reconciliationRequired === true;
   const cardRailAvailable = canUseCardRail(moneyRail, !!frozen);
   function freezeMesa(scope: string, handle: MonetaryIntentHandle) {
@@ -400,6 +495,18 @@ export function CreateMesaFlow() {
     clearUnconfirmed(mesaScopeBase, handle);
     setFrozen((current) => current && current.handle.key === handle.key && current.handle.generation === handle.generation ? null : current);
   }
+
+  useEffect(() => {
+    if (!createRequested || !sinGarantia || !restaurant) return;
+    if (priorAttemptCheckFailed) {
+      setCreateRequested(false);
+      setError(t('No pudimos descartar una apertura anterior. No vamos a tokenizar otra tarjeta ni abrir otra mesa.'));
+      return;
+    }
+    if (!priorAttemptChecked) return;
+    setCreateRequested(false);
+    void createMesa();
+  }, [createRequested, sinGarantia, restaurant?.id, priorAttemptChecked, priorAttemptCheckFailed]);
 
   /**
    * N-07 · SALIDA de la apertura congelada. Era el caso más grave del journal:
@@ -648,6 +755,9 @@ export function CreateMesaFlow() {
     setEditingItems(true);
     setExpandedItem(0);
     setStep('ticket');
+    // El toque en “Cargarlo a mano” es la acción explícita. Sin merchant, el
+    // owner usa el UUID estable del intento y crea un registro privado.
+    if (!restaurantId) void resolveTicketRestaurant().catch(() => undefined);
   }
 
   async function runScan(image?: Blob) {
@@ -660,6 +770,10 @@ export function CreateMesaFlow() {
     setScanIssue(null);
     try {
       const r = await api.scanTicket(image, setUploadProgress);
+      setOcrMerchant(r.merchant);
+      // Resolver no crea la mesa. Sólo prepara la identidad privada/pública
+      // para que el CTA posterior pueda abrirla sin QR.
+      if (!restaurantId) void resolveTicketRestaurant(r.merchant).catch(() => undefined);
       const decision = decideOcrScan(r);
       if (decision.kind === 'provider_unavailable') {
         setScannedTotalCents(null);
@@ -701,12 +815,7 @@ export function CreateMesaFlow() {
       // clasifica tamaño, formato y multipart; red/timeout/2xx malformado quedan
       // neutrales porque no prueban que haya faltado luz.
       const apiError = extractApiError(err);
-      const tooLarge = apiError.status === 413 || apiError.code === 'image_too_large';
-      const imageType = apiError.status === 415
-        || apiError.code === 'unsupported_image_type_for_provider'
-        || apiError.code === 'invalid_image_type'
-        || apiError.code === 'invalid_multipart';
-      setScanIssue(tooLarge ? 'too_large' : imageType ? 'image_type' : 'ocr');
+      setScanIssue(ocrFailureIssue(apiError.code, apiError.status));
       // El cartel de §1.6 dice lo mismo con sus dos salidas al lado. El toast
       // encima era el segundo aviso del mismo hecho, y tapaba justo la barra.
     } finally {
@@ -995,6 +1104,8 @@ export function CreateMesaFlow() {
         // segunda mesa con un segundo hold por el total.
         if (intent) freezeMesa(mesaScope, intent);
         setError(t('Tienes una apertura sin confirmar. Reinténtala tal cual antes de cambiar el ticket.'));
+      } else if (code === 'restaurant_record_only') {
+        setError(t('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.'));
       } else if (definitivo) {
         // 4xx sin código propio: el backend rechazó y no creó nada.
         setError(t('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.'));
@@ -1009,6 +1120,40 @@ export function CreateMesaFlow() {
       createInFlightRef.current.leave();
       setBusy(false);
     }
+  }
+
+  async function continueFromTicket() {
+    let resolved = restaurant;
+    let recordOnly = restaurantRecordOnly;
+    if (!resolved) {
+      try {
+        const result = await resolveTicketRestaurant();
+        resolved = result?.restaurant ?? null;
+        recordOnly = result?.record_only ?? false;
+      } catch {
+        return;
+      }
+    }
+    const route = ticketOpeningRoute({
+      userAction: true,
+      restaurantReady: !!resolved,
+      recordOnly,
+      moneyEnabled: !sinGarantia,
+    });
+    if (route === 'resolving_restaurant') {
+      setRestaurantError(t('Identificando el restaurante… prueba de nuevo en un momento.'));
+      return;
+    }
+    if (route === 'record_only_blocked') {
+      setError(t('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.'));
+      return;
+    }
+    if (route === 'create_without_money') {
+      setCreateRequested(true);
+      return;
+    }
+    void loadCards();
+    setStep('garantia');
   }
 
   async function confirm3ds() {
@@ -1113,7 +1258,18 @@ export function CreateMesaFlow() {
       return;
     }
     if (step === 'scan') return navigate('home');
-    if (step === 'ticket') return setStep('scan');
+    if (step === 'ticket') {
+      // Volver a cámara inicia OTRO ticket. Sólo acá rota el fallback; los
+      // reintentos dentro de Scan conservan el UUID del intento actual.
+      ticketFallbackRef.current = null;
+      resolutionRef.current = null;
+      setOcrMerchant(undefined);
+      if (!restaurantId) {
+        setRestaurant(null);
+        setRestaurantRecordOnly(false);
+      }
+      return setStep('scan');
+    }
     if (step === 'garantia') return setStep('ticket');
     // threeds/share: la mesa ya existe (o está autorizándose); no se vuelve.
     return navigate('home');
@@ -1195,6 +1351,26 @@ export function CreateMesaFlow() {
           {avisoApertura()}
           {/* G-01: un QR roto/suspendido se avisa acá, antes de armar nada. */}
           {restaurantError && <div className="note note-orange">{restaurantError}</div>}
+          {(scanIssue === 'budget_exhausted' || scanIssue === 'budget_unavailable') && (
+            <div className="state-error" role="alert">
+              <div className="state-error-row">
+                <Icon name="x-circle" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">No pudimos leer el ticket</div>
+                  <p className="state-error-body">
+                    {scanIssue === 'budget_exhausted'
+                      ? 'Se alcanzó el límite mensual de lectura. Puedes cargar los consumos a mano.'
+                      : 'El servicio de lectura no está disponible. Puedes cargar los consumos a mano.'}
+                  </p>
+                </div>
+              </div>
+              <div className="state-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={cargarAMano}>
+                  {t('Cargarlo a mano')}
+                </button>
+              </div>
+            </div>
+          )}
           {scanIssue === 'ocr' && (
             <div className="state-error" role="alert">
               <div className="state-error-row">
@@ -1695,9 +1871,7 @@ export function CreateMesaFlow() {
               // mostrar: se crea la mesa y se va al link. Pedirle a alguien que
               // "garantice" en un modo donde el dueño rechaza la garantía sería
               // un callejón con cartel.
-              if (sinGarantia) { void createMesa(); return; }
-              void loadCards();
-              setStep('garantia');
+              void continueFromTicket();
             },
           }}
         />

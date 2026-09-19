@@ -49,7 +49,10 @@ const PENDING: PrivateFeatureState = { enabled: false, status: 'pending', notice
 // (decisión `17d436dd…`). El dueño lo publica en `293dae75…` (rama local sin
 // publicar). Mismo orden: el front va ANTES. Se AGREGA: 2.5.2 es lo que sirve
 // producción hoy.
-const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1', '2.5.0', '2.5.1', '2.5.2', '2.5.3']);
+//
+// 2026-09-19 (n179): se PRESENTA 2.5.4, texto exacto aprobado por Mati para
+// tickets sin QR. No se aceptan prefijos ni prereleases por proximidad.
+const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1', '2.5.0', '2.5.1', '2.5.2', '2.5.3', '2.5.4']);
 
 /** Seam nominal: sólo Vitest puede declarar presentable `test-only`. */
 export const TEST_PRESENTABLE_NOTICES = Symbol('private-feature-test-notice-seam');

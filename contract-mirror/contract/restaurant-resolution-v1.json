@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "endpoint": "POST /api/restaurants/resolve",
+  "auth": "active user",
+  "request_fields": [
+    "name?",
+    "rfc?",
+    "fallback_key? UUID"
+  ],
+  "response": {
+    "restaurant": [
+      "id",
+      "name",
+      "category",
+      "address"
+    ],
+    "record_only": "boolean"
+  },
+  "privacy": "private, no-store; no RFC/owner/key response",
+  "private": "owner scoped, unverified, no payments; unknown fallback per ticket",
+  "errors": {
+    "restaurant_identity_required": 400,
+    "restaurant_not_found": 404,
+    "restaurant_record_only": 409
+  }
+}

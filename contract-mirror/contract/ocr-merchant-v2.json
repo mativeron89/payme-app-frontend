@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "endpoint": "POST /api/ocr?contract_version=2",
+  "default_version": 1,
+  "extra_fields": {
+    "contract_version": 2,
+    "merchant?": {
+      "name?": "NFC trim/collapse <=200",
+      "rfc?": "uppercase compact syntax only"
+    }
+  },
+  "merchant_source": [
+    "VENDOR_NAME",
+    "VENDOR_VAT_NUMBER"
+  ],
+  "omitted": [
+    "address",
+    "buyer RFC",
+    "payment digits"
+  ],
+  "manual_review": "nonrepresentable quantity/price or multiple documents: items=[], total_cents=0, warnings no_items_found/total_mismatch; single document total_detected preserved",
+  "error": {
+    "invalid_ocr_contract_version": 400
+  }
+}

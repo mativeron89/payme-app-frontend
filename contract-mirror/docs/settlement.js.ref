@@ -1582,6 +1582,9 @@ async function settleMesaLocked(mesaId) {
     );
     const m = rows[0];
     if (!m) return { skip: 'not_found' };
+    if (m.guarantee_mode === false && m.metadata?.sin_garantia === true) {
+      return { skip: 'record_only' };
+    }
     if (m.settled_at || ['settled', 'dispersing', 'completed', 'cancelled'].includes(m.status)) {
       return { skip: 'already_settled' };
     }

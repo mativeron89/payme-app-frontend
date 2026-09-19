@@ -189,6 +189,8 @@ const OCR_WARNINGS: readonly OcrWarning[] = [
   'no_items_found', 'low_confidence_items', 'total_mismatch', 'provider_error',
 ];
 const OCR_ITEM_KEYS = ['name', 'category', 'price_cents', 'quantity', 'confidence', 'low_confidence'];
+const OCR_V1_KEYS = ['items', 'total_cents', 'total_detected_cents', 'warnings', 'mock'];
+const OCR_V2_KEYS = [...OCR_V1_KEYS, 'contract_version', 'merchant'];
 
 function safeNonNegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
@@ -197,7 +199,11 @@ function safeNonNegative(value: unknown): value is number {
 /** Replica el validador publicado por el owner, sin inferir señales ausentes. */
 export function ocrResponse(value: unknown): OcrResponse {
   const body = record(value);
-  if (!body || !Array.isArray(body.items)
+  const version2 = body?.contract_version === 2;
+  const allowed = version2 ? OCR_V2_KEYS : OCR_V1_KEYS;
+  if (!body || (version2 && Object.keys(body).some((key) => !allowed.includes(key)))
+      || (!version2 && body.contract_version !== undefined)
+      || !Array.isArray(body.items)
       || !safeNonNegative(body.total_cents)
       || (body.total_detected_cents !== undefined && !safeNonNegative(body.total_detected_cents))
       || !Array.isArray(body.warnings)
@@ -205,6 +211,28 @@ export function ocrResponse(value: unknown): OcrResponse {
       || new Set(body.warnings).size !== body.warnings.length
       || typeof body.mock !== 'boolean') {
     throw new ContractResponseError('ocr');
+  }
+
+  let merchant: OcrResponse['merchant'];
+  if (version2 && body.merchant !== undefined) {
+    const raw = record(body.merchant);
+    const name = raw?.name;
+    const rfc = raw?.rfc;
+    const normalizedRfc = typeof rfc === 'string'
+      ? rfc.normalize('NFC').toUpperCase().replace(/[\s-]/gu, '')
+      : null;
+    if (!raw || Object.keys(raw).length === 0
+        || Object.keys(raw).some((key) => key !== 'name' && key !== 'rfc')
+        || (name !== undefined && (typeof name !== 'string' || !name || name !== name.trim()
+          || name.length > 200 || [...name].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)))
+        || (rfc !== undefined && (typeof rfc !== 'string' || normalizedRfc !== rfc
+          || !/^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/u.test(rfc)))) {
+      throw new ContractResponseError('ocr');
+    }
+    merchant = {
+      ...(typeof name === 'string' ? { name } : {}),
+      ...(typeof rfc === 'string' ? { rfc } : {}),
+    };
   }
 
   const items: OcrResponse['items'] = [];
@@ -235,6 +263,8 @@ export function ocrResponse(value: unknown): OcrResponse {
   }
 
   return {
+    ...(version2 ? { contract_version: 2 as const } : {}),
+    ...(merchant ? { merchant } : {}),
     items,
     total_cents: body.total_cents,
     ...(body.total_detected_cents !== undefined

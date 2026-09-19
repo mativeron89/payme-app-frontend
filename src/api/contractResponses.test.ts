@@ -4,8 +4,42 @@ import {
   attachPaymentMethodResponse,
   invitationResponse,
   mesaCreationResponse,
+  ocrResponse,
   setupIntentResponse,
 } from './contractResponses';
+
+describe('OCR v2 · merchant cerrado y v1 compatible', () => {
+  const base = {
+    items: [{ name: 'Taco', category: 'mexican', price_cents: 1000, quantity: 1 }],
+    total_cents: 1000,
+    warnings: [],
+    mock: false,
+  };
+
+  it('conserva v1 y acepta v2 con sólo nombre/RFC proveedor normalizados', () => {
+    expect(ocrResponse(base)).toEqual(base);
+    expect(ocrResponse({
+      contract_version: 2,
+      merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
+      ...base,
+    })).toMatchObject({
+      contract_version: 2,
+      merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
+    });
+  });
+
+  it.each([
+    { contract_version: 2, merchant: {}, ...base },
+    { contract_version: 2, merchant: { name: ' Tacos ' }, ...base },
+    { contract_version: 2, merchant: { rfc: 'teg-010101-ab1' }, ...base },
+    { contract_version: 2, merchant: { address: 'dato prohibido' }, ...base },
+    { contract_version: 2, merchant: { buyer_rfc: 'XAXX010101000' }, ...base },
+    { contract_version: 2, payment_digits: '4242', ...base },
+    { contract_version: 3, ...base },
+  ])('rechaza v2 malformado o datos fuera de la allowlist', (value) => {
+    expect(() => ocrResponse(value)).toThrow('contract_response_invalid:ocr');
+  });
+});
 
 const method = {
   id: 'payment-method-id',
