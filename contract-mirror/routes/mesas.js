@@ -36,6 +36,7 @@ const cardEligibility = require('../services/cardEligibility');
 const savedCards = require('../services/savedCards');   // D4 (v2.16)
 const paymentMethodLifecycle = require('../services/paymentMethodLifecycle');
 const itemClaims = require('../services/itemClaims');   // v2.18 (fracciones)
+const consumoPropio = require('../services/consumoPropio');   // AB-17: «lo que elegiste»
 const settlement = require('../services/settlement');
 const paymentProcessor = require('../services/paymentProcessor');
 const {
@@ -982,83 +983,12 @@ router.get('/mine', requireAuth, async (req, res, next) => {
     const pagina = rows.slice(0, limit);
     const hayMas = rows.length > limit;
 
-    // Selección propia por mesa. Los claims ajenos del MISMO ítem se cargan
-    // sólo para precisar el monto cuando la fracción propia completa el ítem
-    // —misma aritmética que el cobro, `itemClaims.priceFraction`, no una copia—
-    // y no se publican.
-    const mios = new Map();
-    // 🔴 EN DIVISIÓN `igual` EL DINERO NO VIVE EN LOS CLAIMS. La división son
-    // casilleros (`mesa_division_slots`), el cobro sale de ahí y el camino de
-    // pago ni siquiera precia claims. Derivar el monto propio de los ítems
-    // declarados daba dos mentiras: cero para quien pagó su casillero sin
-    // declarar nada, y el precio del corte para quien declaró de más. Se lee de
-    // donde está la plata, y `division_mode` viaja para que el consumidor sepa
-    // qué está mirando.
-    const igualIds = pagina.filter((m) => m.division_mode === 'igual').map((m) => m.id);
-    if (igualIds.length > 0) {
-      const { rows: slots } = await pool.query(
-        `SELECT mesa_id, amount_cents FROM mesa_division_slots
-          WHERE mesa_id = ANY($1::uuid[]) AND claimed_by_user_id = $2`,
-        [igualIds, req.user.id]
-      );
-      for (const s of slots) {
-        const acc = mios.get(s.mesa_id) || { items_count: 0, amount_cents: 0 };
-        acc.items_count += 1;
-        acc.amount_cents += Number(s.amount_cents);
-        mios.set(s.mesa_id, acc);
-      }
-    }
-    const idsConsumo = pagina.filter((m) => m.division_mode === 'consumo').map((m) => m.id);
-    if (idsConsumo.length > 0) {
-      const { rows: claims } = await pool.query(
-        `SELECT c.mesa_id, c.mesa_item_id, c.fraction_bps, c.amount_cents,
-                c.locked_by_user_id,
-                i.price_cents, i.quantity
-           FROM mesa_item_claims c
-           JOIN mesa_items i ON i.id = c.mesa_item_id
-          WHERE c.mesa_id = ANY($1::uuid[])
-            AND (c.status = 'paid'
-                 OR (c.status = 'locked'
-                     AND (c.lock_expires_at IS NULL OR c.lock_expires_at >= NOW())))
-          ORDER BY c.created_at ASC, c.id ASC`,
-        [idsConsumo]
-      );
-      const porItem = new Map();
-      for (const c of claims) {
-        if (!porItem.has(c.mesa_item_id)) porItem.set(c.mesa_item_id, []);
-        porItem.get(c.mesa_item_id).push(c);
-      }
-      const itemsPorMesa = new Map();
-      for (const [itemId, delItem] of porItem) {
-        // 🔴 EL ORDEN IMPORTA, y es la diferencia entre el número que se muestra
-        // y el que se cobra. `priceFraction` responde «cuánto sale ESTE claim
-        // dados los que ya estaban»: aplicarla con TODOS los vivos de ahora
-        // convierte a cada fracción en la completadora y el residuo de centavos
-        // cae en la persona equivocada. Se reconstruye la historia: los claims
-        // vienen ordenados por creación y cada uno se preció contra los
-        // anteriores. Sobre 3500 en tercios da 1167/1167/1166, igual que el
-        // riel; aplicarla «todos contra todos» daba 1166/1166/1166.
-        const anteriores = [];
-        for (const c of delItem) {
-          const linea = itemClaims.lineTotalCents(Number(c.price_cents), Number(c.quantity));
-          const monto = c.amount_cents != null
-            ? Number(c.amount_cents)
-            : itemClaims.priceFraction(linea, Number(c.fraction_bps), anteriores);
-          anteriores.push({ fraction_bps: c.fraction_bps, amount_cents: monto });
-          if (c.locked_by_user_id !== req.user.id) continue;
-          const acc = mios.get(c.mesa_id)
-            || { items_count: 0, amount_cents: 0, _items: new Set() };
-          // `items_count` cuenta ÍTEMS, no claims: media porción es un ítem, y
-          // dos claims propios sobre el mismo ítem tampoco son dos.
-          acc._items.add(itemId);
-          acc.items_count = acc._items.size;
-          acc.amount_cents += monto;
-          mios.set(c.mesa_id, acc);
-          itemsPorMesa.set(c.mesa_id, acc._items);
-        }
-      }
-      for (const acc of mios.values()) delete acc._items;
-    }
+    // Selección propia por mesa: UNA sola definición de «lo que elegiste»,
+    // compartida con «Mis estadísticas» (AB-17). La lógica —claims vivos
+    // propios preciados reconstruyendo la historia del ítem, casilleros en
+    // división `igual`— vive en services/consumoPropio.js y es la que estaba
+    // escrita acá hasta v2.101.0, sin cambios.
+    const mios = await consumoPropio.porMesa(req.user.id, pagina);
 
     const ultima = pagina[pagina.length - 1];
     res.json({

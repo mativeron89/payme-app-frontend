@@ -6,6 +6,39 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-19** (el segundo del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`98ee47b4a1c6c242b7e49f6e5cce17711bcea201`**
+  (App Backend **v2.102.0**, AB-17: «Mis estadísticas» etapa 1,
+  `consumption_month` aditivo en `GET /api/account/stats`).
+- Commit del que se tomó el inventario autoritativo:
+  **`acc96a51618ea6faf7f7abded16e1164aa922772`** (HEAD de la rama del dueño
+  `claude/stats-consumo-20260919`). La diferencia `98ee47b..acc96a5` toca sólo
+  `contract/mirror-inventory.json`.
+
+🔴 **No está publicado:** ninguna rama remota del dueño contiene `98ee47b`
+(medido 2026-09-19). Por eso el front trata `consumption_month` como OPCIONAL.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior
+(`d073e17`) cambian **dos**: `routes/account.js` (el bloque nuevo) y
+`routes/mesas.js` (el refactor que lleva «lo que elegiste» a
+`services/consumoPropio.js`, que el dueño deja fuera de la población). Hay cero
+nuevos, cero que salgan y cero renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `acc96a51`
+(`.claude/worktrees/stats-consumo`, porcelain vacío).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `98ee47b`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `98ee47b`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`acc96a51`) · exit 0 |
+
+### Refresh anterior · 2026-09-19 (aviso 2.5.2, soltar, quiénes se sumaron · `d073e17`)
+
 - Fecha del refresh: **2026-09-19**.
 - Commit exacto y procedencia del CONTENIDO:
   **`d073e1776b8709438ea29073abcd2a4c4486260d`**

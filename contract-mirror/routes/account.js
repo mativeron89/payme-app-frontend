@@ -19,6 +19,8 @@ const { centsToDisplay } = require('../utils/money');
 const logger = require('../utils/logger');
 const profileIdentity = require('../services/profileIdentity');
 const { proveedoresVinculados } = require('../services/externalIdentities');
+const consumoPropio = require('../services/consumoPropio');
+const { dineroHabilitado } = require('../services/moneyRail');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -465,6 +467,88 @@ router.get('/history', validateQuery(historyQuery), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/**
+ * AB-17 · «Mis estadísticas» etapa 1 (decisión de Mati: «Con lo que cada uno
+ * eligió en sus mesas»). Mientras los pagos estén apagados, el mes se arma con
+ * LO QUE ELEGISTE —la misma definición que `GET /api/mesas/mine`
+ * (services/consumoPropio.js)—; con el dinero encendido, con lo pagado. `basis`
+ * le dice al front cuál de las dos es, para rotular «consumo» o «gasto» sin
+ * adivinar. Sólo la cuenta del bearer.
+ *
+ * Mes: la MISMA regla que el resto de /stats, `date_trunc('month', NOW())` en
+ * la zona de la sesión de la base (no es hora de México; se conserva).
+ * Una visita = una mesa creada este mes con consumo propio > 0.
+ * Promedio en centavos enteros, truncado. Porcentajes: los calcula el front.
+ * Orden: monto desc, empate por nombre de categoría, `other` siempre al final;
+ * una categoría con monto 0 no sale.
+ */
+function ordenarCategorias(lista) {
+  return lista
+    .filter((c) => c.amount_cents > 0)
+    .sort((a, b) => {
+      if ((a.category === 'other') !== (b.category === 'other')) return a.category === 'other' ? 1 : -1;
+      return b.amount_cents - a.amount_cents || a.category.localeCompare(b.category);
+    });
+}
+
+function bloqueDeConsumo(basis, categorias, total, visitas) {
+  return {
+    basis,
+    total_cents: total,
+    visits: visitas,
+    avg_per_visit_cents: visitas > 0 ? Math.floor(total / visitas) : 0,
+    categories: ordenarCategorias(categorias),
+  };
+}
+
+async function consumoDesdeSelecciones(userId) {
+  const { rows: mesas } = await pool.query(
+    `SELECT m.id, m.division_mode, r.category
+       FROM mesas m
+       JOIN restaurants r ON r.id = m.restaurant_id
+      WHERE m.created_at >= date_trunc('month', NOW())
+        AND (
+              EXISTS (
+                SELECT 1 FROM mesa_item_claims c
+                 WHERE c.mesa_id = m.id AND c.locked_by_user_id = $1
+                   AND (c.status = 'paid'
+                        OR (c.status = 'locked'
+                            AND (c.lock_expires_at IS NULL OR c.lock_expires_at >= NOW())))
+              )
+              OR EXISTS (
+                SELECT 1 FROM mesa_division_slots s
+                 WHERE s.mesa_id = m.id AND s.claimed_by_user_id = $1
+              )
+            )`,
+    [userId]
+  );
+  const mios = await consumoPropio.porMesa(userId, mesas);
+  const porCategoria = new Map();
+  let total = 0;
+  let visitas = 0;
+  for (const m of mesas) {
+    const monto = mios.get(m.id)?.amount_cents || 0;
+    if (monto <= 0) continue;
+    total += monto;
+    visitas += 1;
+    const acc = porCategoria.get(m.category) || { category: m.category, amount_cents: 0, visits: 0 };
+    acc.amount_cents += monto;
+    acc.visits += 1;
+    porCategoria.set(m.category, acc);
+  }
+  return bloqueDeConsumo('consumption', [...porCategoria.values()], total, visitas);
+}
+
+/** Con el dinero encendido: lo pagado, con la convención de category_breakdown. */
+function consumoDesdePagos(categoriasPagadas) {
+  const categorias = categoriasPagadas.map((c) => ({
+    category: c.category, amount_cents: c.spent_cents, visits: c.visits,
+  }));
+  const total = categorias.reduce((acc, c) => acc + c.amount_cents, 0);
+  const visitas = categorias.reduce((acc, c) => acc + c.visits, 0);
+  return bloqueDeConsumo('payments', categorias, total, visitas);
+}
+
 router.get('/stats', async (req, res, next) => {
   try {
     const { rows: month } = await pool.query(
@@ -530,7 +614,11 @@ router.get('/stats', async (req, res, next) => {
       .map((c) => ({ category: c.category, spent_cents: Number(c.spent), visits: c.visits }))
       .filter((c) => c.spent_cents > 0)
       .sort((a, b) => b.spent_cents - a.spent_cents || a.category.localeCompare(b.category));
+    const consumoDelMes = dineroHabilitado()
+      ? consumoDesdePagos(categorias)
+      : await consumoDesdeSelecciones(req.user.id);
     res.json({
+      consumption_month: consumoDelMes,
       category_breakdown: {
         convention: 'net_of_processed_refunds',
         total_cents: categorias.reduce((acc, c) => acc + c.spent_cents, 0),
