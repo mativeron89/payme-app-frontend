@@ -13,6 +13,8 @@ import { formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
 import { bpsLabel } from './mesaItemsView';
 import { lugaresYVisitas, nombreDeCocina, visitasTexto } from '../utils/textosDeEstadisticas';
+import { usePeriodoEstadisticas, type ClavePeriodo } from '../api/periodoEstadisticas';
+import { SelectorDePeriodo } from './SelectorDePeriodo';
 
 /**
  * **Tus restaurantes** — pantalla 2b del diseño de «Mis estadísticas» (AF-29,
@@ -43,16 +45,20 @@ export function TusRestaurantesScreen() {
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
   const [abierto, setAbierto] = useState<string | null>(null);
   const [visitaAbierta, setVisitaAbierta] = useState<string | null>(null);
+  /** AF-31 · el período elegido en 2a, conservado al navegar. */
+  const clave = usePeriodoEstadisticas();
 
   const cargar = useCallback(() => {
     setEstado({ tipo: 'cargando' });
+    setAbierto(null);
+    setVisitaAbierta(null);
     api
-      .getStatsRestaurants()
+      .getStatsRestaurants(clave)
       .then((datos) => setEstado({ tipo: 'lista', datos }))
       // Todo error es el mismo cartel: 404, 413 o red. El dueño no manda datos
       // parciales, así que no hay nada a medias que mostrar.
       .catch(() => setEstado({ tipo: 'error' }));
-  }, []);
+  }, [clave]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -60,6 +66,10 @@ export function TusRestaurantesScreen() {
   const datos = estado.tipo === 'lista' ? estado.datos : null;
   const conDatos = datos !== null && datos.restaurants.length > 0;
   const orden = datos ? ordenDeCocinas(datos) : [];
+  // Sólo si el dueño CONFIRMA el período pedido: un backend anterior lo ignora
+  // y manda el mes en curso, que se rotula «Este mes» y no ofrece selector.
+  const soportaPeriodo = datos !== null && datos.period?.key === clave;
+  const efectiva: ClavePeriodo = soportaPeriodo ? clave : 'this_month';
 
   function abrirRestaurante(id: string) {
     setAbierto((a) => (a === id ? null : id));
@@ -69,16 +79,18 @@ export function TusRestaurantesScreen() {
   return (
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('estadisticas')} />
-      {conDatos ? (
+      {conDatos || soportaPeriodo ? (
         <div className="title-card stat-burbuja">
           <h1 className="stat-oculto">{t('Tus restaurantes')}</h1>
-          <div className="stat-burbuja-periodo">{t('Este mes')}</div>
-          <div className="stat-burbuja-dato">
-            <div className="stat-burbuja-total">{formatMXN(datos.totalCents)}</div>
-            <div className="stat-burbuja-contexto">
-              {lugaresYVisitas(datos.restaurants.length, visitasDelMes(datos), t)}
+          <SelectorDePeriodo clave={efectiva} disponible={soportaPeriodo} />
+          {conDatos && (
+            <div className="stat-burbuja-dato">
+              <div className="stat-burbuja-total">{formatMXN(datos.totalCents)}</div>
+              <div className="stat-burbuja-contexto">
+                {lugaresYVisitas(datos.restaurants.length, visitasDelMes(datos), t)}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ) : (
         <div className="title-card">
@@ -109,7 +121,11 @@ export function TusRestaurantesScreen() {
           </div>
         ) : !conDatos ? (
           <div className="mesa-empty">
-            <div className="mesa-empty-title">{t('Todavía no registramos consumos este mes.')}</div>
+            <div className="mesa-empty-title">
+              {efectiva === 'this_month'
+                ? t('Todavía no registramos consumos este mes.')
+                : t('No registramos consumos en este período.')}
+            </div>
           </div>
         ) : (
           <div className="rest-lista">

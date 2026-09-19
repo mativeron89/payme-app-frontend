@@ -1189,6 +1189,12 @@ export interface StatsResponse {
    * `decodeConsumoDelMes`, que falla cerrado a la pantalla de siempre.
    */
   consumption_month?: unknown;
+  /**
+   * AF-31 · v2.106.0 · aditivo: el período que el dueño usó para
+   * `consumption_month`. Sólo se lee con `confirmaPeriodo`: si falta, el backend
+   * no conoce `?period=` y lo que llegó es el mes en curso.
+   */
+  period?: unknown;
 }
 
 // ─── Errores (shape del error handler de server.js y rutas) ─

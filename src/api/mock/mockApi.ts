@@ -2712,23 +2712,42 @@ export async function mockAcceptInvitation(id: string): Promise<{ accepted: bool
   return delay({ accepted: true });
 }
 
-// ─── Stats (GET /account/stats) ────────────────────────────
+// ─── Stats (GET /account/stats y sus pantallas) ────────────
 
 /**
- * AF-26 · `consumption_month` del mock, coherente con el resto de `mockStats`:
- * las mismas seis visitas del mes (La Parolaccia ×3, Hanzo ×2, Café Nube ×1)
- * repartidas por cocina, sumando el mismo total. La base sigue al dinero del
- * mock como el dueño sigue a `dineroHabilitado()`: con los pagos apagados es
- * `consumption` («consumo»); con pagos, `payments` («gasto»).
+ * 🔴 **AF-31 · un solo modelo para 2a, 2b, 2c y 2f.** El mock arma UNA lista de
+ * visitas de los últimos seis meses (cada una con su cocina, su restaurante,
+ * su fecha y sus platos) y de ahí salen `consumption_month`,
+ * `/stats/restaurants`, `/stats/dishes` y `/stats/evolution`. Así las sumas
+ * coinciden por construcción, como exige el dueño (`consumption_month` =
+ * restaurantes = último mes de la evolución, en el mismo período), y no por
+ * números copiados a mano en cuatro lugares.
  *
- * Costura `payme.app.mock.stats.v1`: `una` (una sola cocina), `cuatro`,
- * `siete` (DOS cocinas que el contrato de hoy no manda —`vegan`, `grill`—, para
- * ver el agrupado del anillo: con el contrato vigente nunca llegan más de cinco),
- * `vacio` (total 0), `ausente` (backend anterior a v2.102.0) y `raro` (las
- * categorías no suman el total).
+ * El mes en curso sale de `categoriasDelMesMock` y de sus costuras, igual que
+ * antes: los e2e de AF-26 y AF-29 ven los mismos números. Los cinco meses
+ * anteriores son fijos, con uno vacío a propósito para 2f. Los meses del mock
+ * son UTC (el dueño corta a la medianoche de México; acá no hace falta).
+ *
+ * La base sigue al dinero del mock como el dueño sigue a `dineroHabilitado()`:
+ * con los pagos apagados es `consumption` («consumo»); con pagos, `payments`
+ * («gasto»), y ahí cada visita incluye una propina del 10 % que los platos no.
+ *
+ * Costuras:
+ * - `payme.app.mock.stats.v1`: `una`, `cuatro`, `siete` (DOS cocinas que el
+ *   contrato de hoy no manda, para ver el agrupado del anillo), `vacio` (el mes
+ *   en curso sin nada), `ausente` (sin `consumption_month`, backend anterior a
+ *   v2.102.0) y `raro` (las categorías no suman el total);
+ * - `payme.app.mock.periodo.v1 = antiguo`: backend anterior a v2.106.0, que
+ *   ignora `?period=` y no devuelve `period`;
+ * - `payme.app.mock.restaurantes.v1`, `.platos.v1` y `.evolucion.v1`:
+ *   `antiguo` (404), `error` (500) y `grande` (413).
  */
 function costuraDeStats(): string | null {
-  try { return localStorage.getItem('payme.app.mock.stats.v1'); } catch { return null; }
+  return leerCostura('payme.app.mock.stats.v1');
+}
+
+function leerCostura(clave: string): string | null {
+  try { return localStorage.getItem(clave); } catch { return null; }
 }
 
 function baseDelMock(): 'payments' | 'consumption' {
@@ -2763,34 +2782,19 @@ function categoriasDelMesMock(costura: string | null): Array<{ category: string;
             ];
 }
 
-function consumoDelMesMock(): Record<string, unknown> | undefined {
-  const costura = costuraDeStats();
-  if (costura === 'ausente') return undefined;
-  const basis = baseDelMock();
-  const categorias = categoriasDelMesMock(costura);
-  const total = categorias.reduce((a, c) => a + c.amount_cents, 0);
-  const visitas = categorias.reduce((a, c) => a + c.visits, 0);
-  return {
-    basis,
-    total_cents: costura === 'raro' ? total + 1 : total,
-    visits: visitas,
-    avg_per_visit_cents: visitas > 0 ? Math.floor(total / visitas) : 0,
-    categories: categorias,
-  };
-}
+/** Los cinco meses anteriores al actual, del más viejo (0) al más nuevo (4). */
+const MESES_PREVIOS_MOCK: ReadonlyArray<ReadonlyArray<{ category: string; amount_cents: number; visits: number }>> = [
+  [{ category: 'mexican', amount_cents: 25000, visits: 1 }, { category: 'other', amount_cents: 5000, visits: 1 }],
+  [{ category: 'italian', amount_cents: 45000, visits: 1 }],
+  [],
+  [{ category: 'japanese', amount_cents: 60000, visits: 1 }, { category: 'cafe', amount_cents: 8000, visits: 1 }],
+  [
+    { category: 'italian', amount_cents: 90000, visits: 2 },
+    { category: 'mexican', amount_cents: 30000, visits: 1 },
+    { category: 'cafe', amount_cents: 12000, visits: 2 },
+  ],
+];
 
-/**
- * AF-29 · n165 · `GET /account/stats/restaurants` del mock (dueño v2.104.0).
- *
- * Sale de LAS MISMAS cocinas que `consumption_month`, un restaurante por cocina,
- * así que el total coincide con el de 2a como exige el dueño. Cada visita se
- * reparte en platos que suman su monto; en base `payments` la visita incluye
- * una propina del 10 % que los platos no, como declara el handoff.
- *
- * Costura propia `payme.app.mock.restaurantes.v1`: `antiguo` (404, backend
- * anterior a v2.104.0), `error` (500) y `grande` (413 `stats_month_too_large`).
- * La de stats (`vacio`, `una`, `cuatro`, `siete`) también rige acá.
- */
 const RESTAURANTE_POR_COCINA: Record<string, { name: string; platos: readonly string[] }> = {
   italian: { name: 'La Parolaccia', platos: ['Tagliatelle Bolognese', 'Tiramisú', 'Vino tinto (copa)'] },
   japanese: { name: 'Hanzo Sushi', platos: ['Ramen tonkotsu', 'Gyozas de cerdo'] },
@@ -2807,74 +2811,158 @@ function repartir(total: number, n: number): number[] {
   return Array.from({ length: n }, (_, i) => (i === n - 1 ? total - base * (n - 1) : base));
 }
 
-export async function mockStatsRestaurants(): Promise<unknown> {
-  const propia = (() => {
-    try { return localStorage.getItem('payme.app.mock.restaurantes.v1'); } catch { return null; }
-  })();
-  if (propia === 'antiguo') return fail(404, 'not_found');
-  if (propia === 'error') return fail(500, 'internal_error');
-  if (propia === 'grande') return fail(413, 'stats_month_too_large');
-  const basis = baseDelMock();
-  const categorias = categoriasDelMesMock(costuraDeStats());
-  const ahora = new Date();
-  const inicio = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), 1));
-  let dia = 0;
-  const restaurants = categorias.map((c, idx) => {
-    const r = RESTAURANTE_POR_COCINA[c.category] ?? { name: `Restaurante ${idx + 1}`, platos: ['Plato'] };
-    const visits = repartir(c.amount_cents, c.visits).map((monto, v) => {
-      dia += 1;
-      // Horas hacia atrás desde ahora, sin salir del mes (el día 1 a la madrugada
-      // «ahora menos N horas» caería en el mes anterior).
-      const creada = new Date(Math.max(inicio.getTime() + dia * 60_000, ahora.getTime() - dia * 3_600_000));
-      const propina = basis === 'payments' ? Math.floor(monto / 11) : 0;
-      const platos = repartir(monto - propina, r.platos.length).map((a, k) => ({
-        name: r.platos[k],
-        // El segundo plato de la primera visita va a medias: muestra la fracción.
-        fraction_bps: v === 0 && k === 1 ? 5000 : 10000,
-        amount_cents: a,
-      }));
-      return {
-        code: `PA-${String(7000 + idx * 10 + v)}`,
-        created_at: creada.toISOString(),
-        division_mode: 'consumo',
-        amount_cents: monto,
-        items: platos,
-      };
-    });
-    // Visitas de la más nueva a la más vieja, como el dueño.
-    visits.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-    return {
-      id: `e0000000-0000-4000-8000-${String(idx + 1).padStart(12, '0')}`,
-      name: r.name,
-      category: c.category,
-      amount_cents: c.amount_cents,
-      visits_count: visits.length,
-      visits,
-    };
-  });
-  return delay({
-    basis,
-    month_start: inicio.toISOString(),
-    total_cents: restaurants.reduce((a, r) => a + r.amount_cents, 0),
-    restaurants,
-  });
+interface VisitaMock {
+  readonly mes: number;
+  readonly category: string;
+  readonly restaurantId: string;
+  readonly restaurant: string;
+  readonly code: string;
+  readonly created_at: string;
+  readonly amount_cents: number;
+  readonly items: ReadonlyArray<{ name: string; fraction_bps: number; amount_cents: number }>;
 }
 
-export async function mockStats(): Promise<StatsResponse> {
-  const consumo = consumoDelMesMock();
+/** Inicio (UTC) del mes `mes` del modelo: 5 = el actual, 0 = hace cinco. */
+function inicioDeMes(mes: number, ahora: Date): Date {
+  return new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth() - (5 - mes), 1));
+}
+
+function idDeRestaurante(category: string): string {
+  const orden = ['italian', 'japanese', 'cafe', 'mexican', 'vegan', 'grill', 'other'];
+  const n = orden.indexOf(category) + 1 || 99;
+  return `e0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+}
+
+function visitasDelModelo(): VisitaMock[] {
+  const ahora = new Date();
+  const basis = baseDelMock();
+  const visitas: VisitaMock[] = [];
+  let dia = 0;
+  for (let mes = 0; mes <= 5; mes += 1) {
+    const inicio = inicioDeMes(mes, ahora);
+    const categorias = mes === 5 ? categoriasDelMesMock(costuraDeStats()) : MESES_PREVIOS_MOCK[mes];
+    categorias.forEach((c, idx) => {
+      const r = RESTAURANTE_POR_COCINA[c.category] ?? { name: `Restaurante ${idx + 1}`, platos: ['Plato'] };
+      repartir(c.amount_cents, c.visits).forEach((monto, v) => {
+        let creada: Date;
+        if (mes === 5) {
+          // Horas hacia atrás desde ahora, sin salir del mes (el día 1 a la
+          // madrugada «ahora menos N horas» caería en el mes anterior).
+          dia += 1;
+          creada = new Date(Math.max(inicio.getTime() + dia * 60_000, ahora.getTime() - dia * 3_600_000));
+        } else {
+          creada = new Date(inicio.getTime() + ((4 + v * 3 + idx) * 24 + 20) * 3_600_000);
+        }
+        const propina = basis === 'payments' ? Math.floor(monto / 11) : 0;
+        const items = repartir(monto - propina, r.platos.length).map((a, k) => ({
+          name: r.platos[k],
+          // El segundo plato de la primera visita va a medias: muestra la fracción.
+          fraction_bps: v === 0 && k === 1 ? 5000 : 10000,
+          amount_cents: a,
+        }));
+        visitas.push({
+          mes,
+          category: c.category,
+          restaurantId: idDeRestaurante(c.category),
+          restaurant: r.name,
+          code: `PA-${7000 + mes * 100 + idx * 10 + v}`,
+          created_at: creada.toISOString(),
+          amount_cents: monto,
+          items,
+        });
+      });
+    });
+  }
+  return visitas;
+}
+
+type ClavePeriodoMock = 'this_month' | 'last_month' | 'last_3_months' | 'this_year';
+const PERIODOS_MOCK: readonly string[] = ['this_month', 'last_month', 'last_3_months', 'this_year'];
+
+/** Los meses del modelo que entran en el período, y su `period` como lo publica el dueño. */
+function periodoDelMock(clave: ClavePeriodoMock): { meses: number[]; period: { key: string; start: string; end: string | null } } {
+  const ahora = new Date();
+  const actual = inicioDeMes(5, ahora);
+  if (clave === 'last_month') {
+    return { meses: [4], period: { key: clave, start: inicioDeMes(4, ahora).toISOString(), end: actual.toISOString() } };
+  }
+  if (clave === 'last_3_months') {
+    return { meses: [3, 4, 5], period: { key: clave, start: inicioDeMes(3, ahora).toISOString(), end: null } };
+  }
+  if (clave === 'this_year') {
+    const anio = ahora.getUTCFullYear();
+    const meses = [0, 1, 2, 3, 4, 5].filter((m) => inicioDeMes(m, ahora).getUTCFullYear() === anio);
+    return { meses, period: { key: clave, start: new Date(Date.UTC(anio, 0, 1)).toISOString(), end: null } };
+  }
+  return { meses: [5], period: { key: 'this_month', start: actual.toISOString(), end: null } };
+}
+
+/**
+ * Resuelve `?period=` como el dueño: sin parámetro, `this_month`; un valor fuera
+ * de la lista, 400. Con la costura `antiguo` se ignora y no se publica `period`.
+ */
+function resolverPeriodo(pedido: string | undefined): { clave: ClavePeriodoMock; publicar: boolean } | 'invalido' {
+  if (leerCostura('payme.app.mock.periodo.v1') === 'antiguo') return { clave: 'this_month', publicar: false };
+  if (pedido === undefined) return { clave: 'this_month', publicar: true };
+  if (!PERIODOS_MOCK.includes(pedido)) return 'invalido';
+  return { clave: pedido as ClavePeriodoMock, publicar: true };
+}
+
+/** La regla de orden del dueño: monto desc, empate por nombre, `other` al final. */
+function ordenarCategoriasMock<T extends { category: string; amount_cents: number }>(lista: T[]): T[] {
+  return lista
+    .filter((c) => c.amount_cents > 0)
+    .sort((a, b) => {
+      if ((a.category === 'other') !== (b.category === 'other')) return a.category === 'other' ? 1 : -1;
+      return b.amount_cents - a.amount_cents || a.category.localeCompare(b.category);
+    });
+}
+
+function categoriasDeVisitas(visitas: readonly VisitaMock[]): Array<{ category: string; amount_cents: number; visits: number }> {
+  const m = new Map<string, { category: string; amount_cents: number; visits: number }>();
+  for (const v of visitas) {
+    const acc = m.get(v.category) ?? { category: v.category, amount_cents: 0, visits: 0 };
+    acc.amount_cents += v.amount_cents;
+    acc.visits += 1;
+    m.set(v.category, acc);
+  }
+  return ordenarCategoriasMock([...m.values()]);
+}
+
+function consumoDelPeriodoMock(visitas: readonly VisitaMock[]): Record<string, unknown> | undefined {
+  const costura = costuraDeStats();
+  if (costura === 'ausente') return undefined;
+  const categorias = categoriasDeVisitas(visitas);
+  const total = categorias.reduce((a, c) => a + c.amount_cents, 0);
+  const cantidad = visitas.length;
+  return {
+    basis: baseDelMock(),
+    total_cents: costura === 'raro' ? total + 1 : total,
+    visits: cantidad,
+    avg_per_visit_cents: cantidad > 0 ? Math.floor(total / cantidad) : 0,
+    categories: categorias,
+  };
+}
+
+export async function mockStats(period?: string): Promise<StatsResponse> {
+  const resuelto = resolverPeriodo(period);
+  if (resuelto === 'invalido') return fail(400, 'validation_error');
+  const { meses, period: periodo } = periodoDelMock(resuelto.clave);
+  const consumo = consumoDelPeriodoMock(visitasDelModelo().filter((v) => meses.includes(v.mes)));
+  const extra = {
+    ...(consumo !== undefined && { consumption_month: consumo }),
+    ...(resuelto.publicar && { period: periodo }),
+  };
   // `vacio` vacía el mes ENTERO, como hoy con los pagos apagados y sin mesas:
   // si sólo vaciara `consumption_month`, la pantalla de siempre mostraría los
   // pagos del mock y el vacío real no se vería nunca.
-  const vacio = (() => {
-    try { return localStorage.getItem('payme.app.mock.stats.v1') === 'vacio'; } catch { return false; }
-  })();
-  if (vacio) {
+  if (costuraDeStats() === 'vacio') {
     return delay({
       month: { spent_cents: 0, spent_display: centsToDisplay(0), visits: 0, avg_per_visit_cents: 0, avg_per_visit_display: centsToDisplay(0) },
       top_restaurants: [],
       top_dish: null,
       favorite_category: null,
-      ...(consumo !== undefined && { consumption_month: consumo }),
+      ...extra,
     });
   }
   const spent = 216500;
@@ -2895,7 +2983,125 @@ export async function mockStats(): Promise<StatsResponse> {
     ],
     top_dish: { name: 'Tagliatelle Bolognese', times: 3 },
     favorite_category: 'italian',
-    ...(consumo !== undefined && { consumption_month: consumo }),
+    ...extra,
+  });
+}
+
+/** Las costuras de 404/500/413 de las tres rutas nuevas. */
+function fallaDeRuta(clave: string, error413: string): Promise<never> | null {
+  const c = leerCostura(clave);
+  if (c === 'antiguo') return fail(404, 'not_found');
+  if (c === 'error') return fail(500, 'internal_error');
+  if (c === 'grande') return fail(413, error413);
+  return null;
+}
+
+/** AF-29 · `GET /account/stats/restaurants` (v2.104.0), con `?period=` desde v2.106.0. */
+export async function mockStatsRestaurants(period?: string): Promise<unknown> {
+  const falla = fallaDeRuta('payme.app.mock.restaurantes.v1', 'stats_month_too_large');
+  if (falla) return falla;
+  const resuelto = resolverPeriodo(period);
+  if (resuelto === 'invalido') return fail(400, 'validation_error');
+  const { meses, period: periodo } = periodoDelMock(resuelto.clave);
+  const visitas = visitasDelModelo().filter((v) => meses.includes(v.mes));
+  const porRestaurante = new Map<string, VisitaMock[]>();
+  for (const v of visitas) porRestaurante.set(v.restaurantId, [...(porRestaurante.get(v.restaurantId) ?? []), v]);
+  const restaurants = [...porRestaurante.values()]
+    .map((vs) => {
+      // Visitas de la más nueva a la más vieja, como el dueño.
+      const ordenadas = [...vs].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+      return {
+        id: vs[0].restaurantId,
+        name: vs[0].restaurant,
+        category: vs[0].category,
+        amount_cents: vs.reduce((a, v) => a + v.amount_cents, 0),
+        visits_count: vs.length,
+        visits: ordenadas.map((v) => ({
+          code: v.code,
+          created_at: v.created_at,
+          division_mode: 'consumo',
+          amount_cents: v.amount_cents,
+          items: v.items.map((it) => ({ ...it })),
+        })),
+      };
+    })
+    // Restaurantes por monto de mayor a menor, empate por nombre.
+    .sort((a, b) => b.amount_cents - a.amount_cents || a.name.localeCompare(b.name));
+  return delay({
+    basis: baseDelMock(),
+    month_start: periodo.start,
+    total_cents: restaurants.reduce((a, r) => a + r.amount_cents, 0),
+    restaurants,
+    ...(resuelto.publicar && { period: periodo }),
+  });
+}
+
+/** El nombre normalizado del dueño: NFC, minúsculas, espacios colapsados; los acentos se conservan. */
+function normalizarPlatoMock(nombre: string): string {
+  return nombre.normalize('NFC').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+/** AF-31 · `GET /account/stats/dishes` (v2.107.0). */
+export async function mockStatsDishes(period?: string): Promise<unknown> {
+  const falla = fallaDeRuta('payme.app.mock.platos.v1', 'stats_range_too_large');
+  if (falla) return falla;
+  const resuelto = resolverPeriodo(period);
+  if (resuelto === 'invalido') return fail(400, 'validation_error');
+  const { meses, period: periodo } = periodoDelMock(resuelto.clave);
+  const visitas = visitasDelModelo()
+    .filter((v) => meses.includes(v.mes))
+    .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+  const platos = new Map<string, { name: string; restaurant: { id: string; name: string; category: string }; times: number; amount_cents: number }>();
+  for (const v of visitas) {
+    const vistos = new Set<string>();
+    for (const it of v.items) {
+      const clave = `${v.restaurantId}|${normalizarPlatoMock(it.name)}`;
+      const acc = platos.get(clave) ?? {
+        name: it.name,
+        restaurant: { id: v.restaurantId, name: v.restaurant, category: v.category },
+        times: 0,
+        amount_cents: 0,
+      };
+      // `times` = VISITAS: el mismo plato dos veces en la misma mesa cuenta 1.
+      if (!vistos.has(clave)) acc.times += 1;
+      vistos.add(clave);
+      acc.amount_cents += it.amount_cents;
+      acc.name = it.name; // el de la visita más reciente (van en orden de fecha)
+      platos.set(clave, acc);
+    }
+  }
+  const dishes = [...platos.values()]
+    .sort((a, b) => b.times - a.times || b.amount_cents - a.amount_cents || a.name.localeCompare(b.name))
+    .slice(0, 5);
+  return delay({
+    basis: baseDelMock(),
+    ...(resuelto.publicar && { period: periodo }),
+    distinct_dishes: platos.size,
+    dishes,
+  });
+}
+
+/** AF-31 · `GET /account/stats/evolution` (v2.108.0): siempre los últimos 6 meses. */
+export async function mockStatsEvolution(): Promise<unknown> {
+  const falla = fallaDeRuta('payme.app.mock.evolucion.v1', 'stats_range_too_large');
+  if (falla) return falla;
+  const ahora = new Date();
+  const todas = visitasDelModelo();
+  const months = [0, 1, 2, 3, 4, 5].map((mes) => {
+    const vs = todas.filter((v) => v.mes === mes);
+    return {
+      month_start: inicioDeMes(mes, ahora).toISOString(),
+      total_cents: vs.reduce((a, v) => a + v.amount_cents, 0),
+      visits: vs.length,
+      categories: categoriasDeVisitas(vs),
+    };
+  });
+  const total = months.reduce((a, m) => a + m.total_cents, 0);
+  return delay({
+    basis: baseDelMock(),
+    months,
+    total_cents: total,
+    avg_per_month_cents: Math.floor(total / 6),
   });
 }
 

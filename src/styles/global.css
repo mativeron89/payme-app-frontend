@@ -5328,6 +5328,41 @@ body {
   text-align: right;
 }
 
+/* ── AF-31 · el selector de período de la burbuja ──────────────────────── */
+.stat-periodo-boton {
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.stat-periodos {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 12px;
+}
+
+.stat-periodo-opcion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  font-size: 15px;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+}
+
+.stat-periodo-opcion.on {
+  font-weight: 700;
+  color: var(--teal-txt);
+}
+
 /* ── AF-29 · 2b «Tus restaurantes» y el acceso de 2a ─────────────────────
    Medidas del diseño 2b: el ancho dice de qué depende cada cosa. Tarjeta del
    restaurante a lo ancho (blanca), la visita una burbuja --bg 28px más angosta,

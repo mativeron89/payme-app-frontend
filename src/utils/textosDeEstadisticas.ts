@@ -24,3 +24,19 @@ export function visitasTexto(n: number, t: T): string {
 export function lugaresYVisitas(lugares: number, visitas: number, t: T): string {
   return `${lugares} ${lugares === 1 ? t('lugar') : t('lugares')} · ${visitasTexto(visitas, t)}`;
 }
+
+/** AF-31 · el nombre del período, como aparece en la burbuja y en el selector. */
+export function etiquetaDePeriodo(clave: string, t: T): string {
+  if (clave === 'last_month') return t('Mes pasado');
+  if (clave === 'last_3_months') return t('Últimos 3 meses');
+  if (clave === 'this_year') return t('Este año');
+  return t('Este mes');
+}
+
+/** AF-31 · el cierre de frases como «3 lugares · 6 visitas este mes». */
+export function sufijoDePeriodo(clave: string, t: T): string {
+  if (clave === 'last_month') return t('el mes pasado');
+  if (clave === 'last_3_months') return t('en los últimos 3 meses');
+  if (clave === 'this_year') return t('este año');
+  return t('este mes');
+}

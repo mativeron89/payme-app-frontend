@@ -16,6 +16,7 @@
  */
 
 import type { BaseDeConsumo } from './consumoDelMes';
+import { decodePeriodo, type PeriodoConfirmado } from './periodoEstadisticas';
 
 export interface ItemDeVisita {
   readonly name: string;
@@ -44,6 +45,11 @@ export interface TusRestaurantes {
   readonly monthStart: string;
   readonly totalCents: number;
   readonly restaurants: readonly RestauranteDelMes[];
+  /**
+   * AF-31 · v2.106.0 · el período que usó el dueño. `null` con un backend
+   * anterior, que no lo publica (y que ignora `?period=`).
+   */
+  readonly period: PeriodoConfirmado | null;
 }
 
 function objetoPlano(v: unknown): v is Record<string, unknown> {
@@ -100,13 +106,18 @@ function restaurante(raw: unknown): RestauranteDelMes {
 }
 
 export function decodeTusRestaurantes(raw: unknown): TusRestaurantes {
-  if (!objetoPlano(raw) || !claves(raw, ['basis', 'month_start', 'total_cents', 'restaurants'])) malo();
+  // `period` es la única clave OPCIONAL (v2.106.0): presente, tiene que ser válida.
+  const conPeriodo = objetoPlano(raw) && Object.prototype.hasOwnProperty.call(raw, 'period');
+  const esperadas = ['basis', 'month_start', 'total_cents', 'restaurants', ...(conPeriodo ? ['period'] : [])];
+  if (!objetoPlano(raw) || !claves(raw, esperadas)) malo();
+  const period = conPeriodo ? decodePeriodo(raw.period) : null;
+  if (conPeriodo && period === null) malo();
   const { basis, month_start: m, total_cents: total, restaurants } = raw;
   if ((basis !== 'consumption' && basis !== 'payments') || !fecha(m) || !entero(total) || !Array.isArray(restaurants)) malo();
   const rs = restaurants.map(restaurante);
   if (new Set(rs.map((r) => r.id)).size !== rs.length) malo();
   if (rs.reduce((s, r) => s + r.amountCents, 0) !== total) malo();
-  return { basis, monthStart: m, totalCents: total, restaurants: rs };
+  return { basis, monthStart: m, totalCents: total, restaurants: rs, period };
 }
 
 /** Cuántas visitas en total (para «N lugares · M visitas»). */

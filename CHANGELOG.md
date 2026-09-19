@@ -11,6 +11,53 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.175.0 — Período, «Qué comes» (2c) y «Evolución» (2f) (2026-09-19)
+
+Orden `APP-STATS-DISHES-EVOLUTION-PERIOD-AF-31-20260919`, base `36d8fbe` (= `origin/main`,
+0.174.0). **Sin push, sin deploy, sin GREEN.** Roadmap n166 (parte de platos) y n167;
+decisión de Mati «por etapas».
+
+- **Espejo, en un commit propio (`ca15729`):** dueño v2.108.0, inventario en
+  `3dbaa64` y contenido en `a8a75c1`, con el período, los platos y la evolución.
+  Cambian `routes/account.js` y `schemas/index.js`; los tres gates verdes. El remoto
+  del dueño está en `81003fe` (v2.105.0): nada de esto está publicado todavía.
+
+### Pieza 1 · selector de período (v2.106.0)
+
+- **La burbuja de 2a y 2b** lleva el período con su flecha (diseño: «el período va
+  solo a la izquierda, con una flecha que abre el selector»). Abre la hoja inferior
+  de la app (`.sheet-overlay`, el patrón de Inicio, por portal a `document.body`)
+  con las cuatro opciones del dueño: Este mes, Mes pasado, Últimos 3 meses y Este
+  año. Van como `?period=`.
+- **El elegido se conserva al navegar** entre 2a, 2b y 2c: vive en memoria
+  (`src/api/periodoEstadisticas.ts`). Al recargar vuelve a «Este mes», el default
+  del dueño.
+- 🔴 **Sólo vale si el dueño lo CONFIRMA** (`period.key` igual al pedido). Un
+  backend anterior ignora `?period=` y manda el mes en curso: ahí no hay flecha y
+  todo se rotula «Este mes». Si no se hiciera así, «Mes pasado» mostraría los
+  números de este mes.
+- **2a · el período mueve SÓLO `consumption_month`** (handoff v2.106.0). «Plato más
+  pedido», «Tipo de cocina favorito» y las barras viejas salen de pagos y no tienen
+  filtro de fecha: **con otro período se OCULTAN** para no mezclar números de
+  períodos distintos. El anillo se titula «Tu consumo en el período» o «Tu gasto en
+  el período».
+- **Sin `consumption_month` válido** no se ofrece el período, porque no habría nada
+  que mover.
+- **Un período sin consumo conserva la burbuja y el selector**, con «No registramos
+  consumos en este período.»; si no, no habría cómo volver. El acceso a 2b dice
+  «3 lugares · 5 visitas el mes pasado».
+- **2b** pide su período, lo confirma igual y acepta `period` como única clave
+  opcional de su decodificador exacto.
+- **La ruta lleva el período por `rutaConPeriodo`**, que concatena, para que la
+  guarda C-03 (todo `${}` de una ruta escapa) no necesite excepción nueva.
+- **Tests:** unitarios del período (5) y e2e (3): Mes pasado en 2a y 2b con sus
+  totales, período vacío con salida y backend anterior sin selector.
+  `estadisticas-anillo.spec.ts` (AF-26) afirmaba «sin flecha»: ahora afirma la
+  flecha con el período confirmado (guarda declarada).
+- **Mutantes (9, todos mueren).** Uno (2b que ignora el período) sobrevivió la
+  primera vez. El test miraba la burbuja antes de que 2b pintara, y la de 2a ya
+  decía «Mes pasado». Ahora espera a 2b.
+
 ## 0.174.0 — «Soltar» con el dato del dueño y «Tus restaurantes» (2026-09-19)
 
 Orden `APP-STATS-RESTAURANTS-AND-RELEASABLE-AF-29-20260919`, base `c03618f`

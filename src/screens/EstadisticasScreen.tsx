@@ -14,7 +14,9 @@ import { fullName } from '../utils/identity';
 import { decodeConsumoDelMes, type ConsumoDelMes } from '../api/consumoDelMes';
 import { extractApiError } from '../api/errors';
 import { visitasDelMes, type TusRestaurantes } from '../api/tusRestaurantes';
-import { lugaresYVisitas, nombreDeCocina, visitasTexto } from '../utils/textosDeEstadisticas';
+import { lugaresYVisitas, nombreDeCocina, sufijoDePeriodo, visitasTexto } from '../utils/textosDeEstadisticas';
+import { confirmaPeriodo, usePeriodoEstadisticas, type ClavePeriodo } from '../api/periodoEstadisticas';
+import { SelectorDePeriodo } from './SelectorDePeriodo';
 import { colorDeFila, porcentajesEnteros, porcionesDelAnillo, RADIO_ANILLO, GROSOR_ANILLO } from '../utils/anillo';
 
 /**
@@ -65,22 +67,24 @@ export function EstadisticasScreen() {
    * acceso: la pantalla 2b sabe mostrar su error con «Reintentar».
    */
   const [restaurantes, setRestaurantes] = useState<AccesoRestaurantes>({ estado: 'cargando' });
+  /** AF-31 · el período elegido, compartido con 2b y 2c. */
+  const clave = usePeriodoEstadisticas();
 
   const cargar = useCallback(() => {
     setFallo(false);
     setStats(null);
     setRestaurantes({ estado: 'cargando' });
     api
-      .getStats()
+      .getStats(clave)
       .then(setStats)
       .catch(() => setFallo(true));
     api
-      .getStatsRestaurants()
+      .getStatsRestaurants(clave)
       .then((datos) => setRestaurantes({ estado: 'listo', datos }))
       .catch((err) => {
         setRestaurantes(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
       });
-  }, []);
+  }, [clave]);
 
   useEffect(() => {
     if (!vista.showAccountActivity) return;
@@ -102,6 +106,21 @@ export function EstadisticasScreen() {
    */
   const consumo = stats ? decodeConsumoDelMes(stats.consumption_month) : null;
   const conAnillo = consumo !== null && consumo.totalCents > 0;
+  /**
+   * AF-31 · el período sólo vale si el dueño lo CONFIRMA (`period.key` igual al
+   * pedido). Un backend anterior ignora `?period=` y manda el mes en curso: ahí
+   * no hay selector y todo se rotula «Este mes».
+   *
+   * 🔴 **El período mueve SÓLO `consumption_month`** (handoff v2.106.0). «Plato
+   * más pedido», «Tipo de cocina favorito» y las barras viejas salen de pagos y
+   * no tienen filtro de fecha, así que con otro período se ocultan: mostrarlos
+   * al lado del anillo mezclaría números de períodos distintos.
+   */
+  // El período sólo mueve `consumption_month`: sin ese bloque válido (ausente o
+  // inválido) no hay nada que el selector cambie, y queda la pantalla de siempre.
+  const soportaPeriodo = stats !== null && consumo !== null && confirmaPeriodo(clave, stats.period) !== null;
+  const efectiva: ClavePeriodo = soportaPeriodo ? clave : 'this_month';
+  const otroPeriodo = efectiva !== 'this_month';
   const accesoVisible = restaurantes.estado === 'listo' || restaurantes.estado === 'sin_resumen';
 
   return (
@@ -111,8 +130,8 @@ export function EstadisticasScreen() {
           hoy sin uso y con otro tamaño) y queda fuera de esta orden: se declara,
           no se improvisa acá. El nombre sigue siendo el <h1> de la burbuja. */}
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} />
-      {conAnillo ? (
-        <BurbujaDelMes consumo={consumo} />
+      {conAnillo || soportaPeriodo ? (
+        <BurbujaDelMes consumo={conAnillo ? consumo : null} clave={efectiva} selector={soportaPeriodo} />
       ) : (
         <div className="title-card">
           <h1 className="title-card-title">{t('Mis estadísticas')}</h1>
@@ -150,9 +169,13 @@ export function EstadisticasScreen() {
           </div>
         ) : (
           <>
-            {accesoVisible && <AccesoTusRestaurantes acceso={restaurantes} />}
-            {conAnillo && <AnilloPorCocina consumo={consumo} />}
-            {!conAnillo && sinActividad ? (
+            {accesoVisible && <AccesoTusRestaurantes acceso={restaurantes} clave={clave} />}
+            {conAnillo && <AnilloPorCocina consumo={consumo} clave={efectiva} />}
+            {!conAnillo && otroPeriodo ? (
+              <div className="mesa-empty">
+                <div className="mesa-empty-title">{t('No registramos consumos en este período.')}</div>
+              </div>
+            ) : otroPeriodo ? null : !conAnillo && sinActividad ? (
               /* Vacío REAL, sin borde. NO se pinta "$0.00 gastado": no gastar
                  nada y no tener datos son cosas distintas. */
               <div className="mesa-empty">
@@ -249,18 +272,31 @@ export function EstadisticasScreen() {
  * visitas y promedio debajo. El `<h1>` de la pantalla sigue siendo «Mis
  * estadísticas», sólo para lectores de pantalla: a la vista va en la cabecera.
  */
-function BurbujaDelMes({ consumo }: { consumo: ConsumoDelMes }) {
+function BurbujaDelMes({
+  consumo,
+  clave,
+  selector,
+}: {
+  consumo: ConsumoDelMes | null;
+  clave: ClavePeriodo;
+  selector: boolean;
+}) {
   const { t } = useIdioma();
   return (
     <div className="title-card stat-burbuja">
       <h1 className="stat-oculto">{t('Mis estadísticas')}</h1>
-      <div className="stat-burbuja-periodo">{t('Este mes')}</div>
-      <div className="stat-burbuja-dato">
-        <div className="stat-burbuja-total">{formatMXN(consumo.totalCents)}</div>
-        <div className="stat-burbuja-contexto">
-          {visitasTexto(consumo.visits, t)} · {t('{0} promedio', formatMXN(consumo.avgPerVisitCents))}
+      {/* AF-31 · el período con su flecha, sólo si el dueño lo confirmó. Un
+          período sin consumo conserva la burbuja: si no, el selector se iría y
+          no habría cómo volver. */}
+      <SelectorDePeriodo clave={clave} disponible={selector} />
+      {consumo && (
+        <div className="stat-burbuja-dato">
+          <div className="stat-burbuja-total">{formatMXN(consumo.totalCents)}</div>
+          <div className="stat-burbuja-contexto">
+            {visitasTexto(consumo.visits, t)} · {t('{0} promedio', formatMXN(consumo.avgPerVisitCents))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -271,7 +307,7 @@ function BurbujaDelMes({ consumo }: { consumo: ConsumoDelMes }) {
  * adivina. **Nunca el color solo**: cada porción está escrita abajo con nombre,
  * visitas, monto y porcentaje, y el anillo lleva todo eso en su `aria-label`.
  */
-function AnilloPorCocina({ consumo }: { consumo: ConsumoDelMes }) {
+function AnilloPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: ClavePeriodo }) {
   const { t } = useIdioma();
   const esConsumo = consumo.basis === 'consumption';
   const montos = consumo.categories.map((c) => c.amountCents);
@@ -286,7 +322,9 @@ function AnilloPorCocina({ consumo }: { consumo: ConsumoDelMes }) {
     <section className="stat-anillo-card" aria-labelledby="stat-anillo-titulo">
       <div>
         <h2 id="stat-anillo-titulo" className="stat-anillo-titulo">
-          {esConsumo ? t('Tu consumo del mes') : t('Tu gasto del mes')}
+          {clave === 'this_month'
+            ? (esConsumo ? t('Tu consumo del mes') : t('Tu gasto del mes'))
+            : (esConsumo ? t('Tu consumo en el período') : t('Tu gasto en el período'))}
         </h2>
         <div className="stat-anillo-sub">
           {esConsumo ? t('Lo que elegiste en tus mesas') : t('Lo que pagaste, descontando reembolsos')}
@@ -345,7 +383,7 @@ type AccesoRestaurantes =
  * diseño que se dibuja: los otros (Qué comés, Evolución) todavía no tienen
  * pantalla. Con datos dice cuántos lugares y visitas; sin ellos, sólo el título.
  */
-function AccesoTusRestaurantes({ acceso }: { acceso: AccesoRestaurantes }) {
+function AccesoTusRestaurantes({ acceso, clave }: { acceso: AccesoRestaurantes; clave: ClavePeriodo }) {
   const { t } = useIdioma();
   const datos = acceso.estado === 'listo' ? acceso.datos : null;
   return (
@@ -354,7 +392,9 @@ function AccesoTusRestaurantes({ acceso }: { acceso: AccesoRestaurantes }) {
         <span className="stat-acceso-titulo">{t('Tus restaurantes')}</span>
         {datos && datos.restaurants.length > 0 && (
           <span className="stat-acceso-sub">
-            {lugaresYVisitas(datos.restaurants.length, visitasDelMes(datos), t)} {t('este mes')}
+            {lugaresYVisitas(datos.restaurants.length, visitasDelMes(datos), t)}{' '}
+            {/* Sólo si el dueño confirmó el período: si no, lo que llegó es el mes en curso. */}
+            {sufijoDePeriodo(datos.period?.key === clave ? clave : 'this_month', t)}
           </span>
         )}
       </span>

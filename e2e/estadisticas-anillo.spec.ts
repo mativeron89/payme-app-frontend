@@ -39,7 +39,10 @@ test.describe('AF-26 · Mis estadísticas · inicio con anillo', () => {
     await expect(burbuja).toContainText('Este mes');
     await expect(burbuja).toContainText('$770.00');
     await expect(burbuja).toContainText('10 visitas · $77.00 promedio');
-    await expect(burbuja.locator('svg')).toHaveCount(0);
+    // AF-31: con el período confirmado por el dueño, «Este mes» lleva su flecha
+    // y abre el selector (en AF-26 no había otros períodos y no la llevaba). Sin
+    // `period` —backend anterior— sigue sin flecha: lo cubre periodo-estadisticas.
+    await expect(burbuja.getByRole('button', { name: /^Período: Este mes/ })).toBeVisible();
     // Lista: nombre, visitas, monto y porcentaje — nunca el color solo.
     await expect(filas(page)).toHaveCount(4);
     await expect(filas(page).nth(0)).toHaveText(/Italiana.*3 visitas.*\$310\.00.*40%/);

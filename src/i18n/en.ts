@@ -847,4 +847,16 @@ export const EN: Record<string, string> = {
   "Jue": "Thu",
   "Vie": "Fri",
   "Sáb": "Sat",
+  // AF-31 · período de «Mis estadísticas».
+  "Mes pasado": "Last month",
+  "Últimos 3 meses": "Last 3 months",
+  "Este año": "This year",
+  "el mes pasado": "last month",
+  "en los últimos 3 meses": "in the last 3 months",
+  "este año": "this year",
+  "Período: {0}. Cambiar": "Period: {0}. Change",
+  "Elige el período": "Choose the period",
+  "No registramos consumos en este período.": "We have no consumption in this period.",
+  "Tu consumo en el período": "Your consumption in the period",
+  "Tu gasto en el período": "Your spending in the period",
 };

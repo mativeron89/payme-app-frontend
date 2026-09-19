@@ -35,6 +35,7 @@ import { decodeMisMesas, type PaginaMisMesas } from './misMesas';
 import { decodeSoltarConsumo, type ConsumoSoltado } from './soltarConsumo';
 import { decodeParticipantes, type Participante } from './participantes';
 import { decodeTusRestaurantes, type TusRestaurantes } from './tusRestaurantes';
+import { rutaConPeriodo, type ClavePeriodo } from './periodoEstadisticas';
 import { extractApiError } from './errors';
 import {
   assertProfileIdentityEnabled,
@@ -349,9 +350,10 @@ export interface Api {
    */
   acceptInvitationLink(token: string): Promise<AcceptInvitationLinkResponse>;
   // stats
-  getStats(): Promise<StatsResponse>;
-  /** AF-29 · n165 · «Tus restaurantes» del mes (2b). 404 = backend anterior. */
-  getStatsRestaurants(): Promise<TusRestaurantes>;
+  /** AF-31 · con `period`, `?period=` (dueño v2.106.0); sin él, el mes en curso. */
+  getStats(period?: ClavePeriodo): Promise<StatsResponse>;
+  /** AF-29 · n165 · «Tus restaurantes» (2b). 404 = backend anterior. */
+  getStatsRestaurants(period?: ClavePeriodo): Promise<TusRestaurantes>;
   // social
   getFriends(): Promise<FriendsResponse>;
   /**
@@ -750,9 +752,11 @@ const realApi: Api = {
       await httpRequest<unknown>('POST', '/invitations/accept-link', { token }),
     ),
 
-  getStats: () => httpRequest<StatsResponse>('GET', '/account/stats'),
-  getStatsRestaurants: async () =>
-    decodeTusRestaurantes(await httpRequest<unknown>('GET', '/account/stats/restaurants')),
+  getStats: (period) => httpRequest<StatsResponse>('GET', rutaConPeriodo('/account/stats', period)),
+  getStatsRestaurants: async (period) =>
+    decodeTusRestaurantes(
+      await httpRequest<unknown>('GET', rutaConPeriodo('/account/stats/restaurants', period)),
+    ),
 
   getFriends: () => httpRequest<FriendsResponse>('GET', '/friends'),
   addFriend: async (query) => friendRequestCreatedResponse(
@@ -952,8 +956,8 @@ const mockApi: Api = {
   acceptInvitationLink: async (token) =>
     acceptInvitationLinkResponse(await mock.mockAcceptInvitationLink(token)),
 
-  getStats: () => mock.mockStats(),
-  getStatsRestaurants: async () => decodeTusRestaurantes(await mock.mockStatsRestaurants()),
+  getStats: (period) => mock.mockStats(period),
+  getStatsRestaurants: async (period) => decodeTusRestaurantes(await mock.mockStatsRestaurants(period)),
 
   getFriends: () => mock.mockFriends(),
   addFriend: async (query) => friendRequestCreatedResponse(await mock.mockAddFriend(query)),
