@@ -13,6 +13,7 @@ import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
 import { EstadisticasScreen } from './screens/EstadisticasScreen';
 import { TusRestaurantesScreen } from './screens/TusRestaurantesScreen';
+import { QueComesScreen } from './screens/QueComesScreen';
 import { SocialScreen } from './screens/SocialScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { JoinMesaScreen } from './screens/JoinMesaScreen';
@@ -228,6 +229,8 @@ function Shell() {
         return <EstadisticasScreen />;
       case 'restaurantes':
         return <TusRestaurantesScreen />;
+      case 'platos':
+        return <QueComesScreen />;
       case 'cargar':
         return <TopupScreen />;
       case 'transferir':

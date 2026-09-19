@@ -5328,6 +5328,23 @@ body {
   text-align: right;
 }
 
+/* ── AF-31 · 2c «Qué comes»: la fila del plato lleva el restaurante debajo. */
+.plato-texto {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.plato-texto .stat-anillo-nombre {
+  flex: none;
+}
+
+.plato-rest {
+  font-size: 12px;
+  color: var(--gray-d);
+}
+
 /* ── AF-31 · el selector de período de la burbuja ──────────────────────── */
 .stat-periodo-boton {
   gap: 4px;

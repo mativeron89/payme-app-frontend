@@ -36,6 +36,7 @@ import { decodeSoltarConsumo, type ConsumoSoltado } from './soltarConsumo';
 import { decodeParticipantes, type Participante } from './participantes';
 import { decodeTusRestaurantes, type TusRestaurantes } from './tusRestaurantes';
 import { rutaConPeriodo, type ClavePeriodo } from './periodoEstadisticas';
+import { decodePlatos, type PlatosDelPeriodo } from './platos';
 import { extractApiError } from './errors';
 import {
   assertProfileIdentityEnabled,
@@ -354,6 +355,8 @@ export interface Api {
   getStats(period?: ClavePeriodo): Promise<StatsResponse>;
   /** AF-29 · n165 · «Tus restaurantes» (2b). 404 = backend anterior. */
   getStatsRestaurants(period?: ClavePeriodo): Promise<TusRestaurantes>;
+  /** AF-31 · n166 · «Qué comes» por platos (2c). 404 = backend anterior. */
+  getStatsDishes(period?: ClavePeriodo): Promise<PlatosDelPeriodo>;
   // social
   getFriends(): Promise<FriendsResponse>;
   /**
@@ -753,6 +756,8 @@ const realApi: Api = {
     ),
 
   getStats: (period) => httpRequest<StatsResponse>('GET', rutaConPeriodo('/account/stats', period)),
+  getStatsDishes: async (period) =>
+    decodePlatos(await httpRequest<unknown>('GET', rutaConPeriodo('/account/stats/dishes', period))),
   getStatsRestaurants: async (period) =>
     decodeTusRestaurantes(
       await httpRequest<unknown>('GET', rutaConPeriodo('/account/stats/restaurants', period)),
@@ -957,6 +962,7 @@ const mockApi: Api = {
     acceptInvitationLinkResponse(await mock.mockAcceptInvitationLink(token)),
 
   getStats: (period) => mock.mockStats(period),
+  getStatsDishes: async (period) => decodePlatos(await mock.mockStatsDishes(period)),
   getStatsRestaurants: async (period) => decodeTusRestaurantes(await mock.mockStatsRestaurants(period)),
 
   getFriends: () => mock.mockFriends(),

@@ -127,6 +127,8 @@ const ESPERADO: Record<PageId, Esperado> = {
   // AF-29 · 2b. Monta su pantalla con el <h1> «Tus restaurantes» (visible en
   // carga, error y vacío; oculto para lectores de pantalla con datos).
   restaurantes: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Tus restaurantes' } },
+  // AF-31 · 2c. Mismo criterio: <h1> «Qué comes».
+  platos: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Qué comes' } },
   recovery: {
     tipo: 'pantalla',
     marcador: { rol: 'heading', nombre: 'Crear una contraseña nueva' },

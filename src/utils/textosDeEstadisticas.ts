@@ -40,3 +40,13 @@ export function sufijoDePeriodo(clave: string, t: T): string {
   if (clave === 'this_year') return t('este año');
   return t('este mes');
 }
+
+/** «1 vez», «4 veces». En platos, `times` son visitas (handoff v2.107.0). */
+export function vecesTexto(n: number, t: T): string {
+  return `${n} ${n === 1 ? t('vez') : t('veces')}`;
+}
+
+/** «15 platos distintos», con su singular. */
+export function platosDistintos(n: number, t: T): string {
+  return `${n} ${n === 1 ? t('plato distinto') : t('platos distintos')}`;
+}

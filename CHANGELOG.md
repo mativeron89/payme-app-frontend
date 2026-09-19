@@ -58,6 +58,38 @@ decisión de Mati «por etapas».
   primera vez. El test miraba la burbuja antes de que 2b pintara, y la de 2a ya
   decía «Mes pasado». Ahora espera a 2b.
 
+### Pieza 2 · «Qué comes» por platos (2c, v2.107.0)
+
+- **Ruta nueva `#/platos`** con `GET /api/account/stats/dishes?period=`. Se abre
+  desde el acceso «Qué comes» de 2a («Tiramisú · 3 veces · y 6 platos más») y
+  vuelve con ← Volver. El acceso sólo se dibuja si la ruta existe: 404 ⇒ no está.
+- **Burbuja:** el período (con selector si el dueño lo confirma) y «N platos
+  distintos».
+- **Tarjeta:** «Tus cinco platos» (o «Tus platos» si son menos) y «De 7 platos
+  distintos este mes».
+- **Anillo:** repartido por **veces**, porque el dato del dueño son visitas y
+  media porción cuenta 1. En el centro, los platos distintos; los porcentajes del
+  `aria-label` son sobre los cinco listados.
+- **Lista:** plato, restaurante, «N veces» y monto. Con pagos, una línea aclara
+  que el monto de cada plato va sin la propina.
+- **Las pestañas «Ingrediente» y «Momento» del diseño NO se dibujan**: 2d y 2e no
+  existen.
+- **Decodificador de claves exactas** (`src/api/platos.ts`): a lo sumo 5 platos,
+  `distinct_dishes` nunca menor que los listados, `times` ≥ 1, `period` opcional.
+  Un campo de más se rechaza.
+- **Estados:** error con «Reintentar» (500, 413 `stats_range_too_large` o un
+  rechazo del decodificador), vacío por período y lista.
+- **El anillo pasó a `src/screens/AnilloSvg.tsx`**, compartido por 2a y 2c; 2a
+  sigue igual (sus 7 e2e pasan sin cambios).
+- **El acceso de 2a es genérico** (`FilaDeAcceso`), con el mismo sondeo que el de
+  2b.
+- **Guardas tocadas (declaradas):**
+  - `rutas-montan-pantalla.spec.ts`: la ruta `platos`.
+  - `AppHeader.identity.test.tsx`: 18 → 19 montajes autenticados.
+- **Tests:** decodificador (4) y e2e (7): abrir y volver, el pie con pagos, el
+  período en 2c, vacío, 404, y error y 413 con reintento. Capturas: 2c y 2c vacía.
+- **Mutantes (8, todos mueren).**
+
 ## 0.174.0 — «Soltar» con el dato del dueño y «Tus restaurantes» (2026-09-19)
 
 Orden `APP-STATS-RESTAURANTS-AND-RELEASABLE-AF-29-20260919`, base `c03618f`

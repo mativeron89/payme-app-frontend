@@ -14,10 +14,12 @@ import { fullName } from '../utils/identity';
 import { decodeConsumoDelMes, type ConsumoDelMes } from '../api/consumoDelMes';
 import { extractApiError } from '../api/errors';
 import { visitasDelMes, type TusRestaurantes } from '../api/tusRestaurantes';
-import { lugaresYVisitas, nombreDeCocina, sufijoDePeriodo, visitasTexto } from '../utils/textosDeEstadisticas';
+import type { PlatosDelPeriodo } from '../api/platos';
+import { lugaresYVisitas, nombreDeCocina, sufijoDePeriodo, vecesTexto, visitasTexto } from '../utils/textosDeEstadisticas';
 import { confirmaPeriodo, usePeriodoEstadisticas, type ClavePeriodo } from '../api/periodoEstadisticas';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
-import { colorDeFila, porcentajesEnteros, porcionesDelAnillo, RADIO_ANILLO, GROSOR_ANILLO } from '../utils/anillo';
+import { colorDeFila, porcentajesEnteros, porcionesDelAnillo } from '../utils/anillo';
+import { AnilloSvg } from './AnilloSvg';
 
 /**
  * **Estadísticas** — la pantalla real que lanza la pestaña del mismo nombre
@@ -69,11 +71,14 @@ export function EstadisticasScreen() {
   const [restaurantes, setRestaurantes] = useState<AccesoRestaurantes>({ estado: 'cargando' });
   /** AF-31 · el período elegido, compartido con 2b y 2c. */
   const clave = usePeriodoEstadisticas();
+  /** AF-31 · el acceso a «Qué comes» (2c), con la misma regla que el de 2b. */
+  const [platos, setPlatos] = useState<Sondeo<PlatosDelPeriodo>>({ estado: 'cargando' });
 
   const cargar = useCallback(() => {
     setFallo(false);
     setStats(null);
     setRestaurantes({ estado: 'cargando' });
+    setPlatos({ estado: 'cargando' });
     api
       .getStats(clave)
       .then(setStats)
@@ -83,6 +88,12 @@ export function EstadisticasScreen() {
       .then((datos) => setRestaurantes({ estado: 'listo', datos }))
       .catch((err) => {
         setRestaurantes(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
+      });
+    api
+      .getStatsDishes(clave)
+      .then((datos) => setPlatos({ estado: 'listo', datos }))
+      .catch((err) => {
+        setPlatos(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
       });
   }, [clave]);
 
@@ -170,6 +181,7 @@ export function EstadisticasScreen() {
         ) : (
           <>
             {accesoVisible && <AccesoTusRestaurantes acceso={restaurantes} clave={clave} />}
+            {(platos.estado === 'listo' || platos.estado === 'sin_resumen') && <AccesoQueComes acceso={platos} />}
             {conAnillo && <AnilloPorCocina consumo={consumo} clave={efectiva} />}
             {!conAnillo && otroPeriodo ? (
               <div className="mesa-empty">
@@ -317,7 +329,6 @@ function AnilloPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: Cl
   // categoría del restaurante tal cual (ver `consumoDelMes.ts`).
   const nombres = consumo.categories.map((c) => nombreDeCocina(c.category, t) ?? t('Otra cocina'));
   const resumen = nombres.map((n, i) => `${n} ${pcts[i]}%`).join(', ');
-  const centro = 70;
   return (
     <section className="stat-anillo-card" aria-labelledby="stat-anillo-titulo">
       <div>
@@ -330,33 +341,16 @@ function AnilloPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: Cl
           {esConsumo ? t('Lo que elegiste en tus mesas') : t('Lo que pagaste, descontando reembolsos')}
         </div>
       </div>
-      <div className="stat-anillo">
-        <svg
-          width="188"
-          height="188"
-          viewBox="0 0 140 140"
-          role="img"
-          aria-label={esConsumo ? t('Consumo por tipo de cocina: {0}', resumen) : t('Gasto por tipo de cocina: {0}', resumen)}
-        >
-          <g transform={`rotate(-90 ${centro} ${centro})`} fill="none" strokeWidth={GROSOR_ANILLO} strokeLinecap="butt">
-            {porciones.map((p, i) => (
-              <circle
-                key={i}
-                cx={centro}
-                cy={centro}
-                r={RADIO_ANILLO}
-                stroke={p.color}
-                strokeDasharray={`${p.trazo.toFixed(1)} ${p.hueco.toFixed(1)}`}
-                strokeDashoffset={p.desde.toFixed(1)}
-              />
-            ))}
-          </g>
-        </svg>
-        <div className="stat-anillo-centro" aria-hidden="true">
-          <div className="stat-anillo-total">{formatMXN(consumo.totalCents)}</div>
-          <div className="stat-anillo-unidad">{esConsumo ? t('de consumo') : t('de gasto')}</div>
-        </div>
-      </div>
+      <AnilloSvg
+        porciones={porciones}
+        etiqueta={esConsumo ? t('Consumo por tipo de cocina: {0}', resumen) : t('Gasto por tipo de cocina: {0}', resumen)}
+        centro={
+          <>
+            <div className="stat-anillo-total">{formatMXN(consumo.totalCents)}</div>
+            <div className="stat-anillo-unidad">{esConsumo ? t('de consumo') : t('de gasto')}</div>
+          </>
+        }
+      />
       <ul className="stat-anillo-lista">
         {consumo.categories.map((c, i) => (
           <li key={c.category} className="stat-anillo-fila">
@@ -372,11 +366,47 @@ function AnilloPorCocina({ consumo, clave }: { consumo: ConsumoDelMes; clave: Cl
   );
 }
 
-type AccesoRestaurantes =
+/**
+ * El sondeo de una pantalla hija: 404 ⇒ backend anterior ⇒ el acceso no se
+ * dibuja. Cualquier otro resultado lo dibuja (la hija sabe mostrar su error).
+ */
+type Sondeo<D> =
   | { readonly estado: 'cargando' }
   | { readonly estado: 'no_disponible' }
   | { readonly estado: 'sin_resumen' }
-  | { readonly estado: 'listo'; readonly datos: TusRestaurantes };
+  | { readonly estado: 'listo'; readonly datos: D };
+
+type AccesoRestaurantes = Sondeo<TusRestaurantes>;
+
+/**
+ * AF-31 · la fila de acceso de 2a: título, un resumen si lo hay y la flecha.
+ * Los accesos se dibujan sólo si su pantalla existe y responde.
+ */
+function FilaDeAcceso({ titulo, sub, destino }: { titulo: string; sub: string | null; destino: 'restaurantes' | 'platos' }) {
+  return (
+    <button type="button" className="stat-acceso" onClick={() => navigate(destino)}>
+      <span className="stat-acceso-texto">
+        <span className="stat-acceso-titulo">{titulo}</span>
+        {sub && <span className="stat-acceso-sub">{sub}</span>}
+      </span>
+      <Icon name="chevron-down" size={20} className="rest-chev derecha" />
+    </button>
+  );
+}
+
+/** AF-31 · «Qué comes · Tiramisú · 3 veces · y 4 platos más». */
+function AccesoQueComes({ acceso }: { acceso: Sondeo<PlatosDelPeriodo> }) {
+  const { t } = useIdioma();
+  const datos = acceso.estado === 'listo' ? acceso.datos : null;
+  const primero = datos?.dishes[0];
+  let sub: string | null = null;
+  if (datos && primero) {
+    const resto = datos.distinctDishes - 1;
+    sub = `${primero.name} · ${vecesTexto(primero.times, t)}`
+      + (resto > 0 ? ` · ${resto === 1 ? t('y 1 plato más') : t('y {0} platos más', resto)}` : '');
+  }
+  return <FilaDeAcceso titulo={t('Qué comes')} sub={sub} destino="platos" />;
+}
 
 /**
  * AF-29 · el acceso de 2a a «Tus restaurantes». Es el único de los cuatro del
@@ -386,19 +416,9 @@ type AccesoRestaurantes =
 function AccesoTusRestaurantes({ acceso, clave }: { acceso: AccesoRestaurantes; clave: ClavePeriodo }) {
   const { t } = useIdioma();
   const datos = acceso.estado === 'listo' ? acceso.datos : null;
-  return (
-    <button type="button" className="stat-acceso" onClick={() => navigate('restaurantes')}>
-      <span className="stat-acceso-texto">
-        <span className="stat-acceso-titulo">{t('Tus restaurantes')}</span>
-        {datos && datos.restaurants.length > 0 && (
-          <span className="stat-acceso-sub">
-            {lugaresYVisitas(datos.restaurants.length, visitasDelMes(datos), t)}{' '}
-            {/* Sólo si el dueño confirmó el período: si no, lo que llegó es el mes en curso. */}
-            {sufijoDePeriodo(datos.period?.key === clave ? clave : 'this_month', t)}
-          </span>
-        )}
-      </span>
-      <Icon name="chevron-down" size={20} className="rest-chev derecha" />
-    </button>
-  );
+  const sub = datos && datos.restaurants.length > 0
+    // Sólo si el dueño confirmó el período: si no, lo que llegó es el mes en curso.
+    ? `${lugaresYVisitas(datos.restaurants.length, visitasDelMes(datos), t)} ${sufijoDePeriodo(datos.period?.key === clave ? clave : 'this_month', t)}`
+    : null;
+  return <FilaDeAcceso titulo={t('Tus restaurantes')} sub={sub} destino="restaurantes" />;
 }
