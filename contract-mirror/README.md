@@ -6,6 +6,41 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-19** (el sexto del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`ade827abe7ae6678d58a457200a21ed44842832c`**
+  (App Backend **v2.114.0**, AB-28 · n98. El recorrido incluye:
+  - v2.112.0: el aviso `mesa_expired`, que emite un servicio fuera de esta
+    población;
+  - v2.113.0: `POST /mesas/:code/close`;
+  - v2.114.0: el lock ya no se cuela en una mesa recién cerrada.)
+- Commit del que se tomó el inventario autoritativo:
+  **`82f5082f775741c80e86ef513daa39447bd62437`** (HEAD de la rama del dueño
+  `claude/mesa-vence-aviso-cierre`). Entre `ade827a` y `82f5082` hay sólo
+  inventario (`735cede`) y dos aserciones de tests (`82f5082`), fuera de la
+  población.
+
+🔴 **No está publicado:** el `main` remoto del dueño es `3dbaa64e…` (v2.108.0) y
+ninguna rama remota contiene `ade827a` (medido 2026-09-19).
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior
+(`293dae7`) cambia **uno**: `routes/mesas.js`. Hay cero nuevos, cero que salgan
+y cero renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `82f5082f`
+(`.claude/worktrees/mesa-cierre`, porcelain vacío).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `ade827a`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `ade827a`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`82f5082f`) · exit 0 |
+
+### Refresh anterior · 2026-09-19 (momentos, foto al organizador, aviso 2.5.3 · `293dae7`)
+
 - Fecha del refresh: **2026-09-19** (el quinto del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`293dae75c1e0008b1b03492f041d3933463c47f5`**

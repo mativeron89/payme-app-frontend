@@ -39,6 +39,7 @@ const itemClaims = require('../services/itemClaims');   // v2.18 (fracciones)
 const consumoPropio = require('../services/consumoPropio');   // AB-17: «lo que elegiste»
 const profileIdentity = require('../services/profileIdentity');   // AB-25: foto al organizador
 const { edadConocida } = require('../services/consent');          // AB-25: la ÚNICA mayoría de edad
+const { avisarMesaVencida } = require('../services/avisoMesaVencida');   // AB-28: aviso al cerrar
 const settlement = require('../services/settlement');
 const paymentProcessor = require('../services/paymentProcessor');
 const {
@@ -1500,6 +1501,14 @@ router.post('/:code/items/lock', requireAuth, requireMesaParticipant,
           `SELECT status FROM mesas WHERE id = $1 FOR UPDATE`, [mesa.id]
         );
         estadoDeMesa = fijada ? fijada.status : null;
+        // AB-28 · ampliación 1: el estado se VUELVE a mirar bajo el candado.
+        // El chequeo de arriba usa la foto de requireMesaParticipant, tomada
+        // sin candado: si la mesa se cerró en el medio (timer o /close), sin
+        // esto la selección se guardaba en una mesa ya cerrada. Sólo el camino
+        // sin garantía, que es el único que toma este candado acá.
+        if (!['open', 'partially_paid'].includes(estadoDeMesa)) {
+          throw Object.assign(new Error('mesa_not_active'), { status: 409 });
+        }
       }
       const result = [];
       // orden estable por id: dos locks concurrentes con sets solapados no se
@@ -1571,6 +1580,9 @@ router.post('/:code/items/lock', requireAuth, requireMesaParticipant,
               fromState: estadoDeMesa, toState: 'expired',
               reason: 'mesa_cerrada_seleccion_completa', triggeredBy: 'system',
             });
+            // AB-28 · n98: aviso al organizador y a quienes eligieron, en la
+            // misma transacción que cerró la mesa.
+            await avisarMesaVencida(client, { mesaId: mesa.id, motivo: 'all_items_selected' });
             cerradaPorSeleccion = true;
           }
         }
@@ -1671,6 +1683,65 @@ router.post('/:code/items/release', requireAuth, requireMesaParticipant, async (
     }
     next(err);
   }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /:code/close · AB-28 · n98 (decisión de Mati b7dbbe5c…aa8: «Sí, con
+// confirmación»; sin reapertura: «No: se abre una mesa nueva»). El organizador
+// cierra ANTES de que venza una mesa SIN garantía y abierta: pasa a `expired`
+// con `closure_reason='closed_by_organizer'`; lo elegido queda como consumo.
+// Candado de la mesa primero (mismo orden que lock/release). Avisa como el
+// vencimiento, a quienes eligieron algo, NO al organizador (cerró él: no hay
+// nada que avisarle). Idempotente: cerrarla otra vez devuelve lo mismo.
+// La confirmación es del front. Sólo pagos apagados; nada de dinero ni outbox.
+// ═══════════════════════════════════════════════════════════
+router.post('/:code/close', requireAuth, requireMesaParticipant, async (req, res, next) => {
+  const cerrada = { mesa_status: 'expired', closure_reason: 'closed_by_organizer' };
+  try {
+    if (!req.user || req.mesa.opener_user_id !== req.user.id) {
+      return res.status(403).json({ error: 'not_mesa_organizer' });
+    }
+    const respuesta = await pool.tx(async (client) => {
+      const { rows: [m] } = await client.query(
+        `SELECT status, guarantee_mode, metadata FROM mesas WHERE id = $1 FOR UPDATE`, [req.mesa.id]
+      );
+      const sinGarantia = !!m && m.guarantee_mode === false && m.metadata?.sin_garantia === true;
+      if (!sinGarantia || dineroHabilitado()) {
+        return { status: 409, body: { error: 'close_not_applicable' } };
+      }
+      if (m.status === 'expired' && m.metadata?.closure_reason === 'closed_by_organizer') {
+        return { status: 200, body: cerrada };
+      }
+      if (m.status !== 'open') {
+        return {
+          status: 409,
+          body: {
+            error: 'mesa_not_active',
+            mesa_status: m.status,
+            closure_reason: m.metadata?.closure_reason || (m.status === 'expired' ? 'time' : null),
+          },
+        };
+      }
+      await client.query(
+        `UPDATE mesas
+            SET status = 'expired',
+                metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb),
+                                     '{closure_reason}', '"closed_by_organizer"'::jsonb, true)
+          WHERE id = $1`,
+        [req.mesa.id]
+      );
+      await stateMachine.transition({
+        client, entityType: 'mesa', entityId: req.mesa.id,
+        fromState: 'open', toState: 'expired',
+        reason: 'mesa_cerrada_por_organizador', triggeredBy: 'user',
+      });
+      await avisarMesaVencida(client, {
+        mesaId: req.mesa.id, motivo: 'closed_by_organizer', excluirUserId: req.user.id,
+      });
+      return { status: 200, body: cerrada };
+    });
+    res.status(respuesta.status).json(respuesta.body);
+  } catch (err) { next(err); }
 });
 
 // ═══════════════════════════════════════════════════════════
