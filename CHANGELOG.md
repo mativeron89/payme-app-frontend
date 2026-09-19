@@ -11,6 +11,39 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.174.0 — «Soltar» con el dato del dueño y «Tus restaurantes» (2026-09-19)
+
+Orden `APP-STATS-RESTAURANTS-AND-RELEASABLE-AF-29-20260919`, base `c03618f`
+(= `origin/main`, servido 0.173.0). **Sin push, sin deploy, sin GREEN.** Roadmap
+n171 y n165; decisión de Mati «por etapas».
+
+- **Espejo, en un commit propio (`bb1c46e`):** dueño v2.104.0, inventario en
+  `8ed527f` y contenido en `ae1434d`, local y sin publicar. Cambian
+  `routes/account.js`, `routes/mesas.js` y `services/itemClaims.js`, con los tres
+  gates verdes.
+
+### Ítem 1 · «Soltar» con `my_releasable_bps` (n171, cierra G-40)
+
+- Los dos campos nuevos por ítem (`my_paid_bps`, `my_releasable_bps`, dueño
+  v2.103.0) son **opcionales** y se leen sólo con `bpsValido`.
+- **Con el dato:** «Soltar» se ofrece si y sólo si `my_releasable_bps > 0`, con la
+  mesa `open` o `partially_paid`, o sea **también con pagos de otros**. Es la misma
+  definición que la ruta de soltar. Nunca sobre lo pagado entero ni en «igual».
+- **Sin el dato** (el backend servido hoy) o con un valor raro: la regla provisoria
+  de AF-25, cero pagos en la mesa.
+- **La fila distingue lo pagado de lo elegido** cuando `my_paid_bps > 0`: «Pagaste
+  ½ · elegiste ½ más» o «Ya lo pagaste». Sin pago, lo de siempre.
+- **Mock:** publica los dos campos desde sus claims (sin pagos en vuelo). La
+  costura `payme.app.mock.parte_pagada.v1 = antiguo` los omite, como el backend de
+  hoy.
+- **G-40 cerrado** en `GAPS.md`.
+- **Tests:** unitarios de la regla y del texto (8 nuevos). En e2e, el caso viejo
+  pasa a correr con la costura `antiguo`, y hay dos nuevos: con el pago de otro
+  «Soltar» sigue (captura), y la fila con la mitad pagada.
+- **Mutantes:** 9, todos mueren: ignorar el dato, ofrecer con 0, sin
+  `partially_paid`, ofrecer lo pagado, un dato raro que no cae a la regla vieja,
+  la etiqueta sin lo pagado (unitario y e2e) y un mock que no publica lo liberable.
+
 ## 0.173.0 — «Mis estadísticas», etapa 1: inicio con anillo (2026-09-19)
 
 Orden `APP-STATS-HOME-RING-AF-26-20260919`, base `048b38d` (= `origin/main`,

@@ -1509,6 +1509,9 @@ export function toOpenMesa(m: MockMesa): OpenMesa {
 }
 
 export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
+  const parteAntigua = (() => {
+    try { return localStorage.getItem('payme.app.mock.parte_pagada.v1') === 'antiguo'; } catch { return false; }
+  })();
   const slots: DivisionSlot[] | undefined = m.slots
     ? m.slots.map((s) => ({
         slot_index: s.slot_index,
@@ -1555,6 +1558,14 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
         my_bps: mine,
         locked_by_me: mine > 0,
         lock_expires_at: i.lock_expires_at,
+        // AF-29 · v2.103.0 (G-40). El mock no tiene pagos en vuelo, así que lo
+        // mío es exactamente pagado + liberable. La costura
+        // `payme.app.mock.parte_pagada.v1 = antiguo` los omite, como el
+        // backend servido hoy.
+        ...(!parteAntigua && {
+          my_paid_bps: i.claims.filter((c) => c.who === identity && c.status === 'paid').reduce((s, c) => s + c.fraction_bps, 0),
+          my_releasable_bps: i.claims.filter((c) => c.who === identity && c.status === 'locked').reduce((s, c) => s + c.fraction_bps, 0),
+        }),
       };
     }),
     ...(slots && { division_slots: slots }),

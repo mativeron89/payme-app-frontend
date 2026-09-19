@@ -165,20 +165,43 @@ export function esMioElegido(item: MesaItem, esConsumo: boolean): boolean {
 }
 
 /**
- * AF-25 · n80 · ¿se OFRECE soltarlo? Más estricto que `esMioElegido`, y el
- * porqué es de contrato: `my_bps` suma lo reservado Y lo pagado
- * (`contract-mirror/routes/mesas.js:1274-1284`), así que en una mesa con algún
- * pago el front no puede saber si MI parte de un ítem a medio pagar está
- * pagada. Por eso sólo se ofrece mientras la mesa está `open` y SIN NINGÚN pago
- * (`paid_amount_cents === 0`): ahí lo mío no puede estar pagado. El dueño
- * igual nunca suelta lo pagado; esto es para no OFRECER algo que no pasaría.
- * Hueco anotado en GAPS.md (G-40).
+ * ¿Se OFRECE soltarlo?
+ *
+ * **AF-29 · con el dato del dueño (v2.103.0, cierra G-40):** si llega
+ * `my_releasable_bps` válido, se ofrece si y sólo si es > 0. Es la misma
+ * definición que usa la ruta de soltar (`itemClaims.sqlClaimLiberable`), así que
+ * vale aunque en la mesa haya pagos de otros (`partially_paid`). Lo pagado y lo
+ * que está en medio de un pago nunca entran en ese número.
+ *
+ * **AF-25 · sin el dato (backend anterior):** la regla provisoria. `my_bps`
+ * suma lo reservado Y lo pagado, así que sólo se ofrece con la mesa `open` y
+ * SIN NINGÚN pago (`paid_amount_cents === 0`), donde lo mío no puede estar
+ * pagado. Un `my_releasable_bps` raro cuenta como ausente: se vuelve a esta.
  */
 export function sePuedeSoltar(item: MesaItem, mesa: MesaDetail, esConsumo: boolean): boolean {
-  return esMioElegido(item, esConsumo)
-    && item.locked_by_me
+  if (!esMioElegido(item, esConsumo)) return false;
+  if (bpsValido(item.my_releasable_bps)) {
+    return item.my_releasable_bps > 0
+      && (mesa.status === 'open' || mesa.status === 'partially_paid');
+  }
+  return item.locked_by_me
     && mesa.status === 'open'
     && mesa.paid_amount_cents === 0;
+}
+
+/**
+ * AF-29 · el texto de lo mío. Con `my_paid_bps` > 0 distingue lo pagado de lo
+ * elegido; sin el dato, lo de siempre («Lo elegiste» / «Elegiste ½»).
+ */
+export function etiquetaDeLoMio(item: MesaItem, t: (s: string, ...a: unknown[]) => string): string {
+  const pagado = bpsValido(item.my_paid_bps) ? item.my_paid_bps : 0;
+  if (pagado > 0) {
+    const resto = item.my_bps - pagado;
+    return resto > 0
+      ? t('Pagaste {0} · elegiste {1} más', bpsLabel(pagado), bpsLabel(resto))
+      : t('Ya lo pagaste');
+  }
+  return item.my_bps >= 10000 ? t('Lo elegiste') : t('Elegiste {0}', bpsLabel(item.my_bps));
 }
 
 export function MesaDetailView({
@@ -443,9 +466,7 @@ export function MesaDetailView({
             const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
             const mio = !sel && esMioElegido(i, esConsumo);
             const soltable = mio && soltarDisponible && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
-            const tag = mio
-              ? (i.my_bps >= 10000 ? t('Lo elegiste') : t('Elegiste {0}', bpsLabel(i.my_bps)))
-              : rowTag(state, i, t);
+            const tag = mio ? etiquetaDeLoMio(i, t) : rowTag(state, i, t);
             const myBpsSel = selected.get(i.id) ?? 10000;
             // En partes iguales marcar es informativo y no reserva nada, así
             // que ahí NUNCA se bloquea una fila: el monto no depende de esto.

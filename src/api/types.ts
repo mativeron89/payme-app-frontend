@@ -578,6 +578,14 @@ export interface MesaItem {
   my_bps: number;
   locked_by_me: boolean;
   lock_expires_at: string | null;
+  /**
+   * AF-29 · v2.103.0 (G-40) · aditivos y OPCIONALES: el backend servido hoy no
+   * los manda. `my_paid_bps` = lo mío ya pagado; `my_releasable_bps` = lo que
+   * `items/release` soltaría ahora. Se leen sólo con `bpsValido`: un valor raro
+   * cuenta como ausente y rige la regla anterior (cero pagos en la mesa).
+   */
+  my_paid_bps?: unknown;
+  my_releasable_bps?: unknown;
 }
 
 /** v2.68: pedido de fracción natural (2500|3333|5000|6667|7500|10000). */

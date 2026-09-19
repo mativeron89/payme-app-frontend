@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decodeSoltarConsumo } from './soltarConsumo';
-import { esMioElegido, sePuedeSoltar } from '../screens/MesaDetailView';
+import { esMioElegido, etiquetaDeLoMio, sePuedeSoltar } from '../screens/MesaDetailView';
 import type { MesaDetail, MesaItem } from './types';
 
 describe('AF-25 · decodeSoltarConsumo', () => {
@@ -59,5 +59,53 @@ describe('AF-25 · cuándo se ofrece «Soltar»', () => {
     expect(esMioElegido(ITEM, true)).toBe(true);
     expect(esMioElegido({ ...ITEM, status: 'paid' }, true)).toBe(false);
     expect(esMioElegido(ITEM, false)).toBe(false);
+  });
+});
+
+describe('AF-29 · «Soltar» con el dato del dueño (my_releasable_bps, cierra G-40)', () => {
+  const CON_PAGO_AJENO = { ...MESA, status: 'partially_paid', paid_amount_cents: 5000 } as MesaDetail;
+
+  it('🔴 con el dato > 0 se ofrece AUNQUE la mesa tenga pagos de otros', () => {
+    expect(sePuedeSoltar({ ...ITEM, my_releasable_bps: 10000 }, CON_PAGO_AJENO, true)).toBe(true);
+  });
+
+  it('🔴 con el dato en 0 NO se ofrece, aunque la regla vieja dijera que sí', () => {
+    // Mesa abierta y sin pagos: la regla provisoria lo ofrecería. El dueño dice 0.
+    expect(sePuedeSoltar({ ...ITEM, my_releasable_bps: 0, my_paid_bps: 10000 }, MESA, true)).toBe(false);
+  });
+
+  it('nunca sobre lo pagado entero, ni en «igual», ni con la mesa cerrada', () => {
+    expect(sePuedeSoltar({ ...ITEM, status: 'paid', my_releasable_bps: 10000 }, MESA, true)).toBe(false);
+    expect(sePuedeSoltar({ ...ITEM, my_releasable_bps: 10000 }, MESA, false)).toBe(false);
+    expect(sePuedeSoltar({ ...ITEM, my_releasable_bps: 10000 }, { ...MESA, status: 'fully_paid' } as MesaDetail, true)).toBe(false);
+  });
+
+  it('un dato raro cuenta como ausente: rige la regla vieja (cero pagos)', () => {
+    for (const raro of [-1, 10001, 2.5, '5000', null]) {
+      expect(sePuedeSoltar({ ...ITEM, my_releasable_bps: raro }, MESA, true), String(raro)).toBe(true);
+      expect(sePuedeSoltar({ ...ITEM, my_releasable_bps: raro }, CON_PAGO_AJENO, true), String(raro)).toBe(false);
+    }
+  });
+});
+
+describe('AF-29 · el texto de lo mío distingue lo pagado de lo elegido', () => {
+  const t = (s: string, ...a: unknown[]) => a.reduce<string>((acc, v, i) => acc.replace(`{${i}}`, String(v)), s);
+
+  it('sin pago: lo de siempre', () => {
+    expect(etiquetaDeLoMio(ITEM, t)).toBe('Lo elegiste');
+    expect(etiquetaDeLoMio({ ...ITEM, my_bps: 5000 }, t)).toBe('Elegiste ½');
+  });
+
+  it('con parte pagada y parte elegida: las dos', () => {
+    expect(etiquetaDeLoMio({ ...ITEM, my_bps: 10000, my_paid_bps: 5000, my_releasable_bps: 5000 }, t))
+      .toBe('Pagaste ½ · elegiste ½ más');
+  });
+
+  it('todo lo mío pagado: «Ya lo pagaste»', () => {
+    expect(etiquetaDeLoMio({ ...ITEM, my_bps: 5000, my_paid_bps: 5000, my_releasable_bps: 0 }, t)).toBe('Ya lo pagaste');
+  });
+
+  it('un my_paid_bps raro no inventa un pago', () => {
+    expect(etiquetaDeLoMio({ ...ITEM, my_paid_bps: '5000' }, t)).toBe('Lo elegiste');
   });
 });

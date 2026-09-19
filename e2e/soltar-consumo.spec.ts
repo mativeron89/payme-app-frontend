@@ -43,17 +43,38 @@ async function mesaConUnoElegido(page: Page): Promise<string> {
  * Cambia la mesa EN MEMORIA del mock, que es lo que lee el próximo pedido. Lo
  * mismo por `localStorage` no alcanza sin recargar: el mock lo pisa al guardar.
  */
-async function cambiarMesaEnMemoria(page: Page, code: string, cambio: 'con_pago' | 'cerrada' | 'ya_suelto'): Promise<void> {
+async function cambiarMesaEnMemoria(
+  page: Page,
+  code: string,
+  cambio: 'con_pago' | 'cerrada' | 'ya_suelto' | 'pago_ajeno' | 'mitad_pagada',
+): Promise<void> {
   await page.evaluate(async ([c, k]) => {
     const storePath = '/src/api/mock/store.ts';
     const store = await import(/* @vite-ignore */ storePath) as {
-      state: { mesas: Array<{ code: string; status: string; paid_amount_cents: number; items: Array<{ claims: unknown[] }> }> };
+      state: { mesas: Array<{ code: string; status: string; paid_amount_cents: number; items: Array<{ name: string; status?: string; claims: unknown[] }> }> };
     };
     const mesa = store.state.mesas.find((m) => m.code === c);
     if (!mesa) throw new Error(`mesa ${c} ausente en el mock`);
     if (k === 'con_pago') mesa.paid_amount_cents = 100;
     else if (k === 'cerrada') mesa.status = 'fully_paid';
-    else for (const i of mesa.items) i.claims = [];
+    else if (k === 'ya_suelto') for (const i of mesa.items) i.claims = [];
+    else if (k === 'pago_ajeno') {
+      // Otra persona pagó el Risotto: la mesa queda `partially_paid`.
+      mesa.status = 'partially_paid';
+      mesa.paid_amount_cents = 22000;
+      const risotto = mesa.items.find((i) => i.name === 'Risotto ai Funghi')!;
+      risotto.claims = [{ who: 'guest', fraction_bps: 10000, amount_cents: 22000, status: 'paid' }];
+      (risotto as { status?: string }).status = 'paid';
+    } else {
+      // Pagué la mitad del Tagliatelle y la otra mitad sigue elegida.
+      mesa.status = 'partially_paid';
+      mesa.paid_amount_cents = 9750;
+      const tagliatelle = mesa.items.find((i) => i.name === 'Tagliatelle Bolognese')!;
+      tagliatelle.claims = [
+        { who: 'user', fraction_bps: 5000, amount_cents: 9750, status: 'paid' },
+        { who: 'user', fraction_bps: 5000, amount_cents: null, status: 'locked' },
+      ];
+    }
   }, [code, cambio] as const);
 }
 
@@ -82,7 +103,8 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await expect(page.getByText('No había nada para soltar.')).toHaveCount(0);
   });
 
-  test('🔴 con un pago en la mesa NO se ofrece soltar, aunque sigue diciendo «Lo elegiste»', async ({ page }) => {
+  test('🔴 backend SIN el dato (anterior a v2.103.0): con un pago en la mesa NO se ofrece soltar', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('payme.app.mock.parte_pagada.v1', 'antiguo'));
     const code = await mesaConUnoElegido(page);
     await cambiarMesaEnMemoria(page, code, 'con_pago');
     // El detalle no tiene recarga manual: salir y volver lo vuelve a pedir, sin
@@ -94,6 +116,31 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     const fila = page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first();
     await expect(fila).toContainText('Lo elegiste');
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toHaveCount(0);
+  });
+
+  test('🔴 AF-29 · con el dato del dueño, un pago de OTRO no quita «Soltar»', async ({ page }) => {
+    const code = await mesaConUnoElegido(page);
+    await cambiarMesaEnMemoria(page, code, 'pago_ajeno');
+    await page.goto('/#/');
+    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await page.goto(`/#/mesa/${code}`);
+    // Testigo: el pago ajeno se ve en la mesa.
+    await expect(page.getByRole('button', { name: /^Risotto ai Funghi/ }).first()).toContainText('Pagado');
+    await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
+    await capturar(page, 'soltar-03-con-pago-de-otro');
+    await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
+    await expect(page.getByText('Listo, lo soltaste. Ya lo puede elegir otra persona.')).toBeVisible();
+  });
+
+  test('AF-29 · con parte pagada, la fila dice qué pagaste y qué elegiste', async ({ page }) => {
+    const code = await mesaConUnoElegido(page);
+    await cambiarMesaEnMemoria(page, code, 'mitad_pagada');
+    await page.goto('/#/');
+    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await page.goto(`/#/mesa/${code}`);
+    await expect(page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first()).toContainText('Pagaste ½ · elegiste ½ más');
+    // Lo elegido que queda se puede soltar; lo pagado, no (el dueño suelta sólo lo `locked`).
+    await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
   });
 
   test('si la mesa dejó de aceptar cambios, lo dice con texto neutro', async ({ page }) => {

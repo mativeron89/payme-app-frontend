@@ -828,4 +828,7 @@ export const EN: Record<string, string> = {
   "Consumo por tipo de cocina: {0}": "Consumption by type of cuisine: {0}",
   "Gasto por tipo de cocina: {0}": "Spending by type of cuisine: {0}",
   "Otra cocina": "Other cuisine",
+  // AF-29 · lo mío pagado y elegido (cierra G-40).
+  "Pagaste {0} · elegiste {1} más": "You paid {0} · chose {1} more",
+  "Ya lo pagaste": "You already paid for this",
 };
