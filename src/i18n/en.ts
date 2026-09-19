@@ -818,4 +818,5 @@ export const EN: Record<string, string> = {
   "Todavía no se sumó nadie.": "Nobody has joined yet.",
   "Invitado": "Guest",
   "Cuenta eliminada": "Deleted account",
+  "Soltar todavía no está disponible.": "Releasing isn't available yet.",
 };

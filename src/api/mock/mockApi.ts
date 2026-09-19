@@ -1896,6 +1896,11 @@ export async function mockReleaseItems(
   itemIds: readonly string[],
   identity: MockIdentity,
 ): Promise<{ released: Array<{ item_id: string; fraction_bps: number }> }> {
+  // Costura: `antiguo` = backend anterior a v2.100.0, sin la ruta (404 sin item_id).
+  const antiguo = (() => {
+    try { return localStorage.getItem('payme.app.mock.soltar.v1') === 'antiguo'; } catch { return false; }
+  })();
+  if (antiguo) return fail(404, 'not_found');
   const mesa = findMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   const ids = [...itemIds];

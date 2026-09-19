@@ -99,6 +99,8 @@ export interface MesaDetailViewProps {
   onReleaseItem: (id: string) => void;
   /** AF-25 · el ítem que se está soltando, o `null`: apaga el botón mientras viaja. */
   soltando: string | null;
+  /** AF-25 · `false` tras un 404 de ruta (backend anterior a v2.100.0). */
+  soltarDisponible: boolean;
   /**
    * AF-25 · n72 · quiénes se sumaron. `oculto` para quien no organiza y para un
    * backend anterior (404): la sección no aparece. La red la hace `MesaScreen`.
@@ -197,6 +199,7 @@ export function MesaDetailView({
   onToggleItem,
   onReleaseItem,
   soltando,
+  soltarDisponible,
   quienesSeSumaron,
   onReintentarQuienes,
   onSetFraction,
@@ -439,7 +442,7 @@ export function MesaDetailView({
             // válido no se ofrece tomar nada.
             const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
             const mio = !sel && esMioElegido(i, esConsumo);
-            const soltable = mio && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
+            const soltable = mio && soltarDisponible && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
             const tag = mio
               ? (i.my_bps >= 10000 ? t('Lo elegiste') : t('Elegiste {0}', bpsLabel(i.my_bps)))
               : rowTag(state, i, t);

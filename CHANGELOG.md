@@ -59,6 +59,16 @@ foto; la foto después» (n72).
   soltarlo. Intenta de nuevo.» para el resto. **Sin doble envío:** un `ref` corta
   antes del primer render y el botón queda deshabilitado después. Con un pago sin
   confirmar no se suelta nada (B-06). No toca cobros.
+- **Contra el backend actual (2.99.0, sin la ruta)** — agregado en un commit sucesor
+  del ítem 2. El dueño no publica una capability de «soltar», así que no se sabe
+  antes. «Lo elegiste» funciona igual, porque usa campos que ya existían. El primer
+  toque en «Soltar» recibe un 404 de ruta, **sin `item_id`** a diferencia de
+  `item_not_found`: se dice «Soltar todavía no está disponible.» y «Soltar» deja de
+  ofrecerse en esa mesa, en vez de repetir un «intenta de nuevo» que no es cierto.
+  Publicando en el orden del aviso (ítem 1, después el backend, después los ítems 2
+  y 3) esto no llega a verse; cubre un rollback. Costura del mock:
+  `payme.app.mock.soltar.v1 = antiguo`. Un 404 `mesa_not_found` también apaga
+  «Soltar», y es aceptable porque la mesa ya no está.
 - **Contrato y mock:** `api.releaseItems` → `POST /mesas/:code/items/release
   {item_ids}` con un decodificador estricto (`src/api/soltarConsumo.ts`).
   `mockReleaseItems` sigue al dueño: rechaza en su mismo orden, sólo suelta lo

@@ -111,6 +111,38 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await expect(page.getByText('Listo, lo soltaste. Ya lo puede elegir otra persona.')).toHaveCount(0);
   });
 
+  test('backend anterior sin la ruta (404): lo dice una vez y deja de ofrecer «Soltar»', async ({ page }) => {
+    await mesaConUnoElegido(page);
+    await page.evaluate(() => localStorage.setItem('payme.app.mock.soltar.v1', 'antiguo'));
+    await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
+    await expect(page.getByText('Soltar todavía no está disponible.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toHaveCount(0);
+    // Lo elegido sigue diciéndose: el campo existe en el backend anterior.
+    await expect(page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first()).toContainText('Lo elegiste');
+    await expect(page.getByText('No pudimos soltarlo. Intenta de nuevo.')).toHaveCount(0);
+  });
+
+  test('un 404 de ÍTEM (item_not_found) no se confunde con un backend sin la ruta', async ({ page }) => {
+    const code = await mesaConUnoElegido(page);
+    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Soltar Risotto ai Funghi' })).toBeVisible();
+    // El Tagliatelle deja de existir en la mesa del mock: el dueño contestaría
+    // 404 `item_not_found` CON `item_id`.
+    await page.evaluate(async (c) => {
+      const storePath = '/src/api/mock/store.ts';
+      const store = await import(/* @vite-ignore */ storePath) as {
+        state: { mesas: Array<{ code: string; items: Array<{ name: string }> }> };
+      };
+      const mesa = store.state.mesas.find((m) => m.code === c)!;
+      mesa.items = mesa.items.filter((i) => i.name !== 'Tagliatelle Bolognese');
+    }, code);
+    await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
+    await expect(page.getByText('No pudimos soltarlo. Intenta de nuevo.')).toBeVisible();
+    await expect(page.getByText('Soltar todavía no está disponible.')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Soltar Risotto ai Funghi' })).toBeVisible();
+  });
+
   test('en «partes iguales» no se ofrece soltar', async ({ page }) => {
     await conRielApagado(page);
     await ingresar(page);

@@ -334,6 +334,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   /** AF-25 · n80 · el ítem que se está soltando; `null` sin pedido en vuelo. */
   const [soltando, setSoltando] = useState<string | null>(null);
   const soltandoRef = useRef(false);
+  /**
+   * AF-25 · un backend anterior a v2.100.0 no tiene la ruta: contesta 404 SIN
+   * `item_id` (el `item_not_found` del dueño sí lo trae). El dueño no publica una
+   * capability de «soltar», así que no se puede saber antes; después del primer
+   * 404 de ruta, «Soltar» deja de ofrecerse en esta mesa en vez de fallar en
+   * cada toque con un «intenta de nuevo» que no es cierto.
+   */
+  const [soltarNoDisponible, setSoltarNoDisponible] = useState(false);
   const [lockTokens, setLockTokens] = useState<string[]>([]);
   /**
    * §1.5 bis · 🔴 LA PROPINA NACE SIN ELEGIR.
@@ -667,10 +675,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         ? t('Listo, lo soltaste. Ya lo puede elegir otra persona.')
         : t('No había nada para soltar.'));
     } catch (err) {
-      const { code: ec } = extractApiError(err);
-      toast(ec === 'mesa_not_active'
-        ? t('La mesa ya no acepta cambios.')
-        : t('No pudimos soltarlo. Intenta de nuevo.'));
+      const { code: ec, status, extra } = extractApiError(err);
+      if (status === 404 && typeof extra.item_id !== 'string') {
+        setSoltarNoDisponible(true);
+        toast(t('Soltar todavía no está disponible.'));
+      } else {
+        toast(ec === 'mesa_not_active'
+          ? t('La mesa ya no acepta cambios.')
+          : t('No pudimos soltarlo. Intenta de nuevo.'));
+      }
     } finally {
       soltandoRef.current = false;
       setSoltando(null);
@@ -2377,6 +2390,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       onToggleItem={toggleItem}
       onReleaseItem={releaseItem}
       soltando={soltando}
+      soltarDisponible={!soltarNoDisponible}
       quienesSeSumaron={quienes}
       onReintentarQuienes={cargarQuienes}
       onSetFraction={setFraction}
