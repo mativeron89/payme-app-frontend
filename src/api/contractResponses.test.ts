@@ -26,11 +26,18 @@ describe('OCR v2 · merchant cerrado y v1 compatible', () => {
       contract_version: 2,
       merchant: { name: 'Tacos El Güero', rfc: 'TEG010101AB1' },
     });
+    expect(ocrResponse({
+      contract_version: 2,
+      merchant: { name: 'Café Norte' },
+      ...base,
+    }).merchant).toEqual({ name: 'Café Norte' });
   });
 
   it.each([
     { contract_version: 2, merchant: {}, ...base },
     { contract_version: 2, merchant: { name: ' Tacos ' }, ...base },
+    { contract_version: 2, merchant: { name: 'Cafe\u0301 Central' }, ...base },
+    { contract_version: 2, merchant: { name: 'Tacos  El Güero' }, ...base },
     { contract_version: 2, merchant: { rfc: 'teg-010101-ab1' }, ...base },
     { contract_version: 2, merchant: { address: 'dato prohibido' }, ...base },
     { contract_version: 2, merchant: { buyer_rfc: 'XAXX010101000' }, ...base },

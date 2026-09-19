@@ -196,6 +196,15 @@ function safeNonNegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
+function normalizedMerchantName(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const name = value.normalize('NFC').trim().replace(/\s+/gu, ' ');
+  return name && name.length <= 200
+    && ![...name].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)
+    ? name
+    : null;
+}
+
 /** Replica el validador publicado por el owner, sin inferir señales ausentes. */
 export function ocrResponse(value: unknown): OcrResponse {
   const body = record(value);
@@ -223,8 +232,7 @@ export function ocrResponse(value: unknown): OcrResponse {
       : null;
     if (!raw || Object.keys(raw).length === 0
         || Object.keys(raw).some((key) => key !== 'name' && key !== 'rfc')
-        || (name !== undefined && (typeof name !== 'string' || !name || name !== name.trim()
-          || name.length > 200 || [...name].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)))
+        || (name !== undefined && normalizedMerchantName(name) !== name)
         || (rfc !== undefined && (typeof rfc !== 'string' || normalizedRfc !== rfc
           || !/^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/u.test(rfc)))) {
       throw new ContractResponseError('ocr');

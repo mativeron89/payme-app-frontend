@@ -11,6 +11,17 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.180.1 — Paridad canónica del comercio OCR (2026-09-19)
+
+Orden `AF-N179-RECEPCION-FIX1-20260919`, base `e92de07`. **Sin push,
+sin deploy, sin GREEN.** Roadmap n179.
+
+- El decoder OCR v2 rechaza `merchant.name` cuando no está ya en NFC o tiene
+  espacios por colapsar, igual que `normalizeName` del owner fijo `9868821e`;
+  no normaliza silenciosamente respuestas inválidas.
+- Se conservan el contrato v1, los nombres canónicos, RFC y todas las guardas
+  cerradas de la entrega `0.180.0`.
+
 ## 0.180.0 — Ticket sin QR · mesa privada sin cobros (2026-09-19)
 
 Orden `AF-N179-TICKET-IMPLEMENTACION-20260919`, base `13800c9`. **Sin push,
