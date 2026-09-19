@@ -11,7 +11,7 @@ test.use({ viewport: { width: 390, height: 844 } });
 
 async function applyPrivateVariant(
   page: import('@playwright/test').Page,
-  variant: 'off' | 'absent' | 'malformed' | 'superseded_notice' | 'unknown_notice' | 'aviso_250' | 'aviso_251' | 'aviso_252',
+  variant: 'off' | 'absent' | 'malformed' | 'superseded_notice' | 'unknown_notice' | 'aviso_250' | 'aviso_251' | 'aviso_252' | 'aviso_253',
 ): Promise<void> {
   await page.evaluate(async (selected) => {
     const apiPath = '/src/api/index.ts';
@@ -59,7 +59,8 @@ async function applyPrivateVariant(
     const noticeVersion = selected === 'superseded_notice'
       ? '2.2.0'
       : selected === 'aviso_250' ? '2.5.0' : selected === 'aviso_251' ? '2.5.1'
-        : selected === 'aviso_252' ? '2.5.2' : '9.9.9';
+        : selected === 'aviso_252' ? '2.5.2'
+        : selected === 'aviso_253' ? '2.5.3' : '9.9.9';
     feature.applyPrivateFeatureConfig({
       ...config,
       features: {
@@ -190,6 +191,19 @@ test('AF-25 · con el aviso 2.5.2 del dueño (v2.101.0) la edición de nombre y 
   await expect(page.getByRole('button', { name: 'Editar nombre' })).toHaveCount(0);
   // …y 2.5.2 la vuelve a encender.
   await applyPrivateVariant(page, 'aviso_252');
+  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cambiar foto de perfil' })).toBeVisible();
+});
+
+test('AF-32 · con el aviso 2.5.3 del dueño (v2.111.0) la edición de nombre y foto sigue viva', async ({ page }) => {
+  await ingresar(page);
+  await page.getByRole('button', { name: 'Más', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
+  // Testigo: una versión que el front NO presenta apaga la edición…
+  await applyPrivateVariant(page, 'unknown_notice');
+  await expect(page.getByRole('button', { name: 'Editar nombre' })).toHaveCount(0);
+  // …y 2.5.3 la vuelve a encender.
+  await applyPrivateVariant(page, 'aviso_253');
   await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Cambiar foto de perfil' })).toBeVisible();
 });

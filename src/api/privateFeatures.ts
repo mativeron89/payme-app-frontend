@@ -43,7 +43,13 @@ const PENDING: PrivateFeatureState = { enabled: false, status: 'pending', notice
 // 2026-09-19 (AF-25): se PRESENTA 2.5.2 (el organizador ve quiénes se sumaron),
 // que el dueño publica con n72 (`d073e177…`, rama local sin publicar). Mismo
 // orden: el front va ANTES. Se AGREGA: 2.5.1 es lo último que publicó el dueño.
-const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1', '2.5.0', '2.5.1', '2.5.2']);
+//
+// 2026-09-19 (AF-32): se PRESENTA 2.5.3 (la foto de quienes se sumaron, sólo
+// para el organizador y nunca de menores o sin fecha), aprobado por Mati
+// (decisión `17d436dd…`). El dueño lo publica en `293dae75…` (rama local sin
+// publicar). Mismo orden: el front va ANTES. Se AGREGA: 2.5.2 es lo que sirve
+// producción hoy.
+const PRESENTABLE_NOTICE_VERSIONS = new Set<string>(['2.3.0', '2.4.1', '2.5.0', '2.5.1', '2.5.2', '2.5.3']);
 
 /** Seam nominal: sólo Vitest puede declarar presentable `test-only`. */
 export const TEST_PRESENTABLE_NOTICES = Symbol('private-feature-test-notice-seam');

@@ -120,6 +120,18 @@ const PROFILE_252 = {
   notice_version: '2.5.2',
 };
 
+/** AF-32 · 2.5.3 (la foto para el organizador) también se presenta. */
+const PROFILE_253 = {
+  ...PROFILE_ON,
+  notice_version: '2.5.3',
+};
+
+/** AF-32 · y contra 2.5.3: un sufijo o un dígito de más NO se presentan. */
+const PROFILE_NEAR_MISS_253 = [
+  { ...PROFILE_ON, notice_version: '2.5.30' },
+  { ...PROFILE_ON, notice_version: '2.5.3-rc' },
+];
+
 /** AF-25 · y contra 2.5.2: un sufijo o un dígito de más NO se presentan. */
 const PROFILE_NEAR_MISS_252 = [
   { ...PROFILE_ON, notice_version: '2.5.20' },
@@ -196,8 +208,11 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
     // AF-25 · y 2.5.2…
     expect(readProfileIdentityCapability(config(PROFILE_252)))
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.2' });
+    // AF-32 · y 2.5.3…
+    expect(readProfileIdentityCapability(config(PROFILE_253)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.3' });
     // …sin sus near-miss…
-    for (const cerca of [...PROFILE_NEAR_MISS_250, ...PROFILE_NEAR_MISS_251, ...PROFILE_NEAR_MISS_252]) {
+    for (const cerca of [...PROFILE_NEAR_MISS_250, ...PROFILE_NEAR_MISS_251, ...PROFILE_NEAR_MISS_252, ...PROFILE_NEAR_MISS_253]) {
       expect(readProfileIdentityCapability(config(cerca)).status, cerca.notice_version).toBe('notice_unavailable');
     }
     // …y una versión FUTURA sigue apagando.

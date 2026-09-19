@@ -11,6 +11,27 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.176.0 — Aviso 2.5.3, la foto en «Quiénes se sumaron» y «por momento del día» (2026-09-19)
+
+Orden `APP-ROSTER-PHOTO-2-5-3-AND-DAYPARTS-AF-32-20260919`, base `f587e36` (= `origin/main`,
+0.175.0). **Sin push, sin deploy, sin GREEN.** Decisiones de Mati: aviso 2.5.3 «Aprobado
+tal cual», con la foto de menores o sin fecha oculta (`17d436dd…`), y los momentos
+«Desayuno, Comida, Tarde, Cena» (`fab659b2…`).
+
+- **Espejo, en un commit propio (`b670ae6`):** dueño v2.111.0, inventario en
+  `91d1e74` y contenido en `293dae7`, local y sin publicar. El remoto del dueño está
+  en `81003fe` (v2.105.0). Cambian `routes/account.js`, `routes/mesas.js`,
+  `schemas/index.js` y `services/profileIdentity.js` (`notice_version: '2.5.3'`),
+  con los tres gates verdes.
+
+### Ítem 1 · reconocer el Aviso 2.5.3 (va primero y se publica solo)
+
+- `PRESENTABLE_NOTICE_VERSIONS` suma `'2.5.3'` y conserva todas las anteriores;
+  `2.5.2` es lo que sirve producción.
+- Tests: 2.5.3 presentado; los casi-iguales `'2.5.30'` y `'2.5.3-rc'` no; el
+  un-toque manda `'2.5.3'` tal cual; e2e de perfil.
+- Mutantes: quitar 2.5.3 y quitar 2.5.2, en unitario y e2e. Los cuatro mueren.
+
 ## 0.175.0 — Período, «Qué comes» (2c) y «Evolución» (2f) (2026-09-19)
 
 Orden `APP-STATS-DISHES-EVOLUTION-PERIOD-AF-31-20260919`, base `36d8fbe` (= `origin/main`,
