@@ -87,10 +87,11 @@ function familiasDinamicas(): Record<string, string[]> {
     // (ya cubierto porque es un literal `t('…')` propio). Corregido 2026-09-18:
     // ver nota arriba, no es texto de backend.
     'ERROR_TEXT (LoginScreen)': deModulo('../screens/LoginScreen.tsx', 'const ERROR_TEXT'),
-    // EstadisticasScreen.tsx · `nombreDeCocina()` → `t(categoryLabel(…))`, con
+    // utils/textosDeEstadisticas.ts · `nombreDeCocina()` → `t(categoryLabel(…))`, con
     // `null` guardado antes de llamar a `t()` (no aplica acá). Corregido
     // 2026-09-18: ver nota arriba, no es texto de backend. AF-26 (2026-09-19):
-    // el mismo sitio sirve también al anillo de cocinas; sigue siendo UNO.
+    // el mismo sitio sirve también al anillo de cocinas; AF-29: y a «Tus
+    // restaurantes», movido a `utils/` para las dos pantallas. Sigue siendo UNO.
     'categoryLabel (utils/labels)': deModulo('../utils/labels.ts', 'const CATEGORIA'),
   };
 }

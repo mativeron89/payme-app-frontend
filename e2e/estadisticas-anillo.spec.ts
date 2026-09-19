@@ -48,7 +48,9 @@ test.describe('AF-26 · Mis estadísticas · inicio con anillo', () => {
     await expect(tarjeta(page).locator('circle')).toHaveCount(4);
     // Se retiró el cartel, y las secciones de siempre siguen debajo.
     await expect(page.getByText('Todavía no existe en el contrato')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Tus restaurantes' })).toBeVisible();
+    // AF-29: con el acceso a 2b disponible, «Tus restaurantes» es un acceso y
+    // ya no la sección vieja de barras (que queda sólo con un backend anterior).
+    await expect(page.getByRole('button', { name: /^Tus restaurantes/ })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Mis estadísticas', exact: true })).toBeAttached();
     await capturar(page, 'estadisticas-02-cuatro-cocinas');
   });

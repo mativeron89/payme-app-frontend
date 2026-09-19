@@ -831,4 +831,20 @@ export const EN: Record<string, string> = {
   // AF-29 · lo mío pagado y elegido (cierra G-40).
   "Pagaste {0} · elegiste {1} más": "You paid {0} · chose {1} more",
   "Ya lo pagaste": "You already paid for this",
+  // AF-29 · 2b «Tus restaurantes».
+  "Cargando tus restaurantes": "Loading your restaurants",
+  "No pudimos cargar tus restaurantes": "We couldn't load your restaurants",
+  "Lo que elegiste en tus mesas.": "What you chose at your tables.",
+  "Lo que pagaste, descontando reembolsos. Cada visita incluye la propina; los platos, no.": "What you paid, minus refunds. Each visit includes the tip; the dishes don't.",
+  "Tu parte, en partes iguales": "Your share, split equally",
+  "lugar": "place",
+  "lugares": "places",
+  "este mes": "this month",
+  "Dom": "Sun",
+  "Lun": "Mon",
+  "Mar": "Tue",
+  "Mié": "Wed",
+  "Jue": "Thu",
+  "Vie": "Fri",
+  "Sáb": "Sat",
 };

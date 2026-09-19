@@ -5328,6 +5328,185 @@ body {
   text-align: right;
 }
 
+/* ── AF-29 · 2b «Tus restaurantes» y el acceso de 2a ─────────────────────
+   Medidas del diseño 2b: el ancho dice de qué depende cada cosa. Tarjeta del
+   restaurante a lo ancho (blanca), la visita una burbuja --bg 28px más angosta,
+   y lo consumido una blanca con borde 24px más angosta que la visita. */
+.stat-acceso {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 60px;
+  margin-bottom: 10px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 30, 59, 0.06);
+  text-align: left;
+  cursor: pointer;
+}
+
+.stat-acceso-texto,
+.rest-texto {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.stat-acceso-titulo {
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.stat-acceso-sub,
+.rest-sub {
+  font-size: 12.5px;
+  color: var(--gray-d);
+}
+
+.rest-chev {
+  flex: none;
+  color: var(--teal-txt);
+  transition: none;
+}
+
+.rest-chev.abierto {
+  transform: rotate(180deg);
+}
+
+.rest-chev.derecha {
+  transform: rotate(-90deg);
+}
+
+.rest-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rest-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 30, 59, 0.06);
+}
+
+.rest-fila,
+.rest-visita-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rest-nombre {
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.rest-monto {
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+}
+
+.rest-visitas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rest-visita {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: calc(100% - 28px);
+  margin: 0 auto;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: var(--bg);
+}
+
+.rest-visita-fecha {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.rest-visita-hora {
+  font-size: 13px;
+  color: var(--gray-d);
+}
+
+.rest-visita-monto {
+  min-width: 66px;
+  text-align: right;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.rest-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  width: calc(100% - 24px);
+  margin: 0 auto 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  list-style: none;
+}
+
+.rest-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--navy);
+}
+
+.rest-item-frac {
+  min-width: 14px;
+  font-size: 12.5px;
+  color: var(--gray-d);
+}
+
+.rest-item-nombre {
+  flex: 1;
+  min-width: 0;
+}
+
+.rest-pie {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: var(--gray-d);
+}
+
 .stat-hero {
   padding: var(--sp-6) var(--sp-4);
   border-radius: var(--r-lg);

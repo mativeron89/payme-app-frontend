@@ -8,11 +8,13 @@ import { useAuth } from '../auth/AuthContext';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderBack } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
-import { goBack } from '../router';
+import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
-import { categoryLabel } from '../utils/labels';
 import { fullName } from '../utils/identity';
 import { decodeConsumoDelMes, type ConsumoDelMes } from '../api/consumoDelMes';
+import { extractApiError } from '../api/errors';
+import { visitasDelMes, type TusRestaurantes } from '../api/tusRestaurantes';
+import { lugaresYVisitas, nombreDeCocina, visitasTexto } from '../utils/textosDeEstadisticas';
 import { colorDeFila, porcentajesEnteros, porcionesDelAnillo, RADIO_ANILLO, GROSOR_ANILLO } from '../utils/anillo';
 
 /**
@@ -56,13 +58,28 @@ export function EstadisticasScreen() {
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [fallo, setFallo] = useState(false);
 
+  /**
+   * AF-29 · el acceso a «Tus restaurantes» (2b) depende de que el dueño tenga la
+   * ruta: 404 ⇒ backend anterior ⇒ el acceso NO se dibuja y queda la sección
+   * vieja de barras. Cualquier otro resultado (datos, vacío, 413 o red) dibuja el
+   * acceso: la pantalla 2b sabe mostrar su error con «Reintentar».
+   */
+  const [restaurantes, setRestaurantes] = useState<AccesoRestaurantes>({ estado: 'cargando' });
+
   const cargar = useCallback(() => {
     setFallo(false);
     setStats(null);
+    setRestaurantes({ estado: 'cargando' });
     api
       .getStats()
       .then(setStats)
       .catch(() => setFallo(true));
+    api
+      .getStatsRestaurants()
+      .then((datos) => setRestaurantes({ estado: 'listo', datos }))
+      .catch((err) => {
+        setRestaurantes(extractApiError(err).status === 404 ? { estado: 'no_disponible' } : { estado: 'sin_resumen' });
+      });
   }, []);
 
   useEffect(() => {
@@ -85,6 +102,7 @@ export function EstadisticasScreen() {
    */
   const consumo = stats ? decodeConsumoDelMes(stats.consumption_month) : null;
   const conAnillo = consumo !== null && consumo.totalCents > 0;
+  const accesoVisible = restaurantes.estado === 'listo' || restaurantes.estado === 'sin_resumen';
 
   return (
     <div className="screen has-appbar">
@@ -132,6 +150,7 @@ export function EstadisticasScreen() {
           </div>
         ) : (
           <>
+            {accesoVisible && <AccesoTusRestaurantes acceso={restaurantes} />}
             {conAnillo && <AnilloPorCocina consumo={consumo} />}
             {!conAnillo && sinActividad ? (
               /* Vacío REAL, sin borde. NO se pinta "$0.00 gastado": no gastar
@@ -163,7 +182,9 @@ export function EstadisticasScreen() {
                 </div>
                 )}
 
-                {stats.top_restaurants.length > 0 && (
+                {/* La sección vieja (barras por pagos) queda SÓLO si el acceso nuevo
+                    no está: con él, «Tus restaurantes» es la pantalla 2b. */}
+                {!accesoVisible && restaurantes.estado !== 'cargando' && stats.top_restaurants.length > 0 && (
                   <>
                     <h2 className="stat-sect">{t('Tus restaurantes')}</h2>
                     <div className="card card-p">
@@ -220,21 +241,6 @@ export function EstadisticasScreen() {
       <AppBottomBar active={null} />
     </div>
   );
-}
-
-/**
- * El nombre de una cocina, traducido. `labels.ts` es constante de MÓDULO:
- * devuelve español y se traduce acá, en UN solo `t()` no literal para las dos
- * superficies que lo usan (el chip de favorita y el anillo).
- */
-function nombreDeCocina(category: string | null | undefined, t: (s: string, ...a: unknown[]) => string): string | null {
-  const crudo = categoryLabel(category);
-  return crudo === null ? null : t(crudo);
-}
-
-/** Visitas con su palabra: «1 visita», «3 visitas». */
-function visitasTexto(n: number, t: (s: string, ...a: unknown[]) => string): string {
-  return `${n} ${n === 1 ? t('visita') : t('visitas')}`;
 }
 
 /**
@@ -325,5 +331,34 @@ function AnilloPorCocina({ consumo }: { consumo: ConsumoDelMes }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+type AccesoRestaurantes =
+  | { readonly estado: 'cargando' }
+  | { readonly estado: 'no_disponible' }
+  | { readonly estado: 'sin_resumen' }
+  | { readonly estado: 'listo'; readonly datos: TusRestaurantes };
+
+/**
+ * AF-29 · el acceso de 2a a «Tus restaurantes». Es el único de los cuatro del
+ * diseño que se dibuja: los otros (Qué comés, Evolución) todavía no tienen
+ * pantalla. Con datos dice cuántos lugares y visitas; sin ellos, sólo el título.
+ */
+function AccesoTusRestaurantes({ acceso }: { acceso: AccesoRestaurantes }) {
+  const { t } = useIdioma();
+  const datos = acceso.estado === 'listo' ? acceso.datos : null;
+  return (
+    <button type="button" className="stat-acceso" onClick={() => navigate('restaurantes')}>
+      <span className="stat-acceso-texto">
+        <span className="stat-acceso-titulo">{t('Tus restaurantes')}</span>
+        {datos && datos.restaurants.length > 0 && (
+          <span className="stat-acceso-sub">
+            {lugaresYVisitas(datos.restaurants.length, visitasDelMes(datos), t)} {t('este mes')}
+          </span>
+        )}
+      </span>
+      <Icon name="chevron-down" size={20} className="rest-chev derecha" />
+    </button>
   );
 }

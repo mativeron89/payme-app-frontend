@@ -34,6 +34,7 @@ import {
 import { decodeMisMesas, type PaginaMisMesas } from './misMesas';
 import { decodeSoltarConsumo, type ConsumoSoltado } from './soltarConsumo';
 import { decodeParticipantes, type Participante } from './participantes';
+import { decodeTusRestaurantes, type TusRestaurantes } from './tusRestaurantes';
 import { extractApiError } from './errors';
 import {
   assertProfileIdentityEnabled,
@@ -349,6 +350,8 @@ export interface Api {
   acceptInvitationLink(token: string): Promise<AcceptInvitationLinkResponse>;
   // stats
   getStats(): Promise<StatsResponse>;
+  /** AF-29 · n165 · «Tus restaurantes» del mes (2b). 404 = backend anterior. */
+  getStatsRestaurants(): Promise<TusRestaurantes>;
   // social
   getFriends(): Promise<FriendsResponse>;
   /**
@@ -748,6 +751,8 @@ const realApi: Api = {
     ),
 
   getStats: () => httpRequest<StatsResponse>('GET', '/account/stats'),
+  getStatsRestaurants: async () =>
+    decodeTusRestaurantes(await httpRequest<unknown>('GET', '/account/stats/restaurants')),
 
   getFriends: () => httpRequest<FriendsResponse>('GET', '/friends'),
   addFriend: async (query) => friendRequestCreatedResponse(
@@ -948,6 +953,7 @@ const mockApi: Api = {
     acceptInvitationLinkResponse(await mock.mockAcceptInvitationLink(token)),
 
   getStats: () => mock.mockStats(),
+  getStatsRestaurants: async () => decodeTusRestaurantes(await mock.mockStatsRestaurants()),
 
   getFriends: () => mock.mockFriends(),
   addFriend: async (query) => friendRequestCreatedResponse(await mock.mockAddFriend(query)),

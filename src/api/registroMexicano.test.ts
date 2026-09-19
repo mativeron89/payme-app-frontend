@@ -142,6 +142,8 @@ const ESPANOL_LEGITIMO = new Set([
   'automático', 'teléfono', 'búsqueda', 'cámara', 'país', 'atención', 'posición',
   // Nombres propios del seed.
   'nicolás', 'josé', 'maría',
+  // AF-29 · la abreviatura de miércoles en «Mié 16/09» (2b, «Tus restaurantes»).
+  'mié',
   // Pretéritos de primera persona (aparecen en prosa de tests).
   'sumé', 'bloqueé', 'tomé', 'encontré', 'entré', 'pagué',
 ]);

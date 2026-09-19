@@ -44,6 +44,67 @@ n171 y n165; decisión de Mati «por etapas».
   `partially_paid`, ofrecer lo pagado, un dato raro que no cae a la regla vieja,
   la etiqueta sin lo pagado (unitario y e2e) y un mock que no publica lo liberable.
 
+### Ítem 2 · pantalla «Tus restaurantes» (2b, n165)
+
+- **Ruta nueva `#/restaurantes`** (`src/router.ts`, `src/App.tsx`), con
+  `GET /api/account/stats/restaurants` (dueño v2.104.0). Se abre desde Mis
+  estadísticas y vuelve con ← Volver, también si se entró directo por la ruta.
+- **Tres niveles que se abren de a uno:**
+  - el restaurante, con el color de su cocina en el anillo de 2a (la misma regla
+    de orden del dueño), el nombre, «Italiana · 3 visitas» y el monto;
+  - la visita, con «Sáb 12/09», la hora local y el monto;
+  - lo que consumiste: plato, fracción si no es entero y monto. En «igual», «Tu
+    parte, en partes iguales».
+
+  Abrir otro restaurante cierra el primero y su visita. Anchos y estilos del
+  diseño 2b: tarjeta, burbuja 28px más angosta y la de lo consumido 24px más.
+- **Burbuja** como en 2a: «Este mes», el total y «N lugares · M visitas».
+- **Pie por `basis`:** «Lo que elegiste en tus mesas.» o, sólo con pagos, «Lo que
+  pagaste, descontando reembolsos. Cada visita incluye la propina; los platos,
+  no.»
+- **Decodificador de claves exactas** (`src/api/tusRestaurantes.ts`): un campo de
+  más en cualquier nivel se rechaza. Se exigen las sumas que el dueño declara
+  (total = restaurantes, restaurante = visitas, `visits_count` = visitas); los
+  platos NO se suman contra la visita, porque con pagos la visita incluye la
+  propina.
+- **Estados:** cargando; error con «Reintentar» (500, 413
+  `stats_month_too_large` o un rechazo del decodificador: nunca una lista a
+  medias); vacío; lista.
+- **El acceso en Mis estadísticas:** «Tus restaurantes» con «N lugares · M visitas
+  este mes». Es el único de los cuatro de 2a que se dibuja. Con un backend
+  anterior (404) no aparece y queda la sección vieja de barras; si el acceso está,
+  la reemplaza.
+- **Textos compartidos** en `src/utils/textosDeEstadisticas.ts`: `nombreDeCocina`
+  (sigue siendo el único `t()` no literal de las cocinas), `visitasTexto` y
+  `lugaresYVisitas`. Así 2a y 2b no se importan entre sí.
+- **Mock** coherente con `consumption_month`: un restaurante por cocina, con los
+  mismos montos, y el mismo total en 2a y 2b (un e2e lo exige). Costura
+  `payme.app.mock.restaurantes.v1`: `antiguo` (404), `error` (500) y `grande`
+  (413).
+- **Declarado, no se hizo:**
+  - «Ver comprobante» del diseño, porque no tiene destino en esta orden.
+  - El barrio del restaurante («Roma Norte»), porque el contrato no lo manda.
+- **Guardas tocadas (declaradas):**
+  - `e2e/rutas-montan-pantalla.spec.ts`: la ruta nueva en `ESPERADO`.
+  - `AppHeader.identity.test.tsx`: 17 → 18 montajes autenticados.
+  - `registroMexicano.test.ts`: `mié` en la allowlist de español legítimo, que es
+    la abreviatura de miércoles.
+  - `traduccion.test.ts`: la ubicación de `nombreDeCocina`.
+  - `e2e/estadisticas-anillo.spec.ts` (AF-26): donde afirmaba la sección vieja
+    «Tus restaurantes», ahora afirma el acceso que la reemplaza. En la primera
+    corrida completa ese caso dio rojo, y el log quedó en `gates/24-*-primera-1-rojo`.
+- **Tests:** decodificador (7), `partesDeFecha` (3) y e2e (8): abrir y volver,
+  tres niveles de a uno, el pie con pagos, vacío, 404, error y 413 con
+  reintento, y la entrada directa. Capturas: cerrada, con un restaurante abierto,
+  con una visita abierta y vacía.
+- **Mutantes:** 12. Tres sobrevivieron la primera vez y se corrigieron los tests:
+  - la suma del restaurante: el caso también rompía el total y lo tapaba;
+  - «Volver» a Inicio: con historial nunca se ve el fallback;
+  - la visita que no se cerraba al cambiar de restaurante: ningún caso volvía al
+    primero.
+
+  Re-plantados, los 12 mueren.
+
 ## 0.173.0 — «Mis estadísticas», etapa 1: inicio con anillo (2026-09-19)
 
 Orden `APP-STATS-HOME-RING-AF-26-20260919`, base `048b38d` (= `origin/main`,

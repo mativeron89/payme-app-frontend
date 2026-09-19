@@ -2727,16 +2727,19 @@ export async function mockAcceptInvitation(id: string): Promise<{ accepted: bool
  * `vacio` (total 0), `ausente` (backend anterior a v2.102.0) y `raro` (las
  * categorías no suman el total).
  */
-function consumoDelMesMock(): Record<string, unknown> | undefined {
-  const costura = (() => {
-    try { return localStorage.getItem('payme.app.mock.stats.v1'); } catch { return null; }
-  })();
-  if (costura === 'ausente') return undefined;
-  const basis = (modoMonetarioMock() as { payments_enabled?: unknown })?.payments_enabled === true
+function costuraDeStats(): string | null {
+  try { return localStorage.getItem('payme.app.mock.stats.v1'); } catch { return null; }
+}
+
+function baseDelMock(): 'payments' | 'consumption' {
+  return (modoMonetarioMock() as { payments_enabled?: unknown })?.payments_enabled === true
     ? 'payments'
     : 'consumption';
-  const categorias: Array<{ category: string; amount_cents: number; visits: number }> =
-    costura === 'vacio' ? []
+}
+
+/** Las cocinas del mes del mock, según la costura. Una sola fuente para 2a y 2b. */
+function categoriasDelMesMock(costura: string | null): Array<{ category: string; amount_cents: number; visits: number }> {
+  return costura === 'vacio' ? []
       : costura === 'una' ? [{ category: 'italian', amount_cents: 118000, visits: 3 }]
         : costura === 'cuatro' ? [
           { category: 'italian', amount_cents: 31000, visits: 3 },
@@ -2758,6 +2761,13 @@ function consumoDelMesMock(): Record<string, unknown> | undefined {
               { category: 'japanese', amount_cents: 83500, visits: 2 },
               { category: 'cafe', amount_cents: 15000, visits: 1 },
             ];
+}
+
+function consumoDelMesMock(): Record<string, unknown> | undefined {
+  const costura = costuraDeStats();
+  if (costura === 'ausente') return undefined;
+  const basis = baseDelMock();
+  const categorias = categoriasDelMesMock(costura);
   const total = categorias.reduce((a, c) => a + c.amount_cents, 0);
   const visitas = categorias.reduce((a, c) => a + c.visits, 0);
   return {
@@ -2767,6 +2777,87 @@ function consumoDelMesMock(): Record<string, unknown> | undefined {
     avg_per_visit_cents: visitas > 0 ? Math.floor(total / visitas) : 0,
     categories: categorias,
   };
+}
+
+/**
+ * AF-29 · n165 · `GET /account/stats/restaurants` del mock (dueño v2.104.0).
+ *
+ * Sale de LAS MISMAS cocinas que `consumption_month`, un restaurante por cocina,
+ * así que el total coincide con el de 2a como exige el dueño. Cada visita se
+ * reparte en platos que suman su monto; en base `payments` la visita incluye
+ * una propina del 10 % que los platos no, como declara el handoff.
+ *
+ * Costura propia `payme.app.mock.restaurantes.v1`: `antiguo` (404, backend
+ * anterior a v2.104.0), `error` (500) y `grande` (413 `stats_month_too_large`).
+ * La de stats (`vacio`, `una`, `cuatro`, `siete`) también rige acá.
+ */
+const RESTAURANTE_POR_COCINA: Record<string, { name: string; platos: readonly string[] }> = {
+  italian: { name: 'La Parolaccia', platos: ['Tagliatelle Bolognese', 'Tiramisú', 'Vino tinto (copa)'] },
+  japanese: { name: 'Hanzo Sushi', platos: ['Ramen tonkotsu', 'Gyozas de cerdo'] },
+  cafe: { name: 'Café Nube', platos: ['Flat white', 'Croissant'] },
+  mexican: { name: 'Fonda Chapultepec', platos: ['Tacos al pastor', 'Agua de jamaica'] },
+  vegan: { name: 'Verde Raíz', platos: ['Bowl de quinoa'] },
+  grill: { name: 'Parrilla Norte', platos: ['Arrachera'] },
+  other: { name: 'Bar Central', platos: ['Botana'] },
+};
+
+/** Parte `total` en `n` montos enteros: los primeros llevan el piso, el último el resto. */
+function repartir(total: number, n: number): number[] {
+  const base = Math.floor(total / n);
+  return Array.from({ length: n }, (_, i) => (i === n - 1 ? total - base * (n - 1) : base));
+}
+
+export async function mockStatsRestaurants(): Promise<unknown> {
+  const propia = (() => {
+    try { return localStorage.getItem('payme.app.mock.restaurantes.v1'); } catch { return null; }
+  })();
+  if (propia === 'antiguo') return fail(404, 'not_found');
+  if (propia === 'error') return fail(500, 'internal_error');
+  if (propia === 'grande') return fail(413, 'stats_month_too_large');
+  const basis = baseDelMock();
+  const categorias = categoriasDelMesMock(costuraDeStats());
+  const ahora = new Date();
+  const inicio = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), 1));
+  let dia = 0;
+  const restaurants = categorias.map((c, idx) => {
+    const r = RESTAURANTE_POR_COCINA[c.category] ?? { name: `Restaurante ${idx + 1}`, platos: ['Plato'] };
+    const visits = repartir(c.amount_cents, c.visits).map((monto, v) => {
+      dia += 1;
+      // Horas hacia atrás desde ahora, sin salir del mes (el día 1 a la madrugada
+      // «ahora menos N horas» caería en el mes anterior).
+      const creada = new Date(Math.max(inicio.getTime() + dia * 60_000, ahora.getTime() - dia * 3_600_000));
+      const propina = basis === 'payments' ? Math.floor(monto / 11) : 0;
+      const platos = repartir(monto - propina, r.platos.length).map((a, k) => ({
+        name: r.platos[k],
+        // El segundo plato de la primera visita va a medias: muestra la fracción.
+        fraction_bps: v === 0 && k === 1 ? 5000 : 10000,
+        amount_cents: a,
+      }));
+      return {
+        code: `PA-${String(7000 + idx * 10 + v)}`,
+        created_at: creada.toISOString(),
+        division_mode: 'consumo',
+        amount_cents: monto,
+        items: platos,
+      };
+    });
+    // Visitas de la más nueva a la más vieja, como el dueño.
+    visits.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+    return {
+      id: `e0000000-0000-4000-8000-${String(idx + 1).padStart(12, '0')}`,
+      name: r.name,
+      category: c.category,
+      amount_cents: c.amount_cents,
+      visits_count: visits.length,
+      visits,
+    };
+  });
+  return delay({
+    basis,
+    month_start: inicio.toISOString(),
+    total_cents: restaurants.reduce((a, r) => a + r.amount_cents, 0),
+    restaurants,
+  });
 }
 
 export async function mockStats(): Promise<StatsResponse> {

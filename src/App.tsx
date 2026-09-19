@@ -12,6 +12,7 @@ import { enforceCorteRouteGuard } from './corteGuard';
 import { AvisosScreen } from './screens/AvisosScreen';
 import { CreateMesaFlow } from './screens/CreateMesaFlow';
 import { EstadisticasScreen } from './screens/EstadisticasScreen';
+import { TusRestaurantesScreen } from './screens/TusRestaurantesScreen';
 import { SocialScreen } from './screens/SocialScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { JoinMesaScreen } from './screens/JoinMesaScreen';
@@ -225,6 +226,8 @@ function Shell() {
         return <PagosScreen />;
       case 'estadisticas':
         return <EstadisticasScreen />;
+      case 'restaurantes':
+        return <TusRestaurantesScreen />;
       case 'cargar':
         return <TopupScreen />;
       case 'transferir':

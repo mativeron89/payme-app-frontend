@@ -124,6 +124,9 @@ const ESPERADO: Record<PageId, Esperado> = {
   tarjetas: { tipo: 'redirige', a: /#\/home$/ },
   pagos: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis pagos' } },
   estadisticas: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis estadísticas' } },
+  // AF-29 · 2b. Monta su pantalla con el <h1> «Tus restaurantes» (visible en
+  // carga, error y vacío; oculto para lectores de pantalla con datos).
+  restaurantes: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Tus restaurantes' } },
   recovery: {
     tipo: 'pantalla',
     marcador: { rol: 'heading', nombre: 'Crear una contraseña nueva' },

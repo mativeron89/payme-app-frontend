@@ -41,6 +41,8 @@ export const PAGES = [
   'tarjetas',
   'pagos',
   'estadisticas',
+  /** AF-29 · 2b «Tus restaurantes»: se abre desde Mis estadísticas. */
+  'restaurantes',
   'cargar',
   'transferir',
   /**
