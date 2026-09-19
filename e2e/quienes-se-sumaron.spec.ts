@@ -26,6 +26,14 @@ async function capturar(page: Page, nombre: string): Promise<void> {
   await page.screenshot({ path: `${dir}/${test.info().project.name}-${nombre}.png` });
 }
 
+async function pedidosDeFotos(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const path = '/src/api/mock/mockApi.ts';
+    const mock = await import(/* @vite-ignore */ path) as { contarPedidosDeFotos(): number };
+    return mock.contarPedidosDeFotos();
+  });
+}
+
 async function pedidos(page: Page): Promise<number> {
   return page.evaluate(async () => {
     const path = '/src/api/mock/mockApi.ts';
@@ -44,8 +52,11 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
     await expect(lista.getByText('payme_mx_luis', { exact: true })).toBeVisible();
     await expect(lista.getByText('Renata Ortiz', { exact: true })).toBeVisible();
-    // Sin foto y sin plata: la sección no tiene imágenes ni montos.
-    await expect(lista.locator('img')).toHaveCount(0);
+    // AF-32 (aviso 2.5.3): Luis tiene foto y la ve el organizador, como `blob:`
+    // en memoria; Renata no tiene, y va con sus iniciales. Sin plata.
+    await expect(lista.locator('img')).toHaveCount(1);
+    await expect(lista.getByRole('img', { name: 'Foto de Luis Cárdenas' })).toHaveAttribute('src', /^blob:/);
+    await expect(lista.locator('.avatar').filter({ hasText: 'RO' })).toBeVisible();
     await expect(lista).not.toContainText('$');
     // El scroll es de la app, no de la página: se trae la sección a la vista.
     // (medido: el contenedor es `.flow-scroll`, 772 de contenido para 585 de alto;
@@ -103,5 +114,76 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
     await expect(seccion(page).getByText('Todavía no se sumó nadie.')).toBeVisible();
+  });
+
+  test('AF-32 · fotos e iniciales mezcladas, con invitado y cuenta eliminada como antes', async ({ page }) => {
+    await seam(page, 'variedad');
+    await ingresar(page);
+    await page.goto('/#/mesa/PA-2847');
+    const lista = seccion(page);
+    await expect(lista.getByRole('img', { name: 'Foto de Luis Cárdenas' })).toBeVisible();
+    await expect(lista.locator('.avatar').filter({ hasText: 'RO' })).toBeVisible();
+    await expect(lista.getByText('Invitado', { exact: true })).toBeVisible();
+    await expect(lista.getByText('Cuenta eliminada', { exact: true })).toBeVisible();
+    // Una sola foto pedida: la de quien tiene has_avatar.
+    expect(await pedidosDeFotos(page)).toBe(1);
+    await page.evaluate(() => { document.querySelector('.flow-scroll')?.scrollTo(0, 1e6); });
+    await capturar(page, 'quienes-03-fotos-e-iniciales');
+  });
+
+  test('🔴 AF-32 · a quien NO organiza no se le pide ninguna foto', async ({ page }) => {
+    await ingresar(page);
+    await page.goto('/#/mesa/PA-4520');
+    await expect(page.getByRole('button', { name: /^Barco de sushi/ })).toBeVisible();
+    expect(await pedidosDeFotos(page)).toBe(0);
+  });
+
+  test('AF-32 · backend anterior (forma vieja, sin has_avatar): la lista sigue, con iniciales', async ({ page }) => {
+    await seam(page, 'forma_vieja');
+    await ingresar(page);
+    await page.goto('/#/mesa/PA-2847');
+    const lista = seccion(page);
+    await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
+    await expect(lista.locator('img')).toHaveCount(0);
+    await expect(lista.locator('.avatar').filter({ hasText: 'LC' })).toBeVisible();
+    expect(await pedidosDeFotos(page)).toBe(0);
+  });
+
+  test('AF-32 · si la foto falla: iniciales, sin mensaje y sin volver a pedir', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('payme.app.mock.fotos.v1', 'error'));
+    await ingresar(page);
+    await page.goto('/#/mesa/PA-2847');
+    const lista = seccion(page);
+    await expect(lista.locator('.avatar').filter({ hasText: 'LC' })).toBeVisible();
+    await expect.poll(() => pedidosDeFotos(page)).toBe(1);
+    // 🔴 EXCEPCIÓN DECLARADA a la convención «cero waitForTimeout» (e2e/_app.ts):
+    // lo que se afirma es que NO pasa algo —un reintento—, y una ausencia en el
+    // tiempo no tiene evento al que esperar. Se espera un rato fijo y se vuelve
+    // a contar. La misma garantía, sin reloj, la fija `fotosDeParticipantes.test.ts`.
+    await page.waitForTimeout(1500);
+    expect(await pedidosDeFotos(page)).toBe(1);
+    await expect(lista.locator('img')).toHaveCount(0);
+    await expect(page.getByText(/foto/i)).toHaveCount(0);
+  });
+
+  test('🔴 AF-32 · al salir de la mesa, el `blob:` de la foto se REVOCA', async ({ page }) => {
+    // Espía de `URL.revokeObjectURL` antes de que cargue la app.
+    await page.addInitScript(() => {
+      const w = window as unknown as { __revocadas: string[] };
+      w.__revocadas = [];
+      const original = URL.revokeObjectURL.bind(URL);
+      URL.revokeObjectURL = (url: string) => { w.__revocadas.push(url); original(url); };
+    });
+    await ingresar(page);
+    await page.goto('/#/mesa/PA-2847');
+    const foto = seccion(page).getByRole('img', { name: 'Foto de Luis Cárdenas' });
+    await expect(foto).toBeVisible();
+    const src = await foto.getAttribute('src');
+    expect(src).toMatch(/^blob:/);
+    // Sale de la mesa (se desmonta la pantalla, sin recargar la página).
+    await page.goto('/#/');
+    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __revocadas: string[] }).__revocadas))
+      .toContain(src);
   });
 });

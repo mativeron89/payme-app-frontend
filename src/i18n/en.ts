@@ -893,4 +893,6 @@ export const EN: Record<string, string> = {
   "{0}: sin consumos": "{0}: no consumption",
   "hoy {0}": "today {0}",
   "{0} promedio en los últimos 6 meses": "{0} average over the last 6 months",
+  // AF-32 · la foto de quienes se sumaron.
+  "Foto de {0}": "Photo of {0}",
 };

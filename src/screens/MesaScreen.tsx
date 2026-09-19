@@ -1,6 +1,7 @@
 import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api, IS_MOCK, newIdempotencyKey } from '../api';
+import { FotosDeParticipantes } from '../api/fotosDeParticipantes';
 import { useWalletRail } from '../api/walletRail';
 import { corteDePagosView } from '../api/releaseGates';
 import { useNativeWallets } from '../api/nativeWallets';
@@ -549,6 +550,38 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     if (esOrganizador) cargarQuienes();
     else setQuienes({ estado: 'oculto' });
   }, [esOrganizador, cargarQuienes]);
+
+  /**
+   * AF-32 · las fotos de quienes se sumaron (dueño v2.110.0). Una
+   * `FotosDeParticipantes` por mesa: pide sólo con `has_avatar`, una vez por
+   * persona y sin reintentos, y al desmontar o cambiar de mesa REVOCA cada
+   * `blob:`. La sesión se lee por ref para no recrear —y re-pedir— en cada
+   * render.
+   */
+  const sesionRef = useRef(session);
+  sesionRef.current = session;
+  const fotosRef = useRef<FotosDeParticipantes | null>(null);
+  const [, setVersionFotos] = useState(0);
+  useEffect(() => {
+    const fotos = new FotosDeParticipantes(
+      async (participantId) => {
+        const s = sesionRef.current;
+        if (!s) throw new Error('sin_sesion');
+        return (await api.getParticipantAvatar(code, participantId, s)).blob;
+      },
+      () => setVersionFotos((v) => v + 1),
+    );
+    fotosRef.current = fotos;
+    return () => {
+      fotos.dispose();
+      if (fotosRef.current === fotos) fotosRef.current = null;
+    };
+  }, [code]);
+  useEffect(() => {
+    // Sólo el organizador, y sólo desde la lista que el dueño le dio a él.
+    if (!esOrganizador || quienes.estado !== 'lista') return;
+    fotosRef.current?.cargar(quienes.lista);
+  }, [esOrganizador, quienes]);
 
   useEffect(() => {
     if (!isGuest) {
@@ -2392,6 +2425,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       soltando={soltando}
       soltarDisponible={!soltarNoDisponible}
       quienesSeSumaron={quienes}
+      fotoDe={(participantId) => fotosRef.current?.url(participantId) ?? null}
       onReintentarQuienes={cargarQuienes}
       onSetFraction={setFraction}
       onGoToPay={goToPay}

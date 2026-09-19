@@ -1963,7 +1963,7 @@ export function contarPedidosDeParticipantes(): number {
 export async function mockMesaParticipants(
   code: string,
   identity: MockIdentity,
-): Promise<{ participants: Array<{ first_name: string | null; last_name: string | null; payme_id: string | null }> }> {
+): Promise<{ participants: Array<Record<string, unknown>> }> {
   pedidosDeParticipantes += 1;
   const costura = (() => {
     try { return localStorage.getItem(CLAVE_PARTICIPANTES); } catch { return null; }
@@ -1982,7 +1982,81 @@ export async function mockMesaParticipants(
         { first_name: 'Cuenta', last_name: 'eliminada', payme_id: null },
       ]
     : base;
-  return delay({ participants: participants.map((p) => ({ ...p })) });
+  // AF-32 · v2.110.0 · la forma NUEVA (participant_id + has_avatar), salvo con
+  // la costura `forma_vieja` (backend v2.101.0–v2.109.0). Con foto sólo quienes
+  // estén en FOTOS_MOCK: el resto (menor, sin fecha, sin foto, invitado o cuenta
+  // eliminada) va con has_avatar:false, como el dueño.
+  return delay({
+    participants: participants.map((p, i) => (costura === 'forma_vieja'
+      ? { ...p }
+      : {
+          participant_id: idDeParticipanteMock(code, i),
+          ...p,
+          has_avatar: p.payme_id !== null && FOTOS_MOCK.has(p.payme_id),
+        })),
+  });
+}
+
+/** AF-32 · quién tiene foto en el mock (Luis sí, Renata no: iniciales). */
+const FOTOS_MOCK = new Set<string>(['payme_mx_luis', 'payme_mx_sofia']);
+
+function idDeParticipanteMock(code: string, i: number): string {
+  const n = [...code].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 1_000_000, 0);
+  return `f0000000-0000-4000-8000-${String(n * 100 + i).padStart(12, '0')}`;
+}
+
+let pedidosDeFotos = 0;
+/**
+ * Cuántas fotos de participantes se pidieron. Existe para el e2e de «a quien no
+ * organiza no se le pide ninguna foto»: en pantalla, no pedir y pedir-y-fallar
+ * se ven igual (iniciales).
+ */
+export function contarPedidosDeFotos(): number {
+  return pedidosDeFotos;
+}
+
+/**
+ * AF-32 · `GET /mesas/:code/participants/:participant_id/avatar`. El dueño
+ * responde SIEMPRE el mismo 404 `avatar_not_found` para todo lo que no es «la
+ * foto de alguien de tu mesa, que la tiene, siendo vos el organizador». La foto
+ * del mock se dibuja en el navegador (un JPEG de 96×96 con la inicial): el mock
+ * no tiene bytes reales.
+ */
+export async function mockParticipantAvatar(
+  code: string,
+  participantId: string,
+  identity: MockIdentity,
+): Promise<PrivateAvatarBlob> {
+  pedidosDeFotos += 1;
+  if (leerCosturaFoto() === 'error') return fail(500, 'internal_error');
+  const mesa = findMesa(code);
+  if (!mesa || identity === 'guest' || !mesa.openedByUser) return fail(404, 'avatar_not_found');
+  const fila = (PARTICIPANTES_SEED[code] ?? []).find((_, i) => idDeParticipanteMock(code, i) === participantId);
+  if (!fila || fila.payme_id === null || !FOTOS_MOCK.has(fila.payme_id)) return fail(404, 'avatar_not_found');
+  const blob = await jpegDeIniciales((fila.first_name ?? '?').charAt(0));
+  return delay({ blob });
+}
+
+function leerCosturaFoto(): string | null {
+  try { return localStorage.getItem('payme.app.mock.fotos.v1'); } catch { return null; }
+}
+
+function jpegDeIniciales(letra: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 96;
+    canvas.height = 96;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { reject(new Error('sin_canvas')); return; }
+    ctx.fillStyle = '#0a7b80';
+    ctx.fillRect(0, 0, 96, 96);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 48px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(letra.toUpperCase(), 48, 52);
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('sin_blob'))), 'image/jpeg', 0.9);
+  });
 }
 
 export async function mockPayMesa(

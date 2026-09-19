@@ -16,6 +16,17 @@ export interface Participante {
   readonly firstName: string | null;
   readonly lastName: string | null;
   readonly paymeId: string | null;
+  /**
+   * AF-32 · v2.110.0 · el id de la FILA de la mesa (no el de la cuenta), para
+   * pedir la foto. `null` con un backend anterior, que no lo manda.
+   */
+  readonly participantId: string | null;
+  /**
+   * AF-32 · `true` sólo con foto, cuenta activa y mayor de edad conocida. Menor,
+   * sin fecha, sin foto, invitado o eliminada ⇒ `false` ⇒ iniciales. Con un
+   * backend anterior, `false`.
+   */
+  readonly hasAvatar: boolean;
 }
 
 function objetoPlano(v: unknown): v is Record<string, unknown> {
@@ -39,12 +50,28 @@ export function decodeParticipantes(raw: unknown): readonly Participante[] {
     throw new Error('participants_response_malformed');
   }
   return raw.participants.map((p) => {
-    if (!objetoPlano(p)
-        || !clavesExactas(p, ['first_name', 'last_name', 'payme_id'])
+    // 🔴 AF-32 · DOS formas exactas, y ninguna otra: la de v2.101.0 (tres
+    // claves) y la de v2.110.0, que suma `participant_id` y `has_avatar`. Un
+    // decodificador que sólo aceptara la vieja rechazaría la nueva, y la
+    // sección entera pasaría a error el día que se publique el backend.
+    const vieja = objetoPlano(p) && clavesExactas(p, ['first_name', 'last_name', 'payme_id']);
+    const nueva = objetoPlano(p)
+      && clavesExactas(p, ['participant_id', 'first_name', 'last_name', 'payme_id', 'has_avatar']);
+    if (!objetoPlano(p) || (!vieja && !nueva)
         || !textoONulo(p.first_name) || !textoONulo(p.last_name) || !textoONulo(p.payme_id)) {
       throw new Error('participants_response_malformed');
     }
-    return { firstName: p.first_name, lastName: p.last_name, paymeId: p.payme_id };
+    if (nueva && (typeof p.participant_id !== 'string' || p.participant_id.length === 0
+        || typeof p.has_avatar !== 'boolean')) {
+      throw new Error('participants_response_malformed');
+    }
+    return {
+      firstName: p.first_name,
+      lastName: p.last_name,
+      paymeId: p.payme_id,
+      participantId: nueva ? (p.participant_id as string) : null,
+      hasAvatar: nueva ? p.has_avatar === true : false,
+    };
   });
 }
 
@@ -63,7 +90,7 @@ export type FilaParticipante =
   | { readonly tipo: 'eliminada' }
   | { readonly tipo: 'persona'; readonly nombre: string | null; readonly paymeId: string | null };
 
-export function filaDeParticipante(p: Participante): FilaParticipante {
+export function filaDeParticipante(p: Pick<Participante, 'firstName' | 'lastName' | 'paymeId'>): FilaParticipante {
   if (p.firstName === null && p.lastName === null && p.paymeId === null) return { tipo: 'invitado' };
   if (p.paymeId === null && p.firstName === 'Cuenta' && p.lastName === 'eliminada') return { tipo: 'eliminada' };
   const nombre = [p.firstName, p.lastName].filter((x): x is string => !!x && x.trim().length > 0).join(' ');

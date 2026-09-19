@@ -4258,9 +4258,28 @@ body {
 
 .quien {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   padding: var(--sp-2) 0;
   border-bottom: 1px solid var(--border);
+}
+
+/* AF-32 · la foto usa el mismo círculo que `.avatar` (42px); el hueco de
+   invitado y cuenta eliminada mide lo mismo para que los nombres alineen. */
+.quien-foto {
+  object-fit: cover;
+}
+
+.quien-hueco {
+  flex: none;
+  width: 42px;
+  height: 42px;
+}
+
+.quien-texto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .quien-nombre {

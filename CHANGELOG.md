@@ -32,6 +32,55 @@ tal cual», con la foto de menores o sin fecha oculta (`17d436dd…`), y los mom
   un-toque manda `'2.5.3'` tal cual; e2e de perfil.
 - Mutantes: quitar 2.5.3 y quitar 2.5.2, en unitario y e2e. Los cuatro mueren.
 
+### Ítem 2 · la foto en «Quiénes se sumaron» (v2.110.0)
+
+- **Decodificador de `/participants` con DOS formas exactas**: la de v2.101.0 (tres
+  claves) y la de v2.110.0, que suma `participant_id` y `has_avatar`. Una mezcla de
+  las dos, o cualquier otra clave, se rechaza. Era el primer riesgo: el
+  decodificador anterior habría pasado toda la sección a error el día que saliera
+  el backend. Con la forma vieja no hay fotos, sólo iniciales.
+- **`FotosDeParticipantes`** (`src/api/fotosDeParticipantes.ts`):
+  - pide sólo con `has_avatar: true` y `participant_id`, un pedido por persona;
+  - **sin reintentos**: con 404 o error quedan las iniciales, sin mensaje;
+  - cada foto es un `blob:` en memoria con su `AvatarObjectUrlLease`, y `dispose`
+    los **revoca** todos;
+  - una foto que llega después de `dispose` no crea URL.
+
+  `MesaScreen` crea una por mesa y la libera al desmontar o cambiar de mesa. La
+  vista sólo recibe `fotoDe(id)`: sigue sin llamar a la red.
+- **Pedido:** con `httpPrivateAvatarRequest`, el mismo canal validado de la foto
+  propia (sesión, `private, no-store`, JPEG y tamaño). Nunca `<img src>` a la ruta
+  ni caché o almacenamiento.
+- **La fila:** foto (el círculo `.avatar` de 42 px) o iniciales (`Avatar` del
+  sistema). Invitado y cuenta eliminada quedan como antes, sin avatar, con un hueco
+  del mismo ancho para que los nombres alineen.
+- **Sólo el organizador pide fotos**, porque la lista sólo se pide para él. Un e2e
+  cuenta los pedidos de foto y exige cero para quien no organiza.
+- **Mock:** la forma nueva por defecto. Luis tiene foto, que el mock dibuja en el
+  navegador como un JPEG de 96×96 con la inicial; Renata no. Costuras:
+  `participantes.v1 = forma_vieja` y `fotos.v1 = error`.
+- **Guardas tocadas (declaradas):**
+  - `quienes-se-sumaron.spec.ts` (AF-25) afirmaba «sin foto» (`img` = 0), porque
+    entonces la foto venía después. Con 2.5.3 decidido, afirma la foto de Luis
+    como `blob:` y las iniciales de Renata.
+  - `corteGuard.test.ts`: la prop `fotoDe`.
+- **Excepción declarada a «cero `waitForTimeout`»:** el e2e de «sin reintento»
+  espera un rato fijo, porque afirma que algo NO pasa. La misma garantía, sin
+  reloj, la fija el unitario.
+- **Tests:** decodificador con las dos formas y la mezcla (+2), la clase (4) y e2e
+  (+5): fotos e iniciales mezcladas (captura), no-organizador sin pedidos de foto,
+  forma vieja, foto que falla sin reintento, y el `blob:` revocado al salir de la
+  mesa (con un espía de `URL.revokeObjectURL`).
+- **Mutantes:**
+  - Mueren: rechazar la forma nueva o la vieja, no revocar, reintentar, pedir sin
+    `has_avatar`, la lista sin guarda de organizador, la foto que no llega a la
+    vista, y `dispose` que no corre al desmontar.
+  - `dispose` sin llamar sobrevivió la primera vez: sólo lo cubría el unitario de
+    la clase, no el cableado. Con el e2e del espía, muere.
+  - La guarda de organizador del efecto de fotos sobrevive sola **a propósito**:
+    sin la lista, que ya exige ser organizador, no hay ids que pedir. Quitando las
+    dos, muere.
+
 ## 0.175.0 — Período, «Qué comes» (2c) y «Evolución» (2f) (2026-09-19)
 
 Orden `APP-STATS-DISHES-EVOLUTION-PERIOD-AF-31-20260919`, base `36d8fbe` (= `origin/main`,

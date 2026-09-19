@@ -3,7 +3,7 @@ import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { AppHeaderFlow } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
-import { useToast } from '../components/ui';
+import { Avatar, useToast } from '../components/ui';
 import { InviteFriends } from '../components/InviteFriends';
 import type { MesaDetail, MesaItem } from '../api/types';
 import { filaDeParticipante, type Participante } from '../api/participantes';
@@ -107,6 +107,11 @@ export interface MesaDetailViewProps {
    */
   quienesSeSumaron: QuienesSeSumaron;
   onReintentarQuienes: () => void;
+  /**
+   * AF-32 · la foto (`blob:`) de una fila, o `null` ⇒ iniciales. La pide y la
+   * libera `MesaScreen`; acá sólo se dibuja.
+   */
+  fotoDe: (participantId: string | null) => string | null;
   onSetFraction: (id: string, bps: number) => void;
   onGoToPay: () => void;
   onRetryFrozenPay: () => void;
@@ -225,6 +230,7 @@ export function MesaDetailView({
   soltarDisponible,
   quienesSeSumaron,
   onReintentarQuienes,
+  fotoDe,
   onSetFraction,
   onGoToPay,
   onRetryFrozenPay,
@@ -585,18 +591,36 @@ export function MesaDetailView({
                   return (
                     // Sin id estable en el contrato: el orden de llegada es el del dueño.
                     <li key={idx} className="quien">
-                      {fila.tipo === 'invitado' ? (
-                        <span className="quien-nombre">{t('Invitado')}</span>
-                      ) : fila.tipo === 'eliminada' ? (
-                        <span className="quien-nombre dim">{t('Cuenta eliminada')}</span>
+                      {fila.tipo === 'persona' ? (
+                        (() => {
+                          // AF-32 · foto si el dueño la dio y llegó; si no, iniciales.
+                          const foto = fotoDe(p.participantId);
+                          const quien = fila.nombre ?? fila.paymeId ?? '';
+                          return foto ? (
+                            <img className="avatar quien-foto" src={foto} alt={t('Foto de {0}', quien)} />
+                          ) : (
+                            <Avatar name={quien} />
+                          );
+                        })()
                       ) : (
-                        <>
-                          <span className="quien-nombre">{fila.nombre ?? fila.paymeId}</span>
-                          {fila.nombre !== null && fila.paymeId !== null && (
-                            <span className="quien-id">{fila.paymeId}</span>
-                          )}
-                        </>
+                        // Invitado y cuenta eliminada: como antes, sin avatar;
+                        // el hueco mantiene alineados los nombres.
+                        <span className="quien-hueco" aria-hidden="true" />
                       )}
+                      <span className="quien-texto">
+                        {fila.tipo === 'invitado' ? (
+                          <span className="quien-nombre">{t('Invitado')}</span>
+                        ) : fila.tipo === 'eliminada' ? (
+                          <span className="quien-nombre dim">{t('Cuenta eliminada')}</span>
+                        ) : (
+                          <>
+                            <span className="quien-nombre">{fila.nombre ?? fila.paymeId}</span>
+                            {fila.nombre !== null && fila.paymeId !== null && (
+                              <span className="quien-id">{fila.paymeId}</span>
+                            )}
+                          </>
+                        )}
+                      </span>
                     </li>
                   );
                 })}

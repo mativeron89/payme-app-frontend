@@ -9,10 +9,41 @@ describe('AF-25 · decodeParticipantes · claves exactas', () => {
         { first_name: null, last_name: null, payme_id: null },
       ],
     })).toEqual([
-      { firstName: 'Ana', lastName: 'Pérez', paymeId: 'payme_ap_x1y2' },
-      { firstName: null, lastName: null, paymeId: null },
+      // La forma de v2.101.0 no trae foto: sin id de fila y sin avatar.
+      { firstName: 'Ana', lastName: 'Pérez', paymeId: 'payme_ap_x1y2', participantId: null, hasAvatar: false },
+      { firstName: null, lastName: null, paymeId: null, participantId: null, hasAvatar: false },
     ]);
     expect(decodeParticipantes({ participants: [] })).toEqual([]);
+  });
+
+  it('🔴 AF-32 · la forma NUEVA (v2.110.0) también se lee: participant_id y has_avatar', () => {
+    expect(decodeParticipantes({
+      participants: [
+        { participant_id: 'p-1', first_name: 'Ana', last_name: 'Pérez', payme_id: 'payme_ap', has_avatar: true },
+        { participant_id: 'p-2', first_name: null, last_name: null, payme_id: null, has_avatar: false },
+      ],
+    })).toEqual([
+      { firstName: 'Ana', lastName: 'Pérez', paymeId: 'payme_ap', participantId: 'p-1', hasAvatar: true },
+      { firstName: null, lastName: null, paymeId: null, participantId: 'p-2', hasAvatar: false },
+    ]);
+  });
+
+  it('🔴 AF-32 · la vieja y la nueva conviven fila a fila; una MEZCLA de las dos no', () => {
+    expect(decodeParticipantes({
+      participants: [
+        { first_name: 'Ana', last_name: 'Pérez', payme_id: 'payme_ap' },
+        { participant_id: 'p-2', first_name: 'Luis', last_name: 'Cárdenas', payme_id: 'payme_lc', has_avatar: true },
+      ],
+    }).map((p) => p.hasAvatar)).toEqual([false, true]);
+    for (const medio of [
+      { participant_id: 'p-1', first_name: 'Ana', last_name: 'Pérez', payme_id: 'payme_ap' },
+      { first_name: 'Ana', last_name: 'Pérez', payme_id: 'payme_ap', has_avatar: true },
+      { participant_id: '', first_name: 'Ana', last_name: 'Pérez', payme_id: 'payme_ap', has_avatar: true },
+      { participant_id: 'p-1', first_name: 'Ana', last_name: 'Pérez', payme_id: 'payme_ap', has_avatar: 'sí' },
+    ]) {
+      expect(() => decodeParticipantes({ participants: [medio] }), JSON.stringify(medio))
+        .toThrow('participants_response_malformed');
+    }
   });
 
   it('🔴 un campo DE MÁS se rechaza: ni foto, ni monto, ni quién eligió qué se cuelan', () => {
