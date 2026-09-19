@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "ae1434d63929235dc8ecc3baa4aa8ed9dd73089c",
+  "commit": "a8a75c12ab54896b4e522860ae3a81e692567ebb",
   "total": 107,
   "archivos": [
     {
@@ -307,8 +307,8 @@
     {
       "origen": "routes/account.js",
       "destino": "routes/account.js",
-      "sha256": "6a20bb312babd0ba5a14f7608d168d565ab241253e9db3ba6f98f7a6fb6a8a53",
-      "bytes": 33599
+      "sha256": "149291bd9148a93feee341d0dbe31e3e575a0ca4bc6b84f6a4e29b4c5fd0ff5f",
+      "bytes": 40772
     },
     {
       "origen": "routes/auth.js",
@@ -427,8 +427,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "8d802ef7ccdaa7f23effac389fbc04230733bfadced40f2da7d4e194e2b3fedd",
-      "bytes": 27277
+      "sha256": "b769ff44c53fc7bf1fae15e947c302f5772c2bc2e086a323ecbc64237dfe220d",
+      "bytes": 27661
     },
     {
       "origen": "services/authRecovery.js",

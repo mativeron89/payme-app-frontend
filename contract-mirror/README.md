@@ -6,6 +6,42 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-19** (el cuarto del día).
+- Commit exacto y procedencia del CONTENIDO:
+  **`a8a75c12ab54896b4e522860ae3a81e692567ebb`**
+  (App Backend **v2.108.0**, AB-22. El recorrido incluye:
+  - v2.105.0: el mes corta a la medianoche de México;
+  - v2.106.0: `?period=` en `/stats` y `/stats/restaurants`;
+  - v2.107.0: `/stats/dishes`;
+  - v2.108.0: `/stats/evolution`.)
+- Commit del que se tomó el inventario autoritativo:
+  **`3dbaa64e82156ea536428051fa962143ad683c25`** (HEAD de la rama del dueño
+  `claude/stats-platos-evolucion`). La diferencia `a8a75c1..3dbaa64` toca sólo
+  `contract/mirror-inventory.json`.
+
+🔴 **Publicado sólo en parte:** el `main` remoto del dueño es `81003fe`
+(v2.105.0, el corte de México). Ninguna rama remota contiene `5a838b5`,
+`47b8b9e` ni `a8a75c1` (medido 2026-09-19). Por eso el front trata `period`,
+`/stats/dishes` y `/stats/evolution` como OPCIONALES.
+
+🆕 **107 archivos espejados** más este README. Contra el corte anterior
+(`ae1434d`) cambian **dos**: `routes/account.js` y `schemas/index.js`. Hay cero
+nuevos, cero que salgan y cero renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree del dueño en `3dbaa64e`
+(`.claude/worktrees/stats-platos`, porcelain vacío).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 107 archivos · commit `a8a75c1`** · exit 0 |
+| `--integridad` | **OK 107/107** contra el inventario · exit 0 |
+| `--paridad` | **OK 107/107**: espejo = inventario = fuente **en `a8a75c1`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD del dueño (`3dbaa64e`) · exit 0 |
+
+### Refresh anterior · 2026-09-19 (parte pagada y «Tus restaurantes» · `ae1434d`)
+
 - Fecha del refresh: **2026-09-19** (el tercero del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`ae1434d63929235dc8ecc3baa4aa8ed9dd73089c`**

@@ -560,6 +560,13 @@ const restaurantSearchQuery = z.object({
   q: z.string().trim().max(100).optional(),
 });
 
+// AB-22 · período de «Mis estadísticas»: lista CERRADA (services/inicioDeMes.PERIODOS).
+// Sin parámetro = this_month. Un valor desconocido o repetido (?period=a&period=b
+// llega como array) ⇒ 400 validation_error.
+const statsPeriodQuery = z.object({
+  period: z.enum(['this_month', 'last_month', 'last_3_months', 'this_year']).default('this_month'),
+});
+
 function validateBody(schema) {
   return (req, res, next) => {
     const r = schema.safeParse(req.body);
@@ -619,5 +626,5 @@ module.exports = {
   registerPushDevice,
   movementsQuery, historyQuery, walletTxQuery, notificationsQuery,
   restaurantSearchQuery,
-  validateBody, validateQuery, validateParams,
+  validateBody, validateQuery, validateParams, statsPeriodQuery,
 };

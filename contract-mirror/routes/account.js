@@ -13,13 +13,19 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const {
   movementsQuery, historyQuery, walletTxQuery, updateMe, updateProfileName, uuidIdParam,
-  validateQuery, validateBody, validateParams,
+  validateQuery, validateBody, validateParams, statsPeriodQuery,
 } = require('../schemas');
 const { centsToDisplay } = require('../utils/money');
 const logger = require('../utils/logger');
 const profileIdentity = require('../services/profileIdentity');
 const { proveedoresVinculados } = require('../services/externalIdentities');
 const consumoPropio = require('../services/consumoPropio');
+const {
+  inicioDeMesMxSql, rangoDePeriodoMxSql, rangoDeMesAtrasMxSql, filtroDeRango,
+} = require('../services/inicioDeMes');
+// AB-21 · n169: TODAS las consultas de estadísticas cortan el mes a la
+// medianoche de México (services/inicioDeMes.js), no en la zona de la sesión.
+const INICIO_DE_MES = inicioDeMesMxSql();
 const { dineroHabilitado } = require('../services/moneyRail');
 
 const router = express.Router();
@@ -475,13 +481,63 @@ router.get('/history', validateQuery(historyQuery), async (req, res, next) => {
  * le dice al front cuál de las dos es, para rotular «consumo» o «gasto» sin
  * adivinar. Sólo la cuenta del bearer.
  *
- * Mes: la MISMA regla que el resto de /stats, `date_trunc('month', NOW())` en
- * la zona de la sesión de la base (no es hora de México; se conserva).
+ * Mes: la MISMA regla que el resto de /stats: desde la medianoche del día 1 en
+ * hora de México (services/inicioDeMes.js; AB-21 corrigió el corte, que antes
+ * dependía de la zona de la sesión de la base).
  * Una visita = una mesa creada este mes con consumo propio > 0.
  * Promedio en centavos enteros, truncado. Porcentajes: los calcula el front.
  * Orden: monto desc, empate por nombre de categoría, `other` siempre al final;
  * una categoría con monto 0 no sale.
  */
+/**
+ * AB-22 · período. `RANGO_DEL_MES` es el this_month de siempre; los handlers
+ * leen `req.validatedQuery.period` (validado con lista cerrada en schemas/).
+ */
+const RANGO_DEL_MES = rangoDePeriodoMxSql('this_month');
+function periodoDe(req) {
+  const key = req.validatedQuery?.period || 'this_month';
+  return { key, rango: rangoDePeriodoMxSql(key) };
+}
+async function periodoPublicado(key, rango) {
+  const { rows: [r] } = await pool.query(
+    `SELECT ${rango.desde} AS desde, ${rango.hasta || 'NULL::timestamptz'} AS hasta`
+  );
+  return {
+    key,
+    start: new Date(r.desde).toISOString(),
+    end: r.hasta ? new Date(r.hasta).toISOString() : null,
+  };
+}
+
+/**
+ * Pagos del rango por categoría, convención G-34 (neto de reembolsos
+ * procesados). La usan `category_breakdown` (siempre el mes) y
+ * `consumption_month` en base payments (el período pedido).
+ */
+async function categoriasPagadas(userId, rango) {
+  const { rows } = await pool.query(
+    `SELECT r.category,
+            COALESCE(SUM(GREATEST(pa.gross_amount_cents - COALESCE(rf.reembolsado, 0), 0)), 0)
+              AS spent,
+            COUNT(*)::int AS visits
+       FROM payment_attempts pa
+       JOIN mesas m ON m.id = pa.mesa_id
+       JOIN restaurants r ON r.id = m.restaurant_id
+       LEFT JOIN (
+         SELECT payment_attempt_id, SUM(amount_cents) AS reembolsado
+           FROM payment_refunds WHERE status = 'processed'
+          GROUP BY payment_attempt_id
+       ) rf ON rf.payment_attempt_id = pa.id
+      WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+        AND ${filtroDeRango('pa.created_at', rango)}
+      GROUP BY r.category`, [userId]
+  );
+  return rows
+    .map((c) => ({ category: c.category, spent_cents: Number(c.spent), visits: c.visits }))
+    .filter((c) => c.spent_cents > 0)
+    .sort((a, b) => b.spent_cents - a.spent_cents || a.category.localeCompare(b.category));
+}
+
 function ordenarCategorias(lista) {
   return lista
     .filter((c) => c.amount_cents > 0)
@@ -506,13 +562,13 @@ function bloqueDeConsumo(basis, categorias, total, visitas) {
  * `consumption_month` y para «Tus restaurantes», así los dos totales salen del
  * mismo conjunto.
  */
-async function mesasDelMesConSeleccion(userId) {
+async function mesasDelMesConSeleccion(userId, rango = RANGO_DEL_MES) {
   const { rows } = await pool.query(
     `SELECT m.id, m.code, m.division_mode, m.created_at,
             r.id AS restaurant_id, r.name AS restaurant_name, r.category
        FROM mesas m
        JOIN restaurants r ON r.id = m.restaurant_id
-      WHERE m.created_at >= date_trunc('month', NOW())
+      WHERE ${filtroDeRango('m.created_at', rango)}
         AND (
               EXISTS (
                 SELECT 1 FROM mesa_item_claims c
@@ -531,8 +587,8 @@ async function mesasDelMesConSeleccion(userId) {
   return rows;
 }
 
-async function consumoDesdeSelecciones(userId) {
-  const mesas = await mesasDelMesConSeleccion(userId);
+async function consumoDesdeSelecciones(userId, rango = RANGO_DEL_MES) {
+  const mesas = await mesasDelMesConSeleccion(userId, rango);
   const mios = await consumoPropio.porMesa(userId, mesas);
   const porCategoria = new Map();
   let total = 0;
@@ -563,8 +619,9 @@ function consumoDesdePagos(categoriasPagadas) {
 /**
  * AB-20 · «Tus restaurantes» (pantalla 2b). Ruta propia y no un bloque de
  * /stats: el detalle por visita e ítem sólo lo necesita esta pantalla, y una
- * mesa puede tener 100+ ítems. Acotada al mes (misma regla y mismo límite de
- * zona horaria que /stats); sin paginar.
+ * mesa puede tener 100+ ítems. Acotada al mes en hora de México (misma regla
+ * que /stats, services/inicioDeMes.js); sin paginar. `month_start` es ese
+ * instante, en ISO UTC.
  *
  * `basis` igual que `consumption_month`: con el dinero apagado sale de lo
  * elegido (services/consumoPropio.js, con detalle por ítem); encendido, de lo
@@ -616,8 +673,8 @@ function armarRestaurantes(basis, visitas) {
   return { basis, total_cents: total, restaurants };
 }
 
-async function restaurantesDesdeSelecciones(userId) {
-  const mesas = await mesasDelMesConSeleccion(userId);
+async function restaurantesDesdeSelecciones(userId, rango = RANGO_DEL_MES) {
+  const mesas = await mesasDelMesConSeleccion(userId, rango);
   const mios = await consumoPropio.porMesa(userId, mesas, pool, { detalle: true });
   return armarRestaurantes('consumption', mesas.map((m) => ({
     ...m,
@@ -626,7 +683,7 @@ async function restaurantesDesdeSelecciones(userId) {
   })));
 }
 
-async function restaurantesDesdePagos(userId) {
+async function restaurantesDesdePagos(userId, rango = RANGO_DEL_MES) {
   const { rows: mesas } = await pool.query(
     `SELECT m.id, m.code, m.division_mode, m.created_at,
             r.id AS restaurant_id, r.name AS restaurant_name, r.category,
@@ -641,7 +698,7 @@ async function restaurantesDesdePagos(userId) {
           GROUP BY payment_attempt_id
        ) rf ON rf.payment_attempt_id = pa.id
       WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
-        AND pa.created_at >= date_trunc('month', NOW())
+        AND ${filtroDeRango('pa.created_at', rango)}
       GROUP BY m.id, m.code, m.division_mode, m.created_at, r.id, r.name, r.category`,
     [userId]
   );
@@ -653,7 +710,7 @@ async function restaurantesDesdePagos(userId) {
        JOIN payment_attempts pa ON pa.id = pai.payment_attempt_id
        JOIN mesa_items mi ON mi.id = pai.mesa_item_id
       WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
-        AND pa.created_at >= date_trunc('month', NOW())
+        AND ${filtroDeRango('pa.created_at', rango)}
       GROUP BY pa.mesa_id, pai.mesa_item_id, mi.name, mi.created_at
       ORDER BY mi.created_at ASC, pai.mesa_item_id ASC`,
     [userId]
@@ -670,12 +727,13 @@ async function restaurantesDesdePagos(userId) {
   })));
 }
 
-router.get('/stats/restaurants', async (req, res, next) => {
+router.get('/stats/restaurants', validateQuery(statsPeriodQuery), async (req, res, next) => {
   try {
-    const { rows: [inicio] } = await pool.query(`SELECT date_trunc('month', NOW()) AS t`);
+    const { key: periodo, rango } = periodoDe(req);
+    const period = await periodoPublicado(periodo, rango);
     const cuerpo = dineroHabilitado()
-      ? await restaurantesDesdePagos(req.user.id)
-      : await restaurantesDesdeSelecciones(req.user.id);
+      ? await restaurantesDesdePagos(req.user.id, rango)
+      : await restaurantesDesdeSelecciones(req.user.id, rango);
     const visitas = cuerpo.restaurants.reduce((s, r) => s + r.visits_count, 0);
     if (visitas > maxVisitasDelMes) {
       return res.status(413).json({ error: 'stats_month_too_large' });
@@ -683,14 +741,132 @@ router.get('/stats/restaurants', async (req, res, next) => {
     res.setHeader('Cache-Control', 'private, no-store');
     res.json({
       basis: cuerpo.basis,
-      month_start: new Date(inicio.t).toISOString(),
+      period,
+      // Compatibilidad (AB-20): el inicio del rango; con period=this_month, el del mes.
+      month_start: period.start,
       total_cents: cuerpo.total_cents,
       restaurants: cuerpo.restaurants,
     });
   } catch (err) { next(err); }
 });
 
-router.get('/stats', async (req, res, next) => {
+/**
+ * AB-22 · «Qué comes» por platos (pantalla 2c). Se arma desde la MISMA
+ * estructura que «Tus restaurantes» (restaurantes → visitas → lo propio por
+ * ítem), en las dos bases: una sola fuente para las dos pantallas.
+ *
+ * Regla de agrupación (REVISABLE, declarada en el handoff): un plato es
+ * (restaurante, nombre normalizado). Normalizar = NFC, minúsculas, sin espacios
+ * al borde y con los internos colapsados; los ACENTOS se conservan
+ * («Tiramisu» ≠ «Tiramisú»). Nunca se mezclan restaurantes. El nombre
+ * mostrado es la grafía de la visita más reciente.
+ * `times` = cantidad de VISITAS en que lo elegiste (media porción = 1; dos
+ * ítems con el mismo nombre en la misma mesa = 1). `amount_cents` = lo tuyo
+ * (en base payments, lo cobrado por ítem, sin propina). Mesas «igual»: sin
+ * ítems ⇒ no aportan platos.
+ * Orden: times desc, monto desc, nombre, restaurante; tope 5; `distinct_dishes`
+ * = cuántos platos distintos hubo en el período.
+ */
+const MAX_VISITAS_DEL_RANGO = 5000;
+let maxVisitasDelRango = MAX_VISITAS_DEL_RANGO;
+function fijarMaxVisitasDelRangoParaTests(n) {
+  if (process.env.NODE_ENV !== 'test') throw new Error('stats_test_seam_forbidden');
+  const previo = maxVisitasDelRango;
+  maxVisitasDelRango = n;
+  return () => { maxVisitasDelRango = previo; };
+}
+
+function normalizarPlato(nombre) {
+  return String(nombre).normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function armarPlatos(restaurants) {
+  const platos = new Map();
+  for (const r of restaurants) {
+    // De la visita más vieja a la más nueva: la última grafía vista gana.
+    const visitas = [...r.visits].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    for (const v of visitas) {
+      const enEstaVisita = new Set();
+      for (const it of v.items) {
+        const clave = `${r.id}\u0000${normalizarPlato(it.name)}`;
+        const p = platos.get(clave) || {
+          name: it.name,
+          restaurant: { id: r.id, name: r.name, category: r.category },
+          times: 0, amount_cents: 0,
+        };
+        p.name = it.name;
+        p.amount_cents += it.amount_cents;
+        if (!enEstaVisita.has(clave)) { p.times += 1; enEstaVisita.add(clave); }
+        platos.set(clave, p);
+      }
+    }
+  }
+  const todos = [...platos.values()].sort((a, b) => b.times - a.times
+    || b.amount_cents - a.amount_cents
+    || a.name.localeCompare(b.name)
+    || a.restaurant.name.localeCompare(b.restaurant.name));
+  return { distinct_dishes: todos.length, dishes: todos.slice(0, 5) };
+}
+
+router.get('/stats/dishes', validateQuery(statsPeriodQuery), async (req, res, next) => {
+  try {
+    const { key: periodo, rango } = periodoDe(req);
+    const period = await periodoPublicado(periodo, rango);
+    const cuerpo = dineroHabilitado()
+      ? await restaurantesDesdePagos(req.user.id, rango)
+      : await restaurantesDesdeSelecciones(req.user.id, rango);
+    const visitas = cuerpo.restaurants.reduce((s, r) => s + r.visits_count, 0);
+    if (visitas > maxVisitasDelRango) {
+      return res.status(413).json({ error: 'stats_range_too_large' });
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ basis: cuerpo.basis, period, ...armarPlatos(cuerpo.restaurants) });
+  } catch (err) { next(err); }
+});
+
+/**
+ * AB-22 · «Evolución» (pantalla 2f). Los últimos 6 meses calendario de México,
+ * del más viejo al actual, meses vacíos incluidos. Cada mes se calcula con la
+ * MISMA función que `consumption_month` sobre su propio rango, así el mes en
+ * curso es, por construcción, `consumption_month` (un test lo exige igual).
+ * `avg_per_month_cents` = floor(total / 6), con los meses vacíos adentro (el
+ * ejemplo del diseño: 4380 / 6 = 730). Sin período (el rango es fijo).
+ * Tope: más de 5000 visitas en los 6 meses ⇒ 413, sin datos parciales.
+ */
+const MESES_DE_EVOLUCION = 6;
+
+router.get('/stats/evolution', async (req, res, next) => {
+  try {
+    const meses = [];
+    for (let k = MESES_DE_EVOLUCION - 1; k >= 0; k -= 1) {
+      const rango = rangoDeMesAtrasMxSql(k);
+      const bloque = dineroHabilitado()
+        ? consumoDesdePagos(await categoriasPagadas(req.user.id, rango))
+        : await consumoDesdeSelecciones(req.user.id, rango);
+      const { rows: [inicio] } = await pool.query(`SELECT ${rango.desde} AS t`);
+      meses.push({ basis: bloque.basis, month_start: new Date(inicio.t).toISOString(), bloque });
+    }
+    const visitas = meses.reduce((s, m) => s + m.bloque.visits, 0);
+    if (visitas > maxVisitasDelRango) {
+      return res.status(413).json({ error: 'stats_range_too_large' });
+    }
+    const total = meses.reduce((s, m) => s + m.bloque.total_cents, 0);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({
+      basis: meses[meses.length - 1].basis,
+      months: meses.map((m) => ({
+        month_start: m.month_start,
+        total_cents: m.bloque.total_cents,
+        visits: m.bloque.visits,
+        categories: m.bloque.categories,
+      })),
+      total_cents: total,
+      avg_per_month_cents: Math.floor(total / MESES_DE_EVOLUCION),
+    });
+  } catch (err) { next(err); }
+});
+
+router.get('/stats', validateQuery(statsPeriodQuery), async (req, res, next) => {
   try {
     const { rows: month } = await pool.query(
       `SELECT COALESCE(SUM(gross_amount_cents), 0) AS spent,
@@ -703,7 +879,7 @@ router.get('/stats', async (req, res, next) => {
                    ELSE 0 END AS avg_per_visit
          FROM payment_attempts
         WHERE user_id = $1 AND status IN ('succeeded','processed')
-          AND created_at >= date_trunc('month', NOW())`, [req.user.id]
+          AND created_at >= ${INICIO_DE_MES}`, [req.user.id]
     );
     const { rows: topR } = await pool.query(
       `SELECT r.name, COUNT(*)::int AS visits
@@ -728,37 +904,21 @@ router.get('/stats', async (req, res, next) => {
     // v2.98.0 · G-09 (Roadmap n77) · gasto del mes por categoría, calculado en
     // el servidor: la torta del front lo arma hoy desde /account/history con
     // limit=100 y trunca con más de 100 pagos. Sólo pagos de la cuenta del
-    // bearer. Mismo mes que `month` (date_trunc sobre la fecha del intento).
+    // bearer. Mismo mes que `month` (inicio de mes en hora de México, sobre la
+    // fecha del intento).
     // «Pagado» con la convención de G-34 (/mesas/open): intentos succeeded o
     // processed, menos lo reembolsado en payment_refunds procesados, sin bajar
     // de cero por intento. OJO: `month.spent_cents` de arriba es BRUTO (no
     // resta reembolsos) y no se cambia para no alterar lo que el front ya
     // muestra; con reembolsos, la suma de categorías puede ser menor.
-    const { rows: porCategoria } = await pool.query(
-      `SELECT r.category,
-              COALESCE(SUM(GREATEST(pa.gross_amount_cents - COALESCE(rf.reembolsado, 0), 0)), 0)
-                AS spent,
-              COUNT(*)::int AS visits
-         FROM payment_attempts pa
-         JOIN mesas m ON m.id = pa.mesa_id
-         JOIN restaurants r ON r.id = m.restaurant_id
-         LEFT JOIN (
-           SELECT payment_attempt_id, SUM(amount_cents) AS reembolsado
-             FROM payment_refunds WHERE status = 'processed'
-            GROUP BY payment_attempt_id
-         ) rf ON rf.payment_attempt_id = pa.id
-        WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
-          AND pa.created_at >= date_trunc('month', NOW())
-        GROUP BY r.category`, [req.user.id]
-    );
-    const categorias = porCategoria
-      .map((c) => ({ category: c.category, spent_cents: Number(c.spent), visits: c.visits }))
-      .filter((c) => c.spent_cents > 0)
-      .sort((a, b) => b.spent_cents - a.spent_cents || a.category.localeCompare(b.category));
+    const categorias = await categoriasPagadas(req.user.id, RANGO_DEL_MES);
+    // AB-22 · `?period=` mueve SÓLO `consumption_month`; lo demás sigue mensual.
+    const { key: periodo, rango } = periodoDe(req);
     const consumoDelMes = dineroHabilitado()
-      ? consumoDesdePagos(categorias)
-      : await consumoDesdeSelecciones(req.user.id);
+      ? consumoDesdePagos(periodo === 'this_month' ? categorias : await categoriasPagadas(req.user.id, rango))
+      : await consumoDesdeSelecciones(req.user.id, rango);
     res.json({
+      period: await periodoPublicado(periodo, rango),
       consumption_month: consumoDelMes,
       category_breakdown: {
         convention: 'net_of_processed_refunds',
@@ -782,3 +942,4 @@ router.get('/stats', async (req, res, next) => {
 module.exports = router;
 // Seam de test (NODE_ENV=test) para ejercitar el tope sin crear mil mesas.
 module.exports.fijarMaxVisitasParaTests = fijarMaxVisitasParaTests;
+module.exports.fijarMaxVisitasDelRangoParaTests = fijarMaxVisitasDelRangoParaTests;
