@@ -348,6 +348,7 @@ export async function httpPrivateAvatarRequest(
   path: string,
   expectedSession: StoredSession,
   timeoutMs = 15_000,
+  policy: { readonly requireAuthorizationVary?: boolean; readonly forbidEtag?: boolean } = {},
 ): Promise<PrivateAvatarBlob> {
   return authenticatedRequest(expectedSession, (session) => rawRequestAs<PrivateAvatarBlob>(
     'GET', path, undefined, session.access_token, timeoutMs,
@@ -356,6 +357,13 @@ export async function httpPrivateAvatarRequest(
       if (!cacheControl.split(',').map((part) => part.trim()).includes('private')
           || !cacheControl.split(',').map((part) => part.trim()).includes('no-store')) {
         throw new Error('avatar_response_cache_policy_invalid');
+      }
+      if (policy.requireAuthorizationVary) {
+        const vary = response.headers.get('vary')?.split(',').map((part) => part.trim().toLowerCase()) ?? [];
+        if (!vary.includes('authorization')) throw new Error('avatar_response_vary_invalid');
+      }
+      if (policy.forbidEtag && response.headers.has('etag')) {
+        throw new Error('avatar_response_etag_forbidden');
       }
       const contentLength = response.headers.get('content-length');
       if (contentLength === null || !/^\d+$/.test(contentLength)
@@ -378,6 +386,7 @@ export async function httpPrivateJsonRequest<T>(
   path: string,
   expectedSession?: StoredSession,
   timeoutMs = REQUEST_TIMEOUT_MS,
+  policy: { readonly requireAuthorizationVary?: boolean; readonly forbidEtag?: boolean } = {},
 ): Promise<T> {
   return authenticatedRequest(expectedSession, (session) => rawRequestAs<T>(
     'GET', path, undefined, session.access_token, timeoutMs,
@@ -387,12 +396,47 @@ export async function httpPrivateJsonRequest<T>(
       if (!tokens.includes('private') || !tokens.includes('no-store')) {
         throw new Error('private_json_cache_policy_invalid');
       }
+      if (policy.requireAuthorizationVary) {
+        const vary = response.headers.get('vary')?.split(',').map((part) => part.trim().toLowerCase()) ?? [];
+        if (!vary.includes('authorization')) throw new Error('private_json_vary_invalid');
+      }
+      if (policy.forbidEtag && response.headers.has('etag')) {
+        throw new Error('private_json_etag_forbidden');
+      }
       if (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
         throw new Error('private_json_media_type_invalid');
       }
       return (await response.json()) as T;
     },
     { Accept: 'application/json' },
+    'no-store',
+  ));
+}
+
+/** Mutación JSON privada cuya respuesta conserva el mismo contrato no-store. */
+export async function httpPrivateJsonMutationRequest<T>(
+  path: string,
+  body: unknown,
+  expectedSession: StoredSession,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  return authenticatedRequest(expectedSession, (session) => rawRequestAs<T>(
+    'POST', path, body, session.access_token, timeoutMs,
+    async (response) => {
+      const cacheControl = response.headers.get('cache-control')?.toLowerCase() ?? '';
+      const tokens = cacheControl.split(',').map((part) => part.trim());
+      if (!tokens.includes('private') || !tokens.includes('no-store')) {
+        throw new Error('private_json_cache_policy_invalid');
+      }
+      const vary = response.headers.get('vary')?.split(',').map((part) => part.trim().toLowerCase()) ?? [];
+      if (!vary.includes('authorization')) throw new Error('private_json_vary_invalid');
+      if (response.headers.has('etag')) throw new Error('private_json_etag_forbidden');
+      if (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
+        throw new Error('private_json_media_type_invalid');
+      }
+      return (await response.json()) as T;
+    },
+    { Accept: 'application/json', 'Content-Type': 'application/json' },
     'no-store',
   ));
 }

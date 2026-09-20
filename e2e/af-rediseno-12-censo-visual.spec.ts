@@ -166,14 +166,15 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await acreditar(page, '06-compartir');
 
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByText('Elige lo que consumiste', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+  await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
 
   // F2-03 · de acá en adelante el recorrido prueba el CORTE, así que el modo
   // se declara y se recarga. Las seis superficies ya capturadas quedaron con el
   // riel vivo —incluida la garantía, que con el dinero apagado no existe—; la
   // divergencia se declara en la entrega, no se tapa cambiando el censo.
   await declararCorteYRecargar(page);
-  await expect(page.getByText('Elige lo que consumiste', { exact: true })).toBeVisible();
+  await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
   await expect(page.getByText(/queda reservado/)).toHaveCount(0);
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'clipboard', {

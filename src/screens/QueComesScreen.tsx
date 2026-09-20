@@ -111,6 +111,7 @@ export function QueComesScreen() {
   // mismos platos, agrupados. Sólo si los platos son del MISMO período confirmado.
   const platosDelMismoPeriodo = datos !== null && datos.period?.key === periodoDeLaVista?.key ? datos : null;
   const efectiva: ClavePeriodo = soportaPeriodo ? clave : 'this_month';
+  const pestanaActiva: Pestana = verMomentos ? 'momento' : verIngredientes ? 'ingrediente' : 'platos';
 
   return (
     <div className="screen has-appbar">
@@ -151,12 +152,16 @@ export function QueComesScreen() {
         {/* Las pestañas del diseño 2c, en su orden: «Platos», «Ingrediente» (AF-38)
             y «Momento» (AF-32). Cada una aparece si su ruta existe; sin ninguna
             (dos 404) no hay pestañas. */}
-        {conPestanas && (
-          <div className="seg stat-pestanas" role="tablist" aria-label={t('Qué comes')}>
+        <div className={conPestanas ? 'stat-tabs-shell' : undefined}>
+          {conPestanas && (
+            <div className="seg stat-pestanas" role="tablist" aria-label={t('Qué comes')}>
             <button
               type="button"
+              id="que-comes-tab-platos"
               role="tab"
               aria-selected={!verMomentos && !verIngredientes}
+              aria-controls="que-comes-panel"
+              tabIndex={!verMomentos && !verIngredientes ? 0 : -1}
               className={`seg-btn ${!verMomentos && !verIngredientes ? 'on' : ''}`}
               onClick={() => setPestana('platos')}
             >
@@ -165,8 +170,11 @@ export function QueComesScreen() {
             {conIngrediente && (
               <button
                 type="button"
+                id="que-comes-tab-ingrediente"
                 role="tab"
                 aria-selected={verIngredientes}
+                aria-controls="que-comes-panel"
+                tabIndex={verIngredientes ? 0 : -1}
                 className={`seg-btn ${verIngredientes ? 'on' : ''}`}
                 onClick={() => setPestana('ingrediente')}
               >
@@ -176,56 +184,67 @@ export function QueComesScreen() {
             {conMomento && (
               <button
                 type="button"
+                id="que-comes-tab-momento"
                 role="tab"
                 aria-selected={verMomentos}
+                aria-controls="que-comes-panel"
+                tabIndex={verMomentos ? 0 : -1}
                 className={`seg-btn ${verMomentos ? 'on' : ''}`}
                 onClick={() => setPestana('momento')}
               >
                 {t('Momento')}
               </button>
             )}
-          </div>
-        )}
-        {verMomentos ? (
-          <VistaDeMomentos estado={momentos} clave={efectiva} onReintentar={cargar} />
-        ) : verIngredientes ? (
-          <VistaDeIngredientes
-            estado={ingredientes}
-            clave={efectiva}
-            platosDistintos={platosDelMismoPeriodo?.distinctDishes ?? null}
-            onReintentar={cargar}
-          />
-        ) : estado.tipo === 'cargando' ? (
-          <div aria-busy="true" aria-label={t('Cargando tus platos')}>
-            <div className="stat-hero sk">
-              <span className="sk-line w40" />
-              <span className="sk-line w70 tall" />
             </div>
-          </div>
-        ) : estado.tipo === 'error' ? (
-          <div className="state-error">
-            <div className="state-error-row">
-              <Icon name="x-circle" size={22} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="state-error-title">{t('No pudimos cargar tus platos')}</div>
-                <p className="state-error-body">{t('Revisa la conexión y prueba de nuevo.')}</p>
+          )}
+          <div
+            id={conPestanas ? 'que-comes-panel' : undefined}
+            role={conPestanas ? 'tabpanel' : undefined}
+            aria-labelledby={conPestanas ? `que-comes-tab-${pestanaActiva}` : undefined}
+            className={conPestanas ? 'stat-tabs-panel' : undefined}
+          >
+            {verMomentos ? (
+              <VistaDeMomentos estado={momentos} clave={efectiva} onReintentar={cargar} />
+            ) : verIngredientes ? (
+              <VistaDeIngredientes
+                estado={ingredientes}
+                clave={efectiva}
+                platosDistintos={platosDelMismoPeriodo?.distinctDishes ?? null}
+                onReintentar={cargar}
+              />
+            ) : estado.tipo === 'cargando' ? (
+              <div aria-busy="true" aria-label={t('Cargando tus platos')}>
+                <div className="stat-hero sk">
+                  <span className="sk-line w40" />
+                  <span className="sk-line w70 tall" />
+                </div>
               </div>
-            </div>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={cargar}>
-              {t('Reintentar')}
-            </button>
+            ) : estado.tipo === 'error' ? (
+              <div className="state-error">
+                <div className="state-error-row">
+                  <Icon name="x-circle" size={22} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="state-error-title">{t('No pudimos cargar tus platos')}</div>
+                    <p className="state-error-body">{t('Revisa la conexión y prueba de nuevo.')}</p>
+                  </div>
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={cargar}>
+                  {t('Reintentar')}
+                </button>
+              </div>
+            ) : !conDatos || datos === null ? (
+              <div className="mesa-empty">
+                <div className="mesa-empty-title">
+                  {efectiva === 'this_month'
+                    ? t('Todavía no registramos platos este mes.')
+                    : t('No registramos platos en este período.')}
+                </div>
+              </div>
+            ) : (
+              <TusPlatos datos={datos} clave={efectiva} />
+            )}
           </div>
-        ) : !conDatos || datos === null ? (
-          <div className="mesa-empty">
-            <div className="mesa-empty-title">
-              {efectiva === 'this_month'
-                ? t('Todavía no registramos platos este mes.')
-                : t('No registramos platos en este período.')}
-            </div>
-          </div>
-        ) : (
-          <TusPlatos datos={datos} clave={efectiva} />
-        )}
+        </div>
       </div>
 
       <AppBottomBar active={null} />

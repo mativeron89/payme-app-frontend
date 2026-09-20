@@ -27,6 +27,16 @@ export interface TuMesa {
   /** `null` si el dueño no mandó un conteo/monto válido: la fila no lo muestra. */
   readonly itemsCount: number | null;
   readonly amountCents: number | null;
+  /** Detalle propio opt-in. `null` = no vino o falló su validación. */
+  readonly items: readonly ItemPropioDeMesa[] | null;
+}
+
+export interface ItemPropioDeMesa {
+  readonly itemId: string;
+  readonly quantity: number;
+  readonly name: string;
+  readonly fractionBps: number;
+  readonly amountCents: number;
 }
 
 export interface PaginaMisMesas {
@@ -46,6 +56,32 @@ function enteroNoNegativo(v: unknown): number | null {
   return typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : null;
 }
 
+function itemsPropios(
+  raw: unknown,
+  divisionMode: TuMesa['divisionMode'],
+  itemsCount: number | null,
+  amountCents: number | null,
+): readonly ItemPropioDeMesa[] | null {
+  if (!Array.isArray(raw) || itemsCount === null || amountCents === null) return null;
+  const decoded: ItemPropioDeMesa[] = [];
+  for (const value of raw) {
+    if (!objeto(value) || Object.keys(value).sort().join(',') !== 'amount_cents,fraction_bps,item_id,name,quantity') return null;
+    const itemId = texto(value.item_id);
+    const name = texto(value.name);
+    const quantity = enteroNoNegativo(value.quantity);
+    const fractionBps = enteroNoNegativo(value.fraction_bps);
+    const itemAmount = enteroNoNegativo(value.amount_cents);
+    if (!itemId || !name || quantity === null || quantity < 1 || fractionBps === null
+      || fractionBps < 1 || fractionBps > 10000 || itemAmount === null) return null;
+    decoded.push({ itemId, quantity, name, fractionBps, amountCents: itemAmount });
+  }
+  if (divisionMode === 'igual') return decoded.length === 0 ? decoded : null;
+  if (divisionMode !== 'consumo') return null;
+  if (decoded.length !== itemsCount) return null;
+  const sum = decoded.reduce((total, item) => total + item.amountCents, 0);
+  return Number.isSafeInteger(sum) && sum === amountCents ? decoded : null;
+}
+
 function fila(raw: unknown): TuMesa | null {
   if (!objeto(raw)) return null;
   const id = texto(raw.id);
@@ -55,21 +91,25 @@ function fila(raw: unknown): TuMesa | null {
   if (!id || !code || !status) return null;
   const restaurante = objeto(raw.restaurant) ? raw.restaurant : {};
   const mine = objeto(raw.mine) ? raw.mine : {};
+  const divisionMode = raw.division_mode === 'consumo' || raw.division_mode === 'igual' ? raw.division_mode : null;
+  const itemsCount = enteroNoNegativo(mine.items_count);
+  const amountCents = enteroNoNegativo(mine.amount_cents);
   return {
     id,
     code,
     restaurante: texto(restaurante.name),
     categoria: texto(restaurante.category),
     status,
-    divisionMode: raw.division_mode === 'consumo' || raw.division_mode === 'igual' ? raw.division_mode : null,
+    divisionMode,
     guaranteeMode: typeof raw.guarantee_mode === 'boolean' ? raw.guarantee_mode : null,
     closureReason: raw.closure_reason === 'all_items_selected' || raw.closure_reason === 'time'
       || raw.closure_reason === 'closed_by_organizer'
       ? raw.closure_reason
       : null,
     createdAt: texto(raw.created_at),
-    itemsCount: enteroNoNegativo(mine.items_count),
-    amountCents: enteroNoNegativo(mine.amount_cents),
+    itemsCount,
+    amountCents,
+    items: itemsPropios(mine.items, divisionMode, itemsCount, amountCents),
   };
 }
 

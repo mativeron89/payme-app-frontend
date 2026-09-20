@@ -58,6 +58,13 @@ test.describe('AF-31 · Qué comes (2c)', () => {
     await expect(page.getByText('Lo cobrado por cada plato, sin la propina.')).toHaveCount(0);
     // AF-38: las tres pestañas del diseño, en su orden.
     await expect(page.getByRole('tablist', { name: 'Qué comes' }).getByRole('tab')).toHaveText(['Platos', 'Ingrediente', 'Momento']);
+    const panel = page.getByRole('tabpanel');
+    await expect(panel).toHaveAttribute('aria-labelledby', 'que-comes-tab-platos');
+    const [tabBox, panelBox] = await Promise.all([
+      page.getByRole('tab', { name: 'Platos' }).boundingBox(),
+      panel.boundingBox(),
+    ]);
+    expect(Math.abs(((tabBox?.y ?? 0) + (tabBox?.height ?? 0)) - (panelBox?.y ?? 0))).toBeLessThanOrEqual(1);
     // AF-32: «Momento» ya existe (2e, v2.109.0) y es pestaña; «Ingrediente» (2d) no.
     await expect(page.getByRole('tab', { name: 'Momento' })).toBeVisible();
     await capturar(page, 'platos-01-2c');

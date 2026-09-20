@@ -11,6 +11,30 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.181.0 — Ajustes visuales y detalle histórico propio (2026-09-20)
+
+Órdenes `AF-AJUSTES10-VISUAL-20260920`, adendas U04/U08/U09 y decisiones U05
+2a/3a, base `863276b`. **Sin push ni deploy.** Dispensa de auditoría específica
+de Mati.
+
+- La selección de consumos elimina los avisos repetidos y lleva «Soltar» a una
+  X accesible dentro de la fila; el encabezado alinea marca, nombre y campana.
+- El escáner usa un marco móvil 4:3, Asociadas conserva sólo su estado honesto,
+  Historial pierde el rótulo redundante y Qué comes une pestañas con contenido.
+- Solicitudes refresca al volver a foco/visibilidad y los recibos opacos dicen
+  «Envío registrado», sin prometer que siguen pendientes ni revelar identidad.
+- Historial consume el detalle propio opt-in del candidato Backend `v2.120.0` sin
+  recalcular importes, y cae al resumen si el detalle falta o es inconsistente.
+- Las visitas abren un «Detalle digital del ticket» con los datos autorizados de
+  la mesa; no es foto, factura ni comprobante de pago y excluye atribuciones.
+- U05 presenta al titular el Aviso 2.5.5 con resumen, enlace, «Entendido» y
+  «Ahora no» no bloqueante. Sólo la acción explícita registra versión/hash; las
+  fotos de amistades viajan autenticadas como blobs efímeros, con avatar
+  genérico ante cualquier ausencia o denegación y sin persistencia local.
+- El mirror adopta los tres contratos cambiados del producto Backend `f0e0820`
+  y el inventario final `d9bf761`; integridad y paridad local quedan 109/109,
+  sin afirmar publicación del backend.
+
 ## 0.180.6 — Barra por reparto confirmado sin pagos (2026-09-20)
 
 Orden `AF-BARRA-ITEMS-CORRECCION-20260920`, base `e9ffdc0`.

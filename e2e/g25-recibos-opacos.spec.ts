@@ -22,7 +22,8 @@ test('G-25 · salientes son recibos no-oraculares y cancelar espera el 200', asy
   await page.getByRole('tab', { name: /^Solicitudes/ }).click();
 
   await expect(page.getByText('Enviadas (2)', { exact: true })).toBeVisible();
-  await expect(page.getByText('Solicitud enviada', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('Envío registrado', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('· pendiente', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Nicolás Salas', { exact: true })).toHaveCount(0);
   await expect(page.getByText('payme_mx_nico', { exact: true })).toHaveCount(0);
   await expect(page.getByText('fantasma-que-no-existe', { exact: false })).toHaveCount(0);

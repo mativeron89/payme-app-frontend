@@ -31,8 +31,7 @@ async function mesaConUnoElegido(page: Page): Promise<string> {
   await ingresar(page);
   const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
   await page.goto(`/#/mesa/${mesa.code}`);
-  // Testigo positivo del estado declarado (ver `mesa-sin-garantia.spec.ts`).
-  await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+  await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
@@ -112,7 +111,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await page.goto('/#/');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await page.goto(`/#/mesa/${code}`);
-    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
     const fila = page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first();
     await expect(fila).toContainText('Lo elegiste');
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toHaveCount(0);
@@ -195,7 +194,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true });
     await page.goto(`/#/mesa/${mesa.code}`);
-    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await expect(page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first()).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: /^Soltar/ })).toHaveCount(0);

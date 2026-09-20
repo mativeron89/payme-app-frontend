@@ -46,6 +46,7 @@ const {
   httpLogout,
   httpPrivateAvatarRequest,
   httpPrivateJsonRequest,
+  httpPrivateJsonMutationRequest,
   httpRegister,
   httpRequest,
   httpSocialSession,
@@ -562,6 +563,31 @@ describe('avatar privado: bearer, no-store y bytes acotados', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('U05 exige Vary Authorization y prohíbe ETag en el canal de amigos', async () => {
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    const strict = { requireAuthorizationVary: true, forbidEtag: true };
+    const headers = {
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': 'private, no-store',
+      'Content-Length': '4',
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(bytes, {
+      status: 200, headers: { ...headers, Vary: 'Accept-Encoding, Authorization' },
+    })));
+    await expect(httpPrivateAvatarRequest('/friends/u-2/avatar', loggedSession(), 15_000, strict))
+      .resolves.toMatchObject({ blob: { type: 'image/jpeg', size: 4 } });
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(bytes, { status: 200, headers })));
+    await expect(httpPrivateAvatarRequest('/friends/u-2/avatar', loggedSession(), 15_000, strict))
+      .rejects.toThrow('avatar_response_vary_invalid');
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(bytes, {
+      status: 200, headers: { ...headers, Vary: 'Authorization', ETag: '"revision"' },
+    })));
+    await expect(httpPrivateAvatarRequest('/friends/u-2/avatar', loggedSession(), 15_000, strict))
+      .rejects.toThrow('avatar_response_etag_forbidden');
+  });
+
   it.each([
     ['sin private', { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' }, new Uint8Array([1])],
     ['sin no-store', { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private' }, new Uint8Array([1])],
@@ -613,6 +639,33 @@ describe('avatar privado: bearer, no-store y bytes acotados', () => {
     vi.stubGlobal('fetch', vi.fn(async () => response({ shortfall_detail: {} })));
     await expect(httpPrivateJsonRequest('/mesas/PA-12345/shortfall-detail', loggedSession()))
       .rejects.toThrow('private_json_cache_policy_invalid');
+  });
+
+  it('U05 POST privado exige no-store, Vary Authorization y ausencia de ETag', async () => {
+    const expected = loggedSession();
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(init?.method).toBe('POST');
+      expect(init?.body).toBe(JSON.stringify({ notice_version: '2.5.5', notice_hash: 'h' }));
+      return new Response(JSON.stringify({ acknowledged: true }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'private, no-store',
+          Vary: 'Authorization',
+        },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(httpPrivateJsonMutationRequest(
+      '/friends/avatar-notice', { notice_version: '2.5.5', notice_hash: 'h' }, expected,
+    )).resolves.toEqual({ acknowledged: true });
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' },
+    })));
+    await expect(httpPrivateJsonMutationRequest('/friends/avatar-notice', {}, expected))
+      .rejects.toThrow('private_json_vary_invalid');
   });
 
   it('JSON privado conserva refresh único y reintenta con el bearer rotado', async () => {

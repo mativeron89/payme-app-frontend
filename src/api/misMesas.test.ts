@@ -22,8 +22,37 @@ describe('decodeMisMesas', () => {
     expect(r.mesas).toEqual([{
       id: fila.id, code: 'PA-7310', restaurante: 'Tacos El Güero', categoria: 'mexican',
       status: 'expired', divisionMode: 'consumo', guaranteeMode: false,
-      closureReason: 'all_items_selected', createdAt: fila.created_at, itemsCount: 3, amountCents: 45000,
+      closureReason: 'all_items_selected', createdAt: fila.created_at, itemsCount: 3, amountCents: 45000, items: null,
     }]);
+  });
+
+  it('detail=items lee sólo la selección propia exacta y conserva cantidad, fracción e importe canónico', () => {
+    const detail = [
+      { item_id: 'item-1', quantity: 2, name: 'Tacos', fraction_bps: 5000, amount_cents: 20000 },
+      { item_id: 'item-2', quantity: 1, name: 'Agua', fraction_bps: 10000, amount_cents: 15000 },
+      { item_id: 'item-3', quantity: 1, name: 'Postre', fraction_bps: 5000, amount_cents: 10000 },
+    ];
+    const [m] = decodeMisMesas({
+      mesas: [{ ...fila, mine: { ...fila.mine, items: detail } }],
+      page: { limit: 20, next_cursor: null },
+    }).mesas;
+    expect(m?.items).toEqual([
+      { itemId: 'item-1', quantity: 2, name: 'Tacos', fractionBps: 5000, amountCents: 20000 },
+      { itemId: 'item-2', quantity: 1, name: 'Agua', fractionBps: 10000, amountCents: 15000 },
+      { itemId: 'item-3', quantity: 1, name: 'Postre', fractionBps: 5000, amountCents: 10000 },
+    ]);
+  });
+
+  it('detalle ausente o inconsistente cae en null; igual acepta únicamente []', () => {
+    const base = { mesas: [{ ...fila }], page: { limit: 20, next_cursor: null } };
+    expect(decodeMisMesas(base).mesas[0]?.items).toBeNull();
+    expect(decodeMisMesas({ ...base, mesas: [{ ...fila, mine: { ...fila.mine, items: [
+      { item_id: 'item-1', quantity: 1, name: 'Tacos', fraction_bps: 10000, amount_cents: 44999 },
+    ] } }] }).mesas[0]?.items).toBeNull();
+    expect(decodeMisMesas({ ...base, mesas: [{ ...fila, division_mode: 'igual', mine: { ...fila.mine, items: [] } }] }).mesas[0]?.items).toEqual([]);
+    expect(decodeMisMesas({ ...base, mesas: [{ ...fila, division_mode: 'igual', mine: { ...fila.mine, items: [
+      { item_id: 'item-1', quantity: 1, name: 'Tacos', fraction_bps: 10000, amount_cents: 45000 },
+    ] } }] }).mesas[0]?.items).toBeNull();
   });
 
   it('🔴 un sobre que no es del dueño es un error, no una lista vacía', () => {

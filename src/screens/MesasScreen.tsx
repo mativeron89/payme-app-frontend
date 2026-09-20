@@ -98,6 +98,7 @@ export function MesasScreen() {
   const [fallo, setFallo] = useState(false);
   const [unread, setUnread] = useState(0);
   const [abierta, setAbierta] = useState<string | null>(null);
+  const [mesaPropiaAbierta, setMesaPropiaAbierta] = useState<string | null>(null);
   const [detalles, setDetalles] = useState<Record<string, MovementDetailResponse[] | 'loading' | 'error'>>({});
   /**
    * AF-24 · «Tus mesas», de `GET /api/mesas/mine`. Con los pagos apagados, el
@@ -113,7 +114,7 @@ export function MesasScreen() {
   const cargarMisMesas = useCallback(() => {
     setFalloMesas(false);
     setMisMesas(null);
-    api.getMyMesas()
+    api.getMyMesas({ detail: 'items' })
       .then((r) => { setMisMesas([...r.mesas]); setCursorMesas(r.nextCursor); })
       .catch(() => setFalloMesas(true));
   }, []);
@@ -121,7 +122,7 @@ export function MesasScreen() {
   const cargarMasMesas = useCallback(() => {
     if (!cursorMesas || cargandoMasMesas) return;
     setCargandoMasMesas(true);
-    api.getMyMesas({ cursor: cursorMesas })
+    api.getMyMesas({ cursor: cursorMesas, detail: 'items' })
       .then((r) => {
         setMisMesas((actual) => [...(actual ?? []), ...r.mesas]);
         setCursorMesas(r.nextCursor);
@@ -207,24 +208,59 @@ export function MesasScreen() {
     </div>
   ) : tusMesas.length > 0 || cursorMesas ? (
     <section className="tus-mesas" aria-label={t('Tus mesas')}>
-      <h2 className="sectlabel">{t('Tus mesas')}</h2>
       {tusMesas.map((m) => {
         const eleccion = textoEleccion(m, t);
-        return (
-          <div key={m.id} className="hist-item tu-mesa">
-            <div className="hist-row">
-              <span aria-hidden="true">
-                <Icon name={CATEGORY_EMOJI[m.categoria ?? ''] ?? 'dining'} size={22} />
-              </span>
-              <div className="hist-main">
-                <div className="hist-rest">{m.restaurante ?? t('Mesa {0}', m.code)}</div>
-                <div className="hist-meta">
-                  {m.createdAt && <>{fechaDeFila(m.createdAt, locale, t)}{' · '}</>}
-                  {textoEstadoTuMesa(estadoDeTuMesa(m), t)}
-                </div>
-                {eleccion && <div className="hist-meta">{eleccion}</div>}
+        const conDetalle = m.divisionMode === 'consumo' && m.items !== null && m.items.length > 0;
+        const detalleAbierto = conDetalle && mesaPropiaAbierta === m.code;
+        const fila = (
+          <>
+            <span aria-hidden="true">
+              <Icon name={CATEGORY_EMOJI[m.categoria ?? ''] ?? 'dining'} size={22} />
+            </span>
+            <div className="hist-main">
+              <div className="hist-rest">{m.restaurante ?? t('Mesa {0}', m.code)}</div>
+              <div className="hist-meta">
+                {m.createdAt && <>{fechaDeFila(m.createdAt, locale, t)}{' · '}</>}
+                {textoEstadoTuMesa(estadoDeTuMesa(m), t)}
               </div>
+              {eleccion && <div className="hist-meta">{eleccion}</div>}
             </div>
+            {conDetalle && (
+              <span className={`hist-chevron ${detalleAbierto ? 'on' : ''}`} aria-hidden="true">
+                <Icon name="chevron-down" size={20} />
+              </span>
+            )}
+          </>
+        );
+        return (
+          <div key={m.id} className={`hist-item tu-mesa ${detalleAbierto ? 'on' : ''}`}>
+            {conDetalle ? (
+              <button
+                type="button"
+                className="hist-row"
+                aria-expanded={detalleAbierto}
+                onClick={() => setMesaPropiaAbierta((actual) => actual === m.code ? null : m.code)}
+              >
+                {fila}
+              </button>
+            ) : (
+              <div className="hist-row">{fila}</div>
+            )}
+            {detalleAbierto && m.items && (
+              <div className="hist-detail" aria-label={t('Lo que elegiste')}>
+                {m.items.map((item) => (
+                  <div key={item.itemId} className="hist-detail-row">
+                    <span className="hist-detail-name">
+                      <span>{item.name}{item.quantity > 1 ? ` × ${item.quantity}` : ''}</span>
+                      {item.fractionBps < 10000 && (
+                        <span className="hist-detail-declared">{bpsLabel(item.fractionBps)}</span>
+                      )}
+                    </span>
+                    <span className="hist-detail-amount">{formatMXN(item.amountCents)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       })}

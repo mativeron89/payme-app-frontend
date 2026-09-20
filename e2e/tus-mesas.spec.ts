@@ -51,10 +51,14 @@ test('las mesas cerradas sin cobro aparecen con lo que elegiste y cómo terminar
   await ingresar(page);
   await page.goto('/#/mesas');
   await expect(seccion(page)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tus mesas', exact: true })).toHaveCount(0);
 
   const guero = seccion(page).locator('.tu-mesa').filter({ hasText: 'Tacos El Güero' });
   await expect(guero).toContainText('Cerró sin cobro');
   await expect(guero).toContainText('Elegiste 3 ítems · $450.00');
+  await guero.getByRole('button').click();
+  await expect(guero.getByText('Tacos al pastor × 2')).toBeVisible();
+  await expect(guero).toContainText('$200.00');
   // En `igual` se eligen PARTES.
   await expect(seccion(page).locator('.tu-mesa').filter({ hasText: 'Café Tacuba' }))
     .toContainText('Elegiste 1 parte · $180.00');

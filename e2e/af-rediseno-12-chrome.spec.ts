@@ -45,9 +45,14 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     await expect(barra.locator('..')).toHaveCSS('position', 'absolute');
     await expect(barra.locator('..')).toHaveCSS('border-top-left-radius', '24px');
     await expect(titulo).toContainText('Encuadra el ticket dentro del marco');
-    await expect(page.locator('.scan-frame')).toHaveCSS('height', '400px');
+    const scanBox = await page.locator('.scan-frame').boundingBox();
+    expect((scanBox?.width ?? 0) / (scanBox?.height ?? 1)).toBeCloseTo(4 / 3, 1);
+    expect((scanBox?.y ?? 0) + (scanBox?.height ?? 0)).toBeLessThan(fabBox?.y ?? Infinity);
     await expect(page.locator('.scan-frame')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
     await expect(page.locator('.scan-frame-slot')).toHaveCSS('align-items', 'center');
+    if (process.env.PAYME_E2E_CAPTURAS) {
+      await page.screenshot({ path: `${process.env.PAYME_E2E_CAPTURAS}/u06-scan-frame.png`, fullPage: true });
+    }
 
     const shell = await page.locator('.app').evaluate((node) => ({
       clientHeight: node.clientHeight,

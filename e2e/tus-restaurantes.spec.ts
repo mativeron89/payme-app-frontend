@@ -40,7 +40,7 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     await expect(page.locator('.stat-burbuja')).toContainText('$2,165.00');
     await expect(page.locator('.stat-burbuja')).toContainText('3 lugares · 6 visitas');
     await expect(page.locator('.rest-card')).toHaveCount(3);
-    await expect(page.getByText('Lo que elegiste en tus mesas.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Lo que elegiste en tus mesas.', { exact: true })).toHaveCount(0);
     await capturar(page, 'restaurantes-01-cerrada');
     await page.getByRole('button', { name: 'Volver' }).click();
     await expect(page).toHaveURL(/#\/estadisticas$/);
@@ -60,6 +60,11 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     // La primera visita que arma el mock es la más NUEVA (va arriba) y trae el
     // plato a medias.
     await visitas.first().getByRole('button').click();
+    const dialog = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('No es una foto, factura ni comprobante de pago.');
+    await expect(dialog).toContainText('Total del ticket');
+    await dialog.getByRole('button', { name: 'Cerrar' }).click();
     const consumido = parolaccia.locator('.rest-items');
     await expect(consumido).toBeVisible();
     await expect(consumido.locator('.rest-item')).toHaveCount(3);

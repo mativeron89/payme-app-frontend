@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import { ordenDeCocinas, visitasDelMes, type TusRestaurantes, type Visita } from '../api/tusRestaurantes';
@@ -15,6 +15,7 @@ import { bpsLabel } from './mesaItemsView';
 import { lugaresYVisitas, nombreDeCocina, visitasTexto } from '../utils/textosDeEstadisticas';
 import { usePeriodoEstadisticas, type ClavePeriodo } from '../api/periodoEstadisticas';
 import { SelectorDePeriodo } from './SelectorDePeriodo';
+import { TicketDigitalDialog } from '../components/TicketDigitalDialog';
 
 /**
  * **Tus restaurantes** — pantalla 2b del diseño de «Mis estadísticas» (AF-29,
@@ -45,6 +46,8 @@ export function TusRestaurantesScreen() {
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
   const [abierto, setAbierto] = useState<string | null>(null);
   const [visitaAbierta, setVisitaAbierta] = useState<string | null>(null);
+  const [ticketCode, setTicketCode] = useState<string | null>(null);
+  const ticketTriggerRef = useRef<HTMLButtonElement | null>(null);
   /** AF-31 · el período elegido en 2a, conservado al navegar. */
   const clave = usePeriodoEstadisticas();
 
@@ -75,6 +78,8 @@ export function TusRestaurantesScreen() {
     setAbierto((a) => (a === id ? null : id));
     setVisitaAbierta(null);
   }
+
+  const cerrarTicket = useCallback(() => setTicketCode(null), []);
 
   return (
     <div className="screen has-appbar">
@@ -162,7 +167,12 @@ export function TusRestaurantesScreen() {
                               type="button"
                               className="rest-visita-fila"
                               aria-expanded={abiertaV}
-                              onClick={() => setVisitaAbierta((a) => (a === clave ? null : clave))}
+                              aria-haspopup="dialog"
+                              onClick={(event) => {
+                                setVisitaAbierta(clave);
+                                ticketTriggerRef.current = event.currentTarget;
+                                setTicketCode(v.code);
+                              }}
                             >
                               <span className="rest-visita-fecha">{f ? `${dias[f.diaSemana]} ${f.diaMes}` : '—'}</span>
                               <span className="rest-visita-hora">{f ? f.hora : ''}</span>
@@ -178,15 +188,18 @@ export function TusRestaurantesScreen() {
                 </section>
               );
             })}
-            <p className="rest-pie">
-              {datos.basis === 'consumption'
-                ? t('Lo que elegiste en tus mesas.')
-                : t('Lo que pagaste, descontando reembolsos. Cada visita incluye la propina; los platos, no.')}
-            </p>
+            {datos.basis !== 'consumption' && (
+              <p className="rest-pie">
+                {t('Lo que pagaste, descontando reembolsos. Cada visita incluye la propina; los platos, no.')}
+              </p>
+            )}
           </div>
         )}
       </div>
 
+      {ticketCode && (
+        <TicketDigitalDialog code={ticketCode} onClose={cerrarTicket} returnFocusRef={ticketTriggerRef} />
+      )}
       <AppBottomBar active={null} />
     </div>
   );

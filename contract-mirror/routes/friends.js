@@ -38,6 +38,8 @@ const {
 } = require('../schemas');
 const notifs = require('../services/notifications');
 const logger = require('../utils/logger');
+const profileIdentity = require('../services/profileIdentity');
+const avatarNotice = require('../services/friendAvatarNotice');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -101,6 +103,42 @@ router.get('/', async (req, res, next) => {
       })),
     });
   } catch (err) { next(err); }
+});
+
+// GET sólo informa; únicamente POST explícito puede guardar un acuse propio.
+for (const method of ['get', 'post']) {
+  router[method]('/avatar-notice', async (req, res, next) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Vary', 'Authorization');
+    try {
+      const result = method === 'get' ? await avatarNotice.state(req.user.id)
+        : await avatarNotice.acknowledge(req.user.id, req.body);
+      return res.type('application/json').end(JSON.stringify(result));
+    } catch (err) {
+      if (['invalid_notice_payload', 'notice_mismatch', 'legal_text_unavailable', 'auth_required'].includes(err.code)) {
+        return res.status(err.status).type('application/json').end(JSON.stringify({ error: err.code }));
+      }
+      return next(err);
+    }
+  });
+}
+
+// U05: sólo entre amistades aceptadas; mismo fallback ante toda denegación.
+router.get('/:userId/avatar', async (req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Vary', 'Authorization');
+  const absent = () => res.status(404).type('application/json')
+    .end(JSON.stringify({ error: 'avatar_not_found' }));
+  try {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.userId)) {
+      return absent();
+    }
+    const avatar = await profileIdentity.obtenerAvatarDeAmigo(req.user.id, req.params.userId);
+    if (!avatar) return absent();
+    res.type(avatar.mimeType);
+    res.setHeader('Content-Length', String(avatar.bytes.length));
+    return res.end(avatar.bytes);
+  } catch (err) { return next(err); }
 });
 
 router.get('/search', validateQuery(searchFriends), async (req, res, next) => {
@@ -187,6 +225,14 @@ router.post('/', solicitudLimiter, validateBody(addFriend), async (req, res, nex
              WHERE friendships.status <> 'blocked'`,
           [req.user.id, destino.id]
         );
+        // Sólo el recibo NUEVO: no correlacionar NULL históricos.
+        await client.query(
+          `UPDATE friend_request_receipts SET friendship_id=(
+             SELECT id FROM friendships WHERE user_id=$1 AND friend_user_id=$2
+               AND status='accepted'
+           ) WHERE id=$3 AND requester_user_id=$1`,
+          [req.user.id, destino.id, receipt.id]
+        );
         return { outcome: 'accepted_reciprocal', requestId: receipt.id };
       }
       const creada = await client.query(
@@ -198,7 +244,7 @@ router.post('/', solicitudLimiter, validateBody(addFriend), async (req, res, nex
       );
       const friendshipId = creada.rows[0]?.id || (await client.query(
         `SELECT id FROM friendships
-          WHERE user_id=$1 AND friend_user_id=$2 AND status='pending'`,
+          WHERE user_id=$1 AND friend_user_id=$2 AND status IN ('pending','accepted')`,
         [req.user.id, destino.id]
       )).rows[0]?.id || null;
       if (friendshipId) {
@@ -242,10 +288,17 @@ router.get('/requests', validateQuery(friendRequestsQuery), async (req, res, nex
     const entrantes = direction === 'incoming';
     if (!entrantes) {
       const { rows } = await pool.query(
-        `SELECT id, created_at
-           FROM friend_request_receipts
-          WHERE requester_user_id=$1
-          ORDER BY created_at DESC, id DESC
+        `SELECT receipt.id, receipt.created_at
+           FROM friend_request_receipts receipt
+          WHERE receipt.requester_user_id=$1
+            -- Ocultar sólo amistad aceptada que GET /friends ya permite ver.
+            -- NULL/rechazado/inexistente/bloqueado conservan recibo opaco.
+            AND NOT EXISTS (
+              SELECT 1 FROM friendships f JOIN users u ON u.id=f.friend_user_id
+               WHERE f.id=receipt.friendship_id AND f.user_id=$1
+                 AND f.status='accepted' AND u.status='active'
+            )
+          ORDER BY receipt.created_at DESC, receipt.id DESC
           LIMIT 100`,
         [req.user.id]
       );

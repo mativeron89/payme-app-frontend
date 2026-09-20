@@ -25,6 +25,7 @@ import { AppBottomBar } from '../components/AppBottomBar';
 import {
   AppHeader, BubbleTabs, Launcher, MountedCard, type BubbleTab,
 } from '../components/AppHeader';
+import { FriendAvatarNotice } from '../components/FriendAvatarNotice';
 
 /**
  * §1.1 · Inicio — y §1.11, que **es la misma pantalla**: las tres pestañas SON
@@ -273,14 +274,12 @@ export function HomeScreen() {
                 <Icon name="info" size={20} />
                 <div>
                   <div className="state-unknown-title">{t('Todavía no está disponible')}</div>
-                  <p className="state-unknown-body">
-                    {t('Asociar la cuenta de otra persona toca cómo se autoriza un pago, así que no la abrimos hasta tenerlo resuelto.')}
-                  </p>
                 </div>
               </div>
             </div>
           )}
         </MountedCard>
+        <FriendAvatarNotice />
 
         {/* ─── La burbuja de la mesa. Va DEBAJO de los accesos, no arriba. ─── */}
         <section className="home-mesa" aria-label={t('Tu mesa abierta')}>

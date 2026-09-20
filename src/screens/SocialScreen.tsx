@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import type { Friend, Group, GroupDetailResponse } from '../api/types';
@@ -13,10 +13,14 @@ import { navigate } from '../router';
 import { useWalletRail } from '../api/walletRail';
 import { fold, relTime } from '../utils/format';
 import { fullName } from '../utils/identity';
+import { isCurrentSession } from '../api/storage';
+import { RequestEpoch } from '../utils/requestEpoch';
 import {
   cancelOutgoingReceipt, incomingRowView, outgoingRowView,
   type IncomingRowView, type OutgoingRowView,
 } from './friendRequestsView';
+import { FriendAvatarNotice } from '../components/FriendAvatarNotice';
+import { FriendAvatar } from '../components/FriendAvatar';
 
 /**
  * §1.9 · La sección social — **UNA pantalla con tres pestañas**: Amigos, Grupos
@@ -71,6 +75,7 @@ export function SocialScreen() {
 
   // ─── Amigos ───
   const [friends, setFriends] = useState<Friend[] | null>(null);
+  const [friendsRevision, setFriendsRevision] = useState(0);
   const [filtroAmigos, setFiltroAmigos] = useState('');
   const [adding, setAdding] = useState(false);
   const [newQuery, setNewQuery] = useState('');
@@ -95,27 +100,75 @@ export function SocialScreen() {
    */
   const [outgoing, setOutgoing] = useState<OutgoingRowView[]>([]);
   const [reqBusy, setReqBusy] = useState<string | null>(null);
+  const friendsEpoch = useRef(new RequestEpoch());
+  const groupsEpoch = useRef(new RequestEpoch());
+  const requestsEpoch = useRef(new RequestEpoch());
 
-  function loadRequests() {
-    void api.getIncomingFriendRequests()
-      .then((r) => setIncoming(r.requests.map(incomingRowView))).catch(() => undefined);
-    void api.getOutgoingFriendRequests()
-      .then((r) => setOutgoing(r.requests.map(outgoingRowView))).catch(() => undefined);
-  }
+  const loadRequests = useCallback(() => {
+    if (!session || !isCurrentSession(session)) return;
+    const expected = session;
+    const epoch = requestsEpoch.current.next();
+    void Promise.all([api.getIncomingFriendRequests(), api.getOutgoingFriendRequests()])
+      .then(([entrantes, salientes]) => {
+        if (!requestsEpoch.current.isCurrent(epoch) || !isCurrentSession(expected)) return;
+        setIncoming(entrantes.requests.map(incomingRowView));
+        setOutgoing(salientes.requests.map(outgoingRowView));
+      })
+      .catch(() => undefined);
+  }, [session]);
 
-  function loadFriends() {
-    api.getFriends().then((r) => setFriends(r.friends)).catch(() => setFriends([]));
-  }
+  const loadFriends = useCallback(() => {
+    if (!session || !isCurrentSession(session)) return;
+    // Revoca los blobs visibles antes de revalidar la relación y los permisos.
+    setFriendsRevision((value) => value + 1);
+    const expected = session;
+    const epoch = friendsEpoch.current.next();
+    api.getFriends()
+      .then((r) => {
+        if (friendsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setFriends(r.friends);
+      })
+      .catch(() => {
+        if (friendsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setFriends([]);
+      });
+  }, [session]);
 
-  function loadGroups() {
-    api.getGroups().then((r) => setGroups(r.groups)).catch(() => setGroups([]));
-  }
+  const loadGroups = useCallback(() => {
+    if (!session || !isCurrentSession(session)) return;
+    const expected = session;
+    const epoch = groupsEpoch.current.next();
+    api.getGroups()
+      .then((r) => {
+        if (groupsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setGroups(r.groups);
+      })
+      .catch(() => {
+        if (groupsEpoch.current.isCurrent(epoch) && isCurrentSession(expected)) setGroups([]);
+      });
+  }, [session]);
 
   useEffect(() => {
     loadFriends();
     loadGroups();
     loadRequests();
-  }, []);
+    return () => {
+      friendsEpoch.current.next();
+      groupsEpoch.current.next();
+      requestsEpoch.current.next();
+    };
+  }, [loadFriends, loadGroups, loadRequests]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadFriends();
+      loadRequests();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [loadFriends, loadRequests]);
 
   /** Entrante: solicitud. Saliente: receipt. Nunca viaja el id de persona. */
   async function resolveRequest(
@@ -169,14 +222,7 @@ export function SocialScreen() {
       toast(t('Si tiene PayMe, le va a llegar tu solicitud'));
       setNewQuery('');
       setAdding(false);
-      // 🔴 G-25 · retiro de compatibilidad legacy (2026-09-18, E0 PASS): la
-      // ventana de convivencia con Backend < v2.71 ya cerró (owner-first
-      // cumplido, `9c5a7b14` en producción), así que el riesgo original de
-      // reabrir el oráculo con una recarga inmediata ya no aplica — el owner
-      // crea un recibo opaco por intento, exista o no la persona. Esta línea
-      // sigue sin recargar la lista de todos modos: agregar `loadRequests()`
-      // acá es un cambio de comportamiento de UI, no de contrato, y queda
-      // fuera del alcance de esta orden (12 paths, sólo DTO).
+      loadRequests();
     } catch {
       toast(t('No pudimos enviar la solicitud. Prueba de nuevo.'));
     } finally {
@@ -373,6 +419,7 @@ export function SocialScreen() {
             />
           )}
         </MountedCard>
+        <FriendAvatarNotice />
 
         {/* ─── Burbuja aparte: buscador arriba, listado alfabético debajo ─── */}
         {tab === 'amigos' && (
@@ -427,7 +474,7 @@ export function SocialScreen() {
               )}
               {amigosVisibles?.map((f) => (
                 <div key={f.id} className="friend-row" style={{ cursor: 'default' }}>
-                  <Avatar name={f.full_name} />
+                  <FriendAvatar friendId={f.id} name={f.full_name} refreshToken={friendsRevision} />
                   <div className="fr-name">
                     <div className="n">{f.full_name}</div>
                     <div className="id">{f.payme_id}</div>
@@ -452,6 +499,7 @@ export function SocialScreen() {
                         await api.removeFriend(f.id);
                         toast(t('Amigo quitado'));
                         loadFriends();
+                        loadRequests();
                       } catch {
                         toast(t('No se pudo quitar de tus amigos'));
                       }
@@ -666,8 +714,8 @@ function SolicitudesPanel({
                 <Icon name="clock" size={18} />
               </div>
               <div className="fr-name">
-                <div className="n">{t('Solicitud enviada')}</div>
-                <div className="id">{relTime(r.requestedAt, undefined, t)} {t('· pendiente')}</div>
+                <div className="n">{t('Envío registrado')}</div>
+                <div className="id">{relTime(r.requestedAt, undefined, t)}</div>
               </div>
               <button
                 className="btn btn-ghost btn-sm btn-fit"

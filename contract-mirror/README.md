@@ -8,34 +8,42 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-09-20**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`2198f4ceb5059bdf0d63cc08ff9fd26d66b8a016`**
-  (App Backend **v2.117.3**: `services/profileIdentity.js` declara el Aviso
-  **2.5.4** para ticket y comercio privado).
+  **`f0e0820951cc4b0297b111dc34be852612afa951`**
+  (App Backend **v2.120.0**: acuse explícito del Aviso **2.5.5**, foto privada
+  entre amistades aceptadas y los contratos U04/U08 ya incorporados).
 - Commit local del que se tomó el inventario autoritativo:
-  **`4bcbb7bb090639a910a54da8dd2ecfca46c81c0a`** (tree
-  `5d5a8276d055549ad639a7276c39edd8c00b9bbb`). El inventario declara primero
-  el contenido exacto `2198f4c`; `4bcbb7b` sólo publica localmente ese
-  inventario regenerado.
+  **`d9bf7616e27a6deeea1876d2b4b5bcb69810bc5e`** (tree
+  `73253371b8f41e382bb3217dd3f3aa9f59717e95`). El inventario declara primero
+  el contenido exacto `f0e0820`; `d9bf761` sólo publica el inventario derivado.
 
 🔴 **No acredita publicación ni producción:** ambos objetos son locales y este
 refresh no hizo push, deploy ni consulta remota.
 
 🆕 **109 archivos espejados** más este README. Contra el corte anterior
-(`5c63bcf`) cambia exactamente uno: `services/profileIdentity.js`. No hay altas,
-bajas ni renombrados.
+(`2198f4c`) cambian exactamente tres: `routes/friends.js`, `routes/mesas.js` y
+`services/profileIdentity.js`. No hay altas, bajas ni renombrados.
 
 ### Verificación de esta adopción, con su resultado literal
 
-`PAYME_APP_BACKEND_DIR` apuntó al worktree owner limpio en `4bcbb7b`. Los gates
-leen el commit de contenido `2198f4c` declarado por el inventario y comparan su
-vigencia con ese HEAD local.
+`PAYME_APP_BACKEND_DIR` apuntó al repositorio owner que contiene ambos objetos.
+Los gates leen exclusivamente el commit de contenido `f0e0820` declarado por
+el inventario final tomado de `d9bf761`.
 
 | gate | resultado |
 |---|---|
-| `--adoptar-inventario` | **adoptado y verificado: 109 archivos · commit `2198f4c`** · exit 0 |
 | `--integridad` | **OK 109/109** contra el inventario · exit 0 |
-| `--paridad` | **OK 109/109**: espejo = inventario = fuente **en `2198f4c`** · exit 0 |
-| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD owner (`4bcbb7b`) · exit 0 |
+| `--paridad` | **OK 109/109**: espejo = inventario = fuente **en `f0e0820`** · exit 0 |
+
+No se ejecutó `--vigencia`: el HEAD mutable del dueño no es el oráculo de esta
+adopción. Mandan el producto `f0e0820` y su inventario derivado `d9bf761`.
+
+### Refresh anterior · 2026-09-20 (Aviso 2.5.4 y ticket privado · `2198f4c`)
+
+- Población: 109 archivos.
+- Inventario: `4bcbb7bb090639a910a54da8dd2ecfca46c81c0a` (tree
+  `5d5a8276d055549ad639a7276c39edd8c00b9bbb`).
+- Cambio del corte: `services/profileIdentity.js`, con Aviso 2.5.4.
+- Gates registrados: integridad, paridad y vigencia 109/109 · exit 0.
 
 ### Refresh anterior · 2026-09-19 (OCR v2 y presupuestos · `5c63bcf`)
 

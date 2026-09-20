@@ -2042,8 +2042,9 @@ body {
    (§5 bis · D). Es el único elemento oscuro de la pantalla.
    ══════════════════════════════════════════════════════════════════════════ */
 .scan-frame {
-  width: 100%;
-  height: 400px;
+  width: min(100%, 520px, calc(42dvh * 4 / 3));
+  height: auto;
+  aspect-ratio: 4 / 3;
   flex: none;
   border-radius: var(--r-lg);
   border: 1px solid var(--border);
@@ -2153,6 +2154,7 @@ body {
   min-height: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 .scan-upload-progress {
@@ -2241,6 +2243,84 @@ body {
   color: #fff;
   font-size: 15px;
   flex-shrink: 0;
+}
+
+.friend-avatar-image {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--gray-l);
+}
+
+/* U05 · aviso no modal: informa y permite seguir usando toda la app. */
+.friend-avatar-notice {
+  display: flex;
+  gap: var(--sp-3);
+  margin: var(--sp-4) var(--sp-4) 0;
+  padding: var(--sp-4);
+  border: 1px solid color-mix(in srgb, var(--teal) 35%, var(--border));
+  border-radius: var(--r-lg);
+  background: var(--teal-l);
+  color: var(--text);
+}
+
+.friend-avatar-notice-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--teal-d, #0a7b80);
+}
+
+.friend-avatar-notice-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.friend-avatar-notice-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 800;
+}
+
+.friend-avatar-notice p {
+  margin: var(--sp-1) 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-muted);
+}
+
+.friend-avatar-notice a {
+  display: inline-flex;
+  min-height: var(--tap-min);
+  align-items: center;
+  color: var(--link);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.friend-avatar-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.friend-avatar-notice-actions .btn {
+  min-height: var(--tap-min);
+  padding-inline: var(--sp-4);
+}
+
+.friend-avatar-notice-error {
+  margin-top: var(--sp-2);
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  font-weight: 600;
 }
 
 /* Variante de MARCA — monograma navy sobre `--teal-l`, SIN color por persona
@@ -2729,6 +2809,17 @@ body {
   font-size: 25px;
 }
 
+/* Logo y nombre comparten una sola caja de 34px. Así el nombre se centra
+   respecto del lockup completo y sigue cediendo con elipsis ante la campana. */
+.hdr-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+}
+
 /* 1.2× el cuerpo (283d88d). El `margin-top: 1px` es el ajuste fino que la
    propia regla trae para la cabecera de la app. El mínimo del handoff para el
    símbolo dentro de un lockup sigue siendo 24px: con la variante compacta
@@ -2761,6 +2852,9 @@ body {
 
 /* Nombre COMPLETO del usuario. Trunca con elipsis; nunca empuja la campana. */
 .hdr-user {
+  display: flex;
+  align-items: center;
+  height: 34px;
   flex: 1;
   min-width: 0;
   font-family: var(--font-body);
@@ -4193,6 +4287,10 @@ body {
 
 /* ─── La lista ─── */
 
+.mi-item {
+  position: relative;
+}
+
 .mi-row {
   display: flex;
   align-items: center;
@@ -4206,6 +4304,10 @@ body {
   text-align: left;
   cursor: pointer;
   font: inherit;
+}
+
+.mi-row.has-release {
+  padding-right: calc(var(--tap-min) + var(--sp-2));
 }
 
 .mi-row:disabled {
@@ -4389,10 +4491,39 @@ body {
   color: var(--gray-d);
 }
 
-/* AF-25 · n80 · «Soltar» un consumo propio no pagado: botón secundario bajo su
-   fila, alineado con el texto (44px = check + separación, como .mi-frac). */
+/* AF-AJUSTES10 · el control de liberar vive dentro de la burbuja del consumo.
+   La X y su nombre accesible no dependen sólo del rojo; conserva 44×44. */
 .mi-soltar {
-  margin: 0 0 var(--sp-2) 44px;
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.mi-soltar:hover {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.mi-soltar:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.mi-soltar:focus-visible,
+.stat-pestanas .seg-btn:focus-visible {
+  outline: 3px solid var(--action-2);
+  outline-offset: 2px;
 }
 
 .mi-frac {
@@ -5516,10 +5647,54 @@ body {
   min-width: 64px;
 }
 
-/* ── AF-32 · las pestañas de «Qué comes» (Platos · Momento), con el `.seg` del
-   sistema. */
+/* AF-AJUSTES10 · pestañas y panel son una sola pieza, como la unión aprobada
+   de las pestañas de Inicio con su tarjeta. */
+.stat-tabs-shell {
+  border-radius: var(--r-lg);
+}
+
 .stat-pestanas {
-  margin-bottom: 12px;
+  align-items: flex-end;
+  gap: 4px;
+  margin-bottom: 0;
+  padding: 0;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: transparent;
+}
+
+.stat-pestanas .seg-btn {
+  min-height: var(--tap-min);
+  border: 1px solid transparent;
+  border-bottom-color: var(--border);
+  border-radius: 12px 12px 0 0;
+  background: var(--gray-l);
+}
+
+.stat-pestanas .seg-btn.on {
+  position: relative;
+  z-index: 1;
+  margin-bottom: -1px;
+  border-color: var(--border);
+  border-bottom-color: var(--surface);
+  background: var(--surface);
+  color: var(--navy);
+}
+
+.stat-tabs-panel {
+  min-height: 1px;
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(16, 30, 59, 0.06);
+}
+
+.stat-tabs-panel > .stat-anillo-card {
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  box-shadow: none;
+}
+
+.stat-tabs-panel > :not(.stat-anillo-card) {
+  margin: var(--sp-4);
 }
 
 /* ── AF-31 · 2c «Qué comes»: la fila del plato lleva el restaurante debajo. */
@@ -5772,6 +5947,151 @@ body {
   padding: 0 4px;
   font-size: 11.5px;
   color: var(--gray-d);
+}
+
+/* U09 · visor histórico del ticket digital. No representa una foto ni un
+   comprobante de pago: sólo proyecta los campos permitidos de GET mesa. */
+.ticket-digital-backdrop {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--sp-4);
+  background: rgba(16, 30, 59, 0.58);
+}
+
+.ticket-digital-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 520px);
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top));
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-3);
+  overflow: hidden;
+}
+
+.ticket-digital-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.ticket-digital-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.ticket-digital-head h2,
+.ticket-digital-head p {
+  margin: 0;
+}
+
+.ticket-digital-head h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  color: var(--navy);
+}
+
+.ticket-digital-head p {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.ticket-digital-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--navy);
+  cursor: pointer;
+}
+
+.ticket-digital-close:focus-visible {
+  outline: 3px solid var(--action-2);
+  outline-offset: 2px;
+}
+
+.ticket-digital-scroll {
+  min-height: 160px;
+  padding: var(--sp-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ticket-digital-restaurant {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.ticket-digital-code {
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.ticket-digital-items {
+  margin: var(--sp-4) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticket-digital-items li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--sp-2);
+  align-items: baseline;
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ticket-digital-qty,
+.ticket-digital-price {
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-digital-qty {
+  color: var(--text-muted);
+}
+
+.ticket-digital-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.ticket-digital-price {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.ticket-digital-total {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 2px solid var(--navy);
+  font-family: var(--font-display);
+  color: var(--navy);
+}
+
+.ticket-digital-empty {
+  margin: var(--sp-4) 0;
+  color: var(--text-muted);
 }
 
 .stat-hero {

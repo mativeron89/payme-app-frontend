@@ -320,7 +320,7 @@ describe('🔴 corte · el árbol REAL no monta el alta de tarjeta', () => {
 
 // ─── La vista de la mesa ─────────────────────────────────────────────────────
 
-describe('🔴 corte · MesaDetailView cierra sus dos controles y conserva el aviso', () => {
+describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redundante', () => {
   const MESA: MesaDetail = {
     id: 'm-1',
     code: 'PA-0001',

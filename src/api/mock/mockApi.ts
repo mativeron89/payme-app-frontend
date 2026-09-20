@@ -8,6 +8,7 @@ import { centsToDisplay, fractionAmount, splitEqual, sumCents, tipFromBps } from
 import { payloadCanonical, sha256Hex } from '../../utils/payloadIdentity';
 import {
   createSession,
+  isCurrentSession,
   loadSession,
   saveSession,
   type SessionStateWitness,
@@ -71,6 +72,11 @@ import type {
 } from '../types';
 import type { PrivateAvatarBlob } from '../profileIdentity';
 import { profileNameInput, validateAvatarInput } from '../profileIdentity';
+import {
+  FRIEND_AVATAR_NOTICE_HASH,
+  FRIEND_AVATAR_NOTICE_VERSION,
+  type FriendAvatarNoticeAcknowledgement,
+} from '../friendAvatarNotice';
 import type { ShortfallDetail } from '../shortfallDetail';
 import { MESA_CREATION_OUTCOME_BY_STATUS } from '../types';
 import {
@@ -430,7 +436,7 @@ function googleSinNombreMock(): boolean {
 }
 
 /** La versión del aviso que publica el mock; `continue` exige ésta. */
-export const MOCK_AVISO_VERSION = '0.0.0';
+export const MOCK_AVISO_VERSION = FRIEND_AVATAR_NOTICE_VERSION;
 
 /**
  * La contraseña de la cuenta demo que «ya existe» en la rama `link_required`.
@@ -582,10 +588,10 @@ export async function mockGetConfig(): Promise<AppConfig> {
       profile_identity: {
         supported: true,
         enabled: true,
-        // 🔴 2.4.1 acá y 2.3.0 en `settlement_shortfall_detail`, abajo: la
-        // asimetría es DATO del dueño, no un descuido. Unificarlas dejaría la
-        // suite verde sobre un estado que en producción no existe.
-        notice_version: '2.4.1',
+        // U05 · 2.5.5 acá y 2.3.0 en `settlement_shortfall_detail`, abajo: la
+        // asimetría es DATO del dueño, no un descuido. Este campo no acredita
+        // por sí solo el acuse: la autoridad es /friends/avatar-notice.
+        notice_version: FRIEND_AVATAR_NOTICE_VERSION,
         notice_required: true,
         activation_blocker: null,
         payme_id_mutable: false,
@@ -1184,7 +1190,7 @@ export async function mockGetPrivacyNotice(): Promise<LegalTextResponse> {
       // riel mock nunca podía ofrecer «Continuar con Google» en un toque. Que es
       // una demo lo sigue diciendo el cuerpo del aviso.
       version: MOCK_AVISO_VERSION,
-      hash: '0'.repeat(64),
+      hash: FRIEND_AVATAR_NOTICE_HASH,
       effective_from: '2026-08-12T00:00:00.000Z',
       body: 'AVISO DE DEMOSTRACIÓN. Este texto sólo ejercita la puesta a disposición en el modo demo; no es el aviso productivo de PayMe.',
     },
@@ -1394,25 +1400,40 @@ function conCamposAditivos(m: MockMesa): OpenMesa {
  */
 const CLAVE_MIS_MESAS = 'payme.app.mock.mis_mesas.v1';
 
-function mineDeMockMesa(m: MockMesa): { items_count: number; amount_cents: number } {
+function mineDeMockMesa(m: MockMesa, withItems: boolean): {
+  items_count: number;
+  amount_cents: number;
+  items?: Array<{ item_id: string; quantity: number; name: string; fraction_bps: number; amount_cents: number }>;
+} {
   if (m.division_mode === 'igual') {
     const mios = (m.slots ?? []).filter((sl) => sl.claimedBy === 'user' && (sl.status === 'claimed' || sl.status === 'paid'));
-    return { items_count: mios.length, amount_cents: mios.reduce((acc, sl) => acc + sl.amount_cents, 0) };
+    return {
+      items_count: mios.length,
+      amount_cents: mios.reduce((acc, sl) => acc + sl.amount_cents, 0),
+      ...(withItems ? { items: [] } : {}),
+    };
   }
   let items = 0;
   let monto = 0;
+  const detail: Array<{ item_id: string; quantity: number; name: string; fraction_bps: number; amount_cents: number }> = [];
   for (const it of m.items) {
     const mios = it.claims.filter((c) => c.who === 'user');
     if (mios.length === 0) continue;
     items += 1;
+    const fractionBps = mios.reduce((sum, claim) => sum + claim.fraction_bps, 0);
+    const amountCents = mios.reduce(
+      (sum, claim) => sum + (claim.amount_cents ?? Math.floor((it.price_cents * it.quantity * claim.fraction_bps) / 10000)),
+      0,
+    );
     for (const c of mios) {
       monto += c.amount_cents ?? Math.floor((it.price_cents * it.quantity * c.fraction_bps) / 10000);
     }
+    detail.push({ item_id: it.id, quantity: it.quantity, name: it.name, fraction_bps: fractionBps, amount_cents: amountCents });
   }
-  return { items_count: items, amount_cents: monto };
+  return { items_count: items, amount_cents: monto, ...(withItems ? { items: detail } : {}) };
 }
 
-export async function mockMisMesas(params?: { cursor?: string; limit?: number }): Promise<unknown> {
+export async function mockMisMesas(params?: { cursor?: string; limit?: number; detail?: 'items' }): Promise<unknown> {
   const seam = leerSeam(CLAVE_MIS_MESAS);
   if (seam === 'error') return fail(500, 'internal_error');
   state.mesas.forEach(settleIfExpired);
@@ -1428,7 +1449,7 @@ export async function mockMisMesas(params?: { cursor?: string; limit?: number })
       closure_reason: m.closure_reason ?? null,
       // El mock no guarda la creación: se aproxima desde el vencimiento.
       created_at: new Date(Date.parse(m.expires_at) - 30 * 60_000).toISOString(),
-      mine: mineDeMockMesa(m),
+      mine: mineDeMockMesa(m, params?.detail === 'items'),
     }));
   const fixtures = seam === 'sin_cobro' ? [
     {
@@ -1436,21 +1457,35 @@ export async function mockMisMesas(params?: { cursor?: string; limit?: number })
       restaurant: { name: 'Tacos El Güero', category: 'mexican' }, status: 'expired',
       division_mode: 'consumo', guarantee_mode: false, closure_reason: 'all_items_selected',
       created_at: new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString(),
-      mine: { items_count: 3, amount_cents: 45000 },
+      mine: {
+        items_count: 3,
+        amount_cents: 45000,
+        ...(params?.detail === 'items' ? { items: [
+          { item_id: 'item-7310-1', quantity: 2, name: 'Tacos al pastor', fraction_bps: 10000, amount_cents: 20000 },
+          { item_id: 'item-7310-2', quantity: 1, name: 'Agua de jamaica', fraction_bps: 10000, amount_cents: 15000 },
+          { item_id: 'item-7310-3', quantity: 1, name: 'Quesadilla', fraction_bps: 5000, amount_cents: 10000 },
+        ] } : {}),
+      },
     },
     {
       id: 'aaaaaaaa-0000-4000-8000-000000000002', code: 'PA-6604',
       restaurant: { name: 'Café Tacuba', category: 'cafe' }, status: 'expired',
       division_mode: 'igual', guarantee_mode: false, closure_reason: 'time',
       created_at: new Date(Date.now() - 6 * 24 * 60 * 60_000).toISOString(),
-      mine: { items_count: 1, amount_cents: 18000 },
+      mine: { items_count: 1, amount_cents: 18000, ...(params?.detail === 'items' ? { items: [] } : {}) },
     },
   ] : seam === 'muchas' ? Array.from({ length: 23 }, (_, i) => ({
     id: `bbbbbbbb-0000-4000-8000-${String(i).padStart(12, '0')}`, code: `PA-${String(5000 + i)}`,
     restaurant: { name: `Mesa de prueba ${i + 1}`, category: 'other' }, status: 'expired',
     division_mode: 'consumo', guarantee_mode: false, closure_reason: 'time',
     created_at: new Date(Date.now() - (i + 1) * 60 * 60_000).toISOString(),
-    mine: { items_count: 1, amount_cents: 10000 },
+    mine: {
+      items_count: 1,
+      amount_cents: 10000,
+      ...(params?.detail === 'items' ? { items: [
+        { item_id: `item-${i}`, quantity: 1, name: `Consumo ${i + 1}`, fraction_bps: 10000, amount_cents: 10000 },
+      ] } : {}),
+    },
   })) : [];
   const todas = [...(seam === 'muchas' ? [] : propias), ...fixtures]
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
@@ -3479,6 +3514,60 @@ export async function mockFriends(): Promise<FriendsResponse> {
   return delay({
     friends: state.friends.map(({ email: _email, ...persona }) => persona),
   });
+}
+
+const MOCK_FRIEND_NOTICE_HASH = FRIEND_AVATAR_NOTICE_HASH;
+const mockFriendNoticeAcknowledgements = new Map<string, string>();
+
+function requireCurrentMockSession(expectedSession: StoredSession): void {
+  if (!isCurrentSession(expectedSession)) throw new MockApiError(401, 'auth_required');
+}
+
+/** Estado privado, por titular; leerlo nunca crea el acuse. */
+export async function mockFriendAvatarNotice(
+  expectedSession: StoredSession,
+): Promise<Record<string, unknown>> {
+  requireCurrentMockSession(expectedSession);
+  const acknowledgedAt = mockFriendNoticeAcknowledgements.get(expectedSession.principal_id) ?? null;
+  return delay({
+    notice_version: MOCK_AVISO_VERSION,
+    notice_hash: MOCK_FRIEND_NOTICE_HASH,
+    acknowledged: acknowledgedAt !== null,
+    acknowledged_at: acknowledgedAt,
+  });
+}
+
+/** Sólo el click explícito con el texto vigente crea el registro idempotente. */
+export async function mockAcknowledgeFriendAvatarNotice(
+  acknowledgement: FriendAvatarNoticeAcknowledgement,
+  expectedSession: StoredSession,
+): Promise<Record<string, unknown>> {
+  requireCurrentMockSession(expectedSession);
+  if (acknowledgement.notice_version !== MOCK_AVISO_VERSION
+      || acknowledgement.notice_hash !== MOCK_FRIEND_NOTICE_HASH) {
+    throw new MockApiError(409, 'notice_mismatch');
+  }
+  if (!mockFriendNoticeAcknowledgements.has(expectedSession.principal_id)) {
+    mockFriendNoticeAcknowledgements.set(expectedSession.principal_id, new Date().toISOString());
+  }
+  return mockFriendAvatarNotice(expectedSession);
+}
+
+const MOCK_FRIENDS_WITH_VISIBLE_AVATAR = new Set(['payme_mx_sofi', 'payme_mx_juan']);
+const MOCK_JPEG_BASE64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=';
+
+/** El mock conserva el mismo 404 uniforme y entrega bytes efímeros JPEG. */
+export async function mockFriendAvatar(
+  friendId: string,
+  expectedSession: StoredSession,
+): Promise<PrivateAvatarBlob> {
+  requireCurrentMockSession(expectedSession);
+  const friend = state.friends.find((candidate) => candidate.id === friendId);
+  if (!friend || !MOCK_FRIENDS_WITH_VISIBLE_AVATAR.has(friend.payme_id)) {
+    throw new MockApiError(404, 'avatar_not_found');
+  }
+  const bytes = Uint8Array.from(atob(MOCK_JPEG_BASE64), (char) => char.charCodeAt(0));
+  return delay({ blob: new Blob([bytes], { type: 'image/jpeg' }) });
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   httpOcrUploadRequest,
   httpPrivateAvatarRequest,
   httpPrivateJsonRequest,
+  httpPrivateJsonMutationRequest,
   httpPublicRequest,
   httpRegister,
   httpRequest,
@@ -36,6 +37,11 @@ import { decodeSoltarConsumo, type ConsumoSoltado } from './soltarConsumo';
 import { decodeMesaCerrada, type MesaCerrada } from './cerrarMesa';
 import { decodeParticipantes, type Participante } from './participantes';
 import { decodeTusRestaurantes, type TusRestaurantes } from './tusRestaurantes';
+import {
+  decodeFriendAvatarNotice,
+  type FriendAvatarNoticeAcknowledgement,
+  type FriendAvatarNoticeState,
+} from './friendAvatarNotice';
 import { rutaConPeriodo, type ClavePeriodo } from './periodoEstadisticas';
 import { decodePlatos, type PlatosDelPeriodo } from './platos';
 import { decodeEvolucion, type Evolucion } from './evolucion';
@@ -279,7 +285,7 @@ export interface Api {
    * AF-24 · «Tus mesas» · `GET /api/mesas/mine`. Sólo las mesas propias, de a
    * `limit` (dueño: 20 por defecto, 50 máximo) con el cursor opaco del dueño.
    */
-  getMyMesas(params?: { cursor?: string; limit?: number }): Promise<PaginaMisMesas>;
+  getMyMesas(params?: { cursor?: string; limit?: number; detail?: 'items' }): Promise<PaginaMisMesas>;
   /** Detalle de UN pago propio; el backend vuelve a validar `user_id`. */
   getMovement(id: string): Promise<MovementDetailResponse>;
   // mesas
@@ -382,6 +388,15 @@ export interface Api {
   getStatsIngredients(period?: ClavePeriodo): Promise<IngredientesDelPeriodo>;
   // social
   getFriends(): Promise<FriendsResponse>;
+  /** Estado privado del acuse específico de la audiencia de fotos entre amigos. */
+  getFriendAvatarNotice(expectedSession: StoredSession): Promise<FriendAvatarNoticeState>;
+  /** Único acto que registra el acuse: versión y hash efectivamente mostrados. */
+  acknowledgeFriendAvatarNotice(
+    acknowledgement: FriendAvatarNoticeAcknowledgement,
+    expectedSession: StoredSession,
+  ): Promise<FriendAvatarNoticeState>;
+  /** JPEG privado; cualquier ausencia/denegación comparte el fallback 404 del dueño. */
+  getFriendAvatar(friendId: string, expectedSession: StoredSession): Promise<PrivateAvatarBlob>;
   /**
    * C1/C2 (v2.29): ya NO crea amistad ni dice si la persona existe. Responde
    * 202 `{ requested: true }` en todos los casos. La UI no puede afirmar nada
@@ -552,6 +567,7 @@ const realApi: Api = {
     const qs = new URLSearchParams();
     if (params?.limit != null) qs.set('limit', String(params.limit));
     if (params?.cursor) qs.set('cursor', params.cursor);
+    if (params?.detail) qs.set('detail', params.detail);
     const s = qs.toString();
     return decodeMisMesas(await httpRequest<unknown>('GET', `/mesas/mine${s ? `?${s}` : ''}`));
   },
@@ -802,6 +818,21 @@ const realApi: Api = {
     ),
 
   getFriends: () => httpRequest<FriendsResponse>('GET', '/friends'),
+  getFriendAvatarNotice: async (expectedSession) => decodeFriendAvatarNotice(
+    await httpPrivateJsonRequest<unknown>(
+      '/friends/avatar-notice', expectedSession, 30_000,
+      { requireAuthorizationVary: true, forbidEtag: true },
+    ),
+  ),
+  acknowledgeFriendAvatarNotice: async (acknowledgement, expectedSession) => decodeFriendAvatarNotice(
+    await httpPrivateJsonMutationRequest<unknown>(
+      '/friends/avatar-notice', acknowledgement, expectedSession,
+    ),
+  ),
+  getFriendAvatar: (friendId, expectedSession) => httpPrivateAvatarRequest(
+    `/friends/${encodeURIComponent(friendId)}/avatar`, expectedSession, 15_000,
+    { requireAuthorizationVary: true, forbidEtag: true },
+  ),
   addFriend: async (query) => friendRequestCreatedResponse(
     await httpRequest<unknown>('POST', '/friends', query),
   ),
@@ -1010,6 +1041,13 @@ const mockApi: Api = {
   getStatsRestaurants: async (period) => decodeTusRestaurantes(await mock.mockStatsRestaurants(period)),
 
   getFriends: () => mock.mockFriends(),
+  getFriendAvatarNotice: async (expectedSession) => decodeFriendAvatarNotice(
+    await mock.mockFriendAvatarNotice(expectedSession),
+  ),
+  acknowledgeFriendAvatarNotice: async (acknowledgement, expectedSession) => decodeFriendAvatarNotice(
+    await mock.mockAcknowledgeFriendAvatarNotice(acknowledgement, expectedSession),
+  ),
+  getFriendAvatar: (friendId, expectedSession) => mock.mockFriendAvatar(friendId, expectedSession),
   addFriend: async (query) => friendRequestCreatedResponse(await mock.mockAddFriend(query)),
   getIncomingFriendRequests: async () => friendRequestsResponse(
     await mock.mockFriendRequests('incoming'),

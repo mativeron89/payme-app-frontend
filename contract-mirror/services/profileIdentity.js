@@ -11,7 +11,8 @@
  * la frase de la invitación de alta; 2.5.3 en v2.111.0 — la foto al
  * organizador de la mesa y la regla de menores; 2.5.2 en v2.101.0 — sólo el renglón de
  * quién organiza una mesa; 2.5.4 en v2.117.3 — ticket y comercio privado):
- * la foto privada se describe igual y la conducta no cambia;
+ * v2.119.0 incorpora 2.5.5 para acceso privado de amigos aceptados;
+ * su publicación exige presentar previamente la actualización al titular.
  * tests/profile-identity.test.js ata esta constante al archivo
  * legal/aviso_privacidad.md, así que un aviso nuevo pasa por acá a propósito.
  * Los bytes nunca salen en URLs ni viajan a Stripe, outbox o Dashboard.
@@ -22,6 +23,7 @@ const { randomUUID } = require('node:crypto');
 const sharp = require('sharp');
 const pool = require('../db/pool');
 const consent = require('./consent');
+const friendAvatarNotice = require('./friendAvatarNotice');
 const { normalizarNombre } = require('../utils/profileNames');
 
 const MAX_INPUT_BYTES = 5 * 1024 * 1024;
@@ -34,7 +36,7 @@ const SUPPORTED_INPUT_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const PROFILE_IDENTITY_CAPABILITY = Object.freeze({
   supported: true,
   enabled: true,
-  notice_version: '2.5.4',
+  notice_version: '2.5.5',
   notice_required: true,
   activation_blocker: null,
   payme_id_mutable: false,
@@ -284,6 +286,37 @@ async function obtenerAvatar(userId, db = pool) {
   };
 }
 
+/** U05: canal de amigos, sin reutilizar permiso de organizador ni URL pública.
+ * Exige acuse explícito del titular para versión/hash vigentes, nunca del lector.
+ */
+async function obtenerAvatarDeAmigo(viewerId, ownerId, db = pool) {
+  if (!profileIdentityRolloutEnabled() || viewerId === ownerId) return null;
+  if ((await consent.edadConocida(ownerId, db)) !== true) return null;
+  let notice;
+  try { notice = await friendAvatarNotice.current(db); } catch (err) {
+    if (err.code === 'legal_text_unavailable') return null;
+    throw err;
+  }
+  // Foto, acuse del titular y relación se leen juntos en cada acceso.
+  const { rows: [avatar] } = await db.query(
+    `SELECT a.mime_type, a.image_bytes
+       FROM user_avatars a JOIN users owner ON owner.id=a.user_id
+       JOIN users viewer ON viewer.id=$1
+      WHERE a.user_id=$2 AND owner.status='active' AND viewer.status='active'
+        AND EXISTS (SELECT 1 FROM friend_avatar_notice_acknowledgements ack
+          WHERE ack.user_id=a.user_id AND ack.notice_version=$3 AND ack.notice_hash=$4)
+        AND EXISTS (SELECT 1 FROM friendships f
+          WHERE f.user_id=$1 AND f.friend_user_id=$2 AND f.status='accepted')
+        AND EXISTS (SELECT 1 FROM friendships f
+          WHERE f.user_id=$2 AND f.friend_user_id=$1 AND f.status='accepted')
+        AND NOT EXISTS (SELECT 1 FROM friendships f
+          WHERE ((f.user_id=$1 AND f.friend_user_id=$2)
+              OR (f.user_id=$2 AND f.friend_user_id=$1)) AND f.status='blocked')`,
+    [viewerId, ownerId, notice.version, notice.hash]
+  );
+  return avatar ? { mimeType: avatar.mime_type, bytes: avatar.image_bytes } : null;
+}
+
 async function borrarAvatar(userId, expectedRevision) {
   return pool.tx(async (client) => {
     const user = await client.query(`SELECT id FROM users WHERE id=$1 FOR UPDATE`, [userId]);
@@ -310,5 +343,6 @@ module.exports = {
   actualizarNombre,
   guardarAvatar,
   obtenerAvatar,
+  obtenerAvatarDeAmigo,
   borrarAvatar,
 };

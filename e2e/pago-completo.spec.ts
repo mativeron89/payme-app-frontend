@@ -110,7 +110,7 @@ test.describe('el camino de pago completo', () => {
      * que lo dice. Salir sin registrar dejaría ese aviso mintiendo.
      */
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
     // Y nada se cobró: la mesa sigue en $0.00 de $840.00.
     await page.goto(`/#/mesa/${mesa.code}`);

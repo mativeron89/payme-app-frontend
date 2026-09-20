@@ -132,6 +132,17 @@ const PROFILE_254 = {
   notice_version: '2.5.4',
 };
 
+/** U05 · 2.5.5 presenta la audiencia de foto entre amigos y su acuse. */
+const PROFILE_255 = {
+  ...PROFILE_ON,
+  notice_version: '2.5.5',
+};
+
+const PROFILE_NEAR_MISS_255 = [
+  { ...PROFILE_ON, notice_version: '2.5.50' },
+  { ...PROFILE_ON, notice_version: '2.5.5-rc' },
+];
+
 const PROFILE_NEAR_MISS_254 = [
   { ...PROFILE_ON, notice_version: '2.5.40' },
   { ...PROFILE_ON, notice_version: '2.5.4-rc' },
@@ -224,8 +235,10 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.3' });
     expect(readProfileIdentityCapability(config(PROFILE_254)))
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.4' });
+    expect(readProfileIdentityCapability(config(PROFILE_255)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.5' });
     // …sin sus near-miss…
-    for (const cerca of [...PROFILE_NEAR_MISS_250, ...PROFILE_NEAR_MISS_251, ...PROFILE_NEAR_MISS_252, ...PROFILE_NEAR_MISS_253, ...PROFILE_NEAR_MISS_254]) {
+    for (const cerca of [...PROFILE_NEAR_MISS_250, ...PROFILE_NEAR_MISS_251, ...PROFILE_NEAR_MISS_252, ...PROFILE_NEAR_MISS_253, ...PROFILE_NEAR_MISS_254, ...PROFILE_NEAR_MISS_255]) {
       expect(readProfileIdentityCapability(config(cerca)).status, cerca.notice_version).toBe('notice_unavailable');
     }
     // …y una versión FUTURA sigue apagando.
@@ -367,9 +380,9 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
     });
   });
 
-  it('el config mock publicado replica ON 2.4.1 y conserva payme_id/avatar privados', async () => {
+  it('el config mock publicado replica ON 2.5.5 y conserva payme_id/avatar privados', async () => {
     expect(readProfileIdentityCapability(await mock.mockGetConfig()))
-      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.4.1' });
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.5' });
   });
 
   /**

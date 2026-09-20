@@ -20,7 +20,7 @@ async function mesaSinGarantia(page: Page, costuras: Record<string, string> = {}
   await ingresar(page);
   const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
   await page.goto(`/#/mesa/${mesa.code}`);
-  await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+  await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
   return mesa.code;
 }
 
@@ -83,6 +83,7 @@ test.describe('AF-34 · cerrar la mesa', () => {
   test('AF-36 · los tres botones llevan color: invitar lleno, copiar con borde, cerrar en gris; todos AA', async ({ page }) => {
     await mesaSinGarantia(page);
     await page.evaluate(() => { document.querySelector('.flow-scroll')?.scrollTo(0, 1e6); });
+    await expect(boton(page)).toBeVisible();
     const colores = await page.evaluate(() => {
       const lum = (c: string) => {
         const [r, g, b] = (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number).map((v) => {
@@ -144,7 +145,7 @@ test.describe('AF-34 · cerrar la mesa', () => {
       location.hash = '#/mesas';
     }, code);
     await page.evaluate((c) => { location.hash = `#/mesa/${c}`; }, code);
-    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
     await expect(boton(page)).toHaveCount(0);
     // Testigo de que la vista SÍ cambió de rol (y no quedó la del organizador).
     await expect(page.getByRole('button', { name: 'Copiar link de invitación' })).toHaveCount(0);

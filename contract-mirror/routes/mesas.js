@@ -959,6 +959,11 @@ const emitirCursorDeMine = (t, id) =>
 
 router.get('/mine', requireAuth, async (req, res, next) => {
   try {
+    // Opt-in cerrado; el listado histórico conserva su forma por defecto.
+    if (req.query.detail !== undefined && req.query.detail !== 'items') {
+      return res.status(400).json({ error: 'invalid_detail' });
+    }
+    const detailItems = req.query.detail === 'items';
     const limit = limiteDeMine(req.query.limit);
     if (limit === null) return res.status(400).json({ error: 'invalid_limit' });
     const cursor = cursorDeMine(req.query.cursor);
@@ -1004,7 +1009,8 @@ router.get('/mine', requireAuth, async (req, res, next) => {
     // propios preciados reconstruyendo la historia del ítem, casilleros en
     // división `igual`— vive en services/consumoPropio.js y es la que estaba
     // escrita acá hasta v2.101.0, sin cambios.
-    const mios = await consumoPropio.porMesa(req.user.id, pagina);
+    const mios = await consumoPropio.porMesa(req.user.id, pagina, pool,
+      { detalle: detailItems, identificarItems: detailItems });
 
     const ultima = pagina[pagina.length - 1];
     res.json({
@@ -1021,7 +1027,10 @@ router.get('/mine', requireAuth, async (req, res, next) => {
           || (m.guarantee_mode === false && m.metadata?.sin_garantia === true
               && m.status === 'expired' ? 'time' : null),
         created_at: m.created_at,
-        mine: mios.get(m.id) || { items_count: 0, amount_cents: 0 },
+        mine: {
+          ...(mios.get(m.id) || { items_count: 0, amount_cents: 0 }),
+          ...(detailItems && { items: mios.get(m.id)?.items || [] }),
+        },
       })),
       page: {
         limit,

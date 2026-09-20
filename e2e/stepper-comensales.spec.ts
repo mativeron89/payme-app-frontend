@@ -33,9 +33,35 @@ async function declararCorteYRecargar(page: import('@playwright/test').Page): Pr
   await page.reload();
 }
 
+/**
+ * Este recorrido necesita pasar por garantía antes de declarar el corte. La
+ * condición ya estaba documentada, pero dependía del default implícito del
+ * mock: al correr después de specs que fijan `disabled`, el primer caso podía
+ * heredar ese seam y saltarse la garantía. Declararlo hace que el pre requisito
+ * sea parte del propio recorrido, igual que el corte que se declara después.
+ */
+async function declararRielVivo(page: import('@playwright/test').Page): Promise<void> {
+  // Se escribe una vez, no con `addInitScript`: ese hook volvería a imponer
+  // sandbox en la recarga donde este mismo test declara después el corte.
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('payme.app.mock.money_rail.v1', 'sandbox');
+  });
+}
+
+async function esperarRielVivo(page: import('@playwright/test').Page): Promise<void> {
+  // «Ver tarjetas» sólo aparece después de que las capabilities autoritativas
+  // de cuenta y dinero terminaron de cargar. Esperar ese testigo evita correr
+  // el OCR durante `pending`, donde el flujo sin QR resuelve provisionalmente
+  // un comercio privado y puede ganar la carrera al restaurante mock público.
+  await expect(page.getByRole('button', { name: 'Ver tarjetas', exact: true })).toBeVisible();
+}
+
 test.describe('el stepper de comensales (§1.4)', () => {
   test('consumo: sin elegir frena con toast; elegido, viaja EXACTAMENTE ese N', async ({ page }) => {
+    await declararRielVivo(page);
     await ingresar(page);
+    await esperarRielVivo(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
     await page.getByRole('button', { name: 'Capturar' }).click();
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
@@ -90,7 +116,8 @@ test.describe('el stepper de comensales (§1.4)', () => {
     // donde el organizador pasa por la garantía; ninguna de esas aserciones se
     // tocó.
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-    await expect(page.getByText('Elige lo que consumiste', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
+    await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
 
     // 🔴 **F2-03 · el modo se declara sobre la MESA YA ABIERTA, y la primera
     // versión de esto estaba mal.**
@@ -104,7 +131,7 @@ test.describe('el stepper de comensales (§1.4)', () => {
     // ⚠️ Lo cazó el navegador, no la suite: `typecheck` y los unitarios pasaban
     // con la versión rota adentro.
     await declararCorteYRecargar(page);
-    await expect(page.getByText('Elige lo que consumiste', { exact: true })).toBeVisible();
+    await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
@@ -118,7 +145,9 @@ test.describe('el stepper de comensales (§1.4)', () => {
     // 3 en IGUAL, se abre la mesa, y se afirman las dos consecuencias: el N
     // que viajó y la parte por persona (840÷3 = $280.00 — con el 4 fantasma
     // sería $210.00).
+    await declararRielVivo(page);
     await ingresar(page);
+    await esperarRielVivo(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
     await page.getByRole('button', { name: 'Capturar' }).click();
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();

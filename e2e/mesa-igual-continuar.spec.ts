@@ -47,10 +47,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-3121');
     await expect(page.locator('.mesa-selection-title')).toContainText('partes iguales');
-    // 🔴 TESTIGO POSITIVO de la MISMA capability: este aviso sólo existe con el
-    // riel AUTORITATIVO declarando los pagos apagados. Sin esperarlo, las
-    // ausencias de abajo se cumplirían mientras el config todavía viaja.
-    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
     // La mesa igual del seed ahora tiene ítems reales (el contrato los exige).
     await expect(page.getByText('Omakase para dos')).toBeVisible();
@@ -103,11 +100,10 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
     await expect(page.locator('.mesa-selection-title')).toContainText('cada uno lo suyo');
-    // Mismo testigo positivo que arriba, y por el mismo motivo.
-    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
     await expect(page.getByText('Tagliatelle Bolognese')).toBeVisible();
-    await expect(page.getByText('Elige lo que consumiste').first()).toBeVisible();
+    await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
 
     // No hay «Continuar»: la única salida del círculo es «Listo».
     await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
@@ -144,7 +140,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
      * es lo único que hace verdadera la promesa que la persona acaba de leer —
      * «tu selección queda registrada»—, y no hacerlo dejaba ese aviso mintiendo.
      */
-    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
     expect(await claimsDe(), 'la selección no quedó registrada: el aviso promete algo que no ocurre').toBeGreaterThan(antes);
   });
 });

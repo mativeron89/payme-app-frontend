@@ -60,6 +60,15 @@ export function PayMeLogo({ size }: { size?: number }) {
   );
 }
 
+function HeaderIdentity({ userName }: { userName?: string }) {
+  return (
+    <span className="hdr-identity">
+      <PayMeLogo />
+      {userName && <span className="hdr-user">{userName}</span>}
+    </span>
+  );
+}
+
 interface HeaderBase {
   /** Pestañas en burbuja, si la pantalla las tiene. */
   tabs?: ReactNode;
@@ -108,8 +117,7 @@ export function AppHeader({
   return (
     <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''} ${alignChrome ? 'hdr-chrome-aligned' : ''}`}>
       <div className="hdr-row">
-        <PayMeLogo />
-        {identidad && <span className="hdr-user">{identidad}</span>}
+        <HeaderIdentity userName={identidad} />
         {bellHere ? (
           /* No es `<button>` a propósito: no hace nada. Un botón que no lleva a
              ningún lado es una promesa rota, y encima entra en el orden de
@@ -164,8 +172,7 @@ export function AppHeaderBack({
   return (
     <header className={`hdr ${compact ? 'hdr-compact' : ''} ${tabs ? 'hdr-tabbed' : ''}`}>
       <div className="hdr-row">
-        <PayMeLogo />
-        {identidad && <span className="hdr-user">{identidad}</span>}
+        <HeaderIdentity userName={identidad} />
         {bellHere ? (
           <span className="hdr-bell hdr-bell-here" role="img" aria-label={t('Estás en Avisos')}>
             <Icon name="bell" size={22} />
@@ -257,8 +264,7 @@ export function AppHeaderFlow({
   return (
     <header className={`hdr hdr-flow ${compact ? 'hdr-compact' : ''}`}>
       <div className="hdr-row">
-        <PayMeLogo />
-        {identidad && <span className="hdr-user">{identidad}</span>}
+        <HeaderIdentity userName={identidad} />
         <button
           type="button"
           className="hdr-bell"

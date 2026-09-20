@@ -52,9 +52,7 @@ test.describe('C3 · mesa sin garantía', () => {
 
     // 🔴 EL TESTIGO POSITIVO de esta capability: el aviso sólo existe cuando el
     // riel es AUTORITATIVO y declara los pagos apagados. Con el config todavía
-    // sin llegar no aparece, así que esperar por él acredita que el estado ya
-    // se aplicó — y recién entonces afirmar una ausencia significa algo.
-    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toBeVisible();
+    await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
     // Con el config aplicado: ninguna superficie de cobro.
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);

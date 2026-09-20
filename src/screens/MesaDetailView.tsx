@@ -391,18 +391,6 @@ export function MesaDetailView({
     : [];
   const cierraLaMesa = esConsumo && selected.size > 0 && librosTrasMiSeleccion.length === 0;
   /**
-   * D-R8 · el final del recorrido del comensal durante el corte: eligió lo suyo
-   * y no hay checkout. En vez de dejarlo sin salida, se le dice qué pasó con su
-   * selección. **La selección no vence** —el dueño publica `item_lock_seconds:
-   * null` en este modo—, así que la promesa es literal.
-   */
-  const avisoCorte = corteDeclarado && (
-    <div className="note note-orange" role="status" style={{ marginBottom: 12 }}>
-      {t('Los pagos llegan pronto; tu selección queda registrada.')}
-    </div>
-  );
-
-  /**
    * D-R20 · el resumen que acompaña al aviso: **lo que queda y lo mío**, con
    * cada consumo como tomado o libre. Ninguna persona aparece.
    */
@@ -447,14 +435,12 @@ export function MesaDetailView({
     </div>
   );
 
-  const miParte = (
+  const miParte = faltaElegir ? null : (
     <div className="mi-parte">
       {nothingLeft ? (
         <span>{t('No queda nada por pagar')}</span>
       ) : !esConsumo && availableSlots === 0 ? (
         <span>{t('No quedan partes')}</span>
-      ) : faltaElegir ? (
-        <span>{t('Elige lo que consumiste')}</span>
       ) : (
         <>
           <span>{mySlotsTaken > 0 && !esConsumo ? t('Otra parte') : t('Mi parte')}</span>
@@ -530,7 +516,6 @@ export function MesaDetailView({
       {guestHeader}
       <div className="scroll flow-scroll con-fila-sobre-barra">
         {hojaCierre}
-        {avisoCorte}
         {avisoPagoCongelado}
         {esConsumo && nothingLeft && (
           <div className="note note-amber" style={{ marginBottom: 12 }}>
@@ -566,10 +551,10 @@ export function MesaDetailView({
                 ? fractionPreview(fullPrice, myBpsSel, i.remaining_bps)
                 : fullPrice;
             return (
-              <div key={i.id}>
+              <div key={i.id} className={`mi-item${soltable ? ' has-release' : ''}`}>
                 <button
                   type="button"
-                  className={`mi-row ${sel ? 'sel' : ''}`}
+                  className={`mi-row ${sel ? 'sel' : ''}${soltable ? ' has-release' : ''}`}
                   onClick={() => !disabled && onToggleItem(i.id)}
                   disabled={disabled}
                   aria-pressed={disabled ? undefined : sel}
@@ -597,12 +582,13 @@ export function MesaDetailView({
                 {soltable && (
                   <button
                     type="button"
-                    className="btn btn-ghost btn-sm btn-fit mi-soltar"
+                    className="mi-soltar"
                     onClick={() => onReleaseItem(i.id)}
                     disabled={soltando !== null}
-                    aria-label={t('Soltar {0}', i.name)}
+                    aria-label={soltando === i.id ? t('Soltando…') : t('Soltar {0}', i.name)}
+                    aria-busy={soltando === i.id || undefined}
                   >
-                    {soltando === i.id ? t('Soltando…') : t('Soltar')}
+                    <Icon name={soltando === i.id ? 'clock' : 'x-circle'} size={22} />
                   </button>
                 )}
                 {/* Selector de porción en LOS DOS MODOS. En consumo expresa
