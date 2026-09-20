@@ -26,8 +26,8 @@ describe('AF-AJUSTES10 · guardas visuales focales', () => {
   });
 
   it('alinea identidad, mantiene el historial sin rótulo y une tabs/panel', () => {
-    expect(header).toContain('className="hdr-identity"');
-    expect(css).toMatch(/\.hdr-identity\s*\{[\s\S]*align-items:\s*center/);
+    expect(header).toContain('className="hdr-user-group"');
+    expect(css).toMatch(/\.hdr-user-group\s*\{[\s\S]*align-items:\s*center/);
     expect(mesas).not.toContain('<h2 className="sectlabel">{t(\'Tus mesas\')}</h2>');
     expect(css).toContain('.stat-tabs-panel');
     expect(css).toContain('border-bottom-color: var(--surface)');

@@ -11,6 +11,19 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.181.1 — Corrección causal del wrapper de identidad (2026-09-20)
+
+Adenda `AF-AJUSTES10-CI-IDENTIDAD-20260920`, base publicada `2383e3c`.
+**Sin push ni deploy.** Conserva la dispensa de auditoría específica de la
+entrega.
+
+- Renombra exclusivamente el wrapper visual nuevo del encabezado para que no
+  contenga el identificador histórico prohibido `hdr-id`; mantiene intacta la
+  guarda de identidad y no cambia estructura, estilos ni comportamiento.
+- Actualiza la expectativa focal del mismo wrapper. La suite unitaria completa
+  pasa a ser obligatoria en este sucesor porque los 118 tests focales del
+  candidato anterior no incluían la guarda que lo rechazó en CI.
+
 ## 0.181.0 — Ajustes visuales y detalle histórico propio (2026-09-20)
 
 Órdenes `AF-AJUSTES10-VISUAL-20260920`, adendas U04/U08/U09 y decisiones U05

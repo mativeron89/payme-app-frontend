@@ -62,7 +62,7 @@ export function PayMeLogo({ size }: { size?: number }) {
 
 function HeaderIdentity({ userName }: { userName?: string }) {
   return (
-    <span className="hdr-identity">
+    <span className="hdr-user-group">
       <PayMeLogo />
       {userName && <span className="hdr-user">{userName}</span>}
     </span>

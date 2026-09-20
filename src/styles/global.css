@@ -2811,7 +2811,7 @@ body {
 
 /* Logo y nombre comparten una sola caja de 34px. Así el nombre se centra
    respecto del lockup completo y sigue cediendo con elipsis ante la campana. */
-.hdr-identity {
+.hdr-user-group {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
