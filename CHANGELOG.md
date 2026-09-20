@@ -11,6 +11,16 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.180.3 — Captura n179 portable en Playwright (2026-09-20)
+
+Orden `AF-N179-CI-SCREENSHOT-FIX-20260920`, base `131152b9`. **Sin push,
+sin deploy, sin rerun del CI.** Roadmap n179.
+
+- La captura del recorrido feliz usa `testInfo.outputPath(...)` en lugar de una
+  ruta absoluta local de macOS, para que Playwright escriba dentro de su propio
+  directorio de resultados también en el runner Linux.
+- No cambian aserciones, flujo, producto ni el resto de la suite.
+
 ## 0.180.2 — Guarda de tipo del comercio OCR (2026-09-19)
 
 Orden `AF-N179-GUARDA-NULL-EXCEPCION-20260919`, base `82d0f95`. **Sin push,

@@ -14,7 +14,7 @@ async function escanearSinQr(page: import('@playwright/test').Page): Promise<voi
 }
 
 test.describe('n179 · ticket real sin QR', () => {
-  test('merchant → resolve privado → mesa record-only, sólo después del CTA', async ({ page }) => {
+  test('merchant → resolve privado → mesa record-only, sólo después del CTA', async ({ page }, testInfo) => {
     await configurarTicketSinQr(page);
     await escanearSinQr(page);
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
@@ -34,7 +34,7 @@ test.describe('n179 · ticket real sin QR', () => {
     expect(after.mesas[0]?.restaurant.id).toBe(before.privateRestaurantIds[0]);
     await expect(page.getByRole('heading', { name: 'Garantiza la mesa' })).toHaveCount(0);
     await page.screenshot({
-      path: '/Users/matiasveron/.codex/runs/payme-af-n179-ticket-20260919/captura-movil-ticket-sin-qr.png',
+      path: testInfo.outputPath('captura-movil-ticket-sin-qr.png'),
       fullPage: true,
     });
   });
