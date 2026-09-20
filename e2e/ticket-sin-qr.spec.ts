@@ -46,7 +46,13 @@ test.describe('n179 · ticket real sin QR', () => {
     await completarDivision(page);
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-    await expect(page.getByText(/Puede que la mesa ya se haya creado/)).toBeVisible();
+    await expect(page.getByRole('status')).toHaveText(
+      'No pudimos confirmar la apertura. Puede que la mesa ya se haya creado: reintenta esta misma apertura, no armes otra.',
+    );
+    // Un solo estado conserva las cuatro garantías sin duplicar feedback: el
+    // resultado es ambiguo, la mesa puede existir, se reintenta la misma
+    // apertura y no se arma otra. Un segundo alert volvería a tapar esta causa.
+    await expect(page.getByRole('alert')).toHaveCount(0);
     const lost = await estadoN179(page);
     expect(lost.mesas).toHaveLength(1);
     expect(lost.mesaLedgerKeys).toHaveLength(1);

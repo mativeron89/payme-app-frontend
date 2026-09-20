@@ -11,6 +11,17 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.180.5 — Feedback único ante apertura ambigua (2026-09-20)
+
+Orden `AF-N179-CI-SELECTOR-FEEDBACK-SUCESOR-20260920`, base `5b0ef99`.
+**Sin push ni deploy.** Roadmap n179.
+
+- Una respuesta perdida deja un solo estado persistente: resultado ambiguo,
+  posible mesa ya creada, reintento de la misma apertura y prohibición de abrir
+  otra; el camino sin garantía ya no menciona retenciones inexistentes.
+- La prueba móvil fija por rol y texto exactos esas cuatro garantías, exige que
+  no aparezca un segundo aviso y conserva UUID, mesa y ledger idempotentes.
+
 ## 0.180.4 — Continuar con hit target y feedback completos (2026-09-20)
 
 Orden `AF-N179-FIX-CONTINUAR-HIT-TARGET-FEEDBACK-20260920`, base `184dbba`.

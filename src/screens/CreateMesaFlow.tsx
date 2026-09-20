@@ -643,6 +643,12 @@ export function CreateMesaFlow() {
               </button>
             </div>
           </>
+        ) : sinGarantia ? (
+          // n179 abre sin garantía: nombrar una retención acá fabricaría un
+          // riesgo que este camino no tiene. Este copy fija, en un solo panel,
+          // resultado ambiguo, posible mesa existente, replay del mismo intento
+          // y prohibición de abrir otra.
+          <>{t('No pudimos confirmar la apertura. Puede que la mesa ya se haya creado: reintenta esta misma apertura, no armes otra.')}</>
         ) : (
           <><b>{t('Tienes una apertura sin confirmar.')}</b> {t('Puede que la mesa ya se haya creado con su garantía. Reinténtala tal cual: si ya existe, te devolvemos esa misma mesa en vez de retener el total otra vez.')}</>
         )}
@@ -1127,11 +1133,21 @@ export function CreateMesaFlow() {
         // 4xx sin código propio: el backend rechazó y no creó nada.
         setError(t('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.'));
       } else {
-        // Ambiguo (5xx, red, timeout): la mesa PUEDE existir ya, con su
-        // garantía retenida. Se congela el intento — el reintento cae en el
-        // replay del backend y devuelve esa misma mesa en vez de crear otra.
-        if (intent) freezeMesa(mesaScope, intent);
-        setError(t('No pudimos confirmar la apertura. Puede que la mesa ya se haya creado: reintenta esta misma apertura, no armes otra.'));
+        // Ambiguo (5xx, red, timeout): la mesa PUEDE existir ya —y, cuando el
+        // riel monetario está vivo, también su garantía—. Se congela el intento:
+        // el replay devuelve esa misma mesa en vez de crear otra.
+        if (intent) {
+          freezeMesa(mesaScope, intent);
+          // `avisoApertura()` es el estado canónico del intento congelado. Un
+          // `form-error` con el mismo copy dejaba dos avisos adyacentes y hacía
+          // ambiguo hasta el selector accesible. La falla previa ya se limpió
+          // al empezar este envío; no se fabrica otra copia acá.
+          setError(null);
+        } else {
+          // Defensa residual: si no hubo handle que congelar, no existe panel
+          // persistente y el fallo igual tiene que quedar visible.
+          setError(t('No pudimos confirmar la apertura. Puede que la mesa ya se haya creado: reintenta esta misma apertura, no armes otra.'));
+        }
       }
     } finally {
       createInFlightRef.current.leave();
