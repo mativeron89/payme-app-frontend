@@ -14,7 +14,7 @@ test('AF-AJUSTES10 · Asociadas queda mínima y el header alinea marca/nombre si
   await expect(page.getByText('Todavía no está disponible', { exact: true })).toBeVisible();
   await expect(page.getByText(/cómo se autoriza un pago/)).toHaveCount(0);
 
-  const identity = page.locator('.hdr-identity');
+  const identity = page.locator('.hdr-user-group');
   const [identityBox, logoBox, userBox, bellBox] = await Promise.all([
     identity.boundingBox(),
     identity.locator('.hdr-mark').boundingBox(),

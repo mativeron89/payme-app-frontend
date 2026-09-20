@@ -11,6 +11,18 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.181.2 — Expectativas E2E alineadas con la entrega (2026-09-20)
+
+Adenda `AF-AJUSTES10-E2E-EXPECTATIVAS-20260920`, base publicada `526832c`.
+**Sin push ni deploy.** Conserva la dispensa de auditoría específica.
+
+- La prueba visual conserva sus mediciones de geometría y campana, apuntando al
+  nombre vigente `hdr-user-group` del wrapper que ya validan runtime, CSS y la
+  guarda focal.
+- La prueba de alta conserva custodia, aviso de demostración, registro y
+  limpieza, y fija explícitamente la versión autorizada `2.5.5` que U05 publica
+  en el mock; no acepta una versión variable ni la confunde con un aviso real.
+
 ## 0.181.1 — Corrección causal del wrapper de identidad (2026-09-20)
 
 Adenda `AF-AJUSTES10-CI-IDENTIDAD-20260920`, base publicada `2383e3c`.
