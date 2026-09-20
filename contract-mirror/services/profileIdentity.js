@@ -10,7 +10,7 @@
  * v2.95.0 — sólo cambió la sección de eliminación; 2.5.1 en v2.99.0 — sólo
  * la frase de la invitación de alta; 2.5.3 en v2.111.0 — la foto al
  * organizador de la mesa y la regla de menores; 2.5.2 en v2.101.0 — sólo el renglón de
- * quién organiza una mesa):
+ * quién organiza una mesa; 2.5.4 en v2.117.3 — ticket y comercio privado):
  * la foto privada se describe igual y la conducta no cambia;
  * tests/profile-identity.test.js ata esta constante al archivo
  * legal/aviso_privacidad.md, así que un aviso nuevo pasa por acá a propósito.
@@ -34,7 +34,7 @@ const SUPPORTED_INPUT_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const PROFILE_IDENTITY_CAPABILITY = Object.freeze({
   supported: true,
   enabled: true,
-  notice_version: '2.5.3',
+  notice_version: '2.5.4',
   notice_required: true,
   activation_blocker: null,
   payme_id_mutable: false,

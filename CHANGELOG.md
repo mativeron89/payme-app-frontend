@@ -23,6 +23,9 @@ Orden `AF-N179-FIX-CONTINUAR-HIT-TARGET-FEEDBACK-20260920`, base `184dbba`.
   el envío.
 - Una prueba móvil sintética cubre el texto visible, el espacio intermedio, el
   círculo, el exterior, el doble toque y la recuperación tras fallo de resolución.
+- El mirror adopta mecánicamente la capability de perfil del owner `2198f4c` y
+  su inventario `4bcbb7b`: el Aviso soportado pasa a `2.5.4` para ticket y
+  comercio privado, sin afirmar publicación ni producción.
 
 ## 0.180.3 — Captura n179 portable en Playwright (2026-09-20)
 

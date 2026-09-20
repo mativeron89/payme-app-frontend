@@ -6,6 +6,39 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-20**.
+- Commit exacto y procedencia del CONTENIDO:
+  **`2198f4ceb5059bdf0d63cc08ff9fd26d66b8a016`**
+  (App Backend **v2.117.3**: `services/profileIdentity.js` declara el Aviso
+  **2.5.4** para ticket y comercio privado).
+- Commit local del que se tomó el inventario autoritativo:
+  **`4bcbb7bb090639a910a54da8dd2ecfca46c81c0a`** (tree
+  `5d5a8276d055549ad639a7276c39edd8c00b9bbb`). El inventario declara primero
+  el contenido exacto `2198f4c`; `4bcbb7b` sólo publica localmente ese
+  inventario regenerado.
+
+🔴 **No acredita publicación ni producción:** ambos objetos son locales y este
+refresh no hizo push, deploy ni consulta remota.
+
+🆕 **109 archivos espejados** más este README. Contra el corte anterior
+(`5c63bcf`) cambia exactamente uno: `services/profileIdentity.js`. No hay altas,
+bajas ni renombrados.
+
+### Verificación de esta adopción, con su resultado literal
+
+`PAYME_APP_BACKEND_DIR` apuntó al worktree owner limpio en `4bcbb7b`. Los gates
+leen el commit de contenido `2198f4c` declarado por el inventario y comparan su
+vigencia con ese HEAD local.
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | **adoptado y verificado: 109 archivos · commit `2198f4c`** · exit 0 |
+| `--integridad` | **OK 109/109** contra el inventario · exit 0 |
+| `--paridad` | **OK 109/109**: espejo = inventario = fuente **en `2198f4c`** · exit 0 |
+| `--vigencia` | **OK**: el contenido espejado sigue igual en el HEAD owner (`4bcbb7b`) · exit 0 |
+
+### Refresh anterior · 2026-09-19 (OCR v2 y presupuestos · `5c63bcf`)
+
 - Fecha del refresh: **2026-09-19** (el noveno del día).
 - Commit exacto y procedencia del CONTENIDO:
   **`5c63bcfb109a747abce892ac1c512fe941db8747`**
@@ -20,7 +53,7 @@ desde `src/` y nunca se corrige a mano.
 No se consultó vigencia contra el HEAD del worktree del dueño, que trabaja en
 paralelo, ni se usa su estado mutable como fuente.
 
-🆕 **109 archivos espejados** más este README. Contra el corte anterior
+Población del corte: **109 archivos espejados** más este README. Contra el corte anterior
 (`ca021dc`) hay **dos altas** (`contract/ocr-merchant-v2.json` y
 `contract/restaurant-resolution-v1.json`), **seis modificaciones**, cero bajas
 y cero renombrados. Frente al corte C4 de n179, O1 cambia exactamente

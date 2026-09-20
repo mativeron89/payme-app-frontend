@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "5c63bcfb109a747abce892ac1c512fe941db8747",
+  "commit": "2198f4ceb5059bdf0d63cc08ff9fd26d66b8a016",
   "total": 109,
   "archivos": [
     {
@@ -577,8 +577,8 @@
     {
       "origen": "services/profileIdentity.js",
       "destino": "services/profileIdentity.js",
-      "sha256": "fe8de342ee70ebfbf05ac20023c60c9b700049dffab32b11ad38afd216aecb07",
-      "bytes": 11026
+      "sha256": "25a67a060e7beba21e8c6f50cb93a6c0d3f73315a62bdaed7e48262b2ff51a2e",
+      "bytes": 11075
     },
     {
       "origen": "services/savedCards.js",
