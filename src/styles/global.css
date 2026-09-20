@@ -2517,6 +2517,12 @@ body {
 
 .appbar-center {
   position: static;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .appbar-item {
@@ -2579,23 +2585,31 @@ body {
   transform: translateX(-50%);
   transition: transform var(--mo-fast, 120ms) ease-out;
 }
-.appbar-fab:active {
+.appbar-center:active:not(:disabled) .appbar-fab {
   transform: translateX(-50%) scale(0.96);
 }
-.appbar-fab:disabled {
+.appbar-center:disabled {
+  cursor: default;
+}
+.appbar-center:disabled .appbar-fab {
   opacity: 0.55;
   box-shadow: none;
-  cursor: default;
 }
 .appbar-center .appbar-label {
   color: var(--text-muted);
 }
+.appbar-center:disabled .appbar-label {
+  opacity: 0.7;
+}
 
 /* Foco visible: 2px sólido con 2px de offset, navy sobre fondo claro. */
 .appbar-item:focus-visible,
-.appbar-fab:focus-visible {
+.appbar-center:focus-visible .appbar-fab {
   outline: 2px solid var(--action);
   outline-offset: 2px;
+}
+.appbar-center:focus-visible {
+  outline: none;
 }
 
 /* Aire para que el contenido no quede debajo de la barra.
@@ -2646,7 +2660,7 @@ body {
   .appbar-fab {
     transition: none;
   }
-  .appbar-fab:active {
+  .appbar-center:active:not(:disabled) .appbar-fab {
     transform: translateX(-50%);
   }
 }

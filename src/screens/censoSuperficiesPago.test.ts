@@ -677,7 +677,7 @@ describe('🔴 P36 · censo semántico de la pantalla de pago', () => {
         // circuito — antes se afirmaba una punta y se confiaba en la otra.
         tag: 'AppBottomBar > button',
         clase: 'raw-sin-guarda',
-        identifica: (s) => atributoLiteral(s, 'className') === 'appbar-fab',
+        identifica: (s) => atributoLiteral(s, 'className') === 'appbar-center',
         afirmar: (s) => {
           expect(
             expresionDe(atributo(s, 'disabled'), s.sf),

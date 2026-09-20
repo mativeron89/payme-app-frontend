@@ -84,8 +84,10 @@ export interface AppBottomBarProps {
     label: string;
     icon: IconName;
     onClick: () => void;
-    /** Deshabilita el círculo sin sacarlo de la barra (ej.: nada seleccionado). */
+    /** Deshabilita la acción central sin sacarla de la barra (ej.: nada seleccionado). */
     disabled?: boolean;
+    /** Expone que la acción ya está procesándose, además de deshabilitarla. */
+    busy?: boolean;
   };
   /**
    * Fila propia ARRIBA de la barra, dentro del mismo bloque. Es donde vive lo
@@ -102,6 +104,7 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
     icon: 'plus' as IconName,
     onClick: () => navigate('scan'),
     disabled: false,
+    busy: false,
   };
 
   const item = (it: SideItem) => {
@@ -128,19 +131,20 @@ export function AppBottomBar({ active = null, center, above }: AppBottomBarProps
       {above && <div className="appbar-above">{above}</div>}
       <nav className="appbar" aria-label={t('Navegación principal')}>
         {LEFT.map(item)}
-        <div className="appbar-center">
-          <button
-            type="button"
-            className="appbar-fab"
-            onClick={centro.onClick}
-            disabled={centro.disabled}
-            aria-label={t(centro.label)}
-          >
+        <button
+          type="button"
+          className="appbar-center"
+          onClick={centro.onClick}
+          disabled={centro.disabled}
+          aria-busy={centro.busy || undefined}
+          aria-label={t(centro.label)}
+        >
+          <span className="appbar-fab" aria-hidden="true">
             {/* 22px dentro del círculo de 56px medido por Diseño. */}
             <Icon name={centro.icon} size={22} />
-          </button>
+          </span>
           <span className="appbar-label">{t(centro.label)}</span>
-        </div>
+        </button>
         {RIGHT.map(item)}
       </nav>
     </div>

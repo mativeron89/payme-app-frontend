@@ -140,6 +140,7 @@ export const EN: Record<string, string> = {
   "Consultando…": "Checking…",
   "Consumo": "Item",
   "Continuar": "Continue",
+  "Continuando…": "Continuing…",
   "Contraseña": "Password",
   "Copiar el link de invitación de la mesa {0}": "Copy the invitation link for table {0}",
   "Copiar link": "Copy link",

@@ -241,9 +241,9 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     expect(radioBox!.x).toBeLessThan(chipBox!.x);
 
     const cta = page.getByRole('button', { name: 'Garantizar', exact: true });
-    await expect(cta).toHaveClass(/appbar-fab/);
-    await expect(cta).toHaveCSS('width', '56px');
-    await expect(cta).toHaveCSS('height', '56px');
+    await expect(cta).toHaveClass(/appbar-center/);
+    await expect(cta.locator('.appbar-fab')).toHaveCSS('width', '56px');
+    await expect(cta.locator('.appbar-fab')).toHaveCSS('height', '56px');
     const nota = page.locator('.gar-note-fixed');
     await expect(nota).toHaveText('La retención no es un cobro: si todos pagan lo suyo, se libera sola al cerrar la mesa.');
     const [notaBox, appBox] = await Promise.all([nota.boundingBox(), page.locator('.app').boundingBox()]);
@@ -275,7 +275,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(tarjeta).toContainText('Santander ···· 4532');
     await expect(tarjeta).toContainText('La tarjeta que elegiste para garantizar');
     const confirmar = page.getByRole('button', { name: 'Confirmar', exact: true });
-    await expect(confirmar).toHaveClass(/appbar-fab/);
+    await expect(confirmar).toHaveClass(/appbar-center/);
     await capturarSiCorresponde(page, '03-confirma-banco.png');
 
     // La tarjeta está siempre por composición, pero sólo se vuelve live-region

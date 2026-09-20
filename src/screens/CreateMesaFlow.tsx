@@ -278,6 +278,8 @@ export function CreateMesaFlow() {
   }, [cardsLoaded, fuenteGarantiaExacta, reconciledSavedPaymentMethodId]);
   const [busy, setBusy] = useState(false);
   const createInFlightRef = useRef(createInFlightMutex());
+  const [ticketContinuing, setTicketContinuing] = useState(false);
+  const ticketContinueInFlightRef = useRef(createInFlightMutex());
   const confirm3dsInFlightRef = useRef(createInFlightMutex());
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateMesaResponse | null>(null);
@@ -300,6 +302,11 @@ export function CreateMesaFlow() {
     cardStateRef.current = s;
     setCardState(s);
   }, []);
+
+  function finishTicketContinuation() {
+    ticketContinueInFlightRef.current.leave();
+    setTicketContinuing(false);
+  }
 
   /**
    * G-01 RESUELTO (backend v2.21): el restaurante se resuelve contra
@@ -501,6 +508,7 @@ export function CreateMesaFlow() {
     if (priorAttemptCheckFailed) {
       setCreateRequested(false);
       setError(t('No pudimos descartar una apertura anterior. No vamos a tokenizar otra tarjeta ni abrir otra mesa.'));
+      finishTicketContinuation();
       return;
     }
     if (!priorAttemptChecked) return;
@@ -849,7 +857,10 @@ export function CreateMesaFlow() {
   }
 
   async function createMesa() {
-    if (!ticketValid) return;
+    if (!ticketValid) {
+      finishTicketContinuation();
+      return;
+    }
     // §1.4: sin N elegido no se abre mesa. Este guard NO inventa un default —
     // el gate de la pantalla fusionada ya lo exige, y si algún camino nuevo
     // llegara acá sin elección, vuelve a ELLA en vez de fabricar un número.
@@ -858,12 +869,14 @@ export function CreateMesaFlow() {
     if (participants === null) {
       toast(t('Elige cuántos son'));
       setStep('ticket');
+      finishTicketContinuation();
       return;
     }
     if (!createInFlightRef.current.tryEnter()) return;
     if (!mesaScope || !actor) {
       setError(actorError ? t('No pudimos verificar una identidad segura para esta garantía.') : t('Preparando una identidad segura para esta garantía…'));
       createInFlightRef.current.leave();
+      finishTicketContinuation();
       return;
     }
     if (!priorAttemptChecked || priorAttemptCheckFailed) {
@@ -871,6 +884,7 @@ export function CreateMesaFlow() {
         ? t('No pudimos descartar una apertura anterior. No vamos a tokenizar otra tarjeta ni abrir otra mesa.')
         : t('Estamos verificando que no exista otra apertura. Espera un momento.'));
       createInFlightRef.current.leave();
+      finishTicketContinuation();
       return;
     }
     // ORDEN 2A · el bloqueo se levanta SÓLO con un diagnóstico del contrato que
@@ -889,6 +903,7 @@ export function CreateMesaFlow() {
     if (frozenRequiresReconciliation && !replayHabilitado) {
       setError(t('Esta apertura pertenece a una sesión anterior. Está bloqueada hasta reconciliar su resultado; no abrimos otra mesa.'));
       createInFlightRef.current.leave();
+      finishTicketContinuation();
       return;
     }
     // ORDEN 1-B · sin elección explícita no se reenvía. El silencio no puede
@@ -900,6 +915,7 @@ export function CreateMesaFlow() {
       cardChoicesRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
       setCardChoicePulse(true);
       createInFlightRef.current.leave();
+      finishTicketContinuation();
       return;
     }
     /**
@@ -917,6 +933,7 @@ export function CreateMesaFlow() {
       if (method === 'card' && !cardRailAvailable) {
         setError(t(CARD_RAIL_UNAVAILABLE_COPY));
         createInFlightRef.current.leave();
+        finishTicketContinuation();
         return;
       }
     }
@@ -1119,41 +1136,48 @@ export function CreateMesaFlow() {
     } finally {
       createInFlightRef.current.leave();
       setBusy(false);
+      finishTicketContinuation();
     }
   }
 
   async function continueFromTicket() {
-    let resolved = restaurant;
-    let recordOnly = restaurantRecordOnly;
-    if (!resolved) {
-      try {
-        const result = await resolveTicketRestaurant();
-        resolved = result?.restaurant ?? null;
-        recordOnly = result?.record_only ?? false;
-      } catch {
+    let handedOffToCreation = false;
+    try {
+      let resolved = restaurant;
+      let recordOnly = restaurantRecordOnly;
+      if (!resolved) {
+        try {
+          const result = await resolveTicketRestaurant();
+          resolved = result?.restaurant ?? null;
+          recordOnly = result?.record_only ?? false;
+        } catch {
+          return;
+        }
+      }
+      const route = ticketOpeningRoute({
+        userAction: true,
+        restaurantReady: !!resolved,
+        recordOnly,
+        moneyEnabled: !sinGarantia,
+      });
+      if (route === 'resolving_restaurant') {
+        setRestaurantError(t('Identificando el restaurante… prueba de nuevo en un momento.'));
         return;
       }
+      if (route === 'record_only_blocked') {
+        setError(t('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.'));
+        return;
+      }
+      if (route === 'create_without_money') {
+        handedOffToCreation = true;
+        setCreateRequested(true);
+        return;
+      }
+      void loadCards();
+      setStep('garantia');
+    } finally {
+      if (!handedOffToCreation) finishTicketContinuation();
     }
-    const route = ticketOpeningRoute({
-      userAction: true,
-      restaurantReady: !!resolved,
-      recordOnly,
-      moneyEnabled: !sinGarantia,
-    });
-    if (route === 'resolving_restaurant') {
-      setRestaurantError(t('Identificando el restaurante… prueba de nuevo en un momento.'));
-      return;
-    }
-    if (route === 'record_only_blocked') {
-      setError(t('No pudimos abrir la mesa. Revisa el ticket y prueba de nuevo.'));
-      return;
-    }
-    if (route === 'create_without_money') {
-      setCreateRequested(true);
-      return;
-    }
-    void loadCards();
-    setStep('garantia');
   }
 
   async function confirm3ds() {
@@ -1584,6 +1608,21 @@ export function CreateMesaFlow() {
           </div>
         </div>
         <div className="scroll flow-scroll ticket-flow-scroll">
+          {ticketContinuing && (
+            <div className="note" role="status" aria-live="polite">
+              {t('Continuando…')}
+            </div>
+          )}
+          {restaurantError && (
+            <div className="form-error" role="alert">
+              {restaurantError}
+            </div>
+          )}
+          {error && (
+            <div className="form-error" role="alert">
+              {error}
+            </div>
+          )}
           {avisoApertura()}
           {/* Las tres formas salen de UNA lista, no de tres bloques copiados:
               con tres copias, agregar un estado visual a una y olvidarse de
@@ -1840,7 +1879,7 @@ export function CreateMesaFlow() {
           active={null}
           above={!ticketValid ? <div className="tk-invalid">{ticketInvalidReason}</div> : undefined}
           center={{
-            label: t('Continuar'),
+            label: ticketContinuing ? t('Continuando…') : t('Continuar'),
             icon: 'arrow-right',
             onClick: () => {
               // El CTA nunca se apaga por el stepper: frena explicando (§1.4).
@@ -1867,12 +1906,18 @@ export function CreateMesaFlow() {
                 setTicketPulse(true);
                 return;
               }
+              if (!ticketContinueInFlightRef.current.tryEnter()) return;
+              setTicketContinuing(true);
+              setError(null);
+              setRestaurantError(null);
               // C3 · sin garantía no hay tarjeta que elegir ni paso que
               // mostrar: se crea la mesa y se va al link. Pedirle a alguien que
               // "garantice" en un modo donde el dueño rechaza la garantía sería
               // un callejón con cartel.
               void continueFromTicket();
             },
+            disabled: ticketContinuing,
+            busy: ticketContinuing,
           }}
         />
       </div>

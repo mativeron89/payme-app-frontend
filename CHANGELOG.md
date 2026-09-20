@@ -11,6 +11,19 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.180.4 — Continuar con hit target y feedback completos (2026-09-20)
+
+Orden `AF-N179-FIX-CONTINUAR-HIT-TARGET-FEEDBACK-20260920`, base `184dbba`.
+**Sin push ni deploy.** Roadmap n179.
+
+- La acción central de la barra es un único botón semántico: círculo, rótulo y
+  espacio intermedio comparten handler, foco, estado disabled y nombre accesible.
+- En la división del ticket, `Continuando…` aparece antes de resolver o crear;
+  los errores de restaurante/apertura quedan visibles y el doble toque no duplica
+  el envío.
+- Una prueba móvil sintética cubre el texto visible, el espacio intermedio, el
+  círculo, el exterior, el doble toque y la recuperación tras fallo de resolución.
+
 ## 0.180.3 — Captura n179 portable en Playwright (2026-09-20)
 
 Orden `AF-N179-CI-SCREENSHOT-FIX-20260920`, base `131152b9`. **Sin push,
