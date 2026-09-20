@@ -11,6 +11,22 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.180.6 — Barra por reparto confirmado sin pagos (2026-09-20)
+
+Orden `AF-BARRA-ITEMS-CORRECCION-20260920`, base `e9ffdc0`.
+**Sin push ni deploy.** Roadmap RM190.
+
+- Con el corte de pagos confirmado, las mesas por consumo muestran cuánto del
+  total ya quedó asignado y cuánto falta, usando la ocupación global persistida
+  de los ítems; una selección local todavía no confirmada no mueve la barra.
+- Cantidades y fracciones usan la aritmética canónica por línea, sin volver a
+  sumar pagos; datos inválidos, duplicados, overflow o diferencias legacy no
+  fabrican un reparto completo ni redondean a 100 % antes del total efectivo.
+- La recarga, liberación y los conflictos concurrentes vuelven a la fuente
+  confirmada. El cierre preexistente por selección total muestra `Asignado`
+  separado de `Pagado`, sin cambiar el cierre ni el ledger.
+- El flujo con pagos y las partes iguales conservan su cálculo anterior.
+
 ## 0.180.5 — Feedback único ante apertura ambigua (2026-09-20)
 
 Orden `AF-N179-CI-SELECTOR-FEEDBACK-SUCESOR-20260920`, base `5b0ef99`.

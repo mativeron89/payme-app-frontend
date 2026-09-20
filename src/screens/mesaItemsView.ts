@@ -102,6 +102,105 @@ export function itemsAmountFor(mesa: MesaDetail | null, selected: Map<string, nu
     );
 }
 
+export type ConfirmedConsumptionProgress =
+  | {
+      readonly status: 'known';
+      readonly assignedCents: number;
+      /** Positivo = falta asignar; negativo = las líneas exceden el total legacy. */
+      readonly differenceCents: number;
+      readonly itemsTotalCents: number;
+      readonly totalMatchesItems: boolean;
+      readonly complete: boolean;
+      /** Porcentaje de presentación: nunca llega a 100 antes de `complete`. */
+      readonly visualPercent: number;
+    }
+  | {
+      readonly status: 'unknown';
+      readonly reason: 'invalid_total' | 'duplicate_item' | 'invalid_item' | 'invalid_bps' | 'overflow';
+    };
+
+/**
+ * Avance GENERAL ya confirmado de una mesa por consumo, sin identidad.
+ *
+ * `remaining_bps` es el agregado del owner de todos los claims vivos
+ * (`locked` + `paid`). Por eso esta cuenta:
+ *
+ * - no usa `selected`, que todavía es una intención local rechazable;
+ * - no suma `paid_amount_cents`, porque un claim pagado ya está incluido;
+ * - cuenta cada línea una vez y aplica cantidad antes de la fracción;
+ * - falla cerrado ante datos que permitirían fabricar un cero o un 100 %.
+ *
+ * La discrepancia entre líneas y `total_cents` NO vuelve desconocidos los
+ * importes: se conserva para mostrarla. Lo único que pierde es la capacidad de
+ * afirmar «completo».
+ */
+export function confirmedConsumptionProgress(
+  mesa: Pick<MesaDetail, 'total_cents' | 'items'>,
+): ConfirmedConsumptionProgress {
+  if (!Number.isSafeInteger(mesa.total_cents) || mesa.total_cents < 0) {
+    return { status: 'unknown', reason: 'invalid_total' };
+  }
+  if (!Array.isArray(mesa.items)) return { status: 'unknown', reason: 'invalid_item' };
+
+  const ids = new Set<string>();
+  let assigned = 0n;
+  let itemsTotal = 0n;
+  let allAssigned = mesa.items.length > 0;
+  const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+
+  for (const item of mesa.items) {
+    if (!item || typeof item.id !== 'string' || item.id.length === 0) {
+      return { status: 'unknown', reason: 'invalid_item' };
+    }
+    if (ids.has(item.id)) return { status: 'unknown', reason: 'duplicate_item' };
+    ids.add(item.id);
+    if (!Number.isSafeInteger(item.price_cents) || item.price_cents < 0
+      || !Number.isSafeInteger(item.quantity) || item.quantity < 1) {
+      return { status: 'unknown', reason: 'invalid_item' };
+    }
+    if (!bpsValido(item.remaining_bps)) return { status: 'unknown', reason: 'invalid_bps' };
+
+    const line = BigInt(item.price_cents) * BigInt(item.quantity);
+    if (line > maxSafe) return { status: 'unknown', reason: 'overflow' };
+    itemsTotal += line;
+    if (itemsTotal > maxSafe) return { status: 'unknown', reason: 'overflow' };
+
+    const takenBps = 10000 - item.remaining_bps;
+    allAssigned = allAssigned && takenBps === 10000;
+    try {
+      assigned += BigInt(fractionAmount(Number(line), takenBps));
+    } catch {
+      return { status: 'unknown', reason: 'overflow' };
+    }
+    if (assigned > maxSafe) return { status: 'unknown', reason: 'overflow' };
+  }
+
+  const assignedCents = Number(assigned);
+  const itemsTotalCents = Number(itemsTotal);
+  const totalMatchesItems = itemsTotalCents === mesa.total_cents;
+  const complete = mesa.total_cents > 0
+    && totalMatchesItems
+    && allAssigned
+    && assignedCents === mesa.total_cents;
+
+  let roundedPercent = 0;
+  if (mesa.total_cents > 0) {
+    const total = BigInt(mesa.total_cents);
+    roundedPercent = Number((assigned * 100n + total / 2n) / total);
+  }
+  const visualPercent = complete ? 100 : Math.min(99, Math.max(0, roundedPercent));
+
+  return {
+    status: 'known',
+    assignedCents,
+    differenceCents: mesa.total_cents - assignedCents,
+    itemsTotalCents,
+    totalMatchesItems,
+    complete,
+    visualPercent,
+  };
+}
+
 /**
  * No queda NADA seleccionable: sin esto la pantalla seguía diciendo "elegí tus
  * consumos" sobre una lista donde ya no había nada elegible.

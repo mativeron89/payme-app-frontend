@@ -58,7 +58,7 @@ import {
   requiresReconciliation,
 } from './freezeMachine';
 import { MesaDetailView, type QuienesSeSumaron } from './MesaDetailView';
-import { bpsLabel, fraccionInicial, itemsAmountFor } from './mesaItemsView';
+import { bpsLabel, confirmedConsumptionProgress, fraccionInicial, itemsAmountFor } from './mesaItemsView';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { tipFromBps } from '../utils/money';
@@ -326,6 +326,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * vista `pay` no se abre.
    */
   const CORTE = corteDePagosView(moneyRail);
+  const corteDeclarado = moneyRail.status === 'authoritative' && !moneyRail.puedeCargarTarjeta;
   const nativeWallets = useNativeWallets();
   // OLA 5D · método de pago con saldo y copy asociada: los declara el BACKEND.
   const { walletRailEnabled } = useWalletRail();
@@ -1719,6 +1720,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
      * monto máximo posible — con nadie pagando, `shortfall` ES el total.
      */
     const sinCobros = cerroSinCobros(mesa);
+    const repartoCierre = corteDeclarado
+      && mesa.division_mode === 'consumo'
+      && mesa.closure_reason === 'all_items_selected'
+      ? confirmedConsumptionProgress(mesa)
+      : null;
+    const repartoCierreConocido = repartoCierre?.status === 'known' ? repartoCierre : null;
     return (
       <div className="screen">
         <TopBar
@@ -1756,6 +1763,35 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 {formatMXN(mesa.paid_amount_cents)}
               </span>
             </div>
+            {repartoCierreConocido ? (
+              <>
+                <div
+                  className="mi-progress"
+                  role="progressbar"
+                  aria-valuenow={repartoCierreConocido.visualPercent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={t('Asignado {0}% de la mesa', repartoCierreConocido.visualPercent)}
+                >
+                  <div className="mi-progress-fill" style={{ width: `${repartoCierreConocido.visualPercent}%` }} />
+                </div>
+                <div className="receipt-row">
+                  <span className="lbl">{t('Asignado')}</span>
+                  <span className="val">{formatMXN(repartoCierreConocido.assignedCents)}</span>
+                </div>
+                <div className="receipt-row">
+                  <span className="lbl">
+                    {repartoCierreConocido.differenceCents >= 0 ? t('Por asignar') : t('Por encima del total')}
+                  </span>
+                  <span className="val">{formatMXN(Math.abs(repartoCierreConocido.differenceCents))}</span>
+                </div>
+              </>
+            ) : null}
+            {repartoCierre?.status === 'unknown' ? (
+              <div className="note note-amber" role="status">
+                {t('No pudimos calcular el reparto confirmado')}
+              </div>
+            ) : null}
             {!sinCobros && shortfall > 0 && (
               <div className="receipt-row">
                 <span className="lbl">{isOpener ? t('Cubrió tu garantía') : t('Cubrió la garantía')}</span>
@@ -2502,7 +2538,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       pagosCortados={CORTE.pagosCortados}
       // El corte DECLARADO por el dueño: sólo con el riel autoritativo. Ver el
       // porqué en la prop de `MesaDetailView`.
-      corteDeclarado={moneyRail.status === 'authoritative' && !moneyRail.puedeCargarTarjeta}
+      corteDeclarado={corteDeclarado}
       onLeave={() => navigate('home')}
       onOpenInvite={() => setInviteOpen(true)}
       onCopyInvitationLink={() => void copyInvitationLink()}

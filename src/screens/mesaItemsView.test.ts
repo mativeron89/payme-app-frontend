@@ -5,6 +5,7 @@ import {
   availableSlotsOf,
   bpsLabel,
   bpsValido,
+  confirmedConsumptionProgress,
   fraccionInicial,
   fractionPreview,
   itemsAmountFor,
@@ -164,6 +165,121 @@ describe('itemsAmountFor', () => {
       division_slots: [slot({ status: 'paid' }), slot({ slot_index: 1, status: 'claimed' })],
     });
     expect(itemsAmountFor(m, new Map())).toBe(0);
+  });
+});
+
+describe('confirmedConsumptionProgress · reparto global confirmado', () => {
+  it('cubre cero, parcial y total sin leer la selección local', () => {
+    const zero = confirmedConsumptionProgress(mesa({
+      items: [
+        item({ id: 'a', price_cents: 30000 }),
+        item({ id: 'b', price_cents: 54000 }),
+      ],
+    }));
+    expect(zero).toEqual({
+      status: 'known', assignedCents: 0, differenceCents: 84000,
+      itemsTotalCents: 84000, totalMatchesItems: true, complete: false, visualPercent: 0,
+    });
+
+    const partial = confirmedConsumptionProgress(mesa({
+      items: [
+        item({ id: 'a', price_cents: 30000, remaining_bps: 0 }),
+        item({ id: 'b', price_cents: 54000 }),
+      ],
+    }));
+    expect(partial).toMatchObject({
+      status: 'known', assignedCents: 30000, differenceCents: 54000,
+      complete: false, visualPercent: 36,
+    });
+
+    const complete = confirmedConsumptionProgress(mesa({
+      items: [
+        item({ id: 'a', price_cents: 30000, remaining_bps: 0 }),
+        item({ id: 'b', price_cents: 54000, remaining_bps: 0 }),
+      ],
+    }));
+    expect(complete).toMatchObject({
+      status: 'known', assignedCents: 84000, differenceCents: 0,
+      complete: true, visualPercent: 100,
+    });
+  });
+
+  it('aplica cantidad y redondeo canónico a la fracción agregada de cada línea', () => {
+    const r = confirmedConsumptionProgress(mesa({
+      total_cents: 30003,
+      items: [
+        // Línea 20002; ⅓ agregado = 6667.3334 → 6667 centavos.
+        item({ id: 'cantidad', price_cents: 10001, quantity: 2, remaining_bps: 6667 }),
+        // Línea 10001; ¼ agregado = 2500.25 → 2500 centavos.
+        item({ id: 'cuarto', price_cents: 10001, remaining_bps: 7500 }),
+      ],
+    }));
+    expect(r).toMatchObject({
+      status: 'known', assignedCents: 9167, differenceCents: 20836,
+      itemsTotalCents: 30003, totalMatchesItems: true, complete: false, visualPercent: 31,
+    });
+  });
+
+  it('agrega la ocupación global una vez: no suma pago ni identidad por separado', () => {
+    const r = confirmedConsumptionProgress(mesa({
+      total_cents: 10000,
+      paid_amount_cents: 5000,
+      items: [item({ id: 'compartido', remaining_bps: 2500 })],
+    }));
+    expect(r).toMatchObject({ status: 'known', assignedCents: 7500, differenceCents: 2500 });
+  });
+
+  it('un porcentaje redondeable a 100 sigue en 99 hasta el total efectivo', () => {
+    const r = confirmedConsumptionProgress(mesa({
+      total_cents: 10000,
+      items: [item({ id: 'casi', price_cents: 10000, remaining_bps: 1 })],
+    }));
+    expect(r).toMatchObject({
+      status: 'known', assignedCents: 9999, differenceCents: 1,
+      complete: false, visualPercent: 99,
+    });
+  });
+
+  it('conserva discrepancias legacy y nunca las presenta como reparto completo', () => {
+    const falta = confirmedConsumptionProgress(mesa({
+      total_cents: 84000,
+      items: [item({ id: 'legacy', price_cents: 83999, remaining_bps: 0 })],
+    }));
+    expect(falta).toMatchObject({
+      status: 'known', assignedCents: 83999, differenceCents: 1,
+      totalMatchesItems: false, complete: false, visualPercent: 99,
+    });
+
+    const excede = confirmedConsumptionProgress(mesa({
+      total_cents: 84000,
+      items: [item({ id: 'legacy', price_cents: 84001, remaining_bps: 0 })],
+    }));
+    expect(excede).toMatchObject({
+      status: 'known', assignedCents: 84001, differenceCents: -1,
+      totalMatchesItems: false, complete: false, visualPercent: 99,
+    });
+  });
+
+  it('falla cerrado ante bps/ítems inválidos, duplicados y overflow', () => {
+    expect(confirmedConsumptionProgress(mesa({
+      total_cents: Number.NaN,
+    }))).toEqual({ status: 'unknown', reason: 'invalid_total' });
+    expect(confirmedConsumptionProgress(mesa({
+      items: [item({ remaining_bps: undefined as never })],
+    }))).toEqual({ status: 'unknown', reason: 'invalid_bps' });
+    expect(confirmedConsumptionProgress(mesa({
+      items: [item({ id: '' })],
+    }))).toEqual({ status: 'unknown', reason: 'invalid_item' });
+    expect(confirmedConsumptionProgress(mesa({
+      items: [item({ id: 'dup' }), item({ id: 'dup' })],
+    }))).toEqual({ status: 'unknown', reason: 'duplicate_item' });
+    expect(confirmedConsumptionProgress(mesa({
+      items: [item({ quantity: 0 })],
+    }))).toEqual({ status: 'unknown', reason: 'invalid_item' });
+    expect(confirmedConsumptionProgress(mesa({
+      total_cents: Number.MAX_SAFE_INTEGER,
+      items: [item({ price_cents: Number.MAX_SAFE_INTEGER, quantity: 2 })],
+    }))).toEqual({ status: 'unknown', reason: 'overflow' });
   });
 });
 

@@ -14,6 +14,7 @@ import {
   availableSlotsOf,
   bpsLabel,
   bpsValido,
+  confirmedConsumptionProgress,
   countdownIsUrgent,
   fractionPreview,
   nothingLeftFor,
@@ -310,10 +311,13 @@ export function MesaDetailView({
   const itemsRef = useRef<HTMLDivElement | null>(null);
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
-  const pct = mesa.total_cents > 0 ? Math.round((mesa.paid_amount_cents / mesa.total_cents) * 100) : 0;
+  const esConsumo = mesa.division_mode === 'consumo';
+  const reparto = corteDeclarado && esConsumo ? confirmedConsumptionProgress(mesa) : null;
+  const repartoConocido = reparto?.status === 'known' ? reparto : null;
+  const pctPagado = mesa.total_cents > 0 ? Math.round((mesa.paid_amount_cents / mesa.total_cents) * 100) : 0;
+  const pct = repartoConocido?.visualPercent ?? (reparto ? 0 : pctPagado);
   const availableSlots = availableSlotsOf(mesa);
   const nothingLeft = nothingLeftFor(mesa);
-  const esConsumo = mesa.division_mode === 'consumo';
   const divisionLabel = esConsumo
     ? t('cada uno lo suyo')
     : mesa.expected_participants === 1
@@ -491,16 +495,32 @@ export function MesaDetailView({
         <div
           className="mi-progress"
           role="progressbar"
-          aria-valuenow={pct}
+          aria-valuenow={reparto?.status === 'unknown' ? undefined : pct}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label={t('Pagado {0}% de la mesa', pct)}
+          aria-label={repartoConocido
+            ? t('Asignado {0}% de la mesa', pct)
+            : reparto
+              ? t('No pudimos calcular el reparto confirmado')
+              : t('Pagado {0}% de la mesa', pct)}
         >
           <div className="mi-progress-fill" style={{ width: `${pct}%` }} />
         </div>
         <div className="mi-meta">
           <span className="mi-meta-amt">
-            {formatMXN(mesa.paid_amount_cents)} {t('de')} {formatMXN(mesa.total_cents)} ({pct}%)
+            {repartoConocido ? (
+              <>
+                {t('{0} asignados', formatMXN(repartoConocido.assignedCents))} ·{' '}
+                {repartoConocido.differenceCents >= 0
+                  ? t('{0} por asignar', formatMXN(repartoConocido.differenceCents))
+                  : t('{0} por encima del total', formatMXN(Math.abs(repartoConocido.differenceCents)))}{' '}
+                ({pct}%)
+              </>
+            ) : reparto ? (
+              t('No pudimos calcular el reparto confirmado')
+            ) : (
+              <>{formatMXN(mesa.paid_amount_cents)} {t('de')} {formatMXN(mesa.total_cents)} ({pct}%)</>
+            )}
           </span>
           <span className={`mi-count ${urgente ? 'urgent' : ''}`}>
             <Icon name="clock" size={14} /> {cd ?? t('venció')}
