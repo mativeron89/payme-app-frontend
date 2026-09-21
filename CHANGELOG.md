@@ -11,6 +11,17 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.182.2 — Censo visual alineado con tercios iguales (2026-09-20)
+
+Sucesor causal de `AF-AJUSTES8-VISUAL-CONTRATOS-20260920`, después del CI de
+`294dd8c`. **Sin push ni deploy.**
+
+- El censo visual deja de exigir la geometría anterior de pestañas alineadas a
+  los extremos: verifica el `padding` vigente y que los tres anchos sean
+  iguales, de acuerdo con V02 y con la regresión focal de esta entrega.
+- No cambia producto; corrige exclusivamente la expectativa incompatible que
+  bloqueó Playwright (366 casos pasaron y uno falló en los tres intentos).
+
 ## 0.182.1 — Evidencia móvil de nombre largo (2026-09-20)
 
 Sucesor focal de `AF-AJUSTES8-VISUAL-CONTRATOS-20260920`, sobre `efc6d0d`.

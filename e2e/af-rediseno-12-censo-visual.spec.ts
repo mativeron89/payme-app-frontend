@@ -112,12 +112,13 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await acreditar(page, '01-inicio', false);
   const cuentaTab = page.getByRole('tab', { name: 'Cuenta', exact: true });
   await expect(cuentaTab).toHaveCSS('height', '40px');
-  await expect(cuentaTab).toHaveCSS('padding-left', '18px');
+  await expect(cuentaTab).toHaveCSS('padding-left', '8px');
   await expect(cuentaTab).toHaveCSS('border-top-left-radius', '12px');
   await expect(page.locator('.btabs')).toHaveCSS('display', 'grid');
-  await expect(cuentaTab).toHaveCSS('justify-self', 'start');
-  await expect(page.getByRole('tab', { name: 'Estadísticas', exact: true })).toHaveCSS('justify-self', 'center');
-  await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toHaveCSS('justify-self', 'end');
+  const tabWidths = await page.getByRole('tab').evaluateAll((tabs) => (
+    tabs.map((tab) => tab.getBoundingClientRect().width)
+  ));
+  expect(Math.max(...tabWidths) - Math.min(...tabWidths)).toBeLessThanOrEqual(1);
   await expect(page.locator('.mounted-card')).toHaveCSS('border-top-left-radius', '0px');
 
   await page.getByRole('button', { name: 'Avisos', exact: true }).click();
