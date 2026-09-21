@@ -30,6 +30,36 @@ describe('frontera contractual monetaria', () => {
     }, walletRequest)).toThrow('money_response_malformed');
   });
 
+  it('acepta sólo en replay idempotente el N histórico ausente y recupera pending_auth', () => {
+    const replay = {
+      idempotent: true,
+      mesa: {
+        id: UUID_A,
+        code: 'PM-123',
+        total_cents: '1000',
+        division_mode: 'igual',
+        expected_participants: 2,
+        original_participants: null,
+        status: 'pending_auth',
+        expires_at: '2026-08-02T12:00:00.000Z',
+        created_at: '2026-08-02T11:30:00.000Z',
+      },
+      guarantee: {
+        method: 'card',
+        status: 'requires_action',
+        client_secret: 'pi_historica_secret',
+      },
+    };
+    expect(createMesaResponse(replay, mesaRequest)).toMatchObject({
+      mesa: { original_participants: null, status: 'pending_auth' },
+      guarantee: { status: 'requires_action', client_secret: 'pi_historica_secret' },
+    });
+    expect(() => createMesaResponse({
+      ...replay,
+      mesa: { ...replay.mesa, original_participants: 3 },
+    }, mesaRequest)).toThrow('money_response_malformed');
+  });
+
   it('acepta Stripe fresh sin payment_type y liga 3DS al recibo de consumo', () => {
     const fresh = { attempt: { id: UUID_B, gross_amount_cents: '1300', tip_cents: '300', items: [{ item_id: UUID_A, fraction_bps: 3333, amount_cents: '1000' }], client_secret: 'pi_secret', status: 'requires_action', stripe_status: 'requires_action', requires_action: true } };
     expect(payMesaResponse(fresh, payRequest, consumptionBinding)).toMatchObject({ attempt: { gross_amount_cents: 1300, tip_cents: 300, items: [{ item_id: UUID_A, fraction_bps: 3333, amount_cents: 1000 }], client_secret: 'pi_secret', requires_action: true } });

@@ -66,21 +66,54 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
   });
 
-  test('partes iguales: permite declarar una fracción sin alterar el casillero', async ({ page }) => {
+  test('partes iguales: N original no limita la declaración ¾ ni altera el casillero', async ({ page }) => {
     await ingresar(page);
+    await page.evaluate(() => {
+      const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
+      const mesa = st.mesas.find((candidate: { code: string }) => candidate.code === 'PA-3121');
+      mesa.original_participants = 4;
+      localStorage.setItem('payme_mock_state_v1', JSON.stringify(st));
+    });
     await page.goto('/#/mesa/PA-3121');
 
     await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
     const fracciones = page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' });
     await expect(fracciones.getByRole('radio')).toHaveCount(6);
-    await expect(fracciones.getByRole('radio', { name: '⅔', exact: true })).toBeVisible();
-    await fracciones.getByRole('radio', { name: '½', exact: true }).click();
+    await expect(fracciones.getByRole('radio', { name: '¾', exact: true })).toBeVisible();
+    await fracciones.getByRole('radio', { name: '¾', exact: true }).click();
 
     // No hay preview monetario por plato en igualdad: la fracción es una
     // declaración separada y el monto sigue siendo el slot fijo.
     await expect(page.locator('.mi-frac-amt')).toHaveCount(0);
     const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
     await expect(filaMiParte).toContainText('$155.00');
+
+    // Captura el body real sin sustituir su respuesta: la prueba llega hasta
+    // el mock normal y acredita que ¾ viaja como dato declarado, mientras el
+    // importe continúa saliendo del casillero igualitario.
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const modulo = await import(/* @vite-ignore */ ruta);
+      const original = modulo.api.payMesa.bind(modulo.api);
+      modulo.api.payMesa = async (...args: Parameters<typeof original>) => {
+        localStorage.setItem('payme.app.e2e.equal-pay-body.v1', JSON.stringify(args[1]));
+        return original(...args);
+      };
+    });
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
+    await expect(page.getByText('Tu parte · $155.00', { exact: true })).toBeVisible();
+    await page.getByRole('radio', { name: '0%', exact: true }).click();
+    await page.getByRole('radio', { name: /Santander.*4532/ }).click();
+    await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+    await expect(page.getByText('¡Listo!')).toBeVisible();
+
+    const body = await page.evaluate(() => JSON.parse(
+      localStorage.getItem('payme.app.e2e.equal-pay-body.v1') ?? 'null',
+    ));
+    expect(body.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fraction_bps: 7500 }),
+    ]));
   });
 
   /**

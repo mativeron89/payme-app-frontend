@@ -655,7 +655,7 @@ export function MesaDetailView({
                       <div className="seg" role="radiogroup" aria-labelledby={`frac-${i.id}`}>
                         {FRACTIONS.filter((f) => (
                           (!esConsumo || f.bps <= i.remaining_bps)
-                          && (bpsPermitidosPorOriginal === null || bpsPermitidosPorOriginal.has(f.bps))
+                          && (!esConsumo || bpsPermitidosPorOriginal === null || bpsPermitidosPorOriginal.has(f.bps))
                         )).map((f) => (
                           <button
                             key={f.bps}

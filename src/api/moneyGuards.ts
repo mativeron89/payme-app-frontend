@@ -127,12 +127,20 @@ export function createMesaResponse(value: unknown, expected: CreateMesaRequest):
   const originalParticipants = mesa.original_participants;
   const mesaStatus = mesa.status;
   if ((division !== 'consumo' && division !== 'igual') || typeof participants !== 'number' || !Number.isSafeInteger(participants) || participants < 1 || participants > 20 || (mesaStatus !== 'open' && mesaStatus !== 'pending_auth')) fail();
-  if (typeof originalParticipants !== 'number' || !Number.isSafeInteger(originalParticipants)
+  // El dueño siempre publica la clave. En una creación nueva debe contener el
+  // N exacto; sólo un replay idempotente puede traer `null`, porque las mesas
+  // creadas antes de que existiera metadata.original_participants no se
+  // rellenan por inferencia. Ese replay puede ser el único camino para
+  // recuperar el client_secret de una garantía pending_auth histórica.
+  if (originalParticipants === null) {
+    if (root?.idempotent !== true) fail();
+  } else if (typeof originalParticipants !== 'number' || !Number.isSafeInteger(originalParticipants)
       || originalParticipants < 1 || originalParticipants > 20) fail();
   const method = enumValue(guarantee.method, GUARANTEE_METHODS);
   const status = enumValue(guarantee.status, new Set(['open', 'requires_action', 'none']));
   if (total !== positiveExpectation(expected.total_cents) || division !== expected.division_mode
-      || participants !== expected.expected_participants || originalParticipants !== expected.expected_participants
+      || participants !== expected.expected_participants
+      || (originalParticipants !== null && originalParticipants !== expected.expected_participants)
       || method !== expected.guarantee_method) fail();
   if ((status === 'open' && mesaStatus !== 'open')
       || (status === 'requires_action' && mesaStatus !== 'pending_auth')
