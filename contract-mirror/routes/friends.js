@@ -109,7 +109,8 @@ router.get('/', async (req, res, next) => {
 for (const method of ['get', 'post']) {
   router[method]('/avatar-notice', async (req, res, next) => {
     res.setHeader('Cache-Control', 'private, no-store');
-    res.setHeader('Vary', 'Authorization');
+    res.vary('Authorization');
+    res.setHeader('Access-Control-Expose-Headers', 'Vary, ETag');
     try {
       const result = method === 'get' ? await avatarNotice.state(req.user.id)
         : await avatarNotice.acknowledge(req.user.id, req.body);
@@ -126,7 +127,8 @@ for (const method of ['get', 'post']) {
 // U05: sólo entre amistades aceptadas; mismo fallback ante toda denegación.
 router.get('/:userId/avatar', async (req, res, next) => {
   res.setHeader('Cache-Control', 'private, no-store');
-  res.setHeader('Vary', 'Authorization');
+  res.vary('Authorization');
+  res.setHeader('Access-Control-Expose-Headers', 'Vary, ETag');
   const absent = () => res.status(404).type('application/json')
     .end(JSON.stringify({ error: 'avatar_not_found' }));
   try {

@@ -8,36 +8,44 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-09-20**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`d4ad6ae9efa7933f24abba65766c67cf2e48fa2d`**
-  (App Backend **v2.121.0**: conserva `original_participants`, acepta
-  `fraction_denominator` y la etiqueta opcional por mesa no identificada).
+  **`be227f92246b3492b14015b03fd561720de70667`**
+  (App Backend **v2.122.0**: expone `Vary` y `ETag` al navegador en las rutas
+  privadas de aviso/foto; conserva el contrato V04/V07 de v2.121.0).
 - Commit local del que se tomó el inventario autoritativo:
-  **`160652bfbe9f371518781b1beb271af005e854e8`** (tree
-  `d8c8a2bb03be57e0dfcceaa8035183d967ed90d1`). El inventario declara primero
-  el contenido exacto `d4ad6ae`; `160652b` sólo publica el inventario derivado.
+  **`4f7a94bf0d9606b03fbef0674efa04da291cbc65`** (tree
+  `51c84640dca5a16907324aacf78ac9d554d0a05f`). El inventario declara primero
+  el contenido exacto `be227f9`; `4f7a94b` sólo publica el inventario derivado.
 
 🔴 **No acredita publicación ni producción:** ambos objetos son locales y este
 refresh no hizo push, deploy ni consulta remota.
 
 🆕 **111 archivos espejados** más este README. Contra el corte anterior
-(`f0e0820`) entran `contract/mesa-presentation-v1.json` y
-`services/mesaPresentation.js`; cambian `contract/create-mesa-identity-vectors.json`,
-`routes/mesas.js`, `schemas/index.js` y `utils/idempotency.js`. No hay bajas ni
-renombrados.
+(`160652b`) cambia únicamente `routes/friends.js` por la corrección CORS V06.
+No hay altas, bajas ni renombrados.
 
 ### Verificación de esta adopción, con su resultado literal
 
 `PAYME_APP_BACKEND_DIR` apuntó al repositorio owner que contiene ambos objetos.
-Los gates leen exclusivamente el commit de contenido `d4ad6ae` declarado por
-el inventario final tomado de `160652b`.
+Los gates leen exclusivamente el commit de contenido `be227f9` declarado por
+el inventario final tomado de `4f7a94b`.
 
 | gate | resultado |
 |---|---|
 | `--integridad` | **OK 111/111** contra el inventario · exit 0 |
-| `--paridad` | **OK 111/111**: espejo = inventario = fuente **en `d4ad6ae`** · exit 0 |
+| `--paridad` | **OK 111/111**: espejo = inventario = fuente **en `be227f9`** · exit 0 |
 
-`--vigencia`: **OK**, el contenido sigue igual en el HEAD final `160652b` del
-dueño. Mandan el producto `d4ad6ae` y su inventario derivado `160652b`.
+`--vigencia`: **OK**, el contenido sigue igual en el HEAD final `4f7a94b` del
+dueño. Mandan el producto `be227f9` y su inventario derivado `4f7a94b`.
+
+### Refresh anterior · 2026-09-20 (N original y etiqueta privada · `160652b`)
+
+- Población: 111 archivos.
+- Contenido: `d4ad6ae9efa7933f24abba65766c67cf2e48fa2d` (App Backend v2.121.0).
+- Inventario: `160652bfbe9f371518781b1beb271af005e854e8` (tree
+  `d8c8a2bb03be57e0dfcceaa8035183d967ed90d1`).
+- Cambios del corte: `original_participants`, `fraction_denominator` y etiqueta
+  opcional por mesa no identificada.
+- Gates registrados: integridad, paridad y vigencia 111/111 · exit 0.
 
 ### Refresh anterior · 2026-09-20 (Aviso 2.5.5 y foto privada · `f0e0820`)
 
