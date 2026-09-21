@@ -11,6 +11,17 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.182.1 — Evidencia móvil de nombre largo (2026-09-20)
+
+Sucesor focal de `AF-AJUSTES8-VISUAL-CONTRATOS-20260920`, sobre `efc6d0d`.
+**Sin push ni deploy.**
+
+- La prueba visual usa también 375 px y un nombre deliberadamente largo:
+  verifica elipsis real, texto accesible íntegro y ausencia de solapamiento con
+  la campana, además de conservar la medición óptica y los tercios de pestañas.
+- El nombre usa una caja de bloque para que `text-overflow: ellipsis` se pinte
+  de verdad; conserva el centrado óptico dentro del lockup.
+
 ## 0.182.0 — Ajustes visuales de Inicio, selección e Historial (2026-09-20)
 
 Orden `AF-AJUSTES8-VISUAL-CONTRATOS-20260920`, decisiones visuales V01, V02,

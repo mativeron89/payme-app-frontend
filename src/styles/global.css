@@ -2852,8 +2852,7 @@ body {
 
 /* Nombre COMPLETO del usuario. Trunca con elipsis; nunca empuja la campana. */
 .hdr-user {
-  display: flex;
-  align-items: center;
+  display: block;
   align-self: center;
   flex: 1;
   min-width: 0;

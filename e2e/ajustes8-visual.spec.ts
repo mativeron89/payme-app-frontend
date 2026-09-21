@@ -21,6 +21,7 @@ async function claimsDelItem(page: Page, code: string, name: string): Promise<nu
 
 test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
   test('V01/V02 · marca, nombre y tres pestañas conservan una geometría estable', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
     await ingresar(page);
 
     const tabs = page.getByRole('tab');
@@ -41,6 +42,29 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
 
     const cuentaHeight = await page.locator('.home-tab-panel').evaluate((node) => node.getBoundingClientRect().height);
     await capturar(page, 'v01-v02-cuenta-mobile');
+
+    const longName = 'Alejandra Fernanda Rodríguez Hernández de la Fuente';
+    await page.evaluate((name) => {
+      const key = 'payme_app_session__mock';
+      const raw = localStorage.getItem(key);
+      if (!raw) throw new Error('sesión mock ausente');
+      const session = JSON.parse(raw) as { user?: { first_name: string; last_name: string } };
+      if (!session.user) throw new Error('usuario de sesión ausente');
+      session.user.first_name = name;
+      session.user.last_name = '';
+      localStorage.setItem(key, JSON.stringify(session));
+    }, longName);
+    await page.reload();
+    const longUser = page.locator('.hdr-user');
+    await expect(longUser).toHaveText(longName);
+    const [longUserBox, bellBox, isEllipsized] = await Promise.all([
+      longUser.boundingBox(),
+      page.getByRole('button', { name: 'Avisos' }).boundingBox(),
+      longUser.evaluate((node) => node.scrollWidth > node.clientWidth),
+    ]);
+    expect(isEllipsized).toBe(true);
+    expect((longUserBox?.x ?? 0) + (longUserBox?.width ?? 0)).toBeLessThanOrEqual(bellBox?.x ?? 0);
+    await capturar(page, 'v01-nombre-largo-375');
 
     await page.getByRole('tab', { name: 'Asociadas' }).click();
     const asociadasHeight = await page.locator('.home-tab-panel').evaluate((node) => node.getBoundingClientRect().height);
