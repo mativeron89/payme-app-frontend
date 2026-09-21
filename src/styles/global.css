@@ -2854,12 +2854,13 @@ body {
 .hdr-user {
   display: flex;
   align-items: center;
-  height: 34px;
+  align-self: center;
   flex: 1;
   min-width: 0;
   font-family: var(--font-body);
   font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  /* V01 · centrar la línea real, no una caja de 34px con aire tipográfico. */
+  line-height: 1;
   color: var(--on-dark-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2948,7 +2949,7 @@ body {
   position: relative;
   top: 15px;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: flex-end;
   height: 40px;
   gap: 0;
@@ -2962,13 +2963,15 @@ body {
   align-items: center;
   gap: var(--sp-2);
   height: 40px;
+  width: 100%;
   min-height: 40px;
-  padding: 0 18px;
+  padding: 0 var(--sp-2);
   border: none;
   cursor: pointer;
   font-family: var(--font-display);
   font-size: 15px;
   line-height: var(--lh-sm);
+  white-space: nowrap;
   /* Inactiva: texto plano sobre el navy, SIN fondo. El fondo translúcido que
      se probó casi no se veía — es un bug corregido, no una opción. */
   background: none;
@@ -2977,9 +2980,11 @@ body {
   border-radius: 12px 12px 0 0;
 }
 
-.btab:nth-child(1) { justify-self: start; }
-.btab:nth-child(2) { justify-self: center; }
-.btab:nth-child(3) { justify-self: end; }
+.btab:nth-child(1),
+.btab:nth-child(2),
+.btab:nth-child(3) {
+  justify-content: center;
+}
 
 /* Activa: burbuja blanca enganchada a la tarjeta — una sola pieza continua. */
 .btab.on {
@@ -4241,6 +4246,10 @@ body {
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* Progreso de pago de la mesa completa, dentro de la tarjeta de título. */
+.mesa-selection-scroll {
+  padding-top: var(--sp-4);
+}
+
 .mi-progress {
   height: 8px;
   border-radius: var(--r-full);
@@ -4629,6 +4638,16 @@ body {
 .launch-stack {
   display: flex;
   flex-direction: column;
+}
+
+/* V02 · las vistas de la cabecera comparten la misma caja. Cuenta y Asociadas
+   no saltan de alto al alternar y sus pestañas ya comparten tercios iguales. */
+.home-tab-panel {
+  min-height: 116px;
+}
+
+.home-tab-panel-empty {
+  justify-content: center;
 }
 .launch-stack > .launch + .launch {
   border-top: 1px solid var(--border);
@@ -5274,10 +5293,11 @@ body {
   outline-offset: -2px;
 }
 
-/* Abierta: la fila se tiñe apenas — tinte al 8%, no el color pleno, igual que
-   un ítem seleccionado en Mis ítems (§1.10 lo pide con esa referencia). */
+/* V08 · la apertura se expresa por el chevron, `aria-expanded` y la frontera
+   con el detalle. La cabecera sigue blanca; no se funde con el título cian. */
 .hist-item.on .hist-row {
-  background: rgba(15, 181, 201, 0.08);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .hist-main {
@@ -5337,8 +5357,15 @@ body {
 .hist-detail {
   margin: 0 var(--sp-3) var(--sp-3);
   padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--surface-2);
+}
+
+.history-scroll {
+  padding-top: var(--sp-4);
+  padding-left: var(--sp-4);
+  padding-right: var(--sp-4);
 }
 
 .hist-payment + .hist-payment {

@@ -284,7 +284,7 @@ export function MesasScreen() {
         <h1 className="title-card-title">{t('Historial')}</h1>
       </div>
 
-      <div className="scroll" style={{ paddingLeft: 16, paddingRight: 16 }}>
+      <div className="scroll history-scroll">
 
         {seccionTusMesas}
 

@@ -11,6 +11,23 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.182.0 — Ajustes visuales de Inicio, selección e Historial (2026-09-20)
+
+Orden `AF-AJUSTES8-VISUAL-CONTRATOS-20260920`, decisiones visuales V01, V02,
+V03, V05 y V08, base publicada `7cfd3d3`. **Sin push ni deploy.** V04 y V07
+quedan fuera de este candidato y conservan su gate funcional y de auditoría.
+
+- Inicio centra ópticamente el nombre con la marca y da a Cuenta, Estadísticas
+  y Asociadas tercios iguales, sin recorte de rótulos ni salto de alto al
+  alternar el panel.
+- La selección separa el título de los consumos y elimina la confirmación
+  repetida del último ítem: marcar sigue siendo local y sólo `Listo` registra.
+- Historial separa título y contenido, conserva tarjetas blancas y usa un
+  detalle neutro con frontera, chevron y `aria-expanded` coherentes.
+- La regresión móvil mide geometría y el acto explícito, y guarda capturas
+  móviles y de escritorio. La prueba U05 existente confirma por fixture que el
+  aviso es descubrible y que una ausencia autorizada conserva el monograma.
+
 ## 0.181.2 — Expectativas E2E alineadas con la entrega (2026-09-20)
 
 Adenda `AF-AJUSTES10-E2E-EXPECTATIVAS-20260920`, base publicada `526832c`.

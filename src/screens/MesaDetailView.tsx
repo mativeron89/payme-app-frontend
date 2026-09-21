@@ -305,7 +305,6 @@ export function MesaDetailView({
   const toast = useToast();
   /** El par «scroll + pulso» de §1.4/§1.5 bis, acá para la lista de consumos. */
   const [itemsPulse, setItemsPulse] = useState(false);
-  const [confirmandoCierre, setConfirmandoCierre] = useState(false);
   /** AF-34 · la hoja de «¿Cerrar la mesa?», distinta de la de D-R20. */
   const [confirmandoCerrarMesa, setConfirmandoCerrarMesa] = useState(false);
   const itemsRef = useRef<HTMLDivElement | null>(null);
@@ -365,75 +364,6 @@ export function MesaDetailView({
    * (`schemas/index.js:233`, default []).
    */
   const faltaElegir = esConsumo && selected.size === 0;
-
-  /**
-   * 🔴 **D-R20 · «Aviso sin nombres», etiqueta literal de Mati.**
-   *
-   * En división por consumo quien reclama el último cierra la mesa **para
-   * todos, en el acto**, y una mesa cerrada ya no admite soltar nada (AF-25:
-   * «soltar» existe desde el dueño v2.100.0, pero sólo con la mesa activa).
-   * Confirmarlo antes no es cortesía: es la única oportunidad de enterarse.
-   *
-   * ⚠️ **Y el aviso NO dice quién tomó qué.** El contrato publica por ítem
-   * sólo mío/no-mío —`locked_by_me`, y su comentario lo declara: *«jamás expone
-   * de quién es el ajeno»*—, así que la atribución no existe de este lado. La
-   * primera redacción de esta decisión pedía mostrarla; se corrigió al medir el
-   * contrato, y Mati eligió esta variante sabiendo la diferencia. Cada consumo
-   * se muestra **tomado o libre**, sin persona.
-   */
-  const librosTrasMiSeleccion = esConsumo
-    ? mesa.items.filter((i) => {
-        if (i.status === 'paid') return false;
-        if (i.locked_by_me) return false;
-        if (i.status === 'locked') return false;
-        return !selected.has(i.id);
-      })
-    : [];
-  const cierraLaMesa = esConsumo && selected.size > 0 && librosTrasMiSeleccion.length === 0;
-  /**
-   * D-R20 · el resumen que acompaña al aviso: **lo que queda y lo mío**, con
-   * cada consumo como tomado o libre. Ninguna persona aparece.
-   */
-  const hojaCierre = confirmandoCierre && (
-    <div className="sheet-backdrop" role="dialog" aria-modal="true" aria-label={t('Con esto se cierra la mesa')}>
-      <div className="sheet">
-        <div className="sheet-title">{t('Con esto se cierra la mesa para todos')}</div>
-        <p className="sheet-copy">
-          {t('Estás por tomar el último consumo disponible. Cuando lo hagas, la mesa se cierra para todos los comensales.')}
-        </p>
-        <div className="receipt-row">
-          <span className="lbl">{t('Lo que tomas')}</span>
-          <span className="val">{selected.size}</span>
-        </div>
-        <div className="receipt-row">
-          <span className="lbl">{t('Lo que queda libre')}</span>
-          <span className="val">{librosTrasMiSeleccion.length}</span>
-        </div>
-        <ul className="sheet-list">
-          {mesa.items.map((i) => (
-            <li key={i.id}>
-              {/* Tomado o libre. NUNCA por quién: el contrato no lo publica y
-                  la decisión de Mati es explícita en no mostrarlo. */}
-              {i.status === 'paid' || i.status === 'locked' || selected.has(i.id)
-                ? t('Tomado')
-                : t('Libre')}
-            </li>
-          ))}
-        </ul>
-        <div className="sheet-actions">
-          <button className="btn btn-ghost" onClick={() => setConfirmandoCierre(false)}>
-            {t('Volver a elegir')}
-          </button>
-          <button
-            className="btn btn-navy"
-            onClick={() => { setConfirmandoCierre(false); onGoToPay(); }}
-          >
-            {t('Sí, cerrar la mesa')}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 
   const miParte = faltaElegir ? null : (
     <div className="mi-parte">
@@ -514,8 +444,7 @@ export function MesaDetailView({
         </div>
       </div>
       {guestHeader}
-      <div className="scroll flow-scroll con-fila-sobre-barra">
-        {hojaCierre}
+      <div className="scroll flow-scroll con-fila-sobre-barra mesa-selection-scroll">
         {avisoPagoCongelado}
         {esConsumo && nothingLeft && (
           <div className="note note-amber" style={{ marginBottom: 12 }}>
@@ -754,11 +683,11 @@ export function MesaDetailView({
            * el recorrido; antes salía sin registrar nada, y el aviso que la
            * persona lee —«tu selección queda registrada»— habría sido falso.
            * Sin selección no hay nada que registrar y se sale, como antes.
-           * D-R20 se interpone cuando este toque cerraría la mesa.
+           * V05 conserva este único acto explícito: marcar el último ítem sólo
+           * cambia la selección local y nunca envía por sí mismo.
            */
           onClick: () => {
             if (selected.size === 0) { onLeave(); return; }
-            if (cierraLaMesa) { setConfirmandoCierre(true); return; }
             onGoToPay();
           },
           disabled: false,

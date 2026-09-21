@@ -553,16 +553,7 @@ export const EN: Record<string, string> = {
   // D-R23 · la línea discreta de «Más». Copy EN cerrado por Codex; dice lo mismo
   // que el ES y no promete una fecha que nadie ratificó.
   "Los pagos llegan pronto": "Payments are coming soon",
-  // D-R20 · «Aviso sin nombres»: el EN tampoco atribuye consumos a personas.
-  "Con esto se cierra la mesa": "This closes the table",
-  "Con esto se cierra la mesa para todos": "This closes the table for everyone",
-  "Estás por tomar el último consumo disponible. Cuando lo hagas, la mesa se cierra para todos los comensales.": "You're about to take the last available item. Once you do, the table closes for everyone.",
   "Lo que elegiste": "What you chose",
-  "Lo que tomas": "What you're taking",
-  "Lo que queda libre": "Still available",
-  "Tomado": "Taken",
-  "Libre": "Available",
-  "Volver a elegir": "Go back",
   "Sí, cerrar la mesa": "Yes, close the table",
   // D-R8 · final del recorrido durante el corte. «Queda registrada» es literal:
   // la selección no vence, porque el dueño publica `item_lock_seconds: null`.

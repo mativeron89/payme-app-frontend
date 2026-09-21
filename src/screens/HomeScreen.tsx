@@ -234,7 +234,7 @@ export function HomeScreen() {
             la pestaña central conserva ambos radios (§5 bis · B). */}
         <MountedCard seam={tab === TABS[0]!.id ? 'left' : tab === TABS.at(-1)!.id ? 'right' : undefined}>
           {tab === 'cuenta' && (
-            <div className="launch-pair">
+            <div className="launch-pair home-tab-panel">
               {rail.showCards && corte.showCards && (
                 <Launcher icon="card" label={t('Ver tarjetas')} onClick={() => navigate('tarjetas')} />
               )}
@@ -243,7 +243,7 @@ export function HomeScreen() {
           )}
 
           {tab === 'estadisticas' && (
-            <div className="launch-stack">
+            <div className="launch-stack home-tab-panel">
               {/* La frase es de Mati, textual, y va como invitación arriba. */}
               <p className="launch-invite">{t('¿Quieres ver qué consumes, cuánto y dónde?')}</p>
               <Launcher
@@ -269,7 +269,7 @@ export function HomeScreen() {
            * una que todavía no"*.
            */}
           {tab === 'asociadas' && (
-            <div className="launch-stack">
+            <div className="launch-stack home-tab-panel home-tab-panel-empty">
               <div className="state-unknown">
                 <Icon name="info" size={20} />
                 <div>
