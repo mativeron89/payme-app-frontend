@@ -124,11 +124,16 @@ export function createMesaResponse(value: unknown, expected: CreateMesaRequest):
   const total = normalizePositiveCents(mesa.total_cents);
   const division = mesa.division_mode;
   const participants = mesa.expected_participants;
+  const originalParticipants = mesa.original_participants;
   const mesaStatus = mesa.status;
   if ((division !== 'consumo' && division !== 'igual') || typeof participants !== 'number' || !Number.isSafeInteger(participants) || participants < 1 || participants > 20 || (mesaStatus !== 'open' && mesaStatus !== 'pending_auth')) fail();
+  if (typeof originalParticipants !== 'number' || !Number.isSafeInteger(originalParticipants)
+      || originalParticipants < 1 || originalParticipants > 20) fail();
   const method = enumValue(guarantee.method, GUARANTEE_METHODS);
   const status = enumValue(guarantee.status, new Set(['open', 'requires_action', 'none']));
-  if (total !== positiveExpectation(expected.total_cents) || division !== expected.division_mode || participants !== expected.expected_participants || method !== expected.guarantee_method) fail();
+  if (total !== positiveExpectation(expected.total_cents) || division !== expected.division_mode
+      || participants !== expected.expected_participants || originalParticipants !== expected.expected_participants
+      || method !== expected.guarantee_method) fail();
   if ((status === 'open' && mesaStatus !== 'open')
       || (status === 'requires_action' && mesaStatus !== 'pending_auth')
       // C3 · sin garantía la mesa nace ABIERTA. Sin esta coherencia, `none`
@@ -155,7 +160,7 @@ export function createMesaResponse(value: unknown, expected: CreateMesaRequest):
   // aparecen juntos, la respuesta es contradictoria y no acredita el hold.
   if (status === 'open' && clientSecret !== undefined) fail();
   return {
-    mesa: { id: mesa.id, code: mesa.code, total_cents: total, division_mode: division, expected_participants: participants, status: mesaStatus as CreateMesaResponse['mesa']['status'], expires_at: mesa.expires_at, created_at: mesa.created_at },
+    mesa: { id: mesa.id, code: mesa.code, total_cents: total, division_mode: division, expected_participants: participants, original_participants: originalParticipants, status: mesaStatus as CreateMesaResponse['mesa']['status'], expires_at: mesa.expires_at, created_at: mesa.created_at },
     guarantee: { method, status, ...(clientSecret && { client_secret: clientSecret }), ...(connectedAccount && { connected_account_id: connectedAccount }) },
   };
 }

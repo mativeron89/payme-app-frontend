@@ -607,6 +607,12 @@ export interface FractionRequest {
   fraction_bps: number;
 }
 
+/** V04 · lock por fracción natural 1/n. Exclusivo con `fraction_bps`. */
+export type LockFractionRequest = FractionRequest | {
+  item_id: string;
+  fraction_denominator: number;
+};
+
 /** Slot de división igualitaria (GET /api/mesas/:code, division_slots). */
 export interface DivisionSlot {
   slot_index: number;
@@ -642,6 +648,8 @@ export interface MesaDetail {
   tip_base_cents: number;
   division_mode: 'consumo' | 'igual';
   expected_participants: number;
+  /** V04 · N explícito de creación; `null` en mesas históricas sin proveniencia. */
+  original_participants: number | null;
   status: MesaStatus;
   expires_at: string;
   /**
@@ -682,6 +690,8 @@ export interface CreateMesaRequest {
   total_cents: number;
   division_mode: 'consumo' | 'igual';
   expected_participants: number;
+  /** V07 · etiqueta privada de esta mesa; nunca renombra el restaurante. */
+  restaurant_label?: string;
   /**
    * C3 · `'none'` es la mesa sin garantía, y **sólo existe con el dinero
    * apagado**: con el riel vivo el dueño la rechaza con `409 guarantee_required`
@@ -713,6 +723,7 @@ export interface CreateMesaResponse {
     total_cents: number;
     division_mode: 'consumo' | 'igual';
     expected_participants: number;
+    original_participants: number | null;
     status: MesaStatus;
     expires_at: string;
     created_at: string;

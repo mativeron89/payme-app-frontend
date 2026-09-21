@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "scope": "consumo item selection and optional label of unidentified ticket mesa; no payments/equal division change",
+  "create": {
+    "expected_participants": "Explicit integer 1..20 recorded as original_participants in existing mesa metadata. Omission retains historical default expected_participants=1 but original_participants=null. Client cannot set metadata/provenance.",
+    "restaurant_label": "Optional string, <=400 raw UTF-16 units, no C0/DEL, NFC+trim+collapse whitespace, <=200 normalized units; blank equivalent to omitted. Only own private unknown fallback with no RFC/generic name; otherwise 409 restaurant_label_not_allowed. No restaurant mutation.",
+    "idempotency": "Normalized nonempty label included in hash. Different N provenance conflicts for new rows, including omitted vs explicit1. Historical hashes unaffected when label omitted. Same key concurrent creation returns same mesa."
+  },
+  "read": {
+    "original_participants": "Integer1..20 or null on POST /mesas, replay, GET /mesas/:code. Historical records without provenance stay null even if expected_participants>1. Never derive from participants_count/quantity.",
+    "restaurant_name": "GET mesa detail/open/mine project the per-mesa label for unverified restaurant; verified restaurant name wins. Same access controls/audience as before. Client renders as text, never innerHTML."
+  },
+  "lock": {
+    "endpoint": "POST /mesas/:code/items/lock",
+    "request_example": {
+      "items": [
+        {
+          "item_id": "uuid",
+          "fraction_denominator": 7
+        }
+      ]
+    },
+    "fraction_denominator": "Strict numeric integer1..20, exclusive with fraction_bps. Consumo only; must be <=original_participants. Canonical requested bps = integer quotient 10000/n. Do not calculate cents client-side.",
+    "errors": {
+      "400": [
+        "fraction_denominator_consumo_only",
+        "fraction_denominator_exceeds_original",
+        "fraction_not_allowed_for_original_participants",
+        "schema validation for invalid/mixed input"
+      ],
+      "409": [
+        "original_participants_unknown",
+        "fraction_not_available",
+        "mesa_not_active"
+      ]
+    },
+    "known_original": "Legacy bps requests must also be a unit fraction1/n for n<=N. item_ids remains whole. No bypass via old request format.",
+    "unknown_original": "Explicit denominators rejected409; legacy bps contract retained to preserve historical operation/claims. UI must not infer N or offer Otro without reliable original.",
+    "preserved": "Existing per-mesa/item locks, own claim replacement, availability, canonical residual absorption <100bps and integer cent pricing. Response claims[].fraction_bps is effective and may include residual. No rewrite of historical assignments. Equal and pay request schemas retain old fraction set."
+  }
+}

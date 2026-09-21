@@ -333,6 +333,7 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
     tip_base_cents: 21000,
     division_mode: 'consumo',
     expected_participants: 4,
+    original_participants: null,
     status: 'open',
     expires_at: new Date(Date.now() + 25 * 60_000).toISOString(),
     items: [{
@@ -350,6 +351,7 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
       isGuest: false,
       guestHeader: null,
       selected: new Map(),
+      selectedDenominators: new Map(),
       itemsAmount: 0,
       mySlotsTaken: 0,
       frozenScope: null,
@@ -369,6 +371,7 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
       onCerrarMesa: null,
       cerrando: false,
       onSetFraction: () => undefined,
+      onSetDenominator: () => undefined,
       onGoToPay: () => undefined,
       onRetryFrozenPay: () => undefined,
       onLeave: () => undefined,

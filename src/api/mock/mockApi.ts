@@ -62,6 +62,7 @@ import type {
   HistoryResponse,
   MovementDetailResponse,
   FractionRequest,
+  LockFractionRequest,
   FacebookCompleteRequest,
   FacebookRegisterStartRequest,
   FacebookStartResponse,
@@ -70,6 +71,7 @@ import type {
   RecoveryRequestResponse,
   RegisterRequest,
 } from '../types';
+import { denominatorBps, originalParticipants, validateRestaurantLabel } from '../mesaPresentation';
 import type { PrivateAvatarBlob } from '../profileIdentity';
 import { profileNameInput, validateAvatarInput } from '../profileIdentity';
 import {
@@ -189,6 +191,7 @@ const MOCK_PAYLOAD_KEYS = {
     'total_cents',
     'division_mode',
     'expected_participants',
+    'restaurant_label',
     'guarantee_method',
     'items',
   ],
@@ -1563,6 +1566,15 @@ export async function mockScanTicket(): Promise<OcrResponse> {
       mock: true,
     });
   }
+  if (mode === 'no_merchant') {
+    return delay({
+      contract_version: 2,
+      items,
+      total_cents: total,
+      warnings: [],
+      mock: true,
+    });
+  }
   return new Promise((resolve) =>
     setTimeout(() => resolve({
       contract_version: 2,
@@ -1627,22 +1639,33 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   if (sum !== req.total_cents) {
     return fail(400, 'total_mismatch', { expected: sum, received: req.total_cents });
   }
+  const label = validateRestaurantLabel(req.restaurant_label ?? '');
+  if (!label.ok) return fail(400, 'validation_error', { field: 'restaurant_label', reason: label.reason });
+  const { restaurant_label: _rawLabel, ...requestWithoutLabel } = req;
+  const canonicalRequest = label.normalized
+    ? { ...requestWithoutLabel, restaurant_label: label.normalized }
+    : requestWithoutLabel;
   // B-06 (v2.25): misma clave → misma mesa, sin abrir una segunda con otra
   // garantía por el total.
   const idemKey = `mesa:${req.idempotency_key}`;
-  const idemHash = mockPayloadHash(req, MOCK_PAYLOAD_KEYS.create_mesa);
+  const idemHash = mockPayloadHash(canonicalRequest, MOCK_PAYLOAD_KEYS.create_mesa);
   const previoMesa = readMockIdempotency(idemKey);
   if (previoMesa) {
     if (previoMesa.hash !== idemHash) return fail(409, 'idempotency_conflict');
     return delay({ ...(previoMesa.response as CreateMesaResponse), idempotent: true });
   }
   const session = loadSession();
-  const privateRestaurant = session
-    ? Object.values(state.restaurantResolutions[session.principal_id] ?? {})
-      .find((r) => r.id === req.restaurant_id)
+  const privateRestaurantEntry = session
+    ? Object.entries(state.restaurantResolutions[session.principal_id] ?? {})
+      .find(([, candidate]) => candidate.id === req.restaurant_id)
     : undefined;
+  const privateRestaurant = privateRestaurantEntry?.[1];
   const restaurant = MOCK_RESTAURANTS.find((r) => r.id === req.restaurant_id) ?? privateRestaurant;
   if (!restaurant) return fail(404, 'restaurant_not_found');
+  if (label.normalized && (!privateRestaurantEntry?.[0].startsWith('unknown:')
+      || privateRestaurant?.name !== 'Restaurante sin identificar')) {
+    return fail(409, 'restaurant_label_not_allowed');
+  }
 
   /**
    * C3 · la mesa SIN garantía, con la puerta exacta del dueño
@@ -1689,12 +1712,13 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
   const mesa: MockMesa = {
     id: mockId('c'),
     code,
-    restaurant: { ...restaurant },
+    restaurant: { ...restaurant, ...(label.normalized ? { name: label.normalized } : {}) },
     total_cents: req.total_cents,
     paid_amount_cents: 0,
     tip_amount_cents: 0,
     division_mode: req.division_mode,
     expected_participants: req.expected_participants,
+    original_participants: req.expected_participants,
     status: req.guarantee_method === 'card' ? 'pending_auth' : 'open',
     // C3 · la mesa sin garantía vive CINCO HORAS (decisión de Mati); con
     // garantía conserva su ventana de siempre.
@@ -1747,6 +1771,7 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
         total_cents: mesa.total_cents,
         division_mode: mesa.division_mode,
         expected_participants: mesa.expected_participants,
+        original_participants: mesa.original_participants ?? null,
         status: 'open',
         expires_at: mesa.expires_at,
         created_at: now,
@@ -1773,6 +1798,7 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
         total_cents: mesa.total_cents,
         division_mode: mesa.division_mode,
         expected_participants: mesa.expected_participants,
+        original_participants: mesa.original_participants ?? null,
         status: 'open',
         expires_at: mesa.expires_at,
         created_at: now,
@@ -1808,6 +1834,7 @@ export async function mockCreateMesa(req: CreateMesaRequest): Promise<CreateMesa
       total_cents: mesa.total_cents,
       division_mode: mesa.division_mode,
       expected_participants: mesa.expected_participants,
+      original_participants: mesa.original_participants ?? null,
       status: 'pending_auth',
       expires_at: mesa.expires_at,
       created_at: now,
@@ -1962,25 +1989,42 @@ export async function mockConfirmGuarantee3ds(code: string): Promise<{ status: '
 
 export async function mockLockItems(
   code: string,
-  requests: FractionRequest[],
+  requests: LockFractionRequest[],
   identity: MockIdentity,
 ): Promise<LockItemsResponse> {
   const mesa = findMesa(code);
   if (!mesa) return fail(404, 'mesa_not_found');
   if (!mesaPayable(mesa)) return fail(409, 'mesa_not_active');
-  if (!requests.every((r) => FRACTION_VALUES.includes(r.fraction_bps))) {
-    return fail(400, 'validation_error', { message: 'fraction_bps inválido' });
-  }
+  const original = originalParticipants(mesa.original_participants);
   // Validar y calcular efectivos ANTES de mutar (como la tx del backend).
   const claims: Array<{ item_id: string; fraction_bps: number }> = [];
   try {
     for (const rq of requests) {
       const item = mesa.items.find((i) => i.id === rq.item_id);
       if (!item) return fail(404, 'item_not_found', { item_id: rq.item_id });
+      let requestedBps: number;
+      if ('fraction_denominator' in rq) {
+        if (mesa.division_mode !== 'consumo') return fail(400, 'fraction_denominator_consumo_only');
+        if (original === null) return fail(409, 'original_participants_unknown');
+        if (!Number.isSafeInteger(rq.fraction_denominator) || rq.fraction_denominator < 1 || rq.fraction_denominator > 20) {
+          return fail(400, 'validation_error', { field: 'fraction_denominator' });
+        }
+        if (rq.fraction_denominator > original) return fail(400, 'fraction_denominator_exceeds_original');
+        requestedBps = denominatorBps(rq.fraction_denominator);
+      } else {
+        if (!FRACTION_VALUES.includes(rq.fraction_bps)) {
+          return fail(400, 'validation_error', { message: 'fraction_bps inválido' });
+        }
+        if (original !== null) {
+          const allowed = Array.from({ length: original }, (_, index) => denominatorBps(index + 1));
+          if (!allowed.includes(rq.fraction_bps)) return fail(400, 'fraction_not_allowed_for_original_participants');
+        }
+        requestedBps = rq.fraction_bps;
+      }
       // Re-reclamo: mis locked del ítem se reemplazan (como el backend).
       const others = item.claims.filter((c) => !(c.who === identity && c.status === 'locked'));
       const remaining = 10000 - others.reduce((s, c) => s + c.fraction_bps, 0);
-      const eff = effectiveBps(rq.fraction_bps, remaining);
+      const eff = effectiveBps(requestedBps, remaining);
       claims.push({ item_id: rq.item_id, fraction_bps: eff });
     }
   } catch (e) {

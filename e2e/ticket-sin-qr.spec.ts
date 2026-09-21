@@ -18,6 +18,7 @@ test.describe('n179 · ticket real sin QR', () => {
     await configurarTicketSinQr(page);
     await escanearSinQr(page);
     await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
+    await expect(page.getByLabel('Nombre del restaurante (opcional)')).toHaveCount(0);
 
     const before = await estadoN179(page);
     expect(before.mesas).toHaveLength(0);
@@ -37,6 +38,50 @@ test.describe('n179 · ticket real sin QR', () => {
       path: testInfo.outputPath('captura-movil-ticket-sin-qr.png'),
       fullPage: true,
     });
+  });
+
+  test('V07 · sin merchant permite nombre privado normalizado y lo conserva en compartir, detalle e historial', async ({ page }, testInfo) => {
+    await configurarTicketSinQr(page, { ocr: 'no_merchant' });
+    await escanearSinQr(page);
+    await expect(page.getByRole('radio', { name: /Pagar el total/ })).toBeVisible();
+    await expect.poll(async () => (await estadoN179(page)).privateRestaurantIds.length).toBe(1);
+
+    const label = page.getByLabel('Nombre del restaurante (opcional)');
+    await expect(label).toBeVisible();
+    await label.fill('  Cafe\u0301   del Centro  ');
+    await expect(page.getByText('Sólo identifica esta mesa; no crea ni modifica un comercio.')).toBeVisible();
+    await completarDivision(page);
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();
+    await expect(page.getByText(/Café del Centro · Mesa PA-/)).toBeVisible();
+
+    const state = await estadoN179(page);
+    expect(state.mesas).toHaveLength(1);
+    expect(state.mesas[0]?.restaurant.name).toBe('Café del Centro');
+    const code = state.mesas[0]!.code;
+
+    await page.goto(`/#/mesa/${code}`);
+    await expect(page.getByText('Café del Centro', { exact: true }).first()).toBeVisible();
+    await page.reload();
+    await expect(page.getByText('Café del Centro', { exact: true }).first()).toBeVisible();
+
+    await page.evaluate(async (mesaCode) => {
+      const storePath = '/src/api/mock/store.ts';
+      const { state: mockState, persist } = await import(/* @vite-ignore */ storePath) as {
+        state: { mesas: Array<{ code: string; status: string; guarantee_mode?: boolean; closure_reason?: string | null }> };
+        persist: () => void;
+      };
+      const mesa = mockState.mesas.find((candidate) => candidate.code === mesaCode);
+      if (!mesa) throw new Error('mesa V07 ausente');
+      mesa.status = 'expired';
+      mesa.guarantee_mode = false;
+      mesa.closure_reason = 'time';
+      persist();
+    }, code);
+    await page.goto('/#/mesas');
+    await expect(page.getByRole('heading', { name: 'Historial' })).toBeVisible();
+    await expect(page.getByText('Café del Centro', { exact: true }).first()).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('v07-nombre-privado-historial.png'), fullPage: true });
   });
 
   test('respuesta perdida después de crear reusa UUID y conserva count=1', async ({ page }) => {

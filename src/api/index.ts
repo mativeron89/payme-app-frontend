@@ -91,7 +91,7 @@ import type {
   RestaurantResponse,
   RestaurantResolutionRequest,
   RestaurantResolutionResponse,
-  FractionRequest,
+  LockFractionRequest,
   ClabeResponse,
   CreateInvitationResponse,
   CreateSetupIntentResponse,
@@ -306,7 +306,7 @@ export interface Api {
     clientSecret: string,
     connectedAccountId?: string,
   ): Promise<{ status: string; outcome: 'success' | 'definitive' | 'ambiguous'; error?: string }>;
-  lockItems(code: string, items: FractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
+  lockItems(code: string, items: LockFractionRequest[], guestToken?: string): Promise<LockItemsResponse>;
   /** AF-25 · n80 · suelta lo propio no pagado; `[]` si no había nada que soltar. */
   releaseItems(code: string, itemIds: readonly string[]): Promise<readonly ConsumoSoltado[]>;
   /** AF-34 · n98 · el organizador cierra la mesa sin garantía. La confirmación la pide la pantalla. */

@@ -28,6 +28,7 @@ const {
   requireAuth, requireMesaParticipant,
 } = require('../middleware/auth');
 const schemas = require('../schemas');
+const mesaPresentation = require('../services/mesaPresentation');
 const stateMachine = require('../utils/stateMachine');
 const stripeService = require('../services/stripe');
 const { rechazaPorRielApagado } = require('../services/walletRail');
@@ -162,6 +163,7 @@ function publicCreatedMesa(row, status = row?.status) {
     total_cents: row?.total_cents,
     division_mode: row?.division_mode,
     expected_participants: row?.expected_participants,
+    original_participants: mesaPresentation.originalParticipants(row),
     status,
     expires_at: row?.expires_at,
     created_at: row?.created_at,
@@ -222,7 +224,7 @@ async function cerrojoDeGarantia(mesa) {
 router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res, next) => {
   try {
     const {
-      restaurant_id, total_cents, division_mode, expected_participants, items,
+      restaurant_id, restaurant_label, original_participants, total_cents, division_mode, expected_participants, items,
       guarantee_method, stripe_payment_method_id,   // v2.11 (parche §1/§2 · garantía)
       payment_method_id, save_payment_method,       // D4 (v2.16): tarjeta guardada
       idempotency_key,                              // B-06 §4.1 (v2.25): opcional
@@ -261,7 +263,8 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
     if (idempotency_key) {
       const previa = await findExistingMesa(req.user.id, idempotency_key);
       if (previa) {
-        if (!hashesMatch(previa.idempotency_payload_hash, mesaHash)) {
+        if (!hashesMatch(previa.idempotency_payload_hash, mesaHash)
+            || !mesaPresentation.matchesOriginalParticipants(previa, original_participants)) {
           return res.status(409).json({ error: 'idempotency_conflict' });
         }
         // Mesa MUERTA (la garantía falló, se canceló o venció): el request
@@ -306,11 +309,12 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
     // client_secret, no ocultarla detrás de un 404.
     if (!mesaPrevia) {
       const { rows: [restaurant] } = await pool.query(
-        `SELECT created_by_user_id FROM restaurants WHERE id=$1 AND
+        `SELECT created_by_user_id, name, rfc, private_identity_key FROM restaurants WHERE id=$1 AND
           ((created_by_user_id IS NULL AND status='active') OR
            (created_by_user_id=$2 AND status='unverified'))`, [restaurant_id,req.user.id]
       );
       if (!restaurant) return res.status(404).json({ error: 'restaurant_not_found' });
+      if (restaurant_label) mesaPresentation.assertLabelAllowed(restaurant, req.user.id);
       if (restaurant.created_by_user_id && !sinGarantia) {
         return res.status(409).json({ error: 'restaurant_record_only' });
       }
@@ -507,11 +511,12 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
           return await pool.tx(async (client) => {
             if (sinGarantia) {
               const { rows: [restaurant] } = await client.query(
-                `SELECT created_by_user_id FROM restaurants WHERE id=$1 AND
+                `SELECT created_by_user_id, name, rfc, private_identity_key FROM restaurants WHERE id=$1 AND
                   ((created_by_user_id IS NULL AND status='active') OR
                    (created_by_user_id=$2 AND status='unverified')) FOR SHARE`,
                 [restaurant_id, req.user.id]);
               if (!restaurant) throw Object.assign(new Error('restaurant_not_found'), { status: 404 });
+              if (restaurant_label) mesaPresentation.assertLabelAllowed(restaurant, req.user.id);
               if (!restaurant.created_by_user_id && dineroHabilitado()) {
                 throw Object.assign(new Error('guarantee_required'), { status: 409 });
               }
@@ -546,7 +551,7 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
                VALUES ($1,$2,$3,$4,$5,$6,$7,$18,$19,$20,$8,$9,
                        $10,$11,$12,$13,$14,$15,$16,$17)
                RETURNING id, code, total_cents, division_mode, expected_participants,
-                         status, expires_at, created_at,
+                         status, expires_at, created_at, metadata,
                          auth_source_payment_method_id,auth_stripe_customer_id,
                          auth_off_session,auth_save_payment_method,
                          auth_card_policy_version,auth_card_brand,
@@ -568,7 +573,9 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
                // garantía; ver tests/g11-guardado-tarjeta-direct.test.js:199).
                // Sin la marca, la guarda del pago rompía ese flujo: lo encontró
                // el integral, no el focal.
-               sinGarantia ? JSON.stringify({ sin_garantia: true }) : '{}']
+               JSON.stringify({ ...(sinGarantia && { sin_garantia: true }),
+                 original_participants,
+                 ...(restaurant_label && { restaurant_label }) })]
             );
             const m = rows[0];
             await client.query(
@@ -630,7 +637,8 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
       if (err.code === '23505' && idempotency_key) {
         const ganadora = await findExistingMesa(req.user.id, idempotency_key);
         if (ganadora) {
-          if (!hashesMatch(ganadora.idempotency_payload_hash, mesaHash)) {
+          if (!hashesMatch(ganadora.idempotency_payload_hash, mesaHash)
+              || !mesaPresentation.matchesOriginalParticipants(ganadora, original_participants)) {
             return res.status(409).json({ error: 'idempotency_conflict' });
           }
           logger.audit('mesa_create_replay_carrera', {
@@ -859,7 +867,7 @@ router.get('/open', requireAuth, async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT m.id, m.code, m.total_cents, m.paid_amount_cents, m.status, m.expires_at,
               m.division_mode, m.guarantee_mode, m.metadata,
-              r.name AS restaurant_name, r.category,
+              r.name AS restaurant_name, r.category, r.status AS restaurant_status,
               -- v2.93.0 · G-27 · cuánta gente hay: los que se SUMARON, no los
               -- esperados. Conteo de filas activas (con cuenta o invitado sin
               -- cuenta); un agregado de la mesa, sin identidades.
@@ -882,8 +890,8 @@ router.get('/open', requireAuth, async (req, res, next) => {
     res.json({
       mesas: rows.map(m => ({
         id: m.id, code: m.code,
-        full_name: `Mesa ${m.code} - ${m.restaurant_name}`,
-        restaurant: { name: m.restaurant_name, category: m.category },
+        full_name: `Mesa ${m.code} - ${mesaPresentation.displayRestaurantName(m, m.restaurant_name, m.restaurant_status)}`,
+        restaurant: { name: mesaPresentation.displayRestaurantName(m, m.restaurant_name, m.restaurant_status), category: m.category },
         total_cents: Number(m.total_cents),
         paid_amount_cents: Number(m.paid_amount_cents),
         pct_paid: Number(m.total_cents) > 0
@@ -976,7 +984,7 @@ router.get('/mine', requireAuth, async (req, res, next) => {
               m.division_mode,
               to_char(m.created_at AT TIME ZONE 'UTC',
                       'YYYY-MM-DD"T"HH24:MI:SS.USOF') AS created_at_cursor,
-              r.name AS restaurant_name, r.category
+              r.name AS restaurant_name, r.category, r.status AS restaurant_status
          FROM mesas m
          JOIN restaurants r ON r.id = m.restaurant_id
         WHERE (
@@ -1017,7 +1025,7 @@ router.get('/mine', requireAuth, async (req, res, next) => {
       mesas: pagina.map((m) => ({
         id: m.id,
         code: m.code,
-        restaurant: { name: m.restaurant_name, category: m.category },
+        restaurant: { name: mesaPresentation.displayRestaurantName(m, m.restaurant_name, m.restaurant_status), category: m.category },
         status: m.status,
         division_mode: m.division_mode,
         // C3 · lo que distingue un cierre SIN COBROS de un vencimiento
@@ -1273,7 +1281,7 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
         ORDER BY display_name ASC`, [mesa.restaurant_id]
     );
     const { rows: rRow } = await pool.query(
-      `SELECT name, category, address FROM restaurants WHERE id = $1`, [mesa.restaurant_id]
+      `SELECT name, category, address, status FROM restaurants WHERE id = $1`, [mesa.restaurant_id]
     );
     const r = rRow[0] || {};
 
@@ -1325,8 +1333,8 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
     res.json({
       mesa: {
         id: mesa.id, code: mesa.code,
-        full_name: `Mesa ${mesa.code} - ${r.name}`,
-        restaurant: { id: mesa.restaurant_id, name: r.name, category: r.category, address: r.address },
+        full_name: `Mesa ${mesa.code} - ${mesaPresentation.displayRestaurantName(mesa, r.name, r.status)}`,
+        restaurant: { id: mesa.restaurant_id, name: mesaPresentation.displayRestaurantName(mesa, r.name, r.status), category: r.category, address: r.address },
         total_cents: Number(mesa.total_cents),
         total_display: centsToDisplay(Number(mesa.total_cents)),
         paid_amount_cents: Number(mesa.paid_amount_cents),
@@ -1336,6 +1344,7 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
         tip_base_cents: Math.round(Number(mesa.total_cents) / (Number(mesa.expected_participants) || 1)),
         division_mode: mesa.division_mode,
         expected_participants: mesa.expected_participants,
+        original_participants: mesaPresentation.originalParticipants(mesa),
         status: garantiaMesa.status, expires_at: mesa.expires_at,
         // 🔴 C3 · SIN ESTOS DOS CAMPOS, `expired` MIENTE SOBRE DINERO.
         // La pantalla de mesa del comensal, ante `status='expired'`, calcula
@@ -1514,6 +1523,7 @@ router.post('/:code/items/lock', requireAuth, requireMesaParticipant,
     const requests = legacyShape
       ? req.body.item_ids.map((id) => ({ item_id: id, fraction_bps: 10000 }))
       : req.body.items;
+    mesaPresentation.validateItemFractions({ ...garantia, division_mode: mesa.division_mode }, requests);
     const seen = new Set();
     for (const r of requests) {
       if (seen.has(r.item_id)) {

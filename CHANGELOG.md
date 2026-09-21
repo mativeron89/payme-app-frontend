@@ -11,6 +11,25 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.183.0 — Fracciones por N original y nombre privado de mesa (2026-09-20)
+
+Tramo funcional V04/V07 de `AF-AJUSTES8-VISUAL-CONTRATOS-20260920`, separado
+del candidato visual `10a62c5` y alineado con App Backend v2.121.0 (`d4ad6ae`).
+**Sin push ni deploy.**
+
+- En mesas de consumo con N original confiable, la selección ofrece 1, 1/2,
+  1/3 y 1/4 sólo cuando corresponden, y «Otro» admite un denominador entero
+  hasta N; el lock envía `fraction_denominator` y deja al Backend calcular los
+  bps efectivos. Mesas históricas sin N conservan el selector anterior, sin
+  inferirlo de miembros ni cantidades.
+- Un ticket privado sin nombre ni RFC puede llevar un nombre opcional de mesa,
+  normalizado y acotado. Vacío conserva «Restaurante sin identificar»; el dato
+  no renombra comercios y aparece en compartir, detalle, recarga e Historial.
+- El mirror adopta los 111 archivos del owner y su contrato
+  `mesa-presentation-v1`; identidad idempotente, decoders y mock siguen los
+  campos nuevos. Las pruebas cubren N=2, N=7, históricos, conflictos,
+  normalización, replay y rechazo sobre restaurantes verificados.
+
 ## 0.182.2 — Censo visual alineado con tercios iguales (2026-09-20)
 
 Sucesor causal de `AF-AJUSTES8-VISUAL-CONTRATOS-20260920`, después del CI de

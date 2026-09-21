@@ -7,6 +7,11 @@ import { Icon } from '../components/Icon';
 import { Avatar, useToast } from '../components/ui';
 import { InviteFriends } from '../components/InviteFriends';
 import type { MesaDetail, MesaItem } from '../api/types';
+import {
+  availableDefaultDenominators,
+  denominatorBps,
+  originalParticipants,
+} from '../api/mesaPresentation';
 import { filaDeParticipante, type Participante } from '../api/participantes';
 import { countdownTo, formatMXN } from '../utils/format';
 import {
@@ -62,6 +67,7 @@ export interface MesaDetailViewProps {
   isGuest: boolean;
   guestHeader: ReactNode;
   selected: Map<string, number>;
+  selectedDenominators: Map<string, number>;
   /** Ya calculado por el dueño del estado: acá no se recalcula plata. */
   itemsAmount: number;
   mySlotsTaken: number;
@@ -121,11 +127,106 @@ export interface MesaDetailViewProps {
   onCerrarMesa: (() => Promise<void>) | null;
   cerrando: boolean;
   onSetFraction: (id: string, bps: number) => void;
+  onSetDenominator: (id: string, denominator: number) => void;
   onGoToPay: () => void;
   onRetryFrozenPay: () => void;
   onOpenInvite: () => void;
   onCopyInvitationLink: () => void;
   onBack: () => void;
+}
+
+function NaturalFractionSelector({
+  itemId,
+  original,
+  remainingBps,
+  selectedDenominator,
+  allowOther,
+  onChoose,
+}: {
+  itemId: string;
+  original: number;
+  remainingBps: number;
+  selectedDenominator: number | null;
+  allowOther: boolean;
+  onChoose: (denominator: number) => void;
+}) {
+  const { t } = useIdioma();
+  const [editingOther, setEditingOther] = useState(false);
+  const [other, setOther] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const defaults = availableDefaultDenominators(original, remainingBps);
+  const customSelected = selectedDenominator !== null && !defaults.includes(selectedDenominator);
+
+  function applyOther() {
+    if (!/^[1-9][0-9]*$/u.test(other)) {
+      setError(t('Escribe un número entero positivo.'));
+      return;
+    }
+    const denominator = Number(other);
+    if (!Number.isSafeInteger(denominator) || denominator > original) {
+      setError(t('El máximo para esta mesa es {0}.', original));
+      return;
+    }
+    if (denominatorBps(denominator) > remainingBps) {
+      setError(t('Esa porción ya no está disponible.'));
+      return;
+    }
+    setError(null);
+    onChoose(denominator);
+    setEditingOther(false);
+  }
+
+  return (
+    <>
+      <div className="seg" role="radiogroup" aria-labelledby={`frac-${itemId}`}>
+        {defaults.map((denominator) => (
+          <button
+            key={denominator}
+            type="button"
+            className={`seg-btn ${selectedDenominator === denominator ? 'on' : ''}`}
+            onClick={() => { setEditingOther(false); setError(null); onChoose(denominator); }}
+            role="radio"
+            aria-checked={selectedDenominator === denominator}
+            aria-label={denominator === 1 ? t('Entero') : `1/${denominator}`}
+          >
+            {denominator === 1 ? '1' : `1/${denominator}`}
+          </button>
+        ))}
+        {allowOther && (
+          <button
+            type="button"
+            className={`seg-btn ${editingOther || customSelected ? 'on' : ''}`}
+            onClick={() => { setEditingOther(true); setOther(customSelected ? String(selectedDenominator) : ''); setError(null); }}
+            role="radio"
+            aria-checked={editingOther || customSelected}
+          >
+            {t('Otro')}
+          </button>
+        )}
+      </div>
+      {editingOther && (
+        <div className="mi-frac-other">
+          <label htmlFor={`frac-other-${itemId}`}>{t('¿Entre cuántas personas compartieron este plato?')}</label>
+          <div className="mi-frac-other-row">
+            <input
+              id={`frac-other-${itemId}`}
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={2}
+              value={other}
+              aria-invalid={error ? true : undefined}
+              onChange={(event) => setOther(event.target.value)}
+            />
+            <button type="button" className="btn btn-ghost btn-sm" onClick={applyOther}>{t('Aplicar')}</button>
+          </div>
+          <div className={error ? 'form-error' : 'caption'} role={error ? 'alert' : undefined}>
+            {error ?? t('Número entero entre 1 y {0}.', original)}
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 /**
@@ -277,6 +378,7 @@ export function MesaDetailView({
   isGuest,
   guestHeader,
   selected,
+  selectedDenominators,
   itemsAmount,
   mySlotsTaken,
   frozenScope,
@@ -295,6 +397,7 @@ export function MesaDetailView({
   onCerrarMesa,
   cerrando,
   onSetFraction,
+  onSetDenominator,
   onGoToPay,
   onRetryFrozenPay,
   onOpenInvite,
@@ -311,6 +414,10 @@ export function MesaDetailView({
   const cd = countdownTo(mesa.expires_at);
   const urgente = countdownIsUrgent(cd);
   const esConsumo = mesa.division_mode === 'consumo';
+  const original = originalParticipants(mesa.original_participants);
+  const bpsPermitidosPorOriginal = original === null
+    ? null
+    : new Set(Array.from({ length: original }, (_, index) => denominatorBps(index + 1)));
   const reparto = corteDeclarado && esConsumo ? confirmedConsumptionProgress(mesa) : null;
   const repartoConocido = reparto?.status === 'known' ? reparto : null;
   const pctPagado = mesa.total_cents > 0 ? Math.round((mesa.paid_amount_cents / mesa.total_cents) * 100) : 0;
@@ -404,6 +511,7 @@ export function MesaDetailView({
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card mesa-selection-title">
         <h1 className="title-card-title">{t('¿Qué consumiste?')}</h1>
+        <div className="title-card-sub">{mesa.restaurant.name}</div>
         <div className="title-card-sub">
           {code} · <strong>{divisionLabel}</strong>
         </div>
@@ -472,6 +580,12 @@ export function MesaDetailView({
             const soltable = mio && soltarDisponible && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
             const tag = mio ? etiquetaDeLoMio(i, t) : rowTag(state, i, t);
             const myBpsSel = selected.get(i.id) ?? 10000;
+            const selectedDenominator = selectedDenominators.get(i.id) ?? null;
+            const selectorNatural = esConsumo && pagosCortados && original !== null;
+            const allowOther = selectorNatural && Array.from(
+              { length: Math.max(0, original - 4) },
+              (_, index) => index + 5,
+            ).some((denominator) => denominatorBps(denominator) <= i.remaining_bps);
             // En partes iguales marcar es informativo y no reserva nada, así
             // que ahí NUNCA se bloquea una fila: el monto no depende de esto.
             const disabled = esConsumo && bloqueado;
@@ -528,21 +642,40 @@ export function MesaDetailView({
                     <div className="mi-frac-lbl" id={`frac-${i.id}`}>
                       {t('¿Cuánto tomas tú?')}
                     </div>
-                    <div className="seg" role="radiogroup" aria-labelledby={`frac-${i.id}`}>
-                      {FRACTIONS.filter((f) => !esConsumo || f.bps <= i.remaining_bps).map((f) => (
-                        <button
-                          key={f.bps}
-                          type="button"
-                          className={`seg-btn ${myBpsSel === f.bps ? 'on' : ''}`}
-                          onClick={() => onSetFraction(i.id, f.bps)}
-                          role="radio"
-                          aria-checked={myBpsSel === f.bps}
-                          aria-label={f.bps >= 10000 ? t('Entero') : bpsLabel(f.bps)}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
+                    {selectorNatural ? (
+                      <NaturalFractionSelector
+                        itemId={i.id}
+                        original={original}
+                        remainingBps={i.remaining_bps}
+                        selectedDenominator={selectedDenominator}
+                        allowOther={allowOther}
+                        onChoose={(denominator) => onSetDenominator(i.id, denominator)}
+                      />
+                    ) : (
+                      <div className="seg" role="radiogroup" aria-labelledby={`frac-${i.id}`}>
+                        {FRACTIONS.filter((f) => (
+                          (!esConsumo || f.bps <= i.remaining_bps)
+                          && (bpsPermitidosPorOriginal === null || bpsPermitidosPorOriginal.has(f.bps))
+                        )).map((f) => (
+                          <button
+                            key={f.bps}
+                            type="button"
+                            className={`seg-btn ${myBpsSel === f.bps ? 'on' : ''}`}
+                            onClick={() => onSetFraction(i.id, f.bps)}
+                            role="radio"
+                            aria-checked={myBpsSel === f.bps}
+                            aria-label={f.bps >= 10000 ? t('Entero') : bpsLabel(f.bps)}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {esConsumo && pagosCortados && original === null && (
+                      <div className="caption">
+                        {t('Esta mesa es anterior y no guardó el número original de personas. Mostramos las porciones disponibles de siempre.')}
+                      </div>
+                    )}
                     {esConsumo && (
                       <div className="mi-frac-amt" aria-live="polite">
                         {t('Tu parte:')} {formatMXN(fractionPreview(fullPrice, myBpsSel, i.remaining_bps))}

@@ -4,7 +4,7 @@ export async function configurarTicketSinQr(
   page: Page,
   options: {
     lostResponse?: boolean;
-    ocr?: 'malformed' | 'no_items' | 'budget_exhausted' | 'budget_unavailable';
+    ocr?: 'malformed' | 'no_items' | 'no_merchant' | 'budget_exhausted' | 'budget_unavailable';
   } = {},
 ): Promise<void> {
   await page.addInitScript((config) => {
@@ -26,7 +26,7 @@ export async function completarDivision(page: Page): Promise<void> {
 }
 
 export async function estadoN179(page: Page): Promise<{
-  mesas: Array<{ id: string; restaurant: { id: string; name: string } }>;
+  mesas: Array<{ id: string; code: string; restaurant: { id: string; name: string } }>;
   privateRestaurantIds: string[];
   mesaLedgerKeys: string[];
 }> {

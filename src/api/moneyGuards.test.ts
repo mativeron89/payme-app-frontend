@@ -14,10 +14,12 @@ const transferBinding = { recipientUserId: UUID_A, paymeId: 'payme_mx_ab12' };
 describe('frontera contractual monetaria', () => {
   it('normaliza BIGINT decimal canónico de create mesa y verifica request completo', () => {
     const raw = {
-      mesa: { id: UUID_A, code: 'PM-123', total_cents: '1000', division_mode: 'igual', expected_participants: 2, status: 'open', expires_at: '2026-08-02T12:00:00.000Z', created_at: '2026-08-02T11:30:00.000Z' },
+      mesa: { id: UUID_A, code: 'PM-123', total_cents: '1000', division_mode: 'igual', expected_participants: 2, original_participants: 2, status: 'open', expires_at: '2026-08-02T12:00:00.000Z', created_at: '2026-08-02T11:30:00.000Z' },
       guarantee: { method: 'card', status: 'open' },
     };
     expect(createMesaResponse(raw, mesaRequest)).toMatchObject({ mesa: { total_cents: 1000 }, guarantee: { method: 'card', status: 'open' } });
+    expect(() => createMesaResponse({ ...raw, mesa: { ...raw.mesa, original_participants: null } }, mesaRequest)).toThrow('money_response_malformed');
+    expect(() => createMesaResponse({ ...raw, mesa: { ...raw.mesa, original_participants: 3 } }, mesaRequest)).toThrow('money_response_malformed');
     expect(() => createMesaResponse({ ...raw, mesa: { ...raw.mesa, total_cents: '1001' } }, mesaRequest)).toThrow('money_response_malformed');
     expect(() => createMesaResponse({ ...raw, guarantee: { method: 'wallet', status: 'open' } }, mesaRequest)).toThrow('money_response_malformed');
     const walletRequest = { ...mesaRequest, guarantee_method: 'wallet' as const };
@@ -212,6 +214,7 @@ describe('C3 · garantía `none`, y sólo en su combinación exacta', () => {
         total_cents: 84000,
         division_mode: 'igual',
         expected_participants: 4,
+        original_participants: 4,
         status: mesaStatus,
         expires_at: '2026-09-03T00:00:00.000Z',
         created_at: '2026-09-02T19:00:00.000Z',

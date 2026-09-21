@@ -73,3 +73,54 @@ describe('n90 · vencimiento de la selección en el mock', () => {
     expect(r.lock_expires_at).toBeNull();
   });
 });
+
+describe('V04 · fracciones naturales en el mock contractual', () => {
+  it('N=7 reserva 1/7 como 1428 bps y conserva reemplazo propio', async () => {
+    const { mock, mesa, libre } = await cargar('disabled');
+    mesa.original_participants = 7;
+    const first = await mock.mockLockItems(
+      mesa.code,
+      [{ item_id: libre.id, fraction_denominator: 7 }],
+      'user',
+    );
+    expect(first.claims).toEqual([{ item_id: libre.id, fraction_bps: 1428 }]);
+    const retry = await mock.mockLockItems(
+      mesa.code,
+      [{ item_id: libre.id, fraction_denominator: 7 }],
+      'user',
+    );
+    expect(retry.claims).toEqual([{ item_id: libre.id, fraction_bps: 1428 }]);
+    expect(libre.claims.filter((claim) => claim.who === 'user')).toHaveLength(1);
+  });
+
+  it('N conocido cierra denominadores mayores y el bypass legacy', async () => {
+    const { mock, mesa, libre } = await cargar('disabled');
+    mesa.original_participants = 2;
+    await expect(mock.mockLockItems(
+      mesa.code,
+      [{ item_id: libre.id, fraction_denominator: 3 }],
+      'user',
+    )).rejects.toMatchObject({ status: 400, message: 'fraction_denominator_exceeds_original' });
+    await expect(mock.mockLockItems(
+      mesa.code,
+      [{ item_id: libre.id, fraction_bps: 2500 }],
+      'user',
+    )).rejects.toMatchObject({ status: 400, message: 'fraction_not_allowed_for_original_participants' });
+  });
+
+  it('histórica sin N rechaza denominador y mantiene fracciones legacy', async () => {
+    const { mock, mesa, libre } = await cargar('disabled');
+    delete mesa.original_participants;
+    await expect(mock.mockLockItems(
+      mesa.code,
+      [{ item_id: libre.id, fraction_denominator: 2 }],
+      'user',
+    )).rejects.toMatchObject({ status: 409, message: 'original_participants_unknown' });
+    const legacy = await mock.mockLockItems(
+      mesa.code,
+      [{ item_id: libre.id, fraction_bps: 2500 }],
+      'user',
+    );
+    expect(legacy.claims).toEqual([{ item_id: libre.id, fraction_bps: 2500 }]);
+  });
+});

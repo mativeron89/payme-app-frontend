@@ -4249,6 +4249,61 @@ body {
   padding-top: var(--sp-4);
 }
 
+.restaurant-label-card {
+  display: grid;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
+}
+
+.restaurant-label-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.restaurant-label-card input,
+.mi-frac-other input {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.restaurant-label-card input:focus-visible,
+.mi-frac-other input:focus-visible {
+  outline: 3px solid var(--action-2);
+  outline-offset: 2px;
+}
+
+.mi-frac-other {
+  display: grid;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.mi-frac-other > label {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+}
+
+.mi-frac-other-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
 .mi-progress {
   height: 8px;
   border-radius: var(--r-full);

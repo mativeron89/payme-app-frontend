@@ -126,6 +126,7 @@ const PAYLOAD_KEYS = {
   // recalcula desde el payload nuevo.
   create_mesa: [
     'restaurant_id',
+    'restaurant_label',
     'total_cents',
     'division_mode',
     'expected_participants',

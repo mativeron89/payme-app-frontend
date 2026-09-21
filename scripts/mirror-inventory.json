@@ -1,20 +1,26 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "f0e0820951cc4b0297b111dc34be852612afa951",
-  "total": 109,
+  "commit": "d4ad6ae9efa7933f24abba65766c67cf2e48fa2d",
+  "total": 111,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
       "destino": "contract/create-mesa-identity-vectors.json",
-      "sha256": "3a300b5c26abb38b5187fe1818f8bcfddf9b84f4645a6e56e4d791814daac96b",
-      "bytes": 6785
+      "sha256": "fabe59a954b410c5b02dc31d793e8214b7ad2408c99701a49f174f19885c6913",
+      "bytes": 6809
     },
     {
       "origen": "contract/mesa-pay-identity-vectors.json",
       "destino": "contract/mesa-pay-identity-vectors.json",
       "sha256": "a1b5c6a34b6ac045cf3969bfdda122ee72a791711cd4320f69450c2e56ccebef",
       "bytes": 5731
+    },
+    {
+      "origen": "contract/mesa-presentation-v1.json",
+      "destino": "contract/mesa-presentation-v1.json",
+      "sha256": "8d02051c3c2b1067752ede307b390ee18d78508415c0e7df270ef2305c0c0afe",
+      "bytes": 2850
     },
     {
       "origen": "contract/ocr-merchant-v2.json",
@@ -367,8 +373,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "590cfd9b24b2a4cff746dc06bf2d281f788dc426547c36028d9ca5ecaae66876",
-      "bytes": 184916
+      "sha256": "f8edb76ef20cf576600f97ecfe58165a1210b5f9c509edb12cc8cc361ad31778",
+      "bytes": 186209
     },
     {
       "origen": "routes/notifications.js",
@@ -439,8 +445,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "78384265a10bacdf9ccfa10b7e42166e444dd6eb4a4a8fb7720fc22410407758",
-      "bytes": 28139
+      "sha256": "086b7241f3622238538a30ef3f889b7bc05b6c05604fb04319b1072a3c70e2be",
+      "bytes": 29262
     },
     {
       "origen": "services/authRecovery.js",
@@ -519,6 +525,12 @@
       "destino": "services/itemClaims.js",
       "sha256": "85d6f8575d4fdee16383f0e336751fabde17fde2f0412d0ec47219e01c558214",
       "bytes": 21407
+    },
+    {
+      "origen": "services/mesaPresentation.js",
+      "destino": "services/mesaPresentation.js",
+      "sha256": "9b2d4ce4e0fcc09fbb5ef70652f6bbde12ff5fed11e3a0a593706b97ec314895",
+      "bytes": 2244
     },
     {
       "origen": "services/moneyRail.js",
@@ -631,8 +643,8 @@
     {
       "origen": "utils/idempotency.js",
       "destino": "utils/idempotency.js",
-      "sha256": "19984b86497f629a2d349020ed8ae2dc5da1e1f9fdf8a35521832a65b1ea72bd",
-      "bytes": 6659
+      "sha256": "9485658088f36e7921b7cb3c5e18da9903ff652d1d95c051b4607fd9598d7bce",
+      "bytes": 6683
     },
     {
       "origen": "utils/money.js",

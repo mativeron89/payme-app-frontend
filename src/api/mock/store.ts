@@ -113,6 +113,8 @@ export interface MockMesa {
   tip_amount_cents: number;
   division_mode: 'consumo' | 'igual';
   expected_participants: number;
+  /** V04 · ausente en seeds históricos; nuevas mesas guardan el N explícito. */
+  original_participants?: number;
   status: MesaStatus;
   expires_at: string;
   items: MockItem[];
@@ -1545,6 +1547,9 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
     tip_amount_cents: m.tip_amount_cents,
     division_mode: m.division_mode,
     expected_participants: m.expected_participants,
+    original_participants: Number.isSafeInteger(m.original_participants)
+      ? m.original_participants!
+      : null,
     // C3 · el par que distingue un cierre SIN COBROS de un vencimiento
     // monetario. Se publican los dos porque el dueño publica los dos, aunque el
     // discriminador sea sólo `closure_reason`.

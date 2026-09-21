@@ -43,6 +43,7 @@ import { GUARDAR_TARJETA_DEFAULT } from './saveCardView';
 import { fuenteGuardadaVigente, SIN_TARJETA_ELEGIDA } from './tarjetaElegida';
 import { decideOcrScan } from './ocrScanView';
 import { resolutionRequest } from '../api/restaurantResolution';
+import { canLabelPrivateUnknownRestaurant, validateRestaurantLabel } from '../api/mesaPresentation';
 
 import { MOCK_RESTAURANTS } from '../api/mock/seedData';
 import { createCardPaymentMethod } from '../api/stripe';
@@ -332,12 +333,20 @@ export function CreateMesaFlow() {
   const [restaurantRecordOnly, setRestaurantRecordOnly] = useState(false);
   const [restaurantError, setRestaurantError] = useState<string | null>(null);
   const [ocrMerchant, setOcrMerchant] = useState<OcrMerchant | undefined>();
+  const [restaurantLabel, setRestaurantLabel] = useState('');
   const ticketFallbackRef = useRef<string | null>(null);
   const resolutionRef = useRef<{
     sessionId: string;
     fingerprint: string;
     promise: ReturnType<typeof api.resolveRestaurant>;
   } | null>(null);
+  // Los handlers de captura atraviesan awaits del OCR. Estas refs les permiten
+  // consultar la fuente vigente después del await, en vez de la del render que
+  // inició la captura.
+  const restaurantIdRef = useRef(restaurantId);
+  const restaurantRef = useRef(restaurant);
+  restaurantIdRef.current = restaurantId;
+  restaurantRef.current = restaurant;
   const effectiveRestaurantId = restaurant?.id ?? restaurantId;
   const mesaScopeBase = actor
     ? scopeForActor(actor, `mesa:${effectiveRestaurantId || 'sin-restaurante'}`)
@@ -352,6 +361,13 @@ export function CreateMesaFlow() {
       return;
     }
     let alive = true;
+    // El fallback demo depende de una capability asíncrona: el OCR puede haber
+    // empezado sin `restaurantId` y seguir resolviendo un registro privado
+    // cuando el config habilita el restaurante verificado. Esa resolución ya
+    // no pertenece a la fuente vigente y no debe poder pisarla al terminar.
+    resolutionRef.current = null;
+    setRestaurant(null);
+    setRestaurantRecordOnly(false);
     setRestaurantError(null);
     api
       .getRestaurant(restaurantId)
@@ -374,15 +390,38 @@ export function CreateMesaFlow() {
     ticketFallbackRef.current = null;
     resolutionRef.current = null;
     setOcrMerchant(undefined);
+    setRestaurantLabel('');
     if (!restaurantId) {
       setRestaurant(null);
       setRestaurantRecordOnly(false);
     }
   }, [session?.principal_id]);
 
+  // Sin QR + resolución genérica sin señales sólo puede provenir del fallback
+  // privado de esta cuenta. Se deriva de esas señales durables y no del flag
+  // transitorio `recordOnly`, que también gobierna el ruteo y puede cambiar en
+  // una actualización de sesión mientras termina el OCR.
+  const restaurantLabelEligible = canLabelPrivateUnknownRestaurant({
+    hasRestaurantFromQr: !!restaurantId,
+    restaurantName: restaurant?.name,
+    ocrName: ocrMerchant?.name,
+    ocrRfc: ocrMerchant?.rfc,
+  });
+  const restaurantLabelValidation = validateRestaurantLabel(restaurantLabel);
+  const normalizedRestaurantLabel = restaurantLabelEligible && restaurantLabelValidation.ok
+    ? restaurantLabelValidation.normalized
+    : null;
+  const restaurantLabelError = restaurantLabelValidation.ok
+    ? null
+    : restaurantLabelValidation.reason === 'control_character'
+      ? t('El nombre no puede contener saltos de línea ni caracteres de control.')
+      : t('Usa un nombre de hasta 200 caracteres.');
+
   async function resolveTicketRestaurant(merchant = ocrMerchant) {
-    if (restaurantId) {
-      return restaurant ? { restaurant, record_only: false as const } : null;
+    if (restaurantIdRef.current) {
+      return restaurantRef.current
+        ? { restaurant: restaurantRef.current, record_only: false as const }
+        : null;
     }
     const sessionId = session?.principal_id;
     if (!sessionId) {
@@ -404,6 +443,10 @@ export function CreateMesaFlow() {
     let promise: ReturnType<typeof api.resolveRestaurant>;
     promise = api.resolveRestaurant(request)
       .then((result) => {
+        // Si apareció un QR/fallback verificado, o arrancó otra resolución,
+        // este resultado privado quedó obsoleto. Se devuelve al caller que lo
+        // inició, pero no muta la identidad que usa la apertura de la mesa.
+        if (resolutionRef.current?.promise !== promise) return result;
         setRestaurant(result.restaurant);
         setRestaurantRecordOnly(result.record_only);
         return result;
@@ -432,7 +475,7 @@ export function CreateMesaFlow() {
   // tarjeta tipeada cambia en cada invocación de Stripe.js, y meterlo acá haría
   // que cambiar de tarjeta abriera una segunda mesa con un segundo hold.
   const contentScope = actor
-    ? scopeForActor(actor, `mesa:${effectiveRestaurantId || 'sin-restaurante'}|${total}|${division}|${participants}|${method}`)
+    ? scopeForActor(actor, `mesa:${effectiveRestaurantId || 'sin-restaurante'}|${normalizedRestaurantLabel ?? ''}|${total}|${division}|${participants}|${method}`)
     : '';
   /**
    * Intento de apertura SIN CONFIRMAR (error ambiguo). La mesa puede existir
@@ -759,6 +802,7 @@ export function CreateMesaFlow() {
   function cargarAMano() {
     setScanIssue(null);
     setScannedTotalCents(null);
+    setRestaurantLabel('');
     // 🔴 P3-01 (Codex, 2026-08-20): el ticket vuelve a nacer PLEGADO en cada
     // llegada a la pantalla. Sin este reset, abrir el acordeón, volver y
     // escanear otro ticket lo mostraba abierto — el estado de un ticket que
@@ -771,13 +815,14 @@ export function CreateMesaFlow() {
     setStep('ticket');
     // El toque en “Cargarlo a mano” es la acción explícita. Sin merchant, el
     // owner usa el UUID estable del intento y crea un registro privado.
-    if (!restaurantId) void resolveTicketRestaurant().catch(() => undefined);
+    if (!restaurantIdRef.current) void resolveTicketRestaurant().catch(() => undefined);
   }
 
   async function runScan(image?: Blob) {
     setScanning(true);
     setUploadProgress(null);
     setError(null);
+    setRestaurantLabel('');
     // El cartel del intento anterior se va cuando este intento EMPIEZA, no
     // cuando se toca el botón: si la persona abre la cámara y la cancela, el
     // motivo por el que falló la vez pasada tiene que seguir en pantalla.
@@ -787,7 +832,7 @@ export function CreateMesaFlow() {
       setOcrMerchant(r.merchant);
       // Resolver no crea la mesa. Sólo prepara la identidad privada/pública
       // para que el CTA posterior pueda abrirla sin QR.
-      if (!restaurantId) void resolveTicketRestaurant(r.merchant).catch(() => undefined);
+      if (!restaurantIdRef.current) void resolveTicketRestaurant(r.merchant).catch(() => undefined);
       const decision = decideOcrScan(r);
       if (decision.kind === 'provider_unavailable') {
         setScannedTotalCents(null);
@@ -875,6 +920,11 @@ export function CreateMesaFlow() {
     if (participants === null) {
       toast(t('Elige cuántos son'));
       setStep('ticket');
+      finishTicketContinuation();
+      return;
+    }
+    if (restaurantLabelEligible && !restaurantLabelValidation.ok) {
+      setError(restaurantLabelError);
       finishTicketContinuation();
       return;
     }
@@ -1022,6 +1072,7 @@ export function CreateMesaFlow() {
         // El N que la persona ELIGIÓ, en los dos modos. El ternario viejo era
         // inerte (las dos ramas mandaban el mismo default invisible).
         expected_participants: participants,
+        ...(normalizedRestaurantLabel ? { restaurant_label: normalizedRestaurantLabel } : {}),
         // C3 · `none` cuando el dueño declara el dinero apagado. Su refine exige
         // CERO fuentes de pago, y los spreads de abajo no las agregan porque en
         // ese modo no hay tarjeta elegida ni tipeada.
@@ -1304,6 +1355,7 @@ export function CreateMesaFlow() {
       ticketFallbackRef.current = null;
       resolutionRef.current = null;
       setOcrMerchant(undefined);
+      setRestaurantLabel('');
       if (!restaurantId) {
         setRestaurant(null);
         setRestaurantRecordOnly(false);
@@ -1640,6 +1692,24 @@ export function CreateMesaFlow() {
             </div>
           )}
           {avisoApertura()}
+          {restaurantLabelEligible && (
+            <label className="restaurant-label-card">
+              <span className="restaurant-label-title">{t('Nombre del restaurante (opcional)')}</span>
+              <input
+                type="text"
+                value={restaurantLabel}
+                maxLength={400}
+                disabled={!!frozen}
+                aria-invalid={restaurantLabelError ? true : undefined}
+                aria-describedby="restaurant-label-help"
+                onChange={(event) => setRestaurantLabel(event.target.value)}
+                placeholder={t('Restaurante sin identificar')}
+              />
+              <span id="restaurant-label-help" className={restaurantLabelError ? 'form-error' : 'caption'}>
+                {restaurantLabelError ?? t('Sólo identifica esta mesa; no crea ni modifica un comercio.')}
+              </span>
+            </label>
+          )}
           {/* Las tres formas salen de UNA lista, no de tres bloques copiados:
               con tres copias, agregar un estado visual a una y olvidarse de
               las otras es cuestión de tiempo. */}
@@ -2324,6 +2394,7 @@ export function CreateMesaFlow() {
    */
   if (step === 'share' && created) {
     const code = created.mesa.code;
+    const displayedRestaurantName = normalizedRestaurantLabel ?? restaurant?.name;
     const copiarLink = () => {
       if (!link) return;
       void writeClipboardText(link).then((copied) =>
@@ -2341,7 +2412,7 @@ export function CreateMesaFlow() {
         <div className="title-card share-title">
           <h1 className="title-card-title">{t('Compartir la mesa')}</h1>
           <div className="title-card-sub">
-            {restaurant?.name ? `${restaurant.name} · ` : ''}{t('Mesa {0}', code)}
+            {displayedRestaurantName ? `${displayedRestaurantName} · ` : ''}{t('Mesa {0}', code)}
           </div>
         </div>
         <div className="scroll flow-scroll share-flow-scroll">

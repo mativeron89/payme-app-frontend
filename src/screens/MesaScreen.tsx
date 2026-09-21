@@ -41,13 +41,14 @@ import { filaPropina } from './propinaRecibo';
 import { AppBottomBar } from '../components/AppBottomBar';
 import { Icon } from '../components/Icon';
 import type {
-  FractionRequest,
+  LockFractionRequest,
   MesaDetail,
   PayMesaRequest,
   PayMesaResponse,
   PaymentMethod,
   PaymentType,
 } from '../api/types';
+import { denominatorBps, initialDenominator, originalParticipants } from '../api/mesaPresentation';
 import { useAuth } from '../auth/AuthContext';
 import { fullName } from '../utils/identity';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
@@ -354,6 +355,8 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [view, setView] = useState<View>('detail');
   // v2.18 (fracciones): selección = ítem → fracción elegida en bps.
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
+  /** V04 · sólo el lock nuevo necesita denominador; pagos conservan su schema. */
+  const [selectedDenominators, setSelectedDenominators] = useState<Map<string, number>>(new Map());
   /** AF-25 · n80 · el ítem que se está soltando; `null` sin pedido en vuelo. */
   const [soltando, setSoltando] = useState<string | null>(null);
   const soltandoRef = useRef(false);
@@ -462,7 +465,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   useEffect(() => {
     identityEpochRef.current.next();
     mesaReadEpochRef.current.next();
-    setMesa(null); setNotFound(false); setSelected(new Map()); setLockTokens([]);
+    setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setLockTokens([]);
     // La mesa nueva también nace sin elegir: acá estaba el segundo `15`.
     setTip(NO_TIP_CHOSEN); setCustomTipStr(''); setStaffId(null);
     setTipSelectorFailed(false); setTipPulse(false); setMetodoPulse(false);
@@ -674,8 +677,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       return;
     }
     const next = new Map(selected);
+    const nextDenominators = new Map(selectedDenominators);
     if (next.has(id)) {
       next.delete(id);
+      nextDenominators.delete(id);
     } else {
       const item = mesa?.items.find((i) => i.id === id);
       // ORDEN 1A.3 · acá vivían DOS defaults fabricados —`?? 10000` dos
@@ -685,16 +690,24 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // En igualdad esta fracción es una DECLARACIÓN sin efecto monetario:
       // no compite por `remaining_bps` y empieza en entero. En consumo sigue
       // siendo una tenencia real y sólo se ofrece lo que queda.
+      const original = originalParticipants(mesa?.original_participants);
+      const denominator = mesa?.division_mode === 'consumo' && original !== null
+        ? initialDenominator(original, item?.remaining_bps ?? Number.NaN)
+        : null;
       const def = mesa?.division_mode === 'igual'
         ? 10000
-        : fraccionInicial(item?.remaining_bps);
+        : original !== null
+          ? denominator === null ? null : denominatorBps(denominator)
+          : fraccionInicial(item?.remaining_bps);
       if (def === null) {
         toast(t('No pudimos leer cuánto queda de ese ítem. Actualiza la mesa.'));
         return;
       }
       next.set(id, def);
+      if (!CORTE.allowsPay && denominator !== null) nextDenominators.set(id, denominator);
     }
     setSelected(next);
+    setSelectedDenominators(nextDenominators);
   }
 
   function setFraction(id: string, bps: number) {
@@ -705,6 +718,23 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     const next = new Map(selected);
     next.set(id, bps);
     setSelected(next);
+    const nextDenominators = new Map(selectedDenominators);
+    nextDenominators.delete(id);
+    setSelectedDenominators(nextDenominators);
+  }
+
+  function setDenominator(id: string, denominator: number) {
+    if (frozenRef.current || CORTE.allowsPay) {
+      if (frozenRef.current) toast(t('Tienes un pago sin confirmar: resuélvelo antes de cambiar tu selección'));
+      return;
+    }
+    const original = originalParticipants(mesa?.original_participants);
+    const item = mesa?.items.find((candidate) => candidate.id === id);
+    if (original === null || !item || !Number.isSafeInteger(denominator)
+        || denominator < 1 || denominator > original
+        || denominatorBps(denominator) > item.remaining_bps) return;
+    setSelected(new Map(selected).set(id, denominatorBps(denominator)));
+    setSelectedDenominators(new Map(selectedDenominators).set(id, denominator));
   }
 
   /**
@@ -802,10 +832,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       setBusy(true);
       try {
         // Contrato: lock primero (POST /:code/items/lock), después pagar.
-        const requests: FractionRequest[] = [...selected.entries()].map(([item_id, fraction_bps]) => ({
-          item_id,
-          fraction_bps,
-        }));
+        const requests: LockFractionRequest[] = [...selected.entries()].map(([item_id, fraction_bps]) => {
+          const fractionDenominator = selectedDenominators.get(item_id);
+          return fractionDenominator === undefined
+            ? { item_id, fraction_bps }
+            : { item_id, fraction_denominator: fractionDenominator };
+        });
         const r = await api.lockItems(code, requests, guestToken);
         setLockTokens([r.lock_token]);
         // Con el corte la selección queda registrada y el recorrido termina acá:
@@ -815,7 +847,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         // dueño (`my_bps`) y la fila lo muestra como «Lo elegiste», con «Soltar».
         // Antes quedaba marcada con un selector de porción vacío y «Tu parte:
         // $0.00», porque lo que quedaba libre del ítem ya era 0 (medido).
-        if (!CORTE.allowsPay) { setSelected(new Map()); reload(); return; }
+        if (!CORTE.allowsPay) { setSelected(new Map()); setSelectedDenominators(new Map()); reload(); return; }
         setView('pay');
       } catch (err) {
         const { code: ec, extra } = extractApiError(err);
@@ -827,6 +859,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             const next = new Map(selected);
             next.delete(itemId);
             setSelected(next);
+            const nextDenominators = new Map(selectedDenominators);
+            nextDenominators.delete(itemId);
+            setSelectedDenominators(nextDenominators);
           }
           reload();
         } else if (ec === 'item_already_locked' || ec === 'item_already_paid') {
@@ -836,7 +871,19 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             const next = new Map(selected);
             next.delete(itemId);
             setSelected(next);
+            const nextDenominators = new Map(selectedDenominators);
+            nextDenominators.delete(itemId);
+            setSelectedDenominators(nextDenominators);
           }
+          reload();
+        } else if (ec === 'original_participants_unknown') {
+          toast(t('Esta mesa no guardó el número original de personas. Actualiza para usar las porciones disponibles de siempre.'));
+          setSelectedDenominators(new Map());
+          reload();
+        } else if (ec === 'fraction_denominator_exceeds_original'
+            || ec === 'fraction_not_allowed_for_original_participants'
+            || ec === 'fraction_denominator_consumo_only') {
+          toast(t('Esa porción no es válida para esta mesa.'));
           reload();
         } else {
           toast(t('No pudimos reservar lo que elegiste'));
@@ -1953,7 +2000,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="btn btn-ghost"
-                onClick={() => { setView('detail'); setSelected(new Map()); reload(); }}
+                onClick={() => { setView('detail'); setSelected(new Map()); setSelectedDenominators(new Map()); reload(); }}
               >
                 {t('Ver la mesa')}
               </button>
@@ -2518,6 +2565,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       isGuest={isGuest}
       guestHeader={guestHeader}
       selected={selected}
+      selectedDenominators={selectedDenominators}
       itemsAmount={itemsAmount}
       mySlotsTaken={mySlotsTaken}
       frozenScope={frozenScope}
@@ -2533,6 +2581,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       fotoDe={(participantId) => fotosRef.current?.url(participantId) ?? null}
       onReintentarQuienes={cargarQuienes}
       onSetFraction={setFraction}
+      onSetDenominator={setDenominator}
       onGoToPay={goToPay}
       onRetryFrozenPay={() => { if (CORTE.allowsPay) setView('pay'); }}
       pagosCortados={CORTE.pagosCortados}

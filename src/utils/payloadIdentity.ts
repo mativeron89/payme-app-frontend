@@ -1,7 +1,7 @@
 /**
  * IDENTIDAD ECONÓMICA DE UN REQUEST — réplica EXACTA de
  * `payme-app-backend/utils/idempotency.js` (espejado en
- * `contract-mirror/utils/idempotency.js`, contenido `87a9a74`, v2.70.0).
+ * `contract-mirror/utils/idempotency.js`, contenido `4dc04f5`, v2.121.0).
  *
  * ## Por qué este archivo existe
  *
@@ -71,6 +71,7 @@ export const PAYLOAD_KEYS = {
    */
   create_mesa: [
     'restaurant_id',
+    'restaurant_label',
     'total_cents',
     'division_mode',
     'expected_participants',

@@ -51,6 +51,7 @@ function mesa(over: Partial<MesaDetail> = {}): MesaDetail {
     tip_base_cents: 21000,
     division_mode: 'consumo',
     expected_participants: 4,
+    original_participants: null,
     status: 'open',
     expires_at: '2026-08-05T00:00:00.000Z',
     items: [],

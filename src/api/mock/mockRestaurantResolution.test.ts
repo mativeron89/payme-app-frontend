@@ -79,4 +79,63 @@ describe('mock restaurants/resolve · ownership e idempotencia', () => {
       items: [{ name: 'Taco', price_cents: 1000, quantity: 1 }],
     })).rejects.toMatchObject({ status: 409, message: 'restaurant_record_only' });
   });
+
+  it('V07 · normaliza el nombre sólo en la mesa privada y lo incluye en la identidad', async () => {
+    const { mock, store, storage } = await load();
+    mock.setModoMonetarioMock('disabled');
+    storage.saveSession(storage.createSession({
+      access_token: 'a', refresh_token: 'r', user: store.state.user,
+    }));
+    const resolved = await mock.mockResolveRestaurant({
+      fallback_key: '33333333-3333-4333-8333-333333333333',
+    });
+    expect(resolved.restaurant.name).toBe('Restaurante sin identificar');
+    const request = {
+      restaurant_id: resolved.restaurant.id,
+      restaurant_label: '  Cafe\u0301   del Centro  ',
+      total_cents: 1000,
+      division_mode: 'consumo' as const,
+      expected_participants: 7,
+      guarantee_method: 'none' as const,
+      idempotency_key: 'private-label-normalized',
+      items: [{ name: 'Taco', price_cents: 1000, quantity: 1 }],
+    };
+    const first = await mock.mockCreateMesa(request);
+    const retry = await mock.mockCreateMesa({ ...request, restaurant_label: 'Café del Centro' });
+    expect(retry).toMatchObject({ idempotent: true, mesa: { id: first.mesa.id, original_participants: 7 } });
+
+    const created = store.state.mesas.find((mesa) => mesa.id === first.mesa.id)!;
+    expect(created.restaurant.name).toBe('Café del Centro');
+    const privateRecord = Object.values(store.state.restaurantResolutions[store.state.user.id] ?? {})
+      .find((restaurant) => restaurant.id === resolved.restaurant.id);
+    expect(privateRecord?.name).toBe('Restaurante sin identificar');
+
+    await expect(mock.mockCreateMesa({ ...request, restaurant_label: 'Otro nombre' }))
+      .rejects.toMatchObject({ status: 409, message: 'idempotency_conflict' });
+
+    const blank = await mock.mockCreateMesa({
+      ...request,
+      restaurant_label: '   ',
+      idempotency_key: 'private-label-blank',
+    });
+    expect(store.state.mesas.find((mesa) => mesa.id === blank.mesa.id)?.restaurant.name)
+      .toBe('Restaurante sin identificar');
+  });
+
+  it('V07 · un restaurante verificado no acepta etiqueta privada', async () => {
+    const { mock, store, storage } = await load();
+    storage.saveSession(storage.createSession({
+      access_token: 'a', refresh_token: 'r', user: store.state.user,
+    }));
+    await expect(mock.mockCreateMesa({
+      restaurant_id: store.state.mesas[0].restaurant.id,
+      restaurant_label: 'No debe aplicar',
+      total_cents: 1000,
+      division_mode: 'igual',
+      expected_participants: 2,
+      guarantee_method: 'none',
+      idempotency_key: 'verified-label-forbidden',
+      items: [{ name: 'Taco', price_cents: 1000, quantity: 1 }],
+    })).rejects.toMatchObject({ status: 409, message: 'restaurant_label_not_allowed' });
+  });
 });

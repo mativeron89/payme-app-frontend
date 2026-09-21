@@ -8,34 +8,45 @@ desde `src/` y nunca se corrige a mano.
 
 - Fecha del refresh: **2026-09-20**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`f0e0820951cc4b0297b111dc34be852612afa951`**
-  (App Backend **v2.120.0**: acuse explícito del Aviso **2.5.5**, foto privada
-  entre amistades aceptadas y los contratos U04/U08 ya incorporados).
+  **`d4ad6ae9efa7933f24abba65766c67cf2e48fa2d`**
+  (App Backend **v2.121.0**: conserva `original_participants`, acepta
+  `fraction_denominator` y la etiqueta opcional por mesa no identificada).
 - Commit local del que se tomó el inventario autoritativo:
-  **`d9bf7616e27a6deeea1876d2b4b5bcb69810bc5e`** (tree
-  `73253371b8f41e382bb3217dd3f3aa9f59717e95`). El inventario declara primero
-  el contenido exacto `f0e0820`; `d9bf761` sólo publica el inventario derivado.
+  **`160652bfbe9f371518781b1beb271af005e854e8`** (tree
+  `d8c8a2bb03be57e0dfcceaa8035183d967ed90d1`). El inventario declara primero
+  el contenido exacto `d4ad6ae`; `160652b` sólo publica el inventario derivado.
 
 🔴 **No acredita publicación ni producción:** ambos objetos son locales y este
 refresh no hizo push, deploy ni consulta remota.
 
-🆕 **109 archivos espejados** más este README. Contra el corte anterior
-(`2198f4c`) cambian exactamente tres: `routes/friends.js`, `routes/mesas.js` y
-`services/profileIdentity.js`. No hay altas, bajas ni renombrados.
+🆕 **111 archivos espejados** más este README. Contra el corte anterior
+(`f0e0820`) entran `contract/mesa-presentation-v1.json` y
+`services/mesaPresentation.js`; cambian `contract/create-mesa-identity-vectors.json`,
+`routes/mesas.js`, `schemas/index.js` y `utils/idempotency.js`. No hay bajas ni
+renombrados.
 
 ### Verificación de esta adopción, con su resultado literal
 
 `PAYME_APP_BACKEND_DIR` apuntó al repositorio owner que contiene ambos objetos.
-Los gates leen exclusivamente el commit de contenido `f0e0820` declarado por
-el inventario final tomado de `d9bf761`.
+Los gates leen exclusivamente el commit de contenido `d4ad6ae` declarado por
+el inventario final tomado de `160652b`.
 
 | gate | resultado |
 |---|---|
-| `--integridad` | **OK 109/109** contra el inventario · exit 0 |
-| `--paridad` | **OK 109/109**: espejo = inventario = fuente **en `f0e0820`** · exit 0 |
+| `--integridad` | **OK 111/111** contra el inventario · exit 0 |
+| `--paridad` | **OK 111/111**: espejo = inventario = fuente **en `d4ad6ae`** · exit 0 |
 
-No se ejecutó `--vigencia`: el HEAD mutable del dueño no es el oráculo de esta
-adopción. Mandan el producto `f0e0820` y su inventario derivado `d9bf761`.
+`--vigencia`: **OK**, el contenido sigue igual en el HEAD final `160652b` del
+dueño. Mandan el producto `d4ad6ae` y su inventario derivado `160652b`.
+
+### Refresh anterior · 2026-09-20 (Aviso 2.5.5 y foto privada · `f0e0820`)
+
+- Población: 109 archivos.
+- Inventario: `d9bf7616e27a6deeea1876d2b4b5bcb69810bc5e` (tree
+  `73253371b8f41e382bb3217dd3f3aa9f59717e95`).
+- Cambios del corte: `routes/friends.js`, `routes/mesas.js` y
+  `services/profileIdentity.js`.
+- Gates registrados: integridad y paridad 109/109 · exit 0.
 
 ### Refresh anterior · 2026-09-20 (Aviso 2.5.4 y ticket privado · `2198f4c`)
 

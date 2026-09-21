@@ -322,6 +322,12 @@ const createMesa = z.object({
   // y la misma key guarantee_<mesa>, evitando un segundo hold.
   idempotency_key: idempotencyKey.optional(),
   restaurant_id: uuid,
+  restaurant_label: z.string().max(400)
+    .refine(v => Array.from(v).every(c => c.charCodeAt(0) >= 32 && c.charCodeAt(0) !== 127), {
+      message: 'restaurant_label contains control characters',
+    })
+    .transform(v => v.normalize('NFC').trim().replace(/\s+/g, ' '))
+    .pipe(z.string().max(200)).optional(),
   total_cents: strictPositive,
   division_mode: z.enum(['consumo', 'igual']).default('consumo'),
   // 🔴 SIN `.default(1)` A PROPÓSITO — ver el refine de abajo. El default se
@@ -373,7 +379,11 @@ const createMesa = z.object({
 // El default va DESPUÉS de los refines: antes lo ponía `.default(1)` en el
 // campo y el refine ya no podía ver la ausencia. `validateBody` reemplaza
 // `req.body` con este resultado, así que la ruta sigue recibiendo el número.
-}).transform(d => ({ ...d, expected_participants: d.expected_participants ?? 1 }));
+}).transform(d => ({ ...d,
+  original_participants: d.expected_participants ?? null,
+  expected_participants: d.expected_participants ?? 1,
+  restaurant_label: d.restaurant_label || undefined,
+}));
 
 // v2.18/v2.68 (fracciones): conjunto natural ratificado:
 // ¼ | ⅓ | ½ | ⅔ | ¾ | entero. El server valida contra lo disponible y computa
@@ -388,9 +398,21 @@ const fractionItem = z.object({
     .default(10000),
 });
 
+// Denominador explícito sólo para lock de consumo; pay/igual conservan su DTO.
+const lockFractionItem = z.object({
+  item_id: uuid,
+  fraction_bps: safeInt.refine(v => FRACTION_VALUES.includes(v), {
+    message: `fraction_bps must be one of ${FRACTION_VALUES.join('|')}`,
+  }).optional(),
+  fraction_denominator: safeInt.min(1).max(20).optional(),
+}).refine(d => d.fraction_denominator === undefined || d.fraction_bps === undefined, {
+  message: 'fraction_denominator and fraction_bps are mutually exclusive',
+}).transform(d => ({ ...d, fraction_bps: d.fraction_denominator === undefined
+  ? (d.fraction_bps ?? 10000) : Number(10000n / BigInt(d.fraction_denominator)) }));
+
 const lockItems = z.object({
   item_ids: z.array(uuid).min(1).optional(),          // legacy: enteros
-  items: z.array(fractionItem).min(1).optional(),     // v2.18: fracciones
+  items: z.array(lockFractionItem).min(1).optional(), // consumo: bps legacy o denominador
 }).refine((d) => !!d.item_ids !== !!d.items, {
   message: 'exactly one of item_ids or items is required',
 });

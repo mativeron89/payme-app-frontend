@@ -180,6 +180,7 @@ describe('el sello de `create_mesa` es la identidad económica del dueño', () =
       { division_mode: 'igual' },
       { guarantee_method: 'wallet' },
       { restaurant_id: '33333333-3333-4333-8333-333333333333' },
+      { restaurant_label: 'Café del Centro' },
       { items: [ITEMS[0]] },
     ]) {
       await expect(
