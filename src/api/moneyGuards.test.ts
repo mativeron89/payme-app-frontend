@@ -47,12 +47,12 @@ describe('frontera contractual monetaria', () => {
       guarantee: {
         method: 'card',
         status: 'requires_action',
-        client_secret: 'pi_historica_secret',
+        client_secret: 'mock',
       },
     };
     expect(createMesaResponse(replay, mesaRequest)).toMatchObject({
       mesa: { original_participants: null, status: 'pending_auth' },
-      guarantee: { status: 'requires_action', client_secret: 'pi_historica_secret' },
+      guarantee: { status: 'requires_action', client_secret: 'mock' },
     });
     expect(() => createMesaResponse({
       ...replay,
