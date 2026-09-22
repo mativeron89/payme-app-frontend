@@ -645,6 +645,51 @@ export async function mockUpdateProfileIdentity(
   return delay(profile);
 }
 
+/** Hoy en México (UTC−6, sin horario de verano desde 2022), `YYYY-MM-DD`. */
+function hoyEnMexicoMock(): string {
+  return new Date(Date.now() - 6 * 3_600_000).toISOString().slice(0, 10);
+}
+
+function esFechaCalendarioMock(v: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const [y, m, d] = v.split('-').map(Number);
+  const f = new Date(Date.UTC(y, m - 1, d));
+  return f.getUTCFullYear() === y && f.getUTCMonth() === m - 1 && f.getUTCDate() === d;
+}
+
+/** El veredicto del DUEÑO (`services/consent.js`): cumplió 18 en calendario de México. */
+function esAdultoMock(birthDate: string): boolean {
+  const [y, m, d] = birthDate.split('-').map(Number);
+  const cumple18 = `${String(y + 18).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  return cumple18 <= hoyEnMexicoMock();
+}
+
+/**
+ * M03 · `PATCH /account/me` del dueño (`routes/account.js`): valida la fecha
+ * (real, no futura, desde 1900), la guarda UNA vez, es idempotente con la misma
+ * y responde 409 `birth_date_already_set` con otra. Devuelve el perfil propio.
+ */
+export async function mockDeclareBirthDate(birthDate: string): Promise<ProfileIdentityResponse> {
+  if (typeof birthDate !== 'string' || !esFechaCalendarioMock(birthDate)
+      || birthDate > hoyEnMexicoMock() || birthDate < '1900-01-01') {
+    return fail(400, 'validation_error');
+  }
+  const fixture = activePrivateFeatureFixture();
+  const actual = fixture.profile.user.birth_date;
+  if (actual !== null && actual !== birthDate) return fail(409, 'birth_date_already_set');
+  const profile = {
+    ...fixture.profile,
+    user: { ...fixture.profile.user, birth_date: birthDate, birth_date_set: true, is_adult: esAdultoMock(birthDate) },
+  };
+  if (privateFeatureFixture) {
+    privateFeatureFixture = { ...fixture, profile };
+  } else {
+    state.user = { ...state.user, birth_date: birthDate, birth_date_set: true, is_adult: profile.user.is_adult };
+    persist();
+  }
+  return delay(profile);
+}
+
 export async function mockProfileAvatar(): Promise<PrivateAvatarBlob> {
   const avatar = activePrivateFeatureFixture().avatar;
   if (!avatar) throw new MockApiError(404, 'avatar_not_found');

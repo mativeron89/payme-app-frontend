@@ -264,6 +264,13 @@ export interface Api {
     name: { first_name: string; last_name: string },
     expectedSession: StoredSession,
   ): Promise<ProfileIdentityResponse>;
+  /**
+   * M03 · declarar la fecha de nacimiento propia (`PATCH /account/me`, D-03/D-11).
+   * UNA sola vez: reenviar la misma es idempotente; otra da 409
+   * `birth_date_already_set`. La respuesta es el perfil propio, con `is_adult`
+   * y `birth_date_set` del servidor: el front no calcula edad.
+   */
+  declareBirthDate(birthDate: string, expectedSession: StoredSession): Promise<ProfileIdentityResponse>;
   getProfileAvatar(expectedSession: StoredSession): Promise<PrivateAvatarBlob>;
   putProfileAvatar(
     image: Blob,
@@ -525,6 +532,12 @@ const realApi: Api = {
     assertProfileIdentityEnabled();
     return decodeProfileIdentityResponse(
       await httpRequest<unknown>('PATCH', '/account/me/profile', name, expectedSession),
+    );
+  },
+  declareBirthDate: async (birthDate, expectedSession) => {
+    assertProfileIdentityEnabled();
+    return decodeProfileIdentityResponse(
+      await httpRequest<unknown>('PATCH', '/account/me', { birth_date: birthDate }, expectedSession),
     );
   },
   getProfileAvatar: async (expectedSession) => {
@@ -950,6 +963,12 @@ const mockApi: Api = {
   updateProfileIdentity: async (name) => {
     assertProfileIdentityEnabled();
     return mock.mockUpdateProfileIdentity(name);
+  },
+  // Como `getProfileIdentity` y `updateProfileIdentity` del mock: sin el
+  // decodificador estricto, porque el usuario del mock trae claves de la demo.
+  declareBirthDate: async (birthDate) => {
+    assertProfileIdentityEnabled();
+    return mock.mockDeclareBirthDate(birthDate);
   },
   getProfileAvatar: async () => {
     assertProfileIdentityEnabled();

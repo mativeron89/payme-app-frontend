@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from './index';
 import {
   applyPrivateFeatureConfig,
@@ -585,6 +585,99 @@ describe('avatar privado · bytes y ObjectURL efímeros', () => {
       await expect(mock.mockProfileAvatar()).resolves.toMatchObject({
         blob: expect.objectContaining({ size: phonePhoto.size, type: 'image/png' }),
       });
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe('M03 · declarar la fecha de nacimiento (PATCH /account/me, una sola vez)', () => {
+  const SIN_FECHA = { ...VALID_USER, birth_date: null, birth_date_set: false, is_adult: null };
+
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  /** La fachada real exige que `expectedSession` sea la sesión VIGENTE guardada. */
+  async function conSesionVigente(): Promise<void> {
+    const valores = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => valores.get(k) ?? null,
+      setItem: (k: string, v: string) => { valores.set(k, v); },
+      removeItem: (k: string) => { valores.delete(k); },
+    });
+    const { saveSession } = await import('./storage');
+    saveSession(SESSION);
+  }
+
+  it('🔴 la fachada real manda PATCH /account/me con EXACTAMENTE { birth_date } y decodifica el perfil estricto', async () => {
+    applyPrivateFeatureConfig(config(PROFILE_ON));
+    await conSesionVigente();
+    const respuesta = { user: { ...VALID_USER, birth_date: '1990-05-10', birth_date_set: true, is_adult: true } };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(respuesta), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await api.declareBirthDate('1990-05-10', SESSION);
+    expect(r.user).toMatchObject({ birth_date_set: true, is_adult: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(String(url)).toMatch(/\/account\/me$/);
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body as string)).toEqual({ birth_date: '1990-05-10' });
+  });
+
+  it('una respuesta que no es el perfil estricto se rechaza', async () => {
+    applyPrivateFeatureConfig(config(PROFILE_ON));
+    await conSesionVigente();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ user: { ...SIN_FECHA, edad: 36 } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })));
+    await expect(api.declareBirthDate('1990-05-10', SESSION)).rejects.toThrow('profile_identity_response_malformed');
+  });
+
+  it('con la capability de perfil apagada, no sale ningún pedido', async () => {
+    applyPrivateFeatureConfig(config(PROFILE_OFF));
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(api.declareBirthDate('1990-05-10', SESSION)).rejects.toThrow('profile_identity_unavailable');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('🔴 el mock es write-once como el dueño: guarda, repite idempotente y rechaza otra con 409', async () => {
+    const restore = mock.installPrivateFeatureMockFixtureForTests({
+      profile: { user: SIN_FECHA },
+      avatar: null,
+      shortfallByMesa: {},
+    });
+    try {
+      const primera = await mock.mockDeclareBirthDate('1990-05-10');
+      expect(decodeProfileIdentityResponse(primera).user).toMatchObject({
+        birth_date: '1990-05-10', birth_date_set: true, is_adult: true,
+      });
+      await expect(mock.mockDeclareBirthDate('1990-05-10')).resolves.toMatchObject({ user: { birth_date: '1990-05-10' } });
+      await expect(mock.mockDeclareBirthDate('1991-01-01'))
+        .rejects.toMatchObject({ status: 409, message: 'birth_date_already_set' });
+      await expect(mock.mockProfileIdentity()).resolves.toMatchObject({ user: { birth_date: '1990-05-10' } });
+    } finally {
+      restore();
+    }
+  });
+
+  it('el mock valida como el dueño: fecha real, no futura, desde 1900; y el veredicto de edad es suyo', async () => {
+    const restore = mock.installPrivateFeatureMockFixtureForTests({
+      profile: { user: SIN_FECHA },
+      avatar: null,
+      shortfallByMesa: {},
+    });
+    try {
+      for (const mala of ['2001-02-30', '1899-12-31', '3000-01-01', '10/05/1990', '']) {
+        await expect(mock.mockDeclareBirthDate(mala), mala).rejects.toMatchObject({ status: 400 });
+      }
+      const menor = new Date(Date.now() - 6 * 3_600_000);
+      menor.setUTCFullYear(menor.getUTCFullYear() - 10);
+      const r = await mock.mockDeclareBirthDate(menor.toISOString().slice(0, 10));
+      expect(r.user).toMatchObject({ birth_date_set: true, is_adult: false });
     } finally {
       restore();
     }

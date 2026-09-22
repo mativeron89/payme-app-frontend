@@ -11,6 +11,43 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.186.0 — «Fecha de nacimiento» en el perfil, una sola vez, para que se vean las fotos (2026-09-22)
+
+Orden `AF-M03-FECHA-DE-NACIMIENTO-CLAUDE-20260922`, base `afc37ce` (= `origin/main`,
+0.185.2). **Sin push, sin deploy.** Decisión de Mati (`1dc77b51…`), literal: «Campo de
+fecha en el perfil, una sola vez (Recomendada)». Diagnóstico AB-M03 (`6ac570ac…`): la foto
+para amigos y organizadores exige que su dueño tenga fecha declarada y sea mayor
+(`edadConocida === true`), y ninguna pantalla de la app permitía declararla.
+
+- **`api.declareBirthDate`** → `PATCH /account/me` con exactamente `{ birth_date }`
+  (contrato ya existente del dueño, `routes/account.js`: write-once, idempotente con la
+  misma fecha, 409 `birth_date_already_set` con otra). La respuesta pasa por el
+  decodificador estricto del perfil. Detrás de la capability de perfil, como el resto.
+- **Mock con paridad:** valida como el dueño (fecha real, no futura, desde 1900), guarda
+  una sola vez, repite idempotente, 409 con otra, y calcula `is_adult` como el dueño (18
+  cumplidos en calendario de México). La fachada mock no decodifica, igual que las otras
+  dos llamadas de perfil del mock (el usuario de la demo trae claves de más).
+- **En «Más» (`ProfileIdentityEditor`):** el campo aparece **sólo** cuando el servidor
+  dice `birth_date_set === false`; sin saberlo todavía, no se dibuja. Al guardar,
+  desaparece y no vuelve. **Nunca se muestra la fecha ni una edad, y el cliente no la
+  calcula:** el veredicto es el `is_adult` de la respuesta. Si el servidor dice menor, se
+  avisa que la foto no se muestra.
+- **Textos:** del Aviso vigente y de la decisión de Mati (declarado): «Podemos pedir tu
+  fecha de nacimiento para aplicar las protecciones de edad; no la usamos para
+  publicidad» es literal del Aviso; «Si eres menor de edad o no nos diste tu fecha de
+  nacimiento, no **mostramos tu foto** a nadie más» cambia «no **se la** mostramos» del
+  Aviso, porque fuera de su párrafo el «la» queda sin referente; «No se puede cambiar
+  después» es de la decisión. Los botones y avisos breves («Guardar fecha», errores) son
+  de interfaz.
+- **No se tocó:** `PRESENTABLE_NOTICE_VERSIONS`, las guardas de menores, el acuse del
+  aviso de fotos ni el registro. `FriendAvatarNotice` (opcional en la orden) no se tocó.
+- **Tests:** 11 nuevos (fachada con método, ruta y cuerpo exactos; respuesta no estricta
+  rechazada; capability apagada sin pedido; mock write-once, validación y edad; el campo
+  sólo sin fecha, nunca la fecha ni una edad, aviso para menor). Mutantes: 10, todos
+  mueren. **Un defecto que ninguna prueba vio:** la fachada mock decodificaba estricto y
+  en el navegador el guardado fallaba; lo cazó la sonda de capturas, no la suite
+  (declarado: falta un e2e del guardado; queda fuera del alcance de esta orden).
+
 ## 0.185.2 — CI rojo en `main`: expectativas de M04 y testigo de cierre sin cobros (2026-09-22)
 
 Corrección causal `AF-LISTO-CORRECCION-CI-CLAUDE-20260922` sobre `903b6a8`, que
