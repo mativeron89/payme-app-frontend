@@ -11,6 +11,23 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.184.0 — Fracciones distribuidas, contexto compacto y lectura individual (2026-09-21)
+
+Orden `AF-M01-M03-M04-20260921`, sobre `d449508`. **Sin push ni deploy.**
+
+- El selector distribuye sólo las opciones disponibles: N=2 ocupa dos mitades
+  centradas y la implementación vigente de igualdad conserva sus seis valores
+  y sus áreas táctiles. No cambia denominadores, bps ni importes.
+- La cabecera corrige el alineado óptico entre marca y nombre. La selección
+  compacta `restaurante / código · modo`; las invitaciones muestran el mismo
+  par cuando ambos datos existen, y Avisos separa su título del contenido.
+- Abrir un aviso nuevo con destino confirma primero
+  `PATCH /notifications/:id/read`; sólo esa fila pasa a leída. Un error no
+  reconciliado se ve y no navega ni cae en la operación global; ante un 404 por
+  carrera, un GET debe confirmar esa misma fila leída y el mismo destino.
+- M03 queda como diagnóstico, sin cambio de fotos: organizador y amistad son
+  canales distintos, y el fallback actual no deja distinguir un 404 de red.
+
 ## 0.183.0 — Fracciones por N original y nombre privado de mesa (2026-09-20)
 
 Tramo funcional V04/V07 de `AF-AJUSTES8-VISUAL-CONTRATOS-20260920`, separado

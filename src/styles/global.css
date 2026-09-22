@@ -2814,7 +2814,9 @@ body {
 .hdr-user-group {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
+  /* M04 · el nombre pertenece al mismo lockup visual: 10px conserva aire sin
+     abrir el hueco que en móvil hacía leer marca e identidad como dos grupos. */
+  gap: 10px;
   flex: 1;
   min-width: 0;
   height: 34px;
@@ -2860,6 +2862,9 @@ body {
   font-size: var(--fs-sm);
   /* V01 · centrar la línea real, no una caja de 34px con aire tipográfico. */
   line-height: 1;
+  /* Corrección óptica: la x-height de DM Sans quedaba apenas por debajo del
+     centro percibido del wordmark, aunque las cajas geométricas coincidían. */
+  transform: translateY(-1px);
   color: var(--on-dark-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3563,6 +3568,19 @@ body {
   padding: 0 var(--sp-4);
 }
 
+/* M04 · la tarjeta montada y el contenido dejan de parecer una sola pieza. */
+.avisos-scroll {
+  /* Separación visible y acotada: el título sigue montado, pero el primer
+     bloque ya no arranca pegado a su borde. */
+  padding-top: var(--sp-6);
+}
+
+.avisos-title-card {
+  min-height: 70px;
+  padding-top: var(--sp-3);
+  padding-bottom: var(--sp-3);
+}
+
 .linkbtn {
   min-height: var(--tap-min);
   padding: 0 var(--sp-2);
@@ -3615,6 +3633,10 @@ body {
   line-height: var(--lh-h2);
   font-weight: 700;
   color: var(--text);
+}
+
+.inv-mesa-code {
+  white-space: nowrap;
 }
 
 .inv-cta {
@@ -4606,15 +4628,31 @@ body {
 /* Mismo componente .seg del sistema, con el área táctil de la app. */
 .mi-frac .seg {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* M01 · seis subcolumnas permiten repartir 1–6 opciones sin una columna
+     fantasma: 2→2 mitades, 3/6→3 columnas, 4→2×2 y 5→3+2 centradas. */
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
   margin-bottom: var(--sp-2);
   background: var(--surface);
 }
 
 .mi-frac .seg-btn {
+  grid-column: span 2;
   min-height: var(--tap-min);
   font-size: var(--fs-body);
+}
+
+.mi-frac .seg:has(> .seg-btn:first-child:last-child) > .seg-btn {
+  grid-column: span 6;
+}
+
+.mi-frac .seg:has(> .seg-btn:nth-child(2):last-child) > .seg-btn,
+.mi-frac .seg:has(> .seg-btn:nth-child(4):last-child) > .seg-btn {
+  grid-column: span 3;
+}
+
+.mi-frac .seg:has(> .seg-btn:nth-child(5):last-child) > .seg-btn:nth-child(4) {
+  grid-column: 2 / span 2;
 }
 
 .mi-frac .seg-btn.on {
@@ -4664,6 +4702,25 @@ body {
 .mesa-selection-title .title-card-sub strong {
   color: var(--text);
   font-weight: 700;
+}
+
+/* M04 · una sola línea contextual evita que restaurante, código y modo inflen
+   la burbuja. Puede envolver en equipos angostos sin truncar esos datos. */
+.mesa-selection-title {
+  min-height: 0;
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.mesa-selection-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  column-gap: var(--sp-1);
+}
+
+.mesa-selection-context-main {
+  white-space: normal;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

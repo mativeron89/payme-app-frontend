@@ -96,13 +96,38 @@ const NOTIF_ICON: Record<string, IconName> = {
 };
 
 /** La fila principal de un aviso: un botón si lleva a una mesa, un div si no. */
-function AvisoPrincipal({ destino, children }: { destino: string | null; children: ReactNode }) {
+function AvisoPrincipal({
+  destino,
+  onOpen,
+  disabled = false,
+  children,
+}: {
+  destino: string | null;
+  onOpen?: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
   if (destino === null) return <div className="aviso-row-main">{children}</div>;
   return (
-    <button type="button" className="aviso-row-main aviso-row-link" onClick={() => navigate('mesa', destino)}>
+    <button type="button" className="aviso-row-main aviso-row-link" onClick={onOpen} disabled={disabled}>
       {children}
     </button>
   );
+}
+
+/**
+ * Una carrera 404 no es éxito. Sólo autoriza continuar si un GET propio
+ * posterior confirma que ESA fila ya está leída y conserva el mismo destino.
+ */
+export function reconciledReadDestination(
+  notifications: readonly AppNotification[],
+  notificationId: string,
+  expectedDestination: string,
+): string | null {
+  const current = notifications.find((notification) => notification.id === notificationId);
+  return current?.read_at && mesaDelAviso(current) === expectedDestination
+    ? expectedDestination
+    : null;
 }
 
 export function AvisosScreen() {
@@ -116,6 +141,7 @@ export function AvisosScreen() {
   // dejaba entrar a mesas muertas (y reventaba la pantalla con una fila mala).
   const [invitations, setInvitations] = useState<InvitacionMostrable[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [openingNotificationId, setOpeningNotificationId] = useState<string | null>(null);
 
   function load() {
     api.getNotifications().then((r) => setNotifs(r.notifications)).catch(() => setNotifs([]));
@@ -156,15 +182,57 @@ export function AvisosScreen() {
     }
   }
 
+  async function openNotification(notification: AppNotification, destino: string) {
+    if (notification.read_at) {
+      navigate('mesa', destino);
+      return;
+    }
+    if (openingNotificationId !== null) return;
+    setOpeningNotificationId(notification.id);
+    try {
+      // El punto y el peso cambian sólo después del 2xx del dueño. El 404
+      // (ajena, ausente o ya leída en una carrera) conserva la pantalla y
+      // muestra el error; nunca se sustituye por read-all.
+      await api.markNotificationRead(notification.id);
+      const readAt = new Date().toISOString();
+      setNotifs((current) => current?.map((item) => (
+        item.id === notification.id ? { ...item, read_at: readAt } : item
+      )) ?? current);
+      navigate('mesa', destino);
+    } catch (err) {
+      const { status } = extractApiError(err);
+      if (status === 404) {
+        try {
+          const refreshed = await api.getNotifications();
+          setNotifs(refreshed.notifications);
+          const reconciled = reconciledReadDestination(
+            refreshed.notifications,
+            notification.id,
+            destino,
+          );
+          if (reconciled !== null) {
+            navigate('mesa', reconciled);
+            return;
+          }
+        } catch {
+          // El error visible de abajo cubre también una reconciliación fallida.
+        }
+      }
+      toast(t('No se pudo marcar como leído'));
+    } finally {
+      setOpeningNotificationId(null);
+    }
+  }
+
   const hasUnread = notifs?.some((n) => !n.read_at) ?? false;
 
   return (
     <div className="screen has-appbar">
       <AppHeaderBack userName={fullName(session) ?? undefined} onBack={() => goBack('home')} bellHere />
-      <div className="title-card">
+      <div className="title-card avisos-title-card">
         <h1 className="title-card-title">{t('Notificaciones')}</h1>
       </div>
-      <div className="scroll flow-scroll">
+      <div className="scroll flow-scroll avisos-scroll">
         {invitations.length > 0 && (
           <>
             <h2 className="sectlabel">{t('Te invitaron')}</h2>
@@ -200,7 +268,12 @@ export function AvisosScreen() {
                     <div className="inv-l1">
                       {inv.invitador ? t('{0} te invitó a', inv.invitador) : t('Te invitaron a una mesa')}
                     </div>
-                    {inv.restaurante && <div className="inv-l2">{inv.restaurante}</div>}
+                    {inv.restaurante && (
+                      <div className="inv-l2">
+                        {inv.restaurante}
+                        {inv.mesaCode && <span className="inv-mesa-code"> / {inv.mesaCode}</span>}
+                      </div>
+                    )}
                     {metaInvitacion(inv, (iso) => relTime(iso, undefined, t), t) && (
                       <div className="inv-meta">{metaInvitacion(inv, (iso) => relTime(iso, undefined, t), t)}</div>
                     )}
@@ -246,6 +319,7 @@ export function AvisosScreen() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {notifs?.map((n) => {
             const sinLeer = !n.read_at;
+            const destino = mesaDelAviso(n);
             const shortfallDisclosure = readShortfallNotificationDisclosure(n);
             const inviterName = n.type === 'invitation_received' && typeof n.payload?.inviter_name === 'string'
               ? n.payload.inviter_name.trim()
@@ -261,7 +335,11 @@ export function AvisosScreen() {
                 {/* AF-34 · `mesa_expired` con código: tocarlo lleva a esa mesa, que
                     muestra su cierre. Sin código, la fila queda quieta. El texto
                     es el `body` del dueño tal cual, como el resto de los avisos. */}
-                <AvisoPrincipal destino={mesaDelAviso(n)}>
+                <AvisoPrincipal
+                  destino={destino}
+                  onOpen={destino === null ? undefined : () => openNotification(n, destino)}
+                  disabled={openingNotificationId !== null}
+                >
                   <span
                     className={`aviso-dot ${sinLeer ? '' : 'off'}`}
                     aria-hidden={sinLeer ? undefined : 'true'}

@@ -2886,6 +2886,10 @@ export async function mockNotifications(): Promise<NotificationsResponse> {
   return delay({ notifications: [...avisosDeMesaVencidaMock(), ...state.notifications], unread_count: unread, limit: 20, offset: 0 });
 }
 
+/* Estado efímero exclusivo de la costura e2e: permite que su aviso sintético
+   recorra el mismo PATCH individual sin contaminar el seed persistido. */
+const avisosDeCosturaLeidos = new Map<string, string>();
+
 /**
  * AF-34 · v2.112.0 · el aviso `mesa_expired`, con la forma del dueño. El mock no
  * lo emite solo (el estado no guarda quién eligió en cada mesa cerrada): la
@@ -2908,7 +2912,7 @@ function avisosDeMesaVencidaMock(): NotificationsResponse['notifications'] {
       payload: { mesa_code: 'PA-1099', closure_reason: 'time' },
       related_entity_type: 'mesa',
       related_entity_id: mesa?.id ?? null,
-      read_at: null,
+      read_at: avisosDeCosturaLeidos.get('aviso-mesa-vencida-1') ?? null,
       created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
     },
     {
@@ -2927,6 +2931,25 @@ function avisosDeMesaVencidaMock(): NotificationsResponse['notifications'] {
 
 export async function mockUnreadCount(): Promise<{ unread_count: number }> {
   return delay({ unread_count: state.notifications.filter((n) => !n.read_at).length });
+}
+
+/** PATCH /notifications/:id/read: una fila propia, sólo si seguía sin leer. */
+export async function mockMarkNotificationRead(id: string): Promise<void> {
+  const index = state.notifications.findIndex((notification) => (
+    notification.id === id && notification.read_at === null
+  ));
+  if (index >= 0) {
+    const notification = state.notifications[index];
+    state.notifications[index] = { ...notification, read_at: new Date().toISOString() };
+    persist();
+  } else {
+    const synthetic = avisosDeMesaVencidaMock().find((notification) => (
+      notification.id === id && notification.read_at === null
+    ));
+    if (!synthetic) return fail(404, 'notification_not_found_or_already_read');
+    avisosDeCosturaLeidos.set(id, new Date().toISOString());
+  }
+  return delay(undefined);
 }
 
 export async function mockMarkAllNotificationsRead(): Promise<void> {

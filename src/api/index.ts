@@ -354,6 +354,7 @@ export interface Api {
     expectedSession: StoredSession,
   ): Promise<ShortfallDetail>;
   getUnreadCount(): Promise<{ unread_count: number }>;
+  markNotificationRead(id: string): Promise<void>;
   markAllNotificationsRead(): Promise<void>;
   getPendingInvitations(): Promise<PendingInvitationsResponse>;
   acceptInvitation(id: string): Promise<{ accepted: boolean }>;
@@ -789,6 +790,13 @@ const realApi: Api = {
     );
   },
   getUnreadCount: () => httpRequest<{ unread_count: number }>('GET', '/notifications/unread-count'),
+  markNotificationRead: async (id) => {
+    const response = await httpRequest<unknown>('PATCH', `/notifications/${encodeURIComponent(id)}/read`);
+    if (typeof response !== 'object' || response === null || Array.isArray(response)
+        || Object.keys(response).length !== 1 || !('read' in response) || response.read !== true) {
+      throw new Error('notification_read_response_malformed');
+    }
+  },
   markAllNotificationsRead: async () => {
     await httpRequest('PATCH', '/notifications/read-all');
   },
@@ -1027,6 +1035,7 @@ const mockApi: Api = {
     return decodeShortfallDetailResponse({ shortfall_detail: detail }, expectedShortfallCents);
   },
   getUnreadCount: () => mock.mockUnreadCount(),
+  markNotificationRead: (id) => mock.mockMarkNotificationRead(id),
   markAllNotificationsRead: () => mock.mockMarkAllNotificationsRead(),
   getPendingInvitations: () => mock.mockPendingInvitations(),
   acceptInvitation: async (id) => acceptInvitationResponse(await mock.mockAcceptInvitation(id)),

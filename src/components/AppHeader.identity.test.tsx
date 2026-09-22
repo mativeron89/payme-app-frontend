@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { AppHeader, AppHeaderBack, AppHeaderFlow } from './AppHeader';
 
 const HEADER_SOURCE = readFileSync(new URL('./AppHeader.tsx', import.meta.url), 'utf8');
+const GLOBAL_CSS = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
 const SCREEN_SOURCES = import.meta.glob('/src/screens/*.tsx', {
   eager: true,
   query: '?raw',
@@ -38,6 +39,11 @@ describe('cabeceras autenticadas · identidad propia por nombre', () => {
 
     expect(html.match(/class="hdr-mark"/g)).toHaveLength(3);
     expect(html).not.toContain('class="hdr-user"');
+  });
+
+  it('M04 · mantiene una sola caja óptica para marca y nombre', () => {
+    expect(GLOBAL_CSS).toMatch(/\.hdr-user-group\s*\{[\s\S]*?align-items:\s*center;[\s\S]*?height:\s*34px;/);
+    expect(GLOBAL_CSS).toMatch(/\.hdr-user\s*\{[\s\S]*?transform:\s*translateY\(-1px\);/);
   });
 
   // AF-29 (2026-09-19): 17 → 18 por `TusRestaurantesScreen` (2b), y AF-31:

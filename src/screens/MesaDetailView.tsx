@@ -511,9 +511,10 @@ export function MesaDetailView({
       <AppHeaderFlow userName={userName} onBack={onBack} bellBlocked={busy || !!frozenScope} />
       <div className="title-card mesa-selection-title">
         <h1 className="title-card-title">{t('¿Qué consumiste?')}</h1>
-        <div className="title-card-sub">{mesa.restaurant.name}</div>
-        <div className="title-card-sub">
-          {code} · <strong>{divisionLabel}</strong>
+        <div className="title-card-sub mesa-selection-context">
+          <span className="mesa-selection-context-main">{mesa.restaurant.name} / {code}</span>
+          <span aria-hidden="true">·</span>
+          <strong>{divisionLabel}</strong>
         </div>
         <div className="title-card-div" />
         <div
