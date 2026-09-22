@@ -312,7 +312,7 @@
   /* Header · descenso del nombre respecto del centrado de flex. UNA sola
      constante para iterar con una captura real de Mati; el porqué y las
      mediciones están en `.hdr-user`. */
-  --hdr-user-nudge: 3px;
+  --hdr-user-nudge: 5.5px;
 }
 
 html,
@@ -2877,15 +2877,18 @@ body {
      llevan USE_TYPO_METRICS, así que no hay elección de tabla distinta: WebKit
      apoya «PayMe» 0.69 px más abajo y el nombre 0.23 px más arriba que
      Chromium (redondeo de ascenso/descenso), y por eso en el iPhone se ve más
-     alto. Con 1px (v0.187.2) la tinta del nombre quedó en WebKit a 36.77
-     (cuadrado +0.27) y Mati, en su iPhone, dijo «Sigue un poco alto» → «Lo
-     bajo otro paso»: 3px (v0.188.1). Medido con 3px: tinta del nombre 39.01
-     Chromium · 38.77 WebKit (cuadrado +2.51 / +2.27; mayúsculas de «PayMe»
-     +2.82 / +1.89; x-height del nombre 40.48 / 40.24 contra 38.68 / 39.37 de
-     «PayMe»). La guarda de Chromium vive en `af-rediseno-12-censo-visual`;
-     el valor lo confirma Mati con una captura real. Alternativa sin iterar,
-     medida y documentada en el CIERRE de AF-HEADER-WEBKIT: `text-box:
-     trim-both ex alphabetic` da números idénticos en los dos motores. */
+     alto. Iteraciones con Mati en su iPhone: 1px (v0.187.2, «Sigue un poco
+     alto»), 3px (v0.188.1, «hay que bajarlo un poco más»: en su foto la base
+     del nombre quedaba por encima de la de «PayMe»). Iteración 3 (v0.188.2,
+     AF-HEADER-ITER3): igualar LÍNEAS BASE, que es lo que su ojo compara.
+     Sin desplazamiento, WebKit apoya el nombre en 40.77 y «PayMe» en 46.19
+     (Chromium 41.00 y 45.50): la diferencia en WebKit es 5.42 px, así que
+     5px la dejaba 0.42 px alta; con 5.5px las líneas base quedan en WebKit
+     46.27 vs 46.19 (+0.08) y en Chromium 46.50 vs 45.50 (+1.00). Tinta del
+     nombre con 5.5px: 41.27 WebKit · 41.51 Chromium (cuadrado +4.77 / +5.01).
+     La guarda de Chromium vive en `af-rediseno-12-censo-visual`. Alternativa
+     sin iterar, medida en el CIERRE de AF-HEADER-WEBKIT: `text-box:
+     trim-both`, idéntica en los dos motores. */
   transform: translateY(var(--hdr-user-nudge));
   color: var(--on-dark-muted);
   overflow: hidden;

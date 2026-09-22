@@ -37,10 +37,10 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
     ]);
     // Decisión de Mati del 22/09 (AF-HEADER-WEBKIT, iteración 2): el nombre va
     // deliberadamente por debajo del centro del lockup, exactamente la constante
-    // `--hdr-user-nudge` (3 px). La guarda ya no exige cajas centradas: exige que
+    // `--hdr-user-nudge` (5.5 px desde AF-HEADER-ITER3). La guarda ya no exige cajas centradas: exige que
     // lo único que las separe sea esa constante.
     const nudge = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hdr-user-nudge')));
-    expect(nudge).toBe(3);
+    expect(nudge).toBe(5.5);
     expect(Math.abs(
       (((userBox?.y ?? 0) + (userBox?.height ?? 0) / 2) - ((logoBox?.y ?? 0) + (logoBox?.height ?? 0) / 2)) - nudge,
     )).toBeLessThanOrEqual(1);

@@ -11,6 +11,21 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.188.2 — Header: el nombre apoya en la línea base de «PayMe» (5,5 px) (2026-09-22)
+
+Orden `AF-HEADER-ITER3-CLAUDE-20260922`, iteración 3 con Mati: con v0.188.1
+mostró una captura en la que la base del nombre queda por encima de la de
+«PayMe» y pidió «bajarlo un poco más». Se cambia el criterio a **igualar
+líneas base**, que es lo que su ojo compara.
+
+- Medido con la sonda de dos motores: sin desplazamiento, WebKit apoya el
+  nombre en 40,77 y «PayMe» en 46,19 (5,42 px de diferencia); 5 px la dejaba
+  0,42 px alta, así que `--hdr-user-nudge` pasa de 3 px a **5,5 px**: líneas
+  base en WebKit 46,27 vs 46,19 (+0,08) y en Chromium 46,50 vs 45,50 (+1,00).
+  Tinta del nombre 4,77 / 5,01 px por debajo del centro del cuadrado azul.
+- Guardas a la constante: unit 5,5 px; censo (descenso en Chromium acotado a
+  [4,75; 5,25]); U03/U07, V01/V02 y M04 leen la constante del CSS.
+
 ## 0.188.1 — Header: el nombre baja otro paso (3 px en total) (2026-09-22)
 
 Iteración 2 de `AF-HEADER-WEBKIT-CLAUDE-20260922`: Mati recargó v0.187.2 en su
