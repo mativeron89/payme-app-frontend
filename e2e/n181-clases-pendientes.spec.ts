@@ -68,6 +68,44 @@ async function clickContinuar(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
 }
 
+/**
+ * Oráculo de la espera (AF-HEADER-WEBKIT, adenda: CI 35748089838 rojo 3/3 en
+ * el test 1 y flaky en 35744875165). El orden importa: primero la VERDAD DE
+ * FONDO —la barrera reteniendo al actor/lector, que es lo que hace que el
+ * flujo esté pendiente— y recién después la UI de espera, leída como UN solo
+ * estado consistente (CTA «Continuando…» deshabilitado + nota `role=status`
+ * visible con ese texto) en vez de dos aserciones separadas que una recarga
+ * de React entre ambas dejaba sin objeto. La nota se ubica con el mismo
+ * localizador que `af-n179-continuar-feedback` (`[role="status"].note`): el
+ * toast también es `role=status` y no es esta señal. Ninguna aserción se
+ * relaja: si la nota no está mientras la barrera retiene, sigue siendo rojo.
+ */
+async function esperarPendiente(page: Page, barrier: 'actor' | 'read'): Promise<{ waiters: number; ui: unknown }> {
+  const waiters = await expect.poll(async () => {
+    const probe = await probeN181(page);
+    return barrier === 'actor' ? probe.actorWaiters : probe.readWaiters;
+  }, { message: `la barrera ${barrier} no retiene a nadie: el flujo no está pendiente` }).toBeGreaterThan(0).then(async () => {
+    const probe = await probeN181(page);
+    return barrier === 'actor' ? probe.actorWaiters : probe.readWaiters;
+  });
+  const nota = page.locator('[role="status"].note');
+  const cta = page.getByRole('button', { name: 'Continuando…', exact: true });
+  let ui: unknown = null;
+  await expect.poll(async () => {
+    const [ctaCount, ctaDisabled, notaCount, notaVisible, notaText] = await Promise.all([
+      cta.count(),
+      cta.isDisabled().catch(() => false),
+      nota.count(),
+      nota.first().isVisible().catch(() => false),
+      nota.first().textContent().catch(() => null),
+    ]);
+    ui = { ctaCount, ctaDisabled, notaCount, notaVisible, notaText };
+    return ui;
+  }, { message: 'la UI de espera no es consistente con la barrera retenida' })
+    .toEqual({ ctaCount: 1, ctaDisabled: true, notaCount: 1, notaVisible: true, notaText: 'Continuando…' });
+  return { waiters, ui };
+}
+
 async function guardarCaso(
   page: Page,
   testInfo: TestInfo,
@@ -104,9 +142,7 @@ test('1 · actor pendiente muestra espera y sale al liberar la barrera', async (
     const before = await estadoN179(page);
     evidence.before = before;
     await clickContinuar(page);
-    await expect(page.getByRole('button', { name: 'Continuando…', exact: true })).toBeDisabled();
-    await expect(page.getByRole('status')).toHaveText('Continuando…');
-    await expect.poll(async () => (await probeN181(page)).actorWaiters).toBeGreaterThan(0);
+    evidence.pending = await esperarPendiente(page, 'actor');
     evidence.pendingProbe = await probeN181(page);
 
     await liberarBarreraN181(page, 'actor');
@@ -155,9 +191,7 @@ test('3 · readUnconfirmed pendiente conserva espera y continúa al liberar', as
     const before = await estadoN179(page);
     evidence.before = before;
     await clickContinuar(page);
-    await expect(page.getByRole('button', { name: 'Continuando…', exact: true })).toBeDisabled();
-    await expect(page.getByRole('status')).toHaveText('Continuando…');
-    await expect.poll(async () => (await probeN181(page)).readWaiters).toBeGreaterThan(0);
+    evidence.pending = await esperarPendiente(page, 'read');
     evidence.pendingProbe = await probeN181(page);
 
     await liberarBarreraN181(page, 'read');
