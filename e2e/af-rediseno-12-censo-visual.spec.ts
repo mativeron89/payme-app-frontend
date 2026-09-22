@@ -80,17 +80,17 @@ async function acreditar(
     };
   });
   expect(tinta, 'la cabecera tiene nombre, wordmark y cuadrado').not.toBeNull();
-  // Revisión de Mati del 22/09 en su iPhone («Sigue alto» → «Lo bajo un poco
-  // más»): `--hdr-user-nudge: 1px`, medido en Chromium y WebKit (comentario
-  // de `.hdr-user`). Este censo corre en Chromium, donde la tinta del nombre
-  // queda 0.51 px por debajo del cuadrado y 0.82 por debajo de las
-  // mayúsculas; en WebKit, donde mira Mati, a +0.27 y −0.11. Se acota el
-  // descenso en Chromium a [0.25, 0.75] respecto del cuadrado: ni el 0.5 de
-  // más arriba que Mati veía alto, ni un salto mayor que el pedido.
+  // Revisiones de Mati del 22/09 en su iPhone: «Sigue alto» → 1px (v0.187.2)
+  // → «Sigue un poco alto» → 3px (v0.188.1). `--hdr-user-nudge: 3px`, medido
+  // en Chromium y WebKit (comentario de `.hdr-user`). Este censo corre en
+  // Chromium, donde la tinta del nombre queda 2.51 px por debajo del cuadrado
+  // y 2.82 por debajo de las mayúsculas; en WebKit, donde mira Mati, a +2.27
+  // y +1.89. Se acota el descenso en Chromium a [2.25, 2.75] respecto del
+  // cuadrado: exactamente el paso pedido, ni el anterior ni uno mayor.
   const bajada = tinta!.userInkCy - tinta!.squareCy;
-  expect(bajada).toBeGreaterThanOrEqual(0.25);
-  expect(bajada).toBeLessThanOrEqual(0.75);
-  expect(Math.abs(tinta!.userInkCy - tinta!.logoCapCy)).toBeLessThanOrEqual(1.0);
+  expect(bajada).toBeGreaterThanOrEqual(2.25);
+  expect(bajada).toBeLessThanOrEqual(2.75);
+  expect(Math.abs(tinta!.userInkCy - tinta!.logoCapCy)).toBeLessThanOrEqual(3.0);
   await expect(header).toHaveCSS('padding-top', '14px');
   await expect(header).toHaveCSS('padding-right', '16px');
   await expect(header).toHaveCSS('padding-bottom', '56px');

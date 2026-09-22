@@ -61,7 +61,8 @@ describe('cabeceras autenticadas · identidad propia por nombre', () => {
    * desplazamiento vertical puede sumarse por fuera de esa constante.
    */
   it('el descenso del nombre es una sola constante medida en los dos motores', () => {
-    expect(GLOBAL_CSS).toMatch(/--hdr-user-nudge:\s*1px;/);
+    // Iteración 2 (Mati en su iPhone, v0.187.2: «Sigue un poco alto»): 3px.
+    expect(GLOBAL_CSS).toMatch(/--hdr-user-nudge:\s*3px;/);
     const regla = GLOBAL_CSS.match(/\.hdr-user\s*\{[^}]*\}/)?.[0] ?? '';
     expect(regla).toContain('align-self: center;');
     expect(regla).toContain('transform: translateY(var(--hdr-user-nudge));');

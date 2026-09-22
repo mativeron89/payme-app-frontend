@@ -11,6 +11,23 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.188.1 — Header: el nombre baja otro paso (3 px en total) (2026-09-22)
+
+Iteración 2 de `AF-HEADER-WEBKIT-CLAUDE-20260922`: Mati recargó v0.187.2 en su
+iPhone y eligió «Sigue un poco alto» → «Lo bajo otro paso».
+
+- `--hdr-user-nudge` pasa de 1 px a **3 px** (una sola constante). Medido con
+  la sonda de dos motores: tinta del nombre 39,01 (Chromium) / 38,77 (WebKit),
+  o sea 2,51 / 2,27 px por debajo del centro del cuadrado azul y 2,82 / 1,89
+  por debajo de las mayúsculas de «PayMe»; el centro de x-height del nombre
+  queda 1,8 / 0,9 px por debajo del de «PayMe». Guardas actualizadas (unit:
+  3 px; censo: descenso en Chromium acotado a [2,25; 2,75]).
+- La sonda `scripts/sonda-header/` ahora también informa el centro de
+  x-height. Medido y documentado en el CIERRE un mecanismo sin iteraciones:
+  `text-box: trim-both ex alphabetic` produce números idénticos en Chromium y
+  WebKit y alinea las minúsculas del nombre con las de «PayMe» (35,99 en los
+  dos). Queda como propuesta para decidir con Mati.
+
 ## 0.188.0 — Fracciones en «igual» según N más «Otro» (2026-09-22)
 
 Adenda P3 de `AF-HEADER-WEBKIT-CLAUDE-20260922`, sobre `8db3d95`. Decisión de
