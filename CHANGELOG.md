@@ -11,6 +11,37 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.187.1 — Pruebas de robustez: «¿Cómo dividen?» no falla en silencio (n181) y el guardado de la fecha (n219) (2026-09-22)
+
+Orden `AF-ROBUSTEZ-TESTS-CLAUDE-20260922`, base `6a93a6c` (= `origin/main`, 0.187.0).
+**Sólo tests: cero cambios de producto.** Autoridad: Mati, «APP: ítems de
+pruebas/robustez del Roadmap (e2e, cortes mudos)» (`267e256f…`).
+
+- **n181 · `d69cfaf`.** Entra al repo la matriz de seis casos de `createMesa()` que Codex
+  dejó preservada fuera del repo (`e2e/n181-clases-pendientes.spec.ts` + su fixture, con
+  las importaciones vueltas relativas; el fixture intacto). Los seis casos son: actor
+  pendiente, actor fallido, `readUnconfirmed` pendiente, `readUnconfirmed` fallido, otra
+  familia con consulta fallida, y respuesta incoherente con replay sin duplicar. Se suma
+  `e2e/n181-dividen-errores-visibles.spec.ts` con los tres que la orden nombra y la
+  matriz no: sin restaurante, error definitivo de `createMesa` (4xx) y recuperación tras
+  ese error. Los fallos se provocan reemplazando, en la página y sólo durante el test, un
+  método del objeto `api` del mock. **9 de 9.**
+- **n219 · `a0304c4`.** `e2e/perfil-fecha-de-nacimiento.spec.ts`: el guardado de la fecha
+  por la fachada mock (el aviso es el de éxito, el mock queda con la fecha, el campo se va
+  y no vuelve al recargar), y sin fecha elegida no manda nada. Es la sonda de capturas de
+  M03 convertida en spec.
+- **Mutantes (de producto, restaurados por copia):** 5. Mueren 4: sin el aviso de error
+  del paso ticket (4 rojos), sin el aviso de restaurante (1), el 4xx sin mensaje (2) y la
+  fachada mock con el decodificador estricto de 75fdcff (1). **Sobrevive 1, equivalente
+  en pantalla:** no limpiar el error al reintentar, porque tras el reintento exitoso se
+  sale a «Compartir», que no dibuja ese error.
+- **Declarado.** La orden nombra «capability false» como caso. No hay una costura del mock
+  que deje ausente o ilegible la capability de pagos, y no se tocó producto para crearla:
+  los casos corren con `money_rail: disabled` (la capability de tarjeta en falso), que es
+  el modo en el que la mesa se abre desde este paso. El caso de la matriz «respuesta
+  no-open en la guarda objetivo» sigue sin combinación válida que la alcance (lo había
+  medido Codex); lo cubre el caso 6 por el decodificador.
+
 ## 0.187.0 — Listo deja una confirmación fija; el nombre centrado con el logo (2026-09-22)
 
 Orden `AF-LISTO-CONFIRMACION-FRACCIONES-HEADER-CLAUDE-20260922`, sobre `75fdcff7`.
