@@ -60,6 +60,8 @@ import type {
   TransfersResponse,
   WalletTransactionsResponse,
   HistoryResponse,
+  InformativeSelectionResponse,
+  ReplaceInformativeSelectionRequest,
   MovementDetailResponse,
   FractionRequest,
   LockFractionRequest,
@@ -1527,6 +1529,95 @@ export async function mockGetMesa(code: string, identity: MockIdentity): Promise
   if (!mesa) return fail(404, 'mesa_not_found');
   settleIfExpired(mesa);
   return delay({ mesa: toMesaDetail(mesa, identity) });
+}
+
+const INFORMATIVE_CONTRACT = 'payme.app.informative-selections/v2' as const;
+
+function informativeKey(mesa: MockMesa): string {
+  return `${mesa.id}:${state.user.id}`;
+}
+
+function informativePaymentsDisabled(): boolean {
+  return (modoMonetarioMock() as { payments_enabled?: unknown }).payments_enabled === false;
+}
+
+function informativeResponse(mesa: MockMesa): InformativeSelectionResponse {
+  const saved = state.informativeSelections[informativeKey(mesa)] ?? { items: [], updated_at: null };
+  return {
+    contract: INFORMATIVE_CONTRACT,
+    mesa: {
+      code: mesa.code,
+      division_mode: 'igual',
+      status: mesa.status,
+      mutable: mesa.status === 'open' && informativePaymentsDisabled(),
+      closure_reason: mesa.closure_reason ?? null,
+    },
+    selection: { source: 'informative', items: [...saved.items], updated_at: saved.updated_at },
+    coverage: {
+      all_items_selected: mesa.items.length > 0
+        && mesa.items.every((item) => saved.items.some((selected) => selected.item_id === item.id)),
+    },
+  };
+}
+
+export async function mockGetInformativeSelection(code: string): Promise<InformativeSelectionResponse> {
+  const mesa = findMesa(code);
+  if (!mesa) return fail(404, 'mesa_not_found');
+  settleIfExpired(mesa);
+  if (mesa.division_mode !== 'igual') return fail(409, 'informative_selection_not_available_for_division_mode');
+  if ((mesa.guarantee_mode ?? true) !== false) return fail(409, 'informative_selection_requires_no_guarantee');
+  return delay(informativeResponse(mesa));
+}
+
+export async function mockReplaceInformativeSelection(
+  code: string,
+  req: ReplaceInformativeSelectionRequest,
+): Promise<InformativeSelectionResponse> {
+  const mesa = findMesa(code);
+  if (!mesa) return fail(404, 'mesa_not_found');
+  settleIfExpired(mesa);
+  if (!req || typeof req !== 'object' || Array.isArray(req)
+      || Object.keys(req).length !== 2 || !Object.hasOwn(req, 'items') || !Object.hasOwn(req, 'confirm_closure')
+      || req.confirm_closure !== true || !Array.isArray(req.items) || req.items.length > 100) {
+    return fail(400, 'validation_error');
+  }
+  if (mesa.division_mode !== 'igual') return fail(409, 'informative_selection_not_available_for_division_mode');
+  if ((mesa.guarantee_mode ?? true) !== false) return fail(409, 'informative_selection_requires_no_guarantee');
+  const allowed = new Set([2500, 3333, 5000, 6667, 7500, 10000]);
+  const ids = new Set<string>();
+  const items: ReplaceInformativeSelectionRequest['items'] = [];
+  for (const item of req.items) {
+    const itemId = typeof item?.item_id === 'string' ? item.item_id.toLowerCase() : '';
+    if (!item || typeof item !== 'object' || Array.isArray(item)
+        || Object.keys(item).length !== 2 || !Object.hasOwn(item, 'item_id')
+        || !Object.hasOwn(item, 'declared_fraction_bps')
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(itemId)
+        || ids.has(itemId) || !allowed.has(item.declared_fraction_bps)) return fail(400, 'validation_error');
+    if (!mesa.items.some((candidate) => candidate.id === itemId)) return fail(404, 'item_not_found');
+    ids.add(itemId);
+    items.push({ item_id: itemId, declared_fraction_bps: item.declared_fraction_bps });
+  }
+  items.sort((a, b) => a.item_id.localeCompare(b.item_id));
+  const current = state.informativeSelections[informativeKey(mesa)] ?? { items: [], updated_at: null };
+  const exactReplay = current.items.length === items.length
+    && current.items.every((item, index) => item.item_id === items[index]?.item_id
+      && item.declared_fraction_bps === items[index]?.declared_fraction_bps);
+  if (!informativePaymentsDisabled() && !exactReplay) {
+    return fail(409, 'informative_selection_requires_payments_disabled');
+  }
+  if (mesa.status !== 'open' && !exactReplay) return fail(409, 'informative_selection_read_only');
+  if (!exactReplay) {
+    state.informativeSelections[informativeKey(mesa)] = {
+      items,
+      updated_at: new Date().toISOString(),
+    };
+    if (mesa.items.length > 0 && mesa.items.every((item) => ids.has(item.id))) {
+      mesa.status = 'expired';
+      mesa.closure_reason = 'all_items_selected';
+    }
+    persist();
+  }
+  return delay(informativeResponse(mesa));
 }
 
 export async function mockScanTicket(): Promise<OcrResponse> {

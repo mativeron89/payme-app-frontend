@@ -12,7 +12,7 @@ const multer = require('multer');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const {
-  movementsQuery, historyQuery, walletTxQuery, updateMe, updateProfileName, uuidIdParam,
+  movementsQuery, historyQuery, informativeHistoryQuery, walletTxQuery, updateMe, updateProfileName, uuidIdParam,
   validateQuery, validateBody, validateParams, statsPeriodQuery,
 } = require('../schemas');
 const { centsToDisplay } = require('../utils/money');
@@ -29,8 +29,17 @@ const {
 const INICIO_DE_MES = inicioDeMesMxSql();
 const { dineroHabilitado } = require('../services/moneyRail');
 
+const informativeSelections = require('../services/informativeSelections');
 const router = express.Router();
+router.use('/informative-history', (req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store'); res.vary('Authorization'); next();
+});
 router.use(requireAuth);
+
+router.get('/informative-history', validateQuery(informativeHistoryQuery), async (req, res, next) => {
+  try { res.json(await informativeSelections.history({ userId: req.user.id, ...req.validatedQuery })); }
+  catch (err) { next(err); }
+});
 
 // ─── GET /me — perfil propio (G-02, v2.20) ─────────────────────────────────
 // SELECT propio con ALLOWLIST explícita en el punto de exposición: no se

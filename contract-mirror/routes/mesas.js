@@ -57,6 +57,7 @@ const invitationAuthority = require('../services/invitationAuthority');
 const shortfallDetails = require('../services/shortfallDetails');
 const nativeWalletCapability = require('../services/nativeWalletCapability');
 
+const informativeSelections = require('../services/informativeSelections');
 const router = express.Router();
 const { validateBody, validateParams } = schemas;
 const ITEM_LOCK_SECONDS = Number(process.env.ITEM_LOCK_SECONDS) || 600;
@@ -1001,6 +1002,15 @@ router.get('/mine', requireAuth, async (req, res, next) => {
                               AND (c.lock_expires_at IS NULL
                                    OR c.lock_expires_at >= NOW())))
                 )
+                OR (m.division_mode='igual' AND m.guarantee_mode=false
+                  AND m.metadata->>'sin_garantia'='true' AND EXISTS (
+                    SELECT 1 FROM mesa_informative_selections s WHERE s.mesa_id=m.id AND s.user_id=$1
+                  ) AND (m.opener_user_id=$1 OR EXISTS (
+                    SELECT 1 FROM mesa_participants p WHERE p.mesa_id=m.id AND p.user_id=$1 AND p.status='active'
+                  ) OR (r.created_by_user_id IS NULL AND EXISTS (
+                    SELECT 1 FROM invitations inv WHERE inv.mesa_id=m.id AND inv.invited_user_id=$1
+                      AND inv.status='pending' AND inv.superseded_by_id IS NULL AND inv.expires_at>NOW()
+                  ))))
               )
           AND ($2::timestamptz IS NULL
                OR (m.created_at, m.id) < ($2::timestamptz, $3::uuid))
@@ -1011,6 +1021,9 @@ router.get('/mine', requireAuth, async (req, res, next) => {
 
     const pagina = rows.slice(0, limit);
     const hayMas = rows.length > limit;
+    const informativeByMesa = await informativeSelections.ownSelectionsForMesas({
+      mesaIds: pagina.map(m => m.id), userId: req.user.id,
+    });
 
     // Selección propia por mesa: UNA sola definición de «lo que elegiste»,
     // compartida con «Mis estadísticas» (AB-17). La lógica —claims vivos
@@ -1035,6 +1048,7 @@ router.get('/mine', requireAuth, async (req, res, next) => {
           || (m.guarantee_mode === false && m.metadata?.sin_garantia === true
               && m.status === 'expired' ? 'time' : null),
         created_at: m.created_at,
+        ...(informativeByMesa.has(m.id) && { informative_selection: informativeByMesa.get(m.id) }),
         mine: {
           ...(mios.get(m.id) || { items_count: 0, amount_cents: 0 }),
           ...(detailItems && { items: mios.get(m.id)?.items || [] }),
@@ -1227,6 +1241,21 @@ async function privateMesaVisibility(req, res, next) {
     next();
   } catch (err) { next(err); }
 }
+function informativePrivate(_req, res, next) {
+  res.setHeader('Cache-Control', 'private, no-store'); res.vary('Authorization'); next();
+}
+router.get('/:code/informative-selection', informativePrivate, requireAuth, privateMesaVisibility,
+  requireMesaParticipant, async (req, res, next) => {
+    try { res.json(await informativeSelections.read({ mesaId: req.mesa.id, userId: req.user.id })); }
+    catch (err) { next(err); }
+  });
+router.put('/:code/informative-selection', informativePrivate, requireAuth, privateMesaVisibility,
+  requireMesaParticipant, validateBody(schemas.informativeSelection), async (req, res, next) => {
+    try {
+      res.json(await informativeSelections.replace({ mesaId: req.mesa.id, userId: req.user.id,
+        items: req.body.items, confirmClosure: req.body.confirm_closure }));
+    } catch (err) { next(err); }
+  });
 router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant, async (req, res, next) => {
   try {
     const mesa = req.mesa;
@@ -1238,6 +1267,7 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
     // cinco horas—. Derivarlo evita tocar `services/timer.js`, que no está en
     // scope, y deja una sola verdad para el consumidor.
     const garantiaMesa = await cerrojoDeGarantia(mesa);
+    const informativeCapability = await informativeSelections.getCapability({ mesaId: mesa.id, userId: req.user.id });
     const { rows: items } = await pool.query(
       `SELECT id, name, category, price_cents, quantity, status,
               locked_at, lock_expires_at, locked_by_user_id,
@@ -1355,6 +1385,7 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
         // en CHANGELOG_v2.84.0.md—, así que la distinción viaja acá:
         //   guarantee_mode=false + closure_reason  ⇒ cerró SIN COBROS.
         // Un consumidor que no lea estos campos mostrará el cierre monetario.
+        informative_selection_capability: informativeCapability,
         guarantee_mode: garantiaMesa.guarantee_mode,
         closure_reason: garantiaMesa.closure_reason,
         items: items.map(i => {

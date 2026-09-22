@@ -9,6 +9,7 @@ import type {
   FriendRequestCreatedResponse,
   IncomingFriendRequest,
   IncomingFriendRequestsResponse,
+  InformativeSelectionResponse,
   MesaCreationLookup,
   MesaCreationOutcome,
   MesaStatus,
@@ -18,7 +19,7 @@ import type {
   OutgoingFriendRequest,
   OutgoingFriendRequestsResponse,
 } from './types';
-import { MESA_CREATION_OUTCOME_BY_STATUS } from './types';
+import { INFORMATIVE_SELECTION_CONTRACT, MESA_CREATION_OUTCOME_BY_STATUS } from './types';
 
 /** Un 2xx malformado no acredita éxito: el caller debe conservar su intento. */
 export class ContractResponseError extends Error {
@@ -50,6 +51,63 @@ function optionalBoolean(value: unknown): boolean {
 function exactKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
   const keys = Object.keys(value);
   return keys.length === allowed.length && keys.every((key) => allowed.includes(key));
+}
+
+const INFORMATIVE_BPS = new Set([2500, 3333, 5000, 6667, 7500, 10000]);
+
+/** GET/PUT /mesas/:code/informative-selection: un 2xx parcial nunca acredita guardado. */
+export function informativeSelectionResponse(value: unknown): InformativeSelectionResponse {
+  const body = record(value);
+  const mesa = record(body?.mesa);
+  const selection = record(body?.selection);
+  const coverage = record(body?.coverage);
+  if (!body || !mesa || !selection || !coverage
+      || !exactKeys(body, ['contract', 'mesa', 'selection', 'coverage'])
+      || body.contract !== INFORMATIVE_SELECTION_CONTRACT
+      || !exactKeys(mesa, ['code', 'division_mode', 'status', 'mutable', 'closure_reason'])
+      || !nonEmpty(mesa.code) || mesa.division_mode !== 'igual' || !nonEmpty(mesa.status)
+      || typeof mesa.mutable !== 'boolean'
+      || (mesa.closure_reason !== null && typeof mesa.closure_reason !== 'string')
+      || !exactKeys(selection, ['source', 'items', 'updated_at'])
+      || selection.source !== 'informative' || !Array.isArray(selection.items)
+      || (selection.updated_at !== null && !isoTimestamp(selection.updated_at))
+      || !exactKeys(coverage, ['all_items_selected'])
+      || typeof coverage.all_items_selected !== 'boolean') {
+    throw new ContractResponseError('mesas/:code/informative-selection');
+  }
+  const seen = new Set<string>();
+  let previous = '';
+  const items = selection.items.map((raw) => {
+    const item = record(raw);
+    if (!item || !exactKeys(item, ['item_id', 'declared_fraction_bps'])
+        || !uuid(item.item_id) || seen.has(item.item_id)
+        || !INFORMATIVE_BPS.has(item.declared_fraction_bps as number)
+        || (previous && previous.localeCompare(item.item_id) >= 0)) {
+      throw new ContractResponseError('mesas/:code/informative-selection');
+    }
+    seen.add(item.item_id);
+    previous = item.item_id;
+    return {
+      item_id: item.item_id,
+      declared_fraction_bps: item.declared_fraction_bps as InformativeSelectionResponse['selection']['items'][number]['declared_fraction_bps'],
+    };
+  });
+  return {
+    contract: INFORMATIVE_SELECTION_CONTRACT,
+    mesa: {
+      code: mesa.code,
+      division_mode: 'igual',
+      status: mesa.status,
+      mutable: mesa.mutable,
+      closure_reason: mesa.closure_reason as string | null,
+    },
+    selection: {
+      source: 'informative',
+      items,
+      updated_at: selection.updated_at as string | null,
+    },
+    coverage: { all_items_selected: coverage.all_items_selected },
+  };
 }
 
 // ─── G-25 · recibos salientes opacos ─────────────────────────────────────

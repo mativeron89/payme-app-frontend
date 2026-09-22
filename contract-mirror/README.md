@@ -6,36 +6,43 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
-- Fecha del refresh: **2026-09-20**.
+- Fecha del refresh: **2026-09-21**.
 - Commit exacto y procedencia del CONTENIDO:
-  **`be227f92246b3492b14015b03fd561720de70667`**
-  (App Backend **v2.122.0**: expone `Vary` y `ETag` al navegador en las rutas
-  privadas de aviso/foto; conserva el contrato V04/V07 de v2.121.0).
+  **`29bdd2f606eb7b319a6865febce3038402dc8ff9`** (tree
+  `17fee89f30f9b4aa4172ac0af82a17ee062b39cf`, App Backend **v2.123.0**:
+  selección informativa propia v2 para mesas `igual` sin garantía ni pagos).
 - Commit local del que se tomó el inventario autoritativo:
-  **`4f7a94bf0d9606b03fbef0674efa04da291cbc65`** (tree
-  `51c84640dca5a16907324aacf78ac9d554d0a05f`). El inventario declara primero
-  el contenido exacto `be227f9`; `4f7a94b` sólo publica el inventario derivado.
+  **`9e2448b`**. La recepción del owner fue validada en `34014fe` (tree
+  `924f7379f7a64fb69aecc7af4fa6aa855e70171e`); esos commits posteriores sólo
+  cambian el inventario/pruebas, no los 114 bytes espejados de `29bdd2f`.
 
 🔴 **No acredita publicación ni producción:** ambos objetos son locales y este
 refresh no hizo push, deploy ni consulta remota.
 
-🆕 **111 archivos espejados** más este README. Contra el corte anterior
-(`160652b`) cambia únicamente `routes/friends.js` por la corrección CORS V06.
-No hay altas, bajas ni renombrados.
+🆕 **114 archivos espejados** más este README. Contra el corte anterior se
+agregan schema, migración y servicio de selección informativa; cambian rutas y
+schemas del contrato. La documentación narrativa y el runner de migración del
+owner no pertenecen al inventario: no se copiaron como falsos miembros.
 
 ### Verificación de esta adopción, con su resultado literal
 
-`PAYME_APP_BACKEND_DIR` apuntó al repositorio owner que contiene ambos objetos.
-Los gates leen exclusivamente el commit de contenido `be227f9` declarado por
-el inventario final tomado de `4f7a94b`.
+`PAYME_APP_BACKEND_DIR` apuntó al worktree owner recibido en `34014fe`. Los
+gates leen el commit de contenido `29bdd2f` declarado por el inventario.
 
 | gate | resultado |
 |---|---|
-| `--integridad` | **OK 111/111** contra el inventario · exit 0 |
-| `--paridad` | **OK 111/111**: espejo = inventario = fuente **en `be227f9`** · exit 0 |
+| `--integridad` | **OK 114/114** contra el inventario · exit 0 |
+| `--paridad` | **OK 114/114**: espejo = inventario = fuente **en `29bdd2f`** · exit 0 |
+| `--vigencia` | **OK**: el contenido sigue igual en HEAD `34014fe` · exit 0 |
 
-`--vigencia`: **OK**, el contenido sigue igual en el HEAD final `4f7a94b` del
-dueño. Mandan el producto `be227f9` y su inventario derivado `4f7a94b`.
+Manda el producto `29bdd2f`; el HEAD posterior sólo acredita vigencia local.
+
+### Refresh anterior · 2026-09-20 (CORS privado · `be227f9`)
+
+- Población: 111 archivos.
+- Contenido: `be227f92246b3492b14015b03fd561720de70667` (v2.122.0).
+- Inventario: `4f7a94bf0d9606b03fbef0674efa04da291cbc65`.
+- Cambio del corte: `routes/friends.js`; gates 111/111 · exit 0.
 
 ### Refresh anterior · 2026-09-20 (N original y etiqueta privada · `160652b`)
 

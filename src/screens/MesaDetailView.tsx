@@ -98,8 +98,10 @@ export interface MesaDetailViewProps {
    * autoritativo: es el **testigo positivo** de esta capability.
    */
   corteDeclarado: boolean;
-  /** La salida del flujo cuando no hay pago al que continuar. */
-  onLeave: () => void;
+  /** Selección v2 cerrada: se muestra lo propio pero no se permite editar. */
+  informativeReadOnly: boolean;
+  /** Capability/ruta v2 ausente o ilegible: nunca se presenta como guardada. */
+  informativeUnavailable: boolean;
   busy: boolean;
   inviteOpen: boolean;
   onToggleItem: (id: string) => void;
@@ -384,7 +386,8 @@ export function MesaDetailView({
   frozenScope,
   pagosCortados,
   corteDeclarado,
-  onLeave,
+  informativeReadOnly,
+  informativeUnavailable,
   busy,
   inviteOpen,
   onToggleItem,
@@ -555,6 +558,16 @@ export function MesaDetailView({
       {guestHeader}
       <div className="scroll flow-scroll con-fila-sobre-barra mesa-selection-scroll">
         {avisoPagoCongelado}
+        {!esConsumo && informativeReadOnly && (
+          <div className="note note-teal" style={{ marginBottom: 12 }}>
+            {t('Esta mesa ya cerró. Lo guardado es sólo de lectura.')}
+          </div>
+        )}
+        {!esConsumo && informativeUnavailable && (
+          <div className="note note-amber" style={{ marginBottom: 12 }}>
+            {t('Esta versión del servicio no puede guardar la selección informativa. Nada se marcó como guardado.')}
+          </div>
+        )}
         {esConsumo && nothingLeft && (
           <div className="note note-amber" style={{ marginBottom: 12 }}>
             {t('Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.')}
@@ -589,7 +602,7 @@ export function MesaDetailView({
             ).some((denominator) => denominatorBps(denominator) <= i.remaining_bps);
             // En partes iguales marcar es informativo y no reserva nada, así
             // que ahí NUNCA se bloquea una fila: el monto no depende de esto.
-            const disabled = esConsumo && bloqueado;
+            const disabled = (esConsumo && bloqueado) || (!esConsumo && informativeReadOnly);
             const precio =
               sel && esConsumo && myBpsSel < 10000
                 ? fractionPreview(fullPrice, myBpsSel, i.remaining_bps)
@@ -663,6 +676,7 @@ export function MesaDetailView({
                             type="button"
                             className={`seg-btn ${myBpsSel === f.bps ? 'on' : ''}`}
                             onClick={() => onSetFraction(i.id, f.bps)}
+                            disabled={!esConsumo && informativeReadOnly}
                             role="radio"
                             aria-checked={myBpsSel === f.bps}
                             aria-label={f.bps >= 10000 ? t('Entero') : bpsLabel(f.bps)}
@@ -821,10 +835,9 @@ export function MesaDetailView({
            * cambia la selección local y nunca envía por sí mismo.
            */
           onClick: () => {
-            if (selected.size === 0) { onLeave(); return; }
             onGoToPay();
           },
-          disabled: false,
+          disabled: busy || (!esConsumo && informativeReadOnly),
         } : {
           label: t('Continuar'),
           icon: 'arrow-right',

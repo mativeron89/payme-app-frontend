@@ -417,6 +417,17 @@ const lockItems = z.object({
   message: 'exactly one of item_ids or items is required',
 });
 
+const informativeSelection = z.object({
+  items: z.array(z.object({ item_id: uuid.transform(value => value.toLowerCase()),
+    declared_fraction_bps: z.number().int().refine(v => [2500,3333,5000,6667,7500,10000].includes(v)),
+  }).strict()).max(100).refine(items => new Set(items.map(i => i.item_id)).size === items.length),
+  confirm_closure: z.literal(true),
+}).strict();
+const informativeHistoryQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+}).strict();
+
 const payMesa = z.object({
   payment_method_id: uuid.optional(),
   stripe_payment_method_id: stripePmId.optional(),
@@ -652,7 +663,7 @@ module.exports = {
   addFriend, searchFriends, friendRequestsQuery,
   createGroup, updateGroup, addGroupMember,
   createInvitation,
-  createMesa, payMesa, lockItems,
+  createMesa, payMesa, lockItems, informativeSelection, informativeHistoryQuery,
   topupOxxo, topupCard,
   createTransfer,
   addStaff, updateStaff, setStaffShift, panelStaffRequest,

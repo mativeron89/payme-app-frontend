@@ -3,10 +3,42 @@ import {
   acceptInvitationResponse,
   attachPaymentMethodResponse,
   invitationResponse,
+  informativeSelectionResponse,
   mesaCreationResponse,
   ocrResponse,
   setupIntentResponse,
 } from './contractResponses';
+
+describe('selección informativa v2 · respuesta exacta', () => {
+  const A = 'a0000000-0000-4000-8000-000000000001';
+  const valid = {
+    contract: 'payme.app.informative-selections/v2',
+    mesa: { code: 'PA-1', division_mode: 'igual', status: 'open', mutable: true, closure_reason: null },
+    selection: {
+      source: 'informative',
+      items: [{ item_id: A, declared_fraction_bps: 5000 }],
+      updated_at: '2026-09-21T12:00:00.000Z',
+    },
+    coverage: { all_items_selected: false },
+  };
+
+  it('acepta el shape canónico y también la lista vacía', () => {
+    expect(informativeSelectionResponse(valid).selection.items).toEqual(valid.selection.items);
+    expect(informativeSelectionResponse({
+      ...valid,
+      selection: { source: 'informative', items: [], updated_at: null },
+    }).selection.items).toEqual([]);
+  });
+
+  it.each([
+    { ...valid, extra: true },
+    { ...valid, contract: 'payme.app.informative-selections/v1' },
+    { ...valid, selection: { ...valid.selection, items: [{ item_id: A, declared_fraction_bps: 2000 }] } },
+    { ...valid, selection: { ...valid.selection, items: [...valid.selection.items, ...valid.selection.items] } },
+  ])('rechaza respuestas que no acreditan el contrato', (body) => {
+    expect(() => informativeSelectionResponse(body)).toThrow('contract_response_invalid');
+  });
+});
 
 describe('OCR v2 · merchant cerrado y v1 compatible', () => {
   const base = {

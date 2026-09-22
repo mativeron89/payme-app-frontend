@@ -11,6 +11,24 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.185.0 — Listo persiste la selección informativa propia (2026-09-21)
+
+Orden `AF-LISTO-INTEGRACION-20260921`, sobre `9c78a7b`, con contrato owner
+`payme.app.informative-selections/v2` de App Backend `29bdd2f`. **Sin push ni
+deploy.**
+
+- En mesas `igual` sin garantía y con pagos apagados, `Listo` reemplaza la
+  selección propia con pares exactos `{item_id, declared_fraction_bps}` y
+  `confirm_closure:true`; la selección vacía también envía PUT.
+- La recarga rehidrata esos pares desde GET propio. Un error conserva el estado
+  local y sólo se presenta como éxito cuando ese GET reconcilia exactamente el
+  intento; capability o ruta ausente muestran incompatibilidad.
+- Una mesa cerrada queda sólo de lectura en UI; el mock replica reemplazo,
+  vacío, replay exacto y cierre por cobertura completa. No hay autosubmit,
+  modal C2, navegación sustituta, pagos ni historial financiero nuevo.
+- El espejo adopta 114 archivos owner-first. Las pruebas cubren `En partes
+  iguales` N≥2 y `Pagar el total` N=1/N>1 antes de su mapeo contractual.
+
 ## 0.184.0 — Fracciones distribuidas, contexto compacto y lectura individual (2026-09-21)
 
 Orden `AF-M01-M03-M04-20260921`, sobre `d449508`. **Sin push ni deploy.**

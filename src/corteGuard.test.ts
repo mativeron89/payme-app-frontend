@@ -359,6 +359,8 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
       // D-R8 · el corte DECLARADO por el dueño: distinto de `pagosCortados`, que
       // también es true mientras el riel está `pending`.
       corteDeclarado: true,
+      informativeReadOnly: false,
+      informativeUnavailable: false,
       busy: false,
       inviteOpen: false,
       onToggleItem: () => undefined,
@@ -374,7 +376,6 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
       onSetDenominator: () => undefined,
       onGoToPay: () => undefined,
       onRetryFrozenPay: () => undefined,
-      onLeave: () => undefined,
       onOpenInvite: () => undefined,
       onCopyInvitationLink: () => undefined,
       onBack: () => undefined,

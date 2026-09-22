@@ -6,6 +6,7 @@ import type {
   Friend,
   Group,
   HistoryEntry,
+  InformativeSelectionItem,
   MovementDetailResponse,
   ItemStatus,
   MesaDetail,
@@ -58,6 +59,14 @@ export const MODO_MONETARIO_MOCK_POR_DEFECTO = Object.freeze({
   payments_enabled: true,
   real_money: false,
 });
+
+function pagosMockDeshabilitados(): boolean {
+  try {
+    return (localStorage.getItem('payme.app.mock.money_rail.v1') ?? MODO_MONETARIO_MOCK_POR_DEFECTO.mode) === 'disabled';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Store persistido del mock: hace de "backend" con las MISMAS reglas del
@@ -226,6 +235,11 @@ export interface MockState {
   restaurantResolutions: Record<string, Record<string, Restaurant>>;
   /** Debe persistir junto a las mutaciones económicas para que reload no cobre de nuevo. */
   idempotency: Record<string, MockIdemEntry>;
+  /** v2.123.0 · selección informativa propia, aislada por mesa+usuario. */
+  informativeSelections: Record<string, {
+    items: InformativeSelectionItem[];
+    updated_at: string | null;
+  }>;
 }
 
 let seq = 0;
@@ -916,6 +930,7 @@ function seedState(): MockState {
     joinedMesaCodes: [],
     restaurantResolutions: {},
     idempotency: {},
+    informativeSelections: {},
     transfers: [
       {
         id: mockId('f'),
@@ -1281,6 +1296,10 @@ function loadPersisted(): MockState | null {
     if (!parsed.idempotency || typeof parsed.idempotency !== 'object' || Array.isArray(parsed.idempotency)) {
       parsed.idempotency = {};
     }
+    if (!parsed.informativeSelections || typeof parsed.informativeSelections !== 'object'
+        || Array.isArray(parsed.informativeSelections)) {
+      parsed.informativeSelections = {};
+    }
     // OLA 3C: `friendRequests` y `blockedUserIds` nacieron después que el
     // storage. Un estado persistido de antes los trae `undefined` y la pantalla
     // de amigos reventaba al leerlos.
@@ -1555,6 +1574,15 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
     // discriminador sea sólo `closure_reason`.
     guarantee_mode: m.guarantee_mode ?? true,
     closure_reason: m.closure_reason ?? null,
+    informative_selection_capability: {
+      contract: 'payme.app.informative-selections/v2',
+      supported: m.division_mode === 'igual'
+        && (m.guarantee_mode ?? true) === false,
+      mutable: m.division_mode === 'igual'
+        && (m.guarantee_mode ?? true) === false
+        && pagosMockDeshabilitados()
+        && m.status === 'open',
+    },
     status: m.status,
     expires_at: m.expires_at,
     items: m.items.map((i) => {

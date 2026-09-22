@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "payme.app.informative-selections/v2",
+  "$ref": "#/$defs/readResponse",
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "declared_fraction_bps"
+      ],
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "declared_fraction_bps": {
+          "type": "integer",
+          "enum": [
+            2500,
+            3333,
+            5000,
+            6667,
+            7500,
+            10000
+          ]
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "items",
+        "updated_at"
+      ],
+      "properties": {
+        "source": {
+          "const": "informative"
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "item_id",
+              "declared_fraction_bps"
+            ],
+            "properties": {
+              "item_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "declared_fraction_bps": {
+                "type": "integer",
+                "enum": [
+                  2500,
+                  3333,
+                  5000,
+                  6667,
+                  7500,
+                  10000
+                ]
+              }
+            }
+          }
+        },
+        "updated_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "supported",
+        "mutable"
+      ],
+      "properties": {
+        "contract": {
+          "const": "payme.app.informative-selections/v2"
+        },
+        "supported": {
+          "type": "boolean"
+        },
+        "mutable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "replaceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items",
+        "confirm_closure"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "item_id",
+              "declared_fraction_bps"
+            ],
+            "properties": {
+              "item_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "declared_fraction_bps": {
+                "type": "integer",
+                "enum": [
+                  2500,
+                  3333,
+                  5000,
+                  6667,
+                  7500,
+                  10000
+                ]
+              }
+            }
+          }
+        },
+        "confirm_closure": {
+          "const": true
+        }
+      }
+    },
+    "readResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "mesa",
+        "selection",
+        "coverage"
+      ],
+      "properties": {
+        "contract": {
+          "const": "payme.app.informative-selections/v2"
+        },
+        "mesa": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "division_mode",
+            "status",
+            "mutable",
+            "closure_reason"
+          ],
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "division_mode": {
+              "const": "igual"
+            },
+            "status": {
+              "type": "string"
+            },
+            "mutable": {
+              "type": "boolean"
+            },
+            "closure_reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "selection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "items",
+            "updated_at"
+          ],
+          "properties": {
+            "source": {
+              "const": "informative"
+            },
+            "items": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "item_id",
+                  "declared_fraction_bps"
+                ],
+                "properties": {
+                  "item_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "declared_fraction_bps": {
+                    "type": "integer",
+                    "enum": [
+                      2500,
+                      3333,
+                      5000,
+                      6667,
+                      7500,
+                      10000
+                    ]
+                  }
+                }
+              }
+            },
+            "updated_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            }
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "all_items_selected"
+          ],
+          "properties": {
+            "all_items_selected": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "historyResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "history",
+        "limit",
+        "offset"
+      ],
+      "properties": {
+        "contract": {
+          "const": "payme.app.informative-selections/v2"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "mesa_code",
+              "division_mode",
+              "mesa_status",
+              "closure_reason",
+              "items",
+              "updated_at"
+            ],
+            "properties": {
+              "mesa_code": {
+                "type": "string"
+              },
+              "division_mode": {
+                "const": "igual"
+              },
+              "mesa_status": {
+                "type": "string"
+              },
+              "closure_reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "item_id",
+                    "declared_fraction_bps"
+                  ],
+                  "properties": {
+                    "item_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "declared_fraction_bps": {
+                      "type": "integer",
+                      "enum": [
+                        2500,
+                        3333,
+                        5000,
+                        6667,
+                        7500,
+                        10000
+                      ]
+                    }
+                  }
+                }
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

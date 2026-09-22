@@ -27,6 +27,7 @@ import {
   friendRequestCreatedResponse,
   friendRequestsResponse,
   invitationResponse,
+  informativeSelectionResponse,
   legalTextResponse,
   mesaCreationResponse,
   ocrResponse,
@@ -131,6 +132,8 @@ import type {
   TransfersResponse,
   WalletTransactionsResponse,
   HistoryResponse,
+  InformativeSelectionResponse,
+  ReplaceInformativeSelectionRequest,
   MovementDetailResponse,
 } from './types';
 
@@ -291,6 +294,8 @@ export interface Api {
   // mesas
   getOpenMesas(): Promise<OpenMesasResponse>;
   getMesa(code: string, guestToken?: string): Promise<MesaDetailResponse>;
+  getInformativeSelection(code: string): Promise<InformativeSelectionResponse>;
+  replaceInformativeSelection(code: string, req: ReplaceInformativeSelectionRequest): Promise<InformativeSelectionResponse>;
   scanTicket(image?: Blob, onUploadProgress?: (progress: UploadProgress) => void): Promise<OcrResponse>;
   createMesa(req: CreateMesaRequest, intent: MonetaryIntentHandle): Promise<CreateMesaResponse>;
   /**
@@ -583,6 +588,12 @@ const realApi: Api = {
     guestToken
       ? httpGuestRequest<MesaDetailResponse>('GET', `/mesas/${encodeURIComponent(code)}`, guestToken)
       : httpRequest<MesaDetailResponse>('GET', `/mesas/${encodeURIComponent(code)}`),
+  getInformativeSelection: async (code) => informativeSelectionResponse(
+    await httpRequest<unknown>('GET', `/mesas/${encodeURIComponent(code)}/informative-selection`),
+  ),
+  replaceInformativeSelection: async (code, req) => informativeSelectionResponse(
+    await httpRequest<unknown>('PUT', `/mesas/${encodeURIComponent(code)}/informative-selection`, req),
+  ),
   async scanTicket(image, onUploadProgress) {
     // POST /api/ocr es multipart (campo `image`). Usa XHR sólo acá para medir
     // el upload; auth/refresh/timeout/HttpError siguen compartiendo la misma
@@ -963,6 +974,10 @@ const mockApi: Api = {
 
   getOpenMesas: () => mock.mockOpenMesas(),
   getMesa: (code, guestToken) => mock.mockGetMesa(code, guestToken ? 'guest' : 'user'),
+  getInformativeSelection: async (code) => informativeSelectionResponse(await mock.mockGetInformativeSelection(code)),
+  replaceInformativeSelection: async (code, req) => informativeSelectionResponse(
+    await mock.mockReplaceInformativeSelection(code, req),
+  ),
   scanTicket: async () => ocrResponse(await mock.mockScanTicket()),
   createMesa: async (req, intent) =>
     withPreparedMonetaryRequest(

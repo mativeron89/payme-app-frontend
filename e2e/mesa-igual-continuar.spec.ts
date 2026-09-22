@@ -42,9 +42,19 @@ async function conRielApagado(page: import('@playwright/test').Page): Promise<vo
  */
 
 test.describe('Continuar en la mesa (H-14)', () => {
-  test('partes iguales: la fila dice Mi parte, y el círculo cierra el flujo SIN pago (corte)', async ({ page }) => {
+  test('partes iguales: Listo persiste incluso vacío y permanece en Mis ítems (corte)', async ({ page }) => {
     await conRielApagado(page);
     await ingresar(page);
+    await page.evaluate(async () => {
+      const route = '/src/api/mock/store.ts';
+      const module = await import(/* @vite-ignore */ route);
+      const mesa = module.state.mesas.find((candidate: { code: string }) => candidate.code === 'PA-3121');
+      mesa.status = 'open';
+      mesa.guarantee_mode = false;
+      mesa.guarantee_method = 'none';
+      mesa.closure_reason = null;
+      module.persist();
+    });
     await page.goto('/#/mesa/PA-3121');
     await expect(page.locator('.mesa-selection-title')).toContainText('partes iguales');
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
@@ -56,13 +66,18 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.getByText('Mi parte')).toBeVisible();
     await expect(page.getByText('$155.00').first()).toBeVisible();
 
-    // 🔴 CORTE · no hay «Continuar»; el círculo es «Listo», habilitado, y
-    // cierra hacia Inicio. La pantalla de pago no aparece nunca.
+    // 🔴 CORTE · no hay «Continuar»; el círculo es «Listo», habilitado, y el
+    // vacío también viaja como reemplazo explícito. No navega a Inicio.
     await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
     const listo = page.getByRole('button', { name: 'Listo', exact: true });
     await expect(listo).toBeEnabled();
     await listo.click();
-    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
+    await expect(page).toHaveURL(/#\/mesa\/PA-3121$/);
+    // En el contrato owner, vacío→vacío es replay exacto y por eso no crea
+    // fila: el éxito se acredita por la respuesta canónica, no por una fila.
+    await page.reload();
+    await expect(page.locator('.mi-row[aria-pressed="true"]')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
   });
 

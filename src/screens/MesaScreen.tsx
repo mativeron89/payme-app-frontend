@@ -79,6 +79,12 @@ import {
 import { createInFlightMutex } from '../utils/inFlight';
 import { RequestEpoch } from '../utils/requestEpoch';
 import { writeClipboardText } from '../utils/clipboard';
+import {
+  readInformativeSelectionCapability,
+  replaceInformativeSelectionRequest,
+  sameInformativeSelection,
+  selectionMap,
+} from './informativeSelectionView';
 
 /**
  * Pantalla de mesa (T2/T3/T4): detalle + mis ítems con lock, pago con
@@ -357,6 +363,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
   /** V04 · sólo el lock nuevo necesita denominador; pagos conservan su schema. */
   const [selectedDenominators, setSelectedDenominators] = useState<Map<string, number>>(new Map());
+  const [informativeState, setInformativeState] = useState<'idle' | 'loading' | 'available' | 'readonly' | 'unsupported' | 'error'>('idle');
   /** AF-25 · n80 · el ítem que se está soltando; `null` sin pedido en vuelo. */
   const [soltando, setSoltando] = useState<string | null>(null);
   const soltandoRef = useRef(false);
@@ -465,7 +472,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   useEffect(() => {
     identityEpochRef.current.next();
     mesaReadEpochRef.current.next();
-    setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setLockTokens([]);
+    setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setInformativeState('idle'); setLockTokens([]);
     // La mesa nueva también nace sin elegir: acá estaba el segundo `15`.
     setTip(NO_TIP_CHOSEN); setCustomTipStr(''); setStaffId(null);
     setTipSelectorFailed(false); setTipPulse(false); setMetodoPulse(false);
@@ -535,6 +542,26 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       .then((r) => {
         if (mesaReadEpochRef.current.isCurrent(requestEpoch) && identityEpochRef.current.isCurrent(identityEpoch)) {
           setMesa(r.mesa); setNotFound(false);
+          if (r.mesa.division_mode !== 'igual' || guestToken) {
+            setInformativeState('idle');
+            return;
+          }
+          const capability = readInformativeSelectionCapability(r.mesa.informative_selection_capability);
+          if (!capability?.supported) {
+            setInformativeState('unsupported');
+            return;
+          }
+          setInformativeState('loading');
+          void api.getInformativeSelection(code).then((saved) => {
+            if (!mesaReadEpochRef.current.isCurrent(requestEpoch)
+                || !identityEpochRef.current.isCurrent(identityEpoch)) return;
+            setSelected(selectionMap(saved));
+            setSelectedDenominators(new Map());
+            setInformativeState(saved.mesa.mutable ? 'available' : 'readonly');
+          }).catch(() => {
+            if (mesaReadEpochRef.current.isCurrent(requestEpoch)
+                && identityEpochRef.current.isCurrent(identityEpoch)) setInformativeState('error');
+          });
         }
       })
       .catch(() => {
@@ -902,7 +929,58 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // Con el corte no hay pago al que ir y en igualdad no hay lock que
       // registrar —la declaración es informativa—: el recorrido termina donde
       // está, sin abrir una pantalla de cobro que no puede cobrar.
-      if (!CORTE.allowsPay) return;
+      if (!CORTE.allowsPay) {
+        if (informativeState === 'unsupported' || informativeState === 'idle') {
+          toast(t('Guardar esta selección todavía no está disponible.'));
+          return;
+        }
+        if (informativeState === 'loading') {
+          toast(t('Estamos leyendo tu selección. Intenta de nuevo en un momento.'));
+          return;
+        }
+        if (informativeState === 'readonly') {
+          toast(t('Esta mesa ya cerró. Tu selección queda disponible sólo para consulta.'));
+          return;
+        }
+        const request = replaceInformativeSelectionRequest(selected);
+        setBusy(true);
+        try {
+          const saved = await api.replaceInformativeSelection(code, request);
+          setSelected(selectionMap(saved));
+          setSelectedDenominators(new Map());
+          setInformativeState(saved.mesa.mutable ? 'available' : 'readonly');
+          toast(t('Tu selección quedó guardada.'));
+          reload();
+        } catch (err) {
+          let reconciled = false;
+          try {
+            const saved = await api.getInformativeSelection(code);
+            if (sameInformativeSelection(request, saved)) {
+              reconciled = true;
+              setSelected(selectionMap(saved));
+              setInformativeState(saved.mesa.mutable ? 'available' : 'readonly');
+              toast(t('Tu selección quedó guardada.'));
+              reload();
+            } else if (!saved.mesa.mutable) {
+              setInformativeState('readonly');
+            }
+          } catch {
+            // La lectura propia tampoco pudo acreditar la mutación: se conserva el intento local.
+          }
+          if (!reconciled) {
+            const failure = extractApiError(err);
+            if (failure.status === 404) setInformativeState('unsupported');
+            toast(failure.status === 404
+              ? t('Guardar esta selección todavía no está disponible.')
+              : failure.code === 'informative_selection_read_only'
+                ? t('La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.')
+                : t('No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.'));
+          }
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
       setView('pay');
     }
   }
@@ -2588,7 +2666,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // El corte DECLARADO por el dueño: sólo con el riel autoritativo. Ver el
       // porqué en la prop de `MesaDetailView`.
       corteDeclarado={corteDeclarado}
-      onLeave={() => navigate('home')}
+      informativeReadOnly={mesa.division_mode === 'igual' && informativeState === 'readonly'}
+      informativeUnavailable={mesa.division_mode === 'igual'
+        && (informativeState === 'unsupported' || informativeState === 'error')}
       onOpenInvite={() => setInviteOpen(true)}
       onCopyInvitationLink={() => void copyInvitationLink()}
       onBack={() => goBack('mesas')}

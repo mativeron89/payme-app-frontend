@@ -674,6 +674,8 @@ export interface MesaDetail {
    * dueño: cualquier otro valor se trata como cierre monetario.
    */
   closure_reason?: string | null;
+  /** v2.123.0 · capability runtime de la persistencia informativa. */
+  informative_selection_capability?: unknown;
   items: MesaItem[];
   division_slots?: DivisionSlot[];
   active_staff: ActiveStaff[];
@@ -682,6 +684,44 @@ export interface MesaDetail {
 
 export interface MesaDetailResponse {
   mesa: MesaDetail;
+}
+
+// ─── Selección informativa v2 (routes/mesas.js) ───────────
+
+export const INFORMATIVE_SELECTION_CONTRACT = 'payme.app.informative-selections/v2' as const;
+export type InformativeFractionBps = 2500 | 3333 | 5000 | 6667 | 7500 | 10000;
+
+export interface InformativeSelectionItem {
+  item_id: string;
+  declared_fraction_bps: InformativeFractionBps;
+}
+
+export interface InformativeSelectionCapability {
+  contract: typeof INFORMATIVE_SELECTION_CONTRACT;
+  supported: boolean;
+  mutable: boolean;
+}
+
+export interface InformativeSelectionResponse {
+  contract: typeof INFORMATIVE_SELECTION_CONTRACT;
+  mesa: {
+    code: string;
+    division_mode: 'igual';
+    status: string;
+    mutable: boolean;
+    closure_reason: string | null;
+  };
+  selection: {
+    source: 'informative';
+    items: InformativeSelectionItem[];
+    updated_at: string | null;
+  };
+  coverage: { all_items_selected: boolean };
+}
+
+export interface ReplaceInformativeSelectionRequest {
+  items: InformativeSelectionItem[];
+  confirm_closure: true;
 }
 
 /** POST /api/mesas — request (schemas.createMesa, A-1 + D4 v2.16). */

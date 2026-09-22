@@ -969,4 +969,13 @@ export const EN: Record<string, string> = {
   "Se eligieron todos los consumos.": "Every item was chosen.",
   "La cerraste tú.": "You closed it.",
   "La cerró quien la organizó.": "The organizer closed it.",
+  // v2.123.0 · selección informativa propia.
+  "Guardar esta selección todavía no está disponible.": "Saving this selection isn't available yet.",
+  "Estamos leyendo tu selección. Intenta de nuevo en un momento.": "We're loading your selection. Try again in a moment.",
+  "Esta mesa ya cerró. Tu selección queda disponible sólo para consulta.": "This table is closed. Your saved selection is read-only.",
+  "Tu selección quedó guardada.": "Your selection was saved.",
+  "La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.": "The table is closed. We kept your local selection without replacing the saved one.",
+  "No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.": "We couldn't confirm the save. We kept your selection so you can retry.",
+  "Esta mesa ya cerró. Lo guardado es sólo de lectura.": "This table is closed. Saved data is read-only.",
+  "Esta versión del servicio no puede guardar la selección informativa. Nada se marcó como guardado.": "This service version can't save the informative selection. Nothing was marked as saved.",
 };
