@@ -11,6 +11,30 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.187.0 — Listo deja una confirmación fija; el nombre centrado con el logo (2026-09-22)
+
+Orden `AF-LISTO-CONFIRMACION-FRACCIONES-HEADER-CLAUDE-20260922`, sobre `75fdcff7`.
+Partes P1 y P2; la P3 (fracciones en «igual» según N con «Otro») queda para una
+orden sucesora porque el dueño necesita una migración aprobada por Mati.
+
+- **Listo (P1).** En producción el guardado funcionaba (cuatro PUT 200 en diez
+  segundos) pero el único rastro era un toast de 2,4 s sobre una pantalla que
+  no cambiaba, y se leía como «no pasa nada». Ahora, tras un PUT confirmado, la
+  misma pantalla deja una nota fija «Tu selección quedó guardada. Si cambias
+  algo, vuelve a tocar «Listo».» y el círculo pasa a «Guardado» deshabilitado
+  hasta la primera edición; al recargar con selección guardada se ve lo mismo.
+  Sin navegar. El toast desaparece y con él su traducción huérfana.
+- **Header (P2).** Decisión de Mati: el nombre centrado verticalmente con el
+  logo. El `translateY(-1px)` de M04 subía la tinta del nombre 1,5 px por
+  encima del cuadrado azul; se retira. Guarda nueva: en cada pantalla del censo
+  la tinta del nombre queda a ≤0,6 px del centro del cuadrado y de las
+  mayúsculas de «PayMe». Medido en Chromium; Mati lo confirma en su iPhone.
+
+Observación declarada: el censo visual mide en «12-estadisticas» una tarjeta de
+título que cambia a la burbuja con selector cuando llega la respuesta del mock,
+así que sólo pasa si mide antes; falló una vez en una corrida local en paralelo y
+pasa sola y en CI (1 worker). No se toca en esta orden.
+
 ## 0.186.0 — «Fecha de nacimiento» en el perfil, una sola vez, para que se vean las fotos (2026-09-22)
 
 Orden `AF-M03-FECHA-DE-NACIMIENTO-CLAUDE-20260922`, base `afc37ce` (= `origin/main`,
