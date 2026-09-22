@@ -367,6 +367,16 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   /** V04 · sólo el lock nuevo necesita denominador; pagos conservan su schema. */
   const [selectedDenominators, setSelectedDenominators] = useState<Map<string, number>>(new Map());
   const [informativeState, setInformativeState] = useState<InformativeSelectionState>('idle');
+  /**
+   * P1 (`AF-LISTO-CONFIRMACION-FRACCIONES-HEADER-CLAUDE-20260922`) · lo
+   * guardado coincide con lo que se ve. Un toast de 2,4 s sobre una pantalla
+   * que no cambia se leía como «no pasa nada» (diagnóstico del 22/09 en
+   * producción: cuatro PUT 200 en diez segundos). Nace `true` cuando el GET
+   * propio trae una selección guardada o cuando un PUT confirma; vuelve a
+   * `false` con la primera edición local. Sólo tiene sentido en igualdad con
+   * el riel apagado: la vista lo ignora fuera de ese caso.
+   */
+  const [informativeSaved, setInformativeSaved] = useState(false);
   /** AF-25 · n80 · el ítem que se está soltando; `null` sin pedido en vuelo. */
   const [soltando, setSoltando] = useState<string | null>(null);
   const soltandoRef = useRef(false);
@@ -475,7 +485,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   useEffect(() => {
     identityEpochRef.current.next();
     mesaReadEpochRef.current.next();
-    setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setInformativeState('idle'); setLockTokens([]);
+    setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setInformativeState('idle'); setInformativeSaved(false); setLockTokens([]);
     // La mesa nueva también nace sin elegir: acá estaba el segundo `15`.
     setTip(NO_TIP_CHOSEN); setCustomTipStr(''); setStaffId(null);
     setTipSelectorFailed(false); setTipPulse(false); setMetodoPulse(false);
@@ -560,6 +570,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
                 || !identityEpochRef.current.isCurrent(identityEpoch)) return;
             setSelected(selectionMap(saved));
             setSelectedDenominators(new Map());
+            // `updated_at` sólo existe con filas guardadas; un vaciado deliberado
+            // recién confirmado conserva su `true` hasta la próxima edición.
+            setInformativeSaved((prev) => prev || saved.selection.updated_at !== null);
             setInformativeState(saved.mesa.mutable ? 'available' : 'readonly');
           }).catch(() => {
             if (mesaReadEpochRef.current.isCurrent(requestEpoch)
@@ -751,6 +764,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     }
     setSelected(next);
     setSelectedDenominators(nextDenominators);
+    setInformativeSaved(false);
   }
 
   function setFraction(id: string, bps: number) {
@@ -768,6 +782,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     const nextDenominators = new Map(selectedDenominators);
     nextDenominators.delete(id);
     setSelectedDenominators(nextDenominators);
+    setInformativeSaved(false);
   }
 
   function setDenominator(id: string, denominator: number) {
@@ -976,7 +991,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           // Si sigue abierta, la recarga debe terminar antes de permitir otra
           // edición: así su GET tardío no puede pisar un borrador posterior.
           setInformativeState(saved.mesa.mutable ? 'loading' : 'readonly');
-          toast(t('Tu selección quedó guardada.'));
+          // P1 · la confirmación es la nota fija de la vista, no un toast de
+          // 2,4 s: lo guardado se ve hasta que la persona cambie algo.
+          setInformativeSaved(true);
           reload();
         } catch (err) {
           let reconciled = false;
@@ -986,7 +1003,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               reconciled = true;
               setSelected(selectionMap(saved));
               setInformativeState(saved.mesa.mutable ? 'loading' : 'readonly');
-              toast(t('Tu selección quedó guardada.'));
+              setInformativeSaved(true);
               reload();
             } else if (!saved.mesa.mutable) {
               setInformativeState('readonly');
@@ -2700,6 +2717,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       corteDeclarado={corteDeclarado}
       informativeReadOnly={informativeReadOnly}
       informativeClosedWithoutCharges={!!informativePersistenceActive && cerroSinCobros(mesa)}
+      // Sólo mientras la mesa sigue editable: cerrada/lectura tienen su propia nota.
+      informativeSaved={!!informativePersistenceActive && informativeSaved
+        && (informativeState === 'available' || informativeState === 'loading')}
       informativeEditingBlocked={informativeEditingBlocked}
       informativeLoading={!!informativePersistenceActive
         && (informativeState === 'idle' || informativeState === 'loading')}

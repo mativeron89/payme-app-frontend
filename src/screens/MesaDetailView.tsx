@@ -108,6 +108,13 @@ export interface MesaDetailViewProps {
    * dinero: lo niega.
    */
   informativeClosedWithoutCharges: boolean;
+  /**
+   * P1 · lo que se ve coincide con lo guardado y no hubo edición después: la
+   * vista deja una nota fija y el círculo pasa a «Guardado», deshabilitado,
+   * hasta que la persona toque algo. Es la única señal de éxito: el toast de
+   * 2,4 s se leía como «no pasa nada».
+   */
+  informativeSaved: boolean;
   /** Bloquea filas/fracciones durante lectura, escritura y recarga. */
   informativeEditingBlocked: boolean;
   informativeLoading: boolean;
@@ -402,6 +409,7 @@ export function MesaDetailView({
   corteDeclarado,
   informativeReadOnly,
   informativeClosedWithoutCharges,
+  informativeSaved,
   informativeEditingBlocked,
   informativeLoading,
   informativeUnsupported,
@@ -585,7 +593,12 @@ export function MesaDetailView({
             <div>{t('Esta mesa ya cerró. Lo guardado es sólo de lectura.')}</div>
           </div>
         )}
-        {!esConsumo && informativeLoading && (
+        {!esConsumo && informativeSaved && (
+          <div className="note note-teal" role="status" style={{ marginBottom: 12 }}>
+            {t('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».')}
+          </div>
+        )}
+        {!esConsumo && informativeLoading && !informativeSaved && (
           <div className="note note-teal" role="status" style={{ marginBottom: 12 }}>
             {t('Estamos leyendo tu selección guardada…')}
           </div>
@@ -859,7 +872,9 @@ export function MesaDetailView({
         active={null}
         above={miParte}
         center={pagosCortados ? {
-          label: t('Listo'),
+          // P1 · con lo guardado a la vista el círculo lo dice y no se puede
+          // volver a enviar lo mismo; la primera edición lo devuelve a «Listo».
+          label: !esConsumo && informativeSaved ? t('Guardado') : t('Listo'),
           icon: 'check',
           /**
            * D-R8 · con el corte el círculo **registra la selección** y termina
@@ -872,7 +887,7 @@ export function MesaDetailView({
           onClick: () => {
             onGoToPay();
           },
-          disabled: busy || (!esConsumo && informativeEditingBlocked),
+          disabled: busy || (!esConsumo && (informativeEditingBlocked || informativeSaved)),
         } : {
           label: t('Continuar'),
           icon: 'arrow-right',

@@ -361,6 +361,7 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
       corteDeclarado: true,
       informativeReadOnly: false,
       informativeClosedWithoutCharges: false,
+      informativeSaved: false,
       informativeEditingBlocked: false,
       informativeLoading: false,
       informativeUnsupported: false,
@@ -431,6 +432,29 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
     const conCobros = vista({ mesa: igual, informativeReadOnly: true, informativeClosedWithoutCharges: false });
     expect(conCobros).toContain('Esta mesa ya cerró. Lo guardado es sólo de lectura.');
     expect(conCobros).not.toContain('Esta mesa cerró sin cobros');
+  });
+
+  /**
+   * P1 · después de guardar, la vista lo dice de forma fija y el círculo pasa a
+   * «Guardado» deshabilitado; sin guardado (o tras editar) vuelve «Listo».
+   * En consumo la prop no tiene efecto: ahí no hay selección informativa.
+   */
+  it('con la selección guardada la nota es fija y el círculo dice «Guardado» deshabilitado', () => {
+    const igual: MesaDetail = { ...MESA, division_mode: 'igual' };
+    const guardado = vista({ mesa: igual, informativeSaved: true });
+    expect(guardado).toContain('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».');
+    // El círculo deshabilitado: `disabled` precede al `aria-label` en el markup.
+    expect(guardado).toContain('disabled="" aria-label="Guardado"');
+    expect(guardado).not.toContain('aria-label="Listo"');
+
+    const sinGuardar = vista({ mesa: igual, informativeSaved: false });
+    expect(sinGuardar).toContain('aria-label="Listo"');
+    expect(sinGuardar).not.toContain('Tu selección quedó guardada.');
+    expect(sinGuardar).not.toContain('aria-label="Guardado"');
+
+    const consumo = vista({ informativeSaved: true });
+    expect(consumo).toContain('aria-label="Listo"');
+    expect(consumo).not.toContain('Tu selección quedó guardada.');
   });
 
   /**

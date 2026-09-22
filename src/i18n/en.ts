@@ -983,6 +983,8 @@ export const EN: Record<string, string> = {
   "Estamos leyendo tu selección. Intenta de nuevo en un momento.": "We're loading your selection. Try again in a moment.",
   "Esta mesa ya cerró. Tu selección queda disponible sólo para consulta.": "This table is closed. Your saved selection is read-only.",
   "Tu selección quedó guardada.": "Your selection was saved.",
+  "Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».": "Your selection was saved. If you change anything, tap “Done” again.",
+  "Guardado": "Saved",
   "La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.": "The table is closed. We kept your local selection without replacing the saved one.",
   "No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.": "We couldn't confirm the save. We kept your selection so you can retry.",
   "Esta mesa ya cerró. Lo guardado es sólo de lectura.": "This table is closed. Saved data is read-only.",

@@ -294,4 +294,43 @@ test.describe('Listo · selección informativa v2', () => {
       confirm_closure: true,
     });
   });
+
+  /**
+   * P1 (`AF-LISTO-CONFIRMACION-FRACCIONES-HEADER-CLAUDE-20260922`) · en
+   * producción el éxito sólo dejaba un toast de 2,4 s y la persona tocaba
+   * «Listo» cuatro veces. Ahora lo guardado queda a la vista: nota fija y
+   * círculo «Guardado» deshabilitado, sin navegar; la recarga lo conserva y la
+   * primera edición devuelve «Listo».
+   */
+  test('Listo deja una confirmación fija y «Guardado» hasta editar; la recarga la conserva', async ({ page }) => {
+    await abrirInformativa(page, 'En partes iguales', 2);
+    const first = page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true });
+    const second = page.getByRole('button', { name: 'Risotto ai Funghi', exact: true });
+    const nota = page.getByText('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».');
+    const guardado = page.getByRole('button', { name: 'Guardado', exact: true });
+    const listo = page.getByRole('button', { name: 'Listo', exact: true });
+
+    await expect(nota).toHaveCount(0);
+    await first.click();
+    await listo.click();
+    await expect(nota).toBeVisible();
+    await expect(guardado).toBeDisabled();
+    await expect(listo).toHaveCount(0);
+    // Sin navegar: la misma pantalla, con la fila guardada a la vista.
+    await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
+    await expect(first).toHaveAttribute('aria-pressed', 'true');
+    // Una sola señal: no hay toast además de la nota.
+    await expect(page.locator('.toast:not(.toast-hidden)')).toHaveCount(0);
+
+    await page.reload();
+    await expect(nota).toBeVisible();
+    await expect(guardado).toBeDisabled();
+    await expect(first).toHaveAttribute('aria-pressed', 'true');
+
+    // La primera edición vuelve a «Listo» y retira la nota: lo que se ve ya no es lo guardado.
+    await second.click();
+    await expect(nota).toHaveCount(0);
+    await expect(guardado).toHaveCount(0);
+    await expect(listo).toBeEnabled();
+  });
 });
