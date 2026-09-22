@@ -2862,9 +2862,12 @@ body {
   font-size: var(--fs-sm);
   /* V01 · centrar la línea real, no una caja de 34px con aire tipográfico. */
   line-height: 1;
-  /* Corrección óptica: la x-height de DM Sans quedaba apenas por debajo del
-     centro percibido del wordmark, aunque las cajas geométricas coincidían. */
-  transform: translateY(-1px);
+  /* Decisión de Mati 2026-09-22 (nombre centrado verticalmente con el logo):
+     sin desplazamientos ópticos. Medido a 390 px con canvas sobre la tinta
+     real: la tinta de «Mati» centra en 36.0 px, el cuadrado azul en 36.5 y la
+     banda de mayúsculas de «PayMe» en 36.2. El `translateY(-1px)` de M04 la
+     subía a 35.0, un píxel y medio por encima del cuadrado: era la causa de
+     que se leyera alta. La guarda vive en `af-rediseno-12-censo-visual`. */
   color: var(--on-dark-muted);
   overflow: hidden;
   text-overflow: ellipsis;

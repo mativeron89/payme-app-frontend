@@ -43,7 +43,23 @@ describe('cabeceras autenticadas · identidad propia por nombre', () => {
 
   it('M04 · mantiene una sola caja óptica para marca y nombre', () => {
     expect(GLOBAL_CSS).toMatch(/\.hdr-user-group\s*\{[\s\S]*?align-items:\s*center;[\s\S]*?height:\s*34px;/);
-    expect(GLOBAL_CSS).toMatch(/\.hdr-user\s*\{[\s\S]*?transform:\s*translateY\(-1px\);/);
+  });
+
+  /**
+   * Decisión de Mati 2026-09-22 («Centrado verticalmente con el logo»: el centro
+   * del nombre a la altura del centro del cuadrado azul y de «PayMe»). El
+   * `translateY(-1px)` de M04 subía la tinta del nombre 1,5 px por encima del
+   * cuadrado; sin desplazamientos el centrado de flex ya la deja a 0,5 px del
+   * cuadrado y a 0,2 px de las mayúsculas de «PayMe» (medido con canvas; la
+   * guarda en píxeles vive en `af-rediseno-12-censo-visual`). Cualquier
+   * `transform`/`margin` vertical nuevo sobre `.hdr-user` vuelve a mover eso.
+   */
+  it('el nombre no lleva desplazamiento vertical propio: lo centra la caja de 34px', () => {
+    const regla = GLOBAL_CSS.match(/\.hdr-user\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(regla).toContain('align-self: center;');
+    expect(regla).not.toMatch(/transform\s*:/);
+    expect(regla).not.toMatch(/margin-(top|bottom)\s*:/);
+    expect(regla).not.toMatch(/(top|bottom)\s*:\s*-?\d/);
   });
 
   // AF-29 (2026-09-19): 17 → 18 por `TusRestaurantesScreen` (2b), y AF-31:

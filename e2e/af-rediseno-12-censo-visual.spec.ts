@@ -42,6 +42,46 @@ async function acreditar(
   expect((identityBox?.x ?? 0) - ((markBox?.x ?? 0) + (markBox?.width ?? 0))).toBe(10);
   expect(bellBox?.width).toBeGreaterThanOrEqual(44);
   expect(bellBox?.height).toBeGreaterThanOrEqual(44);
+  // Decisión de Mati 2026-09-22 («Centrado verticalmente con el logo», orden
+  // AF-LISTO-CONFIRMACION-FRACCIONES-HEADER-CLAUDE-20260922): el centro de la
+  // TINTA del nombre a la altura del centro del cuadrado azul y de la banda de
+  // mayúsculas de «PayMe» (el descendente de la «y» queda fuera, regla del
+  // lockup 283d88d). Se mide la tinta con canvas, no la caja: las cajas ya
+  // coincidían cuando Mati lo veía desalineado. Medido: 36.0 vs 36.5 y 36.2.
+  const tinta = await page.evaluate(() => {
+    const baselineOf = (el: HTMLElement) => {
+      const probe = document.createElement('span');
+      probe.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline;';
+      el.appendChild(probe);
+      const y = probe.getBoundingClientRect().y;
+      probe.remove();
+      return y;
+    };
+    const ink = (el: HTMLElement, text: string) => {
+      const cs = getComputedStyle(el);
+      const ctx = document.createElement('canvas').getContext('2d')!;
+      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const m = ctx.measureText(text);
+      return { asc: m.actualBoundingBoxAscent, desc: m.actualBoundingBoxDescent };
+    };
+    const user = document.querySelector('.screen > .hdr .hdr-user') as HTMLElement | null;
+    const logo = document.querySelector('.screen > .hdr .hdr-logo') as HTMLElement | null;
+    const square = document.querySelector('.screen > .hdr .hdr-mark svg rect');
+    if (!user || !logo || !square) return null;
+    const sq = square.getBoundingClientRect();
+    const ub = baselineOf(user);
+    const lb = baselineOf(logo);
+    const ui = ink(user, user.innerText);
+    const caps = ink(logo, 'PM');
+    return {
+      squareCy: (sq.top + sq.bottom) / 2,
+      userInkCy: ((ub - ui.asc) + (ub + ui.desc)) / 2,
+      logoCapCy: lb - caps.asc / 2,
+    };
+  });
+  expect(tinta, 'la cabecera tiene nombre, wordmark y cuadrado').not.toBeNull();
+  expect(Math.abs(tinta!.userInkCy - tinta!.squareCy)).toBeLessThanOrEqual(0.6);
+  expect(Math.abs(tinta!.userInkCy - tinta!.logoCapCy)).toBeLessThanOrEqual(0.6);
   await expect(header).toHaveCSS('padding-top', '14px');
   await expect(header).toHaveCSS('padding-right', '16px');
   await expect(header).toHaveCSS('padding-bottom', '56px');
