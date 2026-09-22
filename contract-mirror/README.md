@@ -12,8 +12,9 @@ desde `src/` y nunca se corrige a mano.
   **`5cef0b7d9d6de3fad4abfa00cdec160599f59906`** (App Backend **v2.124.0**,
   AB-FRACCIONES-IGUAL: dominio cerrado de 22 fracciones informativas, regla por
   N única para consumo e «igual», migración `informative_fraction_v3`).
-- Commit del que se tomó el inventario autoritativo: **`1927ba90`**
-  (`origin/main` del owner; sólo regenera el inventario sobre `5cef0b7`,
+- Commit del que se tomó el inventario autoritativo:
+  **`1927ba90ba6b2885574c7efb05d4f02f77991c1d`** (`origin/main` del owner,
+  CI success, **no desplegado**; sólo regenera el inventario sobre `5cef0b7`,
   `git diff --stat 5cef0b7..1927ba90` no toca ningún archivo espejado).
 
 🆕 **115 archivos espejados**: se suma `db/migrate_informative_fractions_v2.124.0.sql`

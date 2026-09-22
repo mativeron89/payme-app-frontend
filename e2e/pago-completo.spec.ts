@@ -89,7 +89,9 @@ test.describe('el camino de pago completo', () => {
 
     // Marcar lo consumido sigue vivo y sigue sin mover un peso (H-14).
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-    await page.getByRole('radio', { name: '½', exact: true }).click();
+    // v2.124.0 (fracciones en «igual» según N, Decisión de Mati e9aa0450…): la
+    // mesa nace con N=4, así que bajo el corte el selector es el natural.
+    await page.getByRole('radio', { name: '1/2', exact: true }).click();
     await expect(page.locator('.mi-frac-amt')).toHaveCount(0);
     const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
     await expect(filaMiParte).toContainText('$210.00');
