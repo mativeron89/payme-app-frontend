@@ -360,7 +360,11 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
       // también es true mientras el riel está `pending`.
       corteDeclarado: true,
       informativeReadOnly: false,
-      informativeUnavailable: false,
+      informativeEditingBlocked: false,
+      informativeLoading: false,
+      informativeUnsupported: false,
+      informativeLoadError: false,
+      onRetryInformative: () => undefined,
       busy: false,
       inviteOpen: false,
       onToggleItem: () => undefined,

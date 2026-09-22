@@ -100,8 +100,14 @@ export interface MesaDetailViewProps {
   corteDeclarado: boolean;
   /** Selección v2 cerrada: se muestra lo propio pero no se permite editar. */
   informativeReadOnly: boolean;
-  /** Capability/ruta v2 ausente o ilegible: nunca se presenta como guardada. */
-  informativeUnavailable: boolean;
+  /** Bloquea filas/fracciones durante lectura, escritura y recarga. */
+  informativeEditingBlocked: boolean;
+  informativeLoading: boolean;
+  /** Capability/ruta v2 ausente: nunca se presenta como guardada. */
+  informativeUnsupported: boolean;
+  /** GET propio falló: se recupera antes de permitir cualquier reemplazo. */
+  informativeLoadError: boolean;
+  onRetryInformative: () => void;
   busy: boolean;
   inviteOpen: boolean;
   onToggleItem: (id: string) => void;
@@ -387,7 +393,11 @@ export function MesaDetailView({
   pagosCortados,
   corteDeclarado,
   informativeReadOnly,
-  informativeUnavailable,
+  informativeEditingBlocked,
+  informativeLoading,
+  informativeUnsupported,
+  informativeLoadError,
+  onRetryInformative,
   busy,
   inviteOpen,
   onToggleItem,
@@ -563,9 +573,22 @@ export function MesaDetailView({
             {t('Esta mesa ya cerró. Lo guardado es sólo de lectura.')}
           </div>
         )}
-        {!esConsumo && informativeUnavailable && (
+        {!esConsumo && informativeLoading && (
+          <div className="note note-teal" role="status" style={{ marginBottom: 12 }}>
+            {t('Estamos leyendo tu selección guardada…')}
+          </div>
+        )}
+        {!esConsumo && informativeUnsupported && (
           <div className="note note-amber" style={{ marginBottom: 12 }}>
             {t('Esta versión del servicio no puede guardar la selección informativa. Nada se marcó como guardado.')}
+          </div>
+        )}
+        {!esConsumo && informativeLoadError && (
+          <div className="note note-amber" role="alert" style={{ marginBottom: 12 }}>
+            {t('No pudimos leer tu selección guardada. No vamos a reemplazarla sin recuperarla primero.')}
+            <button type="button" className="btn btn-ghost btn-sm btn-fit" onClick={onRetryInformative}>
+              {t('Reintentar lectura')}
+            </button>
           </div>
         )}
         {esConsumo && nothingLeft && (
@@ -602,7 +625,7 @@ export function MesaDetailView({
             ).some((denominator) => denominatorBps(denominator) <= i.remaining_bps);
             // En partes iguales marcar es informativo y no reserva nada, así
             // que ahí NUNCA se bloquea una fila: el monto no depende de esto.
-            const disabled = (esConsumo && bloqueado) || (!esConsumo && informativeReadOnly);
+            const disabled = (esConsumo && bloqueado) || (!esConsumo && informativeEditingBlocked);
             const precio =
               sel && esConsumo && myBpsSel < 10000
                 ? fractionPreview(fullPrice, myBpsSel, i.remaining_bps)
@@ -614,7 +637,7 @@ export function MesaDetailView({
                   className={`mi-row ${sel ? 'sel' : ''}${soltable ? ' has-release' : ''}`}
                   onClick={() => !disabled && onToggleItem(i.id)}
                   disabled={disabled}
-                  aria-pressed={disabled ? undefined : sel}
+                  aria-pressed={!esConsumo ? sel : disabled ? undefined : sel}
                   aria-label={`${i.name}${i.quantity > 1 ? ` por ${i.quantity}` : ''}${tag ? t(', {0}', tag) : ''}`}
                 >
                   <span
@@ -676,7 +699,7 @@ export function MesaDetailView({
                             type="button"
                             className={`seg-btn ${myBpsSel === f.bps ? 'on' : ''}`}
                             onClick={() => onSetFraction(i.id, f.bps)}
-                            disabled={!esConsumo && informativeReadOnly}
+                            disabled={!esConsumo && informativeEditingBlocked}
                             role="radio"
                             aria-checked={myBpsSel === f.bps}
                             aria-label={f.bps >= 10000 ? t('Entero') : bpsLabel(f.bps)}
@@ -817,9 +840,9 @@ export function MesaDetailView({
           onConfirmar={() => { void onCerrarMesa().finally(() => setConfirmandoCerrarMesa(false)); }}
         />
       )}
-      {/* CORTE DEL VIERNES · el círculo no puede ser un botón muerto (§5 bis ·
-          E): sin pago al que continuar, cierra el flujo y vuelve a Inicio. El
-          camino a `pay` queda abajo, dormido, para cuando el corte se levante. */}
+      {/* Con pagos apagados, Listo es el único acto explícito de persistencia.
+          No navega ni cobra; cerrado/lectura/error lo deshabilitan hasta que el
+          estado propio sea conocido. */}
       <AppBottomBar
         active={null}
         above={miParte}
@@ -830,14 +853,14 @@ export function MesaDetailView({
            * D-R8 · con el corte el círculo **registra la selección** y termina
            * el recorrido; antes salía sin registrar nada, y el aviso que la
            * persona lee —«tu selección queda registrada»— habría sido falso.
-           * Sin selección no hay nada que registrar y se sale, como antes.
-           * V05 conserva este único acto explícito: marcar el último ítem sólo
-           * cambia la selección local y nunca envía por sí mismo.
+           * Incluso vacío se envía como reemplazo deliberado, pero sólo después
+           * de una lectura acreditada. Marcar el último ítem continúa siendo
+           * local y nunca envía por sí mismo.
            */
           onClick: () => {
             onGoToPay();
           },
-          disabled: busy || (!esConsumo && informativeReadOnly),
+          disabled: busy || (!esConsumo && informativeEditingBlocked),
         } : {
           label: t('Continuar'),
           icon: 'arrow-right',

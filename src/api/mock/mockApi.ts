@@ -1541,8 +1541,19 @@ function informativePaymentsDisabled(): boolean {
   return (modoMonetarioMock() as { payments_enabled?: unknown }).payments_enabled === false;
 }
 
+function informativeCoverage(mesa: MockMesa): boolean {
+  const prefix = `${mesa.id}:`;
+  const selectedIds = new Set(
+    Object.entries(state.informativeSelections)
+      .filter(([key]) => key.startsWith(prefix))
+      .flatMap(([, selection]) => selection.items.map((item) => item.item_id)),
+  );
+  return mesa.items.length > 0 && mesa.items.every((item) => selectedIds.has(item.id));
+}
+
 function informativeResponse(mesa: MockMesa): InformativeSelectionResponse {
-  const saved = state.informativeSelections[informativeKey(mesa)] ?? { items: [], updated_at: null };
+  const own = state.informativeSelections[informativeKey(mesa)];
+  const saved = own?.items.length ? own : { items: [], updated_at: null };
   return {
     contract: INFORMATIVE_CONTRACT,
     mesa: {
@@ -1553,10 +1564,7 @@ function informativeResponse(mesa: MockMesa): InformativeSelectionResponse {
       closure_reason: mesa.closure_reason ?? null,
     },
     selection: { source: 'informative', items: [...saved.items], updated_at: saved.updated_at },
-    coverage: {
-      all_items_selected: mesa.items.length > 0
-        && mesa.items.every((item) => saved.items.some((selected) => selected.item_id === item.id)),
-    },
+    coverage: { all_items_selected: informativeCoverage(mesa) },
   };
 }
 
@@ -1607,11 +1615,14 @@ export async function mockReplaceInformativeSelection(
   }
   if (mesa.status !== 'open' && !exactReplay) return fail(409, 'informative_selection_read_only');
   if (!exactReplay) {
-    state.informativeSelections[informativeKey(mesa)] = {
-      items,
-      updated_at: new Date().toISOString(),
-    };
-    if (mesa.items.length > 0 && mesa.items.every((item) => ids.has(item.id))) {
+    if (items.length === 0) delete state.informativeSelections[informativeKey(mesa)];
+    else {
+      state.informativeSelections[informativeKey(mesa)] = {
+        items,
+        updated_at: new Date().toISOString(),
+      };
+    }
+    if (informativeCoverage(mesa)) {
       mesa.status = 'expired';
       mesa.closure_reason = 'all_items_selected';
     }

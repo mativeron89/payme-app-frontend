@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { INFORMATIVE_SELECTION_CONTRACT, type InformativeSelectionResponse } from '../api/types';
 import {
   readInformativeSelectionCapability,
+  informativeSelectionEditingBlocked,
   replaceInformativeSelectionRequest,
   sameInformativeSelection,
   selectionMap,
+  showClosedInformativeSelection,
 } from './informativeSelectionView';
 
 const A = 'a0000000-0000-4000-8000-000000000001';
@@ -46,5 +48,24 @@ describe('selección informativa v2 · vista pura', () => {
 
   it('rechaza fracciones inventadas antes de tocar la red', () => {
     expect(() => replaceInformativeSelectionRequest(new Map([[A, 2000]]))).toThrow('informative_fraction_invalid');
+  });
+
+  it('bloquea edición hasta leer, mientras guarda y en readonly/error', () => {
+    for (const state of ['idle', 'loading', 'readonly', 'unsupported', 'error'] as const) {
+      expect(informativeSelectionEditingBlocked({ active: true, state, busy: false, payable: true })).toBe(true);
+    }
+    expect(informativeSelectionEditingBlocked({ active: true, state: 'available', busy: true, payable: true })).toBe(true);
+    expect(informativeSelectionEditingBlocked({ active: true, state: 'available', busy: false, payable: false })).toBe(true);
+    expect(informativeSelectionEditingBlocked({ active: true, state: 'available', busy: false, payable: true })).toBe(false);
+    // Con pagos vivos este contrato informativo no interfiere con el flujo histórico.
+    expect(informativeSelectionEditingBlocked({ active: false, state: 'readonly', busy: true, payable: false })).toBe(false);
+  });
+
+  it('mantiene Mis ítems alcanzable al cerrar si la selección puede leerse o reintentarse', () => {
+    expect(showClosedInformativeSelection({ active: true, state: 'loading', payable: false })).toBe(true);
+    expect(showClosedInformativeSelection({ active: true, state: 'readonly', payable: false })).toBe(true);
+    expect(showClosedInformativeSelection({ active: true, state: 'error', payable: false })).toBe(true);
+    expect(showClosedInformativeSelection({ active: true, state: 'unsupported', payable: false })).toBe(false);
+    expect(showClosedInformativeSelection({ active: true, state: 'readonly', payable: true })).toBe(false);
   });
 });

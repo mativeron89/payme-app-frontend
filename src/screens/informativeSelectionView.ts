@@ -9,6 +9,32 @@ import { INFORMATIVE_SELECTION_CONTRACT } from '../api/types';
 
 const ALLOWED_BPS = new Set<number>([2500, 3333, 5000, 6667, 7500, 10000]);
 
+export type InformativeSelectionState =
+  | 'idle'
+  | 'loading'
+  | 'available'
+  | 'readonly'
+  | 'unsupported'
+  | 'error';
+
+export function informativeSelectionEditingBlocked(input: {
+  active: boolean;
+  state: InformativeSelectionState;
+  busy: boolean;
+  payable: boolean;
+}): boolean {
+  return input.active && (input.state !== 'available' || input.busy || !input.payable);
+}
+
+export function showClosedInformativeSelection(input: {
+  active: boolean;
+  state: InformativeSelectionState;
+  payable: boolean;
+}): boolean {
+  return input.active && !input.payable
+    && (input.state === 'loading' || input.state === 'readonly' || input.state === 'error');
+}
+
 export function readInformativeSelectionCapability(value: unknown): InformativeSelectionCapability | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;

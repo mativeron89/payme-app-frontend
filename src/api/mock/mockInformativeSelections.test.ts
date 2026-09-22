@@ -49,7 +49,7 @@ describe('mock selección informativa v2', () => {
     });
     const emptied = await mock.mockReplaceInformativeSelection(mesa.code, { items: [], confirm_closure: true });
     expect(emptied.selection.items).toEqual([]);
-    expect(emptied.selection.updated_at).not.toBeNull();
+    expect(emptied.selection.updated_at).toBeNull();
   });
 
   it('al cubrir todos cierra; después sólo admite replay exacto', async () => {
@@ -89,5 +89,34 @@ describe('mock selección informativa v2', () => {
     await expect(mock.mockReplaceInformativeSelection(mesa.code, {
       items: [], confirm_closure: true, extra: true,
     } as never)).rejects.toMatchObject({ status: 400, message: 'validation_error' });
+  });
+
+  it('cobertura es global por mesa, pero GET conserva sólo la selección propia', async () => {
+    const { mock, state, mesa } = await subject();
+    const firstUserId = state.user.id;
+    const firstItems = mesa.items.slice(0, 1);
+    const secondItems = mesa.items.slice(1);
+
+    const first = await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: firstItems.map((item) => ({ item_id: item.id, declared_fraction_bps: 5000 })),
+      confirm_closure: true,
+    });
+    expect(first.coverage.all_items_selected).toBe(false);
+
+    const secondUserId = 'e0000000-0000-4000-8000-000000000999';
+    state.user = { ...state.user, id: secondUserId };
+    const closed = await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: secondItems.map((item) => ({ item_id: item.id, declared_fraction_bps: 10000 })),
+      confirm_closure: true,
+    });
+    expect(closed.coverage.all_items_selected).toBe(true);
+    expect(closed.mesa).toMatchObject({ status: 'expired', closure_reason: 'all_items_selected' });
+    expect(closed.selection.items.map((item) => item.item_id)).toEqual(secondItems.map((item) => item.id).sort());
+
+    state.user = { ...state.user, id: firstUserId };
+    const ownFirst = await mock.mockGetInformativeSelection(mesa.code);
+    expect(ownFirst.coverage.all_items_selected).toBe(true);
+    expect(ownFirst.selection.items).toEqual(first.selection.items);
+    expect(ownFirst.selection.items).not.toEqual(closed.selection.items);
   });
 });

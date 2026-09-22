@@ -81,9 +81,12 @@ import { RequestEpoch } from '../utils/requestEpoch';
 import { writeClipboardText } from '../utils/clipboard';
 import {
   readInformativeSelectionCapability,
+  informativeSelectionEditingBlocked,
   replaceInformativeSelectionRequest,
   sameInformativeSelection,
   selectionMap,
+  showClosedInformativeSelection,
+  type InformativeSelectionState,
 } from './informativeSelectionView';
 
 /**
@@ -363,7 +366,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
   /** V04 · sólo el lock nuevo necesita denominador; pagos conservan su schema. */
   const [selectedDenominators, setSelectedDenominators] = useState<Map<string, number>>(new Map());
-  const [informativeState, setInformativeState] = useState<'idle' | 'loading' | 'available' | 'readonly' | 'unsupported' | 'error'>('idle');
+  const [informativeState, setInformativeState] = useState<InformativeSelectionState>('idle');
   /** AF-25 · n80 · el ítem que se está soltando; `null` sin pedido en vuelo. */
   const [soltando, setSoltando] = useState<string | null>(null);
   const soltandoRef = useRef(false);
@@ -675,6 +678,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   }, [isGuest, guestToken, code]);
 
   const payable = mesa?.status === 'open' || mesa?.status === 'partially_paid';
+  const informativePersistenceActive = mesa?.division_mode === 'igual' && !CORTE.allowsPay;
+  const informativeReadOnly = !!informativePersistenceActive
+    && (!payable || informativeState === 'readonly');
+  const informativeEditingBlocked = informativeSelectionEditingBlocked({
+    active: !!informativePersistenceActive,
+    state: informativeState,
+    busy,
+    payable: !!payable,
+  });
 
   // `FRACTIONS`, `bpsLabel`, `fractionPreview` y esta cuenta viven ahora en
   // `mesaItemsView.ts`: son puras y estaban declaradas adentro del componente,
@@ -701,6 +713,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     // nuevo). Primero se resuelve ese pago.
     if (frozenRef.current) {
       toast(t('Tienes un pago sin confirmar: resuélvelo antes de cambiar tu selección'));
+      return;
+    }
+    if (informativeEditingBlocked) {
+      toast(t('Espera a que terminemos de leer o guardar tu selección.'));
       return;
     }
     const next = new Map(selected);
@@ -740,6 +756,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   function setFraction(id: string, bps: number) {
     if (frozenRef.current) {
       toast(t('Tienes un pago sin confirmar: resuélvelo antes de cambiar tu selección'));
+      return;
+    }
+    if (informativeEditingBlocked) {
+      toast(t('Espera a que terminemos de leer o guardar tu selección.'));
       return;
     }
     const next = new Map(selected);
@@ -938,6 +958,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           toast(t('Estamos leyendo tu selección. Intenta de nuevo en un momento.'));
           return;
         }
+        if (informativeState === 'error') {
+          toast(t('No pudimos leer tu selección guardada. Reintenta la lectura antes de guardar.'));
+          reload();
+          return;
+        }
         if (informativeState === 'readonly') {
           toast(t('Esta mesa ya cerró. Tu selección queda disponible sólo para consulta.'));
           return;
@@ -948,7 +973,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           const saved = await api.replaceInformativeSelection(code, request);
           setSelected(selectionMap(saved));
           setSelectedDenominators(new Map());
-          setInformativeState(saved.mesa.mutable ? 'available' : 'readonly');
+          // Si sigue abierta, la recarga debe terminar antes de permitir otra
+          // edición: así su GET tardío no puede pisar un borrador posterior.
+          setInformativeState(saved.mesa.mutable ? 'loading' : 'readonly');
           toast(t('Tu selección quedó guardada.'));
           reload();
         } catch (err) {
@@ -958,7 +985,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             if (sameInformativeSelection(request, saved)) {
               reconciled = true;
               setSelected(selectionMap(saved));
-              setInformativeState(saved.mesa.mutable ? 'available' : 'readonly');
+              setInformativeState(saved.mesa.mutable ? 'loading' : 'readonly');
               toast(t('Tu selección quedó guardada.'));
               reload();
             } else if (!saved.mesa.mutable) {
@@ -1817,7 +1844,12 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
   );
 
   // ─── Mesa cerrada (A-2) ──────────────────────────────────
-  if (!payable && view === 'detail') {
+  const muestraSeleccionInformativaCerrada = showClosedInformativeSelection({
+    active: !!informativePersistenceActive,
+    state: informativeState,
+    payable: !!payable,
+  });
+  if (!payable && view === 'detail' && !muestraSeleccionInformativaCerrada) {
     // AF-34 · el dueño cierra la mesa sin cobros con `status:'expired'` en los
     // tres motivos; el mock usa `completed` para el de tiempo. Sin este atajo, la
     // mesa cerrada por el organizador caía en «Mesa vencida» con el backend real.
@@ -2666,9 +2698,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // El corte DECLARADO por el dueño: sólo con el riel autoritativo. Ver el
       // porqué en la prop de `MesaDetailView`.
       corteDeclarado={corteDeclarado}
-      informativeReadOnly={mesa.division_mode === 'igual' && informativeState === 'readonly'}
-      informativeUnavailable={mesa.division_mode === 'igual'
-        && (informativeState === 'unsupported' || informativeState === 'error')}
+      informativeReadOnly={informativeReadOnly}
+      informativeEditingBlocked={informativeEditingBlocked}
+      informativeLoading={!!informativePersistenceActive
+        && (informativeState === 'idle' || informativeState === 'loading')}
+      informativeUnsupported={!!informativePersistenceActive && informativeState === 'unsupported'}
+      informativeLoadError={!!informativePersistenceActive && informativeState === 'error'}
+      onRetryInformative={reload}
       onOpenInvite={() => setInviteOpen(true)}
       onCopyInvitationLink={() => void copyInvitationLink()}
       onBack={() => goBack('mesas')}

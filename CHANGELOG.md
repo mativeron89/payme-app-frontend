@@ -11,6 +11,20 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.185.1 — Consulta cerrada y borradores protegidos en Listo (2026-09-22)
+
+Corrección causal `AF-LISTO-CORRECCION-R1-R4-20260922` sobre `e0c4889`, por
+los hallazgos R1–R4 de la revisión estática. **Sin push ni deploy.**
+
+- Una selección propia guardada sigue visible en `Mis ítems` como sólo lectura
+  después del cierre por cobertura y al reingresar tras cierre por tiempo.
+- Una lectura propia fallida bloquea edición y PUT hasta recuperarse; el vaciado
+  deliberado continúa disponible después de una lectura acreditada.
+- Lectura, PUT y recarga bloquean explícitamente filas y fracciones mientras
+  están en vuelo, evitando que una respuesta tardía sustituya un borrador.
+- El mock calcula cobertura por el conjunto de usuarios de la misma mesa,
+  mantiene GET aislado por usuario y devuelve `updated_at:null` tras vaciar.
+
 ## 0.185.0 — Listo persiste la selección informativa propia (2026-09-21)
 
 Orden `AF-LISTO-INTEGRACION-20260921`, sobre `9c78a7b`, con contrato owner

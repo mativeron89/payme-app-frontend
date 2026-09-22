@@ -978,4 +978,9 @@ export const EN: Record<string, string> = {
   "No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.": "We couldn't confirm the save. We kept your selection so you can retry.",
   "Esta mesa ya cerró. Lo guardado es sólo de lectura.": "This table is closed. Saved data is read-only.",
   "Esta versión del servicio no puede guardar la selección informativa. Nada se marcó como guardado.": "This service version can't save the informative selection. Nothing was marked as saved.",
+  "Estamos leyendo tu selección guardada…": "We're loading your saved selection…",
+  "No pudimos leer tu selección guardada. No vamos a reemplazarla sin recuperarla primero.": "We couldn't load your saved selection. We won't replace it until we recover it first.",
+  "Reintentar lectura": "Retry loading",
+  "Espera a que terminemos de leer o guardar tu selección.": "Wait until we finish loading or saving your selection.",
+  "No pudimos leer tu selección guardada. Reintenta la lectura antes de guardar.": "We couldn't load your saved selection. Retry loading before saving.",
 };

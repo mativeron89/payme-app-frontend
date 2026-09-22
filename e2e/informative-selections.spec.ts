@@ -113,8 +113,185 @@ test.describe('Listo · selección informativa v2', () => {
     });
     await page.goto('/#/mesa/PA-3121');
     await expect(page.getByText('Esta versión del servicio no puede guardar la selección informativa. Nada se marcó como guardado.')).toBeVisible();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect(page.getByText('Guardar esta selección todavía no está disponible.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
+    await expect(page.locator('.mi-row').first()).toBeDisabled();
     await expect(page.getByText('Tu selección quedó guardada.')).toHaveCount(0);
+  });
+
+  test('cerrar por cobertura deja Mis ítems visible, readonly y durable al reingresar', async ({ page }) => {
+    await abrirInformativa(page, 'En partes iguales', 2);
+    const rows = page.locator('.mi-row');
+    const total = await rows.count();
+    expect(total).toBeGreaterThan(0);
+    for (let index = 0; index < total; index += 1) await rows.nth(index).click();
+
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
+    await expect(rows).toHaveCount(total);
+    for (let index = 0; index < total; index += 1) {
+      await expect(rows.nth(index)).toBeDisabled();
+      await expect(rows.nth(index)).toHaveAttribute('aria-pressed', 'true');
+    }
+
+    await page.reload();
+    await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
+    await expect(page.locator('.mi-row[aria-pressed="true"]')).toHaveCount(total);
+  });
+
+  test('reentrada tras cierre por tiempo muestra sólo la selección propia sin afirmar cobros', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
+    await ingresar(page);
+    await page.evaluate(async () => {
+      const route = '/src/api/mock/store.ts';
+      const module = await import(/* @vite-ignore */ route);
+      const mesa = module.state.mesas.find((candidate: { code: string }) => candidate.code === 'PA-3121');
+      mesa.status = 'expired';
+      mesa.guarantee_mode = false;
+      mesa.guarantee_method = 'none';
+      mesa.closure_reason = 'time';
+      const item = mesa.items[0];
+      module.state.informativeSelections[`${mesa.id}:${module.state.user.id}`] = {
+        items: [{ item_id: item.id, declared_fraction_bps: 5000 }],
+        updated_at: new Date().toISOString(),
+      };
+      module.persist();
+      location.hash = '#/mesa/PA-3121';
+    });
+
+    await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
+    const saved = page.getByRole('button', { name: 'Omakase para dos', exact: true });
+    await expect(saved).toBeDisabled();
+    await expect(saved).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('radio', { name: '½', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByText(/Cubrió.*garantía/)).toHaveCount(0);
+    await expect(page.getByText('Recibió el restaurante')).toHaveCount(0);
+  });
+
+  test('GET inicial fallido bloquea PUT; recuperar habilita un vaciado deliberado', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
+    await ingresar(page);
+    await page.evaluate(async () => {
+      const storeRoute = '/src/api/mock/store.ts';
+      const store = await import(/* @vite-ignore */ storeRoute);
+      const mesa = store.state.mesas.find((candidate: { code: string }) => candidate.code === 'PA-3121');
+      mesa.status = 'open';
+      mesa.expires_at = new Date(Date.now() + 60 * 60_000).toISOString();
+      mesa.guarantee_mode = false;
+      mesa.guarantee_method = 'none';
+      mesa.closure_reason = null;
+      store.state.informativeSelections[`${mesa.id}:${store.state.user.id}`] = {
+        items: [{ item_id: mesa.items[0].id, declared_fraction_bps: 5000 }],
+        updated_at: new Date().toISOString(),
+      };
+      store.persist();
+
+      const apiRoute = '/src/api/index.ts';
+      const module = await import(/* @vite-ignore */ apiRoute);
+      const originalGet = module.api.getInformativeSelection.bind(module.api);
+      const originalPut = module.api.replaceInformativeSelection.bind(module.api);
+      let failOnce = true;
+      module.api.getInformativeSelection = async (...args: Parameters<typeof originalGet>) => {
+        if (failOnce) {
+          failOnce = false;
+          throw new Error('lectura_inicial_fallida');
+        }
+        return originalGet(...args);
+      };
+      module.api.replaceInformativeSelection = async (...args: Parameters<typeof originalPut>) => {
+        const calls = Number(localStorage.getItem('payme.app.e2e.r2.puts') ?? '0') + 1;
+        localStorage.setItem('payme.app.e2e.r2.puts', String(calls));
+        localStorage.setItem('payme.app.e2e.r2.body', JSON.stringify(args[1]));
+        return originalPut(...args);
+      };
+      location.hash = '#/mesa/PA-3121';
+    });
+
+    await expect(page.getByText('No pudimos leer tu selección guardada. No vamos a reemplazarla sin recuperarla primero.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeDisabled();
+    await expect(page.locator('.mi-row').first()).toBeDisabled();
+    expect(await page.evaluate(() => localStorage.getItem('payme.app.e2e.r2.puts'))).toBeNull();
+
+    await page.getByRole('button', { name: 'Reintentar lectura', exact: true }).click();
+    const saved = page.getByRole('button', { name: 'Omakase para dos', exact: true });
+    await expect(saved).toHaveAttribute('aria-pressed', 'true');
+    await expect(saved).toBeEnabled();
+    await saved.click();
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
+    expect(await page.evaluate(() => ({
+      calls: localStorage.getItem('payme.app.e2e.r2.puts'),
+      body: JSON.parse(localStorage.getItem('payme.app.e2e.r2.body') ?? 'null'),
+    }))).toEqual({ calls: '1', body: { items: [], confirm_closure: true } });
+  });
+
+  test('GET, PUT y recarga diferidos mantienen editores bloqueados hasta su respuesta', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled'));
+    await ingresar(page);
+    await page.evaluate(async () => {
+      const storeRoute = '/src/api/mock/store.ts';
+      const store = await import(/* @vite-ignore */ storeRoute);
+      const mesa = store.state.mesas.find((candidate: { code: string }) => candidate.code === 'PA-3121');
+      mesa.status = 'open';
+      mesa.expires_at = new Date(Date.now() + 60 * 60_000).toISOString();
+      mesa.guarantee_mode = false;
+      mesa.guarantee_method = 'none';
+      mesa.closure_reason = null;
+      delete store.state.informativeSelections[`${mesa.id}:${store.state.user.id}`];
+      store.persist();
+
+      const apiRoute = '/src/api/index.ts';
+      const module = await import(/* @vite-ignore */ apiRoute);
+      const originalGet = module.api.getInformativeSelection.bind(module.api);
+      const originalPut = module.api.replaceInformativeSelection.bind(module.api);
+      let getCalls = 0;
+      module.api.getInformativeSelection = async (...args: Parameters<typeof originalGet>) => {
+        getCalls += 1;
+        const phase = getCalls === 1 ? 'initial' : 'reload';
+        localStorage.setItem(`payme.app.e2e.r3.${phase}.waiting`, '1');
+        return new Promise((resolve, reject) => {
+          (window as unknown as Record<string, unknown>)[`release_${phase}`] = () => {
+            void originalGet(...args).then(resolve, reject);
+          };
+        });
+      };
+      module.api.replaceInformativeSelection = async (...args: Parameters<typeof originalPut>) => {
+        const saved = await originalPut(...args);
+        localStorage.setItem('payme.app.e2e.r3.put.waiting', '1');
+        localStorage.setItem('payme.app.e2e.r3.put.body', JSON.stringify(args[1]));
+        return new Promise((resolve) => {
+          (window as unknown as Record<string, unknown>).release_put = () => resolve(saved);
+        });
+      };
+      location.hash = '#/mesa/PA-3121';
+    });
+
+    const first = page.getByRole('button', { name: 'Omakase para dos', exact: true });
+    const second = page.getByRole('button', { name: 'Sashimi mixto', exact: true });
+    await expect(page.getByText('Estamos leyendo tu selección guardada…')).toBeVisible();
+    await expect(first).toBeDisabled();
+    await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_initial)());
+    await expect(first).toBeEnabled();
+
+    await first.click();
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.put.waiting'))).toBe('1');
+    await expect(second).toBeDisabled();
+    await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_put)());
+
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.reload.waiting'))).toBe('1');
+    await expect(second).toBeDisabled();
+    await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_reload)());
+    await expect(second).toBeEnabled();
+    await expect(first).toHaveAttribute('aria-pressed', 'true');
+    await expect(second).toHaveAttribute('aria-pressed', 'false');
+    expect(await page.evaluate(() => JSON.parse(
+      localStorage.getItem('payme.app.e2e.r3.put.body') ?? 'null',
+    ))).toEqual({
+      items: [expect.objectContaining({ declared_fraction_bps: 10000 })],
+      confirm_closure: true,
+    });
   });
 });
