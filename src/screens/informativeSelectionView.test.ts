@@ -47,7 +47,9 @@ describe('selección informativa v2 · vista pura', () => {
   });
 
   it('rechaza fracciones inventadas antes de tocar la red', () => {
-    expect(() => replaceInformativeSelectionRequest(new Map([[A, 2000]]))).toThrow('informative_fraction_invalid');
+    // v2.124.0: 2000 (1/5) entra en el dominio de 22; 2001 no.
+    expect(replaceInformativeSelectionRequest(new Map([[A, 2000]])).items).toEqual([{ item_id: A, declared_fraction_bps: 2000 }]);
+    expect(() => replaceInformativeSelectionRequest(new Map([[A, 2001]]))).toThrow('informative_fraction_invalid');
   });
 
   it('bloquea edición hasta leer, mientras guarda y en readonly/error', () => {

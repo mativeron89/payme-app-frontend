@@ -389,6 +389,7 @@ const createMesa = z.object({
 // ¼ | ⅓ | ½ | ⅔ | ¾ | entero. El server valida contra lo disponible y computa
 // montos sólo con bps/centavos; el mismo shape sirve a consumo e igual.
 const { FRACTION_VALUES } = require('../services/itemClaims');
+const { FRACCIONES_INFORMATIVAS } = require('../services/mesaPresentation');
 const fractionItem = z.object({
   item_id: uuid,
   fraction_bps: safeInt
@@ -419,7 +420,9 @@ const lockItems = z.object({
 
 const informativeSelection = z.object({
   items: z.array(z.object({ item_id: uuid.transform(value => value.toLowerCase()),
-    declared_fraction_bps: z.number().int().refine(v => [2500,3333,5000,6667,7500,10000].includes(v)),
+    // Dominio cerrado (22 valores); cuáles valen para ESTA mesa depende de N y lo
+    // decide services/mesaPresentation.validateInformativeFractions (Decisión 005).
+    declared_fraction_bps: z.number().int().refine(v => FRACCIONES_INFORMATIVAS.includes(v)),
   }).strict()).max(100).refine(items => new Set(items.map(i => i.item_id)).size === items.length),
   confirm_closure: z.literal(true),
 }).strict();

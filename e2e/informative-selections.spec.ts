@@ -42,7 +42,8 @@ test.describe('Listo · selección informativa v2', () => {
     const code = await abrirInformativa(page, 'En partes iguales', 2);
     const first = page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true });
     await first.click();
-    await page.getByRole('radio', { name: '½', exact: true }).click();
+    // v2.124.0: con N=2 el selector es el natural (1/1..1/N), como en consumo.
+    await page.getByRole('radio', { name: '1/2', exact: true }).click();
 
     // La mutación llega al mock, pero su respuesta se pierde. La pantalla sólo
     // puede declarar éxito si el GET propio devuelve exactamente el intento.
@@ -59,7 +60,7 @@ test.describe('Listo · selección informativa v2', () => {
     await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
     await page.reload();
     await expect(first).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('radio', { name: '½', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('radio', { name: '1/2', exact: true })).toHaveAttribute('aria-checked', 'true');
     expect(await page.evaluate((mesaCode) => {
       const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
       const mesa = st.mesas.find((candidate: { code: string }) => candidate.code === mesaCode);
@@ -90,12 +91,14 @@ test.describe('Listo · selección informativa v2', () => {
   test('Pagar el total N>1 mapea a igual y conserva fracción declarada', async ({ page }) => {
     await abrirInformativa(page, 'Pagar el total', 3);
     await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
-    await page.getByRole('radio', { name: '¾', exact: true }).click();
+    // v2.124.0: con N=3 se ofrecen 1/1, 1/2 y 1/3; ¾ ya no es una opción nueva.
+    await expect(page.getByRole('radio', { name: '¾', exact: true })).toHaveCount(0);
+    await page.getByRole('radio', { name: '1/3', exact: true }).click();
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
     await page.reload();
     await expect(page.getByRole('button', { name: 'Risotto ai Funghi', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('radio', { name: '¾', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('radio', { name: '1/3', exact: true })).toHaveAttribute('aria-checked', 'true');
   });
 
   test('capability ausente muestra incompatibilidad y nunca finge guardado', async ({ page }) => {
@@ -332,5 +335,71 @@ test.describe('Listo · selección informativa v2', () => {
     await expect(nota).toHaveCount(0);
     await expect(guardado).toHaveCount(0);
     await expect(listo).toBeEnabled();
+  });
+
+  /**
+   * v2.124.0 (AB-FRACCIONES-IGUAL, Decisión de Mati e9aa0450…): en «igual»
+   * bajo el corte, con N conocido, el selector es el de consumo —1/1..1/4 y
+   * «Otro» hasta N— y lo guardado vuelve a mostrarse como denominador. Un
+   * rechazo del dueño por N se ve con su copy, no como fallo genérico.
+   */
+  test('N=5 ofrece 1/1..1/4 y «Otro» hasta N; «Otro»=5 guarda 2000 y un rechazo por N es visible', async ({ page }) => {
+    const code = await abrirInformativa(page, 'En partes iguales', 5);
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    const fracciones = page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' });
+    await expect(fracciones.getByRole('radio')).toHaveCount(5);
+    for (const name of ['Entero', '1/2', '1/3', '1/4', 'Otro']) {
+      await expect(fracciones.getByRole('radio', { name, exact: true })).toBeVisible();
+    }
+    await expect(fracciones.getByRole('radio', { name: 'Entero', exact: true })).toHaveAttribute('aria-checked', 'true');
+
+    await fracciones.getByRole('radio', { name: 'Otro', exact: true }).click();
+    const input = page.getByLabel('¿Entre cuántas personas compartieron este plato?');
+    await input.fill('6');
+    await page.getByRole('button', { name: 'Aplicar' }).click();
+    await expect(page.getByRole('alert')).toHaveText('El máximo para esta mesa es 5.');
+    await input.fill('5');
+    await page.getByRole('button', { name: 'Aplicar' }).click();
+    await expect(fracciones.getByRole('radio', { name: 'Otro', exact: true })).toHaveAttribute('aria-checked', 'true');
+
+    await page.evaluate(async () => {
+      const route = '/src/api/index.ts';
+      const module = await import(/* @vite-ignore */ route);
+      const original = module.api.replaceInformativeSelection.bind(module.api);
+      module.api.replaceInformativeSelection = async (...args: Parameters<typeof original>) => {
+        localStorage.setItem('payme.app.e2e.n5.body', JSON.stringify(args[1]));
+        return original(...args);
+      };
+    });
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('payme.app.e2e.n5.body') ?? 'null')))
+      .toEqual({ items: [expect.objectContaining({ declared_fraction_bps: 2000 })], confirm_closure: true });
+
+    // Lo guardado en bps vuelve como denominador: 2000 ⇒ «Otro» (5).
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(fracciones.getByRole('radio', { name: 'Otro', exact: true })).toHaveAttribute('aria-checked', 'true');
+
+    // El dueño rechaza por N (400): el front lo dice con su copy y conserva lo guardado.
+    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await page.evaluate(async () => {
+      const route = '/src/api/index.ts';
+      const module = await import(/* @vite-ignore */ route);
+      const original = module.api.replaceInformativeSelection.bind(module.api);
+      module.api.replaceInformativeSelection = async (code: string, req: { items: Array<{ item_id: string; declared_fraction_bps: number }>; confirm_closure: true }) => {
+        const forzado = { ...req, items: req.items.map((item) => ({ ...item, declared_fraction_bps: 1666 })) };
+        return original(code, forzado as Parameters<typeof original>[1]);
+      };
+    });
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect(page.getByText('Esa porción no es válida para esta mesa.')).toBeVisible();
+    expect(await page.evaluate((mesaCode) => {
+      const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
+      const mesa = st.mesas.find((candidate: { code: string }) => candidate.code === mesaCode);
+      const row = Object.entries(st.informativeSelections)
+        .find(([key]) => key.startsWith(`${mesa.id}:`))?.[1] as { items: Array<{ declared_fraction_bps: number }> } | undefined;
+      return row?.items.map((item) => item.declared_fraction_bps);
+    }, code)).toEqual([2000]);
   });
 });

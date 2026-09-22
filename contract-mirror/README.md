@@ -6,6 +6,34 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-22** (orden `AF-HEADER-WEBKIT-CLAUDE-20260922`,
+  adenda P3 · fracciones en «igual» según N).
+- Commit exacto y procedencia del CONTENIDO:
+  **`5cef0b7d9d6de3fad4abfa00cdec160599f59906`** (App Backend **v2.124.0**,
+  AB-FRACCIONES-IGUAL: dominio cerrado de 22 fracciones informativas, regla por
+  N única para consumo e «igual», migración `informative_fraction_v3`).
+- Commit del que se tomó el inventario autoritativo: **`1927ba90`**
+  (`origin/main` del owner; sólo regenera el inventario sobre `5cef0b7`,
+  `git diff --stat 5cef0b7..1927ba90` no toca ningún archivo espejado).
+
+🆕 **115 archivos espejados**: se suma `db/migrate_informative_fractions_v2.124.0.sql`
+y cambian schema y migración v2.123.0 de la selección informativa,
+`schemas/index.js`, `services/informativeSelections.js` y
+`services/mesaPresentation.js`.
+
+🔴 **No acredita publicación ni producción:** el owner está en `origin/main`
+pero **no desplegado** al momento de este refresh; el front se publica primero
+para que el parser acepte los 22 valores antes de que alguien guarde 1/5.
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | adoptado y verificado 115 · commit `5cef0b7` · exit 0 |
+| `--integridad` | **OK 115/115** · exit 0 |
+| `--paridad` | **OK 115/115**: espejo = inventario = fuente **en `5cef0b7`** · exit 0 |
+| `--vigencia` | contra el worktree owner en `34014fe` (HEAD anterior) lista `services/mesaPresentation.js` como cambiado: es el HEAD viejo, no el espejo; contra `1927ba90` el diff es cero (ver arriba) |
+
+### Refresh anterior · 2026-09-21 (Listo v2 · `29bdd2f`)
+
 - Fecha del refresh: **2026-09-21**.
 - Commit exacto y procedencia del CONTENIDO:
   **`29bdd2f606eb7b319a6865febce3038402dc8ff9`** (tree

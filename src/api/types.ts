@@ -689,7 +689,20 @@ export interface MesaDetailResponse {
 // ─── Selección informativa v2 (routes/mesas.js) ───────────
 
 export const INFORMATIVE_SELECTION_CONTRACT = 'payme.app.informative-selections/v2' as const;
-export type InformativeFractionBps = 2500 | 3333 | 5000 | 6667 | 7500 | 10000;
+/**
+ * Dominio cerrado del dueño (v2.124.0, AB-FRACCIONES-IGUAL, Decisión de Mati
+ * e9aa0450…): 1/k para k = 1..20 en bps truncados —el máximo de comensales de
+ * `POST /mesas`— más 6667 y 7500 históricos. Es el enum de
+ * `contract/informative-selections-v2.schema.json` espejado; cuáles valen para
+ * ESTA mesa lo decide N (`original_participants`), no este set.
+ */
+export const INFORMATIVE_FRACTION_BPS = [
+  500, 526, 555, 588, 625, 666, 714, 769, 833, 909, 1000, 1111, 1250, 1428, 1666, 2000,
+  2500, 3333, 5000, 6667, 7500, 10000,
+] as const;
+export type InformativeFractionBps = typeof INFORMATIVE_FRACTION_BPS[number];
+/** Las seis de antes: lo único que el dueño admite cuando la mesa no registró N. */
+export const INFORMATIVE_LEGACY_BPS = [2500, 3333, 5000, 6667, 7500, 10000] as const;
 
 export interface InformativeSelectionItem {
   item_id: string;

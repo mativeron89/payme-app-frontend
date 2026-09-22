@@ -1,8 +1,8 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "29bdd2f606eb7b319a6865febce3038402dc8ff9",
-  "total": 114,
+  "commit": "5cef0b7d9d6de3fad4abfa00cdec160599f59906",
+  "total": 115,
   "archivos": [
     {
       "origen": "contract/create-mesa-identity-vectors.json",
@@ -13,8 +13,8 @@
     {
       "origen": "contract/informative-selections-v2.schema.json",
       "destino": "contract/informative-selections-v2.schema.json",
-      "sha256": "36a0368a59b681e697c10a99106aa8479e6d41ee09321ec557669add1d4b6d97",
-      "bytes": 8146
+      "sha256": "2c6ea8c8b4b8894ab7c54fa20fe644c582f6e33a96fc6feeff2b59441db2417b",
+      "bytes": 10080
     },
     {
       "origen": "contract/mesa-pay-identity-vectors.json",
@@ -143,10 +143,16 @@
       "bytes": 2012
     },
     {
+      "origen": "db/migrate_informative_fractions_v2.124.0.sql",
+      "destino": "db/migrate_informative_fractions_v2.124.0.sql",
+      "sha256": "a6189ce3d9f257deae69db37f3b4b15edc6fc4d3e78038e1c52e53351d7dba0c",
+      "bytes": 1873
+    },
+    {
       "origen": "db/migrate_informative_selections_v2.123.0.sql",
       "destino": "db/migrate_informative_selections_v2.123.0.sql",
-      "sha256": "32f35d7a560774848c84e9d8fe7c0b0e48f3c6290cc0ecbe3d106ac7463c9cd5",
-      "bytes": 4791
+      "sha256": "d4a06d15de04ebca8b29350614d487a06c655205bd430ee5b6fe6c89f21b56e2",
+      "bytes": 5834
     },
     {
       "origen": "db/migrate_invitation_authority_v2.28.6.sql",
@@ -457,8 +463,8 @@
     {
       "origen": "schemas/index.js",
       "destino": "schemas/index.js",
-      "sha256": "fd287ef42ebcf0fcc55497df042eb01e56143dba2b9898f4bce5e41cde70a33e",
-      "bytes": 29855
+      "sha256": "5db82d8e03184344cefcf15551f4483b4ee3a689f5566fc0981aa05b2ebe646a",
+      "bytes": 30093
     },
     {
       "origen": "services/authRecovery.js",
@@ -529,8 +535,8 @@
     {
       "origen": "services/informativeSelections.js",
       "destino": "services/informativeSelections.js",
-      "sha256": "30106491284fccc23e1eef710236a85272609d8e7962ff239c90223bc12d1237",
-      "bytes": 8622
+      "sha256": "b13c46d968c18c80c22ea45ae92786f931e352e31ee29aa90c28ccf4bc52bd45",
+      "bytes": 9035
     },
     {
       "origen": "services/invitationAuthority.js",
@@ -547,8 +553,8 @@
     {
       "origen": "services/mesaPresentation.js",
       "destino": "services/mesaPresentation.js",
-      "sha256": "9b2d4ce4e0fcc09fbb5ef70652f6bbde12ff5fed11e3a0a593706b97ec314895",
-      "bytes": 2244
+      "sha256": "96662b64c6ffc43ce3a88901a40cbe4b297bb6ff845ed86c816f7ca0e8c9e50e",
+      "bytes": 4249
     },
     {
       "origen": "services/moneyRail.js",

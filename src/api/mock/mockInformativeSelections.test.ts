@@ -119,4 +119,62 @@ describe('mock selección informativa v2', () => {
     expect(ownFirst.selection.items).toEqual(first.selection.items);
     expect(ownFirst.selection.items).not.toEqual(closed.selection.items);
   });
+
+  /**
+   * v2.124.0 (AB-FRACCIONES-IGUAL, Decisión de Mati e9aa0450…): paridad con
+   * `validateInformativeFractions` del dueño. Con N conocido sólo 1/k con k ≤ N
+   * (400); sin N sólo las seis legacy (409); lo ya guardado se reenvía igual.
+   */
+  it('con N conocido acepta 1/k hasta N y rechaza el resto con 400 visible', async () => {
+    const { mock, mesa } = await subject();
+    mesa.original_participants = 3;
+    const first = mesa.items[0]!;
+    const saved = await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: first.id, declared_fraction_bps: 3333 }], confirm_closure: true,
+    });
+    expect(saved.selection.items).toEqual([{ item_id: first.id, declared_fraction_bps: 3333 }]);
+    await expect(mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: first.id, declared_fraction_bps: 1666 }], confirm_closure: true,
+    })).rejects.toMatchObject({ status: 400, message: 'fraction_not_allowed_for_original_participants' });
+    // Estrechamiento declarado: 2/3 ya no entra como selección NUEVA con N.
+    await expect(mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: first.id, declared_fraction_bps: 6667 }], confirm_closure: true,
+    })).rejects.toMatchObject({ status: 400, message: 'fraction_not_allowed_for_original_participants' });
+    // Nada de eso tocó lo guardado.
+    expect((await mock.mockGetInformativeSelection(mesa.code)).selection.items)
+      .toEqual([{ item_id: first.id, declared_fraction_bps: 3333 }]);
+  });
+
+  it('sin N sólo admite las seis legacy y contesta 409 sin inventar N', async () => {
+    const { mock, mesa } = await subject();
+    delete mesa.original_participants;
+    const first = mesa.items[0]!;
+    await expect(mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: first.id, declared_fraction_bps: 1428 }], confirm_closure: true,
+    })).rejects.toMatchObject({ status: 409, message: 'original_participants_unknown' });
+    const saved = await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: first.id, declared_fraction_bps: 7500 }], confirm_closure: true,
+    });
+    expect(saved.selection.items).toEqual([{ item_id: first.id, declared_fraction_bps: 7500 }]);
+  });
+
+  it('una fracción legacy ya guardada se reenvía igual aunque N la excluya', async () => {
+    const { mock, mesa } = await subject();
+    delete mesa.original_participants;
+    const [first, second] = [mesa.items[0]!, mesa.items[1]!];
+    await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: first.id, declared_fraction_bps: 7500 }], confirm_closure: true,
+    });
+    mesa.original_participants = 4;
+    const items = [
+      { item_id: first.id, declared_fraction_bps: 7500 as const },
+      { item_id: second.id, declared_fraction_bps: 2500 as const },
+    ].sort((a, b) => a.item_id.localeCompare(b.item_id));
+    const saved = await mock.mockReplaceInformativeSelection(mesa.code, { items, confirm_closure: true });
+    expect(saved.selection.items).toEqual(items);
+    // Fuera de los 22 sigue siendo validation_error, antes que cualquier regla por N.
+    await expect(mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: first.id, declared_fraction_bps: 2001 as unknown as 2500 }], confirm_closure: true,
+    })).rejects.toMatchObject({ status: 400, message: 'validation_error' });
+  });
 });

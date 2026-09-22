@@ -36,8 +36,14 @@ CREATE TEMP TABLE informative_expected (
   declared_fraction_bps INTEGER NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY(mesa_id,mesa_item_id,user_id),
-  CHECK (declared_fraction_bps IN (2500,3333,5000,6667,7500,10000))
+  PRIMARY KEY(mesa_id,mesa_item_id,user_id)
+) ON COMMIT DROP;
+-- v2.124.0 reemplaza el CHECK de la fracción: al reaplicar este archivo se
+-- acepta exactamente uno de los dos (v2 propio o v3 sucesor), comparado aparte.
+CREATE TEMP TABLE informative_fraction_accepted (
+  a INTEGER CONSTRAINT informative_fraction_v2 CHECK (a IN (2500,3333,5000,6667,7500,10000)),
+  b INTEGER CONSTRAINT informative_fraction_v3 CHECK (b IN
+    (10000,5000,3333,2500,2000,1666,1428,1250,1111,1000,909,833,769,714,666,625,588,555,526,500,6667,7500))
 ) ON COMMIT DROP;
 DO $$
 DECLARE actual JSONB; expected JSONB;
@@ -52,10 +58,17 @@ BEGIN
   SELECT jsonb_agg(jsonb_build_array(adnum,pg_get_expr(adbin,adrelid)) ORDER BY adnum)
     INTO expected FROM pg_attrdef WHERE adrelid='informative_expected'::regclass;
   IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'informative_selection_incompatible_defaults'; END IF;
+  SELECT jsonb_agg(conname || ' ' || replace(pg_get_constraintdef(oid),'declared_fraction_bps','v'))
+    INTO actual FROM pg_constraint WHERE conrelid='mesa_informative_selections'::regclass AND contype='c';
+  IF jsonb_array_length(COALESCE(actual,'[]'::jsonb)) <> 1 OR NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conrelid='informative_fraction_accepted'::regclass AND contype='c'
+        AND conname || ' ' || replace(replace(pg_get_constraintdef(oid),'(a ','(v '),'(b ','(v ') = actual->>0)
+    THEN RAISE EXCEPTION 'informative_selection_incompatible_constraints'; END IF;
   SELECT jsonb_agg(pg_get_constraintdef(oid) ORDER BY pg_get_constraintdef(oid))
-    INTO actual FROM pg_constraint WHERE conrelid='mesa_informative_selections'::regclass;
+    INTO actual FROM pg_constraint WHERE conrelid='mesa_informative_selections'::regclass AND contype<>'c';
   SELECT jsonb_agg(def ORDER BY def) INTO expected FROM (
     SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conrelid='informative_expected'::regclass
+      AND contype<>'c'
     UNION ALL SELECT unnest(ARRAY[
       'FOREIGN KEY (mesa_id) REFERENCES mesas(id) ON DELETE CASCADE',
       'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE',

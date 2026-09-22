@@ -49,6 +49,19 @@ export function initialDenominator(original: number, remainingBps: number): numb
   return null;
 }
 
+/**
+ * Inverso de `denominatorBps` para 1..N: el k cuyo `floor(10000/k)` es `bps`,
+ * o `null` (una fracción legacy como 6667 no tiene k). Lo usa «igual» para
+ * mostrar como elegido lo que el GET propio trae en bps.
+ */
+export function denominatorFromBps(bps: number, original: number | null): number | null {
+  if (original === null || originalParticipants(original) === null) return null;
+  for (let denominator = 1; denominator <= original; denominator += 1) {
+    if (denominatorBps(denominator) === bps) return denominator;
+  }
+  return null;
+}
+
 export const DEFAULT_DENOMINATORS = [1, 2, 3, 4] as const;
 
 export function availableDefaultDenominators(original: number, remainingBps: number): number[] {

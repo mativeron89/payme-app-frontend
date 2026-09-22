@@ -24,6 +24,13 @@ describe('selección informativa v2 · respuesta exacta', () => {
 
   it('acepta el shape canónico y también la lista vacía', () => {
     expect(informativeSelectionResponse(valid).selection.items).toEqual(valid.selection.items);
+    // v2.124.0: el enum de 22 se lee entero; un parser de seis rompía apenas
+    // alguien guardara 1/5.
+    for (const bps of [500, 1428, 2000, 6667]) {
+      const items = [{ item_id: A, declared_fraction_bps: bps }];
+      expect(informativeSelectionResponse({ ...valid, selection: { ...valid.selection, items } }).selection.items)
+        .toEqual(items);
+    }
     expect(informativeSelectionResponse({
       ...valid,
       selection: { source: 'informative', items: [], updated_at: null },
@@ -33,7 +40,8 @@ describe('selección informativa v2 · respuesta exacta', () => {
   it.each([
     { ...valid, extra: true },
     { ...valid, contract: 'payme.app.informative-selections/v1' },
-    { ...valid, selection: { ...valid.selection, items: [{ item_id: A, declared_fraction_bps: 2000 }] } },
+    // v2.124.0: 2000 (1/5) ya es válido; 2001 no está en ninguno de los 22.
+    { ...valid, selection: { ...valid.selection, items: [{ item_id: A, declared_fraction_bps: 2001 }] } },
     { ...valid, selection: { ...valid.selection, items: [...valid.selection.items, ...valid.selection.items] } },
   ])('rechaza respuestas que no acreditan el contrato', (body) => {
     expect(() => informativeSelectionResponse(body)).toThrow('contract_response_invalid');

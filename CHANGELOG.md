@@ -11,6 +11,31 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.188.0 — Fracciones en «igual» según N más «Otro» (2026-09-22)
+
+Adenda P3 de `AF-HEADER-WEBKIT-CLAUDE-20260922`, sobre `8db3d95`. Decisión de
+Mati (fracciones en «igual» según la cantidad de comensales más «Otro») y
+aprobación de la migración v2.124.0 del backend. **Este front se publica antes
+de desplegar el backend `1927ba90`:** el parser de seis rompía la lectura apenas
+alguien guardara 1/5.
+
+- Contrato espejado en `5cef0b7` (v2.124.0): `declared_fraction_bps` en un
+  dominio cerrado de 22 valores (1/k para k=1..20 más 2/3 y 3/4 históricos), en
+  entrada y en todas las lecturas. `types`, `contractResponses`,
+  `informativeSelectionView` y el mock aceptan los 22.
+- Con el riel apagado y N conocido, «igual» usa el mismo selector que consumo:
+  1/1, 1/2, 1/3, 1/4 y «Otro» hasta N; la declaración no se limita por lo
+  restante. Lo guardado en bps vuelve como denominador (2000 ⇒ «Otro» = 5).
+  Sin N, siguen las seis de siempre con su aviso.
+- Los dos rechazos del dueño por N se dicen con su copy: 400
+  `fraction_not_allowed_for_original_participants` («Esa porción no es válida
+  para esta mesa.») y 409 `original_participants_unknown`. Estrechamiento
+  declarado: con N conocido, 2/3 y 3/4 ya no son una selección nueva; una ya
+  guardada se reenvía igual.
+- Mock con paridad (dominio, regla por N después de cerrada/dinero, replay de
+  lo guardado). Tests unit y e2e: N=5 ofrece 1/1..1/4 y «Otro»; «Otro»=5 viaja
+  como 2000 y se rehidrata; un 400 por N es visible y no toca lo guardado.
+
 ## 0.187.2 — Header: el nombre baja 1 px, medido en Chromium y WebKit (2026-09-22)
 
 Orden `AF-HEADER-WEBKIT-CLAUDE-20260922`, sobre `a9a3d889`. Mati miró v0.187.0 en su

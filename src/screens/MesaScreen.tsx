@@ -747,9 +747,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // no compite por `remaining_bps` y empieza en entero. En consumo sigue
       // siendo una tenencia real y sólo se ofrece lo que queda.
       const original = originalParticipants(mesa?.original_participants);
-      const denominator = mesa?.division_mode === 'consumo' && original !== null
-        ? initialDenominator(original, item?.remaining_bps ?? Number.NaN)
-        : null;
+      // «igual» con N (v2.124.0): nace entero, y el selector natural lo
+      // muestra como 1/1 elegido; sin N no hay denominador (rama legacy).
+      const denominator = original === null
+        ? null
+        : mesa?.division_mode === 'consumo'
+          ? initialDenominator(original, item?.remaining_bps ?? Number.NaN)
+          : 1;
       const def = mesa?.division_mode === 'igual'
         ? 10000
         : original !== null
@@ -792,11 +796,13 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     }
     const original = originalParticipants(mesa?.original_participants);
     const item = mesa?.items.find((candidate) => candidate.id === id);
+    // En «igual» la declaración no compite por lo restante: sólo N la acota.
     if (original === null || !item || !Number.isSafeInteger(denominator)
         || denominator < 1 || denominator > original
-        || denominatorBps(denominator) > item.remaining_bps) return;
+        || (mesa?.division_mode === 'consumo' && denominatorBps(denominator) > item.remaining_bps)) return;
     setSelected(new Map(selected).set(id, denominatorBps(denominator)));
     setSelectedDenominators(new Map(selectedDenominators).set(id, denominator));
+    setInformativeSaved(false);
   }
 
   /**
@@ -1014,11 +1020,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           if (!reconciled) {
             const failure = extractApiError(err);
             if (failure.status === 404) setInformativeState('unsupported');
+            // v2.124.0: los dos rechazos por N del dueño se dicen con su copy
+            // (la misma que consumo), nunca como un fallo genérico de red.
             toast(failure.status === 404
               ? t('Guardar esta selección todavía no está disponible.')
               : failure.code === 'informative_selection_read_only'
                 ? t('La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.')
-                : t('No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.'));
+                : failure.code === 'fraction_not_allowed_for_original_participants'
+                  ? t('Esa porción no es válida para esta mesa.')
+                  : failure.code === 'original_participants_unknown'
+                    ? t('Esta mesa no guardó el número original de personas. Actualiza para usar las porciones disponibles de siempre.')
+                    : t('No pudimos confirmar el guardado. Conservamos tu selección para que reintentes.'));
           }
         } finally {
           setBusy(false);

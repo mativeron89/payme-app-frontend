@@ -10,6 +10,7 @@ import type { MesaDetail, MesaItem } from '../api/types';
 import {
   availableDefaultDenominators,
   denominatorBps,
+  denominatorFromBps,
   originalParticipants,
 } from '../api/mesaPresentation';
 import { filaDeParticipante, type Participante } from '../api/participantes';
@@ -164,6 +165,7 @@ function NaturalFractionSelector({
   remainingBps,
   selectedDenominator,
   allowOther,
+  disabled = false,
   onChoose,
 }: {
   itemId: string;
@@ -171,6 +173,8 @@ function NaturalFractionSelector({
   remainingBps: number;
   selectedDenominator: number | null;
   allowOther: boolean;
+  /** «igual»: lectura/escritura/recarga en vuelo bloquean también las fracciones. */
+  disabled?: boolean;
   onChoose: (denominator: number) => void;
 }) {
   const { t } = useIdioma();
@@ -208,6 +212,7 @@ function NaturalFractionSelector({
             type="button"
             className={`seg-btn ${selectedDenominator === denominator ? 'on' : ''}`}
             onClick={() => { setEditingOther(false); setError(null); onChoose(denominator); }}
+            disabled={disabled}
             role="radio"
             aria-checked={selectedDenominator === denominator}
             aria-label={denominator === 1 ? t('Entero') : `1/${denominator}`}
@@ -220,6 +225,7 @@ function NaturalFractionSelector({
             type="button"
             className={`seg-btn ${editingOther || customSelected ? 'on' : ''}`}
             onClick={() => { setEditingOther(true); setOther(customSelected ? String(selectedDenominator) : ''); setError(null); }}
+            disabled={disabled}
             role="radio"
             aria-checked={editingOther || customSelected}
           >
@@ -238,10 +244,11 @@ function NaturalFractionSelector({
               autoComplete="off"
               maxLength={2}
               value={other}
+              disabled={disabled}
               aria-invalid={error ? true : undefined}
               onChange={(event) => setOther(event.target.value)}
             />
-            <button type="button" className="btn btn-ghost btn-sm" onClick={applyOther}>{t('Aplicar')}</button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={applyOther}>{t('Aplicar')}</button>
           </div>
           <div className={error ? 'form-error' : 'caption'} role={error ? 'alert' : undefined}>
             {error ?? t('Número entero entre 1 y {0}.', original)}
@@ -642,12 +649,19 @@ export function MesaDetailView({
             const soltable = mio && soltarDisponible && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
             const tag = mio ? etiquetaDeLoMio(i, t) : rowTag(state, i, t);
             const myBpsSel = selected.get(i.id) ?? 10000;
-            const selectedDenominator = selectedDenominators.get(i.id) ?? null;
-            const selectorNatural = esConsumo && pagosCortados && original !== null;
+            // AB-FRACCIONES-IGUAL (Decisión de Mati e9aa0450…, dueño v2.124.0):
+            // con el riel apagado y N conocido, «igual» usa el MISMO selector
+            // que consumo —1/1..1/N y «Otro»—. En igualdad la declaración no
+            // reserva nada, así que no se limita por lo restante (10000). Sin
+            // N, el dueño sólo admite las seis de siempre: rama legacy.
+            const restanteParaFraccion = esConsumo ? i.remaining_bps : 10000;
+            const selectedDenominator = selectedDenominators.get(i.id)
+              ?? (esConsumo ? null : denominatorFromBps(myBpsSel, original));
+            const selectorNatural = pagosCortados && original !== null;
             const allowOther = selectorNatural && Array.from(
               { length: Math.max(0, original - 4) },
               (_, index) => index + 5,
-            ).some((denominator) => denominatorBps(denominator) <= i.remaining_bps);
+            ).some((denominator) => denominatorBps(denominator) <= restanteParaFraccion);
             // En partes iguales marcar es informativo y no reserva nada, así
             // que ahí NUNCA se bloquea una fila: el monto no depende de esto.
             const disabled = (esConsumo && bloqueado) || (!esConsumo && informativeEditingBlocked);
@@ -708,9 +722,10 @@ export function MesaDetailView({
                       <NaturalFractionSelector
                         itemId={i.id}
                         original={original}
-                        remainingBps={i.remaining_bps}
+                        remainingBps={restanteParaFraccion}
                         selectedDenominator={selectedDenominator}
                         allowOther={allowOther}
+                        disabled={!esConsumo && informativeEditingBlocked}
                         onChoose={(denominator) => onSetDenominator(i.id, denominator)}
                       />
                     ) : (
@@ -734,7 +749,7 @@ export function MesaDetailView({
                         ))}
                       </div>
                     )}
-                    {esConsumo && pagosCortados && original === null && (
+                    {pagosCortados && original === null && (
                       <div className="caption">
                         {t('Esta mesa es anterior y no guardó el número original de personas. Mostramos las porciones disponibles de siempre.')}
                       </div>

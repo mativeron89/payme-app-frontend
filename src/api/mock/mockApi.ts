@@ -82,7 +82,7 @@ import {
   type FriendAvatarNoticeAcknowledgement,
 } from '../friendAvatarNotice';
 import type { ShortfallDetail } from '../shortfallDetail';
-import { MESA_CREATION_OUTCOME_BY_STATUS } from '../types';
+import { INFORMATIVE_FRACTION_BPS, INFORMATIVE_LEGACY_BPS, MESA_CREATION_OUTCOME_BY_STATUS } from '../types';
 import {
   MOCK_CONNECTED_ACCOUNTS,
   MOCK_RECOVERY_TOKEN,
@@ -1636,7 +1636,8 @@ export async function mockReplaceInformativeSelection(
   }
   if (mesa.division_mode !== 'igual') return fail(409, 'informative_selection_not_available_for_division_mode');
   if ((mesa.guarantee_mode ?? true) !== false) return fail(409, 'informative_selection_requires_no_guarantee');
-  const allowed = new Set([2500, 3333, 5000, 6667, 7500, 10000]);
+  // Paridad con el dueño v2.124.0: dominio cerrado de 22 en la entrada…
+  const allowed = new Set<number>(INFORMATIVE_FRACTION_BPS);
   const ids = new Set<string>();
   const items: ReplaceInformativeSelectionRequest['items'] = [];
   for (const item of req.items) {
@@ -1659,6 +1660,25 @@ export async function mockReplaceInformativeSelection(
     return fail(409, 'informative_selection_requires_payments_disabled');
   }
   if (mesa.status !== 'open' && !exactReplay) return fail(409, 'informative_selection_read_only');
+  // …y por N, después de cerrada/dinero (esos errores ganan), como
+  // `validateInformativeFractions` del dueño: con N conocido sólo 1/k con
+  // k ≤ N (400); sin N sólo las seis legacy (409) y nunca se inventa N. Lo ya
+  // guardado para ese ítem no se invalida al reenviarlo igual.
+  const original = originalParticipants(mesa.original_participants);
+  const guardadas = new Map(current.items.map((item) => [item.item_id, item.declared_fraction_bps]));
+  const permitidas = original === null
+    ? null
+    : new Set(Array.from({ length: original }, (_, index) => denominatorBps(index + 1)));
+  for (const item of items) {
+    if (guardadas.get(item.item_id) === item.declared_fraction_bps) continue;
+    if (permitidas === null) {
+      if (!(INFORMATIVE_LEGACY_BPS as readonly number[]).includes(item.declared_fraction_bps)) {
+        return fail(409, 'original_participants_unknown');
+      }
+    } else if (!permitidas.has(item.declared_fraction_bps)) {
+      return fail(400, 'fraction_not_allowed_for_original_participants');
+    }
+  }
   if (!exactReplay) {
     if (items.length === 0) delete state.informativeSelections[informativeKey(mesa)];
     else {

@@ -5,7 +5,9 @@ const pool = require('../db/pool');
 const stateMachine = require('../utils/stateMachine');
 const { dineroHabilitado } = require('./moneyRail');
 const CONTRACT = 'payme.app.informative-selections/v2';
-const FRACTIONS = [2500, 3333, 5000, 6667, 7500, 10000];
+// Fracciones legacy: las únicas admitidas cuando la mesa no registró N.
+const { FRACTION_VALUES } = require('./itemClaims');
+const mesaPresentation = require('./mesaPresentation');
 // Misma participación que el middleware y misma frontera de mesa privada.
 const ACCESS_SQL = `(
   m.opener_user_id=$2 OR EXISTS (SELECT 1 FROM mesa_participants p
@@ -77,7 +79,7 @@ async function getCapability({ mesaId, userId }) {
 async function replace({ mesaId, userId, items, confirmClosure }) {
   if (confirmClosure !== true || !Array.isArray(items) || items.length > 100
       || new Set(items.map(i => i.item_id)).size !== items.length
-      || items.some(i => !FRACTIONS.includes(i.declared_fraction_bps))) {
+      || items.some(i => !mesaPresentation.FRACCIONES_INFORMATIVAS.includes(i.declared_fraction_bps))) {
     throw error('validation_error', 400);
   }
   const desired = items.map(i => ({ item_id: i.item_id.toLowerCase(), declared_fraction_bps: i.declared_fraction_bps }))
@@ -92,6 +94,8 @@ async function replace({ mesaId, userId, items, confirmClosure }) {
     }
     if (dineroHabilitado()) throw error('informative_selection_requires_payments_disabled');
     if (m.status !== 'open' || !m.before_expiry) throw error('informative_selection_read_only');
+    mesaPresentation.validateInformativeFractions(m, desired, FRACTION_VALUES,
+      new Map(previous.items.map(i => [i.item_id, i.declared_fraction_bps])));
     const ids = desired.map(i => i.item_id);
     const valid = await client.query('SELECT id FROM mesa_items WHERE mesa_id=$1 AND id=ANY($2::uuid[])',
       [mesaId, ids]);
@@ -151,4 +155,5 @@ async function history({ userId, limit, offset }) {
     })), limit, offset };
   });
 }
-module.exports = { CONTRACT, FRACTIONS, ACCESS_SQL, read, replace, getCapability, ownSelectionsForMesas, history };
+// FRACTIONS: las seis legacy (lo que se admite cuando la mesa no registró N).
+module.exports = { CONTRACT, FRACTIONS: FRACTION_VALUES, ACCESS_SQL, read, replace, getCapability, ownSelectionsForMesas, history };

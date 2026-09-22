@@ -5,9 +5,12 @@ import type {
   InformativeSelectionResponse,
   ReplaceInformativeSelectionRequest,
 } from '../api/types';
-import { INFORMATIVE_SELECTION_CONTRACT } from '../api/types';
+import { INFORMATIVE_FRACTION_BPS, INFORMATIVE_SELECTION_CONTRACT } from '../api/types';
 
-const ALLOWED_BPS = new Set<number>([2500, 3333, 5000, 6667, 7500, 10000]);
+// v2.124.0: el dominio cerrado de 22 del dueño. Qué vale para ESTA mesa lo
+// decide el dueño por N y se muestra como error visible; acá sólo se corta lo
+// que ningún backend aceptaría.
+const ALLOWED_BPS = new Set<number>(INFORMATIVE_FRACTION_BPS);
 
 export type InformativeSelectionState =
   | 'idle'

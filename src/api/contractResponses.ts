@@ -19,7 +19,7 @@ import type {
   OutgoingFriendRequest,
   OutgoingFriendRequestsResponse,
 } from './types';
-import { INFORMATIVE_SELECTION_CONTRACT, MESA_CREATION_OUTCOME_BY_STATUS } from './types';
+import { INFORMATIVE_FRACTION_BPS, INFORMATIVE_SELECTION_CONTRACT, MESA_CREATION_OUTCOME_BY_STATUS } from './types';
 
 /** Un 2xx malformado no acredita éxito: el caller debe conservar su intento. */
 export class ContractResponseError extends Error {
@@ -53,7 +53,9 @@ function exactKeys(value: Record<string, unknown>, allowed: readonly string[]): 
   return keys.length === allowed.length && keys.every((key) => allowed.includes(key));
 }
 
-const INFORMATIVE_BPS = new Set([2500, 3333, 5000, 6667, 7500, 10000]);
+// v2.124.0: los 22 del enum del contrato. Un parser con seis rompía la lectura
+// apenas alguien guardara 1/5.
+const INFORMATIVE_BPS = new Set<number>(INFORMATIVE_FRACTION_BPS);
 
 /** GET/PUT /mesas/:code/informative-selection: un 2xx parcial nunca acredita guardado. */
 export function informativeSelectionResponse(value: unknown): InformativeSelectionResponse {
