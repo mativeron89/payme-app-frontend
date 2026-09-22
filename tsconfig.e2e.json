@@ -28,6 +28,10 @@
   },
   "include": [
     "e2e/**/*.ts",
+    // AF-HEADER-WEBKIT-CLAUDE-20260922 · la sonda de dos motores vive fuera de
+    // `e2e/` para no correr en la suite, pero es un spec de Playwright igual:
+    // Node que evalúa en el navegador. Mismo proyecto, mismas libs.
+    "scripts/sonda-header/**/*.ts",
     "playwright.config.ts",
     "vite.config.ts",
     "vite.landing.config.ts", "vercel.ts"
