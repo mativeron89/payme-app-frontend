@@ -61,9 +61,11 @@ test.describe('n179 · ticket real sin QR', () => {
     const code = state.mesas[0]!.code;
 
     await page.goto(`/#/mesa/${code}`);
-    await expect(page.getByText('Café del Centro', { exact: true }).first()).toBeVisible();
+    // M04 (`9c78a7b`, v0.184.0): en el detalle el nombre va en la línea
+    // `restaurante / código`; el texto exacto solo ya no existe como elemento.
+    await expect(page.getByText(new RegExp(`^Café del Centro / ${code}$`))).toBeVisible();
     await page.reload();
-    await expect(page.getByText('Café del Centro', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(new RegExp(`^Café del Centro / ${code}$`))).toBeVisible();
 
     await page.evaluate(async (mesaCode) => {
       const storePath = '/src/api/mock/store.ts';

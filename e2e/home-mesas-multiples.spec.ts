@@ -46,7 +46,9 @@ test.describe('Inicio · varias mesas abiertas (§1.1 variante B)', () => {
     await filaOtra.click();
     await expect(page).toHaveURL(/#\/mesa\/PA-2847/);
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
-    await expect(page.getByText(/^PA-2847 ·/)).toBeVisible();
+    // M04 (`9c78a7b`, v0.184.0): la línea contextual es `restaurante / código`
+    // en un solo span y el modo va en otro; el «·» quedó `aria-hidden`.
+    await expect(page.getByText('La Parolaccia / PA-2847', { exact: true })).toBeVisible();
     await expect(page.getByText('cada uno lo suyo', { exact: true })).toBeVisible();
   });
 

@@ -360,6 +360,7 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
       // también es true mientras el riel está `pending`.
       corteDeclarado: true,
       informativeReadOnly: false,
+      informativeClosedWithoutCharges: false,
       informativeEditingBlocked: false,
       informativeLoading: false,
       informativeUnsupported: false,
@@ -412,6 +413,24 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
   it('sin pago congelado no hay aviso', () => {
     const markup = vista({ pagosCortados: true, frozenScope: null });
     expect(markup).not.toContain('Tienes un pago sin confirmar.');
+  });
+
+  /**
+   * C3/AF-34 · con Listo v2 la mesa cerrada sin cobros ya no llega a «Cierre
+   * completado»: se queda en la selección de sólo lectura (R1, `903b6a8`). El
+   * testigo ratificado «Esta mesa cerró sin cobros» tiene que seguir ahí, y
+   * sólo ahí: una mesa cerrada que SÍ cobró no lo dice.
+   */
+  it('la selección cerrada sin cobros lo dice; la cerrada con cobros no', () => {
+    const igual: MesaDetail = { ...MESA, division_mode: 'igual', status: 'expired' };
+    const sinCobros = vista({ mesa: igual, informativeReadOnly: true, informativeClosedWithoutCharges: true });
+    expect(sinCobros).toContain('Esta mesa cerró sin cobros');
+    expect(sinCobros).toContain('Esta mesa ya cerró. Lo guardado es sólo de lectura.');
+    expect(sinCobros).not.toContain('Cubrió tu garantía');
+
+    const conCobros = vista({ mesa: igual, informativeReadOnly: true, informativeClosedWithoutCharges: false });
+    expect(conCobros).toContain('Esta mesa ya cerró. Lo guardado es sólo de lectura.');
+    expect(conCobros).not.toContain('Esta mesa cerró sin cobros');
   });
 
   /**

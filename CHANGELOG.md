@@ -11,6 +11,35 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.185.2 — CI rojo en `main`: expectativas de M04 y testigo de cierre sin cobros (2026-09-22)
+
+Corrección causal `AF-LISTO-CORRECCION-CI-CLAUDE-20260922` sobre `903b6a8`, que
+se publicó en `main` con el CI en rojo: Playwright 6 failed / 378 passed (run
+35681987575); el hook de Vercel no se disparó y producción siguió en `d449508`.
+**Este commit se publica sólo con la suite completa (Vitest + Playwright) verde
+en local.** Diagnóstico por fallo:
+
+- Una regresión de producto: con Listo v2 (R1, `903b6a8`) la mesa cerrada sin
+  cobros ya no llega a «Cierre completado» y se queda en la selección de sólo
+  lectura, donde había desaparecido el testigo ratificado **«Esta mesa cerró
+  sin cobros»** (C3/AF-34). La vista cerrada ahora lo dice cuando corresponde,
+  y sólo entonces; lo guarda `corteGuard.test.ts` y `mesa-sin-garantia.spec.ts`.
+- Tres expectativas obsoletas por M04 (`9c78a7b`, v0.184.0, orden
+  `AF-M01-M03-M04-20260921`): el `gap` marca/identidad de la cabecera es 10 px,
+  el detalle compacta `restaurante / código · modo` en una línea, y
+  `.mesa-selection-title` usa `12px 16px`. Ajustados `af-rediseno-12-censo-visual`,
+  `home-mesas-multiples` y `ticket-sin-qr`, citando la fuente en cada uno.
+- Dos fixtures anteriores al contrato `payme.app.informative-selections/v2`
+  (Decisión 7): el dueño publica `supported`/`mutable` sólo para mesas en igual
+  **sin garantía** y `open`, y el mock lo refleja. `historial` abre la mesa viva
+  como nace bajo el corte (sin garantía) y `manual-m01-m04-visual` deja PA-3121
+  como nace en producción con los pagos apagados. Ninguna aserción se relajó ni
+  se borró un test.
+
+Observación para el dueño, no corregida acá: una mesa en igual **con** garantía
+vista bajo el corte queda íntegramente bloqueada (filas y «Listo»), porque su
+capability es `supported:false`. Es la conducta del contrato, no de este front.
+
 ## 0.185.1 — Consulta cerrada y borradores protegidos en Listo (2026-09-22)
 
 Corrección causal `AF-LISTO-CORRECCION-R1-R4-20260922` sobre `e0c4889`, por

@@ -34,7 +34,12 @@ async function acreditar(
   expect((navBox?.y ?? 0) - (fabBox?.y ?? 0)).toBe(26);
   expect(markBox?.x).toBe(16);
   expect(markBox?.height).toBe(34);
-  expect((identityBox?.x ?? 0) - ((markBox?.x ?? 0) + (markBox?.width ?? 0))).toBe(12);
+  // M04 (`AF-M01-M03-M04-20260921`, v0.184.0, `9c78a7b`; recepción del Coordinador
+  // APP en `ops/coordinacion-app-20260919/RECEPCION_AF_VISUAL_Y_ORDEN_LISTO_20260921.md`):
+  // el nombre pertenece al mismo lockup visual que la marca y el `gap` de
+  // `.hdr-user-group` pasó de `var(--sp-3)` (12 px) a 10 px. La guarda de CSS vive
+  // en `AppHeader.identity.test.tsx`; acá se mide el resultado en píxeles.
+  expect((identityBox?.x ?? 0) - ((markBox?.x ?? 0) + (markBox?.width ?? 0))).toBe(10);
   expect(bellBox?.width).toBeGreaterThanOrEqual(44);
   expect(bellBox?.height).toBeGreaterThanOrEqual(44);
   await expect(header).toHaveCSS('padding-top', '14px');
@@ -185,7 +190,10 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   });
   await page.getByRole('button', { name: 'Copiar link de invitación', exact: true }).click();
   await expect(page.locator('.toast')).toHaveText('Link de invitación copiado ✓');
-  await acreditar(page, '07-mis-items');
+  // M04 (`9c78a7b`, v0.184.0): `.mesa-selection-title` pasó a una sola línea
+  // contextual con `padding: var(--sp-3) var(--sp-4)` (12px 16px) y `min-height: 0`,
+  // para que restaurante, código y modo no inflen la burbuja.
+  await acreditar(page, '07-mis-items', true, { top: '12px', right: '16px', bottom: '12px', left: '16px' });
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
   // CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · el censo se detiene en

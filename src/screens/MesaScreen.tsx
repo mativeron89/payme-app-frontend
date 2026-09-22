@@ -2699,6 +2699,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // porqué en la prop de `MesaDetailView`.
       corteDeclarado={corteDeclarado}
       informativeReadOnly={informativeReadOnly}
+      informativeClosedWithoutCharges={!!informativePersistenceActive && cerroSinCobros(mesa)}
       informativeEditingBlocked={informativeEditingBlocked}
       informativeLoading={!!informativePersistenceActive
         && (informativeState === 'idle' || informativeState === 'loading')}

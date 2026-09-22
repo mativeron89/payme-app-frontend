@@ -112,8 +112,18 @@ test.describe('Historial (§1.10)', () => {
    * variante con pago vuelve cuando el corte se levante.
    */
   test('la mesa viva (con consumo elegido, sin pago posible) NO aparece en el historial', async ({ page }) => {
+    // Listo v2 (Decisión 7, `e0c4889`/`903b6a8`): bajo el corte la selección se
+    // guarda por el contrato `payme.app.informative-selections/v2`, y el dueño
+    // publica `supported` sólo para mesas en igual SIN garantía (`eligible` en
+    // `contract-mirror/services/informativeSelections.js`); el mock lo refleja.
+    // Una mesa garantizada vista bajo el corte queda bloqueada a propósito, así
+    // que este recorrido abre la mesa como nace en producción con los pagos
+    // apagados: sin garantía. El corte se declara antes del alta, sin recarga.
+    await page.addInitScript(() => {
+      localStorage.setItem('payme.app.mock.money_rail.v1', 'disabled');
+    });
     await ingresar(page);
-    const mesa = await abrirMesaConLink(page);
+    const mesa = await abrirMesaConLink(page, { sinGarantia: true });
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByText('$840.00')).toBeVisible();

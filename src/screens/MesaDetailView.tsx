@@ -100,6 +100,14 @@ export interface MesaDetailViewProps {
   corteDeclarado: boolean;
   /** Selección v2 cerrada: se muestra lo propio pero no se permite editar. */
   informativeReadOnly: boolean;
+  /**
+   * C3/AF-34 · la mesa cerró SIN COBROS (`cerroSinCobros`). Antes de Listo v2 lo
+   * decía la pantalla «Cierre completado»; con la selección cerrada visible
+   * (R1, `903b6a8`) esa pantalla ya no se alcanza, y el testigo de honestidad
+   * ratificado tiene que seguir diciéndolo acá. No afirma ningún movimiento de
+   * dinero: lo niega.
+   */
+  informativeClosedWithoutCharges: boolean;
   /** Bloquea filas/fracciones durante lectura, escritura y recarga. */
   informativeEditingBlocked: boolean;
   informativeLoading: boolean;
@@ -393,6 +401,7 @@ export function MesaDetailView({
   pagosCortados,
   corteDeclarado,
   informativeReadOnly,
+  informativeClosedWithoutCharges,
   informativeEditingBlocked,
   informativeLoading,
   informativeUnsupported,
@@ -570,7 +579,10 @@ export function MesaDetailView({
         {avisoPagoCongelado}
         {!esConsumo && informativeReadOnly && (
           <div className="note note-teal" style={{ marginBottom: 12 }}>
-            {t('Esta mesa ya cerró. Lo guardado es sólo de lectura.')}
+            {informativeClosedWithoutCharges && (
+              <div><strong>{t('Esta mesa cerró sin cobros')}</strong></div>
+            )}
+            <div>{t('Esta mesa ya cerró. Lo guardado es sólo de lectura.')}</div>
           </div>
         )}
         {!esConsumo && informativeLoading && (

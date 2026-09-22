@@ -40,11 +40,22 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
     await page.evaluate(async () => {
       const storePath = '/src/api/mock/store.ts';
       const { state } = await import(/* @vite-ignore */ storePath) as {
-        state: { mesas: Array<{ code: string; original_participants?: number }> };
+        state: { mesas: Array<{ code: string; original_participants?: number; guarantee_mode?: boolean; status?: string }> };
       };
       const mesa = state.mesas.find((candidate) => candidate.code === 'PA-2847');
       if (!mesa) throw new Error('PA-2847 ausente');
       mesa.original_participants = 2;
+      // Listo v2 (Decisión 7, `e0c4889`/`903b6a8`): con el riel apagado las filas
+      // de una mesa en igual sólo se editan si el dueño publica `supported` y
+      // `mutable`, y eso exige igual SIN garantía y mesa `open` (`capability` en
+      // `contract-mirror/services/informativeSelections.js`; el mock lo refleja).
+      // PA-3121 nace garantizada y `partially_paid` —un estado que bajo el corte
+      // no existe— así que acá se la deja como nace en producción con los pagos
+      // apagados. PA-2847 es `consumo` y no pasa por la capability.
+      const igual = state.mesas.find((candidate) => candidate.code === 'PA-3121');
+      if (!igual) throw new Error('PA-3121 ausente');
+      igual.guarantee_mode = false;
+      igual.status = 'open';
     });
     await page.goto('/#/mesa/PA-2847');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
