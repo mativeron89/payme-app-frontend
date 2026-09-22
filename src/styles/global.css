@@ -309,6 +309,10 @@
      Syne en display; el cuerpo sigue en DM Sans. */
   --font-display: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
   --font-body: 'DM Sans', sans-serif;
+  /* Header · descenso del nombre respecto del centrado de flex. UNA sola
+     constante para iterar con una captura real de Mati; el porqué y las
+     mediciones están en `.hdr-user`. */
+  --hdr-user-nudge: 1px;
 }
 
 html,
@@ -2862,12 +2866,22 @@ body {
   font-size: var(--fs-sm);
   /* V01 · centrar la línea real, no una caja de 34px con aire tipográfico. */
   line-height: 1;
-  /* Decisión de Mati 2026-09-22 (nombre centrado verticalmente con el logo):
-     sin desplazamientos ópticos. Medido a 390 px con canvas sobre la tinta
-     real: la tinta de «Mati» centra en 36.0 px, el cuadrado azul en 36.5 y la
-     banda de mayúsculas de «PayMe» en 36.2. El `translateY(-1px)` de M04 la
-     subía a 35.0, un píxel y medio por encima del cuadrado: era la causa de
-     que se leyera alta. La guarda vive en `af-rediseno-12-censo-visual`. */
+  /* Decisión de Mati 2026-09-22 («Centrado verticalmente con el logo») y su
+     revisión de la mañana en el iPhone con v0.187.0: «Sigue alto» → «Lo bajo
+     un poco más». Medido con la sonda de tinta (canvas) en DOS motores de
+     Playwright, 390×844, DPR 3, sin desplazamiento:
+       centro de tinta del nombre  36.01 Chromium · 35.77 WebKit 26.5
+       centro del cuadrado azul    36.50 en ambos
+       mayúsculas de «PayMe»       36.19 Chromium · 36.88 WebKit
+     Las tablas `hhea` y `OS/2 typo` son idénticas en las dos fuentes y ambas
+     llevan USE_TYPO_METRICS, así que no hay elección de tabla distinta: WebKit
+     apoya «PayMe» 0.69 px más abajo y el nombre 0.23 px más arriba que
+     Chromium (redondeo de ascenso/descenso), y por eso en el iPhone se ve más
+     alto. Con `--hdr-user-nudge: 1px` la tinta del nombre queda en WebKit a
+     36.77 (cuadrado +0.27, mayúsculas −0.11) y en Chromium a 37.01 (+0.51,
+     +0.82). La guarda de Chromium vive en `af-rediseno-12-censo-visual`; el
+     valor final lo confirma Mati con una captura real. */
+  transform: translateY(var(--hdr-user-nudge));
   color: var(--on-dark-muted);
   overflow: hidden;
   text-overflow: ellipsis;

@@ -11,6 +11,26 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.187.2 — Header: el nombre baja 1 px, medido en Chromium y WebKit (2026-09-22)
+
+Orden `AF-HEADER-WEBKIT-CLAUDE-20260922`, sobre `a9a3d889`. Mati miró v0.187.0 en su
+iPhone: «Sigue alto» → «Lo bajo un poco más».
+
+- Las tablas `hhea` y `OS/2 typo` de DM Sans y Plus Jakarta Sans son idénticas y
+  ambas llevan `USE_TYPO_METRICS`: los motores no eligen tablas distintas. Medido
+  con la sonda de tinta en Playwright Chromium y WebKit 26.5 (390×844, DPR 3):
+  WebKit apoya «PayMe» 0,69 px más abajo y el nombre 0,23 px más arriba que
+  Chromium, así que en el iPhone el nombre quedaba 0,73 px por encima del
+  cuadrado azul y 1,1 px por encima de las mayúsculas de «PayMe».
+- `--hdr-user-nudge: 1px`, una sola constante aplicada como `translateY` en
+  `.hdr-user`: en WebKit la tinta del nombre queda a +0,27 del cuadrado y −0,11
+  de las mayúsculas; en Chromium a +0,51 y +0,82. Guardas: `AppHeader.identity`
+  (una sola definición, ningún otro desplazamiento) y el censo visual (descenso
+  en Chromium acotado a [0,25; 0,75] respecto del cuadrado).
+- `scripts/sonda-header/`: la sonda de dos motores y su config, para iterar la
+  constante con una captura real de Mati:
+  `npx playwright test -c scripts/sonda-header/playwright.config.ts`.
+
 ## 0.187.1 — Pruebas de robustez: «¿Cómo dividen?» no falla en silencio (n181) y el guardado de la fecha (n219) (2026-09-22)
 
 Orden `AF-ROBUSTEZ-TESTS-CLAUDE-20260922`, base `6a93a6c` (= `origin/main`, 0.187.0).

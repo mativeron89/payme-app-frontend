@@ -54,12 +54,22 @@ describe('cabeceras autenticadas · identidad propia por nombre', () => {
    * guarda en píxeles vive en `af-rediseno-12-censo-visual`). Cualquier
    * `transform`/`margin` vertical nuevo sobre `.hdr-user` vuelve a mover eso.
    */
-  it('el nombre no lleva desplazamiento vertical propio: lo centra la caja de 34px', () => {
+  /**
+   * Revisión de Mati del 22/09 en su iPhone («Sigue alto» → «Lo bajo un poco
+   * más»): el descenso vive en UNA constante, `--hdr-user-nudge`, medida en
+   * Chromium y WebKit (ver el comentario de `.hdr-user`). Ningún otro
+   * desplazamiento vertical puede sumarse por fuera de esa constante.
+   */
+  it('el descenso del nombre es una sola constante medida en los dos motores', () => {
+    expect(GLOBAL_CSS).toMatch(/--hdr-user-nudge:\s*1px;/);
     const regla = GLOBAL_CSS.match(/\.hdr-user\s*\{[^}]*\}/)?.[0] ?? '';
     expect(regla).toContain('align-self: center;');
-    expect(regla).not.toMatch(/transform\s*:/);
+    expect(regla).toContain('transform: translateY(var(--hdr-user-nudge));');
     expect(regla).not.toMatch(/margin-(top|bottom)\s*:/);
     expect(regla).not.toMatch(/(top|bottom)\s*:\s*-?\d/);
+    // Una sola DEFINICIÓN (línea que empieza con la propiedad); las menciones
+    // en comentarios no cuentan.
+    expect((GLOBAL_CSS.match(/^\s*--hdr-user-nudge:/gm) ?? []).length).toBe(1);
   });
 
   // AF-29 (2026-09-19): 17 → 18 por `TusRestaurantesScreen` (2b), y AF-31:
