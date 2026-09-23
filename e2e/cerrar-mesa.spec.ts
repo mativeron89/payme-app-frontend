@@ -114,6 +114,30 @@ test.describe('AF-34 · cerrar la mesa', () => {
     await capturar(page, 'botones-01-mesa-con-los-tres');
   });
 
+  test('🔴 n187 · cada clase de los botones de la mesa tiene estilos (sin clases muertas)', async ({ page }) => {
+    await mesaSinGarantia(page);
+    await page.evaluate(() => { document.querySelector('.flow-scroll')?.scrollTo(0, 1e6); });
+    await expect(boton(page)).toBeVisible();
+    const sinEstilo = await page.evaluate(() => {
+      const selectores: string[] = [];
+      const recorrer = (reglas: CSSRuleList) => {
+        for (const r of [...reglas]) {
+          if (r instanceof CSSStyleRule) selectores.push(r.selectorText);
+          if ('cssRules' in r && (r as CSSGroupingRule).cssRules) recorrer((r as CSSGroupingRule).cssRules);
+        }
+      };
+      for (const hoja of [...document.styleSheets]) recorrer(hoja.cssRules);
+      const conEstilo = (c: string) => {
+        const re = new RegExp(`\\.${c.replace(/[-]/g, '\\-')}(?![\\w-])`);
+        return selectores.some((s) => re.test(s));
+      };
+      return [...document.querySelectorAll('.mesa-secondary-actions button')].flatMap((b) => (
+        [...b.classList].filter((c) => !conEstilo(c)).map((c) => `${b.textContent?.trim()}: .${c}`)
+      ));
+    });
+    expect(sinEstilo).toEqual([]);
+  });
+
   test('🔴 un doble toque en «Sí, cerrar» manda UN pedido', async ({ page }) => {
     await mesaSinGarantia(page);
     await tocarCerrar(page);

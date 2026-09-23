@@ -860,7 +860,7 @@ export function MesaDetailView({
             {onCerrarMesa && sePuedeCerrar(mesa) && (
               <button
                 type="button"
-                className="btn btn-neutro btn-sm btn-fit mesa-cerrar"
+                className="btn btn-neutro btn-sm btn-fit"
                 onClick={() => setConfirmandoCerrarMesa(true)}
                 disabled={cerrando}
               >
