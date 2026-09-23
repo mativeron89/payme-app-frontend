@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { mesesDeMexico } from '../src/utils/meses';
-import { porcentajesEnteros } from '../src/utils/anillo';
+import { porcentajesEnteros, porcionesDelAnillo } from '../src/utils/anillo';
 
 const MESES = mesesDeMexico(new Date(), 'es');
 
@@ -233,6 +233,11 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await expect(region(page).getByRole('img', {
         name: `Por ingrediente principal: ${nombres.map((n, i) => `${n} ${enPlatos[i]}%`).join(', ')}`,
       })).toBeVisible();
+      // Y el TRAZO de cada porción es el que dan los platos, no el dinero.
+      const trazos = await region(page).locator('svg circle').evaluateAll((cs) => (
+        cs.map((c) => c.getAttribute('stroke-dasharray'))
+      ));
+      expect(trazos).toEqual(porcionesDelAnillo(porFila).map((p) => `${p.trazo.toFixed(1)} ${p.hueco.toFixed(1)}`));
       // La burbuja es la de «Platos», como el diseño 2d.
       await expect(page.locator('.stat-burbuja-total')).toHaveText('7 platos');
       await capturar(page, 'ingrediente-01-con-datos');
