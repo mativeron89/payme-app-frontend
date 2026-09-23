@@ -11,6 +11,36 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.189.0 — «Qué comes · por ingrediente» dice «N platos» por grupo (n178) (2026-09-23)
+
+Orden `AF-ROADMAP-TARDE-CLAUDE-20260922`, punto 2 (Roadmap n178, F02-T24), con
+la adenda que habilita publicarlo: el dueño **v2.125.0** (`8e1c718`) ya está
+desplegado y publica `dish_count` por grupo en `/stats/ingredients`.
+
+- 🔴 **Arregla una rotura en producción.** El decodificador exigía las tres
+  claves exactas por grupo (`key`, `times`, `amount_cents`): con v2.125.0 servido,
+  cada respuesta traía `dish_count` de más y la pestaña «Ingrediente» caía en «No
+  pudimos cargar tus ingredientes». Ningún test lo veía porque el mock no mandaba
+  el campo. Deducido del código, no medido en `app.paymemx.com`.
+- **Espejo en un commit propio (`e32e7be`):** contenido `bd1c976`, inventario
+  `8e1c718`, misma población de 115; cambian `routes/account.js`, `routes/staff.js`,
+  `services/externalIdentities.js`, `contract/social-auth-v1.json` y su handoff.
+  Adoptar, integridad, paridad y vigencia en exit 0.
+- **Con el dato**, como el diseño 2d y como 2c/2e: el anillo reparte **platos**,
+  al centro «N platos distintos» (los mismos de la pestaña «Platos») y cada fila
+  «N platos» y su monto, sin visitas ni porcentaje. Con pagos, el pie sigue
+  diciendo «Lo cobrado por cada plato, sin la propina.»
+- **Sin el dato** (un dueño anterior): la vista de siempre, con el dinero al
+  centro y visitas, monto y porcentaje por fila.
+- `dish_count` es aditivo: todos los grupos lo traen o ninguno (mezclado se
+  rechaza), entero ≥ 1. Al sumar claves desconocidas a «Otros», los platos se
+  suman (cada plato cae en un solo grupo) y las visitas siguen sin sumarse.
+- Mock: publica `dish_count`; la costura `payme.app.mock.ingredientes.v1 =
+  sin_platos` reproduce la forma anterior.
+- ⚠️ Borde declarado: el dueño no publica grupos con monto 0, así que con platos
+  gratis la suma del centro puede quedar por debajo del «Los mismos N platos» del
+  subtítulo, que sale de «Platos».
+
 ## 0.188.2 — Header: el nombre apoya en la línea base de «PayMe» (5,5 px) (2026-09-22)
 
 Orden `AF-HEADER-ITER3-CLAUDE-20260922`, iteración 3 con Mati: con v0.188.1
