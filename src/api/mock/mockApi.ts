@@ -3672,7 +3672,11 @@ const GRUPO_DEL_PLATO_MOCK: Record<string, string> = {
  * Costura `payme.app.mock.ingredientes.v1`: `antiguo` (404) · `error` (500) ·
  * `grande` (413) · `otros` (lo que no es alcohol ni postre cae en «Otros», que
  * queda como el grupo MAYOR) · `desconocida` (el postre llega con una clave que el
- * front no conoce).
+ * front no conoce) · `sin_platos` (la forma v2.115.0–v2.124.0, sin `dish_count`).
+ *
+ * n178 · v2.125.0 suma `dish_count` por grupo: platos DISTINTOS del grupo, con la
+ * misma clave que `dishes` (restaurante + nombre normalizado), así la suma de los
+ * grupos es `distinct_dishes`.
  */
 export async function mockStatsIngredients(period?: string): Promise<unknown> {
   const falla = fallaDeRuta('payme.app.mock.ingredientes.v1', 'stats_range_too_large');
@@ -3688,6 +3692,7 @@ export async function mockStatsIngredients(period?: string): Promise<unknown> {
     return g;
   };
   const porGrupo = new Map<string, { key: string; times: number; amount_cents: number }>();
+  const platosPorGrupo = new Map<string, Set<string>>();
   let total = 0;
   for (const v of visitasDelModelo().filter((x) => meses.includes(x.mes))) {
     const enEstaVisita = new Set<string>();
@@ -3697,10 +3702,14 @@ export async function mockStatsIngredients(period?: string): Promise<unknown> {
       g.amount_cents += it.amount_cents;
       if (!enEstaVisita.has(key)) { g.times += 1; enEstaVisita.add(key); }
       porGrupo.set(key, g);
+      const platos = platosPorGrupo.get(key) ?? new Set<string>();
+      platos.add(`${v.restaurantId}|${normalizarPlatoMock(it.name)}`);
+      platosPorGrupo.set(key, platos);
       total += it.amount_cents;
     }
   }
   const groups = [...porGrupo.values()]
+    .map((g) => (costura === 'sin_platos' ? g : { ...g, dish_count: platosPorGrupo.get(g.key)?.size ?? 0 }))
     .filter((g) => g.amount_cents > 0)
     .sort((a, b) => {
       if ((a.key === 'other') !== (b.key === 'other')) return a.key === 'other' ? 1 : -1;

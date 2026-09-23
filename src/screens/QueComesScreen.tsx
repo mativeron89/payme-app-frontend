@@ -413,11 +413,12 @@ function rotuloDeGrupo(key: ClaveGrupo, t: (s: string, ...a: unknown[]) => strin
 }
 
 /**
- * AF-38 · «por ingrediente principal» (2d). El anillo reparte el DINERO de cada
- * grupo sobre `total_cents` (el dueño no trae platos por grupo: el «5 platos» del
- * diseño no se puede decir sin inventarlo). Al centro, el total; en la lista,
- * cada grupo con sus visitas y su monto, «Otros» al final. Debajo del anillo, la
- * línea chica de estimación cuando `estimated` (decisión de Mati).
+ * AF-38 · «por ingrediente principal» (2d). n178: con `dish_count` (v2.125.0) el
+ * anillo reparte PLATOS, al centro cuántos, y cada fila «N platos» y su monto,
+ * como el diseño. Con un dueño anterior, el anillo reparte el DINERO sobre
+ * `total_cents` con el total al centro, y cada fila sus visitas, monto y
+ * porcentaje. «Otros» siempre al final. Debajo del anillo, la línea chica de
+ * estimación cuando `estimated` (decisión de Mati).
  */
 function VistaDeIngredientes({
   estado,
@@ -472,7 +473,17 @@ function VistaDeIngredientes({
     );
   }
   const montos = grupos.map((g) => g.amountCents);
-  const pcts = porcentajesEnteros(montos);
+  /**
+   * n178 · con `dish_count` (dueño v2.125.0) la vista es la del diseño 2d: el
+   * anillo reparte PLATOS, el centro dice cuántos y cada fila «N platos» y su
+   * monto, igual que 2c y 2e. Sin el dato (dueño anterior) queda como estaba: el
+   * anillo reparte el dinero y la fila dice visitas, monto y porcentaje (G-41).
+   */
+  const platosPorGrupo = grupos.every((g) => g.dishCount !== null)
+    ? grupos.map((g) => g.dishCount as number)
+    : null;
+  const totalPlatos = platosPorGrupo?.reduce((a, n) => a + n, 0) ?? 0;
+  const pcts = porcentajesEnteros(platosPorGrupo ?? montos);
   const nombres = grupos.map((g) => rotuloDeGrupo(g.key, t));
   const resumen = nombres.map((n, i) => `${n} ${pcts[i]}%`).join(', ');
   return (
@@ -486,14 +497,21 @@ function VistaDeIngredientes({
         </div>
       </div>
       <AnilloSvg
-        porciones={porcionesDelAnillo(montos)}
+        porciones={porcionesDelAnillo(platosPorGrupo ?? montos)}
         etiqueta={t('Por ingrediente principal: {0}', resumen)}
-        centro={
+        centro={platosPorGrupo ? (
+          <>
+            <div className="stat-anillo-total">{totalPlatos}</div>
+            <div className="stat-anillo-unidad">
+              {totalPlatos === 1 ? t('plato distinto') : t('platos distintos')}
+            </div>
+          </>
+        ) : (
           <>
             <div className="stat-anillo-total">{formatMXN(datos.totalCents)}</div>
             <div className="stat-anillo-unidad">{datos.basis === 'payments' ? t('de gasto') : t('de consumo')}</div>
           </>
-        }
+        )}
       />
       {datos.estimated && <p className="stat-estimacion">{t('Clasificado por el nombre del plato')}</p>}
       <ul className="stat-anillo-lista">
@@ -501,9 +519,13 @@ function VistaDeIngredientes({
           <li key={g.key} className="stat-anillo-fila">
             <span className="stat-anillo-color" style={{ background: colorDeFila(i) }} aria-hidden="true" />
             <span className="stat-anillo-nombre">{nombres[i]}</span>
-            <span className="stat-anillo-visitas">{g.times !== null ? visitasTexto(g.times, t) : ''}</span>
+            {platosPorGrupo ? (
+              <span className="stat-anillo-visitas">{platosTexto(platosPorGrupo[i], t)}</span>
+            ) : (
+              <span className="stat-anillo-visitas">{g.times !== null ? visitasTexto(g.times, t) : ''}</span>
+            )}
             <span className="stat-anillo-monto">{formatMXN(g.amountCents)}</span>
-            <span className="stat-anillo-pct">{pcts[i]}%</span>
+            {!platosPorGrupo && <span className="stat-anillo-pct">{pcts[i]}%</span>}
           </li>
         ))}
       </ul>

@@ -194,9 +194,8 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await page.getByRole('tablist', { name: 'Qué comes' }).getByRole('tab', { name: 'Ingrediente' }).click();
     }
 
-    test('las tres pestañas; los grupos con visitas y monto, «Otros» al final, la línea de estimación y el total de 2a', async ({ page }) => {
+    test('n178 · las tres pestañas; cada grupo con «N platos» y su monto, el anillo en platos, «Otros» al final', async ({ page }) => {
       await preparar(page);
-      // El total del mes de 2a: en base consumo, lo de cada plato suma lo de cada visita.
       const total2a = (await page.locator('.stat-burbuja-total').textContent()) ?? '';
       expect(total2a).toBe('$2,165.00');
       await abrirIngrediente(page);
@@ -207,18 +206,40 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await expect(filas(page)).toHaveCount(5);
       await expect(filas(page).last()).toContainText('Otros');
       await expect(region(page)).toContainText('Bebidas con alcohol');
-      await expect(filas(page).first()).toContainText(/\d+ visitas?/);
-      // 🔴 El centro es el total, y es el de 2a: la suma coincide.
-      await expect(region(page).locator('.stat-anillo-total')).toHaveText(total2a);
+      // 🔴 Cada fila dice «N platos», como el diseño 2d; ni visitas ni porcentaje.
+      const textos = await filas(page).allTextContents();
+      for (const fila of textos) {
+        expect(fila).toMatch(/\d+ platos?/);
+        expect(fila).not.toMatch(/\d+ visitas?/);
+        expect(fila).not.toMatch(/\d+%/);
+      }
+      // 🔴 El centro dice cuántos platos, y son los mismos 7 de «Platos»: la
+      // suma de los grupos coincide con el subtítulo y con la burbuja.
+      const porFila = textos.map((f) => Number(/(\d+) platos?/.exec(f)?.[1]));
+      expect(porFila.reduce((a, n) => a + n, 0)).toBe(7);
+      await expect(region(page).locator('.stat-anillo-total')).toHaveText('7');
+      await expect(region(page).locator('.stat-anillo-unidad')).toHaveText('platos distintos');
+      // El dinero sigue en cada fila y suma lo de 2a.
       const montos = await region(page).locator('.stat-anillo-monto').allTextContents();
       expect(Math.round(montos.reduce((a, m) => a + pesos(m) * 100, 0))).toBe(216500);
       await expect(region(page).getByText('Clasificado por el nombre del plato')).toBeVisible();
       await expect(region(page).getByRole('img', { name: /^Por ingrediente principal: Carnes \d+%/ })).toBeVisible();
       // La burbuja es la de «Platos», como el diseño 2d.
       await expect(page.locator('.stat-burbuja-total')).toHaveText('7 platos');
-      // Sin «N platos» por grupo: el dueño no lo trae.
-      for (const fila of await filas(page).allTextContents()) expect(fila).not.toMatch(/\d+ platos?/);
       await capturar(page, 'ingrediente-01-con-datos');
+    });
+
+    test('🔴 n178 · con el dueño anterior (sin `dish_count`) queda como antes: dinero al centro, visitas y porcentaje', async ({ page }) => {
+      await preparar(page, { ingredientes: 'sin_platos' });
+      const total2a = (await page.locator('.stat-burbuja-total').textContent()) ?? '';
+      await abrirIngrediente(page);
+      await expect(filas(page)).toHaveCount(5);
+      await expect(filas(page).first()).toContainText(/\d+ visitas?/);
+      await expect(region(page).locator('.stat-anillo-total')).toHaveText(total2a);
+      for (const fila of await filas(page).allTextContents()) {
+        expect(fila).not.toMatch(/\d+ platos?/);
+        expect(fila).toMatch(/\d+%/);
+      }
     });
 
     test('🔴 «Otros» queda al final aunque sea el grupo MAYOR', async ({ page }) => {
@@ -267,8 +288,16 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       });
     }
 
-    test('con pagos: «de gasto» y sin la propina', async ({ page }) => {
+    test('con pagos: el pie dice que es lo cobrado, sin la propina', async ({ page }) => {
       await preparar(page, { conDinero: true });
+      await abrirIngrediente(page);
+      // n178 · el centro es de platos; la base del dinero la dice el pie.
+      await expect(region(page).locator('.stat-anillo-unidad')).toHaveText('platos distintos');
+      await expect(page.getByText('Lo cobrado por cada plato, sin la propina.')).toBeVisible();
+    });
+
+    test('con pagos y el dueño anterior: «de gasto» al centro', async ({ page }) => {
+      await preparar(page, { conDinero: true, ingredientes: 'sin_platos' });
       await abrirIngrediente(page);
       await expect(region(page).locator('.stat-anillo-unidad')).toHaveText('de gasto');
       await expect(page.getByText('Lo cobrado por cada plato, sin la propina.')).toBeVisible();
@@ -280,8 +309,22 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       await page.getByRole('radio', { name: /^Mes pasado/ }).click();
       await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
       await abrirIngrediente(page);
-      await expect(region(page).locator('.stat-anillo-total')).toHaveText('$1,320.00');
+      // Los montos de las filas son los del mes elegido y el centro, sus platos.
+      const montos = await region(page).locator('.stat-anillo-monto').allTextContents();
+      expect(Math.round(montos.reduce((a, m) => a + pesos(m) * 100, 0))).toBe(132000);
+      await expect(page.locator('.stat-burbuja-total')).toHaveText(/\d+ platos?/);
+      const burbuja = Number(/\d+/.exec((await page.locator('.stat-burbuja-total').textContent()) ?? '')?.[0]);
+      await expect(region(page).locator('.stat-anillo-total')).toHaveText(String(burbuja));
       await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);
+    });
+
+    test('el período elegido rige también con el dueño anterior (dinero al centro)', async ({ page }) => {
+      await preparar(page, { ingredientes: 'sin_platos' });
+      await page.getByRole('button', { name: /^Período: / }).click();
+      await page.getByRole('radio', { name: /^Mes pasado/ }).click();
+      await expect(page.locator('.stat-burbuja')).toContainText('$1,320.00');
+      await abrirIngrediente(page);
+      await expect(region(page).locator('.stat-anillo-total')).toHaveText('$1,320.00');
     });
   });
 });
