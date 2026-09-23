@@ -11,6 +11,48 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.190.0 — Pago en revisión sin promesa de reintento, aviso de Google en Safari, censo de estadísticas estable (2026-09-23)
+
+Orden `AF-ROADMAP-TARDE-CLAUDE-20260922`, puntos 1, 3, 4 y 5 (Roadmap n226,
+n187, n224 y RM-182). Base `0.189.0`. Textos de n224 y 5b: decisiones 10 y 11
+de Mati, literales (`ops/bibliotecario-claude-20260917/DECISION_MATI_DECISIONES_7_A_14_20260923.md`,
+sha256 `7d2066b075b75f640350f55eda1617a88aa81c79620a89daea58c68e947c862e`).
+
+- **n224 · el aviso del pago congelado ya no invita a un reintento imposible.**
+  Cuando ese pago sólo se puede reconciliar (no se puede reenviar desde esta
+  sesión), el detalle de la mesa ofrecía «Reintentar ese pago» y la vista de pago
+  respondía con el bloqueo. Ahora `MesaScreen` le pasa al detalle el mismo
+  `frozenRequiresReconciliation` que usa la vista de pago, y en ese caso:
+  - el texto es el de la **decisión 10**: «Este pago quedó pendiente de
+    revisión. Cuando se resuelva, vas a poder reintentar.», y **«Reintentar ese
+    pago» no se muestra**;
+  - queda un botón **«Revisar si se cobró»** (texto existente) que no reintenta:
+    lleva a la salida de reconciliación N-07 de la vista de pago. **Declarado:**
+    sin él no hay camino para que la revisión «se resuelva» y el pago quedaría
+    bloqueado. Con el corte de pagos no hay botón y el texto sigue siendo el del
+    corte: «vas a poder reintentar» sería falso.
+- **n226 · el censo de «12-estadisticas» deja de depender de la latencia del
+  mock.** La tarjeta tiene dos estados a propósito: la de título mientras carga y
+  la burbuja del mes con los datos. El censo medía lo que hubiera en ese momento
+  y exigía `center`. Ahora espera la burbuja y exige su `space-between`. Un test
+  nuevo retiene `getStats`, mide los dos estados y prueba que la caja (16, 112,
+  358 × 83) y el contenido de abajo no se mueven: el cambio es inocuo.
+- **n187 · «Cerrar mesa» sin la clase muerta `mesa-cerrar`.** Un test nuevo
+  exige que toda clase de los botones de la mesa tenga una regla CSS.
+- **RM-182 · 5a · diagnóstico del popup de Google.** Si la ventana pierde el
+  foco hacia el iframe del botón de Google y lo recupera sin que llegue la
+  credencial en 2 s, escribe **un** `console.info('[payme] google_popup_stuck',
+  …)` con motor, plataforma y cuánto estuvo abierto. Sin red y sin datos
+  personales: se lee con el inspector web de Safari para confirmar la causa.
+  Falso positivo declarado: cerrar el popup a propósito también lo registra.
+- **RM-182 · 5b · el aviso bajo el botón de Google**, con el texto de la
+  **decisión 11**, pasado al tuteo de la app como se hace con los textos del
+  diseño (precedente del 2026-09-19): «Si entraste con Google y quieres usar
+  otra cuenta, cierra sesión de Google en Safari y vuelve a intentar.» El
+  original en voseo lo rechaza la guarda `registroMexicano.test.ts`, que no se
+  toca. Sólo en WebKit (Safari y todo
+  navegador de iOS), detectado por `userAgent`; en Chrome no aparece.
+
 ## 0.189.0 — «Qué comes · por ingrediente» dice «N platos» por grupo (n178) (2026-09-23)
 
 Orden `AF-ROADMAP-TARDE-CLAUDE-20260922`, punto 2 (Roadmap n178, F02-T24), con
