@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 import { mesesDeMexico } from '../src/utils/meses';
+import { porcentajesEnteros } from '../src/utils/anillo';
 
 const MESES = mesesDeMexico(new Date(), 'es');
 
@@ -223,7 +224,15 @@ test.describe('AF-31 · Qué comes (2c)', () => {
       const montos = await region(page).locator('.stat-anillo-monto').allTextContents();
       expect(Math.round(montos.reduce((a, m) => a + pesos(m) * 100, 0))).toBe(216500);
       await expect(region(page).getByText('Clasificado por el nombre del plato')).toBeVisible();
-      await expect(region(page).getByRole('img', { name: /^Por ingrediente principal: Carnes \d+%/ })).toBeVisible();
+      // 🔴 El anillo reparte PLATOS: los porcentajes del anillo salen de los
+      // platos de cada fila, no del dinero (que da otros números en este mock).
+      const nombres = await region(page).locator('.stat-anillo-nombre').allTextContents();
+      const enPlatos = porcentajesEnteros(porFila);
+      const enDinero = porcentajesEnteros(montos.map((m) => Math.round(pesos(m) * 100)));
+      expect(enPlatos).not.toEqual(enDinero);
+      await expect(region(page).getByRole('img', {
+        name: `Por ingrediente principal: ${nombres.map((n, i) => `${n} ${enPlatos[i]}%`).join(', ')}`,
+      })).toBeVisible();
       // La burbuja es la de «Platos», como el diseño 2d.
       await expect(page.locator('.stat-burbuja-total')).toHaveText('7 platos');
       await capturar(page, 'ingrediente-01-con-datos');
