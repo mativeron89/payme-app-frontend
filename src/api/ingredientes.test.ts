@@ -191,7 +191,7 @@ describe('🔴 n178 · la forma servida por v2.125.0, desde el espejo', () => {
       { items: [{ name: 'Arrachera', amount_cents: 32000 }, { name: 'Pozole', amount_cents: 15000 }] },
     ] },
   ];
-  const servido = {
+  const servido: Record<string, unknown> = {
     basis: 'consumption',
     period: { key: 'this_month', start: '2026-09-01T06:00:00.000Z', end: null },
     ...armarIngredientes(restaurants),
