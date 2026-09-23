@@ -2708,6 +2708,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       itemsAmount={itemsAmount}
       mySlotsTaken={mySlotsTaken}
       frozenScope={frozenScope}
+      frozenRequiresReconciliation={frozenRequiresReconciliation}
       busy={busy}
       inviteOpen={inviteOpen}
       onToggleItem={toggleItem}

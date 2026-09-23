@@ -355,6 +355,7 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
       itemsAmount: 0,
       mySlotsTaken: 0,
       frozenScope: null,
+      frozenRequiresReconciliation: false,
       pagosCortados: true,
       // D-R8 · el corte DECLARADO por el dueño: distinto de `pagosCortados`, que
       // también es true mientras el riel está `pending`.
@@ -468,6 +469,42 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
     expect(markup).not.toContain('aria-label="Listo"');
     expect(markup).toContain('Reintentar ese pago');
     expect(markup).toContain('Reinténtalo tal cual');
+    expect(markup).not.toContain('Revisar si se cobró');
+  });
+
+  /**
+   * n224 · el pago congelado que sólo se puede RECONCILIAR. Antes el detalle
+   * ofrecía «Reintentar ese pago» y la vista de pago respondía con el bloqueo.
+   */
+  it('🔴 n224 · si sólo se puede reconciliar: el texto de la decisión 10 y sin «Reintentar»; queda «Revisar si se cobró»', () => {
+    const markup = vista({ pagosCortados: false, frozenScope: 'pay:PA-0001', frozenRequiresReconciliation: true });
+    expect(markup).toContain('Tienes un pago sin confirmar.');
+    expect(markup).toContain('Este pago quedó pendiente de revisión. Cuando se resuelva, vas a poder reintentar.');
+    expect(markup).not.toContain('Puede que ya se haya cobrado.');
+    expect(markup).not.toContain('Reintentar ese pago');
+    expect(markup).not.toContain('Reinténtalo');
+    // El botón sigue: es el único camino a la salida de la vista de pago (N-07).
+    expect(markup).toContain('Revisar si se cobró');
+  });
+
+  it('n224 · con el corte, reconciliar o no, no hay botón (la vista de pago no se alcanza)', () => {
+    const markup = vista({ pagosCortados: true, frozenScope: 'pay:PA-0001', frozenRequiresReconciliation: true });
+    // Con el corte no hay reintento posible: el texto de la decisión 10 («vas a
+    // poder reintentar») sería una promesa falsa; queda el del corte.
+    expect(markup).toContain('Puedes revisarlo en Mis pagos.');
+    expect(markup).not.toContain('vas a poder reintentar');
+    expect(markup).not.toContain('Revisar si se cobró');
+    expect(markup).not.toContain('Reintentar ese pago');
+  });
+
+  it('🔴 n224 · el cableado: MesaScreen le pasa al detalle el mismo `frozenRequiresReconciliation` que usa la vista de pago', () => {
+    const fuentes = import.meta.glob('/src/screens/MesaScreen.tsx', {
+      query: '?raw', import: 'default', eager: true,
+    }) as Record<string, string>;
+    const fuente = fuentes['/src/screens/MesaScreen.tsx'];
+    expect(fuente).toContain('const frozenRequiresReconciliation = requiresReconciliation(frozen);');
+    const detalle = fuente.slice(fuente.indexOf('<MesaDetailView'));
+    expect(detalle).toMatch(/\bfrozenRequiresReconciliation=\{frozenRequiresReconciliation\}/);
   });
 });
 

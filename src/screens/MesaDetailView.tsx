@@ -75,6 +75,14 @@ export interface MesaDetailViewProps {
   /** Hay un pago sin confirmar: se avisa y se ofrece volver a ÉL, no a otro. */
   frozenScope: string | null;
   /**
+   * n224 · ese pago sin confirmar NO se puede reenviar desde esta sesión
+   * (`requiresReconciliation`, `freezeMachine.ts`): sólo queda reconciliarlo.
+   * Antes el detalle no lo sabía y ofrecía «Reintentar ese pago», cuyo desenlace
+   * inmediato era el bloqueo de la vista de pago. Con esto el detalle no promete
+   * un reintento: el botón lleva a la misma vista, pero a revisar si se cobró.
+   */
+  frozenRequiresReconciliation: boolean;
+  /**
    * CORTE DEL VIERNES (`releaseGates.ts`) · con el corte activo la pantalla
    * TERMINA acá: no hay `Continuar` hacia el pago ni reintento de un pago
    * congelado. El aviso del pago congelado se conserva, sin su botón y con un
@@ -412,6 +420,7 @@ export function MesaDetailView({
   itemsAmount,
   mySlotsTaken,
   frozenScope,
+  frozenRequiresReconciliation,
   pagosCortados,
   corteDeclarado,
   informativeReadOnly,
@@ -471,20 +480,31 @@ export function MesaDetailView({
    * El aviso NO se oculta con el corte: el estado real de la persona es que
    * hay un pago sin confirmar. Lo que se retira es el botón, y con él la
    * promesa de reintentar. `#/pagos` se conserva y es donde puede verificarlo.
+   *
+   * n224 · con el pago que sólo se puede RECONCILIAR tampoco se promete un
+   * reintento. Texto: decisión 10 de Mati, literal («Aprobar el texto»,
+   * `DECISION_MATI_DECISIONES_7_A_14_20260923.md`), que además oculta «Reintentar»
+   * mientras el pago esté en revisión. El botón que queda no reintenta: dice
+   * «Revisar si se cobró», que es lo que la vista de pago ofrece en ese estado
+   * (N-07). No se quita porque es el único camino a esa salida: sin él la
+   * revisión nunca «se resuelve» y el pago quedaría bloqueado.
    */
+  const soloReconciliar = frozenRequiresReconciliation && !pagosCortados;
   const avisoPagoCongelado = frozenScope && (
     <div className="note note-orange" role="status" style={{ marginBottom: 12 }}>
       <b>{t('Tienes un pago sin confirmar.')}</b>{' '}
-      {pagosCortados
-        ? t('Puede que ya se haya cobrado. Puedes revisarlo en Mis pagos.')
-        : t('Puede que ya se haya cobrado. Reinténtalo tal cual antes de cambiar tu selección.')}
+      {soloReconciliar
+        ? t('Este pago quedó pendiente de revisión. Cuando se resuelva, vas a poder reintentar.')
+        : pagosCortados
+          ? t('Puede que ya se haya cobrado. Puedes revisarlo en Mis pagos.')
+          : t('Puede que ya se haya cobrado. Reinténtalo tal cual antes de cambiar tu selección.')}
       {!pagosCortados && (
         <button
           className="btn btn-ghost btn-sm btn-fit"
           style={{ marginTop: 8 }}
           onClick={onRetryFrozenPay}
         >
-          {t('Reintentar ese pago')}
+          {soloReconciliar ? t('Revisar si se cobró') : t('Reintentar ese pago')}
         </button>
       )}
     </div>
