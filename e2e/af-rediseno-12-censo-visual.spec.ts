@@ -12,6 +12,7 @@ async function acreditar(
   nombre: string,
   titleCard = true,
   titlePadding = { top: '16px', right: '18px', bottom: '16px', left: '18px' },
+  titleJustify: 'center' | 'space-between' = 'center',
 ): Promise<void> {
   const app = page.locator('.app');
   await expect(app).toBeVisible();
@@ -116,7 +117,7 @@ async function acreditar(
     await expect(title).toHaveCSS('padding-right', titlePadding.right);
     await expect(title).toHaveCSS('padding-bottom', titlePadding.bottom);
     await expect(title).toHaveCSS('padding-left', titlePadding.left);
-    await expect(title).toHaveCSS('justify-content', 'center');
+    await expect(title).toHaveCSS('justify-content', titleJustify);
   }
   await expect(page.locator('.screen > .scroll')).toHaveCount(1);
   await expect(page.locator('.screen > .appbar-block')).toHaveCount(1);
@@ -264,5 +265,52 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await acreditar(page, '11-historial');
   await page.goto('/#/estadisticas');
   await expect(page.getByRole('heading', { name: 'Mis estadísticas', exact: true })).toBeVisible();
-  await acreditar(page, '12-estadisticas');
+  // n226 · la tarjeta tiene DOS estados: mientras carga es la de título
+  // (centrada) y con los datos es la burbuja del mes (2a: período a la
+  // izquierda, dato a la derecha, `space-between`). Medir «lo que haya» hacía
+  // que el censo pasara o fallara según la latencia del mock. Se mide el estado
+  // FINAL, con su valor exacto; que el cambio no mueve nada lo prueba el test
+  // de abajo.
+  await expect(page.locator('.screen > .title-card.stat-burbuja')).toBeVisible();
+  await expect(page.locator('.stat-burbuja-total')).toHaveText(/^\$[\d,]+\.\d{2}$/);
+  await acreditar(page, '12-estadisticas', true, undefined, 'space-between');
+});
+
+/**
+ * n226 · por qué el cambio de forma de la tarjeta es inocuo: se retiene la
+ * respuesta de `getStats` para ver el estado de carga, se mide, se suelta y se
+ * vuelve a medir. La caja de la tarjeta (posición y tamaño) y el arranque del
+ * contenido de abajo son IGUALES en los dos estados: sólo cambia lo de adentro,
+ * que pasa del título a «período · total». Nada salta.
+ */
+test('n226 · «Mis estadísticas»: la tarjeta pasa de título a burbuja del mes sin mover nada', async ({ page }) => {
+  await ingresar(page);
+  await page.evaluate(async () => {
+    const apiPath = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ apiPath) as { api: Record<string, unknown> };
+    const w = window as unknown as { __n226Soltar?: () => void };
+    const original = api.getStats as (...a: unknown[]) => Promise<unknown>;
+    api.getStats = (...a: unknown[]) => new Promise((resolve, reject) => {
+      w.__n226Soltar = () => { original(...a).then(resolve, reject); };
+    });
+  });
+  await page.goto('/#/estadisticas');
+  const tarjeta = page.locator('.screen > .title-card').first();
+  const medir = () => tarjeta.evaluate((n) => {
+    const r = n.getBoundingClientRect();
+    const abajo = document.querySelector('.screen > .scroll')!.getBoundingClientRect();
+    return { caja: { x: r.x, y: r.y, w: r.width, h: r.height }, abajo: abajo.y, burbuja: n.classList.contains('stat-burbuja') };
+  });
+  await page.waitForFunction(() => typeof (window as unknown as { __n226Soltar?: unknown }).__n226Soltar === 'function');
+  await expect(tarjeta).toHaveCSS('justify-content', 'center');
+  const cargando = await medir();
+  expect(cargando.burbuja).toBe(false);
+  await page.evaluate(() => (window as unknown as { __n226Soltar: () => void }).__n226Soltar());
+  await expect(page.locator('.screen > .title-card.stat-burbuja')).toBeVisible();
+  await expect(tarjeta).toHaveCSS('justify-content', 'space-between');
+  const listo = await medir();
+  expect(listo.burbuja).toBe(true);
+  expect(listo.caja).toEqual(cargando.caja);
+  expect(listo.abajo).toBe(cargando.abajo);
+  expect(cargando.caja).toEqual({ x: 16, y: 112, w: 358, h: 83 });
 });
