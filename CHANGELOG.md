@@ -37,6 +37,12 @@ desplegado y publica `dish_count` por grupo en `/stats/ingredients`.
   suman (cada plato cae en un solo grupo) y las visitas siguen sin sumarse.
 - Mock: publica `dish_count`; la costura `payme.app.mock.ingredientes.v1 =
   sin_platos` reproduce la forma anterior.
+- 🔴 **Test de la forma servida, desde el espejo** (pedido del Bibliotecario al
+  registrar el incidente): `ingredientes.test.ts` extrae literalmente
+  `normalizarPlato` y `armarIngredientes` de `contract-mirror/routes/account.js`,
+  arma el cuerpo como la ruta y lo decodifica. Con el decodificador de `4b367b8`
+  da rojo (mutante medido). El clasificador del dueño no está en el espejo: el
+  test usa un doble fijo, declarado.
 - ⚠️ Borde declarado: el dueño no publica grupos con monto 0, así que con platos
   gratis la suma del centro puede quedar por debajo del «Los mismos N platos» del
   subtítulo, que sale de «Platos».
