@@ -20,6 +20,8 @@ import {
   type GoogleButtonHandle,
 } from '../api/googleIdentity';
 import { sugerenciaDesdeIdToken } from '../api/googleClaims';
+import { vigilarPopupGoogle, type VigiaPopupGoogle } from '../api/googlePopupDiagnostico';
+import { AvisoGoogleOtraCuenta } from './AvisoGoogleOtraCuenta';
 import {
   linkIntentValido,
   socialAuthSnapshot,
@@ -635,6 +637,8 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     if (!authority || !container || googleLoadFailed) return;
     let active = true;
     let handle: GoogleButtonHandle;
+    // RM-182 · 5a · diagnóstico sin PII del popup que no vuelve (Safari).
+    let vigia: VigiaPopupGoogle | null = null;
     try {
       handle = renderGoogleIdentityButton({
         container,
@@ -642,6 +646,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         locale: authority.locale,
         mockLabel: t('Continuar con Google'),
         onCredential: (credential) => {
+          vigia?.credencialRecibida();
           if (googleAuthorityRef.current !== authority) return;
           if (authority.purpose === 'captura') {
             // No viaja nada: el token queda retenido en memoria hasta «Crear mi
@@ -786,6 +791,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       return;
     }
     googleHandle.current = handle;
+    vigia = vigilarPopupGoogle(container);
     void handle.ready.catch(() => {
       if (!active) return;
       setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));
@@ -793,6 +799,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     });
     return () => {
       active = false;
+      vigia?.dispose();
       handle.dispose();
       if (googleHandle.current === handle) googleHandle.current = null;
     };
@@ -1168,6 +1175,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
           <a href={PATH_PRIVACIDAD}>{t('Aviso de privacidad')}</a>
         </p>
       )}
+      {/* RM-182 · 5b · ranura del aviso para cambiar de cuenta en Safari: no se
+          dibuja hasta que Mati apruebe el texto (decisión 11). */}
+      <AvisoGoogleOtraCuenta />
       {googleLoadFailed && (
         <button
           type="button"
