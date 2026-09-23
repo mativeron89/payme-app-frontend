@@ -275,6 +275,13 @@ const CONTINUE_CANAL = 'google_continue';
 /** Addendum 1 · vida y tope de errores del intento de conexión por contraseña. */
 const LINK_INTENT_TTL_SECONDS = 600;
 const LINK_INTENT_MAX_FAILED = 5;
+// n187 · N8 de la auditoría Kimi K3: el tope también es POR CUENTA. Quien ya
+// controla el Google de otro podía re-emitir intentos (`/google/continue`) y
+// sumar 5 pruebas de contraseña por intento. Ahora los errores de TODOS los
+// intentos de la cuenta se suman en una ventana; al tope, cualquier intento de
+// esa cuenta falla opaco sin probar la contraseña (no es un oráculo).
+const LINK_ACCOUNT_MAX_FAILED = 5;
+const LINK_ACCOUNT_WINDOW_SECONDS = 3600;
 const AVISO = 'aviso_privacidad';
 
 function normalizarONull(value) {
@@ -533,6 +540,19 @@ async function linkFromContinueIntent({ linkIntent, password }) {
         );
         return { ...CONTINUE_FALLA_LOGIN, outcome: 'failed' };
       }
+      // El FOR UPDATE del usuario serializa los intentos concurrentes de la cuenta.
+      const { rows: [acumulado] } = await client.query(
+        `SELECT COALESCE(SUM(failed_attempts),0)::int AS fallidos
+           FROM google_continue_link_intents
+          WHERE user_id=$1 AND created_at > NOW() - make_interval(secs => $2)`,
+        [user.id, LINK_ACCOUNT_WINDOW_SECONDS]
+      );
+      if (acumulado.fallidos >= LINK_ACCOUNT_MAX_FAILED) {
+        await client.query(
+          `UPDATE google_continue_link_intents SET consumed_at=NOW() WHERE id=$1`, [intent.id]
+        );
+        return { ...CONTINUE_FALLA_LOGIN, outcome: 'failed' };
+      }
       const valida = await bcrypt.compare(password, user.password_hash);
       if (!valida) {
         const fallidos = intent.failed_attempts + 1;
@@ -602,6 +622,8 @@ module.exports = {
   continueWithExternalIdentity,
   linkFromContinueIntent,
   LINK_INTENT_MAX_FAILED,
+  LINK_ACCOUNT_MAX_FAILED,
+  LINK_ACCOUNT_WINDOW_SECONDS,
   nombresParaAlta,
   PROVEEDORES_PUBLICABLES,
   consumeCredential,

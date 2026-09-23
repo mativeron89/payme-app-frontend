@@ -6,6 +6,38 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-23** (orden `AF-ROADMAP-TARDE-CLAUDE-20260922`,
+  punto 2 · n178 «N platos» por grupo).
+- Commit exacto y procedencia del CONTENIDO:
+  **`bd1c976cc1fceffbbbcd6c99a08a3ae03990394a`** (App Backend **v2.125.0**:
+  n91, n172, n187, n178 y n184).
+- Commit del que se tomó el inventario autoritativo:
+  **`8e1c718902817c5c9b52572c39f42c0aec16b7ed`** (`origin/main` del owner,
+  **desplegado y verificado** según
+  `ops/bibliotecario-claude-20260917/LIVE_VERIFICADO_APP_AB_8E1C718_Y_HEADER_ITER3_4B367B8_20260922.md`,
+  sha256 `bd6c93f6…44ee`; esa verificación es del Bibliotecario, no de este
+  refresh). Sólo regenera el inventario sobre `bd1c976`.
+
+**115 archivos espejados, la misma población.** Cambian cinco:
+`routes/account.js` (n178 `dish_count` por grupo en `/stats/ingredients`; n184
+tope antes de la consulta), `routes/staff.js` (n172 mes de México),
+`services/externalIdentities.js`, `contract/social-auth-v1.json` y
+`docs/HANDOFF_SOCIAL_AUTH_V2.72.0.md` (n187 tope por cuenta al vincular Google).
+El handoff de ingredientes (`docs/HANDOFF_POR_INGREDIENTE_V2.115.0.md`) no está
+en el inventario del dueño: se leyó en el owner, no se espeja.
+
+La fuente se consultó en un clon local de sólo lectura del owner, en `8e1c718`
+(el repo del owner no se escribió).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | adoptado y verificado 115 · commit `bd1c976` · exit 0 |
+| `--integridad` | **OK 115/115** · exit 0 |
+| `--paridad` | **OK 115/115**: espejo = inventario = fuente **en `bd1c976`** · exit 0 |
+| `--vigencia` | **OK** contra el clon en `8e1c718` · exit 0 |
+
+### Refresh anterior · 2026-09-22 (fracciones en «igual» · `5cef0b7`)
+
 - Fecha del refresh: **2026-09-22** (orden `AF-HEADER-WEBKIT-CLAUDE-20260922`,
   adenda P3 · fracciones en «igual» según N).
 - Commit exacto y procedencia del CONTENIDO:

@@ -10,6 +10,9 @@ const { addStaff, updateStaff, setStaffShift, validateBody } = require('../schem
 const { centsToDisplay } = require('../utils/money');
 const logger = require('../utils/logger');
 const staffCatalog = require('../services/staffCatalog');
+// n172 · el mes de las propinas corta a la medianoche de México, como las
+// estadísticas del comensal (services/inicioDeMes.js), no en la zona de la sesión.
+const { inicioDeMesMxSql } = require('../services/inicioDeMes');
 
 const router = express.Router();
 
@@ -148,7 +151,7 @@ earningsRouter.get('/staff-earnings', async (req, res, next) => {
          FROM tip_distributions td
          JOIN restaurant_staff s ON s.id = td.staff_id
         WHERE s.user_id = $1 AND td.status = 'credited'
-          AND td.credited_at >= date_trunc('month', NOW())`, [req.user.id]
+          AND td.credited_at >= ${inicioDeMesMxSql()}`, [req.user.id]
     );
     const { rows: tips } = await pool.query(
       `SELECT td.id, td.amount_cents, td.status, td.credited_at, td.created_at,

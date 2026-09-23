@@ -572,13 +572,10 @@ function bloqueDeConsumo(basis, categorias, total, visitas) {
  * `consumption_month` y para «Tus restaurantes», así los dos totales salen del
  * mismo conjunto.
  */
-async function mesasDelMesConSeleccion(userId, rango = RANGO_DEL_MES) {
-  const { rows } = await pool.query(
-    `SELECT m.id, m.code, m.division_mode, m.created_at,
-            r.id AS restaurant_id, r.name AS restaurant_name, r.category
-       FROM mesas m
-       JOIN restaurants r ON r.id = m.restaurant_id
-      WHERE ${filtroDeRango('m.created_at', rango)}
+// Mesa del rango con selección propia viva ($1 = usuario). Un solo predicado
+// para la carga (mesasDelMesConSeleccion) y para el tope previo (n184).
+function seleccionPropiaSql(rango) {
+  return `${filtroDeRango('m.created_at', rango)}
         AND (
               EXISTS (
                 SELECT 1 FROM mesa_item_claims c
@@ -591,10 +588,36 @@ async function mesasDelMesConSeleccion(userId, rango = RANGO_DEL_MES) {
                 SELECT 1 FROM mesa_division_slots s
                  WHERE s.mesa_id = m.id AND s.claimed_by_user_id = $1
               )
-            )`,
+            )`;
+}
+
+async function mesasDelMesConSeleccion(userId, rango = RANGO_DEL_MES) {
+  const { rows } = await pool.query(
+    `SELECT m.id, m.code, m.division_mode, m.created_at,
+            r.id AS restaurant_id, r.name AS restaurant_name, r.category
+       FROM mesas m
+       JOIN restaurants r ON r.id = m.restaurant_id
+      WHERE ${seleccionPropiaSql(rango)}`,
     [userId]
   );
   return rows;
+}
+
+/**
+ * n184 · tope ANTES del trabajo pesado. Cuenta las mesas candidatas del rango
+ * (base consumo: el mismo predicado que la carga; base pagos: mesas con pago
+ * propio) sin cargar ítems ni calcular lo propio. Las visitas nunca superan a
+ * las candidatas, así que si éstas pasan el tope se responde 413 sin hacer la
+ * consulta cara; el chequeo exacto de después se mantiene.
+ */
+async function excedeTopeAntes(userId, rango, maximo) {
+  const { rows: [r] } = await pool.query(dineroHabilitado()
+    ? `SELECT COUNT(DISTINCT pa.mesa_id)::int AS n FROM payment_attempts pa
+        WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
+          AND ${filtroDeRango('pa.created_at', rango)}`
+    : `SELECT COUNT(*)::int AS n FROM mesas m WHERE ${seleccionPropiaSql(rango)}`,
+  [userId]);
+  return r.n > maximo;
 }
 
 async function consumoDesdeSelecciones(userId, rango = RANGO_DEL_MES) {
@@ -740,6 +763,9 @@ async function restaurantesDesdePagos(userId, rango = RANGO_DEL_MES) {
 router.get('/stats/restaurants', validateQuery(statsPeriodQuery), async (req, res, next) => {
   try {
     const { key: periodo, rango } = periodoDe(req);
+    if (await excedeTopeAntes(req.user.id, rango, maxVisitasDelMes)) {
+      return res.status(413).json({ error: 'stats_month_too_large' });
+    }
     const period = await periodoPublicado(periodo, rango);
     const cuerpo = dineroHabilitado()
       ? await restaurantesDesdePagos(req.user.id, rango)
@@ -821,6 +847,9 @@ function armarPlatos(restaurants) {
 router.get('/stats/dishes', validateQuery(statsPeriodQuery), async (req, res, next) => {
   try {
     const { key: periodo, rango } = periodoDe(req);
+    if (await excedeTopeAntes(req.user.id, rango, maxVisitasDelRango)) {
+      return res.status(413).json({ error: 'stats_range_too_large' });
+    }
     const period = await periodoPublicado(periodo, rango);
     const cuerpo = dineroHabilitado()
       ? await restaurantesDesdePagos(req.user.id, rango)
@@ -879,6 +908,9 @@ function armarMomentos(restaurants) {
 router.get('/stats/dayparts', validateQuery(statsPeriodQuery), async (req, res, next) => {
   try {
     const { key: periodo, rango } = periodoDe(req);
+    if (await excedeTopeAntes(req.user.id, rango, maxVisitasDelRango)) {
+      return res.status(413).json({ error: 'stats_range_too_large' });
+    }
     const period = await periodoPublicado(periodo, rango);
     const cuerpo = dineroHabilitado()
       ? await restaurantesDesdePagos(req.user.id, rango)
@@ -905,6 +937,10 @@ router.get('/stats/dayparts', validateQuery(statsPeriodQuery), async (req, res, 
  */
 function armarIngredientes(restaurants) {
   const porGrupo = new Map();
+  // n178 · platos distintos por grupo, con la MISMA clave que `dishes`
+  // (restaurante + normalizarPlato): la suma de dish_count de todos los grupos
+  // (incluido `other`, y los de monto 0 que no se publican) es distinct_dishes.
+  const platosPorGrupo = new Map();
   let total = 0;
   for (const r of restaurants) {
     for (const v of r.visits) {
@@ -915,11 +951,14 @@ function armarIngredientes(restaurants) {
         g.amount_cents += it.amount_cents;
         if (!enEstaVisita.has(key)) { g.times += 1; enEstaVisita.add(key); }
         porGrupo.set(key, g);
+        if (!platosPorGrupo.has(key)) platosPorGrupo.set(key, new Set());
+        platosPorGrupo.get(key).add(`${r.id}\u0000${normalizarPlato(it.name)}`);
         total += it.amount_cents;
       }
     }
   }
   const groups = [...porGrupo.values()]
+    .map((g) => ({ ...g, dish_count: platosPorGrupo.get(g.key).size }))
     .filter((g) => g.amount_cents > 0)
     .sort((a, b) => {
       if ((a.key === 'other') !== (b.key === 'other')) return a.key === 'other' ? 1 : -1;
@@ -936,6 +975,9 @@ function armarIngredientes(restaurants) {
 router.get('/stats/ingredients', validateQuery(statsPeriodQuery), async (req, res, next) => {
   try {
     const { key: periodo, rango } = periodoDe(req);
+    if (await excedeTopeAntes(req.user.id, rango, maxVisitasDelRango)) {
+      return res.status(413).json({ error: 'stats_range_too_large' });
+    }
     const period = await periodoPublicado(periodo, rango);
     const cuerpo = dineroHabilitado()
       ? await restaurantesDesdePagos(req.user.id, rango)
@@ -962,6 +1004,10 @@ const MESES_DE_EVOLUCION = 6;
 
 router.get('/stats/evolution', async (req, res, next) => {
   try {
+    const seisMeses = { desde: rangoDeMesAtrasMxSql(MESES_DE_EVOLUCION - 1).desde, hasta: null };
+    if (await excedeTopeAntes(req.user.id, seisMeses, maxVisitasDelRango)) {
+      return res.status(413).json({ error: 'stats_range_too_large' });
+    }
     const meses = [];
     for (let k = MESES_DE_EVOLUCION - 1; k >= 0; k -= 1) {
       const rango = rangoDeMesAtrasMxSql(k);
@@ -993,6 +1039,8 @@ router.get('/stats/evolution', async (req, res, next) => {
 
 router.get('/stats', validateQuery(statsPeriodQuery), async (req, res, next) => {
   try {
+    // n184 · estadísticas propias: nunca en caches intermediarios ni del navegador.
+    res.setHeader('Cache-Control', 'private, no-store');
     const { rows: month } = await pool.query(
       `SELECT COALESCE(SUM(gross_amount_cents), 0) AS spent,
               COUNT(*)::int AS visits,

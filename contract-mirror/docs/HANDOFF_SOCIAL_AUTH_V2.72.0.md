@@ -42,7 +42,8 @@ aunque luego se retire esa configuración.
   Google»): si el correo verificado es de una cuenta activa con contraseña,
   `409 {error:"link_required", link_intent}`; `POST /api/auth/google/continue/link`
   con `{link_intent, password}` crea el vínculo y da sesión (`linked:true`).
-  Intento de un solo uso, 10 minutos, quemado al quinto error. Correo no
+  Intento de un solo uso, 10 minutos, quemado al quinto error; desde v2.125.0
+  (n187) además 5 errores por CUENTA en 1 hora, sumando todos sus intentos. Correo no
   verificado o cuenta sin contraseña ⇒ `registration_not_available` opaco. Sin alta disponible ⇒ el mismo `social_auth_failed` 401 que
   login. Sin nombre utilizable ⇒ `422 profile_required` y reintento con nombre
   declarado y credencial nueva. Capability: `features.google_continue`

@@ -134,8 +134,8 @@
         "too_many_auth_attempts": [429]
       },
       "error_notes": {
-        "reauthentication_failed": "contraseña incorrecta, sin vínculo. El intento sigue vivo hasta 5 errores; al quinto se quema y desde ahí responde social_auth_failed.",
-        "social_auth_failed": "intento inexistente, vencido, usado o quemado; cuenta destino ya inactiva o sin contraseña; o el subject quedó vinculado a otra cuenta entre medio."
+        "reauthentication_failed": "contraseña incorrecta, sin vínculo. El intento sigue vivo hasta 5 errores; al quinto se quema y desde ahí responde social_auth_failed. Desde v2.125.0 (n187) el tope también es POR CUENTA: 5 errores sumando todos los intentos de la cuenta destino en 1 hora; al tope, cualquier intento de esa cuenta responde social_auth_failed sin probar la contraseña.",
+        "social_auth_failed": "intento inexistente, vencido, usado o quemado; cuenta destino ya inactiva o sin contraseña; tope de errores de la cuenta alcanzado (n187); o el subject quedó vinculado a otra cuenta entre medio."
       }
     },
     "google_link": {
