@@ -486,7 +486,14 @@ export function CreateMesaFlow() {
   const [priorAttemptCheckedFor, setPriorAttemptCheckedFor] = useState('');
   const [priorAttemptCheckFailedFor, setPriorAttemptCheckFailedFor] = useState('');
   const priorAttemptChecked = !!mesaScopeBase && priorAttemptCheckedFor === mesaScopeBase;
-  const priorAttemptCheckFailed = priorAttemptCheckFailedFor === mesaScopeBase;
+  /**
+   * AF-N134 · sin actor todavía, `mesaScopeBase` es '' y el estado inicial también: la comparación sola daba
+   * «falló» antes de que la verificación empezara, y la pantalla abandonaba la espera con el error falso «No
+   * pudimos descartar una apertura anterior» mientras el actor seguía resolviéndose (medido en n181 caso 1, 20 de
+   * 20). Actor PENDIENTE ⇒ todavía no se verificó: se espera. Actor FALLIDO ⇒ la verificación no se puede hacer:
+   * eso sí es fallar, y el caso 2 lo exige (sin esto «Continuando…» quedaba colgado para siempre).
+   */
+  const priorAttemptCheckFailed = mesaScopeBase ? priorAttemptCheckFailedFor === mesaScopeBase : !!actorError;
   useEffect(() => {
     setFrozen(null);
     setPriorAttemptCheckedFor('');
