@@ -106,6 +106,32 @@ async function esperarPendiente(page: Page, barrier: 'actor' | 'read'): Promise<
   return { waiters, ui };
 }
 
+/**
+ * AF-N134 · registra, desde antes del clic, cada alerta y cada vez que el CTA vuelve a «Continuar». Un poll sólo ve
+ * el estado en el instante en que pregunta; esto ve también lo que pasó entre dos preguntas.
+ */
+async function vigilarEspera(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __n181Vigilancia: { alertas: string[]; volvioContinuar: boolean; vioEspera: boolean } };
+    w.__n181Vigilancia = { alertas: [], volvioContinuar: false, vioEspera: false };
+    const mirar = () => {
+      for (const alerta of document.querySelectorAll('[role="alert"]')) {
+        const texto = alerta.textContent?.trim() ?? '';
+        if (texto && !w.__n181Vigilancia.alertas.includes(texto)) w.__n181Vigilancia.alertas.push(texto);
+      }
+      const textos = [...document.querySelectorAll('button')].map((b) => b.textContent?.trim() ?? '');
+      if (textos.includes('Continuando…')) w.__n181Vigilancia.vioEspera = true;
+      else if (w.__n181Vigilancia.vioEspera && textos.includes('Continuar')) w.__n181Vigilancia.volvioContinuar = true;
+    };
+    new MutationObserver(mirar).observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+    mirar();
+  });
+}
+
+async function leerVigilancia(page: Page): Promise<{ alertas: string[]; volvioContinuar: boolean; vioEspera: boolean }> {
+  return page.evaluate(() => (window as unknown as { __n181Vigilancia: { alertas: string[]; volvioContinuar: boolean; vioEspera: boolean } }).__n181Vigilancia);
+}
+
 async function guardarCaso(
   page: Page,
   testInfo: TestInfo,
@@ -141,8 +167,19 @@ test('1 · actor pendiente muestra espera y sale al liberar la barrera', async (
     await abrirTicket(page);
     const before = await estadoN179(page);
     evidence.before = before;
+    await vigilarEspera(page);
     await clickContinuar(page);
     evidence.pending = await esperarPendiente(page, 'actor');
+    // AF-N134 · la espera tiene que SOSTENERSE mientras la barrera retiene, no sólo aparecer. Medido (sonda de
+    // línea de tiempo, 20 de 20): con el actor pendiente la pantalla mostraba «Continuando…» unos 40 ms y después
+    // el error falso «No pudimos descartar…»; este caso pasaba sólo si liberaba la barrera dentro de esa ventana.
+    await page.waitForTimeout(1000);
+    const sostenida = await leerVigilancia(page);
+    evidence.sostenida = sostenida;
+    expect(sostenida.alertas, 'con el actor pendiente no puede aparecer un error').toEqual([]);
+    expect(sostenida.volvioContinuar, 'el CTA no puede volver a «Continuar» mientras la barrera retiene').toBe(false);
+    expect((await probeN181(page)).actorWaiters, 'la barrera sigue reteniendo al actor').toBeGreaterThan(0);
+    await expect(page.getByRole('button', { name: 'Continuando…', exact: true })).toBeDisabled();
     evidence.pendingProbe = await probeN181(page);
 
     await liberarBarreraN181(page, 'actor');
