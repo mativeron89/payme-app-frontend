@@ -11,6 +11,53 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.191.0 — «Listo» registra y lleva a Inicio (decisión 32) (2026-09-24)
+
+Orden `AF-LISTO-INICIO-CLAUDE-20260924`. Decisión 32 de Mati, literal: «En esa pantalla ya
+muestra lo que elegí, cuando selecciono Listo me debería llevar a la pantalla de Inicio».
+Base `0.190.2`. Sin cambios de contrato, mock ni backend.
+
+- **Con los pagos apagados, «Listo» con una selección nueva registra** —lock en «cada uno
+  lo suyo», PUT informativo en «igual»— **y, si el dueño responde OK, vuelve a Inicio.** Si
+  falla, no navega y muestra el error de siempre. El detalle sigue accesible desde Inicio o
+  Mesas; al reentrar, la fila dice «Lo elegiste» (consumo) o la nota fija «Tu selección
+  quedó guardada» (igual).
+- **Ya registrado y sin nada nuevo, «Listo»/«Guardado» también lleva a Inicio, sin volver a
+  enviar.** Medido el 24/09 en producción (mesa PA-22383, 0.190.0): el lock había respondido
+  200 y el círculo quedaba vivo y mudo, porque `goToPay` retornaba en silencio con la
+  selección local vacía. Nunca más un retorno silencioso.
+- En «cada uno lo suyo», sin nada elegido ni registrado, «Listo» usa la misma guarda que
+  «Continuar»: toast «Elige lo que consumiste para continuar», scroll y pulso.
+- **n225 cambia en un punto, declarado:** «Guardado» deja de estar deshabilitado —lleva a
+  Inicio sin reenviar—; la nota fija se conserva. Guarda unitaria actualizada en
+  `src/corteGuard.test.ts`.
+- Pruebas de conducta nuevas, con clics a 390 px, en `e2e/listo-lleva-a-inicio.spec.ts`:
+  elegir → Inicio; segundo toque → Inicio sin otro lock/PUT; sin nada → toast sin navegar;
+  lock/PUT que falla → sin navegar y con error; igual y consumo. Cuatro son rojas contra
+  `0.190.1`; las dos de fallo ya pasaban —la base tampoco navegaba al fallar— y quedan como
+  guarda contra navegar de más. Seis specs existentes reentran a la mesa después de «Listo»;
+  en los guardados vacíos (replay exacto, sin fila en el dueño) la nota ya no puede mostrarse
+  al reentrar y el éxito lo acredita la vuelta a Inicio.
+
+**Adenda (mismo lease, commit aparte) · pin tolerante del Aviso 2.5.5 y 2.5.6.** Decisiones
+34/35 de Mati (notificaciones por correo) y regla del incidente `dish_count`: el consumidor
+tolerante se publica antes que el dueño.
+
+- `src/api/friendAvatarNotice.ts` acepta **exactamente dos pares** `{versión, huella}` en
+  `/friends/avatar-notice`: `2.5.5 · 5847ec0a…` (producción hoy) y `2.5.6 · fb5b0d93…` (sha256
+  del cuerpo exacto del texto congelado `aviso_privacidad_2.5.6.md`, remedido acá con el mismo
+  `hashBody` del dueño). Par cruzado, ajeno o con la huella en mayúsculas: falla cerrado, como
+  antes. El acuse va con el par que devolvió el servidor, como hoy. El mock sigue presentando
+  2.5.5.
+- **Declarado:** `src/api/privateFeatures.ts` también fija la versión (`PRESENTABLE_NOTICE_VERSIONS`)
+  y se le AGREGA `2.5.6`; sin eso, un dueño en 2.5.6 apagaría la edición de nombre y foto con
+  `notice_unavailable`. Ese set estaba fuera del alcance de las órdenes anteriores; la adenda lo
+  incluye expresamente («si otro archivo del front fija la versión, incluilo y declaralo»).
+- Pruebas: unitarias del par (`friendAvatarNotice.test.ts`, roja contra `0.190.1` en 2.5.6;
+  cruzados y ajenos rechazados), capability (`profileIdentity.test.ts`, 2.5.6 y sus near-miss) y
+  de conducta (`e2e/ajustes10-u05.spec.ts`: con 2.5.6 el cartel se muestra y «Entendido» acusa ese
+  par; un par cruzado no muestra cartel ni acusa).
+
 ## 0.190.2 — «Continuar» ya no muestra un error falso mientras se prepara la identidad (2026-09-24)
 
 Orden `AF-N134-DEPS-CLAUDE-20260924`, opción (b) del Bibliotecario y adenda de scope. Base `0.190.1`,
