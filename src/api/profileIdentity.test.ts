@@ -143,6 +143,17 @@ const PROFILE_NEAR_MISS_255 = [
   { ...PROFILE_ON, notice_version: '2.5.5-rc' },
 ];
 
+/** Adenda 2026-09-24 · 2.5.6 (notificaciones por correo) se presenta ANTES que el dueño. */
+const PROFILE_256 = {
+  ...PROFILE_ON,
+  notice_version: '2.5.6',
+};
+
+const PROFILE_NEAR_MISS_256 = [
+  { ...PROFILE_ON, notice_version: '2.5.60' },
+  { ...PROFILE_ON, notice_version: '2.5.6-rc' },
+];
+
 const PROFILE_NEAR_MISS_254 = [
   { ...PROFILE_ON, notice_version: '2.5.40' },
   { ...PROFILE_ON, notice_version: '2.5.4-rc' },
@@ -237,8 +248,10 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.4' });
     expect(readProfileIdentityCapability(config(PROFILE_255)))
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.5' });
+    expect(readProfileIdentityCapability(config(PROFILE_256)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.6' });
     // …sin sus near-miss…
-    for (const cerca of [...PROFILE_NEAR_MISS_250, ...PROFILE_NEAR_MISS_251, ...PROFILE_NEAR_MISS_252, ...PROFILE_NEAR_MISS_253, ...PROFILE_NEAR_MISS_254, ...PROFILE_NEAR_MISS_255]) {
+    for (const cerca of [...PROFILE_NEAR_MISS_250, ...PROFILE_NEAR_MISS_251, ...PROFILE_NEAR_MISS_252, ...PROFILE_NEAR_MISS_253, ...PROFILE_NEAR_MISS_254, ...PROFILE_NEAR_MISS_255, ...PROFILE_NEAR_MISS_256]) {
       expect(readProfileIdentityCapability(config(cerca)).status, cerca.notice_version).toBe('notice_unavailable');
     }
     // …y una versión FUTURA sigue apagando.

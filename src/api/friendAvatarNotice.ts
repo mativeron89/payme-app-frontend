@@ -1,7 +1,31 @@
 import type { LegalTextResponse } from './types';
 
-export const FRIEND_AVATAR_NOTICE_VERSION = '2.5.5';
-export const FRIEND_AVATAR_NOTICE_HASH = '5847ec0aff8247258d0763bc75ac6cd82ea553ae78b0ff06128ab43927085bd5';
+/**
+ * Pares {versión, huella} del Aviso que este front acepta del dueño en
+ * `/friends/avatar-notice`: **exactamente estos dos y ningún otro**. Un par
+ * cruzado (versión de uno con huella del otro) o ajeno falla cerrado.
+ *
+ * Adenda a AF-LISTO-INICIO (decisiones 34/35, 2026-09-24) y regla del incidente
+ * `dish_count`: el consumidor tolerante se publica ANTES que el dueño, para que
+ * App Backend pueda pasar a 2.5.6 sin apagar este cartel.
+ * - 2.5.5 · `5847ec0a…`: lo que sirve producción hoy (medido en `/ready`).
+ * - 2.5.6 · `fb5b0d93…`: sha256 del cuerpo exacto del texto congelado
+ *   (`hashBody` del dueño = sha256 del cuerpo servido; remedido acá sobre
+ *   `aviso_privacidad_2.5.6.md`, cuerpo sin frontmatter ni blancos de borde).
+ * El acuse se hace siempre con el par que devolvió el servidor, como hasta hoy.
+ */
+export const FRIEND_AVATAR_NOTICE_PAIRS: readonly { readonly version: string; readonly hash: string }[] = [
+  { version: '2.5.5', hash: '5847ec0aff8247258d0763bc75ac6cd82ea553ae78b0ff06128ab43927085bd5' },
+  { version: '2.5.6', hash: 'fb5b0d9301bacf9ad662cd20812bf57ef4745c46c49a412b76871a14f6574d0e' },
+];
+
+/** El par que sirve producción hoy; es el que presenta el riel mock. */
+export const FRIEND_AVATAR_NOTICE_VERSION = FRIEND_AVATAR_NOTICE_PAIRS[0].version;
+export const FRIEND_AVATAR_NOTICE_HASH = FRIEND_AVATAR_NOTICE_PAIRS[0].hash;
+
+export function isAcceptedFriendAvatarNoticePair(version: unknown, hash: unknown): boolean {
+  return FRIEND_AVATAR_NOTICE_PAIRS.some((pair) => pair.version === version && pair.hash === hash);
+}
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 export interface FriendAvatarNoticeState {
@@ -41,8 +65,10 @@ export function decodeFriendAvatarNotice(value: unknown): FriendAvatarNoticeStat
   ])) throw new Error('friend_avatar_notice_response_malformed');
 
   const acknowledgedAt = value.acknowledged_at;
-  if (value.notice_version !== FRIEND_AVATAR_NOTICE_VERSION
-      || value.notice_hash !== FRIEND_AVATAR_NOTICE_HASH
+  const noticeVersion = value.notice_version;
+  const noticeHash = value.notice_hash;
+  if (typeof noticeVersion !== 'string' || typeof noticeHash !== 'string'
+      || !isAcceptedFriendAvatarNoticePair(noticeVersion, noticeHash)
       || typeof value.acknowledged !== 'boolean'
       || !(acknowledgedAt === null || validUtc(acknowledgedAt))
       || value.acknowledged !== (acknowledgedAt !== null)) {
@@ -50,8 +76,8 @@ export function decodeFriendAvatarNotice(value: unknown): FriendAvatarNoticeStat
   }
 
   return {
-    noticeVersion: value.notice_version,
-    noticeHash: value.notice_hash,
+    noticeVersion,
+    noticeHash,
     acknowledged: value.acknowledged,
     acknowledgedAt,
   };

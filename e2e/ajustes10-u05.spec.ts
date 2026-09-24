@@ -43,4 +43,62 @@ test.describe('U05 · foto entre amigos y acuse explícito', () => {
     await expect(maria.locator('.avatar')).toBeVisible();
     await capturar(page, 'u05-fotos-y-fallback');
   });
+
+  /**
+   * Adenda a AF-LISTO-INICIO (2026-09-24) · pin tolerante: el front acepta los
+   * pares 2.5.5 y 2.5.6 con sus huellas exactas, y ningún otro. El riel mock
+   * sigue sirviendo 2.5.5; acá el servidor (parchado en el módulo `api`) devuelve
+   * el otro par válido o uno ajeno ANTES de entrar, que es cuando el cartel lee.
+   */
+  const HASH_256 = 'fb5b0d9301bacf9ad662cd20812bf57ef4745c46c49a412b76871a14f6574d0e';
+
+  async function conServidorQueDevuelve(page: import('@playwright/test').Page, version: string, hash: string): Promise<void> {
+    await page.goto('/');
+    await page.evaluate(async ([v, h]) => {
+      const route = '/src/api/index.ts';
+      const module = await import(/* @vite-ignore */ route) as {
+        api: Record<string, (...args: unknown[]) => Promise<unknown>>;
+      };
+      // El decodificador REAL sigue en el camino: es el pin que se prueba. Sólo
+      // se sustituye lo que el servidor contesta.
+      const pinRoute = '/src/api/friendAvatarNotice.ts';
+      const pin = await import(/* @vite-ignore */ pinRoute) as { decodeFriendAvatarNotice: (raw: unknown) => unknown };
+      const legal = await module.api.getPrivacyNotice() as { legal_text: Record<string, unknown> };
+      module.api.getFriendAvatarNotice = async () => pin.decodeFriendAvatarNotice(
+        { notice_version: v, notice_hash: h, acknowledged: false, acknowledged_at: null },
+      );
+      module.api.getPrivacyNotice = async () => ({ legal_text: { ...legal.legal_text, version: v, hash: h } });
+      module.api.acknowledgeFriendAvatarNotice = async (body: unknown) => {
+        localStorage.setItem('payme.app.e2e.u05.acuse', JSON.stringify(body));
+        const b = body as { notice_version: string; notice_hash: string };
+        return pin.decodeFriendAvatarNotice(
+          { notice_version: b.notice_version, notice_hash: b.notice_hash, acknowledged: true, acknowledged_at: '2026-09-24T00:00:00.000Z' },
+        );
+      };
+    }, [version, hash] as const);
+    await page.getByLabel('Email', { exact: true }).fill('mati@payme.mx');
+    await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
+    await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
+  }
+
+  test('pin tolerante · con el par 2.5.6 el cartel se muestra y «Entendido» acusa ese par exacto', async ({ page }) => {
+    await conServidorQueDevuelve(page, '2.5.6', HASH_256);
+    const notice = page.getByLabel('Actualización del Aviso de Privacidad');
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText('2.5.6');
+    await notice.getByRole('button', { name: 'Entendido', exact: true }).click();
+    await expect(notice).toHaveCount(0);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('payme.app.e2e.u05.acuse') ?? 'null')))
+      .toEqual({ notice_version: '2.5.6', notice_hash: HASH_256 });
+  });
+
+  test('pin tolerante · un par ajeno o cruzado no muestra el cartel ni acusa nada (falla cerrado)', async ({ page }) => {
+    await conServidorQueDevuelve(page, '2.5.6', '5847ec0aff8247258d0763bc75ac6cd82ea553ae78b0ff06128ab43927085bd5');
+    await expect(page.getByLabel('Actualización del Aviso de Privacidad')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Amigos', exact: true }).click();
+    await expect(page.getByPlaceholder('Buscar entre tus amigos')).toBeVisible();
+    await expect(page.getByLabel('Actualización del Aviso de Privacidad')).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('payme.app.e2e.u05.acuse'))).toBeNull();
+  });
 });
