@@ -11,6 +11,28 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.190.1 — Avisos de seguridad de dependencias sin subir de mayor (n134) (2026-09-24)
+
+Orden `AF-N134-DEPS-CLAUDE-20260924` (Roadmap n134, parte App Frontend). Base `0.190.0`.
+Sólo dependencias de desarrollo: **el runtime (`npm audit --omit=dev`) tenía 0 avisos y
+sigue con 0**. No cambia nada de lo que ve la persona.
+
+- **De 8 avisos a 4** en `npm audit` completo:
+  - `js-yaml` 4.1.0 → **4.3.2**, con el pin exacto de siempre: es la devDependency del
+    instrumento de tests que Mati autorizó. Cierra los tres avisos altos de merge keys.
+  - `npm audit fix --package-lock-only`: `browserslist` 4.29.1, `nanoid` 3.3.19 y
+    `baseline-browser-mapping` 2.11.26, más sus arrastres (`caniuse-lite`,
+    `electron-to-chromium`, `node-releases` y `update-browserslist-db`). Todos son minor
+    o patch; ningún paquete nuevo ni quitado.
+- ⚠️ **Quedan 4, declarados y sin tocar**, porque sólo se cierran subiendo de mayor, y
+  eso es otra orden (sin Node 24 ni Vite 8 acá):
+  - `vite` 5.4.21 (alto) y `esbuild` 0.21.5 (moderado), que viene con Vite 5: se
+    cierran con Vite 6.4.3+ u 8.
+  - `vitest` 3.2.7 y `@vitest/mocker` (moderados): se cierran con Vitest 4.1.11+ o 5.
+    La línea 3.x no tiene parche.
+  - Los cuatro son herramientas del servidor de desarrollo y de la suite: no llegan al
+    bundle publicado.
+
 ## 0.190.0 — Pago en revisión sin promesa de reintento, aviso de Google en Safari, censo de estadísticas estable (2026-09-23)
 
 Orden `AF-ROADMAP-TARDE-CLAUDE-20260922`, puntos 1, 3, 4 y 5 (Roadmap n226,
