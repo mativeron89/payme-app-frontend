@@ -11,6 +11,26 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.190.2 — «Continuar» ya no muestra un error falso mientras se prepara la identidad (2026-09-24)
+
+Orden `AF-N134-DEPS-CLAUDE-20260924`, opción (b) del Bibliotecario y adenda de scope. Base `0.190.1`,
+que no llegó a publicarse: CI dio rojo en `n181-clases-pendientes` caso 1 (run `36066442938`).
+
+- 🔴 **El «intermitente» era un defecto de producto.** Una sonda de línea de tiempo (MutationObserver)
+  sobre el caso 1 midió, en 20 de 20 corridas, que con el actor todavía pendiente la pantalla mostraba
+  «Continuando…» unos 40 ms y después «No pudimos descartar una apertura anterior…», con «Continuar»
+  otra vez habilitado. El test pasaba sólo si su poll caía dentro de esa ventana.
+- **Causa:** `CreateMesaFlow.tsx`, `priorAttemptCheckFailed = priorAttemptCheckFailedFor === mesaScopeBase`.
+  Sin actor, los dos valen `''` y la comparación decía «falló» antes de que la verificación empezara.
+  Viene de `2c921e0`.
+- **Arreglo:** `mesaScopeBase ? … : !!actorError`. Con el actor pendiente, se espera. Con el actor
+  fallido, falla como antes: el caso 2 lo exige, y la variante `!!mesaScopeBase && …` lo dejaba colgado
+  en «Continuando…» para siempre (medido 5 de 5).
+- **El caso 1 ahora es determinista:** exige que la espera se sostenga 1 s, sin alertas y con la barrera
+  reteniendo. Contra el producto anterior da rojo 5 de 5; con el arreglo, el spec completo da 30 de 30
+  sin flaky, con el método del CI (`CI=1`, 1 worker, 2 reintentos, `--repeat-each=5`). Antes daba 2 de 30.
+- Incluye 0.190.1 (dependencias sin subir de mayor, n134).
+
 ## 0.190.1 — Avisos de seguridad de dependencias sin subir de mayor (n134) (2026-09-24)
 
 Orden `AF-N134-DEPS-CLAUDE-20260924` (Roadmap n134, parte App Frontend). Base `0.190.0`.
