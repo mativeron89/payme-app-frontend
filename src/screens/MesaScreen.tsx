@@ -876,6 +876,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     }
   }
 
+  /**
+   * Decisión 32 (Mati, 2026-09-24): con el guardado OK, «Listo» vuelve a
+   * Inicio; si falla, no navega y muestra el error. El invitado (rama
+   * durmiente) no puede salir a 'home' —`navigate()` reescribe el hash sin
+   * el token— así que conserva la recarga de siempre.
+   */
+  function volverAInicio(): void {
+    if (isGuest) { reload(); return; }
+    navigate('home');
+  }
+
   async function goToPay() {
     if (!mesa) return;
     /**
@@ -896,7 +907,14 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
      */
     setError(null);
     if (mesa.division_mode === 'consumo') {
-      if (selected.size === 0) return;
+      if (selected.size === 0) {
+        // Decisión 32 · ya registrado y sin nada nuevo: «Listo» también lleva
+        // a Inicio; nunca un retorno mudo (medido el 24/09: el círculo quedaba
+        // vivo sin hacer nada). Sin nada registrado, la vista frena explicando
+        // antes de llegar acá, con la misma guarda que «Continuar».
+        if (mesa.items.some((i) => i.my_bps > 0 && i.status !== 'paid')) volverAInicio();
+        return;
+      }
       setBusy(true);
       try {
         // Contrato: lock primero (POST /:code/items/lock), después pagar.
@@ -915,7 +933,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         // dueño (`my_bps`) y la fila lo muestra como «Lo elegiste», con «Soltar».
         // Antes quedaba marcada con un selector de porción vacío y «Tu parte:
         // $0.00», porque lo que quedaba libre del ítem ya era 0 (medido).
-        if (!CORTE.allowsPay) { setSelected(new Map()); setSelectedDenominators(new Map()); reload(); return; }
+        //
+        // Decisión 32 · con el lock OK se vuelve a Inicio: el detalle sigue
+        // accesible desde Inicio o Mesas, y al volver la fila dice «Lo elegiste».
+        if (!CORTE.allowsPay) { setSelected(new Map()); setSelectedDenominators(new Map()); volverAInicio(); return; }
         setView('pay');
       } catch (err) {
         const { code: ec, extra } = extractApiError(err);
@@ -971,6 +992,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // registrar —la declaración es informativa—: el recorrido termina donde
       // está, sin abrir una pantalla de cobro que no puede cobrar.
       if (!CORTE.allowsPay) {
+        // Decisión 32 · lo guardado sigue igual (ninguna edición desde el último
+        // guardado acreditado): «Guardado» lleva a Inicio sin volver a enviar.
+        if (informativeSaved) { volverAInicio(); return; }
         if (informativeState === 'unsupported' || informativeState === 'idle') {
           toast(t('Guardar esta selección todavía no está disponible.'));
           return;
@@ -997,10 +1021,10 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           // Si sigue abierta, la recarga debe terminar antes de permitir otra
           // edición: así su GET tardío no puede pisar un borrador posterior.
           setInformativeState(saved.mesa.mutable ? 'loading' : 'readonly');
-          // P1 · la confirmación es la nota fija de la vista, no un toast de
-          // 2,4 s: lo guardado se ve hasta que la persona cambie algo.
+          // P1 · la confirmación es la nota fija de la vista al volver, no un
+          // toast de 2,4 s. Decisión 32 · con el guardado OK se vuelve a Inicio.
           setInformativeSaved(true);
-          reload();
+          volverAInicio();
         } catch (err) {
           let reconciled = false;
           try {
@@ -1010,7 +1034,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
               setSelected(selectionMap(saved));
               setInformativeState(saved.mesa.mutable ? 'loading' : 'readonly');
               setInformativeSaved(true);
-              reload();
+              volverAInicio();
             } else if (!saved.mesa.mutable) {
               setInformativeState('readonly');
             }

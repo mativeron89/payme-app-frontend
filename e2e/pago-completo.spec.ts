@@ -112,6 +112,8 @@ test.describe('el camino de pago completo', () => {
      * que lo dice. Salir sin registrar dejaría ese aviso mintiendo.
      */
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    // Decisión 32 (2026-09-24) · registra y vuelve a Inicio: Mati lo pidió literal.
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
     // Y nada se cobró: la mesa sigue en $0.00 de $840.00.

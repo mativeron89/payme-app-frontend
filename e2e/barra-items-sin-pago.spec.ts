@@ -112,6 +112,9 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
 
     // Dos eventos no duplican el claim: el owner reemplaza el lock propio.
     await page.getByRole('button', { name: 'Listo', exact: true }).dblclick();
+    // Decisión 32 · con el lock OK se vuelve a Inicio; se reentra para mirar la barra.
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+    await page.goto('/#/mesa/PA-8401');
     await expect(page.getByRole('button', { name: 'Soltar Consumo de 300' })).toBeVisible();
     await expect(page.getByRole('progressbar', { name: 'Asignado 36% de la mesa' })).toBeVisible();
     await expect(page.getByText('$300.00 asignados · $540.00 por asignar (36%)')).toBeVisible();

@@ -561,6 +561,16 @@ export function MesaDetailView({
    * mirándola de cerca son TRES razones, no dos.
    */
   const faltaElegirConsumos = esConsumo && selected.size === 0;
+  // Decisión 32 · en consumo, «registrado» vive en el dueño (`my_bps`): con algo
+  // registrado y nada nuevo, «Listo» vuelve a Inicio en vez de quedarse mudo.
+  const tengoRegistrado = esConsumo && mesa.items.some((i) => i.my_bps > 0 && i.status !== 'paid');
+  // Frena explicando, no apagado (§5 bis · E): toast + scroll + pulso, las
+  // tres. Compartido por «Continuar» y «Listo»: nunca se avanza sin elegir.
+  const frenarSinEleccion = (): void => {
+    toast(t('Elige lo que consumiste para continuar'));
+    itemsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    setItemsPulse(true);
+  };
   const continuarDeshabilitado = busy || (!esConsumo && availableSlots === 0);
 
   return (
@@ -901,14 +911,16 @@ export function MesaDetailView({
         />
       )}
       {/* Con pagos apagados, Listo es el único acto explícito de persistencia.
-          No navega ni cobra; cerrado/lectura/error lo deshabilitan hasta que el
-          estado propio sea conocido. */}
+          No cobra; con el guardado OK vuelve a Inicio (decisión 32) y si falla
+          se queda mostrando el error; cerrado/lectura/error lo deshabilitan
+          hasta que el estado propio sea conocido. */}
       <AppBottomBar
         active={null}
         above={miParte}
         center={pagosCortados ? {
-          // P1 · con lo guardado a la vista el círculo lo dice y no se puede
-          // volver a enviar lo mismo; la primera edición lo devuelve a «Listo».
+          // P1 · con lo guardado a la vista el círculo lo dice; la primera
+          // edición lo devuelve a «Listo». Decisión 32 · «Guardado» sigue
+          // tocable: lleva a Inicio sin volver a enviar lo mismo.
           label: !esConsumo && informativeSaved ? t('Guardado') : t('Listo'),
           icon: 'check',
           /**
@@ -920,21 +932,17 @@ export function MesaDetailView({
            * local y nunca envía por sí mismo.
            */
           onClick: () => {
+            // Decisión 32 · sin nada elegido ni registrado, la misma guarda
+            // que «Continuar»; nunca un retorno silencioso.
+            if (faltaElegirConsumos && !tengoRegistrado) { frenarSinEleccion(); return; }
             onGoToPay();
           },
-          disabled: busy || (!esConsumo && (informativeEditingBlocked || informativeSaved)),
+          disabled: busy || (!esConsumo && informativeEditingBlocked),
         } : {
           label: t('Continuar'),
           icon: 'arrow-right',
           onClick: () => {
-            // Frena explicando, no apagado (§5 bis · E): toast + scroll + pulso,
-            // las tres. `onGoToPay` no se llama: no se avanza sin elegir.
-            if (faltaElegirConsumos) {
-              toast(t('Elige lo que consumiste para continuar'));
-              itemsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-              setItemsPulse(true);
-              return;
-            }
+            if (faltaElegirConsumos) { frenarSinEleccion(); return; }
             onGoToPay();
           },
           disabled: continuarDeshabilitado,

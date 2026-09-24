@@ -437,15 +437,20 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
 
   /**
    * P1 · después de guardar, la vista lo dice de forma fija y el círculo pasa a
-   * «Guardado» deshabilitado; sin guardado (o tras editar) vuelve «Listo».
-   * En consumo la prop no tiene efecto: ahí no hay selección informativa.
+   * «Guardado»; sin guardado (o tras editar) vuelve «Listo». En consumo la prop
+   * no tiene efecto: ahí no hay selección informativa.
+   *
+   * Decisión 32 (2026-09-24): «Guardado» ya NO se deshabilita —lleva a Inicio
+   * sin volver a enviar lo mismo—; hasta 0.190.1 el markup traía
+   * `disabled="" aria-label="Guardado"` y esta guarda lo exigía.
    */
-  it('con la selección guardada la nota es fija y el círculo dice «Guardado» deshabilitado', () => {
+  it('con la selección guardada la nota es fija y el círculo dice «Guardado», tocable', () => {
     const igual: MesaDetail = { ...MESA, division_mode: 'igual' };
     const guardado = vista({ mesa: igual, informativeSaved: true });
     expect(guardado).toContain('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».');
-    // El círculo deshabilitado: `disabled` precede al `aria-label` en el markup.
-    expect(guardado).toContain('disabled="" aria-label="Guardado"');
+    expect(guardado).toContain('aria-label="Guardado"');
+    // `disabled` precede al `aria-label` en el markup: su ausencia acredita el círculo vivo.
+    expect(guardado).not.toContain('disabled="" aria-label="Guardado"');
     expect(guardado).not.toContain('aria-label="Listo"');
 
     const sinGuardar = vista({ mesa: igual, informativeSaved: false });

@@ -67,12 +67,17 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.getByText('$155.00').first()).toBeVisible();
 
     // 🔴 CORTE · no hay «Continuar»; el círculo es «Listo», habilitado, y el
-    // vacío también viaja como reemplazo explícito. No navega a Inicio.
+    // vacío también viaja como reemplazo explícito. Con el guardado OK vuelve
+    // a Inicio (decisión 32); al reentrar, la nota fija lo dice.
     await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
     const listo = page.getByRole('button', { name: 'Listo', exact: true });
     await expect(listo).toBeEnabled();
     await listo.click();
-    await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+    await page.goto('/#/mesa/PA-3121');
+    // Vacío→vacío no deja fila ni `updated_at`: al reentrar no hay nota, el
+    // círculo vuelve a ser «Listo». El éxito lo acreditó la vuelta a Inicio.
+    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
     await expect(page).toHaveURL(/#\/mesa\/PA-3121$/);
     // En el contrato owner, vacío→vacío es replay exacto y por eso no crea
     // fila: el éxito se acredita por la respuesta canónica, no por una fila.
@@ -177,6 +182,8 @@ test.describe('Continuar en la mesa (H-14)', () => {
     // Con la selección hecha sigue sin haber pago.
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    // Decisión 32 · registra y vuelve a Inicio.
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
 
     /**
      * 🔴 **D-R8 invirtió esta aserción, y el motivo viejo era correcto.**

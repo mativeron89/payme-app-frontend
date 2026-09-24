@@ -1,6 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 
+/**
+ * Decisión 32 (Mati, 2026-09-24) · «Listo» guarda y vuelve a Inicio. Estas
+ * pruebas miran lo guardado, así que reentran a la misma mesa después.
+ */
+async function listoYVolver(page: Page): Promise<void> {
+  const enMesa = await page.evaluate(() => location.hash);
+  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+  await page.goto(`/${enMesa}`);
+}
+
 type Forma = 'En partes iguales' | 'Pagar el total';
 
 async function abrirInformativa(page: Page, forma: Forma, participantes: number): Promise<string> {
@@ -56,7 +67,7 @@ test.describe('Listo · selección informativa v2', () => {
         throw new Error('respuesta_perdida');
       };
     });
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await listoYVolver(page);
     await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
     await page.reload();
     await expect(first).toHaveAttribute('aria-pressed', 'true');
@@ -81,8 +92,11 @@ test.describe('Listo · selección informativa v2', () => {
         return original(...args);
       };
     });
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
+    await listoYVolver(page);
+    // Vacío→vacío es replay exacto sin fila en el dueño: al reentrar no hay nada
+    // guardado que mostrar (sin `updated_at`), así que el círculo vuelve a ser
+    // «Listo». El éxito lo acreditó la vuelta a Inicio (decisión 32).
+    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
     expect(await page.evaluate(() => JSON.parse(
       localStorage.getItem('payme.app.e2e.informative-put.v2') ?? 'null',
     ))).toEqual({ items: [], confirm_closure: true });
@@ -94,7 +108,7 @@ test.describe('Listo · selección informativa v2', () => {
     // v2.124.0: con N=3 se ofrecen 1/1, 1/2 y 1/3; ¾ ya no es una opción nueva.
     await expect(page.getByRole('radio', { name: '¾', exact: true })).toHaveCount(0);
     await page.getByRole('radio', { name: '1/3', exact: true }).click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await listoYVolver(page);
     await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
     await page.reload();
     await expect(page.getByRole('button', { name: 'Risotto ai Funghi', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -128,7 +142,9 @@ test.describe('Listo · selección informativa v2', () => {
     expect(total).toBeGreaterThan(0);
     for (let index = 0; index < total; index += 1) await rows.nth(index).click();
 
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    // El guardado responde OK (y cierra la mesa): se vuelve a Inicio igual
+    // (decisión 32); al reentrar, la vista es de sólo lectura.
+    await listoYVolver(page);
     await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
@@ -222,8 +238,11 @@ test.describe('Listo · selección informativa v2', () => {
     await expect(saved).toHaveAttribute('aria-pressed', 'true');
     await expect(saved).toBeEnabled();
     await saved.click();
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
+    await listoYVolver(page);
+    // El vaciado borra la fila del dueño: al reentrar no queda `updated_at` ni
+    // nota; el éxito lo acreditó la vuelta a Inicio y el PUT medido abajo.
+    await expect(saved).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
     expect(await page.evaluate(() => ({
       calls: localStorage.getItem('payme.app.e2e.r2.puts'),
       body: JSON.parse(localStorage.getItem('payme.app.e2e.r2.body') ?? 'null'),
@@ -283,6 +302,10 @@ test.describe('Listo · selección informativa v2', () => {
     await expect.poll(() => page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.put.waiting'))).toBe('1');
     await expect(second).toBeDisabled();
     await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_put)());
+    // Decisión 32 · con el PUT OK se vuelve a Inicio; la lectura diferida que
+    // antes era la recarga es ahora la del reingreso, y bloquea igual.
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+    await page.goto('/#/mesa/PA-3121');
 
     await expect.poll(() => page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.reload.waiting'))).toBe('1');
     await expect(second).toBeDisabled();
@@ -315,11 +338,12 @@ test.describe('Listo · selección informativa v2', () => {
 
     await expect(nota).toHaveCount(0);
     await first.click();
-    await listo.click();
+    await listoYVolver(page);
     await expect(nota).toBeVisible();
-    await expect(guardado).toBeDisabled();
+    // Decisión 32 · «Guardado» sigue tocable: lleva a Inicio sin reenviar lo mismo.
+    await expect(guardado).toBeEnabled();
     await expect(listo).toHaveCount(0);
-    // Sin navegar: la misma pantalla, con la fila guardada a la vista.
+    // De vuelta en la mesa, con la fila guardada a la vista.
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
     await expect(first).toHaveAttribute('aria-pressed', 'true');
     // Una sola señal: no hay toast además de la nota.
@@ -327,7 +351,7 @@ test.describe('Listo · selección informativa v2', () => {
 
     await page.reload();
     await expect(nota).toBeVisible();
-    await expect(guardado).toBeDisabled();
+    await expect(guardado).toBeEnabled();
     await expect(first).toHaveAttribute('aria-pressed', 'true');
 
     // La primera edición vuelve a «Listo» y retira la nota: lo que se ve ya no es lo guardado.
@@ -371,7 +395,7 @@ test.describe('Listo · selección informativa v2', () => {
         return original(...args);
       };
     });
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await listoYVolver(page);
     await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('payme.app.e2e.n5.body') ?? 'null')))
       .toEqual({ items: [expect.objectContaining({ declared_fraction_bps: 2000 })], confirm_closure: true });
