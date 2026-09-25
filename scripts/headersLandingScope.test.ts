@@ -60,7 +60,12 @@ describe('vercel.ts · aislamiento causal por identidad de proyecto', () => {
     expect(r.config!['rewrites']).toEqual(PATHS.map((source) => ({
       source, destination: '/index.html',
     })));
-    expect(r.config!['headers']).toEqual(PATHS.map((source) => ({ source, headers: PARES })));
+    // n186 · delante va el bloque global de CSP en Report-Only (sus directivas
+    // las fija `csp.test.ts`); las dos reglas Meta siguen exactamente iguales.
+    const [csp, ...meta] = r.config!['headers'] as Array<{ source: string; headers: Array<{ key: string }> }>;
+    expect(csp?.source).toBe('/(.*)');
+    expect(csp?.headers.map((h) => h.key)).toEqual(['Content-Security-Policy-Report-Only']);
+    expect(meta).toEqual(PATHS.map((source) => ({ source, headers: PARES })));
   });
 
   it('landing conserva el gate Git pero no recibe ninguna regla Meta', () => {
@@ -68,7 +73,10 @@ describe('vercel.ts · aislamiento causal por identidad de proyecto', () => {
     expect(r.status, r.salida).toBe(0);
     exigirComun(r.config!);
     expect(r.config!['rewrites']).toEqual([]);
-    expect(r.config!['headers']).toEqual([]);
+    // n186 · SÓLO su CSP obligatoria sobre `/(.*)`: ninguna regla ni cabecera Meta.
+    const headers = r.config!['headers'] as Array<{ source: string; headers: Array<{ key: string }> }>;
+    expect(headers.map((h) => h.source)).toEqual(['/(.*)']);
+    expect(headers[0]?.headers.map((h) => h.key)).toEqual(['Content-Security-Policy']);
   });
 
   /**

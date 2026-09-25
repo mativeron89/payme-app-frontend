@@ -35,7 +35,8 @@ claves nuevas:
   - `scripts/csp.test.ts`: cabeceras por artefacto, directivas, origen de la API y hash del
     `<style>`;
   - `landing.test.ts`: el hash del script de idioma, recalculado desde el build;
-  - `despliegue.test.ts`: acepta el bloque global de CSP; los dos paths públicos conservan lo suyo;
+  - `despliegue.test.ts` y `headersLandingScope.test.ts`: aceptan el bloque global de CSP; los dos
+    paths públicos conservan lo suyo, y la landing no recibe ninguna regla Meta;
   - **`e2e/csp/`**, proyectos `csp-app` y `csp-landing`: la política EXACTA de `vercel.ts`,
     **aplicada como obligatoria** sobre el build mock y el build de la landing, que sirve
     `e2e/csp/servidor.mjs`. Cubre:
