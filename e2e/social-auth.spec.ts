@@ -127,6 +127,6 @@ test('recovery invalida una sesión previa antes de volver al ingreso', async ({
   await expect.poll(() => page.evaluate(() => localStorage.getItem('payme_app_session__mock')))
     .toBeNull();
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByText('Entra a tu cuenta', { exact: true })).toBeVisible();
+  await expect(page.getByText('Log in', { exact: true })).toBeVisible();
   expect(external).toEqual([]);
 });

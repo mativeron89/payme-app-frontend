@@ -43,7 +43,6 @@ const ICONO: Readonly<Record<NotificationPreferenceType, IconName>> = {
 
 export function NotificacionesView({
   userName,
-  email,
   estado,
   prefs,
   busyType,
@@ -52,7 +51,6 @@ export function NotificacionesView({
   onReintentar,
 }: {
   readonly userName: string | undefined;
-  readonly email: string | null;
   readonly estado: 'cargando' | 'ok' | 'error';
   readonly prefs: NotificationPreferencesResponse | null;
   readonly busyType: NotificationPreferenceType | null;
@@ -102,11 +100,8 @@ export function NotificacionesView({
         <h1 className="title-card-title">{t('Notificaciones')}</h1>
       </div>
       <div className="scroll" style={{ paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
-        <p className="body-text" style={{ marginBottom: 12 }}>
-          {email
-            ? t('Elige qué avisos quieres recibir también por correo a {0}. Los avisos siempre aparecen en la campana de la app.', email)
-            : t('Elige qué avisos quieres recibir también por correo. Los avisos siempre aparecen en la campana de la app.')}
-        </p>
+        {/* Decisión 75 de Mati: sin la leyenda «Elige qué avisos quieres recibir
+            también por correo…» (las dos variantes). El resto no cambia. */}
         {estado === 'cargando' && (
           <div className="loading" role="status">{t('Cargando…')}</div>
         )}
@@ -221,7 +216,6 @@ export function NotificacionesScreen() {
   return (
     <NotificacionesView
       userName={fullName(session) ?? undefined}
-      email={session?.user?.email ?? null}
       estado={estado}
       prefs={prefs}
       busyType={busyType}

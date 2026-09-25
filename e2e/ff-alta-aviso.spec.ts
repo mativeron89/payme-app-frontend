@@ -5,7 +5,7 @@ const MESA = 'mesa-token-bbbbbbbbbbbbbbbbbbbbb';
 
 test('D-FF-1 · sin autoridad no existe superficie de registro', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('Entra a tu cuenta', { exact: true })).toBeVisible();
+  await expect(page.getByText('Log in', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Registrarme', exact: true })).toHaveCount(0);
   // 🔴 REAPUNTADA el 2026-09-17 (APP-LOGIN-REDESIGN-AF-02) y NO porque se
   // pusiera roja: siguió VERDE. El rótulo de la puerta al registro pasó a
@@ -45,7 +45,7 @@ test('link combinado conserva autoridades separadas y respeta “Ya tengo cuenta
   await expect(page).toHaveURL(/#\/mesa\/PA-2847$/);
   await expect(page.getByRole('button', { name: 'Crear cuenta gratis', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Ya tengo cuenta · Entrar', exact: true }).click();
-  await expect(page.getByText('Entra a tu cuenta', { exact: true })).toBeVisible();
+  await expect(page.getByText('Log in', { exact: true })).toBeVisible();
   // 🔴 EDITADA: antes afirmaba que «Crea tu cuenta» NO estaba, para decir «esta
   // pantalla está en login, no en registro». Con el rediseño esa frase es el
   // rótulo del enlace al alta, que en login SÍ aparece cuando hay invitación

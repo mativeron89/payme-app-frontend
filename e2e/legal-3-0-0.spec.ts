@@ -95,15 +95,28 @@ test.describe('nota «Al entrar aceptas el Aviso»', () => {
     await expect(nota(page)).toHaveCount(0);
   });
 
-  test('paquete ENCENDIDO, «entrar»: la nota sigue como hoy', async ({ page }) => {
+  test('paquete ENCENDIDO, «entrar»: la nota sigue como hoy, y sin casillas (decisión 73)', async ({ page }) => {
     await conPaquete(page, true);
+    // AF-LOGIN-D73 · las casillas ya no están en «Entrar», así que dejaron de
+    // servir de testigo de carga. En su lugar, observación SOSTENIDA desde antes
+    // de cargar: la nota no puede desaparecer mientras llega el paquete (el mock
+    // publica `google_continue` y el paquete se pide igual en «Entrar»). Sin esto,
+    // ocultarla también acá sobrevivía (medido en AF-NOTA-ALTA).
+    await page.addInitScript(() => {
+      const w = window as unknown as { __notaSeFue: number; __notaVista: boolean };
+      w.__notaSeFue = 0; w.__notaVista = false;
+      new MutationObserver(() => {
+        const hay = [...document.querySelectorAll('p.ingreso-legal')].some((p) => (p.textContent ?? '').includes('Al entrar aceptas el'));
+        if (hay) w.__notaVista = true; else if (w.__notaVista) w.__notaSeFue += 1;
+      }).observe(document, { subtree: true, childList: true, characterData: true });
+    });
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
-    // Testigo de que el paquete YA cargó en «entrar»: con «Continuar con Google»
-    // (publicado por el mock) las casillas aparecen junto al botón. Sin esperarlas,
-    // la nota se vería en el primer render, antes de la carga, y el caso no
-    // distinguiría ocultarla también acá (medido: ese mutante sobrevivía).
-    await expect(page.getByRole('checkbox')).toHaveCount(2);
+    await expect(nota(page)).toBeVisible();
+    await page.waitForTimeout(1500);
+    expect(await page.evaluate(() => (window as unknown as { __notaSeFue: number }).__notaSeFue),
+      'la nota se fue de «entrar» cuando llegó el paquete').toBe(0);
+    await expect(page.getByRole('checkbox'), 'decisión 73: en «Entrar» no hay casillas').toHaveCount(0);
     await expect(nota(page)).toBeVisible();
     await expect(nota(page).getByRole('link', { name: 'Aviso de privacidad', exact: true })).toHaveAttribute('href', '/privacy');
   });
@@ -174,8 +187,10 @@ test.describe('Configuración › Notificaciones (E1/E2)', () => {
     await page.getByRole('button', { name: /^Notificaciones/ }).click();
     await expect(page).toHaveURL(/#\/notificaciones$/);
     await expect(page.getByRole('heading', { name: 'Notificaciones', exact: true })).toBeVisible();
-    await expect(page.getByText('mati@payme.mx')).toBeVisible();
+    // Decisión 75: la leyenda «Elige qué avisos…» (que era lo único que mostraba el
+    // correo) ya no está; el testigo positivo de que la pantalla cargó es la lista.
     await expect(page.getByText('Siempre por correo').first()).toBeVisible();
+    await expect(page.getByText(/Elige qué avisos/)).toHaveCount(0);
     await expect(page.getByText('Disponible cuando haya pagos').first()).toBeVisible();
     await expect(page.getByText('Disponible con el próximo Aviso')).toBeVisible();
     await expect(page.getByText(/WhatsApp|SMS/)).toHaveCount(0);

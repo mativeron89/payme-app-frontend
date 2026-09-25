@@ -21,7 +21,6 @@ function render(estado: 'cargando' | 'ok' | 'error', datos: NotificationPreferen
     <IdiomaProvider>
       <NotificacionesView
         userName="Mati"
-        email="mati@payme.mx"
         estado={estado}
         prefs={datos}
         busyType={null}
@@ -37,7 +36,9 @@ describe('AF2 · Configuración › Notificaciones · los tres modos y los tres 
   it('con datos: grupos, títulos traducidos por tipo y el control de cada modo', () => {
     const html = render('ok');
     expect(html).toContain('Notificaciones');
-    expect(html).toContain('mati@payme.mx');
+    // Decisión 75: sin la leyenda «Elige qué avisos…» en ninguna de sus variantes.
+    expect(html).not.toContain('Elige qué avisos');
+    expect(html).not.toContain('campana de la app');
     expect(html).toContain('Seguridad');
     expect(html).toContain('Te invitan a una mesa');
     // editable → interruptor con su estado; fixed_on → texto; unavailable → motivo.

@@ -99,20 +99,29 @@ test('🔴 pasar del ingreso a «Crea tu cuenta» no recarga el aviso ni apaga e
     localStorage.setItem('payme.app.mock.google_sin_cuenta.v1', 'true');
   });
   await page.goto('/');
-  // En el ingreso, el un-toque ya está listo: el aviso está cargado.
-  await expect(page.locator('.ingreso-aviso-google')).toBeVisible();
+  // AF-LOGIN-D73 · decisión 73: en «Entrar» Google sólo hace entrar, así que la
+  // frase del un-toque ya NO está ahí; aparece al pasar a «Crea tu cuenta». Lo
+  // que se sigue vigilando: que una vez aparecida NO se vaya (recargar el aviso
+  // la hacía parpadear y apagaba el un-toque). El observador se arma ANTES del
+  // toque y cuenta desapariciones sólo después de la primera aparición.
+  await expect(page.getByRole('button', { name: 'Continuar con Google', exact: true })).toBeVisible();
+  await expect(page.locator('.ingreso-aviso-google')).toHaveCount(0);
   await page.evaluate(() => {
-    const w = window as unknown as { __desapariciones: number };
+    const w = window as unknown as { __desapariciones: number; __vista: boolean };
     w.__desapariciones = 0;
+    w.__vista = false;
     new MutationObserver(() => {
-      if (!document.querySelector('.ingreso-aviso-google')) w.__desapariciones += 1;
+      const hay = !!document.querySelector('.ingreso-aviso-google');
+      if (hay) w.__vista = true;
+      else if (w.__vista) w.__desapariciones += 1;
     }).observe(document, { subtree: true, childList: true });
   });
   await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
   await expect(page.getByText('O regístrate con tu correo', { exact: true })).toBeVisible();
+  await expect(page.locator('.ingreso-aviso-google')).toBeVisible();
   await page.waitForTimeout(800);
   expect(await page.evaluate(() => (window as unknown as { __desapariciones: number }).__desapariciones),
-    'la frase del un-toque desapareció al pasar a «Crea tu cuenta»').toBe(0);
+    'la frase del un-toque desapareció después de aparecer en «Crea tu cuenta»').toBe(0);
   await expect(page.locator('.ingreso-aviso-google')).toBeVisible();
   // 🔴 Y el BOTÓN está, arriba. La frase sola no alcanza: la primera versión de
   // este test pasaba con el contenedor de arriba vacío (la autoridad idéntica

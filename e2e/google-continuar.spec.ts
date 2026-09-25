@@ -71,19 +71,46 @@ async function unToqueListo(page: Page): Promise<void> {
   await expect(aviso(page).getByRole('link', { name: 'Aviso de privacidad' })).toHaveAttribute('href', '/privacy');
 }
 
-test('cuenta EXISTENTE: un toque y adentro, con la frase del aviso bajo el botón', async ({ page }) => {
+/**
+ * AF-LOGIN-D73 · decisión 73 de Mati: el alta en un toque vive SÓLO en «Crea tu
+ * cuenta». En «Entrar», Google sólo hace entrar a quien ya tiene cuenta. Los
+ * recorridos de alta en un toque arrancan acá.
+ */
+async function irACreaTuCuenta(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
+  await unToqueListo(page);
+}
+
+test('cuenta EXISTENTE en «Entrar»: un toque y adentro, sin casillas ni frase de alta (decisión 73)', async ({ page }) => {
   await preparar(page, {});
   await page.goto('/');
-  await unToqueListo(page);
-  await capturar(page, '01-ingreso-continuar');
+  await expect(page.getByText('Log in', { exact: true })).toBeVisible();
+  await expect(google(page)).toBeVisible();
+  // En «Entrar» no se crea nada: ni la frase del un-toque ni casillas.
+  await expect(aviso(page)).toHaveCount(0);
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  await capturar(page, '01-ingreso-solo-entrar');
   await google(page).click();
   await expect(adentro(page)).toBeVisible();
 });
 
-test('persona NUEVA en el ingreso: un toque crea la cuenta con los datos de Google, sin escribir nada', async ({ page }) => {
+test('persona NUEVA en «Entrar»: NO se crea la cuenta; lleva a «Crea tu cuenta con Google» (decisión 73)', async ({ page }) => {
   await preparar(page, { altaPublica: true, sinCuenta: true });
   await page.goto('/');
-  await unToqueListo(page);
+  await expect(google(page)).toBeVisible();
+  await google(page).click();
+
+  await expect(page.getByText('Crea tu cuenta con Google', { exact: true })).toBeVisible();
+  await expect(page.getByText('Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.')).toBeVisible();
+  await expect(adentro(page)).toHaveCount(0);
+  expect(await usuarioDeSesion(page), 'se creó una cuenta desde «Entrar»').toBeNull();
+  await capturar(page, '02-entrar-sin-cuenta-lleva-al-alta');
+});
+
+test('persona NUEVA en «Crea tu cuenta»: un toque crea la cuenta con los datos de Google, sin escribir nada', async ({ page }) => {
+  await preparar(page, { altaPublica: true, sinCuenta: true });
+  await page.goto('/');
+  await irACreaTuCuenta(page);
   await google(page).click();
 
   await expect(adentro(page)).toBeVisible();
@@ -113,9 +140,9 @@ test('«Crea tu cuenta»: Google arriba de todo, un toque y adentro', async ({ p
 });
 
 test('correo con cuenta: pide la contraseña UNA vez, acepta la correcta y conecta Google', async ({ page }) => {
-  await preparar(page, { sinCuenta: true, correoConCuenta: true });
+  await preparar(page, { altaPublica: true, sinCuenta: true, correoConCuenta: true });
   await page.goto('/');
-  await unToqueListo(page);
+  await irACreaTuCuenta(page);
   await google(page).click();
 
   await expect(page.getByText('Conecta tu cuenta con Google', { exact: true })).toBeVisible();
@@ -139,9 +166,9 @@ test('correo con cuenta: pide la contraseña UNA vez, acepta la correcta y conec
 });
 
 test('correo con cuenta: al quinto error el intento se quema y se vuelve a Google con texto neutro', async ({ page }) => {
-  await preparar(page, { sinCuenta: true, correoConCuenta: true });
+  await preparar(page, { altaPublica: true, sinCuenta: true, correoConCuenta: true });
   await page.goto('/');
-  await unToqueListo(page);
+  await irACreaTuCuenta(page);
   await google(page).click();
   await expect(page.getByText('Conecta tu cuenta con Google', { exact: true })).toBeVisible();
 
@@ -155,14 +182,14 @@ test('correo con cuenta: al quinto error el intento se quema y se vuelve a Googl
   await page.getByLabel('Contraseña', { exact: true }).fill('demo'.repeat(3));
   await conectar.click();
   await expect(page.getByRole('alert')).toHaveText('No pudimos conectar tu cuenta. Toca «Continuar con Google» otra vez.');
-  await expect(page.getByText('Entra a tu cuenta', { exact: true })).toBeVisible();
+  await expect(page.getByText('Log in', { exact: true })).toBeVisible();
   await expect(google(page)).toBeVisible();
 });
 
 test('Google sin nombre: el paso pide SÓLO nombre y apellido y el reintento crea la cuenta', async ({ page }) => {
   await preparar(page, { altaPublica: true, sinCuenta: true, sinNombre: true });
   await page.goto('/');
-  await unToqueListo(page);
+  await irACreaTuCuenta(page);
   await google(page).click();
 
   await expect(page.getByText('Crea tu cuenta con Google', { exact: true })).toBeVisible();
@@ -183,14 +210,14 @@ test('Google sin nombre: el paso pide SÓLO nombre y apellido y el reintento cre
 test('alta CERRADA: persona nueva recibe el cartel neutro, sin paso de alta ni texto que revele la cuenta', async ({ page }) => {
   await preparar(page, { altaPublica: false, sinCuenta: true });
   await page.goto('/');
-  await unToqueListo(page);
+  await expect(google(page)).toBeVisible();
   await google(page).click();
 
   await expect(page.getByRole('alert')).toHaveText(
     'No pudimos entrar con Google. Prueba de nuevo o entra con tu correo y contraseña.',
   );
   await expect(page.getByText('Crea tu cuenta con Google', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Entra a tu cuenta', { exact: true })).toBeVisible();
+  await expect(page.getByText('Log in', { exact: true })).toBeVisible();
 });
 
 test('🔴 sin features.google_continue (backend 2.91.0): sin frase de un-toque, conducta 0.167.0', async ({ page }) => {

@@ -67,7 +67,7 @@ const tituloAlta = (page: Page) => page.getByText('Crea tu cuenta con Google', {
 test('persona NUEVA: toca Google en el ingreso, completa sus datos y queda adentro', async ({ page }) => {
   await preparar(page, { altaPublica: true, sinCuenta: true });
   await page.goto('/');
-  await expect(page.getByText('Entra a tu cuenta', { exact: true })).toBeVisible();
+  await expect(page.getByText('Log in', { exact: true })).toBeVisible();
   await capturar(page, '01-ingreso');
 
   await google(page).click();
@@ -196,7 +196,7 @@ test('alta CERRADA: el ingreso fallido deja el cartel neutro y no promete un alt
   await capturar(page, '05-alta-cerrada');
   await expect(tituloAlta(page)).toHaveCount(0);
   await expect(page.getByLabel('Contraseña', { exact: true })).toBeVisible();
-  await expect(page.getByText('Entra a tu cuenta', { exact: true })).toBeVisible();
+  await expect(page.getByText('Log in', { exact: true })).toBeVisible();
   // El botón sigue ahí: se puede volver a intentar.
   await expect(google(page)).toBeVisible();
 });
@@ -208,7 +208,7 @@ test('desde el paso de Google se puede volver al ingreso con correo', async ({ p
   await expect(tituloAlta(page)).toBeVisible();
 
   await page.getByRole('button', { name: 'Ya tengo cuenta → entrar', exact: true }).click();
-  await expect(page.getByText('Entra a tu cuenta', { exact: true })).toBeVisible();
+  await expect(page.getByText('Log in', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Contraseña', { exact: true })).toBeVisible();
 
   // Y el alta normal, tocada a mano, vuelve completa: con contraseña.

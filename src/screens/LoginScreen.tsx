@@ -573,8 +573,13 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         invitationToken: autoridad?.tipo === 'invitacion' ? autoridad.token : null,
         nombre,
       });
+    // AF-LOGIN-D73 · decisión 73 de Mati: en «Entrar», Google SÓLO hace entrar a
+    // quien ya tiene cuenta (`/google/login`, que el dueño nunca usa para crear
+    // una). Sin cuenta, el 401 opaco lleva a «Crea tu cuenta con Google», donde
+    // están las casillas. El alta en un toque (`continue`) queda sólo en «Crea tu
+    // cuenta»: enmienda parcial de la decisión del 18/09.
     if (mode === 'login') {
-      return continueOn ? continuar(null) : { purpose: 'login', clientId, locale };
+      return { purpose: 'login', clientId, locale };
     }
     if (capturaGoogle) {
       return unToqueEnAlta ? continuar(null) : { purpose: 'captura', clientId, locale };
@@ -1328,7 +1333,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             Pay<span className="t">Me</span>
           </div>
         </div>
-        <div className="ingreso-sub">{t('Divide y paga la cuenta desde la mesa')}</div>
+        <div className="ingreso-sub">{t('Divide y paga la cuenta desde donde quieras')}</div>
       </header>
 
       <div className="ingreso-burbuja">
@@ -1336,17 +1341,14 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
           {pasoVincular
             ? t('Conecta tu cuenta con Google')
             : mode === 'login'
-              ? t('Entra a tu cuenta')
+              // Decisión 74 de Mati, literal: «que diga solo Log in». Va igual en
+              // los dos idiomas y sin `t()`: una clave «Log in → Log in» la
+              // marcaría como copy sin traducir la guarda de `idioma.spec.ts`.
+              ? 'Log in'
               : pasoGoogle ? t('Crea tu cuenta con Google') : t('Crea tu cuenta')}
         </div>
-        {/* El artefacto sólo diseña el login; el alta es la pantalla siguiente y
-            todavía no está diseñada. Por eso el subtítulo no se inventa para el
-            modo registro: se omite. */}
-        {mode === 'login' && !pasoVincular && (
-          <div className="ingreso-burbuja-sub">
-            {t('Con tu cuenta guardamos tus tarjetas y tus pagos anteriores.')}
-          </div>
-        )}
+        {/* Decisión 74: la burbuja de «Entrar» lleva SÓLO el título; el
+            subtítulo se quitó y la burbuja se ajusta sola (altura automática). */}
         {pasoGoogle && !pasoVincular && (
           <div className="ingreso-burbuja-sub" role="status">
             {tieneCredencial
