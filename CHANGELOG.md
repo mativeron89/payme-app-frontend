@@ -11,6 +11,30 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.2 — La puerta legal antes de unirse a una mesa por link (2026-09-26)
+
+Orden AF-PUERTA-JOIN-20260926 (sha256 40e03c11…). Hallazgo de App Backend - Opus en AB2. Base `0.193.1`.
+
+- **El defecto:** `App.tsx` dibujaba `JoinMesaScreen` (link con `?t=`) antes de mirar la puerta.
+  Quien llegaba por link se unía a la mesa sin haber aceptado el paquete 3.0.0, y con AB2 servido el
+  canje recibiría `428 legal_acceptance_required`, que se trataba como error no terminal:
+  «Reintentar», y la puerta nunca aparecía.
+- **Ahora:** con la sesión pendiente de aceptar, la puerta sale antes que `JoinMesaScreen`.
+  - El token se conserva en la ruta y en su custodia.
+  - Al aceptar, la pantalla del link se monta de nuevo y canjea, sin pedir el link otra vez.
+  - Mientras la consulta de la puerta está en vuelo, no se canjea: `usePuertaLegal` expone `lista`,
+    ligada a la sesión y derivada en el render.
+- Un 428 en `accept-link` abre la puerta y retoma igual. Si el dueño se contradice (428, pero la
+  consulta dice que no falta aceptar), queda «Reintentar» manual, sin canjear en bucle.
+- Con el paquete apagado, o con la aceptación hecha, el recorrido es el de antes. Sin texto nuevo.
+- Tests:
+  - `e2e/puerta-join.spec.ts`, cinco casos: sin aceptar, ya aceptado, apagado, 428 y 428
+    contradictorio. «Unido» se mide en el dueño mock, no en la pantalla.
+  - Unitario de `puertaLista`.
+  - Cinco mutantes, los cinco muertos por su caso.
+  - Los conteos de canjes no se afirman exactos, porque `StrictMode` monta dos veces en
+    desarrollo; se afirma que no se mueven solos.
+
 ## 0.193.1 — Alta con casillas 3.0.0 sin la nota «Al entrar aceptas el Aviso» (2026-09-25)
 
 Orden AF-NOTA-ALTA-20260925 (sha256 bdd305ac…), observación 3 de R-AF. Base `0.193.0`.
