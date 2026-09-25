@@ -24,7 +24,13 @@ import { goBack } from '../router';
  * atrás si falla. Los títulos NO viajan en el contrato: se traducen acá por
  * `type`. Un tipo que el decodificador no conoce ya no llega hasta acá.
  */
-const GRUPOS: readonly NotificationPreferenceGroup[] = ['seguridad', 'mesas', 'amigos', 'pagos'];
+/**
+ * Decisión 78 de Mati (2026-09-25): el grupo «Pagos» NO se muestra mientras los
+ * pagos estén apagados —«no quiero llenar espacios»—. Vuelve con otra orden,
+ * agregando `'pagos'` acá. Es sólo presentación: las preferencias del servidor
+ * no se tocan, y ninguna fila oculta dispara un `PUT`.
+ */
+const GRUPOS: readonly NotificationPreferenceGroup[] = ['seguridad', 'mesas', 'amigos'];
 
 const ICONO: Readonly<Record<NotificationPreferenceType, IconName>> = {
   account_recovery: 'lock',

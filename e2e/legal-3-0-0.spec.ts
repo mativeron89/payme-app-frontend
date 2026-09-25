@@ -191,7 +191,10 @@ test.describe('Configuración › Notificaciones (E1/E2)', () => {
     // correo) ya no está; el testigo positivo de que la pantalla cargó es la lista.
     await expect(page.getByText('Siempre por correo').first()).toBeVisible();
     await expect(page.getByText(/Elige qué avisos/)).toHaveCount(0);
-    await expect(page.getByText('Disponible cuando haya pagos').first()).toBeVisible();
+    // Decisión 78: sin el grupo «Pagos» mientras los pagos estén apagados.
+    await expect(page.getByRole('region', { name: 'Pagos' })).toHaveCount(0);
+    await expect(page.getByText('Disponible cuando haya pagos')).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Mesas' })).toBeVisible();
     await expect(page.getByText('Disponible con el próximo Aviso')).toBeVisible();
     await expect(page.getByText(/WhatsApp|SMS/)).toHaveCount(0);
     const invitacion = page.getByRole('switch', { name: 'Correo: Te invitan a una mesa' });

@@ -45,7 +45,12 @@ describe('AF2 · Configuración › Notificaciones · los tres modos y los tres 
     expect(html).toMatch(/role="switch"[^>]*checked=""/);
     expect((html.match(/role="switch"/g) ?? []).length).toBe(2);
     expect(html).toContain('Siempre por correo');
-    expect(html).toContain('Disponible cuando haya pagos');
+    // Decisión 78: el grupo «Pagos» no se muestra, aunque el servidor lo mande
+    // (la fila `tip_received` sigue en `prefs`: sólo se deja de pintar).
+    expect(html).not.toContain('aria-label="Pagos"');
+    expect(html).not.toContain('Disponible cuando haya pagos');
+    expect(html).not.toContain('Recibiste una propina');
+    expect(prefs.items.some((item) => item.group === 'pagos')).toBe(true);
     expect(html).toContain('Disponible con el próximo Aviso');
     // Sin WhatsApp ni SMS, ni como «próximamente» (decisión 33).
     expect(html).not.toMatch(/WhatsApp|SMS/);
