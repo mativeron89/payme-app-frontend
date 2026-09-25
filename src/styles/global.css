@@ -1032,8 +1032,19 @@ body {
    rediseñado de rebote dos pantallas que esta orden no toca, y el cambio
    habría sido invisible para cualquiera que leyera sólo el login. Las dos
    conservan su aspecto de hoy, intacto. */
+/* AF-LOGIN-D73 · (A) la pantalla de ingreso es SU PROPIO contenedor de
+   desplazamiento. Vive dentro de `.app`, que tiene `height: 100dvh` y
+   `overflow: hidden`; con `min-height: 100dvh` y sin scroll propio, lo que no
+   entraba quedaba RECORTADO y el dedo no llegaba (medido en WebKit de iPhone:
+   `.ingreso` 986 px dentro de un `.app` de 664 px, «Crea tu cuenta» a 890 px).
+   Playwright no lo veía porque desplaza por código un `overflow: hidden`, cosa
+   que un dedo no puede. `flex: 1` + `min-height: 0` le dan la altura que el
+   padre tiene —`.app`, o `.screen` cuando llega desde un link de invitación—. */
 .ingreso {
-  min-height: 100dvh;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--bg);
   display: flex;
   flex-direction: column;
