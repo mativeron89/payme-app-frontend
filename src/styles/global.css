@@ -1535,6 +1535,60 @@ body {
 .item-row.paid-other .item-price {
   color: var(--gray-txt);
 }
+/* AF2 · LEGAL-3.0.0: casillas de aceptación (registro, Google y puerta). */
+.casilla-legal {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: var(--fs-legacy-sm);
+  line-height: 1.35;
+}
+.casilla-legal input[type='checkbox'] { width: 20px; height: 20px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--teal); }
+.casilla-legal a, .ingreso-legal a { text-decoration: underline; }
+.puerta-legal .h2 { margin-bottom: 8px; }
+.puerta-legal-nota { color: var(--gray-txt); font-size: var(--fs-legacy-sm); }
+.puerta-legal .ingreso-entrar { margin-top: 12px; }
+.casillas-legales { margin: 8px 0 12px; }
+.social-google-gated { pointer-events: none; opacity: 0.5; }
+/* AF2 · Configuración › Notificaciones: conmutador de correo por fila. */
+.notif-switch-label { display: flex; align-items: center; gap: 8px; }
+.notif-switch {
+  appearance: none;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--gray-b);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+}
+.notif-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 120ms ease;
+}
+.notif-switch:checked { background: var(--teal); }
+.notif-switch:checked::after { left: 21px; }
+.notif-switch:disabled { opacity: 0.6; cursor: default; }
+.notif-fijo {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--fs-legacy-sm);
+  color: var(--gray-b);
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+.notif-row--apagada { opacity: 0.6; }
 .checkbox {
   width: 22px;
   height: 22px;

@@ -35,20 +35,13 @@ export function ProfileIdentityEditor({
   const [editingName, setEditingName] = useState(false);
   const [firstName, setFirstName] = useState(user?.first_name ?? '');
   const [lastName, setLastName] = useState(user?.last_name ?? '');
-  const [busy, setBusy] = useState<'name' | 'avatar' | 'delete' | 'birth' | null>(null);
+  const [busy, setBusy] = useState<'name' | 'avatar' | 'delete' | null>(null);
   /**
-   * M03 · la fecha de nacimiento, UNA sola vez (decisión de Mati, «Campo de
-   * fecha en el perfil, una sola vez»). Sin ella el dueño no muestra la foto a
-   * nadie más: `edadConocida` da `null` y la foto queda en iniciales.
-   *
-   * Se sigue con estado propio y no con la sesión: `birth_date_set` e `is_adult`
-   * llegan en el perfil estricto (GET al montar y respuesta del PATCH). `null` es
-   * «todavía no sé»: el campo no se dibuja hasta saber que falta. La edad nunca
-   * se calcula acá: el veredicto es del servidor.
+   * M03 · hasta 0.192.0 acá vivía el campo «Fecha de nacimiento», una sola vez.
+   * LEGAL-3.0.0 (AF2, decisión 39) lo retiró: la mayoría de edad se declara al
+   * aceptar el paquete legal y el dueño deja de leer la fecha. La edad nunca se
+   * calculó acá y sigue sin calcularse.
    */
-  const [fechaDeclarada, setFechaDeclarada] = useState<boolean | null>(user?.birth_date_set ?? null);
-  const [esAdulto, setEsAdulto] = useState<boolean | null>(user?.is_adult ?? null);
-  const [fecha, setFecha] = useState('');
   const avatarLease = useRef<AvatarObjectUrlLease | null>(null);
   const avatarEpoch = useRef(new RequestEpoch());
   const profileEpoch = useRef(new RequestEpoch());
@@ -90,8 +83,6 @@ export function ProfileIdentityEditor({
     const epoch = profileEpoch.current.next();
     api.getProfileIdentity(expected).then(({ user: fresh }) => {
       if (!profileEpoch.current.isCurrent(epoch)) return;
-      setFechaDeclarada(fresh.birth_date_set);
-      setEsAdulto(fresh.is_adult);
       adoptProfileMutationUser(
         expected,
         (current) => mergeProfileIdentityIntoCurrentUser(current, fresh),
@@ -233,47 +224,6 @@ export function ProfileIdentityEditor({
     }
   }, [adoptUser, busy, refreshProfileAfterMutation, session, t, toast, user]);
 
-  const saveBirthDate = useCallback(async () => {
-    if (!user || busy || fechaDeclarada !== false) return;
-    if (!fecha) {
-      toast(t('Elige tu fecha de nacimiento.'));
-      return;
-    }
-    const expected = session;
-    const epoch = mutationEpoch.current.next();
-    profileEpoch.current.next();
-    setBusy('birth');
-    try {
-      const response = await api.declareBirthDate(fecha, expected);
-      if (!mutationEpoch.current.isCurrent(epoch)) return;
-      setFechaDeclarada(response.user.birth_date_set);
-      setEsAdulto(response.user.is_adult);
-      setFecha('');
-      adoptProfileMutationUser(
-        expected,
-        (current) => mergeProfileIdentityIntoCurrentUser(current, response.user),
-        { loadCurrent: loadSession, isCurrent: isCurrentSession, adoptUser },
-      );
-      toast(t('Fecha de nacimiento guardada ✓'));
-    } catch (error) {
-      const current = currentSamePrincipalSession(expected, loadSession());
-      if (mutationEpoch.current.isCurrent(epoch) && current && isCurrentSession(current)) {
-        const { status, code } = extractApiError(error);
-        if (status === 409 && code === 'birth_date_already_set') {
-          // Ya estaba declarada (otra sesión): el campo se retira. El dueño no
-          // la deja cambiar desde la app.
-          setFechaDeclarada(true);
-          toast(t('La fecha de nacimiento ya fue declarada y no se puede cambiar desde la app.'));
-        } else if (status === 400) {
-          toast(t('Revisa la fecha de nacimiento.'));
-        } else {
-          toast(t('No pudimos guardar tu fecha de nacimiento.'));
-        }
-      }
-    } finally {
-      if (mutationEpoch.current.isCurrent(epoch)) setBusy(null);
-    }
-  }, [adoptUser, busy, fecha, fechaDeclarada, session, t, toast, user]);
 
   const handleAvatarError = useCallback(() => {
     avatarLease.current?.clear();
@@ -347,37 +297,9 @@ export function ProfileIdentityEditor({
       )}
 
       {user && <div className="profile-payme-id">{user.payme_id}</div>}
-      {/* M03 · textos del Aviso vigente (2.5.5, «Tu foto de perfil…» y «Podemos
-          pedir tu fecha de nacimiento…») y de la decisión de Mati («no se puede
-          cambiar después»). No se muestra la fecha ni una edad. */}
-      {enabled && user && fechaDeclarada === false && (
-        <div className="profile-name-editor profile-birth-date">
-          <label>
-            <span>{t('Fecha de nacimiento')}</span>
-            <input
-              type="date"
-              value={fecha}
-              min="1900-01-01"
-              onChange={(event) => setFecha(event.target.value)}
-              disabled={busy !== null}
-            />
-          </label>
-          <p className="body-text profile-birth-date-note">
-            {t('Si eres menor de edad o no nos diste tu fecha de nacimiento, no mostramos tu foto a nadie más.')}
-          </p>
-          <p className="body-text profile-birth-date-note">
-            {t('Podemos pedir tu fecha de nacimiento para aplicar las protecciones de edad; no la usamos para publicidad. No se puede cambiar después.')}
-          </p>
-          <button type="button" className="btn btn-navy btn-fit" onClick={() => void saveBirthDate()} disabled={busy !== null}>
-            {busy === 'birth' ? t('Guardando…') : t('Guardar fecha')}
-          </button>
-        </div>
-      )}
-      {enabled && user && fechaDeclarada === true && esAdulto === false && (
-        <p className="body-text profile-birth-date-note">
-          {t('Si eres menor de edad o no nos diste tu fecha de nacimiento, no mostramos tu foto a nadie más.')}
-        </p>
-      )}
+      {/* M03 · LEGAL-3.0.0 (AF2): el campo de fecha de nacimiento se retiró.
+          La mayoría de edad se declara al aceptar el paquete legal (decisión 39);
+          el dueño deja de leer la fecha y la borra en AB2. */}
       {enabled && user?.avatar && (
         <button type="button" className="profile-avatar-delete" onClick={() => void deleteAvatar()} disabled={busy !== null}>
           <Icon name="trash" size={14} /> {busy === 'delete' ? t('Eliminando…') : t('Eliminar foto')}

@@ -146,6 +146,9 @@ const ESPANOL_LEGITIMO = new Set([
   'mié',
   // Pretéritos de primera persona (aparecen en prosa de tests).
   'sumé', 'bloqueé', 'tomé', 'encontré', 'entré', 'pagué',
+  // AF2 · futuro de tercera persona del texto aprobado de la puerta (decisión
+  // 46): «se mostrará a tus amigos». No es voseo.
+  'mostrará',
 ]);
 
 /**

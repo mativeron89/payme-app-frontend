@@ -34,8 +34,8 @@ import {
   subscribeSignupInvitation,
   type SignupInvitationCapture,
 } from '../api/signupInvitation';
-import { PATH_PRIVACIDAD } from '../public/publicRoute';
-import type { LegalTextResponse } from '../api/types';
+import { PATH_PRIVACIDAD, PATH_TERMINOS } from '../public/publicRoute';
+import type { LegalAcceptanceRequest, LegalTextResponse } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 
 /**
@@ -267,6 +267,20 @@ type LegalState =
   | { status: 'idle' | 'loading' | 'error' }
   | { status: 'ready'; value: LegalTextResponse['legal_text'] };
 
+/**
+ * AF2 · LEGAL-3.0.0 · el paquete que acompaña al aviso en el alta: Términos de
+ * uso y aviso simplificado. `unavailable` = el dueño todavía no lo sirve (404,
+ * paquete apagado): el alta sigue como hasta hoy, sin casillas. `ready` =
+ * casillas obligatorias y `legal_acceptance` viaja en las tres altas.
+ */
+type PaqueteState =
+  | { status: 'idle' | 'loading' | 'error' | 'unavailable' }
+  | {
+    status: 'ready';
+    terminos: LegalTextResponse['legal_text'];
+    simplificado: LegalTextResponse['legal_text'];
+  };
+
 type GoogleActionAuthority =
   | {
       readonly purpose: 'login';
@@ -417,6 +431,10 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   const [error, setError] = useState<string | null>(null);
   const [legal, setLegal] = useState<LegalState>({ status: 'idle' });
   const [legalAttempt, setLegalAttempt] = useState(0);
+  const [paquete, setPaquete] = useState<PaqueteState>({ status: 'idle' });
+  const [aceptaMayor, setAceptaMayor] = useState(false);
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
+  const aceptacionRef = useRef<LegalAcceptanceRequest | null>(null);
   const previousSignup = useRef(signup);
   /**
    * AF-19 · el contenedor de GIS vive en ESTADO (callback ref), no en un ref:
@@ -729,6 +747,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
                   ...(authority.alta.tipo === 'invitacion'
                     ? { invitation_token: authority.alta.invitationToken }
                     : { email: authority.alta.email }),
+                  ...conAceptacion(),
                 });
                 // Sólo hay algo que soltar si se usó una invitación.
                 if (authority.alta.tipo === 'invitacion') clearSignupInvitation();
@@ -817,6 +836,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       const { created } = await googleContinue({
         id_token: credential,
         accepted_notice_version: authority.noticeVersion,
+        ...conAceptacion(),
         ...(authority.invitationToken !== null ? { invitation_token: authority.invitationToken } : {}),
         ...(authority.nombre !== null
           ? { first_name: authority.nombre.firstName, last_name: authority.nombre.lastName }
@@ -1026,6 +1046,71 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     return () => { alive = false; };
   }, [quiereAviso, signup, legalAttempt]);
 
+  // AF2 · el paquete legal 3.0.0 se pide junto con el aviso. 404 = apagado en el
+  // dueño (alta de siempre); otro error = como el del aviso, con reintento.
+  useEffect(() => {
+    if (!quiereAviso) {
+      setPaquete({ status: 'idle' });
+      return;
+    }
+    let alive = true;
+    setPaquete({ status: 'loading' });
+    Promise.all([api.getLegalText('terminos_uso'), api.getLegalText('aviso_privacidad_simplificado')])
+      .then(([terminos, simplificado]) => {
+        if (alive) setPaquete({ status: 'ready', terminos: terminos.legal_text, simplificado: simplificado.legal_text });
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setPaquete({ status: extractApiError(err).status === 404 ? 'unavailable' : 'error' });
+      });
+    return () => { alive = false; };
+  }, [quiereAviso, signup, legalAttempt]);
+
+  // Cambiar de «Entrar» a «Crea tu cuenta» (o al revés) desmarca las casillas.
+  useEffect(() => {
+    setAceptaMayor(false);
+    setAceptaTerminos(false);
+  }, [mode]);
+
+  const paqueteVigente = legal.status === 'ready' && paquete.status === 'ready';
+  const paqueteIncierto = mode === 'register' && (paquete.status === 'loading' || paquete.status === 'error');
+  const aceptacionLista = !paqueteVigente || (aceptaMayor && aceptaTerminos);
+  aceptacionRef.current = paqueteVigente && legal.status === 'ready' && paquete.status === 'ready'
+    ? {
+      aviso_version: legal.value.version,
+      aviso_hash: legal.value.hash,
+      terminos_version: paquete.terminos.version,
+      terminos_hash: paquete.terminos.hash,
+      adult_declaration: true,
+    }
+    : null;
+  const conAceptacion = () => (aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {});
+
+  /**
+   * AF2 · las dos casillas aprobadas (`registro_y_puerta.txt`): sin marcar, y
+   * nada avanza hasta marcarlas. La misma pieza sirve al alta con correo, al
+   * paso de Google y al un-toque.
+   */
+  const casillasLegales = paqueteVigente ? (
+    <div className="casillas-legales">
+      <label className="casilla-legal">
+        <input type="checkbox" checked={aceptaMayor} disabled={busy || socialBusy} onChange={(e) => setAceptaMayor(e.target.checked)} />
+        <span>{t('Declaro que tengo 18 años o más.')}</span>
+      </label>
+      <label className="casilla-legal">
+        <input type="checkbox" checked={aceptaTerminos} disabled={busy || socialBusy} onChange={(e) => setAceptaTerminos(e.target.checked)} />
+        <span>
+          {t('He leído y acepto los')}{' '}
+          <a href={PATH_TERMINOS} target="_blank" rel="noreferrer">{t('Términos de Uso')}</a>.
+        </span>
+      </label>
+      <p className="ingreso-legal">
+        {t('Aviso de Privacidad: Consulta cómo PayMe trata tus datos personales en nuestro')}{' '}
+        <a href={PATH_PRIVACIDAD} target="_blank" rel="noreferrer">{t('Aviso de Privacidad')}</a>.
+      </p>
+    </div>
+  ) : null;
+
   // AF-16 · el paso de Google existe sólo en registro.
   useEffect(() => {
     if (mode === 'login') {
@@ -1068,6 +1153,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         ...(autoridad.tipo === 'invitacion'
           ? { invitation_token: autoridad.token }
           : { email: email.trim() }),
+        ...conAceptacion(),
       });
       if (autoridad.tipo === 'invitacion') clearSignupInvitation();
     } catch (err) {
@@ -1112,6 +1198,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
           first_name: firstName,
           last_name: lastName,
           ...(autoridad.tipo === 'invitacion' ? { invitation_token: autoridad.token } : {}),
+          ...conAceptacion(),
         });
         // `register` retorna sólo después de que la sesión quedó persistida.
         // Un 403 opaco conserva el token: puede ser sólo un email mal escrito.
@@ -1122,6 +1209,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       // Carrera GET→POST: el owner perdió integridad legal. El aviso cacheado
       // deja de acreditar el alta y sólo un GET nuevo puede reabrirla.
       if (code === 'registration_unavailable') setLegal({ status: 'error' });
+      // AF2 · el par aceptado dejó de ser el vigente (409): se vuelven a leer
+      // aviso y paquete; la persona vuelve a marcar sobre el texto nuevo.
+      if (code === 'legal_version_mismatch') setLegalAttempt((value) => value + 1);
       setError(errorMessage(err, t));
     } finally {
       setBusy(false);
@@ -1158,18 +1248,35 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
    * que dibuja el botón depende de `googleContainer` (estado): cada elemento
    * nuevo lo vuelve a dibujar.
    */
+  // AF2 · con el paquete vigente, el toque que puede CREAR una cuenta (un-toque
+  // o alta con Google) exige las dos casillas ANTES: el botón de Google queda
+  // inerte —sin puntero ni foco— hasta marcarlas (`registro_y_puerta.txt`).
+  const googlePuedeCrear = googleAuthority?.purpose === 'continue' || googleAuthority?.purpose === 'register';
+  const googleInerte = paqueteVigente && googlePuedeCrear && !aceptacionLista;
+  // Una sola vez en pantalla: si la ranura de Google ya las muestra (Google
+  // PRIMERO en «Crea tu cuenta»), el formulario de abajo no las repite; las
+  // mismas dos casillas gobiernan los dos caminos.
+  const casillasEnRanura = paqueteVigente && googlePuedeCrear;
   const ranuraGoogle = (
     <div className="social-provider-slot">
+      {paqueteVigente && googlePuedeCrear && casillasLegales}
       <div
-        ref={setGoogleContainer}
-        className="social-google-container"
-        role="group"
-        aria-label={t('Continuar con Google')}
-      />
+        className={googleInerte ? 'social-google-gated' : undefined}
+        aria-disabled={googleInerte || undefined}
+        {...(googleInerte ? ({ inert: '' } as Record<string, string>) : {})}
+      >
+        <div
+          ref={setGoogleContainer}
+          className="social-google-container"
+          role="group"
+          aria-label={t('Continuar con Google')}
+        />
+      </div>
       {/* AF-17 · con «Continuar con Google» el toque puede CREAR la cuenta: la
           aceptación del aviso se dice junto al botón y enlaza el mismo aviso
-          cuya versión viaja. Sin versión vigente no hay modo un-toque. */}
-      {googleAuthority?.purpose === 'continue' && (
+          cuya versión viaja. Sin versión vigente no hay modo un-toque. AF2: con
+          el paquete 3.0.0 vigente, las casillas de arriba reemplazan la frase. */}
+      {googleAuthority?.purpose === 'continue' && !paqueteVigente && (
         <p className="ingreso-legal ingreso-aviso-google">
           {t('Al continuar aceptas el')}{' '}
           <a href={PATH_PRIVACIDAD}>{t('Aviso de privacidad')}</a>
@@ -1388,7 +1495,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
           {mode === 'register' && legal.status === 'loading' && (
             <div className="legal-notice-state" role="status">{t('Cargando…')}</div>
           )}
-          {mode === 'register' && legal.status === 'error' && (
+          {mode === 'register' && (legal.status === 'error' || paquete.status === 'error') && (
             <div className="ingreso-error" role="alert">
               <div>{t('No pudimos conectar. Prueba de nuevo.')}</div>
               <button
@@ -1400,7 +1507,23 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
               </button>
             </div>
           )}
-          {mode === 'register' && legal.status === 'ready' && (
+          {mode === 'register' && legal.status === 'ready' && paquete.status === 'ready' && (
+            <>
+              {!casillasEnRanura && casillasLegales}
+              <section className="legal-notice" aria-label="Aviso de Privacidad Simplificado">
+                {idioma === 'en' && (
+                  <p className="legal-notice-language" lang="en">
+                    This document is only available in Spanish for now.
+                  </p>
+                )}
+                <pre lang="es">{paquete.simplificado.body}</pre>
+                <div className="legal-notice-meta" lang="es">
+                  Versión {paquete.simplificado.version} · {paquete.simplificado.effective_from.slice(0, 10)}
+                </div>
+              </section>
+            </>
+          )}
+          {mode === 'register' && legal.status === 'ready' && paquete.status !== 'ready' && (
             <section className="legal-notice" aria-label="Aviso de privacidad">
               {idioma === 'en' && (
                 <p className="legal-notice-language" lang="en">
@@ -1419,7 +1542,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
               className="ingreso-entrar"
               type="button"
               onClick={() => { void onCrearConGoogle(); }}
-              disabled={busy || socialBusy || legal.status !== 'ready'
+              disabled={busy || socialBusy || legal.status !== 'ready' || paqueteIncierto || !aceptacionLista
                 || !socialActionEligible({
                   mode: 'register',
                   providerActionEnabled: true,
@@ -1439,7 +1562,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
             className="ingreso-entrar"
             type="submit"
             disabled={busy || socialBusy || recoveryBusy
-              || (mode === 'register' && legal.status !== 'ready')}
+              || (mode === 'register' && legal.status !== 'ready')
+              || paqueteIncierto
+              || (mode === 'register' && !aceptacionLista)}
           >
             {busy ? t('Un segundo…') : mode === 'login' ? t('Entrar') : t('Registrarme')}
           </button>

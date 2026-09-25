@@ -293,12 +293,15 @@ describe('LoginScreen · rediseño del 2026-09-17', () => {
     expect(altaGoogle, 'Google quedó debajo de un campo en «Crea tu cuenta»').toBeLessThan(primerCampo);
   });
 
-  it('🔴 el aviso legal enlaza el documento que EXISTE y no nombra otro', () => {
-    // El artefacto dice «los Términos y el Aviso de privacidad». Los Términos
-    // no existen: ni página pública ni `kind` del dueño. Prometerlos en un
-    // link sería un callejón sin salida.
+  it('🔴 el aviso legal enlaza documentos que EXISTEN: el Aviso siempre; los Términos sólo con su página y su kind', () => {
+    // Hasta 0.192.0 los Términos no existían y nombrarlos era un callejón sin
+    // salida. LEGAL-3.0.0 (AF2) los sirve el dueño en `terminos_uso` y este
+    // front en `/terminos`: el enlace sólo se dibuja con el paquete vigente.
     expect(source).toContain('PATH_PRIVACIDAD');
     expect(source).toContain("t('Aviso de privacidad')");
-    expect(source).not.toMatch(/t\('[^']*Términos/);
+    expect(source).toContain('PATH_TERMINOS');
+    expect(source).toContain("t('Términos de Uso')");
+    expect(source).toContain("paquete.status === 'ready'");
+    expect(source).toContain("status: extractApiError(err).status === 404 ? 'unavailable' : 'error'");
   });
 });

@@ -61,61 +61,33 @@ describe('ProfileIdentityEditor · superficie DARK y lifecycle privado', () => {
   });
 });
 
-describe('M03 · «Fecha de nacimiento» en el perfil, una sola vez', () => {
+describe('M03 · LEGAL-3.0.0 (AF2): la fecha de nacimiento se retiró del perfil', () => {
   const conUsuario = (extra: Record<string, unknown>): StoredSession => ({
     ...SESSION,
     user: { ...SESSION.user!, ...extra },
   });
 
-  it('🔴 aparece sólo cuando el servidor dice que falta (birth_date_set === false)', () => {
+  it.each([
+    ['falta la fecha (birth_date_set false)', { birth_date_set: false, is_adult: null, birth_date: null }],
+    ['fecha declarada, adulto', { birth_date_set: true, is_adult: true, birth_date: '1988-03-14' }],
+    ['fecha declarada, menor según el servidor', { birth_date_set: true, is_adult: false, birth_date: '2015-01-01' }],
+    ['el dueño ya borró las fechas (AB2)', { birth_date_set: false, is_adult: true, birth_date: null }],
+  ])('sin campo, sin fecha, sin edad y sin nota de menor · %s', (_caso, extra) => {
     const html = renderToStaticMarkup(
-      <ProfileIdentityEditor session={conUsuario({ birth_date_set: false, is_adult: null, birth_date: null })} enabled adoptUser={() => true} />,
-    );
-    expect(html).toContain('Fecha de nacimiento');
-    expect(html).toContain('type="date"');
-    expect(html).toContain('Guardar fecha');
-    expect(html).toContain('no mostramos tu foto a nadie más');
-    expect(html).toContain('No se puede cambiar después.');
-  });
-
-  it('🔴 con la fecha ya declarada no se ofrece (write-once) y no muestra la fecha ni una edad', () => {
-    const html = renderToStaticMarkup(
-      <ProfileIdentityEditor session={conUsuario({ birth_date_set: true, is_adult: true, birth_date: '1988-03-14' })} enabled adoptUser={() => true} />,
+      <ProfileIdentityEditor session={conUsuario(extra)} enabled adoptUser={() => true} />,
     );
     expect(html).not.toContain('type="date"');
     expect(html).not.toContain('Fecha de nacimiento');
+    expect(html).not.toContain('Guardar fecha');
+    expect(html).not.toContain('no mostramos tu foto a nadie más');
     expect(html).not.toContain('1988');
+    expect(html).not.toContain('2015');
     expect(html).not.toMatch(/\d+ años/);
   });
 
-  it('sin saber todavía (la sesión no lo trae) no se dibuja: espera al perfil estricto', () => {
-    const html = renderToStaticMarkup(
-      <ProfileIdentityEditor session={SESSION} enabled adoptUser={() => true} />,
-    );
-    expect(html).not.toContain('type="date"');
-  });
-
-  it('con el perfil apagado no hay campo aunque falte la fecha', () => {
-    const html = renderToStaticMarkup(
-      <ProfileIdentityEditor session={conUsuario({ birth_date_set: false, is_adult: null, birth_date: null })} enabled={false} adoptUser={() => true} />,
-    );
-    expect(html).not.toContain('type="date"');
-  });
-
-  it('menor según el SERVIDOR: dice que su foto no se muestra, sin campo', () => {
-    const html = renderToStaticMarkup(
-      <ProfileIdentityEditor session={conUsuario({ birth_date_set: true, is_adult: false, birth_date: '2015-01-01' })} enabled adoptUser={() => true} />,
-    );
-    expect(html).not.toContain('type="date"');
-    expect(html).toContain('no mostramos tu foto a nadie más');
-    expect(html).not.toContain('2015');
-  });
-
-  it('🔴 un solo PATCH, el veredicto sale de la respuesta y el cliente no calcula edad', () => {
-    expect(source.match(/api\.declareBirthDate/g)).toHaveLength(1);
-    expect(source).toContain('setFechaDeclarada(response.user.birth_date_set)');
-    expect(source).toContain('setEsAdulto(response.user.is_adult)');
-    expect(source).toContain("status === 409 && code === 'birth_date_already_set'");
+  it('🔴 el editor ya no declara la fecha ni calcula edad en el cliente', () => {
+    expect(source).not.toContain('api.declareBirthDate');
+    expect(source).not.toContain('birth_date_already_set');
     expect(source).not.toMatch(/getFullYear|getUTCFullYear|Date\.now|new Date\(/);
   });
 });

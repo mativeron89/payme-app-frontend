@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   codigoValido,
   PATH_PRIVACIDAD,
+  PATH_TERMINOS,
   PREFIJO_ELIMINACION,
   resolverRutaPublica,
 } from './publicRoute';
@@ -24,6 +25,12 @@ describe('resolverRutaPublica · el censo de paths', () => {
     // encontrar la página y nadie se entera hasta la revisión de la app.
     expect(PATH_PRIVACIDAD).toBe('/privacy');
     expect(PREFIJO_ELIMINACION).toBe('/facebook-data-deletion/');
+    // AF2 · LEGAL-3.0.0: la URL que citan los Términos y las casillas del alta.
+    expect(PATH_TERMINOS).toBe('/terminos');
+  });
+
+  it('✅ `/terminos` exacto es la superficie de Términos de uso (AF2)', () => {
+    expect(resolverRutaPublica('/terminos')).toEqual({ tipo: 'terminos' });
   });
 
   it('✅ `/privacy` exacto es la superficie de privacidad', () => {
@@ -41,10 +48,10 @@ describe('resolverRutaPublica · el censo de paths', () => {
    * de rechazos no prueba nada si nada se acepta.
    */
   it('🔴 el parser acepta ALGO · si no, los rechazos de abajo miden en vacío', () => {
-    const aceptados = ['/privacy', `${PREFIJO_ELIMINACION}${CODIGO_OK}`]
+    const aceptados = ['/privacy', '/terminos', `${PREFIJO_ELIMINACION}${CODIGO_OK}`]
       .map(resolverRutaPublica)
       .filter((r) => r !== null);
-    expect(aceptados).toHaveLength(2);
+    expect(aceptados).toHaveLength(3);
   });
 
   it.each([
@@ -53,6 +60,8 @@ describe('resolverRutaPublica · el censo de paths', () => {
     ['/privacy/', 'con barra final no es el path exacto'],
     ['/privacy/extra', 'con sufijo tampoco'],
     ['/privacidad', 'la traducción no es el contrato'],
+    ['/terminos/', 'Términos con barra final no es el path exacto'],
+    ['/Terminos', 'Términos en mayúscula tampoco'],
     ['/facebook-data-deletion', 'sin barra ni código no es la ruta de estado'],
     ['/otra/facebook-data-deletion/abcDEF012345_-ghIJKLmnop', 'el prefijo va al principio'],
     ['/mesa/PA-1234', 'una ruta cualquiera de la app'],

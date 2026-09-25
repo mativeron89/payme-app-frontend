@@ -7,6 +7,7 @@ import {
   type EstadoBorrado,
 } from './FacebookDataDeletionPage';
 import { PrivacyNoticeView, type EstadoAviso } from './PrivacyNoticePage';
+import { TerminosUsoView } from './TerminosUsoPage';
 import { PublicApp, URL_APP } from './PublicApp';
 
 /**
@@ -34,7 +35,7 @@ const AVISO = {
 };
 
 const FUENTES: Record<string, string> = Object.fromEntries(
-  ['PublicApp.tsx', 'PrivacyNoticePage.tsx', 'FacebookDataDeletionPage.tsx', 'publicRoute.ts']
+  ['PublicApp.tsx', 'PrivacyNoticePage.tsx', 'TerminosUsoPage.tsx', 'FacebookDataDeletionPage.tsx', 'publicRoute.ts']
     .map((n) => [n, readFileSync(new URL(`./${n}`, import.meta.url), 'utf8')]),
 );
 
@@ -96,6 +97,40 @@ describe('/privacy · los tres estados', () => {
     });
     expect(html, 'el cuerpo llegó al DOM como marcado vivo').not.toContain('<img');
     expect(html, 'debe verse escapado, como texto').toContain('&lt;img');
+  });
+});
+
+describe('/terminos · los tres estados (AF2 · LEGAL-3.0.0)', () => {
+  const render = (estado: EstadoAviso): string =>
+    renderToStaticMarkup(<TerminosUsoView estado={estado} onReintentar={() => undefined} />);
+  const TERMINOS = { ...AVISO, kind: 'terminos_uso' as const, version: '1.0.0', body: 'Primer párrafo de los Términos.' };
+
+  it('✅ con los Términos: título, versión, vigencia y CUERPO OWNER', () => {
+    const html = render({ fase: 'ok', aviso: TERMINOS });
+    expect(html).toContain('Términos de uso');
+    expect(html).toContain('Versión 1.0.0');
+    expect(html).toContain('2026-08-01');
+    expect(html).toContain('Primer párrafo de los Términos.');
+    expect(html).not.toContain('Reintentar');
+  });
+
+  it('✅ cargando lo dice, y no muestra cuerpo', () => {
+    const html = render({ fase: 'cargando' });
+    expect(html).toContain('Cargando los Términos vigentes');
+    expect(html).not.toContain('Primer párrafo');
+  });
+
+  it('🔴 no verificable: lo dice, ofrece reintentar y NO inventa Términos', () => {
+    const html = render({ fase: 'no-verificable' });
+    expect(html).toContain('No pudimos leer los Términos vigentes');
+    expect(html).toContain('Reintentar');
+    expect(html).not.toContain('Primer párrafo');
+  });
+
+  it('🔴 el cuerpo NUNCA se inyecta como HTML', () => {
+    const html = render({ fase: 'ok', aviso: { ...TERMINOS, body: '<img src=x onerror="alert(1)">' } });
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img');
   });
 });
 
@@ -363,7 +398,7 @@ describe('🔴 la carpeta pública entera · sin HTML vivo y sin storage', () =>
    * que los detectores no detecten.
    */
   it('🔴 el barrido leyó código de verdad, y sus detectores ven', () => {
-    expect(Object.keys(FUENTES)).toHaveLength(4);
+    expect(Object.keys(FUENTES)).toHaveLength(5);
     for (const [nombre, fuente] of Object.entries(FUENTES)) {
       const limpio = codigo(fuente);
       expect(fuente.length, `${nombre} llegó vacío`).toBeGreaterThan(500);

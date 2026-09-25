@@ -40,8 +40,10 @@ import type {
   GroupsResponse,
   IncomingFriendRequestsResponse,
   LockItemsResponse,
+  LegalAcceptanceRequest,
   LegalTextKind,
   LegalTextResponse,
+  NotificationPreferencesPut,
   MesaCreationOutcome,
   MesaDetailResponse,
   MesaStatus,
@@ -1237,10 +1239,30 @@ export async function mockCompleteRecovery(
  * DEMOSTRACIÓN: no se copia texto legal al repo; la huella es de demo y no
  * acredita ningún texto productivo.
  */
+/**
+ * AF2 · el riel mock replica al dueño CON EL PAQUETE 3.0.0 APAGADO (estado de
+ * AB1 recién desplegado): los tipos nuevos dan 404 `legal_text_not_found` y la
+ * aceptación no se exige. `payme.app.mock.legal_3_0_0.v1 = 'on'` en
+ * `localStorage` lo enciende, sólo para ejercitar casillas y puerta.
+ */
+export const MOCK_LEGAL_FLAG_KEY = 'payme.app.mock.legal_3_0_0.v1';
+function paqueteLegalMockEncendido(): boolean {
+  try { return localStorage.getItem(MOCK_LEGAL_FLAG_KEY) === 'on'; } catch { return false; }
+}
+const MOCK_TERMINOS_PAR = { version: '1.0.0', hash: 'd'.repeat(64) } as const;
+const CLAVE_LEGAL_ACEPTADO = 'payme.app.mock.legal_aceptado.v1';
+function legalAceptadoMock(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(CLAVE_LEGAL_ACEPTADO) ?? '[]') as string[]); } catch { return new Set(); }
+}
+function guardarLegalAceptadoMock(principales: Set<string>): void {
+  try { localStorage.setItem(CLAVE_LEGAL_ACEPTADO, JSON.stringify([...principales])); } catch { /* demo */ }
+}
+
 export async function mockGetLegalText(kind: LegalTextKind): Promise<LegalTextResponse> {
   if (kind === 'aviso_privacidad') return mockGetPrivacyNotice();
+  if (!paqueteLegalMockEncendido()) throw new MockApiError(404, 'legal_text_not_found');
   const demo = kind === 'terminos_uso'
-    ? { version: '1.0.0', hash: 'd'.repeat(64), body: 'TÉRMINOS DE DEMOSTRACIÓN. Este texto sólo ejercita la puesta a disposición en el modo demo; no son los Términos productivos de PayMe.' }
+    ? { ...MOCK_TERMINOS_PAR, body: 'TÉRMINOS DE DEMOSTRACIÓN. Este texto sólo ejercita la puesta a disposición en el modo demo; no son los Términos productivos de PayMe.' }
     : { version: '3.0.0', hash: 'e'.repeat(64), body: 'AVISO SIMPLIFICADO DE DEMOSTRACIÓN. Este texto sólo ejercita la puesta a disposición en el modo demo; no es el aviso productivo de PayMe.' };
   return delay({
     legal_text: { kind, ...demo, effective_from: '2026-09-25T00:00:00.000Z' },
@@ -1254,12 +1276,99 @@ export async function mockGetLegalText(kind: LegalTextKind): Promise<LegalTextRe
  */
 export async function mockGetLegalAcceptance(expectedSession: StoredSession): Promise<Record<string, unknown>> {
   requireCurrentMockSession(expectedSession);
-  return delay({ required: false, aviso: null, terminos: null });
+  if (!paqueteLegalMockEncendido()) return delay({ required: false, aviso: null, terminos: null });
+  return delay({
+    required: !legalAceptadoMock().has(expectedSession.principal_id),
+    aviso: { version: MOCK_AVISO_VERSION, hash: FRIEND_AVATAR_NOTICE_HASH },
+    terminos: { ...MOCK_TERMINOS_PAR },
+  });
 }
 
-export async function mockAcceptLegal(_acceptance: unknown, expectedSession: StoredSession): Promise<Record<string, unknown>> {
+export async function mockAcceptLegal(acceptance: LegalAcceptanceRequest, expectedSession: StoredSession): Promise<Record<string, unknown>> {
   requireCurrentMockSession(expectedSession);
-  throw new MockApiError(409, 'legal_package_not_active');
+  if (!paqueteLegalMockEncendido()) throw new MockApiError(409, 'legal_package_not_active');
+  const claves = Object.keys(acceptance).sort().join(',');
+  if (claves !== 'adult_declaration,aviso_hash,aviso_version,terminos_hash,terminos_version' || acceptance.adult_declaration !== true) {
+    throw new MockApiError(400, 'validation_error');
+  }
+  if (acceptance.aviso_version !== MOCK_AVISO_VERSION || acceptance.aviso_hash !== FRIEND_AVATAR_NOTICE_HASH
+      || acceptance.terminos_version !== MOCK_TERMINOS_PAR.version || acceptance.terminos_hash !== MOCK_TERMINOS_PAR.hash) {
+    throw new MockApiError(409, 'legal_version_mismatch');
+  }
+  const aceptados = legalAceptadoMock();
+  aceptados.add(expectedSession.principal_id);
+  guardarLegalAceptadoMock(aceptados);
+  // Decisión 45: aceptar el paquete registra también el «Entendido» de fotos.
+  if (!mockFriendNoticeAcknowledgements.has(expectedSession.principal_id)) {
+    mockFriendNoticeAcknowledgements.set(expectedSession.principal_id, new Date().toISOString());
+  }
+  return mockGetLegalAcceptance(expectedSession);
+}
+
+/**
+ * AF2 · preferencias de notificaciones (E1) en el riel mock: el catálogo de
+ * decisiones 33-37 con el dinero apagado —pagos `unavailable/payments_disabled`,
+ * «amigo agregado» `unavailable/notice_pending`, seguridad `fixed_on` y tres
+ * editables encendidas por default—, guardado por titular en memoria.
+ */
+const MOCK_NOTIF_EDITABLES = ['invitation_received', 'mesa_expired', 'friend_request_received'] as const;
+const CLAVE_NOTIF_PREFS = 'payme.app.mock.notification_preferences.v1';
+function notifPrefsMock(): Map<string, Map<string, boolean>> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CLAVE_NOTIF_PREFS) ?? '{}') as Record<string, Record<string, boolean>>;
+    return new Map(Object.entries(raw).map(([p, v]) => [p, new Map(Object.entries(v))]));
+  } catch { return new Map(); }
+}
+function guardarNotifPrefsMock(todas: Map<string, Map<string, boolean>>): void {
+  try {
+    localStorage.setItem(CLAVE_NOTIF_PREFS, JSON.stringify(Object.fromEntries([...todas].map(([p, v]) => [p, Object.fromEntries(v)]))));
+  } catch { /* demo */ }
+}
+
+function mockNotifCatalogo(principalId: string): Record<string, unknown> {
+  const propias = notifPrefsMock().get(principalId) ?? new Map<string, boolean>();
+  const editable = (type: string) => ({ mode: 'editable', value: propias.get(type) ?? true, default: true });
+  const pagos = (type: string) => ({ type, group: 'pagos', email: { mode: 'unavailable', reason: 'payments_disabled' } });
+  return {
+    notice_version: MOCK_AVISO_VERSION,
+    channels: ['email'],
+    items: [
+      { type: 'account_recovery', group: 'seguridad', email: { mode: 'fixed_on' } },
+      { type: 'account_deleted', group: 'seguridad', email: { mode: 'fixed_on' } },
+      { type: 'invitation_received', group: 'mesas', email: editable('invitation_received') },
+      { type: 'mesa_expired', group: 'mesas', email: editable('mesa_expired') },
+      { type: 'friend_request_received', group: 'amigos', email: editable('friend_request_received') },
+      { type: 'friend_added', group: 'amigos', email: { mode: 'unavailable', reason: 'notice_pending' } },
+      pagos('mesa_paid_by_friend'), pagos('mesa_fully_paid'), pagos('payment_failed'),
+      pagos('mesa_shortfall_charged'), pagos('mesa_garantia_impagos'), pagos('tip_received'),
+    ],
+  };
+}
+
+export async function mockGetNotificationPreferences(expectedSession: StoredSession): Promise<Record<string, unknown>> {
+  requireCurrentMockSession(expectedSession);
+  return delay(mockNotifCatalogo(expectedSession.principal_id));
+}
+
+export async function mockPutNotificationPreferences(
+  body: NotificationPreferencesPut,
+  expectedSession: StoredSession,
+): Promise<Record<string, unknown>> {
+  requireCurrentMockSession(expectedSession);
+  // Cuerpo estricto del dueño: sólo editables y booleanos; lo demás es 400.
+  if (!Array.isArray(body.items) || body.items.length === 0 || body.items.length > MOCK_NOTIF_EDITABLES.length
+      || body.items.some((item) => typeof item.email !== 'boolean' || Object.keys(item).length !== 2)) {
+    throw new MockApiError(400, 'validation_error');
+  }
+  if (body.items.some((item) => !(MOCK_NOTIF_EDITABLES as readonly string[]).includes(item.type))) {
+    throw new MockApiError(400, 'notification_preference_not_editable');
+  }
+  const todas = notifPrefsMock();
+  const propias = todas.get(expectedSession.principal_id) ?? new Map<string, boolean>();
+  for (const item of body.items) propias.set(item.type, item.email);
+  todas.set(expectedSession.principal_id, propias);
+  guardarNotifPrefsMock(todas);
+  return delay(mockNotifCatalogo(expectedSession.principal_id));
 }
 
 export async function mockGetPrivacyNotice(): Promise<LegalTextResponse> {

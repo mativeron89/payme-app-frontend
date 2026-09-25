@@ -147,6 +147,16 @@ export function MasScreen() {
             </div>
             <SelectorIdioma />
           </div>
+          {/* AF2 · LEGAL-3.0.0 / decisiones 33-37 · Configuración › Notificaciones:
+              qué avisos llegan también por correo. Mati pidió «una nueva ventana»:
+              página propia (`#/notificaciones`), no una sección acá. */}
+          <button className="list-row" onClick={() => navigate('notificaciones')}>
+            <span><Icon name="bell" size={16} /></span>
+            <div style={{ flex: 1, fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>
+              {t('Notificaciones')}
+            </div>
+            <span style={{ color: 'var(--gray-b)' }}>→</span>
+          </button>
           {corteDeclarado && (
             <div className="list-row list-row--nota" style={{ cursor: 'default' }} role="status">
               <span><Icon name="card" size={16} /></span>

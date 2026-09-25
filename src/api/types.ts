@@ -76,6 +76,8 @@ export interface RegisterRequest {
   password: string;
   first_name: string;
   last_name: string;
+  /** AF2 · aceptación del paquete legal 3.0.0; opcional en AB1, obligatoria en AB2. */
+  legal_acceptance?: LegalAcceptanceRequest;
   /**
    * D-FF-1 · autoridad one-use, ligada por el owner al email normalizado.
    *
@@ -109,6 +111,8 @@ export interface GoogleLoginRequest {
 export interface GoogleRegisterRequest extends GoogleLoginRequest {
   /** Opcional desde C2b: con el alta abierta puede no haberla. */
   invitation_token?: string;
+  /** AF2 · aceptación del paquete legal 3.0.0; opcional en AB1, obligatoria en AB2. */
+  legal_acceptance?: LegalAcceptanceRequest;
   /**
    * 🔴 **El ÚNICO body condicional a la capability de todo el alta.**
    *
@@ -180,7 +184,12 @@ export interface LegalAcceptanceResponse {
   terminos: LegalTextPair | null;
 }
 
-/** Cuerpo estricto del POST: el par vigente de cada documento y la declaración 18+. */
+/**
+ * Cuerpo estricto del POST de aceptación y del campo opcional `legal_acceptance`
+ * de las tres altas (`/auth/register`, `/auth/google/register`,
+ * `/auth/google/continue`, AB1): el par vigente de cada documento y la
+ * declaración 18+.
+ */
 export interface LegalAcceptanceRequest {
   aviso_version: string;
   aviso_hash: string;
@@ -1321,4 +1330,41 @@ export interface ApiError {
   error: string;
   message?: string;
   [key: string]: unknown;
+}
+
+// ─── Notificaciones · preferencias (E1, `payme.app.notification-preferences/v1`) ───
+
+export const NOTIFICATION_PREFERENCE_TYPES = [
+  'account_recovery', 'account_deleted',
+  'invitation_received', 'mesa_expired',
+  'friend_request_received', 'friend_added',
+  'mesa_paid_by_friend', 'mesa_fully_paid', 'payment_failed',
+  'mesa_shortfall_charged', 'mesa_garantia_impagos', 'tip_received',
+] as const;
+export type NotificationPreferenceType = typeof NOTIFICATION_PREFERENCE_TYPES[number];
+
+export const NOTIFICATION_PREFERENCE_GROUPS = ['seguridad', 'mesas', 'amigos', 'pagos'] as const;
+export type NotificationPreferenceGroup = typeof NOTIFICATION_PREFERENCE_GROUPS[number];
+
+export type NotificationEmailPreference =
+  | { readonly mode: 'editable'; readonly value: boolean; readonly default: boolean }
+  | { readonly mode: 'fixed_on' }
+  | { readonly mode: 'unavailable'; readonly reason: 'payments_disabled' | 'notice_pending' };
+
+export interface NotificationPreferenceItem {
+  readonly type: NotificationPreferenceType;
+  readonly group: NotificationPreferenceGroup;
+  readonly email: NotificationEmailPreference;
+}
+
+/** GET/PUT /api/notifications/preferences → DTO cerrado del dueño (sólo correo). */
+export interface NotificationPreferencesResponse {
+  readonly notice_version: string;
+  readonly channels: readonly ['email'];
+  readonly items: readonly NotificationPreferenceItem[];
+}
+
+/** PUT: sólo tipos editables HOY y el booleano de correo; cuerpo estricto. */
+export interface NotificationPreferencesPut {
+  readonly items: readonly { readonly type: NotificationPreferenceType; readonly email: boolean }[];
 }

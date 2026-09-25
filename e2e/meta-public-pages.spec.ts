@@ -41,6 +41,7 @@ const CODIGO = 'SENTINELAxyz012345_-abcd';
 const RUTA_ELIMINACION = `/facebook-data-deletion/${CODIGO}`;
 
 const PATRON_AVISO = '**/api/legal/aviso_privacidad';
+const PATRON_TERMINOS = '**/api/legal/terminos_uso';
 const PATRON_STATUS = '**/api/auth/facebook/data-deletion/status/**';
 
 const AVISO = {
@@ -254,7 +255,38 @@ test.describe('/facebook-data-deletion · la matriz de estados', () => {
   });
 });
 
+test.describe('/terminos · los Términos vigentes salen del owner (AF2 · LEGAL-3.0.0)', () => {
+  const TERMINOS = { legal_text: { ...AVISO.legal_text, kind: 'terminos_uso', version: '1.0.0', body: 'Primer párrafo de los Términos de uso.' } };
+
+  test('✅ acceso directo y RELOAD real muestran los Términos, versión y vigencia', async ({ page }) => {
+    await page.route(PATRON_TERMINOS, json(TERMINOS));
+    await page.goto('/terminos');
+    await expect(page.getByRole('heading', { name: 'Términos de uso' })).toBeVisible();
+    await expect(page.getByText('Primer párrafo de los Términos de uso.')).toBeVisible();
+    await expect(page.getByText('Versión 1.0.0')).toBeVisible();
+    await page.reload();
+    await expect(page.getByText('Primer párrafo de los Términos de uso.')).toBeVisible();
+  });
+
+  test('🔴 sin el documento en el owner (404, paquete apagado) lo dice y NO inventa Términos', async ({ page }) => {
+    await page.route(PATRON_TERMINOS, json({ error: 'legal_text_not_found' }, { status: 404 }));
+    await page.goto('/terminos');
+    await expect(page.getByText('No pudimos leer los Términos vigentes')).toBeVisible();
+    await expect(page.getByText('Primer párrafo')).toHaveCount(0);
+  });
+});
+
 test.describe('🔴 CENSO DE RED · cada página pide su endpoint owner y nada más', () => {
+  test('/terminos no pide sesión, config, Stripe, GIS, Meta ni analytics', async ({ page }) => {
+    const censo = censar(page);
+    await page.route(PATRON_TERMINOS, json({ legal_text: { ...AVISO.legal_text, kind: 'terminos_uso', version: '1.0.0', body: 'Términos owner.' } }));
+    await page.goto('/terminos');
+    await expect(page.getByText('Términos owner.')).toBeVisible();
+    expect(backendPedido(censo)).toEqual(['http://localhost:3000/api/legal/terminos_uso']);
+    expect(hostsExternos(censo)).toEqual(['localhost:3000']);
+    expect(censo.errores).toEqual([]);
+  });
+
   test('/privacy no pide sesión, config, Stripe, GIS, Meta ni analytics', async ({ page }) => {
     const censo = censar(page);
     await page.route(PATRON_AVISO, json(AVISO));

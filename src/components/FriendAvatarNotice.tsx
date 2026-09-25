@@ -50,7 +50,7 @@ export function FriendAvatarNoticeView({
       <div className="friend-avatar-notice-content">
         <div className="friend-avatar-notice-title">{t('Tu foto entre amigos')}</div>
         <p>
-          {t('Actualizamos el Aviso para explicar que tus amigos aceptados pueden ver tu foto de perfil. Las personas bloqueadas, menores de edad o sin fecha de nacimiento siguen usando el avatar genérico.')}
+          {t('Actualizamos el Aviso para explicar que tus amigos aceptados pueden ver tu foto de perfil. Las personas bloqueadas siguen usando el avatar genérico.')}
         </p>
         <a href="/privacy" target="_blank" rel="noopener noreferrer">
           {t('Ver Aviso de Privacidad')} · {version}

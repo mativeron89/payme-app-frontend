@@ -15,6 +15,7 @@ import {
   httpSocialSession,
   invalidateSessionSerialized,
   runWithSessionStateLock,
+  setOnLegalAcceptanceRequired,
   setOnSessionExpired,
   type UploadProgress,
 } from './http';
@@ -44,6 +45,7 @@ import {
   type FriendAvatarNoticeAcknowledgement,
   type FriendAvatarNoticeState,
 } from './friendAvatarNotice';
+import { decodeNotificationPreferences } from './notificationPreferences';
 import { rutaConPeriodo, type ClavePeriodo } from './periodoEstadisticas';
 import { decodePlatos, type PlatosDelPeriodo } from './platos';
 import { decodeEvolucion, type Evolucion } from './evolucion';
@@ -91,6 +93,8 @@ import type {
   MeResponse,
   LegalAcceptanceRequest,
   LegalAcceptanceResponse,
+  NotificationPreferencesPut,
+  NotificationPreferencesResponse,
   LegalTextKind,
   LegalTextResponse,
   RestaurantResponse,
@@ -238,6 +242,13 @@ export interface Api {
    * dueño: `{required:false, aviso:null, terminos:null}`. La puerta llega en AF2.
    */
   getLegalAcceptance(expectedSession: StoredSession): Promise<LegalAcceptanceResponse>;
+  /**
+   * AF2 · Configuración › Notificaciones (E1 del dueño, v2.128.0): sólo correo.
+   * Privado: `no-store`, `Vary: Authorization`, sin ETag, como el aviso de foto.
+   */
+  getNotificationPreferences(expectedSession: StoredSession): Promise<NotificationPreferencesResponse>;
+  /** `PUT` de uno o más ítems editables; responde el DTO completo. */
+  putNotificationPreferences(body: NotificationPreferencesPut, expectedSession: StoredSession): Promise<NotificationPreferencesResponse>;
   /** `POST /api/legal/acceptance`: acepta el par vigente con la declaración 18+. Idempotente. */
   acceptLegal(acceptance: LegalAcceptanceRequest, expectedSession: StoredSession): Promise<LegalAcceptanceResponse>;
   // auth
@@ -274,6 +285,8 @@ export interface Api {
   logout(): Promise<void>;
   restoreSession(): StoredSession | null;
   onSessionExpired(cb: (() => void) | null): void;
+  /** AF2 · LEGAL-3.0.0: el dueño contestó 428 `legal_acceptance_required` (AB2); la app abre la puerta. */
+  onLegalAcceptanceRequired(cb: (() => void) | null): void;
   /** Perfil propio (G-02, v2.20) — hidrata sesiones persistidas sin `user`. */
   getMe(): Promise<MeResponse>;
   /** GET propio estricto, sólo detrás de `profile_identity`. */
@@ -495,6 +508,17 @@ const realApi: Api = {
   getLegalAcceptance: async (expectedSession) => legalAcceptanceResponse(
     await httpRequest<unknown>('GET', '/legal/acceptance', undefined, expectedSession),
   ),
+  getNotificationPreferences: async (expectedSession) => decodeNotificationPreferences(
+    await httpPrivateJsonRequest<unknown>(
+      '/notifications/preferences', expectedSession, 30_000,
+      { requireAuthorizationVary: true, forbidEtag: true },
+    ),
+  ),
+  putNotificationPreferences: async (body, expectedSession) => decodeNotificationPreferences(
+    await httpPrivateJsonMutationRequest<unknown>(
+      '/notifications/preferences', body, expectedSession, 30_000, 'PUT',
+    ),
+  ),
   acceptLegal: async (acceptance, expectedSession) => legalAcceptanceResponse(
     await httpRequest<unknown>('POST', '/legal/acceptance', acceptance, expectedSession),
   ),
@@ -548,6 +572,7 @@ const realApi: Api = {
   logout: () => httpLogout(),
   restoreSession: () => loadSession(),
   onSessionExpired: (cb) => setOnSessionExpired(cb),
+  onLegalAcceptanceRequired: (cb) => setOnLegalAcceptanceRequired(cb),
   // Compatibilidad de rollout: sesiones históricas pueden hidratarse contra
   // un backend previo al header privado. El lector estricto vive únicamente
   // detrás de la capability nueva, en `getProfileIdentity`.
@@ -954,6 +979,12 @@ const mockApi: Api = {
   getLegalAcceptance: async (expectedSession) => legalAcceptanceResponse(
     await mock.mockGetLegalAcceptance(expectedSession),
   ),
+  getNotificationPreferences: async (expectedSession) => decodeNotificationPreferences(
+    await mock.mockGetNotificationPreferences(expectedSession),
+  ),
+  putNotificationPreferences: async (body, expectedSession) => decodeNotificationPreferences(
+    await mock.mockPutNotificationPreferences(body, expectedSession),
+  ),
   acceptLegal: async (acceptance, expectedSession) => legalAcceptanceResponse(
     await mock.mockAcceptLegal(acceptance, expectedSession),
   ),
@@ -992,6 +1023,8 @@ const mockApi: Api = {
   },
   restoreSession: () => loadSession(),
   onSessionExpired: () => undefined,
+  // El mock nunca contesta 428: la puerta se ejercita parchando la fachada.
+  onLegalAcceptanceRequired: () => undefined,
   getMe: () => mock.mockGetMe(),
   getProfileIdentity: async () => {
     assertProfileIdentityEnabled();

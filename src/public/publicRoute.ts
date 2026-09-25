@@ -40,11 +40,14 @@
 
 export type RutaPublica =
   | { readonly tipo: 'privacidad' }
+  /** AF2 (LEGAL-3.0.0) · Términos de uso, públicos: se leen antes de registrarse. */
+  | { readonly tipo: 'terminos' }
   /** `code: null` ⇒ el path no trae un código consultable. No se hace request. */
   | { readonly tipo: 'eliminacion'; readonly code: string | null };
 
 /** El contrato Meta fija estos dos paths; no hay variantes ni alias. */
 export const PATH_PRIVACIDAD = '/privacy';
+export const PATH_TERMINOS = '/terminos';
 export const PREFIJO_ELIMINACION = '/facebook-data-deletion/';
 
 const FORMA_BASE64URL = /^[A-Za-z0-9_-]+$/;
@@ -101,6 +104,7 @@ export function codigoValido(code: string): boolean {
  */
 export function resolverRutaPublica(pathname: string): RutaPublica | null {
   if (pathname === PATH_PRIVACIDAD) return { tipo: 'privacidad' };
+  if (pathname === PATH_TERMINOS) return { tipo: 'terminos' };
   if (!pathname.startsWith(PREFIJO_ELIMINACION)) return null;
   const code = pathname.slice(PREFIJO_ELIMINACION.length);
   return { tipo: 'eliminacion', code: codigoValido(code) ? code : null };

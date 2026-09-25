@@ -439,9 +439,11 @@ export async function httpPrivateJsonMutationRequest<T>(
   body: unknown,
   expectedSession: StoredSession,
   timeoutMs = REQUEST_TIMEOUT_MS,
+  /** AF2 · `PUT` para las preferencias de notificaciones (E1); `POST` sigue siendo el default. */
+  method: 'POST' | 'PUT' = 'POST',
 ): Promise<T> {
   return authenticatedRequest(expectedSession, (session) => rawRequestAs<T>(
-    'POST', path, body, session.access_token, timeoutMs,
+    method, path, body, session.access_token, timeoutMs,
     async (response) => {
       const cacheControl = response.headers.get('cache-control')?.toLowerCase() ?? '';
       const tokens = cacheControl.split(',').map((part) => part.trim());

@@ -24,12 +24,16 @@ import { MesasScreen } from './screens/MesasScreen';
 import { PagosScreen } from './screens/PagosScreen';
 import { RecoveryScreen } from './screens/RecoveryScreen';
 import { MasScreen } from './screens/MasScreen';
+import { NotificacionesScreen } from './screens/NotificacionesScreen';
+import { PuertaLegal, usePuertaLegal } from './components/PuertaLegal';
 import { TarjetasScreen } from './screens/TarjetasScreen';
 import { TopupScreen } from './screens/TopupScreen';
 import { TransferScreen } from './screens/TransferScreen';
 
 function Shell() {
-  const { session, facebookCallbackPhase } = useAuth();
+  const { session, facebookCallbackPhase, logout } = useAuth();
+  // AF2 · LEGAL-3.0.0: la puerta de aceptación para quien ya tiene cuenta.
+  const puerta = usePuertaLegal(session);
   /**
    * F2 · el corte de pagos lo declara el dueño (`money_rail`), igual que el riel
    * saldo. Se pide acá, en el shell, para que la decisión sea una sola por carga
@@ -175,6 +179,20 @@ function Shell() {
 
   if (!session) return <LoginScreen />;
 
+  // AF2 · mientras falte aceptar el paquete legal vigente, la puerta bloquea
+  // todo lo demás: sólo «Continuar» o «Cerrar sesión» (decisión 40).
+  if (puerta.estado.fase === 'cerrada') {
+    return (
+      <PuertaLegal
+        session={session}
+        aceptacion={puerta.estado.aceptacion}
+        onAceptada={puerta.abrir}
+        onReconsultar={puerta.reconsultar}
+        onCerrarSesion={() => { void logout(); }}
+      />
+    );
+  }
+
   // Sin copy y sin pantalla: el efecto de arriba ya está redirigiendo.
   if (rutaDelRielSaldo) return null;
   if (rutaCortada) return null;
@@ -251,6 +269,8 @@ function Shell() {
         return <MasScreen />;
       case 'avisos':
         return <AvisosScreen />;
+      case 'notificaciones':
+        return <NotificacionesScreen />;
       /**
        * **El guard real es el `never`, no el `default`.**
        *

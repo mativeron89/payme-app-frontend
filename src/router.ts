@@ -70,6 +70,8 @@ export const PAGES = [
    */
   'mas',
   'avisos',
+  /** AF2 · LEGAL-3.0.0 / decisiones 33-37: Configuración › Notificaciones (sólo correo). */
+  'notificaciones',
   /** Completion público; el token vive sólo en memoria y nunca en PageId/query. */
   'recovery',
   'mesa',

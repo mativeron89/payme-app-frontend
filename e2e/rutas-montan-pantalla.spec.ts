@@ -168,6 +168,8 @@ const ESPERADO: Record<PageId, Esperado> = {
   scan: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Escanea el ticket' } },
   mas: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Configuración' } },
   avisos: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Notificaciones', nivel: 1 } },
+  // AF2 · LEGAL-3.0.0 / decisiones 33-37: Configuración › Notificaciones.
+  notificaciones: { tipo: 'pantalla', marcador: { rol: 'heading', nombre: 'Notificaciones', exacto: true } },
 
   /**
    * 🔴 `#/mesa` **sin** código monta `MesasScreen` —lo dice su propio `case`— y

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { FacebookDataDeletionPage } from './FacebookDataDeletionPage';
 import { PrivacyNoticePage } from './PrivacyNoticePage';
+import { TerminosUsoPage } from './TerminosUsoPage';
 import type { RutaPublica } from './publicRoute';
 
 /**
@@ -39,6 +40,7 @@ import type { RutaPublica } from './publicRoute';
 
 const TITULO: Readonly<Record<RutaPublica['tipo'], string>> = {
   privacidad: 'Aviso de privacidad · PayMe',
+  terminos: 'Términos de uso · PayMe',
   eliminacion: 'Eliminación de datos · PayMe',
 };
 
@@ -56,9 +58,9 @@ export function PublicApp({ ruta }: { readonly ruta: RutaPublica }): JSX.Element
       </header>
 
       <main className="pub-main">
-        {ruta.tipo === 'privacidad'
-          ? <PrivacyNoticePage />
-          : <FacebookDataDeletionPage code={ruta.code} />}
+        {ruta.tipo === 'privacidad' && <PrivacyNoticePage />}
+        {ruta.tipo === 'terminos' && <TerminosUsoPage />}
+        {ruta.tipo === 'eliminacion' && <FacebookDataDeletionPage code={ruta.code} />}
       </main>
 
       <footer className="pub-pie">

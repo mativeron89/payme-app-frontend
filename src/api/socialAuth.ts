@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import type { AppConfig, SocialSessionResponse } from './types';
+import type { LegalAcceptanceRequest } from './types';
 
 export type SocialAuthStatus = 'pending' | 'authoritative' | 'absent' | 'malformed';
 
@@ -411,6 +412,8 @@ export function decodeLinkedProvidersResponse(value: unknown): readonly LinkedPr
 /** Cuerpo exacto de `POST /api/auth/google/link` (`social-auth-v1.json`). */
 /** AF-17 · body de `POST /api/auth/google/continue` (`schemas.socialContinue`, strict). */
 export interface GoogleContinueRequest {
+  /** AF2 · aceptación del paquete legal 3.0.0; opcional en AB1, obligatoria en AB2. */
+  legal_acceptance?: LegalAcceptanceRequest;
   readonly id_token: string;
   /** La versión del aviso que la pantalla enlaza junto al botón. */
   readonly accepted_notice_version: string;
