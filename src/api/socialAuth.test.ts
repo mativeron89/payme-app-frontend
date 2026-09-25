@@ -134,10 +134,20 @@ describe('social auth capability · fail-closed con password preservado', () => 
 
   it('birth gate sólo cierra registration; no cierra login ni password', () => {
     const social = recoveryEnabled(googleEnabled(true));
+    // Presente y malformado (`null`): cierra el alta social, como siempre.
     const absent = readSocialAuthCapability(config(social, null));
     expect(absent.status).toBe('authoritative');
     expect(absent.google).toMatchObject({ enabled: true, login: true, registration: false });
     expect(absent.passwordLoginEnabled).toBe(true);
+    // LEGAL-3.0.0 (AF1) · AUSENTE (el dueño ya no publica el bloque): no cierra.
+    // Rojo contra 0.191.0.
+    const sinBloque = readSocialAuthCapability({ features: { social_auth: social } });
+    expect(sinBloque.status).toBe('authoritative');
+    expect(sinBloque.google).toMatchObject({ enabled: true, login: true, registration: true });
+    expect(sinBloque.socialRegistrationBirthDateReady).toBe(true);
+    for (const malformado of [{}, { ...BIRTH_READY, extra: true }, { ...BIRTH_READY, supported: false }]) {
+      expect(readSocialAuthCapability(config(social, malformado)).google.registration).toBe(false);
+    }
 
     const ready = readSocialAuthCapability(config(social));
     expect(ready.google.registration).toBe(true);

@@ -38,6 +38,21 @@ describe('aviso previo al alta · decoder fail-closed', () => {
   ])('rechaza una respuesta que no acredita el aviso (%j)', (malformed) => {
     expect(() => legalTextResponse(malformed)).toThrow('contract_response_invalid:legal/aviso_privacidad');
   });
+
+  /**
+   * LEGAL-3.0.0 (AF1) · los dos tipos nuevos se leen con el mismo decoder y el
+   * `kind` pedido; el dueño todavía no los sirve (rojo contra 0.191.0).
+   */
+  it.each([
+    ['aviso_privacidad_simplificado', '3.0.0'],
+    ['terminos_uso', '1.0.0'],
+  ] as const)('acepta %s cuando se pide exactamente ese kind', (kind, version) => {
+    const texto = { legal_text: { ...notice.legal_text, kind, version } };
+    expect(legalTextResponse(texto, kind)).toEqual(texto);
+    // Pedir un tipo y recibir otro sigue siendo contrato roto, en las dos direcciones.
+    expect(() => legalTextResponse(texto)).toThrow('contract_response_invalid:legal/aviso_privacidad');
+    expect(() => legalTextResponse(notice, kind)).toThrow(`contract_response_invalid:legal/${kind}`);
+  });
 });
 
 describe('OCR real · decoder del contrato publicado', () => {

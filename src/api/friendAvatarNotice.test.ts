@@ -6,7 +6,8 @@ import {
 } from './friendAvatarNotice';
 
 const HASH = '5847ec0aff8247258d0763bc75ac6cd82ea553ae78b0ff06128ab43927085bd5';
-const HASH_256 = 'fb5b0d9301bacf9ad662cd20812bf57ef4745c46c49a412b76871a14f6574d0e';
+const HASH_300 = 'f5251653514f7616ac2700ebacee106b9fbaee48b4c42fda35708b28aa95f949';
+const HASH_256_RETIRADO = 'fb5b0d9301bacf9ad662cd20812bf57ef4745c46c49a412b76871a14f6574d0e';
 const state = {
   notice_version: '2.5.5',
   notice_hash: HASH,
@@ -39,26 +40,28 @@ describe('U05 · acuse del Aviso para foto entre amigos', () => {
     [{ ...state, notice_hash: 'a'.repeat(64) }, 'hash distinto'],
     [{ ...state, acknowledged: true }, 'acusado sin fecha'],
     [{ ...state, acknowledged_at: '2026-09-20' }, 'fecha sin acuse'],
-    // Pin tolerante (adenda 2026-09-24): sólo los DOS pares exactos.
-    [{ ...state, notice_version: '2.5.6' }, '2.5.6 con la huella de 2.5.5 (par cruzado)'],
-    [{ ...state, notice_hash: HASH_256 }, '2.5.5 con la huella de 2.5.6 (par cruzado)'],
+    // Pin tolerante: sólo los DOS pares exactos (2.5.5 y 3.0.0).
+    [{ ...state, notice_version: '3.0.0' }, '3.0.0 con la huella de 2.5.5 (par cruzado)'],
+    [{ ...state, notice_hash: HASH_300 }, '2.5.5 con la huella de 3.0.0 (par cruzado)'],
     [{ ...state, notice_version: '2.5.7', notice_hash: 'c'.repeat(64) }, 'par ajeno'],
-    [{ ...state, notice_version: '2.5.6', notice_hash: HASH_256.toUpperCase() }, 'huella en mayúsculas'],
+    [{ ...state, notice_version: '3.0.0', notice_hash: HASH_300.toUpperCase() }, 'huella en mayúsculas'],
+    // LEGAL-3.0.0 (AF1): el par 2.5.6 se retiró; ese aviso no se publica nunca.
+    [{ ...state, notice_version: '2.5.6', notice_hash: HASH_256_RETIRADO }, '2.5.6 retirado'],
   ])('falla cerrado ante %s (%s)', (value, _label) => {
     expect(() => decodeFriendAvatarNotice(value)).toThrow('friend_avatar_notice_response_malformed');
   });
 
   /**
-   * Adenda a AF-LISTO-INICIO (2026-09-24): el front acepta 2.5.5 y 2.5.6 con
-   * sus huellas exactas, para que el dueño publique 2.5.6 sin apagar el cartel.
-   * Rojo contra 0.190.1 en el par 2.5.6.
+   * LEGAL-3.0.0 (AF1, orden maestra 2026-09-25): el front acepta 2.5.5 y 3.0.0
+   * con sus huellas exactas, para que el dueño publique 3.0.0 sin apagar el
+   * cartel. Rojo contra 0.191.0 en el par 3.0.0.
    */
   it('acepta exactamente los dos pares publicados y acusa con el par que devolvió el servidor', () => {
     const PARES = [
       { version: '2.5.5', hash: HASH },
-      { version: '2.5.6', hash: HASH_256 },
+      { version: '3.0.0', hash: HASH_300 },
     ] as const;
-    // Primero la CONDUCTA (rojo contra 0.190.1: 2.5.6 tiraba `malformed`)…
+    // Primero la CONDUCTA (rojo contra 0.191.0: 3.0.0 tiraba `malformed`)…
     for (const pair of PARES) {
       const decoded = decodeFriendAvatarNotice({
         ...state, notice_version: pair.version, notice_hash: pair.hash,

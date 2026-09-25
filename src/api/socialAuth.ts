@@ -225,6 +225,11 @@ function decodeSignup(raw: unknown): boolean {
 }
 
 function birthDateAllowsSocialRegistration(raw: unknown): boolean {
+  // LEGAL-3.0.0 (AF1) · el bloque pasa a ser OPCIONAL: cuando el dueño retire
+  // la fecha de nacimiento (AB2/AB3) dejará de publicarlo, y su ausencia no
+  // debe apagar el alta social. Presente, se sigue exigiendo exacto y válido;
+  // presente y malformado (incluido `null`) sigue cerrando, como hasta hoy.
+  if (raw === undefined) return true;
   return plainObject(raw)
     && exactKeys(raw, BIRTH_KEYS)
     && raw.supported === true

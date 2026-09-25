@@ -5,18 +5,20 @@ import type { LegalTextResponse } from './types';
  * `/friends/avatar-notice`: **exactamente estos dos y ningún otro**. Un par
  * cruzado (versión de uno con huella del otro) o ajeno falla cerrado.
  *
- * Adenda a AF-LISTO-INICIO (decisiones 34/35, 2026-09-24) y regla del incidente
- * `dish_count`: el consumidor tolerante se publica ANTES que el dueño, para que
- * App Backend pueda pasar a 2.5.6 sin apagar este cartel.
- * - 2.5.5 · `5847ec0a…`: lo que sirve producción hoy (medido en `/ready`).
- * - 2.5.6 · `fb5b0d93…`: sha256 del cuerpo exacto del texto congelado
- *   (`hashBody` del dueño = sha256 del cuerpo servido; remedido acá sobre
- *   `aviso_privacidad_2.5.6.md`, cuerpo sin frontmatter ni blancos de borde).
+ * Regla del incidente `dish_count`: el consumidor tolerante se publica ANTES
+ * que el dueño, para que App Backend pueda subir de versión sin apagar el cartel.
+ * - 2.5.5 · `5847ec0a…`: lo que sirve producción hoy.
+ * - 3.0.0 · `f5251653…`: el aviso integral del paquete legal (decisiones 46/47,
+ *   ORDEN MAESTRA LEGAL-3.0.0-20260925). `hashBody` del dueño = sha256 del
+ *   cuerpo servido con `.trim()`; remedido acá sobre el texto final
+ *   `aviso_privacidad_3.0.0.txt` (L0 final).
+ * - 2.5.6 · `fb5b0d93…` se RETIRA: ese aviso no se publica nunca; lo reemplaza
+ *   3.0.0 (AF1 de la orden maestra).
  * El acuse se hace siempre con el par que devolvió el servidor, como hasta hoy.
  */
 export const FRIEND_AVATAR_NOTICE_PAIRS: readonly { readonly version: string; readonly hash: string }[] = [
   { version: '2.5.5', hash: '5847ec0aff8247258d0763bc75ac6cd82ea553ae78b0ff06128ab43927085bd5' },
-  { version: '2.5.6', hash: 'fb5b0d9301bacf9ad662cd20812bf57ef4745c46c49a412b76871a14f6574d0e' },
+  { version: '3.0.0', hash: 'f5251653514f7616ac2700ebacee106b9fbaee48b4c42fda35708b28aa95f949' },
 ];
 
 /** El par que sirve producción hoy; es el que presenta el riel mock. */

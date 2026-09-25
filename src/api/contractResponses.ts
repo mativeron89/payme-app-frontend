@@ -4,6 +4,9 @@ import type {
   AttachedPaymentMethod,
   CreateInvitationResponse,
   CreateSetupIntentResponse,
+  LegalAcceptanceResponse,
+  LegalTextKind,
+  LegalTextPair,
   LegalTextResponse,
   FriendRequestCancelledResponse,
   FriendRequestCreatedResponse,
@@ -214,15 +217,24 @@ export function friendRequestCancelledResponse(value: unknown): FriendRequestCan
 
 // ─── D-FF · aviso público y OCR ───────────────────────────────────────────
 
-/** El aviso controla si el alta puede ofrecerse; un 2xx incompleto no alcanza. */
-export function legalTextResponse(value: unknown): LegalTextResponse {
+/**
+ * El aviso controla si el alta puede ofrecerse; un 2xx incompleto no alcanza.
+ *
+ * LEGAL-3.0.0 (AF1) · el decoder recibe el `kind` PEDIDO y exige que el dueño
+ * conteste exactamente ése: pedir Términos y recibir el aviso sigue siendo un
+ * contrato roto. Las cinco claves y sus formas no cambian.
+ */
+export function legalTextResponse(
+  value: unknown,
+  expectedKind: LegalTextKind = 'aviso_privacidad',
+): LegalTextResponse {
   const body = record(value);
   const legal = record(body?.legal_text);
-  const endpoint = 'legal/aviso_privacidad';
+  const endpoint = `legal/${expectedKind}`;
   if (!body || !legal
       || !exactKeys(body, ['legal_text'])
       || !exactKeys(legal, ['kind', 'version', 'hash', 'effective_from', 'body'])
-      || legal.kind !== 'aviso_privacidad'
+      || legal.kind !== expectedKind
       || typeof legal.version !== 'string'
       || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(legal.version)
       || legal.version.length > 30
@@ -235,13 +247,43 @@ export function legalTextResponse(value: unknown): LegalTextResponse {
   }
   return {
     legal_text: {
-      kind: 'aviso_privacidad',
+      kind: expectedKind,
       version: legal.version,
       hash: legal.hash,
       effective_from: legal.effective_from,
       body: legal.body,
     },
   };
+}
+
+const LEGAL_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const LEGAL_HASH = /^[a-f0-9]{64}$/;
+
+function legalPair(value: unknown): LegalTextPair | null | undefined {
+  if (value === null) return null;
+  const pair = record(value);
+  if (!pair || !exactKeys(pair, ['version', 'hash'])
+      || typeof pair.version !== 'string' || !LEGAL_VERSION.test(pair.version) || pair.version.length > 30
+      || typeof pair.hash !== 'string' || !LEGAL_HASH.test(pair.hash)) return undefined;
+  return { version: pair.version, hash: pair.hash };
+}
+
+/**
+ * LEGAL-3.0.0 (AF1) · `GET/POST /api/legal/acceptance`, forma exacta de AB1:
+ * tres claves, pares `{version, hash}` o `null`. `required:true` sin los dos
+ * pares vigentes es contradictorio y se rechaza: la puerta no puede pedir
+ * aceptar algo que el dueño no nombró.
+ */
+export function legalAcceptanceResponse(value: unknown): LegalAcceptanceResponse {
+  const body = record(value);
+  const endpoint = 'legal/acceptance';
+  if (!body || !exactKeys(body, ['required', 'aviso', 'terminos'])
+      || typeof body.required !== 'boolean') throw new ContractResponseError(endpoint);
+  const aviso = legalPair(body.aviso);
+  const terminos = legalPair(body.terminos);
+  if (aviso === undefined || terminos === undefined) throw new ContractResponseError(endpoint);
+  if (body.required && (aviso === null || terminos === null)) throw new ContractResponseError(endpoint);
+  return { required: body.required, aviso, terminos };
 }
 
 const OCR_CATEGORIES: readonly OcrCategory[] = ['italian', 'japanese', 'mexican', 'cafe', 'other'];

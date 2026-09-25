@@ -28,6 +28,7 @@ import {
   friendRequestsResponse,
   invitationResponse,
   informativeSelectionResponse,
+  legalAcceptanceResponse,
   legalTextResponse,
   mesaCreationResponse,
   ocrResponse,
@@ -88,6 +89,9 @@ import type {
   BalanceResponse,
   AttachPaymentMethodResponse,
   MeResponse,
+  LegalAcceptanceRequest,
+  LegalAcceptanceResponse,
+  LegalTextKind,
   LegalTextResponse,
   RestaurantResponse,
   RestaurantResolutionRequest,
@@ -222,6 +226,20 @@ export interface Api {
   getConfig(): Promise<AppConfig>;
   /** Aviso vigente que debe ponerse a disposición antes del alta. Público. */
   getPrivacyNotice(): Promise<LegalTextResponse>;
+  /**
+   * LEGAL-3.0.0 (AF1) · cualquier texto legal público por su `kind`. Los
+   * Términos y el aviso simplificado se leen por acá cuando el dueño los sirva;
+   * `getPrivacyNotice` conserva su camino literal.
+   */
+  getLegalText(kind: LegalTextKind): Promise<LegalTextResponse>;
+  /**
+   * LEGAL-3.0.0 (AF1) · estado de aceptación del paquete legal vigente
+   * (`GET /api/legal/acceptance`, con sesión). Con el paquete apagado en el
+   * dueño: `{required:false, aviso:null, terminos:null}`. La puerta llega en AF2.
+   */
+  getLegalAcceptance(expectedSession: StoredSession): Promise<LegalAcceptanceResponse>;
+  /** `POST /api/legal/acceptance`: acepta el par vigente con la declaración 18+. Idempotente. */
+  acceptLegal(acceptance: LegalAcceptanceRequest, expectedSession: StoredSession): Promise<LegalAcceptanceResponse>;
   // auth
   login(email: string, password: string): Promise<StoredSession>;
   register(data: RegisterRequest): Promise<StoredSession>;
@@ -467,6 +485,18 @@ const realApi: Api = {
   getConfig: () => httpPublicRequest<AppConfig>('GET', '/config'),
   getPrivacyNotice: async () => legalTextResponse(
     await httpPublicRequest<unknown>('GET', '/legal/aviso_privacidad'),
+  ),
+  getLegalText: async (kind) => legalTextResponse(
+    await httpPublicRequest<unknown>('GET', `/legal/${encodeURIComponent(kind)}`), kind,
+  ),
+  // LEGAL-3.0.0 (AF1) · forma exacta publicada por App Backend - Opus para AB1
+  // (DISENO_AB1.md §3): GET y POST comparten ruta y forma; con la bandera
+  // apagada el GET responde `{required:false, aviso:null, terminos:null}`.
+  getLegalAcceptance: async (expectedSession) => legalAcceptanceResponse(
+    await httpRequest<unknown>('GET', '/legal/acceptance', undefined, expectedSession),
+  ),
+  acceptLegal: async (acceptance, expectedSession) => legalAcceptanceResponse(
+    await httpRequest<unknown>('POST', '/legal/acceptance', acceptance, expectedSession),
   ),
   login: (email, password) => httpLogin(email, password),
   register: (data) => httpRegister(data),
@@ -920,6 +950,13 @@ const realApi: Api = {
 const mockApi: Api = {
   getConfig: () => mock.mockGetConfig(),
   getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
+  getLegalText: async (kind) => legalTextResponse(await mock.mockGetLegalText(kind), kind),
+  getLegalAcceptance: async (expectedSession) => legalAcceptanceResponse(
+    await mock.mockGetLegalAcceptance(expectedSession),
+  ),
+  acceptLegal: async (acceptance, expectedSession) => legalAcceptanceResponse(
+    await mock.mockAcceptLegal(acceptance, expectedSession),
+  ),
   login: (email, password) => runWithSessionStateLock(() => mock.mockLogin(email, password)),
   register: (data) => runWithSessionStateLock(() => mock.mockRegister(data)),
   googleLogin: (idToken) => mock.mockGoogleLogin(idToken),

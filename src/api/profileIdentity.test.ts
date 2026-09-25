@@ -143,15 +143,21 @@ const PROFILE_NEAR_MISS_255 = [
   { ...PROFILE_ON, notice_version: '2.5.5-rc' },
 ];
 
-/** Adenda 2026-09-24 · 2.5.6 (notificaciones por correo) se presenta ANTES que el dueño. */
-const PROFILE_256 = {
+/** LEGAL-3.0.0 (AF1) · 2.5.6 se retiró (no se publica); 3.0.0 se presenta ANTES que el dueño. */
+const PROFILE_256_RETIRADO = {
   ...PROFILE_ON,
   notice_version: '2.5.6',
 };
 
-const PROFILE_NEAR_MISS_256 = [
-  { ...PROFILE_ON, notice_version: '2.5.60' },
-  { ...PROFILE_ON, notice_version: '2.5.6-rc' },
+const PROFILE_300 = {
+  ...PROFILE_ON,
+  notice_version: '3.0.0',
+};
+
+const PROFILE_NEAR_MISS_300 = [
+  { ...PROFILE_ON, notice_version: '3.0.00' },
+  { ...PROFILE_ON, notice_version: '3.0.0-rc' },
+  { ...PROFILE_ON, notice_version: '3.0' },
 ];
 
 const PROFILE_NEAR_MISS_254 = [
@@ -248,10 +254,13 @@ describe('capabilities privadas · forma y lógica cerradas', () => {
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.4' });
     expect(readProfileIdentityCapability(config(PROFILE_255)))
       .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.5' });
-    expect(readProfileIdentityCapability(config(PROFILE_256)))
-      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '2.5.6' });
+    expect(readProfileIdentityCapability(config(PROFILE_300)))
+      .toEqual({ enabled: true, status: 'authoritative', noticeVersion: '3.0.0' });
+    // 2.5.6 retirado: apaga como cualquier versión desconocida.
+    expect(readProfileIdentityCapability(config(PROFILE_256_RETIRADO)))
+      .toEqual({ enabled: false, status: 'notice_unavailable', noticeVersion: '2.5.6' });
     // …sin sus near-miss…
-    for (const cerca of [...PROFILE_NEAR_MISS_250, ...PROFILE_NEAR_MISS_251, ...PROFILE_NEAR_MISS_252, ...PROFILE_NEAR_MISS_253, ...PROFILE_NEAR_MISS_254, ...PROFILE_NEAR_MISS_255, ...PROFILE_NEAR_MISS_256]) {
+    for (const cerca of [...PROFILE_NEAR_MISS_250, ...PROFILE_NEAR_MISS_251, ...PROFILE_NEAR_MISS_252, ...PROFILE_NEAR_MISS_253, ...PROFILE_NEAR_MISS_254, ...PROFILE_NEAR_MISS_255, ...PROFILE_NEAR_MISS_300]) {
       expect(readProfileIdentityCapability(config(cerca)).status, cerca.notice_version).toBe('notice_unavailable');
     }
     // …y una versión FUTURA sigue apagando.

@@ -46,11 +46,11 @@ test.describe('U05 · foto entre amigos y acuse explícito', () => {
 
   /**
    * Adenda a AF-LISTO-INICIO (2026-09-24) · pin tolerante: el front acepta los
-   * pares 2.5.5 y 2.5.6 con sus huellas exactas, y ningún otro. El riel mock
+   * pares 2.5.5 y 3.0.0 con sus huellas exactas, y ningún otro. El riel mock
    * sigue sirviendo 2.5.5; acá el servidor (parchado en el módulo `api`) devuelve
    * el otro par válido o uno ajeno ANTES de entrar, que es cuando el cartel lee.
    */
-  const HASH_256 = 'fb5b0d9301bacf9ad662cd20812bf57ef4745c46c49a412b76871a14f6574d0e';
+  const HASH_300 = 'f5251653514f7616ac2700ebacee106b9fbaee48b4c42fda35708b28aa95f949';
 
   async function conServidorQueDevuelve(page: import('@playwright/test').Page, version: string, hash: string): Promise<void> {
     await page.goto('/');
@@ -82,19 +82,19 @@ test.describe('U05 · foto entre amigos y acuse explícito', () => {
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
   }
 
-  test('pin tolerante · con el par 2.5.6 el cartel se muestra y «Entendido» acusa ese par exacto', async ({ page }) => {
-    await conServidorQueDevuelve(page, '2.5.6', HASH_256);
+  test('pin tolerante · con el par 3.0.0 el cartel se muestra y «Entendido» acusa ese par exacto', async ({ page }) => {
+    await conServidorQueDevuelve(page, '3.0.0', HASH_300);
     const notice = page.getByLabel('Actualización del Aviso de Privacidad');
     await expect(notice).toBeVisible();
-    await expect(notice).toContainText('2.5.6');
+    await expect(notice).toContainText('3.0.0');
     await notice.getByRole('button', { name: 'Entendido', exact: true }).click();
     await expect(notice).toHaveCount(0);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('payme.app.e2e.u05.acuse') ?? 'null')))
-      .toEqual({ notice_version: '2.5.6', notice_hash: HASH_256 });
+      .toEqual({ notice_version: '3.0.0', notice_hash: HASH_300 });
   });
 
   test('pin tolerante · un par ajeno o cruzado no muestra el cartel ni acusa nada (falla cerrado)', async ({ page }) => {
-    await conServidorQueDevuelve(page, '2.5.6', '5847ec0aff8247258d0763bc75ac6cd82ea553ae78b0ff06128ab43927085bd5');
+    await conServidorQueDevuelve(page, '3.0.0', '5847ec0aff8247258d0763bc75ac6cd82ea553ae78b0ff06128ab43927085bd5');
     await expect(page.getByLabel('Actualización del Aviso de Privacidad')).toHaveCount(0);
     await page.getByRole('button', { name: 'Amigos', exact: true }).click();
     await expect(page.getByPlaceholder('Buscar entre tus amigos')).toBeVisible();

@@ -40,6 +40,7 @@ import type {
   GroupsResponse,
   IncomingFriendRequestsResponse,
   LockItemsResponse,
+  LegalTextKind,
   LegalTextResponse,
   MesaCreationOutcome,
   MesaDetailResponse,
@@ -1231,6 +1232,36 @@ export async function mockCompleteRecovery(
 }
 
 /** Fixture de UI, no copia del aviso legal productivo ni aprobación jurídica. */
+/**
+ * LEGAL-3.0.0 (AF1) · los textos nuevos del riel mock. Como el aviso, son
+ * DEMOSTRACIÓN: no se copia texto legal al repo; la huella es de demo y no
+ * acredita ningún texto productivo.
+ */
+export async function mockGetLegalText(kind: LegalTextKind): Promise<LegalTextResponse> {
+  if (kind === 'aviso_privacidad') return mockGetPrivacyNotice();
+  const demo = kind === 'terminos_uso'
+    ? { version: '1.0.0', hash: 'd'.repeat(64), body: 'TÉRMINOS DE DEMOSTRACIÓN. Este texto sólo ejercita la puesta a disposición en el modo demo; no son los Términos productivos de PayMe.' }
+    : { version: '3.0.0', hash: 'e'.repeat(64), body: 'AVISO SIMPLIFICADO DE DEMOSTRACIÓN. Este texto sólo ejercita la puesta a disposición en el modo demo; no es el aviso productivo de PayMe.' };
+  return delay({
+    legal_text: { kind, ...demo, effective_from: '2026-09-25T00:00:00.000Z' },
+  });
+}
+
+/**
+ * LEGAL-3.0.0 (AF1) · el riel mock replica el dueño CON EL PAQUETE APAGADO
+ * (estado de AB1 recién desplegado): nada que aceptar, y el POST contesta el
+ * 409 del dueño. El estado encendido lo ejercitan los tests parchando la fachada.
+ */
+export async function mockGetLegalAcceptance(expectedSession: StoredSession): Promise<Record<string, unknown>> {
+  requireCurrentMockSession(expectedSession);
+  return delay({ required: false, aviso: null, terminos: null });
+}
+
+export async function mockAcceptLegal(_acceptance: unknown, expectedSession: StoredSession): Promise<Record<string, unknown>> {
+  requireCurrentMockSession(expectedSession);
+  throw new MockApiError(409, 'legal_package_not_active');
+}
+
 export async function mockGetPrivacyNotice(): Promise<LegalTextResponse> {
   return delay({
     legal_text: {

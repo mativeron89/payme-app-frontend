@@ -17,10 +17,29 @@ const BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
 const SESSION_LOCK = 'payme-session-state';
 
 let onSessionExpiredCb: (() => void) | null = null;
+let onLegalAcceptanceRequiredCb: (() => void) | null = null;
 const refreshInFlight = new Map<string, Promise<StoredSession | null>>();
 
 export function setOnSessionExpired(cb: (() => void) | null): void {
   onSessionExpiredCb = cb;
+}
+
+/**
+ * LEGAL-3.0.0 (AF1) · el dueño responderá `428 legal_acceptance_required` en
+ * `requireAuth` cuando falte aceptar el paquete legal vigente (AB2). Este
+ * gancho lo avisa una vez por request para que la app abra la puerta de
+ * aceptación (AF2); el error se propaga igual, nunca se traga.
+ */
+export function setOnLegalAcceptanceRequired(cb: (() => void) | null): void {
+  onLegalAcceptanceRequiredCb = cb;
+}
+
+export const LEGAL_ACCEPTANCE_REQUIRED = 'legal_acceptance_required';
+
+function notifyLegalAcceptanceRequired(err: unknown): void {
+  if (err instanceof HttpError && err.status === 428 && err.body?.error === LEGAL_ACCEPTANCE_REQUIRED) {
+    onLegalAcceptanceRequiredCb?.();
+  }
 }
 
 export class HttpError extends Error {
@@ -262,6 +281,7 @@ async function authenticatedRequest<T>(
   try {
     return await run(session);
   } catch (err) {
+    notifyLegalAcceptanceRequired(err);
     if (err instanceof HttpError && err.status === 401) {
       const refreshed = await tryRefresh(session);
       if (refreshed && refreshed.family_id === session.family_id && refreshed.principal_id === session.principal_id && isCurrentSession(refreshed)) {

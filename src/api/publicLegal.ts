@@ -1,6 +1,6 @@
 import { legalTextResponse } from './contractResponses';
 import { codigoValido } from '../public/publicRoute';
-import type { LegalTextResponse } from './types';
+import type { LegalTextKind, LegalTextResponse } from './types';
 
 /**
  * APP-FE-META-PUBLIC-COMPLIANCE-01 · el ÚNICO cliente de red de las superficies
@@ -46,6 +46,15 @@ import type { LegalTextResponse } from './types';
 const BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 export const PATH_AVISO = '/api/legal/aviso_privacidad';
+/**
+ * LEGAL-3.0.0 (AF1) · los tres paths públicos, literales. `/terminos` (AF2)
+ * lee `terminos_uso` por acá; ninguno acepta un path que no esté en esta tabla.
+ */
+export const PATHS_LEGALES: Readonly<Record<LegalTextKind, string>> = {
+  aviso_privacidad: PATH_AVISO,
+  aviso_privacidad_simplificado: '/api/legal/aviso_privacidad_simplificado',
+  terminos_uso: '/api/legal/terminos_uso',
+};
 export const PREFIJO_STATUS = '/api/auth/facebook/data-deletion/status/';
 
 /**
@@ -166,17 +175,22 @@ async function pedir(path: string, deadlineMs: number): Promise<Respuesta | null
   }
 }
 
-/** El aviso vigente, decodificado con el decoder contractual del repo. */
-export async function leerAvisoPrivacidad(op: Opciones = {}): Promise<LecturaAviso> {
-  const res = await pedir(PATH_AVISO, op.deadlineMs ?? DEADLINE_MS);
+/** Un texto legal vigente por `kind`, decodificado con el decoder contractual del repo. */
+export async function leerTextoLegal(kind: LegalTextKind, op: Opciones = {}): Promise<LecturaAviso> {
+  const res = await pedir(PATHS_LEGALES[kind], op.deadlineMs ?? DEADLINE_MS);
   if (!res || res.status !== 200) return { estado: 'no-verificable' };
   try {
-    return { estado: 'ok', aviso: legalTextResponse(res.json).legal_text };
+    return { estado: 'ok', aviso: legalTextResponse(res.json, kind).legal_text };
   } catch {
     // `ContractResponseError` nombra el endpoint, no el cuerpo — igual no se
     // propaga: un 2xx malformado es no verificable y se acabó.
     return { estado: 'no-verificable' };
   }
+}
+
+/** El aviso vigente: el mismo camino de siempre, por su path literal. */
+export async function leerAvisoPrivacidad(op: Opciones = {}): Promise<LecturaAviso> {
+  return leerTextoLegal('aviso_privacidad', op);
 }
 
 /**

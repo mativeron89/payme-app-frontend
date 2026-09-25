@@ -157,10 +157,42 @@ export interface RecoveryCompleteResponse {
   completed: true;
 }
 
-/** GET /api/legal/aviso_privacidad → texto vigente verificado por el owner. */
+/**
+ * Tipos de texto legal que el dueño sirve en `GET /api/legal/:kind`.
+ * LEGAL-3.0.0 (AF1): `terminos_uso` y `aviso_privacidad_simplificado` entran
+ * ANTES de que el dueño los publique, para que el front servido no los rechace.
+ */
+export type LegalTextKind = 'aviso_privacidad' | 'aviso_privacidad_simplificado' | 'terminos_uso';
+
+/** Un par exacto {versión, huella} de un texto legal, como lo publica el dueño. */
+export interface LegalTextPair {
+  version: string;
+  hash: string;
+}
+
+/**
+ * GET/POST /api/legal/acceptance (AB1, DISENO_AB1.md §3): exactamente tres
+ * claves. Con el paquete 3.0.0 apagado: `{required:false, aviso:null, terminos:null}`.
+ */
+export interface LegalAcceptanceResponse {
+  required: boolean;
+  aviso: LegalTextPair | null;
+  terminos: LegalTextPair | null;
+}
+
+/** Cuerpo estricto del POST: el par vigente de cada documento y la declaración 18+. */
+export interface LegalAcceptanceRequest {
+  aviso_version: string;
+  aviso_hash: string;
+  terminos_version: string;
+  terminos_hash: string;
+  adult_declaration: true;
+}
+
+/** GET /api/legal/:kind → texto vigente verificado por el owner. */
 export interface LegalTextResponse {
   legal_text: {
-    kind: 'aviso_privacidad';
+    kind: LegalTextKind;
     version: string;
     hash: string;
     effective_from: string;
