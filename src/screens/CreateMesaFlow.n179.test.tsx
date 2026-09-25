@@ -67,7 +67,7 @@ describe('n81 · foto de ticket demasiado pequeña', () => {
     expect(rechazoLocalDeImagen(MAX + 1, MAX, null)).toBe('too_large');
   });
 
-  it('las dos oraciones tienen su versión en inglés', () => {
+  it('las dos oraciones tienen su traducción en el diccionario EN', () => {
     expect(EN['La foto es demasiado pequeña para leer el ticket.']).toBe('The photo is too small to read the receipt.');
     expect(EN['Toma otra más cerca, con buena luz y sin recortarla.']).toBe('Take another one closer, in good light, without cropping it.');
   });
