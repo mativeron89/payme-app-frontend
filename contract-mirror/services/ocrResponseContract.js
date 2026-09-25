@@ -26,6 +26,8 @@ const OCR_ERROR_STATUS = Object.freeze({
   invalid_image_type: 400,
   invalid_multipart: 400,
   image_too_large: 413,
+  // v2.133.0 · n81 · foto de menos de 10 KB: 422, la imagen es válida pero no se puede leer.
+  ticket_image_too_small: 422,
   unsupported_image_type_for_provider: 415,
   // C6 · cuota diaria del OCR real agotada. 429 y no 503: el servicio está
   // sano, lo que se acabó es el techo del día. El body no lleva contador,

@@ -6,6 +6,35 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-25** (orden `AF-N81-CLAUDE-20260925` · n81, foto de
+  ticket demasiado pequeña).
+- Commit exacto y procedencia del CONTENIDO:
+  **`fb92bd5c16dc9362e5e8a9f4024007433217f58a`** (App Backend **v2.133.0**, n81 commit A: foto de ticket mínima de
+  10 KB con `422 ticket_image_too_small` y `features.ocr.min_image_bytes`; incluye
+  E3 v2.130.0, AB-TOPE-LOG v2.131.1 y AB2 v2.132.0).
+- Commit del que se tomó el inventario autoritativo:
+  **`f5f3326`…** = `origin/main` del owner al momento del refresh (n81 commit C,
+  v2.133.0; `7ea3c68` regeneró el inventario sobre `fb92bd5` y `f5f3326` sólo
+  mueve un test). Hash completo: **`f5f3326d05c376373e26b75ca548a471d0ef9678`**. El estado desplegado lo acredita el
+  Bibliotecario, no este refresh.
+
+**121 archivos espejados**, los mismos: no entra ni sale ninguno. Cambian
+`routes/ocr.js`, `services/ocrRail.js` y `services/ocrResponseContract.js` (n81);
+`middleware/auth.js` y `services/legalAcceptance.js` (AB2, 428); y
+`services/notifications.js` y `services/authRecoveryTransport.resend.js` (E3).
+
+La fuente se consultó en un clon local de sólo lectura del owner, en `f5f3326`
+(el repo del owner no se escribió).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | adoptado y verificado 121 · commit `fb92bd5` · exit 0 |
+| `--integridad` | **OK 121/121** · exit 0 |
+| `--paridad` | **OK 121/121**: espejo = inventario = fuente **en `fb92bd5`** · exit 0 |
+| `--vigencia` | vigente: el contenido espejado sigue igual en `f5f3326` · exit 0 |
+
+### Refresh anterior · 2026-09-25 (AF2, paquete legal · `644bbaf`)
+
 - Fecha del refresh: **2026-09-25** (ORDEN MAESTRA LEGAL-3.0.0-20260925, entrega
   **AF2** · pantallas del paquete legal y Configuración › Notificaciones).
 - Commit exacto y procedencia del CONTENIDO:

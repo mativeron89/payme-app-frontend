@@ -34,7 +34,7 @@ const router = express.Router();
 // `true` o un typo caían a mock EN SILENCIO: quien configuró AWS quedaba
 // convencido de haberlo prendido, y el síntoma habría sido que los tickets se
 // leen mal —porque el mock inventa— sin un solo error en los logs.
-const { ocrRealHabilitado, proveedorSoporta, MIME_PROVEEDOR } = require('../services/ocrRail');
+const { ocrRealHabilitado, proveedorSoporta, MIME_PROVEEDOR, MIN_IMAGE_BYTES } = require('../services/ocrRail');
 const USE_REAL = ocrRealHabilitado();
 // v2.19 (D5): proveedor real integrado — Amazon Textract (services/ocrTextract).
 // El DEFAULT sigue siendo mock: nada cambia hasta setear OCR_FEATURE_FLAG=real
@@ -213,6 +213,15 @@ router.post('/', (req, res, next) => {
       const out = errorOcr('invalid_image_type', {
         message: 'File content does not match declared image type',
       });
+      return res.status(out.status).json(out.body);
+    }
+
+    // v2.133.0 · n81 · decisión 67: una foto de menos de 10 KB se rechaza ACÁ, antes de la
+    // cuota diaria, el presupuesto mensual y el proveedor (todos viven en analyzeExpense), y
+    // igual en mock y en real. Se mide el buffer recibido, no el tamaño declarado.
+    if (req.file.buffer.length < MIN_IMAGE_BYTES) {
+      logger.warn('ocr_image_too_small', { user_id: req.user.id, size_bytes: req.file.buffer.length });
+      const out = errorOcr('ticket_image_too_small', { min_image_bytes: MIN_IMAGE_BYTES });
       return res.status(out.status).json(out.body);
     }
 

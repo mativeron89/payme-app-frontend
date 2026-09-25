@@ -151,4 +151,7 @@ module.exports = {
   APP_ORIGIN,
   DEADLINE_MS,
   MAX_BODY_BYTES,
+  // v2.130.0 · E3 · el transporte de avisos reusa las mismas guardas de red.
+  waitWithAbort,
+  readBoundedJson,
 };

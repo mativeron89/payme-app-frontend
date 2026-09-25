@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "644bbaf3814c5a80604ec98c200df3cddd6910e8",
+  "commit": "fb92bd5c16dc9362e5e8a9f4024007433217f58a",
   "total": 121,
   "archivos": [
     {
@@ -355,8 +355,8 @@
     {
       "origen": "middleware/auth.js",
       "destino": "middleware/auth.js",
-      "sha256": "18bc1dafd75d8d3c9fd8e7accdb4179fda1c42f142c5da33f79f060c05bffb14",
-      "bytes": 11026
+      "sha256": "31139e0a2612793c77cc0375761eaf3dddf032b54f05520457554a0e9496d604",
+      "bytes": 12591
     },
     {
       "origen": "routes/account.js",
@@ -427,8 +427,8 @@
     {
       "origen": "routes/ocr.js",
       "destino": "routes/ocr.js",
-      "sha256": "0e10f41dd94c0520fda3cc5a521bc7ca6557f44ef51e882f45e85105e4680216",
-      "bytes": 13412
+      "sha256": "c0cd7c68e841484252219b867323dfd625607e919cb92ff520418733faf2d922",
+      "bytes": 14011
     },
     {
       "origen": "routes/payment-methods.js",
@@ -505,8 +505,8 @@
     {
       "origen": "services/authRecoveryTransport.resend.js",
       "destino": "services/authRecoveryTransport.resend.js",
-      "sha256": "efa1fd1d7e6e6a628512d89e4c66b4d2df55c3ed379b8236fd9eccc607659d98",
-      "bytes": 5141
+      "sha256": "c6e8622dae3c75b34e9c0ba056ddc30a9e756f2a67eec2320f308cb70ec4c56a",
+      "bytes": 5257
     },
     {
       "origen": "services/cardEligibility.js",
@@ -577,8 +577,8 @@
     {
       "origen": "services/legalAcceptance.js",
       "destino": "services/legalAcceptance.js",
-      "sha256": "f33a8ca572d7c0e2c01f8d638fd7bb3e3d898c3d79cf80b7f7317fe63138ddf3",
-      "bytes": 7227
+      "sha256": "9bbef107f303edaf6d94796d05b9a3259ca7a398b038f9686e99d302d38fbdcb",
+      "bytes": 8090
     },
     {
       "origen": "services/mesaPresentation.js",
@@ -607,20 +607,20 @@
     {
       "origen": "services/notifications.js",
       "destino": "services/notifications.js",
-      "sha256": "a4b4bbf765961fb4f20bcb09a8b3a983de5cd5c1bfeb8fc91eb9787aecd8114e",
-      "bytes": 6030
+      "sha256": "19e5ce2163fede5853ba3d47a22d545414e5d46722dded0e985b16a9c7917323",
+      "bytes": 6600
     },
     {
       "origen": "services/ocrRail.js",
       "destino": "services/ocrRail.js",
-      "sha256": "bddc9d221c986f92e9ba5fd977225e08bb9a834c211e381d445d2655ebe18ae1",
-      "bytes": 4360
+      "sha256": "421a98191599ae377d35e000e3ab9d06585cec2b02db00f380f2805ce9fa2848",
+      "bytes": 4841
     },
     {
       "origen": "services/ocrResponseContract.js",
       "destino": "services/ocrResponseContract.js",
-      "sha256": "9a78603dbe3287f61cc2e89e5b3a6ce52e8285f8d3a22deb29ebdd51a176c329",
-      "bytes": 5344
+      "sha256": "060110951138fd130f22fa4e4842e150c673572d578be0ca8cfc1e63e3d632c8",
+      "bytes": 5472
     },
     {
       "origen": "services/paymentAttemptReconciler.js",

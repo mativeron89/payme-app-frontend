@@ -155,4 +155,25 @@ async function declaroMayoria(userId, db = pool) {
   return rows.length > 0 ? true : null;
 }
 
-module.exports = { ACCIONES, vigente, parsear, parVigente, estado, registrar, paraAlta, aceptar, declaroMayoria };
+/**
+ * v2.132.0 · AB2 · ¿el titular aceptó el par VIGENTE? Una sola consulta indexada, para
+ * requireAuth. Una constancia de un par anterior no cuenta: el par se compara contra los
+ * textos con effective_to NULL. Sin textos vigentes, false (cierra).
+ */
+async function aceptoVigente(userId, db = pool) {
+  const { rows: [r] } = await db.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM legal_acceptances la
+         JOIN legal_texts a ON a.kind = 'aviso_privacidad' AND a.effective_to IS NULL
+                           AND a.version = la.aviso_version AND a.hash = la.aviso_hash
+         JOIN legal_texts t ON t.kind = 'terminos_uso' AND t.effective_to IS NULL
+                           AND t.version = la.terminos_version AND t.hash = la.terminos_hash
+        WHERE la.user_id = $1) AS ok`,
+    [userId]
+  );
+  return r.ok === true;
+}
+
+module.exports = {
+  ACCIONES, vigente, parsear, parVigente, estado, registrar, paraAlta, aceptar, declaroMayoria, aceptoVigente,
+};

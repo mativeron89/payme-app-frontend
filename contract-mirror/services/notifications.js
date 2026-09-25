@@ -76,8 +76,13 @@ async function create({ user_id, type, title, body, payload = {}, related_entity
     return null;
   }
   const finalTitle = title || TYPES[type].title;
-  const db = client || pool;
-  const insert = async () => {
+  // v2.130.0 · E3 · el correo se encola en la MISMA escritura que el aviso: sin aviso no hay
+  // correo, y un fallo de la cola voltea sólo el aviso opcional (savepoint), nunca la tx del
+  // llamador. Con E3 apagado `enqueue` no escribe nada. Require perezoso: hay ciclo con
+  // notificationPreferences (que lee TYPES de este módulo).
+  const correo = require('./notificationEmailDelivery');
+  const conCorreo = correo.capability().enabled;
+  const insert = async (db) => {
     const { rows } = await db.query(
       `INSERT INTO notifications
          (user_id, type, title, body, payload, related_entity_type, related_entity_id)
@@ -86,13 +91,14 @@ async function create({ user_id, type, title, body, payload = {}, related_entity
       [user_id, type, finalTitle, body || null, payload,
        related_entity_type || null, related_entity_id || null]
     );
+    await correo.enqueue(db, { userId: user_id, notificationId: rows[0].id, type });
     return rows[0];
   };
 
   // Las notificaciones son explícitamente opcionales. Dentro de una tx no se
   // puede atrapar una query fallida a pelo: PostgreSQL deja la tx abortada.
   if (client) {
-    const optional = await pool.withSavepoint(client, insert);
+    const optional = await pool.withSavepoint(client, () => insert(client));
     if (!optional.ok) {
       logger.error('notification_create_failed', { user_id, type, error: optional.error.message });
       return null;
@@ -102,7 +108,7 @@ async function create({ user_id, type, title, body, payload = {}, related_entity
   }
 
   try {
-    const notification = await insert();
+    const notification = conCorreo ? await pool.tx((c) => insert(c)) : await insert(pool);
     logger.audit('notification_created', { user_id, type, notif_id: notification.id });
     return notification;
   } catch (err) {

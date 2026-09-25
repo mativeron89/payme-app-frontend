@@ -50,6 +50,13 @@ const MODOS = Object.freeze(['mock', 'real']);
  */
 const MIME_PROVEEDOR = Object.freeze(['image/jpeg', 'image/png']);
 
+/**
+ * v2.133.0 · n81 · decisión 67 de Mati («Mínimo 10 KB»). Una foto de ticket de menos de 10 240
+ * bytes no tiene resolución para leerse: se rechaza con `ticket_image_too_small` ANTES de reservar
+ * cuota diaria, presupuesto mensual o llamar al proveedor, igual en modo mock y real.
+ */
+const MIN_IMAGE_BYTES = 10 * 1024;
+
 /** Lo que la ruta acepta subir hoy. Superset del proveedor; ver el header. */
 const MIME_ACEPTADOS = Object.freeze([
   'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic',
@@ -89,6 +96,8 @@ function ocrCapability(env = process.env) {
     // de una lista escrita a mano que ya se desincronizó una vez.
     accepted_mime_types: [...MIME_ACEPTADOS],
     provider_mime_types: [...MIME_PROVEEDOR],
+    // n81 · el front puede avisar antes de subir; el rechazo lo decide igual el dueño.
+    min_image_bytes: MIN_IMAGE_BYTES,
   };
 }
 
@@ -96,6 +105,7 @@ module.exports = {
   MODOS,
   MIME_PROVEEDOR,
   MIME_ACEPTADOS,
+  MIN_IMAGE_BYTES,
   modoOcr,
   ocrRealHabilitado,
   proveedorSoporta,

@@ -16,6 +16,28 @@ const jwt = require('jsonwebtoken');
 const pool = require('../db/pool');
 const { tokenHash, verifyInvitationLinkToken } = require('../utils/tokens');
 const logger = require('../utils/logger');
+const legal = require('../services/legal');
+const legalAcceptance = require('../services/legalAcceptance');
+
+/**
+ * v2.132.0 · AB2 · con el paquete legal 3.0.0 vigente, toda ruta autenticada responde 428
+ * `{error:'legal_acceptance_required'}` si el titular no tiene constancia del par vigente
+ * (decisión 40: los existentes aceptan al entrar). Excepciones CERRADAS: lo que la puerta del
+ * front necesita para funcionar (medido en el front servido 69a8f9c0):
+ *   · /api/legal/** — leer los textos y GET/POST /api/legal/acceptance (PuertaLegal.tsx:38,144);
+ *   · GET /api/account/me — la hidratación de la sesión (AuthContext.tsx:77-92).
+ * Cerrar sesión (/api/auth/logout) y refrescar (/api/auth/refresh) no pasan por requireAuth.
+ * No hay ruta de eliminación de cuenta del titular (se pide por correo): nada que exceptuar.
+ * Método exacto: PATCH /api/account/me NO está exceptuado.
+ */
+const PREFIJOS_EXENTOS_DE_LA_PUERTA = Object.freeze(['/api/legal/']);
+const RUTAS_EXENTAS_DE_LA_PUERTA = Object.freeze(['GET /api/account/me']);
+
+function exentaDeLaPuerta(req) {
+  const ruta = `${req.baseUrl || ''}${req.path || ''}`;
+  if (PREFIJOS_EXENTOS_DE_LA_PUERTA.some((p) => ruta.startsWith(p))) return true;
+  return RUTAS_EXENTAS_DE_LA_PUERTA.includes(`${req.method} ${ruta}`);
+}
 
 const JWT_ISS = process.env.JWT_ISSUER || 'payme.mx';
 const JWT_AUD = process.env.JWT_AUDIENCE || 'payme-app';
@@ -125,6 +147,10 @@ async function requireAuth(req, res, next) {
     if (!user) return res.status(401).json({ error: 'user_not_found' });
     if (user.status !== 'active') {
       return res.status(403).json({ error: 'user_suspended' });
+    }
+    if (legal.PAQUETE_300_VIGENTE && !exentaDeLaPuerta(req)
+        && !(await legalAcceptance.aceptoVigente(user.id))) {
+      return res.status(428).json({ error: 'legal_acceptance_required' });
     }
 
     req.user = user;
@@ -302,4 +328,6 @@ module.exports = {
   // Compartido con /auth/logout: aceptar una forma legacy en el middleware
   // pero no poder revocarla dejaría una sesión activa tras un logout exitoso.
   loadActiveSession,
+  PREFIJOS_EXENTOS_DE_LA_PUERTA,
+  RUTAS_EXENTAS_DE_LA_PUERTA,
 };
