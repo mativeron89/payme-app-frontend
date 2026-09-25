@@ -20,6 +20,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const consent = require('../services/consent');
 const legal = require('../services/legal');
+const legalAcceptance = require('../services/legalAcceptance');
 const logger = require('../utils/logger');
 
 const publicRouter = express.Router();
@@ -64,12 +65,44 @@ publicRouter.get('/', async (req, res, next) => {
  * La lista de `GET /api/legal` NO se toca: publica kind, versión y hash, no
  * el cuerpo. Esconder que el documento existe sería otra decisión.
  */
-const KINDS_SIN_SESION = new Set(['aviso_privacidad']);
+// v2.129.0 · el simplificado y los Términos se leen ANTES de registrarse. Con la
+// bandera LEGAL_3_0_0_VIGENTE apagada no están en legal.KINDS: responden 404.
+const KINDS_SIN_SESION = new Set(['aviso_privacidad', 'aviso_privacidad_simplificado', 'terminos_uso']);
 
 function sesionSalvoPublico(req, res, next) {
   if (KINDS_SIN_SESION.has(req.params.kind)) return next();
   return requireAuth(req, res, next);
 }
+
+// ═══════════ CON SESIÓN: aceptación del paquete 3.0.0 (v2.129.0 · AB1) ═══════════
+// 🔴 Se monta ANTES de `/:kind`: si no, «acceptance» se tomaría como un tipo de
+// texto y respondería 404. Contrato acordado con App Frontend (AF1): el estado
+// tiene exactamente 3 claves; con LEGAL_3_0_0_VIGENTE apagada, required:false.
+
+function responderError(res, err, next) {
+  if (err.status && err.code === 'validation_error') {
+    return res.status(400).json({ error: 'validation_error', issues: err.issues });
+  }
+  if (err.status && err.code) return res.status(err.status).json({ error: err.code });
+  return next(err);
+}
+
+/** GET /api/legal/acceptance — ¿falta aceptar el par vigente? */
+publicRouter.get('/acceptance', requireAuth, async (req, res, next) => {
+  try {
+    res.json(await legalAcceptance.estado(req.user.id));
+  } catch (err) { responderError(res, err, next); }
+});
+
+/** POST /api/legal/acceptance — quien ya tenía cuenta acepta el par vigente. */
+publicRouter.post('/acceptance', requireAuth, async (req, res, next) => {
+  try {
+    const out = await legalAcceptance.aceptar(req.user.id, req.body);
+    logger.audit('legal_acceptance', { user_id: req.user.id, aviso_version: out.aviso.version,
+      terminos_version: out.terminos.version });
+    res.json(out);
+  } catch (err) { responderError(res, err, next); }
+});
 
 /**
  * GET /api/legal/:kind — el texto VIGENTE, con su versión y hash.

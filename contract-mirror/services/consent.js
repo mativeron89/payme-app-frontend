@@ -58,6 +58,12 @@ function isPurpose(key) {
  * El gate de grantConsent trata ese null como BLOQUEO.
  */
 async function edadConocida(userId, db = pool) {
+  // v2.129.0 · con el paquete 3.0.0 vigente la mayoría deja de leerse de la
+  // fecha (decisión 39: se retira) y pasa a ser la declaración «18 años o más»
+  // de la aceptación (decisión 44). Mismo contrato: true, o null = cierra.
+  if (legal.PAQUETE_300_VIGENTE) {
+    return require('./legalAcceptance').declaroMayoria(userId, db);
+  }
   const { rows } = await db.query(
     `SELECT column_name FROM information_schema.columns
       WHERE table_schema = current_schema()

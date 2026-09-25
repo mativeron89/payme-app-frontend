@@ -10,6 +10,7 @@ const facebookDataRights = require('../services/facebookDataRights');
 const recovery = require('../services/authRecovery');
 const identities = require('../services/externalIdentities');
 const legal = require('../services/legal');
+const legalAcceptance = require('../services/legalAcceptance');
 const logger = require('../utils/logger');
 const pool = require('../db/pool');
 const { signupRateLimitMiddleware, consumeSignupRateLimit } = require('../services/signupRateLimit');
@@ -72,6 +73,26 @@ async function requirePrivacyNotice(req, res, next) {
   }
 }
 
+/**
+ * v2.129.0 · AB1 · la aceptación del paquete 3.0.0 en las altas. Forma inválida
+ * → 400 antes de tocar al proveedor; par que no es el vigente → 409. Van antes
+ * del opaco de alta: no revelan nada de la cuenta, sólo del texto vigente.
+ */
+function aceptacionDelAlta(req, res) {
+  try {
+    return { ok: true, valor: legalAcceptance.paraAlta(req.body.legal_acceptance) };
+  } catch (err) {
+    res.status(400).json({ error: 'validation_error', issues: err.issues });
+    return { ok: false };
+  }
+}
+function legalError(res, error) {
+  if (error.code === 'legal_version_mismatch' || error.code === 'legal_text_unavailable') {
+    return res.status(error.status).json({ error: error.code });
+  }
+  return null;
+}
+
 function socialError(res, error, registration = false) {
   if (registration) {
     if (error.code === 'social_auth_temporarily_unavailable') {
@@ -95,6 +116,8 @@ function socialError(res, error, registration = false) {
 
 router.post('/google/register', googleDark('registration'), socialSignupRateLimit, requirePrivacyNotice,
   validarPorRequest(schemas.socialRegisterSchema), async (req, res, next) => {
+    const aceptacion = aceptacionDelAlta(req, res);
+    if (!aceptacion.ok) return undefined;
     try {
       const evidence = await google.verifyIdToken(req.body.id_token);
       const response = await identities.registerWithExternalIdentity({
@@ -102,7 +125,9 @@ router.post('/google/register', googleDark('registration'), socialSignupRateLimi
         evidence,
         firstName: req.body.first_name,
         lastName: req.body.last_name,
-        birthDate: req.body.birth_date,
+        // v2.129.0 · con el paquete 3.0.0 vigente la fecha se retira (decisión 39).
+        birthDate: legal.PAQUETE_300_VIGENTE ? null : req.body.birth_date,
+        legalAcceptance: aceptacion.valor,
         // C2b · el email DECLARADO por el usuario. Sólo llega acá con el alta
         // pública abierta (con ella cerrada el DTO lo rechaza), no es autoridad
         // —no enlaza, no fusiona, no recupera— y con invitación pierde: uno
@@ -112,7 +137,7 @@ router.post('/google/register', googleDark('registration'), socialSignupRateLimi
       logger.audit('user_registered_external', { user_id: response.user.id, provider: 'google' });
       return res.status(201).json(response);
     } catch (error) {
-      return socialError(res, error, true) || next(error);
+      return legalError(res, error) || socialError(res, error, true) || next(error);
     }
   });
 
@@ -141,6 +166,8 @@ router.post('/google/login', googleDark('login'), validateBody(schemas.socialLog
  */
 router.post('/google/continue', googleDark('login'),
   validateBody(schemas.socialContinue), async (req, res, next) => {
+    const aceptacion = aceptacionDelAlta(req, res);
+    if (!aceptacion.ok) return undefined;
     try {
       const { evidence, profile } = await google.verifyIdTokenWithProfile(req.body.id_token);
       const result = await identities.continueWithExternalIdentity({
@@ -150,6 +177,7 @@ router.post('/google/continue', googleDark('login'),
         acceptedNoticeVersion: req.body.accepted_notice_version,
         declaredFirstName: req.body.first_name,
         declaredLastName: req.body.last_name,
+        legalAcceptance: aceptacion.valor,
         // La cuenta nace sin fecha de nacimiento: si la fecha pasa a ser
         // obligatoria en el alta, el alta en un toque se apaga con ella.
         registrationAvailable: google.capability().registration
@@ -184,7 +212,7 @@ router.post('/google/continue', googleDark('login'),
       if (error.code === 'rate_limit_unavailable') {
         return res.status(503).json({ error: 'rate_limit_unavailable' });
       }
-      return socialError(res, error) || next(error);
+      return legalError(res, error) || socialError(res, error) || next(error);
     }
   });
 

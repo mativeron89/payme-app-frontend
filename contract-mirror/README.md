@@ -6,6 +6,37 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-25** (ORDEN MAESTRA LEGAL-3.0.0-20260925, entrega
+  **AF2** · pantallas del paquete legal y Configuración › Notificaciones).
+- Commit exacto y procedencia del CONTENIDO:
+  **`644bbaf3814c5a80604ec98c200df3cddd6910e8`** (App Backend **v2.129.0**, AB1
+  commit A: paquete 3.0.0 detrás de `LEGAL_3_0_0_VIGENTE`, constancia
+  `legal_acceptances` y vaciado de datos técnicos; incluye E1 v2.128.0).
+- Commit del que se tomó el inventario autoritativo:
+  **`0edb963`…** = `origin/main` del owner al momento del refresh (AB1 commit C,
+  v2.129.0; `176ba0b` regeneró el inventario sobre `644bbaf` y `0edb963` sólo
+  mueve un test). Hash completo: **`0edb963537612cb29bf0e8703124afd9545526f3`**.
+  El estado desplegado lo acredita el Bibliotecario, no este refresh.
+
+🆕 **121 archivos espejados**: entran `db/migrate_legal_acceptances_v2.129.0.sql`,
+`services/legalAcceptance.js` y los cuatro de E1 (`contract/notification-preferences-v1.schema.json`,
+`db/migrate_notification_preferences_v2.128.0.sql`, `routes/notificationPreferences.js`,
+`services/notificationPreferences.js`); cambian `routes/consent.js`, `routes/auth.js`,
+`contract/social-auth-v1.json`, `routes/account.js`, `routes/notifications.js`,
+`routes/mesas.js` y `schemas/index.js`.
+
+La fuente se consultó en un clon local de sólo lectura del owner, en `0edb963`
+(el repo del owner no se escribió).
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | adoptado y verificado 121 · commit `644bbaf` · exit 0 |
+| `--integridad` | **OK 121/121** · exit 0 |
+| `--paridad` | **OK 121/121**: espejo = inventario = fuente **en `644bbaf`** · exit 0 |
+| `--vigencia` | vigente: el contenido espejado sigue igual en `0edb963` · exit 0 |
+
+### Refresh anterior · 2026-09-23 (n178 «N platos» por grupo · `bd1c976`)
+
 - Fecha del refresh: **2026-09-23** (orden `AF-ROADMAP-TARDE-CLAUDE-20260922`,
   punto 2 · n178 «N platos» por grupo).
 - Commit exacto y procedencia del CONTENIDO:

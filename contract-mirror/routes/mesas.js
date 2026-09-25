@@ -587,11 +587,17 @@ router.post('/', requireAuth, validateBody(schemas.createMesa), async (req, res,
                sinGarantia ? 'open' : 'pending_auth',
                sinGarantia ? 'mesa_created_sin_garantia' : 'mesa_created_guarantee']
             );
-            for (const it of items) {
+            // El orden del ticket vive en `created_at`: todos los ítems se
+            // insertan en ESTA transacción, y `NOW()` es el inicio de la
+            // transacción, así que sin el desplazamiento todos empataban al
+            // microsegundo y el orden quedaba al azar (el UUID desempataba).
+            // Un microsegundo por posición: estrictamente creciente y
+            // determinista, sin columna nueva.
+            for (const [posicion, it] of items.entries()) {
               await client.query(
-                `INSERT INTO mesa_items (mesa_id, name, category, price_cents, quantity)
-                 VALUES ($1,$2,$3,$4,$5)`,
-                [m.id, it.name, it.category || 'other', it.price_cents, it.quantity]
+                `INSERT INTO mesa_items (mesa_id, name, category, price_cents, quantity, created_at)
+                 VALUES ($1,$2,$3,$4,$5, NOW() + ($6::int * INTERVAL '1 microsecond'))`,
+                [m.id, it.name, it.category || 'other', it.price_cents, it.quantity, posicion]
               );
             }
             await client.query(
@@ -1272,7 +1278,7 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
       `SELECT id, name, category, price_cents, quantity, status,
               locked_at, lock_expires_at, locked_by_user_id,
               locked_by_guest_token, locked_by_guest_token_hash
-         FROM mesa_items WHERE mesa_id = $1 ORDER BY created_at ASC`, [mesa.id]
+         FROM mesa_items WHERE mesa_id = $1 ORDER BY created_at ASC, id ASC`, [mesa.id]
     );
     // v2.18 (fracciones): cuánto queda de cada ítem y cuánto tengo yo (vivos =
     // pagados + locked no vencidos). Lectura pura: sin candados.

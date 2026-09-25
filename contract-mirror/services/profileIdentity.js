@@ -33,10 +33,11 @@ const MAX_OUTPUT_BYTES = 256 * 1024;
 const OUTPUT_MIME = 'image/jpeg';
 const SUPPORTED_INPUT_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
+// v2.129.0 · con LEGAL_3_0_0_VIGENTE sigue al aviso 3.0.0 (misma regla: al vigente).
 const PROFILE_IDENTITY_CAPABILITY = Object.freeze({
   supported: true,
   enabled: true,
-  notice_version: '2.5.5',
+  notice_version: require('./legal').PAQUETE_300_VIGENTE ? '3.0.0' : '2.5.5',
   notice_required: true,
   activation_blocker: null,
   payme_id_mutable: false,

@@ -18,6 +18,7 @@ const {
 const { centsToDisplay } = require('../utils/money');
 const logger = require('../utils/logger');
 const profileIdentity = require('../services/profileIdentity');
+const legal = require('../services/legal');
 const { proveedoresVinculados } = require('../services/externalIdentities');
 const consumoPropio = require('../services/consumoPropio');
 const clasificadorPlatos = require('../services/clasificadorPlatos');
@@ -93,7 +94,17 @@ router.get('/me', async (req, res, next) => {
  * soporte. Si se pudiera editar libremente, el gate de D-11 no protegería nada
  * (bastaría con corregirla para saltearlo).
  */
-router.patch('/me', validateBody(updateMe), async (req, res, next) => {
+/**
+ * v2.129.0 · AB1 · con el paquete legal 3.0.0 vigente la fecha de nacimiento se
+ * retira (decisión 39): ya no se pide ni se guarda. La mayoría es la declaración
+ * de la aceptación (decisión 44). 410 antes de validar: el cuerpo ya no importa.
+ */
+function fechaRetirada(_req, res, next) {
+  if (legal.PAQUETE_300_VIGENTE) return res.status(410).json({ error: 'birth_date_retired' });
+  return next();
+}
+
+router.patch('/me', fechaRetirada, validateBody(updateMe), async (req, res, next) => {
   try {
     const { rowCount } = await pool.query(
       `UPDATE users SET birth_date = $2 WHERE id = $1 AND birth_date IS NULL`,

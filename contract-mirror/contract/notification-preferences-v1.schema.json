@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "payme.app.notification-preferences/v1",
+  "title": "PayMe App · preferencias de notificaciones (sólo correo)",
+  "_comentario": [
+    "Contrato OWNER (App Backend) de GET/PUT /api/notifications/preferences. Decisiones 33-37 de Mati.",
+    "Los títulos NO viajan: el front los traduce por `type`. `type` y `group` son enums CERRADOS;",
+    "el front rechaza claves desconocidas (claves exactas) y muestra sólo lo que conoce.",
+    "PUT acepta únicamente `items[].type` con mode=editable HOY y `items[].email` booleano; responde el mismo DTO."
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["notice_version", "channels", "items"],
+  "properties": {
+    "notice_version": { "type": "string", "maxLength": 30 },
+    "channels": { "type": "array", "items": { "const": "email" }, "minItems": 1, "maxItems": 1 },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "group", "email"],
+        "properties": {
+          "type": { "enum": ["account_recovery", "account_deleted", "invitation_received", "mesa_expired", "friend_request_received", "friend_added", "mesa_paid_by_friend", "mesa_fully_paid", "payment_failed", "mesa_shortfall_charged", "mesa_garantia_impagos", "tip_received"] },
+          "group": { "enum": ["seguridad", "mesas", "amigos", "pagos"] },
+          "email": {
+            "oneOf": [
+              { "type": "object", "additionalProperties": false, "required": ["mode", "value", "default"],
+                "properties": { "mode": { "const": "editable" }, "value": { "type": "boolean" }, "default": { "type": "boolean" } } },
+              { "type": "object", "additionalProperties": false, "required": ["mode"],
+                "properties": { "mode": { "const": "fixed_on" } } },
+              { "type": "object", "additionalProperties": false, "required": ["mode", "reason"],
+                "properties": { "mode": { "const": "unavailable" }, "reason": { "enum": ["payments_disabled", "notice_pending"] } } }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

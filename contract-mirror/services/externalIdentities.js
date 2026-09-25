@@ -9,6 +9,7 @@ const { normalizarEmailDeContrato } = require('../schemas');
 const signupInvitations = require('./signupInvitations');
 const paymeSessions = require('./paymeSessions');
 const legal = require('./legal');
+const legalAcceptances = require('./legalAcceptance');
 const { tokenHash } = require('../utils/tokens');
 const { normalizarNombre } = require('../utils/profileNames');
 
@@ -84,6 +85,7 @@ function emailDeLaCuenta(invitation, email) {
 
 async function registerWithExternalIdentity({
   invitationToken, invitationTokenHash, evidence, firstName, lastName, birthDate, email,
+  legalAcceptance = null,
 }) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const paymeId = await generatePaymeId(firstName, lastName);
@@ -111,6 +113,10 @@ async function registerWithExternalIdentity({
             evidence.provider]
         );
         await insertBinding(client, { userId: user.id, evidence });
+        // v2.129.0 · AB1 · constancia del paquete 3.0.0 en la misma transacción.
+        if (legalAcceptance) {
+          await legalAcceptances.registrar(client, user.id, 'registro_google', legalAcceptance);
+        }
         const session = await paymeSessions.createSession({ userId: user.id, client });
         if (invitation) {
           await signupInvitations.marcarConsumida(client, {
@@ -315,7 +321,9 @@ function nombresParaAlta(profile, declared) {
   return null;
 }
 
-async function crearCuentaDesdeContinue(client, { evidence, email, nombres, invitation, vigente }) {
+async function crearCuentaDesdeContinue(client, {
+  evidence, email, nombres, invitation, vigente, legalAcceptance = null,
+}) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const paymeId = await generatePaymeId(nombres.firstName, nombres.lastName);
     await client.query('SAVEPOINT continue_alta');
@@ -336,6 +344,10 @@ async function crearCuentaDesdeContinue(client, { evidence, email, nombres, invi
          VALUES ($1,$2,$3,$4,$5)`,
         [user.id, vigente.kind, vigente.version, vigente.hash, CONTINUE_CANAL]
       );
+      // v2.129.0 · AB1 · constancia del paquete 3.0.0 en la misma transacción.
+      if (legalAcceptance) {
+        await legalAcceptances.registrar(client, user.id, 'registro_google_continuar', legalAcceptance);
+      }
       if (invitation) {
         await signupInvitations.marcarConsumida(client, {
           invitationId: invitation.id,
@@ -370,6 +382,7 @@ async function continueWithExternalIdentity({
   registrationAvailable,
   linkingAvailable,
   consumeSignupRateLimit,
+  legalAcceptance = null,
 }) {
   if (!METODOS_DE_ALTA_SOCIAL.has(evidence.provider)) throw authFailed();
   try {
@@ -488,7 +501,7 @@ async function continueWithExternalIdentity({
       }
 
       const creada = await crearCuentaDesdeContinue(client, {
-        evidence, email, nombres, invitation, vigente,
+        evidence, email, nombres, invitation, vigente, legalAcceptance,
       });
       if (!creada) return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
       return {

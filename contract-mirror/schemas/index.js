@@ -72,6 +72,10 @@ const registerBase = z.object({
   // a la misma respuesta opaca que un token usado o vencido. La autoridad lo
   // convierte en un hash imposible sin procesar contenido arbitrariamente largo.
   invitation_token: z.unknown().optional(),
+  // v2.129.0 · AB1 · aceptación del paquete legal 3.0.0. `unknown` a propósito:
+  // con LEGAL_3_0_0_VIGENTE apagada se ignora; encendida, la forma exacta la
+  // valida services/legalAcceptance.js (400 validation_error, legal_acceptance.*).
+  legal_acceptance: z.unknown().optional(),
   // ORDEN 1B (2026-08-10) · el teléfono DEJA DE PEDIRSE. El inventario de
   // datos personales lo midió: no tenía un solo consumidor lógico —el login
   // busca por email_normalized, la búsqueda de amigos por email/payme_id, el
@@ -187,6 +191,8 @@ const socialRegisterBase = z.object({
   first_name: profileName,
   last_name: profileName,
   birth_date: birthDate.optional(),
+  // v2.129.0 · AB1 · ver registerBase.
+  legal_acceptance: z.unknown().optional(),
 }).strict();
 /**
  * C2 · con el alta pública abierta, el DTO social admite `email` OPCIONAL del
@@ -221,6 +227,8 @@ const socialContinue = z.object({
   accepted_notice_version: z.string().regex(/^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$/),
   first_name: profileName.optional(),
   last_name: profileName.optional(),
+  // v2.129.0 · AB1 · ver registerBase.
+  legal_acceptance: z.unknown().optional(),
 }).strict();
 /** Addendum 1 de AB-07 · completar la conexión con la contraseña de la cuenta. */
 const socialContinueLink = z.object({
@@ -554,6 +562,16 @@ const panelStaffRequest = z.discriminatedUnion('operation', [
   z.object({ operation: z.literal('remove'), ...panelRequestBase, staff_id: uuid }).strict(),
 ]);
 
+// NOTIFICACIONES · E1 (decisiones 33-37 de Mati). Los tipos editables salen del
+// servicio, no se duplican acá; el cuerpo es estricto (una clave de más = 400).
+const { EDITABLE_TYPES } = require('../services/notificationPreferences');
+const notificationPreferencesPut = z.object({
+  items: z.array(z.object({
+    type: z.enum(EDITABLE_TYPES),
+    email: z.boolean(),
+  }).strict()).min(1).max(EDITABLE_TYPES.length),
+}).strict();
+
 // PUSH
 const registerPushDevice = z.object({
   token: z.string().min(10).max(500),
@@ -670,7 +688,7 @@ module.exports = {
   topupOxxo, topupCard,
   createTransfer,
   addStaff, updateStaff, setStaffShift, panelStaffRequest,
-  registerPushDevice,
+  registerPushDevice, notificationPreferencesPut,
   movementsQuery, historyQuery, walletTxQuery, notificationsQuery,
   restaurantSearchQuery,
   restaurantResolution,

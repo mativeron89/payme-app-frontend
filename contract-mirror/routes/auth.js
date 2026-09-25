@@ -32,6 +32,7 @@ const { loadActiveSession } = require('../middleware/auth');
 const { walletRailEnabled } = require('../services/walletRail');
 const signupInvitations = require('../services/signupInvitations');
 const legal = require('../services/legal');
+const legalAcceptance = require('../services/legalAcceptance');
 const paymeSessions = require('../services/paymeSessions');
 
 const router = express.Router();
@@ -86,7 +87,16 @@ router.post('/register', requirePrivacyNotice, validateRegister, async (req, res
   try {
     // req.body.email ya viene normalizado por el schema (P1 #4), pero
     // normalizeEmail es idempotente y lo dejamos por claridad.
-    const { email, password, first_name, last_name, birth_date, invitation_token } = req.body;
+    const { email, password, first_name, last_name, invitation_token } = req.body;
+    // v2.129.0 · AB1 · con el paquete 3.0.0 vigente la fecha se retira (decisión
+    // 39): se ignora si llega. La mayoría pasa a ser la declaración de la aceptación.
+    const birth_date = legal.PAQUETE_300_VIGENTE ? null : req.body.birth_date;
+    let aceptacion;
+    try {
+      aceptacion = legalAcceptance.paraAlta(req.body.legal_acceptance);
+    } catch (err) {
+      return res.status(400).json({ error: 'validation_error', issues: err.issues });
+    }
     const normalized = normalizeEmail(email);
 
     const hash = await bcrypt.hash(password, 10);
@@ -124,6 +134,9 @@ router.post('/register', requirePrivacyNotice, validateRegister, async (req, res
         if (walletRailEnabled()) {
           await client.query(`INSERT INTO wallets (user_id, balance_cents) VALUES ($1, 0)`, [createdUser.id]);
         }
+        if (aceptacion) {
+          await legalAcceptance.registrar(client, createdUser.id, 'registro_correo', aceptacion);
+        }
         const createdSession = await createSession({ userId: createdUser.id, client });
         if (signupInvitation) {
           await signupInvitations.marcarConsumida(client, {
@@ -155,6 +168,9 @@ router.post('/register', requirePrivacyNotice, validateRegister, async (req, res
           continue;
         }
         if (err.code === signupInvitations.ERROR_PUBLICO) {
+          return res.status(err.status).json({ error: err.code });
+        }
+        if (err.code === 'legal_version_mismatch' || err.code === 'legal_text_unavailable') {
           return res.status(err.status).json({ error: err.code });
         }
         throw err;
