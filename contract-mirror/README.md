@@ -6,6 +6,35 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-25** (orden `AF-MESA-D79-CLAUDE-20260925` · mesa
+  compartida en «partes iguales», decisiones 76 y 79 a 81).
+- Commit exacto y procedencia del CONTENIDO:
+  **`6eaf299e74032c9eaeff106fb185946bcc04249c`** (App Backend **v2.134.0**, commit A:
+  `informative_remaining_bps` por ítem, 409 `informative_fraction_exceeds_item`,
+  cobertura por entero y cierre con aviso en «igual», y `division_mode` /
+  `assigned_cents` / `assignment_complete` en `/mesas/open`).
+- Commit del que se tomó el inventario autoritativo:
+  **`47743ecdcb8c2e103e4cfd87b3410b090814710c`** (v2.134.0, commit B: regenera el
+  inventario sobre `6eaf299`), el que el Bibliotecario informó desplegado.
+  Wire del dueño: `docs/MESA_COMPARTIDA_D79_WIRE.md` en `47743ec`, sha256
+  `d97a0242a4667c9fddef45be75f076b316a1104bf106efaf8c2707aef5edde2b`.
+
+**121 archivos espejados**, los mismos: no entra ni sale ninguno. Cambian
+`routes/mesas.js` y `services/informativeSelections.js`.
+
+La fuente se leyó con `git show` sobre objetos del repo del owner, sin tocar su
+árbol ni sus refs.
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | adoptado y verificado 121 · commit `6eaf299` · exit 0 |
+| `--integridad` | **OK 121/121** · exit 0 |
+| `--paridad` | **OK 121/121**: espejo = inventario = fuente **en `6eaf299`** · exit 0 |
+| `--vigencia` | ⚠️ exit 1 **contra el HEAD local del owner**, que está en `9c5a7b1` (un commit viejo, no el servido): no mide nada útil. Medido aparte contra el servido **`47743ec`**: **121/121 idénticos**. |
+
+### Refresh anterior · 2026-09-25 (AF-N81 · `fb92bd5`)
+
+
 - Fecha del refresh: **2026-09-25** (orden `AF-N81-CLAUDE-20260925` · n81, foto de
   ticket demasiado pequeña).
 - Commit exacto y procedencia del CONTENIDO:

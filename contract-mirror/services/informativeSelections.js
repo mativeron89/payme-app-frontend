@@ -6,8 +6,9 @@ const stateMachine = require('../utils/stateMachine');
 const { dineroHabilitado } = require('./moneyRail');
 const CONTRACT = 'payme.app.informative-selections/v2';
 // Fracciones legacy: las únicas admitidas cuando la mesa no registró N.
-const { FRACTION_VALUES } = require('./itemClaims');
+const { FRACTION_VALUES, COMPLETING_TOLERANCE_BPS } = require('./itemClaims');
 const mesaPresentation = require('./mesaPresentation');
+const { avisarMesaVencida } = require('./avisoMesaVencida');
 // Misma participación que el middleware y misma frontera de mesa privada.
 const ACCESS_SQL = `(
   m.opener_user_id=$2 OR EXISTS (SELECT 1 FROM mesa_participants p
@@ -53,13 +54,62 @@ async function own(client, mesaId, userId) {
   return { source: 'informative', items: rows.map(({ item_id, declared_fraction_bps }) =>
     ({ item_id, declared_fraction_bps })), updated_at: rows[0]?.updated_at || null };
 }
+// Decisión 81 de Mati (2026-09-25): un plato está cubierto cuando las porciones
+// declaradas por todos SUMAN el entero. Mismo tope que consumo
+// (itemClaims.effectiveBps): un faltante menor a 100 bps cuenta como completo,
+// porque las fracciones se truncan (3 × 3333 = 9999). Una sola definición para
+// el cierre, el rechazo por exceso, GET /mesas/:code y GET /mesas/open.
+// Un plato con más del entero (declaraciones anteriores a la regla) queda en 0.
+const restanteDe = (declarado) =>
+  (10000 - declarado < COMPLETING_TOLERANCE_BPS ? 0 : 10000 - declarado);
+/**
+ * Cuánto queda por elegir de cada plato, sumando lo declarado por TODOS. Es un
+ * agregado por plato: no dice quién declaró ni cuántos. Devuelve
+ * Map(mesaId → Map(itemId → bps)); una mesa sin platos no aparece.
+ */
+async function remainingByItem(db, mesaIds) {
+  const result = new Map();
+  if (!mesaIds.length) return result;
+  const { rows } = await db.query(
+    `SELECT i.mesa_id, i.id AS item_id, COALESCE(SUM(s.declared_fraction_bps), 0)::int AS declarado
+       FROM mesa_items i
+       LEFT JOIN mesa_informative_selections s ON s.mesa_id=i.mesa_id AND s.mesa_item_id=i.id
+      WHERE i.mesa_id=ANY($1::uuid[])
+      GROUP BY i.mesa_id, i.id`, [mesaIds]);
+  for (const r of rows) {
+    if (!result.has(r.mesa_id)) result.set(r.mesa_id, new Map());
+    result.get(r.mesa_id).set(r.item_id, restanteDe(r.declarado));
+  }
+  return result;
+}
 async function complete(client, mesaId) {
-  const { rows: [r] } = await client.query(
-    `SELECT EXISTS(SELECT 1 FROM mesa_items WHERE mesa_id=$1) AND NOT EXISTS(
-      SELECT 1 FROM mesa_items i WHERE i.mesa_id=$1 AND NOT EXISTS(
-        SELECT 1 FROM mesa_informative_selections s WHERE s.mesa_id=i.mesa_id AND s.mesa_item_id=i.id
-      )) AS complete`, [mesaId]);
-  return r.complete;
+  const restantes = (await remainingByItem(client, [mesaId])).get(mesaId);
+  return !!restantes && [...restantes.values()].every((r) => r === 0);
+}
+// Decisión 81 · nunca por encima del entero. Sólo se mira lo que esta persona
+// SUBE (plato nuevo o porción mayor que la guardada): bajar o reenviar lo mismo
+// nunca se rechaza, así una mesa con declaraciones anteriores a la regla no deja
+// a nadie trabado. Corre bajo el candado de la mesa (load con FOR UPDATE), que
+// toman todos los que escriben acá: dos personas no pueden pasarse a la vez.
+async function assertWithinWhole(client, mesaId, userId, desired, previous) {
+  const previas = new Map(previous.items.map(i => [i.item_id, i.declared_fraction_bps]));
+  const suben = desired.filter(i => i.declared_fraction_bps > (previas.get(i.item_id) || 0));
+  if (!suben.length) return;
+  const { rows } = await client.query(
+    `SELECT mesa_item_id AS item_id, SUM(declared_fraction_bps)::int AS ajeno
+       FROM mesa_informative_selections
+      WHERE mesa_id=$1 AND user_id<>$2 AND mesa_item_id=ANY($3::uuid[])
+      GROUP BY mesa_item_id`, [mesaId, userId, suben.map(i => i.item_id)]);
+  const ajeno = new Map(rows.map(r => [r.item_id, r.ajeno]));
+  for (const i of suben) {
+    const otros = ajeno.get(i.item_id) || 0;
+    if (otros + i.declared_fraction_bps > 10000) {
+      // `remaining_bps`: lo que queda del plato sin contar lo propio, con la
+      // misma regla que publica GET /mesas/:code. Sin identidades ni conteos.
+      throw Object.assign(error('informative_fraction_exceeds_item'),
+        { item_id: i.item_id, remaining_bps: restanteDe(otros) });
+    }
+  }
 }
 function response(m, selection, covered) {
   return { contract: CONTRACT, mesa: { code: m.code, division_mode: m.division_mode,
@@ -100,6 +150,7 @@ async function replace({ mesaId, userId, items, confirmClosure }) {
     const valid = await client.query('SELECT id FROM mesa_items WHERE mesa_id=$1 AND id=ANY($2::uuid[])',
       [mesaId, ids]);
     if (valid.rowCount !== ids.length) throw error('item_not_found', 404);
+    await assertWithinWhole(client, mesaId, userId, desired, previous);
     await client.query(`DELETE FROM mesa_informative_selections
       WHERE mesa_id=$1 AND user_id=$2 AND NOT(mesa_item_id=ANY($3::uuid[]))`, [mesaId, userId, ids]);
     if (ids.length) await client.query(
@@ -118,6 +169,10 @@ async function replace({ mesaId, userId, items, confirmClosure }) {
       await stateMachine.transition({ client, entityType: 'mesa', entityId: mesaId,
         fromState: 'open', toState: 'expired', reason: 'mesa_cerrada_seleccion_informativa_completa',
         triggeredBy: 'user' });
+      // Decisión 80: el cierre avisa, en la misma transacción, al organizador y
+      // a quienes declararon algo (igual que el cierre de consumo). Después de
+      // guardar: quien completó la mesa también está entre los avisados.
+      await avisarMesaVencida(client, { mesaId, motivo: 'all_items_selected' });
       m.status = 'expired'; m.metadata = { ...m.metadata, closure_reason: 'all_items_selected' };
     }
     return response(m, await own(client, mesaId, userId), covered);
@@ -156,4 +211,5 @@ async function history({ userId, limit, offset }) {
   });
 }
 // FRACTIONS: las seis legacy (lo que se admite cuando la mesa no registró N).
-module.exports = { CONTRACT, FRACTIONS: FRACTION_VALUES, ACCESS_SQL, read, replace, getCapability, ownSelectionsForMesas, history };
+module.exports = { CONTRACT, FRACTIONS: FRACTION_VALUES, ACCESS_SQL, read, replace, getCapability, ownSelectionsForMesas, history,
+  remainingByItem, restanteDe };

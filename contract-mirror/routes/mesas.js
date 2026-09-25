@@ -47,7 +47,7 @@ const {
   assertPaymentIntentContract,
   loadPaymentAttemptContract,
 } = require('../services/paymentIntentContract');
-const { centsToDisplay, sumCents, calculateFee, splitEqual, tipFromBps } = require('../utils/money');
+const { centsToDisplay, sumCents, calculateFee, splitEqual, tipFromBps, fractionAmount } = require('../utils/money');
 const {
   payloadHash, hashesMatch, PAYLOAD_KEYS, payloadKeysForHashVersion,
 } = require('../utils/idempotency');
@@ -869,6 +869,73 @@ async function pagoPropioPorMesa(userId, mesas) {
   return resultado;
 }
 
+/**
+ * Decisión 76 · lo ELEGIDO de cada mesa abierta, con la MISMA cifra que se ve
+ * adentro (`confirmedConsumptionProgress` del front sobre GET /mesas/:code):
+ * Σ por plato de `fractionAmount(precio × cantidad, 10000 − restante)`.
+ *   · consumo: restante = el `remaining_bps` de GET /:code (claims vivos
+ *     `paid` + `locked` sin vencer, de todos);
+ *   · igual con pagos apagados: el `informative_remaining_bps` (decisión 81);
+ *   · igual con dinero (legacy): no hay un restante con ese criterio ⇒ `null`.
+ * `assignment_complete` replica la regla de adentro: nunca completo antes de
+ * que TODO plato esté elegido, las líneas sumen el total y lo asignado también.
+ * Agregado de mesa: no se lee ni publica nada por persona.
+ */
+async function avanceAsignadoPorMesa(mesas) {
+  const resultado = new Map();
+  for (const m of mesas) resultado.set(m.id, { assigned_cents: null, assignment_complete: false });
+  if (mesas.length === 0) return resultado;
+  const ids = mesas.map((m) => m.id);
+  const { rows: items } = await pool.query(
+    `SELECT id, mesa_id, price_cents, quantity FROM mesa_items WHERE mesa_id = ANY($1::uuid[])`, [ids]
+  );
+  const { rows: tomados } = await pool.query(
+    `SELECT mesa_item_id,
+            COALESCE(SUM(fraction_bps) FILTER (
+              WHERE status='paid' OR (status='locked' AND (lock_expires_at IS NULL OR lock_expires_at >= NOW()))
+            ), 0)::int AS taken_bps
+       FROM mesa_item_claims WHERE mesa_id = ANY($1::uuid[]) GROUP BY mesa_item_id`, [ids]
+  );
+  const tomadoPorItem = new Map(tomados.map((t) => [t.mesa_item_id, t.taken_bps]));
+  const informativas = mesas.filter((m) => m.division_mode === 'igual'
+    && m.guarantee_mode === false && m.metadata?.sin_garantia === true).map((m) => m.id);
+  const restanteInformativo = await informativeSelections.remainingByItem(pool, informativas);
+  const itemsPorMesa = new Map();
+  for (const i of items) {
+    if (!itemsPorMesa.has(i.mesa_id)) itemsPorMesa.set(i.mesa_id, []);
+    itemsPorMesa.get(i.mesa_id).push(i);
+  }
+  for (const m of mesas) {
+    let restanteDelPlato;
+    if (m.division_mode === 'consumo') {
+      restanteDelPlato = (i) => Math.max(0, 10000 - (tomadoPorItem.get(i.id) || 0));
+    } else if (informativas.includes(m.id)) {
+      const mapa = restanteInformativo.get(m.id) || new Map();
+      restanteDelPlato = (i) => mapa.get(i.id) ?? 10000;
+    } else {
+      continue;   // igual con dinero: sin criterio común ⇒ null
+    }
+    const lineas = itemsPorMesa.get(m.id) || [];
+    let asignado = 0; let totalLineas = 0; let todo = lineas.length > 0; let valido = true;
+    for (const i of lineas) {
+      let linea;
+      try { linea = itemClaims.lineTotalCents(Number(i.price_cents), Number(i.quantity)); }
+      catch (_) { valido = false; break; }
+      const restante = restanteDelPlato(i);
+      todo = todo && restante === 0;
+      totalLineas += linea;
+      asignado += fractionAmount(linea, 10000 - restante);
+    }
+    if (!valido || !Number.isSafeInteger(asignado) || !Number.isSafeInteger(totalLineas)) continue;
+    const total = Number(m.total_cents);
+    resultado.set(m.id, {
+      assigned_cents: asignado,
+      assignment_complete: total > 0 && todo && totalLineas === total && asignado === total,
+    });
+  }
+  return resultado;
+}
+
 router.get('/open', requireAuth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -894,6 +961,7 @@ router.get('/open', requireAuth, async (req, res, next) => {
         ORDER BY m.created_at DESC`, [req.user.id]
     );
     const pagoPropio = await pagoPropioPorMesa(req.user.id, rows);
+    const asignado = await avanceAsignadoPorMesa(rows);
     res.json({
       mesas: rows.map(m => ({
         id: m.id, code: m.code,
@@ -907,6 +975,10 @@ router.get('/open', requireAuth, async (req, res, next) => {
         participants_count: Number(m.participants_count),
         my_status: pagoPropio.get(m.id).status,
         my_paid_cents: pagoPropio.get(m.id).paid_cents,
+        // Decisión 76 (aditivos, sin identidades): lo ELEGIDO sobre el total.
+        division_mode: m.division_mode,
+        assigned_cents: asignado.get(m.id).assigned_cents,
+        assignment_complete: asignado.get(m.id).assignment_complete,
       })),
     });
   } catch (err) { next(err); }
@@ -1260,7 +1332,14 @@ router.put('/:code/informative-selection', informativePrivate, requireAuth, priv
     try {
       res.json(await informativeSelections.replace({ mesaId: req.mesa.id, userId: req.user.id,
         items: req.body.items, confirmClosure: req.body.confirm_closure }));
-    } catch (err) { next(err); }
+    } catch (err) {
+      // Decisión 81: el plato y cuánto queda de él, para que el front lo diga.
+      // El manejador global sólo publica `error`, así que éste va acá.
+      if (err.code === 'informative_fraction_exceeds_item') {
+        return res.status(409).json({ error: err.code, item_id: err.item_id, remaining_bps: err.remaining_bps });
+      }
+      next(err);
+    }
   });
 router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant, async (req, res, next) => {
   try {
@@ -1274,6 +1353,12 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
     // scope, y deja una sola verdad para el consumidor.
     const garantiaMesa = await cerrojoDeGarantia(mesa);
     const informativeCapability = await informativeSelections.getCapability({ mesaId: mesa.id, userId: req.user.id });
+    // Decisión 79 (2026-09-25): en «igual» con pagos apagados, cuánto queda por
+    // elegir de cada plato sumando lo declarado por TODOS — agregado por plato,
+    // sin nombres ni conteos de personas. `null` en cualquier otra mesa.
+    const restantesInformativos = informativeCapability.supported
+      ? ((await informativeSelections.remainingByItem(pool, [mesa.id])).get(mesa.id) || new Map())
+      : null;
     const { rows: items } = await pool.query(
       `SELECT id, name, category, price_cents, quantity, status,
               locked_at, lock_expires_at, locked_by_user_id,
@@ -1411,6 +1496,8 @@ router.get('/:code', requireAuth, privateMesaVisibility, requireMesaParticipant,
             my_releasable_bps: myReleasableBps,
             locked_by_me: myBps > 0 || lockedByMe(i),   // claims primero; columnas legacy p/ filas viejas
             lock_expires_at: i.lock_expires_at,
+            informative_remaining_bps: restantesInformativos
+              ? (restantesInformativos.get(i.id) ?? 10000) : null,
           };
         }),
         ...(slots && { division_slots: slots }),
