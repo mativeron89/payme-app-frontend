@@ -11,6 +11,23 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.191.1 — Inicio: la tarjeta de «Estadísticas» del mismo tamaño que «Cuenta» y «Asociadas» (2026-09-25)
+
+Orden `AF-BURBUJA-STATS-CLAUDE-20260925`, pedido de Mati: «que la burbuja de estadísticas tenga el mismo tamaño
+que la de Cuenta y Asociadas».
+
+- **Medido antes:** «Cuenta» y «Asociadas» miden 116 px. «Estadísticas» medía **148 px** a 360 y 390 px (la
+  invitación ocupaba dos líneas) y **124 px** a 430. Al cambiar de pestaña, el contenido de abajo saltaba 32 px (8 a
+  430).
+- **Ahora:** las tres miden 116 px en los tres anchos y lo de abajo no se mueve. «Estadísticas» tiene la misma
+  composición que «Cuenta»: ícono y «Ver mis estadísticas».
+- ⚠️ **Declarado: la línea «¿Quieres ver qué consumes, cuánto y dónde?» se retira.** La orden prioriza la
+  composición de «Cuenta» sobre achicarla o unirla a la acción. Con ella, la tarjeta no entraba en 116 px sin
+  cambiar la tipografía del acceso. Se fueron también su traducción (`en.ts`) y la regla `.launch-invite`, que
+  quedaban muertas. No se escribió copy nuevo. Si Mati quiere la frase de vuelta, la alternativa es unirla a la
+  acción como línea chica.
+- Prueba nueva, `e2e/inicio-pestanas-misma-altura.spec.ts`: contra la base da rojo 4 de 4.
+
 ## 0.191.0 — «Listo» registra y lleva a Inicio (decisión 32) (2026-09-24)
 
 Orden `AF-LISTO-INICIO-CLAUDE-20260924`. Decisión 32 de Mati, literal: «En esa pantalla ya
