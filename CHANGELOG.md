@@ -11,6 +11,45 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.7 — Mesa compartida en «partes iguales» e Inicio con lo elegido (2026-09-25)
+
+Orden AF-MESA-D79 (sha256 c2ee3ef7…), lease AF-MESA-D79-CLAUDE-20260925. Decisiones de Mati:
+- 76 (a5570ed9…);
+- 79 a 81 (26bd91b5…).
+
+Dueño servido: App Backend `47743ec` (v2.134.0), wire `docs/MESA_COMPARTIDA_D79_WIRE.md` (d97a0242…).
+Base `0.193.6` (`151e464`).
+
+- **Espejo** a v2.134.0: contenido de `6eaf299`, inventario de `47743ec`, 121 archivos.
+  - Cambian `routes/mesas.js` y `services/informativeSelections.js`.
+  - Paridad OK. Contra el servido `47743ec`, 121/121 idénticos.
+- **Inicio (decisión 76):** la tarjeta y la hoja «+N más» muestran lo ELEGIDO sobre el total, con
+  su barra, cuando el dueño publica `assigned_cents` y `assignment_complete`.
+  - El % nunca llega a 100 antes de completo.
+  - Sin los campos, se ve lo pagado, como antes.
+- **F-1:** la mesa abierta se relee cada 10 s y al volver a la app.
+  - Nunca pisa lo que la persona está eligiendo.
+  - Respeta las épocas de lectura.
+- **«Partes iguales» (decisión 79):**
+  - cada plato dice «Queda ½», o «Lo eligió otro» cuando ya no queda nada para esta cuenta, sin
+    nombres;
+  - no se puede elegir más de lo que queda;
+  - el 409 `informative_fraction_exceeds_item` se dice con los textos de consumo («De ese plato
+    queda solo ½» / «Ese plato ya está completo») y relee la mesa;
+  - la barra muestra lo elegido: «$ / $ (%)».
+- **F-2 (decisión 80):** si la acción propia cierra la mesa, se ve «La mesa se cerró» con el nombre
+  de la mesa, en vez de volver mudo al Inicio.
+- **F-3:** el Historial de «igual» cuenta desde la selección informativa («Elegiste N ítems»), sin
+  afirmar monto.
+- **Textos:** el único nuevo es «La mesa se cerró» (EN: «The table closed»). Los demás ya
+  existían.
+- **Pruebas:**
+  - e2e con el escenario de Mati y un test del refresco cada 10 s con reloj simulado;
+  - unitarios de lectores y del mock;
+  - mutantes M1–M11 muertos, cada uno en la aserción que corresponde.
+- **Límite:** el mock tiene una sola sesión, así que la otra cuenta es una declaración escrita en el
+  store simulado con otro `user_id`. El aviso de cierre del dueño no se simula.
+
 ## 0.193.6 — Ingreso en iPhone, casillas sólo en «Crea tu cuenta», encabezado y barra de la mesa, sin «Pagos» en avisos (2026-09-25)
 
 Orden AF-LOGIN-CASILLAS-Y-CORTE-IPHONE (sha256 3759020a…), lease AF-LOGIN-D73-CLAUDE-20260925,
