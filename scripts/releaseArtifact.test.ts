@@ -600,18 +600,25 @@ describe('config cruzado rechazado por el juez local transportado', () => {
   });
 });
 
-describe('CLI Node 20 con vite-node lockeado y sin logs de secretos', () => {
-  it('acredita que el binario disponible coincide con package-lock.json', () => {
+// AF-VITE-MAYOR · el runner pasó de `vite-node` (vitest 4 ya no lo instala) al
+// `runnerImport` de Vite. Lo que se acredita no cambia: la versión del runner que
+// resuelve `release-artifact.mjs` es la que package-lock.json inmoviliza.
+describe('CLI Node 20 con el runner de Vite lockeado y sin logs de secretos', () => {
+  it('acredita que el vite que resuelve el runner coincide con package-lock.json', () => {
     const lock = JSON.parse(readFileSync(join(REPO_REAL, 'package-lock.json'), 'utf8')) as {
       packages?: Record<string, { version?: string }>;
     };
-    const version = lock.packages?.['node_modules/vite-node']?.version;
+    const version = lock.packages?.['node_modules/vite']?.version;
     expect(version).toMatch(/^\d+\.\d+\.\d+$/);
-    const salida = execFileSync(join(REPO_REAL, 'node_modules/.bin/vite-node'), ['--version'], {
-      cwd: REPO_REAL,
-      encoding: 'utf8',
-    });
-    expect(salida).toContain(`vite-node/${version}`);
+    // Se resuelve DESDE el runner, no desde el test: es el `vite` que importa él.
+    const salida = execFileSync(process.execPath, [
+      '--input-type=module', '-e',
+      `import { createRequire } from 'node:module';
+       const r = createRequire(${JSON.stringify(join(AQUI, 'release-artifact.mjs'))});
+       process.stdout.write(r('vite/package.json').version);`,
+    ], { cwd: REPO_REAL, encoding: 'utf8' });
+    expect(salida).toBe(version);
+    expect(readFileSync(join(AQUI, 'release-artifact.mjs'), 'utf8')).toContain("import('vite')");
   });
 
   it('el runner Node 20 devuelve sólo el resumen canónico', () => {

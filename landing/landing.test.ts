@@ -1019,9 +1019,10 @@ describe('PROPIEDAD 6 · las imágenes', () => {
 describe('PROPIEDAD 7 · el layout móvil de §6', () => {
   const bloque640 = (): string => {
     const css = cssDelBuild();
-    const i = css.indexOf('@media (max-width:640px)') >= 0
-      ? css.indexOf('@media (max-width:640px)')
-      : css.indexOf('@media (max-width: 640px)');
+    // AF-VITE-MAYOR · esbuild 0.25 (vite 6) minifica `@media(max-width:640px)`,
+    // sin espacios; esbuild 0.21 dejaba `@media (max-width: 640px)`. Es el mismo
+    // CSS: se aceptan las formas, no se exige una.
+    const i = css.search(/@media\s*\(max-width:\s*640px\)/);
     expect(i, 'no existe el breakpoint de 640 px que §6 manda').toBeGreaterThan(-1);
     return css.slice(i);
   };

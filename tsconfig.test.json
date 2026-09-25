@@ -1,14 +1,19 @@
 {
   // ══════════════════════════════════════════════════════════════════════════
-  // Los tests de `src/` — navegador, pero SÍ ven los tipos de vitest (y con
-  // ellos, inevitablemente, los de Node que vitest arrastra).
+  // Los tests de `src/` — navegador, pero SÍ ven los tipos de vitest y los de
+  // Node (leen fuentes con `node:fs`, usan `Buffer`).
   //
   // Existen aparte para que esa contaminación NO alcance al código que se
   // despacha. Ver el comentario de `tsconfig.json`: la medición está ahí.
+  //
+  // AF-VITE-MAYOR (vitest 4 / vite 6): hasta vitest 3 los tipos de Node
+  // entraban de contrabando, arrastrados por los de vitest; desde vitest 4 ya
+  // no (medido: 28 archivos de test sin `node:fs`/`Buffer`). Se declaran acá,
+  // explícitos, y SÓLO acá: `tsconfig.json` sigue con `vite/client` y nada más.
   // ══════════════════════════════════════════════════════════════════════════
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["vite/client"]
+    "types": ["vite/client", "node"]
   },
   "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/arnes/**/*.ts"],
   "exclude": []
