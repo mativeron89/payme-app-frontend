@@ -11,6 +11,45 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.6 — La pantalla de ingreso se desplaza en iPhone y las casillas quedan sólo en «Crea tu cuenta» (2026-09-25)
+
+Orden AF-LOGIN-CASILLAS-Y-CORTE-IPHONE (sha256 3759020a…), lease AF-LOGIN-D73-CLAUDE-20260925,
+decisiones 73 (e3e3e57a…), 74 (551e1264…) y 75 (afd79945…) de Mati. Base `0.193.5` (`f95d528`).
+
+- **A · Corte en iPhone.** `.app` mide `100dvh` con `overflow: hidden`, y `.ingreso` no era un
+  contenedor con scroll. En un iPhone 14 (WebKit, 390×664), la pantalla medía 986 px dentro de 664:
+  el final de la tarjeta de Google quedaba cortado y «Crea tu cuenta» (y = 890) no se podía
+  alcanzar con el dedo.
+  - `.ingreso` ahora es `flex: 1; min-height: 0; overflow-y: auto`.
+  - Test nuevo `e2e/login-desplazamiento.spec.ts`: desplaza como un dedo (sólo el documento y los
+    contenedores `auto`/`scroll`, no el scroll programático de Playwright) y exige que el enlace
+    quede a la vista, con el paquete legal activo y sin él.
+  - Resultado: la base queda en rojo 2/2 y el candidato en verde 2/2, en Chromium y WebKit.
+- **B · Decisión 73, «Sólo en Crear cuenta».** Enmienda parcial del alta en un toque del 18/09.
+  - En «Entrar», Google usa siempre `/google/login`. El dueño (medido en `f5f3326`) nunca crea
+    cuentas por esa ruta: sin vínculo contesta 401 `social_auth_failed`.
+  - En «Entrar» no hay casillas ni botón inerte.
+  - Sin cuenta, el 401 lleva a «Crea tu cuenta con Google» con el texto que ya existía, y ahí están
+    las casillas.
+  - El alta en un toque queda sólo en «Crea tu cuenta».
+  - Sin cambios en App Backend y sin texto visible nuevo.
+- **Decisión 74.**
+  - El título de la burbuja de «Entrar» pasa a «Log in», literal en los dos idiomas (sin `t()`,
+    para que no se traduzca), y pierde el subtítulo.
+  - Bajo el logo: «Divide y paga la cuenta desde donde quieras». En inglés: «Split and pay the bill
+    from wherever you are».
+- **Decisión 75.** En Notificaciones sale la leyenda «Elige qué avisos…», con sus dos variantes, sus
+  entradas en `en.ts` y la prop `email` que sólo la alimentaba.
+- **Mutantes L1–L5 muertos:**
+  - L1: sin scroll;
+  - L2: «Entrar» con `continue`;
+  - L3: título viejo;
+  - L4: leyenda de vuelta;
+  - L5: nota oculta al entrar.
+- **Límite de L2:** L2 muere en el test de persona nueva, no en el de cuenta existente.
+- **Qué no queda probado:** el iframe real de Google Identity no se puede ejercitar en mock. Lo
+  que se prueba es el corte, que era la causa medida.
+
 ## 0.193.5 — Mensaje claro para una foto de ticket demasiado pequeña (n81) (2026-09-26)
 
 Orden AF-N81-CLAUDE-20260925 (sha256 99985ebe…), decisión 67 de Mati («Mínimo 10 KB», con «un
