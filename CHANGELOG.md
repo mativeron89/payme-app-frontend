@@ -11,6 +11,20 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.1 — Alta con casillas 3.0.0 sin la nota «Al entrar aceptas el Aviso» (2026-09-25)
+
+Orden AF-NOTA-ALTA-20260925 (sha256 bdd305ac…), observación 3 de R-AF. Base `0.193.0`.
+
+- En «Crea tu cuenta» con el paquete 3.0.0 vigente se acepta con las dos casillas; la nota «Al
+  entrar aceptas el Aviso de privacidad.» sobraba y contradecía. **Deja de dibujarse sólo ahí.**
+  En «entrar» y con el paquete apagado queda exactamente como antes. Sin texto nuevo.
+- Se actualiza el comentario «Los Términos no existen», falso desde AF2 (el dueño los sirve en
+  `terminos_uso` y este front en `/terminos`). El copy no cambia.
+- `e2e/legal-3-0-0.spec.ts`: tres casos (3.0.0 alta, 3.0.0 entrar, apagado). El de «entrar»
+  espera las casillas junto a Google como testigo de que el paquete cargó: sin ese testigo, un
+  mutante que ocultaba la nota también al entrar sobrevivía (medido). Tres mutantes, los tres
+  muertos por su caso.
+
 ## 0.193.0 — AF2 · paquete legal 3.0.0 en pantalla y Configuración › Notificaciones (2026-09-25)
 
 ORDEN MAESTRA LEGAL-3.0.0-20260925 (sha256 b81cfee1…), entrega **AF2**; decisiones 33-37 y
