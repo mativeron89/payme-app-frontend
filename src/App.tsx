@@ -173,25 +173,45 @@ function Shell() {
   // la capability haya caído. Vive antes del guard de sesión y no recibe el
   // token: RecoveryScreen sólo observa el snapshot saneado en memoria.
   if (route.page === 'recovery') return <RecoveryScreen />;
+
+  // AF2 · mientras falte aceptar el paquete legal vigente, la puerta bloquea
+  // todo lo demás: sólo «Continuar» o «Cerrar sesión» (decisión 40).
+  const puertaCerrada = session && puerta.estado.fase === 'cerrada' ? (
+    <PuertaLegal
+      session={session}
+      aceptacion={puerta.estado.aceptacion}
+      onAceptada={puerta.abrir}
+      onReconsultar={puerta.reconsultar}
+      onCerrarSesion={() => { void logout(); }}
+    />
+  ) : null;
+
+  /**
+   * AF-PUERTA-JOIN · el link de invitación también pasa por la puerta. Antes
+   * este `return` iba primero y quien llegaba por link se unía a la mesa sin
+   * haber aceptado (y con el 428 de AB2 quedaba en «Reintentar»).
+   *
+   * El token NO se toca: sigue en la ruta y en su custodia. Al aceptar, la
+   * puerta se abre, `JoinMesaScreen` se monta de nuevo con el mismo token y
+   * canjea, sin pedir el link otra vez. `lista` le dice que no canjee mientras
+   * la consulta de esta sesión está en vuelo.
+   */
   if (route.page === 'mesa' && route.param && linkToken) {
-    return <JoinMesaScreen key={route.param} code={route.param} token={linkToken} />;
+    if (puertaCerrada) return puertaCerrada;
+    return (
+      <JoinMesaScreen
+        key={route.param}
+        code={route.param}
+        token={linkToken}
+        puertaLista={puerta.lista}
+        onRequiereAceptacion={puerta.reconsultar}
+      />
+    );
   }
 
   if (!session) return <LoginScreen />;
 
-  // AF2 · mientras falte aceptar el paquete legal vigente, la puerta bloquea
-  // todo lo demás: sólo «Continuar» o «Cerrar sesión» (decisión 40).
-  if (puerta.estado.fase === 'cerrada') {
-    return (
-      <PuertaLegal
-        session={session}
-        aceptacion={puerta.estado.aceptacion}
-        onAceptada={puerta.abrir}
-        onReconsultar={puerta.reconsultar}
-        onCerrarSesion={() => { void logout(); }}
-      />
-    );
-  }
+  if (puertaCerrada) return puertaCerrada;
 
   // Sin copy y sin pantalla: el efecto de arriba ya está redirigiendo.
   if (rutaDelRielSaldo) return null;

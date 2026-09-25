@@ -16,33 +16,67 @@ import { PATH_PRIVACIDAD, PATH_TERMINOS } from '../public/publicRoute';
  * consultar por el gancho de la fachada. Los textos son los aprobados en
  * `registro_y_puerta.txt` (decisión 46).
  */
+/**
+ * AF-PUERTA-JOIN · `consultando` existe para el link de invitación: mientras la
+ * consulta está en vuelo, `JoinMesaScreen` no canjea (si canjeara, la persona
+ * quedaría unida a la mesa sin haber aceptado). Las demás rutas miran sólo
+ * `cerrada` y se comportan como antes.
+ */
 export type EstadoPuerta =
+  | { readonly fase: 'consultando' }
   | { readonly fase: 'abierta' }
   | { readonly fase: 'cerrada'; readonly aceptacion: LegalAcceptanceResponse };
 
+/** La respuesta vale para UNA sesión: la de otra no dice nada de ésta. */
+interface EstadoDeSesion {
+  readonly estado: EstadoPuerta;
+  readonly sesion: StoredSession | null;
+}
+
+/**
+ * ¿Ya se sabe si esta sesión puede seguir? Se DERIVA en el render y no en un
+ * efecto: cuando la sesión aparece (entrar desde el link), el efecto hijo de
+ * `JoinMesaScreen` corre ANTES que el de este hook, y con un `abierta` viejo de
+ * la sesión nula canjearía sin mirar la puerta.
+ */
+export function puertaLista(actual: EstadoDeSesion, session: StoredSession | null): boolean {
+  return actual.sesion === session && actual.estado.fase !== 'consultando';
+}
+
 export function usePuertaLegal(session: StoredSession | null): {
   readonly estado: EstadoPuerta;
+  readonly lista: boolean;
   readonly abrir: () => void;
   readonly reconsultar: () => void;
 } {
-  const [estado, setEstado] = useState<EstadoPuerta>({ fase: 'abierta' });
+  const [actual, setActual] = useState<EstadoDeSesion>({ estado: { fase: 'abierta' }, sesion: null });
   const [intento, setIntento] = useState(0);
   const vivo = useRef(0);
+  const sesionActual = useRef(session);
+  sesionActual.current = session;
 
   useEffect(() => {
     const marca = ++vivo.current;
     if (!session) {
-      setEstado({ fase: 'abierta' });
+      setActual({ estado: { fase: 'abierta' }, sesion: null });
       return;
     }
+    // Con la puerta ya cerrada se queda cerrada mientras se reconsulta: que no
+    // se asome la pantalla de atrás por un instante.
+    setActual((prev) => (prev.sesion === session && prev.estado.fase === 'cerrada'
+      ? prev
+      : { estado: { fase: 'consultando' }, sesion: session }));
     api.getLegalAcceptance(session)
       .then((aceptacion) => {
         if (vivo.current !== marca) return;
-        setEstado(aceptacion.required ? { fase: 'cerrada', aceptacion } : { fase: 'abierta' });
+        setActual({
+          estado: aceptacion.required ? { fase: 'cerrada', aceptacion } : { fase: 'abierta' },
+          sesion: session,
+        });
       })
       // Sin ruta (backend anterior), red caída o contrato roto: no se bloquea a
       // nadie por lo que no se pudo leer; el dueño defiende con el 428 (AB2).
-      .catch(() => { if (vivo.current === marca) setEstado({ fase: 'abierta' }); });
+      .catch(() => { if (vivo.current === marca) setActual({ estado: { fase: 'abierta' }, sesion: session }); });
     return () => { vivo.current += 1; };
   }, [session, intento]);
 
@@ -52,8 +86,11 @@ export function usePuertaLegal(session: StoredSession | null): {
     return () => api.onLegalAcceptanceRequired(null);
   }, [reconsultar]);
 
-  const abrir = useCallback(() => setEstado({ fase: 'abierta' }), []);
-  return { estado, abrir, reconsultar };
+  const abrir = useCallback(
+    () => setActual({ estado: { fase: 'abierta' }, sesion: sesionActual.current }),
+    [],
+  );
+  return { estado: actual.estado, lista: puertaLista(actual, session), abrir, reconsultar };
 }
 
 export function PuertaLegalView({

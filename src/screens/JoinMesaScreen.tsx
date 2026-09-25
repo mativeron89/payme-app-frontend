@@ -1,7 +1,8 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
+import { LEGAL_ACCEPTANCE_REQUIRED } from '../api/http';
 import { signupInvitationSnapshot, subscribeSignupInvitation } from '../api/signupInvitation';
 import { useSocialAuthCapability } from '../api/socialAuth';
 import { autoridadDeAlta } from './LoginScreen';
@@ -88,10 +89,39 @@ function salirAMisItems(mesaCode: string): void {
   }
 }
 
-export function JoinMesaScreen({ code, token }: { code: string; token: string }) {
+/**
+ * AF-PUERTA-JOIN · `puertaLista`: la consulta de la puerta legal de ESTA sesión
+ * ya volvió abierta. Sin eso no se canjea: canjear antes une a la persona a la
+ * mesa sin haber aceptado. Mientras tanto la pantalla sigue en «uniéndote», que
+ * es lo que ya mostraba.
+ *
+ * `onRequiereAceptacion`: el dueño contestó 428 `legal_acceptance_required` al
+ * canje (AB2). Se le pide a la puerta que vuelva a consultar, y la custodia del
+ * token NO se liquida: la puerta reemplaza a esta pantalla y, al aceptar, ésta
+ * se monta de nuevo y canjea con el mismo token.
+ */
+export function JoinMesaScreen({
+  code,
+  token,
+  puertaLista = true,
+  onRequiereAceptacion,
+}: {
+  code: string;
+  token: string;
+  puertaLista?: boolean;
+  onRequiereAceptacion?: () => void;
+}) {
   const { t } = useIdioma();
   const { session } = useAuth();
   const [outcome, setOutcome] = useState<JoinLinkOutcome>('joining');
+  /**
+   * Hubo un 428 y la puerta todavía no se cerró. Si la reconsulta vuelve
+   * ABIERTA (el dueño se contradice), no se canjea solo de nuevo: eso sería un
+   * 428 → reconsulta → canje en bucle. Se muestra el error con «Reintentar» y
+   * reintentar queda en manos de la persona. Es un `ref` y no estado: se marca
+   * aunque el efecto que lo originó ya se haya desmontado.
+   */
+  const esperandoPuerta = useRef(false);
   /**
    * El alta no se abre sola: §1.2-A es una pantalla propia con DOS acciones, y
    * recién al tocar una se muestra el formulario en el modo que corresponde.
@@ -166,7 +196,12 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
   }, [code, token]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || !puertaLista) return;
+    if (esperandoPuerta.current) {
+      esperandoPuerta.current = false;
+      setOutcome('error');
+      return;
+    }
     let alive = true;
     setOutcome('joining');
     api
@@ -189,8 +224,17 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
         setJoined(r.mesa_code);
       })
       .catch((err: unknown) => {
+        const { status, code: motivo } = extractApiError(err);
+        // AF-PUERTA-JOIN · el 428 legal no es un fallo del canje: es la puerta.
+        // Va ANTES del `alive` a propósito: la marca tiene que quedar aunque la
+        // reconsulta ya haya desmontado este efecto. Sin `settle`: el token se
+        // conserva entero para canjear después de aceptar.
+        if (status === 428 && motivo === LEGAL_ACCEPTANCE_REQUIRED) {
+          esperandoPuerta.current = true;
+          onRequiereAceptacion?.();
+          return;
+        }
         if (!alive) return;
-        const { status } = extractApiError(err);
         /**
          * Custodia POR RESULTADO, en `invitationCustody.ts`. Los terminales
          * sueltan la credencial de las DOS custodias —storage **y URL**—; los
@@ -211,7 +255,7 @@ export function JoinMesaScreen({ code, token }: { code: string; token: string })
     return () => {
       alive = false;
     };
-  }, [session, token, attempt]);
+  }, [session, token, attempt, puertaLista, onRequiereAceptacion]);
 
   /**
    * El nombre del restaurante para §1.2-C, y **sólo** después del canje.

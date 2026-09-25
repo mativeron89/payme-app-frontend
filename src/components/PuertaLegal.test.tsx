@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { IdiomaProvider } from '../i18n/idioma';
-import { PuertaLegalView } from './PuertaLegal';
+import { PuertaLegalView, puertaLista } from './PuertaLegal';
+import type { StoredSession } from '../api/storage';
 
 function render(aceptaMayor: boolean, aceptaTerminos: boolean, busy = false, error: string | null = null): string {
   return renderToStaticMarkup(
@@ -52,5 +53,32 @@ describe('AF2 · puerta de aceptación para quien ya tiene cuenta (decisiones 40
     expect(html).toContain('role="alert"');
     expect(html).toContain('No pudimos guardar tu confirmación');
     expect(html).toContain('Continuar');
+  });
+});
+
+/**
+ * AF-PUERTA-JOIN · `puertaLista` decide si `JoinMesaScreen` puede canjear. Se
+ * prueba la función pura porque el orden de los efectos (hijo antes que padre)
+ * es justo lo que el `useEffect` no deja ver en esta suite sin librería de render.
+ */
+describe('AF-PUERTA-JOIN · la puerta está lista sólo para la sesión que consultó', () => {
+  const s1 = { principal_id: 'p1' } as unknown as StoredSession;
+  const s2 = { principal_id: 'p2' } as unknown as StoredSession;
+  const aceptacion = { required: true, aviso: { version: '3.0.0', hash: 'a'.repeat(64) }, terminos: { version: '1.0.0', hash: 'b'.repeat(64) } };
+
+  it('abierta o cerrada para ESTA sesión: lista', () => {
+    expect(puertaLista({ estado: { fase: 'abierta' }, sesion: s1 }, s1)).toBe(true);
+    expect(puertaLista({ estado: { fase: 'cerrada', aceptacion }, sesion: s1 }, s1)).toBe(true);
+  });
+
+  it('en vuelo: no lista', () => {
+    expect(puertaLista({ estado: { fase: 'consultando' }, sesion: s1 }, s1)).toBe(false);
+  });
+
+  it('🔴 el «abierta» de la sesión nula (o de otra) no vale para la que acaba de entrar', () => {
+    // Es el render en el que la persona entra desde el link: el hijo canjearía
+    // antes de que el hook consulte.
+    expect(puertaLista({ estado: { fase: 'abierta' }, sesion: null }, s1)).toBe(false);
+    expect(puertaLista({ estado: { fase: 'abierta' }, sesion: s2 }, s1)).toBe(false);
   });
 });
