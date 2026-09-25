@@ -11,6 +11,54 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.0 — AF2 · paquete legal 3.0.0 en pantalla y Configuración › Notificaciones (2026-09-25)
+
+ORDEN MAESTRA LEGAL-3.0.0-20260925 (sha256 b81cfee1…), entrega **AF2**; decisiones 33-37 y
+40-47 de Mati (textos aprobados en la 46). Base `0.192.0`. **Regla clave:** con el dueño en
+`LEGAL_3_0_0_VIGENTE=false` (hoy) nada nuevo se muestra ni se exige; la puerta aparece sólo
+cuando el dueño dice `required`. Contrato contrastado con App Backend - Opus (AB1 publicado en
+v2.129.0; E1 servido desde v2.128.0).
+
+- **Espejo de contrato** refrescado al inventario `644bbaf` (App Backend v2.129.0, AB1): 121
+  archivos; entran `db/migrate_legal_acceptances_v2.129.0.sql`, `services/legalAcceptance.js` y
+  los cuatro de E1; cambian `routes/consent.js`, `auth.js`, `social-auth.js`, `account.js`,
+  `notifications.js`, `mesas.js` y `schemas/index.js`. Adoptado, paridad y vigencia OK.
+- **`/terminos`**, ruta pública nueva junto a `/privacy`: los Términos de uso tal cual los sirve
+  el dueño, sin sesión ni storage, con su censo de red; con el paquete apagado dice «no
+  verificable», que es la verdad.
+- **Registro con correo:** con Términos y aviso simplificado servidos, dos casillas SIN marcar
+  («Declaro que tengo 18 años o más.», «He leído y acepto los Términos de Uso»), la frase con el
+  enlace al Aviso y el **simplificado** en lugar del aviso completo; «Registrarme» deshabilitado
+  hasta marcar ambas; el alta viaja con `legal_acceptance` (5 claves). Con el paquete apagado,
+  el alta de siempre.
+- **Google:** las mismas casillas arriba del botón cuando el toque puede crear cuenta (un-toque
+  o alta con Google); el botón queda inerte —sin puntero ni foco— hasta marcarlas; «Crear mi
+  cuenta» igual; `legal_acceptance` en `/google/register` y `/google/continue`. Una sola vez por
+  pantalla. La frase «Al continuar aceptas…» queda sólo con el paquete apagado.
+- **Puerta para quien ya tiene cuenta** (decisiones 40, 44, 45): al entrar se consulta
+  `GET /api/legal/acceptance`; con `required:true` una pantalla bloquea todo con los textos
+  aprobados, las dos casillas, «Continuar» (acepta el par vigente con la declaración 18+) y
+  «Cerrar sesión». `409 legal_version_mismatch` vuelve a leer; sin ruta, red o contrato roto no
+  se bloquea a nadie (defiende el 428 del dueño, ya enganchado desde AF1).
+- **M03 sin fecha:** el perfil ya no pide ni guarda la fecha de nacimiento ni muestra la nota de
+  menor; el banner de foto deja de nombrar «menores de edad o sin fecha». El método de la fachada
+  queda durmiente.
+- **Configuración › Notificaciones** (E2, decisiones 33-37): fila con campana entre Idioma y Mis
+  tarjetas y página propia. Grupos Seguridad · Mesas · Amigos · Pagos, títulos por tipo, un
+  interruptor «Correo» por fila con guardado inmediato (PUT de un ítem, optimista con vuelta
+  atrás), «Siempre por correo» que explica al tocarlo, «Disponible cuando haya pagos» /
+  «Disponible con el próximo Aviso». Sin WhatsApp ni SMS. Decoder estricto del contrato v1
+  (un tipo desconocido se descarta; una clave o modo desconocido rompe); `PUT` privado nuevo en
+  `http.ts` con la misma política que el aviso de foto.
+- **Mock:** replica al dueño con el paquete apagado; `payme.app.mock.legal_3_0_0.v1='on'` lo
+  enciende para las pruebas; aceptación y preferencias persisten en la demo.
+- Pruebas de conducta con clics (`e2e/legal-3-0-0.spec.ts`): alta apagado/encendido con el
+  cuerpo capturado, puerta que acepta y no vuelve al recargar, «Cerrar sesión», Notificaciones
+  que guarda y sobrevive la recarga; `/terminos` en `meta-public-pages`; ausencia de la fecha en
+  `perfil-fecha-de-nacimiento`; `rutas-montan-pantalla` con la página nueva. Guardas ajustadas y
+  declaradas: `LoginScreen.test` (los Términos ahora existen), `AppHeader.identity` (21 montajes),
+  `registroMexicano` («mostrará», futuro del texto aprobado, entra a la allowlist).
+
 ## 0.192.0 — AF1 · tolerancia para el paquete legal 3.0.0, sin cambio visible (2026-09-25)
 
 ORDEN MAESTRA LEGAL-3.0.0-20260925 (sha256 b81cfee1…), entrega **AF1**; decisiones 46/47 de
