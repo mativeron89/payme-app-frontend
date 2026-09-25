@@ -734,7 +734,6 @@ export const EN: Record<string, string> = {
   "¿Cómo dividen?": "How are you splitting?",
   "¿Eliminar el grupo \"{0}\"?": "Delete the group \"{0}\"?",
   "¿Para quién?": "For whom?",
-  "¿Quieres ver qué consumes, cuánto y dónde?": "Want to see what you order, how much, and where?",
   "¿Quitar a {0} de tus amigos?": "Remove {0} from your friends?",
   "¿Quitar la tarjeta terminada en {0}?": "Remove the card ending in {0}?",
   "¿Qué consumiste?": "What did you have?",

@@ -242,10 +242,12 @@ export function HomeScreen() {
             </div>
           )}
 
+          {/* AF-BURBUJA-STATS (pedido de Mati del 25/09): la pestaña tiene el MISMO tamaño y la misma composición
+              que «Cuenta» —ícono y acción—. La invitación «¿Quieres ver qué consumes, cuánto y dónde?» la hacía
+              148 px contra 116 (dos líneas a 390) y el contenido de abajo saltaba 32 px al cambiar de pestaña;
+              la orden prioriza la composición de «Cuenta», así que se retira. */}
           {tab === 'estadisticas' && (
-            <div className="launch-stack home-tab-panel">
-              {/* La frase es de Mati, textual, y va como invitación arriba. */}
-              <p className="launch-invite">{t('¿Quieres ver qué consumes, cuánto y dónde?')}</p>
+            <div className="launch-pair home-tab-panel">
               <Launcher
                 icon="chart"
                 label={t('Ver mis estadísticas')}
