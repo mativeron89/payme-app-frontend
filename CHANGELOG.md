@@ -11,6 +11,49 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.4 — CSP: obligatoria en la landing y en Report-Only en la app (n186); retiro de declareBirthDate (n217) (2026-09-26)
+
+Orden AF-CSP-N186-20260925 (sha256 1c5e7115…). Base `0.193.3`.
+
+**n186 · CSP.** Hasta acá la app no mandaba CSP. `vercel.ts` la genera por artefacto, sin exports ni
+claves nuevas:
+
+- **Landing: `Content-Security-Policy` obligatoria.**
+  - Sólo recursos propios: una hoja, dos fuentes y cuatro imágenes.
+  - El único script, el inline de idioma, va por su sha256.
+  - `connect-src` y `form-action` en `'none'`; `frame-ancestors 'none'`.
+- **App: `Content-Security-Policy-Report-Only`**, sin `report-uri`: las violaciones se ven en la
+  consola. Permite:
+  - Google Identity (`/gsi/`) y Stripe.js, con el 3DS en `hooks.stripe.com`;
+  - el origen de `VITE_API_URL`, sólo si es http(s) válido;
+  - imágenes `blob:` (avatares y escáner) y `data:` (íconos del CSS);
+  - service worker y manifest propios;
+  - el `<style>` del splash por hash, sin `'unsafe-inline'` ni `'unsafe-eval'`.
+  - **No pasa a obligatoria en esta orden:** se decide después de observar producción.
+- **Artefacto desconocido:** ninguna cabecera, igual que rewrites y headers.
+- **Tests:**
+  - `scripts/csp.test.ts`: cabeceras por artefacto, directivas, origen de la API y hash del
+    `<style>`;
+  - `landing.test.ts`: el hash del script de idioma, recalculado desde el build;
+  - `despliegue.test.ts`: acepta el bloque global de CSP; los dos paths públicos conservan lo suyo;
+  - **`e2e/csp/`**, proyectos `csp-app` y `csp-landing`: la política EXACTA de `vercel.ts`,
+    **aplicada como obligatoria** sobre el build mock y el build de la landing, que sirve
+    `e2e/csp/servidor.mjs`. Cubre:
+    - el control de bloqueo;
+    - el ingreso con Google (mock);
+    - la tarjeta con 3DS;
+    - los orígenes reales de Google y Stripe (enrutados a stubs), y uno ajeno bloqueado;
+    - el idioma de la landing.
+  - Seis mutantes, los seis muertos. `'unsafe-inline'` junto a un hash lo caza el unitario, no el
+    navegador: con un hash presente, el navegador lo ignora.
+- **Límite declarado:** en el riel mock no carga el GIS ni el Stripe.js reales. Que la política los
+  admita se prueba con sus orígenes enrutados, no con los scripts de verdad.
+- Cero cambio de producto visible.
+
+**n217.** Se retira `declareBirthDate`: la fachada real y mock, `mockDeclareBirthDate` con sus tres
+auxiliares, y sus tests. Quedó sin uso con el paquete 3.0.0 (la fecha se retiró y el dueño responde
+410). El guardarraíl que afirma que el editor de perfil no la usa se conserva.
+
 ## 0.193.3 — Vite 6 y Vitest 4: cierra los 4 avisos de desarrollo de n134 (2026-09-26)
 
 Orden AF-VITE-VITEST-MAYOR-20260926 (sha256 2e564628…), decisión 52 de Mati. Base `0.193.2`.
