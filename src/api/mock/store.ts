@@ -1537,7 +1537,40 @@ export function toOpenMesa(m: MockMesa): OpenMesa {
   };
 }
 
+/**
+ * Decisión 81 · réplica del dueño v2.134.0 (`informativeSelections.restanteDe`):
+ * un plato está cubierto cuando lo declarado por todos suma el entero, con el
+ * tope de 100 bps de consumo (3 × 3333 = 9999 cuenta como completo). Un plato
+ * con más del entero queda en 0.
+ */
+export function restanteDeDeclarado(declarado: number): number {
+  return 10000 - declarado < 100 ? 0 : 10000 - declarado;
+}
+
+/** «igual» sin garantía: la misma condición que `informative_selection_capability.supported`. */
+export function admiteSeleccionInformativa(m: MockMesa): boolean {
+  return m.division_mode === 'igual' && (m.guarantee_mode ?? true) === false;
+}
+
+/**
+ * Réplica de `remainingByItem` del dueño: cuánto queda de cada plato sumando lo
+ * declarado por TODAS las cuentas (`state.informativeSelections` se indexa por
+ * `mesaId:userId`). Agregado por plato, sin identidades.
+ */
+export function restanteInformativoPorPlato(m: MockMesa): Map<string, number> {
+  const prefijo = `${m.id}:`;
+  const declarado = new Map<string, number>();
+  for (const [clave, seleccion] of Object.entries(state.informativeSelections)) {
+    if (!clave.startsWith(prefijo)) continue;
+    for (const item of seleccion.items) {
+      declarado.set(item.item_id, (declarado.get(item.item_id) ?? 0) + item.declared_fraction_bps);
+    }
+  }
+  return new Map(m.items.map((i) => [i.id, restanteDeDeclarado(declarado.get(i.id) ?? 0)]));
+}
+
 export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
+  const restantesInformativos = admiteSeleccionInformativa(m) ? restanteInformativoPorPlato(m) : null;
   const parteAntigua = (() => {
     try { return localStorage.getItem('payme.app.mock.parte_pagada.v1') === 'antiguo'; } catch { return false; }
   })();
@@ -1596,6 +1629,8 @@ export function toMesaDetail(m: MockMesa, identity: MockIdentity): MesaDetail {
         quantity: i.quantity,
         status: i.status,
         remaining_bps: Math.max(0, 10000 - taken),
+        // Decisión 79 · dueño v2.134.0: sólo donde hay selección informativa.
+        informative_remaining_bps: restantesInformativos ? (restantesInformativos.get(i.id) ?? 10000) : null,
         my_bps: mine,
         locked_by_me: mine > 0,
         lock_expires_at: i.lock_expires_at,

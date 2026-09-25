@@ -1,4 +1,4 @@
-import type { MesaDetail } from '../api/types';
+import type { MesaDetail, MesaItem } from '../api/types';
 import { fractionAmount } from '../utils/money';
 
 /**
@@ -136,6 +136,13 @@ export type ConfirmedConsumptionProgress =
  */
 export function confirmedConsumptionProgress(
   mesa: Pick<MesaDetail, 'total_cents' | 'items'>,
+  /**
+   * Decisión 79 · de dónde sale «lo que queda» de cada plato. Por defecto el
+   * `remaining_bps` de consumo; en «igual» con pagos apagados, el
+   * `informative_remaining_bps` del dueño v2.134.0. Es la MISMA regla que usa
+   * el dueño para `assigned_cents` de `/mesas/open` (wire §5).
+   */
+  restanteDe: (item: MesaItem) => unknown = (item) => item.remaining_bps,
 ): ConfirmedConsumptionProgress {
   if (!Number.isSafeInteger(mesa.total_cents) || mesa.total_cents < 0) {
     return { status: 'unknown', reason: 'invalid_total' };
@@ -158,14 +165,15 @@ export function confirmedConsumptionProgress(
       || !Number.isSafeInteger(item.quantity) || item.quantity < 1) {
       return { status: 'unknown', reason: 'invalid_item' };
     }
-    if (!bpsValido(item.remaining_bps)) return { status: 'unknown', reason: 'invalid_bps' };
+    const restante = restanteDe(item);
+    if (!bpsValido(restante)) return { status: 'unknown', reason: 'invalid_bps' };
 
     const line = BigInt(item.price_cents) * BigInt(item.quantity);
     if (line > maxSafe) return { status: 'unknown', reason: 'overflow' };
     itemsTotal += line;
     if (itemsTotal > maxSafe) return { status: 'unknown', reason: 'overflow' };
 
-    const takenBps = 10000 - item.remaining_bps;
+    const takenBps = 10000 - restante;
     allAssigned = allAssigned && takenBps === 10000;
     try {
       assigned += BigInt(fractionAmount(Number(line), takenBps));
@@ -232,4 +240,36 @@ export function countdownIsUrgent(countdown: string | null): boolean {
   if (!countdown) return false;
   const minutes = Number(countdown.split(':')[0]);
   return Number.isFinite(minutes) && minutes < 60;
+}
+
+// ─── Decisión 79 · mesa compartida en «partes iguales» (dueño v2.134.0) ────
+
+/**
+ * Cuánto queda por elegir del plato, sumando lo que declararon todos. `null`
+ * si el dueño no lo publica (mesa que no admite selección informativa, o un
+ * dueño anterior) o si el valor no es un entero 0..10000: nunca se inventa.
+ */
+export function restanteInformativo(item: Pick<MesaItem, 'informative_remaining_bps'>): number | null {
+  const valor = item.informative_remaining_bps;
+  return bpsValido(valor) ? valor : null;
+}
+
+/**
+ * Lo que ESTA persona puede declarar del plato. El restante del dueño incluye
+ * lo propio ya guardado (wire §1), así que se le suma de vuelta; nunca pasa del
+ * entero. `null` = sin dato: rige la conducta anterior (no se limita).
+ */
+export function limiteInformativo(
+  item: Pick<MesaItem, 'id' | 'informative_remaining_bps'>,
+  guardadas: ReadonlyMap<string, number>,
+): number | null {
+  const restante = restanteInformativo(item);
+  if (restante === null) return null;
+  return Math.min(10000, restante + (guardadas.get(item.id) ?? 0));
+}
+
+/** ¿El dueño publica lo que queda por plato? Con uno solo alcanza para usarlo. */
+export function informativoPublicado(mesa: Pick<MesaDetail, 'items'>): boolean {
+  return Array.isArray(mesa.items)
+    && mesa.items.some((item) => item.informative_remaining_bps !== undefined && item.informative_remaining_bps !== null);
 }

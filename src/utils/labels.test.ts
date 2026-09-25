@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asignadoDeMesaAbierta,
   estadoDeTuMesa,
   estadoPersonalDeMesa,
   iconoDeCategoriaRestaurante,
@@ -129,5 +130,35 @@ describe('AF-34 · mesaDelAviso · a qué mesa lleva el aviso', () => {
 
   it('🔴 un closure_reason desconocido no cambia nada: el texto es el body del dueño', () => {
     expect(mesaDelAviso({ type: 'mesa_expired', payload: { mesa_code: 'PA-1', closure_reason: 'algo_nuevo' } })).toBe('PA-1');
+  });
+});
+
+/**
+ * Decisión 76 · la tarjeta del Inicio muestra lo ELEGIDO con los aditivos del
+ * dueño v2.134.0. Cada `it` rompe UNA condición: lo raro cae en `null` y el
+ * Inicio sigue mostrando lo pagado, como contra un dueño anterior.
+ */
+describe('decisión 76 · asignadoDeMesaAbierta', () => {
+  it('control positivo: $195 de $840 → 23 %', () => {
+    expect(asignadoDeMesaAbierta({ total_cents: 84000, assigned_cents: 19500, assignment_complete: false }))
+      .toEqual({ assignedCents: 19500, percent: 23 });
+  });
+  it('nunca 100 % antes de completo, y 100 % sólo con completo', () => {
+    expect(asignadoDeMesaAbierta({ total_cents: 84000, assigned_cents: 83999, assignment_complete: false })?.percent).toBe(99);
+    expect(asignadoDeMesaAbierta({ total_cents: 84000, assigned_cents: 84000, assignment_complete: true })?.percent).toBe(100);
+  });
+  it('ausente, null o de otro tipo ⇒ null (dueño anterior o «igual» con garantía)', () => {
+    expect(asignadoDeMesaAbierta({ total_cents: 84000 })).toBeNull();
+    expect(asignadoDeMesaAbierta({ total_cents: 84000, assigned_cents: null, assignment_complete: false })).toBeNull();
+    expect(asignadoDeMesaAbierta({ total_cents: 84000, assigned_cents: '19500', assignment_complete: false })).toBeNull();
+    expect(asignadoDeMesaAbierta({ total_cents: 84000, assigned_cents: 19500 })).toBeNull();
+    expect(asignadoDeMesaAbierta({ total_cents: 84000, assigned_cents: -1, assignment_complete: false })).toBeNull();
+    expect(asignadoDeMesaAbierta({ total_cents: 84000, assigned_cents: 1.5, assignment_complete: false })).toBeNull();
+  });
+  it('«completo» con una cifra distinta del total es incoherente ⇒ null', () => {
+    expect(asignadoDeMesaAbierta({ total_cents: 84000, assigned_cents: 19500, assignment_complete: true })).toBeNull();
+  });
+  it('total cero ⇒ 0 %, sin dividir por cero', () => {
+    expect(asignadoDeMesaAbierta({ total_cents: 0, assigned_cents: 0, assignment_complete: false })).toEqual({ assignedCents: 0, percent: 0 });
   });
 });

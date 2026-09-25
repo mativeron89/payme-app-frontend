@@ -8,6 +8,9 @@ import {
   confirmedConsumptionProgress,
   fraccionInicial,
   fractionPreview,
+  informativoPublicado,
+  limiteInformativo,
+  restanteInformativo,
   itemsAmountFor,
   nothingLeftFor,
 } from './mesaItemsView';
@@ -384,5 +387,51 @@ describe('fraccionInicial · ante la duda NO se elige el máximo', () => {
     // `?? 10000` y preseleccionaba el ítem entero sobre un resto de 1 bps.
     expect(fraccionInicial(1)).toBeNull();
     expect(fraccionInicial(0)).toBeNull();
+  });
+});
+
+/**
+ * Decisión 79 · «igual» con el dato del dueño v2.134.0. El restante incluye lo
+ * propio guardado, así que el límite de esta cuenta lo suma de vuelta.
+ */
+describe('decisión 79 · lo que queda por plato en «igual»', () => {
+  const item = (informative_remaining_bps: unknown) => ({ id: 'i-1', informative_remaining_bps });
+
+  it('restanteInformativo: entero 0..10000 o null, nunca inventado', () => {
+    expect(restanteInformativo(item(5000))).toBe(5000);
+    expect(restanteInformativo(item(0))).toBe(0);
+    for (const raro of [null, undefined, -1, 10001, 50.5, '5000']) {
+      expect(restanteInformativo(item(raro)), String(raro)).toBeNull();
+    }
+  });
+
+  it('limiteInformativo: lo que queda + lo propio guardado, tope entero; sin dato ⇒ null', () => {
+    expect(limiteInformativo(item(5000), new Map())).toBe(5000);
+    expect(limiteInformativo(item(0), new Map([['i-1', 5000]]))).toBe(5000);
+    expect(limiteInformativo(item(5000), new Map([['i-1', 5000]]))).toBe(10000);
+    expect(limiteInformativo(item(10000), new Map([['i-1', 5000]]))).toBe(10000);
+    expect(limiteInformativo(item(null), new Map([['i-1', 5000]]))).toBeNull();
+  });
+
+  it('informativoPublicado: alcanza con un plato con dato', () => {
+    expect(informativoPublicado({ items: [item(null), item(null)] as never })).toBe(false);
+    expect(informativoPublicado({ items: [item(null), item(10000)] as never })).toBe(true);
+  });
+
+  it('la barra de «igual» cuenta lo ELEGIDO desde informative_remaining_bps (misma cuenta que /mesas/open)', () => {
+    const mesa = {
+      total_cents: 84000,
+      items: [
+        { id: 'a', price_cents: 19500, quantity: 1, remaining_bps: 10000, informative_remaining_bps: 0 },
+        { id: 'b', price_cents: 64500, quantity: 1, remaining_bps: 10000, informative_remaining_bps: 10000 },
+      ] as unknown as MesaItem[],
+    };
+    const r = confirmedConsumptionProgress(mesa, (i) => i.informative_remaining_bps);
+    expect(r).toMatchObject({ status: 'known', assignedCents: 19500, visualPercent: 23, complete: false });
+    // El default sigue siendo consumo: con remaining_bps 10000, nada asignado.
+    expect(confirmedConsumptionProgress(mesa)).toMatchObject({ status: 'known', assignedCents: 0 });
+    // Un dato raro no fabrica un avance.
+    const raro = { ...mesa, items: [{ ...mesa.items[0]!, informative_remaining_bps: null }] as MesaItem[] };
+    expect(confirmedConsumptionProgress(raro, (i) => i.informative_remaining_bps)).toMatchObject({ status: 'unknown' });
   });
 });

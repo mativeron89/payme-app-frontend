@@ -94,6 +94,7 @@ import {
 } from './seedData';
 import { MODO_MONETARIO_MOCK_POR_DEFECTO } from './store';
 import {
+  admiteSeleccionInformativa,
   availableBalance,
   findMesa,
   markMesaPaid,
@@ -102,6 +103,8 @@ import {
   mockId,
   persist,
   pushWalletTx,
+  restanteDeDeclarado,
+  restanteInformativoPorPlato,
   settleIfExpired,
   state,
   toMesaDetail,
@@ -1528,6 +1531,46 @@ function conCamposAditivos(m: MockMesa): OpenMesa {
     participants_count: m.expected_participants,
     my_status: estado,
     my_paid_cents: estado === 'paid' ? Math.min(m.paid_amount_cents, parteIgual) : 0,
+    ...avanceAsignadoMock(m),
+  };
+}
+
+/**
+ * Decisión 76 · réplica de `avanceAsignadoPorMesa` del dueño v2.134.0 (wire §5):
+ * Σ por plato de `fractionAmount(línea, 10000 − restante)`, con el MISMO
+ * restante que publica el detalle de la mesa — consumo: `remaining_bps`;
+ * «igual» sin garantía: `informative_remaining_bps`; «igual» con garantía: null.
+ */
+function avanceAsignadoMock(m: MockMesa): {
+  division_mode: 'consumo' | 'igual';
+  assigned_cents: number | null;
+  assignment_complete: boolean;
+} {
+  const sinDato = { division_mode: m.division_mode, assigned_cents: null, assignment_complete: false };
+  let restanteDe: (item: MockMesa['items'][number]) => number;
+  if (m.division_mode === 'consumo') {
+    restanteDe = (item) => Math.max(0, 10000 - takenBps(item));
+  } else if (admiteSeleccionInformativa(m)) {
+    const mapa = restanteInformativoPorPlato(m);
+    restanteDe = (item) => mapa.get(item.id) ?? 10000;
+  } else {
+    return sinDato;
+  }
+  let asignado = 0;
+  let totalLineas = 0;
+  let todo = m.items.length > 0;
+  for (const item of m.items) {
+    const linea = item.price_cents * item.quantity;
+    const restante = restanteDe(item);
+    todo = todo && restante === 0;
+    totalLineas += linea;
+    asignado += fractionAmount(linea, 10000 - restante);
+  }
+  if (!Number.isSafeInteger(asignado) || !Number.isSafeInteger(totalLineas)) return sinDato;
+  return {
+    division_mode: m.division_mode,
+    assigned_cents: asignado,
+    assignment_complete: m.total_cents > 0 && todo && totalLineas === m.total_cents && asignado === m.total_cents,
   };
 }
 
@@ -1547,6 +1590,18 @@ function conCamposAditivos(m: MockMesa): OpenMesa {
  *   límite por defecto del dueño es 20).
  */
 const CLAVE_MIS_MESAS = 'payme.app.mock.mis_mesas.v1';
+
+/** `informative_selection` de `/mesas/mine` (dueño `ownSelectionsForMesas`). */
+function informativaPropiaDeMine(m: MockMesa): { informative_selection?: {
+  source: 'informative';
+  items: Array<{ item_id: string; declared_fraction_bps: number }>;
+  updated_at: string | null;
+} } {
+  if (!admiteSeleccionInformativa(m)) return {};
+  const propia = state.informativeSelections[informativeKey(m)];
+  if (!propia?.items.length) return {};
+  return { informative_selection: { source: 'informative', items: [...propia.items], updated_at: propia.updated_at } };
+}
 
 function mineDeMockMesa(m: MockMesa, withItems: boolean): {
   items_count: number;
@@ -1597,6 +1652,8 @@ export async function mockMisMesas(params?: { cursor?: string; limit?: number; d
       closure_reason: m.closure_reason ?? null,
       // El mock no guarda la creación: se aproxima desde el vencimiento.
       created_at: new Date(Date.parse(m.expires_at) - 30 * 60_000).toISOString(),
+      // Como el dueño: sólo si la cuenta declaró algo en esa mesa «igual».
+      ...informativaPropiaDeMine(m),
       mine: mineDeMockMesa(m, params?.detail === 'items'),
     }));
   const fixtures = seam === 'sin_cobro' ? [
@@ -1684,14 +1741,42 @@ function informativePaymentsDisabled(): boolean {
   return (modoMonetarioMock() as { payments_enabled?: unknown }).payments_enabled === false;
 }
 
+/**
+ * Decisión 81 · réplica del dueño v2.134.0: cubierto cuando lo declarado por
+ * todos suma el entero en CADA plato (antes bastaba cualquier porción).
+ */
 function informativeCoverage(mesa: MockMesa): boolean {
-  const prefix = `${mesa.id}:`;
-  const selectedIds = new Set(
-    Object.entries(state.informativeSelections)
-      .filter(([key]) => key.startsWith(prefix))
-      .flatMap(([, selection]) => selection.items.map((item) => item.item_id)),
-  );
-  return mesa.items.length > 0 && mesa.items.every((item) => selectedIds.has(item.id));
+  const restantes = restanteInformativoPorPlato(mesa);
+  return mesa.items.length > 0 && mesa.items.every((item) => restantes.get(item.id) === 0);
+}
+
+/**
+ * Decisión 81 · réplica de `assertWithinWhole` del dueño: sólo se mira lo que
+ * esta cuenta SUBE (plato nuevo o porción mayor que la guardada); bajar,
+ * soltar o reenviar lo mismo nunca se rechaza. Se informa el primer plato que
+ * no entra, en orden de `item_id`, con lo que queda SIN contar lo propio.
+ */
+function excesoInformativo(
+  mesa: MockMesa,
+  deseados: ReplaceInformativeSelectionRequest['items'],
+  guardadas: ReadonlyMap<string, number>,
+): { item_id: string; remaining_bps: number } | null {
+  const propia = informativeKey(mesa);
+  const prefijo = `${mesa.id}:`;
+  for (const item of deseados) {
+    if (item.declared_fraction_bps <= (guardadas.get(item.item_id) ?? 0)) continue;
+    let ajeno = 0;
+    for (const [clave, seleccion] of Object.entries(state.informativeSelections)) {
+      if (!clave.startsWith(prefijo) || clave === propia) continue;
+      ajeno += seleccion.items
+        .filter((otro) => otro.item_id === item.item_id)
+        .reduce((suma, otro) => suma + otro.declared_fraction_bps, 0);
+    }
+    if (ajeno + item.declared_fraction_bps > 10000) {
+      return { item_id: item.item_id, remaining_bps: restanteDeDeclarado(ajeno) };
+    }
+  }
+  return null;
 }
 
 function informativeResponse(mesa: MockMesa): InformativeSelectionResponse {
@@ -1777,6 +1862,8 @@ export async function mockReplaceInformativeSelection(
       return fail(400, 'fraction_not_allowed_for_original_participants');
     }
   }
+  const exceso = excesoInformativo(mesa, items, guardadas);
+  if (exceso) return fail(409, 'informative_fraction_exceeds_item', exceso);
   if (!exactReplay) {
     if (items.length === 0) delete state.informativeSelections[informativeKey(mesa)];
     else {

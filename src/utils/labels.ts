@@ -175,6 +175,35 @@ export function pagadoPropioCentavos(mesa: {
 }
 
 /**
+ * Decisión 76 · lo ELEGIDO de una mesa abierta, para la tarjeta del Inicio.
+ * Aditivos del dueño v2.134.0 (`assigned_cents`, `assignment_complete`), la
+ * misma cifra que la barra de adentro. Se lee campo por campo, como
+ * `participants_count`: con cualquiera ausente o raro ⇒ `null` y el Inicio
+ * sigue mostrando lo de antes. El porcentaje nunca llega a 100 antes de que
+ * el dueño diga completo, con la misma regla de la barra de la mesa.
+ */
+export function asignadoDeMesaAbierta(mesa: {
+  readonly total_cents: number;
+  readonly assigned_cents?: unknown;
+  readonly assignment_complete?: unknown;
+}): { readonly assignedCents: number; readonly percent: number } | null {
+  const asignado = mesa.assigned_cents;
+  const completo = mesa.assignment_complete;
+  const total = mesa.total_cents;
+  if (typeof asignado !== 'number' || !Number.isSafeInteger(asignado) || asignado < 0) return null;
+  if (typeof completo !== 'boolean') return null;
+  if (!Number.isSafeInteger(total) || total < 0) return null;
+  // «Completo» con una cifra distinta del total es incoherente: no se afirma.
+  if (completo && asignado !== total) return null;
+  let percent = 0;
+  if (total > 0) {
+    const redondeado = Number((BigInt(asignado) * 100n + BigInt(total) / 2n) / BigInt(total));
+    percent = completo ? 100 : Math.min(99, Math.max(0, redondeado));
+  }
+  return { assignedCents: asignado, percent };
+}
+
+/**
  * G-31 · el ícono de la tarjeta de invitación sale de `restaurant_category`
  * (enum cerrado del dueño). Ausente, desconocido u `other` ⇒ `store`, el
  * genérico de siempre, que no afirma ninguna cocina. Nunca se infiere del

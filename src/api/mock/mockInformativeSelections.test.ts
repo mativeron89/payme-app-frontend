@@ -105,19 +105,110 @@ describe('mock selección informativa v2', () => {
 
     const secondUserId = 'e0000000-0000-4000-8000-000000000999';
     state.user = { ...state.user, id: secondUserId };
-    const closed = await mock.mockReplaceInformativeSelection(mesa.code, {
+    // Decisión 81: con la otra mitad del primer plato sin declarar, NO cierra.
+    const sinCompletar = await mock.mockReplaceInformativeSelection(mesa.code, {
       items: secondItems.map((item) => ({ item_id: item.id, declared_fraction_bps: 10000 })),
+      confirm_closure: true,
+    });
+    expect(sinCompletar.coverage.all_items_selected).toBe(false);
+    expect(sinCompletar.mesa.status).toBe('open');
+    const closed = await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [
+        ...firstItems.map((item) => ({ item_id: item.id, declared_fraction_bps: 5000 as const })),
+        ...secondItems.map((item) => ({ item_id: item.id, declared_fraction_bps: 10000 as const })),
+      ],
       confirm_closure: true,
     });
     expect(closed.coverage.all_items_selected).toBe(true);
     expect(closed.mesa).toMatchObject({ status: 'expired', closure_reason: 'all_items_selected' });
-    expect(closed.selection.items.map((item) => item.item_id)).toEqual(secondItems.map((item) => item.id).sort());
+    expect(closed.selection.items.map((item) => item.item_id)).toEqual(mesa.items.map((item) => item.id).sort());
 
     state.user = { ...state.user, id: firstUserId };
     const ownFirst = await mock.mockGetInformativeSelection(mesa.code);
     expect(ownFirst.coverage.all_items_selected).toBe(true);
     expect(ownFirst.selection.items).toEqual(first.selection.items);
     expect(ownFirst.selection.items).not.toEqual(closed.selection.items);
+  });
+
+  /**
+   * Decisión 81 · réplica de `assertWithinWhole` del dueño v2.134.0 (wire §2):
+   * subir por encima del entero da 409 con el plato y lo que queda SIN contar lo
+   * propio; bajar, soltar o reenviar lo mismo nunca se rechaza; no escribe nada.
+   */
+  it('409 informative_fraction_exceeds_item al pasar del entero; bajar nunca se rechaza', async () => {
+    const { mock, state, mesa } = await subject();
+    const plato = mesa.items[0]!;
+    const primero = state.user.id;
+    await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: plato.id, declared_fraction_bps: 5000 }], confirm_closure: true,
+    });
+    state.user = { ...state.user, id: 'e0000000-0000-4000-8000-000000000998' };
+    await expect(mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: plato.id, declared_fraction_bps: 10000 }], confirm_closure: true,
+    })).rejects.toMatchObject({
+      status: 409,
+      message: 'informative_fraction_exceeds_item',
+      extra: { item_id: plato.id, remaining_bps: 5000 },
+    });
+    // No escribió nada: esta cuenta sigue sin selección.
+    expect((await mock.mockGetInformativeSelection(mesa.code)).selection.items).toEqual([]);
+    // Lo que queda sí entra.
+    await mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: plato.id, declared_fraction_bps: 5000 }], confirm_closure: true,
+    });
+    // El primero ya no puede subir: lo que queda SIN contar lo suyo es la
+    // mitad que declaró el otro (wire §2). Sí puede bajar o reenviar.
+    state.user = { ...state.user, id: primero };
+    await expect(mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: plato.id, declared_fraction_bps: 10000 }], confirm_closure: true,
+    })).rejects.toMatchObject({ status: 409, extra: { remaining_bps: 5000 } });
+    await expect(mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: plato.id, declared_fraction_bps: 5000 }], confirm_closure: true,
+    })).resolves.toBeTruthy();
+    await expect(mock.mockReplaceInformativeSelection(mesa.code, {
+      items: [{ item_id: plato.id, declared_fraction_bps: 2500 }], confirm_closure: true,
+    })).resolves.toBeTruthy();
+  });
+
+  it('decisión 79 · el detalle publica lo que queda por plato, sumando a todos y sin nombres', async () => {
+    const { mock, state, mesa } = await subject();
+    const plato = mesa.items[0]!;
+    state.informativeSelections[`${mesa.id}:e0000000-0000-4000-8000-000000000997`] = {
+      items: [{ item_id: plato.id, declared_fraction_bps: 5000 }], updated_at: new Date().toISOString(),
+    };
+    const detalle = (await mock.mockGetMesa(mesa.code, 'user')).mesa;
+    const item = detalle.items.find((candidate) => candidate.id === plato.id)!;
+    expect(item.informative_remaining_bps).toBe(5000);
+    expect(detalle.items.filter((candidate) => candidate.id !== plato.id)
+      .every((candidate) => candidate.informative_remaining_bps === 10000)).toBe(true);
+    // 3 × 3333 = 9999 cuenta como completo (tope de 100 bps).
+    state.informativeSelections[`${mesa.id}:e0000000-0000-4000-8000-000000000997`] = {
+      items: [{ item_id: plato.id, declared_fraction_bps: 3333 }], updated_at: new Date().toISOString(),
+    };
+    for (const otra of ['e0000000-0000-4000-8000-000000000996', 'e0000000-0000-4000-8000-000000000995']) {
+      state.informativeSelections[`${mesa.id}:${otra}`] = {
+        items: [{ item_id: plato.id, declared_fraction_bps: 3333 }], updated_at: new Date().toISOString(),
+      };
+    }
+    const casi = (await mock.mockGetMesa(mesa.code, 'user')).mesa.items.find((candidate) => candidate.id === plato.id)!;
+    expect(casi.informative_remaining_bps).toBe(0);
+    expect(JSON.stringify(casi)).not.toMatch(/e0000000|user_id|declared_by/);
+  });
+
+  it('decisión 76 · /mesas/open publica lo ELEGIDO en «igual» con la misma cuenta que adentro', async () => {
+    const { mock, state, mesa } = await subject();
+    mesa.openedByUser = true;
+    const plato = mesa.items[0]!;
+    state.informativeSelections[`${mesa.id}:e0000000-0000-4000-8000-000000000997`] = {
+      items: [{ item_id: plato.id, declared_fraction_bps: 5000 }], updated_at: new Date().toISOString(),
+    };
+    const abierta = (await mock.mockOpenMesas()).mesas.find((m) => m.code === mesa.code)!;
+    const linea = plato.price_cents * plato.quantity;
+    expect(abierta).toMatchObject({
+      division_mode: 'igual',
+      assigned_cents: Math.floor(linea / 2),
+      assignment_complete: false,
+    });
   });
 
   /**

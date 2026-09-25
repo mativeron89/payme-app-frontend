@@ -23,7 +23,38 @@ describe('decodeMisMesas', () => {
       id: fila.id, code: 'PA-7310', restaurante: 'Tacos El Güero', categoria: 'mexican',
       status: 'expired', divisionMode: 'consumo', guaranteeMode: false,
       closureReason: 'all_items_selected', createdAt: fila.created_at, itemsCount: 3, amountCents: 45000, items: null,
+      eleccionInformativa: false,
     }]);
+  });
+
+  /**
+   * F-3 (decisión 79) · en «igual» la selección propia es INFORMATIVA: `mine`
+   * trae casilleros en cero y la fila decía «No elegiste ítems». Con
+   * `informative_selection` del dueño se cuentan los PLATOS declarados; sin
+   * precios, el monto no se afirma.
+   */
+  it('F-3 · «igual» cuenta desde informative_selection y no afirma monto', () => {
+    const igual = {
+      ...fila, division_mode: 'igual', mine: { items_count: 0, amount_cents: 0 },
+      informative_selection: {
+        source: 'informative',
+        items: [
+          { item_id: 'aaaaaaaa-0000-4000-8000-00000000000a', declared_fraction_bps: 10000 },
+          { item_id: 'aaaaaaaa-0000-4000-8000-00000000000b', declared_fraction_bps: 5000 },
+        ],
+        updated_at: '2026-09-25T20:00:00.000Z',
+      },
+    };
+    const [m] = decodeMisMesas({ mesas: [igual], page: { limit: 20, next_cursor: null } }).mesas;
+    expect(m).toMatchObject({ divisionMode: 'igual', itemsCount: 2, amountCents: null, eleccionInformativa: true });
+  });
+
+  it('F-3 · sin informative_selection, o con forma rara, rige `mine` como antes', () => {
+    const base = { ...fila, division_mode: 'igual', mine: { items_count: 1, amount_cents: 18000 } };
+    for (const informative_selection of [undefined, null, { source: 'otra', items: [] }, { source: 'informative', items: [{ item_id: '', declared_fraction_bps: 5000 }] }]) {
+      const [m] = decodeMisMesas({ mesas: [{ ...base, informative_selection }], page: { limit: 20, next_cursor: null } }).mesas;
+      expect(m, JSON.stringify(informative_selection)).toMatchObject({ itemsCount: 1, amountCents: 18000, eleccionInformativa: false });
+    }
   });
 
   it('detail=items lee sólo la selección propia exacta y conserva cantidad, fracción e importe canónico', () => {

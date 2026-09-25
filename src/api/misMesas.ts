@@ -29,6 +29,13 @@ export interface TuMesa {
   readonly amountCents: number | null;
   /** Detalle propio opt-in. `null` = no vino o falló su validación. */
   readonly items: readonly ItemPropioDeMesa[] | null;
+  /**
+   * F-3 · en «igual» sin garantía, `itemsCount` sale de la selección
+   * informativa propia (`informative_selection`, dueño `ownSelectionsForMesas`)
+   * y no de los casilleros: cuenta PLATOS declarados. Sin precios en ese
+   * objeto, `amountCents` queda en `null` y no se afirma un monto.
+   */
+  readonly eleccionInformativa: boolean;
 }
 
 export interface ItemPropioDeMesa {
@@ -82,6 +89,23 @@ function itemsPropios(
   return Number.isSafeInteger(sum) && sum === amountCents ? decoded : null;
 }
 
+/**
+ * F-3 · cuántos platos declaró la cuenta en su selección informativa. `null` si
+ * el objeto no vino o no tiene la forma del dueño: entonces rige `mine`.
+ */
+function platosInformativos(raw: unknown): number | null {
+  if (!objeto(raw) || raw.source !== 'informative' || !Array.isArray(raw.items)) return null;
+  const ids = new Set<string>();
+  for (const item of raw.items) {
+    if (!objeto(item)) return null;
+    const itemId = texto(item.item_id);
+    const bps = enteroNoNegativo(item.declared_fraction_bps);
+    if (!itemId || ids.has(itemId) || bps === null || bps < 1 || bps > 10000) return null;
+    ids.add(itemId);
+  }
+  return ids.size;
+}
+
 function fila(raw: unknown): TuMesa | null {
   if (!objeto(raw)) return null;
   const id = texto(raw.id);
@@ -92,8 +116,14 @@ function fila(raw: unknown): TuMesa | null {
   const restaurante = objeto(raw.restaurant) ? raw.restaurant : {};
   const mine = objeto(raw.mine) ? raw.mine : {};
   const divisionMode = raw.division_mode === 'consumo' || raw.division_mode === 'igual' ? raw.division_mode : null;
-  const itemsCount = enteroNoNegativo(mine.items_count);
-  const amountCents = enteroNoNegativo(mine.amount_cents);
+  // F-3 · en «igual» la selección propia es INFORMATIVA: los casilleros de
+  // `mine` quedan en cero y la fila decía «No elegiste ítems» (diagnóstico
+  // AB-DIAG-MESA §3). Si el dueño publica `informative_selection`, se cuenta
+  // de ahí.
+  const informativos = divisionMode === 'igual' ? platosInformativos(raw.informative_selection) : null;
+  const eleccionInformativa = informativos !== null;
+  const itemsCount = eleccionInformativa ? informativos : enteroNoNegativo(mine.items_count);
+  const amountCents = eleccionInformativa ? null : enteroNoNegativo(mine.amount_cents);
   return {
     id,
     code,
@@ -110,6 +140,7 @@ function fila(raw: unknown): TuMesa | null {
     itemsCount,
     amountCents,
     items: itemsPropios(mine.items, divisionMode, itemsCount, amountCents),
+    eleccionInformativa,
   };
 }
 

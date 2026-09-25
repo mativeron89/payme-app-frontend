@@ -611,6 +611,14 @@ export interface OpenMesa {
   participants_count?: unknown;
   my_status?: unknown;
   my_paid_cents?: unknown;
+  /**
+   * Decisión 76 · aditivos del dueño v2.134.0 (wire §5): lo ELEGIDO de la mesa
+   * sobre el total, la misma cifra que adentro. Contra un dueño anterior no
+   * vienen; se leen campo por campo en `asignadoDeMesaAbierta`.
+   */
+  division_mode?: unknown;
+  assigned_cents?: unknown;
+  assignment_complete?: unknown;
 }
 
 export interface OpenMesasResponse {
@@ -640,6 +648,14 @@ export interface MesaItem {
    */
   my_paid_bps?: unknown;
   my_releasable_bps?: unknown;
+  /**
+   * Decisión 79 · dueño v2.134.0 (`docs/MESA_COMPARTIDA_D79_WIRE.md` §1):
+   * cuánto queda por elegir del plato en «igual» sumando lo que declararon
+   * TODOS (incluido lo propio), sin identidades. Entero 0..10000 sólo si la
+   * mesa admite selección informativa; `null` en cualquier otra. `unknown`
+   * A PROPÓSITO: se lee sólo con `restanteInformativo`.
+   */
+  informative_remaining_bps?: unknown;
 }
 
 /** v2.68: pedido de fracción natural (2500|3333|5000|6667|7500|10000). */
@@ -854,6 +870,13 @@ export interface LockItemsResponse {
    * campo (sólo `lock_token`). AF-21 lo corrige al alinear el mock.
    */
   lock_expires_at: string | null;
+  /**
+   * C3 · sólo cuando ESTA selección cerró la mesa sin cobros
+   * (`contract-mirror/routes/mesas.js`, `cerradaPorSeleccion`): `'expired'` y
+   * `'all_items_selected'`. F-2 los lee con `cerroPorSeleccion`.
+   */
+  mesa_status?: unknown;
+  closure_reason?: unknown;
 }
 
 export type PaymentType = 'card' | 'apple_pay' | 'google_pay' | 'wallet';
