@@ -93,6 +93,12 @@ async function otraCuentaDeclara(page: Page, items: Array<[string, number]>): Pr
   }, { code: CODIGO, otra: OTRA_CUENTA, pares: items });
 }
 
+/** Captura opcional para el juicio visual de Mati; sin la variable, nada. */
+async function capturar(page: Page, nombre: string): Promise<void> {
+  const dir = process.env.PAYME_E2E_CAPTURAS;
+  if (dir) await page.screenshot({ path: `${dir}/${nombre}.png`, fullPage: true });
+}
+
 const fila = (page: Page, nombre: string) => page.locator('.mi-item').filter({ hasText: nombre });
 const barra = (page: Page) => page.locator('.mi-meta-amt');
 
@@ -109,6 +115,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     const tarjeta = page.locator('.mesa-card').filter({ hasText: RESTAURANTE });
     await expect(tarjeta.locator('.mesa-money')).toContainText('$150.00');
     await expect(tarjeta.locator('.mesa-money')).toContainText('$840.00');
+    await capturar(page, 'd79-01-inicio-lo-elegido');
 
     // Decisión 79 · adentro: cuánto queda del plato, sin nombres, y la barra de
     // lo elegido con el formato de la decisión 77.
@@ -117,6 +124,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await expect(fila(page, 'Pizza para compartir')).toContainText('Queda ½');
     await expect(barra(page)).toHaveText('$150.00 / $840.00 (18%)');
     await expect(page.locator('main, .screen').first()).not.toContainText(OTRA_CUENTA);
+    await capturar(page, 'd79-02-queda-medio');
 
     // No se puede elegir más de lo que queda: nace en ½ y «Entero» no se ofrece.
     await page.getByRole('button', { name: /^Pizza para compartir/ }).click();
@@ -135,6 +143,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await expect(page.getByText('Ese plato ya está completo')).toBeVisible();
     await expect(fila(page, 'Pizza para compartir')).toContainText('Lo eligió otro');
     await expect(page.getByRole('button', { name: /^Pizza para compartir/ })).toBeDisabled();
+    await capturar(page, 'd79-03-409-completo');
 
     // Se completa la mesa con la parrillada: cierre con pantalla (F-2).
     await page.getByRole('button', { name: /^Parrillada/ }).click();
@@ -143,6 +152,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await expect(page.getByText(RESTAURANTE, { exact: true })).toBeVisible();
     await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`#/mesa/${CODIGO}$`));
+    await capturar(page, 'd79-04-la-mesa-se-cerro');
 
     // F-3 · el Historial cuenta desde la selección informativa.
     await page.goto('/#/mesas');
@@ -150,6 +160,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await expect(enHistorial).toContainText('Cerró sin cobro');
     await expect(enHistorial).toContainText('Elegiste 1 ítem');
     await expect(enHistorial).not.toContainText('No elegiste ítems');
+    await capturar(page, 'd79-05-historial');
   });
 
   test('F-1 · sin tocar nada, la mesa se relee cada 10 s', async ({ page }) => {
