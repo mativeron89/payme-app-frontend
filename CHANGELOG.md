@@ -11,6 +11,46 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.192.0 — AF1 · tolerancia para el paquete legal 3.0.0, sin cambio visible (2026-09-25)
+
+ORDEN MAESTRA LEGAL-3.0.0-20260925 (sha256 b81cfee1…), entrega **AF1**; decisiones 46/47 de
+Mati (textos aprobados y publicación conjunta). Base `0.191.1`. Regla del incidente
+`dish_count`: el consumidor tolerante se publica ANTES que el dueño. **Nada cambia a la vista**:
+el backend sigue sirviendo 2.5.5 y el aviso de siempre.
+
+- **`GET /api/legal/:kind` acepta los tipos nuevos** `aviso_privacidad_simplificado` (3.0.0) y
+  `terminos_uso` (1.0.0): el decoder recibe el `kind` pedido y exige que el dueño conteste
+  exactamente ése (`legalTextResponse(value, kind)`); mismas cinco claves y formas. Fachada
+  `api.getLegalText(kind)` (real y mock), lector público `leerTextoLegal(kind)` con los tres paths
+  literales; `getPrivacyNotice` y `/privacy` conservan su camino. El mock sirve textos de
+  DEMOSTRACIÓN para los dos tipos nuevos, con huellas de demo.
+- **Aviso de foto entre amigos:** pares aceptados = `2.5.5 · 5847ec0a…` (producción hoy) y
+  **`3.0.0 · f5251653…`** (aviso integral de la abogada; sha256 del cuerpo con `trim`, remedido
+  sobre el texto final de L0). **Se retira el par 2.5.6** (`fb5b0d93…`): ese aviso no se publica.
+- **`PRESENTABLE_NOTICE_VERSIONS`:** entra `3.0.0`, sale `2.5.6`. Sin la línea, un dueño en 3.0.0
+  apagaría nombre y foto con `notice_unavailable`.
+- **`features.account_birth_date` pasa a ser opcional:** ausente ya no cierra el alta social
+  (el dueño dejará de publicarlo al retirar la fecha de nacimiento); presente sigue exigiéndose
+  exacto, y `null` o malformado siguen cerrando.
+- **`428 legal_acceptance_required`:** gancho `setOnLegalAcceptanceRequired` en `http.ts`, que
+  avisa a la app una vez por request y deja pasar el error con su status; ningún otro 4xx lo
+  dispara y la sesión no se toca. La puerta de aceptación que lo usa llega en AF2.
+- **`GET/POST /api/legal/acceptance`** (forma exacta publicada por App Backend - Opus para AB1,
+  `DISENO_AB1.md` §3): decoder `legalAcceptanceResponse` de tres claves —`required`, `aviso`,
+  `terminos`, pares `{version, hash}` o `null`; `required:true` sin los dos pares se rechaza— y
+  fachada `api.getLegalAcceptance(sesión)` / `api.acceptLegal(cuerpo, sesión)`. El mock replica el
+  paquete APAGADO: `{required:false, aviso:null, terminos:null}` y el POST contesta el 409 del
+  dueño. Ninguna pantalla lo usa todavía (la puerta llega en AF2).
+- `/me` y `features`: sin cambios, confirmado por AB1 (ninguna clave nueva; sólo
+  `profile_identity.notice_version` pasa a `3.0.0` con la bandera encendida). `/me` ya toleraba
+  `birth_date` null.
+- Pruebas: decoder por `kind` y rechazo cruzado (`ffContracts.test.ts`), pares 2.5.5/3.0.0 y
+  2.5.6 retirado (`friendAvatarNotice.test.ts`, e2e `ajustes10-u05` con el decodificador real en
+  el camino), 3.0.0 presentable con sus near-miss y 2.5.6 apagado (`profileIdentity.test.ts`),
+  bloque de fecha ausente vs malformado (`socialAuth.test.ts`), gancho del 428
+  (`http.legalGate.test.ts`), decoder de aceptación (`legalAcceptance.test.ts`). Todas rojas
+  contra `0.191.0`.
+
 ## 0.191.1 — Inicio: la tarjeta de «Estadísticas» del mismo tamaño que «Cuenta» y «Asociadas» (2026-09-25)
 
 Orden `AF-BURBUJA-STATS-CLAUDE-20260925`, pedido de Mati: «que la burbuja de estadísticas tenga el mismo tamaño
