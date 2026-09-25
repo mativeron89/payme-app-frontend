@@ -11,6 +11,48 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.3 — Vite 6 y Vitest 4: cierra los 4 avisos de desarrollo de n134 (2026-09-26)
+
+Orden AF-VITE-VITEST-MAYOR-20260926 (sha256 2e564628…), decisión 52 de Mati. Base `0.193.2`.
+
+- **Versiones:**
+  - `vite` 5.4.21 → **6.4.3**;
+  - `vitest` 3.2.7 → **4.1.11**;
+  - `@vitejs/plugin-react` → **4.7.0**;
+  - arrastra `esbuild` 0.21.5 → 0.25.12.
+  - Rollup no cambia (4.62.2) y el runtime no cambia (react, react-dom, stripe-js).
+- **`npm audit`:** 0 completo y 0 en runtime; antes, 4 de desarrollo (vite alto; esbuild, vitest y
+  @vitest/mocker moderados).
+- **Por qué este salto y no otro:**
+  - vitest 5 exige Node ≥22.12 y el CI corre Node 20; mover el Node del CI es otro frente.
+  - vite 7/8 cambian el target por defecto o el bundler (Rolldown).
+  - Vite 6.4.3 es el menor salto que cierra todo y conserva Rollup, el target y Node 20.
+- **Ajustes que el salto exige, ninguno de producto:**
+  - `tsconfig.test.json` declara los tipos de Node: vitest 4 ya no los arrastra, y dejaba 28
+    archivos de test sin `node:fs`/`Buffer`. `tsconfig.json`, el del código que se despacha, no
+    cambia.
+  - `scripts/release-artifact.mjs` corre `releaseArtifact.ts` con `runnerImport` de Vite: el binario
+    `vite-node` venía con vitest 3 y vitest 4 no lo instala. No hay dependencia nueva, y su test
+    acredita que el vite que resuelve el runner es el del lock.
+  - `landing.test.ts` acepta `@media(max-width:640px)`: esbuild 0.25 minifica sin espacios, y es el
+    mismo CSS.
+- **Bundle comparado** contra 0.193.2, construidos los dos desde `git archive`:
+  - **Iguales:**
+    - real, 18 de 21 archivos;
+    - mock, 16 de 19;
+    - landing, 10 de 11;
+    - `index.html`, `sw.js`, manifest, fuentes e imágenes, en los tres.
+  - **CSS:** sólo los espacios de `@media` (−18 bytes en la app, −4 en la landing).
+  - **`App`:** plegado de constantes numéricas (`20*60*6e4` → `1200*6e4`, todas verificadas) y el
+    `react-dom` de `createPortal` tomado por la envoltura CommonJS de Vite 6.
+  - **Chunk de React:** +1370 bytes de esa misma envoltura (el `require` perezoso); React 18.3.1 es
+    el mismo.
+  - **CSP intacta:** mismos orígenes y mismo único `<script type="module">`, y el `<script>` inline
+    de la landing es idéntico.
+- **Build minificado:** un subconjunto de 14 specs e2e contra `vite preview` del build mock da el
+  mismo resultado en base y candidato: 61 passed. Los 6 de `n181` fallan igual en los dos, porque
+  sus barreras sólo existen en el servidor de desarrollo.
+
 ## 0.193.2 — La puerta legal antes de unirse a una mesa por link (2026-09-26)
 
 Orden AF-PUERTA-JOIN-20260926 (sha256 40e03c11…). Hallazgo de App Backend - Opus en AB2. Base `0.193.1`.
