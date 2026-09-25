@@ -579,7 +579,9 @@ export function MesaDetailView({
       <div className="title-card mesa-selection-title">
         <h1 className="title-card-title">{t('¿Qué consumiste?')}</h1>
         <div className="title-card-sub mesa-selection-context">
-          <span className="mesa-selection-context-main">{mesa.restaurant.name} / {code}</span>
+          {/* Decisión 77 de Mati: sin el ID de la mesa —nadie tiene dos
+              abiertas— y en UNA línea, restaurante · modalidad. */}
+          <span className="mesa-selection-context-main">{mesa.restaurant.name}</span>
           <span aria-hidden="true">·</span>
           <strong>{divisionLabel}</strong>
         </div>
@@ -600,18 +602,14 @@ export function MesaDetailView({
         </div>
         <div className="mi-meta">
           <span className="mi-meta-amt">
+            {/* Decisión 77 de Mati: igual que el Inicio, sólo «monto / total
+                (porcentaje)», sin «asignados» ni «por asignar». */}
             {repartoConocido ? (
-              <>
-                {t('{0} asignados', formatMXN(repartoConocido.assignedCents))} ·{' '}
-                {repartoConocido.differenceCents >= 0
-                  ? t('{0} por asignar', formatMXN(repartoConocido.differenceCents))
-                  : t('{0} por encima del total', formatMXN(Math.abs(repartoConocido.differenceCents)))}{' '}
-                ({pct}%)
-              </>
+              <>{formatMXN(repartoConocido.assignedCents)} / {formatMXN(mesa.total_cents)} ({pct}%)</>
             ) : reparto ? (
               t('No pudimos calcular el reparto confirmado')
             ) : (
-              <>{formatMXN(mesa.paid_amount_cents)} {t('de')} {formatMXN(mesa.total_cents)} ({pct}%)</>
+              <>{formatMXN(mesa.paid_amount_cents)} / {formatMXN(mesa.total_cents)} ({pct}%)</>
             )}
           </span>
           <span className={`mi-count ${urgente ? 'urgent' : ''}`}>

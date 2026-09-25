@@ -83,7 +83,8 @@ test.describe('el camino de pago completo', () => {
 
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     const seleccion = page.locator('.mesa-selection-title');
-    await expect(seleccion).toContainText(mesa.code);
+    // Decisión 77 de Mati: restaurante · modalidad, sin el código de mesa.
+    await expect(seleccion).not.toContainText(mesa.code);
     await expect(seleccion).toContainText('partes iguales');
     await expect(page.getByText('$840.00')).toBeVisible();
 
@@ -116,9 +117,9 @@ test.describe('el camino de pago completo', () => {
     await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
-    // Y nada se cobró: la mesa sigue en $0.00 de $840.00.
+    // Y nada se cobró: la mesa sigue en $0.00 / $840.00 (decisión 77).
     await page.goto(`/#/mesa/${mesa.code}`);
-    await expect(page.getByText(/\$0\.00 de \$840\.00/)).toBeVisible();
+    await expect(page.getByText(/\$0\.00 \/ \$840\.00/)).toBeVisible();
   });
 
   /**

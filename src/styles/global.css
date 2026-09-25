@@ -4794,8 +4794,10 @@ body {
   font-weight: 700;
 }
 
-/* M04 · una sola línea contextual evita que restaurante, código y modo inflen
-   la burbuja. Puede envolver en equipos angostos sin truncar esos datos. */
+/* M04 · una sola línea contextual evita que restaurante y modo inflen la
+   burbuja. Decisión 77 de Mati: sin el código de mesa y en UNA línea, así que
+   ya no envuelve. Si no entra, se recorta el NOMBRE con «…»; la modalidad no
+   se recorta nunca. Antes podía envolver sin truncar. */
 .mesa-selection-title {
   min-height: 0;
   padding: var(--sp-3) var(--sp-4);
@@ -4803,14 +4805,23 @@ body {
 
 .mesa-selection-context {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
   justify-content: center;
   column-gap: var(--sp-1);
+  min-width: 0;
 }
 
 .mesa-selection-context-main {
-  white-space: normal;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mesa-selection-context > :not(.mesa-selection-context-main) {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

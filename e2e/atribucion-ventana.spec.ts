@@ -213,9 +213,11 @@ test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo',
   // vuelve con el pago hecho — el ítem que pagué ya no está disponible para
   // nadie. Si la recarga no hubiera pasado, o el pago no hubiera quedado, esto
   // no se sostiene.
-  await expect(page.getByText(mesa.code)).toBeVisible();
+  // Decisión 77: el encabezado ya no muestra el código; la URL sí.
+  await expect(page).toHaveURL(new RegExp(`#/mesa/${mesa.code}$`));
+  await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
   // El progreso de la mesa vuelve con mi pago adentro: el remount ocurrió Y
   // el pago quedó del otro lado. Sin las dos cosas, esto no se sostiene — y
   // el número es el mismo que las tres superficies acaban de afirmar.
-  await expect(page.getByText(/\$210\.00 de \$840\.00/)).toBeVisible();
+  await expect(page.getByText(/\$210\.00 \/ \$840\.00/)).toBeVisible();
 });

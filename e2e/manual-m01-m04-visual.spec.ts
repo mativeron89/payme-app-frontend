@@ -67,7 +67,8 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
     ));
     expect(Math.abs(widths[0]! - widths[1]!)).toBeLessThanOrEqual(1);
     expect(Math.min(...widths)).toBeGreaterThan(100);
-    await expect(page.locator('.mesa-selection-title')).toContainText('La Parolaccia / PA-2847');
+    await expect(page.locator('.mesa-selection-context-main')).toHaveText('La Parolaccia');
+    await expect(page.locator('.mesa-selection-title')).not.toContainText('PA-2847');
     await capturar(page, 'm01-consumo-n2');
 
     await page.goto('/#/mesa/PA-3121');

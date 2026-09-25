@@ -79,6 +79,11 @@ type Esperado =
       readonly marcador: Marcador;
       /** El `/param` del hash, para las rutas que sin él montan otra cosa. */
       readonly param?: string;
+      /**
+       * Testigo de que el `param` llegó a la pantalla, cuando la pantalla ya no
+       * lo muestra: el mock materializa la mesa con el código que se le pidió.
+       */
+      readonly paramEnStore?: true;
     }
   | { readonly tipo: 'redirige'; readonly a: RegExp }
   /**
@@ -175,10 +180,13 @@ const ESPERADO: Record<PageId, Esperado> = {
    * 🔴 `#/mesa` **sin** código monta `MesasScreen` —lo dice su propio `case`— y
    * ahí sería indistinguible de `#/mesas`. Así que se le da un código.
    *
-   * **El marcador es el código mismo**, y eso prueba de más: `PA-0000` sólo
-   * puede llegar a la pantalla si el `case` además **cableó el `param`**. Un
-   * `case 'mesa'` que montara `MesaScreen` sin pasarle el código pasaría
-   * cualquier marcador fijo y fallaría éste.
+   * **El marcador era el código mismo**, y eso probaba de más: `PA-0000` sólo
+   * podía llegar a la pantalla si el `case` además **cableaba el `param`**.
+   * 🔴 Decisión 77 de Mati (2026-09-25): el encabezado ya no muestra el código.
+   * La prueba del cableado pasa al mock: `mockGetMesa(code)` materializa la
+   * mesa con EL código pedido, así que un `case 'mesa'` que montara
+   * `MesaScreen` sin pasarle el código no dejaría `PA-0000` en el store y
+   * fallaría igual (`paramEnStore`). El marcador visible es el título.
    *
    * Un código inventado y no una mesa real: abrir una mesa de verdad son seis
    * pasos con 3DS incluido, y lo que este recorrido prueba es **cuál pantalla
@@ -194,7 +202,8 @@ const ESPERADO: Record<PageId, Esperado> = {
   mesa: {
     tipo: 'pantalla',
     param: 'PA-0000',
-    marcador: { rol: 'texto', nombre: 'PA-0000' },
+    marcador: { rol: 'heading', nombre: '¿Qué consumiste?', nivel: 1 },
+    paramEnStore: true,
   },
 };
 
@@ -254,6 +263,16 @@ test.describe('cada ruta declarada monta su propia pantalla', () => {
 
       // 1 · se ve LA SUYA.
       await expect(ubicar(page, esperado!.marcador)).toBeVisible();
+      if (esperado!.paramEnStore) {
+        const codigos = await page.evaluate(async () => {
+          const storePath = '/src/api/mock/store.ts';
+          const { state } = await import(/* @vite-ignore */ storePath) as {
+            state: { mesas: Array<{ code: string }> };
+          };
+          return state.mesas.map((m) => m.code);
+        });
+        expect(codigos, 'el param del hash tiene que llegar a la pantalla').toContain(esperado!.param);
+      }
 
       /**
        * 2 · ⭐ y NO se ve la de Inicio. Sin esta línea, borrar el `case` haría
