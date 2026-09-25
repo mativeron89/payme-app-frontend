@@ -1675,19 +1675,23 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
           </div>
         )}
 
-        {/* 🔴 EL AVISO LEGAL NOMBRA UN SOLO DOCUMENTO, Y NO ES UN RECORTE
-            ESTÉTICO. El artefacto dice «los Términos y el Aviso de privacidad»,
-            con los dos como links. **Los Términos no existen**: no hay página
-            pública que los sirva —`src/public/` tiene `/privacy` y la de
-            eliminación de datos, nada más— y tampoco son un `kind` del dueño
-            —`contract-mirror/routes/consent.js` publica `aviso_privacidad` y
-            `aviso_campanas`—. Un link a un documento inexistente es un callejón
-            sin salida, y redactar Términos es una decisión legal de Mati, no
-            mía. Se enlaza lo que existe y se declara lo que falta. */}
-        <p className="ingreso-legal">
-          {t('Al entrar aceptas el')}{' '}
-          <a href={PATH_PRIVACIDAD}>{t('Aviso de privacidad')}</a>.
-        </p>
+        {/* 🔴 EL AVISO LEGAL NOMBRA UN SOLO DOCUMENTO. Hasta AF2 era porque los
+            Términos no existían y un link a un documento inexistente es un
+            callejón sin salida. Desde LEGAL-3.0.0 (AF2) existen —el dueño los
+            sirve en `terminos_uso` y este front en `/terminos`—, pero sólo con
+            el paquete vigente, y ahí se aceptan con las casillas, no con esta
+            nota: el copy de la nota no cambia (orden AF-NOTA-ALTA, sin texto
+            nuevo).
+            AF-NOTA-ALTA · en «Crea tu cuenta» con el paquete 3.0.0 vigente las
+            casillas ya dicen qué se acepta; «Al entrar aceptas el Aviso» sobra
+            y contradice que la aceptación sea por casilla. Se deja de dibujar
+            SÓLO ahí: en «entrar», y con el paquete apagado, queda como antes. */}
+        {!(mode === 'register' && paqueteVigente) && (
+          <p className="ingreso-legal">
+            {t('Al entrar aceptas el')}{' '}
+            <a href={PATH_PRIVACIDAD}>{t('Aviso de privacidad')}</a>.
+          </p>
+        )}
 
         {IS_MOCK && (
           <div className="ingreso-mock">

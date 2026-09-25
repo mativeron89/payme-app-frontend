@@ -78,6 +78,49 @@ test.describe('alta con correo', () => {
   });
 });
 
+/**
+ * AF-NOTA-ALTA · observación 3 de R-AF. «Al entrar aceptas el Aviso» sobra en el
+ * alta con casillas: ahí se acepta marcándolas. Se mide la nota por su texto
+ * exacto y, en el caso que la saca, junto con las casillas que la reemplazan:
+ * una ausencia sin el testigo de al lado pasaría también con la pantalla vacía.
+ */
+test.describe('nota «Al entrar aceptas el Aviso»', () => {
+  const nota = (page: Page) => page.locator('p.ingreso-legal', { hasText: 'Al entrar aceptas el' });
+
+  test('paquete ENCENDIDO, «Crea tu cuenta»: con las casillas, sin la nota', async ({ page }) => {
+    await conPaquete(page, true);
+    await irAlAlta(page);
+    await expect(page.getByRole('checkbox', { name: 'Declaro que tengo 18 años o más.' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: /He leído y acepto los/ })).toBeVisible();
+    await expect(nota(page)).toHaveCount(0);
+  });
+
+  test('paquete ENCENDIDO, «entrar»: la nota sigue como hoy', async ({ page }) => {
+    await conPaquete(page, true);
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
+    // Testigo de que el paquete YA cargó en «entrar»: con «Continuar con Google»
+    // (publicado por el mock) las casillas aparecen junto al botón. Sin esperarlas,
+    // la nota se vería en el primer render, antes de la carga, y el caso no
+    // distinguiría ocultarla también acá (medido: ese mutante sobrevivía).
+    await expect(page.getByRole('checkbox')).toHaveCount(2);
+    await expect(nota(page)).toBeVisible();
+    await expect(nota(page).getByRole('link', { name: 'Aviso de privacidad', exact: true })).toHaveAttribute('href', '/privacy');
+  });
+
+  test('paquete APAGADO: la nota sigue en «entrar» y en «Crea tu cuenta»', async ({ page }) => {
+    await conPaquete(page, false);
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
+    await expect(nota(page)).toBeVisible();
+    await irAlAlta(page);
+    // Testigo: el aviso completo se dibuja cuando la carga resolvió «sin paquete».
+    await expect(page.getByLabel('Aviso de privacidad', { exact: true })).toBeVisible();
+    await expect(page.getByRole('checkbox')).toHaveCount(0);
+    await expect(nota(page)).toBeVisible();
+  });
+});
+
 test.describe('puerta para quien ya tiene cuenta', () => {
   test('paquete APAGADO: no hay puerta', async ({ page }) => {
     await conPaquete(page, false);
