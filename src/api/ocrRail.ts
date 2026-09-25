@@ -74,6 +74,13 @@ export interface OcrRailState {
   /** El modo que declaró el emisor. Para diagnóstico, no para deducir formatos. */
   readonly mode: string | null;
   readonly status: OcrRailStatus;
+  /**
+   * n81 · el piso de bytes que publica el dueño (`features.ocr.min_image_bytes`,
+   * App Backend v2.133.0). `null` = no vino o no es un entero positivo: el front
+   * no rechaza nada por chica y se comporta como antes; el 422 del dueño decide
+   * igual. No hay número propio de respaldo a propósito.
+   */
+  readonly minImageBytes: number | null;
 }
 
 /**
@@ -85,7 +92,7 @@ export interface OcrRailState {
  */
 const FALLBACK = 'image/jpeg,image/jpg,image/png';
 
-const CERRADO: OcrRailState = { accept: FALLBACK, mode: null, status: 'pending' };
+const CERRADO: OcrRailState = { accept: FALLBACK, mode: null, status: 'pending', minImageBytes: null };
 
 export const OCR_RAIL_FALLBACK: OcrRailState = CERRADO;
 
@@ -116,10 +123,13 @@ export function readOcrRail(config: unknown): OcrRailState {
   const provider = listaMime(raw.provider_mime_types);
   const aceptados = listaMime(raw.accepted_mime_types);
   const mode = typeof raw.mode === 'string' ? raw.mode : null;
+  const minImageBytes = typeof raw.min_image_bytes === 'number'
+    && Number.isSafeInteger(raw.min_image_bytes) && raw.min_image_bytes > 0
+    ? raw.min_image_bytes : null;
 
   // Sin la lista del PROVEEDOR no hay nada que este módulo pueda mejorar sobre
   // el fallback: es la única que dice qué se procesa de verdad.
-  if (!provider) return { ...CERRADO, mode, status: 'malformed' };
+  if (!provider) return { ...CERRADO, mode, status: 'malformed', minImageBytes };
 
   // 🔴 `mock` es el ÚNICO caso que ensancha, y se exige LEÍDO. Un modo
   // desconocido —o ausente— no se interpreta como permisivo: se trata como el
@@ -129,6 +139,7 @@ export function readOcrRail(config: unknown): OcrRailState {
     accept: (ensancha ? aceptados : provider).join(','),
     mode,
     status: 'authoritative',
+    minImageBytes,
   };
 }
 

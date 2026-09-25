@@ -106,13 +106,31 @@ export function ticketOpeningRoute(input: {
 }
 
 export function ocrFailureIssue(code: string, status: number | null):
-  'budget_exhausted' | 'budget_unavailable' | 'too_large' | 'image_type' | 'ocr' {
+  'budget_exhausted' | 'budget_unavailable' | 'too_large' | 'too_small' | 'image_type' | 'ocr' {
   if (status === 429 && code === 'ocr_monthly_budget_exhausted') return 'budget_exhausted';
   if (status === 503 && code === 'ocr_budget_unavailable') return 'budget_unavailable';
+  // n81 · App Backend v2.133.0: la imagen es válida pero no se puede leer.
+  if (status === 422 && code === 'ticket_image_too_small') return 'too_small';
   if (status === 413 || code === 'image_too_large') return 'too_large';
   if (status === 415 || code === 'unsupported_image_type_for_provider'
       || code === 'invalid_image_type' || code === 'invalid_multipart') return 'image_type';
   return 'ocr';
+}
+
+/**
+ * n81 · el rechazo ANTES de subir, por tamaño. El techo es el de siempre
+ * (8 MiB); el piso es el que publica el dueño en `features.ocr.min_image_bytes`
+ * y SÓLO si lo publica: sin él (`null`), una foto chica se sube y decide el 422
+ * del dueño, igual que antes. Ningún número propio hace de fuente de verdad.
+ */
+export function rechazoLocalDeImagen(
+  bytes: number,
+  maxBytes: number,
+  minBytes: number | null,
+): 'too_large' | 'too_small' | null {
+  if (bytes > maxBytes) return 'too_large';
+  if (minBytes !== null && bytes < minBytes) return 'too_small';
+  return null;
 }
 
 function priceCentsOf(it: EditItem): number {
@@ -132,7 +150,7 @@ function lineTotalCents(it: EditItem): number | null {
 
 export function CreateMesaFlow() {
   const { t } = useIdioma();
-  const { accept: acceptOcr } = useOcrRail();
+  const { accept: acceptOcr, minImageBytes } = useOcrRail();
   const moneyRail = useMoneyRail();
   /**
    * 🔴 C3 · **la mesa sin garantía, y cuándo existe.**
@@ -164,7 +182,7 @@ export function CreateMesaFlow() {
    * colapsarlos vuelve falsa al menos una explicación.
    */
   const [scanIssue, setScanIssue] = useState<
-    'ocr' | 'no_items' | 'provider' | 'image_type' | 'too_large'
+    'ocr' | 'no_items' | 'provider' | 'image_type' | 'too_large' | 'too_small'
     | 'budget_exhausted' | 'budget_unavailable' | null
   >(null);
   /**
@@ -1568,6 +1586,24 @@ export function CreateMesaFlow() {
               </div>
             </div>
           )}
+          {/* n81 · decisión 67 de Mati. Texto propuesto por el dueño (tuteo),
+              en la lista de Mati para revisar; las dos oraciones, tal cual. */}
+          {scanIssue === 'too_small' && (
+            <div className="state-warn" role="alert">
+              <div className="state-error-row">
+                <Icon name="warning" size={22} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="state-error-title">{t('La foto es demasiado pequeña para leer el ticket.')}</div>
+                  <p className="state-error-body">{t('Toma otra más cerca, con buena luz y sin recortarla.')}</p>
+                </div>
+              </div>
+              <div className="state-actions">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={doScan}>
+                  {t('Sacar otra foto')}
+                </button>
+              </div>
+            </div>
+          )}
           {/* Real: abre la cámara del teléfono. POST /api/ocr es multipart y
               valida los magic bytes, así que necesita una imagen de verdad. */}
             {/* 🔴 El `accept` sale del DUEÑO del contrato, no de una lista acá.
@@ -1591,8 +1627,10 @@ export function CreateMesaFlow() {
               // El techo se mira ACÁ y no después de subir: con mala señal,
               // mandar 12 MB para que el backend conteste 413 es un minuto
               // perdido en la mesa. El adaptador conserva su guarda igual.
-              if (file.size > MAX_TICKET_IMAGE_BYTES) {
-                setScanIssue('too_large');
+              // n81 · y el piso, si el dueño lo publica (`rechazoLocalDeImagen`).
+              const rechazo = rechazoLocalDeImagen(file.size, MAX_TICKET_IMAGE_BYTES, minImageBytes);
+              if (rechazo) {
+                setScanIssue(rechazo);
                 return;
               }
               void runScan(file);

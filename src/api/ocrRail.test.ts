@@ -72,3 +72,30 @@ describe('🔴 el FALLBACK es la intersección · correcto en los dos mundos', (
     }
   });
 });
+
+/**
+ * n81 · `min_image_bytes` (App Backend v2.133.0). Sólo un entero positivo del
+ * dueño habilita el rechazo local; cualquier otra cosa lo deja apagado, como
+ * antes: el front no inventa el número.
+ */
+describe('n81 · el piso de bytes sale del dueño o no existe', () => {
+  it('con la clave del dueño, la expone tal cual', () => {
+    expect(readOcrRail(cfg({ mode: 'real', provider_mime_types: PROV, min_image_bytes: 10240 })).minImageBytes).toBe(10240);
+  });
+
+  it('🔴 sin la clave (backend anterior), no hay piso y el resto del rail sigue igual', () => {
+    const r = readOcrRail(cfg({ mode: 'real', provider_mime_types: PROV }));
+    expect(r.minImageBytes).toBeNull();
+    expect(r.status).toBe('authoritative');
+    expect(r.accept).toBe(PROV.join(','));
+  });
+
+  it.each([0, -1, 1.5, '10240', null, Number.MAX_SAFE_INTEGER + 2])('un valor inválido (%s) no habilita nada', (v) => {
+    expect(readOcrRail(cfg({ mode: 'real', provider_mime_types: PROV, min_image_bytes: v })).minImageBytes).toBeNull();
+  });
+
+  it('sin capability, o mal formada, tampoco', () => {
+    expect(readOcrRail({ features: {} }).minImageBytes).toBeNull();
+    expect(readOcrRail(cfg('x')).minImageBytes).toBeNull();
+  });
+});

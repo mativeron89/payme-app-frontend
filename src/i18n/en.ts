@@ -276,6 +276,8 @@ export const EN: Record<string, string> = {
   "Japonesa": "Japanese",
   "La apertura pertenece a una sesión anterior. No la reenviamos ni iniciamos otra hasta reconciliarla.": "The opening belongs to a previous session. We won't resend it or start another until it's reconciled.",
   "La foto pesa más de 8 MB": "The photo is over 8 MB",
+  "La foto es demasiado pequeña para leer el ticket.": "The photo is too small to read the receipt.",
+  "Toma otra más cerca, con buena luz y sin recortarla.": "Take another one closer, in good light, without cropping it.",
   "La garantía sigue en verificación. No abras otra mesa ni cambies el método todavía.": "The guarantee is still being verified. Don't open another table or change the method yet.",
   "La garantía ya no está vigente.": "The guarantee is no longer valid.",
   "La ingresas al confirmar (segura, vía Stripe)": "You enter it when confirming (secure, via Stripe)",

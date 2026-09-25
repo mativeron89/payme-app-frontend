@@ -592,6 +592,9 @@ export async function mockGetConfig(): Promise<AppConfig> {
         credentials_present: false,
         accepted_mime_types: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic'],
         provider_mime_types: ['image/jpeg', 'image/png'],
+        // n81 · App Backend v2.133.0 (`services/ocrRail.js`): el piso que el
+        // dueño publica para que el front avise antes de subir.
+        min_image_bytes: 10240,
       },
       profile_identity: {
         supported: true,
@@ -1807,6 +1810,9 @@ export async function mockScanTicket(): Promise<OcrResponse> {
   localStorage.setItem(attemptsKey, String(Number(localStorage.getItem(attemptsKey) ?? '0') + 1));
   if (mode === 'budget_exhausted') return fail(429, 'ocr_monthly_budget_exhausted');
   if (mode === 'budget_unavailable') return fail(503, 'ocr_budget_unavailable');
+  // n81 · el 422 del dueño (v2.133.0, `routes/ocr.js`) para una foto de menos de
+  // 10 KB. El mock no recibe imagen, así que se ejercita con este seam.
+  if (mode === 'too_small') return fail(422, 'ticket_image_too_small', { min_image_bytes: 10240 });
   if (mode === 'malformed') {
     return delay({
       contract_version: 2,

@@ -128,6 +128,46 @@ test.describe('n179 · ticket real sin QR', () => {
     expect((await estadoN179(page)).mesas).toHaveLength(1);
   });
 
+  /**
+   * n81 · el 422 `ticket_image_too_small` del dueño (App Backend v2.133.0). El
+   * mock no recibe imagen: el seam `too_small` devuelve exactamente ese 422.
+   */
+  test('n81 · foto demasiado pequeña: el mensaje claro, «Sacar otra foto» y un solo intento', async ({ page }) => {
+    await configurarTicketSinQr(page, { ocr: 'too_small' });
+    await escanearSinQr(page);
+    const alerta = page.getByRole('alert');
+    await expect(alerta).toContainText('La foto es demasiado pequeña para leer el ticket.');
+    await expect(alerta).toContainText('Toma otra más cerca, con buena luz y sin recortarla.');
+    await expect(alerta.getByRole('button', { name: 'Sacar otra foto' })).toBeVisible();
+    // No cae en el genérico: el mensaje es el propio, no «No pudimos leer el ticket».
+    await expect(page.getByText('No pudimos leer el ticket')).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('payme.app.mock.n179.ocr_attempts.v1'))).toBe('1');
+  });
+
+  /**
+   * n81 · el rechazo ANTES de subir, cableado: el `<input type="file">` recibe
+   * una foto de 5 KB y el piso que publica el dueño (mock: `min_image_bytes`
+   * 10240) la frena sin llamar al OCR. Mide el cableado de `onChange` →
+   * `rechazoLocalDeImagen` → `useOcrRail`, que el unitario no ve.
+   */
+  test('n81 · una foto de menos del piso publicado se frena antes de subir', async ({ page }) => {
+    await configurarTicketSinQr(page);
+    await ingresar(page);
+    await page.getByRole('button', { name: 'Nueva', exact: true }).click();
+    await expect(page).toHaveURL(/#\/scan$/);
+    // Testigo de que la capability ya llegó: el `accept` se ensancha a la lista
+    // del modo mock (con HEIC) sólo cuando el rail es autoritativo. Antes de eso
+    // no hay piso publicado y la foto se subiría, que es lo correcto.
+    const input = page.locator('input[type="file"]');
+    await expect(input).toHaveAttribute('accept', /image\/heic/);
+    await input.setInputFiles({
+      name: 'ticket.jpg', mimeType: 'image/jpeg', buffer: Buffer.alloc(5 * 1024, 1),
+    });
+    const alerta = page.getByRole('alert');
+    await expect(alerta).toContainText('La foto es demasiado pequeña para leer el ticket.');
+    expect(await page.evaluate(() => localStorage.getItem('payme.app.mock.n179.ocr_attempts.v1')), 'se llamó al OCR').toBeNull();
+  });
+
   for (const [mode, message] of [
     ['budget_exhausted', 'Se alcanzó el límite mensual de lectura'],
     ['budget_unavailable', 'El servicio de lectura no está disponible'],
