@@ -625,12 +625,18 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
   });
 
   it('🔴 las cabeceras existen, con su valor, sobre los dos paths y ninguno más', () => {
+    // n186 · el bloque global de CSP (sólo reporte en App) va PRIMERO y es el
+    // único global; sus directivas las fija `csp.test.ts`. Los dos paths
+    // públicos conservan exactamente sus dos cabeceras de siempre.
+    const [csp, ...publicos] = V.headers ?? [];
+    expect(csp?.source).toBe('/(.*)');
+    expect((csp?.headers ?? []).map((h) => h.key)).toEqual(['Content-Security-Policy-Report-Only']);
     expect(
-      (V.headers ?? []).map((h) => h.source),
+      publicos.map((h) => h.source),
       'los bloques de headers dejaron de cubrir las dos rutas, o cubren de más',
     ).toEqual([...PATHS_PUBLICOS]);
 
-    for (const bloque of V.headers ?? []) {
+    for (const bloque of publicos) {
       expect(
         bloque.headers,
         `las cabeceras de \`${bloque.source}\` no son las ratificadas`,
@@ -661,8 +667,9 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
    */
   it('🔴 el archivo tiene las reglas de verdad · nada mide en vacío', () => {
     expect(V.rewrites, 'no hay rewrites: el gate mediría sobre nada').toHaveLength(2);
-    expect(V.headers, 'no hay bloques de headers').toHaveLength(2);
-    expect((V.headers ?? []).flatMap((h) => h.headers ?? [])).toHaveLength(4);
+    // Dos bloques de los paths públicos + el global de CSP (n186).
+    expect(V.headers, 'no hay bloques de headers').toHaveLength(3);
+    expect((V.headers ?? []).flatMap((h) => h.headers ?? [])).toHaveLength(5);
     expect(PATHS_PUBLICOS).toHaveLength(2);
   });
 

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { cabeceraGlobal, directivasCsp, evaluarConfigVercel } from '../scripts/vercelConfig';
 import {
   evaluarPoliticaScriptLanding,
   leerObjetoLiteralConstante,
@@ -1178,3 +1179,22 @@ describe('PROPIEDAD 8 · el contenido es el del boceto', () => {
  * No se borró en silencio: queda esta nota, que es lo que faltó las otras
  * veces.
  */
+
+/**
+ * n186 · la CSP OBLIGATORIA de la landing (`vercel.ts`) autoriza el script de
+ * idioma por su hash. Si el script cambia y el hash no, el edge lo bloquea y la
+ * landing queda en español fijo, sin que nadie se entere: por eso el hash se
+ * recalcula acá desde el build real y se compara con la política.
+ */
+describe('n186 · la CSP de la landing autoriza exactamente sus scripts inline', () => {
+  it('🔴 cada `<script>` inline del build está en `script-src` por su sha256, y nada más', () => {
+    const politica = cabeceraGlobal(
+      evaluarConfigVercel({ ...process.env, PAYME_VERCEL_ARTIFACT: 'landing' }),
+      'Content-Security-Policy',
+    ) ?? '';
+    const permitidos = directivasCsp(politica).get('script-src') ?? [];
+    const delBuild = build.scripts.map((s) => `'sha256-${createHash('sha256').update(s).digest('base64')}'`);
+    expect(delBuild.length, 'el build no trae scripts inline: el test no probaría nada').toBeGreaterThan(0);
+    expect([...permitidos].sort(), 'el hash del script de idioma en vercel.ts no coincide con el build').toEqual([...new Set(delBuild)].sort());
+  });
+});

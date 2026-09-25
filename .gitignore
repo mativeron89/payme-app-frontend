@@ -42,3 +42,6 @@ blob-report/
 .vitest-corrida.json
 .sello-corrida
 .sello-build
+# n186 · builds del harness CSP de Playwright (playwright.config.ts).
+dist-e2e-csp/
+dist-e2e-csp-landing/

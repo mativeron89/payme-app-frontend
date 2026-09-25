@@ -114,12 +114,39 @@ export default defineConfig({
   projects: [
     {
       name: 'movil',
+      // n186 · los specs de `e2e/csp/` corren en sus propios proyectos, contra
+      // el BUILD con la CSP obligatoria; no contra el servidor de desarrollo.
+      testIgnore: /[\\/]csp[\\/]/,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 390, height: 844 },
         isMobile: true,
         hasTouch: true,
       },
+    },
+    /**
+     * n186 · CSP OBLIGATORIA en el entorno de test (orden AF-CSP-N186-20260925).
+     * El servidor dev de Vite inyecta scripts y estilos inline que producción no
+     * tiene, así que la política se prueba contra el BUILD mock (app) y el build
+     * de la landing, servidos por `e2e/csp/servidor.mjs` con la política EXACTA
+     * que genera `vercel.ts` —la de la app, que en producción va en Report-Only,
+     * acá aplicada como obligatoria—.
+     */
+    {
+      name: 'csp-app',
+      testMatch: /[\\/]csp[\\/]app\.spec\.ts$/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        baseURL: 'http://127.0.0.1:5188',
+      },
+    },
+    {
+      name: 'csp-landing',
+      testMatch: /[\\/]csp[\\/]landing\.spec\.ts$/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:5189' },
     },
   ],
 
@@ -142,10 +169,28 @@ export default defineConfig({
    * arranque **falla** en vez de adoptarlo: el runner lo RECHAZA, que es la
    * conducta que `runner-servidor.spec.ts` acredita.
    */
-  webServer: {
-    command: 'npx --no-install vite --port 5176 --strictPort --mode mock',
-    url: 'http://localhost:5176',
-    reuseExistingServer: false,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      command: 'npx --no-install vite --port 5176 --strictPort --mode mock',
+      url: 'http://localhost:5176',
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    // n186 · build mock y build de la landing, cada uno con su CSP obligatoria.
+    // Salidas propias (gitignoradas): no pisan `dist/` ni `dist-landing/`.
+    {
+      command: 'npx --no-install vite build --mode mock --outDir dist-e2e-csp --emptyOutDir --logLevel warn'
+        + ' && node e2e/csp/servidor.mjs dist-e2e-csp 5188 app',
+      url: 'http://127.0.0.1:5188',
+      reuseExistingServer: false,
+      timeout: 180_000,
+    },
+    {
+      command: 'npx --no-install vite build --config vite.landing.config.ts --outDir ../dist-e2e-csp-landing'
+        + ' --emptyOutDir --logLevel warn && node e2e/csp/servidor.mjs dist-e2e-csp-landing 5189 landing',
+      url: 'http://127.0.0.1:5189',
+      reuseExistingServer: false,
+      timeout: 180_000,
+    },
+  ],
 });
