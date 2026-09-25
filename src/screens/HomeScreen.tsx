@@ -11,6 +11,7 @@ import { useMoneyRail } from '../api/moneyRail';
 import { countdownLong, formatMXN } from '../utils/format';
 import { fullName } from '../utils/identity';
 import {
+  asignadoDeMesaAbierta,
   estadoPersonalDeMesa,
   mesaStatusLabel,
   pagadoPropioCentavos,
@@ -94,6 +95,16 @@ function etiquetaPersonal(m: OpenMesa, t: (s: string, ...a: unknown[]) => string
   if (estado === 'paid') return t('Ya pagaste, faltan otros');
   if (estado === 'pending') return t('Te falta pagar');
   return null;
+}
+
+/**
+ * Decisión 76 · qué avance muestra una mesa abierta en el Inicio: lo ELEGIDO si
+ * el dueño lo publica (`asignadoDeMesaAbierta`), si no lo pagado, como antes.
+ */
+function avanceDeMesa(m: OpenMesa): { readonly cents: number; readonly percent: number } {
+  const asignado = asignadoDeMesaAbierta(m);
+  if (asignado) return { cents: asignado.assignedCents, percent: asignado.percent };
+  return { cents: m.paid_amount_cents, percent: Math.min(100, Math.max(0, m.pct_paid)) };
 }
 
 export function HomeScreen() {
@@ -336,16 +347,20 @@ export function HomeScreen() {
                     <div className="mesa-meta">{t('Pagaste {0}', formatMXN(pagadoPropioCentavos(mesa)!))}</div>
                   )}
 
-                  {/* La jerarquía dice "cuánto falta", no "cuánto es": lo pagado en
-                      --fs-h1 tabular, el total en --fs-body muted. */}
+                  {/* La jerarquía dice "cuánto falta", no "cuánto es": el monto en
+                      --fs-h1 tabular, el total en --fs-body muted.
+                      Decisión 76 de Mati: con el dato del dueño (v2.134.0) se
+                      muestra lo ELEGIDO, la misma cifra que dentro de la mesa;
+                      sin él, lo pagado, como antes. Lo pagado se suma cuando se
+                      enciendan los pagos (orden futura). */}
                   <div className="mesa-money">
-                    <span className="mesa-paid">{formatMXN(mesa.paid_amount_cents)}</span>
+                    <span className="mesa-paid">{formatMXN(avanceDeMesa(mesa).cents)}</span>
                     <span className="mesa-total">{t('de')} {formatMXN(mesa.total_cents)}</span>
                   </div>
                   {/* La barra NUNCA va sola: los dos importes de arriba son el dato,
                       esto es el refuerzo. Por eso es aria-hidden. */}
                   <div className="mesa-bar" aria-hidden="true">
-                    <span style={{ width: `${Math.min(100, Math.max(0, mesa.pct_paid))}%` }} />
+                    <span style={{ width: `${avanceDeMesa(mesa).percent}%` }} />
                   </div>
 
                   <div className="mesa-foot">
@@ -520,11 +535,11 @@ export function HomeScreen() {
                     </div>
                   )}
                   <div className="mesa-bar" aria-hidden="true">
-                    <span style={{ width: `${Math.min(100, Math.max(0, m.pct_paid))}%` }} />
+                    <span style={{ width: `${avanceDeMesa(m).percent}%` }} />
                   </div>
                   <div className="sheet-mesa-foot">
                     <span className="mesa-total">
-                      {formatMXN(m.paid_amount_cents)} {t('de')} {formatMXN(m.total_cents)}
+                      {formatMXN(avanceDeMesa(m).cents)} {t('de')} {formatMXN(m.total_cents)}
                     </span>
                     {cd && (
                       <span className={`mesa-cd ${cd.urgent ? 'urgent' : ''}`}>

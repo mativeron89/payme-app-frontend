@@ -84,7 +84,8 @@ function textoEstadoTuMesa(e: EstadoTuMesa, t: (s: string, ...a: unknown[]) => s
 function textoEleccion(m: TuMesa, t: (s: string, ...a: unknown[]) => string): string | null {
   if (m.itemsCount === null) return null;
   if (m.itemsCount === 0) return t('No elegiste ítems');
-  const partes = m.divisionMode === 'igual';
+  // En «igual» se eligen PARTES; con la selección informativa (F-3), PLATOS.
+  const partes = m.divisionMode === 'igual' && !m.eleccionInformativa;
   const que = m.itemsCount === 1
     ? (partes ? t('Elegiste 1 parte') : t('Elegiste 1 ítem'))
     : (partes ? t('Elegiste {0} partes', m.itemsCount) : t('Elegiste {0} ítems', m.itemsCount));

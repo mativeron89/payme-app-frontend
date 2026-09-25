@@ -123,6 +123,7 @@ export const EN: Record<string, string> = {
   "Cerrar sesión": "Log out",
   "Checa que el total coincida con el total del ticket": "Check that the total matches the ticket total",
   "Cierre completado": "Closing completed",
+  "La mesa se cerró": "The table closed",
   "Cobrado por": "Charged by",
   "Cobrado por: {0}": "Charged by: {0}",
   "Código de la mesa": "Table code",

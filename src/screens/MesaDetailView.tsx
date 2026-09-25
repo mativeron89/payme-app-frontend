@@ -23,7 +23,10 @@ import {
   confirmedConsumptionProgress,
   countdownIsUrgent,
   fractionPreview,
+  informativoPublicado,
+  limiteInformativo,
   nothingLeftFor,
+  restanteInformativo,
 } from './mesaItemsView';
 
 /**
@@ -126,6 +129,12 @@ export interface MesaDetailViewProps {
   informativeSaved: boolean;
   /** Bloquea filas/fracciones durante lectura, escritura y recarga. */
   informativeEditingBlocked: boolean;
+  /**
+   * Decisión 79 · la selección informativa YA GUARDADA de esta cuenta (no el
+   * borrador). Hace falta para saber cuánto puede declarar: el restante del
+   * dueño ya la incluye.
+   */
+  informativasGuardadas: ReadonlyMap<string, number>;
   informativeLoading: boolean;
   /** Capability/ruta v2 ausente: nunca se presenta como guardada. */
   informativeUnsupported: boolean;
@@ -293,9 +302,9 @@ function rowStateOf(item: MesaItem, selected: Map<string, number>): RowState {
  * único portador de significado.
  *
  * *"Lo eligió otro"* y no *"Lo eligió otro · todavía no pagó"*: la mesa recarga
- * al montar, después de una acción propia o con el botón manual — no hay
- * polling ni WebSocket que traiga en vivo lo que hace otro comensal. Prometer
- * "todavía no pagó" como hecho instantáneo no sería cierto (§1.5).
+ * al montar, después de una acción propia, con el botón manual y —desde F-1
+ * (decisión 79)— cada 10 s y al volver a la app. Sigue sin ser en vivo, así
+ * que prometer "todavía no pagó" como hecho instantáneo no sería cierto (§1.5).
  */
 function rowTag(state: RowState, item: MesaItem, t: (s: string, ...a: unknown[]) => string): string | null {
   if (state === 'pagado') return t('Pagado');
@@ -303,6 +312,21 @@ function rowTag(state: RowState, item: MesaItem, t: (s: string, ...a: unknown[])
   // No afirma que lo tomó otro —no lo sabemos—: dice que no pudimos leerlo.
   if (state === 'indeterminado') return t('No pudimos leer este ítem');
   if (state === 'parcial') return t('Queda {0}', bpsLabel(item.remaining_bps));
+  return null;
+}
+
+/**
+ * Decisión 79 · la etiqueta de un plato en «igual». Mismos textos que consumo:
+ * «Lo eligió otro» cuando no queda nada para esta cuenta, y «Queda {porción}»
+ * mientras falte. Nunca dice quién eligió ni cuántos (el dueño no lo publica).
+ */
+function tagIgual(
+  state: RowState,
+  restante: number | null,
+  t: (s: string, ...a: unknown[]) => string,
+): string | null {
+  if (state === 'tomado') return t('Lo eligió otro');
+  if (restante !== null && restante > 0 && restante < 10000) return t('Queda {0}', bpsLabel(restante));
   return null;
 }
 
@@ -427,6 +451,7 @@ export function MesaDetailView({
   informativeClosedWithoutCharges,
   informativeSaved,
   informativeEditingBlocked,
+  informativasGuardadas,
   informativeLoading,
   informativeUnsupported,
   informativeLoadError,
@@ -464,7 +489,16 @@ export function MesaDetailView({
   const bpsPermitidosPorOriginal = original === null
     ? null
     : new Set(Array.from({ length: original }, (_, index) => denominatorBps(index + 1)));
-  const reparto = corteDeclarado && esConsumo ? confirmedConsumptionProgress(mesa) : null;
+  // Decisión 79 · en «igual» con el dato del dueño (v2.134.0), la barra dice lo
+  // ELEGIDO igual que en consumo, contando desde `informative_remaining_bps`.
+  // Sin el dato rige lo de antes: lo pagado.
+  const reparto = !corteDeclarado
+    ? null
+    : esConsumo
+      ? confirmedConsumptionProgress(mesa)
+      : informativoPublicado(mesa)
+        ? confirmedConsumptionProgress(mesa, (item) => item.informative_remaining_bps)
+        : null;
   const repartoConocido = reparto?.status === 'known' ? reparto : null;
   const pctPagado = mesa.total_cents > 0 ? Math.round((mesa.paid_amount_cents / mesa.total_cents) * 100) : 0;
   const pct = repartoConocido?.visualPercent ?? (reparto ? 0 : pctPagado);
@@ -666,23 +700,33 @@ export function MesaDetailView({
             const fullPrice = i.price_cents * i.quantity;
             // En igualdad la selección sólo declara consumo y no reclama el
             // ítem: otras tenencias/remaining_bps no deben bloquearla.
+            // Decisión 79 · en «igual» el dueño v2.134.0 publica cuánto queda
+            // del plato (de TODOS, sin nombres). Lo que ESTA cuenta puede
+            // declarar es eso más lo propio guardado; `null` = sin dato, y
+            // entonces no se limita, como antes.
+            const restanteIgual = esConsumo ? null : restanteInformativo(i);
+            const limiteIgual = esConsumo ? null : limiteInformativo(i, informativasGuardadas);
             const state = esConsumo
               ? rowStateOf(i, selected)
-              : selected.has(i.id) ? 'seleccionado' : 'disponible';
+              : selected.has(i.id)
+                ? 'seleccionado'
+                : limiteIgual === 0 ? 'tomado' : 'disponible';
             const sel = state === 'seleccionado';
             // 1A.3 · 'indeterminado' bloquea igual que 'tomado': sin dato
             // válido no se ofrece tomar nada.
             const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
             const mio = !sel && esMioElegido(i, esConsumo);
             const soltable = mio && soltarDisponible && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
-            const tag = mio ? etiquetaDeLoMio(i, t) : rowTag(state, i, t);
+            const tag = mio
+              ? etiquetaDeLoMio(i, t)
+              : esConsumo ? rowTag(state, i, t) : tagIgual(state, restanteIgual, t);
             const myBpsSel = selected.get(i.id) ?? 10000;
             // AB-FRACCIONES-IGUAL (Decisión de Mati e9aa0450…, dueño v2.124.0):
             // con el riel apagado y N conocido, «igual» usa el MISMO selector
-            // que consumo —1/1..1/N y «Otro»—. En igualdad la declaración no
-            // reserva nada, así que no se limita por lo restante (10000). Sin
-            // N, el dueño sólo admite las seis de siempre: rama legacy.
-            const restanteParaFraccion = esConsumo ? i.remaining_bps : 10000;
+            // que consumo —1/1..1/N y «Otro»—. Sin N, el dueño sólo admite las
+            // seis de siempre: rama legacy. Decisión 79: la declaración ya no
+            // puede pasar del entero, así que se limita por lo que queda.
+            const restanteParaFraccion = esConsumo ? i.remaining_bps : (limiteIgual ?? 10000);
             const selectedDenominator = selectedDenominators.get(i.id)
               ?? (esConsumo ? null : denominatorFromBps(myBpsSel, original));
             const selectorNatural = pagosCortados && original !== null;
@@ -690,9 +734,9 @@ export function MesaDetailView({
               { length: Math.max(0, original - 4) },
               (_, index) => index + 5,
             ).some((denominator) => denominatorBps(denominator) <= restanteParaFraccion);
-            // En partes iguales marcar es informativo y no reserva nada, así
-            // que ahí NUNCA se bloquea una fila: el monto no depende de esto.
-            const disabled = (esConsumo && bloqueado) || (!esConsumo && informativeEditingBlocked);
+            // En partes iguales marcar es informativo y no reserva nada; desde la
+            // decisión 79 sí se bloquea el plato que otros ya eligieron entero.
+            const disabled = bloqueado || (!esConsumo && informativeEditingBlocked);
             const precio =
               sel && esConsumo && myBpsSel < 10000
                 ? fractionPreview(fullPrice, myBpsSel, i.remaining_bps)
@@ -759,7 +803,7 @@ export function MesaDetailView({
                     ) : (
                       <div className="seg" role="radiogroup" aria-labelledby={`frac-${i.id}`}>
                         {FRACTIONS.filter((f) => (
-                          (!esConsumo || f.bps <= i.remaining_bps)
+                          f.bps <= restanteParaFraccion
                           && (!esConsumo || bpsPermitidosPorOriginal === null || bpsPermitidosPorOriginal.has(f.bps))
                         )).map((f) => (
                           <button

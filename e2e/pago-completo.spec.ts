@@ -117,9 +117,18 @@ test.describe('el camino de pago completo', () => {
     await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
-    // Y nada se cobró: la mesa sigue en $0.00 / $840.00 (decisión 77).
+    // La barra de «igual» ya no mide lo pagado sino lo ELEGIDO (decisiones 77 y
+    // 79): la mitad del Tagliatelle, $97.50 de $840.00.
     await page.goto(`/#/mesa/${mesa.code}`);
-    await expect(page.getByText(/\$0\.00 \/ \$840\.00/)).toBeVisible();
+    await expect(page.locator('.mi-meta-amt')).toHaveText('$97.50 / $840.00 (12%)');
+    // Y nada se cobró: se mide en el dueño simulado, no en la barra.
+    expect(await page.evaluate(async (code) => {
+      const storePath = '/src/api/mock/store.ts';
+      const { state } = await import(/* @vite-ignore */ storePath) as {
+        state: { mesas: Array<{ code: string; paid_amount_cents: number }> };
+      };
+      return state.mesas.find((m) => m.code === code)?.paid_amount_cents;
+    }, mesa.code)).toBe(0);
   });
 
   /**

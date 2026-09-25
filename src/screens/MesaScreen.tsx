@@ -59,7 +59,7 @@ import {
   requiresReconciliation,
 } from './freezeMachine';
 import { MesaDetailView, type QuienesSeSumaron } from './MesaDetailView';
-import { bpsLabel, confirmedConsumptionProgress, fraccionInicial, itemsAmountFor } from './mesaItemsView';
+import { bpsLabel, confirmedConsumptionProgress, fraccionInicial, itemsAmountFor, limiteInformativo } from './mesaItemsView';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { tipFromBps } from '../utils/money';
@@ -99,6 +99,13 @@ import {
 type View = 'detail' | 'pay' | 'confirm';
 
 /**
+ * F-1 · cada cuánto se relee una mesa abierta mientras se mira. 10 s es lo que
+ * propuso el diagnóstico del dueño (AB-DIAG-MESA §5): lo bastante seguido para
+ * no duplicar platos, sin martillar el servicio. Al volver a la app se relee ya.
+ */
+export const INTERVALO_REFRESCO_MS = 10_000;
+
+/**
  * 🔴 **C3 · el discriminador del cierre SIN COBROS, y por qué NO es
  * `guarantee_mode`.**
  *
@@ -132,6 +139,15 @@ export function cerroSinCobros(mesa: Pick<MesaDetail, 'closure_reason'>): boolea
  * AF-34 · por qué cerró una mesa sin cobros, en una línea. Se rotulan los tres
  * motivos del mismo modo; cualquier otro valor no dibuja nada.
  */
+/**
+ * F-2 (decisión 80) · ¿la respuesta de la acción propia dice que la mesa se
+ * cerró porque se eligió todo? Consumo: `mesa_status` de `items/lock`; «igual»:
+ * `mesa.status` del PUT informativo. Sólo el par exacto del dueño lo acredita.
+ */
+export function cerroPorSeleccion(r: { readonly mesa_status?: unknown; readonly closure_reason?: unknown }): boolean {
+  return r.mesa_status === 'expired' && r.closure_reason === 'all_items_selected';
+}
+
 export function motivoDelCierre(
   closureReason: string | null | undefined,
   esOrganizador: boolean,
@@ -377,6 +393,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
    * el riel apagado: la vista lo ignora fuera de ese caso.
    */
   const [informativeSaved, setInformativeSaved] = useState(false);
+  /**
+   * Decisión 79 · la selección informativa YA GUARDADA (no el borrador de
+   * `selected`). El restante que publica el dueño la incluye, así que hace falta
+   * para saber cuánto más puede declarar esta cuenta sin pasar del entero.
+   */
+  const [informativasGuardadas, setInformativasGuardadas] = useState<ReadonlyMap<string, number>>(new Map());
+  /**
+   * F-2 (decisión 80) · la acción PROPIA acaba de cerrar la mesa (se eligió
+   * todo). Antes se volvía mudo al Inicio; ahora se dice «La mesa se cerró».
+   */
+  const [cierrePropio, setCierrePropio] = useState(false);
   /** AF-25 · n80 · el ítem que se está soltando; `null` sin pedido en vuelo. */
   const [soltando, setSoltando] = useState<string | null>(null);
   const soltandoRef = useRef(false);
@@ -486,6 +513,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     identityEpochRef.current.next();
     mesaReadEpochRef.current.next();
     setMesa(null); setNotFound(false); setSelected(new Map()); setSelectedDenominators(new Map()); setInformativeState('idle'); setInformativeSaved(false); setLockTokens([]);
+    setInformativasGuardadas(new Map()); setCierrePropio(false);
     // La mesa nueva también nace sin elegir: acá estaba el segundo `15`.
     setTip(NO_TIP_CHOSEN); setCustomTipStr(''); setStaffId(null);
     setTipSelectorFailed(false); setTipPulse(false); setMetodoPulse(false);
@@ -569,6 +597,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             if (!mesaReadEpochRef.current.isCurrent(requestEpoch)
                 || !identityEpochRef.current.isCurrent(identityEpoch)) return;
             setSelected(selectionMap(saved));
+            setInformativasGuardadas(selectionMap(saved));
             setSelectedDenominators(new Map());
             // `updated_at` sólo existe con filas guardadas; un vaciado deliberado
             // recién confirmado conserva su `true` hasta la próxima edición.
@@ -590,6 +619,63 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     const tick = setInterval(() => forceTick((n) => n + 1), 1000);
     return () => clearInterval(tick);
   }, [reload]);
+
+  /**
+   * F-1 (decisión 79) · la mesa abierta se refresca sola: lo que eligen los
+   * demás aparece sin tocar nada. Es una lectura SILENCIOSA y acotada:
+   *  - sólo reemplaza `mesa` (lo que queda por plato, estado, montos); nunca
+   *    el borrador `selected` ni la selección propia guardada;
+   *  - captura la época de lectura SIN avanzarla: no puede invalidar una
+   *    lectura completa en curso (la del GET informativo propio), y si esa
+   *    lectura empieza después, este resultado se descarta;
+   *  - sus propias épocas descartan una respuesta vieja que llega tarde;
+   *  - si el estado de la mesa cambió (se cerró), delega en la lectura completa,
+   *    que es la que sabe pasar a sólo lectura.
+   * Un fallo no se muestra: la próxima vuelta reintenta y el botón manual sigue.
+   */
+  const refrescoEpochRef = useRef(new RequestEpoch());
+  const estadoDeMesaRef = useRef<string | null>(null);
+  useEffect(() => { estadoDeMesaRef.current = mesa?.status ?? null; }, [mesa?.status]);
+  const refrescarMesa = useCallback(() => {
+    const readEpoch = mesaReadEpochRef.current.capture();
+    const identityEpoch = identityEpochRef.current.capture();
+    const refrescoEpoch = refrescoEpochRef.current.next();
+    api
+      .getMesa(code, guestToken)
+      .then((r) => {
+        if (!mesaReadEpochRef.current.isCurrent(readEpoch)
+            || !identityEpochRef.current.isCurrent(identityEpoch)
+            || !refrescoEpochRef.current.isCurrent(refrescoEpoch)) return;
+        if (estadoDeMesaRef.current !== null && r.mesa.status !== estadoDeMesaRef.current) {
+          reload();
+          return;
+        }
+        setMesa(r.mesa);
+      })
+      .catch(() => undefined);
+  }, [code, guestToken, reload]);
+
+  const puedeRefrescarRef = useRef(false);
+  puedeRefrescarRef.current = view === 'detail'
+    && !busy
+    && !cierrePropio
+    && (mesa?.status === 'open' || mesa?.status === 'partially_paid')
+    && informativeState !== 'loading';
+  useEffect(() => {
+    const intentar = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (puedeRefrescarRef.current) refrescarMesa();
+    };
+    const cadaTanto = setInterval(intentar, INTERVALO_REFRESCO_MS);
+    const alVolver = () => { if (document.visibilityState === 'visible') intentar(); };
+    window.addEventListener('focus', intentar);
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      clearInterval(cadaTanto);
+      window.removeEventListener('focus', intentar);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+  }, [refrescarMesa]);
 
   /**
    * AF-25 · n72 · quiénes se sumaron, **sólo si soy el organizador**. A otro no
@@ -747,18 +833,36 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       // no compite por `remaining_bps` y empieza en entero. En consumo sigue
       // siendo una tenencia real y sólo se ofrece lo que queda.
       const original = originalParticipants(mesa?.original_participants);
+      // Decisión 79 · en «igual», si el dueño publica lo que queda del plato,
+      // la declaración nace en la mayor porción que todavía entra (lo que
+      // queda + lo propio guardado). Sin el dato rige lo de antes: entero.
+      const limiteIgual = mesa?.division_mode === 'igual' && item
+        ? limiteInformativo(item, informativasGuardadas)
+        : null;
+      if (limiteIgual === 0) {
+        toast(t('Ese plato ya está completo'));
+        return;
+      }
       // «igual» con N (v2.124.0): nace entero, y el selector natural lo
       // muestra como 1/1 elegido; sin N no hay denominador (rama legacy).
       const denominator = original === null
         ? null
         : mesa?.division_mode === 'consumo'
           ? initialDenominator(original, item?.remaining_bps ?? Number.NaN)
-          : 1;
+          : limiteIgual === null ? 1 : initialDenominator(original, limiteIgual);
       const def = mesa?.division_mode === 'igual'
-        ? 10000
+        ? limiteIgual === null
+          ? 10000
+          : original !== null
+            ? denominator === null ? null : denominatorBps(denominator)
+            : fraccionInicial(limiteIgual)
         : original !== null
           ? denominator === null ? null : denominatorBps(denominator)
           : fraccionInicial(item?.remaining_bps);
+      if (def === null && mesa?.division_mode === 'igual') {
+        toast(t('Ese plato ya está completo'));
+        return;
+      }
       if (def === null) {
         toast(t('No pudimos leer cuánto queda de ese ítem. Actualiza la mesa.'));
         return;
@@ -780,6 +884,11 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       toast(t('Espera a que terminemos de leer o guardar tu selección.'));
       return;
     }
+    // Decisión 79 · en «igual» no se ofrece pasar del entero; la vista ya no
+    // muestra esas porciones, y esto lo sostiene si llegara un toque viejo.
+    const itemIgual = mesa?.division_mode === 'igual' ? mesa.items.find((i) => i.id === id) : undefined;
+    const limiteIgual = itemIgual ? limiteInformativo(itemIgual, informativasGuardadas) : null;
+    if (limiteIgual !== null && bps > limiteIgual) return;
     const next = new Map(selected);
     next.set(id, bps);
     setSelected(next);
@@ -800,6 +909,9 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     if (original === null || !item || !Number.isSafeInteger(denominator)
         || denominator < 1 || denominator > original
         || (mesa?.division_mode === 'consumo' && denominatorBps(denominator) > item.remaining_bps)) return;
+    // Decisión 79 · en «igual», tampoco por encima de lo que queda del plato.
+    const limiteIgual = mesa?.division_mode === 'igual' ? limiteInformativo(item, informativasGuardadas) : null;
+    if (limiteIgual !== null && denominatorBps(denominator) > limiteIgual) return;
     setSelected(new Map(selected).set(id, denominatorBps(denominator)));
     setSelectedDenominators(new Map(selectedDenominators).set(id, denominator));
     setInformativeSaved(false);
@@ -926,6 +1038,15 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         });
         const r = await api.lockItems(code, requests, guestToken);
         setLockTokens([r.lock_token]);
+        // F-2 (decisión 80) · la última selección cerró la mesa: el dueño lo dice
+        // en esta misma respuesta (`mesa_status`), y se muestra en vez de volver
+        // mudo al Inicio.
+        if (cerroPorSeleccion(r)) {
+          setSelected(new Map()); setSelectedDenominators(new Map());
+          setCierrePropio(true);
+          reload();
+          return;
+        }
         // Con el corte la selección queda registrada y el recorrido termina acá:
         // se recarga para que «Mis ítems» muestre lo tomado, y no se abre `pay`.
         //
@@ -1017,7 +1138,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         try {
           const saved = await api.replaceInformativeSelection(code, request);
           setSelected(selectionMap(saved));
+          setInformativasGuardadas(selectionMap(saved));
           setSelectedDenominators(new Map());
+          // F-2 (decisión 80) · esta declaración completó la mesa y el dueño la
+          // cerró en la misma escritura: se dice, no se vuelve mudo al Inicio.
+          if (cerroPorSeleccion({ mesa_status: saved.mesa.status, closure_reason: saved.mesa.closure_reason })) {
+            setInformativeState('readonly');
+            setInformativeSaved(true);
+            setCierrePropio(true);
+            reload();
+            return;
+          }
           // Si sigue abierta, la recarga debe terminar antes de permitir otra
           // edición: así su GET tardío no puede pisar un borrador posterior.
           setInformativeState(saved.mesa.mutable ? 'loading' : 'readonly');
@@ -1029,6 +1160,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
           let reconciled = false;
           try {
             const saved = await api.getInformativeSelection(code);
+            setInformativasGuardadas(selectionMap(saved));
             if (sameInformativeSelection(request, saved)) {
               reconciled = true;
               setSelected(selectionMap(saved));
@@ -1046,6 +1178,25 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
             if (failure.status === 404) setInformativeState('unsupported');
             // v2.124.0: los dos rechazos por N del dueño se dicen con su copy
             // (la misma que consumo), nunca como un fallo genérico de red.
+            // Decisión 79 · el dueño v2.134.0 rechaza pasar del entero con el
+            // plato y lo que queda de él (sin contar lo propio). Se dice con
+            // los MISMOS textos que consumo, se saca ese plato del borrador y
+            // se relee la mesa para mostrar lo que queda; lo demás se conserva.
+            if (failure.code === 'informative_fraction_exceeds_item') {
+              const rem = typeof failure.extra.remaining_bps === 'number' ? failure.extra.remaining_bps : 0;
+              toast(rem > 0 ? t('De ese plato queda solo {0}', bpsLabel(rem)) : t('Ese plato ya está completo'));
+              const itemId = typeof failure.extra.item_id === 'string' ? failure.extra.item_id : null;
+              if (itemId) {
+                const next = new Map(selected);
+                next.delete(itemId);
+                setSelected(next);
+                const nextDenominators = new Map(selectedDenominators);
+                nextDenominators.delete(itemId);
+                setSelectedDenominators(nextDenominators);
+              }
+              refrescarMesa();
+              return;
+            }
             toast(failure.status === 404
               ? t('Guardar esta selección todavía no está disponible.')
               : failure.code === 'informative_selection_read_only'
@@ -1896,6 +2047,41 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
     </div>
   );
 
+  // ─── F-2 · la acción propia cerró la mesa (decisión 80) ────
+  // Antes se volvía mudo al Inicio y la persona no sabía que la mesa ya no
+  // estaba abierta. Se dice acá, con el nombre de la mesa (P4); «Ver la mesa»
+  // lleva al cierre completo, que se relee en segundo plano.
+  if (cierrePropio) {
+    return (
+      <div className="screen">
+        <TopBar title={t('Cierre completado')} onBack={isGuest ? undefined : () => navigate('home')} />
+        {guestHeader}
+        <div className="scroll" style={{ padding: '20px 16px' }}>
+          <div style={{ textAlign: 'center', padding: '8px 0 18px' }} role="status">
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <Icon name="check-circle" size={40} />
+            </div>
+            <div className="h2" style={{ marginTop: 8 }}>{t('La mesa se cerró')}</div>
+            <div className="body-text" style={{ marginTop: 6 }}>{mesa.restaurant.name}</div>
+            <div className="body-text cierre-motivo" style={{ marginTop: 4 }}>
+              {t('Se eligieron todos los consumos.')}
+            </div>
+          </div>
+        </div>
+        <div className="action-bar">
+          <button className="btn btn-ghost" onClick={() => setCierrePropio(false)}>
+            {t('Ver la mesa')}
+          </button>
+          {!isGuest && (
+            <button className="btn btn-navy" onClick={() => navigate('home')}>
+              <Icon name="home" size={16} className="ico-inline" /> {t('Inicio')}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ─── Mesa cerrada (A-2) ──────────────────────────────────
   const muestraSeleccionInformativaCerrada = showClosedInformativeSelection({
     active: !!informativePersistenceActive,
@@ -2735,6 +2921,7 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
       frozenRequiresReconciliation={frozenRequiresReconciliation}
       busy={busy}
       inviteOpen={inviteOpen}
+      informativasGuardadas={informativasGuardadas}
       onToggleItem={toggleItem}
       onReleaseItem={releaseItem}
       soltando={soltando}

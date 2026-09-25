@@ -364,6 +364,7 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
       informativeClosedWithoutCharges: false,
       informativeSaved: false,
       informativeEditingBlocked: false,
+      informativasGuardadas: new Map(),
       informativeLoading: false,
       informativeUnsupported: false,
       informativeLoadError: false,

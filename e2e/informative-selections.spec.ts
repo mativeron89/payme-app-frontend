@@ -12,6 +12,15 @@ async function listoYVolver(page: Page): Promise<void> {
   await page.goto(`/${enMesa}`);
 }
 
+/**
+ * AF-MESA-D79 · desde la decisión 79 la fila de «igual» puede llevar su etiqueta
+ * («Queda ½», «Lo eligió otro») en el nombre accesible, como en consumo. Se
+ * ancla en el nombre del plato: nunca matchea «Soltar …» ni otro plato.
+ */
+function plato(nombre: string): RegExp {
+  return new RegExp(`^${nombre}(,|$)`);
+}
+
 type Forma = 'En partes iguales' | 'Pagar el total';
 
 async function abrirInformativa(page: Page, forma: Forma, participantes: number): Promise<string> {
@@ -51,7 +60,7 @@ async function abrirInformativa(page: Page, forma: Forma, participantes: number)
 test.describe('Listo · selección informativa v2', () => {
   test('En partes iguales N≥2 guarda pares exactos, reconcilia respuesta incierta y rehidrata', async ({ page }) => {
     const code = await abrirInformativa(page, 'En partes iguales', 2);
-    const first = page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true });
+    const first = page.getByRole('button', { name: plato('Tagliatelle Bolognese') });
     await first.click();
     // v2.124.0: con N=2 el selector es el natural (1/1..1/N), como en consumo.
     await page.getByRole('radio', { name: '1/2', exact: true }).click();
@@ -104,14 +113,14 @@ test.describe('Listo · selección informativa v2', () => {
 
   test('Pagar el total N>1 mapea a igual y conserva fracción declarada', async ({ page }) => {
     await abrirInformativa(page, 'Pagar el total', 3);
-    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await page.getByRole('button', { name: plato('Risotto ai Funghi') }).click();
     // v2.124.0: con N=3 se ofrecen 1/1, 1/2 y 1/3; ¾ ya no es una opción nueva.
     await expect(page.getByRole('radio', { name: '¾', exact: true })).toHaveCount(0);
     await page.getByRole('radio', { name: '1/3', exact: true }).click();
     await listoYVolver(page);
     await expect(page.getByText('Tu selección quedó guardada.')).toBeVisible();
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Risotto ai Funghi', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: plato('Risotto ai Funghi') })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('radio', { name: '1/3', exact: true })).toHaveAttribute('aria-checked', 'true');
   });
 
@@ -142,9 +151,15 @@ test.describe('Listo · selección informativa v2', () => {
     expect(total).toBeGreaterThan(0);
     for (let index = 0; index < total; index += 1) await rows.nth(index).click();
 
-    // El guardado responde OK (y cierra la mesa): se vuelve a Inicio igual
-    // (decisión 32); al reentrar, la vista es de sólo lectura.
-    await listoYVolver(page);
+    // El guardado responde OK y CIERRA la mesa. F-2 (decisión 80): en vez de
+    // volver mudo a Inicio se dice «La mesa se cerró»; «Ver la mesa» lleva a
+    // la vista de sólo lectura.
+    const enMesa = await page.evaluate(() => location.hash);
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+    await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
+    await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
+    expect(await page.evaluate(() => location.hash)).toBe(enMesa);
+    await page.getByRole('button', { name: 'Ver la mesa', exact: true }).click();
     await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
@@ -181,7 +196,7 @@ test.describe('Listo · selección informativa v2', () => {
     });
 
     await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
-    const saved = page.getByRole('button', { name: 'Omakase para dos', exact: true });
+    const saved = page.getByRole('button', { name: plato('Omakase para dos') });
     await expect(saved).toBeDisabled();
     await expect(saved).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('radio', { name: '½', exact: true })).toHaveAttribute('aria-checked', 'true');
@@ -234,7 +249,7 @@ test.describe('Listo · selección informativa v2', () => {
     expect(await page.evaluate(() => localStorage.getItem('payme.app.e2e.r2.puts'))).toBeNull();
 
     await page.getByRole('button', { name: 'Reintentar lectura', exact: true }).click();
-    const saved = page.getByRole('button', { name: 'Omakase para dos', exact: true });
+    const saved = page.getByRole('button', { name: plato('Omakase para dos') });
     await expect(saved).toHaveAttribute('aria-pressed', 'true');
     await expect(saved).toBeEnabled();
     await saved.click();
@@ -290,8 +305,8 @@ test.describe('Listo · selección informativa v2', () => {
       location.hash = '#/mesa/PA-3121';
     });
 
-    const first = page.getByRole('button', { name: 'Omakase para dos', exact: true });
-    const second = page.getByRole('button', { name: 'Sashimi mixto', exact: true });
+    const first = page.getByRole('button', { name: plato('Omakase para dos') });
+    const second = page.getByRole('button', { name: plato('Sashimi mixto') });
     await expect(page.getByText('Estamos leyendo tu selección guardada…')).toBeVisible();
     await expect(first).toBeDisabled();
     await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_initial)());
@@ -330,8 +345,8 @@ test.describe('Listo · selección informativa v2', () => {
    */
   test('Listo deja una confirmación fija y «Guardado» hasta editar; la recarga la conserva', async ({ page }) => {
     await abrirInformativa(page, 'En partes iguales', 2);
-    const first = page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true });
-    const second = page.getByRole('button', { name: 'Risotto ai Funghi', exact: true });
+    const first = page.getByRole('button', { name: plato('Tagliatelle Bolognese') });
+    const second = page.getByRole('button', { name: plato('Risotto ai Funghi') });
     const nota = page.getByText('Tu selección quedó guardada. Si cambias algo, vuelve a tocar «Listo».');
     const guardado = page.getByRole('button', { name: 'Guardado', exact: true });
     const listo = page.getByRole('button', { name: 'Listo', exact: true });
@@ -369,7 +384,7 @@ test.describe('Listo · selección informativa v2', () => {
    */
   test('N=5 ofrece 1/1..1/4 y «Otro» hasta N; «Otro»=5 guarda 2000 y un rechazo por N es visible', async ({ page }) => {
     const code = await abrirInformativa(page, 'En partes iguales', 5);
-    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await page.getByRole('button', { name: plato('Tagliatelle Bolognese') }).click();
     const fracciones = page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' });
     await expect(fracciones.getByRole('radio')).toHaveCount(5);
     for (const name of ['Entero', '1/2', '1/3', '1/4', 'Otro']) {
@@ -402,11 +417,11 @@ test.describe('Listo · selección informativa v2', () => {
 
     // Lo guardado en bps vuelve como denominador: 2000 ⇒ «Otro» (5).
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: plato('Tagliatelle Bolognese') })).toHaveAttribute('aria-pressed', 'true');
     await expect(fracciones.getByRole('radio', { name: 'Otro', exact: true })).toHaveAttribute('aria-checked', 'true');
 
     // El dueño rechaza por N (400): el front lo dice con su copy y conserva lo guardado.
-    await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
+    await page.getByRole('button', { name: plato('Risotto ai Funghi') }).click();
     await page.evaluate(async () => {
       const route = '/src/api/index.ts';
       const module = await import(/* @vite-ignore */ route);
