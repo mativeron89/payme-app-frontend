@@ -11,6 +11,37 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.5 — Mensaje claro para una foto de ticket demasiado pequeña (n81) (2026-09-26)
+
+Orden AF-N81-CLAUDE-20260925 (sha256 99985ebe…), decisión 67 de Mati («Mínimo 10 KB», con «un
+mensaje claro»). Dueño servido: App Backend `f5f3326` (v2.133.0). Base `0.193.4`.
+
+- **El 422 `ticket_image_too_small`** del dueño ya no cae en el genérico «No pudimos leer el
+  ticket».
+  - Tiene su propio bloque, con el texto propuesto por el dueño, en tuteo y en dos oraciones, tal
+    cual: «La foto es demasiado pequeña para leer el ticket. Toma otra más cerca, con buena luz y sin
+    recortarla.»
+  - La salida es «Sacar otra foto».
+  - Inglés: «The photo is too small to read the receipt. Take another one closer, in good light,
+    without cropping it.»
+  - El texto queda en la lista de Mati para revisar.
+- **Antes de subir:** si `/api/config` publica `features.ocr.min_image_bytes` (entero positivo),
+  una foto más chica se frena en el teléfono con el mismo mensaje, sin gastar la subida ni el OCR.
+  Sin la clave, o con un valor inválido, se sube como antes y decide el 422. El front no tiene un
+  número propio.
+- **Espejo del contrato** refrescado al inventario `fb92bd5`, en commit aparte: 121 archivos, los
+  mismos. Cambian los tres de n81 y los de E3 y AB2 que faltaban. Paridad y vigencia verificadas
+  en un clon de sólo lectura del dueño.
+- **Mock:** `min_image_bytes` 10240 en la config, y el seam `too_small`
+  (`payme.app.mock.n179.ocr.v1`) con el 422 del dueño.
+- **Tests:**
+  - unitarios de `ocrFailureIssue`, `rechazoLocalDeImagen`, el rail (clave presente, ausente e
+    inválida) y el inglés;
+  - e2e del 422, con un solo intento;
+  - e2e del rechazo local por el `<input type="file">` real. Espera, como testigo, que el rail sea
+    autoritativo: antes de eso, correctamente, no hay piso.
+  - Cinco mutantes muertos. El del bloque y el del cableado del `onChange` sólo los caza el e2e.
+
 ## 0.193.4 — CSP: obligatoria en la landing y en Report-Only en la app (n186); retiro de declareBirthDate (n217) (2026-09-26)
 
 Orden AF-CSP-N186-20260925 (sha256 1c5e7115…). Base `0.193.3`.
