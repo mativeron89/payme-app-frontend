@@ -11,7 +11,7 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
-## 0.193.6 — La pantalla de ingreso se desplaza en iPhone y las casillas quedan sólo en «Crea tu cuenta» (2026-09-25)
+## 0.193.6 — Ingreso en iPhone, casillas sólo en «Crea tu cuenta», encabezado y barra de la mesa, sin «Pagos» en avisos (2026-09-25)
 
 Orden AF-LOGIN-CASILLAS-Y-CORTE-IPHONE (sha256 3759020a…), lease AF-LOGIN-D73-CLAUDE-20260925,
 decisiones 73 (e3e3e57a…), 74 (551e1264…) y 75 (afd79945…) de Mati. Base `0.193.5` (`f95d528`).
@@ -49,6 +49,27 @@ decisiones 73 (e3e3e57a…), 74 (551e1264…) y 75 (afd79945…) de Mati. Base `
 - **Límite de L2:** L2 muere en el test de persona nueva, no en el de cuenta existente.
 - **Qué no queda probado:** el iframe real de Google Identity no se puede ejercitar en mock. Lo
   que se prueba es el corte, que era la causa medida.
+- **Adenda C · decisión 76 (a5570ed9…) · Inicio muestra lo elegido: STOP, sin cambios.**
+  - El Inicio se alimenta sólo de `GET /mesas/open`. En el dueño servido (`f5f3326`) esa ruta no
+    publica ítems, `remaining_bps`, un asignado ni `division_mode`.
+  - Derivarlo exigiría un pedido nuevo por mesa, y la adenda lo excluye. Se reportó la forma
+    exacta de los campos aditivos que harían falta.
+- **Adenda D · decisión 77 (d82efbc4…).**
+  - «¿Qué consumiste?» lleva «restaurante · modalidad» en una línea, sin el código de mesa. Si el
+    nombre no entra, se recorta con «…»; la modalidad nunca.
+  - La barra muestra «$195.00 / $840.00 (23%)», sin «asignados» ni «por asignar». La rama de lo
+    pagado también usa «/».
+  - Se sumó un test con los pasos de Mati: elegir, soltar e ir al Historial, donde la mesa
+    abierta no figura. El mutante que quita el filtro lo pone en rojo.
+- **Adenda E · decisión 78 (246b35b8…).** Configuración › Notificaciones ya no muestra el grupo
+  «Pagos». Las preferencias del servidor no se tocan.
+- **Mutantes D1–D5 y E1–E2 muertos:**
+  - D1: Historial sin filtro;
+  - D2: código de vuelta;
+  - D3: texto «asignados»;
+  - D4: el encabezado envuelve (sólo en rojo a 320 px, porque a 390 entra igual);
+  - D5: la ruta no pasa el `param`;
+  - E1 y E2: «Pagos» de vuelta.
 
 ## 0.193.5 — Mensaje claro para una foto de ticket demasiado pequeña (n81) (2026-09-26)
 
