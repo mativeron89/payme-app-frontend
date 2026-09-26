@@ -11,6 +11,26 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.9 — La modalidad de cada visita en Tus restaurantes (2026-09-25)
+
+Orden AF-STATS-MODALIDAD-CLAUDE-20260925 (sha256 ba28e122…), decisión 86 de Mati («Modalidad y
+porción»). Base `0.193.8` (`7cdfc77`).
+
+- **Rótulo por visita:** cada visita dice «Partes iguales» o «Por consumo» debajo de la fecha, con
+  el `division_mode` que el dueño ya publica. En inglés: «Split evenly» y «By what you ordered».
+- **Sin cambios en:**
+  - la porción por plato (fracción; nada si es entero);
+  - «Qué comes»;
+  - el contrato y el espejo.
+- **Decodificador:** queda estricto por decisión del Bibliotecario, porque el dueño sólo emite
+  `consumo` o `igual`. La cláusula de la orden «un valor desconocido omite el rótulo» quedó sin
+  efecto para el decodificador. La pantalla, igual, no nombra ningún otro valor.
+- **Pruebas:**
+  - e2e que queda en rojo contra la base;
+  - unitario;
+  - mutantes S1 (rótulos cruzados), S2 (sin rótulo) y S3 (adivina un valor desconocido)
+    muertos, cada uno en su aserción.
+
 ## 0.193.8 — La foto de los amigos al compartir la mesa (2026-09-25)
 
 Orden AF-FOTO-COMPARTIR-CLAUDE-20260925 (sha256 4384d98f…), pedido de Mati: «si voy a amigos veo
