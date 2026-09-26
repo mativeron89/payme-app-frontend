@@ -41,15 +41,45 @@ describe('n186 · App: CSP SÓLO de reporte', () => {
     expect(d.get('frame-ancestors')).toEqual(["'none'"]);
   });
 
-  it('🔴 sin `unsafe-inline` ni `unsafe-eval`: el `<style>` del splash va por su hash exacto', () => {
-    expect(politica).not.toMatch(/unsafe-/);
+  /**
+   * AF-CSP-ESTILOS (n186) · lo que inyecta `gsi/client` se midió con el script
+   * real: un `<style>` constante (por su hash) y el atributo `style` del botón,
+   * que lleva el ancho del contenedor y cambia con cada teléfono. El ÚNICO
+   * `unsafe-` admitido es `'unsafe-inline'` en `style-src-attr`.
+   */
+  it('🔴 el único `unsafe-` es `\'unsafe-inline\'` en `style-src-attr`; ningún `unsafe-eval` ni `unsafe-hashes`', () => {
+    const conUnsafe = [...d.entries()].filter(([, fuentes]) => fuentes.some((f) => f.includes('unsafe-')));
+    expect(conUnsafe).toEqual([['style-src-attr', ["'unsafe-inline'"]]]);
+    expect(politica).not.toMatch(/unsafe-eval|unsafe-hashes|wasm-unsafe/);
+  });
+
+  it('🔴 script-src, connect-src y frame-src quedan EXACTAMENTE como antes (no se relajan por los estilos)', () => {
+    expect(d.get('script-src')).toEqual(["'self'", 'https://accounts.google.com/gsi/client', 'https://js.stripe.com', 'https://*.js.stripe.com']);
+    expect(d.get('connect-src')).toEqual(["'self'", 'https://accounts.google.com/gsi/', 'https://api.stripe.com']);
+    expect(d.get('frame-src')).toEqual(['https://accounts.google.com/gsi/', 'https://js.stripe.com', 'https://*.js.stripe.com', 'https://hooks.stripe.com']);
+    expect(d.get('default-src')).toEqual(["'self'"]);
+  });
+
+  it('style-src y style-src-elem: lo propio, el splash, la hoja de GIS y el `<style>` de GIS por su hash; nada más', () => {
+    const GIS = "'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='";
+    for (const directiva of ['style-src', 'style-src-elem']) {
+      const fuentes = d.get(directiva) ?? [];
+      expect(fuentes, directiva).toHaveLength(4);
+      expect(fuentes, directiva).toEqual(expect.arrayContaining(["'self'", 'https://accounts.google.com/gsi/style', GIS]));
+      expect(fuentes.join(' '), directiva).not.toMatch(/unsafe-|\*|https?:\/\/(?!accounts\.google\.com\/gsi\/style)/);
+    }
+  });
+
+  it('🔴 el `<style>` del splash va por su hash exacto', () => {
     const html = readFileSync(join(RAIZ, 'index.html'), 'utf8');
     const estilos = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1] ?? '');
     expect(estilos).toHaveLength(1);
     // Ningún <script> inline en la app: el único es el módulo con `src`.
     expect([...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>/g)]).toHaveLength(0);
-    const hashes = (d.get('style-src') ?? []).filter((f) => f.startsWith("'sha256-"));
-    expect(hashes, 'el hash del <style> de index.html no coincide: el splash quedaría bloqueado').toEqual([sha(estilos[0]!)]);
+    for (const directiva of ['style-src', 'style-src-elem']) {
+      expect(d.get(directiva), `el hash del <style> de index.html no está en ${directiva}: el splash quedaría bloqueado`)
+        .toContain(sha(estilos[0]!));
+    }
   });
 
   it('el origen de la API sale de `VITE_API_URL`, y sólo si es http(s) válido', () => {

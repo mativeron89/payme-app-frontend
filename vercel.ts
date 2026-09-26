@@ -64,6 +64,19 @@ const headers = [
  * otra orden, después de observar producción.
  * - `<style>` inline de `index.html` (splash): por hash, sin `'unsafe-inline'`;
  * - Google Identity Services: script, iframe, fetch y hoja bajo `/gsi/`;
+ * - n186 · AF-CSP-ESTILOS · lo que `gsi/client` INYECTA en nuestro documento,
+ *   medido con el script real y la política exacta en Report-Only (harness en
+ *   `~/.codex/runs/payme-af-csp-estilos-20260925/`), con los mismos dos
+ *   hashes que la consola de producción:
+ *   · un `<style>` propio de ~9,9 KB, constante: va por su hash exacto en
+ *     `style-src-elem` y, para navegadores sin `-elem`, también en `style-src`.
+ *     ⚠️ Si Google cambia `gsi/client`, cambia el hash y vuelve el reporte;
+ *     antes de pasar a obligatoria se vuelve a medir;
+ *   · el atributo `style` del botón, que lleva `width:Npx` con el ancho del
+ *     contenedor (200..360, lo calcula `googleIdentity.ts`): cambia con cada
+ *     teléfono, así que un hash no lo cubre. `'unsafe-inline'` SÓLO en
+ *     `style-src-attr`: un atributo de estilo no ejecuta código, y scripts,
+ *     conexiones y marcos no se tocan;
  * - Stripe.js: script e iframes (incluido el 3DS en `hooks.stripe.com`), API;
  * - el origen de la API sale de `VITE_API_URL` del mismo entorno de build; si
  *   falta o no parsea, no se agrega (es reporte: se vería en la consola);
@@ -74,6 +87,8 @@ const headers = [
  */
 const HASH_SCRIPT_IDIOMA_LANDING = "'sha256-0q+B8AZ70OFIwdyvViSs6/v+EDiwpZvDJ86Uf9Aiupc='";
 const HASH_STYLE_SPLASH_APP = "'sha256-cm7TCL2O3xGpn0S6b2s0pom3xI3fEP3U38AYzzLIn2E='";
+/** El `<style>` que inyecta `gsi/client` (medido el 2026-09-26; igual al de producción). */
+const HASH_STYLE_GIS = "'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='";
 
 // Parámetros con valor por defecto: TypeScript infiere el tipo sin anotaciones,
 // y el archivo sigue siendo ESM plano (ver el 📌 de arriba).
@@ -108,7 +123,9 @@ const conApi = (lista = ['']) => (api ? [...lista, api] : lista);
 const cspApp = politica([
   ['default-src', "'self'"],
   ['script-src', "'self'", 'https://accounts.google.com/gsi/client', 'https://js.stripe.com', 'https://*.js.stripe.com'],
-  ['style-src', "'self'", HASH_STYLE_SPLASH_APP, 'https://accounts.google.com/gsi/style'],
+  ['style-src', "'self'", HASH_STYLE_SPLASH_APP, 'https://accounts.google.com/gsi/style', HASH_STYLE_GIS],
+  ['style-src-elem', "'self'", HASH_STYLE_SPLASH_APP, 'https://accounts.google.com/gsi/style', HASH_STYLE_GIS],
+  ['style-src-attr', "'unsafe-inline'"],
   ['img-src', ...conApi(["'self'", 'data:', 'blob:'])],
   ['font-src', "'self'"],
   ['connect-src', ...conApi(["'self'", 'https://accounts.google.com/gsi/', 'https://api.stripe.com'])],
