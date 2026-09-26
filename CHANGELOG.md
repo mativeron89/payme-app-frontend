@@ -11,6 +11,26 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.11 — Textos visibles fuera del traductor: censo, cinco traducidos y guarda (n79) (2026-09-25)
+
+Orden AF-I18N-N79-CLAUDE-20260925 (sha256 335adb1e…). Base `0.193.10` (`d566933`).
+
+- **Censo por AST** (`scripts/textosFueraDelTraductor.mjs`), sobre los `.tsx` de `src/`, sin tests
+  ni `src/i18n/`. En la base encontró 120 textos:
+  - **a** (común): 5, se tradujeron;
+  - **b** (garantía, saldo o pagos, apagado): 55;
+  - **c** (legal): 30;
+  - no son copy: 14 tokens, 9 de marca, 6 que ya pasan por `t(variable)` y «Log in» (decisión 74).
+- **Los traducidos:**
+  - «No pudimos leer el ticket» y los dos mensajes de lectura del ticket;
+  - «c/u» → «each»;
+  - el nombre accesible del plato con cantidad → «{0} × {1}».
+- **El español queda byte-idéntico** (`src/i18n/n79.test.ts`).
+- **Guarda:** falla si aparece un texto visible nuevo fuera de `t()`. Los grupos b y c quedan listados,
+  con su motivo, en `scripts/textosFueraDelTraductor.clasificados.json`, para Diseño.
+- **El «72» de n79 no es esta población:** coincide con las 72 entradas EN huérfanas de
+  `traduccion.test.ts` (claves que nadie usa).
+
 ## 0.193.10 — La CSP de la app contempla los estilos de Google Identity (n186, sigue en Report-Only) (2026-09-25)
 
 Orden AF-CSP-ESTILOS-CLAUDE-20260925 (sha256 fa2997ad…). Base `0.193.9` (`3a77a2a`).
