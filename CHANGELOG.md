@@ -11,6 +11,21 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.8 — La foto de los amigos al compartir la mesa (2026-09-25)
+
+Orden AF-FOTO-COMPARTIR-CLAUDE-20260925 (sha256 4384d98f…), pedido de Mati: «si voy a amigos veo
+la foto de mis contactos pero en compartir mesa no figura la imagen». Base `0.193.7` (`107c5d2`).
+
+- «Invitar amigos de PayMe» muestra la misma foto que Amigos (n196), con el mismo componente
+  (`FriendAvatar`) y la misma ruta del dueño (`GET /friends/:userId/avatar`). Aplica a la pestaña
+  Amigos y a los integrantes de un grupo.
+- **Sin foto:** esta pantalla conserva su monograma sin color por persona (reconciliación
+  2026-08-21). Amigos no cambia.
+- **Dueño:** no hizo falta ningún campo nuevo; la ruta ya está servida en `47743ec`.
+- **Pruebas:**
+  - e2e nuevo que queda en rojo contra la base;
+  - mutantes F1 (foto no cableada) y F2 (monograma con color) muertos, cada uno en su aserción.
+
 ## 0.193.7 — Mesa compartida en «partes iguales» e Inicio con lo elegido (2026-09-25)
 
 Orden AF-MESA-D79 (sha256 c2ee3ef7…), lease AF-MESA-D79-CLAUDE-20260925. Decisiones de Mati:
