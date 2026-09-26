@@ -41,6 +41,11 @@ en Chrome del iPhone: «entra bien con Google pero no ingresa de una al Inicio, 
   - 21 unitarios rompían porque `useSyncExternalStore` no tenía el snapshot de servidor;
   - 9 e2e rompían porque se reescribía `/` a `/home`, una navegación de más;
   - `af02-alta-tarjeta-durable` navegaba con el ingreso en vuelo, y ahora espera a Inicio.
+- **La segunda corrida también dio rojo, por un intermitente ajeno, y tampoco se pusheó:**
+  `mesa-sin-garantia` ya fallaba a veces en la base (9 de 80 corridas). Escribía el vencimiento por
+  fuera del mock, y un guardado en vuelo lo pisaba. Ahora vence la mesa en la memoria del mock y
+  guarda con su `persist()`: 160 de 160 en verde, y la guarda sigue dando rojo con `sinCobros`
+  invertido.
 
 ## 0.194.2 — Tus restaurantes: la tarjeta de lo propio, centrada (2026-09-26)
 
