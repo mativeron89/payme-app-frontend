@@ -384,6 +384,11 @@ export const EN: Record<string, string> = {
   "No pudimos invitar a {0}": "We couldn't invite {0}",
   "No pudimos leer cuánto queda de ese ítem. Actualiza la mesa.": "We couldn't read how much is left of that item. Refresh the table.",
   "No pudimos leer el ticket": "We couldn't read the ticket",
+  // n79 · AF-I18N-N79: textos que se mostraban sin pasar por el traductor.
+  "Se alcanzó el límite mensual de lectura. Puedes cargar los consumos a mano.": "We reached this month's reading limit. You can add the items by hand.",
+  "El servicio de lectura no está disponible. Puedes cargar los consumos a mano.": "The reading service isn't available. You can add the items by hand.",
+  "c/u": "each",
+  "{0} por {1}": "{0} × {1}",
   "No pudimos leer este ítem": "We couldn't read this item",
   "No pudimos leer la tarjeta.": "We couldn't read the card.",
   "No pudimos reservar lo que elegiste": "We couldn't reserve what you picked",

@@ -1473,11 +1473,11 @@ export function CreateMesaFlow() {
               <div className="state-error-row">
                 <Icon name="x-circle" size={22} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="state-error-title">No pudimos leer el ticket</div>
+                  <div className="state-error-title">{t('No pudimos leer el ticket')}</div>
                   <p className="state-error-body">
                     {scanIssue === 'budget_exhausted'
-                      ? 'Se alcanzó el límite mensual de lectura. Puedes cargar los consumos a mano.'
-                      : 'El servicio de lectura no está disponible. Puedes cargar los consumos a mano.'}
+                      ? t('Se alcanzó el límite mensual de lectura. Puedes cargar los consumos a mano.')
+                      : t('El servicio de lectura no está disponible. Puedes cargar los consumos a mano.')}
                   </p>
                 </div>
               </div>
@@ -1830,7 +1830,7 @@ export function CreateMesaFlow() {
                     : formatMXN(Math.round(total / participants))}
                 </div>
                 <div className="split-amt-lbl">
-                  {reparteElTotal(division) ? 'c/u' : t('base de propina · c/u')}
+                  {reparteElTotal(division) ? t('c/u') : t('base de propina · c/u')}
                 </div>
               </>
             )}

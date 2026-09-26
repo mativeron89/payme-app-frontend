@@ -749,7 +749,7 @@ export function MesaDetailView({
                   onClick={() => !disabled && onToggleItem(i.id)}
                   disabled={disabled}
                   aria-pressed={!esConsumo ? sel : disabled ? undefined : sel}
-                  aria-label={`${i.name}${i.quantity > 1 ? ` por ${i.quantity}` : ''}${tag ? t(', {0}', tag) : ''}`}
+                  aria-label={`${i.quantity > 1 ? t('{0} por {1}', i.name, i.quantity) : i.name}${tag ? t(', {0}', tag) : ''}`}
                 >
                   <span
                     className={`mi-check ${sel ? 'on' : ''} ${state === 'pagado' ? 'paid' : ''} ${state === 'tomado' ? 'taken' : ''}`}
