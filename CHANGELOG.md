@@ -11,6 +11,36 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.195.2 — Pedidos chicos de Mati: nombre del restaurante, aviso de Google, Cuenta e Historial (decisiones 96 a 100) (2026-09-26)
+
+Orden AF-NOMBRE-COMPACTO-CLAUDE-20260926 (sha256 b14de7f6…), con sus cuatro adendas. Base
+`0.195.1` (`83634db`).
+
+- **D96 · «Nombre del restaurante»:**
+  - de una tarjeta de tres filas (132.7 px a 390) a UNA fila de 69 px: título chico e input, con el
+    borde, el radio y la sombra de las opciones de «¿Cómo dividen?»;
+  - sin la leyenda «Sólo identifica…» ni su traducción; el error de validación sigue;
+  - la condición de aparición no cambia: sólo sin comercio de QR ni de OCR.
+- **D97 · el aviso «Si entraste con Google…»:** se retira con su componente, su texto y su test. Un
+  test nuevo fija que no está y conserva la guarda del vigía de RM-182, que sigue sólo como log.
+- **D98 + D99 · Inicio › Cuenta:**
+  - «Ver pagos» lleva a Mesas (la ruta `pagos` sigue);
+  - nuevo acceso «Ver perfil» lleva a Configuración, la misma pantalla que «Más»;
+  - lado a lado, del tamaño del de «Estadísticas»;
+  - «Ver tarjetas» conserva su condición.
+- **D100 · Historial › «Lo que elegiste»:** plato, «½» y monto en una línea, en columnas, con el
+  criterio de Tus restaurantes: la columna sólo ocupa lugar si hay alguna porción. El detalle por
+  pago («Declaraste ½») no cambia.
+- **Pruebas:**
+  - e2e rojos en la base para las cinco decisiones; otros verdes en la base a propósito, porque
+    fijan lo que no cambia;
+  - mutantes M1–M10 muertos;
+  - capturas de antes y después.
+- ⚠️ **Un commit no compila aislado:** `ee62908` (D96) se llevó el borrado de
+  `AvisoGoogleOtraCuenta.tsx` y de su test, que estaba en el índice desde antes, y su
+  `LoginScreen` todavía lo importa. El commit siguiente, `c52c402` (D97), lo arregla. No se
+  reescribe la historia: se declara acá.
+
 ## 0.195.1 — Los avisos de «Escanea el ticket» ya no quedan tapados por el marco (2026-09-26)
 
 Orden AF-AVISO-FOTO-CLAUDE-20260926 (sha256 8a7a9cf5…). Base `0.195.0` (`c8020a8`). Mati, en el
