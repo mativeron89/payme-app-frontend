@@ -6163,6 +6163,12 @@ body {
   list-style: none;
 }
 
+/* AF-STATS-LO-PROPIO · el ticket completo, aparte de lo propio. */
+.rest-visita-ticket {
+  align-self: center;
+  margin: -4px auto 12px;
+}
+
 .rest-item {
   display: flex;
   align-items: center;

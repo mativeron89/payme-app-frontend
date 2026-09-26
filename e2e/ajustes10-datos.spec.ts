@@ -36,7 +36,9 @@ test('U09 · una visita abre detalle digital completo y devuelve el foco al cerr
   await page.goto('/#/restaurantes');
   const restaurante = page.getByRole('region', { name: 'La Parolaccia' });
   await restaurante.getByRole('button', { name: /^La Parolaccia/ }).click();
-  const trigger = restaurante.locator('.rest-visita-fila').first();
+  await restaurante.locator('.rest-visita-fila').first().click();
+  // AF-STATS-LO-PROPIO · el ticket completo se abre con su botón, no con la fila.
+  const trigger = restaurante.getByRole('button', { name: 'Ver ticket completo', exact: true });
   await trigger.click();
   const dialog = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
   await expect(dialog).toContainText('No es una foto, factura ni comprobante de pago.');

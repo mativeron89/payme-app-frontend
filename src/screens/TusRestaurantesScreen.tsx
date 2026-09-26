@@ -26,6 +26,11 @@ import { TicketDigitalDialog } from '../components/TicketDigitalDialog';
  * monto). El ancho dice de qué depende cada cosa: el restaurante ocupa la
  * tarjeta, la visita es una burbuja más angosta y lo consumido otra más.
  *
+ * AF-STATS-LO-PROPIO · tocar la visita SÓLO despliega o repliega lo propio. El
+ * ticket completo de la mesa se abre con su botón, «Ver ticket completo», dentro
+ * de la visita desplegada: antes el mismo toque abría los dos y el modal tapaba
+ * lo propio («no me dice qué consumí yo, está el ticket entero», Mati).
+ *
  * El rótulo sale de `basis`, como en 2a. En base `payments` la visita incluye la
  * propina y los platos no: se dice con una línea al pie, sólo en esa base.
  *
@@ -168,12 +173,7 @@ export function TusRestaurantesScreen() {
                               type="button"
                               className="rest-visita-fila"
                               aria-expanded={abiertaV}
-                              aria-haspopup="dialog"
-                              onClick={(event) => {
-                                setVisitaAbierta(clave);
-                                ticketTriggerRef.current = event.currentTarget;
-                                setTicketCode(v.code);
-                              }}
+                              onClick={() => setVisitaAbierta((a) => (a === clave ? null : clave))}
                             >
                               <span className="rest-visita-cuando">
                                 <span className="rest-visita-fecha">{f ? `${dias[f.diaSemana]} ${f.diaMes}` : '—'}</span>
@@ -183,7 +183,22 @@ export function TusRestaurantesScreen() {
                               <span className="rest-visita-monto">{formatMXN(v.amountCents)}</span>
                               <Icon name="chevron-down" size={18} className={abiertaV ? 'rest-chev abierto' : 'rest-chev'} />
                             </button>
-                            {abiertaV && <LoConsumido visita={v} />}
+                            {abiertaV && (
+                              <>
+                                <LoConsumido visita={v} />
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm rest-visita-ticket"
+                                  aria-haspopup="dialog"
+                                  onClick={(event) => {
+                                    ticketTriggerRef.current = event.currentTarget;
+                                    setTicketCode(v.code);
+                                  }}
+                                >
+                                  {t('Ver ticket completo')}
+                                </button>
+                              </>
+                            )}
                           </div>
                         );
                       })}

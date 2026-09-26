@@ -673,6 +673,7 @@ export const EN: Record<string, string> = {
   "Ver mis ítems": "View my items",
   "Ver más": "See more",
   "Ver pagos": "View payments",
+  "Ver ticket completo": "See full ticket",
   "Ver tarjetas": "View cards",
   "Visitas": "Visits",
   "Volver": "Back",

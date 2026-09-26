@@ -59,8 +59,11 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     await capturar(page, 'restaurantes-02-restaurante-abierto');
 
     // La primera visita que arma el mock es la más NUEVA (va arriba) y trae el
-    // plato a medias.
-    await visitas.first().getByRole('button').click();
+    // plato a medias. El toque despliega lo propio; el ticket completo tiene su
+    // botón (AF-STATS-LO-PROPIO).
+    await visitas.first().locator('.rest-visita-fila').click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await visitas.first().getByRole('button', { name: 'Ver ticket completo', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Detalle digital del ticket' });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('No es una foto, factura ni comprobante de pago.');
