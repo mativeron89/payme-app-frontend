@@ -11,6 +11,20 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.194.2 — Tus restaurantes: la tarjeta de lo propio, centrada (2026-09-26)
+
+Orden AF-STATS-BURBUJA-CLAUDE-20260926 (sha256 2c289507…). Base `0.194.1` (`a0b3cb8`). Mati, en el
+iPhone: «la burbuja está descentrada».
+
+- **Causa, medida a 390 px:** el texto quedaba a 36 px del borde izquierdo contra 12 del derecho. Al
+  relleno de 12 px se le sumaba la columna de la porción (14 px + 10 de hueco), vacía cuando ningún
+  plato es una porción. Además la tarjeta era 24 px más angosta que «Ver ticket completo».
+- **Ahora:** la columna del «½» sólo ocupa lugar si la visita tiene alguna porción, y entonces sigue
+  alineando los platos. La tarjeta tiene el mismo ancho útil que el botón.
+- **Sólo estilos y una clase.** Sin contrato ni cambio de comportamiento.
+- **Pruebas:** e2e de geometría, rojo en la base (36 contra 12). Mutantes M1–M5 muertos. Capturas de
+  antes y después a 390 px.
+
 ## 0.194.1 — Tus restaurantes: el toque muestra lo propio y el ticket completo va aparte (2026-09-26)
 
 Orden AF-STATS-LO-PROPIO-CLAUDE-20260926 (sha256 d86fe95c…). Base `0.194.0` (`e7171e7`).
