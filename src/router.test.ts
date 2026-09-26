@@ -4,11 +4,13 @@ import {
   PAGES,
   convertirFragmentoViejo,
   fragmentoConSecreto,
+  irAlInicioTrasIngreso,
   navigate,
   normalizeUnknownHash,
   parseHash,
   parseLocation,
   replaceRoute,
+  volverAlIngreso,
 } from './router';
 import { navegadorFalso } from './navegadorFalso.testutil';
 
@@ -174,5 +176,35 @@ describe('n130 · los #/… viejos sin secreto pasan a su ruta', () => {
       expect(convertirFragmentoViejo(), inicial).toBe(false);
       expect(b.replaceState, inicial).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe('AF-INICIO-TRAS-INGRESO · la URL al cerrar sesión y al entrar', () => {
+  it('cerrar sesión deja la URL en la pantalla de ingreso, sin ruta, query ni fragmento', () => {
+    const nav = navegadorFalso('/mas?r=rest-qr-1#algo');
+    volverAlIngreso();
+    expect(nav.url()).toBe('/');
+    expect(nav.replaceState).toHaveBeenCalledTimes(1);
+    expect(nav.pushState).not.toHaveBeenCalled();
+    expect(nav.dispatched).toContain('payme:ruta');
+  });
+
+  it('después de entrar: /home, sin la ruta ni la query de la sesión anterior, y sin entrada nueva en el historial', () => {
+    const nav = navegadorFalso('/mas?r=rest-qr-1');
+    irAlInicioTrasIngreso();
+    expect(nav.url()).toBe('/home');
+    expect(nav.pushState).not.toHaveBeenCalled();
+  });
+
+  it('si la URL ya es la de destino, no toca el historial', () => {
+    const nav = navegadorFalso('/home');
+    irAlInicioTrasIngreso();
+    expect(nav.replaceState).not.toHaveBeenCalled();
+  });
+
+  it('con el historial bloqueado, cae a location.replace', () => {
+    const nav = navegadorFalso('/mas', { historialBloqueado: true });
+    volverAlIngreso();
+    expect(nav.locationReplace).toHaveBeenCalledWith('/');
   });
 });
