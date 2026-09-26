@@ -247,15 +247,21 @@ export function MesasScreen() {
             ) : (
               <div className="hist-row">{fila}</div>
             )}
+            {/* Decisión 100 de Mati: plato, porción y monto en UNA línea, en
+                columnas, con el criterio de Tus restaurantes (AF-STATS-BURBUJA):
+                la columna del «½» sólo ocupa lugar si alguna línea la tiene. */}
             {detalleAbierto && m.items && (
-              <div className="hist-detail" aria-label={t('Lo que elegiste')}>
+              <div
+                className={m.items.some((item) => item.fractionBps < 10000)
+                  ? 'hist-detail hist-detail--con-porcion'
+                  : 'hist-detail'}
+                aria-label={t('Lo que elegiste')}
+              >
                 {m.items.map((item) => (
                   <div key={item.itemId} className="hist-detail-row">
+                    <span className="hist-detail-frac">{item.fractionBps < 10000 ? bpsLabel(item.fractionBps) : ''}</span>
                     <span className="hist-detail-name">
-                      <span>{item.name}{item.quantity > 1 ? ` × ${item.quantity}` : ''}</span>
-                      {item.fractionBps < 10000 && (
-                        <span className="hist-detail-declared">{bpsLabel(item.fractionBps)}</span>
-                      )}
+                      {item.name}{item.quantity > 1 ? ` × ${item.quantity}` : ''}
                     </span>
                     <span className="hist-detail-amount">{formatMXN(item.amountCents)}</span>
                   </div>

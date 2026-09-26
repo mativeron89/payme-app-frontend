@@ -5612,6 +5612,23 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* Decisión 100 · en «Lo que elegiste», el «½» va en su columna, antes del
+   nombre y en la misma línea. Como en Tus restaurantes, la columna sólo ocupa
+   lugar si la mesa tiene alguna porción: vacía, correría los nombres. */
+.hist-detail-frac {
+  flex: none;
+  min-width: 14px;
+  color: var(--text-muted);
+}
+
+.hist-detail:not(.hist-detail--con-porcion) .hist-detail-frac {
+  display: none;
+}
+
+.hist-detail-row > .hist-detail-name {
+  flex: 1;
+}
+
 .hist-detail-declared {
   color: var(--text-muted);
   font-size: var(--fs-xs);
