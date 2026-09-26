@@ -50,6 +50,11 @@ for (const encendido of [true, false]) {
     await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
     // La pantalla ya se armó entera (Google y el pie cargados).
     await expect(page.getByRole('button', { name: 'Crea tu cuenta', exact: true })).toHaveCount(1);
+    // AF-STATS-BURBUJA · el splash de carga se retira DESPUÉS del montaje (mínimo
+    // visible + fundido, `src/splash.ts`) y mientras tanto tapa la pantalla:
+    // `elementFromPoint` daba `#splash` con el botón ya a la vista (medido: 4 de
+    // 60 corridas, igual en la base). Un dedo espera a que se vaya; el test, también.
+    await expect(page.locator('#splash')).toHaveCount(0);
     await desplazarComoUnDedo(page);
     expect(await aLaVista(page, 'Crea tu cuenta'), 'el pie de la tarjeta quedó fuera del alcance del dedo').toBe(true);
   });
