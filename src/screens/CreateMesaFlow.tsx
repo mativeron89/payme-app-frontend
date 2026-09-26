@@ -808,7 +808,8 @@ export function CreateMesaFlow() {
   /**
    * Demo: el mock devuelve el ticket de ejemplo sin foto.
    * Real: `POST /api/ocr` es multipart y valida los magic bytes de la imagen,
-   * así que hay que mandar una foto de verdad → se abre la cámara del teléfono.
+   * así que hay que mandar una foto de verdad → se abre el selector del
+   * teléfono, con cámara y fototeca (decisión 91).
    */
   function doScan() {
     if (IS_MOCK) {
@@ -1604,8 +1605,14 @@ export function CreateMesaFlow() {
               </div>
             </div>
           )}
-          {/* Real: abre la cámara del teléfono. POST /api/ocr es multipart y
-              valida los magic bytes, así que necesita una imagen de verdad. */}
+          {/* Real: abre el selector del teléfono, con cámara y fototeca. POST
+              /api/ocr es multipart y valida los magic bytes, así que necesita
+              una imagen de verdad.
+
+              AF-GALERIA · decisión 91 de Mati («Sí, las dos»): sin `capture`.
+              `capture="environment"` abría directo la cámara en iOS y Android y
+              no dejaba elegir una foto del carrete. Sin cartel de «ticket de
+              ejemplo»: la misma decisión lo descartó. */}
             {/* 🔴 El `accept` sale del DUEÑO del contrato, no de una lista acá.
                 Estaba hardcodeado con los cuatro formatos y Textract procesa
                 jpeg y png: un HEIC —el default del iPhone— se elegía, se subía
@@ -1618,7 +1625,6 @@ export function CreateMesaFlow() {
             ref={fileInput}
             type="file"
             accept={acceptOcr}
-            capture="environment"
             hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
