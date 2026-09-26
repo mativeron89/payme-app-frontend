@@ -44,6 +44,20 @@ export interface GoogleContinueCapability {
   readonly oneTapSignup: boolean;
 }
 
+/**
+ * AF-GOOGLE-REDIRECT · `features.google_redirect` (App Backend v2.136.0,
+ * decisiones 92 y 94): «Entrar» con Google en la MISMA pestaña (modo redirect
+ * de GIS). Bloque hermano de primer nivel, por la misma razón que
+ * `google_continue`.
+ *
+ * Fail-closed a `enabled: false`, que es el popup de hoy sin cambios:
+ * ausente (backend anterior), mal formado, una clave de más o `enabled` que no
+ * sea exactamente `true` ⇒ popup. `enabled` es el valor VIVO del dueño.
+ */
+export interface GoogleRedirectCapability {
+  readonly enabled: boolean;
+}
+
 export interface SocialAuthState {
   readonly status: SocialAuthStatus;
   readonly google: GoogleSocialCapability;
@@ -76,9 +90,12 @@ export interface SocialAuthState {
   readonly publicRegistration: boolean;
   /** AF-17 · decodificada del bloque hermano `features.google_continue`. */
   readonly googleContinue: GoogleContinueCapability;
+  /** AF-GOOGLE-REDIRECT · decodificada del bloque hermano `features.google_redirect`. */
+  readonly googleRedirect: GoogleRedirectCapability;
 }
 
 const GOOGLE_CONTINUE_OFF: GoogleContinueCapability = { supported: false, oneTapSignup: false };
+const GOOGLE_REDIRECT_OFF: GoogleRedirectCapability = { enabled: false };
 
 const GOOGLE_OFF: GoogleSocialCapability = {
   enabled: false,
@@ -108,6 +125,7 @@ function closed(status: SocialAuthStatus): SocialAuthState {
     socialRegistrationBirthDateReady: false,
     publicRegistration: false,
     googleContinue: GOOGLE_CONTINUE_OFF,
+    googleRedirect: GOOGLE_REDIRECT_OFF,
   };
 }
 
@@ -250,6 +268,17 @@ function decodeGoogleContinue(raw: unknown): GoogleContinueCapability {
   return { supported: true, oneTapSignup: raw.one_tap_signup };
 }
 
+/** Las DOS claves exactas de `features.google_redirect` (v2.136.0). */
+const GOOGLE_REDIRECT_KEYS = ['enabled', 'supported'] as const;
+
+function decodeGoogleRedirect(raw: unknown): GoogleRedirectCapability {
+  if (!plainObject(raw) || !exactKeys(raw, GOOGLE_REDIRECT_KEYS)
+      || raw.supported !== true || typeof raw.enabled !== 'boolean') {
+    return GOOGLE_REDIRECT_OFF;
+  }
+  return { enabled: raw.enabled === true };
+}
+
 /** Decodifica toda la capability como conjunto cerrado y conserva password. */
 export function readSocialAuthCapability(config: unknown): SocialAuthState {
   if (!plainObject(config)) return closed('malformed');
@@ -296,6 +325,9 @@ export function readSocialAuthCapability(config: unknown): SocialAuthState {
     // `continue` exige además el login con Google del dueño: sin él, el
     // endpoint está apagado (`googleDark('login')`) y no hay nada que llamar.
     googleContinue: google.login ? decodeGoogleContinue(features.google_continue) : GOOGLE_CONTINUE_OFF,
+    // El redirect también exige el login con Google del dueño: su `enabled`
+    // vivo ya lo incluye, y acá se vuelve a pedir para no depender de eso.
+    googleRedirect: google.login ? decodeGoogleRedirect(features.google_redirect) : GOOGLE_REDIRECT_OFF,
   };
 }
 

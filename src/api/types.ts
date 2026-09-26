@@ -252,6 +252,8 @@ export interface AppConfig {
     signup?: unknown;
     /** AF-17 · v2.92.0 · «Continuar con Google»; se decodifica en `socialAuth.ts`. */
     google_continue?: unknown;
+    /** AF-GOOGLE-REDIRECT · v2.136.0 · «Entrar» con Google en la misma pestaña. */
+    google_redirect?: unknown;
     /**
      * OLA 5 (v2.31.0) · capability del riel saldo. **Sin tipar a propósito.**
      *
