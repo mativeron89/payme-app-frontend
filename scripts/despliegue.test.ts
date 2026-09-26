@@ -628,6 +628,16 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
   const PAGINAS_CON_PARAMETRO = ['mesa', 'transferir'] as const;
   const RUTAS_APP = [...PAGES.map((p) => `/${p}`), ...PAGINAS_CON_PARAMETRO.map((p) => `/${p}/:param`)];
   const TODAS = [...PATHS_PUBLICOS, ...RUTAS_APP];
+  /**
+   * 🔴 AF-GOOGLE-REDIRECT · decisiones 92 y 94 · la ÚNICA excepción registrada
+   * a «todo rewrite va a /index.html»: el `login_uri` del ingreso con Google
+   * en la misma pestaña, que el hosting pasa al dueño. Se fija acá LITERAL,
+   * sin importarla de `vercel.ts`: si el destino cambia en un solo lado, rojo.
+   */
+  const REWRITE_GOOGLE_REDIRECT = {
+    source: '/auth/google/redirect',
+    destination: 'https://payme-app-backend-production.up.railway.app/api/auth/google/redirect',
+  } as const;
 
   it('🔴 las claves de primer nivel son EXACTAMENTE tres', () => {
     // `redirects`, `cleanUrls`, `trailingSlash`, `routes` o `functions` nuevos
@@ -641,11 +651,42 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
     expect(
       V.rewrites,
       'si esto cambia, un acceso directo a una página de Meta o de la app vuelve a dar 404',
-    ).toEqual(TODAS.map((source) => ({ source, destination: '/index.html' })));
+    ).toEqual([
+      ...TODAS.map((source) => ({ source, destination: '/index.html' })),
+      REWRITE_GOOGLE_REDIRECT,
+    ]);
+  });
+
+  /**
+   * 🔴 AF-GOOGLE-REDIRECT · un solo rewrite sale de la app, y es ése. Un
+   * segundo destino externo, uno armado con otro host o un `source` con
+   * parámetros o comodines caen acá.
+   */
+  it('🔴 un único rewrite no va a /index.html, y es EXACTAMENTE el login_uri de Google', () => {
+    const externos = (V.rewrites ?? []).filter((r) => r.destination !== '/index.html');
+    expect(externos).toEqual([REWRITE_GOOGLE_REDIRECT]);
+    const destino = new URL(REWRITE_GOOGLE_REDIRECT.destination);
+    expect(destino.protocol).toBe('https:');
+    expect(destino.host).toBe('payme-app-backend-production.up.railway.app');
+    expect(destino.pathname).toBe('/api/auth/google/redirect');
+    expect(destino.search + destino.hash).toBe('');
+    expect(REWRITE_GOOGLE_REDIRECT.source).not.toMatch(/[:*()]/);
+  });
+
+  it.each([
+    { source: '/auth/google/redirect2', destination: REWRITE_GOOGLE_REDIRECT.destination },
+    { source: '/auth/:path*', destination: 'https://payme-app-backend-production.up.railway.app/api/auth/:path*' },
+    { source: '/auth/google/redirect', destination: 'https://otro-backend.example.com/api/auth/google/redirect' },
+  ])('🔴 MUTANTE · un segundo destino externo ($source → $destination) NO pasa la política', (extra) => {
+    const mutado = structuredClone(V) as unknown as { rewrites: Array<{ source: string; destination: string }> };
+    mutado.rewrites.push(extra);
+    expect(mutado.rewrites.filter((r) => r.destination !== '/index.html')).not.toEqual([REWRITE_GOOGLE_REDIRECT]);
   });
 
   it('🔴 cada `source` es un path exacto · NADA global', () => {
-    const fuentes = (V.rewrites ?? []).map((r) => r.source);
+    // La excepción registrada tiene su propio test, exacto (arriba).
+    const fuentes = (V.rewrites ?? []).map((r) => r.source)
+      .filter((f) => f !== REWRITE_GOOGLE_REDIRECT.source);
     expect(fuentes, 'los rewrites dejaron de cubrir las rutas, o cubren de más').toEqual(TODAS);
     for (const f of fuentes) {
       // Sólo un segmento fijo y, a lo sumo, un parámetro con nombre al final.
@@ -660,7 +701,8 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
   it('🔴 hay un rewrite por cada página de `PAGES`, y ninguno de más', () => {
     const fuentes = new Set((V.rewrites ?? []).map((r) => r.source));
     for (const p of PAGES) expect(fuentes.has(`/${p}`), `/${p} sin rewrite`).toBe(true);
-    const deApp = [...fuentes].filter((f) => !(PATHS_PUBLICOS as readonly string[]).includes(f));
+    const deApp = [...fuentes].filter((f) => !(PATHS_PUBLICOS as readonly string[]).includes(f)
+      && f !== REWRITE_GOOGLE_REDIRECT.source);
     expect(deApp.map((f) => f.split('/')[1]).every((p) => PAGES.includes(p!))).toBe(true);
   });
 
@@ -706,7 +748,7 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
    * cero bloques.
    */
   it('🔴 el archivo tiene las reglas de verdad · nada mide en vacío', () => {
-    expect(V.rewrites, 'no hay rewrites: el gate mediría sobre nada').toHaveLength(TODAS.length);
+    expect(V.rewrites, 'no hay rewrites: el gate mediría sobre nada').toHaveLength(TODAS.length + 1);
     expect(RUTAS_APP.length).toBeGreaterThan(PAGES.length);
     // Dos bloques de los paths públicos + el global de CSP (n186).
     expect(V.headers, 'no hay bloques de headers').toHaveLength(3);

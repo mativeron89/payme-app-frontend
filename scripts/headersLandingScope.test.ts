@@ -63,7 +63,11 @@ describe('vercel.ts · aislamiento causal por identidad de proyecto', () => {
     expect(rewrites.slice(0, 2)).toEqual(PATHS.map((source) => ({
       source, destination: '/index.html',
     })));
-    expect(rewrites.every((x) => x.destination === '/index.html')).toBe(true);
+    // AF-GOOGLE-REDIRECT · todos a index.html salvo UNO, el `login_uri` de
+    // Google, al final; su valor exacto lo fija `despliegue.test.ts`.
+    const externos = rewrites.filter((x) => x.destination !== '/index.html');
+    expect(externos.map((x) => x.source)).toEqual(['/auth/google/redirect']);
+    expect(rewrites.at(-1)?.source).toBe('/auth/google/redirect');
     expect(rewrites.length).toBeGreaterThan(2);
     // n186 · delante va el bloque global de CSP en Report-Only (sus directivas
     // las fija `csp.test.ts`); las dos reglas Meta siguen exactamente iguales.

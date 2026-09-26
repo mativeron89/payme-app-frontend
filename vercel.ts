@@ -165,12 +165,36 @@ const cabecerasCsp = esApp
     ? [{ source: '/(.*)', headers: [{ key: 'Content-Security-Policy', value: cspLanding }] }]
     : [];
 
+/**
+ * AF-GOOGLE-REDIRECT · decisiones 92 y 94 · el `login_uri` del ingreso con
+ * Google en la misma pestaña. Google hace el POST a `app.paymemx.com`, porque
+ * la cookie `g_csrf_token` la escribe `gsi/client` en ese host, y el rewrite lo
+ * pasa al dueño con la cookie y el cuerpo (wire §3).
+ *
+ * 🔴 **Es el ÚNICO rewrite que no va a `/index.html`**, y es exacto: una sola
+ * ruta, sin parámetros ni comodines, a un solo destino fijo. No depende de
+ * `VITE_API_URL`: el `login_uri` está registrado en Google Cloud para
+ * producción, y un destino armado desde una variable podría mandar el POST de
+ * Google a otro backend. `despliegue.test.ts` y `headersLandingScope.test.ts`
+ * lo fijan byte por byte.
+ *
+ * ⚠️ Vercel no filtra un rewrite por método: un GET a esta ruta también llega
+ * al dueño, que no la sirve.
+ */
+export const REWRITE_GOOGLE_REDIRECT = {
+  source: '/auth/google/redirect',
+  destination: 'https://payme-app-backend-production.up.railway.app/api/auth/google/redirect',
+};
+
 export const config = {
   // 🔴 PRIMERA PROPIEDAD Y FUERA DE TODA CONDICIÓN. No depende del artefacto,
   // del entorno ni de nada que el panel de Vercel pueda no tener puesto.
   git: { deploymentEnabled: { main: false } },
   rewrites: esApp
-    ? [...paths, ...rutasApp].map((source) => ({ source, destination: '/index.html' }))
+    ? [
+        ...[...paths, ...rutasApp].map((source) => ({ source, destination: '/index.html' })),
+        REWRITE_GOOGLE_REDIRECT,
+      ]
     : [],
   headers: [
     ...cabecerasCsp,
