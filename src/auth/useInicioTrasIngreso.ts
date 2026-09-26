@@ -20,7 +20,13 @@ import { conservaRutaTrasIngreso, trasCambioDeSesion } from './destinoTrasIngres
  */
 export function useInicioTrasIngreso(session: StoredSession | null): void {
   const route = useRoute();
-  const altaPendiente = useSyncExternalStore(subscribeSignupInvitation, signupInvitationSnapshot);
+  // El tercer argumento es el del render en servidor, que usan los unitarios
+  // que dibujan el árbol real (como en LoginScreen).
+  const altaPendiente = useSyncExternalStore(
+    subscribeSignupInvitation,
+    signupInvitationSnapshot,
+    signupInvitationSnapshot,
+  );
   const invitacionDeAltaVista = useRef(false);
   useEffect(() => {
     if (!session && altaPendiente.status === 'available') invitacionDeAltaVista.current = true;

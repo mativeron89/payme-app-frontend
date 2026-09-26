@@ -291,8 +291,16 @@ export function volverAlIngreso(): void {
   reemplazarUrl('/');
 }
 
-/** Después de entrar: Inicio, sin la ruta ni la query de la sesión anterior. */
+/**
+ * Después de entrar: Inicio, sin la ruta ni la query de la sesión anterior.
+ *
+ * Si la URL ya ES Inicio limpio (`/` o `/home`, sin query ni fragmento, como la
+ * deja `volverAlIngreso`), no se toca: reescribirla dispararía una navegación
+ * y un render de más sin cambiar la pantalla.
+ */
 export function irAlInicioTrasIngreso(): void {
+  const { pathname, search, hash } = window.location;
+  if ((pathname === '/' || pathname === '/home') && !search && !hash) return;
   reemplazarUrl('/home');
 }
 
