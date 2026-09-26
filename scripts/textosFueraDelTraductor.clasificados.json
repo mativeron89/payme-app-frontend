@@ -1,0 +1,786 @@
+[
+ {
+  "archivo": "src/components/AppHeader.tsx",
+  "texto": "Pay",
+  "grupo": "marca",
+  "veces": 1,
+  "motivo": "marca o logotipo; no se traduce"
+ },
+ {
+  "archivo": "src/components/AppHeader.tsx",
+  "texto": "Me",
+  "grupo": "marca",
+  "veces": 1,
+  "motivo": "marca o logotipo; no se traduce"
+ },
+ {
+  "archivo": "src/components/InviteFriends.tsx",
+  "texto": "friends",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/components/InviteFriends.tsx",
+  "texto": "groups",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/components/SelectorIdioma.tsx",
+  "texto": "es",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/components/SelectorIdioma.tsx",
+  "texto": "en",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/components/ui.tsx",
+  "texto": "Pay",
+  "grupo": "marca",
+  "veces": 1,
+  "motivo": "marca o logotipo; no se traduce"
+ },
+ {
+  "archivo": "src/components/ui.tsx",
+  "texto": "Me",
+  "grupo": "marca",
+  "veces": 1,
+  "motivo": "marca o logotipo; no se traduce"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "Eliminación de datos",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "Estado de tu solicitud de eliminación de datos en PayMe.",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "Consultando el estado de la solicitud…",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "Pendiente",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "Recibimos tu solicitud y todavía la estamos procesando. Vuelve a cargar esta página más tarde para ver si ya terminó.",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "Completada",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "La eliminación de tus datos se completó.",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "No encontrada",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "No encontramos una solicitud que corresponda a este enlace. Revisa que sea el enlace completo que recibiste.",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "No verificable",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/FacebookDataDeletionPage.tsx",
+  "texto": "No pudimos consultar el estado en este momento. No afirmamos nada sobre tu solicitud sin poder verificarlo: vuelve a cargar esta página en unos minutos.",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/PrivacyNoticePage.tsx",
+  "texto": "Aviso de privacidad",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/PrivacyNoticePage.tsx",
+  "texto": "Cargando el aviso vigente…",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/PrivacyNoticePage.tsx",
+  "texto": "No pudimos leer el aviso vigente en este momento. No mostramos una copia guardada para no publicar un texto que puede estar vencido.",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/PrivacyNoticePage.tsx",
+  "texto": "Reintentar",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/PrivacyNoticePage.tsx",
+  "texto": "Versión",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/PrivacyNoticePage.tsx",
+  "texto": "· vigente desde",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/PublicApp.tsx",
+  "texto": "PayMe",
+  "grupo": "marca",
+  "veces": 1,
+  "motivo": "marca o logotipo; no se traduce"
+ },
+ {
+  "archivo": "src/public/PublicApp.tsx",
+  "texto": "Volver a PayMe",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/TerminosUsoPage.tsx",
+  "texto": "Términos de uso",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/TerminosUsoPage.tsx",
+  "texto": "Cargando los Términos vigentes…",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/TerminosUsoPage.tsx",
+  "texto": "No pudimos leer los Términos vigentes en este momento. No mostramos una copia guardada para no publicar un texto que puede estar vencido.",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/TerminosUsoPage.tsx",
+  "texto": "Reintentar",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/TerminosUsoPage.tsx",
+  "texto": "Versión",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/public/TerminosUsoPage.tsx",
+  "texto": "· vigente desde",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "Ya sabemos cómo quedó: puedes reenviarla tal cual desde el botón de abajo.",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "Está bloqueada hasta reconciliarla; no vamos a reenviarla ni abrir otra mesa.",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "consumo",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "Por lo que pidió cada uno",
+  "grupo": "dinamico",
+  "veces": 1,
+  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "Cada uno elige sus platos",
+  "grupo": "dinamico",
+  "veces": 1,
+  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "igual",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "En partes iguales",
+  "grupo": "dinamico",
+  "veces": 1,
+  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "El total dividido entre todos",
+  "grupo": "dinamico",
+  "veces": 1,
+  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "total",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "Pagar el total",
+  "grupo": "dinamico",
+  "veces": 1,
+  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "Uno o varios cubren toda la cuenta",
+  "grupo": "dinamico",
+  "veces": 1,
+  "motivo": "se traduce con t(op.title)/t(op.sub); la clave existe en en.ts"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "Saldo PayMe",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "Congela",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/CreateMesaFlow.tsx",
+  "texto": "de tu saldo hasta que la mesa cierre",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/CuentasConectadas.tsx",
+  "texto": "Google",
+  "grupo": "marca",
+  "veces": 1,
+  "motivo": "marca o logotipo; no se traduce"
+ },
+ {
+  "archivo": "src/screens/HomeScreen.tsx",
+  "texto": "Tu saldo PayMe",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/HomeScreen.tsx",
+  "texto": "Ocultar saldo",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/HomeScreen.tsx",
+  "texto": "Mostrar saldo",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/HomeScreen.tsx",
+  "texto": "Cargar",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/HomeScreen.tsx",
+  "texto": "Transferir",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/HomeScreen.tsx",
+  "texto": "Últimos movimientos",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/LoginScreen.tsx",
+  "texto": "Pay",
+  "grupo": "marca",
+  "veces": 1,
+  "motivo": "marca o logotipo; no se traduce"
+ },
+ {
+  "archivo": "src/screens/LoginScreen.tsx",
+  "texto": "Me",
+  "grupo": "marca",
+  "veces": 1,
+  "motivo": "marca o logotipo; no se traduce"
+ },
+ {
+  "archivo": "src/screens/LoginScreen.tsx",
+  "texto": "Log in",
+  "grupo": "decision",
+  "veces": 1,
+  "motivo": "decisión 74 de Mati: «Log in» literal en los dos idiomas"
+ },
+ {
+  "archivo": "src/screens/LoginScreen.tsx",
+  "texto": "Aviso de Privacidad Simplificado",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/screens/LoginScreen.tsx",
+  "texto": "This document is only available in Spanish for now.",
+  "grupo": "c",
+  "veces": 2,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/screens/LoginScreen.tsx",
+  "texto": "Versión",
+  "grupo": "c",
+  "veces": 2,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/screens/LoginScreen.tsx",
+  "texto": "Aviso de privacidad",
+  "grupo": "c",
+  "veces": 1,
+  "motivo": "legal: aviso, términos o eliminación de datos"
+ },
+ {
+  "archivo": "src/screens/MasScreen.tsx",
+  "texto": "Saldo y tarjetas",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/MesaDetailView.tsx",
+  "texto": "seleccionado",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/screens/MesaDetailView.tsx",
+  "texto": "tomado",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/screens/MesaDetailView.tsx",
+  "texto": "disponible",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/screens/MesaDetailView.tsx",
+  "texto": "Si tocas pagar de nuevo, cubres la parte de otro comensal.",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/MesaScreen.tsx",
+  "texto": "Saldo PayMe",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/MesaScreen.tsx",
+  "texto": "G",
+  "grupo": "marca",
+  "veces": 1,
+  "motivo": "marca o logotipo; no se traduce"
+ },
+ {
+  "archivo": "src/screens/MesaScreen.tsx",
+  "texto": "o Apple Pay",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/MesaScreen.tsx",
+  "texto": "o Google Pay",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/MesaScreen.tsx",
+  "texto": "(el saldo PayMe pide cuenta)",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/PagosScreen.tsx",
+  "texto": "numeric",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/screens/PagosScreen.tsx",
+  "texto": "short",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/screens/SocialScreen.tsx",
+  "texto": "Transferir a",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Cargar saldo",
+  "grupo": "b",
+  "veces": 2,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Paga en cualquier OXXO",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Referencia OXXO",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Vence el",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "numeric",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "long",
+  "grupo": "token",
+  "veces": 1,
+  "motivo": "identificador o opción de Intl; no se muestra"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "· muestra este número en caja",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "El saldo se acredita solo cuando pagues en la tienda. Te avisamos con una notificación.",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Listo",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Monto a cargar",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Monto a cargar (mín. $50, máx. $10,000)",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "OXXO",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Tarjeta",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "SPEI",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Te damos una referencia para pagar en efectivo en cualquier OXXO. El saldo se acredita al pagar en la tienda (tarda unos minutos).",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Se acredita al instante",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "No tienes tarjetas guardadas todavía.",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Tu CLABE PayMe (",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Beneficiario:",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Copiar CLABE",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Generando tu CLABE…",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Transfiere por SPEI a esta CLABE desde tu banco; el saldo se acredita solo.",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Sin monto mínimo, disponible 24/7.",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Procesando…",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TopupScreen.tsx",
+  "texto": "Cargar",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Transferir",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Para",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Busca por nombre, email o ID PayMe",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Todavía no tienes amigos — agrega desde Amigos.",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Sin resultados.",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "cambiar",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Monto a transferir",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Disponible:",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Concepto (opcional)",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Va directo del saldo PayMe al saldo de tu amigo. Inmediata y sin costo.",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Enviando…",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Enviar a",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ },
+ {
+  "archivo": "src/screens/TransferScreen.tsx",
+  "texto": "Elige amigo y monto",
+  "grupo": "b",
+  "veces": 1,
+  "motivo": "garantía, saldo o pagos (apagado); espera textos de Diseño"
+ }
+]
