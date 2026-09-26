@@ -1743,6 +1743,10 @@ export function CreateMesaFlow() {
             </div>
           )}
           {avisoApertura()}
+          {/* Decisión 96 de Mati: una fila compacta —título chico e input—, sin
+              la leyenda «Sólo identifica…». La condición de aparición no cambia:
+              `canLabelPrivateUnknownRestaurant` exige que ni el QR ni el OCR
+              hayan dado el comercio. El error de validación sigue. */}
           {restaurantLabelEligible && (
             <label className="restaurant-label-card">
               <span className="restaurant-label-title">{t('Nombre del restaurante (opcional)')}</span>
@@ -1752,13 +1756,15 @@ export function CreateMesaFlow() {
                 maxLength={400}
                 disabled={!!frozen}
                 aria-invalid={restaurantLabelError ? true : undefined}
-                aria-describedby="restaurant-label-help"
+                aria-describedby={restaurantLabelError ? 'restaurant-label-help' : undefined}
                 onChange={(event) => setRestaurantLabel(event.target.value)}
                 placeholder={t('Restaurante sin identificar')}
               />
-              <span id="restaurant-label-help" className={restaurantLabelError ? 'form-error' : 'caption'}>
-                {restaurantLabelError ?? t('Sólo identifica esta mesa; no crea ni modifica un comercio.')}
-              </span>
+              {restaurantLabelError && (
+                <span id="restaurant-label-help" className="form-error restaurant-label-error">
+                  {restaurantLabelError}
+                </span>
+              )}
             </label>
           )}
           {/* Las tres formas salen de UNA lista, no de tres bloques copiados:

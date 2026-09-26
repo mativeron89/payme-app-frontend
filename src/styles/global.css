@@ -4366,22 +4366,38 @@ body {
   padding-top: var(--sp-4);
 }
 
+/* Decisión 96 de Mati («Hace mucho más chica la burbuja del Nombre del
+   Restaurante»): UNA fila, título chico a la izquierda e input a la derecha,
+   con el borde, el radio y la sombra de las opciones de «¿Cómo dividen?» que
+   tiene debajo (`.division-options .div-card`). Antes era una tarjeta de tres
+   filas con la leyenda: 132.7 px de alto a 390 px. */
 .restaurant-label-card {
   display: grid;
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-3);
-  padding: var(--sp-4);
+  grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--sp-3);
+  row-gap: var(--sp-1);
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border: 2px solid var(--border);
   border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: 0 2px 10px rgba(16, 30, 59, 0.09);
+  box-shadow: var(--sh-1);
+  /* El input lo hereda (`font: inherit`, más abajo): entra «Restaurante sin
+     identificar» sin recortarse al lado del título. */
+  font-size: var(--fs-sm);
 }
 
 .restaurant-label-title {
   font-family: var(--font-display);
-  font-size: var(--fs-body);
-  line-height: var(--lh-body);
+  font-size: 12.5px;
+  line-height: 1.2;
   font-weight: 700;
-  color: var(--text);
+  color: var(--text-muted);
+}
+
+.restaurant-label-error {
+  grid-column: 1 / -1;
 }
 
 .restaurant-label-card input,

@@ -49,7 +49,8 @@ test.describe('n179 · ticket real sin QR', () => {
     const label = page.getByLabel('Nombre del restaurante (opcional)');
     await expect(label).toBeVisible();
     await label.fill('  Cafe\u0301   del Centro  ');
-    await expect(page.getByText('Sólo identifica esta mesa; no crea ni modifica un comercio.')).toBeVisible();
+    // Decisión 96 de Mati: el campo va sin la leyenda «Sólo identifica…».
+    await expect(page.getByText('Sólo identifica esta mesa; no crea ni modifica un comercio.')).toHaveCount(0);
     await completarDivision(page);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Compartir la mesa' })).toBeVisible();

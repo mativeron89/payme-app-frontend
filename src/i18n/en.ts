@@ -446,7 +446,6 @@ export const EN: Record<string, string> = {
   "Esta mesa es anterior y no guardó el número original de personas. Mostramos las porciones disponibles de siempre.": "This older table didn't save the original number of people. We're showing the usual available portions.",
   "Esta mesa no guardó el número original de personas. Actualiza para usar las porciones disponibles de siempre.": "This table didn't save the original number of people. Refresh to use the usual available portions.",
   "Número entero entre 1 y {0}.": "A whole number from 1 to {0}.",
-  "Sólo identifica esta mesa; no crea ni modifica un comercio.": "This only identifies this table; it doesn't create or change a business.",
   "Usa un nombre de hasta 200 caracteres.": "Use a name up to 200 characters.",
   "¿Entre cuántas personas compartieron este plato?": "How many people shared this dish?",
   "Pagado": "Paid",
