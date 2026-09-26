@@ -11,6 +11,24 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.194.4 — La foto del ticket, de la cámara o del carrete (decisión 91) (2026-09-26)
+
+Orden AF-GALERIA-CLAUDE-20260926 (sha256 59d29a90…). Base `0.194.3` (`5446b5a`). Decisión 91 de
+Mati: «Sí, las dos» (cámara y carrete) y «No, así está bien» (sin cartel de ejemplo).
+
+- **Qué cambió:** el input de la foto del ticket (`CreateMesaFlow`) ya no lleva
+  `capture="environment"`, que en iOS y Android abría directo la cámara. Ahora el teléfono ofrece
+  sacar la foto o elegirla de la fototeca.
+- **Sin cambios:** `accept` (del dueño), los rechazos locales de tamaño y el piso de n81.
+- **Sin cartel de «ticket de ejemplo».** Sin contrato ni cambio en el backend.
+- **Clase:** hay dos inputs de archivo en `src`. El del perfil no es de ticket y no tenía `capture`.
+- **Pruebas:**
+  - e2e rojo en la base: el input tenía `capture`;
+  - una foto elegida sigue el flujo hasta la división, sin cartel de ejemplo;
+  - el piso sigue frenando antes de subir;
+  - mutantes M1–M3 muertos (`environment`, `user` y `capture` a secas).
+- **Sin cubrir:** el selector real del sistema en iPhone y Android, que Playwright no abre.
+
 ## 0.194.3 — Después de entrar, Inicio; cerrar sesión no arrastra la ruta (2026-09-26)
 
 Orden AF-INICIO-TRAS-INGRESO-CLAUDE-20260926 (sha256 d2cc8c88…). Base `0.194.2` (`77d2d44`). Mati,
