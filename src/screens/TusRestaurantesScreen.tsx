@@ -161,6 +161,7 @@ export function TusRestaurantesScreen() {
                         const clave = `${r.id}:${v.code}`;
                         const abiertaV = visitaAbierta === clave;
                         const f = partesDeFecha(v.createdAt);
+                        const modo = modalidadDeVisita(v.divisionMode, t);
                         return (
                           <div key={v.code} className="rest-visita">
                             <button
@@ -174,7 +175,10 @@ export function TusRestaurantesScreen() {
                                 setTicketCode(v.code);
                               }}
                             >
-                              <span className="rest-visita-fecha">{f ? `${dias[f.diaSemana]} ${f.diaMes}` : '—'}</span>
+                              <span className="rest-visita-cuando">
+                                <span className="rest-visita-fecha">{f ? `${dias[f.diaSemana]} ${f.diaMes}` : '—'}</span>
+                                {modo && <span className="rest-visita-modo">{modo}</span>}
+                              </span>
                               <span className="rest-visita-hora">{f ? f.hora : ''}</span>
                               <span className="rest-visita-monto">{formatMXN(v.amountCents)}</span>
                               <Icon name="chevron-down" size={18} className={abiertaV ? 'rest-chev abierto' : 'rest-chev'} />
@@ -203,6 +207,20 @@ export function TusRestaurantesScreen() {
       <AppBottomBar active={null} />
     </div>
   );
+}
+
+/**
+ * Decisión 86 de Mati · la modalidad de cada visita, con el dato que el dueño ya
+ * publica (`visits[].division_mode`). Un valor que no es ninguno de los dos no
+ * se nombra: se omite el rótulo, nunca se adivina.
+ */
+export function modalidadDeVisita(
+  divisionMode: unknown,
+  t: (s: string, ...a: unknown[]) => string,
+): string | null {
+  if (divisionMode === 'igual') return t('Partes iguales');
+  if (divisionMode === 'consumo') return t('Por consumo');
+  return null;
 }
 
 /** Lo que consumiste en una visita: plato, fracción si no es entero y monto. */

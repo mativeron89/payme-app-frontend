@@ -6116,11 +6116,23 @@ body {
   background: var(--bg);
 }
 
-.rest-visita-fecha {
+.rest-visita-cuando {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rest-visita-fecha {
   font-size: 13.5px;
   font-weight: 700;
   color: var(--navy);
+}
+
+.rest-visita-modo {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--gray-d);
 }
 
 .rest-visita-hora {

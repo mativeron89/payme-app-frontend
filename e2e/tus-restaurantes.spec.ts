@@ -53,8 +53,9 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     await parolaccia.getByRole('button', { name: /^La Parolaccia/ }).click();
     const visitas = parolaccia.locator('.rest-visita');
     await expect(visitas).toHaveCount(3);
-    // Fecha «Xxx dd/mm» y hora «hh:mm».
-    await expect(visitas.first()).toHaveText(/^(Dom|Lun|Mar|Mié|Jue|Vie|Sáb) \d{2}\/\d{2}\d{2}:\d{2}\$/);
+    // Fecha «Xxx dd/mm», la modalidad (decisión 86; el mock las emite en
+    // consumo) y hora «hh:mm».
+    await expect(visitas.first()).toHaveText(/^(Dom|Lun|Mar|Mié|Jue|Vie|Sáb) \d{2}\/\d{2}Por consumo\d{2}:\d{2}\$/);
     await capturar(page, 'restaurantes-02-restaurante-abierto');
 
     // La primera visita que arma el mock es la más NUEVA (va arriba) y trae el

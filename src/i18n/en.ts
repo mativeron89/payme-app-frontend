@@ -852,6 +852,8 @@ export const EN: Record<string, string> = {
   "Lo que elegiste en tus mesas.": "What you chose at your tables.",
   "Lo que pagaste, descontando reembolsos. Cada visita incluye la propina; los platos, no.": "What you paid, minus refunds. Each visit includes the tip; the dishes don't.",
   "Tu parte, en partes iguales": "Your share, split equally",
+  "Partes iguales": "Split evenly",
+  "Por consumo": "By what you ordered",
   "lugar": "place",
   "lugares": "places",
   "este mes": "this month",
