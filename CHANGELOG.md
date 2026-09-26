@@ -11,6 +11,23 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.194.1 — Tus restaurantes: el toque muestra lo propio y el ticket completo va aparte (2026-09-26)
+
+Orden AF-STATS-LO-PROPIO-CLAUDE-20260926 (sha256 d86fe95c…). Base `0.194.0` (`e7171e7`).
+Defecto que reportó Mati: «Dice o partes iguales o por consumo pero no me dice qué consumi yo,
+esta el ticket entero».
+
+- **La causa:** un solo toque en la visita desplegaba lo propio Y abría el ticket completo; el
+  modal lo tapaba.
+- **Ahora:** tocar la visita sólo despliega o repliega lo propio (plato, porción «½», monto y la
+  modalidad). Dentro de la visita abierta hay un botón aparte, **«Ver ticket completo»** (EN «See
+  full ticket»), que abre el mismo detalle digital de antes. Al cerrarlo, el foco vuelve al botón.
+- **Accesibilidad:** `aria-expanded` en la fila; `aria-haspopup="dialog"` sólo en el botón.
+- **Sin contrato ni espejo.** «Qué comes» no se toca (decisión 88).
+- **Pruebas:** e2e nuevo, rojo en la base; los dos e2e que abrían el ticket desde la fila pasan
+  por el botón. Mutantes M1–M6 muertos (la fila vuelve a abrir el ticket, la fila no repliega,
+  `aria-haspopup` en la fila o fuera del botón, el botón no abre, el texto sin traducir).
+
 ## 0.194.0 — Direcciones sin «#» (History API), sin romper enlaces viejos (n130) (2026-09-25)
 
 Orden AF-HISTORY-N130-CLAUDE-20260925 (sha256 5363c499…), **opción A por adenda del
