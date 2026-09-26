@@ -53,7 +53,12 @@ async function conRielApagado(page: import('@playwright/test').Page): Promise<vo
 
 /** El acceso tal cual lo toca la persona → la pantalla a la que tiene que caer. */
 const ACCESOS = [
-  { pestana: 'Cuenta', acceso: 'Ver pagos', hash: '#/pagos', titulo: 'Mis pagos' },
+  // Decisión 98 de Mati: mientras los pagos estén apagados, «Ver pagos» lleva a
+  // Mesas (su título es «Historial»). La ruta `#/pagos` sigue viva y la cubre
+  // `corteGuard.test.ts` («#/pagos SÍ monta Mis pagos»).
+  { pestana: 'Cuenta', acceso: 'Ver pagos', hash: '#/mesas', titulo: 'Historial' },
+  // Decisión 99: «Ver perfil» lleva a Configuración, la misma pantalla que «Más».
+  { pestana: 'Cuenta', acceso: 'Ver perfil', hash: '#/mas', titulo: 'Configuración' },
   {
     pestana: 'Estadísticas',
     acceso: 'Ver mis estadísticas',

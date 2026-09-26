@@ -244,12 +244,20 @@ export function HomeScreen() {
         {/* La tarjeta cuadra la esquina que coincide con una pestaña extrema;
             la pestaña central conserva ambos radios (§5 bis · B). */}
         <MountedCard seam={tab === TABS[0]!.id ? 'left' : tab === TABS.at(-1)!.id ? 'right' : undefined}>
+          {/* Decisiones 98 y 99 de Mati: la pestaña «Cuenta» ofrece dos accesos
+              lado a lado, del mismo tamaño y composición que el de «Estadísticas»:
+              - «Ver pagos» lleva a Mesas mientras los pagos estén apagados (la ruta
+                'pagos' sigue existiendo);
+              - «Ver perfil» lleva a Configuración, la misma pantalla que «Más»
+                (`AppBottomBar` → 'mas' → `MasScreen`).
+              «Ver tarjetas» conserva su condición. */}
           {tab === 'cuenta' && (
             <div className="launch-pair home-tab-panel">
               {rail.showCards && corte.showCards && (
                 <Launcher icon="card" label={t('Ver tarjetas')} onClick={() => navigate('tarjetas')} />
               )}
-              <Launcher icon="receipt" label={t('Ver pagos')} onClick={() => navigate('pagos')} />
+              <Launcher icon="receipt" label={t('Ver pagos')} onClick={() => navigate('mesas')} />
+              <Launcher icon="settings" label={t('Ver perfil')} onClick={() => navigate('mas')} />
             </div>
           )}
 
