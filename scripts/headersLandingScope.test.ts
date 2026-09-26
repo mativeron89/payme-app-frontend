@@ -53,13 +53,18 @@ function exigirComun(config: Record<string, unknown>): void {
 }
 
 describe('vercel.ts · aislamiento causal por identidad de proyecto', () => {
-  it('app obtiene exactamente dos rewrites y dos reglas de headers', () => {
+  it('app obtiene los dos rewrites Meta primero, sus dos reglas de headers, y las rutas de la app sin headers propios', () => {
     const r = ejecutar('app');
     expect(r.status, r.salida).toBe(0);
     exigirComun(r.config!);
-    expect(r.config!['rewrites']).toEqual(PATHS.map((source) => ({
+    const rewrites = r.config!['rewrites'] as Array<{ source: string; destination: string }>;
+    // n130 · los dos Meta van primero y sin cambios; después, las rutas de la
+    // app (su lista exacta la fija `despliegue.test.ts`). Todos a index.html.
+    expect(rewrites.slice(0, 2)).toEqual(PATHS.map((source) => ({
       source, destination: '/index.html',
     })));
+    expect(rewrites.every((x) => x.destination === '/index.html')).toBe(true);
+    expect(rewrites.length).toBeGreaterThan(2);
     // n186 · delante va el bloque global de CSP en Report-Only (sus directivas
     // las fija `csp.test.ts`); las dos reglas Meta siguen exactamente iguales.
     const [csp, ...meta] = r.config!['headers'] as Array<{ source: string; headers: Array<{ key: string }> }>;

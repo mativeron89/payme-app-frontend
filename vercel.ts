@@ -44,6 +44,27 @@ const esApp = artifact === 'app';
 const esLanding = artifact === 'landing';
 
 const paths = ['/privacy', '/facebook-data-deletion/:code'];
+
+/**
+ * n130 · AF-HISTORY-N130 · las rutas normales de la app (History API).
+ *
+ * Una por página, EXACTAS. No es un catch-all a propósito: las guardas de
+ * despliegue prohíben reglas globales, porque un `/(.*)` alcanzaría de más, y
+ * así una ruta que no existe sigue dando 404 en el edge. La lista espeja
+ * `PAGES` de `src/router.ts`: este archivo se evalúa solo, sin importar nada,
+ * así que `despliegue.test.ts` ata las dos listas.
+ */
+const PAGINAS_APP = [
+  'home', 'cuenta', 'tarjetas', 'pagos', 'estadisticas', 'restaurantes', 'platos',
+  'evolucion', 'cargar', 'transferir', 'amigos', 'mesas', 'scan', 'mas', 'avisos',
+  'notificaciones', 'recovery', 'mesa',
+];
+/** Las que llevan un parámetro en la ruta: el código de mesa y el ID a transferir. */
+const PAGINAS_CON_PARAMETRO = ['mesa', 'transferir'];
+const rutasApp = [
+  ...PAGINAS_APP.map((p) => `/${p}`),
+  ...PAGINAS_CON_PARAMETRO.map((p) => `/${p}/:param`),
+];
 const headers = [
   { key: 'Cache-Control', value: 'no-store' },
   { key: 'Referrer-Policy', value: 'no-referrer' },
@@ -149,7 +170,7 @@ export const config = {
   // del entorno ni de nada que el panel de Vercel pueda no tener puesto.
   git: { deploymentEnabled: { main: false } },
   rewrites: esApp
-    ? paths.map((source) => ({ source, destination: '/index.html' }))
+    ? [...paths, ...rutasApp].map((source) => ({ source, destination: '/index.html' }))
     : [],
   headers: [
     ...cabecerasCsp,

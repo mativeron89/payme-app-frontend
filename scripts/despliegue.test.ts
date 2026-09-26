@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { load } from 'js-yaml';
 import { leerWorkflow, pasosDeWorkflow, pasosGarantizadosAntesDe } from './yamlWorkflow';
+import ts from 'typescript';
 
 /**
  * ⭐ LA COMPUERTA DE PUBLICACIÓN · que corte de verdad, no que lo diga.
@@ -597,8 +598,36 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
     headers?: readonly Regla[];
   };
 
-  /** Los dos únicos `source` que este archivo puede nombrar. */
+  /**
+   * n130 · `PAGES` leído del router por AST. No se importa `src/router.ts`:
+   * usa `window`, y el proyecto de TypeScript de `scripts/` no tiene el DOM.
+   */
+  const PAGES: readonly string[] = (() => {
+    const sf = ts.createSourceFile('router.ts', readFileSync(join(RAIZ, 'src', 'router.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+    let lista: string[] | null = null;
+    const visitar = (n: ts.Node): void => {
+      if (ts.isVariableDeclaration(n) && n.name.getText(sf) === 'PAGES' && n.initializer) {
+        const init = ts.isAsExpression(n.initializer) ? n.initializer.expression : n.initializer;
+        if (ts.isArrayLiteralExpression(init)) {
+          lista = init.elements.filter(ts.isStringLiteral).map((e) => e.text);
+        }
+      }
+      ts.forEachChild(n, visitar);
+    };
+    visitar(sf);
+    if (!lista || (lista as string[]).length < 10) throw new Error('no se pudo leer PAGES de src/router.ts');
+    return lista;
+  })();
+
+  /** Los dos únicos `source` públicos que este archivo puede nombrar. */
   const PATHS_PUBLICOS = ['/privacy', '/facebook-data-deletion/:code'] as const;
+  /**
+   * n130 · las rutas normales de la app: una por página de `PAGES` más
+   * `/mesa/:param` y `/transferir/:param`. EXACTAS, ninguna global.
+   */
+  const PAGINAS_CON_PARAMETRO = ['mesa', 'transferir'] as const;
+  const RUTAS_APP = [...PAGES.map((p) => `/${p}`), ...PAGINAS_CON_PARAMETRO.map((p) => `/${p}/:param`)];
+  const TODAS = [...PATHS_PUBLICOS, ...RUTAS_APP];
 
   it('🔴 las claves de primer nivel son EXACTAMENTE tres', () => {
     // `redirects`, `cleanUrls`, `trailingSlash`, `routes` o `functions` nuevos
@@ -608,20 +637,31 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
     );
   });
 
-  it('🔴 los rewrites son los dos exactos · ni de más, ni cambiados', () => {
+  it('🔴 los rewrites son los exactos · los dos públicos y las rutas de la app, ni de más, ni cambiados', () => {
     expect(
       V.rewrites,
-      'si esto cambia, un acceso directo a las páginas de Meta vuelve a dar 404',
-    ).toEqual([
-      { source: '/privacy', destination: '/index.html' },
-      { source: '/facebook-data-deletion/:code', destination: '/index.html' },
-    ]);
+      'si esto cambia, un acceso directo a una página de Meta o de la app vuelve a dar 404',
+    ).toEqual(TODAS.map((source) => ({ source, destination: '/index.html' })));
   });
 
-  it('🔴 cada `source` es un path público exacto · NADA global', () => {
+  it('🔴 cada `source` es un path exacto · NADA global', () => {
     const fuentes = (V.rewrites ?? []).map((r) => r.source);
-    expect(fuentes, 'los rewrites dejaron de cubrir las dos rutas, o cubren de más')
-      .toEqual([...PATHS_PUBLICOS]);
+    expect(fuentes, 'los rewrites dejaron de cubrir las rutas, o cubren de más').toEqual(TODAS);
+    for (const f of fuentes) {
+      // Sólo un segmento fijo y, a lo sumo, un parámetro con nombre al final.
+      expect(f, `\`${f}\` no es un path exacto`).toMatch(/^\/[a-z-]+(\/:[a-z]+)?$/);
+    }
+  });
+
+  /**
+   * 🔴 n130 · las rutas de `vercel.ts` y las páginas del router no pueden
+   * separarse: una página nueva sin rewrite daría 404 al recargarla.
+   */
+  it('🔴 hay un rewrite por cada página de `PAGES`, y ninguno de más', () => {
+    const fuentes = new Set((V.rewrites ?? []).map((r) => r.source));
+    for (const p of PAGES) expect(fuentes.has(`/${p}`), `/${p} sin rewrite`).toBe(true);
+    const deApp = [...fuentes].filter((f) => !(PATHS_PUBLICOS as readonly string[]).includes(f));
+    expect(deApp.map((f) => f.split('/')[1]).every((p) => PAGES.includes(p!))).toBe(true);
   });
 
   it('🔴 las cabeceras existen, con su valor, sobre los dos paths y ninguno más', () => {
@@ -666,7 +706,8 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
    * cero bloques.
    */
   it('🔴 el archivo tiene las reglas de verdad · nada mide en vacío', () => {
-    expect(V.rewrites, 'no hay rewrites: el gate mediría sobre nada').toHaveLength(2);
+    expect(V.rewrites, 'no hay rewrites: el gate mediría sobre nada').toHaveLength(TODAS.length);
+    expect(RUTAS_APP.length).toBeGreaterThan(PAGES.length);
     // Dos bloques de los paths públicos + el global de CSP (n186).
     expect(V.headers, 'no hay bloques de headers').toHaveLength(3);
     expect((V.headers ?? []).flatMap((h) => h.headers ?? [])).toHaveLength(5);
@@ -685,8 +726,8 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
       mutado.rewrites.push({ source: global });
       expect(
         mutado.rewrites.map((r) => r.source),
-        `una regla global sobre \`${global}\` alcanzaría también a la landing`,
-      ).not.toEqual([...PATHS_PUBLICOS]);
+        `una regla global sobre \`${global}\` alcanzaría de más`,
+      ).not.toEqual(TODAS);
     },
   );
 });
