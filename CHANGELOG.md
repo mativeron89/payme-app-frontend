@@ -11,6 +11,31 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.194.0 — Direcciones sin «#» (History API), sin romper enlaces viejos (n130) (2026-09-25)
+
+Orden AF-HISTORY-N130-CLAUDE-20260925 (sha256 5363c499…), **opción A por adenda del
+Bibliotecario**. Base `0.193.11` (`7560a91`).
+
+- **Rutas normales:** la app navega con `/home`, `/mesas`, `/mesa/PA-2847`… Recargar o abrir un
+  enlace directo funciona: hay un rewrite exacto por página en `vercel.ts`, sin reglas globales,
+  con la misma CSP.
+- **Enlaces viejos con `#`:** un `#/…` sin secreto se convierte a su ruta con `replaceState`,
+  conservando la query. No hace falta cambiar el backend.
+- **Opción A:** tres enlaces llevan un secreto en el fragmento y SE QUEDAN ahí:
+  - la invitación `#/mesa/…?t=`;
+  - la recuperación `#/recovery?token=`;
+  - `signup_invitation`.
+  Lo que va después de `#` no llega nunca al servidor ni al `Referer`. La conversión no los toca,
+  y el token nunca pasa a path ni query.
+- **Pruebas:**
+  - unitarios del router;
+  - e2e por cada clase del censo de enlaces, que registran todas las URLs por las que pasa la
+    página;
+  - mutantes H1–H6 muertos. H6 sobrevivía hasta que el test tuvo una clave codificada
+    (`%74oken`).
+- **Sin cubrir:** Google real, los correos reales y el fallback servido por Vercel (sólo la
+  configuración; lo verifica el Bibliotecario).
+
 ## 0.193.11 — Textos visibles fuera del traductor: censo, cinco traducidos y guarda (n79) (2026-09-25)
 
 Orden AF-I18N-N79-CLAUDE-20260925 (sha256 335adb1e…). Base `0.193.10` (`d566933`).
