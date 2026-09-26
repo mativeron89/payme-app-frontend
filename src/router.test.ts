@@ -196,10 +196,23 @@ describe('AF-INICIO-TRAS-INGRESO · la URL al cerrar sesión y al entrar', () =>
     expect(nav.pushState).not.toHaveBeenCalled();
   });
 
-  it('si la URL ya es la de destino, no toca el historial', () => {
-    const nav = navegadorFalso('/home');
-    irAlInicioTrasIngreso();
-    expect(nav.replaceState).not.toHaveBeenCalled();
+  it('si la URL ya es Inicio limpio (/ o /home), no toca el historial', () => {
+    for (const inicial of ['/', '/home']) {
+      const nav = navegadorFalso(inicial);
+      irAlInicioTrasIngreso();
+      expect(nav.replaceState, inicial).not.toHaveBeenCalled();
+      expect(nav.url()).toBe(inicial);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('Inicio con una query o un fragmento que quedaron sí se limpia a /home', () => {
+    for (const inicial of ['/?r=rest-qr-1', '/home?r=x', '/#algo']) {
+      const nav = navegadorFalso(inicial);
+      irAlInicioTrasIngreso();
+      expect(nav.url(), inicial).toBe('/home');
+      vi.unstubAllGlobals();
+    }
   });
 
   it('con el historial bloqueado, cae a location.replace', () => {

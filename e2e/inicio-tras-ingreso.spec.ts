@@ -20,15 +20,29 @@ const ruta = (page: Page) => page.evaluate(() => ({
   hash: location.hash,
 }));
 
+/**
+ * Barrera de cuadros: dos `requestAnimationFrame` después de lo que se ve,
+ * React ya corrió sus efectos, incluido el que decide a dónde ir tras entrar.
+ * Sin esto, una afirmación de «se quedó» puede pasar en el instante anterior a
+ * una redirección (lo mostró el mutante que quita la excepción del QR).
+ */
+async function asentado(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+}
+
 async function entrarCon(page: Page, email: string): Promise<void> {
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
-/** Inicio, por la URL y por la pantalla: la pestaña de Inicio activa. */
+/**
+ * Inicio, por la URL y por la pantalla: la pestaña de Inicio activa. La URL de
+ * Inicio es `/` o `/home` (como en `rutas-history.spec.ts`): después de cerrar
+ * sesión la URL ya es `/`, y la app no la reescribe.
+ */
 async function enInicio(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/:\d+\/home$/);
+  await expect(page).toHaveURL(/:\d+\/(home)?$/);
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Inicio', exact: true })).toHaveAttribute('aria-current', 'page');
 }
@@ -75,8 +89,9 @@ test.describe('AF-INICIO-TRAS-INGRESO · después de entrar, Inicio', () => {
   test('una sesión viva que abre una ruta directa se queda ahí (no es un ingreso)', async ({ page }) => {
     await ingresar(page);
     await page.goto('/mas');
-    await expect(page).toHaveURL(/:\d+\/mas$/);
     await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeVisible();
+    await asentado(page);
+    await expect(page).toHaveURL(/:\d+\/mas$/);
   });
 });
 
@@ -84,6 +99,8 @@ test.describe('AF-INICIO-TRAS-INGRESO · los enlaces de entrada van a su destino
   test('el QR del restaurante: entrar desde /scan?r=… deja en el escaneo con su restaurante', async ({ page }) => {
     await page.goto('/scan?r=rest-qr-1');
     await entrarCon(page, 'mati@payme.mx');
+    await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();
+    await asentado(page);
     await expect(page).toHaveURL(/:\d+\/scan\?r=rest-qr-1$/);
     await expect(page.getByRole('heading', { name: 'Escanea el ticket' })).toBeVisible();
   });
@@ -100,7 +117,8 @@ test.describe('AF-INICIO-TRAS-INGRESO · los enlaces de entrada van a su destino
     await expect.poll(async () => (await ruta(page)).path).toBe(`/mesa/${mesa.code}`);
     expect(page.url()).not.toContain(mesa.token);
     await expect(page.getByText('¡Te sumaste a la mesa!', { exact: true })).toBeVisible();
-    await expect(page).not.toHaveURL(/\/home$/);
+    await asentado(page);
+    await expect(page).toHaveURL(new RegExp(`/mesa/${mesa.code}$`));
   });
 
   test('una invitación de alta: después de crear la cuenta, la ruta en la que se abrió', async ({ page }) => {
@@ -113,7 +131,9 @@ test.describe('AF-INICIO-TRAS-INGRESO · los enlaces de entrada van a su destino
     await page.getByLabel('Contraseña', { exact: true }).fill('demo-e2e');
     await page.getByRole('button', { name: 'Registrarme', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Tus mesas' })).toBeVisible();
-    await expect(page).not.toHaveURL(/\/home$/);
+    await asentado(page);
+    await expect(page).not.toHaveURL(/:\d+\/(home)?$/);
+    await expect(page.getByRole('region', { name: 'Tus mesas' })).toBeVisible();
     expect(page.url()).not.toContain(invitacion);
   });
 });
