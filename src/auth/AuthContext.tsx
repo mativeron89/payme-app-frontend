@@ -18,6 +18,8 @@ import { clearSignupInvitation } from '../api/signupInvitation';
 import { loadSession, replaceCurrentSession, subscribeSession, type StoredSession } from '../api/storage';
 import type { GoogleRegisterRequest, RegisterRequest, User } from '../api/types';
 import type { GoogleContinueLinkRequest, GoogleContinueRequest } from '../api/socialAuth';
+import { volverAlIngreso } from '../router';
+import { useInicioTrasIngreso } from './useInicioTrasIngreso';
 
 export type FacebookCallbackPhase = 'idle' | 'processing' | 'error';
 
@@ -63,6 +65,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [facebookCallbackPhase, setFacebookCallbackPhase] = useState<FacebookCallbackPhase>(
     initialFacebookCallbackPhase,
   );
+  // AF-INICIO-TRAS-INGRESO · acá y no en el shell: los hijos se remontan con
+  // cada familia de sesión y no ven el ingreso (ver el hook).
+  useInicioTrasIngreso(session);
 
   useEffect(() => {
     api.onSessionExpired(() => setSession(loadSession()));
@@ -204,6 +209,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.logout();
     } finally {
+      // AF-INICIO-TRAS-INGRESO · la URL vuelve a la pantalla de ingreso: la ruta
+      // de la sesión que se cierra (p. ej. `/mas`) no se arrastra a la próxima.
+      volverAlIngreso();
       setSession(loadSession());
       setFacebookCallbackPhase('idle');
     }

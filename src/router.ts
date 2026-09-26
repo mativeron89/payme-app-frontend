@@ -267,6 +267,36 @@ export function replaceRoute(page: PageId, param?: string): void {
 }
 
 /**
+ * AF-INICIO-TRAS-INGRESO · reemplaza la URL ENTERA —camino, query y fragmento—
+ * sin dejar entrada en el historial.
+ *
+ * `replaceRoute` conserva la query (el `?r=` del QR tiene que sobrevivir a la
+ * navegación de adentro de la app); acá no se quiere: al cerrar sesión o al
+ * llegar a Inicio después de entrar, lo que quedó de la sesión anterior no se
+ * arrastra.
+ */
+function reemplazarUrl(url: string): void {
+  if (ubicacionActual() === url) return;
+  try {
+    window.history.replaceState(window.history.state, '', url);
+  } catch {
+    window.location.replace(url);
+    return;
+  }
+  avisarRuta();
+}
+
+/** Al cerrar sesión: la pantalla de ingreso, sin la ruta que quedó. */
+export function volverAlIngreso(): void {
+  reemplazarUrl('/');
+}
+
+/** Después de entrar: Inicio, sin la ruta ni la query de la sesión anterior. */
+export function irAlInicioTrasIngreso(): void {
+  reemplazarUrl('/home');
+}
+
+/**
  * G-35 · si el parser tuvo que degradar a Inicio, la barra también dice Inicio.
  *
  * Se reemplaza la entrada actual: con una asignación normal la ruta inválida
