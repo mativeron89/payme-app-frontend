@@ -136,7 +136,7 @@ test.describe('los accesos de Más', () => {
     await expect(barra.getByRole('button', { name: 'Más', exact: true })).toBeVisible();
 
     await barra.getByRole('button', { name: 'Inicio', exact: true }).click();
-    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page).toHaveURL(/:\d+\/home$/);
     await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toBeVisible();
   });
 
@@ -155,7 +155,7 @@ test.describe('los accesos de Más', () => {
     const barra = page.getByRole('navigation', { name: 'Navegación principal' });
     await barra.getByRole('button', { name: 'Más', exact: true }).click();
 
-    await expect(page).toHaveURL(/#\/mas$/);
+    await expect(page).toHaveURL(/:\d+\/mas$/);
     await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
     await expect(barra.getByRole('button', { name: 'Más', exact: true })).toHaveAttribute(
       'aria-current',

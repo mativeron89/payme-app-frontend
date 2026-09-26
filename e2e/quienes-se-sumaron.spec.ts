@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar } from './_app';
+import { ingresar, irEnLaApp } from './_app';
 
 /**
  * AF-25 · n72 · «quiénes se sumaron», sólo para el organizador
@@ -181,7 +181,7 @@ test.describe('AF-25 · quiénes se sumaron (n72)', () => {
     const src = await foto.getAttribute('src');
     expect(src).toMatch(/^blob:/);
     // Sale de la mesa (se desmonta la pantalla, sin recargar la página).
-    await page.goto('/#/');
+    await irEnLaApp(page, '/home');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => (window as unknown as { __revocadas: string[] }).__revocadas))
       .toContain(src);

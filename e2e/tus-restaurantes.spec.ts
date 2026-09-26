@@ -36,14 +36,14 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     // Con el acceso nuevo, la sección vieja de barras no está.
     await expect(page.locator('.stat-rest')).toHaveCount(0);
     await acceso(page).click();
-    await expect(page).toHaveURL(/#\/restaurantes$/);
+    await expect(page).toHaveURL(/:\d+\/restaurantes$/);
     await expect(page.locator('.stat-burbuja')).toContainText('$2,165.00');
     await expect(page.locator('.stat-burbuja')).toContainText('3 lugares · 6 visitas');
     await expect(page.locator('.rest-card')).toHaveCount(3);
     await expect(page.getByText('Lo que elegiste en tus mesas.', { exact: true })).toHaveCount(0);
     await capturar(page, 'restaurantes-01-cerrada');
     await page.getByRole('button', { name: 'Volver' }).click();
-    await expect(page).toHaveURL(/#\/estadisticas$/);
+    await expect(page).toHaveURL(/:\d+\/estadisticas$/);
   });
 
   test('tres niveles que se abren de a uno: restaurante → visita → lo consumido', async ({ page }) => {
@@ -88,7 +88,7 @@ test.describe('AF-29 · Tus restaurantes (2b)', () => {
     await page.goto('/#/restaurantes');
     await expect(page.locator('.rest-card').first()).toBeVisible();
     await page.getByRole('button', { name: 'Volver' }).click();
-    await expect(page).toHaveURL(/#\/estadisticas$/);
+    await expect(page).toHaveURL(/:\d+\/estadisticas$/);
   });
 
   test('con pagos, el pie dice que la visita incluye la propina y los platos no', async ({ page }) => {

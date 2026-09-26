@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { abrirMesaConLink, ingresar } from './_app';
+import { abrirMesaConLink, ingresar, irEnLaApp } from './_app';
 
 /**
  * AF-25 · n80 · soltar un consumo propio no pagado (`POST items/release`, dueño
@@ -35,7 +35,7 @@ async function mesaConUnoElegido(page: Page): Promise<string> {
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   // Decisión 32 · «Listo» registra y vuelve a Inicio; se vuelve a la mesa para mirar lo tomado.
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+  await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
   await page.goto(`/#/mesa/${mesa.code}`);
   await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
   return mesa.code;
@@ -111,9 +111,9 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await cambiarMesaEnMemoria(page, code, 'con_pago');
     // El detalle no tiene recarga manual: salir y volver lo vuelve a pedir, sin
     // recargar la página (que pisaría el cambio hecho en memoria).
-    await page.goto('/#/');
+    await irEnLaApp(page, '/home');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
-    await page.goto(`/#/mesa/${code}`);
+    await irEnLaApp(page, `/mesa/${code}`);
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
     const fila = page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first();
     await expect(fila).toContainText('Lo elegiste');
@@ -123,9 +123,9 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
   test('🔴 AF-29 · con el dato del dueño, un pago de OTRO no quita «Soltar»', async ({ page }) => {
     const code = await mesaConUnoElegido(page);
     await cambiarMesaEnMemoria(page, code, 'pago_ajeno');
-    await page.goto('/#/');
+    await irEnLaApp(page, '/home');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
-    await page.goto(`/#/mesa/${code}`);
+    await irEnLaApp(page, `/mesa/${code}`);
     // Testigo: el pago ajeno se ve en la mesa.
     await expect(page.getByRole('button', { name: /^Risotto ai Funghi/ }).first()).toContainText('Pagado');
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
@@ -137,9 +137,9 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
   test('AF-29 · con parte pagada, la fila dice qué pagaste y qué elegiste', async ({ page }) => {
     const code = await mesaConUnoElegido(page);
     await cambiarMesaEnMemoria(page, code, 'mitad_pagada');
-    await page.goto('/#/');
+    await irEnLaApp(page, '/home');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
-    await page.goto(`/#/mesa/${code}`);
+    await irEnLaApp(page, `/mesa/${code}`);
     await expect(page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first()).toContainText('Pagaste ½ · elegiste ½ más');
     // Lo elegido que queda se puede soltar; lo pagado, no (el dueño suelta sólo lo `locked`).
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
@@ -175,7 +175,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     const code = await mesaConUnoElegido(page);
     await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+    await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto(`/#/mesa/${code}`);
     await expect(page.getByRole('button', { name: 'Soltar Risotto ai Funghi' })).toBeVisible();
     // El Tagliatelle deja de existir en la mesa del mock: el dueño contestaría

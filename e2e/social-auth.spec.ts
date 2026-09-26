@@ -14,7 +14,7 @@ function externalRequests(page: Page): string[] {
 
 async function openRegistration(page: Page): Promise<void> {
   await page.goto(`/#/home?signup_invitation=${SIGNUP}`);
-  await expect(page).toHaveURL(/#\/home$/);
+  await expect(page).toHaveURL(/:\d+\/home$/);
   await expect(page.getByText('AVISO DE DEMOSTRACIÓN.')).toBeVisible();
   await page.getByLabel('Nombre', { exact: true }).fill('Sofía');
   await page.getByLabel('Apellido', { exact: true }).fill('Social');

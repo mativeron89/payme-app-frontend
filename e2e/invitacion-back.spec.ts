@@ -59,7 +59,7 @@ test.describe('el token de un link terminal no revive por historial', () => {
    */
   test('con una pantalla previa, Atrás vuelve a ella y no al link con token', async ({ page }) => {
     await ingresar(page);
-    await expect(page).toHaveURL(/#\/home|:\d+\/$/);
+    await expect(page).toHaveURL(/:\d+\/home|:\d+\/$/);
 
     // Navegación DENTRO de la app, que es la que crea entrada de historial.
     await page.evaluate((t) => {

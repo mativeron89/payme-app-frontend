@@ -203,6 +203,6 @@ test.describe('Compartir · selector progresivo y ausencias deliberadas', () => 
     const principal = page.getByRole('button', { name: 'Continuar', exact: true });
     await expect(principal).toBeVisible();
     await principal.click();
-    await expect(page).toHaveURL(/#\/mesa\/PA-/);
+    await expect(page).toHaveURL(/:\d+\/mesa\/PA-/);
   });
 });

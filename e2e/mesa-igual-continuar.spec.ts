@@ -73,12 +73,12 @@ test.describe('Continuar en la mesa (H-14)', () => {
     const listo = page.getByRole('button', { name: 'Listo', exact: true });
     await expect(listo).toBeEnabled();
     await listo.click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+    await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await page.goto('/#/mesa/PA-3121');
     // Vacío→vacío no deja fila ni `updated_at`: al reentrar no hay nota, el
     // círculo vuelve a ser «Listo». El éxito lo acreditó la vuelta a Inicio.
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
-    await expect(page).toHaveURL(/#\/mesa\/PA-3121$/);
+    await expect(page).toHaveURL(/:\d+\/mesa\/PA-3121$/);
     // En el contrato owner, vacío→vacío es replay exacto y por eso no crea
     // fila: el éxito se acredita por la respuesta canónica, no por una fila.
     await page.reload();
@@ -183,7 +183,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     // Decisión 32 · registra y vuelve a Inicio.
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+    await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
 
     /**
      * 🔴 **D-R8 invirtió esta aserción, y el motivo viejo era correcto.**

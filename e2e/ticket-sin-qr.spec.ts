@@ -9,7 +9,7 @@ import {
 async function escanearSinQr(page: import('@playwright/test').Page): Promise<void> {
   await ingresar(page);
   await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-  await expect(page).toHaveURL(/#\/scan$/);
+  await expect(page).toHaveURL(/:\d+\/scan$/);
   await page.getByRole('button', { name: 'Capturar' }).click();
 }
 
@@ -154,7 +154,7 @@ test.describe('n179 · ticket real sin QR', () => {
     await configurarTicketSinQr(page);
     await ingresar(page);
     await page.getByRole('button', { name: 'Nueva', exact: true }).click();
-    await expect(page).toHaveURL(/#\/scan$/);
+    await expect(page).toHaveURL(/:\d+\/scan$/);
     // Testigo de que la capability ya llegó: el `accept` se ensancha a la lista
     // del modo mock (con HEIC) sólo cuando el rail es autoritativo. Antes de eso
     // no hay piso publicado y la foto se subiría, que es lo correcto.

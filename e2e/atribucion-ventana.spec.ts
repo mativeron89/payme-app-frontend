@@ -214,7 +214,7 @@ test('🔴 tras un remount REAL, pantalla, compartir y descarga dicen lo mismo',
   // nadie. Si la recarga no hubiera pasado, o el pago no hubiera quedado, esto
   // no se sostiene.
   // Decisión 77: el encabezado ya no muestra el código; la URL sí.
-  await expect(page).toHaveURL(new RegExp(`#/mesa/${mesa.code}$`));
+  await expect(page).toHaveURL(new RegExp(`:\\d+/mesa/${mesa.code}$`));
   await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
   // El progreso de la mesa vuelve con mi pago adentro: el remount ocurrió Y
   // el pago quedó del otro lado. Sin las dos cosas, esto no se sostiene — y

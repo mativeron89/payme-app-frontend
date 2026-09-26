@@ -26,7 +26,7 @@ test.describe('Avisos conserva salida explícita', () => {
     await ingresar(page);
 
     await page.getByRole('button', { name: 'Avisos', exact: true }).click();
-    await expect(page).toHaveURL(/#\/avisos$/);
+    await expect(page).toHaveURL(/:\d+\/avisos$/);
 
     // La campana de esta pantalla NO es un botón: ya estás adentro y no hay
     // adónde ir. Por eso se busca por rol de imagen y su nombre accesible, que
@@ -35,13 +35,13 @@ test.describe('Avisos conserva salida explícita', () => {
 
     await page.getByRole('button', { name: 'Volver', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
-    await expect(page).not.toHaveURL(/#\/avisos$/);
+    await expect(page).not.toHaveURL(/:\d+\/avisos$/);
   });
 
   test('la barra inferior es la salida, y funciona', async ({ page }) => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Avisos', exact: true }).click();
-    await expect(page).toHaveURL(/#\/avisos$/);
+    await expect(page).toHaveURL(/:\d+\/avisos$/);
 
     await page.getByRole('button', { name: 'Inicio', exact: true }).click();
 
@@ -54,7 +54,7 @@ test.describe('Avisos conserva salida explícita', () => {
   test('el Atrás del navegador sigue devolviendo a Inicio', async ({ page }) => {
     await ingresar(page);
     await page.getByRole('button', { name: 'Avisos', exact: true }).click();
-    await expect(page).toHaveURL(/#\/avisos$/);
+    await expect(page).toHaveURL(/:\d+\/avisos$/);
 
     // El router es de hash y no se tocó, pero la afirmación vale igual: es el
     // gesto que la gente usa en el teléfono, y ahora es la única alternativa a
@@ -71,6 +71,6 @@ test.describe('Avisos conserva salida explícita', () => {
     // Decía "Aceptar y ver la mesa →", que no es el verbo de ningún otro lado.
     await page.getByRole('button', { name: 'Sumarme', exact: true }).click();
 
-    await expect(page).toHaveURL(/#\/mesa\/PA-/);
+    await expect(page).toHaveURL(/:\d+\/mesa\/PA-/);
   });
 });

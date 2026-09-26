@@ -70,7 +70,8 @@ test.describe('los accesos de las pestañas de Inicio llegan a su pantalla', () 
       await page.getByRole('tab', { name: pestana, exact: true }).click();
       await page.getByRole('button', { name: acceso, exact: true }).click();
 
-      await expect(page).toHaveURL(new RegExp(`${hash.replace('#/', '#\\/')}$`));
+      // n130 · la ruta vive en el path: `#/x` → `:puerto/x`.
+      await expect(page).toHaveURL(new RegExp(`:\\d+${hash.replace('#/', '\\/')}$`));
       await expect(page.getByText(titulo, { exact: true })).toBeVisible();
 
       /**

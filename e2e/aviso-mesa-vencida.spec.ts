@@ -28,7 +28,7 @@ test.describe('AF-34 · aviso de mesa vencida', () => {
     await expect(page.getByRole('button', { name: /Una mesa en la que elegiste se cerró/ })).toHaveCount(0);
     await capturar(page, 'aviso-01-en-avisos');
     await aviso.click();
-    await expect(page).toHaveURL(/#\/mesa\/PA-1099$/);
+    await expect(page).toHaveURL(/:\d+\/mesa\/PA-1099$/);
   });
 
   test('sin la costura, Avisos sigue como estaba (testigo)', async ({ page }) => {

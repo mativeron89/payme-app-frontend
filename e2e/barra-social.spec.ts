@@ -75,7 +75,7 @@ test.describe('§1.9 · la barra de cinco en la sección social', () => {
     const barra = page.getByRole('navigation', { name: BARRA });
     await barra.getByRole('button', { name: 'Inicio', exact: true }).click();
 
-    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page).toHaveURL(/:\d+\/home$/);
     await expect(page.getByRole('tab', { name: 'Asociadas', exact: true })).toBeVisible();
   });
 
@@ -147,6 +147,6 @@ test.describe('§1.9 · la barra de cinco en la sección social', () => {
     await expect(barra).toHaveCount(1);
 
     await barra.getByRole('button', { name: 'Inicio', exact: true }).click();
-    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page).toHaveURL(/:\d+\/home$/);
   });
 });

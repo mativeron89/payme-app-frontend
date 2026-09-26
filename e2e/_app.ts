@@ -232,3 +232,19 @@ export const CORTE = corteDePagosView({
  * —algo que diga que los pagos vuelven, en vez de un espacio vacío—, y eso es
  * una decisión de producto, no un ajuste de test. Queda elevado.
  */
+
+/**
+ * n130 · navega DENTRO de la app sin recargar la página.
+ *
+ * Con el router por hash, `page.goto('/#/…')` desde otra ruta de la app era una
+ * navegación del mismo documento: no recargaba, y los tests la usaban para
+ * volver a pedir datos sin perder el estado en memoria del mock. Con rutas
+ * normales, ir de `/mesa/X` a `/#/…` es una carga completa. Esto hace lo mismo
+ * que la app al navegar: `pushState` y el aviso al router.
+ */
+export async function irEnLaApp(page: Page, ruta: string): Promise<void> {
+  await page.evaluate((r) => {
+    window.history.pushState(null, '', r);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, ruta);
+}

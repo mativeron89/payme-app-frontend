@@ -33,7 +33,7 @@ test.describe('AF-31 · Evolución (2f)', () => {
     await preparar(page);
     await expect(acceso(page)).toContainText('$819.16 promedio en los últimos 6 meses');
     await acceso(page).click();
-    await expect(page).toHaveURL(/#\/evolucion$/);
+    await expect(page).toHaveURL(/:\d+\/evolucion$/);
     const burbuja = page.locator('.stat-burbuja');
     await expect(burbuja).toContainText('6 meses');
     await expect(burbuja).toContainText('$4,915.00');
@@ -57,7 +57,7 @@ test.describe('AF-31 · Evolución (2f)', () => {
     await expect(page.getByRole('listitem').filter({ hasText: 'Italiana' }).last()).toContainText('hoy 54%');
     await capturar(page, 'evolucion-01-2f');
     await page.getByRole('button', { name: 'Volver' }).click();
-    await expect(page).toHaveURL(/#\/estadisticas$/);
+    await expect(page).toHaveURL(/:\d+\/estadisticas$/);
   });
 
   test('con el mes actual vacío: su barra en cero y el resto igual', async ({ page }) => {

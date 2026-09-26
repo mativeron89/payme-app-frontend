@@ -13,16 +13,16 @@ test.describe('hash desconocido · normalización real del hook', () => {
   test('al montar descarta la query y reemplaza la entrada inválida', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/pagos');
-    await expect(page).toHaveURL(/#\/pagos$/);
+    await expect(page).toHaveURL(/:\d+\/pagos$/);
 
     await page.goto('/#/saldo?t=secret');
 
-    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page).toHaveURL(/:\d+\/home$/);
     expect(page.url()).not.toContain('secret');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
     await page.goBack();
-    await expect(page).toHaveURL(/#\/pagos$/);
+    await expect(page).toHaveURL(/:\d+\/pagos$/);
     expect(page.url()).not.toContain('saldo');
     expect(page.url()).not.toContain('secret');
   });
@@ -30,16 +30,16 @@ test.describe('hash desconocido · normalización real del hook', () => {
   test('después del montaje normaliza un hashchange sin ensuciar Atrás', async ({ page }) => {
     await ingresar(page);
     await page.evaluate(() => { window.location.hash = '#/pagos'; });
-    await expect(page).toHaveURL(/#\/pagos$/);
+    await expect(page).toHaveURL(/:\d+\/pagos$/);
 
     await page.evaluate(() => { window.location.hash = '#/zzz?t=secret'; });
 
-    await expect(page).toHaveURL(/#\/home$/);
+    await expect(page).toHaveURL(/:\d+\/home$/);
     expect(page.url()).not.toContain('secret');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
     await page.goBack();
-    await expect(page).toHaveURL(/#\/pagos$/);
+    await expect(page).toHaveURL(/:\d+\/pagos$/);
     expect(page.url()).not.toContain('zzz');
     expect(page.url()).not.toContain('secret');
   });

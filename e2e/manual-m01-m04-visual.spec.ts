@@ -108,7 +108,7 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
     await sembrarDosAvisos(page);
     await page.getByRole('button', { name: 'Avisos' }).click();
     await page.getByRole('button', { name: /La mesa PA-1099 se cerró/ }).click();
-    await expect(page).toHaveURL(/#\/mesa\/PA-1099$/);
+    await expect(page).toHaveURL(/:\d+\/mesa\/PA-1099$/);
     const reads = await page.evaluate(async () => {
       const storePath = '/src/api/mock/store.ts';
       const { state } = await import(/* @vite-ignore */ storePath) as {
@@ -134,7 +134,7 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
     await page.getByRole('button', { name: 'Avisos' }).click();
     await page.getByRole('button', { name: /La mesa PA-1099 se cerró/ }).click();
     await expect(page.getByText('No se pudo marcar como leído', { exact: true })).toBeVisible();
-    await expect(page).toHaveURL(/#\/avisos$/);
+    await expect(page).toHaveURL(/:\d+\/avisos$/);
     await expect(page.getByRole('button', { name: /La mesa PA-1099 se cerró/ }).locator('.aviso-dot')).not.toHaveClass(/off/);
   });
 
@@ -157,7 +157,7 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
     });
     await page.getByRole('button', { name: 'Avisos' }).click();
     await page.getByRole('button', { name: /La mesa PA-1099 se cerró/ }).click();
-    await expect(page).toHaveURL(/#\/mesa\/PA-1099$/);
+    await expect(page).toHaveURL(/:\d+\/mesa\/PA-1099$/);
     await expect(page.getByText('No se pudo marcar como leído', { exact: true })).toHaveCount(0);
   });
 });

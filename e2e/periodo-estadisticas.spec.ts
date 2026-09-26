@@ -67,7 +67,7 @@ test.describe('AF-31 · período de Mis estadísticas', () => {
     // de mirar la burbuja: si no, la de 2a —que ya dice «Mes pasado»— satisface la
     // aserción mientras 2b todavía no pintó (mutante P4, que así sobrevivía).
     await page.getByRole('button', { name: /^Tus restaurantes/ }).click();
-    await expect(page).toHaveURL(/#\/restaurantes$/);
+    await expect(page).toHaveURL(/:\d+\/restaurantes$/);
     await expect(page.locator('.rest-card').first()).toBeVisible();
     await expect(page.locator('.rest-card')).toHaveCount(3);
     await expect(page.locator('.stat-burbuja')).toContainText(MESES.anterior);

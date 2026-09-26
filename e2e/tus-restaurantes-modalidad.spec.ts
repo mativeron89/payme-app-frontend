@@ -48,7 +48,7 @@ test.describe('decisión 86 · la modalidad de cada visita en Tus restaurantes',
   test('una visita «igual» dice «Partes iguales» y una de consumo dice «Por consumo»', async ({ page }) => {
     await preparar(page);
     await page.getByRole('button', { name: /^Tus restaurantes/ }).click();
-    await expect(page).toHaveURL(/#\/restaurantes$/);
+    await expect(page).toHaveURL(/:\d+\/restaurantes$/);
 
     const hanzo = tarjeta(page, 'Hanzo Sushi');
     await hanzo.getByRole('button', { name: /^Hanzo Sushi/ }).click();

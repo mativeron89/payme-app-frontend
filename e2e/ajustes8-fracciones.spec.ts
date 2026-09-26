@@ -55,7 +55,7 @@ async function sembrar(page: Page, code: string, original: number | null): Promi
   await page.goto(`/#/mesa/${code}`);
   // Decisión 77: el encabezado ya no muestra el código; el testigo es la URL
   // y el consumo que esta spec sembró.
-  await expect(page).toHaveURL(new RegExp(`#/mesa/${code}$`));
+  await expect(page).toHaveURL(new RegExp(`:\\d+/mesa/${code}$`));
   await expect(page.getByRole('button', { name: 'Pizza para compartir', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Pizza para compartir', exact: true }).click();
 }

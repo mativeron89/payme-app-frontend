@@ -185,7 +185,7 @@ test.describe('Configuración › Notificaciones (E1/E2)', () => {
     await ingresar(page);
     await page.goto('/#/mas');
     await page.getByRole('button', { name: /^Notificaciones/ }).click();
-    await expect(page).toHaveURL(/#\/notificaciones$/);
+    await expect(page).toHaveURL(/:\d+\/notificaciones$/);
     await expect(page.getByRole('heading', { name: 'Notificaciones', exact: true })).toBeVisible();
     // Decisión 75: la leyenda «Elige qué avisos…» (que era lo único que mostraba el
     // correo) ya no está; el testigo positivo de que la pantalla cargó es la lista.

@@ -43,7 +43,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
     await preparar(page);
     await expect(acceso(page)).toContainText('3 veces · y 6 platos más');
     await acceso(page).click();
-    await expect(page).toHaveURL(/#\/platos$/);
+    await expect(page).toHaveURL(/:\d+\/platos$/);
     await expect(tarjeta(page)).toBeVisible();
     await expect(page.locator('.stat-burbuja-total')).toHaveText('7 platos');
     await expect(page.locator('.stat-burbuja-contexto')).toHaveText('distintos');
@@ -70,7 +70,7 @@ test.describe('AF-31 · Qué comes (2c)', () => {
     await expect(page.getByRole('tab', { name: 'Momento' })).toBeVisible();
     await capturar(page, 'platos-01-2c');
     await page.getByRole('button', { name: 'Volver' }).click();
-    await expect(page).toHaveURL(/#\/estadisticas$/);
+    await expect(page).toHaveURL(/:\d+\/estadisticas$/);
   });
 
   test('con pagos, dice que el monto de cada plato no lleva propina', async ({ page }) => {

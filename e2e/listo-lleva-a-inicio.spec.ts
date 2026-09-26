@@ -22,14 +22,14 @@ async function conRielApagado(page: Page): Promise<void> {
 }
 
 async function enInicio(page: Page): Promise<void> {
-  await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+  await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
   await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 }
 
 async function sigueEnLaMesa(page: Page, code: string): Promise<void> {
   // Se espera un momento real: la navegación, si ocurriera, sería asíncrona.
   await page.waitForTimeout(600);
-  expect(await page.evaluate(() => location.hash)).toBe(`#/mesa/${code}`);
+  expect(await page.evaluate(() => location.pathname)).toBe(`/mesa/${code}`);
   await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
 }
 
@@ -165,6 +165,6 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.' })).toBeVisible();
     await page.waitForTimeout(600);
-    expect(await page.evaluate(() => location.hash)).toBe(`#/mesa/${mesa.code}`);
+    expect(await page.evaluate(() => location.pathname)).toBe(`/mesa/${mesa.code}`);
   });
 });

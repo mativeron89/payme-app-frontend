@@ -125,8 +125,8 @@ const ESPERADO: Record<PageId, Esperado> = {
    * guard de `corteGuard.ts` los deja atrás. Cuando el corte se levante, estas
    * dos filas vuelven a ser `alias`/`pantalla`.
    */
-  cuenta: { tipo: 'redirige', a: /#\/home$/ },
-  tarjetas: { tipo: 'redirige', a: /#\/home$/ },
+  cuenta: { tipo: 'redirige', a: /:\d+\/home$/ },
+  tarjetas: { tipo: 'redirige', a: /:\d+\/home$/ },
   pagos: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis pagos' } },
   estadisticas: { tipo: 'pantalla', marcador: { rol: 'texto', nombre: 'Mis estadísticas' } },
   // AF-29 · 2b. Monta su pantalla con el <h1> «Tus restaurantes» (visible en
@@ -147,8 +147,8 @@ const ESPERADO: Record<PageId, Esperado> = {
    * una decisión y no un olvido. El detalle de por qué —historial, endpoints,
    * vocabulario— lo cubre `rutas-wallet.spec.ts`.
    */
-  cargar: { tipo: 'redirige', a: /#\/home$/ },
-  transferir: { tipo: 'redirige', a: /#\/home$/ },
+  cargar: { tipo: 'redirige', a: /:\d+\/home$/ },
+  transferir: { tipo: 'redirige', a: /:\d+\/home$/ },
 
   /**
    * §1.9 · la sección social es UNA pantalla con tres pestañas, así que
@@ -257,7 +257,7 @@ test.describe('cada ruta declarada monta su propia pantalla', () => {
         await expect(
           ubicar(page, (aliasada as { marcador: Marcador }).marcador),
         ).toBeVisible();
-        await expect(page).toHaveURL(new RegExp(`#/${pagina}$`));
+        await expect(page).toHaveURL(new RegExp(`:\\d+/${pagina}$`));
         return;
       }
 

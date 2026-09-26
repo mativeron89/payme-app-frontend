@@ -151,7 +151,7 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
     await expect(page.getByText(RESTAURANTE, { exact: true })).toBeVisible();
     await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(`#/mesa/${CODIGO}$`));
+    await expect(page).toHaveURL(new RegExp(`:\\d+/mesa/${CODIGO}$`));
     await capturar(page, 'd79-04-la-mesa-se-cerro');
 
     // F-3 · el Historial cuenta desde la selección informativa.

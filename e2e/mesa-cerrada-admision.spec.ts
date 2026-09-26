@@ -106,7 +106,7 @@ test('🔴 puerta B en POSITIVO: la mesa pagada entera pero viva ADMITE entrar',
   await sumarme.click();
 
   await expect(page.getByText('Te sumaste a la mesa ✓')).toBeVisible();
-  await expect(page).toHaveURL(/#\/mesa\/PA-4520/);
+  await expect(page).toHaveURL(/:\d+\/mesa\/PA-4520/);
   // Adentro, la pantalla honesta del estado que la mesa tiene: pagos
   // registrados, pendiente de cierre. Entró — que era el punto.
   await expect(page.getByText('Pagos registrados')).toBeVisible();

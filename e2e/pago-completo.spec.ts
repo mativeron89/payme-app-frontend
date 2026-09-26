@@ -114,7 +114,7 @@ test.describe('el camino de pago completo', () => {
      */
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     // Decisión 32 (2026-09-24) · registra y vuelve a Inicio: Mati lo pidió literal.
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+    await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
 
     // La barra de «igual» ya no mide lo pagado sino lo ELEGIDO (decisiones 77 y

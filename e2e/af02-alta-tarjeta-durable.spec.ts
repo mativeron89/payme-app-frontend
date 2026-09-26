@@ -129,7 +129,7 @@ test('AF-02 · una key fallida no fabrica continuidad ni atraviesa un rail luego
    * hay pantalla. Y lo que el recorrido existe para probar se afirma igual
    * abajo: la key fallida no dejó continuidad de ningún tipo.
    */
-  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#/home');
+  await expect.poll(() => page.evaluate(() => window.location.pathname)).toBe('/home');
   await expect(page.getByRole('button', { name: 'Guardar tarjeta', exact: true })).toHaveCount(0);
   await expect(page.getByText(/···· 4532/)).toHaveCount(0);
 
@@ -178,7 +178,7 @@ for (const stage of ['setup', 'attach'] as const) {
      * el guard la reemplaza por Inicio. No se intenta alcanzar la pantalla de
      * alta ni su CTA de reintento — con el riel cerrado no deben existir.
      */
-    await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#/home');
+    await expect.poll(() => page.evaluate(() => window.location.pathname)).toBe('/home');
     const accion = stage === 'attach' ? 'Reintentar la misma tarjeta' : 'Guardar tarjeta';
     await expect(page.getByRole('button', { name: accion, exact: true })).toHaveCount(0);
     await expect(page.getByText(/quedó sin confirmar/)).toHaveCount(0);

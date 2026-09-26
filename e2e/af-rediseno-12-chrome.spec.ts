@@ -61,7 +61,7 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     expect(shell.scrollHeight).toBe(shell.clientHeight);
 
     await header.getByRole('button', { name: 'Avisos', exact: true }).click();
-    await expect(page).toHaveURL(/#\/avisos$/);
+    await expect(page).toHaveURL(/:\d+\/avisos$/);
   });
 
   test('Configuración muestra identidad sin prometer edición y sin cartel demo redundante', async ({ page }) => {

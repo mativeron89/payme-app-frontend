@@ -44,7 +44,7 @@ test.describe('Inicio · varias mesas abiertas (§1.1 variante B)', () => {
 
     // Tocar la fila entra a ESA mesa.
     await filaOtra.click();
-    await expect(page).toHaveURL(/#\/mesa\/PA-2847/);
+    await expect(page).toHaveURL(/:\d+\/mesa\/PA-2847/);
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?', exact: true })).toBeVisible();
     // Decisión 77 de Mati: la línea contextual es sólo el restaurante, sin el
     // código de mesa; el modo va en otro span y el «·» sigue `aria-hidden`.

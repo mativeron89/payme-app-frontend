@@ -55,7 +55,7 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
       await page.goto(`/#/${ruta}`);
 
       // ⭐ La redirección, ocurriendo de verdad adentro de la app montada.
-      await expect(page).toHaveURL(/#\/home$/);
+      await expect(page).toHaveURL(/:\d+\/home$/);
       await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
       // Y no se montó nada del riel en el camino.
@@ -76,7 +76,7 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
       await conRielApagado(page);
       await ingresar(page);
       await page.goto(`/#/${ruta}`);
-      await expect(page).toHaveURL(/#\/home$/);
+      await expect(page).toHaveURL(/:\d+\/home$/);
 
       await page.goBack();
 
@@ -100,7 +100,7 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
     await ingresar(page);
     for (const ruta of RUTAS_DEL_RIEL) {
       await page.goto(`/#/${ruta}`);
-      await expect(page).toHaveURL(/#\/home$/);
+      await expect(page).toHaveURL(/:\d+\/home$/);
     }
 
     expect(llamadas).toEqual([]);
@@ -122,7 +122,7 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
 
     await page.goto('/#/pagos');
 
-    await expect(page).toHaveURL(/#\/pagos$/);
+    await expect(page).toHaveURL(/:\d+\/pagos$/);
     await expect(page.getByRole('heading', { name: 'Mis pagos', exact: true })).toBeVisible();
   });
 
@@ -163,7 +163,7 @@ test.describe('las rutas del riel saldo no son alcanzables', () => {
     test(`${que} sigue visible con el riel apagado · #/${ruta}`, async ({ page }) => {
       await ingresar(page);
       await page.goto(`/#/${ruta}`);
-      await expect(page).toHaveURL(new RegExp(`#/${ruta}$`));
+      await expect(page).toHaveURL(new RegExp(`:\\d+/${ruta}$`));
 
       await expect(ver(page)).toBeVisible();
 
@@ -199,7 +199,7 @@ test.describe('corte del viernes · las rutas de tarjetas no son alcanzables', (
 
       await page.goto(`/#/${ruta}`);
 
-      await expect(page).toHaveURL(/#\/home$/);
+      await expect(page).toHaveURL(/:\d+\/home$/);
       await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
 
       const cuerpo = await page.locator('body').innerText();
@@ -212,7 +212,7 @@ test.describe('corte del viernes · las rutas de tarjetas no son alcanzables', (
       await conRielApagado(page);
       await ingresar(page);
       await page.goto(`/#/${ruta}`);
-      await expect(page).toHaveURL(/#\/home$/);
+      await expect(page).toHaveURL(/:\d+\/home$/);
 
       await page.goBack();
 

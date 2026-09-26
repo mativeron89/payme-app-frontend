@@ -1,15 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar } from './_app';
+import { ingresar, irEnLaApp } from './_app';
 
 /**
  * Decisión 32 (Mati, 2026-09-24) · «Listo» guarda y vuelve a Inicio. Estas
  * pruebas miran lo guardado, así que reentran a la misma mesa después.
  */
 async function listoYVolver(page: Page): Promise<void> {
-  const enMesa = await page.evaluate(() => location.hash);
+  // n130 · la ruta vive en el path, no en el fragmento.
+  const enMesa = await page.evaluate(() => location.pathname);
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
-  await page.goto(`/${enMesa}`);
+  await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
+  await page.goto(enMesa);
 }
 
 /**
@@ -154,11 +155,11 @@ test.describe('Listo · selección informativa v2', () => {
     // El guardado responde OK y CIERRA la mesa. F-2 (decisión 80): en vez de
     // volver mudo a Inicio se dice «La mesa se cerró»; «Ver la mesa» lleva a
     // la vista de sólo lectura.
-    const enMesa = await page.evaluate(() => location.hash);
+    const enMesa = await page.evaluate(() => location.pathname);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect(page.getByText('La mesa se cerró', { exact: true })).toBeVisible();
     await expect(page.getByText('Se eligieron todos los consumos.')).toBeVisible();
-    expect(await page.evaluate(() => location.hash)).toBe(enMesa);
+    expect(await page.evaluate(() => location.pathname)).toBe(enMesa);
     await page.getByRole('button', { name: 'Ver la mesa', exact: true }).click();
     await expect(page.getByText('Esta mesa ya cerró. Lo guardado es sólo de lectura.')).toBeVisible();
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
@@ -319,8 +320,9 @@ test.describe('Listo · selección informativa v2', () => {
     await page.evaluate(() => ((window as unknown as Record<string, () => void>).release_put)());
     // Decisión 32 · con el PUT OK se vuelve a Inicio; la lectura diferida que
     // antes era la recarga es ahora la del reingreso, y bloquea igual.
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
-    await page.goto('/#/mesa/PA-3121');
+    await expect.poll(() => page.evaluate(() => location.pathname)).toBe('/home');
+    // n130 · sin recargar: el `api` parchado en memoria tiene que seguir vivo.
+    await irEnLaApp(page, '/mesa/PA-3121');
 
     await expect.poll(() => page.evaluate(() => localStorage.getItem('payme.app.e2e.r3.reload.waiting'))).toBe('1');
     await expect(second).toBeDisabled();
