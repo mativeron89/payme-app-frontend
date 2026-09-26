@@ -5,8 +5,9 @@ import { extractApiError } from '../api/errors';
 import { isDefinitiveMutationError, isServiceUnavailable } from '../api/mutationRetry';
 import type { Friend, Group } from '../api/types';
 import { fold } from '../utils/format';
-import { Avatar, useToast } from './ui';
+import { useToast } from './ui';
 import { Icon } from './Icon';
+import { FriendAvatar } from './FriendAvatar';
 
 /**
  * Invitar amigos de PayMe a una mesa — el panel de §1.7 Compartir.
@@ -184,11 +185,15 @@ export function InviteFriends({ code }: { code: string }) {
     const done = invited.has(f.payme_id);
     return (
       <div key={key} className="inv-row">
-        {/* Monograma navy sobre `--teal-l`, SIN color por persona
-            (reconciliación 2026-08-21). El color por hash no lo elegía nadie y
-            metía un sexto color sin token en la única pantalla donde §5 bis · F
-            declara que hay uno solo. */}
-        <Avatar name={f.full_name} variant="marca" />
+        {/* Pedido de Mati (2026-09-25): la misma foto que en Amigos (n196),
+            con el mismo componente y la misma ruta del dueño
+            (`GET /friends/:userId/avatar`); `f.id` es el user id del amigo,
+            también en los integrantes de un grupo. Sin foto queda el monograma
+            navy sobre `--teal-l`, SIN color por persona (reconciliación
+            2026-08-21): el color por hash no lo elegía nadie y metía un sexto
+            color sin token en la única pantalla donde §5 bis · F declara que
+            hay uno solo. */}
+        <FriendAvatar friendId={f.id} name={f.full_name} refreshToken={tick} variant="marca" />
         <div className="fr-name">
           <div className="n">{f.full_name}</div>
           <div className="id">{f.payme_id}</div>

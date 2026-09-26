@@ -13,10 +13,17 @@ export function FriendAvatar({
   friendId,
   name,
   refreshToken,
+  variant = 'color',
 }: {
   friendId: string;
   name: string;
   refreshToken: number;
+  /**
+   * El monograma de respaldo, sin foto. Amigos usa el de siempre; «compartir
+   * mesa» conserva el suyo (`marca`, sin color por persona, reconciliación
+   * 2026-08-21). La foto es la misma en los dos lados.
+   */
+  variant?: 'color' | 'marca';
 }) {
   const { session } = useAuth();
   const lease = useRef<AvatarObjectUrlLease | null>(null);
@@ -46,5 +53,5 @@ export function FriendAvatar({
 
   return url ? (
     <img className="friend-avatar-image" src={url} alt="" aria-hidden="true" />
-  ) : <Avatar name={name} />;
+  ) : <Avatar name={name} variant={variant} />;
 }
