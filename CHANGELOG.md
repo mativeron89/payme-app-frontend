@@ -11,6 +11,26 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.193.10 — La CSP de la app contempla los estilos de Google Identity (n186, sigue en Report-Only) (2026-09-25)
+
+Orden AF-CSP-ESTILOS-CLAUDE-20260925 (sha256 fa2997ad…). Base `0.193.9` (`3a77a2a`).
+
+- **Lo medido:** con el `gsi/client` real y la política exacta en Report-Only aparecen los dos
+  mismos hashes que se ven en producción:
+  - un `<style>` constante de GIS: va por su hash en `style-src-elem`, y en `style-src` para
+    navegadores sin `-elem`;
+  - el atributo `style` del botón, que lleva el ancho del contenedor y cambia con cada teléfono:
+    `'unsafe-inline'` sólo en `style-src-attr`.
+- **Sin cambios:** `script-src`, `connect-src` y `frame-src` quedan exactamente igual, y lo fija un
+  test.
+- **Sigue en Report-Only.** Pasar a obligatoria espera la prueba de Mati.
+- **Pruebas:**
+  - harness con 0 violaciones a 320 y 280 px;
+  - mutantes: sin `style-src-attr` vuelven 2 violaciones, sin el hash de GIS vuelve 1, y relajar
+    `script-src` pone en rojo los tests.
+- **Límite:** el recorrido medido es el botón de Google en ingreso. El login real con Google, el
+  3DS de Stripe y la cámara no se midieron (hace falta dispositivo o cuenta real).
+
 ## 0.193.9 — La modalidad de cada visita en Tus restaurantes (2026-09-25)
 
 Orden AF-STATS-MODALIDAD-CLAUDE-20260925 (sha256 ba28e122…), decisión 86 de Mati («Modalidad y
