@@ -46,7 +46,9 @@ class FakeScriptElement extends FakeElement {
   referrerPolicy = '';
 }
 
-class FakeButtonElement extends FakeElement {}
+class FakeButtonElement extends FakeElement {
+  dataset: Record<string, string> = {};
+}
 
 class FakeContainer {
   readonly clientWidth: number;
@@ -366,6 +368,99 @@ describe('Google GIS · state, replay y configuración manual', () => {
     const button = container.children[0] as FakeButtonElement;
     expect(button.textContent).toBe('Continuar con Google');
     button.dispatch('click');
+    button.dispatch('click');
+    expect(onCredential).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AF-GOOGLE-REDIRECT · «Entrar» en la misma pestaña (decisiones 92 y 94)', () => {
+  const LOGIN_URI = 'https://app.paymemx.com/auth/google/redirect';
+  const conRedirect = (container = new FakeContainer(), onCredential = vi.fn(), simularEnMock = vi.fn()) => ({
+    ...options(container, onCredential),
+    redirect: { loginUri: LOGIN_URI, simularEnMock },
+  });
+
+  it('inicializa EXACTAMENTE como el wire: redirect, login_uri, sin callback', async () => {
+    const handle = renderGoogleIdentityButton(conRedirect());
+    const api = installGoogleApi();
+    onlyScript().dispatch('load');
+    await handle.ready;
+    expect(api.initialize).toHaveBeenCalledTimes(1);
+    expect(api.initialize.mock.calls[0][0]).toEqual({
+      client_id: 'payme-google-web-client-id',
+      ux_mode: 'redirect',
+      login_uri: LOGIN_URI,
+      auto_select: false,
+    });
+    expect(api.renderButton).toHaveBeenCalledTimes(1);
+    expect(api.prompt).not.toHaveBeenCalled();
+  });
+
+  it('sin redirect, el popup queda EXACTO como antes', async () => {
+    const handle = renderGoogleIdentityButton(options());
+    const api = installGoogleApi();
+    onlyScript().dispatch('load');
+    await handle.ready;
+    const init = api.initialize.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.keys(init).sort()).toEqual(['auto_select', 'button_auto_select', 'callback', 'client_id', 'ux_mode']);
+    expect(init).toMatchObject({ ux_mode: 'popup', auto_select: false, button_auto_select: false });
+    expect(init).not.toHaveProperty('login_uri');
+  });
+
+  it('el modo lo decide la pantalla montada: popup → redirect reinicializa; el mismo modo, nunca', async () => {
+    const primero = renderGoogleIdentityButton(options(new FakeContainer()));
+    const api = installGoogleApi();
+    onlyScript().dispatch('load');
+    await primero.ready;
+    primero.dispose();
+    const segundo = renderGoogleIdentityButton(conRedirect(new FakeContainer()));
+    await segundo.ready;
+    expect(api.initialize).toHaveBeenCalledTimes(2);
+    expect(api.initialize.mock.calls[1][0]).toMatchObject({ ux_mode: 'redirect', login_uri: LOGIN_URI });
+    segundo.dispose();
+    const tercero = renderGoogleIdentityButton(conRedirect(new FakeContainer()));
+    await tercero.ready;
+    expect(api.initialize, 'el mismo modo no se vuelve a inicializar').toHaveBeenCalledTimes(2);
+    tercero.dispose();
+    const cuarto = renderGoogleIdentityButton(options(new FakeContainer()));
+    await cuarto.ready;
+    expect(api.initialize).toHaveBeenCalledTimes(3);
+    expect(api.initialize.mock.calls[2][0]).toMatchObject({ ux_mode: 'popup' });
+  });
+
+  it('un login_uri que no es https exacto se rechaza antes de montar', () => {
+    for (const malo of ['http://app.paymemx.com/auth/google/redirect', `${LOGIN_URI}?x=1`,
+      `${LOGIN_URI}#x`, 'https://u:p@app.paymemx.com/auth/google/redirect', 'nada']) {
+      expect(() => renderGoogleIdentityButton({
+        ...options(), redirect: { loginUri: malo, simularEnMock: vi.fn() },
+      }), malo).toThrow('google_login_uri_invalid');
+    }
+  });
+
+  it('mock: el botón dice su modo y su login_uri, y el toque simula la ida y vuelta UNA vez, sin credencial', async () => {
+    vi.stubEnv('VITE_MOCK', '1');
+    const onCredential = vi.fn();
+    const simularEnMock = vi.fn();
+    const container = new FakeContainer();
+    const handle = renderGoogleIdentityButton(conRedirect(container, onCredential, simularEnMock));
+    await handle.ready;
+    expect(browser.scripts()).toHaveLength(0);
+    const button = container.children[0] as FakeButtonElement;
+    expect(button.dataset).toEqual({ uxMode: 'redirect', loginUri: LOGIN_URI });
+    button.dispatch('click');
+    button.dispatch('click');
+    expect(simularEnMock).toHaveBeenCalledTimes(1);
+    expect(onCredential).not.toHaveBeenCalled();
+  });
+
+  it('mock sin redirect: el botón no dice modo y entrega la credencial como siempre', async () => {
+    vi.stubEnv('VITE_MOCK', '1');
+    const onCredential = vi.fn();
+    const container = new FakeContainer();
+    const handle = renderGoogleIdentityButton(options(container, onCredential));
+    await handle.ready;
+    const button = container.children[0] as FakeButtonElement;
+    expect(button.dataset).toEqual({});
     button.dispatch('click');
     expect(onCredential).toHaveBeenCalledTimes(1);
   });

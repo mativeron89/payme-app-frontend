@@ -6,14 +6,30 @@ interface GoogleCredentialResponse {
   state?: unknown;
 }
 
+/** El popup de siempre: la credencial vuelve al callback de la página. */
+interface GoogleInitPopup {
+  client_id: string;
+  callback: (response: GoogleCredentialResponse) => void;
+  auto_select: false;
+  button_auto_select: false;
+  ux_mode: 'popup';
+}
+
+/**
+ * AF-GOOGLE-REDIRECT · decisiones 92 y 94: «Entrar» en la MISMA pestaña. Es la
+ * forma exacta del wire del dueño (`docs/GOOGLE_REDIRECT_D92_WIRE.md` §2):
+ * **sin `callback`**, porque en modo redirect Google hace el POST al
+ * `login_uri`, no al JS.
+ */
+interface GoogleInitRedirect {
+  client_id: string;
+  ux_mode: 'redirect';
+  login_uri: string;
+  auto_select: false;
+}
+
 interface GoogleIdentityApi {
-  initialize(options: {
-    client_id: string;
-    callback: (response: GoogleCredentialResponse) => void;
-    auto_select: false;
-    button_auto_select: false;
-    ux_mode: 'popup';
-  }): void;
+  initialize(options: GoogleInitPopup | GoogleInitRedirect): void;
   renderButton(
     parent: HTMLElement,
     options: {
@@ -44,6 +60,8 @@ interface GoogleNamespace {
 let loaderInFlight: Promise<GoogleIdentityApi> | null = null;
 let ownedScript: HTMLScriptElement | null = null;
 let initializedClientId: string | null = null;
+/** Con qué modo quedó inicializado GIS: `popup` o `redirect <login_uri>`. */
+let initializedMode: string | null = null;
 let pendingClientId: string | null = null;
 let pendingClientOwners = new Set<symbol>();
 
@@ -51,6 +69,8 @@ interface GoogleMount {
   readonly owner: symbol;
   readonly container: HTMLElement;
   readonly clientId: string;
+  /** `null` = popup; si no, el `login_uri` del modo redirect. */
+  readonly loginUri: string | null;
   readonly onCredential: (credential: string) => void;
   active: boolean;
   reserved: boolean;
@@ -188,11 +208,44 @@ function allocateRouteState(): string {
   throw new Error('google_state_collision');
 }
 
-/** GIS documenta una sola inicialización por página; una segunda pisa config. */
+function modoDe(mount: GoogleMount): string {
+  return mount.loginUri === null ? 'popup' : `redirect ${mount.loginUri}`;
+}
+
+function configuracionDe(mount: GoogleMount): GoogleInitPopup | GoogleInitRedirect {
+  return mount.loginUri === null
+    ? {
+        client_id: mount.clientId,
+        callback: routeCredential,
+        auto_select: false,
+        button_auto_select: false,
+        ux_mode: 'popup',
+      }
+    : {
+        client_id: mount.clientId,
+        ux_mode: 'redirect',
+        login_uri: mount.loginUri,
+        auto_select: false,
+      };
+}
+
+/**
+ * GIS documenta una sola inicialización por página; una segunda pisa config.
+ *
+ * AF-GOOGLE-REDIRECT · la única excepción es el MODO: «Entrar» usa redirect y
+ * «Crea tu cuenta» sigue en popup (fase 1), y las dos pantallas conviven en la
+ * misma página. El wire del dueño lo fija: «el modo lo decide la pantalla
+ * montada». Si la pantalla que monta pide otro modo, se vuelve a inicializar
+ * con su configuración completa; con el mismo modo, nunca.
+ */
 function initializeGoogleIdentity(api: GoogleIdentityApi, mount: GoogleMount): void {
   if (initializedClientId !== null) {
     if (initializedClientId !== mount.clientId) throw new Error('google_client_id_conflict');
     releaseClientId(mount);
+    if (initializedMode !== modoDe(mount)) {
+      api.initialize(configuracionDe(mount));
+      initializedMode = modoDe(mount);
+    }
     return;
   }
   if (!mount.reserved
@@ -200,13 +253,8 @@ function initializeGoogleIdentity(api: GoogleIdentityApi, mount: GoogleMount): v
       || !pendingClientOwners.has(mount.owner)) {
     throw new Error('google_client_id_reservation_lost');
   }
-  api.initialize({
-    client_id: mount.clientId,
-    callback: routeCredential,
-    auto_select: false,
-    button_auto_select: false,
-    ux_mode: 'popup',
-  });
+  api.initialize(configuracionDe(mount));
+  initializedMode = modoDe(mount);
   initializedClientId = mount.clientId;
   pendingClientId = null;
   pendingClientOwners.clear();
@@ -283,6 +331,29 @@ export interface GoogleButtonOptions {
   readonly locale: 'es' | 'en';
   readonly mockLabel: string;
   readonly onCredential: (credential: string) => void;
+  /**
+   * AF-GOOGLE-REDIRECT · modo redirect: Google vuelve a la app por el
+   * `login_uri`, así que `onCredential` no se llama nunca.
+   *
+   * `simularEnMock` es la ida y vuelta del dueño en el riel mock (donde no hay
+   * GIS ni AB): recibe la credencial del botón mock y hace lo que harían Google
+   * y el 303. Nunca se llama en real.
+   */
+  readonly redirect?: {
+    readonly loginUri: string;
+    readonly simularEnMock: (credential: string) => void;
+  };
+}
+
+/** Un `login_uri` válido: https, sin credenciales, query ni fragmento. */
+function validLoginUri(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === 'https:' && !u.username && !u.password && !u.search && !u.hash
+      && u.href === value;
+  } catch {
+    return false;
+  }
 }
 
 export interface GoogleButtonHandle {
@@ -298,6 +369,9 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
   if (options.locale !== 'es' && options.locale !== 'en') {
     throw new Error('google_locale_invalid');
   }
+  if (options.redirect && !validLoginUri(options.redirect.loginUri)) {
+    throw new Error('google_login_uri_invalid');
+  }
   const mock = import.meta.env.VITE_MOCK === '1';
   if (!mock) assertClientIdCompatible(options.clientId);
   const routeState = mock ? null : allocateRouteState();
@@ -309,6 +383,7 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
     owner: Symbol('google-identity-mount'),
     container: options.container,
     clientId: options.clientId,
+    loginUri: options.redirect?.loginUri ?? null,
     onCredential: options.onCredential,
     active: true,
     reserved: false,
@@ -332,8 +407,20 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
     button.type = 'button';
     button.className = 'social-provider-button social-provider-google';
     button.textContent = options.mockLabel;
+    const redirect = options.redirect;
+    if (redirect) {
+      // Observable para el e2e: el riel mock no tiene GIS que inspeccionar.
+      button.dataset.uxMode = 'redirect';
+      button.dataset.loginUri = redirect.loginUri;
+    }
     button.addEventListener('click', () => {
-      deliverMock(credencialMock());
+      if (!redirect) {
+        deliverMock(credencialMock());
+        return;
+      }
+      if (!mountRecord.active || containerMounts.get(options.container) !== mountRecord || mockDelivered) return;
+      mockDelivered = true;
+      redirect.simularEnMock(credencialMock());
     });
     options.container.append(button);
     mountPromise = Promise.resolve();
@@ -371,6 +458,7 @@ export function resetGoogleIdentityForTests(): void {
   ownedScript?.remove();
   ownedScript = null;
   initializedClientId = null;
+  initializedMode = null;
   pendingClientId = null;
   pendingClientOwners = new Set<symbol>();
   credentialRoutes.clear();
