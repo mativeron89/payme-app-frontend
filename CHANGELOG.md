@@ -24,6 +24,10 @@ iPhone: «la burbuja está descentrada».
 - **Sólo estilos y una clase.** Sin contrato ni cambio de comportamiento.
 - **Pruebas:** e2e de geometría, rojo en la base (36 contra 12). Mutantes M1–M5 muertos. Capturas de
   antes y después a 390 px.
+- **Un intermitente ajeno, arreglado en el test:** `login-desplazamiento` fallaba a veces, también en la
+  base (2 de 60). Con el botón ya a la vista, el punto lo tapaba el splash de carga, que se retira
+  después del montaje. El test ahora espera a que salga, como `meta-public-pages`. 120 de 120 en
+  verde, y la guarda sigue dando rojo si `.ingreso` deja de desplazarse.
 
 ## 0.194.1 — Tus restaurantes: el toque muestra lo propio y el ticket completo va aparte (2026-09-26)
 
