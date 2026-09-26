@@ -255,6 +255,12 @@ export interface Api {
   login(email: string, password: string): Promise<StoredSession>;
   register(data: RegisterRequest): Promise<StoredSession>;
   googleLogin(idToken: string): Promise<StoredSession>;
+  /**
+   * AF-GOOGLE-REDIRECT · v2.136.0 · canje del código de un solo uso con el que
+   * vuelve «Entrar» con Google en la misma pestaña. Misma respuesta que
+   * `google/login`, y la sesión se guarda igual.
+   */
+  googleRedirectRedeem(code: string): Promise<StoredSession>;
   googleRegister(data: GoogleRegisterRequest): Promise<StoredSession>;
   /**
    * AF-17 · v2.92.0 · «Continuar con Google» entra o crea la cuenta en un toque.
@@ -518,6 +524,7 @@ const realApi: Api = {
   login: (email, password) => httpLogin(email, password),
   register: (data) => httpRegister(data),
   googleLogin: (idToken) => httpSocialSession('/auth/google/login', { id_token: idToken }),
+  googleRedirectRedeem: (code) => httpSocialSession('/auth/google/redirect/redeem', { code }),
   googleRegister: (data) => httpSocialSession('/auth/google/register', data),
   googleContinue: (data) => httpGoogleContinue('/auth/google/continue', data),
   googleContinueLink: (data) => httpGoogleContinue('/auth/google/continue/link', data),
@@ -978,6 +985,7 @@ const mockApi: Api = {
   login: (email, password) => runWithSessionStateLock(() => mock.mockLogin(email, password)),
   register: (data) => runWithSessionStateLock(() => mock.mockRegister(data)),
   googleLogin: (idToken) => mock.mockGoogleLogin(idToken),
+  googleRedirectRedeem: (code) => mock.mockGoogleRedirectRedeem(code),
   googleRegister: (data) => mock.mockGoogleRegister(data),
   googleContinue: (data) => mock.mockGoogleContinue(data),
   googleContinueLink: (data) => mock.mockGoogleContinueLink(data),

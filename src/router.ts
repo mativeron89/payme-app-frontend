@@ -171,6 +171,10 @@ export function fragmentoConSecreto(hash: string): boolean {
   for (const clave of params.keys()) {
     if (/^(t|token|signup_invitation)$/i.test(clave)) return true;
   }
+  // AF-GOOGLE-REDIRECT · la vuelta del ingreso con Google (`#google_redirect=`,
+  // y su error) también: `googleRedirect.ts` la retira antes de montar, y esto
+  // asegura que ni un fallo de esa captura la convierta en una ruta.
+  if (/(^|[?&#/])google_redirect(_error)?=/i.test(limpio)) return true;
   // Un `token=` fuera de una query bien formada también cuenta.
   return /(^|[?&#/])(t|token|signup_invitation)=/i.test(limpio);
 }

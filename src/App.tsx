@@ -31,7 +31,7 @@ import { TopupScreen } from './screens/TopupScreen';
 import { TransferScreen } from './screens/TransferScreen';
 
 function Shell() {
-  const { session, facebookCallbackPhase, logout } = useAuth();
+  const { session, facebookCallbackPhase, vueltaGoogle, logout } = useAuth();
   // AF2 · LEGAL-3.0.0: la puerta de aceptación para quien ya tiene cuenta.
   const puerta = usePuertaLegal(session);
   /**
@@ -160,7 +160,8 @@ function Shell() {
   // El callback ya fue limpiado antes de React, pero su canje sigue siendo
   // asíncrono. No se monta ningún control de login mientras esa autoridad está
   // en vuelo: un segundo ingreso no puede competir por la sesión visible.
-  if (facebookCallbackPhase === 'processing') {
+  // AF-GOOGLE-REDIRECT · lo mismo mientras se canjea la vuelta de Google.
+  if (facebookCallbackPhase === 'processing' || vueltaGoogle.fase === 'processing') {
     return (
       <div className="login-screen">
         <div className="login-card" role="status" aria-live="polite">

@@ -54,18 +54,25 @@ if (!rutaPublica) {
  * estas líneas se evalúa en una ruta pública.
  */
 async function arrancarPrivada(): Promise<void> {
-  const [recovery, facebook, invitacion, idioma, app] = await Promise.all([
+  const [googleRedirect, recovery, facebook, invitacion, idioma, app] = await Promise.all([
+    import('./api/googleRedirect'),
     import('./api/recoveryFlow'),
     import('./api/facebookAuthFlow'),
     import('./api/signupInvitation'),
     import('./i18n/idioma'),
     import('./App'),
   ]);
+  const { capturarVueltaGoogleRedirect } = googleRedirect;
   const { bootstrapRecoveryTokenCapture } = recovery;
   const { bootstrapFacebookCallbackCapture } = facebook;
   const { bootstrapSignupInvitationCustody } = invitacion;
   const { IdiomaProvider } = idioma;
   const App = app.default;
+
+  // AF-GOOGLE-REDIRECT · la vuelta del ingreso con Google (`#google_redirect=…`)
+  // sale del fragmento con replaceState ANTES que nada: antes del router, que
+  // si no la convertiría en una ruta, y antes de la primera request.
+  capturarVueltaGoogleRedirect();
 
   // El recovery token se captura en memoria y se retira de query/fragmento
   // antes de que React pueda renderizar o iniciar cualquier request. Si el

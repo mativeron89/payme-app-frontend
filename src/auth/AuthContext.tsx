@@ -19,9 +19,48 @@ import { loadSession, replaceCurrentSession, subscribeSession, type StoredSessio
 import type { GoogleRegisterRequest, RegisterRequest, User } from '../api/types';
 import type { GoogleContinueLinkRequest, GoogleContinueRequest } from '../api/socialAuth';
 import { volverAlIngreso } from '../router';
+import {
+  canjearVueltaGoogleRedirectUnaVez,
+  olvidarVueltaGoogleRedirect,
+  vueltaGoogleRedirectSnapshot,
+} from '../api/googleRedirect';
+import { extractApiError } from '../api/errors';
 import { useInicioTrasIngreso } from './useInicioTrasIngreso';
 
 export type FacebookCallbackPhase = 'idle' | 'processing' | 'error';
+
+/**
+ * AF-GOOGLE-REDIRECT · la vuelta de «Entrar» con Google en la misma pestaña.
+ * El motivo del error decide el texto (siempre uno que ya existe):
+ * - `sin_vinculo`: `#google_redirect_error=social_auth_failed` (opaco, como
+ *   `google/login`): lleva a «Crea tu cuenta» si hay alta, como el popup;
+ * - `codigo_invalido`: el canje contestó `401` (reusado, vencido, inexistente);
+ * - `demasiados`: el canje contestó `429`;
+ * - `csrf`: `#google_redirect_error=csrf_failed`;
+ * - `no_disponible`: `#google_redirect_error=temporarily_unavailable`;
+ * - `fallo`: cualquier otra cosa (red, `404` con la capability apagada, forma).
+ */
+export type MotivoVueltaGoogle =
+  | 'sin_vinculo' | 'codigo_invalido' | 'demasiados' | 'csrf' | 'no_disponible' | 'fallo';
+
+export type VueltaGoogle =
+  | { readonly fase: 'idle' }
+  | { readonly fase: 'processing' }
+  | { readonly fase: 'error'; readonly motivo: MotivoVueltaGoogle };
+
+function vueltaGoogleInicial(): VueltaGoogle {
+  const v = vueltaGoogleRedirectSnapshot();
+  if (v.estado === 'codigo') return { fase: 'processing' };
+  if (v.estado === 'invalida') return { fase: 'error', motivo: 'fallo' };
+  if (v.estado === 'error') {
+    return {
+      fase: 'error',
+      motivo: v.error === 'social_auth_failed' ? 'sin_vinculo'
+        : v.error === 'csrf_failed' ? 'csrf' : 'no_disponible',
+    };
+  }
+  return { fase: 'idle' };
+}
 
 function initialFacebookCallbackPhase(): FacebookCallbackPhase {
   const capture = facebookCallbackSnapshot();
@@ -51,6 +90,10 @@ interface AuthState {
    */
   anunciar(mensaje: string): void;
   facebookCallbackPhase: FacebookCallbackPhase;
+  /** AF-GOOGLE-REDIRECT · la vuelta de «Entrar» con Google en la misma pestaña. */
+  vueltaGoogle: VueltaGoogle;
+  /** La pantalla ya mostró el error de la vuelta. */
+  descartarVueltaGoogle(): void;
   completeFacebookCallback(): Promise<void>;
   clearFacebookCallbackError(): void;
   logout(): Promise<void>;
@@ -68,6 +111,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // AF-INICIO-TRAS-INGRESO · acá y no en el shell: los hijos se remontan con
   // cada familia de sesión y no ven el ingreso (ver el hook).
   useInicioTrasIngreso(session);
+
+  /**
+   * AF-GOOGLE-REDIRECT · la vuelta ya salió de la URL en `main.tsx`. Acá se
+   * canjea UNA vez —`StrictMode` monta dos, y las dos comparten la misma
+   * promesa— y se entra como con el popup: la sesión nueva, la puerta legal y
+   * Inicio (AF-INICIO-TRAS-INGRESO) siguen su curso de siempre.
+   */
+  const [vueltaGoogle, setVueltaGoogle] = useState<VueltaGoogle>(vueltaGoogleInicial);
+  useEffect(() => {
+    if (vueltaGoogleRedirectSnapshot().estado !== 'codigo') return;
+    let vivo = true;
+    canjearVueltaGoogleRedirectUnaVez((codigo) => api.googleRedirectRedeem(codigo))
+      .then(() => {
+        olvidarVueltaGoogleRedirect();
+        setSession(loadSession());
+        if (vivo) setVueltaGoogle({ fase: 'idle' });
+      })
+      .catch((error: unknown) => {
+        olvidarVueltaGoogleRedirect();
+        setSession(loadSession());
+        const { status } = extractApiError(error);
+        const motivo: MotivoVueltaGoogle = status === 401 ? 'codigo_invalido'
+          : status === 429 ? 'demasiados' : 'fallo';
+        if (vivo) setVueltaGoogle({ fase: 'error', motivo });
+      });
+    return () => { vivo = false; };
+  }, []);
+  const descartarVueltaGoogle = useCallback(() => {
+    olvidarVueltaGoogleRedirect();
+    setVueltaGoogle((actual) => (actual.fase === 'error' ? { fase: 'idle' } : actual));
+  }, []);
 
   useEffect(() => {
     api.onSessionExpired(() => setSession(loadSession()));
@@ -233,6 +307,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       googleContinueLink,
       anunciar,
       facebookCallbackPhase,
+      vueltaGoogle,
+      descartarVueltaGoogle,
       completeFacebookCallback,
       clearFacebookCallbackError,
       logout,
@@ -248,6 +324,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       googleContinueLink,
       anunciar,
       facebookCallbackPhase,
+      vueltaGoogle,
+      descartarVueltaGoogle,
       completeFacebookCallback,
       clearFacebookCallbackError,
       logout,

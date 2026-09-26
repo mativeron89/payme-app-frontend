@@ -20,6 +20,7 @@ import {
   type GoogleButtonHandle,
 } from '../api/googleIdentity';
 import { sugerenciaDesdeIdToken } from '../api/googleClaims';
+import { GOOGLE_REDIRECT_LOGIN_URI, simularIdaYVueltaMock } from '../api/googleRedirect';
 import { vigilarPopupGoogle, type VigiaPopupGoogle } from '../api/googlePopupDiagnostico';
 import { AvisoGoogleOtraCuenta } from './AvisoGoogleOtraCuenta';
 import {
@@ -286,6 +287,13 @@ type GoogleActionAuthority =
       readonly purpose: 'login';
       readonly clientId: string;
       readonly locale: 'es' | 'en';
+      /**
+       * AF-GOOGLE-REDIRECT · decisiones 92 y 94: con `features.google_redirect.enabled`
+       * del dueño, «Entrar» va en la MISMA pestaña. Sólo el login: el alta sigue
+       * en popup (fase 1). Va en la autoridad para que un cambio de la capability
+       * remonte el botón con el modo nuevo.
+       */
+      readonly redirect: boolean;
     }
   /**
    * AF-16 · addendum 1 · Google PRIMERO en «Crea tu cuenta». Este botón no
@@ -358,6 +366,8 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     facebookCallbackPhase,
     completeFacebookCallback,
     clearFacebookCallbackError,
+    vueltaGoogle,
+    descartarVueltaGoogle,
     anunciar,
   } = useAuth();
   const social = useSocialAuthCapability();
@@ -579,7 +589,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     // están las casillas. El alta en un toque (`continue`) queda sólo en «Crea tu
     // cuenta»: enmienda parcial de la decisión del 18/09.
     if (mode === 'login') {
-      return { purpose: 'login', clientId, locale };
+      return { purpose: 'login', clientId, locale, redirect: social.googleRedirect.enabled };
     }
     if (capturaGoogle) {
       return unToqueEnAlta ? continuar(null) : { purpose: 'captura', clientId, locale };
@@ -613,6 +623,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     mode,
     perfilActivo,
     social.google.webClientId,
+    social.googleRedirect.enabled,
     unToqueEnAlta,
     versionAvisoContinue,
   ]);
@@ -652,6 +663,55 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   };
   const releaseAuthAction = () => { authActionActive.current = false; };
 
+  /**
+   * AF-GOOGLE-REDIRECT · la vuelta de «Entrar» con Google que no terminó en
+   * sesión. Los textos son los que ya existen para esos casos; ninguno dice si
+   * la cuenta existe.
+   *
+   * Sin vínculo (`social_auth_failed`, opaco como `google/login`) se hace lo
+   * mismo que con el popup: si hay con qué crear la cuenta, «Crea tu cuenta con
+   * Google» (decisión 73). A diferencia del popup, no hay `id_token` en la
+   * página para precargar datos: el paso los pide.
+   */
+  useEffect(() => {
+    if (vueltaGoogle.fase !== 'error') return;
+    // La vuelta llega con la página recién cargada: se espera a que el dueño
+    // diga si hay alta, que es lo que decide «Crea tu cuenta» o el texto neutro.
+    // El popup no tiene esta espera porque su botón sólo existe con la capability.
+    if (social.status === 'pending') return;
+    const motivo = vueltaGoogle.motivo;
+    descartarVueltaGoogle();
+    if (motivo === 'sin_vinculo') {
+      const actual = socialAuthSnapshot();
+      if (ofrecerAltaConGoogle({
+        status: 401,
+        code: 'social_auth_failed',
+        autoridad: autoridadDeAlta(signupInvitationSnapshot(), actual.publicRegistration),
+        googleRegistration: actual.google.enabled
+          && actual.google.registration
+          && actual.google.webClientId !== null,
+      })) {
+        setPassword('');
+        setRecoveryAccepted(false);
+        setAltaConGoogle(true);
+        setMode('register');
+        setGoogleGeneration((value) => value + 1);
+        return;
+      }
+      setError(t('No pudimos entrar con Google. Prueba de nuevo o entra con tu correo y contraseña.'));
+      return;
+    }
+    setError(
+      motivo === 'codigo_invalido'
+        ? t('No pudimos entrar con Google. Prueba de nuevo o entra con tu correo y contraseña.')
+        : motivo === 'demasiados'
+          ? t('Demasiados intentos. Espera un minuto.')
+          : motivo === 'no_disponible'
+            ? t('Prueba de nuevo más tarde.')
+            : t('No pudimos completar el ingreso. Prueba de nuevo.'),
+    );
+  }, [vueltaGoogle, descartarVueltaGoogle, social.status, t]);
+
   useEffect(() => {
     googleHandle.current?.dispose();
     googleHandle.current = null;
@@ -662,12 +722,21 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     let handle: GoogleButtonHandle;
     // RM-182 · 5a · diagnóstico sin PII del popup que no vuelve (Safari).
     let vigia: VigiaPopupGoogle | null = null;
+    // AF-GOOGLE-REDIRECT · en la misma pestaña Google vuelve por el `login_uri`
+    // y el canje ocurre al volver (AuthContext): acá no llega ninguna credencial.
+    const redirect = authority.purpose === 'login' && authority.redirect
+      ? {
+          loginUri: GOOGLE_REDIRECT_LOGIN_URI,
+          simularEnMock: (credencial: string) => { void simularIdaYVueltaMock(credencial); },
+        }
+      : undefined;
     try {
       handle = renderGoogleIdentityButton({
         container,
         clientId: authority.clientId,
         locale: authority.locale,
         mockLabel: t('Continuar con Google'),
+        ...(redirect ? { redirect } : {}),
         onCredential: (credential) => {
           vigia?.credencialRecibida();
           if (googleAuthorityRef.current !== authority) return;
@@ -815,7 +884,8 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       return;
     }
     googleHandle.current = handle;
-    vigia = vigilarPopupGoogle(container);
+    // El vigía de RM-182 mira el popup; en la misma pestaña no hay popup.
+    if (!redirect) vigia = vigilarPopupGoogle(container);
     void handle.ready.catch(() => {
       if (!active) return;
       setError(t('No pudimos completar el ingreso. Prueba de nuevo.'));

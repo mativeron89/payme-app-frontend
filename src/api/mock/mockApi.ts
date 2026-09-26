@@ -446,6 +446,88 @@ function googleSinNombreMock(): boolean {
   return leerSeam(CLAVE_GOOGLE_SIN_NOMBRE) === 'true';
 }
 
+/**
+ * AF-GOOGLE-REDIRECT · seam de `features.google_redirect`. El bloque se publica
+ * siempre, como lo sirve el dueño hoy (`supported: true`), y `enabled` es
+ * `true` sólo con el `'true'` exacto: fail-closed al popup de siempre.
+ */
+const CLAVE_GOOGLE_REDIRECT = 'payme.app.mock.google_redirect.v1';
+
+export function googleRedirectMock(): boolean {
+  return leerSeam(CLAVE_GOOGLE_REDIRECT) === 'true';
+}
+
+/**
+ * El dueño guarda sólo el sha256 del código, con vencimiento a 60 s y
+ * `consumed_at` (decisión 94, `google_redirect_codes`). El mock hace lo mismo,
+ * y lo guarda en `localStorage` porque la vuelta es un documento NUEVO (el 303
+ * recarga): es la «base» del mock, no un storage de la app.
+ */
+const CLAVE_CODIGOS_GOOGLE_REDIRECT = 'payme.app.mock.google_redirect_codes.v1';
+const TTL_CODIGO_GOOGLE_REDIRECT_MS = 60_000;
+
+interface CodigoGoogleRedirectMock { readonly expira: number; readonly consumido: boolean }
+
+function leerCodigosGoogleRedirect(): Record<string, CodigoGoogleRedirectMock> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CLAVE_CODIGOS_GOOGLE_REDIRECT) ?? '{}') as unknown;
+    return raw && typeof raw === 'object' ? raw as Record<string, CodigoGoogleRedirectMock> : {};
+  } catch {
+    return {};
+  }
+}
+
+function guardarCodigosGoogleRedirect(codigos: Record<string, CodigoGoogleRedirectMock>): void {
+  try { localStorage.setItem(CLAVE_CODIGOS_GOOGLE_REDIRECT, JSON.stringify(codigos)); } catch { /* demo en memoria */ }
+}
+
+/**
+ * Lo que hace el dueño con el POST de Google al `login_uri`, en el riel mock:
+ * consume el `id_token` como `google/login` y devuelve el FRAGMENTO del 303
+ * (`services/googleRedirect.js`): el código, o el error opaco sin vínculo.
+ */
+export async function mockGoogleRedirectLoginUri(idToken: string): Promise<string> {
+  await waitSocialLatency();
+  if (!validSocialCredential(idToken) || mockGoogleCredencialesConsumidas.has(idToken)
+      || googleSinCuentaMock()) {
+    mockGoogleCredencialesConsumidas.add(idToken);
+    return 'google_redirect_error=social_auth_failed';
+  }
+  mockGoogleCredencialesConsumidas.add(idToken);
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const codigo = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const codigos = leerCodigosGoogleRedirect();
+  codigos[await sha256Hex(codigo)] = { expira: Date.now() + TTL_CODIGO_GOOGLE_REDIRECT_MS, consumido: false };
+  guardarCodigosGoogleRedirect(codigos);
+  return `google_redirect=${codigo}`;
+}
+
+/**
+ * `POST /api/auth/google/redirect/redeem`: la misma respuesta que
+ * `google/login`. Reusado, vencido o inexistente ⇒ `401 social_auth_failed`;
+ * capability apagada ⇒ `404`.
+ */
+export async function mockGoogleRedirectRedeem(code: string): Promise<StoredSession> {
+  if (typeof code !== 'string') throw new MockApiError(400, 'validation_error');
+  const origin = loadSession();
+  await waitSocialLatency();
+  if (!googleRedirectMock()) throw new MockApiError(404, 'not_found');
+  if (!/^[A-Za-z0-9_-]{20,200}$/.test(code)) throw new MockApiError(401, 'social_auth_failed');
+  const codigos = leerCodigosGoogleRedirect();
+  const clave = await sha256Hex(code);
+  const fila = codigos[clave];
+  if (!fila || fila.consumido || fila.expira <= Date.now()) {
+    throw new MockApiError(401, 'social_auth_failed');
+  }
+  codigos[clave] = { ...fila, consumido: true };
+  guardarCodigosGoogleRedirect(codigos);
+  return persistMockSocialUser(MOCK_USER, 'google-redirect', origin, () => {
+    state.user = { ...MOCK_USER };
+    marcarProveedorVinculado(MOCK_USER.id, 'google');
+    persist();
+  });
+}
+
 /** La versión del aviso que publica el mock; `continue` exige ésta. */
 export const MOCK_AVISO_VERSION = FRIEND_AVATAR_NOTICE_VERSION;
 
@@ -580,6 +662,8 @@ export async function mockGetConfig(): Promise<AppConfig> {
       ...(googleContinueMock()
         ? { google_continue: { supported: true, one_tap_signup: altaPublicaMock() } }
         : {}),
+      // AF-GOOGLE-REDIRECT · forma exacta del dueño v2.136.0 (`contract-mirror/routes/config.js`).
+      google_redirect: { supported: true, enabled: googleRedirectMock() },
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
       /**
