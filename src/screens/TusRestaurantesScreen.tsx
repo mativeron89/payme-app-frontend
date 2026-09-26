@@ -251,8 +251,10 @@ function LoConsumido({ visita }: { visita: Visita }) {
       </div>
     );
   }
+  // AF-STATS-BURBUJA · la columna de la porción sólo ocupa lugar si hay alguna.
+  const conPorcion = visita.items.some((it) => it.fractionBps < 10000);
   return (
-    <ul className="rest-items">
+    <ul className={conPorcion ? 'rest-items con-porcion' : 'rest-items'}>
       {visita.items.map((it, i) => (
         <li key={i} className="rest-item">
           <span className="rest-item-frac">{it.fractionBps < 10000 ? bpsLabel(it.fractionBps) : ''}</span>

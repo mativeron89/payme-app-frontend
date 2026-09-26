@@ -6154,8 +6154,9 @@ body {
   flex-direction: column;
   gap: 6px;
   box-sizing: border-box;
-  width: calc(100% - 24px);
-  margin: 0 auto 12px;
+  /* AF-STATS-BURBUJA · el mismo ancho útil que «Ver ticket completo». */
+  width: 100%;
+  margin: 0 0 12px;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -6181,6 +6182,13 @@ body {
   min-width: 14px;
   font-size: 12.5px;
   color: var(--gray-d);
+}
+
+/* AF-STATS-BURBUJA · sin ninguna porción en la visita, la columna del «½» no
+   ocupa lugar: vacía, corría el texto 24 px a la izquierda («la burbuja está
+   descentrada», Mati). Con una porción se conserva, para alinear los platos. */
+.rest-items:not(.con-porcion) .rest-item-frac {
+  display: none;
 }
 
 .rest-item-nombre {
