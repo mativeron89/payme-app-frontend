@@ -78,12 +78,30 @@ test.describe('C3 · mesa sin garantía', () => {
  * ausencia sola no distingue «no está» de «no llegué a la pantalla».
  */
 async function vencerLaMesa(page: import('@playwright/test').Page, code: string): Promise<void> {
-  await page.evaluate((c) => {
-    const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
-    const mesa = st.mesas.find((m: { code: string }) => m.code === c);
+  /**
+   * AF-INICIO-TRAS-INGRESO · se vence en el estado EN MEMORIA del mock y se
+   * guarda con su propio `persist()`. Antes se escribía la clave de
+   * `localStorage` por fuera, y un guardado del mock todavía en vuelo (la carga
+   * de la mesa) la pisaba antes de la recarga: intermitente anterior a esta
+   * orden, medido 9 de 80 corridas en la base 77d2d44. Con la memoria como
+   * única fuente, cualquier guardado posterior escribe la mesa ya vencida.
+   */
+  await page.evaluate(async (c) => {
+    const ruta = '/src/api/mock/store.ts';
+    const store = await import(/* @vite-ignore */ ruta) as {
+      state: { mesas: Array<{ code: string; expires_at: string }> };
+      persist: () => void;
+    };
+    const mesa = store.state.mesas.find((m) => m.code === c);
     if (!mesa) throw new Error(`mesa ${c} ausente en el estado del mock`);
     mesa.expires_at = new Date(Date.now() - 60_000).toISOString();
-    localStorage.setItem('payme_mock_state_v1', JSON.stringify(st));
+    store.persist();
+    // `persist` agrupa en un microtask: se espera a que la clave lo refleje.
+    await new Promise<void>((r) => queueMicrotask(r));
+    const guardado = JSON.parse(localStorage.getItem('payme_mock_state_v1')!) as typeof store.state;
+    if (guardado.mesas.find((m) => m.code === c)?.expires_at !== mesa.expires_at) {
+      throw new Error('el vencimiento no llegó a la clave del mock');
+    }
   }, code);
   /**
    * 🔴 **La recarga NO es decorativa y me costó una vuelta.** El mock mantiene
