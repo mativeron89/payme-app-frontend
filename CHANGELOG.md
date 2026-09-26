@@ -11,6 +11,48 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.195.0 — «Entrar» con Google en la misma pestaña, detrás del flag del dueño (decisiones 92 y 94) (2026-09-26)
+
+Orden AF-GOOGLE-REDIRECT-CLAUDE-20260926 (sha256 f9be67ff…). Base `0.194.4` (`cefe493`). Wire del
+dueño: `docs/GOOGLE_REDIRECT_D92_WIRE.md` en AB `a8987b0` (sha256 9176293…).
+
+- **Por qué:** en iPhone el popup de Google abre otra pestaña. Si la persona va a Gmail por la
+  verificación en dos pasos y vuelve, esa pestaña queda en «400» o congelada. En modo redirect todo
+  pasa en la misma pestaña.
+- **Espejo:** App Backend v2.137.0 (`57b06a7`, inventario de `a8987b0`). 121 archivos, cambian 8;
+  integridad y paridad OK, y ninguno cambió contra el servido.
+- **Capability `features.google_redirect`:** exacta `{supported, enabled}`. Ausente, mal formada o
+  con `enabled: false` (lo servido hoy), queda el popup de siempre, exacto.
+- **Con `enabled: true`:** el botón de «Entrar» usa `ux_mode: 'redirect'` con
+  `login_uri: https://app.paymemx.com/auth/google/redirect`, sin callback. «Crea tu cuenta» sigue en
+  popup (fase 1).
+- **La vuelta** (`#google_redirect=<código>`):
+  - sale de la URL con `replaceState` antes que nada, en `main.tsx`;
+  - se canjea una vez en `POST /api/auth/google/redirect/redeem`;
+  - se entra como siempre: sesión, puerta legal e Inicio;
+  - el código vive sólo en memoria y nunca toca path, query, storage ni logs. El router lo cuenta
+    como secreto.
+- **Los errores** muestran textos que ya existían:
+  - sin vínculo: «Crea tu cuenta con Google», si hay alta, como el popup;
+  - `csrf_failed`: «No pudimos completar el ingreso. Prueba de nuevo.»;
+  - `temporarily_unavailable`: «Prueba de nuevo más tarde.»;
+  - código reusado o vencido: «No pudimos entrar con Google…».
+- **Hosting:** un rewrite exacto, `/auth/google/redirect` → el dueño en Railway. Es la única
+  excepción registrada a «todo rewrite va a `/index.html`», fijada literal por los tests de
+  despliegue. La CSP no cambia.
+- **Mitigación del vigía (RM-182):** no hay un texto que ya exista para «cerrá la pestaña de Google
+  y tocá de nuevo». Queda propuesto en el CIERRE y no se publica.
+- **Pruebas:**
+  - e2e con el mock: flag apagado, flag encendido, ida y vuelta, código reusado, sin vínculo y
+    cada error;
+  - unitarios de la vuelta, la capability, GIS en redirect y el orden en `main.tsx`;
+  - tests de despliegue;
+  - mutantes M1–M13 muertos.
+- **Después (no es de esta orden):**
+  1. Mati agrega el `login_uri` en Google Cloud;
+  2. el Bibliotecario enciende el flag;
+  3. Mati prueba en el iPhone.
+
 ## 0.194.4 — La foto del ticket, de la cámara o del carrete (decisión 91) (2026-09-26)
 
 Orden AF-GALERIA-CLAUDE-20260926 (sha256 59d29a90…). Base `0.194.3` (`5446b5a`). Decisión 91 de
