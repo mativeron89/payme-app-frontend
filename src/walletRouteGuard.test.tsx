@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { accountRailView } from './api/releaseGates';
 import { applyWalletRailConfig, readWalletRail, resetWalletRailForTests } from './api/walletRail';
-import { parseHash, type PageId } from './router';
+import { EVENTO_RUTA, parseHash, parseLocation, type PageId } from './router';
+import { navegadorFalso } from './navegadorFalso.testutil';
 import { enforceWalletRouteGuard } from './walletRouteGuard';
 
 /**
@@ -47,33 +48,9 @@ import { enforceWalletRouteGuard } from './walletRouteGuard';
  * "me llamaron con tal string" sería una afirmación sobre la llamada; lo que
  * importa es en qué ruta queda la persona.
  */
-function browserStub(hash: string) {
-  let actual = hash;
-  const hashWrites: string[] = [];
-  const replaceState = vi.fn((_s: unknown, _t: string, url: string) => {
-    const i = url.indexOf('#');
-    actual = i >= 0 ? url.slice(i) : '';
-  });
-  const pushState = vi.fn();
-  const dispatched: string[] = [];
-  class FakeHashChangeEvent {
-    type: string;
-    constructor(type: string) { this.type = type; }
-  }
-  vi.stubGlobal('HashChangeEvent', FakeHashChangeEvent);
-  vi.stubGlobal('window', {
-    location: {
-      pathname: '/',
-      search: '',
-      get hash() { return actual; },
-      set hash(v: string) { hashWrites.push(v); actual = v; },
-    },
-    history: { state: null, replaceState, pushState },
-    dispatchEvent: (e: { type: string }) => { dispatched.push(e.type); return true; },
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  });
-  return { replaceState, pushState, hashWrites, dispatched, hash: () => actual };
+// n130 · el mismo `window` de prueba que el router: modela path, query y fragmento.
+function browserStub(inicial: string) {
+  return navegadorFalso(inicial);
 }
 
 function memoryStorage() {
@@ -158,8 +135,8 @@ describe('ORDEN 4C · ruta bloqueada → replace de historial → home', () => {
         expect(enforceWalletRouteGuard(walletRailEnabled, page)).toBe(true);
 
         // Dónde queda la persona.
-        expect(b.hash()).toBe('#/home');
-        expect(parseHash(b.hash()).page).toBe('home');
+        expect(b.url()).toBe('/home');
+        expect(parseLocation(b.path(), b.search()).page).toBe('home');
         // ⭐ Y por qué vía: `replaceState` REEMPLAZA la entrada actual. Con
         // `navigate` o con una asignación de hash, `#/cargar` seguiría viva en
         // el historial y el botón Atrás la recuperaría. Una ruta a la que no se
@@ -169,7 +146,7 @@ describe('ORDEN 4C · ruta bloqueada → replace de historial → home', () => {
         expect(b.hashWrites).toEqual([]);
         // `replaceState` no dispara `hashchange`: sin esto el router no se
         // entera y la app queda pintando la ruta vieja.
-        expect(b.dispatched).toEqual(['hashchange']);
+        expect(b.dispatched).toEqual([EVENTO_RUTA]);
       });
     }
   }
@@ -182,7 +159,7 @@ describe('ORDEN 4C · ruta bloqueada → replace de historial → home', () => {
   it('capability que todavía NO llegó (pending) también bloquea', () => {
     const b = browserStub('#/cargar');
     expect(enforceWalletRouteGuard(readWalletRail(undefined).walletRailEnabled, 'cargar')).toBe(true);
-    expect(b.hash()).toBe('#/home');
+    expect(b.url()).toBe('/home');
   });
 
   /**
@@ -205,14 +182,14 @@ describe('ORDEN 4C · ruta bloqueada → replace de historial → home', () => {
     expect(enforceWalletRouteGuard(walletRailEnabled, 'cargar')).toBe(false);
 
     expect(b.replaceState).not.toHaveBeenCalled();
-    expect(b.hash()).toBe('#/cargar');
+    expect(b.url()).toBe('/#/cargar');
   });
 
   it.each(RUTAS_LEGITIMAS)('la ruta card-only #/%s nunca se toca', (page) => {
     const b = browserStub(`#/${page}`);
     expect(enforceWalletRouteGuard(false, page)).toBe(false);
     expect(b.replaceState).not.toHaveBeenCalled();
-    expect(b.hash()).toBe(`#/${page}`);
+    expect(b.url()).toBe(`/#/${page}`);
   });
 
   /**
@@ -222,22 +199,14 @@ describe('ORDEN 4C · ruta bloqueada → replace de historial → home', () => {
    * no el normal.
    */
   it('si el historial está bloqueado, igual saca de la ruta', () => {
-    let actual = '#/cargar';
-    const hashWrites: string[] = [];
-    vi.stubGlobal('HashChangeEvent', class { constructor(public type: string) {} });
-    vi.stubGlobal('window', {
-      location: {
-        pathname: '/', search: '',
-        get hash() { return actual; },
-        set hash(v: string) { hashWrites.push(v); actual = v; },
-      },
-      history: { state: null, replaceState() { throw new Error('SecurityError'); } },
-      dispatchEvent: () => true,
-    });
+    // n130 · sin `replaceState`, el fallback es `location.replace` a la ruta
+    // normal: la ruta cortada tampoco queda en el historial.
+    const b = navegadorFalso('#/cargar', { historialBloqueado: true });
 
     expect(() => enforceWalletRouteGuard(false, 'cargar')).not.toThrow();
-    expect(actual).toBe('#/home');
-    expect(hashWrites).toEqual(['#/home']);
+    expect(b.locationReplace).toHaveBeenCalledWith('/home');
+    expect(b.url()).toBe('/home');
+    expect(b.hashWrites).toEqual([]);
   });
 });
 
@@ -263,7 +232,7 @@ describe('ORDEN 4C · ningún parámetro de URL alcanza el gate', () => {
     const b = browserStub(hash);
     const route = parseHash(hash);
     expect(enforceWalletRouteGuard(false, route.page)).toBe(true);
-    expect(b.hash()).toBe('#/home');
+    expect(b.url()).toBe('/home');
   });
 });
 
@@ -438,7 +407,7 @@ describe('ORDEN 4C · el gate no depende del modo ni de ningún principal', () =
     expect(offendingKeys).toEqual(['enabled_for_restaurant']);
     expect(walletRailEnabled).toBe(false);
     expect(enforceWalletRouteGuard(walletRailEnabled, 'cargar')).toBe(true);
-    expect(b.hash()).toBe('#/home');
+    expect(b.url()).toBe('/home');
     expect(denuncia).toHaveBeenCalledTimes(1);
   });
 });

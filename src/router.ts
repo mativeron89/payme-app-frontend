@@ -1,13 +1,26 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Mini-router por hash, propio (mismo patrón que el dashboard frontend).
- * Formato: #/home · #/cuenta · #/mesa/PA-2847 (T2+) · ...
+ * Mini-router propio. **n130 (AF-HISTORY-N130): rutas normales con History API**
+ * —`/home`, `/mesa/PA-2847`— en lugar de `#/…`.
  *
- * Nota T3 (invitado por link): el backend arma el link como
- * `${FRONTEND_PUBLIC_URL}/mesa/:code?t=<token>`. Con hash routing, en el
- * deploy FRONTEND_PUBLIC_URL debe terminar en `/#` para que el link caiga
- * en `#/mesa/:code?t=...`; parseHash ya soporta el `?t=` adentro del hash.
+ * 🔴 **Opción A, adenda del Bibliotecario:** los enlaces que llevan un SECRETO
+ * en el fragmento se QUEDAN en el fragmento, igual que antes:
+ *   - `#/mesa/:code?t=<token>`: la invitación del dueño,
+ *     `${FRONTEND_PUBLIC_URL}/mesa/:code?t=…` con `FRONTEND_PUBLIC_URL` que
+ *     termina en `/#` (`contract-mirror/routes/mesas.js`);
+ *   - `#/recovery?token=…`: el correo de recuperación, y toda la familia
+ *     `#/recovery` porque `recoveryFlow.ts` trabaja sobre el fragmento;
+ *   - `signup_invitation` en el fragmento.
+ * Lo que va después de `#` no viaja nunca al servidor ni en el `Referer`.
+ * Pasarlo a path o query lo mandaría al edge en cada carga, así que la
+ * conversión NUNCA toca esos fragmentos (`fragmentoConSecreto`). Se enrutan
+ * desde el fragmento, como siempre, y al navegar a otra página el fragmento
+ * sale de la URL.
+ *
+ * Todo otro `#/…` viejo (enlaces guardados, marcadores) se convierte con
+ * `replaceState` a su ruta, conservando su query, sin dejar entrada en el
+ * historial.
  */
 
 /**
@@ -131,16 +144,106 @@ export function parseHash(hash: string): Route {
   return resolveHash(hash).route;
 }
 
+/** La ruta de un `pathname` + `search` de la app (sin fragmento). */
+function resolvePath(pathname: string, search: string): HashResolution {
+  const limpio = pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+  const query = search.startsWith('?') ? search.slice(1) : search;
+  return resolveHash(`#/${limpio}${query ? `?${query}` : ''}`);
+}
+
+export function parseLocation(pathname: string, search: string): Route {
+  return resolvePath(pathname, search).route;
+}
+
+/**
+ * 🔴 **¿El fragmento lleva un secreto?** Si sí, no se convierte nunca (opción A).
+ *
+ * Es deliberadamente conservador: cualquier `t`, `token` o `signup_invitation`
+ * en la query del fragmento, o la familia `#/recovery` entera, cuentan. Un
+ * falso positivo sólo deja un enlace viejo con `#`; un falso negativo mandaría
+ * un token al servidor.
+ */
+export function fragmentoConSecreto(hash: string): boolean {
+  const limpio = hash.replace(/^#\/?/, '');
+  const [camino = '', query = ''] = limpio.split('?');
+  if (/^recovery(\/|$)/i.test(camino)) return true;
+  const params = new URLSearchParams(query);
+  for (const clave of params.keys()) {
+    if (/^(t|token|signup_invitation)$/i.test(clave)) return true;
+  }
+  // Un `token=` fuera de una query bien formada también cuenta.
+  return /(^|[?&#/])(t|token|signup_invitation)=/i.test(limpio);
+}
+
+/** ¿Hay un fragmento con ruta (`#/algo`)? `#` y `#/` solos no son ruta. */
+function fragmentoConRuta(hash: string): boolean {
+  return hash.replace(/^#\/?/, '').length > 0;
+}
+
+/**
+ * Convierte un `#/…` viejo SIN secreto a su ruta, con `replaceState`. La query
+ * del fragmento se suma a la de la URL (la del fragmento gana en una clave
+ * repetida). Devuelve `true` si convirtió.
+ */
+export function convertirFragmentoViejo(): boolean {
+  const { hash, search } = window.location;
+  if (!fragmentoConRuta(hash) || fragmentoConSecreto(hash)) return false;
+  const limpio = hash.replace(/^#\/?/, '');
+  const [camino = '', queryFragmento = ''] = limpio.split('?');
+  const query = new URLSearchParams(search);
+  for (const [k, v] of new URLSearchParams(queryFragmento)) query.set(k, v);
+  const q = query.toString();
+  try {
+    window.history.replaceState(window.history.state, '', `/${camino}${q ? `?${q}` : ''}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** La ruta de la ubicación actual: el fragmento con secreto manda; si no, el path. */
+function resolveLocation(): HashResolution {
+  const { hash, pathname, search } = window.location;
+  if (fragmentoConRuta(hash)) return resolveHash(hash);
+  return resolvePath(pathname, search);
+}
+
+/** Aviso interno: `pushState`/`replaceState` no disparan `popstate`. */
+export const EVENTO_RUTA = 'payme:ruta';
+
+function avisarRuta(): void {
+  window.dispatchEvent(new Event(EVENTO_RUTA));
+}
+
+/** La URL completa de la app, para comparar antes y después de navegar. */
+export function ubicacionActual(): string {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
 // Navegaciones hechas DENTRO de la app: goBack() vuelve por el historial real
-// del navegador (cada cambio de hash crea una entrada), pero si la pantalla se
+// del navegador (cada navegación crea una entrada), pero si la pantalla se
 // abrió directo (deep link, refresh) no hay adónde volver → cae al fallback.
 let internalNavs = 0;
 
-export function navigate(page: PageId, param?: string): void {
+function destino(page: PageId, param?: string): string {
   const suffix = param ? `/${encodeURIComponent(param)}` : '';
-  const next = `#/${page}${suffix}`;
-  if (window.location.hash !== next) internalNavs += 1;
-  window.location.hash = next;
+  // La query de la URL (p. ej. `?r=` del QR) se conserva al navegar, como se
+  // conservaba con el router por hash. El fragmento, no: un fragmento con
+  // secreto sale de la URL al pasar a otra página.
+  return `/${page}${suffix}${window.location.search}`;
+}
+
+export function navigate(page: PageId, param?: string): void {
+  const next = destino(page, param);
+  if (ubicacionActual() === next) return;
+  internalNavs += 1;
+  try {
+    window.history.pushState(null, '', next);
+  } catch {
+    window.location.assign(next);
+    return;
+  }
+  avisarRuta();
 }
 
 /**
@@ -152,32 +255,33 @@ export function navigate(page: PageId, param?: string): void {
  * invitación. Una ruta a la que no se puede entrar tampoco se puede volver.
  */
 export function replaceRoute(page: PageId, param?: string): void {
-  const suffix = param ? `/${encodeURIComponent(param)}` : '';
-  const next = `#/${page}${suffix}`;
-  if (window.location.hash === next) return;
+  const next = destino(page, param);
+  if (ubicacionActual() === next) return;
   try {
-    window.history.replaceState(
-      window.history.state,
-      '',
-      `${window.location.pathname}${window.location.search}${next}`,
-    );
-    // `replaceState` no dispara `hashchange`: hay que avisarle al router.
-    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    window.history.replaceState(window.history.state, '', next);
   } catch {
-    // Si el navegador no deja tocar el historial, al menos sacar de la ruta.
-    window.location.hash = next;
+    window.location.replace(next);
+    return;
   }
+  avisarRuta();
 }
 
 /**
  * G-35 · si el parser tuvo que degradar a Inicio, la barra también dice Inicio.
  *
- * Se reemplaza la entrada actual: con una asignación normal el hash inválido
+ * Se reemplaza la entrada actual: con una asignación normal la ruta inválida
  * quedaría detrás del botón Atrás y reaparecería en cada retroceso. Rutas
- * conocidas, sus queries y los hashes vacíos quedan byte por byte intactos.
+ * conocidas y sus queries quedan byte por byte intactas.
  */
 export function normalizeUnknownHash(hash: string): boolean {
   if (resolveHash(hash).recognized) return false;
+  replaceRoute('home');
+  return true;
+}
+
+/** Lo mismo que `normalizeUnknownHash`, sobre la ubicación completa. */
+function normalizarDesconocida(): boolean {
+  if (resolveLocation().recognized) return false;
   replaceRoute('home');
   return true;
 }
@@ -197,16 +301,29 @@ export function goBack(fallback: PageId, fallbackParam?: string): void {
 }
 
 export function useRoute(): Route {
-  const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
+  const [route, setRoute] = useState<Route>(() => {
+    convertirFragmentoViejo();
+    return resolveLocation().route;
+  });
   useEffect(() => {
     const onChange = () => {
-      if (normalizeUnknownHash(window.location.hash)) return;
-      setRoute(parseHash(window.location.hash));
+      convertirFragmentoViejo();
+      if (normalizarDesconocida()) return;
+      setRoute(resolveLocation().route);
     };
+    // `popstate` (Atrás/Adelante), `hashchange` (un `#/…` viejo que llega con
+    // la app abierta, o los flujos que todavía trabajan sobre el fragmento) y
+    // el aviso propio de `navigate`/`replaceRoute`.
+    window.addEventListener('popstate', onChange);
     window.addEventListener('hashchange', onChange);
-    // `hashchange` no corre por la URL con la que se montó la app.
+    window.addEventListener(EVENTO_RUTA, onChange);
+    // Ningún evento corre por la URL con la que se montó la app.
     onChange();
-    return () => window.removeEventListener('hashchange', onChange);
+    return () => {
+      window.removeEventListener('popstate', onChange);
+      window.removeEventListener('hashchange', onChange);
+      window.removeEventListener(EVENTO_RUTA, onChange);
+    };
   }, []);
   return route;
 }

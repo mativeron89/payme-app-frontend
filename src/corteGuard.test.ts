@@ -29,7 +29,8 @@ const CORTE_DE_LOS_RECORRIDOS = corteDePagosView(
 import type { MesaDetail } from './api/types';
 import { resetWalletRailForTests } from './api/walletRail';
 import { enforceCorteRouteGuard } from './corteGuard';
-import { PAGES, parseHash, type PageId } from './router';
+import { EVENTO_RUTA, PAGES, parseHash, parseLocation, type PageId } from './router';
+import { navegadorFalso } from './navegadorFalso.testutil';
 import { MesaDetailView, type MesaDetailViewProps } from './screens/MesaDetailView';
 
 /**
@@ -78,33 +79,9 @@ import { MesaDetailView, type MesaDetailViewProps } from './screens/MesaDetailVi
 
 // ─── Harness (mismo que walletRouteGuard.test.tsx, y por las mismas razones) ─
 
-function browserStub(hash: string) {
-  let actual = hash;
-  const hashWrites: string[] = [];
-  const replaceState = vi.fn((_s: unknown, _t: string, url: string) => {
-    const i = url.indexOf('#');
-    actual = i >= 0 ? url.slice(i) : '';
-  });
-  const pushState = vi.fn();
-  const dispatched: string[] = [];
-  class FakeHashChangeEvent {
-    type: string;
-    constructor(type: string) { this.type = type; }
-  }
-  vi.stubGlobal('HashChangeEvent', FakeHashChangeEvent);
-  vi.stubGlobal('window', {
-    location: {
-      pathname: '/',
-      search: '',
-      get hash() { return actual; },
-      set hash(v: string) { hashWrites.push(v); actual = v; },
-    },
-    history: { state: null, replaceState, pushState },
-    dispatchEvent: (e: { type: string }) => { dispatched.push(e.type); return true; },
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  });
-  return { replaceState, pushState, hashWrites, dispatched, hash: () => actual };
+// n130 · el mismo `window` de prueba que el router: modela path, query y fragmento.
+function browserStub(inicial: string) {
+  return navegadorFalso(inicial);
 }
 
 function memoryStorage() {
@@ -190,15 +167,15 @@ describe('🔴 corte · ruta cortada → replace de historial → home', () => {
 
       expect(enforceCorteRouteGuard(page, RIEL_CORTADO_AUTORITATIVO)).toBe(true);
 
-      expect(b.hash()).toBe('#/home');
-      expect(parseHash(b.hash()).page).toBe('home');
+      expect(b.url()).toBe('/home');
+      expect(parseLocation(b.path(), b.search()).page).toBe('home');
       // ⭐ Por `replaceState`: con `navigate` o una asignación de hash la ruta
       // seguiría viva en el historial y el botón Atrás la recuperaría.
       expect(b.replaceState).toHaveBeenCalledTimes(1);
       expect(b.pushState).not.toHaveBeenCalled();
       expect(b.hashWrites).toEqual([]);
-      // `replaceState` no dispara `hashchange`: sin esto el router no se entera.
-      expect(b.dispatched).toEqual(['hashchange']);
+      // `replaceState` no dispara `popstate`: sin el aviso propio el router no se entera.
+      expect(b.dispatched).toEqual([EVENTO_RUTA]);
     });
   }
 
@@ -221,7 +198,7 @@ describe('🔴 corte · ruta cortada → replace de historial → home', () => {
       const b = browserStub(`#/${page}`);
       expect(enforceCorteRouteGuard(page, rail), `expulsó con status ${rail.status}`).toBe(false);
       expect(b.replaceState, `redirigió con status ${rail.status}`).not.toHaveBeenCalled();
-      expect(b.hash(), `movió el hash con status ${rail.status}`).toBe(`#/${page}`);
+      expect(b.url(), `movió el hash con status ${rail.status}`).toBe(`/#/${page}`);
       // Y lo que NO cambia: la vista sigue cortada, así que la superficie de
       // tarjetas no se ve mientras el estado no sea autoritativo.
       expect(allowsCorteRoute(page, rail), `mostró la vista con status ${rail.status}`).toBe(false);
@@ -232,7 +209,7 @@ describe('🔴 corte · ruta cortada → replace de historial → home', () => {
     const b = browserStub(`#/${page}`);
     expect(enforceCorteRouteGuard(page, RIEL_CORTADO_AUTORITATIVO)).toBe(false);
     expect(b.replaceState).not.toHaveBeenCalled();
-    expect(b.hash()).toBe(`#/${page}`);
+    expect(b.url()).toBe(`/#/${page}`);
   });
 
   /**
@@ -250,26 +227,18 @@ describe('🔴 corte · ruta cortada → replace de historial → home', () => {
     const b = browserStub(hash);
     const route = parseHash(hash);
     expect(enforceCorteRouteGuard(route.page, RIEL_CORTADO_AUTORITATIVO)).toBe(true);
-    expect(b.hash()).toBe('#/home');
+    expect(b.url()).toBe('/home');
   });
 
   it('si el historial está bloqueado, igual saca de la ruta', () => {
-    let actual = '#/tarjetas';
-    const hashWrites: string[] = [];
-    vi.stubGlobal('HashChangeEvent', class { constructor(public type: string) {} });
-    vi.stubGlobal('window', {
-      location: {
-        pathname: '/', search: '',
-        get hash() { return actual; },
-        set hash(v: string) { hashWrites.push(v); actual = v; },
-      },
-      history: { state: null, replaceState() { throw new Error('SecurityError'); } },
-      dispatchEvent: () => true,
-    });
+    // n130 · sin `replaceState`, el fallback es `location.replace` a la ruta
+    // normal: la ruta cortada tampoco queda en el historial.
+    const b = navegadorFalso('#/tarjetas', { historialBloqueado: true });
 
     expect(() => enforceCorteRouteGuard('tarjetas', RIEL_CORTADO_AUTORITATIVO)).not.toThrow();
-    expect(actual).toBe('#/home');
-    expect(hashWrites).toEqual(['#/home']);
+    expect(b.locationReplace).toHaveBeenCalledWith('/home');
+    expect(b.url()).toBe('/home');
+    expect(b.hashWrites).toEqual([]);
   });
 });
 

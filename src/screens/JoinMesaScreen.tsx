@@ -9,7 +9,7 @@ import { autoridadDeAlta } from './LoginScreen';
 import { useAuth } from '../auth/AuthContext';
 import { AppHeader } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
-import { navigate } from '../router';
+import { EVENTO_RUTA, navigate, ubicacionActual } from '../router';
 import {
   closeInvitationCustody,
   openInvitationCustody,
@@ -82,10 +82,11 @@ import { joinLinkMessage, joinLinkStage, type JoinLinkOutcome } from './joinLink
  * todas las pantallas de la app y eso es otra orden.
  */
 function salirAMisItems(mesaCode: string): void {
-  const antes = window.location.hash;
+  // n130 · se compara la URL entera (path, query y fragmento), no sólo el hash.
+  const antes = ubicacionActual();
   navigate('mesa', mesaCode);
-  if (window.location.hash === antes) {
-    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  if (ubicacionActual() === antes) {
+    window.dispatchEvent(new Event(EVENTO_RUTA));
   }
 }
 
