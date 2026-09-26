@@ -22,7 +22,6 @@ import {
 import { sugerenciaDesdeIdToken } from '../api/googleClaims';
 import { GOOGLE_REDIRECT_LOGIN_URI, simularIdaYVueltaMock } from '../api/googleRedirect';
 import { vigilarPopupGoogle, type VigiaPopupGoogle } from '../api/googlePopupDiagnostico';
-import { AvisoGoogleOtraCuenta } from './AvisoGoogleOtraCuenta';
 import {
   linkIntentValido,
   socialAuthSnapshot,
@@ -1357,9 +1356,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
           <a href={PATH_PRIVACIDAD}>{t('Aviso de privacidad')}</a>
         </p>
       )}
-      {/* RM-182 · 5b · ranura del aviso para cambiar de cuenta en Safari: no se
-          dibuja hasta que Mati apruebe el texto (decisión 11). */}
-      <AvisoGoogleOtraCuenta />
+      {/* RM-182 · 5b · el aviso para cambiar de cuenta en Safari se retiró por la
+          decisión 97 de Mati: con Google en la misma pestaña, cambiar de cuenta
+          funciona. El vigía 5a sigue, sólo como log. */}
       {googleLoadFailed && (
         <button
           type="button"
