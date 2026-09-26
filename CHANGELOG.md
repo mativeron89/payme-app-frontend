@@ -11,6 +11,32 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.194.3 — Después de entrar, Inicio; cerrar sesión no arrastra la ruta (2026-09-26)
+
+Orden AF-INICIO-TRAS-INGRESO-CLAUDE-20260926 (sha256 d2cc8c88…). Base `0.194.2` (`77d2d44`). Mati,
+en Chrome del iPhone: «entra bien con Google pero no ingresa de una al Inicio, ingresa a "Más"».
+
+- **Causa:** cerrar sesión no tocaba la URL (`AuthContext.logout`), y la pantalla de ingreso se
+  dibuja sobre la ruta que haya (`App.tsx`: sin sesión, `LoginScreen`). Al volver a entrar se veía
+  la ruta de la sesión anterior. No la trajo n130: con el router por hash pasaba igual con `#/mas`.
+- **Ahora:**
+  - cerrar sesión deja la URL en `/`, sin ruta, query ni fragmento;
+  - después de todo ingreso (correo, Google, alta), la app va a `/home`;
+  - una sesión restaurada al cargar no es un ingreso: quien abre `/mesas` con la sesión viva se
+    queda ahí.
+- **Excepción, los enlaces de entrada**, que van a su destino como antes:
+  - la invitación a una mesa (con su token en la URL o en custodia);
+  - el QR (`/scan?r=…`);
+  - una invitación de alta vista sin sesión.
+  Una ruta que quedó de antes (Más, Configuración…) no cuenta como entrada.
+- **Los secretos** siguen en el fragmento (opción A de n130).
+- **Pruebas:**
+  - e2e con 7 casos. Rojos en la base: cerrar sesión desde Más y volver a entrar, con correo y con
+    Google, y la ruta que quedó de una sesión vencida. Las cuatro excepciones pasan en la base,
+    porque son lo de siempre, y cada una tiene su mutante;
+  - unitarios de la regla y de la URL;
+  - mutantes M1–M6 muertos.
+
 ## 0.194.2 — Tus restaurantes: la tarjeta de lo propio, centrada (2026-09-26)
 
 Orden AF-STATS-BURBUJA-CLAUDE-20260926 (sha256 2c289507…). Base `0.194.1` (`a0b3cb8`). Mati, en el
