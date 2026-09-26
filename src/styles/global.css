@@ -2218,9 +2218,14 @@ body {
   padding-top: 0;
 }
 
+/* AF-AVISO-FOTO · el hueco del marco CRECE para centrarlo cuando sobra lugar,
+   pero NO se achica por debajo del marco. Con `flex: 1; min-height: 0`, un
+   aviso debajo lo achicaba (medido a 390×664: de 364 a 186 px) mientras el
+   marco seguía en 269 px: el marco desbordaba 41 px arriba y abajo, y por ser
+   `position: relative` se pintaba ENCIMA del aviso («leer el ticket.», Mati).
+   Ahora, si no entra, la pantalla se desplaza. */
 .scan-frame-slot {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
