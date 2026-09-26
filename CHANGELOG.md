@@ -21,7 +21,8 @@ en Chrome del iPhone: «entra bien con Google pero no ingresa de una al Inicio, 
   la ruta de la sesión anterior. No la trajo n130: con el router por hash pasaba igual con `#/mas`.
 - **Ahora:**
   - cerrar sesión deja la URL en `/`, sin ruta, query ni fragmento;
-  - después de todo ingreso (correo, Google, alta), la app va a `/home`;
+  - después de todo ingreso (correo, Google, alta), la app va a Inicio. Si la URL ya es Inicio
+    limpio (`/` o `/home`, como la deja cerrar sesión), no se reescribe;
   - una sesión restaurada al cargar no es un ingreso: quien abre `/mesas` con la sesión viva se
     queda ahí.
 - **Excepción, los enlaces de entrada**, que van a su destino como antes:
@@ -35,7 +36,11 @@ en Chrome del iPhone: «entra bien con Google pero no ingresa de una al Inicio, 
     Google, y la ruta que quedó de una sesión vencida. Las cuatro excepciones pasan en la base,
     porque son lo de siempre, y cada una tiene su mutante;
   - unitarios de la regla y de la URL;
-  - mutantes M1–M6 muertos.
+  - mutantes M1–M7 muertos.
+- **La primera corrida de gates dio rojo, y no se pusheó:**
+  - 21 unitarios rompían porque `useSyncExternalStore` no tenía el snapshot de servidor;
+  - 9 e2e rompían porque se reescribía `/` a `/home`, una navegación de más;
+  - `af02-alta-tarjeta-durable` navegaba con el ingreso en vuelo, y ahora espera a Inicio.
 
 ## 0.194.2 — Tus restaurantes: la tarjeta de lo propio, centrada (2026-09-26)
 
