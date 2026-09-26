@@ -9,6 +9,7 @@ const facebook = require('../services/facebookIdentity');
 const facebookDataRights = require('../services/facebookDataRights');
 const recovery = require('../services/authRecovery');
 const identities = require('../services/externalIdentities');
+const googleRedirect = require('../services/googleRedirect');
 const legal = require('../services/legal');
 const legalAcceptance = require('../services/legalAcceptance');
 const logger = require('../utils/logger');
@@ -140,6 +141,28 @@ router.post('/google/register', googleDark('registration'), socialSignupRateLimi
       return legalError(res, error) || socialError(res, error, true) || next(error);
     }
   });
+
+/**
+ * v2.136.0 · decisiones 92 y 94 · canje del código que dejó el login_uri del modo
+ * redirect (services/googleRedirect.js). Un solo uso, 60 s; devuelve la MISMA
+ * sesión que `/google/login`. Todo lo que no canjea es el mismo 401 opaco. Pasa por
+ * `authLimiter` (server.js cubre `/api/auth/google`). Apagado ⇒ 404.
+ */
+router.post('/google/redirect/redeem', async (req, res, next) => {
+  if (!googleRedirect.habilitado()) return res.status(404).json({ error: 'not_found' });
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)
+      || Object.keys(body).length !== 1 || typeof body.code !== 'string') {
+    return res.status(400).json({ error: 'validation_error' });
+  }
+  try {
+    const { userId, body: sesion } = await googleRedirect.canjear(body.code);
+    logger.audit('user_login_external', { user_id: userId, provider: 'google', via: 'redirect' });
+    return res.json(sesion);
+  } catch (error) {
+    return socialError(res, error) || next(error);
+  }
+});
 
 router.post('/google/login', googleDark('login'), validateBody(schemas.socialLogin), async (req, res, next) => {
   try {

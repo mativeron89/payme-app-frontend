@@ -21,6 +21,7 @@ const profileIdentity = require('../services/profileIdentity');
 const legal = require('../services/legal');
 const { proveedoresVinculados } = require('../services/externalIdentities');
 const consumoPropio = require('../services/consumoPropio');
+const username = require('../services/username');
 const clasificadorPlatos = require('../services/clasificadorPlatos');
 const {
   inicioDeMesMxSql, rangoDePeriodoMxSql, rangoDeMesAtrasMxSql, filtroDeRango,
@@ -31,11 +32,27 @@ const INICIO_DE_MES = inicioDeMesMxSql();
 const { dineroHabilitado } = require('../services/moneyRail');
 
 const informativeSelections = require('../services/informativeSelections');
+const { displayRestaurantName } = require('../services/mesaPresentation');
 const router = express.Router();
 router.use('/informative-history', (req, res, next) => {
   res.setHeader('Cache-Control', 'private, no-store'); res.vary('Authorization'); next();
 });
 router.use(requireAuth);
+
+/**
+ * AB-NOMBRE-RESTO (2026-09-25) · el nombre del restaurante de una mesa, con la
+ * MISMA regla que GET /mesas/:code, el ticket digital y el aviso de cierre
+ * (`displayRestaurantName`): el nombre que la persona le puso a la mesa si el
+ * restaurante es privado; si no, el del restaurante. Estas dos columnas llevan
+ * alias propios y NUNCA salen en una respuesta: cambia el VALOR de `name`, no
+ * la forma (los decoders del front son estrictos por claves).
+ */
+const NOMBRE_COLS = `r.status AS nombre_restaurant_status,
+              m.metadata->>'restaurant_label' AS nombre_restaurant_label`;
+function nombreDelRestaurante(row, name = row.restaurant_name) {
+  return displayRestaurantName({ metadata: { restaurant_label: row.nombre_restaurant_label } },
+    name, row.nombre_restaurant_status);
+}
 
 router.get('/informative-history', validateQuery(informativeHistoryQuery), async (req, res, next) => {
   try { res.json(await informativeSelections.history({ userId: req.user.id, ...req.validatedQuery })); }
@@ -246,6 +263,52 @@ router.get('/me/linked-providers', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/**
+ * @usuario propio · v2.137.0 · decisión 93 de Mati (docs/USERNAME_D93_WIRE.md).
+ * Con USERNAME_ENABLED apagado cada ruta hace `next()`: cae al 404 de siempre y
+ * nada de lo servido cambia. Estas tres rutas están exceptuadas de la puerta 428
+ * `username_required` (middleware/auth.js): son las que la pantalla de elegir usa.
+ */
+function responderUsername(res, err, next) {
+  if (err && err.code && err.status && err.status < 500) {
+    const body = { error: err.code };
+    if (err.next_change_at) body.next_change_at = err.next_change_at;
+    return res.status(err.status).json(body);
+  }
+  return next(err);
+}
+
+router.get('/username', async (req, res, next) => {
+  if (!username.habilitado()) return next();
+  try {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json(await username.estado(req.user.id));
+  } catch (err) { responderUsername(res, err, next); }
+});
+
+router.get('/username/suggestion', async (req, res, next) => {
+  if (!username.habilitado()) return next();
+  try {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ suggestion: await username.sugerir(req.user.id) });
+  } catch (err) { responderUsername(res, err, next); }
+});
+
+router.put('/username', async (req, res, next) => {
+  if (!username.habilitado()) return next();
+  try {
+    const body = req.body;
+    if (!body || typeof body !== 'object' || Array.isArray(body)
+        || Object.keys(body).length !== 1 || typeof body.username !== 'string') {
+      return res.status(400).json({ error: 'validation_error' });
+    }
+    const out = await username.elegir(req.user.id, body.username);
+    logger.audit('username_set', { user_id: req.user.id });
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json(out);
+  } catch (err) { responderUsername(res, err, next); }
+});
+
 router.get('/me/avatar', requireProfileIdentityRollout, async (req, res, next) => {
   try {
     const avatar = await profileIdentity.obtenerAvatar(req.user.id);
@@ -325,6 +388,7 @@ router.get('/movements', validateQuery(movementsQuery), async (req, res, next) =
               pa.payment_type, pa.status, pa.created_at,
               m.code AS mesa_code,
               r.name AS restaurant_name, r.category AS restaurant_category,
+              ${NOMBRE_COLS},
               pm.brand, pm.bank_name, pm.last_four
          FROM payment_attempts pa
          JOIN mesas m ON m.id = pa.mesa_id
@@ -344,7 +408,7 @@ router.get('/movements', validateQuery(movementsQuery), async (req, res, next) =
         payment_type: r.payment_type,
         status: r.status,
         date: r.created_at,
-        mesa: { code: r.mesa_code, restaurant: r.restaurant_name, category: r.restaurant_category },
+        mesa: { code: r.mesa_code, restaurant: nombreDelRestaurante(r), category: r.restaurant_category },
         method: r.brand ? {
           brand: r.brand, bank: r.bank_name, last_four: r.last_four,
           display: `${r.brand === 'visa' ? 'Visa' : r.brand === 'mastercard' ? 'MC' : 'Amex'} ••${r.last_four}`,
@@ -360,6 +424,7 @@ router.get('/movements/:id', marcarRespuestaPrivada,
   try {
     const { rows: aRows } = await pool.query(
       `SELECT pa.*, m.code AS mesa_code, r.name AS restaurant_name, r.category,
+              ${NOMBRE_COLS},
               pm.brand, pm.bank_name, pm.last_four
          FROM payment_attempts pa
          JOIN mesas m ON m.id = pa.mesa_id
@@ -381,7 +446,7 @@ router.get('/movements/:id', marcarRespuestaPrivada,
 
     res.json({
       id: a.id,
-      restaurant: { name: a.restaurant_name, category: a.category },
+      restaurant: { name: nombreDelRestaurante(a), category: a.category },
       mesa: { code: a.mesa_code },
       date: a.created_at,
       payment_type: a.payment_type,
@@ -470,7 +535,8 @@ router.get('/history', validateQuery(historyQuery), async (req, res, next) => {
       // acomodar una pantalla nueva. La agregación se queda en el front.
       `SELECT pa.id, pa.gross_amount_cents, pa.created_at,
               m.code AS mesa_code, m.status AS mesa_status,
-              r.name AS restaurant_name, r.category
+              r.name AS restaurant_name, r.category,
+              ${NOMBRE_COLS}
          FROM payment_attempts pa
          JOIN mesas m ON m.id = pa.mesa_id
          JOIN restaurants r ON r.id = m.restaurant_id
@@ -486,7 +552,7 @@ router.get('/history', validateQuery(historyQuery), async (req, res, next) => {
         date: r.created_at,
         mesa_code: r.mesa_code,
         mesa_status: r.mesa_status,
-        restaurant: r.restaurant_name,
+        restaurant: nombreDelRestaurante(r),
         category: r.category,
       })),
       limit, offset,
@@ -585,6 +651,8 @@ function bloqueDeConsumo(basis, categorias, total, visitas) {
  */
 // Mesa del rango con selección propia viva ($1 = usuario). Un solo predicado
 // para la carga (mesasDelMesConSeleccion) y para el tope previo (n184).
+// La frontera de acceso informativa es UNA sola definición; acá el usuario es $1.
+const ACCESO_INFORMATIVO = informativeSelections.ACCESS_SQL.replaceAll('$2', '$1');
 function seleccionPropiaSql(rango) {
   return `${filtroDeRango('m.created_at', rango)}
         AND (
@@ -599,13 +667,23 @@ function seleccionPropiaSql(rango) {
                 SELECT 1 FROM mesa_division_slots s
                  WHERE s.mesa_id = m.id AND s.claimed_by_user_id = $1
               )
+              -- AB-STATS-IGUAL (decisión 83): la selección informativa propia de
+              -- «igual» sin garantía, con la MISMA frontera de acceso que
+              -- /mesas/mine y el historial informativo (informativeSelections.ACCESS_SQL).
+              OR (m.division_mode = 'igual' AND m.guarantee_mode = false
+                  AND m.metadata->>'sin_garantia' = 'true'
+                  AND EXISTS (SELECT 1 FROM mesa_informative_selections si
+                               WHERE si.mesa_id = m.id AND si.user_id = $1)
+                  AND EXISTS (SELECT 1 FROM restaurants r
+                               WHERE r.id = m.restaurant_id AND ${ACCESO_INFORMATIVO}))
             )`;
 }
 
 async function mesasDelMesConSeleccion(userId, rango = RANGO_DEL_MES) {
   const { rows } = await pool.query(
     `SELECT m.id, m.code, m.division_mode, m.created_at,
-            r.id AS restaurant_id, r.name AS restaurant_name, r.category
+            r.id AS restaurant_id, r.name AS restaurant_name, r.category,
+            ${NOMBRE_COLS}
        FROM mesas m
        JOIN restaurants r ON r.id = m.restaurant_id
       WHERE ${seleccionPropiaSql(rango)}`,
@@ -633,7 +711,7 @@ async function excedeTopeAntes(userId, rango, maximo) {
 
 async function consumoDesdeSelecciones(userId, rango = RANGO_DEL_MES) {
   const mesas = await mesasDelMesConSeleccion(userId, rango);
-  const mios = await consumoPropio.porMesa(userId, mesas);
+  const mios = await consumoPropio.porMesa(userId, mesas, pool, { informativas: true });
   const porCategoria = new Map();
   let total = 0;
   let visitas = 0;
@@ -695,9 +773,18 @@ function armarRestaurantes(basis, visitas) {
     if (v.amount_cents <= 0) continue;
     total += v.amount_cents;
     const r = porResto.get(v.restaurant_id) || {
-      id: v.restaurant_id, name: v.restaurant_name, category: v.category,
+      id: v.restaurant_id, name: null, category: v.category,   // lo fija el bloque de abajo
       amount_cents: 0, visits_count: 0, visits: [],
     };
+    // AB-NOMBRE-RESTO · si dos mesas del mismo restaurante privado tienen
+    // nombres distintos, el grupo muestra el de la visita MÁS RECIENTE (misma
+    // regla que la grafía de un plato en armarPlatos). No se reagrupa: la
+    // agrupación sigue siendo por restaurant_id.
+    const cuando = new Date(v.created_at).getTime();
+    if (r._nombreDesde === undefined || cuando >= r._nombreDesde) {
+      r.name = nombreDelRestaurante(v);
+      r._nombreDesde = cuando;
+    }
     r.amount_cents += v.amount_cents;
     r.visits_count += 1;
     r.visits.push({
@@ -709,6 +796,7 @@ function armarRestaurantes(basis, visitas) {
     });
     porResto.set(v.restaurant_id, r);
   }
+  for (const r of porResto.values()) delete r._nombreDesde;
   const restaurants = [...porResto.values()]
     .sort((a, b) => b.amount_cents - a.amount_cents || a.name.localeCompare(b.name));
   for (const r of restaurants) {
@@ -719,7 +807,7 @@ function armarRestaurantes(basis, visitas) {
 
 async function restaurantesDesdeSelecciones(userId, rango = RANGO_DEL_MES) {
   const mesas = await mesasDelMesConSeleccion(userId, rango);
-  const mios = await consumoPropio.porMesa(userId, mesas, pool, { detalle: true });
+  const mios = await consumoPropio.porMesa(userId, mesas, pool, { detalle: true, informativas: true });
   return armarRestaurantes('consumption', mesas.map((m) => ({
     ...m,
     amount_cents: mios.get(m.id)?.amount_cents || 0,
@@ -731,6 +819,7 @@ async function restaurantesDesdePagos(userId, rango = RANGO_DEL_MES) {
   const { rows: mesas } = await pool.query(
     `SELECT m.id, m.code, m.division_mode, m.created_at,
             r.id AS restaurant_id, r.name AS restaurant_name, r.category,
+            ${NOMBRE_COLS},
             COALESCE(SUM(GREATEST(pa.gross_amount_cents - COALESCE(rf.reembolsado, 0), 0)), 0)
               AS amount
        FROM payment_attempts pa
@@ -1066,10 +1155,15 @@ router.get('/stats', validateQuery(statsPeriodQuery), async (req, res, next) => 
           AND created_at >= ${INICIO_DE_MES}`, [req.user.id]
     );
     const { rows: topR } = await pool.query(
-      `SELECT r.name, COUNT(*)::int AS visits
+      // AB-NOMBRE-RESTO · misma agrupación por restaurante; el nombre mostrado
+      // es el de la mesa del pago más reciente (displayRestaurantName).
+      `SELECT r.name AS restaurant_name, r.status AS nombre_restaurant_status,
+              (array_agg(m.metadata->>'restaurant_label' ORDER BY pa.created_at DESC, pa.id DESC))[1]
+                AS nombre_restaurant_label,
+              COUNT(*)::int AS visits
          FROM payment_attempts pa JOIN mesas m ON m.id = pa.mesa_id JOIN restaurants r ON r.id = m.restaurant_id
         WHERE pa.user_id = $1 AND pa.status IN ('succeeded','processed')
-        GROUP BY r.id, r.name ORDER BY visits DESC LIMIT 3`, [req.user.id]
+        GROUP BY r.id, r.name, r.status ORDER BY visits DESC LIMIT 3`, [req.user.id]
     );
     const { rows: topD } = await pool.query(
       `SELECT mi.name, COUNT(*)::int AS times
@@ -1116,7 +1210,7 @@ router.get('/stats', validateQuery(statsPeriodQuery), async (req, res, next) => 
         avg_per_visit_cents: Number(month[0].avg_per_visit),
         avg_per_visit_display: centsToDisplay(Number(month[0].avg_per_visit)),
       },
-      top_restaurants: topR,
+      top_restaurants: topR.map((t) => ({ name: nombreDelRestaurante(t), visits: t.visits })),
       top_dish: topD[0] || null,
       favorite_category: topCat[0]?.category || null,
     });

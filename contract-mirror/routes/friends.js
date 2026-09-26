@@ -40,6 +40,7 @@ const notifs = require('../services/notifications');
 const logger = require('../utils/logger');
 const profileIdentity = require('../services/profileIdentity');
 const avatarNotice = require('../services/friendAvatarNotice');
+const username = require('../services/username');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -70,6 +71,24 @@ const solicitudLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => `u:${req.user.id}`,
 });
+
+/**
+ * v2.137.0 · decisión 93: límite POR CUENTA sobre la búsqueda por @ (guarda del
+ * Bibliotecario contra la enumeración, junto con el mínimo de 3 caracteres y
+ * el techo de 5 resultados).
+ */
+const busquedaUsernameLimiter = rateLimit({
+  windowMs: Number(process.env.RATE_LIMIT_USERNAME_SEARCH_WINDOW_MS) || 60_000,
+  max: Number(process.env.RATE_LIMIT_USERNAME_SEARCH_MAX) || 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `uname:${req.user.id}`,
+});
+
+/** Con USERNAME_ENABLED apagado, la ruta no existe: cae al 404 de siempre. */
+function soloConUsername(req, res, next) {
+  return username.habilitado() ? next() : next('router');
+}
 
 /** ¿Hay un bloqueo en cualquiera de las dos direcciones? */
 async function hayBloqueo(client, a, b) {
@@ -124,6 +143,47 @@ for (const method of ['get', 'post']) {
   });
 }
 
+// ─── Búsqueda por @ · v2.137.0 · decisión 93 (docs/USERNAME_D93_WIRE.md) ─────
+
+/**
+ * Sugerencias al escribir: prefijo de 3+ caracteres, 5 resultados como máximo,
+ * con límite por cuenta. Devuelve @, nombre, apellido y si hay foto mostrable.
+ * NUNCA el mail, el id interno ni el payme_id. Excluye a la propia cuenta, a
+ * las borradas o suspendidas y a las que tienen un bloqueo con quien busca.
+ */
+router.get('/by-username', soloConUsername, busquedaUsernameLimiter, async (req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.vary('Authorization');
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q : null;
+    return res.json(await username.buscar(req.user.id, q));
+  } catch (err) {
+    if (err.code === 'username_query_invalid') return res.status(400).json({ error: err.code });
+    return next(err);
+  }
+});
+
+/**
+ * Foto de un resultado, con la regla de n164: nunca la de un menor ni la de una
+ * cuenta sin fecha conocida. Toda denegación, el mismo 404 (no oracular).
+ */
+router.get('/by-username/:username/avatar', soloConUsername, busquedaUsernameLimiter,
+  async (req, res, next) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.vary('Authorization');
+    res.setHeader('Access-Control-Expose-Headers', 'Vary, ETag');
+    try {
+      const avatar = await username.avatarPorUsername(req.user.id, req.params.username);
+      if (!avatar) {
+        return res.status(404).type('application/json')
+          .end(JSON.stringify({ error: 'avatar_not_found' }));
+      }
+      res.type(avatar.mimeType);
+      res.setHeader('Content-Length', String(avatar.bytes.length));
+      return res.end(avatar.bytes);
+    } catch (err) { return next(err); }
+  });
+
 // U05: sólo entre amistades aceptadas; mismo fallback ante toda denegación.
 router.get('/:userId/avatar', async (req, res, next) => {
   res.setHeader('Cache-Control', 'private, no-store');
@@ -173,17 +233,39 @@ router.get('/search', validateQuery(searchFriends), async (req, res, next) => {
  * solicitud tuya, o te bloqueó. El recibo sólo prueba que PayMe registró TU
  * intención; nunca prueba que exista una persona detrás.
  */
-router.post('/', solicitudLimiter, validateBody(addFriend), async (req, res, next) => {
+/**
+ * v2.137.0 · decisión 93: con USERNAME_ENABLED encendido, el cuerpo también
+ * puede ser exactamente `{ username }`. Apagado, ese cuerpo sigue en el 400 de
+ * `addFriend` como hoy. Un @ inexistente o mal formado sigue el mismo camino
+ * ciego que un mail inexistente.
+ */
+function validarSolicitud(req, res, next) {
+  const b = req.body;
+  if (username.habilitado() && b && typeof b === 'object' && !Array.isArray(b)
+      && Object.keys(b).length === 1 && typeof b.username === 'string') {
+    req.solicitudPorUsername = b.username;
+    return next();
+  }
+  return validateBody(addFriend)(req, res, next);
+}
+
+router.post('/', solicitudLimiter, validarSolicitud, async (req, res, next) => {
   try {
-    const { email, payme_id } = req.body;
-    const lookup = email
-      ? await pool.query(
-        `SELECT id FROM users WHERE email_normalized = LOWER($1) AND status = 'active'`,
-        [email])
-      : await pool.query(
-        `SELECT id FROM users WHERE payme_id = $1 AND status = 'active'`,
-        [payme_id]);
-    const destino = lookup.rows[0];
+    let destino;
+    if (req.solicitudPorUsername !== undefined) {
+      const id = await username.idPorUsername(req.solicitudPorUsername);
+      destino = id ? { id } : undefined;
+    } else {
+      const { email, payme_id } = req.body;
+      const lookup = email
+        ? await pool.query(
+          `SELECT id FROM users WHERE email_normalized = LOWER($1) AND status = 'active'`,
+          [email])
+        : await pool.query(
+          `SELECT id FROM users WHERE payme_id = $1 AND status = 'active'`,
+          [payme_id]);
+      destino = lookup.rows[0];
+    }
 
     // Igualación de tiempo: sin esto, "existe" y "no existe" se distinguen por
     // la duración del trabajo que sigue. Mismo criterio que el bcrypt.compare

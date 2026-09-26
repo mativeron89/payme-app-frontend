@@ -76,6 +76,41 @@
         "too_many_auth_attempts": [429]
       }
     },
+    "google_redirect_login_uri": {
+      "since": "v2.136.0",
+      "method": "POST",
+      "path": "/api/auth/google/redirect",
+      "public_path": "https://app.paymemx.com/auth/google/redirect (rewrite del front al AB; es el login_uri registrado en Google Cloud)",
+      "caller": "Google (modo redirect de GIS), nunca el front por fetch",
+      "gated_by": "features.google_redirect.enabled; apagado ⇒ 404",
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request": ["credential", "g_csrf_token", "select_by?"],
+      "csrf": "doble envío de GIS: cookie g_csrf_token === campo g_csrf_token; falta o distinto ⇒ csrf_failed",
+      "mounted_before_public_cors": true,
+      "auth_limiter": false,
+      "success_status": 303,
+      "success_location": "<origen de FRONTEND_PUBLIC_URL>/#google_redirect=<código>",
+      "error_location": "<origen de FRONTEND_PUBLIC_URL>/#google_redirect_error=<csrf_failed|social_auth_failed|temporarily_unavailable>",
+      "rule": "la MISMA que google_login (decisión 73, fase 1 sólo «Entrar»): vínculo activo ⇒ código; sin vínculo ⇒ social_auth_failed opaco; nunca crea cuenta ni vínculo"
+    },
+    "google_redirect_redeem": {
+      "since": "v2.136.0",
+      "method": "POST",
+      "path": "/api/auth/google/redirect/redeem",
+      "gated_by": "features.google_redirect.enabled; apagado ⇒ 404",
+      "request": ["code"],
+      "request_notes": {
+        "code": "el valor del fragmento #google_redirect=. Un solo uso, vence a los 60 s; se guarda sólo su sha256 (google_redirect_codes)."
+      },
+      "success_status": 200,
+      "success_shape": "session_success_shape",
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "social_auth_failed": [401, 503],
+        "too_many_auth_attempts": [429]
+      }
+    },
     "google_continue": {
       "since": "v2.92.0",
       "method": "POST",
@@ -268,6 +303,24 @@
         "too_many_auth_attempts": [429]
       }
     }
+  },
+  "google_redirect_capability": {
+    "since": "v2.136.0",
+    "path": "features.google_redirect",
+    "shape": { "supported": "boolean (true)", "enabled": "boolean" },
+    "enabled_true_when": "GOOGLE_REDIRECT_ENABLED=true y google_sign_in.login activo",
+    "why_top_level": "igual que google_continue: social_auth.google_sign_in se decodifica con claves exactas en el front",
+    "absent_means": "backend anterior a v2.136.0: sólo popup",
+    "scope_fase_1": "sólo «Entrar»; el alta con Google sigue en popup"
+  },
+  "google_redirect_flow": {
+    "login_uri": "https://app.paymemx.com/auth/google/redirect",
+    "code_location": "fragment_only",
+    "callback_cleanup": "remove_fragment_immediately_with_replaceState_before_redeem",
+    "code_forbidden_in": ["query", "logs", "local_storage", "session_storage"],
+    "payme_session_tokens_in_url": false,
+    "code_ttl_seconds": 60,
+    "code_single_use": true
   },
   "google_continue_capability": {
     "since": "v2.92.0",

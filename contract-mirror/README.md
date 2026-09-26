@@ -6,6 +6,35 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-26** (orden `AF-GOOGLE-REDIRECT-CLAUDE-20260926` ·
+  ingreso con Google en la misma pestaña, decisiones 92 y 94).
+- Commit exacto y procedencia del CONTENIDO:
+  **`57b06a74626bec94e79b9bda213f5b5bdf39e458`** (App Backend **v2.137.0**, commit A: incluye
+  v2.136.0, con `features.google_redirect`, `POST /api/auth/google/redirect` y
+  `POST /api/auth/google/redirect/redeem`, y v2.137.0, decisión 93, `features.username`).
+- Commit del que se tomó el inventario autoritativo:
+  **`a8987b06c48b5f41fe0711f92ae18c92bd2427f9`** (v2.137.0, commit B: regenera el
+  inventario sobre `57b06a7`), el que el Bibliotecario informó servido.
+  Wire del dueño: `docs/GOOGLE_REDIRECT_D92_WIRE.md` en `a8987b0`, sha256
+  `9176293917e908ee6b62ebad46baf6b37df189fd69c5b0ce405b796c88a42249`.
+
+**121 archivos espejados**, los mismos: no entra ni sale ninguno. Cambian
+`contract/social-auth-v1.json`, `middleware/auth.js`, `routes/account.js`,
+`routes/config.js`, `routes/friends.js`, `routes/invitations.js`,
+`routes/social-auth.js` y `services/externalIdentities.js`.
+
+La fuente se leyó con `git show` sobre objetos del repo del owner, sin tocar su
+árbol ni sus refs.
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | adoptado y verificado 121 · commit `57b06a7` · exit 0 |
+| `--integridad` | **OK 121/121** · exit 0 |
+| `--paridad` | **OK 121/121**: espejo = inventario = fuente **en `57b06a7`** · exit 0 |
+| vigencia | medida contra el servido **`a8987b0`** con `git diff --name-only 57b06a7 a8987b0` sobre las 121 rutas: **ninguna cambió**. No se usó `--vigencia`, que mira el HEAD local del owner. |
+
+### Refresh anterior · 2026-09-25 (AF-MESA-D79 · `6eaf299`)
+
 - Fecha del refresh: **2026-09-25** (orden `AF-MESA-D79-CLAUDE-20260925` · mesa
   compartida en «partes iguales», decisiones 76 y 79 a 81).
 - Commit exacto y procedencia del CONTENIDO:

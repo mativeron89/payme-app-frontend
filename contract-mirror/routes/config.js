@@ -56,6 +56,8 @@ const WALLET_RAIL = Object.freeze({
   account_activity: true,
 });
 const googleIdentity = require('../services/googleIdentity');
+const googleRedirect = require('../services/googleRedirect');
+const username = require('../services/username');
 const facebookIdentity = require('../services/facebookIdentity');
 const authRecovery = require('../services/authRecovery');
 
@@ -161,6 +163,24 @@ router.get('/', (req, res) => {
           && googleIdentity.capability().registration === true
           && altaPublicaHabilitada()
           && !birthDateRequeridaEnRegistro(),
+      },
+      // v2.136.0 · decisiones 92 y 94 · ingreso con Google en la MISMA pestaña
+      // (modo redirect de GIS, fase 1: sólo «Entrar»). Bloque hermano de primer
+      // nivel por la misma razón que `google_continue`: `social_auth.google_sign_in`
+      // se decodifica con claves exactas en el front. `enabled` es el valor VIVO
+      // (GOOGLE_REDIRECT_ENABLED y el login con Google encendidos): el front usa el
+      // modo redirect sólo con `true`; ausente o `false`, sigue el popup.
+      google_redirect: {
+        supported: true,
+        enabled: googleRedirect.habilitado(),
+      },
+      // v2.137.0 · decisión 93 · @usuario único. Bloque hermano de primer nivel,
+      // mismo criterio que `google_redirect`. `enabled` es el valor VIVO de
+      // USERNAME_ENABLED: apagado hasta que el Aviso nuevo esté publicado. Con
+      // `false` o ausente, el front no muestra nada del @.
+      username: {
+        supported: true,
+        enabled: username.habilitado(),
       },
       // Implementación owner-first activada con aviso 2.3.0 ratificado.
       // El payme_id sigue inmutable y el avatar nunca tiene URL pública.

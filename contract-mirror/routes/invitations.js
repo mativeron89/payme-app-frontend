@@ -12,6 +12,7 @@ const { requireAuth } = require('../middleware/auth');
 const { uuidIdParam, validateParams } = require('../schemas');
 const invitationAuthority = require('../services/invitationAuthority');
 const stateMachine = require('../utils/stateMachine');
+const { displayRestaurantName } = require('../services/mesaPresentation');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -35,6 +36,9 @@ router.get('/', async (req, res, next) => {
       `SELECT i.id, i.mesa_id, i.invitation_type, i.status, i.expires_at, i.created_at,
               m.code AS mesa_code, m.status AS mesa_status,
               r.name AS restaurant_name,
+              -- AB-NOMBRE-RESTO · sólo para displayRestaurantName; se quitan abajo.
+              r.status AS nombre_restaurant_status,
+              m.metadata->>'restaurant_label' AS nombre_restaurant_label,
               -- v2.93.0 · G-31 · categoría del restaurante para la tarjeta.
               -- Enum cerrado de restaurants.category, NOT NULL en la base.
               r.category AS restaurant_category,
@@ -51,8 +55,14 @@ router.get('/', async (req, res, next) => {
       [req.user.id]
     );
     res.json({
-      invitations: rows.map((row) => ({
+      // AB-NOMBRE-RESTO (2026-09-25) · `restaurant_name` con la MISMA regla que
+      // GET /mesas/:code (el nombre que se le puso a la mesa si el restaurante es
+      // privado). Cambia el VALOR, no las claves: las dos columnas auxiliares no
+      // salen en la respuesta.
+      invitations: rows.map(({ nombre_restaurant_status, nombre_restaurant_label, ...row }) => ({
         ...row,
+        restaurant_name: displayRestaurantName({ metadata: { restaurant_label: nombre_restaurant_label } },
+          row.restaurant_name, nombre_restaurant_status),
         mesa_joinable: stateMachine.mesaViva(row.mesa_status),
       })),
     });

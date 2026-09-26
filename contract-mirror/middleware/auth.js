@@ -18,6 +18,7 @@ const { tokenHash, verifyInvitationLinkToken } = require('../utils/tokens');
 const logger = require('../utils/logger');
 const legal = require('../services/legal');
 const legalAcceptance = require('../services/legalAcceptance');
+const username = require('../services/username');
 
 /**
  * v2.132.0 · AB2 · con el paquete legal 3.0.0 vigente, toda ruta autenticada responde 428
@@ -37,6 +38,27 @@ function exentaDeLaPuerta(req) {
   const ruta = `${req.baseUrl || ''}${req.path || ''}`;
   if (PREFIJOS_EXENTOS_DE_LA_PUERTA.some((p) => ruta.startsWith(p))) return true;
   return RUTAS_EXENTAS_DE_LA_PUERTA.includes(`${req.method} ${ruta}`);
+}
+
+/**
+ * v2.137.0 · decisión 93 («Obligatorio para todos»): con USERNAME_ENABLED encendido, una cuenta
+ * sin @ recibe 428 `{error:'username_required'}` en toda ruta autenticada, DESPUÉS de la puerta
+ * legal (primero se acepta el Aviso, después se elige el @). Excepciones cerradas: las de la
+ * puerta legal (sin ellas el front no hidrata la sesión ni muestra los textos) y las dos rutas
+ * exactas que usa la pantalla de elegir el @ (cualquier método). Apagada, no hay consulta extra.
+ */
+const RUTAS_EXENTAS_DEL_USERNAME = Object.freeze([
+  '/api/account/username', '/api/account/username/suggestion',
+]);
+
+function exentaDelUsername(req) {
+  if (exentaDeLaPuerta(req)) return true;
+  return RUTAS_EXENTAS_DEL_USERNAME.includes(`${req.baseUrl || ''}${req.path || ''}`);
+}
+
+async function faltaUsername(userId) {
+  const { rows: [r] } = await pool.query('SELECT username FROM users WHERE id = $1', [userId]);
+  return !r || !r.username;
 }
 
 const JWT_ISS = process.env.JWT_ISSUER || 'payme.mx';
@@ -151,6 +173,9 @@ async function requireAuth(req, res, next) {
     if (legal.PAQUETE_300_VIGENTE && !exentaDeLaPuerta(req)
         && !(await legalAcceptance.aceptoVigente(user.id))) {
       return res.status(428).json({ error: 'legal_acceptance_required' });
+    }
+    if (username.habilitado() && !exentaDelUsername(req) && (await faltaUsername(user.id))) {
+      return res.status(428).json({ error: 'username_required' });
     }
 
     req.user = user;
@@ -330,4 +355,5 @@ module.exports = {
   loadActiveSession,
   PREFIJOS_EXENTOS_DE_LA_PUERTA,
   RUTAS_EXENTAS_DE_LA_PUERTA,
+  RUTAS_EXENTAS_DEL_USERNAME,
 };

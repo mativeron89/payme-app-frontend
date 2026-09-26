@@ -141,35 +141,73 @@ async function registerWithExternalIdentity({
   throw registrationUnavailable();
 }
 
+/**
+ * La cuenta ACTIVA con vínculo ACTIVO para esta evidencia, o null. Consume la
+ * credencial (anti-replay) aun cuando no haya vínculo. Una sola definición para
+ * el ingreso de hoy (`loginWithExternalIdentity`) y para el ingreso en la misma
+ * pestaña (`issueLoginCodeWithExternalIdentity`, v2.136.0): las dos entran por la
+ * misma regla o por ninguna.
+ */
+async function usuarioPorVinculo(client, evidence) {
+  await assertSubjectAllowed(client, evidence);
+  await consumeCredential(client, evidence, 'login');
+  const { rows } = await client.query(
+    `SELECT u.id,u.payme_id,u.email,u.first_name,u.last_name,u.status
+       FROM external_identity_bindings b
+       JOIN users u ON u.id=b.user_id
+      WHERE b.provider=$1 AND b.subject_namespace=$2 AND b.subject=$3
+        AND b.status='active'
+      FOR UPDATE OF b,u`,
+    [evidence.provider, evidence.subject_namespace, evidence.subject]
+  );
+  const user = rows.length === 1 && rows[0].status === 'active' ? rows[0] : null;
+  // El digest anti-replay sí confirma aun cuando no haya binding. No hay
+  // escritura de cuenta/sesión, pero el mismo bearer no puede martillar el
+  // lookup indefinidamente ni volverse válido después por una carrera.
+  if (!user) return null;
+  delete user.status;
+  return user;
+}
+
+function erroresDeIngreso(error) {
+  if (error.code === 'social_auth_failed') return error;
+  if (error.code === '23505' || error.code === '23514') return authFailed();
+  return error;
+}
+
 async function loginWithExternalIdentity(evidence) {
   try {
     const response = await pool.tx(async (client) => {
-      await assertSubjectAllowed(client, evidence);
-      await consumeCredential(client, evidence, 'login');
-      const { rows } = await client.query(
-        `SELECT u.id,u.payme_id,u.email,u.first_name,u.last_name,u.status
-           FROM external_identity_bindings b
-           JOIN users u ON u.id=b.user_id
-          WHERE b.provider=$1 AND b.subject_namespace=$2 AND b.subject=$3
-            AND b.status='active'
-          FOR UPDATE OF b,u`,
-        [evidence.provider, evidence.subject_namespace, evidence.subject]
-      );
-      const user = rows.length === 1 && rows[0].status === 'active' ? rows[0] : null;
-      // El digest anti-replay sí confirma aun cuando no haya binding. No hay
-      // escritura de cuenta/sesión, pero el mismo bearer no puede martillar el
-      // lookup indefinidamente ni volverse válido después por una carrera.
+      const user = await usuarioPorVinculo(client, evidence);
       if (!user) return null;
-      delete user.status;
       const session = await paymeSessions.createSession({ userId: user.id, client });
       return paymeSessions.sessionResponse(user, session);
     });
     if (!response) throw authFailed();
     return response;
   } catch (error) {
-    if (error.code === 'social_auth_failed') throw error;
-    if (error.code === '23505' || error.code === '23514') throw authFailed();
-    throw error;
+    throw erroresDeIngreso(error);
+  }
+}
+
+/**
+ * v2.136.0 · decisiones 92 y 94 · ingreso con Google en la MISMA pestaña. Misma
+ * regla que `loginWithExternalIdentity` (decisión 73: en «Entrar» sólo se
+ * ingresa; sin vínculo, el mismo `social_auth_failed` opaco), pero en vez de la
+ * sesión emite, en la misma transacción, un código de un solo uso que el front
+ * canjea después (`emitir(client, userId)` devuelve el código crudo).
+ */
+async function issueLoginCodeWithExternalIdentity(evidence, emitir) {
+  try {
+    const code = await pool.tx(async (client) => {
+      const user = await usuarioPorVinculo(client, evidence);
+      if (!user) return null;
+      return emitir(client, user.id);
+    });
+    if (!code) throw authFailed();
+    return code;
+  } catch (error) {
+    throw erroresDeIngreso(error);
   }
 }
 
@@ -630,6 +668,7 @@ async function linkFromContinueIntent({ linkIntent, password }) {
 module.exports = {
   registerWithExternalIdentity,
   loginWithExternalIdentity,
+  issueLoginCodeWithExternalIdentity,
   linkExternalIdentity,
   proveedoresVinculados,
   continueWithExternalIdentity,
