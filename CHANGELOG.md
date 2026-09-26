@@ -11,6 +11,29 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.195.1 — Los avisos de «Escanea el ticket» ya no quedan tapados por el marco (2026-09-26)
+
+Orden AF-AVISO-FOTO-CLAUDE-20260926 (sha256 8a7a9cf5…). Base `0.195.0` (`c8020a8`). Mati, en el
+iPhone: «Funciona pero la imagen sale mal». El aviso de foto chica se leía desde «leer el ticket.».
+
+- **Causa, medida a 390×664** (el alto visible del iPhone con las barras del navegador):
+  - el hueco del marco (`.scan-frame-slot`) tenía `flex: 1; min-height: 0`;
+  - con un aviso debajo se achicaba de 364 a 186 px, mientras el marco seguía en 269;
+  - el marco desbordaba 41 px arriba y abajo, y por ser `position: relative` se pintaba encima del
+    aviso;
+  - pasaba con todos los avisos de la pantalla;
+  - a 844 px de alto sobraba lugar y no se veía.
+- **Ahora:** el hueco crece para centrar el marco, pero no se achica por debajo de él
+  (`flex: 1 0 auto`). Si no entra, la pantalla se desplaza. En reposo el marco queda exactamente
+  donde estaba, medido a 664 y a 844.
+- **Sólo estilos.** Sin contrato.
+- **Pruebas:**
+  - e2e de geometría a 390×664, rojo en la base en los cinco avisos: foto chica local y del dueño,
+    foto grande, sin ítems y presupuesto agotado;
+  - «Sacar otra foto» se alcanza sin que la barra lo tape;
+  - mutantes M1–M3 muertos;
+  - capturas de antes y después.
+
 ## 0.195.0 — «Entrar» con Google en la misma pestaña, detrás del flag del dueño (decisiones 92 y 94) (2026-09-26)
 
 Orden AF-GOOGLE-REDIRECT-CLAUDE-20260926 (sha256 f9be67ff…). Base `0.194.4` (`cefe493`). Wire del
