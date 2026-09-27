@@ -1609,11 +1609,7 @@ body {
   color: var(--gray-txt);
 }
 .arroba-error { color: var(--warning); }
-.arroba-config .arroba-nota,
-.arroba-config .arroba-edicion { padding: 0 16px 12px; }
-.arroba-config .arroba-error-guardar { margin: 0 16px 12px; }
 .arroba-acciones { display: flex; gap: 8px; margin-top: 12px; }
-.arroba-propio { font-size: var(--fs-legacy-sm); color: var(--navy); font-weight: 600; }
 .arroba-buscar { margin-bottom: 16px; }
 .arroba-resultados { margin-top: 4px; }
 .arroba-lista { list-style: none; margin: 4px 0 0; padding: 0; }
@@ -7367,6 +7363,28 @@ h1.pay-title-lbl {
   margin-top: 6px;
   font-size: var(--fs-legacy-sm);
   color: var(--gray-txt);
+}
+
+/* AF-ALTA-POPUP-D106 · decisión 106: el @ con su lápiz, como el nombre. */
+.profile-arroba-bloque {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.profile-arroba-linea {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: 4px;
+}
+
+.profile-arroba-linea .profile-arroba { margin-top: 0; }
+
+.profile-arroba-editor {
+  width: min(100%, 300px);
+  margin-top: var(--sp-3);
+  text-align: left;
 }
 
 .profile-name-editor {

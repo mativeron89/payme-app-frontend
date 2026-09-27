@@ -8,55 +8,74 @@ import {
   normalizarUsername,
   problemaDeFormato,
   publicarArrobaPropia,
+  useArrobaPropia,
   useUsernameCapability,
   type EstadoUsername,
 } from '../api/username';
 import { CampoArroba, mensajeAlGuardar } from './PuertaArroba';
 import { Icon } from './Icon';
+import { useToast } from './ui';
 
 /**
  * AF-USUARIO-ARROBA · decisión 93 (punto 4: «Sí, una vez cada 30 días») · el @
  * propio en Configuración: se ve, y se cambia si el dueño lo permite. El límite
  * lo decide el dueño (`next_change_at`, wire §4); la app sólo lo muestra.
  *
+ * AF-ALTA-POPUP-D106 · decisión 106 de Mati: se saca la tarjeta «Tu @usuario»
+ * con su «Puedes volver a cambiar…». Es la línea del @ debajo del nombre
+ * (decisión 104) con un lápiz, como el del nombre. El lápiz abre el
+ * cambio o, si todavía no se puede, dice desde cuándo; la fecha ya no queda
+ * escrita a la vista.
+ *
  * 🔴 Con `features.username` apagado no renderiza nada ni pide nada.
  */
 export function ArrobaEnConfiguracion({ session }: { readonly session: StoredSession }) {
   const { enabled } = useUsernameCapability();
   if (!enabled) return null;
-  return <FilaArroba session={session} />;
+  return <LineaArroba session={session} />;
 }
 
-function FilaArroba({ session }: { readonly session: StoredSession }) {
+function LineaArroba({ session }: { readonly session: StoredSession }) {
   const { t, idioma } = useIdioma();
+  const toast = useToast();
   const [estado, setEstado] = useState<EstadoUsername | null>(null);
-  const [fallo, setFallo] = useState(false);
   const [editando, setEditando] = useState(false);
+  const [mostrarFecha, setMostrarFecha] = useState(false);
   const [valor, setValor] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
 
-  // AF-USERNAME-D104 · el mismo @ que se ve acá va debajo del nombre, en la
-  // cabecera de Configuración (`ProfileIdentityEditor`): una lectura, dos lugares.
+  // AF-USERNAME-D104 · una lectura del @, y el store la publica para quien más
+  // la quiera. Lo que se ve sale de ahí: atado a la cuenta y sin los reservados.
   const principal = session.principal_id;
   const leido = estado?.username;
   useEffect(() => {
     if (leido !== undefined) publicarArrobaPropia(principal, leido);
   }, [principal, leido]);
+  const arroba = useArrobaPropia(principal);
 
   useEffect(() => {
     let vivo = true;
-    setFallo(false);
     api.getUsername(session)
       .then((e) => { if (vivo && isCurrentSession(session)) setEstado(e); })
-      .catch(() => { if (vivo) setFallo(true); });
+      .catch(() => undefined);
     return () => { vivo = false; };
   }, [session]);
 
   const proximo = estado?.next_change_at ?? null;
-  const puedeCambiar = estado !== null && estado.username !== null && proximo === null;
   const valido = problemaDeFormato(normalizarUsername(valor)) === 'ok';
+
+  function alTocarLapiz() {
+    if (!estado?.username) return;
+    setError(null);
+    if (proximo !== null) {
+      setMostrarFecha(true);
+      return;
+    }
+    setValor(estado.username);
+    setMostrarFecha(false);
+    setEditando(true);
+  }
 
   async function guardar() {
     if (busy || !estado) return;
@@ -66,15 +85,15 @@ function FilaArroba({ session }: { readonly session: StoredSession }) {
       const nuevo = await api.putUsername(normalizarUsername(valor), session);
       setEstado(nuevo);
       setEditando(false);
-      setAviso(nuevo.username ? t('Listo, tu @ ahora es @{0}.', nuevo.username) : null);
+      if (nuevo.username) toast(t('Listo, tu @ ahora es @{0}.', nuevo.username));
     } catch (err) {
       const { status, code, extra } = extractApiError(err);
       if (status === 409 && code === 'username_change_too_soon' && typeof extra.next_change_at === 'string'
           && !Number.isNaN(Date.parse(extra.next_change_at))) {
-        // El dueño manda desde cuándo: se muestra ESA fecha, no una calculada
-        // acá, en la nota de siempre (una sola vez, no además como error).
+        // El dueño manda desde cuándo: se dice ESA fecha, no una calculada acá.
         setEstado({ ...estado, next_change_at: extra.next_change_at });
         setEditando(false);
+        setMostrarFecha(true);
         // El cambio que lo impide pudo hacerse en otro lado: se relee el @ real.
         void api.getUsername(session)
           .then((real) => { if (isCurrentSession(session)) setEstado(real); })
@@ -87,37 +106,32 @@ function FilaArroba({ session }: { readonly session: StoredSession }) {
     }
   }
 
+  // Apagado, sin elegir, reservado o todavía sin leer: nada (decisión 104).
+  if (!arroba) return null;
+
   return (
-    <div className="card config-card arroba-config" style={{ marginBottom: 12 }}>
-      <div className="list-row" style={{ cursor: 'default' }}>
-        <span><Icon name="users" size={16} /></span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 'var(--fs-legacy-sm)', fontWeight: 600 }}>{t('Tu @usuario')}</div>
-          <div className="caption arroba-propio">
-            {estado?.username
-              ? `@${estado.username}`
-              : fallo ? t('No pudimos cargar tu @.') : estado ? t('Todavía no elegiste tu @.') : t('Cargando…')}
-          </div>
-        </div>
-        {puedeCambiar && !editando && (
+    <div className="profile-arroba-bloque">
+      <div className="profile-arroba-linea">
+        <div className="profile-arroba">{arroba}</div>
+        {estado?.username && !editando && (
           <button
             type="button"
-            className="btn btn-ghost btn-sm btn-fit"
-            onClick={() => { setValor(estado?.username ?? ''); setError(null); setAviso(null); setEditando(true); }}
+            className="profile-name-edit profile-arroba-edit"
+            onClick={alTocarLapiz}
+            aria-label={t('Cambiar tu @')}
           >
-            {t('Cambiar')}
+            <Icon name="pencil" size={15} />
           </button>
         )}
       </div>
-      {aviso && !editando && <div className="arroba-nota" role="status">{aviso}</div>}
-      {proximo !== null && !editando && (
+      {mostrarFecha && proximo !== null && !editando && (
         <div className="arroba-nota" role="status">
           {t('Puedes volver a cambiar tu @ desde el {0}.', fechaDeCambio(proximo, idioma))}
         </div>
       )}
       {editando && (
         <form
-          className="arroba-edicion"
+          className="arroba-edicion profile-arroba-editor"
           onSubmit={(e) => { e.preventDefault(); if (valido && !busy) void guardar(); }}
         >
           <CampoArroba
@@ -129,10 +143,10 @@ function FilaArroba({ session }: { readonly session: StoredSession }) {
           />
           <div className="arroba-nota">{t('Después vas a tener que esperar 30 días para volver a cambiarlo.')}</div>
           <div className="arroba-acciones">
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => { setEditando(false); setError(null); }}>
+            <button type="button" className="btn btn-ghost btn-fit" disabled={busy} onClick={() => { setEditando(false); setError(null); }}>
               {t('Cancelar')}
             </button>
-            <button type="submit" className="btn btn-primary" disabled={busy || !valido}>
+            <button type="submit" className="btn btn-navy btn-fit" disabled={busy || !valido}>
               {busy ? t('Un segundo…') : t('Guardar')}
             </button>
           </div>

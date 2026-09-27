@@ -80,6 +80,9 @@ async function espiarArroba(page: Page): Promise<void> {
   });
 }
 
+/** Decisión 106: el lápiz junto al @, debajo del nombre. */
+const lapiz = (page: Page) => page.getByRole('button', { name: 'Cambiar tu @', exact: true });
+
 const llamadas = (page: Page, metodo: string) => page.evaluate(
   (m) => (window as unknown as { __arroba: Record<string, unknown[][]> }).__arroba[m] ?? [],
   metodo,
@@ -117,7 +120,9 @@ test.describe('AF-USUARIO-ARROBA · apagado (tolerancia si el dueño lo apaga)',
     await irEnLaApp(page, '/mas');
     await expect(page.getByRole('heading', { name: 'Configuración' })).toBeVisible();
     await expect(page.getByText('Tu @usuario')).toHaveCount(0);
-    await expect(page.locator('.arroba-config')).toHaveCount(0);
+    await expect(page.locator('.profile-name-line')).toBeVisible();
+    await expect(page.locator('.profile-arroba')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Cambiar tu @', exact: true })).toHaveCount(0);
 
     await abrirAgregarAmigo(page);
     await expect(page.getByLabel('Buscar por @usuario')).toHaveCount(0);
@@ -182,7 +187,7 @@ test.describe('AF-USUARIO-ARROBA · encendido · la puerta «Elige tu @usuario»
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Elige tu @usuario' })).toHaveCount(0);
     await irEnLaApp(page, '/mas');
-    await expect(page.locator('.arroba-propio')).toHaveText('@mati.veron');
+    await expect(page.locator('.profile-arroba')).toHaveText('@mati.veron');
   });
 
   test('va DESPUÉS de la puerta legal: primero se acepta el Aviso, después se elige el @', async ({ page }) => {
@@ -207,12 +212,12 @@ test.describe('AF-USUARIO-ARROBA · encendido · la puerta «Elige tu @usuario»
 });
 
 test.describe('AF-USUARIO-ARROBA · encendido · cambiar el @ con el límite de 30 días', () => {
-  test('con el último cambio hace más de 30 días se cambia, y después dice desde cuándo se puede de nuevo', async ({ page }) => {
+  test('con el último cambio hace más de 30 días el lápiz lo cambia, y después dice desde cuándo se puede de nuevo', async ({ page }) => {
     await encender(page);
     await ingresarConArroba(page, 'mati.viejo', 40);
     await irEnLaApp(page, '/mas');
-    await expect(page.locator('.arroba-propio')).toHaveText('@mati.viejo');
-    await page.getByRole('button', { name: 'Cambiar', exact: true }).click();
+    await expect(page.locator('.profile-arroba')).toHaveText('@mati.viejo');
+    await lapiz(page).click();
     const campo = page.getByLabel('Nuevo @usuario');
     await expect(campo).toHaveValue('mati.viejo');
     await capturar(page, 'arroba-04-config-cambiar');
@@ -223,19 +228,26 @@ test.describe('AF-USUARIO-ARROBA · encendido · cambiar el @ con el límite de 
 
     await campo.fill('mati.nuevo');
     await page.getByRole('button', { name: 'Guardar', exact: true }).click();
-    await expect(page.locator('.arroba-propio')).toHaveText('@mati.nuevo');
+    await expect(page.locator('.profile-arroba')).toHaveText('@mati.nuevo');
     await expect(page.getByText('Listo, tu @ ahora es @mati.nuevo.')).toBeVisible();
+    // Decisión 106: la fecha no queda escrita; la dice el lápiz, y no abre el cambio.
+    await expect(page.getByText(/Puedes volver a cambiar/)).toHaveCount(0);
+    await lapiz(page).click();
     await expect(page.getByText(/^Puedes volver a cambiar tu @ desde el \d{1,2} de [a-z]+\.$/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Cambiar', exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Nuevo @usuario')).toHaveCount(0);
     await capturar(page, 'arroba-05-config-cambiado');
   });
 
-  test('antes de los 30 días no ofrece cambiar y muestra la fecha del dueño', async ({ page }) => {
+  test('antes de los 30 días el lápiz no abre el cambio: dice la fecha del dueño', async ({ page }) => {
     await encender(page);
     await ingresarConArroba(page, 'mati.reciente', 5);
     await irEnLaApp(page, '/mas');
-    await expect(page.locator('.arroba-propio')).toHaveText('@mati.reciente');
-    await expect(page.getByRole('button', { name: 'Cambiar', exact: true })).toHaveCount(0);
+    await expect(page.locator('.profile-arroba')).toHaveText('@mati.reciente');
+    // Decisión 106: sin tarjeta, y la fecha no queda escrita a la vista.
+    await expect(page.getByText('Tu @usuario')).toHaveCount(0);
+    await expect(page.getByText(/Puedes volver a cambiar/)).toHaveCount(0);
+    await lapiz(page).click();
+    await expect(page.getByLabel('Nuevo @usuario')).toHaveCount(0);
     const esperada = await page.evaluate(() => new Intl.DateTimeFormat('es-MX', {
       day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
     }).format(new Date(Date.now() + 25 * 86_400_000)));
@@ -247,7 +259,7 @@ test.describe('AF-USUARIO-ARROBA · encendido · cambiar el @ con el límite de 
     await encender(page);
     await ingresarConArroba(page, 'mati.viejo', 40);
     await irEnLaApp(page, '/mas');
-    await page.getByRole('button', { name: 'Cambiar', exact: true }).click();
+    await lapiz(page).click();
     // Entre que se abrió el editor y se guardó, el @ cambió en otro lado hace 2 días.
     await conArroba(page, 'mati.otro', 2);
     await page.getByLabel('Nuevo @usuario').fill('mati.nuevo');
@@ -261,7 +273,7 @@ test.describe('AF-USUARIO-ARROBA · encendido · cambiar el @ con el límite de 
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByLabel('Nuevo @usuario')).toHaveCount(0);
     // Y muestra el @ que realmente tiene ahora, no el que tenía al abrir.
-    await expect(page.locator('.arroba-propio')).toHaveText('@mati.otro');
+    await expect(page.locator('.profile-arroba')).toHaveText('@mati.otro');
   });
 });
 

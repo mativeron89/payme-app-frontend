@@ -272,10 +272,11 @@ export function arrobaCoincide(username: unknown, habilitado: boolean, filtroPle
 }
 
 /**
- * El @ PROPIO, debajo del nombre en Configuración. Lo lee UNA vez la tarjeta
- * «Tu @usuario» (`GET /api/account/username`, la misma request de siempre) y lo
- * publica acá; la cabecera lo toma de este store en vez de pedirlo otra vez. Va
- * atado a la cuenta (`principal_id`): con otra sesión no se ve el @ anterior.
+ * El @ PROPIO, debajo del nombre en Configuración. Lo lee UNA vez esa línea
+ * (`ArrobaEnConfiguracion`, `GET /api/account/username`, la misma request de
+ * siempre; la tarjeta «Tu @usuario» se sacó por la decisión 106) y lo publica
+ * acá; lo que se ve sale de este store. Va atado a la cuenta (`principal_id`):
+ * con otra sesión no se ve el @ anterior.
  */
 interface ArrobaPropia { readonly principal: string; readonly username: string | null }
 let propia: ArrobaPropia | null = null;
