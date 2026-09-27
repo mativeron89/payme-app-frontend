@@ -604,7 +604,7 @@ describe('auditoría de secretos', () => {
   // documentos y los mismos bytes, pasados por el MISMO script, que no se toca.
   // Lo que cambia es que se parten en tramos de a lo sumo 128 KiB cortados por
   // LÍNEA, uno por test. El script decide línea por línea (cada patrón, la
-  // partición espejo/resto, `SECRETOS_DEMO_RAILWAY`), así que la unión de los
+  // partición espejo/resto y el archivo prohibido por nombre), así que la unión de los
   // tramos audita exactamente lo mismo que el todo. El tiempo de cada test
   // queda acotado por el tramo, no por el CHANGELOG: lo que crece es la
   // CANTIDAD de tramos. Que los tramos reconstruyan cada documento byte a byte
