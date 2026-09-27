@@ -11,6 +11,43 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.200.0 — El alta con Google tras «Entrar» sin cuenta, en la misma pestaña; y tres pruebas que fallaban solas o pasaban vacías (2026-09-27)
+
+Orden AF-HIGIENE-ALTA-CLAUDE-20260927 (sha256 5222caa8…). Base `0.199.0` (`ddbbd13`). Un commit por punto.
+
+1. **`cerrar-mesa.spec.ts:185` intermitente** (falló en cinco CI):
+   - **Causa:** el test marcaba la mesa vencida sin esperar a que la pantalla la cargara. Si el GET de la mesa
+     salía después (CPU lenta, como en el CI), llegaba ya vencida, el botón «Cerrar mesa» no se pintaba y el click
+     vencía a los 30 s.
+   - **Medido** con una sonda, CPU ×6 por CDP y 30 corridas sin retries: el orden viejo falla 2 de 30, y en las 30
+     el botón todavía no estaba al mutar. El orden nuevo (botón visible → confirmación abierta → vencerla → «Sí»)
+     pasa 30 de 30.
+   - Sin timeouts más largos ni reintentos.
+   - **Acreditación:** el spec entero 20 veces seguidas, 200 de 200.
+   - Censo de la clase (e2e que mutan el mock): ningún otro con este patrón. Hay 8 con una ventana residual de
+     refresco del mismo orden que la de éste, más 2 que no ejercitan lo que dicen. Declarados en el CIERRE.
+2. **La auditoría de secretos de la documentación, en tramos.**
+   - **Antes:** un test con los 22 `.md` versionados fuera de `contract-mirror/` (1,07 MB, el 77 % del CHANGELOG).
+     Tardaba 2,5 s en local y 4,38 s en el CI, contra el límite de 5 s, y crecía con cada entrada.
+   - **Ahora:** el mismo universo, byte por byte, por el mismo script sin tocar, partido en tramos de hasta
+     128 KiB cortados por línea. Son 10 tests y el más lento tarda 574 ms en local. El script decide línea por
+     línea, así que la unión audita lo mismo que el todo.
+   - Un test prueba que los tramos reconstruyen cada documento, y un control positivo exige rojo con una línea
+     con forma de secreto.
+3. **`af-rediseno-12`, Configuración, dejó de ser un verde vacío.** «Sin prometer edición» sólo pasaba antes de que
+   llegara `profile_identity`, encendida en el mock desde `6beab65`. Ahora espera la capability y afirma lo
+   servido: se editan nombre y foto, y nada más.
+4. **El alta con Google después de «Entrar» sin cuenta** (decisiones 92, 102 y 103). Con `google_redirect_signup`
+   encendido, el paso «Crea tu cuenta con Google» usa el mismo alta en un toque que «Crea tu cuenta»: redirect con
+   `state` `alta:`, las casillas y el canje al volver.
+   - No pide nombre ni correo: los pone Google, y un `422` pide el nombre a la vuelta.
+   - Mientras carga el aviso no hay botón. Si carga con una versión que `continue` no acepta, vuelve el paso de
+     siempre, para no quedar sin salida.
+   - Apagado, igual que antes.
+   - **Texto nuevo** (propuesto en el CIERRE): «Toca «Continuar con Google» otra vez para crear tu cuenta.»
+- **Mutantes:** 22 (4 del punto 2, 4 del 3 y 14 del 4). Cazados 21, y 1 equivalente declarado (P4-M: el cartel
+  de correo exige nombre y apellido, que en ese paso llegan vacíos).
+
 ## 0.199.0 — El @ en lugar del código `payme_…`, en toda la app (decisión 104) (2026-09-27)
 
 Orden AF-USERNAME-D104-CLAUDE-20260927 (sha256 977b31b3…). Decisión 104 (`87a65d18…`): «que el usuario esté abajo
