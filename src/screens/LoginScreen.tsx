@@ -631,7 +631,14 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       return { purpose: 'login', clientId, locale, redirect: social.googleRedirect.enabled };
     }
     if (capturaGoogle) {
-      return unToqueEnAlta ? continuar(null) : { purpose: 'captura', clientId, locale };
+      if (unToqueEnAlta) return continuar(null);
+      // AF-GOOGLE-ALTA-REDIRECT · con el alta en la misma pestaña encendida, el
+      // botón de «Crea tu cuenta» va en redirect (wire D102 §1). Mientras el
+      // aviso no cargó, el alta en un toque todavía no existe y el botón sería
+      // la «captura» en POPUP: justo el que falla en iPhone. Se espera al aviso.
+      if (social.googleRedirectSignup.enabled && social.googleContinue.supported
+          && social.googleContinue.oneTapSignup) return null;
+      return { purpose: 'captura', clientId, locale };
     }
     if (perfilActivo) {
       return continuar({ firstName: firstName.trim(), lastName: lastName.trim() });
@@ -664,6 +671,8 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     social.google.webClientId,
     social.googleRedirect.enabled,
     social.googleRedirectSignup.enabled,
+    social.googleContinue.supported,
+    social.googleContinue.oneTapSignup,
     unToqueEnAlta,
     versionAvisoContinue,
   ]);

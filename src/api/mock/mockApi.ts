@@ -466,13 +466,14 @@ export function googleAltaRedirectMock(): boolean {
 }
 
 /**
- * AF-USUARIO-ARROBA · seam de `features.username`: apagado salvo el `'true'`
- * exacto, como lo sirve hoy el dueño (`USERNAME_ENABLED` ausente).
+ * AF-USUARIO-ARROBA · seam de `features.username`. **Encendido por defecto**,
+ * como lo sirve el dueño desde la decisión 103 (27/09: «No lo dejes apagado»,
+ * `USERNAME_ENABLED=true`). Se apaga sólo con el `'false'` exacto.
  */
 export const CLAVE_USERNAME_MOCK = 'payme.app.mock.username.v1';
 
 export function usernameMock(): boolean {
-  return leerSeam(CLAVE_USERNAME_MOCK) === 'true';
+  return leerSeam(CLAVE_USERNAME_MOCK) !== 'false';
 }
 
 /**
@@ -1591,7 +1592,21 @@ export async function mockPutNotificationPreferences(
   return delay(mockNotifCatalogo(expectedSession.principal_id));
 }
 
+/**
+ * Seam de e2e: la latencia del aviso, en ms (0 a 10 000). Abre la ventana en la
+ * que la pantalla todavía no tiene el aviso cargado, que es cuando el alta en
+ * un toque aún no existe (AF-GOOGLE-ALTA-REDIRECT).
+ */
+export const CLAVE_LATENCIA_AVISO_MOCK = 'payme.app.mock.latencia_aviso_ms.v1';
+
+function latenciaAvisoMock(): number {
+  const n = Number(leerSeam(CLAVE_LATENCIA_AVISO_MOCK) ?? '0');
+  return Number.isInteger(n) && n > 0 && n <= 10_000 ? n : 0;
+}
+
 export async function mockGetPrivacyNotice(): Promise<LegalTextResponse> {
+  const extra = latenciaAvisoMock();
+  if (extra > 0) await new Promise((resolve) => setTimeout(resolve, extra));
   return delay({
     legal_text: {
       kind: 'aviso_privacidad',
@@ -4325,20 +4340,33 @@ function exigirUsernameMock(expectedSession: StoredSession): void {
   }
 }
 
-/** El @ propio, por titular. Persistido para que sobreviva la recarga del e2e. */
+/**
+ * El @ propio, por titular. Persistido para que sobreviva la recarga del e2e.
+ * La cuenta demo nace con el @ `mativeron` (como una cuenta que ya lo eligió,
+ * con el @ encendido); `null` en el mapa declara «sin @» a propósito, que es
+ * como se ejercita la pantalla de elegirlo.
+ */
 export const CLAVE_USERNAME_PROPIO_MOCK = 'payme.app.mock.username_propio.v1';
 type UsernamePropioMock = { username: string; changed_at: string | null };
+const USERNAME_DEMO_MOCK: UsernamePropioMock = { username: 'mativeron', changed_at: null };
 
-function usernamesPropiosMock(): Record<string, UsernamePropioMock> {
+function usernamesPropiosMock(): Record<string, UsernamePropioMock | null> {
   try {
     const raw = JSON.parse(localStorage.getItem(CLAVE_USERNAME_PROPIO_MOCK) ?? '{}') as unknown;
-    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, UsernamePropioMock> : {};
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, UsernamePropioMock | null> : {};
   } catch {
     return {};
   }
 }
 
-function guardarUsernamesPropiosMock(todos: Record<string, UsernamePropioMock>): void {
+/** El @ de un titular: lo guardado; si no hay nada guardado, la demo trae el suyo. */
+function usernamePropioMock(principal: string): UsernamePropioMock | null {
+  const todos = usernamesPropiosMock();
+  if (principal in todos) return todos[principal] ?? null;
+  return principal === MOCK_USER.id ? USERNAME_DEMO_MOCK : null;
+}
+
+function guardarUsernamesPropiosMock(todos: Record<string, UsernamePropioMock | null>): void {
   try { localStorage.setItem(CLAVE_USERNAME_PROPIO_MOCK, JSON.stringify(todos)); } catch { /* demo */ }
 }
 
@@ -4380,13 +4408,13 @@ function formatoUsernameMock(u: string): boolean {
 
 function usernameTomadoMock(u: string, principal: string): boolean {
   if (DIRECTORIO_ARROBA_MOCK.some((d) => d.username === u)) return true;
-  return Object.entries(usernamesPropiosMock()).some(([p, v]) => p !== principal && v.username === u);
+  return Object.entries(usernamesPropiosMock()).some(([p, v]) => p !== principal && v?.username === u);
 }
 
 const CAMBIO_MS_MOCK = 30 * 24 * 60 * 60_000;
 
 function estadoUsernameMock(principal: string): Record<string, unknown> {
-  const propio = usernamesPropiosMock()[principal];
+  const propio = usernamePropioMock(principal);
   if (!propio) return { username: null, required: true, next_change_at: null };
   const libre = propio.changed_at ? Date.parse(propio.changed_at) + CAMBIO_MS_MOCK : 0;
   return {
@@ -4419,7 +4447,7 @@ export async function mockPutUsername(raw: string, expectedSession: StoredSessio
   const nuevo = normalizarUsernameMock(raw);
   if (!formatoUsernameMock(nuevo)) throw new MockApiError(400, 'username_invalid');
   const todos = usernamesPropiosMock();
-  const actual = todos[principal];
+  const actual = usernamePropioMock(principal);
   if (actual?.username === nuevo) return delay(estadoUsernameMock(principal));
   if (RESERVADOS_MOCK.has(nuevo) || nuevo.startsWith('payme') || usernameTomadoMock(nuevo, principal)) {
     throw new MockApiError(409, 'username_not_available');
@@ -4445,7 +4473,7 @@ export async function mockSearchUsernames(rawQ: string, expectedSession: StoredS
   exigirUsernameMock(expectedSession);
   const q = normalizarUsernameMock(rawQ);
   if (!/^[a-z0-9._]{3,20}$/.test(q)) throw new MockApiError(400, 'username_query_invalid');
-  const propio = usernamesPropiosMock()[expectedSession.principal_id]?.username;
+  const propio = usernamePropioMock(expectedSession.principal_id)?.username;
   const results = DIRECTORIO_ARROBA_MOCK
     .filter((d) => d.username.startsWith(q) && d.username !== propio && !bloqueadoPorArrobaMock(d))
     .sort((a, b) => (a.username < b.username ? -1 : 1))

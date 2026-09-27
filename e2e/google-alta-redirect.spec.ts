@@ -25,6 +25,10 @@ interface Seams {
   sinNombre?: boolean;
   correoConCuenta?: boolean;
   legal?: boolean;
+  /** Decisión 103: el @usuario está ENCENDIDO en producción desde el 27/09. */
+  username?: boolean;
+  /** ms de latencia del aviso en el mock: abre la ventana antes de que cargue. */
+  latenciaAviso?: number;
 }
 
 async function preparar(page: Page, s: Seams): Promise<void> {
@@ -38,6 +42,15 @@ async function preparar(page: Page, s: Seams): Promise<void> {
     if (op.sinNombre) localStorage.setItem('payme.app.mock.google_sin_nombre.v1', 'true');
     if (op.correoConCuenta) localStorage.setItem('payme.app.mock.google_correo_con_cuenta.v1', 'true');
     if (op.legal) localStorage.setItem('payme.app.mock.legal_3_0_0.v1', 'on');
+    // El @ ya está encendido por defecto (decisión 103). La cuenta que nace en
+    // el mock reusa el id de la demo, que trae su @: `null` la declara sin @,
+    // como una cuenta recién creada de verdad.
+    if (op.username) {
+      localStorage.setItem('payme.app.mock.username.v1', 'true');
+      localStorage.setItem('payme.app.mock.username_propio.v1',
+        JSON.stringify({ 'a0000000-0000-4000-8000-000000000001': null }));
+    }
+    if (op.latenciaAviso) localStorage.setItem('payme.app.mock.latencia_aviso_ms.v1', String(op.latenciaAviso));
   }, s);
 }
 
@@ -311,6 +324,52 @@ test('409 legal_version_mismatch: el código sigue vivo, se releen los textos y 
   await expect(page.getByText('¡Listo! Creamos tu cuenta de PayMe.')).toBeVisible();
   await expect(adentro(page)).toBeVisible();
   expect(await pendientes(page)).toBe(0);
+});
+
+/**
+ * Mientras el aviso no cargó, el alta en un toque todavía no existe. Hoy, sin el
+ * alta en redirect, en esa ventana el botón es la «captura» en POPUP; encendida,
+ * ese popup es justo el que falla en iPhone, así que no se muestra hasta que el
+ * botón pueda ir en redirect (wire D102 §1).
+ */
+test.describe('AF-GOOGLE-ALTA-REDIRECT · el toque antes de que cargue el aviso', () => {
+  test('encendido: no hay botón en popup mientras carga el aviso; después aparece en redirect', async ({ page }) => {
+    await preparar(page, { redirect: true, altaRedirect: true, latenciaAviso: 6000 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
+    await expect(page.locator('.ingreso-alta-google')).toBeVisible();
+    await expect(google(page)).toHaveCount(0);
+    await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect', { timeout: 15_000 });
+  });
+
+  test('apagado (control): en esa ventana está la «captura» en popup de siempre', async ({ page }) => {
+    await preparar(page, { redirect: true, latenciaAviso: 6000 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Crea tu cuenta', exact: true }).click();
+    await expect(google(page)).toBeVisible();
+    await expect(google(page)).not.toHaveAttribute('data-ux-mode', /.*/);
+  });
+});
+
+/**
+ * Decisión 103: el @usuario está encendido en producción. Una cuenta que nace
+ * con el alta en redirect no tiene @ todavía: después del 201 la app pide
+ * elegirlo (la pantalla del @), y recién después entra.
+ */
+test('como está servido hoy (@ encendido): 201 → «Elige tu @usuario» → adentro', async ({ page }) => {
+  await preparar(page, { redirect: true, altaRedirect: true, legal: true, username: true });
+  await irACreaTuCuenta(page, 'redirect');
+  await marcarCasillas(page);
+  await google(page).click();
+
+  await expect(page.getByRole('heading', { name: 'Elige tu @usuario' })).toBeVisible();
+  await expect(adentro(page)).toHaveCount(0);
+  await capturar(page, 'd102-08-elige-tu-arroba');
+  await page.getByLabel('Tu @usuario', { exact: true }).fill('ana.nueva');
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(adentro(page)).toBeVisible();
+  expect(await pendientes(page)).toBe(0);
+  await codigoEnNingunLado(page);
 });
 
 test('«Entrar» (fase 1) sin cambios: su botón no lleva el state de alta', async ({ page }) => {

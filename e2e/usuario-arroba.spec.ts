@@ -5,12 +5,16 @@ import { abrirMesaConLink, ingresar, irEnLaApp, tokenDeLaUrl } from './_app';
  * AF-USUARIO-ARROBA · decisión 93 de Mati · el @usuario, lado de la app, con el
  * mock. Contrato: App Backend v2.137.0 (`a8987b06`), `docs/USERNAME_D93_WIRE.md`.
  *
- * - **Apagado** (lo que sirve hoy el dueño): la app no pide nada del @ ni
- *   muestra nada del @.
- * - **Encendido** (`payme.app.mock.username.v1 = 'true'`): la pantalla «Elige tu
- *   @usuario» después de la puerta legal, el cambio con los 30 días y la
- *   búsqueda en Amigos (3+ caracteres, hasta 5, foto con n164, nunca el mail),
- *   con la solicitud por @.
+ * - **Encendido**, que es lo que sirve el dueño desde la decisión 103 y el
+ *   default del mock: la pantalla «Elige tu @usuario» después de la puerta
+ *   legal, el cambio con los 30 días y la búsqueda en Amigos (3+ caracteres,
+ *   hasta 5, foto con n164, nunca el mail), con la solicitud por @.
+ * - **Apagado** (`payme.app.mock.username.v1 = 'false'`): la app no pide nada
+ *   del @ ni muestra nada del @. Es la tolerancia si el dueño lo apaga.
+ *
+ * La cuenta demo del mock trae su @ (`mativeron`). Para ejercitar la pantalla
+ * de elegirlo, `encender` la deja SIN @ (una vez por pestaña, así una recarga
+ * no le borra el que eligió).
  */
 
 const CLAVE_FLAG = 'payme.app.mock.username.v1';
@@ -21,8 +25,21 @@ async function capturar(page: Page, nombre: string): Promise<void> {
   if (dir) await page.screenshot({ path: `${dir}/${test.info().project.name}-${nombre}.png` });
 }
 
+const DEMO = 'a0000000-0000-4000-8000-000000000001';
+
+/** Encendido y con la cuenta demo SIN @, una sola vez por pestaña. */
 async function encender(page: Page): Promise<void> {
-  await page.addInitScript((clave) => localStorage.setItem(clave, 'true'), CLAVE_FLAG);
+  await page.addInitScript(({ flag, propio, demo }) => {
+    localStorage.setItem(flag, 'true');
+    if (sessionStorage.getItem('e2e.arroba.sin') === '1') return;
+    sessionStorage.setItem('e2e.arroba.sin', '1');
+    localStorage.setItem(propio, JSON.stringify({ [demo]: null }));
+  }, { flag: CLAVE_FLAG, propio: CLAVE_PROPIO, demo: DEMO });
+}
+
+/** Apagado: lo que pasaría si el dueño volviera a apagarlo. */
+async function apagar(page: Page): Promise<void> {
+  await page.addInitScript((clave) => localStorage.setItem(clave, 'false'), CLAVE_FLAG);
 }
 
 /** Entra con la cuenta demo SIN esperar Inicio: encendido, primero va la puerta. */
@@ -74,8 +91,9 @@ async function abrirAgregarAmigo(page: Page): Promise<void> {
   await expect(page.getByPlaceholder('Email o ID PayMe (payme_mx_xxxx)')).toBeVisible();
 }
 
-test.describe('AF-USUARIO-ARROBA · apagado (lo que sirve hoy el dueño)', () => {
+test.describe('AF-USUARIO-ARROBA · apagado (tolerancia si el dueño lo apaga)', () => {
   test('cero cambios: sin puerta, sin fila en Configuración, sin búsqueda por @, y ninguna llamada del @', async ({ page }) => {
+    await apagar(page);
     await ingresar(page);
     // El dueño publica el bloque apagado; la app lo lee y no hace nada.
     const config = await page.evaluate(async () => {
@@ -367,7 +385,9 @@ test.describe('AF-USUARIO-ARROBA · encendido · el link de invitación', () => 
   test('sin @, la pantalla sale ANTES del canje, conserva el token y al elegirlo se une', async ({ page }) => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
-    await page.evaluate((clave) => localStorage.setItem(clave, 'true'), CLAVE_FLAG);
+    // Desde acá, la cuenta demo no tiene @.
+    await page.evaluate(({ propio, demo }) => localStorage.setItem(propio, JSON.stringify({ [demo]: null })),
+      { propio: CLAVE_PROPIO, demo: DEMO });
     await page.goto('about:blank');
     await page.goto(`/#/mesa/${mesa.code}?t=${mesa.token}`);
 
@@ -383,11 +403,19 @@ test.describe('AF-USUARIO-ARROBA · encendido · el link de invitación', () => 
   });
 
   test('428 username_required en el canje: abre la pantalla del @ (aunque la config se leyó apagada), no «Reintentar», y retoma', async ({ page }) => {
+    // La config se lee APAGADA al entrar; después el dueño enciende la bandera
+    // y contesta 428 al canje mientras la cuenta no tenga @.
+    await page.addInitScript((clave) => {
+      if (sessionStorage.getItem('e2e.arroba.428') === '1') return;
+      sessionStorage.setItem('e2e.arroba.428', '1');
+      localStorage.setItem(clave, 'false');
+    }, CLAVE_FLAG);
     await ingresar(page);
     const mesa = await abrirMesaConLink(page);
-    // La config se leyó APAGADA al entrar; ahora el dueño enciende la bandera
-    // y contesta 428 al canje mientras la cuenta no tenga @.
-    await page.evaluate((clave) => localStorage.setItem(clave, 'true'), CLAVE_FLAG);
+    await page.evaluate(({ flag, propio, demo }) => {
+      localStorage.setItem(flag, 'true');
+      localStorage.setItem(propio, JSON.stringify({ [demo]: null }));
+    }, { flag: CLAVE_FLAG, propio: CLAVE_PROPIO, demo: DEMO });
     await page.evaluate(async (claveProp) => {
       const idx = '/src/api/index.ts';
       const http = '/src/api/http.ts';
@@ -398,7 +426,7 @@ test.describe('AF-USUARIO-ARROBA · encendido · el link de invitación', () => 
         const w = window as unknown as { __canjes?: number };
         w.__canjes = (w.__canjes ?? 0) + 1;
         const propios = JSON.parse(localStorage.getItem(claveProp) ?? '{}') as Record<string, unknown>;
-        if (Object.keys(propios).length === 0) throw new h.HttpError(428, { error: 'username_required' });
+        if (!Object.values(propios).some((v) => v !== null)) throw new h.HttpError(428, { error: 'username_required' });
         return original(...args);
       };
     }, CLAVE_PROPIO);
