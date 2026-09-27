@@ -29,7 +29,7 @@ test('tipear "12,34" en el input real deja 1234 centavos, no 123400', async ({ p
   await page.goto('/#/mesa/PA-2847');
 
   await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Listo', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
 
   const propinas = page.getByRole('radiogroup', { name: /propina/i });

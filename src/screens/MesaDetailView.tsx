@@ -7,16 +7,10 @@ import { Icon } from '../components/Icon';
 import { Avatar, useToast } from '../components/ui';
 import { InviteFriends } from '../components/InviteFriends';
 import type { MesaDetail, MesaItem } from '../api/types';
-import {
-  availableDefaultDenominators,
-  denominatorBps,
-  denominatorFromBps,
-  originalParticipants,
-} from '../api/mesaPresentation';
+import { denominatorBps, originalParticipants } from '../api/mesaPresentation';
 import { filaDeParticipante, type Participante } from '../api/participantes';
 import { countdownTo, formatMXN } from '../utils/format';
 import {
-  FRACTIONS,
   availableSlotsOf,
   bpsLabel,
   bpsValido,
@@ -28,6 +22,7 @@ import {
   nothingLeftFor,
   restanteInformativo,
 } from './mesaItemsView';
+import { etiquetaPorcion, porcionesDisponibles, textoPlatos } from './queConsumisteView';
 
 /**
  * Mis ítems — `s-myitems`, SPEC_APP.md §1.5.
@@ -87,7 +82,7 @@ export interface MesaDetailViewProps {
   frozenRequiresReconciliation: boolean;
   /**
    * CORTE DEL VIERNES (`releaseGates.ts`) · con el corte activo la pantalla
-   * TERMINA acá: no hay `Continuar` hacia el pago ni reintento de un pago
+   * TERMINA acá: el círculo «Listo» no lleva al pago y no hay reintento de un pago
    * congelado. El aviso del pago congelado se conserva, sin su botón y con un
    * texto que no promete una acción que la app no ofrece.
    */
@@ -174,106 +169,6 @@ export interface MesaDetailViewProps {
   onOpenInvite: () => void;
   onCopyInvitationLink: () => void;
   onBack: () => void;
-}
-
-function NaturalFractionSelector({
-  itemId,
-  original,
-  remainingBps,
-  selectedDenominator,
-  allowOther,
-  disabled = false,
-  onChoose,
-}: {
-  itemId: string;
-  original: number;
-  remainingBps: number;
-  selectedDenominator: number | null;
-  allowOther: boolean;
-  /** «igual»: lectura/escritura/recarga en vuelo bloquean también las fracciones. */
-  disabled?: boolean;
-  onChoose: (denominator: number) => void;
-}) {
-  const { t } = useIdioma();
-  const [editingOther, setEditingOther] = useState(false);
-  const [other, setOther] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const defaults = availableDefaultDenominators(original, remainingBps);
-  const customSelected = selectedDenominator !== null && !defaults.includes(selectedDenominator);
-
-  function applyOther() {
-    if (!/^[1-9][0-9]*$/u.test(other)) {
-      setError(t('Escribe un número entero positivo.'));
-      return;
-    }
-    const denominator = Number(other);
-    if (!Number.isSafeInteger(denominator) || denominator > original) {
-      setError(t('El máximo para esta mesa es {0}.', original));
-      return;
-    }
-    if (denominatorBps(denominator) > remainingBps) {
-      setError(t('Esa porción ya no está disponible.'));
-      return;
-    }
-    setError(null);
-    onChoose(denominator);
-    setEditingOther(false);
-  }
-
-  return (
-    <>
-      <div className="seg" role="radiogroup" aria-labelledby={`frac-${itemId}`}>
-        {defaults.map((denominator) => (
-          <button
-            key={denominator}
-            type="button"
-            className={`seg-btn ${selectedDenominator === denominator ? 'on' : ''}`}
-            onClick={() => { setEditingOther(false); setError(null); onChoose(denominator); }}
-            disabled={disabled}
-            role="radio"
-            aria-checked={selectedDenominator === denominator}
-            aria-label={denominator === 1 ? t('Entero') : `1/${denominator}`}
-          >
-            {denominator === 1 ? '1' : `1/${denominator}`}
-          </button>
-        ))}
-        {allowOther && (
-          <button
-            type="button"
-            className={`seg-btn ${editingOther || customSelected ? 'on' : ''}`}
-            onClick={() => { setEditingOther(true); setOther(customSelected ? String(selectedDenominator) : ''); setError(null); }}
-            disabled={disabled}
-            role="radio"
-            aria-checked={editingOther || customSelected}
-          >
-            {t('Otro')}
-          </button>
-        )}
-      </div>
-      {editingOther && (
-        <div className="mi-frac-other">
-          <label htmlFor={`frac-other-${itemId}`}>{t('¿Entre cuántas personas compartieron este plato?')}</label>
-          <div className="mi-frac-other-row">
-            <input
-              id={`frac-other-${itemId}`}
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={2}
-              value={other}
-              disabled={disabled}
-              aria-invalid={error ? true : undefined}
-              onChange={(event) => setOther(event.target.value)}
-            />
-            <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={applyOther}>{t('Aplicar')}</button>
-          </div>
-          <div className={error ? 'form-error' : 'caption'} role={error ? 'alert' : undefined}>
-            {error ?? t('Número entero entre 1 y {0}.', original)}
-          </div>
-        </div>
-      )}
-    </>
-  );
 }
 
 /**
@@ -440,7 +335,6 @@ export function MesaDetailView({
   isGuest,
   guestHeader,
   selected,
-  selectedDenominators,
   itemsAmount,
   mySlotsTaken,
   frozenScope,
@@ -486,9 +380,28 @@ export function MesaDetailView({
   const urgente = countdownIsUrgent(cd);
   const esConsumo = mesa.division_mode === 'consumo';
   const original = originalParticipants(mesa.original_participants);
-  const bpsPermitidosPorOriginal = original === null
-    ? null
-    : new Set(Array.from({ length: original }, (_, index) => denominatorBps(index + 1)));
+  /** AF-QUE-CONSUMISTE · el renglón propio que muestra el selector, o ninguno. */
+  const [abierto, setAbierto] = useState<string | null>(null);
+  /**
+   * Regla 3 del diseño · marcar un plato lo toma con la mayor porción que cabe
+   * (la decide `MesaScreen`) y, si hay más de una, abre el selector en el mismo
+   * renglón; con una sola opción se marca directo (regla 4).
+   */
+  const tomarPlato = (id: string, cuantasOpciones: number): void => {
+    onToggleItem(id);
+    setAbierto(cuantasOpciones > 1 ? id : null);
+  };
+  /**
+   * Con el N de la mesa y los pagos apagados, la porción viaja como denominador
+   * (AB-FRACCIONES-IGUAL); si no, como bps. Las cuatro porciones son de las dos
+   * listas: 10000, 5000, 3333 y 2500.
+   */
+  const selectorNatural = pagosCortados && original !== null;
+  const elegirPorcion = (id: string, denominator: number): void => {
+    if (selectorNatural) onSetDenominator(id, denominator);
+    else onSetFraction(id, denominatorBps(denominator));
+    setAbierto(null);
+  };
   // Decisión 79 · en «igual» con el dato del dueño (v2.134.0), la barra dice lo
   // ELEGIDO igual que en consumo, contando desde `informative_remaining_bps`.
   // Sin el dato rige lo de antes: lo pagado.
@@ -546,8 +459,8 @@ export function MesaDetailView({
 
   /**
    * Fila superior de la barra. Lo dinámico vive acá y no en el nav item, que
-   * dice "Continuar" siempre: un nav item que cambia de texto según el estado
-   * es un nav item inestable (§1.5).
+   * dice "Listo" siempre (decisión 90; antes "Continuar" hacia el pago): un nav
+   * item que cambia de texto según el estado es un nav item inestable (§1.5).
    *
    * **La selección sólo manda en CONSUMO** (auditoría 2026-08-06, H-14). En
    * ese modo el monto SALE de lo elegido, así que sin selección la fila guía
@@ -571,7 +484,12 @@ export function MesaDetailView({
         <span>{t('No quedan partes')}</span>
       ) : (
         <>
-          <span>{mySlotsTaken > 0 && !esConsumo ? t('Otra parte') : t('Mi parte')}</span>
+          {/* Regla 8 del diseño · «Mi parte · N platos» y el monto. N cuenta los
+              platos de la selección, que son los que suma el monto. */}
+          <span className="mi-parte-lbl">
+            {mySlotsTaken > 0 && !esConsumo ? t('Otra parte') : t('Mi parte')}
+            <span className="mi-parte-platos"> · {textoPlatos(selected.size, t)}</span>
+          </span>
           <span className="mi-parte-amt">{formatMXN(itemsAmount)}</span>
         </>
       )}
@@ -619,7 +537,8 @@ export function MesaDetailView({
           <span aria-hidden="true">·</span>
           <strong>{divisionLabel}</strong>
         </div>
-        <div className="title-card-div" />
+        {/* Regla 8 · la barra de avance y el reloj van dentro de la burbuja
+            del título, fija al scroll. */}
         <div
           className="mi-progress"
           role="progressbar"
@@ -638,12 +557,13 @@ export function MesaDetailView({
           <span className="mi-meta-amt">
             {/* Decisión 77 de Mati: igual que el Inicio, sólo «monto / total
                 (porcentaje)», sin «asignados» ni «por asignar». */}
+            {/* Regla 8 · «$X / $840.00 (N%)»: lo elegido fuerte, el resto tenue. */}
             {repartoConocido ? (
-              <>{formatMXN(repartoConocido.assignedCents)} / {formatMXN(mesa.total_cents)} ({pct}%)</>
+              <><b>{formatMXN(repartoConocido.assignedCents)}</b><span className="mi-meta-resto"> / {formatMXN(mesa.total_cents)} ({pct}%)</span></>
             ) : reparto ? (
               t('No pudimos calcular el reparto confirmado')
             ) : (
-              <>{formatMXN(mesa.paid_amount_cents)} / {formatMXN(mesa.total_cents)} ({pct}%)</>
+              <><b>{formatMXN(mesa.paid_amount_cents)}</b><span className="mi-meta-resto"> / {formatMXN(mesa.total_cents)} ({pct}%)</span></>
             )}
           </span>
           <span className={`mi-count ${urgente ? 'urgent' : ''}`}>
@@ -690,20 +610,34 @@ export function MesaDetailView({
             {t('Los demás ya tomaron todo lo de esta mesa. No queda nada para que pagues.')}
           </div>
         )}
+        {/* AF-QUE-CONSUMISTE · decisión 90 de Mati · la lista de «¿Qué
+            consumiste?» del diseño de Claude Design
+            (`PANTALLA-que-consumiste.md`, sha256 fabae11b…). Reemplaza el bloque
+            «¿Cuánto tomas tú?» que se abría debajo del plato y la lista con borde
+            punteado, «Elegiste ½» y X roja:
+            - regla 1: todos los renglones miden lo mismo; elegir, cambiar la
+              porción o soltar nunca mueve la lista;
+            - regla 2: lo propio queda en su lugar, en teal, con la píldora de
+              porción y tu parte;
+            - regla 3: la píldora abre el selector EN el mismo renglón;
+            - reglas 5 y 6: «Queda ½» y «Lo eligió otro», sin nombre;
+            - regla 7: se suelta tocando el círculo o «Soltar», sin X roja.
+            El estado (selección, límites de D79, bloqueos) sigue siendo de
+            `MesaScreen`: acá sólo se dibuja y se avisan intenciones. */}
         <div
           ref={itemsRef}
-          className={`card${faltaElegirConsumos ? ' tk-fold--pending' : ''}${itemsPulse ? ' tk-fold--pulse' : ''}`}
+          className={`card qc-lista${itemsPulse ? ' tk-fold--pulse' : ''}`}
           style={{ marginBottom: 14 }}
           onAnimationEnd={() => setItemsPulse(false)}
         >
-          {mesa.items.map((i) => {
+          {mesa.items.map((i) => <div key={i.id} className="qc-renglon" data-plato={i.name}>{(() => {
             const fullPrice = i.price_cents * i.quantity;
+            const nombre = `${i.name}${i.quantity > 1 ? ` × ${i.quantity}` : ''}`;
+            const nombreAria = i.quantity > 1 ? t('{0} por {1}', i.name, i.quantity) : i.name;
             // En igualdad la selección sólo declara consumo y no reclama el
-            // ítem: otras tenencias/remaining_bps no deben bloquearla.
-            // Decisión 79 · en «igual» el dueño v2.134.0 publica cuánto queda
-            // del plato (de TODOS, sin nombres). Lo que ESTA cuenta puede
-            // declarar es eso más lo propio guardado; `null` = sin dato, y
-            // entonces no se limita, como antes.
+            // ítem. Decisión 79 · en «igual» el dueño v2.134.0 publica cuánto
+            // queda del plato (de TODOS, sin nombres): esta cuenta puede declarar
+            // eso más lo propio guardado; `null` = sin dato, no se limita.
             const restanteIgual = esConsumo ? null : restanteInformativo(i);
             const limiteIgual = esConsumo ? null : limiteInformativo(i, informativasGuardadas);
             const state = esConsumo
@@ -712,130 +646,161 @@ export function MesaDetailView({
                 ? 'seleccionado'
                 : limiteIgual === 0 ? 'tomado' : 'disponible';
             const sel = state === 'seleccionado';
-            // 1A.3 · 'indeterminado' bloquea igual que 'tomado': sin dato
-            // válido no se ofrece tomar nada.
+            // 1A.3 · 'indeterminado' bloquea igual que 'tomado'.
             const bloqueado = state === 'tomado' || state === 'pagado' || state === 'indeterminado';
-            const mio = !sel && esMioElegido(i, esConsumo);
-            const soltable = mio && soltarDisponible && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
-            const tag = mio
-              ? etiquetaDeLoMio(i, t)
-              : esConsumo ? rowTag(state, i, t) : tagIgual(state, restanteIgual, t);
-            const myBpsSel = selected.get(i.id) ?? 10000;
-            // AB-FRACCIONES-IGUAL (Decisión de Mati e9aa0450…, dueño v2.124.0):
-            // con el riel apagado y N conocido, «igual» usa el MISMO selector
-            // que consumo —1/1..1/N y «Otro»—. Sin N, el dueño sólo admite las
-            // seis de siempre: rama legacy. Decisión 79: la declaración ya no
-            // puede pasar del entero, así que se limita por lo que queda.
-            const restanteParaFraccion = esConsumo ? i.remaining_bps : (limiteIgual ?? 10000);
-            const selectedDenominator = selectedDenominators.get(i.id)
-              ?? (esConsumo ? null : denominatorFromBps(myBpsSel, original));
-            const selectorNatural = pagosCortados && original !== null;
-            const allowOther = selectorNatural && Array.from(
-              { length: Math.max(0, original - 4) },
-              (_, index) => index + 5,
-            ).some((denominator) => denominatorBps(denominator) <= restanteParaFraccion);
-            // En partes iguales marcar es informativo y no reserva nada; desde la
-            // decisión 79 sí se bloquea el plato que otros ya eligieron entero.
-            const disabled = bloqueado || (!esConsumo && informativeEditingBlocked);
-            const precio =
-              sel && esConsumo && myBpsSel < 10000
-                ? fractionPreview(fullPrice, myBpsSel, i.remaining_bps)
-                : fullPrice;
-            return (
-              <div key={i.id} className={`mi-item${soltable ? ' has-release' : ''}`}>
-                <button
-                  type="button"
-                  className={`mi-row ${sel ? 'sel' : ''}${soltable ? ' has-release' : ''}`}
-                  onClick={() => !disabled && onToggleItem(i.id)}
-                  disabled={disabled}
-                  aria-pressed={!esConsumo ? sel : disabled ? undefined : sel}
-                  aria-label={`${i.quantity > 1 ? t('{0} por {1}', i.name, i.quantity) : i.name}${tag ? t(', {0}', tag) : ''}`}
-                >
-                  <span
-                    className={`mi-check ${sel ? 'on' : ''} ${state === 'pagado' ? 'paid' : ''} ${state === 'tomado' ? 'taken' : ''}`}
-                    aria-hidden="true"
-                  >
-                    {state === 'tomado' ? (
-                      <Icon name="lock" size={13} />
-                    ) : (
-                      <Icon name="check" size={15} />
-                    )}
-                  </span>
-                  <span className="mi-body">
-                    <span className={`mi-name ${bloqueado ? 'dim' : ''} ${state === 'pagado' ? 'paid' : ''}`}>
-                      {i.name}
-                      {i.quantity > 1 ? ` × ${i.quantity}` : ''}
-                    </span>
-                    {tag && <span className="mi-tag">{tag}</span>}
-                  </span>
-                  <span className={`mi-price ${bloqueado ? 'dim' : ''}`}>{formatMXN(precio)}</span>
-                </button>
-                {soltable && (
-                  <button
-                    type="button"
-                    className="mi-soltar"
-                    onClick={() => onReleaseItem(i.id)}
-                    disabled={soltando !== null}
-                    aria-label={soltando === i.id ? t('Soltando…') : t('Soltar {0}', i.name)}
-                    aria-busy={soltando === i.id || undefined}
-                  >
-                    <Icon name={soltando === i.id ? 'clock' : 'x-circle'} size={22} />
-                  </button>
-                )}
-                {/* Selector de porción en LOS DOS MODOS. En consumo expresa
-                    tenencia/cobro y se limita por lo restante; en igualdad es
-                    sólo `declared_fraction_bps`, sin alterar el casillero. */}
-                {sel && (
-                  <div className="mi-frac">
-                    <div className="mi-frac-lbl" id={`frac-${i.id}`}>
-                      {t('¿Cuánto tomas tú?')}
-                    </div>
-                    {selectorNatural ? (
-                      <NaturalFractionSelector
-                        itemId={i.id}
-                        original={original}
-                        remainingBps={restanteParaFraccion}
-                        selectedDenominator={selectedDenominator}
-                        allowOther={allowOther}
-                        disabled={!esConsumo && informativeEditingBlocked}
-                        onChoose={(denominator) => onSetDenominator(i.id, denominator)}
-                      />
-                    ) : (
-                      <div className="seg" role="radiogroup" aria-labelledby={`frac-${i.id}`}>
-                        {FRACTIONS.filter((f) => (
-                          f.bps <= restanteParaFraccion
-                          && (!esConsumo || bpsPermitidosPorOriginal === null || bpsPermitidosPorOriginal.has(f.bps))
-                        )).map((f) => (
+            const registrado = !sel && esMioElegido(i, esConsumo);
+            const soltableRegistrado = registrado && soltarDisponible && !frozenScope && sePuedeSoltar(i, mesa, esConsumo);
+            const editBloqueado = !esConsumo && informativeEditingBlocked;
+            // Regla 4 · las porciones que caben en la mesa y en lo que queda.
+            const restanteParaPorcion = esConsumo ? i.remaining_bps : (limiteIgual ?? 10000);
+            const opciones = porcionesDisponibles(original, restanteParaPorcion);
+            const tag = esConsumo ? rowTag(state, i, t) : tagIgual(state, restanteIgual, t);
+            const queda = !sel && !registrado && !bloqueado && (esConsumo
+              ? state === 'parcial'
+              : restanteIgual !== null && restanteIgual > 0 && restanteIgual < 10000);
+
+            if (sel || registrado) {
+              const bps = sel ? (selected.get(i.id) ?? 10000) : i.my_bps;
+              const etiqueta = etiquetaPorcion(bps, t);
+              // Regla 2 del diseño · «píldora de porción + tu parte en pesos». En
+              // consumo la última porción la ajusta el dueño (`fractionPreview`).
+              // 🔴 En «igual» NO hay pesos por plato: la porción es una declaración
+              // y lo que se paga es el casillero fijo («Mi parte» abajo). Mostrar
+              // «$97.50» junto a ½ plato inventaría un precio que nadie cobra
+              // (regla vigente desde 6d32f2e, que la pantalla nueva no deroga).
+              const parte = !esConsumo
+                ? null
+                : sel
+                  ? fractionPreview(fullPrice, bps, i.remaining_bps)
+                  : fractionPreview(fullPrice, bps, 10000);
+              // Con la edición bloqueada (D79: leyendo, guardando, sólo lectura)
+              // el renglón propio no ofrece nada: ni selector, ni píldora que
+              // abra, ni círculo que suelte. Se ve lo elegido y nada más.
+              if (sel && abierto === i.id && !editBloqueado) {
+                return (
+                  <div key={i.id} className="qc-fila qc-mia qc-mia--abierta" data-estado="mio">
+                    <div className="qc-selector" role="radiogroup" aria-label={t('Porción de {0}', nombreAria)}>
+                      {opciones.map((d) => {
+                        const elegida = bps === denominatorBps(d);
+                        return (
                           <button
-                            key={f.bps}
+                            key={d}
                             type="button"
-                            className={`seg-btn ${myBpsSel === f.bps ? 'on' : ''}`}
-                            onClick={() => onSetFraction(i.id, f.bps)}
-                            disabled={!esConsumo && informativeEditingBlocked}
                             role="radio"
-                            aria-checked={myBpsSel === f.bps}
-                            aria-label={f.bps >= 10000 ? t('Entero') : bpsLabel(f.bps)}
+                            aria-checked={elegida}
+                            className={`qc-opcion${elegida ? ' on' : ''}`}
+                            onClick={() => elegirPorcion(i.id, d)}
                           >
-                            {f.label}
+                            {etiquetaPorcion(denominatorBps(d), t)}
                           </button>
-                        ))}
-                      </div>
-                    )}
-                    {pagosCortados && original === null && (
-                      <div className="caption">
-                        {t('Esta mesa es anterior y no guardó el número original de personas. Mostramos las porciones disponibles de siempre.')}
-                      </div>
-                    )}
-                    {esConsumo && (
-                      <div className="mi-frac-amt" aria-live="polite">
-                        {t('Tu parte:')} {formatMXN(fractionPreview(fullPrice, myBpsSel, i.remaining_bps))}
-                      </div>
-                    )}
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      className="qc-soltar"
+                      onClick={() => { setAbierto(null); onToggleItem(i.id); }}
+                    >
+                      {t('Soltar')}
+                    </button>
                   </div>
-                )}
-              </div>
+                );
+              }
+              return (
+                <div
+                  key={i.id}
+                  className="qc-fila qc-mia"
+                  data-estado={sel ? 'mio' : 'registrado'}
+                  role="group"
+                  aria-label={registrado ? `${nombreAria}${t(', {0}', etiquetaDeLoMio(i, t))}` : nombreAria}
+                >
+                  {sel && !editBloqueado ? (
+                    <button
+                      type="button"
+                      className="qc-circulo qc-circulo--marcado"
+                      aria-label={t('Soltar {0}', i.name)}
+                      onClick={() => { setAbierto(null); onToggleItem(i.id); }}
+                    >
+                      <Icon name="check" size={14} />
+                    </button>
+                  ) : soltableRegistrado ? (
+                    <button
+                      type="button"
+                      className="qc-circulo qc-circulo--marcado"
+                      aria-label={soltando === i.id ? t('Soltando…') : t('Soltar {0}', i.name)}
+                      aria-busy={soltando === i.id || undefined}
+                      disabled={soltando !== null}
+                      onClick={() => onReleaseItem(i.id)}
+                    >
+                      <Icon name={soltando === i.id ? 'clock' : 'check'} size={14} />
+                    </button>
+                  ) : (
+                    <span className="qc-circulo qc-circulo--marcado" aria-hidden="true">
+                      <Icon name="check" size={14} />
+                    </span>
+                  )}
+                  {/* AF-29 · si parte de lo mío ya está PAGADO, el renglón lo dice
+                      con palabras en una segunda línea («Pagaste ½ · elegiste ½
+                      más»), como «Lo eligió otro»: confundir elegido con pagado es
+                      confundir plata. Sin pago, la píldora ya dice la porción. */}
+                  {registrado && bpsValido(i.my_paid_bps) && i.my_paid_bps > 0 ? (
+                    <span className="qc-cuerpo">
+                      <span className="qc-nombre qc-nombre--mio">{nombre}</span>
+                      <span className="qc-etiqueta">{etiquetaDeLoMio(i, t)}</span>
+                    </span>
+                  ) : (
+                    <span className="qc-nombre qc-nombre--mio">{nombre}</span>
+                  )}
+                  {sel && opciones.length > 1 && !editBloqueado ? (
+                    <button
+                      type="button"
+                      className="qc-pildora"
+                      aria-label={t('Cambiar la porción de {0}: {1}', nombreAria, etiqueta)}
+                      aria-expanded={false}
+                      onClick={() => setAbierto(i.id)}
+                    >
+                      {etiqueta}
+                      <Icon name="chevron-down" size={12} />
+                    </button>
+                  ) : (
+                    <span className="qc-pildora qc-pildora--fija">{etiqueta}</span>
+                  )}
+                  {parte !== null && <span className="qc-parte">{formatMXN(parte)}</span>}
+                </div>
+              );
+            }
+
+            if (bloqueado) {
+              return (
+                <div key={i.id} className="qc-fila qc-otro" data-estado={state} aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}>
+                  <span className="qc-candado" aria-hidden="true"><Icon name="lock" size={12} /></span>
+                  <span className="qc-cuerpo">
+                    <span className="qc-nombre qc-nombre--otro">{nombre}</span>
+                    {tag && <span className="qc-etiqueta">{tag}</span>}
+                  </span>
+                  <span className="qc-precio qc-precio--otro">{formatMXN(fullPrice)}</span>
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={i.id}
+                type="button"
+                className="qc-fila qc-libre"
+                data-estado={queda ? 'queda' : 'libre'}
+                disabled={editBloqueado}
+                aria-pressed={false}
+                aria-label={`${nombreAria}${tag ? t(', {0}', tag) : ''}`}
+                onClick={() => tomarPlato(i.id, opciones.length)}
+              >
+                <span className="qc-circulo" aria-hidden="true" />
+                <span className="qc-nombre">{nombre}</span>
+                {queda && tag && <span className="qc-pildora qc-pildora--queda">{tag}</span>}
+                <span className="qc-precio">{formatMXN(fullPrice)}</span>
+              </button>
             );
-          })}
+          })()}</div>)}
         </div>
         {/* v2.25 §4.3 (B-06): `claimed_by_me` es lo único que le permite al
             comensal ver que su parte YA está tomada. Sin esto volvía, veía
@@ -964,7 +929,8 @@ export function MesaDetailView({
           // edición lo devuelve a «Listo». Decisión 32 · «Guardado» sigue
           // tocable: lleva a Inicio sin volver a enviar lo mismo.
           label: !esConsumo && informativeSaved ? t('Guardado') : t('Listo'),
-          icon: 'check',
+          // Diseño de Claude Design: el círculo central lleva la flecha.
+          icon: 'arrow-right',
           /**
            * D-R8 · con el corte el círculo **registra la selección** y termina
            * el recorrido; antes salía sin registrar nada, y el aviso que la
@@ -975,13 +941,15 @@ export function MesaDetailView({
            */
           onClick: () => {
             // Decisión 32 · sin nada elegido ni registrado, la misma guarda
-            // que «Continuar»; nunca un retorno silencioso.
+            // que el círculo hacia el pago; nunca un retorno silencioso.
             if (faltaElegirConsumos && !tengoRegistrado) { frenarSinEleccion(); return; }
             onGoToPay();
           },
           disabled: busy || (!esConsumo && informativeEditingBlocked),
         } : {
-          label: t('Continuar'),
+          // Decisión 90 de Mati, definición 1: el círculo dice «Listo» también
+          // cuando sigue al pago.
+          label: t('Listo'),
           icon: 'arrow-right',
           onClick: () => {
             if (faltaElegirConsumos) { frenarSinEleccion(); return; }

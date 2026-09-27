@@ -18,11 +18,15 @@ describe('AF-AJUSTES10 · guardas visuales focales', () => {
     expect(restaurantes).not.toContain("t('Lo que elegiste en tus mesas.')");
   });
 
-  it('la liberación queda en el ítem, con ícono, nombre accesible y blanco de 44px', () => {
-    expect(mesa).toContain("className={`mi-item${soltable ? ' has-release' : ''}`}");
+  // AF-QUE-CONSUMISTE · decisión 90 · regla 7 del diseño: la liberación sigue en
+  // el renglón del plato y con nombre accesible, pero es el círculo marcado (o
+  // «Soltar» en el selector), sin la X roja. El blanco de 44 px lo da el
+  // pseudoelemento del círculo (definición 4: sin agrandar lo visible).
+  it('la liberación queda en el renglón, sin X roja, con nombre accesible y blanco de 44px', () => {
+    expect(mesa).toContain('className="qc-circulo qc-circulo--marcado"');
     expect(mesa).toContain("t('Soltar {0}', i.name)");
-    expect(mesa).toContain("'x-circle'");
-    expect(css).toMatch(/\.mi-soltar\s*\{[\s\S]*width:\s*var\(--tap-min\);[\s\S]*height:\s*var\(--tap-min\)/);
+    expect(mesa).not.toContain("'x-circle'");
+    expect(css).toMatch(/button\.qc-circulo::after\s*\{[\s\S]*width:\s*var\(--tap-min\)/);
   });
 
   it('alinea identidad, mantiene el historial sin rótulo y une tabs/panel', () => {

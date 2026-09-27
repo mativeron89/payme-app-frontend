@@ -36,7 +36,12 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
     await ingresar(page);
   });
 
-  test('N=2 distribuye dos opciones y preserva las seis implementadas en igualdad', async ({ page }) => {
+  /**
+   * M01 pedía que con N=2 las dos opciones se repartieran el ancho. Sigue igual
+   * con el selector en el renglón (decisión 90). Lo que cambió es «igual»: ya no
+   * son seis (⅔ y ¾ salieron), son Entero · ½ · ⅓ · ¼.
+   */
+  test('N=2 distribuye dos opciones; en igualdad se ofrecen las cuatro de la decisión 90', async ({ page }) => {
     await page.evaluate(async () => {
       const storePath = '/src/api/mock/store.ts';
       const { state } = await import(/* @vite-ignore */ storePath) as {
@@ -60,7 +65,7 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
     await page.goto('/#/mesa/PA-2847');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
 
-    const consumo = page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' });
+    const consumo = page.getByRole('radiogroup', { name: 'Porción de Tagliatelle Bolognese' });
     await expect(consumo.getByRole('radio')).toHaveCount(2);
     const widths = await consumo.getByRole('radio').evaluateAll((nodes) => (
       nodes.map((node) => node.getBoundingClientRect().width)
@@ -73,8 +78,9 @@ test.describe('M01/M04 · verificación móvil sintética', () => {
 
     await page.goto('/#/mesa/PA-3121');
     await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
-    await expect(page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' }).getByRole('radio')).toHaveCount(6);
-    await capturar(page, 'm01-igual-seis');
+    await expect(page.getByRole('radiogroup', { name: 'Porción de Omakase para dos' }).getByRole('radio'))
+      .toHaveText(['Entero', '½', '⅓', '¼']);
+    await capturar(page, 'm01-igual-cuatro');
   });
 
   test('cabecera y Avisos conservan alineación, aire y contexto restaurante / ID', async ({ page }) => {

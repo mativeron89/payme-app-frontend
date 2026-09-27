@@ -365,10 +365,13 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
     return renderToStaticMarkup(createElement(MesaDetailView, props(sobre)));
   }
 
-  it('con el corte, el círculo es «Listo» y no hay «Continuar» hacia el pago', () => {
-    const markup = vista({ pagosCortados: true });
+  it('con el corte, el círculo es «Listo» y no hay reintento hacia el pago', () => {
+    const markup = vista({ pagosCortados: true, frozenScope: 'pay:PA-0001' });
     expect(markup).toContain('aria-label="Listo"');
-    expect(markup).not.toContain('aria-label="Continuar"');
+    // Decisión 90 · el círculo dice «Listo» con o sin pagos: el rótulo ya no
+    // separa los modos. Lo que el corte quita es el reintento del pago
+    // congelado, con el mismo `frozenScope` que el control positivo de abajo.
+    expect(markup).not.toContain('Reintentar ese pago');
     // La selección sigue viva: es lo que la pantalla ofrece bajo el corte.
     expect(markup).toContain('Tagliatelle Bolognese');
     expect(markup).toContain('¿Qué consumiste?');
@@ -438,10 +441,14 @@ describe('🔴 corte · MesaDetailView cierra sus dos controles sin banner redun
    * ausencias de arriba pasarían igual si alguien hubiera borrado los
    * controles en vez de cerrarlos — y «desactivar no es borrar».
    */
-  it('control positivo · sin el corte, la vista vuelve a ofrecer Continuar y Reintentar', () => {
+  it('control positivo · sin el corte, la vista vuelve a ofrecer el pago y Reintentar', () => {
     const markup = vista({ pagosCortados: false, frozenScope: 'pay:PA-0001' });
-    expect(markup).toContain('aria-label="Continuar"');
-    expect(markup).not.toContain('aria-label="Listo"');
+    // AF-QUE-CONSUMISTE · decisión 90 de Mati, definición 1: el círculo dice
+    // «Listo» también cuando sigue al pago (antes «Continuar»). Lo que separa
+    // los dos modos en el markup es el reintento del pago congelado, que sólo
+    // existe sin el corte (abajo).
+    expect(markup).toContain('aria-label="Listo"');
+    expect(markup).not.toContain('aria-label="Continuar"');
     expect(markup).toContain('Reintentar ese pago');
     expect(markup).toContain('Reinténtalo tal cual');
     expect(markup).not.toContain('Revisar si se cobró');

@@ -56,7 +56,9 @@ test.describe('C3 · mesa sin garantía', () => {
 
     // Con el config aplicado: ninguna superficie de cobro.
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
+    // Decisión 90 · el círculo dice «Listo» con o sin pagos: lo que prueba el
+    // corte es que no hay pantalla de pago, no el rótulo del círculo.
+    await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
   });
 });
 

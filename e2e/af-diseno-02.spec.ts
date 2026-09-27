@@ -116,7 +116,7 @@ async function abrirPago(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Listo', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pagar mi parte', exact: true })).toBeVisible();
 }
 

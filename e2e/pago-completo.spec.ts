@@ -92,14 +92,16 @@ test.describe('el camino de pago completo', () => {
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
     // v2.124.0 (fracciones en «igual» según N, Decisión de Mati e9aa0450…): la
     // mesa nace con N=4, así que bajo el corte el selector es el natural.
-    await page.getByRole('radio', { name: '1/2', exact: true }).click();
-    await expect(page.locator('.mi-frac-amt')).toHaveCount(0);
-    const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
+    await page.getByRole('radio', { name: '½', exact: true }).click();
+    // En «igual» no hay precio por plato: la porción es una declaración.
+    await expect(page.locator('.qc-parte')).toHaveCount(0);
+    const filaMiParte = page.locator('.mi-parte');
     await expect(filaMiParte).toContainText('$210.00');
 
-    // 🔴 EL CORTE · acá había un «Continuar» → «Pagar mi parte». No existe: ni
-    // el control, ni la pantalla, ni el selector de propina.
-    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
+    // 🔴 EL CORTE · acá había un «Continuar» → «Pagar mi parte». No existe la
+    // pantalla ni el selector de propina. El círculo dice «Listo» con o sin
+    // pagos (decisión 90, definición 1): lo que distingue el corte es a dónde
+    // lleva, y eso lo mide el recorrido de abajo (Inicio, cero cobrado).
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
     await expect(page.getByRole('radiogroup', { name: /propina/i })).toHaveCount(0);
 
@@ -141,7 +143,7 @@ test.describe('el camino de pago completo', () => {
     await abrirMesaConLink(page);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-    await page.getByRole('button', { name: 'Continuar' }).click();
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
 
     // La propina es un `radiogroup`, no botones sueltos: es una elección entre
     // opciones excluyentes y así la anuncia un lector de pantalla.
@@ -168,7 +170,7 @@ test.describe('el camino de pago completo', () => {
     await abrirMesaConLink(page);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese' }).click();
-    await page.getByRole('button', { name: 'Continuar' }).click();
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
 
     const propinas = page.getByRole('radiogroup', { name: /propina/i });
     await expect(propinas.getByRole('radio', { checked: true })).toHaveCount(0);

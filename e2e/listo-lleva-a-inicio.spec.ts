@@ -68,7 +68,7 @@ async function cambiarEstadoEnMemoria(page: Page, code: string, status: string):
 }
 
 test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
-  test('consumo · elegir → Listo registra y vuelve a Inicio; al volver, la fila dice «Lo elegiste»', async ({ page }) => {
+  test('consumo · elegir → Listo registra y vuelve a Inicio; al volver, la fila se ve como propia', async ({ page }) => {
     await conRielApagado(page);
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
@@ -80,7 +80,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     expect(await llamadas(page, 'lockItems')).toBe(1);
 
     await page.goto(`/#/mesa/${mesa.code}`);
-    await expect(page.getByText('Lo elegiste')).toBeVisible();
+    await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] [data-estado="registrado"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
     await expect(page.getByRole('progressbar', { name: 'Asignado 23% de la mesa' })).toBeVisible();
   });
@@ -95,7 +95,7 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await enInicio(page);
 
     await page.goto(`/#/mesa/${mesa.code}`);
-    await expect(page.getByText('Lo elegiste')).toBeVisible();
+    await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] [data-estado="registrado"]')).toBeVisible();
     await contarLlamadas(page, 'lockItems');
     const listo = page.getByRole('button', { name: 'Listo', exact: true });
     await expect(listo).toBeEnabled();

@@ -66,10 +66,10 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.getByText('Mi parte')).toBeVisible();
     await expect(page.getByText('$155.00').first()).toBeVisible();
 
-    // 🔴 CORTE · no hay «Continuar»; el círculo es «Listo», habilitado, y el
-    // vacío también viaja como reemplazo explícito. Con el guardado OK vuelve
-    // a Inicio (decisión 32); al reentrar, la nota fija lo dice.
-    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
+    // 🔴 CORTE · el círculo es «Listo», habilitado, y el vacío también viaja
+    // como reemplazo explícito. Con el guardado OK vuelve a Inicio (decisión
+    // 32); al reentrar, la nota fija lo dice. Desde la decisión 90 el círculo
+    // dice «Listo» con o sin pagos: el corte se mide por a dónde lleva.
     const listo = page.getByRole('button', { name: 'Listo', exact: true });
     await expect(listo).toBeEnabled();
     await listo.click();
@@ -82,11 +82,16 @@ test.describe('Continuar en la mesa (H-14)', () => {
     // En el contrato owner, vacío→vacío es replay exacto y por eso no crea
     // fila: el éxito se acredita por la respuesta canónica, no por una fila.
     await page.reload();
-    await expect(page.locator('.mi-row[aria-pressed="true"]')).toHaveCount(0);
+    await expect(page.locator('.qc-renglon [data-estado="mio"]')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
   });
 
-  test('partes iguales: N original no limita la declaración ¾ ni altera el casillero', async ({ page }) => {
+  /**
+   * Decisión 90 (definición 2) sacó ¾ y ⅔ del selector. Lo que este recorrido
+   * cuida no cambió: con pagos, la porción declarada en «igual» viaja como dato
+   * y el importe sigue saliendo del casillero igualitario.
+   */
+  test('partes iguales: la porción declarada viaja como dato y no altera el casillero', async ({ page }) => {
     await ingresar(page);
     await page.evaluate(() => {
       const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
@@ -97,19 +102,18 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await page.goto('/#/mesa/PA-3121');
 
     await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
-    const fracciones = page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' });
-    await expect(fracciones.getByRole('radio')).toHaveCount(6);
-    await expect(fracciones.getByRole('radio', { name: '¾', exact: true })).toBeVisible();
-    await fracciones.getByRole('radio', { name: '¾', exact: true }).click();
+    const fracciones = page.getByRole('radiogroup', { name: 'Porción de Omakase para dos' });
+    await expect(fracciones.getByRole('radio')).toHaveText(['Entero', '½', '⅓', '¼']);
+    await fracciones.getByRole('radio', { name: '⅓', exact: true }).click();
 
     // No hay preview monetario por plato en igualdad: la fracción es una
     // declaración separada y el monto sigue siendo el slot fijo.
-    await expect(page.locator('.mi-frac-amt')).toHaveCount(0);
-    const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
+    await expect(page.locator('.qc-parte')).toHaveCount(0);
+    const filaMiParte = page.locator('.mi-parte');
     await expect(filaMiParte).toContainText('$155.00');
 
     // Captura el body real sin sustituir su respuesta: la prueba llega hasta
-    // el mock normal y acredita que ¾ viaja como dato declarado, mientras el
+    // el mock normal y acredita que ⅓ viaja como dato declarado, mientras el
     // importe continúa saliendo del casillero igualitario.
     await page.evaluate(async () => {
       const ruta = '/src/api/index.ts';
@@ -120,7 +124,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
         return original(...args);
       };
     });
-    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toBeVisible();
     await expect(page.getByText('Tu parte · $155.00', { exact: true })).toBeVisible();
     await page.getByRole('radio', { name: '0%', exact: true }).click();
@@ -132,13 +136,13 @@ test.describe('Continuar en la mesa (H-14)', () => {
       localStorage.getItem('payme.app.e2e.equal-pay-body.v1') ?? 'null',
     ));
     expect(body.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ fraction_bps: 7500 }),
+      expect.objectContaining({ fraction_bps: 3333 }),
     ]));
   });
 
   /**
    * 🔴 CORTE · lo que H-14 cuida en `consumo` —la selección determina el
-   * monto— sigue vivo y se afirma igual (`.mi-frac-amt`, fila «Mi parte»). Lo
+   * monto— sigue vivo y se afirma igual (`.qc-parte`, fila «Mi parte»). Lo
    * que cambia es el final: no hay «Continuar», no hay pantalla de pago, y
    * elegir NO reserva el ítem —el corte va ANTES de `api.lockItems`, así que
    * los `claims` del mock quedan como estaban—. Sin esa última afirmación, un
@@ -158,8 +162,7 @@ test.describe('Continuar en la mesa (H-14)', () => {
     await expect(page.getByText('Tagliatelle Bolognese')).toBeVisible();
     await expect(page.getByText('Elige lo que consumiste', { exact: true })).toHaveCount(0);
 
-    // No hay «Continuar»: la única salida del círculo es «Listo».
-    await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
+    // La única salida del círculo es «Listo», y lleva a Inicio (abajo).
     await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeEnabled();
 
     const claimsDe = () => page.evaluate(() => {
@@ -172,12 +175,13 @@ test.describe('Continuar en la mesa (H-14)', () => {
 
     // La selección y su aritmética siguen: es lo que la pantalla ofrece.
     await page.getByText('Tagliatelle Bolognese').click();
-    const fracciones = page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' });
-    await expect(fracciones.getByRole('radio')).toHaveCount(6);
-    await fracciones.getByRole('radio', { name: '⅔', exact: true }).click();
-    await expect(page.locator('.mi-frac-amt')).toContainText('$130.01');
-    const filaMiParte = page.getByText('Mi parte', { exact: true }).locator('..');
-    await expect(filaMiParte).toContainText('$130.01');
+    const fracciones = page.getByRole('radiogroup', { name: 'Porción de Tagliatelle Bolognese' });
+    await expect(fracciones.getByRole('radio')).toHaveText(['Entero', '½', '⅓', '¼']);
+    // ⅓ de $195.00 no es exacto: 6499.35 centavos se redondean a 6499.
+    await fracciones.getByRole('radio', { name: '⅓', exact: true }).click();
+    await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] .qc-parte')).toHaveText('$64.99');
+    const filaMiParte = page.locator('.mi-parte');
+    await expect(filaMiParte).toContainText('$64.99');
 
     // Con la selección hecha sigue sin haber pago.
     await expect(page.getByRole('heading', { name: 'Pagar mi parte' })).toHaveCount(0);
@@ -206,11 +210,12 @@ for (const width of [320, 390]) {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
 
-    // Dos filas expandidas reproducen el caso que desbordaba la pantalla: cada
-    // selector agrega seis fracciones y su preview, sin cambiar el shell.
+    // Dos platos marcados. Desde la decisión 90 el selector vive DENTRO del
+    // renglón y hay uno solo abierto a la vez (regla 3: «nada flota encima de
+    // otros platos»): marcar el segundo cierra el del primero.
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     await page.getByRole('button', { name: 'Risotto ai Funghi', exact: true }).click();
-    await expect(page.getByRole('radiogroup', { name: '¿Cuánto tomas tú?' })).toHaveCount(2);
+    await expect(page.getByRole('radiogroup')).toHaveCount(1);
 
     const scroll = page.locator('.screen > .scroll.flow-scroll');
     const shell = page.locator('.app');

@@ -122,7 +122,8 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
     const item = page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true });
     expect(await claimsDelItem(page, mesa.code, 'Tagliatelle Bolognese')).toBe(0);
     await item.click();
-    await expect(item).toHaveAttribute('aria-pressed', 'true');
+    // Decisión 90 · el renglón elegido es el propio en teal, no un botón pulsado.
+    await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] [data-estado="mio"]')).toBeVisible();
     expect(await claimsDelItem(page, mesa.code, 'Tagliatelle Bolognese')).toBe(0);
     await expect(page.getByRole('dialog', { name: /Con esto se cierra la mesa/ })).toHaveCount(0);
     await expect(page.getByText('Tomado', { exact: true })).toHaveCount(0);

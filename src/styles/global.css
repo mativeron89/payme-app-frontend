@@ -4400,8 +4400,7 @@ body {
   grid-column: 1 / -1;
 }
 
-.restaurant-label-card input,
-.mi-frac-other input {
+.restaurant-label-card input {
   width: 100%;
   min-height: var(--tap-min);
   padding: 0 var(--sp-3);
@@ -4412,29 +4411,9 @@ body {
   font: inherit;
 }
 
-.restaurant-label-card input:focus-visible,
-.mi-frac-other input:focus-visible {
+.restaurant-label-card input:focus-visible {
   outline: 3px solid var(--action-2);
   outline-offset: 2px;
-}
-
-.mi-frac-other {
-  display: grid;
-  gap: var(--sp-2);
-  margin-top: var(--sp-2);
-}
-
-.mi-frac-other > label {
-  color: var(--text-muted);
-  font-size: var(--fs-caption);
-  line-height: var(--lh-caption);
-}
-
-.mi-frac-other-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--sp-2);
-  align-items: center;
 }
 
 .mi-progress {
@@ -4481,137 +4460,291 @@ body {
   font-weight: 700;
 }
 
-/* ─── La lista ─── */
+/* ─── La lista · AF-QUE-CONSUMISTE (decisión 90) ─── */
 
-.mi-item {
-  position: relative;
+/* El diseño de Claude Design, citado (`PANTALLA-que-consumiste.md`,
+   sha256 fabae11b…). Los colores van con los TOKENS que el diseño nombra
+   (--teal-l, --action-2, --border): sus hex (#E4F7F8, #12A5B4, #E3E9F0) son las
+   copias del sistema de diseño y la app usa los suyos. Las sombras del
+   prototipo van con --sh-1: sus rgba(15,31,61,…) son el navy viejo que
+   `coloresMigrados.test.ts` no deja volver.
+
+   Regla 1 · todos los renglones miden lo mismo: 48 px el normal y 44 px el
+   propio dentro de un margen de 3 px. El nombre NO envuelve (se recorta con
+   «…»): un nombre en dos líneas movería la lista. */
+.qc-lista {
+  padding: 0;
+  border-radius: 22px;
+  overflow: hidden;
 }
 
-.mi-row {
+.qc-renglon {
+  border-top: 1px solid var(--border);
+  margin-top: -1px;
+}
+
+.qc-fila {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
+  gap: 12px;
   width: 100%;
-  padding: var(--sp-3) var(--sp-2);
+  min-height: 48px;
+  padding: 6px 14px;
   border: 0;
-  border-bottom: 1px solid var(--border);
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
   background: none;
-  text-align: left;
-  cursor: pointer;
+  color: var(--text);
   font: inherit;
+  text-align: left;
 }
 
-.mi-row.has-release {
-  padding-right: calc(var(--tap-min) + var(--sp-2));
+.qc-libre {
+  cursor: pointer;
 }
 
-.mi-row:disabled {
+.qc-libre:disabled {
   cursor: default;
 }
 
-/* Seleccionado: fondo de fila al 8%. Es tinte, no el color pleno — el pleno
-   sobre el que después va texto no llega a contraste. */
-.mi-row.sel {
-  background: rgba(15, 181, 201, 0.08);
-}
-
-/* Checkbox. Los CUATRO estados se distinguen por FORMA además de color: vacío,
-   tilde teal, tilde verde y candado. En escala de grises "lo eligió otro" y
-   "lo elegí yo" no se pueden confundir (§1.5 lo pide explícito). */
-.mi-check {
+.qc-circulo {
+  box-sizing: border-box;
+  position: relative;
   flex: none;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 2px solid var(--border);
-  border-radius: var(--r-sm);
+  padding: 0;
+  border: 2px solid var(--gray-b);
+  border-radius: var(--r-full);
   background: var(--surface);
-  color: transparent;
 }
 
-.mi-check.on {
-  border-color: var(--action-2);
+/* Regla 7 · soltar tocando el círculo marcado. Soltar no es un error: sin rojo.
+   El tilde va en --action-2-fg (el navy del sistema sobre el cian, 6.67:1):
+   el blanco del prototipo sobre este cian no llega a contraste. */
+.qc-circulo--marcado {
+  border: 0;
   background: var(--action-2);
   color: var(--action-2-fg);
 }
 
-.mi-check.paid {
-  border-color: var(--success);
-  background: var(--success);
-  color: #fff;
+button.qc-circulo {
+  cursor: pointer;
 }
 
-.mi-check.taken {
-  border-color: var(--border);
+.qc-nombre {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15.5px;
+  color: var(--text);
+}
+
+.qc-precio {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Regla 3 · la píldora de porción: 30 px, 12.5 px/700, blanca con borde,
+   radio 10, chevron. Regla 5 · «Queda ½» usa la misma, sin chevron. */
+.qc-pildora {
+  box-sizing: border-box;
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 30px;
+  padding: 0 7px 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+button.qc-pildora {
+  cursor: pointer;
+}
+
+.qc-pildora svg {
+  color: var(--text-muted);
+}
+
+.qc-pildora--queda,
+.qc-pildora--fija {
+  padding: 0 9px;
+}
+
+/* Decisión 90, definición 4 · zona táctil de 44 px sin agrandar lo visible:
+   un pseudoelemento invisible extiende el blanco de la píldora (30 → 44), del
+   selector (28 → 44), de «Soltar» (30 → 44) y del círculo (24 → 44). */
+button.qc-pildora::after,
+.qc-opcion::after,
+.qc-soltar::after,
+button.qc-circulo::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 50%;
+  height: var(--tap-min);
+  transform: translateY(-50%);
+}
+
+button.qc-circulo::after {
+  left: 50%;
+  width: var(--tap-min);
+  transform: translate(-50%, -50%);
+}
+
+/* Regla 6 · «Lo eligió otro»: rojo pastel, candado, sin nombre de quién. El
+   #FBE7E3 no tiene token en la app: va el del diseño, literal. */
+.qc-otro {
+  background: #fbe7e3;
+}
+
+.qc-candado {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-full);
   background: var(--border);
   color: var(--text-muted);
 }
 
-.mi-body {
-  flex: 1;
+.qc-cuerpo {
+  flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.mi-name {
-  /* `block` explícito: son spans dentro de un <button>, y en línea el estado se
-     pegaba al nombre — "Pizza MargheritaPagado". */
-  display: block;
-  font-family: var(--font-body);
-  font-size: var(--fs-body);
-  line-height: var(--lh-body);
-  color: var(--text);
-  overflow-wrap: break-word;
-}
-
-.mi-row.sel .mi-name {
-  font-weight: 600;
-}
-
-/* Se atenúan NOMBRE y PRECIO, nunca la fila entera: bajarle la opacidad al
-   contenedor arrastra el texto de ayuda por debajo del mínimo de contraste.
-   Ya pasó una vez; la corrección se conserva (§1.5). */
-.mi-name.dim,
-.mi-price.dim {
+.qc-nombre--otro {
   color: var(--text-muted);
 }
 
-.mi-name.paid {
-  text-decoration: line-through;
-}
-
-/* El estado, con PALABRAS. El color y el ícono nunca son el único portador. */
-.mi-tag {
-  display: block;
+.qc-etiqueta {
   margin-top: 2px;
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  font-size: 12.5px;
+  line-height: 1.2;
   color: var(--text-muted);
 }
 
-.mi-price {
-  flex: none;
-  font-family: var(--font-display);
-  font-size: var(--fs-body);
-  line-height: var(--lh-body);
+.qc-precio--otro {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Regla 2 · el renglón propio: --teal-l, borde 2 px --action-2, radio 12,
+   círculo marcado, píldora de porción y tu parte. No repite el precio. */
+.qc-mia {
+  min-height: 44px;
+  margin: 3px 4px;
+  width: auto;
+  padding: 4px 10px;
+  gap: 10px;
+  border: 2px solid var(--action-2);
+  border-radius: 12px;
+  background: var(--teal-l);
+}
+
+.qc-nombre--mio {
   font-weight: 700;
+}
+
+.qc-parte {
+  flex: none;
+  min-width: 66px;
+  text-align: right;
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--text);
-  text-align: right;
 }
 
-.mi-row.sel .mi-price {
+/* Regla 3 · el renglón convertido en selector: Entero · ½ · ⅓ · ¼ (botones de
+   28 px) + «Soltar». Nada flota encima de otros platos. */
+.qc-mia--abierta {
+  gap: 8px;
+}
+
+.qc-selector {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 2px;
+  padding: 1px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.qc-opcion {
+  box-sizing: border-box;
+  position: relative;
+  flex: 1 1 0;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.qc-opcion.on {
+  background: var(--action-2);
+  color: var(--action-2-fg);
+  font-weight: 800;
+}
+
+.qc-soltar {
+  position: relative;
+  flex: none;
+  height: 30px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font-size: 12.5px;
   font-weight: 700;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
-/* ─── Selector de porción ─── */
+.qc-opcion:focus-visible,
+.qc-soltar:focus-visible,
+.qc-pildora:focus-visible,
+.qc-circulo:focus-visible,
+.qc-libre:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
 
-/* Desplegable debajo del ítem, INDENTADO para que se lea como suyo y no como
-   otra fila de la lista. Arranca con "1" marcada: tildar y listo sigue siendo
-   el flujo de siempre, y el selector sólo pesa si alguien lo cambia. */
 /* AF-25 · n72 · «quiénes se sumaron»: lista simple, nombre arriba e
    identificador debajo, sin foto. */
 .quienes {
@@ -4687,97 +4820,47 @@ body {
   color: var(--gray-d);
 }
 
-/* AF-AJUSTES10 · el control de liberar vive dentro de la burbuja del consumo.
-   La X y su nombre accesible no dependen sólo del rojo; conserva 44×44. */
-.mi-soltar {
-  position: absolute;
-  z-index: 1;
-  top: 4px;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--tap-min);
-  height: var(--tap-min);
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-full);
-  background: transparent;
-  color: var(--danger);
-  cursor: pointer;
-}
-
-.mi-soltar:hover {
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-}
-
-.mi-soltar:disabled {
-  cursor: wait;
-  opacity: 0.6;
-}
-
-.mi-soltar:focus-visible,
 .stat-pestanas .seg-btn:focus-visible {
   outline: 3px solid var(--action-2);
   outline-offset: 2px;
 }
 
-.mi-frac {
-  padding: var(--sp-3) var(--sp-2) var(--sp-4) 44px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(15, 181, 201, 0.08);
-}
-
-.mi-frac-lbl {
-  margin-bottom: var(--sp-2);
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text-muted);
-}
-
-/* Mismo componente .seg del sistema, con el área táctil de la app. */
-.mi-frac .seg {
-  display: grid;
-  /* M01 · seis subcolumnas permiten repartir 1–6 opciones sin una columna
-     fantasma: 2→2 mitades, 3/6→3 columnas, 4→2×2 y 5→3+2 centradas. */
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 4px;
-  margin-bottom: var(--sp-2);
+/* AF-QUE-CONSUMISTE · regla 8 · en «¿Qué consumiste?» la barra y el reloj van
+   con los valores del diseño: barra de 7 px sobre blanco, lo elegido fuerte y
+   el reloj en ámbar (--warning, el ámbar de texto del sistema: el #A87C1F del
+   prototipo no llega a contraste sobre --teal-l). */
+.mesa-selection-title .mi-progress {
+  height: 7px;
+  margin-top: 12px;
   background: var(--surface);
 }
 
-.mi-frac .seg-btn {
-  grid-column: span 2;
-  min-height: var(--tap-min);
-  font-size: var(--fs-body);
+.mesa-selection-title .mi-meta {
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  font-family: var(--font-display);
+  font-size: 13.5px;
 }
 
-.mi-frac .seg:has(> .seg-btn:first-child:last-child) > .seg-btn {
-  grid-column: span 6;
+.mesa-selection-title .mi-meta-amt b {
+  font-weight: 700;
+  color: var(--text);
 }
 
-.mi-frac .seg:has(> .seg-btn:nth-child(2):last-child) > .seg-btn,
-.mi-frac .seg:has(> .seg-btn:nth-child(4):last-child) > .seg-btn {
-  grid-column: span 3;
+.mi-meta-resto {
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
-.mi-frac .seg:has(> .seg-btn:nth-child(5):last-child) > .seg-btn:nth-child(4) {
-  grid-column: 2 / span 2;
+.mesa-selection-title .mi-count {
+  font-weight: 700;
+  color: var(--warning);
 }
 
-.mi-frac .seg-btn.on {
-  background: var(--action-2);
-  color: var(--action-2-fg);
-}
-
-.mi-frac-amt {
-  font-family: var(--font-body);
-  font-size: var(--fs-body);
-  line-height: var(--lh-body);
-  font-weight: 600;
-  color: var(--link);
-  font-variant-numeric: tabular-nums;
+/* Con menos de una hora sigue el naranja de siempre (--brand-ink). */
+.mesa-selection-title .mi-count.urgent {
+  color: var(--brand-ink);
 }
 
 /* ─── "Mi parte", la fila propia arriba de la barra ─── */
@@ -4799,13 +4882,23 @@ body {
   color: var(--text-muted);
 }
 
+/* Regla 8 · «Mi parte · N platos» y el monto en el teal oscuro (--link), 21 px. */
+.mi-parte-lbl {
+  font-size: 14.5px;
+  color: var(--text-muted);
+}
+
+.mi-parte-platos {
+  font-size: 13px;
+}
+
 .mi-parte-amt {
-  padding-left: var(--sp-4);
-  border-left: 1px solid var(--border);
+  margin-left: auto;
   font-family: var(--font-display);
-  font-size: var(--fs-h2);
+  font-size: 21px;
   line-height: var(--lh-h2);
   font-weight: 800;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   color: var(--link);
 }

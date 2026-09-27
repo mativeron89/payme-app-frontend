@@ -60,64 +60,81 @@ async function sembrar(page: Page, code: string, original: number | null): Promi
   await page.getByRole('button', { name: 'Pizza para compartir', exact: true }).click();
 }
 
-test.describe('Ajustes 8 · V04 fracciones naturales', () => {
+/** Graba lo que la pantalla le manda a `lockItems`, sin sustituir la respuesta. */
+async function grabarLocks(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const ruta = '/src/api/index.ts';
+    const { api } = await import(/* @vite-ignore */ ruta) as { api: Record<string, (...a: unknown[]) => Promise<unknown>> };
+    const w = window as unknown as { __locks: unknown[] };
+    w.__locks = [];
+    const original = api.lockItems.bind(api);
+    api.lockItems = async (...a: unknown[]) => { w.__locks.push(a[1]); return original(...a); };
+  });
+}
+
+async function fraccionGuardada(page: Page, code: string): Promise<number | null> {
+  return page.evaluate(async ({ mesaCode, itemId }) => {
+    const storePath = '/src/api/mock/store.ts';
+    const { state } = await import(/* @vite-ignore */ storePath) as {
+      state: { mesas: Array<{ code: string; items: Array<{ id: string; claims: Array<{ who: string; fraction_bps: number }> }> }> };
+    };
+    return state.mesas.find((mesa) => mesa.code === mesaCode)
+      ?.items.find((item) => item.id === itemId)
+      ?.claims.find((claim) => claim.who === 'user')?.fraction_bps ?? null;
+  }, { mesaCode: code, itemId: ITEM_ID });
+}
+
+const porciones = (page: Page) => page
+  .getByRole('radiogroup', { name: 'Porción de Pizza para compartir' })
+  .getByRole('radio');
+
+/**
+ * 🔴 **La decisión 90 de Mati (2026-09-26) cambió lo que V04 ofrecía.** El
+ * selector natural daba Entero, ½, ⅓, ¼ y «Otro» con un denominador a mano
+ * hasta N; las mesas históricas mostraban además ⅔ y ¾ con un aviso. Ahora son
+ * **Entero, ½, ⅓ y ¼** para todas, limitadas por las personas (n204) y por lo
+ * que queda. Lo que V04 cuidaba y sigue vivo: N limita, la mesa con N viaja por
+ * denominador (el dueño fija los bps) y la histórica no infiere N y viaja por bps.
+ */
+test.describe('Ajustes 8 · V04 fracciones naturales (con la decisión 90)', () => {
   test('N=2 ofrece únicamente entero y mitad, sin Otro', async ({ page }) => {
     await preparar(page);
     await sembrar(page, 'PA-9202', 2);
 
-    await expect(page.getByRole('radio', { name: 'Entero' })).toBeVisible();
-    await expect(page.getByRole('radio', { name: '1/2' })).toBeVisible();
-    await expect(page.getByRole('radio', { name: '1/3' })).toHaveCount(0);
+    await expect(porciones(page)).toHaveText(['Entero', '½']);
+    await expect(page.getByRole('radio', { name: '⅓' })).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'Otro' })).toHaveCount(0);
   });
 
-  test('N=7 valida Otro y envía el denominador; el dueño fija 1428 bps', async ({ page }, testInfo) => {
+  test('N=7 ofrece Entero · ½ · ⅓ · ¼ sin Otro, y envía el denominador; el dueño fija 3333 bps', async ({ page }, testInfo) => {
     await preparar(page);
     await sembrar(page, 'PA-9207', 7);
 
-    await expect(page.getByRole('radio', { name: '1/4' })).toBeVisible();
-    await page.getByRole('radio', { name: 'Otro' }).click();
-    const input = page.getByLabel('¿Entre cuántas personas compartieron este plato?');
-    await input.fill('8');
-    await page.getByRole('button', { name: 'Aplicar' }).click();
-    await expect(page.getByRole('alert')).toHaveText('El máximo para esta mesa es 7.');
-    await input.fill('2.5');
-    await page.getByRole('button', { name: 'Aplicar' }).click();
-    await expect(page.getByRole('alert')).toHaveText('Escribe un número entero positivo.');
-    await input.fill('7');
-    await page.getByRole('button', { name: 'Aplicar' }).click();
-    await expect(page.getByRole('radio', { name: 'Otro' })).toHaveAttribute('aria-checked', 'true');
-    await page.screenshot({ path: testInfo.outputPath('v04-fraccion-uno-sobre-siete.png'), fullPage: true });
+    await expect(porciones(page)).toHaveText(['Entero', '½', '⅓', '¼']);
+    await expect(page.getByRole('radio', { name: 'Otro' })).toHaveCount(0);
+    await page.getByRole('radio', { name: '⅓' }).click();
+    await page.screenshot({ path: testInfo.outputPath('v04-fraccion-un-tercio.png'), fullPage: true });
 
+    await grabarLocks(page);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect.poll(() => page.evaluate(async ({ mesaCode, itemId }) => {
-      const storePath = '/src/api/mock/store.ts';
-      const { state } = await import(/* @vite-ignore */ storePath) as {
-        state: { mesas: Array<{ code: string; items: Array<{ id: string; claims: Array<{ who: string; fraction_bps: number }> }> }> };
-      };
-      return state.mesas.find((mesa) => mesa.code === mesaCode)
-        ?.items.find((item) => item.id === itemId)
-        ?.claims.find((claim) => claim.who === 'user')?.fraction_bps ?? null;
-    }, { mesaCode: 'PA-9207', itemId: ITEM_ID })).toBe(1428);
+    await expect.poll(() => fraccionGuardada(page, 'PA-9207')).toBe(3333);
+    expect(await page.evaluate(() => (window as unknown as { __locks: unknown[] }).__locks))
+      .toEqual([[{ item_id: ITEM_ID, fraction_denominator: 3 }]]);
   });
 
-  test('una mesa histórica no infiere N y conserva el selector legacy', async ({ page }) => {
+  test('una mesa histórica no infiere N: mismas cuatro porciones, y viaja por bps', async ({ page }) => {
     await preparar(page);
     await sembrar(page, 'PA-9299', null);
 
-    await expect(page.getByText('Esta mesa es anterior y no guardó el número original de personas. Mostramos las porciones disponibles de siempre.')).toBeVisible();
+    await expect(porciones(page)).toHaveText(['Entero', '½', '⅓', '¼']);
     await expect(page.getByRole('radio', { name: 'Otro' })).toHaveCount(0);
-    await expect(page.getByRole('radio', { name: '¼' })).toBeVisible();
     await page.getByRole('radio', { name: '¼' }).click();
+    await grabarLocks(page);
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect.poll(() => page.evaluate(async ({ mesaCode, itemId }) => {
-      const storePath = '/src/api/mock/store.ts';
-      const { state } = await import(/* @vite-ignore */ storePath) as {
-        state: { mesas: Array<{ code: string; items: Array<{ id: string; claims: Array<{ who: string; fraction_bps: number }> }> }> };
-      };
-      return state.mesas.find((mesa) => mesa.code === mesaCode)
-        ?.items.find((item) => item.id === itemId)
-        ?.claims.find((claim) => claim.who === 'user')?.fraction_bps ?? null;
-    }, { mesaCode: 'PA-9299', itemId: ITEM_ID })).toBe(2500);
+    await expect.poll(() => fraccionGuardada(page, 'PA-9299')).toBe(2500);
+    const locks = await page.evaluate(() => (window as unknown as { __locks: Array<Array<Record<string, unknown>>> }).__locks);
+    expect(locks).toHaveLength(1);
+    expect(locks[0]).toEqual([expect.objectContaining({ item_id: ITEM_ID, fraction_bps: 2500 })]);
+    expect(locks[0]![0]).not.toHaveProperty('fraction_denominator');
   });
 });

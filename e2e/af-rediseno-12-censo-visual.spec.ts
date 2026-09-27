@@ -249,10 +249,9 @@ test('las diez superficies aprobadas quedan medidas a 390 × 844 (el corte deja 
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
   // CORTE DEL VIERNES (APP-FE-FRIDAY-NO-PAY-GUARD-02) · el censo se detiene en
   // Mis ítems: 08-pago y 09-comprobante quedan fuera mientras el checkout esté
-  // cerrado. El círculo dice «Listo», no hay «Continuar» y no hay pantalla de
-  // pago que alcanzar.
+  // cerrado. El círculo dice «Listo» (desde la decisión 90, con o sin pagos) y
+  // no hay pantalla de pago que alcanzar.
   await expect(page.getByRole('button', { name: 'Listo', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Pagar mi parte', exact: true })).toHaveCount(0);
 
   await page.goto('/#/mas');

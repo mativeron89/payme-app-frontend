@@ -99,7 +99,8 @@ async function capturar(page: Page, nombre: string): Promise<void> {
   if (dir) await page.screenshot({ path: `${dir}/${nombre}.png`, fullPage: true });
 }
 
-const fila = (page: Page, nombre: string) => page.locator('.mi-item').filter({ hasText: nombre });
+// AF-QUE-CONSUMISTE · decisión 90 · el renglón del plato se ancla en su nombre.
+const fila = (page: Page, nombre: string) => page.locator(`.qc-renglon[data-plato="${nombre}"]`);
 const barra = (page: Page) => page.locator('.mi-meta-amt');
 
 test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
@@ -127,10 +128,14 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await capturar(page, 'd79-02-queda-medio');
 
     // No se puede elegir más de lo que queda: nace en ½ y «Entero» no se ofrece.
+    // Con N=2 y «Queda ½» la única porción que cabe es ½, así que la regla 4 del
+    // diseño la marca directo, sin abrir selector ni ofrecer cambiarla.
     await page.getByRole('button', { name: /^Pizza para compartir/ }).click();
-    const porcion = fila(page, 'Pizza para compartir').getByRole('radiogroup');
-    await expect(porcion.getByRole('radio', { name: '1/2', exact: true })).toHaveAttribute('aria-checked', 'true');
-    await expect(porcion.getByRole('radio', { name: 'Entero', exact: true })).toHaveCount(0);
+    const pizza = fila(page, 'Pizza para compartir');
+    await expect(pizza.locator('[data-estado="mio"] .qc-pildora')).toHaveText('½');
+    await expect(pizza.getByRole('radiogroup')).toHaveCount(0);
+    await expect(pizza.getByRole('button', { name: /^Cambiar la porción/ })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Entero', exact: true })).toHaveCount(0);
 
     // F-1 · la otra cuenta sube a la pizza entera y, al volver a la app, la
     // mesa se relee sola: la barra cambia sin recargar la página.
@@ -142,7 +147,9 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await page.getByRole('button', { name: 'Listo', exact: true }).click();
     await expect(page.getByText('Ese plato ya está completo')).toBeVisible();
     await expect(fila(page, 'Pizza para compartir')).toContainText('Lo eligió otro');
-    await expect(page.getByRole('button', { name: /^Pizza para compartir/ })).toBeDisabled();
+    // Bloqueado: el renglón «Lo eligió otro» no tiene nada tocable.
+    await expect(fila(page, 'Pizza para compartir').locator('[data-estado="tomado"]')).toBeVisible();
+    await expect(fila(page, 'Pizza para compartir').getByRole('button')).toHaveCount(0);
     await capturar(page, 'd79-03-409-completo');
 
     // Se completa la mesa con la parrillada: cierre con pantalla (F-2).

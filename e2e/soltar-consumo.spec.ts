@@ -80,22 +80,35 @@ async function cambiarMesaEnMemoria(
   }, [code, cambio] as const);
 }
 
+/**
+ * AF-QUE-CONSUMISTE · decisión 90 · el renglón por el plato (`data-plato`). Lo
+ * registrado ya no dice «Lo elegiste» en gris: es el renglón propio en teal con
+ * la píldora de su porción (regla 2 del diseño), y se suelta con el círculo.
+ */
+const fila = (page: Page, nombre: string) => page.locator(`.qc-renglon[data-plato="${nombre}"]`).first();
+
 test.describe('AF-25 · soltar un consumo (n80)', () => {
-  test('lo elegido se ve como «Lo elegiste», se suelta y vuelve a quedar libre', async ({ page }) => {
+  test('lo elegido se ve como propio, se suelta y vuelve a quedar libre', async ({ page }) => {
     await mesaConUnoElegido(page);
-    const fila = page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first();
-    await expect(fila).toContainText('Lo elegiste');
+    const tagliatelle = fila(page, 'Tagliatelle Bolognese');
+    await expect(tagliatelle.locator('[data-estado="registrado"]')).toBeVisible();
+    await expect(tagliatelle.locator('.qc-pildora')).toHaveText('Entero');
+    // Regla 7 · el círculo marcado suelta, y se pinta con el check, no con la X
+    // (`M9 9l6 6` es el trazo de `x-circle`).
+    await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).locator('path'))
+      .toHaveAttribute('d', 'M5 12.5l4.7 4.7L19 7.5');
+    await expect(page.locator('.qc-lista path[d="M9 9l6 6"]')).toHaveCount(0);
     await capturar(page, 'soltar-01-lo-elegiste');
 
     await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
     await expect(page.getByText('Listo, lo soltaste. Ya lo puede elegir otra persona.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toHaveCount(0);
-    await expect(fila).not.toContainText('Lo elegiste');
+    await expect(tagliatelle.locator('[data-estado="libre"]')).toBeVisible();
     await capturar(page, 'soltar-02-suelto');
 
     // Libre de verdad: se puede volver a elegir.
-    await fila.click();
-    await expect(fila).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
+    await expect(tagliatelle.getByRole('radiogroup')).toBeVisible();
   });
 
   test('un doble toque manda UN pedido: nunca aparece «No había nada para soltar»', async ({ page }) => {
@@ -115,8 +128,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await irEnLaApp(page, `/mesa/${code}`);
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
-    const fila = page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first();
-    await expect(fila).toContainText('Lo elegiste');
+    await expect(fila(page, 'Tagliatelle Bolognese').locator('[data-estado="registrado"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toHaveCount(0);
   });
 
@@ -127,7 +139,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await irEnLaApp(page, `/mesa/${code}`);
     // Testigo: el pago ajeno se ve en la mesa.
-    await expect(page.getByRole('button', { name: /^Risotto ai Funghi/ }).first()).toContainText('Pagado');
+    await expect(fila(page, 'Risotto ai Funghi').locator('[data-estado="pagado"]')).toContainText('Pagado');
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
     await capturar(page, 'soltar-03-con-pago-de-otro');
     await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
@@ -140,7 +152,7 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await irEnLaApp(page, '/home');
     await expect(page.getByRole('button', { name: 'Nueva', exact: true })).toBeVisible();
     await irEnLaApp(page, `/mesa/${code}`);
-    await expect(page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first()).toContainText('Pagaste ½ · elegiste ½ más');
+    await expect(fila(page, 'Tagliatelle Bolognese')).toContainText('Pagaste ½ · elegiste ½ más');
     // Lo elegido que queda se puede soltar; lo pagado, no (el dueño suelta sólo lo `locked`).
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toBeVisible();
   });
@@ -166,8 +178,8 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
     await expect(page.getByText('Soltar todavía no está disponible.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' })).toHaveCount(0);
-    // Lo elegido sigue diciéndose: el campo existe en el backend anterior.
-    await expect(page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first()).toContainText('Lo elegiste');
+    // Lo elegido sigue viéndose como propio: el campo existe en el backend anterior.
+    await expect(fila(page, 'Tagliatelle Bolognese').locator('[data-estado="registrado"]')).toBeVisible();
     await expect(page.getByText('No pudimos soltarlo. Intenta de nuevo.')).toHaveCount(0);
   });
 
@@ -194,15 +206,33 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await expect(page.getByRole('button', { name: 'Soltar Risotto ai Funghi' })).toBeVisible();
   });
 
-  test('en «partes iguales» no se ofrece soltar', async ({ page }) => {
+  /**
+   * En «partes iguales» no hay soltar CONTRA EL DUEÑO: la selección es una
+   * declaración local hasta «Listo». Desde el diseño de la decisión 90, el
+   * círculo y «Soltar» deshacen esa declaración en el renglón (regla 7), así que
+   * lo que se fija es que no viaja ningún `releaseItems` ni sale su aviso.
+   */
+  test('en «partes iguales» no se suelta contra el dueño: soltar sólo deshace la declaración', async ({ page }) => {
     await conRielApagado(page);
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true });
     await page.goto(`/#/mesa/${mesa.code}`);
     await expect(page.getByText('Los pagos llegan pronto; tu selección queda registrada.')).toHaveCount(0);
+    await page.evaluate(async () => {
+      const ruta = '/src/api/index.ts';
+      const { api } = await import(/* @vite-ignore */ ruta) as { api: Record<string, (...a: unknown[]) => Promise<unknown>> };
+      const w = window as unknown as { __soltados: number };
+      w.__soltados = 0;
+      const original = api.releaseItems.bind(api);
+      api.releaseItems = async (...a: unknown[]) => { w.__soltados += 1; return original(...a); };
+    });
+    const tagliatelle = fila(page, 'Tagliatelle Bolognese');
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-    await expect(page.getByRole('button', { name: /^Tagliatelle Bolognese/ }).first()).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('button', { name: /^Soltar/ })).toHaveCount(0);
-    await expect(page.getByText('Lo elegiste')).toHaveCount(0);
+    await tagliatelle.getByRole('radio', { name: 'Entero' }).click();
+    await expect(tagliatelle.locator('[data-estado="mio"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
+    await expect(tagliatelle.locator('[data-estado="libre"]')).toBeVisible();
+    expect(await page.evaluate(() => (window as unknown as { __soltados: number }).__soltados)).toBe(0);
+    await expect(page.getByText('Listo, lo soltaste. Ya lo puede elegir otra persona.')).toHaveCount(0);
   });
 });

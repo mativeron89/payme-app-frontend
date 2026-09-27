@@ -207,7 +207,7 @@ test('Pagar separa resumen, propina, método y total sin duplicar el monto', asy
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
   await page.getByRole('button', { name: 'Vino tinto (copa)', exact: true }).click();
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Listo', exact: true }).click();
 
   const title = page.locator('.pay-title');
   await expect(title).toContainText('Consumos propios · $255.00');

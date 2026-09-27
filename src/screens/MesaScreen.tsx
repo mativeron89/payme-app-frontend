@@ -48,7 +48,7 @@ import type {
   PaymentMethod,
   PaymentType,
 } from '../api/types';
-import { denominatorBps, initialDenominator, originalParticipants } from '../api/mesaPresentation';
+import { denominatorBps, originalParticipants } from '../api/mesaPresentation';
 import { useAuth } from '../auth/AuthContext';
 import { fullName } from '../utils/identity';
 import { CardBrandChip, TopBar, useToast } from '../components/ui';
@@ -59,7 +59,8 @@ import {
   requiresReconciliation,
 } from './freezeMachine';
 import { MesaDetailView, type QuienesSeSumaron } from './MesaDetailView';
-import { bpsLabel, confirmedConsumptionProgress, fraccionInicial, itemsAmountFor, limiteInformativo } from './mesaItemsView';
+import { bpsLabel, bpsValido, confirmedConsumptionProgress, itemsAmountFor, limiteInformativo } from './mesaItemsView';
+import { porcionesDisponibles } from './queConsumisteView';
 import { goBack, navigate } from '../router';
 import { formatMXN } from '../utils/format';
 import { tipFromBps } from '../utils/money';
@@ -843,22 +844,17 @@ export function MesaScreen({ code, guestToken }: { code: string; guestToken?: st
         toast(t('Ese plato ya está completo'));
         return;
       }
-      // «igual» con N (v2.124.0): nace entero, y el selector natural lo
-      // muestra como 1/1 elegido; sin N no hay denominador (rama legacy).
-      const denominator = original === null
-        ? null
-        : mesa?.division_mode === 'consumo'
-          ? initialDenominator(original, item?.remaining_bps ?? Number.NaN)
-          : limiteIgual === null ? 1 : initialDenominator(original, limiteIgual);
-      const def = mesa?.division_mode === 'igual'
-        ? limiteIgual === null
-          ? 10000
-          : original !== null
-            ? denominator === null ? null : denominatorBps(denominator)
-            : fraccionInicial(limiteIgual)
-        : original !== null
-          ? denominator === null ? null : denominatorBps(denominator)
-          : fraccionInicial(item?.remaining_bps);
+      // AF-QUE-CONSUMISTE · decisión 90 · se marca con la MAYOR de las
+      // porciones que se ofrecen (Entero, ½, ⅓, ¼) que cabe en la mesa y en lo
+      // que queda: la misma lista que muestra el selector, así que nunca nace
+      // una porción que no se puede elegir (⅔, ¾). Con N conocido viaja además
+      // como denominador (AB-FRACCIONES-IGUAL); sin N, sólo como bps.
+      const restante = mesa?.division_mode === 'igual'
+        ? (limiteIgual ?? 10000)
+        : (item && bpsValido(item.remaining_bps) ? item.remaining_bps : Number.NaN);
+      const opciones = porcionesDisponibles(original, restante);
+      const denominator = original === null ? null : (opciones[0] ?? null);
+      const def = opciones.length > 0 ? denominatorBps(opciones[0]!) : null;
       if (def === null && mesa?.division_mode === 'igual') {
         toast(t('Ese plato ya está completo'));
         return;
