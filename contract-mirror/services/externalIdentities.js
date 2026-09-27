@@ -410,6 +410,158 @@ async function crearCuentaDesdeContinue(client, {
   return null;
 }
 
+/**
+ * La lógica de «Continuar con Google», dentro de la transacción del llamador y con
+ * identidad y perfil YA verificados. v2.138.0 · la comparten `/google/continue`
+ * (consume la credencial acá, con su purpose de siempre) y el canje del alta en la
+ * misma pestaña (decisión 102), cuya credencial ya se consumió en el POST del
+ * login_uri: ahí `consumir` no hace nada. Mismos desenlaces para los dos.
+ */
+async function continuarEnTransaccion(client, {
+  evidence,
+  profile,
+  invitationToken,
+  acceptedNoticeVersion,
+  declaredFirstName,
+  declaredLastName,
+  registrationAvailable,
+  linkingAvailable,
+  consumeSignupRateLimit,
+  legalAcceptance = null,
+  consumir,
+}) {
+    // Dos «continuar» simultáneos con la misma identidad se serializan acá:
+    // el segundo espera, ve el binding del primero y entra como login.
+    await client.query(
+      `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
+      [`external_identity:${evidence.provider}:${evidence.subject_namespace}:${evidence.subject}`]
+    );
+    await assertSubjectAllowed(client, evidence);
+    const { rows } = await client.query(
+      `SELECT u.id,u.payme_id,u.email,u.first_name,u.last_name,
+              u.status AS user_status,b.status AS binding_status
+         FROM external_identity_bindings b
+         JOIN users u ON u.id=b.user_id
+        WHERE b.provider=$1 AND b.subject_namespace=$2 AND b.subject=$3
+        FOR UPDATE OF b,u`,
+      [evidence.provider, evidence.subject_namespace, evidence.subject]
+    );
+    if (rows.length === 1) {
+      await consumir(client, 'login');
+      const row = rows[0];
+      if (row.binding_status !== 'active' || row.user_status !== 'active') {
+        return { ...CONTINUE_FALLA_LOGIN, outcome: 'failed' };
+      }
+      const user = {
+        id: row.id, payme_id: row.payme_id, email: row.email,
+        first_name: row.first_name, last_name: row.last_name,
+      };
+      const session = await paymeSessions.createSession({ userId: user.id, client });
+      return {
+        status: 200,
+        body: { ...paymeSessions.sessionResponse(user, session), created: false },
+        outcome: 'login',
+        userId: user.id,
+      };
+    }
+
+    if (!registrationAvailable) {
+      await consumir(client, 'login');
+      return { ...CONTINUE_FALLA_LOGIN, outcome: 'failed' };
+    }
+    let invitation;
+    try {
+      invitation = await signupInvitations.autoridadDeAlta(client, { token: invitationToken });
+    } catch (error) {
+      if (error.code !== 'registration_not_available') throw error;
+      // Sin autoridad de alta (cerrada y sin invitación válida) es, para esta
+      // persona, lo mismo que alta no habilitada: el 401 de login.
+      await consumir(client, 'login');
+      return { ...CONTINUE_FALLA_LOGIN, outcome: 'failed' };
+    }
+
+    await consumir(client, 'register');
+    const publicacion = await legal.getRequiredPublicationStatus({ client });
+    if (!publicacion.ready) {
+      return { status: 503, body: { error: 'registration_unavailable' }, outcome: 'failed' };
+    }
+    const vigente = await legal.getVigente(AVISO, client);
+    if (!vigente || vigente.version !== acceptedNoticeVersion) {
+      return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
+    }
+    const email = normalizarEmailDeContrato(profile.email);
+    if (!email) return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
+    if (invitation && invitation.email_normalized !== email) {
+      return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
+    }
+    // El limitador va antes de mirar si el correo existe: cualquier respuesta
+    // que dependa de eso queda acotada por correo.
+    const limite = await consumeSignupRateLimit(client, { token: invitationToken, email });
+    if (!limite.allowed) {
+      return {
+        status: 429, body: { error: 'too_many_signup_attempts' }, outcome: 'failed',
+        retryAt: limite.retryAt,
+      };
+    }
+    const { rows: destinos } = await client.query(
+      `SELECT id,status,password_hash FROM users
+        WHERE email_normalized=$1 OR lower(email)=$1 LIMIT 2`,
+      [email]
+    );
+    // Copia única y conexión: las dos exigen un correo VERIFICADO. Sin él, la
+    // existencia de una cuenta no se revela nunca.
+    if (profile.email_verified !== true) return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
+    if (destinos.length > 0) {
+      // Addendum 1 · decisión de Mati: correo ya registrado. Nunca se vincula
+      // por email: se emite un intento que SÓLO la contraseña de esa cuenta
+      // completa. Sin contraseña utilizable, cuenta inactiva, vinculación
+      // apagada o correo ambiguo: el opaco de siempre.
+      const destino = destinos.length === 1 ? destinos[0] : null;
+      if (!linkingAvailable || !destino || destino.status !== 'active'
+          || !destino.password_hash) {
+        return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
+      }
+      const linkIntent = randomBytes(32).toString('base64url');
+      await client.query(
+        `INSERT INTO google_continue_link_intents
+           (intent_hash,user_id,provider,subject_namespace,subject,expires_at)
+         VALUES ($1,$2,$3,$4,$5,NOW() + make_interval(secs => $6))`,
+        [tokenHash(linkIntent), destino.id, evidence.provider,
+          evidence.subject_namespace, evidence.subject, LINK_INTENT_TTL_SECONDS]
+      );
+      return {
+        status: 409,
+        body: { error: 'link_required', link_intent: linkIntent },
+        outcome: 'link_required',
+        userId: destino.id,
+      };
+    }
+    const nombres = nombresParaAlta(profile, {
+      firstName: declaredFirstName, lastName: declaredLastName,
+    });
+    if (!nombres) {
+      return { status: 422, body: { error: 'profile_required' }, outcome: 'failed' };
+    }
+
+    const creada = await crearCuentaDesdeContinue(client, {
+      evidence, email, nombres, invitation, vigente, legalAcceptance,
+    });
+    if (!creada) return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
+    return {
+      status: 201,
+      body: { ...paymeSessions.sessionResponse(creada.user, creada.session), created: true },
+      outcome: 'created',
+      userId: creada.user.id,
+    };
+}
+
+/** El mapeo de errores de base del alta en un toque (compartido con el canje del alta). */
+function errorDeContinuar(error) {
+  if (error.code === 'social_auth_failed') return error;
+  if (error.code === '23505' || error.code === '23514') return authFailed();
+  return error;
+}
+
 async function continueWithExternalIdentity({
   evidence,
   profile,
@@ -424,135 +576,21 @@ async function continueWithExternalIdentity({
 }) {
   if (!METODOS_DE_ALTA_SOCIAL.has(evidence.provider)) throw authFailed();
   try {
-    return await pool.tx(async (client) => {
-      // Dos «continuar» simultáneos con la misma identidad se serializan acá:
-      // el segundo espera, ve el binding del primero y entra como login.
-      await client.query(
-        `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
-        [`external_identity:${evidence.provider}:${evidence.subject_namespace}:${evidence.subject}`]
-      );
-      await assertSubjectAllowed(client, evidence);
-      const { rows } = await client.query(
-        `SELECT u.id,u.payme_id,u.email,u.first_name,u.last_name,
-                u.status AS user_status,b.status AS binding_status
-           FROM external_identity_bindings b
-           JOIN users u ON u.id=b.user_id
-          WHERE b.provider=$1 AND b.subject_namespace=$2 AND b.subject=$3
-          FOR UPDATE OF b,u`,
-        [evidence.provider, evidence.subject_namespace, evidence.subject]
-      );
-      if (rows.length === 1) {
-        await consumeCredential(client, evidence, 'login');
-        const row = rows[0];
-        if (row.binding_status !== 'active' || row.user_status !== 'active') {
-          return { ...CONTINUE_FALLA_LOGIN, outcome: 'failed' };
-        }
-        const user = {
-          id: row.id, payme_id: row.payme_id, email: row.email,
-          first_name: row.first_name, last_name: row.last_name,
-        };
-        const session = await paymeSessions.createSession({ userId: user.id, client });
-        return {
-          status: 200,
-          body: { ...paymeSessions.sessionResponse(user, session), created: false },
-          outcome: 'login',
-          userId: user.id,
-        };
-      }
-
-      if (!registrationAvailable) {
-        await consumeCredential(client, evidence, 'login');
-        return { ...CONTINUE_FALLA_LOGIN, outcome: 'failed' };
-      }
-      let invitation;
-      try {
-        invitation = await signupInvitations.autoridadDeAlta(client, { token: invitationToken });
-      } catch (error) {
-        if (error.code !== 'registration_not_available') throw error;
-        // Sin autoridad de alta (cerrada y sin invitación válida) es, para esta
-        // persona, lo mismo que alta no habilitada: el 401 de login.
-        await consumeCredential(client, evidence, 'login');
-        return { ...CONTINUE_FALLA_LOGIN, outcome: 'failed' };
-      }
-
-      await consumeCredential(client, evidence, 'register');
-      const publicacion = await legal.getRequiredPublicationStatus({ client });
-      if (!publicacion.ready) {
-        return { status: 503, body: { error: 'registration_unavailable' }, outcome: 'failed' };
-      }
-      const vigente = await legal.getVigente(AVISO, client);
-      if (!vigente || vigente.version !== acceptedNoticeVersion) {
-        return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
-      }
-      const email = normalizarEmailDeContrato(profile.email);
-      if (!email) return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
-      if (invitation && invitation.email_normalized !== email) {
-        return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
-      }
-      // El limitador va antes de mirar si el correo existe: cualquier respuesta
-      // que dependa de eso queda acotada por correo.
-      const limite = await consumeSignupRateLimit(client, { token: invitationToken, email });
-      if (!limite.allowed) {
-        return {
-          status: 429, body: { error: 'too_many_signup_attempts' }, outcome: 'failed',
-          retryAt: limite.retryAt,
-        };
-      }
-      const { rows: destinos } = await client.query(
-        `SELECT id,status,password_hash FROM users
-          WHERE email_normalized=$1 OR lower(email)=$1 LIMIT 2`,
-        [email]
-      );
-      // Copia única y conexión: las dos exigen un correo VERIFICADO. Sin él, la
-      // existencia de una cuenta no se revela nunca.
-      if (profile.email_verified !== true) return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
-      if (destinos.length > 0) {
-        // Addendum 1 · decisión de Mati: correo ya registrado. Nunca se vincula
-        // por email: se emite un intento que SÓLO la contraseña de esa cuenta
-        // completa. Sin contraseña utilizable, cuenta inactiva, vinculación
-        // apagada o correo ambiguo: el opaco de siempre.
-        const destino = destinos.length === 1 ? destinos[0] : null;
-        if (!linkingAvailable || !destino || destino.status !== 'active'
-            || !destino.password_hash) {
-          return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
-        }
-        const linkIntent = randomBytes(32).toString('base64url');
-        await client.query(
-          `INSERT INTO google_continue_link_intents
-             (intent_hash,user_id,provider,subject_namespace,subject,expires_at)
-           VALUES ($1,$2,$3,$4,$5,NOW() + make_interval(secs => $6))`,
-          [tokenHash(linkIntent), destino.id, evidence.provider,
-            evidence.subject_namespace, evidence.subject, LINK_INTENT_TTL_SECONDS]
-        );
-        return {
-          status: 409,
-          body: { error: 'link_required', link_intent: linkIntent },
-          outcome: 'link_required',
-          userId: destino.id,
-        };
-      }
-      const nombres = nombresParaAlta(profile, {
-        firstName: declaredFirstName, lastName: declaredLastName,
-      });
-      if (!nombres) {
-        return { status: 422, body: { error: 'profile_required' }, outcome: 'failed' };
-      }
-
-      const creada = await crearCuentaDesdeContinue(client, {
-        evidence, email, nombres, invitation, vigente, legalAcceptance,
-      });
-      if (!creada) return { ...CONTINUE_FALLA_ALTA, outcome: 'failed' };
-      return {
-        status: 201,
-        body: { ...paymeSessions.sessionResponse(creada.user, creada.session), created: true },
-        outcome: 'created',
-        userId: creada.user.id,
-      };
-    });
+    return await pool.tx((client) => continuarEnTransaccion(client, {
+      evidence,
+      profile,
+      invitationToken,
+      acceptedNoticeVersion,
+      declaredFirstName,
+      declaredLastName,
+      registrationAvailable,
+      linkingAvailable,
+      consumeSignupRateLimit,
+      legalAcceptance,
+      consumir: (c, purpose) => consumeCredential(c, evidence, purpose),
+    }));
   } catch (error) {
-    if (error.code === 'social_auth_failed') throw error;
-    if (error.code === '23505' || error.code === '23514') throw authFailed();
-    throw error;
+    throw errorDeContinuar(error);
   }
 }
 
@@ -666,6 +704,9 @@ async function linkFromContinueIntent({ linkIntent, password }) {
 }
 
 module.exports = {
+  // v2.138.0 · alta en la misma pestaña (services/googleRedirectSignup.js).
+  continuarEnTransaccion,
+  errorDeContinuar,
   registerWithExternalIdentity,
   loginWithExternalIdentity,
   issueLoginCodeWithExternalIdentity,

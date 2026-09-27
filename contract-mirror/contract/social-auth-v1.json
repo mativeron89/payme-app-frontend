@@ -111,6 +111,50 @@
         "too_many_auth_attempts": [429]
       }
     },
+    "google_redirect_signup_start": {
+      "since": "v2.138.0",
+      "method": "POST",
+      "path": "/api/auth/google/redirect",
+      "caller": "Google (modo redirect de GIS) desde el botón de «Crea tu cuenta», con state de alta",
+      "gated_by": "features.google_redirect_signup.enabled; apagado ⇒ el state se ignora y rige google_redirect_login_uri byte a byte",
+      "request": ["credential", "g_csrf_token", "select_by?", "state"],
+      "request_notes": {
+        "state": "alta:<id> con id en [A-Za-z0-9_-]{1,100}. Cualquier otro valor o ausente ⇒ fase 1 («Entrar»)."
+      },
+      "csrf": "el mismo doble envío que google_redirect_login_uri",
+      "success_status": 303,
+      "success_location": "<origen de FRONTEND_PUBLIC_URL>/#google_signup=<código>",
+      "error_location": "<origen de FRONTEND_PUBLIC_URL>/#google_redirect_error=<csrf_failed|social_auth_failed|temporarily_unavailable>",
+      "rule": "decisión 102: verifica con perfil, consume la credencial (purpose redirect) y guarda la identidad pendiente hasta 10 min en google_signup_pending. No crea cuenta ni vínculo ni mira si existe una: el mismo código para todos"
+    },
+    "google_redirect_signup": {
+      "since": "v2.138.0",
+      "method": "POST",
+      "path": "/api/auth/google/redirect/signup",
+      "gated_by": "features.google_redirect_signup.enabled; apagado ⇒ el 404 not_found de siempre",
+      "request": ["code", "accepted_notice_version", "legal_acceptance?", "invitation_token?", "first_name?", "last_name?"],
+      "request_notes": {
+        "code": "el valor del fragmento #google_signup=. Vive 10 min; se guarda sólo su sha256. Un desenlace terminal lo consume (borra la fila); 422 profile_required, 429 y 503 lo dejan vivo hasta 5 intentos.",
+        "resto": "idéntico a google_continue sin id_token: la misma lógica y los mismos desenlaces, con la identidad y el perfil que verificó google_redirect_signup_start"
+      },
+      "success": {
+        "login": { "status": 200, "shape": "session_success_shape + created:false" },
+        "created": { "status": 201, "shape": "session_success_shape + created:true" }
+      },
+      "errors": {
+        "validation_error": [400],
+        "social_auth_failed": [401],
+        "registration_not_available": [403],
+        "link_required": [409],
+        "legal_version_mismatch": [409],
+        "profile_required": [422],
+        "too_many_signup_attempts": [429],
+        "too_many_auth_attempts": [429],
+        "registration_unavailable": [503],
+        "legal_text_unavailable": [503],
+        "rate_limit_unavailable": [503]
+      }
+    },
     "google_continue": {
       "since": "v2.92.0",
       "method": "POST",
@@ -321,6 +365,13 @@
     "payme_session_tokens_in_url": false,
     "code_ttl_seconds": 60,
     "code_single_use": true
+  },
+  "google_redirect_signup_capability": {
+    "since": "v2.138.0",
+    "path": "features.google_redirect_signup",
+    "shape": { "supported": "boolean (true)", "enabled": "boolean" },
+    "enabled_true_when": "GOOGLE_REDIRECT_SIGNUP_ENABLED=true, features.google_redirect.enabled true y el inventario del Aviso vigente declara la frase google_alta_redirect_transitoria presente en el Aviso servido",
+    "absent_means": "backend anterior a v2.138.0: «Crea tu cuenta» con Google en popup"
   },
   "google_continue_capability": {
     "since": "v2.92.0",

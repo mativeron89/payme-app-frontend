@@ -230,6 +230,18 @@ const socialContinue = z.object({
   // v2.129.0 · AB1 · ver registerBase.
   legal_acceptance: z.unknown().optional(),
 }).strict();
+/**
+ * v2.138.0 · decisión 102 · canje del alta con Google en la misma pestaña: el código
+ * del fragmento `#google_signup` más lo mismo que `socialContinue` salvo el id_token.
+ */
+const socialRedirectSignup = z.object({
+  code: z.string().min(20).max(200),
+  invitation_token: z.unknown().optional(),
+  accepted_notice_version: z.string().regex(/^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$/),
+  first_name: profileName.optional(),
+  last_name: profileName.optional(),
+  legal_acceptance: z.unknown().optional(),
+}).strict();
 /** Addendum 1 de AB-07 · completar la conexión con la contraseña de la cuenta. */
 const socialContinueLink = z.object({
   link_intent: z.string().min(20).max(200),
@@ -677,6 +689,7 @@ module.exports = {
   register, registerCompat, registerSchema, birthDateRequeridaEnRegistro,
   altaPublicaHabilitada, FLAG_ALTA_PUBLICA,
   login, refreshToken, socialRegisterSchema, socialLogin, socialContinue, socialContinueLink, socialLink,
+  socialRedirectSignup,
   facebookRegisterStartSchema, facebookLoginStart, facebookComplete,
   facebookSignedRequest,
   recoveryRequest, recoveryComplete, updateMe, updateProfileName,

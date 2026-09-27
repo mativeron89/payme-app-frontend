@@ -10,6 +10,7 @@ const facebookDataRights = require('../services/facebookDataRights');
 const recovery = require('../services/authRecovery');
 const identities = require('../services/externalIdentities');
 const googleRedirect = require('../services/googleRedirect');
+const googleRedirectSignup = require('../services/googleRedirectSignup');
 const legal = require('../services/legal');
 const legalAcceptance = require('../services/legalAcceptance');
 const logger = require('../utils/logger');
@@ -164,6 +165,41 @@ router.post('/google/redirect/redeem', async (req, res, next) => {
   }
 });
 
+/**
+ * v2.138.0 · decisión 102 · canje del alta con Google en la MISMA pestaña. El código lo
+ * dejó el POST del login_uri con `state` de alta (services/googleRedirectSignup.js) con
+ * la identidad ya verificada; acá llegan las casillas y corre la misma lógica que
+ * `/google/continue`, con sus mismos desenlaces. Pasa por `authLimiter`. Apagado ⇒ el 404 de siempre.
+ */
+router.post('/google/redirect/signup', async (req, res, next) => {
+  // Apagado, la ruta no existe: cae al 404 de siempre (con `path`), igual que antes de v2.138.0.
+  if (!googleRedirectSignup.habilitado()) return next('router');
+  return validateBody(schemas.socialRedirectSignup)(req, res, async () => {
+    const aceptacion = aceptacionDelAlta(req, res);
+    if (!aceptacion.ok) return undefined;
+    try {
+      const result = await googleRedirectSignup.canjear({
+        code: req.body.code,
+        invitationToken: req.body.invitation_token,
+        acceptedNoticeVersion: req.body.accepted_notice_version,
+        declaredFirstName: req.body.first_name,
+        declaredLastName: req.body.last_name,
+        legalAcceptance: aceptacion.valor,
+        registrationAvailable: google.capability().registration
+          && !schemas.birthDateRequeridaEnRegistro(),
+        linkingAvailable: google.capability().linking === true,
+        consumeSignupRateLimit: limitadorDeAlta(req),
+      });
+      return responderContinue(res, result, { via: 'redirect' });
+    } catch (error) {
+      if (error.code === 'rate_limit_unavailable') {
+        return res.status(503).json({ error: 'rate_limit_unavailable' });
+      }
+      return legalError(res, error) || socialError(res, error) || next(error);
+    }
+  });
+});
+
 router.post('/google/login', googleDark('login'), validateBody(schemas.socialLogin), async (req, res, next) => {
   try {
     const evidence = await google.verifyIdToken(req.body.id_token);
@@ -187,6 +223,37 @@ router.post('/google/login', googleDark('login'), validateBody(schemas.socialLog
  * alta con el correo verificado. El de login (`authLimiter`) ya cubre
  * `/api/auth/google` en server.js.
  */
+/** El límite de altas por correo, dentro de la transacción del alta (compartido con el canje). */
+function limitadorDeAlta(req) {
+  return async (client, { token, email }) => {
+    try {
+      return await consumeSignupRateLimit({ db: client, token, email });
+    } catch (error) {
+      logger.error('signup_rate_limit_unavailable', {
+        code: error.code, correlation_id: req.correlationId,
+      });
+      throw Object.assign(new Error('rate_limit_unavailable'), { code: 'rate_limit_unavailable' });
+    }
+  };
+}
+
+/** Desenlace del alta en un toque → auditoría y respuesta (compartido con el canje). */
+function responderContinue(res, result, via) {
+  if (result.outcome === 'login') {
+    logger.audit('user_login_external', { user_id: result.userId, provider: 'google', ...via });
+  } else if (result.outcome === 'link_required') {
+    logger.audit('external_identity_link_required', { user_id: result.userId, provider: 'google', ...via });
+  } else if (result.outcome === 'created') {
+    logger.audit('user_registered_external', {
+      user_id: result.userId, provider: 'google', channel: 'google_continue', ...via,
+    });
+  }
+  if (result.status === 429 && result.retryAt) {
+    res.setHeader('Retry-After', Math.max(1, Math.ceil((result.retryAt - Date.now()) / 1_000)));
+  }
+  return res.status(result.status).json(result.body);
+}
+
 router.post('/google/continue', googleDark('login'),
   validateBody(schemas.socialContinue), async (req, res, next) => {
     const aceptacion = aceptacionDelAlta(req, res);
@@ -207,30 +274,9 @@ router.post('/google/continue', googleDark('login'),
           && !schemas.birthDateRequeridaEnRegistro(),
         // Addendum 1 · el pedido de contraseña sólo existe con la vinculación viva.
         linkingAvailable: google.capability().linking === true,
-        consumeSignupRateLimit: async (client, { token, email }) => {
-          try {
-            return await consumeSignupRateLimit({ db: client, token, email });
-          } catch (error) {
-            logger.error('signup_rate_limit_unavailable', {
-              code: error.code, correlation_id: req.correlationId,
-            });
-            throw Object.assign(new Error('rate_limit_unavailable'), { code: 'rate_limit_unavailable' });
-          }
-        },
+        consumeSignupRateLimit: limitadorDeAlta(req),
       });
-      if (result.outcome === 'login') {
-        logger.audit('user_login_external', { user_id: result.userId, provider: 'google' });
-      } else if (result.outcome === 'link_required') {
-        logger.audit('external_identity_link_required', { user_id: result.userId, provider: 'google' });
-      } else if (result.outcome === 'created') {
-        logger.audit('user_registered_external', {
-          user_id: result.userId, provider: 'google', channel: 'google_continue',
-        });
-      }
-      if (result.status === 429 && result.retryAt) {
-        res.setHeader('Retry-After', Math.max(1, Math.ceil((result.retryAt - Date.now()) / 1_000)));
-      }
-      return res.status(result.status).json(result.body);
+      return responderContinue(res, result, {});
     } catch (error) {
       if (error.code === 'rate_limit_unavailable') {
         return res.status(503).json({ error: 'rate_limit_unavailable' });

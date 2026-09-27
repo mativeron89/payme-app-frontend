@@ -6,6 +6,38 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-27** (orden `AF-GOOGLE-ALTA-REDIRECT-CLAUDE-20260927` ·
+  «Crea tu cuenta» con Google en la misma pestaña, decisión 102).
+- Commit exacto y procedencia del CONTENIDO:
+  **`07ab163c7d80b4c2554b8ca60efb7ec22990ce87`** (App Backend **v2.138.0**, commit A:
+  `features.google_redirect_signup`, el `state` `alta:` en `POST /api/auth/google/redirect`,
+  el fragmento `#google_signup` y `POST /api/auth/google/redirect/signup`).
+- Commit del que se tomó el inventario autoritativo:
+  **`e81b7c21e378c7e413eb591f67f9dfe5788ff195`** (v2.138.0, commit B: regenera el
+  inventario sobre `07ab163`), el que el Bibliotecario informó servido.
+  Wire del dueño: `docs/GOOGLE_ALTA_REDIRECT_D102_WIRE.md` en `e81b7c2`, sha256
+  `0844379081bb3e0de5e81cb55d88e38a2ff6c7316fa7206388df765bf5a5818a`.
+
+**121 archivos espejados**, los mismos: no entra ni sale ninguno. Cambian
+`contract/social-auth-v1.json`, `routes/config.js`, `routes/social-auth.js`,
+`schemas/index.js` y `services/externalIdentities.js`.
+
+La fuente se leyó con `git show` sobre objetos del repo del owner, sin tocar su
+árbol ni sus refs.
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | adoptado y verificado 121 · commit `07ab163` · exit 0 |
+| `--integridad` | **OK 121/121** · exit 0 |
+| `--paridad` | **OK 121/121**: espejo = inventario = fuente **en `07ab163`** · exit 0 |
+| vigencia | medida contra el servido **`e81b7c2`** con `git diff --name-only 07ab163 e81b7c2` sobre las 121 rutas: **ninguna cambió**. No se usó `--vigencia`, que mira el HEAD local del owner. |
+
+⚠️ El inventario se toma del commit que lo CONTIENE (`e81b7c2`), no del que
+nombra (`07ab163`): en `07ab163` todavía está el inventario anterior, y adoptarlo
+falla por contenido (pasó en este refresh y la adopción se negó, como debe).
+
+---
+
 - Fecha del refresh: **2026-09-26** (orden `AF-GOOGLE-REDIRECT-CLAUDE-20260926` ·
   ingreso con Google en la misma pestaña, decisiones 92 y 94).
 - Commit exacto y procedencia del CONTENIDO:

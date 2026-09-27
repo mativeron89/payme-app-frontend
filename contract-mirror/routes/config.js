@@ -57,6 +57,7 @@ const WALLET_RAIL = Object.freeze({
 });
 const googleIdentity = require('../services/googleIdentity');
 const googleRedirect = require('../services/googleRedirect');
+const googleRedirectSignup = require('../services/googleRedirectSignup');
 const username = require('../services/username');
 const facebookIdentity = require('../services/facebookIdentity');
 const authRecovery = require('../services/authRecovery');
@@ -173,6 +174,14 @@ router.get('/', (req, res) => {
       google_redirect: {
         supported: true,
         enabled: googleRedirect.habilitado(),
+      },
+      // v2.138.0 · decisión 102 · «Crea tu cuenta» con Google en la misma pestaña.
+      // Bloque hermano, mismo criterio. `enabled` es el valor VIVO: la bandera
+      // GOOGLE_REDIRECT_SIGNUP_ENABLED, el redirect de la fase 1 encendido y un Aviso
+      // vigente que cubra el guardado transitorio. Con `false`, el alta sigue en popup.
+      google_redirect_signup: {
+        supported: true,
+        enabled: googleRedirectSignup.habilitado(),
       },
       // v2.137.0 · decisión 93 · @usuario único. Bloque hermano de primer nivel,
       // mismo criterio que `google_redirect`. `enabled` es el valor VIVO de
