@@ -26,6 +26,7 @@ import { RecoveryScreen } from './screens/RecoveryScreen';
 import { MasScreen } from './screens/MasScreen';
 import { NotificacionesScreen } from './screens/NotificacionesScreen';
 import { PuertaLegal, usePuertaLegal } from './components/PuertaLegal';
+import { PuertaArroba, usePuertaArroba } from './components/PuertaArroba';
 import { TarjetasScreen } from './screens/TarjetasScreen';
 import { TopupScreen } from './screens/TopupScreen';
 import { TransferScreen } from './screens/TransferScreen';
@@ -34,6 +35,12 @@ function Shell() {
   const { session, facebookCallbackPhase, vueltaGoogle, logout } = useAuth();
   // AF2 · LEGAL-3.0.0: la puerta de aceptación para quien ya tiene cuenta.
   const puerta = usePuertaLegal(session);
+  /**
+   * AF-USUARIO-ARROBA · decisión 93 · la pantalla del @ va DESPUÉS de la puerta
+   * legal (wire §3): sólo se consulta cuando la legal de esta sesión ya volvió
+   * abierta. Con `features.username` apagado no pide nada y queda abierta.
+   */
+  const arroba = usePuertaArroba(session, puerta.lista && puerta.estado.fase === 'abierta');
   /**
    * F2 · el corte de pagos lo declara el dueño (`money_rail`), igual que el riel
    * saldo. Se pide acá, en el shell, para que la decisión sea una sola por carga
@@ -197,15 +204,26 @@ function Shell() {
    * canjea, sin pedir el link otra vez. `lista` le dice que no canjee mientras
    * la consulta de esta sesión está en vuelo.
    */
+  // AF-USUARIO-ARROBA · la pantalla del @, con la misma mecánica que la legal.
+  const arrobaCerrada = session && !puertaCerrada && arroba.estado.fase === 'cerrada' ? (
+    <PuertaArroba
+      session={session}
+      onElegido={arroba.abrir}
+      onCerrarSesion={() => { void logout(); }}
+    />
+  ) : null;
+
   if (route.page === 'mesa' && route.param && linkToken) {
     if (puertaCerrada) return puertaCerrada;
+    if (arrobaCerrada) return arrobaCerrada;
     return (
       <JoinMesaScreen
         key={route.param}
         code={route.param}
         token={linkToken}
-        puertaLista={puerta.lista}
+        puertaLista={puerta.lista && arroba.lista}
         onRequiereAceptacion={puerta.reconsultar}
+        onRequiereArroba={arroba.reconsultar}
       />
     );
   }
@@ -213,6 +231,7 @@ function Shell() {
   if (!session) return <LoginScreen />;
 
   if (puertaCerrada) return puertaCerrada;
+  if (arrobaCerrada) return arrobaCerrada;
 
   // Sin copy y sin pantalla: el efecto de arriba ya está redirigiendo.
   if (rutaDelRielSaldo) return null;

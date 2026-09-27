@@ -14,6 +14,7 @@ import { useMoneyRail } from '../api/moneyRail';
 import { fullName } from '../utils/identity';
 import { useProfileIdentityCapability } from '../api/privateFeatures';
 import { useSocialAuthCapability } from '../api/socialAuth';
+import { ArrobaEnConfiguracion } from '../components/ArrobaEnConfiguracion';
 import { CuentasConectadas } from './CuentasConectadas';
 
 /**
@@ -90,6 +91,9 @@ export function MasScreen() {
             <div className="h2">{t('Tu cuenta')}</div>
           </div>
         )}
+        {/* AF-USUARIO-ARROBA · decisión 93 · el @ propio y su cambio (30 días).
+            Con `features.username` apagado no renderiza nada ni pide nada. */}
+        {session && <ArrobaEnConfiguracion session={session} />}
         {!user && (
           <div className="note note-orange" style={{ marginBottom: 12 }}>
             {t('Tus datos van a aparecer aquí en cuanto termines de crear tu cuenta.')}

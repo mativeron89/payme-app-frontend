@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
-import { LEGAL_ACCEPTANCE_REQUIRED } from '../api/http';
+import { LEGAL_ACCEPTANCE_REQUIRED, USERNAME_REQUIRED } from '../api/http';
 import { signupInvitationSnapshot, subscribeSignupInvitation } from '../api/signupInvitation';
 import { useSocialAuthCapability } from '../api/socialAuth';
 import { autoridadDeAlta } from './LoginScreen';
@@ -106,11 +106,19 @@ export function JoinMesaScreen({
   token,
   puertaLista = true,
   onRequiereAceptacion,
+  onRequiereArroba,
 }: {
   code: string;
   token: string;
   puertaLista?: boolean;
   onRequiereAceptacion?: () => void;
+  /**
+   * AF-USUARIO-ARROBA · el dueño contestó 428 `username_required` al canje:
+   * mismo trato que el legal. Se conserva el token y la pantalla del @
+   * reemplaza a ésta; al elegirlo, se canjea con el mismo token. Apagado, el
+   * dueño no lo emite.
+   */
+  onRequiereArroba?: () => void;
 }) {
   const { t } = useIdioma();
   const { session } = useAuth();
@@ -235,6 +243,11 @@ export function JoinMesaScreen({
           onRequiereAceptacion?.();
           return;
         }
+        if (status === 428 && motivo === USERNAME_REQUIRED) {
+          esperandoPuerta.current = true;
+          onRequiereArroba?.();
+          return;
+        }
         if (!alive) return;
         /**
          * Custodia POR RESULTADO, en `invitationCustody.ts`. Los terminales
@@ -256,7 +269,7 @@ export function JoinMesaScreen({
     return () => {
       alive = false;
     };
-  }, [session, token, attempt, puertaLista, onRequiereAceptacion]);
+  }, [session, token, attempt, puertaLista, onRequiereAceptacion, onRequiereArroba]);
 
   /**
    * El nombre del restaurante para §1.2-C, y **sólo** después del canje.

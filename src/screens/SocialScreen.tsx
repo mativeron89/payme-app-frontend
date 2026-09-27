@@ -21,6 +21,7 @@ import {
 } from './friendRequestsView';
 import { FriendAvatarNotice } from '../components/FriendAvatarNotice';
 import { FriendAvatar } from '../components/FriendAvatar';
+import { BuscarPorArroba } from '../components/BuscarPorArroba';
 
 /**
  * §1.9 · La sección social — **UNA pantalla con tres pestañas**: Amigos, Grupos
@@ -427,6 +428,9 @@ export function SocialScreen() {
             {adding && (
               <div className="card card-p" style={{ marginBottom: 12 }}>
                 <div className="sectlabel">{t('Agregar amigo')}</div>
+                {/* AF-USUARIO-ARROBA · decisión 93 · buscar por @ con sugerencias.
+                    Apagado no renderiza nada: queda sólo el campo de siempre. */}
+                {session && <BuscarPorArroba session={session} onEnviada={loadRequests} />}
                 <input
                   className="input"
                   placeholder={t('Email o ID PayMe (payme_mx_xxxx)')}
