@@ -93,13 +93,31 @@ test.describe('Continuar en la mesa (H-14)', () => {
    */
   test('partes iguales: la porción declarada viaja como dato y no altera el casillero', async ({ page }) => {
     await ingresar(page);
-    await page.evaluate(() => {
-      const st = JSON.parse(localStorage.getItem('payme_mock_state_v1')!);
-      const mesa = st.mesas.find((candidate: { code: string }) => candidate.code === 'PA-3121');
+    // AF-HIGIENE-2 · hasta 0.200.0 el N se escribía en el estado GUARDADO del
+    // mock (`localStorage`), que el store en memoria no vuelve a leer sin
+    // recargar: el test corría con N desconocido. Ahora va al store que lee la
+    // app, y se afirma que llegó. Hoy el selector es el mismo con N=4 que sin N
+    // (`porcionesDisponibles`: tope = N ?? 4); el N fija el escenario ante un
+    // cambio de la rama «N desconocido».
+    const nMesa = () => page.evaluate(async () => {
+      const storePath = '/src/api/mock/store.ts';
+      const store = await import(/* @vite-ignore */ storePath) as {
+        state: { mesas: Array<{ code: string; original_participants?: number | null }> };
+      };
+      return store.state.mesas.find((candidate) => candidate.code === 'PA-3121')?.original_participants ?? null;
+    });
+    await page.evaluate(async () => {
+      const storePath = '/src/api/mock/store.ts';
+      const store = await import(/* @vite-ignore */ storePath) as {
+        state: { mesas: Array<{ code: string; original_participants?: number | null }> };
+        persist: () => void;
+      };
+      const mesa = store.state.mesas.find((candidate) => candidate.code === 'PA-3121')!;
       mesa.original_participants = 4;
-      localStorage.setItem('payme_mock_state_v1', JSON.stringify(st));
+      store.persist();
     });
     await page.goto('/#/mesa/PA-3121');
+    expect(await nMesa()).toBe(4);
 
     await page.getByRole('button', { name: 'Omakase para dos', exact: true }).click();
     const fracciones = page.getByRole('radiogroup', { name: 'Porción de Omakase para dos' });

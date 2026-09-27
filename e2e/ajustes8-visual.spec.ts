@@ -86,10 +86,16 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
     await ingresar(page);
     const mesa = await abrirMesaConLink(page, { sinGarantia: true, modo: 'consumo' });
 
+    // AF-HIGIENE-2 · hasta 0.200.0 este cambio NO se persistía, y el `goto` de
+    // abajo es una carga completa (se sale de /scan): el mock releía su estado
+    // guardado y el cambio se perdía. El test corría con todos los platos
+    // libres, nunca con «el último consumo». Ahora se persiste, y abajo se
+    // afirma la precondición.
     await page.evaluate(async (code) => {
       const storePath = '/src/api/mock/store.ts';
       const store = await import(/* @vite-ignore */ storePath) as {
         state: { mesas: Array<{ code: string; items: Array<{ name: string; status?: string; price_cents: number; quantity: number; claims: unknown[] }> }> };
+        persist: () => void;
       };
       const target = store.state.mesas.find((candidate) => candidate.code === code);
       if (!target) throw new Error(`mesa ${code} ausente en el mock`);
@@ -107,6 +113,7 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
           item.status = 'locked';
         }
       }
+      store.persist();
     }, mesa.code);
 
     await page.goto('/#/');
@@ -118,6 +125,12 @@ test.describe('AF-AJUSTES8 · correcciones visuales y acto explícito', () => {
       page.locator('.mesa-selection-scroll .card').first().boundingBox(),
     ]);
     expect((itemsBox?.y ?? 0) - ((titleBox?.y ?? 0) + (titleBox?.height ?? 0))).toBeGreaterThanOrEqual(16);
+
+    // La precondición del nombre del test: Tagliatelle es el ÚLTIMO consumo
+    // libre; todos los demás los tomó otra persona.
+    await expect(page.locator('.qc-renglon [data-estado="libre"]')).toHaveCount(1);
+    await expect(page.locator('.qc-renglon[data-plato="Tagliatelle Bolognese"] [data-estado="libre"]')).toBeVisible();
+    await expect(page.locator('.qc-renglon [data-estado="tomado"]')).not.toHaveCount(0);
 
     const item = page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true });
     expect(await claimsDelItem(page, mesa.code, 'Tagliatelle Bolognese')).toBe(0);
