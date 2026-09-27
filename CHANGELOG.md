@@ -11,6 +11,70 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.196.0 — «¿Qué consumiste?» con el diseño de Claude Design: la porción se elige en el renglón (decisión 90) (2026-09-26)
+
+Orden AF-QUE-CONSUMISTE-CLAUDE-20260926 (sha256 02ec045c…). Decisiones 89 (`0953891a…`) y 90
+(`dafbd58b…`). Diseño `DISENO_CLAUDE_DESIGN_QUE_CONSUMISTE_20260926/` (`PANTALLA-que-consumiste.md`
+sha256 fabae11b…, `App-Que-consumiste.dc.html` 20a0e7ec…). Base `0.195.2` (`382724a`).
+
+- **Se reemplaza**, en «cada uno lo suyo» y en «partes iguales»:
+  - el bloque «¿Cuánto tomas tú?» con seis fracciones, «Otro» y «Tu parte:» que se abría debajo
+    del plato;
+  - la lista con borde punteado, «Elegiste ½» en gris y la X roja.
+- **La lista nueva** (las ocho reglas del diseño):
+  1. todos los renglones miden lo mismo: 48 px, y el propio 44 px dentro de un margen de 3 px;
+     elegir, cambiar la porción o soltar no mueve la lista (medido: ≤ 2 px);
+  2. lo propio queda en su lugar, en teal con borde de 2 px, círculo marcado, la píldora de
+     porción y tu parte en pesos;
+  3. la píldora (o marcar el plato) convierte el renglón en el selector Entero · ½ · ⅓ · ¼ +
+     «Soltar»; al elegir vuelve a su forma. Hay un solo selector abierto a la vez;
+  4. las porciones son las que caben en la mesa y en lo que queda; con una sola opción se marca
+     directo, sin selector;
+  5. «Queda ½» es la misma píldora, sin chevron, junto al precio; tocar el renglón toma lo que queda;
+  6. «Lo eligió otro» en rojo pastel, con candado, sin nombre de quién y sin nada tocable;
+  7. se suelta tocando el círculo marcado o «Soltar»; ya no hay X roja;
+  8. arriba la barra «$X / $840.00 (N%)» y el reloj; abajo «Mi parte · N platos» y «Listo».
+- **Decisión 90:**
+  1. el círculo central dice «Listo», también con los pagos encendidos (donde decía «Continuar»;
+     sigue llevando a pagar);
+  2. porciones Entero, ½, ⅓ y ¼, limitadas por las personas de la mesa (n204) y por lo que queda
+     del plato. ⅔, ¾ y «Otro» salen del selector; una porción ya guardada con ellas se sigue
+     mostrando. Al marcar, la porción inicial es la primera que cabe (Entero, o ½ en un «Queda ½»);
+  3. en «partes iguales» también se elige la porción;
+  4. zona de toque de 44 px (`--tap-min`) en píldora, porciones, «Soltar» y círculo, sin agrandar
+     lo visible;
+  5. el cierre de la mesa sigue la decisión 81.
+- **D79 intacto:** relectura cada 10 s, 409 `informative_fraction_exceeds_item` con su texto,
+  pantalla «La mesa se cerró», el borrador no se pisa. Con la edición bloqueada (leyendo,
+  guardando, sólo lectura) el renglón propio no ofrece nada tocable.
+- **Sin cambio de contrato ni de espejo.**
+- ⚠️ **Desvíos declarados frente al prototipo:**
+  - colores con los tokens de la app en vez de los hex del diseño (mismos roles); el rojo pastel
+    `#FBE7E3` va literal porque no tiene token;
+  - la porción elegida va en azul marino sobre cian (`--action-2-fg`), no blanco, por contraste AA;
+  - el reloj usa `--warning` en vez de `#A87C1F`;
+  - el encabezado conserva el nombre del restaurante de la decisión 77, no el código de mesa;
+  - la barra de arriba muestra lo registrado en el dueño (decisiones 77 y 79). El prototipo suma
+    en vivo también lo que elegiste y todavía no guardaste ($252.50 contra $162.50 en su
+    ejemplo); eso no se cambió, porque sería mostrar como «elegido por la mesa» algo que el resto
+    no ve;
+  - en «partes iguales» el renglón propio NO muestra pesos por plato: la porción es una
+    declaración y se paga el casillero fijo (regla vigente desde `6d32f2e`);
+  - si parte de lo tuyo ya está pagado, el renglón lo dice en una segunda línea («Pagaste ½ ·
+    elegiste ½ más», AF-29): confundir elegido con pagado es confundir plata;
+  - sale el aviso de mesa histórica «Mostramos las porciones disponibles de siempre»: ahora son las
+    mismas cuatro para todas.
+- **Tests:**
+  - `e2e/que-consumiste.spec.ts`: 12 casos, uno por estado y por regla, rojos en la base
+    (12 de 12);
+  - D79 verde (`mesa-compartida-d79`, `informative-selections`);
+  - 19 e2e migrados a la UI nueva sin cambiar lo que miden. Los que ofrecían ⅔, ¾ u «Otro» pasan
+    a las cuatro porciones. Los negativos sobre «Continuar» en la mesa quedaban vacíos y se
+    reemplazan;
+  - 17 mutantes muertos. Uno sobrevivió primero, la X con comillas dobles, que la guarda textual
+    no veía; ahora se vigila el trazo que se pinta;
+  - capturas a 390 lado a lado con el prototipo.
+
 ## 0.195.2 — Pedidos chicos de Mati: nombre del restaurante, aviso de Google, Cuenta e Historial (decisiones 96 a 100) (2026-09-26)
 
 Orden AF-NOMBRE-COMPACTO-CLAUDE-20260926 (sha256 b14de7f6…), con sus cuatro adendas. Base
