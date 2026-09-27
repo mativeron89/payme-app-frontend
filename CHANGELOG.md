@@ -11,6 +11,41 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.200.1 — Las ventanas del refresco de la mesa, cerradas en los e2e; y dos e2e que no ejercitaban lo que dicen (2026-09-27)
+
+Orden AF-HIGIENE-2-CLAUDE-20260927 (sha256 2dac3730…). Base `0.200.0` (`478e94d`). Sólo pruebas: sin cambios de
+producto.
+
+1. **Las ocho ventanas del censo de 0.200.0.** Tests que mutan el mock y después tocan una acción. El refresco de la
+   mesa (cada 10 s y al volver el foco) podía leer la mutación antes de la respuesta.
+   - **Siete** (barra-items 409, listo × 2, soltar × 3, cerrar-mesa): el helper `sinRefresco` (`e2e/_app.ts`)
+     declara la pestaña oculta mientras dura la mutación, la acción y su aserción, y con la pestaña oculta el refresco
+     no corre. No toca timers, latencia ni producto.
+   - **mesa-compartida-d79 F-1**, que prueba el refresco en sí: el reloj falso se pausa antes de montar la mesa y
+     todo corre en tiempo falso. Su «todavía no» ahora puede fallar, porque `runFor` corre también la lectura del
+     mock.
+   - **Sondas** (temporales), con el orden viejo contra el nuevo:
+
+     | sonda | viejo | nuevo |
+     |---|---|---|
+     | tick forzado en la ventana | 18 de 21 fallan | 21 de 21 |
+     | tormenta de `focus` con CPU ×6 | 4 de 35 fallan | 35 de 35 |
+     | d79 con 11 s reales de máquina lenta | 3 de 3 fallan | 3 de 3 |
+
+     Con el tick forzado, barra-items pasa en el viejo, pero el refresco cambió el renglón antes de la acción.
+   - Sin timeouts más largos ni reintentos.
+2. **Dos e2e que no ejercitaban lo que dicen:**
+   - `ajustes8-visual` V03/V05 no persistía el «último consumo» y corría con todos los platos libres. Ahora lo
+     persiste y afirma la precondición.
+   - `mesa-igual-continuar` escribía el N en el estado guardado y no en el store que lee la app. Ahora lo pone en el
+     store y afirma que llegó.
+   - Declarado: hoy el selector es el mismo con N=4 que sin N.
+- **Mutantes:**
+  - intervalo de refresco a 5 s: cazado por d79;
+  - sin persist: cazado por ajustes8;
+  - N a `localStorage`: cazado por mesa-igual;
+  - `sinRefresco` dejando la pestaña visible: bajo el tick forzado caen 6 de 7, como el viejo.
+
 ## 0.200.0 — El alta con Google tras «Entrar» sin cuenta, en la misma pestaña; y tres pruebas que fallaban solas o pasaban vacías (2026-09-27)
 
 Orden AF-HIGIENE-ALTA-CLAUDE-20260927 (sha256 5222caa8…). Base `0.199.0` (`ddbbd13`). Un commit por punto.
