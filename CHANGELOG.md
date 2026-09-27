@@ -11,6 +11,69 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.197.0 — @usuario, lado de la app (decisión 93), APAGADO detrás de `features.username` (2026-09-27)
+
+Orden AF-USUARIO-ARROBA-CLAUDE-20260927 (sha256 96275c12…). Decisión 93 (`341968d4…`). Dueño servido
+App Backend v2.137.0 (`a8987b06`), wire `docs/USERNAME_D93_WIRE.md` (`792e7f8b…`). Base `0.196.0`
+(`c801bcf`).
+
+- 🔴 **Todo cuelga de `features.username.enabled`. Hoy el dueño lo sirve en `false`, y apagada la app
+  queda exactamente igual:**
+  - no pide nada del @ ni muestra nada del @;
+  - el DOM de Ingreso, Inicio, Configuración y «Agregar amigo» es idéntico, byte por byte, al de
+    `0.196.0`. Con el flag encendido, la misma comparación da distinto: es un control positivo;
+  - no se agrega ninguna request: la capability no pide su propio `/config`. La alimenta la fachada con
+    cada config que ya llega. Sólo tras un 428 `username_required` (que el dueño emite únicamente
+    encendido) se relee.
+- **Espejo:** ya estaba completo desde `ba4568c` (inventario de `a8987b0`). Medido de nuevo: 121/121
+  archivos iguales al servido `a8987b06`, con la misma población y los mismos sha que declara el
+  inventario del dueño. No se tocó.
+- **Pantalla «Elige tu @usuario»** (`components/PuertaArroba.tsx`):
+  - misma mecánica que la puerta legal y **después** de ella; también antes del canje del link de
+    invitación, conservando el token;
+  - propone el @ sugerido del dueño;
+  - valida el formato mientras se escribe: minúsculas, números, punto y guion bajo, de 3 a 20, sin
+    punto en el borde; normaliza como el dueño (`@MatiVeron` → `mativeron`);
+  - guarda con `PUT`;
+  - no deja seguir sin @: sólo «Continuar» o «Cerrar sesión»;
+  - el 428 `username_required` se maneja como el legal, en la capa http y en el canje del link.
+- **Configuración** (`components/ArrobaEnConfiguracion.tsx`):
+  - muestra el @ propio;
+  - «Cambiar» sólo si el dueño lo permite. Si no, dice desde cuándo, con la fecha que manda el dueño
+    (`next_change_at`, en hora de México);
+  - si el dueño contesta `username_change_too_soon` al guardar, se muestra su fecha y se relee el @
+    real.
+- **Amigos › Agregar amigo** (`components/BuscarPorArroba.tsx`):
+  - consulta desde 3 caracteres del alfabeto del @, esperando 350 ms a que se deje de escribir;
+  - muestra hasta 5 resultados, en el orden del dueño, con foto, nombre y @;
+  - la foto se pide sólo si el resultado dice `has_avatar`, y cualquier 404 deja las iniciales
+    (regla de n164, del dueño);
+  - el mail nunca: el decodificador rechaza la respuesta entera si un resultado trae una clave de más;
+  - «Agregar» manda exactamente `{ username }` y la fila queda «Enviada»;
+  - el 429 del límite por cuenta se dice;
+  - la búsqueda por correo o ID de siempre queda como está.
+- **Mock:**
+  - seam `payme.app.mock.username.v1`;
+  - el @ propio queda guardado por titular;
+  - hay un directorio de @ con siete coincidencias para «mar» y una cuenta menor;
+  - las rutas del @ respetan la puerta legal, como el dueño.
+- **Textos nuevos, en tú y en inglés:** propuestos en el CIERRE para aprobación. El encendido espera al
+  Aviso nuevo y a la prueba de Mati.
+- **Pruebas:**
+  - unit: `username.test.ts` (formato, capability, decodificadores, fecha) y
+    `http.usernameGate.test.ts` (el 428 y que no se cruza con el legal);
+  - e2e `usuario-arroba.spec.ts`, 14 casos:
+    - apagado sin cambios, con el espía puesto al salir y volver a entrar;
+    - la puerta y su validación;
+    - «no disponible»;
+    - el orden legal → @;
+    - el link y su 428;
+    - el cambio con los 30 días y el «demasiado pronto» del dueño;
+    - la búsqueda (3+, una sola consulta al escribir seguido, 5, sin mail, foto con n164, 429);
+    - la solicitud por @;
+  - DOM contra `0.196.0`: idéntico apagado; distinto encendido, como control;
+  - 20 mutantes, todos cazados por el test que nombra su regla.
+
 ## 0.196.0 — «¿Qué consumiste?» con el diseño de Claude Design: la porción se elige en el renglón (decisión 90) (2026-09-26)
 
 Orden AF-QUE-CONSUMISTE-CLAUDE-20260926 (sha256 02ec045c…). Decisiones 89 (`0953891a…`) y 90
