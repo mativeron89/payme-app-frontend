@@ -11,6 +11,51 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.202.0 — Una pestaña vieja se actualiza sola en el ingreso (2026-09-27)
+
+Orden AF-VERSION-NUEVA-CLAUDE-20260927 (sha256 37f9203b…). Base `0.201.0` (`be701fb`). Es la sugerencia del CIERRE
+de AF-ALTA-POPUP-D106: el 400 de Mati corrió, casi seguro, en una pestaña con JS viejo, y un arreglo publicado no le
+llega a JS que ya está cargado.
+
+1. **La versión que corre y la publicada.**
+   - La que corre va embebida en el bundle (`__APP_VERSION__`).
+   - La publicada es `/version.json`: la emite el build y la sirve el servidor de desarrollo.
+   - Las dos salen del mismo `package.json`, en `vite.config.ts`.
+   - **Cabecera en el hosting:** `vercel.ts` suma una regla exacta, sólo en el proyecto App:
+     `/version.json → Cache-Control: no-store`. Además la app la pide con `cache: 'no-store'`. El service worker no
+     la toca (sólo cachea `/assets/*-<hash>` y los íconos).
+2. **Dónde revisa.**
+   - Sólo el ingreso que monta la app (Entrar y Crea tu cuenta), al montar y al volver a la pestaña
+     (`visibilitychange` y `pageshow` del bfcache).
+   - El ingreso que aparece dentro del link de una mesa no revisa, y fuera del ingreso no hay ni un pedido.
+3. **Cuándo recarga:** sólo si la publicada es MÁS NUEVA, y una vez por versión publicada en cada pestaña.
+   - **Sin bucle:** la marca vive en `sessionStorage` y se escribe y relee antes de recargar. Si después de recargar
+     sigue viniendo el JS viejo (un CDN a medio propagar), no hay otra recarga. Sin `sessionStorage` no hay recarga.
+   - **Nunca pierde nada:** no recarga con algo escrito o marcado, con un cartel a la vista, con un paso de Google, un
+     código o un token en memoria, ni con algo en vuelo.
+   - **Sin respuesta o con una rara, nada:** red, estado, otro media type (una SPA que contesta HTML), forma o tiempo.
+- **Guardas:** las de despliegue y del artefacto fijan la regla nueva y el único `.json` (`version.json`, con la
+  versión del `package.json`) exactos; ninguna se afloja. El lease sumó `scripts/*.test.ts` al alcance
+  (2026-09-27T20:22:28Z). Los docs de despliegue quedan fuera del lease y no se tocaron.
+- **Mutantes:** 17 plantados, 17 cazados, leyendo qué test cae.
+  - nunca recarga;
+  - sin la guarda del bucle;
+  - sin releer la marca;
+  - cualquier diferencia es «nueva»;
+  - sin storage recarga igual;
+  - media type por prefijo;
+  - caché por defecto;
+  - sin `visibilitychange` o sin `pageshow`;
+  - no mira si es seguro;
+  - lo escrito no cuenta;
+  - el canje no cuenta (sus dos términos van juntos: con un código en memoria la pantalla siempre está en un paso de
+    canje);
+  - el link de mesa también recarga;
+  - la app no la habilita;
+  - Vercel sin `no-store`;
+  - el build no emite la versión;
+  - la versión embebida de otro lado.
+
 ## 0.201.0 — Con el alta de Google en la misma pestaña, ningún Google en popup; y el @ se cambia desde un lápiz (2026-09-27)
 
 Orden AF-ALTA-POPUP-D106-CLAUDE-20260927 (sha256 9dd02d52…). Decisiones 92, 102, 103 y 106. Base `0.200.1`
