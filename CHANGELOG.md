@@ -11,6 +11,56 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.199.0 — El @ en lugar del código `payme_…`, en toda la app (decisión 104) (2026-09-27)
+
+Orden AF-USERNAME-D104-CLAUDE-20260927 (sha256 977b31b3…). Decisión 104 (`87a65d18…`): «que el usuario esté abajo
+del nombre, oculta el ID que se le asigna, no hace falta mostrarlo» («Sí, en toda la app»). Dueño App Backend
+v2.139.0 (`7f080cd5`), publicado y **sin desplegar**; wire `docs/USERNAME_EN_LISTAS_D104_WIRE.md` (`a9f09c45…`). Base
+`0.198.1` (`a7cbe1e`).
+
+- 🔴 **Tolerante antes del deploy del dueño.** Los dos decodificadores estrictos aceptan `username` como clave
+  opcional (ausente, string o `null`):
+  - solicitudes recibidas (`requests[].user`);
+  - «Quiénes se sumaron» (`participants[]`), sobre las dos formas que ya aceptaba.
+
+  Es la única clave nueva: otra de más, o un `username` que no sea string ni `null`, sigue rechazando la respuesta.
+  Las salientes siguen siendo recibos opacos.
+- **Debajo del nombre va el @, y el código nunca:**
+  - en Configuración, el @ propio. Es el mismo que lee «Tu @usuario», sin request nueva, y un cambio se ve en los
+    dos lugares;
+  - en Amigos: la lista, los integrantes de un grupo, «Agregar del listado de amigos» y las solicitudes recibidas;
+  - al invitar amigos a una mesa, en amigos y en grupos;
+  - en «Quiénes se sumaron».
+- **Cuándo no se muestra nada** (ni la línea vacía): sin @ (ausente o `null`), mal formado, que empiece por «payme»
+  (reservado por el dueño) o con `features.username` apagada.
+  - En «Quiénes se sumaron», a una persona sin nombre se la muestra por su @, o como «Sin nombre». Ya no por el
+    código.
+  - `payme_id` sigue siendo la clave interna para invitar y sumar. Las vistas de solicitudes y de participantes ya
+    no lo transportan.
+- **Buscadores y campos:**
+  - el filtro de Amigos y el de invitar buscan por nombre y por @, ya no por el código;
+  - el campo de «Nuevo amigo» dice «Email» (antes «Email o ID PayMe (payme_mx_xxxx)»), y sigue aceptando un ID;
+  - el buscador de invitar dice «Buscar por nombre o @», o «Buscar por nombre» con el @ apagado.
+- **Fuera:** `TransferScreen` (riel wallet dormido, no navegable) conserva el código sin tocar.
+- **Espejo** owner-first al inventario de `7f080cd` (contenido de `ef3dac4`). Son 121 archivos, los mismos, y cambian
+  5: `contract/social-auth-v1.json`, `routes/config.js`, `routes/friends.js`, `routes/groups.js` y
+  `routes/mesas.js`. `--adoptar-inventario`, `--integridad` y `--paridad` dan OK 121/121.
+- **Integrantes de grupo sin `email`** (aviso del Bibliotecario): el dueño dejó de mandarlo el 10/08 (`c66443b`),
+  pero el tipo lo seguía declarando y el mock lo seguía mandando. Salió de los dos; la app nunca lo mostró.
+- **Mock:**
+  - amigos, solicitudes entrantes, grupos y participantes traen `username` como v2.139.0;
+  - Leo Paz y Renata no tienen @;
+  - seam `payme.app.mock.listas_sin_arroba.v1` para el dueño anterior (sin la clave);
+  - costura de participantes `sin_nombre`: dos cuentas vivas sin nombre, una con @ y otra sin.
+- **e2e** `arroba-en-listas.spec.ts`: las cuatro pantallas con el AB nuevo, el viejo y el @ apagado. «payme_» no
+  aparece en pantalla, ni como texto ni como ejemplo de un campo.
+- **Mutantes:** 26, todos cazados por su test. M25 (la fila sin nombre vuelve a mostrar el código) sobrevivió a
+  la primera ronda porque ningún fixture tenía una cuenta viva sin nombre; lo cierra la costura `sin_nombre`.
+- **Declarado, sin corregir:** en `af-rediseno-12-chrome.spec.ts`, «sin prometer edición» sólo pasa si se evalúa
+  antes de que llegue `profile_identity`, que el mock sirve encendida desde `6beab65` (25/08). Se conservó el
+  mismo momento de evaluación.
+- **Textos nuevos** (propuestos en el CIERRE): «Buscar por nombre o @» y «Buscar por nombre».
+
 ## 0.198.1 — Alta con Google en redirect sin popup mientras carga el aviso; mock con el @ encendido (decisión 103) (2026-09-27)
 
 Misma orden AF-GOOGLE-ALTA-REDIRECT-CLAUDE-20260927. Decisión 103 de Mati (`d819c45c…`, 27/09): «No lo dejes
