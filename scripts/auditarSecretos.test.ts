@@ -583,58 +583,136 @@ describe('auditoría de secretos', () => {
     });
   });
 
-  it('el instrumento corre limpio sobre la documentación REAL del repo', () => {
-    // 🔴 ESTE ES EL HUECO QUE LA SUITE NO VEÍA, y costó un rojo real: 15/15 en
-    // verde con fixtures sintéticos mientras `auditar-secretos.sh origin/main`
-    // salía 1. **Los fixtures ejercitaban el patrón; nadie ejercitaba el
-    // documento.** El CHANGELOG que describe este mismo arreglo citaba el
-    // ejemplo que NO hay que eximir, y el gate lo marcaba: el instrumento se
-    // trabó con el texto que lo describe.
-    //
-    // La lista se DERIVA de git en vez de escribirse a mano: un archivo nuevo
-    // queda cubierto sin que nadie se acuerde de agregarlo acá. Se excluye
-    // `contract-mirror/` porque es del dueño del contrato y este repo no puede
-    // editarlo — una guarda que se pone roja sobre algo que no podés tocar no
-    // es una guarda, es un bloqueo.
-    const listado = spawnSync(
-      'git',
-      ['ls-files', '--', '*.md', ':(exclude)contract-mirror/*'],
-      { cwd: RAIZ, encoding: 'utf8' },
-    );
-    expect(listado.status, listado.stderr).toBe(0);
-    const documentos = listado.stdout.split('\n').filter(Boolean);
-    expect(documentos.length, 'no se encontró documentación que auditar').toBeGreaterThan(0);
-    expect(documentos).toContain('CHANGELOG.md');
+  // 🔴 ESTE ES EL HUECO QUE LA SUITE NO VEÍA, y costó un rojo real: 15/15 en
+  // verde con fixtures sintéticos mientras `auditar-secretos.sh origin/main`
+  // salía 1. **Los fixtures ejercitaban el patrón; nadie ejercitaba el
+  // documento.** El CHANGELOG que describe este mismo arreglo citaba el
+  // ejemplo que NO hay que eximir, y el gate lo marcaba: el instrumento se
+  // trabó con el texto que lo describe.
+  //
+  // La lista se DERIVA de git en vez de escribirse a mano: un archivo nuevo
+  // queda cubierto sin que nadie se acuerde de agregarlo acá. Se excluye
+  // `contract-mirror/` porque es del dueño del contrato y este repo no puede
+  // editarlo — una guarda que se pone roja sobre algo que no podés tocar no
+  // es una guarda, es un bloqueo.
+  //
+  // AF-HIGIENE-ALTA · punto 2 (2026-09-27). Hasta 0.199.0 era UN solo test que
+  // auditaba todo junto: 22 documentos, 1,07 MB (el 77 % es el CHANGELOG), 2,5 s
+  // locales y 4,38 s en el CI contra el límite de 5 s de vitest, y crecía con
+  // cada entrada. Los tres patrones de asignación con `-i` son 1,8 s de esos
+  // 2,5, y son lineales en el tamaño. **El universo NO cambia**: los mismos
+  // documentos y los mismos bytes, pasados por el MISMO script, que no se toca.
+  // Lo que cambia es que se parten en tramos de a lo sumo 128 KiB cortados por
+  // LÍNEA, uno por test. El script decide línea por línea (cada patrón, la
+  // partición espejo/resto, `SECRETOS_DEMO_RAILWAY`), así que la unión de los
+  // tramos audita exactamente lo mismo que el todo. El tiempo de cada test
+  // queda acotado por el tramo, no por el CHANGELOG: lo que crece es la
+  // CANTIDAD de tramos. Que los tramos reconstruyan cada documento byte a byte
+  // se prueba abajo, y un control positivo prueba que el armado puede ponerse
+  // rojo.
+  describe('la documentación REAL del repo, en tramos acotados', () => {
+    const TRAMO_MAX_BYTES = 128 * 1024;
 
-    const dir = mkdtempSync(join(tmpdir(), 'payme-secret-docs-'));
-    temporales.push(dir);
-    mkdirSync(join(dir, 'scripts'), { recursive: true });
-    copyFileSync(SCRIPT, join(dir, 'scripts', 'auditar-secretos.sh'));
-    writeFileSync(join(dir, '.keep'), 'baseline\n');
-    git(dir, 'init', '-q');
-    git(dir, 'config', 'user.email', 'probe@payme.invalid');
-    git(dir, 'config', 'user.name', 'PayMe probe');
-    git(dir, 'add', '--', '.keep', 'scripts/auditar-secretos.sh');
-    git(dir, 'commit', '-qm', 'baseline');
-    const base = git(dir, 'rev-parse', 'HEAD');
-
-    for (const documento of documentos) {
-      const destino = join(dir, documento);
-      mkdirSync(dirname(destino), { recursive: true });
-      copyFileSync(join(RAIZ, documento), destino);
+    interface Parte {
+      readonly documento: string;
+      readonly desde: number;
+      readonly hasta: number;
+      readonly texto: string;
     }
-    git(dir, 'add', '--', ...documentos);
-    git(dir, 'commit', '-qm', 'documentacion real');
 
-    const result = spawnSync('bash', ['scripts/auditar-secretos.sh', base], {
-      cwd: dir,
-      encoding: 'utf8',
+    function documentosAuditables(): string[] {
+      const listado = spawnSync(
+        'git',
+        ['ls-files', '--', '*.md', ':(exclude)contract-mirror/*'],
+        { cwd: RAIZ, encoding: 'utf8' },
+      );
+      return listado.status === 0 ? listado.stdout.split('\n').filter(Boolean) : [];
+    }
+
+    /**
+     * Cada documento se corta por línea en partes de a lo sumo `max` bytes (una
+     * sola línea más larga que `max` queda sola, entera). Las partes chicas se
+     * juntan en el mismo tramo, sin repetir documento: en el repo temporal la
+     * ruta de cada documento es una sola.
+     */
+    function tramosDe(documentos: readonly string[], max: number): Parte[][] {
+      const tramos: Parte[][] = [];
+      let actual: Parte[] = [];
+      let bytes = 0;
+      const cerrar = () => {
+        if (actual.length > 0) tramos.push(actual);
+        actual = [];
+        bytes = 0;
+      };
+      for (const documento of documentos) {
+        const lineas = readFileSync(join(RAIZ, documento), 'utf8').split(/(?<=\n)/);
+        let i = 0;
+        while (i < lineas.length) {
+          const desde = i;
+          let texto = '';
+          let tamano = 0;
+          while (i < lineas.length) {
+            const linea = lineas[i]!;
+            const b = Buffer.byteLength(linea);
+            if (texto.length > 0 && tamano + b > max) break;
+            texto += linea;
+            tamano += b;
+            i += 1;
+          }
+          if (bytes + tamano > max || actual.some((p) => p.documento === documento)) cerrar();
+          actual.push({ documento, desde: desde + 1, hasta: i, texto });
+          bytes += tamano;
+        }
+      }
+      cerrar();
+      return tramos;
+    }
+
+    function auditarTramo(tramo: readonly Parte[]) {
+      const { dir, base } = repoConArchivos(Object.fromEntries(tramo.map((p) => [p.documento, p.texto])));
+      return spawnSync('bash', ['scripts/auditar-secretos.sh', base], { cwd: dir, encoding: 'utf8' });
+    }
+
+    const DOCUMENTOS = documentosAuditables();
+    const TRAMOS = tramosDe(DOCUMENTOS, TRAMO_MAX_BYTES);
+
+    it('el universo: todos los .md versionados fuera de contract-mirror/, y los tramos los reconstruyen byte a byte', () => {
+      expect(DOCUMENTOS.length, 'no se encontró documentación que auditar').toBeGreaterThan(0);
+      expect(DOCUMENTOS).toContain('CHANGELOG.md');
+      const reconstruido = new Map<string, string>();
+      for (const tramo of TRAMOS) {
+        const tamano = tramo.reduce((n, p) => n + Buffer.byteLength(p.texto), 0);
+        const unaLinea = tramo.length === 1 && tramo[0]!.desde === tramo[0]!.hasta;
+        expect(tamano <= TRAMO_MAX_BYTES || unaLinea, `tramo de ${tamano} bytes`).toBe(true);
+        expect(new Set(tramo.map((p) => p.documento)).size).toBe(tramo.length);
+        for (const p of tramo) reconstruido.set(p.documento, (reconstruido.get(p.documento) ?? '') + p.texto);
+      }
+      expect([...reconstruido.keys()].sort()).toEqual([...DOCUMENTOS].sort());
+      for (const documento of DOCUMENTOS) {
+        expect(reconstruido.get(documento) === readFileSync(join(RAIZ, documento), 'utf8'), documento).toBe(true);
+      }
     });
 
-    expect(
-      result.status,
-      `la documentación real dispara el gate:\n${result.stdout}${result.stderr}`,
-    ).toBe(0);
+    it('control positivo: el mismo armado, con una línea con forma de secreto agregada, se pone rojo', () => {
+      // Se arma en runtime, como los demás, para que este archivo no lo contenga.
+      const secretoFalso = ['sk', 'live', 'A'.repeat(24)].join('_');
+      const [primera, ...resto] = TRAMOS[0]!;
+      const result = auditarTramo([{ ...primera!, texto: `${primera!.texto}\nclave: ${secretoFalso}\n` }, ...resto]);
+      expect(`${result.stdout}${result.stderr}`).toContain('VALOR con forma de secreto');
+      expect(result.status).toBe(1);
+    });
+
+    it.each(TRAMOS.map((tramo, i) => [
+      `${i + 1}/${TRAMOS.length}`,
+      tramo.map((p) => `${p.documento}:${p.desde}-${p.hasta}`).join(' '),
+      tramo,
+    ] as const))('tramo %s (%s) corre limpio', (_n, _desc, tramo) => {
+      const result = auditarTramo(tramo);
+      expect(
+        result.status,
+        `la documentación real dispara el gate:\n${result.stdout}${result.stderr}`,
+      ).toBe(0);
+    });
   });
 
   it('CI entrega una base alcanzable y no vacía tanto en push como en PR', () => {
