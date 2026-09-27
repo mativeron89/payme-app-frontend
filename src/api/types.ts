@@ -1170,6 +1170,12 @@ export interface Friend {
   first_name: string;
   last_name: string;
   full_name: string;
+  /**
+   * AF-USERNAME-D104 · App Backend v2.139.0, con `features.username`
+   * encendida: el @ sin «@», o `null` si no eligió uno. Ausente con un dueño
+   * anterior o con la bandera apagada. Se muestra SÓLO vía `arrobaVisible`.
+   */
+  username?: string | null;
   /** Solo en GET /friends: `responded_at` de la amistad, o `created_at`. */
   added_at?: string;
 }
@@ -1267,7 +1273,19 @@ export interface GroupsResponse {
 /** GET /api/groups/:id. */
 export interface GroupDetailResponse {
   group: { id: string; name: string; icon: string };
-  members: Array<{ id: string; payme_id: string; first_name: string; last_name: string; email: string }>;
+  /**
+   * Las cuatro claves del dueño (`contract-mirror/routes/groups.js`), más
+   * `username` con la bandera encendida. Sin `email`: el dueño dejó de mandarlo
+   * el 10/08 (`c66443b`) y hasta 0.198.1 este tipo lo seguía declarando.
+   */
+  members: Array<{
+    id: string;
+    payme_id: string;
+    first_name: string;
+    last_name: string;
+    /** AF-USERNAME-D104 · igual que `Friend.username`. */
+    username?: string | null;
+  }>;
 }
 
 // ─── Notifications (routes/notifications.js) ───────────────

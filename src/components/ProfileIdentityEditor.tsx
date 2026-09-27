@@ -10,6 +10,7 @@ import {
   validateAvatarInput,
 } from '../api/profileIdentity';
 import { isCurrentSession, loadSession, type StoredSession } from '../api/storage';
+import { useArrobaPropia } from '../api/username';
 import type { User } from '../api/types';
 import { extractApiError } from '../api/errors';
 import { useIdioma } from '../i18n/idioma';
@@ -53,6 +54,12 @@ export function ProfileIdentityEditor({
   const principalId = session.principal_id;
   const avatarRevision = user?.avatar?.revision ?? null;
   const fullName = user ? `${user.first_name} ${user.last_name}` : t('PayMe');
+  /**
+   * AF-USERNAME-D104 · decisión 104: debajo del nombre, el @ propio en lugar del
+   * `payme_id`. Lo lee la tarjeta «Tu @usuario» (sin request nueva); apagado,
+   * sin elegir o todavía sin leer, no se muestra nada.
+   */
+  const arrobaPropia = useArrobaPropia(principalId);
 
   const refreshProfileAfterMutation = useCallback(async (
     origin: StoredSession,
@@ -296,7 +303,7 @@ export function ProfileIdentityEditor({
         </div>
       )}
 
-      {user && <div className="profile-payme-id">{user.payme_id}</div>}
+      {user && arrobaPropia && <div className="profile-arroba">{arrobaPropia}</div>}
       {/* M03 · LEGAL-3.0.0 (AF2): el campo de fecha de nacimiento se retiró.
           La mayoría de edad se declara al aceptar el paquete legal (decisión 39);
           el dueño deja de leer la fecha y la borra en AB2. */}

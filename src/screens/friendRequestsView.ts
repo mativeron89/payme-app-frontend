@@ -41,7 +41,12 @@ export interface IncomingRowView {
   userId: string;
   fullName: string;
   firstName: string;
-  paymeId: string;
+  /**
+   * AF-USERNAME-D104 · el @ crudo del dueño (sin «@»), o `null`. Hasta 0.198.1
+   * esta vista llevaba el `payme_id` para mostrarlo; la decisión 104 lo saca de
+   * la pantalla y la vista ya no lo transporta. Se muestra vía `arrobaVisible`.
+   */
+  username: string | null;
 }
 
 /**
@@ -62,7 +67,7 @@ export function incomingRowView(r: IncomingFriendRequest): IncomingRowView {
     userId: r.user.id,
     fullName: r.user.full_name,
     firstName: r.user.first_name,
-    paymeId: r.user.payme_id,
+    username: r.user.username ?? null,
   };
 }
 

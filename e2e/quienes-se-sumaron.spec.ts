@@ -45,13 +45,17 @@ async function pedidos(page: Page): Promise<number> {
 const seccion = (page: Page) => page.getByRole('region', { name: 'Quiénes se sumaron' });
 
 test.describe('AF-25 · quiénes se sumaron (n72)', () => {
-  test('el organizador ve nombre, apellido e identificador, y nada más', async ({ page }) => {
+  test('el organizador ve nombre, apellido y @, y nada más', async ({ page }) => {
     await ingresar(page);
     await page.goto('/#/mesa/PA-2847');
     const lista = seccion(page);
     await expect(lista.getByText('Luis Cárdenas', { exact: true })).toBeVisible();
-    await expect(lista.getByText('payme_mx_luis', { exact: true })).toBeVisible();
+    // AF-USERNAME-D104 · decisión 104: debajo del nombre, el @ (Luis eligió
+    // uno; Renata no, y debajo de ella no va nada). El código, nunca.
+    await expect(lista.getByText('@luis.cardenas', { exact: true })).toBeVisible();
     await expect(lista.getByText('Renata Ortiz', { exact: true })).toBeVisible();
+    await expect(lista.locator('.quien-id')).toHaveCount(1);
+    await expect(lista).not.toContainText('payme_');
     // AF-32 (aviso 2.5.3): Luis tiene foto y la ve el organizador, como `blob:`
     // en memoria; Renata no tiene, y va con sus iniciales. Sin plata.
     await expect(lista.locator('img')).toHaveCount(1);

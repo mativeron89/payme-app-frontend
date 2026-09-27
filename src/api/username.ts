@@ -237,3 +237,73 @@ export function recargarUsernameCapability(): Promise<void> {
 export function useUsernameCapability(): UsernameCapability {
   return useSyncExternalStore(subscribeUsername, usernameSnapshot, usernameSnapshot);
 }
+
+// ─── Decisión 104 · el @ en lugar del código `payme_…` ─────────────────────
+
+/**
+ * AF-USERNAME-D104 · decisión 104 de Mati: «que el usuario esté abajo del
+ * nombre, oculta el ID que se le asigna, no hace falta mostrarlo» («Sí, en toda
+ * la app»). Wire del dueño: App Backend v2.139.0 (`7f080cd5`),
+ * `docs/USERNAME_EN_LISTAS_D104_WIRE.md` (sha256 a9f09c45…).
+ *
+ * Lo ÚNICO que se muestra de una persona debajo de su nombre: `@usuario` si el
+ * dueño mandó un @ con formato válido y la capability está encendida; si no,
+ * `null` y no se muestra nada. **Nunca el `payme_id`**: sigue viajando como
+ * clave interna (invitar, sumar a un grupo), pero ninguna pantalla lo recibe
+ * de esta función. Ausente, `null`, mal formado o apagado dan lo mismo.
+ */
+export function arrobaVisible(username: unknown, habilitado: boolean): string | null {
+  if (!habilitado || typeof username !== 'string' || !formatoValido(username)) return null;
+  // El dueño reserva todo @ que EMPIECE por «payme» (`services/username.js`,
+  // `reservado()`, en `7f080cd`; no está espejado): uno así nunca es un @ elegido. Si llegara —un código puesto
+  // por error en `username`—, se trata como ausente: el código no se pinta.
+  if (username.startsWith('payme')) return null;
+  return `@${username}`;
+}
+
+/**
+ * ¿Coincide el filtro con el @ de la persona? Con o sin la `@` adelante. Filtrar
+ * por el `payme_id` —que ya no se ve— devolvía amigos sin explicar por qué.
+ */
+export function arrobaCoincide(username: unknown, habilitado: boolean, filtroPlegado: string): boolean {
+  const visible = arrobaVisible(username, habilitado);
+  // `@mativeron` contiene tanto «mati» como «@mati».
+  return visible !== null && filtroPlegado.length > 0 && visible.includes(filtroPlegado);
+}
+
+/**
+ * El @ PROPIO, debajo del nombre en Configuración. Lo lee UNA vez la tarjeta
+ * «Tu @usuario» (`GET /api/account/username`, la misma request de siempre) y lo
+ * publica acá; la cabecera lo toma de este store en vez de pedirlo otra vez. Va
+ * atado a la cuenta (`principal_id`): con otra sesión no se ve el @ anterior.
+ */
+interface ArrobaPropia { readonly principal: string; readonly username: string | null }
+let propia: ArrobaPropia | null = null;
+const propiaListeners = new Set<() => void>();
+
+export function publicarArrobaPropia(principal: string, username: string | null): void {
+  if (propia?.principal === principal && propia.username === username) return;
+  propia = { principal, username };
+  for (const listener of [...propiaListeners]) listener();
+}
+
+function subscribePropia(listener: () => void): () => void {
+  propiaListeners.add(listener);
+  return () => { propiaListeners.delete(listener); };
+}
+
+function propiaSnapshot(): ArrobaPropia | null {
+  return propia;
+}
+
+export function resetArrobaPropiaForTests(): void {
+  propia = null;
+  for (const listener of [...propiaListeners]) listener();
+}
+
+/** `@usuario` propio de ESTA cuenta, o `null` (apagado, sin elegir, sin leer todavía). */
+export function useArrobaPropia(principal: string): string | null {
+  const { enabled } = useUsernameCapability();
+  const actual = useSyncExternalStore(subscribePropia, propiaSnapshot, propiaSnapshot);
+  return actual?.principal === principal ? arrobaVisible(actual.username, enabled) : null;
+}

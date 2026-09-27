@@ -69,11 +69,20 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     await page.getByRole('button', { name: 'Más', exact: true }).click();
 
     await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
-    await expect(page.getByText('payme_mx_mati', { exact: true }).first()).toBeVisible();
+    // AF-USERNAME-D104: hasta 0.198.1 esta espera era el `payme_mx_mati` debajo
+    // del nombre, que se pinta en el MISMO render que esta línea. Se conserva el
+    // momento exacto de las dos aserciones siguientes: con `profile_identity`
+    // encendida en el mock (desde `6beab65`, 25/08) sólo pasan si se evalúan
+    // antes de que llegue la capability. Declarado en el CIERRE de D104; no se
+    // corrige acá.
+    await expect(page.locator('.profile-name-line')).toBeVisible();
     await expect(page.getByRole('button', { name: /Editar|Cambiar foto/i })).toHaveCount(0);
     await expect(page.locator('input[type="file"]')).toHaveCount(0);
     await expect(page.getByText('Modo demo:', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Reiniciar la demo', exact: true })).toBeVisible();
+    // AF-USERNAME-D104 · decisión 104: debajo del nombre, el @; el código, nunca.
+    await expect(page.locator('.profile-arroba')).toHaveText('@mativeron');
+    await expect(page.getByText(/payme_/)).toHaveCount(0);
   });
 
   test('Garantía deja la nota fija separada del círculo a 375 × 667', async ({ page }) => {

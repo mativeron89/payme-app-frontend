@@ -4,7 +4,7 @@ import { AvatarObjectUrlLease } from './profileIdentity';
 import type { Participante } from './participantes';
 
 const persona = (id: string | null, hasAvatar: boolean): Participante => ({
-  firstName: 'Ana', lastName: 'Pérez', paymeId: 'payme_ap', participantId: id, hasAvatar,
+  firstName: 'Ana', lastName: 'Pérez', paymeId: 'payme_ap', participantId: id, hasAvatar, username: null,
 });
 
 function armar(pedir: (id: string) => Promise<Blob>) {

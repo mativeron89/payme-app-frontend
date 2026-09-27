@@ -22,6 +22,8 @@ import {
 import { FriendAvatarNotice } from '../components/FriendAvatarNotice';
 import { FriendAvatar } from '../components/FriendAvatar';
 import { BuscarPorArroba } from '../components/BuscarPorArroba';
+import { arrobaCoincide, useUsernameCapability } from '../api/username';
+import { ArrobaDebajo } from '../components/ArrobaDebajo';
 
 /**
  * §1.9 · La sección social — **UNA pantalla con tres pestañas**: Amigos, Grupos
@@ -78,6 +80,11 @@ export function SocialScreen() {
   const [friends, setFriends] = useState<Friend[] | null>(null);
   const [friendsRevision, setFriendsRevision] = useState(0);
   const [filtroAmigos, setFiltroAmigos] = useState('');
+  /**
+   * AF-USERNAME-D104 · decisión 104: debajo del nombre va el @ (`ArrobaDebajo`),
+   * nunca el `payme_id`, y el filtro busca por lo que se ve.
+   */
+  const { enabled: arrobaHabilitada } = useUsernameCapability();
   const [adding, setAdding] = useState(false);
   const [newQuery, setNewQuery] = useState('');
   const [busy, setBusy] = useState(false);
@@ -257,7 +264,9 @@ export function SocialScreen() {
         // C4 (v2.29): `email` salió del contrato, del resultado y del criterio.
         // Buscar por substring de correo confirmaba su existencia carácter a
         // carácter. No se repone del lado del front.
-        fold(f.payme_id).includes(fold(filtroAmigos)),
+        // AF-USERNAME-D104: se filtra por el @ que se VE, no por el `payme_id`,
+        // que dejó de verse (encontraba amigos sin explicar por qué).
+        arrobaCoincide(f.username, arrobaHabilitada, fold(filtroAmigos)),
     )
     .sort((a, b) => alfabetico(a.full_name, b.full_name)) ?? null;
 
@@ -305,7 +314,7 @@ export function SocialScreen() {
                   <div className="n">
                     {m.first_name} {m.last_name}
                   </div>
-                  <div className="id">{m.payme_id}</div>
+                  <ArrobaDebajo username={m.username} />
                 </div>
                 <button
                   className="back-btn"
@@ -347,7 +356,7 @@ export function SocialScreen() {
                     <Avatar name={f.full_name} />
                     <div className="fr-name">
                       <div className="n">{f.full_name}</div>
-                      <div className="id">{f.payme_id}</div>
+                      <ArrobaDebajo username={f.username} />
                     </div>
                     <span className="badge badge-teal">{t('+ sumar')}</span>
                   </button>
@@ -431,9 +440,12 @@ export function SocialScreen() {
                 {/* AF-USUARIO-ARROBA · decisión 93 · buscar por @ con sugerencias.
                     Apagado no renderiza nada: queda sólo el campo de siempre. */}
                 {session && <BuscarPorArroba session={session} onEnviada={loadRequests} />}
+                {/* AF-USERNAME-D104: el ejemplo `payme_mx_xxxx` era el único
+                    código que quedaba a la vista. El campo sigue aceptando un
+                    ID si alguien lo tiene; el @ se busca en el campo de arriba. */}
                 <input
                   className="input"
-                  placeholder={t('Email o ID PayMe (payme_mx_xxxx)')}
+                  placeholder={t('Email')}
                   value={newQuery}
                   onChange={(e) => setNewQuery(e.target.value)}
                 />
@@ -481,7 +493,7 @@ export function SocialScreen() {
                   <FriendAvatar friendId={f.id} name={f.full_name} refreshToken={friendsRevision} />
                   <div className="fr-name">
                     <div className="n">{f.full_name}</div>
-                    <div className="id">{f.payme_id}</div>
+                    <ArrobaDebajo username={f.username} />
                   </div>
                   {walletRailEnabled && (
                     <button
@@ -668,7 +680,7 @@ function SolicitudesPanel({
               <Avatar name={r.fullName} />
               <div className="fr-name">
                 <div className="n">{r.fullName}</div>
-                <div className="id">{r.paymeId}</div>
+                <ArrobaDebajo username={r.username} />
               </div>
               <div className="fr-actions">
                 <button

@@ -7,6 +7,7 @@ import {
   fechaDeCambio,
   normalizarUsername,
   problemaDeFormato,
+  publicarArrobaPropia,
   useUsernameCapability,
   type EstadoUsername,
 } from '../api/username';
@@ -35,6 +36,14 @@ function FilaArroba({ session }: { readonly session: StoredSession }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+
+  // AF-USERNAME-D104 · el mismo @ que se ve acá va debajo del nombre, en la
+  // cabecera de Configuración (`ProfileIdentityEditor`): una lectura, dos lugares.
+  const principal = session.principal_id;
+  const leido = estado?.username;
+  useEffect(() => {
+    if (leido !== undefined) publicarArrobaPropia(principal, leido);
+  }, [principal, leido]);
 
   useEffect(() => {
     let vivo = true;

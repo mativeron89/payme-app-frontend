@@ -123,21 +123,37 @@ function isoTimestamp(value: unknown): value is string {
     && Number.isFinite(Date.parse(value));
 }
 
+const FRIEND_IDENTITY_KEYS = ['id', 'payme_id', 'first_name', 'last_name', 'full_name'] as const;
+
+/**
+ * AF-USERNAME-D104 · App Backend v2.139.0 suma `username` a `requests[].user`
+ * con `features.username` encendida (wire §2): el @ sin «@», o `null` si la
+ * persona no eligió uno. Es la ÚNICA clave opcional; las otras cinco siguen
+ * exactas y una clave de más —un `email`— sigue rechazando la respuesta. Este
+ * AF se publica ANTES del deploy del dueño: si el decodificador siguiera
+ * exigiendo cinco claves, las solicitudes recibidas caerían a error el día que
+ * se despliegue.
+ */
 function friendIdentity(value: unknown): IncomingFriendRequest['user'] | null {
   const user = record(value);
+  const conArroba = user !== null && Object.prototype.hasOwnProperty.call(user, 'username');
   if (!user
-      || !exactKeys(user, ['id', 'payme_id', 'first_name', 'last_name', 'full_name'])
+      || !exactKeys(user, conArroba ? [...FRIEND_IDENTITY_KEYS, 'username'] : FRIEND_IDENTITY_KEYS)
       || !uuid(user.id)
       || !nonEmpty(user.payme_id)
       || !nonEmpty(user.first_name)
       || !nonEmpty(user.last_name)
-      || !nonEmpty(user.full_name)) return null;
+      || !nonEmpty(user.full_name)
+      // String o `null`, nada más. Qué string se MUESTRA lo decide
+      // `arrobaVisible` (formato del wire §2): un @ raro no tira la lista.
+      || (conArroba && user.username !== null && typeof user.username !== 'string')) return null;
   return {
     id: user.id,
     payme_id: user.payme_id,
     first_name: user.first_name,
     last_name: user.last_name,
     full_name: user.full_name,
+    ...(conArroba ? { username: user.username as string | null } : {}),
   };
 }
 

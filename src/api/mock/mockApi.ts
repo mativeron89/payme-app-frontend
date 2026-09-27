@@ -477,6 +477,23 @@ export function usernameMock(): boolean {
 }
 
 /**
+ * AF-USERNAME-D104 · seam del dueño ANTERIOR a v2.139.0 (el servido hoy,
+ * `96634167`): con el @ encendido, las listas llegan SIN la clave `username`.
+ * Sólo con el `'true'` exacto; por defecto, la forma de v2.139.0.
+ */
+export const CLAVE_LISTAS_SIN_ARROBA_MOCK = 'payme.app.mock.listas_sin_arroba.v1';
+
+/**
+ * Lo que el dueño v2.139.0 agrega a cada persona de amigos, solicitudes
+ * entrantes, grupos y participantes: `{ username }` (el @, o `null`) sólo con
+ * `USERNAME_ENABLED`; apagado —o con el seam del dueño anterior— nada.
+ */
+function arrobaEnListaMock(payme: string | null): { username: string | null } | Record<string, never> {
+  if (!usernameMock() || leerSeam(CLAVE_LISTAS_SIN_ARROBA_MOCK) === 'true') return {};
+  return { username: arrobaPorPaymeMock(payme) };
+}
+
+/**
  * El dueño guarda sólo el sha256 del código, con vencimiento a 60 s y
  * `consumed_at` (decisión 94, `google_redirect_codes`). El mock hace lo mismo,
  * y lo guarda en `localStorage` porque la vuelta es un documento NUEVO (el 303
@@ -2745,7 +2762,8 @@ export async function mockReleaseItems(
  * sumó todavía. Costura `payme.app.mock.participantes.v1`:
  * `error` (500), `antiguo` (404: backend anterior a v2.101.0), `vacio` y
  * `variedad` (suma un invitado sin cuenta y una cuenta eliminada, con la forma
- * EXACTA que deja la anonimización del dueño).
+ * EXACTA que deja la anonimización del dueño) y `sin_nombre` (AF-USERNAME-D104:
+ * dos cuentas vivas sin nombre, una sin @ y otra con @).
  */
 const CLAVE_PARTICIPANTES = 'payme.app.mock.participantes.v1';
 const PARTICIPANTES_SEED: Record<string, Array<{ first_name: string | null; last_name: string | null; payme_id: string | null }>> = {
@@ -2789,7 +2807,15 @@ export async function mockMesaParticipants(
         { first_name: null, last_name: null, payme_id: null },
         { first_name: 'Cuenta', last_name: 'eliminada', payme_id: null },
       ]
-    : base;
+    // AF-USERNAME-D104 · cuentas vivas SIN nombre: una sin @ (hasta 0.198.1 se
+    // la mostraba por su código) y otra con @ (se la muestra por su @).
+    : costura === 'sin_nombre'
+      ? [
+          ...base,
+          { first_name: '', last_name: '', payme_id: 'payme_mx_sinnom' },
+          { first_name: '', last_name: '', payme_id: 'payme_mx_solo' },
+        ]
+      : base;
   // AF-32 · v2.110.0 · la forma NUEVA (participant_id + has_avatar), salvo con
   // la costura `forma_vieja` (backend v2.101.0–v2.109.0). Con foto sólo quienes
   // estén en FOTOS_MOCK: el resto (menor, sin fecha, sin foto, invitado o cuenta
@@ -2801,6 +2827,8 @@ export async function mockMesaParticipants(
           participant_id: idDeParticipanteMock(code, i),
           ...p,
           has_avatar: p.payme_id !== null && FOTOS_MOCK.has(p.payme_id),
+          // AF-USERNAME-D104 · v2.139.0: invitado y cuenta eliminada, `null`.
+          ...arrobaEnListaMock(p.payme_id),
         })),
   });
 }
@@ -4217,7 +4245,10 @@ export async function mockFriends(): Promise<FriendsResponse> {
   // C3: el contrato de amigos ya no lleva `email`. Se proyecta explícitamente
   // para que el mock no pueda filtrarlo por descuido.
   return delay({
-    friends: state.friends.map(({ email: _email, ...persona }) => persona),
+    friends: state.friends.map(({ email: _email, ...persona }) => ({
+      ...persona,
+      ...arrobaEnListaMock(persona.payme_id),
+    })),
   });
 }
 
@@ -4384,7 +4415,6 @@ const DIRECTORIO_ARROBA_MOCK: ReadonlyArray<{
   { username: 'sofi.fernandez', first_name: 'Sofía', last_name: 'Fernández', foto: 'visible', payme: 'payme_mx_sofi' },
   { username: 'juan.lopez', first_name: 'Juan', last_name: 'López', foto: 'visible', payme: 'payme_mx_juan' },
   { username: 'maria.ruiz', first_name: 'María', last_name: 'Ruiz', foto: 'sin_foto', payme: 'payme_mx_maru' },
-  { username: 'leo.paz', first_name: 'Leo', last_name: 'Paz', foto: 'sin_foto', payme: 'payme_mx_leop' },
   { username: 'valentina.rios', first_name: 'Valentina', last_name: 'Ríos', foto: 'sin_foto', payme: 'payme_mx_vale' },
   { username: 'nicolas.salas', first_name: 'Nicolás', last_name: 'Salas', foto: 'sin_foto', payme: 'payme_mx_nico' },
   { username: 'mariana', first_name: 'Mariana', last_name: 'Gómez', foto: 'visible' },
@@ -4394,6 +4424,23 @@ const DIRECTORIO_ARROBA_MOCK: ReadonlyArray<{
   { username: 'marta.s', first_name: 'Marta', last_name: 'Sosa', foto: 'sin_foto' },
   { username: 'martina', first_name: 'Martina', last_name: 'Pérez', foto: 'menor' },
 ];
+
+/**
+ * AF-USERNAME-D104 · gente de las mesas del mock que no está en el store pero sí
+ * eligió su @ (Luis). Leo Paz (amigo) y Renata (mesa) NO tienen @: son los que
+ * ejercitan «sin @, no se ve nada».
+ */
+const ARROBAS_DE_MESA_MOCK: Readonly<Record<string, string>> = {
+  payme_mx_luis: 'luis.cardenas',
+  // Costura `sin_nombre` de participantes: la cuenta sin nombre que sí tiene @.
+  payme_mx_solo: 'solo.arroba',
+};
+
+/** El @ de una persona del mock por su `payme_id`, o `null` si no eligió uno. */
+function arrobaPorPaymeMock(payme: string | null): string | null {
+  if (payme === null) return null;
+  return DIRECTORIO_ARROBA_MOCK.find((d) => d.payme === payme)?.username ?? ARROBAS_DE_MESA_MOCK[payme] ?? null;
+}
 
 /** Reservados del mock: un subconjunto del dueño, más todo lo que empiece por «payme». */
 const RESERVADOS_MOCK = new Set(['payme', 'admin', 'soporte', 'ayuda', 'api', 'www']);
@@ -4525,6 +4572,7 @@ export function mockFriendRequests(direction: FriendRequestDirection): Promise<F
           first_name: request.person.first_name,
           last_name: request.person.last_name,
           full_name: request.person.full_name,
+          ...arrobaEnListaMock(request.person.payme_id),
         },
         requested_at: request.requested_at,
       })),
@@ -4599,8 +4647,10 @@ export async function mockGroupDetail(id: string): Promise<GroupDetailResponse> 
       payme_id: m.payme_id,
       first_name: m.first_name,
       last_name: m.last_name,
-      // Grupos SÍ conserva el correo (contract-mirror/routes/groups.js).
-      email: m.email,
+      // AF-USERNAME-D104 · como el dueño (`contract-mirror/routes/groups.js`,
+      // desde `c66443b`, 10/08): el correo del integrante NO sale. Hasta
+      // 0.198.1 el mock lo seguía mandando; la app nunca lo mostró.
+      ...arrobaEnListaMock(m.payme_id),
     })),
   });
 }

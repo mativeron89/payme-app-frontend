@@ -97,6 +97,49 @@ describe('G-25 · incoming conserva identidad y acciones', () => {
   });
 });
 
+/**
+ * AF-USERNAME-D104 · App Backend v2.139.0 (`7f080cd5`) suma `username` a
+ * `requests[].user` con la bandera encendida (wire §2). El AF se publica ANTES
+ * del deploy del dueño: si este decodificador siguiera exigiendo cinco claves,
+ * «Solicitudes» caería a error ese día.
+ */
+describe('AF-USERNAME-D104 · incoming tolera `username`, y sólo eso', () => {
+  const incoming = (user: unknown) => friendRequestsResponse({
+    direction: 'incoming',
+    requests: [{ id: RECEIPT_ID, user, requested_at: REQUESTED_AT }],
+  }, 'incoming');
+
+  it('lee el @ (string), el `null` y la ausencia (dueño anterior o bandera apagada)', () => {
+    expect(incoming({ ...PERSON, username: 'vale.rios' }).requests[0]!.user.username).toBe('vale.rios');
+    expect(incoming({ ...PERSON, username: null }).requests[0]!.user.username).toBeNull();
+    const sinClave = incoming(PERSON).requests[0]!.user;
+    expect('username' in sinClave).toBe(false);
+  });
+
+  it('🔴 lo demás sigue exacto: otra clave de más, o `username` de otro tipo, rechazan la respuesta', () => {
+    for (const malo of [
+      { ...PERSON, username: 1 },
+      { ...PERSON, username: {} },
+      { ...PERSON, username: 'vale.rios', email: 'v@r.mx' },
+      { ...PERSON, usuario: 'vale.rios' },
+      { id: PERSON_ID, first_name: 'Valentina', last_name: 'Ríos', full_name: 'Valentina Ríos', username: 'vale.rios' },
+    ]) {
+      expect(() => incoming(malo), JSON.stringify(malo)).toThrow('contract_response_invalid:friends/requests');
+    }
+  });
+
+  it('🔴 un saliente con `user` sigue siendo un error, también con `username`', () => {
+    expect(() => friendRequestsResponse({
+      direction: 'outgoing',
+      requests: [{ id: RECEIPT_ID, user: { ...PERSON, username: 'vale.rios' }, requested_at: REQUESTED_AT }],
+    }, 'outgoing')).toThrow('contract_response_invalid:friends/requests');
+    expect(() => friendRequestsResponse({
+      direction: 'outgoing',
+      requests: [{ id: RECEIPT_ID, username: 'vale.rios', requested_at: REQUESTED_AT }],
+    }, 'outgoing')).toThrow('contract_response_invalid:friends/requests');
+  });
+});
+
 describe('G-25 · DELETE confirma antes de retirar', () => {
   it('acepta únicamente el 200 contractual exacto', () => {
     expect(friendRequestCancelledResponse({ cancelled: true })).toEqual({ cancelled: true });

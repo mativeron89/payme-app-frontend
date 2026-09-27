@@ -90,8 +90,9 @@ test('Configuración edita nombre/foto y propaga el nombre a reload y otra pesta
 
   await expect(page.getByText('Nombre actualizado ✓')).toBeVisible();
   await expect(page.locator('.hdr-user')).toHaveText('Renata Nueva');
-  await expect(page.locator('.profile-payme-id')).toHaveText('payme_mx_mati');
-  await expect(page.locator('.hdr')).not.toContainText('payme_mx_mati');
+  // AF-USERNAME-D104 · decisión 104: debajo del nombre va el @ propio, no el código.
+  await expect(page.locator('.profile-arroba')).toHaveText('@mativeron');
+  await expect(page.locator('body')).not.toContainText('payme_mx_mati');
   await expect(sibling.locator('.hdr-user')).toHaveText('Renata Nueva');
 
   const phonePhoto = Buffer.concat([
@@ -114,7 +115,8 @@ test('Configuración edita nombre/foto y propaga el nombre a reload y otra pesta
   await page.reload();
   await expect(page.locator('.hdr-user')).toHaveText('Renata Nueva');
   await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
-  await expect(page.locator('.profile-payme-id')).toHaveText('payme_mx_mati');
+  await expect(page.locator('.profile-arroba')).toHaveText('@mativeron');
+  await expect(page.locator('body')).not.toContainText('payme_mx_mati');
 });
 
 test('Notificaciones abre sólo el detalle acreditado y presenta el residual legacy literal', async ({ page }) => {

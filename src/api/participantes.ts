@@ -12,6 +12,8 @@
  * visible, nunca una foto mostrada sin decidir.
  */
 
+import { arrobaVisible } from './username';
+
 export interface Participante {
   readonly firstName: string | null;
   readonly lastName: string | null;
@@ -27,6 +29,12 @@ export interface Participante {
    * backend anterior, `false`.
    */
   readonly hasAvatar: boolean;
+  /**
+   * AF-USERNAME-D104 · v2.139.0 con `features.username` encendida: el @ sin
+   * «@», o `null` (sin elegir, invitado o eliminada). `null` también con un
+   * dueño anterior, que no lo manda. Se muestra SÓLO vía `arrobaVisible`.
+   */
+  readonly username: string | null;
 }
 
 function objetoPlano(v: unknown): v is Record<string, unknown> {
@@ -54,11 +62,19 @@ export function decodeParticipantes(raw: unknown): readonly Participante[] {
     // claves) y la de v2.110.0, que suma `participant_id` y `has_avatar`. Un
     // decodificador que sólo aceptara la vieja rechazaría la nueva, y la
     // sección entera pasaría a error el día que se publique el backend.
-    const vieja = objetoPlano(p) && clavesExactas(p, ['first_name', 'last_name', 'payme_id']);
+    //
+    // AF-USERNAME-D104 · v2.139.0 suma `username` (string o `null`) con la
+    // bandera encendida. Es la ÚNICA clave opcional, sobre cualquiera de las
+    // dos formas; todo lo demás sigue exacto. Este AF se publica antes del
+    // deploy del dueño: si no, «Quiénes se sumaron» caería a error ese día.
+    const conArroba = objetoPlano(p) && Object.prototype.hasOwnProperty.call(p, 'username');
+    const extra: readonly string[] = conArroba ? ['username'] : [];
+    const vieja = objetoPlano(p) && clavesExactas(p, ['first_name', 'last_name', 'payme_id', ...extra]);
     const nueva = objetoPlano(p)
-      && clavesExactas(p, ['participant_id', 'first_name', 'last_name', 'payme_id', 'has_avatar']);
+      && clavesExactas(p, ['participant_id', 'first_name', 'last_name', 'payme_id', 'has_avatar', ...extra]);
     if (!objetoPlano(p) || (!vieja && !nueva)
-        || !textoONulo(p.first_name) || !textoONulo(p.last_name) || !textoONulo(p.payme_id)) {
+        || !textoONulo(p.first_name) || !textoONulo(p.last_name) || !textoONulo(p.payme_id)
+        || (conArroba && !textoONulo(p.username))) {
       throw new Error('participants_response_malformed');
     }
     if (nueva && (typeof p.participant_id !== 'string' || p.participant_id.length === 0
@@ -71,6 +87,7 @@ export function decodeParticipantes(raw: unknown): readonly Participante[] {
       paymeId: p.payme_id,
       participantId: nueva ? (p.participant_id as string) : null,
       hasAvatar: nueva ? p.has_avatar === true : false,
+      username: conArroba ? (p.username as string | null) : null,
     };
   });
 }
@@ -83,16 +100,29 @@ export function decodeParticipantes(raw: unknown): readonly Participante[] {
  *   identificador. Se reconoce por esa forma EXACTA, no sólo por el `null` del
  *   identificador: una cuenta viva sin identificador mostraría su nombre, no
  *   «Cuenta eliminada».
- * - Cualquier otro: nombre y apellido, y el identificador si lo hay.
+ * - Cualquier otro: nombre y apellido, y debajo el @ si lo hay.
+ *
+ * 🔴 AF-USERNAME-D104 · decisión 104: la fila de una persona ya NO lleva el
+ * `payme_id`. Hasta 0.198.1 lo mostraba debajo del nombre, y EN LUGAR del
+ * nombre cuando faltaba. El tipo no tiene dónde ponerlo: una pantalla no puede
+ * mostrar lo que no recibe. `paymeId` sigue sirviendo sólo para reconocer al
+ * invitado y a la eliminada.
  */
 export type FilaParticipante =
   | { readonly tipo: 'invitado' }
   | { readonly tipo: 'eliminada' }
-  | { readonly tipo: 'persona'; readonly nombre: string | null; readonly paymeId: string | null };
+  | { readonly tipo: 'persona'; readonly nombre: string | null; readonly arroba: string | null };
 
-export function filaDeParticipante(p: Pick<Participante, 'firstName' | 'lastName' | 'paymeId'>): FilaParticipante {
+export function filaDeParticipante(
+  p: Pick<Participante, 'firstName' | 'lastName' | 'paymeId' | 'username'>,
+  arrobaHabilitada: boolean,
+): FilaParticipante {
   if (p.firstName === null && p.lastName === null && p.paymeId === null) return { tipo: 'invitado' };
   if (p.paymeId === null && p.firstName === 'Cuenta' && p.lastName === 'eliminada') return { tipo: 'eliminada' };
   const nombre = [p.firstName, p.lastName].filter((x): x is string => !!x && x.trim().length > 0).join(' ');
-  return { tipo: 'persona', nombre: nombre.length > 0 ? nombre : null, paymeId: p.paymeId };
+  return {
+    tipo: 'persona',
+    nombre: nombre.length > 0 ? nombre : null,
+    arroba: arrobaVisible(p.username, arrobaHabilitada),
+  };
 }

@@ -319,7 +319,7 @@ test.describe('AF-DISENO-02 · composición ratificada de las seis pantallas', (
     await expect(amigosTab).toHaveAttribute('aria-selected', 'true');
     await expect(gruposTab).toHaveAttribute('aria-selected', 'false');
     await expect(page.getByRole('tabpanel')).toHaveCount(1);
-    await expect(page.getByPlaceholder('Buscar por nombre o ID')).toBeVisible();
+    await expect(page.getByPlaceholder('Buscar por nombre o @', { exact: true })).toBeVisible();
     await gruposTab.click();
     await expect(gruposTab).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByPlaceholder('Buscar grupo por nombre')).toBeVisible();

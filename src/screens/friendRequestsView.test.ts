@@ -68,10 +68,21 @@ describe('solicitud ENTRANTE · sí lleva identidad, y es deliberado', () => {
    * y sin nombre el destinatario no puede decidir si aceptar. Lo que no se
    * muestra es a quien todavía no hizo nada.
    */
-  it('conserva nombre y payme_id para poder decidir', () => {
+  it('conserva el nombre para poder decidir', () => {
     const v = incomingRowView(SOLICITUD_ENTRANTE);
     expect(v.fullName).toBe('Valentina Ríos');
-    expect(v.paymeId).toBe('payme_mx_vale');
+  });
+
+  it('🔴 AF-USERNAME-D104 · lleva el @ del dueño, y el `payme_id` ya no llega a la vista', () => {
+    // Hasta 0.198.1 la vista transportaba el `payme_id` para mostrarlo. La
+    // decisión 104 lo saca de la pantalla: la vista no tiene dónde ponerlo.
+    const conArroba = incomingRowView({ ...SOLICITUD_ENTRANTE, user: { ...PERSONA, username: 'vale.rios' } });
+    expect(conArroba.username).toBe('vale.rios');
+    expect(JSON.stringify(conArroba)).not.toContain(PERSONA.payme_id);
+    // Dueño anterior (sin la clave) o sin @ elegido: `null`, nunca el código.
+    expect(incomingRowView(SOLICITUD_ENTRANTE).username).toBeNull();
+    expect(incomingRowView({ ...SOLICITUD_ENTRANTE, user: { ...PERSONA, username: null } }).username).toBeNull();
+    expect(JSON.stringify(incomingRowView(SOLICITUD_ENTRANTE))).not.toContain(PERSONA.payme_id);
   });
 
   it('separa el id de la SOLICITUD del id de la PERSONA', () => {

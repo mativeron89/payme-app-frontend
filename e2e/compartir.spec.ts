@@ -32,7 +32,7 @@ test.describe('Compartir · selector progresivo y ausencias deliberadas', () => 
     await expect(amigos).toHaveAttribute('aria-selected', 'true');
     await expect(grupos).toHaveAttribute('aria-selected', 'false');
     await expect(page.getByRole('tabpanel')).toHaveCount(1);
-    await expect(page.getByPlaceholder('Buscar por nombre o ID')).toBeVisible();
+    await expect(page.getByPlaceholder('Buscar por nombre o @', { exact: true })).toBeVisible();
 
     const [amigosBox, gruposBox] = await Promise.all([amigos.boundingBox(), grupos.boundingBox()]);
     expect(amigosBox).not.toBeNull();

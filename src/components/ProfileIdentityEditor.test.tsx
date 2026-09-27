@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { StoredSession } from '../api/storage';
+import {
+  applyUsernameConfig,
+  publicarArrobaPropia,
+  resetArrobaPropiaForTests,
+  resetUsernameForTests,
+} from '../api/username';
 import { ProfileIdentityEditor } from './ProfileIdentityEditor';
 
 const SESSION: StoredSession = {
@@ -21,28 +27,60 @@ const SESSION: StoredSession = {
 
 const source = readFileSync(new URL('./ProfileIdentityEditor.tsx', import.meta.url), 'utf8');
 
+afterEach(() => {
+  resetUsernameForTests();
+  resetArrobaPropiaForTests();
+});
+
+const encender = () => applyUsernameConfig({ features: { username: { supported: true, enabled: true } } });
+
 describe('ProfileIdentityEditor · superficie DARK y lifecycle privado', () => {
   it('OFF conserva identidad de sólo lectura y no crea controles ni input de archivo', () => {
     const html = renderToStaticMarkup(
       <ProfileIdentityEditor session={SESSION} enabled={false} adoptUser={() => true} />,
     );
     expect(html).toContain('Sofía Fernández');
-    expect(html).toContain('payme_mx_a1b2');
+    // AF-USERNAME-D104 · decisión 104: el código ya no se muestra.
+    expect(html).not.toContain('payme_');
     expect(html).not.toContain('profile-avatar-edit');
     expect(html).not.toContain('profile-name-edit');
     expect(html).not.toContain('type="file"');
     expect(html).not.toContain('Eliminar foto');
   });
 
-  it('ON de prueba monta los controles sin volver editable el payme_id', () => {
+  it('ON de prueba monta los controles, y el payme_id no aparece ni editable ni a la vista', () => {
     const html = renderToStaticMarkup(
       <ProfileIdentityEditor session={SESSION} enabled adoptUser={() => true} />,
     );
     expect(html).toContain('profile-avatar-edit');
     expect(html).toContain('profile-name-edit');
     expect(html).toContain('type="file"');
-    expect(html).toContain('payme_mx_a1b2');
-    expect(html).not.toContain('value="payme_mx_a1b2"');
+    expect(html).not.toContain('payme_');
+  });
+
+  it('🔴 AF-USERNAME-D104 · debajo del nombre va el @ propio de ESTA cuenta, con la capability encendida', () => {
+    encender();
+    publicarArrobaPropia(SESSION.principal_id, 'sofi.fer');
+    const html = renderToStaticMarkup(
+      <ProfileIdentityEditor session={SESSION} enabled={false} adoptUser={() => true} />,
+    );
+    expect(html).toContain('<div class="profile-arroba">@sofi.fer</div>');
+    expect(html).not.toContain('payme_');
+  });
+
+  it.each([
+    ['apagada', false, SESSION.principal_id, 'sofi.fer'],
+    ['sin elegir', true, SESSION.principal_id, null],
+    ['el @ es de OTRA cuenta', true, 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'otra.persona'],
+  ])('🔴 AF-USERNAME-D104 · %s → debajo del nombre no va nada, ni el código', (_l, on, principal, username) => {
+    if (on) encender();
+    publicarArrobaPropia(principal, username);
+    const html = renderToStaticMarkup(
+      <ProfileIdentityEditor session={SESSION} enabled={false} adoptUser={() => true} />,
+    );
+    expect(html).not.toContain('profile-arroba');
+    expect(html).not.toContain('@');
+    expect(html).not.toContain('payme_');
   });
 
   it('cada mutación se envía una vez; 409 relee y exige reintento explícito', () => {

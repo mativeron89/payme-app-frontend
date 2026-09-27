@@ -10,7 +10,7 @@ test('U04 · el recibo opaco se rotula como registro sin prometer estado pendien
   await ingresar(page);
   await page.goto('/#/amigos');
   await page.getByRole('button', { name: 'Nuevo amigo', exact: true }).click();
-  await page.getByPlaceholder('Email o ID PayMe (payme_mx_xxxx)').fill('recibo-opaco@example.com');
+  await page.getByPlaceholder('Email', { exact: true }).fill('recibo-opaco@example.com');
   await page.getByRole('button', { name: 'Agregar', exact: true }).click();
   await expect(page.getByText('Si tiene PayMe, le va a llegar tu solicitud', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: /Solicitudes/ }).click();

@@ -3,7 +3,7 @@ import { ingresar } from './_app';
 
 async function enviar(page: Parameters<typeof ingresar>[0], query: string) {
   await page.getByRole('button', { name: 'Nuevo amigo', exact: true }).click();
-  await page.getByPlaceholder('Email o ID PayMe (payme_mx_xxxx)').fill(query);
+  await page.getByPlaceholder('Email', { exact: true }).fill(query);
   await page.getByRole('button', { name: 'Agregar', exact: true }).click();
   await expect(page.getByText('Si tiene PayMe, le va a llegar tu solicitud', { exact: true }))
     .toBeVisible();

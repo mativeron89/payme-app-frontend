@@ -88,7 +88,7 @@ const llamadas = (page: Page, metodo: string) => page.evaluate(
 async function abrirAgregarAmigo(page: Page): Promise<void> {
   await irEnLaApp(page, '/amigos');
   await page.getByRole('button', { name: 'Nuevo amigo' }).click();
-  await expect(page.getByPlaceholder('Email o ID PayMe (payme_mx_xxxx)')).toBeVisible();
+  await expect(page.getByPlaceholder('Email', { exact: true })).toBeVisible();
 }
 
 test.describe('AF-USUARIO-ARROBA · apagado (tolerancia si el dueño lo apaga)', () => {
@@ -287,7 +287,7 @@ test.describe('AF-USUARIO-ARROBA · encendido · buscar por @ en Amigos', () => 
     const buscar = page.getByLabel('Buscar por @usuario');
     await expect(buscar).toBeVisible();
     // La búsqueda por correo o ID de siempre sigue ahí.
-    await expect(page.getByPlaceholder('Email o ID PayMe (payme_mx_xxxx)')).toBeVisible();
+    await expect(page.getByPlaceholder('Email', { exact: true })).toBeVisible();
 
     await buscar.fill('ma');
     await expect(page.getByText('Escribe al menos 3 letras de su @.')).toBeVisible();

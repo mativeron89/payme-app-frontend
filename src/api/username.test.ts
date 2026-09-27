@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyUsernameConfig,
+  arrobaCoincide,
+  arrobaVisible,
   consultaValida,
   decodeEstadoUsername,
   decodeResultadosArroba,
@@ -146,5 +148,36 @@ describe('fecha del próximo cambio', () => {
     // 05:00 UTC del 27 = 23:00 del 26 en México.
     expect(fechaDeCambio('2026-10-27T05:00:00.000Z', 'es')).toBe('26 de octubre');
     expect(fechaDeCambio('2026-10-27T05:00:00.000Z', 'en')).toBe('October 26');
+  });
+});
+
+describe('AF-USERNAME-D104 · qué se ve debajo del nombre (decisión 104)', () => {
+  it('el @ con formato válido, con la capability encendida', () => {
+    expect(arrobaVisible('mativeron', true)).toBe('@mativeron');
+    expect(arrobaVisible('ana.p_1', true)).toBe('@ana.p_1');
+  });
+
+  it.each([
+    ['ausente (dueño anterior)', undefined, true],
+    ['null (sin elegir)', null, true],
+    ['fuera de formato', 'Mati Veron', true],
+    ['corto', 'ab', true],
+    ['punto en el borde', '.mati', true],
+    ['no string', 42, true],
+    ['un payme_id, apagada', 'payme_mx_ana', false],
+    ['un payme_id, encendida (reservado por el dueño)', 'payme_mx_ana', true],
+    ['cualquier @ que empiece por «payme»', 'paymeoficial', true],
+    ['apagada', 'mativeron', false],
+  ])('%s → nada', (_l, username, habilitado) => {
+    expect(arrobaVisible(username, habilitado)).toBeNull();
+  });
+
+  it('el filtro coincide por el @ que se ve, con o sin «@», y nunca con la capability apagada', () => {
+    expect(arrobaCoincide('mativeron', true, 'mati')).toBe(true);
+    expect(arrobaCoincide('mativeron', true, '@mati')).toBe(true);
+    expect(arrobaCoincide('mativeron', true, 'ana')).toBe(false);
+    expect(arrobaCoincide('mativeron', true, '')).toBe(false);
+    expect(arrobaCoincide(null, true, 'mati')).toBe(false);
+    expect(arrobaCoincide('mativeron', false, 'mati')).toBe(false);
   });
 });

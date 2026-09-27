@@ -8,6 +8,8 @@ import { fold } from '../utils/format';
 import { useToast } from './ui';
 import { Icon } from './Icon';
 import { FriendAvatar } from './FriendAvatar';
+import { ArrobaDebajo } from './ArrobaDebajo';
+import { arrobaCoincide, useUsernameCapability } from '../api/username';
 
 /**
  * Invitar amigos de PayMe a una mesa — el panel de §1.7 Compartir.
@@ -41,9 +43,12 @@ import { FriendAvatar } from './FriendAvatar';
  */
 interface Invitable {
   id: string;
+  /** Clave interna para invitar (`POST /invitations`). NO se muestra (decisión 104). */
   payme_id: string;
   first_name: string;
   full_name: string;
+  /** AF-USERNAME-D104 · lo que se ve debajo del nombre, vía `ArrobaDebajo`. */
+  username?: string | null;
 }
 
 export function InviteFriends({ code }: { code: string }) {
@@ -55,6 +60,7 @@ export function InviteFriends({ code }: { code: string }) {
   const [tick, setTick] = useState(0);
   const [mode, setMode] = useState<'friends' | 'groups'>('friends');
   const [q, setQ] = useState('');
+  const { enabled: arrobaHabilitada } = useUsernameCapability();
   const [invited, setInvited] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<Set<string>>(new Set());
   /** Grupo abierto en el acordeón. Uno solo: dos abiertos empujan de más. */
@@ -93,11 +99,12 @@ export function InviteFriends({ code }: { code: string }) {
     const needle = fold(q.trim());
     const pool = needle
       ? friends.filter(
-          (f) => fold(f.full_name).includes(needle) || fold(f.payme_id).includes(needle),
+          // AF-USERNAME-D104: por el @ que se ve, ya no por el `payme_id`.
+          (f) => fold(f.full_name).includes(needle) || arrobaCoincide(f.username, arrobaHabilitada, needle),
         )
       : friends;
     return pool.slice(0, 6);
-  }, [friends, q]);
+  }, [friends, q, arrobaHabilitada]);
 
   const shownGroups = useMemo(() => {
     const needle = fold(q.trim());
@@ -172,6 +179,7 @@ export function InviteFriends({ code }: { code: string }) {
           payme_id: m.payme_id,
           first_name: m.first_name,
           full_name: t('{0} {1}', m.first_name, m.last_name).trim(),
+          username: m.username ?? null,
         })),
       }));
     } catch {
@@ -196,7 +204,7 @@ export function InviteFriends({ code }: { code: string }) {
         <FriendAvatar friendId={f.id} name={f.full_name} refreshToken={tick} variant="marca" />
         <div className="fr-name">
           <div className="n">{f.full_name}</div>
-          <div className="id">{f.payme_id}</div>
+          <ArrobaDebajo username={f.username} />
         </div>
         {/* Con BORDE y sin relleno: invitar es una acción repetible sobre una
             lista, no el cierre de la pantalla. Un botón lleno por fila competía
@@ -270,7 +278,10 @@ export function InviteFriends({ code }: { code: string }) {
           <Icon name="search" size={18} aria-hidden="true" />
           <input
             className="social-search-input"
-            placeholder={mode === 'friends' ? t('Buscar por nombre o ID') : t('Buscar grupo por nombre')}
+            // AF-USERNAME-D104: se busca por lo que se ve. El «ID» ya no se ve.
+            placeholder={mode === 'groups'
+              ? t('Buscar grupo por nombre')
+              : arrobaHabilitada ? t('Buscar por nombre o @') : t('Buscar por nombre')}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             aria-label={mode === 'friends' ? t('Buscar contactos para invitar') : t('Buscar grupo por nombre')}

@@ -9,6 +9,7 @@ import { InviteFriends } from '../components/InviteFriends';
 import type { MesaDetail, MesaItem } from '../api/types';
 import { denominatorBps, originalParticipants } from '../api/mesaPresentation';
 import { filaDeParticipante, type Participante } from '../api/participantes';
+import { useUsernameCapability } from '../api/username';
 import { countdownTo, formatMXN } from '../utils/format';
 import {
   availableSlotsOf,
@@ -370,6 +371,8 @@ export function MesaDetailView({
   onBack,
 }: MesaDetailViewProps) {
   const { t } = useIdioma();
+  /** AF-USERNAME-D104 · «Quiénes se sumaron» muestra el @, nunca el `payme_id`. */
+  const { enabled: arrobaHabilitada } = useUsernameCapability();
   const toast = useToast();
   /** El par «scroll + pulso» de §1.4/§1.5 bis, acá para la lista de consumos. */
   const [itemsPulse, setItemsPulse] = useState(false);
@@ -834,7 +837,7 @@ export function MesaDetailView({
             ) : (
               <ul className="quienes-lista">
                 {quienesSeSumaron.lista.map((p, idx) => {
-                  const fila = filaDeParticipante(p);
+                  const fila = filaDeParticipante(p, arrobaHabilitada);
                   return (
                     // Sin id estable en el contrato: el orden de llegada es el del dueño.
                     <li key={idx} className="quien">
@@ -842,7 +845,7 @@ export function MesaDetailView({
                         (() => {
                           // AF-32 · foto si el dueño la dio y llegó; si no, iniciales.
                           const foto = fotoDe(p.participantId);
-                          const quien = fila.nombre ?? fila.paymeId ?? '';
+                          const quien = fila.nombre ?? fila.arroba ?? '';
                           return foto ? (
                             <img className="avatar quien-foto" src={foto} alt={t('Foto de {0}', quien)} />
                           ) : (
@@ -860,10 +863,14 @@ export function MesaDetailView({
                         ) : fila.tipo === 'eliminada' ? (
                           <span className="quien-nombre dim">{t('Cuenta eliminada')}</span>
                         ) : (
+                          // AF-USERNAME-D104 · decisión 104: debajo del nombre, el @.
+                          // Hasta 0.198.1 iba el `payme_id`, y EN LUGAR del nombre
+                          // si faltaba; ahora sin nombre va el @, y sin los dos,
+                          // «Sin nombre». El código nunca.
                           <>
-                            <span className="quien-nombre">{fila.nombre ?? fila.paymeId}</span>
-                            {fila.nombre !== null && fila.paymeId !== null && (
-                              <span className="quien-id">{fila.paymeId}</span>
+                            <span className="quien-nombre">{fila.nombre ?? fila.arroba ?? t('Sin nombre')}</span>
+                            {fila.nombre !== null && fila.arroba !== null && (
+                              <span className="quien-id">{fila.arroba}</span>
                             )}
                           </>
                         )}

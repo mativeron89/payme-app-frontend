@@ -7359,9 +7359,10 @@ h1.pay-title-lbl {
   box-shadow: none;
 }
 
-.profile-payme-id {
+/* AF-USERNAME-D104 · decisión 104: debajo del nombre va el @ propio, ya no el
+   `payme_id` (que iba en `monospace` por ser un código). */
+.profile-arroba {
   margin-top: 6px;
-  font-family: monospace;
   font-size: var(--fs-legacy-sm);
   color: var(--gray-txt);
 }

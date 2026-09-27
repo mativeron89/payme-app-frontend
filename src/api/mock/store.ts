@@ -628,9 +628,9 @@ function seedFriends(): MockPerson[] {
     last_name: last,
     full_name: `${first} ${last}`,
     // El mock conserva el correo como lo conserva `users` en el backend: lo que
-    // C3/C4 sacó es la PROYECCIÓN en amigos, no el dato. Grupos sigue
-    // devolviéndolo (contract-mirror/routes/groups.js), así que el store tiene
-    // que poder alimentar las dos formas.
+    // se sacó son las PROYECCIONES (amigos desde C3/C4; grupos desde `c66443b`,
+    // que este mock recién siguió en 0.199.0), no el dato. Acá sirve para
+    // encontrar a alguien por correo al pedirle amistad.
     email: `${payme}@mail.com`,
     added_at: iso(-30 * 24 * 60 * 60_000),
   });
