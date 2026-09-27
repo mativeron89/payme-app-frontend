@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { abrirMesaConLink, ingresar } from './_app';
+import { abrirMesaConLink, ingresar, sinRefresco } from './_app';
 
 /**
  * Decisión 32 de Mati (2026-09-24): «En esa pantalla ya muestra lo que elegí,
@@ -126,10 +126,14 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
     // La mesa vence EN MEMORIA del mock justo antes del lock: el dueño contesta
     // 409 `mesa_not_active`, que el front dice con su toast genérico de reserva.
-    await cambiarEstadoEnMemoria(page, mesa.code, 'expired');
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'No pudimos reservar lo que elegiste' })).toBeVisible();
-    await sigueEnLaMesa(page, mesa.code);
+    // AF-HIGIENE-2 · sin refresco en el medio: si relee la mesa vencida antes
+    // del lock, «Listo» ya no está y el test mediría otra cosa.
+    await sinRefresco(page, async () => {
+      await cambiarEstadoEnMemoria(page, mesa.code, 'expired');
+      await page.getByRole('button', { name: 'Listo', exact: true }).click();
+      await expect(page.getByRole('status').filter({ hasText: 'No pudimos reservar lo que elegiste' })).toBeVisible();
+      await sigueEnLaMesa(page, mesa.code);
+    });
   });
 
   test('igual · elegir → Listo guarda y vuelve a Inicio; al volver, nota fija y «Guardado» tocable que también va a Inicio sin otro PUT', async ({ page }) => {
@@ -161,10 +165,13 @@ test.describe('Decisión 32 · «Listo» lleva a Inicio', () => {
     await page.goto(`/#/mesa/${mesa.code}`);
     await expect(page.getByRole('heading', { name: '¿Qué consumiste?' })).toBeVisible();
     await page.getByRole('button', { name: 'Tagliatelle Bolognese', exact: true }).click();
-    await cambiarEstadoEnMemoria(page, mesa.code, 'expired');
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.' })).toBeVisible();
-    await page.waitForTimeout(600);
-    expect(await page.evaluate(() => location.pathname)).toBe(`/mesa/${mesa.code}`);
+    // AF-HIGIENE-2 · lo mismo en «igual»: sin refresco entre el vencimiento y el PUT.
+    await sinRefresco(page, async () => {
+      await cambiarEstadoEnMemoria(page, mesa.code, 'expired');
+      await page.getByRole('button', { name: 'Listo', exact: true }).click();
+      await expect(page.getByRole('status').filter({ hasText: 'La mesa ya cerró. Conservamos tu selección local sin reemplazar la guardada.' })).toBeVisible();
+      await page.waitForTimeout(600);
+      expect(await page.evaluate(() => location.pathname)).toBe(`/mesa/${mesa.code}`);
+    });
   });
 });

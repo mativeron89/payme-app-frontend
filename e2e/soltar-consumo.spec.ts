@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { abrirMesaConLink, ingresar, irEnLaApp } from './_app';
+import { abrirMesaConLink, ingresar, irEnLaApp, sinRefresco } from './_app';
 
 /**
  * AF-25 · n80 · soltar un consumo propio no pagado (`POST items/release`, dueño
@@ -159,17 +159,23 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
 
   test('si la mesa dejó de aceptar cambios, lo dice con texto neutro', async ({ page }) => {
     const code = await mesaConUnoElegido(page);
-    await cambiarMesaEnMemoria(page, code, 'cerrada');
-    await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
-    await expect(page.getByText('La mesa ya no acepta cambios.')).toBeVisible();
+    // AF-HIGIENE-2 · sin refresco entre el cierre y la respuesta de «Soltar».
+    await sinRefresco(page, async () => {
+      await cambiarMesaEnMemoria(page, code, 'cerrada');
+      await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
+      await expect(page.getByText('La mesa ya no acepta cambios.')).toBeVisible();
+    });
   });
 
   test('si ya estaba suelto, lo dice: el mensaje sale de lo que contestó el dueño', async ({ page }) => {
     const code = await mesaConUnoElegido(page);
-    await cambiarMesaEnMemoria(page, code, 'ya_suelto');
-    await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
-    await expect(page.getByText('No había nada para soltar.')).toBeVisible();
-    await expect(page.getByText('Listo, lo soltaste. Ya lo puede elegir otra persona.')).toHaveCount(0);
+    // AF-HIGIENE-2 · sin refresco: si relee la mesa ya suelta, «Soltar» desaparece.
+    await sinRefresco(page, async () => {
+      await cambiarMesaEnMemoria(page, code, 'ya_suelto');
+      await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
+      await expect(page.getByText('No había nada para soltar.')).toBeVisible();
+      await expect(page.getByText('Listo, lo soltaste. Ya lo puede elegir otra persona.')).toHaveCount(0);
+    });
   });
 
   test('backend anterior sin la ruta (404): lo dice una vez y deja de ofrecer «Soltar»', async ({ page }) => {
@@ -192,18 +198,22 @@ test.describe('AF-25 · soltar un consumo (n80)', () => {
     await expect(page.getByRole('button', { name: 'Soltar Risotto ai Funghi' })).toBeVisible();
     // El Tagliatelle deja de existir en la mesa del mock: el dueño contestaría
     // 404 `item_not_found` CON `item_id`.
-    await page.evaluate(async (c) => {
-      const storePath = '/src/api/mock/store.ts';
-      const store = await import(/* @vite-ignore */ storePath) as {
-        state: { mesas: Array<{ code: string; items: Array<{ name: string }> }> };
-      };
-      const mesa = store.state.mesas.find((m) => m.code === c)!;
-      mesa.items = mesa.items.filter((i) => i.name !== 'Tagliatelle Bolognese');
-    }, code);
-    await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
-    await expect(page.getByText('No pudimos soltarlo. Intenta de nuevo.')).toBeVisible();
-    await expect(page.getByText('Soltar todavía no está disponible.')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Soltar Risotto ai Funghi' })).toBeVisible();
+    // AF-HIGIENE-2 · sin refresco: si relee la mesa sin el Tagliatelle, su
+    // «Soltar» desaparece antes del toque.
+    await sinRefresco(page, async () => {
+      await page.evaluate(async (c) => {
+        const storePath = '/src/api/mock/store.ts';
+        const store = await import(/* @vite-ignore */ storePath) as {
+          state: { mesas: Array<{ code: string; items: Array<{ name: string }> }> };
+        };
+        const mesa = store.state.mesas.find((m) => m.code === c)!;
+        mesa.items = mesa.items.filter((i) => i.name !== 'Tagliatelle Bolognese');
+      }, code);
+      await page.getByRole('button', { name: 'Soltar Tagliatelle Bolognese' }).click();
+      await expect(page.getByText('No pudimos soltarlo. Intenta de nuevo.')).toBeVisible();
+      await expect(page.getByText('Soltar todavía no está disponible.')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Soltar Risotto ai Funghi' })).toBeVisible();
+    });
   });
 
   /**

@@ -248,3 +248,34 @@ export async function irEnLaApp(page: Page, ruta: string): Promise<void> {
     window.dispatchEvent(new PopStateEvent('popstate'));
   }, ruta);
 }
+
+/**
+ * AF-HIGIENE-2 · la ventana del refresco de la mesa.
+ *
+ * `MesaScreen` relee la mesa cada 10 s (`INTERVALO_REFRESCO_MS`) y al volver el
+ * foco, salvo con la pestaña oculta (`document.visibilityState === 'hidden'`).
+ * Un test que cambia el mock y después toca una acción quiere medir la
+ * RESPUESTA de esa acción. Si un refresco cae entre el cambio y esa respuesta,
+ * la pantalla se relee sola con el mock ya cambiado: el botón desaparece o la
+ * pantalla muestra otra cosa, y el test mide otra cosa (el censo de
+ * AF-HIGIENE-ALTA encontró ocho así).
+ *
+ * Mientras dura `cuerpo`, la página se declara oculta: el refresco no corre, ni
+ * por el tick ni por el foco. No se tocan timers ni la latencia del mock, y las
+ * relecturas explícitas de la pantalla (después de un 409, por ejemplo) siguen
+ * igual. Al salir se restaura sin disparar `visibilitychange`, así que tampoco
+ * agrega una relectura. Se llama con la pantalla YA cargada: la precondición
+ * se espera antes, afuera.
+ */
+export async function sinRefresco<T>(page: Page, cuerpo: () => Promise<T>): Promise<T> {
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+  });
+  try {
+    return await cuerpo();
+  } finally {
+    await page.evaluate(() => {
+      delete (document as unknown as Record<string, unknown>).visibilityState;
+    });
+  }
+}

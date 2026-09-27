@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { abrirMesaConLink, ingresar } from './_app';
+import { abrirMesaConLink, ingresar, sinRefresco } from './_app';
 
 /**
  * AF-34 · n98 · «Cerrar mesa» para el organizador (dueño v2.113.0): mesa SIN
@@ -190,24 +190,26 @@ test.describe('AF-34 · cerrar la mesa', () => {
     // pintaba y el click vencía a los 30 s. Medido con la CPU ×6: 2 de 30 así,
     // y en las 30 el botón todavía no estaba al mutar. Ahora: la mesa abierta
     // cargó (el botón está), se abre la confirmación, y RECIÉN AHÍ se cierra
-    // «por otra cosa». Es el caso real: mientras confirmabas, venció. Entre la
-    // mutación y el «Sí» ya no hay ninguna carga pendiente; sólo el refresco de
-    // cada 10 s podría leerla antes, y tendría que caer justo en ese clic.
+    // «por otra cosa». Es el caso real: mientras confirmabas, venció.
+    // AF-HIGIENE-2 · y sin refresco entre la mutación y la respuesta del «Sí»:
+    // el de cada 10 s (o el foco) cerraba la hoja si caía justo ahí.
     await expect(boton(page)).toBeVisible();
     await tocarCerrar(page);
     await expect(hoja(page)).toBeVisible();
-    await page.evaluate(async (c) => {
-      const storePath = '/src/api/mock/store.ts';
-      const store = await import(/* @vite-ignore */ storePath) as {
-        state: { mesas: Array<{ code: string; status: string; closure_reason?: string | null }> };
-      };
-      const m = store.state.mesas.find((x) => x.code === c)!;
-      m.status = 'expired';
-      m.closure_reason = 'time';
-    }, code);
-    await hoja(page).getByRole('button', { name: 'Sí, cerrar la mesa' }).click();
-    await expect(page.getByText('La mesa ya estaba cerrada.')).toBeVisible();
-    await expect(page.getByText('Venció el tiempo de la mesa.')).toBeVisible();
+    await sinRefresco(page, async () => {
+      await page.evaluate(async (c) => {
+        const storePath = '/src/api/mock/store.ts';
+        const store = await import(/* @vite-ignore */ storePath) as {
+          state: { mesas: Array<{ code: string; status: string; closure_reason?: string | null }> };
+        };
+        const m = store.state.mesas.find((x) => x.code === c)!;
+        m.status = 'expired';
+        m.closure_reason = 'time';
+      }, code);
+      await hoja(page).getByRole('button', { name: 'Sí, cerrar la mesa' }).click();
+      await expect(page.getByText('La mesa ya estaba cerrada.')).toBeVisible();
+      await expect(page.getByText('Venció el tiempo de la mesa.')).toBeVisible();
+    });
   });
 
   test('backend anterior (404): lo dice una vez y el botón se retira', async ({ page }) => {

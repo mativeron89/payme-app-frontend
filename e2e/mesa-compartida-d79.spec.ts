@@ -174,12 +174,28 @@ test.describe('AF-MESA-D79 · mesa compartida en «partes iguales»', () => {
     await page.clock.install();
     await preparar(page);
     await sembrarMesaIgual(page);
+    // AF-HIGIENE-2 · hasta 0.200.0 el reloj falso corría con el real, y el primer
+    // salto de 4 s daba «todavía no» sólo si montar, cargar y declarar tardaba
+    // menos de 6 s REALES. Ahora el reloj se PAUSA antes de montar la mesa: el
+    // intervalo de 10 s nace en T0 y todo lo que sigue corre en tiempo falso,
+    // incluida la latencia del mock (350 ms por pedido). Ya no depende de la
+    // máquina.
+    // `pauseAt` no acepta el pasado: 5 s adelante cubre la ida y vuelta aun con
+    // la máquina lenta. El salto ocurre ANTES de montar la mesa (sólo corre
+    // timers del Inicio); el intervalo nace después, en el instante pausado.
+    const t0 = await page.evaluate(() => Date.now() + 5_000);
+    await page.clock.pauseAt(t0);
     await page.goto(`/#/mesa/${CODIGO}`);
+    await page.clock.runFor(3_000);
     await expect(barra(page)).toHaveText('$0.00 / $840.00 (0%)');
     await otraCuentaDeclara(page, [[PARRILLADA, 5000]]);
-    await page.clock.fastForward(4_000);
+    // T0 + 8 s: el primer tick no puede haber pasado (nace en T0 o después).
+    await page.clock.runFor(5_000);
     await expect(barra(page)).toHaveText('$0.00 / $840.00 (0%)');
-    await page.clock.fastForward(7_000);
+    // T0 + 14 s: pasó el tick de los 10 s y su lectura, con margen por si el
+    // intervalo se reinició durante la carga (hasta T0 + 3 s); el segundo tick
+    // no llega antes de T0 + 20 s.
+    await page.clock.runFor(6_000);
     await expect(barra(page)).toHaveText('$270.00 / $840.00 (32%)');
     await expect(fila(page, 'Parrillada')).toContainText('Queda ½');
   });

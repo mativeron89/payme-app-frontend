@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ingresar } from './_app';
+import { ingresar, sinRefresco } from './_app';
 
 interface SyntheticClaim {
   who: 'user' | 'other';
@@ -148,27 +148,31 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
     await abrir(page, 'PA-8402');
 
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
-    await page.evaluate(async () => {
-      const storePath = '/src/api/mock/store.ts';
-      const { state, persist } = await import(/* @vite-ignore */ storePath) as {
-        state: {
-          mesas: Array<{
-            code: string;
-            items: Array<{ status: string; claims: SyntheticClaim[] }>;
-          }>;
+    // AF-HIGIENE-2 · el otro toma la mitad y la respuesta de «Listo» se mide sin
+    // que un refresco de 10 s (o el foco) relea la mesa antes y cambie el camino.
+    await sinRefresco(page, async () => {
+      await page.evaluate(async () => {
+        const storePath = '/src/api/mock/store.ts';
+        const { state, persist } = await import(/* @vite-ignore */ storePath) as {
+          state: {
+            mesas: Array<{
+              code: string;
+              items: Array<{ status: string; claims: SyntheticClaim[] }>;
+            }>;
+          };
+          persist: () => void;
         };
-        persist: () => void;
-      };
-      const item = state.mesas.find((mesa) => mesa.code === 'PA-8402')!.items[0]!;
-      item.status = 'locked';
-      item.claims = [{ who: 'other', fraction_bps: 5000, amount_cents: null, status: 'locked' }];
-      persist();
-    });
-    await page.getByRole('button', { name: 'Listo', exact: true }).click();
+        const item = state.mesas.find((mesa) => mesa.code === 'PA-8402')!.items[0]!;
+        item.status = 'locked';
+        item.claims = [{ who: 'other', fraction_bps: 5000, amount_cents: null, status: 'locked' }];
+        persist();
+      });
+      await page.getByRole('button', { name: 'Listo', exact: true }).click();
 
-    await expect(page.getByText('De ese plato queda solo ½')).toBeVisible();
-    await expect(page.getByRole('progressbar', { name: 'Asignado 18% de la mesa' })).toBeVisible();
-    await expect(page.getByText('$150.00 / $840.00 (18%)', { exact: true })).toBeVisible();
+      await expect(page.getByText('De ese plato queda solo ½')).toBeVisible();
+      await expect(page.getByRole('progressbar', { name: 'Asignado 18% de la mesa' })).toBeVisible();
+      await expect(page.getByText('$150.00 / $840.00 (18%)', { exact: true })).toBeVisible();
+    });
     await expect.poll(() => page.evaluate(async () => {
       const storePath = '/src/api/mock/store.ts';
       const { state } = await import(/* @vite-ignore */ storePath) as {
