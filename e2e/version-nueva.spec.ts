@@ -110,6 +110,17 @@ test.describe('AF-VERSION-NUEVA · en el ingreso', () => {
     expect(await marca(page)).toBe(NUEVA);
   });
 
+  test('vuelta desde el bfcache (pageshow persisted, sin visibilitychange): también revisa', async ({ page }) => {
+    const pub = await preparar(page);
+    await page.goto('/');
+    await expect(ingreso(page)).toBeVisible();
+    await expect.poll(() => pub.pedidos).toBeGreaterThanOrEqual(1);
+    pub.version = NUEVA;
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+    await expect.poll(() => cargas(page)).toBe(2);
+    expect(await marca(page)).toBe(NUEVA);
+  });
+
   test('con algo escrito en el formulario, NO recarga', async ({ page }) => {
     const pub = await preparar(page);
     await page.goto('/');
