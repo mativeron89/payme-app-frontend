@@ -84,6 +84,7 @@ import {
   socialAuthSnapshot,
   type GoogleContinueLinkRequest,
   type GoogleContinueRequest,
+  type GoogleRedirectSignupRequest,
   type GoogleLinkRequest,
   type GoogleLinkResult,
   type LinkedProvider,
@@ -277,6 +278,8 @@ export interface Api {
    * `googleRegister` como en 0.167.0.
    */
   googleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean }>;
+  /** AF-GOOGLE-ALTA-REDIRECT · canje del alta en la misma pestaña (wire D102 §5). */
+  googleRedirectSignup(data: GoogleRedirectSignupRequest): Promise<{ readonly created: boolean }>;
   /** AF-17 · completa un `409 link_required` con la contraseña de la cuenta. */
   googleContinueLink(data: GoogleContinueLinkRequest): Promise<{ readonly created: boolean }>;
   /**
@@ -556,6 +559,7 @@ const realApi: Api = {
   googleRedirectRedeem: (code) => httpSocialSession('/auth/google/redirect/redeem', { code }),
   googleRegister: (data) => httpSocialSession('/auth/google/register', data),
   googleContinue: (data) => httpGoogleContinue('/auth/google/continue', data),
+  googleRedirectSignup: (data) => httpGoogleContinue('/auth/google/redirect/signup', data),
   googleContinueLink: (data) => httpGoogleContinue('/auth/google/continue/link', data),
   // `private, no-store` es contrato del dueño para esta ruta: el lector
   // privado lo EXIGE, igual que para `/account/me`.
@@ -1039,6 +1043,7 @@ const mockApi: Api = {
   googleRedirectRedeem: (code) => mock.mockGoogleRedirectRedeem(code),
   googleRegister: (data) => mock.mockGoogleRegister(data),
   googleContinue: (data) => mock.mockGoogleContinue(data),
+  googleRedirectSignup: (data) => mock.mockGoogleRedirectSignup(data),
   googleContinueLink: (data) => mock.mockGoogleContinueLink(data),
   getLinkedProviders: async () => decodeLinkedProvidersResponse(await mock.mockGetLinkedProviders()),
   googleLink: async (data) => {

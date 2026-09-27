@@ -453,6 +453,43 @@ describe('AF-GOOGLE-REDIRECT · «Entrar» en la misma pestaña (decisiones 92 y
     expect(onCredential).not.toHaveBeenCalled();
   });
 
+  /**
+   * AF-GOOGLE-ALTA-REDIRECT · decisión 102 · el botón de «Crea tu cuenta» usa el
+   * MISMO `login_uri` con otro `state`: `alta:<id>` (wire D102 §2).
+   */
+  it('alta: el state propio llega a renderButton tal cual; sin él, el de siempre (fase 1)', async () => {
+    const conAlta = { ...options(new FakeContainer()), redirect: { loginUri: LOGIN_URI, simularEnMock: vi.fn(), state: 'alta:1234-abcd' } };
+    const handle = renderGoogleIdentityButton(conAlta);
+    const api = installGoogleApi();
+    onlyScript().dispatch('load');
+    await handle.ready;
+    expect(api.renderButton.mock.calls[0][1]).toMatchObject({ state: 'alta:1234-abcd' });
+    handle.dispose();
+    const fase1 = renderGoogleIdentityButton(conRedirect(new FakeContainer()));
+    await fase1.ready;
+    const estado = (api.renderButton.mock.calls[1][1] as { state: string }).state;
+    expect(estado).not.toMatch(/^alta:/);
+  });
+
+  it('alta: un state fuera del alfabeto seguro se rechaza antes de montar', () => {
+    for (const malo of ['', 'alta:con espacio', 'alta:<script>', `alta:${'x'.repeat(200)}`, 'alta:a/b']) {
+      expect(() => renderGoogleIdentityButton({
+        ...options(), redirect: { loginUri: LOGIN_URI, simularEnMock: vi.fn(), state: malo },
+      }), malo).toThrow('google_state_invalid');
+    }
+  });
+
+  it('alta en mock: el botón dice también su state', async () => {
+    vi.stubEnv('VITE_MOCK', '1');
+    const container = new FakeContainer();
+    const handle = renderGoogleIdentityButton({
+      ...options(container), redirect: { loginUri: LOGIN_URI, simularEnMock: vi.fn(), state: 'alta:abc' },
+    });
+    await handle.ready;
+    expect((container.children[0] as FakeButtonElement).dataset)
+      .toEqual({ uxMode: 'redirect', loginUri: LOGIN_URI, state: 'alta:abc' });
+  });
+
   it('mock sin redirect: el botón no dice modo y entrega la credencial como siempre', async () => {
     vi.stubEnv('VITE_MOCK', '1');
     const onCredential = vi.fn();

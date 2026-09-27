@@ -175,6 +175,8 @@ export function fragmentoConSecreto(hash: string): boolean {
   // y su error) también: `googleRedirect.ts` la retira antes de montar, y esto
   // asegura que ni un fallo de esa captura la convierta en una ruta.
   if (/(^|[?&#/])google_redirect(_error)?=/i.test(limpio)) return true;
+  // AF-GOOGLE-ALTA-REDIRECT · y la de «Crea tu cuenta» (`#google_signup=`).
+  if (/(^|[?&#/])google_signup=/i.test(limpio)) return true;
   // Un `token=` fuera de una query bien formada también cuenta.
   return /(^|[?&#/])(t|token|signup_invitation)=/i.test(limpio);
 }

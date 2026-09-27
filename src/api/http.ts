@@ -596,14 +596,16 @@ export async function persistGoogleContinueResponse(
 }
 
 export async function httpGoogleContinue(
-  path: '/auth/google/continue' | '/auth/google/continue/link',
+  path: '/auth/google/continue' | '/auth/google/continue/link' | '/auth/google/redirect/signup',
   body: unknown,
 ): Promise<{ readonly created: boolean }> {
   const origin = loadSession();
   const response = await rawRequest<unknown>('POST', path, body);
+  // AF-GOOGLE-ALTA-REDIRECT · el canje del alta en la misma pestaña «corre
+  // exactamente la lógica de /google/continue» (wire §5): misma respuesta.
   return persistGoogleContinueResponse(
     response,
-    path === '/auth/google/continue' ? 'continue' : 'link',
+    path === '/auth/google/continue/link' ? 'link' : 'continue',
     origin,
   );
 }

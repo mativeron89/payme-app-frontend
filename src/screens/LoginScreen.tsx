@@ -21,6 +21,19 @@ import {
 } from '../api/googleIdentity';
 import { sugerenciaDesdeIdToken } from '../api/googleClaims';
 import { GOOGLE_REDIRECT_LOGIN_URI, simularIdaYVueltaMock } from '../api/googleRedirect';
+import {
+  borrarContextoAlta,
+  canjearAltaGoogle,
+  codigoSigueVivo,
+  estadoDeAlta,
+  guardarContextoAlta,
+  hayCodigoAlta,
+  leerContextoAlta,
+  olvidarCodigoAlta,
+  simularIdaYVueltaAltaMock,
+  vueltaAltaSnapshot,
+  type ContextoAlta,
+} from '../api/googleAltaRedirect';
 import { vigilarPopupGoogle, type VigiaPopupGoogle } from '../api/googlePopupDiagnostico';
 import {
   linkIntentValido,
@@ -319,6 +332,13 @@ type GoogleActionAuthority =
       readonly noticeVersion: string;
       readonly invitationToken: string | null;
       readonly nombre: { readonly firstName: string; readonly lastName: string } | null;
+      /**
+       * AF-GOOGLE-ALTA-REDIRECT · decisión 102: con `features.google_redirect_signup`
+       * el botón de «Crea tu cuenta» va en la MISMA pestaña, con `state`
+       * `alta:<id>`. Va en la autoridad para que un cambio de la capability
+       * remonte el botón con el modo nuevo.
+       */
+      readonly redirectAlta: boolean;
     }
   | {
       readonly purpose: 'register';
@@ -361,6 +381,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     googleLogin,
     googleRegister,
     googleContinue,
+    googleRedirectSignup,
     googleContinueLink,
     facebookCallbackPhase,
     completeFacebookCallback,
@@ -437,6 +458,21 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
    */
   const linkIntent = useRef<string | null>(null);
   const [pasoVincular, setPasoVincular] = useState(false);
+  /**
+   * AF-GOOGLE-ALTA-REDIRECT · la vuelta de «Crea tu cuenta» en la misma pestaña
+   * (`#google_signup=<código>`, capturada en `main.tsx`):
+   * - `canjeando`: el canje está en vuelo (o por salir);
+   * - `completar`: el código sigue vivo pero falta volver a confirmar el aviso
+   *   y las casillas (se perdió el `sessionStorage`, cambió el texto legal, o
+   *   un 429/503 que se puede reintentar);
+   * - `perfil`: `422 profile_required`: se piden nombre y apellido y se
+   *   reintenta con el MISMO código, sin volver a Google.
+   * El código nunca pasa por acá: vive en `googleAltaRedirect.ts`.
+   */
+  const [altaVuelta, setAltaVuelta] = useState<'nada' | 'canjeando' | 'completar' | 'perfil'>(
+    () => (vueltaAltaSnapshot().estado === 'codigo' ? 'canjeando' : 'nada'),
+  );
+  const contextoAlta = useRef<ContextoAlta | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [legal, setLegal] = useState<LegalState>({ status: 'idle' });
   const [legalAttempt, setLegalAttempt] = useState(0);
@@ -581,6 +617,10 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         noticeVersion: versionAvisoContinue,
         invitationToken: autoridad?.tipo === 'invitacion' ? autoridad.token : null,
         nombre,
+        // Sólo el botón de arriba de «Crea tu cuenta» (sin nombre declarado).
+        // El reintento de `422` del alta en redirect no vuelve a Google: usa el
+        // mismo código (ver `canjearAlta`).
+        redirectAlta: nombre === null && social.googleRedirectSignup.enabled,
       });
     // AF-LOGIN-D73 · decisión 73 de Mati: en «Entrar», Google SÓLO hace entrar a
     // quien ya tiene cuenta (`/google/login`, que el dueño nunca usa para crear
@@ -623,6 +663,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     perfilActivo,
     social.google.webClientId,
     social.googleRedirect.enabled,
+    social.googleRedirectSignup.enabled,
     unToqueEnAlta,
     versionAvisoContinue,
   ]);
@@ -728,7 +769,15 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
           loginUri: GOOGLE_REDIRECT_LOGIN_URI,
           simularEnMock: (credencial: string) => { void simularIdaYVueltaMock(credencial); },
         }
-      : undefined;
+      // AF-GOOGLE-ALTA-REDIRECT · el mismo `login_uri`, con el `state` de alta
+      // (wire D102 §2). El canje ocurre al volver (`canjearAlta`).
+      : authority.purpose === 'continue' && authority.redirectAlta
+        ? {
+            loginUri: GOOGLE_REDIRECT_LOGIN_URI,
+            state: estadoDeAlta(),
+            simularEnMock: (credencial: string) => { void simularIdaYVueltaAltaMock(credencial); },
+          }
+        : undefined;
     try {
       handle = renderGoogleIdentityButton({
         container,
@@ -1161,6 +1210,151 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   const conAceptacion = () => (aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {});
 
   /**
+   * AF-GOOGLE-ALTA-REDIRECT · el canje del alta (wire D102 §5), con los mismos
+   * desenlaces que `continue`. Los errores que dejan el código vivo (422, 429,
+   * 503 y 409 `legal_version_mismatch`) no lo sueltan: la persona reintenta sin
+   * volver a Google. Todo lo demás es terminal: se suelta el código y se borra
+   * el contexto.
+   */
+  async function canjearAlta(ctx: ContextoAlta) {
+    if (!tryAcquireAuthAction()) return;
+    setSocialBusy(true);
+    setError(null);
+    setAltaVuelta('canjeando');
+    try {
+      const { created } = await canjearAltaGoogle((code) => googleRedirectSignup({ code, ...ctx }));
+      olvidarCodigoAlta();
+      borrarContextoAlta();
+      contextoAlta.current = null;
+      setAltaVuelta('nada');
+      // La invitación se consume sólo si la cuenta NACIÓ con ella.
+      if (created && ctx.invitation_token !== undefined) clearSignupInvitation();
+      if (created) anunciar(t('¡Listo! Creamos tu cuenta de PayMe.'));
+    } catch (err) {
+      const { status, code, extra } = extractApiError(err);
+      if (codigoSigueVivo(status, code)) {
+        contextoAlta.current = ctx;
+        setMode('register');
+        if (status === 422) {
+          setAltaVuelta('perfil');
+          return;
+        }
+        if (code === 'legal_version_mismatch') {
+          // El par aceptado dejó de ser el vigente: se vuelven a leer los
+          // textos y la persona vuelve a marcar sobre el texto nuevo.
+          setLegalAttempt((value) => value + 1);
+          setError(t('Actualizamos los documentos. Vuelve a marcar las casillas y toca «Crear mi cuenta».'));
+        } else if (status === 429) {
+          setError(mensajeContinue(code === 'too_many_auth_attempts' ? 'too_many_auth_attempts' : 'too_many_signup_attempts', t));
+        } else {
+          setError(t('Prueba de nuevo más tarde.'));
+        }
+        setAltaVuelta('completar');
+        return;
+      }
+      olvidarCodigoAlta();
+      borrarContextoAlta();
+      contextoAlta.current = null;
+      setAltaVuelta('nada');
+      const actual = socialAuthSnapshot();
+      const desenlace = desenlaceContinue({
+        status,
+        code,
+        extra,
+        oneTapSignup: actual.googleContinue.oneTapSignup,
+        autoridad: autoridadDeAlta(signupInvitationSnapshot(), actual.publicRegistration),
+        googleRegistration: actual.google.enabled
+          && actual.google.registration
+          && actual.google.webClientId !== null,
+      });
+      if (desenlace.tipo === 'vincular') {
+        linkIntent.current = desenlace.linkIntent;
+        setPassword('');
+        setPasoVincular(true);
+      } else if (desenlace.tipo === 'alta_formulario') {
+        setPassword('');
+        setAltaConGoogle(true);
+        setMode('register');
+      } else if (desenlace.tipo === 'mensaje') {
+        setError(mensajeContinue(desenlace.clave, t));
+      } else {
+        // `perfil` deja el código vivo y ya se atendió arriba.
+        setError(mensajeContinue('neutro', t));
+      }
+      setGoogleGeneration((value) => value + 1);
+    } finally {
+      setSocialBusy(false);
+      releaseAuthAction();
+    }
+  }
+
+  // AF-GOOGLE-ALTA-REDIRECT · al volver de Google con un código: con el
+  // contexto guardado, se canjea; sin él (se perdió el `sessionStorage`), se
+  // vuelven a pedir el aviso y las casillas, y se canjea con el mismo código.
+  // Va ANTES del efecto que guarda el contexto: ése no borra nada mientras
+  // haya un código en memoria.
+  useEffect(() => {
+    if (altaVuelta !== 'canjeando' || !hayCodigoAlta()) return;
+    const ctx = leerContextoAlta();
+    if (ctx) {
+      void canjearAlta(ctx);
+      return;
+    }
+    setMode('register');
+    setAltaVuelta('completar');
+    // Sólo al montar: después, los reintentos los dispara la persona.
+  }, []);
+
+  // AF-GOOGLE-ALTA-REDIRECT · lo que viaja al canje se deja en `sessionStorage`
+  // ANTES de salir a Google (wire D102 §3). El botón queda inerte hasta marcar
+  // las casillas, así que el contexto existe sólo con ellas marcadas: el toque
+  // que sale a Google siempre lo encuentra. Nunca el código.
+  const claveAceptacion = JSON.stringify(aceptacionRef.current);
+  useEffect(() => {
+    if (hayCodigoAlta()) return;
+    const a = googleAuthority;
+    if (a?.purpose === 'continue' && a.redirectAlta && aceptacionLista) {
+      guardarContextoAlta({
+        accepted_notice_version: a.noticeVersion,
+        ...(aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {}),
+        ...(a.invitationToken !== null ? { invitation_token: a.invitationToken } : {}),
+      });
+    } else {
+      borrarContextoAlta();
+    }
+  }, [googleAuthority, aceptacionLista, claveAceptacion]);
+
+  /** «Crear mi cuenta» del paso de la vuelta: el mismo código, lo que hay en pantalla. */
+  function onTerminarAlta(e: FormEvent) {
+    e.preventDefault();
+    const base = contextoAlta.current;
+    const version = altaVuelta === 'perfil' && base ? base.accepted_notice_version : versionAvisoContinue;
+    if (version === null || !hayCodigoAlta()) return;
+    const invitacion = autoridad?.tipo === 'invitacion' ? autoridad.token : base?.invitation_token;
+    const ctx: ContextoAlta = altaVuelta === 'perfil' && base
+      ? { ...base, first_name: firstName.trim(), last_name: lastName.trim() }
+      : {
+          accepted_notice_version: version,
+          ...(aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {}),
+          ...(invitacion !== undefined ? { invitation_token: invitacion } : {}),
+          ...(base?.first_name !== undefined && base.last_name !== undefined
+            ? { first_name: base.first_name, last_name: base.last_name }
+            : {}),
+        };
+    void canjearAlta(ctx);
+  }
+
+  /** La persona deja el alta a medias: el código se suelta y el contexto se borra. */
+  function abandonarAlta() {
+    olvidarCodigoAlta();
+    borrarContextoAlta();
+    contextoAlta.current = null;
+    setAltaVuelta('nada');
+    setError(null);
+    setGoogleGeneration((value) => value + 1);
+  }
+
+  /**
    * AF2 · las dos casillas aprobadas (`registro_y_puerta.txt`): sin marcar, y
    * nada avanza hasta marcarlas. La misma pieza sirve al alta con correo, al
    * paso de Google y al un-toque.
@@ -1409,6 +1603,8 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         <div className="ingreso-burbuja-titulo">
           {pasoVincular
             ? t('Conecta tu cuenta con Google')
+            : altaVuelta !== 'nada'
+              ? t('Crea tu cuenta con Google')
             : mode === 'login'
               // Decisión 74 de Mati, literal: «que diga solo Log in». Va igual en
               // los dos idiomas y sin `t()`: una clave «Log in → Log in» la
@@ -1418,7 +1614,17 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
         </div>
         {/* Decisión 74: la burbuja de «Entrar» lleva SÓLO el título; el
             subtítulo se quitó y la burbuja se ajusta sola (altura automática). */}
-        {pasoGoogle && !pasoVincular && (
+        {altaVuelta === 'completar' && !pasoVincular && (
+          <div className="ingreso-burbuja-sub" role="status">
+            {t('Para terminar de crear tu cuenta, confirma lo siguiente y toca «Crear mi cuenta».')}
+          </div>
+        )}
+        {altaVuelta === 'perfil' && !pasoVincular && (
+          <div className="ingreso-burbuja-sub" role="status">
+            {t('Google no nos dio tu nombre. Escríbelo y toca «Crear mi cuenta».')}
+          </div>
+        )}
+        {pasoGoogle && altaVuelta === 'nada' && !pasoVincular && (
           <div className="ingreso-burbuja-sub" role="status">
             {tieneCredencial
               ? t('Revisa tus datos y toca «Crear mi cuenta».')
@@ -1435,7 +1641,71 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       </div>
 
       <div className="ingreso-cuerpo">
-        {pasoVincular ? (
+        {/* AF-GOOGLE-ALTA-REDIRECT · la vuelta de «Crea tu cuenta» en la misma
+            pestaña: mientras se canjea, o el paso para terminar el alta con el
+            MISMO código (sin volver a Google). */}
+        {altaVuelta === 'canjeando' && !pasoVincular ? (
+          <div className="ingreso-tarjeta" role="status" aria-live="polite">
+            {t('Un segundo…')}
+          </div>
+        ) : (altaVuelta === 'completar' || altaVuelta === 'perfil') && !pasoVincular ? (
+          <form className="ingreso-tarjeta ingreso-alta-vuelta" onSubmit={onTerminarAlta} aria-busy={socialBusy}>
+            {altaVuelta === 'perfil' && (
+              <>
+                <label className="ingreso-campo">
+                  <span className="ingreso-etiqueta">{t('Nombre')}</span>
+                  <input
+                    className="input ingreso-input"
+                    placeholder={t('Nombre')}
+                    autoComplete="given-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    disabled={socialBusy}
+                    required
+                  />
+                </label>
+                <label className="ingreso-campo">
+                  <span className="ingreso-etiqueta">{t('Apellido')}</span>
+                  <input
+                    className="input ingreso-input"
+                    placeholder={t('Apellido')}
+                    autoComplete="family-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    disabled={socialBusy}
+                    required
+                  />
+                </label>
+              </>
+            )}
+            {altaVuelta === 'completar' && casillasLegales}
+            {altaVuelta === 'completar' && !paqueteVigente && legal.status === 'ready' && (
+              <p className="ingreso-legal">
+                {t('Al continuar aceptas el')}{' '}
+                <a href={PATH_PRIVACIDAD}>{t('Aviso de privacidad')}</a>
+              </p>
+            )}
+            {error && (
+              <div id="login-error" className="ingreso-error" role="alert">
+                {error}
+              </div>
+            )}
+            <button
+              type="submit"
+              className="ingreso-entrar"
+              disabled={socialBusy || (altaVuelta === 'perfil'
+                ? firstName.trim().length === 0 || lastName.trim().length === 0
+                : versionAvisoContinue === null || paqueteIncierto || !aceptacionLista)}
+            >
+              {socialBusy ? t('Un segundo…') : t('Crear mi cuenta')}
+            </button>
+            <div className="ingreso-pie">
+              <button type="button" className="login-toggle" onClick={abandonarAlta} disabled={socialBusy}>
+                {t('Volver')}
+              </button>
+            </div>
+          </form>
+        ) : pasoVincular ? (
           <form className="ingreso-tarjeta" onSubmit={onVincular}>
             <label className="ingreso-campo">
               <span className="ingreso-etiqueta">{t('Contraseña')}</span>

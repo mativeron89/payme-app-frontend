@@ -54,8 +54,9 @@ if (!rutaPublica) {
  * estas líneas se evalúa en una ruta pública.
  */
 async function arrancarPrivada(): Promise<void> {
-  const [googleRedirect, recovery, facebook, invitacion, idioma, app] = await Promise.all([
+  const [googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app] = await Promise.all([
     import('./api/googleRedirect'),
+    import('./api/googleAltaRedirect'),
     import('./api/recoveryFlow'),
     import('./api/facebookAuthFlow'),
     import('./api/signupInvitation'),
@@ -63,6 +64,7 @@ async function arrancarPrivada(): Promise<void> {
     import('./App'),
   ]);
   const { capturarVueltaGoogleRedirect } = googleRedirect;
+  const { capturarVueltaAltaGoogle } = googleAlta;
   const { bootstrapRecoveryTokenCapture } = recovery;
   const { bootstrapFacebookCallbackCapture } = facebook;
   const { bootstrapSignupInvitationCustody } = invitacion;
@@ -73,6 +75,9 @@ async function arrancarPrivada(): Promise<void> {
   // sale del fragmento con replaceState ANTES que nada: antes del router, que
   // si no la convertiría en una ruta, y antes de la primera request.
   capturarVueltaGoogleRedirect();
+  // AF-GOOGLE-ALTA-REDIRECT · lo mismo con la vuelta de «Crea tu cuenta»
+  // (`#google_signup=…`, decisión 102): el código queda sólo en memoria.
+  capturarVueltaAltaGoogle();
 
   // El recovery token se captura en memoria y se retira de query/fragmento
   // antes de que React pueda renderizar o iniciar cualquier request. Si el

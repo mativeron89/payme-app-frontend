@@ -1059,4 +1059,8 @@ export const EN: Record<string, string> = {
   "Solicitud enviada a @{0}": "Request sent to @{0}",
   "Agregar a @{0}": "Add @{0}",
   "Enviada": "Sent",
+  // AF-GOOGLE-ALTA-REDIRECT · decisión 102 · el paso para terminar el alta con Google en la misma pestaña.
+  "Para terminar de crear tu cuenta, confirma lo siguiente y toca «Crear mi cuenta».": "To finish creating your account, confirm the following and tap «Create my account».",
+  "Google no nos dio tu nombre. Escríbelo y toca «Crear mi cuenta».": "Google didn't give us your name. Type it and tap «Create my account».",
+  "Actualizamos los documentos. Vuelve a marcar las casillas y toca «Crear mi cuenta».": "We updated the documents. Check the boxes again and tap «Create my account».",
 };

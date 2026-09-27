@@ -92,6 +92,13 @@ export interface SocialAuthState {
   readonly googleContinue: GoogleContinueCapability;
   /** AF-GOOGLE-REDIRECT · decodificada del bloque hermano `features.google_redirect`. */
   readonly googleRedirect: GoogleRedirectCapability;
+  /**
+   * AF-GOOGLE-ALTA-REDIRECT · decisión 102 · `features.google_redirect_signup`
+   * (App Backend v2.138.0): «Crea tu cuenta» con Google en la misma pestaña.
+   * Misma forma y mismo criterio que `google_redirect`; exige además la fase 1
+   * encendida, como el dueño (wire §1). Apagado ⇒ el alta en popup de hoy.
+   */
+  readonly googleRedirectSignup: GoogleRedirectCapability;
 }
 
 const GOOGLE_CONTINUE_OFF: GoogleContinueCapability = { supported: false, oneTapSignup: false };
@@ -126,6 +133,7 @@ function closed(status: SocialAuthStatus): SocialAuthState {
     publicRegistration: false,
     googleContinue: GOOGLE_CONTINUE_OFF,
     googleRedirect: GOOGLE_REDIRECT_OFF,
+    googleRedirectSignup: GOOGLE_REDIRECT_OFF,
   };
 }
 
@@ -328,6 +336,11 @@ export function readSocialAuthCapability(config: unknown): SocialAuthState {
     // El redirect también exige el login con Google del dueño: su `enabled`
     // vivo ya lo incluye, y acá se vuelve a pedir para no depender de eso.
     googleRedirect: google.login ? decodeGoogleRedirect(features.google_redirect) : GOOGLE_REDIRECT_OFF,
+    // El alta en redirect cuelga de la fase 1: el dueño ya la exige para su
+    // `enabled`, y acá se vuelve a pedir para no depender de eso (wire §1).
+    googleRedirectSignup: google.login && decodeGoogleRedirect(features.google_redirect).enabled
+      ? decodeGoogleRedirect(features.google_redirect_signup)
+      : GOOGLE_REDIRECT_OFF,
   };
 }
 
@@ -451,6 +464,20 @@ export interface GoogleContinueRequest {
   readonly accepted_notice_version: string;
   readonly invitation_token?: string;
   /** Sólo en el reintento después de `422 profile_required`. */
+  readonly first_name?: string;
+  readonly last_name?: string;
+}
+
+/**
+ * AF-GOOGLE-ALTA-REDIRECT · body de `POST /api/auth/google/redirect/signup`
+ * (`schemas.socialRedirectSignup`, strict): lo de `continue` sin el `id_token`,
+ * más el código del fragmento `#google_signup`.
+ */
+export interface GoogleRedirectSignupRequest {
+  readonly code: string;
+  readonly accepted_notice_version: string;
+  readonly legal_acceptance?: LegalAcceptanceRequest;
+  readonly invitation_token?: string;
   readonly first_name?: string;
   readonly last_name?: string;
 }

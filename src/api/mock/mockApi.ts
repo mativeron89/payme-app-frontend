@@ -1,6 +1,7 @@
 import type {
   GoogleContinueLinkRequest,
   GoogleContinueRequest,
+  GoogleRedirectSignupRequest,
   GoogleLinkRequest,
 } from '../socialAuth';
 import { CLAIMS_GOOGLE_MOCK } from '../googleIdentity';
@@ -457,6 +458,13 @@ export function googleRedirectMock(): boolean {
   return leerSeam(CLAVE_GOOGLE_REDIRECT) === 'true';
 }
 
+/** AF-GOOGLE-ALTA-REDIRECT · seam de `features.google_redirect_signup`: sólo con el `'true'` exacto. */
+export const CLAVE_GOOGLE_ALTA_REDIRECT = 'payme.app.mock.google_redirect_signup.v1';
+
+export function googleAltaRedirectMock(): boolean {
+  return leerSeam(CLAVE_GOOGLE_ALTA_REDIRECT) === 'true';
+}
+
 /**
  * AF-USUARIO-ARROBA · seam de `features.username`: apagado salvo el `'true'`
  * exacto, como lo sirve hoy el dueño (`USERNAME_ENABLED` ausente).
@@ -536,6 +544,157 @@ export async function mockGoogleRedirectRedeem(code: string): Promise<StoredSess
     marcarProveedorVinculado(MOCK_USER.id, 'google');
     persist();
   });
+}
+
+// ─── «Crea tu cuenta» con Google en la misma pestaña · AF-GOOGLE-ALTA-REDIRECT ──
+
+/**
+ * `google_signup_pending` del dueño (decisión 102): sólo el sha256 del código,
+ * 10 minutos, intentos que lo dejan vivo con tope de 5. En `localStorage`
+ * porque la vuelta es un documento nuevo (la «base» del mock).
+ */
+export const CLAVE_ALTAS_PENDIENTES_MOCK = 'payme.app.mock.google_signup_pending.v1';
+const TTL_ALTA_PENDIENTE_MS = 10 * 60_000;
+const TOPE_INTENTOS_ALTA = 5;
+
+interface AltaPendienteMock { readonly expira: number; intentos: number; readonly sinNombre: boolean }
+
+function leerAltasPendientes(): Record<string, AltaPendienteMock> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CLAVE_ALTAS_PENDIENTES_MOCK) ?? '{}') as unknown;
+    return raw && typeof raw === 'object' ? raw as Record<string, AltaPendienteMock> : {};
+  } catch {
+    return {};
+  }
+}
+
+function guardarAltasPendientes(altas: Record<string, AltaPendienteMock>): void {
+  try { localStorage.setItem(CLAVE_ALTAS_PENDIENTES_MOCK, JSON.stringify(altas)); } catch { /* demo en memoria */ }
+}
+
+/**
+ * El POST de Google al `login_uri` CON `state` de alta, en el riel mock: el
+ * dueño verifica y guarda la identidad hasta 10 min, SIN crear nada ni mirar si
+ * existe una cuenta, y devuelve el mismo fragmento para todos.
+ */
+export async function mockGoogleRedirectSignupLoginUri(idToken: string): Promise<string> {
+  await waitSocialLatency();
+  if (!validSocialCredential(idToken) || mockGoogleCredencialesConsumidas.has(idToken)) {
+    mockGoogleCredencialesConsumidas.add(idToken);
+    return 'google_redirect_error=social_auth_failed';
+  }
+  mockGoogleCredencialesConsumidas.add(idToken);
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const codigo = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const altas = leerAltasPendientes();
+  altas[await sha256Hex(codigo)] = {
+    expira: Date.now() + TTL_ALTA_PENDIENTE_MS,
+    intentos: 0,
+    sinNombre: googleSinNombreMock(),
+  };
+  guardarAltasPendientes(altas);
+  return `google_signup=${codigo}`;
+}
+
+const CLAVES_CANJE_ALTA = new Set(['code', 'accepted_notice_version', 'legal_acceptance', 'invitation_token', 'first_name', 'last_name']);
+
+/**
+ * `POST /api/auth/google/redirect/signup` · la lógica de `continue` sin el
+ * `id_token` (wire §5). Terminal ⇒ la fila se borra; 422, 409 de versión legal,
+ * 429 y 503 la dejan viva hasta 5 intentos, y después se quema (401).
+ */
+export async function mockGoogleRedirectSignup(data: GoogleRedirectSignupRequest): Promise<{ readonly created: boolean }> {
+  if (!data || typeof data !== 'object' || Object.keys(data).some((k) => !CLAVES_CANJE_ALTA.has(k))
+      || typeof data.code !== 'string' || data.code.length < 20 || data.code.length > 200
+      || typeof data.accepted_notice_version !== 'string'
+      || !/^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$/.test(data.accepted_notice_version)) {
+    throw new MockApiError(400, 'validation_error');
+  }
+  const origin = loadSession();
+  await waitSocialLatency();
+  if (!googleRedirectMock() || !googleAltaRedirectMock()) throw new MockApiError(404, 'not_found');
+  const altas = leerAltasPendientes();
+  const clave = await sha256Hex(data.code);
+  const fila = altas[clave];
+  if (!fila || fila.expira <= Date.now() || fila.intentos >= TOPE_INTENTOS_ALTA) {
+    delete altas[clave];
+    guardarAltasPendientes(altas);
+    throw new MockApiError(401, 'social_auth_failed');
+  }
+  const terminal = () => { delete altas[clave]; guardarAltasPendientes(altas); };
+  const vivo = (status: number, error: string): never => {
+    fila.intentos += 1;
+    if (fila.intentos >= TOPE_INTENTOS_ALTA) delete altas[clave];
+    else altas[clave] = fila;
+    guardarAltasPendientes(altas);
+    throw new MockApiError(status, error);
+  };
+
+  if (!googleSinCuentaMock()) {
+    terminal();
+    return persistGoogleContinueResponse(
+      cuerpoDeSesionMock(MOCK_USER, 'google-alta-redirect', { created: false }),
+      'continue',
+      origin,
+      () => {
+        state.user = { ...MOCK_USER };
+        marcarProveedorVinculado(MOCK_USER.id, 'google');
+        persist();
+      },
+    );
+  }
+  if (googleCorreoConCuentaMock()) {
+    terminal();
+    const linkIntent = `mock-link-intent-${crypto.randomUUID()}`;
+    mockIntentosDeVinculo.set(linkIntent, { vence: Date.now() + VIDA_DEL_INTENTO_MS, errores: 0 });
+    throw new MockApiError(409, 'link_required', { link_intent: linkIntent });
+  }
+  const traeInvitacion = typeof data.invitation_token === 'string'
+    && data.invitation_token.length >= 20 && data.invitation_token.length <= 200;
+  if (!traeInvitacion && !altaPublicaMock()) {
+    terminal();
+    throw new MockApiError(401, 'social_auth_failed');
+  }
+  if (data.accepted_notice_version !== MOCK_AVISO_VERSION) {
+    terminal();
+    throw new MockApiError(403, 'registration_not_available');
+  }
+  // Con el paquete 3.0.0 vigente, la aceptación tiene que ser la del par vigente.
+  if (paqueteLegalMockEncendido()) {
+    const a = data.legal_acceptance;
+    if (!a || a.aviso_version !== MOCK_AVISO_VERSION || a.aviso_hash !== FRIEND_AVATAR_NOTICE_HASH
+        || a.terminos_version !== MOCK_TERMINOS_PAR.version || a.terminos_hash !== MOCK_TERMINOS_PAR.hash
+        || a.adult_declaration !== true) {
+      vivo(409, 'legal_version_mismatch');
+    }
+  }
+  const nombreDeclarado = typeof data.first_name === 'string' && data.first_name.trim().length > 0
+    && typeof data.last_name === 'string' && data.last_name.trim().length > 0;
+  if (fila.sinNombre && !nombreDeclarado) vivo(422, 'profile_required');
+  terminal();
+  const nombre = fila.sinNombre
+    ? { first_name: data.first_name!, last_name: data.last_name! }
+    : { first_name: CLAIMS_GOOGLE_MOCK.given_name, last_name: CLAIMS_GOOGLE_MOCK.family_name };
+  const user = { ...socialRegistrationUser(nombre), email: CLAIMS_GOOGLE_MOCK.email };
+  return persistGoogleContinueResponse(
+    cuerpoDeSesionMock(user, 'google-alta-redirect-alta', { created: true }),
+    'continue',
+    origin,
+    () => {
+      state.user = user;
+      state.paymentMethods = [];
+      marcarProveedorVinculado(user.id, 'google');
+      setGoogleSinCuentaMock(false);
+      // Como el dueño: el alta con `legal_acceptance` del par vigente deja la
+      // constancia, así que la cuenta nueva no vuelve a ver la puerta legal.
+      if (paqueteLegalMockEncendido() && data.legal_acceptance) {
+        const aceptados = legalAceptadoMock();
+        aceptados.add(user.id);
+        guardarLegalAceptadoMock(aceptados);
+      }
+      persist();
+    },
+  );
 }
 
 /** La versión del aviso que publica el mock; `continue` exige ésta. */
@@ -674,6 +833,9 @@ export async function mockGetConfig(): Promise<AppConfig> {
         : {}),
       // AF-GOOGLE-REDIRECT · forma exacta del dueño v2.136.0 (`contract-mirror/routes/config.js`).
       google_redirect: { supported: true, enabled: googleRedirectMock() },
+      // AF-GOOGLE-ALTA-REDIRECT · v2.138.0: `enabled` exige también la fase 1,
+      // como el dueño (wire §1). El bloque se sirve siempre.
+      google_redirect_signup: { supported: true, enabled: googleRedirectMock() && googleAltaRedirectMock() },
       // AF-USUARIO-ARROBA · forma exacta del dueño v2.137.0: el bloque se sirve
       // siempre, y `enabled` es `true` sólo con el seam en `'true'` exacto.
       username: { supported: true, enabled: usernameMock() },

@@ -80,7 +80,19 @@ describe('D-FF-1 · cableado owner→formulario', () => {
     expect(continueToken).toBeGreaterThan(continueSend);
     expect(continueClear).toBeGreaterThan(continueToken);
     expect(login.match(/await googleContinue\(\{/g)).toHaveLength(1);
-    expect(login.match(/clearSignupInvitation\(\)/g)).toHaveLength(4);
+
+    // AF-GOOGLE-ALTA-REDIRECT · el quinto: el canje del alta en la misma
+    // pestaña (decisión 102). La invitación viaja en el contexto guardado y se
+    // suelta SÓLO si la cuenta nació, después de la sesión.
+    const altaSend = login.indexOf('googleRedirectSignup({ code, ...ctx })');
+    const altaClear = login.indexOf(
+      'if (created && ctx.invitation_token !== undefined) clearSignupInvitation();',
+      altaSend,
+    );
+    expect(altaSend).toBeGreaterThan(-1);
+    expect(altaClear).toBeGreaterThan(altaSend);
+    expect(login.match(/googleRedirectSignup\(\{/g)).toHaveLength(1);
+    expect(login.match(/clearSignupInvitation\(\)/g)).toHaveLength(5);
 
     const facebookSend = auth.indexOf('await api.facebookRegisterComplete(');
     const facebookClear = auth.indexOf("if (purpose === 'register') clearSignupInvitation();", facebookSend);

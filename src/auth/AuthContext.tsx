@@ -17,7 +17,11 @@ import {
 import { clearSignupInvitation } from '../api/signupInvitation';
 import { loadSession, replaceCurrentSession, subscribeSession, type StoredSession } from '../api/storage';
 import type { GoogleRegisterRequest, RegisterRequest, User } from '../api/types';
-import type { GoogleContinueLinkRequest, GoogleContinueRequest } from '../api/socialAuth';
+import type {
+  GoogleContinueLinkRequest,
+  GoogleContinueRequest,
+  GoogleRedirectSignupRequest,
+} from '../api/socialAuth';
 import { volverAlIngreso } from '../router';
 import {
   canjearVueltaGoogleRedirectUnaVez,
@@ -79,6 +83,8 @@ interface AuthState {
   googleRegister(data: GoogleRegisterRequest): Promise<void>;
   /** AF-17 · entra o crea en un toque; `created` dice si la cuenta nació ahora. */
   googleContinue(data: GoogleContinueRequest): Promise<{ readonly created: boolean }>;
+  /** AF-GOOGLE-ALTA-REDIRECT · canje del alta con Google en la misma pestaña. */
+  googleRedirectSignup(data: GoogleRedirectSignupRequest): Promise<{ readonly created: boolean }>;
   /** AF-17 · completa un `409 link_required` con la contraseña de la cuenta. */
   googleContinueLink(data: GoogleContinueLinkRequest): Promise<void>;
   /**
@@ -232,6 +238,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const googleRedirectSignup = useCallback(async (data: GoogleRedirectSignupRequest) => {
+    try {
+      const result = await api.googleRedirectSignup(data);
+      setFacebookCallbackPhase('idle');
+      return result;
+    } finally {
+      setSession(loadSession());
+    }
+  }, []);
+
   const googleContinueLink = useCallback(async (data: GoogleContinueLinkRequest) => {
     try {
       await api.googleContinueLink(data);
@@ -304,6 +320,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       googleLogin,
       googleRegister,
       googleContinue,
+      googleRedirectSignup,
       googleContinueLink,
       anunciar,
       facebookCallbackPhase,
@@ -321,6 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       googleLogin,
       googleRegister,
       googleContinue,
+      googleRedirectSignup,
       googleContinueLink,
       anunciar,
       facebookCallbackPhase,

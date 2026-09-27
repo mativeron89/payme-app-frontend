@@ -342,7 +342,18 @@ export interface GoogleButtonOptions {
   readonly redirect?: {
     readonly loginUri: string;
     readonly simularEnMock: (credential: string) => void;
+    /**
+     * AF-GOOGLE-ALTA-REDIRECT · el `state` del botón. Sin él, el de siempre
+     * (fase 1, «Entrar»). Con `alta:<id>`, el dueño lo toma como «Crea tu
+     * cuenta» (wire D102 §2): el mismo `login_uri`, otro camino.
+     */
+    readonly state?: string;
   };
+}
+
+/** Un `state` que GIS devuelve tal cual: corto y de un alfabeto seguro. */
+function validState(value: string): boolean {
+  return /^[A-Za-z0-9:_-]{1,120}$/.test(value);
 }
 
 /** Un `login_uri` válido: https, sin credenciales, query ni fragmento. */
@@ -371,6 +382,9 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
   }
   if (options.redirect && !validLoginUri(options.redirect.loginUri)) {
     throw new Error('google_login_uri_invalid');
+  }
+  if (options.redirect?.state !== undefined && !validState(options.redirect.state)) {
+    throw new Error('google_state_invalid');
   }
   const mock = import.meta.env.VITE_MOCK === '1';
   if (!mock) assertClientIdCompatible(options.clientId);
@@ -412,6 +426,7 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
       // Observable para el e2e: el riel mock no tiene GIS que inspeccionar.
       button.dataset.uxMode = 'redirect';
       button.dataset.loginUri = redirect.loginUri;
+      if (redirect.state !== undefined) button.dataset.state = redirect.state;
     }
     button.addEventListener('click', () => {
       if (!redirect) {
@@ -438,7 +453,7 @@ export function renderGoogleIdentityButton(options: GoogleButtonOptions): Google
         shape: 'rectangular',
         text: 'continue_with',
         locale: options.locale,
-        state: routeState as string,
+        state: options.redirect?.state ?? (routeState as string),
         width: Math.max(200, Math.min(360, Math.floor(options.container.clientWidth || 320))),
       });
     }).catch((error) => {
