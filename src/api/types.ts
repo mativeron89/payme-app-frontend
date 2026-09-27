@@ -254,6 +254,8 @@ export interface AppConfig {
     google_continue?: unknown;
     /** AF-GOOGLE-REDIRECT · v2.136.0 · «Entrar» con Google en la misma pestaña. */
     google_redirect?: unknown;
+    /** AF-USUARIO-ARROBA · v2.137.0 · el @usuario; se decodifica en `username.ts`. */
+    username?: unknown;
     /**
      * OLA 5 (v2.31.0) · capability del riel saldo. **Sin tipar a propósito.**
      *

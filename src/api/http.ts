@@ -18,6 +18,7 @@ const SESSION_LOCK = 'payme-session-state';
 
 let onSessionExpiredCb: (() => void) | null = null;
 let onLegalAcceptanceRequiredCb: (() => void) | null = null;
+let onUsernameRequiredCb: (() => void) | null = null;
 const refreshInFlight = new Map<string, Promise<StoredSession | null>>();
 
 export function setOnSessionExpired(cb: (() => void) | null): void {
@@ -39,6 +40,26 @@ export const LEGAL_ACCEPTANCE_REQUIRED = 'legal_acceptance_required';
 function notifyLegalAcceptanceRequired(err: unknown): void {
   if (err instanceof HttpError && err.status === 428 && err.body?.error === LEGAL_ACCEPTANCE_REQUIRED) {
     onLegalAcceptanceRequiredCb?.();
+  }
+}
+
+/**
+ * AF-USUARIO-ARROBA · decisión 93 · con `USERNAME_ENABLED` encendido, el dueño
+ * responde `428 username_required` en toda ruta autenticada a una cuenta sin @,
+ * DESPUÉS de la puerta legal (`contract-mirror/middleware/auth.js`). Mismo
+ * mecanismo que el 428 legal: se avisa una vez por request para que la app
+ * abra la pantalla del @, y el error se propaga igual. Apagado, el dueño no lo
+ * emite y este gancho nunca corre.
+ */
+export function setOnUsernameRequired(cb: (() => void) | null): void {
+  onUsernameRequiredCb = cb;
+}
+
+export const USERNAME_REQUIRED = 'username_required';
+
+function notifyUsernameRequired(err: unknown): void {
+  if (err instanceof HttpError && err.status === 428 && err.body?.error === USERNAME_REQUIRED) {
+    onUsernameRequiredCb?.();
   }
 }
 
@@ -282,6 +303,7 @@ async function authenticatedRequest<T>(
     return await run(session);
   } catch (err) {
     notifyLegalAcceptanceRequired(err);
+    notifyUsernameRequired(err);
     if (err instanceof HttpError && err.status === 401) {
       const refreshed = await tryRefresh(session);
       if (refreshed && refreshed.family_id === session.family_id && refreshed.principal_id === session.principal_id && isCurrentSession(refreshed)) {

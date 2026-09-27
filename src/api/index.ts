@@ -17,6 +17,7 @@ import {
   runWithSessionStateLock,
   setOnLegalAcceptanceRequired,
   setOnSessionExpired,
+  setOnUsernameRequired,
   type UploadProgress,
 } from './http';
 import * as mock from './mock/mockApi';
@@ -69,6 +70,14 @@ import { withPreparedMonetaryRequest, type MonetaryIntentHandle } from './idempo
 import { guaranteeOutcome } from './paymentStatus';
 import { loadSession, type SessionStateWitness, type StoredSession } from './storage';
 import { decodeFacebookStartResponse } from './facebookAuthFlow';
+import {
+  applyUsernameConfig,
+  decodeEstadoUsername,
+  decodeResultadosArroba,
+  decodeSugerencia,
+  type EstadoUsername,
+  type ResultadoArroba,
+} from './username';
 import {
   decodeGoogleLinkResponse,
   decodeLinkedProvidersResponse,
@@ -293,6 +302,20 @@ export interface Api {
   onSessionExpired(cb: (() => void) | null): void;
   /** AF2 · LEGAL-3.0.0: el dueño contestó 428 `legal_acceptance_required` (AB2); la app abre la puerta. */
   onLegalAcceptanceRequired(cb: (() => void) | null): void;
+  /** AF-USUARIO-ARROBA · el dueño contestó 428 `username_required`; la app abre la pantalla del @. */
+  onUsernameRequired(cb: (() => void) | null): void;
+  /**
+   * AF-USUARIO-ARROBA · decisión 93 · el @ propio (`docs/USERNAME_D93_WIRE.md`
+   * §4). Sólo se llaman con `features.username.enabled`; apagado, el dueño las
+   * sirve como 404.
+   */
+  getUsername(expectedSession: StoredSession): Promise<EstadoUsername>;
+  getUsernameSuggestion(expectedSession: StoredSession): Promise<string | null>;
+  putUsername(username: string, expectedSession: StoredSession): Promise<EstadoUsername>;
+  /** Búsqueda por prefijo del @ (§5): hasta 5 resultados, nunca el mail. */
+  searchUsernames(q: string, expectedSession: StoredSession): Promise<ResultadoArroba[]>;
+  /** Foto de un resultado, con la regla de n164 del dueño; toda denegación es el mismo 404. */
+  getUsernameAvatar(username: string, expectedSession: StoredSession): Promise<PrivateAvatarBlob>;
   /** Perfil propio (G-02, v2.20) — hidrata sesiones persistidas sin `user`. */
   getMe(): Promise<MeResponse>;
   /** GET propio estricto, sólo detrás de `profile_identity`. */
@@ -445,7 +468,7 @@ export interface Api {
    * 202 `{ requested: true }` en todos los casos. La UI no puede afirmar nada
    * sobre el destinatario.
    */
-  addFriend(query: { email?: string; payme_id?: string }): Promise<FriendRequestCreatedResponse>;
+  addFriend(query: { email: string } | { payme_id: string } | { username: string }): Promise<FriendRequestCreatedResponse>;
   getIncomingFriendRequests(): Promise<IncomingFriendRequestsResponse>;
   getOutgoingFriendRequests(): Promise<OutgoingFriendRequestsResponse>;
   acceptFriendRequest(requestId: string): Promise<void>;
@@ -494,7 +517,13 @@ function creacionDesdeError(err: unknown): MesaCreationLookup {
 }
 
 const realApi: Api = {
-  getConfig: () => httpPublicRequest<AppConfig>('GET', '/config'),
+  // AF-USUARIO-ARROBA · cada config que llega alimenta la capability del @:
+  // así el @ no agrega una request propia (`./username.ts`).
+  getConfig: async () => {
+    const config = await httpPublicRequest<AppConfig>('GET', '/config');
+    applyUsernameConfig(config);
+    return config;
+  },
   getPrivacyNotice: async () => legalTextResponse(
     await httpPublicRequest<unknown>('GET', '/legal/aviso_privacidad'),
   ),
@@ -573,6 +602,24 @@ const realApi: Api = {
   restoreSession: () => loadSession(),
   onSessionExpired: (cb) => setOnSessionExpired(cb),
   onLegalAcceptanceRequired: (cb) => setOnLegalAcceptanceRequired(cb),
+  onUsernameRequired: (cb) => setOnUsernameRequired(cb),
+  getUsername: async (expectedSession) => decodeEstadoUsername(
+    await httpRequest<unknown>('GET', '/account/username', undefined, expectedSession),
+  ),
+  getUsernameSuggestion: async (expectedSession) => decodeSugerencia(
+    await httpRequest<unknown>('GET', '/account/username/suggestion', undefined, expectedSession),
+  ),
+  putUsername: async (username, expectedSession) => decodeEstadoUsername(
+    await httpRequest<unknown>('PUT', '/account/username', { username }, expectedSession),
+  ),
+  searchUsernames: async (q, expectedSession) => decodeResultadosArroba(
+    await httpRequest<unknown>('GET', `/friends/by-username?q=${encodeURIComponent(q)}`, undefined, expectedSession),
+  ),
+  // Misma política que la foto de una amistad: `Vary: Authorization`, sin ETag.
+  getUsernameAvatar: (username, expectedSession) => httpPrivateAvatarRequest(
+    `/friends/by-username/${encodeURIComponent(username)}/avatar`, expectedSession, 15_000,
+    { requireAuthorizationVary: true, forbidEtag: true },
+  ),
   // Compatibilidad de rollout: sesiones históricas pueden hidratarse contra
   // un backend previo al header privado. El lector estricto vive únicamente
   // detrás de la capability nueva, en `getProfileIdentity`.
@@ -967,7 +1014,11 @@ const realApi: Api = {
 };
 
 const mockApi: Api = {
-  getConfig: () => mock.mockGetConfig(),
+  getConfig: async () => {
+    const config = await mock.mockGetConfig();
+    applyUsernameConfig(config);
+    return config;
+  },
   getPrivacyNotice: async () => legalTextResponse(await mock.mockGetPrivacyNotice()),
   getLegalText: async (kind) => legalTextResponse(await mock.mockGetLegalText(kind), kind),
   getLegalAcceptance: async (expectedSession) => legalAcceptanceResponse(
@@ -1020,6 +1071,18 @@ const mockApi: Api = {
   onSessionExpired: () => undefined,
   // El mock nunca contesta 428: la puerta se ejercita parchando la fachada.
   onLegalAcceptanceRequired: () => undefined,
+  onUsernameRequired: () => undefined,
+  getUsername: async (expectedSession) => decodeEstadoUsername(await mock.mockGetUsername(expectedSession)),
+  getUsernameSuggestion: async (expectedSession) => decodeSugerencia(
+    await mock.mockGetUsernameSuggestion(expectedSession),
+  ),
+  putUsername: async (username, expectedSession) => decodeEstadoUsername(
+    await mock.mockPutUsername(username, expectedSession),
+  ),
+  searchUsernames: async (q, expectedSession) => decodeResultadosArroba(
+    await mock.mockSearchUsernames(q, expectedSession),
+  ),
+  getUsernameAvatar: (username, expectedSession) => mock.mockUsernameAvatar(username, expectedSession),
   getMe: () => mock.mockGetMe(),
   getProfileIdentity: async () => {
     assertProfileIdentityEnabled();

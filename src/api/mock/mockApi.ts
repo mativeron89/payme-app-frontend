@@ -458,6 +458,16 @@ export function googleRedirectMock(): boolean {
 }
 
 /**
+ * AF-USUARIO-ARROBA · seam de `features.username`: apagado salvo el `'true'`
+ * exacto, como lo sirve hoy el dueño (`USERNAME_ENABLED` ausente).
+ */
+export const CLAVE_USERNAME_MOCK = 'payme.app.mock.username.v1';
+
+export function usernameMock(): boolean {
+  return leerSeam(CLAVE_USERNAME_MOCK) === 'true';
+}
+
+/**
  * El dueño guarda sólo el sha256 del código, con vencimiento a 60 s y
  * `consumed_at` (decisión 94, `google_redirect_codes`). El mock hace lo mismo,
  * y lo guarda en `localStorage` porque la vuelta es un documento NUEVO (el 303
@@ -664,6 +674,9 @@ export async function mockGetConfig(): Promise<AppConfig> {
         : {}),
       // AF-GOOGLE-REDIRECT · forma exacta del dueño v2.136.0 (`contract-mirror/routes/config.js`).
       google_redirect: { supported: true, enabled: googleRedirectMock() },
+      // AF-USUARIO-ARROBA · forma exacta del dueño v2.137.0: el bloque se sirve
+      // siempre, y `enabled` es `true` sólo con el seam en `'true'` exacto.
+      username: { supported: true, enabled: usernameMock() },
       wallet_rail: { enabled: false, account_activity: true },
       money_rail: modoMonetarioMock(),
       /**
@@ -4093,13 +4106,23 @@ export async function mockFriendAvatar(
  * opaco en todos los caminos. El mock replica esa ceguera a propósito: si acá
  * devolviera 404 o variara la cantidad, la demo reabriría el oráculo.
  */
-export async function mockAddFriend(query: { email?: string; payme_id?: string }): Promise<FriendRequestCreatedResponse> {
+export async function mockAddFriend(
+  query: { email: string } | { payme_id: string } | { username: string },
+): Promise<FriendRequestCreatedResponse> {
   const requestedAt = new Date().toISOString();
   const receiptId = mockId('f');
-  const email = query.email?.trim().toLowerCase();
+  // AF-USUARIO-ARROBA · `{ username }` exacto sólo con el @ encendido; apagado
+  // es el 400 de siempre (wire §6). Un @ que no existe sigue el camino ciego.
+  if ('username' in query) {
+    if (!usernameMock() || Object.keys(query).length !== 1) throw new MockApiError(400, 'validation_error');
+  }
+  const email = 'email' in query ? query.email.trim().toLowerCase() : undefined;
+  const paymeId = 'payme_id' in query
+    ? query.payme_id
+    : 'username' in query ? paymeIdPorArrobaMock(query.username) : undefined;
   const destino = [...state.friends, ...state.directory].find(
     (p) => (email !== undefined && p.email.toLowerCase() === email)
-      || (query.payme_id !== undefined && p.payme_id === query.payme_id),
+      || (paymeId !== undefined && p.payme_id === paymeId),
   );
 
   if (destino) {
@@ -4122,6 +4145,173 @@ export async function mockAddFriend(query: { email?: string; payme_id?: string }
   // Misma forma y un recibo nuevo en TODOS los casos: no existe, existe, ya es
   // amigo, ya hay pendiente, o me bloqueó. Nunca incluye identidad.
   return delay({ requested: true as const, request_id: receiptId });
+}
+
+// ─── @usuario · AF-USUARIO-ARROBA · decisión 93 ─────────────────────────
+
+/**
+ * El mock replica el dueño v2.137.0 (`docs/USERNAME_D93_WIRE.md`): apagado,
+ * las rutas del @ son el 404 de siempre; encendido, las formas exactas.
+ */
+function exigirUsernameMock(expectedSession: StoredSession): void {
+  requireCurrentMockSession(expectedSession);
+  if (!usernameMock()) throw new MockApiError(404, 'not_found');
+  // Como el dueño: las rutas del @ NO están exceptuadas de la puerta legal
+  // (`contract-mirror/middleware/auth.js`). Sin el Aviso aceptado, 428.
+  if (paqueteLegalMockEncendido() && !legalAceptadoMock().has(expectedSession.principal_id)) {
+    throw new MockApiError(428, 'legal_acceptance_required');
+  }
+}
+
+/** El @ propio, por titular. Persistido para que sobreviva la recarga del e2e. */
+export const CLAVE_USERNAME_PROPIO_MOCK = 'payme.app.mock.username_propio.v1';
+type UsernamePropioMock = { username: string; changed_at: string | null };
+
+function usernamesPropiosMock(): Record<string, UsernamePropioMock> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CLAVE_USERNAME_PROPIO_MOCK) ?? '{}') as unknown;
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, UsernamePropioMock> : {};
+  } catch {
+    return {};
+  }
+}
+
+function guardarUsernamesPropiosMock(todos: Record<string, UsernamePropioMock>): void {
+  try { localStorage.setItem(CLAVE_USERNAME_PROPIO_MOCK, JSON.stringify(todos)); } catch { /* demo */ }
+}
+
+/**
+ * Cuentas con @ para la búsqueda. Las que tienen `payme` son personas del store
+ * (amigos y directorio): la solicitud por su @ sigue el mismo camino que por
+ * correo. Las demás existen sólo para la búsqueda. `foto`: `visible` (la regla
+ * de n164 la deja ver), `menor` (nunca se ve) o `sin_foto`. Con el prefijo
+ * «mar» hay siete: alcanza para probar el tope de 5.
+ */
+const DIRECTORIO_ARROBA_MOCK: ReadonlyArray<{
+  username: string; first_name: string; last_name: string;
+  foto: 'visible' | 'menor' | 'sin_foto'; payme?: string;
+}> = [
+  { username: 'sofi.fernandez', first_name: 'Sofía', last_name: 'Fernández', foto: 'visible', payme: 'payme_mx_sofi' },
+  { username: 'juan.lopez', first_name: 'Juan', last_name: 'López', foto: 'visible', payme: 'payme_mx_juan' },
+  { username: 'maria.ruiz', first_name: 'María', last_name: 'Ruiz', foto: 'sin_foto', payme: 'payme_mx_maru' },
+  { username: 'leo.paz', first_name: 'Leo', last_name: 'Paz', foto: 'sin_foto', payme: 'payme_mx_leop' },
+  { username: 'valentina.rios', first_name: 'Valentina', last_name: 'Ríos', foto: 'sin_foto', payme: 'payme_mx_vale' },
+  { username: 'nicolas.salas', first_name: 'Nicolás', last_name: 'Salas', foto: 'sin_foto', payme: 'payme_mx_nico' },
+  { username: 'mariana', first_name: 'Mariana', last_name: 'Gómez', foto: 'visible' },
+  { username: 'marcos_d', first_name: 'Marcos', last_name: 'Díaz', foto: 'sin_foto' },
+  { username: 'mario.g', first_name: 'Mario', last_name: 'Gil', foto: 'visible' },
+  { username: 'marcelo', first_name: 'Marcelo', last_name: 'Ruiz', foto: 'sin_foto' },
+  { username: 'marta.s', first_name: 'Marta', last_name: 'Sosa', foto: 'sin_foto' },
+  { username: 'martina', first_name: 'Martina', last_name: 'Pérez', foto: 'menor' },
+];
+
+/** Reservados del mock: un subconjunto del dueño, más todo lo que empiece por «payme». */
+const RESERVADOS_MOCK = new Set(['payme', 'admin', 'soporte', 'ayuda', 'api', 'www']);
+
+function normalizarUsernameMock(raw: string): string {
+  return raw.normalize('NFC').trim().replace(/^@/, '').toLowerCase();
+}
+
+function formatoUsernameMock(u: string): boolean {
+  return /^[a-z0-9._]{3,20}$/.test(u) && !u.startsWith('.') && !u.endsWith('.');
+}
+
+function usernameTomadoMock(u: string, principal: string): boolean {
+  if (DIRECTORIO_ARROBA_MOCK.some((d) => d.username === u)) return true;
+  return Object.entries(usernamesPropiosMock()).some(([p, v]) => p !== principal && v.username === u);
+}
+
+const CAMBIO_MS_MOCK = 30 * 24 * 60 * 60_000;
+
+function estadoUsernameMock(principal: string): Record<string, unknown> {
+  const propio = usernamesPropiosMock()[principal];
+  if (!propio) return { username: null, required: true, next_change_at: null };
+  const libre = propio.changed_at ? Date.parse(propio.changed_at) + CAMBIO_MS_MOCK : 0;
+  return {
+    username: propio.username,
+    required: false,
+    next_change_at: libre > Date.now() ? new Date(libre).toISOString() : null,
+  };
+}
+
+export async function mockGetUsername(expectedSession: StoredSession): Promise<Record<string, unknown>> {
+  exigirUsernameMock(expectedSession);
+  return delay(estadoUsernameMock(expectedSession.principal_id));
+}
+
+export async function mockGetUsernameSuggestion(expectedSession: StoredSession): Promise<Record<string, unknown>> {
+  exigirUsernameMock(expectedSession);
+  const limpio = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const base = `${limpio(MOCK_USER.first_name)}${limpio(MOCK_USER.last_name)}`.slice(0, 20);
+  for (const candidato of [base, `${base.slice(0, 17)}123`]) {
+    if (formatoUsernameMock(candidato) && !usernameTomadoMock(candidato, expectedSession.principal_id)) {
+      return delay({ suggestion: candidato });
+    }
+  }
+  return delay({ suggestion: null });
+}
+
+export async function mockPutUsername(raw: string, expectedSession: StoredSession): Promise<Record<string, unknown>> {
+  exigirUsernameMock(expectedSession);
+  const principal = expectedSession.principal_id;
+  const nuevo = normalizarUsernameMock(raw);
+  if (!formatoUsernameMock(nuevo)) throw new MockApiError(400, 'username_invalid');
+  const todos = usernamesPropiosMock();
+  const actual = todos[principal];
+  if (actual?.username === nuevo) return delay(estadoUsernameMock(principal));
+  if (RESERVADOS_MOCK.has(nuevo) || nuevo.startsWith('payme') || usernameTomadoMock(nuevo, principal)) {
+    throw new MockApiError(409, 'username_not_available');
+  }
+  if (actual?.changed_at) {
+    const libre = Date.parse(actual.changed_at) + CAMBIO_MS_MOCK;
+    if (libre > Date.now()) {
+      throw new MockApiError(409, 'username_change_too_soon', { next_change_at: new Date(libre).toISOString() });
+    }
+  }
+  todos[principal] = { username: nuevo, changed_at: new Date().toISOString() };
+  guardarUsernamesPropiosMock(todos);
+  return delay(estadoUsernameMock(principal));
+}
+
+function bloqueadoPorArrobaMock(d: (typeof DIRECTORIO_ARROBA_MOCK)[number]): boolean {
+  if (!d.payme) return false;
+  const persona = [...state.friends, ...state.directory].find((p) => p.payme_id === d.payme);
+  return persona !== undefined && state.blockedUserIds.includes(persona.id);
+}
+
+export async function mockSearchUsernames(rawQ: string, expectedSession: StoredSession): Promise<Record<string, unknown>> {
+  exigirUsernameMock(expectedSession);
+  const q = normalizarUsernameMock(rawQ);
+  if (!/^[a-z0-9._]{3,20}$/.test(q)) throw new MockApiError(400, 'username_query_invalid');
+  const propio = usernamesPropiosMock()[expectedSession.principal_id]?.username;
+  const results = DIRECTORIO_ARROBA_MOCK
+    .filter((d) => d.username.startsWith(q) && d.username !== propio && !bloqueadoPorArrobaMock(d))
+    .sort((a, b) => (a.username < b.username ? -1 : 1))
+    .slice(0, 5)
+    // Las cuatro claves exactas del dueño: nunca el mail, el id ni el payme_id.
+    .map((d) => ({
+      username: d.username,
+      first_name: d.first_name,
+      last_name: d.last_name,
+      has_avatar: d.foto === 'visible',
+    }));
+  return delay({ results });
+}
+
+/** Regla de n164: la foto de un menor (o sin foto) es el mismo 404 que todo lo demás. */
+export async function mockUsernameAvatar(raw: string, expectedSession: StoredSession): Promise<PrivateAvatarBlob> {
+  exigirUsernameMock(expectedSession);
+  const u = normalizarUsernameMock(raw);
+  const d = DIRECTORIO_ARROBA_MOCK.find((x) => x.username === u);
+  if (!d || d.foto !== 'visible' || bloqueadoPorArrobaMock(d)) throw new MockApiError(404, 'avatar_not_found');
+  const bytes = Uint8Array.from(atob(MOCK_JPEG_BASE64), (char) => char.charCodeAt(0));
+  return delay({ blob: new Blob([bytes], { type: 'image/jpeg' }) });
+}
+
+/** El `payme_id` de la persona del store con ese @, para que la solicitud siga su camino. */
+function paymeIdPorArrobaMock(raw: string): string | undefined {
+  const u = normalizarUsernameMock(raw);
+  return DIRECTORIO_ARROBA_MOCK.find((d) => d.username === u)?.payme;
 }
 
 export function mockFriendRequests(direction: 'incoming'): Promise<IncomingFriendRequestsResponse>;
