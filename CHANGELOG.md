@@ -11,6 +11,26 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.198.1 — Alta con Google en redirect sin popup mientras carga el aviso; mock con el @ encendido (decisión 103) (2026-09-27)
+
+Misma orden AF-GOOGLE-ALTA-REDIRECT-CLAUDE-20260927. Decisión 103 de Mati (`d819c45c…`, 27/09): «No lo dejes
+apagado… publicá sin problema». El @usuario ya está encendido en producción, y el alta con Google en la misma
+pestaña se enciende al publicar: la rama encendida es la que va a usar la gente.
+
+- **Con el alta en redirect encendida, no hay popup mientras carga el aviso.** Antes de que cargue, el alta en
+  un toque todavía no existe, y el botón de arriba de «Crea tu cuenta» era la «captura» en POPUP, justo el que
+  falla en iPhone. Ahora no aparece hasta que puede ir en redirect (wire D102 §1). Apagado queda igual que
+  antes, con el popup de siempre en esa ventana; el e2e lo fija como control.
+- **El mock, alineado a lo servido:**
+  - el @ está encendido por defecto y se apaga con `'false'`;
+  - la cuenta demo trae su @ (`mativeron`), y `null` en el mapa la declara sin @;
+  - un seam de latencia del aviso abre, en el e2e, la ventana antes de que cargue.
+- **e2e:**
+  - el toque antes del aviso, con el control apagado;
+  - la cadena como está servida: alta 201 → «Elige tu @usuario» → adentro;
+  - `usuario-arroba.spec.ts` ajustado al default encendido (apagado queda como tolerancia).
+- **Mutante M19** (vuelve el popup mientras carga el aviso): cazado por su test.
+
 ## 0.198.0 — «Crea tu cuenta» con Google en la misma pestaña (decisión 102), APAGADO detrás de `google_redirect_signup` (2026-09-27)
 
 Orden AF-GOOGLE-ALTA-REDIRECT-CLAUDE-20260927 (sha256 974c6c22…). Decisión 102 (`7c16421c…`). Dueño servido
