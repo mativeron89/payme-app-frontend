@@ -11,6 +11,57 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.201.0 — Con el alta de Google en la misma pestaña, ningún Google en popup; y el @ se cambia desde un lápiz (2026-09-27)
+
+Orden AF-ALTA-POPUP-D106-CLAUDE-20260927 (sha256 9dd02d52…). Decisiones 92, 102, 103 y 106. Base `0.200.1`
+(`198c18f`).
+
+1. **El alta con Google de Mati salió en popup** («400 … malformed», el síntoma del popup en el iPhone).
+   - **Medido:** el dueño registró un `POST /google/continue` a las 17:47:39Z y cero `POST /auth/google/redirect`.
+     En la app, `/google/continue` sale sólo de un botón `continue` en popup. Con la capability leída con las tres
+     encendidas, ese botón no existe en ningún camino (censo en el CIERRE).
+   - **Deducido del código, no medido en el teléfono:** la página tenía en memoria el alta en popup, porque la
+     capability se leía una vez por página y cerrar sesión no recarga (se encendió a las ~04:27Z).
+   - **No cerrado:** la captura de Configuración de las 17:51Z muestra el @ debajo del nombre, que es 0.199.0 o
+     posterior, publicado después del encendido. Si es la misma carga de página del intento, esta causa no alcanza.
+     Lo decide el AB: si ese teléfono pidió `/api/config` entre las 04:27Z y las 17:47:39Z.
+   - **Descartado, medido:**
+     - la reinicialización de GIS: el modo queda fijo en cada botón al dibujarlo;
+     - la configuración de Google: el redirect con `state` `alta:` llega a la pantalla de ingreso de Google, y el
+       control con un `login_uri` sin registrar da otro error («Access blocked»);
+     - la forma de `google_redirect_signup`: la que sirve el dueño es la que la app decodifica.
+   - **Arreglo:**
+     - la pantalla de ingreso relee `/api/config` al montar y al volver a la pestaña (`visibilitychange`, y
+       `pageshow` del bfcache);
+     - hasta la primera respuesta no dibuja Google; al volver, el botón queda inerte hasta releer y se redibuja sólo
+       si cambió el modo.
+   - **Con `google_redirect_signup` encendido ningún botón de ingreso o alta abre popup** (`abreGoogleEnPopup`).
+     Dos casos raros que sólo tenían popup dejan de ofrecer Google y queda el alta con correo, sin callejón:
+     - el aviso con una versión que `continue` no acepta (el paso de 0.200.0);
+     - el alta sólo por invitación.
+   - **Sin cambio, declarado:** «Vincular Google» en Cuentas conectadas sigue en popup. No es alta ni ingreso, y el
+     dueño no tiene un redirect para vincular.
+   - Mock: costura de la versión del aviso para el caso raro.
+2. **Decisión 106: se saca la tarjeta «Tu @usuario»** de Configuración.
+   - El @ debajo del nombre lleva un lápiz como el del nombre.
+   - Con el cambio permitido abre el editor de siempre (30 días). Si todavía no se puede, dice desde cuándo, con la
+     fecha del dueño; la fecha ya no queda escrita a la vista.
+   - «Listo, tu @ ahora es…» va en el aviso breve, como «Nombre actualizado».
+   - Se retiran dos frases que sólo usaba la tarjeta y se suma «Cambiar tu @».
+- **e2e:** uno por camino del censo, con la configuración de producción. El testigo registra TODOS los botones de
+  Google dibujados en cada documento, no sólo el último.
+- **Mutantes:** 19 plantados, 18 cazados; se lee qué test cae.
+  - sin relectura (la conducta de 0.200.1): caen el caso de Mati, la pantalla abierta, el bfcache y «no redibuja»;
+  - sin `visibilitychange`, sin `pageshow`, dibujar mientras confirma, no inerte al releer: cada uno por su test;
+  - `pasoGoogle` y `capturaGoogle` de antes, y la costura de versión ignorada: cae la versión no aceptada;
+  - relectura (respuesta vieja que pisa, siempre objeto nuevo, pending que pide aparte) y `abreGoogleEnPopup`: los
+    unitarios. «Pide aparte» sobrevivió primero: el unitario era ciego por un `import()` concurrente de vitest; se
+    corrigió en un commit sucesor y cae;
+  - decisión 106 (fecha siempre a la vista, el lápiz abre sin poder, el lápiz no dice la fecha, el 409 no la dice,
+    sin «Listo», sin lápiz): cada uno por su e2e;
+  - **equivalente, declarado:** sin la guarda central `abreGoogleEnPopup` en la pantalla no cae nada, porque
+    `pasoGoogle` y `capturaGoogle` ya cierran todos los caminos a popup. Queda como segunda barrera.
+
 ## 0.200.1 — Las ventanas del refresco de la mesa, cerradas en los e2e; y dos e2e que no ejercitaban lo que dicen (2026-09-27)
 
 Orden AF-HIGIENE-2-CLAUDE-20260927 (sha256 2dac3730…). Base `0.200.0` (`478e94d`). Sólo pruebas: sin cambios de
