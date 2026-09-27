@@ -48,14 +48,18 @@ router.use(requireAuth);
 /**
  * Proyección pública de una persona. **Nunca** email ni teléfono.
  * `payme_id` sí: es el identificador que la propia app muestra para agregar.
+ * v2.139.0 · decisión 104 · con USERNAME_ENABLED, también su @ (`username`, o
+ * null si todavía no eligió), el mismo dato público de la búsqueda por @. Apagada,
+ * la proyección queda exactamente como antes.
  */
-const PERSONA_SQL = 'u.id, u.payme_id, u.first_name, u.last_name';
+const PERSONA_SQL = 'u.id, u.payme_id, u.first_name, u.last_name, u.username';
 const persona = (r) => ({
   id: r.id,
   payme_id: r.payme_id,
   first_name: r.first_name,
   last_name: r.last_name,
   full_name: `${r.first_name} ${r.last_name}`,
+  ...(username.habilitado() && { username: r.username ?? null }),
 });
 
 /**

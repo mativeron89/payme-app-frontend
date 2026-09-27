@@ -6,6 +6,40 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-27** (orden `AF-USERNAME-D104-CLAUDE-20260927` · el @
+  de la otra persona en lugar del código `payme_…`, decisión 104).
+- Commit exacto y procedencia del CONTENIDO:
+  **`ef3dac45df538dc40f0c4abe48ff8d978536d17e`** (App Backend **v2.139.0**, commit A:
+  `username` en `GET /api/friends`, `requests[].user` de las entrantes,
+  `GET /api/groups/:id` y `GET /api/mesas/:code/participants`, sólo con
+  `USERNAME_ENABLED`; y el Aviso desligado del alta por @, decisión 103).
+- Commit del que se tomó el inventario autoritativo:
+  **`7f080cd56c1f41642bea8750416ef7c07c6c9fe2`** (v2.139.0, commit B: regenera el
+  inventario sobre `ef3dac4`), publicado en `main` y **sin desplegar**: el AB
+  servido sigue en `96634167`, sin el campo. Por eso este AF tolera la clave
+  antes del deploy del dueño.
+  Wire del dueño: `docs/USERNAME_EN_LISTAS_D104_WIRE.md` en `7f080cd`, sha256
+  `a9f09c45f997524889e99431cfb4cd2e5c440f419d9f7c9f83a9f0e95ef1daef`.
+
+**121 archivos espejados**, los mismos: no entra ni sale ninguno. Cambian
+`contract/social-auth-v1.json`, `routes/config.js`, `routes/friends.js`,
+`routes/groups.js` y `routes/mesas.js`.
+
+La fuente se leyó con `git show` sobre objetos del repo del owner, sin tocar su
+árbol ni sus refs.
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | adoptado y verificado 121 · commit `ef3dac4` · exit 0 |
+| `--integridad` | **OK 121/121** · exit 0 |
+| `--paridad` | **OK 121/121**: espejo = inventario = fuente **en `ef3dac4`** · exit 0 |
+| vigencia | medida contra el publicado **`7f080cd`** con `git diff --name-only ef3dac4 7f080cd`: cambia sólo `contract/mirror-inventory.json`, que no es una de las 121 rutas. **Ninguna cambió.** No se usó `--vigencia`, que mira el HEAD local del owner. |
+
+Como en el refresh anterior, el inventario se toma del commit que lo CONTIENE
+(`7f080cd`), no del que nombra (`ef3dac4`).
+
+### Refresh anterior · 2026-09-27 (AF-GOOGLE-ALTA-REDIRECT · `07ab163`)
+
 - Fecha del refresh: **2026-09-27** (orden `AF-GOOGLE-ALTA-REDIRECT-CLAUDE-20260927` ·
   «Crea tu cuenta» con Google en la misma pestaña, decisión 102).
 - Commit exacto y procedencia del CONTENIDO:
@@ -36,7 +70,7 @@ La fuente se leyó con `git show` sobre objetos del repo del owner, sin tocar su
 nombra (`07ab163`): en `07ab163` todavía está el inventario anterior, y adoptarlo
 falla por contenido (pasó en este refresh y la adopción se negó, como debe).
 
----
+### Refresh anterior · 2026-09-26 (AF-GOOGLE-REDIRECT · `57b06a7`)
 
 - Fecha del refresh: **2026-09-26** (orden `AF-GOOGLE-REDIRECT-CLAUDE-20260926` ·
   ingreso con Google en la misma pestaña, decisiones 92 y 94).

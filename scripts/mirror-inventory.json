@@ -1,7 +1,7 @@
 {
   "_comentario": "GENERADO por scripts/generar-inventario-mirror.js. No editar a mano.",
   "version": 1,
-  "commit": "07ab163c7d80b4c2554b8ca60efb7ec22990ce87",
+  "commit": "ef3dac45df538dc40f0c4abe48ff8d978536d17e",
   "total": 121,
   "archivos": [
     {
@@ -49,8 +49,8 @@
     {
       "origen": "contract/social-auth-v1.json",
       "destino": "contract/social-auth-v1.json",
-      "sha256": "be3b8fcbc26933a2d417b3081e78231470e6f2a844be233a8f5b18976842555f",
-      "bytes": 26116
+      "sha256": "74e181628467493fb1be6b816beedc410b55bd9c8601c965330f35df04936538",
+      "bytes": 26054
     },
     {
       "origen": "db/migrate_abono_spei_v2.8.sql",
@@ -373,8 +373,8 @@
     {
       "origen": "routes/config.js",
       "destino": "routes/config.js",
-      "sha256": "3bb1f9bdd5196b778f1a1e6a660ab5e3d827683031ff117b1af8681cfeaa9523",
-      "bytes": 11150
+      "sha256": "b3567cbf47e67812000ae626ed6c6ce130f9791d49450df49e14713568a92602",
+      "bytes": 11148
     },
     {
       "origen": "routes/connect.js",
@@ -391,14 +391,14 @@
     {
       "origen": "routes/friends.js",
       "destino": "routes/friends.js",
-      "sha256": "42db1006607f00e981de5b579bc79333642088d5962a474948cf2d93dac851c7",
-      "bytes": 25640
+      "sha256": "65590c820220167f10c4a9930ea0fa6fbfdee052d03cdfa08b245a623bbd0382",
+      "bytes": 25937
     },
     {
       "origen": "routes/groups.js",
       "destino": "routes/groups.js",
-      "sha256": "27e66bd25f124fe4efef75c46a2b49dfa1947d2a762daa1817758923851bc005",
-      "bytes": 4998
+      "sha256": "0e9b9eed34502ab12a90ec387f335b67cba29bcd15bfb3c6d9ca89a0409a65e6",
+      "bytes": 5442
     },
     {
       "origen": "routes/invitations.js",
@@ -409,8 +409,8 @@
     {
       "origen": "routes/mesas.js",
       "destino": "routes/mesas.js",
-      "sha256": "6b79420697de814bc2817001c8e6abcee69538f2270aea170471357916781d55",
-      "bytes": 193326
+      "sha256": "090654dad6233fcc83b6284a4695adeb6d4587b3f148b98b5ccad0b37e1009e2",
+      "bytes": 193695
     },
     {
       "origen": "routes/notificationPreferences.js",

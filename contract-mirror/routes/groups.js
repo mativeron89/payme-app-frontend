@@ -8,6 +8,7 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { createGroup, updateGroup, addGroupMember, validateBody } = require('../schemas');
 const logger = require('../utils/logger');
+const username = require('../services/username');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -40,11 +41,20 @@ router.get('/:id', async (req, res, next) => {
       // de privacidad vigente afirma «tus amigos no ven tu
       // correo»: mientras esta línea lo devolviera, esa frase era falsa.
       // El identificador que se comparte a propósito es `payme_id`.
-      `SELECT u.id, u.payme_id, u.first_name, u.last_name
+      `SELECT u.id, u.payme_id, u.first_name, u.last_name, u.username
          FROM friend_group_members m JOIN users u ON u.id = m.friend_user_id
         WHERE m.group_id = $1`, [group.id]
     );
-    res.json({ group, members });
+    // v2.139.0 · decisión 104 · el @ del integrante sólo con USERNAME_ENABLED;
+    // apagada, las mismas cuatro claves de siempre.
+    const conArroba = username.habilitado();
+    res.json({
+      group,
+      members: members.map((m) => ({
+        id: m.id, payme_id: m.payme_id, first_name: m.first_name, last_name: m.last_name,
+        ...(conArroba && { username: m.username ?? null }),
+      })),
+    });
   } catch (err) { next(err); }
 });
 

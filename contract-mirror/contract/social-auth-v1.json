@@ -370,7 +370,7 @@
     "since": "v2.138.0",
     "path": "features.google_redirect_signup",
     "shape": { "supported": "boolean (true)", "enabled": "boolean" },
-    "enabled_true_when": "GOOGLE_REDIRECT_SIGNUP_ENABLED=true, features.google_redirect.enabled true y el inventario del Aviso vigente declara la frase google_alta_redirect_transitoria presente en el Aviso servido",
+    "enabled_true_when": "GOOGLE_REDIRECT_SIGNUP_ENABLED=true y features.google_redirect.enabled true (v2.138.1 · decisión 103: sin atadura al Aviso)",
     "absent_means": "backend anterior a v2.138.0: «Crea tu cuenta» con Google en popup"
   },
   "google_continue_capability": {

@@ -58,6 +58,7 @@ const shortfallDetails = require('../services/shortfallDetails');
 const nativeWalletCapability = require('../services/nativeWalletCapability');
 
 const informativeSelections = require('../services/informativeSelections');
+const usernameSvc = require('../services/username');
 const router = express.Router();
 const { validateBody, validateParams } = schemas;
 const ITEM_LOCK_SECONDS = Number(process.env.ITEM_LOCK_SECONDS) || 600;
@@ -1531,7 +1532,7 @@ router.get('/:code/participants', requireAuth, requireMesaParticipant, async (re
     }
     const { rows } = await pool.query(
       `SELECT p.id AS participant_id, p.user_id,
-              u.first_name, u.last_name, u.payme_id, u.status,
+              u.first_name, u.last_name, u.payme_id, u.username, u.status,
               EXISTS (SELECT 1 FROM user_avatars a WHERE a.user_id = p.user_id) AS tiene_foto
          FROM mesa_participants p
          LEFT JOIN users u ON u.id = p.user_id
@@ -1540,6 +1541,9 @@ router.get('/:code/participants', requireAuth, requireMesaParticipant, async (re
         ORDER BY p.joined_at ASC, p.id ASC`,
       [req.mesa.id, req.user.id]
     );
+    // v2.139.0 · decisión 104 · con USERNAME_ENABLED, también el @ (o null: sin
+    // cuenta, sin @ elegido o eliminada). Apagada, las mismas cinco claves.
+    const conArroba = usernameSvc.habilitado();
     const participants = [];
     for (const r of rows) {
       participants.push({
@@ -1548,6 +1552,7 @@ router.get('/:code/participants', requireAuth, requireMesaParticipant, async (re
         last_name: r.last_name ?? null,
         payme_id: r.status === 'deleted' ? null : (r.payme_id ?? null),
         has_avatar: await fotoVisibleAlOrganizador(r),
+        ...(conArroba && { username: r.status === 'deleted' ? null : (r.username ?? null) }),
       });
     }
     res.json({ participants });

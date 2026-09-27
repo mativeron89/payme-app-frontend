@@ -177,8 +177,8 @@ router.get('/', (req, res) => {
       },
       // v2.138.0 · decisión 102 · «Crea tu cuenta» con Google en la misma pestaña.
       // Bloque hermano, mismo criterio. `enabled` es el valor VIVO: la bandera
-      // GOOGLE_REDIRECT_SIGNUP_ENABLED, el redirect de la fase 1 encendido y un Aviso
-      // vigente que cubra el guardado transitorio. Con `false`, el alta sigue en popup.
+      // GOOGLE_REDIRECT_SIGNUP_ENABLED y el redirect de la fase 1 encendido (v2.138.1 ·
+      // decisión 103: sin atadura al Aviso). Con `false`, el alta sigue en popup.
       google_redirect_signup: {
         supported: true,
         enabled: googleRedirectSignup.habilitado(),
