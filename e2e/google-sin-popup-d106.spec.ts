@@ -248,6 +248,17 @@ test.describe('AF-ALTA-POPUP-D106 · la capability se vuelve a leer', () => {
     await expect(google(page)).not.toHaveAttribute('data-ux-mode', /.*/);
   });
 
+  test('vuelta desde el bfcache (pageshow persisted, sin visibilitychange): también relee', async ({ page }) => {
+    await preparar(page, { altaRedirect: false });
+    await page.goto('/');
+    await creaTuCuenta(page).click();
+    await expect(google(page)).not.toHaveAttribute('data-ux-mode', /.*/);
+    await page.evaluate((k) => localStorage.setItem(k, 'true'), ALTA_REDIRECT);
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+    await esAltaEnRedirect(page);
+    expect(await releyendo(page)).toEqual([true]);
+  });
+
   test('una respuesta que no cambia nada no vuelve a dibujar el botón', async ({ page }) => {
     await preparar(page);
     await page.goto('/');

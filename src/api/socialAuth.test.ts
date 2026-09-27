@@ -425,8 +425,7 @@ describe('AF-ALTA-POPUP-D106 · releer la capability', () => {
     const relectura = releerSocialAuthCapability();
     await vi.waitFor(() => { expect(getConfig).toHaveBeenCalledTimes(1); });
     release?.(conAlta(true));
-    await primera;
-    expect(await relectura).toBe(true);
+    await Promise.all([primera, relectura]);
     expect(getConfig).toHaveBeenCalledTimes(1);
     expect(socialAuthSnapshot().googleRedirectSignup.enabled).toBe(true);
   });
@@ -437,7 +436,7 @@ describe('AF-ALTA-POPUP-D106 · releer la capability', () => {
     expect(socialAuthSnapshot().googleRedirectSignup.enabled).toBe(false);
     const avisos = vi.fn();
     const soltar = subscribeSocialAuth(avisos);
-    expect(await releerSocialAuthCapability()).toBe(true);
+    await releerSocialAuthCapability();
     soltar();
     expect(getConfig).toHaveBeenCalledTimes(2);
     expect(socialAuthSnapshot().googleRedirectSignup.enabled).toBe(true);
@@ -450,8 +449,9 @@ describe('AF-ALTA-POPUP-D106 · releer la capability', () => {
     const antes = socialAuthSnapshot();
     const avisos = vi.fn();
     const soltar = subscribeSocialAuth(avisos);
-    expect(await releerSocialAuthCapability()).toBe(true);
+    await releerSocialAuthCapability();
     soltar();
+    expect(getConfig).toHaveBeenCalledTimes(2);
     expect(socialAuthSnapshot()).toBe(antes);
     expect(avisos).not.toHaveBeenCalled();
   });
@@ -475,11 +475,12 @@ describe('AF-ALTA-POPUP-D106 · releer la capability', () => {
     expect(socialAuthSnapshot().googleRedirectSignup.enabled).toBe(true);
   });
 
-  it('si falla, resuelve false y queda lo último leído', async () => {
+  it('si falla, resuelve igual y queda lo último leído', async () => {
     getConfig.mockResolvedValueOnce(conAlta(true)).mockRejectedValueOnce(new Error('network_down'));
     await ensureSocialAuthCapability();
     const antes = socialAuthSnapshot();
-    expect(await releerSocialAuthCapability()).toBe(false);
+    await releerSocialAuthCapability();
+    expect(getConfig).toHaveBeenCalledTimes(2);
     expect(socialAuthSnapshot()).toBe(antes);
   });
 });

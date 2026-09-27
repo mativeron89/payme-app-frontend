@@ -584,17 +584,14 @@ export function useSocialAuthCapability(): SocialAuthState {
  *   más nueva no pisa el estado;
  * - con el mismo contenido conserva el MISMO objeto: la pantalla no se entera y
  *   el botón de Google no se vuelve a montar.
- * Resuelve `true` si llegó una config y `false` si falló. Si falló queda lo último
- * leído, como con la primera lectura: sin `/api/config` tampoco hay ida a Google
- * que pueda salir bien.
+ * Si falla queda lo último leído, como con la primera lectura: sin `/api/config`
+ * tampoco hay ida a Google que pueda salir bien.
  */
 let relecturaPedida = 0;
 let relecturaAplicada = 0;
 
-export function releerSocialAuthCapability(): Promise<boolean> {
-  if (state.status === 'pending') {
-    return ensureSocialAuthCapability().then(() => state.status !== 'pending');
-  }
+export function releerSocialAuthCapability(): Promise<void> {
+  if (state.status === 'pending') return ensureSocialAuthCapability();
   const propia = ++relecturaPedida;
   return import('./index')
     .then(({ api }) => api.getConfig())
@@ -607,9 +604,8 @@ export function releerSocialAuthCapability(): Promise<boolean> {
           for (const listener of [...listeners]) listener();
         }
       }
-      return true;
     })
-    .catch(() => false);
+    .catch(() => undefined);
 }
 
 /**
