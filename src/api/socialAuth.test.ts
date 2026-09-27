@@ -422,8 +422,12 @@ describe('AF-ALTA-POPUP-D106 · releer la capability', () => {
     let release: ((value: unknown) => void) | undefined;
     getConfig.mockReturnValue(new Promise((resolve) => { release = resolve; }));
     const primera = ensureSocialAuthCapability();
-    const relectura = releerSocialAuthCapability();
+    // La relectura sale con la primera ya pedida y todavía sin respuesta. Antes
+    // salía en el mismo tick y el mutante «pide aparte» sobrevivía: dos `import()`
+    // dinámicos concurrentes del módulo mockeado, en vitest, resuelven el
+    // segundo al real, y su request no llegaba a este contador.
     await vi.waitFor(() => { expect(getConfig).toHaveBeenCalledTimes(1); });
+    const relectura = releerSocialAuthCapability();
     release?.(conAlta(true));
     await Promise.all([primera, relectura]);
     expect(getConfig).toHaveBeenCalledTimes(1);
