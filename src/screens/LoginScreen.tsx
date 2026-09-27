@@ -49,6 +49,7 @@ import {
   type SignupInvitationCapture,
 } from '../api/signupInvitation';
 import { PATH_PRIVACIDAD, PATH_TERMINOS } from '../public/publicRoute';
+import { useRecargaPorVersionNueva } from '../api/versionPublicada';
 import type { LegalAcceptanceRequest, LegalTextResponse } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 
@@ -426,7 +427,18 @@ export function modeAfterSignupSnapshot(
  * quien viene a registrarse aterriza en el login y tiene que buscar el toggle.
  * El alta en sí NO se rediseña acá: sigue siendo este formulario tal cual.
  */
-export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register' } = {}) {
+export function LoginScreen({
+  initialMode,
+  recargaPorVersion = false,
+}: {
+  initialMode?: 'login' | 'register';
+  /**
+   * AF-VERSION-NUEVA · sólo el ingreso que monta `App` puede recargar la
+   * pestaña si hay una versión publicada más nueva. El de `JoinMesaScreen` no:
+   * es el alta en medio de un link de mesa.
+   */
+  recargaPorVersion?: boolean;
+} = {}) {
   const { t, idioma } = useIdioma();
   const {
     login,
@@ -1634,6 +1646,22 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   // releer la capability; si el modo cambió, se vuelve a dibujar con el nuevo.
   // Sin atenuarlo: dura lo que tarda `/api/config` y no es un requisito que falte.
   const googleReleyendo = confirmacionSocial === 'releyendo';
+
+  /**
+   * AF-VERSION-NUEVA · la pestaña se recarga sola si hay una versión publicada
+   * más nueva, SÓLO con la pantalla intacta: nada escrito ni marcado, ningún
+   * cartel a la vista, ningún paso de Google, código o token en memoria, y
+   * nada en vuelo. Recargar en cualquiera de esos casos perdería algo.
+   */
+  const pantallaIntacta = !busy && !socialBusy && !recoveryBusy && !recoveryAccepted
+    && error === null && facebookCallbackPhase !== 'error'
+    && altaVuelta === 'nada' && !altaConGoogle && !pasoVincular && !tieneCredencial && !perfilGoogle
+    && email === '' && password === '' && firstName === '' && lastName === ''
+    && !aceptaMayor && !aceptaTerminos;
+  useRecargaPorVersionNueva(
+    recargaPorVersion,
+    () => pantallaIntacta && !hayCodigoAlta() && !authActionActive.current,
+  );
   // Una sola vez en pantalla: si la ranura de Google ya las muestra (Google
   // PRIMERO en «Crea tu cuenta»), el formulario de abajo no las repite; las
   // mismas dos casillas gobiernan los dos caminos.

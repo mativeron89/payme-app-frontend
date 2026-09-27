@@ -396,7 +396,12 @@ describe.each([0, 1])('artefacto distribuible #%i', (i) => {
     // Agregar la extensión acá NO alcanzaba por sí solo: sin la entrada en
     // `BINARIOS_AUTORIZADOS`, un PNG emitido caía en «binario no autorizado».
     // Las dos mitades son la decisión, y ninguna relaja a la otra.
-    const CONOCIDAS = ['.html', '.css', '.js', '.ttf', '.txt', '.svg', '.webmanifest', '.png'];
+    //
+    // 🔴 `.json` entra el 2026-09-27 con `/version.json` (orden
+    // AF-VERSION-NUEVA): la versión publicada, que una pestaña vieja compara con
+    // la suya en el ingreso. Va del lado de TEXTO PARSEADO, dentro del barrido
+    // de egress, y el test de abajo fija que es EL ÚNICO `.json` y su forma.
+    const CONOCIDAS = ['.html', '.css', '.js', '.ttf', '.txt', '.svg', '.webmanifest', '.png', '.json'];
     const raras = art()
       .archivos.filter((a) => !CONOCIDAS.some((e) => a.endsWith(e)));
     expect(raras, `archivos de tipo no clasificado: ${raras.join(' · ')}`).toEqual([]);
@@ -410,6 +415,15 @@ describe.each([0, 1])('artefacto distribuible #%i', (i) => {
    * saca los PNG de `BINARIOS_AUTORIZADOS`. Esto fija de qué LADO cayó cada
    * uno, que es lo que la orden adjudicó.
    */
+  it('🔴 `version.json` es el único `.json`, se barre como texto y dice sólo la versión del package.json', () => {
+    const jsons = art().archivos.filter((a) => a.endsWith('.json'));
+    expect(jsons, 'el artefacto emite otro `.json` o dejó de emitir la versión').toEqual(['version.json']);
+    expect(Object.keys(art().binarios)).not.toContain('version.json');
+    expect(art().inertes).not.toContain('version.json');
+    const { version } = JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8')) as { version: string };
+    expect(JSON.parse(art().porArchivo['version.json'] ?? 'null')).toEqual({ version });
+  });
+
   it('🔴 el manifest se barre como texto y los iconos se verifican por hash', () => {
     const manifest = art().archivos.filter((a) => a.endsWith('.webmanifest'));
     expect(manifest, 'el artefacto dejó de emitir el manifest').toEqual(['manifest.webmanifest']);

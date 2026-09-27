@@ -114,10 +114,40 @@ function emitirServiceWorker(): Plugin {
   };
 }
 
+/**
+ * AF-VERSION-NUEVA · la versión que corre y la publicada salen del MISMO
+ * `package.json`: la primera va embebida en el bundle (`__APP_VERSION__`) y la
+ * segunda es `/version.json`, que emite el build (real y mock) y sirve el
+ * servidor de desarrollo. Una pestaña abierta compara las dos en el ingreso
+ * (`src/api/versionPublicada.ts`). En Vercel, `/version.json` va con
+ * `Cache-Control: no-store` (`vercel.ts`).
+ */
+const VERSION_PAQUETE = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version;
+
+function versionPublicada(): Plugin {
+  const cuerpo = `${JSON.stringify({ version: VERSION_PAQUETE })}\n`;
+  return {
+    name: 'payme-version-publicada',
+    configureServer(server) {
+      server.middlewares.use('/version.json', (_req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(cuerpo);
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: cuerpo });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), exigirApiUrl(), emitirServiceWorker()],
+  plugins: [react(), exigirApiUrl(), emitirServiceWorker(), versionPublicada()],
   server: { port: 5174 },
-  define: { __ARBOL_SERVIDO__: JSON.stringify(arbolServido()) },
+  define: {
+    __ARBOL_SERVIDO__: JSON.stringify(arbolServido()),
+    __APP_VERSION__: JSON.stringify(VERSION_PAQUETE),
+  },
   // Sin esto, vitest reemplaza todo módulo CSS por un stub vacío (`css: false`
   // es su default), incluso el import `?raw` con el que designTokens.test.ts
   // verifica los tokens del sistema de diseño: el archivo llegaba como "".

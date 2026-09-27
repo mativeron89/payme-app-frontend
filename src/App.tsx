@@ -228,7 +228,9 @@ function Shell() {
     );
   }
 
-  if (!session) return <LoginScreen />;
+  // AF-VERSION-NUEVA · este ingreso (no el del link de mesa) puede recargar una
+  // pestaña vieja si hay una versión publicada más nueva.
+  if (!session) return <LoginScreen recargaPorVersion />;
 
   if (puertaCerrada) return puertaCerrada;
   if (arrobaCerrada) return arrobaCerrada;

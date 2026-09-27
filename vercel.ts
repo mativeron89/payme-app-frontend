@@ -186,6 +186,17 @@ export const REWRITE_GOOGLE_REDIRECT = {
   destination: 'https://payme-app-backend-production.up.railway.app/api/auth/google/redirect',
 };
 
+/**
+ * AF-VERSION-NUEVA · `/version.json` (la versión publicada, que emite el build)
+ * nunca se cachea: una pestaña vieja la compara con la suya en el ingreso y, si
+ * es más nueva, recarga una vez (`src/api/versionPublicada.ts`). Ruta EXACTA,
+ * sólo en el proyecto App, sin `Referrer-Policy`: no es una superficie Meta.
+ */
+export const CABECERA_VERSION_PUBLICADA = {
+  source: '/version.json',
+  headers: [{ key: 'Cache-Control', value: 'no-store' }],
+};
+
 export const config = {
   // 🔴 PRIMERA PROPIEDAD Y FUERA DE TODA CONDICIÓN. No depende del artefacto,
   // del entorno ni de nada que el panel de Vercel pueda no tener puesto.
@@ -199,5 +210,6 @@ export const config = {
   headers: [
     ...cabecerasCsp,
     ...(esApp ? paths.map((source) => ({ source, headers })) : []),
+    ...(esApp ? [CABECERA_VERSION_PUBLICADA] : []),
   ],
 };

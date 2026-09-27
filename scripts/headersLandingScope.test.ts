@@ -71,10 +71,13 @@ describe('vercel.ts · aislamiento causal por identidad de proyecto', () => {
     expect(rewrites.length).toBeGreaterThan(2);
     // n186 · delante va el bloque global de CSP en Report-Only (sus directivas
     // las fija `csp.test.ts`); las dos reglas Meta siguen exactamente iguales.
-    const [csp, ...meta] = r.config!['headers'] as Array<{ source: string; headers: Array<{ key: string }> }>;
+    const [csp, ...resto] = r.config!['headers'] as Array<{ source: string; headers: Array<{ key: string }> }>;
     expect(csp?.source).toBe('/(.*)');
     expect(csp?.headers.map((h) => h.key)).toEqual(['Content-Security-Policy-Report-Only']);
+    // AF-VERSION-NUEVA · al final, `/version.json` sin caché, exacta y sin más.
+    const meta = resto.slice(0, -1);
     expect(meta).toEqual(PATHS.map((source) => ({ source, headers: PARES })));
+    expect(resto.at(-1)).toEqual({ source: '/version.json', headers: [{ key: 'Cache-Control', value: 'no-store' }] });
   });
 
   it('landing conserva el gate Git pero no recibe ninguna regla Meta', () => {
