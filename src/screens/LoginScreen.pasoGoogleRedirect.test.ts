@@ -28,7 +28,7 @@ describe('AF-HIGIENE-ALTA · cuándo el paso de Google tras el error va en redir
     expect(pasoGoogleEnRedirect({ ...TODO, avisoListo: false, versionContinue: null })).toBe(true);
   });
 
-  it('🔴 aviso cargado con una versión que `continue` NO acepta ⇒ el paso de siempre, no un callejón', () => {
+  it('🔴 aviso cargado con una versión que `continue` NO acepta ⇒ no va en redirect (con el alta en la misma pestaña el paso no se ofrece: D106)', () => {
     expect(pasoGoogleEnRedirect({ ...TODO, versionContinue: null })).toBe(false);
   });
 

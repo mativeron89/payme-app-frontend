@@ -1621,6 +1621,19 @@ function latenciaAvisoMock(): number {
   return Number.isInteger(n) && n > 0 && n <= 10_000 ? n : 0;
 }
 
+/**
+ * AF-ALTA-POPUP-D106 · seam de e2e: la versión del aviso. Sólo se usa con un
+ * sufijo de prerelease (`2.3.0-rc.1`): la forma que el aviso admite y
+ * `continue` no, que es el caso raro sin alta en un toque. Cualquier otro valor
+ * se ignora y queda la versión de siempre.
+ */
+export const CLAVE_AVISO_VERSION_MOCK = 'payme.app.mock.aviso_version.v1';
+
+function versionAvisoMock(): string {
+  const v = leerSeam(CLAVE_AVISO_VERSION_MOCK);
+  return v !== null && /^\d{1,4}\.\d{1,4}\.\d{1,4}-[0-9A-Za-z.]{1,10}$/.test(v) ? v : MOCK_AVISO_VERSION;
+}
+
 export async function mockGetPrivacyNotice(): Promise<LegalTextResponse> {
   const extra = latenciaAvisoMock();
   if (extra > 0) await new Promise((resolve) => setTimeout(resolve, extra));
@@ -1631,7 +1644,7 @@ export async function mockGetPrivacyNotice(): Promise<LegalTextResponse> {
       // `accepted_notice_version` (`^\d{1,4}\.\d{1,4}\.\d{1,4}$`): con ella el
       // riel mock nunca podía ofrecer «Continuar con Google» en un toque. Que es
       // una demo lo sigue diciendo el cuerpo del aviso.
-      version: MOCK_AVISO_VERSION,
+      version: versionAvisoMock(),
       hash: FRIEND_AVATAR_NOTICE_HASH,
       effective_from: '2026-08-12T00:00:00.000Z',
       body: 'AVISO DE DEMOSTRACIÓN. Este texto sólo ejercita la puesta a disposición en el modo demo; no es el aviso productivo de PayMe.',

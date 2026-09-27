@@ -38,6 +38,7 @@ import { vigilarPopupGoogle, type VigiaPopupGoogle } from '../api/googlePopupDia
 import {
   linkIntentValido,
   socialAuthSnapshot,
+  useConfirmacionCapacidadSocial,
   useSocialAuthCapability,
 } from '../api/socialAuth';
 import { captureSessionStateWitness } from '../api/storage';
@@ -175,8 +176,10 @@ export function versionAvisoParaContinue(version: string | null): string | null 
  * - es ese paso y todavía no hay un `id_token` retenido ni un `422` en curso;
  * - el dueño publica el alta en la misma pestaña y el alta en un toque;
  * - y el aviso no cargó todavía, o cargó con una versión que `continue` acepta.
- *   Con una versión que no acepta (el camino 0.167.0), el paso vuelve al de
- *   siempre: sin esto quedaría sin botón y sin campos, un callejón sin salida.
+ *   Con una versión que no acepta, hasta 0.200.1 el paso volvía al de siempre,
+ *   con el botón en POPUP. AF-ALTA-POPUP-D106: con el alta en la misma pestaña
+ *   encendida ese paso ya no se ofrece y queda el alta con correo (ver
+ *   `pasoGoogle` y `abreGoogleEnPopup`); apagada, sigue el de siempre.
  */
 export function pasoGoogleEnRedirect(i: {
   readonly pasoGoogle: boolean;
@@ -325,7 +328,7 @@ type PaqueteState =
     simplificado: LegalTextResponse['legal_text'];
   };
 
-type GoogleActionAuthority =
+export type GoogleActionAuthority =
   | {
       readonly purpose: 'login';
       readonly clientId: string;
@@ -388,6 +391,25 @@ type GoogleActionAuthority =
       readonly lastName: string;
     };
 
+/**
+ * AF-ALTA-POPUP-D106 · ¿este botón abre Google en una ventana aparte? El popup es
+ * lo que falla en el iPhone («400 malformed»). Con `google_redirect_signup`
+ * encendido la pantalla no dibuja NINGÚN botón que dé `true` acá: ni el ingreso
+ * ni el alta. Un caso raro sin redirect posible se queda sin Google, con el alta
+ * con correo a la vista.
+ */
+export function abreGoogleEnPopup(autoridad: GoogleActionAuthority): boolean {
+  switch (autoridad.purpose) {
+    case 'login':
+      return !autoridad.redirect;
+    case 'continue':
+      return !autoridad.redirectAlta;
+    case 'captura':
+    case 'register':
+      return true;
+  }
+}
+
 export function modeAfterSignupSnapshot(
   current: 'login' | 'register',
   changed: boolean,
@@ -422,6 +444,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     anunciar,
   } = useAuth();
   const social = useSocialAuthCapability();
+  // AF-ALTA-POPUP-D106 · Google se dibuja con una capability releída por ESTA
+  // pantalla (al montar y al volver a la pestaña), no con la de la carga.
+  const confirmacionSocial = useConfirmacionCapacidadSocial();
   const signup = useSyncExternalStore(
     subscribeSignupInvitation,
     signupInvitationSnapshot,
@@ -537,13 +562,6 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
    * mientras la persona está acá, vuelve el formulario de alta completo en vez
    * de quedar una pantalla sin ningún botón.
    */
-  const pasoGoogle = mode === 'register'
-    && altaConGoogle
-    && signupAvailable
-    && social.google.enabled
-    && social.google.registration
-    && social.google.webClientId !== null;
-  const legalReady = legal.status === 'ready';
   /**
    * 🔴 AF-17 · «Continuar con Google» se ofrece sólo si el dueño lo publica
    * (`features.google_continue.supported`) Y la pantalla tiene cargado un aviso
@@ -554,6 +572,27 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   const versionAvisoContinue = versionAvisoParaContinue(
     legal.status === 'ready' ? legal.value.version : null,
   );
+  /**
+   * AF-ALTA-POPUP-D106 · con el alta en la misma pestaña encendida, ningún botón
+   * de ingreso o alta abre Google en popup (`abreGoogleEnPopup`). Los dos pasos
+   * que sólo tenían popup como salida —el aviso con una versión que `continue` no
+   * acepta, y el alta por invitación con el alta pública cerrada— dejan de
+   * ofrecer Google: queda el alta con correo, sin callejón.
+   */
+  const sinPopupGoogle = social.googleRedirectSignup.enabled;
+  const altaGoogleEnRedirectPosible = sinPopupGoogle
+    && social.googleContinue.supported
+    && social.googleContinue.oneTapSignup
+    && (legal.status !== 'ready' || versionAvisoContinue !== null);
+  const pasoGoogle = mode === 'register'
+    && altaConGoogle
+    && signupAvailable
+    && social.google.enabled
+    && social.google.registration
+    && social.google.webClientId !== null
+    // El `id_token` ya retenido no abre Google: «Crear mi cuenta» lo usa.
+    && (!sinPopupGoogle || tieneCredencial || (altaGoogleEnRedirectPosible && !perfilGoogle));
+  const legalReady = legal.status === 'ready';
   const continueOn = social.googleContinue.supported
     && versionAvisoContinue !== null
     && social.google.webClientId !== null;
@@ -587,7 +626,8 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     && signupAvailable
     && social.google.enabled
     && social.google.registration
-    && social.google.webClientId !== null;
+    && social.google.webClientId !== null
+    && (!sinPopupGoogle || altaGoogleEnRedirectPosible);
   /** AF-17 · el botón de arriba de «Crea tu cuenta» crea en un toque. */
   const unToqueEnAlta = capturaGoogle && continueOn && social.googleContinue.oneTapSignup;
   // Con el token retenido el paso no muestra Google: el alta sale con «Crear mi
@@ -652,7 +692,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
       requiereInvitacion: false,
     });
 
-  const autoridadCandidata = useMemo<GoogleActionAuthority | null>(() => {
+  const autoridadSinGuarda = useMemo<GoogleActionAuthority | null>(() => {
     const clientId = social.google.webClientId;
     if (!googleEligible || clientId === null) return null;
     const locale = idioma === 'en' ? 'en' : 'es';
@@ -729,6 +769,13 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     unToqueEnAlta,
     versionAvisoContinue,
   ]);
+  // AF-ALTA-POPUP-D106 · hasta que vuelva la capability que pidió esta pantalla,
+  // ningún botón (con la de la carga podría salir en popup); y con el alta en la
+  // misma pestaña encendida, ninguno en popup.
+  const autoridadCandidata = confirmacionSocial === 'confirmando'
+    || (autoridadSinGuarda !== null && sinPopupGoogle && abreGoogleEnPopup(autoridadSinGuarda))
+    ? null
+    : autoridadSinGuarda;
   /**
    * 🔴 AF-19 · la autoridad cambia de IDENTIDAD sólo cuando cambia su CONTENIDO.
    *
@@ -1583,6 +1630,10 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   // inerte —sin puntero ni foco— hasta marcarlas (`registro_y_puerta.txt`).
   const googlePuedeCrear = googleAuthority?.purpose === 'continue' || googleAuthority?.purpose === 'register';
   const googleInerte = paqueteVigente && googlePuedeCrear && !aceptacionLista;
+  // AF-ALTA-POPUP-D106 · de vuelta en la pestaña, el botón no responde hasta
+  // releer la capability; si el modo cambió, se vuelve a dibujar con el nuevo.
+  // Sin atenuarlo: dura lo que tarda `/api/config` y no es un requisito que falte.
+  const googleReleyendo = confirmacionSocial === 'releyendo';
   // Una sola vez en pantalla: si la ranura de Google ya las muestra (Google
   // PRIMERO en «Crea tu cuenta»), el formulario de abajo no las repite; las
   // mismas dos casillas gobiernan los dos caminos.
@@ -1591,9 +1642,10 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     <div className="social-provider-slot">
       {paqueteVigente && googlePuedeCrear && casillasLegales}
       <div
-        className={googleInerte ? 'social-google-gated' : undefined}
-        aria-disabled={googleInerte || undefined}
-        {...(googleInerte ? ({ inert: '' } as Record<string, string>) : {})}
+        className={[googleInerte && 'social-google-gated', googleReleyendo && 'social-google-releyendo']
+          .filter(Boolean).join(' ') || undefined}
+        aria-disabled={googleInerte || googleReleyendo || undefined}
+        {...(googleInerte || googleReleyendo ? ({ inert: '' } as Record<string, string>) : {})}
       >
         <div
           ref={setGoogleContainer}

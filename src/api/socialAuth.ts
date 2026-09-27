@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { AppConfig, SocialSessionResponse } from './types';
 import type { LegalAcceptanceRequest } from './types';
 
@@ -541,6 +541,8 @@ export function applySocialAuthConfig(config: unknown): SocialAuthState {
 export function resetSocialAuthForTests(): void {
   state = PENDING;
   inFlight = null;
+  relecturaPedida = 0;
+  relecturaAplicada = 0;
   for (const listener of [...listeners]) listener();
 }
 
@@ -565,4 +567,86 @@ export function ensureSocialAuthCapability(): Promise<void> {
 export function useSocialAuthCapability(): SocialAuthState {
   useEffect(() => { void ensureSocialAuthCapability(); }, []);
   return useSyncExternalStore(subscribeSocialAuth, socialAuthSnapshot, socialAuthSnapshot);
+}
+
+/**
+ * AF-ALTA-POPUP-D106 · 🔴 la capability se leía UNA vez por página y nunca más.
+ *
+ * Cerrar sesión no recarga la página, y una pestaña del iPhone vive días. Una
+ * página cargada antes de que el dueño encendiera `google_redirect_signup` (27/09,
+ * ~04:27Z) seguía creyendo que el alta iba en popup: el `POST /google/continue`
+ * de Mati de las 17:47:39Z sólo sale de un botón `continue` en popup, y con la
+ * capability leída después de encenderla ese botón no existe.
+ *
+ * `releerSocialAuthCapability` vuelve a pedir `/api/config`:
+ * - con la capability todavía `pending`, es la primera lectura y se comparte;
+ * - si no, es una request nueva; una respuesta vieja que llega después de una
+ *   más nueva no pisa el estado;
+ * - con el mismo contenido conserva el MISMO objeto: la pantalla no se entera y
+ *   el botón de Google no se vuelve a montar.
+ * Resuelve `true` si llegó una config y `false` si falló. Si falló queda lo último
+ * leído, como con la primera lectura: sin `/api/config` tampoco hay ida a Google
+ * que pueda salir bien.
+ */
+let relecturaPedida = 0;
+let relecturaAplicada = 0;
+
+export function releerSocialAuthCapability(): Promise<boolean> {
+  if (state.status === 'pending') {
+    return ensureSocialAuthCapability().then(() => state.status !== 'pending');
+  }
+  const propia = ++relecturaPedida;
+  return import('./index')
+    .then(({ api }) => api.getConfig())
+    .then((config) => {
+      if (propia > relecturaAplicada) {
+        relecturaAplicada = propia;
+        const nuevo = readSocialAuthCapability(config);
+        if (JSON.stringify(nuevo) !== JSON.stringify(state)) {
+          state = nuevo;
+          for (const listener of [...listeners]) listener();
+        }
+      }
+      return true;
+    })
+    .catch(() => false);
+}
+
+/**
+ * Qué tan confirmada está la capability para ESTA pantalla:
+ * - `confirmando`: montó y todavía no volvió la lectura que pidió; Google no se
+ *   dibuja (con la lectura vieja podría salir en popup);
+ * - `lista`: volvió (o falló, y queda la anterior);
+ * - `releyendo`: la pestaña volvió a verse y se está releyendo. El botón que ya
+ *   estaba sigue a la vista pero inerte, para no parpadear; si el modo cambió, la
+ *   pantalla lo vuelve a dibujar con el nuevo.
+ */
+export type ConfirmacionCapacidadSocial = 'confirmando' | 'lista' | 'releyendo';
+
+export function useConfirmacionCapacidadSocial(): ConfirmacionCapacidadSocial {
+  const [confirmacion, setConfirmacion] = useState<ConfirmacionCapacidadSocial>('confirmando');
+  useEffect(() => {
+    let vivo = true;
+    let pedido = 0;
+    const releer = (mientras: 'confirmando' | 'releyendo') => {
+      const propio = ++pedido;
+      // Una vuelta a la pestaña antes de la primera respuesta sigue confirmando.
+      setConfirmacion((actual) => (actual === 'confirmando' ? 'confirmando' : mientras));
+      void releerSocialAuthCapability().then(() => {
+        if (vivo && propio === pedido) setConfirmacion('lista');
+      });
+    };
+    releer('confirmando');
+    const alVolver = () => { if (document.visibilityState === 'visible') releer('releyendo'); };
+    // bfcache: la página vuelve entera, con su JS de antes, sin `visibilitychange`.
+    const alMostrar = (evento: PageTransitionEvent) => { if (evento.persisted) releer('releyendo'); };
+    document.addEventListener('visibilitychange', alVolver);
+    window.addEventListener('pageshow', alMostrar);
+    return () => {
+      vivo = false;
+      document.removeEventListener('visibilitychange', alVolver);
+      window.removeEventListener('pageshow', alMostrar);
+    };
+  }, []);
+  return confirmacion;
 }

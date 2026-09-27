@@ -9,8 +9,10 @@ const {
   ensureSocialAuthCapability,
   readSocialAuthCapability,
   decodeGoogleContinueResponse,
+  releerSocialAuthCapability,
   resetSocialAuthForTests,
   socialAuthSnapshot,
+  subscribeSocialAuth,
 } = await import('./socialAuth');
 
 const OFF = {
@@ -397,5 +399,87 @@ describe('AF-17 · features.google_continue y la respuesta de continue', () => {
       { ...sesion, created: false, linked: false }]) {
       expect(() => decodeGoogleContinueResponse(malo, 'link')).toThrow();
     }
+  });
+});
+
+/**
+ * AF-ALTA-POPUP-D106 · la capability se leía UNA vez por página: una pestaña
+ * cargada antes de que el dueño encendiera el alta en la misma pestaña seguía
+ * con el alta en popup (el caso de Mati del 27/09). La pantalla de ingreso la
+ * vuelve a leer al montar y al volver a la pestaña.
+ */
+describe('AF-ALTA-POPUP-D106 · releer la capability', () => {
+  const conAlta = (enabled: boolean) => ({
+    features: {
+      social_auth: recoveryEnabled(googleEnabled(true)),
+      account_birth_date: BIRTH_READY,
+      google_redirect: { supported: true, enabled: true },
+      google_redirect_signup: { supported: true, enabled },
+    },
+  });
+
+  it('con la capability todavía pending es la primera lectura, compartida', async () => {
+    let release: ((value: unknown) => void) | undefined;
+    getConfig.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    const primera = ensureSocialAuthCapability();
+    const relectura = releerSocialAuthCapability();
+    await vi.waitFor(() => { expect(getConfig).toHaveBeenCalledTimes(1); });
+    release?.(conAlta(true));
+    await primera;
+    expect(await relectura).toBe(true);
+    expect(getConfig).toHaveBeenCalledTimes(1);
+    expect(socialAuthSnapshot().googleRedirectSignup.enabled).toBe(true);
+  });
+
+  it('🔴 el dueño encendió el alta después de la primera lectura: la relectura la trae', async () => {
+    getConfig.mockResolvedValueOnce(conAlta(false)).mockResolvedValueOnce(conAlta(true));
+    await ensureSocialAuthCapability();
+    expect(socialAuthSnapshot().googleRedirectSignup.enabled).toBe(false);
+    const avisos = vi.fn();
+    const soltar = subscribeSocialAuth(avisos);
+    expect(await releerSocialAuthCapability()).toBe(true);
+    soltar();
+    expect(getConfig).toHaveBeenCalledTimes(2);
+    expect(socialAuthSnapshot().googleRedirectSignup.enabled).toBe(true);
+    expect(avisos).toHaveBeenCalledTimes(1);
+  });
+
+  it('el mismo contenido conserva el MISMO objeto y no avisa a nadie', async () => {
+    getConfig.mockResolvedValue(conAlta(true));
+    await ensureSocialAuthCapability();
+    const antes = socialAuthSnapshot();
+    const avisos = vi.fn();
+    const soltar = subscribeSocialAuth(avisos);
+    expect(await releerSocialAuthCapability()).toBe(true);
+    soltar();
+    expect(socialAuthSnapshot()).toBe(antes);
+    expect(avisos).not.toHaveBeenCalled();
+  });
+
+  it('una respuesta vieja que llega después de una más nueva no pisa el estado', async () => {
+    getConfig.mockResolvedValueOnce(conAlta(false));
+    await ensureSocialAuthCapability();
+    const liberar: Array<(value: unknown) => void> = [];
+    getConfig.mockImplementation(() => new Promise((resolve) => { liberar.push(resolve); }));
+    // La segunda sale cuando la primera ya pidió: las dos quedan en vuelo a la vez.
+    // (Dos `import()` dinámicos concurrentes del módulo mockeado no son fiables
+    // en vitest: el segundo resolvía el real.)
+    const vieja = releerSocialAuthCapability();
+    await vi.waitFor(() => { expect(liberar).toHaveLength(1); });
+    const nueva = releerSocialAuthCapability();
+    await vi.waitFor(() => { expect(liberar).toHaveLength(2); });
+    liberar[1](conAlta(true));
+    await nueva;
+    liberar[0](conAlta(false));
+    await vieja;
+    expect(socialAuthSnapshot().googleRedirectSignup.enabled).toBe(true);
+  });
+
+  it('si falla, resuelve false y queda lo último leído', async () => {
+    getConfig.mockResolvedValueOnce(conAlta(true)).mockRejectedValueOnce(new Error('network_down'));
+    await ensureSocialAuthCapability();
+    const antes = socialAuthSnapshot();
+    expect(await releerSocialAuthCapability()).toBe(false);
+    expect(socialAuthSnapshot()).toBe(antes);
   });
 });
