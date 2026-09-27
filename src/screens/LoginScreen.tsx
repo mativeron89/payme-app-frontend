@@ -166,6 +166,37 @@ export function versionAvisoParaContinue(version: string | null): string | null 
   return version !== null && VERSION_AVISO_CONTINUE.test(version) ? version : null;
 }
 
+/**
+ * AF-HIGIENE-ALTA · punto 4 · decisiones 92 («Todo el ingreso pasa en la misma
+ * pestaña»), 102 y 103. ¿El paso «Crea tu cuenta con Google» —al que lleva
+ * «Entrar» con Google sin cuenta (`social_auth_failed`, decisión 73)— usa el
+ * alta en un toque en REDIRECT? Hasta 0.199.0 creaba siempre con los datos del
+ * formulario y el botón en popup, el que falla en iPhone. Ahora sí, cuando:
+ * - es ese paso y todavía no hay un `id_token` retenido ni un `422` en curso;
+ * - el dueño publica el alta en la misma pestaña y el alta en un toque;
+ * - y el aviso no cargó todavía, o cargó con una versión que `continue` acepta.
+ *   Con una versión que no acepta (el camino 0.167.0), el paso vuelve al de
+ *   siempre: sin esto quedaría sin botón y sin campos, un callejón sin salida.
+ */
+export function pasoGoogleEnRedirect(i: {
+  readonly pasoGoogle: boolean;
+  readonly tieneCredencial: boolean;
+  readonly perfilGoogle: boolean;
+  readonly altaRedirect: boolean;
+  readonly continueSupported: boolean;
+  readonly oneTapSignup: boolean;
+  readonly avisoListo: boolean;
+  readonly versionContinue: string | null;
+}): boolean {
+  return i.pasoGoogle
+    && !i.tieneCredencial
+    && !i.perfilGoogle
+    && i.altaRedirect
+    && i.continueSupported
+    && i.oneTapSignup
+    && (!i.avisoListo || i.versionContinue !== null);
+}
+
 /** Los carteles posibles de un fallo de `continue`. Conjunto CERRADO. */
 export type ClaveMensajeContinue =
   | 'neutro'
@@ -528,6 +559,22 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     && social.google.webClientId !== null;
   const perfilActivo = pasoGoogle && perfilGoogle && continueOn;
   /**
+   * AF-HIGIENE-ALTA · punto 4: el paso usa el MISMO alta en un toque que el botón
+   * de arriba de «Crea tu cuenta» (redirect, `state` `alta:`), sin datos del
+   * formulario: los pone Google, y un `422` pide el nombre a la vuelta, con el
+   * mismo código. Apagada, igual que antes. Ver `pasoGoogleEnRedirect`.
+   */
+  const pasoGoogleRedirect = pasoGoogleEnRedirect({
+    pasoGoogle,
+    tieneCredencial,
+    perfilGoogle,
+    altaRedirect: social.googleRedirectSignup.enabled,
+    continueSupported: social.googleContinue.supported,
+    oneTapSignup: social.googleContinue.oneTapSignup,
+    avisoListo: legal.status === 'ready',
+    versionContinue: versionAvisoContinue,
+  });
+  /**
    * 🔴 AF-16 · addendum 1 · en «Crea tu cuenta» Google va PRIMERO y no depende
    * de nada escrito: sólo de que el dueño publique el alta con Google y de que
    * haya con qué crear la cuenta. Antes el botón aparecía recién con nombre,
@@ -548,6 +595,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
   // registra con los datos del formulario, como siempre. En el reintento de
   // `profile_required` alcanza con nombre y apellido: el correo lo pone Google.
   const googleEligible = !pasoVincular && (capturaGoogle
+    || pasoGoogleRedirect
     || (perfilActivo && legalReady && firstName.trim().length > 0 && lastName.trim().length > 0)
     || (!(pasoGoogle && tieneCredencial) && !perfilActivo
     && (mode === 'login' || pasoGoogle)
@@ -588,6 +636,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
    */
   const faltaCorreoParaAltaSocial = pasoGoogle
     && !tieneCredencial
+    && !pasoGoogleRedirect
     && !perfilActivo
     && altaPublica
     && email.trim().length === 0
@@ -643,6 +692,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     if (perfilActivo) {
       return continuar({ firstName: firstName.trim(), lastName: lastName.trim() });
     }
+    // AF-HIGIENE-ALTA · punto 4 · el alta en un toque, en redirect. Sin el aviso
+    // cargado `continuar` da `null`: no se cae al `register` en popup mientras.
+    if (pasoGoogleRedirect) return continuar(null);
     if (!autoridad || legal.status !== 'ready') return null;
     const alta = autoridad.tipo === 'invitacion'
       ? { tipo: 'invitacion' as const, invitationToken: autoridad.token }
@@ -667,6 +719,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
     lastName,
     legal.status,
     mode,
+    pasoGoogleRedirect,
     perfilActivo,
     social.google.webClientId,
     social.googleRedirect.enabled,
@@ -1639,7 +1692,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
               ? t('Revisa tus datos y toca «Crear mi cuenta».')
               : perfilActivo
                 ? t('Google no nos dio tu nombre. Escríbelo y toca «Continuar con Google» otra vez.')
-                : t('Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.')}
+                : pasoGoogleRedirect
+                  ? t('Toca «Continuar con Google» otra vez para crear tu cuenta.')
+                  : t('Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.')}
           </div>
         )}
         {pasoVincular && (
@@ -1759,7 +1814,9 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
               </div>
             </section>
           )}
-          {mode === 'register' && (
+          {/* AF-HIGIENE-ALTA · punto 4: en el alta en redirect los datos los pone
+              Google; pedirlos acá sería prometer que viajan. */}
+          {mode === 'register' && !pasoGoogleRedirect && (
             <>
               <label className="ingreso-campo">
                 <span className="ingreso-etiqueta">{t('Nombre')}</span>
@@ -1802,7 +1859,7 @@ export function LoginScreen({ initialMode }: { initialMode?: 'login' | 'register
               no se pide, porque no viaja. */}
           {/* AF-17 · en el reintento de `profile_required` tampoco: el correo
               es el verificado de Google, `continue` no acepta otro. */}
-          {!(pasoGoogle && (autoridad?.tipo === 'invitacion' || perfilActivo)) && (
+          {!(pasoGoogle && (autoridad?.tipo === 'invitacion' || perfilActivo || pasoGoogleRedirect)) && (
           <label className="ingreso-campo">
             <span className="ingreso-etiqueta">{t('Email')}</span>
             <input

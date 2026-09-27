@@ -776,6 +776,7 @@ export const EN: Record<string, string> = {
   // AF-16 · tocar Google en el ingreso también sirve para registrarse.
   "Crea tu cuenta con Google": "Create your account with Google",
   "Revisa tus datos y toca «Continuar con Google» otra vez para crear tu cuenta.": "Check your details and tap “Continue with Google” again to create your account.",
+  "Toca «Continuar con Google» otra vez para crear tu cuenta.": "Tap “Continue with Google” again to create your account.",
   "Escribe tu nombre y apellido aquí arriba para continuar con Google.": "Enter your first and last name above to continue with Google.",
   "No pudimos entrar con Google. Prueba de nuevo o entra con tu correo y contraseña.": "We couldn't sign you in with Google. Try again or sign in with your email and password.",
   "O regístrate con tu correo": "Or sign up with your email",
