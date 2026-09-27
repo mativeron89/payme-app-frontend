@@ -11,6 +11,64 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.198.0 — «Crea tu cuenta» con Google en la misma pestaña (decisión 102), APAGADO detrás de `google_redirect_signup` (2026-09-27)
+
+Orden AF-GOOGLE-ALTA-REDIRECT-CLAUDE-20260927 (sha256 974c6c22…). Decisión 102 (`7c16421c…`). Dueño servido
+App Backend v2.138.0 (`e81b7c21`), wire `docs/GOOGLE_ALTA_REDIRECT_D102_WIRE.md` (`08443790…`). Base `0.197.0`
+(`8837c00`).
+
+- 🔴 **Todo cuelga de `features.google_redirect_signup.enabled`, que hoy el dueño sirve en `false`.** Apagada
+  (o ausente, o sin la fase 1 encendida), «Crea tu cuenta» y el alta en un toque quedan como hoy, en popup. El
+  DOM de Ingreso y de «Crea tu cuenta» es idéntico al de `0.197.0`.
+- **Espejo** owner-first al inventario de `e81b7c2` (contenido de `07ab163`). Son 121 archivos, los mismos, y
+  cambian 5: `contract/social-auth-v1.json`, `routes/config.js`, `routes/social-auth.js`, `schemas/index.js` y
+  `services/externalIdentities.js`. `--adoptar-inventario`, `--integridad` y `--paridad` dan OK 121/121. Contra
+  el servido `e81b7c2`, ninguna ruta cambió.
+- **Encendida, según el wire:**
+  - el botón de arriba de «Crea tu cuenta» (el alta en un toque) va en redirect, con el MISMO `login_uri` y
+    `state` `alta:<uuid>`;
+  - con las casillas marcadas (el botón está inerte hasta entonces), lo que viaja al canje queda en
+    `sessionStorage`: versión del aviso, `legal_acceptance` e invitación. Nunca el código;
+  - al volver, `#google_signup=<código>` se lee en `main.tsx` antes del router, se borra con `replaceState` y
+    se canjea en `POST /api/auth/google/redirect/signup`. El código vive sólo en memoria, y el router lo cuenta
+    como fragmento secreto;
+  - los desenlaces son los de `continue` (`desenlaceContinue`):
+    - 200 entra, y 201 entra y crea con «¡Listo! Creamos tu cuenta de PayMe.»;
+    - 409 `link_required` lleva al paso de la contraseña de siempre;
+    - 422 `profile_required` pide nombre y apellido y reintenta con el MISMO código, sin volver a Google;
+    - 409 `legal_version_mismatch` relee los textos y vuelve a pedir las casillas, con el código vivo;
+    - 429 y 503 permiten reintentar;
+    - 401, 403 y el resto sueltan el código y dicen el texto de siempre;
+  - si se perdió el `sessionStorage`, vuelven las casillas y se canjea con el mismo código mientras no venza;
+  - la invitación se suelta sólo si la cuenta nació con ella (el censo de `signupSurface.test.ts` suma ese
+    quinto lugar).
+- **«Entrar» (fase 1) sin cambios.** Su botón no lleva el `state` de alta.
+- **Mock:**
+  - seam `payme.app.mock.google_redirect_signup.v1`;
+  - el `login_uri` con `state` de alta guarda la identidad pendiente 10 minutos, con tope de 5 intentos;
+  - el canje reproduce los desenlaces y deja la constancia legal del alta.
+- **Textos nuevos** (propuestos en el CIERRE):
+  - «Para terminar de crear tu cuenta, confirma lo siguiente y toca «Crear mi cuenta».»;
+  - «Google no nos dio tu nombre. Escríbelo y toca «Crear mi cuenta».»;
+  - «Actualizamos los documentos. Vuelve a marcar las casillas y toca «Crear mi cuenta».»
+- **Pruebas:**
+  - unit: `googleAltaRedirect.test.ts` (state, fragmento, captura, canje con el mismo código, tabla de «sigue
+    vivo», contexto fail-closed y capability), el `state` en `googleIdentity.test.ts` y el quinto lugar del
+    censo de invitaciones;
+  - e2e `google-alta-redirect.spec.ts`, 9 casos:
+    - apagado es el popup de hoy, también sin la fase 1;
+    - 201 de punta a punta;
+    - 422 → reintento → 201;
+    - 409 `link_required`;
+    - `sessionStorage` perdido → 201;
+    - código vencido → 401, con el código soltado de la memoria;
+    - 409 `legal_version_mismatch` → 201;
+    - «Entrar» sin el `state` de alta;
+  - el DOM contra `0.197.0` es idéntico apagado; encendido, cambia sólo «Crea tu cuenta» con la fase 1, como
+    control;
+  - 18 mutantes, todos cazados. M01 (el alta sin exigir la fase 1) lo caza sólo el unit: el mock, como el
+    dueño, ya publica `enabled:false` sin la fase 1.
+
 ## 0.197.0 — @usuario, lado de la app (decisión 93), APAGADO detrás de `features.username` (2026-09-27)
 
 Orden AF-USUARIO-ARROBA-CLAUDE-20260927 (sha256 96275c12…). Decisión 93 (`341968d4…`). Dueño servido
