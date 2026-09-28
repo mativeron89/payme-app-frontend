@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useIdioma } from '../i18n/idioma';
 import { AppBottomBar } from '../components/AppBottomBar';
@@ -21,6 +21,7 @@ import {
   informativoPublicado,
   limiteInformativo,
   nothingLeftFor,
+  progresoConBorrador,
   restanteInformativo,
 } from './mesaItemsView';
 import { etiquetaPorcion, porcionesDisponibles, textoPlatos } from './queConsumisteView';
@@ -408,13 +409,33 @@ export function MesaDetailView({
   // Decisión 79 · en «igual» con el dato del dueño (v2.134.0), la barra dice lo
   // ELEGIDO igual que en consumo, contando desde `informative_remaining_bps`.
   // Sin el dato rige lo de antes: lo pagado.
-  const reparto = !corteDeclarado
+  //
+  // AF-BARRA-EN-VIVO · decisión 107, punto 3 · y suma el borrador propio antes de
+  // «Listo» (`progresoConBorrador`). En «igual», sólo con la selección guardada
+  // ya leída: sin ella no se sabe qué reemplaza el borrador, y la barra dice lo
+  // registrado.
+  const guardadaLeida = !informativeLoading && !informativeUnsupported && !informativeLoadError
+    && !informativeReadOnly;
+  const repartoCalculado = useMemo(() => (!corteDeclarado
     ? null
     : esConsumo
-      ? confirmedConsumptionProgress(mesa)
-      : informativoPublicado(mesa)
-        ? confirmedConsumptionProgress(mesa, (item) => item.informative_remaining_bps)
-        : null;
+      ? progresoConBorrador(mesa, (item) => item.remaining_bps, () => 0, selected)
+      : !informativoPublicado(mesa)
+        ? null
+        : guardadaLeida
+          ? progresoConBorrador(
+              mesa,
+              (item) => item.informative_remaining_bps,
+              (item) => informativasGuardadas.get(item.id) ?? 0,
+              selected,
+            )
+          : confirmedConsumptionProgress(mesa, (item) => item.informative_remaining_bps)),
+  [corteDeclarado, esConsumo, guardadaLeida, informativasGuardadas, mesa, selected]);
+  // Mientras «Listo» viaja, la barra se queda como estaba: un refresco que llegue
+  // en ese rato ya trae lo registrado, y sumado al borrador lo contaría dos veces.
+  const repartoPrevio = useRef(repartoCalculado);
+  useLayoutEffect(() => { if (!busy) repartoPrevio.current = repartoCalculado; });
+  const reparto = busy ? repartoPrevio.current : repartoCalculado;
   const repartoConocido = reparto?.status === 'known' ? reparto : null;
   const pctPagado = mesa.total_cents > 0 ? Math.round((mesa.paid_amount_cents / mesa.total_cents) * 100) : 0;
   const pct = repartoConocido?.visualPercent ?? (reparto ? 0 : pctPagado);

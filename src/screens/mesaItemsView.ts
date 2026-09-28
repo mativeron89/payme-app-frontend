@@ -210,6 +210,47 @@ export function confirmedConsumptionProgress(
 }
 
 /**
+ * AF-BARRA-EN-VIVO · decisión 107, punto 3 (n190) · la barra de «¿Qué
+ * consumiste?» suma lo que la persona va eligiendo antes de «Listo».
+ *
+ * Es la MISMA cuenta que `confirmedConsumptionProgress`, con lo que queda de
+ * cada plato ajustado por la cuenta propia: `restante + propio − borrador`.
+ * - `propioRegistrado` es lo propio que ya está dentro del restante del dueño.
+ *   En «igual» es la selección guardada, que el borrador REEMPLAZA entera. En
+ *   consumo es 0: el borrador se suma a lo registrado, nunca lo repite (nace
+ *   como mucho con lo que queda).
+ * - Así lo propio cuenta UNA vez: lo guardado sale y entra el borrador.
+ * - Un borrador que ya no entra en ese plato (otra persona eligió después, y el
+ *   dueño lo va a rechazar con el 409 de «De ese plato queda solo…») NO cuenta:
+ *   para ese plato vale lo registrado. Recortarlo a lo que queda inventaría una
+ *   porción que nadie eligió.
+ *
+ * 🔴 **El 100 % sólo lo da lo registrado.** Si lo registrado de la mesa no está
+ * completo, el borrador no la lleva a 100: el tope es 99, el mismo que antes de
+ * completarse. El borrador lo ve sólo quien lo elige; no viaja hasta «Listo».
+ */
+export function progresoConBorrador(
+  mesa: Pick<MesaDetail, 'total_cents' | 'items'>,
+  restanteDe: (item: MesaItem) => unknown,
+  propioRegistrado: (item: MesaItem) => number,
+  borrador: ReadonlyMap<string, number>,
+): ConfirmedConsumptionProgress {
+  const registrado = confirmedConsumptionProgress(mesa, restanteDe);
+  if (registrado.status !== 'known') return registrado;
+  const enVivo = confirmedConsumptionProgress(mesa, (item) => {
+    const restante = restanteDe(item);
+    if (!bpsValido(restante)) return restante;
+    const propio = bpsValido(propioRegistrado(item)) ? propioRegistrado(item) : 0;
+    const nuevo = borrador.get(item.id) ?? 0;
+    const disponible = Math.min(10000, restante + propio);
+    return bpsValido(nuevo) && nuevo <= disponible ? disponible - nuevo : restante;
+  });
+  if (enVivo.status !== 'known') return registrado;
+  if (enVivo.complete && !registrado.complete) return { ...enVivo, complete: false, visualPercent: 99 };
+  return enVivo;
+}
+
+/**
  * No queda NADA seleccionable: sin esto la pantalla seguía diciendo "elegí tus
  * consumos" sobre una lista donde ya no había nada elegible.
  *

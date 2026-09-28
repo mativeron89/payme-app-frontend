@@ -101,7 +101,7 @@ const items840: SyntheticItem[] = [
 ];
 
 test.describe('RM190 · barra por ítems asignados sin pago', () => {
-  test('provisional no cuenta; confirmación, doble toque, recarga y release siguen la fuente real', async ({ page }) => {
+  test('lo provisional suma en vivo (decisión 107); confirmación, doble toque, recarga y release siguen la fuente real', async ({ page }) => {
     await preparar(page);
     await sembrarMesa(page, { code: 'PA-8401', total_cents: 84000, items: items840 });
     await abrir(page, 'PA-8401');
@@ -113,7 +113,10 @@ test.describe('RM190 · barra por ítems asignados sin pago', () => {
 
     await page.getByRole('button', { name: 'Consumo de 300', exact: true }).click();
     await expect(page.locator('.mi-parte-amt')).toHaveText('$300.00');
-    await expect(page.getByRole('progressbar', { name: 'Asignado 0% de la mesa' })).toBeVisible();
+    // AF-BARRA-EN-VIVO · decisión 107, punto 3 («Sí, en vivo»): hasta 0.202.0 lo
+    // provisional NO contaba y la barra seguía en 0 %. Ahora suma antes de «Listo».
+    await expect(page.getByRole('progressbar', { name: 'Asignado 36% de la mesa' })).toBeVisible();
+    await expect(page.getByText('$300.00 / $840.00 (36%)', { exact: true })).toBeVisible();
 
     // Dos eventos no duplican el claim: el owner reemplaza el lock propio.
     await page.getByRole('button', { name: 'Listo', exact: true }).dblclick();

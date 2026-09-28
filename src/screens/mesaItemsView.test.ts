@@ -13,6 +13,7 @@ import {
   restanteInformativo,
   itemsAmountFor,
   nothingLeftFor,
+  progresoConBorrador,
 } from './mesaItemsView';
 
 /**
@@ -433,5 +434,109 @@ describe('decisión 79 · lo que queda por plato en «igual»', () => {
     // Un dato raro no fabrica un avance.
     const raro = { ...mesa, items: [{ ...mesa.items[0]!, informative_remaining_bps: null }] as MesaItem[] };
     expect(confirmedConsumptionProgress(raro, (i) => i.informative_remaining_bps)).toMatchObject({ status: 'unknown' });
+  });
+});
+
+/**
+ * AF-BARRA-EN-VIVO · decisión 107, punto 3 (n190) · la barra suma el borrador
+ * propio antes de «Listo», sin contar lo propio dos veces y sin llegar a 100
+ * por el borrador. Los recorridos por pantalla los hace
+ * `e2e/barra-en-vivo.spec.ts`.
+ */
+describe('progresoConBorrador · la barra en vivo', () => {
+  const restanteConsumo = (i: MesaItem) => i.remaining_bps;
+  const sinPropio = () => 0;
+  // $300 + $540 = $840. Otra persona ya registró todo el plato b.
+  const base = () => mesa({
+    items: [
+      item({ id: 'a', price_cents: 30000 }),
+      item({ id: 'b', price_cents: 54000, remaining_bps: 0 }),
+    ],
+  });
+
+  it('control: sin borrador es exactamente lo registrado', () => {
+    expect(progresoConBorrador(base(), restanteConsumo, sinPropio, new Map()))
+      .toEqual(confirmedConsumptionProgress(base()));
+  });
+
+  it('consumo: el borrador se SUMA a lo registrado', () => {
+    const r = progresoConBorrador(base(), restanteConsumo, sinPropio, new Map([['a', 5000]]));
+    expect(r).toMatchObject({ status: 'known', assignedCents: 54000 + 15000, complete: false, visualPercent: 82 });
+  });
+
+  it('🔴 el borrador que completa la mesa NO la lleva a 100 si lo registrado no está completo: tope 99', () => {
+    const r = progresoConBorrador(base(), restanteConsumo, sinPropio, new Map([['a', 10000]]));
+    expect(r).toMatchObject({ status: 'known', assignedCents: 84000, complete: false, visualPercent: 99 });
+  });
+
+  it('con lo registrado completo, 100', () => {
+    const completa = mesa({
+      items: [
+        item({ id: 'a', price_cents: 30000, remaining_bps: 0 }),
+        item({ id: 'b', price_cents: 54000, remaining_bps: 0 }),
+      ],
+    });
+    expect(progresoConBorrador(completa, restanteConsumo, sinPropio, new Map())).toMatchObject({ visualPercent: 100 });
+  });
+
+  it('🔴 un borrador que ya no entra (otro eligió después) no cuenta: vale lo registrado de ese plato', () => {
+    // Del plato a quedan ¾ tomados por otro ($225); mi borrador pide ½ y sólo queda ¼.
+    const m = mesa({ items: [item({ id: 'a', price_cents: 30000, remaining_bps: 2500 }), item({ id: 'b', price_cents: 54000, remaining_bps: 0 })] });
+    const r = progresoConBorrador(m, restanteConsumo, sinPropio, new Map([['a', 5000]]));
+    expect(r).toMatchObject({ assignedCents: 22500 + 54000, visualPercent: 91 });
+    // Y lo que sí entra, suma: ¼.
+    expect(progresoConBorrador(m, restanteConsumo, sinPropio, new Map([['a', 2500]])))
+      .toMatchObject({ assignedCents: 84000, visualPercent: 99 });
+  });
+
+  describe('igual: el borrador REEMPLAZA lo guardado', () => {
+    const restanteIgual = (i: MesaItem) => i.informative_remaining_bps;
+    // Plato a: guardé ½ (el restante del dueño ya la descuenta). Plato b: libre.
+    const igual = () => mesa({
+      division_mode: 'igual',
+      items: [
+        item({ id: 'a', price_cents: 30000, informative_remaining_bps: 5000 }),
+        item({ id: 'b', price_cents: 54000, informative_remaining_bps: 10000 }),
+      ],
+    });
+    const guardado = new Map([['a', 5000]]);
+    const propio = (i: MesaItem) => guardado.get(i.id) ?? 0;
+
+    it('🔴 el borrador igual a lo guardado: lo registrado, sin contar lo propio dos veces', () => {
+      const r = progresoConBorrador(igual(), restanteIgual, propio, new Map(guardado));
+      expect(r).toEqual(confirmedConsumptionProgress(igual(), restanteIgual));
+      expect(r).toMatchObject({ assignedCents: 15000 });
+    });
+
+    it('pasar de ½ a entero suma la otra mitad', () => {
+      expect(progresoConBorrador(igual(), restanteIgual, propio, new Map([['a', 10000]])))
+        .toMatchObject({ assignedCents: 30000 });
+    });
+
+    it('soltarlo en el borrador lo resta', () => {
+      expect(progresoConBorrador(igual(), restanteIgual, propio, new Map()))
+        .toMatchObject({ assignedCents: 0, visualPercent: 0 });
+    });
+
+    it('🔴 un borrador que ya no entra: vale lo guardado de ese plato, no se lo saca', () => {
+      // Otro tomó el resto del plato a después de mi borrador: queda 0 + mi ½ guardada.
+      const lleno = mesa({
+        division_mode: 'igual',
+        items: [item({ id: 'a', price_cents: 30000, informative_remaining_bps: 0 }), item({ id: 'b', price_cents: 54000, informative_remaining_bps: 10000 })],
+      });
+      expect(progresoConBorrador(lleno, restanteIgual, propio, new Map([['a', 10000]])))
+        .toMatchObject({ assignedCents: 30000 });
+    });
+
+    it('sumar otro plato', () => {
+      expect(progresoConBorrador(igual(), restanteIgual, propio, new Map([['a', 5000], ['b', 2500]])))
+        .toMatchObject({ assignedCents: 15000 + 13500 });
+    });
+  });
+
+  it('un dato raro del dueño: lo mismo que lo registrado (desconocido), sin inventar', () => {
+    const m = mesa({ items: [item({ id: 'a', remaining_bps: Number.NaN })] });
+    expect(progresoConBorrador(m, restanteConsumo, sinPropio, new Map([['a', 5000]])))
+      .toEqual(confirmedConsumptionProgress(m));
   });
 });
