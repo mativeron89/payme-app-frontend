@@ -129,8 +129,8 @@ export default defineConfig({
      * El servidor dev de Vite inyecta scripts y estilos inline que producción no
      * tiene, así que la política se prueba contra el BUILD mock (app) y el build
      * de la landing, servidos por `e2e/csp/servidor.mjs` con la política EXACTA
-     * que genera `vercel.ts` —la de la app, que en producción va en Report-Only,
-     * acá aplicada como obligatoria—.
+     * que genera `vercel.ts` —la de la app, obligatoria también en producción
+     * desde AF-CSP-OBLIGATORIA—.
      */
     {
       name: 'csp-app',
