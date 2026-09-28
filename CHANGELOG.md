@@ -11,6 +11,47 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.204.0 — «Vincular Google» en la misma pestaña (2026-09-28)
+
+Orden AF-VINCULAR-GOOGLE-CLAUDE-20260928 (sha256 838255c6…). Decisión 107, punto 1. Dueño servido: App Backend
+v2.141.0 (`41e6bf3`); wire `docs/GOOGLE_VINCULAR_REDIRECT_D107_WIRE.md` (sha256 45c4ecaa…). Base `0.203.0`
+(`aa65083`). Sin textos nuevos.
+
+1. **Espejo owner-first** (`f8888c3`). Inventario del dueño adoptado desde `41e6bf3`, que lo declara sobre `4cffc16`:
+   121/121, integridad y paridad verdes.
+2. **La capability.** `features.google_redirect_link` se lee con la misma forma exacta que la fase 1 y, además, exige
+   la fase 1 encendida y el vínculo con Google del dueño. Ausente (AB anterior), mal formada o apagada → como hasta
+   hoy: popup.
+3. **Encendida: nunca popup.**
+   - «Vincular Google» pide primero el intento al dueño (`POST /auth/google/link/redirect/start`), que devuelve sólo
+     `{ state: "vincular:<id>" }`. Cualquier otra forma se rechaza.
+   - Recién entonces se dibuja el botón de Google en la misma pestaña, con el `login_uri` de siempre y ese `state`.
+     Sin `state` no se dibuja ningún botón.
+   - Al salir se deja en `sessionStorage` una marca con **la hora**, nunca el `state`. El `state` no se guarda en
+     ningún storage.
+4. **La vuelta**, leída en `main.tsx` ANTES del router y antes que la vuelta de «Entrar»:
+   - `#google_link=listo` → se retira con `replaceState` (sin entrada en el historial), la dirección pasa a `/mas` y
+     «Cuentas conectadas» abre directo en la contraseña. Todavía no está vinculada: falta la contraseña.
+   - `#google_redirect_error=…` es de vincular **sólo con la marca vigente** (10 minutos). Sin ella sigue siendo de
+     «Entrar», como hasta hoy.
+   - Si el fragmento no se pudo retirar, falla cerrado.
+5. **La contraseña** va a `POST /auth/google/link/redirect/complete`:
+   - 200 → «Vinculada».
+   - 403 (contraseña) y 429 (el tope de 5 por hora del dueño) → se reintenta sólo la contraseña, con el mismo intento.
+   - 401 opaco (sin intento, vencido, de otra cuenta) y 400 → vuelve a «Vincular Google», con el aviso.
+   - Cancelar al volver de Google relee el estado en vez de afirmar «No vinculada».
+6. **Sin cambios:** «Entrar», «Crea tu cuenta» y el popup de vincular con la capability apagada.
+- **`googleIdentity`:** el `state` admite `:` y hasta 209 caracteres (`vincular:` + 200), el tope del dueño.
+- **Mock:** replica al dueño: intento de 9 minutos por cuenta, el quinto error lo quema, 429 al quinto error de la
+  hora, la vuelta con error configurable. La vuelta es un documento nuevo, como el 303 real.
+- **Mutantes:** 20 plantados, 20 cazados.
+  - L2 (capability sin el vínculo) sobrevivía: el caso «sin el vínculo» usaba `linking: false` con Google
+    encendido, lo que invalida todo el bloque, y pasaba sin afirmar nada. Ahora usa Google apagado entero y cada
+    caso afirma la config válida (`8ff3582`).
+  - L4 (sin la guarda «nunca popup») sobrevivía como supuesto equivalente. **No lo era:** la capability se relee
+    desde «Entrar» (AF-ALTA-POPUP-D106), y una relectura que vuelve tarde puede encenderla con el popup a la vista.
+    Un e2e nuevo reproduce esa ventana y lo caza (`15d0fe9`).
+
 ## 0.203.0 — La barra de «¿Qué consumiste?» suma lo que vas eligiendo (2026-09-28)
 
 Orden AF-BARRA-EN-VIVO-CLAUDE-20260928 (sha256 45d2be89…). Decisión 107, punto 3 (n190): «Sí, en vivo
