@@ -256,6 +256,8 @@ export interface AppConfig {
     google_redirect?: unknown;
     /** AF-GOOGLE-ALTA-REDIRECT · v2.138.0 · «Crea tu cuenta» con Google en la misma pestaña. */
     google_redirect_signup?: unknown;
+    /** AF-VINCULAR-GOOGLE · App Backend v2.141.0 · `{ supported, enabled }`, igual que la fase 1. */
+    google_redirect_link?: unknown;
     /** AF-USUARIO-ARROBA · v2.137.0 · el @usuario; se decodifica en `username.ts`. */
     username?: unknown;
     /**

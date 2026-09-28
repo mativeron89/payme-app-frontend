@@ -472,11 +472,24 @@ describe('AF-GOOGLE-REDIRECT · «Entrar» en la misma pestaña (decisiones 92 y
   });
 
   it('alta: un state fuera del alfabeto seguro se rechaza antes de montar', () => {
-    for (const malo of ['', 'alta:con espacio', 'alta:<script>', `alta:${'x'.repeat(200)}`, 'alta:a/b']) {
+    // AF-VINCULAR-GOOGLE · el tope es 209: el `state` más largo del dueño es
+    // `vincular:` + 200. Hasta 0.203.0 era 120 y este caso usaba 205.
+    for (const malo of ['', 'alta:con espacio', 'alta:<script>', `alta:${'x'.repeat(205)}`, 'alta:a/b']) {
       expect(() => renderGoogleIdentityButton({
         ...options(), redirect: { loginUri: LOGIN_URI, simularEnMock: vi.fn(), state: malo },
       }), malo).toThrow('google_state_invalid');
     }
+  });
+
+  it('AF-VINCULAR-GOOGLE · el `state` más largo del dueño (`vincular:` + 200) entra; uno más, no', () => {
+    const largo = `vincular:${'a'.repeat(200)}`;
+    expect(largo).toHaveLength(209);
+    expect(() => renderGoogleIdentityButton({
+      ...options(), redirect: { loginUri: LOGIN_URI, simularEnMock: vi.fn(), state: largo },
+    }).dispose()).not.toThrow();
+    expect(() => renderGoogleIdentityButton({
+      ...options(), redirect: { loginUri: LOGIN_URI, simularEnMock: vi.fn(), state: `${largo}a` },
+    })).toThrow('google_state_invalid');
   });
 
   it('alta en mock: el botón dice también su state', async () => {

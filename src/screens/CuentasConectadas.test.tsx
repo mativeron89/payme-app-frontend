@@ -10,6 +10,7 @@ import {
   ESTADO_INICIAL,
   claseDeErrorDeVinculo,
   esEstadoDesconocido,
+  estadoInicialCuentas,
   reducirCuentas,
   type EstadoCuentas,
   type EventoCuentas,
@@ -262,5 +263,83 @@ describe('MasScreen · el cableado, no sólo la función', () => {
     expect(mas).toMatch(/\{session && \(\s*<CuentasConectadas/);
     expect(mas).toContain('linking={social.google.linking}');
     expect(mas).toContain('webClientId={social.google.webClientId}');
+  });
+});
+
+/**
+ * AF-VINCULAR-GOOGLE · decisión 107, punto 1 · vincular en la MISMA pestaña
+ * (v2.141.0). El intento vive en el dueño; acá sólo cambia por dónde se pasa.
+ * El recorrido por pantalla lo hace `e2e/vincular-google-redirect.spec.ts`.
+ */
+describe('AF-VINCULAR-GOOGLE · la máquina con la misma pestaña', () => {
+  const STATE = `vincular:${'a'.repeat(43)}`;
+  const EN_LA_CONTRASENA: EstadoCuentas = { fase: 'contrasena', idToken: null, error: null };
+
+  it('«Vincular Google» pide el intento y, con el `state`, muestra el botón en la misma pestaña', () => {
+    const iniciando = correr([{ tipo: 'cargada', vinculada: false }, { tipo: 'iniciar' }]);
+    expect(iniciando).toEqual({ fase: 'iniciando' });
+    expect(reducirCuentas(iniciando, { tipo: 'intento', state: STATE }))
+      .toEqual({ fase: 'eligiendo', error: null, state: STATE });
+  });
+
+  it('si el intento no se pudo pedir, vuelve a «Vincular Google» con el aviso', () => {
+    expect(correr([{ tipo: 'cargada', vinculada: false }, { tipo: 'iniciar' }, { tipo: 'inicio_fallido', clase: 'demasiados' }]))
+      .toEqual({ fase: 'no_vinculada', error: 'demasiados' });
+  });
+
+  it('🔴 con el `state`, una credencial de popup no entra: en la misma pestaña no hay credencial', () => {
+    const eligiendo: EstadoCuentas = { fase: 'eligiendo', error: null, state: STATE };
+    expect(reducirCuentas(eligiendo, { tipo: 'credencial', idToken: TOKEN })).toBe(eligiendo);
+  });
+
+  it.each<[string, 'contrasena' | 'demasiados' | 'red']>([
+    ['contraseña equivocada (403): el intento sigue', 'contrasena'],
+    ['el tope de la cuenta (429)', 'demasiados'],
+    ['una caída de red', 'red'],
+  ])('%s ⇒ se reintenta SÓLO la contraseña', (_nombre, clase) => {
+    const r = correr([{ tipo: 'enviar' }, { tipo: 'vinculo_error', clase }], EN_LA_CONTRASENA);
+    expect(r).toEqual({ fase: 'contrasena', idToken: null, error: clase });
+  });
+
+  it('🔴 el 401 opaco (sin intento, vencido o de otra cuenta) vuelve a empezar, con el aviso', () => {
+    expect(correr([{ tipo: 'enviar' }, { tipo: 'vinculo_error', clase: 'google' }], EN_LA_CONTRASENA))
+      .toEqual({ fase: 'no_vinculada', error: 'google' });
+  });
+
+  it('vinculó: «Vinculada», igual que por el popup', () => {
+    expect(correr([{ tipo: 'enviar' }, { tipo: 'vinculo_ok', yaEstaba: false }], EN_LA_CONTRASENA))
+      .toEqual({ fase: 'vinculada', aviso: 'recien' });
+  });
+
+  it('cancelar al volver de Google LEE el estado, en vez de afirmar «No vinculada»', () => {
+    expect(reducirCuentas(EN_LA_CONTRASENA, { tipo: 'cancelar' })).toEqual({ fase: 'cargando' });
+  });
+
+  it('una vuelta con error se muestra al terminar de cargar, junto a «Vincular Google»', () => {
+    expect(correr([{ tipo: 'cargada', vinculada: false }], { fase: 'cargando', error: 'google' }))
+      .toEqual({ fase: 'no_vinculada', error: 'google' });
+    // Si ya estaba vinculada, no se afirma un error de un intento viejo.
+    expect(correr([{ tipo: 'cargada', vinculada: true }], { fase: 'cargando', error: 'google' }))
+      .toEqual({ fase: 'vinculada', aviso: null });
+  });
+
+  it.each<[string, Parameters<typeof estadoInicialCuentas>[0], EstadoCuentas]>([
+    ['sin vuelta: lo de siempre', { estado: 'ausente' }, ESTADO_INICIAL],
+    ['`#google_link=listo`: directo a la contraseña', { estado: 'listo' }, EN_LA_CONTRASENA],
+    ['csrf: reintentar', { estado: 'error', error: 'csrf_failed' }, { fase: 'cargando', error: 'google' }],
+    ['social_auth_failed: esa cuenta no', { estado: 'error', error: 'social_auth_failed' }, { fase: 'cargando', error: 'google' }],
+    ['proveedor caído: de conexión', { estado: 'error', error: 'temporarily_unavailable' }, { fase: 'cargando', error: 'red' }],
+    ['una forma que no es del dueño', { estado: 'error', error: 'invalida' }, { fase: 'cargando', error: 'google' }],
+  ])('estado inicial · %s', (_nombre, vuelta, esperado) => {
+    expect(estadoInicialCuentas(vuelta)).toEqual(esperado);
+  });
+
+  it('la vista: «Un segundo…» mientras se pide el intento, y el aviso junto a «Vincular Google»', () => {
+    const iniciando = renderToStaticMarkup(<CuentasConectadasVista estado={{ fase: 'iniciando' }} password="" />);
+    expect(iniciando).toContain('Un segundo…');
+    expect(iniciando).toMatch(/<button[^>]*disabled/);
+    const conAviso = renderToStaticMarkup(<CuentasConectadasVista estado={{ fase: 'no_vinculada', error: 'google' }} password="" />);
+    expect(conAviso).toContain('No pudimos vincular esa cuenta de Google. Inténtalo de nuevo.');
+    expect(conAviso).toContain('Vincular Google');
   });
 });

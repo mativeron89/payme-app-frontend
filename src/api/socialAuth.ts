@@ -99,6 +99,13 @@ export interface SocialAuthState {
    * encendida, como el dueño (wire §1). Apagado ⇒ el alta en popup de hoy.
    */
   readonly googleRedirectSignup: GoogleRedirectCapability;
+  /**
+   * AF-VINCULAR-GOOGLE · decisión 107, punto 1 · `features.google_redirect_link`
+   * (App Backend v2.141.0): «Vincular Google» en la misma pestaña. Misma forma y
+   * criterio; exige además la fase 1 encendida y el vínculo con Google, como el
+   * dueño (wire §1). Apagado ⇒ el vínculo en popup de hoy.
+   */
+  readonly googleRedirectLink: GoogleRedirectCapability;
 }
 
 const GOOGLE_CONTINUE_OFF: GoogleContinueCapability = { supported: false, oneTapSignup: false };
@@ -134,6 +141,7 @@ function closed(status: SocialAuthStatus): SocialAuthState {
     googleContinue: GOOGLE_CONTINUE_OFF,
     googleRedirect: GOOGLE_REDIRECT_OFF,
     googleRedirectSignup: GOOGLE_REDIRECT_OFF,
+    googleRedirectLink: GOOGLE_REDIRECT_OFF,
   };
 }
 
@@ -341,6 +349,10 @@ export function readSocialAuthCapability(config: unknown): SocialAuthState {
     googleRedirectSignup: google.login && decodeGoogleRedirect(features.google_redirect).enabled
       ? decodeGoogleRedirect(features.google_redirect_signup)
       : GOOGLE_REDIRECT_OFF,
+    // Vincular en la misma pestaña cuelga de la fase 1 y del vínculo con Google.
+    googleRedirectLink: google.linking && decodeGoogleRedirect(features.google_redirect).enabled
+      ? decodeGoogleRedirect(features.google_redirect_link)
+      : GOOGLE_REDIRECT_OFF,
   };
 }
 
@@ -499,6 +511,27 @@ export interface GoogleLinkResult {
    * dueño no escribió nada (v2.91.0, idempotente). `false` = se vinculó ahora.
    */
   readonly alreadyLinked: boolean;
+}
+
+/**
+ * AF-VINCULAR-GOOGLE · `POST /api/auth/google/link/redirect/start` → `{ state }`.
+ * El dueño lo arma como `vincular:` + 20 a 200 de `[A-Za-z0-9_-]`
+ * (`services/googleLinkRedirect.js`, `STATE_VINCULAR`). Cualquier otra forma se
+ * rechaza: el `state` va tal cual al botón de Google y vuelve al dueño.
+ */
+export const STATE_VINCULAR = /^vincular:[A-Za-z0-9_-]{20,200}$/;
+
+export function decodeGoogleLinkRedirectStart(value: unknown): string {
+  if (!plainObject(value) || !exactKeys(value, ['state'])
+      || typeof value.state !== 'string' || !STATE_VINCULAR.test(value.state)) {
+    throw new Error('google_link_redirect_start_malformed');
+  }
+  return value.state;
+}
+
+/** AF-VINCULAR-GOOGLE · cuerpo exacto de `POST /api/auth/google/link/redirect/complete`. */
+export interface GoogleLinkRedirectCompleteRequest {
+  readonly current_password: string;
 }
 
 /**

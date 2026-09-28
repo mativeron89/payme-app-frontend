@@ -3,6 +3,15 @@ import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import { renderGoogleIdentityButton, type GoogleButtonHandle } from '../api/googleIdentity';
 import type { StoredSession } from '../api/storage';
+import { GOOGLE_REDIRECT_LOGIN_URI } from '../api/googleRedirect';
+import {
+  marcarVincularEnCurso,
+  olvidarVincularEnCurso,
+  olvidarVueltaVincular,
+  simularIdaYVueltaVincularMock,
+  vueltaVincularSnapshot,
+  type VueltaVincular,
+} from '../api/googleVincularRedirect';
 import { useIdioma } from '../i18n/idioma';
 
 /**
@@ -42,18 +51,32 @@ export type ErrorVinculo = 'contrasena' | 'google' | 'red' | 'demasiados';
 export type AvisoVinculo = 'recien' | 'ya_estaba';
 
 export type EstadoCuentas =
-  | { readonly fase: 'cargando' }
+  /**
+   * AF-VINCULAR-GOOGLE · `error`: la vuelta de vincular llegó con un error; se
+   * muestra al terminar de cargar, junto a «Vincular Google» (volver a empezar).
+   */
+  | { readonly fase: 'cargando'; readonly error?: ErrorVinculo }
   /** 404 de un backend anterior o una forma inválida: no se afirma NADA. */
   | { readonly fase: 'oculto' }
   /** Falla transitoria al leer el estado: se puede reintentar. */
   | { readonly fase: 'error_carga' }
   | { readonly fase: 'vinculada'; readonly aviso: AvisoVinculo | null }
-  | { readonly fase: 'no_vinculada' }
-  /** El botón de Google está a la vista. */
-  | { readonly fase: 'eligiendo'; readonly error: ErrorVinculo | null }
-  /** Google ya devolvió su credencial; falta la contraseña de PayMe. */
-  | { readonly fase: 'contrasena'; readonly idToken: string; readonly error: ErrorVinculo | null }
-  | { readonly fase: 'enviando'; readonly idToken: string };
+  | { readonly fase: 'no_vinculada'; readonly error?: ErrorVinculo }
+  /** AF-VINCULAR-GOOGLE · pidiendo el intento de vincular en la misma pestaña (`start`). */
+  | { readonly fase: 'iniciando' }
+  /**
+   * El botón de Google está a la vista. AF-VINCULAR-GOOGLE · con `state`, va en
+   * la MISMA pestaña con ese `state` (`vincular:<id>`); sin él, el popup de hoy.
+   */
+  | { readonly fase: 'eligiendo'; readonly error: ErrorVinculo | null; readonly state?: string }
+  /**
+   * Google ya devolvió su credencial; falta la contraseña de PayMe.
+   * AF-VINCULAR-GOOGLE · `idToken: null` = volvimos de Google en la misma pestaña:
+   * la cuenta de Google quedó anotada en el intento del dueño y se completa con
+   * `link/redirect/complete`.
+   */
+  | { readonly fase: 'contrasena'; readonly idToken: string | null; readonly error: ErrorVinculo | null }
+  | { readonly fase: 'enviando'; readonly idToken: string | null };
 
 export type EventoCuentas =
   | { readonly tipo: 'cargada'; readonly vinculada: boolean }
@@ -61,6 +84,10 @@ export type EventoCuentas =
   | { readonly tipo: 'carga_fallida' }
   | { readonly tipo: 'reintentar' }
   | { readonly tipo: 'empezar' }
+  /** AF-VINCULAR-GOOGLE · «Vincular Google» con la capability: se pide el intento. */
+  | { readonly tipo: 'iniciar' }
+  | { readonly tipo: 'intento'; readonly state: string }
+  | { readonly tipo: 'inicio_fallido'; readonly clase: ErrorVinculo }
   | { readonly tipo: 'credencial'; readonly idToken: string }
   | { readonly tipo: 'enviar' }
   | { readonly tipo: 'vinculo_ok'; readonly yaEstaba: boolean }
@@ -68,6 +95,20 @@ export type EventoCuentas =
   | { readonly tipo: 'cancelar' };
 
 export const ESTADO_INICIAL: EstadoCuentas = { fase: 'cargando' };
+
+/**
+ * AF-VINCULAR-GOOGLE · de dónde arranca la sección al volver de Google en la
+ * misma pestaña. `listo` va directo a la contraseña. Un error vuelve a
+ * empezar, con el aviso que ya existe: el de «esa cuenta de Google» para lo que
+ * se reintenta, y el de conexión para el proveedor caído.
+ */
+export function estadoInicialCuentas(vuelta: VueltaVincular): EstadoCuentas {
+  if (vuelta.estado === 'listo') return { fase: 'contrasena', idToken: null, error: null };
+  if (vuelta.estado === 'error') {
+    return { fase: 'cargando', error: vuelta.error === 'temporarily_unavailable' ? 'red' : 'google' };
+  }
+  return ESTADO_INICIAL;
+}
 
 /**
  * Un evento que no corresponde a la fase actual se IGNORA y devuelve el mismo
@@ -79,7 +120,8 @@ export function reducirCuentas(estado: EstadoCuentas, evento: EventoCuentas): Es
   switch (evento.tipo) {
     case 'cargada':
       if (estado.fase !== 'cargando') return estado;
-      return evento.vinculada ? { fase: 'vinculada', aviso: null } : { fase: 'no_vinculada' };
+      if (evento.vinculada) return { fase: 'vinculada', aviso: null };
+      return estado.error ? { fase: 'no_vinculada', error: estado.error } : { fase: 'no_vinculada' };
     case 'carga_desconocida':
       return estado.fase === 'cargando' ? { fase: 'oculto' } : estado;
     case 'carga_fallida':
@@ -88,8 +130,15 @@ export function reducirCuentas(estado: EstadoCuentas, evento: EventoCuentas): Es
       return estado.fase === 'error_carga' ? { fase: 'cargando' } : estado;
     case 'empezar':
       return estado.fase === 'no_vinculada' ? { fase: 'eligiendo', error: null } : estado;
+    case 'iniciar':
+      return estado.fase === 'no_vinculada' ? { fase: 'iniciando' } : estado;
+    case 'intento':
+      return estado.fase === 'iniciando' ? { fase: 'eligiendo', error: null, state: evento.state } : estado;
+    case 'inicio_fallido':
+      return estado.fase === 'iniciando' ? { fase: 'no_vinculada', error: evento.clase } : estado;
     case 'credencial':
-      return estado.fase === 'eligiendo'
+      // Con `state` el botón va en la misma pestaña: no hay credencial que llegue acá.
+      return estado.fase === 'eligiendo' && estado.state === undefined
         ? { fase: 'contrasena', idToken: evento.idToken, error: null }
         : estado;
     case 'enviar':
@@ -100,6 +149,15 @@ export function reducirCuentas(estado: EstadoCuentas, evento: EventoCuentas): Es
         : estado;
     case 'vinculo_error':
       if (estado.fase !== 'enviando') return estado;
+      // AF-VINCULAR-GOOGLE · en la misma pestaña el intento sigue vivo con la
+      // contraseña mal (403), el tope (429) o una caída de red: se reintenta sólo
+      // la contraseña. El 401 opaco (sin intento, vencido, de otra cuenta) y el
+      // 400 vuelven a empezar, con el aviso junto a «Vincular Google».
+      if (estado.idToken === null) {
+        return evento.clase === 'google'
+          ? { fase: 'no_vinculada', error: 'google' }
+          : { fase: 'contrasena', idToken: null, error: evento.clase };
+      }
       // 403 y 429 ocurren ANTES de consumir el token: se conserva y se reintenta
       // sólo la contraseña. Todo lo demás vuelve a elegir Google.
       if (evento.clase === 'contrasena' || evento.clase === 'demasiados') {
@@ -110,6 +168,9 @@ export function reducirCuentas(estado: EstadoCuentas, evento: EventoCuentas): Es
       // 🔴 Cancelar SUELTA el `id_token`: la fase de destino no lo tiene. Mientras
       // se envía no se cancela —el botón está deshabilitado—, porque un envío en
       // vuelo puede terminar vinculando y la pantalla diría lo contrario.
+      // AF-VINCULAR-GOOGLE · al volver de Google no se leyó el estado (se fue
+      // directo a la contraseña): cancelar lo lee, en vez de afirmar «No vinculada».
+      if (estado.fase === 'contrasena' && estado.idToken === null) return { fase: 'cargando' };
       return estado.fase === 'eligiendo' || estado.fase === 'contrasena'
         ? { fase: 'no_vinculada' }
         : estado;
@@ -186,6 +247,10 @@ export function CuentasConectadasVista({
   const enFlujo = estado.fase === 'eligiendo' || estado.fase === 'contrasena' || estado.fase === 'enviando';
   const enviando = estado.fase === 'enviando';
   const error = estado.fase === 'eligiendo' || estado.fase === 'contrasena' ? estado.error : null;
+  // AF-VINCULAR-GOOGLE · un intento que terminó o no pudo empezar: se dice junto
+  // a «Vincular Google», que es por donde se vuelve a empezar.
+  const errorParaEmpezar = estado.fase === 'no_vinculada' ? estado.error ?? null : null;
+  const iniciando = estado.fase === 'iniciando';
 
   return (
     <section className="card config-card cuentas-conectadas" aria-labelledby="cuentas-conectadas-titulo">
@@ -206,7 +271,7 @@ export function CuentasConectadasVista({
         </div>
       )}
 
-      {(vinculada || estado.fase === 'no_vinculada' || enFlujo) && (
+      {(vinculada || estado.fase === 'no_vinculada' || iniciando || enFlujo) && (
         <div className="cuentas-conectadas-fila">
           <span className="cuentas-conectadas-logo" aria-hidden="true" />
           <div className="cuentas-conectadas-proveedor">
@@ -217,12 +282,21 @@ export function CuentasConectadasVista({
               {vinculada ? t('Vinculada') : t('No vinculada')}
             </div>
           </div>
-          {estado.fase === 'no_vinculada' && (
-            <button type="button" className="btn btn-navy cuentas-conectadas-accion" onClick={onEmpezar}>
-              {t('Vincular Google')}
+          {(estado.fase === 'no_vinculada' || iniciando) && (
+            <button
+              type="button"
+              className="btn btn-navy cuentas-conectadas-accion"
+              onClick={onEmpezar}
+              disabled={iniciando}
+            >
+              {iniciando ? t('Un segundo…') : t('Vincular Google')}
             </button>
           )}
         </div>
+      )}
+
+      {errorParaEmpezar && (
+        <div className="ingreso-error" role="alert">{textoDeError(errorParaEmpezar, t)}</div>
       )}
 
       {vinculada && estado.aviso && (
@@ -313,18 +387,41 @@ export interface CuentasConectadasProps {
   readonly linking: boolean;
   readonly webClientId: string | null;
   readonly session: StoredSession;
+  /**
+   * AF-VINCULAR-GOOGLE · `features.google_redirect_link.enabled` (v2.141.0).
+   * Encendido: vincular va en la MISMA pestaña y NUNCA en popup. Apagado (o
+   * ausente): exactamente lo de hoy.
+   */
+  readonly redirectLink?: boolean;
 }
 
-export function CuentasConectadas({ linking, webClientId, session }: CuentasConectadasProps) {
+export function CuentasConectadas({ linking, webClientId, session, redirectLink = false }: CuentasConectadasProps) {
   // La capability se lee ANTES de cualquier hook con efecto: apagada, no se
   // monta nada, no se pide nada y no se carga GIS.
   if (!linking || webClientId === null) return null;
-  return <CuentasConectadasActiva webClientId={webClientId} session={session} />;
+  return <CuentasConectadasActiva webClientId={webClientId} session={session} redirectLink={redirectLink} />;
 }
 
-function CuentasConectadasActiva({ webClientId, session }: { webClientId: string; session: StoredSession }) {
+function CuentasConectadasActiva({ webClientId, session, redirectLink }: {
+  webClientId: string;
+  session: StoredSession;
+  redirectLink: boolean;
+}) {
   const { t, idioma } = useIdioma();
-  const [estado, despachar] = useReducer(reducirCuentas, ESTADO_INICIAL);
+  // AF-VINCULAR-GOOGLE · la vuelta de Google (capturada en `main.tsx`) decide
+  // dónde arranca: con la capability apagada no se completa nada en la misma
+  // pestaña, así que se arranca como siempre.
+  const [estado, despachar] = useReducer(
+    reducirCuentas,
+    undefined,
+    () => (redirectLink ? estadoInicialCuentas(vueltaVincularSnapshot()) : ESTADO_INICIAL),
+  );
+  const seccionRef = useRef<HTMLDivElement | null>(null);
+  const [desdeLaVuelta] = useState(() => redirectLink && vueltaVincularSnapshot().estado !== 'ausente');
+  useEffect(() => {
+    olvidarVueltaVincular();
+    if (desdeLaVuelta) seccionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [desdeLaVuelta]);
   const [password, setPassword] = useState('');
   const [generacionGoogle, setGeneracionGoogle] = useState(0);
   const googleRef = useRef<HTMLDivElement | null>(null);
@@ -354,11 +451,15 @@ function CuentasConectadasActiva({ webClientId, session }: { webClientId: string
   // El botón de GIS existe sólo en `eligiendo`. Cada error que vuelve acá monta
   // una generación nueva: el handle es de un solo uso.
   const eligiendo = estado.fase === 'eligiendo';
+  const stateVincular = estado.fase === 'eligiendo' ? estado.state ?? null : null;
   useEffect(() => {
     handleRef.current?.dispose();
     handleRef.current = null;
     const contenedor = googleRef.current;
     if (!eligiendo || !contenedor) return;
+    // 🔴 AF-VINCULAR-GOOGLE · con la capability encendida, NUNCA popup: sin el
+    // `state` del intento no se dibuja ningún botón.
+    if (redirectLink && stateVincular === null) return;
     let handle: GoogleButtonHandle;
     try {
       handle = renderGoogleIdentityButton({
@@ -366,6 +467,15 @@ function CuentasConectadasActiva({ webClientId, session }: { webClientId: string
         clientId: webClientId,
         locale: idioma === 'en' ? 'en' : 'es',
         mockLabel: t('Continuar con Google'),
+        ...(stateVincular !== null
+          ? {
+              redirect: {
+                loginUri: GOOGLE_REDIRECT_LOGIN_URI,
+                state: stateVincular,
+                simularEnMock: (credencial: string) => { void simularIdaYVueltaVincularMock(credencial, stateVincular); },
+              },
+            }
+          : {}),
         onCredential: (idToken) => despachar({ tipo: 'credencial', idToken }),
       });
     } catch {
@@ -377,7 +487,23 @@ function CuentasConectadasActiva({ webClientId, session }: { webClientId: string
       handle.dispose();
       if (handleRef.current === handle) handleRef.current = null;
     };
-  }, [eligiendo, generacionGoogle, webClientId, idioma, t]);
+  }, [eligiendo, stateVincular, redirectLink, generacionGoogle, webClientId, idioma, t]);
+
+  /**
+   * AF-VINCULAR-GOOGLE · «Vincular Google» en la misma pestaña: primero el
+   * intento del dueño (`start`, 9 minutos, ligado a esta cuenta), después el
+   * botón de Google con su `state`. La marca dice que la próxima vuelta con error
+   * es de vincular; nunca guarda el `state`.
+   */
+  function iniciarEnLaMismaPestana() {
+    despachar({ tipo: 'iniciar' });
+    api.googleLinkRedirectStart(session)
+      .then((state) => {
+        marcarVincularEnCurso();
+        despachar({ tipo: 'intento', state });
+      })
+      .catch((err) => despachar({ tipo: 'inicio_fallido', clase: claseDeErrorDeVinculo(err) }));
+  }
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
@@ -385,25 +511,29 @@ function CuentasConectadasActiva({ webClientId, session }: { webClientId: string
     const idToken = estado.idToken;
     despachar({ tipo: 'enviar' });
     try {
-      const { alreadyLinked } = await api.googleLink({ id_token: idToken, current_password: password }, session);
+      const { alreadyLinked } = idToken === null
+        ? await api.googleLinkRedirectComplete({ current_password: password }, session)
+        : await api.googleLink({ id_token: idToken, current_password: password }, session);
       despachar({ tipo: 'vinculo_ok', yaEstaba: alreadyLinked });
     } catch (err) {
       const clase = claseDeErrorDeVinculo(err);
       despachar({ tipo: 'vinculo_error', clase });
-      if (clase !== 'contrasena' && clase !== 'demasiados') setGeneracionGoogle((g) => g + 1);
+      if (idToken !== null && clase !== 'contrasena' && clase !== 'demasiados') setGeneracionGoogle((g) => g + 1);
     }
   }
 
   return (
-    <CuentasConectadasVista
-      estado={estado}
-      password={password}
-      googleRef={googleRef}
-      onPassword={setPassword}
-      onEmpezar={() => despachar({ tipo: 'empezar' })}
-      onEnviar={(e) => { void enviar(e); }}
-      onCancelar={() => despachar({ tipo: 'cancelar' })}
-      onReintentar={() => despachar({ tipo: 'reintentar' })}
-    />
+    <div ref={seccionRef}>
+      <CuentasConectadasVista
+        estado={estado}
+        password={password}
+        googleRef={googleRef}
+        onPassword={setPassword}
+        onEmpezar={() => (redirectLink ? iniciarEnLaMismaPestana() : despachar({ tipo: 'empezar' }))}
+        onEnviar={(e) => { void enviar(e); }}
+        onCancelar={() => { olvidarVincularEnCurso(); despachar({ tipo: 'cancelar' }); }}
+        onReintentar={() => despachar({ tipo: 'reintentar' })}
+      />
+    </div>
   );
 }

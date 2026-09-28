@@ -2,6 +2,7 @@ import type {
   GoogleContinueLinkRequest,
   GoogleContinueRequest,
   GoogleRedirectSignupRequest,
+  GoogleLinkRedirectCompleteRequest,
   GoogleLinkRequest,
 } from '../socialAuth';
 import { CLAIMS_GOOGLE_MOCK } from '../googleIdentity';
@@ -854,6 +855,8 @@ export async function mockGetConfig(): Promise<AppConfig> {
       // AF-GOOGLE-ALTA-REDIRECT · v2.138.0: `enabled` exige también la fase 1,
       // como el dueño (wire §1). El bloque se sirve siempre.
       google_redirect_signup: { supported: true, enabled: googleRedirectMock() && googleAltaRedirectMock() },
+      // AF-VINCULAR-GOOGLE · v2.141.0 · vincular en la misma pestaña (seam `…google_redirect_link.v1`).
+      google_redirect_link: { supported: true, enabled: googleRedirectMock() && googleLinkRedirectMock() },
       // AF-USUARIO-ARROBA · forma exacta del dueño v2.137.0: el bloque se sirve
       // siempre, y `enabled` es `true` sólo con el seam en `'true'` exacto.
       username: { supported: true, enabled: usernameMock() },
@@ -1364,6 +1367,148 @@ export async function mockGoogleLink(data: GoogleLinkRequest): Promise<unknown> 
   const alreadyLinked = (state.linkedProvidersByUser[state.user.id] ?? []).includes('google');
   if (!alreadyLinked) {
     marcarProveedorVinculado(state.user.id, 'google');
+    persist();
+  }
+  return { linked: true, provider: 'google', already_linked: alreadyLinked };
+}
+
+// ─── AF-VINCULAR-GOOGLE · decisión 107, punto 1 · vincular en la misma pestaña ───
+//
+// Réplica del dueño v2.141.0 (`services/googleLinkRedirect.js`, wire
+// `GOOGLE_VINCULAR_REDIRECT_D107_WIRE.md`). La ida a Google es un documento
+// nuevo, así que los intentos y los fallos viven en `localStorage` del mock (la
+// «base» del dueño), no en memoria, igual que los códigos de la fase 1.
+
+/** Seam de `features.google_redirect_link`: encendido sólo con el `'true'` exacto. */
+export const CLAVE_GOOGLE_LINK_REDIRECT = 'payme.app.mock.google_redirect_link.v1';
+
+export function googleLinkRedirectMock(): boolean {
+  return leerSeam(CLAVE_GOOGLE_LINK_REDIRECT) === 'true';
+}
+
+/**
+ * Seam de e2e: la vuelta de Google con un error del wire (`csrf_failed`,
+ * `social_auth_failed` o `temporarily_unavailable`). Otro valor, sin efecto.
+ */
+export const CLAVE_GOOGLE_LINK_VUELTA = 'payme.app.mock.google_link_vuelta.v1';
+
+/** Intentos por cuenta: uno vivo a la vez (un `start` nuevo reemplaza el anterior). */
+export const CLAVE_INTENTOS_VINCULAR = 'payme.app.mock.google_link_intents.v1';
+const CLAVE_FALLOS_VINCULAR = 'payme.app.mock.google_link_fallos.v1';
+const VIDA_INTENTO_VINCULAR_MS = 9 * 60 * 1000;
+const TOPE_FALLOS_VINCULAR_POR_HORA = 5;
+const UNA_HORA_MS = 60 * 60 * 1000;
+
+interface IntentoVincularMock {
+  readonly idHash: string;
+  readonly vence: number;
+  readonly anotado: boolean;
+  readonly errores: number;
+}
+
+function leerJsonMock<T>(clave: string): Record<string, T> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(clave) ?? '{}') as unknown;
+    return raw && typeof raw === 'object' ? raw as Record<string, T> : {};
+  } catch {
+    return {};
+  }
+}
+
+function guardarJsonMock(clave: string, valor: unknown): void {
+  try { localStorage.setItem(clave, JSON.stringify(valor)); } catch { /* demo en memoria */ }
+}
+
+/** Los fallos de contraseña de la cuenta en la última hora (el tope del dueño, §3). */
+function fallosRecientesDe(usuario: string): number[] {
+  const todos = leerJsonMock<number[]>(CLAVE_FALLOS_VINCULAR);
+  return (todos[usuario] ?? []).filter((t) => t > Date.now() - UNA_HORA_MS);
+}
+
+function anotarFalloDe(usuario: string): void {
+  const todos = leerJsonMock<number[]>(CLAVE_FALLOS_VINCULAR);
+  todos[usuario] = [...fallosRecientesDe(usuario), Date.now()];
+  guardarJsonMock(CLAVE_FALLOS_VINCULAR, todos);
+}
+
+/** `POST /api/auth/google/link/redirect/start` → `{ state: "vincular:<id>" }`. */
+export async function mockGoogleLinkRedirectStart(): Promise<unknown> {
+  await waitSocialLatency();
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const id = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const intentos = leerJsonMock<IntentoVincularMock>(CLAVE_INTENTOS_VINCULAR);
+  intentos[state.user.id] = { idHash: await sha256Hex(id), vence: Date.now() + VIDA_INTENTO_VINCULAR_MS, anotado: false, errores: 0 };
+  guardarJsonMock(CLAVE_INTENTOS_VINCULAR, intentos);
+  return { state: `vincular:${id}` };
+}
+
+/**
+ * El POST de Google al `login_uri` con `state` de vínculo, en el riel mock:
+ * anota la cuenta de Google en el intento vivo y vuelve con `google_link=listo`
+ * (no vincula ni mira si es de otra cuenta). Intento inexistente, vencido o ya
+ * anotado ⇒ el mismo `social_auth_failed` opaco.
+ */
+export async function mockGoogleRedirectLinkLoginUri(idToken: string, stateValue: string): Promise<string> {
+  await waitSocialLatency();
+  const forzado = leerSeam(CLAVE_GOOGLE_LINK_VUELTA);
+  if (forzado === 'csrf_failed' || forzado === 'social_auth_failed' || forzado === 'temporarily_unavailable') {
+    return `google_redirect_error=${forzado}`;
+  }
+  const m = /^vincular:([A-Za-z0-9_-]{20,200})$/.exec(stateValue);
+  if (!m || !validSocialCredential(idToken) || mockGoogleCredencialesConsumidas.has(idToken)) {
+    return 'google_redirect_error=social_auth_failed';
+  }
+  mockGoogleCredencialesConsumidas.add(idToken);
+  const hash = await sha256Hex(m[1]!);
+  const intentos = leerJsonMock<IntentoVincularMock>(CLAVE_INTENTOS_VINCULAR);
+  const usuario = Object.keys(intentos).find((u) => intentos[u]!.idHash === hash);
+  const intento = usuario === undefined ? undefined : intentos[usuario];
+  if (usuario === undefined || !intento || intento.vence <= Date.now() || intento.anotado) {
+    return 'google_redirect_error=social_auth_failed';
+  }
+  intentos[usuario] = { ...intento, anotado: true };
+  guardarJsonMock(CLAVE_INTENTOS_VINCULAR, intentos);
+  return 'google_link=listo';
+}
+
+/**
+ * `POST /api/auth/google/link/redirect/complete`. La contraseña «buena» es la
+ * misma de la demo de `continue/link` (`MOCK_CLAVE_DEMO_VINCULAR`): el mock no
+ * guarda contraseñas, y ése ya es su camino a `reauthentication_failed`.
+ * - tope: 5 contraseñas equivocadas por cuenta y por hora ⇒ `429`, sin probarla;
+ * - sin intento vivo y anotado ⇒ `401 social_auth_failed`;
+ * - equivocada ⇒ `403` y el intento sigue; al quinto error del intento, se quema.
+ */
+export async function mockGoogleLinkRedirectComplete(data: GoogleLinkRedirectCompleteRequest): Promise<unknown> {
+  const keys = Object.keys(data);
+  if (keys.length !== 1 || keys[0] !== 'current_password' || typeof data.current_password !== 'string'
+      || data.current_password.length < 8 || data.current_password.length > 128) {
+    throw new MockApiError(400, 'validation_error');
+  }
+  await waitSocialLatency();
+  const usuario = state.user.id;
+  if (fallosRecientesDe(usuario).length >= TOPE_FALLOS_VINCULAR_POR_HORA) {
+    throw new MockApiError(429, 'too_many_link_attempts');
+  }
+  const intentos = leerJsonMock<IntentoVincularMock>(CLAVE_INTENTOS_VINCULAR);
+  const intento = intentos[usuario];
+  if (!intento || intento.vence <= Date.now() || !intento.anotado) {
+    delete intentos[usuario];
+    guardarJsonMock(CLAVE_INTENTOS_VINCULAR, intentos);
+    throw new MockApiError(401, 'social_auth_failed');
+  }
+  if (data.current_password !== MOCK_CLAVE_DEMO_VINCULAR) {
+    anotarFalloDe(usuario);
+    if (intento.errores + 1 >= ERRORES_HASTA_QUEMAR) delete intentos[usuario];
+    else intentos[usuario] = { ...intento, errores: intento.errores + 1 };
+    guardarJsonMock(CLAVE_INTENTOS_VINCULAR, intentos);
+    throw new MockApiError(403, 'reauthentication_failed');
+  }
+  delete intentos[usuario];
+  guardarJsonMock(CLAVE_INTENTOS_VINCULAR, intentos);
+  const alreadyLinked = (state.linkedProvidersByUser[usuario] ?? []).includes('google');
+  if (!alreadyLinked) {
+    marcarProveedorVinculado(usuario, 'google');
     persist();
   }
   return { linked: true, provider: 'google', already_linked: alreadyLinked };

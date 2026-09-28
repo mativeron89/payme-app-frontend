@@ -351,9 +351,13 @@ export interface GoogleButtonOptions {
   };
 }
 
-/** Un `state` que GIS devuelve tal cual: corto y de un alfabeto seguro. */
+/**
+ * Un `state` que GIS devuelve tal cual: de un alfabeto seguro y acotado. AF-VINCULAR-GOOGLE ·
+ * hasta 209: el más largo es `vincular:` + 200 del dueño (`STATE_VINCULAR`); el
+ * de alta llega a 105.
+ */
 function validState(value: string): boolean {
-  return /^[A-Za-z0-9:_-]{1,120}$/.test(value);
+  return /^[A-Za-z0-9:_-]{1,209}$/.test(value);
 }
 
 /** Un `login_uri` válido: https, sin credenciales, query ni fragmento. */

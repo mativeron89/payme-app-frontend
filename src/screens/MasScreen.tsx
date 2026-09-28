@@ -202,6 +202,7 @@ export function MasScreen() {
             linking={social.google.linking}
             webClientId={social.google.webClientId}
             session={session}
+            redirectLink={social.googleRedirectLink.enabled}
           />
         )}
         {IS_MOCK && (

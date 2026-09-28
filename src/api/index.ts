@@ -79,12 +79,14 @@ import {
   type ResultadoArroba,
 } from './username';
 import {
+  decodeGoogleLinkRedirectStart,
   decodeGoogleLinkResponse,
   decodeLinkedProvidersResponse,
   socialAuthSnapshot,
   type GoogleContinueLinkRequest,
   type GoogleContinueRequest,
   type GoogleRedirectSignupRequest,
+  type GoogleLinkRedirectCompleteRequest,
   type GoogleLinkRequest,
   type GoogleLinkResult,
   type LinkedProvider,
@@ -228,6 +230,11 @@ function assertGoogleLinkingEnabled(): void {
   if (!socialAuthSnapshot().google.linking) throw new Error('google_linking_not_available');
 }
 
+/** AF-VINCULAR-GOOGLE · sin la capability, las dos rutas no existen en el dueño (404). */
+function assertGoogleLinkRedirectEnabled(): void {
+  if (!socialAuthSnapshot().googleRedirectLink.enabled) throw new Error('google_link_redirect_not_available');
+}
+
 export interface Api {
   /**
    * `GET /api/config`. Público (sin sesión) y de solo lectura. Lo consume
@@ -288,6 +295,16 @@ export interface Api {
    */
   getLinkedProviders(expectedSession: StoredSession): Promise<readonly LinkedProvider[]>;
   googleLink(data: GoogleLinkRequest, expectedSession: StoredSession): Promise<GoogleLinkResult>;
+  /**
+   * AF-VINCULAR-GOOGLE · decisión 107 · vincular en la misma pestaña (v2.141.0):
+   * `start` devuelve el `state` `vincular:` del botón; `complete` vincula con la
+   * contraseña, con la MISMA respuesta que `googleLink`.
+   */
+  googleLinkRedirectStart(expectedSession: StoredSession): Promise<string>;
+  googleLinkRedirectComplete(
+    data: GoogleLinkRedirectCompleteRequest,
+    expectedSession: StoredSession,
+  ): Promise<GoogleLinkResult>;
   facebookLoginStart(): Promise<FacebookStartResponse>;
   facebookRegisterStart(data: FacebookRegisterStartRequest): Promise<FacebookStartResponse>;
   facebookLoginComplete(
@@ -570,6 +587,18 @@ const realApi: Api = {
     assertGoogleLinkingEnabled();
     return decodeGoogleLinkResponse(
       await httpRequest<unknown>('POST', '/auth/google/link', data, expectedSession),
+    );
+  },
+  googleLinkRedirectStart: async (expectedSession) => {
+    assertGoogleLinkRedirectEnabled();
+    return decodeGoogleLinkRedirectStart(
+      await httpRequest<unknown>('POST', '/auth/google/link/redirect/start', {}, expectedSession),
+    );
+  },
+  googleLinkRedirectComplete: async (data, expectedSession) => {
+    assertGoogleLinkRedirectEnabled();
+    return decodeGoogleLinkResponse(
+      await httpRequest<unknown>('POST', '/auth/google/link/redirect/complete', data, expectedSession),
     );
   },
   facebookLoginStart: async () => decodeFacebookStartResponse(
@@ -1049,6 +1078,14 @@ const mockApi: Api = {
   googleLink: async (data) => {
     assertGoogleLinkingEnabled();
     return decodeGoogleLinkResponse(await mock.mockGoogleLink(data));
+  },
+  googleLinkRedirectStart: async () => {
+    assertGoogleLinkRedirectEnabled();
+    return decodeGoogleLinkRedirectStart(await mock.mockGoogleLinkRedirectStart());
+  },
+  googleLinkRedirectComplete: async (data) => {
+    assertGoogleLinkRedirectEnabled();
+    return decodeGoogleLinkResponse(await mock.mockGoogleLinkRedirectComplete(data));
   },
   facebookLoginStart: () => mock.mockFacebookLoginStart(),
   facebookRegisterStart: (data) => mock.mockFacebookRegisterStart(data),

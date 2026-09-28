@@ -4,6 +4,7 @@ const getConfig = vi.fn<() => Promise<unknown>>();
 vi.mock('./index', () => ({ api: { getConfig } }));
 
 const {
+  decodeGoogleLinkRedirectStart,
   decodeGoogleLinkResponse,
   decodeLinkedProvidersResponse,
   ensureSocialAuthCapability,
@@ -486,5 +487,51 @@ describe('AF-ALTA-POPUP-D106 · releer la capability', () => {
     await releerSocialAuthCapability();
     expect(getConfig).toHaveBeenCalledTimes(2);
     expect(socialAuthSnapshot()).toBe(antes);
+  });
+});
+
+/**
+ * AF-VINCULAR-GOOGLE · decisión 107, punto 1 · `features.google_redirect_link`
+ * (v2.141.0). Misma forma que la fase 1; exige además la fase 1 y el vínculo
+ * con Google, como el dueño.
+ */
+describe('AF-VINCULAR-GOOGLE · la capability y el `start`', () => {
+  const con = (link: unknown, { redirect = true, linking = true } = {}) => ({
+    features: {
+      social_auth: recoveryEnabled({
+        ...googleEnabled(true),
+        google_sign_in: { ...googleEnabled(true).google_sign_in, linking },
+      }),
+      account_birth_date: BIRTH_READY,
+      google_redirect: { supported: true, enabled: redirect },
+      ...(link === undefined ? {} : { google_redirect_link: link }),
+    },
+  });
+
+  it('encendida sólo con la forma exacta, la fase 1 y el vínculo', () => {
+    expect(readSocialAuthCapability(con({ supported: true, enabled: true })).googleRedirectLink.enabled).toBe(true);
+  });
+
+  it.each<[string, ReturnType<typeof con>]>([
+    ['ausente (AB anterior)', con(undefined)],
+    ['apagada', con({ supported: true, enabled: false })],
+    ['con una clave de más', con({ supported: true, enabled: true, extra: 1 })],
+    ['booleano como texto', con({ supported: true, enabled: 'true' })],
+    ['sin la fase 1', con({ supported: true, enabled: true }, { redirect: false })],
+    ['sin el vínculo con Google', con({ supported: true, enabled: true }, { linking: false })],
+  ])('apagada: %s', (_nombre, config) => {
+    expect(readSocialAuthCapability(config).googleRedirectLink.enabled).toBe(false);
+  });
+
+  it('`start`: sólo `{ state: "vincular:<20 a 200>" }`', () => {
+    const bueno = `vincular:${'a'.repeat(43)}`;
+    expect(decodeGoogleLinkRedirectStart({ state: bueno })).toBe(bueno);
+    expect(decodeGoogleLinkRedirectStart({ state: `vincular:${'b'.repeat(200)}` })).toHaveLength(209);
+    for (const malo of [
+      null, {}, { state: bueno, extra: 1 }, { state: 'alta:abc' }, { state: `vincular:${'a'.repeat(19)}` },
+      { state: `vincular:${'a'.repeat(201)}` }, { state: 'vincular:con espacio que no va' }, { state: 42 },
+    ]) {
+      expect(() => decodeGoogleLinkRedirectStart(malo), JSON.stringify(malo)).toThrow('google_link_redirect_start_malformed');
+    }
   });
 });

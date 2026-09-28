@@ -54,7 +54,8 @@ if (!rutaPublica) {
  * estas líneas se evalúa en una ruta pública.
  */
 async function arrancarPrivada(): Promise<void> {
-  const [googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app] = await Promise.all([
+  const [googleVincular, googleRedirect, googleAlta, recovery, facebook, invitacion, idioma, app] = await Promise.all([
+    import('./api/googleVincularRedirect'),
     import('./api/googleRedirect'),
     import('./api/googleAltaRedirect'),
     import('./api/recoveryFlow'),
@@ -63,6 +64,7 @@ async function arrancarPrivada(): Promise<void> {
     import('./i18n/idioma'),
     import('./App'),
   ]);
+  const { capturarVueltaVincular } = googleVincular;
   const { capturarVueltaGoogleRedirect } = googleRedirect;
   const { capturarVueltaAltaGoogle } = googleAlta;
   const { bootstrapRecoveryTokenCapture } = recovery;
@@ -71,6 +73,10 @@ async function arrancarPrivada(): Promise<void> {
   const { IdiomaProvider } = idioma;
   const App = app.default;
 
+  // AF-VINCULAR-GOOGLE · la vuelta de «Vincular Google» (`#google_link=listo`, o un
+  // error con una ida a vincular vigente) va PRIMERO: los errores comparten
+  // fragmento con «Entrar», y sin la marca siguen siendo de la fase 1.
+  capturarVueltaVincular();
   // AF-GOOGLE-REDIRECT · la vuelta del ingreso con Google (`#google_redirect=…`)
   // sale del fragmento con replaceState ANTES que nada: antes del router, que
   // si no la convertiría en una ruta, y antes de la primera request.
