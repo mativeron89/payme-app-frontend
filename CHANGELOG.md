@@ -11,6 +11,42 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.203.0 — La barra de «¿Qué consumiste?» suma lo que vas eligiendo (2026-09-28)
+
+Orden AF-BARRA-EN-VIVO-CLAUDE-20260928 (sha256 45d2be89…). Decisión 107, punto 3 (n190): «Sí, en vivo
+(Recomendada)». Base `0.202.0` (`d124154`). Sin textos nuevos.
+
+1. **Qué suma.** Antes de «Listo», la barra ($ elegido / $ total y %) suma lo registrado por toda la mesa más el
+   borrador propio. Vale en «Cada uno lo suyo» y en «Partes iguales», con las mismas porciones.
+2. **Sin contar dos veces.**
+   - En «igual» el borrador REEMPLAZA lo guardado: sale lo guardado y entra el borrador.
+   - En consumo el borrador se suma a lo registrado, que nunca repite: un plato nace, como mucho, con lo que queda.
+   - Un borrador que ya no entra en su plato (otra persona eligió después) no cuenta: para ese plato vale lo
+     registrado. Recortarlo a lo que queda inventaría una porción que nadie eligió.
+   - Mientras «Listo» viaja, la barra queda como estaba. Un refresco que llegue en ese rato ya trae lo registrado, y
+     sumado al borrador lo contaría dos veces.
+3. **El 100 %.** Sólo lo da lo registrado: con la mesa incompleta, el borrador la lleva como mucho a 99, el mismo tope
+   de siempre antes de completarse.
+4. **Quién lo ve.** El borrador lo ve sólo quien lo elige: no sale al dueño hasta «Listo», y las otras personas siguen
+   viendo lo registrado. En «igual», sólo cuenta con la selección guardada ya leída; si no, la barra dice lo
+   registrado.
+5. **Sin cambios:** D79 («Queda ½», «Lo eligió otro», el 409), el refresco de 10 s ni el Inicio.
+- **RM190** (`barra-items-sin-pago`) decía «lo provisional no cuenta», que era la regla antes de la decisión 107. Su
+  primer test ahora afirma la barra en vivo; el del 409 sigue igual.
+- **Mutantes:** 9 plantados, 8 cazados.
+  - sin borrador (la conducta de 0.202.0);
+  - «igual» sin borrador;
+  - «igual» sin restar lo guardado;
+  - sin tope 99;
+  - el borrador que no entra se recorta;
+  - sin congelar mientras «Listo» viaja (cae el test que lo reproduce con el reloj pausado: esperaba $150, llegó
+    $300);
+  - congela siempre;
+  - lo propio no se limita al plato.
+  - **Sobrevive, declarado:** «en igual, el borrador aunque no se haya leído lo guardado». No tiene camino
+    alcanzable: fuera del estado «disponible» la edición está bloqueada, la lectura escribe borrador y guardado
+    juntos, y el refresco de 10 s no relee lo guardado. Queda como guarda.
+
 ## 0.202.0 — Una pestaña vieja se actualiza sola en el ingreso (2026-09-27)
 
 Orden AF-VERSION-NUEVA-CLAUDE-20260927 (sha256 37f9203b…). Base `0.201.0` (`be701fb`). Es la sugerencia del CIERRE
