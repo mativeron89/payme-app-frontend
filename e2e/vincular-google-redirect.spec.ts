@@ -203,4 +203,28 @@ test.describe('AF-VINCULAR-GOOGLE · con la capability apagada', () => {
     await expect(seccion(page).getByText('Vinculada', { exact: true })).toBeVisible();
     expect(await page.evaluate((k) => localStorage.getItem(k), INTENTOS)).toBeNull();
   });
+
+  test('se enciende con el popup a la vista (relectura tardía): el popup se retira y se vuelve a empezar en la misma pestaña', async ({ page }) => {
+    await preparar(page, { link: false });
+    await abrirConfiguracion(page);
+    await seccion(page).getByRole('button', { name: 'Vincular Google', exact: true }).click();
+    await expect(google(page)).toBeVisible();
+    await expect(google(page)).not.toHaveAttribute('data-ux-mode', /.*/);
+    // La única ventana real: una relectura de `/api/config` que salió desde
+    // «Entrar» (AF-ALTA-POPUP-D106) y vuelve después, con la capability ya
+    // encendida. Se dispara sobre el MISMO módulo que usa la app (Vite dev).
+    await page.evaluate(async () => {
+      localStorage.setItem('payme.app.mock.google_redirect_link.v1', 'true');
+      const modulo = '/src/api/socialAuth.ts';
+      const { releerSocialAuthCapability } = await import(modulo);
+      await releerSocialAuthCapability();
+    });
+    // Nunca popup con la capability encendida: sin el `state` no queda ningún botón.
+    await expect(google(page)).toHaveCount(0);
+    await seccion(page).getByRole('button', { name: 'Cancelar', exact: true }).click();
+    await expect(seccion(page).getByText('No vinculada', { exact: true })).toBeVisible();
+    await seccion(page).getByRole('button', { name: 'Vincular Google', exact: true }).click();
+    await expect(google(page)).toHaveAttribute('data-ux-mode', 'redirect');
+    await expect(google(page)).toHaveAttribute('data-state', /^vincular:[A-Za-z0-9_-]{20,200}$/);
+  });
 });
