@@ -11,6 +11,46 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.205.0 — La protección de seguridad de la app pasa a bloquear (2026-09-28)
+
+Orden AF-CSP-OBLIGATORIA-CLAUDE-20260928 (sha256 17c6e990…). Decisión 107, punto 4 (n186): «Sí, medir y bloquear
+(Recomendada)». Base `0.204.0` (`2941b5c`). Sin textos nuevos.
+
+1. **Qué cambia.** La CSP del proyecto App pasa de `Content-Security-Policy-Report-Only` a
+   `Content-Security-Policy`. **La política es la misma, byte por byte:** sólo cambia la cabecera. No había
+   `report-uri` que conservar. La landing no cambia: ya era obligatoria.
+2. **Medida antes de cambiar**, con un instrumento rehecho fuera del repo: la cabecera real de `vercel.ts`, Chrome
+   headless, dos vías por recorrido (el evento `securitypolicyviolation` y la consola). **0 violaciones en los 15
+   recorridos**, en Report-Only y otra vez ya obligatoria.
+   - Build de producción con el GIS real (un `client_id` inventado, sin cuentas), contra una API de mentira local:
+     - «Entrar», «Crea tu cuenta» con las casillas marcadas, y la vuelta con `social_auth_failed` y con
+       `csrf_failed`: todos con el botón de Google en redirect;
+     - Configuración, y «Vincular Google» con su `state`.
+   - Mock con los pagos apagados: Inicio, Mesas, «¿Qué consumiste?» (con un plato elegido), Historial,
+     Estadísticas, Tus restaurantes, Amigos, la foto de perfil y el escáner con la foto del ticket.
+   - El `<style>` que inyecta `gsi/client` sigue teniendo el mismo hash que la política.
+3. **El instrumento ve lo que tiene que ver.** Con fuentes quitadas a propósito aparecen las violaciones esperadas:
+   el `<style>` y el atributo del botón de Google, su iframe y su script, la API y las imágenes `blob:`.
+   - Sin `'unsafe-inline'` en `style-src-attr`, las pantallas propias no reportan nada: React pone los estilos por
+     el CSSOM, que la CSP no restringe. Ese permiso existe sólo por el botón de Google.
+4. **Qué pasa si algo falta, medido con la política ya obligatoria:**
+   - sin el hash del `<style>` de Google, su botón aparece desarmado (el logo a todo el ancho) y el ingreso con
+     correo sigue. Si Google cambia ese estilo, eso es lo que se va a ver hasta volver a medir el hash;
+   - sin el origen de la API, no llega ninguna llamada. No puede faltar sin que el build falle antes
+     (`exigirApiUrl`); después de publicar, el `connect-src` servido tiene que nombrar la API.
+5. **Lo que no se pudo medir, y por qué:**
+   - la tarjeta y el 3DS de Stripe: los pagos están apagados y Stripe.js no se carga en ningún recorrido;
+   - el OCR real: AWS está apagado;
+   - el ingreso real con Google: sin cuentas no hay credencial. La página de Google, en la misma pestaña, no lleva
+     nuestra CSP; la vuelta con error sí se midió, y la vuelta con código usa la misma API medida;
+   - Safari y Firefox: sólo Chromium.
+- Guardas: `csp.test.ts` exige UNA cabecera obligatoria y ninguna Report-Only; `despliegue.test.ts` y
+  `headersLandingScope.test.ts` fijan la clave nueva; el e2e `csp-app` exige que `vercel.ts` la genere obligatoria.
+- **Mutantes:** 3 plantados, 3 cazados.
+  - La app de vuelta en Report-Only: caen las tres guardas y el e2e.
+  - Las dos cabeceras a la vez: cae «UNA sola cabecera».
+  - La landing en Report-Only: cae la guarda de la landing.
+
 ## 0.204.0 — «Vincular Google» en la misma pestaña (2026-09-28)
 
 Orden AF-VINCULAR-GOOGLE-CLAUDE-20260928 (sha256 838255c6…). Decisión 107, punto 1. Dueño servido: App Backend
