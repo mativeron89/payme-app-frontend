@@ -496,12 +496,12 @@ describe('AF-ALTA-POPUP-D106 · releer la capability', () => {
  * con Google, como el dueño.
  */
 describe('AF-VINCULAR-GOOGLE · la capability y el `start`', () => {
+  // Con Google encendido el dueño exige `linking: true`; la única config VÁLIDA
+  // sin vínculo es Google apagado entero (`OFF`). Un `linking: false` con Google
+  // encendido invalida todo el bloque y el caso no afirmaría nada.
   const con = (link: unknown, { redirect = true, linking = true } = {}) => ({
     features: {
-      social_auth: recoveryEnabled({
-        ...googleEnabled(true),
-        google_sign_in: { ...googleEnabled(true).google_sign_in, linking },
-      }),
+      social_auth: linking ? recoveryEnabled(googleEnabled(true)) : OFF,
       account_birth_date: BIRTH_READY,
       google_redirect: { supported: true, enabled: redirect },
       ...(link === undefined ? {} : { google_redirect_link: link }),
@@ -520,7 +520,10 @@ describe('AF-VINCULAR-GOOGLE · la capability y el `start`', () => {
     ['sin la fase 1', con({ supported: true, enabled: true }, { redirect: false })],
     ['sin el vínculo con Google', con({ supported: true, enabled: true }, { linking: false })],
   ])('apagada: %s', (_nombre, config) => {
-    expect(readSocialAuthCapability(config).googleRedirectLink.enabled).toBe(false);
+    const capability = readSocialAuthCapability(config);
+    // El resto de la config es válido: se apaga SÓLO el vínculo en redirect.
+    expect(capability.status).toBe('authoritative');
+    expect(capability.googleRedirectLink.enabled).toBe(false);
   });
 
   it('`start`: sólo `{ state: "vincular:<20 a 200>" }`', () => {
