@@ -534,6 +534,17 @@ describe('progresoConBorrador · la barra en vivo', () => {
     });
   });
 
+  it('datos del dueño que no cierran (restante + lo propio pasa del entero): lo propio no cuenta más de un plato', () => {
+    const restanteIgual = (i: MesaItem) => i.informative_remaining_bps;
+    const m = mesa({
+      division_mode: 'igual',
+      items: [item({ id: 'a', price_cents: 30000, informative_remaining_bps: 10000 }), item({ id: 'b', price_cents: 54000, informative_remaining_bps: 10000 })],
+    });
+    // Guardado ½ que el restante no descuenta: con un borrador de ½, el plato va ½ tomado.
+    expect(progresoConBorrador(m, restanteIgual, (i) => (i.id === 'a' ? 5000 : 0), new Map([['a', 5000]])))
+      .toMatchObject({ assignedCents: 15000 });
+  });
+
   it('un dato raro del dueño: lo mismo que lo registrado (desconocido), sin inventar', () => {
     const m = mesa({ items: [item({ id: 'a', remaining_bps: Number.NaN })] });
     expect(progresoConBorrador(m, restanteConsumo, sinPropio, new Map([['a', 5000]])))
