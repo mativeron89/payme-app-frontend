@@ -11,6 +11,7 @@ const recovery = require('../services/authRecovery');
 const identities = require('../services/externalIdentities');
 const googleRedirect = require('../services/googleRedirect');
 const googleRedirectSignup = require('../services/googleRedirectSignup');
+const googleLinkRedirect = require('../services/googleLinkRedirect');
 const legal = require('../services/legal');
 const legalAcceptance = require('../services/legalAcceptance');
 const logger = require('../utils/logger');
@@ -109,6 +110,10 @@ function socialError(res, error, registration = false) {
   }
   if (error.code === 'reauthentication_failed') {
     return res.status(403).json({ error: 'reauthentication_failed' });
+  }
+  // v2.141.0 · decisión 107 · tope de contraseñas por cuenta al vincular (5 por hora).
+  if (error.code === 'too_many_link_attempts') {
+    return res.status(429).json({ error: 'too_many_link_attempts' });
   }
   if (error.code === 'social_auth_failed' || error.code === 'social_auth_not_available') {
     return res.status(401).json({ error: 'social_auth_failed' });
@@ -305,6 +310,42 @@ router.post('/google/continue/link', googleDark('linking'),
         });
       }
       return res.status(result.status).json(result.body);
+    } catch (error) {
+      return socialError(res, error) || next(error);
+    }
+  });
+
+/**
+ * v2.141.0 · decisión 107, punto 1 · «Vincular Google» en la MISMA pestaña
+ * (services/googleLinkRedirect.js). Apagado, las dos rutas no existen: caen al 404 de siempre
+ * ANTES de pedir sesión, igual que antes de v2.141.0.
+ */
+function vincularRedirectDark(req, res, next) {
+  return googleLinkRedirect.habilitado() ? next() : next('router');
+}
+
+router.post('/google/link/redirect/start', vincularRedirectDark, requireAuth,
+  validateBody(schemas.socialLinkRedirectStart), async (req, res, next) => {
+    try {
+      const out = await googleLinkRedirect.iniciar(req.user.id);
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json(out);
+    } catch (error) {
+      if (error.code === 'auth_required') return res.status(401).json({ error: 'auth_required' });
+      return next(error);
+    }
+  });
+
+router.post('/google/link/redirect/complete', vincularRedirectDark, requireAuth,
+  validateBody(schemas.socialLinkRedirectComplete), async (req, res, next) => {
+    try {
+      const response = await googleLinkRedirect.completar({
+        userId: req.user.id, currentPassword: req.body.current_password,
+      });
+      logger.audit('external_identity_linked', {
+        user_id: req.user.id, provider: 'google', already_linked: response.already_linked, via: 'redirect',
+      });
+      return res.json(response);
     } catch (error) {
       return socialError(res, error) || next(error);
     }

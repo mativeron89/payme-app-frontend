@@ -6,6 +6,38 @@ desde `src/` y nunca se corrige a mano.
 
 ## Procedencia congelada
 
+- Fecha del refresh: **2026-09-28** (orden `AF-VINCULAR-GOOGLE-CLAUDE-20260928` ·
+  «Vincular Google» en la misma pestaña, decisión 107 punto 1).
+- Commit exacto y procedencia del CONTENIDO:
+  **`4cffc16946c08f742a9d3f4eaaae4a2b81c25e45`** (App Backend **v2.141.0**, commit A:
+  `features.google_redirect_link`, `POST /api/auth/google/link/redirect/start` y
+  `/complete`, el `state` `vincular:` en el `login_uri`, el fragmento `#google_link=listo`
+  y el tope de 5 contraseñas equivocadas por cuenta y por hora, `429 too_many_link_attempts`).
+- Commit del que se tomó el inventario autoritativo:
+  **`41e6bf3d9a9d25a934c57cb049a6bf1b4b4f9651`** (v2.141.0, commit B: regenera el
+  inventario sobre `4cffc16`), publicado en `main` y servido con
+  `GOOGLE_REDIRECT_LINK_ENABLED` apagada.
+  Wire del dueño: `docs/GOOGLE_VINCULAR_REDIRECT_D107_WIRE.md` en `41e6bf3`, sha256
+  `45c4ecaa41aa5bdc77734f5ede0c11aeab55d03efa690b7f29cabdd9d154dfea`.
+
+**121 archivos espejados**, los mismos: no entra ni sale ninguno. Cambian
+`contract/social-auth-v1.json`, `routes/config.js`, `routes/social-auth.js`,
+`schemas/index.js` y `services/externalIdentities.js`.
+
+La fuente se leyó con `git show` sobre objetos del repo del owner, sin tocar su
+árbol ni sus refs.
+
+| gate | resultado |
+|---|---|
+| `--adoptar-inventario` | adoptado y verificado 121 · commit `4cffc16` · exit 0 |
+| `--integridad` | **OK 121/121** · exit 0 |
+| `--paridad` | **OK 121/121**: espejo = inventario = fuente **en `4cffc16`** · exit 0 |
+| vigencia | medida contra el publicado **`41e6bf3`** con `git diff --stat 4cffc16 41e6bf3`: cambia sólo `contract/mirror-inventory.json`, que no es una de las 121 rutas. **Ninguna cambió.** |
+
+Como en los refresh anteriores, el inventario se toma del commit que lo CONTIENE
+(`41e6bf3`), no del que nombra (`4cffc16`).
+
+### Refresh anterior · 2026-09-27 (AF-USERNAME-D104 · `ef3dac4`)
 - Fecha del refresh: **2026-09-27** (orden `AF-USERNAME-D104-CLAUDE-20260927` · el @
   de la otra persona en lugar del código `payme_…`, decisión 104).
 - Commit exacto y procedencia del CONTENIDO:

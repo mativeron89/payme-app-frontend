@@ -237,64 +237,115 @@ async function proveedoresVinculados(userId, db = pool) {
   return PROVEEDORES_PUBLICABLES.filter((p) => activos.has(p));
 }
 
-async function linkExternalIdentity({ userId, currentPassword, evidence }) {
-  const { rows } = await pool.query(
-    `SELECT password_hash,status FROM users WHERE id=$1`, [userId]
+/**
+ * v2.141.0 · decisión 107, punto 2 · tope de contraseñas equivocadas POR CUENTA, 5 por hora,
+ * COMPARTIDO entre los tres caminos que vinculan con contraseña: `/google/link`,
+ * `/google/continue/link` y `/google/link/redirect/complete`. Suma los errores de la última
+ * hora en las dos tablas de intentos (n187 ya lo hacía sólo para `continue`). Un acierto no
+ * borra nada: el conteo baja recién cuando los errores salen de la ventana.
+ */
+async function fallosDeVinculo(client, userId) {
+  const { rows: [r] } = await client.query(
+    `SELECT
+       COALESCE((SELECT SUM(failed_attempts) FROM google_continue_link_intents
+                  WHERE user_id=$1 AND created_at > NOW() - make_interval(secs => $2)), 0)
+     + COALESCE((SELECT SUM(failed_attempts) FROM google_link_redirect_intents
+                  WHERE user_id=$1 AND created_at > NOW() - make_interval(secs => $2)), 0)
+       AS fallidos`,
+    [userId, LINK_ACCOUNT_WINDOW_SECONDS]
   );
-  const snapshot = rows.length === 1 ? rows[0] : null;
-  const validPassword = snapshot?.password_hash
-    ? await bcrypt.compare(currentPassword, snapshot.password_hash)
-    : false;
-  if (!snapshot || snapshot.status !== 'active' || !validPassword) {
-    throw codedError('reauthentication_failed', 403);
+  return Number(r.fallidos);
+}
+
+function demasiadosIntentos() {
+  return codedError('too_many_link_attempts', 429);
+}
+
+/**
+ * La parte de vincular que va DESPUÉS de la contraseña, compartida por `/google/link` y el
+ * `complete` del vínculo en la misma pestaña. `consumir` gasta la credencial (en el redirect
+ * ya se gastó en el POST del login_uri). Idempotente sólo para el MISMO usuario; cualquier
+ * otro caso —subject de otra cuenta, revocado, u otro subject propio— es el 401 opaco.
+ */
+async function vincularEnTransaccion(client, { userId, evidence, consumir }) {
+  await assertSubjectAllowed(client, evidence);
+  // La credencial se consume SIEMPRE, también en el camino idempotente: un
+  // id_token ya usado sigue siendo 401 aunque el binding sea propio.
+  await consumir(client);
+  // v2.91.0 · ON CONFLICT DO NOTHING cubre las dos unicidades (subject tomado;
+  // usuario que ya tiene otro subject de este proveedor) y, ante un INSERT
+  // concurrente, espera su COMMIT.
+  const { rowCount } = await client.query(
+    `INSERT INTO external_identity_bindings
+       (user_id,provider,subject_namespace,subject,status)
+     VALUES ($1,$2,$3,$4,'active')
+     ON CONFLICT DO NOTHING`,
+    [userId, evidence.provider, evidence.subject_namespace, evidence.subject]
+  );
+  if (rowCount === 1) {
+    return { linked: true, provider: evidence.provider, already_linked: false };
   }
+  const { rows: existing } = await client.query(
+    `SELECT user_id,status FROM external_identity_bindings
+      WHERE provider=$1 AND subject_namespace=$2 AND subject=$3`,
+    [evidence.provider, evidence.subject_namespace, evidence.subject]
+  );
+  const propio = existing.length === 1
+    && existing[0].user_id === userId
+    && existing[0].status === 'active';
+  if (!propio) throw authFailed();
+  return { linked: true, provider: evidence.provider, already_linked: true };
+}
+
+/** Contraseña equivocada en `/google/link`: una fila «directo», ya consumida, sin identidad. */
+async function registrarFalloDirecto(client, userId) {
+  await client.query(
+    `INSERT INTO google_link_redirect_intents
+       (intent_hash, user_id, canal, failed_attempts, expires_at, consumed_at)
+     VALUES ($1, $2, 'directo', 1, NOW(), NOW())`,
+    [tokenHash(randomBytes(32).toString('base64url')), userId]
+  );
+}
+
+/**
+ * `POST /api/auth/google/link` (sesión + contraseña + id_token del popup).
+ *   · cuenta inactiva o sin contraseña                → 403 reauthentication_failed (no cuenta);
+ *   · tope de la cuenta alcanzado                     → 429 too_many_link_attempts, sin probar
+ *     la contraseña ni gastar la credencial;
+ *   · contraseña equivocada                           → 403, queda contada; la credencial SIGUE
+ *     viva (el AF reintenta sólo la contraseña);
+ *   · contraseña correcta                             → vincularEnTransaccion.
+ * El error de contraseña se confirma (el contador) y recién después se lanza.
+ */
+async function linkExternalIdentity({ userId, currentPassword, evidence }) {
+  let resultado;
   try {
-    return await pool.tx(async (client) => {
+    resultado = await pool.tx(async (client) => {
       const { rows: locked } = await client.query(
         `SELECT password_hash,status FROM users WHERE id=$1 FOR UPDATE`, [userId]
       );
-      if (locked.length !== 1 || locked[0].status !== 'active'
-          || locked[0].password_hash !== snapshot.password_hash) {
+      if (locked.length !== 1 || locked[0].status !== 'active' || !locked[0].password_hash) {
         throw codedError('reauthentication_failed', 403);
       }
-      await assertSubjectAllowed(client, evidence);
-      // La credencial se consume SIEMPRE, también en el camino idempotente: un
-      // id_token ya usado sigue siendo 401 aunque el binding sea propio.
-      await consumeCredential(client, evidence, 'link');
-      // v2.91.0 · idempotencia sólo para el MISMO usuario. ON CONFLICT DO
-      // NOTHING cubre las dos unicidades (subject tomado; usuario que ya tiene
-      // otro subject de este proveedor) y, ante un INSERT concurrente, espera
-      // su COMMIT. Después se lee el binding de ESTE subject: si es activo y de
-      // este usuario, la respuesta es la misma vinculación ya hecha; cualquier
-      // otro caso —de otra cuenta, revocado, u otro subject propio— conserva
-      // el social_auth_failed opaco de siempre, sin escribir nada.
-      const { rowCount } = await client.query(
-        `INSERT INTO external_identity_bindings
-           (user_id,provider,subject_namespace,subject,status)
-         VALUES ($1,$2,$3,$4,'active')
-         ON CONFLICT DO NOTHING`,
-        [userId, evidence.provider, evidence.subject_namespace, evidence.subject]
-      );
-      if (rowCount === 1) {
-        return { linked: true, provider: evidence.provider, already_linked: false };
+      if ((await fallosDeVinculo(client, userId)) >= LINK_ACCOUNT_MAX_FAILED) {
+        throw demasiadosIntentos();
       }
-      const { rows: existing } = await client.query(
-        `SELECT user_id,status FROM external_identity_bindings
-          WHERE provider=$1 AND subject_namespace=$2 AND subject=$3`,
-        [evidence.provider, evidence.subject_namespace, evidence.subject]
-      );
-      const propio = existing.length === 1
-        && existing[0].user_id === userId
-        && existing[0].status === 'active';
-      if (!propio) throw authFailed();
-      return { linked: true, provider: evidence.provider, already_linked: true };
+      if (!(await bcrypt.compare(currentPassword, locked[0].password_hash))) {
+        await registrarFalloDirecto(client, userId);
+        return { fallo: 'reauthentication_failed' };
+      }
+      return vincularEnTransaccion(client, {
+        userId, evidence, consumir: (c) => consumeCredential(c, evidence, 'link'),
+      });
     });
   } catch (error) {
-    if (error.code === 'reauthentication_failed') throw error;
+    if (error.code === 'reauthentication_failed' || error.code === 'too_many_link_attempts') throw error;
     if (error.code === '23505' || error.code === '23514'
         || error.code === 'social_auth_failed') throw authFailed();
     throw error;
   }
+  if (resultado.fallo) throw codedError('reauthentication_failed', 403);
+  return resultado;
 }
 
 /*
@@ -630,13 +681,8 @@ async function linkFromContinueIntent({ linkIntent, password }) {
         return { ...CONTINUE_FALLA_LOGIN, outcome: 'failed' };
       }
       // El FOR UPDATE del usuario serializa los intentos concurrentes de la cuenta.
-      const { rows: [acumulado] } = await client.query(
-        `SELECT COALESCE(SUM(failed_attempts),0)::int AS fallidos
-           FROM google_continue_link_intents
-          WHERE user_id=$1 AND created_at > NOW() - make_interval(secs => $2)`,
-        [user.id, LINK_ACCOUNT_WINDOW_SECONDS]
-      );
-      if (acumulado.fallidos >= LINK_ACCOUNT_MAX_FAILED) {
+      // v2.141.0 · el tope es el compartido de los tres caminos (fallosDeVinculo).
+      if ((await fallosDeVinculo(client, user.id)) >= LINK_ACCOUNT_MAX_FAILED) {
         await client.query(
           `UPDATE google_continue_link_intents SET consumed_at=NOW() WHERE id=$1`, [intent.id]
         );
@@ -704,6 +750,10 @@ async function linkFromContinueIntent({ linkIntent, password }) {
 }
 
 module.exports = {
+  // v2.141.0 · vincular en la misma pestaña (services/googleLinkRedirect.js).
+  fallosDeVinculo,
+  vincularEnTransaccion,
+  demasiadosIntentos,
   // v2.138.0 · alta en la misma pestaña (services/googleRedirectSignup.js).
   continuarEnTransaccion,
   errorDeContinuar,

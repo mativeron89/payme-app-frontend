@@ -58,6 +58,7 @@ const WALLET_RAIL = Object.freeze({
 const googleIdentity = require('../services/googleIdentity');
 const googleRedirect = require('../services/googleRedirect');
 const googleRedirectSignup = require('../services/googleRedirectSignup');
+const googleLinkRedirect = require('../services/googleLinkRedirect');
 const username = require('../services/username');
 const facebookIdentity = require('../services/facebookIdentity');
 const authRecovery = require('../services/authRecovery');
@@ -182,6 +183,12 @@ router.get('/', (req, res) => {
       google_redirect_signup: {
         supported: true,
         enabled: googleRedirectSignup.habilitado(),
+      },
+      // v2.141.0 · decisión 107 · «Vincular Google» en la misma pestaña. Bloque hermano; `enabled`
+      // es el valor VIVO: GOOGLE_REDIRECT_LINK_ENABLED, la fase 1 y el vínculo con Google encendidos.
+      google_redirect_link: {
+        supported: true,
+        enabled: googleLinkRedirect.habilitado(),
       },
       // v2.137.0 · decisión 93 · @usuario único. Bloque hermano de primer nivel,
       // mismo criterio que `google_redirect`. `enabled` es el valor VIVO de

@@ -213,7 +213,7 @@
         "too_many_auth_attempts": [429]
       },
       "error_notes": {
-        "reauthentication_failed": "contraseña incorrecta, sin vínculo. El intento sigue vivo hasta 5 errores; al quinto se quema y desde ahí responde social_auth_failed. Desde v2.125.0 (n187) el tope también es POR CUENTA: 5 errores sumando todos los intentos de la cuenta destino en 1 hora; al tope, cualquier intento de esa cuenta responde social_auth_failed sin probar la contraseña.",
+        "reauthentication_failed": "contraseña incorrecta, sin vínculo. El intento sigue vivo hasta 5 errores; al quinto se quema y desde ahí responde social_auth_failed. Desde v2.125.0 (n187) el tope también es POR CUENTA: 5 errores sumando todos los intentos de la cuenta destino en 1 hora; al tope, cualquier intento de esa cuenta responde social_auth_failed sin probar la contraseña. Desde v2.141.0 (decisión 107) el tope es COMPARTIDO con google_link y google_link_redirect_complete: 5 errores por cuenta por hora entre los tres caminos; esta ruta conserva su social_auth_failed al tope.",
         "social_auth_failed": "intento inexistente, vencido, usado o quemado; cuenta destino ya inactiva o sin contraseña; tope de errores de la cuenta alcanzado (n187); o el subject quedó vinculado a otra cuenta entre medio."
       }
     },
@@ -227,7 +227,8 @@
         "already_linked": "desde v2.91.0. false = se creó el binding en esta llamada; true = el subject de Google YA estaba vinculado, activo, a ESTA misma cuenta y no se escribió nada. Las dos respuestas son 200 con el mismo shape.",
         "idempotencia": "sólo para la misma cuenta. Si el subject está vinculado a OTRA cuenta, revocado, o esta cuenta ya tiene otro subject de Google, la respuesta sigue siendo social_auth_failed 401 opaco, sin cambios y sin revelar cuál de los casos es.",
         "reautenticacion": "current_password se exige también en el camino idempotente: contraseña incorrecta es reauthentication_failed 403 sin cambios.",
-        "credencial": "el id_token se consume también en el camino idempotente; reenviar el MISMO id_token es social_auth_failed 401."
+        "credencial": "el id_token se consume también en el camino idempotente; reenviar el MISMO id_token es social_auth_failed 401.",
+        "tope_por_cuenta": "desde v2.141.0 (decisión 107): 5 contraseñas equivocadas por cuenta por hora, compartido con google_continue_link y google_link_redirect_complete. Al tope responde too_many_link_attempts 429 sin probar la contraseña ni gastar el id_token. Un acierto no resetea el conteo."
       },
       "errors": {
         "not_found": [404],
@@ -235,7 +236,56 @@
         "auth_required": [401],
         "reauthentication_failed": [403],
         "social_auth_failed": [401, 503],
-        "too_many_auth_attempts": [429]
+        "too_many_auth_attempts": [429],
+        "too_many_link_attempts": [429]
+      }
+    },
+    "google_link_redirect_start": {
+      "since": "v2.141.0",
+      "method": "POST",
+      "path": "/api/auth/google/link/redirect/start",
+      "auth": "payme_bearer",
+      "gated_by": "features.google_redirect_link.enabled; apagado ⇒ el 404 not_found de siempre, antes de pedir sesión",
+      "request": [],
+      "success": { "status": 200, "shape": { "state": "vincular:<id>" } },
+      "success_notes": {
+        "state": "va tal cual en el state del botón GIS en modo redirect. Vive 9 minutos, se guarda sólo el sha256 del <id> y queda ligado a la cuenta de la sesión. Un start nuevo deja sin efecto el anterior.",
+        "retencion": "el identificador de Google anotado se borra al consumirse el intento o al vencer (barrido cada 30 s): nunca más de 10 minutos. Las filas que sólo cuentan fallos no tienen datos de Google y viven como máximo 1 hora."
+      },
+      "errors": { "not_found": [404], "validation_error": [400], "auth_required": [401], "too_many_auth_attempts": [429] }
+    },
+    "google_link_redirect_login_uri": {
+      "since": "v2.141.0",
+      "method": "POST",
+      "path": "/api/auth/google/redirect",
+      "caller": "Google (modo redirect de GIS) desde el botón de «Vincular Google», con state vincular:<id>",
+      "gated_by": "features.google_redirect_link.enabled; apagado ⇒ el state se ignora y rige google_redirect_login_uri",
+      "request": ["credential", "g_csrf_token", "select_by?", "state"],
+      "success_status": 303,
+      "success_location": "<origen de FRONTEND_PUBLIC_URL>/#google_link=listo",
+      "error_location": "<origen de FRONTEND_PUBLIC_URL>/#google_redirect_error=<csrf_failed|social_auth_failed|temporarily_unavailable>",
+      "rule": "decisión 107: verifica SIN perfil, consume la credencial (purpose link) y sólo anota provider+subject en el intento; NO vincula ni mira si el subject es de otra cuenta. Nunca nombre ni correo."
+    },
+    "google_link_redirect_complete": {
+      "since": "v2.141.0",
+      "method": "POST",
+      "path": "/api/auth/google/link/redirect/complete",
+      "auth": "payme_bearer",
+      "gated_by": "features.google_redirect_link.enabled; apagado ⇒ el 404 not_found de siempre, antes de pedir sesión",
+      "request": ["current_password"],
+      "success": { "linked": true, "provider": "google", "already_linked": "boolean" },
+      "success_notes": {
+        "misma_forma": "exactamente la de google_link, con la misma idempotencia sólo para la misma cuenta.",
+        "intento": "toma el intento vivo de ESTA cuenta con subject anotado. Se consume al vincular y también ante un social_auth_failed del vínculo; una contraseña equivocada lo deja vivo hasta 5 errores."
+      },
+      "errors": {
+        "not_found": [404],
+        "validation_error": [400],
+        "auth_required": [401],
+        "reauthentication_failed": [403],
+        "social_auth_failed": [401],
+        "too_many_auth_attempts": [429],
+        "too_many_link_attempts": [429]
       }
     },
     "facebook_register_start": {
@@ -372,6 +422,13 @@
     "shape": { "supported": "boolean (true)", "enabled": "boolean" },
     "enabled_true_when": "GOOGLE_REDIRECT_SIGNUP_ENABLED=true y features.google_redirect.enabled true (v2.138.1 · decisión 103: sin atadura al Aviso)",
     "absent_means": "backend anterior a v2.138.0: «Crea tu cuenta» con Google en popup"
+  },
+  "google_redirect_link_capability": {
+    "since": "v2.141.0",
+    "path": "features.google_redirect_link",
+    "shape": { "supported": "boolean (true)", "enabled": "boolean" },
+    "enabled_true_when": "GOOGLE_REDIRECT_LINK_ENABLED=true, features.google_redirect.enabled true y google_sign_in.linking activo",
+    "absent_means": "backend anterior a v2.141.0: «Vincular Google» en popup"
   },
   "google_continue_capability": {
     "since": "v2.92.0",

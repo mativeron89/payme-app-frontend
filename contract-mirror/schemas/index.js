@@ -251,6 +251,11 @@ const socialLink = z.object({
   id_token: externalIdToken,
   current_password: passwordLegacy,
 }).strict();
+/** v2.141.0 · decisión 107 · vincular Google en la misma pestaña. */
+const socialLinkRedirectStart = z.object({}).strict();
+const socialLinkRedirectComplete = z.object({
+  current_password: passwordLegacy,
+}).strict();
 const facebookRegisterStartBase = z.object({
   invitation_token: z.string().min(20).max(200),
   first_name: profileName,
@@ -689,7 +694,7 @@ module.exports = {
   register, registerCompat, registerSchema, birthDateRequeridaEnRegistro,
   altaPublicaHabilitada, FLAG_ALTA_PUBLICA,
   login, refreshToken, socialRegisterSchema, socialLogin, socialContinue, socialContinueLink, socialLink,
-  socialRedirectSignup,
+  socialRedirectSignup, socialLinkRedirectStart, socialLinkRedirectComplete,
   facebookRegisterStartSchema, facebookLoginStart, facebookComplete,
   facebookSignedRequest,
   recoveryRequest, recoveryComplete, updateMe, updateProfileName,
