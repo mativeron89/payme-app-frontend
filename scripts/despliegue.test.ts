@@ -707,12 +707,12 @@ describe('vercel.ts · las dos rutas limpias públicas', () => {
   });
 
   it('🔴 las cabeceras existen, con su valor, sobre los dos paths y ninguno más', () => {
-    // n186 · el bloque global de CSP (sólo reporte en App) va PRIMERO y es el
-    // único global; sus directivas las fija `csp.test.ts`. Los dos paths
-    // públicos conservan exactamente sus dos cabeceras de siempre.
+    // n186 · el bloque global de CSP (OBLIGATORIA en App desde AF-CSP-OBLIGATORIA)
+    // va PRIMERO y es el único global; sus directivas las fija `csp.test.ts`. Los
+    // dos paths públicos conservan exactamente sus dos cabeceras de siempre.
     const [csp, ...resto] = V.headers ?? [];
     expect(csp?.source).toBe('/(.*)');
-    expect((csp?.headers ?? []).map((h) => h.key)).toEqual(['Content-Security-Policy-Report-Only']);
+    expect((csp?.headers ?? []).map((h) => h.key)).toEqual(['Content-Security-Policy']);
     // AF-VERSION-NUEVA · el último bloque es `/version.json`: ruta exacta, sólo
     // `Cache-Control: no-store` (una pestaña vieja la compara en el ingreso).
     const version = resto.at(-1);

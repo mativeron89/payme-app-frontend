@@ -18,14 +18,21 @@ const sinApi = { ...process.env, VITE_API_URL: '' };
 const sha = (s: string) => `'sha256-${createHash('sha256').update(s).digest('base64')}'`;
 const todasLasClaves = (c: ReturnType<typeof evaluarConfigVercel>) => c.headers.flatMap((r) => r.headers.map((h) => h.key));
 
-describe('n186 · App: CSP SÓLO de reporte', () => {
+/**
+ * AF-CSP-OBLIGATORIA (decisión 107.4) · la de la app pasó a OBLIGATORIA después de
+ * medir 0 violaciones con esta misma política en Report-Only (build de producción
+ * con el GIS real y mock con los pagos apagados). La política no cambió: sólo la
+ * cabecera. Volver a Report-Only es una orden, no un descuido que pase un test.
+ */
+describe('n186 · App: CSP OBLIGATORIA', () => {
   const app = evaluarConfigVercel({ ...sinApi, PAYME_VERCEL_ARTIFACT: 'app' });
-  const politica = cabeceraGlobal(app, CSP_RO) ?? '';
+  const politica = cabeceraGlobal(app, CSP) ?? '';
   const d = directivasCsp(politica);
 
-  it('🔴 va en Report-Only sobre `/(.*)` y NUNCA como obligatoria', () => {
+  it('🔴 obligatoria sobre `/(.*)`, UNA sola cabecera de CSP y ninguna en Report-Only', () => {
     expect(politica.length).toBeGreaterThan(50);
-    expect(todasLasClaves(app)).not.toContain(CSP);
+    expect(todasLasClaves(app)).not.toContain(CSP_RO);
+    expect(todasLasClaves(app).filter((k) => k === CSP)).toHaveLength(1);
     expect(app.headers[0]?.source).toBe('/(.*)');
   });
 
@@ -85,11 +92,11 @@ describe('n186 · App: CSP SÓLO de reporte', () => {
   it('el origen de la API sale de `VITE_API_URL`, y sólo si es http(s) válido', () => {
     const con = directivasCsp(cabeceraGlobal(evaluarConfigVercel({
       ...process.env, PAYME_VERCEL_ARTIFACT: 'app', VITE_API_URL: 'https://api.example.test/v1/',
-    }), CSP_RO) ?? '');
+    }), CSP) ?? '');
     expect(con.get('connect-src')).toContain('https://api.example.test');
     expect(con.get('img-src')).toContain('https://api.example.test');
     for (const malo of ['', 'no-es-url', 'javascript:alert(1)']) {
-      const p = cabeceraGlobal(evaluarConfigVercel({ ...process.env, PAYME_VERCEL_ARTIFACT: 'app', VITE_API_URL: malo }), CSP_RO) ?? '';
+      const p = cabeceraGlobal(evaluarConfigVercel({ ...process.env, PAYME_VERCEL_ARTIFACT: 'app', VITE_API_URL: malo }), CSP) ?? '';
       expect(p, `«${malo}» no debería agregar un origen`).not.toMatch(/api\.example|javascript:/);
       expect(directivasCsp(p).get('connect-src')).toEqual(["'self'", 'https://accounts.google.com/gsi/', 'https://api.stripe.com']);
     }

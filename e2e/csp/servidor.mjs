@@ -1,9 +1,9 @@
 // n186 · servidor estático del harness CSP (orden AF-CSP-N186-20260925).
 //
 // Sirve un build (app mock o landing) con la política que genera `vercel.ts`
-// para ese artefacto, pero SIEMPRE como `Content-Security-Policy` OBLIGATORIA:
-// en producción la de la app va en Report-Only, y acá se aplica de verdad para
-// demostrar que alcanza. La política sale del archivo real, no de una copia:
+// para ese artefacto, SIEMPRE como `Content-Security-Policy` OBLIGATORIA —desde
+// AF-CSP-OBLIGATORIA también la de la app en producción; `X-Payme-Csp-Origen`
+// dice con qué clave la generó `vercel.ts`—. La política sale del archivo real:
 // se evalúan los bytes de `vercel.ts` como ESM, igual que `despliegue.test.ts`.
 //
 // Uso: node e2e/csp/servidor.mjs <dir-del-build> <puerto> <app|landing>

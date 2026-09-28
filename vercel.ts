@@ -80,9 +80,13 @@ const headers = [
  * autoriza por su hash exacto; un test lo recalcula desde el build y falla si
  * el script cambia sin que cambie el hash de acá.
  *
- * **App: SÓLO REPORTE** (`Content-Security-Policy-Report-Only`, sin
- * `report-uri`: las violaciones se ven en la consola). Pasar a obligatoria es
- * otra orden, después de observar producción.
+ * **App: OBLIGATORIA** desde AF-CSP-OBLIGATORIA (decisión 107.4, n186). Hasta
+ * 0.204.0 fue `Content-Security-Policy-Report-Only`; se pasó a bloquear después
+ * de medir 0 violaciones con la política EXACTA en Report-Only, en el build de
+ * producción con el GIS real y en el mock con los pagos apagados (instrumento y
+ * tabla en `~/.codex/runs/payme-af-csp-obligatoria-20260928/`). Sin
+ * `report-uri`: no había uno que conservar, y las violaciones se ven en la
+ * consola. La política no cambió al pasar a obligatoria: sólo la cabecera.
  * - `<style>` inline de `index.html` (splash): por hash, sin `'unsafe-inline'`;
  * - Google Identity Services: script, iframe, fetch y hoja bajo `/gsi/`;
  * - n186 · AF-CSP-ESTILOS · lo que `gsi/client` INYECTA en nuestro documento,
@@ -91,8 +95,11 @@ const headers = [
  *   hashes que la consola de producción:
  *   · un `<style>` propio de ~9,9 KB, constante: va por su hash exacto en
  *     `style-src-elem` y, para navegadores sin `-elem`, también en `style-src`.
- *     ⚠️ Si Google cambia `gsi/client`, cambia el hash y vuelve el reporte;
- *     antes de pasar a obligatoria se vuelve a medir;
+ *     ⚠️ Si Google cambia `gsi/client`, cambia el hash y, ya obligatoria, el
+ *     `<style>` de GIS queda BLOQUEADO. Medido quitando el hash con la política
+ *     obligatoria: el botón de Google aparece DESARMADO (su logo a todo el
+ *     ancho) y el ingreso con correo sigue. Re-medido el 2026-09-28: el mismo
+ *     hash. Si el botón aparece así, lo primero es volver a medirlo;
  *   · el atributo `style` del botón, que lleva `width:Npx` con el ancho del
  *     contenedor (200..360, lo calcula `googleIdentity.ts`): cambia con cada
  *     teléfono, así que un hash no lo cubre. `'unsafe-inline'` SÓLO en
@@ -100,7 +107,13 @@ const headers = [
  *     conexiones y marcos no se tocan;
  * - Stripe.js: script e iframes (incluido el 3DS en `hooks.stripe.com`), API;
  * - el origen de la API sale de `VITE_API_URL` del mismo entorno de build; si
- *   falta o no parsea, no se agrega (es reporte: se vería en la consola);
+ *   falta o no parsea, no se agrega. 🔴 Ya obligatoria, eso BLOQUEARÍA toda
+ *   llamada a la API (medido: sin el origen no llegó ninguna, y sin
+ *   `/api/config` no hay botón de Google). No puede pasar en silencio: el
+ *   build real falla sin `VITE_API_URL` (`exigirApiUrl`, `vite.config.ts`),
+ *   del mismo entorno, y no hay un `.env.production` versionado que se la dé
+ *   sólo a Vite. Un valor que no parsea deja además al bundle sin API. Tras
+ *   cada deploy, el `connect-src` servido tiene que nombrar el origen de la API;
  * - imágenes `blob:` (avatares, escáner) y `data:` (íconos SVG del CSS);
  * - service worker y manifest propios.
  *
@@ -108,7 +121,7 @@ const headers = [
  */
 const HASH_SCRIPT_IDIOMA_LANDING = "'sha256-0q+B8AZ70OFIwdyvViSs6/v+EDiwpZvDJ86Uf9Aiupc='";
 const HASH_STYLE_SPLASH_APP = "'sha256-cm7TCL2O3xGpn0S6b2s0pom3xI3fEP3U38AYzzLIn2E='";
-/** El `<style>` que inyecta `gsi/client` (medido el 2026-09-26; igual al de producción). */
+/** El `<style>` que inyecta `gsi/client` (medido el 2026-09-26, igual al de producción; re-medido el 2026-09-28). */
 const HASH_STYLE_GIS = "'sha256-RU4sU0AaS8IBGZx8XrGt/pa9A5SLA3dQszGeqT5L3Kw='";
 
 // Parámetros con valor por defecto: TypeScript infiere el tipo sin anotaciones,
@@ -160,7 +173,7 @@ const cspApp = politica([
 ]);
 
 const cabecerasCsp = esApp
-  ? [{ source: '/(.*)', headers: [{ key: 'Content-Security-Policy-Report-Only', value: cspApp }] }]
+  ? [{ source: '/(.*)', headers: [{ key: 'Content-Security-Policy', value: cspApp }] }]
   : esLanding
     ? [{ source: '/(.*)', headers: [{ key: 'Content-Security-Policy', value: cspLanding }] }]
     : [];

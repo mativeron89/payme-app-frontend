@@ -3,8 +3,9 @@ import { abrirMesaConLink, ingresar } from '../_app';
 import { vigilarCsp, violaciones } from './violaciones';
 
 /**
- * n186 · la CSP de la app (en producción, Report-Only) aplicada como
- * OBLIGATORIA sobre el build mock (proyecto `csp-app`, `e2e/csp/servidor.mjs`).
+ * n186 · la CSP de la app, OBLIGATORIA en producción desde AF-CSP-OBLIGATORIA,
+ * aplicada sobre el build mock (proyecto `csp-app`, `e2e/csp/servidor.mjs`). El
+ * control de abajo exige que `vercel.ts` la genere ya como obligatoria.
  *
  * En el riel mock no se carga el GIS real ni Stripe.js: el login de Google y la
  * tarjeta son del mock. Por eso hay un caso aparte que demuestra, bajo la misma
@@ -18,7 +19,7 @@ test.beforeEach(async ({ page }) => {
 test('control: la política está aplicada como OBLIGATORIA y bloquea un script inline', async ({ page }) => {
   const r = await page.goto('/');
   expect(r?.headers()['content-security-policy'], 'el documento no trae la CSP obligatoria').toContain("default-src 'self'");
-  expect(r?.headers()['x-payme-csp-origen']).toBe('Content-Security-Policy-Report-Only');
+  expect(r?.headers()['x-payme-csp-origen']).toBe('Content-Security-Policy');
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
   const ejecuto = await page.evaluate(async () => {
     const s = document.createElement('script');
