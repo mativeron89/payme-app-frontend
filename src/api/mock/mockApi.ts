@@ -3798,7 +3798,11 @@ export async function mockPendingInvitations(): Promise<PendingInvitationsRespon
   const ahora = new Date().toISOString();
   state.mesas.forEach(settleIfExpired);
   return delay({
-    invitations: state.pendingInvitations
+    // AF-INVITACION-INICIO · el ORDEN del emisor: `ORDER BY i.created_at DESC`
+    // (`routes/invitations.js`). Inicio muestra la primera que admite entrar
+    // como «la más nueva»; sin este orden, el mock mostraría otra.
+    invitations: [...state.pendingInvitations]
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .filter((i) => i.expires_at > ahora)
       .map((i) => {
         const mesa = findMesa(i.mesa_code);

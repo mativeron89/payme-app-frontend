@@ -1063,4 +1063,7 @@ export const EN: Record<string, string> = {
   "Para terminar de crear tu cuenta, confirma lo siguiente y toca «Crear mi cuenta».": "To finish creating your account, confirm the following and tap «Create my account».",
   "Google no nos dio tu nombre. Escríbelo y toca «Crear mi cuenta».": "Google didn't give us your name. Type it and tap «Create my account».",
   "Actualizamos los documentos. Vuelve a marcar las casillas y toca «Crear mi cuenta».": "We updated the documents. Check the boxes again and tap «Create my account».",
+  // AF-INVITACION-INICIO · decisión 109 · la invitación en Inicio, con las demás en Avisos.
+  "+1 invitación más": "+1 more invitation",
+  "+{0} invitaciones más": "+{0} more invitations",
 };

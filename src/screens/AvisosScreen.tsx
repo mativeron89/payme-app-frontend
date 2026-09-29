@@ -15,6 +15,7 @@ import {
   metaInvitacion,
   type InvitacionMostrable,
 } from './invitacionAdmision';
+import { useAceptarInvitacion } from './InvitacionEnInicio';
 import { goBack, navigate } from '../router';
 import { relTime } from '../utils/format';
 import { iconoDeCategoriaRestaurante, mesaDelAviso } from '../utils/labels';
@@ -140,7 +141,6 @@ export function AvisosScreen() {
   // campos que la red puede no traer, y confiar en esa promesa era lo que
   // dejaba entrar a mesas muertas (y reventaba la pantalla con una fila mala).
   const [invitations, setInvitations] = useState<InvitacionMostrable[]>([]);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [openingNotificationId, setOpeningNotificationId] = useState<string | null>(null);
 
   function load() {
@@ -152,26 +152,10 @@ export function AvisosScreen() {
   }
   useEffect(load, []);
 
-  async function accept(inv: InvitacionMostrable) {
-    setBusyId(inv.id);
-    try {
-      await api.acceptInvitation(inv.id);
-      toast(t('Te sumaste a la mesa ✓'));
-      // Sin código no se navega a ciegas: se recarga y la lista se corrige
-      // sola. Sólo llega acá una fila `admite`, que en el contrato trae code.
-      if (inv.mesaCode) navigate('mesa', inv.mesaCode);
-      else load();
-    } catch (err) {
-      // v2.45.0 · la carrera entre el GET y el toque: la tarjeta vino viva y
-      // la mesa murió en el medio. El 410 tiene copy propia (Diseño) — el
-      // genérico diría "no pudimos" cuando lo que pasó es "ya no hay dónde".
-      const { status } = extractApiError(err);
-      toast(status === 410 ? t('Esta mesa ya cerró.') : t('No pudimos aceptar la invitación'));
-      load();
-    } finally {
-      setBusyId(null);
-    }
-  }
+  // AF-INVITACION-INICIO · decisión 109 · aceptar es la MISMA función que usa la
+  // burbuja de Inicio (`aceptarInvitacion`): acepta, avisa y entra a la mesa; sin
+  // código recarga; un error avisa (el 410 con su copy) y recarga.
+  const { ocupada: busyId, aceptar: accept } = useAceptarInvitacion(load);
 
   async function markAll() {
     try {

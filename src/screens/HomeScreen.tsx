@@ -27,6 +27,7 @@ import {
   AppHeader, BubbleTabs, Launcher, MountedCard, type BubbleTab,
 } from '../components/AppHeader';
 import { FriendAvatarNotice } from '../components/FriendAvatarNotice';
+import { InvitacionEnInicio } from './InvitacionEnInicio';
 
 /**
  * §1.1 · Inicio — y §1.11, que **es la misma pantalla**: las tres pestañas SON
@@ -49,9 +50,14 @@ import { FriendAvatarNotice } from '../components/FriendAvatarNotice';
  * no existe en ninguna otra superficie. El criterio de cuál es la
  * protagonista vive en `homeMesasView.ts`.
  *
- * El banner de invitación pendiente que vivía acá arriba **se fue a Avisos**
- * (decisión de Mati del 2026-08-05, §5 del spec). No se duplica: se saca. Con
- * él se fue `getPendingInvitations()` de esta pantalla — Avisos ya lo pide.
+ * 🔴 **La invitación pendiente VUELVE a Inicio (decisión 109 de Mati,
+ * 2026-09-28)**, y supersede la del 2026-08-05 (§5 del spec) que la había
+ * mandado sólo a Avisos con «No se duplica: se saca». Literal: «la invitación
+ * a la mesa tiene que aparecer con una burbuja en el Inicio, no únicamente en
+ * notificaciones, tiene que ser más sencillo y ahí ahorramos un click». Ahora
+ * se ve en Inicio Y en Avisos: una burbuja arriba de la mesa, con «Sumarme»
+ * directo, y «+N invitaciones más» que lleva a Avisos. La lógica y el pedido
+ * viven en `InvitacionEnInicio.tsx`; aceptar es la misma función que Avisos.
  */
 
 /** Las tres de §1.11. `asociadas` existe y no tiene interior: ver abajo. */
@@ -300,6 +306,10 @@ export function HomeScreen() {
             </div>
           )}
         </MountedCard>
+        {/* Decisión 109 · la invitación pendiente, arriba de todo lo que sigue a
+            las pestañas (la tarjeta montada va enganchada a ellas y no se
+            separa). Sin invitaciones no dibuja nada. */}
+        <InvitacionEnInicio />
         <FriendAvatarNotice />
 
         {/* ─── La burbuja de la mesa. Va DEBAJO de los accesos, no arriba. ─── */}

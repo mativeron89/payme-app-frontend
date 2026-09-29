@@ -170,6 +170,20 @@ describe('invitaciones in-app · vencidas (espejo del emisor)', () => {
     expect(porId.get('hacia-viva')).toMatchObject({ mesa_joinable: true, mesa_status: 'open' });
   });
 
+  it('AF-INVITACION-INICIO · el GET ordena como el emisor: la más nueva primero', async () => {
+    const { mock, state } = await cargar();
+    const hace = (ms: number) => new Date(Date.now() - ms).toISOString();
+    state.pendingInvitations = [
+      { ...invitacion('vieja', 60_000), created_at: hace(3 * 60_000) },
+      { ...invitacion('nueva', 60_000), created_at: hace(60_000) },
+      { ...invitacion('media', 60_000), created_at: hace(2 * 60_000) },
+    ];
+    const r = await mock.mockPendingInvitations();
+    expect(r.invitations.map((i) => i.id)).toEqual(['nueva', 'media', 'vieja']);
+    // El orden no toca el estado: sólo la respuesta.
+    expect(state.pendingInvitations.map((i) => i.id)).toEqual(['vieja', 'nueva', 'media']);
+  });
+
   it('la invitación del SEED no promete más vida que su mesa', async () => {
     const { state } = await cargar();
     const inv = state.pendingInvitations[0]!;
