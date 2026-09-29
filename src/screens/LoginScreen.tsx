@@ -81,6 +81,10 @@ const ERROR_TEXT: Record<string, string> = {
   invalid_credentials: 'Email o contraseña incorrectos.',
   user_suspended: 'Tu cuenta está suspendida. Escríbenos.',
   too_many_auth_attempts: 'Demasiados intentos. Espera un minuto.',
+  // Decisión 128 · freno por cuenta: 5 contraseñas equivocadas → 15 minutos.
+  // App Backend 2.144.0 lo responde 429 sin cuerpo adicional. No es el tope por
+  // conexión de arriba; «¿Olvidaste tu contraseña?» sigue funcionando.
+  too_many_login_attempts: 'Demasiados intentos. Prueba de nuevo en unos minutos.',
   validation_error: 'Revisa los datos: email válido y contraseña de al menos 8 caracteres.',
   registration_not_available: 'No pudimos crear la cuenta. Si ya tienes una, inicia sesión o recupera tu contraseña.',
   registration_unavailable: 'Prueba de nuevo más tarde.',

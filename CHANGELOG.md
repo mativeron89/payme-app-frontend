@@ -11,6 +11,39 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.209.3 — El login dice cuándo la cuenta está frenada (2026-09-29)
+
+Orden AF-TEXTO-FRENO-LOGIN-CLAUDE-20260929 (sha256 694eabcc…). Decisión 128 de Mati: después de 5 contraseñas
+equivocadas en una cuenta, hay que esperar 15 minutos; «¿Olvidaste tu contraseña?» sigue funcionando. App Backend
+2.144.0 lo responde `429 {"error":"too_many_login_attempts"}`, sin cuerpo adicional. Base `0.209.2` (`1732f8f`). Sólo
+`LoginScreen.tsx` y `en.ts`.
+
+- **`too_many_login_attempts` tiene su texto:** «Demasiados intentos. Prueba de nuevo en unos minutos.», y en inglés
+  "Too many attempts. Try again in a few minutes.". Antes caía en el genérico «No pudimos conectar. Prueba de nuevo.»,
+  que invita a reintentar justo cuando reintentar no sirve.
+- **`too_many_auth_attempts`** (el tope por conexión) **no cambia:** «Demasiados intentos. Espera un minuto.».
+- **El formulario se comporta como con los demás errores del login:** el correo y la contraseña quedan como estaban, y
+  «¿Olvidaste tu contraseña?» queda a la vista y habilitado.
+  - 🔴 **La orden pedía vaciar la contraseña «como con los otros errores del login», y esa premisa era falsa.** Una
+    sonda sobre `1732f8f` con `invalid_credentials` dejó la contraseña escrita («contrasena-equivocada») y el correo:
+    el login no vacía nada con ningún error. El Bibliotecario corrigió la indicación: la intención era la coherencia,
+    no vaciar. Un comportamiento distinto sólo para este error habría sido una rareza nueva.
+- **El mock no emite este código** (`mockLogin` acepta todo). El test reemplaza `api.login` en la página por una que
+  rechaza con el `MockApiError(429, …)` real, como `af-login-redesign-vista-previa.spec.ts`. El mock no se tocó.
+- **Pruebas nuevas:** `e2e/login-freno-por-cuenta.spec.ts` (4):
+  - el texto en español, sin el genérico ni el «un minuto», con el correo y la contraseña intactos y «¿Olvidaste…?»
+    visible y habilitado;
+  - el texto en inglés;
+  - la coherencia: `invalid_credentials` deja el formulario igual;
+  - `too_many_auth_attempts` conserva su texto.
+  - Sobre `1732f8f` caen las dos del texto nuevo, en su primera aserción: se recibe «No pudimos conectar. Prueba de
+    nuevo.» y "We couldn't connect. Try again.". Las otras dos pasan, porque describen lo que ya era así.
+- **Mutantes:** 4 plantados, 4 cazados. Se leyó qué test cae en cada uno:
+  - **sin el mapeo** (el de la orden): caen las dos del texto, y la guarda de huérfanas de `traduccion.test.ts`;
+  - **sin la traducción:** cae la del inglés, y la guarda que exige EN para cada valor de `ERROR_TEXT`;
+  - **el texto del tope por conexión reusado:** caen las dos del texto, y la de huérfanas;
+  - **vaciar la contraseña con este error:** caen las dos que miran el formulario.
+
 ## 0.209.2 — «¿Cuántos pagan?» centrado (2026-09-29)
 
 Orden AF-CENTRAR-CUANTOS-PAGAN-CLAUDE-20260929 (sha256 b8946b59…). Pedido 136 de Mati: «Centra el ¿Cuántos pagan?», sobre

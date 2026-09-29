@@ -159,6 +159,7 @@ export const EN: Record<string, string> = {
   "Cuenta": "Account",
   "De ese plato queda solo {0}": "Only {0} of that dish is left",
   "Demasiados intentos. Espera un minuto.": "Too many attempts. Wait a minute.",
+  "Demasiados intentos. Prueba de nuevo en unos minutos.": "Too many attempts. Try again in a few minutes.",
   "Demo · datos de ejemplo, no se cobra dinero real": "Demo · sample data, no real money is charged",
   "Descargar": "Download",
   "Desde este teléfono ya se pagó una parte de esta mesa.": "A share of this table was already paid from this phone.",
