@@ -11,6 +11,63 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.207.1 — Un texto legal nuevo pide marcar las casillas otra vez; y la sonda del encabezado vuelve a arrancar (2026-09-29)
+
+Orden AF-CORRECCIONES-AUDITORIA-CLAUDE-20260929 (sha256 c24692ae…). Decisión 120 de Mati: «Sí, todas (Recomendada)».
+Hallazgos AF-01 y AF-02 de la auditoría Codex del tramo Claude (informe 025ea7e2…), verificados por el Bibliotecario.
+Base `0.207.0` (`bb2d273`). Sin cambios en el AB ni en los textos legales.
+
+1. **AF-01 · aceptar queda atado al par que se veía.** El par es la versión y el hash del aviso y de los términos.
+   - **El defecto:** si se publicaba un texto nuevo con la pantalla abierta, el `409 legal_version_mismatch` releía el
+     par pero las casillas seguían marcadas. No había aviso, o salía el genérico «No pudimos conectar», y un segundo
+     toque aceptaba el par nuevo sin que la persona lo viera.
+   - **Ahora**, con un par nuevo las casillas aparecen desmarcadas, el botón queda deshabilitado y un aviso dice que
+     los documentos cambiaron.
+   - **Un error que no cambia el par** (503, red caída) deja las casillas como estaban.
+   - **La puerta** de quien ya tiene cuenta se monta una por par: `key={claveDelPar(…)}` en `App.tsx`. El aviso lo
+     decide el hook (`parCambio`), sólo si la relectura de ESA sesión cambió el par de la puerta cerrada.
+   - **El alta** (`LoginScreen`): cada casilla guarda el par sobre el que se marcó y cuenta sólo con ese par vigente
+     (`casillaVigente`). Se deriva en el render, sin esperar a un efecto.
+   - **El canje del alta con Google en redirect** tenía el mismo defecto, pero sólo ante un segundo 409 en la misma
+     vista, porque la primera vuelta es un documento nuevo. Lo cubre el mismo arreglo, con su e2e.
+2. **AF-02 · la sonda del encabezado vuelve a arrancar** (`scripts/sonda-header/playwright.config.ts`).
+   - **Por qué no arrancaba:** desde n186 (`a79d8e1`) la config base tiene una lista de tres servidores. La sonda la
+     esparcía como un objeto y quedaba sin `command`: «config.webServer.command cannot be empty». Un cast lo tapaba
+     en el typecheck y `--list` no arranca servidores.
+   - **Ahora** elige el servidor mock por su url y falla con un error claro si no está.
+   - Probado con un arranque real en loopback (chromium y webkit), no sólo con `--list`. No se tocaron la config base,
+     la CSP ni el encabezado.
+- **Textos nuevos (es → en):**
+  - «Actualizamos los documentos. Vuelve a marcar las casillas y toca «Continuar».» → «We updated the documents. Check
+    the boxes again and tap «Continue».»
+  - «Actualizamos los documentos. Vuelve a marcar las casillas y toca «Registrarme».» → «We updated the documents.
+    Check the boxes again and tap «Sign up».»
+  - **Diferencia con la orden, acordada con el Bibliotecario antes de escribirla:** la orden pedía el mismo texto
+    que Google, que dice «toca «Crear mi cuenta»». Ese botón no existe en la puerta («Continuar») ni en el alta por
+    correo («Registrarme»), así que cada pantalla nombra su botón. El texto de Google no cambia.
+  - El del alta por correo va explícito en ese envío y no en `ERROR_TEXT`, que también usan vincular y recuperar.
+- **Pruebas nuevas.** Rojas sobre `bb2d273` antes del arreglo, las tres por «Received: checked»:
+  - `e2e/legal-cambio-de-par.spec.ts`, 7 recorridos:
+    - 409 con par nuevo en la puerta, en el alta por correo y en el canje de Google;
+    - cuatro controles: 503 y red con el mismo par, en la puerta y en el alta.
+  - `scripts/sonda-header-config.test.ts`: rojo en `bb2d273` («command vacío»).
+  - Unitarios: `claveDelPar` y `parCambio` en `PuertaLegal.test.tsx`; `casillaVigente` en
+    `LoginScreen.casillas.test.ts`.
+- **Observación, fuera de esta orden:** `onCrearConGoogle`, el alta en popup con credencial, no relee los textos ante
+  un 409 y reenvía el par viejo hasta recargar.
+  - No acepta nada que la persona no vio, así que no es este defecto.
+  - Hoy está dormido: el alta de Google va en redirect.
+  - El Bibliotecario lo lleva al Roadmap aparte.
+- **Mutantes:** 11 plantados, 11 cazados. Se leyó qué test cae en cada uno:
+  - puerta sin `key`: cae el 409 de la puerta;
+  - puerta que desmarca ante cualquier error: caen sus dos controles (503 y red);
+  - puerta sin aviso: cae el 409 de la puerta;
+  - `parCambio` sin comparar el par, y `claveDelPar` sin el hash de términos: caen sus unitarios;
+  - alta que ignora el par: caen el unitario y los e2e del alta por correo y de Google;
+  - alta que desmarca ante cualquier error: caen sus dos controles;
+  - alta con el aviso genérico: cae el 409 del alta;
+  - sonda que esparce la lista, sin `cwd` o con otro servidor: cae el test de la config, cada uno en su aserción.
+
 ## 0.207.0 — Un solo lápiz en Configuración para foto, nombre y @ (2026-09-29)
 
 Orden AF-LAPIZ-UNICO-CLAUDE-20260929 (sha256 0b64a617…). Decisión 110 de Mati: «dejar solo un lápiz que conglomere la
