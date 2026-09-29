@@ -11,6 +11,48 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.209.2 — «¿Cuántos pagan?» centrado (2026-09-29)
+
+Orden AF-CENTRAR-CUANTOS-PAGAN-CLAUDE-20260929 (sha256 b8946b59…). Pedido 136 de Mati: «Centra el ¿Cuántos pagan?», sobre
+la captura de 0.209.0 a 390×664, donde el título y el selector iban a la izquierda y el monto a la derecha. Base
+`0.209.1` (`61428e6`). Sólo `CreateMesaFlow.tsx` y el CSS del bloque.
+
+1. **El título va centrado**, sea «¿Cuántos pagan?» o «¿Cuántos son en la mesa?».
+2. **El grupo «– N + monto» va centrado en la tarjeta**, con el monto y su rótulo alineados a la derecha, junto al
+   selector.
+3. **El «+» no se mueve bajo el dedo**, ni al cambiar N (1, 9, 12) ni en el primer toque. Así se logra:
+   - el bloque del monto reserva su ancho con una copia invisible del monto más ancho posible, el de N = 1, que es el
+     total, en la misma celda de grilla que el monto real;
+   - el rótulo está en los dos estados, así que la caja mide lo mismo con o sin número y con cualquier N.
+4. **Sin número todavía, el lugar del monto no queda vacío:** un marcador apagado, «$—» en el tamaño del monto y en el
+   gris del texto secundario, con su rótulo debajo, también en gris. Así el grupo se lee centrado desde el primer
+   momento, y el monto real aparece en el mismo lugar. Es `aria-hidden`: la pregunta ya la dice el selector. Esto lo
+   pidió el Bibliotecario al ver la captura con el lugar reservado vacío.
+5. **Entre los botones y el número del selector, 12 px en vez de 18**, para que el monto entre al lado a 375 px. Los
+   botones siguen de 46 px.
+- **Sigue entrando todo en una vista** (pedido 127). Final del bloque / límite, en px:
+  - 390×664: 549 / 574 en los tres estados;
+  - 375×667: 569 / 577 sin número y por consumo, y 549 / 577 con «c/u». Por consumo, «base de propina · c/u» ocupa dos
+    líneas también sin número, así que no hay salto de alto al elegir.
+  - Sin letras más chicas.
+- **Pruebas nuevas:** `e2e/centrar-cuantos-pagan.spec.ts`, a 390×664 y 375×667:
+  - en las tres formas, el título y el grupo centrados a ≤ 2 px, sin número (con el marcador) y con número;
+  - el monto junto al selector, a ≤ 16 px en las formas con «c/u». Por consumo el rótulo largo define el ancho y a 375
+    se parte en dos líneas, así que ahí se pide sólo el centrado;
+  - el «+» a ≤ 1 px entre sin número, N = 1, 9 y 12, en «Pagar el total» y por consumo.
+  - 🔴 Se mide el TEXTO con un `Range`, no la caja. En la base el selector y el monto estaban en los dos bordes, y su
+    extensión conjunta ya daba centrada; lo que no había era grupo, y lo detecta el hueco.
+  - Sobre `61428e6`, con el spec final, caen las 6 del centrado en su primera aserción: el marcador «$—» no existe. La
+    primera versión del spec, sin el marcador, las hacía caer en el título, con el centro en 93 contra 195. Las 4 del
+    «+» pasan, porque la base tenía el selector fijo a la izquierda.
+- **Mutantes:** 6 plantados, 6 cazados. Se leyó qué test cae en cada uno:
+  - **la alineación vuelve a la izquierda** (el de la orden): caen las 6 del centrado;
+  - sólo el grupo pegado a la izquierda: caen 5 de las 6. A 375 por consumo el rótulo llena la caja y queda igual;
+  - sin la reserva de ancho: caen las del «+» de «Pagar el total». Por consumo el rótulo ya define el ancho;
+  - sin el marcador: caen las 6 del centrado;
+  - el monto alineado a la izquierda de su caja: caen las de «c/u» en los dos tamaños;
+  - el marcador en negro: caen las 6 del centrado, por el gris.
+
 ## 0.209.1 — El invitado que entra o se da de alta con Google cae en su mesa (2026-09-29)
 
 Orden AF-INVITACION-TRAS-GOOGLE-CLAUDE-20260929 (sha256 697b9275…). Defecto que Mati reportó en producción el 29/09:
