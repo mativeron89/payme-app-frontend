@@ -1041,7 +1041,7 @@ export function LoginScreen({
                 // que no promete un alta que no está disponible ni afirma nada
                 // sobre si la cuenta existe.
                 setError(t('No pudimos entrar con Google. Prueba de nuevo o entra con tu correo y contraseña.'));
-              } else {
+              } else if (!textoLegalNuevo(code)) {
                 // D-R15 · el texto vigente de `registration_not_available` ya
                 // orienta a iniciar sesión o recuperar sin afirmar que exista.
                 setError(code === 'registration_not_available'
@@ -1119,7 +1119,9 @@ export function LoginScreen({
         setLastName((value) => (value.trim() ? value : s.lastName));
         return s;
       };
-      if (desenlace.tipo === 'vincular') {
+      if (textoLegalNuevo(code)) {
+        // AF-POPUP-GOOGLE-409 · el aviso y la relectura ya quedaron: nada más.
+      } else if (desenlace.tipo === 'vincular') {
         linkIntent.current = desenlace.linkIntent;
         setPassword('');
         setPasoVincular(true);
@@ -1353,6 +1355,27 @@ export function LoginScreen({
   const conAceptacion = () => (aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {});
 
   /**
+   * 🔴 AF-POPUP-GOOGLE-409 · decisión 120 · la misma clase que AF-01. De los seis
+   * envíos de `legal_acceptance`, el correo (`onSubmit`) y el canje redirect
+   * (`canjearAlta`) ya trataban el `409 legal_version_mismatch`. Los tres del
+   * alta con Google en ventana emergente no: «Crear mi cuenta»
+   * (`onCrearConGoogle`), el botón de Google del paso (`purpose: 'register'`) y
+   * el alta en un toque (`continuarConGoogle`). Mostraban el genérico y el
+   * reintento mandaba el par viejo, así que el alta quedaba trabada.
+   *
+   * Ahora se releen los textos (`legalAttempt`). Con el par nuevo las casillas
+   * aparecen desmarcadas (`casillaVigente`) y el aviso nombra el botón que queda
+   * en pantalla. En los tres es Google, porque la credencial es de un uso.
+   * Devuelve si lo atendió.
+   */
+  function textoLegalNuevo(code: string): boolean {
+    if (code !== 'legal_version_mismatch') return false;
+    setLegalAttempt((value) => value + 1);
+    setError(t('Actualizamos los documentos. Vuelve a marcar las casillas y toca «Continuar con Google».'));
+    return true;
+  }
+
+  /**
    * AF-GOOGLE-ALTA-REDIRECT · el canje del alta (wire D102 §5), con los mismos
    * desenlaces que `continue`. Los errores que dejan el código vivo (422, 429,
    * 503 y 409 `legal_version_mismatch`) no lo sueltan: la persona reintenta sin
@@ -1572,9 +1595,11 @@ export function LoginScreen({
       // D-R15 · el texto vigente orienta a iniciar sesión o recuperar sin
       // afirmar que la cuenta exista. Sin token, el paso vuelve a ofrecer el
       // botón de Google, que registra con estos mismos datos.
-      setError(code === 'registration_not_available'
-        ? errorMessage(err, t)
-        : t('No pudimos completar el ingreso. Prueba de nuevo.'));
+      if (!textoLegalNuevo(code)) {
+        setError(code === 'registration_not_available'
+          ? errorMessage(err, t)
+          : t('No pudimos completar el ingreso. Prueba de nuevo.'));
+      }
       setTieneCredencial(false);
       setGoogleGeneration((value) => value + 1);
     } finally {

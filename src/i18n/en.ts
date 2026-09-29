@@ -1068,4 +1068,7 @@ export const EN: Record<string, string> = {
   // «Actualizar» ya existía como "Refresh" (sólo en el botón dormido de invitado
   // de MesaScreen); pasa a "Update", que es lo que pidió la orden.
   "Hay una versión nueva": "A new version is available",
+  // AF-POPUP-GOOGLE-409 · el 409 de un par nuevo en el alta con Google en popup.
+  // El inglés del botón es el de «Continuar con Google», que ya existe.
+  "Actualizamos los documentos. Vuelve a marcar las casillas y toca «Continuar con Google».": "We updated the documents. Check the boxes again and tap «Continue with Google».",
 };
