@@ -1871,8 +1871,13 @@ export function CreateMesaFlow() {
                 pregunta; consumo cuenta mesa, igual/total cuentan pagadores. */}
             {/* AF-NOMBRE-EN-TICKET · pedido 127: el monto por persona va AL LADO
                 del selector, no debajo, para que las tres formas y este bloque
-                entren en una vista a 390×664 y 375×667. El selector queda fijo a
-                la izquierda: cuando aparece el monto no se corre bajo el dedo. */}
+                entren en una vista a 390×664 y 375×667.
+                AF-CENTRAR-CUANTOS-PAGAN · pedido 136 («Centra el ¿Cuántos
+                pagan?»): el grupo «– N + monto» va centrado. Para que el «+» no
+                se corra bajo el dedo, el bloque del monto reserva SIEMPRE su
+                ancho con una copia invisible del monto más ancho posible (el de
+                N=1, que es el total), y el rótulo está en los dos estados: el
+                ancho no cambia al elegir ni al cambiar N. */}
             <div className="division-stepper-fila">
               <div className="stepper" role="group" aria-label={preguntaStepper}>
                 <button
@@ -1892,6 +1897,7 @@ export function CreateMesaFlow() {
                 </button>
               </div>
               <div className="division-stepper-monto">
+                <div className="reserva-monto" aria-hidden="true">{formatMXN(total)}</div>
                 {participants !== null && (
                   <>
                     <div className="split-amt" aria-live="polite">
@@ -1900,6 +1906,19 @@ export function CreateMesaFlow() {
                         : formatMXN(Math.round(total / participants))}
                     </div>
                     <div className="split-amt-lbl">
+                      {reparteElTotal(division) ? t('c/u') : t('base de propina · c/u')}
+                    </div>
+                  </>
+                )}
+                {/* Sin número todavía, el lugar del monto no queda vacío: un
+                    marcador apagado («$—» y su rótulo) en la misma caja, así el
+                    grupo se lee centrado desde el primer momento y el monto real
+                    aparece en el mismo lugar. Es decorativo: la pregunta ya la
+                    dice el grupo del selector. */}
+                {participants === null && (
+                  <>
+                    <div className="marcador-monto" aria-hidden="true">$—</div>
+                    <div className="marcador-rotulo" aria-hidden="true">
                       {reparteElTotal(division) ? t('c/u') : t('base de propina · c/u')}
                     </div>
                   </>
