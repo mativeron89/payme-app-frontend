@@ -1876,8 +1876,8 @@ export function CreateMesaFlow() {
                 pagan?»): el grupo «– N + monto» va centrado. Para que el «+» no
                 se corra bajo el dedo, el bloque del monto reserva SIEMPRE su
                 ancho con una copia invisible del monto más ancho posible (el de
-                N=1, que es el total), y el rótulo está en los dos estados: el
-                ancho no cambia al elegir ni al cambiar N. */}
+                N=1, que es el total, escrito con ceros), y el rótulo está en los
+                dos estados: el ancho no cambia al elegir ni al cambiar N. */}
             <div className="division-stepper-fila">
               <div className="stepper" role="group" aria-label={preguntaStepper}>
                 <button
@@ -1897,7 +1897,11 @@ export function CreateMesaFlow() {
                 </button>
               </div>
               <div className="division-stepper-monto">
-                <div className="reserva-monto" aria-hidden="true">{formatMXN(total)}</div>
+                {/* Con ceros y no con el total: el total ya está arriba (§5 bis ·
+                    F, «un dato, un lugar») y una copia, aunque invisible, lo
+                    repetiría en el documento. Con números tabulares todos los
+                    dígitos miden lo mismo, así que el ancho es idéntico. */}
+                <div className="reserva-monto" aria-hidden="true">{formatMXN(total).replace(/[0-9]/g, '0')}</div>
                 {participants !== null && (
                   <>
                     <div className="split-amt" aria-live="polite">
