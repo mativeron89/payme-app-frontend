@@ -75,15 +75,14 @@ test.describe('AF-REDISENO-12 · chrome compartido a 375 × 667', () => {
     // encendida, como producción, y esas dos aserciones pasaban SÓLO porque se
     // evaluaban antes de que llegara la capability: un verde vacío. Hoy lo que
     // se afirma es lo servido, después de esperar la capability:
-    //   - se editan el nombre y la foto, y nada más: un solo input de archivo y
-    //     ningún campo de texto a la vista (el nombre recién al tocar el lápiz;
-    //     el correo y el @ no son campos);
+    //   - AF-LAPIZ-UNICO · decisión 110: UN solo lápiz, «Editar perfil», para la
+    //     foto, el nombre y el @. Ningún campo a la vista ni input de archivo
+    //     hasta tocarlo (el correo no es un campo);
     //   - apagada no hay edición: eso lo cubre `perfil-faltante-activado`
     //     (variante `off`) y, en unidad, `ProfileIdentityEditor.test.tsx`.
-    await expect(page.getByRole('button', { name: 'Editar nombre', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Cambiar foto de perfil', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Editar|Cambiar foto/i })).toHaveCount(2);
-    await expect(page.locator('input[type="file"]')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Editar perfil', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Editar|Cambiar/i })).toHaveCount(1);
+    await expect(page.locator('input[type="file"]')).toHaveCount(0);
     await expect(page.locator('input:not([type="file"]), textarea, select, [contenteditable="true"]')).toHaveCount(0);
     await expect(page.getByText('Modo demo:', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Reiniciar la demo', exact: true })).toBeVisible();

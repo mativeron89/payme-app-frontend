@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { ingresar } from './_app';
 
 const CAPTURE_DIR = process.env.RUNNER_TEMP || '/private/tmp';
@@ -75,6 +75,24 @@ async function applyPrivateVariant(
   }, variant);
 }
 
+/**
+ * AF-LAPIZ-UNICO · decisión 110: un solo lápiz, «Editar perfil», para foto,
+ * nombre y @. Con la identidad de perfil apagada el lápiz SIGUE (el @ se puede
+ * cambiar igual); lo que se apaga está adentro: la foto y el nombre. Abre el
+ * formulario, afirma y cancela.
+ */
+async function nombreYFotoEditables(page: Page, esperado: boolean): Promise<void> {
+  await page.getByRole('button', { name: 'Editar perfil', exact: true }).click();
+  const form = page.getByRole('form', { name: 'Editar perfil' });
+  await expect(form).toBeVisible();
+  // Testigo de que el formulario terminó de dibujarse: el @ siempre está.
+  await expect(form.getByLabel('Tu @usuario')).toBeVisible();
+  await expect(form.getByRole('button', { name: 'Cambiar foto de perfil' })).toHaveCount(esperado ? 1 : 0);
+  await expect(form.getByLabel('Nombre', { exact: true })).toHaveCount(esperado ? 1 : 0);
+  await form.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await expect(form).toHaveCount(0);
+}
+
 test('Configuración edita nombre/foto y propaga el nombre a reload y otra pestaña', async ({ context, page }) => {
   await ingresar(page);
   const sibling = await context.newPage();
@@ -83,12 +101,13 @@ test('Configuración edita nombre/foto y propaga el nombre a reload y otra pesta
 
   await page.getByRole('button', { name: 'Más', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Configuración' })).toBeVisible();
-  await page.getByRole('button', { name: 'Editar nombre' }).click();
-  await page.getByLabel('Nombre').fill('Renata');
+  await page.getByRole('button', { name: 'Editar perfil', exact: true }).click();
+  await page.getByLabel('Nombre', { exact: true }).fill('Renata');
   await page.getByLabel('Apellido').fill('Nueva');
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();
 
-  await expect(page.getByText('Nombre actualizado ✓')).toBeVisible();
+  const guardado = page.getByText('Perfil actualizado ✓');
+  await expect(guardado).toBeVisible();
   await expect(page.locator('.hdr-user')).toHaveText('Renata Nueva');
   // AF-USERNAME-D104 · decisión 104: debajo del nombre va el @ propio, no el código.
   await expect(page.locator('.profile-arroba')).toHaveText('@mativeron');
@@ -100,21 +119,27 @@ test('Configuración edita nombre/foto y propaga el nombre a reload y otra pesta
     Buffer.alloc(100 * 1024),
   ]);
   expect(phonePhoto.byteLength).toBeGreaterThan(256 * 1024);
+  await expect(guardado).toBeHidden();
+  await page.getByRole('button', { name: 'Editar perfil', exact: true }).click();
   await page.locator('input[type="file"]').setInputFiles({
     name: 'foto-de-telefono.jpg',
     mimeType: 'image/jpeg',
     buffer: phonePhoto,
   });
-  const photoToast = page.getByText('Foto actualizada ✓');
-  await expect(photoToast).toBeVisible();
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await expect(guardado).toBeVisible();
   await expect(page.getByRole('img', { name: 'Foto de perfil' })).toBeVisible();
+  // «Eliminar foto» ya no está suelto: vive en «Editar perfil».
+  await expect(page.getByRole('button', { name: 'Eliminar foto' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Editar perfil', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Eliminar foto' })).toBeVisible();
-  await expect(photoToast).toBeHidden();
+  await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await expect(guardado).toBeHidden();
   await page.screenshot({ path: CONFIG_CAPTURE, animations: 'disabled' });
 
   await page.reload();
   await expect(page.locator('.hdr-user')).toHaveText('Renata Nueva');
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Editar perfil' })).toBeVisible();
   await expect(page.locator('.profile-arroba')).toHaveText('@mativeron');
   await expect(page.locator('body')).not.toContainText('payme_mx_mati');
 });
@@ -141,12 +166,11 @@ test('Notificaciones abre sólo el detalle acreditado y presenta el residual leg
 test('OFF, ausente, malformado, 2.2.0 supersedido y aviso desconocido apagan ambas superficies', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Más', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
+  await nombreYFotoEditables(page, true);
 
   for (const variant of ['off', 'absent', 'malformed', 'superseded_notice', 'unknown_notice'] as const) {
     await applyPrivateVariant(page, variant);
-    await expect(page.getByRole('button', { name: 'Editar nombre' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Cambiar foto de perfil' })).toHaveCount(0);
+    await nombreYFotoEditables(page, false);
   }
 
   await page.getByRole('button', { name: 'Avisos' }).click();
@@ -158,54 +182,50 @@ test('OFF, ausente, malformado, 2.2.0 supersedido y aviso desconocido apagan amb
 test('AF-19 · con el aviso 2.5.0 del dueño (v2.95.0) la edición de nombre y foto sigue viva', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Más', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
+  await nombreYFotoEditables(page, true);
 
   // Testigo: una versión que el front NO presenta apaga la edición…
   await applyPrivateVariant(page, 'unknown_notice');
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toHaveCount(0);
+  await nombreYFotoEditables(page, false);
 
   // …y 2.5.0 la vuelve a encender: el verde sale de reconocer 2.5.0, no de
   // un estado que ya estaba.
   await applyPrivateVariant(page, 'aviso_250');
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Cambiar foto de perfil' })).toBeVisible();
+  await nombreYFotoEditables(page, true);
 });
 
 test('AF-24 · con el aviso 2.5.1 del dueño (v2.99.0) la edición de nombre y foto sigue viva', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Más', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
+  await nombreYFotoEditables(page, true);
   // Testigo: una versión que el front NO presenta apaga la edición…
   await applyPrivateVariant(page, 'unknown_notice');
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toHaveCount(0);
+  await nombreYFotoEditables(page, false);
   // …y 2.5.1 la vuelve a encender.
   await applyPrivateVariant(page, 'aviso_251');
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Cambiar foto de perfil' })).toBeVisible();
+  await nombreYFotoEditables(page, true);
 });
 
 test('AF-25 · con el aviso 2.5.2 del dueño (v2.101.0) la edición de nombre y foto sigue viva', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Más', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
+  await nombreYFotoEditables(page, true);
   // Testigo: una versión que el front NO presenta apaga la edición…
   await applyPrivateVariant(page, 'unknown_notice');
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toHaveCount(0);
+  await nombreYFotoEditables(page, false);
   // …y 2.5.2 la vuelve a encender.
   await applyPrivateVariant(page, 'aviso_252');
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Cambiar foto de perfil' })).toBeVisible();
+  await nombreYFotoEditables(page, true);
 });
 
 test('AF-32 · con el aviso 2.5.3 del dueño (v2.111.0) la edición de nombre y foto sigue viva', async ({ page }) => {
   await ingresar(page);
   await page.getByRole('button', { name: 'Más', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
+  await nombreYFotoEditables(page, true);
   // Testigo: una versión que el front NO presenta apaga la edición…
   await applyPrivateVariant(page, 'unknown_notice');
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toHaveCount(0);
+  await nombreYFotoEditables(page, false);
   // …y 2.5.3 la vuelve a encender.
   await applyPrivateVariant(page, 'aviso_253');
-  await expect(page.getByRole('button', { name: 'Editar nombre' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Cambiar foto de perfil' })).toBeVisible();
+  await nombreYFotoEditables(page, true);
 });

@@ -196,9 +196,9 @@ test.describe('AF-USERNAME-D104 · AB nuevo: debajo del nombre, el @', () => {
     expect(page.viewportSize()?.width).toBe(390);
     await capturar(page, 'd104-configuracion');
 
-    // Decisión 106: el cambio sale del lápiz junto al @, y se ve ahí sin recargar.
-    await page.getByRole('button', { name: 'Cambiar tu @', exact: true }).click();
-    await page.getByLabel('Nuevo @usuario').fill('mati.nuevo');
+    // Decisión 110: el cambio sale del único lápiz («Editar perfil»), y se ve sin recargar.
+    await page.getByRole('button', { name: 'Editar perfil', exact: true }).click();
+    await page.getByRole('form', { name: 'Editar perfil' }).getByLabel('Tu @usuario').fill('mati.nuevo');
     await page.getByRole('button', { name: 'Guardar', exact: true }).click();
     await expect(page.locator('.profile-arroba')).toHaveText('@mati.nuevo');
     await sinCodigo(page);

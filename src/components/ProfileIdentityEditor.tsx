@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import {
   AvatarObjectUrlLease,
-  PROFILE_AVATAR_INPUT_MIMES,
   adoptProfileMutationUser,
   currentSamePrincipalSession,
   mergeProfileIdentityIntoCurrentUser,
@@ -14,7 +13,8 @@ import type { User } from '../api/types';
 import { extractApiError } from '../api/errors';
 import { useIdioma } from '../i18n/idioma';
 import { RequestEpoch } from '../utils/requestEpoch';
-import { ArrobaEnConfiguracion } from './ArrobaEnConfiguracion';
+import { ArrobaEnConfiguracion, useArrobaDeConfiguracion } from './ArrobaEnConfiguracion';
+import { EditarPerfil, type ResultadoParte } from './EditarPerfil';
 import { Icon } from './Icon';
 import { Avatar, useToast } from './ui';
 
@@ -33,10 +33,9 @@ export function ProfileIdentityEditor({
   const toast = useToast();
   const user = session.user;
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState(false);
-  const [firstName, setFirstName] = useState(user?.first_name ?? '');
-  const [lastName, setLastName] = useState(user?.last_name ?? '');
-  const [busy, setBusy] = useState<'name' | 'avatar' | 'delete' | null>(null);
+  /** AF-LAPIZ-UNICO · decisión 110 · «Editar perfil» abierto (el único lápiz). */
+  const [editando, setEditando] = useState(false);
+  const arroba = useArrobaDeConfiguracion(session);
   /**
    * M03 · hasta 0.192.0 acá vivía el campo «Fecha de nacimiento», una sola vez.
    * LEGAL-3.0.0 (AF2, decisión 39) lo retiró: la mayoría de edad se declara al
@@ -47,7 +46,6 @@ export function ProfileIdentityEditor({
   const avatarEpoch = useRef(new RequestEpoch());
   const profileEpoch = useRef(new RequestEpoch());
   const mutationEpoch = useRef(new RequestEpoch());
-  const fileInput = useRef<HTMLInputElement | null>(null);
   if (!avatarLease.current) avatarLease.current = new AvatarObjectUrlLease();
 
   const familyId = session.family_id;
@@ -69,12 +67,6 @@ export function ProfileIdentityEditor({
       { loadCurrent: loadSession, isCurrent: isCurrentSession, adoptUser },
     );
   }, [adoptUser]);
-
-  useEffect(() => {
-    if (editingName) return;
-    setFirstName(user?.first_name ?? '');
-    setLastName(user?.last_name ?? '');
-  }, [editingName, user?.first_name, user?.last_name]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -116,120 +108,126 @@ export function ProfileIdentityEditor({
     avatarLease.current?.dispose();
   }, []);
 
-  const saveName = useCallback(async () => {
-    if (!user || busy) return;
+  /**
+   * AF-LAPIZ-UNICO · decisión 110 · los tres guardados de «Editar perfil» que son
+   * de esta pantalla (nombre, subir foto, borrar foto). Hacen lo mismo que antes
+   * —las épocas, la adopción por CAS y la relectura ante un 409—, pero ya no
+   * avisan con un toast: devuelven el resultado de su parte, y el error queda en
+   * ESE campo del formulario. Nunca lanzan.
+   */
+  const guardarNombre = useCallback(async (nombre: string, apellido: string): Promise<ResultadoParte> => {
     let first: string;
     let last: string;
     try {
-      first = profileNameInput(firstName);
-      last = profileNameInput(lastName);
+      first = profileNameInput(nombre);
+      last = profileNameInput(apellido);
     } catch {
-      toast(t('Revisa el nombre y el apellido.'));
-      return;
+      return { ok: false, error: t('Revisa el nombre y el apellido.') };
     }
     const expected = session;
     const epoch = mutationEpoch.current.next();
     profileEpoch.current.next();
-    setBusy('name');
     try {
       const response = await api.updateProfileIdentity({ first_name: first, last_name: last }, expected);
       if (!mutationEpoch.current.isCurrent(epoch) || !adoptProfileMutationUser(
         expected,
         (current) => mergeProfileIdentityIntoCurrentUser(current, response.user),
         { loadCurrent: loadSession, isCurrent: isCurrentSession, adoptUser },
-      )) return;
-      setEditingName(false);
-      // Lo que se presenta sale de la respuesta normalizada del servidor.
-      setFirstName(response.user.first_name);
-      setLastName(response.user.last_name);
-      toast(t('Nombre actualizado ✓'));
+      )) return { ok: false, error: t('No pudimos actualizar tu nombre.') };
+      return { ok: true };
     } catch {
-      const current = currentSamePrincipalSession(expected, loadSession());
-      if (mutationEpoch.current.isCurrent(epoch) && current && isCurrentSession(current)) {
-        toast(t('No pudimos actualizar tu nombre.'));
-      }
-    } finally {
-      if (mutationEpoch.current.isCurrent(epoch)) setBusy(null);
+      return { ok: false, error: t('No pudimos actualizar tu nombre.') };
     }
-  }, [adoptUser, busy, firstName, lastName, session, t, toast, user]);
+  }, [adoptUser, session, t]);
 
-  const uploadAvatar = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
-    const image = event.target.files?.[0];
-    event.target.value = '';
-    if (!image || !user || busy) return;
+  const subirFoto = useCallback(async (image: File): Promise<ResultadoParte> => {
+    if (!user) return { ok: false, error: t('No pudimos actualizar tu foto.') };
     try {
       validateAvatarInput(image);
     } catch {
-      toast(t('Usa una imagen JPG, PNG o WebP de hasta 5 MB.'));
-      return;
+      return { ok: false, error: t('Usa una imagen JPG, PNG o WebP de hasta 5 MB.') };
     }
     const expected = session;
     const expectedRevision = user.avatar?.revision ?? null;
     const epoch = mutationEpoch.current.next();
     profileEpoch.current.next();
     avatarEpoch.current.next();
-    setBusy('avatar');
     try {
       const response = await api.putProfileAvatar(image, expectedRevision, expected);
       if (!mutationEpoch.current.isCurrent(epoch) || !adoptProfileMutationUser(
         expected,
         (current) => current.user ? { ...current.user, avatar: response.avatar } : null,
         { loadCurrent: loadSession, isCurrent: isCurrentSession, adoptUser },
-      )) return;
-      toast(t('Foto actualizada ✓'));
+      )) return { ok: false, error: t('No pudimos actualizar tu foto.') };
+      return { ok: true };
     } catch (error) {
-      const current = currentSamePrincipalSession(expected, loadSession());
-      if (mutationEpoch.current.isCurrent(epoch) && current && isCurrentSession(current)) {
-        if (extractApiError(error).status === 409) {
-          await refreshProfileAfterMutation(expected, epoch).catch(() => false);
-          toast(t('Tu foto cambió en otra sesión. Reintenta.'));
-        } else {
-          toast(t('No pudimos actualizar tu foto.'));
-        }
+      if (extractApiError(error).status === 409) {
+        await refreshProfileAfterMutation(expected, epoch).catch(() => false);
+        return { ok: false, error: t('Tu foto cambió en otra sesión. Reintenta.') };
       }
-    } finally {
-      if (mutationEpoch.current.isCurrent(epoch)) setBusy(null);
+      return { ok: false, error: t('No pudimos actualizar tu foto.') };
     }
-  }, [adoptUser, busy, refreshProfileAfterMutation, session, t, toast, user]);
+  }, [adoptUser, refreshProfileAfterMutation, session, t, user]);
 
-  const deleteAvatar = useCallback(async () => {
+  const quitarFoto = useCallback(async (): Promise<ResultadoParte> => {
     const revision = user?.avatar?.revision;
-    if (!revision || busy) return;
+    // Sin foto no hay nada que borrar: la parte está hecha.
+    if (!revision) return { ok: true };
     const expected = session;
     const epoch = mutationEpoch.current.next();
     profileEpoch.current.next();
     avatarEpoch.current.next();
-    setBusy('delete');
     try {
       await api.deleteProfileAvatar(revision, expected);
       if (!mutationEpoch.current.isCurrent(epoch) || !adoptProfileMutationUser(
         expected,
         (current) => current.user ? { ...current.user, avatar: null } : null,
         { loadCurrent: loadSession, isCurrent: isCurrentSession, adoptUser },
-      )) return;
+      )) return { ok: false, error: t('No pudimos eliminar tu foto.') };
       avatarLease.current?.clear();
       setAvatarUrl(null);
-      toast(t('Foto eliminada ✓'));
+      return { ok: true };
     } catch (error) {
-      const current = currentSamePrincipalSession(expected, loadSession());
-      if (mutationEpoch.current.isCurrent(epoch) && current && isCurrentSession(current)) {
-        if (extractApiError(error).status === 409) {
-          await refreshProfileAfterMutation(expected, epoch).catch(() => false);
-          toast(t('Tu foto cambió en otra sesión. Reintenta.'));
-        } else {
-          toast(t('No pudimos eliminar tu foto.'));
-        }
+      if (extractApiError(error).status === 409) {
+        await refreshProfileAfterMutation(expected, epoch).catch(() => false);
+        return { ok: false, error: t('Tu foto cambió en otra sesión. Reintenta.') };
       }
-    } finally {
-      if (mutationEpoch.current.isCurrent(epoch)) setBusy(null);
+      return { ok: false, error: t('No pudimos eliminar tu foto.') };
     }
-  }, [adoptUser, busy, refreshProfileAfterMutation, session, t, toast, user]);
-
+  }, [adoptUser, refreshProfileAfterMutation, session, t, user]);
 
   const handleAvatarError = useCallback(() => {
     avatarLease.current?.clear();
     setAvatarUrl(null);
   }, []);
+
+  // El único lápiz edita lo que se pueda: nombre y foto con la capability del
+  // dueño, y el @ si hay uno (en espera también: el formulario dice desde cuándo).
+  const editaNombreYFoto = enabled && !!user;
+  const editaArroba = arroba.editable !== null || arroba.notaDeEspera !== null;
+
+  if (editando && (editaNombreYFoto || editaArroba)) {
+    return (
+      <div className="config-profile">
+        <EditarPerfil
+          actual={{
+            nombre: user?.first_name ?? '',
+            apellido: user?.last_name ?? '',
+            arroba: arroba.editable,
+          }}
+          editaNombreYFoto={editaNombreYFoto}
+          arrobaEnEspera={arroba.notaDeEspera !== null ? arroba.arroba : null}
+          notaDeEspera={arroba.notaDeEspera}
+          fotoUrl={avatarUrl}
+          tieneFoto={!!user?.avatar}
+          nombreParaAvatar={fullName}
+          guardadores={{ nombre: guardarNombre, arroba: arroba.guardar, subirFoto, quitarFoto }}
+          onGuardado={() => { setEditando(false); toast(t('Perfil actualizado ✓')); }}
+          onCerrar={() => setEditando(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="config-profile">
@@ -244,72 +242,25 @@ export function ProfileIdentityEditor({
         ) : (
           <Avatar name={fullName} size={84} variant="marca" />
         )}
-        {enabled && user && (
-          <>
-            <button
-              type="button"
-              className="profile-avatar-edit"
-              onClick={() => fileInput.current?.click()}
-              disabled={busy !== null}
-              aria-label={t('Cambiar foto de perfil')}
-            >
-              <Icon name="camera" size={15} />
-            </button>
-            <input
-              ref={fileInput}
-              className="profile-file-input"
-              type="file"
-              accept={PROFILE_AVATAR_INPUT_MIMES.join(',')}
-              onChange={uploadAvatar}
-              tabIndex={-1}
-            />
-          </>
+      </div>
+
+      <div className="profile-name-line">
+        <div className="h2">{user ? fullName : t('Tu cuenta')}</div>
+        {(editaNombreYFoto || editaArroba) && (
+          <button type="button" className="profile-name-edit" onClick={() => setEditando(true)} aria-label={t('Editar perfil')}>
+            <Icon name="pencil" size={15} />
+          </button>
         )}
       </div>
 
-      {editingName && enabled && user ? (
-        <div className="profile-name-editor">
-          <label>
-            <span>{t('Nombre')}</span>
-            <input value={firstName} onChange={(event) => setFirstName(event.target.value)} maxLength={200} />
-          </label>
-          <label>
-            <span>{t('Apellido')}</span>
-            <input value={lastName} onChange={(event) => setLastName(event.target.value)} maxLength={200} />
-          </label>
-          <div className="profile-name-actions">
-            <button type="button" className="btn btn-ghost btn-fit" onClick={() => setEditingName(false)} disabled={busy !== null}>
-              {t('Cancelar')}
-            </button>
-            <button type="button" className="btn btn-navy btn-fit" onClick={() => void saveName()} disabled={busy !== null}>
-              {busy === 'name' ? t('Guardando…') : t('Guardar')}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="profile-name-line">
-          <div className="h2">{user ? fullName : t('Tu cuenta')}</div>
-          {enabled && user && (
-            <button type="button" className="profile-name-edit" onClick={() => setEditingName(true)} aria-label={t('Editar nombre')}>
-              <Icon name="pencil" size={15} />
-            </button>
-          )}
-        </div>
-      )}
-
       {/* AF-USERNAME-D104 · decisión 104: debajo del nombre, el @ propio en lugar
-          del `payme_id`. AF-ALTA-POPUP-D106 · decisión 106: con su lápiz, como el
-          del nombre; la tarjeta «Tu @usuario» se sacó. Apagado, sin elegir o
-          todavía sin leer, no se muestra nada. */}
-      {user && <ArrobaEnConfiguracion session={session} />}
+          del `payme_id`. AF-LAPIZ-UNICO · decisión 110: sin lápiz propio; se
+          cambia en «Editar perfil». Apagado, sin elegir o todavía sin leer, no
+          se muestra nada. */}
+      {user && <ArrobaEnConfiguracion arroba={arroba.arroba} />}
       {/* M03 · LEGAL-3.0.0 (AF2): el campo de fecha de nacimiento se retiró.
           La mayoría de edad se declara al aceptar el paquete legal (decisión 39);
           el dueño deja de leer la fecha y la borra en AB2. */}
-      {enabled && user?.avatar && (
-        <button type="button" className="profile-avatar-delete" onClick={() => void deleteAvatar()} disabled={busy !== null}>
-          <Icon name="trash" size={14} /> {busy === 'delete' ? t('Eliminando…') : t('Eliminar foto')}
-        </button>
-      )}
     </div>
   );
 }

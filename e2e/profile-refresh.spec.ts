@@ -28,7 +28,8 @@ test('rotar tokens durante PATCH no abre GET stale ni revierte nombre o avatar',
   await expect.poll(() => page.evaluate(
     () => (window as HarnessWindow).__profileRefreshStats?.().profileGets ?? -1,
   )).toBe(1);
-  await page.getByRole('button', { name: 'Editar nombre' }).click();
+  // AF-LAPIZ-UNICO · decisión 110: el nombre se edita en «Editar perfil».
+  await page.getByRole('button', { name: 'Editar perfil' }).click();
   await page.getByLabel('Nombre').fill('Renata');
   await page.getByLabel('Apellido').fill('Nueva');
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();

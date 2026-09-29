@@ -48,14 +48,32 @@ describe('ProfileIdentityEditor · superficie DARK y lifecycle privado', () => {
     expect(html).not.toContain('Eliminar foto');
   });
 
-  it('ON de prueba monta los controles, y el payme_id no aparece ni editable ni a la vista', () => {
+  it('ON de prueba monta UN solo lápiz, y el payme_id no aparece ni editable ni a la vista', () => {
     const html = renderToStaticMarkup(
       <ProfileIdentityEditor session={SESSION} enabled adoptUser={() => true} />,
     );
-    expect(html).toContain('profile-avatar-edit');
+    // AF-LAPIZ-UNICO · decisión 110: un solo lápiz que abre «Editar perfil».
+    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Editar perfil"');
     expect(html).toContain('profile-name-edit');
-    expect(html).toContain('type="file"');
+    // Ya no hay botón de cámara ni lápiz del @ en el encabezado, ni input de archivo
+    // hasta abrir el formulario, ni «Eliminar foto» suelto.
+    expect(html).not.toContain('profile-avatar-edit');
+    expect(html).not.toContain('Editar nombre');
+    expect(html).not.toContain('Cambiar tu @');
+    expect(html).not.toContain('type="file"');
+    expect(html).not.toContain('Eliminar foto');
     expect(html).not.toContain('payme_');
+  });
+
+  it('🔴 AF-LAPIZ-UNICO · con foto, tampoco hay «Eliminar foto» suelto: se quita desde «Editar perfil»', () => {
+    const conFoto: StoredSession = {
+      ...SESSION,
+      user: { ...SESSION.user!, avatar: { revision: 'r1', width: 256, height: 256, updated_at: '2026-09-29T00:00:00.000Z' } },
+    };
+    const html = renderToStaticMarkup(<ProfileIdentityEditor session={conFoto} enabled adoptUser={() => true} />);
+    expect(html).not.toContain('Eliminar foto');
+    expect(html.match(/<button/g)).toHaveLength(1);
   });
 
   it('🔴 AF-USERNAME-D104 · debajo del nombre va el @ propio de ESTA cuenta, con la capability encendida', () => {

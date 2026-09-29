@@ -80,8 +80,9 @@ async function espiarArroba(page: Page): Promise<void> {
   });
 }
 
-/** Decisión 106: el lápiz junto al @, debajo del nombre. */
-const lapiz = (page: Page) => page.getByRole('button', { name: 'Cambiar tu @', exact: true });
+/** Decisión 110: el único lápiz, «Editar perfil», abre foto, nombre y @ juntos. */
+const lapiz = (page: Page) => page.getByRole('button', { name: 'Editar perfil', exact: true });
+const campoArroba = (page: Page) => page.getByRole('form', { name: 'Editar perfil' }).getByLabel('Tu @usuario');
 
 const llamadas = (page: Page, metodo: string) => page.evaluate(
   (m) => (window as unknown as { __arroba: Record<string, unknown[][]> }).__arroba[m] ?? [],
@@ -122,7 +123,11 @@ test.describe('AF-USUARIO-ARROBA · apagado (tolerancia si el dueño lo apaga)',
     await expect(page.getByText('Tu @usuario')).toHaveCount(0);
     await expect(page.locator('.profile-name-line')).toBeVisible();
     await expect(page.locator('.profile-arroba')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Cambiar tu @', exact: true })).toHaveCount(0);
+    // Decisión 110: el lápiz queda por el nombre y la foto, pero adentro no hay @.
+    await lapiz(page).click();
+    await expect(page.getByRole('form', { name: 'Editar perfil' }).getByLabel('Nombre', { exact: true })).toBeVisible();
+    await expect(page.getByText('Tu @usuario')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
 
     await abrirAgregarAmigo(page);
     await expect(page.getByLabel('Buscar por @usuario')).toHaveCount(0);
@@ -218,23 +223,25 @@ test.describe('AF-USUARIO-ARROBA · encendido · cambiar el @ con el límite de 
     await irEnLaApp(page, '/mas');
     await expect(page.locator('.profile-arroba')).toHaveText('@mati.viejo');
     await lapiz(page).click();
-    const campo = page.getByLabel('Nuevo @usuario');
+    const campo = campoArroba(page);
     await expect(campo).toHaveValue('mati.viejo');
     await capturar(page, 'arroba-04-config-cambiar');
 
     await campo.fill('mariana');
     await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+    // El error queda en el @, con el formulario abierto y lo escrito intacto.
     await expect(page.getByRole('alert')).toHaveText('Ese @ no está disponible.');
+    await expect(campo).toHaveValue('mariana');
 
     await campo.fill('mati.nuevo');
     await page.getByRole('button', { name: 'Guardar', exact: true }).click();
     await expect(page.locator('.profile-arroba')).toHaveText('@mati.nuevo');
-    await expect(page.getByText('Listo, tu @ ahora es @mati.nuevo.')).toBeVisible();
-    // Decisión 106: la fecha no queda escrita; la dice el lápiz, y no abre el cambio.
+    await expect(page.getByText('Perfil actualizado ✓')).toBeVisible();
+    // Decisión 106: la fecha no queda escrita; la dice «Editar perfil», y el @ ya no se edita.
     await expect(page.getByText(/Puedes volver a cambiar/)).toHaveCount(0);
     await lapiz(page).click();
     await expect(page.getByText(/^Puedes volver a cambiar tu @ desde el \d{1,2} de [a-z]+\.$/)).toBeVisible();
-    await expect(page.getByLabel('Nuevo @usuario')).toHaveCount(0);
+    await expect(campoArroba(page)).toHaveCount(0);
     await capturar(page, 'arroba-05-config-cambiado');
   });
 
@@ -247,32 +254,35 @@ test.describe('AF-USUARIO-ARROBA · encendido · cambiar el @ con el límite de 
     await expect(page.getByText('Tu @usuario')).toHaveCount(0);
     await expect(page.getByText(/Puedes volver a cambiar/)).toHaveCount(0);
     await lapiz(page).click();
-    await expect(page.getByLabel('Nuevo @usuario')).toHaveCount(0);
     const esperada = await page.evaluate(() => new Intl.DateTimeFormat('es-MX', {
       day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
     }).format(new Date(Date.now() + 25 * 86_400_000)));
     await expect(page.getByText(`Puedes volver a cambiar tu @ desde el ${esperada}.`)).toBeVisible();
+    // Se ve, no se edita.
+    await expect(page.getByRole('form', { name: 'Editar perfil' }).getByText('@mati.reciente')).toBeVisible();
+    await expect(campoArroba(page)).toHaveCount(0);
     await capturar(page, 'arroba-06-config-30-dias');
   });
 
-  test('si el dueño contesta «demasiado pronto» al guardar, se dice con SU fecha y se cierra el editor', async ({ page }) => {
+  test('si el dueño contesta «demasiado pronto» al guardar, el error queda en el @ con SU fecha y el @ deja de editarse', async ({ page }) => {
     await encender(page);
     await ingresarConArroba(page, 'mati.viejo', 40);
     await irEnLaApp(page, '/mas');
     await lapiz(page).click();
     // Entre que se abrió el editor y se guardó, el @ cambió en otro lado hace 2 días.
     await conArroba(page, 'mati.otro', 2);
-    await page.getByLabel('Nuevo @usuario').fill('mati.nuevo');
+    await campoArroba(page).fill('mati.nuevo');
     await page.getByRole('button', { name: 'Guardar', exact: true }).click();
     const esperada = await page.evaluate(() => new Intl.DateTimeFormat('es-MX', {
       day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
     }).format(new Date(Date.now() + 28 * 86_400_000)));
-    await expect(page.getByRole('status').filter({ hasText: 'Puedes volver' }))
-      .toHaveText(`Puedes volver a cambiar tu @ desde el ${esperada}.`);
+    // Decisión 110: el error queda EN el @ (una sola vez), con el formulario abierto.
+    await expect(page.getByRole('alert')).toHaveText(`Puedes volver a cambiar tu @ desde el ${esperada}.`);
     await expect(page.getByText(/Puedes volver a cambiar/)).toHaveCount(1);
-    await expect(page.getByRole('alert')).toHaveCount(0);
-    await expect(page.getByLabel('Nuevo @usuario')).toHaveCount(0);
+    await expect(campoArroba(page)).toHaveCount(0);
     // Y muestra el @ que realmente tiene ahora, no el que tenía al abrir.
+    await expect(page.getByRole('form', { name: 'Editar perfil' }).getByText('@mati.otro')).toBeVisible();
+    await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
     await expect(page.locator('.profile-arroba')).toHaveText('@mati.otro');
   });
 });
