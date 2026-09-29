@@ -170,6 +170,8 @@ test.describe('AF-LAPIZ-UNICO · un solo lápiz para foto, nombre y @', () => {
     await expect(nombre(page)).toHaveValue('Renata');
     await expect(arroba(page)).toHaveValue('mariana');
     expect(await llamadas(page)).toEqual({ updateProfileIdentity: 1, putUsername: 1, putProfileAvatar: 1, deleteProfileAvatar: 0 });
+    // La foto guardada se sigue viendo en el formulario (la del dueño, releída).
+    await expect(form(page).getByRole('img', { name: 'Foto de perfil' })).toBeVisible();
     await capturar(page, 'editar-perfil-04-arroba-ocupado');
 
     // Reintentar manda sólo lo que falló: ni el nombre ni la foto otra vez.
