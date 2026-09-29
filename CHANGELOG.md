@@ -11,6 +11,56 @@
 > tocar el ayer** — si una entrada anterior a `0.79.3` afirma que no se publicó,
 > se refiere al día en que se redactó, no a hoy.
 
+## 0.208.0 — Con la sesión iniciada, una pestaña vieja muestra «Hay una versión nueva · Actualizar» (2026-09-29)
+
+Orden AF-CARTEL-VERSION-NUEVA-CLAUDE-20260929 (sha256 3c62810b…). Decisión 125 de Mati: «Cartel para actualizar
+(Recomendada)». Base `0.207.1` (`1bc5e3c`). Sin cambios en el AB, la CSP ni `/version.json`.
+
+1. **Con la sesión iniciada**, en cualquier pantalla, se revisa la versión publicada igual que en el ingreso: al montar,
+   al volver a la pestaña (`visibilitychange`) y desde el bfcache (`pageshow`). Si es más nueva, arriba aparece «Hay
+   una versión nueva» con «Actualizar».
+   - **Nunca recarga sola.** Recarga sólo si la persona toca «Actualizar».
+   - La × lo cierra. Vuelve en la próxima revisión si sigue habiendo una versión más nueva.
+   - Sin respuesta, con una respuesta rara o con la misma versión, no aparece.
+2. **Va arriba y en el flujo**, como primer hijo de `.app` (`App.tsx`): empuja la pantalla y no tapa ningún botón. Abajo
+   lo taparían `.fab` y `.cta-float`, que son fijos. Toma el `safe-area` de arriba para no quedar bajo la barra de estado
+   del iPhone.
+   - **Declarado:** en la PWA de un iPhone con notch, mientras se ve el cartel, el encabezado conserva también su margen
+     superior y queda un espacio de más. En Safari ese margen vale 0.
+3. **El ingreso no cambia:** con la pantalla intacta sigue recargando sola.
+4. **Una sola definición de las revisiones** (`useRevisarVersion` en `versionPublicada.ts`). La usan la recarga del
+   ingreso y el cartel: el mismo disparo con dos desenlaces.
+- **Textos (es → en):**
+  - nuevo: «Hay una versión nueva» → «A new version is available»;
+  - «Actualizar» ya existía como «Refresh» y pasa a «Update», como pidió la orden. Lo usaba sólo el botón dormido de
+    invitado de `MesaScreen` (`isGuest`), que también recarga, y ahí dice lo mismo;
+  - la × usa «Cerrar» → «Close», que ya existía.
+- **`e2e/version-nueva.spec.ts`**, con adenda de alcance del Bibliotecario (17:02:18Z):
+  - el test «en una mesa abierta» decía «sin pedidos de versión y sin recarga». Ahora revisa, muestra el cartel y NO
+    recarga;
+  - lo que protegía (no recargar dentro de una mesa) se conserva, igual que «marca null»;
+  - el describe pasó de «ni siquiera revisa» a «nunca recarga sola»;
+  - el test del alta desde el link de una mesa, sin sesión y con cero pedidos, no cambió.
+- **Pruebas nuevas.** `e2e/cartel-version-nueva.spec.ts` tiene 8 recorridos. Los 7 con sesión estaban rojos sobre
+  `1bc5e3c`; el control del ingreso es verde en los dos lados:
+  - al abrir con versión nueva: aparece, no recarga sola y «Actualizar» recarga una vez;
+  - al volver a la pestaña y desde el bfcache: aparece. La × lo cierra y vuelve;
+  - controles: la misma versión, una respuesta rara y la red caída;
+  - el ingreso sigue recargando solo y ahí no hay cartel;
+  - capturas a 390 y 1440 px en Inicio, Pagos (con el mes pegajoso debajo del cartel) y una mesa. Ningún botón queda
+    tapado: se mide con `elementFromPoint` en el centro de cada botón.
+  - Unitarios: `versionMasNueva`, `cartelVisible` y la vista.
+- **Mutantes:** 8 plantados, 8 cazados. Se leyó qué test cae en cada uno:
+  - **recarga sola con sesión** (el de la orden): caen el test de abrir, el de volver, las capturas y el de la mesa en
+    `version-nueva`;
+  - **no aparece con versión nueva** (el de la orden): caen el unitario y los e2e de abrir, volver y capturas;
+  - sin revisar al volver: caen el test de volver, los tres controles y las capturas;
+  - sin revisar desde el bfcache: cae el test de volver, en su parte `pageshow`;
+  - la × que no vuelve: caen el unitario y el test de volver;
+  - «Actualizar» que no recarga: cae el test de abrir;
+  - el cartel fijo encima del encabezado: «el cartel tapa estos botones» → «Avisos»;
+  - revisar sin sesión: caen el control del ingreso y el alta sin sesión de `version-nueva`.
+
 ## 0.207.1 — Un texto legal nuevo pide marcar las casillas otra vez; y la sonda del encabezado vuelve a arrancar (2026-09-29)
 
 Orden AF-CORRECCIONES-AUDITORIA-CLAUDE-20260929 (sha256 c24692ae…). Decisión 120 de Mati: «Sí, todas (Recomendada)».
