@@ -3,6 +3,7 @@ import { useIdioma } from '../i18n/idioma';
 import { api } from '../api';
 import { extractApiError } from '../api/errors';
 import { LEGAL_ACCEPTANCE_REQUIRED, USERNAME_REQUIRED } from '../api/http';
+import { recordarRetornoAMesa } from '../api/retornoTrasIngreso';
 import { signupInvitationSnapshot, subscribeSignupInvitation } from '../api/signupInvitation';
 import { useSocialAuthCapability } from '../api/socialAuth';
 import { autoridadDeAlta } from './LoginScreen';
@@ -378,7 +379,12 @@ export function JoinMesaScreen({
             <button
               type="button"
               className="link-btn link-btn-brand"
-              onClick={() => setAuthMode('register')}
+              onClick={() => {
+                // AF-INVITACION-TRAS-GOOGLE · si el alta sale a Google y vuelve
+                // a la raíz, esta marca devuelve a la persona a ESTA mesa.
+                recordarRetornoAMesa(code);
+                setAuthMode('register');
+              }}
             >
               {t('Crear cuenta gratis')}
             </button>
@@ -386,7 +392,10 @@ export function JoinMesaScreen({
           <button
             type="button"
             className="link-btn link-btn-outline"
-            onClick={() => setAuthMode('login')}
+            onClick={() => {
+              recordarRetornoAMesa(code);
+              setAuthMode('login');
+            }}
           >
             {t('Ya tengo cuenta · Entrar')}
           </button>

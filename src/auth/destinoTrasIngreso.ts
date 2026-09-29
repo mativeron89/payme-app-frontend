@@ -48,3 +48,19 @@ export function trasCambioDeSesion(
   if (habiaSesion || !haySesion) return 'quedarse';
   return conserva() ? 'quedarse' : 'inicio';
 }
+
+/**
+ * AF-INVITACION-TRAS-GOOGLE · a qué mesa volver después de entrar, si a alguna.
+ *
+ * La vuelta de Google en la misma pestaña llega a la raíz y la ruta ya no dice
+ * de qué mesa venía la persona. La marca (`retornoTrasIngreso.ts`) lo recuerda,
+ * pero vale SÓLO si la invitación custodiada es de esa misma mesa: sin eso, una
+ * marca vieja de la mesa A llevaría a A a quien después abrió el link de B. El
+ * token nombra su mesa; la marca también.
+ */
+export function mesaDeRetorno(
+  marca: { readonly code: string } | null,
+  codigoCustodiado: string | null,
+): string | null {
+  return marca && codigoCustodiado && marca.code === codigoCustodiado ? marca.code : null;
+}

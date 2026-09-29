@@ -3,6 +3,7 @@ import {
   rememberInvitationLink,
   stripTokenFromUrl,
 } from '../api/invitationLink';
+import { olvidarRetornoAMesa } from '../api/retornoTrasIngreso';
 import type { JoinLinkOutcome } from './joinLinkView';
 
 /**
@@ -86,6 +87,8 @@ export function openInvitationCustody(code: string, token: string): boolean {
 export function closeInvitationCustody(): void {
   clearPendingInvitationLink();
   stripTokenFromUrl();
+  // AF-INVITACION-TRAS-GOOGLE · el canje cerró: no queda mesa a la que volver.
+  olvidarRetornoAMesa();
 }
 
 /**
@@ -111,6 +114,7 @@ export function settleInvitationFailure(status: number | null): JoinLinkOutcome 
   const terminal = status === 400 || status === 403 || status === 410;
   if (terminal) {
     clearPendingInvitationLink();
+    olvidarRetornoAMesa();
     // ⭐ El arreglo de 4B. Antes esta línea no existía y la URL conservaba el
     // `?t=` de un token muerto cada vez que el storage no había persistido.
     stripTokenFromUrl();

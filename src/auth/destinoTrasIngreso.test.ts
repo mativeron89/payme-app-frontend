@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseLocation } from '../router';
-import { conservaRutaTrasIngreso, trasCambioDeSesion } from './destinoTrasIngreso';
+import { conservaRutaTrasIngreso, mesaDeRetorno, trasCambioDeSesion } from './destinoTrasIngreso';
 
 /** AF-INICIO-TRAS-INGRESO · a dónde va la app después de entrar. */
 const sinNada = { tokenDeInvitacion: null, invitacionDeAlta: false };
@@ -61,5 +61,28 @@ describe('trasCambioDeSesion · sólo «sin sesión → con sesión» es un ingr
     let consultas = 0;
     trasCambioDeSesion(true, true, () => { consultas += 1; return false; });
     expect(consultas).toBe(0);
+  });
+});
+
+/**
+ * AF-INVITACION-TRAS-GOOGLE · la marca de retorno vale sólo con la invitación
+ * custodiada de ESA mesa. El recorrido con Google está en
+ * `e2e/invitacion-mesa-google-redirect.spec.ts`.
+ */
+describe('mesaDeRetorno · se vuelve a la mesa sólo si marca y custodia coinciden', () => {
+  const marca = { code: 'PA-2847' };
+
+  it('la misma mesa: se vuelve a ella', () => {
+    expect(mesaDeRetorno(marca, 'PA-2847')).toBe('PA-2847');
+  });
+
+  it('otra mesa en custodia: no se vuelve (la marca de A no lleva a A a quien abrió B)', () => {
+    expect(mesaDeRetorno(marca, 'PA-9999')).toBeNull();
+  });
+
+  it('sin marca o sin custodia: no se vuelve', () => {
+    expect(mesaDeRetorno(null, 'PA-2847')).toBeNull();
+    expect(mesaDeRetorno(marca, null)).toBeNull();
+    expect(mesaDeRetorno(null, null)).toBeNull();
   });
 });

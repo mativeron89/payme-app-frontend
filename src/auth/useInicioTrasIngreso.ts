@@ -1,9 +1,10 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { tokenForMesa } from '../api/invitationLink';
+import { readPendingInvitationLink, tokenForMesa } from '../api/invitationLink';
+import { olvidarRetornoAMesa, tomarRetornoAMesa } from '../api/retornoTrasIngreso';
 import { signupInvitationSnapshot, subscribeSignupInvitation } from '../api/signupInvitation';
 import type { StoredSession } from '../api/storage';
-import { irAlInicioTrasIngreso, useRoute } from '../router';
-import { conservaRutaTrasIngreso, trasCambioDeSesion } from './destinoTrasIngreso';
+import { irAlInicioTrasIngreso, replaceRoute, useRoute } from '../router';
+import { conservaRutaTrasIngreso, mesaDeRetorno, trasCambioDeSesion } from './destinoTrasIngreso';
 
 /**
  * AF-INICIO-TRAS-INGRESO · después de entrar, Inicio; salvo un enlace de
@@ -41,7 +42,18 @@ export function useInicioTrasIngreso(session: StoredSession | null): void {
       invitacionDeAlta: invitacionDeAltaVista.current,
     }));
     if (session !== null) invitacionDeAltaVista.current = false;
-    if (decision === 'inicio') irAlInicioTrasIngreso();
+    // AF-INVITACION-TRAS-GOOGLE · al cerrar sesión, la marca de retorno se va.
+    if (habia && session === null) olvidarRetornoAMesa();
+    if (decision === 'inicio') {
+      // AF-INVITACION-TRAS-GOOGLE · la vuelta de Google llega a la raíz. Si la
+      // persona venía del link de una mesa (marca de ≤30 min, de un uso) y la
+      // invitación custodiada es de ESA mesa, se vuelve a la mesa: App monta
+      // JoinMesaScreen con la sesión, después de las puertas legal y del @, y
+      // canjea. Si no, Inicio como siempre.
+      const mesa = mesaDeRetorno(tomarRetornoAMesa(), readPendingInvitationLink()?.code ?? null);
+      if (mesa) replaceRoute('mesa', mesa);
+      else irAlInicioTrasIngreso();
+    }
     // Sólo el cambio de sesión decide: la ruta se lee como estaba en ese momento.
   }, [session]);
 }
