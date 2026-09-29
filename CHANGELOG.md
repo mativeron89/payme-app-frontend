@@ -30,6 +30,8 @@ equivocadas en una cuenta, hay que esperar 15 minutos; «¿Olvidaste tu contrase
     no vaciar. Un comportamiento distinto sólo para este error habría sido una rareza nueva.
 - **El mock no emite este código** (`mockLogin` acepta todo). El test reemplaza `api.login` en la página por una que
   rechaza con el `MockApiError(429, …)` real, como `af-login-redesign-vista-previa.spec.ts`. El mock no se tocó.
+  - Las rutas del `import()` van en variables. Con literales, `tsc -p tsconfig.e2e.json` intentó resolverlas en disco,
+    el gate de aliases cayó en los gates locales y se corrigió antes del push.
 - **Pruebas nuevas:** `e2e/login-freno-por-cuenta.spec.ts` (4):
   - el texto en español, sin el genérico ni el «un minuto», con el correo y la contraseña intactos y «¿Olvidaste…?»
     visible y habilitado;

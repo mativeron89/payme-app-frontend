@@ -27,8 +27,12 @@ const CLAVE = 'contrasena-equivocada';
 
 async function loginRechaza(page: Page, status: number, codigo: string): Promise<void> {
   await page.evaluate(async ([s, code]) => {
-    const modulo = await import(/* @vite-ignore */ '/src/api/index.ts');
-    const { MockApiError } = await import(/* @vite-ignore */ '/src/api/mock/mockApi.ts');
+    // Las rutas van en variables: son del servidor de Vite, no del disco, y un
+    // literal haría que `tsc -p tsconfig.e2e.json` intente resolverlas.
+    const ruta = '/src/api/index.ts';
+    const rutaMock = '/src/api/mock/mockApi.ts';
+    const modulo = await import(/* @vite-ignore */ ruta);
+    const { MockApiError } = await import(/* @vite-ignore */ rutaMock);
     // La firma es `MockApiError(status, error)`, en ese orden.
     modulo.api.login = async () => { throw new MockApiError(s, code); };
   }, [status, codigo] as const);
