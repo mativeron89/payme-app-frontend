@@ -303,6 +303,15 @@ export function socialActionEligible(input: SocialActionEligibility): boolean {
   return true;
 }
 
+/**
+ * AF-01 (auditoría Codex) · una casilla legal marcada vale sólo para el par
+ * (versión y hash del aviso y de los términos) sobre el que se marcó. `null` es
+ * sin marcar, y sin par vigente no hay nada que aceptar.
+ */
+export function casillaVigente(marcadaSobre: string | null, parVigente: string | null): boolean {
+  return marcadaSobre !== null && marcadaSobre === parVigente;
+}
+
 function errorMessage(err: unknown, t: (s: string, ...a: unknown[]) => string): string {
   const { code } = extractApiError(err);
   // 🔴 `ERROR_TEXT` es constante de MÓDULO: sus valores están en español y
@@ -545,8 +554,9 @@ export function LoginScreen({
   const [legal, setLegal] = useState<LegalState>({ status: 'idle' });
   const [legalAttempt, setLegalAttempt] = useState(0);
   const [paquete, setPaquete] = useState<PaqueteState>({ status: 'idle' });
-  const [aceptaMayor, setAceptaMayor] = useState(false);
-  const [aceptaTerminos, setAceptaTerminos] = useState(false);
+  // AF-01 · cada casilla guarda el par sobre el que se marcó (`null`: sin marcar).
+  const [aceptaMayor, setAceptaMayor] = useState<string | null>(null);
+  const [aceptaTerminos, setAceptaTerminos] = useState<string | null>(null);
   const aceptacionRef = useRef<LegalAcceptanceRequest | null>(null);
   const previousSignup = useRef(signup);
   /**
@@ -1312,13 +1322,12 @@ export function LoginScreen({
 
   // Cambiar de «Entrar» a «Crea tu cuenta» (o al revés) desmarca las casillas.
   useEffect(() => {
-    setAceptaMayor(false);
-    setAceptaTerminos(false);
+    setAceptaMayor(null);
+    setAceptaTerminos(null);
   }, [mode]);
 
   const paqueteVigente = legal.status === 'ready' && paquete.status === 'ready';
   const paqueteIncierto = mode === 'register' && (paquete.status === 'loading' || paquete.status === 'error');
-  const aceptacionLista = !paqueteVigente || (aceptaMayor && aceptaTerminos);
   aceptacionRef.current = paqueteVigente && legal.status === 'ready' && paquete.status === 'ready'
     ? {
       aviso_version: legal.value.version,
@@ -1328,6 +1337,19 @@ export function LoginScreen({
       adult_declaration: true,
     }
     : null;
+  /**
+   * 🔴 AF-01 (auditoría Codex) · una casilla cuenta sólo si se marcó sobre el par
+   * VIGENTE. Un `409 legal_version_mismatch` relee los textos; si el par cambió,
+   * las casillas aparecen desmarcadas y el botón deshabilitado, sin esperar a un
+   * efecto: se deriva en este render. Antes quedaban marcadas y un segundo toque
+   * aceptaba el par nuevo sin que la persona lo viera. Vale para el alta por
+   * correo, el paso de Google y el canje del alta en redirect: son las mismas
+   * casillas. Un error que no cambia el par (503, red) las deja como estaban.
+   */
+  const parVigente = aceptacionRef.current ? JSON.stringify(aceptacionRef.current) : null;
+  const mayorMarcada = casillaVigente(aceptaMayor, parVigente);
+  const terminosMarcada = casillaVigente(aceptaTerminos, parVigente);
+  const aceptacionLista = !paqueteVigente || (mayorMarcada && terminosMarcada);
   const conAceptacion = () => (aceptacionRef.current ? { legal_acceptance: aceptacionRef.current } : {});
 
   /**
@@ -1483,11 +1505,11 @@ export function LoginScreen({
   const casillasLegales = paqueteVigente ? (
     <div className="casillas-legales">
       <label className="casilla-legal">
-        <input type="checkbox" checked={aceptaMayor} disabled={busy || socialBusy} onChange={(e) => setAceptaMayor(e.target.checked)} />
+        <input type="checkbox" checked={mayorMarcada} disabled={busy || socialBusy} onChange={(e) => setAceptaMayor(e.target.checked ? parVigente : null)} />
         <span>{t('Declaro que tengo 18 años o más.')}</span>
       </label>
       <label className="casilla-legal">
-        <input type="checkbox" checked={aceptaTerminos} disabled={busy || socialBusy} onChange={(e) => setAceptaTerminos(e.target.checked)} />
+        <input type="checkbox" checked={terminosMarcada} disabled={busy || socialBusy} onChange={(e) => setAceptaTerminos(e.target.checked ? parVigente : null)} />
         <span>
           {t('He leído y acepto los')}{' '}
           <a href={PATH_TERMINOS} target="_blank" rel="noreferrer">{t('Términos de Uso')}</a>.
@@ -1599,9 +1621,16 @@ export function LoginScreen({
       // deja de acreditar el alta y sólo un GET nuevo puede reabrirla.
       if (code === 'registration_unavailable') setLegal({ status: 'error' });
       // AF2 · el par aceptado dejó de ser el vigente (409): se vuelven a leer
-      // aviso y paquete; la persona vuelve a marcar sobre el texto nuevo.
-      if (code === 'legal_version_mismatch') setLegalAttempt((value) => value + 1);
-      setError(errorMessage(err, t));
+      // aviso y paquete; la persona vuelve a marcar sobre el texto nuevo (con
+      // el par nuevo las casillas aparecen desmarcadas: `casillaVigente`).
+      // AF-01 · el aviso nombra el botón de ESTA pantalla; no va en
+      // `ERROR_TEXT`, que también usan vincular y recuperar.
+      if (code === 'legal_version_mismatch') {
+        setLegalAttempt((value) => value + 1);
+        setError(t('Actualizamos los documentos. Vuelve a marcar las casillas y toca «Registrarme».'));
+      } else {
+        setError(errorMessage(err, t));
+      }
     } finally {
       setBusy(false);
       releaseAuthAction();
@@ -1657,7 +1686,7 @@ export function LoginScreen({
     && error === null && facebookCallbackPhase !== 'error'
     && altaVuelta === 'nada' && !altaConGoogle && !pasoVincular && !tieneCredencial && !perfilGoogle
     && email === '' && password === '' && firstName === '' && lastName === ''
-    && !aceptaMayor && !aceptaTerminos;
+    && aceptaMayor === null && aceptaTerminos === null;
   useRecargaPorVersionNueva(
     recargaPorVersion,
     () => pantallaIntacta && !hayCodigoAlta() && !authActionActive.current,

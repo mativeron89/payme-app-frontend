@@ -31,6 +31,26 @@ export type EstadoPuerta =
 interface EstadoDeSesion {
   readonly estado: EstadoPuerta;
   readonly sesion: StoredSession | null;
+  /** AF-01 · la relectura trajo un par distinto del que la puerta mostraba. */
+  readonly documentosCambiaron?: boolean;
+}
+
+/**
+ * AF-01 (auditoría Codex) · el par que se acepta: versión y hash del aviso y de
+ * los términos. `App.tsx` lo usa como `key` de `<PuertaLegal>`: un par nuevo
+ * monta una puerta nueva, con las casillas vacías. Las marcadas sobre el par
+ * anterior no valen para éste.
+ */
+export function claveDelPar(a: LegalAcceptanceResponse): string {
+  return JSON.stringify([a.aviso?.version, a.aviso?.hash, a.terminos?.version, a.terminos?.hash]);
+}
+
+/** ¿La relectura de ESTA sesión cambió el par que la puerta cerrada mostraba? */
+export function parCambio(previo: EstadoDeSesion, session: StoredSession, nueva: LegalAcceptanceResponse): boolean {
+  return nueva.required
+    && previo.sesion === session
+    && previo.estado.fase === 'cerrada'
+    && claveDelPar(previo.estado.aceptacion) !== claveDelPar(nueva);
 }
 
 /**
@@ -46,6 +66,8 @@ export function puertaLista(actual: EstadoDeSesion, session: StoredSession | nul
 export function usePuertaLegal(session: StoredSession | null): {
   readonly estado: EstadoPuerta;
   readonly lista: boolean;
+  /** AF-01 · la puerta que se muestra viene de una relectura que cambió el par. */
+  readonly documentosCambiaron: boolean;
   readonly abrir: () => void;
   readonly reconsultar: () => void;
 } {
@@ -69,10 +91,11 @@ export function usePuertaLegal(session: StoredSession | null): {
     api.getLegalAcceptance(session)
       .then((aceptacion) => {
         if (vivo.current !== marca) return;
-        setActual({
+        setActual((previo) => ({
           estado: aceptacion.required ? { fase: 'cerrada', aceptacion } : { fase: 'abierta' },
           sesion: session,
-        });
+          documentosCambiaron: parCambio(previo, session, aceptacion),
+        }));
       })
       // Sin ruta (backend anterior), red caída o contrato roto: no se bloquea a
       // nadie por lo que no se pudo leer; el dueño defiende con el 428 (AB2).
@@ -90,7 +113,13 @@ export function usePuertaLegal(session: StoredSession | null): {
     () => setActual({ estado: { fase: 'abierta' }, sesion: sesionActual.current }),
     [],
   );
-  return { estado: actual.estado, lista: puertaLista(actual, session), abrir, reconsultar };
+  return {
+    estado: actual.estado,
+    lista: puertaLista(actual, session),
+    documentosCambiaron: actual.documentosCambiaron === true,
+    abrir,
+    reconsultar,
+  };
 }
 
 export function PuertaLegalView({
@@ -152,15 +181,24 @@ export function PuertaLegalView({
   );
 }
 
+/**
+ * 🔴 AF-01 · se monta una por par (`key={claveDelPar(…)}` en `App.tsx`): las
+ * casillas son estado de ESTA instancia y nacen vacías. Si un `409` trae un par
+ * nuevo, la puerta que lo muestra es otra, sin casillas marcadas y con el aviso
+ * `documentosCambiaron`. Un error que no cambia el par (503, red) no la
+ * remonta y las casillas quedan como estaban.
+ */
 export function PuertaLegal({
   session,
   aceptacion,
+  documentosCambiaron,
   onAceptada,
   onReconsultar,
   onCerrarSesion,
 }: {
   readonly session: StoredSession;
   readonly aceptacion: LegalAcceptanceResponse;
+  readonly documentosCambiaron: boolean;
   readonly onAceptada: () => void;
   readonly onReconsultar: () => void;
   readonly onCerrarSesion: () => void;
@@ -170,6 +208,9 @@ export function PuertaLegal({
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Se lee al montar: la instancia nace con el par nuevo y el aviso, que queda
+  // hasta el próximo «Continuar».
+  const [avisoDeCambio, setAvisoDeCambio] = useState(documentosCambiaron);
 
   const continuar = useCallback(async () => {
     const { aviso, terminos } = aceptacion;
@@ -177,6 +218,7 @@ export function PuertaLegal({
     if (!aviso || !terminos || busy) return;
     setBusy(true);
     setError(null);
+    setAvisoDeCambio(false);
     try {
       const saved = await api.acceptLegal({
         aviso_version: aviso.version,
@@ -192,6 +234,8 @@ export function PuertaLegal({
       if (status === 409 && code === 'legal_version_mismatch') {
         // El texto cambió mientras la puerta estaba abierta: se vuelve a leer
         // el par vigente, nunca se acepta a ciegas lo que la persona no vio.
+        // Con el par nuevo `App.tsx` monta otra puerta, sin casillas y con el
+        // aviso (AF-01): acá no se toca nada.
         onReconsultar();
         return;
       }
@@ -206,7 +250,9 @@ export function PuertaLegal({
       aceptaMayor={aceptaMayor}
       aceptaTerminos={aceptaTerminos}
       busy={busy}
-      error={error}
+      error={error ?? (avisoDeCambio
+        ? t('Actualizamos los documentos. Vuelve a marcar las casillas y toca «Continuar».')
+        : null)}
       onAceptaMayor={setAceptaMayor}
       onAceptaTerminos={setAceptaTerminos}
       onContinuar={() => { void continuar(); }}

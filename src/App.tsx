@@ -25,7 +25,7 @@ import { PagosScreen } from './screens/PagosScreen';
 import { RecoveryScreen } from './screens/RecoveryScreen';
 import { MasScreen } from './screens/MasScreen';
 import { NotificacionesScreen } from './screens/NotificacionesScreen';
-import { PuertaLegal, usePuertaLegal } from './components/PuertaLegal';
+import { claveDelPar, PuertaLegal, usePuertaLegal } from './components/PuertaLegal';
 import { PuertaArroba, usePuertaArroba } from './components/PuertaArroba';
 import { TarjetasScreen } from './screens/TarjetasScreen';
 import { TopupScreen } from './screens/TopupScreen';
@@ -186,8 +186,12 @@ function Shell() {
   // todo lo demás: sólo «Continuar» o «Cerrar sesión» (decisión 40).
   const puertaCerrada = session && puerta.estado.fase === 'cerrada' ? (
     <PuertaLegal
+      // AF-01 · una puerta por par: un par nuevo la monta de cero, sin las
+      // casillas que se marcaron sobre el anterior.
+      key={claveDelPar(puerta.estado.aceptacion)}
       session={session}
       aceptacion={puerta.estado.aceptacion}
+      documentosCambiaron={puerta.documentosCambiaron}
       onAceptada={puerta.abrir}
       onReconsultar={puerta.reconsultar}
       onCerrarSesion={() => { void logout(); }}

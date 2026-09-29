@@ -1061,4 +1061,7 @@ export const EN: Record<string, string> = {
   // AF-LAPIZ-UNICO · decisión 110 · un solo lápiz para foto, nombre y @.
   "Editar perfil": "Edit profile",
   "Perfil actualizado ✓": "Profile updated ✓",
+  // AF-CORRECCIONES-AUDITORIA · AF-01 · el 409 de un par nuevo, con el botón de cada pantalla.
+  "Actualizamos los documentos. Vuelve a marcar las casillas y toca «Continuar».": "We updated the documents. Check the boxes again and tap «Continue».",
+  "Actualizamos los documentos. Vuelve a marcar las casillas y toca «Registrarme».": "We updated the documents. Check the boxes again and tap «Sign up».",
 };
